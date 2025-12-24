@@ -16,7 +16,7 @@ var (
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
-	Redis    RedisConfig    `yaml:"redis"`
+	Cache    CacheConfig    `yaml:"cache"`
 	Log      LogConfig      `yaml:"log"`
 	JWT      JWTConfig      `yaml:"jwt"`
 	App      AppConfig      `yaml:"app"`
@@ -33,25 +33,26 @@ type ServerConfig struct {
 
 // DatabaseConfig 数据库配置
 type DatabaseConfig struct {
-	Driver          string `yaml:"driver"`           // sqlite, postgres
-	Database        string `yaml:"database"`         // SQLite: 文件路径, PostgreSQL: 数据库名
-	Host            string `yaml:"host"`             // PostgreSQL only
-	Port            int    `yaml:"port"`             // PostgreSQL only
-	Username        string `yaml:"username"`         // PostgreSQL only
-	Password        string `yaml:"password"`         // PostgreSQL only
-	LogLevel        string `yaml:"log_level"`        // silent, error, warn, info
-	MaxIdleConns    int    `yaml:"max_idle_conns"`   // PostgreSQL only
-	MaxOpenConns    int    `yaml:"max_open_conns"`   // PostgreSQL only
+	Driver          string `yaml:"driver"`            // sqlite, postgres
+	Database        string `yaml:"database"`          // SQLite: 文件路径, PostgreSQL: 数据库名
+	Host            string `yaml:"host"`              // PostgreSQL only
+	Port            int    `yaml:"port"`              // PostgreSQL only
+	Username        string `yaml:"username"`          // PostgreSQL only
+	Password        string `yaml:"password"`          // PostgreSQL only
+	LogLevel        string `yaml:"log_level"`         // silent, error, warn, info
+	MaxIdleConns    int    `yaml:"max_idle_conns"`    // PostgreSQL only
+	MaxOpenConns    int    `yaml:"max_open_conns"`    // PostgreSQL only
 	ConnMaxLifetime int    `yaml:"conn_max_lifetime"` // PostgreSQL only (seconds)
 }
 
-// RedisConfig Redis配置
-type RedisConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	Password string `yaml:"password"`
-	DB       int    `yaml:"db"`
-	PoolSize int    `yaml:"pool_size"`
+// CacheConfig 缓存配置
+type CacheConfig struct {
+	Driver string `yaml:"driver"` // memory (默认), redis
+	// Redis 专用配置 (使用 memory 时可忽略)
+	RedisHost     string `yaml:"redis_host"`
+	RedisPort     int    `yaml:"redis_port"`
+	RedisPassword string `yaml:"redis_password"`
+	RedisDB       int    `yaml:"redis_db"`
 }
 
 // LogConfig 日志配置

@@ -1,5 +1,5 @@
 # V2Board Go Backend Docker Compose
-# 默认使用 SQLite，无需额外数据库服务
+# 零依赖部署：SQLite + 内存缓存
 
 services:
   v2board:
@@ -13,27 +13,7 @@ services:
       - ./logs:/app/logs
     environment:
       - TZ=Asia/Shanghai
-    depends_on:
-      - redis
     restart: unless-stopped
-    networks:
-      - v2board
-
-  redis:
-    image: redis:7-alpine
-    container_name: v2board-redis
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-    networks:
-      - v2board
-
-volumes:
-  redis_data:
-
-networks:
-  v2board:
-    driver: bridge
 
 ---
 # 可选: 使用 PostgreSQL 的配置
@@ -52,10 +32,7 @@ networks:
 #       - TZ=Asia/Shanghai
 #     depends_on:
 #       - postgres
-#       - redis
 #     restart: unless-stopped
-#     networks:
-#       - v2board
 #
 #   postgres:
 #     image: postgres:16-alpine
@@ -67,24 +44,8 @@ networks:
 #     volumes:
 #       - postgres_data:/var/lib/postgresql/data
 #     restart: unless-stopped
-#     networks:
-#       - v2board
-#
-#   redis:
-#     image: redis:7-alpine
-#     container_name: v2board-redis
-#     volumes:
-#       - redis_data:/data
-#     restart: unless-stopped
-#     networks:
-#       - v2board
 #
 # volumes:
 #   postgres_data:
-#   redis_data:
-#
-# networks:
-#   v2board:
-#     driver: bridge
   v2board:
     driver: bridge
