@@ -14,21 +14,47 @@ var (
 
 // Config 应用配置
 type Config struct {
+	Env      string         `yaml:"env"` // development, production
 	Server   ServerConfig   `yaml:"server"`
+	Frontend FrontendConfig `yaml:"frontend"`
 	Database DatabaseConfig `yaml:"database"`
 	Cache    CacheConfig    `yaml:"cache"`
 	Log      LogConfig      `yaml:"log"`
 	JWT      JWTConfig      `yaml:"jwt"`
 	App      AppConfig      `yaml:"app"`
+	Admin    AdminConfig    `yaml:"admin"`
+	TLS      TLSConfig      `yaml:"tls"`
+}
+
+// TLSConfig TLS/HTTPS 配置
+type TLSConfig struct {
+	Enable   bool   `yaml:"enable"`    // 是否启用 TLS
+	CertFile string `yaml:"cert_file"` // 证书文件路径
+	KeyFile  string `yaml:"key_file"`  // 私钥文件路径
+	Domain   string `yaml:"domain"`    // 域名 (用于生成订阅链接等)
+}
+
+// AdminConfig 默认管理员配置
+type AdminConfig struct {
+	Email    string `yaml:"email"`
+	Password string `yaml:"password"`
 }
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Host         string `yaml:"host"`
-	Port         int    `yaml:"port"`
-	Mode         string `yaml:"mode"`
-	ReadTimeout  int    `yaml:"read_timeout"`
-	WriteTimeout int    `yaml:"write_timeout"`
+	Host           string   `yaml:"host"`
+	Port           int      `yaml:"port"`
+	Mode           string   `yaml:"mode"` // debug, release, test
+	ReadTimeout    int      `yaml:"read_timeout"`
+	WriteTimeout   int      `yaml:"write_timeout"`
+	TrustedProxies []string `yaml:"trusted_proxies"` // 可信代理 IP 列表
+}
+
+// FrontendConfig 前端服务器配置
+type FrontendConfig struct {
+	Enable bool   `yaml:"enable"` // 是否启用前端服务
+	Port   int    `yaml:"port"`   // 前端服务端口
+	Path   string `yaml:"path"`   // 前端静态文件目录
 }
 
 // DatabaseConfig 数据库配置

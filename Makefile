@@ -6,7 +6,14 @@ BUILD_TIME := $(shell date +%Y-%m-%d_%H:%M:%S)
 LDFLAGS := -X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME)
 
 # 编译
-build:
+build: build-web build-server
+
+# 编译前端
+build-web:
+	cd web && npm install && npm run build
+
+# 编译后端
+build-server:
 	go build -ldflags "$(LDFLAGS)" -o v2board ./cmd/server
 
 # 运行

@@ -122,6 +122,11 @@ func Get(key string) (interface{}, error) {
 	return item.value, nil
 }
 
+// Delete 删除单个缓存 (别名)
+func Delete(key string) error {
+	return Del(key)
+}
+
 // Del 删除缓存
 func Del(keys ...string) error {
 	memCache.mu.Lock()

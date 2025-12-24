@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/anixops/v2board/internal/config"
+	"github.com/glebarez/sqlite" // 纯Go实现的SQLite驱动，无需CGO
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -94,6 +94,11 @@ func Init(cfg *config.DatabaseConfig) error {
 
 // Get 获取数据库实例
 func Get() *gorm.DB {
+	return db
+}
+
+// GetDB 获取数据库实例
+func GetDB() *gorm.DB {
 	return db
 }
 

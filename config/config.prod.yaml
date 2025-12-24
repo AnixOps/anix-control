@@ -1,0 +1,78 @@
+# V2Board Go Backend Configuration - Production
+# 生产环境配置文件
+
+# 环境标识: development (开发), production (生产)
+env: "production"
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "release"
+  read_timeout: 30
+  write_timeout: 30
+  # 可信代理列表 (用于获取真实 IP，如在 Nginx/Cloudflare 后面)
+  trusted_proxies:
+    - "127.0.0.1"
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+
+# TLS/HTTPS 配置
+# 方式一: 使用 Nginx 反代 (推荐) - 设置 enable: false
+# 方式二: Go 原生 TLS - 设置 enable: true 并配置证书路径
+tls:
+  enable: false                               # 使用 Nginx 反代时设为 false
+  cert_file: "/etc/ssl/certs/v2board.crt"     # SSL 证书路径 (仅 enable: true 时需要)
+  key_file: "/etc/ssl/private/v2board.key"    # SSL 私钥路径 (仅 enable: true 时需要)
+  domain: "your-domain.com"                   # 您的域名 (用于生成订阅链接等)
+
+# 前端服务器配置
+frontend:
+  enable: true
+  port: 3000         # 保持 3000 端口，通过 Nginx 反代到 80/443
+  path: "public"
+
+# 数据库配置 - 生产环境推荐使用 PostgreSQL
+database:
+  driver: "postgres"
+  host: "127.0.0.1"
+  port: 5432
+  username: "v2board"
+  password: "your-secure-password"
+  database: "v2board"
+  log_level: "error"          # 生产环境只记录错误
+  max_idle_conns: 10
+  max_open_conns: 100
+  conn_max_lifetime: 3600
+
+# 缓存配置 - 生产环境推荐使用 Redis
+cache:
+  driver: "redis"
+  redis_host: "127.0.0.1"
+  redis_port: 6379
+  redis_password: ""
+  redis_db: 0
+
+log:
+  level: "warn"               # 生产环境减少日志
+  output: "file"
+  file_path: "/var/log/v2board/v2board.log"
+  max_size: 100
+  max_backups: 30
+  max_age: 30
+
+jwt:
+  secret: "CHANGE-THIS-TO-A-VERY-LONG-RANDOM-STRING-IN-PRODUCTION"
+  expire: 86400
+
+app:
+  name: "V2Board"
+  version: "2.0.0"
+  api_token: "your-secure-api-token-for-nodes"
+  traffic_log_enable: true
+  subscribe_path: "s"
+
+# 默认管理员配置
+admin:
+  email: "admin@your-domain.com"
+  password: ""  # 留空将自动生成
