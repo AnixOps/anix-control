@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/anixops/v2board/internal/cache"
@@ -187,7 +188,28 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 		return nil, errors.New("创建节点失败")
 	}
 
-	// 4. 标记授权密钥已使用
+	// 4. 创建默认协议配置 (VMess)
+	defaultPort := req.Port
+	if defaultPort == 0 {
+		defaultPort = 443
+	}
+	defaultTransport := "tcp"
+	protocol := &model.NodeProtocol{
+		NodeID:    node.ID,
+		Name:      "Default VMess",
+		Type:      model.ProtocolVMess,
+		Port:      defaultPort,
+		Enable:    1,
+		Sort:      0,
+		TLS:       0,
+		Transport: &defaultTransport,
+	}
+	if err := s.db.Create(protocol).Error; err != nil {
+		// 协议创建失败不影响节点注册，只记录日志
+		log.Printf("创建默认协议失败: %v", err)
+	}
+
+	// 5. 标记授权密钥已使用
 	s.db.Model(&authKey).Updates(map[string]interface{}{
 		"used":            1,
 		"used_by_node_id": node.ID,

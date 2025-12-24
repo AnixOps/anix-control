@@ -252,6 +252,18 @@
             <p>授权密钥用于节点自动注册。将密钥配置到节点后，节点启动时会自动向面板注册。</p>
           </div>
           
+          <!-- 一次性密钥显示 -->
+          <div v-if="generatedKey" class="key-display-box">
+            <div class="key-display-header">
+              <span>⚠️ 请立即复制此密钥，关闭后将无法再次查看！</span>
+              <button class="close-btn" @click="generatedKey = ''">×</button>
+            </div>
+            <div class="key-display-content">
+              <code class="key-text-large">{{ generatedKey }}</code>
+              <button class="btn btn-primary" @click="copyKey(generatedKey); generatedKey = ''">复制并关闭</button>
+            </div>
+          </div>
+
           <div class="protocol-header">
             <div class="form-inline">
               <input v-model="newKeyRemark" type="text" placeholder="备注（可选）" style="width: 200px;" />
@@ -264,9 +276,8 @@
           <table class="table" v-if="authKeys.length > 0">
             <thead>
               <tr>
-                <th>密钥</th>
-                <th>备注</th>
-                <th>使用次数</th>
+                <th>名称/备注</th>
+                <th>状态</th>
                 <th>创建时间</th>
                 <th>操作</th>
               </tr>
@@ -274,14 +285,15 @@
             <tbody>
               <tr v-for="key in authKeys" :key="key.id">
                 <td>
-                  <code class="key-text">{{ key.key }}</code>
-                  <button class="btn btn-xs" @click="copyKey(key.key)">复制</button>
+                  <code class="key-text">{{ key.name || '-' }}</code>
                 </td>
-                <td>{{ key.remark || '-' }}</td>
-                <td>{{ key.used_count }} / {{ key.max_uses || '∞' }}</td>
+                <td>
+                  <span v-if="key.used_by_node_id" class="badge badge-success">已使用</span>
+                  <span v-else class="badge badge-info">未使用</span>
+                </td>
                 <td>{{ formatDate(key.created_at) }}</td>
                 <td>
-                  <button class="btn btn-sm btn-danger" @click="removeAuthKey(key)">删除</button>
+                  <button class="btn btn-sm btn-danger" @click="removeAuthKey(key)" :disabled="key.used_by_node_id">删除</button>
                 </td>
               </tr>
             </tbody>
@@ -341,6 +353,7 @@ const selectedTemplate = ref('')
 const showAuthKeys = ref(false)
 const authKeys = ref([])
 const newKeyRemark = ref('')
+const generatedKey = ref('')  // 一次性显示的密钥
 
 // 加载数据
 const loadNodes = async () => {
@@ -548,8 +561,12 @@ const deleteProtocol = async (protocol) => {
 const generateKey = async () => {
   generatingKey.value = true
   try {
-    await generateAuthKey({ remark: newKeyRemark.value })
+    const res = await generateAuthKey({ name: newKeyRemark.value })
     newKeyRemark.value = ''
+    // 显示一次性密钥
+    if (res.data && res.data.key) {
+      generatedKey.value = res.data.key
+    }
     loadAuthKeys()
   } catch (e) {
     alert('生成失败: ' + (e.message || e))
@@ -893,24 +910,79 @@ onMounted(() => {
 .empty-message {
   text-align: center;
   padding: 32px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .info-box {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 16px;
-  color: #1e40af;
+  color: var(--primary-color);
 }
 
 .key-text {
   font-size: 12px;
-  background: #f3f4f6;
+  background: var(--surface-color);
   padding: 4px 8px;
   border-radius: 4px;
   word-break: break-all;
+  color: var(--text-color);
+}
+
+.key-display-box {
+  background: rgba(245, 158, 11, 0.15);
+  border: 2px solid var(--warning-color);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.key-display-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  color: var(--warning-color);
+  font-weight: 600;
+}
+
+.key-display-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.key-text-large {
+  font-size: 14px;
+  font-family: monospace;
+  background: var(--surface-color);
+  padding: 12px 16px;
+  border-radius: 6px;
+  word-break: break-all;
+  width: 100%;
+  text-align: center;
+  border: 1px solid var(--warning-color);
+  color: var(--text-color);
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.badge-success {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--success-color);
+}
+
+.badge-info {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--primary-color);
 }
 
 .text-center {
