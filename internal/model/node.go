@@ -32,6 +32,9 @@ type Node struct {
 	Show         int        `gorm:"default:1" json:"show"`          // 是否显示给用户
 	AutoRegister int        `gorm:"default:0" json:"auto_register"` // 是否自动注册的节点
 
+	// 高级配置 (直接JSON编辑)
+	RawConfig *string `gorm:"type:text" json:"raw_config"` // 原始配置 (JSON, 优先级最高)
+
 	// 服务器信息 (由节点上报)
 	ServerIP      *string `gorm:"size:45" json:"server_ip"`      // 实际服务器IP
 	ServerVersion *string `gorm:"size:50" json:"server_version"` // 节点程序版本

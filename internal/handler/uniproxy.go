@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -17,6 +18,7 @@ import (
 type UniProxyHandler struct {
 	serverService *service.ServerService
 	userService   *service.UserService
+	nodeService   *service.NodeService
 }
 
 // NewUniProxyHandler 创建UniProxy处理器
@@ -24,6 +26,7 @@ func NewUniProxyHandler() *UniProxyHandler {
 	return &UniProxyHandler{
 		serverService: service.NewServerService(),
 		userService:   service.NewUserService(),
+		nodeService:   service.NewNodeService(),
 	}
 }
 
@@ -39,20 +42,185 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 		return
 	}
 
-	serverType := model.ServerType(nodeType)
+	var config map[string]interface{}
 
-	// 构建节点配置
-	config, err := h.serverService.BuildNodeConfig(serverType, uint(nodeID))
+	// 如果没有指定 node_type，先尝试查询新版节点表
+	if nodeType == "" {
+		config, err = h.buildNewNodeConfig(uint(nodeID))
+		if err == nil {
+			h.sendConfigResponse(c, config)
+			return
+		}
+		// 新版节点未找到，尝试旧版（依次尝试各种类型）
+		for _, serverType := range []model.ServerType{model.ServerTypeVMess, model.ServerTypeVLESS, model.ServerTypeTrojan, model.ServerTypeShadowsocks} {
+			config, err = h.serverService.BuildNodeConfig(serverType, uint(nodeID))
+			if err == nil {
+				h.sendConfigResponse(c, config)
+				return
+			}
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": "node not found"})
+		return
+	}
+
+	// 指定了 node_type，使用旧版查询
+	serverType := model.ServerType(nodeType)
+	config, err = h.serverService.BuildNodeConfig(serverType, uint(nodeID))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "node not found"})
 		return
 	}
 
-	// 生成ETag
+	h.sendConfigResponse(c, config)
+}
+
+// buildNewNodeConfig 从新版节点表构建配置
+// 配置优先级: RawConfig (原始JSON) > 协议配置 > 默认配置
+func (h *UniProxyHandler) buildNewNodeConfig(nodeID uint) (map[string]interface{}, error) {
+	node, err := h.nodeService.GetNode(nodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	config := make(map[string]interface{})
+
+	// 优先级1: 如果有 RawConfig，直接使用（管理员高级模式）
+	if node.RawConfig != nil && *node.RawConfig != "" {
+		if err := json.Unmarshal([]byte(*node.RawConfig), &config); err != nil {
+			return nil, fmt.Errorf("invalid raw_config JSON: %v", err)
+		}
+		// 确保基础配置存在
+		h.ensureBaseConfig(config, node)
+		return config, nil
+	}
+
+	// 优先级2: 从协议配置构建
+	protocols, _ := h.nodeService.GetProtocols(nodeID)
+	if len(protocols) > 0 {
+		// 使用第一个启用的协议配置
+		var protocol *model.NodeProtocol
+		for i := range protocols {
+			if protocols[i].Enable == 1 {
+				protocol = &protocols[i]
+				break
+			}
+		}
+		if protocol != nil {
+			h.buildConfigFromProtocol(config, node, protocol)
+			return config, nil
+		}
+	}
+
+	// 优先级3: 无协议配置，返回基础节点信息（允许节点先连接）
+	h.buildMinimalConfig(config, node)
+	return config, nil
+}
+
+// ensureBaseConfig 确保基础配置存在
+func (h *UniProxyHandler) ensureBaseConfig(config map[string]interface{}, node *model.Node) {
+	// V2bX 必需字段
+	if _, ok := config["node_type"]; !ok {
+		config["node_type"] = "vless" // 默认类型
+	}
+	if _, ok := config["send_through"]; !ok {
+		config["send_through"] = "0.0.0.0"
+	}
+	if _, ok := config["routes"]; !ok {
+		config["routes"] = []interface{}{}
+	}
+	if _, ok := config["base_config"]; !ok {
+		config["base_config"] = map[string]interface{}{
+			"push_interval": 60,
+			"pull_interval": 60,
+		}
+	}
+}
+
+// buildMinimalConfig 构建最小配置（无协议时）
+func (h *UniProxyHandler) buildMinimalConfig(config map[string]interface{}, node *model.Node) {
+	// V2bX 必需字段
+	config["node_type"] = "vless" // 默认类型，管理员可通过 RawConfig 覆盖
+	config["server_port"] = node.Port
+	config["host"] = node.Host
+	config["server_name"] = node.Host
+	config["send_through"] = "0.0.0.0"
+	config["routes"] = []interface{}{}
+	config["base_config"] = map[string]interface{}{
+		"push_interval": 60,
+		"pull_interval": 60,
+	}
+	// 标记为无协议配置状态
+	config["_no_protocol"] = true
+}
+
+// buildConfigFromProtocol 从协议配置构建
+func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]interface{}, node *model.Node, protocol *model.NodeProtocol) {
+	// V2bX 必需字段
+	config["node_type"] = string(protocol.Type)
+	config["server_port"] = protocol.Port
+	if protocol.Host != nil && *protocol.Host != "" {
+		config["host"] = *protocol.Host
+		config["server_name"] = *protocol.Host
+	} else {
+		config["host"] = node.Host
+		config["server_name"] = node.Host
+	}
+
+	// 解析协议配置
+	var protocolConfig map[string]interface{}
+	if protocol.Settings != nil && *protocol.Settings != "" {
+		json.Unmarshal([]byte(*protocol.Settings), &protocolConfig)
+	}
+
+	// TLS 配置
+	config["tls"] = protocol.TLS
+	if protocol.TLSSettings != nil && *protocol.TLSSettings != "" {
+		var tlsSettings map[string]interface{}
+		json.Unmarshal([]byte(*protocol.TLSSettings), &tlsSettings)
+		config["tls_settings"] = tlsSettings
+	}
+
+	// 传输层配置
+	if protocol.Transport != nil && *protocol.Transport != "" {
+		config["network"] = *protocol.Transport
+	} else {
+		config["network"] = "tcp"
+	}
+	if protocol.TransportSettings != nil && *protocol.TransportSettings != "" {
+		var transportSettings map[string]interface{}
+		json.Unmarshal([]byte(*protocol.TransportSettings), &transportSettings)
+		config["network_settings"] = transportSettings
+	}
+
+	// 根据协议类型设置特定配置
+	switch protocol.Type {
+	case "vmess":
+		// VMess 不需要额外配置
+	case "vless":
+		config["flow"] = getConfigValue(protocolConfig, "flow", "")
+	case "trojan":
+		// Trojan 不需要额外配置
+	case "shadowsocks":
+		config["cipher"] = getConfigValue(protocolConfig, "cipher", "aes-256-gcm")
+		if serverKey, ok := protocolConfig["server_key"]; ok {
+			config["server_key"] = serverKey
+		}
+	}
+
+	// 添加基础配置
+	config["send_through"] = "0.0.0.0"
+	config["routes"] = []interface{}{}
+	config["base_config"] = map[string]interface{}{
+		"push_interval": 60,
+		"pull_interval": 60,
+	}
+}
+
+// sendConfigResponse 发送配置响应
+func (h *UniProxyHandler) sendConfigResponse(c *gin.Context, config map[string]interface{}) {
 	configJSON, _ := json.Marshal(config)
 	etag := generateETag(configJSON)
 
-	// 检查ETag
 	ifNoneMatch := c.GetHeader("If-None-Match")
 	if ifNoneMatch == etag {
 		c.Status(http.StatusNotModified)
@@ -61,6 +229,17 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 
 	c.Header("ETag", etag)
 	c.JSON(http.StatusOK, config)
+}
+
+// getConfigValue 从配置中获取值，如果不存在则返回默认值
+func getConfigValue(config map[string]interface{}, key string, defaultValue interface{}) interface{} {
+	if config == nil {
+		return defaultValue
+	}
+	if val, ok := config[key]; ok {
+		return val
+	}
+	return defaultValue
 }
 
 // GetUsers 获取用户列表
@@ -75,16 +254,65 @@ func (h *UniProxyHandler) GetUsers(c *gin.Context) {
 		return
 	}
 
-	serverType := model.ServerType(nodeType)
+	var users []*model.User
 
-	// 获取服务器用户
-	users, err := h.serverService.GetServerUsers(serverType, uint(nodeID))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get users"})
-		return
+	// 如果没有指定 node_type，先尝试新版节点
+	if nodeType == "" {
+		// 新版节点：获取所有有效订阅的用户
+		users, err = h.getNewNodeUsers(uint(nodeID))
+		if err == nil {
+			h.sendUsersResponse(c, users)
+			return
+		}
+		// 回退到旧版（尝试各种类型）
+		for _, serverType := range []model.ServerType{model.ServerTypeVMess, model.ServerTypeVLESS, model.ServerTypeTrojan, model.ServerTypeShadowsocks} {
+			oldUsers, err := h.serverService.GetServerUsers(serverType, uint(nodeID))
+			if err == nil && len(oldUsers) > 0 {
+				// 转换为指针切片
+				users = make([]*model.User, len(oldUsers))
+				for i := range oldUsers {
+					users[i] = &oldUsers[i]
+				}
+				h.sendUsersResponse(c, users)
+				return
+			}
+		}
+	} else {
+		serverType := model.ServerType(nodeType)
+		oldUsers, err := h.serverService.GetServerUsers(serverType, uint(nodeID))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get users"})
+			return
+		}
+		// 转换为指针切片
+		users = make([]*model.User, len(oldUsers))
+		for i := range oldUsers {
+			users[i] = &oldUsers[i]
+		}
 	}
 
-	// 构建响应
+	h.sendUsersResponse(c, users)
+}
+
+// getNewNodeUsers 获取新版节点的用户
+func (h *UniProxyHandler) getNewNodeUsers(nodeID uint) ([]*model.User, error) {
+	// 验证节点存在
+	node, err := h.nodeService.GetNode(nodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取所有有效用户（已付费且未过期）
+	users, err := h.userService.GetActiveUsersForNode(node.GroupID)
+	if err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+// sendUsersResponse 发送用户列表响应
+func (h *UniProxyHandler) sendUsersResponse(c *gin.Context, users []*model.User) {
 	userList := make([]map[string]interface{}, 0, len(users))
 	for _, user := range users {
 		speedLimit := user.GetSpeedLimit()

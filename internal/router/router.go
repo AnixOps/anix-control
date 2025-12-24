@@ -92,6 +92,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.DELETE("/nodes/:id", nodeHandler.DeleteNode)
 			admin.POST("/nodes/:id/sync", nodeHandler.SyncProtocol)
 
+			// 节点高级配置 (RawConfig - 直接JSON编辑)
+			admin.GET("/nodes/:id/raw-config", nodeHandler.GetNodeRawConfig)
+			admin.PUT("/nodes/:id/raw-config", nodeHandler.UpdateNodeRawConfig)
+			admin.POST("/nodes/validate-config", nodeHandler.ValidateRawConfig)
+
 			// 节点协议管理
 			admin.GET("/nodes/:id/protocols", nodeHandler.GetProtocols)
 			admin.POST("/nodes/:id/protocols", nodeHandler.CreateProtocol)

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -205,6 +206,118 @@ func (h *NodeHandler) GetNodeStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": stats})
+}
+
+// ========== 高级配置 (RawConfig) ==========
+
+// GetNodeRawConfig 获取节点原始配置
+func (h *NodeHandler) GetNodeRawConfig(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的节点ID"})
+		return
+	}
+
+	node, err := h.nodeService.GetNode(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
+		return
+	}
+
+	var config interface{}
+	if node.RawConfig != nil && *node.RawConfig != "" {
+		json.Unmarshal([]byte(*node.RawConfig), &config)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"node_id":    node.ID,
+			"name":       node.Name,
+			"raw_config": config,
+		},
+	})
+}
+
+// UpdateNodeRawConfig 更新节点原始配置 (高级模式)
+func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的节点ID"})
+		return
+	}
+
+	var req struct {
+		RawConfig interface{} `json:"raw_config"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		return
+	}
+
+	// 验证并序列化 JSON
+	var rawConfigStr *string
+	if req.RawConfig != nil {
+		jsonBytes, err := json.Marshal(req.RawConfig)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "无效的 JSON 配置"})
+			return
+		}
+		str := string(jsonBytes)
+		rawConfigStr = &str
+	}
+
+	if err := h.nodeService.UpdateNode(uint(id), map[string]interface{}{
+		"raw_config": rawConfigStr,
+	}); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "配置更新成功"})
+}
+
+// ValidateRawConfig 验证原始配置 JSON
+func (h *NodeHandler) ValidateRawConfig(c *gin.Context) {
+	var req struct {
+		RawConfig interface{} `json:"raw_config"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		return
+	}
+
+	// 验证 JSON 结构
+	jsonBytes, err := json.Marshal(req.RawConfig)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"valid":   false,
+			"message": "无效的 JSON",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 检查必要字段
+	var config map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &config); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"valid":   false,
+			"message": "配置必须是 JSON 对象",
+		})
+		return
+	}
+
+	warnings := []string{}
+	if _, ok := config["server_port"]; !ok {
+		warnings = append(warnings, "缺少 server_port 字段")
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"valid":    true,
+		"message":  "配置有效",
+		"warnings": warnings,
+		"size":     len(jsonBytes),
+	})
 }
 
 // ========== 协议管理 ==========

@@ -83,6 +83,23 @@ func (s *UserService) GetActiveUsers() ([]model.User, error) {
 	return users, err
 }
 
+// GetActiveUsersForNode 获取节点可用的有效用户
+// groupID 为 nil 时返回所有有效用户，否则返回指定分组的用户
+func (s *UserService) GetActiveUsersForNode(groupID *uint) ([]*model.User, error) {
+	var users []*model.User
+	query := s.db.Preload("Plan").
+		Where("banned = 0").
+		Where("(expired_at IS NULL OR expired_at > ?)", time.Now().Unix()).
+		Where("(u + d) < transfer_enable")
+
+	if groupID != nil {
+		query = query.Where("group_id = ?", *groupID)
+	}
+
+	err := query.Find(&users).Error
+	return users, err
+}
+
 // UpdateTraffic 更新用户流量
 func (s *UserService) UpdateTraffic(userID uint, upload, download int64) error {
 	return s.db.Model(&model.User{}).
