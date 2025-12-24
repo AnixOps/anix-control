@@ -38,7 +38,7 @@
        │  │ 无凭证 → 继续步骤2   │                 │
        │  └───────────────────┘                 │
        │                                        │
-       │  2. POST /api/v1/node/register        │
+       │  2. POST /api/v2/node/register        │
        │  {auth_key, name, host, port, ...}    │
        │ ─────────────────────────────────────►│
        │                                        │
@@ -48,7 +48,7 @@
        │                                        │
        │  4. 保存凭证到本地文件                   │
        │                                        │
-       │  5. POST /api/v1/node/heartbeat       │
+       │  5. POST /api/v2/node/heartbeat       │
        │  Header: X-API-Key: <api_key>         │
        │  {cpu_usage, memory_usage, ...}       │
        │ ─────────────────────────────────────►│
@@ -64,7 +64,7 @@
 
 ### 1. 节点注册
 
-**Endpoint:** `POST /api/v1/node/register`
+**Endpoint:** `POST /api/v2/node/register`
 
 **Request:**
 ```json
@@ -100,7 +100,7 @@
 
 ### 2. 节点心跳
 
-**Endpoint:** `POST /api/v1/node/heartbeat`
+**Endpoint:** `POST /api/v2/node/heartbeat`
 
 **Headers:**
 ```
@@ -392,7 +392,7 @@ func (c *Client) Register(req *RegisterRequest) (*RegisterResponse, error) {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v1/node/register", bytes.NewReader(body))
+	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v2/node/register", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -436,7 +436,7 @@ func (c *Client) Heartbeat(req *HeartbeatRequest) error {
 		return fmt.Errorf("marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v1/node/heartbeat", bytes.NewReader(body))
+	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v2/node/heartbeat", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
@@ -893,7 +893,7 @@ func (c *Client) Heartbeat(req *HeartbeatRequest) error {
 		return fmt.Errorf("marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v1/node/heartbeat", bytes.NewReader(body))
+	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v2/node/heartbeat", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}

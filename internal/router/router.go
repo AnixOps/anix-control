@@ -19,26 +19,26 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// API v1
-	v1 := r.Group("/api/v1")
+	// API v2
+	v2 := r.Group("/api/v2")
 	{
 		// 认证接口 (无需登录)
 		authHandler := handler.NewAuthHandler(cfg)
-		v1.POST("/login", authHandler.Login)
-		v1.POST("/register", authHandler.Register)
+		v2.POST("/login", authHandler.Login)
+		v2.POST("/register", authHandler.Register)
 
 		// 支付接口
 		paymentHandler := handler.NewPaymentHandler()
-		v1.GET("/payment/methods", paymentHandler.GetPaymentMethods)
-		v1.GET("/payment/status/:trade_no", paymentHandler.GetPaymentStatus)
+		v2.GET("/payment/methods", paymentHandler.GetPaymentMethods)
+		v2.GET("/payment/status/:trade_no", paymentHandler.GetPaymentStatus)
 
 		// 支付回调 (无需认证)
-		v1.POST("/payment/x402/callback", paymentHandler.X402Callback)
-		v1.POST("/payment/stripe/webhook", paymentHandler.StripeWebhook)
-		v1.POST("/payment/paypal/webhook", paymentHandler.PayPalWebhook)
+		v2.POST("/payment/x402/callback", paymentHandler.X402Callback)
+		v2.POST("/payment/stripe/webhook", paymentHandler.StripeWebhook)
+		v2.POST("/payment/paypal/webhook", paymentHandler.PayPalWebhook)
 
 		// 需要登录的接口
-		auth := v1.Group("")
+		auth := v2.Group("")
 		auth.Use(middleware.JWTAuth())
 		{
 			// 用户接口
@@ -54,7 +54,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		}
 
 		// 管理员接口
-		admin := v1.Group("/admin")
+		admin := v2.Group("/admin")
 		admin.Use(middleware.JWTAuth())
 		admin.Use(middleware.AdminAuth())
 		{
@@ -111,14 +111,14 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		}
 
 		// 节点自动注册 API (公开)
-		nodePublic := v1.Group("/node")
+		nodePublic := v2.Group("/node")
 		{
 			nodeHandler := handler.NewNodeHandler()
 			nodePublic.POST("/register", nodeHandler.Register)
 		}
 
 		// 节点通信 API (需要 API Key 认证 + 可选签名验证)
-		nodeAPI := v1.Group("/node")
+		nodeAPI := v2.Group("/node")
 		nodeAPI.Use(middleware.NodeAPIKeyAuth())
 		nodeAPI.Use(middleware.SignatureAuth())    // 签名验证 (向后兼容，可选)
 		nodeAPI.Use(middleware.NodeSecureLogger()) // 安全审计日志
@@ -127,8 +127,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			nodeAPI.POST("/heartbeat", nodeHandler.Heartbeat)
 		}
 
-		// UniProxy API (节点通信接口 - 旧版兼容)
-		uniproxy := v1.Group("/server/UniProxy")
+		// UniProxy API (节点通信接口)
+		uniproxy := v2.Group("/server/UniProxy")
 		uniproxy.Use(middleware.NodeAuth())
 		{
 			h := handler.NewUniProxyHandler()
