@@ -50,3 +50,7 @@ app:
   api_token: ""  # Global API token for node communication
   traffic_log_enable: true
   subscribe_path: "s"
+
+admin:
+  email: "v2board@anixops.com"
+  password: ""

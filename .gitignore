@@ -38,7 +38,11 @@ config/config.yaml
 # Build
 dist/
 build/
+public/
+web/node_modules/
 
+# Database
+data/
 # Environment
 .env
 .env.local
