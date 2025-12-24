@@ -1,3 +1,6 @@
+# V2Board Go Backend Docker Compose
+# 默认使用 SQLite，无需额外数据库服务
+
 services:
   v2board:
     build: .
@@ -6,28 +9,12 @@ services:
       - "8080:8080"
     volumes:
       - ./config:/app/config
+      - ./data:/app/data      # SQLite 数据库
       - ./logs:/app/logs
     environment:
       - TZ=Asia/Shanghai
     depends_on:
-      - mysql
       - redis
-    restart: unless-stopped
-    networks:
-      - v2board
-
-  mysql:
-    image: mysql:8.0
-    container_name: v2board-mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: v2board123
-      MYSQL_DATABASE: v2board
-      MYSQL_USER: v2board
-      MYSQL_PASSWORD: v2board123
-    volumes:
-      - mysql_data:/var/lib/mysql
-    ports:
-      - "3306:3306"
     restart: unless-stopped
     networks:
       - v2board
@@ -37,16 +24,67 @@ services:
     container_name: v2board-redis
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
     restart: unless-stopped
     networks:
       - v2board
 
 volumes:
-  mysql_data:
   redis_data:
 
 networks:
+  v2board:
+    driver: bridge
+
+---
+# 可选: 使用 PostgreSQL 的配置
+# 取消下面的注释并修改 config.yaml 使用 postgres 驱动
+
+# services:
+#   v2board:
+#     build: .
+#     container_name: v2board
+#     ports:
+#       - "8080:8080"
+#     volumes:
+#       - ./config:/app/config
+#       - ./logs:/app/logs
+#     environment:
+#       - TZ=Asia/Shanghai
+#     depends_on:
+#       - postgres
+#       - redis
+#     restart: unless-stopped
+#     networks:
+#       - v2board
+#
+#   postgres:
+#     image: postgres:16-alpine
+#     container_name: v2board-postgres
+#     environment:
+#       POSTGRES_DB: v2board
+#       POSTGRES_USER: v2board
+#       POSTGRES_PASSWORD: v2board123
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     restart: unless-stopped
+#     networks:
+#       - v2board
+#
+#   redis:
+#     image: redis:7-alpine
+#     container_name: v2board-redis
+#     volumes:
+#       - redis_data:/data
+#     restart: unless-stopped
+#     networks:
+#       - v2board
+#
+# volumes:
+#   postgres_data:
+#   redis_data:
+#
+# networks:
+#   v2board:
+#     driver: bridge
   v2board:
     driver: bridge

@@ -4,12 +4,25 @@
 
 ## 特性
 
-- 🚀 高性能: 使用 Go 语言和 Gin 框架，性能大幅提升
-- 🔧 多协议支持: VMess, VLESS, Trojan, Shadowsocks, Hysteria, Hysteria2, TUIC, AnyTLS
-- 📦 简单部署: 单二进制文件，开箱即用
-- 🔒 安全可靠: 原生支持 TLS、Reality 等安全特性
-- 📊 流量统计: 完整的流量监控和统计功能
-- 🌐 节点管理: 支持多节点集群管理
+- 🚀 **高性能**: 使用 Go 语言和 Gin 框架，性能大幅提升
+- 🔧 **多协议支持**: VMess, VLESS, Trojan, Shadowsocks, Hysteria, Hysteria2, TUIC, AnyTLS
+- 📦 **轻量部署**: 单二进制文件，默认使用 SQLite，开箱即用
+- 🗄️ **数据库灵活**: 支持 SQLite (默认) 和 PostgreSQL
+- 🔒 **安全可靠**: 原生支持 TLS、Reality 等安全特性
+- 📊 **流量统计**: 完整的流量监控和统计功能
+- 🌐 **节点管理**: 支持多节点集群管理
+
+## 技术栈
+
+| 组件 | 技术 | 说明 |
+|------|------|------|
+| 语言 | Go 1.22+ | 高性能、静态编译 |
+| Web框架 | Gin | 高性能 HTTP 框架 |
+| ORM | GORM | Go 语言 ORM 框架 |
+| 数据库 | SQLite / PostgreSQL | 轻量级或企业级 |
+| 缓存 | Redis | 在线状态、会话缓存 |
+| 序列化 | msgpack | 高效二进制序列化 |
+| 配置 | YAML | 简洁的配置格式 |
 
 ## 项目结构
 
@@ -20,6 +33,8 @@
 │       └── main.go          # 程序入口
 ├── config/
 │   └── config.yaml          # 配置文件
+├── data/
+│   └── v2board.db           # SQLite 数据库文件 (自动创建)
 ├── internal/
 │   ├── cache/               # Redis 缓存
 │   ├── config/              # 配置加载
@@ -31,7 +46,7 @@
 │   └── service/             # 业务逻辑
 ├── go.mod
 ├── go.sum
-└── README_GO.md
+└── README.md
 ```
 
 ## 快速开始
@@ -39,8 +54,8 @@
 ### 环境要求
 
 - Go 1.22+
-- MySQL 5.7+ / MariaDB 10.3+
-- Redis 6.0+
+- Redis 6.0+ (可选，用于在线状态)
+- PostgreSQL 14+ (可选，默认使用 SQLite)
 
 ### 编译
 
@@ -63,20 +78,25 @@ make build
 cp config/config.yaml.example config/config.yaml
 ```
 
-编辑 `config/config.yaml`：
+#### SQLite 配置 (默认，零配置)
 
 ```yaml
-server:
-  host: "0.0.0.0"
-  port: 8080
-  mode: "release"
-
 database:
+  driver: "sqlite"
+  database: "data/v2board.db"
+```
+
+#### PostgreSQL 配置
+
+```yaml
+database:
+  driver: "postgres"
   host: "127.0.0.1"
-  port: 3306
+  port: 5432
   database: "v2board"
-  username: "root"
+  username: "postgres"
   password: "your_password"
+```
 
 redis:
   host: "127.0.0.1"
