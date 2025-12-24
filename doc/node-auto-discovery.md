@@ -780,6 +780,389 @@ func sendHeartbeatWithRecovery(client *api.Client) {
 2. **TLS 验证**: 生产环境务必启用 TLS 验证
 3. **授权密钥**: 授权密钥应通过安全渠道分发，使用后自动失效
 4. **日志脱敏**: 日志中不应打印完整的密钥信息
+5. **请求签名**: 建议启用 HMAC 签名验证，防止中间人攻击
+
+---
+
+## 安全增强 - 请求签名
+
+服务端已支持请求签名验证，客户端只需在请求中添加签名 Header 即可启用此安全特性。
+
+### 签名算法
+
+```
+签名 = HMAC-SHA256(timestamp + method + path + body, secret)
+```
+
+### 客户端签名实现
+
+在 `api/client.go` 中添加签名功能：
+
+```go
+package api
+
+import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/tls"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strconv"
+	"time"
+)
+
+// Client V2Board API 客户端
+type Client struct {
+	baseURL       string
+	httpClient    *http.Client
+	apiKey        string
+	secret        string  // 用于签名
+	enableSign    bool    // 是否启用签名
+}
+
+// NewClient 创建 API 客户端
+func NewClient(baseURL string, insecure bool) *Client {
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: insecure,
+		},
+	}
+
+	return &Client{
+		baseURL: baseURL,
+		httpClient: &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: transport,
+		},
+		enableSign: true, // 默认启用签名
+	}
+}
+
+// SetCredentials 设置 API Key 和 Secret
+func (c *Client) SetCredentials(apiKey, secret string) {
+	c.apiKey = apiKey
+	c.secret = secret
+}
+
+// SetEnableSign 设置是否启用签名
+func (c *Client) SetEnableSign(enable bool) {
+	c.enableSign = enable
+}
+
+// signRequest 为请求添加签名
+func (c *Client) signRequest(req *http.Request, body []byte) {
+	if !c.enableSign || c.secret == "" {
+		return
+	}
+
+	// 时间戳
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+
+	// 生成随机 nonce (防重放)
+	nonceBytes := make([]byte, 16)
+	rand.Read(nonceBytes)
+	nonce := hex.EncodeToString(nonceBytes)
+
+	// 构建签名字符串: timestamp + method + path + body
+	signData := timestamp + req.Method + req.URL.Path + string(body)
+
+	// 计算 HMAC-SHA256
+	mac := hmac.New(sha256.New, []byte(c.secret))
+	mac.Write([]byte(signData))
+	signature := hex.EncodeToString(mac.Sum(nil))
+
+	// 设置签名相关 Header
+	req.Header.Set("X-Timestamp", timestamp)
+	req.Header.Set("X-Nonce", nonce)
+	req.Header.Set("X-Signature", signature)
+}
+
+// Heartbeat 发送心跳 (带签名)
+func (c *Client) Heartbeat(req *HeartbeatRequest) error {
+	if c.apiKey == "" {
+		return fmt.Errorf("api key not set")
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequest("POST", c.baseURL+"/api/v1/node/heartbeat", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("X-API-Key", c.apiKey)
+
+	// 添加签名
+	c.signRequest(httpReq, body)
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized: api key invalid or expired")
+	}
+
+	if resp.StatusCode == http.StatusBadRequest {
+		respBody, _ := io.ReadAll(resp.Body)
+		var errResp struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		}
+		json.Unmarshal(respBody, &errResp)
+		
+		// 签名相关错误
+		switch errResp.Code {
+		case "INVALID_SIGNATURE":
+			return fmt.Errorf("签名验证失败，请检查 secret 是否正确")
+		case "REQUEST_EXPIRED":
+			return fmt.Errorf("请求已过期，请检查系统时间是否同步")
+		case "DUPLICATE_REQUEST":
+			return fmt.Errorf("重复请求")
+		}
+		return fmt.Errorf("heartbeat failed: %s", errResp.Message)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("heartbeat failed: %s", string(respBody))
+	}
+
+	return nil
+}
+```
+
+### 凭证更新
+
+注册成功后需要同时保存 `api_key` 和 `secret`：
+
+```go
+// Credential 节点凭证
+type Credential struct {
+	NodeID  uint   `json:"node_id"`
+	APIKey  string `json:"api_key"`
+	Secret  string `json:"secret"`  // 添加 secret 字段
+}
+
+// 注册成功后保存
+cred := &credential.Credential{
+	NodeID: resp.Data.NodeID,
+	APIKey: resp.Data.APIKey,
+	Secret: resp.Data.Secret,  // 保存 secret
+}
+
+// 设置客户端凭证
+client.SetCredentials(cred.APIKey, cred.Secret)
+```
+
+### 签名验证流程
+
+```
+客户端                                服务端
+   │                                    │
+   │ 1. 生成时间戳 + nonce               │
+   │                                    │
+   │ 2. 计算签名                         │
+   │    sig = HMAC(ts+method+path+body) │
+   │                                    │
+   │ 3. 发送请求                         │
+   │    Header: X-API-Key               │
+   │    Header: X-Timestamp             │
+   │    Header: X-Nonce                 │
+   │    Header: X-Signature             │
+   │ ──────────────────────────────────►│
+   │                                    │
+   │                    4. 验证时间戳 (±5分钟)
+   │                    5. 检查 nonce 防重放
+   │                    6. 重新计算签名并比对
+   │                                    │
+   │◄────────────────────────────────── │
+   │              成功/失败              │
+```
+
+### 签名验证的安全特性
+
+| 特性 | 说明 |
+|------|-----|
+| **防篡改** | 修改请求体会导致签名不匹配 |
+| **防重放** | nonce 一次性使用，5分钟内有效 |
+| **时效性** | 时间戳超过5分钟的请求被拒绝 |
+| **身份绑定** | secret 与节点绑定，泄露不影响其他节点 |
+
+---
+
+## 安全增强 - 凭证加密存储
+
+### 使用机器特征加密
+
+```go
+package credential
+
+import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/json"
+	"io"
+	"os"
+	"path/filepath"
+
+	"github.com/denisbrodbeck/machineid"
+)
+
+// EncryptedStore 加密凭证存储
+type EncryptedStore struct {
+	filePath string
+	key      []byte
+}
+
+// NewEncryptedStore 创建加密存储
+func NewEncryptedStore(filePath string) (*EncryptedStore, error) {
+	key, err := deriveKey()
+	if err != nil {
+		return nil, err
+	}
+	return &EncryptedStore{
+		filePath: filePath,
+		key:      key,
+	}, nil
+}
+
+// deriveKey 从机器特征派生加密密钥
+func deriveKey() ([]byte, error) {
+	// 获取机器唯一 ID
+	id, err := machineid.ID()
+	if err != nil {
+		// 降级：使用主机名
+		hostname, _ := os.Hostname()
+		id = hostname
+	}
+
+	// 加盐并哈希
+	salt := "v2board-node-credential-v1"
+	h := sha256.Sum256([]byte(id + salt))
+	return h[:], nil
+}
+
+// Save 加密保存凭证
+func (s *EncryptedStore) Save(cred *Credential) error {
+	// JSON 序列化
+	plaintext, err := json.Marshal(cred)
+	if err != nil {
+		return err
+	}
+
+	// AES-GCM 加密
+	block, err := aes.NewCipher(s.key)
+	if err != nil {
+		return err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return err
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+
+	// 确保目录存在
+	dir := filepath.Dir(s.filePath)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+
+	// 写入文件
+	return os.WriteFile(s.filePath, ciphertext, 0600)
+}
+
+// Load 解密加载凭证
+func (s *EncryptedStore) Load() (*Credential, error) {
+	ciphertext, err := os.ReadFile(s.filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	// AES-GCM 解密
+	block, err := aes.NewCipher(s.key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(ciphertext) < nonceSize {
+		return nil, fmt.Errorf("ciphertext too short")
+	}
+
+	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return nil, fmt.Errorf("decrypt failed: %w", err)
+	}
+
+	var cred Credential
+	if err := json.Unmarshal(plaintext, &cred); err != nil {
+		return nil, err
+	}
+
+	return &cred, nil
+}
+```
+
+### 依赖
+
+```
+go get github.com/denisbrodbeck/machineid
+```
+
+---
+
+## 安全增强 - 日志脱敏
+
+客户端也应该对日志进行脱敏处理：
+
+```go
+package utils
+
+// Redact 脱敏字符串
+func Redact(s string) string {
+	if s == "" {
+		return ""
+	}
+	length := len(s)
+	if length <= 8 {
+		return "****"
+	}
+	return s[:4] + "****" + s[length-4:]
+}
+
+// 使用示例
+log.Printf("使用凭证: NodeID=%d, APIKey=%s", cred.NodeID, Redact(cred.APIKey))
+// 输出: 使用凭证: NodeID=1, APIKey=a1b2****e5f6
+```
 
 ---
 
@@ -788,6 +1171,7 @@ func sendHeartbeatWithRecovery(client *api.Client) {
 ```
 go get github.com/shirou/gopsutil/v3
 go get gopkg.in/yaml.v3
+go get github.com/denisbrodbeck/machineid
 ```
 
 ---

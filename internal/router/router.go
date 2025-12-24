@@ -112,9 +112,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			nodePublic.POST("/register", nodeHandler.Register)
 		}
 
-		// 节点通信 API (需要 API Key 认证)
+		// 节点通信 API (需要 API Key 认证 + 可选签名验证)
 		nodeAPI := v1.Group("/node")
 		nodeAPI.Use(middleware.NodeAPIKeyAuth())
+		nodeAPI.Use(middleware.SignatureAuth())    // 签名验证 (向后兼容，可选)
+		nodeAPI.Use(middleware.NodeSecureLogger()) // 安全审计日志
 		{
 			nodeHandler := handler.NewNodeHandler()
 			nodeAPI.POST("/heartbeat", nodeHandler.Heartbeat)
