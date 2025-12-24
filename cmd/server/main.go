@@ -42,11 +42,10 @@ func main() {
 	}
 	defer database.Close()
 
-	// 初始化Redis
-	if err := cache.Init(&cfg.Redis); err != nil {
-		log.Fatalf("Failed to init redis: %v", err)
-	}
-	defer cache.Close()
+	// 初始化缓存 (默认使用内存缓存)
+	cache.InitMemory()
+	defer cache.CloseMemory()
+	log.Println("Cache initialized: memory")
 
 	// 设置Gin模式
 	gin.SetMode(cfg.Server.Mode)

@@ -6,8 +6,9 @@
 
 - 🚀 **高性能**: 使用 Go 语言和 Gin 框架，性能大幅提升
 - 🔧 **多协议支持**: VMess, VLESS, Trojan, Shadowsocks, Hysteria, Hysteria2, TUIC, AnyTLS
-- 📦 **轻量部署**: 单二进制文件，默认使用 SQLite，开箱即用
+- 📦 **零依赖部署**: 单二进制文件 + SQLite，无需安装任何外部服务
 - 🗄️ **数据库灵活**: 支持 SQLite (默认) 和 PostgreSQL
+- 💾 **内置缓存**: 使用内存缓存，无需 Redis
 - 🔒 **安全可靠**: 原生支持 TLS、Reality 等安全特性
 - 📊 **流量统计**: 完整的流量监控和统计功能
 - 🌐 **节点管理**: 支持多节点集群管理
@@ -16,12 +17,12 @@
 
 | 组件 | 技术 | 说明 |
 |------|------|------|
-| 语言 | Go 1.22+ | 高性能、静态编译 |
+| 语言 | Go 1.22+ | 高性能、静态编译、跨平台 |
 | Web框架 | Gin | 高性能 HTTP 框架 |
 | ORM | GORM | Go 语言 ORM 框架 |
 | 数据库 | SQLite / PostgreSQL | 轻量级或企业级 |
-| 缓存 | Redis | 在线状态、会话缓存 |
-| 序列化 | msgpack | 高效二进制序列化 |
+| 缓存 | 内置内存缓存 | 零依赖、高性能 |
+| 序列化 | msgpack / JSON | 高效二进制序列化 |
 | 配置 | YAML | 简洁的配置格式 |
 
 ## 项目结构
@@ -36,7 +37,7 @@
 ├── data/
 │   └── v2board.db           # SQLite 数据库文件 (自动创建)
 ├── internal/
-│   ├── cache/               # Redis 缓存
+│   ├── cache/               # 内存缓存
 │   ├── config/              # 配置加载
 │   ├── database/            # 数据库连接
 │   ├── handler/             # HTTP 处理器
