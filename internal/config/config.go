@@ -33,16 +33,16 @@ type ServerConfig struct {
 
 // DatabaseConfig 数据库配置
 type DatabaseConfig struct {
-	Driver          string `yaml:"driver"`
-	Host            string `yaml:"host"`
-	Port            int    `yaml:"port"`
-	Database        string `yaml:"database"`
-	Username        string `yaml:"username"`
-	Password        string `yaml:"password"`
-	Charset         string `yaml:"charset"`
-	MaxIdleConns    int    `yaml:"max_idle_conns"`
-	MaxOpenConns    int    `yaml:"max_open_conns"`
-	ConnMaxLifetime int    `yaml:"conn_max_lifetime"`
+	Driver          string `yaml:"driver"`           // sqlite, postgres
+	Database        string `yaml:"database"`         // SQLite: 文件路径, PostgreSQL: 数据库名
+	Host            string `yaml:"host"`             // PostgreSQL only
+	Port            int    `yaml:"port"`             // PostgreSQL only
+	Username        string `yaml:"username"`         // PostgreSQL only
+	Password        string `yaml:"password"`         // PostgreSQL only
+	LogLevel        string `yaml:"log_level"`        // silent, error, warn, info
+	MaxIdleConns    int    `yaml:"max_idle_conns"`   // PostgreSQL only
+	MaxOpenConns    int    `yaml:"max_open_conns"`   // PostgreSQL only
+	ConnMaxLifetime int    `yaml:"conn_max_lifetime"` // PostgreSQL only (seconds)
 }
 
 // RedisConfig Redis配置

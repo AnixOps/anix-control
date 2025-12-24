@@ -2,10 +2,13 @@ package database
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/anixops/v2board/internal/config"
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -14,32 +17,77 @@ var db *gorm.DB
 
 // Init 初始化数据库连接
 func Init(cfg *config.DatabaseConfig) error {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=True&loc=Local",
-		cfg.Username,
-		cfg.Password,
-		cfg.Host,
-		cfg.Port,
-		cfg.Database,
-		cfg.Charset,
-	)
-
+	var dialector gorm.Dialector
 	var err error
-	db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+
+	switch cfg.Driver {
+	case "sqlite", "sqlite3", "":
+		// SQLite 为默认数据库
+		dbPath := cfg.Database
+		if dbPath == "" {
+			dbPath = "data/v2board.db"
+		}
+
+		// 确保目录存在
+		dir := filepath.Dir(dbPath)
+		if dir != "" && dir != "." {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return fmt.Errorf("failed to create database directory: %w", err)
+			}
+		}
+
+		dialector = sqlite.Open(dbPath)
+
+	case "postgres", "postgresql":
+		// PostgreSQL
+		dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable TimeZone=Asia/Shanghai",
+			cfg.Host,
+			cfg.Port,
+			cfg.Username,
+			cfg.Password,
+			cfg.Database,
+		)
+		dialector = postgres.Open(dsn)
+
+	default:
+		return fmt.Errorf("unsupported database driver: %s (supported: sqlite, postgres)", cfg.Driver)
+	}
+
+	// 配置日志级别
+	logLevel := logger.Info
+	if cfg.LogLevel == "silent" {
+		logLevel = logger.Silent
+	} else if cfg.LogLevel == "error" {
+		logLevel = logger.Error
+	} else if cfg.LogLevel == "warn" {
+		logLevel = logger.Warn
+	}
+
+	db, err = gorm.Open(dialector, &gorm.Config{
+		Logger: logger.Default.LogMode(logLevel),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to connect database: %w", err)
 	}
 
-	sqlDB, err := db.DB()
-	if err != nil {
-		return fmt.Errorf("failed to get database instance: %w", err)
-	}
+	// 只有 PostgreSQL 需要设置连接池
+	if cfg.Driver == "postgres" || cfg.Driver == "postgresql" {
+		sqlDB, err := db.DB()
+		if err != nil {
+			return fmt.Errorf("failed to get database instance: %w", err)
+		}
 
-	// 设置连接池
-	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
-	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
-	sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetime) * time.Second)
+		// 设置连接池
+		if cfg.MaxIdleConns > 0 {
+			sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
+		}
+		if cfg.MaxOpenConns > 0 {
+			sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
+		}
+		if cfg.ConnMaxLifetime > 0 {
+			sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetime) * time.Second)
+		}
+	}
 
 	return nil
 }
@@ -51,9 +99,27 @@ func Get() *gorm.DB {
 
 // Close 关闭数据库连接
 func Close() error {
+	if db == nil {
+		return nil
+	}
 	sqlDB, err := db.DB()
 	if err != nil {
 		return err
 	}
 	return sqlDB.Close()
+}
+
+// AutoMigrate 自动迁移数据库表
+func AutoMigrate(models ...interface{}) error {
+	return db.AutoMigrate(models...)
+}
+
+// IsSQLite 检查是否使用 SQLite
+func IsSQLite() bool {
+	return db.Dialector.Name() == "sqlite"
+}
+
+// IsPostgres 检查是否使用 PostgreSQL
+func IsPostgres() bool {
+	return db.Dialector.Name() == "postgres"
 }
