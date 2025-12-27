@@ -1,0 +1,12 @@
+# 本地测试节点配置
+# 使用方法: .\subtest.exe sub local_test.yaml v2ray
+
+groups:
+    default:
+        - name: 本地test
+          type: vless
+          server: 127.0.0.1
+          port: 19999
+          uuid: 4d7ccb2c-7c21-4003-bf45-47408593e4e4
+          security: none
+          network: tcp

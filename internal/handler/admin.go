@@ -17,6 +17,7 @@ type AdminHandler struct {
 	userService  *service.UserService
 	orderService *service.OrderService
 	statsService *service.StatsService
+	planService  *service.PlanService
 }
 
 // NewAdminHandler 创建管理员处理器
@@ -25,6 +26,7 @@ func NewAdminHandler() *AdminHandler {
 		userService:  service.NewUserService(),
 		orderService: service.NewOrderService(),
 		statsService: service.NewStatsService(),
+		planService:  service.NewPlanService(),
 	}
 }
 
@@ -254,6 +256,104 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+}
+
+// ====== 套餐管理 ======
+
+// CreatePlan 创建套餐
+func (h *AdminHandler) CreatePlan(c *gin.Context) {
+	var p model.Plan
+	if err := c.ShouldBindJSON(&p); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		return
+	}
+	if err := h.planService.Create(&p); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "创建失败", "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "创建成功", "data": p})
+}
+
+// GetPlans 获取套餐列表
+func (h *AdminHandler) GetPlans(c *gin.Context) {
+	list, err := h.planService.List()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取失败", "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list})
+}
+
+// GetPlan 获取单个套餐
+func (h *AdminHandler) GetPlan(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		return
+	}
+	p, err := h.planService.Get(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "套餐不存在"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": p})
+}
+
+// UpdatePlan 更新套餐
+func (h *AdminHandler) UpdatePlan(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		return
+	}
+	var p model.Plan
+	if err := c.ShouldBindJSON(&p); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		return
+	}
+	p.ID = uint(id)
+	if err := h.planService.Update(&p); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败", "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "更新成功", "data": p})
+}
+
+// DeletePlan 删除套餐
+func (h *AdminHandler) DeletePlan(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		return
+	}
+	if err := h.planService.Delete(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "删除失败", "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+}
+
+// AssignPlanToUser 管理员将套餐分配给用户
+// POST /api/v2/admin/plans/:id/assign
+func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
+	planID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "套餐ID 无效"})
+		return
+	}
+	var req struct {
+		UserID   uint   `json:"user_id" binding:"required"`
+		ExpireAt *int64 `json:"expire_at"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		return
+	}
+	if err := h.planService.AssignToUser(uint(planID), req.UserID, req.ExpireAt); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "分配失败", "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "分配成功"})
 }
 
 // GetUserStats 获取用户统计

@@ -8,10 +8,13 @@ import AdminLayout from '@/layouts/AdminLayout.vue'
 // Views
 import Login from '@/views/Login.vue'
 import UserDashboard from '@/views/user/Dashboard.vue'
+import UserSubscribe from '@/views/user/Subscribe.vue'
 import AdminDashboard from '@/views/admin/Dashboard.vue'
 import AdminUsers from '@/views/admin/Users.vue'
 import AdminOrders from '@/views/admin/Orders.vue'
 import AdminNodes from '@/views/admin/Nodes.vue'
+import AdminSubscriptions from '@/views/admin/Subscriptions.vue'
+import AdminPlans from '@/views/admin/Plans.vue'
 
 const routes = [
   {
@@ -35,7 +38,7 @@ const routes = [
       },
       {
         path: 'subscribe',
-        component: { template: '<div class="page"><h1>订阅管理</h1><p>订阅功能开发中...</p></div>' }
+        component: UserSubscribe
       },
       {
         path: 'knowledge',
@@ -64,6 +67,14 @@ const routes = [
       {
         path: 'orders',
         component: AdminOrders
+      },
+      {
+        path: 'subscriptions',
+        component: AdminSubscriptions
+      },
+      {
+        path: 'plans',
+        component: AdminPlans
       },
       {
         path: 'settings',

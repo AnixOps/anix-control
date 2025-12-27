@@ -247,6 +247,15 @@ func (s *NodeService) Heartbeat(nodeID uint, req *model.NodeHeartbeatRequest) er
 	return s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(updates).Error
 }
 
+// UpdateLastCheckAt 更新节点最后检查时间 (用于 UniProxy 接口)
+func (s *NodeService) UpdateLastCheckAt(nodeID uint) error {
+	now := time.Now().Unix()
+	return s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(map[string]interface{}{
+		"last_check_at": now,
+		"status":        model.NodeStatusOnline,
+	}).Error
+}
+
 // GetNodeByAPIKey 通过API Key获取节点
 func (s *NodeService) GetNodeByAPIKey(apiKey string) (*model.Node, error) {
 	keyHash := hashString(apiKey)

@@ -1,0 +1,42 @@
+groups:
+    default:
+        - name: 本地测试-TCP
+          type: vless
+          server: 127.0.0.1
+          port: 19999
+          uuid: 4d7ccb2c-7c21-4003-bf45-47408593e4e4
+          security: none
+          network: tcp
+        - name: 美国节点-Reality
+          type: vless
+          server: us.example.com
+          port: 443
+          uuid: '{{UUID}}'
+          flow: xtls-rprx-vision
+          tls: true
+          servername: www.microsoft.com
+          client-fingerprint: chrome
+          reality-opts:
+            public-key: your-public-key-here
+            short-id: abcd1234
+          network: tcp
+        - name: 日本节点-WS
+          type: vless
+          server: jp.example.com
+          port: 443
+          uuid: '{{UUID}}'
+          tls: true
+          servername: jp.example.com
+          network: ws
+          ws-opts:
+            path: /ws
+            headers:
+                Host: jp.example.com
+    vip:
+        - name: VIP香港-Hysteria2
+          type: hysteria2
+          server: hk.example.com
+          port: 443
+          uuid: '{{UUID}}'
+          tls: true
+          servername: hk.example.com

@@ -105,6 +105,11 @@ button:disabled, .btn:disabled {
   border-color: var(--border-color);
 }
 
+/* 管理页操作按钮统一样式 */
+.actions .btn {
+  margin-left: 8px;
+}
+
 .btn-secondary:hover {
   background-color: var(--surface-hover);
   border-color: var(--text-secondary);
@@ -165,6 +170,19 @@ input::placeholder, textarea::placeholder {
 
 .card:hover {
   border-color: var(--text-secondary);
+}
+.card {
+  background-color: rgba(20,20,20,0.95);
+  border: 1px solid rgba(255,255,255,0.03);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+
+.card:hover {
+  border-color: rgba(255,255,255,0.06);
+  box-shadow: var(--shadow-md);
 }
 
 /* 响应式网格 */

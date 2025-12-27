@@ -239,6 +239,10 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 
 	config := make(map[string]interface{})
 
+	// V2bX 必需字段：node_type
+	config["node_type"] = string(serverType)
+	config["send_through"] = "0.0.0.0"
+
 	switch sv := server.(type) {
 	case *model.ServerVMess:
 		config["host"] = sv.Host
