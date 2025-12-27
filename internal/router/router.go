@@ -19,6 +19,15 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
+	// 订阅接口 (公开，使用用户 token 认证)
+	// 路径可通过配置 app.subscribe_path 自定义，默认为 "s"
+	subscribePath := cfg.App.SubscribePath
+	if subscribePath == "" {
+		subscribePath = "s"
+	}
+	subscribeHandler := handler.NewSubscribeHandler(cfg)
+	r.GET("/"+subscribePath+"/:token", subscribeHandler.GetSubscription)
+
 	// API v2
 	v2 := r.Group("/api/v2")
 	{
@@ -108,6 +117,46 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/auth-keys", nodeHandler.GetAuthKeys)
 			admin.POST("/auth-keys", nodeHandler.GenerateAuthKey)
 			admin.DELETE("/auth-keys/:id", nodeHandler.DeleteAuthKey)
+
+			// 订阅分组和模板管理
+			subAdmin := handler.NewSubscriptionAdminHandler()
+
+			// 订阅分组
+			admin.GET("/subscription/groups", subAdmin.GetGroups)
+			admin.POST("/subscription/groups", subAdmin.CreateGroup)
+			admin.GET("/subscription/groups/:id", subAdmin.GetGroup)
+			admin.PUT("/subscription/groups/:id", subAdmin.UpdateGroup)
+			admin.DELETE("/subscription/groups/:id", subAdmin.DeleteGroup)
+
+			// 订阅模板
+			admin.GET("/subscription/groups/:id/templates", subAdmin.GetTemplates)
+			admin.POST("/subscription/groups/:id/templates", subAdmin.CreateTemplate)
+			admin.GET("/subscription/templates/:id", subAdmin.GetTemplate)
+			admin.PUT("/subscription/templates/:id", subAdmin.UpdateTemplate)
+			admin.DELETE("/subscription/templates/:id", subAdmin.DeleteTemplate)
+
+			// 用户订阅分组关联
+			admin.GET("/subscription/users/:user_id/groups", subAdmin.GetUserGroups)
+			admin.POST("/subscription/users/:user_id/groups", subAdmin.AssignGroupToUser)
+			admin.DELETE("/subscription/users/:user_id/groups/:group_id", subAdmin.RemoveGroupFromUser)
+
+			// 套餐订阅分组关联
+			admin.GET("/subscription/plans/:plan_id/groups", subAdmin.GetPlanGroups)
+			admin.POST("/subscription/plans/:plan_id/groups", subAdmin.AssignGroupToPlan)
+			admin.DELETE("/subscription/plans/:plan_id/groups/:group_id", subAdmin.RemoveGroupFromPlan)
+
+			// 订阅工具接口
+			admin.GET("/subscription/formats", subAdmin.GetSubscriptionFormats)
+			admin.GET("/subscription/protocols", subAdmin.GetProtocolTypes)
+			admin.POST("/subscription/preview", subAdmin.PreviewSubscription)
+
+			// 套餐管理
+			admin.GET("/plans", adminHandler.GetPlans)
+			admin.POST("/plans", adminHandler.CreatePlan)
+			admin.GET("/plans/:id", adminHandler.GetPlan)
+			admin.PUT("/plans/:id", adminHandler.UpdatePlan)
+			admin.DELETE("/plans/:id", adminHandler.DeletePlan)
+			admin.POST("/plans/:id/assign", adminHandler.AssignPlanToUser)
 		}
 
 		// 节点自动注册 API (公开)

@@ -155,8 +155,12 @@ func (h *UniProxyHandler) buildMinimalConfig(config map[string]interface{}, node
 
 // buildConfigFromProtocol 从协议配置构建
 func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]interface{}, node *model.Node, protocol *model.NodeProtocol) {
-	// V2bX 必需字段
-	config["node_type"] = string(protocol.Type)
+	// V2bX 必需字段：node_type (如果协议类型为空，使用默认值)
+	nodeType := string(protocol.Type)
+	if nodeType == "" {
+		nodeType = "vless" // 默认类型
+	}
+	config["node_type"] = nodeType
 	config["server_port"] = protocol.Port
 	if protocol.Host != nil && *protocol.Host != "" {
 		config["host"] = *protocol.Host
@@ -392,6 +396,11 @@ func (h *UniProxyHandler) PushTraffic(c *gin.Context) {
 		return
 	}
 
+	// 更新节点心跳时间 (新版节点)
+	if nodeType == "" {
+		h.nodeService.UpdateLastCheckAt(uint(nodeID))
+	}
+
 	serverType := model.ServerType(nodeType)
 
 	// 解析请求体
@@ -449,6 +458,11 @@ func (h *UniProxyHandler) PushAlive(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid node_id"})
 		return
+	}
+
+	// 更新节点心跳时间 (新版节点)
+	if nodeType == "" {
+		h.nodeService.UpdateLastCheckAt(uint(nodeID))
 	}
 
 	serverType := model.ServerType(nodeType)

@@ -47,6 +47,9 @@
           <router-link to="/admin/nodes" @click="closeSidebar">
             <span class="nav-icon">🖥️</span> 节点列表
           </router-link>
+          <router-link to="/admin/subscriptions" @click="closeSidebar">
+            <span class="nav-icon">📡</span> 订阅管理
+          </router-link>
         </div>
         
         <div class="nav-section">
@@ -101,6 +104,7 @@ const pageTitles = {
   '/admin/dashboard': '仪表盘',
   '/admin/users': '用户管理',
   '/admin/nodes': '节点管理',
+  '/admin/subscriptions': '订阅管理',
   '/admin/orders': '订单管理',
   '/admin/settings': '系统设置'
 }

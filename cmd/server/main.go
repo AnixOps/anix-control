@@ -61,28 +61,45 @@ func main() {
 	}
 	defer database.Close()
 
-	// 自动迁移数据库
-	if err := database.AutoMigrate(
-		&model.User{},
-		&model.Plan{},
-		&model.Order{},
-		&model.Payment{},
-		&model.PaymentLog{},
-		&model.ServerVMess{},
-		&model.ServerVLESS{},
-		&model.ServerTrojan{},
-		&model.ServerShadowsocks{},
-		// 新版节点管理
-		&model.Node{},
-		&model.NodeProtocol{},
-		&model.NodeGroup{},
-		&model.AuthorizedKey{},
-	); err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
+	// 自动迁移数据库：仅在 development 或 test 环境下运行，避免在生产环境自动修改数据库结构
+	if env == "development" || env == "test" {
+		if err := database.AutoMigrate(
+			&model.User{},
+			&model.Plan{},
+			&model.Order{},
+			&model.Payment{},
+			&model.PaymentLog{},
+			&model.ServerVMess{},
+			&model.ServerVLESS{},
+			&model.ServerTrojan{},
+			&model.ServerShadowsocks{},
+			// 新版节点管理
+			&model.Node{},
+			&model.NodeProtocol{},
+			&model.NodeGroup{},
+			&model.AuthorizedKey{},
+			// 订阅分组和模板
+			&model.SubscriptionGroup{},
+			&model.SubscriptionTemplate{},
+			&model.UserSubscriptionGroup{},
+			&model.PlanSubscriptionGroup{},
+			// 事件与新模型
+			&model.Event{},
+		); err != nil {
+			log.Fatalf("Failed to migrate database: %v", err)
+		}
+	} else {
+		log.Println("Production mode: skipping AutoMigrate. Use explicit migrations in production.")
 	}
 
 	// 初始化管理员账号
 	service.InitAdmin(cfg)
+
+	// 初始化默认订阅分组
+	service.InitSubscriptionDefaults()
+
+	// 初始化默认套餐
+	service.InitDefaultPlan()
 
 	// 初始化缓存 (默认使用内存缓存)
 	cache.InitMemory()

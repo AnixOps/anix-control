@@ -201,6 +201,32 @@ export function syncNodeProtocol(id) {
   })
 }
 
+// 获取节点原始配置
+export function getNodeRawConfig(id) {
+  return request({
+    url: `/admin/nodes/${id}/raw-config`,
+    method: 'get'
+  })
+}
+
+// 更新节点原始配置
+export function updateNodeRawConfig(id, data) {
+  return request({
+    url: `/admin/nodes/${id}/raw-config`,
+    method: 'put',
+    data
+  })
+}
+
+// 验证节点配置
+export function validateNodeConfig(data) {
+  return request({
+    url: '/admin/nodes/validate-config',
+    method: 'post',
+    data
+  })
+}
+
 // ====== 节点协议管理 ======
 
 // 获取节点协议列表
@@ -270,4 +296,207 @@ export function deleteAuthKey(id) {
     url: `/admin/auth-keys/${id}`,
     method: 'delete'
   })
+}
+
+// ====== 订阅管理 ======
+
+// 获取订阅分组列表
+export function getSubscriptionGroups() {
+  return request({
+    url: '/admin/subscription/groups',
+    method: 'get'
+  })
+}
+
+// 创建订阅分组
+export function createSubscriptionGroup(data) {
+  return request({
+    url: '/admin/subscription/groups',
+    method: 'post',
+    data
+  })
+}
+
+// 获取订阅分组详情
+export function getSubscriptionGroup(id) {
+  return request({
+    url: `/admin/subscription/groups/${id}`,
+    method: 'get'
+  })
+}
+
+// 更新订阅分组
+export function updateSubscriptionGroup(id, data) {
+  return request({
+    url: `/admin/subscription/groups/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除订阅分组
+export function deleteSubscriptionGroup(id) {
+  return request({
+    url: `/admin/subscription/groups/${id}`,
+    method: 'delete'
+  })
+}
+
+// 获取分组下的模板列表
+export function getSubscriptionTemplates(groupId) {
+  return request({
+    url: `/admin/subscription/groups/${groupId}/templates`,
+    method: 'get'
+  })
+}
+
+// 创建订阅模板
+export function createSubscriptionTemplate(groupId, data) {
+  return request({
+    url: `/admin/subscription/groups/${groupId}/templates`,
+    method: 'post',
+    data
+  })
+}
+
+// 获取订阅模板详情
+export function getSubscriptionTemplate(id) {
+  return request({
+    url: `/admin/subscription/templates/${id}`,
+    method: 'get'
+  })
+}
+
+// 更新订阅模板
+export function updateSubscriptionTemplate(id, data) {
+  return request({
+    url: `/admin/subscription/templates/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除订阅模板
+export function deleteSubscriptionTemplate(id) {
+  return request({
+    url: `/admin/subscription/templates/${id}`,
+    method: 'delete'
+  })
+}
+
+// 预览订阅内容
+export function previewSubscription(data) {
+  return request({
+    url: '/admin/subscription/preview',
+    method: 'post',
+    data
+  })
+}
+
+// ====== 套餐管理 ======
+
+// 获取套餐列表
+export function getPlans() {
+  return request({
+    url: '/admin/plans',
+    method: 'get'
+  })
+}
+
+// 创建套餐
+export function createPlan(data) {
+  return request({
+    url: '/admin/plans',
+    method: 'post',
+    data
+  })
+}
+
+// 获取套餐
+export function getPlan(id) {
+  return request({
+    url: `/admin/plans/${id}`,
+    method: 'get'
+  })
+}
+
+// 更新套餐
+export function updatePlan(id, data) {
+  return request({
+    url: `/admin/plans/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除套餐
+export function deletePlan(id) {
+  return request({
+    url: `/admin/plans/${id}`,
+    method: 'delete'
+  })
+}
+
+// 分配套餐给用户
+export function assignPlanToUser(id, data) {
+  return request({
+    url: `/admin/plans/${id}/assign`,
+    method: 'post',
+    data
+  })
+}
+
+// 默认导出
+export default {
+  getDashboard,
+  createUser,
+  getUserList,
+  getUserStats,
+  getUser,
+  updateUser,
+  deleteUser,
+  banUser,
+  unbanUser,
+  resetUserTraffic,
+  getOrderList,
+  getOrderStats,
+  getOrder,
+  updateOrderStatus,
+  markOrderPaid,
+  cancelOrder,
+  getNodes,
+  getNodeStats,
+  createNode,
+  getNode,
+  updateNode,
+  deleteNode,
+  syncNodeProtocol,
+  getNodeRawConfig,
+  updateNodeRawConfig,
+  validateNodeConfig,
+  getNodeProtocols,
+  createNodeProtocol,
+  updateNodeProtocol,
+  deleteNodeProtocol,
+  getProtocolTemplates,
+  getAuthKeys,
+  generateAuthKey,
+  deleteAuthKey,
+  getSubscriptionGroups,
+  createSubscriptionGroup,
+  getSubscriptionGroup,
+  updateSubscriptionGroup,
+  deleteSubscriptionGroup,
+  getSubscriptionTemplates,
+  createSubscriptionTemplate,
+  getSubscriptionTemplate,
+  updateSubscriptionTemplate,
+  deleteSubscriptionTemplate,
+  previewSubscription
+  ,getPlans
+  ,createPlan
+  ,getPlan
+  ,updatePlan
+  ,deletePlan
+  ,assignPlanToUser
 }
