@@ -197,37 +197,107 @@
 
     <!-- 添加/编辑协议模态框 -->
     <div class="modal-overlay" v-if="showProtocolFormModal" @click.self="closeProtocolFormModal">
-      <div class="modal">
+      <div class="modal modal-lg">
         <div class="modal-header">
           <h3>{{ editingProtocol ? '编辑协议' : '添加协议' }}</h3>
           <button class="close-btn" @click="closeProtocolFormModal">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group" v-if="!editingProtocol">
-            <label>协议模板</label>
-            <select v-model="selectedTemplate" @change="applyTemplate">
-              <option value="">选择模板...</option>
-              <option v-for="tpl in protocolTemplates" :key="tpl.type" :value="tpl.type">
-                {{ tpl.type }} - {{ tpl.description }}
-              </option>
-            </select>
+            <label>协议模板库 (Prefab Templates)</label>
+            <div class="template-grid">
+              <div 
+                v-for="tpl in protocolTemplates" 
+                :key="tpl.type + tpl.name" 
+                :class="['template-card', selectedTemplate === tpl.name ? 'active' : '']"
+                @click="applyTemplate(tpl)"
+              >
+                <div class="tpl-name">{{ tpl.name }}</div>
+                <div class="tpl-desc">{{ tpl.description }}</div>
+              </div>
+            </div>
           </div>
-          <div class="form-group">
-            <label>协议类型 *</label>
-            <input v-model="protocolForm.protocol_type" type="text" :disabled="editingProtocol" />
+
+          <div class="tabs">
+            <button :class="['tab-btn', protocolForm.mode === 'general' ? 'active' : '']" @click="protocolForm.mode = 'general'">基础配置</button>
+            <button :class="['tab-btn', protocolForm.mode === 'custom' ? 'active' : '']" @click="protocolForm.mode = 'custom'">JSON 高级模式</button>
           </div>
-          <div class="form-group">
-            <label>端口 *</label>
-            <input v-model.number="protocolForm.port" type="number" placeholder="443" />
+
+          <div v-if="protocolForm.mode === 'general'" class="protocol-editor">
+            <div class="form-row">
+              <div class="form-group">
+                <label>协议类型 *</label>
+                <select v-model="protocolForm.type">
+                  <option value="vmess">VMess</option>
+                  <option value="vless">VLESS</option>
+                  <option value="trojan">Trojan</option>
+                  <option value="shadowsocks">Shadowsocks</option>
+                  <option value="hysteria2">Hysteria2</option>
+                  <option value="tuic">TUIC</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>监听端口 *</label>
+                <input v-model.number="protocolForm.port" type="number" placeholder="443" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>TLS 模式</label>
+                <select v-model.number="protocolForm.tls">
+                  <option :value="0">无 TLS</option>
+                  <option :value="1">标准 TLS</option>
+                  <option :value="2">Reality (推荐)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>传输层协议</label>
+                <select v-model="protocolForm.transport">
+                  <option value="tcp">TCP</option>
+                  <option value="ws">WebSocket</option>
+                  <option value="grpc">gRPC</option>
+                  <option value="quic">QUIC</option>
+                  <option value="h2">HTTP/2</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>协议设置 (JSON Settings)</label>
+              <textarea v-model="protocolForm.settings" rows="3" placeholder='{"flow": "xtls-rprx-vision"}'></textarea>
+            </div>
+
+            <div class="form-group" v-if="protocolForm.tls > 0">
+              <label>TLS 设置 (JSON)</label>
+              <textarea v-model="protocolForm.tls_settings" rows="3" placeholder='{"server_name": "example.com"}'></textarea>
+            </div>
+
+            <div class="form-group" v-if="protocolForm.tls === 2">
+              <label>Reality 设置 (JSON)</label>
+              <textarea v-model="protocolForm.reality_settings" rows="3" placeholder='{"short_id": "..."}'></textarea>
+            </div>
+
+            <div class="form-group" v-if="protocolForm.transport !== 'tcp'">
+              <label>传输层设置 (JSON)</label>
+              <textarea v-model="protocolForm.transport_settings" rows="3" placeholder='{"path": "/ws"}'></textarea>
+            </div>
           </div>
-          <div class="form-group">
-            <label>配置 (JSON)</label>
-            <textarea v-model="protocolForm.config" rows="10" placeholder="{}"></textarea>
+
+          <div v-else class="protocol-editor">
+            <div class="info-box">
+              高级模式将全量覆盖此协议的所有配置。请输入完整的 JSON 对象。
+            </div>
+            <div class="form-group">
+              <label>自定义全量配置 (Custom JSON Override)</label>
+              <textarea v-model="protocolForm.custom_config" rows="15" placeholder='{ "node_type": "vless", ... }'></textarea>
+            </div>
           </div>
+
           <div class="form-group">
             <label class="checkbox-label">
-              <input type="checkbox" v-model="protocolForm.enabled" />
-              启用协议
+              <input type="checkbox" v-model="protocolForm.enable" :true-value="1" :false-value="0" />
+              启用此协议
             </label>
           </div>
         </div>
@@ -342,10 +412,17 @@ const protocols = ref([])
 const showProtocolFormModal = ref(false)
 const editingProtocol = ref(null)
 const protocolForm = reactive({
-  protocol_type: '',
+  mode: 'general', // general | custom
+  type: 'vless',
   port: 443,
-  config: '{}',
-  enabled: true
+  enable: 1,
+  tls: 0,
+  transport: 'tcp',
+  settings: '{}',
+  tls_settings: '{}',
+  transport_settings: '{}',
+  reality_settings: '{}',
+  custom_config: ''
 })
 const protocolTemplates = ref([])
 const selectedTemplate = ref('')
@@ -476,7 +553,19 @@ const closeProtocolModal = () => {
 
 const openAddProtocol = () => {
   editingProtocol.value = null
-  Object.assign(protocolForm, { protocol_type: '', port: 443, config: '{}', enabled: true })
+  Object.assign(protocolForm, { 
+    mode: 'general',
+    type: 'vless', 
+    port: 443, 
+    enable: 1,
+    tls: 0,
+    transport: 'tcp',
+    settings: '{}',
+    tls_settings: '{}',
+    transport_settings: '{}',
+    reality_settings: '{}',
+    custom_config: ''
+  })
   selectedTemplate.value = ''
   showProtocolFormModal.value = true
 }
@@ -484,10 +573,17 @@ const openAddProtocol = () => {
 const editProtocol = (protocol) => {
   editingProtocol.value = protocol
   Object.assign(protocolForm, {
-    protocol_type: protocol.protocol_type,
+    mode: protocol.custom_config ? 'custom' : 'general',
+    type: protocol.type,
     port: protocol.port,
-    config: JSON.stringify(protocol.config || {}, null, 2),
-    enabled: protocol.enabled
+    enable: protocol.enable,
+    tls: protocol.tls || 0,
+    transport: protocol.transport || 'tcp',
+    settings: protocol.settings || '{}',
+    tls_settings: protocol.tls_settings || '{}',
+    transport_settings: protocol.transport_settings || '{}',
+    reality_settings: protocol.reality_settings || '{}',
+    custom_config: protocol.custom_config || ''
   })
   showProtocolFormModal.value = true
 }
@@ -497,36 +593,37 @@ const closeProtocolFormModal = () => {
   editingProtocol.value = null
 }
 
-const applyTemplate = () => {
-  const tpl = protocolTemplates.value.find(t => t.type === selectedTemplate.value)
-  if (tpl) {
-    protocolForm.protocol_type = tpl.type
-    protocolForm.port = tpl.default_port
-    protocolForm.config = JSON.stringify(tpl.default_config || {}, null, 2)
-  }
+const applyTemplate = (tpl) => {
+  selectedTemplate.value = tpl.name
+  protocolForm.type = tpl.type
+  protocolForm.port = tpl.default_port
+  protocolForm.tls = tpl.tls || 0
+  protocolForm.transport = tpl.transport || 'tcp'
+  protocolForm.settings = tpl.settings || '{}'
+  protocolForm.tls_settings = tpl.tls_settings || '{}'
+  protocolForm.reality_settings = tpl.reality_settings || '{}'
+  protocolForm.mode = 'general'
 }
 
 const saveProtocol = async () => {
-  if (!protocolForm.protocol_type || !protocolForm.port) {
+  if (protocolForm.mode === 'general' && (!protocolForm.type || !protocolForm.port)) {
     alert('请填写必填字段')
-    return
-  }
-  
-  let config = {}
-  try {
-    config = JSON.parse(protocolForm.config || '{}')
-  } catch (e) {
-    alert('配置 JSON 格式错误')
     return
   }
   
   savingProtocol.value = true
   try {
     const data = {
-      protocol_type: protocolForm.protocol_type,
+      type: protocolForm.type,
       port: protocolForm.port,
-      config: config,
-      enabled: protocolForm.enabled
+      enable: protocolForm.enable,
+      tls: protocolForm.tls,
+      transport: protocolForm.transport,
+      settings: protocolForm.settings,
+      tls_settings: protocolForm.tls_settings,
+      transport_settings: protocolForm.transport_settings,
+      reality_settings: protocolForm.reality_settings,
+      custom_config: protocolForm.mode === 'custom' ? protocolForm.custom_config : null
     }
     
     if (editingProtocol.value) {
@@ -1044,6 +1141,76 @@ onMounted(() => {
   color: var(--text-color);
 }
 
+/* 协议模板样式 */
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.template-card {
+  padding: 12px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.template-card:hover {
+  border-color: var(--primary-color);
+  background: var(--surface-hover);
+}
+
+.template-card.active {
+  border-color: var(--primary-color);
+  background: rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.tpl-name {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: var(--primary-color);
+}
+
+.tpl-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* 标签页 */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 14px;
+  transition: var(--transition);
+}
+
+.tab-btn:hover {
+  color: var(--text-color);
+  background: var(--bg-color);
+}
+
+.tab-btn.active {
+  color: white;
+  background: var(--primary-color);
+}
 .badge {
   display: inline-block;
   padding: 4px 10px;

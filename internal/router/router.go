@@ -54,7 +54,35 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			userHandler := handler.NewUserHandler()
 			auth.GET("/user/profile", userHandler.GetProfile)
 			auth.GET("/user/dashboard", userHandler.GetDashboard)
+			// 用户订阅接口
 			auth.GET("/user/subscription", userHandler.GetSubscription)
+
+			// 知识库接口
+			knowledgeHandler := handler.NewKnowledgeHandler()
+			auth.GET("/user/knowledge", knowledgeHandler.GetArticles)
+			auth.GET("/user/knowledge/:id", knowledgeHandler.GetArticle)
+
+			// 工单接口
+			ticketHandler := handler.NewTicketHandler()
+			auth.GET("/user/ticket", ticketHandler.GetTickets)
+			auth.POST("/user/ticket", ticketHandler.CreateTicket)
+			auth.GET("/user/ticket/:id", ticketHandler.GetTicket)
+			auth.POST("/user/ticket/:id/reply", ticketHandler.ReplyTicket)
+			auth.POST("/user/ticket/:id/close", ticketHandler.CloseTicket)
+
+			// 套餐接口
+			planHandler := handler.NewUserPlanHandler()
+			auth.GET("/user/plan", planHandler.GetPlans)
+
+			// 优惠券接口
+			couponHandler := handler.NewCouponHandler()
+			auth.POST("/user/coupon/check", couponHandler.CheckCoupon)
+
+			// 订单接口
+			orderHandler := handler.NewOrderHandler()
+			auth.GET("/user/order", orderHandler.GetOrders)
+			auth.POST("/user/order/save", orderHandler.SaveOrder)
+			auth.GET("/user/order/:id", orderHandler.GetOrderDetail)
 
 			// 用户支付接口
 			auth.POST("/payment/x402/create", paymentHandler.X402CreatePayment)
@@ -157,6 +185,25 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.PUT("/plans/:id", adminHandler.UpdatePlan)
 			admin.DELETE("/plans/:id", adminHandler.DeletePlan)
 			admin.POST("/plans/:id/assign", adminHandler.AssignPlanToUser)
+
+			// 工单管理 (V2 Stub)
+			ticketHandler := handler.NewAdminTicketHandler()
+			admin.GET("/ticket", ticketHandler.GetTickets)
+			admin.POST("/ticket/reply", ticketHandler.ReplyTicket)
+			admin.POST("/ticket/:id/close", ticketHandler.CloseTicket)
+
+			// 优惠券管理 (V2 Stub)
+			couponHandler := handler.NewAdminCouponHandler()
+			admin.GET("/coupon", couponHandler.GetCoupons)
+			admin.POST("/coupon", couponHandler.CreateCoupon)
+			admin.DELETE("/coupon/:id", couponHandler.DeleteCoupon)
+
+			// 知识库管理 (V2 Stub)
+			knowledgeHandler := handler.NewAdminKnowledgeHandler()
+			admin.GET("/knowledge", knowledgeHandler.GetArticles)
+			admin.POST("/knowledge", knowledgeHandler.CreateArticle)
+			admin.PUT("/knowledge/:id", knowledgeHandler.UpdateArticle)
+			admin.DELETE("/knowledge/:id", knowledgeHandler.DeleteArticle)
 		}
 
 		// 节点自动注册 API (公开)

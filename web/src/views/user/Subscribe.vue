@@ -46,7 +46,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { getSubscription } from '@/api/user'
 
@@ -54,12 +54,13 @@ export default {
   name: 'UserSubscribe',
   setup() {
     const userStore = useUserStore()
-    const token = (userStore.userInfo && userStore.userInfo.token) || ''
+    const token = computed(() => (userStore.userInfo && userStore.userInfo.token) || '')
     const subscription = ref({})
     const formats = [
       { value: 'v2ray', label: 'V2Ray (Base64)' },
       { value: 'clash', label: 'Clash (YAML)' },
-      { value: 'json', label: 'JSON' },
+      { value: 'sing-box', label: 'Sing-box (JSON)' },
+      { value: 'json', label: 'Raw JSON' },
       { value: 'base64json', label: 'Base64 JSON' }
     ]
 
@@ -83,7 +84,14 @@ export default {
     function getSubscribeUrl(format) {
       const origin = window.location.origin
       const path = '/s' // default subscribe path
-      return `${origin}${path}/${token}?type=${format}`
+      let ext = ''
+      switch (format) {
+        case 'clash': ext = '.yaml'; break;
+        case 'sing-box': ext = '.json'; break;
+        case 'v2ray': ext = '.txt'; break;
+        case 'json': ext = '.json'; break;
+      }
+      return `${origin}${path}/${token.value}${ext}`
     }
 
     async function copyText(text) {

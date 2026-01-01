@@ -107,6 +107,9 @@ type NodeProtocol struct {
 	// Reality 配置
 	RealitySettings *string `gorm:"type:text" json:"reality_settings"` // Reality配置 (JSON)
 
+	// 自定义配置 (全量覆盖)
+	CustomConfig *string `gorm:"type:text" json:"custom_config"` // 自定义配置 (JSON, 优先级最高)
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 
@@ -183,60 +186,72 @@ type ProtocolTemplate struct {
 	Name        string       `json:"name"`
 	Description string       `json:"description"`
 	DefaultPort int          `json:"default_port"`
-	Settings    string       `json:"settings"` // 默认配置JSON
+	Settings    string       `json:"settings"`         // 默认配置JSON
+	TLS         int          `json:"tls"`              // 0=无, 1=TLS, 2=Reality
+	TLSSettings string       `json:"tls_settings"`     // TLS配置JSON
+	Transport   string       `json:"transport"`        // tcp, ws, etc.
+	Reality     string       `json:"reality_settings"` // Reality配置JSON
 }
 
 // GetProtocolTemplates 获取协议模板列表
 func GetProtocolTemplates() []ProtocolTemplate {
 	return []ProtocolTemplate{
 		{
-			Type:        ProtocolVMess,
-			Name:        "VMess",
-			Description: "V2Ray VMess 协议",
+			Type:        ProtocolVLESS,
+			Name:        "VLESS + Reality (推荐)",
+			Description: "目前最安全的协议组合，抗封锁能力极强",
 			DefaultPort: 443,
-			Settings:    `{"security":"auto"}`,
+			TLS:         2, // Reality
+			Settings:    `{"flow":"xtls-rprx-vision"}`,
+			TLSSettings: `{"fingerprint":"chrome","server_name":"www.microsoft.com"}`,
+			Reality:     `{"short_id":"6ba85179e30d4fc2","dest":"www.microsoft.com:443"}`,
+			Transport:   "tcp",
 		},
 		{
-			Type:        ProtocolVLESS,
-			Name:        "VLESS",
-			Description: "V2Ray VLESS 协议 (推荐)",
+			Type:        ProtocolVMess,
+			Name:        "VMess + WebSocket + TLS",
+			Description: "经典的 CDN 转发配置，适合配合 Cloudflare 等使用",
 			DefaultPort: 443,
-			Settings:    `{"flow":"xtls-rprx-vision"}`,
+			TLS:         1, // TLS
+			Settings:    `{}`,
+			TLSSettings: `{"allowInsecure":false}`,
+			Transport:   "ws",
 		},
 		{
 			Type:        ProtocolTrojan,
 			Name:        "Trojan",
-			Description: "Trojan 协议",
+			Description: "伪装成 HTTPS 流量，简单稳定",
 			DefaultPort: 443,
+			TLS:         1,
 			Settings:    `{}`,
+			Transport:   "tcp",
 		},
 		{
 			Type:        ProtocolShadowsocks,
-			Name:        "Shadowsocks",
-			Description: "Shadowsocks 协议",
+			Name:        "Shadowsocks (2022-Blake3)",
+			Description: "高性能的加密传输协议",
 			DefaultPort: 8388,
+			TLS:         0,
 			Settings:    `{"method":"2022-blake3-aes-128-gcm"}`,
+			Transport:   "tcp",
 		},
 		{
 			Type:        ProtocolHysteria2,
 			Name:        "Hysteria2",
-			Description: "Hysteria2 协议 (高速)",
+			Description: "基于 UDP 的高速传输协议，适合高丢包环境",
 			DefaultPort: 443,
-			Settings:    `{"up_mbps":100,"down_mbps":100}`,
+			TLS:         1,
+			Settings:    `{"up_mbps":100,"down_mbps":100,"obfs":"salamander","obfs-password":"auth_password"}`,
+			Transport:   "udp",
 		},
 		{
 			Type:        ProtocolTUIC,
-			Name:        "TUIC",
-			Description: "TUIC v5 协议",
+			Name:        "TUIC v5",
+			Description: "基于 QUIC 的现代传输协议",
 			DefaultPort: 443,
+			TLS:         1,
 			Settings:    `{"congestion_control":"bbr"}`,
-		},
-		{
-			Type:        ProtocolAnyTLS,
-			Name:        "AnyTLS",
-			Description: "AnyTLS 协议",
-			DefaultPort: 443,
-			Settings:    `{}`,
+			Transport:   "udp",
 		},
 	}
 }

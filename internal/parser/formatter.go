@@ -597,6 +597,9 @@ func (f *ClashFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRe
 			},
 		},
 		"rules": []string{
+			"DOMAIN-SUFFIX,google.com,🚀 节点选择",
+			"DOMAIN-KEYWORD,google,🚀 节点选择",
+			"DOMAIN-SUFFIX,ad.com,REJECT",
 			"GEOIP,CN,DIRECT",
 			"MATCH,🚀 节点选择",
 		},

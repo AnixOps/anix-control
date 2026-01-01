@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 	"time"
@@ -34,11 +33,11 @@ func InitAdmin(cfg *config.Config) {
 	password := cfg.Admin.Password
 
 	if email == "" {
-		email = fmt.Sprintf("admin_%d@v2board.com", time.Now().Unix())
+		email = "admin@v2board.com"
 	}
 
 	if password == "" {
-		password = generateRandomPassword(12)
+		password = "password" // Default for dev if not configured
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

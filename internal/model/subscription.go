@@ -241,6 +241,7 @@ const (
 	FormatQuantumultX  SubscriptionFormat = "quantumultx"  // Quantumult X 配置
 	FormatJSON         SubscriptionFormat = "json"         // 原始 JSON
 	FormatBase64JSON   SubscriptionFormat = "base64json"   // Base64 编码的 JSON (你的自定义格式)
+	FormatSingBox      SubscriptionFormat = "sing-box"     // Sing-box JSON
 )
 
 // SubscriptionRequest 订阅请求参数

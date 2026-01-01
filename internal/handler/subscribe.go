@@ -40,11 +40,32 @@ func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
 		return
 	}
 
+	// 支持从扩展名检测格式 (例如 /s/TOKEN.yaml)
+	ext := ""
+	if lastDot := strings.LastIndex(token, "."); lastDot != -1 {
+		ext = token[lastDot+1:]
+		token = token[:lastDot] // 去掉扩展名的才是真正的 token
+	}
+
 	// 检测输出格式
 	formatStr := c.Query("type")
 	if formatStr == "" {
-		// 根据 User-Agent 自动检测
-		formatStr = h.detectFormatFromUserAgent(c.GetHeader("User-Agent"))
+		if ext != "" {
+			// 根据后缀映射
+			switch strings.ToLower(ext) {
+			case "yaml", "yml":
+				formatStr = "clash"
+			case "json":
+				formatStr = "sing-box"
+			case "txt":
+				formatStr = "v2ray"
+			}
+		}
+
+		if formatStr == "" {
+			// 根据 User-Agent 自动检测
+			formatStr = h.detectFormatFromUserAgent(c.GetHeader("User-Agent"))
+		}
 	}
 
 	format := model.SubscriptionFormat(formatStr)
@@ -100,7 +121,9 @@ func (h *SubscribeHandler) detectFormatFromUserAgent(ua string) string {
 		`v2rayn`:       "v2ray",
 		`v2box`:        "v2ray",
 		`nekoray`:      "v2ray",
-		`sing-box`:     "json",
+		`sing-box`:     "sing-box",
+		`s-box`:        "sing-box",
+		`nekobox`:      "sing-box",
 	}
 
 	for pattern, format := range patterns {
@@ -482,6 +505,7 @@ func (h *SubscriptionAdminHandler) GetSubscriptionFormats(c *gin.Context) {
 		{"id": "quantumultx", "name": "Quantumult X", "description": "适用于 Quantumult X iOS"},
 		{"id": "json", "name": "JSON", "description": "原始 JSON 格式"},
 		{"id": "base64json", "name": "Base64 JSON", "description": "Base64 编码的分组 JSON 格式"},
+		{"id": "sing-box", "name": "Sing-box", "description": "适用于 Sing-box, Nekobox 等"},
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": formats})
