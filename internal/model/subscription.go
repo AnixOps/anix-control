@@ -18,6 +18,7 @@ type SubscriptionGroup struct {
 
 	// 关联
 	Templates []SubscriptionTemplate `gorm:"foreignKey:GroupID" json:"templates,omitempty"`
+	Protocols []NodeProtocol         `gorm:"many2many:v2_subscription_group_node_protocols;" json:"protocols,omitempty"`
 }
 
 func (SubscriptionGroup) TableName() string {

@@ -279,6 +279,48 @@ func (s *NodeService) GetProtocols(nodeID uint) ([]model.NodeProtocol, error) {
 	return protocols, nil
 }
 
+// GetProtocolsByGroup 获取关联到特定分组的协议列表
+func (s *NodeService) GetProtocolsByGroup(groupID uint) ([]model.NodeProtocol, error) {
+	var protocols []model.NodeProtocol
+	if err := s.db.Preload("Node").
+		Joins("JOIN v2_subscription_group_node_protocols ON v2_subscription_group_node_protocols.node_protocol_id = v2_node_protocol.id").
+		Where("v2_subscription_group_node_protocols.subscription_group_id = ?", groupID).
+		Find(&protocols).Error; err != nil {
+		return nil, err
+	}
+	return protocols, nil
+}
+
+// AssignProtocolsToGroup 为分组分配节点协议
+func (s *NodeService) AssignProtocolsToGroup(groupID uint, protocolIDs []uint) error {
+	var group model.SubscriptionGroup
+	if err := s.db.First(&group, groupID).Error; err != nil {
+		return err
+	}
+
+	var protocols []model.NodeProtocol
+	if len(protocolIDs) > 0 {
+		if err := s.db.Where("id IN ?", protocolIDs).Find(&protocols).Error; err != nil {
+			return err
+		}
+	}
+
+	// 替换关联（清空旧的并添加新的）
+	return s.db.Model(&group).Association("Protocols").Replace(protocols)
+}
+
+// GetAllAvailableProtocols 获取所有可显示在订阅中的协议
+func (s *NodeService) GetAllAvailableProtocols() ([]model.NodeProtocol, error) {
+	var protocols []model.NodeProtocol
+	if err := s.db.Preload("Node").Preload("SubscriptionGroups").
+		Where("show = 1").
+		Order("node_id ASC, sort ASC").
+		Find(&protocols).Error; err != nil {
+		return nil, err
+	}
+	return protocols, nil
+}
+
 // GetProtocol 获取协议详情
 func (s *NodeService) GetProtocol(id uint) (*model.NodeProtocol, error) {
 	var protocol model.NodeProtocol
@@ -379,11 +421,12 @@ func (s *NodeService) GetNodeStats() (map[string]interface{}, error) {
 		Scan(&totalDownload)
 
 	return map[string]interface{}{
-		"total_nodes":    totalNodes,
-		"online_nodes":   onlineNodes,
-		"pending_nodes":  pendingNodes,
-		"total_upload":   totalUpload,
-		"total_download": totalDownload,
+		"total":   totalNodes,
+		"online":  onlineNodes,
+		"pending": pendingNodes,
+		"offline": totalNodes - onlineNodes - pendingNodes,
+		"up":      totalUpload,
+		"down":    totalDownload,
 	}, nil
 }
 

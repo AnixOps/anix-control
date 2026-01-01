@@ -272,6 +272,64 @@ func (h *SubscriptionAdminHandler) GetTemplates(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": templates})
 }
 
+// GetGroupProtocols 获取属于该分组的物理节点协议
+// GET /api/v2/admin/subscription/groups/:id/protocols
+func (h *SubscriptionAdminHandler) GetGroupProtocols(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		return
+	}
+
+	nodeService := service.NewNodeService()
+	protocols, err := nodeService.GetProtocolsByGroup(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取协议失败", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": protocols})
+}
+
+// UpdateGroupProtocols 更新分组关联的物理节点协议
+// POST /api/v2/admin/subscription/groups/:id/protocols
+func (h *SubscriptionAdminHandler) UpdateGroupProtocols(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		return
+	}
+
+	var req struct {
+		ProtocolIDs []uint `json:"protocol_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		return
+	}
+
+	nodeService := service.NewNodeService()
+	if err := nodeService.AssignProtocolsToGroup(uint(id), req.ProtocolIDs); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
+}
+
+// GetAvailableProtocols 获取所有可用的物理节点协议 (Protocol Pool)
+// GET /api/v2/admin/subscription/protocols/available
+func (h *SubscriptionAdminHandler) GetAvailableProtocols(c *gin.Context) {
+	nodeService := service.NewNodeService()
+	protocols, err := nodeService.GetAllAvailableProtocols()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取失败", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": protocols})
+}
+
 // CreateTemplate 创建订阅模板
 // POST /api/v2/admin/subscription/groups/:id/templates
 func (h *SubscriptionAdminHandler) CreateTemplate(c *gin.Context) {

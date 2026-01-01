@@ -85,13 +85,15 @@ const (
 
 // NodeProtocol 节点协议配置
 type NodeProtocol struct {
-	ID     uint         `gorm:"primaryKey" json:"id"`
-	NodeID uint         `gorm:"index" json:"node_id"`      // 所属节点
-	Name   string       `gorm:"size:100" json:"name"`      // 协议名称
-	Type   ProtocolType `gorm:"size:20;index" json:"type"` // 协议类型
-	Port   int          `json:"port"`                      // 监听端口
-	Enable int          `gorm:"default:1" json:"enable"`   // 是否启用
-	Sort   int          `gorm:"default:0" json:"sort"`     // 排序
+	ID      uint         `gorm:"primaryKey" json:"id"`
+	NodeID  uint         `gorm:"index" json:"node_id"`      // 所属节点
+	Name    string       `gorm:"size:100" json:"name"`      // 协议名称
+	Type    ProtocolType `gorm:"size:20;index" json:"type"` // 协议类型
+	Port    int          `json:"port"`                      // 监听端口
+	Enable  int          `gorm:"default:1" json:"enable"`   // 是否启用 (节点端是否运行)
+	Show    int          `gorm:"default:1" json:"show"`     // 是否显示在订阅中
+	Sort    int          `gorm:"default:0" json:"sort"`     // 排序
+	GroupID *uint        `gorm:"index" json:"group_id"`     // 所属订阅分组 (如果为空则跟随节点)
 
 	// 通用配置
 	Host *string `gorm:"size:255" json:"host"` // 连接地址 (可覆盖节点host)
@@ -114,7 +116,8 @@ type NodeProtocol struct {
 	UpdatedAt time.Time `json:"updated_at"`
 
 	// 关联
-	Node *Node `gorm:"foreignKey:NodeID" json:"node,omitempty"`
+	Node               *Node               `gorm:"foreignKey:NodeID" json:"node,omitempty"`
+	SubscriptionGroups []SubscriptionGroup `gorm:"many2many:v2_subscription_group_node_protocols;" json:"subscription_groups,omitempty"`
 }
 
 func (NodeProtocol) TableName() string {

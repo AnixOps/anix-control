@@ -350,6 +350,31 @@ export function getSubscriptionTemplates(groupId) {
   })
 }
 
+// 获取分组下的物理节点协议列表
+export function getSubscriptionProtocols(groupId) {
+  return request({
+    url: `/admin/subscription/groups/${groupId}/protocols`,
+    method: 'get'
+  })
+}
+
+// 更新分组关联的物理节点协议
+export function updateGroupProtocols(groupId, protocolIds) {
+  return request({
+    url: `/admin/subscription/groups/${groupId}/protocols`,
+    method: 'post',
+    data: { protocol_ids: protocolIds }
+  })
+}
+
+// 获取所有可用的物理节点协议 (Protocol Pool)
+export function getAvailableProtocols() {
+  return request({
+    url: '/admin/subscription/protocols/available',
+    method: 'get'
+  })
+}
+
 // 创建订阅模板
 export function createSubscriptionTemplate(groupId, data) {
   return request({
@@ -608,6 +633,9 @@ export default {
   updateSubscriptionGroup,
   deleteSubscriptionGroup,
   getSubscriptionTemplates,
+  getSubscriptionProtocols,
+  updateGroupProtocols,
+  getAvailableProtocols,
   createSubscriptionTemplate,
   getSubscriptionTemplate,
   updateSubscriptionTemplate,
