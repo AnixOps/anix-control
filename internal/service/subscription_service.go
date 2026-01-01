@@ -85,8 +85,8 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 	// 7. 应用过滤规则
 	nodes = s.filterNodes(nodes, req.Include, req.Exclude)
 
-	// 8. 获取内部节点 (从 Node 表)
-	internalNodes, err := s.getInternalNodes(user, ctx)
+	// 8. 获取内部节点 (从 Node 表, 基于分组关联)
+	internalNodes, err := s.getInternalNodes(user, ctx, groups)
 	if err == nil && len(internalNodes) > 0 {
 		nodes = append(internalNodes, nodes...)
 	}
@@ -95,6 +95,19 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 	format := req.Format
 	if format == "" {
 		format = model.FormatV2Ray
+	}
+
+	// 9. 去重 (针对非 V2Ray 分组模式)
+	if !(format == model.FormatV2Ray && len(groups) > 0) {
+		uniqueNodes := make([]*model.ParsedNode, 0, len(nodes))
+		nodeMap := make(map[string]bool)
+		for _, n := range nodes {
+			if !nodeMap[n.ID] {
+				uniqueNodes = append(uniqueNodes, n)
+				nodeMap[n.ID] = true
+			}
+		}
+		nodes = uniqueNodes
 	}
 
 	formatter, ok := s.registry.GetFormatter(format)
@@ -109,7 +122,7 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 		var groupPlainParts []string
 
 		// 获取全部内部节点一次，用于按组过滤
-		internalNodes, _ := s.getInternalNodes(user, ctx)
+		internalNodes, _ := s.getInternalNodes(user, ctx, groups)
 
 		for _, g := range groups {
 			// 模板节点
@@ -377,10 +390,8 @@ func (s *SubscriptionService) renderTemplate(tpl *model.SubscriptionTemplate, ct
 
 	// 协议配置
 	protocolSettings := tpl.GetProtocolSettings()
-	if protocolSettings != nil {
-		for k, v := range protocolSettings {
-			node.Settings[k] = v
-		}
+	for k, v := range protocolSettings {
+		node.Settings[k] = v
 	}
 
 	// 如果有自定义模板 JSON，使用它覆盖
@@ -485,26 +496,56 @@ func (s *SubscriptionService) filterNodes(nodes []*model.ParsedNode, include, ex
 }
 
 // getInternalNodes 获取内部节点 (从 Node 表)
-func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.TemplateRenderContext) ([]*model.ParsedNode, error) {
-	var nodes []*model.Node
-
-	query := s.db.Where("status = ? AND show = 1", model.NodeStatusOnline)
-
-	// 如果用户有分组限制
-	if user.GroupID != nil {
-		query = query.Where("group_id IS NULL OR group_id = ?", *user.GroupID)
+func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.TemplateRenderContext, groups []*model.SubscriptionGroup) ([]*model.ParsedNode, error) {
+	if len(groups) == 0 {
+		return nil, nil
 	}
 
-	if err := query.Preload("Protocols", "enable = 1").Order("sort ASC, id ASC").Find(&nodes).Error; err != nil {
+	groupIDs := make([]uint, len(groups))
+	groupMap := make(map[uint]bool)
+	for i, g := range groups {
+		groupIDs[i] = g.ID
+		groupMap[g.ID] = true
+	}
+
+	var protocols []model.NodeProtocol
+	// 查询关联到这些分组的协议
+	// 调试日志：打印正在查询的分组 ID
+	fmt.Printf("[Subscription] Requesting internal nodes for groupIDs: %v\n", groupIDs)
+
+	if err := s.db.Preload("Node").Preload("SubscriptionGroups").
+		Joins("JOIN v2_subscription_group_node_protocols ON v2_subscription_group_node_protocols.node_protocol_id = v2_node_protocol.id").
+		Where("v2_subscription_group_node_protocols.subscription_group_id IN ? AND v2_node_protocol.enable = 1", groupIDs).
+		Find(&protocols).Error; err != nil {
+		fmt.Printf("[Subscription] DB Query Error: %v\n", err)
 		return nil, err
 	}
 
-	var result []*model.ParsedNode
+	fmt.Printf("[Subscription] Found %d candidate protocols\n", len(protocols))
 
-	for _, node := range nodes {
-		for _, protocol := range node.Protocols {
-			parsed := s.nodeProtocolToParsedNode(node, &protocol, ctx)
+	var result []*model.ParsedNode
+	for _, p := range protocols {
+		if p.Node == nil {
+			fmt.Printf("[Subscription] Protocol %d has no Node associated\n", p.ID)
+			continue
+		}
+
+		fmt.Printf("[Subscription] Checking node %s (Online: %v, LastCheck: %v)\n", p.Node.Name, p.Node.IsOnline(), p.Node.LastCheckAt)
+
+		// 调试期间放宽在线检查，先让东西出来
+		// if !p.Node.IsOnline() { continue }
+
+		// 遍历协议所属的所有分组
+		for _, g := range p.SubscriptionGroups {
+			// 只处理用户当前请求的分组
+			if !groupMap[g.ID] {
+				continue
+			}
+
+			parsed := s.nodeProtocolToParsedNode(p.Node, &p, ctx)
 			if parsed != nil {
+				parsed.GroupID = g.ID
+				parsed.GroupName = g.Name
 				result = append(result, parsed)
 			}
 		}

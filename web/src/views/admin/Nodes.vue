@@ -70,9 +70,9 @@
                 {{ getStatusText(node.status) }}
               </span>
             </td>
-            <td>{{ node.protocol_count || 0 }}</td>
+            <td>{{ node.protocols?.length || 0 }}</td>
             <td>{{ formatBytes(node.traffic_today || 0) }}</td>
-            <td>{{ formatTime(node.last_heartbeat) }}</td>
+            <td>{{ formatTime(node.last_check_at) }}</td>
             <td class="actions">
               <button class="btn btn-sm btn-info" @click="openProtocols(node)">
                 📡 协议
@@ -175,12 +175,12 @@
             <tbody>
               <tr v-for="protocol in protocols" :key="protocol.id">
                 <td>
-                  <span class="protocol-type">{{ protocol.protocol_type }}</span>
+                  <span class="protocol-type">{{ (protocol.type || 'unknown').toUpperCase() }}</span>
                 </td>
                 <td>{{ protocol.port }}</td>
                 <td>
-                  <span :class="['status-badge', protocol.enabled ? 'status-online' : 'status-disabled']">
-                    {{ protocol.enabled ? '启用' : '禁用' }}
+                  <span :class="['status-badge', protocol.enable ? 'status-online' : 'status-disabled']">
+                    {{ protocol.enable ? '启用' : '禁用' }}
                   </span>
                 </td>
                 <td>
@@ -294,11 +294,19 @@
             </div>
           </div>
 
-          <div class="form-group">
-            <label class="checkbox-label">
-              <input type="checkbox" v-model="protocolForm.enable" :true-value="1" :false-value="0" />
-              启用此协议
-            </label>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="protocolForm.enable" :true-value="1" :false-value="0" />
+                <span>启用协议 (节点端运行)</span>
+              </label>
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="protocolForm.show" :true-value="1" :false-value="0" />
+                <span>显示在订阅协议池中 (可在“订阅管理”中配置关联)</span>
+              </label>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -422,7 +430,8 @@ const protocolForm = reactive({
   tls_settings: '{}',
   transport_settings: '{}',
   reality_settings: '{}',
-  custom_config: ''
+  custom_config: '',
+  show: 1
 })
 const protocolTemplates = ref([])
 const selectedTemplate = ref('')
@@ -564,7 +573,8 @@ const openAddProtocol = () => {
     tls_settings: '{}',
     transport_settings: '{}',
     reality_settings: '{}',
-    custom_config: ''
+    custom_config: '',
+    show: 1
   })
   selectedTemplate.value = ''
   showProtocolFormModal.value = true
@@ -583,7 +593,8 @@ const editProtocol = (protocol) => {
     tls_settings: protocol.tls_settings || '{}',
     transport_settings: protocol.transport_settings || '{}',
     reality_settings: protocol.reality_settings || '{}',
-    custom_config: protocol.custom_config || ''
+    custom_config: protocol.custom_config || '',
+    show: protocol.show ?? 1
   })
   showProtocolFormModal.value = true
 }
@@ -623,7 +634,9 @@ const saveProtocol = async () => {
       tls_settings: protocolForm.tls_settings,
       transport_settings: protocolForm.transport_settings,
       reality_settings: protocolForm.reality_settings,
-      custom_config: protocolForm.mode === 'custom' ? protocolForm.custom_config : null
+      custom_config: protocolForm.mode === 'custom' ? protocolForm.custom_config : null,
+      show: protocolForm.show,
+      group_id: protocolForm.group_id
     }
     
     if (editingProtocol.value) {
@@ -737,6 +750,7 @@ onMounted(() => {
   loadStats()
   loadProtocolTemplates()
   loadAuthKeys()
+  loadSubscriptionGroups()
 })
 </script>
 

@@ -158,6 +158,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 			// 订阅模板
 			admin.GET("/subscription/groups/:id/templates", subAdmin.GetTemplates)
+			admin.GET("/subscription/groups/:id/protocols", subAdmin.GetGroupProtocols)
+			admin.POST("/subscription/groups/:id/protocols", subAdmin.UpdateGroupProtocols)
 			admin.POST("/subscription/groups/:id/templates", subAdmin.CreateTemplate)
 			admin.GET("/subscription/templates/:id", subAdmin.GetTemplate)
 			admin.PUT("/subscription/templates/:id", subAdmin.UpdateTemplate)
@@ -176,6 +178,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			// 订阅工具接口
 			admin.GET("/subscription/formats", subAdmin.GetSubscriptionFormats)
 			admin.GET("/subscription/protocols", subAdmin.GetProtocolTypes)
+			admin.GET("/subscription/protocols/available", subAdmin.GetAvailableProtocols)
 			admin.POST("/subscription/preview", subAdmin.PreviewSubscription)
 
 			// 套餐管理

@@ -57,7 +57,12 @@
       "groupSaved": "分组已保存",
       "templateSaved": "模板已保存",
       "saveError": "保存失败",
-      "updateError": "更新失败"
+      "updateError": "更新失败",
+      "productionNodes": "物理节点协议",
+      "manageProtocols": "管理关联",
+      "availableProtocols": "可用节点协议池",
+      "confirmUpdate": "确认保存",
+      "updateSuccess": "更新成功"
     }
   }
 }
