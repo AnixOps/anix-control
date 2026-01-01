@@ -85,6 +85,14 @@ func main() {
 			&model.PlanSubscriptionGroup{},
 			// 事件与新模型
 			&model.Event{},
+			// 工单系统
+			&model.Ticket{},
+			&model.TicketMessage{},
+			// 优惠券系统
+			&model.Coupon{},
+			&model.CouponUsage{},
+			// 知识库
+			&model.Knowledge{},
 		); err != nil {
 			log.Fatalf("Failed to migrate database: %v", err)
 		}
@@ -169,6 +177,15 @@ func startFrontendServer(cfg *config.Config) {
 	// API 代理 - 将 /api 请求转发到 API 服务器
 	apiTarget := fmt.Sprintf("http://127.0.0.1:%d", cfg.Server.Port)
 	r.Any("/api/*path", func(c *gin.Context) {
+		proxyAPI(c, apiTarget)
+	})
+
+	// 订阅代理 - 将 /s (或自定义路径) 转发到 API 服务器
+	subPath := cfg.App.SubscribePath
+	if subPath == "" {
+		subPath = "s"
+	}
+	r.Any("/"+subPath+"/*path", func(c *gin.Context) {
 		proxyAPI(c, apiTarget)
 	})
 

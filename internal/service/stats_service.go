@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -119,7 +120,7 @@ func (s *StatsService) GetDashboardStats(forceRefresh bool) (*DashboardStats, er
 
 // GetUserSubscription 获取用户订阅详情 (优先从缓存读取)
 func (s *StatsService) GetUserSubscription(userID uint, forceRefresh bool) (*UserSubscription, error) {
-	cacheKey := CacheKeyUserSubscription + string(rune(userID))
+	cacheKey := fmt.Sprintf("%s%d", CacheKeyUserSubscription, userID)
 
 	// 尝试从缓存获取
 	if !forceRefresh {
@@ -152,7 +153,7 @@ func (s *StatsService) RefreshDashboardCache() error {
 
 // InvalidateUserCache 使用户缓存失效 (用户数据变更时调用)
 func (s *StatsService) InvalidateUserCache(userID uint) {
-	cacheKey := CacheKeyUserSubscription + string(rune(userID))
+	cacheKey := fmt.Sprintf("%s%d", CacheKeyUserSubscription, userID)
 	cache.Delete(cacheKey)
 }
 

@@ -58,40 +58,6 @@ func InitSubscriptionDefaults() {
 		ServerName:       strPtr("www.microsoft.com"),
 		TLS:              2, // Reality
 		TLSFingerprint:   strPtr("chrome"),
-		// InitDefaultPlan 确保数据库中有一个默认套餐（如“基础套餐”）
-		func InitDefaultPlan() {
-			db := database.Get()
-			var count int64
-			db.Model(&model.Plan{}).Count(&count)
-			if count > 0 {
-				return // 已有套餐，不重复初始化
-			}
-
-			log.Println("Initializing default plan...")
-
-			// 查找 default 分组
-			var group model.SubscriptionGroup
-			if err := db.Where("name = ?", "default").First(&group).Error; err != nil {
-				log.Printf("Failed to find default subscription group for plan: %v", err)
-				return
-			}
-
-			plan := &model.Plan{
-				GroupID:        group.ID,
-				Name:           "基础套餐",
-				TransferEnable: 100 * 1024 * 1024 * 1024, // 100GB
-				MonthPrice:     ptrInt64(1200), // 单位：分（12元）
-				Show:           1,
-				Renew:          1,
-				Sort:           ptrInt(0),
-			}
-			if err := db.Create(plan).Error; err != nil {
-				log.Printf("Failed to create default plan: %v", err)
-			}
-		}
-
-		func ptrInt64(v int64) *int64 { return &v }
-		func ptrInt(v int) *int { return &v }
 		Transport:        "tcp",
 		Flow:             strPtr("xtls-rprx-vision"), // 使用新字段
 		RealityPublicKey: strPtr("your-reality-public-key"),
@@ -102,6 +68,9 @@ func InitSubscriptionDefaults() {
 	if err := db.Create(vlessTemplate).Error; err != nil {
 		log.Printf("Failed to create VLESS template: %v", err)
 	}
+
+	// 初始化默认套餐
+	InitDefaultPlan()
 
 	// 创建示例模板 - VMess WS
 	vmessTemplate := &model.SubscriptionTemplate{
@@ -282,3 +251,38 @@ func InitSubscriptionDefaults() {
 func strPtr(s string) *string {
 	return &s
 }
+
+// InitDefaultPlan 确保数据库中有一个默认套餐（如“基础套餐”）
+func InitDefaultPlan() {
+	db := database.Get()
+	var count int64
+	db.Model(&model.Plan{}).Count(&count)
+	if count > 0 {
+		return // 已有套餐，不重复初始化
+	}
+
+	log.Println("Initializing default plan...")
+
+	// 查找 default 分组
+	var group model.SubscriptionGroup
+	if err := db.Where("name = ?", "default").First(&group).Error; err != nil {
+		log.Printf("Failed to find default subscription group for plan: %v", err)
+		return
+	}
+
+	plan := &model.Plan{
+		GroupID:        group.ID,
+		Name:           "基础套餐",
+		TransferEnable: 100 * 1024 * 1024 * 1024, // 100GB
+		MonthPrice:     ptrInt64(1200),           // 单位：分（12元）
+		Show:           1,
+		Renew:          1,
+		Sort:           ptrInt(0),
+	}
+	if err := db.Create(plan).Error; err != nil {
+		log.Printf("Failed to create default plan: %v", err)
+	}
+}
+
+func ptrInt64(v int64) *int64 { return &v }
+func ptrInt(v int) *int       { return &v }

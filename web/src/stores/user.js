@@ -22,12 +22,26 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('userInfo')
   }
 
+  async function getUserInfo() {
+    try {
+      const { getProfile } = await import('@/api/user')
+      const res = await getProfile()
+      if (res.data) {
+        userInfo.value = res.data
+        localStorage.setItem('userInfo', JSON.stringify(res.data))
+      }
+    } catch (e) {
+      console.error('Failed to fetch user info:', e)
+    }
+  }
+
   return {
     token,
     userInfo,
     isLoggedIn,
     isAdmin,
     login,
-    logout
+    logout,
+    getUserInfo
   }
 })

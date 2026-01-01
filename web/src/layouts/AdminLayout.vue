@@ -40,6 +40,9 @@
           <router-link to="/admin/orders" @click="closeSidebar">
             <span class="nav-icon">📋</span> 订单管理
           </router-link>
+          <router-link to="/admin/tickets" @click="closeSidebar">
+            <span class="nav-icon">🎫</span> 工单管理
+          </router-link>
         </div>
         
         <div class="nav-section">
@@ -49,6 +52,23 @@
           </router-link>
           <router-link to="/admin/subscriptions" @click="closeSidebar">
             <span class="nav-icon">📡</span> 订阅管理
+          </router-link>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-title">营销管理</div>
+          <router-link to="/admin/plans" @click="closeSidebar">
+            <span class="nav-icon">💰</span> 套餐管理
+          </router-link>
+          <router-link to="/admin/coupons" @click="closeSidebar">
+            <span class="nav-icon">🎟️</span> 优惠券
+          </router-link>
+        </div>
+        
+        <div class="nav-section">
+          <div class="nav-title">内容管理</div>
+          <router-link to="/admin/knowledge" @click="closeSidebar">
+            <span class="nav-icon">📚</span> 知识库
           </router-link>
         </div>
         
@@ -65,7 +85,7 @@
           <div class="user-avatar">👤</div>
           <div class="user-details">
             <div class="user-name">管理员</div>
-            <div class="user-email">{{ userStore.user?.email }}</div>
+            <div class="user-email">{{ userStore.userInfo?.email }}</div>
           </div>
         </div>
         <button class="btn-ghost btn-sm w-full" @click="logout">退出登录</button>
@@ -106,6 +126,10 @@ const pageTitles = {
   '/admin/nodes': '节点管理',
   '/admin/subscriptions': '订阅管理',
   '/admin/orders': '订单管理',
+  '/admin/plans': '套餐管理',
+  '/admin/tickets': '工单管理',
+  '/admin/coupons': '优惠券管理',
+  '/admin/knowledge': '知识库管理',
   '/admin/settings': '系统设置'
 }
 
@@ -134,6 +158,9 @@ let timer
 onMounted(() => {
   updateTime()
   timer = setInterval(updateTime, 60000)
+  if (userStore.isLoggedIn) {
+    userStore.getUserInfo()
+  }
 })
 
 onUnmounted(() => {

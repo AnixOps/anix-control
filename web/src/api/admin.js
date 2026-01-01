@@ -446,6 +446,126 @@ export function assignPlanToUser(id, data) {
   })
 }
 
+// ====== 套餐-订阅分组关联 ======
+
+// 获取套餐关联的订阅分组
+export function getPlanGroups(planId) {
+  return request({
+    url: `/admin/subscription/plans/${planId}/groups`,
+    method: 'get'
+  })
+}
+
+// 给套餐添加订阅分组
+export function addGroupToPlan(planId, groupId) {
+  return request({
+    url: `/admin/subscription/plans/${planId}/groups`,
+    method: 'post',
+    data: { group_id: groupId }
+  })
+}
+
+// 从套餐移除订阅分组
+export function removeGroupFromPlan(planId, groupId) {
+  return request({
+    url: `/admin/subscription/plans/${planId}/groups/${groupId}`,
+    method: 'delete'
+  })
+}
+
+// ====== 工单管理 ======
+
+// 获取工单列表
+export function getTickets(params) {
+  return request({
+    url: '/admin/ticket',
+    method: 'get',
+    params
+  })
+}
+
+// 回复工单
+export function replyTicket(data) {
+  return request({
+    url: '/admin/ticket/reply',
+    method: 'post',
+    data
+  })
+}
+
+// 关闭工单
+export function closeTicket(id) {
+  return request({
+    url: `/admin/ticket/${id}/close`,
+    method: 'post'
+  })
+}
+
+// ====== 优惠券管理 ======
+
+// 获取优惠券列表
+export function getCoupons(params) {
+  return request({
+    url: '/admin/coupon',
+    method: 'get',
+    params
+  })
+}
+
+// 创建优惠券
+export function createCoupon(data) {
+  return request({
+    url: '/admin/coupon',
+    method: 'post',
+    data
+  })
+}
+
+// 删除优惠券
+export function deleteCoupon(id) {
+  return request({
+    url: `/admin/coupon/${id}`,
+    method: 'delete'
+  })
+}
+
+// ====== 知识库管理 ======
+
+// 获取知识库文章列表
+export function getKnowledgeList(params) {
+  return request({
+    url: '/admin/knowledge',
+    method: 'get',
+    params
+  })
+}
+
+// 创建知识库文章
+export function createKnowledge(data) {
+  return request({
+    url: '/admin/knowledge',
+    method: 'post',
+    data
+  })
+}
+
+// 更新知识库文章
+export function updateKnowledge(id, data) {
+  return request({
+    url: `/admin/knowledge/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除知识库文章
+export function deleteKnowledge(id) {
+  return request({
+    url: `/admin/knowledge/${id}`,
+    method: 'delete'
+  })
+}
+
 // 默认导出
 export default {
   getDashboard,
@@ -492,11 +612,29 @@ export default {
   getSubscriptionTemplate,
   updateSubscriptionTemplate,
   deleteSubscriptionTemplate,
-  previewSubscription
-  ,getPlans
-  ,createPlan
-  ,getPlan
-  ,updatePlan
-  ,deletePlan
-  ,assignPlanToUser
+  previewSubscription,
+  getPlans,
+  createPlan,
+  getPlan,
+  updatePlan,
+  deletePlan,
+  assignPlanToUser,
+  // 套餐-订阅分组关联
+  getPlanGroups,
+  addGroupToPlan,
+  removeGroupFromPlan,
+  // 工单管理
+  getTickets,
+  replyTicket,
+  closeTicket,
+  // 优惠券管理
+  getCoupons,
+  createCoupon,
+  deleteCoupon,
+  // 知识库管理
+  getKnowledgeList,
+  createKnowledge,
+  updateKnowledge,
+  deleteKnowledge
 }
+

@@ -196,18 +196,42 @@ func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]interface{},
 		config["network_settings"] = transportSettings
 	}
 
-	// 根据协议类型设置特定配置
+	// 针对特定内核的特殊处理
 	switch protocol.Type {
 	case "vmess":
-		// VMess 不需要额外配置
+		// VMess 不需要额外配置，大部分都在 Settings 中
 	case "vless":
 		config["flow"] = getConfigValue(protocolConfig, "flow", "")
-	case "trojan":
-		// Trojan 不需要额外配置
 	case "shadowsocks":
 		config["cipher"] = getConfigValue(protocolConfig, "cipher", "aes-256-gcm")
 		if serverKey, ok := protocolConfig["server_key"]; ok {
 			config["server_key"] = serverKey
+		}
+	}
+
+	// Reality 配置
+	if protocol.TLS == 2 && protocol.RealitySettings != nil && *protocol.RealitySettings != "" {
+		var realitySettings map[string]interface{}
+		if err := json.Unmarshal([]byte(*protocol.RealitySettings), &realitySettings); err == nil {
+			// V2bX 将 reality 配置放在 tls_settings 内部或者顶层，取决于内核
+			// 这里我们参考主流做法，合并到 tls_settings 中
+			if config["tls_settings"] == nil {
+				config["tls_settings"] = make(map[string]interface{})
+			}
+			tlsSettings := config["tls_settings"].(map[string]interface{})
+			for k, v := range realitySettings {
+				tlsSettings[k] = v
+			}
+		}
+	}
+
+	// 优先级最高: 自定义全量配置 (如果设置了，将尝试合并或覆盖现有配置)
+	if protocol.CustomConfig != nil && *protocol.CustomConfig != "" {
+		var customConfig map[string]interface{}
+		if err := json.Unmarshal([]byte(*protocol.CustomConfig), &customConfig); err == nil {
+			for k, v := range customConfig {
+				config[k] = v
+			}
 		}
 	}
 

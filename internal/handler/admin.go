@@ -161,9 +161,27 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	if req.Balance != nil {
 		updates["balance"] = *req.Balance
 	}
+
+	// 如果更新了套餐，且没有显式提供其他套餐相关字段，则从套餐自动同步
 	if req.PlanID != nil {
 		updates["plan_id"] = *req.PlanID
+		plan, err := h.planService.Get(*req.PlanID)
+		if err == nil {
+			updates["group_id"] = plan.GroupID
+			if req.TransferEnable == nil {
+				updates["transfer_enable"] = plan.TransferEnable * 1024 * 1024 * 1024
+			}
+			if req.SpeedLimit == nil && plan.SpeedLimit != nil {
+				updates["speed_limit"] = *plan.SpeedLimit
+			}
+			if req.DeviceLimit == nil && plan.DeviceLimit != nil {
+				updates["device_limit"] = *plan.DeviceLimit
+			}
+			// 通常手动修改套餐 ID 时，如果没传过期时间，可能需要根据逻辑处理
+			// 但这里我们尊重 req.ExpiredAt 的显式设置（或不设置保持原样）
+		}
 	}
+
 	if req.ExpiredAt != nil {
 		updates["expired_at"] = *req.ExpiredAt
 	}

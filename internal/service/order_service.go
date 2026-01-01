@@ -184,18 +184,46 @@ func (s *OrderService) Create(params CreateOrderParams) (*model.Order, error) {
 		}
 	}
 
+	// 应用优惠券
+	var discountAmount int64
+	if params.CouponID != nil && *params.CouponID > 0 {
+		var coupon model.Coupon
+		if err := s.db.First(&coupon, *params.CouponID).Error; err == nil {
+			now := time.Now().Unix()
+			if coupon.StartedAt <= now && coupon.EndedAt >= now {
+				if coupon.LimitUse == nil || *coupon.LimitUse == 0 || coupon.UseCount < *coupon.LimitUse {
+					if coupon.Type == 1 { // 百分比
+						discountAmount = price * int64(coupon.Value) / 100
+					} else if coupon.Type == 2 { // 固定金额
+						discountAmount = int64(coupon.Value)
+					}
+
+					// 确保不会减成负数
+					if discountAmount > price {
+						discountAmount = price
+					}
+					price -= discountAmount
+
+					// 增加优惠券使用计数
+					s.db.Model(&coupon).UpdateColumn("use_count", gorm.Expr("use_count + 1"))
+				}
+			}
+		}
+	}
+
 	// 生成交易号
 	tradeNo := generateTradeNo()
 
 	order := &model.Order{
-		UserID:      params.UserID,
-		PlanID:      params.PlanID,
-		CouponID:    params.CouponID,
-		Type:        orderType,
-		Period:      params.Period,
-		TradeNo:     tradeNo,
-		TotalAmount: price,
-		Status:      0, // 待支付
+		UserID:         params.UserID,
+		PlanID:         params.PlanID,
+		CouponID:       params.CouponID,
+		Type:           orderType,
+		Period:         params.Period,
+		TradeNo:        tradeNo,
+		TotalAmount:    price,
+		DiscountAmount: &discountAmount,
+		Status:         0, // 待支付
 	}
 
 	if err := s.db.Create(order).Error; err != nil {
@@ -224,51 +252,69 @@ func (s *OrderService) Cancel(orderID uint) error {
 
 // Complete 完成订单 (支付成功后处理)
 func (s *OrderService) Complete(orderID uint) error {
-	order, err := s.GetByID(orderID)
-	if err != nil {
-		return err
-	}
-
-	if order.Status != 1 {
-		return errors.New("订单状态错误")
-	}
-
+	// 启用事务执行订单完成逻辑
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		// 获取套餐
-		var plan model.Plan
-		if err := tx.First(&plan, order.PlanID).Error; err != nil {
+		// 1. 获取并锁定订单记录
+		var order model.Order
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").Preload("User").First(&order, orderID).Error; err != nil {
 			return err
 		}
 
-		// 计算到期时间
-		var expiredAt int64
-		now := time.Now()
-		switch order.Period {
-		case "month":
-			expiredAt = now.AddDate(0, 1, 0).Unix()
-		case "quarter":
-			expiredAt = now.AddDate(0, 3, 0).Unix()
-		case "half_year":
-			expiredAt = now.AddDate(0, 6, 0).Unix()
-		case "year":
-			expiredAt = now.AddDate(1, 0, 0).Unix()
-		case "two_year":
-			expiredAt = now.AddDate(2, 0, 0).Unix()
-		case "three_year":
-			expiredAt = now.AddDate(3, 0, 0).Unix()
-		case "onetime":
-			expiredAt = now.AddDate(100, 0, 0).Unix() // 100年
+		if order.Status != 1 {
+			return errors.New("订单状态不处于已支付，无法完成")
 		}
 
-		// 更新用户
-		userUpdates := map[string]interface{}{
-			"plan_id":         order.PlanID,
-			"group_id":        plan.GroupID,
-			"transfer_enable": plan.TransferEnable * 1024 * 1024 * 1024, // GB to bytes
-			"expired_at":      expiredAt,
-			"u":               0, // 重置上传流量
-			"d":               0, // 重置下载流量
+		// 2. 获取套餐详情及关联分组
+		var plan model.Plan
+		if err := tx.First(&plan, order.PlanID).Error; err != nil {
+			return errors.New("关联套餐不存在")
 		}
+
+		var planGroups []model.PlanSubscriptionGroup
+		tx.Where("plan_id = ?", plan.ID).Find(&planGroups)
+
+		// 3. 计算日期逻辑 (面向生产：支持续费累加)
+		var expiredAt int64
+		now := time.Now()
+
+		// 基础增加时间计算
+		var addMonths, addDays int
+		switch order.Period {
+		case "month":
+			addMonths = 1
+		case "quarter":
+			addMonths = 3
+		case "half_year":
+			addMonths = 6
+		case "year":
+			addMonths = 12
+		case "two_year":
+			addMonths = 24
+		case "three_year":
+			addMonths = 36
+		case "onetime":
+			addMonths = 1200 // 100年
+		}
+
+		// 如果用户当前套餐与订单套餐一致且未过期，则在原有基础上累加
+		if order.User.PlanID != nil && *order.User.PlanID == plan.ID && order.User.ExpiredAt != nil && *order.User.ExpiredAt > now.Unix() {
+			baseTime := time.Unix(*order.User.ExpiredAt, 0)
+			expiredAt = baseTime.AddDate(0, addMonths, addDays).Unix()
+		} else {
+			// 新购或切换套餐，从现在开始计算
+			expiredAt = now.AddDate(0, addMonths, addDays).Unix()
+		}
+
+		// 4. 更新用户主表信息
+		userUpdates := map[string]interface{}{
+			"plan_id":         plan.ID,
+			"group_id":        plan.GroupID, // 保持向后兼容
+			"transfer_enable": plan.TransferEnable * 1024 * 1024 * 1024,
+			"expired_at":      expiredAt,
+			"u":               0, // 购买/续费通常重置流量
+			"d":               0,
+		}
+
 		if plan.SpeedLimit != nil {
 			userUpdates["speed_limit"] = *plan.SpeedLimit
 		}
@@ -280,8 +326,25 @@ func (s *OrderService) Complete(orderID uint) error {
 			return err
 		}
 
-		// 更新订单状态为已完成
-		if err := tx.Model(&model.Order{}).Where("id = ?", orderID).Update("status", 3).Error; err != nil {
+		// 5. 权限分发 (面向生产的多分组同步)
+		// 删除旧的所有订阅分组关联
+		if err := tx.Where("user_id = ?", order.UserID).Delete(&model.UserSubscriptionGroup{}).Error; err != nil {
+			return err
+		}
+
+		// 插入新的分组关联
+		for _, pg := range planGroups {
+			usg := model.UserSubscriptionGroup{
+				UserID:  order.UserID,
+				GroupID: pg.GroupID,
+			}
+			if err := tx.Create(&usg).Error; err != nil {
+				return err
+			}
+		}
+
+		// 6. 更新订单状态为已完成 (3)
+		if err := tx.Model(&order).Update("status", 3).Error; err != nil {
 			return err
 		}
 

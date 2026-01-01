@@ -70,12 +70,28 @@ func (s *PlanService) List() ([]*model.Plan, error) {
 
 // AssignToUser 将套餐分配给用户（同步修改用户记录），并写事件
 func (s *PlanService) AssignToUser(planID, userID uint, expireAt *int64) error {
+	// 获取套餐详情
+	var plan model.Plan
+	if err := s.db.First(&plan, planID).Error; err != nil {
+		return err
+	}
+
 	// 更新用户
 	updates := map[string]interface{}{
-		"plan_id": planID,
+		"plan_id":         plan.ID,
+		"group_id":        plan.GroupID,
+		"transfer_enable": plan.TransferEnable * 1024 * 1024 * 1024,
+		"u":               0,
+		"d":               0,
 	}
 	if expireAt != nil {
 		updates["expired_at"] = *expireAt
+	}
+	if plan.SpeedLimit != nil {
+		updates["speed_limit"] = *plan.SpeedLimit
+	}
+	if plan.DeviceLimit != nil {
+		updates["device_limit"] = *plan.DeviceLimit
 	}
 
 	if err := s.db.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {

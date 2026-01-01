@@ -9,12 +9,19 @@ import AdminLayout from '@/layouts/AdminLayout.vue'
 import Login from '@/views/Login.vue'
 import UserDashboard from '@/views/user/Dashboard.vue'
 import UserSubscribe from '@/views/user/Subscribe.vue'
+import UserKnowledge from '@/views/user/Knowledge.vue'
+import UserTickets from '@/views/user/Tickets.vue'
+import UserPlans from '@/views/user/Plans.vue'
+import UserOrders from '@/views/user/Orders.vue'
 import AdminDashboard from '@/views/admin/Dashboard.vue'
 import AdminUsers from '@/views/admin/Users.vue'
 import AdminOrders from '@/views/admin/Orders.vue'
 import AdminNodes from '@/views/admin/Nodes.vue'
 import AdminSubscriptions from '@/views/admin/Subscriptions.vue'
 import AdminPlans from '@/views/admin/Plans.vue'
+import AdminTickets from '@/views/admin/Tickets.vue'
+import AdminCoupons from '@/views/admin/Coupons.vue'
+import AdminKnowledge from '@/views/admin/Knowledge.vue'
 
 const routes = [
   {
@@ -42,7 +49,19 @@ const routes = [
       },
       {
         path: 'knowledge',
-        component: { template: '<div class="page"><h1>使用教程</h1><p>教程内容开发中...</p></div>' }
+        component: UserKnowledge
+      },
+      {
+        path: 'tickets',
+        component: UserTickets
+      },
+      {
+        path: 'plans',
+        component: UserPlans
+      },
+      {
+        path: 'orders',
+        component: UserOrders
       }
     ]
   },
@@ -77,6 +96,18 @@ const routes = [
         component: AdminPlans
       },
       {
+        path: 'tickets',
+        component: AdminTickets
+      },
+      {
+        path: 'coupons',
+        component: AdminCoupons
+      },
+      {
+        path: 'knowledge',
+        component: AdminKnowledge
+      },
+      {
         path: 'settings',
         component: { template: '<div class="page"><h1>系统设置</h1><p>系统设置功能开发中...</p></div>' }
       }
@@ -92,7 +123,7 @@ const router = createRouter({
 // Navigation Guards
 router.beforeEach((to, from, next) => {
   const userStore = useUserStore()
-  
+
   if (to.meta.requiresAuth && !userStore.isLoggedIn) {
     next('/login')
   } else if (to.meta.requiresAdmin && !userStore.isAdmin) {

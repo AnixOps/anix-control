@@ -58,6 +58,7 @@ func NewRegistry() *Registry {
 	r.RegisterFormatter(model.FormatBase64JSON, &Base64JSONFormatter{})
 	r.RegisterFormatter(model.FormatShadowrocket, &ShadowrocketFormatter{})
 	r.RegisterFormatter(model.FormatQuantumultX, &QuantumultXFormatter{})
+	r.RegisterFormatter(model.FormatSingBox, &SingBoxFormatter{})
 
 	return r
 }

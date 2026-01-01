@@ -10,9 +10,12 @@
         <router-link to="/user/dashboard">仪表盘</router-link>
         <router-link to="/user/subscribe">订阅</router-link>
         <router-link to="/user/knowledge">使用教程</router-link>
+        <router-link to="/user/tickets">我的工单</router-link>
+        <router-link to="/user/plans">购买套餐</router-link>
+        <router-link to="/user/orders">我的订单</router-link>
       </nav>
       <div class="user-actions">
-        <span class="user-email">{{ userStore.user?.email }}</span>
+        <span class="user-email">{{ userStore.userInfo?.email }}</span>
         <button class="btn-ghost btn-sm" @click="logout">退出</button>
       </div>
     </header>
@@ -40,6 +43,15 @@
         <router-link to="/user/knowledge" @click="sidebarOpen = false">
           <span class="nav-icon">📚</span> 使用教程
         </router-link>
+        <router-link to="/user/tickets" @click="sidebarOpen = false">
+          <span class="nav-icon">🎫</span> 我的工单
+        </router-link>
+        <router-link to="/user/plans" @click="sidebarOpen = false">
+          <span class="nav-icon">💰</span> 购买套餐
+        </router-link>
+        <router-link to="/user/orders" @click="sidebarOpen = false">
+          <span class="nav-icon">📦</span> 我的订单
+        </router-link>
       </nav>
       <div class="sidebar-footer">
         <button class="btn-secondary w-full" @click="logout">退出登录</button>
@@ -55,7 +67,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
 
@@ -67,6 +79,12 @@ const logout = () => {
   userStore.logout()
   router.push('/login')
 }
+
+onMounted(() => {
+  if (userStore.isLoggedIn) {
+    userStore.getUserInfo()
+  }
+})
 </script>
 
 <style scoped>
