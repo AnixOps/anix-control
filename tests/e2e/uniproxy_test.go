@@ -117,6 +117,7 @@ func (s *UniProxyE2ETestSuite) SetupSuite() {
 	s.db.Create(s.testUser)
 
 	// 创建路由
+	config.Set(s.cfg)
 	s.router = gin.New()
 	router.Setup(s.router, s.cfg)
 }
