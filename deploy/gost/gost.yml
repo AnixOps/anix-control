@@ -1,0 +1,45 @@
+# gost 转发节点部署配置
+# 将此文件放置在转发节点服务器上
+
+services:
+  # 默认管理服务 (API)
+  - name: api
+    addr: ":18080"
+    handler:
+      type: api
+      auth:
+        username: admin
+        password: ${API_TOKEN}  # 替换为实际 API Token
+    listener:
+      type: tcp
+
+# 转发链配置 (用于多级转发)
+chains: []
+hops: []
+
+# 认证器
+authers:
+  - name: auther-0
+    auths:
+      - username: admin
+        password: ${API_TOKEN}
+
+# API 配置
+api:
+  addr: ":18080"
+  pathPrefix: /api
+  accesslog: true
+  auth:
+    username: admin
+    password: ${API_TOKEN}
+
+# 日志配置
+log:
+  output: stderr
+  level: info
+  format: text
+
+# Prometheus 监控
+metrics:
+  addr: :9000
+  path: /metrics

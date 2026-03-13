@@ -1,0 +1,5502 @@
+basePath: /api/v2
+definitions:
+  handler.AgentHeartbeatRequest:
+    properties:
+      node_id:
+        type: integer
+      resources:
+        additionalProperties: true
+        type: object
+      status:
+        type: string
+    type: object
+  handler.AgentMonitorRequest:
+    properties:
+      node_id:
+        type: integer
+      system:
+        additionalProperties: true
+        type: object
+    type: object
+  handler.AgentRegisterRequest:
+    properties:
+      capabilities:
+        items:
+          type: string
+        type: array
+      node_id:
+        type: integer
+      system:
+        additionalProperties: true
+        type: object
+      token:
+        type: string
+      version:
+        type: string
+    type: object
+  handler.AgentTaskResult:
+    properties:
+      data: {}
+      duration_ms:
+        type: integer
+      error:
+        type: string
+      output:
+        type: string
+      success:
+        type: boolean
+      task_id:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  handler.BroadcastRequest:
+    properties:
+      message:
+        type: string
+    required:
+    - message
+    type: object
+  handler.CreateGatewayRequest:
+    properties:
+      config:
+        type: string
+      description:
+        type: string
+      fee_fixed:
+        type: number
+      fee_rate:
+        type: number
+      icon:
+        type: string
+      max_amount:
+        type: number
+      min_amount:
+        type: number
+      name:
+        type: string
+      sort:
+        type: integer
+      type:
+        enum:
+        - alipay
+        - wechat
+        - stripe
+        - usdt
+        - epay
+        type: string
+    required:
+    - name
+    - type
+    type: object
+  handler.CreateNodeRequest:
+    properties:
+      api_port:
+        type: integer
+      api_token:
+        type: string
+      bandwidth:
+        type: integer
+      host:
+        type: string
+      isp:
+        type: string
+      max_conn:
+        type: integer
+      name:
+        type: string
+      port:
+        maximum: 65535
+        minimum: 1
+        type: integer
+      region:
+        type: string
+      type:
+        enum:
+        - relay
+        - exit
+        type: string
+      weight:
+        type: integer
+    required:
+    - host
+    - name
+    - port
+    - type
+    type: object
+  handler.CreatePaymentRequest:
+    properties:
+      amount:
+        minimum: 1
+        type: number
+      gateway_id:
+        type: integer
+      order_id:
+        type: integer
+    required:
+    - amount
+    - gateway_id
+    type: object
+  handler.CreateRuleRequest:
+    properties:
+      exit_node_id:
+        type: integer
+      expire_time:
+        type: string
+      listen_port:
+        maximum: 65535
+        minimum: 1
+        type: integer
+      name:
+        type: string
+      protocol:
+        enum:
+        - tcp
+        - udp
+        - both
+        type: string
+      relay_node_id:
+        type: integer
+      remark:
+        type: string
+      speed_limit:
+        type: integer
+      target_host:
+        type: string
+      target_port:
+        maximum: 65535
+        minimum: 1
+        type: integer
+      traffic_limit:
+        type: integer
+      user_group_id:
+        type: integer
+      user_id:
+        type: integer
+    required:
+    - exit_node_id
+    - listen_port
+    - name
+    - relay_node_id
+    - target_host
+    - target_port
+    type: object
+  handler.CreateTaskRequest:
+    properties:
+      action:
+        type: string
+      node_id:
+        type: integer
+      params:
+        additionalProperties: true
+        type: object
+      timeout:
+        type: integer
+      type:
+        type: string
+    required:
+    - action
+    - node_id
+    - type
+    type: object
+  handler.ExecuteCommandRequest:
+    properties:
+      args:
+        items:
+          type: string
+        type: array
+      command:
+        type: string
+      env:
+        additionalProperties: true
+        type: object
+      node_id:
+        type: integer
+      timeout:
+        type: integer
+    required:
+    - command
+    - node_id
+    type: object
+  handler.NotifySettingsRequest:
+    properties:
+      notify_expire:
+        type: boolean
+      notify_ticket:
+        type: boolean
+      notify_traffic:
+        type: boolean
+    type: object
+  handler.SendNotificationRequest:
+    properties:
+      content:
+        type: string
+      telegram_id:
+        type: integer
+      title:
+        type: string
+    required:
+    - content
+    - telegram_id
+    - title
+    type: object
+  handler.SetWebhookRequest:
+    properties:
+      url:
+        type: string
+    required:
+    - url
+    type: object
+  handler.TestGostConnectionRequest:
+    properties:
+      api_port:
+        type: integer
+      api_token:
+        type: string
+      host:
+        type: string
+    required:
+    - api_port
+    - host
+    type: object
+  handler.ToggleRequest:
+    properties:
+      enabled:
+        type: boolean
+    type: object
+  handler.UpdateBotRequest:
+    properties:
+      admin_ids:
+        type: string
+      allow_bind:
+        type: boolean
+      allow_info:
+        type: boolean
+      allow_sub:
+        type: boolean
+      allow_ticket:
+        type: boolean
+      name:
+        type: string
+      token:
+        type: string
+      welcome_msg:
+        type: string
+    type: object
+  handler.UpdateGatewayRequest:
+    properties:
+      config:
+        type: string
+      description:
+        type: string
+      fee_fixed:
+        type: number
+      fee_rate:
+        type: number
+      icon:
+        type: string
+      max_amount:
+        type: number
+      min_amount:
+        type: number
+      name:
+        type: string
+      sort:
+        type: integer
+    type: object
+  handler.UpdateNodeRequest:
+    properties:
+      bandwidth:
+        type: integer
+      enabled:
+        type: boolean
+      host:
+        type: string
+      isp:
+        type: string
+      max_conn:
+        type: integer
+      name:
+        type: string
+      port:
+        type: integer
+      region:
+        type: string
+      weight:
+        type: integer
+    type: object
+  handler.UpdateRuleRequest:
+    properties:
+      expire_time:
+        type: string
+      listen_port:
+        type: integer
+      name:
+        type: string
+      protocol:
+        type: string
+      remark:
+        type: string
+      speed_limit:
+        type: integer
+      target_host:
+        type: string
+      target_port:
+        type: integer
+      traffic_limit:
+        type: integer
+    type: object
+  model.AdminCreateUserRequest:
+    properties:
+      email:
+        type: string
+      is_admin:
+        type: integer
+      password:
+        minLength: 6
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  model.BackupConfig:
+    properties:
+      auto_backup:
+        type: boolean
+      backup_database:
+        type: boolean
+      backup_files:
+        type: boolean
+      created_at:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: integer
+      retention_days:
+        description: 保留天数
+        type: integer
+      s3_access_key:
+        type: string
+      s3_bucket:
+        type: string
+      s3_endpoint:
+        type: string
+      s3_region:
+        type: string
+      s3_secret_key:
+        type: string
+      schedule:
+        description: cron表达式
+        type: string
+      storage_path:
+        type: string
+      storage_type:
+        description: local/s3/ftp
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.InviteConfig:
+    properties:
+      auto_generate:
+        description: 邀请码设置
+        type: boolean
+      code_count:
+        description: 每个用户邀请码数量
+        type: integer
+      code_expire_days:
+        description: 邀请码过期天数 (0=永不过期)
+        type: integer
+      commission_enabled:
+        description: 佣金设置
+        type: boolean
+      commission_fixed:
+        description: 固定佣金金额
+        type: number
+      commission_min:
+        description: 最低提现金额
+        type: number
+      commission_rate:
+        description: 佣金比例 (0.1 = 10%)
+        type: number
+      commission_type:
+        description: 1=按比例 2=固定金额
+        type: integer
+      created_at:
+        type: string
+      enabled:
+        type: boolean
+      first_order_bonus:
+        description: 首次奖励
+        type: number
+      first_traffic_bonus:
+        description: 首次流量奖励 (bytes)
+        type: integer
+      id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  model.LoadBalancer:
+    properties:
+      check_interval:
+        description: 检查间隔(秒)
+        type: integer
+      check_timeout:
+        description: 超时时间(秒)
+        type: integer
+      created_at:
+        type: string
+      enabled:
+        type: boolean
+      group_id:
+        description: 节点组ID
+        type: integer
+      health_check:
+        type: boolean
+      id:
+        type: integer
+      name:
+        type: string
+      node_weights:
+        description: 'JSON: {node_id: weight}'
+        type: string
+      strategy:
+        description: round-robin/least-conn/latency/weight/random
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  model.Node:
+    properties:
+      auto_register:
+        description: 是否自动注册的节点
+        type: integer
+      cpu_usage:
+        description: CPU使用率
+        type: number
+      created_at:
+        type: string
+      disk_usage:
+        description: 磁盘使用率
+        type: number
+      group_id:
+        description: 节点分组
+        type: integer
+      host:
+        description: 服务器地址 (IP或域名)
+        type: string
+      id:
+        type: integer
+      last_check_at:
+        description: 时间戳
+        type: integer
+      memory_usage:
+        description: 内存使用率
+        type: number
+      name:
+        description: 节点名称
+        type: string
+      online_users:
+        description: 在线用户数
+        type: integer
+      port:
+        description: API通信端口
+        type: integer
+      protocols:
+        description: 关联
+        items:
+          $ref: '#/definitions/model.NodeProtocol'
+        type: array
+      rate:
+        description: 流量倍率
+        type: number
+      raw_config:
+        description: 高级配置 (直接JSON编辑)
+        type: string
+      server_ip:
+        description: 服务器信息 (由节点上报)
+        type: string
+      server_os:
+        description: 操作系统信息
+        type: string
+      server_version:
+        description: 节点程序版本
+        type: string
+      show:
+        description: 是否显示给用户
+        type: integer
+      sort:
+        description: 排序
+        type: integer
+      status:
+        allOf:
+        - $ref: '#/definitions/model.NodeStatus'
+        description: 节点状态
+      tags:
+        description: 标签 (JSON array)
+        type: string
+      total_download:
+        description: 总下载流量
+        type: integer
+      total_upload:
+        description: 流量统计
+        type: integer
+      traffic_rate:
+        description: 计费倍率
+        type: number
+      updated_at:
+        type: string
+      uptime:
+        description: 运行时间(秒)
+        type: integer
+    type: object
+  model.NodeHeartbeatRequest:
+    properties:
+      cpu_usage:
+        type: number
+      disk_usage:
+        type: number
+      download:
+        description: 本次下载流量增量
+        type: integer
+      memory_usage:
+        type: number
+      online_users:
+        type: integer
+      upload:
+        description: 本次上传流量增量
+        type: integer
+      uptime:
+        type: integer
+    type: object
+  model.NodeProtocol:
+    properties:
+      alpn:
+        description: ALPN设置
+        type: string
+      created_at:
+        type: string
+      custom_config:
+        description: 自定义配置 (全量覆盖)
+        type: string
+      enable:
+        description: 是否启用 (节点端是否运行)
+        type: integer
+      group_id:
+        description: 所属订阅分组 (如果为空则跟随节点)
+        type: integer
+      host:
+        description: 通用配置
+        type: string
+      id:
+        type: integer
+      name:
+        description: 协议名称
+        type: string
+      node:
+        allOf:
+        - $ref: '#/definitions/model.Node'
+        description: 关联
+      node_id:
+        description: 所属节点
+        type: integer
+      port:
+        description: 监听端口
+        type: integer
+      reality_settings:
+        description: Reality 配置
+        type: string
+      settings:
+        description: 协议特定配置 (JSON)
+        type: string
+      show:
+        description: 是否显示在订阅中
+        type: integer
+      sort:
+        description: 排序
+        type: integer
+      subscription_groups:
+        items:
+          $ref: '#/definitions/model.SubscriptionGroup'
+        type: array
+      tls:
+        description: 'TLS模式: 0=无, 1=TLS, 2=Reality'
+        type: integer
+      tls_settings:
+        description: TLS配置 (JSON)
+        type: string
+      transport:
+        description: '传输层: tcp, ws, grpc, quic, h2'
+        type: string
+      transport_settings:
+        description: 传输层配置 (JSON)
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/model.ProtocolType'
+        description: 协议类型
+      updated_at:
+        type: string
+    type: object
+  model.NodeRegisterRequest:
+    properties:
+      auth_key:
+        description: 授权密钥
+        type: string
+      host:
+        description: 节点地址
+        type: string
+      name:
+        description: 节点名称
+        type: string
+      port:
+        description: API端口
+        type: integer
+      server_os:
+        description: 操作系统
+        type: string
+      server_version:
+        description: 节点版本
+        type: string
+    required:
+    - auth_key
+    type: object
+  model.NodeStatus:
+    enum:
+    - 0
+    - 1
+    - 2
+    - 3
+    type: integer
+    x-enum-comments:
+      NodeStatusDisabled: 已禁用
+      NodeStatusOffline: 离线
+      NodeStatusOnline: 在线
+      NodeStatusPending: 待审核
+    x-enum-descriptions:
+    - 待审核
+    - 在线
+    - 离线
+    - 已禁用
+    x-enum-varnames:
+    - NodeStatusPending
+    - NodeStatusOnline
+    - NodeStatusOffline
+    - NodeStatusDisabled
+  model.Plan:
+    properties:
+      capacity_limit:
+        type: integer
+      content:
+        type: string
+      created_at:
+        type: string
+      device_limit:
+        type: integer
+      group_id:
+        type: integer
+      half_year_price:
+        type: integer
+      id:
+        type: integer
+      month_price:
+        description: Prices
+        type: integer
+      name:
+        type: string
+      onetime_price:
+        type: integer
+      quarter_price:
+        type: integer
+      renew:
+        type: integer
+      reset_price:
+        type: integer
+      reset_traffic_method:
+        type: integer
+      show:
+        type: integer
+      sort:
+        type: integer
+      speed_limit:
+        type: integer
+      three_year_price:
+        type: integer
+      transfer_enable:
+        description: GB
+        type: integer
+      two_year_price:
+        type: integer
+      updated_at:
+        type: string
+      year_price:
+        type: integer
+    type: object
+  model.ProtocolType:
+    enum:
+    - vmess
+    - vless
+    - trojan
+    - shadowsocks
+    - hysteria2
+    - tuic
+    - anytls
+    type: string
+    x-enum-varnames:
+    - ProtocolVMess
+    - ProtocolVLESS
+    - ProtocolTrojan
+    - ProtocolShadowsocks
+    - ProtocolHysteria2
+    - ProtocolTUIC
+    - ProtocolAnyTLS
+  model.RegisterRequest:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 6
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  model.SubscriptionGroup:
+    properties:
+      created_at:
+        type: string
+      description:
+        description: 分组描述
+        type: string
+      enable:
+        description: 是否启用
+        type: integer
+      id:
+        type: integer
+      name:
+        description: 分组名称
+        type: string
+      priority:
+        description: 优先级 (数值越大优先级越高)
+        type: integer
+      protocols:
+        items:
+          $ref: '#/definitions/model.NodeProtocol'
+        type: array
+      templates:
+        description: 关联
+        items:
+          $ref: '#/definitions/model.SubscriptionTemplate'
+        type: array
+      updated_at:
+        type: string
+    type: object
+  model.SubscriptionTemplate:
+    properties:
+      alpn:
+        description: ALPN (h2,http/1.1)
+        type: string
+      created_at:
+        type: string
+      enable:
+        description: 是否启用
+        type: integer
+      encryption:
+        description: '加密: 空 或 mlkem768x25519plus'
+        type: string
+      encryption_settings:
+        description: 加密配置 JSON
+        type: string
+      flow:
+        description: VLESS 特有配置 (对应 V2bX flow, encryption, encryption_settings)
+        type: string
+      group:
+        allOf:
+        - $ref: '#/definitions/model.SubscriptionGroup'
+        description: 关联
+      group_id:
+        description: 所属分组
+        type: integer
+      id:
+        type: integer
+      name:
+        description: 模板名称 (显示给用户的节点名)
+        type: string
+      port:
+        description: 端口 (server_port)
+        type: integer
+      protocol_settings:
+        description: 协议特定配置 (存储其他不在通用字段中的配置)
+        type: string
+      reality_dest:
+        description: 回落目标 (dest)
+        type: string
+      reality_public_key:
+        description: Reality 配置 (当 TLS=2 时使用, 对应 V2bX tls_settings)
+        type: string
+      reality_short_id:
+        description: Short ID (对应 sid)
+        type: string
+      reality_spider_x:
+        description: SpiderX (对应 spx)
+        type: string
+      server:
+        description: 服务器基础配置 (对应 V2bX CommonNode)
+        type: string
+      server_name:
+        description: SNI 服务器名称
+        type: string
+      sort:
+        description: 排序
+        type: integer
+      ss_cipher:
+        description: Shadowsocks 配置 (对应 V2bX cipher, server_key)
+        type: string
+      ss_server_key:
+        description: SS2022 服务器密钥
+        type: string
+      tags:
+        description: 标签 (JSON array)
+        type: string
+      template_json:
+        description: |-
+          JSON 模板配置 (高级功能)
+          支持变量占位符: {{.UUID}}, {{.UserID}}, {{.Email}}, {{.ExpiredAt}}, {{.SpeedLimit}}, {{.DeviceLimit}}
+          以及自定义变量: {{.Custom.xxx}}
+        type: string
+      tls:
+        description: TLS 配置 (对应 V2bX tls 字段)
+        type: integer
+      tls_fingerprint:
+        description: TLS 指纹 (chrome, firefox, safari, ios, android, edge, 360, qq,
+          random)
+        type: string
+      transport:
+        description: 传输层配置 (对应 V2bX network, network_settings)
+        type: string
+      transport_settings:
+        description: 传输层配置 JSON
+        type: string
+      type:
+        description: '协议类型: vmess, vless, trojan, shadowsocks, hysteria2, tuic, anytls'
+        type: string
+      updated_at:
+        type: string
+    type: object
+  service.CreateRuleRequest:
+    properties:
+      exit_node_id:
+        type: integer
+      expire_time:
+        type: string
+      name:
+        type: string
+      protocol:
+        type: string
+      relay_node_id:
+        type: integer
+      speed_limit:
+        type: integer
+      target_host:
+        type: string
+      target_port:
+        type: integer
+      traffic_limit:
+        type: integer
+    type: object
+  service.TelegramCallback:
+    properties:
+      data:
+        type: string
+      from:
+        $ref: '#/definitions/service.TelegramUser'
+      id:
+        type: string
+      message:
+        $ref: '#/definitions/service.TelegramMessage'
+    type: object
+  service.TelegramChat:
+    properties:
+      id:
+        type: integer
+      title:
+        type: string
+      type:
+        type: string
+      username:
+        type: string
+    type: object
+  service.TelegramMessage:
+    properties:
+      chat:
+        $ref: '#/definitions/service.TelegramChat'
+      date:
+        type: integer
+      from:
+        $ref: '#/definitions/service.TelegramUser'
+      message_id:
+        type: integer
+      text:
+        type: string
+    type: object
+  service.TelegramUpdate:
+    properties:
+      callback_query:
+        $ref: '#/definitions/service.TelegramCallback'
+      message:
+        $ref: '#/definitions/service.TelegramMessage'
+      update_id:
+        type: integer
+    type: object
+  service.TelegramUser:
+    properties:
+      first_name:
+        type: string
+      id:
+        type: integer
+      is_bot:
+        type: boolean
+      language_code:
+        type: string
+      last_name:
+        type: string
+      username:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@example.com
+    name: API Support
+    url: https://github.com/anixops/v2board/issues
+  description: |-
+    V2Board 高性能代理面板管理系统 API 文档
+    支持用户管理、节点管理、订阅系统、支付网关、流量转发等功能
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://github.com/anixops/v2board
+  title: V2Board AnixOps API
+  version: 2.0.0
+paths:
+  /admin/agent/execute:
+    post:
+      consumes:
+      - application/json
+      description: 管理员在节点上执行命令
+      parameters:
+      - description: 命令信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ExecuteCommandRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 执行命令
+      tags:
+      - 管理端-Agent
+  /admin/agent/list:
+    get:
+      description: 管理员获取所有在线的 Agent
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取在线 Agent 列表
+      tags:
+      - 管理端-Agent
+  /admin/agent/tasks:
+    post:
+      consumes:
+      - application/json
+      description: 管理员向节点下发任务
+      parameters:
+      - description: 任务信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建任务
+      tags:
+      - 管理端-Agent
+  /admin/auth-keys:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取所有授权密钥列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取授权密钥列表
+      tags:
+      - 管理端-节点
+    post:
+      consumes:
+      - application/json
+      description: 管理员生成节点自动注册的授权密钥
+      parameters:
+      - description: 密钥请求 {name, expire_days}
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 生成授权密钥
+      tags:
+      - 管理端-节点
+  /admin/auth-keys/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除指定的授权密钥
+      parameters:
+      - description: 密钥ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除授权密钥
+      tags:
+      - 管理端-节点
+  /admin/dashboard:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取仪表盘统计数据，包括用户数、订单数、收入等
+      parameters:
+      - description: 是否强制刷新缓存
+        in: query
+        name: refresh
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取仪表盘数据
+      tags:
+      - 管理端-系统
+  /admin/forward/nodes:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取中转节点列表，支持分页和类型筛选
+      parameters:
+      - description: 节点类型 (relay/exit)
+        in: query
+        name: type
+        type: string
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取中转节点列表
+      tags:
+      - 管理端-转发
+    post:
+      consumes:
+      - application/json
+      description: 管理员创建新的中转节点
+      parameters:
+      - description: 节点信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateNodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建中转节点
+      tags:
+      - 管理端-转发
+  /admin/forward/nodes/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除指定中转节点
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除中转节点
+      tags:
+      - 管理端-转发
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取指定中转节点的详细信息
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取中转节点详情
+      tags:
+      - 管理端-转发
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新指定中转节点的信息
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 节点更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdateNodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新中转节点
+      tags:
+      - 管理端-转发
+  /admin/forward/nodes/{id}/check:
+    post:
+      consumes:
+      - application/json
+      description: 管理员对指定中转节点进行健康检查
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 健康检查节点
+      tags:
+      - 管理端-转发
+  /admin/forward/nodes/{id}/sync-stats:
+    post:
+      consumes:
+      - application/json
+      description: 从 gost 节点同步流量和连接统计数据到面板
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 同步节点统计数据
+      tags:
+      - 管理端-转发
+  /admin/forward/nodes/{id}/toggle:
+    post:
+      consumes:
+      - application/json
+      description: 管理员启用或禁用指定中转节点
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 状态请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ToggleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 切换节点状态
+      tags:
+      - 管理端-转发
+  /admin/forward/rules:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取转发规则列表，支持分页和用户筛选
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      - description: 用户ID
+        in: query
+        name: user_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取转发规则列表
+      tags:
+      - 管理端-转发
+    post:
+      consumes:
+      - application/json
+      description: 管理员创建新的转发规则
+      parameters:
+      - description: 规则信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateRuleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建转发规则
+      tags:
+      - 管理端-转发
+  /admin/forward/rules/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除指定转发规则
+      parameters:
+      - description: 规则ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除转发规则
+      tags:
+      - 管理端-转发
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取指定转发规则的详细信息
+      parameters:
+      - description: 规则ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取转发规则详情
+      tags:
+      - 管理端-转发
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新指定转发规则的信息
+      parameters:
+      - description: 规则ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 规则更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdateRuleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新转发规则
+      tags:
+      - 管理端-转发
+  /admin/forward/rules/{id}/toggle:
+    post:
+      consumes:
+      - application/json
+      description: 管理员启用或禁用指定转发规则
+      parameters:
+      - description: 规则ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 状态请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ToggleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 切换规则状态
+      tags:
+      - 管理端-转发
+  /admin/forward/stats:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取转发统计数据，包括节点数、在线数、流量等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取转发统计
+      tags:
+      - 管理端-转发
+  /admin/forward/test-connection:
+    post:
+      consumes:
+      - application/json
+      description: 测试与 gost 节点的 API 连接是否正常
+      parameters:
+      - description: 连接信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.TestGostConnectionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 测试 gost 节点连接
+      tags:
+      - 管理端-转发
+  /admin/invite/config:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取邀请系统配置
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取邀请配置
+      tags:
+      - 管理端-系统
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新邀请系统配置
+      parameters:
+      - description: 邀请配置
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.InviteConfig'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新邀请配置
+      tags:
+      - 管理端-系统
+  /admin/invite/stats:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取邀请系统统计数据
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取邀请统计
+      tags:
+      - 管理端-系统
+  /admin/invite/withdrawals:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取提现申请列表
+      parameters:
+      - description: 状态筛选
+        in: query
+        name: status
+        type: string
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取提现申请列表
+      tags:
+      - 管理端-系统
+  /admin/invite/withdrawals/{id}/process:
+    post:
+      consumes:
+      - application/json
+      description: 管理员处理提现申请，批准或拒绝
+      parameters:
+      - description: 提现记录ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 处理请求 {status, remark}
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 处理提现申请
+      tags:
+      - 管理端-系统
+  /admin/loadbalancers:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取负载均衡器列表
+      parameters:
+      - description: 分组ID
+        in: query
+        name: group_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取负载均衡器列表
+      tags:
+      - 管理端-系统
+    post:
+      consumes:
+      - application/json
+      description: 管理员创建新的负载均衡器
+      parameters:
+      - description: 负载均衡器配置
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.LoadBalancer'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建负载均衡器
+      tags:
+      - 管理端-系统
+  /admin/loadbalancers/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除指定负载均衡器
+      parameters:
+      - description: 负载均衡器ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除负载均衡器
+      tags:
+      - 管理端-系统
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取指定负载均衡器的详细信息
+      parameters:
+      - description: 负载均衡器ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取负载均衡器详情
+      tags:
+      - 管理端-系统
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新指定负载均衡器的配置
+      parameters:
+      - description: 负载均衡器ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 负载均衡器配置
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.LoadBalancer'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新负载均衡器
+      tags:
+      - 管理端-系统
+  /admin/loadbalancers/{id}/check:
+    post:
+      consumes:
+      - application/json
+      description: 管理员对指定负载均衡器执行健康检查
+      parameters:
+      - description: 负载均衡器ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 执行健康检查
+      tags:
+      - 管理端-系统
+  /admin/loadbalancers/{id}/stats:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取指定负载均衡器的统计数据
+      parameters:
+      - description: 负载均衡器ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取负载均衡统计
+      tags:
+      - 管理端-系统
+  /admin/mfa/config:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取全局MFA配置
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取MFA配置
+      tags:
+      - 管理端-系统
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新全局MFA配置
+      parameters:
+      - description: MFA配置
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新MFA配置
+      tags:
+      - 管理端-系统
+  /admin/nodes:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取节点列表，支持分页和筛选
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      - description: 搜索关键词
+        in: query
+        name: search
+        type: string
+      - description: 节点状态
+        in: query
+        name: status
+        type: integer
+      - description: 分组ID
+        in: query
+        name: group_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取节点列表
+      tags:
+      - 管理端-节点
+    post:
+      consumes:
+      - application/json
+      description: 管理员手动创建节点
+      parameters:
+      - description: 节点信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.Node'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建节点
+      tags:
+      - 管理端-节点
+  /admin/nodes/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除指定节点
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除节点
+      tags:
+      - 管理端-节点
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取指定节点的详细信息
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取节点详情
+      tags:
+      - 管理端-节点
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新指定节点的信息
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 节点更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新节点
+      tags:
+      - 管理端-节点
+  /admin/nodes/{id}/protocols:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取指定节点的协议配置列表
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取节点协议列表
+      tags:
+      - 管理端-节点
+    post:
+      consumes:
+      - application/json
+      description: 管理员为指定节点创建协议配置
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 协议配置
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.NodeProtocol'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建节点协议
+      tags:
+      - 管理端-节点
+  /admin/nodes/{id}/raw-config:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取指定节点的原始JSON配置
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取节点原始配置
+      tags:
+      - 管理端-节点
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新指定节点的原始JSON配置（高级模式）
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: '原始配置 {raw_config: object}'
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新节点原始配置
+      tags:
+      - 管理端-节点
+  /admin/nodes/{id}/sync:
+    post:
+      consumes:
+      - application/json
+      description: 管理员将协议配置同步到指定节点
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 同步协议到节点
+      tags:
+      - 管理端-节点
+  /admin/nodes/protocol-templates:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取可用的协议模板列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取协议模板
+      tags:
+      - 管理端-节点
+  /admin/nodes/protocols/{protocol_id}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除指定的节点协议配置
+      parameters:
+      - description: 协议ID
+        in: path
+        name: protocol_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除节点协议
+      tags:
+      - 管理端-节点
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新指定的节点协议配置
+      parameters:
+      - description: 协议ID
+        in: path
+        name: protocol_id
+        required: true
+        type: integer
+      - description: 协议更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新节点协议
+      tags:
+      - 管理端-节点
+  /admin/nodes/stats:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取节点统计数据
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取节点统计
+      tags:
+      - 管理端-节点
+  /admin/nodes/validate-config:
+    post:
+      consumes:
+      - application/json
+      description: 管理员验证节点原始JSON配置的有效性
+      parameters:
+      - description: '原始配置 {raw_config: object}'
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 验证原始配置
+      tags:
+      - 管理端-节点
+  /admin/notification/email/config:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取邮件发送配置
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取邮件配置
+      tags:
+      - 管理端-通知
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新邮件发送配置
+      parameters:
+      - description: 邮件配置
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新邮件配置
+      tags:
+      - 管理端-通知
+  /admin/notification/logs:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取通知日志列表
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      - description: 通知类型
+        in: query
+        name: type
+        type: string
+      - description: 发送状态
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取通知日志列表
+      tags:
+      - 管理端-通知
+  /admin/notification/templates:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取通知模板列表
+      parameters:
+      - description: 通知类型
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取通知模板列表
+      tags:
+      - 管理端-通知
+    post:
+      consumes:
+      - application/json
+      description: 管理员创建新的通知模板
+      parameters:
+      - description: 模板信息
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建通知模板
+      tags:
+      - 管理端-通知
+  /admin/notification/templates/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除指定通知模板
+      parameters:
+      - description: 模板ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除通知模板
+      tags:
+      - 管理端-通知
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新指定通知模板
+      parameters:
+      - description: 模板ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 模板更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新通知模板
+      tags:
+      - 管理端-通知
+  /admin/notification/test:
+    post:
+      consumes:
+      - application/json
+      description: 管理员发送测试通知
+      parameters:
+      - description: 测试通知请求
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 发送测试通知
+      tags:
+      - 管理端-通知
+  /admin/orders:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取订单列表，支持分页和筛选
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      - description: 订单号
+        in: query
+        name: trade_no
+        type: string
+      - description: 用户邮箱
+        in: query
+        name: email
+        type: string
+      - description: 订单状态
+        in: query
+        name: status
+        type: integer
+      - description: 订单类型
+        in: query
+        name: type
+        type: integer
+      - description: 用户ID
+        in: query
+        name: user_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取订单列表
+      tags:
+      - 管理端-订单
+  /admin/orders/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取指定订单的详细信息
+      parameters:
+      - description: 订单ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取订单详情
+      tags:
+      - 管理端-订单
+  /admin/orders/{id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: 管理员取消指定订单
+      parameters:
+      - description: 订单ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 取消订单
+      tags:
+      - 管理端-订单
+  /admin/orders/{id}/paid:
+    post:
+      consumes:
+      - application/json
+      description: 管理员手动标记订单为已支付并开通服务
+      parameters:
+      - description: 订单ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 标记订单已支付
+      tags:
+      - 管理端-订单
+  /admin/orders/{id}/status:
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新指定订单的状态
+      parameters:
+      - description: 订单ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: '状态请求 {status: int}'
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新订单状态
+      tags:
+      - 管理端-订单
+  /admin/orders/stats:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取订单统计数据
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取订单统计
+      tags:
+      - 管理端-订单
+  /admin/payment/gateways:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取所有支付网关列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取支付网关列表
+      tags:
+      - 管理端-支付
+    post:
+      consumes:
+      - application/json
+      description: 管理员创建新的支付网关
+      parameters:
+      - description: 网关信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreateGatewayRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建支付网关
+      tags:
+      - 管理端-支付
+  /admin/payment/gateways/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除指定支付网关
+      parameters:
+      - description: 网关ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除支付网关
+      tags:
+      - 管理端-支付
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新指定支付网关的信息
+      parameters:
+      - description: 网关ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 网关更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdateGatewayRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新支付网关
+      tags:
+      - 管理端-支付
+  /admin/payment/gateways/{id}/toggle:
+    post:
+      consumes:
+      - application/json
+      description: 管理员启用或禁用指定支付网关
+      parameters:
+      - description: 网关ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 状态请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.ToggleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 切换网关状态
+      tags:
+      - 管理端-支付
+  /admin/payment/records:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取支付记录列表，支持分页和状态筛选
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      - description: 支付状态
+        in: query
+        name: status
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取支付记录列表
+      tags:
+      - 管理端-支付
+  /admin/payment/stats:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取支付统计数据，支持日期范围筛选
+      parameters:
+      - description: '开始日期 (格式: 2006-01-02)'
+        in: query
+        name: start
+        type: string
+      - description: '结束日期 (格式: 2006-01-02)'
+        in: query
+        name: end
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取支付统计
+      tags:
+      - 管理端-支付
+  /admin/plans:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取所有套餐列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取套餐列表
+      tags:
+      - 管理端-套餐
+    post:
+      consumes:
+      - application/json
+      description: 管理员创建新套餐
+      parameters:
+      - description: 套餐信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.Plan'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建套餐
+      tags:
+      - 管理端-套餐
+  /admin/plans/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除指定套餐
+      parameters:
+      - description: 套餐ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除套餐
+      tags:
+      - 管理端-套餐
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取指定套餐的详细信息
+      parameters:
+      - description: 套餐ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取套餐详情
+      tags:
+      - 管理端-套餐
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新指定套餐信息
+      parameters:
+      - description: 套餐ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 套餐信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.Plan'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新套餐
+      tags:
+      - 管理端-套餐
+  /admin/plans/{id}/assign:
+    post:
+      consumes:
+      - application/json
+      description: 管理员将指定套餐分配给用户
+      parameters:
+      - description: 套餐ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: '分配请求 {user_id: uint, expire_at: int64}'
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 分配套餐给用户
+      tags:
+      - 管理端-套餐
+  /admin/system/backup:
+    post:
+      consumes:
+      - application/json
+      description: 管理员手动创建系统备份
+      parameters:
+      - default: database
+        description: 备份类型 (database/full)
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建备份
+      tags:
+      - 管理端-系统
+  /admin/system/backup/config:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取系统备份配置
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取备份配置
+      tags:
+      - 管理端-系统
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新系统备份配置
+      parameters:
+      - description: 备份配置
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.BackupConfig'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新备份配置
+      tags:
+      - 管理端-系统
+  /admin/system/backup/stats:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取备份统计数据
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取备份统计
+      tags:
+      - 管理端-系统
+  /admin/system/backups:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取备份记录列表
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取备份列表
+      tags:
+      - 管理端-系统
+  /admin/system/backups/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除指定备份记录
+      parameters:
+      - description: 备份ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除备份
+      tags:
+      - 管理端-系统
+  /admin/system/backups/{id}/restore:
+    post:
+      consumes:
+      - application/json
+      description: 管理员从备份恢复系统
+      parameters:
+      - description: 备份ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 恢复备份
+      tags:
+      - 管理端-系统
+  /admin/system/configs:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取系统配置列表，支持按分组筛选
+      parameters:
+      - description: 配置分组
+        in: query
+        name: group
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取系统配置列表
+      tags:
+      - 管理端-系统
+  /admin/system/configs/{key}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除指定key的系统配置
+      parameters:
+      - description: 配置键名
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除系统配置
+      tags:
+      - 管理端-系统
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取指定key的系统配置
+      parameters:
+      - description: 配置键名
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取单个系统配置
+      tags:
+      - 管理端-系统
+    put:
+      consumes:
+      - application/json
+      description: 管理员设置系统配置项
+      parameters:
+      - description: 配置键名
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: 配置值
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 设置系统配置
+      tags:
+      - 管理端-系统
+  /admin/telegram/bot:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取Telegram Bot的配置信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取Telegram Bot配置
+      tags:
+      - 管理端-通知
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新Telegram Bot的配置信息
+      parameters:
+      - description: Bot配置
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.UpdateBotRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新Telegram Bot配置
+      tags:
+      - 管理端-通知
+  /admin/telegram/broadcast:
+    post:
+      consumes:
+      - application/json
+      description: 管理员通过Telegram广播消息给所有绑定用户
+      parameters:
+      - description: 广播请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.BroadcastRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 广播Telegram消息
+      tags:
+      - 管理端-通知
+  /admin/telegram/notify:
+    post:
+      consumes:
+      - application/json
+      description: 管理员通过Telegram发送通知给指定用户
+      parameters:
+      - description: 通知请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.SendNotificationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 发送Telegram通知
+      tags:
+      - 管理端-通知
+  /admin/telegram/users:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取Telegram用户绑定列表
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户绑定列表
+      tags:
+      - 管理端-通知
+  /admin/telegram/webhook:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除Telegram Bot的Webhook配置
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除Telegram Webhook
+      tags:
+      - 管理端-通知
+    post:
+      consumes:
+      - application/json
+      description: 管理员设置Telegram Bot的Webhook地址
+      parameters:
+      - description: Webhook配置
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.SetWebhookRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 设置Telegram Webhook
+      tags:
+      - 管理端-通知
+  /admin/users:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取用户列表
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      - description: 邮箱搜索
+        in: query
+        name: email
+        type: string
+      - description: 状态筛选
+        in: query
+        name: status
+        type: string
+      - description: 套餐ID筛选
+        in: query
+        name: plan_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户列表
+      tags:
+      - 管理端-用户
+    post:
+      consumes:
+      - application/json
+      description: 管理员创建新用户
+      parameters:
+      - description: 用户信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.AdminCreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建用户
+      tags:
+      - 管理端-用户
+  /admin/users/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员删除指定用户
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 删除用户
+      tags:
+      - 管理端-用户
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取用户详细信息
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户详情
+      tags:
+      - 管理端-用户
+    put:
+      consumes:
+      - application/json
+      description: 管理员更新用户信息，支持修改邮箱、密码、余额、套餐等
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 用户更新信息
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新用户信息
+      tags:
+      - 管理端-用户
+  /admin/users/{id}/ban:
+    post:
+      consumes:
+      - application/json
+      description: 管理员封禁指定用户
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 封禁用户
+      tags:
+      - 管理端-用户
+  /admin/users/{id}/reset-traffic:
+    post:
+      consumes:
+      - application/json
+      description: 管理员重置指定用户的已使用流量
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 重置用户流量
+      tags:
+      - 管理端-用户
+  /admin/users/{id}/unban:
+    post:
+      consumes:
+      - application/json
+      description: 管理员解封指定用户
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 解封用户
+      tags:
+      - 管理端-用户
+  /admin/users/stats:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取用户统计数据，包括总用户数、活跃用户等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户统计
+      tags:
+      - 管理端-用户
+  /api/v2/agent/heartbeat:
+    post:
+      consumes:
+      - application/json
+      description: Agent 定期发送心跳
+      parameters:
+      - description: 心跳信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.AgentHeartbeatRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Agent 心跳
+      tags:
+      - Agent
+  /api/v2/agent/monitor:
+    post:
+      consumes:
+      - application/json
+      description: Agent 上报系统监控数据
+      parameters:
+      - description: 监控数据
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.AgentMonitorRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 上报监控数据
+      tags:
+      - Agent
+  /api/v2/agent/register:
+    post:
+      consumes:
+      - application/json
+      description: Agent 启动时注册到面板
+      parameters:
+      - description: 注册信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.AgentRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Agent 注册
+      tags:
+      - Agent
+  /api/v2/agent/result:
+    post:
+      consumes:
+      - application/json
+      description: Agent 上报任务执行结果
+      parameters:
+      - description: 任务结果
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.AgentTaskResult'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 上报任务结果
+      tags:
+      - Agent
+  /api/v2/agent/tasks:
+    get:
+      description: Agent 轮询获取待执行的任务
+      parameters:
+      - description: 节点 ID
+        in: query
+        name: node_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取待执行任务
+      tags:
+      - Agent
+  /api/v2/agent/ws:
+    get:
+      description: Agent 建立 WebSocket 长连接
+      responses:
+        "101":
+          description: Switching Protocols
+      summary: WebSocket 连接
+      tags:
+      - Agent
+  /api/v2/forward/agent/rules:
+    get:
+      description: Agent 获取该节点的转发规则
+      parameters:
+      - description: 节点 ID
+        in: query
+        name: node_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 获取转发规则
+      tags:
+      - Agent
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: 用户登录获取 JWT Token
+      parameters:
+      - description: 登录请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登录成功
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: 认证失败
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 用户登录
+      tags:
+      - 认证
+  /node/heartbeat:
+    post:
+      consumes:
+      - application/json
+      description: 节点向面板发送心跳以保持在线状态
+      parameters:
+      - description: 心跳请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.NodeHeartbeatRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 节点心跳
+      tags:
+      - 节点通信
+  /node/register:
+    post:
+      consumes:
+      - application/json
+      description: 节点通过授权密钥自动注册到面板
+      parameters:
+      - description: 注册请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.NodeRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 节点自动注册
+      tags:
+      - 节点通信
+  /payment/callback/{type}:
+    post:
+      consumes:
+      - application/json
+      description: 接收第三方支付平台的回调通知
+      parameters:
+      - description: 支付类型 (alipay/wechat/epay等)
+        in: path
+        name: type
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: success
+          schema:
+            type: string
+        "400":
+          description: fail
+          schema:
+            type: string
+      summary: 支付回调
+      tags:
+      - 支付回调
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: 创建新用户账户
+      parameters:
+      - description: 注册请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 注册成功
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 参数错误
+          schema:
+            additionalProperties: true
+            type: object
+      summary: 用户注册
+      tags:
+      - 认证
+  /telegram/webhook:
+    post:
+      consumes:
+      - application/json
+      description: 接收Telegram Bot的Webhook回调
+      parameters:
+      - description: Telegram Update
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.TelegramUpdate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Telegram Webhook回调
+      tags:
+      - Telegram
+  /user/dashboard:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前登录用户的仪表盘数据，包括订阅信息等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户仪表盘
+      tags:
+      - 用户端
+  /user/forward/rules:
+    get:
+      consumes:
+      - application/json
+      description: 用户获取自己的转发规则列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户的转发规则
+      tags:
+      - 用户端
+    post:
+      consumes:
+      - application/json
+      description: 用户创建自己的转发规则
+      parameters:
+      - description: 规则信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.CreateRuleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 用户创建转发规则
+      tags:
+      - 用户端
+  /user/invite:
+    get:
+      consumes:
+      - application/json
+      description: 用户获取自己的邀请码和佣金信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取邀请信息
+      tags:
+      - 用户端
+  /user/invite/commissions:
+    get:
+      consumes:
+      - application/json
+      description: 用户获取自己的佣金记录列表
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取佣金记录
+      tags:
+      - 用户端
+  /user/invite/generate:
+    post:
+      consumes:
+      - application/json
+      description: 用户生成新的邀请码
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 生成邀请码
+      tags:
+      - 用户端
+  /user/invite/withdraw:
+    post:
+      consumes:
+      - application/json
+      description: 用户申请佣金提现
+      parameters:
+      - description: 提现请求 {amount, method, account, name}
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 申请提现
+      tags:
+      - 用户端
+  /user/invite/withdrawals:
+    get:
+      consumes:
+      - application/json
+      description: 用户获取自己的提现记录列表
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取提现记录
+      tags:
+      - 用户端
+  /user/mfa/backup-codes/regenerate:
+    post:
+      consumes:
+      - application/json
+      description: 用户重新生成MFA备用码
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 重新生成备用码
+      tags:
+      - 用户端
+  /user/mfa/disable:
+    post:
+      consumes:
+      - application/json
+      description: 用户禁用多因素认证，需要密码确认
+      parameters:
+      - description: '密码请求 {password: string}'
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 禁用MFA
+      tags:
+      - 用户端
+  /user/mfa/status:
+    get:
+      consumes:
+      - application/json
+      description: 用户获取自己的多因素认证状态
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取MFA状态
+      tags:
+      - 用户端
+  /user/mfa/totp/enable:
+    post:
+      consumes:
+      - application/json
+      description: 用户启用TOTP多因素认证，需要验证码确认
+      parameters:
+      - description: '验证码请求 {code: string}'
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 启用TOTP
+      tags:
+      - 用户端
+  /user/mfa/totp/setup:
+    post:
+      consumes:
+      - application/json
+      description: 用户设置TOTP多因素认证，返回密钥和二维码
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 设置TOTP
+      tags:
+      - 用户端
+  /user/mfa/verify:
+    post:
+      consumes:
+      - application/json
+      description: 用户验证多因素认证代码
+      parameters:
+      - description: '验证请求 {code: string, method: string}'
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 验证MFA代码
+      tags:
+      - 用户端
+  /user/notifications:
+    get:
+      consumes:
+      - application/json
+      description: 用户获取自己的通知列表
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户通知列表
+      tags:
+      - 用户端
+  /user/notifications/{id}/read:
+    post:
+      consumes:
+      - application/json
+      description: 用户将指定通知标记为已读
+      parameters:
+      - description: 通知ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 标记通知为已读
+      tags:
+      - 用户端
+  /user/notifications/read-all:
+    post:
+      consumes:
+      - application/json
+      description: 用户将所有通知标记为已读
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 标记所有通知为已读
+      tags:
+      - 用户端
+  /user/notifications/unread-count:
+    get:
+      consumes:
+      - application/json
+      description: 用户获取未读通知的数量
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取未读通知数量
+      tags:
+      - 用户端
+  /user/payment/channels:
+    get:
+      consumes:
+      - application/json
+      description: 用户获取可用的支付渠道列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取支付渠道列表
+      tags:
+      - 用户端
+  /user/payment/create:
+    post:
+      consumes:
+      - application/json
+      description: 用户创建支付订单
+      parameters:
+      - description: 支付请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.CreatePaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 创建支付订单
+      tags:
+      - 用户端
+  /user/payment/records:
+    get:
+      consumes:
+      - application/json
+      description: 用户获取自己的支付记录列表
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户支付记录
+      tags:
+      - 用户端
+  /user/payment/status/{trade_no}:
+    get:
+      consumes:
+      - application/json
+      description: 用户查询支付订单状态
+      parameters:
+      - description: 订单号
+        in: path
+        name: trade_no
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 查询支付状态
+      tags:
+      - 用户端
+  /user/profile:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前登录用户的基本信息，包括邮箱、UUID、Token等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户基本信息
+      tags:
+      - 用户端
+  /user/subscription:
+    get:
+      consumes:
+      - application/json
+      description: 获取当前登录用户的订阅信息，包括流量、到期时间等
+      parameters:
+      - description: 是否强制刷新缓存
+        in: query
+        name: refresh
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取用户订阅详情
+      tags:
+      - 用户端
+  /user/telegram/notify:
+    post:
+      consumes:
+      - application/json
+      description: 用户更新自己的Telegram通知设置
+      parameters:
+      - description: 通知设置
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.NotifySettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 更新Telegram通知设置
+      tags:
+      - 用户端
+  /user/telegram/status:
+    get:
+      consumes:
+      - application/json
+      description: 用户获取自己的Telegram绑定状态
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取Telegram绑定状态
+      tags:
+      - 用户端
+  /user/telegram/unbind:
+    post:
+      consumes:
+      - application/json
+      description: 用户解绑自己的Telegram账号
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 解绑Telegram
+      tags:
+      - 用户端
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
+tags:
+- description: 用户登录、注册等认证相关接口
+  name: 认证
+- description: 用户个人信息、订阅、工单、订单等接口
+  name: 用户端
+- description: 管理员用户管理、节点管理、配置等接口
+  name: 管理端
+- description: 节点注册、心跳、配置同步等接口
+  name: 节点通信
