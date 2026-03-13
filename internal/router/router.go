@@ -5,6 +5,8 @@ import (
 	"github.com/anixops/v2board/internal/handler"
 	"github.com/anixops/v2board/internal/middleware"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // Setup 设置路由
@@ -14,7 +16,26 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
 
+	// Swagger API 文档
+	// 自定义 handler 来正确处理 doc.json
+	r.GET("/swagger/*any", func(c *gin.Context) {
+		path := c.Param("any")
+		if path == "/doc.json" || path == "doc.json" {
+			// 直接返回静态 swagger.json 文件
+			c.File("./docs/swagger.json")
+			return
+		}
+		// 其他 swagger 文件使用 ginSwagger
+		ginSwagger.WrapHandler(swaggerFiles.Handler)(c)
+	})
+
 	// 健康检查
+	// @Summary 健康检查
+	// @Description 检查服务是否正常运行
+	// @Tags 系统
+	// @Produce json
+	// @Success 200 {object} map[string]string
+	// @Router /health [get]
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
@@ -207,7 +228,162 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/knowledge", knowledgeHandler.CreateArticle)
 			admin.PUT("/knowledge/:id", knowledgeHandler.UpdateArticle)
 			admin.DELETE("/knowledge/:id", knowledgeHandler.DeleteArticle)
+
+			// ========== 流量转发管理 ==========
+			forwardHandler := handler.NewForwardHandler()
+
+			// 中转节点管理
+			admin.GET("/forward/nodes", forwardHandler.ListNodes)
+			admin.POST("/forward/nodes", forwardHandler.CreateNode)
+			admin.GET("/forward/nodes/:id", forwardHandler.GetNode)
+			admin.PUT("/forward/nodes/:id", forwardHandler.UpdateNode)
+			admin.DELETE("/forward/nodes/:id", forwardHandler.DeleteNode)
+			admin.POST("/forward/nodes/:id/check", forwardHandler.CheckNode)
+			admin.POST("/forward/nodes/:id/toggle", forwardHandler.ToggleNode)
+			admin.POST("/forward/nodes/:id/sync-stats", forwardHandler.SyncNodeStats)
+			admin.POST("/forward/test-connection", forwardHandler.TestGostConnection)
+
+			// 转发规则管理
+			admin.GET("/forward/rules", forwardHandler.ListRules)
+			admin.POST("/forward/rules", forwardHandler.CreateRule)
+			admin.GET("/forward/rules/:id", forwardHandler.GetRule)
+			admin.PUT("/forward/rules/:id", forwardHandler.UpdateRule)
+			admin.DELETE("/forward/rules/:id", forwardHandler.DeleteRule)
+			admin.POST("/forward/rules/:id/toggle", forwardHandler.ToggleRule)
+
+			// 转发统计
+			admin.GET("/forward/stats", forwardHandler.GetForwardStats)
+
+			// ========== 支付网关管理 ==========
+			paymentGatewayHandler := handler.NewPaymentGatewayHandler()
+
+			// 网关管理
+			admin.GET("/payment/gateways", paymentGatewayHandler.ListGateways)
+			admin.POST("/payment/gateways", paymentGatewayHandler.CreateGateway)
+			admin.PUT("/payment/gateways/:id", paymentGatewayHandler.UpdateGateway)
+			admin.DELETE("/payment/gateways/:id", paymentGatewayHandler.DeleteGateway)
+			admin.POST("/payment/gateways/:id/toggle", paymentGatewayHandler.ToggleGateway)
+
+			// 支付统计和记录
+			admin.GET("/payment/stats", paymentGatewayHandler.GetPaymentStats)
+			admin.GET("/payment/records", paymentGatewayHandler.ListPaymentRecords)
+
+			// ========== Telegram Bot 管理 ==========
+			telegramHandler := handler.NewTelegramHandler()
+
+			admin.GET("/telegram/bot", telegramHandler.GetBot)
+			admin.PUT("/telegram/bot", telegramHandler.UpdateBot)
+			admin.POST("/telegram/webhook", telegramHandler.SetWebhook)
+			admin.DELETE("/telegram/webhook", telegramHandler.DeleteWebhook)
+			admin.POST("/telegram/notify", telegramHandler.SendNotification)
+			admin.POST("/telegram/broadcast", telegramHandler.Broadcast)
+			admin.GET("/telegram/users", telegramHandler.GetUserBindings)
+
+			// ========== MFA 管理 ==========
+			mfaHandler := handler.NewMFAHandler()
+			admin.GET("/mfa/config", mfaHandler.GetAdminConfig)
+			admin.PUT("/mfa/config", mfaHandler.UpdateAdminConfig)
+
+			// ========== 通知管理 ==========
+			notificationHandler := handler.NewNotificationHandler()
+			admin.GET("/notification/templates", notificationHandler.ListTemplates)
+			admin.POST("/notification/templates", notificationHandler.CreateTemplate)
+			admin.PUT("/notification/templates/:id", notificationHandler.UpdateTemplate)
+			admin.DELETE("/notification/templates/:id", notificationHandler.DeleteTemplate)
+			admin.GET("/notification/logs", notificationHandler.ListLogs)
+			admin.POST("/notification/test", notificationHandler.SendTestNotification)
+			admin.GET("/notification/email/config", notificationHandler.GetEmailConfig)
+			admin.PUT("/notification/email/config", notificationHandler.UpdateEmailConfig)
+
+			// ========== 邀请返利管理 ==========
+			inviteHandler := handler.NewInviteHandler()
+			admin.GET("/invite/config", inviteHandler.GetConfig)
+			admin.PUT("/invite/config", inviteHandler.UpdateConfig)
+			admin.GET("/invite/stats", inviteHandler.GetInviteStats)
+			admin.GET("/invite/withdrawals", inviteHandler.GetWithdrawals)
+			admin.POST("/invite/withdrawals/:id/process", inviteHandler.ProcessWithdraw)
+
+			// ========== 系统配置管理 ==========
+			systemHandler := handler.NewSystemHandler()
+			admin.GET("/system/configs", systemHandler.GetConfigs)
+			admin.GET("/system/configs/:key", systemHandler.GetConfig)
+			admin.PUT("/system/configs/:key", systemHandler.SetConfig)
+			admin.DELETE("/system/configs/:key", systemHandler.DeleteConfig)
+
+			// ========== 备份管理 ==========
+			admin.GET("/system/backup/config", systemHandler.GetBackupConfig)
+			admin.PUT("/system/backup/config", systemHandler.UpdateBackupConfig)
+			admin.POST("/system/backup", systemHandler.CreateBackup)
+			admin.GET("/system/backups", systemHandler.ListBackups)
+			admin.GET("/system/backup/stats", systemHandler.GetBackupStats)
+			admin.DELETE("/system/backups/:id", systemHandler.DeleteBackup)
+			admin.POST("/system/backups/:id/restore", systemHandler.RestoreBackup)
+
+			// ========== 负载均衡管理 ==========
+			lbHandler := handler.NewLoadBalancerHandler()
+			admin.GET("/loadbalancers", lbHandler.ListLoadBalancers)
+			admin.POST("/loadbalancers", lbHandler.CreateLoadBalancer)
+			admin.GET("/loadbalancers/:id", lbHandler.GetLoadBalancer)
+			admin.PUT("/loadbalancers/:id", lbHandler.UpdateLoadBalancer)
+			admin.DELETE("/loadbalancers/:id", lbHandler.DeleteLoadBalancer)
+			admin.GET("/loadbalancers/:id/stats", lbHandler.GetLoadBalancerStats)
+			admin.POST("/loadbalancers/:id/check", lbHandler.RunHealthCheck)
 		}
+
+		// 用户接口 (需认证)
+		authUser := v2.Group("")
+		authUser.Use(middleware.JWTAuth())
+		{
+			// 用户转发规则
+			forwardHandler := handler.NewForwardHandler()
+			authUser.GET("/user/forward/rules", forwardHandler.GetUserRules)
+			authUser.POST("/user/forward/rules", forwardHandler.CreateUserRule)
+
+			// 用户支付
+			paymentGatewayHandler := handler.NewPaymentGatewayHandler()
+			authUser.GET("/user/payment/channels", paymentGatewayHandler.GetChannels)
+			authUser.POST("/user/payment/create", paymentGatewayHandler.CreatePayment)
+			authUser.GET("/user/payment/status/:trade_no", paymentGatewayHandler.GetPaymentStatus)
+			authUser.GET("/user/payment/records", paymentGatewayHandler.GetUserRecords)
+
+			// 用户 Telegram
+			telegramHandler := handler.NewTelegramHandler()
+			authUser.GET("/user/telegram/status", telegramHandler.GetTelegramStatus)
+			authUser.POST("/user/telegram/unbind", telegramHandler.UnbindTelegram)
+			authUser.POST("/user/telegram/notify", telegramHandler.UpdateNotifySettings)
+
+			// 用户 MFA
+			mfaHandler := handler.NewMFAHandler()
+			authUser.GET("/user/mfa/status", mfaHandler.GetStatus)
+			authUser.POST("/user/mfa/totp/setup", mfaHandler.SetupTOTP)
+			authUser.POST("/user/mfa/totp/enable", mfaHandler.EnableTOTP)
+			authUser.POST("/user/mfa/disable", mfaHandler.DisableMFA)
+			authUser.POST("/user/mfa/verify", mfaHandler.VerifyMFA)
+			authUser.POST("/user/mfa/backup-codes/regenerate", mfaHandler.RegenerateBackupCodes)
+
+			// 用户通知
+			notificationHandler := handler.NewNotificationHandler()
+			authUser.GET("/user/notifications", notificationHandler.GetUserNotifications)
+			authUser.GET("/user/notifications/unread-count", notificationHandler.GetUnreadCount)
+			authUser.POST("/user/notifications/:id/read", notificationHandler.MarkAsRead)
+			authUser.POST("/user/notifications/read-all", notificationHandler.MarkAllAsRead)
+
+			// 用户邀请
+			inviteHandler := handler.NewInviteHandler()
+			authUser.GET("/user/invite", inviteHandler.GetInviteInfo)
+			authUser.POST("/user/invite/generate", inviteHandler.GenerateCode)
+			authUser.GET("/user/invite/commissions", inviteHandler.GetCommissionRecords)
+			authUser.POST("/user/invite/withdraw", inviteHandler.RequestWithdraw)
+			authUser.GET("/user/invite/withdrawals", inviteHandler.GetWithdrawRecords)
+		}
+
+		// Telegram Webhook (公开)
+		telegramHandler := handler.NewTelegramHandler()
+		v2.POST("/telegram/webhook", telegramHandler.TelegramWebhook)
+
+		// 支付回调 (公开)
+		paymentGatewayHandler := handler.NewPaymentGatewayHandler()
+		v2.POST("/payment/callback/:type", paymentGatewayHandler.PaymentCallback)
 
 		// 节点自动注册 API (公开)
 		nodePublic := v2.Group("/node")
@@ -236,6 +412,31 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			uniproxy.GET("/alivelist", h.GetAliveList)
 			uniproxy.POST("/push", h.PushTraffic)
 			uniproxy.POST("/alive", h.PushAlive)
+		}
+
+		// Agent API (NAT 后节点主动连接)
+		agentHandler := handler.NewAgentHandler()
+		agentPublic := v2.Group("/agent")
+		{
+			agentPublic.POST("/register", agentHandler.AgentRegister)
+			agentPublic.POST("/heartbeat", agentHandler.AgentHeartbeat)
+			agentPublic.GET("/tasks", agentHandler.AgentGetTasks)
+			agentPublic.POST("/result", agentHandler.AgentReportResult)
+			agentPublic.POST("/monitor", agentHandler.AgentMonitor)
+			agentPublic.GET("/ws", agentHandler.AgentWebSocket)
+		}
+
+		// 转发规则同步 (Agent 使用)
+		v2.GET("/forward/agent/rules", agentHandler.AgentGetForwardRules)
+
+		// Agent 管理接口 (管理员)
+		agentAdmin := v2.Group("/admin/agent")
+		agentAdmin.Use(middleware.JWTAuth())
+		agentAdmin.Use(middleware.AdminAuth())
+		{
+			agentAdmin.GET("/list", agentHandler.ListAgents)
+			agentAdmin.POST("/tasks", agentHandler.CreateTask)
+			agentAdmin.POST("/execute", agentHandler.ExecuteCommand)
 		}
 	}
 }
