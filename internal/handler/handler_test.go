@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/anixops/v2board/internal/cache"
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
@@ -26,6 +27,9 @@ type HandlerTestSuite struct {
 
 func (s *HandlerTestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
+
+	// 初始化缓存
+	cache.InitMemory()
 
 	s.cfg = &config.Config{
 		Env: "test",

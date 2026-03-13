@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -239,9 +240,12 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 
 	config := make(map[string]interface{})
 
-	// V2bX 必需字段：node_type
-	config["node_type"] = string(serverType)
+	// V2bX 必需字段：node_type 和 type
+	nodeTypeStr := string(serverType)
+	config["node_type"] = nodeTypeStr
+	config["type"] = nodeTypeStr
 	config["send_through"] = "0.0.0.0"
+	log.Printf("BuildNodeConfig: node_type=%s, type=%s", nodeTypeStr, nodeTypeStr)
 
 	switch sv := server.(type) {
 	case *model.ServerVMess:

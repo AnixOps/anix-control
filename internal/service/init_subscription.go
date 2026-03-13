@@ -273,8 +273,8 @@ func InitDefaultPlan() {
 	plan := &model.Plan{
 		GroupID:        group.ID,
 		Name:           "基础套餐",
-		TransferEnable: 100 * 1024 * 1024 * 1024, // 100GB
-		MonthPrice:     ptrInt64(1200),           // 单位：分（12元）
+		TransferEnable: 100,            // 100GB
+		MonthPrice:     ptrInt64(1200), // 单位：分（12元）
 		Show:           1,
 		Renew:          1,
 		Sort:           ptrInt(0),

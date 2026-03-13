@@ -169,7 +169,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		if err == nil {
 			updates["group_id"] = plan.GroupID
 			if req.TransferEnable == nil {
-				updates["transfer_enable"] = plan.TransferEnable * 1024 * 1024 * 1024
+				updates["transfer_enable"] = plan.TransferEnable * 1073741824
 			}
 			if req.SpeedLimit == nil && plan.SpeedLimit != nil {
 				updates["speed_limit"] = *plan.SpeedLimit
