@@ -3,15 +3,13 @@
     "allow": [
       "Bash(go build:*)",
       "Bash(go test:*)",
-      "Bash(sleep 5 && curl -s http://localhost:8080/health 2>/dev/null || echo \"Service not responding\")",
-      "Bash(curl -s \"http://localhost:8080/api/v2/server/UniProxy/config?node_id=1&token=test\" 2>/dev/null | head -20)",
-      "Bash(curl -s \"http://localhost:8080/api/v2/server/UniProxy/config?node_id=1&token=test\" 2>/dev/null)",
-      "Bash(sqlite3 data/v2board.db \"SELECT * FROM v2_node LIMIT 5;\" 2>/dev/null || echo \"No v2_node table or empty\"\nsqlite3 data/v2board.db \"SELECT id, host, server_port FROM v2_server_shadowsocks LIMIT 5;\" 2>/dev/null)",
-      "Bash(sqlite3 data/v2board.db \"SELECT * FROM v2_node_protocol WHERE node_id=1;\" 2>/dev/null || echo \"No protocols\")",
-      "Bash(curl -s \"http://localhost:8080/api/v2/server/UniProxy/config?node_id=1&token=test&node_type=shadowsocks\" 2>/dev/null)",
-      "Bash(go clean:*)",
-      "Bash(sqlite3 data/v2board.db \"SELECT id, node_id, type, custom_config FROM v2_node_protocol WHERE node_id=1;\" 2>/dev/null)",
-      "Bash(netstat -ano | grep 8080 | head -5\ntasklist | grep -i v2board)"
+      "Bash(go vet:*)",
+      "Bash(go mod:*)",
+      "Bash(go run:*)",
+      "Bash(sqlite3 data/*.db*)",
+      "Bash(curl -s http://localhost:8080/*)",
+      "Bash(rm -f *.exe)",
+      "Bash(mkdir -p:*)"
     ]
   }
 }
