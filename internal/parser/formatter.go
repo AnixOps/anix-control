@@ -927,6 +927,230 @@ func (f *ClashFormatter) addTransportOpts(proxy map[string]interface{}, node *mo
 	}
 }
 
+// SurgeFormatter Surge 格式化器
+type SurgeFormatter struct{}
+
+func (f *SurgeFormatter) Name() string {
+	return "surge"
+}
+
+func (f *SurgeFormatter) ContentType() string {
+	return "text/plain; charset=utf-8"
+}
+
+func (f *SurgeFormatter) FileExtension() string {
+	return "conf"
+}
+
+func (f *SurgeFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRenderContext) ([]byte, error) {
+	var lines []string
+	lines = append(lines, "[Proxy]")
+
+	for _, node := range nodes {
+		line := f.formatNode(node, ctx)
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+
+	// 添加一个默认的节点组
+	lines = append(lines, "[Proxy Group]")
+	var proxyNames []string
+	for _, node := range nodes {
+		proxyNames = append(proxyNames, node.Name)
+	}
+	if len(proxyNames) > 0 {
+		lines = append(lines, "Proxy = select, "+strings.Join(proxyNames, ", "))
+	} else {
+		lines = append(lines, "Proxy = direct")
+	}
+
+	return []byte(strings.Join(lines, "\n")), nil
+}
+
+func (f *SurgeFormatter) formatNode(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
+	var line string
+	switch node.Type {
+	case "vmess":
+		line = f.formatVMess(node, ctx)
+	case "vless":
+		line = f.formatVLESS(node, ctx)
+	case "trojan":
+		line = f.formatTrojan(node, ctx)
+	case "shadowsocks", "ss":
+		line = f.formatShadowsocks(node, ctx)
+	default:
+		return ""
+	}
+	if line != "" {
+		return fmt.Sprintf("%s = %s", node.Name, line)
+	}
+	return ""
+}
+
+func (f *SurgeFormatter) formatVMess(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
+	uuid := node.UUID
+	if uuid == "" && ctx != nil {
+		uuid = ctx.UUID
+	}
+	// vmess, server, port, username=uuid, ws=true, ws-path=/path, ws-headers=Host:host.com, tls=true, sni=host.com
+	parts := []string{
+		"vmess",
+		node.Server,
+		fmt.Sprintf("%d", node.Port),
+		fmt.Sprintf("username=%s", uuid),
+	}
+
+	// VMess AEAD is enabled by default in Surge
+	parts = append(parts, "vmess-aead=true")
+
+	if node.TLS || node.TLSMode == 1 {
+		parts = append(parts, "tls=true")
+		if node.ServerName != "" {
+			parts = append(parts, fmt.Sprintf("sni=%s", node.ServerName))
+		}
+		if node.SkipCertVerify {
+			parts = append(parts, "skip-cert-verify=true")
+		}
+	}
+
+	switch node.Transport {
+	case "ws":
+		parts = append(parts, "ws=true")
+		if node.TransportSettings != nil {
+			if path, ok := node.TransportSettings["path"].(string); ok {
+				parts = append(parts, fmt.Sprintf("ws-path=%s", path))
+			}
+			if host, ok := node.TransportSettings["host"].(string); ok {
+				parts = append(parts, fmt.Sprintf("ws-headers=Host:%s", host))
+			}
+		}
+	case "h2":
+		parts = append(parts, "http/2=true")
+		if node.TransportSettings != nil {
+			if path, ok := node.TransportSettings["path"].(string); ok {
+				parts = append(parts, fmt.Sprintf("h2-path=%s", path))
+			}
+			if host, ok := node.TransportSettings["host"].(string); ok {
+				parts = append(parts, fmt.Sprintf("h2-host=%s", host))
+			}
+		}
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+func (f *SurgeFormatter) formatVLESS(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
+	uuid := node.UUID
+	if uuid == "" && ctx != nil {
+		uuid = ctx.UUID
+	}
+
+	// vless, server, port, username=uuid, tls=true, sni=host.com
+	parts := []string{
+		"vless",
+		node.Server,
+		fmt.Sprintf("%d", node.Port),
+		fmt.Sprintf("username=%s", uuid),
+	}
+
+	if node.TLSMode == 2 || node.RealityPublicKey != "" {
+		parts = append(parts, "tls=true") // Surge uses 'tls' for Reality
+		if node.ServerName != "" {
+			parts = append(parts, fmt.Sprintf("sni=%s", node.ServerName))
+		}
+		if node.RealityPublicKey != "" {
+			// Surge combines reality-key and short-id into a single 'experimental-reality-key' field
+			// For simplicity, we only use the public key here.
+			// A more advanced implementation might require combining them if the format standardizes.
+			parts = append(parts, fmt.Sprintf("reality-public-key=%s", node.RealityPublicKey))
+		}
+	} else if node.TLS || node.TLSMode == 1 {
+		parts = append(parts, "tls=true")
+		if node.ServerName != "" {
+			parts = append(parts, fmt.Sprintf("sni=%s", node.ServerName))
+		}
+	}
+
+	if node.SkipCertVerify {
+		parts = append(parts, "skip-cert-verify=true")
+	}
+
+	switch node.Transport {
+	case "ws":
+		parts = append(parts, "ws=true")
+		if node.TransportSettings != nil {
+			if path, ok := node.TransportSettings["path"].(string); ok {
+				parts = append(parts, fmt.Sprintf("ws-path=%s", path))
+			}
+			if host, ok := node.TransportSettings["host"].(string); ok {
+				parts = append(parts, fmt.Sprintf("ws-headers=Host:%s", host))
+			}
+		}
+	case "h2":
+		parts = append(parts, "http/2=true")
+		if node.TransportSettings != nil {
+			if path, ok := node.TransportSettings["path"].(string); ok {
+				parts = append(parts, fmt.Sprintf("h2-path=%s", path))
+			}
+			if host, ok := node.TransportSettings["host"].(string); ok {
+				parts = append(parts, fmt.Sprintf("h2-host=%s", host))
+			}
+		}
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+
+func (f *SurgeFormatter) formatTrojan(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
+	password := node.Password
+	if password == "" && ctx != nil {
+		password = ctx.UUID
+	}
+
+	// trojan, server, port, password=password, sni=host.com
+	parts := []string{
+		"trojan",
+		node.Server,
+		fmt.Sprintf("%d", node.Port),
+		fmt.Sprintf("password=%s", password),
+	}
+
+	if node.ServerName != "" {
+		parts = append(parts, fmt.Sprintf("sni=%s", node.ServerName))
+	}
+
+	if node.SkipCertVerify {
+		parts = append(parts, "skip-cert-verify=true")
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+func (f *SurgeFormatter) formatShadowsocks(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
+	password := node.Password
+	if password == "" && ctx != nil {
+		password = ctx.UUID
+	}
+
+	cipher := "aes-256-gcm"
+	if c, ok := node.Settings["cipher"].(string); ok && c != "" {
+		cipher = c
+	}
+
+	// ss, server, port, encrypt-method=cipher, password=password
+	parts := []string{
+		"ss",
+		node.Server,
+		fmt.Sprintf("%d", node.Port),
+		fmt.Sprintf("encrypt-method=%s", cipher),
+		fmt.Sprintf("password=%s", password),
+	}
+
+	return strings.Join(parts, ", ")
+}
+
 // JSONFormatter 原始 JSON 格式化器
 type JSONFormatter struct{}
 

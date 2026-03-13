@@ -80,7 +80,7 @@ func (s *PlanService) AssignToUser(planID, userID uint, expireAt *int64) error {
 	updates := map[string]interface{}{
 		"plan_id":         plan.ID,
 		"group_id":        plan.GroupID,
-		"transfer_enable": plan.TransferEnable * 1024 * 1024 * 1024,
+		"transfer_enable": plan.TransferEnable * 1073741824,
 		"u":               0,
 		"d":               0,
 	}

@@ -309,7 +309,7 @@ func (s *OrderService) Complete(orderID uint) error {
 		userUpdates := map[string]interface{}{
 			"plan_id":         plan.ID,
 			"group_id":        plan.GroupID, // 保持向后兼容
-			"transfer_enable": plan.TransferEnable * 1024 * 1024 * 1024,
+			"transfer_enable": plan.TransferEnable * 1073741824,
 			"expired_at":      expiredAt,
 			"u":               0, // 购买/续费通常重置流量
 			"d":               0,

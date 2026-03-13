@@ -55,6 +55,8 @@ func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
 			switch strings.ToLower(ext) {
 			case "yaml", "yml":
 				formatStr = "clash"
+			case "conf":
+				formatStr = "surge"
 			case "json":
 				formatStr = "sing-box"
 			case "txt":
