@@ -25,7 +25,7 @@ func NodeAuth() gin.HandlerFunc {
 		}
 
 		cfg := config.Get()
-		if cfg.App.APIToken != "" && token != cfg.App.APIToken {
+		if cfg != nil && cfg.App.APIToken != "" && token != cfg.App.APIToken {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "invalid token",
 			})

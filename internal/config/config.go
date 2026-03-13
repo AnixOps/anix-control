@@ -127,3 +127,8 @@ func Load(path string) (*Config, error) {
 func Get() *Config {
 	return cfg
 }
+
+// Set 设置配置 (主要用于测试)
+func Set(c *Config) {
+	cfg = c
+}

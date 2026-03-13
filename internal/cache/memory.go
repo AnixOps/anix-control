@@ -70,6 +70,9 @@ func CloseMemory() {
 
 // Set 设置缓存
 func Set(key string, value interface{}, expiration time.Duration) error {
+	if memCache == nil {
+		return nil
+	}
 	memCache.mu.Lock()
 	defer memCache.mu.Unlock()
 
@@ -87,6 +90,9 @@ func Set(key string, value interface{}, expiration time.Duration) error {
 
 // GetString 获取字符串缓存
 func GetString(key string) (string, error) {
+	if memCache == nil {
+		return "", ErrKeyNotFound
+	}
 	memCache.mu.RLock()
 	defer memCache.mu.RUnlock()
 
@@ -107,6 +113,9 @@ func GetString(key string) (string, error) {
 
 // Get 获取缓存值
 func Get(key string) (interface{}, error) {
+	if memCache == nil {
+		return nil, ErrKeyNotFound
+	}
 	memCache.mu.RLock()
 	defer memCache.mu.RUnlock()
 
@@ -129,6 +138,9 @@ func Delete(key string) error {
 
 // Del 删除缓存
 func Del(keys ...string) error {
+	if memCache == nil {
+		return nil
+	}
 	memCache.mu.Lock()
 	defer memCache.mu.Unlock()
 
@@ -141,6 +153,9 @@ func Del(keys ...string) error {
 
 // SAdd 集合添加
 func SAdd(key string, members ...interface{}) error {
+	if memCache == nil {
+		return nil
+	}
 	memCache.mu.Lock()
 	defer memCache.mu.Unlock()
 
@@ -158,6 +173,9 @@ func SAdd(key string, members ...interface{}) error {
 
 // SMembers 获取集合成员
 func SMembers(key string) ([]string, error) {
+	if memCache == nil {
+		return []string{}, nil
+	}
 	memCache.mu.RLock()
 	defer memCache.mu.RUnlock()
 
@@ -175,6 +193,9 @@ func SMembers(key string) ([]string, error) {
 
 // SCard 获取集合大小
 func SCard(key string) (int64, error) {
+	if memCache == nil {
+		return 0, nil
+	}
 	memCache.mu.RLock()
 	defer memCache.mu.RUnlock()
 
@@ -187,6 +208,9 @@ func SCard(key string) (int64, error) {
 
 // Expire 设置过期时间
 func Expire(key string, expiration time.Duration) error {
+	if memCache == nil {
+		return nil
+	}
 	memCache.mu.Lock()
 	defer memCache.mu.Unlock()
 
@@ -198,6 +222,9 @@ func Expire(key string, expiration time.Duration) error {
 
 // Keys 获取匹配的键（支持简单的 * 通配符）
 func Keys(pattern string) ([]string, error) {
+	if memCache == nil {
+		return []string{}, nil
+	}
 	memCache.mu.RLock()
 	defer memCache.mu.RUnlock()
 
@@ -232,6 +259,9 @@ func Keys(pattern string) ([]string, error) {
 
 // HSet 设置Hash字段
 func HSet(key string, field string, value interface{}) error {
+	if memCache == nil {
+		return nil
+	}
 	memCache.mu.Lock()
 	defer memCache.mu.Unlock()
 
@@ -250,6 +280,9 @@ func HGet(key string, field string) (string, error) {
 
 // HGetAll 获取所有Hash字段
 func HGetAll(key string) (map[string]string, error) {
+	if memCache == nil {
+		return map[string]string{}, nil
+	}
 	memCache.mu.RLock()
 	defer memCache.mu.RUnlock()
 
@@ -269,6 +302,9 @@ func HGetAll(key string) (map[string]string, error) {
 
 // HDel 删除Hash字段
 func HDel(key string, fields ...string) error {
+	if memCache == nil {
+		return nil
+	}
 	memCache.mu.Lock()
 	defer memCache.mu.Unlock()
 
@@ -281,6 +317,9 @@ func HDel(key string, fields ...string) error {
 
 // SClear 清空集合
 func SClear(key string) error {
+	if memCache == nil {
+		return nil
+	}
 	memCache.mu.Lock()
 	defer memCache.mu.Unlock()
 
@@ -290,6 +329,9 @@ func SClear(key string) error {
 
 // Exists 检查键是否存在
 func Exists(key string) bool {
+	if memCache == nil {
+		return false
+	}
 	memCache.mu.RLock()
 	defer memCache.mu.RUnlock()
 
