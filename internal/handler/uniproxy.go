@@ -5,7 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/anixops/v2board/internal/model"
@@ -36,6 +38,13 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 	nodeType := c.Query("node_type")
 	nodeIDStr := c.Query("node_id")
 
+	// 写入调试文件
+	debugFile, _ := os.OpenFile("C:/tmp/debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if debugFile != nil {
+		debugFile.WriteString(fmt.Sprintf("GetConfig: node_type=%s, node_id=%s\n", nodeType, nodeIDStr))
+		defer debugFile.Close()
+	}
+
 	nodeID, err := strconv.ParseUint(nodeIDStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid node_id"})
@@ -46,11 +55,14 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 
 	// 如果没有指定 node_type，先尝试查询新版节点表
 	if nodeType == "" {
+		fmt.Printf("DEBUG: no node_type, trying buildNewNodeConfig\n")
 		config, err = h.buildNewNodeConfig(uint(nodeID))
 		if err == nil {
+			fmt.Printf("DEBUG: buildNewNodeConfig success, config keys=%v\n", getMapKeys(config))
 			h.sendConfigResponse(c, config)
 			return
 		}
+		fmt.Printf("DEBUG: buildNewNodeConfig failed: %v\n", err)
 		// 新版节点未找到，尝试旧版（依次尝试各种类型）
 		for _, serverType := range []model.ServerType{model.ServerTypeVMess, model.ServerTypeVLESS, model.ServerTypeTrojan, model.ServerTypeShadowsocks} {
 			config, err = h.serverService.BuildNodeConfig(serverType, uint(nodeID))
@@ -96,10 +108,12 @@ func (h *UniProxyHandler) buildNewNodeConfig(nodeID uint) (map[string]interface{
 
 	// 优先级2: 从协议配置构建
 	protocols, _ := h.nodeService.GetProtocols(nodeID)
+	fmt.Printf("DEBUG buildNewNodeConfig: nodeID=%d, protocols count=%d\n", nodeID, len(protocols))
 	if len(protocols) > 0 {
 		// 使用第一个启用的协议配置
 		var protocol *model.NodeProtocol
 		for i := range protocols {
+			fmt.Printf("DEBUG: protocol[%d] type=%s, enable=%d\n", i, protocols[i].Type, protocols[i].Enable)
 			if protocols[i].Enable == 1 {
 				protocol = &protocols[i]
 				break
@@ -122,6 +136,10 @@ func (h *UniProxyHandler) ensureBaseConfig(config map[string]interface{}, node *
 	if _, ok := config["node_type"]; !ok {
 		config["node_type"] = "vless" // 默认类型
 	}
+	// 确保 type 字段存在（与 node_type 一致）
+	if _, ok := config["type"]; !ok {
+		config["type"] = config["node_type"]
+	}
 	if _, ok := config["send_through"]; !ok {
 		config["send_through"] = "0.0.0.0"
 	}
@@ -140,6 +158,7 @@ func (h *UniProxyHandler) ensureBaseConfig(config map[string]interface{}, node *
 func (h *UniProxyHandler) buildMinimalConfig(config map[string]interface{}, node *model.Node) {
 	// V2bX 必需字段
 	config["node_type"] = "vless" // 默认类型，管理员可通过 RawConfig 覆盖
+	config["type"] = "vless"     // 与 node_type 一致
 	config["server_port"] = node.Port
 	config["host"] = node.Host
 	config["server_name"] = node.Host
@@ -155,13 +174,18 @@ func (h *UniProxyHandler) buildMinimalConfig(config map[string]interface{}, node
 
 // buildConfigFromProtocol 从协议配置构建
 func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]interface{}, node *model.Node, protocol *model.NodeProtocol) {
-	// V2bX 必需字段：node_type (如果协议类型为空，使用默认值)
+	// V2bX 必需字段：node_type 和 type (如果协议类型为空，使用默认值)
 	nodeType := string(protocol.Type)
 	if nodeType == "" {
 		nodeType = "vless" // 默认类型
 	}
 	config["node_type"] = nodeType
+	config["type"] = nodeType // 与 node_type 一致
 	config["server_port"] = protocol.Port
+
+	// 调试：打印 config 的所有 key
+	fmt.Printf("DEBUG buildConfigFromProtocol: keys=%v, node_type=%v, type=%v\n",
+		getMapKeys(config), config["node_type"], config["type"])
 	if protocol.Host != nil && *protocol.Host != "" {
 		config["host"] = *protocol.Host
 		config["server_name"] = *protocol.Host
@@ -246,6 +270,15 @@ func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]interface{},
 
 // sendConfigResponse 发送配置响应
 func (h *UniProxyHandler) sendConfigResponse(c *gin.Context, config map[string]interface{}) {
+	// 确保 type 字段存在
+	if _, ok := config["type"]; !ok {
+		if nt, ok := config["node_type"]; ok {
+			config["type"] = nt
+		}
+	}
+	log.Printf("sendConfigResponse: config keys=%v, type=%v, node_type=%v",
+		getMapKeys(config), config["type"], config["node_type"])
+
 	configJSON, _ := json.Marshal(config)
 	etag := generateETag(configJSON)
 
@@ -518,4 +551,13 @@ func (h *UniProxyHandler) PushAlive(c *gin.Context) {
 func generateETag(data []byte) string {
 	hash := md5.Sum(data)
 	return hex.EncodeToString(hash[:])
+}
+
+// getMapKeys 获取 map 的所有 key
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }

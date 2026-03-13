@@ -1,0 +1,988 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>grpc: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/anixops/v2board/internal/grpc/interceptor.go (90.7%)</option>
+				
+				<option value="file1">github.com/anixops/v2board/internal/grpc/node_server.go (87.1%)</option>
+				
+				<option value="file2">github.com/anixops/v2board/internal/grpc/server.go (62.5%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">no coverage</span>
+				<span class="cov1">low coverage</span>
+				<span class="cov2">*</span>
+				<span class="cov3">*</span>
+				<span class="cov4">*</span>
+				<span class="cov5">*</span>
+				<span class="cov6">*</span>
+				<span class="cov7">*</span>
+				<span class="cov8">*</span>
+				<span class="cov9">*</span>
+				<span class="cov10">high coverage</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package grpc
+
+import (
+        "context"
+        "strings"
+        "sync"
+        "time"
+
+        "google.golang.org/grpc"
+        "google.golang.org/grpc/codes"
+        "google.golang.org/grpc/metadata"
+        "google.golang.org/grpc/peer"
+        "google.golang.org/grpc/status"
+)
+
+// NodeConnection 节点连接信息
+type NodeConnection struct {
+        NodeID      uint32
+        LastSeen    time.Time
+        RemoteAddr  string
+        Connection  interface{} // 可以是具体的流对象
+}
+
+// NodeConnectionManager 节点连接管理器
+type NodeConnectionManager struct {
+        mu          sync.RWMutex
+        connections map[uint32]*NodeConnection
+        configVer   map[uint32]int64 // 节点配置版本
+}
+
+// NewNodeConnectionManager 创建连接管理器
+func NewNodeConnectionManager() *NodeConnectionManager <span class="cov9" title="5">{
+        return &amp;NodeConnectionManager{
+                connections: make(map[uint32]*NodeConnection),
+                configVer:   make(map[uint32]int64),
+        }
+}</span>
+
+// Register 注册节点连接
+func (m *NodeConnectionManager) Register(nodeID uint32, addr string) <span class="cov7" title="4">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+        m.connections[nodeID] = &amp;NodeConnection{
+                NodeID:     nodeID,
+                LastSeen:   time.Now(),
+                RemoteAddr: addr,
+        }
+}</span>
+
+// Unregister 注销节点连接
+func (m *NodeConnectionManager) Unregister(nodeID uint32) <span class="cov4" title="2">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+        delete(m.connections, nodeID)
+}</span>
+
+// UpdateLastSeen 更新最后活跃时间
+func (m *NodeConnectionManager) UpdateLastSeen(nodeID uint32) <span class="cov4" title="2">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+        if conn, ok := m.connections[nodeID]; ok </span><span class="cov4" title="2">{
+                conn.LastSeen = time.Now()
+        }</span>
+}
+
+// GetConnection 获取节点连接
+func (m *NodeConnectionManager) GetConnection(nodeID uint32) (*NodeConnection, bool) <span class="cov7" title="4">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+        conn, ok := m.connections[nodeID]
+        return conn, ok
+}</span>
+
+// GetActiveNodes 获取所有活跃节点
+func (m *NodeConnectionManager) GetActiveNodes() []uint32 <span class="cov1" title="1">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+        nodes := make([]uint32, 0, len(m.connections))
+        for id := range m.connections </span><span class="cov4" title="2">{
+                nodes = append(nodes, id)
+        }</span>
+        <span class="cov1" title="1">return nodes</span>
+}
+
+// UpdateConfigVersion 更新配置版本
+func (m *NodeConnectionManager) UpdateConfigVersion(nodeID uint32, version int64) <span class="cov1" title="1">{
+        m.mu.Lock()
+        defer m.mu.Unlock()
+        m.configVer[nodeID] = version
+}</span>
+
+// GetConfigVersion 获取配置版本
+func (m *NodeConnectionManager) GetConfigVersion(nodeID uint32) int64 <span class="cov4" title="2">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+        return m.configVer[nodeID]
+}</span>
+
+// IsConfigChanged 检查配置是否变更
+func (m *NodeConnectionManager) IsConfigChanged(nodeID uint32, currentVer int64) bool <span class="cov6" title="3">{
+        m.mu.RLock()
+        defer m.mu.RUnlock()
+        lastVer, ok := m.configVer[nodeID]
+        if !ok </span><span class="cov1" title="1">{
+                return true // 首次连接，需要推送
+        }</span>
+        <span class="cov4" title="2">return currentVer &gt; lastVer</span>
+}
+
+// 全局连接管理器
+var connectionManager = NewNodeConnectionManager()
+
+// GetConnectionManager 获取连接管理器
+func GetConnectionManager() *NodeConnectionManager <span class="cov10" title="6">{
+        return connectionManager
+}</span>
+
+// AuthInterceptor 认证拦截器
+func AuthInterceptor(apiToken string) grpc.UnaryServerInterceptor <span class="cov4" title="2">{
+        return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) </span><span class="cov9" title="5">{
+                // 健康检查不需要认证
+                if strings.Contains(info.FullMethod, "HealthService") </span><span class="cov4" title="2">{
+                        return handler(ctx, req)
+                }</span>
+
+                // 从 metadata 获取 token
+                <span class="cov6" title="3">md, ok := metadata.FromIncomingContext(ctx)
+                if !ok </span><span class="cov0" title="0">{
+                        return nil, status.Error(codes.Unauthenticated, "missing metadata")
+                }</span>
+
+                <span class="cov6" title="3">tokens := md.Get("authorization")
+                if len(tokens) == 0 </span><span class="cov1" title="1">{
+                        return nil, status.Error(codes.Unauthenticated, "missing authorization token")
+                }</span>
+
+                <span class="cov4" title="2">token := tokens[0]
+                if strings.HasPrefix(token, "Bearer ") </span><span class="cov4" title="2">{
+                        token = strings.TrimPrefix(token, "Bearer ")
+                }</span>
+
+                // 验证 token
+                <span class="cov4" title="2">if apiToken != "" &amp;&amp; token != apiToken </span><span class="cov1" title="1">{
+                        return nil, status.Error(codes.Unauthenticated, "invalid token")
+                }</span>
+
+                <span class="cov1" title="1">return handler(ctx, req)</span>
+        }
+}
+
+// StreamAuthInterceptor 流式认证拦截器
+func StreamAuthInterceptor(apiToken string) grpc.StreamServerInterceptor <span class="cov4" title="2">{
+        return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error </span><span class="cov1" title="1">{
+                // 健康检查不需要认证
+                if strings.Contains(info.FullMethod, "HealthService") </span><span class="cov0" title="0">{
+                        return handler(srv, ss)
+                }</span>
+
+                // 从 metadata 获取 token
+                <span class="cov1" title="1">md, ok := metadata.FromIncomingContext(ss.Context())
+                if !ok </span><span class="cov0" title="0">{
+                        return status.Error(codes.Unauthenticated, "missing metadata")
+                }</span>
+
+                <span class="cov1" title="1">tokens := md.Get("authorization")
+                if len(tokens) == 0 </span><span class="cov1" title="1">{
+                        return status.Error(codes.Unauthenticated, "missing authorization token")
+                }</span>
+
+                <span class="cov0" title="0">token := tokens[0]
+                if strings.HasPrefix(token, "Bearer ") </span><span class="cov0" title="0">{
+                        token = strings.TrimPrefix(token, "Bearer ")
+                }</span>
+
+                // 验证 token
+                <span class="cov0" title="0">if apiToken != "" &amp;&amp; token != apiToken </span><span class="cov0" title="0">{
+                        return status.Error(codes.Unauthenticated, "invalid token")
+                }</span>
+
+                <span class="cov0" title="0">return handler(srv, ss)</span>
+        }
+}
+
+// LoggingInterceptor 日志拦截器
+func LoggingInterceptor() grpc.UnaryServerInterceptor <span class="cov6" title="3">{
+        return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) </span><span class="cov7" title="4">{
+                start := time.Now()
+
+                // 获取客户端地址
+                clientAddr := "unknown"
+                if p, ok := peer.FromContext(ctx); ok </span><span class="cov7" title="4">{
+                        clientAddr = p.Addr.String()
+                }</span>
+
+                <span class="cov7" title="4">resp, err := handler(ctx, req)
+
+                // 记录请求
+                duration := time.Since(start)
+                code := codes.OK
+                if err != nil </span><span class="cov4" title="2">{
+                        code = status.Code(err)
+                }</span>
+
+                // 使用标准日志输出
+                <span class="cov7" title="4">println("[GRPC]", info.FullMethod, "from", clientAddr, "duration", duration.String(), "code", code.String())
+
+                return resp, err</span>
+        }
+}
+
+// StreamLoggingInterceptor 流式日志拦截器
+func StreamLoggingInterceptor() grpc.StreamServerInterceptor <span class="cov7" title="4">{
+        return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error </span><span class="cov1" title="1">{
+                start := time.Now()
+
+                // 获取客户端地址
+                clientAddr := "unknown"
+                if p, ok := peer.FromContext(ss.Context()); ok </span><span class="cov1" title="1">{
+                        clientAddr = p.Addr.String()
+                }</span>
+
+                <span class="cov1" title="1">err := handler(srv, ss)
+
+                // 记录请求
+                duration := time.Since(start)
+                code := codes.OK
+                if err != nil </span><span class="cov1" title="1">{
+                        code = status.Code(err)
+                }</span>
+
+                <span class="cov1" title="1">println("[GRPC STREAM]", info.FullMethod, "from", clientAddr, "duration", duration.String(), "code", code.String())
+
+                return err</span>
+        }
+}
+
+// GetPeerAddr 从上下文获取客户端地址
+func GetPeerAddr(ctx context.Context) string <span class="cov6" title="3">{
+        p, ok := peer.FromContext(ctx)
+        if !ok </span><span class="cov1" title="1">{
+                return "unknown"
+        }</span>
+        <span class="cov4" title="2">return p.Addr.String()</span>
+}
+
+// GetNodeIDFromContext 从上下文获取节点ID（需要先在拦截器中设置）
+func GetNodeIDFromContext(ctx context.Context) uint32 <span class="cov4" title="2">{
+        nodeID, ok := ctx.Value(nodeIDKey{}).(uint32)
+        if !ok </span><span class="cov1" title="1">{
+                return 0
+        }</span>
+        <span class="cov1" title="1">return nodeID</span>
+}
+
+// SetNodeIDToContext 设置节点ID到上下文
+func SetNodeIDToContext(ctx context.Context, nodeID uint32) context.Context <span class="cov1" title="1">{
+        return context.WithValue(ctx, nodeIDKey{}, nodeID)
+}</span>
+
+type nodeIDKey struct{}</pre>
+		
+		<pre class="file" id="file1" style="display: none">package grpc
+
+import (
+        "context"
+        "crypto/sha256"
+        "encoding/hex"
+        "log"
+        "time"
+
+        pb "github.com/anixops/v2board/api/grpc/v2boardpb"
+        "github.com/anixops/v2board/internal/model"
+        "github.com/anixops/v2board/internal/service"
+        "google.golang.org/grpc/codes"
+        "google.golang.org/grpc/status"
+)
+
+// NodeGRPCServer 节点 gRPC 服务实现
+type NodeGRPCServer struct {
+        pb.UnimplementedNodeServiceServer
+        nodeService *service.NodeService
+        userService *service.UserService
+}
+
+// NewNodeGRPCServer 创建节点 gRPC 服务
+func NewNodeGRPCServer() *NodeGRPCServer <span class="cov10" title="9">{
+        return &amp;NodeGRPCServer{
+                nodeService: service.NewNodeService(),
+                userService: service.NewUserService(),
+        }
+}</span>
+
+// Register 节点注册
+func (s *NodeGRPCServer) Register(ctx context.Context, req *pb.NodeRegisterRequest) (*pb.NodeRegisterResponse, error) <span class="cov1" title="1">{
+        // 构建注册请求
+        registerReq := &amp;model.NodeRegisterRequest{
+                AuthKey:       req.AuthKey,
+                Name:          req.Name,
+                Host:          req.Host,
+                Port:          int(req.Port),
+                ServerVersion: req.ServerVersion,
+                ServerOS:      req.ServerOs,
+        }
+
+        // 获取客户端 IP
+        clientIP := "unknown"
+        if p, ok := peerFromContext(ctx); ok </span><span class="cov1" title="1">{
+                clientIP = p
+        }</span>
+
+        // 执行注册
+        <span class="cov1" title="1">resp, err := s.nodeService.RegisterNode(registerReq, clientIP)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, status.Error(codes.InvalidArgument, err.Error())
+        }</span>
+
+        <span class="cov1" title="1">return &amp;pb.NodeRegisterResponse{
+                NodeId:  uint32(resp.NodeID),
+                ApiKey:  resp.APIKey,
+                Secret:  resp.Secret,
+                Message: resp.Message,
+        }, nil</span>
+}
+
+// GetConfig 获取节点配置
+func (s *NodeGRPCServer) GetConfig(ctx context.Context, req *pb.NodeConfigRequest) (*pb.NodeConfigResponse, error) <span class="cov7" title="5">{
+        node, err := s.nodeService.GetNode(uint(req.NodeId))
+        if err != nil </span><span class="cov1" title="1">{
+                return nil, status.Error(codes.NotFound, "node not found")
+        }</span>
+
+        // 获取协议配置
+        <span class="cov6" title="4">protocols, _ := s.nodeService.GetProtocols(uint(req.NodeId))
+
+        // 构建配置响应
+        resp := &amp;pb.NodeConfigResponse{
+                Host:        node.Host,
+                ServerPort:  int32(node.Port),
+                ServerName:  node.Host,
+                SendThrough: "0.0.0.0",
+                BaseConfig: &amp;pb.BaseConfig{
+                        PushInterval: 60,
+                        PullInterval: 60,
+                },
+        }
+
+        // 如果有协议配置
+        if len(protocols) &gt; 0 </span><span class="cov5" title="3">{
+                protocol := protocols[0]
+                resp.NodeType = string(protocol.Type)
+                resp.Type = string(protocol.Type)
+                resp.ServerPort = int32(protocol.Port)
+                resp.Tls = int32(protocol.TLS)
+
+                if protocol.Transport != nil </span><span class="cov5" title="3">{
+                        resp.Network = *protocol.Transport
+                }</span> else<span class="cov0" title="0"> {
+                        resp.Network = "tcp"
+                }</span>
+        } else<span class="cov1" title="1"> {
+                // 默认配置
+                resp.NodeType = "vless"
+                resp.Type = "vless"
+                resp.Network = "tcp"
+        }</span>
+
+        <span class="cov6" title="4">return resp, nil</span>
+}
+
+// ReportStatus 上报节点状态
+func (s *NodeGRPCServer) ReportStatus(ctx context.Context, req *pb.NodeStatusRequest) (*pb.StatusResponse, error) <span class="cov3" title="2">{
+        heartbeatReq := &amp;model.NodeHeartbeatRequest{
+                CPUUsage:    req.CpuUsage,
+                MemoryUsage: req.MemoryUsage,
+                DiskUsage:   req.DiskUsage,
+                Uptime:      req.Uptime,
+                OnlineUsers: int(req.OnlineUsers),
+                Upload:      req.Upload,
+                Download:    req.Download,
+        }
+
+        if err := s.nodeService.Heartbeat(uint(req.NodeId), heartbeatReq); err != nil </span><span class="cov1" title="1">{
+                return nil, status.Error(codes.Internal, err.Error())
+        }</span>
+
+        <span class="cov1" title="1">return &amp;pb.StatusResponse{
+                Success: true,
+                Message: "status updated",
+                Code:    200,
+        }, nil</span>
+}
+
+// StatusStream 双向流：节点状态实时通信
+func (s *NodeGRPCServer) StatusStream(stream pb.NodeService_StatusStreamServer) error <span class="cov1" title="1">{
+        var nodeID uint32
+        mgr := GetConnectionManager()
+
+        // 获取客户端地址
+        clientAddr := GetPeerAddr(stream.Context())
+
+        defer func() </span><span class="cov1" title="1">{
+                if nodeID &gt; 0 </span><span class="cov1" title="1">{
+                        mgr.Unregister(nodeID)
+                        log.Printf("Node %d disconnected from gRPC stream", nodeID)
+                }</span>
+        }()
+
+        <span class="cov1" title="1">for </span><span class="cov3" title="2">{
+                req, err := stream.Recv()
+                if err != nil </span><span class="cov1" title="1">{
+                        return err
+                }</span>
+
+                // 首次连接时记录节点ID
+                <span class="cov1" title="1">if nodeID == 0 </span><span class="cov1" title="1">{
+                        nodeID = req.NodeId
+                        mgr.Register(nodeID, clientAddr)
+                        log.Printf("Node %d connected via gRPC stream from %s", nodeID, clientAddr)
+                }</span>
+
+                // 更新活跃时间
+                <span class="cov1" title="1">mgr.UpdateLastSeen(nodeID)
+
+                // 处理状态上报
+                heartbeatReq := &amp;model.NodeHeartbeatRequest{
+                        CPUUsage:    req.CpuUsage,
+                        MemoryUsage: req.MemoryUsage,
+                        DiskUsage:   req.DiskUsage,
+                        Uptime:      req.Uptime,
+                        OnlineUsers: int(req.OnlineUsers),
+                        Upload:      req.Upload,
+                        Download:    req.Download,
+                }
+
+                if err := s.nodeService.Heartbeat(uint(req.NodeId), heartbeatReq); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Failed to update node status: %v", err)
+                        continue</span>
+                }
+
+                // 检查是否有配置变更需要推送
+                <span class="cov1" title="1">configResp, err := s.checkConfigChanges(req.NodeId)
+                if err == nil &amp;&amp; configResp != nil </span><span class="cov0" title="0">{
+                        if err := stream.Send(configResp); err != nil </span><span class="cov0" title="0">{
+                                log.Printf("Failed to send config update: %v", err)
+                        }</span>
+                }
+        }
+}
+
+// checkConfigChanges 检查配置变更
+func (s *NodeGRPCServer) checkConfigChanges(nodeID uint32) (*pb.NodeConfigResponse, error) <span class="cov1" title="1">{
+        // TODO: 实现配置变更检测
+        // 可以通过缓存或数据库版本号来判断是否需要推送
+        return nil, nil
+}</span>
+
+// peerFromContext 从上下文获取客户端地址 (已弃用，使用 GetPeerAddr)
+func peerFromContext(ctx context.Context) (string, bool) <span class="cov1" title="1">{
+        addr := GetPeerAddr(ctx)
+        return addr, addr != "unknown"
+}</span>
+
+// UserGRPCServer 用户 gRPC 服务实现
+type UserGRPCServer struct {
+        pb.UnimplementedUserServiceServer
+        userService *service.UserService
+        nodeService *service.NodeService
+}
+
+// NewUserGRPCServer 创建用户 gRPC 服务
+func NewUserGRPCServer() *UserGRPCServer <span class="cov8" title="6">{
+        return &amp;UserGRPCServer{
+                userService: service.NewUserService(),
+                nodeService: service.NewNodeService(),
+        }
+}</span>
+
+// GetUsers 获取用户列表
+func (s *UserGRPCServer) GetUsers(ctx context.Context, req *pb.UserListRequest) (*pb.UserListResponse, error) <span class="cov3" title="2">{
+        // 获取节点信息以确定分组
+        node, err := s.nodeService.GetNode(uint(req.NodeId))
+        if err != nil </span><span class="cov1" title="1">{
+                return nil, status.Error(codes.NotFound, "node not found")
+        }</span>
+
+        // 获取活跃用户
+        <span class="cov1" title="1">users, err := s.userService.GetActiveUsersForNode(node.GroupID)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, status.Error(codes.Internal, "failed to get users")
+        }</span>
+
+        // 转换为 proto 格式
+        <span class="cov1" title="1">userInfos := make([]*pb.UserInfo, 0, len(users))
+        for _, user := range users </span><span class="cov1" title="1">{
+                speedLimit := user.GetSpeedLimit()
+                deviceLimit := user.GetDeviceLimit()
+
+                userInfos = append(userInfos, &amp;pb.UserInfo{
+                        Id:             uint32(user.ID),
+                        Uuid:           user.UUID,
+                        SpeedLimit:     speedLimit,
+                        DeviceLimit:    int32(deviceLimit),
+                        TransferEnable: user.TransferEnable,
+                        UsedUpload:     user.U,
+                        UsedDownload:   user.D,
+                })
+        }</span>
+
+        <span class="cov1" title="1">return &amp;pb.UserListResponse{
+                Users:      userInfos,
+                Total:      int64(len(userInfos)),
+                UpdatedAt:  time.Now().Unix(),
+        }, nil</span>
+}
+
+// UserChanges 双向流：用户变更实时推送
+func (s *UserGRPCServer) UserChanges(stream pb.UserService_UserChangesServer) error <span class="cov1" title="1">{
+        for </span><span class="cov3" title="2">{
+                notification, err := stream.Recv()
+                if err != nil </span><span class="cov1" title="1">{
+                        return err
+                }</span>
+
+                // 确认接收
+                <span class="cov1" title="1">if err := stream.Send(&amp;pb.StatusResponse{
+                        Success: true,
+                        Message: "notification received",
+                        Code:    200,
+                }); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+
+                // 记录用户变更
+                <span class="cov1" title="1">log.Printf("User change: type=%v, user_id=%v", notification.Type, notification.User.GetId())</span>
+        }
+}
+
+// TrafficGRPCServer 流量 gRPC 服务实现
+type TrafficGRPCServer struct {
+        pb.UnimplementedTrafficServiceServer
+        userService   *service.UserService
+        serverService *service.ServerService
+        nodeService   *service.NodeService
+}
+
+// NewTrafficGRPCServer 创建流量 gRPC 服务
+func NewTrafficGRPCServer() *TrafficGRPCServer <span class="cov8" title="6">{
+        return &amp;TrafficGRPCServer{
+                userService:   service.NewUserService(),
+                serverService: service.NewServerService(),
+                nodeService:   service.NewNodeService(),
+        }
+}</span>
+
+// ReportTraffic 批量上报流量
+func (s *TrafficGRPCServer) ReportTraffic(ctx context.Context, req *pb.TrafficReportRequest) (*pb.TrafficReportResponse, error) <span class="cov5" title="3">{
+        // 更新节点心跳
+        s.nodeService.UpdateLastCheckAt(uint(req.NodeId))
+
+        // 转换流量数据
+        traffics := make(map[uint][2]int64)
+        for userID, data := range req.Traffics </span><span class="cov3" title="2">{
+                traffics[uint(userID)] = [2]int64{data.Upload, data.Download}
+        }</span>
+
+        // 获取流量倍率
+        <span class="cov5" title="3">rate := 1.0
+        node, err := s.nodeService.GetNode(uint(req.NodeId))
+        if err == nil </span><span class="cov3" title="2">{
+                rate = node.Rate
+        }</span>
+
+        // 按倍率计算实际流量
+        <span class="cov5" title="3">userTraffics := make(map[uint][2]int64)
+        for userID, traffic := range traffics </span><span class="cov3" title="2">{
+                userTraffics[userID] = [2]int64{
+                        int64(float64(traffic[0]) * rate),
+                        int64(float64(traffic[1]) * rate),
+                }
+        }</span>
+
+        // 批量更新用户流量
+        <span class="cov5" title="3">if err := s.userService.BatchUpdateTraffic(userTraffics); err != nil </span><span class="cov0" title="0">{
+                return nil, status.Error(codes.Internal, "failed to update traffic")
+        }</span>
+
+        <span class="cov5" title="3">return &amp;pb.TrafficReportResponse{
+                Success: true,
+                Message: "traffic updated",
+        }, nil</span>
+}
+
+// ReportOnline 上报在线状态
+func (s *TrafficGRPCServer) ReportOnline(ctx context.Context, req *pb.OnlineReportRequest) (*pb.StatusResponse, error) <span class="cov3" title="2">{
+        // 更新节点心跳
+        s.nodeService.UpdateLastCheckAt(uint(req.NodeId))
+
+        // 转换在线数据
+        userIPs := make(map[uint][]string)
+        for userID, data := range req.Online </span><span class="cov1" title="1">{
+                userIPs[uint(userID)] = data.Ips
+        }</span>
+
+        // 更新在线状态
+        <span class="cov3" title="2">if err := s.serverService.UpdateOnlineStatus("", uint(req.NodeId), userIPs); err != nil </span><span class="cov0" title="0">{
+                return nil, status.Error(codes.Internal, "failed to update online status")
+        }</span>
+
+        <span class="cov3" title="2">return &amp;pb.StatusResponse{
+                Success: true,
+                Message: "online status updated",
+                Code:    200,
+        }, nil</span>
+}
+
+// TrafficStream 双向流：实时流量上报
+func (s *TrafficGRPCServer) TrafficStream(stream pb.TrafficService_TrafficStreamServer) error <span class="cov1" title="1">{
+        for </span><span class="cov3" title="2">{
+                req, err := stream.Recv()
+                if err != nil </span><span class="cov1" title="1">{
+                        return err
+                }</span>
+
+                // 处理流量上报
+                <span class="cov1" title="1">resp, err := s.ReportTraffic(stream.Context(), req)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Failed to process traffic: %v", err)
+                        continue</span>
+                }
+
+                // 发送响应
+                <span class="cov1" title="1">if err := stream.Send(resp); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+}
+
+// OnlineStream 双向流：实时在线状态
+func (s *TrafficGRPCServer) OnlineStream(stream pb.TrafficService_OnlineStreamServer) error <span class="cov1" title="1">{
+        for </span><span class="cov3" title="2">{
+                req, err := stream.Recv()
+                if err != nil </span><span class="cov1" title="1">{
+                        return err
+                }</span>
+
+                // 处理在线状态上报
+                <span class="cov1" title="1">resp, err := s.ReportOnline(stream.Context(), req)
+                if err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Failed to process online status: %v", err)
+                        continue</span>
+                }
+
+                // 发送响应
+                <span class="cov1" title="1">if err := stream.Send(resp); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+}
+
+// HealthGRPCServer 健康检查 gRPC 服务实现
+type HealthGRPCServer struct {
+        pb.UnimplementedHealthServiceServer
+}
+
+// NewHealthGRPCServer 创建健康检查 gRPC 服务
+func NewHealthGRPCServer() *HealthGRPCServer <span class="cov10" title="9">{
+        return &amp;HealthGRPCServer{}
+}</span>
+
+// Check 简单健康检查
+func (s *HealthGRPCServer) Check(ctx context.Context, req *pb.HealthCheckRequest) (*pb.HealthCheckResponse, error) <span class="cov6" title="4">{
+        return &amp;pb.HealthCheckResponse{
+                Status:        pb.HealthCheckResponse_SERVING,
+                ServerVersion: "2.0.0",
+                Timestamp:     time.Now().Unix(),
+        }, nil
+}</span>
+
+// Watch 双向流：持续健康检查
+func (s *HealthGRPCServer) Watch(stream pb.HealthService_WatchServer) error <span class="cov3" title="2">{
+        for </span><span class="cov6" title="4">{
+                _, err := stream.Recv()
+                if err != nil </span><span class="cov3" title="2">{
+                        return err
+                }</span>
+
+                <span class="cov3" title="2">resp := &amp;pb.HealthCheckResponse{
+                        Status:        pb.HealthCheckResponse_SERVING,
+                        ServerVersion: "2.0.0",
+                        Timestamp:     time.Now().Unix(),
+                }
+
+                if err := stream.Send(resp); err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+}
+
+// 辅助函数
+func hashString(s string) string <span class="cov5" title="3">{
+        h := sha256.New()
+        h.Write([]byte(s))
+        return hex.EncodeToString(h.Sum(nil))
+}</pre>
+		
+		<pre class="file" id="file2" style="display: none">package grpc
+
+import (
+        "context"
+        "fmt"
+        "net"
+        "os"
+        "os/signal"
+        "syscall"
+        "time"
+
+        pb "github.com/anixops/v2board/api/grpc/v2boardpb"
+        "google.golang.org/grpc"
+        "google.golang.org/grpc/keepalive"
+)
+
+// ServerConfig gRPC 服务器配置
+type ServerConfig struct {
+        // 监听地址
+        Host string
+        // 监听端口
+        Port int
+        // API Token (可选，用于认证)
+        APIToken string
+        // Keepalive 时间
+        KeepaliveTime time.Duration
+        // Keepalive 超时
+        KeepaliveTimeout time.Duration
+        // 最大连接空闲时间
+        MaxConnectionIdle time.Duration
+        // 最大连接年龄
+        MaxConnectionAge time.Duration
+}
+
+// DefaultServerConfig 默认配置
+func DefaultServerConfig() *ServerConfig <span class="cov4" title="2">{
+        return &amp;ServerConfig{
+                Host:             "0.0.0.0",
+                Port:             50051,
+                KeepaliveTime:    30 * time.Second,
+                KeepaliveTimeout: 10 * time.Second,
+                MaxConnectionIdle: 15 * time.Minute,
+                MaxConnectionAge:  30 * time.Minute,
+        }
+}</span>
+
+// Server gRPC 服务器
+type Server struct {
+        config     *ServerConfig
+        grpcServer *grpc.Server
+        listener   net.Listener
+}
+
+// NewServer 创建 gRPC 服务器
+func NewServer(cfg *ServerConfig) *Server <span class="cov10" title="5">{
+        if cfg == nil </span><span class="cov1" title="1">{
+                cfg = DefaultServerConfig()
+        }</span>
+        <span class="cov10" title="5">return &amp;Server{config: cfg}</span>
+}
+
+// Start 启动服务器
+func (s *Server) Start() error <span class="cov4" title="2">{
+        addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
+        lis, err := net.Listen("tcp", addr)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to listen: %w", err)
+        }</span>
+        <span class="cov4" title="2">s.listener = lis
+
+        // 创建 gRPC 服务器选项
+        opts := []grpc.ServerOption{
+                grpc.KeepaliveParams(keepalive.ServerParameters{
+                        MaxConnectionIdle: s.config.MaxConnectionIdle,
+                        MaxConnectionAge:  s.config.MaxConnectionAge,
+                        Time:              s.config.KeepaliveTime,
+                        Timeout:           s.config.KeepaliveTimeout,
+                }),
+                grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+                        MinTime:             10 * time.Second,
+                        PermitWithoutStream: true,
+                }),
+        }
+
+        // 添加拦截器
+        interceptors := []grpc.UnaryServerInterceptor{
+                LoggingInterceptor(),
+        }
+        streamInterceptors := []grpc.StreamServerInterceptor{
+                StreamLoggingInterceptor(),
+        }
+
+        // 如果配置了 API Token，添加认证拦截器
+        if s.config.APIToken != "" </span><span class="cov0" title="0">{
+                interceptors = append(interceptors, AuthInterceptor(s.config.APIToken))
+                streamInterceptors = append(streamInterceptors, StreamAuthInterceptor(s.config.APIToken))
+        }</span>
+
+        // 链式拦截器
+        <span class="cov4" title="2">if len(interceptors) &gt; 0 </span><span class="cov4" title="2">{
+                opts = append(opts, grpc.ChainUnaryInterceptor(interceptors...))
+        }</span>
+        <span class="cov4" title="2">if len(streamInterceptors) &gt; 0 </span><span class="cov4" title="2">{
+                opts = append(opts, grpc.ChainStreamInterceptor(streamInterceptors...))
+        }</span>
+
+        // 创建 gRPC 服务器
+        <span class="cov4" title="2">s.grpcServer = grpc.NewServer(opts...)
+
+        // 注册服务
+        pb.RegisterNodeServiceServer(s.grpcServer, NewNodeGRPCServer())
+        pb.RegisterUserServiceServer(s.grpcServer, NewUserGRPCServer())
+        pb.RegisterTrafficServiceServer(s.grpcServer, NewTrafficGRPCServer())
+        pb.RegisterHealthServiceServer(s.grpcServer, NewHealthGRPCServer())
+
+        // 启动服务器
+        go func() </span><span class="cov4" title="2">{
+                fmt.Printf("[GRPC] Server listening on %s\n", addr)
+                if err := s.grpcServer.Serve(lis); err != nil </span><span class="cov0" title="0">{
+                        fmt.Printf("[GRPC] Server error: %v\n", err)
+                }</span>
+        }()
+
+        <span class="cov4" title="2">return nil</span>
+}
+
+// Stop 停止服务器
+func (s *Server) Stop() <span class="cov4" title="2">{
+        if s.grpcServer != nil </span><span class="cov4" title="2">{
+                fmt.Println("[GRPC] Server stopping...")
+                s.grpcServer.GracefulStop()
+                fmt.Println("[GRPC] Server stopped")
+        }</span>
+}
+
+// GracefulShutdown 优雅关闭
+func (s *Server) GracefulShutdown(ctx context.Context) error <span class="cov0" title="0">{
+        sigChan := make(chan os.Signal, 1)
+        signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+        select </span>{
+        case sig := &lt;-sigChan:<span class="cov0" title="0">
+                fmt.Printf("[GRPC] Received signal: %v\n", sig)
+                s.Stop()
+                return nil</span>
+        case &lt;-ctx.Done():<span class="cov0" title="0">
+                s.Stop()
+                return ctx.Err()</span>
+        }
+}
+
+// GetConnectionManager 获取连接管理器
+func (s *Server) GetConnectionManager() *NodeConnectionManager <span class="cov1" title="1">{
+        return GetConnectionManager()
+}</span>
+
+// Run 运行服务器（阻塞）
+func Run(cfg *ServerConfig) error <span class="cov0" title="0">{
+        server := NewServer(cfg)
+        if err := server.Start(); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">ctx, cancel := context.WithCancel(context.Background())
+        defer cancel()
+
+        return server.GracefulShutdown(ctx)</span>
+}</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
