@@ -1,0 +1,196 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ go_dev, production ]
+  pull_request:
+    branches: [ go_dev, production ]
+
+env:
+  GO_VERSION: '1.24'
+
+jobs:
+  # ========== 测试阶段 ==========
+  test:
+    name: Test & Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests with coverage
+        run: |
+          go test -v -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Generate coverage report
+        run: |
+          go tool cover -func=coverage.out > coverage.txt
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          cat coverage.txt >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check minimum coverage (80%)
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Total coverage: ${COVERAGE}%"
+          if [ $(echo "$COVERAGE < 80" | bc -l) -eq 1 ]; then
+            echo "::error::Coverage ${COVERAGE}% is below minimum 80%"
+            exit 1
+          fi
+          echo "✅ Coverage check passed: ${COVERAGE}%"
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.out
+            coverage.txt
+
+  # ========== gRPC 测试 (核心功能) ==========
+  grpc-test:
+    name: gRPC Core Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run gRPC tests
+        run: |
+          go test -v -coverprofile=grpc_coverage.out ./internal/grpc/...
+
+      - name: Check gRPC coverage (80%+)
+        run: |
+          COVERAGE=$(go tool cover -func=grpc_coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "gRPC coverage: ${COVERAGE}%"
+          if [ $(echo "$COVERAGE < 80" | bc -l) -eq 1 ]; then
+            echo "::error::gRPC coverage ${COVERAGE}% is below minimum 80%"
+            exit 1
+          fi
+          echo "✅ gRPC coverage check passed: ${COVERAGE}%"
+
+      - name: Verify core functions
+        run: |
+          echo "Verifying all core gRPC functions are tested..."
+          go test -v -run "TestNodeRegistrationFlow|TestGetConfig|TestReportStatus|TestGetUsers|TestReportTraffic|TestReportOnline|TestHealthCheck" ./internal/grpc/...
+
+  # ========== 构建阶段 ==========
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [test, grpc-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build binary
+        run: |
+          CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o v2board ./cmd/server
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2board-binary
+          path: v2board
+
+  # ========== 生产部署 (仅 production 分支) ==========
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/production' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://panel.example.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: v2board-binary
+
+      - name: Deploy to server
+        run: |
+          echo "Deploying to production server..."
+          # 在这里添加实际的部署脚本
+          # 例如: rsync, scp, 或使用 Docker
+
+      - name: Health check
+        run: |
+          echo "Running health check..."
+          # curl -f https://panel.example.com/health || exit 1
+
+      - name: Notify deployment
+        run: |
+          echo "✅ Deployment completed successfully"
+
+  # ========== Docker 构建 ==========
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        if: github.ref == 'refs/heads/production'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKER_USERNAME }}/v2board
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/production' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.ref == 'refs/heads/production' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

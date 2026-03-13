@@ -1,0 +1,278 @@
+syntax = "proto3";
+
+package v2board;
+
+option go_package = "github.com/anixops/v2board/api/grpc/v2boardpb";
+
+// ==================== 通用消息 ====================
+
+// 空响应
+message Empty {}
+
+// 状态响应
+message StatusResponse {
+  bool success = 1;
+  string message = 2;
+  int32 code = 3;
+}
+
+// ==================== 节点服务 ====================
+
+// 节点注册请求
+message NodeRegisterRequest {
+  string auth_key = 1;           // 授权密钥
+  string name = 2;               // 节点名称
+  string host = 3;               // 节点地址
+  int32 port = 4;                // API端口
+  string server_version = 5;     // 节点版本
+  string server_os = 6;          // 操作系统
+  repeated string supported_protocols = 7; // 支持的协议列表
+}
+
+// 节点注册响应
+message NodeRegisterResponse {
+  uint32 node_id = 1;            // 节点ID
+  string api_key = 2;            // API密钥
+  string secret = 3;             // 共享密钥
+  string message = 4;
+}
+
+// 节点配置请求
+message NodeConfigRequest {
+  uint32 node_id = 1;
+}
+
+// 节点配置响应
+message NodeConfigResponse {
+  string node_type = 1;
+  string type = 2;               // 与 node_type 一致
+  string host = 3;
+  int32 server_port = 4;
+  string server_name = 5;
+  int32 tls = 6;                 // 0=无, 1=TLS, 2=Reality
+  map<string, string> tls_settings = 7;
+  string network = 8;            // tcp, ws, grpc, etc.
+  map<string, string> network_settings = 9;
+  string cipher = 10;            // SS加密方式
+  string flow = 11;              // VLESS flow
+  string server_key = 12;        // SS2022服务器密钥
+  BaseConfig base_config = 13;
+  repeated Route routes = 14;
+  string send_through = 15;
+  map<string, string> extra = 16; // 扩展配置
+}
+
+// 基础配置
+message BaseConfig {
+  int32 push_interval = 1;       // 流量上报间隔(秒)
+  int32 pull_interval = 2;       // 配置拉取间隔(秒)
+}
+
+// 路由配置
+message Route {
+  string match = 1;
+  string action = 2;
+}
+
+// 节点状态上报请求
+message NodeStatusRequest {
+  uint32 node_id = 1;
+  double cpu_usage = 2;
+  double memory_usage = 3;
+  double disk_usage = 4;
+  int64 uptime = 5;
+  int32 online_users = 6;
+  int64 upload = 7;              // 本次上报的上传流量增量
+  int64 download = 8;            // 本次上报的下载流量增量
+}
+
+// 节点服务
+service NodeService {
+  // 节点注册
+  rpc Register(NodeRegisterRequest) returns (NodeRegisterResponse);
+
+  // 获取节点配置
+  rpc GetConfig(NodeConfigRequest) returns (NodeConfigResponse);
+
+  // 上报节点状态 (替代心跳)
+  rpc ReportStatus(NodeStatusRequest) returns (StatusResponse);
+
+  // 双向流：节点状态实时通信
+  rpc StatusStream(stream NodeStatusRequest) returns (stream NodeConfigResponse);
+}
+
+// ==================== 用户服务 ====================
+
+// 用户列表请求
+message UserListRequest {
+  uint32 node_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+// 用户信息
+message UserInfo {
+  uint32 id = 1;
+  string uuid = 2;
+  int64 speed_limit = 3;         // 速度限制 (bytes/s)
+  int32 device_limit = 4;        // 设备限制
+  int64 expired_at = 5;          // 过期时间
+  int64 transfer_enable = 6;     // 总流量
+  int64 used_upload = 7;         // 已用上传
+  int64 used_download = 8;       // 已用下载
+  map<string, string> extra = 9; // 扩展信息
+}
+
+// 用户列表响应
+message UserListResponse {
+  repeated UserInfo users = 1;
+  int64 total = 2;
+  int64 updated_at = 3;          // 数据更新时间
+}
+
+// 用户变更通知
+message UserChangeNotification {
+  enum ChangeType {
+    UNKNOWN = 0;
+    CREATED = 1;
+    UPDATED = 2;
+    DELETED = 3;
+    TRAFFIC_RESET = 4;
+    BANNED = 5;
+    UNBANNED = 6;
+  }
+  ChangeType type = 1;
+  UserInfo user = 2;
+  int64 timestamp = 3;
+}
+
+// 用户服务
+service UserService {
+  // 获取用户列表
+  rpc GetUsers(UserListRequest) returns (UserListResponse);
+
+  // 双向流：用户变更实时推送
+  // 面板推送用户变更，节点确认接收
+  rpc UserChanges(stream UserChangeNotification) returns (stream StatusResponse);
+}
+
+// ==================== 流量服务 ====================
+
+// 流量上报请求
+message TrafficReportRequest {
+  uint32 node_id = 1;
+  map<uint32, TrafficData> traffics = 2;  // 用户ID -> 流量数据
+}
+
+// 流量数据
+message TrafficData {
+  int64 upload = 1;              // 上传流量 (bytes)
+  int64 download = 2;            // 下载流量 (bytes)
+}
+
+// 流量上报响应
+message TrafficReportResponse {
+  bool success = 1;
+  string message = 2;
+  map<uint32, int64> balances = 3;  // 用户ID -> 更新后的余额(可选)
+}
+
+// 在线状态上报请求
+message OnlineReportRequest {
+  uint32 node_id = 1;
+  map<uint32, OnlineData> online = 2;   // 用户ID -> 在线数据
+}
+
+// 在线数据
+message OnlineData {
+  repeated string ips = 1;       // 在线IP列表
+  int64 timestamp = 2;           // 时间戳
+}
+
+// 流量服务
+service TrafficService {
+  // 批量上报流量
+  rpc ReportTraffic(TrafficReportRequest) returns (TrafficReportResponse);
+
+  // 上报在线状态
+  rpc ReportOnline(OnlineReportRequest) returns (StatusResponse);
+
+  // 双向流：实时流量上报
+  // 节点持续上报，面板实时响应
+  rpc TrafficStream(stream TrafficReportRequest) returns (stream TrafficReportResponse);
+
+  // 双向流：实时在线状态
+  rpc OnlineStream(stream OnlineReportRequest) returns (stream StatusResponse);
+}
+
+// ==================== 配置同步服务 ====================
+
+// 配置同步请求
+message ConfigSyncRequest {
+  uint32 node_id = 1;
+  int64 last_sync_time = 2;      // 上次同步时间
+}
+
+// 配置同步响应
+message ConfigSyncResponse {
+  bool has_changes = 1;
+  NodeConfigResponse config = 2; // 如果有变更
+  repeated UserInfo users = 3;   // 用户列表(全量或增量)
+  int64 sync_time = 4;           // 当前同步时间
+}
+
+// 配置变更通知
+message ConfigChangeNotification {
+  enum ChangeType {
+    UNKNOWN = 0;
+    NODE_CONFIG = 1;             // 节点配置变更
+    USER_LIST = 2;               // 用户列表变更
+    PROTOCOL_CONFIG = 3;         // 协议配置变更
+  }
+  ChangeType type = 1;
+  uint32 node_id = 2;
+  int64 timestamp = 3;
+  bytes payload = 4;             // 变更内容(JSON)
+}
+
+// 配置同步服务
+service ConfigSyncService {
+  // 请求配置同步
+  rpc SyncConfig(ConfigSyncRequest) returns (ConfigSyncResponse);
+
+  // 双向流：配置变更实时推送
+  // 面板推送变更，节点确认接收
+  rpc ConfigChanges(stream ConfigChangeNotification) returns (stream StatusResponse);
+
+  // 全量同步 (节点启动时)
+  rpc FullSync(ConfigSyncRequest) returns (ConfigSyncResponse);
+}
+
+// ==================== 健康检查服务 ====================
+
+// 健康检查请求
+message HealthCheckRequest {
+  uint32 node_id = 1;
+  string version = 2;
+}
+
+// 健康检查响应
+message HealthCheckResponse {
+  enum ServingStatus {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+  }
+  ServingStatus status = 1;
+  string server_version = 2;
+  int64 timestamp = 3;
+}
+
+// 健康检查服务
+service HealthService {
+  // 简单健康检查
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // 双向流：持续健康检查
+  rpc Watch(stream HealthCheckRequest) returns (stream HealthCheckResponse);
+}

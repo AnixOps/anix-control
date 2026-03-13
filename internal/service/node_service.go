@@ -244,7 +244,14 @@ func (s *NodeService) Heartbeat(nodeID uint, req *model.NodeHeartbeatRequest) er
 			UpdateColumn("total_download", gorm.Expr("total_download + ?", req.Download))
 	}
 
-	return s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(updates).Error
+	result := s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // UpdateLastCheckAt 更新节点最后检查时间 (用于 UniProxy 接口)
