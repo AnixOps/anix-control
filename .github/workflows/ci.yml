@@ -29,12 +29,15 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-${{ env.GO_VERSION }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-
+            ${{ runner.os }}-go-${{ env.GO_VERSION }}-
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
 
       - name: Run tests with coverage
         run: |
@@ -77,6 +80,12 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+
+      - name: Verify dependencies
+        run: |
+          go mod verify
+          go list -m google.golang.org/grpc
+          go list -m all | grep -E "grpc|protobuf"
 
       - name: Run gRPC tests
         run: |
