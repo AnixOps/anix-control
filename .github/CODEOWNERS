@@ -1,0 +1,22 @@
+# CODEOWNERS - 代码所有者配置
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# 生产环境相关代码需要审核
+/.github/ @owner
+/scripts/ @owner
+/config/config.prod.yaml @owner
+
+# 核心业务逻辑
+/internal/grpc/ @owner
+/internal/handler/ @owner
+/internal/service/ @owner
+
+# 数据模型
+/internal/model/ @owner
+
+# API 定义
+/api/ @owner
+
+# 前端核心代码
+/web/src/router/ @owner
+/web/src/stores/ @owner
