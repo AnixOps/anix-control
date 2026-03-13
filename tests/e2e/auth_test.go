@@ -52,6 +52,10 @@ func (s *AuthE2ETestSuite) SetupSuite() {
 			APIToken:      "test-api-token",
 			SubscribePath: "s",
 		},
+		Admin: config.AdminConfig{
+			Email:    "admin@example.com",
+			Password: "admin123456",
+		},
 	}
 
 	// 初始化数据库
@@ -67,6 +71,7 @@ func (s *AuthE2ETestSuite) SetupSuite() {
 	service.InitAdmin(s.cfg)
 
 	// 创建路由
+	config.Set(s.cfg)
 	s.router = gin.New()
 	router.Setup(s.router, s.cfg)
 }

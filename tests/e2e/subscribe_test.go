@@ -67,6 +67,7 @@ func (s *SubscribeE2ETestSuite) SetupSuite() {
 		&model.NodeProtocol{},
 		&model.SubscriptionGroup{},
 		&model.SubscriptionTemplate{},
+		&model.UserSubscriptionGroup{},
 		&model.Order{},
 	)
 	s.Require().NoError(err)
@@ -128,7 +129,16 @@ func (s *SubscribeE2ETestSuite) SetupSuite() {
 	// 关联协议到分组
 	s.db.Model(s.testGroup).Association("Protocols").Append(s.testProtocol)
 
+	// 关联用户到订阅分组
+	userGroup := &model.UserSubscriptionGroup{
+		UserID:   s.testUser.ID,
+		GroupID:  s.testGroup.ID,
+		ExpireAt: nil, // 永不过期
+	}
+	s.db.Create(userGroup)
+
 	// 创建路由
+	config.Set(s.cfg)
 	s.router = gin.New()
 	router.Setup(s.router, s.cfg)
 }
@@ -190,7 +200,8 @@ func (s *SubscribeE2ETestSuite) TestGetSubscription_ClashFormat() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	assert.Contains(s.T(), w.Header().Get("Content-Type"), "text/plain")
+	// Clash 格式返回 YAML，content-type 为 text/yaml
+	assert.Contains(s.T(), w.Header().Get("Content-Type"), "text/yaml")
 }
 
 // TestGetSubscription_SurgeFormat 测试 Surge 格式

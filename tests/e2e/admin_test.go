@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -57,6 +58,10 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 			APIToken:      "test-api-token",
 			SubscribePath: "s",
 		},
+		Admin: config.AdminConfig{
+			Email:    "admin@example.com",
+			Password: "admin123456",
+		},
 	}
 
 	// 初始化数据库
@@ -81,6 +86,7 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 	service.InitAdmin(s.cfg)
 
 	// 创建路由
+	config.Set(s.cfg)
 	s.router = gin.New()
 	router.Setup(s.router, s.cfg)
 
@@ -88,9 +94,10 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 	s.adminToken = s.login("admin@example.com", "admin123456")
 
 	// 创建普通用户
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("userpassword"), bcrypt.DefaultCost)
 	s.testUser = &model.User{
 		Email:          "user@example.com",
-		Password:       "$2a$10$test-hash",
+		Password:       string(hashedPassword),
 		Token:          uuid.New().String(),
 		UUID:           uuid.New().String(),
 		Balance:        0,
@@ -99,7 +106,7 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 		IsAdmin:        0,
 	}
 	s.db.Create(s.testUser)
-	s.userToken = s.login("user@example.com", "admin123456") // 需要设置密码
+	s.userToken = s.login("user@example.com", "userpassword")
 
 	// 创建测试套餐
 	content := "Test plan description"
@@ -205,7 +212,7 @@ func (s *AdminE2ETestSuite) TestGetUsers() {
 	json.Unmarshal(w.Body.Bytes(), &response)
 
 	data := response["data"].(map[string]interface{})
-	users := data["records"].([]interface{})
+	users := data["list"].([]interface{})
 	assert.GreaterOrEqual(s.T(), len(users), 1)
 }
 
@@ -259,7 +266,7 @@ func (s *AdminE2ETestSuite) TestGetNodes() {
 	json.Unmarshal(w.Body.Bytes(), &response)
 
 	data := response["data"].(map[string]interface{})
-	nodes := data["records"].([]interface{})
+	nodes := data["list"].([]interface{})
 	assert.GreaterOrEqual(s.T(), len(nodes), 1)
 }
 
