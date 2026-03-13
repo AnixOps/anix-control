@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/anixops/v2board/internal/cache"
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
@@ -57,6 +58,12 @@ func (s *UniProxyE2ETestSuite) SetupSuite() {
 			SubscribePath: "s",
 		},
 	}
+
+	// 注册配置到全局 (必须在中中间件初始化前设置)
+	config.Set(s.cfg)
+
+	// 初始化缓存
+	cache.InitMemory()
 
 	// 初始化数据库
 	err := database.Init(&s.cfg.Database)

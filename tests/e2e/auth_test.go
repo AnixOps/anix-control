@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/anixops/v2board/internal/cache"
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
@@ -52,7 +53,17 @@ func (s *AuthE2ETestSuite) SetupSuite() {
 			APIToken:      "test-api-token",
 			SubscribePath: "s",
 		},
+		Admin: config.AdminConfig{
+			Email:    "admin@example.com",
+			Password: "admin123456",
+		},
 	}
+
+	// 注册配置到全局 (必须在中间件初始化前设置)
+	config.Set(s.cfg)
+
+	// 初始化缓存
+	cache.InitMemory()
 
 	// 初始化数据库
 	err := database.Init(&s.cfg.Database)
