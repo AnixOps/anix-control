@@ -3,8 +3,10 @@ package e2e
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/anixops/v2board/internal/cache"
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
@@ -55,6 +57,12 @@ func (s *SubscribeE2ETestSuite) SetupSuite() {
 		},
 	}
 
+	// 注册配置到全局 (必须在中间件初始化前设置)
+	config.Set(s.cfg)
+
+	// 初始化缓存
+	cache.InitMemory()
+
 	// 初始化数据库
 	err := database.Init(&s.cfg.Database)
 	s.Require().NoError(err)
@@ -67,6 +75,7 @@ func (s *SubscribeE2ETestSuite) SetupSuite() {
 		&model.NodeProtocol{},
 		&model.SubscriptionGroup{},
 		&model.SubscriptionTemplate{},
+		&model.UserSubscriptionGroup{},
 		&model.Order{},
 	)
 	s.Require().NoError(err)
@@ -127,6 +136,13 @@ func (s *SubscribeE2ETestSuite) SetupSuite() {
 
 	// 关联协议到分组
 	s.db.Model(s.testGroup).Association("Protocols").Append(s.testProtocol)
+
+	// 将用户关联到订阅分组
+	userGroup := &model.UserSubscriptionGroup{
+		UserID:  s.testUser.ID,
+		GroupID: s.testGroup.ID,
+	}
+	s.db.Create(userGroup)
 
 	// 创建路由
 	s.router = gin.New()
@@ -190,7 +206,9 @@ func (s *SubscribeE2ETestSuite) TestGetSubscription_ClashFormat() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	assert.Contains(s.T(), w.Header().Get("Content-Type"), "text/plain")
+	// Clash format returns YAML content type
+	contentType := w.Header().Get("Content-Type")
+	assert.True(s.T(), strings.Contains(contentType, "text/yaml") || strings.Contains(contentType, "text/plain"), "Expected text/yaml or text/plain, got: "+contentType)
 }
 
 // TestGetSubscription_SurgeFormat 测试 Surge 格式

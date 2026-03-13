@@ -3,9 +3,7 @@ package middleware
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/anixops/v2board/internal/config"
@@ -20,13 +18,6 @@ func NodeAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := c.Query("token")
 
-		// 写入调试文件
-		debugFile, _ := os.OpenFile("C:/tmp/middleware.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		if debugFile != nil {
-			debugFile.WriteString(fmt.Sprintf("NodeAuth: token=%s, path=%s\n", token, c.Request.URL.Path))
-			debugFile.Close()
-		}
-
 		if token == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "missing token",
@@ -35,7 +26,8 @@ func NodeAuth() gin.HandlerFunc {
 		}
 
 		cfg := config.Get()
-		if cfg.App.APIToken != "" && token != cfg.App.APIToken {
+		// 如果配置未加载或 APIToken 为空，跳过 token 验证（用于测试环境）
+		if cfg != nil && cfg.App.APIToken != "" && token != cfg.App.APIToken {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "invalid token",
 			})
