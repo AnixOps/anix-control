@@ -46,3 +46,8 @@ data/
 # Environment
 .env
 .env.local
+
+# Build outputs
+bin/
+output/
+test-reports/

@@ -1,0 +1,178 @@
+# V2Board AnixOps - 生产环境部署
+# 使用 PostgreSQL + Redis
+
+services:
+  # ========== API 服务 ==========
+  api:
+    image: ${DOCKER_REGISTRY:-}/v2board:${VERSION:-latest}
+    container_name: v2board-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"     # HTTP API
+      - "50051:50051"   # gRPC
+    volumes:
+      - ./config:/app/config:ro
+      - ./public:/app/public
+      - ./logs:/app/logs
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - GIN_MODE=release
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-v2board}
+      - DB_PASSWORD=${DB_PASSWORD:?Database password required}
+      - DB_NAME=${DB_NAME:-v2board}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - JWT_SECRET=${JWT_SECRET:?JWT secret required}
+      - API_TOKEN=${API_TOKEN:?API token required}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - v2board-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ========== PostgreSQL 数据库 ==========
+  db:
+    image: postgres:16-alpine
+    container_name: v2board-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-v2board}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Database password required}
+      POSTGRES_DB: ${DB_NAME:-v2board}
+      TZ: ${TZ:-Asia/Shanghai}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - v2board-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-v2board} -d ${DB_NAME:-v2board}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ========== Redis 缓存 ==========
+  redis:
+    image: redis:7-alpine
+    container_name: v2board-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    volumes:
+      - redis-data:/data
+    networks:
+      - v2board-network
+    healthcheck:
+      test: ["CMD", "redis-cli", ${REDIS_PASSWORD:+-a ${REDIS_PASSWORD}}, "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # ========== Nginx 反向代理 ==========
+  nginx:
+    image: nginx:alpine
+    container_name: v2board-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+      - ./public:/usr/share/nginx/html:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - api
+    networks:
+      - v2board-network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ========== Prometheus 监控 (可选) ==========
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: v2board-prometheus
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - v2board-network
+
+  # ========== Grafana 仪表盘 (可选) ==========
+  grafana:
+    image: grafana/grafana:latest
+    container_name: v2board-grafana
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=redis-datasource
+    depends_on:
+      - prometheus
+    networks:
+      - v2board-network
+
+networks:
+  v2board-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:

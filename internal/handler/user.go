@@ -21,7 +21,18 @@ func NewUserHandler() *UserHandler {
 	}
 }
 
-// GetSubscription 获取当前用户订阅详情 (优先从缓存读取)
+// GetSubscription godoc
+// @Summary 获取用户订阅详情
+// @Description 获取当前登录用户的订阅信息，包括流量、到期时间等
+// @Tags 用户端
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param refresh query bool false "是否强制刷新缓存"
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /user/subscription [get]
 func (h *UserHandler) GetSubscription(c *gin.Context) {
 	// 从 JWT 中获取用户 ID
 	userID, exists := c.Get("user_id")
@@ -48,7 +59,17 @@ func (h *UserHandler) GetSubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": sub})
 }
 
-// GetProfile 获取用户基本信息
+// GetProfile godoc
+// @Summary 获取用户基本信息
+// @Description 获取当前登录用户的基本信息，包括邮箱、UUID、Token等
+// @Tags 用户端
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /user/profile [get]
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -79,7 +100,17 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	})
 }
 
-// GetDashboard 用户仪表盘
+// GetDashboard godoc
+// @Summary 获取用户仪表盘
+// @Description 获取当前登录用户的仪表盘数据，包括订阅信息等
+// @Tags 用户端
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /user/dashboard [get]
 func (h *UserHandler) GetDashboard(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {

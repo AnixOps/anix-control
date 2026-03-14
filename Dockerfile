@@ -1,49 +1,69 @@
 # Build stage
 FROM golang:1.24-alpine AS builder
 
-# 安装必要的构建工具
-RUN apk add --no-cache git make
+# Install build tools
+RUN apk add --no-cache git make nodejs npm
 
 WORKDIR /app
 
-# 复制依赖文件
+# Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
 
-# 复制源代码
+# Copy source code
 COPY . .
 
-# 编译
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o v2board ./cmd/server
+# Generate Swagger docs
+RUN go install github.com/swaggo/swag/cmd/swag@latest && \
+    $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal
 
-# 运行镜像
+# Build frontend (if package.json exists)
+RUN if [ -f "web/package.json" ]; then \
+    cd web && npm ci && npm run build && cd ..; \
+    fi
+
+# Build binary with version info
+ARG VERSION=dev
+ARG BUILD_TIME
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" \
+    -o v2board ./cmd/server
+
+# Runtime stage
 FROM alpine:3.19
 
-RUN apk --no-cache add ca-certificates tzdata
+# Install runtime dependencies
+RUN apk --no-cache add ca-certificates tzdata wget
+
+# Create non-root user
+RUN adduser -D -u 1000 v2board
 
 WORKDIR /app
 
-# 创建非 root 用户
-RUN adduser -D -u 1000 v2board
-
-# 复制编译产物
+# Copy binary and config
 COPY --from=builder /app/v2board .
+COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/config/config.yaml.example ./config/config.yaml.example
 
-# 创建必要目录
-RUN mkdir -p /app/data /app/public && chown -R v2board:v2board /app
+# Copy frontend build (if exists)
+COPY --from=builder /app/public ./public
 
-# 切换到非 root 用户
+# Create necessary directories
+RUN mkdir -p /app/data /app/logs && chown -R v2board:v2board /app
+
+# Switch to non-root user
 USER v2board
 
-# 设置时区
+# Set timezone
 ENV TZ=Asia/Shanghai
+ENV GIN_MODE=release
 
-# 暴露端口 (HTTP + gRPC)
+# Expose ports (HTTP + gRPC)
 EXPOSE 8080 50051
 
-# 健康检查
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-CMD ["./v2board", "-config", "config/config.yaml.example"]
+# Default command
+CMD ["./v2board", "-config", "config/config.yaml"]

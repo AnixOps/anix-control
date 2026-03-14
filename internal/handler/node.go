@@ -24,7 +24,16 @@ func NewNodeHandler() *NodeHandler {
 
 // ========== 节点自动注册 API (公开) ==========
 
-// Register 节点自动注册
+// Register godoc
+// @Summary 节点自动注册
+// @Description 节点通过授权密钥自动注册到面板
+// @Tags 节点通信
+// @Accept json
+// @Produce json
+// @Param request body model.NodeRegisterRequest true "注册请求"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Router /node/register [post]
 func (h *NodeHandler) Register(c *gin.Context) {
 	var req model.NodeRegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -53,7 +62,19 @@ func (h *NodeHandler) Register(c *gin.Context) {
 	})
 }
 
-// Heartbeat 节点心跳
+// Heartbeat godoc
+// @Summary 节点心跳
+// @Description 节点向面板发送心跳以保持在线状态
+// @Tags 节点通信
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body model.NodeHeartbeatRequest true "心跳请求"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 401 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /node/heartbeat [post]
 func (h *NodeHandler) Heartbeat(c *gin.Context) {
 	// 从中间件获取节点ID
 	nodeID, exists := c.Get("node_id")
@@ -78,7 +99,21 @@ func (h *NodeHandler) Heartbeat(c *gin.Context) {
 
 // ========== 管理员节点管理 ==========
 
-// GetNodes 获取节点列表
+// GetNodes godoc
+// @Summary 获取节点列表
+// @Description 管理员获取节点列表，支持分页和筛选
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
+// @Param search query string false "搜索关键词"
+// @Param status query int false "节点状态"
+// @Param group_id query int false "分组ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/nodes [get]
 func (h *NodeHandler) GetNodes(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -113,7 +148,18 @@ func (h *NodeHandler) GetNodes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": result})
 }
 
-// GetNode 获取节点详情
+// GetNode godoc
+// @Summary 获取节点详情
+// @Description 管理员获取指定节点的详细信息
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "节点ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /admin/nodes/{id} [get]
 func (h *NodeHandler) GetNode(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -130,7 +176,18 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": node})
 }
 
-// CreateNode 创建节点 (手动添加)
+// CreateNode godoc
+// @Summary 创建节点
+// @Description 管理员手动创建节点
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body model.Node true "节点信息"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/nodes [post]
 func (h *NodeHandler) CreateNode(c *gin.Context) {
 	var node model.Node
 	if err := c.ShouldBindJSON(&node); err != nil {
@@ -153,7 +210,19 @@ func (h *NodeHandler) CreateNode(c *gin.Context) {
 	})
 }
 
-// UpdateNode 更新节点
+// UpdateNode godoc
+// @Summary 更新节点
+// @Description 管理员更新指定节点的信息
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "节点ID"
+// @Param request body map[string]interface{} true "节点更新信息"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/nodes/{id} [put]
 func (h *NodeHandler) UpdateNode(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -181,7 +250,18 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
 }
 
-// DeleteNode 删除节点
+// DeleteNode godoc
+// @Summary 删除节点
+// @Description 管理员删除指定节点
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "节点ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/nodes/{id} [delete]
 func (h *NodeHandler) DeleteNode(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -197,7 +277,16 @@ func (h *NodeHandler) DeleteNode(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
 }
 
-// GetNodeStats 获取节点统计
+// GetNodeStats godoc
+// @Summary 获取节点统计
+// @Description 管理员获取节点统计数据
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/nodes/stats [get]
 func (h *NodeHandler) GetNodeStats(c *gin.Context) {
 	stats, err := h.nodeService.GetNodeStats()
 	if err != nil {
@@ -210,7 +299,18 @@ func (h *NodeHandler) GetNodeStats(c *gin.Context) {
 
 // ========== 高级配置 (RawConfig) ==========
 
-// GetNodeRawConfig 获取节点原始配置
+// GetNodeRawConfig godoc
+// @Summary 获取节点原始配置
+// @Description 管理员获取指定节点的原始JSON配置
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "节点ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /admin/nodes/{id}/raw-config [get]
 func (h *NodeHandler) GetNodeRawConfig(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -238,7 +338,19 @@ func (h *NodeHandler) GetNodeRawConfig(c *gin.Context) {
 	})
 }
 
-// UpdateNodeRawConfig 更新节点原始配置 (高级模式)
+// UpdateNodeRawConfig godoc
+// @Summary 更新节点原始配置
+// @Description 管理员更新指定节点的原始JSON配置（高级模式）
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "节点ID"
+// @Param request body map[string]interface{} true "原始配置 {raw_config: object}"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/nodes/{id}/raw-config [put]
 func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -276,7 +388,17 @@ func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "配置更新成功"})
 }
 
-// ValidateRawConfig 验证原始配置 JSON
+// ValidateRawConfig godoc
+// @Summary 验证原始配置
+// @Description 管理员验证节点原始JSON配置的有效性
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body map[string]interface{} true "原始配置 {raw_config: object}"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Router /admin/nodes/validate-config [post]
 func (h *NodeHandler) ValidateRawConfig(c *gin.Context) {
 	var req struct {
 		RawConfig interface{} `json:"raw_config"`
@@ -322,7 +444,18 @@ func (h *NodeHandler) ValidateRawConfig(c *gin.Context) {
 
 // ========== 协议管理 ==========
 
-// GetProtocols 获取节点的协议列表
+// GetProtocols godoc
+// @Summary 获取节点协议列表
+// @Description 管理员获取指定节点的协议配置列表
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "节点ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/nodes/{id}/protocols [get]
 func (h *NodeHandler) GetProtocols(c *gin.Context) {
 	nodeID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -339,7 +472,19 @@ func (h *NodeHandler) GetProtocols(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": protocols})
 }
 
-// CreateProtocol 创建协议
+// CreateProtocol godoc
+// @Summary 创建节点协议
+// @Description 管理员为指定节点创建协议配置
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "节点ID"
+// @Param request body model.NodeProtocol true "协议配置"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/nodes/{id}/protocols [post]
 func (h *NodeHandler) CreateProtocol(c *gin.Context) {
 	nodeID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -366,7 +511,19 @@ func (h *NodeHandler) CreateProtocol(c *gin.Context) {
 	})
 }
 
-// UpdateProtocol 更新协议
+// UpdateProtocol godoc
+// @Summary 更新节点协议
+// @Description 管理员更新指定的节点协议配置
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param protocol_id path int true "协议ID"
+// @Param request body map[string]interface{} true "协议更新信息"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/nodes/protocols/{protocol_id} [put]
 func (h *NodeHandler) UpdateProtocol(c *gin.Context) {
 	protocolID, err := strconv.ParseUint(c.Param("protocol_id"), 10, 32)
 	if err != nil {
@@ -391,7 +548,18 @@ func (h *NodeHandler) UpdateProtocol(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
 }
 
-// DeleteProtocol 删除协议
+// DeleteProtocol godoc
+// @Summary 删除节点协议
+// @Description 管理员删除指定的节点协议配置
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param protocol_id path int true "协议ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/nodes/protocols/{protocol_id} [delete]
 func (h *NodeHandler) DeleteProtocol(c *gin.Context) {
 	protocolID, err := strconv.ParseUint(c.Param("protocol_id"), 10, 32)
 	if err != nil {
@@ -407,13 +575,32 @@ func (h *NodeHandler) DeleteProtocol(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
 }
 
-// GetProtocolTemplates 获取协议模板
+// GetProtocolTemplates godoc
+// @Summary 获取协议模板
+// @Description 管理员获取可用的协议模板列表
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /admin/nodes/protocol-templates [get]
 func (h *NodeHandler) GetProtocolTemplates(c *gin.Context) {
 	templates := model.GetProtocolTemplates()
 	c.JSON(http.StatusOK, gin.H{"data": templates})
 }
 
-// SyncProtocol 同步协议到节点
+// SyncProtocol godoc
+// @Summary 同步协议到节点
+// @Description 管理员将协议配置同步到指定节点
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "节点ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/nodes/{id}/sync [post]
 func (h *NodeHandler) SyncProtocol(c *gin.Context) {
 	nodeID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -431,7 +618,18 @@ func (h *NodeHandler) SyncProtocol(c *gin.Context) {
 
 // ========== 授权密钥管理 ==========
 
-// GenerateAuthKey 生成授权密钥
+// GenerateAuthKey godoc
+// @Summary 生成授权密钥
+// @Description 管理员生成节点自动注册的授权密钥
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body map[string]interface{} true "密钥请求 {name, expire_days}"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/auth-keys [post]
 func (h *NodeHandler) GenerateAuthKey(c *gin.Context) {
 	var req struct {
 		Name       string `json:"name"`
@@ -463,7 +661,16 @@ func (h *NodeHandler) GenerateAuthKey(c *gin.Context) {
 	})
 }
 
-// GetAuthKeys 获取授权密钥列表
+// GetAuthKeys godoc
+// @Summary 获取授权密钥列表
+// @Description 管理员获取所有授权密钥列表
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/auth-keys [get]
 func (h *NodeHandler) GetAuthKeys(c *gin.Context) {
 	keys, err := h.nodeService.GetAuthKeys()
 	if err != nil {
@@ -474,7 +681,18 @@ func (h *NodeHandler) GetAuthKeys(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": keys})
 }
 
-// DeleteAuthKey 删除授权密钥
+// DeleteAuthKey godoc
+// @Summary 删除授权密钥
+// @Description 管理员删除指定的授权密钥
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "密钥ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/auth-keys/{id} [delete]
 func (h *NodeHandler) DeleteAuthKey(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {

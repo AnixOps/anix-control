@@ -591,6 +591,593 @@ export function deleteKnowledge(id) {
   })
 }
 
+// ====== 流量转发管理 ======
+
+// 获取转发节点列表
+export function getForwardNodes(params) {
+  return request({
+    url: '/admin/forward/nodes',
+    method: 'get',
+    params
+  })
+}
+
+// 创建转发节点
+export function createForwardNode(data) {
+  return request({
+    url: '/admin/forward/nodes',
+    method: 'post',
+    data
+  })
+}
+
+// 获取转发节点详情
+export function getForwardNode(id) {
+  return request({
+    url: `/admin/forward/nodes/${id}`,
+    method: 'get'
+  })
+}
+
+// 更新转发节点
+export function updateForwardNode(id, data) {
+  return request({
+    url: `/admin/forward/nodes/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除转发节点
+export function deleteForwardNode(id) {
+  return request({
+    url: `/admin/forward/nodes/${id}`,
+    method: 'delete'
+  })
+}
+
+// 检查转发节点
+export function checkForwardNode(id) {
+  return request({
+    url: `/admin/forward/nodes/${id}/check`,
+    method: 'post'
+  })
+}
+
+// 切换转发节点状态
+export function toggleForwardNode(id, enabled) {
+  return request({
+    url: `/admin/forward/nodes/${id}/toggle`,
+    method: 'post',
+    data: { enabled }
+  })
+}
+
+// 获取转发规则列表
+export function getForwardRules(params) {
+  return request({
+    url: '/admin/forward/rules',
+    method: 'get',
+    params
+  })
+}
+
+// 创建转发规则
+export function createForwardRule(data) {
+  return request({
+    url: '/admin/forward/rules',
+    method: 'post',
+    data
+  })
+}
+
+// 获取转发规则详情
+export function getForwardRule(id) {
+  return request({
+    url: `/admin/forward/rules/${id}`,
+    method: 'get'
+  })
+}
+
+// 更新转发规则
+export function updateForwardRule(id, data) {
+  return request({
+    url: `/admin/forward/rules/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除转发规则
+export function deleteForwardRule(id) {
+  return request({
+    url: `/admin/forward/rules/${id}`,
+    method: 'delete'
+  })
+}
+
+// 切换转发规则状态
+export function toggleForwardRule(id, enabled) {
+  return request({
+    url: `/admin/forward/rules/${id}/toggle`,
+    method: 'post',
+    data: { enabled }
+  })
+}
+
+// 获取转发统计
+export function getForwardStats() {
+  return request({
+    url: '/admin/forward/stats',
+    method: 'get'
+  })
+}
+
+// ====== 支付网关管理 ======
+
+// 获取支付网关列表
+export function getPaymentGateways() {
+  return request({
+    url: '/admin/payment/gateways',
+    method: 'get'
+  })
+}
+
+// 创建支付网关
+export function createPaymentGateway(data) {
+  return request({
+    url: '/admin/payment/gateways',
+    method: 'post',
+    data
+  })
+}
+
+// 更新支付网关
+export function updatePaymentGateway(id, data) {
+  return request({
+    url: `/admin/payment/gateways/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除支付网关
+export function deletePaymentGateway(id) {
+  return request({
+    url: `/admin/payment/gateways/${id}`,
+    method: 'delete'
+  })
+}
+
+// 切换支付网关状态
+export function togglePaymentGateway(id, enabled) {
+  return request({
+    url: `/admin/payment/gateways/${id}/toggle`,
+    method: 'post',
+    data: { enabled }
+  })
+}
+
+// 获取支付统计
+export function getPaymentStats(params) {
+  return request({
+    url: '/admin/payment/stats',
+    method: 'get',
+    params
+  })
+}
+
+// 获取支付记录
+export function getPaymentRecords(params) {
+  return request({
+    url: '/admin/payment/records',
+    method: 'get',
+    params
+  })
+}
+
+// ====== Telegram Bot管理 ======
+
+// 获取Bot配置
+export function getTelegramBot() {
+  return request({
+    url: '/admin/telegram/bot',
+    method: 'get'
+  })
+}
+
+// 更新Bot配置
+export function updateTelegramBot(data) {
+  return request({
+    url: '/admin/telegram/bot',
+    method: 'put',
+    data
+  })
+}
+
+// 设置Webhook
+export function setTelegramWebhook(url) {
+  return request({
+    url: '/admin/telegram/webhook',
+    method: 'post',
+    data: { url }
+  })
+}
+
+// 删除Webhook
+export function deleteTelegramWebhook() {
+  return request({
+    url: '/admin/telegram/webhook',
+    method: 'delete'
+  })
+}
+
+// 发送通知
+export function sendTelegramNotification(data) {
+  return request({
+    url: '/admin/telegram/notify',
+    method: 'post',
+    data
+  })
+}
+
+// 广播消息
+export function broadcastTelegram(message) {
+  return request({
+    url: '/admin/telegram/broadcast',
+    method: 'post',
+    data: { message }
+  })
+}
+
+// 获取用户绑定列表
+export function getTelegramUsers(params) {
+  return request({
+    url: '/admin/telegram/users',
+    method: 'get',
+    params
+  })
+}
+
+// ====== MFA管理 ======
+
+// 获取MFA配置
+export function getMFAConfig() {
+  return request({
+    url: '/admin/mfa/config',
+    method: 'get'
+  })
+}
+
+// 更新MFA配置
+export function updateMFAConfig(data) {
+  return request({
+    url: '/admin/mfa/config',
+    method: 'put',
+    data
+  })
+}
+
+// ====== 通知管理 ======
+
+// 获取通知模板列表
+export function getNotificationTemplates(params) {
+  return request({
+    url: '/admin/notification/templates',
+    method: 'get',
+    params
+  })
+}
+
+// 创建通知模板
+export function createNotificationTemplate(data) {
+  return request({
+    url: '/admin/notification/templates',
+    method: 'post',
+    data
+  })
+}
+
+// 更新通知模板
+export function updateNotificationTemplate(id, data) {
+  return request({
+    url: `/admin/notification/templates/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除通知模板
+export function deleteNotificationTemplate(id) {
+  return request({
+    url: `/admin/notification/templates/${id}`,
+    method: 'delete'
+  })
+}
+
+// 获取通知日志
+export function getNotificationLogs(params) {
+  return request({
+    url: '/admin/notification/logs',
+    method: 'get',
+    params
+  })
+}
+
+// 发送测试通知
+export function sendTestNotification(data) {
+  return request({
+    url: '/admin/notification/test',
+    method: 'post',
+    data
+  })
+}
+
+// 获取邮件配置
+export function getEmailConfig() {
+  return request({
+    url: '/admin/notification/email/config',
+    method: 'get'
+  })
+}
+
+// 更新邮件配置
+export function updateEmailConfig(data) {
+  return request({
+    url: '/admin/notification/email/config',
+    method: 'put',
+    data
+  })
+}
+
+// ====== 邀请返利管理 ======
+
+// 获取邀请配置
+export function getInviteConfig() {
+  return request({
+    url: '/admin/invite/config',
+    method: 'get'
+  })
+}
+
+// 更新邀请配置
+export function updateInviteConfig(data) {
+  return request({
+    url: '/admin/invite/config',
+    method: 'put',
+    data
+  })
+}
+
+// 获取邀请统计
+export function getInviteStats() {
+  return request({
+    url: '/admin/invite/stats',
+    method: 'get'
+  })
+}
+
+// 获取提现申请列表
+export function getWithdrawals(params) {
+  return request({
+    url: '/admin/invite/withdrawals',
+    method: 'get',
+    params
+  })
+}
+
+// 处理提现申请
+export function processWithdrawal(id, data) {
+  return request({
+    url: `/admin/invite/withdrawals/${id}/process`,
+    method: 'post',
+    data
+  })
+}
+
+// ====== 系统配置管理 ======
+
+// 获取系统配置
+export function getSystemConfigs(params) {
+  return request({
+    url: '/admin/system/configs',
+    method: 'get',
+    params
+  })
+}
+
+// 获取单个配置
+export function getSystemConfig(key) {
+  return request({
+    url: `/admin/system/configs/${key}`,
+    method: 'get'
+  })
+}
+
+// 设置系统配置
+export function setSystemConfig(key, data) {
+  return request({
+    url: `/admin/system/configs/${key}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除系统配置
+export function deleteSystemConfig(key) {
+  return request({
+    url: `/admin/system/configs/${key}`,
+    method: 'delete'
+  })
+}
+
+// ====== 备份管理 ======
+
+// 获取备份配置
+export function getBackupConfig() {
+  return request({
+    url: '/admin/system/backup/config',
+    method: 'get'
+  })
+}
+
+// 更新备份配置
+export function updateBackupConfig(data) {
+  return request({
+    url: '/admin/system/backup/config',
+    method: 'put',
+    data
+  })
+}
+
+// 创建备份
+export function createBackup(type = 'database') {
+  return request({
+    url: '/admin/system/backup',
+    method: 'post',
+    params: { type }
+  })
+}
+
+// 获取备份列表
+export function getBackups(params) {
+  return request({
+    url: '/admin/system/backups',
+    method: 'get',
+    params
+  })
+}
+
+// 获取备份统计
+export function getBackupStats() {
+  return request({
+    url: '/admin/system/backup/stats',
+    method: 'get'
+  })
+}
+
+// 删除备份
+export function deleteBackup(id) {
+  return request({
+    url: `/admin/system/backups/${id}`,
+    method: 'delete'
+  })
+}
+
+// 恢复备份
+export function restoreBackup(id) {
+  return request({
+    url: `/admin/system/backups/${id}/restore`,
+    method: 'post'
+  })
+}
+
+// ====== Agent 管理 ======
+
+// 获取在线 Agent 列表
+export function getAgents() {
+  return request({
+    url: '/admin/agent/list',
+    method: 'get'
+  })
+}
+
+// 创建 Agent 任务
+export function createAgentTask(data) {
+  return request({
+    url: '/admin/agent/tasks',
+    method: 'post',
+    data
+  })
+}
+
+// 执行命令
+export function executeAgentCommand(data) {
+  return request({
+    url: '/admin/agent/execute',
+    method: 'post',
+    data
+  })
+}
+
+// 获取 Agent 任务结果
+export function getAgentTaskResult(taskId) {
+  return request({
+    url: `/admin/agent/tasks/${taskId}`,
+    method: 'get'
+  })
+}
+
+// 获取 Agent 监控数据
+export function getAgentMonitor(nodeId) {
+  return request({
+    url: '/admin/agent/monitor',
+    method: 'get',
+    params: { node_id: nodeId }
+  })
+}
+
+// ====== 负载均衡管理 ======
+
+// 获取负载均衡器列表
+export function getLoadBalancers(params) {
+  return request({
+    url: '/admin/loadbalancers',
+    method: 'get',
+    params
+  })
+}
+
+// 创建负载均衡器
+export function createLoadBalancer(data) {
+  return request({
+    url: '/admin/loadbalancers',
+    method: 'post',
+    data
+  })
+}
+
+// 获取负载均衡器详情
+export function getLoadBalancer(id) {
+  return request({
+    url: `/admin/loadbalancers/${id}`,
+    method: 'get'
+  })
+}
+
+// 更新负载均衡器
+export function updateLoadBalancer(id, data) {
+  return request({
+    url: `/admin/loadbalancers/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+// 删除负载均衡器
+export function deleteLoadBalancer(id) {
+  return request({
+    url: `/admin/loadbalancers/${id}`,
+    method: 'delete'
+  })
+}
+
+// 获取负载均衡器统计
+export function getLoadBalancerStats(id) {
+  return request({
+    url: `/admin/loadbalancers/${id}/stats`,
+    method: 'get'
+  })
+}
+
+// 执行健康检查
+export function runHealthCheck(id) {
+  return request({
+    url: `/admin/loadbalancers/${id}/check`,
+    method: 'post'
+  })
+}
+
 // 默认导出
 export default {
   getDashboard,
@@ -647,22 +1234,94 @@ export default {
   updatePlan,
   deletePlan,
   assignPlanToUser,
-  // 套餐-订阅分组关联
   getPlanGroups,
   addGroupToPlan,
   removeGroupFromPlan,
-  // 工单管理
   getTickets,
   replyTicket,
   closeTicket,
-  // 优惠券管理
   getCoupons,
   createCoupon,
   deleteCoupon,
-  // 知识库管理
   getKnowledgeList,
   createKnowledge,
   updateKnowledge,
-  deleteKnowledge
+  deleteKnowledge,
+  // 流量转发
+  getForwardNodes,
+  createForwardNode,
+  getForwardNode,
+  updateForwardNode,
+  deleteForwardNode,
+  checkForwardNode,
+  toggleForwardNode,
+  getForwardRules,
+  createForwardRule,
+  getForwardRule,
+  updateForwardRule,
+  deleteForwardRule,
+  toggleForwardRule,
+  getForwardStats,
+  // 支付网关
+  getPaymentGateways,
+  createPaymentGateway,
+  updatePaymentGateway,
+  deletePaymentGateway,
+  togglePaymentGateway,
+  getPaymentStats,
+  getPaymentRecords,
+  // Telegram
+  getTelegramBot,
+  updateTelegramBot,
+  setTelegramWebhook,
+  deleteTelegramWebhook,
+  sendTelegramNotification,
+  broadcastTelegram,
+  getTelegramUsers,
+  // MFA
+  getMFAConfig,
+  updateMFAConfig,
+  // 通知
+  getNotificationTemplates,
+  createNotificationTemplate,
+  updateNotificationTemplate,
+  deleteNotificationTemplate,
+  getNotificationLogs,
+  sendTestNotification,
+  getEmailConfig,
+  updateEmailConfig,
+  // 邀请返利
+  getInviteConfig,
+  updateInviteConfig,
+  getInviteStats,
+  getWithdrawals,
+  processWithdrawal,
+  // 系统配置
+  getSystemConfigs,
+  getSystemConfig,
+  setSystemConfig,
+  deleteSystemConfig,
+  // 备份
+  getBackupConfig,
+  updateBackupConfig,
+  createBackup,
+  getBackups,
+  getBackupStats,
+  deleteBackup,
+  restoreBackup,
+  // Agent
+  getAgents,
+  createAgentTask,
+  executeAgentCommand,
+  getAgentTaskResult,
+  getAgentMonitor,
+  // 负载均衡
+  getLoadBalancers,
+  createLoadBalancer,
+  getLoadBalancer,
+  updateLoadBalancer,
+  deleteLoadBalancer,
+  getLoadBalancerStats,
+  runHealthCheck
 }
 

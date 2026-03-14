@@ -21,7 +21,16 @@ func NewAuthHandler(cfg *config.Config) *AuthHandler {
 	}
 }
 
-// Register 注册接口
+// Register godoc
+// @Summary 用户注册
+// @Description 创建新用户账户
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body model.RegisterRequest true "注册请求"
+// @Success 200 {object} map[string]interface{} "注册成功"
+// @Failure 400 {object} map[string]interface{} "参数错误"
+// @Router /register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req model.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -58,7 +67,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
-// Login 登录接口
+// Login godoc
+// @Summary 用户登录
+// @Description 用户登录获取 JWT Token
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body model.LoginRequest true "登录请求"
+// @Success 200 {object} map[string]interface{} "登录成功"
+// @Failure 401 {object} map[string]interface{} "认证失败"
+// @Router /login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req model.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

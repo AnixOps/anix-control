@@ -1,5 +1,5 @@
 .PHONY: build run clean test test-unit test-e2e test-coverage test-coverage-html test-integration test-frontend
-.PHONY: pre-deploy deploy docker-build docker-run lint vet fmt bench grpc-gen
+.PHONY: pre-deploy deploy docker-build docker-run lint vet fmt bench grpc-gen swagger
 
 # 版本信息
 VERSION := 2.0.0
@@ -175,6 +175,17 @@ grpc-gen:
 	@echo "Generating gRPC code..."
 	protoc --go_out=. --go-grpc_out=. api/grpc/v2board.proto
 
+# 生成 Swagger 文档
+swagger:
+	@echo "Generating Swagger docs..."
+	$(eval SWAG := $(shell go env GOPATH)/bin/swag)
+	@command -v $(SWAG) >/dev/null 2>&1 || go install github.com/swaggo/swag/cmd/swag@latest
+	$(SWAG) init -g cmd/server/main.go -o docs --parseInternal
+
+# 查看 Swagger 文档
+swagger-serve:
+	@echo "Open http://localhost:8080/swagger/index.html after starting the server"
+
 # ==========================================
 # 依赖管理
 # ==========================================
@@ -224,4 +235,6 @@ help:
 	@echo "  make fmt            - 格式化代码"
 	@echo "  make lint           - 代码检查"
 	@echo "  make vet            - go vet"
+	@echo "  make swagger        - 生成 Swagger 文档"
+	@echo "  make grpc-gen       - 生成 gRPC 代码"
 	@echo "  make clean          - 清理编译产物"

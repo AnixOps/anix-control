@@ -40,6 +40,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
+	// Prometheus 指标
+	metricsHandler := handler.NewMetricsHandler()
+	r.GET("/metrics", metricsHandler.GetMetrics)
+
 	// 订阅接口 (公开，使用用户 token 认证)
 	// 路径可通过配置 app.subscribe_path 自定义，默认为 "s"
 	subscribePath := cfg.App.SubscribePath
