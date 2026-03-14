@@ -1,7 +1,9 @@
 package service
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/anixops/v2board/internal/cache"
 	"github.com/anixops/v2board/internal/config"
@@ -35,6 +37,9 @@ func (s *ServiceTestSuite) SetupSuite() {
 		&model.Node{},
 		&model.NodeProtocol{},
 		&model.AuthorizedKey{},
+		&model.Event{},
+		&model.UserSubscriptionGroup{},
+		&model.PlanSubscriptionGroup{},
 	)
 
 	// 测试配置
@@ -483,4 +488,469 @@ func (s *UserServiceTestSuite) TestResetTraffic() {
 
 func TestUserService(t *testing.T) {
 	suite.Run(t, new(UserServiceTestSuite))
+}
+
+// PlanServiceTestSuite 套餐服务测试套件
+type PlanServiceTestSuite struct {
+	ServiceTestSuite
+	svc *PlanService
+}
+
+func (s *PlanServiceTestSuite) SetupTest() {
+	s.ServiceTestSuite.SetupTest()
+	s.svc = NewPlanService()
+}
+
+func (s *PlanServiceTestSuite) TestCreatePlan() {
+	groupID := uint(1)
+	speedLimit := int64(100000000)
+	deviceLimit := 5
+	monthPrice := int64(1000)
+
+	plan := &model.Plan{
+		Name:             "Test Plan",
+		GroupID:          groupID,
+		TransferEnable:   100, // 100GB
+		SpeedLimit:       &speedLimit,
+		DeviceLimit:      &deviceLimit,
+		MonthPrice:       &monthPrice,
+		Show:             1,
+	}
+
+	err := s.svc.Create(plan)
+	assert.NoError(s.T(), err)
+	assert.NotZero(s.T(), plan.ID)
+}
+
+func (s *PlanServiceTestSuite) TestGetPlan() {
+	monthPrice := int64(2000)
+	plan := &model.Plan{
+		Name:           "Get Test Plan",
+		GroupID:        1,
+		TransferEnable: 50,
+		MonthPrice:     &monthPrice,
+		Show:           1,
+	}
+	s.svc.Create(plan)
+
+	found, err := s.svc.Get(plan.ID)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "Get Test Plan", found.Name)
+	assert.Equal(s.T(), int64(2000), *found.MonthPrice)
+}
+
+func (s *PlanServiceTestSuite) TestGetPlan_NotFound() {
+	_, err := s.svc.Get(99999)
+	assert.Error(s.T(), err)
+}
+
+func (s *PlanServiceTestSuite) TestUpdatePlan() {
+	monthPrice := int64(3000)
+	plan := &model.Plan{
+		Name:           "Update Test Plan",
+		GroupID:        1,
+		TransferEnable: 50,
+		MonthPrice:     &monthPrice,
+		Show:           1,
+	}
+	s.svc.Create(plan)
+
+	plan.Name = "Updated Plan"
+	plan.TransferEnable = 100
+	err := s.svc.Update(plan)
+	assert.NoError(s.T(), err)
+
+	found, _ := s.svc.Get(plan.ID)
+	assert.Equal(s.T(), "Updated Plan", found.Name)
+	assert.Equal(s.T(), int64(100), found.TransferEnable)
+}
+
+func (s *PlanServiceTestSuite) TestDeletePlan() {
+	monthPrice := int64(4000)
+	plan := &model.Plan{
+		Name:           "Delete Test Plan",
+		GroupID:        1,
+		TransferEnable: 50,
+		MonthPrice:     &monthPrice,
+		Show:           1,
+	}
+	s.svc.Create(plan)
+
+	err := s.svc.Delete(plan.ID)
+	assert.NoError(s.T(), err)
+
+	_, err = s.svc.Get(plan.ID)
+	assert.Error(s.T(), err)
+}
+
+func (s *PlanServiceTestSuite) TestListPlans() {
+	monthPrice := int64(5000)
+	for i := 1; i <= 3; i++ {
+		plan := &model.Plan{
+			Name:           "List Test Plan",
+			GroupID:        1,
+			TransferEnable: int64(i * 50),
+			MonthPrice:     &monthPrice,
+			Show:           1,
+		}
+		s.svc.Create(plan)
+	}
+
+	list, err := s.svc.List()
+	assert.NoError(s.T(), err)
+	assert.GreaterOrEqual(s.T(), len(list), 3)
+}
+
+func (s *PlanServiceTestSuite) TestAssignToUser() {
+	// 创建套餐
+	speedLimit := int64(100000000)
+	deviceLimit := 5
+	monthPrice := int64(1000)
+	groupID := uint(1)
+	plan := &model.Plan{
+		Name:           "Assign Test Plan",
+		GroupID:        groupID,
+		TransferEnable: 100,
+		SpeedLimit:     &speedLimit,
+		DeviceLimit:    &deviceLimit,
+		MonthPrice:     &monthPrice,
+		Show:           1,
+	}
+	s.svc.Create(plan)
+
+	// 创建用户
+	user := &model.User{
+		Email:          "planuser@example.com",
+		Password:       "hash",
+		Token:          "plan-token",
+		UUID:           "plan-uuid",
+		TransferEnable: 10737418240,
+	}
+	database.Get().Create(user)
+
+	// 分配套餐
+	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
+	err := s.svc.AssignToUser(plan.ID, user.ID, &expireAt)
+	assert.NoError(s.T(), err)
+
+	// 验证用户更新
+	var updatedUser model.User
+	database.Get().First(&updatedUser, user.ID)
+	assert.Equal(s.T(), plan.ID, *updatedUser.PlanID)
+	assert.Equal(s.T(), int64(100*1073741824), updatedUser.TransferEnable)
+}
+
+func TestPlanService(t *testing.T) {
+	suite.Run(t, new(PlanServiceTestSuite))
+}
+
+// OrderServiceTestSuite 订单服务测试套件
+type OrderServiceTestSuite struct {
+	ServiceTestSuite
+	svc       *OrderService
+	planSvc   *PlanService
+	authSvc   *AuthService
+	testUser  *model.User
+	testPlan  *model.Plan
+}
+
+func (s *OrderServiceTestSuite) SetupTest() {
+	s.ServiceTestSuite.SetupTest()
+	s.svc = NewOrderService()
+	s.planSvc = NewPlanService()
+	s.authSvc = NewAuthService()
+
+	// 创建测试用户
+	_, user, _ := s.authSvc.Register("order@example.com", "password123", s.cfg)
+	s.testUser = user
+
+	// 创建测试套餐
+	groupID := uint(1)
+	monthPrice := int64(1000)
+	quarterPrice := int64(2700)
+	yearPrice := int64(10000)
+	onetimePrice := int64(5000)
+	plan := &model.Plan{
+		Name:           "Order Test Plan",
+		GroupID:        groupID,
+		TransferEnable: 100,
+		MonthPrice:     &monthPrice,
+		QuarterPrice:   &quarterPrice,
+		YearPrice:      &yearPrice,
+		OnetimePrice:   &onetimePrice,
+		Show:           1,
+	}
+	s.planSvc.Create(plan)
+	s.testPlan = plan
+}
+
+func (s *OrderServiceTestSuite) TestCreateOrder_Monthly() {
+	order, err := s.svc.Create(CreateOrderParams{
+		UserID: s.testUser.ID,
+		PlanID: s.testPlan.ID,
+		Period: "month",
+	})
+
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), order)
+	assert.NotEmpty(s.T(), order.TradeNo)
+	assert.Equal(s.T(), int64(1000), order.TotalAmount)
+	assert.Equal(s.T(), 1, order.Type) // 新购
+	assert.Equal(s.T(), 0, order.Status)
+}
+
+func (s *OrderServiceTestSuite) TestCreateOrder_Quarterly() {
+	order, err := s.svc.Create(CreateOrderParams{
+		UserID: s.testUser.ID,
+		PlanID: s.testPlan.ID,
+		Period: "quarter",
+	})
+
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(2700), order.TotalAmount)
+}
+
+func (s *OrderServiceTestSuite) TestCreateOrder_Yearly() {
+	order, err := s.svc.Create(CreateOrderParams{
+		UserID: s.testUser.ID,
+		PlanID: s.testPlan.ID,
+		Period: "year",
+	})
+
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(10000), order.TotalAmount)
+}
+
+func (s *OrderServiceTestSuite) TestCreateOrder_Onetime() {
+	order, err := s.svc.Create(CreateOrderParams{
+		UserID: s.testUser.ID,
+		PlanID: s.testPlan.ID,
+		Period: "onetime",
+	})
+
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(5000), order.TotalAmount)
+}
+
+func (s *OrderServiceTestSuite) TestCreateOrder_InvalidPeriod() {
+	_, err := s.svc.Create(CreateOrderParams{
+		UserID: s.testUser.ID,
+		PlanID: s.testPlan.ID,
+		Period: "invalid_period",
+	})
+
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "无效的付费周期")
+}
+
+func (s *OrderServiceTestSuite) TestCreateOrder_PlanNotFound() {
+	_, err := s.svc.Create(CreateOrderParams{
+		UserID: s.testUser.ID,
+		PlanID: 99999,
+		Period: "month",
+	})
+
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "套餐不存在")
+}
+
+func (s *OrderServiceTestSuite) TestGetOrderByID() {
+	order, _ := s.svc.Create(CreateOrderParams{
+		UserID: s.testUser.ID,
+		PlanID: s.testPlan.ID,
+		Period: "month",
+	})
+
+	found, err := s.svc.GetByID(order.ID)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), order.TradeNo, found.TradeNo)
+}
+
+func (s *OrderServiceTestSuite) TestGetOrderByTradeNo() {
+	order, _ := s.svc.Create(CreateOrderParams{
+		UserID: s.testUser.ID,
+		PlanID: s.testPlan.ID,
+		Period: "month",
+	})
+
+	found, err := s.svc.GetByTradeNo(order.TradeNo)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), order.ID, found.ID)
+}
+
+func (s *OrderServiceTestSuite) TestUpdateStatus() {
+	order, _ := s.svc.Create(CreateOrderParams{
+		UserID: s.testUser.ID,
+		PlanID: s.testPlan.ID,
+		Period: "month",
+	})
+
+	err := s.svc.UpdateStatus(order.ID, 1)
+	assert.NoError(s.T(), err)
+
+	found, _ := s.svc.GetByID(order.ID)
+	assert.Equal(s.T(), 1, found.Status)
+	assert.NotZero(s.T(), found.PaidAt)
+}
+
+func (s *OrderServiceTestSuite) TestCancelOrder() {
+	order, _ := s.svc.Create(CreateOrderParams{
+		UserID: s.testUser.ID,
+		PlanID: s.testPlan.ID,
+		Period: "month",
+	})
+
+	err := s.svc.Cancel(order.ID)
+	assert.NoError(s.T(), err)
+
+	found, _ := s.svc.GetByID(order.ID)
+	assert.Equal(s.T(), 2, found.Status)
+}
+
+func (s *OrderServiceTestSuite) TestGetUserOrders() {
+	// 创建多个订单
+	for i := 0; i < 3; i++ {
+		s.svc.Create(CreateOrderParams{
+			UserID: s.testUser.ID,
+			PlanID: s.testPlan.ID,
+			Period: "month",
+		})
+	}
+
+	result, err := s.svc.GetUserOrders(s.testUser.ID, 1, 10)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(3), result.Total)
+	assert.Len(s.T(), result.List, 3)
+}
+
+func (s *OrderServiceTestSuite) TestGetStats() {
+	// 创建几个订单
+	s.svc.Create(CreateOrderParams{
+		UserID: s.testUser.ID,
+		PlanID: s.testPlan.ID,
+		Period: "month",
+	})
+
+	stats, err := s.svc.GetStats()
+	assert.NoError(s.T(), err)
+	assert.GreaterOrEqual(s.T(), stats["total_orders"].(int64), int64(1))
+}
+
+func TestOrderService(t *testing.T) {
+	suite.Run(t, new(OrderServiceTestSuite))
+}
+
+// StatsServiceTestSuite 统计服务测试套件
+type StatsServiceTestSuite struct {
+	ServiceTestSuite
+	svc      *StatsService
+	authSvc  *AuthService
+	planSvc  *PlanService
+}
+
+func (s *StatsServiceTestSuite) SetupTest() {
+	s.ServiceTestSuite.SetupTest()
+	// 重置 statsServiceInstance 以便创建新实例
+	statsServiceInstance = nil
+	s.svc = NewStatsService()
+	s.authSvc = NewAuthService()
+	s.planSvc = NewPlanService()
+}
+
+func (s *StatsServiceTestSuite) TestGetDashboardStats() {
+	// 创建一些用户
+	for i := 0; i < 3; i++ {
+		s.authSvc.Register(fmt.Sprintf("stats%d@example.com", i), "password123", s.cfg)
+	}
+
+	stats, err := s.svc.GetDashboardStats(false)
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), stats)
+	assert.GreaterOrEqual(s.T(), stats.TotalUsers, int64(3))
+}
+
+func (s *StatsServiceTestSuite) TestGetDashboardStats_ForceRefresh() {
+	stats, err := s.svc.GetDashboardStats(true)
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), stats)
+	assert.False(s.T(), stats.CachedAt.IsZero())
+}
+
+func (s *StatsServiceTestSuite) TestGetUserSubscription() {
+	// 创建用户
+	_, user, _ := s.authSvc.Register("subuser@example.com", "password123", s.cfg)
+
+	// 创建套餐
+	groupID := uint(1)
+	monthPrice := int64(1000)
+	plan := &model.Plan{
+		Name:           "Sub Test Plan",
+		GroupID:        groupID,
+		TransferEnable: 100,
+		MonthPrice:     &monthPrice,
+		Show:           1,
+	}
+	s.planSvc.Create(plan)
+
+	// 分配套餐给用户
+	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
+	s.planSvc.AssignToUser(plan.ID, user.ID, &expireAt)
+
+	sub, err := s.svc.GetUserSubscription(user.ID, false)
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), sub)
+	assert.Equal(s.T(), user.Email, sub.Email)
+	assert.Equal(s.T(), "Sub Test Plan", sub.PlanName)
+	assert.False(s.T(), sub.IsExpired)
+	assert.Greater(s.T(), sub.DaysRemaining, 0)
+}
+
+func (s *StatsServiceTestSuite) TestGetUserSubscription_Expired() {
+	// 创建用户
+	_, user, _ := s.authSvc.Register("expireduser@example.com", "password123", s.cfg)
+
+	// 设置过期时间
+	expiredAt := time.Now().Add(-24 * time.Hour).Unix() // 昨天过期
+	database.Get().Model(user).Update("expired_at", expiredAt)
+
+	sub, err := s.svc.GetUserSubscription(user.ID, true)
+	assert.NoError(s.T(), err)
+	assert.True(s.T(), sub.IsExpired)
+	assert.LessOrEqual(s.T(), sub.DaysRemaining, 0)
+}
+
+func (s *StatsServiceTestSuite) TestGetUserSubscription_NoPlan() {
+	// 创建无套餐用户
+	_, user, _ := s.authSvc.Register("noplanuser@example.com", "password123", s.cfg)
+
+	sub, err := s.svc.GetUserSubscription(user.ID, true)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "无套餐", sub.PlanName)
+}
+
+func (s *StatsServiceTestSuite) TestInvalidateUserCache() {
+	_, user, _ := s.authSvc.Register("cacheuser@example.com", "password123", s.cfg)
+
+	// 获取订阅（会缓存）
+	s.svc.GetUserSubscription(user.ID, false)
+
+	// 使缓存失效
+	s.svc.InvalidateUserCache(user.ID)
+
+	// 验证缓存已删除
+	exists := cache.Exists(fmt.Sprintf("%s%d", CacheKeyUserSubscription, user.ID))
+	assert.False(s.T(), exists)
+}
+
+func (s *StatsServiceTestSuite) TestRefreshDashboardCache() {
+	err := s.svc.RefreshDashboardCache()
+	assert.NoError(s.T(), err)
+
+	// 验证缓存存在
+	exists := cache.Exists(CacheKeyDashboardStats)
+	assert.True(s.T(), exists)
+}
+
+func TestStatsService(t *testing.T) {
+	suite.Run(t, new(StatsServiceTestSuite))
 }
