@@ -28,9 +28,10 @@ jobs:
           cache: true
 
       - name: Run unit tests
-        run: go test -v -short -cover ./tests/integration/...
+        run: go test -v -short ./tests/integration/...
 
       - name: Upload coverage
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage
