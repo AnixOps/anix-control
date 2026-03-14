@@ -188,6 +188,9 @@ func TestEchoServerRestart(t *testing.T) {
 	err = srv.Stop(ctx)
 	require.NoError(t, err)
 
+	// 等待端口释放 (TCP TIME_WAIT)
+	time.Sleep(100 * time.Millisecond)
+
 	// 重新启动（应该使用新端口）
 	err = srv.Start(ctx)
 	require.NoError(t, err)
