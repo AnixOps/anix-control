@@ -796,3 +796,325 @@ func (s *NodeHandlerTestSuite) TestValidateRawConfig_InvalidJSON() {
 func TestNodeHandler(t *testing.T) {
 	suite.Run(t, new(NodeHandlerTestSuite))
 }
+
+// AdminHandlerTestSuite 管理员 Handler 测试套件
+type AdminHandlerTestSuite struct {
+	HandlerTestSuite
+	testUser *model.User
+	testPlan *model.Plan
+}
+
+func (s *AdminHandlerTestSuite) SetupTest() {
+	s.HandlerTestSuite.SetupTest()
+
+	// 创建测试套餐
+	groupID := uint(1)
+	monthPrice := int64(1000)
+	s.testPlan = &model.Plan{
+		Name:           "Admin Test Plan",
+		GroupID:        groupID,
+		TransferEnable: 100,
+		MonthPrice:     &monthPrice,
+		Show:           1,
+	}
+	s.db.Create(s.testPlan)
+
+	// 创建测试用户
+	s.testUser = &model.User{
+		Email:          "adminhandler@example.com",
+		Password:       "hash",
+		Token:          "admin-handler-token",
+		UUID:           "admin-handler-uuid",
+		TransferEnable: 10737418240,
+		PlanID:         &s.testPlan.ID,
+	}
+	s.db.Create(s.testUser)
+
+	s.router = gin.New()
+}
+
+func (s *AdminHandlerTestSuite) TestCreateUser_Success() {
+	handler := NewAdminHandler()
+	s.router.POST("/users", handler.CreateUser)
+
+	body := map[string]interface{}{
+		"email":    "newuser@example.com",
+		"password": "password123",
+		"is_admin": 0,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/users", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestCreateUser_DuplicateEmail() {
+	handler := NewAdminHandler()
+	s.router.POST("/users", handler.CreateUser)
+
+	body := map[string]interface{}{
+		"email":    s.testUser.Email,
+		"password": "password123",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/users", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestCreateUser_InvalidBody() {
+	handler := NewAdminHandler()
+	s.router.POST("/users", handler.CreateUser)
+
+	req, _ := http.NewRequest("POST", "/users", bytes.NewReader([]byte("invalid")))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestGetUserList_Success() {
+	handler := NewAdminHandler()
+	s.router.GET("/users", handler.GetUserList)
+
+	req, _ := http.NewRequest("GET", "/users", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestGetUserList_WithFilters() {
+	handler := NewAdminHandler()
+	s.router.GET("/users", handler.GetUserList)
+
+	req, _ := http.NewRequest("GET", "/users?page=1&page_size=10&email=test&status=active", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestGetUser_Success() {
+	handler := NewAdminHandler()
+	s.router.GET("/users/:id", handler.GetUser)
+
+	req, _ := http.NewRequest("GET", "/users/"+strconv.FormatUint(uint64(s.testUser.ID), 10), nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestGetUser_NotFound() {
+	handler := NewAdminHandler()
+	s.router.GET("/users/:id", handler.GetUser)
+
+	req, _ := http.NewRequest("GET", "/users/99999", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestGetUser_InvalidID() {
+	handler := NewAdminHandler()
+	s.router.GET("/users/:id", handler.GetUser)
+
+	req, _ := http.NewRequest("GET", "/users/invalid", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestUpdateUser_Success() {
+	handler := NewAdminHandler()
+	s.router.PUT("/users/:id", handler.UpdateUser)
+
+	body := map[string]interface{}{
+		"balance":  1000,
+		"banned":   0,
+		"is_admin": 0,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/users/"+strconv.FormatUint(uint64(s.testUser.ID), 10), bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestUpdateUser_InvalidID() {
+	handler := NewAdminHandler()
+	s.router.PUT("/users/:id", handler.UpdateUser)
+
+	body := map[string]interface{}{"balance": 1000}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/users/invalid", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestDeleteUser_Success() {
+	// Create a new user to delete
+	user := &model.User{
+		Email:          "todelete@example.com",
+		Password:       "hash",
+		Token:          "to-delete-token",
+		UUID:           "to-delete-uuid",
+		TransferEnable: 10737418240,
+	}
+	s.db.Create(user)
+
+	handler := NewAdminHandler()
+	s.router.DELETE("/users/:id", handler.DeleteUser)
+
+	req, _ := http.NewRequest("DELETE", "/users/"+strconv.FormatUint(uint64(user.ID), 10), nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestBanUser_Success() {
+	handler := NewAdminHandler()
+	s.router.POST("/users/:id/ban", handler.BanUser)
+
+	req, _ := http.NewRequest("POST", "/users/"+strconv.FormatUint(uint64(s.testUser.ID), 10)+"/ban", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestUnbanUser_Success() {
+	// First ban the user
+	s.db.Model(s.testUser).Update("banned", 1)
+
+	handler := NewAdminHandler()
+	s.router.POST("/users/:id/unban", handler.UnbanUser)
+
+	req, _ := http.NewRequest("POST", "/users/"+strconv.FormatUint(uint64(s.testUser.ID), 10)+"/unban", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestResetUserTraffic_Success() {
+	handler := NewAdminHandler()
+	s.router.POST("/users/:id/reset-traffic", handler.ResetUserTraffic)
+
+	req, _ := http.NewRequest("POST", "/users/"+strconv.FormatUint(uint64(s.testUser.ID), 10)+"/reset-traffic", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestGetDashboard() {
+	handler := NewAdminHandler()
+	s.router.GET("/dashboard", handler.GetDashboard)
+
+	req, _ := http.NewRequest("GET", "/dashboard", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestGetPlans() {
+	handler := NewAdminHandler()
+	s.router.GET("/plans", handler.GetPlans)
+
+	req, _ := http.NewRequest("GET", "/plans", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestGetPlan_Success() {
+	handler := NewAdminHandler()
+	s.router.GET("/plans/:id", handler.GetPlan)
+
+	req, _ := http.NewRequest("GET", "/plans/"+strconv.FormatUint(uint64(s.testPlan.ID), 10), nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestGetPlan_NotFound() {
+	handler := NewAdminHandler()
+	s.router.GET("/plans/:id", handler.GetPlan)
+
+	req, _ := http.NewRequest("GET", "/plans/99999", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestCreatePlan_Success() {
+	handler := NewAdminHandler()
+	s.router.POST("/plans", handler.CreatePlan)
+
+	body := map[string]interface{}{
+		"name":             "New Plan",
+		"group_id":         1,
+		"transfer_enable":  100,
+		"month_price":      1000,
+		"show":             1,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/plans", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestGetOrderList() {
+	handler := NewAdminHandler()
+	s.router.GET("/orders", handler.GetOrderList)
+
+	req, _ := http.NewRequest("GET", "/orders", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AdminHandlerTestSuite) TestGetOrderStats() {
+	handler := NewAdminHandler()
+	s.router.GET("/orders/stats", handler.GetOrderStats)
+
+	req, _ := http.NewRequest("GET", "/orders/stats", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func TestAdminHandler(t *testing.T) {
+	suite.Run(t, new(AdminHandlerTestSuite))
+}
