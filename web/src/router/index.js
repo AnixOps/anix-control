@@ -22,6 +22,14 @@ import AdminPlans from '@/views/admin/Plans.vue'
 import AdminTickets from '@/views/admin/Tickets.vue'
 import AdminCoupons from '@/views/admin/Coupons.vue'
 import AdminKnowledge from '@/views/admin/Knowledge.vue'
+import AdminForward from '@/views/admin/Forward.vue'
+import AdminPayment from '@/views/admin/Payment.vue'
+import AdminTelegram from '@/views/admin/Telegram.vue'
+import AdminMFA from '@/views/admin/MFA.vue'
+import AdminNotifications from '@/views/admin/Notifications.vue'
+import AdminInvite from '@/views/admin/Invite.vue'
+import AdminSystem from '@/views/admin/System.vue'
+import AdminAgent from '@/views/admin/Agent.vue'
 
 const routes = [
   {
@@ -108,8 +116,36 @@ const routes = [
         component: AdminKnowledge
       },
       {
-        path: 'settings',
-        component: { template: '<div class="page"><h1>系统设置</h1><p>系统设置功能开发中...</p></div>' }
+        path: 'forward',
+        component: AdminForward
+      },
+      {
+        path: 'payment',
+        component: AdminPayment
+      },
+      {
+        path: 'telegram',
+        component: AdminTelegram
+      },
+      {
+        path: 'mfa',
+        component: AdminMFA
+      },
+      {
+        path: 'notifications',
+        component: AdminNotifications
+      },
+      {
+        path: 'invite',
+        component: AdminInvite
+      },
+      {
+        path: 'system',
+        component: AdminSystem
+      },
+      {
+        path: 'agent',
+        component: AdminAgent
       }
     ]
   }

@@ -53,6 +53,12 @@
           <router-link to="/admin/subscriptions" @click="closeSidebar">
             <span class="nav-icon">📡</span> 订阅管理
           </router-link>
+          <router-link to="/admin/forward" @click="closeSidebar">
+            <span class="nav-icon">🔀</span> 流量转发
+          </router-link>
+          <router-link to="/admin/agent" @click="closeSidebar">
+            <span class="nav-icon">🤖</span> Agent 管理
+          </router-link>
         </div>
 
         <div class="nav-section">
@@ -63,19 +69,42 @@
           <router-link to="/admin/coupons" @click="closeSidebar">
             <span class="nav-icon">🎟️</span> 优惠券
           </router-link>
+          <router-link to="/admin/invite" @click="closeSidebar">
+            <span class="nav-icon">🔗</span> 邀请返利
+          </router-link>
         </div>
-        
+
+        <div class="nav-section">
+          <div class="nav-title">财务</div>
+          <router-link to="/admin/payment" @click="closeSidebar">
+            <span class="nav-icon">💳</span> 支付网关
+          </router-link>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-title">通知</div>
+          <router-link to="/admin/telegram" @click="closeSidebar">
+            <span class="nav-icon">🤖</span> Telegram Bot
+          </router-link>
+          <router-link to="/admin/notifications" @click="closeSidebar">
+            <span class="nav-icon">🔔</span> 通知管理
+          </router-link>
+        </div>
+
         <div class="nav-section">
           <div class="nav-title">内容管理</div>
           <router-link to="/admin/knowledge" @click="closeSidebar">
             <span class="nav-icon">📚</span> 知识库
           </router-link>
         </div>
-        
+
         <div class="nav-section">
           <div class="nav-title">系统</div>
-          <router-link to="/admin/settings" @click="closeSidebar">
-            <span class="nav-icon">⚙️</span> 系统设置
+          <router-link to="/admin/mfa" @click="closeSidebar">
+            <span class="nav-icon">🔐</span> MFA 设置
+          </router-link>
+          <router-link to="/admin/system" @click="closeSidebar">
+            <span class="nav-icon">⚙️</span> 系统管理
           </router-link>
         </div>
       </nav>
@@ -130,7 +159,14 @@ const pageTitles = {
   '/admin/tickets': '工单管理',
   '/admin/coupons': '优惠券管理',
   '/admin/knowledge': '知识库管理',
-  '/admin/settings': '系统设置'
+  '/admin/forward': '流量转发管理',
+  '/admin/payment': '支付网关管理',
+  '/admin/telegram': 'Telegram Bot 管理',
+  '/admin/mfa': 'MFA 设置',
+  '/admin/notifications': '通知管理',
+  '/admin/invite': '邀请返利管理',
+  '/admin/system': '系统管理',
+  '/admin/agent': 'Agent 管理'
 }
 
 const pageTitle = computed(() => pageTitles[route.path] || '管理面板')

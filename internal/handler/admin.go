@@ -32,7 +32,17 @@ func NewAdminHandler() *AdminHandler {
 
 // ====== 用户管理 ======
 
-// CreateUser 管理员创建用户
+// CreateUser godoc
+// @Summary 创建用户
+// @Description 管理员创建新用户
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body model.AdminCreateUserRequest true "用户信息"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Router /admin/users [post]
 func (h *AdminHandler) CreateUser(c *gin.Context) {
 	var req model.AdminCreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -77,7 +87,20 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	})
 }
 
-// GetUserList 获取用户列表
+// GetUserList godoc
+// @Summary 获取用户列表
+// @Description 管理员获取用户列表
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
+// @Param email query string false "邮箱搜索"
+// @Param status query string false "状态筛选"
+// @Param plan_id query int false "套餐ID筛选"
+// @Success 200 {object} map[string]interface{}
+// @Router /admin/users [get]
 func (h *AdminHandler) GetUserList(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -106,7 +129,16 @@ func (h *AdminHandler) GetUserList(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": result})
 }
 
-// GetUser 获取用户详情
+// GetUser godoc
+// @Summary 获取用户详情
+// @Description 管理员获取用户详细信息
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /admin/users/{id} [get]
 func (h *AdminHandler) GetUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -123,7 +155,19 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": user})
 }
 
-// UpdateUser 更新用户信息
+// UpdateUser godoc
+// @Summary 更新用户信息
+// @Description 管理员更新用户信息，支持修改邮箱、密码、余额、套餐等
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户ID"
+// @Param request body map[string]interface{} true "用户更新信息"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/users/{id} [put]
 func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -212,7 +256,18 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
 }
 
-// BanUser 封禁用户
+// BanUser godoc
+// @Summary 封禁用户
+// @Description 管理员封禁指定用户
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/users/{id}/ban [post]
 func (h *AdminHandler) BanUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -228,7 +283,18 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "封禁成功"})
 }
 
-// UnbanUser 解封用户
+// UnbanUser godoc
+// @Summary 解封用户
+// @Description 管理员解封指定用户
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/users/{id}/unban [post]
 func (h *AdminHandler) UnbanUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -244,7 +310,18 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "解封成功"})
 }
 
-// ResetUserTraffic 重置用户流量
+// ResetUserTraffic godoc
+// @Summary 重置用户流量
+// @Description 管理员重置指定用户的已使用流量
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/users/{id}/reset-traffic [post]
 func (h *AdminHandler) ResetUserTraffic(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -260,7 +337,18 @@ func (h *AdminHandler) ResetUserTraffic(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "流量重置成功"})
 }
 
-// DeleteUser 删除用户
+// DeleteUser godoc
+// @Summary 删除用户
+// @Description 管理员删除指定用户
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/users/{id} [delete]
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -278,7 +366,18 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 
 // ====== 套餐管理 ======
 
-// CreatePlan 创建套餐
+// CreatePlan godoc
+// @Summary 创建套餐
+// @Description 管理员创建新套餐
+// @Tags 管理端-套餐
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body model.Plan true "套餐信息"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/plans [post]
 func (h *AdminHandler) CreatePlan(c *gin.Context) {
 	var p model.Plan
 	if err := c.ShouldBindJSON(&p); err != nil {
@@ -292,7 +391,16 @@ func (h *AdminHandler) CreatePlan(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "创建成功", "data": p})
 }
 
-// GetPlans 获取套餐列表
+// GetPlans godoc
+// @Summary 获取套餐列表
+// @Description 管理员获取所有套餐列表
+// @Tags 管理端-套餐
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/plans [get]
 func (h *AdminHandler) GetPlans(c *gin.Context) {
 	list, err := h.planService.List()
 	if err != nil {
@@ -302,7 +410,18 @@ func (h *AdminHandler) GetPlans(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": list})
 }
 
-// GetPlan 获取单个套餐
+// GetPlan godoc
+// @Summary 获取套餐详情
+// @Description 管理员获取指定套餐的详细信息
+// @Tags 管理端-套餐
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "套餐ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /admin/plans/{id} [get]
 func (h *AdminHandler) GetPlan(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -317,7 +436,19 @@ func (h *AdminHandler) GetPlan(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": p})
 }
 
-// UpdatePlan 更新套餐
+// UpdatePlan godoc
+// @Summary 更新套餐
+// @Description 管理员更新指定套餐信息
+// @Tags 管理端-套餐
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "套餐ID"
+// @Param request body model.Plan true "套餐信息"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/plans/{id} [put]
 func (h *AdminHandler) UpdatePlan(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -337,7 +468,18 @@ func (h *AdminHandler) UpdatePlan(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "更新成功", "data": p})
 }
 
-// DeletePlan 删除套餐
+// DeletePlan godoc
+// @Summary 删除套餐
+// @Description 管理员删除指定套餐
+// @Tags 管理端-套餐
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "套餐ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/plans/{id} [delete]
 func (h *AdminHandler) DeletePlan(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -351,8 +493,19 @@ func (h *AdminHandler) DeletePlan(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
 }
 
-// AssignPlanToUser 管理员将套餐分配给用户
-// POST /api/v2/admin/plans/:id/assign
+// AssignPlanToUser godoc
+// @Summary 分配套餐给用户
+// @Description 管理员将指定套餐分配给用户
+// @Tags 管理端-套餐
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "套餐ID"
+// @Param request body map[string]interface{} true "分配请求 {user_id: uint, expire_at: int64}"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/plans/{id}/assign [post]
 func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
 	planID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -374,7 +527,16 @@ func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "分配成功"})
 }
 
-// GetUserStats 获取用户统计
+// GetUserStats godoc
+// @Summary 获取用户统计
+// @Description 管理员获取用户统计数据，包括总用户数、活跃用户等
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/users/stats [get]
 func (h *AdminHandler) GetUserStats(c *gin.Context) {
 	stats, err := h.userService.GetStats()
 	if err != nil {
@@ -387,7 +549,23 @@ func (h *AdminHandler) GetUserStats(c *gin.Context) {
 
 // ====== 订单管理 ======
 
-// GetOrderList 获取订单列表
+// GetOrderList godoc
+// @Summary 获取订单列表
+// @Description 管理员获取订单列表，支持分页和筛选
+// @Tags 管理端-订单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
+// @Param trade_no query string false "订单号"
+// @Param email query string false "用户邮箱"
+// @Param status query int false "订单状态"
+// @Param type query int false "订单类型"
+// @Param user_id query int false "用户ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/orders [get]
 func (h *AdminHandler) GetOrderList(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -430,7 +608,18 @@ func (h *AdminHandler) GetOrderList(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": result})
 }
 
-// GetOrder 获取订单详情
+// GetOrder godoc
+// @Summary 获取订单详情
+// @Description 管理员获取指定订单的详细信息
+// @Tags 管理端-订单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "订单ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /admin/orders/{id} [get]
 func (h *AdminHandler) GetOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -447,7 +636,19 @@ func (h *AdminHandler) GetOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": order})
 }
 
-// UpdateOrderStatus 更新订单状态
+// UpdateOrderStatus godoc
+// @Summary 更新订单状态
+// @Description 管理员更新指定订单的状态
+// @Tags 管理端-订单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "订单ID"
+// @Param request body map[string]interface{} true "状态请求 {status: int}"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/orders/{id}/status [put]
 func (h *AdminHandler) UpdateOrderStatus(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -472,7 +673,18 @@ func (h *AdminHandler) UpdateOrderStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
 }
 
-// MarkOrderPaid 标记订单已支付 (手动开通)
+// MarkOrderPaid godoc
+// @Summary 标记订单已支付
+// @Description 管理员手动标记订单为已支付并开通服务
+// @Tags 管理端-订单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "订单ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/orders/{id}/paid [post]
 func (h *AdminHandler) MarkOrderPaid(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -495,7 +707,18 @@ func (h *AdminHandler) MarkOrderPaid(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "订单已开通"})
 }
 
-// CancelOrder 取消订单
+// CancelOrder godoc
+// @Summary 取消订单
+// @Description 管理员取消指定订单
+// @Tags 管理端-订单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "订单ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/orders/{id}/cancel [post]
 func (h *AdminHandler) CancelOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -511,7 +734,16 @@ func (h *AdminHandler) CancelOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "取消成功"})
 }
 
-// GetOrderStats 获取订单统计
+// GetOrderStats godoc
+// @Summary 获取订单统计
+// @Description 管理员获取订单统计数据
+// @Tags 管理端-订单
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/orders/stats [get]
 func (h *AdminHandler) GetOrderStats(c *gin.Context) {
 	stats, err := h.orderService.GetStats()
 	if err != nil {
@@ -524,7 +756,17 @@ func (h *AdminHandler) GetOrderStats(c *gin.Context) {
 
 // ====== 仪表盘 ======
 
-// GetDashboard 获取仪表盘数据 (优先从缓存读取)
+// GetDashboard godoc
+// @Summary 获取仪表盘数据
+// @Description 管理员获取仪表盘统计数据，包括用户数、订单数、收入等
+// @Tags 管理端-系统
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param refresh query bool false "是否强制刷新缓存"
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /admin/dashboard [get]
 func (h *AdminHandler) GetDashboard(c *gin.Context) {
 	// 检查是否强制刷新
 	forceRefresh := c.Query("refresh") == "true"

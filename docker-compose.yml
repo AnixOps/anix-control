@@ -1,4 +1,4 @@
-# V2Board Go Backend Docker Compose
+# V2Board Go Backend - Docker Compose
 # 零依赖部署：SQLite + 内存缓存
 
 services:
@@ -6,46 +6,109 @@ services:
     build: .
     container_name: v2board
     ports:
-      - "8080:8080"
+      - "8080:8080"    # HTTP API
+      - "50051:50051"  # gRPC
     volumes:
       - ./config:/app/config
-      - ./data:/app/data      # SQLite 数据库
+      - ./data:/app/data
       - ./logs:/app/logs
+      - ./public:/app/public
     environment:
       - TZ=Asia/Shanghai
+      - GIN_MODE=release
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 ---
-# 可选: 使用 PostgreSQL 的配置
-# 取消下面的注释并修改 config.yaml 使用 postgres 驱动
+# 生产环境部署：PostgreSQL + Redis
 
 # services:
-#   v2board:
+#   api:
 #     build: .
-#     container_name: v2board
+#     container_name: v2board-api
+#     restart: unless-stopped
 #     ports:
 #       - "8080:8080"
+#       - "50051:50051"
 #     volumes:
 #       - ./config:/app/config
-#       - ./logs:/app/logs
+#       - ./public:/app/public
 #     environment:
 #       - TZ=Asia/Shanghai
+#       - GIN_MODE=release
 #     depends_on:
-#       - postgres
-#     restart: unless-stopped
+#       db:
+#         condition: service_healthy
+#       redis:
+#         condition: service_healthy
+#     networks:
+#       - v2board-network
+#     healthcheck:
+#       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 10s
 #
-#   postgres:
+#   db:
 #     image: postgres:16-alpine
-#     container_name: v2board-postgres
-#     environment:
-#       POSTGRES_DB: v2board
-#       POSTGRES_USER: v2board
-#       POSTGRES_PASSWORD: v2board123
-#     volumes:
-#       - postgres_data:/var/lib/postgresql/data
+#     container_name: v2board-db
 #     restart: unless-stopped
+#     environment:
+#       POSTGRES_USER: v2board
+#       POSTGRES_PASSWORD: ${DB_PASSWORD:-v2board_secret}
+#       POSTGRES_DB: v2board
+#       TZ: Asia/Shanghai
+#     volumes:
+#       - postgres-data:/var/lib/postgresql/data
+#     networks:
+#       - v2board-network
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U v2board"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+#
+#   redis:
+#     image: redis:7-alpine
+#     container_name: v2board-redis
+#     restart: unless-stopped
+#     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_secret}
+#     volumes:
+#       - redis-data:/data
+#     networks:
+#       - v2board-network
+#     healthcheck:
+#       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_secret}", "ping"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+#
+#   nginx:
+#     image: nginx:alpine
+#     container_name: v2board-nginx
+#     restart: unless-stopped
+#     ports:
+#       - "80:80"
+#       - "443:443"
+#     volumes:
+#       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+#       - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+#       - ./public:/usr/share/nginx/html:ro
+#     depends_on:
+#       - api
+#     networks:
+#       - v2board-network
+#
+# networks:
+#   v2board-network:
+#     driver: bridge
 #
 # volumes:
-#   postgres_data:
-  v2board:
-    driver: bridge
+#   postgres-data:
+#   redis-data:

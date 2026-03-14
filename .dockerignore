@@ -1,0 +1,52 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Build artifacts
+v2board
+v2board.exe
+v2board-linux
+*.exe
+
+# Test artifacts
+*.out
+coverage.out
+coverage.html
+coverage/
+
+# Development files
+*.log
+*.tmp
+.env
+.env.*
+
+# Node modules (will be installed during build)
+web/node_modules
+
+# Data directories (should be mounted as volumes)
+data/
+logs/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Test files
+tests/
+*_test.go
+
+# Config files with secrets
+config/config.yaml
+config/config.prod.yaml

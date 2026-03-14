@@ -354,3 +354,63 @@ func Clear() {
 	memCache.data = make(map[string]*cacheItem)
 	memCache.sets = make(map[string]map[string]struct{})
 }
+
+// Incr 自增计数器
+func Incr(key string) int64 {
+	if memCache == nil {
+		return 0
+	}
+	memCache.mu.Lock()
+	defer memCache.mu.Unlock()
+
+	var val int64 = 0
+	if item, ok := memCache.data[key]; ok {
+		if i, ok := item.value.(int64); ok {
+			val = i
+		}
+	}
+	val++
+	memCache.data[key] = &cacheItem{value: val}
+	return val
+}
+
+// IncrBy 自增指定值
+func IncrBy(key string, delta int64) int64 {
+	if memCache == nil {
+		return 0
+	}
+	memCache.mu.Lock()
+	defer memCache.mu.Unlock()
+
+	var val int64 = 0
+	if item, ok := memCache.data[key]; ok {
+		if i, ok := item.value.(int64); ok {
+			val = i
+		}
+	}
+	val += delta
+	memCache.data[key] = &cacheItem{value: val}
+	return val
+}
+
+// Decr 自减计数器
+func Decr(key string) int64 {
+	return IncrBy(key, -1)
+}
+
+// SetInt 设置整数
+func SetInt(key string, value int64, expiration time.Duration) error {
+	return Set(key, value, expiration)
+}
+
+// GetInt 获取整数
+func GetInt(key string) (int64, error) {
+	val, err := Get(key)
+	if err != nil {
+		return 0, err
+	}
+	if i, ok := val.(int64); ok {
+		return i, nil
+	}
+	return 0, ErrKeyNotFound
+}

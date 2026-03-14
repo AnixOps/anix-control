@@ -1,0 +1,102 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, go_dev]
+    paths:
+      - 'tests/integration/**'
+      - 'cmd/integration-test/**'
+      - '.github/workflows/integration-test.yml'
+  pull_request:
+    branches: [main, go_dev]
+    paths:
+      - 'tests/integration/**'
+      - 'cmd/integration-test/**'
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Run unit tests
+        run: go test -v -short -cover ./tests/integration/...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/go_dev'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Build test binary
+        run: go build -o integration-test ./cmd/integration-test/
+
+      - name: Run integration tests (auto-download binaries)
+        run: |
+          ./integration-test \
+            -host "${{ secrets.TEST_SERVER_HOST }}" \
+            -port "${{ secrets.TEST_SERVER_PORT }}" \
+            -uuid "${{ secrets.TEST_USER_UUID }}" \
+            -protocol "${{ secrets.TEST_PROTOCOL }}" \
+            -tls "${{ secrets.TEST_TLS_TYPE }}" \
+            -sni "${{ secrets.TEST_SNI }}" \
+            -public-key "${{ secrets.TEST_REALITY_PUBLIC_KEY }}" \
+            -short-id "${{ secrets.TEST_REALITY_SHORT_ID }}" \
+            -download \
+            -timeout 60s \
+            -output report.json
+        continue-on-error: true
+        env:
+          TEST_SERVER_HOST: ${{ secrets.TEST_SERVER_HOST }}
+          TEST_USER_UUID: ${{ secrets.TEST_USER_UUID }}
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-report
+          path: report.json
+        if: always()
+
+      - name: Print report
+        run: |
+          if [ -f report.json ]; then
+            cat report.json
+          fi
+        if: always()
+
+  mock-server-tests:
+    name: Mock Server Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Run mock server tests
+        run: go test -v -cover ./tests/integration/mock/...
