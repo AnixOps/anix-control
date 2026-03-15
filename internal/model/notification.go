@@ -24,16 +24,17 @@ func (NotificationTemplate) TableName() string {
 
 // NotificationLog 通知日志
 type NotificationLog struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	UserID     *uint     `gorm:"index" json:"user_id"`
-	Type       string    `gorm:"size:20" json:"type"`    // email/telegram/webhook
-	Event      string    `gorm:"size:50" json:"event"`   // 触发事件
-	Title      string    `gorm:"size:200" json:"title"`
-	Content    string    `gorm:"type:text" json:"content"`
-	Status     int       `json:"status"` // 0=待发送 1=已发送 2=失败
-	Error      string    `gorm:"size:500" json:"error"`
+	ID         uint       `gorm:"primaryKey" json:"id"`
+	UserID     *uint      `gorm:"index" json:"user_id"`
+	Type       string     `gorm:"size:20" json:"type"`    // email/telegram/webhook
+	Event      string     `gorm:"size:50" json:"event"`   // 触发事件
+	Title      string     `gorm:"size:200" json:"title"`
+	Content    string     `gorm:"type:text" json:"content"`
+	Status     int        `json:"status"` // 0=待发送 1=已发送 2=失败
+	Error      string     `gorm:"size:500" json:"error"`
 	SentAt     *time.Time `json:"sent_at"`
-	CreatedAt  time.Time `gorm:"index" json:"created_at"`
+	ReadAt     *time.Time `json:"read_at"`
+	CreatedAt  time.Time  `gorm:"index" json:"created_at"`
 }
 
 // TableName 指定表名

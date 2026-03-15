@@ -59,9 +59,9 @@ func (h *MetricsHandler) GetMetrics(c *gin.Context) {
 	h.db.Model(&Node{}).Count(&nodeCount)
 	h.db.Model(&Order{}).Count(&orderCount)
 
-	// 获取在线用户数
+	// 获取在线用户数 (用户有上传或下载流量表示活跃)
 	var onlineUsers int64
-	h.db.Model(&User{}).Where("t > 0").Count(&onlineUsers)
+	h.db.Model(&User{}).Where("u > 0 OR d > 0").Count(&onlineUsers)
 
 	// 构建指标
 	metrics := `# HELP v2board_info Application information

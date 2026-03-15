@@ -346,3 +346,340 @@ func TestClient_Timeout(t *testing.T) {
 		t.Fatal("HealthCheck should timeout")
 	}
 }
+
+func TestClient_GetChains(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/config/chains" {
+			t.Errorf("path = %s, want /api/config/chains", r.URL.Path)
+		}
+
+		resp := struct {
+			Data struct {
+				List []*ChainConfig `json:"list"`
+			} `json:"data"`
+		}{}
+		resp.Data.List = []*ChainConfig{
+			{Name: "chain-1", Hops: []string{"hop-1"}},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := NewClient(&Config{Host: server.URL})
+
+	chains, err := client.GetChains(context.Background())
+	if err != nil {
+		t.Fatalf("GetChains failed: %v", err)
+	}
+
+	if len(chains) != 1 {
+		t.Errorf("chains length = %d, want 1", len(chains))
+	}
+
+	if chains[0].Name != "chain-1" {
+		t.Errorf("chain name = %s, want chain-1", chains[0].Name)
+	}
+}
+
+func TestClient_DeleteChain(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("method = %s, want DELETE", r.Method)
+		}
+		if r.URL.Path != "/api/config/chains/test-chain" {
+			t.Errorf("path = %s, want /api/config/chains/test-chain", r.URL.Path)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient(&Config{Host: server.URL})
+
+	err := client.DeleteChain(context.Background(), "test-chain")
+	if err != nil {
+		t.Fatalf("DeleteChain failed: %v", err)
+	}
+}
+
+func TestClient_CreateHop(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/api/config/hops" {
+			t.Errorf("path = %s, want /api/config/hops", r.URL.Path)
+		}
+
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer server.Close()
+
+	client := NewClient(&Config{Host: server.URL})
+
+	err := client.CreateHop(context.Background(), &HopConfig{
+		Name: "test-hop",
+		Nodes: []HopNode{
+			{Name: "node-1", Addr: "192.168.1.1:8080"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateHop failed: %v", err)
+	}
+}
+
+func TestClient_DeleteHop(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("method = %s, want DELETE", r.Method)
+		}
+		if r.URL.Path != "/api/config/hops/test-hop" {
+			t.Errorf("path = %s, want /api/config/hops/test-hop", r.URL.Path)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient(&Config{Host: server.URL})
+
+	err := client.DeleteHop(context.Background(), "test-hop")
+	if err != nil {
+		t.Fatalf("DeleteHop failed: %v", err)
+	}
+}
+
+func TestClient_GetServiceStats(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/stats/services/test-service" {
+			t.Errorf("path = %s, want /api/stats/services/test-service", r.URL.Path)
+		}
+
+		stats := ServiceStats{
+			Name: "test-service",
+			Addr: ":8080",
+			Current: CurrentStats{
+				Connections: 5,
+				InBytes:     1024,
+				OutBytes:    2048,
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(stats)
+	}))
+	defer server.Close()
+
+	client := NewClient(&Config{Host: server.URL})
+
+	stats, err := client.GetServiceStats(context.Background(), "test-service")
+	if err != nil {
+		t.Fatalf("GetServiceStats failed: %v", err)
+	}
+
+	if stats.Name != "test-service" {
+		t.Errorf("name = %s, want test-service", stats.Name)
+	}
+
+	if stats.Current.Connections != 5 {
+		t.Errorf("connections = %d, want 5", stats.Current.Connections)
+	}
+}
+
+func TestClient_BasicAuth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			t.Error("Basic auth not set")
+		}
+		if username != "" {
+			t.Errorf("username = %s, want empty", username)
+		}
+		if password != "test-token" {
+			t.Errorf("password = %s, want test-token", password)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient(&Config{
+		Host:     server.URL,
+		APIToken: "test-token",
+	})
+
+	_ = client.HealthCheck(context.Background())
+}
+
+func TestServiceConfig_JSON(t *testing.T) {
+	svc := &ServiceConfig{
+		Name: "test-service",
+		Addr: ":8080",
+		Handler: &HandlerConfig{
+			Type: "tcp",
+			Auth: &AuthConfig{
+				Username: "user",
+				Password: "pass",
+			},
+		},
+		Listener: &ListenerConfig{
+			Type: "tcp",
+			TLS: &TLSConfig{
+				CertFile:   "/path/to/cert",
+				KeyFile:    "/path/to/key",
+				ServerName: "example.com",
+			},
+		},
+		Forwarder: &ForwarderConfig{
+			Nodes: []ForwarderNode{
+				{Name: "node-1", Addr: "192.168.1.1:80"},
+			},
+			Selector: &SelectorConfig{
+				Strategy:    "round",
+				MaxFails:    3,
+				FailTimeout: "30s",
+			},
+		},
+	}
+
+	data, err := json.Marshal(svc)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var decoded ServiceConfig
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	if decoded.Name != "test-service" {
+		t.Errorf("name = %s, want test-service", decoded.Name)
+	}
+
+	if decoded.Handler.Type != "tcp" {
+		t.Errorf("handler type = %s, want tcp", decoded.Handler.Type)
+	}
+}
+
+func TestChainConfig_JSON(t *testing.T) {
+	chain := &ChainConfig{
+		Name: "test-chain",
+		Hops: []string{"hop-1", "hop-2"},
+		Selector: &SelectorConfig{
+			Strategy: "round",
+		},
+	}
+
+	data, err := json.Marshal(chain)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var decoded ChainConfig
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	if decoded.Name != "test-chain" {
+		t.Errorf("name = %s, want test-chain", decoded.Name)
+	}
+
+	if len(decoded.Hops) != 2 {
+		t.Errorf("hops length = %d, want 2", len(decoded.Hops))
+	}
+}
+
+func TestHopConfig_JSON(t *testing.T) {
+	hop := &HopConfig{
+		Name: "test-hop",
+		Nodes: []HopNode{
+			{
+				Name: "node-1",
+				Addr: "192.168.1.1:8080",
+				Connector: &ConnectorConfig{
+					Type: "socks5",
+					Auth: &AuthConfig{
+						Username: "user",
+						Password: "pass",
+					},
+				},
+				Dialer: &DialerConfig{
+					Type: "tcp",
+				},
+			},
+		},
+	}
+
+	data, err := json.Marshal(hop)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var decoded HopConfig
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	if decoded.Name != "test-hop" {
+		t.Errorf("name = %s, want test-hop", decoded.Name)
+	}
+
+	if len(decoded.Nodes) != 1 {
+		t.Errorf("nodes length = %d, want 1", len(decoded.Nodes))
+	}
+}
+
+func TestStatsResponse_JSON(t *testing.T) {
+	stats := &StatsResponse{
+		Services: []ServiceStats{
+			{
+				Name: "service-1",
+				Addr: ":8080",
+				Current: CurrentStats{
+					Connections: 10,
+					InBytes:     1024,
+					OutBytes:    2048,
+				},
+				Total: TotalStats{
+					Connections: 100,
+					InBytes:     10240,
+					OutBytes:    20480,
+				},
+			},
+		},
+	}
+
+	data, err := json.Marshal(stats)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var decoded StatsResponse
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	if len(decoded.Services) != 1 {
+		t.Errorf("services length = %d, want 1", len(decoded.Services))
+	}
+}
+
+func TestClient_ContextCancellation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient(&Config{Host: server.URL, Timeout: 5 * time.Second})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	err := client.HealthCheck(ctx)
+	if err == nil {
+		t.Fatal("HealthCheck should fail with cancelled context")
+	}
+}

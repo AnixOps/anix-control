@@ -47,10 +47,14 @@ func (s *InviteService) GetConfig() (*model.InviteConfig, error) {
 			CommissionFixed:     0,
 			CommissionMinAmount: 10,
 		}
-		s.db.Create(&cfg)
+		if createErr := s.db.Create(&cfg); createErr != nil {
+			return nil, createErr.Error
+		}
+	} else if err != nil {
+		return nil, err
 	}
 	s.config = &cfg
-	return &cfg, err
+	return &cfg, nil
 }
 
 // GenerateInviteCode 生成邀请码

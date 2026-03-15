@@ -35,6 +35,7 @@ type BaseServer struct {
 	TLSSettings *string   `gorm:"type:text" json:"tls_settings"`
 	Show        int       `gorm:"default:0" json:"show"`
 	Sort        *int      `json:"sort"`
+	LastCheckAt *int64    `json:"last_check_at"` // 最后检查时间
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
