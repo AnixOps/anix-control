@@ -319,7 +319,7 @@ func (s *SystemConfigService) Set(key, value, cfgType, group, remark string) err
 // GetByGroup 按组获取配置
 func (s *SystemConfigService) GetByGroup(group string) ([]model.SystemConfig, error) {
 	var configs []model.SystemConfig
-	err := s.db.Where("config_group = ?", group).Find(&configs).Error
+	err := s.db.Where("\"group\" = ?", group).Find(&configs).Error
 	return configs, err
 }
 

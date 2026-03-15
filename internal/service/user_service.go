@@ -63,10 +63,11 @@ func (s *UserService) GetByEmail(email string) (*model.User, error) {
 // GetActiveUsersByGroupID 获取指定分组的有效用户
 func (s *UserService) GetActiveUsersByGroupID(groupID uint) ([]model.User, error) {
 	var users []model.User
+	now := time.Now().Unix()
 	err := s.db.Preload("Plan").
 		Where("group_id = ?", groupID).
 		Where("banned = 0").
-		Where("(expired_at IS NULL OR expired_at > UNIX_TIMESTAMP())").
+		Where("(expired_at IS NULL OR expired_at > ?)", now).
 		Where("(u + d) < transfer_enable").
 		Find(&users).Error
 	return users, err
@@ -75,9 +76,10 @@ func (s *UserService) GetActiveUsersByGroupID(groupID uint) ([]model.User, error
 // GetActiveUsers 获取所有有效用户
 func (s *UserService) GetActiveUsers() ([]model.User, error) {
 	var users []model.User
+	now := time.Now().Unix()
 	err := s.db.Preload("Plan").
 		Where("banned = 0").
-		Where("(expired_at IS NULL OR expired_at > UNIX_TIMESTAMP())").
+		Where("(expired_at IS NULL OR expired_at > ?)", now).
 		Where("(u + d) < transfer_enable").
 		Find(&users).Error
 	return users, err

@@ -1,7 +1,12 @@
 package utils
 
 import (
+	"encoding/json"
 	"testing"
+
+	"github.com/anixops/v2board/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRedact(t *testing.T) {
@@ -77,6 +82,19 @@ func TestSensitiveString(t *testing.T) {
 	}
 }
 
+func TestSensitiveString_MarshalJSON(t *testing.T) {
+	s := SensitiveString("abcdefghijklmnop")
+	data, err := json.Marshal(s)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "abcd****mnop")
+}
+
+func TestSensitiveString_Empty(t *testing.T) {
+	s := SensitiveString("")
+	assert.Equal(t, "", s.String())
+	assert.Equal(t, "", s.Raw())
+}
+
 func TestRedactMap(t *testing.T) {
 	input := map[string]interface{}{
 		"username": "john",
@@ -109,6 +127,74 @@ func TestRedactMap(t *testing.T) {
 	}
 }
 
+func TestRedactMap_NonStringSensitive(t *testing.T) {
+	input := map[string]interface{}{
+		"password": 12345, // non-string value
+		"api_key":  true,
+	}
+
+	result := RedactMap(input)
+
+	assert.Equal(t, "[REDACTED]", result["password"])
+	assert.Equal(t, "[REDACTED]", result["api_key"])
+}
+
+func TestRedactMap_Empty(t *testing.T) {
+	// RedactMap(nil) returns empty map (not nil) because function uses make()
+	result := RedactMap(nil)
+	assert.NotNil(t, result)
+	assert.Empty(t, result)
+
+	// Empty map returns empty map
+	result = RedactMap(map[string]interface{}{})
+	assert.NotNil(t, result)
+	assert.Empty(t, result)
+}
+
+func TestRedactJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		contains string
+	}{
+		{
+			name:     "valid json with password",
+			input:    `{"username":"john","password":"secret123456789"}`,
+			contains: "secr****6789",
+		},
+		{
+			name:     "valid json with api_key",
+			input:    `{"api_key":"abcdefghijklmnop"}`,
+			contains: "abcd****mnop",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			contains: "",
+		},
+		{
+			name:     "valid json with short password",
+			input:    `{"password":"secret123"}`,
+			contains: "secr****t123", // Redacted form for 9-char string
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := RedactJSON(tt.input)
+			if tt.contains != "" {
+				assert.Contains(t, result, tt.contains)
+			}
+		})
+	}
+}
+
+func TestRedactJSONRegex(t *testing.T) {
+	input := `{"password": "secret123", "api_key": "key456"}`
+	result := redactJSONRegex(input)
+	assert.Contains(t, result, "[REDACTED]")
+}
+
 func TestLogSafe(t *testing.T) {
 	log := NewLogSafe().
 		SetRaw("action", "login").
@@ -130,4 +216,113 @@ func TestLogSafe(t *testing.T) {
 	if fields["ip"] != "192.168.*.*" {
 		t.Errorf("ip should be redacted")
 	}
+}
+
+func TestLogSafe_String(t *testing.T) {
+	log := NewLogSafe().
+		Set("username", "john").
+		Set("password", "secret123456789")
+
+	result := log.String()
+	assert.Contains(t, result, "john")
+	assert.Contains(t, result, "secr****6789")
+}
+
+func TestLogSafe_Set_NonString(t *testing.T) {
+	log := NewLogSafe().
+		Set("count", 123).
+		Set("password", 456) // non-string sensitive
+
+	fields := log.Fields()
+	assert.Equal(t, 123, fields["count"])
+	assert.Equal(t, "[REDACTED]", fields["password"])
+}
+
+func TestLogSafe_Chained(t *testing.T) {
+	log := NewLogSafe().
+		Set("a", "1").
+		Set("b", "2").
+		SetRaw("c", "3")
+
+	assert.NotNil(t, log)
+	assert.Len(t, log.Fields(), 3)
+}
+
+// ========== JWT Tests ==========
+
+func TestGenerateToken(t *testing.T) {
+	token, err := GenerateToken(1, "test@example.com", false, "test-secret", 3600)
+	require.NoError(t, err)
+	assert.NotEmpty(t, token)
+}
+
+func TestGenerateToken_Admin(t *testing.T) {
+	token, err := GenerateToken(2, "admin@example.com", true, "admin-secret", 7200)
+	require.NoError(t, err)
+	assert.NotEmpty(t, token)
+}
+
+func TestParseTokenWithSecret(t *testing.T) {
+	// Generate a token first
+	token, err := GenerateToken(1, "test@example.com", false, "test-secret", 3600)
+	require.NoError(t, err)
+
+	// Parse it
+	claims, err := ParseTokenWithSecret(token, "test-secret")
+	require.NoError(t, err)
+	assert.Equal(t, uint(1), claims.UserID)
+	assert.Equal(t, "test@example.com", claims.Email)
+	assert.False(t, claims.IsAdmin)
+}
+
+func TestParseTokenWithSecret_InvalidToken(t *testing.T) {
+	_, err := ParseTokenWithSecret("invalid-token", "test-secret")
+	assert.Error(t, err)
+}
+
+func TestParseTokenWithSecret_WrongSecret(t *testing.T) {
+	token, err := GenerateToken(1, "test@example.com", false, "correct-secret", 3600)
+	require.NoError(t, err)
+
+	_, err = ParseTokenWithSecret(token, "wrong-secret")
+	assert.Error(t, err)
+}
+
+func TestParseTokenWithSecret_Expired(t *testing.T) {
+	// Generate an already expired token
+	token, err := GenerateToken(1, "test@example.com", false, "test-secret", -1)
+	require.NoError(t, err)
+
+	_, err = ParseTokenWithSecret(token, "test-secret")
+	assert.Error(t, err)
+}
+
+func TestParseToken(t *testing.T) {
+	// Setup config
+	cfg := &config.Config{
+		JWT: config.JWTConfig{
+			Secret: "test-jwt-secret",
+			Expire: 3600,
+		},
+	}
+	config.Set(cfg)
+
+	// Generate token
+	token, err := GenerateToken(1, "test@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
+	require.NoError(t, err)
+
+	// Parse using config secret
+	claims, err := ParseToken(token)
+	require.NoError(t, err)
+	assert.Equal(t, uint(1), claims.UserID)
+	assert.True(t, claims.IsAdmin)
+}
+
+func TestParseToken_NoConfig(t *testing.T) {
+	// Clear config
+	config.Set(nil)
+
+	_, err := ParseToken("some-token")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "config not loaded")
 }

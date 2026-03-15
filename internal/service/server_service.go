@@ -114,9 +114,10 @@ func (s *ServerService) GetServerUsers(serverType model.ServerType, serverID uin
 
 	// 获取有效用户
 	var users []model.User
+	now := time.Now().Unix()
 	query := s.db.Preload("Plan").
 		Where("banned = 0").
-		Where("(expired_at IS NULL OR expired_at > UNIX_TIMESTAMP())").
+		Where("(expired_at IS NULL OR expired_at > ?)", now).
 		Where("(u + d) < transfer_enable")
 
 	if len(groupIDs) > 0 {
