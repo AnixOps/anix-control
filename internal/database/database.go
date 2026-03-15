@@ -13,10 +13,18 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-var db *gorm.DB
+var (
+	db         *gorm.DB
+	initialized bool
+)
 
 // Init 初始化数据库连接
 func Init(cfg *config.DatabaseConfig) error {
+	// 如果已经初始化，直接返回
+	if initialized && db != nil {
+		return nil
+	}
+
 	var dialector gorm.Dialector
 	var err error
 
@@ -89,6 +97,7 @@ func Init(cfg *config.DatabaseConfig) error {
 		}
 	}
 
+	initialized = true
 	return nil
 }
 
@@ -111,7 +120,18 @@ func Close() error {
 	if err != nil {
 		return err
 	}
-	return sqlDB.Close()
+	if err := sqlDB.Close(); err != nil {
+		return err
+	}
+	db = nil
+	initialized = false
+	return nil
+}
+
+// Reset resets the database state (for testing only)
+func Reset() {
+	db = nil
+	initialized = false
 }
 
 // AutoMigrate 自动迁移数据库表
