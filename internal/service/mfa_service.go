@@ -29,6 +29,11 @@ func NewMFAService(db *gorm.DB, config *model.MFAConfig) *MFAService {
 	}
 }
 
+// SetConfig updates MFA runtime config without recreating service.
+func (s *MFAService) SetConfig(config *model.MFAConfig) {
+	s.config = config
+}
+
 // IsEnabled 检查MFA是否启用
 func (s *MFAService) IsEnabled() bool {
 	return s.config != nil && s.config.Enabled
@@ -341,10 +346,10 @@ func (s *MFAService) RegenerateBackupCodes(userID uint) ([]string, error) {
 
 // TOTPSetup TOTP设置结果
 type TOTPSetup struct {
-	Secret      string   `json:"secret"`        // 密钥 (base32)
-	URL         string   `json:"url"`           // otpauth:// URL
-	QRCode      string   `json:"qr_code"`       // 用于生成二维码
-	BackupCodes []string `json:"backup_codes"`  // 备用码
+	Secret      string   `json:"secret"`       // 密钥 (base32)
+	URL         string   `json:"url"`          // otpauth:// URL
+	QRCode      string   `json:"qr_code"`      // 用于生成二维码
+	BackupCodes []string `json:"backup_codes"` // 备用码
 }
 
 // GenerateQRCodeURL 生成二维码URL (用于Google Chart API等)

@@ -282,6 +282,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/telegram/notify", telegramHandler.SendNotification)
 			admin.POST("/telegram/broadcast", telegramHandler.Broadcast)
 			admin.GET("/telegram/users", telegramHandler.GetUserBindings)
+			admin.PUT("/telegram/users/:id/notify", telegramHandler.UpdateUserNotify)
 
 			// ========== MFA 管理 ==========
 			mfaHandler := handler.NewMFAHandler()
@@ -454,7 +455,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		{
 			agentAdmin.GET("/list", agentHandler.ListAgents)
 			agentAdmin.POST("/tasks", agentHandler.CreateTask)
+			agentAdmin.GET("/tasks/:task_id", agentHandler.GetTaskResult)
 			agentAdmin.POST("/execute", agentHandler.ExecuteCommand)
+			agentAdmin.GET("/monitor", agentHandler.GetMonitor)
 		}
 	}
 }

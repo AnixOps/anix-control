@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -300,19 +301,101 @@ func (s *AgentHandlerTestSuite) TestAgentMonitor_Success() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
+func (s *AgentHandlerTestSuite) TestGetMonitor_Success() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/monitor", handler.AgentMonitor)
+	s.router.GET("/admin/agent/monitor", handler.GetMonitor)
+
+	body := AgentMonitorRequest{
+		NodeID: s.testNode.ID,
+		System: map[string]interface{}{
+			"cpu_percent": 38.2,
+		},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/v2/agent/monitor", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	req, _ = http.NewRequest("GET", "/admin/agent/monitor?node_id="+strconv.Itoa(int(s.testNode.ID)), nil)
+	w = httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	data := resp["data"].(map[string]interface{})
+	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
+}
+
+func (s *AgentHandlerTestSuite) TestGetMonitor_NotFound() {
+	handler := NewAgentHandler()
+	s.router.GET("/admin/agent/monitor", handler.GetMonitor)
+
+	req, _ := http.NewRequest("GET", "/admin/agent/monitor?node_id=9999", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+}
+
+func (s *AgentHandlerTestSuite) TestGetTaskResult_Success() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/result", handler.AgentReportResult)
+	s.router.GET("/admin/agent/tasks/:task_id", handler.GetTaskResult)
+
+	resultBody := AgentTaskResult{
+		TaskID:    "task-xyz-1",
+		NodeID:    s.testNode.ID,
+		Success:   true,
+		Output:    "ok",
+		Duration:  66,
+		Timestamp: time.Now(),
+	}
+	jsonBody, _ := json.Marshal(resultBody)
+	req, _ := http.NewRequest("POST", "/api/v2/agent/result", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	req, _ = http.NewRequest("GET", "/admin/agent/tasks/task-xyz-1", nil)
+	w = httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	data := resp["data"].(map[string]interface{})
+	assert.Equal(s.T(), "task-xyz-1", data["task_id"])
+	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
+}
+
+func (s *AgentHandlerTestSuite) TestGetTaskResult_NotFound() {
+	handler := NewAgentHandler()
+	s.router.GET("/admin/agent/tasks/:task_id", handler.GetTaskResult)
+
+	req, _ := http.NewRequest("GET", "/admin/agent/tasks/not-exists", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+}
+
 // ========== AgentGetForwardRules 测试 ==========
 
 func (s *AgentHandlerTestSuite) TestAgentGetForwardRules() {
 	// 创建转发规则
 	rule := &model.ForwardRule{
-		Name:         "Test Rule",
-		Enabled:      true,
-		RelayNodeID:  s.testNode.ID,
-		ListenPort:   8080,
-		Protocol:     "tcp",
-		ExitNodeID:   s.testNode2.ID,
-		TargetHost:   "10.0.0.1",
-		TargetPort:   80,
+		Name:        "Test Rule",
+		Enabled:     true,
+		RelayNodeID: s.testNode.ID,
+		ListenPort:  8080,
+		Protocol:    "tcp",
+		ExitNodeID:  s.testNode2.ID,
+		TargetHost:  "10.0.0.1",
+		TargetPort:  80,
 	}
 	s.db.Create(rule)
 

@@ -135,8 +135,8 @@
               <td>{{ formatTime(item.created_at) }}</td>
               <td>
                 <div class="action-buttons" v-if="item.status === 'pending'">
-                  <button class="btn-sm btn-primary" @click="processWithdrawal(item, true)" title="通过">✓</button>
-                  <button class="btn-sm btn-danger" @click="processWithdrawal(item, false)" title="拒绝">✕</button>
+                  <button class="btn-sm btn-primary" @click="processWithdrawalRequest(item, true)" title="通过">✓</button>
+                  <button class="btn-sm btn-danger" @click="processWithdrawalRequest(item, false)" title="拒绝">✕</button>
                 </div>
                 <span v-else class="text-secondary">-</span>
               </td>
@@ -264,7 +264,11 @@ const fetchConfig = async () => {
 
 const saveConfig = async () => {
   try {
-    await updateInviteConfig(config.value)
+    const payload = {
+      ...config.value,
+      commission_rate_ratio: Number(config.value.commission_rate || 0) / 100
+    }
+    await updateInviteConfig(payload)
     alert('保存成功')
   } catch (err) {
     alert('保存失败: ' + (err.response?.data?.error || err.message))

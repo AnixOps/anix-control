@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/anixops/v2board/internal/config"
@@ -15,6 +17,157 @@ import (
 // NotificationHandler 通知处理器
 type NotificationHandler struct {
 	notificationService *service.NotificationService
+	systemConfigService *service.SystemConfigService
+}
+
+const notificationEmailConfigKey = "notification.email.config"
+
+func notificationStatusToText(status int) string {
+	switch status {
+	case 1:
+		return "success"
+	case 2:
+		return "failed"
+	default:
+		return "pending"
+	}
+}
+
+func notificationStatusFromText(status string) (int, bool) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "pending":
+		return 0, true
+	case "success":
+		return 1, true
+	case "failed":
+		return 2, true
+	default:
+		return 0, false
+	}
+}
+
+func parseStringField(raw map[string]interface{}, key string) string {
+	v, ok := raw[key]
+	if !ok || v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return strings.TrimSpace(s)
+	}
+	return ""
+}
+
+func parseIntField(raw map[string]interface{}, key string) int {
+	v, ok := raw[key]
+	if !ok || v == nil {
+		return 0
+	}
+	switch vv := v.(type) {
+	case int:
+		return vv
+	case int32:
+		return int(vv)
+	case int64:
+		return int(vv)
+	case float64:
+		return int(vv)
+	case string:
+		n, _ := strconv.Atoi(strings.TrimSpace(vv))
+		return n
+	default:
+		return 0
+	}
+}
+
+func normalizeEmailEncryption(raw interface{}) (string, bool) {
+	switch v := raw.(type) {
+	case bool:
+		if v {
+			return "tls", true
+		}
+		return "none", true
+	case float64:
+		if int(v) == 1 {
+			return "tls", true
+		}
+		if int(v) == 0 {
+			return "none", true
+		}
+	case string:
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "", "none", "false", "0", "off", "no":
+			return "none", true
+		case "tls", "true", "1", "on", "yes", "starttls":
+			return "tls", true
+		case "ssl":
+			return "ssl", true
+		}
+	}
+	return "", false
+}
+
+func emailEncryptionBool(enc string) bool {
+	return enc == "tls" || enc == "ssl"
+}
+
+func (h *NotificationHandler) loadEmailConfig() (*model.EmailConfig, error) {
+	cfg := &model.EmailConfig{
+		Host:        "",
+		Port:        587,
+		Username:    "",
+		Password:    "",
+		FromAddress: "",
+		FromName:    "V2Board",
+		Encryption:  "tls",
+	}
+
+	value, err := h.systemConfigService.Get(notificationEmailConfigKey)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(value) == "" {
+		return cfg, nil
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(value), &raw); err != nil {
+		return nil, err
+	}
+
+	if host := parseStringField(raw, "host"); host != "" {
+		cfg.Host = host
+	}
+	if port := parseIntField(raw, "port"); port > 0 {
+		cfg.Port = port
+	}
+	if username := parseStringField(raw, "username"); username != "" {
+		cfg.Username = username
+	}
+	if password, ok := raw["password"]; ok {
+		if p, ok := password.(string); ok {
+			cfg.Password = p
+		}
+	}
+	if fromAddress := parseStringField(raw, "from_address"); fromAddress != "" {
+		cfg.FromAddress = fromAddress
+	}
+	if fromName := parseStringField(raw, "from_name"); fromName != "" {
+		cfg.FromName = fromName
+	}
+
+	if enc, ok := raw["encryption_type"]; ok {
+		if normalized, valid := normalizeEmailEncryption(enc); valid {
+			cfg.Encryption = normalized
+			return cfg, nil
+		}
+	}
+	if enc, ok := raw["encryption"]; ok {
+		if normalized, valid := normalizeEmailEncryption(enc); valid {
+			cfg.Encryption = normalized
+		}
+	}
+
+	return cfg, nil
 }
 
 // NewNotificationHandler 创建处理器
@@ -23,6 +176,7 @@ func NewNotificationHandler() *NotificationHandler {
 	cfg := config.Get()
 	return &NotificationHandler{
 		notificationService: service.NewNotificationService(db, cfg),
+		systemConfigService: service.NewSystemConfigService(db),
 	}
 }
 
@@ -151,7 +305,14 @@ func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 
 	db.Find(&templates)
 
-	c.JSON(http.StatusOK, gin.H{"data": templates})
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"list":  templates,
+			"total": len(templates),
+		},
+		"list":  templates,
+		"total": len(templates),
+	})
 }
 
 // CreateTemplate godoc
@@ -221,6 +382,8 @@ func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 	}
 
 	var req struct {
+		Type    string `json:"type"`
+		Event   string `json:"event"`
 		Name    string `json:"name"`
 		Title   string `json:"title"`
 		Content string `json:"content"`
@@ -231,6 +394,12 @@ func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 		return
 	}
 
+	if req.Type != "" {
+		template.Type = req.Type
+	}
+	if req.Event != "" {
+		template.Event = req.Event
+	}
 	if req.Name != "" {
 		template.Name = req.Name
 	}
@@ -302,7 +471,11 @@ func (h *NotificationHandler) ListLogs(c *gin.Context) {
 		db = db.Where("type = ?", notifyType)
 	}
 	if status != "" {
-		db = db.Where("status = ?", status)
+		if numericStatus, err := strconv.Atoi(status); err == nil {
+			db = db.Where("status = ?", numericStatus)
+		} else if mappedStatus, ok := notificationStatusFromText(status); ok {
+			db = db.Where("status = ?", mappedStatus)
+		}
 	}
 
 	db.Count(&total)
@@ -310,8 +483,37 @@ func (h *NotificationHandler) ListLogs(c *gin.Context) {
 	offset := (page - 1) * pageSize
 	db.Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&logs)
 
+	list := make([]gin.H, 0, len(logs))
+	for _, log := range logs {
+		recipient := ""
+		if log.UserID != nil {
+			recipient = "user:" + strconv.FormatUint(uint64(*log.UserID), 10)
+		}
+		list = append(list, gin.H{
+			"id":          log.ID,
+			"user_id":     log.UserID,
+			"type":        log.Type,
+			"event":       log.Event,
+			"title":       log.Title,
+			"content":     log.Content,
+			"status":      notificationStatusToText(log.Status),
+			"status_code": log.Status,
+			"recipient":   recipient,
+			"error":       log.Error,
+			"sent_at":     log.SentAt,
+			"read_at":     log.ReadAt,
+			"created_at":  log.CreatedAt,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"data":      logs,
+		"data": gin.H{
+			"list":      list,
+			"total":     total,
+			"page":      page,
+			"page_size": pageSize,
+		},
+		"list":      list,
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
@@ -332,10 +534,12 @@ func (h *NotificationHandler) ListLogs(c *gin.Context) {
 // @Router /admin/notification/test [post]
 func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 	var req struct {
-		Type    string `json:"type" binding:"required"`
-		To      string `json:"to"`
-		Title   string `json:"title"`
-		Content string `json:"content"`
+		Type      string `json:"type" binding:"required"`
+		To        string `json:"to"`
+		Recipient string `json:"recipient"`
+		Title     string `json:"title"`
+		Subject   string `json:"subject"`
+		Content   string `json:"content"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -344,7 +548,14 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 
 	title := req.Title
 	if title == "" {
+		title = req.Subject
+	}
+	if title == "" {
 		title = "Test Notification"
+	}
+	recipient := req.To
+	if recipient == "" {
+		recipient = req.Recipient
 	}
 	content := req.Content
 	if content == "" {
@@ -354,11 +565,21 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 	var err error
 	switch req.Type {
 	case "email":
-		if req.To == "" {
+		if recipient == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "email address required"})
 			return
 		}
-		err = h.notificationService.SendEmail(req.To, title, content)
+		cfg, cfgErr := h.loadEmailConfig()
+		if cfgErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": cfgErr.Error()})
+			return
+		}
+		if cfg.Host == "" || cfg.FromAddress == "" {
+			h.notificationService.SetEmailConfig(nil)
+		} else {
+			h.notificationService.SetEmailConfig(cfg)
+		}
+		err = h.notificationService.SendEmail(recipient, title, content)
 	case "telegram":
 		// TODO: 实现Telegram测试通知
 		err = nil
@@ -375,7 +596,12 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "test notification sent"})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "test notification sent",
+		"data": gin.H{
+			"success": true,
+		},
+	})
 }
 
 // GetEmailConfig godoc
@@ -388,15 +614,25 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /admin/notification/email/config [get]
 func (h *NotificationHandler) GetEmailConfig(c *gin.Context) {
-	// TODO: 从数据库读取邮件配置
+	cfg, err := h.loadEmailConfig()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Keep service config in sync for test-send path.
+	h.notificationService.SetEmailConfig(cfg)
+
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
-			"host":         "",
-			"port":         587,
-			"username":     "",
-			"from_address": "",
-			"from_name":    "V2Board",
-			"encryption":   "tls",
+			"host":            cfg.Host,
+			"port":            cfg.Port,
+			"username":        cfg.Username,
+			"password":        cfg.Password,
+			"from_address":    cfg.FromAddress,
+			"from_name":       cfg.FromName,
+			"encryption":      emailEncryptionBool(cfg.Encryption),
+			"encryption_type": cfg.Encryption,
 		},
 	})
 }
@@ -413,21 +649,97 @@ func (h *NotificationHandler) GetEmailConfig(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{}
 // @Router /admin/notification/email/config [put]
 func (h *NotificationHandler) UpdateEmailConfig(c *gin.Context) {
-	var req struct {
-		Host        string `json:"host" binding:"required"`
-		Port        int    `json:"port" binding:"required"`
-		Username    string `json:"username"`
-		Password    string `json:"password"`
-		FromAddress string `json:"from_address" binding:"required"`
-		FromName    string `json:"from_name"`
-		Encryption  string `json:"encryption"`
-	}
+	var req map[string]interface{}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// TODO: 保存到数据库
+	host := parseStringField(req, "host")
+	if host == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "host is required"})
+		return
+	}
+
+	port := parseIntField(req, "port")
+	if port <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "port is required"})
+		return
+	}
+
+	fromAddress := parseStringField(req, "from_address")
+	if fromAddress == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "from_address is required"})
+		return
+	}
+
+	existing, err := h.loadEmailConfig()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	cfg := &model.EmailConfig{
+		Host:        host,
+		Port:        port,
+		Username:    parseStringField(req, "username"),
+		Password:    existing.Password,
+		FromAddress: fromAddress,
+		FromName:    parseStringField(req, "from_name"),
+		Encryption:  existing.Encryption,
+	}
+
+	if cfg.FromName == "" {
+		cfg.FromName = existing.FromName
+	}
+	if cfg.FromName == "" {
+		cfg.FromName = "V2Board"
+	}
+
+	if passwordRaw, ok := req["password"]; ok {
+		if password, ok := passwordRaw.(string); ok {
+			if strings.TrimSpace(password) != "" {
+				cfg.Password = password
+			}
+		}
+	}
+
+	hasEncryption := false
+	if encRaw, ok := req["encryption_type"]; ok {
+		normalized, valid := normalizeEmailEncryption(encRaw)
+		if !valid {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid encryption_type"})
+			return
+		}
+		cfg.Encryption = normalized
+		hasEncryption = true
+	}
+	if !hasEncryption {
+		if encRaw, ok := req["encryption"]; ok {
+			normalized, valid := normalizeEmailEncryption(encRaw)
+			if !valid {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid encryption"})
+				return
+			}
+			cfg.Encryption = normalized
+		}
+	}
+	if cfg.Encryption == "" {
+		cfg.Encryption = "none"
+	}
+
+	if err := h.systemConfigService.SetJSON(
+		notificationEmailConfigKey,
+		cfg,
+		"notification",
+		"Email notification config",
+	); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Ensure send-test uses newest config immediately.
+	h.notificationService.SetEmailConfig(cfg)
 
 	c.JSON(http.StatusOK, gin.H{"message": "email config updated"})
 }

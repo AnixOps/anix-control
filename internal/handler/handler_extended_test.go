@@ -35,11 +35,11 @@ func (s *UniProxyExtendedTestSuite) SetupTest() {
 	s.HandlerTestSuite.SetupTest()
 
 	s.testNode = &model.Node{
-		Name:    "Test Node",
-		Host:    "127.0.0.1",
-		Port:    443,
-		APIKey:  "test-key",
-		Status:  1,
+		Name:   "Test Node",
+		Host:   "127.0.0.1",
+		Port:   443,
+		APIKey: "test-key",
+		Status: 1,
 	}
 	s.db.Create(s.testNode)
 
@@ -243,8 +243,8 @@ func (s *InviteHandlerExtendedTestSuite) TestUpdateConfig_Create() {
 	s.router.PUT("/admin/invite/config", handler.UpdateConfig)
 
 	body := model.InviteConfig{
-		Enabled:            true,
-		CommissionRate:     0.1,
+		Enabled:             true,
+		CommissionRate:      0.1,
 		CommissionMinAmount: 100,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -255,6 +255,112 @@ func (s *InviteHandlerExtendedTestSuite) TestUpdateConfig_Create() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *InviteHandlerExtendedTestSuite) TestGetConfig_FrontendFields() {
+	cfg := &model.InviteConfig{
+		Enabled:             true,
+		CommissionType:      1,
+		CommissionRate:      0.15,
+		CommissionFixed:     0,
+		CommissionMinAmount: 20,
+	}
+	s.db.Create(cfg)
+
+	handler := NewInviteHandler()
+	s.router.GET("/admin/invite/config", handler.GetConfig)
+
+	req, _ := http.NewRequest("GET", "/admin/invite/config", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "percent", data["commission_type"])
+	assert.InDelta(s.T(), 15.0, data["commission_rate"], 0.0001)
+	assert.InDelta(s.T(), 20.0, data["min_withdraw"], 0.0001)
+	_, hasMethods := data["withdraw_methods"]
+	assert.True(s.T(), hasMethods)
+}
+
+func (s *InviteHandlerExtendedTestSuite) TestUpdateConfig_FrontendPayloadCompatibility() {
+	handler := NewInviteHandler()
+	s.router.PUT("/admin/invite/config", handler.UpdateConfig)
+
+	body := map[string]interface{}{
+		"enabled":          false,
+		"commission_type":  "fixed",
+		"commission_rate":  12.5,
+		"commission_fixed": 88.8,
+		"min_withdraw":     66.6,
+		"code_prefix":      "INVX",
+		"code_length":      12,
+		"withdraw_fee":     1.2,
+		"withdraw_methods": []string{
+			"alipay",
+			"bank",
+		},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/admin/invite/config", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var cfg model.InviteConfig
+	err := s.db.First(&cfg).Error
+	assert.NoError(s.T(), err)
+	assert.False(s.T(), cfg.Enabled)
+	assert.Equal(s.T(), 2, cfg.CommissionType)
+	assert.InDelta(s.T(), 0.125, cfg.CommissionRate, 0.000001)
+	assert.InDelta(s.T(), 88.8, cfg.CommissionFixed, 0.0001)
+	assert.InDelta(s.T(), 66.6, cfg.CommissionMinAmount, 0.0001)
+}
+
+func (s *InviteHandlerExtendedTestSuite) TestUpdateConfig_FrontendExtraFieldsPersisted() {
+	handler := NewInviteHandler()
+	s.router.PUT("/admin/invite/config", handler.UpdateConfig)
+	s.router.GET("/admin/invite/config", handler.GetConfig)
+
+	updateBody := map[string]interface{}{
+		"code_prefix":      "ABC",
+		"code_length":      12,
+		"withdraw_fee":     1.5,
+		"withdraw_methods": []string{"alipay", "bank"},
+		"commission_rate":  12.5,
+	}
+	updateJSON, _ := json.Marshal(updateBody)
+	putReq, _ := http.NewRequest("PUT", "/admin/invite/config", bytes.NewReader(updateJSON))
+	putReq.Header.Set("Content-Type", "application/json")
+	putResp := httptest.NewRecorder()
+	s.router.ServeHTTP(putResp, putReq)
+	assert.Equal(s.T(), http.StatusOK, putResp.Code)
+
+	getReq, _ := http.NewRequest("GET", "/admin/invite/config", nil)
+	getResp := httptest.NewRecorder()
+	s.router.ServeHTTP(getResp, getReq)
+	assert.Equal(s.T(), http.StatusOK, getResp.Code)
+
+	var payload map[string]interface{}
+	err := json.Unmarshal(getResp.Body.Bytes(), &payload)
+	assert.NoError(s.T(), err)
+	data, ok := payload["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "ABC", data["code_prefix"])
+	assert.Equal(s.T(), float64(12), data["code_length"])
+	assert.InDelta(s.T(), 1.5, data["withdraw_fee"], 0.0001)
+	methods, ok := data["withdraw_methods"].([]interface{})
+	assert.True(s.T(), ok)
+	assert.Len(s.T(), methods, 2)
 }
 
 func (s *InviteHandlerExtendedTestSuite) TestUpdateConfig_InvalidBody() {
@@ -306,6 +412,36 @@ func (s *InviteHandlerExtendedTestSuite) TestProcessWithdraw_InvalidBody() {
 	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
 }
 
+func (s *InviteHandlerExtendedTestSuite) TestProcessWithdraw_ApprovedAlias() {
+	withdraw := &model.CommissionWithdraw{
+		UserID: s.testUser.ID,
+		Amount: 500,
+		Status: 0,
+	}
+	s.db.Create(withdraw)
+
+	handler := NewInviteHandler()
+	s.router.POST("/admin/invite/withdrawals/:id/process", handler.ProcessWithdraw)
+
+	body := map[string]interface{}{
+		"approved": true,
+		"remark":   "approved by alias",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/invite/withdrawals/"+strconv.FormatUint(uint64(withdraw.ID), 10)+"/process", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var updated model.CommissionWithdraw
+	err := s.db.First(&updated, withdraw.ID).Error
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), 1, updated.Status)
+}
+
 func (s *InviteHandlerExtendedTestSuite) TestGetWithdrawals() {
 	handler := NewInviteHandler()
 	s.router.GET("/admin/invite/withdrawals", handler.GetWithdrawals)
@@ -315,6 +451,47 @@ func (s *InviteHandlerExtendedTestSuite) TestGetWithdrawals() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *InviteHandlerExtendedTestSuite) TestGetWithdrawals_StatusTextFilterAndPaginationBounds() {
+	pending := &model.CommissionWithdraw{
+		UserID: s.testUser.ID,
+		Amount: 100,
+		Status: 0,
+	}
+	approved := &model.CommissionWithdraw{
+		UserID: s.testUser.ID,
+		Amount: 200,
+		Status: 1,
+	}
+	s.db.Create(pending)
+	s.db.Create(approved)
+
+	handler := NewInviteHandler()
+	s.router.GET("/admin/invite/withdrawals", handler.GetWithdrawals)
+
+	req, _ := http.NewRequest("GET", "/admin/invite/withdrawals?status=pending&page=0&page_size=500", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	list, ok := data["list"].([]interface{})
+	assert.True(s.T(), ok)
+	assert.Len(s.T(), list, 1)
+
+	first, ok := list[0].(map[string]interface{})
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "pending", first["status"])
+	assert.InDelta(s.T(), 0.0, first["status_code"], 0.0001)
+	assert.InDelta(s.T(), 1.0, data["page"], 0.0001)
+	assert.InDelta(s.T(), 100.0, data["page_size"], 0.0001)
 }
 
 func TestInviteHandlerExtended(t *testing.T) {
@@ -354,7 +531,7 @@ func (s *TelegramHandlerExtendedTestSuite) TestSendNotification() {
 	s.router.POST("/admin/telegram/notify", handler.SendNotification)
 
 	body := map[string]interface{}{
-		"telegram_id": 12345,
+		"telegram_id": "12345",
 		"title":       "Test",
 		"content":     "Test notification",
 	}
@@ -364,6 +541,27 @@ func (s *TelegramHandlerExtendedTestSuite) TestSendNotification() {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
+
+	// Request shape should be accepted, service may still fail without real Telegram token.
+	assert.NotEqual(s.T(), http.StatusBadRequest, w.Code)
+}
+
+func (s *TelegramHandlerExtendedTestSuite) TestSendNotification_MessagePayload() {
+	handler := NewTelegramHandler()
+	s.router.POST("/admin/telegram/notify", handler.SendNotification)
+
+	body := map[string]interface{}{
+		"telegram_id": 12345,
+		"message":     "Direct message payload",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/telegram/notify", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.NotEqual(s.T(), http.StatusBadRequest, w.Code)
 }
 
 func (s *TelegramHandlerExtendedTestSuite) TestSendNotification_InvalidBody() {
@@ -393,6 +591,35 @@ func (s *TelegramHandlerExtendedTestSuite) TestBroadcast() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	_, hasSuccess := data["success"]
+	_, hasFailed := data["failed"]
+	assert.True(s.T(), hasSuccess)
+	assert.True(s.T(), hasFailed)
+}
+
+func (s *TelegramHandlerExtendedTestSuite) TestBroadcast_NestedMessage() {
+	handler := NewTelegramHandler()
+	s.router.POST("/admin/telegram/broadcast", handler.Broadcast)
+
+	body := map[string]interface{}{
+		"message": map[string]interface{}{
+			"message": "Nested message payload",
+		},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/telegram/broadcast", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
 func (s *TelegramHandlerExtendedTestSuite) TestBroadcast_InvalidBody() {
@@ -408,14 +635,123 @@ func (s *TelegramHandlerExtendedTestSuite) TestBroadcast_InvalidBody() {
 }
 
 func (s *TelegramHandlerExtendedTestSuite) TestGetUserBindings() {
-	handler := NewTelegramHandler()
-	s.router.GET("/admin/telegram/bindings", handler.GetUserBindings)
+	user := &model.User{
+		Email:          "tg-bindings@example.com",
+		Token:          "tg-bindings-token",
+		UUID:           "tg-bindings-uuid",
+		TransferEnable: 1073741824,
+	}
+	s.db.Create(user)
+	tgUser := &model.TelegramUser{
+		UserID:       user.ID,
+		TelegramID:   12345678,
+		Username:     "tguser",
+		NotifyExpire: true,
+	}
+	s.db.Create(tgUser)
 
-	req, _ := http.NewRequest("GET", "/admin/telegram/bindings", nil)
+	handler := NewTelegramHandler()
+	s.router.GET("/admin/telegram/users", handler.GetUserBindings)
+
+	req, _ := http.NewRequest("GET", "/admin/telegram/users?page=1&page_size=20", nil)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	list, ok := data["list"].([]interface{})
+	assert.True(s.T(), ok)
+	assert.GreaterOrEqual(s.T(), len(list), 1)
+	first, ok := list[0].(map[string]interface{})
+	assert.True(s.T(), ok)
+	_, hasEmail := first["user_email"]
+	_, hasNotify := first["notify_enabled"]
+	assert.True(s.T(), hasEmail)
+	assert.True(s.T(), hasNotify)
+}
+
+func (s *TelegramHandlerExtendedTestSuite) TestGetUserBindings_All() {
+	for i := 0; i < 25; i++ {
+		user := &model.User{
+			Email:          "tg-all-" + strconv.Itoa(i) + "@example.com",
+			Token:          "tg-all-token-" + strconv.Itoa(i),
+			UUID:           "tg-all-uuid-" + strconv.Itoa(i),
+			TransferEnable: 1073741824,
+		}
+		s.db.Create(user)
+		tgUser := &model.TelegramUser{
+			UserID:       user.ID,
+			TelegramID:   int64(300000 + i),
+			Username:     "tgall" + strconv.Itoa(i),
+			NotifyExpire: true,
+		}
+		s.db.Create(tgUser)
+	}
+
+	handler := NewTelegramHandler()
+	s.router.GET("/admin/telegram/users", handler.GetUserBindings)
+
+	req, _ := http.NewRequest("GET", "/admin/telegram/users?all=true", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	list, ok := data["list"].([]interface{})
+	assert.True(s.T(), ok)
+	assert.GreaterOrEqual(s.T(), len(list), 25)
+}
+
+func (s *TelegramHandlerExtendedTestSuite) TestUpdateUserNotify() {
+	user := &model.User{
+		Email:          "tg-notify@example.com",
+		Token:          "tg-notify-token",
+		UUID:           "tg-notify-uuid",
+		TransferEnable: 1073741824,
+	}
+	s.db.Create(user)
+	tgUser := &model.TelegramUser{
+		UserID:        user.ID,
+		TelegramID:    666666,
+		Username:      "tgnotify",
+		NotifyExpire:  true,
+		NotifyTraffic: true,
+		NotifyTicket:  true,
+	}
+	s.db.Create(tgUser)
+
+	handler := NewTelegramHandler()
+	s.router.PUT("/admin/telegram/users/:id/notify", handler.UpdateUserNotify)
+
+	body := map[string]interface{}{
+		"notify_enabled": false,
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("PUT", "/admin/telegram/users/"+strconv.FormatUint(uint64(tgUser.ID), 10)+"/notify", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var refreshed model.TelegramUser
+	err := s.db.First(&refreshed, tgUser.ID).Error
+	assert.NoError(s.T(), err)
+	assert.False(s.T(), refreshed.NotifyExpire)
+	assert.False(s.T(), refreshed.NotifyTraffic)
+	assert.False(s.T(), refreshed.NotifyTicket)
 }
 
 func TestTelegramHandlerExtended(t *testing.T) {
@@ -453,6 +789,16 @@ func (s *PaymentGatewayExtendedTestSuite) SetupTest() {
 }
 
 func (s *PaymentGatewayExtendedTestSuite) TestListPaymentRecords() {
+	record := &model.PaymentRecord{
+		GatewayID:   s.testGateway.ID,
+		TradeNo:     "LIST-RECORDS-001",
+		UserID:      s.testUser.ID,
+		Amount:      10,
+		GatewayType: "alipay",
+		Status:      model.PaymentStatusPending,
+	}
+	s.db.Create(record)
+
 	handler := NewPaymentGatewayHandler()
 	s.router.GET("/admin/payment/records", handler.ListPaymentRecords)
 
@@ -461,6 +807,110 @@ func (s *PaymentGatewayExtendedTestSuite) TestListPaymentRecords() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp struct {
+		Data struct {
+			List []struct {
+				TradeNo string `json:"trade_no"`
+				Status  string `json:"status"`
+			} `json:"list"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+	assert.GreaterOrEqual(s.T(), len(resp.Data.List), 1)
+	found := false
+	for _, item := range resp.Data.List {
+		if item.TradeNo == "LIST-RECORDS-001" {
+			found = true
+			assert.Equal(s.T(), "pending", item.Status)
+		}
+	}
+	assert.True(s.T(), found)
+}
+
+func (s *PaymentGatewayExtendedTestSuite) TestListPaymentRecords_StatusTextFilter() {
+	paidRecord := &model.PaymentRecord{
+		GatewayID:   s.testGateway.ID,
+		TradeNo:     "FILTER-PAID-001",
+		UserID:      s.testUser.ID,
+		Amount:      10,
+		GatewayType: "alipay",
+		Status:      model.PaymentStatusPaid,
+	}
+	failedRecord := &model.PaymentRecord{
+		GatewayID:   s.testGateway.ID,
+		TradeNo:     "FILTER-FAILED-001",
+		UserID:      s.testUser.ID,
+		Amount:      20,
+		GatewayType: "alipay",
+		Status:      model.PaymentStatusCancelled,
+	}
+	s.db.Create(paidRecord)
+	s.db.Create(failedRecord)
+
+	handler := NewPaymentGatewayHandler()
+	s.router.GET("/admin/payment/records", handler.ListPaymentRecords)
+
+	req, _ := http.NewRequest("GET", "/admin/payment/records?status=paid", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp struct {
+		Data struct {
+			List []struct {
+				Status string `json:"status"`
+			} `json:"list"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), resp.Data.List, 1)
+	assert.Equal(s.T(), "paid", resp.Data.List[0].Status)
+}
+
+func (s *PaymentGatewayExtendedTestSuite) TestListPaymentRecords_GatewayTypeFilter() {
+	alipayRecord := &model.PaymentRecord{
+		GatewayID:   s.testGateway.ID,
+		TradeNo:     "FILTER-TYPE-ALI-001",
+		UserID:      s.testUser.ID,
+		Amount:      10,
+		GatewayType: "alipay",
+		Status:      model.PaymentStatusPaid,
+	}
+	wechatRecord := &model.PaymentRecord{
+		GatewayID:   s.testGateway.ID,
+		TradeNo:     "FILTER-TYPE-WECHAT-001",
+		UserID:      s.testUser.ID,
+		Amount:      20,
+		GatewayType: "wechat",
+		Status:      model.PaymentStatusPaid,
+	}
+	s.db.Create(alipayRecord)
+	s.db.Create(wechatRecord)
+
+	handler := NewPaymentGatewayHandler()
+	s.router.GET("/admin/payment/records", handler.ListPaymentRecords)
+
+	req, _ := http.NewRequest("GET", "/admin/payment/records?gateway_type=wechat", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp struct {
+		Data struct {
+			List []struct {
+				GatewayType string `json:"gateway_type"`
+			} `json:"list"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), resp.Data.List, 1)
+	assert.Equal(s.T(), "wechat", resp.Data.List[0].GatewayType)
 }
 
 func (s *PaymentGatewayExtendedTestSuite) TestGetChannels() {
@@ -741,21 +1191,28 @@ func (s *SystemBackupTestSuite) TestGetBackupConfig() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	// First call returns 500 due to service bug (returns error after creating default)
-	// Second call would return 200 since the config now exists
-	// We test the handler path coverage
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	_, hasInterval := data["interval"]
+	_, hasKeepCount := data["keep_count"]
+	assert.True(s.T(), hasInterval)
+	assert.True(s.T(), hasKeepCount)
 }
 
 func (s *SystemBackupTestSuite) TestUpdateBackupConfig() {
 	handler := NewSystemHandler()
 	s.router.PUT("/admin/system/backup/config", handler.UpdateBackupConfig)
 
-	body := model.BackupConfig{
-		Enabled:       true,
-		AutoBackup:    true,
-		RetentionDays: 7,
-		StorageType:   "local",
-		StoragePath:   "backups",
+	body := map[string]interface{}{
+		"enabled":    true,
+		"interval":   12,
+		"keep_count": 9,
 	}
 	jsonBody, _ := json.Marshal(body)
 
@@ -765,6 +1222,14 @@ func (s *SystemBackupTestSuite) TestUpdateBackupConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	assert.InDelta(s.T(), 12, data["interval"], 0.000001)
+	assert.InDelta(s.T(), 9, data["keep_count"], 0.000001)
 }
 
 func (s *SystemBackupTestSuite) TestUpdateBackupConfig_InvalidBody() {
@@ -801,6 +1266,83 @@ func (s *SystemBackupTestSuite) TestListBackups() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
+func (s *SystemBackupTestSuite) TestListBackups_ResponseShape() {
+	pending := &model.BackupRecord{
+		Name:   "pending_backup",
+		Type:   "database",
+		Size:   128,
+		Status: 0,
+	}
+	completed := &model.BackupRecord{
+		Name:   "completed_backup",
+		Type:   "database",
+		Size:   2048,
+		Path:   "C:/tmp/backups/completed_backup.db",
+		Status: 1,
+	}
+	failed := &model.BackupRecord{
+		Name:   "failed_backup",
+		Type:   "database",
+		Size:   512,
+		Status: 2,
+		Error:  "disk full",
+	}
+	s.db.Create(pending)
+	s.db.Create(completed)
+	s.db.Create(failed)
+
+	handler := NewSystemHandler()
+	s.router.GET("/admin/system/backups", handler.ListBackups)
+
+	req, _ := http.NewRequest("GET", "/admin/system/backups?page=1&page_size=20", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp struct {
+		Data struct {
+			List []struct {
+				ID         uint   `json:"id"`
+				Filename   string `json:"filename"`
+				Status     string `json:"status"`
+				StatusCode int    `json:"status_code"`
+			} `json:"list"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+	assert.GreaterOrEqual(s.T(), len(resp.Data.List), 3)
+
+	byID := make(map[uint]struct {
+		Filename   string
+		Status     string
+		StatusCode int
+	})
+	for _, item := range resp.Data.List {
+		byID[item.ID] = struct {
+			Filename   string
+			Status     string
+			StatusCode int
+		}{
+			Filename:   item.Filename,
+			Status:     item.Status,
+			StatusCode: item.StatusCode,
+		}
+	}
+
+	assert.Equal(s.T(), "pending_backup", byID[pending.ID].Filename)
+	assert.Equal(s.T(), "pending", byID[pending.ID].Status)
+	assert.Equal(s.T(), 0, byID[pending.ID].StatusCode)
+
+	assert.Equal(s.T(), "completed_backup.db", byID[completed.ID].Filename)
+	assert.Equal(s.T(), "completed", byID[completed.ID].Status)
+	assert.Equal(s.T(), 1, byID[completed.ID].StatusCode)
+
+	assert.Equal(s.T(), "failed_backup", byID[failed.ID].Filename)
+	assert.Equal(s.T(), "failed", byID[failed.ID].Status)
+	assert.Equal(s.T(), 2, byID[failed.ID].StatusCode)
+}
+
 func (s *SystemBackupTestSuite) TestGetBackupStats() {
 	handler := NewSystemHandler()
 	s.router.GET("/admin/system/backup/stats", handler.GetBackupStats)
@@ -810,6 +1352,29 @@ func (s *SystemBackupTestSuite) TestGetBackupStats() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *SystemBackupTestSuite) TestGetBackupStats_TotalCountAlias() {
+	s.db.Create(&model.BackupRecord{Name: "ok_1", Type: "database", Size: 10, Status: 1})
+	s.db.Create(&model.BackupRecord{Name: "ok_2", Type: "database", Size: 20, Status: 1})
+	s.db.Create(&model.BackupRecord{Name: "failed_1", Type: "database", Size: 30, Status: 2})
+
+	handler := NewSystemHandler()
+	s.router.GET("/admin/system/backup/stats", handler.GetBackupStats)
+
+	req, _ := http.NewRequest("GET", "/admin/system/backup/stats", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), float64(2), data["total_count"])
+	assert.Equal(s.T(), float64(2), data["total_backups"])
 }
 
 func (s *SystemBackupTestSuite) TestDeleteBackup() {
@@ -823,6 +1388,17 @@ func (s *SystemBackupTestSuite) TestDeleteBackup() {
 	// Returns 500 if backup doesn't exist
 }
 
+func (s *SystemBackupTestSuite) TestDeleteBackup_InvalidID() {
+	handler := NewSystemHandler()
+	s.router.DELETE("/admin/system/backups/:id", handler.DeleteBackup)
+
+	req, _ := http.NewRequest("DELETE", "/admin/system/backups/invalid", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
 func (s *SystemBackupTestSuite) TestRestoreBackup() {
 	handler := NewSystemHandler()
 	s.router.POST("/admin/system/backups/:id/restore", handler.RestoreBackup)
@@ -832,6 +1408,17 @@ func (s *SystemBackupTestSuite) TestRestoreBackup() {
 	s.router.ServeHTTP(w, req)
 
 	// Returns 500 if backup doesn't exist
+}
+
+func (s *SystemBackupTestSuite) TestRestoreBackup_InvalidID() {
+	handler := NewSystemHandler()
+	s.router.POST("/admin/system/backups/:id/restore", handler.RestoreBackup)
+
+	req, _ := http.NewRequest("POST", "/admin/system/backups/invalid/restore", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
 }
 
 func TestSystemBackup(t *testing.T) {
@@ -869,6 +1456,48 @@ func (s *LoadBalancerTestSuite) TestListLoadBalancers() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
+func (s *LoadBalancerTestSuite) TestListLoadBalancers_IncludesWeightsField() {
+	s.testLB.NodeWeights = `{"1":10,"2":5}`
+	err := s.db.Save(s.testLB).Error
+	assert.NoError(s.T(), err)
+
+	handler := NewLoadBalancerHandler()
+	s.router.GET("/admin/loadbalancers", handler.ListLoadBalancers)
+
+	req, _ := http.NewRequest("GET", "/admin/loadbalancers", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	list, ok := data["list"].([]interface{})
+	assert.True(s.T(), ok)
+	assert.NotEmpty(s.T(), list)
+
+	found := false
+	for _, item := range list {
+		row, ok := item.(map[string]interface{})
+		assert.True(s.T(), ok)
+		if uint(row["id"].(float64)) != s.testLB.ID {
+			continue
+		}
+		weights, hasWeights := row["weights"]
+		assert.True(s.T(), hasWeights)
+		weightMap, ok := weights.(map[string]interface{})
+		assert.True(s.T(), ok)
+		assert.Equal(s.T(), float64(10), weightMap["1"])
+		assert.Equal(s.T(), float64(5), weightMap["2"])
+		found = true
+	}
+	assert.True(s.T(), found)
+}
+
 func (s *LoadBalancerTestSuite) TestListLoadBalancers_WithGroupID() {
 	handler := NewLoadBalancerHandler()
 	s.router.GET("/admin/loadbalancers", handler.ListLoadBalancers)
@@ -897,6 +1526,38 @@ func (s *LoadBalancerTestSuite) TestCreateLoadBalancer() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *LoadBalancerTestSuite) TestCreateLoadBalancer_WithWeights() {
+	handler := NewLoadBalancerHandler()
+	s.router.POST("/admin/loadbalancers", handler.CreateLoadBalancer)
+
+	body := `{"name":"Weighted LB","strategy":"weight","group_id":1,"weights":{"1":10,"2":5}}`
+	req, _ := http.NewRequest("POST", "/admin/loadbalancers", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+
+	weights, hasWeights := data["weights"]
+	assert.True(s.T(), hasWeights)
+	weightMap, ok := weights.(map[string]interface{})
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), float64(10), weightMap["1"])
+	assert.Equal(s.T(), float64(5), weightMap["2"])
+
+	var lb model.LoadBalancer
+	err = s.db.Where("name = ?", "Weighted LB").First(&lb).Error
+	assert.NoError(s.T(), err)
+	assert.Contains(s.T(), lb.NodeWeights, "\"1\":10")
+	assert.Contains(s.T(), lb.NodeWeights, "\"2\":5")
 }
 
 func (s *LoadBalancerTestSuite) TestCreateLoadBalancer_InvalidBody() {
@@ -950,6 +1611,38 @@ func (s *LoadBalancerTestSuite) TestUpdateLoadBalancer() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *LoadBalancerTestSuite) TestUpdateLoadBalancer_WithWeights() {
+	handler := NewLoadBalancerHandler()
+	s.router.PUT("/admin/loadbalancers/:id", handler.UpdateLoadBalancer)
+
+	body := `{"name":"Updated Weighted LB","strategy":"weight","weights":{"10":3,"20":7}}`
+	req, _ := http.NewRequest("PUT", "/admin/loadbalancers/"+strconv.FormatUint(uint64(s.testLB.ID), 10), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	weights, hasWeights := data["weights"]
+	assert.True(s.T(), hasWeights)
+	weightMap, ok := weights.(map[string]interface{})
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), float64(3), weightMap["10"])
+	assert.Equal(s.T(), float64(7), weightMap["20"])
+
+	var updated model.LoadBalancer
+	err = s.db.First(&updated, s.testLB.ID).Error
+	assert.NoError(s.T(), err)
+	assert.Contains(s.T(), updated.NodeWeights, "\"10\":3")
+	assert.Contains(s.T(), updated.NodeWeights, "\"20\":7")
 }
 
 func (s *LoadBalancerTestSuite) TestUpdateLoadBalancer_NotFound() {
@@ -1295,10 +1988,10 @@ func (s *AdminTicketExtendedTestSuite) SetupTest() {
 	s.db.Create(s.testUser)
 
 	s.testTicket = &model.Ticket{
-		UserID:    s.testUser.ID,
-		Subject:   "Test Ticket",
-		Status:    0,
-		Level:     1,
+		UserID:  s.testUser.ID,
+		Subject: "Test Ticket",
+		Status:  0,
+		Level:   1,
 	}
 	s.db.Create(s.testTicket)
 
@@ -1443,6 +2136,36 @@ func (s *PaymentGatewayExtendedTestSuite2) TestUpdateGateway() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *PaymentGatewayExtendedTestSuite2) TestUpdateGateway_TypeAndZeroMinMax() {
+	s.testGateway.MinAmount = 10
+	s.testGateway.MaxAmount = 100
+	s.db.Save(s.testGateway)
+
+	handler := NewPaymentGatewayHandler()
+	s.router.PUT("/admin/payment/gateways/:id", handler.UpdateGateway)
+
+	body := map[string]interface{}{
+		"type":       "wechat",
+		"min_amount": 0,
+		"max_amount": 0,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/admin/payment/gateways/"+strconv.FormatUint(uint64(s.testGateway.ID), 10), bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var refreshed model.PaymentGateway
+	err := s.db.First(&refreshed, s.testGateway.ID).Error
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "wechat", refreshed.Type)
+	assert.InDelta(s.T(), 0, refreshed.MinAmount, 0.000001)
+	assert.InDelta(s.T(), 0, refreshed.MaxAmount, 0.000001)
 }
 
 func (s *PaymentGatewayExtendedTestSuite2) TestDeleteGateway() {
@@ -1774,14 +2497,34 @@ func (s *NotificationExtendedTestSuite) TestGetUnreadCount() {
 }
 
 func (s *NotificationExtendedTestSuite) TestListTemplates() {
+	tpl := &model.NotificationTemplate{
+		Name:    "Extended Email Template",
+		Type:    "email",
+		Event:   "order.paid",
+		Title:   "Paid",
+		Content: "ok",
+		Enabled: true,
+	}
+	s.db.Create(tpl)
+
 	handler := NewNotificationHandler()
 	s.router.GET("/admin/notification/templates", handler.ListTemplates)
 
-	req, _ := http.NewRequest("GET", "/admin/notification/templates", nil)
+	req, _ := http.NewRequest("GET", "/admin/notification/templates?type=email", nil)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	list, ok := data["list"].([]interface{})
+	assert.True(s.T(), ok)
+	assert.Len(s.T(), list, 1)
+	assert.Equal(s.T(), float64(1), data["total"])
 }
 
 func (s *NotificationExtendedTestSuite) TestCreateTemplate() {
@@ -1805,6 +2548,52 @@ func (s *NotificationExtendedTestSuite) TestCreateTemplate() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
+func (s *NotificationExtendedTestSuite) TestUpdateTemplate_WithTypeAndEvent() {
+	tpl := &model.NotificationTemplate{
+		Name:    "Template Before",
+		Type:    "email",
+		Event:   "user.register",
+		Title:   "Before",
+		Content: "Before content",
+		Enabled: true,
+	}
+	s.db.Create(tpl)
+
+	handler := NewNotificationHandler()
+	s.router.PUT("/admin/notification/templates/:id", handler.UpdateTemplate)
+
+	body := map[string]interface{}{
+		"name":    "Template After",
+		"type":    "telegram",
+		"event":   "ticket.reply",
+		"title":   "After",
+		"content": "After content",
+		"enabled": false,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest(
+		"PUT",
+		"/admin/notification/templates/"+strconv.FormatUint(uint64(tpl.ID), 10),
+		bytes.NewReader(jsonBody),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var updated model.NotificationTemplate
+	err := s.db.First(&updated, tpl.ID).Error
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "Template After", updated.Name)
+	assert.Equal(s.T(), "telegram", updated.Type)
+	assert.Equal(s.T(), "ticket.reply", updated.Event)
+	assert.Equal(s.T(), "After", updated.Title)
+	assert.Equal(s.T(), "After content", updated.Content)
+	assert.False(s.T(), updated.Enabled)
+}
+
 func (s *NotificationExtendedTestSuite) TestCreateTemplate_InvalidBody() {
 	handler := NewNotificationHandler()
 	s.router.POST("/admin/notification/templates", handler.CreateTemplate)
@@ -1818,21 +2607,46 @@ func (s *NotificationExtendedTestSuite) TestCreateTemplate_InvalidBody() {
 }
 
 func (s *NotificationExtendedTestSuite) TestListLogs() {
+	userID := s.testUser.ID
+	logItem := &model.NotificationLog{
+		UserID:  &userID,
+		Type:    "email",
+		Event:   "user.traffic_low",
+		Title:   "Low Traffic",
+		Content: "warn",
+		Status:  2,
+	}
+	s.db.Create(logItem)
+
 	handler := NewNotificationHandler()
 	s.router.GET("/admin/notification/logs", handler.ListLogs)
 
-	req, _ := http.NewRequest("GET", "/admin/notification/logs", nil)
+	req, _ := http.NewRequest("GET", "/admin/notification/logs?status=failed", nil)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.NoError(s.T(), err)
+	data, ok := resp["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	list, ok := data["list"].([]interface{})
+	assert.True(s.T(), ok)
+	assert.Len(s.T(), list, 1)
+
+	row, ok := list[0].(map[string]interface{})
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "failed", row["status"])
+	assert.Equal(s.T(), float64(2), row["status_code"])
 }
 
 func (s *NotificationExtendedTestSuite) TestGetEmailConfig() {
 	handler := NewNotificationHandler()
-	s.router.GET("/admin/notification/email-config", handler.GetEmailConfig)
+	s.router.GET("/admin/notification/email/config", handler.GetEmailConfig)
 
-	req, _ := http.NewRequest("GET", "/admin/notification/email-config", nil)
+	req, _ := http.NewRequest("GET", "/admin/notification/email/config", nil)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
@@ -1841,7 +2655,7 @@ func (s *NotificationExtendedTestSuite) TestGetEmailConfig() {
 
 func (s *NotificationExtendedTestSuite) TestUpdateEmailConfig() {
 	handler := NewNotificationHandler()
-	s.router.PUT("/admin/notification/email-config", handler.UpdateEmailConfig)
+	s.router.PUT("/admin/notification/email/config", handler.UpdateEmailConfig)
 
 	body := map[string]interface{}{
 		"host":         "smtp.example.com",
@@ -1850,7 +2664,7 @@ func (s *NotificationExtendedTestSuite) TestUpdateEmailConfig() {
 	}
 	jsonBody, _ := json.Marshal(body)
 
-	req, _ := http.NewRequest("PUT", "/admin/notification/email-config", bytes.NewReader(jsonBody))
+	req, _ := http.NewRequest("PUT", "/admin/notification/email/config", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
@@ -1860,14 +2674,111 @@ func (s *NotificationExtendedTestSuite) TestUpdateEmailConfig() {
 
 func (s *NotificationExtendedTestSuite) TestUpdateEmailConfig_InvalidBody() {
 	handler := NewNotificationHandler()
-	s.router.PUT("/admin/notification/email-config", handler.UpdateEmailConfig)
+	s.router.PUT("/admin/notification/email/config", handler.UpdateEmailConfig)
 
-	req, _ := http.NewRequest("PUT", "/admin/notification/email-config", strings.NewReader("invalid"))
+	req, _ := http.NewRequest("PUT", "/admin/notification/email/config", strings.NewReader("invalid"))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+func (s *NotificationExtendedTestSuite) TestEmailConfig_RoundTrip_EncryptionStringAndBool_KeepPasswordOnEmpty() {
+	handler := NewNotificationHandler()
+	s.router.GET("/admin/notification/email/config", handler.GetEmailConfig)
+	s.router.PUT("/admin/notification/email/config", handler.UpdateEmailConfig)
+
+	initialBody := map[string]interface{}{
+		"host":         "smtp.persist.test",
+		"port":         465,
+		"username":     "notify-user",
+		"password":     "KeepPassword#1",
+		"from_name":    "Notify Bot",
+		"from_address": "notify@example.com",
+		"encryption":   "tls",
+	}
+	initialJSON, _ := json.Marshal(initialBody)
+	putReq, _ := http.NewRequest("PUT", "/admin/notification/email/config", bytes.NewReader(initialJSON))
+	putReq.Header.Set("Content-Type", "application/json")
+	putResp := httptest.NewRecorder()
+	s.router.ServeHTTP(putResp, putReq)
+	assert.Equal(s.T(), http.StatusOK, putResp.Code)
+
+	// encryption string should be accepted and persisted through GET payload.
+	getReq1, _ := http.NewRequest("GET", "/admin/notification/email/config", nil)
+	getResp1 := httptest.NewRecorder()
+	s.router.ServeHTTP(getResp1, getReq1)
+	assert.Equal(s.T(), http.StatusOK, getResp1.Code)
+
+	var getPayload1 map[string]interface{}
+	err := json.Unmarshal(getResp1.Body.Bytes(), &getPayload1)
+	assert.NoError(s.T(), err)
+	data1, ok := getPayload1["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "smtp.persist.test", data1["host"])
+	assert.Equal(s.T(), float64(465), data1["port"])
+	assert.Equal(s.T(), "notify-user", data1["username"])
+	assert.Equal(s.T(), "notify@example.com", data1["from_address"])
+
+	enc1, hasEnc1 := data1["encryption"]
+	assert.True(s.T(), hasEnc1)
+	if encStr, ok := enc1.(string); ok {
+		assert.NotEmpty(s.T(), encStr)
+	} else if encBool, ok := enc1.(bool); ok {
+		assert.True(s.T(), encBool)
+	} else {
+		s.T().Fatalf("unexpected encryption type: %T", enc1)
+	}
+
+	var storedEmailConfig model.SystemConfig
+	err = s.db.Where("key = ?", notificationEmailConfigKey).First(&storedEmailConfig).Error
+	assert.NoError(s.T(), err)
+	assert.Contains(s.T(), storedEmailConfig.Value, "KeepPassword#1")
+
+	// bool encryption input should be accepted; empty password should keep previous secret.
+	updateBody := map[string]interface{}{
+		"host":         "smtp.persist.test",
+		"port":         465,
+		"username":     "notify-user",
+		"password":     "",
+		"from_name":    "Notify Bot Updated",
+		"from_address": "notify@example.com",
+		"encryption":   true,
+	}
+	updateJSON, _ := json.Marshal(updateBody)
+	putReq2, _ := http.NewRequest("PUT", "/admin/notification/email/config", bytes.NewReader(updateJSON))
+	putReq2.Header.Set("Content-Type", "application/json")
+	putResp2 := httptest.NewRecorder()
+	s.router.ServeHTTP(putResp2, putReq2)
+	assert.Equal(s.T(), http.StatusOK, putResp2.Code)
+
+	getReq2, _ := http.NewRequest("GET", "/admin/notification/email/config", nil)
+	getResp2 := httptest.NewRecorder()
+	s.router.ServeHTTP(getResp2, getReq2)
+	assert.Equal(s.T(), http.StatusOK, getResp2.Code)
+
+	var getPayload2 map[string]interface{}
+	err = json.Unmarshal(getResp2.Body.Bytes(), &getPayload2)
+	assert.NoError(s.T(), err)
+	data2, ok := getPayload2["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "Notify Bot Updated", data2["from_name"])
+
+	enc2, hasEnc2 := data2["encryption"]
+	assert.True(s.T(), hasEnc2)
+	if encStr, ok := enc2.(string); ok {
+		assert.NotEmpty(s.T(), encStr)
+	} else if encBool, ok := enc2.(bool); ok {
+		assert.True(s.T(), encBool)
+	} else {
+		s.T().Fatalf("unexpected encryption type after bool update: %T", enc2)
+	}
+
+	var storedEmailConfigAfter model.SystemConfig
+	err = s.db.Where("key = ?", notificationEmailConfigKey).First(&storedEmailConfigAfter).Error
+	assert.NoError(s.T(), err)
+	assert.Contains(s.T(), storedEmailConfigAfter.Value, "KeepPassword#1")
 }
 
 func (s *NotificationExtendedTestSuite) TestDeleteTemplate() {
@@ -1969,6 +2880,69 @@ func (s *MFAExtendedTestSuite) TestUpdateAdminConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *MFAExtendedTestSuite) TestAdminConfig_FrontendFields_RoundTrip() {
+	handler := NewMFAHandler()
+	s.router.GET("/admin/mfa/config", handler.GetAdminConfig)
+	s.router.PUT("/admin/mfa/config", handler.UpdateAdminConfig)
+
+	updateBody := map[string]interface{}{
+		"enabled":            true,
+		"required":           true,
+		"methods":            map[string]bool{"totp": true, "sms": true, "email": false},
+		"backup_codes_count": 12,
+		"max_attempts":       6,
+		"lockout_duration":   30,
+	}
+	updateJSON, _ := json.Marshal(updateBody)
+	putReq, _ := http.NewRequest("PUT", "/admin/mfa/config", bytes.NewReader(updateJSON))
+	putReq.Header.Set("Content-Type", "application/json")
+	putResp := httptest.NewRecorder()
+	s.router.ServeHTTP(putResp, putReq)
+	assert.Equal(s.T(), http.StatusOK, putResp.Code)
+
+	getReq, _ := http.NewRequest("GET", "/admin/mfa/config", nil)
+	getResp := httptest.NewRecorder()
+	s.router.ServeHTTP(getResp, getReq)
+	assert.Equal(s.T(), http.StatusOK, getResp.Code)
+
+	var payload map[string]interface{}
+	err := json.Unmarshal(getResp.Body.Bytes(), &payload)
+	assert.NoError(s.T(), err)
+	data, ok := payload["data"].(map[string]interface{})
+	assert.True(s.T(), ok)
+
+	_, hasRequired := data["required"]
+	_, hasMethods := data["methods"]
+	_, hasBackupCodesCount := data["backup_codes_count"]
+	_, hasMaxAttempts := data["max_attempts"]
+	_, hasLockoutDuration := data["lockout_duration"]
+
+	assert.True(s.T(), hasRequired)
+	assert.True(s.T(), hasMethods)
+	assert.True(s.T(), hasBackupCodesCount)
+	assert.True(s.T(), hasMaxAttempts)
+	assert.True(s.T(), hasLockoutDuration)
+
+	assert.Equal(s.T(), true, data["enabled"])
+	assert.Equal(s.T(), true, data["required"])
+	assert.Equal(s.T(), float64(12), data["backup_codes_count"])
+	assert.Equal(s.T(), float64(6), data["max_attempts"])
+	assert.Equal(s.T(), float64(30), data["lockout_duration"])
+
+	methods, ok := data["methods"].(map[string]interface{})
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), true, methods["totp"])
+	assert.Equal(s.T(), true, methods["sms"])
+	assert.Equal(s.T(), false, methods["email"])
+
+	var storedMFAConfig model.SystemConfig
+	err = s.db.Where("key = ?", mfaAdminConfigKey).First(&storedMFAConfig).Error
+	assert.NoError(s.T(), err)
+	assert.Contains(s.T(), storedMFAConfig.Value, "\"backup_codes_count\":12")
+	assert.Contains(s.T(), storedMFAConfig.Value, "\"max_attempts\":6")
+	assert.Contains(s.T(), storedMFAConfig.Value, "\"lockout_duration\":30")
 }
 
 func (s *MFAExtendedTestSuite) TestUpdateAdminConfig_InvalidBody() {
@@ -2145,8 +3119,8 @@ func TestNodeExtended(t *testing.T) {
 
 type AdminExtendedTestSuite struct {
 	HandlerTestSuite
-	testUser *model.User
-	testPlan *model.Plan
+	testUser  *model.User
+	testPlan  *model.Plan
 	testOrder *model.Order
 }
 

@@ -60,13 +60,16 @@ func (s *ForwardNodeService) GetByType(nodeType string) ([]*model.ForwardNode, e
 }
 
 // List 获取节点列表
-func (s *ForwardNodeService) List(nodeType string, page, pageSize int) ([]*model.ForwardNode, int64, error) {
+func (s *ForwardNodeService) List(nodeType string, status *int, page, pageSize int) ([]*model.ForwardNode, int64, error) {
 	var nodes []*model.ForwardNode
 	var total int64
 
 	query := s.db.Model(&model.ForwardNode{})
 	if nodeType != "" {
 		query = query.Where("type = ?", nodeType)
+	}
+	if status != nil {
+		query = query.Where("status = ?", *status)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -124,7 +127,7 @@ func (s *ForwardNodeService) HealthCheck(ctx context.Context, nodeID uint) (*Hea
 	if result.Status == model.ForwardNodeStatusOnline {
 		// 计算在线率
 		var stats struct {
-			Total int64
+			Total  int64
 			Online int64
 		}
 		s.db.Model(&model.ForwardNode{}).

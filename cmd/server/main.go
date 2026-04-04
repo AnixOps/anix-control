@@ -9,6 +9,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -66,19 +68,119 @@ func init() {
 	flag.StringVar(&configPath, "config", "config/config.yaml", "配置文件路径")
 }
 
+func fileExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func resolveConfigPath(rawPath string) (string, error) {
+	if rawPath == "" {
+		rawPath = "config/config.yaml"
+	}
+
+	if filepath.IsAbs(rawPath) {
+		if fileExists(rawPath) {
+			return rawPath, nil
+		}
+		return rawPath, fmt.Errorf("config file not found: %s", rawPath)
+	}
+
+	cwdPath, _ := filepath.Abs(rawPath)
+	if fileExists(cwdPath) {
+		return cwdPath, nil
+	}
+
+	if exePath, err := os.Executable(); err == nil {
+		exeCandidate := filepath.Join(filepath.Dir(exePath), rawPath)
+		if fileExists(exeCandidate) {
+			return exeCandidate, nil
+		}
+		return cwdPath, fmt.Errorf("config file not found (checked: %s, %s)", cwdPath, exeCandidate)
+	}
+
+	return cwdPath, fmt.Errorf("config file not found: %s", cwdPath)
+}
+
+func resolveRuntimePath(rawPath, resolvedConfigPath string) string {
+	if rawPath == "" {
+		return rawPath
+	}
+	if filepath.IsAbs(rawPath) {
+		return rawPath
+	}
+
+	candidates := make([]string, 0, 4)
+	configDir := filepath.Dir(resolvedConfigPath)
+	if configDir != "" {
+		// If config file lives in ./config/, prefer resolving relative paths from project root.
+		if strings.EqualFold(filepath.Base(configDir), "config") {
+			candidates = append(candidates, filepath.Join(filepath.Dir(configDir), rawPath))
+		}
+		candidates = append(candidates, filepath.Join(configDir, rawPath))
+	}
+	if exePath, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exePath), rawPath))
+	}
+	if cwdPath, err := filepath.Abs(rawPath); err == nil {
+		candidates = append(candidates, cwdPath)
+	}
+
+	for _, candidate := range candidates {
+		if fileExists(candidate) {
+			return candidate
+		}
+	}
+	if len(candidates) > 0 {
+		return candidates[0]
+	}
+	return rawPath
+}
+
+func resolveSQLitePath(rawDBPath, resolvedConfigPath string) string {
+	if rawDBPath == "" {
+		rawDBPath = "config/data/v2board.db"
+	}
+	return resolveRuntimePath(rawDBPath, resolvedConfigPath)
+}
+
 func main() {
 	flag.Parse()
+
+	resolvedConfigPath, resolveErr := resolveConfigPath(configPath)
+	log.Printf("Loading config file: %s", resolvedConfigPath)
+	if resolveErr != nil {
+		log.Fatalf("Failed to locate config: %v", resolveErr)
+	}
 
 	// 打印版本信息
 	fmt.Printf("V2Board Go Backend v%s (build: %s)\n", version, buildTime)
 
 	// 加载配置
-	cfg, err := config.Load(configPath)
+	cfg, err := config.Load(resolvedConfigPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
 	// 打印环境信息
+	driver := strings.ToLower(cfg.Database.Driver)
+	if driver == "" || driver == "sqlite" || driver == "sqlite3" {
+		cfg.Database.Database = resolveSQLitePath(cfg.Database.Database, resolvedConfigPath)
+		log.Printf("SQLite DB path: %s", cfg.Database.Database)
+	} else {
+		log.Printf("PostgreSQL DSN target: host=%s port=%d db=%s user=%s",
+			cfg.Database.Host, cfg.Database.Port, cfg.Database.Database, cfg.Database.Username)
+	}
+
+	frontendPath := cfg.Frontend.Path
+	if frontendPath == "" {
+		frontendPath = "web/public"
+	}
+	cfg.Frontend.Path = resolveRuntimePath(frontendPath, resolvedConfigPath)
+	log.Printf("Frontend static path: %s", cfg.Frontend.Path)
+
 	env := cfg.Env
 	if env == "" {
 		env = "development"

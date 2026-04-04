@@ -21,6 +21,8 @@ type AgentHandler struct {
 	db          *gorm.DB
 	connections sync.Map // nodeID -> *AgentConnection
 	pendingAcks sync.Map // messageID -> *wsPendingAck
+	taskResults sync.Map // taskID -> AgentTaskStatus
+	monitorData sync.Map // nodeID -> AgentMonitorSnapshot
 	wsUpgrader  websocket.Upgrader
 	ackTimeout  time.Duration
 	maxRetries  int
@@ -549,6 +551,26 @@ type AgentTask struct {
 	Timeout int                    `json:"timeout"`
 }
 
+// AgentTaskStatus stores the latest status/result for a dispatched task.
+type AgentTaskStatus struct {
+	TaskID      string                 `json:"task_id"`
+	NodeID      uint                   `json:"node_id"`
+	Type        string                 `json:"type,omitempty"`
+	Action      string                 `json:"action,omitempty"`
+	Params      map[string]interface{} `json:"params,omitempty"`
+	Timeout     int                    `json:"timeout,omitempty"`
+	Status      string                 `json:"status"`
+	MessageID   string                 `json:"message_id,omitempty"`
+	AckReceived bool                   `json:"ack_received"`
+	Success     bool                   `json:"success"`
+	Output      string                 `json:"output,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	Data        interface{}            `json:"data,omitempty"`
+	DurationMS  int64                  `json:"duration_ms,omitempty"`
+	Timestamp   time.Time              `json:"timestamp"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+}
+
 // AgentReportResult godoc
 // @Summary 涓婃姤浠诲姟缁撴灉
 // @Description Agent 涓婃姤浠诲姟鎵ц缁撴灉
@@ -568,12 +590,54 @@ func (h *AgentHandler) AgentReportResult(c *gin.Context) {
 	// TODO: 淇濆瓨浠诲姟缁撴灉鍒版暟鎹簱
 	// TODO: 濡傛灉鏈夊洖璋冿紝瑙﹀彂鍥炶皟
 
-	c.JSON(http.StatusOK, gin.H{"message": "received"})
+	now := time.Now()
+	snapshot, _ := h.taskResults.Load(result.TaskID)
+	taskStatus, ok := snapshot.(AgentTaskStatus)
+	if !ok {
+		taskStatus = AgentTaskStatus{
+			TaskID:  result.TaskID,
+			Status:  "completed",
+			Success: result.Success,
+		}
+	}
+
+	if result.NodeID != 0 {
+		taskStatus.NodeID = result.NodeID
+	}
+	if result.Type != "" {
+		taskStatus.Type = result.Type
+	}
+	if result.Action != "" {
+		taskStatus.Action = result.Action
+	}
+
+	taskStatus.Success = result.Success
+	taskStatus.Output = result.Output
+	taskStatus.Error = result.Error
+	taskStatus.Data = result.Data
+	taskStatus.DurationMS = result.Duration
+	taskStatus.Status = "completed"
+	taskStatus.UpdatedAt = now
+	if result.Timestamp.IsZero() {
+		taskStatus.Timestamp = now
+	} else {
+		taskStatus.Timestamp = result.Timestamp
+	}
+
+	h.taskResults.Store(result.TaskID, taskStatus)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "received",
+		"data":    taskStatus,
+	})
 }
 
 // AgentTaskResult 浠诲姟缁撴灉
 type AgentTaskResult struct {
-	TaskID    string      `json:"task_id"`
+	TaskID    string      `json:"task_id" binding:"required"`
+	NodeID    uint        `json:"node_id,omitempty"`
+	Type      string      `json:"type,omitempty"`
+	Action    string      `json:"action,omitempty"`
 	Success   bool        `json:"success"`
 	Output    string      `json:"output"`
 	Error     string      `json:"error,omitempty"`
@@ -602,13 +666,31 @@ func (h *AgentHandler) AgentMonitor(c *gin.Context) {
 
 	// TODO: 淇濆瓨鐩戞帶鏁版嵁鍒版椂搴忔暟鎹簱
 
-	c.JSON(http.StatusOK, gin.H{"message": "received"})
+	snapshot := AgentMonitorSnapshot{
+		NodeID:    req.NodeID,
+		System:    req.System,
+		UpdatedAt: time.Now(),
+	}
+	h.monitorData.Store(req.NodeID, snapshot)
+	h.updateConnectionLastSeen(req.NodeID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "received",
+		"data":    snapshot,
+	})
 }
 
 // AgentMonitorRequest 鐩戞帶璇锋眰
 type AgentMonitorRequest struct {
-	NodeID uint                   `json:"node_id"`
+	NodeID uint                   `json:"node_id" binding:"required"`
 	System map[string]interface{} `json:"system"`
+}
+
+// AgentMonitorSnapshot stores the latest monitor payload pushed by an agent node.
+type AgentMonitorSnapshot struct {
+	NodeID    uint                   `json:"node_id"`
+	System    map[string]interface{} `json:"system"`
+	UpdatedAt time.Time              `json:"updated_at"`
 }
 
 // ========== WebSocket 杩炴帴 ==========
@@ -776,36 +858,83 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 		Timeout: req.Timeout,
 	}
 
+	taskStatus := AgentTaskStatus{
+		TaskID:    task.ID,
+		NodeID:    req.NodeID,
+		Type:      req.Type,
+		Action:    req.Action,
+		Params:    req.Params,
+		Timeout:   req.Timeout,
+		Status:    "pending",
+		Success:   false,
+		Timestamp: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	h.taskResults.Store(task.ID, taskStatus)
+
 	messageID, ack, err := h.dispatchWithAckRetry(agentConn, "task.assign", map[string]interface{}{
 		"task": task,
 	}, true)
 	if err != nil {
 		if fallbackErr := h.sendLegacyTask(agentConn, task); fallbackErr != nil {
+			taskStatus.Status = "failed"
+			taskStatus.Error = "send failed: " + fallbackErr.Error()
+			taskStatus.MessageID = messageID
+			taskStatus.UpdatedAt = time.Now()
+			h.taskResults.Store(task.ID, taskStatus)
+
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":        "send failed",
 				"task_id":      task.ID,
 				"message_id":   messageID,
 				"dispatch_err": err.Error(),
+				"data":         taskStatus,
 			})
 			return
 		}
 
+		taskStatus.Status = "dispatched"
+		taskStatus.MessageID = messageID
+		taskStatus.AckReceived = false
+		taskStatus.Success = true
+		taskStatus.Output = "task dispatched (legacy fallback)"
+		taskStatus.UpdatedAt = time.Now()
+		h.taskResults.Store(task.ID, taskStatus)
+
 		c.JSON(http.StatusOK, gin.H{
 			"message":      "task sent with legacy fallback",
 			"task_id":      task.ID,
+			"node_id":      req.NodeID,
+			"success":      true,
+			"output":       taskStatus.Output,
+			"duration_ms":  int64(0),
 			"message_id":   messageID,
 			"ack_received": false,
 			"dispatch_err": err.Error(),
+			"data":         taskStatus,
 		})
 		return
 	}
 
+	taskStatus.Status = "dispatched"
+	taskStatus.MessageID = messageID
+	taskStatus.AckReceived = true
+	taskStatus.Success = true
+	taskStatus.Output = "task dispatched"
+	taskStatus.UpdatedAt = time.Now()
+	h.taskResults.Store(task.ID, taskStatus)
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "task sent",
 		"task_id":      task.ID,
+		"node_id":      req.NodeID,
+		"success":      true,
+		"output":       taskStatus.Output,
+		"duration_ms":  int64(0),
 		"message_id":   messageID,
 		"ack_received": true,
 		"ack":          ack,
+		"data":         taskStatus,
 	})
 }
 
@@ -842,7 +971,74 @@ func (h *AgentHandler) ListAgents(c *gin.Context) {
 		return true
 	})
 
-	c.JSON(http.StatusOK, gin.H{"agents": agents})
+	c.JSON(http.StatusOK, gin.H{
+		"agents": agents,
+		"data":   gin.H{"agents": agents},
+	})
+}
+
+// GetTaskResult godoc
+// @Summary Get task execution result
+// @Description Query the latest status/result for a task by task_id
+// @Tags 管理端 Agent
+// @Produce json
+// @Security BearerAuth
+// @Param task_id path string true "Task ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /admin/agent/tasks/{task_id} [get]
+func (h *AgentHandler) GetTaskResult(c *gin.Context) {
+	taskID := c.Param("task_id")
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "task_id is required"})
+		return
+	}
+
+	snapshot, ok := h.taskResults.Load(taskID)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "task result not found"})
+		return
+	}
+
+	taskStatus, ok := snapshot.(AgentTaskStatus)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid task result state"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": taskStatus})
+}
+
+// GetMonitor godoc
+// @Summary Get latest monitor payload from agent node
+// @Description Query monitor data by node_id
+// @Tags 管理端 Agent
+// @Produce json
+// @Security BearerAuth
+// @Param node_id query int true "Node ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Router /admin/agent/monitor [get]
+func (h *AgentHandler) GetMonitor(c *gin.Context) {
+	nodeID, err := strconv.ParseUint(c.Query("node_id"), 10, 32)
+	if err != nil || nodeID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "valid node_id is required"})
+		return
+	}
+
+	snapshot, ok := h.monitorData.Load(uint(nodeID))
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "monitor data not found"})
+		return
+	}
+
+	monitor, ok := snapshot.(AgentMonitorSnapshot)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid monitor state"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": monitor})
 }
 
 // ExecuteCommand godoc

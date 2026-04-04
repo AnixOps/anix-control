@@ -79,7 +79,7 @@
         </div>
         <div class="form-actions">
           <button class="btn-secondary" @click="saveBackupConfig">保存配置</button>
-          <button class="btn-primary" @click="createBackup">立即备份</button>
+          <button class="btn-primary" @click="createBackupRequest">立即备份</button>
         </div>
       </div>
 
@@ -124,8 +124,8 @@
               <td>{{ formatTime(backup.created_at) }}</td>
               <td>
                 <div class="action-buttons">
-                  <button class="btn-sm btn-ghost" @click="restoreBackup(backup)" title="恢复" :disabled="backup.status !== 'completed'">📥</button>
-                  <button class="btn-sm btn-ghost" @click="deleteBackup(backup)" title="删除">🗑️</button>
+                  <button class="btn-sm btn-ghost" @click="restoreBackupRequest(backup)" title="恢复" :disabled="backup.status !== 'completed'">📥</button>
+                  <button class="btn-sm btn-ghost" @click="deleteBackupRequest(backup)" title="删除">🗑️</button>
                 </div>
               </td>
             </tr>
@@ -176,7 +176,7 @@
               </td>
               <td>
                 <div class="action-buttons">
-                  <button class="btn-sm btn-ghost" @click="runHealthCheck(lb)" title="健康检查">🔍</button>
+                  <button class="btn-sm btn-ghost" @click="runHealthCheckRequest(lb)" title="健康检查">🔍</button>
                   <button class="btn-sm btn-ghost" @click="openBalancerModal(lb)" title="编辑">✏️</button>
                   <button class="btn-sm btn-ghost" @click="deleteBalancer(lb)" title="删除">🗑️</button>
                 </div>

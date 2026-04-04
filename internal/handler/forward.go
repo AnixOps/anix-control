@@ -51,17 +51,32 @@ func (h *ForwardHandler) ListNodes(c *gin.Context) {
 	nodeType := c.Query("type")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	var status *int
+	if rawStatus := c.Query("status"); rawStatus != "" {
+		parsedStatus, err := strconv.Atoi(rawStatus)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
+			return
+		}
+		status = &parsedStatus
+	}
 
-	nodes, total, err := h.nodeService.List(nodeType, page, pageSize)
+	nodes, total, err := h.nodeService.List(nodeType, status, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":  nodes,
-		"total": total,
-		"page":  page,
+		"data": gin.H{
+			"list":      nodes,
+			"total":     total,
+			"page":      page,
+			"page_size": pageSize,
+		},
+		"list":      nodes,
+		"total":     total,
+		"page":      page,
 		"page_size": pageSize,
 	})
 }
@@ -86,17 +101,17 @@ func (h *ForwardHandler) CreateNode(c *gin.Context) {
 	}
 
 	node := &model.ForwardNode{
-		Name:       req.Name,
-		Type:       req.Type,
-		Host:       req.Host,
-		Port:       req.Port,
-		APIPort:    req.APIPort,
-		Region:     req.Region,
-		ISP:        req.ISP,
-		Bandwidth:  req.Bandwidth,
-		Weight:     req.Weight,
-		MaxConn:    req.MaxConn,
-		Enabled:    true,
+		Name:      req.Name,
+		Type:      req.Type,
+		Host:      req.Host,
+		Port:      req.Port,
+		APIPort:   req.APIPort,
+		Region:    req.Region,
+		ISP:       req.ISP,
+		Bandwidth: req.Bandwidth,
+		Weight:    req.Weight,
+		MaxConn:   req.MaxConn,
+		Enabled:   true,
 	}
 
 	if req.APIToken != "" {
@@ -177,6 +192,9 @@ func (h *ForwardHandler) UpdateNode(c *gin.Context) {
 	// 更新字段
 	if req.Name != "" {
 		node.Name = req.Name
+	}
+	if req.Type != "" {
+		node.Type = req.Type
 	}
 	if req.Host != "" {
 		node.Host = req.Host
@@ -300,9 +318,11 @@ func (h *ForwardHandler) ToggleNode(c *gin.Context) {
 	}
 
 	if req.Enabled {
-		node.Status = 1
+		node.Enabled = true
+		node.Status = model.ForwardNodeStatusOnline
 	} else {
-		node.Status = 0
+		node.Enabled = false
+		node.Status = model.ForwardNodeStatusOffline
 	}
 
 	if err := h.nodeService.Update(node); err != nil {
@@ -346,9 +366,15 @@ func (h *ForwardHandler) ListRules(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":  rules,
-		"total": total,
-		"page":  page,
+		"data": gin.H{
+			"list":      rules,
+			"total":     total,
+			"page":      page,
+			"page_size": pageSize,
+		},
+		"list":      rules,
+		"total":     total,
+		"page":      page,
 		"page_size": pageSize,
 	})
 }
@@ -465,6 +491,12 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 	// 更新字段
 	if req.Name != "" {
 		rule.Name = req.Name
+	}
+	if req.RelayNodeID > 0 {
+		rule.RelayNodeID = req.RelayNodeID
+	}
+	if req.ExitNodeID > 0 {
+		rule.ExitNodeID = req.ExitNodeID
 	}
 	if req.ListenPort > 0 {
 		rule.ListenPort = req.ListenPort
@@ -596,11 +628,11 @@ func (h *ForwardHandler) GetForwardStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"relay_nodes": len(relayNodes),
-		"exit_nodes": len(exitNodes),
-		"online_relay": onlineRelay,
-		"online_exit": onlineExit,
-		"total_upload": totalUpload,
+		"relay_nodes":    len(relayNodes),
+		"exit_nodes":     len(exitNodes),
+		"online_relay":   onlineRelay,
+		"online_exit":    onlineExit,
+		"total_upload":   totalUpload,
 		"total_download": totalDownload,
 	})
 }
@@ -678,6 +710,7 @@ type CreateNodeRequest struct {
 // UpdateNodeRequest 更新节点请求
 type UpdateNodeRequest struct {
 	Name      string `json:"name"`
+	Type      string `json:"type" binding:"omitempty,oneof=relay exit"`
 	Host      string `json:"host"`
 	Port      int    `json:"port"`
 	Region    string `json:"region"`
@@ -708,6 +741,8 @@ type CreateRuleRequest struct {
 // UpdateRuleRequest 更新规则请求
 type UpdateRuleRequest struct {
 	Name         string     `json:"name"`
+	RelayNodeID  uint       `json:"relay_node_id"`
+	ExitNodeID   uint       `json:"exit_node_id"`
 	ListenPort   int        `json:"listen_port"`
 	Protocol     string     `json:"protocol"`
 	TargetHost   string     `json:"target_host"`
@@ -804,4 +839,3 @@ func (h *ForwardHandler) SyncNodeStats(c *gin.Context) {
 		"stats":   stats,
 	})
 }
-
