@@ -8,15 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anixops/v2board/tests/integration/binary"
-	"github.com/anixops/v2board/tests/integration/clients"
-	"github.com/anixops/v2board/tests/integration/config"
-	"github.com/anixops/v2board/tests/integration/runner"
+	"github.com/anixops/v2board/internal/tests/integration/binary"
+	"github.com/anixops/v2board/internal/tests/integration/clients"
+	"github.com/anixops/v2board/internal/tests/integration/config"
+	"github.com/anixops/v2board/internal/tests/integration/runner"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestSuite 集成测试套件
+// TestSuite 闆嗘垚娴嬭瘯濂椾欢
 type TestSuite struct {
 	t          *testing.T
 	binMgr     *binary.Manager
@@ -25,7 +25,7 @@ type TestSuite struct {
 	userInfo   config.UserConfig
 }
 
-// NewTestSuite 创建测试套件
+// NewTestSuite 鍒涘缓娴嬭瘯濂椾欢
 func NewTestSuite(t *testing.T) *TestSuite {
 	configDir := t.TempDir()
 	return &TestSuite{
@@ -35,12 +35,12 @@ func NewTestSuite(t *testing.T) *TestSuite {
 	}
 }
 
-// Setup 设置测试环境
+// Setup 璁剧疆娴嬭瘯鐜
 func (s *TestSuite) Setup() error {
-	// 设置二进制管理器
+	// 璁剧疆浜岃繘鍒剁鐞嗗櫒
 	clients.SetBinaryManager(&binaryAdapter{mgr: s.binMgr})
 
-	// 确保二进制文件可用
+	// 纭繚浜岃繘鍒舵枃浠跺彲鐢?
 	if _, err := s.binMgr.EnsureBinary(&binary.XrayInfo); err != nil {
 		return fmt.Errorf("xray binary not available: %w", err)
 	}
@@ -51,7 +51,7 @@ func (s *TestSuite) Setup() error {
 	return nil
 }
 
-// SetServer 设置服务器信息
+// SetServer 璁剧疆鏈嶅姟鍣ㄤ俊鎭?
 func (s *TestSuite) SetServer(host string, port int, protocol config.Protocol) {
 	s.serverInfo = config.ServerConfig{
 		Host:     host,
@@ -60,7 +60,7 @@ func (s *TestSuite) SetServer(host string, port int, protocol config.Protocol) {
 	}
 }
 
-// SetUser 设置用户信息
+// SetUser 璁剧疆鐢ㄦ埛淇℃伅
 func (s *TestSuite) SetUser(uuid, email string) {
 	s.userInfo = config.UserConfig{
 		UUID:  uuid,
@@ -68,7 +68,7 @@ func (s *TestSuite) SetUser(uuid, email string) {
 	}
 }
 
-// RunScenario 运行单个测试场景
+// RunScenario 杩愯鍗曚釜娴嬭瘯鍦烘櫙
 func (s *TestSuite) RunScenario(ctx context.Context, scenario config.TestScenario) *runner.TestResult {
 	r := runner.NewRunner(
 		runner.WithTimeout(30*time.Second),
@@ -83,7 +83,7 @@ func (s *TestSuite) RunScenario(ctx context.Context, scenario config.TestScenari
 	return nil
 }
 
-// RunAllScenarios 运行所有测试场景
+// RunAllScenarios 杩愯鎵€鏈夋祴璇曞満鏅?
 func (s *TestSuite) RunAllScenarios(ctx context.Context) *runner.TestReport {
 	r := runner.NewRunner(
 		runner.WithTimeout(30*time.Second),
@@ -93,7 +93,7 @@ func (s *TestSuite) RunAllScenarios(ctx context.Context) *runner.TestReport {
 	return r.Run(ctx, s.serverInfo, s.userInfo)
 }
 
-// binaryAdapter 适配器
+// binaryAdapter 閫傞厤鍣?
 type binaryAdapter struct {
 	mgr *binary.Manager
 }
@@ -111,7 +111,7 @@ func (a *binaryAdapter) EnsureBinary(name string) (string, error) {
 	return a.mgr.EnsureBinary(info)
 }
 
-// TestBinaryDownload 测试二进制下载
+// TestBinaryDownload 娴嬭瘯浜岃繘鍒朵笅杞?
 func TestBinaryDownload(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
@@ -140,7 +140,7 @@ func TestBinaryDownload(t *testing.T) {
 	})
 }
 
-// TestConfigGeneration 测试配置生成
+// TestConfigGeneration 娴嬭瘯閰嶇疆鐢熸垚
 func TestConfigGeneration(t *testing.T) {
 	scenarios := []config.TestScenario{
 		{Name: "vless-reality", Protocol: config.ProtocolVLESS, Transport: config.TransportTCP, TLS: config.TLSReality},
@@ -166,17 +166,17 @@ func TestConfigGeneration(t *testing.T) {
 
 	for _, scenario := range scenarios {
 		t.Run(string(scenario.Protocol), func(t *testing.T) {
-			// Xray 配置
+			// Xray 閰嶇疆
 			xrayGen := config.NewXrayGenerator()
 			xrayConfig, err := xrayGen.GenerateFromScenario(scenario, server, user)
 			require.NoError(t, err)
 			assert.NotEmpty(t, xrayConfig)
 
-			// Mihomo 配置
+			// Mihomo 閰嶇疆
 			mihomoGen := config.NewMihomoGenerator()
 			mihomoConfig, err := mihomoGen.GenerateFromScenario(scenario, server, user)
 			if err != nil {
-				// 某些协议可能不支持
+				// 鏌愪簺鍗忚鍙兘涓嶆敮鎸?
 				t.Logf("Mihomo does not support %s: %v", scenario.Protocol, err)
 			} else {
 				assert.NotEmpty(t, mihomoConfig)
@@ -185,7 +185,7 @@ func TestConfigGeneration(t *testing.T) {
 	}
 }
 
-// TestClientLifecycle 测试客户端生命周期
+// TestClientLifecycle 娴嬭瘯瀹㈡埛绔敓鍛藉懆鏈?
 func TestClientLifecycle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
@@ -193,7 +193,7 @@ func TestClientLifecycle(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	// 创建测试配置
+	// 鍒涘缓娴嬭瘯閰嶇疆
 	xrayGen := config.NewXrayGenerator()
 	testConfig, err := xrayGen.Generate(&config.ClientConfig{
 		Name:   "test",
@@ -224,24 +224,24 @@ func TestClientLifecycle(t *testing.T) {
 		err := mgr.Add("test", client)
 		require.NoError(t, err)
 
-		// 重复添加
+		// 閲嶅娣诲姞
 		err = mgr.Add("test", client)
 		assert.Error(t, err)
 
-		// 获取
+		// 鑾峰彇
 		got, err := mgr.Get("test")
 		require.NoError(t, err)
 		assert.Equal(t, client, got)
 
-		// 列表
+		// 鍒楄〃
 		list := mgr.List()
 		assert.Contains(t, list, "test")
 
-		// 状态
+		// 鐘舵€?
 		status := mgr.Status()
 		assert.Contains(t, status, "test")
 
-		// 删除
+		// 鍒犻櫎
 		err = mgr.Remove("test")
 		require.NoError(t, err)
 
@@ -250,26 +250,26 @@ func TestClientLifecycle(t *testing.T) {
 	})
 }
 
-// TestRunnerBasic 测试运行器基本功能
+// TestRunnerBasic 娴嬭瘯杩愯鍣ㄥ熀鏈姛鑳?
 func TestRunnerBasic(t *testing.T) {
 	r := runner.NewRunner(
 		runner.WithTimeout(5*time.Second),
 		runner.WithConfigDir(t.TempDir()),
 	)
 
-	// 测试报告
+	// 娴嬭瘯鎶ュ憡
 	report := r.GetReport()
 	assert.NotNil(t, report)
 	assert.Equal(t, 0, report.PassedTests)
 }
 
-// TestHealthCheck 测试健康检查（需要实际服务器）
+// TestHealthCheck 娴嬭瘯鍋ュ悍妫€鏌ワ紙闇€瑕佸疄闄呮湇鍔″櫒锛?
 func TestHealthCheck(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
 	}
 
-	// 检查是否有可用的测试服务器
+	// 妫€鏌ユ槸鍚︽湁鍙敤鐨勬祴璇曟湇鍔″櫒
 	testServer := os.Getenv("TEST_SERVER_HOST")
 	if testServer == "" {
 		t.Skip("TEST_SERVER_HOST not set, skipping health check test")
@@ -278,7 +278,7 @@ func TestHealthCheck(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// 简单的 HTTP 健康检查
+	// 绠€鍗曠殑 HTTP 鍋ュ悍妫€鏌?
 	url := fmt.Sprintf("http://%s/health", testServer)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	require.NoError(t, err)
@@ -294,13 +294,13 @@ func TestHealthCheck(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
-// TestFullIntegration 全集成测试（需要真实服务器和配置）
+// TestFullIntegration 鍏ㄩ泦鎴愭祴璇曪紙闇€瑕佺湡瀹炴湇鍔″櫒鍜岄厤缃級
 func TestFullIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
 	}
 
-	// 从环境变量读取配置
+	// 浠庣幆澧冨彉閲忚鍙栭厤缃?
 	host := os.Getenv("TEST_SERVER_HOST")
 	port := os.Getenv("TEST_SERVER_PORT")
 	uuid := os.Getenv("TEST_USER_UUID")
@@ -314,7 +314,7 @@ func TestFullIntegration(t *testing.T) {
 
 	suite := NewTestSuite(t)
 
-	// 设置服务器信息
+	// 璁剧疆鏈嶅姟鍣ㄤ俊鎭?
 	serverPort := 443
 	if port != "" {
 		fmt.Sscanf(port, "%d", &serverPort)
@@ -328,25 +328,25 @@ func TestFullIntegration(t *testing.T) {
 	suite.SetServer(host, serverPort, proto)
 	suite.SetUser(uuid, "test@example.com")
 
-	// 设置 Reality 配置
+	// 璁剧疆 Reality 閰嶇疆
 	suite.serverInfo.TLSType = config.TLSReality
 	suite.serverInfo.SNI = "www.google.com"
 	suite.serverInfo.PublicKey = publicKey
 	suite.serverInfo.ShortID = shortID
 	suite.serverInfo.Transport = config.TransportTCP
 
-	// 确保二进制文件可用
+	// 纭繚浜岃繘鍒舵枃浠跺彲鐢?
 	if err := suite.Setup(); err != nil {
 		t.Skipf("Binary setup failed: %v", err)
 	}
 
-	// 运行测试
+	// 杩愯娴嬭瘯
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	report := suite.RunAllScenarios(ctx)
 
-	// 打印结果
+	// 鎵撳嵃缁撴灉
 	t.Logf("Total: %d, Passed: %d, Failed: %d",
 		report.TotalTests, report.PassedTests, report.FailedTests)
 
@@ -359,7 +359,7 @@ func TestFullIntegration(t *testing.T) {
 			status, result.ClientType, result.ScenarioName, result.Error)
 	}
 
-	// 允许部分失败（因为可能服务器配置不支持所有协议）
+	// 鍏佽閮ㄥ垎澶辫触锛堝洜涓哄彲鑳芥湇鍔″櫒閰嶇疆涓嶆敮鎸佹墍鏈夊崗璁級
 	if report.PassedTests == 0 {
 		t.Error("All tests failed")
 	}

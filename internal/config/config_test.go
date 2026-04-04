@@ -274,7 +274,7 @@ func TestFrontendConfig(t *testing.T) {
 		Frontend: FrontendConfig{
 			Enable: true,
 			Port:   3000,
-			Path:   "public",
+			Path:   "web/public",
 		},
 	}
 	Set(cfg)
@@ -282,7 +282,7 @@ func TestFrontendConfig(t *testing.T) {
 	got := Get()
 	assert.True(t, got.Frontend.Enable)
 	assert.Equal(t, 3000, got.Frontend.Port)
-	assert.Equal(t, "public", got.Frontend.Path)
+	assert.Equal(t, "web/public", got.Frontend.Path)
 }
 
 func TestLogConfig(t *testing.T) {

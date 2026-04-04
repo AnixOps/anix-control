@@ -10,9 +10,9 @@ services:
       - "50051:50051"  # gRPC
     volumes:
       - ./config:/app/config
-      - ./data:/app/data
+      - ./config/data:/app/config/data
       - ./logs:/app/logs
-      - ./public:/app/public
+      - ./web/public:/app/web/public
     environment:
       - TZ=Asia/Shanghai
       - GIN_MODE=release
@@ -37,7 +37,7 @@ services:
 #       - "50051:50051"
 #     volumes:
 #       - ./config:/app/config
-#       - ./public:/app/public
+#       - ./web/public:/app/web/public
 #     environment:
 #       - TZ=Asia/Shanghai
 #       - GIN_MODE=release
@@ -97,9 +97,9 @@ services:
 #       - "80:80"
 #       - "443:443"
 #     volumes:
-#       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-#       - ./docker/nginx/ssl:/etc/nginx/ssl:ro
-#       - ./public:/usr/share/nginx/html:ro
+#       - ./config/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+#       - ./config/docker/nginx/ssl:/etc/nginx/ssl:ro
+#       - ./web/public:/usr/share/nginx/html:ro
 #     depends_on:
 #       - api
 #     networks:

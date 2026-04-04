@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anixops/v2board/tests/integration/echo"
+	"github.com/anixops/v2board/internal/tests/integration/echo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestSuite 本地测试套件
+// TestSuite 鏈湴娴嬭瘯濂椾欢
 type TestSuite struct {
 	t            *testing.T
 	env          *Environment
@@ -28,7 +28,7 @@ type TestSuite struct {
 	echoServer   *echo.EchoServer
 }
 
-// NewTestSuite 创建测试套件
+// NewTestSuite 鍒涘缓娴嬭瘯濂椾欢
 func NewTestSuite(t *testing.T) *TestSuite {
 	configDir := t.TempDir()
 	return &TestSuite{
@@ -38,16 +38,16 @@ func NewTestSuite(t *testing.T) *TestSuite {
 	}
 }
 
-// Setup 设置测试环境
+// Setup 璁剧疆娴嬭瘯鐜
 func (s *TestSuite) Setup() error {
-	// 查找 xray 二进制
+	// 鏌ユ壘 xray 浜岃繘鍒?
 	if path, err := exec.LookPath("xray"); err == nil {
 		s.xrayPath = path
 	}
 	if path, err := exec.LookPath("mihomo"); err == nil {
 		s.mihomoPath = path
 	}
-	// 也检查 mihomo 的其他名称
+	// 涔熸鏌?mihomo 鐨勫叾浠栧悕绉?
 	if s.mihomoPath == "" {
 		if path, err := exec.LookPath("clash-meta"); err == nil {
 			s.mihomoPath = path
@@ -57,7 +57,7 @@ func (s *TestSuite) Setup() error {
 	return nil
 }
 
-// StartEchoServer 启动内置 Echo 服务器
+// StartEchoServer 鍚姩鍐呯疆 Echo 鏈嶅姟鍣?
 func (s *TestSuite) StartEchoServer(ctx context.Context) error {
 	s.echoServer = echo.NewEchoServer(0)
 	if err := s.echoServer.Start(ctx); err != nil {
@@ -67,14 +67,14 @@ func (s *TestSuite) StartEchoServer(ctx context.Context) error {
 	return nil
 }
 
-// StopEchoServer 停止 Echo 服务器
+// StopEchoServer 鍋滄 Echo 鏈嶅姟鍣?
 func (s *TestSuite) StopEchoServer(ctx context.Context) {
 	if s.echoServer != nil {
 		s.echoServer.Stop(ctx)
 	}
 }
 
-// EchoServerURL 返回 Echo 服务器 URL
+// EchoServerURL 杩斿洖 Echo 鏈嶅姟鍣?URL
 func (s *TestSuite) EchoServerURL() string {
 	if s.echoServer == nil {
 		return ""
@@ -82,31 +82,31 @@ func (s *TestSuite) EchoServerURL() string {
 	return s.echoServer.URL()
 }
 
-// HasXray 检查是否有 Xray
+// HasXray 妫€鏌ユ槸鍚︽湁 Xray
 func (s *TestSuite) HasXray() bool {
 	return s.xrayPath != ""
 }
 
-// HasMihomo 检查是否有 Mihomo
+// HasMihomo 妫€鏌ユ槸鍚︽湁 Mihomo
 func (s *TestSuite) HasMihomo() bool {
 	return s.mihomoPath != ""
 }
 
-// SkipIfNoBinary 如果没有二进制则跳过
+// SkipIfNoBinary 濡傛灉娌℃湁浜岃繘鍒跺垯璺宠繃
 func (s *TestSuite) SkipIfNoBinary() {
 	if !s.HasXray() && !s.HasMihomo() {
 		s.t.Skip("No xray or mihomo binary found, skipping")
 	}
 }
 
-// RunLocalTest 运行本地测试
+// RunLocalTest 杩愯鏈湴娴嬭瘯
 func (s *TestSuite) RunLocalTest(ctx context.Context, protocol string) error {
 	return s.RunLocalTestWithEcho(ctx, protocol, false)
 }
 
-// RunLocalTestWithEcho 运行本地测试（可选择使用 Echo 服务器）
+// RunLocalTestWithEcho 杩愯鏈湴娴嬭瘯锛堝彲閫夋嫨浣跨敤 Echo 鏈嶅姟鍣級
 func (s *TestSuite) RunLocalTestWithEcho(ctx context.Context, protocol string, useEcho bool) error {
-	// 设置环境
+	// 璁剧疆鐜
 	if err := s.env.Setup(ctx, protocol); err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func (s *TestSuite) RunLocalTestWithEcho(ctx context.Context, protocol string, u
 
 	s.t.Logf("Testing %s: server=%d, client=%d", protocol, serverPort, clientPort)
 
-	// 如果使用 Echo 服务器，启动它
+	// 濡傛灉浣跨敤 Echo 鏈嶅姟鍣紝鍚姩瀹?
 	var testURL string
 	if useEcho && s.echoServer != nil {
 		testURL = s.echoServer.URL() + "/generate_204"
@@ -124,7 +124,7 @@ func (s *TestSuite) RunLocalTestWithEcho(ctx context.Context, protocol string, u
 		testURL = "http://www.gstatic.com/generate_204"
 	}
 
-	// 构建配置
+	// 鏋勫缓閰嶇疆
 	builder := NewConfigBuilder().
 		Protocol(protocol).
 		ServerPort(serverPort).
@@ -140,7 +140,7 @@ func (s *TestSuite) RunLocalTestWithEcho(ctx context.Context, protocol string, u
 		return err
 	}
 
-	// 保存配置
+	// 淇濆瓨閰嶇疆
 	serverConfigPath := filepath.Join(s.configDir, fmt.Sprintf("server-%s.json", protocol))
 	clientConfigPath := filepath.Join(s.configDir, fmt.Sprintf("client-%s.json", protocol))
 
@@ -151,13 +151,13 @@ func (s *TestSuite) RunLocalTestWithEcho(ctx context.Context, protocol string, u
 		return err
 	}
 
-	// 使用 xray 作为服务端和客户端
+	// 浣跨敤 xray 浣滀负鏈嶅姟绔拰瀹㈡埛绔?
 	binary := s.xrayPath
 	if binary == "" {
 		return fmt.Errorf("no xray binary found")
 	}
 
-	// 启动服务端
+	// 鍚姩鏈嶅姟绔?
 	serverCmd := exec.CommandContext(ctx, binary, "run", "-c", serverConfigPath)
 	if runtime.GOOS != "windows" {
 		serverCmd.Stdout = os.Stdout
@@ -173,13 +173,13 @@ func (s *TestSuite) RunLocalTestWithEcho(ctx context.Context, protocol string, u
 		}
 	}()
 
-	// 等待服务端启动
+	// 绛夊緟鏈嶅姟绔惎鍔?
 	if err := WaitForPort(serverPort, 10*time.Second); err != nil {
 		return fmt.Errorf("server failed to start: %w", err)
 	}
 	s.t.Logf("Server started on port %d", serverPort)
 
-	// 启动客户端
+	// 鍚姩瀹㈡埛绔?
 	clientCmd := exec.CommandContext(ctx, binary, "run", "-c", clientConfigPath)
 	if runtime.GOOS != "windows" {
 		clientCmd.Stdout = os.Stdout
@@ -195,16 +195,16 @@ func (s *TestSuite) RunLocalTestWithEcho(ctx context.Context, protocol string, u
 		}
 	}()
 
-	// 等待客户端启动
+	// 绛夊緟瀹㈡埛绔惎鍔?
 	if err := WaitForPort(clientPort, 10*time.Second); err != nil {
 		return fmt.Errorf("client failed to start: %w", err)
 	}
 	s.t.Logf("Client started on port %d", clientPort)
 
-	// 测试连通性
+	// 娴嬭瘯杩為€氭€?
 	proxyURL := fmt.Sprintf("socks5://127.0.0.1:%d", clientPort)
 
-	// 通过代理发送请求
+	// 閫氳繃浠ｇ悊鍙戦€佽姹?
 	err = s.testThroughProxy(ctx, proxyURL, testURL)
 	if err != nil {
 		return fmt.Errorf("connectivity test failed: %w", err)
@@ -214,12 +214,12 @@ func (s *TestSuite) RunLocalTestWithEcho(ctx context.Context, protocol string, u
 	return nil
 }
 
-// testThroughProxy 通过代理测试连接
+// testThroughProxy 閫氳繃浠ｇ悊娴嬭瘯杩炴帴
 func (s *TestSuite) testThroughProxy(ctx context.Context, proxyURL, targetURL string) error {
-	// 使用 curl 测试（更简单）
+	// 浣跨敤 curl 娴嬭瘯锛堟洿绠€鍗曪級
 	curlPath, err := exec.LookPath("curl")
 	if err != nil {
-		// 如果没有 curl，使用 Go HTTP 客户端
+		// 濡傛灉娌℃湁 curl锛屼娇鐢?Go HTTP 瀹㈡埛绔?
 		return s.testWithHTTPClient(ctx, proxyURL, targetURL)
 	}
 
@@ -244,17 +244,17 @@ func (s *TestSuite) testThroughProxy(ctx context.Context, proxyURL, targetURL st
 	return nil
 }
 
-// testWithHTTPClient 使用 Go HTTP 客户端测试
+// testWithHTTPClient 浣跨敤 Go HTTP 瀹㈡埛绔祴璇?
 func (s *TestSuite) testWithHTTPClient(ctx context.Context, proxyURL, targetURL string) error {
-	// 创建 SOCKS5 拨号器需要 golang.org/x/net/proxy
-	// 这里使用简单的方式：检查端口是否可达
+	// 鍒涘缓 SOCKS5 鎷ㄥ彿鍣ㄩ渶瑕?golang.org/x/net/proxy
+	// 杩欓噷浣跨敤绠€鍗曠殑鏂瑰紡锛氭鏌ョ鍙ｆ槸鍚﹀彲杈?
 	client := &http.Client{
 		Timeout: 10 * time.Second,
-		// 注意：Go 标准库不直接支持 SOCKS5 代理
-		// 需要使用 golang.org/x/net/proxy
+		// 娉ㄦ剰锛欸o 鏍囧噯搴撲笉鐩存帴鏀寔 SOCKS5 浠ｇ悊
+		// 闇€瑕佷娇鐢?golang.org/x/net/proxy
 	}
 
-	// 简单检查：尝试连接客户端端口
+	// 绠€鍗曟鏌ワ細灏濊瘯杩炴帴瀹㈡埛绔鍙?
 	conn, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
 	if err != nil {
 		return err
@@ -269,12 +269,12 @@ func (s *TestSuite) testWithHTTPClient(ctx context.Context, proxyURL, targetURL 
 	return nil
 }
 
-// Teardown 清理环境
+// Teardown 娓呯悊鐜
 func (s *TestSuite) Teardown() {
 	s.env.Teardown()
 }
 
-// TestEnvironment 测试环境创建
+// TestEnvironment 娴嬭瘯鐜鍒涘缓
 func TestEnvironment(t *testing.T) {
 	env := NewEnvironment(t.TempDir())
 
@@ -289,7 +289,7 @@ func TestEnvironment(t *testing.T) {
 	env.Teardown()
 }
 
-// TestConfigBuilder 测试配置构建
+// TestConfigBuilder 娴嬭瘯閰嶇疆鏋勫缓
 func TestConfigBuilder(t *testing.T) {
 	builder := NewConfigBuilder().
 		Protocol("shadowsocks").
@@ -314,7 +314,7 @@ func TestConfigBuilder(t *testing.T) {
 	})
 }
 
-// TestConfigBuilderProtocols 测试所有协议配置
+// TestConfigBuilderProtocols 娴嬭瘯鎵€鏈夊崗璁厤缃?
 func TestConfigBuilderProtocols(t *testing.T) {
 	protocols := []string{"shadowsocks", "vmess", "vless", "trojan"}
 
@@ -336,15 +336,15 @@ func TestConfigBuilderProtocols(t *testing.T) {
 	}
 }
 
-// TestWaitForPort 测试端口等待
+// TestWaitForPort 娴嬭瘯绔彛绛夊緟
 func TestWaitForPort(t *testing.T) {
-	// 测试一个不会启动的端口
+	// 娴嬭瘯涓€涓笉浼氬惎鍔ㄧ殑绔彛
 	err := WaitForPort(59999, 1*time.Second)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "timeout")
 }
 
-// TestLocalServer 本地服务器测试
+// TestLocalServer 鏈湴鏈嶅姟鍣ㄦ祴璇?
 func TestLocalServer(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
@@ -355,7 +355,7 @@ func TestLocalServer(t *testing.T) {
 	assert.Equal(t, ServerStopped, server.Status())
 }
 
-// TestLocalE2E 端到端本地测试
+// TestLocalE2E 绔埌绔湰鍦版祴璇?
 func TestLocalE2E(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
@@ -378,13 +378,13 @@ func TestLocalE2E(t *testing.T) {
 			err := suite.RunLocalTest(ctx, protocol)
 			if err != nil {
 				t.Logf("Test %s failed (expected if no network): %v", protocol, err)
-				// 不要求成功，因为可能没有网络
+				// 涓嶈姹傛垚鍔燂紝鍥犱负鍙兘娌℃湁缃戠粶
 			}
 		})
 	}
 }
 
-// TestLocalShadowsocks 本地 Shadowsocks 测试
+// TestLocalShadowsocks 鏈湴 Shadowsocks 娴嬭瘯
 func TestLocalShadowsocks(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
@@ -409,7 +409,7 @@ func TestLocalShadowsocks(t *testing.T) {
 	}
 }
 
-// TestLocalVMess 本地 VMess 测试
+// TestLocalVMess 鏈湴 VMess 娴嬭瘯
 func TestLocalVMess(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
@@ -434,7 +434,7 @@ func TestLocalVMess(t *testing.T) {
 	}
 }
 
-// TestLocalVLESS 本地 VLESS 测试
+// TestLocalVLESS 鏈湴 VLESS 娴嬭瘯
 func TestLocalVLESS(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
@@ -459,7 +459,7 @@ func TestLocalVLESS(t *testing.T) {
 	}
 }
 
-// TestLocalTrojan 本地 Trojan 测试
+// TestLocalTrojan 鏈湴 Trojan 娴嬭瘯
 func TestLocalTrojan(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
@@ -484,7 +484,7 @@ func TestLocalTrojan(t *testing.T) {
 	}
 }
 
-// SaveConfig 保存配置测试
+// SaveConfig 淇濆瓨閰嶇疆娴嬭瘯
 func TestSaveConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -493,13 +493,13 @@ func TestSaveConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.FileExists(t, path)
 
-	// 读取验证
+	// 璇诲彇楠岃瘉
 	readData, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, data, readData)
 }
 
-// TestLocalWithEchoServer 使用 Echo 服务器的本地测试
+// TestLocalWithEchoServer 浣跨敤 Echo 鏈嶅姟鍣ㄧ殑鏈湴娴嬭瘯
 func TestLocalWithEchoServer(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
@@ -517,7 +517,7 @@ func TestLocalWithEchoServer(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 启动 Echo 服务器
+	// 鍚姩 Echo 鏈嶅姟鍣?
 	if err := suite.StartEchoServer(ctx); err != nil {
 		t.Fatalf("Failed to start echo server: %v", err)
 	}
@@ -525,7 +525,7 @@ func TestLocalWithEchoServer(t *testing.T) {
 
 	t.Logf("Echo server URL: %s", suite.EchoServerURL())
 
-	// 使用 Echo 服务器运行测试
+	// 浣跨敤 Echo 鏈嶅姟鍣ㄨ繍琛屾祴璇?
 	testCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -542,7 +542,7 @@ func TestLocalWithEchoServer(t *testing.T) {
 	}
 }
 
-// TestLocalShadowsocksWithEcho 使用 Echo 服务器的 Shadowsocks 测试
+// TestLocalShadowsocksWithEcho 浣跨敤 Echo 鏈嶅姟鍣ㄧ殑 Shadowsocks 娴嬭瘯
 func TestLocalShadowsocksWithEcho(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
@@ -575,7 +575,7 @@ func TestLocalShadowsocksWithEcho(t *testing.T) {
 	}
 }
 
-// TestEchoServerIntegration Echo 服务器集成测试
+// TestEchoServerIntegration Echo 鏈嶅姟鍣ㄩ泦鎴愭祴璇?
 func TestEchoServerIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
@@ -586,18 +586,18 @@ func TestEchoServerIntegration(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 启动 Echo 服务器
+	// 鍚姩 Echo 鏈嶅姟鍣?
 	require.NoError(t, suite.StartEchoServer(ctx))
 	defer suite.StopEchoServer(ctx)
 
-	// 直接测试 Echo 服务器
+	// 鐩存帴娴嬭瘯 Echo 鏈嶅姟鍣?
 	resp, err := http.Get(suite.EchoServerURL() + "/ping")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	// 测试 /generate_204
+	// 娴嬭瘯 /generate_204
 	resp2, err := http.Get(suite.EchoServerURL() + "/generate_204")
 	require.NoError(t, err)
 	defer resp2.Body.Close()

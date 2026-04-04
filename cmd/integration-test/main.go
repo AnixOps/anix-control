@@ -10,14 +10,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anixops/v2board/tests/integration/binary"
-	"github.com/anixops/v2board/tests/integration/clients"
-	"github.com/anixops/v2board/tests/integration/config"
-	"github.com/anixops/v2board/tests/integration/runner"
+	"github.com/anixops/v2board/internal/tests/integration/binary"
+	"github.com/anixops/v2board/internal/tests/integration/clients"
+	"github.com/anixops/v2board/internal/tests/integration/config"
+	"github.com/anixops/v2board/internal/tests/integration/runner"
 )
 
 func main() {
-	// 命令行参数
+	// 鍛戒护琛屽弬鏁?
 	host := flag.String("host", "", "Server host (required)")
 	port := flag.Int("port", 443, "Server port")
 	protocol := flag.String("protocol", "vless", "Protocol (vmess, vless, trojan, shadowsocks, hysteria2, tuic)")
@@ -41,13 +41,13 @@ func main() {
 
 	flag.Parse()
 
-	// 初始化二进制管理器（用于自动下载）
+	// 鍒濆鍖栦簩杩涘埗绠＄悊鍣紙鐢ㄤ簬鑷姩涓嬭浇锛?
 	if *downloadBinaries {
 		binMgr := binary.NewManager("")
 		clients.SetBinaryManager(&binaryAdapter{mgr: binMgr})
 	}
 
-	// 验证必需参数
+	// 楠岃瘉蹇呴渶鍙傛暟
 	if *host == "" {
 		fmt.Println("Error: -host is required")
 		flag.Usage()
@@ -59,7 +59,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 创建服务端配置
+	// 鍒涘缓鏈嶅姟绔厤缃?
 	server := config.ServerConfig{
 		Host:      *host,
 		Port:      *port,
@@ -74,17 +74,17 @@ func main() {
 		Method:    *method,
 	}
 
-	// 创建用户配置
+	// 鍒涘缓鐢ㄦ埛閰嶇疆
 	user := config.UserConfig{
 		UUID:  *uuid,
 		Email: *email,
 		Flow:  *flow,
 	}
 
-	// 过滤测试场景
+	// 杩囨护娴嬭瘯鍦烘櫙
 	var scenarios []config.TestScenario
 	if *protocol != "" && *protocol != "all" {
-		// 只运行指定协议的场景
+		// 鍙繍琛屾寚瀹氬崗璁殑鍦烘櫙
 		for _, s := range config.DefaultTestScenarios {
 			if string(s.Protocol) == *protocol {
 				scenarios = append(scenarios, s)
@@ -94,7 +94,7 @@ func main() {
 		scenarios = config.DefaultTestScenarios
 	}
 
-	// 创建运行器选项
+	// 鍒涘缓杩愯鍣ㄩ€夐」
 	opts := []runner.RunnerOption{
 		runner.WithTimeout(*timeout),
 		runner.WithConfigDir(*configDir),
@@ -105,22 +105,22 @@ func main() {
 		opts = append(opts, runner.WithParallel(*parallel))
 	}
 
-	// 创建运行器
+	// 鍒涘缓杩愯鍣?
 	r := runner.NewRunner(opts...)
 
-	// 如果指定了特定客户端，修改生成器
+	// 濡傛灉鎸囧畾浜嗙壒瀹氬鎴风锛屼慨鏀圭敓鎴愬櫒
 	if *client != "" && *client != "both" {
-		// 只使用指定的客户端
+		// 鍙娇鐢ㄦ寚瀹氱殑瀹㈡埛绔?
 		generators := map[string]config.Generator{}
 		if *client == "xray" {
 			generators["xray"] = config.NewXrayGenerator()
 		} else if *client == "mihomo" {
 			generators["mihomo"] = config.NewMihomoGenerator()
 		}
-		// 注意: 需要修改 Runner 来支持自定义生成器
+		// 娉ㄦ剰: 闇€瑕佷慨鏀?Runner 鏉ユ敮鎸佽嚜瀹氫箟鐢熸垚鍣?
 	}
 
-	// 设置信号处理
+	// 璁剧疆淇″彿澶勭悊
 	ctx, cancel := context.WithCancel(context.Background())
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
@@ -130,7 +130,7 @@ func main() {
 		cancel()
 	}()
 
-	// 打印测试信息
+	// 鎵撳嵃娴嬭瘯淇℃伅
 	fmt.Println("========== Integration Test ==========")
 	fmt.Printf("Server: %s:%d\n", server.Host, server.Port)
 	fmt.Printf("Protocol: %s\n", server.Protocol)
@@ -142,13 +142,13 @@ func main() {
 	fmt.Println("=======================================")
 	fmt.Println()
 
-	// 运行测试
+	// 杩愯娴嬭瘯
 	report := r.Run(ctx, server, user)
 
-	// 打印报告
+	// 鎵撳嵃鎶ュ憡
 	r.PrintReport()
 
-	// 保存报告
+	// 淇濆瓨鎶ュ憡
 	if *output != "" {
 		if err := r.SaveReport(*output); err != nil {
 			fmt.Printf("Error saving report: %v\n", err)
@@ -157,19 +157,19 @@ func main() {
 		fmt.Printf("Report saved to: %s\n", *output)
 	}
 
-	// 输出退出码
+	// 杈撳嚭閫€鍑虹爜
 	if report.FailedTests > 0 {
 		os.Exit(1)
 	}
 }
 
-// printJSON 打印 JSON 格式
+// printJSON 鎵撳嵃 JSON 鏍煎紡
 func printJSON(v interface{}) {
 	data, _ := json.MarshalIndent(v, "", "  ")
 	fmt.Println(string(data))
 }
 
-// binaryAdapter 适配 binary.Manager 到 clients 的接口
+// binaryAdapter 閫傞厤 binary.Manager 鍒?clients 鐨勬帴鍙?
 type binaryAdapter struct {
 	mgr *binary.Manager
 }

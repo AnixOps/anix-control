@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anixops/v2board/tests/integration/config"
+	"github.com/anixops/v2board/internal/tests/integration/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -83,7 +83,7 @@ func TestAddResult(t *testing.T) {
 func TestGetPorts(t *testing.T) {
 	http, socks, mixed, api := getPorts("test-scenario", "xray")
 
-	// 端口应该在合理范围内
+	// 绔彛搴旇鍦ㄥ悎鐞嗚寖鍥村唴
 	assert.Greater(t, http, 20000)
 	assert.Less(t, http, 20100)
 	assert.Greater(t, socks, 20100)
@@ -98,13 +98,13 @@ func TestGetPortsUnique(t *testing.T) {
 	http1, socks1, mixed1, api1 := getPorts("scenario-a", "xray")
 	http2, socks2, mixed2, api2 := getPorts("scenario-b", "xray")
 
-	// 不同场景应该有不同的端口
+	// 涓嶅悓鍦烘櫙搴旇鏈変笉鍚岀殑绔彛
 	assert.NotEqual(t, []int{http1, socks1, mixed1, api1},
 		[]int{http2, socks2, mixed2, api2})
 }
 
 func TestRunProtocolNotSupported(t *testing.T) {
-	// 创建一个只支持特定协议的场景
+	// 鍒涘缓涓€涓彧鏀寔鐗瑰畾鍗忚鐨勫満鏅?
 	scenarios := []config.TestScenario{
 		{
 			Name:        "test-hysteria2",
@@ -121,11 +121,11 @@ func TestRunProtocolNotSupported(t *testing.T) {
 	)
 
 	server := config.ServerConfig{
-		Host:       "example.com",
-		Port:       443,
-		Protocol:   config.ProtocolHysteria2,
-		TLSType:    config.TLS,
-		Transport:  config.TransportQUIC,
+		Host:      "example.com",
+		Port:      443,
+		Protocol:  config.ProtocolHysteria2,
+		TLSType:   config.TLS,
+		Transport: config.TransportQUIC,
 	}
 
 	user := config.UserConfig{
@@ -133,10 +133,10 @@ func TestRunProtocolNotSupported(t *testing.T) {
 		Email: "test@example.com",
 	}
 
-	// Hysteria2 不被 Xray/Mihomo 标准配置生成器支持
+	// Hysteria2 涓嶈 Xray/Mihomo 鏍囧噯閰嶇疆鐢熸垚鍣ㄦ敮鎸?
 	report := r.Run(context.Background(), server, user)
 
-	// 应该有结果，但可能会失败（因为协议不支持）
+	// 搴旇鏈夌粨鏋滐紝浣嗗彲鑳戒細澶辫触锛堝洜涓哄崗璁笉鏀寔锛?
 	assert.NotNil(t, report)
 }
 
@@ -152,14 +152,14 @@ func TestRunnerSaveReport(t *testing.T) {
 		Latency:      100 * time.Millisecond,
 	})
 
-	// 创建临时文件
+	// 鍒涘缓涓存椂鏂囦欢
 	tmpDir := t.TempDir()
 	reportPath := tmpDir + "/report.json"
 
 	err := r.SaveReport(reportPath)
 	require.NoError(t, err)
 
-	// 读取并验证文件
+	// 璇诲彇骞堕獙璇佹枃浠?
 	data, err := os.ReadFile(reportPath)
 	require.NoError(t, err)
 	assert.Contains(t, string(data), "test1")
@@ -187,7 +187,7 @@ func TestRunnerPrintReport(t *testing.T) {
 		Error:        "connection timeout",
 	})
 
-	// PrintReport 不应该 panic
+	// PrintReport 涓嶅簲璇?panic
 	r.PrintReport()
 }
 
@@ -202,11 +202,11 @@ func TestTestResultJSON(t *testing.T) {
 		Latency:      100 * time.Millisecond,
 	}
 
-	// 序列化
+	// 搴忓垪鍖?
 	data, err := json.Marshal(result)
 	require.NoError(t, err)
 
-	// 反序列化
+	// 鍙嶅簭鍒楀寲
 	var decoded TestResult
 	err = json.Unmarshal(data, &decoded)
 	require.NoError(t, err)

@@ -228,7 +228,7 @@ func startAPIServer(cfg *config.Config) {
 func startFrontendServer(cfg *config.Config) {
 	frontendPath := cfg.Frontend.Path
 	if frontendPath == "" {
-		frontendPath = "public"
+		frontendPath = "web/public"
 	}
 
 	// 检查前端目录是否存在
@@ -347,7 +347,7 @@ func createDefaultIndex(path string) {
             服务运行中
         </div>
         <p style="margin-top: 2rem; font-size: 0.9rem; opacity: 0.7;">
-            将您的前端文件放入 public/ 目录即可
+            将您的前端文件放入 web/public/ 目录即可
         </p>
     </div>
 </body>

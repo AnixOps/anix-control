@@ -1,113 +1,113 @@
-# V2Board AnixOps
+﻿# V2Board AnixOps
 
-现代化的代理面板管理系统，Go + Vue 3 技术栈。
+鐜颁唬鍖栫殑浠ｇ悊闈㈡澘绠＄悊绯荤粺锛孏o + Vue 3 鎶€鏈爤銆?
 
-## 特性
+## 鐗规€?
 
-- **高性能后端** - Go 1.24 + Gin，支持高并发
-- **现代前端** - Vue 3 + Vite + Element Plus
-- **多协议支持** - VMess/VLESS/Trojan/Shadowsocks/Hysteria2/TUIC
-- **多订阅格式** - V2Ray/Clash/Sing-box/Surge
-- **gRPC 通信** - 节点与面板双向流通信
-- **Agent 系统** - NAT 穿透，远程节点管理
-- **流量转发** - gost 集成，中转节点管理
-- **零依赖部署** - 单二进制文件 + SQLite，无需安装任何外部服务
+- **楂樻€ц兘鍚庣** - Go 1.24 + Gin锛屾敮鎸侀珮骞跺彂
+- **鐜颁唬鍓嶇** - Vue 3 + Vite + Element Plus
+- **澶氬崗璁敮鎸?* - VMess/VLESS/Trojan/Shadowsocks/Hysteria2/TUIC
+- **澶氳闃呮牸寮?* - V2Ray/Clash/Sing-box/Surge
+- **gRPC 閫氫俊** - 鑺傜偣涓庨潰鏉垮弻鍚戞祦閫氫俊
+- **Agent 绯荤粺** - NAT 绌块€忥紝杩滅▼鑺傜偣绠＄悊
+- **娴侀噺杞彂** - gost 闆嗘垚锛屼腑杞妭鐐圭鐞?
+- **闆朵緷璧栭儴缃?* - 鍗曚簩杩涘埗鏂囦欢 + SQLite锛屾棤闇€瀹夎浠讳綍澶栭儴鏈嶅姟
 
-## 技术栈
+## 鎶€鏈爤
 
-| 组件 | 技术 | 说明 |
+| 缁勪欢 | 鎶€鏈?| 璇存槑 |
 |------|------|------|
-| 语言 | Go 1.24+ | 高性能、静态编译、跨平台 |
-| Web框架 | Gin | 高性能 HTTP 框架 |
-| ORM | GORM | Go 语言 ORM 框架 |
-| 数据库 | SQLite / PostgreSQL | 轻量级或企业级 |
-| 缓存 | 内存缓存 / Redis | 零依赖或分布式 |
-| 前端 | Vue 3 + Vite | 现代前端框架 |
-| 通信 | gRPC + WebSocket | 双向实时通信 |
+| 璇█ | Go 1.24+ | 楂樻€ц兘銆侀潤鎬佺紪璇戙€佽法骞冲彴 |
+| Web妗嗘灦 | Gin | 楂樻€ц兘 HTTP 妗嗘灦 |
+| ORM | GORM | Go 璇█ ORM 妗嗘灦 |
+| 鏁版嵁搴?| SQLite / PostgreSQL | 杞婚噺绾ф垨浼佷笟绾?|
+| 缂撳瓨 | 鍐呭瓨缂撳瓨 / Redis | 闆朵緷璧栨垨鍒嗗竷寮?|
+| 鍓嶇 | Vue 3 + Vite | 鐜颁唬鍓嶇妗嗘灦 |
+| 閫氫俊 | gRPC + WebSocket | 鍙屽悜瀹炴椂閫氫俊 |
 
-## 项目结构
+## 椤圭洰缁撴瀯
 
 ```
 v2board_AnixOps/
-├── cmd/server/           # 主程序入口
-├── config/               # 配置文件
-├── internal/             # Go 后端代码
-│   ├── handler/          # HTTP 处理器
-│   ├── service/          # 业务逻辑
-│   ├── model/            # 数据模型
-│   ├── grpc/             # gRPC 服务
-│   ├── gost/             # gost 客户端
-│   └── ...
-├── web/                  # Vue 前端
-│   ├── src/views/        # 页面组件
-│   ├── src/api/          # API 调用
-│   └── ...
-├── docker/               # Docker 配置
-├── docs/                 # Swagger 文档
-└── deploy/               # 部署文件
+鈹溾攢鈹€ cmd/server/           # 涓荤▼搴忓叆鍙?
+鈹溾攢鈹€ config/               # 閰嶇疆鏂囦欢
+鈹溾攢鈹€ internal/             # Go 鍚庣浠ｇ爜
+鈹?  鈹溾攢鈹€ handler/          # HTTP 澶勭悊鍣?
+鈹?  鈹溾攢鈹€ service/          # 涓氬姟閫昏緫
+鈹?  鈹溾攢鈹€ model/            # 鏁版嵁妯″瀷
+鈹?  鈹溾攢鈹€ grpc/             # gRPC 鏈嶅姟
+鈹?  鈹溾攢鈹€ gost/             # gost 瀹㈡埛绔?
+鈹?  鈹斺攢鈹€ ...
+鈹溾攢鈹€ web/                  # Vue 鍓嶇
+鈹?  鈹溾攢鈹€ src/views/        # 椤甸潰缁勪欢
+鈹?  鈹溾攢鈹€ src/api/          # API 璋冪敤
+鈹?  鈹斺攢鈹€ ...
+鈹溾攢鈹€ docker/               # Docker 閰嶇疆
+鈹溾攢鈹€ docs/                 # Swagger 鏂囨。
+鈹斺攢鈹€ deploy/               # 閮ㄧ讲鏂囦欢
 ```
 
-## 快速开始
+## 蹇€熷紑濮?
 
-### 使用 Docker Compose (推荐)
+### 浣跨敤 Docker Compose (鎺ㄨ崘)
 
 ```bash
-# 1. 克隆仓库
+# 1. 鍏嬮殕浠撳簱
 git clone https://github.com/anixops/v2board.git
 cd v2board
 
-# 2. 复制配置文件
+# 2. 澶嶅埗閰嶇疆鏂囦欢
 cp .env.example .env
 cp config/config.yaml.example config/config.yaml
 
-# 3. 编辑配置
+# 3. 缂栬緫閰嶇疆
 nano .env
 nano config/config.yaml
 
-# 4. 启动服务
+# 4. 鍚姩鏈嶅姟
 docker-compose up -d
 
-# 5. 查看日志
+# 5. 鏌ョ湅鏃ュ織
 docker-compose logs -f api
 ```
 
-### 本地开发
+### 鏈湴寮€鍙?
 
 ```bash
-# 后端
+# 鍚庣
 go mod download
 go run cmd/server/main.go
 
-# 前端
+# 鍓嶇
 cd web
 npm install
 npm run dev
 ```
 
-### 编译
+### 缂栬瘧
 
 ```bash
-# 安装依赖
+# 瀹夎渚濊禆
 go mod tidy
 
-# 编译
+# 缂栬瘧
 go build -o v2board ./cmd/server
 
-# 或使用 make
+# 鎴栦娇鐢?make
 make build
 ```
 
-## 配置说明
+## 閰嶇疆璇存槑
 
-### SQLite 配置 (默认，零配置)
+### SQLite 閰嶇疆 (榛樿锛岄浂閰嶇疆)
 
 ```yaml
 database:
   driver: "sqlite"
-  database: "data/v2board.db"
+  database: "config/data/v2board.db"
 ```
 
-### PostgreSQL 配置
+### PostgreSQL 閰嶇疆
 
 ```yaml
 database:
@@ -119,7 +119,7 @@ database:
   password: "your_password"
 ```
 
-### 必要配置
+### 蹇呰閰嶇疆
 
 ```yaml
 jwt:
@@ -129,27 +129,27 @@ app:
   api_token: "your-node-communication-token"
 ```
 
-## 部署指南
+## 閮ㄧ讲鎸囧崡
 
-### 开发环境
+### 寮€鍙戠幆澧?
 
 ```bash
 docker-compose up -d
 ```
 
-### 生产环境
+### 鐢熶骇鐜
 
 ```bash
-# 使用生产配置
+# 浣跨敤鐢熶骇閰嶇疆
 docker-compose -f docker-compose.prod.yml up -d
 
-# 启用监控 (Prometheus + Grafana)
+# 鍚敤鐩戞帶 (Prometheus + Grafana)
 docker-compose -f docker-compose.prod.yml --profile monitoring up -d
 ```
 
-### Systemd 服务
+### Systemd 鏈嶅姟
 
-创建 `/etc/systemd/system/v2board.service`：
+鍒涘缓 `/etc/systemd/system/v2board.service`锛?
 
 ```ini
 [Unit]
@@ -173,40 +173,40 @@ sudo systemctl enable v2board
 sudo systemctl start v2board
 ```
 
-## API 文档
+## API 鏂囨。
 
-启动服务后访问：`http://localhost:8080/swagger/index.html`
+鍚姩鏈嶅姟鍚庤闂細`http://localhost:8080/swagger/index.html`
 
-## 主要功能模块
+## 涓昏鍔熻兘妯″潡
 
-| 模块 | 说明 |
+| 妯″潡 | 璇存槑 |
 |------|------|
-| 用户系统 | 注册/登录/资料/权限 |
-| 套餐系统 | 计费/流量限制/续费 |
-| 节点系统 | 多协议/分组/自动注册 |
-| 订阅系统 | 多格式/分组/模板 |
-| 支付系统 | 多渠道/统计 |
-| 工单系统 | 创建/回复/关闭 |
-| Agent 系统 | NAT 穿透/远程控制 |
-| 流量转发 | 中转节点/gost 集成 |
-| Telegram Bot | 命令/通知/广播 |
-| MFA 认证 | TOTP/备用码 |
+| 鐢ㄦ埛绯荤粺 | 娉ㄥ唽/鐧诲綍/璧勬枡/鏉冮檺 |
+| 濂楅绯荤粺 | 璁¤垂/娴侀噺闄愬埗/缁垂 |
+| 鑺傜偣绯荤粺 | 澶氬崗璁?鍒嗙粍/鑷姩娉ㄥ唽 |
+| 璁㈤槄绯荤粺 | 澶氭牸寮?鍒嗙粍/妯℃澘 |
+| 鏀粯绯荤粺 | 澶氭笭閬?缁熻 |
+| 宸ュ崟绯荤粺 | 鍒涘缓/鍥炲/鍏抽棴 |
+| Agent 绯荤粺 | NAT 绌块€?杩滅▼鎺у埗 |
+| 娴侀噺杞彂 | 涓浆鑺傜偣/gost 闆嗘垚 |
+| Telegram Bot | 鍛戒护/閫氱煡/骞挎挱 |
+| MFA 璁よ瘉 | TOTP/澶囩敤鐮?|
 
-## 测试
+## 娴嬭瘯
 
 ```bash
-# 运行所有测试
+# 杩愯鎵€鏈夋祴璇?
 go test ./...
 
-# 运行带覆盖率的测试
+# 杩愯甯﹁鐩栫巼鐨勬祴璇?
 go test -coverprofile=coverage.out ./internal/...
 go tool cover -html=coverage.out
 ```
 
-## 相关项目
+## 鐩稿叧椤圭洰
 
-- [V2bX_AnixOps](https://github.com/anixops/V2bX_AnixOps) - 节点端程序
-- [AnixOps-agent](https://github.com/anixops/anixops-agent) - 远程控制 Agent
+- [V2bX_AnixOps](https://github.com/anixops/V2bX_AnixOps) - 鑺傜偣绔▼搴?
+- [AnixOps-agent](https://github.com/anixops/anixops-agent) - 杩滅▼鎺у埗 Agent
 
 ## License
 

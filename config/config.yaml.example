@@ -7,13 +7,13 @@ server:
   read_timeout: 30
   write_timeout: 30
 
-# 数据库配置
-# 支持 sqlite (默认) 和 postgres
+# 鏁版嵁搴撻厤缃?
+# 鏀寔 sqlite (榛樿) 鍜?postgres
 database:
-  driver: "sqlite"             # sqlite 或 postgres
-  database: "data/v2board.db"  # SQLite: 文件路径, PostgreSQL: 数据库名
+  driver: "sqlite"             # sqlite 鎴?postgres
+  database: "config/data/v2board.db"  # SQLite: 鏂囦欢璺緞, PostgreSQL: 鏁版嵁搴撳悕
   log_level: "info"            # silent, error, warn, info
-  # PostgreSQL 专用配置 (使用 SQLite 时可忽略)
+  # PostgreSQL 涓撶敤閰嶇疆 (浣跨敤 SQLite 鏃跺彲蹇界暐)
   # host: "127.0.0.1"
   # port: 5432
   # username: "postgres"
@@ -22,11 +22,11 @@ database:
   # max_open_conns: 100
   # conn_max_lifetime: 3600
 
-# 缓存配置
-# 默认使用内存缓存，无需任何外部依赖
+# 缂撳瓨閰嶇疆
+# 榛樿浣跨敤鍐呭瓨缂撳瓨锛屾棤闇€浠讳綍澶栭儴渚濊禆
 cache:
-  driver: "memory"  # memory (默认，推荐) 或 redis
-  # Redis 专用配置 (使用 memory 时可忽略)
+  driver: "memory"  # memory (榛樿锛屾帹鑽? 鎴?redis
+  # Redis 涓撶敤閰嶇疆 (浣跨敤 memory 鏃跺彲蹇界暐)
   # redis_host: "127.0.0.1"
   # redis_port: 6379
   # redis_password: ""
