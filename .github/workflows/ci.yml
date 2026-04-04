@@ -124,7 +124,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
-          path: public/
+          path: web/public/
 
   # ========== 后端构建 ==========
   backend-build:
@@ -171,7 +171,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
-          path: public/
+          path: web/public/
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -224,14 +224,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
-          path: public/
+          path: web/public/
 
       - name: Create release archives
         run: |
           mkdir -p release
           tar -czvf release/v2board-linux-amd64.tar.gz v2board
-          tar -czvf release/v2board-frontend.tar.gz -C public .
-          zip -r release/v2board-frontend.zip public
+          tar -czvf release/v2board-frontend.tar.gz -C web/public .
+          zip -r release/v2board-frontend.zip web/public
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1

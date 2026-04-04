@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, go_dev]
     paths:
-      - 'tests/integration/**'
+      - 'internal/tests/integration/**'
       - 'cmd/integration-test/**'
       - '.github/workflows/integration-test.yml'
   pull_request:
     branches: [main, go_dev]
     paths:
-      - 'tests/integration/**'
+      - 'internal/tests/integration/**'
       - 'cmd/integration-test/**'
   workflow_dispatch:
 
@@ -28,7 +28,7 @@ jobs:
           cache: true
 
       - name: Run unit tests
-        run: go test -v -short ./tests/integration/...
+        run: go test -v -short ./internal/tests/integration/...
 
       - name: Upload coverage
         if: always()
@@ -100,4 +100,4 @@ jobs:
           cache: true
 
       - name: Run mock server tests
-        run: go test -v -cover ./tests/integration/mock/...
+        run: go test -v -cover ./internal/tests/integration/mock/...

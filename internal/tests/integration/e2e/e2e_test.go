@@ -16,23 +16,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anixops/v2board/tests/integration/echo"
+	"github.com/anixops/v2board/internal/tests/integration/echo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/proxy"
 )
 
-// E2ETestSuite 端到端测试套件
+// E2ETestSuite 绔埌绔祴璇曞浠?
 type E2ETestSuite struct {
-	t            *testing.T
-	configDir    string
-	xrayPath     string
-	echoServer   *echo.EchoServer
-	processes    []*exec.Cmd
-	mu           sync.Mutex
+	t          *testing.T
+	configDir  string
+	xrayPath   string
+	echoServer *echo.EchoServer
+	processes  []*exec.Cmd
+	mu         sync.Mutex
 }
 
-// NewE2ETestSuite 创建端到端测试套件
+// NewE2ETestSuite 鍒涘缓绔埌绔祴璇曞浠?
 func NewE2ETestSuite(t *testing.T) *E2ETestSuite {
 	configDir := t.TempDir()
 	return &E2ETestSuite{
@@ -42,9 +42,9 @@ func NewE2ETestSuite(t *testing.T) *E2ETestSuite {
 	}
 }
 
-// Setup 设置测试环境
+// Setup 璁剧疆娴嬭瘯鐜
 func (s *E2ETestSuite) Setup() error {
-	// 查找 xray 二进制
+	// 鏌ユ壘 xray 浜岃繘鍒?
 	if path, err := exec.LookPath("xray"); err == nil {
 		s.xrayPath = path
 		s.t.Logf("Found xray at: %s", path)
@@ -55,7 +55,7 @@ func (s *E2ETestSuite) Setup() error {
 	return nil
 }
 
-// StartEchoServer 启动 Echo 服务器
+// StartEchoServer 鍚姩 Echo 鏈嶅姟鍣?
 func (s *E2ETestSuite) StartEchoServer(ctx context.Context) (int, error) {
 	s.echoServer = echo.NewEchoServer(0)
 	if err := s.echoServer.Start(ctx); err != nil {
@@ -66,14 +66,14 @@ func (s *E2ETestSuite) StartEchoServer(ctx context.Context) (int, error) {
 	return port, nil
 }
 
-// StopEchoServer 停止 Echo 服务器
+// StopEchoServer 鍋滄 Echo 鏈嶅姟鍣?
 func (s *E2ETestSuite) StopEchoServer(ctx context.Context) {
 	if s.echoServer != nil {
 		s.echoServer.Stop(ctx)
 	}
 }
 
-// GetFreePort 获取空闲端口
+// GetFreePort 鑾峰彇绌洪棽绔彛
 func (s *E2ETestSuite) GetFreePort() (int, error) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 	if err != nil {
@@ -89,7 +89,7 @@ func (s *E2ETestSuite) GetFreePort() (int, error) {
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
-// WaitForPort 等待端口可用
+// WaitForPort 绛夊緟绔彛鍙敤
 func (s *E2ETestSuite) WaitForPort(port int, timeout time.Duration) error {
 	start := time.Now()
 	for time.Since(start) < timeout {
@@ -103,10 +103,10 @@ func (s *E2ETestSuite) WaitForPort(port int, timeout time.Duration) error {
 	return fmt.Errorf("timeout waiting for port %d", port)
 }
 
-// RunFullTest 运行完整测试
-// proxyPort: 客户端代理端口
-// echoPort: Echo 服务器端口
-// protocol: 测试协议
+// RunFullTest 杩愯瀹屾暣娴嬭瘯
+// proxyPort: 瀹㈡埛绔唬鐞嗙鍙?
+// echoPort: Echo 鏈嶅姟鍣ㄧ鍙?
+// protocol: 娴嬭瘯鍗忚
 func (s *E2ETestSuite) RunFullTest(ctx context.Context, proxyPort, echoPort int, protocol string) (*TestResult, error) {
 	result := &TestResult{
 		Protocol:  protocol,
@@ -115,7 +115,7 @@ func (s *E2ETestSuite) RunFullTest(ctx context.Context, proxyPort, echoPort int,
 		StartTime: time.Now(),
 	}
 
-	// 1. 生成服务端配置
+	// 1. 鐢熸垚鏈嶅姟绔厤缃?
 	serverPort, err := s.GetFreePort()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get server port: %w", err)
@@ -128,14 +128,14 @@ func (s *E2ETestSuite) RunFullTest(ctx context.Context, proxyPort, echoPort int,
 		return nil, err
 	}
 
-	// 2. 生成客户端配置
+	// 2. 鐢熸垚瀹㈡埛绔厤缃?
 	clientConfig := s.generateClientConfig(protocol, serverPort, proxyPort)
 	clientConfigPath := filepath.Join(s.configDir, fmt.Sprintf("client-%s.json", protocol))
 	if err := os.WriteFile(clientConfigPath, []byte(clientConfig), 0644); err != nil {
 		return nil, err
 	}
 
-	// 3. 启动服务端
+	// 3. 鍚姩鏈嶅姟绔?
 	serverCmd := exec.CommandContext(ctx, s.xrayPath, "run", "-c", serverConfigPath)
 	if runtime.GOOS != "windows" {
 		serverCmd.Stdout = os.Stdout
@@ -146,13 +146,13 @@ func (s *E2ETestSuite) RunFullTest(ctx context.Context, proxyPort, echoPort int,
 	}
 	s.addProcess(serverCmd)
 
-	// 等待服务端启动
+	// 绛夊緟鏈嶅姟绔惎鍔?
 	if err := s.WaitForPort(serverPort, 10*time.Second); err != nil {
 		return nil, fmt.Errorf("server failed to start: %w", err)
 	}
 	s.t.Logf("[%s] Server started on port %d", protocol, serverPort)
 
-	// 4. 启动客户端
+	// 4. 鍚姩瀹㈡埛绔?
 	clientCmd := exec.CommandContext(ctx, s.xrayPath, "run", "-c", clientConfigPath)
 	if runtime.GOOS != "windows" {
 		clientCmd.Stdout = os.Stdout
@@ -163,13 +163,13 @@ func (s *E2ETestSuite) RunFullTest(ctx context.Context, proxyPort, echoPort int,
 	}
 	s.addProcess(clientCmd)
 
-	// 等待客户端启动
+	// 绛夊緟瀹㈡埛绔惎鍔?
 	if err := s.WaitForPort(proxyPort, 10*time.Second); err != nil {
 		return nil, fmt.Errorf("client failed to start: %w", err)
 	}
 	s.t.Logf("[%s] Client started on port %d", protocol, proxyPort)
 
-	// 5. 测试连通性
+	// 5. 娴嬭瘯杩為€氭€?
 	testStart := time.Now()
 	err = s.testConnectivity(ctx, proxyPort, echoPort)
 	result.Latency = time.Since(testStart)
@@ -187,15 +187,15 @@ func (s *E2ETestSuite) RunFullTest(ctx context.Context, proxyPort, echoPort int,
 	return result, nil
 }
 
-// testConnectivity 测试连通性
+// testConnectivity 娴嬭瘯杩為€氭€?
 func (s *E2ETestSuite) testConnectivity(ctx context.Context, proxyPort, echoPort int) error {
-	// 创建 SOCKS5 拨号器
+	// 鍒涘缓 SOCKS5 鎷ㄥ彿鍣?
 	dialer, err := proxy.SOCKS5("tcp", fmt.Sprintf("127.0.0.1:%d", proxyPort), nil, proxy.Direct)
 	if err != nil {
 		return fmt.Errorf("failed to create SOCKS5 dialer: %w", err)
 	}
 
-	// 创建 HTTP 客户端
+	// 鍒涘缓 HTTP 瀹㈡埛绔?
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return dialer.Dial(network, addr)
@@ -207,7 +207,7 @@ func (s *E2ETestSuite) testConnectivity(ctx context.Context, proxyPort, echoPort
 		Timeout:   10 * time.Second,
 	}
 
-	// 通过代理访问 Echo 服务器
+	// 閫氳繃浠ｇ悊璁块棶 Echo 鏈嶅姟鍣?
 	targetURL := fmt.Sprintf("http://127.0.0.1:%d/ping", echoPort)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
@@ -234,11 +234,11 @@ func (s *E2ETestSuite) testConnectivity(ctx context.Context, proxyPort, echoPort
 		return fmt.Errorf("unexpected response: %s", string(body))
 	}
 
-	s.t.Logf("✅ Successfully connected through proxy to Echo server")
+	s.t.Logf("鉁?Successfully connected through proxy to Echo server")
 	return nil
 }
 
-// TestResult 测试结果
+// TestResult 娴嬭瘯缁撴灉
 type TestResult struct {
 	Protocol   string
 	ServerPort int
@@ -252,7 +252,7 @@ type TestResult struct {
 	EndTime    time.Time
 }
 
-// generateServerConfig 生成服务端配置
+// generateServerConfig 鐢熸垚鏈嶅姟绔厤缃?
 func (s *E2ETestSuite) generateServerConfig(protocol string, port int) string {
 	switch protocol {
 	case "shadowsocks":
@@ -327,7 +327,7 @@ func (s *E2ETestSuite) generateServerConfig(protocol string, port int) string {
 	}
 }
 
-// generateClientConfig 生成客户端配置
+// generateClientConfig 鐢熸垚瀹㈡埛绔厤缃?
 func (s *E2ETestSuite) generateClientConfig(protocol string, serverPort, proxyPort int) string {
 	switch protocol {
 	case "shadowsocks":
@@ -430,14 +430,14 @@ func (s *E2ETestSuite) generateClientConfig(protocol string, serverPort, proxyPo
 	}
 }
 
-// addProcess 添加进程
+// addProcess 娣诲姞杩涚▼
 func (s *E2ETestSuite) addProcess(cmd *exec.Cmd) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.processes = append(s.processes, cmd)
 }
 
-// StopAll 停止所有进程
+// StopAll 鍋滄鎵€鏈夎繘绋?
 func (s *E2ETestSuite) StopAll() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -460,22 +460,22 @@ func (s *E2ETestSuite) StopAll() {
 	s.processes = nil
 }
 
-// Teardown 清理环境
+// Teardown 娓呯悊鐜
 func (s *E2ETestSuite) Teardown() {
 	s.StopAll()
 	s.StopEchoServer(context.Background())
 }
 
-// TestResultReport 测试报告
+// TestResultReport 娴嬭瘯鎶ュ憡
 type TestResultReport struct {
-	Timestamp  time.Time
-	Total      int
-	Passed     int
-	Failed     int
-	Results    []TestResult
+	Timestamp time.Time
+	Total     int
+	Passed    int
+	Failed    int
+	Results   []TestResult
 }
 
-// Print 打印报告
+// Print 鎵撳嵃鎶ュ憡
 func (r *TestResultReport) Print() {
 	fmt.Println("\n========== E2E Test Report ==========")
 	fmt.Printf("Time: %s\n", r.Timestamp.Format(time.RFC3339))
@@ -484,11 +484,11 @@ func (r *TestResultReport) Print() {
 	fmt.Println("\nDetails:")
 
 	for _, result := range r.Results {
-		status := "✅ PASS"
+		status := "鉁?PASS"
 		if !result.Success {
-			status = "❌ FAIL"
+			status = "鉂?FAIL"
 		}
-		fmt.Printf("  %s [%s] Server:%d → Proxy:%d → Echo:%d (latency: %v)\n",
+		fmt.Printf("  %s [%s] Server:%d 鈫?Proxy:%d 鈫?Echo:%d (latency: %v)\n",
 			status, result.Protocol, result.ServerPort, result.ProxyPort, result.EchoPort, result.Latency)
 		if result.Error != "" {
 			fmt.Printf("       Error: %s\n", result.Error)
@@ -497,7 +497,7 @@ func (r *TestResultReport) Print() {
 	fmt.Println("======================================")
 }
 
-// ========== 测试函数 ==========
+// ========== 娴嬭瘯鍑芥暟 ==========
 
 func TestE2ESetup(t *testing.T) {
 	suite := NewE2ETestSuite(t)
@@ -528,7 +528,7 @@ func TestE2EStartEchoServer(t *testing.T) {
 	require.NoError(t, err)
 	assert.Greater(t, port, 0)
 
-	// 测试 Echo 服务器
+	// 娴嬭瘯 Echo 鏈嶅姟鍣?
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/ping", port))
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -551,15 +551,15 @@ func TestE2EShadowsocksFull(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 启动 Echo 服务器
+	// 鍚姩 Echo 鏈嶅姟鍣?
 	echoPort, err := suite.StartEchoServer(ctx)
 	require.NoError(t, err)
 
-	// 获取代理端口
+	// 鑾峰彇浠ｇ悊绔彛
 	proxyPort, err := suite.GetFreePort()
 	require.NoError(t, err)
 
-	// 运行完整测试
+	// 杩愯瀹屾暣娴嬭瘯
 	result, err := suite.RunFullTest(ctx, proxyPort, echoPort, "shadowsocks")
 	require.NoError(t, err)
 
@@ -699,13 +699,13 @@ func TestE2EAllProtocols(t *testing.T) {
 			report.Total++
 			if result.Success {
 				report.Passed++
-				t.Logf("✅ %s passed (latency: %v)", protocol, result.Latency)
+				t.Logf("鉁?%s passed (latency: %v)", protocol, result.Latency)
 			} else {
 				report.Failed++
-				t.Logf("❌ %s failed: %s", protocol, result.Error)
+				t.Logf("鉂?%s failed: %s", protocol, result.Error)
 			}
 
-			// 清理进程，为下一个协议测试做准备
+			// 娓呯悊杩涚▼锛屼负涓嬩竴涓崗璁祴璇曞仛鍑嗗
 			suite.StopAll()
 			time.Sleep(500 * time.Millisecond)
 		})
@@ -713,7 +713,7 @@ func TestE2EAllProtocols(t *testing.T) {
 
 	report.Print()
 
-	// 至少要有一些测试通过
+	// 鑷冲皯瑕佹湁涓€浜涙祴璇曢€氳繃
 	if report.Passed == 0 {
 		t.Error("All protocol tests failed")
 	}
@@ -742,7 +742,7 @@ func TestE2EConcurrency(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.Success, "Initial test should pass")
 
-	// 并发测试
+	// 骞跺彂娴嬭瘯
 	var wg sync.WaitGroup
 	errors := make(chan error, 10)
 
@@ -751,7 +751,7 @@ func TestE2EConcurrency(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 
-			// 创建 SOCKS5 拨号器
+			// 鍒涘缓 SOCKS5 鎷ㄥ彿鍣?
 			dialer, err := proxy.SOCKS5("tcp", fmt.Sprintf("127.0.0.1:%d", proxyPort), nil, proxy.Direct)
 			if err != nil {
 				errors <- err
@@ -817,7 +817,7 @@ func TestE2ELargeData(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.Success)
 
-	// 发送大数据
+	// 鍙戦€佸ぇ鏁版嵁
 	dialer, err := proxy.SOCKS5("tcp", fmt.Sprintf("127.0.0.1:%d", proxyPort), nil, proxy.Direct)
 	require.NoError(t, err)
 
@@ -832,7 +832,7 @@ func TestE2ELargeData(t *testing.T) {
 		Timeout:   30 * time.Second,
 	}
 
-	// 发送 1MB 数据
+	// 鍙戦€?1MB 鏁版嵁
 	largeData := bytes.Repeat([]byte("X"), 1024*1024)
 	targetURL := fmt.Sprintf("http://127.0.0.1:%d/echo", echoPort)
 
@@ -845,7 +845,7 @@ func TestE2ELargeData(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	// 验证响应包含数据信息
+	// 楠岃瘉鍝嶅簲鍖呭惈鏁版嵁淇℃伅
 	assert.Contains(t, string(body), "Content-Length")
 	t.Logf("Large data test completed, response length: %d", len(body))
 }

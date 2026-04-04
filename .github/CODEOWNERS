@@ -1,9 +1,9 @@
-# CODEOWNERS - 代码所有者配置
+# CODEOWNERS - 代码所有者配�?
 # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
-# 生产环境相关代码需要审核
+# 生产环境相关代码需要审�?
 /.github/ @owner
-/scripts/ @owner
+/config/scripts/ @owner
 /config/config.prod.yaml @owner
 
 # 核心业务逻辑

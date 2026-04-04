@@ -46,10 +46,10 @@ COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/config/config.yaml.example ./config/config.yaml.example
 
 # Copy frontend build (if exists)
-COPY --from=builder /app/public ./public
+COPY --from=builder /app/web/public ./web/public
 
 # Create necessary directories
-RUN mkdir -p /app/data /app/logs && chown -R v2board:v2board /app
+RUN mkdir -p /app/config/data /app/web/public /app/logs && chown -R v2board:v2board /app
 
 # Switch to non-root user
 USER v2board

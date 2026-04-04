@@ -30,7 +30,7 @@ coverage/
 web/node_modules
 
 # Data directories (should be mounted as volumes)
-data/
+config/data/
 logs/
 
 # Documentation
@@ -44,7 +44,7 @@ docs/
 .travis.yml
 
 # Test files
-tests/
+internal/tests/
 *_test.go
 
 # Config files with secrets

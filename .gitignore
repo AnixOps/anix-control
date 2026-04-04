@@ -38,16 +38,16 @@ config/config.yaml
 # Build
 dist/
 build/
-public/
+web/public/
 web/node_modules/
 
 # Database
-data/
+config/data/
 # Environment
 .env
 .env.local
 
 # Build outputs
-bin/
-output/
+config/workspace/bin/
+config/workspace/output/
 test-reports/

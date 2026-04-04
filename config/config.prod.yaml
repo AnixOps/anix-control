@@ -1,7 +1,7 @@
 # V2Board Go Backend Configuration - Production
-# 生产环境配置文件
+# 鐢熶骇鐜閰嶇疆鏂囦欢
 
-# 环境标识: development (开发), production (生产)
+# 鐜鏍囪瘑: development (寮€鍙?, production (鐢熶骇)
 env: "production"
 
 server:
@@ -10,29 +10,29 @@ server:
   mode: "release"
   read_timeout: 30
   write_timeout: 30
-  # 可信代理列表 (用于获取真实 IP，如在 Nginx/Cloudflare 后面)
+  # 鍙俊浠ｇ悊鍒楄〃 (鐢ㄤ簬鑾峰彇鐪熷疄 IP锛屽鍦?Nginx/Cloudflare 鍚庨潰)
   trusted_proxies:
     - "127.0.0.1"
     - "10.0.0.0/8"
     - "172.16.0.0/12"
     - "192.168.0.0/16"
 
-# TLS/HTTPS 配置
-# 方式一: 使用 Nginx 反代 (推荐) - 设置 enable: false
-# 方式二: Go 原生 TLS - 设置 enable: true 并配置证书路径
+# TLS/HTTPS 閰嶇疆
+# 鏂瑰紡涓€: 浣跨敤 Nginx 鍙嶄唬 (鎺ㄨ崘) - 璁剧疆 enable: false
+# 鏂瑰紡浜? Go 鍘熺敓 TLS - 璁剧疆 enable: true 骞堕厤缃瘉涔﹁矾寰?
 tls:
-  enable: false                               # 使用 Nginx 反代时设为 false
-  cert_file: "/etc/ssl/certs/v2board.crt"     # SSL 证书路径 (仅 enable: true 时需要)
-  key_file: "/etc/ssl/private/v2board.key"    # SSL 私钥路径 (仅 enable: true 时需要)
-  domain: "your-domain.com"                   # 您的域名 (用于生成订阅链接等)
+  enable: false                               # 浣跨敤 Nginx 鍙嶄唬鏃惰涓?false
+  cert_file: "/etc/ssl/certs/v2board.crt"     # SSL 璇佷功璺緞 (浠?enable: true 鏃堕渶瑕?
+  key_file: "/etc/ssl/private/v2board.key"    # SSL 绉侀挜璺緞 (浠?enable: true 鏃堕渶瑕?
+  domain: "your-domain.com"                   # 鎮ㄧ殑鍩熷悕 (鐢ㄤ簬鐢熸垚璁㈤槄閾炬帴绛?
 
-# 前端服务器配置
+# 鍓嶇鏈嶅姟鍣ㄩ厤缃?
 frontend:
   enable: true
-  port: 3000         # 保持 3000 端口，通过 Nginx 反代到 80/443
-  path: "public"
+  port: 3000         # 淇濇寔 3000 绔彛锛岄€氳繃 Nginx 鍙嶄唬鍒?80/443
+  path: "web/public"
 
-# 数据库配置 - 生产环境推荐使用 PostgreSQL
+# 鏁版嵁搴撻厤缃?- 鐢熶骇鐜鎺ㄨ崘浣跨敤 PostgreSQL
 database:
   driver: "postgres"
   host: "127.0.0.1"
@@ -40,12 +40,12 @@ database:
   username: "v2board"
   password: "your-secure-password"
   database: "v2board"
-  log_level: "error"          # 生产环境只记录错误
+  log_level: "error"          # 鐢熶骇鐜鍙褰曢敊璇?
   max_idle_conns: 10
   max_open_conns: 100
   conn_max_lifetime: 3600
 
-# 缓存配置 - 生产环境推荐使用 Redis
+# 缂撳瓨閰嶇疆 - 鐢熶骇鐜鎺ㄨ崘浣跨敤 Redis
 cache:
   driver: "redis"
   redis_host: "127.0.0.1"
@@ -54,7 +54,7 @@ cache:
   redis_db: 0
 
 log:
-  level: "warn"               # 生产环境减少日志
+  level: "warn"               # 鐢熶骇鐜鍑忓皯鏃ュ織
   output: "file"
   file_path: "/var/log/v2board/v2board.log"
   max_size: 100
@@ -72,7 +72,7 @@ app:
   traffic_log_enable: true
   subscribe_path: "s"
 
-# 默认管理员配置
+# 榛樿绠＄悊鍛橀厤缃?
 admin:
   email: "admin@your-domain.com"
-  password: ""  # 留空将自动生成
+  password: ""  # 鐣欑┖灏嗚嚜鍔ㄧ敓鎴?

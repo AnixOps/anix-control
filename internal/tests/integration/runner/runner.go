@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anixops/v2board/tests/integration/clients"
-	"github.com/anixops/v2board/tests/integration/config"
+	"github.com/anixops/v2board/internal/tests/integration/clients"
+	"github.com/anixops/v2board/internal/tests/integration/config"
 )
 
-// TestResult 测试结果
+// TestResult 娴嬭瘯缁撴灉
 type TestResult struct {
 	ScenarioName string        `json:"scenario_name"`
 	ClientType   string        `json:"client_type"`
@@ -26,7 +26,7 @@ type TestResult struct {
 	Logs         string        `json:"logs,omitempty"`
 }
 
-// TestReport 测试报告
+// TestReport 娴嬭瘯鎶ュ憡
 type TestReport struct {
 	Timestamp   time.Time    `json:"timestamp"`
 	TotalTests  int          `json:"total_tests"`
@@ -35,29 +35,29 @@ type TestReport struct {
 	Results     []TestResult `json:"results"`
 }
 
-// Runner 测试运行器
+// Runner 娴嬭瘯杩愯鍣?
 type Runner struct {
-	configDir    string
-	timeout      time.Duration
-	parallel     bool
-	maxParallel  int
-	report       *TestReport
-	mu           sync.Mutex
-	scenarios    []config.TestScenario
-	generators   map[string]config.Generator
+	configDir   string
+	timeout     time.Duration
+	parallel    bool
+	maxParallel int
+	report      *TestReport
+	mu          sync.Mutex
+	scenarios   []config.TestScenario
+	generators  map[string]config.Generator
 }
 
-// RunnerOption 运行器选项
+// RunnerOption 杩愯鍣ㄩ€夐」
 type RunnerOption func(*Runner)
 
-// WithTimeout 设置超时
+// WithTimeout 璁剧疆瓒呮椂
 func WithTimeout(timeout time.Duration) RunnerOption {
 	return func(r *Runner) {
 		r.timeout = timeout
 	}
 }
 
-// WithParallel 设置并行测试
+// WithParallel 璁剧疆骞惰娴嬭瘯
 func WithParallel(maxParallel int) RunnerOption {
 	return func(r *Runner) {
 		r.parallel = true
@@ -65,21 +65,21 @@ func WithParallel(maxParallel int) RunnerOption {
 	}
 }
 
-// WithConfigDir 设置配置目录
+// WithConfigDir 璁剧疆閰嶇疆鐩綍
 func WithConfigDir(dir string) RunnerOption {
 	return func(r *Runner) {
 		r.configDir = dir
 	}
 }
 
-// WithScenarios 设置测试场景
+// WithScenarios 璁剧疆娴嬭瘯鍦烘櫙
 func WithScenarios(scenarios []config.TestScenario) RunnerOption {
 	return func(r *Runner) {
 		r.scenarios = scenarios
 	}
 }
 
-// NewRunner 创建测试运行器
+// NewRunner 鍒涘缓娴嬭瘯杩愯鍣?
 func NewRunner(opts ...RunnerOption) *Runner {
 	r := &Runner{
 		configDir:   "./test_configs",
@@ -103,7 +103,7 @@ func NewRunner(opts ...RunnerOption) *Runner {
 	return r
 }
 
-// Run 运行所有测试场景
+// Run 杩愯鎵€鏈夋祴璇曞満鏅?
 func (r *Runner) Run(ctx context.Context, server config.ServerConfig, user config.UserConfig) *TestReport {
 	r.report.Timestamp = time.Now()
 	r.report.TotalTests = len(r.scenarios) * len(r.generators)
@@ -111,7 +111,7 @@ func (r *Runner) Run(ctx context.Context, server config.ServerConfig, user confi
 	r.report.FailedTests = 0
 	r.report.Results = []TestResult{}
 
-	// 确保配置目录存在
+	// 纭繚閰嶇疆鐩綍瀛樺湪
 	os.MkdirAll(r.configDir, 0755)
 
 	if r.parallel {
@@ -123,7 +123,7 @@ func (r *Runner) Run(ctx context.Context, server config.ServerConfig, user confi
 	return r.report
 }
 
-// runSequential 顺序执行测试
+// runSequential 椤哄簭鎵ц娴嬭瘯
 func (r *Runner) runSequential(ctx context.Context, server config.ServerConfig, user config.UserConfig) {
 	for _, scenario := range r.scenarios {
 		for genName, generator := range r.generators {
@@ -133,7 +133,7 @@ func (r *Runner) runSequential(ctx context.Context, server config.ServerConfig, 
 	}
 }
 
-// runParallel 并行执行测试
+// runParallel 骞惰鎵ц娴嬭瘯
 func (r *Runner) runParallel(ctx context.Context, server config.ServerConfig, user config.UserConfig) {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, r.maxParallel)
@@ -155,7 +155,7 @@ func (r *Runner) runParallel(ctx context.Context, server config.ServerConfig, us
 	wg.Wait()
 }
 
-// runTest 执行单个测试
+// runTest 鎵ц鍗曚釜娴嬭瘯
 func (r *Runner) runTest(ctx context.Context, scenario config.TestScenario, server config.ServerConfig, user config.UserConfig, genName string, generator config.Generator) TestResult {
 	result := TestResult{
 		ScenarioName: scenario.Name,
@@ -169,14 +169,14 @@ func (r *Runner) runTest(ctx context.Context, scenario config.TestScenario, serv
 		result.Duration = time.Since(startTime)
 	}()
 
-	// 检查协议是否支持
+	// 妫€鏌ュ崗璁槸鍚︽敮鎸?
 	if !generator.IsProtocolSupported(scenario.Protocol) {
 		result.Success = false
 		result.Error = fmt.Sprintf("protocol %s not supported by %s", scenario.Protocol, genName)
 		return result
 	}
 
-	// 创建客户端配置
+	// 鍒涘缓瀹㈡埛绔厤缃?
 	configContent, err := generator.GenerateFromScenario(scenario, server, user)
 	if err != nil {
 		result.Success = false
@@ -184,7 +184,7 @@ func (r *Runner) runTest(ctx context.Context, scenario config.TestScenario, serv
 		return result
 	}
 
-	// 保存配置文件
+	// 淇濆瓨閰嶇疆鏂囦欢
 	configPath := filepath.Join(r.configDir, fmt.Sprintf("%s_%s.json", scenario.Name, genName))
 	if genName == "mihomo" {
 		configPath = filepath.Join(r.configDir, fmt.Sprintf("%s_%s.yaml", scenario.Name, genName))
@@ -196,7 +196,7 @@ func (r *Runner) runTest(ctx context.Context, scenario config.TestScenario, serv
 	}
 	defer os.Remove(configPath)
 
-	// 创建客户端
+	// 鍒涘缓瀹㈡埛绔?
 	var client clients.Client
 	switch genName {
 	case "xray":
@@ -211,7 +211,7 @@ func (r *Runner) runTest(ctx context.Context, scenario config.TestScenario, serv
 		)
 	}
 
-	// 启动客户端
+	// 鍚姩瀹㈡埛绔?
 	testCtx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 
@@ -223,10 +223,10 @@ func (r *Runner) runTest(ctx context.Context, scenario config.TestScenario, serv
 	}
 	defer client.Stop()
 
-	// 等待客户端稳定
+	// 绛夊緟瀹㈡埛绔ǔ瀹?
 	time.Sleep(500 * time.Millisecond)
 
-	// 执行连通性测试
+	// 鎵ц杩為€氭€ф祴璇?
 	latency, err := r.testConnectivity(testCtx, client)
 	if err != nil {
 		result.Success = false
@@ -240,11 +240,11 @@ func (r *Runner) runTest(ctx context.Context, scenario config.TestScenario, serv
 	return result
 }
 
-// testConnectivity 测试连通性
+// testConnectivity 娴嬭瘯杩為€氭€?
 func (r *Runner) testConnectivity(ctx context.Context, client clients.Client) (time.Duration, error) {
 	start := time.Now()
 
-	// 通过代理发送请求
+	// 閫氳繃浠ｇ悊鍙戦€佽姹?
 	healthy := client.IsHealthy(ctx)
 	if !healthy {
 		return 0, fmt.Errorf("health check failed")
@@ -253,7 +253,7 @@ func (r *Runner) testConnectivity(ctx context.Context, client clients.Client) (t
 	return time.Since(start), nil
 }
 
-// addResult 添加测试结果
+// addResult 娣诲姞娴嬭瘯缁撴灉
 func (r *Runner) addResult(result TestResult) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -266,14 +266,14 @@ func (r *Runner) addResult(result TestResult) {
 	}
 }
 
-// GetReport 获取测试报告
+// GetReport 鑾峰彇娴嬭瘯鎶ュ憡
 func (r *Runner) GetReport() *TestReport {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.report
 }
 
-// SaveReport 保存测试报告
+// SaveReport 淇濆瓨娴嬭瘯鎶ュ憡
 func (r *Runner) SaveReport(path string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -286,7 +286,7 @@ func (r *Runner) SaveReport(path string) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-// PrintReport 打印测试报告
+// PrintReport 鎵撳嵃娴嬭瘯鎶ュ憡
 func (r *Runner) PrintReport() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -300,9 +300,9 @@ func (r *Runner) PrintReport() {
 	fmt.Println("\nDetails:")
 
 	for _, result := range r.report.Results {
-		status := "✅ PASS"
+		status := "鉁?PASS"
 		if !result.Success {
-			status = "❌ FAIL"
+			status = "鉂?FAIL"
 		}
 		fmt.Printf("  %s [%s/%s] %s (%v) - %v\n",
 			status, result.ClientType, result.Protocol, result.ScenarioName,
@@ -314,15 +314,15 @@ func (r *Runner) PrintReport() {
 	fmt.Println("=================================")
 }
 
-// getPorts 获取端口配置 (避免端口冲突)
+// getPorts 鑾峰彇绔彛閰嶇疆 (閬垮厤绔彛鍐茬獊)
 func getPorts(scenarioName, clientType string) (http, socks, mixed, api int) {
-	// 基础端口
+	// 鍩虹绔彛
 	baseHTTP := 20000
 	baseSocks := 20100
 	baseMixed := 20200
 	baseAPI := 20300
 
-	// 根据场景名生成唯一偏移
+	// 鏍规嵁鍦烘櫙鍚嶇敓鎴愬敮涓€鍋忕Щ
 	offset := 0
 	for i, c := range scenarioName {
 		offset += int(c) + i

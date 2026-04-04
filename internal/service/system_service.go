@@ -13,18 +13,18 @@ import (
 	"gorm.io/gorm"
 )
 
-// BackupService 备份服务
+// BackupService 澶囦唤鏈嶅姟
 type BackupService struct {
 	db     *gorm.DB
 	config *model.BackupConfig
 }
 
-// NewBackupService 创建服务
+// NewBackupService 鍒涘缓鏈嶅姟
 func NewBackupService(db *gorm.DB) *BackupService {
 	return &BackupService{db: db}
 }
 
-// GetConfig 获取备份配置
+// GetConfig 鑾峰彇澶囦唤閰嶇疆
 func (s *BackupService) GetConfig() (*model.BackupConfig, error) {
 	if s.config != nil {
 		return s.config, nil
@@ -33,7 +33,7 @@ func (s *BackupService) GetConfig() (*model.BackupConfig, error) {
 	var cfg model.BackupConfig
 	err := s.db.First(&cfg).Error
 	if err == gorm.ErrRecordNotFound {
-		// 创建默认配置
+		// 鍒涘缓榛樿閰嶇疆
 		cfg = model.BackupConfig{
 			Enabled:        false,
 			AutoBackup:     false,
@@ -48,7 +48,7 @@ func (s *BackupService) GetConfig() (*model.BackupConfig, error) {
 	return &cfg, err
 }
 
-// UpdateConfig 更新备份配置
+// UpdateConfig 鏇存柊澶囦唤閰嶇疆
 func (s *BackupService) UpdateConfig(cfg *model.BackupConfig) error {
 	if err := s.db.Save(cfg).Error; err != nil {
 		return err
@@ -57,18 +57,18 @@ func (s *BackupService) UpdateConfig(cfg *model.BackupConfig) error {
 	return nil
 }
 
-// CreateBackup 创建备份
+// CreateBackup 鍒涘缓澶囦唤
 func (s *BackupService) CreateBackup(backupType string, createdBy *uint) (*model.BackupRecord, error) {
 	cfg, err := s.GetConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	// 创建备份记录
+	// 鍒涘缓澶囦唤璁板綍
 	record := &model.BackupRecord{
 		Name:      fmt.Sprintf("backup_%s", time.Now().Format("20060102_150405")),
 		Type:      backupType,
-		Status:    0, // 进行中
+		Status:    0, // 杩涜涓?
 		Auto:      false,
 		CreatedBy: createdBy,
 	}
@@ -77,7 +77,7 @@ func (s *BackupService) CreateBackup(backupType string, createdBy *uint) (*model
 		return nil, err
 	}
 
-	// 确保备份目录存在
+	// 纭繚澶囦唤鐩綍瀛樺湪
 	backupDir := cfg.StoragePath
 	if backupDir == "" {
 		backupDir = "backups"
@@ -102,7 +102,7 @@ func (s *BackupService) CreateBackup(backupType string, createdBy *uint) (*model
 		backupErr = errors.New("unknown backup type")
 	}
 
-	// 更新记录
+	// 鏇存柊璁板綍
 	now := time.Now()
 	if backupErr != nil {
 		record.Status = 2
@@ -118,16 +118,16 @@ func (s *BackupService) CreateBackup(backupType string, createdBy *uint) (*model
 	return record, backupErr
 }
 
-// backupDatabase 备份数据库
+// backupDatabase 澶囦唤鏁版嵁搴?
 func (s *BackupService) backupDatabase(backupDir, name string) (string, int64, error) {
-	dbPath := "data/v2board.db"
+	dbPath := "config/data/v2board.db"
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		return "", 0, errors.New("database file not found")
 	}
 
 	backupPath := filepath.Join(backupDir, name+".db")
 
-	// 复制数据库文件
+	// 澶嶅埗鏁版嵁搴撴枃浠?
 	data, err := os.ReadFile(dbPath)
 	if err != nil {
 		return "", 0, err
@@ -137,19 +137,19 @@ func (s *BackupService) backupDatabase(backupDir, name string) (string, int64, e
 		return "", 0, err
 	}
 
-	// 获取文件大小
+	// 鑾峰彇鏂囦欢澶у皬
 	info, _ := os.Stat(backupPath)
 
 	return backupPath, info.Size(), nil
 }
 
-// backupFiles 备份文件
+// backupFiles 澶囦唤鏂囦欢
 func (s *BackupService) backupFiles(backupDir, name string) (string, int64, error) {
-	// TODO: 实现文件备份逻辑
+	// TODO: 瀹炵幇鏂囦欢澶囦唤閫昏緫
 	return "", 0, nil
 }
 
-// ListBackups 获取备份列表
+// ListBackups 鑾峰彇澶囦唤鍒楄〃
 func (s *BackupService) ListBackups(page, pageSize int) ([]model.BackupRecord, int64, error) {
 	var records []model.BackupRecord
 	var total int64
@@ -162,14 +162,14 @@ func (s *BackupService) ListBackups(page, pageSize int) ([]model.BackupRecord, i
 	return records, total, err
 }
 
-// DeleteBackup 删除备份
+// DeleteBackup 鍒犻櫎澶囦唤
 func (s *BackupService) DeleteBackup(id uint) error {
 	var record model.BackupRecord
 	if err := s.db.First(&record, id).Error; err != nil {
 		return err
 	}
 
-	// 删除文件
+	// 鍒犻櫎鏂囦欢
 	if record.Path != "" {
 		os.Remove(record.Path)
 	}
@@ -177,7 +177,7 @@ func (s *BackupService) DeleteBackup(id uint) error {
 	return s.db.Delete(&record).Error
 }
 
-// RestoreBackup 恢复备份
+// RestoreBackup 鎭㈠澶囦唤
 func (s *BackupService) RestoreBackup(id uint) error {
 	var record model.BackupRecord
 	if err := s.db.First(&record, id).Error; err != nil {
@@ -195,20 +195,20 @@ func (s *BackupService) RestoreBackup(id uint) error {
 	return errors.New("unsupported backup type")
 }
 
-// restoreDatabase 恢复数据库
+// restoreDatabase 鎭㈠鏁版嵁搴?
 func (s *BackupService) restoreDatabase(backupPath string) error {
-	dbPath := "data/v2board.db"
+	dbPath := "config/data/v2board.db"
 
-	// 读取备份文件
+	// 璇诲彇澶囦唤鏂囦欢
 	data, err := os.ReadFile(backupPath)
 	if err != nil {
 		return err
 	}
 
-	// 关闭当前数据库连接
+	// 鍏抽棴褰撳墠鏁版嵁搴撹繛鎺?
 	database.Close()
 
-	// 写入恢复的数据
+	// 鍐欏叆鎭㈠鐨勬暟鎹?
 	if err := os.WriteFile(dbPath, data, 0644); err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func (s *BackupService) restoreDatabase(backupPath string) error {
 	return nil
 }
 
-// CleanupOldBackups 清理旧备份
+// CleanupOldBackups 娓呯悊鏃у浠?
 func (s *BackupService) CleanupOldBackups() error {
 	cfg, _ := s.GetConfig()
 	if cfg == nil || cfg.RetentionDays <= 0 {
@@ -225,23 +225,23 @@ func (s *BackupService) CleanupOldBackups() error {
 
 	cutoff := time.Now().AddDate(0, 0, -cfg.RetentionDays)
 
-	// 查找需要删除的备份
+	// 鏌ユ壘闇€瑕佸垹闄ょ殑澶囦唤
 	var records []model.BackupRecord
 	s.db.Where("created_at < ? AND status = 1", cutoff).Find(&records)
 
 	for _, record := range records {
-		// 删除文件
+		// 鍒犻櫎鏂囦欢
 		if record.Path != "" {
 			os.Remove(record.Path)
 		}
-		// 删除记录
+		// 鍒犻櫎璁板綍
 		s.db.Delete(&record)
 	}
 
 	return nil
 }
 
-// GetBackupStats 获取备份统计
+// GetBackupStats 鑾峰彇澶囦唤缁熻
 func (s *BackupService) GetBackupStats() (map[string]interface{}, error) {
 	var totalBackups int64
 	var totalSize int64
@@ -267,17 +267,17 @@ func (s *BackupService) GetBackupStats() (map[string]interface{}, error) {
 	return result, nil
 }
 
-// SystemConfigService 系统配置服务
+// SystemConfigService 绯荤粺閰嶇疆鏈嶅姟
 type SystemConfigService struct {
 	db *gorm.DB
 }
 
-// NewSystemConfigService 创建服务
+// NewSystemConfigService 鍒涘缓鏈嶅姟
 func NewSystemConfigService(db *gorm.DB) *SystemConfigService {
 	return &SystemConfigService{db: db}
 }
 
-// Get 获取配置
+// Get 鑾峰彇閰嶇疆
 func (s *SystemConfigService) Get(key string) (string, error) {
 	var cfg model.SystemConfig
 	err := s.db.Where("key = ?", key).First(&cfg).Error
@@ -287,7 +287,7 @@ func (s *SystemConfigService) Get(key string) (string, error) {
 	return cfg.Value, err
 }
 
-// Set 设置配置
+// Set 璁剧疆閰嶇疆
 func (s *SystemConfigService) Set(key, value, cfgType, group, remark string) error {
 	var cfg model.SystemConfig
 	err := s.db.Where("key = ?", key).First(&cfg).Error
@@ -316,21 +316,21 @@ func (s *SystemConfigService) Set(key, value, cfgType, group, remark string) err
 	return s.db.Save(&cfg).Error
 }
 
-// GetByGroup 按组获取配置
+// GetByGroup 鎸夌粍鑾峰彇閰嶇疆
 func (s *SystemConfigService) GetByGroup(group string) ([]model.SystemConfig, error) {
 	var configs []model.SystemConfig
 	err := s.db.Where("\"group\" = ?", group).Find(&configs).Error
 	return configs, err
 }
 
-// GetAll 获取所有配置
+// GetAll 鑾峰彇鎵€鏈夐厤缃?
 func (s *SystemConfigService) GetAll() ([]model.SystemConfig, error) {
 	var configs []model.SystemConfig
 	err := s.db.Find(&configs).Error
 	return configs, err
 }
 
-// GetAsMap 获取配置Map
+// GetAsMap 鑾峰彇閰嶇疆Map
 func (s *SystemConfigService) GetAsMap() (map[string]string, error) {
 	configs, err := s.GetAll()
 	if err != nil {
@@ -344,7 +344,7 @@ func (s *SystemConfigService) GetAsMap() (map[string]string, error) {
 	return result, nil
 }
 
-// GetJSON 获取JSON配置
+// GetJSON 鑾峰彇JSON閰嶇疆
 func (s *SystemConfigService) GetJSON(key string, v interface{}) error {
 	value, err := s.Get(key)
 	if err != nil {
@@ -356,7 +356,7 @@ func (s *SystemConfigService) GetJSON(key string, v interface{}) error {
 	return json.Unmarshal([]byte(value), v)
 }
 
-// SetJSON 设置JSON配置
+// SetJSON 璁剧疆JSON閰嶇疆
 func (s *SystemConfigService) SetJSON(key string, v interface{}, group, remark string) error {
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -365,7 +365,7 @@ func (s *SystemConfigService) SetJSON(key string, v interface{}, group, remark s
 	return s.Set(key, string(data), "json", group, remark)
 }
 
-// Delete 删除配置
+// Delete 鍒犻櫎閰嶇疆
 func (s *SystemConfigService) Delete(key string) error {
 	return s.db.Where("key = ?", key).Delete(&model.SystemConfig{}).Error
 }
