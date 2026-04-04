@@ -193,7 +193,7 @@ func (s *AuthServiceTestSuite) TestRegister_DuplicateEmail() {
 	// 绗簩娆℃敞鍐岀浉鍚岄偖绠?
 	_, _, err = svc.Register("dup@example.com", "password456", s.cfg)
 	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "宸茶娉ㄥ唽")
+	assert.Contains(s.T(), err.Error(), "该邮箱已被注册")
 }
 
 func (s *AuthServiceTestSuite) TestLogin_Success() {
@@ -221,7 +221,7 @@ func (s *AuthServiceTestSuite) TestLogin_WrongPassword() {
 	// 浣跨敤閿欒瀵嗙爜鐧诲綍
 	_, _, err = svc.Login("wrongpass@example.com", "wrongpassword", s.cfg)
 	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "瀵嗙爜閿欒")
+	assert.Contains(s.T(), err.Error(), "用户不存在或密码错误")
 }
 
 func (s *AuthServiceTestSuite) TestLogin_UserNotFound() {
@@ -229,7 +229,7 @@ func (s *AuthServiceTestSuite) TestLogin_UserNotFound() {
 
 	_, _, err := svc.Login("nonexistent@example.com", "password123", s.cfg)
 	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "鐢ㄦ埛涓嶅瓨鍦?")
+	assert.Contains(s.T(), err.Error(), "用户不存在或密码错误")
 }
 
 func (s *AuthServiceTestSuite) TestLogin_BannedUser() {
@@ -244,7 +244,7 @@ func (s *AuthServiceTestSuite) TestLogin_BannedUser() {
 	// 灏濊瘯鐧诲綍
 	_, _, err := svc.Login("banned@example.com", "password123", s.cfg)
 	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "琚皝绂?")
+	assert.Contains(s.T(), err.Error(), "用户已被封禁")
 }
 
 func TestAuthService(t *testing.T) {
@@ -874,7 +874,7 @@ func (s *OrderServiceTestSuite) TestCreateOrder_InvalidPeriod() {
 	})
 
 	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "鏃犳晥鐨勪粯璐瑰懆鏈?")
+	assert.Contains(s.T(), err.Error(), "无效的付费周期")
 }
 
 func (s *OrderServiceTestSuite) TestCreateOrder_PlanNotFound() {
@@ -885,7 +885,7 @@ func (s *OrderServiceTestSuite) TestCreateOrder_PlanNotFound() {
 	})
 
 	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "濂楅涓嶅瓨鍦?")
+	assert.Contains(s.T(), err.Error(), "套餐不存在")
 }
 
 func (s *OrderServiceTestSuite) TestGetOrderByID() {
@@ -1067,7 +1067,7 @@ func (s *StatsServiceTestSuite) TestGetUserSubscription_NoPlan() {
 
 	sub, err := s.svc.GetUserSubscription(user.ID, true)
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), "鏃犲椁?", sub.PlanName)
+	assert.Equal(s.T(), "无套餐", sub.PlanName)
 }
 
 func (s *StatsServiceTestSuite) TestInvalidateUserCache() {
@@ -5376,7 +5376,7 @@ func (s *InitServiceTestSuite) TestInitDefaultPlan() {
 
 	// Verify plan was created
 	var plan model.Plan
-	err := database.Get().Where("name = ?", "鍩虹濂楅").First(&plan).Error
+	err := database.Get().Where("name = ?", "基础套餐").First(&plan).Error
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), int64(100), plan.TransferEnable) // 100GB
 	assert.NotNil(s.T(), plan.MonthPrice)
