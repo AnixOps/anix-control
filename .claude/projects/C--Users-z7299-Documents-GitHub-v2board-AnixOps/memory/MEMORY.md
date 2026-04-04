@@ -1,4 +1,4 @@
-# V2Board AnixOps 开发记忆
+# V2Board AnixOps 开发记录
 
 ## 项目概览
 - **后端**: Go + Gin + GORM + SQLite/PostgreSQL
@@ -7,7 +7,7 @@
 
 ## 架构升级 (2026-03-12)
 
-### gRPC 双边通信 (替代心跳)
+### gRPC 双向通信 (替代部分心跳同步)
 - 协议定义: `api/grpc/v2board.proto`
 - 服务端实现: `internal/grpc/node_server.go`
 - 支持双向流式通信，实现配置实时推送
@@ -21,8 +21,8 @@
 
 ### Go 后端测试
 - 测试框架: `testify/suite` + `httptest`
-- 测试工具目录: `tests/testutil/`
-- E2E 测试目录: `tests/e2e/`
+- 测试工具目录: `internal/tests/testutil/`
+- E2E 测试目录: `internal/tests/e2e/`
 - 运行命令: `make test` 或 `go test -v ./...`
 
 ### 当前覆盖率
@@ -36,9 +36,9 @@
 
 ### 关键命令
 ```bash
-make test              # 运行所有测试
-make test-coverage     # 覆盖率报告
-make test-coverage-html # HTML 报告
+make test               # 运行所有测试
+make test-coverage      # 生成覆盖率报告
+make test-coverage-html # 生成 HTML 报告
 ```
 
 ## 数据库模型关键字段
@@ -49,8 +49,8 @@ make test-coverage-html # HTML 报告
 
 ## 新增文件
 - `api/grpc/v2board.proto` - gRPC 协议定义
-- `internal/grpc/node_server.go` - gRPC 服务端
+- `internal/grpc/node_server.go` - gRPC 服务端实现
 - `internal/websocket/subscription.go` - WebSocket 订阅
 - `internal/service/service_test.go` - 服务层测试
 - `internal/handler/handler_test.go` - Handler 测试
-- `tests/e2e/*.go` - E2E 测试套件
+- `internal/tests/e2e/*.go` - E2E 测试套件

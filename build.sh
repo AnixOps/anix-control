@@ -7,6 +7,7 @@ npm run build
 cd ..
 
 echo "Building Backend..."
-go build -o v2board ./cmd/server
+mkdir -p build
+GOWORK=off go build -o build/v2board ./cmd/server
 
 echo "Build Complete!"

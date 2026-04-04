@@ -30,12 +30,14 @@ build-web:
 # 缂栬瘧鍚庣
 build-server:
 	@echo "Building server..."
-	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o v2board ./cmd/server
+	mkdir -p build
+	GOWORK=off CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o build/v2board ./cmd/server
 
 # 缂栬瘧 Linux 鐗堟湰
 build-linux:
 	@echo "Building for Linux..."
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o v2board-linux ./cmd/server
+	mkdir -p build
+	GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o build/v2board-linux ./cmd/server
 
 # 杩愯寮€鍙戞湇鍔″櫒
 run:
@@ -43,7 +45,7 @@ run:
 
 # 娓呯悊
 clean:
-	rm -f v2board v2board-linux $(COVERAGE_FILE) $(COVERAGE_HTML)
+	rm -f v2board v2board-linux build/v2board build/v2board-linux $(COVERAGE_FILE) $(COVERAGE_HTML)
 	rm -rf coverage/
 	go clean -testcache
 
