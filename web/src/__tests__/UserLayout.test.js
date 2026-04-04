@@ -3,21 +3,27 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import UserLayout from '@/layouts/UserLayout.vue'
 
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
+}))
+
 describe('UserLayout.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
 
-  it('renders slot content', () => {
+  it('renders router view container', () => {
     const wrapper = mount(UserLayout, {
-      slots: {
-        default: '<div class="test-content">Test Content</div>',
-      },
       global: {
-        stubs: ['router-link', 'router-view'],
+        stubs: {
+          'router-link': true,
+          'router-view': true,
+        },
       },
     })
 
-    expect(wrapper.html()).toContain('Test Content')
+    expect(wrapper.find('router-view-stub').exists()).toBe(true)
   })
 })

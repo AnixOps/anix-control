@@ -124,6 +124,7 @@
         </select>
         <select v-model="logFilter.status">
           <option value="">全部状态</option>
+          <option value="pending">Pending</option>
           <option value="success">成功</option>
           <option value="failed">失败</option>
         </select>
@@ -151,8 +152,8 @@
               <td>{{ log.recipient }}</td>
               <td>{{ log.title || '-' }}</td>
               <td>
-                <span :class="['status-badge', log.status === 'success' ? 'status-active' : 'status-failed']">
-                  {{ log.status === 'success' ? '成功' : '失败' }}
+                <span :class="['status-badge', getLogStatusClass(log.status)]">
+                  {{ getLogStatusLabel(log.status) }}
                 </span>
               </td>
               <td>{{ formatTime(log.created_at) }}</td>
@@ -291,6 +292,17 @@ const eventLabels = {
 
 const getTypeLabel = (type) => typeLabels[type] || type
 const getEventLabel = (event) => eventLabels[event] || event
+const getLogStatusClass = (status) => {
+  if (status === 'success') return 'status-active'
+  if (status === 'pending') return 'status-pending'
+  return 'status-failed'
+}
+const getLogStatusLabel = (status) => {
+  if (status === 'success') return 'Success'
+  if (status === 'pending') return 'Pending'
+  return 'Failed'
+}
+
 
 const formatTime = (time) => {
   if (!time) return '-'
@@ -426,6 +438,7 @@ onMounted(() => {
 .type-badge.telegram { background: rgba(0, 136, 204, 0.15); color: #0088cc; }
 .type-badge.webhook { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
 
+.status-pending { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
 .status-failed { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
 
 .checkbox-label {

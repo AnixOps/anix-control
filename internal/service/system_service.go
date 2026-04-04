@@ -42,7 +42,13 @@ func (s *BackupService) GetConfig() (*model.BackupConfig, error) {
 			StorageType:    "local",
 			StoragePath:    "backups",
 		}
-		s.db.Create(&cfg)
+		if createErr := s.db.Create(&cfg).Error; createErr != nil {
+			return nil, createErr
+		}
+		err = nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	s.config = &cfg
 	return &cfg, err

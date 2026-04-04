@@ -839,6 +839,15 @@ export function getTelegramUsers(params) {
   })
 }
 
+// 更新用户通知设置
+export function updateTelegramUserNotify(id, data) {
+  return request({
+    url: `/admin/telegram/users/${id}/notify`,
+    method: 'put',
+    data
+  })
+}
+
 // ====== MFA管理 ======
 
 // 获取MFA配置
@@ -1278,6 +1287,7 @@ export default {
   sendTelegramNotification,
   broadcastTelegram,
   getTelegramUsers,
+  updateTelegramUserNotify,
   // MFA
   getMFAConfig,
   updateMFAConfig,

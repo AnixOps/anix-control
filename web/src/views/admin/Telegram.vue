@@ -150,7 +150,7 @@
 import { ref, computed, onMounted } from 'vue'
 import {
   getTelegramBot, updateTelegramBot, setTelegramWebhook, deleteTelegramWebhook,
-  getTelegramUsers, sendTelegramNotification, broadcastTelegram
+  getTelegramUsers, updateTelegramUserNotify, sendTelegramNotification, broadcastTelegram
 } from '@/api/admin'
 
 const activeTab = ref('config')
@@ -244,15 +244,25 @@ const deleteWebhook = async () => {
 
 const fetchUsers = async () => {
   try {
-    const res = await getTelegramUsers()
+    const res = await getTelegramUsers({ all: true })
     users.value = res.data?.list || []
   } catch (err) {
     console.error('获取用户失败:', err)
   }
 }
 
-const toggleUserNotify = (user) => {
-  user.notify_enabled = !user.notify_enabled
+const toggleUserNotify = async (user) => {
+  try {
+    const nextEnabled = !user.notify_enabled
+    const res = await updateTelegramUserNotify(user.id, { notify_enabled: nextEnabled })
+    const updated = res.data || {}
+    user.notify_enabled = !!updated.notify_enabled
+    user.notify_expire = !!updated.notify_expire
+    user.notify_traffic = !!updated.notify_traffic
+    user.notify_ticket = !!updated.notify_ticket
+  } catch (err) {
+    alert('操作失败: ' + (err.response?.data?.error || err.message))
+  }
 }
 
 const sendNotification = async () => {
@@ -263,7 +273,7 @@ const sendNotification = async () => {
 
   try {
     if (notifyForm.value.type === 'broadcast') {
-      const res = await broadcastTelegram({ message: notifyForm.value.message })
+      const res = await broadcastTelegram(notifyForm.value.message)
       alert(`广播完成，成功: ${res.data?.success || 0}，失败: ${res.data?.failed || 0}`)
     } else {
       if (!notifyForm.value.telegram_id) {

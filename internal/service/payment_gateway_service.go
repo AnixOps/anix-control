@@ -265,13 +265,16 @@ func (s *PaymentGatewayService) GetUserRecords(userID uint, page, pageSize int) 
 }
 
 // ListRecords 获取支付记录列表
-func (s *PaymentGatewayService) ListRecords(page, pageSize int, status *int) ([]*model.PaymentRecord, int64, error) {
+func (s *PaymentGatewayService) ListRecords(page, pageSize int, status *int, gatewayType string) ([]*model.PaymentRecord, int64, error) {
 	var records []*model.PaymentRecord
 	var total int64
 
 	query := s.db.Model(&model.PaymentRecord{})
 	if status != nil {
 		query = query.Where("status = ?", *status)
+	}
+	if gatewayType != "" {
+		query = query.Where("gateway_type = ?", gatewayType)
 	}
 
 	if err := query.Count(&total).Error; err != nil {

@@ -10,6 +10,7 @@ import (
 	"github.com/anixops/v2board/internal/gost"
 	"github.com/anixops/v2board/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ForwardRuleService 转发规则服务
@@ -60,7 +61,10 @@ func (s *ForwardRuleService) Update(rule *model.ForwardRule) error {
 		return err
 	}
 
-	if err := s.db.Save(rule).Error; err != nil {
+	// The rule may carry preloaded associations (RelayNode/ExitNode/User).
+	// Persist only rule fields, otherwise GORM may upsert stale associations
+	// and overwrite updated foreign keys with old relation IDs.
+	if err := s.db.Omit(clause.Associations).Save(rule).Error; err != nil {
 		return err
 	}
 
@@ -249,7 +253,7 @@ func (s *ForwardRuleService) UpdateTraffic(ruleID uint, upload, download int64) 
 // UpdateConnections 更新连接数
 func (s *ForwardRuleService) UpdateConnections(ruleID uint, delta int) error {
 	return s.db.Model(&model.ForwardRule{}).Where("id = ?", ruleID).Updates(map[string]interface{}{
-		"connections":  gorm.Expr("connections + ?", delta),
+		"connections": gorm.Expr("connections + ?", delta),
 		"total_conns": gorm.Expr("total_conns + ?", max(delta, 0)),
 	}).Error
 }
@@ -415,8 +419,8 @@ func (s *ForwardRuleService) GetConfigForNode(nodeID uint) (*NodeForwardConfig, 
 
 // NodeForwardConfig 节点转发配置
 type NodeForwardConfig struct {
-	NodeID uint                 `json:"node_id"`
-	Rules  []ForwardRuleConfig  `json:"rules"`
+	NodeID uint                `json:"node_id"`
+	Rules  []ForwardRuleConfig `json:"rules"`
 }
 
 // ForwardRuleConfig 转发规则配置

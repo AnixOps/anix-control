@@ -1,8 +1,12 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
@@ -12,16 +16,62 @@ import (
 
 // SystemHandler 系统处理器
 type SystemHandler struct {
-	configService  *service.SystemConfigService
-	backupService  *service.BackupService
+	configService *service.SystemConfigService
+	backupService *service.BackupService
+}
+
+func backupStatusToText(status int) string {
+	switch status {
+	case 1:
+		return "completed"
+	case 2:
+		return "failed"
+	default:
+		return "pending"
+	}
+}
+
+func backupIntervalFromSchedule(schedule string) int {
+	schedule = strings.TrimSpace(schedule)
+	if strings.HasPrefix(schedule, "interval:") {
+		raw := strings.TrimPrefix(schedule, "interval:")
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return 24
+}
+
+func backupConfigResponse(cfg *model.BackupConfig) gin.H {
+	return gin.H{
+		"id":              cfg.ID,
+		"enabled":         cfg.Enabled,
+		"auto_backup":     cfg.AutoBackup,
+		"schedule":        cfg.Schedule,
+		"retention_days":  cfg.RetentionDays,
+		"backup_database": cfg.BackupDatabase,
+		"backup_files":    cfg.BackupFiles,
+		"storage_type":    cfg.StorageType,
+		"storage_path":    cfg.StoragePath,
+		"s3_bucket":       cfg.S3Bucket,
+		"s3_region":       cfg.S3Region,
+		"s3_endpoint":     cfg.S3Endpoint,
+		"s3_access_key":   cfg.S3AccessKey,
+		"s3_secret_key":   cfg.S3SecretKey,
+		"created_at":      cfg.CreatedAt,
+		"updated_at":      cfg.UpdatedAt,
+		// Frontend aliases used by System.vue.
+		"interval":   backupIntervalFromSchedule(cfg.Schedule),
+		"keep_count": cfg.RetentionDays,
+	}
 }
 
 // NewSystemHandler 创建处理器
 func NewSystemHandler() *SystemHandler {
 	db := database.Get()
 	return &SystemHandler{
-		configService:  service.NewSystemConfigService(db),
-		backupService:  service.NewBackupService(db),
+		configService: service.NewSystemConfigService(db),
+		backupService: service.NewBackupService(db),
 	}
 }
 
@@ -55,7 +105,29 @@ func (h *SystemHandler) GetConfigs(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": configs})
+	list := make([]gin.H, 0, len(configs))
+	for _, cfg := range configs {
+		list = append(list, gin.H{
+			"id":          cfg.ID,
+			"key":         cfg.Key,
+			"value":       cfg.Value,
+			"type":        cfg.Type,
+			"group":       cfg.Group,
+			"remark":      cfg.Remark,
+			"description": cfg.Remark,
+			"created_at":  cfg.CreatedAt,
+			"updated_at":  cfg.UpdatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"list":  list,
+			"total": len(list),
+		},
+		"list":  list,
+		"total": len(list),
+	})
 }
 
 // GetConfig godoc
@@ -98,17 +170,39 @@ func (h *SystemHandler) SetConfig(c *gin.Context) {
 	key := c.Param("key")
 
 	var req struct {
-		Value  string `json:"value" binding:"required"`
-		Type   string `json:"type"`
-		Group  string `json:"group"`
-		Remark string `json:"remark"`
+		Value       json.RawMessage `json:"value"`
+		Type        string          `json:"type"`
+		Group       string          `json:"group"`
+		Remark      string          `json:"remark"`
+		Description string          `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.configService.Set(key, req.Value, req.Type, req.Group, req.Remark); err != nil {
+	rawValue := bytes.TrimSpace(req.Value)
+	if len(rawValue) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "value is required"})
+		return
+	}
+
+	value := ""
+	if !bytes.Equal(rawValue, []byte("null")) {
+		var stringValue string
+		if err := json.Unmarshal(rawValue, &stringValue); err == nil {
+			value = stringValue
+		} else {
+			value = string(rawValue)
+		}
+	}
+
+	remark := req.Remark
+	if remark == "" {
+		remark = req.Description
+	}
+
+	if err := h.configService.Set(key, value, req.Type, req.Group, remark); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -157,7 +251,7 @@ func (h *SystemHandler) GetBackupConfig(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": cfg})
+	c.JSON(http.StatusOK, gin.H{"data": backupConfigResponse(cfg)})
 }
 
 // UpdateBackupConfig godoc
@@ -173,10 +267,82 @@ func (h *SystemHandler) GetBackupConfig(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /admin/system/backup/config [put]
 func (h *SystemHandler) UpdateBackupConfig(c *gin.Context) {
-	var cfg model.BackupConfig
-	if err := c.ShouldBindJSON(&cfg); err != nil {
+	currentCfg, err := h.backupService.GetConfig()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	cfg := *currentCfg
+	var req map[string]interface{}
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	if rawEnabled, ok := req["enabled"].(bool); ok {
+		cfg.Enabled = rawEnabled
+	}
+	if rawAutoBackup, ok := req["auto_backup"].(bool); ok {
+		cfg.AutoBackup = rawAutoBackup
+	}
+	if rawSchedule, ok := req["schedule"].(string); ok {
+		cfg.Schedule = rawSchedule
+	}
+	if rawRetentionDays, ok := req["retention_days"]; ok {
+		switch v := rawRetentionDays.(type) {
+		case float64:
+			cfg.RetentionDays = int(v)
+		case int:
+			cfg.RetentionDays = v
+		}
+	}
+	if rawBackupDatabase, ok := req["backup_database"].(bool); ok {
+		cfg.BackupDatabase = rawBackupDatabase
+	}
+	if rawBackupFiles, ok := req["backup_files"].(bool); ok {
+		cfg.BackupFiles = rawBackupFiles
+	}
+	if rawStorageType, ok := req["storage_type"].(string); ok {
+		cfg.StorageType = rawStorageType
+	}
+	if rawStoragePath, ok := req["storage_path"].(string); ok {
+		cfg.StoragePath = rawStoragePath
+	}
+	if rawS3Bucket, ok := req["s3_bucket"].(string); ok {
+		cfg.S3Bucket = rawS3Bucket
+	}
+	if rawS3Region, ok := req["s3_region"].(string); ok {
+		cfg.S3Region = rawS3Region
+	}
+	if rawS3Endpoint, ok := req["s3_endpoint"].(string); ok {
+		cfg.S3Endpoint = rawS3Endpoint
+	}
+	if rawS3AccessKey, ok := req["s3_access_key"].(string); ok {
+		cfg.S3AccessKey = rawS3AccessKey
+	}
+	if rawS3SecretKey, ok := req["s3_secret_key"].(string); ok {
+		cfg.S3SecretKey = rawS3SecretKey
+	}
+	if rawKeepCount, ok := req["keep_count"]; ok {
+		switch v := rawKeepCount.(type) {
+		case float64:
+			cfg.RetentionDays = int(v)
+		case int:
+			cfg.RetentionDays = v
+		}
+	}
+	if rawInterval, ok := req["interval"]; ok {
+		switch v := rawInterval.(type) {
+		case float64:
+			if int(v) > 0 {
+				cfg.Schedule = "interval:" + strconv.Itoa(int(v))
+			}
+		case int:
+			if v > 0 {
+				cfg.Schedule = "interval:" + strconv.Itoa(v)
+			}
+		}
 	}
 
 	if err := h.backupService.UpdateConfig(&cfg); err != nil {
@@ -184,7 +350,7 @@ func (h *SystemHandler) UpdateBackupConfig(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": cfg})
+	c.JSON(http.StatusOK, gin.H{"data": backupConfigResponse(&cfg)})
 }
 
 // CreateBackup godoc
@@ -232,8 +398,38 @@ func (h *SystemHandler) ListBackups(c *gin.Context) {
 		return
 	}
 
+	list := make([]gin.H, 0, len(records))
+	for _, record := range records {
+		filename := record.Name
+		if record.Path != "" {
+			filename = filepath.Base(record.Path)
+		}
+		list = append(list, gin.H{
+			"id":           record.ID,
+			"name":         record.Name,
+			"filename":     filename,
+			"type":         record.Type,
+			"size":         record.Size,
+			"path":         record.Path,
+			"status":       backupStatusToText(record.Status),
+			"status_code":  record.Status,
+			"error":        record.Error,
+			"auto":         record.Auto,
+			"created_by":   record.CreatedBy,
+			"completed_at": record.CompletedAt,
+			"created_at":   record.CreatedAt,
+			"updated_at":   record.UpdatedAt,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"data":      records,
+		"data": gin.H{
+			"list":      list,
+			"total":     total,
+			"page":      page,
+			"page_size": pageSize,
+		},
+		"list":      list,
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
@@ -257,6 +453,12 @@ func (h *SystemHandler) GetBackupStats(c *gin.Context) {
 		return
 	}
 
+	if totalBackups, ok := stats["total_backups"]; ok {
+		stats["total_count"] = totalBackups
+	} else if _, ok := stats["total_count"]; !ok {
+		stats["total_count"] = int64(0)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"data": stats})
 }
 
@@ -274,7 +476,11 @@ func (h *SystemHandler) GetBackupStats(c *gin.Context) {
 func (h *SystemHandler) DeleteBackup(c *gin.Context) {
 	id := c.Param("id")
 
-	backupID, _ := strconv.ParseUint(id, 10, 32)
+	backupID, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
 	if err := h.backupService.DeleteBackup(uint(backupID)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -297,7 +503,11 @@ func (h *SystemHandler) DeleteBackup(c *gin.Context) {
 func (h *SystemHandler) RestoreBackup(c *gin.Context) {
 	id := c.Param("id")
 
-	backupID, _ := strconv.ParseUint(id, 10, 32)
+	backupID, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
 	if err := h.backupService.RestoreBackup(uint(backupID)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -311,6 +521,74 @@ func (h *SystemHandler) RestoreBackup(c *gin.Context) {
 // LoadBalancerHandler 负载均衡处理器
 type LoadBalancerHandler struct {
 	lbService *service.LoadBalancerService
+}
+
+func loadBalancerResponse(lb *model.LoadBalancer) gin.H {
+	weights := interface{}(map[string]interface{}{})
+	if lb.NodeWeights != "" {
+		var decoded interface{}
+		if err := json.Unmarshal([]byte(lb.NodeWeights), &decoded); err == nil {
+			weights = decoded
+		}
+	}
+
+	return gin.H{
+		"id":             lb.ID,
+		"name":           lb.Name,
+		"group_id":       lb.GroupID,
+		"group_name":     "",
+		"strategy":       lb.Strategy,
+		"health_check":   lb.HealthCheck,
+		"check_interval": lb.CheckInterval,
+		"check_timeout":  lb.CheckTimeout,
+		"enabled":        lb.Enabled,
+		"node_weights":   lb.NodeWeights,
+		"weights":        weights,
+		"created_at":     lb.CreatedAt,
+		"updated_at":     lb.UpdatedAt,
+	}
+}
+
+type loadBalancerRequest struct {
+	Name          string          `json:"name"`
+	GroupID       uint            `json:"group_id"`
+	Strategy      string          `json:"strategy"`
+	HealthCheck   *bool           `json:"health_check"`
+	CheckInterval int             `json:"check_interval"`
+	CheckTimeout  int             `json:"check_timeout"`
+	Enabled       *bool           `json:"enabled"`
+	NodeWeights   string          `json:"node_weights"`
+	Weights       json.RawMessage `json:"weights"`
+}
+
+func applyLoadBalancerRequest(lb *model.LoadBalancer, req *loadBalancerRequest) {
+	if req.Name != "" {
+		lb.Name = req.Name
+	}
+	if req.GroupID > 0 {
+		lb.GroupID = req.GroupID
+	}
+	if req.Strategy != "" {
+		lb.Strategy = req.Strategy
+	}
+	if req.HealthCheck != nil {
+		lb.HealthCheck = *req.HealthCheck
+	}
+	if req.CheckInterval > 0 {
+		lb.CheckInterval = req.CheckInterval
+	}
+	if req.CheckTimeout > 0 {
+		lb.CheckTimeout = req.CheckTimeout
+	}
+	if req.Enabled != nil {
+		lb.Enabled = *req.Enabled
+	}
+	if len(req.Weights) > 0 && string(req.Weights) != "null" {
+		lb.NodeWeights = string(req.Weights)
+	}
+	if req.NodeWeights != "" {
+		lb.NodeWeights = req.NodeWeights
+	}
 }
 
 // NewLoadBalancerHandler 创建处理器
@@ -340,7 +618,19 @@ func (h *LoadBalancerHandler) ListLoadBalancers(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": lbs})
+	list := make([]gin.H, 0, len(lbs))
+	for i := range lbs {
+		list = append(list, loadBalancerResponse(&lbs[i]))
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"list":  list,
+			"total": len(list),
+		},
+		"list":  list,
+		"total": len(list),
+	})
 }
 
 // CreateLoadBalancer godoc
@@ -356,18 +646,25 @@ func (h *LoadBalancerHandler) ListLoadBalancers(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /admin/loadbalancers [post]
 func (h *LoadBalancerHandler) CreateLoadBalancer(c *gin.Context) {
-	var lb model.LoadBalancer
-	if err := c.ShouldBindJSON(&lb); err != nil {
+	var req loadBalancerRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	lb := model.LoadBalancer{
+		HealthCheck: true,
+		Enabled:     true,
+		Strategy:    "round-robin",
+	}
+	applyLoadBalancerRequest(&lb, &req)
 
 	if err := h.lbService.Create(&lb); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": lb})
+	c.JSON(http.StatusOK, gin.H{"data": loadBalancerResponse(&lb)})
 }
 
 // GetLoadBalancer godoc
@@ -391,7 +688,7 @@ func (h *LoadBalancerHandler) GetLoadBalancer(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": lb})
+	c.JSON(http.StatusOK, gin.H{"data": loadBalancerResponse(lb)})
 }
 
 // UpdateLoadBalancer godoc
@@ -418,19 +715,19 @@ func (h *LoadBalancerHandler) UpdateLoadBalancer(c *gin.Context) {
 		return
 	}
 
-	var req model.LoadBalancer
+	var req loadBalancerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	req.ID = lb.ID
-	if err := h.lbService.Update(&req); err != nil {
+	applyLoadBalancerRequest(lb, &req)
+	if err := h.lbService.Update(lb); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": req})
+	c.JSON(http.StatusOK, gin.H{"data": loadBalancerResponse(lb)})
 }
 
 // DeleteLoadBalancer godoc
@@ -470,7 +767,11 @@ func (h *LoadBalancerHandler) DeleteLoadBalancer(c *gin.Context) {
 func (h *LoadBalancerHandler) GetLoadBalancerStats(c *gin.Context) {
 	id := c.Param("id")
 
-	lbID, _ := strconv.ParseUint(id, 10, 32)
+	lbID, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
 	stats, err := h.lbService.GetStats(uint(lbID))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -494,7 +795,11 @@ func (h *LoadBalancerHandler) GetLoadBalancerStats(c *gin.Context) {
 func (h *LoadBalancerHandler) RunHealthCheck(c *gin.Context) {
 	id := c.Param("id")
 
-	lbID, _ := strconv.ParseUint(id, 10, 32)
+	lbID, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
 	if err := h.lbService.RunHealthCheck(uint(lbID)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

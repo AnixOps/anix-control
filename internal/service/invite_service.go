@@ -47,8 +47,8 @@ func (s *InviteService) GetConfig() (*model.InviteConfig, error) {
 			CommissionFixed:     0,
 			CommissionMinAmount: 10,
 		}
-		if createErr := s.db.Create(&cfg); createErr != nil {
-			return nil, createErr.Error
+		if createErr := s.db.Create(&cfg).Error; createErr != nil {
+			return nil, createErr
 		}
 	} else if err != nil {
 		return nil, err

@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/anixops/v2board/internal/database"
@@ -14,6 +17,50 @@ import (
 // PaymentGatewayHandler 支付网关处理器
 type PaymentGatewayHandler struct {
 	gatewayService *service.PaymentGatewayService
+}
+
+func normalizeGatewayConfig(raw interface{}) (string, error) {
+	if raw == nil {
+		return "", nil
+	}
+
+	if str, ok := raw.(string); ok {
+		return str, nil
+	}
+
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
+func paymentRecordStatusToText(status int) string {
+	switch status {
+	case model.PaymentStatusPaid:
+		return "paid"
+	case model.PaymentStatusRefunded:
+		return "refunded"
+	case model.PaymentStatusCancelled:
+		return "failed"
+	default:
+		return "pending"
+	}
+}
+
+func paymentRecordStatusFromText(status string) (int, bool) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "pending":
+		return model.PaymentStatusPending, true
+	case "paid":
+		return model.PaymentStatusPaid, true
+	case "failed", "cancelled":
+		return model.PaymentStatusCancelled, true
+	case "refunded":
+		return model.PaymentStatusRefunded, true
+	default:
+		return 0, false
+	}
 }
 
 // NewPaymentGatewayHandler 创建处理器
@@ -40,7 +87,14 @@ func (h *PaymentGatewayHandler) ListGateways(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": gateways})
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"list":  gateways,
+			"total": len(gateways),
+		},
+		"list":  gateways,
+		"total": len(gateways),
+	})
 }
 
 // CreateGateway godoc
@@ -67,7 +121,6 @@ func (h *PaymentGatewayHandler) CreateGateway(c *gin.Context) {
 		Type:        req.Type,
 		Enabled:     false,
 		Icon:        req.Icon,
-		Config:      req.Config,
 		FeeRate:     req.FeeRate,
 		FeeFixed:    req.FeeFixed,
 		MinAmount:   req.MinAmount,
@@ -75,6 +128,12 @@ func (h *PaymentGatewayHandler) CreateGateway(c *gin.Context) {
 		Sort:        req.Sort,
 		Description: req.Description,
 	}
+	config, err := normalizeGatewayConfig(req.Config)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid config"})
+		return
+	}
+	gateway.Config = config
 
 	if err := h.gatewayService.Create(gateway); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -120,26 +179,34 @@ func (h *PaymentGatewayHandler) UpdateGateway(c *gin.Context) {
 	if req.Name != "" {
 		gateway.Name = req.Name
 	}
+	if req.Type != "" {
+		gateway.Type = req.Type
+	}
 	if req.Icon != "" {
 		gateway.Icon = req.Icon
 	}
-	if req.Config != "" {
-		gateway.Config = req.Config
+	if req.Config != nil {
+		config, err := normalizeGatewayConfig(req.Config)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid config"})
+			return
+		}
+		gateway.Config = config
 	}
-	if req.FeeRate >= 0 {
-		gateway.FeeRate = req.FeeRate
+	if req.FeeRate != nil {
+		gateway.FeeRate = *req.FeeRate
 	}
-	if req.FeeFixed >= 0 {
-		gateway.FeeFixed = req.FeeFixed
+	if req.FeeFixed != nil {
+		gateway.FeeFixed = *req.FeeFixed
 	}
-	if req.MinAmount > 0 {
-		gateway.MinAmount = req.MinAmount
+	if req.MinAmount != nil {
+		gateway.MinAmount = *req.MinAmount
 	}
-	if req.MaxAmount > 0 {
-		gateway.MaxAmount = req.MaxAmount
+	if req.MaxAmount != nil {
+		gateway.MaxAmount = *req.MaxAmount
 	}
-	if req.Sort >= 0 {
-		gateway.Sort = req.Sort
+	if req.Sort != nil {
+		gateway.Sort = *req.Sort
 	}
 	if req.Description != "" {
 		gateway.Description = req.Description
@@ -200,18 +267,40 @@ func (h *PaymentGatewayHandler) ToggleGateway(c *gin.Context) {
 		return
 	}
 
-	var req ToggleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var req map[string]interface{}
+	if err := c.ShouldBindJSON(&req); err != nil && err != io.EOF {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err := h.gatewayService.Toggle(uint(id), req.Enabled); err != nil {
+	targetEnabled := false
+	if rawEnabled, ok := req["enabled"]; ok {
+		enabled, ok := rawEnabled.(bool)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "enabled must be boolean"})
+			return
+		}
+		targetEnabled = enabled
+	} else {
+		gateway, err := h.gatewayService.GetByID(uint(id))
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "gateway not found"})
+			return
+		}
+		targetEnabled = !gateway.Enabled
+	}
+
+	if err := h.gatewayService.Toggle(uint(id), targetEnabled); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "updated"})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "updated",
+		"data": gin.H{
+			"enabled": targetEnabled,
+		},
+	})
 }
 
 // GetPaymentStats godoc
@@ -249,7 +338,52 @@ func (h *PaymentGatewayHandler) GetPaymentStats(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": stats})
+	var totalOrders int64
+	database.Get().Model(&model.PaymentRecord{}).
+		Where("created_at BETWEEN ? AND ?", start, end).
+		Count(&totalOrders)
+
+	var successOrders int64
+	database.Get().Model(&model.PaymentRecord{}).
+		Where("status = ? AND paid_at BETWEEN ? AND ?", model.PaymentStatusPaid, start, end).
+		Count(&successOrders)
+
+	successRate := float64(0)
+	if totalOrders > 0 {
+		successRate = float64(successOrders) * 100 / float64(totalOrders)
+	}
+
+	var byGatewayRows []struct {
+		GatewayType string
+		Amount      float64
+		Count       int64
+	}
+	database.Get().Model(&model.PaymentRecord{}).
+		Select("gateway_type, COALESCE(SUM(actual_amount), 0) AS amount, COUNT(*) AS count").
+		Where("status = ? AND paid_at BETWEEN ? AND ?", model.PaymentStatusPaid, start, end).
+		Group("gateway_type").
+		Scan(&byGatewayRows)
+
+	byGateway := make(map[string]gin.H, len(byGatewayRows))
+	for _, row := range byGatewayRows {
+		byGateway[row.GatewayType] = gin.H{
+			"amount": row.Amount,
+			"count":  row.Count,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"total_amount":   stats.TotalAmount,
+			"total_count":    stats.TotalCount,
+			"pending_amount": stats.PendingAmount,
+			"pending_count":  stats.PendingCount,
+			"total_orders":   totalOrders,
+			"success_orders": successOrders,
+			"success_rate":   successRate,
+			"by_gateway":     byGateway,
+		},
+	})
 }
 
 // ListPaymentRecords godoc
@@ -268,21 +402,55 @@ func (h *PaymentGatewayHandler) GetPaymentStats(c *gin.Context) {
 func (h *PaymentGatewayHandler) ListPaymentRecords(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	gatewayType := c.Query("gateway_type")
 
 	var status *int
 	if s := c.Query("status"); s != "" {
-		st, _ := strconv.Atoi(s)
-		status = &st
+		if numericStatus, err := strconv.Atoi(s); err == nil {
+			status = &numericStatus
+		} else if mappedStatus, ok := paymentRecordStatusFromText(s); ok {
+			status = &mappedStatus
+		}
 	}
 
-	records, total, err := h.gatewayService.ListRecords(page, pageSize, status)
+	records, total, err := h.gatewayService.ListRecords(page, pageSize, status, gatewayType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	list := make([]gin.H, 0, len(records))
+	for _, record := range records {
+		list = append(list, gin.H{
+			"id":               record.ID,
+			"trade_no":         record.TradeNo,
+			"gateway_id":       record.GatewayID,
+			"gateway_type":     record.GatewayType,
+			"gateway_trade_no": record.GatewayTradeNo,
+			"user_id":          record.UserID,
+			"amount":           record.Amount,
+			"fee_amount":       record.FeeAmount,
+			"actual_amount":    record.ActualAmount,
+			"currency":         record.Currency,
+			"status":           paymentRecordStatusToText(record.Status),
+			"status_code":      record.Status,
+			"paid_at":          record.PaidAt,
+			"cancelled_at":     record.CancelledAt,
+			"refunded_at":      record.RefundedAt,
+			"client_ip":        record.ClientIP,
+			"created_at":       record.CreatedAt,
+			"updated_at":       record.UpdatedAt,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"data":      records,
+		"data": gin.H{
+			"list":      list,
+			"total":     total,
+			"page":      page,
+			"page_size": pageSize,
+		},
+		"list":      list,
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
@@ -496,7 +664,7 @@ type CreateGatewayRequest struct {
 	Name        string  `json:"name" binding:"required"`
 	Type        string  `json:"type" binding:"required,oneof=alipay wechat stripe usdt epay"`
 	Icon        string  `json:"icon"`
-	Config      string  `json:"config"`
+	Config      any     `json:"config"`
 	FeeRate     float64 `json:"fee_rate"`
 	FeeFixed    float64 `json:"fee_fixed"`
 	MinAmount   float64 `json:"min_amount"`
@@ -507,15 +675,16 @@ type CreateGatewayRequest struct {
 
 // UpdateGatewayRequest 更新网关请求
 type UpdateGatewayRequest struct {
-	Name        string  `json:"name"`
-	Icon        string  `json:"icon"`
-	Config      string  `json:"config"`
-	FeeRate     float64 `json:"fee_rate"`
-	FeeFixed    float64 `json:"fee_fixed"`
-	MinAmount   float64 `json:"min_amount"`
-	MaxAmount   float64 `json:"max_amount"`
-	Sort        int     `json:"sort"`
-	Description string  `json:"description"`
+	Name        string   `json:"name"`
+	Type        string   `json:"type" binding:"omitempty,oneof=alipay wechat stripe usdt epay"`
+	Icon        string   `json:"icon"`
+	Config      any      `json:"config"`
+	FeeRate     *float64 `json:"fee_rate"`
+	FeeFixed    *float64 `json:"fee_fixed"`
+	MinAmount   *float64 `json:"min_amount"`
+	MaxAmount   *float64 `json:"max_amount"`
+	Sort        *int     `json:"sort"`
+	Description string   `json:"description"`
 }
 
 // CreatePaymentRequest 创建支付请求

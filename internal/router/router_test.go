@@ -3,6 +3,7 @@ package router
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/anixops/v2board/internal/cache"
@@ -39,8 +40,8 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *config.Config) {
 			Expire: 86400,
 		},
 		App: config.AppConfig{
-			APIToken:       "test-api-token",
-			SubscribePath:  "s",
+			APIToken:         "test-api-token",
+			SubscribePath:    "s",
 			TrafficLogEnable: true,
 		},
 	}
@@ -163,6 +164,8 @@ func TestSetup_AdminEndpoints_RequireAuth(t *testing.T) {
 		{"GET", "/api/v2/admin/nodes"},
 		{"GET", "/api/v2/admin/orders"},
 		{"GET", "/api/v2/admin/plans"},
+		{"GET", "/api/v2/admin/agent/monitor"},
+		{"GET", "/api/v2/admin/agent/tasks/task-1"},
 	}
 
 	for _, ep := range endpoints {
@@ -362,11 +365,43 @@ func TestSetup_AdminPaymentGatewayEndpoints(t *testing.T) {
 	}{
 		{"GET", "/api/v2/admin/payment/gateways"},
 		{"GET", "/api/v2/admin/payment/stats"},
+		{"GET", "/api/v2/admin/payment/records"},
 	}
 
 	for _, ep := range endpoints {
 		t.Run(ep.path, func(t *testing.T) {
 			req, _ := http.NewRequest(ep.method, ep.path, nil)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			// Should return 401 Unauthorized (needs auth)
+			assert.Equal(t, http.StatusUnauthorized, w.Code)
+		})
+	}
+}
+
+func TestSetup_AdminTelegramEndpoints(t *testing.T) {
+	r, _ := setupTestRouter(t)
+	defer teardownTestRouter()
+
+	endpoints := []struct {
+		method string
+		path   string
+	}{
+		{"GET", "/api/v2/admin/telegram/users"},
+		{"PUT", "/api/v2/admin/telegram/users/1/notify"},
+	}
+
+	for _, ep := range endpoints {
+		t.Run(ep.path, func(t *testing.T) {
+			body := strings.NewReader("{}")
+			if ep.method == "GET" {
+				body = strings.NewReader("")
+			}
+			req, _ := http.NewRequest(ep.method, ep.path, body)
+			if ep.method == "PUT" {
+				req.Header.Set("Content-Type", "application/json")
+			}
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 
