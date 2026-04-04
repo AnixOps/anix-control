@@ -484,7 +484,7 @@ func (h *InviteHandler) GetConfig(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body model.InviteConfig true "閭€璇烽厤缃?
+// @Param request body model.InviteConfig true "Invite configuration"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
@@ -708,7 +708,7 @@ func (h *InviteHandler) UpdateConfig(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param status query string false "鐘舵€佺瓫閫?
+// @Param status query string false "Status filter"
 // @Param page query int false "椤电爜" default(1)
 // @Param page_size query int false "姣忛〉鏁伴噺" default(20)
 // @Success 200 {object} map[string]interface{}

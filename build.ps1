@@ -1,7 +1,14 @@
 $ErrorActionPreference = "Stop"
+$repoRoot = $PSScriptRoot
+$frontendDir = Join-Path $repoRoot "web"
+$buildDir = Join-Path $repoRoot "build"
 
 Write-Host "Building Frontend..."
-Push-Location web
+if (-not (Test-Path $frontendDir)) {
+  throw "Frontend directory not found: $frontendDir"
+}
+
+Push-Location $frontendDir
 try {
   npm install
   if ($LASTEXITCODE -ne 0) { throw "npm install failed" }
@@ -14,7 +21,6 @@ finally {
 }
 
 Write-Host "Building Backend..."
-$buildDir = Join-Path $PSScriptRoot "build"
 if (-not (Test-Path $buildDir)) {
   New-Item -ItemType Directory -Path $buildDir | Out-Null
 }
@@ -22,8 +28,14 @@ $oldGoWork = $env:GOWORK
 try {
   # Ignore outer go.work so this module can build independently.
   $env:GOWORK = "off"
-  go build -o (Join-Path $buildDir "v2board.exe") ./cmd/server
-  if ($LASTEXITCODE -ne 0) { throw "go build failed" }
+  Push-Location $repoRoot
+  try {
+    go build -o (Join-Path $buildDir "v2board.exe") ./cmd/server
+    if ($LASTEXITCODE -ne 0) { throw "go build failed" }
+  }
+  finally {
+    Pop-Location
+  }
 }
 finally {
   if ($null -ne $oldGoWork) {

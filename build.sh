@@ -1,13 +1,17 @@
 #!/bin/bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_DIR="${SCRIPT_DIR}/build"
 
 echo "Building Frontend..."
-cd web
+cd "${SCRIPT_DIR}/web"
 npm install
 npm run build
-cd ..
 
 echo "Building Backend..."
-mkdir -p build
-GOWORK=off go build -o build/v2board ./cmd/server
+mkdir -p "${BUILD_DIR}"
+cd "${SCRIPT_DIR}"
+GOWORK=off go build -o "${BUILD_DIR}/v2board" ./cmd/server
 
 echo "Build Complete!"
