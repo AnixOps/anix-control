@@ -390,10 +390,13 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v2.POST("/payment/callback/:type", paymentGatewayHandler.PaymentCallback)
 
 		// 节点自动注册 API (公开)
+		agentHandler := handler.NewAgentHandler()
+
 		nodePublic := v2.Group("/node")
 		{
 			nodeHandler := handler.NewNodeHandler()
 			nodePublic.POST("/register", nodeHandler.Register)
+			nodePublic.GET("/ws", agentHandler.AgentWebSocketUnified)
 		}
 
 		// 节点通信 API (需要 API Key 认证 + 可选签名验证)
@@ -418,8 +421,19 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			uniproxy.POST("/alive", h.PushAlive)
 		}
 
+		// UniProxy API v1 (兼容旧版 V2bX)
+		uniproxyV1 := r.Group("/api/v1/server/UniProxy")
+		uniproxyV1.Use(middleware.NodeAuth())
+		{
+			h := handler.NewUniProxyHandler()
+			uniproxyV1.GET("/config", h.GetConfig)
+			uniproxyV1.GET("/user", h.GetUsers)
+			uniproxyV1.GET("/alivelist", h.GetAliveList)
+			uniproxyV1.POST("/push", h.PushTraffic)
+			uniproxyV1.POST("/alive", h.PushAlive)
+		}
+
 		// Agent API (NAT 后节点主动连接)
-		agentHandler := handler.NewAgentHandler()
 		agentPublic := v2.Group("/agent")
 		{
 			agentPublic.POST("/register", agentHandler.AgentRegister)
@@ -427,7 +441,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			agentPublic.GET("/tasks", agentHandler.AgentGetTasks)
 			agentPublic.POST("/result", agentHandler.AgentReportResult)
 			agentPublic.POST("/monitor", agentHandler.AgentMonitor)
-			agentPublic.GET("/ws", agentHandler.AgentWebSocket)
+			agentPublic.GET("/ws", agentHandler.AgentWebSocketUnified)
 		}
 
 		// 转发规则同步 (Agent 使用)

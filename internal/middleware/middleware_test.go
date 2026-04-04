@@ -116,6 +116,75 @@ func TestNodeAuth_NoConfig(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestNodeAuth_NodeScopedToken_WithGlobalTokenSet(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	config.Set(&config.Config{
+		App: config.AppConfig{
+			APIToken: "global-api-token",
+		},
+	})
+
+	nodeToken := "node-api-key-001"
+	node := &model.Node{
+		Name:       "Node Scoped Auth",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: sha256Hash(nodeToken),
+		Status:     model.NodeStatusOnline,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		nodeID, _ := c.Get("node_id")
+		c.JSON(http.StatusOK, gin.H{"node_id": nodeID})
+	})
+
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID))+"&token="+nodeToken, nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestNodeAuth_NodeScopedToken_PlainAPIKeyFallback(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	config.Set(&config.Config{
+		App: config.AppConfig{
+			APIToken: "global-api-token",
+		},
+	})
+
+	nodeToken := "legacy-plain-api-key"
+	node := &model.Node{
+		Name:   "Legacy Plain APIKey",
+		Host:   "127.0.0.1",
+		Port:   443,
+		APIKey: nodeToken,
+		Status: model.NodeStatusOnline,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID))+"&token="+nodeToken, nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestNodeAPIKeyAuth_MissingAPIKey(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
@@ -218,6 +287,35 @@ func TestNodeAPIKeyAuth_QueryParam(t *testing.T) {
 	})
 
 	req := httptest.NewRequest("GET", "/test?api_key="+apiKey, nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestNodeAPIKeyAuth_PlainAPIKeyFallback(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	apiKey := "legacy-api-key-without-hash"
+	node := &model.Node{
+		Name:   "Legacy Node",
+		Host:   "127.0.0.1",
+		Port:   443,
+		APIKey: apiKey,
+		Status: model.NodeStatusOnline,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAPIKeyAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-API-Key", apiKey)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)

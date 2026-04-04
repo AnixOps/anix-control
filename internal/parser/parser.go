@@ -54,7 +54,10 @@ func NewRegistry() *Registry {
 	// 注册默认格式化器
 	r.RegisterFormatter(model.FormatV2Ray, &V2RayFormatter{})
 	r.RegisterFormatter(model.FormatClash, &ClashFormatter{})
+	r.RegisterFormatter(model.FormatStash, &StashFormatter{})
+	r.RegisterFormatter(model.FormatEgern, &EgernFormatter{})
 	r.RegisterFormatter(model.FormatSurge, &SurgeFormatter{})
+	r.RegisterFormatter(model.FormatLoon, &LoonFormatter{})
 	r.RegisterFormatter(model.FormatJSON, &JSONFormatter{})
 	r.RegisterFormatter(model.FormatBase64JSON, &Base64JSONFormatter{})
 	r.RegisterFormatter(model.FormatShadowrocket, &ShadowrocketFormatter{})

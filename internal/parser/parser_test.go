@@ -14,8 +14,8 @@ import (
 func TestNewRegistry(t *testing.T) {
 	r := NewRegistry()
 	assert.NotNil(t, r)
-	assert.Len(t, r.parsers, 3) // Base64, Clash, SIP008
-	assert.Len(t, r.formatters, 8) // All registered formatters
+	assert.Len(t, r.parsers, 3)     // Base64, Clash, SIP008
+	assert.Len(t, r.formatters, 11) // All registered formatters
 }
 
 func TestRegistry_RegisterParser(t *testing.T) {
@@ -41,7 +41,10 @@ func TestRegistry_GetFormatter(t *testing.T) {
 	tests := []model.SubscriptionFormat{
 		model.FormatV2Ray,
 		model.FormatClash,
+		model.FormatStash,
+		model.FormatEgern,
 		model.FormatSurge,
+		model.FormatLoon,
 		model.FormatJSON,
 		model.FormatBase64JSON,
 		model.FormatShadowrocket,
@@ -202,15 +205,15 @@ func TestV2RayFormatter_FormatVLESS_Reality(t *testing.T) {
 	ctx := &model.TemplateRenderContext{UUID: "test-uuid"}
 
 	node := &model.ParsedNode{
-		Name:              "Test VLESS Reality",
-		Type:              "vless",
-		Server:            "example.com",
-		Port:              443,
-		TLSMode:           2,
-		ServerName:        "example.com",
-		RealityPublicKey:  "test-public-key",
-		RealityShortID:    "test-short-id",
-		TLSFingerprint:    "chrome",
+		Name:             "Test VLESS Reality",
+		Type:             "vless",
+		Server:           "example.com",
+		Port:             443,
+		TLSMode:          2,
+		ServerName:       "example.com",
+		RealityPublicKey: "test-public-key",
+		RealityShortID:   "test-short-id",
+		TLSFingerprint:   "chrome",
 	}
 
 	link, err := f.formatVLESS(node, ctx)
@@ -353,7 +356,11 @@ func TestClashFormatter_Properties(t *testing.T) {
 
 func TestSurgeFormatter_Format(t *testing.T) {
 	f := &SurgeFormatter{}
-	ctx := &model.TemplateRenderContext{UUID: "test-uuid"}
+	ctx := &model.TemplateRenderContext{
+		UUID:            "test-uuid",
+		SubscribeURL:    "https://example.com/s/test?type=surge",
+		SubscribeDomain: "example.com",
+	}
 
 	nodes := []*model.ParsedNode{
 		{
@@ -388,9 +395,37 @@ func TestSurgeFormatter_Format(t *testing.T) {
 
 	output, err := f.Format(nodes, ctx)
 	require.NoError(t, err)
+	assert.Contains(t, string(output), "#!MANAGED-CONFIG https://example.com/s/test?type=surge interval=43200 strict=true")
 	assert.Contains(t, string(output), "[Proxy]")
 	assert.Contains(t, string(output), "Test VMess")
 	assert.Contains(t, string(output), "[Proxy Group]")
+	assert.Contains(t, string(output), "DOMAIN,example.com,DIRECT")
+}
+
+func TestSurgeFormatter_GroupOnlyIncludesSupportedNodes(t *testing.T) {
+	f := &SurgeFormatter{}
+	ctx := &model.TemplateRenderContext{UUID: "test-uuid"}
+
+	nodes := []*model.ParsedNode{
+		{
+			Name:   "VLESS Unsupported",
+			Type:   "vless",
+			Server: "example.com",
+			Port:   443,
+		},
+		{
+			Name:   "VMess Supported",
+			Type:   "vmess",
+			Server: "example.com",
+			Port:   443,
+		},
+	}
+
+	output, err := f.Format(nodes, ctx)
+	require.NoError(t, err)
+	assert.Contains(t, string(output), "VMess Supported = vmess")
+	assert.NotContains(t, string(output), "VLESS Unsupported =")
+	assert.Contains(t, string(output), "Proxy = select, auto, fallback, VMess Supported")
 }
 
 func TestSurgeFormatter_Properties(t *testing.T) {
@@ -434,9 +469,9 @@ func TestBase64JSONFormatter_Format(t *testing.T) {
 	f := &Base64JSONFormatter{}
 	ctx := &model.TemplateRenderContext{
 		UUID:           "test-uuid",
-		TransferEnable:  10737418240,
-		UsedTraffic:     1073741824,
-		ExpiredAt:       1893456000,
+		TransferEnable: 10737418240,
+		UsedTraffic:    1073741824,
+		ExpiredAt:      1893456000,
 	}
 
 	nodes := []*model.ParsedNode{
@@ -493,6 +528,65 @@ func TestShadowrocketFormatter_Properties(t *testing.T) {
 	assert.Equal(t, "shadowrocket", f.Name())
 	assert.Equal(t, "text/plain; charset=utf-8", f.ContentType())
 	assert.Equal(t, "txt", f.FileExtension())
+}
+
+func TestStashFormatter_Properties(t *testing.T) {
+	f := &StashFormatter{}
+	assert.Equal(t, "stash", f.Name())
+	assert.Equal(t, "text/yaml; charset=utf-8", f.ContentType())
+	assert.Equal(t, "yaml", f.FileExtension())
+}
+
+func TestStashFormatter_Format(t *testing.T) {
+	f := &StashFormatter{}
+	ctx := &model.TemplateRenderContext{UUID: "test-uuid"}
+	nodes := []*model.ParsedNode{
+		{Name: "Stash Node", Type: "vmess", Server: "example.com", Port: 443, TLS: true},
+	}
+
+	output, err := f.Format(nodes, ctx)
+	require.NoError(t, err)
+	assert.Contains(t, string(output), "proxies:")
+}
+
+func TestEgernFormatter_Properties(t *testing.T) {
+	f := &EgernFormatter{}
+	assert.Equal(t, "egern", f.Name())
+	assert.Equal(t, "text/yaml; charset=utf-8", f.ContentType())
+	assert.Equal(t, "yaml", f.FileExtension())
+}
+
+func TestEgernFormatter_Format(t *testing.T) {
+	f := &EgernFormatter{}
+	ctx := &model.TemplateRenderContext{UUID: "test-uuid"}
+	nodes := []*model.ParsedNode{
+		{Name: "Egern Node", Type: "vmess", Server: "example.com", Port: 443, TLS: true},
+	}
+
+	output, err := f.Format(nodes, ctx)
+	require.NoError(t, err)
+	assert.Contains(t, string(output), "proxies:")
+}
+
+func TestLoonFormatter_Properties(t *testing.T) {
+	f := &LoonFormatter{}
+	assert.Equal(t, "loon", f.Name())
+	assert.Equal(t, "text/plain; charset=utf-8", f.ContentType())
+	assert.Equal(t, "txt", f.FileExtension())
+}
+
+func TestLoonFormatter_Format(t *testing.T) {
+	f := &LoonFormatter{}
+	ctx := &model.TemplateRenderContext{UUID: "test-uuid"}
+	nodes := []*model.ParsedNode{
+		{Name: "Loon Node", Type: "vmess", Server: "example.com", Port: 443, TLS: true},
+	}
+
+	output, err := f.Format(nodes, ctx)
+	require.NoError(t, err)
+	decoded, decodeErr := base64.StdEncoding.DecodeString(string(output))
+	require.NoError(t, decodeErr)
+	assert.Contains(t, string(decoded), "vmess://")
 }
 
 // ========== Quantumult X Formatter Tests ==========
@@ -657,14 +751,14 @@ func TestSingBoxFormatter_WithReality(t *testing.T) {
 	ctx := &model.TemplateRenderContext{UUID: "test-uuid"}
 
 	node := &model.ParsedNode{
-		Name:              "Test VLESS Reality",
-		Type:              "vless",
-		Server:            "example.com",
-		Port:              443,
-		TLSMode:           2,
-		RealityPublicKey:  "test-public-key",
-		RealityShortID:    "test-short-id",
-		TLSFingerprint:    "chrome",
+		Name:             "Test VLESS Reality",
+		Type:             "vless",
+		Server:           "example.com",
+		Port:             443,
+		TLSMode:          2,
+		RealityPublicKey: "test-public-key",
+		RealityShortID:   "test-short-id",
+		TLSFingerprint:   "chrome",
 	}
 
 	output, err := f.Format([]*model.ParsedNode{node}, ctx)
@@ -1136,9 +1230,9 @@ func TestGetInt(t *testing.T) {
 
 func TestGetBool(t *testing.T) {
 	m := map[string]interface{}{
-		"true":    true,
-		"false":   false,
-		"string":  "abc",
+		"true":   true,
+		"false":  false,
+		"string": "abc",
 	}
 
 	assert.True(t, getBool(m, "true"))

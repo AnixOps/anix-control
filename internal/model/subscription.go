@@ -139,6 +139,10 @@ type TemplateRenderContext struct {
 
 	// 自定义变量 (管理员可扩展)
 	Custom map[string]interface{} `json:"custom,omitempty"`
+
+	// 订阅元信息 (用于生成客户端特定配置，如 Surge managed-config)
+	SubscribeURL    string `json:"subscribe_url,omitempty"`
+	SubscribeDomain string `json:"subscribe_domain,omitempty"`
 }
 
 // ParsedNode 解析后的统一节点格式
@@ -237,7 +241,10 @@ type SubscriptionFormat string
 const (
 	FormatV2Ray        SubscriptionFormat = "v2ray"        // Base64 编码的链接列表
 	FormatClash        SubscriptionFormat = "clash"        // Clash YAML
+	FormatStash        SubscriptionFormat = "stash"        // Stash YAML (兼容 Clash)
+	FormatEgern        SubscriptionFormat = "egern"        // Egern YAML (兼容 Clash)
 	FormatSurge        SubscriptionFormat = "surge"        // Surge 配置
+	FormatLoon         SubscriptionFormat = "loon"         // Loon 配置
 	FormatShadowrocket SubscriptionFormat = "shadowrocket" // Shadowrocket 配置
 	FormatQuantumultX  SubscriptionFormat = "quantumultx"  // Quantumult X 配置
 	FormatJSON         SubscriptionFormat = "json"         // 原始 JSON
@@ -247,11 +254,13 @@ const (
 
 // SubscriptionRequest 订阅请求参数
 type SubscriptionRequest struct {
-	Token   string             `json:"token"`             // 用户 Token
-	Format  SubscriptionFormat `json:"format,omitempty"`  // 输出格式
-	Groups  []uint             `json:"groups,omitempty"`  // 指定分组 (可选)
-	Include string             `json:"include,omitempty"` // 包含关键词
-	Exclude string             `json:"exclude,omitempty"` // 排除关键词
+	Token           string             `json:"token"`             // 用户 Token
+	Format          SubscriptionFormat `json:"format,omitempty"`  // 输出格式
+	Groups          []uint             `json:"groups,omitempty"`  // 指定分组 (可选)
+	Include         string             `json:"include,omitempty"` // 包含关键词
+	Exclude         string             `json:"exclude,omitempty"` // 排除关键词
+	SubscribeURL    string             `json:"-"`                 // 当前请求订阅 URL（供格式化器使用）
+	SubscribeDomain string             `json:"-"`                 // 当前请求订阅域名（供格式化器使用）
 }
 
 // SubscriptionResponse 订阅响应
