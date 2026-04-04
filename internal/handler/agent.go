@@ -471,6 +471,7 @@ func (h *AgentHandler) AgentRegister(c *gin.Context) {
 		Capabilities: req.Capabilities,
 	}
 	h.connections.Store(req.NodeID, conn)
+	h.markNodeOnline(req.NodeID)
 
 	// 鏇存柊鑺傜偣鐘舵€?	h.markNodeOnline(req.NodeID)
 
