@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"fmt"
+	"net"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -29,7 +31,8 @@ func NewSubscribeHandler(cfg *config.Config) *SubscribeHandler {
 // GetSubscription 获取用户订阅
 // GET /s/:token
 // 支持 URL 参数:
-//   - type: 指定输出格式 (v2ray, clash, surge, shadowrocket, quantumultx, json, base64json)
+//   - type: 指定输出格式 (v2ray, clash, stash, egern, surge, loon, shadowrocket, quantumultx, json, base64json)
+//     也支持 type=auto 或 type=ua，强制按 User-Agent 自动识别格式
 //   - include: 包含节点名关键词 (正则)
 //   - exclude: 排除节点名关键词 (正则)
 //   - groups: 指定分组 ID (逗号分隔)
@@ -48,8 +51,12 @@ func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
 	}
 
 	// 检测输出格式
-	formatStr := c.Query("type")
-	if formatStr == "" {
+	formatStr := strings.ToLower(strings.TrimSpace(c.Query("type")))
+	forceUA := formatStr == "auto" || formatStr == "ua"
+
+	if forceUA {
+		formatStr = h.detectFormatFromUserAgent(c.GetHeader("User-Agent"))
+	} else if formatStr == "" {
 		if ext != "" {
 			// 根据后缀映射
 			switch strings.ToLower(ext) {
@@ -83,12 +90,16 @@ func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
 	}
 
 	// 构建请求
+	subscribeURL := h.buildSubscribeURL(c)
+	subscribeDomain := h.buildSubscribeDomain(c)
 	req := &model.SubscriptionRequest{
-		Token:   token,
-		Format:  format,
-		Groups:  groups,
-		Include: c.Query("include"),
-		Exclude: c.Query("exclude"),
+		Token:           token,
+		Format:          format,
+		Groups:          groups,
+		Include:         c.Query("include"),
+		Exclude:         c.Query("exclude"),
+		SubscribeURL:    subscribeURL,
+		SubscribeDomain: subscribeDomain,
 	}
 
 	// 获取订阅
@@ -109,14 +120,46 @@ func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
 	c.String(http.StatusOK, resp.Content)
 }
 
+func (h *SubscribeHandler) buildSubscribeURL(c *gin.Context) string {
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+
+	if forwardedProto := c.GetHeader("X-Forwarded-Proto"); forwardedProto != "" {
+		first := strings.TrimSpace(strings.Split(forwardedProto, ",")[0])
+		if first != "" {
+			scheme = strings.ToLower(first)
+		}
+	}
+
+	return fmt.Sprintf("%s://%s%s", scheme, c.Request.Host, c.Request.URL.RequestURI())
+}
+
+func (h *SubscribeHandler) buildSubscribeDomain(c *gin.Context) string {
+	host := c.Request.Host
+	if forwardedHost := c.GetHeader("X-Forwarded-Host"); forwardedHost != "" {
+		host = strings.TrimSpace(strings.Split(forwardedHost, ",")[0])
+	}
+
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		return parsedHost
+	}
+
+	// IPv6 host without port can appear as [::1]
+	return strings.Trim(host, "[]")
+}
+
 // detectFormatFromUserAgent 根据 User-Agent 检测输出格式
 func (h *SubscribeHandler) detectFormatFromUserAgent(ua string) string {
 	ua = strings.ToLower(ua)
 
 	patterns := map[string]string{
 		`clash`:        "clash",
-		`stash`:        "clash",
+		`stash`:        "stash",
+		`egern`:        "egern",
 		`surge`:        "surge",
+		`loon`:         "loon",
 		`shadowrocket`: "shadowrocket",
 		`quantumult`:   "quantumultx",
 		`v2rayng`:      "v2ray",
@@ -384,20 +427,57 @@ func (h *SubscriptionAdminHandler) UpdateTemplate(c *gin.Context) {
 		return
 	}
 
-	var template model.SubscriptionTemplate
-	if err := c.ShouldBindJSON(&template); err != nil {
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
 		return
 	}
 
-	template.ID = uint(id)
+	if len(updates) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
+		return
+	}
 
-	if err := h.subscriptionService.UpdateTemplate(&template); err != nil {
+	normalizeTemplateUpdatePayload(updates)
+
+	if err := h.subscriptionService.UpdateTemplateFields(uint(id), updates); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新模板失败", "error": err.Error()})
 		return
 	}
 
+	template, err := h.subscriptionService.GetTemplate(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新成功但读取失败", "error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "更新成功", "data": template})
+}
+
+func normalizeTemplateUpdatePayload(updates map[string]interface{}) {
+	intFields := []string{"group_id", "port", "tls", "enable", "sort"}
+	for _, field := range intFields {
+		val, exists := updates[field]
+		if !exists {
+			continue
+		}
+		switch v := val.(type) {
+		case float64:
+			updates[field] = int(v)
+		case float32:
+			updates[field] = int(v)
+		case int64:
+			updates[field] = int(v)
+		case int32:
+			updates[field] = int(v)
+		case bool:
+			if v {
+				updates[field] = 1
+			} else {
+				updates[field] = 0
+			}
+		}
+	}
 }
 
 // DeleteTemplate 删除订阅模板
@@ -558,9 +638,13 @@ func (h *SubscriptionAdminHandler) GetPlanGroups(c *gin.Context) {
 // GET /api/v2/admin/subscription/formats
 func (h *SubscriptionAdminHandler) GetSubscriptionFormats(c *gin.Context) {
 	formats := []map[string]string{
+		{"id": "auto", "name": "Auto (UA)", "description": "根据客户端 User-Agent 自动识别订阅格式"},
 		{"id": "v2ray", "name": "V2Ray Base64", "description": "适用于 V2RayN, V2RayNG, V2Box 等"},
-		{"id": "clash", "name": "Clash YAML", "description": "适用于 Clash, ClashX, Stash 等"},
+		{"id": "clash", "name": "Clash YAML", "description": "适用于 Clash, ClashX 等"},
+		{"id": "stash", "name": "Stash YAML", "description": "适用于 Stash（Clash YAML 兼容）"},
+		{"id": "egern", "name": "Egern YAML", "description": "适用于 Egern（Clash YAML 兼容）"},
 		{"id": "surge", "name": "Surge", "description": "适用于 Surge iOS/macOS"},
+		{"id": "loon", "name": "Loon", "description": "适用于 Loon iOS"},
 		{"id": "shadowrocket", "name": "Shadowrocket", "description": "适用于 Shadowrocket iOS"},
 		{"id": "quantumultx", "name": "Quantumult X", "description": "适用于 Quantumult X iOS"},
 		{"id": "json", "name": "JSON", "description": "原始 JSON 格式"},

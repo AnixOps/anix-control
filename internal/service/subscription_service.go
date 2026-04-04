@@ -77,7 +77,7 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 	}
 
 	// 5. 构建渲染上下文
-	ctx := s.buildRenderContext(user)
+	ctx := s.buildRenderContext(user, req)
 
 	// 6. 将模板渲染为 ParsedNode
 	nodes := s.renderTemplates(templates, ctx, groups)
@@ -98,7 +98,7 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 	}
 
 	// 9. 去重 (针对非 V2Ray 分组模式)
-	if !(format == model.FormatV2Ray && len(groups) > 0) {
+	if !(format == model.FormatV2Ray && len(req.Groups) > 0) {
 		uniqueNodes := make([]*model.ParsedNode, 0, len(nodes))
 		nodeMap := make(map[string]bool)
 		for _, n := range nodes {
@@ -118,7 +118,7 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 	// 如果请求了分组且格式为 V2Ray，按分组生成：先对每组分别格式化（得到各自的编码结果），
 	// 对于 V2Ray 格式解码每组得到原始行，再合并为一个整体字符串后统一 base64 编码返回。
 	var content []byte
-	if format == model.FormatV2Ray && len(groups) > 0 {
+	if format == model.FormatV2Ray && len(req.Groups) > 0 {
 		var groupPlainParts []string
 
 		// 获取全部内部节点一次，用于按组过滤
@@ -128,7 +128,11 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 			// 模板节点
 			tplList, _ := s.GetTemplatesByGroup(g.ID)
 			var groupTemplates []*model.SubscriptionTemplate
-			groupTemplates = append(groupTemplates, tplList...)
+			for _, t := range tplList {
+				if t.Enable == 1 {
+					groupTemplates = append(groupTemplates, t)
+				}
+			}
 
 			// 渲染该组的模板
 			groupNodes := make([]*model.ParsedNode, 0)
@@ -268,7 +272,7 @@ func (s *SubscriptionService) getTemplatesForGroups(groups []*model.Subscription
 }
 
 // buildRenderContext 构建渲染上下文
-func (s *SubscriptionService) buildRenderContext(user *model.User) *model.TemplateRenderContext {
+func (s *SubscriptionService) buildRenderContext(user *model.User, req *model.SubscriptionRequest) *model.TemplateRenderContext {
 	expiredAt := int64(0)
 	if user.ExpiredAt != nil {
 		expiredAt = *user.ExpiredAt
@@ -284,6 +288,11 @@ func (s *SubscriptionService) buildRenderContext(user *model.User) *model.Templa
 		TransferEnable: user.TransferEnable,
 		UsedTraffic:    user.U + user.D,
 		Custom:         make(map[string]interface{}),
+	}
+
+	if req != nil {
+		ctx.SubscribeURL = req.SubscribeURL
+		ctx.SubscribeDomain = req.SubscribeDomain
 	}
 
 	// 如果用户没有设置限制，从套餐获取
@@ -569,6 +578,7 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 		Port:       protocol.Port,
 		UUID:       ctx.UUID,
 		Password:   ctx.UUID,
+		TLSMode:    protocol.TLS,
 		TLS:        protocol.TLS > 0,
 		SourceType: "node",
 		SourceID:   node.ID,
@@ -594,7 +604,13 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 			if pk, ok := realitySettings["public_key"].(string); ok {
 				parsed.RealityPublicKey = pk
 			}
+			if pk, ok := realitySettings["pbk"].(string); ok && parsed.RealityPublicKey == "" {
+				parsed.RealityPublicKey = pk
+			}
 			if sid, ok := realitySettings["short_id"].(string); ok {
+				parsed.RealityShortID = sid
+			}
+			if sid, ok := realitySettings["sid"].(string); ok && parsed.RealityShortID == "" {
 				parsed.RealityShortID = sid
 			}
 		}
@@ -609,6 +625,9 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 			}
 			if fp, ok := tlsSettings["fingerprint"].(string); ok {
 				parsed.TLSFingerprint = fp
+			}
+			if pk, ok := tlsSettings["public_key"].(string); ok && parsed.RealityPublicKey == "" {
+				parsed.RealityPublicKey = pk
 			}
 		}
 	}
@@ -631,6 +650,18 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 			for k, v := range settings {
 				parsed.Settings[k] = v
 			}
+		}
+	}
+
+	// Shadowsocks: support both "cipher" and "method" in protocol settings.
+	if parsed.Type == string(model.ProtocolShadowsocks) {
+		if c, ok := parsed.Settings["cipher"].(string); ok && c != "" {
+			parsed.Cipher = c
+		} else if m, ok := parsed.Settings["method"].(string); ok && m != "" {
+			parsed.Cipher = m
+		}
+		if sk, ok := parsed.Settings["server_key"].(string); ok && sk != "" {
+			parsed.ServerKey = sk
 		}
 	}
 
@@ -683,6 +714,20 @@ func (s *SubscriptionService) CreateTemplate(template *model.SubscriptionTemplat
 // UpdateTemplate 更新订阅模板
 func (s *SubscriptionService) UpdateTemplate(template *model.SubscriptionTemplate) error {
 	return s.db.Save(template).Error
+}
+
+// UpdateTemplateFields 按字段局部更新订阅模板
+func (s *SubscriptionService) UpdateTemplateFields(id uint, fields map[string]interface{}) error {
+	if len(fields) == 0 {
+		return nil
+	}
+	delete(fields, "id")
+	delete(fields, "created_at")
+	delete(fields, "updated_at")
+
+	return s.db.Model(&model.SubscriptionTemplate{}).
+		Where("id = ?", id).
+		Updates(fields).Error
 }
 
 // DeleteTemplate 删除订阅模板

@@ -943,49 +943,112 @@ func (f *SurgeFormatter) FileExtension() string {
 }
 
 func (f *SurgeFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRenderContext) ([]byte, error) {
-	var lines []string
-	lines = append(lines, "[Proxy]")
+	proxyLines := make([]string, 0, len(nodes))
+	proxyNames := make([]string, 0, len(nodes))
+	usedNames := make(map[string]int)
 
 	for _, node := range nodes {
-		line := f.formatNode(node, ctx)
-		if line != "" {
-			lines = append(lines, line)
+		baseName, proxy := f.formatNode(node, ctx)
+		if baseName == "" || proxy == "" {
+			continue
+		}
+
+		name := uniqueSurgeName(baseName, usedNames)
+		proxyLines = append(proxyLines, fmt.Sprintf("%s = %s", name, proxy))
+		proxyNames = append(proxyNames, name)
+	}
+
+	subscribeURL := "http://127.0.0.1/subscription"
+	subscribeDomain := "127.0.0.1"
+	if ctx != nil {
+		if strings.TrimSpace(ctx.SubscribeURL) != "" {
+			subscribeURL = ctx.SubscribeURL
+		}
+		if strings.TrimSpace(ctx.SubscribeDomain) != "" {
+			subscribeDomain = ctx.SubscribeDomain
 		}
 	}
 
-	// 添加一个默认的节点组
-	lines = append(lines, "[Proxy Group]")
-	var proxyNames []string
-	for _, node := range nodes {
-		proxyNames = append(proxyNames, node.Name)
-	}
-	if len(proxyNames) > 0 {
-		lines = append(lines, "Proxy = select, "+strings.Join(proxyNames, ", "))
-	} else {
-		lines = append(lines, "Proxy = direct")
+	lines := []string{
+		fmt.Sprintf("#!MANAGED-CONFIG %s interval=43200 strict=true", subscribeURL),
+		"",
+		"[General]",
+		"loglevel = notify",
+		"dns-server = system",
+		"skip-proxy = 127.0.0.1, localhost, *.local",
+		"",
+		"[Proxy]",
 	}
 
-	return []byte(strings.Join(lines, "\n")), nil
+	lines = append(lines, proxyLines...)
+	lines = append(lines, "", "[Proxy Group]")
+
+	if len(proxyNames) > 0 {
+		joined := strings.Join(proxyNames, ", ")
+		lines = append(lines, "Proxy = select, auto, fallback, "+joined)
+		lines = append(lines, "auto = url-test, "+joined+", url=http://www.gstatic.com/generate_204, interval=43200")
+		lines = append(lines, "fallback = fallback, "+joined+", url=http://www.gstatic.com/generate_204, interval=43200")
+	} else {
+		lines = append(lines, "Proxy = select, DIRECT")
+	}
+
+	lines = append(lines,
+		"",
+		"[Rule]",
+		fmt.Sprintf("DOMAIN,%s,DIRECT", subscribeDomain),
+		"FINAL,Proxy",
+	)
+
+	return []byte(strings.Join(lines, "\r\n")), nil
 }
 
-func (f *SurgeFormatter) formatNode(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
-	var line string
+func sanitizeSurgeName(name string) string {
+	if strings.TrimSpace(name) == "" {
+		return "Proxy"
+	}
+	clean := strings.NewReplacer(
+		",", " ",
+		"=", "-",
+		"\r", " ",
+		"\n", " ",
+	).Replace(name)
+	clean = strings.Join(strings.Fields(clean), " ")
+	if clean == "" {
+		return "Proxy"
+	}
+	return clean
+}
+
+func uniqueSurgeName(base string, used map[string]int) string {
+	if _, exists := used[base]; !exists {
+		used[base] = 1
+		return base
+	}
+	used[base]++
+	return fmt.Sprintf("%s-%d", base, used[base])
+}
+
+func (f *SurgeFormatter) formatNode(node *model.ParsedNode, ctx *model.TemplateRenderContext) (string, string) {
+	name := sanitizeSurgeName(node.Name)
+	var proxy string
 	switch node.Type {
 	case "vmess":
-		line = f.formatVMess(node, ctx)
-	case "vless":
-		line = f.formatVLESS(node, ctx)
+		proxy = f.formatVMess(node, ctx)
 	case "trojan":
-		line = f.formatTrojan(node, ctx)
+		proxy = f.formatTrojan(node, ctx)
 	case "shadowsocks", "ss":
-		line = f.formatShadowsocks(node, ctx)
+		proxy = f.formatShadowsocks(node, ctx)
+	case "hysteria2", "hy2":
+		proxy = f.formatHysteria2(node, ctx)
+	case "anytls":
+		proxy = f.formatAnyTLS(node, ctx)
 	default:
-		return ""
+		return "", ""
 	}
-	if line != "" {
-		return fmt.Sprintf("%s = %s", node.Name, line)
+	if proxy == "" {
+		return "", ""
 	}
-	return ""
+	return name, proxy
 }
 
 func (f *SurgeFormatter) formatVMess(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
@@ -999,6 +1062,8 @@ func (f *SurgeFormatter) formatVMess(node *model.ParsedNode, ctx *model.Template
 		node.Server,
 		fmt.Sprintf("%d", node.Port),
 		fmt.Sprintf("username=%s", uuid),
+		"tfo=true",
+		"udp-relay=true",
 	}
 
 	// VMess AEAD is enabled by default in Surge
@@ -1021,8 +1086,12 @@ func (f *SurgeFormatter) formatVMess(node *model.ParsedNode, ctx *model.Template
 			if path, ok := node.TransportSettings["path"].(string); ok {
 				parts = append(parts, fmt.Sprintf("ws-path=%s", path))
 			}
-			if host, ok := node.TransportSettings["host"].(string); ok {
+			if host, ok := node.TransportSettings["host"].(string); ok && host != "" {
 				parts = append(parts, fmt.Sprintf("ws-headers=Host:%s", host))
+			} else if headers, ok := node.TransportSettings["headers"].(map[string]interface{}); ok {
+				if host, ok := headers["Host"].(string); ok && host != "" {
+					parts = append(parts, fmt.Sprintf("ws-headers=Host:%s", host))
+				}
 			}
 		}
 	case "h2":
@@ -1031,7 +1100,7 @@ func (f *SurgeFormatter) formatVMess(node *model.ParsedNode, ctx *model.Template
 			if path, ok := node.TransportSettings["path"].(string); ok {
 				parts = append(parts, fmt.Sprintf("h2-path=%s", path))
 			}
-			if host, ok := node.TransportSettings["host"].(string); ok {
+			if host, ok := node.TransportSettings["host"].(string); ok && host != "" {
 				parts = append(parts, fmt.Sprintf("h2-host=%s", host))
 			}
 		}
@@ -1039,69 +1108,6 @@ func (f *SurgeFormatter) formatVMess(node *model.ParsedNode, ctx *model.Template
 
 	return strings.Join(parts, ", ")
 }
-
-func (f *SurgeFormatter) formatVLESS(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
-	uuid := node.UUID
-	if uuid == "" && ctx != nil {
-		uuid = ctx.UUID
-	}
-
-	// vless, server, port, username=uuid, tls=true, sni=host.com
-	parts := []string{
-		"vless",
-		node.Server,
-		fmt.Sprintf("%d", node.Port),
-		fmt.Sprintf("username=%s", uuid),
-	}
-
-	if node.TLSMode == 2 || node.RealityPublicKey != "" {
-		parts = append(parts, "tls=true") // Surge uses 'tls' for Reality
-		if node.ServerName != "" {
-			parts = append(parts, fmt.Sprintf("sni=%s", node.ServerName))
-		}
-		if node.RealityPublicKey != "" {
-			// Surge combines reality-key and short-id into a single 'experimental-reality-key' field
-			// For simplicity, we only use the public key here.
-			// A more advanced implementation might require combining them if the format standardizes.
-			parts = append(parts, fmt.Sprintf("reality-public-key=%s", node.RealityPublicKey))
-		}
-	} else if node.TLS || node.TLSMode == 1 {
-		parts = append(parts, "tls=true")
-		if node.ServerName != "" {
-			parts = append(parts, fmt.Sprintf("sni=%s", node.ServerName))
-		}
-	}
-
-	if node.SkipCertVerify {
-		parts = append(parts, "skip-cert-verify=true")
-	}
-
-	switch node.Transport {
-	case "ws":
-		parts = append(parts, "ws=true")
-		if node.TransportSettings != nil {
-			if path, ok := node.TransportSettings["path"].(string); ok {
-				parts = append(parts, fmt.Sprintf("ws-path=%s", path))
-			}
-			if host, ok := node.TransportSettings["host"].(string); ok {
-				parts = append(parts, fmt.Sprintf("ws-headers=Host:%s", host))
-			}
-		}
-	case "h2":
-		parts = append(parts, "http/2=true")
-		if node.TransportSettings != nil {
-			if path, ok := node.TransportSettings["path"].(string); ok {
-				parts = append(parts, fmt.Sprintf("h2-path=%s", path))
-			}
-			if host, ok := node.TransportSettings["host"].(string); ok {
-				parts = append(parts, fmt.Sprintf("h2-host=%s", host))
-			}
-		}
-	}
-
-	return strings.Join(parts, ", ")
-}
-
 
 func (f *SurgeFormatter) formatTrojan(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
 	password := node.Password
@@ -1115,6 +1121,8 @@ func (f *SurgeFormatter) formatTrojan(node *model.ParsedNode, ctx *model.Templat
 		node.Server,
 		fmt.Sprintf("%d", node.Port),
 		fmt.Sprintf("password=%s", password),
+		"tfo=true",
+		"udp-relay=true",
 	}
 
 	if node.ServerName != "" {
@@ -1123,6 +1131,22 @@ func (f *SurgeFormatter) formatTrojan(node *model.ParsedNode, ctx *model.Templat
 
 	if node.SkipCertVerify {
 		parts = append(parts, "skip-cert-verify=true")
+	}
+
+	if node.Transport == "ws" {
+		parts = append(parts, "ws=true")
+		if node.TransportSettings != nil {
+			if path, ok := node.TransportSettings["path"].(string); ok && path != "" {
+				parts = append(parts, fmt.Sprintf("ws-path=%s", path))
+			}
+			if host, ok := node.TransportSettings["host"].(string); ok && host != "" {
+				parts = append(parts, fmt.Sprintf("ws-headers=Host:%s", host))
+			} else if headers, ok := node.TransportSettings["headers"].(map[string]interface{}); ok {
+				if host, ok := headers["Host"].(string); ok && host != "" {
+					parts = append(parts, fmt.Sprintf("ws-headers=Host:%s", host))
+				}
+			}
+		}
 	}
 
 	return strings.Join(parts, ", ")
@@ -1134,9 +1158,25 @@ func (f *SurgeFormatter) formatShadowsocks(node *model.ParsedNode, ctx *model.Te
 		password = ctx.UUID
 	}
 
-	cipher := "aes-256-gcm"
+	cipher := node.Cipher
+	if cipher == "" {
+		cipher = "aes-256-gcm"
+	}
 	if c, ok := node.Settings["cipher"].(string); ok && c != "" {
 		cipher = c
+	}
+
+	if strings.HasPrefix(cipher, "2022-blake3-") {
+		serverKey := node.ServerKey
+		if serverKey == "" {
+			if sk, ok := node.Settings["server_key"].(string); ok {
+				serverKey = sk
+			}
+		}
+		if serverKey != "" {
+			userKey := generateSS2022UserKey(password, cipher)
+			password = fmt.Sprintf("%s:%s", serverKey, userKey)
+		}
 	}
 
 	// ss, server, port, encrypt-method=cipher, password=password
@@ -1146,6 +1186,78 @@ func (f *SurgeFormatter) formatShadowsocks(node *model.ParsedNode, ctx *model.Te
 		fmt.Sprintf("%d", node.Port),
 		fmt.Sprintf("encrypt-method=%s", cipher),
 		fmt.Sprintf("password=%s", password),
+		"fast-open=false",
+		"udp=true",
+	}
+
+	if node.Settings != nil {
+		if obfs, ok := node.Settings["obfs"].(string); ok && obfs == "http" {
+			parts = append(parts, "obfs=http")
+			if obfsHost, ok := node.Settings["obfs-host"].(string); ok && obfsHost != "" {
+				parts = append(parts, fmt.Sprintf("obfs-host=%s", obfsHost))
+			}
+			if obfsPath, ok := node.Settings["obfs-path"].(string); ok && obfsPath != "" {
+				parts = append(parts, fmt.Sprintf("obfs-uri=%s", obfsPath))
+			}
+		}
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+func (f *SurgeFormatter) formatHysteria2(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
+	password := node.Password
+	if password == "" && ctx != nil {
+		password = ctx.UUID
+	}
+
+	parts := []string{
+		"hysteria2",
+		node.Server,
+		fmt.Sprintf("%d", node.Port),
+		fmt.Sprintf("password=%s", password),
+		"udp-relay=true",
+	}
+
+	if node.ServerName != "" {
+		parts = append(parts, fmt.Sprintf("sni=%s", node.ServerName))
+	}
+	if node.SkipCertVerify {
+		parts = append(parts, "skip-cert-verify=true")
+	}
+
+	if node.Settings != nil {
+		if down, ok := node.Settings["down_mbps"]; ok {
+			parts = append(parts, fmt.Sprintf("download-bandwidth=%v", down))
+		} else if up, ok := node.Settings["up_mbps"]; ok {
+			parts = append(parts, fmt.Sprintf("download-bandwidth=%v", up))
+		}
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+func (f *SurgeFormatter) formatAnyTLS(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
+	password := node.Password
+	if password == "" && ctx != nil {
+		password = ctx.UUID
+	}
+
+	parts := []string{
+		"anytls",
+		node.Server,
+		fmt.Sprintf("%d", node.Port),
+		fmt.Sprintf("password=%s", password),
+		"tfo=true",
+	}
+
+	if node.ServerName != "" {
+		parts = append(parts, fmt.Sprintf("sni=%s", node.ServerName))
+	}
+	if node.SkipCertVerify {
+		parts = append(parts, "skip-cert-verify=true")
+	} else {
+		parts = append(parts, "skip-cert-verify=false")
 	}
 
 	return strings.Join(parts, ", ")
@@ -1385,4 +1497,76 @@ func (f *QuantumultXFormatter) formatShadowsocks(node *model.ParsedNode, ctx *mo
 	}
 
 	return strings.Join(parts, ", ")
+}
+
+// StashFormatter Stash 格式化器（兼容 Clash YAML）
+type StashFormatter struct {
+	clash *ClashFormatter
+}
+
+func (f *StashFormatter) Name() string {
+	return "stash"
+}
+
+func (f *StashFormatter) ContentType() string {
+	return "text/yaml; charset=utf-8"
+}
+
+func (f *StashFormatter) FileExtension() string {
+	return "yaml"
+}
+
+func (f *StashFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRenderContext) ([]byte, error) {
+	if f.clash == nil {
+		f.clash = &ClashFormatter{}
+	}
+	return f.clash.Format(nodes, ctx)
+}
+
+// EgernFormatter Egern 格式化器（兼容 Clash YAML）
+type EgernFormatter struct {
+	clash *ClashFormatter
+}
+
+func (f *EgernFormatter) Name() string {
+	return "egern"
+}
+
+func (f *EgernFormatter) ContentType() string {
+	return "text/yaml; charset=utf-8"
+}
+
+func (f *EgernFormatter) FileExtension() string {
+	return "yaml"
+}
+
+func (f *EgernFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRenderContext) ([]byte, error) {
+	if f.clash == nil {
+		f.clash = &ClashFormatter{}
+	}
+	return f.clash.Format(nodes, ctx)
+}
+
+// LoonFormatter Loon 格式化器（兼容 Shadowrocket/V2Ray 订阅）
+type LoonFormatter struct {
+	shadowrocket *ShadowrocketFormatter
+}
+
+func (f *LoonFormatter) Name() string {
+	return "loon"
+}
+
+func (f *LoonFormatter) ContentType() string {
+	return "text/plain; charset=utf-8"
+}
+
+func (f *LoonFormatter) FileExtension() string {
+	return "txt"
+}
+
+func (f *LoonFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRenderContext) ([]byte, error) {
+	if f.shadowrocket == nil {
+		f.shadowrocket = &ShadowrocketFormatter{}
+	}
+	return f.shadowrocket.Format(nodes, ctx)
 }

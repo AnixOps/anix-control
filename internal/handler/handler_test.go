@@ -685,11 +685,11 @@ func (s *NodeHandlerTestSuite) TestCreateNode_Success() {
 	s.router.POST("/nodes", handler.CreateNode)
 
 	body := map[string]interface{}{
-		"name":  "New Test Node",
-		"host":  "192.168.1.200",
-		"port":  443,
-		"rate":  1.0,
-		"show":  1,
+		"name": "New Test Node",
+		"host": "192.168.1.200",
+		"port": 443,
+		"rate": 1.0,
+		"show": 1,
 	}
 	jsonBody, _ := json.Marshal(body)
 
@@ -1184,11 +1184,11 @@ func (s *AdminHandlerTestSuite) TestCreatePlan_Success() {
 	s.router.POST("/plans", handler.CreatePlan)
 
 	body := map[string]interface{}{
-		"name":             "New Plan",
-		"group_id":         1,
-		"transfer_enable":  100,
-		"month_price":      1000,
-		"show":             1,
+		"name":            "New Plan",
+		"group_id":        1,
+		"transfer_enable": 100,
+		"month_price":     1000,
+		"show":            1,
 	}
 	jsonBody, _ := json.Marshal(body)
 
@@ -1602,8 +1602,10 @@ func (s *SubscribeHandlerTestSuite) TestDetectFormatFromUserAgent() {
 		expected  string
 	}{
 		{"Clash/1.0", "clash"},
-		{"Stash/1.0", "clash"},
+		{"Stash/1.0", "stash"},
+		{"Egern/1.0", "egern"},
 		{"Surge/1.0", "surge"},
+		{"Loon/1.0", "loon"},
 		{"Shadowrocket/1.0", "shadowrocket"},
 		{"Quantumult X/1.0", "quantumultx"},
 		{"V2RayNG/1.0", "v2ray"},
@@ -1680,6 +1682,18 @@ func (s *SubscribeHandlerTestSuite) TestGetSubscription_WithFormat() {
 	s.router.GET("/s/:token", handler.GetSubscription)
 
 	req, _ := http.NewRequest("GET", "/s/"+s.testUser.Token+"?type=json", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *SubscribeHandlerTestSuite) TestGetSubscription_WithAutoFormat() {
+	handler := NewSubscribeHandler(s.cfg)
+	s.router.GET("/s/:token", handler.GetSubscription)
+
+	req, _ := http.NewRequest("GET", "/s/"+s.testUser.Token+"?type=auto", nil)
+	req.Header.Set("User-Agent", "Clash/1.0")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
@@ -2026,7 +2040,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetSubscriptionFormats_Success()
 	var response map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &response)
 	data := response["data"].([]interface{})
-	assert.GreaterOrEqual(s.T(), len(data), 8) // At least 8 formats
+	assert.GreaterOrEqual(s.T(), len(data), 12) // At least 12 formats (including auto)
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetProtocolTypes_Success() {
@@ -2344,8 +2358,8 @@ func TestKnowledgeHandler(t *testing.T) {
 // OrderHandlerTestSuite Order Handler 测试套件
 type OrderHandlerTestSuite struct {
 	HandlerTestSuite
-	testUser *model.User
-	testPlan *model.Plan
+	testUser  *model.User
+	testPlan  *model.Plan
 	testOrder *model.Order
 }
 
@@ -4123,10 +4137,10 @@ func (s *AdminPlanHandlerTestSuite) SetupTest() {
 	transferEnable := int64(10737418240)
 	monthPrice := int64(1000)
 	s.testPlan = &model.Plan{
-		Name:          "Test Plan",
+		Name:           "Test Plan",
 		TransferEnable: transferEnable,
-		MonthPrice:    &monthPrice,
-		Show:          1,
+		MonthPrice:     &monthPrice,
+		Show:           1,
 	}
 	s.db.Create(s.testPlan)
 
@@ -4243,10 +4257,10 @@ func (s *AdminOrderHandlerTestSuite) SetupTest() {
 	transferEnable := int64(10737418240)
 	monthPrice := int64(1000)
 	s.testPlan = &model.Plan{
-		Name:          "Test Plan",
+		Name:           "Test Plan",
 		TransferEnable: transferEnable,
-		MonthPrice:    &monthPrice,
-		Show:          1,
+		MonthPrice:     &monthPrice,
+		Show:           1,
 	}
 	s.db.Create(s.testPlan)
 
@@ -4376,10 +4390,10 @@ func (s *NodeRegisterTestSuite) TestRegister_Success() {
 	s.router.POST("/register", handler.Register)
 
 	body := map[string]interface{}{
-		"auth_key":    s.testAuthKey.KeyHash,
-		"name":        "Test Node",
-		"host":        "192.168.1.1",
-		"port":        443,
+		"auth_key":       s.testAuthKey.KeyHash,
+		"name":           "Test Node",
+		"host":           "192.168.1.1",
+		"port":           443,
 		"server_version": "1.0.0",
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -4410,9 +4424,9 @@ func (s *NodeRegisterTestSuite) TestHeartbeat_Unauthorized() {
 	s.router.POST("/heartbeat", handler.Heartbeat)
 
 	body := map[string]interface{}{
-		"cpu_usage":    50.0,
-		"mem_usage":    60.0,
-		"connections":  100,
+		"cpu_usage":   50.0,
+		"mem_usage":   60.0,
+		"connections": 100,
 	}
 	jsonBody, _ := json.Marshal(body)
 
@@ -4628,10 +4642,10 @@ func (s *ForwardNodeHandlerTestSuite) TestCreateNode() {
 	s.router.POST("/forward/nodes", handler.CreateNode)
 
 	body := map[string]interface{}{
-		"name":    "New Forward Node",
-		"type":    "exit",
-		"host":    "192.168.1.201",
-		"port":    8081,
+		"name":     "New Forward Node",
+		"type":     "exit",
+		"host":     "192.168.1.201",
+		"port":     8081,
 		"api_port": 18081,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -4705,14 +4719,14 @@ func (s *ForwardHandlerExtendedTestSuite) SetupTest() {
 	s.db.Create(s.testExitNode)
 
 	s.testRule = &model.ForwardRule{
-		Name:         "Test Rule",
-		Enabled:      true,
-		RelayNodeID:  s.testRelayNode.ID,
-		ListenPort:   9000,
-		Protocol:     "tcp",
-		ExitNodeID:   s.testExitNode.ID,
-		TargetHost:   "10.0.0.1",
-		TargetPort:   80,
+		Name:        "Test Rule",
+		Enabled:     true,
+		RelayNodeID: s.testRelayNode.ID,
+		ListenPort:  9000,
+		Protocol:    "tcp",
+		ExitNodeID:  s.testExitNode.ID,
+		TargetHost:  "10.0.0.1",
+		TargetPort:  80,
 	}
 	s.db.Create(s.testRule)
 
@@ -5203,4 +5217,3 @@ func (s *SystemConfigTestSuite) TestDeleteConfig() {
 func TestSystemConfig(t *testing.T) {
 	suite.Run(t, new(SystemConfigTestSuite))
 }
-

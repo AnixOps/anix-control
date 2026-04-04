@@ -264,7 +264,10 @@ func TestSystemConfigTableName(t *testing.T) {
 func TestSubscriptionFormatConstants(t *testing.T) {
 	assert.Equal(t, SubscriptionFormat("v2ray"), FormatV2Ray)
 	assert.Equal(t, SubscriptionFormat("clash"), FormatClash)
+	assert.Equal(t, SubscriptionFormat("stash"), FormatStash)
+	assert.Equal(t, SubscriptionFormat("egern"), FormatEgern)
 	assert.Equal(t, SubscriptionFormat("surge"), FormatSurge)
+	assert.Equal(t, SubscriptionFormat("loon"), FormatLoon)
 	assert.Equal(t, SubscriptionFormat("json"), FormatJSON)
 	assert.Equal(t, SubscriptionFormat("base64json"), FormatBase64JSON)
 	assert.Equal(t, SubscriptionFormat("shadowrocket"), FormatShadowrocket)

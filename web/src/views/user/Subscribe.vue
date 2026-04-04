@@ -57,8 +57,15 @@ export default {
     const token = computed(() => (userStore.userInfo && userStore.userInfo.token) || '')
     const subscription = ref({})
     const formats = [
+      { value: 'auto', label: 'Auto (By User-Agent)' },
       { value: 'v2ray', label: 'V2Ray (Base64)' },
       { value: 'clash', label: 'Clash (YAML)' },
+      { value: 'stash', label: 'Stash (YAML)' },
+      { value: 'egern', label: 'Egern (YAML)' },
+      { value: 'surge', label: 'Surge' },
+      { value: 'loon', label: 'Loon' },
+      { value: 'shadowrocket', label: 'ShadowRocket' },
+      { value: 'quantumultx', label: 'QuantumultX' },
       { value: 'sing-box', label: 'Sing-box (JSON)' },
       { value: 'json', label: 'Raw JSON' },
       { value: 'base64json', label: 'Base64 JSON' }
@@ -84,14 +91,18 @@ export default {
     function getSubscribeUrl(format) {
       const origin = window.location.origin
       const path = '/s' // default subscribe path
-      let ext = ''
-      switch (format) {
-        case 'clash': ext = '.yaml'; break;
-        case 'sing-box': ext = '.json'; break;
-        case 'v2ray': ext = '.txt'; break;
-        case 'json': ext = '.json'; break;
+      if (!format || format === 'auto' || format === 'ua') {
+        return `${origin}${path}/${token.value}`
       }
-      return `${origin}${path}/${token.value}${ext}`
+      return `${origin}${path}/${token.value}?type=${encodeURIComponent(format)}`
+    }
+
+    function getFileExt(format) {
+      if (format === 'auto' || format === 'ua') return 'txt'
+      if (format === 'clash' || format === 'stash' || format === 'egern') return 'yaml'
+      if (format === 'json' || format === 'sing-box') return 'json'
+      if (format === 'surge') return 'conf'
+      return 'txt'
     }
 
     async function copyText(text) {
@@ -126,7 +137,7 @@ export default {
     }
 
     function downloadPreview() {
-      const ext = previewFormat.value === 'clash' ? 'yaml' : previewFormat.value === 'json' ? 'json' : 'txt'
+      const ext = getFileExt(previewFormat.value)
       const blob = new Blob([previewContent.value], { type: 'text/plain' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

@@ -243,6 +243,12 @@
             <select v-model="previewFormat" @change="loadPreview">
               <option value="v2ray">V2Ray (Base64)</option>
               <option value="clash">Clash (YAML)</option>
+              <option value="stash">Stash (YAML)</option>
+              <option value="egern">Egern (YAML)</option>
+              <option value="surge">Surge</option>
+              <option value="loon">Loon</option>
+              <option value="shadowrocket">ShadowRocket</option>
+              <option value="quantumultx">QuantumultX</option>
               <option value="json">JSON</option>
               <option value="base64json">Base64 JSON</option>
             </select>
@@ -441,11 +447,13 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import adminApi from '@/api/admin'
+import { useUserStore } from '@/stores/user'
 
 export default {
   name: 'Subscriptions',
   setup() {
     const { t } = useI18n()
+    const userStore = useUserStore()
     
     // Data
     const groups = ref([])
@@ -502,8 +510,15 @@ export default {
     
     // Subscription formats
     const subscriptionFormats = [
+      { value: 'auto', label: 'Auto (By User-Agent)' },
       { value: 'v2ray', label: 'V2Ray (Base64)' },
       { value: 'clash', label: 'Clash (YAML)' },
+      { value: 'stash', label: 'Stash (YAML)' },
+      { value: 'egern', label: 'Egern (YAML)' },
+      { value: 'surge', label: 'Surge' },
+      { value: 'loon', label: 'Loon' },
+      { value: 'shadowrocket', label: 'ShadowRocket' },
+      { value: 'quantumultx', label: 'QuantumultX' },
       { value: 'json', label: 'JSON' },
       { value: 'base64json', label: 'Base64 JSON' }
     ]
@@ -641,12 +656,22 @@ export default {
     }
     
     const getSubscriptionUrl = (format) => {
-      // 使用测试用户 token (管理员预览用)
+      // 使用当前登录管理员的真实订阅 token
       const baseUrl = window.location.origin
-      return `${baseUrl}/s/admin-preview?type=${format}&groups=${selectedGroup.value?.id || ''}`
+      const token = userStore.userInfo?.token || ''
+      if (!token) return ''
+      const groupQuery = `groups=${selectedGroup.value?.id || ''}`
+      if (!format || format === 'auto' || format === 'ua') {
+        return `${baseUrl}/s/${token}?${groupQuery}`
+      }
+      return `${baseUrl}/s/${token}?type=${format}&${groupQuery}`
     }
     
     const copyToClipboard = async (text) => {
+      if (!text) {
+        showToast(t('admin.subscriptions.copyError'), 'error')
+        return
+      }
       try {
         await navigator.clipboard.writeText(text)
         showToast(t('admin.subscriptions.copied'), 'success')
@@ -675,10 +700,17 @@ export default {
     const copyPreviewContent = () => {
       copyToClipboard(previewContent.value)
     }
+
+    const getSubscriptionFileExt = (format) => {
+      if (format === 'auto' || format === 'ua') return 'txt'
+      if (format === 'clash' || format === 'stash' || format === 'egern') return 'yaml'
+      if (format === 'json' || format === 'sing-box') return 'json'
+      if (format === 'surge') return 'conf'
+      return 'txt'
+    }
     
     const downloadPreview = () => {
-      const ext = previewFormat.value === 'clash' ? 'yaml' : 
-                  previewFormat.value === 'json' ? 'json' : 'txt'
+      const ext = getSubscriptionFileExt(previewFormat.value)
       const blob = new Blob([previewContent.value], { type: 'text/plain' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

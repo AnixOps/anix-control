@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -15,24 +16,71 @@ import (
 	"gorm.io/gorm"
 )
 
-// AgentHandler Agent 管理 API
+// AgentHandler Agent 绠＄悊 API
 type AgentHandler struct {
 	db          *gorm.DB
 	connections sync.Map // nodeID -> *AgentConnection
+	pendingAcks sync.Map // messageID -> *wsPendingAck
 	wsUpgrader  websocket.Upgrader
+	ackTimeout  time.Duration
+	maxRetries  int
 }
 
-// AgentConnection Agent 连接信息
+// AgentConnection Agent 杩炴帴淇℃伅
 type AgentConnection struct {
-	NodeID      uint
-	LastSeen    time.Time
-	Version     string
-	SystemInfo  map[string]interface{}
+	NodeID       uint
+	LastSeen     time.Time
+	Version      string
+	SystemInfo   map[string]interface{}
 	Capabilities []string
-	WsConn      *websocket.Conn
+	WsConn       *websocket.Conn
+	writeMu      sync.Mutex
 }
 
-// NewAgentHandler 创建 Handler
+type wsAuthInfo struct {
+	NodeID       uint
+	Version      string
+	System       map[string]interface{}
+	Capabilities []string
+	FromHeaders  bool
+}
+
+type wsInboundEnvelope struct {
+	ID         string          `json:"id"`
+	Type       string          `json:"type"`
+	NodeID     uint            `json:"node_id"`
+	Timestamp  int64           `json:"timestamp"`
+	Payload    json.RawMessage `json:"payload"`
+	RequireAck bool            `json:"require_ack,omitempty"`
+}
+
+type wsOutboundEnvelope struct {
+	ID         string      `json:"id"`
+	Type       string      `json:"type"`
+	NodeID     uint        `json:"node_id"`
+	Timestamp  int64       `json:"timestamp"`
+	Payload    interface{} `json:"payload,omitempty"`
+	RequireAck bool        `json:"require_ack,omitempty"`
+}
+
+type wsAckPayload struct {
+	MessageID string `json:"msg_id"`
+	Success   bool   `json:"success"`
+	Error     string `json:"error,omitempty"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+type wsPendingAck struct {
+	NodeID uint
+	Chan   chan *wsAckPayload
+}
+
+var (
+	errAgentNodeNotFound = errors.New("node not found")
+	errAgentInvalidToken = errors.New("invalid token")
+)
+
+// NewAgentHandler 鍒涘缓 Handler
 func NewAgentHandler() *AgentHandler {
 	return &AgentHandler{
 		db: database.Get(),
@@ -41,18 +89,360 @@ func NewAgentHandler() *AgentHandler {
 				return true
 			},
 		},
+		ackTimeout: 3 * time.Second,
+		maxRetries: 2,
 	}
 }
 
-// ========== Agent 认证和注册 ==========
+func (h *AgentHandler) verifyForwardNodeToken(nodeID uint, token string) error {
+	var node model.ForwardNode
+	if err := h.db.First(&node, nodeID).Error; err != nil {
+		return errAgentNodeNotFound
+	}
+	if node.APIToken != token {
+		return errAgentInvalidToken
+	}
+	return nil
+}
+
+func (h *AgentHandler) markNodeOnline(nodeID uint) {
+	h.db.Model(&model.ForwardNode{}).Where("id = ?", nodeID).Updates(map[string]interface{}{
+		"status":     model.ForwardNodeStatusOnline,
+		"last_check": time.Now(),
+	})
+}
+
+func (h *AgentHandler) updateConnectionLastSeen(nodeID uint) {
+	if conn, ok := h.connections.Load(nodeID); ok {
+		ac := conn.(*AgentConnection)
+		ac.LastSeen = time.Now()
+	}
+	h.markNodeOnline(nodeID)
+}
+
+func (h *AgentHandler) authFromRequest(c *gin.Context) (*wsAuthInfo, bool, error) {
+	nodeIDStr := c.Query("node_id")
+	if nodeIDStr == "" {
+		nodeIDStr = c.GetHeader("X-Node-ID")
+	}
+
+	token := c.GetHeader("X-API-Key")
+	if token == "" {
+		token = c.Query("api_key")
+	}
+	if token == "" {
+		token = c.Query("token")
+	}
+
+	if nodeIDStr == "" && token == "" {
+		return nil, false, nil
+	}
+	if nodeIDStr == "" || token == "" {
+		return nil, true, fmt.Errorf("missing node_id or token")
+	}
+
+	nodeID64, err := strconv.ParseUint(nodeIDStr, 10, 32)
+	if err != nil {
+		return nil, true, fmt.Errorf("invalid node_id")
+	}
+
+	nodeID := uint(nodeID64)
+	if err := h.verifyForwardNodeToken(nodeID, token); err != nil {
+		return nil, true, err
+	}
+
+	return &wsAuthInfo{
+		NodeID:      nodeID,
+		FromHeaders: true,
+	}, true, nil
+}
+
+func (h *AgentHandler) authFromMessage(conn *websocket.Conn) (*wsAuthInfo, error) {
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		return nil, err
+	}
+
+	var authMsg struct {
+		Type         string                 `json:"type"`
+		NodeID       uint                   `json:"node_id"`
+		Token        string                 `json:"token"`
+		Version      string                 `json:"version"`
+		System       map[string]interface{} `json:"system"`
+		Capabilities []string               `json:"capabilities"`
+	}
+	if err := json.Unmarshal(msg, &authMsg); err != nil || authMsg.Type != "auth" {
+		return nil, fmt.Errorf("invalid auth")
+	}
+	if err := h.verifyForwardNodeToken(authMsg.NodeID, authMsg.Token); err != nil {
+		return nil, err
+	}
+
+	return &wsAuthInfo{
+		NodeID:       authMsg.NodeID,
+		Version:      authMsg.Version,
+		System:       authMsg.System,
+		Capabilities: authMsg.Capabilities,
+		FromHeaders:  false,
+	}, nil
+}
+
+func normalizeInboundMessageType(messageType string) string {
+	switch messageType {
+	case "config.update":
+		return "config_update"
+	case "user.update":
+		return "user_update"
+	case "user.ban":
+		return "user_ban"
+	case "rule.update":
+		return "rule_update"
+	case "cert.update":
+		return "cert_update"
+	case "traffic.report":
+		return "traffic_report"
+	case "force.reload":
+		return "force_reload"
+	case "task.assign":
+		return "task"
+	case "task.result":
+		return "task_result"
+	default:
+		return messageType
+	}
+}
+
+func parseAckPayload(raw []byte, payload json.RawMessage) (*wsAckPayload, bool) {
+	type ackRaw struct {
+		MsgID     string `json:"msg_id"`
+		MessageID string `json:"message_id"`
+		Success   bool   `json:"success"`
+		Error     string `json:"error,omitempty"`
+		Timestamp int64  `json:"timestamp"`
+	}
+
+	decode := func(data []byte) (*wsAckPayload, bool) {
+		if len(data) == 0 {
+			return nil, false
+		}
+		var a ackRaw
+		if err := json.Unmarshal(data, &a); err != nil {
+			return nil, false
+		}
+		messageID := a.MsgID
+		if messageID == "" {
+			messageID = a.MessageID
+		}
+		if messageID == "" {
+			return nil, false
+		}
+		return &wsAckPayload{
+			MessageID: messageID,
+			Success:   a.Success,
+			Error:     a.Error,
+			Timestamp: a.Timestamp,
+		}, true
+	}
+
+	if ack, ok := decode(payload); ok {
+		return ack, true
+	}
+	return decode(raw)
+}
+
+func (h *AgentHandler) resolveAck(ack *wsAckPayload) {
+	if ack == nil || ack.MessageID == "" {
+		return
+	}
+
+	pending, ok := h.pendingAcks.LoadAndDelete(ack.MessageID)
+	if !ok {
+		return
+	}
+
+	waiter := pending.(*wsPendingAck)
+	select {
+	case waiter.Chan <- ack:
+	default:
+	}
+}
+
+func (h *AgentHandler) sendEnvelope(agentConn *AgentConnection, envelope *wsOutboundEnvelope) error {
+	if agentConn == nil || agentConn.WsConn == nil {
+		return fmt.Errorf("ws connection not available")
+	}
+	agentConn.writeMu.Lock()
+	defer agentConn.writeMu.Unlock()
+	return agentConn.WsConn.WriteJSON(envelope)
+}
+
+func (h *AgentHandler) sendLegacyTask(agentConn *AgentConnection, task AgentTask) error {
+	if agentConn == nil || agentConn.WsConn == nil {
+		return fmt.Errorf("ws connection not available")
+	}
+	agentConn.writeMu.Lock()
+	defer agentConn.writeMu.Unlock()
+	return agentConn.WsConn.WriteJSON(map[string]interface{}{
+		"type": "task",
+		"task": task,
+	})
+}
+
+func (h *AgentHandler) sendAck(agentConn *AgentConnection, messageID string, err error) {
+	if messageID == "" {
+		return
+	}
+
+	payload := &wsAckPayload{
+		MessageID: messageID,
+		Success:   err == nil,
+		Timestamp: time.Now().Unix(),
+	}
+	if err != nil {
+		payload.Error = err.Error()
+	}
+
+	_ = h.sendEnvelope(agentConn, &wsOutboundEnvelope{
+		ID:        generateMessageID(),
+		Type:      "ack",
+		NodeID:    agentConn.NodeID,
+		Timestamp: time.Now().Unix(),
+		Payload:   payload,
+	})
+}
+
+func (h *AgentHandler) dispatchWithAckRetry(agentConn *AgentConnection, messageType string, payload interface{}, requireAck bool) (string, *wsAckPayload, error) {
+	messageID := generateMessageID()
+	if !requireAck {
+		return messageID, nil, h.sendEnvelope(agentConn, &wsOutboundEnvelope{
+			ID:        messageID,
+			Type:      messageType,
+			NodeID:    agentConn.NodeID,
+			Timestamp: time.Now().Unix(),
+			Payload:   payload,
+		})
+	}
+
+	attempts := h.maxRetries + 1
+	var lastErr error
+
+	for attempt := 1; attempt <= attempts; attempt++ {
+		waiter := &wsPendingAck{
+			NodeID: agentConn.NodeID,
+			Chan:   make(chan *wsAckPayload, 1),
+		}
+		h.pendingAcks.Store(messageID, waiter)
+
+		sendErr := h.sendEnvelope(agentConn, &wsOutboundEnvelope{
+			ID:         messageID,
+			Type:       messageType,
+			NodeID:     agentConn.NodeID,
+			Timestamp:  time.Now().Unix(),
+			Payload:    payload,
+			RequireAck: true,
+		})
+		if sendErr != nil {
+			h.pendingAcks.Delete(messageID)
+			lastErr = sendErr
+			continue
+		}
+
+		select {
+		case ack := <-waiter.Chan:
+			h.pendingAcks.Delete(messageID)
+			if ack == nil {
+				lastErr = fmt.Errorf("empty ack for message %s", messageID)
+				continue
+			}
+			if !ack.Success {
+				if ack.Error == "" {
+					return messageID, ack, fmt.Errorf("agent nack for message %s", messageID)
+				}
+				return messageID, ack, fmt.Errorf("agent nack: %s", ack.Error)
+			}
+			return messageID, ack, nil
+		case <-time.After(h.ackTimeout):
+			h.pendingAcks.Delete(messageID)
+			lastErr = fmt.Errorf("ack timeout after %s", h.ackTimeout)
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("send failed")
+	}
+	return messageID, nil, lastErr
+}
+
+func (h *AgentHandler) failPendingAcksForNode(nodeID uint, reason string) {
+	h.pendingAcks.Range(func(key, value interface{}) bool {
+		waiter := value.(*wsPendingAck)
+		if waiter.NodeID != nodeID {
+			return true
+		}
+
+		messageID, _ := key.(string)
+		h.pendingAcks.Delete(key)
+		select {
+		case waiter.Chan <- &wsAckPayload{
+			MessageID: messageID,
+			Success:   false,
+			Error:     reason,
+			Timestamp: time.Now().Unix(),
+		}:
+		default:
+		}
+		return true
+	})
+}
+
+func (h *AgentHandler) handleWebSocketMessage(agentConn *AgentConnection, raw []byte) {
+	if agentConn == nil {
+		return
+	}
+
+	h.updateConnectionLastSeen(agentConn.NodeID)
+
+	var envelope wsInboundEnvelope
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return
+	}
+
+	if envelope.Type == "" {
+		return
+	}
+
+	if envelope.NodeID != 0 && envelope.NodeID != agentConn.NodeID {
+		return
+	}
+
+	envelope.Type = normalizeInboundMessageType(envelope.Type)
+
+	if envelope.Type == "ack" {
+		if ack, ok := parseAckPayload(raw, envelope.Payload); ok {
+			h.resolveAck(ack)
+		}
+		return
+	}
+
+	switch envelope.Type {
+	case "heartbeat", "pong", "traffic_report", "alert", "task_result":
+		h.markNodeOnline(agentConn.NodeID)
+	}
+
+	if envelope.RequireAck && envelope.ID != "" {
+		h.sendAck(agentConn, envelope.ID, nil)
+	}
+}
+
+// ========== Agent 璁よ瘉鍜屾敞鍐?==========
 
 // AgentRegister godoc
-// @Summary Agent 注册
-// @Description Agent 启动时注册到面板
+// @Summary Agent 娉ㄥ唽
+// @Description Agent 鍚姩鏃舵敞鍐屽埌闈㈡澘
 // @Tags Agent
 // @Accept json
 // @Produce json
-// @Param request body AgentRegisterRequest true "注册信息"
+// @Param request body AgentRegisterRequest true "娉ㄥ唽淇℃伅"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v2/agent/register [post]
 func (h *AgentHandler) AgentRegister(c *gin.Context) {
@@ -62,33 +452,27 @@ func (h *AgentHandler) AgentRegister(c *gin.Context) {
 		return
 	}
 
-	// 验证 Token
-	var node model.ForwardNode
-	if err := h.db.First(&node, req.NodeID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "node not found"})
+	// 楠岃瘉 Token
+	if err := h.verifyForwardNodeToken(req.NodeID, req.Token); err != nil {
+		if errors.Is(err, errAgentInvalidToken) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	if node.APIToken != req.Token {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-		return
-	}
-
-	// 记录连接
+	// 璁板綍杩炴帴
 	conn := &AgentConnection{
-		NodeID:      req.NodeID,
-		LastSeen:    time.Now(),
-		Version:     req.Version,
-		SystemInfo:  req.System,
+		NodeID:       req.NodeID,
+		LastSeen:     time.Now(),
+		Version:      req.Version,
+		SystemInfo:   req.System,
 		Capabilities: req.Capabilities,
 	}
 	h.connections.Store(req.NodeID, conn)
 
-	// 更新节点状态
-	h.db.Model(&node).Updates(map[string]interface{}{
-		"status":     model.ForwardNodeStatusOnline,
-		"last_check": time.Now(),
-	})
+	// 鏇存柊鑺傜偣鐘舵€?	h.markNodeOnline(req.NodeID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "registered",
@@ -96,7 +480,7 @@ func (h *AgentHandler) AgentRegister(c *gin.Context) {
 	})
 }
 
-// AgentRegisterRequest 注册请求
+// AgentRegisterRequest 娉ㄥ唽璇锋眰
 type AgentRegisterRequest struct {
 	NodeID       uint                   `json:"node_id"`
 	Token        string                 `json:"token"`
@@ -105,15 +489,14 @@ type AgentRegisterRequest struct {
 	Capabilities []string               `json:"capabilities"`
 }
 
-// ========== Agent 心跳 ==========
+// ========== Agent 蹇冭烦 ==========
 
 // AgentHeartbeat godoc
-// @Summary Agent 心跳
-// @Description Agent 定期发送心跳
-// @Tags Agent
+// @Summary Agent 蹇冭烦
+// @Description Agent 瀹氭湡鍙戦€佸績璺?// @Tags Agent
 // @Accept json
 // @Produce json
-// @Param request body AgentHeartbeatRequest true "心跳信息"
+// @Param request body AgentHeartbeatRequest true "蹇冭烦淇℃伅"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v2/agent/heartbeat [post]
 func (h *AgentHandler) AgentHeartbeat(c *gin.Context) {
@@ -123,65 +506,55 @@ func (h *AgentHandler) AgentHeartbeat(c *gin.Context) {
 		return
 	}
 
-	// 更新连接时间
-	if conn, ok := h.connections.Load(req.NodeID); ok {
-		ac := conn.(*AgentConnection)
-		ac.LastSeen = time.Now()
-	}
-
-	// 更新节点状态
-	h.db.Model(&model.ForwardNode{}).Where("id = ?", req.NodeID).Updates(map[string]interface{}{
-		"last_check": time.Now(),
-		"status":     model.ForwardNodeStatusOnline,
-	})
+	// 鏇存柊杩炴帴鏃堕棿
+	h.updateConnectionLastSeen(req.NodeID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
-// AgentHeartbeatRequest 心跳请求
+// AgentHeartbeatRequest 蹇冭烦璇锋眰
 type AgentHeartbeatRequest struct {
 	NodeID    uint                   `json:"node_id"`
 	Status    string                 `json:"status"`
 	Resources map[string]interface{} `json:"resources"`
 }
 
-// ========== 任务管理 ==========
+// ========== 浠诲姟绠＄悊 ==========
 
 // AgentGetTasks godoc
-// @Summary 获取待执行任务
-// @Description Agent 轮询获取待执行的任务
+// @Summary 鑾峰彇寰呮墽琛屼换鍔?// @Description Agent 杞鑾峰彇寰呮墽琛岀殑浠诲姟
 // @Tags Agent
 // @Produce json
-// @Param node_id query int true "节点 ID"
+// @Param node_id query int true "鑺傜偣 ID"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v2/agent/tasks [get]
 func (h *AgentHandler) AgentGetTasks(c *gin.Context) {
 	nodeID, _ := strconv.ParseUint(c.Query("node_id"), 10, 32)
-	_ = nodeID // TODO: 使用 nodeID 过滤任务
+	_ = nodeID // TODO: 浣跨敤 nodeID 杩囨护浠诲姟
 
-	// TODO: 从任务队列获取该节点的待执行任务
-	// 这里简化实现，返回空任务列表
+	// TODO: 浠庝换鍔￠槦鍒楄幏鍙栬鑺傜偣鐨勫緟鎵ц浠诲姟
+	// 杩欓噷绠€鍖栧疄鐜帮紝杩斿洖绌轰换鍔″垪琛?	tasks := []AgentTask{}
+
 	tasks := []AgentTask{}
-
 	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
 }
 
-// AgentTask 任务定义
+// AgentTask 浠诲姟瀹氫箟
 type AgentTask struct {
-	ID       string                 `json:"id"`
-	Type     string                 `json:"type"`
-	Action   string                 `json:"action"`
-	Params   map[string]interface{} `json:"params"`
-	Timeout  int                    `json:"timeout"`
+	ID      string                 `json:"id"`
+	Type    string                 `json:"type"`
+	Action  string                 `json:"action"`
+	Params  map[string]interface{} `json:"params"`
+	Timeout int                    `json:"timeout"`
 }
 
 // AgentReportResult godoc
-// @Summary 上报任务结果
-// @Description Agent 上报任务执行结果
+// @Summary 涓婃姤浠诲姟缁撴灉
+// @Description Agent 涓婃姤浠诲姟鎵ц缁撴灉
 // @Tags Agent
 // @Accept json
 // @Produce json
-// @Param request body AgentTaskResult true "任务结果"
+// @Param request body AgentTaskResult true "浠诲姟缁撴灉"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v2/agent/result [post]
 func (h *AgentHandler) AgentReportResult(c *gin.Context) {
@@ -191,13 +564,13 @@ func (h *AgentHandler) AgentReportResult(c *gin.Context) {
 		return
 	}
 
-	// TODO: 保存任务结果到数据库
-	// TODO: 如果有回调，触发回调
+	// TODO: 淇濆瓨浠诲姟缁撴灉鍒版暟鎹簱
+	// TODO: 濡傛灉鏈夊洖璋冿紝瑙﹀彂鍥炶皟
 
 	c.JSON(http.StatusOK, gin.H{"message": "received"})
 }
 
-// AgentTaskResult 任务结果
+// AgentTaskResult 浠诲姟缁撴灉
 type AgentTaskResult struct {
 	TaskID    string      `json:"task_id"`
 	Success   bool        `json:"success"`
@@ -208,15 +581,15 @@ type AgentTaskResult struct {
 	Timestamp time.Time   `json:"timestamp"`
 }
 
-// ========== 监控数据 ==========
+// ========== 鐩戞帶鏁版嵁 ==========
 
 // AgentMonitor godoc
-// @Summary 上报监控数据
-// @Description Agent 上报系统监控数据
+// @Summary 涓婃姤鐩戞帶鏁版嵁
+// @Description Agent 涓婃姤绯荤粺鐩戞帶鏁版嵁
 // @Tags Agent
 // @Accept json
 // @Produce json
-// @Param request body AgentMonitorRequest true "监控数据"
+// @Param request body AgentMonitorRequest true "鐩戞帶鏁版嵁"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v2/agent/monitor [post]
 func (h *AgentHandler) AgentMonitor(c *gin.Context) {
@@ -226,23 +599,22 @@ func (h *AgentHandler) AgentMonitor(c *gin.Context) {
 		return
 	}
 
-	// TODO: 保存监控数据到时序数据库
+	// TODO: 淇濆瓨鐩戞帶鏁版嵁鍒版椂搴忔暟鎹簱
 
 	c.JSON(http.StatusOK, gin.H{"message": "received"})
 }
 
-// AgentMonitorRequest 监控请求
+// AgentMonitorRequest 鐩戞帶璇锋眰
 type AgentMonitorRequest struct {
 	NodeID uint                   `json:"node_id"`
 	System map[string]interface{} `json:"system"`
 }
 
-// ========== WebSocket 连接 ==========
+// ========== WebSocket 杩炴帴 ==========
 
 // AgentWebSocket godoc
-// @Summary WebSocket 连接
-// @Description Agent 建立 WebSocket 长连接
-// @Tags Agent
+// @Summary WebSocket 杩炴帴
+// @Description Agent 寤虹珛 WebSocket 闀胯繛鎺?// @Tags Agent
 // @Success 101
 // @Router /api/v2/agent/ws [get]
 func (h *AgentHandler) AgentWebSocket(c *gin.Context) {
@@ -252,7 +624,7 @@ func (h *AgentHandler) AgentWebSocket(c *gin.Context) {
 	}
 	defer conn.Close()
 
-	// 等待认证消息
+	// 绛夊緟璁よ瘉娑堟伅
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
 		return
@@ -268,7 +640,7 @@ func (h *AgentHandler) AgentWebSocket(c *gin.Context) {
 		return
 	}
 
-	// 验证 Token
+	// 楠岃瘉 Token
 	var node model.ForwardNode
 	if err := h.db.First(&node, authMsg.NodeID).Error; err != nil {
 		conn.WriteJSON(map[string]string{"error": "node not found"})
@@ -279,7 +651,7 @@ func (h *AgentHandler) AgentWebSocket(c *gin.Context) {
 		return
 	}
 
-	// 记录 WebSocket 连接
+	// 璁板綍 WebSocket 杩炴帴
 	agentConn := &AgentConnection{
 		NodeID:   authMsg.NodeID,
 		LastSeen: time.Now(),
@@ -289,44 +661,100 @@ func (h *AgentHandler) AgentWebSocket(c *gin.Context) {
 
 	conn.WriteJSON(map[string]string{"type": "auth", "message": "connected"})
 
-	// 处理消息循环
+	// 澶勭悊娑堟伅寰幆
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
 			break
 		}
 
-		// 处理消息
+		// 澶勭悊娑堟伅
 		var m map[string]interface{}
 		json.Unmarshal(msg, &m)
-		// TODO: 处理不同类型的消息
-		_ = m
+		// TODO: 澶勭悊涓嶅悓绫诲瀷鐨勬秷鎭?		_ = m
 	}
 
-	// 清理连接
+	// 娓呯悊杩炴帴
 	h.connections.Delete(authMsg.NodeID)
 }
 
-// ========== 管理接口 ==========
+// AgentWebSocketUnified supports both legacy message-auth and header/query-auth.
+func (h *AgentHandler) AgentWebSocketUnified(c *gin.Context) {
+	authInfo, hasHeaderAuth, err := h.authFromRequest(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	conn, err := h.wsUpgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	if !hasHeaderAuth {
+		authInfo, err = h.authFromMessage(conn)
+		if err != nil {
+			_ = conn.WriteJSON(map[string]string{"error": err.Error()})
+			return
+		}
+	}
+
+	agentConn := &AgentConnection{
+		NodeID:       authInfo.NodeID,
+		LastSeen:     time.Now(),
+		Version:      authInfo.Version,
+		SystemInfo:   authInfo.System,
+		Capabilities: authInfo.Capabilities,
+		WsConn:       conn,
+	}
+	h.connections.Store(authInfo.NodeID, agentConn)
+	h.markNodeOnline(authInfo.NodeID)
+	defer h.connections.Delete(authInfo.NodeID)
+	defer h.failPendingAcksForNode(authInfo.NodeID, "agent websocket closed")
+
+	if !authInfo.FromHeaders {
+		_ = conn.WriteJSON(map[string]string{"type": "auth", "message": "connected"})
+	}
+
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+		h.handleWebSocketMessage(agentConn, msg)
+	}
+}
+
+// ========== 绠＄悊鎺ュ彛 ==========
 
 // CreateTask godoc
-// @Summary 创建任务
-// @Description 管理员向节点下发任务
-// @Tags 管理端-Agent
+// @Summary 鍒涘缓浠诲姟
+// @Description 绠＄悊鍛樺悜鑺傜偣涓嬪彂浠诲姟
+// @Tags 绠＄悊绔?Agent
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body CreateTaskRequest true "任务信息"
+// @Param request body CreateTaskRequest true "浠诲姟淇℃伅"
 // @Success 200 {object} map[string]interface{}
 // @Router /admin/agent/tasks [post]
 func (h *AgentHandler) CreateTask(c *gin.Context) {
 	var req CreateTaskRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	if taskReqValue, ok := c.Get("task_request"); ok {
+		taskReq, ok := taskReqValue.(CreateTaskRequest)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid task_request payload"})
+			return
+		}
+		req = taskReq
+	} else {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
-	// 检查节点是否在线
+	// 妫€鏌ヨ妭鐐规槸鍚﹀湪绾?
 	conn, ok := h.connections.Load(req.NodeID)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "node offline"})
@@ -334,29 +762,53 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 	}
 
 	agentConn := conn.(*AgentConnection)
-
-	// 如果有 WebSocket 连接，直接发送
-	if agentConn.WsConn != nil {
-		err := agentConn.WsConn.WriteJSON(map[string]interface{}{
-			"type": "task",
-			"task": AgentTask{
-				ID:      generateTaskID(),
-				Type:    req.Type,
-				Action:  req.Action,
-				Params:  req.Params,
-				Timeout: req.Timeout,
-			},
-		})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "send failed"})
-			return
-		}
+	if agentConn.WsConn == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "node websocket unavailable"})
+		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "task sent"})
+	task := AgentTask{
+		ID:      generateTaskID(),
+		Type:    req.Type,
+		Action:  req.Action,
+		Params:  req.Params,
+		Timeout: req.Timeout,
+	}
+
+	messageID, ack, err := h.dispatchWithAckRetry(agentConn, "task.assign", map[string]interface{}{
+		"task": task,
+	}, true)
+	if err != nil {
+		if fallbackErr := h.sendLegacyTask(agentConn, task); fallbackErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":        "send failed",
+				"task_id":      task.ID,
+				"message_id":   messageID,
+				"dispatch_err": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":      "task sent with legacy fallback",
+			"task_id":      task.ID,
+			"message_id":   messageID,
+			"ack_received": false,
+			"dispatch_err": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":      "task sent",
+		"task_id":      task.ID,
+		"message_id":   messageID,
+		"ack_received": true,
+		"ack":          ack,
+	})
 }
 
-// CreateTaskRequest 创建任务请求
+// CreateTaskRequest 鍒涘缓浠诲姟璇锋眰
 type CreateTaskRequest struct {
 	NodeID  uint                   `json:"node_id" binding:"required"`
 	Type    string                 `json:"type" binding:"required"`
@@ -366,9 +818,9 @@ type CreateTaskRequest struct {
 }
 
 // ListAgents godoc
-// @Summary 获取在线 Agent 列表
-// @Description 管理员获取所有在线的 Agent
-// @Tags 管理端-Agent
+// @Summary 鑾峰彇鍦ㄧ嚎 Agent 鍒楄〃
+// @Description 绠＄悊鍛樿幏鍙栨墍鏈夊湪绾跨殑 Agent
+// @Tags 绠＄悊绔?Agent
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} map[string]interface{}
@@ -393,13 +845,12 @@ func (h *AgentHandler) ListAgents(c *gin.Context) {
 }
 
 // ExecuteCommand godoc
-// @Summary 执行命令
-// @Description 管理员在节点上执行命令
-// @Tags 管理端-Agent
+// @Summary 鎵ц鍛戒护
+// @Description 绠＄悊鍛樺湪鑺傜偣涓婃墽琛屽懡浠?// @Tags 绠＄悊绔?Agent
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body ExecuteCommandRequest true "命令信息"
+// @Param request body ExecuteCommandRequest true "鍛戒护淇℃伅"
 // @Success 200 {object} map[string]interface{}
 // @Router /admin/agent/execute [post]
 func (h *AgentHandler) ExecuteCommand(c *gin.Context) {
@@ -409,7 +860,7 @@ func (h *AgentHandler) ExecuteCommand(c *gin.Context) {
 		return
 	}
 
-	// 创建命令任务
+	// 鍒涘缓鍛戒护浠诲姟
 	taskReq := CreateTaskRequest{
 		NodeID: req.NodeID,
 		Type:   "command",
@@ -421,12 +872,12 @@ func (h *AgentHandler) ExecuteCommand(c *gin.Context) {
 		Timeout: req.Timeout,
 	}
 
-	// 复用 CreateTask 逻辑
+	// 澶嶇敤 CreateTask 閫昏緫
 	c.Set("task_request", taskReq)
 	h.CreateTask(c)
 }
 
-// ExecuteCommandRequest 执行命令请求
+// ExecuteCommandRequest 鎵ц鍛戒护璇锋眰
 type ExecuteCommandRequest struct {
 	NodeID  uint                   `json:"node_id" binding:"required"`
 	Command string                 `json:"command" binding:"required"`
@@ -435,14 +886,14 @@ type ExecuteCommandRequest struct {
 	Timeout int                    `json:"timeout"`
 }
 
-// ========== 转发规则同步 ==========
+// ========== 杞彂瑙勫垯鍚屾 ==========
 
 // AgentGetForwardRules godoc
-// @Summary 获取转发规则
-// @Description Agent 获取该节点的转发规则
+// @Summary 鑾峰彇杞彂瑙勫垯
+// @Description Agent 鑾峰彇璇ヨ妭鐐圭殑杞彂瑙勫垯
 // @Tags Agent
 // @Produce json
-// @Param node_id query int true "节点 ID"
+// @Param node_id query int true "鑺傜偣 ID"
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v2/forward/agent/rules [get]
 func (h *AgentHandler) AgentGetForwardRules(c *gin.Context) {
@@ -454,7 +905,7 @@ func (h *AgentHandler) AgentGetForwardRules(c *gin.Context) {
 		Preload("ExitNode").
 		Find(&rules)
 
-	// 转换为 Agent 需要的格式
+	// 杞崲涓?Agent 闇€瑕佺殑鏍煎紡
 	var agentRules []ForwardRuleForAgent
 	for _, r := range rules {
 		agentRules = append(agentRules, ForwardRuleForAgent{
@@ -470,7 +921,7 @@ func (h *AgentHandler) AgentGetForwardRules(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": agentRules})
 }
 
-// ForwardRuleForAgent 转发规则（Agent 格式）
+// ForwardRuleForAgent 杞彂瑙勫垯锛圓gent 鏍煎紡锛?
 type ForwardRuleForAgent struct {
 	ID         uint   `json:"id"`
 	Enabled    bool   `json:"enabled"`
@@ -480,8 +931,12 @@ type ForwardRuleForAgent struct {
 	TargetPort int    `json:"target_port"`
 }
 
-// ========== 辅助函数 ==========
+// ========== 杈呭姪鍑芥暟 ==========
 
 func generateTaskID() string {
 	return fmt.Sprintf("task-%d", time.Now().UnixNano())
+}
+
+func generateMessageID() string {
+	return fmt.Sprintf("msg-%d", time.Now().UnixNano())
 }
