@@ -88,20 +88,37 @@ func resolveConfigPath(rawPath string) (string, error) {
 		return rawPath, fmt.Errorf("config file not found: %s", rawPath)
 	}
 
-	cwdPath, _ := filepath.Abs(rawPath)
-	if fileExists(cwdPath) {
-		return cwdPath, nil
+	checked := make([]string, 0, 3)
+
+	if cwdPath, err := filepath.Abs(rawPath); err == nil {
+		checked = append(checked, cwdPath)
+		if fileExists(cwdPath) {
+			return cwdPath, nil
+		}
 	}
 
 	if exePath, err := os.Executable(); err == nil {
-		exeCandidate := filepath.Join(filepath.Dir(exePath), rawPath)
+		exeDir := filepath.Dir(exePath)
+
+		exeCandidate := filepath.Clean(filepath.Join(exeDir, rawPath))
+		checked = append(checked, exeCandidate)
 		if fileExists(exeCandidate) {
 			return exeCandidate, nil
 		}
-		return cwdPath, fmt.Errorf("config file not found (checked: %s, %s)", cwdPath, exeCandidate)
+
+		// Support binaries placed under ./build while config stays at project ./config.
+		exeParentCandidate := filepath.Clean(filepath.Join(exeDir, "..", rawPath))
+		checked = append(checked, exeParentCandidate)
+		if fileExists(exeParentCandidate) {
+			return exeParentCandidate, nil
+		}
 	}
 
-	return cwdPath, fmt.Errorf("config file not found: %s", cwdPath)
+	if len(checked) > 0 {
+		return checked[0], fmt.Errorf("config file not found (checked: %s)", strings.Join(checked, ", "))
+	}
+
+	return rawPath, fmt.Errorf("config file not found: %s", rawPath)
 }
 
 func resolveRuntimePath(rawPath, resolvedConfigPath string) string {
