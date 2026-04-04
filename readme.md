@@ -1,113 +1,109 @@
 ﻿# V2Board AnixOps
 
-鐜颁唬鍖栫殑浠ｇ悊闈㈡澘绠＄悊绯荤粺锛孏o + Vue 3 鎶€鏈爤銆?
+现代化代理面板管理系统，基于 Go + Vue 3，支持多协议节点管理、订阅分发、订单计费和节点通信。
 
-## 鐗规€?
+## 主要特性
 
-- **楂樻€ц兘鍚庣** - Go 1.24 + Gin锛屾敮鎸侀珮骞跺彂
-- **鐜颁唬鍓嶇** - Vue 3 + Vite + Element Plus
-- **澶氬崗璁敮鎸?* - VMess/VLESS/Trojan/Shadowsocks/Hysteria2/TUIC
-- **澶氳闃呮牸寮?* - V2Ray/Clash/Sing-box/Surge
-- **gRPC 閫氫俊** - 鑺傜偣涓庨潰鏉垮弻鍚戞祦閫氫俊
-- **Agent 绯荤粺** - NAT 绌块€忥紝杩滅▼鑺傜偣绠＄悊
-- **娴侀噺杞彂** - gost 闆嗘垚锛屼腑杞妭鐐圭鐞?
-- **闆朵緷璧栭儴缃?* - 鍗曚簩杩涘埗鏂囦欢 + SQLite锛屾棤闇€瀹夎浠讳綍澶栭儴鏈嶅姟
+- 高性能后端：Go 1.24 + Gin，支持高并发
+- 现代前端：Vue 3 + Vite + Pinia
+- 多协议支持：VMess / VLESS / Trojan / Shadowsocks / Hysteria2 / TUIC
+- 多订阅格式：V2Ray / Clash / Sing-box / Surge
+- 面板-节点通信：支持 HTTP 与 gRPC 双通道
+- 节点自动注册：支持 AuthKey 自动发现
+- 可选数据库：SQLite（默认）或 PostgreSQL
+- 可选缓存：Memory（默认）或 Redis
 
-## 鎶€鏈爤
+## 技术栈
 
-| 缁勪欢 | 鎶€鏈?| 璇存槑 |
+| 组件 | 技术 | 说明 |
 |------|------|------|
-| 璇█ | Go 1.24+ | 楂樻€ц兘銆侀潤鎬佺紪璇戙€佽法骞冲彴 |
-| Web妗嗘灦 | Gin | 楂樻€ц兘 HTTP 妗嗘灦 |
-| ORM | GORM | Go 璇█ ORM 妗嗘灦 |
-| 鏁版嵁搴?| SQLite / PostgreSQL | 杞婚噺绾ф垨浼佷笟绾?|
-| 缂撳瓨 | 鍐呭瓨缂撳瓨 / Redis | 闆朵緷璧栨垨鍒嗗竷寮?|
-| 鍓嶇 | Vue 3 + Vite | 鐜颁唬鍓嶇妗嗘灦 |
-| 閫氫俊 | gRPC + WebSocket | 鍙屽悜瀹炴椂閫氫俊 |
+| 后端语言 | Go 1.24+ | 静态编译、跨平台、高性能 |
+| Web 框架 | Gin | HTTP API 与中间件 |
+| ORM | GORM | 数据模型与数据库访问 |
+| 前端 | Vue 3 + Vite | 管理台与用户端 UI |
+| 状态管理 | Pinia | 前端状态管理 |
+| 通信 | gRPC + HTTP | 节点配置同步与状态上报 |
 
-## 椤圭洰缁撴瀯
+## 项目结构
 
-```
+```text
 v2board_AnixOps/
-鈹溾攢鈹€ cmd/server/           # 涓荤▼搴忓叆鍙?
-鈹溾攢鈹€ config/               # 閰嶇疆鏂囦欢
-鈹溾攢鈹€ internal/             # Go 鍚庣浠ｇ爜
-鈹?  鈹溾攢鈹€ handler/          # HTTP 澶勭悊鍣?
-鈹?  鈹溾攢鈹€ service/          # 涓氬姟閫昏緫
-鈹?  鈹溾攢鈹€ model/            # 鏁版嵁妯″瀷
-鈹?  鈹溾攢鈹€ grpc/             # gRPC 鏈嶅姟
-鈹?  鈹溾攢鈹€ gost/             # gost 瀹㈡埛绔?
-鈹?  鈹斺攢鈹€ ...
-鈹溾攢鈹€ web/                  # Vue 鍓嶇
-鈹?  鈹溾攢鈹€ src/views/        # 椤甸潰缁勪欢
-鈹?  鈹溾攢鈹€ src/api/          # API 璋冪敤
-鈹?  鈹斺攢鈹€ ...
-鈹溾攢鈹€ docker/               # Docker 閰嶇疆
-鈹溾攢鈹€ docs/                 # Swagger 鏂囨。
-鈹斺攢鈹€ deploy/               # 閮ㄧ讲鏂囦欢
+├── cmd/                        # 程序入口
+├── config/                     # 配置文件
+├── data/                       # SQLite 数据目录
+├── internal/                   # 后端核心代码
+│   ├── handler/                # HTTP 处理器
+│   ├── service/                # 业务逻辑层
+│   ├── model/                  # GORM 数据模型
+│   ├── router/                 # 路由定义
+│   ├── parser/                 # 订阅解析与格式化
+│   └── grpc/                   # gRPC 服务实现
+├── web/                        # Vue 前端
+│   └── src/
+├── docs/                       # 文档
+└── docker-compose.yml          # 本地一键部署
 ```
 
-## 蹇€熷紑濮?
+## 快速开始
 
-### 浣跨敤 Docker Compose (鎺ㄨ崘)
+### 方式一：Docker Compose（推荐）
 
 ```bash
-# 1. 鍏嬮殕浠撳簱
+# 1) 克隆仓库
 git clone https://github.com/anixops/v2board.git
 cd v2board
 
-# 2. 澶嶅埗閰嶇疆鏂囦欢
+# 2) 准备配置文件
 cp .env.example .env
 cp config/config.yaml.example config/config.yaml
 
-# 3. 缂栬緫閰嶇疆
-nano .env
-nano config/config.yaml
-
-# 4. 鍚姩鏈嶅姟
+# 3) 启动服务
 docker-compose up -d
 
-# 5. 鏌ョ湅鏃ュ織
-docker-compose logs -f api
+# 4) 查看日志
+docker-compose logs -f
 ```
 
-### 鏈湴寮€鍙?
+### 方式二：本地开发
 
 ```bash
-# 鍚庣
+# 后端
 go mod download
 go run cmd/server/main.go
 
-# 鍓嶇
+# 前端
 cd web
 npm install
 npm run dev
 ```
 
-### 缂栬瘧
+## 构建
 
 ```bash
-# 瀹夎渚濊禆
-go mod tidy
-
-# 缂栬瘧
+# 后端可执行文件
 go build -o v2board ./cmd/server
 
-# 鎴栦娇鐢?make
+# 或使用 Makefile
 make build
+
+# 前端构建
+cd web
+npm run build
 ```
 
-## 閰嶇疆璇存槑
+## 配置说明
 
-### SQLite 閰嶇疆 (榛樿锛岄浂閰嶇疆)
+默认配置文件：`config/config.yaml`
+
+### SQLite（默认）
 
 ```yaml
 database:
   driver: "sqlite"
-  database: "config/data/v2board.db"
+  database: "data/v2board.db"
 ```
 
-### PostgreSQL 閰嶇疆
+### PostgreSQL
 
 ```yaml
 database:
@@ -119,7 +115,7 @@ database:
   password: "your_password"
 ```
 
-### 蹇呰閰嶇疆
+### 必填项
 
 ```yaml
 jwt:
@@ -129,84 +125,52 @@ app:
   api_token: "your-node-communication-token"
 ```
 
-## 閮ㄧ讲鎸囧崡
+## 常用接口
 
-### 寮€鍙戠幆澧?
+### 公开接口
 
-```bash
-docker-compose up -d
-```
+- `GET /health`：健康检查
+- `GET /s/:token`：用户订阅
 
-### 鐢熶骇鐜
+### 用户接口（`/api/v2`）
 
-```bash
-# 浣跨敤鐢熶骇閰嶇疆
-docker-compose -f docker-compose.prod.yml up -d
+- `POST /login`
+- `POST /register`
+- `GET /user/profile`
+- `GET /user/dashboard`
 
-# 鍚敤鐩戞帶 (Prometheus + Grafana)
-docker-compose -f docker-compose.prod.yml --profile monitoring up -d
-```
+### 管理员接口（`/api/v2/admin`）
 
-### Systemd 鏈嶅姟
+- `GET /admin/dashboard`
+- `GET/POST /admin/users`
+- `GET/POST /admin/nodes`
+- `GET/POST /admin/plans`
 
-鍒涘缓 `/etc/systemd/system/v2board.service`锛?
+### 节点通信接口
 
-```ini
-[Unit]
-Description=V2Board AnixOps
-After=network.target
+- `GET /api/v2/server/UniProxy/config`
+- `GET /api/v2/server/UniProxy/user`
+- `POST /api/v2/server/UniProxy/push`
+- `POST /api/v2/server/UniProxy/alive`
 
-[Service]
-Type=simple
-User=www-data
-WorkingDirectory=/opt/v2board
-ExecStart=/opt/v2board/v2board -config /opt/v2board/config/config.yaml
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
+## 测试
 
 ```bash
-sudo systemctl enable v2board
-sudo systemctl start v2board
-```
-
-## API 鏂囨。
-
-鍚姩鏈嶅姟鍚庤闂細`http://localhost:8080/swagger/index.html`
-
-## 涓昏鍔熻兘妯″潡
-
-| 妯″潡 | 璇存槑 |
-|------|------|
-| 鐢ㄦ埛绯荤粺 | 娉ㄥ唽/鐧诲綍/璧勬枡/鏉冮檺 |
-| 濂楅绯荤粺 | 璁¤垂/娴侀噺闄愬埗/缁垂 |
-| 鑺傜偣绯荤粺 | 澶氬崗璁?鍒嗙粍/鑷姩娉ㄥ唽 |
-| 璁㈤槄绯荤粺 | 澶氭牸寮?鍒嗙粍/妯℃澘 |
-| 鏀粯绯荤粺 | 澶氭笭閬?缁熻 |
-| 宸ュ崟绯荤粺 | 鍒涘缓/鍥炲/鍏抽棴 |
-| Agent 绯荤粺 | NAT 绌块€?杩滅▼鎺у埗 |
-| 娴侀噺杞彂 | 涓浆鑺傜偣/gost 闆嗘垚 |
-| Telegram Bot | 鍛戒护/閫氱煡/骞挎挱 |
-| MFA 璁よ瘉 | TOTP/澶囩敤鐮?|
-
-## 娴嬭瘯
-
-```bash
-# 杩愯鎵€鏈夋祴璇?
+# 后端全量测试
 go test ./...
 
-# 杩愯甯﹁鐩栫巼鐨勬祴璇?
+# gRPC 模块测试
+go test -v ./internal/grpc/...
+
+# 覆盖率
 go test -coverprofile=coverage.out ./internal/...
 go tool cover -html=coverage.out
 ```
 
-## 鐩稿叧椤圭洰
+## 相关项目
 
-- [V2bX_AnixOps](https://github.com/anixops/V2bX_AnixOps) - 鑺傜偣绔▼搴?
-- [AnixOps-agent](https://github.com/anixops/anixops-agent) - 杩滅▼鎺у埗 Agent
+- [V2bX_AnixOps](https://github.com/anixops/V2bX_AnixOps)：节点端程序
+- [AnixOps-agent](https://github.com/anixops/anixops-agent)：远程 Agent 管理
 
 ## License
 

@@ -1,223 +1,132 @@
-﻿# V2Board AnixOps 閮ㄧ讲鎸囧崡
+﻿# V2Board AnixOps 部署指南
 
-## 鐩綍
+本文档覆盖本项目的常见部署方式：本地开发、Docker Compose、生产环境部署与运维。
 
-1. [鐜瑕佹眰](#鐜瑕佹眰)
-2. [蹇€熼儴缃瞉(#蹇€熼儴缃?
-3. [鐢熶骇閮ㄧ讲](#鐢熶骇閮ㄧ讲)
-4. [閰嶇疆璇存槑](#閰嶇疆璇存槑)
-5. [SSL 璇佷功](#ssl-璇佷功)
-6. [鐩戞帶鍛婅](#鐩戞帶鍛婅)
-7. [澶囦唤鎭㈠](#澶囦唤鎭㈠)
-8. [鏁呴殰鎺掓煡](#鏁呴殰鎺掓煡)
+## 目录
 
----
-
-## 鐜瑕佹眰
-
-### 鏈€浣庤姹?
-
-- CPU: 1 鏍?
-- 鍐呭瓨: 512MB
-- 纾佺洏: 10GB
-- 鎿嶄綔绯荤粺: Linux / macOS / Windows
-
-### 鎺ㄨ崘閰嶇疆
-
-- CPU: 2 鏍?
-- 鍐呭瓨: 2GB+
-- 纾佺洏: 50GB+ SSD
-- 鎿嶄綔绯荤粺: Ubuntu 22.04 / Debian 12
-
-### 杞欢渚濊禆
-
-| 杞欢 | 鐗堟湰 | 璇存槑 |
-|------|------|------|
-| Docker | 24.0+ | 瀹瑰櫒杩愯鏃?|
-| Docker Compose | 2.0+ | 瀹瑰櫒缂栨帓 |
-| Go | 1.24+ | 鏈湴寮€鍙?|
-| Node.js | 20+ | 鍓嶇鏋勫缓 |
+1. 环境要求
+2. 快速部署（Docker Compose）
+3. 本地开发部署
+4. 生产环境部署建议
+5. 关键配置说明
+6. TLS/HTTPS
+7. 监控与日志
+8. 备份与恢复
+9. 常见故障排查
+10. 更新升级
 
 ---
 
-## 蹇€熼儴缃?
+## 1. 环境要求
 
-### Docker Compose (鎺ㄨ崘)
+### 最低配置
+
+- CPU: 1 核
+- 内存: 512MB
+- 磁盘: 10GB
+- 系统: Linux / macOS / Windows
+
+### 推荐配置（生产）
+
+- CPU: 2 核及以上
+- 内存: 2GB 及以上
+- 磁盘: 50GB 及以上 SSD
+- 系统: Ubuntu 22.04 / Debian 12
+
+### 软件依赖
+
+| 软件 | 版本建议 | 用途 |
+|------|----------|------|
+| Docker | 24.0+ | 容器运行时 |
+| Docker Compose | 2.0+ | 编排服务 |
+| Go | 1.24+ | 本地构建后端 |
+| Node.js | 20+ | 本地构建前端 |
+
+---
+
+## 2. 快速部署（Docker Compose）
 
 ```bash
-# 1. 鍏嬮殕浠撳簱
+# 1) 克隆仓库
 git clone https://github.com/anixops/v2board.git
 cd v2board
 
-# 2. 鍒涘缓閰嶇疆
-cp config/config.yaml.example config/config.yaml
+# 2) 准备配置
 cp .env.example .env
+cp config/config.yaml.example config/config.yaml
 
-# 3. 淇敼蹇呰閰嶇疆
-nano config/config.yaml
-# 璁剧疆 jwt.secret 鍜?app.api_token
+# 3) 按需修改配置（至少设置 jwt.secret 与 app.api_token）
+# nano config/config.yaml
 
-# 4. 鍚姩鏈嶅姟
+# 4) 启动
 docker-compose up -d
 
-# 5. 妫€鏌ョ姸鎬?
+# 5) 查看状态与日志
 docker-compose ps
-docker-compose logs -f api
+docker-compose logs -f
 ```
 
-璁块棶 `http://localhost:8080` 鏌ョ湅鍓嶇鐣岄潰銆?
+默认访问地址：`http://localhost:8080`
 
-### 浜岃繘鍒堕儴缃?
+---
+
+## 3. 本地开发部署
 
 ```bash
-# 1. 缂栬瘧
+# 后端
+go mod download
+go run cmd/server/main.go
+
+# 前端
+cd web
+npm install
+npm run dev
+```
+
+生产构建：
+
+```bash
+# 后端
 go build -o v2board ./cmd/server
 
-# 2. 鏋勫缓鍓嶇
-cd web && npm ci && npm run build && cd ..
-
-# 3. 鍒涘缓鐩綍
-mkdir -p config/data logs web/public
-
-# 4. 澶嶅埗鍓嶇鏂囦欢
-# 前端构建产物输出到 web/public/
-
-# 5. 杩愯
-./v2board -config config/config.yaml
+# 前端
+cd web
+npm run build
 ```
 
 ---
 
-## 鐢熶骇閮ㄧ讲
+## 4. 生产环境部署建议
 
-### 1. 鏈嶅姟鍣ㄥ噯澶?
+### 架构建议
 
-```bash
-# 鏇存柊绯荤粺
-apt update && apt upgrade -y
+- 反向代理：Nginx 或 Caddy（统一 TLS 终止）
+- 应用服务：`v2board`（Go 二进制）
+- 数据库：PostgreSQL（优先）
+- 缓存：Redis（多实例/高并发场景）
+- 监控：Prometheus + Grafana（可选）
 
-# 瀹夎 Docker
-curl -fsSL https://get.docker.com | sh
-systemctl enable docker
-systemctl start docker
-
-# 瀹夎 Docker Compose
-apt install docker-compose-plugin
-
-# 鍒涘缓搴旂敤鐩綍
-mkdir -p /opt/v2board
-cd /opt/v2board
-```
-
-### 2. 閰嶇疆鏂囦欢
+### 启动生产编排
 
 ```bash
-# 鍒涘缓閰嶇疆鐩綍
-mkdir -p config config/data logs web/public
-
-# 鍒涘缓閰嶇疆鏂囦欢
-cat > config/config.yaml << 'EOF'
-env: "production"
-
-server:
-  host: "0.0.0.0"
-  port: 8080
-  mode: "release"
-
-tls:
-  enable: false
-
-database:
-  driver: "postgres"
-  host: "db"
-  port: 5432
-  database: "v2board"
-  username: "v2board"
-  password: "${DB_PASSWORD}"
-
-cache:
-  driver: "redis"
-  host: "redis"
-  port: 6379
-  password: "${REDIS_PASSWORD}"
-
-jwt:
-  secret: "${JWT_SECRET}"
-  expire: 86400
-
-app:
-  name: "V2Board"
-  version: "2.0.0"
-  api_token: "${API_TOKEN}"
-EOF
-
-# 鍒涘缓鐜鍙橀噺
-cat > .env << 'EOF'
-TZ=Asia/Shanghai
-VERSION=latest
-
-DB_PASSWORD=your_secure_password
-REDIS_PASSWORD=your_redis_password
-JWT_SECRET=your_jwt_secret_at_least_32_chars
-API_TOKEN=your_api_token
-
-GRAFANA_ADMIN=admin
-GRAFANA_PASSWORD=your_grafana_password
-EOF
-```
-
-### 3. SSL 璇佷功
-
-```bash
-# 鍒涘缓璇佷功鐩綍
-mkdir -p config/docker/nginx/ssl
-
-# 浣跨敤 Let's Encrypt (鎺ㄨ崘)
-# 瀹夎 certbot
-apt install certbot
-
-# 鑾峰彇璇佷功
-certbot certonly --standalone -d panel.example.com
-
-# 澶嶅埗璇佷功
-cp /etc/letsencrypt/live/panel.example.com/fullchain.pem config/docker/nginx/ssl/cert.pem
-cp /etc/letsencrypt/live/panel.example.com/privkey.pem config/docker/nginx/ssl/key.pem
-
-# 璁剧疆鑷姩缁
-cat > /etc/cron.d/certbot << 'EOF'
-0 3 * * * root certbot renew --quiet --post-hook "docker-compose -f /opt/v2board/docker-compose.prod.yml restart nginx"
-EOF
-```
-
-### 4. 鍚姩鏈嶅姟
-
-```bash
-# 鍚姩鍩虹鏈嶅姟
 docker-compose -f docker-compose.prod.yml up -d
-
-# 妫€鏌ョ姸鎬?
-docker-compose -f docker-compose.prod.yml ps
-docker-compose -f docker-compose.prod.yml logs -f api
 ```
 
-### 5. 鍚敤鐩戞帶 (鍙€?
+如需监控组件：
 
 ```bash
-# 鍚姩 Prometheus + Grafana
 docker-compose -f docker-compose.prod.yml --profile monitoring up -d
-
-# 璁块棶 Grafana
-# http://your-server:3001
-# 榛樿璐﹀彿: admin / your_grafana_password
 ```
 
 ---
 
-## 閰嶇疆璇存槑
+## 5. 关键配置说明
 
-### 鏁版嵁搴撻厤缃?
+配置文件：`config/config.yaml`
 
-#### SQLite (榛樿)
+### 数据库
+
+SQLite（默认，单实例简单部署）：
 
 ```yaml
 database:
@@ -225,250 +134,181 @@ database:
   database: "config/data/v2board.db"
 ```
 
-閫傜敤浜庡皬鍨嬮儴缃诧紝鏃犻渶棰濆閰嶇疆銆?
-
-#### PostgreSQL
+PostgreSQL（推荐生产）：
 
 ```yaml
 database:
   driver: "postgres"
-  host: "localhost"
+  host: "127.0.0.1"
   port: 5432
   database: "v2board"
-  username: "v2board"
-  password: "password"
-  sslmode: "disable"
+  username: "postgres"
+  password: "your_password"
 ```
 
-鎺ㄨ崘鐢ㄤ簬鐢熶骇鐜銆?
+### 缓存
 
-### 缂撳瓨閰嶇疆
-
-#### 鍐呭瓨缂撳瓨 (榛樿)
+内存缓存（默认）：
 
 ```yaml
 cache:
   driver: "memory"
 ```
 
-閫傜敤浜庡崟瀹炰緥閮ㄧ讲銆?
-
-#### Redis
+Redis：
 
 ```yaml
 cache:
   driver: "redis"
-  host: "localhost"
+  host: "127.0.0.1"
   port: 6379
   password: ""
   db: 0
 ```
 
-鎺ㄨ崘鐢ㄤ簬澶氬疄渚嬮儴缃层€?
-
-### JWT 閰嶇疆
+### 必填项
 
 ```yaml
 jwt:
-  secret: "your-secret-key-at-least-32-characters"
-  expire: 86400  # 24 灏忔椂
-```
+  secret: "your-jwt-secret-at-least-32-characters"
 
-**閲嶈**: JWT secret 蹇呴』鏄嚦灏?32 瀛楃鐨勯殢鏈哄瓧绗︿覆锛?
-
----
-
-## 鐩戞帶鍛婅
-
-### Prometheus 鎸囨爣
-
-绯荤粺鎻愪緵浠ヤ笅鎸囨爣锛?
-
-- `v2board_http_requests_total` - HTTP 璇锋眰鎬绘暟
-- `v2board_http_request_duration_seconds` - HTTP 璇锋眰鑰楁椂
-- `v2board_active_users` - 娲昏穬鐢ㄦ埛鏁?
-- `v2board_active_nodes` - 娲昏穬鑺傜偣鏁?
-
-### Grafana Dashboard
-
-瀵煎叆棰勭疆 Dashboard锛?
-
-```bash
-# 瀵煎叆 JSON 鏂囦欢
-# 浣嶄簬 config/docker/grafana/dashboards/
-```
-
-### 鍛婅瑙勫垯
-
-閰嶇疆 Prometheus 鍛婅瑙勫垯锛?
-
-```yaml
-# config/docker/prometheus/alerts.yml
-groups:
-  - name: v2board
-    rules:
-      - alert: HighErrorRate
-        expr: rate(v2board_http_requests_total{status=~"5.."}[5m]) > 0.1
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "High error rate detected"
+app:
+  api_token: "your-node-communication-token"
 ```
 
 ---
 
-## 澶囦唤鎭㈠
+## 6. TLS/HTTPS
 
-### 鏁版嵁搴撳浠?
+推荐在 Nginx/Caddy 层处理证书，应用层保持 HTTP 内网监听。
 
-```bash
-# SQLite
-cp config/data/v2board.db config/data/v2board.db.backup
-
-# PostgreSQL
-docker exec v2board-db pg_dump -U v2board v2board > backup.sql
-```
-
-### 鑷姩澶囦唤鑴氭湰
+### Let's Encrypt（示例）
 
 ```bash
-#!/bin/bash
-# /opt/v2board/backup.sh
+# 安装 certbot
+sudo apt update
+sudo apt install -y certbot
 
-BACKUP_DIR="/opt/v2board/backups"
-DATE=$(date +%Y%m%d_%H%M%S)
-
-mkdir -p $BACKUP_DIR
-
-# 澶囦唤鏁版嵁搴?
-docker exec v2board-db pg_dump -U v2board v2board | gzip > $BACKUP_DIR/db_$DATE.sql.gz
-
-# 淇濈暀鏈€杩?7 澶?
-find $BACKUP_DIR -name "*.gz" -mtime +7 -delete
-
-echo "Backup completed: $BACKUP_DIR/db_$DATE.sql.gz"
+# 申请证书（以单域名为例）
+sudo certbot certonly --standalone -d panel.example.com
 ```
 
-娣诲姞鍒?crontab锛?
+证书路径通常为：
 
-```bash
-# 姣忓ぉ鍑屾櫒 2 鐐瑰浠?
-0 2 * * * /opt/v2board/backup.sh >> /opt/v2board/logs/backup.log 2>&1
-```
-
-### 鏁版嵁鎭㈠
-
-```bash
-# PostgreSQL
-gunzip -c backup.sql.gz | docker exec -i v2board-db psql -U v2board v2board
-```
+- `/etc/letsencrypt/live/panel.example.com/fullchain.pem`
+- `/etc/letsencrypt/live/panel.example.com/privkey.pem`
 
 ---
 
-## 鏁呴殰鎺掓煡
+## 7. 监控与日志
 
-### 甯歌闂
+### 常见监控项
 
-#### 1. 鏈嶅姟鏃犳硶鍚姩
+- HTTP 请求总量与耗时
+- 活跃用户数
+- 活跃节点数
+- 错误率（5xx）
 
-```bash
-# 妫€鏌ユ棩蹇?
-docker-compose logs api
-
-# 甯歌鍘熷洜:
-# - 閰嶇疆鏂囦欢閿欒
-# - 鏁版嵁搴撹繛鎺ュけ璐?
-# - 绔彛琚崰鐢?
-```
-
-#### 2. 鏁版嵁搴撹繛鎺ュけ璐?
+### 常用日志命令
 
 ```bash
-# 妫€鏌ユ暟鎹簱鐘舵€?
-docker-compose exec db pg_isready
-
-# 妫€鏌ヨ繛鎺ラ厤缃?
-docker-compose exec api env | grep DB
-```
-
-#### 3. 鍓嶇鏃犳硶璁块棶
-
-```bash
-# 妫€鏌?Nginx 閰嶇疆
-docker-compose exec nginx nginx -t
-
-# 妫€鏌ュ墠绔枃浠?
-ls -la web/public/
-```
-
-#### 4. 鑺傜偣鏃犳硶杩炴帴
-
-```bash
-# 妫€鏌?API Token
-grep api_token config/config.yaml
-
-# 娴嬭瘯 API
-curl "http://localhost:8080/api/v2/server/UniProxy/config?node_id=1&token=your_token"
-```
-
-### 鏃ュ織鏌ョ湅
-
-```bash
-# 鏌ョ湅鎵€鏈夋棩蹇?
+# 全部服务日志
 docker-compose logs -f
 
-# 鏌ョ湅鐗瑰畾鏈嶅姟
+# 指定服务日志
 docker-compose logs -f api
 docker-compose logs -f nginx
 
-# 鏌ョ湅鏈€杩?100 琛?
+# 最近 100 行
 docker-compose logs --tail=100 api
 ```
 
-### 鎬ц兘璋冧紭
+---
 
-#### PostgreSQL
+## 8. 备份与恢复
 
-```sql
--- 鏌ョ湅杩炴帴鏁?
-SELECT count(*) FROM pg_stat_activity;
+### 备份
 
--- 鏌ョ湅鎱㈡煡璇?
-SELECT * FROM pg_stat_statements ORDER BY total_time DESC LIMIT 10;
-```
-
-#### Redis
+SQLite：
 
 ```bash
-# 鏌ョ湅鍐呭瓨浣跨敤
-docker-compose exec redis redis-cli info memory
+cp config/data/v2board.db config/data/v2board.db.backup
+```
 
-# 鏌ョ湅杩炴帴鏁?
-docker-compose exec redis redis-cli info clients
+PostgreSQL：
+
+```bash
+docker exec v2board-db pg_dump -U v2board v2board > backup.sql
+```
+
+### 恢复（PostgreSQL）
+
+```bash
+docker exec -i v2board-db psql -U v2board v2board < backup.sql
+```
+
+建议使用 `crontab` 做每日自动备份，并设置保留策略。
+
+---
+
+## 9. 常见故障排查
+
+### 1) 服务无法启动
+
+```bash
+docker-compose logs api
+```
+
+重点检查：
+
+- `config/config.yaml` 是否有效
+- 数据库连接是否可达
+- 端口是否冲突
+
+### 2) 数据库连接失败
+
+```bash
+docker-compose exec db pg_isready
+```
+
+检查数据库主机、端口、用户名、密码、数据库名。
+
+### 3) 前端访问异常
+
+```bash
+docker-compose exec nginx nginx -t
+```
+
+确认反向代理配置、生效证书和静态资源路径。
+
+### 4) 节点无法连接面板
+
+```bash
+# 检查 api_token
+grep api_token config/config.yaml
+
+# 检查节点接口
+curl "http://localhost:8080/api/v2/server/UniProxy/config?node_id=1&token=your_token"
 ```
 
 ---
 
-## 鏇存柊鍗囩骇
+## 10. 更新升级
 
 ```bash
-# 1. 澶囦唤鏁版嵁
-/opt/v2board/backup.sh
+# 1) 备份
+# SQLite: 复制 db 文件
+# PostgreSQL: pg_dump
 
-# 2. 鎷夊彇鏈€鏂颁唬鐮?
-git pull origin main
+# 2) 拉取新代码
+git pull
 
-# 3. 閲嶆柊鏋勫缓
+# 3) 重新构建并重启
 docker-compose -f docker-compose.prod.yml build
-
-# 4. 閲嶅惎鏈嶅姟
 docker-compose -f docker-compose.prod.yml up -d
 
-# 5. 妫€鏌ョ姸鎬?
+# 4) 检查日志
 docker-compose -f docker-compose.prod.yml logs -f api
 ```
 
----
-
-*鏈€鍚庢洿鏂? 2026-03-14*
+建议先在预发布环境验证，再进行生产升级。
