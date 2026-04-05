@@ -16,9 +16,10 @@ import (
 
 // ForwardHandler 转发处理器
 type ForwardHandler struct {
-	nodeService *service.ForwardNodeService
-	ruleService *service.ForwardRuleService
-	gostManager *gost.Manager
+	nodeService  *service.ForwardNodeService
+	ruleService  *service.ForwardRuleService
+	panelService *service.PanelForwardService
+	gostManager  *gost.Manager
 }
 
 // NewForwardHandler 创建处理器
@@ -26,9 +27,10 @@ func NewForwardHandler() *ForwardHandler {
 	db := database.Get()
 	nodeService := service.NewForwardNodeService(db)
 	return &ForwardHandler{
-		nodeService: nodeService,
-		ruleService: service.NewForwardRuleService(db, nodeService),
-		gostManager: gost.NewManager(db),
+		nodeService:  nodeService,
+		ruleService:  service.NewForwardRuleService(db, nodeService),
+		panelService: service.NewPanelForwardService(db),
+		gostManager:  gost.NewManager(db),
 	}
 }
 
