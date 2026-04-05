@@ -672,6 +672,38 @@ export function getForwardTunnels() {
   })
 }
 
+export function assignAdminUserTunnel(data) {
+  return request({
+    url: '/admin/tunnel/user/assign',
+    method: 'post',
+    data
+  })
+}
+
+export function getAdminUserTunnelList(data) {
+  return request({
+    url: '/admin/tunnel/user/list',
+    method: 'post',
+    data
+  })
+}
+
+export function removeAdminUserTunnel(data) {
+  return request({
+    url: '/admin/tunnel/user/remove',
+    method: 'post',
+    data
+  })
+}
+
+export function updateAdminUserTunnel(data) {
+  return request({
+    url: '/admin/tunnel/user/update',
+    method: 'post',
+    data
+  })
+}
+
 export function getForwardNodes(params) {
   return request({
     url: '/admin/forward/nodes',
@@ -1345,6 +1377,10 @@ export default {
   diagnoseForward,
   updateForwardOrder,
   getForwardTunnels,
+  assignAdminUserTunnel,
+  getAdminUserTunnelList,
+  removeAdminUserTunnel,
+  updateAdminUserTunnel,
   getForwardNodes,
   createForwardNode,
   getForwardNode,

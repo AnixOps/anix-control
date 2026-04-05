@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -19,11 +20,15 @@ const (
 )
 
 type PanelForwardService struct {
-	db *gorm.DB
+	db             *gorm.DB
+	runtimeService *PanelForwardRuntimeService
 }
 
 func NewPanelForwardService(db *gorm.DB) *PanelForwardService {
-	return &PanelForwardService{db: db}
+	return &PanelForwardService{
+		db:             db,
+		runtimeService: NewPanelForwardRuntimeService(db),
+	}
 }
 
 type PanelForwardInput struct {
@@ -52,23 +57,27 @@ type PanelForwardOrderUpdate struct {
 }
 
 type PanelForwardListItem struct {
-	ID            uint   `json:"id"`
-	Name          string `json:"name"`
-	TunnelID      uint   `json:"tunnelId"`
-	TunnelName    string `json:"tunnelName"`
-	InIP          string `json:"inIp"`
-	InPort        int    `json:"inPort"`
-	RemoteAddr    string `json:"remoteAddr"`
-	InterfaceName string `json:"interfaceName"`
-	Strategy      string `json:"strategy"`
-	Status        int    `json:"status"`
-	InFlow        int64  `json:"inFlow"`
-	OutFlow       int64  `json:"outFlow"`
-	CreatedTime   int64  `json:"createdTime"`
-	UpdatedTime   int64  `json:"updatedTime"`
-	UserName      string `json:"userName"`
-	UserID        uint   `json:"userId"`
-	Inx           int    `json:"inx"`
+	ID                  uint   `json:"id"`
+	Name                string `json:"name"`
+	TunnelID            uint   `json:"tunnelId"`
+	TunnelName          string `json:"tunnelName"`
+	InIP                string `json:"inIp"`
+	InPort              int    `json:"inPort"`
+	RemoteAddr          string `json:"remoteAddr"`
+	InterfaceName       string `json:"interfaceName"`
+	Strategy            string `json:"strategy"`
+	Status              int    `json:"status"`
+	InFlow              int64  `json:"inFlow"`
+	OutFlow             int64  `json:"outFlow"`
+	RuntimeBackend      string `json:"runtimeBackend"`
+	RuntimeStatus       int    `json:"runtimeStatus"`
+	RuntimeMessage      string `json:"runtimeMessage"`
+	LastRuntimeSyncTime int64  `json:"lastRuntimeSyncTime"`
+	CreatedTime         int64  `json:"createdTime"`
+	UpdatedTime         int64  `json:"updatedTime"`
+	UserName            string `json:"userName"`
+	UserID              uint   `json:"userId"`
+	Inx                 int    `json:"inx"`
 }
 
 type PanelTunnelListItem struct {
@@ -81,6 +90,95 @@ type PanelTunnelListItem struct {
 	Type          int    `json:"type"`
 	Protocol      string `json:"protocol"`
 	Status        int    `json:"status"`
+}
+
+type PanelTunnelInput struct {
+	Name          string   `json:"name"`
+	InNodeID      uint     `json:"inNodeId"`
+	OutNodeID     *uint    `json:"outNodeId"`
+	Type          int      `json:"type"`
+	Flow          int      `json:"flow"`
+	TrafficRatio  *float64 `json:"trafficRatio"`
+	InterfaceName string   `json:"interfaceName"`
+	Protocol      string   `json:"protocol"`
+	TCPListenAddr string   `json:"tcpListenAddr"`
+	UDPListenAddr string   `json:"udpListenAddr"`
+}
+
+type PanelTunnelUpdateInput struct {
+	ID            uint     `json:"id"`
+	Name          string   `json:"name"`
+	Flow          int      `json:"flow"`
+	TrafficRatio  *float64 `json:"trafficRatio"`
+	InterfaceName string   `json:"interfaceName"`
+	Protocol      string   `json:"protocol"`
+	TCPListenAddr string   `json:"tcpListenAddr"`
+	UDPListenAddr string   `json:"udpListenAddr"`
+}
+
+type PanelAdminTunnelItem struct {
+	ID            uint    `json:"id"`
+	Name          string  `json:"name"`
+	InNodeID      uint    `json:"inNodeId"`
+	OutNodeID     *uint   `json:"outNodeId"`
+	Type          int     `json:"type"`
+	Flow          int     `json:"flow"`
+	TrafficRatio  float64 `json:"trafficRatio"`
+	InterfaceName string  `json:"interfaceName"`
+	Protocol      string  `json:"protocol"`
+	TCPListenAddr string  `json:"tcpListenAddr"`
+	UDPListenAddr string  `json:"udpListenAddr"`
+	InIP          string  `json:"inIp"`
+	OutIP         string  `json:"outIp"`
+	Status        int     `json:"status"`
+}
+
+type PanelUserTunnelInput struct {
+	UserID        uint  `json:"userId"`
+	TunnelID      uint  `json:"tunnelId"`
+	Flow          int64 `json:"flow"`
+	Num           int   `json:"num"`
+	FlowResetTime int64 `json:"flowResetTime"`
+	ExpTime       int64 `json:"expTime"`
+	SpeedID       *uint `json:"speedId"`
+}
+
+type PanelUserTunnelQueryInput struct {
+	UserID uint `json:"userId"`
+}
+
+type PanelUserTunnelUpdateInput struct {
+	ID            uint  `json:"id"`
+	Flow          int64 `json:"flow"`
+	Num           int   `json:"num"`
+	FlowResetTime int64 `json:"flowResetTime"`
+	ExpTime       int64 `json:"expTime"`
+	Status        int   `json:"status"`
+	SpeedID       *uint `json:"speedId"`
+}
+
+type PanelUserTunnelDetailItem struct {
+	ID             uint   `json:"id"`
+	UserID         uint   `json:"userId"`
+	TunnelID       uint   `json:"tunnelId"`
+	Flow           int64  `json:"flow"`
+	Num            int    `json:"num"`
+	FlowResetTime  int64  `json:"flowResetTime"`
+	ExpTime        int64  `json:"expTime"`
+	SpeedID        *uint  `json:"speedId"`
+	SpeedLimitName string `json:"speedLimitName"`
+	Speed          int64  `json:"speed"`
+	TunnelName     string `json:"tunnelName"`
+	TunnelFlow     int    `json:"tunnelFlow"`
+	InFlow         int64  `json:"inFlow"`
+	OutFlow        int64  `json:"outFlow"`
+	Status         int    `json:"status"`
+}
+
+type TunnelDiagnosisReport struct {
+	TunnelName string             `json:"tunnelName"`
+	Timestamp  int64              `json:"timestamp"`
+	Results    []DiagnosisOutcome `json:"results"`
 }
 
 type DiagnosisReport struct {
@@ -151,6 +249,10 @@ func (s *PanelForwardService) CreateForward(userID uint, isAdmin bool, input Pan
 		return nil, errors.New("用户不存在")
 	}
 
+	if !isAdmin && !user.IsValid() {
+		return nil, errors.New("invalid user status")
+	}
+
 	tunnel, err := s.getAccessibleTunnel(input.TunnelID, userID, isAdmin)
 	if err != nil {
 		return nil, err
@@ -187,6 +289,13 @@ func (s *PanelForwardService) CreateForward(userID uint, isAdmin bool, input Pan
 		return nil, err
 	}
 
+	if runtimeErr := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionCreate); runtimeErr != nil {
+		record.Status = model.ForwardStatusError
+		if saveErr := s.db.Save(record).Error; saveErr != nil {
+			return nil, saveErr
+		}
+	}
+
 	item := buildPanelForwardItem(record)
 	return &item, nil
 }
@@ -204,6 +313,12 @@ func (s *PanelForwardService) UpdateForward(userID uint, isAdmin bool, input Pan
 		Strategy:      input.Strategy,
 	}); err != nil {
 		return nil, err
+	}
+
+	if !isAdmin {
+		if _, err := s.getActiveUser(userID); err != nil {
+			return nil, err
+		}
 	}
 
 	record, err := s.getForwardForActor(input.ID, userID, isAdmin)
@@ -227,12 +342,24 @@ func (s *PanelForwardService) UpdateForward(userID uint, isAdmin bool, input Pan
 	record.RemoteAddr = normalizeRemoteAddr(input.RemoteAddr)
 	record.InterfaceName = strings.TrimSpace(input.InterfaceName)
 	record.Strategy = normalizeStrategy(input.Strategy, input.RemoteAddr)
+	if record.Status == model.ForwardStatusError {
+		record.Status = model.ForwardStatusActive
+	}
 
 	if err := s.db.Save(record).Error; err != nil {
 		return nil, err
 	}
 	if err := s.db.Preload("Tunnel").First(record, record.ID).Error; err != nil {
 		return nil, err
+	}
+
+	if record.Status == model.ForwardStatusActive {
+		if runtimeErr := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionUpdate); runtimeErr != nil {
+			record.Status = model.ForwardStatusError
+			if saveErr := s.db.Save(record).Error; saveErr != nil {
+				return nil, saveErr
+			}
+		}
 	}
 
 	item := buildPanelForwardItem(record)
@@ -249,6 +376,10 @@ func (s *PanelForwardService) DeleteForward(userID uint, isAdmin bool, forwardID
 		return errors.New("转发服务正在运行，请先暂停或使用强制删除")
 	}
 
+	if runtimeErr := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionDelete); runtimeErr != nil {
+		return runtimeErr
+	}
+
 	return s.db.Delete(&model.Forward{}, record.ID).Error
 }
 
@@ -256,6 +387,37 @@ func (s *PanelForwardService) SetForwardStatus(userID uint, isAdmin bool, forwar
 	record, err := s.getForwardForActor(forwardID, userID, isAdmin)
 	if err != nil {
 		return err
+	}
+	if !isAdmin && status == model.ForwardStatusActive {
+		if _, err := s.getActiveUser(userID); err != nil {
+			return err
+		}
+		allowed, err := s.userHasTunnelAccess(userID, record.TunnelID)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return errors.New("no active tunnel permission")
+		}
+	}
+
+	if status == model.ForwardStatusActive {
+		record.Status = model.ForwardStatusActive
+		if err := s.db.Save(record).Error; err != nil {
+			return err
+		}
+		if runtimeErr := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionResume); runtimeErr != nil {
+			record.Status = model.ForwardStatusError
+			if saveErr := s.db.Save(record).Error; saveErr != nil {
+				return saveErr
+			}
+			return runtimeErr
+		}
+		return nil
+	}
+
+	if runtimeErr := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionPause); runtimeErr != nil {
+		return runtimeErr
 	}
 
 	record.Status = status
@@ -371,6 +533,151 @@ func (s *PanelForwardService) UpdateOrder(userID uint, isAdmin bool, updates []P
 	})
 }
 
+func (s *PanelForwardService) AssignUserTunnel(input PanelUserTunnelInput) error {
+	if input.UserID == 0 || input.TunnelID == 0 {
+		return errors.New("userId and tunnelId are required")
+	}
+
+	var user model.User
+	if err := s.db.First(&user, input.UserID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("user not found")
+		}
+		return err
+	}
+
+	var tunnel model.ForwardTunnel
+	if err := s.db.First(&tunnel, input.TunnelID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("tunnel not found")
+		}
+		return err
+	}
+
+	var count int64
+	if err := s.db.Model(&model.ForwardUserTunnel{}).
+		Where("user_id = ? AND tunnel_id = ?", input.UserID, input.TunnelID).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return errors.New("user tunnel permission already exists")
+	}
+
+	record := &model.ForwardUserTunnel{
+		UserID:        input.UserID,
+		TunnelID:      input.TunnelID,
+		Flow:          input.Flow,
+		Num:           input.Num,
+		FlowResetTime: input.FlowResetTime,
+		ExpTime:       input.ExpTime,
+		SpeedID:       input.SpeedID,
+		Status:        model.ForwardUserTunnelStatusActive,
+	}
+	return s.db.Create(record).Error
+}
+
+func (s *PanelForwardService) ListUserTunnels(query PanelUserTunnelQueryInput) ([]PanelUserTunnelDetailItem, error) {
+	if query.UserID == 0 {
+		return nil, errors.New("userId is required")
+	}
+
+	var records []model.ForwardUserTunnel
+	if err := s.db.
+		Preload("User").
+		Preload("Tunnel").
+		Where("user_id = ?", query.UserID).
+		Order("id DESC").
+		Find(&records).Error; err != nil {
+		return nil, err
+	}
+
+	items := make([]PanelUserTunnelDetailItem, 0, len(records))
+	for _, record := range records {
+		var traffic struct {
+			InFlow  int64 `gorm:"column:in_flow"`
+			OutFlow int64 `gorm:"column:out_flow"`
+		}
+		if err := s.db.Model(&model.Forward{}).
+			Select("COALESCE(SUM(in_flow), 0) AS in_flow, COALESCE(SUM(out_flow), 0) AS out_flow").
+			Where("user_id = ? AND tunnel_id = ?", record.UserID, record.TunnelID).
+			Scan(&traffic).Error; err != nil {
+			return nil, err
+		}
+
+		speed := int64(0)
+		if record.User != nil {
+			speed = record.User.GetSpeedLimit()
+		}
+
+		speedLimitName := ""
+		if record.SpeedID != nil {
+			speedLimitName = fmt.Sprintf("speed-%d", *record.SpeedID)
+		}
+
+		tunnelName := ""
+		tunnelFlow := 0
+		if record.Tunnel != nil {
+			tunnelName = record.Tunnel.Name
+			tunnelFlow = record.Tunnel.Flow
+		}
+
+		items = append(items, PanelUserTunnelDetailItem{
+			ID:             record.ID,
+			UserID:         record.UserID,
+			TunnelID:       record.TunnelID,
+			Flow:           record.Flow,
+			Num:            record.Num,
+			FlowResetTime:  record.FlowResetTime,
+			ExpTime:        record.ExpTime,
+			SpeedID:        record.SpeedID,
+			SpeedLimitName: speedLimitName,
+			Speed:          speed,
+			TunnelName:     tunnelName,
+			TunnelFlow:     tunnelFlow,
+			InFlow:         traffic.InFlow,
+			OutFlow:        traffic.OutFlow,
+			Status:         record.Status,
+		})
+	}
+
+	return items, nil
+}
+
+func (s *PanelForwardService) RemoveUserTunnel(id uint) error {
+	record, err := s.getUserTunnelByID(id)
+	if err != nil {
+		return err
+	}
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ? AND tunnel_id = ?", record.UserID, record.TunnelID).
+			Delete(&model.Forward{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.ForwardUserTunnel{}, record.ID).Error
+	})
+}
+
+func (s *PanelForwardService) UpdateUserTunnel(input PanelUserTunnelUpdateInput) error {
+	record, err := s.getUserTunnelByID(input.ID)
+	if err != nil {
+		return err
+	}
+
+	if input.Status != model.ForwardUserTunnelStatusActive && input.Status != model.ForwardUserTunnelStatusDisabled {
+		return errors.New("status must be 0 or 1")
+	}
+
+	record.Flow = input.Flow
+	record.Num = input.Num
+	record.FlowResetTime = input.FlowResetTime
+	record.ExpTime = input.ExpTime
+	record.Status = input.Status
+	record.SpeedID = input.SpeedID
+	return s.db.Save(record).Error
+}
+
 func (s *PanelForwardService) getActiveTunnel(tunnelID uint) (*model.ForwardTunnel, error) {
 	var tunnel model.ForwardTunnel
 	if err := s.db.First(&tunnel, tunnelID).Error; err != nil {
@@ -404,6 +711,20 @@ func (s *PanelForwardService) getAccessibleTunnel(tunnelID, userID uint, isAdmin
 	return tunnel, nil
 }
 
+func (s *PanelForwardService) getActiveUser(userID uint) (*model.User, error) {
+	var user model.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user not found")
+		}
+		return nil, err
+	}
+	if !user.IsValid() {
+		return nil, errors.New("invalid user status")
+	}
+	return &user, nil
+}
+
 func (s *PanelForwardService) getForwardForActor(forwardID, userID uint, isAdmin bool) (*model.Forward, error) {
 	var record model.Forward
 	query := s.db.Preload("Tunnel").Where("id = ?", forwardID)
@@ -413,6 +734,21 @@ func (s *PanelForwardService) getForwardForActor(forwardID, userID uint, isAdmin
 	if err := query.First(&record).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("转发不存在")
+		}
+		return nil, err
+	}
+	return &record, nil
+}
+
+func (s *PanelForwardService) getUserTunnelByID(id uint) (*model.ForwardUserTunnel, error) {
+	if id == 0 {
+		return nil, errors.New("user tunnel id is required")
+	}
+
+	var record model.ForwardUserTunnel
+	if err := s.db.First(&record, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user tunnel permission not found")
 		}
 		return nil, err
 	}
@@ -524,8 +860,10 @@ func (s *PanelForwardService) userHasTunnelAccess(userID, tunnelID uint) (bool, 
 	}
 
 	var count int64
+	now := time.Now().UnixMilli()
 	if err := s.db.Model(&model.ForwardUserTunnel{}).
-		Where("user_id = ? AND tunnel_id = ? AND status = ?", userID, tunnelID, model.ForwardUserTunnelStatusActive).
+		Where("user_id = ? AND tunnel_id = ? AND status = ? AND (exp_time = 0 OR exp_time > ?)",
+			userID, tunnelID, model.ForwardUserTunnelStatusActive, now).
 		Count(&count).Error; err != nil {
 		return false, err
 	}
@@ -534,27 +872,69 @@ func (s *PanelForwardService) userHasTunnelAccess(userID, tunnelID uint) (bool, 
 
 func buildPanelForwardItem(record *model.Forward) PanelForwardListItem {
 	item := PanelForwardListItem{
-		ID:            record.ID,
-		Name:          record.Name,
-		TunnelID:      record.TunnelID,
-		InPort:        record.InPort,
-		RemoteAddr:    record.RemoteAddr,
-		InterfaceName: record.InterfaceName,
-		Strategy:      normalizeStrategy(record.Strategy, record.RemoteAddr),
-		Status:        record.Status,
-		InFlow:        record.InFlow,
-		OutFlow:       record.OutFlow,
-		CreatedTime:   record.CreatedAt.UnixMilli(),
-		UpdatedTime:   record.UpdatedAt.UnixMilli(),
-		UserName:      record.UserName,
-		UserID:        record.UserID,
-		Inx:           record.Inx,
+		ID:             record.ID,
+		Name:           record.Name,
+		TunnelID:       record.TunnelID,
+		InPort:         record.InPort,
+		RemoteAddr:     record.RemoteAddr,
+		InterfaceName:  record.InterfaceName,
+		Strategy:       normalizeStrategy(record.Strategy, record.RemoteAddr),
+		Status:         record.Status,
+		InFlow:         record.InFlow,
+		OutFlow:        record.OutFlow,
+		RuntimeBackend: record.RuntimeBackend,
+		RuntimeStatus:  record.RuntimeStatus,
+		RuntimeMessage: record.RuntimeMessage,
+		CreatedTime:    record.CreatedAt.UnixMilli(),
+		UpdatedTime:    record.UpdatedAt.UnixMilli(),
+		UserName:       record.UserName,
+		UserID:         record.UserID,
+		Inx:            record.Inx,
+	}
+	if record.RuntimeLastSyncAt != nil {
+		item.LastRuntimeSyncTime = record.RuntimeLastSyncAt.UnixMilli()
 	}
 	if record.Tunnel != nil {
 		item.TunnelName = record.Tunnel.Name
 		item.InIP = record.Tunnel.InIP
 	}
 	return item
+}
+
+func (s *PanelForwardService) syncForwardRuntime(record *model.Forward, action string) error {
+	if record == nil {
+		return errors.New("forward record is required")
+	}
+
+	var tunnel model.ForwardTunnel
+	if record.Tunnel != nil {
+		tunnel = *record.Tunnel
+	} else if err := s.db.First(&tunnel, record.TunnelID).Error; err != nil {
+		return err
+	}
+
+	result, err := s.runtimeService.Apply(context.Background(), action, record, &tunnel)
+	if result != nil {
+		record.RuntimeBackend = result.Backend
+		record.RuntimeStatus = result.Status
+		record.RuntimeMessage = result.Message
+		now := time.Now()
+		record.RuntimeLastSyncAt = &now
+		if saveErr := s.db.Model(&model.Forward{}).Where("id = ?", record.ID).Updates(map[string]interface{}{
+			"runtime_backend":      record.RuntimeBackend,
+			"runtime_status":       record.RuntimeStatus,
+			"runtime_message":      record.RuntimeMessage,
+			"runtime_last_sync_at": record.RuntimeLastSyncAt,
+		}).Error; saveErr != nil {
+			return saveErr
+		}
+	}
+	if err != nil {
+		return err
+	}
+
+	record.Tunnel = &tunnel
+	return nil
 }
 
 func tunnelPortRange(tunnel *model.ForwardTunnel) (int, int) {

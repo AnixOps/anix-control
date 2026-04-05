@@ -20,6 +20,10 @@ type panelForwardOrderRequest struct {
 	Forwards []service.PanelForwardOrderUpdate `json:"forwards" binding:"required"`
 }
 
+type panelUserTunnelIDRequest struct {
+	ID uint `json:"id" binding:"required"`
+}
+
 func (h *ForwardHandler) ListPanelForwards(c *gin.Context) {
 	items, err := h.panelService.ListForwards(c.GetUint("user_id"), c.GetBool("is_admin"))
 	if err != nil {
@@ -147,6 +151,63 @@ func (h *ForwardHandler) UpdatePanelForwardOrder(c *gin.Context) {
 	}
 
 	if err := h.panelService.UpdateOrder(c.GetUint("user_id"), c.GetBool("is_admin"), req.Forwards); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, true)
+}
+
+func (h *ForwardHandler) AssignPanelUserTunnel(c *gin.Context) {
+	var req service.PanelUserTunnelInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "鍙傛暟閿欒")
+		return
+	}
+
+	if err := h.panelService.AssignUserTunnel(req); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, true)
+}
+
+func (h *ForwardHandler) ListPanelUserTunnels(c *gin.Context) {
+	var req service.PanelUserTunnelQueryInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "鍙傛暟閿欒")
+		return
+	}
+
+	items, err := h.panelService.ListUserTunnels(req)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, items)
+}
+
+func (h *ForwardHandler) RemovePanelUserTunnel(c *gin.Context) {
+	var req panelUserTunnelIDRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "鍙傛暟閿欒")
+		return
+	}
+
+	if err := h.panelService.RemoveUserTunnel(req.ID); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, true)
+}
+
+func (h *ForwardHandler) UpdatePanelUserTunnel(c *gin.Context) {
+	var req service.PanelUserTunnelUpdateInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "鍙傛暟閿欒")
+		return
+	}
+
+	if err := h.panelService.UpdateUserTunnel(req); err != nil {
 		panelError(c, err.Error())
 		return
 	}
