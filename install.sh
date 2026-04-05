@@ -283,12 +283,14 @@ EOF
 write_install_state() {
   local install_dir=$1
   local deploy_mode=$2
-  local monitoring_enabled=$3
-  local proxy_enabled=$4
+  local prometheus_enabled=$3
+  local grafana_enabled=$4
+  local proxy_enabled=$5
 
   cat >"$install_dir/$INSTALL_STATE_FILE" <<EOF
 DEPLOY_MODE=${deploy_mode}
-MONITORING_ENABLED=${monitoring_enabled}
+PROMETHEUS_ENABLED=${prometheus_enabled}
+GRAFANA_ENABLED=${grafana_enabled}
 PROXY_ENABLED=${proxy_enabled}
 EOF
 }
@@ -300,21 +302,32 @@ load_install_state() {
     . "$install_dir/$INSTALL_STATE_FILE"
   else
     DEPLOY_MODE="quick"
-    MONITORING_ENABLED=0
+    PROMETHEUS_ENABLED=0
+    GRAFANA_ENABLED=0
     PROXY_ENABLED=0
+  fi
+  if [ -z "${PROMETHEUS_ENABLED:-}" ] && [ -n "${MONITORING_ENABLED:-}" ]; then
+    PROMETHEUS_ENABLED="$MONITORING_ENABLED"
+  fi
+  if [ -z "${GRAFANA_ENABLED:-}" ]; then
+    GRAFANA_ENABLED=0
   fi
 }
 
 compose_args() {
   local deploy_mode=$1
-  local monitoring_enabled=$2
-  local proxy_enabled=$3
+  local prometheus_enabled=$2
+  local grafana_enabled=$3
+  local proxy_enabled=$4
 
   COMPOSE_ARGS=()
   if [ "$deploy_mode" = "production" ]; then
     COMPOSE_ARGS=(-f docker-compose.prod.yml)
-    if [ "$monitoring_enabled" = "1" ]; then
-      COMPOSE_ARGS+=(--profile monitoring)
+    if [ "$prometheus_enabled" = "1" ] || [ "$grafana_enabled" = "1" ]; then
+      COMPOSE_ARGS+=(--profile prometheus)
+    fi
+    if [ "$grafana_enabled" = "1" ]; then
+      COMPOSE_ARGS+=(--profile grafana)
     fi
     if [ "$proxy_enabled" = "1" ]; then
       COMPOSE_ARGS+=(--profile proxy)
@@ -567,7 +580,8 @@ install_panel() {
   local db_password
   local db_name
   local redis_password
-  local monitoring_enabled=0
+  local prometheus_enabled=0
+  local grafana_enabled=0
   local proxy_enabled=0
   local runtime_backend="gost"
   local http_port=80
@@ -611,8 +625,11 @@ install_panel() {
     redis_password="$(ui_password "Install" "Redis password")"
     [ -n "$redis_password" ] || redis_password="$(random_secret)"
 
-    if ui_confirm "Install" "Enable Grafana/Prometheus profile?"; then
-      monitoring_enabled=1
+    if ui_confirm "Install" "Enable Prometheus profile?"; then
+      prometheus_enabled=1
+      if ui_confirm "Install" "Enable bundled Grafana too?"; then
+        grafana_enabled=1
+      fi
     fi
 
     if ui_confirm "Install" "Enable Nginx reverse proxy profile?"; then
@@ -641,8 +658,8 @@ install_panel() {
   fi
 
   seed_inventory "$install_dir" "$seed_host" "$seed_user" "$seed_port" "$seed_key"
-  write_install_state "$install_dir" "$deploy_mode" "$monitoring_enabled" "$proxy_enabled"
-  compose_args "$deploy_mode" "$monitoring_enabled" "$proxy_enabled"
+  write_install_state "$install_dir" "$deploy_mode" "$prometheus_enabled" "$grafana_enabled" "$proxy_enabled"
+  compose_args "$deploy_mode" "$prometheus_enabled" "$grafana_enabled" "$proxy_enabled"
 
   log_info "Starting containers"
   run_compose "$install_dir" up -d --build
@@ -656,6 +673,12 @@ install_panel() {
   if [ "$proxy_enabled" = "1" ]; then
     printf 'Proxy HTTP:   http://SERVER_IP:%s\n' "$http_port"
     printf 'Proxy HTTPS:  https://SERVER_IP:%s\n' "$https_port"
+  fi
+  if [ "$prometheus_enabled" = "1" ]; then
+    printf 'Prometheus:   http://SERVER_IP:9090\n'
+  fi
+  if [ "$grafana_enabled" = "1" ]; then
+    printf 'Grafana:      http://SERVER_IP:%s\n' "${GRAFANA_PORT:-3001}"
   fi
   printf '\n'
   printf 'Admin email:    %s\n' "$admin_email"
@@ -690,7 +713,7 @@ update_panel() {
   sync_source "$install_dir"
   prepare_install_layout "$install_dir"
   load_install_state "$install_dir"
-  compose_args "$DEPLOY_MODE" "$MONITORING_ENABLED" "$PROXY_ENABLED"
+  compose_args "$DEPLOY_MODE" "$PROMETHEUS_ENABLED" "$GRAFANA_ENABLED" "$PROXY_ENABLED"
 
   log_info "Rebuilding and restarting containers"
   run_compose "$install_dir" up -d --build
@@ -704,7 +727,7 @@ restart_panel() {
   [ -d "$install_dir" ] || die "Installation directory does not exist: $install_dir"
 
   load_install_state "$install_dir"
-  compose_args "$DEPLOY_MODE" "$MONITORING_ENABLED" "$PROXY_ENABLED"
+  compose_args "$DEPLOY_MODE" "$PROMETHEUS_ENABLED" "$GRAFANA_ENABLED" "$PROXY_ENABLED"
   run_compose "$install_dir" restart
 }
 
@@ -716,7 +739,7 @@ status_panel() {
   [ -d "$install_dir" ] || die "Installation directory does not exist: $install_dir"
 
   load_install_state "$install_dir"
-  compose_args "$DEPLOY_MODE" "$MONITORING_ENABLED" "$PROXY_ENABLED"
+  compose_args "$DEPLOY_MODE" "$PROMETHEUS_ENABLED" "$GRAFANA_ENABLED" "$PROXY_ENABLED"
   run_compose "$install_dir" ps
 }
 
@@ -728,7 +751,7 @@ logs_panel() {
   [ -d "$install_dir" ] || die "Installation directory does not exist: $install_dir"
 
   load_install_state "$install_dir"
-  compose_args "$DEPLOY_MODE" "$MONITORING_ENABLED" "$PROXY_ENABLED"
+  compose_args "$DEPLOY_MODE" "$PROMETHEUS_ENABLED" "$GRAFANA_ENABLED" "$PROXY_ENABLED"
   run_compose "$install_dir" logs --tail=200
 }
 
@@ -744,7 +767,7 @@ uninstall_panel() {
   fi
 
   load_install_state "$install_dir"
-  compose_args "$DEPLOY_MODE" "$MONITORING_ENABLED" "$PROXY_ENABLED"
+  compose_args "$DEPLOY_MODE" "$PROMETHEUS_ENABLED" "$GRAFANA_ENABLED" "$PROXY_ENABLED"
   run_compose "$install_dir" down --volumes --remove-orphans
   rm -rf "$install_dir"
 }
