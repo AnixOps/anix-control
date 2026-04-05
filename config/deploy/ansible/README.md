@@ -16,6 +16,8 @@ How to use:
 2. Add your ingress/relay hosts and SSH details.
 3. Place SSH keys under `config/deploy/ssh/` when you use key-based auth.
 4. Set `FORWARD_RUNTIME_BACKEND=iptables_ansible` in `.env`, or switch it in `System.vue`.
+5. If you use SSH password auth instead of a private key, set `FORWARD_RUNTIME_ANSIBLE_HOST`, `FORWARD_RUNTIME_ANSIBLE_USER`, and `FORWARD_RUNTIME_ANSIBLE_PASSWORD` in `.env`.
+6. For non-root SSH users, also set `FORWARD_RUNTIME_ANSIBLE_BECOME=true` and `FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD`.
 
 Notes:
 

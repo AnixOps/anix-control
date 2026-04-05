@@ -214,6 +214,7 @@ go tool cover -html=coverage.out
 - `iptables_ansible`：本地扩展路径，由后台 worker 调用 `ansible-playbook`
 
 Docker 镜像已经内置 `ansible-playbook`，示例 playbook 位于 `config/deploy/ansible/`，一键安装脚本会同时写入 `FORWARD_RUNTIME_BACKEND` 与 `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`，应用启动后会自动同步到 `forward.runtime_backend` 与 `forward.runtime.iptables_ansible.config`。
+如果没有 SSH 密钥，可以直接在 `.env` 填写 `FORWARD_RUNTIME_ANSIBLE_HOST`、`FORWARD_RUNTIME_ANSIBLE_USER`、`FORWARD_RUNTIME_ANSIBLE_PASSWORD`；启动时会自动生成临时 inventory。非 root 登录再补 `FORWARD_RUNTIME_ANSIBLE_BECOME=true` 和 `FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD`。
 
 ## 相关项目
 

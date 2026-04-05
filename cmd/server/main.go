@@ -302,6 +302,11 @@ func main() {
 	service.InitDefaultPlan()
 
 	// 初始化缓存 (默认使用内存缓存)
+	if inventoryPath, err := service.InitForwardRuntimeAnsibleInventoryFromEnv(); err != nil {
+		log.Fatalf("Failed to initialize forward runtime ansible inventory from env: %v", err)
+	} else if inventoryPath != "" {
+		log.Printf("Forward runtime ansible inventory generated from env: %s", inventoryPath)
+	}
 	if err := service.InitForwardRuntimeSystemConfigFromEnv(database.Get()); err != nil {
 		log.Fatalf("Failed to initialize forward runtime config from env: %v", err)
 	}
