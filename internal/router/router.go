@@ -353,6 +353,16 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			forwardHandler := handler.NewForwardHandler()
 			authUser.GET("/user/forward/rules", forwardHandler.GetUserRules)
 			authUser.POST("/user/forward/rules", forwardHandler.CreateUserRule)
+			authUser.POST("/forward/create", forwardHandler.CreatePanelForward)
+			authUser.POST("/forward/list", forwardHandler.ListPanelForwards)
+			authUser.POST("/forward/update", forwardHandler.UpdatePanelForward)
+			authUser.POST("/forward/delete", forwardHandler.DeletePanelForward)
+			authUser.POST("/forward/force-delete", forwardHandler.ForceDeletePanelForward)
+			authUser.POST("/forward/pause", forwardHandler.PausePanelForward)
+			authUser.POST("/forward/resume", forwardHandler.ResumePanelForward)
+			authUser.POST("/forward/diagnose", forwardHandler.DiagnosePanelForward)
+			authUser.POST("/forward/update-order", forwardHandler.UpdatePanelForwardOrder)
+			authUser.POST("/tunnel/user/tunnel", forwardHandler.ListPanelTunnels)
 
 			// 用户支付
 			paymentGatewayHandler := handler.NewPaymentGatewayHandler()

@@ -61,6 +61,9 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.ForwardNode{},
 			&model.ForwardRule{},
 			&model.ForwardStats{},
+			&model.ForwardTunnel{},
+			&model.ForwardUserTunnel{},
+			&model.Forward{},
 			&model.UserMFA{},
 			&model.MFALoginAttempt{},
 			&model.InviteCode{},
@@ -134,6 +137,9 @@ func (s *ServiceTestSuite) SetupTest() {
 	db.Exec("DELETE FROM v2_forward_node")
 	db.Exec("DELETE FROM v2_forward_rule")
 	db.Exec("DELETE FROM v2_forward_stats")
+	db.Exec("DELETE FROM v2_forward")
+	db.Exec("DELETE FROM v2_forward_user_tunnel")
+	db.Exec("DELETE FROM v2_forward_tunnel")
 	db.Exec("DELETE FROM v2_user_mfa")
 	db.Exec("DELETE FROM v2_mfa_login_attempt")
 	db.Exec("DELETE FROM v2_invite_code")

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
@@ -44,7 +45,7 @@ func (h *ForwardHandler) CreatePanelForward(c *gin.Context) {
 		return
 	}
 
-	item, err := h.panelService.CreateForward(c.GetUint("user_id"), req)
+	item, err := h.panelService.CreateForward(c.GetUint("user_id"), c.GetBool("is_admin"), req)
 	if err != nil {
 		panelError(c, err.Error())
 		return
@@ -155,7 +156,8 @@ func (h *ForwardHandler) UpdatePanelForwardOrder(c *gin.Context) {
 func panelSuccess(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
-		"msg":  "success",
+		"msg":  "操作成功",
+		"ts":   time.Now().UnixMilli(),
 		"data": data,
 	})
 }
@@ -164,5 +166,6 @@ func panelError(c *gin.Context, msg string) {
 	c.JSON(http.StatusOK, gin.H{
 		"code": 1,
 		"msg":  msg,
+		"ts":   time.Now().UnixMilli(),
 	})
 }

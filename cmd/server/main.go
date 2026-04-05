@@ -254,6 +254,7 @@ func main() {
 			&model.ForwardLog{},
 			&model.ForwardStats{},
 			&model.ForwardTunnel{},
+			&model.ForwardUserTunnel{},
 			&model.Forward{},
 			// 支付网关
 			&model.PaymentGateway{},

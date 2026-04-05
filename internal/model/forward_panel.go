@@ -13,6 +13,11 @@ const (
 	ForwardStatusError  = -1
 )
 
+const (
+	ForwardUserTunnelStatusDisabled = 0
+	ForwardUserTunnelStatusActive   = 1
+)
+
 // ForwardTunnel is the minimal tunnel resource required by the flux-panel style forward page.
 type ForwardTunnel struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
@@ -33,6 +38,23 @@ type ForwardTunnel struct {
 
 func (ForwardTunnel) TableName() string {
 	return "v2_forward_tunnel"
+}
+
+// ForwardUserTunnel stores flux-panel style per-user tunnel authorization.
+type ForwardUserTunnel struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"uniqueIndex:idx_forward_user_tunnel" json:"user_id"`
+	TunnelID  uint      `gorm:"uniqueIndex:idx_forward_user_tunnel;index" json:"tunnel_id"`
+	Status    int       `gorm:"default:1" json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	User   *User          `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Tunnel *ForwardTunnel `gorm:"foreignKey:TunnelID" json:"tunnel,omitempty"`
+}
+
+func (ForwardUserTunnel) TableName() string {
+	return "v2_forward_user_tunnel"
 }
 
 // Forward is the flux-panel compatible forward resource.
