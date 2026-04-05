@@ -632,3 +632,9 @@ type NotificationTemplate struct {
 ---
 
 *文档生成时间: 2026-03-13*
+
+## Flux-panel Clone Workstream
+
+- Keep `docs/guide/flux-panel-workstream.md` as the single source of truth for flux-panel clone status, reference mapping, status scale, implementation order, and definition of done.
+- Use the document to interpret the `Not Started / Partial / Aligned` states before starting work on forward/tunnel/diagnose flows and to pick the next implementation milestone.
+- After delivering a piece, refresh the workstream and ensure other docs (like `docs/guide/flux-forward-contract.md`) and this roadmap keep pointing to the latest reference.

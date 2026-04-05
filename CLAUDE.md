@@ -917,3 +917,16 @@ cd web && npm run build
 ```
 
 更详细的模块映射、当前完成度和下一步待补项目，见 `docs/guide/flux-panel-clone.md`。
+
+## Flux-panel Clone Docs
+
+- Lead with `docs/guide/flux-panel-clone.md` when working on forward/tunnel/user-tunnel UI, API, or services so you hit the mandatory workflow, route/DTO rules, and validation checklist.
+- Reference `docs/guide/flux-forward-contract.md` for the live response envelope, endpoint mapping, DTO requirements, and known semantic gaps.
+- Before declaring work as `1:1 clone`, document remaining runtime or diagnose differences so successors understand what still diverges from `flux-panel`.
+
+## Flux-panel Doc Sync
+
+- When forward, tunnel, or user-tunnel behavior changes, also update `docs/guide/flux-panel-clone.md`, `docs/guide/flux-forward-contract.md`, `docs/guide/flux-panel-workstream.md`, `docs/guide/api-reference.md`, and `docs/FEATURE_ROADMAP.md`.
+- If user-facing scope or onboarding entry points change, refresh the `Flux-panel` section in `readme.md`.
+- Do not mark work as a full clone while runtime side effects, diagnose paths, or quota/expire/reset-flow gaps are still undocumented.
+- Before declaring work “1:1 clone,” document remaining runtime or diagnose differences so successors understand what still diverges from `flux-panel`.

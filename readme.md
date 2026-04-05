@@ -176,6 +176,10 @@ go tool cover -html=coverage.out
 
 - 复刻规范入口：`AGENTS.md`
 - 详细执行指南：`docs/guide/flux-panel-clone.md`
+- forward/tunnel 契约文档：`docs/guide/flux-forward-contract.md`
+- 当前复刻状态与下一步：`docs/guide/flux-panel-workstream.md`
+- 对外兼容接口入口：`docs/guide/api-reference.md`
+- 历史规划与当前工作流挂钩：`docs/FEATURE_ROADMAP.md`
 - 当前已完成基础模块：流量转发页面与兼容 API
 - 当前本机参考仓库：`C:\Users\z7299\AppData\Local\Temp\flux-panel`
 

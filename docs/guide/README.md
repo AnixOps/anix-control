@@ -1,17 +1,25 @@
-# V2Board AnixOps 文档
+# V2Board AnixOps Guide
 
-## 文档目录
+## Documents
 
-| 文档 | 说明 |
+| Document | Purpose |
 |------|------|
-| [flux-panel 复刻指南](flux-panel-clone.md) | 后续复刻 `flux-panel` 时的参考仓库、契约规则、模块状态与验收清单 |
-| [节点管理](node-management.md) | 节点注册、心跳、协议配置与运维说明 |
-| [客户端兼容](client-compatibility.md) | V2bX/XrayR 等客户端或节点端兼容说明 |
-| [API 参考](api-reference.md) | 主要 API 路由与接口说明 |
-| [订阅系统](subscription-system.md) | 订阅分组、模板与格式化说明 |
+| [Flux-panel Clone Guide](flux-panel-clone.md) | Source-of-truth workflow for future `flux-panel` 1:1 cloning work |
+| [Flux Forward Contract](flux-forward-contract.md) | Concrete forward/tunnel endpoint mapping, DTO fields, auth scope and known gaps |
+| [Flux-panel Clone Workstream](flux-panel-workstream.md) | Current module status, reference mapping, implementation order and definition of done |
+| [Node Management](node-management.md) | Node registration, heartbeat, protocol config and operations |
+| [Client Compatibility](client-compatibility.md) | V2bX/XrayR and related compatibility notes |
+| [API Reference](api-reference.md) | Existing project API overview |
+| [Subscription System](subscription-system.md) | Subscription groups, templates and formatting |
 
-## 快速入口
+## Recommended Reading Order
 
-- 如果目的是继续复刻 `flux-panel` 页面或接口，先读 [flux-panel 复刻指南](flux-panel-clone.md)。
-- 如果目的是对接节点程序，先读 [节点管理](node-management.md) 和 [客户端兼容](client-compatibility.md)。
-- 如果目的是查现有接口，再看 [API 参考](api-reference.md)。
+If the task is to continue cloning `flux-panel`:
+
+1. Read [Flux-panel Clone Guide](flux-panel-clone.md).
+2. Read [Flux Forward Contract](flux-forward-contract.md).
+3. Read [Flux-panel Clone Workstream](flux-panel-workstream.md).
+4. Inspect the local reference repo at `C:\Users\z7299\AppData\Local\Temp\flux-panel`.
+5. Only then start changing routes, services, DTOs or pages.
+
+If the task is not related to `flux-panel`, use the other topic-specific guides.
