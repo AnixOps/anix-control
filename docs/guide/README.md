@@ -4,32 +4,14 @@
 
 | 文档 | 说明 |
 |------|------|
-| [节点管理](node-management.md) | 节点注册、心跳、协议配置 |
-| [客户端兼容](client-compatibility.md) | V2bX/XrayR 配置和修改指南 |
-| [API 参考](api-reference.md) | 完整 API 接口文档 |
+| [flux-panel 复刻指南](flux-panel-clone.md) | 后续复刻 `flux-panel` 时的参考仓库、契约规则、模块状态与验收清单 |
+| [节点管理](node-management.md) | 节点注册、心跳、协议配置与运维说明 |
+| [客户端兼容](client-compatibility.md) | V2bX/XrayR 等客户端或节点端兼容说明 |
+| [API 参考](api-reference.md) | 主要 API 路由与接口说明 |
+| [订阅系统](subscription-system.md) | 订阅分组、模板与格式化说明 |
 
-## 快速开始
+## 快速入口
 
-### 1. 部署面板
-
-```bash
-# 使用 Docker Compose
-docker-compose up -d
-
-# 或直接运行
-go build -o v2board ./cmd/server
-./v2board
-```
-
-### 2. 配置节点
-
-1. 在管理后台生成授权密钥
-2. 将密钥配置到节点程序
-3. 启动节点，自动注册并获取配置
-
-### 3. 客户端要求
-
-- V2bX: 需要修改源码支持 `node_type` 字段
-- XrayR: 需要配置 API 路径为 `/api/v2`
-
-详细说明请参考各文档。
+- 如果目的是继续复刻 `flux-panel` 页面或接口，先读 [flux-panel 复刻指南](flux-panel-clone.md)。
+- 如果目的是对接节点程序，先读 [节点管理](node-management.md) 和 [客户端兼容](client-compatibility.md)。
+- 如果目的是查现有接口，再看 [API 参考](api-reference.md)。

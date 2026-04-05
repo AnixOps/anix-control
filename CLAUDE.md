@@ -826,3 +826,94 @@ protoc --go_out=. --go-grpc_out=. api/grpc/v2board.proto
 - TestConfigWithProtocol: 协议配置
 - TestUsersWithPlan: 带套餐的用户
 - TestTrafficReportWithRate: 流量倍率测试
+
+---
+
+## 十、Flux Panel 复刻规范 (2026-04-05)
+
+后续继续复刻 `flux-panel` 时，默认把“源码一比一兼容”作为最高优先级，不允许先按本项目习惯自行发明接口或交互，再事后回调。
+
+### 10.1 参考仓库
+
+- 上游仓库: `https://github.com/bqlpfy/flux-panel`
+- 当前本机参考副本: `C:\Users\z7299\AppData\Local\Temp\flux-panel`
+- 后端源码优先参考:
+  - `springboot-backend/src/main/java/com/admin/controller/`
+  - `springboot-backend/src/main/java/com/admin/service/impl/`
+  - `springboot-backend/src/main/java/com/admin/common/dto/`
+  - `springboot-backend/src/main/java/com/admin/entity/`
+- 前端源码优先参考:
+  - `vite-frontend/src/pages/`
+  - `vite-frontend/src/components/`
+  - `vite-frontend/src/api/`
+
+### 10.2 复刻优先级
+
+1. 路径、方法、鉴权范围与请求体字段名必须先对齐。
+2. 返回包结构必须对齐，尤其是 `code`、`msg`、`ts`、`data` 以及 DTO 字段大小写。
+3. 页面结构、按钮文案、弹窗流程、排序/批量/诊断等交互要与参考页面一致。
+4. 业务语义再向下对齐，包括权限关系、限额校验、运行时状态变更、诊断逻辑和副作用。
+5. 只有在本仓库架构无法直接承接时，才允许保留兼容镜像路由或过渡实现，但必须在文档里明确写出差距。
+
+### 10.3 强制规则
+
+- 不要把 `flux-panel` 的用户接口随手挂到 `/api/v2/admin/*`。
+  - 先看参考控制器是否有管理员角色限制。
+  - 如果参考接口是登录用户接口，本仓库必须提供同等用户态入口。
+- 不要删减参考 DTO 中“当前页面暂时没用到”的字段。
+  - 这些字段通常会被后续页面、导入导出、诊断或联动流程依赖。
+- 不要只复刻 UI，不复刻 API 语义。
+  - 页面完成后，必须回查 controller/service/entity/dto，确认不是“长得像，但行为不一样”。
+- 不要把运行时能力缺失伪装成“已完成复刻”。
+  - 如果当前只完成 DB 兼容层，而参考实现还包含 Gost/节点/远程副作用，文档里必须显式标注为待补齐。
+- 优先复用参考实现中的授权关系模型。
+  - 例如参考仓库有 `UserTunnel` 时，本仓库优先使用显式关联表，而不是临时塞进 `group_id` 或模糊条件判断。
+
+### 10.4 当前已完成的 Flux 复刻基础
+
+- 流量转发页面已按参考页复刻到:
+  - `web/src/views/admin/Forward.vue`
+- 兼容 API 入口已建立:
+  - `/api/v2/forward/*`
+  - `/api/v2/tunnel/user/tunnel`
+  - 保留 `/api/v2/admin/forward/*` 与 `/api/v2/admin/tunnel/user/tunnel` 作为现有管理后台兼容镜像
+- 当前转发授权关系模型:
+  - `internal/model/forward_panel.go` 中的 `ForwardUserTunnel`
+- 当前关键实现文件:
+  - `internal/service/forward_panel_service.go`
+  - `internal/handler/forward_panel.go`
+  - `internal/router/router.go`
+  - `web/src/api/admin.js`
+  - `internal/service/forward_panel_service_test.go`
+
+### 10.5 后续复刻时的检查清单
+
+- 逐个对比参考仓库的 controller、service、dto、entity 和前端 page/api 文件。
+- 确认路由作用域:
+  - 管理员接口是否真的需要 `AdminAuth`
+  - 用户接口是否已经暴露在 JWT 用户组下
+- 确认返回结构:
+  - 包装层字段
+  - DTO 字段名
+  - 可空字段
+  - 时间戳单位
+- 确认行为差异:
+  - create/update/delete 是否只改库，还是要联动远端运行时
+  - pause/resume 是否只改状态，还是要联动远端服务
+  - diagnose 是否本地拨测，还是应按节点路径执行
+- 补齐自动化验证:
+  - service 测试
+  - handler/router 测试
+  - 前端构建
+- 完成后更新:
+  - `docs/guide/flux-panel-clone.md`
+  - `README.md` 中的说明入口
+
+### 10.6 默认验证命令
+
+```bash
+$env:GOWORK='off'; go test ./internal/router ./internal/handler ./internal/service
+cd web && npm run build
+```
+
+更详细的模块映射、当前完成度和下一步待补项目，见 `docs/guide/flux-panel-clone.md`。

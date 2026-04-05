@@ -170,6 +170,15 @@ go test -coverprofile=coverage.out ./internal/...
 go tool cover -html=coverage.out
 ```
 
+## Flux-panel 复刻
+
+仓库已经进入 `flux-panel` 定向兼容阶段。后续凡是复刻 `flux-panel` 页面或接口，默认遵循“路径、DTO、返回包、交互和业务语义一比一对齐”的原则，而不是先做本项目风格版本。
+
+- 复刻规范入口：`AGENTS.md`
+- 详细执行指南：`docs/guide/flux-panel-clone.md`
+- 当前已完成基础模块：流量转发页面与兼容 API
+- 当前本机参考仓库：`C:\Users\z7299\AppData\Local\Temp\flux-panel`
+
 ## 相关项目
 
 - [V2bX_AnixOps](https://github.com/anixops/V2bX_AnixOps)：节点端程序
