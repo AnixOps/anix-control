@@ -170,7 +170,7 @@ npm run build
 - 应用服务：`v2board`（Go 二进制）
 - 数据库：PostgreSQL（优先）
 - 缓存：Redis（多实例/高并发场景）
-- 监控：Prometheus + Grafana（可选）
+- 监控：Prometheus（可选），内置 Grafana（可选）
 
 ### 启动生产编排
 
@@ -178,10 +178,16 @@ npm run build
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-如需监控组件：
+如需只启动 Prometheus：
 
 ```bash
-docker-compose -f docker-compose.prod.yml --profile monitoring up -d
+docker-compose -f docker-compose.prod.yml --profile prometheus up -d
+```
+
+如需同时启用内置 Grafana：
+
+```bash
+docker-compose -f docker-compose.prod.yml --profile prometheus --profile grafana up -d
 ```
 
 ---

@@ -85,6 +85,7 @@ bash ./panel_install.sh
 - 生成 `config/config.yaml` 与 `.env`
 - 初始化 `config/deploy/ansible/inventory.ini` 与 `config/deploy/ssh/`
 - 启动前端、API、gRPC 端口映射
+- 生产模式下可只启用 Prometheus，不必连带部署 Grafana
 - 通过容器环境变量在启动阶段预写入双运行时示例配置
 
 ### 方式二：本地开发
