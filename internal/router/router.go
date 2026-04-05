@@ -235,6 +235,16 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 			// ========== 流量转发管理 ==========
 			forwardHandler := handler.NewForwardHandler()
+			admin.POST("/forward/create", forwardHandler.CreatePanelForward)
+			admin.POST("/forward/list", forwardHandler.ListPanelForwards)
+			admin.POST("/forward/update", forwardHandler.UpdatePanelForward)
+			admin.POST("/forward/delete", forwardHandler.DeletePanelForward)
+			admin.POST("/forward/force-delete", forwardHandler.ForceDeletePanelForward)
+			admin.POST("/forward/pause", forwardHandler.PausePanelForward)
+			admin.POST("/forward/resume", forwardHandler.ResumePanelForward)
+			admin.POST("/forward/diagnose", forwardHandler.DiagnosePanelForward)
+			admin.POST("/forward/update-order", forwardHandler.UpdatePanelForwardOrder)
+			admin.POST("/tunnel/user/tunnel", forwardHandler.ListPanelTunnels)
 
 			// 中转节点管理
 			admin.GET("/forward/nodes", forwardHandler.ListNodes)

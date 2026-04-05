@@ -253,6 +253,8 @@ func main() {
 			&model.ForwardRoute{},
 			&model.ForwardLog{},
 			&model.ForwardStats{},
+			&model.ForwardTunnel{},
+			&model.Forward{},
 			// 支付网关
 			&model.PaymentGateway{},
 			&model.PaymentRecord{},
