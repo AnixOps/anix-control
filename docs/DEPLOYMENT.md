@@ -48,8 +48,8 @@
 
 ```bash
 # 1) 克隆仓库
-git clone https://github.com/anixops/v2board.git
-cd v2board
+git clone https://github.com/AnixOps/v2board_AnixOps.git
+cd v2board_AnixOps
 
 # 2) 准备配置
 cp .env.example .env
@@ -67,6 +67,70 @@ docker-compose logs -f
 ```
 
 默认访问地址：`http://localhost:8080`
+
+默认前端地址：`http://localhost:3000`
+
+### 2.1 一键安装脚本
+
+本仓库提供与 `flux-panel` 类似的菜单式一键安装脚本，可直接通过 `raw.githubusercontent.com` 执行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/AnixOps/v2board_AnixOps/go_dev/install.sh)
+```
+
+如果你已经在仓库根目录，也可以用兼容上游命名的本地包装器：
+
+```bash
+bash ./panel_install.sh
+```
+
+安装器会完成以下动作：
+
+1. 下载或更新仓库源码归档。
+2. 生成 `config/config.yaml` 与 `.env`。
+3. 构建带 `ansible-playbook` 的应用镜像。
+4. 启动 Docker Compose。
+5. 通过环境变量在启动阶段预写入双运行时示例配置。
+
+### 2.2 Docker 内置 ansible-playbook
+
+运行时镜像已内置：
+
+- `ansible`
+- `openssh-client`
+- `bash`
+
+默认容器内路径：
+
+- ansible 配置：`/app/config/deploy/ansible/ansible.cfg`
+- inventory：`/app/config/deploy/ansible/inventory.ini`
+- 应用 playbook：`/app/config/deploy/ansible/playbooks/forward_apply.yml`
+- 删除 playbook：`/app/config/deploy/ansible/playbooks/forward_remove.yml`
+
+默认 system config JSON 示例：
+
+```json
+{
+  "inventory": "/app/config/deploy/ansible/inventory.ini",
+  "playbookApply": "/app/config/deploy/ansible/playbooks/forward_apply.yml",
+  "playbookRemove": "/app/config/deploy/ansible/playbooks/forward_remove.yml",
+  "workingDir": "/app/config/deploy/ansible",
+  "targetPattern": "{{node.host}}",
+  "timeoutSeconds": 120,
+  "become": true,
+  "environment": {
+    "ANSIBLE_CONFIG": "/app/config/deploy/ansible/ansible.cfg",
+    "ANSIBLE_HOST_KEY_CHECKING": "False"
+  }
+}
+```
+
+说明：
+
+- `iptables_ansible` 是本仓库的本地扩展，不属于 `flux-panel` 原始 `/forward` 契约。
+- 示例 inventory 模板位于 `config/deploy/ansible/inventory.ini.example`，安装脚本会复制为 `inventory.ini`。
+- SSH 密钥目录为 `config/deploy/ssh/`，会被挂载到容器内的 `/home/v2board/.ssh`。
+- Docker 启动时会读取 `FORWARD_RUNTIME_BACKEND` 与 `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`，并自动同步到系统配置表。
 
 ---
 

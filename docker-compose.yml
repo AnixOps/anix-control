@@ -6,19 +6,26 @@ services:
     build: .
     container_name: v2board
     ports:
-      - "8080:8080"    # HTTP API
-      - "50051:50051"  # gRPC
+      - "${PANEL_API_PORT:-8080}:8080"        # HTTP API
+      - "${PANEL_FRONTEND_PORT:-3000}:3000"   # Frontend/UI
+      - "${PANEL_GRPC_PORT:-50051}:50051"     # gRPC
     volumes:
       - ./config:/app/config
       - ./config/data:/app/config/data
+      - ./config/deploy/ssh:/home/v2board/.ssh:ro
       - ./logs:/app/logs
       - ./web/public:/app/web/public
     environment:
-      - TZ=Asia/Shanghai
-      - GIN_MODE=release
+      - TZ=${TZ:-Asia/Shanghai}
+      - GIN_MODE=${GIN_MODE:-release}
+      - HOME=/home/v2board
+      - ANSIBLE_CONFIG=/app/config/deploy/ansible/ansible.cfg
+      - FORWARD_RUNTIME_BACKEND=${FORWARD_RUNTIME_BACKEND:-gost}
+      - FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON=${FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON:-}
+      - ANSIBLE_HOST_KEY_CHECKING=${ANSIBLE_HOST_KEY_CHECKING:-False}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

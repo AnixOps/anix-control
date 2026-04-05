@@ -1,0 +1,39 @@
+- name: Remove V2Board forward iptables rules
+  hosts: all
+  gather_facts: false
+  become: true
+  vars:
+    forward_protocols: "{{ ['tcp', 'udp'] if tunnel.protocol == 'both' else (['udp'] if tunnel.protocol == 'udp' else ['tcp']) }}"
+    forward_interface: "{{ (forward.interfaceName | default('') | trim) or (tunnel.interfaceName | default('') | trim) }}"
+  tasks:
+    - name: Remove NAT chain for each protocol
+      ansible.builtin.shell: |
+        set -euo pipefail
+        CHAIN="V2B_FWD_{{ forward.id }}_{{ item | upper }}"
+        PORT="{{ forward.inPort }}"
+        PROTO="{{ item }}"
+        IFACE="{{ forward_interface }}"
+
+        PREROUTING_ARGS=(-p "$PROTO" --dport "$PORT")
+        if [ -n "$IFACE" ]; then
+          PREROUTING_ARGS+=(-i "$IFACE")
+        fi
+
+        while iptables -t nat -C PREROUTING "${PREROUTING_ARGS[@]}" -j "$CHAIN" 2>/dev/null; do
+          iptables -t nat -D PREROUTING "${PREROUTING_ARGS[@]}" -j "$CHAIN"
+        done
+
+        {% for target in targets %}
+        TARGET_ADDR="{{ target.addr }}"
+        TARGET_HOST="${TARGET_ADDR%%:*}"
+        TARGET_PORT="${TARGET_ADDR##*:}"
+        while iptables -t nat -C POSTROUTING -p "$PROTO" -d "$TARGET_HOST" --dport "$TARGET_PORT" -j MASQUERADE 2>/dev/null; do
+          iptables -t nat -D POSTROUTING -p "$PROTO" -d "$TARGET_HOST" --dport "$TARGET_PORT" -j MASQUERADE
+        done
+        {% endfor %}
+
+        iptables -t nat -F "$CHAIN" 2>/dev/null || true
+        iptables -t nat -X "$CHAIN" 2>/dev/null || true
+      args:
+        executable: /bin/bash
+      loop: "{{ forward_protocols }}"

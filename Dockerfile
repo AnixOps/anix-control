@@ -30,13 +30,23 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o v2board ./cmd/server
 
 # Runtime stage
-FROM alpine:3.19
+FROM debian:bookworm-slim
 
 # Install runtime dependencies
-RUN apk --no-cache add ca-certificates tzdata wget
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ansible \
+        bash \
+        ca-certificates \
+        curl \
+        jq \
+        openssh-client \
+        sshpass \
+        tzdata && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN adduser -D -u 1000 v2board
+RUN useradd --create-home --uid 1000 --shell /bin/bash v2board
 
 WORKDIR /app
 
@@ -44,26 +54,31 @@ WORKDIR /app
 COPY --from=builder /app/v2board .
 COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/config/config.yaml.example ./config/config.yaml.example
+COPY --from=builder /app/config/deploy ./config/deploy
 
 # Copy frontend build (if exists)
 COPY --from=builder /app/web/public ./web/public
 
 # Create necessary directories
-RUN mkdir -p /app/config/data /app/web/public /app/logs && chown -R v2board:v2board /app
+RUN mkdir -p /app/config/data /app/web/public /app/logs /home/v2board/.ssh && \
+    chown -R v2board:v2board /app /home/v2board && \
+    chmod 700 /home/v2board/.ssh
 
 # Switch to non-root user
 USER v2board
 
 # Set timezone
+ENV HOME=/home/v2board
 ENV TZ=Asia/Shanghai
 ENV GIN_MODE=release
+ENV ANSIBLE_CONFIG=/app/config/deploy/ansible/ansible.cfg
 
-# Expose ports (HTTP + gRPC)
-EXPOSE 8080 50051
+# Expose ports (HTTP + frontend + gRPC)
+EXPOSE 8080 3000 50051
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+    CMD curl -fsS http://localhost:8080/health >/dev/null || exit 1
 
 # Default command
 CMD ["./v2board", "-config", "config/config.yaml"]

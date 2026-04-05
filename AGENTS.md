@@ -930,6 +930,16 @@ cd web && npm run build
   - admin endpoint `GET /api/v2/admin/forward/runtime/jobs`
   - server-side worker started by `cmd/server/main.go` to execute pending `iptables_ansible` jobs
   - optional ansible config keys: `command`, `workingDir`, `targetPattern`, `timeoutSeconds`, `environment`
+  - one-click Docker installer: `install.sh` (`panel_install.sh` wrapper)
+  - bundled ansible deployment assets: `config/deploy/ansible/`
+  - env bootstrap keys: `FORWARD_RUNTIME_BACKEND`, `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`
+
+## Deploy Extension Rules
+
+- `install.sh`, `panel_install.sh`, and `config/deploy/ansible/` are local deployment extensions.
+- They improve Docker/bootstrap and runtime setup, but they do not count toward Flux `/forward` clone completion.
+- Keep deployment/runtime extensions documented separately from Flux-compatible UI/API work.
+- Do not move installer-only or ansible bootstrap controls into `web/src/views/admin/Forward.vue`.
 
 ## Flux-panel Doc Sync
 

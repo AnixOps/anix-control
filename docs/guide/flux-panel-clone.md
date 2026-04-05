@@ -181,6 +181,9 @@ These items are local extensions added to support a second runtime path (`iptabl
 - admin runtime job endpoint: `GET /api/v2/admin/forward/runtime/jobs`
 - admin UI location: `web/src/views/admin/System.vue`
 - runtime worker: started automatically by `cmd/server/main.go` and consumes pending `iptables_ansible` jobs in-process
+- Docker bootstrap extension: `install.sh` (`panel_install.sh` wrapper)
+- bundled ansible deployment assets: `config/deploy/ansible/`
+- env bootstrap keys: `FORWARD_RUNTIME_BACKEND`, `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`
 
 Guardrails:
 

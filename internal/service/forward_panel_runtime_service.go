@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/anixops/v2board/internal/gost"
 	"github.com/anixops/v2board/internal/model"
@@ -21,6 +22,12 @@ const (
 	forwardRuntimeAnsibleRemovePlaybookConfigKey = "forward.ansible.playbook_remove"
 	forwardRuntimeAnsibleBecomeConfigKey         = "forward.ansible.become"
 	forwardRuntimeAnsibleExtraVarsConfigKey      = "forward.ansible.extra_vars_json"
+	defaultForwardAnsibleInventoryPath           = "config/deploy/ansible/inventory.ini"
+	defaultForwardAnsibleApplyPlaybookPath       = "config/deploy/ansible/playbooks/forward_apply.yml"
+	defaultForwardAnsibleRemovePlaybookPath      = "config/deploy/ansible/playbooks/forward_remove.yml"
+	defaultForwardAnsibleWorkingDir              = "config/deploy/ansible"
+	defaultForwardAnsibleConfigPath              = "config/deploy/ansible/ansible.cfg"
+	defaultForwardAnsibleTargetPattern           = "{{node.host}}"
 )
 
 type panelForwardRuntimeResult struct {
@@ -399,6 +406,27 @@ func (c *panelForwardAnsibleConfig) ensureDefaults() {
 	}
 	if c.Environment == nil {
 		c.Environment = map[string]string{}
+	}
+	if strings.TrimSpace(c.Inventory) == "" {
+		c.Inventory = defaultForwardAnsibleInventoryPath
+	}
+	if strings.TrimSpace(c.ApplyPlaybook) == "" {
+		c.ApplyPlaybook = defaultForwardAnsibleApplyPlaybookPath
+	}
+	if strings.TrimSpace(c.RemovePlaybook) == "" {
+		c.RemovePlaybook = defaultForwardAnsibleRemovePlaybookPath
+	}
+	if strings.TrimSpace(c.WorkingDir) == "" {
+		c.WorkingDir = defaultForwardAnsibleWorkingDir
+	}
+	if strings.TrimSpace(c.TargetPattern) == "" {
+		c.TargetPattern = defaultForwardAnsibleTargetPattern
+	}
+	if c.TimeoutSeconds <= 0 {
+		c.TimeoutSeconds = int(defaultForwardRuntimeJobTimeout / time.Second)
+	}
+	if strings.TrimSpace(c.Environment["ANSIBLE_CONFIG"]) == "" {
+		c.Environment["ANSIBLE_CONFIG"] = defaultForwardAnsibleConfigPath
 	}
 }
 

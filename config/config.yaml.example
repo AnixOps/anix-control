@@ -1,19 +1,21 @@
-# V2Board Go Backend Configuration
+env: "development"
 
 server:
   host: "0.0.0.0"
   port: 8080
-  mode: "release"  # debug, release, test
+  mode: "release"
   read_timeout: 30
   write_timeout: 30
 
-# 鏁版嵁搴撻厤缃?
-# 鏀寔 sqlite (榛樿) 鍜?postgres
+frontend:
+  enable: true
+  port: 3000
+  path: "web/public"
+
 database:
-  driver: "sqlite"             # sqlite 鎴?postgres
-  database: "config/data/v2board.db"  # SQLite: 鏂囦欢璺緞, PostgreSQL: 鏁版嵁搴撳悕
-  log_level: "info"            # silent, error, warn, info
-  # PostgreSQL 涓撶敤閰嶇疆 (浣跨敤 SQLite 鏃跺彲蹇界暐)
+  driver: "sqlite"
+  database: "config/data/v2board.db"
+  log_level: "info"
   # host: "127.0.0.1"
   # port: 5432
   # username: "postgres"
@@ -22,35 +24,38 @@ database:
   # max_open_conns: 100
   # conn_max_lifetime: 3600
 
-# 缂撳瓨閰嶇疆
-# 榛樿浣跨敤鍐呭瓨缂撳瓨锛屾棤闇€浠讳綍澶栭儴渚濊禆
 cache:
-  driver: "memory"  # memory (榛樿锛屾帹鑽? 鎴?redis
-  # Redis 涓撶敤閰嶇疆 (浣跨敤 memory 鏃跺彲蹇界暐)
+  driver: "memory"
   # redis_host: "127.0.0.1"
   # redis_port: 6379
   # redis_password: ""
   # redis_db: 0
 
 log:
-  level: "info"  # debug, info, warn, error
-  output: "stdout"  # stdout, file
+  level: "info"
+  output: "stdout"
   file_path: "./logs/v2board.log"
-  max_size: 100  # MB
+  max_size: 100
   max_backups: 30
-  max_age: 7  # days
+  max_age: 7
 
 jwt:
   secret: "your-jwt-secret-key-change-in-production"
-  expire: 86400  # seconds
+  expire: 86400
 
 app:
   name: "V2Board"
   version: "2.0.0"
-  api_token: ""  # Legacy global token (UniProxy now enforces per-node API key)
+  api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
 
 admin:
   email: "v2board@anixops.com"
   password: ""
+
+tls:
+  enable: false
+  cert_file: ""
+  key_file: ""
+  domain: ""
