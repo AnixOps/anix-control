@@ -357,6 +357,14 @@ NGINX_HTTPS_PORT=443
 DOCKER_IMAGE=v2board:latest
 FORWARD_RUNTIME_BACKEND=${runtime_backend}
 FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON=$(forward_runtime_ansible_json)
+FORWARD_RUNTIME_ANSIBLE_INVENTORY=
+FORWARD_RUNTIME_ANSIBLE_BECOME=
+FORWARD_RUNTIME_ANSIBLE_HOST_ALIAS=
+FORWARD_RUNTIME_ANSIBLE_HOST=
+FORWARD_RUNTIME_ANSIBLE_PORT=22
+FORWARD_RUNTIME_ANSIBLE_USER=root
+FORWARD_RUNTIME_ANSIBLE_PASSWORD=
+FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD=
 EOF
 }
 
@@ -397,6 +405,14 @@ DOMAIN=panel.example.com
 EMAIL=admin@example.com
 FORWARD_RUNTIME_BACKEND=${runtime_backend}
 FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON=$(forward_runtime_ansible_json)
+FORWARD_RUNTIME_ANSIBLE_INVENTORY=
+FORWARD_RUNTIME_ANSIBLE_BECOME=
+FORWARD_RUNTIME_ANSIBLE_HOST_ALIAS=
+FORWARD_RUNTIME_ANSIBLE_HOST=
+FORWARD_RUNTIME_ANSIBLE_PORT=22
+FORWARD_RUNTIME_ANSIBLE_USER=root
+FORWARD_RUNTIME_ANSIBLE_PASSWORD=
+FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD=
 EOF
 }
 
@@ -654,7 +670,7 @@ install_panel() {
   printf 'SSH key directory: %s\n' "$install_dir/config/deploy/ssh"
   printf 'Default runtime:   %s\n' "$runtime_backend"
   printf '\n'
-  printf 'Place your SSH private key in config/deploy/ssh and, if needed, edit inventory.ini.\n'
+  printf 'Use config/deploy/ssh + inventory.ini for key auth, or fill FORWARD_RUNTIME_ANSIBLE_HOST/USER/PASSWORD in .env for password auth.\n'
   printf 'The runtime backend and ansible config are seeded from .env during service startup.\n'
 }
 

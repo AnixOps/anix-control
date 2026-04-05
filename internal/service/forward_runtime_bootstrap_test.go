@@ -2,6 +2,7 @@ package service
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/anixops/v2board/internal/database"
@@ -34,6 +35,12 @@ func (s *ForwardRuntimeBootstrapTestSuite) SetupTest() {
 	_ = os.Unsetenv(forwardRuntimeAnsibleBecomeEnvVar)
 	_ = os.Unsetenv(forwardRuntimeAnsibleExtraVarsEnvVar)
 	_ = os.Unsetenv(forwardRuntimeAnsibleEnvEnvVar)
+	_ = os.Unsetenv(forwardRuntimeAnsibleHostAliasEnvVar)
+	_ = os.Unsetenv(forwardRuntimeAnsibleHostEnvVar)
+	_ = os.Unsetenv(forwardRuntimeAnsiblePortEnvVar)
+	_ = os.Unsetenv(forwardRuntimeAnsibleUserEnvVar)
+	_ = os.Unsetenv(forwardRuntimeAnsiblePasswordEnvVar)
+	_ = os.Unsetenv(forwardRuntimeAnsibleBecomePasswordEnvVar)
 }
 
 func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_SeedsConfigs() {
@@ -68,6 +75,50 @@ func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFro
 	err := InitForwardRuntimeSystemConfigFromEnv(database.Get())
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), forwardRuntimeAnsibleConfigJSONEnvVar)
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_EnvOverridesJSON() {
+	s.T().Setenv(forwardRuntimeBackendEnvVar, model.ForwardRuntimeBackendIptablesAnsible)
+	s.T().Setenv(forwardRuntimeAnsibleConfigJSONEnvVar, `{"inventory":"/app/config/deploy/ansible/inventory.ini","workingDir":"/app/config/deploy/ansible"}`)
+	s.T().Setenv(forwardRuntimeAnsibleInventoryEnvVar, "/home/v2board/.config/v2board/forward-runtime/inventory.ini")
+
+	err := InitForwardRuntimeSystemConfigFromEnv(database.Get())
+	assert.NoError(s.T(), err)
+
+	configService := NewSystemConfigService(database.Get())
+	inventory, err := configService.Get(forwardRuntimeAnsibleInventoryConfigKey)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "/home/v2board/.config/v2board/forward-runtime/inventory.ini", inventory)
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeAnsibleInventoryFromEnv_WritesPasswordInventory() {
+	inventoryPath := filepath.Join(s.T().TempDir(), "inventory.ini")
+	s.T().Setenv(forwardRuntimeAnsibleInventoryEnvVar, inventoryPath)
+	s.T().Setenv(forwardRuntimeAnsibleHostEnvVar, "203.0.113.10")
+	s.T().Setenv(forwardRuntimeAnsibleUserEnvVar, "debian")
+	s.T().Setenv(forwardRuntimeAnsiblePasswordEnvVar, `p@ss"word`)
+	s.T().Setenv(forwardRuntimeAnsibleBecomePasswordEnvVar, `sudo"pass`)
+
+	path, err := InitForwardRuntimeAnsibleInventoryFromEnv()
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), inventoryPath, path)
+
+	content, err := os.ReadFile(path)
+	assert.NoError(s.T(), err)
+	assert.Contains(s.T(), string(content), `[forward_nodes]`)
+	assert.Contains(s.T(), string(content), `ansible_host="203.0.113.10"`)
+	assert.Contains(s.T(), string(content), `ansible_user="debian"`)
+	assert.Contains(s.T(), string(content), `ansible_password="p@ss\"word"`)
+	assert.Contains(s.T(), string(content), `ansible_become_password="sudo\"pass"`)
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeAnsibleInventoryFromEnv_RejectsPartialPasswordConfig() {
+	s.T().Setenv(forwardRuntimeAnsibleHostEnvVar, "203.0.113.10")
+	s.T().Setenv(forwardRuntimeAnsibleUserEnvVar, "root")
+
+	_, err := InitForwardRuntimeAnsibleInventoryFromEnv()
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), forwardRuntimeAnsiblePasswordEnvVar)
 }
 
 func TestForwardRuntimeBootstrap(t *testing.T) {

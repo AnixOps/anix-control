@@ -131,6 +131,8 @@ bash ./panel_install.sh
 - 示例 inventory 模板位于 `config/deploy/ansible/inventory.ini.example`，安装脚本会复制为 `inventory.ini`。
 - SSH 密钥目录为 `config/deploy/ssh/`，会被挂载到容器内的 `/home/v2board/.ssh`。
 - Docker 启动时会读取 `FORWARD_RUNTIME_BACKEND` 与 `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`，并自动同步到系统配置表。
+- 如果没有 SSH 私钥，可以直接在 `.env` 中设置 `FORWARD_RUNTIME_ANSIBLE_HOST`、`FORWARD_RUNTIME_ANSIBLE_USER`、`FORWARD_RUNTIME_ANSIBLE_PASSWORD`。
+- 容器启动时会基于这些环境变量生成临时 inventory，并把路径同步到运行时配置；非 root 用户可再设置 `FORWARD_RUNTIME_ANSIBLE_BECOME=true` 与 `FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD`。
 
 ---
 

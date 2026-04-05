@@ -49,19 +49,31 @@ func InitForwardRuntimeSystemConfigFromEnv(db *gorm.DB) error {
 		return fmt.Errorf("invalid %s value: %s", forwardRuntimeBackendEnvVar, backend)
 	}
 
-	cfg := &panelForwardAnsibleConfig{
-		Inventory:      strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleInventoryEnvVar)),
-		ApplyPlaybook:  strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleApplyEnvVar)),
-		RemovePlaybook: strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleRemoveEnvVar)),
-		WorkingDir:     strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleWorkdirEnvVar)),
-		TargetPattern:  strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleTargetPatternEnvVar)),
-		Command:        strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleCommandEnvVar)),
-	}
+	cfg := &panelForwardAnsibleConfig{}
 
 	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleConfigJSONEnvVar)); value != "" {
 		if err := json.Unmarshal([]byte(value), cfg); err != nil {
 			return fmt.Errorf("invalid %s value: %w", forwardRuntimeAnsibleConfigJSONEnvVar, err)
 		}
+	}
+
+	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleInventoryEnvVar)); value != "" {
+		cfg.Inventory = value
+	}
+	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleApplyEnvVar)); value != "" {
+		cfg.ApplyPlaybook = value
+	}
+	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleRemoveEnvVar)); value != "" {
+		cfg.RemovePlaybook = value
+	}
+	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleWorkdirEnvVar)); value != "" {
+		cfg.WorkingDir = value
+	}
+	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleTargetPatternEnvVar)); value != "" {
+		cfg.TargetPattern = value
+	}
+	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleCommandEnvVar)); value != "" {
+		cfg.Command = value
 	}
 
 	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleTimeoutEnvVar)); value != "" {
