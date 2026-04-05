@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -304,6 +305,8 @@ func main() {
 	cache.InitMemory()
 	defer cache.CloseMemory()
 	log.Println("Cache initialized: memory")
+	go service.NewPanelForwardRuntimeJobExecutor(database.Get()).Start(context.Background())
+	log.Println("Forward runtime executor started")
 
 	// 设置Gin模式
 	gin.SetMode(cfg.Server.Mode)

@@ -928,6 +928,8 @@ cd web && npm run build
   - system config key `forward.runtime_backend`
   - system config key `forward.runtime.iptables_ansible.config`
   - admin endpoint `GET /api/v2/admin/forward/runtime/jobs`
+  - server-side worker started by `cmd/server/main.go` to execute pending `iptables_ansible` jobs
+  - optional ansible config keys: `command`, `workingDir`, `targetPattern`, `timeoutSeconds`, `environment`
 
 ## Flux-panel Doc Sync
 

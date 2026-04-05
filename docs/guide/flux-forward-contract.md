@@ -77,6 +77,7 @@ The following pieces are local extensions for dual-runtime support and are not p
 - `GET /api/v2/admin/forward/runtime/jobs`
 - system config key `forward.runtime_backend`
 - system config key `forward.runtime.iptables_ansible.config`
+- background worker started by `cmd/server/main.go` that executes pending `iptables_ansible` jobs
 
 Rules for this extension surface:
 

@@ -55,6 +55,10 @@
               rows="5"
               placeholder='{"inventory":"...","playbookApply":"...","playbookRemove":"..."}'
             ></textarea>
+            <p class="text-secondary">
+              Optional keys: <code>command</code>, <code>workingDir</code>, <code>targetPattern</code>,
+              <code>timeoutSeconds</code>, <code>environment</code>.
+            </p>
           </div>
         </div>
         <p v-if="runtimeValidationError" class="form-error">{{ runtimeValidationError }}</p>

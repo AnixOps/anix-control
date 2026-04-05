@@ -180,6 +180,7 @@ These items are local extensions added to support a second runtime path (`iptabl
 - config key: `forward.runtime.iptables_ansible.config`
 - admin runtime job endpoint: `GET /api/v2/admin/forward/runtime/jobs`
 - admin UI location: `web/src/views/admin/System.vue`
+- runtime worker: started automatically by `cmd/server/main.go` and consumes pending `iptables_ansible` jobs in-process
 
 Guardrails:
 
