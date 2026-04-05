@@ -379,6 +379,11 @@ type panelForwardAnsibleConfig struct {
 	RemovePlaybook string                 `json:"playbookRemove"`
 	Become         bool                   `json:"become"`
 	ExtraVars      map[string]interface{} `json:"extraVars"`
+	Command        string                 `json:"command"`
+	WorkingDir     string                 `json:"workingDir"`
+	TargetPattern  string                 `json:"targetPattern"`
+	Environment    map[string]string      `json:"environment"`
+	TimeoutSeconds int                    `json:"timeoutSeconds"`
 }
 
 func (c *panelForwardAnsibleConfig) playbookForAction(action string) string {
@@ -391,6 +396,9 @@ func (c *panelForwardAnsibleConfig) playbookForAction(action string) string {
 func (c *panelForwardAnsibleConfig) ensureDefaults() {
 	if c.ExtraVars == nil {
 		c.ExtraVars = map[string]interface{}{}
+	}
+	if c.Environment == nil {
+		c.Environment = map[string]string{}
 	}
 }
 
@@ -562,60 +570,23 @@ func (p *panelForwardAnsibleRuntimeProvider) buildPayload(action string, forward
 		return "", err
 	}
 
-	type targetPayload struct {
-		Name string `json:"name"`
-		Addr string `json:"addr"`
-	}
-	type forwardPayload struct {
-		ID            uint   `json:"id"`
-		UserID        uint   `json:"userId"`
-		Name          string `json:"name"`
-		InPort        int    `json:"inPort"`
-		RemoteAddr    string `json:"remoteAddr"`
-		InterfaceName string `json:"interfaceName"`
-		Strategy      string `json:"strategy"`
-		Status        int    `json:"status"`
-	}
-	type tunnelPayload struct {
-		ID            uint   `json:"id"`
-		Name          string `json:"name"`
-		InNodeID      uint   `json:"inNodeId"`
-		Protocol      string `json:"protocol"`
-		TCPListenAddr string `json:"tcpListenAddr"`
-		UDPListenAddr string `json:"udpListenAddr"`
-		InterfaceName string `json:"interfaceName"`
-	}
-	type nodePayload struct {
-		ID      uint   `json:"id"`
-		Name    string `json:"name"`
-		Host    string `json:"host"`
-		Port    int    `json:"port"`
-		APIPort int    `json:"apiPort"`
-	}
-	type ansiblePayload struct {
-		Action    string                 `json:"action"`
-		Inventory string                 `json:"inventory"`
-		Playbook  string                 `json:"playbook"`
-		Become    bool                   `json:"become"`
-		ExtraVars map[string]interface{} `json:"extraVars,omitempty"`
-		Forward   forwardPayload         `json:"forward"`
-		Tunnel    tunnelPayload          `json:"tunnel"`
-		Node      nodePayload            `json:"node"`
-		Targets   []targetPayload        `json:"targets"`
-	}
-
-	items := make([]targetPayload, 0, len(targets))
+	items := make([]panelForwardAnsibleTargetPayload, 0, len(targets))
 	for _, target := range targets {
-		items = append(items, targetPayload{Name: target.Name, Addr: target.Addr})
+		items = append(items, panelForwardAnsibleTargetPayload{Name: target.Name, Addr: target.Addr})
 	}
 
-	payload := ansiblePayload{
-		Action:    action,
-		Inventory: cfg.Inventory,
-		Playbook:  cfg.playbookForAction(action),
-		Become:    cfg.Become,
-		ExtraVars: cfg.ExtraVars,
-		Forward: forwardPayload{
+	payload := panelForwardAnsibleRuntimePayload{
+		Action:         action,
+		Inventory:      cfg.Inventory,
+		Playbook:       cfg.playbookForAction(action),
+		Become:         cfg.Become,
+		ExtraVars:      cfg.ExtraVars,
+		Command:        cfg.Command,
+		WorkingDir:     cfg.WorkingDir,
+		TargetPattern:  cfg.TargetPattern,
+		Environment:    cfg.Environment,
+		TimeoutSeconds: cfg.TimeoutSeconds,
+		Forward: panelForwardAnsibleForwardPayload{
 			ID:            forward.ID,
 			UserID:        forward.UserID,
 			Name:          forward.Name,
@@ -625,7 +596,7 @@ func (p *panelForwardAnsibleRuntimeProvider) buildPayload(action string, forward
 			Strategy:      normalizeStrategy(forward.Strategy, forward.RemoteAddr),
 			Status:        forward.Status,
 		},
-		Tunnel: tunnelPayload{
+		Tunnel: panelForwardAnsibleTunnelPayload{
 			ID:            tunnel.ID,
 			Name:          tunnel.Name,
 			InNodeID:      tunnel.InNodeID,
@@ -634,7 +605,7 @@ func (p *panelForwardAnsibleRuntimeProvider) buildPayload(action string, forward
 			UDPListenAddr: tunnel.UDPListenAddr,
 			InterfaceName: tunnel.InterfaceName,
 		},
-		Node: nodePayload{
+		Node: panelForwardAnsibleNodePayload{
 			ID:      node.ID,
 			Name:    node.Name,
 			Host:    node.Host,

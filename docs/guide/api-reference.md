@@ -251,6 +251,8 @@ Notes:
 
 - This is a local extension for dual-runtime support.
 - Keep the Flux-compatible `/admin/forward` page free of extra runtime panels; use `System.vue` for backend switching and runtime job observability.
+- The server now starts an in-process runtime worker that consumes pending `iptables_ansible` jobs automatically.
+- Optional JSON keys inside `forward.runtime.iptables_ansible.config`: `command`, `workingDir`, `targetPattern`, `timeoutSeconds`, `environment`.
 
 ---
 
