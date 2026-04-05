@@ -125,6 +125,8 @@ app:
   api_token: "your-node-communication-token"
 ```
 
+> 说明：UniProxy（`/api/v2/server/UniProxy/*`）鉴权使用 `query: node_id` + `header: X-API-Key`，不使用 query token。
+
 ## 常用接口
 
 ### 公开接口
@@ -152,6 +154,7 @@ app:
 - `GET /api/v2/server/UniProxy/user`
 - `POST /api/v2/server/UniProxy/push`
 - `POST /api/v2/server/UniProxy/alive`
+- 鉴权方式：`query: node_id` + `header: X-API-Key`
 
 ## 测试
 

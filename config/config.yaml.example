@@ -47,7 +47,7 @@ jwt:
 app:
   name: "V2Board"
   version: "2.0.0"
-  api_token: ""  # Global API token for node communication
+  api_token: ""  # Legacy global token (UniProxy now enforces per-node API key)
   traffic_log_enable: true
   subscribe_path: "s"
 

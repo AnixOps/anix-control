@@ -18,11 +18,11 @@ Authorization: Bearer <token>
 
 ### 节点认证
 
-使用 Token 参数或 API Key：
+UniProxy 鉴权使用 `node_id` 查询参数 + `X-API-Key` 请求头。
 
 ```
 # URL 参数方式
-GET /api/v2/server/UniProxy/config?node_id=1&token=<api_token>
+GET /api/v2/server/UniProxy/config?node_id=1
 
 # Header 方式
 X-API-Key: <api_key>
@@ -280,7 +280,8 @@ Content-Type: application/json
 ### 获取节点配置
 
 ```http
-GET /api/v2/server/UniProxy/config?node_id=1&token=<token>
+GET /api/v2/server/UniProxy/config?node_id=1
+X-API-Key: <api_key>
 ```
 
 **响应**:
@@ -311,7 +312,8 @@ GET /api/v2/server/UniProxy/config?node_id=1&token=<token>
 ### 获取用户列表
 
 ```http
-GET /api/v2/server/UniProxy/user?node_id=1&token=<token>
+GET /api/v2/server/UniProxy/user?node_id=1
+X-API-Key: <api_key>
 ```
 
 **响应**:
@@ -331,7 +333,8 @@ GET /api/v2/server/UniProxy/user?node_id=1&token=<token>
 ### 获取在线列表
 
 ```http
-GET /api/v2/server/UniProxy/alivelist?node_id=1&token=<token>
+GET /api/v2/server/UniProxy/alivelist?node_id=1
+X-API-Key: <api_key>
 ```
 
 **响应**:
@@ -347,7 +350,8 @@ GET /api/v2/server/UniProxy/alivelist?node_id=1&token=<token>
 ### 上报流量
 
 ```http
-POST /api/v2/server/UniProxy/push?node_id=1&token=<token>
+POST /api/v2/server/UniProxy/push?node_id=1
+X-API-Key: <api_key>
 Content-Type: application/json
 
 {
@@ -361,7 +365,8 @@ Content-Type: application/json
 ### 上报在线状态
 
 ```http
-POST /api/v2/server/UniProxy/alive?node_id=1&token=<token>
+POST /api/v2/server/UniProxy/alive?node_id=1
+X-API-Key: <api_key>
 Content-Type: application/json
 
 {

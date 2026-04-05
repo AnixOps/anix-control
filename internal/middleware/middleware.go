@@ -7,77 +7,60 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 
-// NodeAuth 鑺傜偣璁よ瘉涓棿浠?(鏃х増鍏煎)
+// NodeAuth enforces node-scoped auth via required `node_id + X-API-Key`.
 func NodeAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token := c.Query("token")
-		if token == "" {
+		apiKey := c.GetHeader("X-API-Key")
+		if apiKey == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "missing token",
+				"error": "missing api key",
 			})
 			return
 		}
 
-		cfg := config.Get()
-
-		// 1) Legacy global token
-		if cfg != nil && cfg.App.APIToken != "" && token == cfg.App.APIToken {
-			c.Next()
-			return
-		}
-
-		// 2) Node-scoped API key token (V2bX uses token + node_id)
 		nodeIDStr := c.Query("node_id")
-		if nodeIDStr != "" {
-			nodeID, err := strconv.ParseUint(nodeIDStr, 10, 32)
-			if err != nil {
-				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-					"error": "invalid node_id",
-				})
-				return
-			}
-
-			var node model.Node
-			db := database.GetDB()
-			if err := db.First(&node, uint(nodeID)).Error; err != nil {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-					"error": "invalid node",
-				})
-				return
-			}
-
-			tokenHash := sha256Hash(token)
-			valid := node.APIKeyHash == tokenHash || (node.APIKeyHash == "" && node.APIKey == token)
-			if !valid {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-					"error": "invalid token",
-				})
-				return
-			}
-
-			c.Set("node_id", node.ID)
-			c.Set("node", &node)
-			c.Next()
+		if nodeIDStr == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "missing node_id",
+			})
 			return
 		}
 
-		// 3) Keep compatibility for tests/dev when APIToken is empty.
-		if cfg == nil || cfg.App.APIToken == "" {
-			c.Next()
+		nodeID, err := strconv.ParseUint(nodeIDStr, 10, 32)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error": "invalid node_id",
+			})
 			return
 		}
 
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-			"error": "invalid token",
-		})
-		return
+		var node model.Node
+		db := database.GetDB()
+		if err := db.First(&node, uint(nodeID)).Error; err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid node",
+			})
+			return
+		}
+
+		tokenHash := sha256Hash(apiKey)
+		valid := node.APIKeyHash == tokenHash || (node.APIKeyHash == "" && node.APIKey == apiKey)
+		if !valid {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid api key",
+			})
+			return
+		}
+
+		c.Set("node_id", node.ID)
+		c.Set("node", &node)
+		c.Next()
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/anixops/v2board/internal/cache"
@@ -22,19 +23,19 @@ import (
 // UniProxyE2ETestSuite UniProxy API E2E 测试套件
 type UniProxyE2ETestSuite struct {
 	suite.Suite
-	router    *gin.Engine
-	db        *gorm.DB
-	cfg       *config.Config
-	testNode  *model.Node
-	testUser  *model.User
-	apiToken  string
+	router   *gin.Engine
+	db       *gorm.DB
+	cfg      *config.Config
+	testNode *model.Node
+	testUser *model.User
+	globalAPIToken string
 }
 
 // SetupSuite 测试套件初始化
 func (s *UniProxyE2ETestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
 
-	s.apiToken = "test-api-token-for-uniproxy"
+	s.globalAPIToken = "test-global-api-token"
 
 	s.cfg = &config.Config{
 		Env: "test",
@@ -54,7 +55,7 @@ func (s *UniProxyE2ETestSuite) SetupSuite() {
 		App: config.AppConfig{
 			Name:          "V2Board UniProxy E2E Test",
 			Version:       "test",
-			APIToken:      s.apiToken,
+			APIToken:      s.globalAPIToken,
 			SubscribePath: "s",
 		},
 	}
@@ -137,9 +138,9 @@ func (s *UniProxyE2ETestSuite) TearDownSuite() {
 func (s *UniProxyE2ETestSuite) TestGetConfig_Success() {
 	req, _ := http.NewRequest("GET", "/api/v2/server/UniProxy/config", nil)
 	q := req.URL.Query()
-	q.Add("node_id", string(rune(s.testNode.ID+'0')))
-	q.Add("token", s.apiToken)
+	q.Add("node_id", strconv.Itoa(int(s.testNode.ID)))
 	req.URL.RawQuery = q.Encode()
+	req.Header.Set("X-API-Key", s.testNode.APIKey)
 
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
@@ -152,9 +153,9 @@ func (s *UniProxyE2ETestSuite) TestGetConfig_Success() {
 func (s *UniProxyE2ETestSuite) TestGetUsers_Success() {
 	req, _ := http.NewRequest("GET", "/api/v2/server/UniProxy/user", nil)
 	q := req.URL.Query()
-	q.Add("node_id", "1")
-	q.Add("token", s.apiToken)
+	q.Add("node_id", strconv.Itoa(int(s.testNode.ID)))
 	req.URL.RawQuery = q.Encode()
+	req.Header.Set("X-API-Key", s.testNode.APIKey)
 
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
@@ -185,10 +186,10 @@ func (s *UniProxyE2ETestSuite) TestPushTraffic_Success() {
 
 	req, _ := http.NewRequest("POST", "/api/v2/server/UniProxy/push", bytes.NewReader(jsonBody))
 	q := req.URL.Query()
-	q.Add("node_id", "1")
-	q.Add("token", s.apiToken)
+	q.Add("node_id", strconv.Itoa(int(s.testNode.ID)))
 	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", s.testNode.APIKey)
 
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
@@ -207,10 +208,10 @@ func (s *UniProxyE2ETestSuite) TestPushAlive_Success() {
 
 	req, _ := http.NewRequest("POST", "/api/v2/server/UniProxy/alive", bytes.NewReader(jsonBody))
 	q := req.URL.Query()
-	q.Add("node_id", "1")
-	q.Add("token", s.apiToken)
+	q.Add("node_id", strconv.Itoa(int(s.testNode.ID)))
 	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", s.testNode.APIKey)
 
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
@@ -219,12 +220,12 @@ func (s *UniProxyE2ETestSuite) TestPushAlive_Success() {
 	assert.Contains(s.T(), []int{http.StatusOK, http.StatusBadRequest}, w.Code)
 }
 
-// TestNodeAuth_MissingToken 测试缺少 Token
-func (s *UniProxyE2ETestSuite) TestNodeAuth_MissingToken() {
+// TestNodeAuth_MissingAPIKey 测试缺少 API Key
+func (s *UniProxyE2ETestSuite) TestNodeAuth_MissingAPIKey() {
 	req, _ := http.NewRequest("GET", "/api/v2/server/UniProxy/config", nil)
 	q := req.URL.Query()
-	q.Add("node_id", "1")
-	// 不添加 token
+	q.Add("node_id", strconv.Itoa(int(s.testNode.ID)))
+	// 不添加 X-API-Key
 	req.URL.RawQuery = q.Encode()
 
 	w := httptest.NewRecorder()
@@ -233,13 +234,13 @@ func (s *UniProxyE2ETestSuite) TestNodeAuth_MissingToken() {
 	assert.Equal(s.T(), http.StatusUnauthorized, w.Code)
 }
 
-// TestNodeAuth_InvalidToken 测试无效 Token
-func (s *UniProxyE2ETestSuite) TestNodeAuth_InvalidToken() {
+// TestNodeAuth_InvalidAPIKey 测试无效 API Key
+func (s *UniProxyE2ETestSuite) TestNodeAuth_InvalidAPIKey() {
 	req, _ := http.NewRequest("GET", "/api/v2/server/UniProxy/config", nil)
 	q := req.URL.Query()
-	q.Add("node_id", "1")
-	q.Add("token", "invalid-token")
+	q.Add("node_id", strconv.Itoa(int(s.testNode.ID)))
 	req.URL.RawQuery = q.Encode()
+	req.Header.Set("X-API-Key", "invalid-api-key")
 
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
@@ -252,10 +253,10 @@ func (s *UniProxyE2ETestSuite) TestPushTraffic_InvalidFormat() {
 	// 发送无效的 JSON
 	req, _ := http.NewRequest("POST", "/api/v2/server/UniProxy/push", bytes.NewReader([]byte("invalid json")))
 	q := req.URL.Query()
-	q.Add("node_id", "1")
-	q.Add("token", s.apiToken)
+	q.Add("node_id", strconv.Itoa(int(s.testNode.ID)))
 	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", s.testNode.APIKey)
 
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)

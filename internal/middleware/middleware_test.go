@@ -37,7 +37,7 @@ func setupTestDB(t *testing.T) func() {
 	}
 }
 
-func TestNodeAuth_MissingToken(t *testing.T) {
+func TestNodeAuth_MissingAPIKey(t *testing.T) {
 	router := gin.New()
 	router.Use(NodeAuth())
 	router.GET("/test", func(c *gin.Context) {
@@ -52,14 +52,19 @@ func TestNodeAuth_MissingToken(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-func TestNodeAuth_ValidToken(t *testing.T) {
-	// 设置配置
-	cfg := &config.Config{
-		App: config.AppConfig{
-			APIToken: "test-token",
-		},
+func TestNodeAuth_ValidAPIKey(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	nodeAPIKey := "test-node-api-key"
+	node := &model.Node{
+		Name:       "Node Auth Token",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: sha256Hash(nodeAPIKey),
+		Status:     model.NodeStatusOnline,
 	}
-	config.Set(cfg)
+	require.NoError(t, database.GetDB().Create(node).Error)
 
 	router := gin.New()
 	router.Use(NodeAuth())
@@ -67,21 +72,26 @@ func TestNodeAuth_ValidToken(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
-	req := httptest.NewRequest("GET", "/test?token=test-token", nil)
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
+	req.Header.Set("X-API-Key", nodeAPIKey)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+func TestNodeAuth_InvalidAPIKey(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
 
-func TestNodeAuth_InvalidToken(t *testing.T) {
-	cfg := &config.Config{
-		App: config.AppConfig{
-			APIToken: "correct-token",
-		},
+	node := &model.Node{
+		Name:       "Node Invalid Token",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: sha256Hash("correct-token"),
+		Status:     model.NodeStatusOnline,
 	}
-	config.Set(cfg)
+	require.NoError(t, database.GetDB().Create(node).Error)
 
 	router := gin.New()
 	router.Use(NodeAuth())
@@ -89,7 +99,8 @@ func TestNodeAuth_InvalidToken(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
-	req := httptest.NewRequest("GET", "/test?token=wrong-token", nil)
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
+	req.Header.Set("X-API-Key", "wrong-api-key")
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -98,8 +109,20 @@ func TestNodeAuth_InvalidToken(t *testing.T) {
 }
 
 func TestNodeAuth_NoConfig(t *testing.T) {
-	// 清除配置
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
 	config.Set(nil)
+
+	nodeAPIKey := "no-config-node-api-key"
+	node := &model.Node{
+		Name:       "Node No Config",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: sha256Hash(nodeAPIKey),
+		Status:     model.NodeStatusOnline,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
 
 	router := gin.New()
 	router.Use(NodeAuth())
@@ -107,16 +130,36 @@ func TestNodeAuth_NoConfig(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
-	// 没有配置时，任何 token 都应该通过
-	req := httptest.NewRequest("GET", "/test?token=any-token", nil)
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
+	req.Header.Set("X-API-Key", nodeAPIKey)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+func TestNodeAuth_GlobalTokenHeaderOnlyRejected(t *testing.T) {
+	config.Set(&config.Config{
+		App: config.AppConfig{
+			APIToken: "global-api-token",
+		},
+	})
 
-func TestNodeAuth_NodeScopedToken_WithGlobalTokenSet(t *testing.T) {
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-API-Key", "global-api-token")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+func TestNodeAuth_NodeScopedAPIKey_WithGlobalTokenSet(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
@@ -126,12 +169,12 @@ func TestNodeAuth_NodeScopedToken_WithGlobalTokenSet(t *testing.T) {
 		},
 	})
 
-	nodeToken := "node-api-key-001"
+	nodeAPIKey := "node-api-key-001"
 	node := &model.Node{
 		Name:       "Node Scoped Auth",
 		Host:       "127.0.0.1",
 		Port:       443,
-		APIKeyHash: sha256Hash(nodeToken),
+		APIKeyHash: sha256Hash(nodeAPIKey),
 		Status:     model.NodeStatusOnline,
 	}
 	require.NoError(t, database.GetDB().Create(node).Error)
@@ -143,7 +186,8 @@ func TestNodeAuth_NodeScopedToken_WithGlobalTokenSet(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{"node_id": nodeID})
 	})
 
-	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID))+"&token="+nodeToken, nil)
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
+	req.Header.Set("X-API-Key", nodeAPIKey)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
@@ -151,7 +195,7 @@ func TestNodeAuth_NodeScopedToken_WithGlobalTokenSet(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestNodeAuth_NodeScopedToken_PlainAPIKeyFallback(t *testing.T) {
+func TestNodeAuth_NodeScopedPlainAPIKeyFallback(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
@@ -161,12 +205,12 @@ func TestNodeAuth_NodeScopedToken_PlainAPIKeyFallback(t *testing.T) {
 		},
 	})
 
-	nodeToken := "legacy-plain-api-key"
+	nodeAPIKey := "legacy-plain-api-key"
 	node := &model.Node{
 		Name:   "Legacy Plain APIKey",
 		Host:   "127.0.0.1",
 		Port:   443,
-		APIKey: nodeToken,
+		APIKey: nodeAPIKey,
 		Status: model.NodeStatusOnline,
 	}
 	require.NoError(t, database.GetDB().Create(node).Error)
@@ -177,7 +221,8 @@ func TestNodeAuth_NodeScopedToken_PlainAPIKeyFallback(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
-	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID))+"&token="+nodeToken, nil)
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
+	req.Header.Set("X-API-Key", nodeAPIKey)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
