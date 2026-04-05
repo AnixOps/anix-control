@@ -7,55 +7,55 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anixops/v2board/internal/gost"
 	"github.com/anixops/v2board/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-// ForwardRuleService 转发规则服务
+// ForwardRuleService handles forward rule persistence and runtime sync.
 type ForwardRuleService struct {
-	db          *gorm.DB
-	nodeService *ForwardNodeService
-	gostManager *gost.Manager
-	mu          sync.RWMutex
+	db              *gorm.DB
+	nodeService     *ForwardNodeService
+	runtimeProvider ForwardRuntimeProvider
+	mu              sync.RWMutex
 }
 
-// NewForwardRuleService 创建服务
+// NewForwardRuleService preserves the existing constructor shape and uses the default runtime provider.
 func NewForwardRuleService(db *gorm.DB, nodeService *ForwardNodeService) *ForwardRuleService {
+	return NewForwardRuleServiceWithProvider(db, nodeService, NewForwardRuntimeProvider(db))
+}
+
+// NewForwardRuleServiceWithProvider allows future runtime backends to be injected explicitly.
+func NewForwardRuleServiceWithProvider(db *gorm.DB, nodeService *ForwardNodeService, provider ForwardRuntimeProvider) *ForwardRuleService {
 	return &ForwardRuleService{
-		db:          db,
-		nodeService: nodeService,
-		gostManager: gost.NewManager(db),
+		db:              db,
+		nodeService:     nodeService,
+		runtimeProvider: provider,
 	}
 }
 
-// Create 创建规则
+// Create creates a rule and syncs it to the runtime when enabled.
 func (s *ForwardRuleService) Create(rule *model.ForwardRule) error {
-	// 验证端口是否可用
 	if err := s.validateRule(rule); err != nil {
 		return err
 	}
 
-	// 保存到数据库
 	if err := s.db.Create(rule).Error; err != nil {
 		return err
 	}
 
-	// 如果规则启用，同步到 gost
 	if rule.Enabled {
 		ctx := context.Background()
-		if err := s.gostManager.CreateForwardRule(ctx, rule); err != nil {
-			// 记录错误但不回滚数据库操作
-			// 可以通过后台任务重试同步
-			fmt.Printf("sync rule %d to gost failed: %v\n", rule.ID, err)
+		if err := s.runtimeProvider.CreateForwardRule(ctx, rule); err != nil {
+			// Keep DB persistence compatible with current behavior even if runtime sync fails.
+			fmt.Printf("sync rule %d failed: %v\n", rule.ID, err)
 		}
 	}
 
 	return nil
 }
 
-// Update 更新规则
+// Update updates a rule and syncs it to the runtime backend.
 func (s *ForwardRuleService) Update(rule *model.ForwardRule) error {
 	if err := s.validateRule(rule); err != nil {
 		return err
@@ -68,33 +68,30 @@ func (s *ForwardRuleService) Update(rule *model.ForwardRule) error {
 		return err
 	}
 
-	// 同步到 gost
 	ctx := context.Background()
-	if err := s.gostManager.UpdateForwardRule(ctx, rule); err != nil {
-		fmt.Printf("sync rule %d to gost failed: %v\n", rule.ID, err)
+	if err := s.runtimeProvider.UpdateForwardRule(ctx, rule); err != nil {
+		fmt.Printf("sync rule %d failed: %v\n", rule.ID, err)
 	}
 
 	return nil
 }
 
-// Delete 删除规则
+// Delete deletes a rule from the runtime backend and then removes it from the database.
 func (s *ForwardRuleService) Delete(id uint) error {
-	// 先获取规则信息
 	rule, err := s.GetByID(id)
 	if err != nil {
 		return err
 	}
 
-	// 从 gost 删除
 	ctx := context.Background()
-	if err := s.gostManager.DeleteForwardRule(ctx, rule); err != nil {
-		fmt.Printf("delete rule %d from gost failed: %v\n", id, err)
+	if err := s.runtimeProvider.DeleteForwardRule(ctx, rule); err != nil {
+		fmt.Printf("delete rule %d failed: %v\n", id, err)
 	}
 
 	return s.db.Delete(&model.ForwardRule{}, id).Error
 }
 
-// GetByID 根据ID获取规则
+// GetByID fetches a rule by ID.
 func (s *ForwardRuleService) GetByID(id uint) (*model.ForwardRule, error) {
 	var rule model.ForwardRule
 	err := s.db.Preload("RelayNode").Preload("ExitNode").First(&rule, id).Error
@@ -104,7 +101,7 @@ func (s *ForwardRuleService) GetByID(id uint) (*model.ForwardRule, error) {
 	return &rule, nil
 }
 
-// List 获取规则列表
+// List fetches a paginated rule list.
 func (s *ForwardRuleService) List(page, pageSize int, userID *uint) ([]*model.ForwardRule, int64, error) {
 	var rules []*model.ForwardRule
 	var total int64
@@ -123,7 +120,7 @@ func (s *ForwardRuleService) List(page, pageSize int, userID *uint) ([]*model.Fo
 	return rules, total, err
 }
 
-// GetEnabledRules 获取启用的规则
+// GetEnabledRules fetches enabled rules.
 func (s *ForwardRuleService) GetEnabledRules() ([]*model.ForwardRule, error) {
 	var rules []*model.ForwardRule
 	err := s.db.Where("enabled = ?", true).
@@ -133,7 +130,7 @@ func (s *ForwardRuleService) GetEnabledRules() ([]*model.ForwardRule, error) {
 	return rules, err
 }
 
-// GetUserRules 获取用户的规则
+// GetUserRules fetches rules owned by a user.
 func (s *ForwardRuleService) GetUserRules(userID uint) ([]*model.ForwardRule, error) {
 	var rules []*model.ForwardRule
 	err := s.db.Where("user_id = ?", userID).
@@ -143,7 +140,7 @@ func (s *ForwardRuleService) GetUserRules(userID uint) ([]*model.ForwardRule, er
 	return rules, err
 }
 
-// Toggle 切换规则状态
+// Toggle updates the enabled state and syncs it to the runtime backend.
 func (s *ForwardRuleService) Toggle(id uint, enabled bool) error {
 	rule, err := s.GetByID(id)
 	if err != nil {
@@ -157,18 +154,16 @@ func (s *ForwardRuleService) Toggle(id uint, enabled bool) error {
 
 	rule.Enabled = enabled
 
-	// 同步到 gost
 	ctx := context.Background()
-	if err := s.gostManager.SyncRuleToGost(ctx, rule); err != nil {
-		fmt.Printf("sync rule %d to gost failed: %v\n", id, err)
+	if err := s.runtimeProvider.SyncForwardRule(ctx, rule); err != nil {
+		fmt.Printf("sync rule %d failed: %v\n", id, err)
 	}
 
 	return nil
 }
 
-// validateRule 验证规则
+// validateRule validates rule topology and port uniqueness.
 func (s *ForwardRuleService) validateRule(rule *model.ForwardRule) error {
-	// 检查中转节点是否存在
 	relayNode, err := s.nodeService.GetByID(rule.RelayNodeID)
 	if err != nil {
 		return fmt.Errorf("relay node not found")
@@ -177,7 +172,6 @@ func (s *ForwardRuleService) validateRule(rule *model.ForwardRule) error {
 		return fmt.Errorf("node is not a relay node")
 	}
 
-	// 检查落地节点是否存在
 	exitNode, err := s.nodeService.GetByID(rule.ExitNodeID)
 	if err != nil {
 		return fmt.Errorf("exit node not found")
@@ -186,7 +180,6 @@ func (s *ForwardRuleService) validateRule(rule *model.ForwardRule) error {
 		return fmt.Errorf("node is not an exit node")
 	}
 
-	// 检查端口冲突 (同一中转节点上的监听端口不能重复)
 	var count int64
 	s.db.Model(&model.ForwardRule{}).
 		Where("relay_node_id = ? AND listen_port = ? AND id != ?",
@@ -199,7 +192,7 @@ func (s *ForwardRuleService) validateRule(rule *model.ForwardRule) error {
 	return nil
 }
 
-// MatchRule 匹配转发规则
+// MatchRule matches an incoming request against enabled rules.
 func (s *ForwardRuleService) MatchRule(sourceIP string, targetHost string, targetPort int) (*model.ForwardRule, error) {
 	rules, err := s.GetEnabledRules()
 	if err != nil {
@@ -207,28 +200,23 @@ func (s *ForwardRuleService) MatchRule(sourceIP string, targetHost string, targe
 	}
 
 	for _, rule := range rules {
-		// 检查目标端口
 		if rule.TargetPort != targetPort {
 			continue
 		}
 
-		// 检查目标地址
 		if rule.TargetHost != targetHost && rule.TargetHost != "0.0.0.0" {
 			continue
 		}
 
-		// 检查用户限制
 		if rule.UserID != nil {
-			// 需要验证用户身份
+			// TODO: implement user validation for user-bound rules.
 			continue
 		}
 
-		// 检查过期时间
 		if rule.ExpireTime != nil && rule.ExpireTime.Before(time.Now()) {
 			continue
 		}
 
-		// 检查流量限制
 		if rule.TrafficLimit != nil {
 			total := rule.Upload + rule.Download
 			if total >= *rule.TrafficLimit {
@@ -242,7 +230,7 @@ func (s *ForwardRuleService) MatchRule(sourceIP string, targetHost string, targe
 	return nil, fmt.Errorf("no matching rule found")
 }
 
-// UpdateTraffic 更新流量统计
+// UpdateTraffic updates traffic counters.
 func (s *ForwardRuleService) UpdateTraffic(ruleID uint, upload, download int64) error {
 	return s.db.Model(&model.ForwardRule{}).Where("id = ?", ruleID).Updates(map[string]interface{}{
 		"upload":   gorm.Expr("upload + ?", upload),
@@ -250,7 +238,7 @@ func (s *ForwardRuleService) UpdateTraffic(ruleID uint, upload, download int64) 
 	}).Error
 }
 
-// UpdateConnections 更新连接数
+// UpdateConnections updates connection counters.
 func (s *ForwardRuleService) UpdateConnections(ruleID uint, delta int) error {
 	return s.db.Model(&model.ForwardRule{}).Where("id = ?", ruleID).Updates(map[string]interface{}{
 		"connections": gorm.Expr("connections + ?", delta),
@@ -258,7 +246,7 @@ func (s *ForwardRuleService) UpdateConnections(ruleID uint, delta int) error {
 	}).Error
 }
 
-// GetPortMapping 获取端口映射表
+// GetPortMapping returns the port-to-rule mapping for a relay node.
 func (s *ForwardRuleService) GetPortMapping(relayNodeID uint) (map[int]*model.ForwardRule, error) {
 	rules, err := s.GetEnabledRules()
 	if err != nil {
@@ -274,7 +262,7 @@ func (s *ForwardRuleService) GetPortMapping(relayNodeID uint) (map[int]*model.Fo
 	return mapping, nil
 }
 
-// GetTrafficStats 获取流量统计
+// GetTrafficStats returns traffic stats for a rule over a time range.
 func (s *ForwardRuleService) GetTrafficStats(ruleID uint, start, end time.Time) ([]*model.ForwardStats, error) {
 	var stats []*model.ForwardStats
 	err := s.db.Where("rule_id = ? AND date >= ? AND date <= ?", ruleID, start, end).
@@ -283,7 +271,7 @@ func (s *ForwardRuleService) GetTrafficStats(ruleID uint, start, end time.Time) 
 	return stats, err
 }
 
-// GetFreePort 获取空闲端口
+// GetFreePort finds a free relay port in the given range.
 func (s *ForwardRuleService) GetFreePort(relayNodeID uint, startPort, endPort int) (int, error) {
 	usedPorts, err := s.getUsedPorts(relayNodeID)
 	if err != nil {
@@ -298,7 +286,7 @@ func (s *ForwardRuleService) GetFreePort(relayNodeID uint, startPort, endPort in
 	return 0, fmt.Errorf("no available port in range %d-%d", startPort, endPort)
 }
 
-// getUsedPorts 获取已使用的端口
+// getUsedPorts returns the used ports for a relay node.
 func (s *ForwardRuleService) getUsedPorts(relayNodeID uint) (map[int]bool, error) {
 	var rules []*model.ForwardRule
 	err := s.db.Where("relay_node_id = ?", relayNodeID).Find(&rules).Error
@@ -313,7 +301,7 @@ func (s *ForwardRuleService) getUsedPorts(relayNodeID uint) (map[int]bool, error
 	return used, nil
 }
 
-// CheckPortAvailable 检查端口是否可用
+// CheckPortAvailable checks whether a relay port is free.
 func (s *ForwardRuleService) CheckPortAvailable(relayNodeID uint, port int) (bool, error) {
 	var count int64
 	s.db.Model(&model.ForwardRule{}).
@@ -322,25 +310,22 @@ func (s *ForwardRuleService) CheckPortAvailable(relayNodeID uint, port int) (boo
 	return count == 0, nil
 }
 
-// ValidateUserRule 验证用户规则权限
+// ValidateUserRule validates whether a user can access a rule.
 func (s *ForwardRuleService) ValidateUserRule(userID, ruleID uint) (bool, error) {
 	rule, err := s.GetByID(ruleID)
 	if err != nil {
 		return false, err
 	}
 
-	// 公共规则
 	if rule.UserID == nil {
 		return true, nil
 	}
 
-	// 用户自己的规则
 	return *rule.UserID == userID, nil
 }
 
-// CreateRuleForUser 为用户创建规则
+// CreateRuleForUser creates a user-owned rule.
 func (s *ForwardRuleService) CreateRuleForUser(userID uint, req *CreateRuleRequest) (*model.ForwardRule, error) {
-	// 获取空闲端口
 	port, err := s.GetFreePort(req.RelayNodeID, 10000, 65535)
 	if err != nil {
 		return nil, fmt.Errorf("no available port: %w", err)
@@ -368,7 +353,7 @@ func (s *ForwardRuleService) CreateRuleForUser(userID uint, req *CreateRuleReque
 	return rule, nil
 }
 
-// CreateRuleRequest 创建规则请求
+// CreateRuleRequest is the request payload for user-owned rule creation.
 type CreateRuleRequest struct {
 	Name         string     `json:"name"`
 	RelayNodeID  uint       `json:"relay_node_id"`
@@ -381,7 +366,7 @@ type CreateRuleRequest struct {
 	ExpireTime   *time.Time `json:"expire_time"`
 }
 
-// GetConfigForNode 获取节点配置 (用于下发到节点)
+// GetConfigForNode returns runtime config that should be pushed to a node.
 func (s *ForwardRuleService) GetConfigForNode(nodeID uint) (*NodeForwardConfig, error) {
 	rules, err := s.GetEnabledRules()
 	if err != nil {
@@ -394,7 +379,6 @@ func (s *ForwardRuleService) GetConfigForNode(nodeID uint) (*NodeForwardConfig, 
 	}
 
 	for _, rule := range rules {
-		// 只返回该节点相关的规则
 		if rule.RelayNodeID != nodeID && rule.ExitNodeID != nodeID {
 			continue
 		}
@@ -417,13 +401,13 @@ func (s *ForwardRuleService) GetConfigForNode(nodeID uint) (*NodeForwardConfig, 
 	return config, nil
 }
 
-// NodeForwardConfig 节点转发配置
+// NodeForwardConfig is the rule bundle for a node.
 type NodeForwardConfig struct {
 	NodeID uint                `json:"node_id"`
 	Rules  []ForwardRuleConfig `json:"rules"`
 }
 
-// ForwardRuleConfig 转发规则配置
+// ForwardRuleConfig is the node-side rule payload.
 type ForwardRuleConfig struct {
 	RuleID     uint   `json:"rule_id"`
 	ListenPort int    `json:"listen_port"`
@@ -433,25 +417,19 @@ type ForwardRuleConfig struct {
 	SpeedLimit int64  `json:"speed_limit,omitempty"`
 }
 
-// CheckIPAllowed 检查IP是否允许访问
+// CheckIPAllowed checks whether an IP is allowed to access the rule.
 func (s *ForwardRuleService) CheckIPAllowed(rule *model.ForwardRule, ip string) bool {
-	// 检查是否需要验证用户
 	if rule.UserID != nil {
-		// TODO: 实现IP白名单检查
+		// TODO: implement IP allowlist checks.
 		return true
 	}
 	return true
 }
 
-// ParseIPRange 解析IP范围
+// ParseIPRange parses CIDR or single-IP input.
 func ParseIPRange(r string) ([]net.IP, error) {
-	// 支持 CIDR 格式: 192.168.1.0/24
-	// 支持范围格式: 192.168.1.1-192.168.1.100
-	// 支持单个IP: 192.168.1.1
-
 	_, ipnet, err := net.ParseCIDR(r)
 	if err == nil {
-		// CIDR 格式
 		var ips []net.IP
 		for ip := ipnet.IP.Mask(ipnet.Mask); ipnet.Contains(ip); inc(ip) {
 			ips = append(ips, net.IP(make([]byte, len(ip))))
@@ -460,7 +438,6 @@ func ParseIPRange(r string) ([]net.IP, error) {
 		return ips, nil
 	}
 
-	// 单个IP
 	ip := net.ParseIP(r)
 	if ip != nil {
 		return []net.IP{ip}, nil
@@ -469,7 +446,7 @@ func ParseIPRange(r string) ([]net.IP, error) {
 	return nil, fmt.Errorf("invalid IP range: %s", r)
 }
 
-// inc IP自增
+// inc increments an IP address in place.
 func inc(ip net.IP) {
 	for j := len(ip) - 1; j >= 0; j-- {
 		ip[j]++

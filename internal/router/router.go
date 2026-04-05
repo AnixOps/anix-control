@@ -245,6 +245,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/forward/diagnose", forwardHandler.DiagnosePanelForward)
 			admin.POST("/forward/update-order", forwardHandler.UpdatePanelForwardOrder)
 			admin.POST("/tunnel/user/tunnel", forwardHandler.ListPanelTunnels)
+			admin.POST("/tunnel/user/assign", forwardHandler.AssignPanelUserTunnel)
+			admin.POST("/tunnel/user/list", forwardHandler.ListPanelUserTunnels)
+			admin.POST("/tunnel/user/remove", forwardHandler.RemovePanelUserTunnel)
+			admin.POST("/tunnel/user/update", forwardHandler.UpdatePanelUserTunnel)
 
 			// 中转节点管理
 			admin.GET("/forward/nodes", forwardHandler.ListNodes)

@@ -256,6 +256,7 @@ func main() {
 			&model.ForwardTunnel{},
 			&model.ForwardUserTunnel{},
 			&model.Forward{},
+			&model.ForwardRuntimeJob{},
 			// 支付网关
 			&model.PaymentGateway{},
 			&model.PaymentRecord{},

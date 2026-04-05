@@ -5,7 +5,6 @@
       <p class="text-secondary">管理所有注册用户</p>
     </div>
 
-    <!-- 统计卡片 -->
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-icon">👥</div>
@@ -37,7 +36,6 @@
       </div>
     </div>
 
-    <!-- 筛选栏 -->
     <div class="filter-bar">
       <input
         v-model="filters.email"
@@ -52,15 +50,10 @@
         <option value="expired">已过期</option>
         <option value="banned">已封禁</option>
       </select>
-      <button class="btn-secondary" @click="fetchUsers">
-        🔍 搜索
-      </button>
-      <button class="btn-primary" @click="showCreateModal = true">
-        ➕ 新增用户
-      </button>
+      <button class="btn-secondary" @click="fetchUsers">搜索</button>
+      <button class="btn-primary" @click="showCreateModal = true">新增用户</button>
     </div>
 
-    <!-- 用户列表 -->
     <div class="table-container">
       <table class="data-table">
         <thead>
@@ -85,11 +78,7 @@
               </div>
             </td>
             <td>{{ user.plan?.name || '-' }}</td>
-            <td>
-              <div class="traffic-info">
-                {{ formatBytes(user.u + user.d) }} / {{ formatBytes(user.transfer_enable) }}
-              </div>
-            </td>
+            <td>{{ formatBytes((user.u || 0) + (user.d || 0)) }} / {{ formatBytes(user.transfer_enable || 0) }}</td>
             <td>{{ formatDate(user.expired_at) }}</td>
             <td>
               <span :class="['status-badge', getStatusClass(user)]">
@@ -99,28 +88,11 @@
             <td>{{ formatDateTime(user.created_at) }}</td>
             <td>
               <div class="action-buttons">
-                <button class="btn-sm btn-ghost" @click="editUser(user)" title="编辑">
-                  ✏️
-                </button>
-                <button 
-                  v-if="user.banned === 0"
-                  class="btn-sm btn-ghost" 
-                  @click="handleBan(user)" 
-                  title="封禁"
-                >
-                  🚫
-                </button>
-                <button 
-                  v-else
-                  class="btn-sm btn-ghost" 
-                  @click="handleUnban(user)" 
-                  title="解封"
-                >
-                  ✅
-                </button>
-                <button class="btn-sm btn-ghost" @click="handleResetTraffic(user)" title="重置流量">
-                  🔄
-                </button>
+                <button class="btn-sm btn-ghost" @click="editUser(user)" title="编辑用户">✏️</button>
+                <button class="btn-sm btn-ghost" @click="openTunnelModal(user)" title="管理隧道授权">🔗</button>
+                <button v-if="user.banned === 0" class="btn-sm btn-ghost" @click="handleBan(user)" title="封禁">🚫</button>
+                <button v-else class="btn-sm btn-ghost" @click="handleUnban(user)" title="解封">✅</button>
+                <button class="btn-sm btn-ghost" @click="handleResetTraffic(user)" title="重置流量">🔄</button>
               </div>
             </td>
           </tr>
@@ -131,26 +103,12 @@
       </table>
     </div>
 
-    <!-- 分页 -->
     <div class="pagination">
-      <button 
-        class="btn-sm btn-secondary" 
-        :disabled="page <= 1"
-        @click="page--; fetchUsers()"
-      >
-        上一页
-      </button>
+      <button class="btn-sm btn-secondary" :disabled="page <= 1" @click="page--; fetchUsers()">上一页</button>
       <span class="page-info">第 {{ page }} 页 / 共 {{ totalPages }} 页</span>
-      <button 
-        class="btn-sm btn-secondary"
-        :disabled="page >= totalPages"
-        @click="page++; fetchUsers()"
-      >
-        下一页
-      </button>
+      <button class="btn-sm btn-secondary" :disabled="page >= totalPages" @click="page++; fetchUsers()">下一页</button>
     </div>
 
-    <!-- 编辑弹窗 -->
     <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
       <div class="modal">
         <div class="modal-header">
@@ -171,7 +129,7 @@
             <input v-model.number="editingUser.transfer_enable" type="number" />
           </div>
           <div class="form-group">
-            <label>到期时间 (Unix时间戳)</label>
+            <label>到期时间 (Unix秒)</label>
             <input v-model.number="editingUser.expired_at" type="number" />
           </div>
           <div class="form-group">
@@ -186,7 +144,6 @@
       </div>
     </div>
 
-    <!-- 新增用户弹窗 -->
     <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
       <div class="modal">
         <div class="modal-header">
@@ -219,12 +176,137 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showTunnelModal" class="modal-overlay" @click.self="closeTunnelModal">
+      <div class="modal tunnel-modal">
+        <div class="modal-header">
+          <h3>隧道授权 - {{ tunnelUser?.email || '-' }}</h3>
+          <button class="close-btn" @click="closeTunnelModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="section-title">授权表单</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>隧道</label>
+              <select v-model="tunnelForm.tunnelId">
+                <option value="">请选择隧道</option>
+                <option v-for="item in tunnelOptions" :key="item.id" :value="item.id">
+                  {{ item.name }} (ID: {{ item.id }})
+                </option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>状态</label>
+              <select v-model.number="tunnelForm.status">
+                <option :value="1">启用</option>
+                <option :value="0">禁用</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>流量配额</label>
+              <input v-model.number="tunnelForm.flow" type="number" min="0" />
+            </div>
+            <div class="form-group">
+              <label>数量配额</label>
+              <input v-model.number="tunnelForm.num" type="number" min="0" />
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>到期时间</label>
+              <input v-model="tunnelForm.expTime" type="datetime-local" />
+            </div>
+            <div class="form-group">
+              <label>流量重置时间</label>
+              <input v-model.number="tunnelForm.flowResetTime" type="number" min="0" />
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>SpeedID</label>
+              <input v-model.number="tunnelForm.speedId" type="number" min="0" placeholder="可选" />
+            </div>
+            <div class="form-group tunnel-form-actions">
+              <button v-if="editingTunnelId" class="btn-secondary" @click="resetTunnelForm">取消编辑</button>
+              <button :disabled="tunnelLoading" @click="submitTunnelForm">
+                {{ tunnelLoading ? '提交中...' : (editingTunnelId ? '更新授权' : '新增授权') }}
+              </button>
+            </div>
+          </div>
+
+          <div class="section-title">当前授权列表</div>
+          <div class="table-container tunnel-list-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>隧道</th>
+                  <th>状态</th>
+                  <th>流量</th>
+                  <th>数量</th>
+                  <th>到期</th>
+                  <th>重置</th>
+                  <th>SpeedID</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="tunnelListLoading">
+                  <td colspan="9" class="empty-row">加载中...</td>
+                </tr>
+                <tr v-for="item in userTunnels" :key="item.id">
+                  <td>{{ item.id }}</td>
+                  <td>{{ item.tunnelName || item.tunnelId }}</td>
+                  <td>
+                    <span :class="['status-badge', item.status === 1 ? 'status-active' : 'status-banned']">
+                      {{ item.status === 1 ? '启用' : '禁用' }}
+                    </span>
+                  </td>
+                  <td>{{ item.flow ?? 0 }}</td>
+                  <td>{{ item.num ?? 0 }}</td>
+                  <td>{{ formatTunnelExpire(item.expTime) }}</td>
+                  <td>{{ item.flowResetTime ?? 0 }}</td>
+                  <td>{{ item.speedId ?? '-' }}</td>
+                  <td>
+                    <div class="action-buttons">
+                      <button class="btn-sm btn-ghost" @click="editTunnelGrant(item)">编辑</button>
+                      <button class="btn-sm btn-ghost" @click="removeTunnelGrant(item)">删除</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="!tunnelListLoading && userTunnels.length === 0">
+                  <td colspan="9" class="empty-row">暂无授权</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="closeTunnelModal">关闭</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { getUserList, getUserStats, updateUser, banUser, unbanUser, resetUserTraffic, createUser } from '@/api/admin'
+import { computed, onMounted, ref } from 'vue'
+import {
+  assignAdminUserTunnel,
+  banUser,
+  createUser,
+  getAdminUserTunnelList,
+  getForwardTunnels,
+  getUserList,
+  getUserStats,
+  removeAdminUserTunnel,
+  resetUserTraffic,
+  unbanUser,
+  updateAdminUserTunnel,
+  updateUser
+} from '@/api/admin'
 
 const users = ref([])
 const stats = ref({})
@@ -235,10 +317,10 @@ const filters = ref({
   email: '',
   status: ''
 })
+
 const showEditModal = ref(false)
 const editingUser = ref({})
 
-// 新增用户相关
 const showCreateModal = ref(false)
 const createLoading = ref(false)
 const createError = ref('')
@@ -248,9 +330,49 @@ const newUser = ref({
   is_admin: 0
 })
 
+const showTunnelModal = ref(false)
+const tunnelUser = ref(null)
+const tunnelOptions = ref([])
+const userTunnels = ref([])
+const tunnelListLoading = ref(false)
+const tunnelLoading = ref(false)
+const editingTunnelId = ref(null)
+
+const newTunnelForm = () => ({
+  tunnelId: '',
+  flow: 0,
+  num: 0,
+  expTime: '',
+  flowResetTime: 0,
+  speedId: null,
+  status: 1
+})
+const tunnelForm = ref(newTunnelForm())
+
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value) || 1)
 
-// 创建用户
+const getResData = (res) => {
+  if (!res) return null
+  if (typeof res.code === 'number') return res.data
+  return res.data
+}
+
+const toDateTimeLocal = (timestamp) => {
+  if (!timestamp) return ''
+  let value = Number(timestamp)
+  if (!Number.isFinite(value) || value <= 0) return ''
+  if (value < 1000000000000) value *= 1000
+  const date = new Date(value)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+const fromDateTimeLocal = (value) => {
+  if (!value) return 0
+  const ts = Date.parse(value)
+  return Number.isNaN(ts) ? 0 : ts
+}
+
 const handleCreateUser = async () => {
   if (!newUser.value.email || !newUser.value.password) {
     createError.value = '请填写邮箱和密码'
@@ -260,10 +382,9 @@ const handleCreateUser = async () => {
     createError.value = '密码长度至少6位'
     return
   }
-  
+
   createLoading.value = true
   createError.value = ''
-  
   try {
     await createUser(newUser.value)
     showCreateModal.value = false
@@ -286,8 +407,9 @@ const fetchUsers = async () => {
       email: filters.value.email,
       status: filters.value.status
     })
-    users.value = res.data?.list || []
-    total.value = res.data?.total || 0
+    const payload = getResData(res) || {}
+    users.value = payload.list || []
+    total.value = payload.total || 0
   } catch (err) {
     console.error('获取用户列表失败:', err)
   }
@@ -296,7 +418,7 @@ const fetchUsers = async () => {
 const fetchStats = async () => {
   try {
     const res = await getUserStats()
-    stats.value = res.data || {}
+    stats.value = getResData(res) || {}
   } catch (err) {
     console.error('获取统计失败:', err)
   }
@@ -319,7 +441,7 @@ const saveUser = async () => {
     showEditModal.value = false
     fetchUsers()
   } catch (err) {
-    alert('保存失败: ' + (err.response?.data?.message || err.message))
+    alert(`保存失败: ${err.response?.data?.message || err.message}`)
   }
 }
 
@@ -355,6 +477,118 @@ const handleResetTraffic = async (user) => {
   }
 }
 
+const loadTunnelOptions = async () => {
+  const res = await getForwardTunnels()
+  tunnelOptions.value = getResData(res) || []
+}
+
+const loadUserTunnels = async (userId) => {
+  tunnelListLoading.value = true
+  try {
+    const res = await getAdminUserTunnelList({ userId })
+    userTunnels.value = getResData(res) || []
+  } catch (err) {
+    alert('获取隧道授权失败')
+  } finally {
+    tunnelListLoading.value = false
+  }
+}
+
+const openTunnelModal = async (user) => {
+  tunnelUser.value = user
+  resetTunnelForm()
+  showTunnelModal.value = true
+  await Promise.all([loadTunnelOptions(), loadUserTunnels(user.id)])
+}
+
+const closeTunnelModal = () => {
+  showTunnelModal.value = false
+  tunnelUser.value = null
+  userTunnels.value = []
+  resetTunnelForm()
+}
+
+const resetTunnelForm = () => {
+  editingTunnelId.value = null
+  tunnelForm.value = newTunnelForm()
+}
+
+const submitTunnelForm = async () => {
+  if (!tunnelUser.value) return
+  if (!tunnelForm.value.tunnelId) {
+    alert('请选择隧道')
+    return
+  }
+
+  tunnelLoading.value = true
+  try {
+    const payload = {
+      tunnelId: Number(tunnelForm.value.tunnelId),
+      flow: Number(tunnelForm.value.flow || 0),
+      num: Number(tunnelForm.value.num || 0),
+      expTime: fromDateTimeLocal(tunnelForm.value.expTime),
+      flowResetTime: Number(tunnelForm.value.flowResetTime || 0),
+      speedId: tunnelForm.value.speedId === null || tunnelForm.value.speedId === '' ? null : Number(tunnelForm.value.speedId),
+      status: Number(tunnelForm.value.status || 1)
+    }
+
+    if (editingTunnelId.value) {
+      await updateAdminUserTunnel({
+        id: Number(editingTunnelId.value),
+        ...payload
+      })
+      alert('授权更新成功')
+    } else {
+      await assignAdminUserTunnel({
+        userId: Number(tunnelUser.value.id),
+        ...payload
+      })
+      alert('授权创建成功')
+    }
+    await loadUserTunnels(tunnelUser.value.id)
+    resetTunnelForm()
+  } catch (err) {
+    alert(err.response?.data?.msg || err.response?.data?.message || '授权操作失败')
+  } finally {
+    tunnelLoading.value = false
+  }
+}
+
+const editTunnelGrant = (item) => {
+  editingTunnelId.value = item.id
+  tunnelForm.value = {
+    tunnelId: item.tunnelId || '',
+    flow: item.flow ?? 0,
+    num: item.num ?? 0,
+    expTime: toDateTimeLocal(item.expTime),
+    flowResetTime: item.flowResetTime ?? 0,
+    speedId: item.speedId ?? null,
+    status: item.status ?? 1
+  }
+}
+
+const removeTunnelGrant = async (item) => {
+  if (!confirm(`确定删除隧道授权 #${item.id} 吗?`)) return
+  try {
+    await removeAdminUserTunnel({ id: item.id })
+    if (tunnelUser.value) {
+      await loadUserTunnels(tunnelUser.value.id)
+    }
+    if (editingTunnelId.value === item.id) {
+      resetTunnelForm()
+    }
+  } catch (err) {
+    alert(err.response?.data?.msg || err.response?.data?.message || '删除授权失败')
+  }
+}
+
+const formatTunnelExpire = (value) => {
+  if (!value) return '永久'
+  const date = new Date(value < 1000000000000 ? value * 1000 : value)
+  if (Number.isNaN(date.getTime())) return '-'
+  return date.toLocaleString('zh-CN')
+}
+
 const getStatusClass = (user) => {
   if (user.banned === 1) return 'status-banned'
   if (user.expired_at && user.expired_at < Date.now() / 1000) return 'status-expired'
@@ -371,16 +605,17 @@ const formatBytes = (bytes) => {
   if (!bytes) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   let i = 0
-  while (bytes >= 1024 && i < units.length - 1) {
-    bytes /= 1024
+  let value = Number(bytes)
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024
     i++
   }
-  return `${bytes.toFixed(2)} ${units[i]}`
+  return `${value.toFixed(2)} ${units[i]}`
 }
 
 const formatDate = (timestamp) => {
   if (!timestamp) return '永久'
-  return new Date(timestamp * 1000).toLocaleDateString('zh-CN')
+  return new Date(Number(timestamp) * 1000).toLocaleDateString('zh-CN')
 }
 
 const formatDateTime = (datetime) => {
@@ -432,7 +667,7 @@ onMounted(() => {
 }
 
 .stat-icon {
-  font-size: 32px;
+  font-size: 28px;
 }
 
 .stat-value {
@@ -478,6 +713,7 @@ onMounted(() => {
   padding: 14px 16px;
   text-align: left;
   border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
 }
 
 .data-table th {
@@ -536,7 +772,7 @@ onMounted(() => {
 .empty-row {
   text-align: center;
   color: var(--text-secondary);
-  padding: 40px !important;
+  padding: 24px !important;
 }
 
 .pagination {
@@ -552,7 +788,6 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-/* 弹窗样式 */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -569,9 +804,13 @@ onMounted(() => {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   width: 100%;
-  max-width: 500px;
+  max-width: 560px;
   max-height: 90vh;
   overflow-y: auto;
+}
+
+.tunnel-modal {
+  max-width: 1100px;
 }
 
 .modal-header {
@@ -639,5 +878,33 @@ onMounted(() => {
 
 .modal-footer button {
   min-width: 80px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 6px 0 12px;
+}
+
+.tunnel-form-actions {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+
+.tunnel-list-wrap {
+  margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
