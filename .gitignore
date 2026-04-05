@@ -34,6 +34,9 @@ logs/
 # Local config
 config/config.yaml
 !config/config.yaml.example
+config/deploy/ssh/*
+!config/deploy/ssh/.gitignore
+config/deploy/ansible/inventory.ini
 
 # Build
 dist/
@@ -46,6 +49,7 @@ config/data/
 # Environment
 .env
 .env.local
+.panel-install.env
 
 # Build outputs
 config/workspace/bin/

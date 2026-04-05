@@ -1,0 +1,13 @@
+{
+  "inventory": "/app/config/deploy/ansible/inventory.ini",
+  "playbookApply": "/app/config/deploy/ansible/playbooks/forward_apply.yml",
+  "playbookRemove": "/app/config/deploy/ansible/playbooks/forward_remove.yml",
+  "workingDir": "/app/config/deploy/ansible",
+  "targetPattern": "{{node.host}}",
+  "timeoutSeconds": 120,
+  "become": true,
+  "environment": {
+    "ANSIBLE_CONFIG": "/app/config/deploy/ansible/ansible.cfg",
+    "ANSIBLE_HOST_KEY_CHECKING": "False"
+  }
+}

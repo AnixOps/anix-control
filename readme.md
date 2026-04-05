@@ -50,8 +50,8 @@ v2board_AnixOps/
 
 ```bash
 # 1) 克隆仓库
-git clone https://github.com/anixops/v2board.git
-cd v2board
+git clone https://github.com/AnixOps/v2board_AnixOps.git
+cd v2board_AnixOps
 
 # 2) 准备配置文件
 cp .env.example .env
@@ -63,6 +63,29 @@ docker-compose up -d
 # 4) 查看日志
 docker-compose logs -f
 ```
+
+默认前端地址：`http://localhost:3000`
+
+### 方式零：一键安装脚本
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/AnixOps/v2board_AnixOps/go_dev/install.sh)
+```
+
+如果你已经在仓库根目录，也可以用兼容上游命名的本地包装器：
+
+```bash
+bash ./panel_install.sh
+```
+
+这个安装器会：
+
+- 下载仓库源码归档到目标目录
+- 本地构建带 `ansible-playbook` 的 Docker 镜像
+- 生成 `config/config.yaml` 与 `.env`
+- 初始化 `config/deploy/ansible/inventory.ini` 与 `config/deploy/ssh/`
+- 启动前端、API、gRPC 端口映射
+- 通过容器环境变量在启动阶段预写入双运行时示例配置
 
 ### 方式二：本地开发
 
@@ -182,6 +205,15 @@ go tool cover -html=coverage.out
 - 历史规划与当前工作流挂钩：`docs/FEATURE_ROADMAP.md`
 - 当前已完成基础模块：流量转发页面与兼容 API
 - 当前本机参考仓库：`C:\Users\z7299\AppData\Local\Temp\flux-panel`
+
+## 双运行时部署
+
+流量转发当前支持两条运行时路径：
+
+- `gost`：Flux 对齐路径
+- `iptables_ansible`：本地扩展路径，由后台 worker 调用 `ansible-playbook`
+
+Docker 镜像已经内置 `ansible-playbook`，示例 playbook 位于 `config/deploy/ansible/`，一键安装脚本会同时写入 `FORWARD_RUNTIME_BACKEND` 与 `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`，应用启动后会自动同步到 `forward.runtime_backend` 与 `forward.runtime.iptables_ansible.config`。
 
 ## 相关项目
 

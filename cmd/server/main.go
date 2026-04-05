@@ -302,6 +302,9 @@ func main() {
 	service.InitDefaultPlan()
 
 	// 初始化缓存 (默认使用内存缓存)
+	if err := service.InitForwardRuntimeSystemConfigFromEnv(database.Get()); err != nil {
+		log.Fatalf("Failed to initialize forward runtime config from env: %v", err)
+	}
 	cache.InitMemory()
 	defer cache.CloseMemory()
 	log.Println("Cache initialized: memory")
