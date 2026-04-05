@@ -70,6 +70,20 @@ These endpoints exist in the Flux reference and should be treated as pending clo
 | `POST /api/v1/tunnel/user/update` | role-restricted | not cloned | quota, expire, status and rate updates |
 | flow side effects in `FlowController` | node/runtime path | not cloned | quota exhaustion, expire and disable behavior |
 
+## Local Extension Surface
+
+The following pieces are local extensions for dual-runtime support and are not part of the upstream Flux `/forward` page contract:
+
+- `GET /api/v2/admin/forward/runtime/jobs`
+- system config key `forward.runtime_backend`
+- system config key `forward.runtime.iptables_ansible.config`
+
+Rules for this extension surface:
+
+- keep the main forward clone UI in `web/src/views/admin/Forward.vue` aligned with Flux
+- place runtime backend selection and runtime job observability in `web/src/views/admin/System.vue`
+- do not describe these extension endpoints as proof that the Flux forward page clone is complete
+
 ## Request DTOs
 
 ### Create Forward

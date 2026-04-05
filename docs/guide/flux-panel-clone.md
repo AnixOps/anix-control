@@ -168,9 +168,24 @@ Still incomplete:
 
 1. full `UserTunnel` management flows
 2. forward runtime semantics
-   - create/update/delete/pause/resume side effects on remote services
+    - create/update/delete/pause/resume side effects on remote services
 3. tunnel / forward diagnose node-chain semantics
 4. quota / expire / flow reset behavior tied to `UserTunnel`
+
+## Local Dual-runtime Extension Rules
+
+These items are local extensions added to support a second runtime path (`iptables_ansible`) while the main Flux clone work continues:
+
+- config key: `forward.runtime_backend`
+- config key: `forward.runtime.iptables_ansible.config`
+- admin runtime job endpoint: `GET /api/v2/admin/forward/runtime/jobs`
+- admin UI location: `web/src/views/admin/System.vue`
+
+Guardrails:
+
+- do not add runtime backend selectors or runtime job tables to `web/src/views/admin/Forward.vue`
+- keep `/admin/forward` aligned with `vite-frontend/src/pages/forward.tsx`
+- document runtime-side differences separately instead of treating the extension UI as part of the Flux clone itself
 
 ## Module Status Board
 

@@ -402,6 +402,47 @@ func (s *PanelForwardServiceTestSuite) TestListUserTunnels_ReturnsJoinedFields()
 	assert.Equal(s.T(), model.ForwardUserTunnelStatusActive, items[0].Status)
 }
 
+func (s *PanelForwardServiceTestSuite) TestListRuntimeJobsFilters() {
+	db := database.Get()
+
+	jobs := []model.ForwardRuntimeJob{
+		{Backend: model.ForwardRuntimeBackendGost, Action: model.ForwardRuntimeJobActionCreate, ForwardID: uintPtr(1), Status: model.ForwardRuntimeJobStatusPending},
+		{Backend: model.ForwardRuntimeBackendIptablesAnsible, Action: model.ForwardRuntimeJobActionCreate, ForwardID: uintPtr(2), Status: model.ForwardRuntimeJobStatusSuccess},
+		{Backend: model.ForwardRuntimeBackendIptablesAnsible, Action: model.ForwardRuntimeJobActionDelete, ForwardID: uintPtr(1), Status: model.ForwardRuntimeJobStatusPending},
+	}
+	for _, job := range jobs {
+		assert.NoError(s.T(), db.Create(&job).Error)
+	}
+
+	status := model.ForwardRuntimeJobStatusPending
+	forwardID := uint(1)
+	filter := PanelRuntimeJobFilter{
+		Backend:   model.ForwardRuntimeBackendIptablesAnsible,
+		Status:    &status,
+		ForwardID: &forwardID,
+		Limit:     5,
+	}
+
+	results, err := s.svc.ListRuntimeJobs(filter)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), results, 1)
+	assert.Equal(s.T(), model.ForwardRuntimeJobActionDelete, results[0].Action)
+
+	filter.Limit = 1
+	results, err = s.svc.ListRuntimeJobs(filter)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), results, 1)
+
+	filter.ForwardID = nil
+	filter.Status = nil
+	filter.Limit = 2
+	results, err = s.svc.ListRuntimeJobs(filter)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), results, 2)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, results[0].Backend)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, results[1].Backend)
+}
+
 func (s *PanelForwardServiceTestSuite) TestCreateForward_IptablesAnsibleQueuesRuntimeJob() {
 	db := database.Get()
 

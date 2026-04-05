@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/anixops/v2board/internal/service"
@@ -31,6 +32,45 @@ func (h *ForwardHandler) ListPanelForwards(c *gin.Context) {
 		return
 	}
 	panelSuccess(c, items)
+}
+
+func (h *ForwardHandler) ListPanelRuntimeJobs(c *gin.Context) {
+	limit := 50
+	if raw := c.DefaultQuery("limit", "50"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	var status *int
+	if raw := c.Query("status"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			status = &parsed
+		}
+	}
+
+	var forwardID *uint
+	if raw := c.Query("forward_id"); raw != "" {
+		if parsed, err := strconv.ParseUint(raw, 10, 32); err == nil {
+			id := uint(parsed)
+			forwardID = &id
+		}
+	}
+
+	jobs, err := h.panelService.ListRuntimeJobs(service.PanelRuntimeJobFilter{
+		Backend:   c.Query("backend"),
+		Status:    status,
+		ForwardID: forwardID,
+		Limit:     limit,
+	})
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, gin.H{
+		"list":  jobs,
+		"total": len(jobs),
+	})
 }
 
 func (h *ForwardHandler) ListPanelTunnels(c *gin.Context) {

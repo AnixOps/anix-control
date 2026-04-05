@@ -222,6 +222,36 @@ POST /api/v2/admin/auth-keys
 DELETE /api/v2/admin/auth-keys/:id
 ```
 
+### Forward runtime extension
+
+```http
+# Runtime job list
+GET /api/v2/admin/forward/runtime/jobs?backend=&status=&forward_id=&limit=50
+
+# Runtime backend selector
+PUT /api/v2/admin/system/configs/forward.runtime_backend
+{
+  "value": "gost",
+  "type": "string",
+  "group": "forward",
+  "description": "Forward runtime backend"
+}
+
+# iptables/ansible runtime config
+PUT /api/v2/admin/system/configs/forward.runtime.iptables_ansible.config
+{
+  "value": "{\"inventory\":\"hosts.ini\",\"playbookApply\":\"apply.yml\",\"playbookRemove\":\"remove.yml\"}",
+  "type": "json",
+  "group": "forward",
+  "description": "Forward runtime ansible config"
+}
+```
+
+Notes:
+
+- This is a local extension for dual-runtime support.
+- Keep the Flux-compatible `/admin/forward` page free of extra runtime panels; use `System.vue` for backend switching and runtime job observability.
+
 ---
 
 ## 节点接口

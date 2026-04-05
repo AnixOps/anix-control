@@ -5,6 +5,7 @@
 - Base UI and compat endpoints are live for `/forward/*` and `/tunnel/user/tunnel`, with `web/src/views/admin/Forward.vue` and `internal/service/forward_panel_service.go` providing the first pass.
 - Response envelope, DTO names, and `ForwardUserTunnel` auth model already align with the Flux-panel reference; these are documented in `docs/guide/flux-forward-contract.md`.
 - Remaining gaps are runtime semantics (create/update/delete/pause/resume side effects, diagnose node paths, quota/expiry linkage) and fully featured `UserTunnel` management.
+- Dual-runtime admin controls now live in `web/src/views/admin/System.vue` with `forward.runtime_backend`, `forward.runtime.iptables_ansible.config`, and `GET /api/v2/admin/forward/runtime/jobs`; this is an extension surface and should not change the Flux-shaped `/admin/forward` page.
 
 ## Reference Mapping
 

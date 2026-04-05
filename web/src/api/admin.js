@@ -665,6 +665,14 @@ export function updateForwardOrder(data) {
   })
 }
 
+export function listForwardRuntimeJobs(params) {
+  return request({
+    url: '/admin/forward/runtime/jobs',
+    method: 'get',
+    params
+  })
+}
+
 export function getForwardTunnels() {
   return request({
     url: '/tunnel/user/tunnel',
@@ -1376,6 +1384,7 @@ export default {
   resumeForwardService,
   diagnoseForward,
   updateForwardOrder,
+  listForwardRuntimeJobs,
   getForwardTunnels,
   assignAdminUserTunnel,
   getAdminUserTunnelList,
