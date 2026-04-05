@@ -74,9 +74,12 @@ type PanelForwardListItem struct {
 type PanelTunnelListItem struct {
 	ID            uint   `json:"id"`
 	Name          string `json:"name"`
+	IP            string `json:"ip"`
 	InIP          string `json:"inIp"`
 	InNodePortSta *int   `json:"inNodePortSta"`
 	InNodePortEnd *int   `json:"inNodePortEnd"`
+	Type          int    `json:"type"`
+	Protocol      string `json:"protocol"`
 	Status        int    `json:"status"`
 }
 
@@ -115,9 +118,9 @@ func (s *PanelForwardService) ListForwards(userID uint, isAdmin bool) ([]PanelFo
 	return items, nil
 }
 
-func (s *PanelForwardService) ListTunnels(_ uint, _ bool) ([]PanelTunnelListItem, error) {
-	var tunnels []model.ForwardTunnel
-	if err := s.db.Where("status = ?", model.ForwardTunnelStatusActive).Order("name ASC").Find(&tunnels).Error; err != nil {
+func (s *PanelForwardService) ListTunnels(userID uint, isAdmin bool) ([]PanelTunnelListItem, error) {
+	tunnels, err := s.getAccessibleTunnels(userID, isAdmin)
+	if err != nil {
 		return nil, err
 	}
 
@@ -126,16 +129,19 @@ func (s *PanelForwardService) ListTunnels(_ uint, _ bool) ([]PanelTunnelListItem
 		items = append(items, PanelTunnelListItem{
 			ID:            tunnel.ID,
 			Name:          tunnel.Name,
+			IP:            tunnel.InIP,
 			InIP:          tunnel.InIP,
 			InNodePortSta: tunnel.InNodePortSta,
 			InNodePortEnd: tunnel.InNodePortEnd,
+			Type:          tunnel.Type,
+			Protocol:      tunnel.Protocol,
 			Status:        tunnel.Status,
 		})
 	}
 	return items, nil
 }
 
-func (s *PanelForwardService) CreateForward(userID uint, input PanelForwardInput) (*PanelForwardListItem, error) {
+func (s *PanelForwardService) CreateForward(userID uint, isAdmin bool, input PanelForwardInput) (*PanelForwardListItem, error) {
 	if err := validatePanelForwardInput(input); err != nil {
 		return nil, err
 	}
@@ -145,7 +151,7 @@ func (s *PanelForwardService) CreateForward(userID uint, input PanelForwardInput
 		return nil, errors.New("用户不存在")
 	}
 
-	tunnel, err := s.getActiveTunnel(input.TunnelID)
+	tunnel, err := s.getAccessibleTunnel(input.TunnelID, userID, isAdmin)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +211,7 @@ func (s *PanelForwardService) UpdateForward(userID uint, isAdmin bool, input Pan
 		return nil, err
 	}
 
-	tunnel, err := s.getActiveTunnel(input.TunnelID)
+	tunnel, err := s.getAccessibleTunnel(input.TunnelID, userID, isAdmin)
 	if err != nil {
 		return nil, err
 	}
@@ -379,6 +385,25 @@ func (s *PanelForwardService) getActiveTunnel(tunnelID uint) (*model.ForwardTunn
 	return &tunnel, nil
 }
 
+func (s *PanelForwardService) getAccessibleTunnel(tunnelID, userID uint, isAdmin bool) (*model.ForwardTunnel, error) {
+	tunnel, err := s.getActiveTunnel(tunnelID)
+	if err != nil {
+		return nil, err
+	}
+	if isAdmin {
+		return tunnel, nil
+	}
+
+	allowed, err := s.userHasTunnelAccess(userID, tunnelID)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, errors.New("鏃犳潈浣跨敤璇ラ毀閬?")
+	}
+	return tunnel, nil
+}
+
 func (s *PanelForwardService) getForwardForActor(forwardID, userID uint, isAdmin bool) (*model.Forward, error) {
 	var record model.Forward
 	query := s.db.Preload("Tunnel").Where("id = ?", forwardID)
@@ -448,6 +473,63 @@ func (s *PanelForwardService) nextIndexForUser(userID uint) (int, error) {
 		return records[i].Inx < records[j].Inx
 	})
 	return records[len(records)-1].Inx + 1, nil
+}
+
+func (s *PanelForwardService) getAccessibleTunnels(userID uint, isAdmin bool) ([]model.ForwardTunnel, error) {
+	var tunnels []model.ForwardTunnel
+	if isAdmin {
+		if err := s.db.Where("status = ?", model.ForwardTunnelStatusActive).Order("name ASC").Find(&tunnels).Error; err != nil {
+			return nil, err
+		}
+		return tunnels, nil
+	}
+
+	if userID == 0 {
+		return []model.ForwardTunnel{}, nil
+	}
+
+	var permissions []model.ForwardUserTunnel
+	if err := s.db.
+		Where("user_id = ?", userID).
+		Order("id ASC").
+		Find(&permissions).Error; err != nil {
+		return nil, err
+	}
+	if len(permissions) == 0 {
+		return []model.ForwardTunnel{}, nil
+	}
+
+	tunnelIDs := make([]uint, 0, len(permissions))
+	seen := make(map[uint]struct{}, len(permissions))
+	for _, permission := range permissions {
+		if _, ok := seen[permission.TunnelID]; ok {
+			continue
+		}
+		seen[permission.TunnelID] = struct{}{}
+		tunnelIDs = append(tunnelIDs, permission.TunnelID)
+	}
+
+	if err := s.db.
+		Where("id IN ? AND status = ?", tunnelIDs, model.ForwardTunnelStatusActive).
+		Order("name ASC").
+		Find(&tunnels).Error; err != nil {
+		return nil, err
+	}
+	return tunnels, nil
+}
+
+func (s *PanelForwardService) userHasTunnelAccess(userID, tunnelID uint) (bool, error) {
+	if userID == 0 || tunnelID == 0 {
+		return false, nil
+	}
+
+	var count int64
+	if err := s.db.Model(&model.ForwardUserTunnel{}).
+		Where("user_id = ? AND tunnel_id = ? AND status = ?", userID, tunnelID, model.ForwardUserTunnelStatusActive).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func buildPanelForwardItem(record *model.Forward) PanelForwardListItem {
