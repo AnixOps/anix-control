@@ -434,3 +434,35 @@ POST /api/v2/payment/notify/:method
 | < 2.0.0 | v1 only | ❌ 已弃用 |
 
 **注意**: v1 API 已完全移除，所有客户端必须使用 v2 API。
+
+## Flux-panel Compat Endpoints
+
+### Response Envelope
+
+Compat endpoints wrap replies in `{ "code": <int>, "msg": "<string>", "ts": <ms>, "data": {...} }`, mirroring the flux-panel reference. Timestamps stay in milliseconds so the cloned UI avoids extra conversions, and error branches keep the same envelope so the page always unwraps `data`.
+
+### Forward & Tunnel Endpoint Mapping
+
+| Flux Reference | Local Route | Auth Scope | Notes |
+|------|------|------|------|
+| `POST /api/v1/forward/create` | `POST /api/v2/forward/create` + `/api/v2/admin/forward/create` | JWT user | Identical payload and response; admin mirror exists for compatibility. |
+| `POST /api/v1/forward/list` | `POST /api/v2/forward/list` + `/api/v2/admin/forward/list` | JWT user | Returns the `PanelForwardListItem` used by the cloned Forward view. |
+| `POST /api/v1/forward/update` | `POST /api/v2/forward/update` + `/api/v2/admin/forward/update` | JWT user | Keeps the `ForwardUserTunnel` check for non-admins. |
+| `POST /api/v1/forward/delete` | `POST /api/v2/forward/delete` + `/api/v2/admin/forward/delete` | JWT user | Matches reference semantics. |
+| `POST /api/v1/forward/force-delete` | `POST /api/v2/forward/force-delete` + `/api/v2/admin/forward/force-delete` | JWT user | Same request/response bodies. |
+| `POST /api/v1/forward/pause` | `POST /api/v2/forward/pause` + `/api/v2/admin/forward/pause` | JWT user | Local handler persists status while the reference also touches remote runtime. |
+| `POST /api/v1/forward/resume` | `POST /api/v2/forward/resume` + `/api/v2/admin/forward/resume` | JWT user | Mirrors pause/resume contract. |
+| `POST /api/v1/forward/diagnose` | `POST /api/v2/forward/diagnose` + `/api/v2/admin/forward/diagnose` | JWT user | Diagnoses still run from the panel side; flux-panel traces node chains. |
+| `POST /api/v1/forward/update-order` | `POST /api/v2/forward/update-order` + `/api/v2/admin/forward/update-order` | JWT user | Uses the same `{ "forwards": [{ "id": id, "inx": idx }] }` payload. |
+| `POST /api/v1/tunnel/user/tunnel` | `POST /api/v2/tunnel/user/tunnel` + `/api/v2/admin/tunnel/user/tunnel` | JWT user | Supplies the tunnel list consumed by the Forward UI. |
+
+### DTO Expectations
+
+Tunnel DTOs preserve the reference fields: `id`, `name`, `ip`, `inNodePortSta`, `inNodePortEnd`, `type`, `protocol`. The local service may also include `inIp` and `status`, but UI code must continue reading the flux field names only. Forward DTOs keep the original names (`tunnelId`, `strategy`, `inPort`, `remoteAddr`, `interfaceName`, `status`, `inFlow`, `outFlow`, `createdTime`, `updatedTime`, etc.) under the standard envelope.
+
+### Current Known Gaps
+
+- **Runtime side effects**: flux-panel triggers remote runtime updates on forward create/update/delete/pause/resume, while our handler currently updates database entries only; document this shortfall before claiming full parity.
+- **Diagnose semantics**: the reference traces relay→exit node chains, whereas ours still uses panel-side dialing; log the divergence in clone docs.
+- **UserTunnel lifecycle**: the list honors `ForwardUserTunnel`, but the remaining quota/expire/flow reset flows still need flux-level implementation.
+- **DTO casing**: keep camelCase names intact and avoid removing fields that exist in the flux reference.

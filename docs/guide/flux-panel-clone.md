@@ -1,67 +1,97 @@
-# Flux-panel 复刻指南
+# Flux-panel Clone Guide
 
-## 目标
+## Goal
 
-本项目后续在“流量转发 / 隧道 / 用户隧道授权 / 相关联动页面”上的开发，默认以 [`flux-panel`](https://github.com/bqlpfy/flux-panel) 为源实现做一比一复刻。
+Future work for forward, tunnel, user-tunnel authorization and adjacent pages must treat [`flux-panel`](https://github.com/bqlpfy/flux-panel) as the source implementation.
 
-这里的“一比一”指的是：
+"1:1 clone" means all of the following should match the reference:
 
-- 请求路径、HTTP 方法、鉴权范围一致
-- 请求体字段名、响应 DTO 字段名、返回包装结构一致
-- 页面结构、按钮文案、模态框流程、表格/分组/拖拽/导入导出交互一致
-- 业务副作用一致
-  - 例如 create/update/delete/pause/resume 是否联动运行时服务
-  - diagnose 是否沿节点路径执行
-  - quota、授权、状态校验是否与参考实现一致
+- request path and HTTP method
+- auth scope and role requirements
+- request body field names
+- response envelope and DTO field names
+- page layout and interaction flow
+- business semantics and side effects
 
-## 参考仓库
+UI-only similarity is not enough.
 
-### 上游地址
+## Reference Repositories
+
+### Upstream
 
 - GitHub: `https://github.com/bqlpfy/flux-panel`
 
-### 当前本机参考副本
+### Local Reference Copy
 
 - `C:\Users\z7299\AppData\Local\Temp\flux-panel`
 
-### 复刻时优先阅读的文件
+### Files To Read First
 
-后端：
+Backend:
 
 - `springboot-backend/src/main/java/com/admin/controller/ForwardController.java`
 - `springboot-backend/src/main/java/com/admin/controller/TunnelController.java`
+- `springboot-backend/src/main/java/com/admin/controller/FlowController.java`
 - `springboot-backend/src/main/java/com/admin/service/impl/ForwardServiceImpl.java`
 - `springboot-backend/src/main/java/com/admin/service/impl/TunnelServiceImpl.java`
+- `springboot-backend/src/main/java/com/admin/service/impl/UserTunnelServiceImpl.java`
 - `springboot-backend/src/main/java/com/admin/common/dto/`
+- `springboot-backend/src/main/java/com/admin/common/dto/ForwardDto.java`
+- `springboot-backend/src/main/java/com/admin/common/dto/ForwardUpdateDto.java`
+- `springboot-backend/src/main/java/com/admin/common/dto/ForwardWithTunnelDto.java`
+- `springboot-backend/src/main/java/com/admin/common/dto/TunnelDto.java`
+- `springboot-backend/src/main/java/com/admin/common/dto/TunnelUpdateDto.java`
+- `springboot-backend/src/main/java/com/admin/common/dto/UserTunnelDto.java`
+- `springboot-backend/src/main/java/com/admin/common/dto/UserTunnelQueryDto.java`
+- `springboot-backend/src/main/java/com/admin/common/dto/UserTunnelUpdateDto.java`
+- `springboot-backend/src/main/java/com/admin/common/dto/UserTunnelWithDetailDto.java`
 - `springboot-backend/src/main/java/com/admin/entity/`
 
-前端：
+Frontend:
 
 - `vite-frontend/src/pages/forward.tsx`
+- `vite-frontend/src/pages/tunnel.tsx`
+- `vite-frontend/src/pages/user.tsx`
+- `vite-frontend/src/api/index.ts`
 - `vite-frontend/src/api/`
 - `vite-frontend/src/components/`
 
-## 复刻顺序
+## Mandatory Workflow
 
-推荐按照下面顺序进行，而不是只盯着页面：
+Use this order every time:
 
-1. 先确认参考仓库里的 controller 路径、鉴权范围和 DTO。
-2. 再确认 service 的真实业务语义，尤其是授权、配额、运行时副作用和异常分支。
-3. 再确认实体/关联关系。
-4. 最后复刻页面、交互和前端请求调用。
-5. 页面完成后回到后端再次核对，避免出现“页面像了，但 API 行为不一样”的情况。
+1. Read the reference page and API client.
+2. Read the reference controller and confirm auth scope.
+3. Read the reference service and identify real semantics.
+4. Read the reference DTO/entity definitions.
+5. Map those pieces to local `router`, `handler`, `service`, `model`, `web/src/views`, `web/src/api`.
+6. Implement.
+7. Re-check the reference before considering the task done.
 
-## 强制契约
+Do not start by inventing a local version and then "making it look similar later".
 
-### 1. 路由和鉴权
+## Forward/Tunnel Endpoint Scope Matrix
 
-- 如果参考接口是登录用户接口，本仓库必须提供用户态入口。
-- 如果参考接口是管理员接口，本仓库再挂到 `/api/v2/admin/*`。
-- 允许为现有本地页面保留镜像兼容路由，但镜像路由不能代替参考仓库真实作用域。
+This matrix is the minimum route surface that must stay visible in clone planning.
 
-### 2. 返回包装结构
+| Area | Flux Endpoint(s) | Flux Auth Scope | Local Status | Notes |
+|------|------|------|------|------|
+| Forward user routes | `POST /api/v1/forward/create|list|update|delete|force-delete|pause|resume|diagnose|update-order` | JWT user | partial clone | local compat routes exist and are detailed in `flux-forward-contract.md` |
+| Tunnel admin routes | `POST /api/v1/tunnel/create|list|update|delete|diagnose` | role-restricted | not started | do not collapse these into user routes |
+| UserTunnel admin routes | `POST /api/v1/tunnel/user/assign|list|remove|update` | role-restricted | not started | these are required for the full clone surface |
+| Tunnel user route | `POST /api/v1/tunnel/user/tunnel` | JWT user | partial clone | this is the only user-scope route under `TunnelController` |
 
-复刻接口时，优先对齐参考返回包：
+## Non-negotiable Rules
+
+### Route Scope
+
+- If the reference endpoint is a logged-in user endpoint, the local project must expose a JWT user route.
+- If the reference endpoint is an admin-only endpoint, then use `/api/v2/admin/*`.
+- Admin mirror routes are allowed for backward compatibility, but they do not replace the real user/admin scope from the reference.
+
+### Response Contract
+
+If the reference uses the standard wrapper, keep it:
 
 ```json
 {
@@ -72,119 +102,186 @@
 }
 ```
 
-规则：
+Rules:
 
-- `code/msg/ts/data` 缺一不可，除非参考接口本身不是这个格式
-- 时间戳单位必须与参考实现一致
-- 错误分支也要保留同层包装
+- always keep `code`, `msg`, `ts`, `data`
+- keep timestamp units consistent with the reference
+- wrap error responses the same way
 
-### 3. DTO 字段
+### DTO Fields
 
-- 不要删掉参考 DTO 中“当前页面暂时没用到”的字段。
-- 不要擅自把 `camelCase` 改成 `snake_case` 或反过来。
-- 不要把参考里的 `ip/type/protocol` 简化成只返回 `inIp`。
+- Never drop a reference DTO field just because the current page does not use it yet.
+- Never rename `camelCase` fields into local naming conventions for convenience.
+- If the reference exposes `ip`, `type`, `protocol`, keep those exact fields even if local code also has `inIp`.
 
-### 4. 业务语义
+### Runtime Semantics
 
-- create/update/delete/pause/resume 需要区分：
-  - 只是修改数据库状态
-  - 还是要联动远端运行时服务
-- diagnose 需要区分：
-  - 只是本地 `Dial`
-  - 还是按入口节点/出口节点链路执行
-- 授权要优先复用参考中的显式关系模型。
-  - 例如参考里有 `UserTunnel`，本项目就优先用显式关联表，而不是临时拼 `group_id`
+Before declaring a module "cloned", confirm whether the reference implementation:
 
-## 本仓库映射规则
+- only touches DB state
+- or also changes remote runtime state
+- or performs node-side diagnosis / chained actions
 
-| 参考仓库 | 本仓库 |
+If local code only matches the DB layer but not runtime side effects, document the gap explicitly.
+
+## Local Mapping
+
+| Flux-panel Piece | Local Project |
 |------|------|
-| Spring Boot controller | `internal/handler/` + `internal/router/router.go` |
+| Spring controller | `internal/handler/` + `internal/router/router.go` |
 | service impl | `internal/service/` |
 | entity | `internal/model/` |
-| React page | `web/src/views/` |
+| frontend page | `web/src/views/` |
 | frontend api | `web/src/api/` |
 
-## 当前已完成的基础
+## Current Forward/Tunnel Base
 
-截至 `2026-04-05`，流量转发模块已有这些基础：
+As of `2026-04-05`, the local project already has these pieces:
 
-- 页面复刻：
+- cloned page:
   - `web/src/views/admin/Forward.vue`
-- 后端兼容服务：
+- compat service:
   - `internal/service/forward_panel_service.go`
-- 兼容处理器：
+- compat handler:
   - `internal/handler/forward_panel.go`
-- 兼容路由：
+- compat routing:
   - `internal/router/router.go`
-- 前端请求封装：
+- frontend request wrapper:
   - `web/src/api/admin.js`
-- 授权关系模型：
-  - `internal/model/forward_panel.go` 中的 `ForwardUserTunnel`
-- 基础测试：
+- explicit auth relation:
+  - `internal/model/forward_panel.go` -> `ForwardUserTunnel`
+- base tests:
   - `internal/service/forward_panel_service_test.go`
 
-## 当前 forward 模块已对齐内容
+## Current Completion Status
 
-- `forward` 页面主体 UI 与交互
-- `/forward/*` 兼容端点
-- `/tunnel/user/tunnel` 兼容端点
-- `code/msg/ts/data` 返回包装
-- `ForwardUserTunnel` 显式授权关系
-- tunnel 列表 DTO 的基础字段：
-  - `id`
-  - `name`
-  - `ip`
-  - `inIp`
-  - `inNodePortSta`
-  - `inNodePortEnd`
-  - `type`
-  - `protocol`
+Already aligned:
 
-## 当前 forward 模块仍需继续补齐的差距
+- forward page main UI
+- `/forward/*` compat endpoints
+- `/tunnel/user/tunnel` compat endpoint
+- response wrapper `code/msg/ts/data`
+- explicit `ForwardUserTunnel` auth model
+- tunnel list fields required by the current forward page
 
-这些内容在文档和代码里都必须视为“待完成”，不能算完全复刻：
+Still incomplete:
 
-1. 运行时副作用仍未完全按 `flux-panel` 原版实现。
-   - 参考实现会联动 Gost 或节点运行时。
-   - 本仓库当前主要还是兼容 DB/接口层。
-2. diagnose 逻辑仍未完全走参考实现的节点链路语义。
-3. `UserTunnel` 周边管理页、限额、流量/过期联动等语义仍可继续向原版贴近。
-4. 任何后续新增的 tunnel/forward 相关页面，都需要继续沿用本规范，而不是另起一套字段和路径。
+1. full `UserTunnel` management flows
+2. forward runtime semantics
+   - create/update/delete/pause/resume side effects on remote services
+3. tunnel / forward diagnose node-chain semantics
+4. quota / expire / flow reset behavior tied to `UserTunnel`
 
-## 建议的下一批复刻目标
+## Module Status Board
 
-按收益和依赖顺序，建议继续做：
+| Module | Reference Surface | Local Status | Notes |
+|------|------|------|------|
+| forward page | `forward.tsx` + `/api/v1/forward/*` | partial clone | main page and compat endpoints exist |
+| tunnel selector for forward | `/api/v1/tunnel/user/tunnel` | partial clone | current DTO is aligned for the page |
+| user-tunnel admin management | `/api/v1/tunnel/user/assign|list|remove|update` | not started | admin management semantics still missing |
+| flow and quota side effects | `FlowController.java` | not started | runtime pause/disable paths still not cloned |
+| diagnose runtime chain | `ForwardServiceImpl.java` and `TunnelServiceImpl.java` | partial clone | panel-side checks exist, node-chain semantics do not |
 
-1. `UserTunnel` 管理页和授权管理流程
-2. forward runtime 语义
-   - create/update/delete/pause/resume 对远端服务的真实副作用
-3. forward / tunnel diagnose 的节点链路实现
-4. 与 `UserTunnel` 相关的 quota、status、expire、flow reset 联动
+## DTO Surface That Must Not Drift
 
-## 每次复刻完成后的验收
+| DTO / response shape | Fields that must remain explicit |
+|------|------|
+| `ForwardDto` | `name`, `tunnelId`, `remoteAddr`, `strategy`, `inPort`, `interfaceName` |
+| `ForwardUpdateDto` | `id`, `userId`, `name`, `tunnelId`, `remoteAddr`, `strategy`, `inPort`, `interfaceName` |
+| `ForwardWithTunnelDto` | `id`, `name`, `inPort`, `remoteAddr`, `status`, `createdTime`, `updatedTime`, `tunnelName`, `inIp`, `userName`, `userId`, `tunnelId`, `inFlow`, `outFlow`, `strategy`, `inx`, `interfaceName` |
+| `TunnelListDto` | `id`, `name`, `ip`, `inNodePortSta`, `inNodePortEnd`, `type`, `protocol` |
+| `TunnelDto` | `name`, `inNodeId`, `outNodeId`, `type`, `flow`, `trafficRatio`, `interfaceName`, `protocol`, `tcpListenAddr`, `udpListenAddr` |
+| `TunnelUpdateDto` | `id`, `name`, `flow`, `trafficRatio`, `protocol`, `tcpListenAddr`, `udpListenAddr`, `interfaceName` |
+| `UserTunnelDto` | `userId`, `tunnelId`, `flow`, `num`, `flowResetTime`, `expTime`, `speedId` |
+| `UserTunnelQueryDto` | `userId` |
+| `UserTunnelUpdateDto` | `id`, `flow`, `num`, `flowResetTime`, `expTime`, `status`, `speedId` |
+| `UserTunnelWithDetailDto` | `id`, `userId`, `tunnelId`, `flow`, `num`, `flowResetTime`, `expTime`, `speedId`, `speedLimitName`, `speed`, `tunnelName`, `tunnelFlow`, `inFlow`, `outFlow`, `status` |
 
-至少执行：
+Extra rules:
+
+- `ForwardUpdateDto.userId` must stay in the clone even if local code can infer the user from token context.
+- `UserTunnelUpdateDto.status`, `UserTunnelUpdateDto.speedId`, and `ForwardWithTunnelDto.inx` are required fields, not optional conveniences.
+
+## Auth And Permission Semantics
+
+- All nine `ForwardController` routes are user-scope in the reference. They are not admin-only just because the file imports role annotations.
+- Under `TunnelController`, only `POST /api/v1/tunnel/user/tunnel` is user-scope. Tunnel CRUD, tunnel diagnose, and user-tunnel management are role-restricted.
+- The user tunnel list behavior is not "active relation only." The reference collects the user's tunnel relations and then filters by active tunnel status; relation `status` is not the list filter itself.
+- Non-admin `createForward`, `updateForward`, and `resumeForward` do more than check relation existence. The reference also checks user expiry, relation status, relation expiry, user total flow, tunnel flow, user forward count, and per-tunnel forward count.
+- `updateForwardOrder` is owner-scoped for normal users and cross-user for admins.
+- When admins change someone else's forward and switch tunnels, the reference re-validates that target user's `UserTunnel` grant is still enabled, unexpired, and within quota.
+
+## Frontend-Coupled Request Semantics
+
+- Multi-line `remoteAddr` input is normalized into a comma-separated string before submit.
+- If there is only one target address, the frontend forces `strategy` to `fifo`.
+- Drag-sort payload stays `{ "forwards": [{ "id": 1, "inx": 0 }] }`.
+- The "direct" ordering flow persists order only for the current user's forwards, not the whole dataset.
+- Diagnose modals expect top-level fields such as `forwardName`, `timestamp`, and `results[]`, and each result item needs `success`, `description`, `nodeName`, `nodeId`, `targetIp`, `targetPort`, `message`, `averageTime`, and `packetLoss`.
+
+## Detailed Runtime Gap Checklist
+
+| Surface | Flux semantics that must be matched | Current local gap |
+|------|------|------|
+| `forward/create` | save DB state, create runtime, rollback DB on runtime failure | local clone is still mainly DB-layer |
+| `forward/update` | rebuild runtime when tunnel/runtime config changes and mark forward error on runtime failure | runtime error state is not fully cloned |
+| `forward/delete` | delete runtime before deleting DB record | local delete can still be DB-first semantics |
+| `forward/force-delete` | DB-only escape hatch that skips runtime deletion | this branch must stay distinct from normal delete |
+| `forward/pause` / `resume` | update runtime services and re-check permissions/quota on resume | remote side effects and resume pre-checks are still incomplete |
+| `forward/diagnose` | different node-chain behavior for direct vs tunnel forwarding | local diagnosis is still panel-side |
+| `tunnel/update` | replay/update forwards under the tunnel when key runtime fields change | cascade behavior not cloned |
+| `tunnel/delete` | block delete if forwards or user-tunnel grants still depend on the tunnel | delete guard semantics not cloned |
+| `tunnel/diagnose` | direct and tunnel modes diagnose different network paths | current docs are still too coarse without this reminder |
+| `user-tunnel/remove` | stop and remove that user's forwards under the tunnel before removing the grant | cascade delete behavior not cloned |
+| `user-tunnel/update` | propagate speed/limit changes to runtime for affected forwards | runtime propagation not cloned |
+
+## Definition Of Done
+
+A `flux-panel` clone task is only done when all relevant items are true:
+
+- routes match the reference
+- auth scope matches the reference
+- DTO field names match the reference
+- response wrapper matches the reference
+- page flow matches the reference
+- service semantics match the reference
+- remaining gaps are explicitly documented
+- validation commands pass
+
+## Required Validation
+
+Minimum validation:
 
 ```bash
 $env:GOWORK='off'; go test ./internal/router ./internal/handler ./internal/service
 cd web && npm run build
 ```
 
-如果是 forward/tunnel 相关改动，再额外确认：
+If the task touches forward/tunnel behavior, also verify:
 
-- 页面请求的路径是否仍与参考一致
-- handler 是否仍返回 `code/msg/ts/data`
-- DTO 是否没有偷偷删字段
-- 用户态接口是否还能在 JWT 用户上下文下访问
-- 新增差距是否已经记录到本文件
+- route scope is still correct
+- handler still returns `code/msg/ts/data`
+- DTO fields were not silently removed
+- user routes still work under JWT user context
+- the remaining gap list is updated
 
-## 文档维护规则
+## Recommended Next Clone Order
 
-后续每完成一个 `flux-panel` 模块复刻，需要同步更新三处：
+1. `UserTunnel` management and authorization UI
+2. forward runtime semantics
+3. tunnel / forward diagnose runtime semantics
+4. quota / expire / reset-flow linkage
+
+## Documentation Maintenance
+
+Every time a `flux-panel` module is cloned or significantly adjusted, update:
 
 - `AGENTS.md`
 - `CLAUDE.md`
 - `docs/guide/flux-panel-clone.md`
+- `docs/guide/flux-forward-contract.md` when forward/tunnel contracts change
+- `docs/guide/api-reference.md` when exposed compat endpoints or DTOs change
+- `docs/FEATURE_ROADMAP.md` when clone status or remaining gaps change
+- `docs/guide/flux-panel-workstream.md` when the next recommended clone order changes
 
-如果只是局部修补，也至少要更新本文件里的“当前已完成基础”或“仍需补齐的差距”。
+If the change is partial, update the completion status and gap list anyway.
