@@ -74,9 +74,9 @@ type PanelForwardListItem struct {
 type PanelTunnelListItem struct {
 	ID            uint   `json:"id"`
 	Name          string `json:"name"`
-	InIP          string `json:"in_ip"`
-	InNodePortSta *int   `json:"in_node_port_sta"`
-	InNodePortEnd *int   `json:"in_node_port_end"`
+	InIP          string `json:"inIp"`
+	InNodePortSta *int   `json:"inNodePortSta"`
+	InNodePortEnd *int   `json:"inNodePortEnd"`
 	Status        int    `json:"status"`
 }
 
