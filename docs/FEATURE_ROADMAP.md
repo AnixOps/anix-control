@@ -63,6 +63,12 @@
 
 ### 2.1 架构设计
 
+Current clone note (`2026-04-05`):
+
+- dual-runtime abstraction exists locally for `gost` and `iptables_ansible`
+- runtime backend selection and runtime job observability live under the admin system page
+- this extension must not change the Flux-shaped forward page while clone work is still in progress
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        流量转发架构                                   │

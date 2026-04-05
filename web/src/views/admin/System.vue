@@ -24,6 +24,68 @@
         <input v-model="configSearch" type="text" placeholder="搜索配置项..." class="search-input" />
         <button class="btn-primary" @click="openConfigModal()">➕ 新增配置</button>
       </div>
+      <section class="runtime-config-card">
+        <div class="runtime-config-head">
+          <div>
+            <p class="eyebrow">Forward Runtime</p>
+            <h3>璁剧疆杞彂運行鍊?</h3>
+          </div>
+          <div class="runtime-config-actions">
+            <button class="btn btn-secondary btn-sm" :disabled="runtimeJobsLoading" @click="fetchForwardRuntimeJobs">
+              {{ runtimeJobsLoading ? 'Refreshing...' : 'Refresh jobs' }}
+            </button>
+            <button class="btn btn-secondary btn-sm" :disabled="runtimeSaving" @click="saveForwardRuntimeConfig">
+              {{ runtimeSaving ? 'Saving...' : 'Save config' }}
+            </button>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Runtime Backend</label>
+            <select v-model="runtimeBackend">
+              <option v-for="option in runtimeBackendOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>iptables ansible JSON</label>
+            <textarea
+              v-model="runtimeConfigJson"
+              rows="5"
+              placeholder='{"inventory":"...","playbookApply":"...","playbookRemove":"..."}'
+            ></textarea>
+          </div>
+        </div>
+        <p v-if="runtimeValidationError" class="form-error">{{ runtimeValidationError }}</p>
+
+        <div class="runtime-jobs-block">
+          <div class="runtime-jobs-head">
+            <h4>Recent runtime jobs</h4>
+            <span class="text-secondary">Latest queued and executed actions for the dual-runtime layer.</span>
+          </div>
+
+          <div v-if="runtimeJobsLoading" class="runtime-jobs-empty">Loading runtime jobs...</div>
+
+          <div v-else-if="runtimeJobs.length" class="runtime-jobs-list">
+            <article v-for="job in runtimeJobs" :key="job.id" class="runtime-job-item">
+              <div class="runtime-job-main">
+                <div class="runtime-job-title">
+                  <strong>#{{ job.id }} {{ job.action }}</strong>
+                  <span>{{ job.backend }} · forward {{ job.forwardId || '-' }} · tunnel {{ job.tunnelId || '-' }} · node {{ job.nodeId || '-' }}</span>
+                </div>
+                <div class="runtime-job-side">
+                  <span :class="['status-badge', `runtime-status-${job.status}`]">{{ getRuntimeJobStatusLabel(job.status) }}</span>
+                  <span class="runtime-job-time">{{ formatRuntimeJobTime(job) }}</span>
+                </div>
+              </div>
+              <code v-if="formatRuntimeJobMessage(job)" class="runtime-job-message">{{ formatRuntimeJobMessage(job) }}</code>
+            </article>
+          </div>
+
+          <div v-else class="runtime-jobs-empty">No runtime jobs yet.</div>
+        </div>
+      </section>
 
       <div class="table-container">
         <table class="data-table">
@@ -275,11 +337,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import {
-  getSystemConfigs, setSystemConfig, deleteSystemConfig,
+  getSystemConfigs, getSystemConfig, setSystemConfig, deleteSystemConfig,
   getBackupConfig, updateBackupConfig, createBackup, getBackups,
   getBackupStats, deleteBackup, restoreBackup,
   getLoadBalancers, createLoadBalancer, updateLoadBalancer,
-  deleteLoadBalancer, runHealthCheck
+  deleteLoadBalancer, runHealthCheck, listForwardRuntimeJobs
 } from '@/api/admin'
 
 const activeTab = ref('config')
@@ -306,6 +368,19 @@ const balancerForm = ref({
   name: '', group_id: 0, strategy: 'round-robin',
   health_check: true, check_interval: 60, weights_json: ''
 })
+
+const runtimeBackendKey = 'forward.runtime_backend'
+const runtimeAnsibleConfigKey = 'forward.runtime.iptables_ansible.config'
+const runtimeBackendOptions = [
+  { value: 'gost', label: 'gost (默认)' },
+  { value: 'iptables_ansible', label: 'iptables_ansible' }
+]
+const runtimeBackend = ref('gost')
+const runtimeConfigJson = ref('')
+const runtimeSaving = ref(false)
+const runtimeValidationError = ref('')
+const runtimeJobs = ref([])
+const runtimeJobsLoading = ref(false)
 
 const filteredConfigs = computed(() => {
   if (!configSearch.value) return configs.value
@@ -353,6 +428,121 @@ const truncateValue = (value) => {
   if (!value) return '-'
   const str = String(value)
   return str.length > 50 ? str.substring(0, 50) + '...' : str
+}
+
+const normalizeRuntimeJob = (raw) => ({
+  ...raw,
+  id: Number(raw.id),
+  status: Number(raw.status ?? 0),
+  forwardId: raw.forwardId ?? raw.forward_id ?? null,
+  tunnelId: raw.tunnelId ?? raw.tunnel_id ?? null,
+  nodeId: raw.nodeId ?? raw.node_id ?? null,
+  createdAt: raw.createdAt ?? raw.created_at ?? null,
+  updatedAt: raw.updatedAt ?? raw.updated_at ?? null,
+  startedAt: raw.startedAt ?? raw.started_at ?? null,
+  completedAt: raw.completedAt ?? raw.completed_at ?? null
+})
+
+const getRuntimeJobStatusLabel = (status) => {
+  switch (Number(status)) {
+    case 0:
+      return 'Pending'
+    case 1:
+      return 'Running'
+    case 2:
+      return 'Success'
+    case 3:
+      return 'Failed'
+    default:
+      return 'Unknown'
+  }
+}
+
+const formatRuntimeJobTime = (job) => {
+  const value = job.completedAt || job.startedAt || job.updatedAt || job.createdAt
+  return value ? formatTime(value) : '-'
+}
+
+const formatRuntimeJobMessage = (job) => {
+  const source = job.error || job.result || job.payload || ''
+  const text = String(source).trim()
+  if (!text) return ''
+  return text.length > 220 ? `${text.slice(0, 217)}...` : text
+}
+
+const fetchForwardRuntimeJobs = async () => {
+  runtimeJobsLoading.value = true
+  try {
+    const res = await listForwardRuntimeJobs({ limit: 10 })
+    runtimeJobs.value = Array.isArray(res.data?.list) ? res.data.list.map(normalizeRuntimeJob) : []
+  } catch (err) {
+    console.error('get forward runtime jobs failed:', err)
+    runtimeJobs.value = []
+  } finally {
+    runtimeJobsLoading.value = false
+  }
+}
+
+const fetchForwardRuntimeConfig = async () => {
+  try {
+    const backendRes = await getSystemConfig(runtimeBackendKey)
+    runtimeBackend.value = backendRes.data?.value || 'gost'
+  } catch (err) {
+    console.error('鑾峰彇 forward runtime backend 澶辫触:', err)
+  }
+  try {
+    const configRes = await getSystemConfig(runtimeAnsibleConfigKey)
+    const rawValue = configRes.data?.value || ''
+    if (!rawValue) {
+      runtimeConfigJson.value = ''
+    } else {
+      try {
+        runtimeConfigJson.value = JSON.stringify(JSON.parse(rawValue), null, 2)
+      } catch {
+        runtimeConfigJson.value = rawValue
+      }
+    }
+  } catch (err) {
+    console.error('鑾峰彇 forward runtime ansible 配置澶辫触:', err)
+  }
+}
+
+const saveForwardRuntimeConfig = async () => {
+  runtimeValidationError.value = ''
+  let parsed = null
+  if (runtimeConfigJson.value.trim()) {
+    try {
+      parsed = JSON.parse(runtimeConfigJson.value)
+    } catch (err) {
+      runtimeValidationError.value = 'ansible JSON invalid'
+      return
+    }
+  }
+
+  runtimeSaving.value = true
+  try {
+    await Promise.all([
+      setSystemConfig(runtimeBackendKey, {
+        value: runtimeBackend.value || 'gost',
+        type: 'string',
+        group: 'forward',
+        description: 'Forward runtime backend'
+      }),
+      setSystemConfig(runtimeAnsibleConfigKey, {
+        value: parsed ? JSON.stringify(parsed) : '',
+        type: 'json',
+        group: 'forward',
+        description: 'Forward runtime ansible config'
+      })
+    ])
+    await fetchForwardRuntimeConfig()
+    await fetchForwardRuntimeJobs()
+    fetchConfigs()
+  } catch (err) {
+    runtimeValidationError.value = err.response?.data?.error || err.message || '保存失败'
+  } finally {
+    runtimeSaving.value = false
+  }
 }
 
 // 系统配置
@@ -545,6 +735,8 @@ const runHealthCheckRequest = async (lb) => {
 
 onMounted(() => {
   fetchConfigs()
+  fetchForwardRuntimeConfig()
+  fetchForwardRuntimeJobs()
   fetchBackupConfig()
   fetchBackups()
   fetchBackupStats()
@@ -559,6 +751,118 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   margin-bottom: 20px;
+}
+
+.runtime-config-card {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+.runtime-config-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+.runtime-config-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.runtime-config-card .form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.runtime-config-card textarea {
+  min-height: 120px;
+  font-family: Consolas, 'Courier New', monospace;
+}
+.runtime-config-card .btn {
+  min-width: 120px;
+}
+.runtime-jobs-block {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-color);
+}
+.runtime-jobs-head,
+.runtime-job-main,
+.runtime-job-side {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.runtime-jobs-head {
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.runtime-jobs-head h4 {
+  margin: 0;
+}
+.runtime-jobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.runtime-job-item {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.03);
+}
+.runtime-job-main {
+  align-items: flex-start;
+}
+.runtime-job-title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.runtime-job-title span,
+.runtime-job-time {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.runtime-job-side {
+  flex-shrink: 0;
+}
+.runtime-job-message {
+  display: block;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.04);
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.runtime-jobs-empty {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.03);
+  color: var(--text-secondary);
+}
+.runtime-status-0 {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+.runtime-status-1 {
+  background: rgba(59, 130, 246, 0.14);
+  color: #1d4ed8;
+}
+.runtime-status-2 {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+}
+.runtime-status-3 {
+  background: rgba(239, 68, 68, 0.14);
+  color: #b91c1c;
 }
 
 .backup-config h3 {

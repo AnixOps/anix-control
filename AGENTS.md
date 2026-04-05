@@ -921,6 +921,13 @@ cd web && npm run build
 - Read `docs/guide/flux-panel-clone.md` before touching forward/tunnel/user-tunnel pages so you follow the mandatory workflow and validation checklist.
 - Use `docs/guide/flux-forward-contract.md` as the source for response envelopes, endpoint mapping, DTO requirements, and documented gaps.
 - Before labeling anything as `1:1 clone`, record remaining runtime or diagnose differences so reviewers understand what still diverges from `flux-panel`.
+- Dual-runtime support (`gost` + `iptables_ansible`) is a local extension, not part of the upstream Flux `/forward` page contract.
+- Keep `web/src/views/admin/Forward.vue` aligned with `vite-frontend/src/pages/forward.tsx`; do not add runtime backend selectors or runtime job tables there.
+- Put extension controls and observability in `web/src/views/admin/System.vue`.
+- Current extension surface:
+  - system config key `forward.runtime_backend`
+  - system config key `forward.runtime.iptables_ansible.config`
+  - admin endpoint `GET /api/v2/admin/forward/runtime/jobs`
 
 ## Flux-panel Doc Sync
 

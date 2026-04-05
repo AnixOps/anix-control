@@ -17,11 +17,20 @@ const (
 	defaultTunnelPortStart = 10000
 	defaultTunnelPortEnd   = 60000
 	diagnosisTimeout       = 3 * time.Second
+	defaultRuntimeJobLimit = 50
+	maxRuntimeJobLimit     = 200
 )
 
 type PanelForwardService struct {
 	db             *gorm.DB
 	runtimeService *PanelForwardRuntimeService
+}
+
+type PanelRuntimeJobFilter struct {
+	Backend   string
+	Status    *int
+	ForwardID *uint
+	Limit     int
 }
 
 func NewPanelForwardService(db *gorm.DB) *PanelForwardService {
@@ -868,6 +877,31 @@ func (s *PanelForwardService) userHasTunnelAccess(userID, tunnelID uint) (bool, 
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func (s *PanelForwardService) ListRuntimeJobs(filter PanelRuntimeJobFilter) ([]model.ForwardRuntimeJob, error) {
+	query := s.db.Model(&model.ForwardRuntimeJob{}).Order("id DESC")
+	if strings.TrimSpace(filter.Backend) != "" {
+		query = query.Where("backend = ?", strings.TrimSpace(filter.Backend))
+	}
+	if filter.Status != nil {
+		query = query.Where("status = ?", *filter.Status)
+	}
+	if filter.ForwardID != nil {
+		query = query.Where("forward_id = ?", *filter.ForwardID)
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = defaultRuntimeJobLimit
+	}
+	if limit > maxRuntimeJobLimit {
+		limit = maxRuntimeJobLimit
+	}
+
+	var jobs []model.ForwardRuntimeJob
+	err := query.Limit(limit).Find(&jobs).Error
+	return jobs, err
 }
 
 func buildPanelForwardItem(record *model.Forward) PanelForwardListItem {
