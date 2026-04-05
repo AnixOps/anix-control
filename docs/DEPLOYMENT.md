@@ -55,7 +55,7 @@ cd v2board
 cp .env.example .env
 cp config/config.yaml.example config/config.yaml
 
-# 3) 按需修改配置（至少设置 jwt.secret 与 app.api_token）
+# 3) 按需修改配置（至少设置 jwt.secret）
 # nano config/config.yaml
 
 # 4) 启动
@@ -171,10 +171,9 @@ cache:
 ```yaml
 jwt:
   secret: "your-jwt-secret-at-least-32-characters"
-
-app:
-  api_token: "your-node-communication-token"
 ```
+
+> 说明：`/api/v1|v2/server/UniProxy/*` 已强制使用节点级鉴权，必须携带 `node_id` 查询参数与 `X-API-Key` 请求头（值为该节点的 `api_key`）。`app.api_token` 仅保留为历史兼容字段，不用于 UniProxy 鉴权。
 
 ---
 
@@ -284,11 +283,11 @@ docker-compose exec nginx nginx -t
 ### 4) 节点无法连接面板
 
 ```bash
-# 检查 api_token
-grep api_token config/config.yaml
+# 检查节点请求参数（node_id + X-API-Key）
+# X-API-Key 应为该节点分配的 api_key
 
 # 检查节点接口
-curl "http://localhost:8080/api/v2/server/UniProxy/config?node_id=1&token=your_token"
+curl -H "X-API-Key: your_node_api_key" "http://localhost:8080/api/v2/server/UniProxy/config?node_id=1"
 ```
 
 ---

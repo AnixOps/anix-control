@@ -258,7 +258,7 @@ jwt:
 app:
   name: "V2Board"
   version: "2.0.0"
-  api_token: ""           # 节点通信令牌
+  api_token: ""           # 历史兼容字段（UniProxy 已改为节点 api_key + X-API-Key）
   subscribe_path: "s"     # 订阅路径
 ```
 
@@ -379,7 +379,7 @@ V2bX_AnixOps/
     {
       "Core": "sing",
       "ApiHost": "https://panel.example.com",
-      "ApiKey": "your-token",
+      "ApiKey": "your-api-key",
       "NodeID": 1,
       "Timeout": 30,
       "ListenIP": "0.0.0.0",
@@ -561,7 +561,7 @@ go build -o V2bX main.go
 
 ### 7.2 API 响应示例
 
-**节点配置 API** (`GET /api/v2/server/UniProxy/config?node_id=1&token=test`):
+**节点配置 API** (`GET /api/v2/server/UniProxy/config?node_id=1 (Header: X-API-Key: <api_key>)`):
 ```json
 {
   "base_config": {"pull_interval": 60, "push_interval": 60},
@@ -613,10 +613,10 @@ GOEXPERIMENT=jsonv2 go build -o V2bX.exe main.go
 curl http://localhost:8080/health
 
 # 节点配置
-curl "http://localhost:8080/api/v2/server/UniProxy/config?node_id=1&token=test"
+curl -H "X-API-Key: your_node_api_key" "http://localhost:8080/api/v2/server/UniProxy/config?node_id=1"
 
 # 用户列表
-curl "http://localhost:8080/api/v2/server/UniProxy/user?node_id=1&token=test"
+curl -H "X-API-Key: your_node_api_key" "http://localhost:8080/api/v2/server/UniProxy/user?node_id=1"
 ```
 
 ---

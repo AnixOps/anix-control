@@ -250,7 +250,7 @@ go build -o xrayr main.go
 curl https://your-panel.com/health
 
 # 测试节点配置接口
-curl "https://your-panel.com/api/v2/server/UniProxy/config?node_id=1&token=your-token"
+curl -H "X-API-Key: your-node-api-key" "https://your-panel.com/api/v2/server/UniProxy/config?node_id=1"
 ```
 
 ### 检查节点日志
