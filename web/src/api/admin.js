@@ -594,6 +594,84 @@ export function deleteKnowledge(id) {
 // ====== 流量转发管理 ======
 
 // 获取转发节点列表
+export function createForward(data) {
+  return request({
+    url: '/admin/forward/create',
+    method: 'post',
+    data
+  })
+}
+
+export function getForwardList() {
+  return request({
+    url: '/admin/forward/list',
+    method: 'post'
+  })
+}
+
+export function updateForward(data) {
+  return request({
+    url: '/admin/forward/update',
+    method: 'post',
+    data
+  })
+}
+
+export function deleteForward(id) {
+  return request({
+    url: '/admin/forward/delete',
+    method: 'post',
+    data: { id }
+  })
+}
+
+export function forceDeleteForward(id) {
+  return request({
+    url: '/admin/forward/force-delete',
+    method: 'post',
+    data: { id }
+  })
+}
+
+export function pauseForwardService(id) {
+  return request({
+    url: '/admin/forward/pause',
+    method: 'post',
+    data: { id }
+  })
+}
+
+export function resumeForwardService(id) {
+  return request({
+    url: '/admin/forward/resume',
+    method: 'post',
+    data: { id }
+  })
+}
+
+export function diagnoseForward(forwardId) {
+  return request({
+    url: '/admin/forward/diagnose',
+    method: 'post',
+    data: { forwardId }
+  })
+}
+
+export function updateForwardOrder(data) {
+  return request({
+    url: '/admin/forward/update-order',
+    method: 'post',
+    data
+  })
+}
+
+export function getForwardTunnels() {
+  return request({
+    url: '/admin/tunnel/user/tunnel',
+    method: 'post'
+  })
+}
+
 export function getForwardNodes(params) {
   return request({
     url: '/admin/forward/nodes',
@@ -1257,6 +1335,16 @@ export default {
   updateKnowledge,
   deleteKnowledge,
   // 流量转发
+  createForward,
+  getForwardList,
+  updateForward,
+  deleteForward,
+  forceDeleteForward,
+  pauseForwardService,
+  resumeForwardService,
+  diagnoseForward,
+  updateForwardOrder,
+  getForwardTunnels,
   getForwardNodes,
   createForwardNode,
   getForwardNode,
