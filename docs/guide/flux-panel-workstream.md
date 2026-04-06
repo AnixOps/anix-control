@@ -4,8 +4,8 @@
 
 - Base UI and compat endpoints are live for `/forward/*`, `/user/reset`, `/tunnel/user/tunnel`, and `/tunnel/user/assign|list|remove|update`, with `web/src/views/admin/Forward.vue`, `web/src/views/admin/Users.vue`, and `internal/service/forward_panel_service.go` providing the first pass.
 - Response envelope, DTO names, and `ForwardUserTunnel` auth model already align with the Flux-panel reference; these are documented in `docs/guide/flux-forward-contract.md`.
-- The admin user page already exposes tunnel grant listing, used-flow display, manual flow reset, and rate-limit columns against the compat routes.
-- Remaining gaps are runtime semantics (create/update/delete/pause/resume side effects, diagnose node paths, quota/expiry linkage) plus the last-mile `UserTunnel` details: stored flow counter semantics, speed-limit selector/list joins, duplicate tunnel filtering, and Flux-style reset dialogs.
+- The admin user page already exposes tunnel grant listing, used-flow display, dedicated flow-reset confirmation modals, duplicate-tunnel filtering on create, and rate-limit columns against the compat routes.
+- Remaining gaps are runtime semantics (create/update/delete/pause/resume side effects, diagnose node paths, quota/expiry linkage) plus the last-mile `UserTunnel` details: native relation-counter writers, speed-limit selector/list joins, and exact Flux UI layout details.
 - Admin-side runtime controls remain outside the Flux-cloned `/admin/forward` page. `web/src/views/admin/System.vue` currently hosts `forward.runtime_backend`, `forward.runtime.iptables_ansible.config`, and `GET /api/v2/admin/forward/runtime/jobs` as the compatibility surface for optional internal backend delegation (`NodeX` in public docs). `install.sh` (`panel_install.sh` wrapper) and the Docker bootstrap keys (`FORWARD_RUNTIME_BACKEND`, `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`) belong to the same deployment/backplane surface and must not change the Flux-shaped page.
 - Current internal runtime calls for `panel_forward` and `legacy_rule` now require an explicit NodeX control-plane base URL (`forward.runtime.nodex.base_url` / `FORWARD_RUNTIME_NODEX_BASE_URL`) and no longer fall back to the ingress node transport for the outer control-plane hop; keep this requirement documented outside the Flux-cloned page.
 
@@ -28,7 +28,7 @@
 
 ## Recommended Implementation Order
 
-1. Finish the remaining Flux-panel `UserTunnel` semantics: source `inFlow/outFlow` from the relation record, join real speed-limit metadata, filter already-assigned tunnels from the create picker, and replace simplified confirm/alert reset flows with Flux-style dialogs.
+1. Finish the remaining Flux-panel `UserTunnel` semantics: replace the current relation-counter backfill with a native writer, join real speed-limit metadata, and finish the remaining Flux UI/layout details around the user-tunnel page.
 2. Reconcile forward runtime semantics: linking create/update/delete/pause/resume to remote services, and ensuring the node chain state mirrors Flux-panel behavior.
 3. Implement diagnose and other node-chain instrumentation so the panel-side diagnostics match reference expectations.
 4. Address quota, expiry, and flow-reset behaviors that rely on `UserTunnel` state so the clone remains behaviorally faithful.

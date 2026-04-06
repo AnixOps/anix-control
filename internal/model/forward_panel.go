@@ -51,6 +51,8 @@ type ForwardUserTunnel struct {
 	TunnelID      uint      `gorm:"uniqueIndex:idx_forward_user_tunnel;index" json:"tunnel_id"`
 	Flow          int64     `gorm:"default:0" json:"flow"`
 	Num           int       `gorm:"default:0" json:"num"`
+	InFlow        int64     `gorm:"default:0" json:"in_flow"`
+	OutFlow       int64     `gorm:"default:0" json:"out_flow"`
 	FlowResetTime int64     `gorm:"default:0" json:"flowResetTime"`
 	ExpTime       int64     `gorm:"default:0" json:"expTime"`
 	SpeedID       *uint     `json:"speedId"`

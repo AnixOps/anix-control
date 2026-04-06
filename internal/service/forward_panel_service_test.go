@@ -741,6 +741,8 @@ func (s *PanelForwardServiceTestSuite) TestListUserTunnels_ReturnsJoinedFields()
 		TunnelID:      tunnel.ID,
 		Flow:          100,
 		Num:           5,
+		InFlow:        3000,
+		OutFlow:       4000,
 		FlowResetTime: 7,
 		ExpTime:       time.Now().Add(24 * time.Hour).UnixMilli(),
 		SpeedID:       &speedID,
@@ -775,12 +777,40 @@ func (s *PanelForwardServiceTestSuite) TestListUserTunnels_ReturnsJoinedFields()
 	assert.Equal(s.T(), speed, items[0].Speed)
 	assert.Equal(s.T(), tunnel.Name, items[0].TunnelName)
 	assert.Equal(s.T(), tunnel.Flow, items[0].TunnelFlow)
-	assert.Equal(s.T(), int64(1000), items[0].InFlow)
-	assert.Equal(s.T(), int64(2000), items[0].OutFlow)
+	assert.Equal(s.T(), int64(3000), items[0].InFlow)
+	assert.Equal(s.T(), int64(4000), items[0].OutFlow)
 	assert.Equal(s.T(), model.ForwardUserTunnelStatusActive, items[0].Status)
 }
 
-func (s *PanelForwardServiceTestSuite) TestResetUserTunnelTraffic_ResetsMatchingForwardFlowsOnly() {
+func (s *PanelForwardServiceTestSuite) TestListUserTunnels_UsesAscendingRelationOrder() {
+	db := database.Get()
+
+	user := &model.User{
+		Email:          "panel-forward-list-order@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-list-order-token",
+		UUID:           "panel-forward-list-order-uuid",
+		TransferEnable: 1073741824,
+	}
+	tunnelA := &model.ForwardTunnel{Name: "Order Tunnel A", InIP: "10.0.2.1", Status: model.ForwardTunnelStatusActive}
+	tunnelB := &model.ForwardTunnel{Name: "Order Tunnel B", InIP: "10.0.2.2", Status: model.ForwardTunnelStatusActive}
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(tunnelA).Error)
+	assert.NoError(s.T(), db.Create(tunnelB).Error)
+
+	first := &model.ForwardUserTunnel{UserID: user.ID, TunnelID: tunnelA.ID, Status: model.ForwardUserTunnelStatusActive}
+	second := &model.ForwardUserTunnel{UserID: user.ID, TunnelID: tunnelB.ID, Status: model.ForwardUserTunnelStatusActive}
+	assert.NoError(s.T(), db.Create(first).Error)
+	assert.NoError(s.T(), db.Create(second).Error)
+
+	items, err := s.svc.ListUserTunnels(PanelUserTunnelQueryInput{UserID: user.ID})
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), items, 2)
+	assert.Equal(s.T(), first.ID, items[0].ID)
+	assert.Equal(s.T(), second.ID, items[1].ID)
+}
+
+func (s *PanelForwardServiceTestSuite) TestResetUserTunnelTraffic_ResetsPermissionAndMatchingForwardFlowsOnly() {
 	db := database.Get()
 
 	userA := &model.User{
@@ -807,6 +837,8 @@ func (s *PanelForwardServiceTestSuite) TestResetUserTunnelTraffic_ResetsMatching
 	perm := &model.ForwardUserTunnel{
 		UserID:   userA.ID,
 		TunnelID: tunnelA.ID,
+		InFlow:   1234,
+		OutFlow:  5678,
 		Status:   model.ForwardUserTunnelStatusActive,
 	}
 	assert.NoError(s.T(), db.Create(perm).Error)
@@ -864,6 +896,47 @@ func (s *PanelForwardServiceTestSuite) TestResetUserTunnelTraffic_ResetsMatching
 	assert.NoError(s.T(), db.First(&reloadedOtherUserSameTunnel, otherUserSameTunnel.ID).Error)
 	assert.Equal(s.T(), int64(333), reloadedOtherUserSameTunnel.InFlow)
 	assert.Equal(s.T(), int64(444), reloadedOtherUserSameTunnel.OutFlow)
+
+	var reloadedPermission model.ForwardUserTunnel
+	assert.NoError(s.T(), db.First(&reloadedPermission, perm.ID).Error)
+	assert.Equal(s.T(), int64(0), reloadedPermission.InFlow)
+	assert.Equal(s.T(), int64(0), reloadedPermission.OutFlow)
+}
+
+func (s *PanelForwardServiceTestSuite) TestCreateForward_RejectsTunnelTrafficExhaustedFromPermissionCounters() {
+	db := database.Get()
+
+	user := &model.User{
+		Email:          "panel-forward-permission-counter@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-permission-counter-token",
+		UUID:           "panel-forward-permission-counter-uuid",
+		TransferEnable: 2 * bytesPerGiB,
+	}
+	tunnel := &model.ForwardTunnel{
+		Name:   "Permission Counter Tunnel",
+		InIP:   "127.0.0.1",
+		Status: model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+	assert.NoError(s.T(), db.Create(&model.ForwardUserTunnel{
+		UserID:   user.ID,
+		TunnelID: tunnel.ID,
+		Flow:     1,
+		InFlow:   bytesPerGiB / 2,
+		OutFlow:  bytesPerGiB / 2,
+		Status:   model.ForwardUserTunnelStatusActive,
+	}).Error)
+
+	_, err := s.svc.CreateForward(user.ID, false, PanelForwardInput{
+		Name:       "Blocked by Permission Counter",
+		TunnelID:   tunnel.ID,
+		RemoteAddr: "example.com:443",
+	})
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "tunnel traffic exhausted")
+	assert.Equal(s.T(), 0, s.runtimeClient.calls)
 }
 
 func (s *PanelForwardServiceTestSuite) TestListRuntimeJobsFilters() {

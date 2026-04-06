@@ -904,11 +904,17 @@ protoc --go_out=. --go-grpc_out=. api/grpc/v2board.proto
   - 每月重置日
   - 限速列
   - 手动“重置流量”操作
+- 用户管理页已补充:
+  - 创建授权时过滤已分配隧道
+  - 编辑授权时隧道只读
+  - 站内重置确认弹窗与已用流量摘要
+- `ForwardUserTunnel` 已补 `in_flow/out_flow` 关系计数字段，列表与配额判断优先读 relation 计数，并对旧的 `v2_forward` 行流量做兼容回填。
 
 当前仍未视为完成复刻的差距:
 
 - `/tunnel/user/list` 的 `inFlow/outFlow`、`speedLimitName/speed` 语义仍未与参考库的 relation/speed-limit join 完全一致。
-- Flux 用户页的限速规则下拉、已授权隧道过滤、以及 reset 确认弹窗交互仍需继续补齐。
+- 当前 relation 计数仍是通过 `v2_forward` 做兼容回填，不是运行时原生写入链路。
+- Flux 用户页的限速规则下拉仍未落地；当前仓库也没有现成的 `speed_limit` 独立模型或 `/speed-limit/list` 接口可直接复用。
 - `flowResetTime` 目前仅完成存储与展示，自动月重置调度尚未落地。
 
 ### 10.5 后续复刻时的检查清单
