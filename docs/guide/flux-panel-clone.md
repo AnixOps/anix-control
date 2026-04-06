@@ -260,6 +260,8 @@ Extra rules:
 - `POST /api/v1/user/reset` uses `{ "id": <id>, "type": 1|2 }`; success keeps `data = null`, errors use `code = -1` with `data = null`.
 - `UserTunnelDto` create flow must not send `status`; status belongs to `UserTunnelUpdateDto`.
 - The Flux user page filters already-assigned tunnels from the create selector and uses a speed-limit picker backed by `/speed-limit/list`; the local admin page now does the same, so the remaining gap is exact page-level layout parity rather than the selector contract itself.
+- The standalone Flux `limit.tsx` resource now has a local analogue at `web/src/views/admin/Limit.vue` backed by `/api/v2/speed-limit/create|list|update|delete|tunnels`; the remaining gap is exact page-level parity plus runtime-side limiter propagation.
+- The Flux `ResetFlowAsync` scheduler now has a local analogue in `ForwardFlowResetWorker`; month-end overflow-day handling, expired-user forward pause, and expired-grant pause+disable are implemented, but exact user disable-state parity is still pending.
 
 ## Detailed Runtime Gap Checklist
 

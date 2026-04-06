@@ -875,6 +875,9 @@ protoc --go_out=. --go-grpc_out=. api/grpc/v2board.proto
   - `web/src/views/admin/Forward.vue`
 - 用户管理页中的隧道授权区已接入首版 Flux 兼容交互:
   - `web/src/views/admin/Users.vue`
+- 独立限速管理页已接入:
+  - `web/src/views/admin/Limit.vue`
+  - 路由与菜单: `/admin/limit`
 - 兼容 API 入口已建立:
   - `/api/v2/forward/*`
   - `/api/v2/user/reset`
@@ -883,6 +886,11 @@ protoc --go_out=. --go-grpc_out=. api/grpc/v2board.proto
   - `/api/v2/tunnel/user/list`
   - `/api/v2/tunnel/user/remove`
   - `/api/v2/tunnel/user/update`
+  - `/api/v2/speed-limit/create`
+  - `/api/v2/speed-limit/list`
+  - `/api/v2/speed-limit/update`
+  - `/api/v2/speed-limit/delete`
+  - `/api/v2/speed-limit/tunnels`
   - 保留 `/api/v2/admin/forward/*` 与 `/api/v2/admin/tunnel/user/tunnel` 作为现有管理后台兼容镜像
 - 当前转发授权关系模型:
   - `internal/model/forward_panel.go` 中的 `ForwardUserTunnel`
@@ -891,14 +899,20 @@ protoc --go_out=. --go-grpc_out=. api/grpc/v2board.proto
   - `internal/handler/forward_panel.go`
   - `internal/router/router.go`
   - `internal/handler/admin.go`
+  - `internal/model/speed_limit.go`
+  - `internal/service/speed_limit_service.go`
+  - `internal/handler/speed_limit.go`
+  - `internal/service/forward_flow_reset_worker.go`
   - `web/src/api/admin.js`
   - `web/src/views/admin/Users.vue`
+  - `web/src/views/admin/Limit.vue`
   - `internal/service/forward_panel_service_test.go`
 
 当前已对齐到可用层的用户侧能力:
 
 - 管理员可以通过 `POST /api/v2/user/reset` 重置用户流量或用户隧道授权流量，返回包与 Flux 保持 `code/msg/ts/data` 结构。
 - 管理员可以通过 `/api/v2/tunnel/user/assign|list|remove|update` 完成用户隧道授权的增删改查。
+- 管理员可以通过 `/api/v2/speed-limit/create|list|update|delete|tunnels` 完成独立限速规则管理。
 - 用户管理页授权表已展示:
   - 已用流量
   - 每月重置日
@@ -907,15 +921,25 @@ protoc --go_out=. --go-grpc_out=. api/grpc/v2board.proto
 - 用户管理页已补充:
   - 创建授权时过滤已分配隧道
   - 编辑授权时隧道只读
+  - 隧道级 speed-limit 选择器
   - 站内重置确认弹窗与已用流量摘要
-- `ForwardUserTunnel` 已补 `in_flow/out_flow` 关系计数字段，列表与配额判断优先读 relation 计数，并对旧的 `v2_forward` 行流量做兼容回填。
+- `ForwardUserTunnel` 已补 `in_flow/out_flow` 关系计数字段，列表与配额判断会优先读 relation 计数，并继续对旧的 `v2_forward` 行流量做兼容回填。
+- `flowResetTime` 不再只是存储字段:
+  - `ForwardFlowResetWorker` 会在启动时先执行一次补扫
+  - 之后每天本地时间 `00:00:05` 扫描
+  - 当月无对应日期时按月末补执行
+  - 同时重置用户流量与用户隧道授权流量
+  - 过期用户会暂停活跃转发
+  - 过期授权会先暂停活跃转发，再禁用授权
+- 登录链路已拒绝过期用户，避免把“过期”伪装成“封禁”。
 
 当前仍未视为完成复刻的差距:
 
-- `/tunnel/user/list` 的 `inFlow/outFlow`、`speedLimitName/speed` 语义仍未与参考库的 relation/speed-limit join 完全一致。
+- `/tunnel/user/list` 的 `inFlow/outFlow` 仍未做到运行时原生写入，当前主要依赖 relation 字段 + `v2_forward` 兼容回填。
 - 当前 relation 计数仍是通过 `v2_forward` 做兼容回填，不是运行时原生写入链路。
-- Flux 用户页的限速规则下拉仍未落地；当前仓库也没有现成的 `speed_limit` 独立模型或 `/speed-limit/list` 接口可直接复用。
-- `flowResetTime` 目前仅完成存储与展示，自动月重置调度尚未落地。
+- speed-limit 资源虽然已落地，但还没有做到运行时侧精确传播或 enforcement。
+- 当前用户授权入口仍不是上游 `user.tsx` 的完整页面，`/admin/limit` 也还不是 `limit.tsx` 的精确像素级复刻。
+- 过期/禁用/配额耗尽等 `FlowController` 运行时副作用仍未与上游完全等价。
 
 ### 10.5 后续复刻时的检查清单
 
@@ -946,59 +970,6 @@ protoc --go_out=. --go-grpc_out=. api/grpc/v2board.proto
 $env:GOWORK='off'; go test ./internal/router ./internal/handler ./internal/service
 cd web && npm run build
 ```
-
-### 10.8 Flux 复刻边界补充 (2026-04-06，覆盖上方旧表述)
-
-- 当前可用的 compat 入口已经包括:
-  - `/api/v2/forward/*`
-  - `/api/v2/user/reset`
-  - `/api/v2/tunnel/user/tunnel`
-  - `/api/v2/tunnel/user/assign`
-  - `/api/v2/tunnel/user/list`
-  - `/api/v2/tunnel/user/remove`
-  - `/api/v2/tunnel/user/update`
-- 当前用户页联动落点是 `web/src/views/admin/Users.vue`，不是上游 `user.tsx` 的完整 1:1 页面；这里已经接上:
-  - 授权列表
-  - 已用流量列
-  - 每月重置日列
-  - Rate Limit 列
-  - 用户流量/隧道流量重置确认弹窗
-  - 创建授权时过滤已分配隧道
-  - 编辑授权时隧道只读
-- `POST /api/v2/user/reset` 当前只代表“手动 reset 兼容入口”:
-  - `type = 1` 重置用户流量
-  - `type = 2` 重置用户隧道授权流量
-- 上游 `flux-panel` 还有 `ResetFlowAsync` 自动月重置任务:
-  - `flowResetTime = 0` 表示不自动重置
-  - `flowResetTime = 1..31` 表示每月第几号重置
-  - 当月没有该日期时，月末补执行
-- 本仓库当前只完成了 `flowResetTime` 的存储、展示和手动 reset 对接。
-- 本仓库当前还没有:
-  - cron / ticker / init worker 形式的自动月重置
-  - 对应上游 `ResetFlowAsync` 的后台调度
-- 当前真实 speed-limit 边界必须按下面理解:
-  - 上游有独立 `SpeedLimit` 资源与 `/api/v1/speed-limit/*`
-  - 本仓库当前只有 `web/src/api/admin.js` 中的 `getSpeedLimitList()` 前端 helper
-  - 本仓库还没有真正落地 `/api/v2/speed-limit/list` 或独立 `SpeedLimit` model / handler / service
-  - 当前 `speedId` 只是 compat DTO 字段，不代表独立限速资源已经复刻完成
-  - 当前授权列表中的 `speed` 仍来自现有用户或套餐 `speed_limit`
-  - 当前 `speedLimitName` 仍是基于 `speedId` 的占位语义，不是上游 `speed_limit` join
-- 后续继续复刻时，必须额外核对这些上游文件，不能只盯着 `/forward`:
-  - `springboot-backend/src/main/java/com/admin/controller/UserController.java`
-  - `springboot-backend/src/main/java/com/admin/controller/SpeedLimitController.java`
-  - `springboot-backend/src/main/java/com/admin/service/impl/UserServiceImpl.java`
-  - `springboot-backend/src/main/java/com/admin/service/impl/UserTunnelServiceImpl.java`
-  - `springboot-backend/src/main/java/com/admin/service/impl/SpeedLimitServiceImpl.java`
-  - `springboot-backend/src/main/java/com/admin/common/task/ResetFlowAsync.java`
-  - `vite-frontend/src/pages/user.tsx`
-  - `vite-frontend/src/pages/limit.tsx`
-  - `vite-frontend/src/api/index.ts`
-- 当前仍未视为完成复刻的差距:
-  - `/tunnel/user/list` 的 `inFlow/outFlow`、`speedLimitName/speed` 语义仍未与上游 `user_tunnel + speed_limit join` 对齐
-  - 当前 relation 流量仍主要从 `v2_forward` 聚合回填，不是运行时原生写入链路
-  - 真实 `SpeedLimit` 资源仍未落地
-  - 自动月重置仍未落地
-  - 当前用户授权入口仍不是上游 `user.tsx` 的完整页面
 
 ## Flux-panel Clone Docs
 
@@ -1059,6 +1030,4 @@ When planning future clone work, prioritize the remaining gaps in this order:
 - When forward, tunnel, or user-tunnel behavior changes, also update `docs/guide/flux-panel-clone.md`, `docs/guide/flux-forward-contract.md`, `docs/guide/flux-panel-workstream.md`, `docs/guide/api-reference.md`, and `docs/FEATURE_ROADMAP.md`.
 - If user-facing scope or onboarding entry points change, refresh the `Flux-panel` section in `readme.md`.
 - Do not mark work as a full clone while runtime side effects, diagnose paths, or quota/expire/reset-flow gaps are still undocumented.
-- Before labeling anything “1:1 clone,” record remaining runtime or diagnose differences so reviewers understand what still diverges from `flux-panel`.
-
-更详细的模块映射、当前完成度和下一步待补项目，见 `docs/guide/flux-panel-clone.md`。
+- 更详细的模块映射、当前完成度和下一步待补项目，见 `docs/guide/flux-panel-clone.md`。
