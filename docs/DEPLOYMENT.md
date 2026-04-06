@@ -198,6 +198,16 @@ docker-compose -f docker-compose.prod.yml --profile prometheus --profile grafana
 
 配置文件：`config/config.yaml`
 
+### NodeX 控制面（当前 `forward` 运行时调用路径）
+
+| 配置项 | 说明 |
+|--------|------|
+| `forward.runtime.nodex.base_url` | NodeX 控制面基础地址（如 `https://nodex.example.com`）。当前 `/admin/forward` 运行时与 legacy rule sync 的 NodeX 调用都要求显式配置该值。 |
+| `forward.runtime.nodex.token` | 控制面认证令牌；若配置，会同时填充 `Authorization: Bearer` 与 `X-API-Key`。若留空，客户端才会回退到请求内节点的 `api_token`。 |
+| `forward.runtime.nodex.timeout_seconds` | 可选；请求超时时间（秒，默认 15）。也可通过 `FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS` 环境变量预设。 |
+
+> 当前 `panel_forward`（`/admin/forward` 创建、更新、暂停、删除、诊断等）与 `legacy_rule` 同步都会走 NodeX control-plane 的 `/api/v2/internal/forward/runtime/execute`。因此 `forward.runtime.nodex.base_url` 现在必须显式指向 NodeX 控制面；客户端不会再隐式猜测 ingress/relay 节点的 `host:apiPort` 作为外层控制面地址，缺失该值会直接报错。
+
 ### 数据库
 
 SQLite（默认，单实例简单部署）：

@@ -253,6 +253,7 @@ Notes:
 - Keep the Flux-compatible `/admin/forward` page free of extra runtime panels; use `System.vue` and deployment surfaces for backend switching and runtime job observability.
 - Optional JSON keys inside `forward.runtime.iptables_ansible.config`: `command`, `workingDir`, `targetPattern`, `timeoutSeconds`, `environment`.
 - Docker and one-click installs can preseed the same values with `FORWARD_RUNTIME_BACKEND` and `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON` before the admin UI is used.
+- Current NodeX-backed `panel_forward` and `legacy_rule` execution also depends on `forward.runtime.nodex.base_url`/`FORWARD_RUNTIME_NODEX_BASE_URL`; this base URL must point at the NodeX control-plane because the client no longer guesses `host:apiPort` from the ingress/relay node for the outer control-plane hop.
 - Public docs intentionally avoid internal executor topology; see `docs/guide/nodex-internal-extension.md` for the contract boundary.
 
 ---

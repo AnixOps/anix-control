@@ -189,7 +189,7 @@ func (c *nodeXForwardRuntimeClient) Execute(ctx context.Context, req nodeXForwar
 	}
 
 	targetNode := resolveNodeXTargetNode(req)
-	baseURL, err := resolveNodeXBaseURL(targetNode, settings)
+	baseURL, err := resolveNodeXBaseURL(targetNode, settings, requiresConfiguredNodeXControlPlane(req))
 	if err != nil {
 		return nil, err
 	}
@@ -317,6 +317,15 @@ func resolveNodeXTargetNode(req nodeXForwardExecuteRequest) *nodeXForwardNodePay
 	return nil
 }
 
+func requiresConfiguredNodeXControlPlane(req nodeXForwardExecuteRequest) bool {
+	switch req.ResourceType {
+	case nodeXForwardResourceTypePanelForward, nodeXForwardResourceTypeLegacyRule:
+		return true
+	default:
+		return req.AnsibleRuntime != nil
+	}
+}
+
 func hasNodeXForwardNode(node nodeXForwardNodePayload) bool {
 	return node.ID != 0 ||
 		strings.TrimSpace(node.Host) != "" ||
@@ -324,9 +333,12 @@ func hasNodeXForwardNode(node nodeXForwardNodePayload) bool {
 		strings.TrimSpace(node.APIToken) != ""
 }
 
-func resolveNodeXBaseURL(node *nodeXForwardNodePayload, settings *nodeXForwardRuntimeSettings) (string, error) {
+func resolveNodeXBaseURL(node *nodeXForwardNodePayload, settings *nodeXForwardRuntimeSettings, requireConfigured bool) (string, error) {
 	if settings != nil && strings.TrimSpace(settings.BaseURL) != "" {
 		return strings.TrimRight(strings.TrimSpace(settings.BaseURL), "/"), nil
+	}
+	if requireConfigured {
+		return "", fmt.Errorf("%s is required for NodeX forward runtime", forwardRuntimeNodeXBaseURLConfigKey)
 	}
 	if node == nil {
 		return "", fmt.Errorf("forward runtime target node is required")
