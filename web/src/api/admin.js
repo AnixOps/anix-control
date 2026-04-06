@@ -83,8 +83,23 @@ export function unbanUser(id) {
 // 重置用户流量
 export function resetUserTraffic(id) {
   return request({
-    url: `/admin/users/${id}/reset-traffic`,
-    method: 'post'
+    url: '/user/reset',
+    method: 'post',
+    data: {
+      id,
+      type: 1
+    }
+  })
+}
+
+export function resetUserTunnelTraffic(id) {
+  return request({
+    url: '/user/reset',
+    method: 'post',
+    data: {
+      id,
+      type: 2
+    }
   })
 }
 
@@ -682,7 +697,7 @@ export function getForwardTunnels() {
 
 export function assignAdminUserTunnel(data) {
   return request({
-    url: '/admin/tunnel/user/assign',
+    url: '/tunnel/user/assign',
     method: 'post',
     data
   })
@@ -690,7 +705,7 @@ export function assignAdminUserTunnel(data) {
 
 export function getAdminUserTunnelList(data) {
   return request({
-    url: '/admin/tunnel/user/list',
+    url: '/tunnel/user/list',
     method: 'post',
     data
   })
@@ -698,7 +713,7 @@ export function getAdminUserTunnelList(data) {
 
 export function removeAdminUserTunnel(data) {
   return request({
-    url: '/admin/tunnel/user/remove',
+    url: '/tunnel/user/remove',
     method: 'post',
     data
   })
@@ -706,7 +721,7 @@ export function removeAdminUserTunnel(data) {
 
 export function updateAdminUserTunnel(data) {
   return request({
-    url: '/admin/tunnel/user/update',
+    url: '/tunnel/user/update',
     method: 'post',
     data
   })
@@ -1317,6 +1332,7 @@ export default {
   banUser,
   unbanUser,
   resetUserTraffic,
+  resetUserTunnelTraffic,
   getOrderList,
   getOrderStats,
   getOrder,

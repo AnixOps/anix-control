@@ -200,7 +200,7 @@ func (h *ForwardHandler) UpdatePanelForwardOrder(c *gin.Context) {
 func (h *ForwardHandler) AssignPanelUserTunnel(c *gin.Context) {
 	var req service.PanelUserTunnelInput
 	if err := c.ShouldBindJSON(&req); err != nil {
-		panelError(c, "鍙傛暟閿欒")
+		panelError(c, "参数错误")
 		return
 	}
 
@@ -208,13 +208,13 @@ func (h *ForwardHandler) AssignPanelUserTunnel(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
-	panelSuccess(c, true)
+	panelSuccess(c, "用户隧道权限分配成功")
 }
 
 func (h *ForwardHandler) ListPanelUserTunnels(c *gin.Context) {
 	var req service.PanelUserTunnelQueryInput
 	if err := c.ShouldBindJSON(&req); err != nil {
-		panelError(c, "鍙傛暟閿欒")
+		panelError(c, "参数错误")
 		return
 	}
 
@@ -229,7 +229,7 @@ func (h *ForwardHandler) ListPanelUserTunnels(c *gin.Context) {
 func (h *ForwardHandler) RemovePanelUserTunnel(c *gin.Context) {
 	var req panelUserTunnelIDRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		panelError(c, "鍙傛暟閿欒")
+		panelError(c, "参数错误")
 		return
 	}
 
@@ -237,13 +237,13 @@ func (h *ForwardHandler) RemovePanelUserTunnel(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
-	panelSuccess(c, true)
+	panelSuccess(c, "用户隧道权限删除成功")
 }
 
 func (h *ForwardHandler) UpdatePanelUserTunnel(c *gin.Context) {
 	var req service.PanelUserTunnelUpdateInput
 	if err := c.ShouldBindJSON(&req); err != nil {
-		panelError(c, "鍙傛暟閿欒")
+		panelError(c, "参数错误")
 		return
 	}
 
@@ -251,7 +251,7 @@ func (h *ForwardHandler) UpdatePanelUserTunnel(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
-	panelSuccess(c, true)
+	panelSuccess(c, "用户隧道权限更新成功")
 }
 
 func panelSuccess(c *gin.Context, data interface{}) {
@@ -265,8 +265,9 @@ func panelSuccess(c *gin.Context, data interface{}) {
 
 func panelError(c *gin.Context, msg string) {
 	c.JSON(http.StatusOK, gin.H{
-		"code": 1,
+		"code": -1,
 		"msg":  msg,
 		"ts":   time.Now().UnixMilli(),
+		"data": nil,
 	})
 }

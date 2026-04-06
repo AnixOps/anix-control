@@ -43,6 +43,17 @@ Expected compat envelope:
 }
 ```
 
+Expected compat error envelope:
+
+```json
+{
+  "code": -1,
+  "msg": "请求失败",
+  "ts": 1712300000000,
+  "data": null
+}
+```
+
 ## Endpoint Mapping
 
 | Flux Endpoint | Flux Scope | Local Route | Local Scope | Local Status | Notes |
@@ -56,19 +67,24 @@ Expected compat envelope:
 | `POST /api/v1/forward/resume` | JWT user | `POST /api/v2/forward/resume` | JWT user | available | admin mirror also exists |
 | `POST /api/v1/forward/diagnose` | JWT user | `POST /api/v2/forward/diagnose` | JWT user | partially aligned | route exists, runtime semantics still differ |
 | `POST /api/v1/forward/update-order` | JWT user | `POST /api/v2/forward/update-order` | JWT user | available | admin mirror also exists |
+| `POST /api/v1/user/reset` | role-restricted | `POST /api/v2/user/reset` | JWT user + `AdminAuth` | available | request body `{id,type}` is cloned; success keeps `data: null` |
 | `POST /api/v1/tunnel/user/tunnel` | JWT user, not admin-only | `POST /api/v2/tunnel/user/tunnel` | JWT user | available | admin mirror also exists |
+| `POST /api/v1/tunnel/user/assign` | role-restricted | `POST /api/v2/tunnel/user/assign` | JWT user + `AdminAuth` | partially aligned | route exists; create DTO matches Flux, but UI still lacks speed-limit picker and duplicate filtering |
+| `POST /api/v1/tunnel/user/list` | role-restricted | `POST /api/v2/tunnel/user/list` | JWT user + `AdminAuth` | partially aligned | field names match; `inFlow/outFlow`, speed-limit values, and sort order still differ |
+| `POST /api/v1/tunnel/user/remove` | role-restricted | `POST /api/v2/tunnel/user/remove` | JWT user + `AdminAuth` | partially aligned | route exists; cascade semantics on affected forwards are still local-only |
+| `POST /api/v1/tunnel/user/update` | role-restricted | `POST /api/v2/tunnel/user/update` | JWT user + `AdminAuth` | partially aligned | route exists; runtime speed propagation and detailed UI flow still differ |
 
-## Next-phase Reference Endpoints
+## Remaining Clone Gaps
 
-These endpoints exist in the Flux reference and should be treated as pending clone scope, not optional extras:
+These gaps still block a full 1:1 clone even though the base compat routes now exist:
 
-| Flux Endpoint | Flux Scope | Local Status | Notes |
+| Surface | Local Status | Notes |
 |------|------|------|------|
-| `POST /api/v1/tunnel/user/assign` | role-restricted | not cloned | user-tunnel grant flow |
-| `POST /api/v1/tunnel/user/list` | role-restricted | not cloned | user-tunnel admin list |
-| `POST /api/v1/tunnel/user/remove` | role-restricted | not cloned | removing grants also affects forwards |
-| `POST /api/v1/tunnel/user/update` | role-restricted | not cloned | quota, expire, status and rate updates |
-| flow side effects in `FlowController` | node/runtime path | not cloned | quota exhaustion, expire and disable behavior |
+| `POST /api/v2/tunnel/user/list` detail semantics | partially aligned | Flux reads `inFlow/outFlow` from `user_tunnel`, joins `speed_limit`, and sorts by relation id ascending; local code still aggregates flow from `v2_forward`, synthesizes `speedLimitName`, and orders by `id DESC` |
+| `POST /api/v2/tunnel/user/assign` UI | partially aligned | Flux create flow does not send `status`; it filters already-assigned tunnels and uses a speed-limit selector rather than a raw numeric `speedId` input |
+| reset confirmation flow | partially aligned | Flux shows dedicated reset modals with current flow summary for user flow and tunnel flow; local page still uses `confirm/alert` |
+| monthly flow reset automation | not cloned | `flowResetTime` is stored and displayed, but automatic reset scheduling is still missing |
+| flow side effects in `FlowController` | not cloned | quota exhaustion, expire and disable behavior still do not mirror the reference runtime path |
 
 ## Local Extension Surface
 
@@ -142,6 +158,61 @@ Rules for this extension surface:
 }
 ```
 
+### Reset Flow
+
+```json
+{
+  "id": 1,
+  "type": 1
+}
+```
+
+`type = 1` resets user flow, `type = 2` resets user-tunnel flow.
+
+### Assign User Tunnel
+
+```json
+{
+  "userId": 2,
+  "tunnelId": 1,
+  "flow": 100,
+  "num": 10,
+  "flowResetTime": 0,
+  "expTime": 1712300000000,
+  "speedId": null
+}
+```
+
+### List User Tunnel
+
+```json
+{
+  "userId": 2
+}
+```
+
+### Remove User Tunnel
+
+```json
+{
+  "id": 1
+}
+```
+
+### Update User Tunnel
+
+```json
+{
+  "id": 1,
+  "flow": 100,
+  "num": 10,
+  "flowResetTime": 0,
+  "expTime": 1712300000000,
+  "status": 1,
+  "speedId": null
+}
+```
+
 ## Response DTOs
 
 ### Tunnel List Item
@@ -187,6 +258,31 @@ Current local compat fields:
 - `userId`
 - `inx`
 
+### UserTunnel Detail Item
+
+Fields currently required by the Flux-cloned admin user page:
+
+| Field | Meaning | Status |
+|------|------|------|
+| `id` | user-tunnel relation id | aligned |
+| `userId` | owner id | aligned |
+| `tunnelId` | tunnel id | aligned |
+| `flow` | tunnel grant quota | aligned |
+| `num` | forward count quota | aligned |
+| `flowResetTime` | monthly reset day | aligned for storage/display |
+| `expTime` | relation expiry timestamp | aligned |
+| `speedId` | speed-limit rule id | aligned |
+| `status` | relation status | aligned on update |
+| `tunnelName` | tunnel display name | aligned |
+| `tunnelFlow` | tunnel quota | aligned |
+| `inFlow` / `outFlow` | used flow counters | partially aligned |
+| `speedLimitName` / `speed` | speed-limit display | partially aligned |
+
+Current known differences:
+
+- Flux sources `inFlow/outFlow` from `user_tunnel`; local code still derives them by summing forward rows under the same user/tunnel pair.
+- Flux joins `speed_limit` to expose display values; local code still synthesizes `speedLimitName` and falls back to user-level speed.
+
 ## Authorization Semantics
 
 ### Tunnel List
@@ -213,12 +309,13 @@ Do not "simplify" this distinction unless the reference changes.
 | create/update/delete | changes Gost / remote runtime | mainly DB compatibility layer |
 | pause/resume | runtime side effects + persistence | mainly local status persistence |
 | diagnose | node-chain diagnosis | mostly panel-side direct dialing |
-| user-tunnel quota | active flow/expire/status linkage | not fully cloned |
+| user-tunnel quota | active flow/expire/status linkage | partially cloned; reset route and grant checks exist, but automatic monthly reset and stored relation counters are still missing |
+| user-tunnel admin UI | speed-limit selector, reset dialogs, filtered tunnel picker | partially cloned; local page shows used flow/reset action/rate column but still uses simplified controls |
 | flow reporting | controller-driven runtime enforcement | not cloned |
 
 ## Future Clone Guardrails
 
-- Do not mark forward/tunnel as "done" while `user-tunnel` management endpoints are still missing.
+- Do not mark forward/tunnel as "done" while `user-tunnel` detail semantics, reset dialogs, or speed-limit UI still diverge from the reference.
 - Do not mark the runtime clone as complete until `FlowController`-driven side effects have a local equivalent.
 - If local DTOs add helper fields such as `inIp` or `status`, keep the Flux fields alongside them and document the extras.
 

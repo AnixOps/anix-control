@@ -354,6 +354,18 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		authUser := v2.Group("")
 		authUser.Use(middleware.JWTAuth())
 		{
+			adminCompat := authUser.Group("")
+			adminCompat.Use(middleware.AdminAuth())
+			{
+				adminCompatHandler := handler.NewAdminHandler()
+				forwardCompatHandler := handler.NewForwardHandler()
+				adminCompat.POST("/user/reset", adminCompatHandler.ResetCompatFlow)
+				adminCompat.POST("/tunnel/user/assign", forwardCompatHandler.AssignPanelUserTunnel)
+				adminCompat.POST("/tunnel/user/list", forwardCompatHandler.ListPanelUserTunnels)
+				adminCompat.POST("/tunnel/user/remove", forwardCompatHandler.RemovePanelUserTunnel)
+				adminCompat.POST("/tunnel/user/update", forwardCompatHandler.UpdatePanelUserTunnel)
+			}
+
 			// 用户转发规则
 			forwardHandler := handler.NewForwardHandler()
 			authUser.GET("/user/forward/rules", forwardHandler.GetUserRules)
