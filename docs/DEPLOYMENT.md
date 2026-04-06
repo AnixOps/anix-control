@@ -127,12 +127,14 @@ bash ./panel_install.sh
 
 说明：
 
-- `iptables_ansible` 是本仓库的本地扩展，不属于 `flux-panel` 原始 `/forward` 契约。
+- `iptables_ansible` 是兼容命名的内部后端入口，用于把执行委托给可选内部执行面（文档中统称 `NodeX`），不属于 `flux-panel` 原始 `/forward` 页面契约。
 - 示例 inventory 模板位于 `config/deploy/ansible/inventory.ini.example`，安装脚本会复制为 `inventory.ini`。
 - SSH 密钥目录为 `config/deploy/ssh/`，会被挂载到容器内的 `/home/v2board/.ssh`。
-- Docker 启动时会读取 `FORWARD_RUNTIME_BACKEND` 与 `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`，并自动同步到系统配置表。
+- Docker 启动时会读取 `FORWARD_RUNTIME_BACKEND` 与 `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`，并把它们作为内部后端初始化值同步到系统配置表。
 - 如果没有 SSH 私钥，可以直接在 `.env` 中设置 `FORWARD_RUNTIME_ANSIBLE_HOST`、`FORWARD_RUNTIME_ANSIBLE_USER`、`FORWARD_RUNTIME_ANSIBLE_PASSWORD`。
-- 容器启动时会基于这些环境变量生成临时 inventory，并把路径同步到运行时配置；非 root 用户可再设置 `FORWARD_RUNTIME_ANSIBLE_BECOME=true` 与 `FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD`。
+- 容器启动时会基于这些环境变量生成兼容 inventory，并把路径同步到运行时配置；非 root 用户可再设置 `FORWARD_RUNTIME_ANSIBLE_BECOME=true` 与 `FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD`。
+- 后端切换、运行时任务观测和部署引导应停留在系统/部署文档范围内，不应并入 Flux 克隆的 `/admin/forward` 页面。
+- 公开边界说明见 `docs/guide/nodex-internal-extension.md`。
 
 ---
 
