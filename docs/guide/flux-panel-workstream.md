@@ -6,6 +6,7 @@
 - Response envelope, DTO names, and `ForwardUserTunnel` auth model already align with the Flux-panel reference; these are documented in `docs/guide/flux-forward-contract.md`.
 - Remaining gaps are runtime semantics (create/update/delete/pause/resume side effects, diagnose node paths, quota/expiry linkage) and fully featured `UserTunnel` management.
 - Admin-side runtime controls remain outside the Flux-cloned `/admin/forward` page. `web/src/views/admin/System.vue` currently hosts `forward.runtime_backend`, `forward.runtime.iptables_ansible.config`, and `GET /api/v2/admin/forward/runtime/jobs` as the compatibility surface for optional internal backend delegation (`NodeX` in public docs). `install.sh` (`panel_install.sh` wrapper) and the Docker bootstrap keys (`FORWARD_RUNTIME_BACKEND`, `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`) belong to the same deployment/backplane surface and must not change the Flux-shaped page.
+- Current internal runtime calls for `panel_forward` and `legacy_rule` now require an explicit NodeX control-plane base URL (`forward.runtime.nodex.base_url` / `FORWARD_RUNTIME_NODEX_BASE_URL`) and no longer fall back to the ingress node transport for the outer control-plane hop; keep this requirement documented outside the Flux-cloned page.
 
 ## Reference Mapping
 

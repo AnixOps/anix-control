@@ -18,6 +18,12 @@ The primary public contract is still the Flux-compatible `/admin/forward` UI and
 - One-click installers may preseed backend settings before the admin UI is used.
 - Backend switching, job observability, and bootstrap controls belong in system/deployment surfaces, not inside the Flux-cloned `/admin/forward` page.
 
+### NodeX Control Plane
+
+- 系统配置 `forward.runtime.nodex.base_url` 是 NodeX 控制面基础地址（例如 `https://nodex.example.com`）。当前 `panel_forward` 与 `legacy_rule` 的 NodeX 调用都会使用它，接口不会再默认回退到节点本身的 `host:apiPort`。
+- `forward.runtime.nodex.token` 用来签发 `Authorization: Bearer` 与 `X-API-Key`，可在控制面/环境变量中预设；仅在该值为空时，客户端才会尝试使用请求里节点的 `apiToken`。应通过 `FORWARD_RUNTIME_NODEX_BASE_URL`/`FORWARD_RUNTIME_NODEX_TOKEN` 环境变量在部署阶段同步。
+- 请求超时可通过 `forward.runtime.nodex.timeout_seconds` 或环境变量 `FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS` 调整，默认 15 秒。
+
 ## Documentation Rule
 
 - When backend semantics change, update `docs/DEPLOYMENT.md`, `docs/guide/api-reference.md`, and `docs/guide/flux-panel-workstream.md`.
