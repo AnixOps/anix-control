@@ -181,15 +181,15 @@ Already aligned:
 Still incomplete:
 
 1. full `UserTunnel` management semantics
-    - Flux sources `inFlow/outFlow` from the relation record and joins `speed_limit`
-    - Flux sorts the list by relation id ascending
-    - create flow should filter already-granted tunnels and use a speed-limit selector
+    - Flux sources `inFlow/outFlow` from the relation record; local still backfills those values from aggregated `v2_forward`
+    - real `speed_limit` resource CRUD and selector now exist, but exact joined display semantics and page layout still differ
 2. forward runtime semantics
     - create/update/delete/pause/resume side effects on remote services
 3. tunnel / forward diagnose node-chain semantics
 4. quota / expire / flow reset behavior tied to `UserTunnel`
-    - monthly automatic reset scheduler still missing
-    - reset confirmation dialogs are still simplified `confirm/alert`
+    - monthly automatic reset worker now exists and handles month-end overflow days
+    - expired-user forward pause and expired-grant pause+disable side effects now run after reset scans
+    - remaining gap is exact Flux user-disable state parity and exact dialog/layout parity
 
 ## Local Dual-runtime Extension Rules
 
@@ -259,7 +259,7 @@ Extra rules:
 - Diagnose modals expect top-level fields such as `forwardName`, `timestamp`, and `results[]`, and each result item needs `success`, `description`, `nodeName`, `nodeId`, `targetIp`, `targetPort`, `message`, `averageTime`, and `packetLoss`.
 - `POST /api/v1/user/reset` uses `{ "id": <id>, "type": 1|2 }`; success keeps `data = null`, errors use `code = -1` with `data = null`.
 - `UserTunnelDto` create flow must not send `status`; status belongs to `UserTunnelUpdateDto`.
-- The Flux user page filters already-assigned tunnels from the create selector and uses a speed-limit picker backed by `/speed-limit/list`; a raw numeric `speedId` input is not considered aligned.
+- The Flux user page filters already-assigned tunnels from the create selector and uses a speed-limit picker backed by `/speed-limit/list`; the local admin page now does the same, so the remaining gap is exact page-level layout parity rather than the selector contract itself.
 
 ## Detailed Runtime Gap Checklist
 

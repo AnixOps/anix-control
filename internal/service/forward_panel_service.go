@@ -596,6 +596,16 @@ func (s *PanelForwardService) AssignUserTunnel(input PanelUserTunnelInput) error
 		return errors.New("user tunnel permission already exists")
 	}
 
+	speedLimit, err := s.resolveTunnelSpeedLimit(input.TunnelID, input.SpeedID)
+	if err != nil {
+		return err
+	}
+
+	var speedID *uint
+	if speedLimit != nil {
+		speedID = &speedLimit.ID
+	}
+
 	record := &model.ForwardUserTunnel{
 		UserID:        input.UserID,
 		TunnelID:      input.TunnelID,
@@ -603,7 +613,7 @@ func (s *PanelForwardService) AssignUserTunnel(input PanelUserTunnelInput) error
 		Num:           input.Num,
 		FlowResetTime: input.FlowResetTime,
 		ExpTime:       input.ExpTime,
-		SpeedID:       input.SpeedID,
+		SpeedID:       speedID,
 		Status:        model.ForwardUserTunnelStatusActive,
 	}
 	return s.db.Create(record).Error
@@ -624,6 +634,11 @@ func (s *PanelForwardService) ListUserTunnels(query PanelUserTunnelQueryInput) (
 		return nil, err
 	}
 
+	speedLimitByID, err := s.listSpeedLimitsByIDs(collectUserTunnelSpeedLimitIDs(records))
+	if err != nil {
+		return nil, err
+	}
+
 	items := make([]PanelUserTunnelDetailItem, 0, len(records))
 	for i := range records {
 		record := &records[i]
@@ -631,14 +646,16 @@ func (s *PanelForwardService) ListUserTunnels(query PanelUserTunnelQueryInput) (
 			return nil, err
 		}
 
-		speed := int64(0)
-		if record.User != nil {
-			speed = record.User.GetSpeedLimit()
-		}
-
 		speedLimitName := ""
+		speed := int64(0)
 		if record.SpeedID != nil {
-			speedLimitName = fmt.Sprintf("speed-%d", *record.SpeedID)
+			if speedLimit, ok := speedLimitByID[*record.SpeedID]; ok {
+				speedLimitName = speedLimit.Name
+				speed = speedLimit.Speed
+			}
+		}
+		if speed == 0 && record.User != nil {
+			speed = record.User.GetSpeedLimit()
 		}
 
 		tunnelName := ""
@@ -703,12 +720,22 @@ func (s *PanelForwardService) UpdateUserTunnel(input PanelUserTunnelUpdateInput)
 		return errors.New("status must be 0 or 1")
 	}
 
+	speedLimit, err := s.resolveTunnelSpeedLimit(record.TunnelID, input.SpeedID)
+	if err != nil {
+		return err
+	}
+
+	var speedID *uint
+	if speedLimit != nil {
+		speedID = &speedLimit.ID
+	}
+
 	record.Flow = input.Flow
 	record.Num = input.Num
 	record.FlowResetTime = input.FlowResetTime
 	record.ExpTime = input.ExpTime
 	record.Status = input.Status
-	record.SpeedID = input.SpeedID
+	record.SpeedID = speedID
 	if err := s.db.Save(record).Error; err != nil {
 		return err
 	}
@@ -874,6 +901,60 @@ func (s *PanelForwardService) getUserTunnelByID(id uint) (*model.ForwardUserTunn
 		return nil, err
 	}
 	return &record, nil
+}
+
+func (s *PanelForwardService) resolveTunnelSpeedLimit(tunnelID uint, speedID *uint) (*model.SpeedLimit, error) {
+	if speedID == nil || *speedID == 0 {
+		return nil, nil
+	}
+
+	var speedLimit model.SpeedLimit
+	if err := s.db.First(&speedLimit, *speedID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("speed limit not found")
+		}
+		return nil, err
+	}
+	if speedLimit.TunnelID != tunnelID {
+		return nil, fmt.Errorf("speed limit %d does not belong to tunnel %d", speedLimit.ID, tunnelID)
+	}
+	return &speedLimit, nil
+}
+
+func collectUserTunnelSpeedLimitIDs(records []model.ForwardUserTunnel) []uint {
+	if len(records) == 0 {
+		return nil
+	}
+
+	ids := make([]uint, 0, len(records))
+	seen := make(map[uint]struct{}, len(records))
+	for _, record := range records {
+		if record.SpeedID == nil || *record.SpeedID == 0 {
+			continue
+		}
+		if _, ok := seen[*record.SpeedID]; ok {
+			continue
+		}
+		seen[*record.SpeedID] = struct{}{}
+		ids = append(ids, *record.SpeedID)
+	}
+	return ids
+}
+
+func (s *PanelForwardService) listSpeedLimitsByIDs(ids []uint) (map[uint]model.SpeedLimit, error) {
+	result := make(map[uint]model.SpeedLimit)
+	if len(ids) == 0 {
+		return result, nil
+	}
+
+	var records []model.SpeedLimit
+	if err := s.db.Where("id IN ?", ids).Find(&records).Error; err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		result[record.ID] = record
+	}
+	return result, nil
 }
 
 func (s *PanelForwardService) resolvePort(tunnel *model.ForwardTunnel, requested *int, excludeForwardID uint) (int, error) {

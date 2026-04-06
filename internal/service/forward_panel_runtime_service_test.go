@@ -141,7 +141,7 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_DispatchesPanelForwardRe
 	}
 }
 
-func (s *PanelForwardRuntimeServiceTestSuite) TestApply_GostDeleteWithoutIngressNodeSkipsRemoteExecution() {
+func (s *PanelForwardRuntimeServiceTestSuite) TestApply_GostDeleteWithoutIngressNodeSkipsRemoteExecutionAndPersistsAuditJob() {
 	db := database.Get()
 	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendGost)
 
@@ -172,9 +172,20 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_GostDeleteWithoutIngress
 	assert.True(s.T(), strings.Contains(result.Message, "skipped because ingress node is not configured"))
 	assert.Empty(s.T(), client.calls)
 
-	var jobCount int64
-	assert.NoError(s.T(), db.Model(&model.ForwardRuntimeJob{}).Count(&jobCount).Error)
-	assert.Equal(s.T(), int64(0), jobCount)
+	var jobs []model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.Order("id ASC").Find(&jobs).Error)
+	if assert.Len(s.T(), jobs, 1) {
+		assert.Equal(s.T(), model.ForwardRuntimeBackendGost, jobs[0].Backend)
+		assert.Equal(s.T(), model.ForwardRuntimeJobActionDelete, jobs[0].Action)
+		assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, jobs[0].Status)
+		assert.Nil(s.T(), jobs[0].NodeID)
+		assert.NotNil(s.T(), jobs[0].StartedAt)
+		assert.NotNil(s.T(), jobs[0].CompletedAt)
+		assert.Empty(s.T(), jobs[0].Error)
+		assert.Contains(s.T(), jobs[0].Result, "skipped because ingress node is not configured")
+		assert.Contains(s.T(), jobs[0].Payload, `"resourceType":"panel_forward"`)
+		assert.Contains(s.T(), jobs[0].Payload, `"backend":"gost"`)
+	}
 }
 
 func (s *PanelForwardRuntimeServiceTestSuite) TestApply_PersistsPendingJobForAsyncNodeXResponse() {

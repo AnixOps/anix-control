@@ -647,4 +647,4 @@ type NotificationTemplate struct {
 - Use the document to interpret the `Not Started / Partial / Aligned` states before starting work on forward/tunnel/diagnose flows and to pick the next implementation milestone.
 - After delivering a piece, refresh the workstream and ensure other docs (like `docs/guide/flux-forward-contract.md`) and this roadmap keep pointing to the latest reference.
 - Current partial-clone surface already includes `/api/v2/user/reset`, `/api/v2/tunnel/user/tunnel`, and `/api/v2/tunnel/user/assign|list|remove|update`, plus the admin user-page tunnel grant table in `web/src/views/admin/Users.vue`.
-- Do not upgrade the status beyond `Partial` until relation-backed flow counters, speed-limit joins/pickers, and Flux-style reset dialogs are closed.
+- Do not upgrade the status beyond `Partial` until relation-backed flow counters, runtime-side speed-limit enforcement, and the remaining Flux UI/runtime parity gaps are closed.

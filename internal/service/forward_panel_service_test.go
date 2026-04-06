@@ -735,6 +735,16 @@ func (s *PanelForwardServiceTestSuite) TestListUserTunnels_ReturnsJoinedFields()
 	}
 	assert.NoError(s.T(), db.Create(user).Error)
 	assert.NoError(s.T(), db.Create(tunnel).Error)
+	assert.NoError(s.T(), db.Create(&model.SpeedLimit{
+		ID:          speedID,
+		Name:        "speed-11",
+		Speed:       4096,
+		TunnelID:    tunnel.ID,
+		TunnelName:  tunnel.Name,
+		Status:      speedLimitStatusActive,
+		CreatedTime: time.Now().UnixMilli(),
+		UpdatedTime: time.Now().UnixMilli(),
+	}).Error)
 
 	perm := &model.ForwardUserTunnel{
 		UserID:        user.ID,
@@ -774,7 +784,7 @@ func (s *PanelForwardServiceTestSuite) TestListUserTunnels_ReturnsJoinedFields()
 	assert.Equal(s.T(), perm.ExpTime, items[0].ExpTime)
 	assert.Equal(s.T(), &speedID, items[0].SpeedID)
 	assert.Equal(s.T(), "speed-11", items[0].SpeedLimitName)
-	assert.Equal(s.T(), speed, items[0].Speed)
+	assert.Equal(s.T(), int64(4096), items[0].Speed)
 	assert.Equal(s.T(), tunnel.Name, items[0].TunnelName)
 	assert.Equal(s.T(), tunnel.Flow, items[0].TunnelFlow)
 	assert.Equal(s.T(), int64(3000), items[0].InFlow)
@@ -937,6 +947,73 @@ func (s *PanelForwardServiceTestSuite) TestCreateForward_RejectsTunnelTrafficExh
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "tunnel traffic exhausted")
 	assert.Equal(s.T(), 0, s.runtimeClient.calls)
+}
+
+func (s *PanelForwardServiceTestSuite) TestAssignUserTunnel_RejectsSpeedLimitFromOtherTunnel() {
+	db := database.Get()
+
+	user := &model.User{
+		Email:          "panel-forward-assign-speed-limit@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-assign-speed-limit-token",
+		UUID:           "panel-forward-assign-speed-limit-uuid",
+		TransferEnable: 1073741824,
+	}
+	tunnelA := &model.ForwardTunnel{Name: "Assign Speed Tunnel A", InIP: "10.50.0.1", Status: model.ForwardTunnelStatusActive}
+	tunnelB := &model.ForwardTunnel{Name: "Assign Speed Tunnel B", InIP: "10.50.0.2", Status: model.ForwardTunnelStatusActive}
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(tunnelA).Error)
+	assert.NoError(s.T(), db.Create(tunnelB).Error)
+
+	speedLimit := &model.SpeedLimit{
+		Name:        "Other Tunnel Speed",
+		Speed:       512,
+		TunnelID:    tunnelB.ID,
+		TunnelName:  tunnelB.Name,
+		Status:      speedLimitStatusActive,
+		CreatedTime: time.Now().UnixMilli(),
+		UpdatedTime: time.Now().UnixMilli(),
+	}
+	assert.NoError(s.T(), db.Create(speedLimit).Error)
+
+	err := s.svc.AssignUserTunnel(PanelUserTunnelInput{
+		UserID:   user.ID,
+		TunnelID: tunnelA.ID,
+		SpeedID:  &speedLimit.ID,
+	})
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "does not belong to tunnel")
+}
+
+func (s *PanelForwardServiceTestSuite) TestUpdateUserTunnel_RejectsMissingSpeedLimit() {
+	db := database.Get()
+
+	user := &model.User{
+		Email:          "panel-forward-update-missing-speed-limit@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-update-missing-speed-limit-token",
+		UUID:           "panel-forward-update-missing-speed-limit-uuid",
+		TransferEnable: 1073741824,
+	}
+	tunnel := &model.ForwardTunnel{Name: "Update Speed Tunnel", InIP: "10.50.0.3", Status: model.ForwardTunnelStatusActive}
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	perm := &model.ForwardUserTunnel{
+		UserID:   user.ID,
+		TunnelID: tunnel.ID,
+		Status:   model.ForwardUserTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(perm).Error)
+
+	missingID := uint(99999)
+	err := s.svc.UpdateUserTunnel(PanelUserTunnelUpdateInput{
+		ID:      perm.ID,
+		Status:  model.ForwardUserTunnelStatusActive,
+		SpeedID: &missingID,
+	})
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "speed limit not found")
 }
 
 func (s *PanelForwardServiceTestSuite) TestListRuntimeJobsFilters() {

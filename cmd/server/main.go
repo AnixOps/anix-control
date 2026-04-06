@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -256,6 +257,7 @@ func main() {
 			&model.ForwardTunnel{},
 			&model.ForwardUserTunnel{},
 			&model.Forward{},
+			&model.SpeedLimit{},
 			&model.ForwardRuntimeJob{},
 			// 支付网关
 			&model.PaymentGateway{},
@@ -309,6 +311,14 @@ func main() {
 	log.Println("Cache initialized: memory")
 
 	// 设置Gin模式
+	go func() {
+		worker := service.NewForwardFlowResetWorker(database.Get())
+		if err := worker.RunOnce(time.Now()); err != nil {
+			log.Printf("Initial forward flow reset run failed: %v", err)
+		}
+		worker.Start(context.Background())
+	}()
+
 	gin.SetMode(cfg.Server.Mode)
 
 	var wg sync.WaitGroup

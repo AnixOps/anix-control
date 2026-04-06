@@ -76,12 +76,13 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 
 	// 创建用户
 	user := &model.User{
-		Email:    req.Email,
-		Password: string(hashedPassword),
-		UUID:     uuid.New().String(),
-		Token:    uuid.New().String(),
-		IsAdmin:  req.IsAdmin,
-		Banned:   0,
+		Email:         req.Email,
+		Password:      string(hashedPassword),
+		UUID:          uuid.New().String(),
+		Token:         uuid.New().String(),
+		IsAdmin:       req.IsAdmin,
+		FlowResetTime: req.FlowResetTime,
+		Banned:        0,
 	}
 
 	if err := db.Create(user).Error; err != nil {
@@ -192,6 +193,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		TransferEnable *int64  `json:"transfer_enable"`
 		SpeedLimit     *int64  `json:"speed_limit"`
 		DeviceLimit    *int    `json:"device_limit"`
+		FlowResetTime  *int64  `json:"flowResetTime"`
 		Banned         *int    `json:"banned"`
 		IsAdmin        *int    `json:"is_admin"`
 		RemarkContent  *string `json:"remark_content"`
@@ -245,6 +247,9 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	}
 	if req.DeviceLimit != nil {
 		updates["device_limit"] = *req.DeviceLimit
+	}
+	if req.FlowResetTime != nil {
+		updates["flow_reset_time"] = *req.FlowResetTime
 	}
 	if req.Banned != nil {
 		updates["banned"] = *req.Banned

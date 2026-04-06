@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"time"
 
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
@@ -79,6 +80,9 @@ func (s *AuthService) Login(email, password string, cfg *config.Config) (string,
 	// 检查是否被封禁
 	if user.Banned == 1 {
 		return "", nil, errors.New("用户已被封禁")
+	}
+	if user.ExpiredAt != nil && *user.ExpiredAt > 0 && *user.ExpiredAt <= time.Now().Unix() {
+		return "", nil, errors.New("用户已过期")
 	}
 
 	// 生成Token

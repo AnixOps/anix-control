@@ -695,6 +695,44 @@ export function getForwardTunnels() {
   })
 }
 
+export function getSpeedLimitList() {
+  return request({
+    url: '/speed-limit/list',
+    method: 'post'
+  })
+}
+
+export function createSpeedLimit(data) {
+  return request({
+    url: '/speed-limit/create',
+    method: 'post',
+    data
+  })
+}
+
+export function updateSpeedLimit(data) {
+  return request({
+    url: '/speed-limit/update',
+    method: 'post',
+    data
+  })
+}
+
+export function deleteSpeedLimit(id) {
+  return request({
+    url: '/speed-limit/delete',
+    method: 'post',
+    data: { id }
+  })
+}
+
+export function getSpeedLimitTunnels() {
+  return request({
+    url: '/speed-limit/tunnels',
+    method: 'post'
+  })
+}
+
 export function assignAdminUserTunnel(data) {
   return request({
     url: '/tunnel/user/assign',
@@ -1402,6 +1440,11 @@ export default {
   updateForwardOrder,
   listForwardRuntimeJobs,
   getForwardTunnels,
+  getSpeedLimitList,
+  createSpeedLimit,
+  updateSpeedLimit,
+  deleteSpeedLimit,
+  getSpeedLimitTunnels,
   assignAdminUserTunnel,
   getAdminUserTunnelList,
   removeAdminUserTunnel,
