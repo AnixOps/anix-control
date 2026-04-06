@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -12,7 +13,43 @@ import (
 
 type PanelForwardServiceTestSuite struct {
 	ServiceTestSuite
-	svc *PanelForwardService
+	svc           *PanelForwardService
+	runtimeClient *stubNodeXForwardRuntimeClient
+}
+
+type stubNodeXForwardRuntimeClient struct {
+	calls         int
+	lastRequest   *nodeXForwardExecuteRequest
+	executeResult *nodeXForwardExecuteResult
+	executeErr    error
+}
+
+func (c *stubNodeXForwardRuntimeClient) Execute(ctx context.Context, req nodeXForwardExecuteRequest) (*nodeXForwardExecuteResult, error) {
+	_ = ctx
+	c.calls++
+	reqCopy := req
+	if req.PanelForward != nil {
+		panelForward := *req.PanelForward
+		reqCopy.PanelForward = &panelForward
+	}
+	if req.LegacyRule != nil {
+		legacyRule := *req.LegacyRule
+		reqCopy.LegacyRule = &legacyRule
+	}
+	c.lastRequest = &reqCopy
+	if c.executeResult != nil || c.executeErr != nil {
+		return c.executeResult, c.executeErr
+	}
+
+	message := "gost runtime synchronized"
+	if req.Backend == model.ForwardRuntimeBackendIptablesAnsible {
+		message = "ansible runtime applied"
+	}
+	return &nodeXForwardExecuteResult{
+		Backend: req.Backend,
+		Status:  model.ForwardRuntimeJobStatusSuccess,
+		Message: message,
+	}, nil
 }
 
 func (s *PanelForwardServiceTestSuite) SetupSuite() {
@@ -33,6 +70,8 @@ func (s *PanelForwardServiceTestSuite) SetupTest() {
 	db.Exec("DELETE FROM v2_forward_user_tunnel")
 	db.Exec("DELETE FROM v2_forward_tunnel")
 	s.svc = NewPanelForwardService(db)
+	s.runtimeClient = &stubNodeXForwardRuntimeClient{}
+	s.svc.runtimeService.client = s.runtimeClient
 }
 
 func (s *PanelForwardServiceTestSuite) TestListTunnels_AdminGetsAllActive() {
@@ -443,7 +482,7 @@ func (s *PanelForwardServiceTestSuite) TestListRuntimeJobsFilters() {
 	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, results[1].Backend)
 }
 
-func (s *PanelForwardServiceTestSuite) TestCreateForward_IptablesAnsibleQueuesRuntimeJob() {
+func (s *PanelForwardServiceTestSuite) TestCreateForward_IptablesAnsibleExecutesViaNodeX() {
 	db := database.Get()
 
 	configSvc := NewSystemConfigService(db)
@@ -507,14 +546,21 @@ func (s *PanelForwardServiceTestSuite) TestCreateForward_IptablesAnsibleQueuesRu
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), item)
 	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, item.RuntimeBackend)
-	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, item.RuntimeStatus)
-	assert.Contains(s.T(), item.RuntimeMessage, "queued ansible runtime job")
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, item.RuntimeStatus)
+	assert.Equal(s.T(), "ansible runtime applied", item.RuntimeMessage)
+	assert.Equal(s.T(), 1, s.runtimeClient.calls)
+	if assert.NotNil(s.T(), s.runtimeClient.lastRequest) {
+		assert.Equal(s.T(), nodeXForwardResourceTypePanelForward, s.runtimeClient.lastRequest.ResourceType)
+		assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, s.runtimeClient.lastRequest.Backend)
+		assert.Equal(s.T(), model.ForwardRuntimeJobActionCreate, s.runtimeClient.lastRequest.Action)
+		assert.Equal(s.T(), tunnel.ID, s.runtimeClient.lastRequest.PanelForward.Tunnel.ID)
+	}
 
 	var record model.Forward
 	assert.NoError(s.T(), db.First(&record, item.ID).Error)
 	assert.Equal(s.T(), model.ForwardStatusActive, record.Status)
 	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, record.RuntimeBackend)
-	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, record.RuntimeStatus)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, record.RuntimeStatus)
 	assert.NotNil(s.T(), record.RuntimeLastSyncAt)
 
 	var jobs []model.ForwardRuntimeJob
@@ -522,8 +568,11 @@ func (s *PanelForwardServiceTestSuite) TestCreateForward_IptablesAnsibleQueuesRu
 	assert.Len(s.T(), jobs, 1)
 	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, jobs[0].Backend)
 	assert.Equal(s.T(), model.ForwardRuntimeJobActionCreate, jobs[0].Action)
-	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, jobs[0].Status)
-	assert.Contains(s.T(), jobs[0].Payload, "/opt/ansible/iptables-forward-apply.yml")
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, jobs[0].Status)
+	assert.Contains(s.T(), jobs[0].Payload, `"resourceType":"panel_forward"`)
+	assert.Contains(s.T(), jobs[0].Payload, `"backend":"iptables_ansible"`)
+	assert.NotNil(s.T(), jobs[0].StartedAt)
+	assert.NotNil(s.T(), jobs[0].CompletedAt)
 }
 
 func (s *PanelForwardServiceTestSuite) TestCreateForward_DefaultGostMarksRuntimeFailureWithoutIngressNode() {

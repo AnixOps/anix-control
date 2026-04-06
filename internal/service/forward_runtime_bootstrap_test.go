@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,6 +36,9 @@ func (s *ForwardRuntimeBootstrapTestSuite) SetupTest() {
 	_ = os.Unsetenv(forwardRuntimeAnsibleBecomeEnvVar)
 	_ = os.Unsetenv(forwardRuntimeAnsibleExtraVarsEnvVar)
 	_ = os.Unsetenv(forwardRuntimeAnsibleEnvEnvVar)
+	_ = os.Unsetenv(forwardRuntimeNodeXBaseURLEnvVar)
+	_ = os.Unsetenv(forwardRuntimeNodeXTokenEnvVar)
+	_ = os.Unsetenv(forwardRuntimeNodeXTimeoutSecondsEnvVar)
 	_ = os.Unsetenv(forwardRuntimeAnsibleHostAliasEnvVar)
 	_ = os.Unsetenv(forwardRuntimeAnsibleHostEnvVar)
 	_ = os.Unsetenv(forwardRuntimeAnsiblePortEnvVar)
@@ -89,6 +93,81 @@ func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFro
 	inventory, err := configService.Get(forwardRuntimeAnsibleInventoryConfigKey)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "/home/v2board/.config/v2board/forward-runtime/inventory.ini", inventory)
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_SeedsNodeXConfig() {
+	s.T().Setenv(forwardRuntimeNodeXBaseURLEnvVar, "http://127.0.0.1:18080")
+	s.T().Setenv(forwardRuntimeNodeXTokenEnvVar, "nodex-secret")
+	s.T().Setenv(forwardRuntimeNodeXTimeoutSecondsEnvVar, "45")
+
+	err := InitForwardRuntimeSystemConfigFromEnv(database.Get())
+	assert.NoError(s.T(), err)
+
+	configService := NewSystemConfigService(database.Get())
+	baseURL, err := configService.Get(forwardRuntimeNodeXBaseURLConfigKey)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "http://127.0.0.1:18080", baseURL)
+
+	token, err := configService.Get(forwardRuntimeNodeXTokenConfigKey)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "nodex-secret", token)
+
+	timeout, err := configService.Get(forwardRuntimeNodeXTimeoutSecondsConfigKey)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "45", timeout)
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_RejectsInvalidExtraVarsJSON() {
+	s.T().Setenv(forwardRuntimeBackendEnvVar, model.ForwardRuntimeBackendIptablesAnsible)
+	s.T().Setenv(forwardRuntimeAnsibleExtraVarsEnvVar, `{"retry":`)
+
+	err := InitForwardRuntimeSystemConfigFromEnv(database.Get())
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), forwardRuntimeAnsibleExtraVarsEnvVar)
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_RejectsInvalidEnvironmentJSON() {
+	s.T().Setenv(forwardRuntimeBackendEnvVar, model.ForwardRuntimeBackendIptablesAnsible)
+	s.T().Setenv(forwardRuntimeAnsibleEnvEnvVar, `{"ANSIBLE_DEBUG":}`)
+
+	err := InitForwardRuntimeSystemConfigFromEnv(database.Get())
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), forwardRuntimeAnsibleEnvEnvVar)
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_SeedsEnvironmentVars() {
+	s.T().Setenv(forwardRuntimeBackendEnvVar, model.ForwardRuntimeBackendIptablesAnsible)
+	s.T().Setenv(forwardRuntimeAnsibleEnvEnvVar, `{"ANSIBLE_DEBUG":"true","CUSTOM_VAR":"configured"}`)
+
+	err := InitForwardRuntimeSystemConfigFromEnv(database.Get())
+	assert.NoError(s.T(), err)
+
+	configService := NewSystemConfigService(database.Get())
+	ansibleConfig, err := configService.Get(forwardRuntimeAnsibleConfigJSONKey)
+	assert.NoError(s.T(), err)
+
+	var cfg panelForwardAnsibleConfig
+	assert.NoError(s.T(), json.Unmarshal([]byte(ansibleConfig), &cfg))
+	assert.Equal(s.T(), "true", cfg.Environment["ANSIBLE_DEBUG"])
+	assert.Equal(s.T(), "configured", cfg.Environment["CUSTOM_VAR"])
+	assert.Equal(s.T(), defaultForwardAnsibleConfigPath, cfg.Environment["ANSIBLE_CONFIG"])
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_SeedsExtraVars() {
+	s.T().Setenv(forwardRuntimeBackendEnvVar, model.ForwardRuntimeBackendIptablesAnsible)
+	s.T().Setenv(forwardRuntimeAnsibleExtraVarsEnvVar, `{"forward_retry":5,"note":"env"}`)
+
+	err := InitForwardRuntimeSystemConfigFromEnv(database.Get())
+	assert.NoError(s.T(), err)
+
+	configService := NewSystemConfigService(database.Get())
+	ansibleConfig, err := configService.Get(forwardRuntimeAnsibleConfigJSONKey)
+	assert.NoError(s.T(), err)
+
+	var cfg panelForwardAnsibleConfig
+	assert.NoError(s.T(), json.Unmarshal([]byte(ansibleConfig), &cfg))
+	assert.Equal(s.T(), float64(5), cfg.ExtraVars["forward_retry"])
+	assert.Equal(s.T(), "env", cfg.ExtraVars["note"])
 }
 
 func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeAnsibleInventoryFromEnv_WritesPasswordInventory() {
