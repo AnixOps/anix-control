@@ -29,14 +29,18 @@ type SpeedLimitUpdateInput struct {
 }
 
 type SpeedLimitService struct {
-	db *gorm.DB
+	db             *gorm.DB
+	forwardService *PanelForwardService
 }
 
 func NewSpeedLimitService(db *gorm.DB) *SpeedLimitService {
 	if db == nil {
 		db = database.Get()
 	}
-	return &SpeedLimitService{db: db}
+	return &SpeedLimitService{
+		db:             db,
+		forwardService: NewPanelForwardService(db),
+	}
 }
 
 func (s *SpeedLimitService) Create(input SpeedLimitInput) (*model.SpeedLimit, error) {
@@ -91,6 +95,15 @@ func (s *SpeedLimitService) Update(input SpeedLimitUpdateInput) (*model.SpeedLim
 		}
 		return nil, err
 	}
+	if record.TunnelID != tunnel.ID {
+		var assigned int64
+		if err := s.db.Model(&model.ForwardUserTunnel{}).Where("speed_id = ?", record.ID).Count(&assigned).Error; err != nil {
+			return nil, err
+		}
+		if assigned > 0 {
+			return nil, errors.New("cannot change tunnel of assigned speed limit")
+		}
+	}
 
 	record.Name = strings.TrimSpace(input.Name)
 	record.Speed = input.Speed
@@ -103,6 +116,9 @@ func (s *SpeedLimitService) Update(input SpeedLimitUpdateInput) (*model.SpeedLim
 
 	if err := s.db.Save(&record).Error; err != nil {
 		return nil, err
+	}
+	if err := s.resyncAssignedForwards(record.ID); err != nil {
+		return &record, err
 	}
 	return &record, nil
 }
@@ -178,4 +194,23 @@ func validateSpeedLimitInput(name string, speed int64) error {
 		return errors.New("speed must be greater than 0")
 	}
 	return nil
+}
+
+func (s *SpeedLimitService) resyncAssignedForwards(speedID uint) error {
+	if speedID == 0 || s.forwardService == nil {
+		return nil
+	}
+
+	var permissions []model.ForwardUserTunnel
+	if err := s.db.Where("speed_id = ?", speedID).Order("id ASC").Find(&permissions).Error; err != nil {
+		return err
+	}
+
+	var firstErr error
+	for i := range permissions {
+		if err := s.forwardService.syncActiveUserTunnelForwards(&permissions[i], model.ForwardRuntimeJobActionUpdate); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }

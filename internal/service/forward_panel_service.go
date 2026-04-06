@@ -729,6 +729,7 @@ func (s *PanelForwardService) UpdateUserTunnel(input PanelUserTunnelUpdateInput)
 	if speedLimit != nil {
 		speedID = &speedLimit.ID
 	}
+	speedChanged := !sameUintPointer(record.SpeedID, speedID)
 
 	record.Flow = input.Flow
 	record.Num = input.Num
@@ -739,7 +740,13 @@ func (s *PanelForwardService) UpdateUserTunnel(input PanelUserTunnelUpdateInput)
 	if err := s.db.Save(record).Error; err != nil {
 		return err
 	}
-	return s.reconcileUserTunnelForwards(record)
+	if err := s.reconcileUserTunnelForwards(record); err != nil {
+		return err
+	}
+	if speedChanged {
+		return s.syncActiveUserTunnelForwards(record, model.ForwardRuntimeJobActionUpdate)
+	}
+	return nil
 }
 
 func (s *PanelForwardService) ResetUserTunnelTraffic(id uint) error {
@@ -1081,6 +1088,33 @@ func (s *PanelForwardService) reconcileUserTunnelForwards(permission *model.Forw
 	return firstErr
 }
 
+func (s *PanelForwardService) syncActiveUserTunnelForwards(permission *model.ForwardUserTunnel, action string) error {
+	if permission == nil {
+		return nil
+	}
+
+	shouldPause, err := s.userTunnelRequiresPause(permission)
+	if err != nil {
+		return err
+	}
+	if shouldPause {
+		return nil
+	}
+
+	forwards, err := s.listUserTunnelForwards(permission.UserID, permission.TunnelID, model.ForwardStatusActive)
+	if err != nil {
+		return err
+	}
+
+	var firstErr error
+	for i := range forwards {
+		if err := s.syncForwardRuntime(&forwards[i], action); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
 func (s *PanelForwardService) userTunnelRequiresPause(permission *model.ForwardUserTunnel) (bool, error) {
 	if permission.Status != model.ForwardUserTunnelStatusActive {
 		return true, nil
@@ -1395,6 +1429,17 @@ func resolveTunnelName(tunnel *model.ForwardTunnel) string {
 		return "系统"
 	}
 	return tunnel.Name
+}
+
+func sameUintPointer(left, right *uint) bool {
+	switch {
+	case left == nil && right == nil:
+		return true
+	case left == nil || right == nil:
+		return false
+	default:
+		return *left == *right
+	}
 }
 
 func splitTarget(target string) (string, int, error) {

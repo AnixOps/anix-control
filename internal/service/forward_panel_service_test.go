@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -65,6 +66,8 @@ func (s *PanelForwardServiceTestSuite) SetupSuite() {
 		&model.ForwardUserTunnel{},
 		&model.Forward{},
 		&model.ForwardRuntimeJob{},
+		&model.ForwardTrafficCursor{},
+		&model.SpeedLimit{},
 	)
 }
 
@@ -73,7 +76,9 @@ func (s *PanelForwardServiceTestSuite) SetupTest() {
 	db := database.Get()
 	db.Exec("DELETE FROM v2_forward")
 	db.Exec("DELETE FROM v2_forward_runtime_job")
+	db.Exec("DELETE FROM v2_forward_traffic_cursor")
 	db.Exec("DELETE FROM v2_forward_user_tunnel")
+	db.Exec("DELETE FROM v2_speed_limit")
 	db.Exec("DELETE FROM v2_forward_tunnel")
 	s.svc = NewPanelForwardService(db)
 	s.runtimeClient = &stubNodeXForwardRuntimeClient{}
@@ -714,6 +719,129 @@ func (s *PanelForwardServiceTestSuite) TestUpdateUserTunnel_DisablePausesAffecte
 	assert.Equal(s.T(), model.ForwardStatusActive, otherRecord.Status)
 }
 
+func (s *PanelForwardServiceTestSuite) TestUpdateUserTunnel_SpeedChangeResyncsAffectedActiveForwards() {
+	db := database.Get()
+	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendGost)
+
+	user := &model.User{
+		Email:          "panel-forward-speed-change@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-speed-change-token",
+		UUID:           "panel-forward-speed-change-uuid",
+		TransferEnable: 10 * bytesPerGiB,
+	}
+	node := &model.ForwardNode{
+		Name:     "Speed Change Ingress",
+		Type:     model.ForwardNodeTypeRelay,
+		Host:     "198.51.100.30",
+		APIPort:  19091,
+		APIToken: "speed-change-token",
+		Status:   model.ForwardNodeStatusOnline,
+		Enabled:  true,
+	}
+	tunnel := &model.ForwardTunnel{
+		Name:          "Speed Change Tunnel",
+		InNodeID:      0,
+		InIP:          "198.51.100.31",
+		Protocol:      "tcp",
+		TCPListenAddr: "0.0.0.0",
+		Status:        model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(node).Error)
+	tunnel.InNodeID = node.ID
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	initialLimit := &model.SpeedLimit{
+		Name:        "10M",
+		Speed:       80,
+		TunnelID:    tunnel.ID,
+		TunnelName:  tunnel.Name,
+		Status:      speedLimitStatusActive,
+		CreatedTime: time.Now().UnixMilli(),
+		UpdatedTime: time.Now().UnixMilli(),
+	}
+	updatedLimit := &model.SpeedLimit{
+		Name:        "20M",
+		Speed:       160,
+		TunnelID:    tunnel.ID,
+		TunnelName:  tunnel.Name,
+		Status:      speedLimitStatusActive,
+		CreatedTime: time.Now().UnixMilli(),
+		UpdatedTime: time.Now().UnixMilli(),
+	}
+	assert.NoError(s.T(), db.Create(initialLimit).Error)
+	assert.NoError(s.T(), db.Create(updatedLimit).Error)
+
+	permission := &model.ForwardUserTunnel{
+		UserID:   user.ID,
+		TunnelID: tunnel.ID,
+		Flow:     100,
+		Num:      10,
+		SpeedID:  &initialLimit.ID,
+		Status:   model.ForwardUserTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(permission).Error)
+
+	activeA := &model.Forward{
+		UserID:     user.ID,
+		UserName:   user.Email,
+		Name:       "Speed-Active-A",
+		TunnelID:   tunnel.ID,
+		InPort:     13101,
+		RemoteAddr: "speed-a.example:443",
+		Status:     model.ForwardStatusActive,
+	}
+	activeB := &model.Forward{
+		UserID:     user.ID,
+		UserName:   user.Email,
+		Name:       "Speed-Active-B",
+		TunnelID:   tunnel.ID,
+		InPort:     13102,
+		RemoteAddr: "speed-b.example:443",
+		Status:     model.ForwardStatusActive,
+	}
+	paused := &model.Forward{
+		UserID:     user.ID,
+		UserName:   user.Email,
+		Name:       "Speed-Paused",
+		TunnelID:   tunnel.ID,
+		InPort:     13103,
+		RemoteAddr: "speed-paused.example:443",
+		Status:     model.ForwardStatusPaused,
+	}
+	assert.NoError(s.T(), db.Create(activeA).Error)
+	assert.NoError(s.T(), db.Create(activeB).Error)
+	assert.NoError(s.T(), db.Create(paused).Error)
+	assert.NoError(s.T(), db.Model(paused).Update("status", model.ForwardStatusPaused).Error)
+
+	err := s.svc.UpdateUserTunnel(PanelUserTunnelUpdateInput{
+		ID:            permission.ID,
+		Flow:          permission.Flow,
+		Num:           permission.Num,
+		FlowResetTime: permission.FlowResetTime,
+		ExpTime:       permission.ExpTime,
+		Status:        model.ForwardUserTunnelStatusActive,
+		SpeedID:       &updatedLimit.ID,
+	})
+	assert.NoError(s.T(), err)
+
+	assert.Len(s.T(), s.runtimeClient.requests, 2)
+	for _, req := range s.runtimeClient.requests {
+		assert.Equal(s.T(), model.ForwardRuntimeJobActionUpdate, req.Action)
+		if assert.NotNil(s.T(), req.PanelForward) && assert.NotNil(s.T(), req.PanelForward.Limiter) {
+			assert.Equal(s.T(), updatedLimit.ID, req.PanelForward.Limiter.SpeedID)
+			assert.Equal(s.T(), updatedLimit.Speed, req.PanelForward.Limiter.Speed)
+		}
+	}
+
+	var reloadedPermission model.ForwardUserTunnel
+	assert.NoError(s.T(), db.First(&reloadedPermission, permission.ID).Error)
+	if assert.NotNil(s.T(), reloadedPermission.SpeedID) {
+		assert.Equal(s.T(), updatedLimit.ID, *reloadedPermission.SpeedID)
+	}
+}
+
 func (s *PanelForwardServiceTestSuite) TestListUserTunnels_ReturnsJoinedFields() {
 	db := database.Get()
 
@@ -910,6 +1038,346 @@ func (s *PanelForwardServiceTestSuite) TestResetUserTunnelTraffic_ResetsPermissi
 	var reloadedPermission model.ForwardUserTunnel
 	assert.NoError(s.T(), db.First(&reloadedPermission, perm.ID).Error)
 	assert.Equal(s.T(), int64(0), reloadedPermission.InFlow)
+	assert.Equal(s.T(), int64(0), reloadedPermission.OutFlow)
+}
+
+func (s *PanelForwardServiceTestSuite) TestUploadFluxForwardFlow_AccumulatesForwardUserAndUserTunnelWithRatioAndFlow() {
+	db := database.Get()
+
+	user := &model.User{
+		Email:          "panel-forward-flow-upload@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-flow-upload-token",
+		UUID:           "panel-forward-flow-upload-uuid",
+		TransferEnable: 20 * bytesPerGiB,
+	}
+	tunnel := &model.ForwardTunnel{
+		Name:         "Flow Upload Tunnel",
+		InIP:         "198.51.100.10",
+		Flow:         2,
+		TrafficRatio: 1.5,
+		Status:       model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	permission := &model.ForwardUserTunnel{
+		UserID:   user.ID,
+		TunnelID: tunnel.ID,
+		Status:   model.ForwardUserTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(permission).Error)
+
+	forward := &model.Forward{
+		UserID:     user.ID,
+		UserName:   user.Email,
+		Name:       "Flux Upload Forward",
+		TunnelID:   tunnel.ID,
+		InPort:     15001,
+		RemoteAddr: "upload.example:443",
+		Status:     model.ForwardStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	err := s.svc.UploadFluxForwardFlow(PanelForwardFlowData{
+		N: forwardFlowServiceName(forward.ID, user.ID, permission.ID),
+		U: 100,
+		D: 200,
+	})
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), 0, s.runtimeClient.calls)
+
+	var reloadedForward model.Forward
+	assert.NoError(s.T(), db.First(&reloadedForward, forward.ID).Error)
+	assert.Equal(s.T(), int64(600), reloadedForward.InFlow)
+	assert.Equal(s.T(), int64(300), reloadedForward.OutFlow)
+
+	var reloadedUser model.User
+	assert.NoError(s.T(), db.First(&reloadedUser, user.ID).Error)
+	assert.Equal(s.T(), int64(300), reloadedUser.U)
+	assert.Equal(s.T(), int64(600), reloadedUser.D)
+
+	var reloadedPermission model.ForwardUserTunnel
+	assert.NoError(s.T(), db.First(&reloadedPermission, permission.ID).Error)
+	assert.Equal(s.T(), int64(600), reloadedPermission.InFlow)
+	assert.Equal(s.T(), int64(300), reloadedPermission.OutFlow)
+}
+
+func (s *PanelForwardServiceTestSuite) TestApplyForwardTrafficSnapshots_TracksDeltaCursorAndCounterReset() {
+	db := database.Get()
+
+	user := &model.User{
+		Email:          "panel-forward-flow-snapshot@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-flow-snapshot-token",
+		UUID:           "panel-forward-flow-snapshot-uuid",
+		TransferEnable: 20 * bytesPerGiB,
+	}
+	tunnel := &model.ForwardTunnel{
+		Name:   "Snapshot Tunnel",
+		InIP:   "198.51.100.11",
+		Status: model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	permission := &model.ForwardUserTunnel{
+		UserID:   user.ID,
+		TunnelID: tunnel.ID,
+		Status:   model.ForwardUserTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(permission).Error)
+
+	forward := &model.Forward{
+		UserID:     user.ID,
+		UserName:   user.Email,
+		Name:       "Snapshot Forward",
+		TunnelID:   tunnel.ID,
+		InPort:     15002,
+		RemoteAddr: "snapshot.example:443",
+		Status:     model.ForwardStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	assert.NoError(s.T(), s.svc.ApplyForwardTrafficSnapshots([]PanelForwardTrafficSnapshot{{
+		ForwardID:     forward.ID,
+		Backend:       model.ForwardRuntimeBackendGost,
+		UploadTotal:   1000,
+		DownloadTotal: 2000,
+	}}))
+	assert.NoError(s.T(), s.svc.ApplyForwardTrafficSnapshots([]PanelForwardTrafficSnapshot{{
+		ForwardID:     forward.ID,
+		Backend:       model.ForwardRuntimeBackendGost,
+		UploadTotal:   1200,
+		DownloadTotal: 2500,
+	}}))
+	assert.NoError(s.T(), s.svc.ApplyForwardTrafficSnapshots([]PanelForwardTrafficSnapshot{{
+		ForwardID:     forward.ID,
+		Backend:       model.ForwardRuntimeBackendGost,
+		UploadTotal:   100,
+		DownloadTotal: 150,
+	}}))
+
+	var reloadedForward model.Forward
+	assert.NoError(s.T(), db.First(&reloadedForward, forward.ID).Error)
+	assert.Equal(s.T(), int64(2650), reloadedForward.InFlow)
+	assert.Equal(s.T(), int64(1300), reloadedForward.OutFlow)
+
+	var reloadedUser model.User
+	assert.NoError(s.T(), db.First(&reloadedUser, user.ID).Error)
+	assert.Equal(s.T(), int64(1300), reloadedUser.U)
+	assert.Equal(s.T(), int64(2650), reloadedUser.D)
+
+	var reloadedPermission model.ForwardUserTunnel
+	assert.NoError(s.T(), db.First(&reloadedPermission, permission.ID).Error)
+	assert.Equal(s.T(), int64(2650), reloadedPermission.InFlow)
+	assert.Equal(s.T(), int64(1300), reloadedPermission.OutFlow)
+
+	var cursor model.ForwardTrafficCursor
+	assert.NoError(s.T(), db.Where("forward_id = ? AND backend = ?", forward.ID, model.ForwardRuntimeBackendGost).First(&cursor).Error)
+	assert.Equal(s.T(), int64(100), cursor.UploadTotal)
+	assert.Equal(s.T(), int64(150), cursor.DownloadTotal)
+
+	var cursorCount int64
+	assert.NoError(s.T(), db.Model(&model.ForwardTrafficCursor{}).Count(&cursorCount).Error)
+	assert.Equal(s.T(), int64(1), cursorCount)
+	assert.Equal(s.T(), 0, s.runtimeClient.calls)
+}
+
+func (s *PanelForwardServiceTestSuite) TestUploadFluxForwardFlow_UserTrafficExhaustedPausesAllUserForwards() {
+	db := database.Get()
+
+	user := &model.User{
+		Email:          "panel-forward-flow-user-pause@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-flow-user-pause-token",
+		UUID:           "panel-forward-flow-user-pause-uuid",
+		TransferEnable: 1000,
+	}
+	node := &model.ForwardNode{
+		Name:    "User Pause Ingress",
+		Type:    model.ForwardNodeTypeRelay,
+		Host:    "203.0.113.10",
+		Status:  model.ForwardNodeStatusOnline,
+		Enabled: true,
+	}
+	tunnelA := &model.ForwardTunnel{
+		Name:     "User Pause Tunnel A",
+		InNodeID: 0,
+		InIP:     "203.0.113.20",
+		Flow:     1,
+		Status:   model.ForwardTunnelStatusActive,
+	}
+	tunnelB := &model.ForwardTunnel{
+		Name:     "User Pause Tunnel B",
+		InNodeID: 0,
+		InIP:     "203.0.113.21",
+		Flow:     1,
+		Status:   model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(node).Error)
+	tunnelA.InNodeID = node.ID
+	tunnelB.InNodeID = node.ID
+	assert.NoError(s.T(), db.Create(tunnelA).Error)
+	assert.NoError(s.T(), db.Create(tunnelB).Error)
+
+	permission := &model.ForwardUserTunnel{
+		UserID:   user.ID,
+		TunnelID: tunnelA.ID,
+		Flow:     10,
+		Status:   model.ForwardUserTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(permission).Error)
+
+	first := &model.Forward{
+		UserID:     user.ID,
+		UserName:   user.Email,
+		Name:       "Pause User Forward A",
+		TunnelID:   tunnelA.ID,
+		InPort:     15003,
+		RemoteAddr: "user-a.example:443",
+		Status:     model.ForwardStatusActive,
+	}
+	second := &model.Forward{
+		UserID:     user.ID,
+		UserName:   user.Email,
+		Name:       "Pause User Forward B",
+		TunnelID:   tunnelB.ID,
+		InPort:     15004,
+		RemoteAddr: "user-b.example:443",
+		Status:     model.ForwardStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(first).Error)
+	assert.NoError(s.T(), db.Create(second).Error)
+
+	err := s.svc.UploadFluxForwardFlow(PanelForwardFlowData{
+		N: forwardFlowServiceName(first.ID, user.ID, permission.ID),
+		U: 600,
+		D: 400,
+	})
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), s.runtimeClient.requests, 2)
+	assert.Equal(s.T(), model.ForwardRuntimeJobActionPause, s.runtimeClient.requests[0].Action)
+	assert.Equal(s.T(), model.ForwardRuntimeJobActionPause, s.runtimeClient.requests[1].Action)
+
+	var reloadedFirst model.Forward
+	assert.NoError(s.T(), db.First(&reloadedFirst, first.ID).Error)
+	assert.Equal(s.T(), model.ForwardStatusPaused, reloadedFirst.Status)
+
+	var reloadedSecond model.Forward
+	assert.NoError(s.T(), db.First(&reloadedSecond, second.ID).Error)
+	assert.Equal(s.T(), model.ForwardStatusPaused, reloadedSecond.Status)
+
+	var reloadedUser model.User
+	assert.NoError(s.T(), db.First(&reloadedUser, user.ID).Error)
+	assert.Equal(s.T(), int64(600), reloadedUser.U)
+	assert.Equal(s.T(), int64(400), reloadedUser.D)
+}
+
+func (s *PanelForwardServiceTestSuite) TestUploadFluxForwardFlow_TunnelTrafficExhaustedPausesOnlyAffectedTunnelForwards() {
+	db := database.Get()
+
+	user := &model.User{
+		Email:          "panel-forward-flow-tunnel-pause@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-flow-tunnel-pause-token",
+		UUID:           "panel-forward-flow-tunnel-pause-uuid",
+		TransferEnable: 20 * bytesPerGiB,
+	}
+	node := &model.ForwardNode{
+		Name:    "Tunnel Pause Ingress",
+		Type:    model.ForwardNodeTypeRelay,
+		Host:    "203.0.113.11",
+		Status:  model.ForwardNodeStatusOnline,
+		Enabled: true,
+	}
+	tunnelA := &model.ForwardTunnel{
+		Name:     "Tunnel Pause A",
+		InNodeID: 0,
+		InIP:     "203.0.113.30",
+		Flow:     1,
+		Status:   model.ForwardTunnelStatusActive,
+	}
+	tunnelB := &model.ForwardTunnel{
+		Name:     "Tunnel Pause B",
+		InNodeID: 0,
+		InIP:     "203.0.113.31",
+		Flow:     1,
+		Status:   model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(node).Error)
+	tunnelA.InNodeID = node.ID
+	tunnelB.InNodeID = node.ID
+	assert.NoError(s.T(), db.Create(tunnelA).Error)
+	assert.NoError(s.T(), db.Create(tunnelB).Error)
+
+	permission := &model.ForwardUserTunnel{
+		UserID:   user.ID,
+		TunnelID: tunnelA.ID,
+		Flow:     1,
+		InFlow:   bytesPerGiB - 400,
+		Status:   model.ForwardUserTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(permission).Error)
+
+	first := &model.Forward{
+		UserID:     user.ID,
+		UserName:   user.Email,
+		Name:       "Pause Tunnel Forward A1",
+		TunnelID:   tunnelA.ID,
+		InPort:     15005,
+		RemoteAddr: "tunnel-a1.example:443",
+		InFlow:     bytesPerGiB - 400,
+		Status:     model.ForwardStatusActive,
+	}
+	second := &model.Forward{
+		UserID:     user.ID,
+		UserName:   user.Email,
+		Name:       "Pause Tunnel Forward A2",
+		TunnelID:   tunnelA.ID,
+		InPort:     15006,
+		RemoteAddr: "tunnel-a2.example:443",
+		Status:     model.ForwardStatusActive,
+	}
+	otherTunnel := &model.Forward{
+		UserID:     user.ID,
+		UserName:   user.Email,
+		Name:       "Pause Tunnel Forward B",
+		TunnelID:   tunnelB.ID,
+		InPort:     15007,
+		RemoteAddr: "tunnel-b.example:443",
+		Status:     model.ForwardStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(first).Error)
+	assert.NoError(s.T(), db.Create(second).Error)
+	assert.NoError(s.T(), db.Create(otherTunnel).Error)
+
+	err := s.svc.UploadFluxForwardFlow(PanelForwardFlowData{
+		N: forwardFlowServiceName(first.ID, user.ID, permission.ID),
+		D: 500,
+	})
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), s.runtimeClient.requests, 2)
+	assert.Equal(s.T(), model.ForwardRuntimeJobActionPause, s.runtimeClient.requests[0].Action)
+	assert.Equal(s.T(), model.ForwardRuntimeJobActionPause, s.runtimeClient.requests[1].Action)
+
+	var reloadedFirst model.Forward
+	assert.NoError(s.T(), db.First(&reloadedFirst, first.ID).Error)
+	assert.Equal(s.T(), model.ForwardStatusPaused, reloadedFirst.Status)
+
+	var reloadedSecond model.Forward
+	assert.NoError(s.T(), db.First(&reloadedSecond, second.ID).Error)
+	assert.Equal(s.T(), model.ForwardStatusPaused, reloadedSecond.Status)
+
+	var reloadedOtherTunnel model.Forward
+	assert.NoError(s.T(), db.First(&reloadedOtherTunnel, otherTunnel.ID).Error)
+	assert.Equal(s.T(), model.ForwardStatusActive, reloadedOtherTunnel.Status)
+
+	var reloadedPermission model.ForwardUserTunnel
+	assert.NoError(s.T(), db.First(&reloadedPermission, permission.ID).Error)
+	assert.Equal(s.T(), int64(bytesPerGiB+100), reloadedPermission.InFlow)
 	assert.Equal(s.T(), int64(0), reloadedPermission.OutFlow)
 }
 
@@ -1199,4 +1667,8 @@ func (s *PanelForwardServiceTestSuite) TestCreateForward_DefaultGostMarksRuntime
 
 func TestPanelForwardService(t *testing.T) {
 	suite.Run(t, new(PanelForwardServiceTestSuite))
+}
+
+func forwardFlowServiceName(forwardID, userID, userTunnelID uint) string {
+	return fmt.Sprintf("%d_%d_%d", forwardID, userID, userTunnelID)
 }

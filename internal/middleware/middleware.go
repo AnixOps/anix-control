@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/utils"
@@ -165,6 +166,43 @@ func AdminAuth() gin.HandlerFunc {
 }
 
 // CORS 璺ㄥ煙涓棿浠?
+func AppTokenAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		cfg := config.Get()
+		expected := ""
+		if cfg != nil {
+			expected = strings.TrimSpace(cfg.App.APIToken)
+		}
+		if expected == "" {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+				"message": "internal api token is not configured",
+			})
+			return
+		}
+
+		token := strings.TrimSpace(c.Query("secret"))
+		if token == "" {
+			token = strings.TrimSpace(c.GetHeader("X-API-Key"))
+		}
+		if token == "" {
+			authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+			if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+				token = strings.TrimSpace(authHeader[7:])
+			} else {
+				token = authHeader
+			}
+		}
+		if token == "" || token != expected {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"message": "invalid internal api token",
+			})
+			return
+		}
+
+		c.Next()
+	}
+}
+
 func CORS() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")

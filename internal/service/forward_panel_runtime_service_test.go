@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
@@ -38,8 +40,10 @@ func (s *PanelForwardRuntimeServiceTestSuite) SetupSuite() {
 	database.AutoMigrate(
 		&model.ForwardNode{},
 		&model.ForwardTunnel{},
+		&model.ForwardUserTunnel{},
 		&model.Forward{},
 		&model.ForwardRuntimeJob{},
+		&model.SpeedLimit{},
 	)
 }
 
@@ -48,6 +52,8 @@ func (s *PanelForwardRuntimeServiceTestSuite) SetupTest() {
 	db := database.Get()
 	db.Exec("DELETE FROM v2_forward_runtime_job")
 	db.Exec("DELETE FROM v2_forward")
+	db.Exec("DELETE FROM v2_forward_user_tunnel")
+	db.Exec("DELETE FROM v2_speed_limit")
 	db.Exec("DELETE FROM v2_forward_tunnel")
 	db.Exec("DELETE FROM v2_forward_node")
 	s.svc = NewPanelForwardRuntimeService(db)
@@ -273,6 +279,102 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_PersistsPendingJobForAsy
 	assert.Nil(s.T(), job.CompletedAt)
 	assert.Equal(s.T(), "", job.Error)
 	assert.Contains(s.T(), job.Payload, "\"ansibleRuntime\"")
+}
+
+func (s *PanelForwardRuntimeServiceTestSuite) TestApply_AttachesLimiterToRuntimeRequest() {
+	db := database.Get()
+	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendIptablesAnsible)
+
+	node := &model.ForwardNode{
+		Name:     "Limiter Node",
+		Type:     model.ForwardNodeTypeRelay,
+		Host:     "203.0.113.15",
+		Port:     22,
+		APIPort:  19500,
+		APIToken: "limiter-token",
+		Enabled:  true,
+	}
+	assert.NoError(s.T(), db.Create(node).Error)
+
+	tunnel := &model.ForwardTunnel{
+		Name:          "Limiter Tunnel",
+		InNodeID:      node.ID,
+		Protocol:      "tcp",
+		TCPListenAddr: "0.0.0.0",
+		Status:        model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	speedLimit := &model.SpeedLimit{
+		Name:        "25M",
+		Speed:       200,
+		TunnelID:    tunnel.ID,
+		TunnelName:  tunnel.Name,
+		Status:      speedLimitStatusActive,
+		CreatedTime: time.Now().UnixMilli(),
+		UpdatedTime: time.Now().UnixMilli(),
+	}
+	assert.NoError(s.T(), db.Create(speedLimit).Error)
+
+	forward := &model.Forward{
+		UserID:        103,
+		UserName:      "runtime-limiter@example.com",
+		Name:          "Limiter Forward",
+		TunnelID:      tunnel.ID,
+		InPort:        22001,
+		RemoteAddr:    "limiter.example.com:443",
+		InterfaceName: "eth0",
+		Status:        model.ForwardStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+	assert.NoError(s.T(), db.Create(&model.ForwardUserTunnel{
+		UserID:   forward.UserID,
+		TunnelID: tunnel.ID,
+		SpeedID:  &speedLimit.ID,
+		Status:   model.ForwardUserTunnelStatusActive,
+	}).Error)
+
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.SetJSON(
+		forwardRuntimeAnsibleConfigJSONKey,
+		panelForwardAnsibleConfig{
+			Inventory:      "/etc/ansible/hosts",
+			ApplyPlaybook:  "/opt/ansible/apply.yml",
+			RemovePlaybook: "/opt/ansible/remove.yml",
+		},
+		forwardRuntimeConfigGroup,
+		"test ansible runtime",
+	))
+
+	client := &stubForwardRuntimeNodeXClient{
+		executeFn: func(_ context.Context, req nodeXForwardExecuteRequest) (*nodeXForwardExecuteResult, error) {
+			if assert.NotNil(s.T(), req.PanelForward) && assert.NotNil(s.T(), req.PanelForward.Limiter) {
+				assert.Equal(s.T(), speedLimit.ID, req.PanelForward.Limiter.SpeedID)
+				assert.Equal(s.T(), speedLimit.Name, req.PanelForward.Limiter.Name)
+				assert.Equal(s.T(), speedLimit.Speed, req.PanelForward.Limiter.Speed)
+			}
+			if assert.NotNil(s.T(), req.AnsibleRuntime) && assert.NotNil(s.T(), req.AnsibleRuntime.Limiter) {
+				assert.Equal(s.T(), speedLimit.ID, req.AnsibleRuntime.Limiter.SpeedID)
+				assert.Equal(s.T(), speedLimit.Speed, req.AnsibleRuntime.Limiter.Speed)
+			}
+			return &nodeXForwardExecuteResult{
+				Backend: model.ForwardRuntimeBackendIptablesAnsible,
+				Status:  model.ForwardRuntimeJobStatusSuccess,
+				Message: "limiter applied",
+			}, nil
+		},
+	}
+	s.svc.client = client
+
+	result, err := s.svc.Apply(context.Background(), model.ForwardRuntimeJobActionCreate, forward, tunnel)
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), result)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, result.Status)
+
+	var job model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.Last(&job).Error)
+	assert.Contains(s.T(), job.Payload, "\"limiter\"")
+	assert.Contains(s.T(), job.Payload, "\"speedId\":"+fmt.Sprintf("%d", speedLimit.ID))
 }
 
 func setForwardRuntimeBackendForTest(t *testing.T, db *gorm.DB, backend string) {

@@ -65,6 +65,7 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.ForwardUserTunnel{},
 			&model.Forward{},
 			&model.ForwardRuntimeJob{},
+			&model.ForwardTrafficCursor{},
 			&model.SpeedLimit{},
 			&model.UserMFA{},
 			&model.MFALoginAttempt{},
@@ -141,6 +142,7 @@ func (s *ServiceTestSuite) SetupTest() {
 	db.Exec("DELETE FROM v2_forward_stats")
 	db.Exec("DELETE FROM v2_forward")
 	db.Exec("DELETE FROM v2_forward_runtime_job")
+	db.Exec("DELETE FROM v2_forward_traffic_cursor")
 	db.Exec("DELETE FROM v2_forward_user_tunnel")
 	db.Exec("DELETE FROM v2_forward_tunnel")
 	db.Exec("DELETE FROM v2_speed_limit")
