@@ -329,6 +329,80 @@ Content-Type: application/json
 }
 ```
 
+### Speed-limit compatibility
+
+```http
+# 限速规则列表
+POST /api/v2/speed-limit/list
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{}
+```
+
+```http
+# 创建限速规则
+POST /api/v2/speed-limit/create
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "name": "10M",
+  "speed": 10,
+  "tunnelId": 1,
+  "tunnelName": "Tunnel-A"
+}
+```
+
+```http
+# 更新限速规则
+POST /api/v2/speed-limit/update
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "id": 1,
+  "name": "20M",
+  "speed": 20,
+  "tunnelId": 1,
+  "tunnelName": "Tunnel-A"
+}
+```
+
+```http
+# 删除限速规则
+POST /api/v2/speed-limit/delete
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "id": 1
+}
+```
+
+```http
+# 可选隧道列表（供 speed-limit 页面使用）
+POST /api/v2/speed-limit/tunnels
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{}
+```
+
+说明:
+
+- 这些接口使用与 Flux 相同的 `code/msg/ts/data` 包装。
+- `tunnelName` 不是可省略的本地扩展字段，Flux 对应 DTO 也会提交它；后续复刻不要擅自删掉。
+- 当前 `/admin/limit` 已接上这些接口，但文档仍需把它视为 `Partial`，因为运行时侧限速传播与精确页面复刻还没完成。
+
+### Scheduled reset semantics
+
+- `flowResetTime = 0` 表示不参与自动月重置。
+- `flowResetTime = 1..31` 表示每月对应日期重置；当月没有该日时，按月末补执行。
+- 当前本地实现会在应用启动时执行一次补扫，然后每天本地时间 `00:00:05` 扫描。
+- 扫描会重置用户流量和用户隧道授权流量；对已过期用户会暂停活跃转发，对已过期授权会先暂停活跃转发再禁用授权。
+- 这仍不代表已经完整复刻 Flux `FlowController` 的所有配额、副作用和禁用语义。
+
 ### Forward runtime backend compatibility
 
 ```http
