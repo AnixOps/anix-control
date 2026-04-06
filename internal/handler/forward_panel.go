@@ -77,6 +77,24 @@ func (h *ForwardHandler) ListPanelRuntimeJobs(c *gin.Context) {
 	})
 }
 
+func (h *ForwardHandler) GetPanelRuntimeStatus(c *gin.Context) {
+	status, err := h.panelService.GetRuntimeStatus(c.Request.Context())
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, status)
+}
+
+func (h *ForwardHandler) DiagnosePanelRuntime(c *gin.Context) {
+	summary, err := h.panelService.DiagnoseRuntime(c.Request.Context())
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, summary)
+}
+
 func (h *ForwardHandler) ListPanelTunnels(c *gin.Context) {
 	items, err := h.panelService.ListTunnels(c.GetUint("user_id"), c.GetBool("is_admin"))
 	if err != nil {

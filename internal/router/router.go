@@ -245,6 +245,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/forward/create", forwardHandler.CreatePanelForward)
 			admin.POST("/forward/list", forwardHandler.ListPanelForwards)
 			admin.GET("/forward/runtime/jobs", forwardHandler.ListPanelRuntimeJobs)
+			admin.GET("/forward/runtime/status", forwardHandler.GetPanelRuntimeStatus)
+			admin.GET("/forward/runtime/doctor", forwardHandler.DiagnosePanelRuntime)
 			admin.POST("/forward/update", forwardHandler.UpdatePanelForward)
 			admin.POST("/forward/delete", forwardHandler.DeletePanelForward)
 			admin.POST("/forward/force-delete", forwardHandler.ForceDeletePanelForward)

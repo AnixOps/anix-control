@@ -9,6 +9,7 @@ import (
 
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
+	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -68,6 +69,9 @@ func (s *ForwardPanelHandlerTestSuite) TestCreatePanelTunnel_WorksWithValidNode(
 }
 
 func (s *ForwardPanelHandlerTestSuite) TestUpdatePanelTunnel_AllowsRuntimeFieldsToChange() {
+	configSvc := service.NewSystemConfigService(database.Get())
+	assert.NoError(s.T(), configSvc.Set("forward.runtime.nodex_mode", "true", "bool", "forward", "enable NodeX mode for tunnel updates"))
+
 	node := model.ForwardNode{
 		Name:    "Init Relay",
 		Type:    model.ForwardNodeTypeRelay,
@@ -76,11 +80,21 @@ func (s *ForwardPanelHandlerTestSuite) TestUpdatePanelTunnel_AllowsRuntimeFields
 		Enabled: true,
 	}
 	assert.NoError(s.T(), database.Get().Create(&node).Error)
+	exitNode := model.ForwardNode{
+		Name:    "Init Exit",
+		Type:    model.ForwardNodeTypeExit,
+		Host:    "10.0.0.5",
+		Status:  model.ForwardNodeStatusOnline,
+		Enabled: true,
+	}
+	assert.NoError(s.T(), database.Get().Create(&exitNode).Error)
 	tunnel := model.ForwardTunnel{
 		Name:          "Update Tunnel",
 		InNodeID:      node.ID,
+		OutNodeID:     &exitNode.ID,
 		InIP:          node.Host,
-		Type:          1,
+		OutIP:         exitNode.Host,
+		Type:          2,
 		Flow:          1,
 		Protocol:      "tcp",
 		TCPListenAddr: "[::]",
@@ -176,6 +190,71 @@ func (s *ForwardPanelHandlerTestSuite) TestDiagnosePanelTunnel_ReturnsReport() {
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	data := resp["data"].(map[string]interface{})
 	assert.Equal(s.T(), float64(tunnel.ID), data["tunnelId"])
+}
+
+func (s *ForwardPanelHandlerTestSuite) TestGetPanelRuntimeStatus_ProxiesNodeXStatus() {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/internal/forward/runtime/status":
+			assert.Equal(s.T(), "Bearer handler-token", r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"version":"v0.0.17-test.5","executePath":"/api/v2/internal/forward/runtime/execute","statusPath":"/api/v2/internal/forward/runtime/status","authRequired":true,"supports":{"resourceTypes":["panel_forward"],"backends":["gost"],"actions":["create","update","delete"]},"modes":{"gost":{"supported":true},"iptablesAnsible":{"supported":true,"ready":true,"command":"ansible-playbook","commandFound":true,"inventoryPath":"inventory.ini","inventoryExists":true,"applyPlaybookPath":"apply.yml","applyPlaybookExists":true,"removePlaybookPath":"remove.yml","removePlaybookExists":true,"workingDir":"playbooks","workingDirExists":true,"targetPattern":"relay","become":false,"timeoutSeconds":30}}}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	configSvc := service.NewSystemConfigService(database.Get())
+	assert.NoError(s.T(), configSvc.Set("forward.runtime.nodex.base_url", server.URL, "string", "forward", "handler base url"))
+	assert.NoError(s.T(), configSvc.Set("forward.runtime.nodex.token", "handler-token", "string", "forward", "handler token"))
+
+	ctx, w := s.newAdminContext("GET", "/admin/forward/runtime/status", nil)
+	s.handler.GetPanelRuntimeStatus(ctx)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]interface{})
+	assert.Equal(s.T(), "v0.0.17-test.5", data["version"])
+	assert.Equal(s.T(), "/api/v2/internal/forward/runtime/status", data["statusPath"])
+}
+
+func (s *ForwardPanelHandlerTestSuite) TestDiagnosePanelRuntime_ReturnsDoctorSummary() {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health":
+			_, _ = w.Write([]byte("ok"))
+		case "/api/v2/internal/forward/runtime/status":
+			assert.Equal(s.T(), "Bearer doctor-token", r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"version":"v0.0.17-test.5","executePath":"/api/v2/internal/forward/runtime/execute","statusPath":"/api/v2/internal/forward/runtime/status","authRequired":true,"supports":{"resourceTypes":["panel_forward","legacy_rule"],"backends":["gost","iptables_ansible"],"actions":["create","update","delete","pause","resume","sync"]},"modes":{"gost":{"supported":true},"iptablesAnsible":{"supported":true,"ready":false,"command":"ansible-playbook","commandFound":false,"inventoryPath":"inventory.ini","inventoryExists":false,"applyPlaybookPath":"apply.yml","applyPlaybookExists":true,"removePlaybookPath":"remove.yml","removePlaybookExists":true,"workingDir":"playbooks","workingDirExists":true,"targetPattern":"relay","become":false,"timeoutSeconds":30,"issues":["inventory missing: inventory.ini"]}}}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	configSvc := service.NewSystemConfigService(database.Get())
+	assert.NoError(s.T(), configSvc.Set("forward.runtime.nodex.base_url", server.URL, "string", "forward", "doctor base url"))
+	assert.NoError(s.T(), configSvc.Set("forward.runtime.nodex.token", "doctor-token", "string", "forward", "doctor token"))
+
+	ctx, w := s.newAdminContext("GET", "/admin/forward/runtime/doctor", nil)
+	s.handler.DiagnosePanelRuntime(ctx)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]interface{})
+	health := data["health"].(map[string]interface{})
+	status := data["runtimeStatus"].(map[string]interface{})
+	commands := data["commands"].(map[string]interface{})
+	assert.Equal(s.T(), true, health["ok"])
+	assert.Equal(s.T(), true, status["ok"])
+	assert.Equal(s.T(), "v0.0.17-test.5", status["version"])
+	assert.NotEmpty(s.T(), commands["powerShell"])
 }
 
 func (s *ForwardPanelHandlerTestSuite) newAdminContext(method, path string, payload interface{}) (*gin.Context, *httptest.ResponseRecorder) {
