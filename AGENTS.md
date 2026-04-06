@@ -1046,4 +1046,52 @@ When planning future clone work, prioritize the remaining gaps in this order:
 - When forward, tunnel, or user-tunnel behavior changes, also update `docs/guide/flux-panel-clone.md`, `docs/guide/flux-forward-contract.md`, `docs/guide/flux-panel-workstream.md`, `docs/guide/api-reference.md`, and `docs/FEATURE_ROADMAP.md`.
 - If user-facing scope or onboarding entry points change, refresh the `Flux-panel` section in `readme.md`.
 - Do not mark work as a full clone while runtime side effects, diagnose paths, or quota/expire/reset-flow gaps are still undocumented.
+
+## Proprietary Forward Runtime Guardrails (2026-04-06)
+
+- Treat NodeX forward runtime and the ansible execution stack as proprietary, internal-only differentiators for the operator stack. They are not generic public features and must not be flattened into the public Flux-clone story.
+- In this repository, `/admin/forward*` pages and their compatible APIs are the public control plane only. The closed execution plane lives behind NodeX mode, runtime job orchestration, deployment scripts, env bootstrapping, and ansible playbooks.
+- Never blur these boundaries:
+  - Flux clone surface: `web/src/views/admin/Forward.vue`, `web/src/views/admin/Tunnel.vue`, `web/src/views/admin/Limit.vue`, `internal/handler/forward_panel.go`, `internal/service/forward_panel_service.go`
+  - Internal execution surface: `internal/service/forward_nodex_*`, `internal/service/forward_panel_runtime_service.go`, `install.sh`, `panel_install.sh`, `config/deploy/ansible/`, runtime job endpoints, and related system-config keys
+- Do not move NodeX-specific install controls, inventory controls, runtime job observability, or execution knobs into the Flux-cloned `/admin/forward` page just because they are operationally related.
+- If a change touches the internal execution surface, update all three runtime boundary docs together:
+  - `docs/guide/nodex-internal-extension.md`
+  - `docs/guide/forward-tunnel-runtime-ops.md`
+  - `docs/guide/forward-tunnel-smoke-test.md`
+- When describing or reviewing work, always state whether the change affects:
+  - Flux-compatible public control-plane behavior
+  - internal-only NodeX runtime behavior
+  - internal-only ansible/iptables execution behavior
+
+## Dual-Mode Runtime Rules
+
+- `NodeX Mode` means `forward.runtime_backend=gost`.
+  - It is stateful.
+  - It requires the NodeX control-plane handshake via `forward.runtime.nodex.base_url` and `forward.runtime.nodex.token`.
+  - It uses ingress/egress semantics and must keep “entry node” language isolated to this mode.
+- `iptables_ansible Mode` means `forward.runtime_backend=iptables_ansible`.
+  - It is stateless.
+  - It uses an execution node plus SSH/inventory/playbook material.
+  - It must not require or display an ingress node unless an explicit compatibility fallback is being handled and documented.
+- Proxy nodes and forward nodes are different resources and must stay different in docs, UI copy, validation, and review language.
+  - `Node` under `/admin/nodes` is for proxy/runtime traffic service.
+  - `ForwardNode` is for the proprietary forward execution plane.
+- Do not ship mixed terminology. If a screen or API serves both modes, make the mode split explicit in copy, validation, and diagnostics.
+
+## Internal Operator Experience Rules
+
+- Build this proprietary feature set with a nyanpass-like operator experience standard: operators should not need to hand-assemble flags, env keys, or troubleshooting steps from scattered notes.
+- Any material improvement to NodeX/forward operator UX should map to four concrete operator entry points:
+  - onboarding / install
+  - commands / version / upgrade
+  - connection model / control-vs-execution explanation
+  - troubleshooting / doctor / diagnostics
+- In this repository, the control-plane side of that experience must stay discoverable through:
+  - `docs/guide/nodex-internal-extension.md`
+  - `docs/guide/forward-tunnel-runtime-ops.md`
+  - `docs/guide/forward-tunnel-smoke-test.md`
+  - `readme.md` when onboarding entry points materially change
+- Prefer copyable commands, explicit mode-specific prerequisites, and smoke-test checklists over vague prose.
+- Do not add dead UI actions. If install/doctor/version/upgrade buttons or copy actions are proposed in admin pages, first ensure the backend automation or documented command flow actually exists.
 - 更详细的模块映射、当前完成度和下一步待补项目，见 `docs/guide/flux-panel-clone.md`。
