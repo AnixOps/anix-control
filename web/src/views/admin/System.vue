@@ -136,6 +136,70 @@
 
           <div v-else class="runtime-jobs-empty">No runtime jobs yet.</div>
         </div>
+
+        <div class="runtime-operator-panel">
+          <div class="operator-head">
+            <div>
+              <p class="eyebrow">NodeX Operator Console</p>
+              <h4>运行时状态与命令</h4>
+              <p class="text-secondary mode-description">
+                汇总控制面健康、医生诊断与一键命令，配合 NodeX mode 与 ansible 双方案。
+              </p>
+            </div>
+            <div class="operator-actions">
+              <button class="btn btn-secondary btn-sm" :disabled="runtimeStatusLoading" @click="fetchRuntimeStatus">
+                {{ runtimeStatusLoading ? 'Loading...' : '刷新状态' }}
+              </button>
+              <button class="btn btn-secondary btn-sm" :disabled="runtimeDoctorRunning" @click="runRuntimeDoctorCheck">
+                {{ runtimeDoctorRunning ? 'Running...' : 'Run Doctor' }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="runtimeStatusLoading" class="operator-loading">Fetching NodeX runtime status...</div>
+          <div v-else>
+            <div v-if="runtimeStatusError" class="form-error">{{ runtimeStatusError }}</div>
+            <div v-else class="operator-status-grid">
+              <div class="status-card operator-card">
+                <p class="metric-label">版本</p>
+                <p class="metric-value">{{ runtimeStatus?.version || '未知' }}</p>
+                <p class="metric-detail">Execute: {{ runtimeStatus?.executePath || '-' }}</p>
+                <p class="metric-detail">Status: {{ runtimeStatus?.statusPath || '-' }}</p>
+                <p class="metric-detail">
+                  Auth: {{ runtimeStatus?.authRequired ? 'Required' : 'Optional' }}
+                </p>
+              </div>
+              <div class="status-card operator-card">
+                <p class="metric-label">支持矩阵</p>
+                <p class="metric-detail">资源: {{ (runtimeStatus?.supports?.resourceTypes || []).join(', ') || '—' }}</p>
+                <p class="metric-detail">Backend: {{ (runtimeStatus?.supports?.backends || []).join(', ') || '—' }}</p>
+                <p class="metric-detail">Actions: {{ (runtimeStatus?.supports?.actions || []).join(', ') || '—' }}</p>
+              </div>
+              <div class="status-card operator-card">
+                <p class="metric-label">iptables_ansible</p>
+                <p class="metric-detail">Ready: {{ runtimeStatus?.modes?.iptablesAnsible?.ready ? '✓' : '✗' }}</p>
+                <p class="metric-detail">Command: {{ runtimeStatus?.modes?.iptablesAnsible?.command || '-' }}</p>
+                <p class="metric-detail" v-if="runtimeStatus?.modes?.iptablesAnsible?.issues?.length">
+                  Issues:
+                  <span v-for="issue in runtimeStatus.modes.iptablesAnsible.issues" :key="issue">{{ issue }}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="operator-commands">
+            <p class="metric-label">CLI 命令</p>
+            <code>{{ runtimeOperatorStatusCommand }}</code>
+            <code>{{ runtimeOperatorDoctorCommand }}</code>
+            <code>{{ runtimeOperatorUpgradeCommand }}</code>
+            <p class="metric-label">Reference</p>
+            <code v-for="reference in runtimeOperatorReferences" :key="reference">{{ reference }}</code>
+          </div>
+          <div class="operator-doctor-output">
+            <p class="metric-label">doctor 输出</p>
+            <pre>{{ runtimeDoctorOutput || '尚未运行 doctor' }}</pre>
+          </div>
+        </div>
       </section>
 
       <div class="table-container">
@@ -392,7 +456,7 @@ import {
   getBackupConfig, updateBackupConfig, createBackup, getBackups,
   getBackupStats, deleteBackup, restoreBackup,
   getLoadBalancers, createLoadBalancer, updateLoadBalancer,
-  deleteLoadBalancer, runHealthCheck, listForwardRuntimeJobs
+  deleteLoadBalancer, runHealthCheck, listForwardRuntimeJobs, getForwardRuntimeStatus, runForwardRuntimeDoctor
 } from '@/api/admin'
 
 const activeTab = ref('config')
@@ -440,6 +504,24 @@ const runtimeSaving = ref(false)
 const runtimeValidationError = ref('')
 const runtimeJobs = ref([])
 const runtimeJobsLoading = ref(false)
+const runtimeStatus = ref(null)
+const runtimeStatusLoading = ref(false)
+const runtimeStatusError = ref('')
+const runtimeDoctorOutput = ref('')
+const runtimeDoctorRunning = ref(false)
+
+const defaultNodeXBaseUrl = 'http://127.0.0.1:8080'
+const runtimeOperatorBaseUrl = computed(() => runtimeNodeXBaseUrl.value?.trim() || defaultNodeXBaseUrl)
+const runtimeOperatorToken = computed(() => runtimeNodeXToken.value?.trim() || '<token>')
+const runtimeOperatorDoctorCommand = computed(() => `BASE_URL=${runtimeOperatorBaseUrl.value} FORWARD_API_TOKEN=${runtimeOperatorToken.value} bash ./tools/nodex.sh doctor`)
+const runtimeOperatorStatusCommand = computed(() => `BASE_URL=${runtimeOperatorBaseUrl.value} FORWARD_API_TOKEN=${runtimeOperatorToken.value} bash ./tools/nodex.sh runtime-status`)
+const runtimeOperatorUpgradeCommand = computed(() => 'git pull --ff-only && powershell -File .\\tools\\nodex.ps1 version')
+const runtimeOperatorReferences = [
+  'docs/reference/check-version.md',
+  'docs/reference/upgrade.md',
+  'docs/reference/connect-model.md',
+  'docs/reference/nodeclient-faq.md'
+]
 
 function parseRuntimeBoolean(value) {
   if (typeof value === 'boolean') {
@@ -561,6 +643,45 @@ const fetchForwardRuntimeJobs = async () => {
     runtimeJobs.value = []
   } finally {
     runtimeJobsLoading.value = false
+  }
+}
+
+const fetchRuntimeStatus = async () => {
+  runtimeStatusLoading.value = true
+  runtimeStatusError.value = ''
+  if (!runtimeNodeXBaseUrl.value?.trim() || !runtimeNodeXToken.value?.trim()) {
+    runtimeStatus.value = null
+    runtimeStatusError.value = 'Set NodeX base URL and token before querying runtime status'
+    runtimeStatusLoading.value = false
+    return
+  }
+  try {
+    const res = await getForwardRuntimeStatus()
+    runtimeStatus.value = res.data?.data || res.data || null
+  } catch (err) {
+    runtimeStatusError.value = err.response?.data?.msg || err.message || '获取 NodeX 运行状态失败'
+    runtimeStatus.value = null
+  } finally {
+    runtimeStatusLoading.value = false
+  }
+}
+
+const runRuntimeDoctorCheck = async () => {
+  runtimeDoctorRunning.value = true
+  runtimeDoctorOutput.value = ''
+  if (!runtimeNodeXBaseUrl.value?.trim() || !runtimeNodeXToken.value?.trim()) {
+    runtimeDoctorOutput.value = 'Set NodeX base URL and token before running doctor'
+    runtimeDoctorRunning.value = false
+    return
+  }
+  try {
+    const res = await runForwardRuntimeDoctor()
+    const payload = res.data?.data || res.data || res
+    runtimeDoctorOutput.value = JSON.stringify(payload, null, 2)
+  } catch (err) {
+    runtimeDoctorOutput.value = err.response?.data?.msg || err.message || 'NodeX doctor 运行失败'
+  } finally {
+    runtimeDoctorRunning.value = false
   }
 }
 
@@ -896,10 +1017,13 @@ const runHealthCheckRequest = async (lb) => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   fetchConfigs()
-  fetchForwardRuntimeConfig()
+  await fetchForwardRuntimeConfig()
   fetchForwardRuntimeJobs()
+  if (runtimeNodeXBaseUrl.value?.trim() && runtimeNodeXToken.value?.trim()) {
+    fetchRuntimeStatus()
+  }
   fetchBackupConfig()
   fetchBackups()
   fetchBackupStats()
@@ -1073,6 +1197,73 @@ onMounted(() => {
   border-radius: 14px;
   background: rgba(15, 23, 42, 0.03);
   color: var(--text-secondary);
+}
+.runtime-operator-panel {
+  margin-top: 24px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--surface-color);
+  padding: 20px;
+}
+.operator-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+.operator-actions {
+  display: flex;
+  gap: 8px;
+}
+.operator-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.operator-card {
+  padding: 12px;
+  border: 1px dashed var(--border-color);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.operator-loading {
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(253, 230, 138, 0.2);
+  color: #92400e;
+}
+.operator-commands code {
+  display: block;
+  margin-bottom: 8px;
+  background: rgba(224, 224, 224, 0.15);
+  padding: 8px;
+  border-radius: 8px;
+  font-family: 'Courier New', monospace;
+}
+.operator-doctor-output pre {
+  background: rgba(15, 23, 42, 0.05);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+.metric-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.metric-value {
+  font-size: 18px;
+  font-weight: 600;
+}
+.metric-detail {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 2px 0;
 }
 .runtime-status-0 {
   background: rgba(245, 158, 11, 0.16);
