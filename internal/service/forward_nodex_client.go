@@ -4,11 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -196,12 +195,19 @@ func (c *nodeXForwardRuntimeClient) Execute(ctx context.Context, req nodeXForwar
 	}
 
 	targetNode := resolveNodeXTargetNode(req)
-	baseURL, err := resolveNodeXBaseURL(targetNode, settings, requiresConfiguredNodeXControlPlane(req))
+	requireConfiguredControlPlane := requiresConfiguredNodeXControlPlane(req)
+	baseURL, err := resolveNodeXBaseURL(targetNode, settings, requireConfiguredControlPlane)
 	if err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(baseURL) == "" {
+		return nil, errors.New("NodeX forward runtime control plane is not configured")
+	}
 
-	token := resolveNodeXToken(targetNode, settings)
+	token, err := resolveNodeXToken(targetNode, settings, requireConfiguredControlPlane)
+	if err != nil {
+		return nil, err
+	}
 
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -325,12 +331,10 @@ func resolveNodeXTargetNode(req nodeXForwardExecuteRequest) *nodeXForwardNodePay
 }
 
 func requiresConfiguredNodeXControlPlane(req nodeXForwardExecuteRequest) bool {
-	switch req.ResourceType {
-	case nodeXForwardResourceTypePanelForward, nodeXForwardResourceTypeLegacyRule:
-		return true
-	default:
-		return req.AnsibleRuntime != nil
+	if req.Backend == model.ForwardRuntimeBackendIptablesAnsible && req.AnsibleRuntime != nil {
+		return false
 	}
+	return true
 }
 
 func hasNodeXForwardNode(node nodeXForwardNodePayload) bool {
@@ -347,57 +351,17 @@ func resolveNodeXBaseURL(node *nodeXForwardNodePayload, settings *nodeXForwardRu
 	if requireConfigured {
 		return "", fmt.Errorf("%s is required for NodeX forward runtime", forwardRuntimeNodeXBaseURLConfigKey)
 	}
-	if node == nil {
-		return "", fmt.Errorf("forward runtime target node is required")
-	}
-
-	host := strings.TrimSpace(node.Host)
-	if host == "" {
-		return "", fmt.Errorf("forward runtime target node host is required")
-	}
-
-	if strings.Contains(host, "://") {
-		parsed, err := url.Parse(host)
-		if err != nil {
-			return "", fmt.Errorf("invalid forward runtime target node host %q: %w", host, err)
-		}
-		if parsed.Host == "" && parsed.Path != "" {
-			parsed.Host = parsed.Path
-			parsed.Path = ""
-		}
-		if parsed.Scheme == "" {
-			parsed.Scheme = "http"
-		}
-		if parsed.Host == "" {
-			return "", fmt.Errorf("forward runtime target node host is required")
-		}
-		if parsed.Port() == "" {
-			if node.APIPort <= 0 {
-				return "", fmt.Errorf("forward runtime target node api port is required")
-			}
-			parsed.Host = net.JoinHostPort(parsed.Hostname(), strconv.Itoa(node.APIPort))
-		}
-		return strings.TrimRight(parsed.String(), "/"), nil
-	}
-
-	if node.APIPort <= 0 {
-		return "", fmt.Errorf("forward runtime target node api port is required")
-	}
-
-	return "http://" + net.JoinHostPort(host, strconv.Itoa(node.APIPort)), nil
+	return "", nil
 }
 
-func resolveNodeXToken(node *nodeXForwardNodePayload, settings *nodeXForwardRuntimeSettings) string {
+func resolveNodeXToken(node *nodeXForwardNodePayload, settings *nodeXForwardRuntimeSettings, requireConfigured bool) (string, error) {
 	if settings != nil && strings.TrimSpace(settings.Token) != "" {
-		return strings.TrimSpace(settings.Token)
+		return strings.TrimSpace(settings.Token), nil
 	}
-	if node != nil && strings.TrimSpace(node.APIToken) != "" {
-		return strings.TrimSpace(node.APIToken)
+	if requireConfigured {
+		return "", fmt.Errorf("%s is required for NodeX forward runtime", forwardRuntimeNodeXTokenConfigKey)
 	}
-	if settings != nil {
-		return strings.TrimSpace(settings.Token)
-	}
-	return ""
+	return "", nil
 }
 
 func (r *nodeXForwardExecuteResponse) toResult(statusCode int, fallbackBackend string) *nodeXForwardExecuteResult {

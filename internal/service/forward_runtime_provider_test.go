@@ -422,8 +422,67 @@ func (s *ForwardRuntimeProviderTestSuite) TestNodeXForwardRuntimeClient_PrefersC
 	}
 }
 
-func (s *ForwardRuntimeProviderTestSuite) TestNodeXForwardRuntimeClient_RequiresConfiguredControlPlaneEndpoint() {
-	client := newNodeXForwardRuntimeClient(NewSystemConfigService(database.Get()))
+func (s *ForwardRuntimeProviderTestSuite) TestNodeXForwardRuntimeClient_RejectsAnsiblePanelForwardWithoutConfiguredControlPlane() {
+	doer := &stubNodeXHTTPDoer{}
+	client := &nodeXForwardRuntimeClient{
+		configService: NewSystemConfigService(database.Get()),
+		httpClient:    doer,
+	}
+
+	_, err := client.Execute(context.Background(), nodeXForwardExecuteRequest{
+		ResourceType: nodeXForwardResourceTypePanelForward,
+		Backend:      model.ForwardRuntimeBackendIptablesAnsible,
+		Action:       model.ForwardRuntimeJobActionCreate,
+		PanelForward: &nodeXPanelForwardRequest{
+			Forward: nodeXPanelForwardPayload{
+				ID:         1,
+				UserID:     2,
+				Name:       "panel-forward",
+				InPort:     10001,
+				RemoteAddr: "198.51.100.20:443",
+				Strategy:   "fifo",
+				Status:     model.ForwardStatusActive,
+			},
+			Tunnel: nodeXPanelTunnelPayload{
+				ID:            3,
+				Name:          "tunnel",
+				InNodeID:      4,
+				Protocol:      "tcp",
+				TCPListenAddr: "0.0.0.0",
+			},
+			IngressNode: nodeXForwardNodePayload{
+				ID:       4,
+				Name:     "relay",
+				Host:     "203.0.113.10",
+				Port:     22,
+				APIPort:  19090,
+				APIToken: "relay-token",
+			},
+		},
+		AnsibleRuntime: &panelForwardAnsibleRuntimePayload{
+			Action:    model.ForwardRuntimeJobActionCreate,
+			Inventory: "/etc/ansible/hosts",
+			Playbook:  "/opt/ansible/apply.yml",
+			Node: panelForwardAnsibleNodePayload{
+				ID:      4,
+				Name:    "relay",
+				Host:    "203.0.113.10",
+				Port:    22,
+				APIPort: 19090,
+			},
+		},
+	})
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "control plane")
+	assert.Nil(s.T(), doer.lastRequest)
+}
+
+func (s *ForwardRuntimeProviderTestSuite) TestNodeXForwardRuntimeClient_RejectsIngressFallbackWithoutConfiguredControlPlane() {
+	doer := &stubNodeXHTTPDoer{}
+	client := &nodeXForwardRuntimeClient{
+		configService: NewSystemConfigService(database.Get()),
+		httpClient:    doer,
+	}
 
 	_, err := client.Execute(context.Background(), nodeXForwardExecuteRequest{
 		ResourceType: nodeXForwardResourceTypePanelForward,
@@ -453,6 +512,37 @@ func (s *ForwardRuntimeProviderTestSuite) TestNodeXForwardRuntimeClient_Requires
 				Port:     22,
 				APIPort:  19090,
 				APIToken: "relay-token",
+			},
+		},
+	})
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), forwardRuntimeNodeXBaseURLConfigKey)
+	assert.Nil(s.T(), doer.lastRequest)
+}
+
+func (s *ForwardRuntimeProviderTestSuite) TestNodeXForwardRuntimeClient_RequiresConfiguredControlPlaneWhenTargetNodeMissing() {
+	client := newNodeXForwardRuntimeClient(NewSystemConfigService(database.Get()))
+
+	_, err := client.Execute(context.Background(), nodeXForwardExecuteRequest{
+		ResourceType: nodeXForwardResourceTypePanelForward,
+		Backend:      model.ForwardRuntimeBackendGost,
+		Action:       model.ForwardRuntimeJobActionCreate,
+		PanelForward: &nodeXPanelForwardRequest{
+			Forward: nodeXPanelForwardPayload{
+				ID:         1,
+				UserID:     2,
+				Name:       "panel-forward",
+				InPort:     10001,
+				RemoteAddr: "198.51.100.20:443",
+				Strategy:   "fifo",
+				Status:     model.ForwardStatusActive,
+			},
+			Tunnel: nodeXPanelTunnelPayload{
+				ID:            3,
+				Name:          "tunnel",
+				InNodeID:      4,
+				Protocol:      "tcp",
+				TCPListenAddr: "0.0.0.0",
 			},
 		},
 	})

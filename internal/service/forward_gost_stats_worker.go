@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"log"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -11,22 +11,41 @@ import (
 	"github.com/anixops/v2board/internal/gost"
 	"github.com/anixops/v2board/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-const defaultForwardGostStatsPollInterval = 30 * time.Second
+const (
+	defaultForwardGostStatsPollInterval     = 30 * time.Second
+	defaultForwardGostStatsIdlePollInterval = 2 * time.Minute
+	defaultForwardGostStatsErrorLogInterval = 5 * time.Minute
+
+	forwardGostStatsPollIntervalEnvVar     = "FORWARD_GOST_STATS_POLL_INTERVAL"
+	forwardGostStatsIdlePollIntervalEnvVar = "FORWARD_GOST_STATS_IDLE_POLL_INTERVAL"
+	forwardGostStatsErrorLogIntervalEnvVar = "FORWARD_GOST_STATS_ERROR_LOG_INTERVAL"
+)
 
 type ForwardGostStatsWorker struct {
-	db       *gorm.DB
-	interval time.Duration
+	db           *gorm.DB
+	interval     time.Duration
+	idleInterval time.Duration
+	errorLogger  *forwardBackgroundErrorLogger
 }
 
 func NewForwardGostStatsWorker(db *gorm.DB) *ForwardGostStatsWorker {
 	if db == nil {
 		db = database.Get()
 	}
+	interval := loadForwardBackgroundIntervalFromEnv(forwardGostStatsPollIntervalEnvVar, defaultForwardGostStatsPollInterval)
+	idleInterval := normalizeForwardIdlePollInterval(
+		interval,
+		loadForwardBackgroundIntervalFromEnv(forwardGostStatsIdlePollIntervalEnvVar, defaultForwardGostStatsIdlePollInterval),
+	)
+	errorLogInterval := loadForwardBackgroundIntervalFromEnv(forwardGostStatsErrorLogIntervalEnvVar, defaultForwardGostStatsErrorLogInterval)
 	return &ForwardGostStatsWorker{
-		db:       db,
-		interval: defaultForwardGostStatsPollInterval,
+		db:           db,
+		interval:     interval,
+		idleInterval: idleInterval,
+		errorLogger:  newForwardBackgroundErrorLogger(errorLogInterval),
 	}
 }
 
@@ -34,36 +53,48 @@ func (w *ForwardGostStatsWorker) Start(ctx context.Context) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := w.RunOnce(ctx); err != nil {
-		log.Printf("forward gost stats initial poll failed: %v", err)
-	}
 
-	ticker := time.NewTicker(w.interval)
-	defer ticker.Stop()
-
+	nextDelay := time.Duration(0)
 	for {
-		select {
-		case <-ctx.Done():
+		if !waitForwardBackgroundCycle(ctx, nextDelay) {
 			return
-		case <-ticker.C:
-			if err := w.RunOnce(ctx); err != nil {
-				log.Printf("forward gost stats poll failed: %v", err)
-			}
 		}
+
+		activeForwards, err := w.runOnce(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			w.errorLogger.Logf("cycle", "forward gost stats poll failed: %v", err)
+			nextDelay = w.interval
+			continue
+		}
+		w.errorLogger.Clear("cycle")
+
+		if activeForwards == 0 {
+			nextDelay = w.idleInterval
+			continue
+		}
+		nextDelay = w.interval
 	}
 }
 
 func (w *ForwardGostStatsWorker) RunOnce(ctx context.Context) error {
+	_, err := w.runOnce(ctx)
+	return err
+}
+
+func (w *ForwardGostStatsWorker) runOnce(ctx context.Context) (int, error) {
 	var forwards []model.Forward
-	if err := w.db.
+	if err := w.queryDB().
 		Preload("Tunnel").
 		Where("runtime_backend = ? AND status = ?", model.ForwardRuntimeBackendGost, model.ForwardStatusActive).
 		Order("id ASC").
 		Find(&forwards).Error; err != nil {
-		return err
+		return 0, err
 	}
 	if len(forwards) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	panelService := NewPanelForwardService(w.db)
@@ -72,9 +103,13 @@ func (w *ForwardGostStatsWorker) RunOnce(ctx context.Context) error {
 	for i := range forwards {
 		uploadTotal, downloadTotal, found, err := w.collectForwardTrafficTotals(ctx, manager, &forwards[i])
 		if err != nil {
-			log.Printf("forward gost stats collect failed for forward %d: %v", forwards[i].ID, err)
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return len(forwards), err
+			}
+			w.errorLogger.Logf("collect:"+strconvFormatUint(forwards[i].ID), "forward gost stats collect failed for forward %d: %v", forwards[i].ID, err)
 			continue
 		}
+		w.errorLogger.Clear("collect:" + strconvFormatUint(forwards[i].ID))
 		if !found {
 			continue
 		}
@@ -84,11 +119,22 @@ func (w *ForwardGostStatsWorker) RunOnce(ctx context.Context) error {
 			UploadTotal:   uploadTotal,
 			DownloadTotal: downloadTotal,
 		}}); err != nil {
-			log.Printf("forward gost stats apply failed for forward %d: %v", forwards[i].ID, err)
+			w.errorLogger.Logf("apply:"+strconvFormatUint(forwards[i].ID), "forward gost stats apply failed for forward %d: %v", forwards[i].ID, err)
+			continue
 		}
+		w.errorLogger.Clear("apply:" + strconvFormatUint(forwards[i].ID))
 	}
 
-	return nil
+	return len(forwards), nil
+}
+
+func (w *ForwardGostStatsWorker) queryDB() *gorm.DB {
+	if w.db == nil {
+		return nil
+	}
+	return w.db.Session(&gorm.Session{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 }
 
 func (w *ForwardGostStatsWorker) collectForwardTrafficTotals(ctx context.Context, manager *gost.Manager, forward *model.Forward) (int64, int64, bool, error) {

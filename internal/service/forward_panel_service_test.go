@@ -62,6 +62,7 @@ func (c *stubNodeXForwardRuntimeClient) Execute(ctx context.Context, req nodeXFo
 func (s *PanelForwardServiceTestSuite) SetupSuite() {
 	s.ServiceTestSuite.SetupSuite()
 	database.AutoMigrate(
+		&model.ForwardNode{},
 		&model.ForwardTunnel{},
 		&model.ForwardUserTunnel{},
 		&model.Forward{},
@@ -80,9 +81,46 @@ func (s *PanelForwardServiceTestSuite) SetupTest() {
 	db.Exec("DELETE FROM v2_forward_user_tunnel")
 	db.Exec("DELETE FROM v2_speed_limit")
 	db.Exec("DELETE FROM v2_forward_tunnel")
+	db.Exec("DELETE FROM v2_forward_node")
 	s.svc = NewPanelForwardService(db)
 	s.runtimeClient = &stubNodeXForwardRuntimeClient{}
 	s.svc.runtimeService.client = s.runtimeClient
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXBaseURLConfigKey,
+		"http://127.0.0.1:18080",
+		"string",
+		forwardRuntimeConfigGroup,
+		"test NodeX runtime URL",
+	))
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXTokenConfigKey,
+		"test-nodex-token",
+		"string",
+		forwardRuntimeConfigGroup,
+		"test NodeX runtime token",
+	))
+}
+
+func (s *PanelForwardServiceTestSuite) createForwardNode(name, host string, status int) *model.ForwardNode {
+	return s.createForwardNodeOfType(name, host, status, model.ForwardNodeTypeRelay)
+}
+
+func (s *PanelForwardServiceTestSuite) createForwardNodeOfType(name, host string, status int, nodeType string) *model.ForwardNode {
+	node := &model.ForwardNode{
+		Name:    name,
+		Type:    nodeType,
+		Host:    host,
+		Port:    20001,
+		Status:  status,
+		Enabled: true,
+	}
+	assert.NoError(s.T(), database.Get().Create(node).Error)
+	return node
+}
+
+func float64Ptr(value float64) *float64 {
+	return &value
 }
 
 func (s *PanelForwardServiceTestSuite) TestListTunnels_AdminGetsAllActive() {
@@ -204,6 +242,450 @@ func (s *PanelForwardServiceTestSuite) TestListTunnels_UserGetsAuthorizedTunnelE
 	assert.Equal(s.T(), tunnel.InIP, items[0].InIP)
 	assert.Equal(s.T(), tunnel.Type, items[0].Type)
 	assert.Equal(s.T(), tunnel.Protocol, items[0].Protocol)
+}
+
+func (s *PanelForwardServiceTestSuite) TestListAdminTunnels_ReturnsFluxCompatibleDTOsInNameOrder() {
+	db := database.Get()
+
+	outNodeID := uint(22)
+	first := &model.ForwardTunnel{
+		Name:          "Beta Tunnel",
+		InNodeID:      11,
+		OutNodeID:     &outNodeID,
+		InIP:          "10.10.10.1",
+		OutIP:         "10.10.10.2",
+		Type:          2,
+		Flow:          2,
+		TrafficRatio:  1.5,
+		InterfaceName: "eth1",
+		Protocol:      "tls",
+		TCPListenAddr: "[::]",
+		UDPListenAddr: "[::]",
+		Status:        model.ForwardTunnelStatusActive,
+	}
+	second := &model.ForwardTunnel{
+		Name:          "Alpha Tunnel",
+		InNodeID:      33,
+		InIP:          "10.20.20.1",
+		OutIP:         "10.20.20.1",
+		Type:          1,
+		Flow:          1,
+		TrafficRatio:  2,
+		Protocol:      "",
+		TCPListenAddr: "0.0.0.0",
+		UDPListenAddr: "0.0.0.0",
+		Status:        model.ForwardTunnelStatusDisabled,
+	}
+	assert.NoError(s.T(), db.Create(first).Error)
+	assert.NoError(s.T(), db.Create(second).Error)
+
+	items, err := s.svc.ListAdminTunnels()
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), items, 2)
+	assert.Equal(s.T(), "Alpha Tunnel", items[0].Name)
+	assert.Equal(s.T(), second.ID, items[0].ID)
+	assert.Equal(s.T(), second.InNodeID, items[0].InNodeID)
+	assert.Equal(s.T(), second.Type, items[0].Type)
+	assert.Equal(s.T(), second.Flow, items[0].Flow)
+	assert.Equal(s.T(), second.TrafficRatio, items[0].TrafficRatio)
+	assert.Equal(s.T(), second.Status, items[0].Status)
+	assert.Equal(s.T(), "Beta Tunnel", items[1].Name)
+	assert.Equal(s.T(), first.OutNodeID, items[1].OutNodeID)
+	assert.Equal(s.T(), first.OutIP, items[1].OutIP)
+	assert.Equal(s.T(), first.Protocol, items[1].Protocol)
+	assert.NotZero(s.T(), items[1].CreatedTime)
+	assert.NotZero(s.T(), items[1].UpdatedTime)
+}
+
+func (s *PanelForwardServiceTestSuite) TestCreateTunnel_SucceedsWithResolvedNodeIPsAndDefaults() {
+	inNode := s.createForwardNode("Ingress Node", "10.0.0.1", model.ForwardNodeStatusOnline)
+	outNode := s.createForwardNodeOfType("Egress Node", "10.0.0.2", model.ForwardNodeStatusOnline, model.ForwardNodeTypeExit)
+
+	item, err := s.svc.CreateTunnel(PanelTunnelInput{
+		Name:      "Create Tunnel",
+		InNodeID:  inNode.ID,
+		OutNodeID: &outNode.ID,
+		Type:      2,
+		Flow:      1,
+	})
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), item)
+	assert.Equal(s.T(), inNode.ID, item.InNodeID)
+	assert.Equal(s.T(), &outNode.ID, item.OutNodeID)
+	assert.Equal(s.T(), "10.0.0.1", item.InIP)
+	assert.Equal(s.T(), "10.0.0.2", item.OutIP)
+	assert.Equal(s.T(), "tls", item.Protocol)
+	assert.Equal(s.T(), 1.0, item.TrafficRatio)
+	assert.Equal(s.T(), "[::]", item.TCPListenAddr)
+	assert.Equal(s.T(), "[::]", item.UDPListenAddr)
+
+	var record model.ForwardTunnel
+	assert.NoError(s.T(), database.Get().First(&record, item.ID).Error)
+	assert.Equal(s.T(), inNode.ID, record.InNodeID)
+	assert.Equal(s.T(), &outNode.ID, record.OutNodeID)
+	assert.Equal(s.T(), "10.0.0.1", record.InIP)
+	assert.Equal(s.T(), "10.0.0.2", record.OutIP)
+	assert.Equal(s.T(), 1.0, record.TrafficRatio)
+	assert.Equal(s.T(), "tls", record.Protocol)
+}
+
+func (s *PanelForwardServiceTestSuite) TestCreateTunnel_RejectsDuplicateNameAndInvalidType2Nodes() {
+	db := database.Get()
+	inNode := s.createForwardNode("Ingress Node", "10.0.0.3", model.ForwardNodeStatusOnline)
+	outNode := s.createForwardNodeOfType("Egress Node", "10.0.0.4", model.ForwardNodeStatusOnline, model.ForwardNodeTypeExit)
+	wrongRelayOutNode := s.createForwardNode("Relay Out Node", "10.0.0.5", model.ForwardNodeStatusOnline)
+	assert.NoError(s.T(), db.Create(&model.ForwardTunnel{
+		Name:   "Duplicate Tunnel",
+		InIP:   "127.0.0.1",
+		OutIP:  "127.0.0.1",
+		Status: model.ForwardTunnelStatusActive,
+	}).Error)
+
+	_, err := s.svc.CreateTunnel(PanelTunnelInput{
+		Name:     "Duplicate Tunnel",
+		InNodeID: inNode.ID,
+		Type:     1,
+		Flow:     1,
+	})
+	assert.Error(s.T(), err)
+
+	_, err = s.svc.CreateTunnel(PanelTunnelInput{
+		Name:     "Missing Out Node",
+		InNodeID: inNode.ID,
+		Type:     2,
+		Flow:     1,
+	})
+	assert.Error(s.T(), err)
+
+	_, err = s.svc.CreateTunnel(PanelTunnelInput{
+		Name:      "Same Node Tunnel",
+		InNodeID:  inNode.ID,
+		OutNodeID: &inNode.ID,
+		Type:      2,
+		Flow:      1,
+	})
+	assert.Error(s.T(), err)
+
+	_, err = s.svc.CreateTunnel(PanelTunnelInput{
+		Name:      "Wrong Out Type Tunnel",
+		InNodeID:  inNode.ID,
+		OutNodeID: &wrongRelayOutNode.ID,
+		Type:      2,
+		Flow:      1,
+	})
+	assert.Error(s.T(), err)
+
+	var count int64
+	assert.NoError(s.T(), db.Model(&model.ForwardTunnel{}).Where("name IN ?", []string{"Missing Out Node", "Same Node Tunnel", "Wrong Out Type Tunnel"}).Count(&count).Error)
+	assert.Zero(s.T(), count)
+
+	_, err = s.svc.CreateTunnel(PanelTunnelInput{
+		Name:      "Valid Type2 Tunnel",
+		InNodeID:  inNode.ID,
+		OutNodeID: &outNode.ID,
+		Type:      2,
+		Flow:      1,
+	})
+	assert.NoError(s.T(), err)
+}
+
+func (s *PanelForwardServiceTestSuite) TestUpdateTunnel_UpdatesEditableFieldsOnly() {
+	db := database.Get()
+	outNodeID := uint(44)
+	record := &model.ForwardTunnel{
+		Name:          "Editable Tunnel",
+		InNodeID:      11,
+		OutNodeID:     &outNodeID,
+		InIP:          "10.30.30.1",
+		OutIP:         "10.30.30.2",
+		Type:          2,
+		Flow:          1,
+		TrafficRatio:  1,
+		InterfaceName: "eth0",
+		Protocol:      "tls",
+		TCPListenAddr: "[::]",
+		UDPListenAddr: "[::]",
+		Status:        model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(record).Error)
+
+	item, err := s.svc.UpdateTunnel(PanelTunnelUpdateInput{
+		ID:            record.ID,
+		Name:          "Updated Tunnel",
+		Flow:          2,
+		TrafficRatio:  float64Ptr(3.5),
+		InterfaceName: "eth2",
+		Protocol:      "ws",
+		TCPListenAddr: "0.0.0.0",
+		UDPListenAddr: "127.0.0.1",
+	})
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), item)
+	assert.Equal(s.T(), "Updated Tunnel", item.Name)
+	assert.Equal(s.T(), 2, item.Flow)
+	assert.Equal(s.T(), 3.5, item.TrafficRatio)
+	assert.Equal(s.T(), "eth2", item.InterfaceName)
+	assert.Equal(s.T(), "ws", item.Protocol)
+	assert.Equal(s.T(), "0.0.0.0", item.TCPListenAddr)
+	assert.Equal(s.T(), "127.0.0.1", item.UDPListenAddr)
+
+	var updated model.ForwardTunnel
+	assert.NoError(s.T(), db.First(&updated, record.ID).Error)
+	assert.Equal(s.T(), record.InNodeID, updated.InNodeID)
+	assert.Equal(s.T(), record.OutNodeID, updated.OutNodeID)
+	assert.Equal(s.T(), record.InIP, updated.InIP)
+	assert.Equal(s.T(), record.OutIP, updated.OutIP)
+	assert.Equal(s.T(), record.Type, updated.Type)
+	assert.Equal(s.T(), 0, s.runtimeClient.calls)
+}
+
+func (s *PanelForwardServiceTestSuite) TestUpdateTunnel_RuntimeFieldChangeResyncsActiveForwards() {
+	db := database.Get()
+	inNode := s.createForwardNode("Ingress Node", "10.0.0.6", model.ForwardNodeStatusOnline)
+	outNode := s.createForwardNodeOfType("Egress Node", "10.0.0.7", model.ForwardNodeStatusOnline, model.ForwardNodeTypeExit)
+	user := &model.User{
+		Email:          "panel-forward-runtime-sync@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-runtime-sync-token",
+		UUID:           "panel-forward-runtime-sync-uuid",
+		TransferEnable: 1073741824,
+	}
+	assert.NoError(s.T(), db.Create(user).Error)
+
+	tunnel := &model.ForwardTunnel{
+		Name:          "Runtime Sync Tunnel",
+		InNodeID:      inNode.ID,
+		OutNodeID:     &outNode.ID,
+		InIP:          inNode.Host,
+		OutIP:         outNode.Host,
+		Type:          2,
+		Flow:          1,
+		TrafficRatio:  1,
+		InterfaceName: "eth0",
+		Protocol:      "tls",
+		TCPListenAddr: "[::]",
+		UDPListenAddr: "[::]",
+		Status:        model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+	forward := &model.Forward{
+		UserID:        user.ID,
+		UserName:      user.Email,
+		Name:          "Active Forward",
+		TunnelID:      tunnel.ID,
+		InPort:        12001,
+		RemoteAddr:    "example.com:443",
+		InterfaceName: "eth0",
+		Strategy:      "fifo",
+		Status:        model.ForwardStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	item, err := s.svc.UpdateTunnel(PanelTunnelUpdateInput{
+		ID:            tunnel.ID,
+		Name:          tunnel.Name,
+		Flow:          tunnel.Flow,
+		TrafficRatio:  float64Ptr(tunnel.TrafficRatio),
+		InterfaceName: "eth9",
+		Protocol:      "ws",
+		TCPListenAddr: "0.0.0.0",
+		UDPListenAddr: "[::1]",
+	})
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), item)
+	assert.Equal(s.T(), 1, s.runtimeClient.calls)
+	assert.NotNil(s.T(), s.runtimeClient.lastRequest)
+	assert.Equal(s.T(), model.ForwardRuntimeJobActionUpdate, s.runtimeClient.lastRequest.Action)
+	assert.NotNil(s.T(), s.runtimeClient.lastRequest.PanelForward)
+	assert.Equal(s.T(), forward.ID, s.runtimeClient.lastRequest.PanelForward.Forward.ID)
+	assert.Equal(s.T(), "tcp", s.runtimeClient.lastRequest.PanelForward.Tunnel.Protocol)
+	assert.Equal(s.T(), "eth9", s.runtimeClient.lastRequest.PanelForward.Tunnel.InterfaceName)
+
+	var updated model.ForwardTunnel
+	assert.NoError(s.T(), db.First(&updated, tunnel.ID).Error)
+	assert.Equal(s.T(), "ws", updated.Protocol)
+	assert.Equal(s.T(), "eth9", updated.InterfaceName)
+}
+
+func (s *PanelForwardServiceTestSuite) TestDeleteTunnel_RejectsWhenReferencedAndDeletesWhenUnused() {
+	db := database.Get()
+
+	forwardTunnel := &model.ForwardTunnel{Name: "Forward Referenced Tunnel", InIP: "10.40.40.1", OutIP: "10.40.40.1", Status: model.ForwardTunnelStatusActive}
+	permissionTunnel := &model.ForwardTunnel{Name: "Permission Referenced Tunnel", InIP: "10.40.40.2", OutIP: "10.40.40.2", Status: model.ForwardTunnelStatusActive}
+	unusedTunnel := &model.ForwardTunnel{Name: "Unused Tunnel", InIP: "10.40.40.3", OutIP: "10.40.40.3", Status: model.ForwardTunnelStatusActive}
+	user := &model.User{
+		Email:          "panel-forward-delete@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-delete-token",
+		UUID:           "panel-forward-delete-uuid",
+		TransferEnable: 1073741824,
+	}
+	assert.NoError(s.T(), db.Create(forwardTunnel).Error)
+	assert.NoError(s.T(), db.Create(permissionTunnel).Error)
+	assert.NoError(s.T(), db.Create(unusedTunnel).Error)
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(&model.Forward{
+		UserID:     user.ID,
+		UserName:   user.Email,
+		Name:       "Using Forward",
+		TunnelID:   forwardTunnel.ID,
+		InPort:     13001,
+		RemoteAddr: "example.com:8443",
+		Status:     model.ForwardStatusPaused,
+	}).Error)
+	assert.NoError(s.T(), db.Create(&model.ForwardUserTunnel{
+		UserID:   user.ID,
+		TunnelID: permissionTunnel.ID,
+		Status:   model.ForwardUserTunnelStatusActive,
+	}).Error)
+
+	err := s.svc.DeleteTunnel(forwardTunnel.ID)
+	assert.Error(s.T(), err)
+
+	err = s.svc.DeleteTunnel(permissionTunnel.ID)
+	assert.Error(s.T(), err)
+
+	err = s.svc.DeleteTunnel(unusedTunnel.ID)
+	assert.NoError(s.T(), err)
+
+	var count int64
+	assert.NoError(s.T(), db.Model(&model.ForwardTunnel{}).Where("id = ?", unusedTunnel.ID).Count(&count).Error)
+	assert.Zero(s.T(), count)
+}
+
+func (s *PanelForwardServiceTestSuite) TestCreateTunnel_AllowsOfflineForwardNodes() {
+	inNode := s.createForwardNode("Offline In Node", "10.0.0.6", model.ForwardNodeStatusOffline)
+	outNode := s.createForwardNodeOfType("Offline Out Node", "10.0.0.7", model.ForwardNodeStatusOffline, model.ForwardNodeTypeExit)
+
+	tunnel, err := s.svc.CreateTunnel(PanelTunnelInput{
+		Name:      "Offline Friendly Tunnel",
+		InNodeID:  inNode.ID,
+		OutNodeID: &outNode.ID,
+		Type:      2,
+		Flow:      1,
+	})
+	assert.NoError(s.T(), err)
+	if assert.NotNil(s.T(), tunnel) {
+		assert.Equal(s.T(), inNode.ID, tunnel.InNodeID)
+		assert.Equal(s.T(), outNode.ID, *tunnel.OutNodeID)
+		assert.Equal(s.T(), model.ForwardTunnelStatusActive, tunnel.Status)
+		assert.Equal(s.T(), "Offline Friendly Tunnel", tunnel.Name)
+	}
+}
+
+func (s *PanelForwardServiceTestSuite) TestDeleteForward_RequiresForceWhenActive() {
+	db := database.Get()
+
+	user := &model.User{
+		Email:          "panel-forward-delete-active@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-delete-active-token",
+		UUID:           "panel-forward-delete-active-uuid",
+		TransferEnable: 1073741824,
+	}
+	tunnel := &model.ForwardTunnel{
+		Name:   "Delete Active Tunnel",
+		InIP:   "10.60.0.1",
+		Status: model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	forward := &model.Forward{
+		UserID:     user.ID,
+		UserName:   user.Email,
+		Name:       "Delete Active Forward",
+		TunnelID:   tunnel.ID,
+		InPort:     14001,
+		RemoteAddr: "delete-active.example.com:443",
+		Status:     model.ForwardStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	err := s.svc.DeleteForward(user.ID, true, forward.ID, false)
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "强制删除")
+	assert.Equal(s.T(), 0, s.runtimeClient.calls)
+
+	var count int64
+	assert.NoError(s.T(), db.Model(&model.Forward{}).Where("id = ?", forward.ID).Count(&count).Error)
+	assert.Equal(s.T(), int64(1), count)
+}
+
+func (s *PanelForwardServiceTestSuite) TestDeleteForward_ForceDeletesRecordWhenRuntimeSyncFails() {
+	db := database.Get()
+
+	user := &model.User{
+		Email:          "panel-forward-force-delete@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-force-delete-token",
+		UUID:           "panel-forward-force-delete-uuid",
+		TransferEnable: 1073741824,
+	}
+	node := &model.ForwardNode{
+		Name:     "Force Delete Ingress",
+		Type:     model.ForwardNodeTypeRelay,
+		Host:     "203.0.113.60",
+		Port:     22,
+		APIPort:  19090,
+		APIToken: "force-delete-token",
+		Status:   model.ForwardNodeStatusOnline,
+		Enabled:  true,
+	}
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(node).Error)
+
+	tunnel := &model.ForwardTunnel{
+		Name:          "Force Delete Tunnel",
+		InNodeID:      node.ID,
+		InIP:          node.Host,
+		Type:          1,
+		Protocol:      "tcp",
+		TCPListenAddr: "0.0.0.0",
+		UDPListenAddr: "0.0.0.0",
+		Status:        model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	forward := &model.Forward{
+		UserID:         user.ID,
+		UserName:       user.Email,
+		Name:           "Force Delete Forward",
+		TunnelID:       tunnel.ID,
+		InPort:         14002,
+		RemoteAddr:     "force-delete.example.com:443",
+		Status:         model.ForwardStatusPaused,
+		RuntimeBackend: model.ForwardRuntimeBackendGost,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+	assert.NoError(s.T(), db.Create(&model.ForwardTrafficCursor{
+		ForwardID:     forward.ID,
+		Backend:       model.ForwardRuntimeBackendGost,
+		UploadTotal:   100,
+		DownloadTotal: 200,
+	}).Error)
+
+	s.runtimeClient.executeErr = assert.AnError
+
+	err := s.svc.DeleteForward(user.ID, true, forward.ID, true)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), 1, s.runtimeClient.calls)
+
+	var forwardCount int64
+	assert.NoError(s.T(), db.Model(&model.Forward{}).Where("id = ?", forward.ID).Count(&forwardCount).Error)
+	assert.Zero(s.T(), forwardCount)
+
+	var cursorCount int64
+	assert.NoError(s.T(), db.Model(&model.ForwardTrafficCursor{}).Where("forward_id = ?", forward.ID).Count(&cursorCount).Error)
+	assert.Zero(s.T(), cursorCount)
+
+	var jobs []model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.Where("forward_id = ?", forward.ID).Find(&jobs).Error)
+	if assert.Len(s.T(), jobs, 1) {
+		assert.Equal(s.T(), model.ForwardRuntimeJobActionDelete, jobs[0].Action)
+		assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, jobs[0].Status)
+		assert.Contains(s.T(), jobs[0].Error, assert.AnError.Error())
+	}
 }
 
 func (s *PanelForwardServiceTestSuite) TestCreateForward_RequiresUserTunnelPermission() {
@@ -463,6 +945,142 @@ func (s *PanelForwardServiceTestSuite) TestSetForwardStatus_ResumeRejectsTunnelT
 	var record model.Forward
 	assert.NoError(s.T(), db.First(&record, forward.ID).Error)
 	assert.Equal(s.T(), model.ForwardStatusPaused, record.Status)
+}
+
+func (s *PanelForwardServiceTestSuite) TestDeleteForward_ForceDeleteIgnoresRuntimeFailureAndRemovesRecord() {
+	db := database.Get()
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeBackendConfigKey,
+		model.ForwardRuntimeBackendGost,
+		"string",
+		forwardRuntimeConfigGroup,
+		"forward runtime backend",
+	))
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXBaseURLConfigKey,
+		"http://127.0.0.1:18080",
+		"string",
+		forwardRuntimeConfigGroup,
+		"forward runtime nodex base url",
+	))
+
+	node := s.createForwardNode("Delete Force Ingress", "198.51.100.60", model.ForwardNodeStatusOnline)
+	node.APIPort = 19090
+	node.APIToken = "delete-force-token"
+	assert.NoError(s.T(), db.Save(node).Error)
+
+	tunnel := &model.ForwardTunnel{
+		Name:          "Delete Force Tunnel",
+		InNodeID:      node.ID,
+		InIP:          node.Host,
+		Protocol:      "tcp",
+		TCPListenAddr: "0.0.0.0",
+		Status:        model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	forward := &model.Forward{
+		UserID:     1,
+		UserName:   "force-delete@example.com",
+		Name:       "Force Delete Forward",
+		TunnelID:   tunnel.ID,
+		InPort:     22001,
+		RemoteAddr: "example.com:443",
+		Status:     model.ForwardStatusPaused,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+	assert.NoError(s.T(), db.Model(forward).Update("status", model.ForwardStatusPaused).Error)
+
+	s.runtimeClient.executeErr = assert.AnError
+
+	err := s.svc.DeleteForward(0, true, forward.ID, true)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), 1, s.runtimeClient.calls)
+
+	var count int64
+	assert.NoError(s.T(), db.Model(&model.Forward{}).Where("id = ?", forward.ID).Count(&count).Error)
+	assert.Zero(s.T(), count)
+}
+
+func (s *PanelForwardServiceTestSuite) TestDeleteForward_NonForceDeleteReturnsRuntimeFailureAndKeepsRecord() {
+	db := database.Get()
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeBackendConfigKey,
+		model.ForwardRuntimeBackendGost,
+		"string",
+		forwardRuntimeConfigGroup,
+		"forward runtime backend",
+	))
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXBaseURLConfigKey,
+		"http://127.0.0.1:18080",
+		"string",
+		forwardRuntimeConfigGroup,
+		"forward runtime nodex base url",
+	))
+
+	node := s.createForwardNode("Delete NonForce Ingress", "198.51.100.61", model.ForwardNodeStatusOnline)
+	node.APIPort = 19091
+	node.APIToken = "delete-nonforce-token"
+	assert.NoError(s.T(), db.Save(node).Error)
+
+	tunnel := &model.ForwardTunnel{
+		Name:          "Delete NonForce Tunnel",
+		InNodeID:      node.ID,
+		InIP:          node.Host,
+		Protocol:      "tcp",
+		TCPListenAddr: "0.0.0.0",
+		Status:        model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	forward := &model.Forward{
+		UserID:     1,
+		UserName:   "nonforce-delete@example.com",
+		Name:       "NonForce Delete Forward",
+		TunnelID:   tunnel.ID,
+		InPort:     22002,
+		RemoteAddr: "example.com:443",
+		Status:     model.ForwardStatusPaused,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+	assert.NoError(s.T(), db.Model(forward).Update("status", model.ForwardStatusPaused).Error)
+
+	s.runtimeClient.executeErr = assert.AnError
+
+	err := s.svc.DeleteForward(0, true, forward.ID, false)
+	assert.ErrorIs(s.T(), err, assert.AnError)
+	assert.Equal(s.T(), 1, s.runtimeClient.calls)
+
+	var count int64
+	assert.NoError(s.T(), db.Model(&model.Forward{}).Where("id = ?", forward.ID).Count(&count).Error)
+	assert.Equal(s.T(), int64(1), count)
+}
+
+func (s *PanelForwardServiceTestSuite) TestDeleteForward_NonForceDeleteRejectsActiveForwardBeforeRuntimeCall() {
+	db := database.Get()
+
+	forward := &model.Forward{
+		UserID:     1,
+		UserName:   "active-delete@example.com",
+		Name:       "Active Delete Forward",
+		TunnelID:   1,
+		InPort:     22003,
+		RemoteAddr: "example.com:443",
+		Status:     model.ForwardStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	err := s.svc.DeleteForward(0, true, forward.ID, false)
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "请先暂停或使用强制删除")
+	assert.Equal(s.T(), 0, s.runtimeClient.calls)
+
+	var count int64
+	assert.NoError(s.T(), db.Model(&model.Forward{}).Where("id = ?", forward.ID).Count(&count).Error)
+	assert.Equal(s.T(), int64(1), count)
 }
 
 func (s *PanelForwardServiceTestSuite) TestUpdateForward_AdminChangingTunnelRevalidatesTargetUserGrant() {
@@ -1525,7 +2143,7 @@ func (s *PanelForwardServiceTestSuite) TestListRuntimeJobsFilters() {
 	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, results[1].Backend)
 }
 
-func (s *PanelForwardServiceTestSuite) TestCreateForward_IptablesAnsibleExecutesViaNodeX() {
+func (s *PanelForwardServiceTestSuite) TestCreateForward_IptablesAnsibleQueuesLocalExecutorJob() {
 	db := database.Get()
 
 	configSvc := NewSystemConfigService(db)
@@ -1589,21 +2207,15 @@ func (s *PanelForwardServiceTestSuite) TestCreateForward_IptablesAnsibleExecutes
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), item)
 	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, item.RuntimeBackend)
-	assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, item.RuntimeStatus)
-	assert.Equal(s.T(), "ansible runtime applied", item.RuntimeMessage)
-	assert.Equal(s.T(), 1, s.runtimeClient.calls)
-	if assert.NotNil(s.T(), s.runtimeClient.lastRequest) {
-		assert.Equal(s.T(), nodeXForwardResourceTypePanelForward, s.runtimeClient.lastRequest.ResourceType)
-		assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, s.runtimeClient.lastRequest.Backend)
-		assert.Equal(s.T(), model.ForwardRuntimeJobActionCreate, s.runtimeClient.lastRequest.Action)
-		assert.Equal(s.T(), tunnel.ID, s.runtimeClient.lastRequest.PanelForward.Tunnel.ID)
-	}
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, item.RuntimeStatus)
+	assert.Equal(s.T(), "ansible runtime queued for local executor", item.RuntimeMessage)
+	assert.Equal(s.T(), 0, s.runtimeClient.calls)
 
 	var record model.Forward
 	assert.NoError(s.T(), db.First(&record, item.ID).Error)
 	assert.Equal(s.T(), model.ForwardStatusActive, record.Status)
 	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, record.RuntimeBackend)
-	assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, record.RuntimeStatus)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, record.RuntimeStatus)
 	assert.NotNil(s.T(), record.RuntimeLastSyncAt)
 
 	var jobs []model.ForwardRuntimeJob
@@ -1611,11 +2223,93 @@ func (s *PanelForwardServiceTestSuite) TestCreateForward_IptablesAnsibleExecutes
 	assert.Len(s.T(), jobs, 1)
 	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, jobs[0].Backend)
 	assert.Equal(s.T(), model.ForwardRuntimeJobActionCreate, jobs[0].Action)
-	assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, jobs[0].Status)
-	assert.Contains(s.T(), jobs[0].Payload, `"resourceType":"panel_forward"`)
-	assert.Contains(s.T(), jobs[0].Payload, `"backend":"iptables_ansible"`)
-	assert.NotNil(s.T(), jobs[0].StartedAt)
-	assert.NotNil(s.T(), jobs[0].CompletedAt)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, jobs[0].Status)
+	assert.Contains(s.T(), jobs[0].Payload, `"action":"create"`)
+	assert.Contains(s.T(), jobs[0].Payload, `"inventory":"/etc/ansible/hosts"`)
+	assert.Contains(s.T(), jobs[0].Payload, `"playbook":"/opt/ansible/iptables-forward-apply.yml"`)
+	assert.Contains(s.T(), jobs[0].Payload, `"forward":{"id":`)
+	assert.Nil(s.T(), jobs[0].StartedAt)
+	assert.Nil(s.T(), jobs[0].CompletedAt)
+}
+
+func (s *PanelForwardServiceTestSuite) TestCreateForward_DefaultGostWithoutNodeXBaseURLMarksRuntimeFailure() {
+	db := database.Get()
+
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXBaseURLConfigKey,
+		"",
+		"string",
+		forwardRuntimeConfigGroup,
+		"clear test NodeX runtime URL",
+	))
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeBackendConfigKey,
+		model.ForwardRuntimeBackendGost,
+		"string",
+		forwardRuntimeConfigGroup,
+		"forward runtime backend",
+	))
+
+	user := &model.User{
+		Email:          "panel-forward-gost-fallback@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-gost-fallback-token",
+		UUID:           "panel-forward-gost-fallback-uuid",
+		TransferEnable: 1073741824,
+	}
+	node := &model.ForwardNode{
+		Name:     "Fallback Ingress",
+		Type:     model.ForwardNodeTypeRelay,
+		Host:     "10.10.20.10",
+		APIPort:  19080,
+		APIToken: "fallback-token",
+		Status:   model.ForwardNodeStatusOnline,
+		Enabled:  true,
+	}
+	tunnel := &model.ForwardTunnel{
+		Name:     "Fallback Tunnel",
+		InNodeID: node.ID,
+		InIP:     "10.10.20.10",
+		Status:   model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(user).Error)
+	assert.NoError(s.T(), db.Create(node).Error)
+
+	var persistedUser model.User
+	assert.NoError(s.T(), db.Where("email = ?", user.Email).First(&persistedUser).Error)
+	var persistedNode model.ForwardNode
+	assert.NoError(s.T(), db.Where("name = ?", node.Name).First(&persistedNode).Error)
+
+	tunnel.InNodeID = persistedNode.ID
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+	assert.NoError(s.T(), db.Create(&model.ForwardUserTunnel{
+		UserID:   persistedUser.ID,
+		TunnelID: tunnel.ID,
+		Status:   model.ForwardUserTunnelStatusActive,
+	}).Error)
+
+	item, err := s.svc.CreateForward(persistedUser.ID, false, PanelForwardInput{
+		Name:       "Gost Fallback Forward",
+		TunnelID:   tunnel.ID,
+		RemoteAddr: "example.com:443",
+	})
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), item)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendGost, item.RuntimeBackend)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, item.RuntimeStatus)
+	assert.Contains(s.T(), item.RuntimeMessage, forwardRuntimeNodeXBaseURLConfigKey)
+	assert.Equal(s.T(), 0, s.runtimeClient.calls)
+
+	var record model.Forward
+	assert.NoError(s.T(), db.First(&record, item.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendGost, record.RuntimeBackend)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, record.RuntimeStatus)
+	assert.Equal(s.T(), model.ForwardStatusError, record.Status)
+
+	var jobCount int64
+	assert.NoError(s.T(), db.Model(&model.ForwardRuntimeJob{}).Count(&jobCount).Error)
+	assert.Zero(s.T(), jobCount)
 }
 
 func (s *PanelForwardServiceTestSuite) TestCreateForward_DefaultGostMarksRuntimeFailureWithoutIngressNode() {

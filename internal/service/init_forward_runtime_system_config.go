@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	forwardRuntimeNodeXModeEnvVar             = "FORWARD_RUNTIME_NODEX_MODE"
 	forwardRuntimeBackendEnvVar              = "FORWARD_RUNTIME_BACKEND"
 	forwardRuntimeAnsibleConfigJSONEnvVar    = "FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON"
 	forwardRuntimeAnsibleInventoryEnvVar     = "FORWARD_RUNTIME_ANSIBLE_INVENTORY"
@@ -35,21 +36,44 @@ func InitForwardRuntimeSystemConfigFromEnv(db *gorm.DB) error {
 	}
 
 	configService := NewSystemConfigService(db)
+	nodeXMode, err := parseForwardRuntimeBoolValue(os.Getenv(forwardRuntimeNodeXModeEnvVar), forwardRuntimeNodeXModeEnvVar)
+	if err != nil {
+		return err
+	}
+	if nodeXMode != nil {
+		if err := configService.Set(
+			forwardRuntimeNodeXModeConfigKey,
+			strconv.FormatBool(*nodeXMode),
+			"bool",
+			forwardRuntimeConfigGroup,
+			"Forward runtime NodeX mode injected from environment",
+		); err != nil {
+			return err
+		}
+	}
+
 	backend := strings.TrimSpace(strings.ToLower(os.Getenv(forwardRuntimeBackendEnvVar)))
 	switch backend {
 	case "":
 	case model.ForwardRuntimeBackendGost, model.ForwardRuntimeBackendIptablesAnsible:
+	default:
+		return fmt.Errorf("invalid %s value: %s", forwardRuntimeBackendEnvVar, backend)
+	}
+
+	effectiveBackend := backend
+	if nodeXMode != nil {
+		effectiveBackend = forwardRuntimeBackendForMode(*nodeXMode)
+	}
+	if effectiveBackend != "" {
 		if err := configService.Set(
 			forwardRuntimeBackendConfigKey,
-			backend,
+			effectiveBackend,
 			"string",
 			forwardRuntimeConfigGroup,
 			"Forward runtime backend injected from environment",
 		); err != nil {
 			return err
 		}
-	default:
-		return fmt.Errorf("invalid %s value: %s", forwardRuntimeBackendEnvVar, backend)
 	}
 
 	if value := strings.TrimSpace(os.Getenv(forwardRuntimeNodeXBaseURLEnvVar)); value != "" {
@@ -92,6 +116,24 @@ func InitForwardRuntimeSystemConfigFromEnv(db *gorm.DB) error {
 			"Forward runtime NodeX timeout injected from environment",
 		); err != nil {
 			return err
+		}
+	}
+
+	if effectiveBackend == model.ForwardRuntimeBackendGost {
+		baseURL, err := configService.Get(forwardRuntimeNodeXBaseURLConfigKey)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(baseURL) == "" {
+			return fmt.Errorf("%s is required for NodeX forward runtime", forwardRuntimeNodeXBaseURLConfigKey)
+		}
+
+		token, err := configService.Get(forwardRuntimeNodeXTokenConfigKey)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(token) == "" {
+			return fmt.Errorf("%s is required for NodeX forward runtime", forwardRuntimeNodeXTokenConfigKey)
 		}
 	}
 
@@ -146,7 +188,7 @@ func InitForwardRuntimeSystemConfigFromEnv(db *gorm.DB) error {
 		}
 	}
 
-	shouldPersist := backend == model.ForwardRuntimeBackendIptablesAnsible ||
+	shouldPersist := effectiveBackend == model.ForwardRuntimeBackendIptablesAnsible ||
 		strings.TrimSpace(cfg.Inventory) != "" ||
 		strings.TrimSpace(cfg.ApplyPlaybook) != "" ||
 		strings.TrimSpace(cfg.RemovePlaybook) != "" ||
