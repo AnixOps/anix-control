@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anixops/v2board/internal/gost"
 	"github.com/anixops/v2board/internal/model"
 	"gorm.io/gorm"
 )
@@ -22,12 +21,13 @@ const (
 	forwardRuntimeAnsibleRemovePlaybookConfigKey = "forward.ansible.playbook_remove"
 	forwardRuntimeAnsibleBecomeConfigKey         = "forward.ansible.become"
 	forwardRuntimeAnsibleExtraVarsConfigKey      = "forward.ansible.extra_vars_json"
-	defaultForwardAnsibleInventoryPath           = "config/deploy/ansible/inventory.ini"
-	defaultForwardAnsibleApplyPlaybookPath       = "config/deploy/ansible/playbooks/forward_apply.yml"
-	defaultForwardAnsibleRemovePlaybookPath      = "config/deploy/ansible/playbooks/forward_remove.yml"
-	defaultForwardAnsibleWorkingDir              = "config/deploy/ansible"
-	defaultForwardAnsibleConfigPath              = "config/deploy/ansible/ansible.cfg"
-	defaultForwardAnsibleTargetPattern           = "{{node.host}}"
+
+	defaultForwardAnsibleInventoryPath      = "config/deploy/ansible/inventory.ini"
+	defaultForwardAnsibleApplyPlaybookPath  = "config/deploy/ansible/playbooks/forward_apply.yml"
+	defaultForwardAnsibleRemovePlaybookPath = "config/deploy/ansible/playbooks/forward_remove.yml"
+	defaultForwardAnsibleWorkingDir         = "config/deploy/ansible"
+	defaultForwardAnsibleConfigPath         = "config/deploy/ansible/ansible.cfg"
+	defaultForwardAnsibleTargetPattern      = "{{node.host}}"
 )
 
 type panelForwardRuntimeResult struct {
@@ -37,67 +37,109 @@ type panelForwardRuntimeResult struct {
 	Async   bool
 }
 
-type panelForwardRuntimeProvider interface {
-	Apply(ctx context.Context, action string, forward *model.Forward, tunnel *model.ForwardTunnel) (*panelForwardRuntimeResult, error)
+type PanelForwardRuntimeService struct {
+	db            *gorm.DB
+	configService *SystemConfigService
+	client        forwardRuntimeNodeXExecutor
 }
 
-type PanelForwardRuntimeService struct {
-	db              *gorm.DB
-	configService   *SystemConfigService
-	gostProvider    panelForwardRuntimeProvider
-	ansibleProvider panelForwardRuntimeProvider
+type panelForwardAnsibleConfig struct {
+	Inventory      string                 `json:"inventory"`
+	ApplyPlaybook  string                 `json:"playbookApply"`
+	RemovePlaybook string                 `json:"playbookRemove"`
+	Become         bool                   `json:"become"`
+	ExtraVars      map[string]interface{} `json:"extraVars"`
+	Command        string                 `json:"command"`
+	WorkingDir     string                 `json:"workingDir"`
+	TargetPattern  string                 `json:"targetPattern"`
+	Environment    map[string]string      `json:"environment"`
+	TimeoutSeconds int                    `json:"timeoutSeconds"`
 }
 
 func NewPanelForwardRuntimeService(db *gorm.DB) *PanelForwardRuntimeService {
+	configService := NewSystemConfigService(db)
 	return &PanelForwardRuntimeService{
-		db:              db,
-		configService:   NewSystemConfigService(db),
-		gostProvider:    &panelForwardGostRuntimeProvider{db: db, manager: gost.NewManager(db)},
-		ansibleProvider: &panelForwardAnsibleRuntimeProvider{db: db, configService: NewSystemConfigService(db)},
+		db:            db,
+		configService: configService,
+		client:        newNodeXForwardRuntimeClient(configService),
 	}
 }
 
 func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, forward *model.Forward, tunnel *model.ForwardTunnel) (*panelForwardRuntimeResult, error) {
 	backend, err := s.resolveBackend()
 	if err != nil {
-		return &panelForwardRuntimeResult{
-			Backend: model.ForwardRuntimeBackendGost,
-			Status:  model.ForwardRuntimeJobStatusFailed,
-			Message: err.Error(),
-		}, err
+		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendGost, err), err
 	}
 
-	var provider panelForwardRuntimeProvider
-	switch backend {
-	case model.ForwardRuntimeBackendGost:
-		provider = s.gostProvider
-	case model.ForwardRuntimeBackendIptablesAnsible:
-		provider = s.ansibleProvider
-	default:
+	req, nodeID, err := s.buildExecuteRequest(backend, action, forward, tunnel)
+	if err != nil {
+		return failedPanelForwardRuntimeResult(backend, err), err
+	}
+	if nodeID == nil && backend == model.ForwardRuntimeBackendGost &&
+		(action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause) {
 		return &panelForwardRuntimeResult{
 			Backend: backend,
-			Status:  model.ForwardRuntimeJobStatusFailed,
-			Message: fmt.Sprintf("unsupported forward runtime backend: %s", backend),
-		}, fmt.Errorf("unsupported forward runtime backend: %s", backend)
+			Status:  model.ForwardRuntimeJobStatusSuccess,
+			Message: "gost runtime skipped because ingress node is not configured",
+		}, nil
 	}
 
-	result, applyErr := provider.Apply(ctx, action, forward, tunnel)
-	if result == nil {
-		result = &panelForwardRuntimeResult{
-			Backend: backend,
-		}
-	}
-	if result.Backend == "" {
-		result.Backend = backend
-	}
-	if applyErr != nil {
-		result.Status = model.ForwardRuntimeJobStatusFailed
-		if strings.TrimSpace(result.Message) == "" {
-			result.Message = applyErr.Error()
-		}
+	payloadJSON, err := json.Marshal(req)
+	if err != nil {
+		return failedPanelForwardRuntimeResult(backend, err), err
 	}
 
-	return result, applyErr
+	startedAt := time.Now()
+	job := &model.ForwardRuntimeJob{
+		Backend:      backend,
+		Action:       action,
+		ResourceType: nodeXForwardResourceTypePanelForward,
+		ResourceID:   uintPtr(forward.ID),
+		ForwardID:    uintPtr(forward.ID),
+		TunnelID:     uintPtr(tunnel.ID),
+		NodeID:       nodeID,
+		Status:       model.ForwardRuntimeJobStatusRunning,
+		Payload:      string(payloadJSON),
+		StartedAt:    &startedAt,
+	}
+	if err := s.db.Create(job).Error; err != nil {
+		return failedPanelForwardRuntimeResult(backend, err), err
+	}
+
+	execResult, execErr := s.client.Execute(ctx, req)
+	result := buildPanelForwardRuntimeResult(backend, action, execResult, execErr)
+	if execErr == nil && result.Status == model.ForwardRuntimeJobStatusFailed {
+		execErr = errors.New(result.Message)
+	}
+
+	updateValues := map[string]interface{}{
+		"status": result.Status,
+		"result": "",
+		"error":  "",
+	}
+	if execResult != nil {
+		updateValues["result"] = strings.TrimSpace(execResult.Result)
+	}
+	if execErr != nil {
+		updateValues["error"] = execErr.Error()
+	} else if result.Status == model.ForwardRuntimeJobStatusFailed {
+		updateValues["error"] = strings.TrimSpace(result.Message)
+	}
+	if isForwardRuntimeTerminalStatus(result.Status) {
+		completedAt := time.Now()
+		updateValues["completed_at"] = &completedAt
+	} else {
+		updateValues["completed_at"] = nil
+	}
+
+	if err := s.db.Model(&model.ForwardRuntimeJob{}).Where("id = ?", job.ID).Updates(updateValues).Error; err != nil {
+		if execErr != nil {
+			return result, execErr
+		}
+		result.Message = strings.TrimSpace(result.Message + "; local audit update failed: " + err.Error())
+	}
+
+	return result, execErr
 }
 
 func (s *PanelForwardRuntimeService) resolveBackend() (string, error) {
@@ -116,164 +158,192 @@ func (s *PanelForwardRuntimeService) resolveBackend() (string, error) {
 	}
 }
 
-type panelForwardGostRuntimeProvider struct {
-	db      *gorm.DB
-	manager *gost.Manager
-}
-
-func (p *panelForwardGostRuntimeProvider) Apply(ctx context.Context, action string, forward *model.Forward, tunnel *model.ForwardTunnel) (*panelForwardRuntimeResult, error) {
-	if tunnel != nil && tunnel.InNodeID == 0 && (action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause) {
-		return &panelForwardRuntimeResult{
-			Backend: model.ForwardRuntimeBackendGost,
-			Status:  model.ForwardRuntimeJobStatusSuccess,
-			Message: "gost runtime skipped because ingress node is not configured",
-		}, nil
+func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string, forward *model.Forward, tunnel *model.ForwardTunnel) (nodeXForwardExecuteRequest, *uint, error) {
+	if forward == nil {
+		return nodeXForwardExecuteRequest{}, nil, errors.New("forward is required")
+	}
+	if tunnel == nil {
+		return nodeXForwardExecuteRequest{}, nil, errors.New("forward tunnel is required")
 	}
 
-	client, err := p.getIngressClient(tunnel)
+	allowMissingIngress := backend == model.ForwardRuntimeBackendGost &&
+		(action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause)
+
+	node, err := s.loadIngressNode(tunnel, allowMissingIngress)
 	if err != nil {
-		return &panelForwardRuntimeResult{
-			Backend: model.ForwardRuntimeBackendGost,
-			Status:  model.ForwardRuntimeJobStatusFailed,
-			Message: err.Error(),
-		}, err
+		return nodeXForwardExecuteRequest{}, nil, err
 	}
 
-	services, err := buildPanelForwardGostServices(forward, tunnel)
-	if err != nil {
-		return &panelForwardRuntimeResult{
-			Backend: model.ForwardRuntimeBackendGost,
-			Status:  model.ForwardRuntimeJobStatusFailed,
-			Message: err.Error(),
-		}, err
+	req := nodeXForwardExecuteRequest{
+		ResourceType: nodeXForwardResourceTypePanelForward,
+		Backend:      backend,
+		Action:       action,
+		PanelForward: &nodeXPanelForwardRequest{
+			Forward: nodeXPanelForwardPayload{
+				ID:            forward.ID,
+				UserID:        forward.UserID,
+				Name:          forward.Name,
+				InPort:        forward.InPort,
+				RemoteAddr:    forward.RemoteAddr,
+				InterfaceName: forward.InterfaceName,
+				Strategy:      normalizeStrategy(forward.Strategy, forward.RemoteAddr),
+				Status:        forward.Status,
+			},
+			Tunnel: nodeXPanelTunnelPayload{
+				ID:            tunnel.ID,
+				Name:          tunnel.Name,
+				InNodeID:      tunnel.InNodeID,
+				Protocol:      normalizePanelRuntimeProtocol(tunnel.Protocol),
+				TCPListenAddr: tunnel.TCPListenAddr,
+				UDPListenAddr: tunnel.UDPListenAddr,
+				InterfaceName: tunnel.InterfaceName,
+			},
+		},
 	}
 
-	switch action {
-	case model.ForwardRuntimeJobActionCreate, model.ForwardRuntimeJobActionResume, model.ForwardRuntimeJobActionSync:
-		err = p.createServices(ctx, client, services)
-	case model.ForwardRuntimeJobActionUpdate:
-		if deleteErr := p.deleteServices(ctx, client, services); deleteErr != nil && !isGostMissingResource(deleteErr) {
-			return &panelForwardRuntimeResult{
-				Backend: model.ForwardRuntimeBackendGost,
-				Status:  model.ForwardRuntimeJobStatusFailed,
-				Message: deleteErr.Error(),
-			}, deleteErr
+	if node == nil {
+		return req, nil, nil
+	}
+
+	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+		ansiblePayload, err := s.buildAnsibleRuntimePayload(action, forward, tunnel, node)
+		if err != nil {
+			return nodeXForwardExecuteRequest{}, nil, err
 		}
-		err = p.createServices(ctx, client, services)
-	case model.ForwardRuntimeJobActionPause, model.ForwardRuntimeJobActionDelete:
-		err = p.deleteServices(ctx, client, services)
-	default:
-		err = fmt.Errorf("unsupported forward runtime action: %s", action)
-	}
-	if err != nil {
-		return &panelForwardRuntimeResult{
-			Backend: model.ForwardRuntimeBackendGost,
-			Status:  model.ForwardRuntimeJobStatusFailed,
-			Message: err.Error(),
-		}, err
+		req.AnsibleRuntime = ansiblePayload
 	}
 
-	message := "gost runtime synchronized"
-	if action == model.ForwardRuntimeJobActionPause || action == model.ForwardRuntimeJobActionDelete {
-		message = "gost runtime removed"
+	req.PanelForward.IngressNode = nodeXForwardNodePayload{
+		ID:       node.ID,
+		Name:     node.Name,
+		Host:     node.Host,
+		Port:     node.Port,
+		APIPort:  node.APIPort,
+		APIToken: node.APIToken,
 	}
-
-	return &panelForwardRuntimeResult{
-		Backend: model.ForwardRuntimeBackendGost,
-		Status:  model.ForwardRuntimeJobStatusSuccess,
-		Message: message,
-		Async:   false,
-	}, nil
+	return req, uintPtr(node.ID), nil
 }
 
-func (p *panelForwardGostRuntimeProvider) getIngressClient(tunnel *model.ForwardTunnel) (*gost.Client, error) {
+func (s *PanelForwardRuntimeService) loadIngressNode(tunnel *model.ForwardTunnel, allowMissing bool) (*model.ForwardNode, error) {
 	if tunnel == nil {
 		return nil, errors.New("forward tunnel is required")
 	}
 	if tunnel.InNodeID == 0 {
+		if allowMissing {
+			return nil, nil
+		}
 		return nil, errors.New("forward tunnel ingress node is not configured")
 	}
-	return p.manager.GetClient(tunnel.InNodeID)
-}
 
-func (p *panelForwardGostRuntimeProvider) createServices(ctx context.Context, client *gost.Client, services []panelForwardGostService) error {
-	for _, service := range services {
-		if err := client.CreateService(ctx, service.Config); err != nil {
-			return fmt.Errorf("create gost service %s: %w", service.Name, err)
+	var node model.ForwardNode
+	if err := s.db.First(&node, tunnel.InNodeID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("forward ingress node not found")
 		}
+		return nil, err
 	}
-	return nil
+	return &node, nil
 }
 
-func (p *panelForwardGostRuntimeProvider) deleteServices(ctx context.Context, client *gost.Client, services []panelForwardGostService) error {
-	var errs []string
-	for _, service := range services {
-		if err := client.DeleteService(ctx, service.Name); err != nil && !isGostMissingResource(err) {
-			errs = append(errs, fmt.Sprintf("%s: %v", service.Name, err))
-		}
+func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(action string, forward *model.Forward, tunnel *model.ForwardTunnel, node *model.ForwardNode) (*panelForwardAnsibleRuntimePayload, error) {
+	if node == nil {
+		return nil, errors.New("forward ingress node is required for ansible runtime")
 	}
-	if len(errs) > 0 {
-		return errors.New(strings.Join(errs, "; "))
-	}
-	return nil
-}
-
-type panelForwardGostService struct {
-	Name   string
-	Config *gost.ServiceConfig
-}
-
-func buildPanelForwardGostServices(forward *model.Forward, tunnel *model.ForwardTunnel) ([]panelForwardGostService, error) {
-	if forward == nil {
-		return nil, errors.New("forward is required")
-	}
-	if tunnel == nil {
-		return nil, errors.New("forward tunnel is required")
-	}
-
-	targets, err := buildPanelForwardGostTargets(forward.RemoteAddr)
+	cfg, err := s.loadPanelForwardAnsibleConfig(action)
 	if err != nil {
 		return nil, err
 	}
-
-	interfaceName := strings.TrimSpace(forward.InterfaceName)
-	if interfaceName == "" {
-		interfaceName = strings.TrimSpace(tunnel.InterfaceName)
+	targets, err := buildPanelForwardAnsibleTargets(forward.RemoteAddr)
+	if err != nil {
+		return nil, err
 	}
-
-	protocol := normalizePanelRuntimeProtocol(tunnel.Protocol)
-	services := make([]panelForwardGostService, 0, 2)
-	switch protocol {
-	case "udp":
-		services = append(services, panelForwardGostService{
-			Name:   panelForwardGostServiceName(forward.ID, "udp"),
-			Config: newPanelForwardGostServiceConfig(forward, tunnel, "udp", interfaceName, targets),
-		})
-	case "both":
-		services = append(services,
-			panelForwardGostService{
-				Name:   panelForwardGostServiceName(forward.ID, "tcp"),
-				Config: newPanelForwardGostServiceConfig(forward, tunnel, "tcp", interfaceName, targets),
-			},
-			panelForwardGostService{
-				Name:   panelForwardGostServiceName(forward.ID, "udp"),
-				Config: newPanelForwardGostServiceConfig(forward, tunnel, "udp", interfaceName, targets),
-			},
-		)
-	default:
-		services = append(services, panelForwardGostService{
-			Name:   panelForwardGostServiceName(forward.ID, "tcp"),
-			Config: newPanelForwardGostServiceConfig(forward, tunnel, "tcp", interfaceName, targets),
-		})
-	}
-
-	return services, nil
+	return &panelForwardAnsibleRuntimePayload{
+		Action:         action,
+		Inventory:      cfg.Inventory,
+		Playbook:       cfg.playbookForAction(action),
+		Become:         cfg.Become,
+		ExtraVars:      copyStringInterfaceMap(cfg.ExtraVars),
+		Command:        cfg.Command,
+		WorkingDir:     cfg.WorkingDir,
+		TargetPattern:  cfg.TargetPattern,
+		Environment:    copyStringMap(cfg.Environment),
+		TimeoutSeconds: cfg.TimeoutSeconds,
+		Forward: panelForwardAnsibleForwardPayload{
+			ID:            forward.ID,
+			UserID:        forward.UserID,
+			Name:          forward.Name,
+			InPort:        forward.InPort,
+			RemoteAddr:    forward.RemoteAddr,
+			InterfaceName: forward.InterfaceName,
+			Strategy:      normalizeStrategy(forward.Strategy, forward.RemoteAddr),
+			Status:        forward.Status,
+		},
+		Tunnel: panelForwardAnsibleTunnelPayload{
+			ID:            tunnel.ID,
+			Name:          tunnel.Name,
+			InNodeID:      tunnel.InNodeID,
+			Protocol:      normalizePanelRuntimeProtocol(tunnel.Protocol),
+			TCPListenAddr: tunnel.TCPListenAddr,
+			UDPListenAddr: tunnel.UDPListenAddr,
+			InterfaceName: tunnel.InterfaceName,
+		},
+		Node: panelForwardAnsibleNodePayload{
+			ID:      node.ID,
+			Name:    node.Name,
+			Host:    node.Host,
+			Port:    node.Port,
+			APIPort: node.APIPort,
+		},
+		Targets: targets,
+	}, nil
 }
 
-func buildPanelForwardGostTargets(remoteAddr string) ([]gost.ForwarderNode, error) {
+func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfig(action string) (*panelForwardAnsibleConfig, error) {
+	cfg := &panelForwardAnsibleConfig{}
+	if err := s.configService.GetJSON(forwardRuntimeAnsibleConfigJSONKey, cfg); err != nil {
+		return nil, err
+	}
+	if value, err := s.configService.Get(forwardRuntimeAnsibleInventoryConfigKey); err != nil {
+		return nil, err
+	} else if strings.TrimSpace(value) != "" {
+		cfg.Inventory = value
+	}
+	if value, err := s.configService.Get(forwardRuntimeAnsibleApplyPlaybookConfigKey); err != nil {
+		return nil, err
+	} else if strings.TrimSpace(value) != "" {
+		cfg.ApplyPlaybook = value
+	}
+	if value, err := s.configService.Get(forwardRuntimeAnsibleRemovePlaybookConfigKey); err != nil {
+		return nil, err
+	} else if strings.TrimSpace(value) != "" {
+		cfg.RemovePlaybook = value
+	}
+	if value, err := s.configService.Get(forwardRuntimeAnsibleBecomeConfigKey); err != nil {
+		return nil, err
+	} else if strings.TrimSpace(value) != "" {
+		cfg.Become = strings.EqualFold(value, "true") || strings.TrimSpace(value) == "1"
+	}
+	if value, err := s.configService.Get(forwardRuntimeAnsibleExtraVarsConfigKey); err != nil {
+		return nil, err
+	} else if strings.TrimSpace(value) != "" {
+		extraVars := map[string]interface{}{}
+		if err := json.Unmarshal([]byte(value), &extraVars); err != nil {
+			return nil, fmt.Errorf("%s is invalid JSON: %w", forwardRuntimeAnsibleExtraVarsConfigKey, err)
+		}
+		cfg.ExtraVars = extraVars
+	}
+	cfg.ensureDefaults()
+	if err := cfg.validate(action); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+func buildPanelForwardAnsibleTargets(remoteAddr string) ([]panelForwardAnsibleTargetPayload, error) {
 	rawTargets := strings.Split(normalizeRemoteAddr(remoteAddr), ",")
-	targets := make([]gost.ForwarderNode, 0, len(rawTargets))
-	for idx, raw := range rawTargets {
+	targets := make([]panelForwardAnsibleTargetPayload, 0, len(rawTargets))
+	count := 0
+	for _, raw := range rawTargets {
 		target := strings.TrimSpace(raw)
 		if target == "" {
 			continue
@@ -282,78 +352,82 @@ func buildPanelForwardGostTargets(remoteAddr string) ([]gost.ForwarderNode, erro
 		if err != nil {
 			return nil, fmt.Errorf("invalid remote address %s: %w", target, err)
 		}
-		targets = append(targets, gost.ForwarderNode{
-			Name: fmt.Sprintf("target-%d", idx+1),
+		count++
+		targets = append(targets, panelForwardAnsibleTargetPayload{
+			Name: fmt.Sprintf("target-%d", count),
 			Addr: fmt.Sprintf("%s:%d", host, port),
 		})
 	}
-
 	if len(targets) == 0 {
 		return nil, errors.New("no valid remote target configured")
 	}
 	return targets, nil
 }
 
-func newPanelForwardGostServiceConfig(forward *model.Forward, tunnel *model.ForwardTunnel, protocol, interfaceName string, targets []gost.ForwarderNode) *gost.ServiceConfig {
-	listenAddr := tunnel.TCPListenAddr
-	if protocol == "udp" {
-		listenAddr = tunnel.UDPListenAddr
-	}
-	listenAddr = strings.TrimSpace(listenAddr)
-	if listenAddr == "" {
-		listenAddr = "0.0.0.0"
-	}
-
-	serviceName := panelForwardGostServiceName(forward.ID, protocol)
-	config := &gost.ServiceConfig{
-		Name:      serviceName,
-		Addr:      fmt.Sprintf("%s:%d", listenAddr, forward.InPort),
-		Interface: interfaceName,
-		Handler: &gost.HandlerConfig{
-			Type: protocol,
-		},
-		Listener: &gost.ListenerConfig{
-			Type: protocol,
-		},
-		Forwarder: &gost.ForwarderConfig{
-			Nodes: targets,
-		},
-		Metadata: map[string]string{
-			"forward_id": fmt.Sprintf("%d", forward.ID),
-			"tunnel_id":  fmt.Sprintf("%d", tunnel.ID),
-			"strategy":   normalizeStrategy(forward.Strategy, forward.RemoteAddr),
-		},
-	}
-
-	if selector := buildPanelForwardGostSelector(forward.Strategy, len(targets)); selector != nil {
-		config.Forwarder.Selector = selector
-	}
-
-	return config
-}
-
-func buildPanelForwardGostSelector(strategy string, targetCount int) *gost.SelectorConfig {
-	if targetCount <= 1 {
+func copyStringInterfaceMap(src map[string]interface{}) map[string]interface{} {
+	if len(src) == 0 {
 		return nil
 	}
-
-	switch normalizeStrategy(strategy, "") {
-	case "round":
-		return &gost.SelectorConfig{Strategy: "round", MaxFails: 3, FailTimeout: "30s"}
-	case "rand":
-		return &gost.SelectorConfig{Strategy: "rand", MaxFails: 3, FailTimeout: "30s"}
-	case "hash":
-		return &gost.SelectorConfig{Strategy: "hash", MaxFails: 3, FailTimeout: "30s"}
-	default:
-		return &gost.SelectorConfig{Strategy: "failover", MaxFails: 3, FailTimeout: "30s"}
+	result := make(map[string]interface{}, len(src))
+	for key, value := range src {
+		result[key] = value
 	}
+	return result
 }
 
-func panelForwardGostServiceName(forwardID uint, protocol string) string {
-	if protocol == "udp" {
-		return fmt.Sprintf("panel-forward-%d-udp", forwardID)
+func copyStringMap(src map[string]string) map[string]string {
+	if len(src) == 0 {
+		return nil
 	}
-	return fmt.Sprintf("panel-forward-%d", forwardID)
+	result := make(map[string]string, len(src))
+	for key, value := range src {
+		result[key] = value
+	}
+	return result
+}
+
+func buildPanelForwardRuntimeResult(backend, action string, execResult *nodeXForwardExecuteResult, execErr error) *panelForwardRuntimeResult {
+	result := &panelForwardRuntimeResult{
+		Backend: backend,
+		Status:  model.ForwardRuntimeJobStatusSuccess,
+	}
+	if execResult != nil {
+		if strings.TrimSpace(execResult.Backend) != "" {
+			result.Backend = execResult.Backend
+		}
+		if execResult.Status != 0 {
+			result.Status = execResult.Status
+		} else if execResult.Async {
+			result.Status = model.ForwardRuntimeJobStatusPending
+		}
+		result.Message = strings.TrimSpace(execResult.Message)
+		result.Async = execResult.Async
+	}
+	if execErr != nil {
+		result.Status = model.ForwardRuntimeJobStatusFailed
+		if strings.TrimSpace(result.Message) == "" {
+			result.Message = execErr.Error()
+		}
+	}
+	if strings.TrimSpace(result.Message) == "" {
+		result.Message = defaultPanelForwardRuntimeMessage(action)
+	}
+	return result
+}
+
+func defaultPanelForwardRuntimeMessage(action string) string {
+	if action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause {
+		return "forward runtime removed"
+	}
+	return "forward runtime synchronized"
+}
+
+func failedPanelForwardRuntimeResult(backend string, err error) *panelForwardRuntimeResult {
+	return &panelForwardRuntimeResult{
+		Backend: backend,
+		Status:  model.ForwardRuntimeJobStatusFailed,
+		Message: err.Error(),
+	}
 }
 
 func normalizePanelRuntimeProtocol(protocol string) string {
@@ -367,37 +441,8 @@ func normalizePanelRuntimeProtocol(protocol string) string {
 	}
 }
 
-func isGostMissingResource(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "404") || strings.Contains(message, "not found")
-}
-
-type panelForwardAnsibleRuntimeProvider struct {
-	db            *gorm.DB
-	configService *SystemConfigService
-}
-
-type panelForwardAnsibleConfig struct {
-	Inventory      string                 `json:"inventory"`
-	ApplyPlaybook  string                 `json:"playbookApply"`
-	RemovePlaybook string                 `json:"playbookRemove"`
-	Become         bool                   `json:"become"`
-	ExtraVars      map[string]interface{} `json:"extraVars"`
-	Command        string                 `json:"command"`
-	WorkingDir     string                 `json:"workingDir"`
-	TargetPattern  string                 `json:"targetPattern"`
-	Environment    map[string]string      `json:"environment"`
-	TimeoutSeconds int                    `json:"timeoutSeconds"`
-}
-
-func (c *panelForwardAnsibleConfig) playbookForAction(action string) string {
-	if action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause {
-		return strings.TrimSpace(c.RemovePlaybook)
-	}
-	return strings.TrimSpace(c.ApplyPlaybook)
+func isForwardRuntimeTerminalStatus(status int) bool {
+	return status == model.ForwardRuntimeJobStatusSuccess || status == model.ForwardRuntimeJobStatusFailed
 }
 
 func (c *panelForwardAnsibleConfig) ensureDefaults() {
@@ -430,224 +475,25 @@ func (c *panelForwardAnsibleConfig) ensureDefaults() {
 	}
 }
 
-func (c *panelForwardAnsibleConfig) applyLegacyValues(inventory, applyPlaybook, removePlaybook string, become bool, extraVars map[string]interface{}) {
-	if strings.TrimSpace(c.Inventory) == "" {
-		c.Inventory = strings.TrimSpace(inventory)
+func (c *panelForwardAnsibleConfig) playbookForAction(action string) string {
+	if action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause {
+		return strings.TrimSpace(c.RemovePlaybook)
 	}
-	if strings.TrimSpace(c.ApplyPlaybook) == "" {
-		c.ApplyPlaybook = strings.TrimSpace(applyPlaybook)
-	}
-	if strings.TrimSpace(c.RemovePlaybook) == "" {
-		c.RemovePlaybook = strings.TrimSpace(removePlaybook)
-	}
-	if !c.Become {
-		c.Become = become
-	}
-	if len(c.ExtraVars) == 0 && len(extraVars) > 0 {
-		c.ExtraVars = extraVars
-	}
+	return strings.TrimSpace(c.ApplyPlaybook)
 }
 
 func (c *panelForwardAnsibleConfig) validate(action string) error {
 	if strings.TrimSpace(c.Inventory) == "" {
 		return fmt.Errorf("%s is required for iptables_ansible runtime", forwardRuntimeAnsibleInventoryConfigKey)
 	}
-	if strings.TrimSpace(c.playbookForAction(action)) == "" {
+	playbook := c.playbookForAction(action)
+	if strings.TrimSpace(playbook) == "" {
 		if action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause {
 			return fmt.Errorf("%s is required for iptables_ansible runtime", forwardRuntimeAnsibleRemovePlaybookConfigKey)
 		}
 		return fmt.Errorf("%s is required for iptables_ansible runtime", forwardRuntimeAnsibleApplyPlaybookConfigKey)
 	}
 	return nil
-}
-
-func (p *panelForwardAnsibleRuntimeProvider) Apply(ctx context.Context, action string, forward *model.Forward, tunnel *model.ForwardTunnel) (*panelForwardRuntimeResult, error) {
-	_ = ctx
-
-	cfg, err := p.loadConfig(action)
-	if err != nil {
-		return &panelForwardRuntimeResult{
-			Backend: model.ForwardRuntimeBackendIptablesAnsible,
-			Status:  model.ForwardRuntimeJobStatusFailed,
-			Message: err.Error(),
-		}, err
-	}
-
-	node, err := p.loadIngressNode(tunnel)
-	if err != nil {
-		return &panelForwardRuntimeResult{
-			Backend: model.ForwardRuntimeBackendIptablesAnsible,
-			Status:  model.ForwardRuntimeJobStatusFailed,
-			Message: err.Error(),
-		}, err
-	}
-
-	payload, err := p.buildPayload(action, forward, tunnel, node, cfg)
-	if err != nil {
-		return &panelForwardRuntimeResult{
-			Backend: model.ForwardRuntimeBackendIptablesAnsible,
-			Status:  model.ForwardRuntimeJobStatusFailed,
-			Message: err.Error(),
-		}, err
-	}
-
-	job := &model.ForwardRuntimeJob{
-		Backend:      model.ForwardRuntimeBackendIptablesAnsible,
-		Action:       action,
-		ResourceType: "forward",
-		ResourceID:   uintPtr(forward.ID),
-		ForwardID:    uintPtr(forward.ID),
-		TunnelID:     uintPtr(tunnel.ID),
-		NodeID:       uintPtr(node.ID),
-		Status:       model.ForwardRuntimeJobStatusPending,
-		Payload:      payload,
-	}
-	if err := p.db.Create(job).Error; err != nil {
-		return &panelForwardRuntimeResult{
-			Backend: model.ForwardRuntimeBackendIptablesAnsible,
-			Status:  model.ForwardRuntimeJobStatusFailed,
-			Message: err.Error(),
-		}, err
-	}
-
-	return &panelForwardRuntimeResult{
-		Backend: model.ForwardRuntimeBackendIptablesAnsible,
-		Status:  model.ForwardRuntimeJobStatusPending,
-		Message: fmt.Sprintf("queued ansible runtime job #%d", job.ID),
-		Async:   true,
-	}, nil
-}
-
-func (p *panelForwardAnsibleRuntimeProvider) loadConfig(action string) (*panelForwardAnsibleConfig, error) {
-	cfg := &panelForwardAnsibleConfig{}
-	if err := p.configService.GetJSON(forwardRuntimeAnsibleConfigJSONKey, cfg); err != nil {
-		return nil, err
-	}
-
-	inventory, err := p.configService.Get(forwardRuntimeAnsibleInventoryConfigKey)
-	if err != nil {
-		return nil, err
-	}
-	playbookKey := forwardRuntimeAnsibleApplyPlaybookConfigKey
-	if action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause {
-		playbookKey = forwardRuntimeAnsibleRemovePlaybookConfigKey
-	}
-	playbook, err := p.configService.Get(playbookKey)
-	if err != nil {
-		return nil, err
-	}
-	becomeValue, err := p.configService.Get(forwardRuntimeAnsibleBecomeConfigKey)
-	if err != nil {
-		return nil, err
-	}
-	extraVarsValue, err := p.configService.Get(forwardRuntimeAnsibleExtraVarsConfigKey)
-	if err != nil {
-		return nil, err
-	}
-
-	extraVars := map[string]interface{}{}
-	if strings.TrimSpace(extraVarsValue) != "" {
-		if err := json.Unmarshal([]byte(extraVarsValue), &extraVars); err != nil {
-			return nil, fmt.Errorf("%s is invalid JSON: %w", forwardRuntimeAnsibleExtraVarsConfigKey, err)
-		}
-	}
-
-	cfg.ensureDefaults()
-	legacyApplyPlaybook := ""
-	legacyRemovePlaybook := ""
-	if action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause {
-		legacyRemovePlaybook = playbook
-	} else {
-		legacyApplyPlaybook = playbook
-	}
-	cfg.applyLegacyValues(
-		inventory,
-		legacyApplyPlaybook,
-		legacyRemovePlaybook,
-		strings.EqualFold(strings.TrimSpace(becomeValue), "true") || strings.TrimSpace(becomeValue) == "1",
-		extraVars,
-	)
-	if err := cfg.validate(action); err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
-}
-
-func (p *panelForwardAnsibleRuntimeProvider) loadIngressNode(tunnel *model.ForwardTunnel) (*model.ForwardNode, error) {
-	if tunnel == nil {
-		return nil, errors.New("forward tunnel is required")
-	}
-	if tunnel.InNodeID == 0 {
-		return nil, errors.New("forward tunnel ingress node is not configured")
-	}
-
-	var node model.ForwardNode
-	if err := p.db.First(&node, tunnel.InNodeID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("forward ingress node not found")
-		}
-		return nil, err
-	}
-	return &node, nil
-}
-
-func (p *panelForwardAnsibleRuntimeProvider) buildPayload(action string, forward *model.Forward, tunnel *model.ForwardTunnel, node *model.ForwardNode, cfg *panelForwardAnsibleConfig) (string, error) {
-	targets, err := buildPanelForwardGostTargets(forward.RemoteAddr)
-	if err != nil {
-		return "", err
-	}
-
-	items := make([]panelForwardAnsibleTargetPayload, 0, len(targets))
-	for _, target := range targets {
-		items = append(items, panelForwardAnsibleTargetPayload{Name: target.Name, Addr: target.Addr})
-	}
-
-	payload := panelForwardAnsibleRuntimePayload{
-		Action:         action,
-		Inventory:      cfg.Inventory,
-		Playbook:       cfg.playbookForAction(action),
-		Become:         cfg.Become,
-		ExtraVars:      cfg.ExtraVars,
-		Command:        cfg.Command,
-		WorkingDir:     cfg.WorkingDir,
-		TargetPattern:  cfg.TargetPattern,
-		Environment:    cfg.Environment,
-		TimeoutSeconds: cfg.TimeoutSeconds,
-		Forward: panelForwardAnsibleForwardPayload{
-			ID:            forward.ID,
-			UserID:        forward.UserID,
-			Name:          forward.Name,
-			InPort:        forward.InPort,
-			RemoteAddr:    forward.RemoteAddr,
-			InterfaceName: forward.InterfaceName,
-			Strategy:      normalizeStrategy(forward.Strategy, forward.RemoteAddr),
-			Status:        forward.Status,
-		},
-		Tunnel: panelForwardAnsibleTunnelPayload{
-			ID:            tunnel.ID,
-			Name:          tunnel.Name,
-			InNodeID:      tunnel.InNodeID,
-			Protocol:      normalizePanelRuntimeProtocol(tunnel.Protocol),
-			TCPListenAddr: tunnel.TCPListenAddr,
-			UDPListenAddr: tunnel.UDPListenAddr,
-			InterfaceName: tunnel.InterfaceName,
-		},
-		Node: panelForwardAnsibleNodePayload{
-			ID:      node.ID,
-			Name:    node.Name,
-			Host:    node.Host,
-			Port:    node.Port,
-			APIPort: node.APIPort,
-		},
-		Targets: items,
-	}
-
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }
 
 func uintPtr(v uint) *uint {

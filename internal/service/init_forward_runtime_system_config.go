@@ -24,6 +24,9 @@ const (
 	forwardRuntimeAnsibleBecomeEnvVar        = "FORWARD_RUNTIME_ANSIBLE_BECOME"
 	forwardRuntimeAnsibleExtraVarsEnvVar     = "FORWARD_RUNTIME_ANSIBLE_EXTRA_VARS_JSON"
 	forwardRuntimeAnsibleEnvEnvVar           = "FORWARD_RUNTIME_ANSIBLE_ENV_JSON"
+	forwardRuntimeNodeXBaseURLEnvVar         = "FORWARD_RUNTIME_NODEX_BASE_URL"
+	forwardRuntimeNodeXTokenEnvVar           = "FORWARD_RUNTIME_NODEX_TOKEN"
+	forwardRuntimeNodeXTimeoutSecondsEnvVar  = "FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS"
 )
 
 func InitForwardRuntimeSystemConfigFromEnv(db *gorm.DB) error {
@@ -47,6 +50,49 @@ func InitForwardRuntimeSystemConfigFromEnv(db *gorm.DB) error {
 		}
 	default:
 		return fmt.Errorf("invalid %s value: %s", forwardRuntimeBackendEnvVar, backend)
+	}
+
+	if value := strings.TrimSpace(os.Getenv(forwardRuntimeNodeXBaseURLEnvVar)); value != "" {
+		if err := configService.Set(
+			forwardRuntimeNodeXBaseURLConfigKey,
+			value,
+			"string",
+			forwardRuntimeConfigGroup,
+			"Forward runtime NodeX base URL injected from environment",
+		); err != nil {
+			return err
+		}
+	}
+
+	if value := strings.TrimSpace(os.Getenv(forwardRuntimeNodeXTokenEnvVar)); value != "" {
+		if err := configService.Set(
+			forwardRuntimeNodeXTokenConfigKey,
+			value,
+			"string",
+			forwardRuntimeConfigGroup,
+			"Forward runtime NodeX token injected from environment",
+		); err != nil {
+			return err
+		}
+	}
+
+	if value := strings.TrimSpace(os.Getenv(forwardRuntimeNodeXTimeoutSecondsEnvVar)); value != "" {
+		timeout, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("invalid %s value: %w", forwardRuntimeNodeXTimeoutSecondsEnvVar, err)
+		}
+		if timeout <= 0 {
+			return fmt.Errorf("%s must be greater than zero", forwardRuntimeNodeXTimeoutSecondsEnvVar)
+		}
+		if err := configService.Set(
+			forwardRuntimeNodeXTimeoutSecondsConfigKey,
+			strconv.Itoa(timeout),
+			"int",
+			forwardRuntimeConfigGroup,
+			"Forward runtime NodeX timeout injected from environment",
+		); err != nil {
+			return err
+		}
 	}
 
 	cfg := &panelForwardAnsibleConfig{}
