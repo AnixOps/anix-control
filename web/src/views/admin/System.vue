@@ -39,16 +39,62 @@
             </button>
           </div>
         </div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Runtime Backend</label>
-            <select v-model="runtimeBackend">
-              <option v-for="option in runtimeBackendOptions" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
+        <div class="runtime-mode-toggle">
+          <div>
+            <p class="eyebrow">Forward Runtime</p>
+            <h3>NodeX Mode</h3>
+            <p class="text-secondary mode-description">
+              NodeX Mode delegates runtime actions to the gost-backed control plane. When disabled, the system
+              falls back to the existing iptables/Ansible runner.
+            </p>
+            <p class="text-secondary mode-description">
+              NodeX Mode requires an explicit base URL and token even for local deployments (think
+              http://localhost:PORT + your shared token).
+            </p>
           </div>
-          <div class="form-group">
+          <label class="mode-switch">
+            <input type="checkbox" v-model="runtimeNodeXMode" aria-label="Toggle NodeX Mode" />
+            <span></span>
+          </label>
+        </div>
+        <div class="form-grid runtime-config-grid">
+          <div v-if="runtimeNodeXMode" class="node-config">
+            <div class="form-group">
+              <label for="nodex-base-url">NodeX Base URL</label>
+              <input
+                id="nodex-base-url"
+                name="nodex-base-url"
+                type="text"
+                v-model="runtimeNodeXBaseUrl"
+                placeholder="https://nodex.example.com"
+              />
+            </div>
+            <div class="form-group">
+              <label for="nodex-token">NodeX Token</label>
+              <input
+                id="nodex-token"
+                name="nodex-token"
+                type="text"
+                v-model="runtimeNodeXToken"
+                placeholder="X-API-Key or Bearer token"
+              />
+            </div>
+            <div class="form-group">
+              <label for="nodex-timeout">Timeout (seconds)</label>
+              <input
+                id="nodex-timeout"
+                name="nodex-timeout"
+                type="number"
+                min="1"
+                v-model.number="runtimeNodeXTimeout"
+              />
+            </div>
+            <p class="text-secondary small">
+              NodeX timeout defaults to 15 seconds. The control plane still needs explicit base_url + token so jobs
+              can authenticate.
+            </p>
+          </div>
+          <div v-else class="form-group ansible-config">
             <label>iptables ansible JSON</label>
             <textarea
               v-model="runtimeConfigJson"
@@ -57,7 +103,8 @@
             ></textarea>
             <p class="text-secondary">
               Optional keys: <code>command</code>, <code>workingDir</code>, <code>targetPattern</code>,
-              <code>timeoutSeconds</code>, <code>environment</code>.
+              <code>timeoutSeconds</code>, <code>environment</code>. This path remains stateless and only needs
+              the relay node SSH info.
             </p>
           </div>
         </div>
@@ -373,18 +420,48 @@ const balancerForm = ref({
   health_check: true, check_interval: 60, weights_json: ''
 })
 
+const runtimeNodeXModeKey = 'forward.runtime.nodex_mode'
 const runtimeBackendKey = 'forward.runtime_backend'
 const runtimeAnsibleConfigKey = 'forward.runtime.iptables_ansible.config'
+const runtimeNodeXBaseUrlKey = 'forward.runtime.nodex.base_url'
+const runtimeNodeXTokenKey = 'forward.runtime.nodex.token'
+const runtimeNodeXTimeoutKey = 'forward.runtime.nodex.timeout_seconds'
 const runtimeBackendOptions = [
   { value: 'gost', label: 'gost (默认)' },
   { value: 'iptables_ansible', label: 'iptables_ansible' }
 ]
 const runtimeBackend = ref('gost')
+const runtimeNodeXMode = ref(false)
+const runtimeNodeXBaseUrl = ref('')
+const runtimeNodeXToken = ref('')
+const runtimeNodeXTimeout = ref(15)
 const runtimeConfigJson = ref('')
 const runtimeSaving = ref(false)
 const runtimeValidationError = ref('')
 const runtimeJobs = ref([])
 const runtimeJobsLoading = ref(false)
+
+function parseRuntimeBoolean(value) {
+  if (typeof value === 'boolean') {
+    return value
+  }
+
+  if (typeof value === 'number') {
+    return value !== 0
+  }
+
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (!normalized) {
+    return null
+  }
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true
+  }
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false
+  }
+  return null
+}
 
 const filteredConfigs = computed(() => {
   if (!configSearch.value) return configs.value
@@ -488,12 +565,26 @@ const fetchForwardRuntimeJobs = async () => {
 }
 
 const fetchForwardRuntimeConfig = async () => {
+  let explicitNodeXMode = null
+  try {
+    const nodeXModeRes = await getSystemConfig(runtimeNodeXModeKey)
+    explicitNodeXMode = parseRuntimeBoolean(nodeXModeRes.data?.value)
+  } catch (err) {
+    console.error('get forward runtime NodeX mode config failed:', err)
+  }
+
   try {
     const backendRes = await getSystemConfig(runtimeBackendKey)
-    runtimeBackend.value = backendRes.data?.value || 'gost'
+    const backendValue = backendRes.data?.value || 'gost'
+    runtimeBackend.value = backendValue
   } catch (err) {
     console.error('鑾峰彇 forward runtime backend 澶辫触:', err)
   }
+  runtimeNodeXMode.value = explicitNodeXMode === null
+    ? runtimeBackend.value === 'gost'
+    : explicitNodeXMode
+  runtimeBackend.value = runtimeNodeXMode.value ? 'gost' : 'iptables_ansible'
+
   try {
     const configRes = await getSystemConfig(runtimeAnsibleConfigKey)
     const rawValue = configRes.data?.value || ''
@@ -509,12 +600,45 @@ const fetchForwardRuntimeConfig = async () => {
   } catch (err) {
     console.error('鑾峰彇 forward runtime ansible 配置澶辫触:', err)
   }
+  try {
+    const baseUrlRes = await getSystemConfig(runtimeNodeXBaseUrlKey)
+    runtimeNodeXBaseUrl.value = baseUrlRes.data?.value || ''
+  } catch (err) {
+    console.error('get forward runtime NodeX base URL config failed:', err)
+  }
+  try {
+    const tokenRes = await getSystemConfig(runtimeNodeXTokenKey)
+    runtimeNodeXToken.value = tokenRes.data?.value || ''
+  } catch (err) {
+    console.error('get forward runtime NodeX token config failed:', err)
+  }
+  try {
+    const timeoutRes = await getSystemConfig(runtimeNodeXTimeoutKey)
+    const timeoutValue = Number(timeoutRes.data?.value)
+    runtimeNodeXTimeout.value = Number.isFinite(timeoutValue) && timeoutValue > 0 ? timeoutValue : 15
+  } catch (err) {
+    console.error('get forward runtime NodeX timeout config failed:', err)
+  }
 }
 
 const saveForwardRuntimeConfig = async () => {
   runtimeValidationError.value = ''
+  const trimmedNodeXBaseUrl = runtimeNodeXBaseUrl.value?.trim() || ''
+  const trimmedNodeXToken = runtimeNodeXToken.value?.trim() || ''
+
+  if (runtimeNodeXMode.value) {
+    if (!trimmedNodeXBaseUrl) {
+      runtimeValidationError.value = 'NodeX base URL is required in NodeX Mode'
+      return
+    }
+    if (!trimmedNodeXToken) {
+      runtimeValidationError.value = 'NodeX token is required in NodeX Mode'
+      return
+    }
+  }
+
   let parsed = null
-  if (runtimeConfigJson.value.trim()) {
+  if (!runtimeNodeXMode.value && runtimeConfigJson.value.trim()) {
     try {
       parsed = JSON.parse(runtimeConfigJson.value)
     } catch (err) {
@@ -523,22 +647,57 @@ const saveForwardRuntimeConfig = async () => {
     }
   }
 
+  const backendValue = runtimeNodeXMode.value ? 'gost' : 'iptables_ansible'
+  runtimeBackend.value = backendValue
+  const timeoutValue = Number(runtimeNodeXTimeout.value)
+
   runtimeSaving.value = true
   try {
-    await Promise.all([
+    const updates = [
+      setSystemConfig(runtimeNodeXModeKey, {
+        value: runtimeNodeXMode.value,
+        type: 'bool',
+        group: 'forward',
+        description: 'Enable NodeX forward runtime mode'
+      }),
       setSystemConfig(runtimeBackendKey, {
-        value: runtimeBackend.value || 'gost',
+        value: backendValue,
         type: 'string',
         group: 'forward',
         description: 'Forward runtime backend'
       }),
-      setSystemConfig(runtimeAnsibleConfigKey, {
-        value: parsed ? JSON.stringify(parsed) : '',
-        type: 'json',
+      setSystemConfig(runtimeNodeXBaseUrlKey, {
+        value: trimmedNodeXBaseUrl,
+        type: 'string',
         group: 'forward',
-        description: 'Forward runtime ansible config'
+        description: 'Forward runtime NodeX base URL'
+      }),
+      setSystemConfig(runtimeNodeXTokenKey, {
+        value: trimmedNodeXToken,
+        type: 'string',
+        group: 'forward',
+        description: 'Forward runtime NodeX token'
+      }),
+      setSystemConfig(runtimeNodeXTimeoutKey, {
+        value: Number.isFinite(timeoutValue) && timeoutValue > 0 ? timeoutValue : 15,
+        type: 'number',
+        group: 'forward',
+        description: 'Forward runtime NodeX timeout'
       })
-    ])
+    ]
+
+    if (!runtimeNodeXMode.value) {
+      updates.push(
+        setSystemConfig(runtimeAnsibleConfigKey, {
+          value: parsed ? JSON.stringify(parsed) : '',
+          type: 'json',
+          group: 'forward',
+          description: 'Forward runtime ansible config'
+        })
+      )
+    }
+
+    await Promise.all(updates)
     await fetchForwardRuntimeConfig()
     await fetchForwardRuntimeJobs()
     fetchConfigs()
@@ -787,6 +946,69 @@ onMounted(() => {
 }
 .runtime-config-card .btn {
   min-width: 120px;
+}
+.runtime-mode-toggle {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.runtime-mode-toggle .mode-description {
+  margin: 4px 0;
+}
+.mode-switch {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+}
+.mode-switch input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+.mode-switch span {
+  width: 52px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--border-color);
+  display: block;
+  transition: background 0.2s ease;
+  position: relative;
+}
+.mode-switch span::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-color);
+  transition: transform 0.2s ease;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.25);
+}
+.mode-switch input:checked + span {
+  background: var(--primary-color);
+}
+.mode-switch input:checked + span::after {
+  transform: translateX(24px);
+}
+.runtime-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.node-config .form-group {
+  margin-bottom: 12px;
+}
+.ansible-config textarea {
+  min-height: 160px;
+}
+.text-secondary.small {
+  font-size: 12px;
 }
 .runtime-jobs-block {
   margin-top: 20px;

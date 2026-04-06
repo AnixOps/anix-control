@@ -12,14 +12,31 @@ import (
 
 	"github.com/anixops/v2board/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 const (
-	defaultForwardRuntimeJobPollInterval = 5 * time.Second
-	defaultForwardRuntimeJobBatchSize    = 10
-	defaultForwardRuntimeJobTimeout      = 2 * time.Minute
-	defaultAnsibleCommand                = "ansible-playbook"
+	defaultForwardRuntimeJobPollInterval     = 5 * time.Second
+	defaultForwardRuntimeJobIdlePollInterval = 30 * time.Second
+	defaultForwardRuntimeJobBatchSize        = 10
+	defaultForwardRuntimeJobTimeout          = 2 * time.Minute
+	defaultForwardRuntimeJobErrorLogInterval = time.Minute
+	defaultAnsibleCommand                    = "ansible-playbook"
+
+	forwardRuntimeJobPollIntervalEnvVar     = "FORWARD_RUNTIME_JOB_POLL_INTERVAL"
+	forwardRuntimeJobIdlePollIntervalEnvVar = "FORWARD_RUNTIME_JOB_IDLE_POLL_INTERVAL"
+	forwardRuntimeJobErrorLogIntervalEnvVar = "FORWARD_RUNTIME_JOB_ERROR_LOG_INTERVAL"
 )
+
+type forwardBackgroundErrorLogState struct {
+	message  string
+	loggedAt time.Time
+}
+
+type forwardBackgroundErrorLogger struct {
+	interval time.Duration
+	states   map[string]forwardBackgroundErrorLogState
+}
 
 type panelForwardRuntimeCommandRunner interface {
 	Run(ctx context.Context, command string, args []string, workdir string, env map[string]string) (string, error)
@@ -44,11 +61,13 @@ func (r osExecPanelForwardRuntimeCommandRunner) Run(ctx context.Context, command
 }
 
 type PanelForwardRuntimeJobExecutor struct {
-	db           *gorm.DB
-	runner       panelForwardRuntimeCommandRunner
-	pollInterval time.Duration
-	batchSize    int
-	jobTimeout   time.Duration
+	db               *gorm.DB
+	runner           panelForwardRuntimeCommandRunner
+	pollInterval     time.Duration
+	idlePollInterval time.Duration
+	batchSize        int
+	jobTimeout       time.Duration
+	errorLogger      *forwardBackgroundErrorLogger
 }
 
 type panelForwardAnsibleTargetPayload struct {
@@ -104,12 +123,20 @@ type panelForwardAnsibleRuntimePayload struct {
 }
 
 func NewPanelForwardRuntimeJobExecutor(db *gorm.DB) *PanelForwardRuntimeJobExecutor {
+	pollInterval := loadForwardBackgroundIntervalFromEnv(forwardRuntimeJobPollIntervalEnvVar, defaultForwardRuntimeJobPollInterval)
+	idlePollInterval := normalizeForwardIdlePollInterval(
+		pollInterval,
+		loadForwardBackgroundIntervalFromEnv(forwardRuntimeJobIdlePollIntervalEnvVar, defaultForwardRuntimeJobIdlePollInterval),
+	)
+	errorLogInterval := loadForwardBackgroundIntervalFromEnv(forwardRuntimeJobErrorLogIntervalEnvVar, defaultForwardRuntimeJobErrorLogInterval)
 	return &PanelForwardRuntimeJobExecutor{
-		db:           db,
-		runner:       osExecPanelForwardRuntimeCommandRunner{},
-		pollInterval: defaultForwardRuntimeJobPollInterval,
-		batchSize:    defaultForwardRuntimeJobBatchSize,
-		jobTimeout:   defaultForwardRuntimeJobTimeout,
+		db:               db,
+		runner:           osExecPanelForwardRuntimeCommandRunner{},
+		pollInterval:     pollInterval,
+		idlePollInterval: idlePollInterval,
+		batchSize:        defaultForwardRuntimeJobBatchSize,
+		jobTimeout:       defaultForwardRuntimeJobTimeout,
+		errorLogger:      newForwardBackgroundErrorLogger(errorLogInterval),
 	}
 }
 
@@ -118,42 +145,58 @@ func (e *PanelForwardRuntimeJobExecutor) Start(ctx context.Context) {
 		ctx = context.Background()
 	}
 	if err := e.requeueRunningJobs(); err != nil {
-		log.Printf("forward runtime executor requeue failed: %v", err)
-	}
-	if err := e.RunPendingJobs(ctx); err != nil {
-		log.Printf("forward runtime executor initial run failed: %v", err)
+		e.errorLogger.Logf("requeue", "forward runtime executor requeue failed: %v", err)
+	} else {
+		e.errorLogger.Clear("requeue")
 	}
 
-	ticker := time.NewTicker(e.pollInterval)
-	defer ticker.Stop()
-
+	nextDelay := time.Duration(0)
 	for {
-		select {
-		case <-ctx.Done():
+		if !waitForwardBackgroundCycle(ctx, nextDelay) {
 			return
-		case <-ticker.C:
-			if err := e.RunPendingJobs(ctx); err != nil {
-				log.Printf("forward runtime executor cycle failed: %v", err)
-			}
 		}
+
+		processed, err := e.runPendingJobs(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			e.errorLogger.Logf("cycle", "forward runtime executor cycle failed: %v", err)
+			nextDelay = e.pollInterval
+			continue
+		}
+		e.errorLogger.Clear("cycle")
+
+		if processed == 0 {
+			nextDelay = e.idlePollInterval
+			continue
+		}
+		nextDelay = e.pollInterval
 	}
 }
 
 func (e *PanelForwardRuntimeJobExecutor) RunPendingJobs(ctx context.Context) error {
+	_, err := e.runPendingJobs(ctx)
+	return err
+}
+
+func (e *PanelForwardRuntimeJobExecutor) runPendingJobs(ctx context.Context) (int, error) {
+	processedCount := 0
 	for {
 		processed, err := e.processNext(ctx)
 		if err != nil {
-			return err
+			return processedCount, err
 		}
 		if !processed {
-			return nil
+			return processedCount, nil
 		}
+		processedCount++
 	}
 }
 
 func (e *PanelForwardRuntimeJobExecutor) processNext(ctx context.Context) (bool, error) {
 	var jobs []model.ForwardRuntimeJob
-	if err := e.db.
+	if err := e.queryDB().
 		Where("backend = ? AND status = ?", model.ForwardRuntimeBackendIptablesAnsible, model.ForwardRuntimeJobStatusPending).
 		Order("id ASC").
 		Limit(e.batchSize).
@@ -280,12 +323,21 @@ func (e *PanelForwardRuntimeJobExecutor) updateForwardRuntimeState(job *model.Fo
 }
 
 func (e *PanelForwardRuntimeJobExecutor) requeueRunningJobs() error {
-	return e.db.Model(&model.ForwardRuntimeJob{}).
+	return e.queryDB().Model(&model.ForwardRuntimeJob{}).
 		Where("backend = ? AND status = ?", model.ForwardRuntimeBackendIptablesAnsible, model.ForwardRuntimeJobStatusRunning).
 		Updates(map[string]interface{}{
 			"status":     model.ForwardRuntimeJobStatusPending,
 			"started_at": nil,
 		}).Error
+}
+
+func (e *PanelForwardRuntimeJobExecutor) queryDB() *gorm.DB {
+	if e.db == nil {
+		return nil
+	}
+	return e.db.Session(&gorm.Session{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 }
 
 func (p *panelForwardAnsibleRuntimePayload) commandName() string {
@@ -409,4 +461,85 @@ func failedForwardStatusForAction(action string) *int {
 	}
 	status := model.ForwardStatusError
 	return &status
+}
+
+func newForwardBackgroundErrorLogger(interval time.Duration) *forwardBackgroundErrorLogger {
+	if interval <= 0 {
+		interval = time.Minute
+	}
+	return &forwardBackgroundErrorLogger{
+		interval: interval,
+		states:   make(map[string]forwardBackgroundErrorLogState),
+	}
+}
+
+func (l *forwardBackgroundErrorLogger) Logf(key, format string, args ...interface{}) {
+	message := fmt.Sprintf(format, args...)
+	if l == nil {
+		log.Print(message)
+		return
+	}
+
+	now := time.Now()
+	if state, ok := l.states[key]; ok && state.message == message && now.Sub(state.loggedAt) < l.interval {
+		return
+	}
+
+	l.states[key] = forwardBackgroundErrorLogState{
+		message:  message,
+		loggedAt: now,
+	}
+	log.Print(message)
+}
+
+func (l *forwardBackgroundErrorLogger) Clear(key string) {
+	if l == nil || key == "" {
+		return
+	}
+	delete(l.states, key)
+}
+
+func loadForwardBackgroundIntervalFromEnv(envKey string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(envKey))
+	if raw == "" {
+		return fallback
+	}
+
+	value, err := time.ParseDuration(raw)
+	if err != nil || value <= 0 {
+		log.Printf("invalid %s=%q, using default %s", envKey, raw, fallback)
+		return fallback
+	}
+	return value
+}
+
+func normalizeForwardIdlePollInterval(activeInterval, idleInterval time.Duration) time.Duration {
+	if activeInterval <= 0 {
+		return idleInterval
+	}
+	if idleInterval <= 0 || idleInterval < activeInterval {
+		return activeInterval
+	}
+	return idleInterval
+}
+
+func waitForwardBackgroundCycle(ctx context.Context, delay time.Duration) bool {
+	if delay <= 0 {
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+			return true
+		}
+	}
+
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }

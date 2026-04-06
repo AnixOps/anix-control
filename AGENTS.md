@@ -977,6 +977,9 @@ cd web && npm run build
 - Use `docs/guide/flux-forward-contract.md` as the source for response envelopes, endpoint mapping, DTO requirements, and documented gaps.
 - Before labeling anything as `1:1 clone`, record remaining runtime or diagnose differences so reviewers understand what still diverges from `flux-panel`.
 - Dual-runtime support (`gost` + compatibility backend `iptables_ansible`) is an optional internal execution plane (`NodeX` in public docs), not part of the upstream Flux `/forward` page contract.
+- Supplementary runtime/401 guidance lives in `docs/guide/forward-tunnel-runtime-ops.md`; NodeX Mode vs iptables ansible Mode descriptions now sit each in the runtime doc and its smoke-test companion, so read both whenever validating NodeX/iptables ansible startups or debugging 401/SSH traces.
+- When running targeted Go verification in this repository, prefer `GOWORK=off go test ...`.
+- The repository lives under a parent `go.work`, and handler/service suites may fail before they even execute if the module is not listed there.
 - Keep `web/src/views/admin/Forward.vue` aligned with `vite-frontend/src/pages/forward.tsx`; do not add runtime backend selectors or runtime job tables there.
 - Put backend controls and observability in `web/src/views/admin/System.vue` or deployment-oriented docs, not in the Flux-cloned page.
 - Current internal-backend compatibility surface:
@@ -988,6 +991,13 @@ cd web && npm run build
   - bundled ansible deployment assets: `config/deploy/ansible/`
   - env bootstrap keys: `FORWARD_RUNTIME_BACKEND`, `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`
   - public boundary note: `docs/guide/nodex-internal-extension.md`
+- Current verified clone entry points:
+  - `web/src/views/admin/Forward.vue`
+  - `web/src/views/admin/Tunnel.vue`
+  - `internal/handler/forward_panel.go`
+  - `internal/service/forward_panel_service.go`
+- `docs/guide/forward-tunnel-smoke-test.md`
+- `docs/guide/nodex-internal-extension.md`
 
 ## Deploy Extension Rules
 
@@ -996,6 +1006,12 @@ cd web && npm run build
 - Keep deployment/runtime backend docs documented separately from Flux-compatible UI/API work.
 - Do not move installer-only, backend selection, runtime job observability, or ansible bootstrap controls into `web/src/views/admin/Forward.vue`.
 - Public docs should describe this layer as `NodeX`/internal backend and avoid implementation-topology language.
+
+## NodeX Runtime Docs
+
+- NodeX Mode (`forward.runtime_backend=gost`) and iptables/ansible Mode (`forward.runtime_backend=iptables_ansible`) are two distinct execution planes. Keep the operational guide in `docs/guide/forward-tunnel-runtime-ops.md`, validation steps in `docs/guide/forward-tunnel-smoke-test.md`, and the extension boundary in `docs/guide/nodex-internal-extension.md`. Synchronize all three whenever runtime behavior or deployment scripts change.
+- Highlight the difference between proxy `Node` entries (`/admin/nodes`) and runtime-only `ForwardNode` records so that operators do not mix control-plane roles.
+- Reference these docs when adding env/config bootstrapping, smoke tests, or runtime backplane automation so reviewers always know where to find NodeX vs ansible guidance.
 
 ## Flux-panel Doc Sync
 

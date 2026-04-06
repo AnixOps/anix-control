@@ -61,6 +61,15 @@ log:
   max_backups: 30
   max_age: 30
 
+# Optional background polling overrides via environment variables.
+# Values use Go duration syntax such as 5s, 30s, 2m.
+# FORWARD_RUNTIME_JOB_POLL_INTERVAL=5s
+# FORWARD_RUNTIME_JOB_IDLE_POLL_INTERVAL=30s
+# FORWARD_RUNTIME_JOB_ERROR_LOG_INTERVAL=1m
+# FORWARD_GOST_STATS_POLL_INTERVAL=30s
+# FORWARD_GOST_STATS_IDLE_POLL_INTERVAL=2m
+# FORWARD_GOST_STATS_ERROR_LOG_INTERVAL=5m
+
 jwt:
   secret: "CHANGE-THIS-TO-A-VERY-LONG-RANDOM-STRING-IN-PRODUCTION"
   expire: 86400

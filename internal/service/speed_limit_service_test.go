@@ -17,9 +17,25 @@ type SpeedLimitServiceTestSuite struct {
 
 func (s *SpeedLimitServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
-	s.svc = NewSpeedLimitService(database.Get())
+	db := database.Get()
+	s.svc = NewSpeedLimitService(db)
 	s.runtimeClient = &stubNodeXForwardRuntimeClient{}
 	s.svc.forwardService.runtimeService.client = s.runtimeClient
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXBaseURLConfigKey,
+		"http://127.0.0.1:18080",
+		"string",
+		forwardRuntimeConfigGroup,
+		"test NodeX runtime URL",
+	))
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXTokenConfigKey,
+		"test-nodex-token",
+		"string",
+		forwardRuntimeConfigGroup,
+		"test NodeX runtime token",
+	))
 }
 
 func (s *SpeedLimitServiceTestSuite) TestCreateListUpdateDelete() {

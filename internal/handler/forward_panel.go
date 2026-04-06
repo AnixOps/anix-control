@@ -17,6 +17,10 @@ type panelForwardDiagnoseRequest struct {
 	ForwardID uint `json:"forwardId" binding:"required"`
 }
 
+type panelTunnelDiagnoseRequest struct {
+	TunnelID uint `json:"tunnelId" binding:"required"`
+}
+
 type panelForwardOrderRequest struct {
 	Forwards []service.PanelForwardOrderUpdate `json:"forwards" binding:"required"`
 }
@@ -80,6 +84,74 @@ func (h *ForwardHandler) ListPanelTunnels(c *gin.Context) {
 		return
 	}
 	panelSuccess(c, items)
+}
+
+func (h *ForwardHandler) ListPanelAdminTunnels(c *gin.Context) {
+	items, err := h.panelService.ListAdminTunnels()
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, items)
+}
+
+func (h *ForwardHandler) CreatePanelTunnel(c *gin.Context) {
+	var req service.PanelTunnelInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	item, err := h.panelService.CreateTunnel(req)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, item)
+}
+
+func (h *ForwardHandler) UpdatePanelTunnel(c *gin.Context) {
+	var req service.PanelTunnelUpdateInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	item, err := h.panelService.UpdateTunnel(req)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, item)
+}
+
+func (h *ForwardHandler) DeletePanelTunnel(c *gin.Context) {
+	var req panelForwardIDRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	if err := h.panelService.DeleteTunnel(req.ID); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, true)
+}
+
+func (h *ForwardHandler) DiagnosePanelTunnel(c *gin.Context) {
+	var req panelTunnelDiagnoseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	report, err := h.panelService.DiagnoseTunnel(req.TunnelID)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, report)
 }
 
 func (h *ForwardHandler) CreatePanelForward(c *gin.Context) {

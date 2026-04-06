@@ -69,7 +69,7 @@
         </div>
         
         <!-- 开发模式快速登录 -->
-        <div class="dev-actions" v-if="isDev && !isRegisterMode">
+        <div class="dev-actions" v-if="enableMockLogin && !isRegisterMode">
           <div class="dev-divider">
             <span>开发模式</span>
           </div>
@@ -104,7 +104,10 @@ const successMsg = ref('')
 const isRegisterMode = ref(false)
 
 // 检测是否为开发环境
-const isDev = computed(() => import.meta.env.DEV)
+const enableMockLogin = computed(() => {
+  const flag = String(import.meta.env.VITE_ENABLE_MOCK_LOGIN || '').trim().toLowerCase()
+  return flag === 'true' || flag === '1' || flag === 'yes'
+})
 
 const toggleMode = () => {
   isRegisterMode.value = !isRegisterMode.value
@@ -140,7 +143,7 @@ const handleRegister = async () => {
       password: password.value
     })
     
-    if (res.data) {
+    if (res.data?.token) {
       const { token, is_admin, user_id, email: userEmail } = res.data
       userStore.login(token, {
         id: user_id,
@@ -156,6 +159,8 @@ const handleRegister = async () => {
           router.push('/user/dashboard')
         }
       }, 1000)
+    } else {
+      throw new Error('register response missing token')
     }
   } catch (err) {
     errorMsg.value = err.response?.data?.message || '注册失败，请稍后重试'
@@ -179,7 +184,7 @@ const handleLogin = async () => {
       password: password.value
     })
     
-    if (res.data) {
+    if (res.data?.token) {
       const { token, is_admin, user_id, email: userEmail } = res.data
       userStore.login(token, {
         id: user_id,
@@ -192,6 +197,8 @@ const handleLogin = async () => {
       } else {
         router.push('/user/dashboard')
       }
+    } else {
+      throw new Error('login response missing token')
     }
   } catch (err) {
     errorMsg.value = err.response?.data?.message || '登录失败，请检查邮箱和密码'
@@ -201,6 +208,9 @@ const handleLogin = async () => {
 }
 
 const mockLogin = (role) => {
+  if (!enableMockLogin.value) {
+    return
+  }
   const mockUser = {
     id: 1,
     email: role === 'admin' ? 'admin@example.com' : 'user@example.com',

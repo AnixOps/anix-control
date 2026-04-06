@@ -1,31 +1,45 @@
 # NodeX Internal Extension Boundary
 
-## Purpose
+`v2board_AnixOps` 仍然是围绕 Flux `/admin/forward` 页面及其 API 进行开发。NodeX/iptables_ansible 运行时只是内部扩展，用于在面板之外触发实际的转发配置。这个文档描述了它们的边界、必须的配置以及运维人员在 NodeX vs Ansible 之间切换时需要牢记的验证路径。
 
-`v2board_AnixOps` remains the public-facing product surface. In forward-related docs, `NodeX` is a sanitized name for an optional internal backend/execution plane that can carry out runtime actions outside the Flux-panel clone contract.
+## 双运行时模式
 
-The primary public contract is still the Flux-compatible `/admin/forward` UI and API surface.
+| 模式 | `forward.runtime_backend` | 控制面 | 执行方式 |
+|------|---------------------------|--------|----------|
+| NodeX Mode | `gost` | NodeX REST 接口（`forward.runtime.nodex.base_url`/`token`） | 控制面向 `ForwardNode` 推送 HTTP job（`backend=gost`） |
+| iptables+Ansible Mode | `iptables_ansible` | 本地 SSH + `ansible-playbook`，`forward.runtime.iptables_ansible.config` 控制 | 将命令推送到 `ForwardNode` 的 SSH 终端（`backend=iptables_ansible`） |
 
-## Contract Boundary
+### 配置示例
 
-- Flux clone surface: `/admin/forward`, its matching DTOs, response envelope, and user/admin interaction flow.
-- Internal backend compatibility surface: `forward.runtime_backend`, `forward.runtime.iptables_ansible.config`, `GET /api/v2/admin/forward/runtime/jobs`, deployment assets under `config/deploy/ansible/`, and installer/bootstrap environment values such as `FORWARD_RUNTIME_BACKEND` and `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`.
-- Compatibility naming: `iptables_ansible` is retained in config and env names for backward compatibility. In public docs, interpret it as an internal backend adapter name, not as a promise about topology or branding.
+```env
+FORWARD_RUNTIME_BACKEND=gost
+FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18080
+FORWARD_RUNTIME_NODEX_TOKEN=nodex-secret
+FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=20
 
-## Deployment Guidance
+FORWARD_RUNTIME_BACKEND=iptables_ansible
+FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON={"inventory":"/etc/ansible/forward_inventory.ini","playbookApply":"/etc/ansible/forward_apply.yml"}
+FORWARD_RUNTIME_ANSIBLE_INVENTORY=/etc/ansible/forward_inventory.ini
+```
 
-- Docker images may bundle `ansible-playbook` to support this optional internal backend.
-- One-click installers may preseed backend settings before the admin UI is used.
-- Backend switching, job observability, and bootstrap controls belong in system/deployment surfaces, not inside the Flux-cloned `/admin/forward` page.
+`InitForwardRuntimeSystemConfigFromEnv` 会把这些环境变量写入系统配置，前端 `/admin/system` 有对应展示，文档处于 `docs/guide/forward-tunnel-runtime-ops.md` 和 `docs/guide/forward-tunnel-smoke-test.md`。
 
-### NodeX Control Plane
+## Proxy Node 与 Forward Node
 
-- 系统配置 `forward.runtime.nodex.base_url` 是 NodeX 控制面基础地址（例如 `https://nodex.example.com`）。当前 `panel_forward` 与 `legacy_rule` 的 NodeX 调用都会使用它，接口不会再默认回退到节点本身的 `host:apiPort`。
-- `forward.runtime.nodex.token` 用来签发 `Authorization: Bearer` 与 `X-API-Key`，可在控制面/环境变量中预设；仅在该值为空时，客户端才会尝试使用请求里节点的 `apiToken`。应通过 `FORWARD_RUNTIME_NODEX_BASE_URL`/`FORWARD_RUNTIME_NODEX_TOKEN` 环境变量在部署阶段同步。
-- 请求超时可通过 `forward.runtime.nodex.timeout_seconds` 或环境变量 `FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS` 调整，默认 15 秒。
+- **Proxy Node (`model.Node`, `/admin/nodes`)**：暴露给用户做代理连接，支持 VMess/VLESS/Trojan 等协议。NodeX runtime job 不直接作用于它，除非它被新建为 `ForwardNode` 之后。
+- **Forward Node (`model.ForwardNode`, `v2_forward_node`)**：只在 runtime job 中使用。NodeX Mode 下提供 `host/api_port/api_token`，Ansible Mode 下提供 SSH 访问字段；其 `type` 字段可区分 `relay`（入口）/`exit`（出口）。
+- 运行时 job 的 `node_id` 指向 `ForwardNode`，反映在 `v2_forward_runtime_job.node_id` 字段。
 
-## Documentation Rule
+确保文档与操作流程都明确强调这两类节点的分离，避免在 `/admin/nodes` 或 NodeX job 日志中混淆角色。
 
-- When backend semantics change, update `docs/DEPLOYMENT.md`, `docs/guide/api-reference.md`, and `docs/guide/flux-panel-workstream.md`.
-- When `/admin/forward` contract or interaction changes, verify against `flux-panel` first and update the clone docs before treating the work as aligned.
-- Public docs should avoid implementation-topology language for NodeX and keep Flux clone rules primary.
+## 文档连接
+
+- Runtime 操作指南：`docs/guide/forward-tunnel-runtime-ops.md`（NodeX/Ansible 配置、env 示例、字段说明）。
+- 手工 Smoke 验证：`docs/guide/forward-tunnel-smoke-test.md`（NodeX job/curl 验证 + Ansible playbook smoke）。
+- Flux Clone 相关：`docs/guide/flux-panel-clone.md`、`docs/guide/flux-forward-contract.md`、`docs/guide/api-reference.md`、`readme.md`（同步 runtime 说明）。
+
+## 维护建议
+
+- 每次更改 NodeX control plane 逻辑、ansible inventory 写法或 smoke 流程时，依次更新本文件、`forward-tunnel-runtime-ops.md`、`forward-tunnel-smoke-test.md`。
+- 所有与 NodeX Mode 相关的 API 路径（如 `/api/v2/admin/forward/runtime/jobs`）都属于内部运维 surface，不应该被认为是 Flux `/admin/forward` 的一部分。
+- 由于这是内部扩展，外部文档（如 README）只需要在“部署”或 “运维” 章节中提及 NodeX/iptables 相关字段，避免在 Flux 页面上暴露这些细节。

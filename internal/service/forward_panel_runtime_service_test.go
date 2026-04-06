@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -57,6 +58,21 @@ func (s *PanelForwardRuntimeServiceTestSuite) SetupTest() {
 	db.Exec("DELETE FROM v2_forward_tunnel")
 	db.Exec("DELETE FROM v2_forward_node")
 	s.svc = NewPanelForwardRuntimeService(db)
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXBaseURLConfigKey,
+		"http://127.0.0.1:18080",
+		"string",
+		forwardRuntimeConfigGroup,
+		"test NodeX runtime URL",
+	))
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXTokenConfigKey,
+		"test-nodex-token",
+		"string",
+		forwardRuntimeConfigGroup,
+		"test NodeX runtime token",
+	))
 }
 
 func (s *PanelForwardRuntimeServiceTestSuite) TestApply_DispatchesPanelForwardRequestAndPersistsSuccessJob() {
@@ -194,7 +210,174 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_GostDeleteWithoutIngress
 	}
 }
 
-func (s *PanelForwardRuntimeServiceTestSuite) TestApply_PersistsPendingJobForAsyncNodeXResponse() {
+func (s *PanelForwardRuntimeServiceTestSuite) TestApply_GostWithoutNodeXBaseURLFails() {
+	db := database.Get()
+	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendGost)
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXBaseURLConfigKey,
+		"",
+		"string",
+		forwardRuntimeConfigGroup,
+		"clear test NodeX runtime URL",
+	))
+
+	node := &model.ForwardNode{
+		Name:     "Fallback Node",
+		Type:     model.ForwardNodeTypeRelay,
+		Host:     "203.0.113.50",
+		Port:     22,
+		APIPort:  19080,
+		APIToken: "fallback-token",
+		Enabled:  true,
+	}
+	assert.NoError(s.T(), db.Create(node).Error)
+
+	tunnel := &model.ForwardTunnel{
+		Name:          "Fallback Tunnel",
+		InNodeID:      node.ID,
+		Protocol:      "tcp",
+		TCPListenAddr: "0.0.0.0",
+		Status:        model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	forward := &model.Forward{
+		UserID:     111,
+		UserName:   "runtime-fallback@example.com",
+		Name:       "Fallback Forward",
+		TunnelID:   tunnel.ID,
+		InPort:     21001,
+		RemoteAddr: "fallback.example.com:443",
+		Status:     model.ForwardStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	client := &stubForwardRuntimeNodeXClient{}
+	s.svc.client = client
+
+	result, err := s.svc.Apply(context.Background(), model.ForwardRuntimeJobActionCreate, forward, tunnel)
+	assert.Error(s.T(), err)
+	assert.NotNil(s.T(), result)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, result.Status)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendGost, result.Backend)
+	assert.Empty(s.T(), client.calls)
+	assert.Contains(s.T(), err.Error(), forwardRuntimeNodeXBaseURLConfigKey)
+
+	var jobCount int64
+	assert.NoError(s.T(), db.Model(&model.ForwardRuntimeJob{}).Count(&jobCount).Error)
+	assert.Zero(s.T(), jobCount, "NodeX execution should not enqueue jobs when base URL is missing")
+}
+
+func (s *PanelForwardRuntimeServiceTestSuite) TestApply_GostWithoutNodeXTokenFails() {
+	db := database.Get()
+	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendGost)
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXBaseURLConfigKey,
+		"http://127.0.0.1:18080",
+		"string",
+		forwardRuntimeConfigGroup,
+		"test NodeX runtime URL",
+	))
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXTokenConfigKey,
+		"",
+		"string",
+		forwardRuntimeConfigGroup,
+		"clear test NodeX runtime token",
+	))
+
+	node := &model.ForwardNode{
+		Name:     "Fallback Node",
+		Type:     model.ForwardNodeTypeRelay,
+		Host:     "203.0.113.50",
+		Port:     22,
+		APIPort:  19080,
+		APIToken: "fallback-token",
+		Enabled:  true,
+	}
+	assert.NoError(s.T(), db.Create(node).Error)
+
+	tunnel := &model.ForwardTunnel{
+		Name:          "Fallback Tunnel",
+		InNodeID:      node.ID,
+		Protocol:      "tcp",
+		TCPListenAddr: "0.0.0.0",
+		Status:        model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	forward := &model.Forward{
+		UserID:     111,
+		UserName:   "runtime-fallback@example.com",
+		Name:       "Fallback Forward",
+		TunnelID:   tunnel.ID,
+		InPort:     21001,
+		RemoteAddr: "fallback.example.com:443",
+		Status:     model.ForwardStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	client := &stubForwardRuntimeNodeXClient{}
+	s.svc.client = client
+
+	result, err := s.svc.Apply(context.Background(), model.ForwardRuntimeJobActionCreate, forward, tunnel)
+	assert.Error(s.T(), err)
+	assert.NotNil(s.T(), result)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, result.Status)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendGost, result.Backend)
+	assert.Empty(s.T(), client.calls)
+	assert.Contains(s.T(), err.Error(), forwardRuntimeNodeXTokenConfigKey)
+
+	var jobCount int64
+	assert.NoError(s.T(), db.Model(&model.ForwardRuntimeJob{}).Count(&jobCount).Error)
+	assert.Zero(s.T(), jobCount, "NodeX execution should not enqueue jobs when token is missing")
+}
+
+func (s *PanelForwardRuntimeServiceTestSuite) TestResolveBackend_NodeXModeOverridesLegacyBackend() {
+	db := database.Get()
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXModeConfigKey,
+		"false",
+		"bool",
+		forwardRuntimeConfigGroup,
+		"disable NodeX mode",
+	))
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeBackendConfigKey,
+		model.ForwardRuntimeBackendGost,
+		"string",
+		forwardRuntimeConfigGroup,
+		"legacy backend",
+	))
+
+	backend, err := s.svc.resolveBackend()
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, backend)
+
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXModeConfigKey,
+		"true",
+		"bool",
+		forwardRuntimeConfigGroup,
+		"enable NodeX mode",
+	))
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeBackendConfigKey,
+		model.ForwardRuntimeBackendIptablesAnsible,
+		"string",
+		forwardRuntimeConfigGroup,
+		"legacy backend",
+	))
+
+	backend, err = s.svc.resolveBackend()
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendGost, backend)
+}
+
+func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleQueuesLocalJobWithoutNodeX() {
 	db := database.Get()
 	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendIptablesAnsible)
 
@@ -245,40 +428,34 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_PersistsPendingJobForAsy
 		"test ansible runtime",
 	))
 
-	client := &stubForwardRuntimeNodeXClient{
-		executeFn: func(_ context.Context, req nodeXForwardExecuteRequest) (*nodeXForwardExecuteResult, error) {
-			assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, req.Backend)
-			if assert.NotNil(s.T(), req.AnsibleRuntime) {
-				assert.Equal(s.T(), "/etc/ansible/hosts", req.AnsibleRuntime.Inventory)
-				assert.Equal(s.T(), "/opt/ansible/apply.yml", req.AnsibleRuntime.Playbook)
-				assert.Equal(s.T(), forward.ID, req.AnsibleRuntime.Forward.ID)
-				assert.Equal(s.T(), node.ID, req.AnsibleRuntime.Node.ID)
-			}
-			return &nodeXForwardExecuteResult{
-				Backend: model.ForwardRuntimeBackendIptablesAnsible,
-				Status:  model.ForwardRuntimeJobStatusPending,
-				Message: "accepted",
-				Async:   true,
-			}, nil
-		},
-	}
+	client := &stubForwardRuntimeNodeXClient{}
 	s.svc.client = client
 
 	result, err := s.svc.Apply(context.Background(), model.ForwardRuntimeJobActionCreate, forward, tunnel)
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), result)
+	assert.Empty(s.T(), client.calls)
 	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, result.Status)
-	assert.Equal(s.T(), "accepted", result.Message)
+	assert.Equal(s.T(), "ansible runtime queued for local executor", result.Message)
 	assert.True(s.T(), result.Async)
 
 	var job model.ForwardRuntimeJob
 	assert.NoError(s.T(), db.Last(&job).Error)
 	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, job.Backend)
 	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, job.Status)
-	assert.NotNil(s.T(), job.StartedAt)
+	assert.Nil(s.T(), job.StartedAt)
 	assert.Nil(s.T(), job.CompletedAt)
 	assert.Equal(s.T(), "", job.Error)
-	assert.Contains(s.T(), job.Payload, "\"ansibleRuntime\"")
+	assert.NotContains(s.T(), job.Payload, "\"ansibleRuntime\"")
+	assert.Contains(s.T(), job.Payload, "\"inventory\":\"/etc/ansible/hosts\"")
+	assert.Contains(s.T(), job.Payload, "\"playbook\":\"/opt/ansible/apply.yml\"")
+
+	var payload panelForwardAnsibleRuntimePayload
+	assert.NoError(s.T(), json.Unmarshal([]byte(job.Payload), &payload))
+	assert.Equal(s.T(), "/etc/ansible/hosts", payload.Inventory)
+	assert.Equal(s.T(), "/opt/ansible/apply.yml", payload.Playbook)
+	assert.Equal(s.T(), forward.ID, payload.Forward.ID)
+	assert.Equal(s.T(), node.ID, payload.Node.ID)
 }
 
 func (s *PanelForwardRuntimeServiceTestSuite) TestApply_AttachesLimiterToRuntimeRequest() {
@@ -346,35 +523,27 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_AttachesLimiterToRuntime
 		"test ansible runtime",
 	))
 
-	client := &stubForwardRuntimeNodeXClient{
-		executeFn: func(_ context.Context, req nodeXForwardExecuteRequest) (*nodeXForwardExecuteResult, error) {
-			if assert.NotNil(s.T(), req.PanelForward) && assert.NotNil(s.T(), req.PanelForward.Limiter) {
-				assert.Equal(s.T(), speedLimit.ID, req.PanelForward.Limiter.SpeedID)
-				assert.Equal(s.T(), speedLimit.Name, req.PanelForward.Limiter.Name)
-				assert.Equal(s.T(), speedLimit.Speed, req.PanelForward.Limiter.Speed)
-			}
-			if assert.NotNil(s.T(), req.AnsibleRuntime) && assert.NotNil(s.T(), req.AnsibleRuntime.Limiter) {
-				assert.Equal(s.T(), speedLimit.ID, req.AnsibleRuntime.Limiter.SpeedID)
-				assert.Equal(s.T(), speedLimit.Speed, req.AnsibleRuntime.Limiter.Speed)
-			}
-			return &nodeXForwardExecuteResult{
-				Backend: model.ForwardRuntimeBackendIptablesAnsible,
-				Status:  model.ForwardRuntimeJobStatusSuccess,
-				Message: "limiter applied",
-			}, nil
-		},
-	}
+	client := &stubForwardRuntimeNodeXClient{}
 	s.svc.client = client
 
 	result, err := s.svc.Apply(context.Background(), model.ForwardRuntimeJobActionCreate, forward, tunnel)
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), result)
-	assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, result.Status)
+	assert.Empty(s.T(), client.calls)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, result.Status)
 
 	var job model.ForwardRuntimeJob
 	assert.NoError(s.T(), db.Last(&job).Error)
 	assert.Contains(s.T(), job.Payload, "\"limiter\"")
 	assert.Contains(s.T(), job.Payload, "\"speedId\":"+fmt.Sprintf("%d", speedLimit.ID))
+
+	var payload panelForwardAnsibleRuntimePayload
+	assert.NoError(s.T(), json.Unmarshal([]byte(job.Payload), &payload))
+	if assert.NotNil(s.T(), payload.Limiter) {
+		assert.Equal(s.T(), speedLimit.ID, payload.Limiter.SpeedID)
+		assert.Equal(s.T(), speedLimit.Name, payload.Limiter.Name)
+		assert.Equal(s.T(), speedLimit.Speed, payload.Limiter.Speed)
+	}
 }
 
 func setForwardRuntimeBackendForTest(t *testing.T, db *gorm.DB, backend string) {

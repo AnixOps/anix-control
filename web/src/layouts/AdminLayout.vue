@@ -56,6 +56,9 @@
           <router-link to="/admin/forward" @click="closeSidebar">
             <span class="nav-icon">🔀</span> 流量转发
           </router-link>
+          <router-link to="/admin/tunnel" @click="closeSidebar">
+            <span class="nav-icon">🛣️</span> 隧道管理
+          </router-link>
           <router-link to="/admin/limit" @click="closeSidebar">
             <span class="nav-icon">🚦</span> 限速管理
           </router-link>
@@ -163,6 +166,7 @@ const pageTitles = {
   '/admin/coupons': '优惠券管理',
   '/admin/knowledge': '知识库管理',
   '/admin/forward': '流量转发管理',
+  '/admin/tunnel': '隧道管理',
   '/admin/limit': '限速管理',
   '/admin/payment': '支付网关管理',
   '/admin/telegram': 'Telegram Bot 管理',

@@ -24,6 +24,7 @@ func (s *ForwardRuntimeBootstrapTestSuite) SetupSuite() {
 func (s *ForwardRuntimeBootstrapTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
 	database.Get().Exec("DELETE FROM v2_system_config")
+	_ = os.Unsetenv(forwardRuntimeNodeXModeEnvVar)
 	_ = os.Unsetenv(forwardRuntimeBackendEnvVar)
 	_ = os.Unsetenv(forwardRuntimeAnsibleConfigJSONEnvVar)
 	_ = os.Unsetenv(forwardRuntimeAnsibleInventoryEnvVar)
@@ -115,6 +116,68 @@ func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFro
 	timeout, err := configService.Get(forwardRuntimeNodeXTimeoutSecondsConfigKey)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "45", timeout)
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_NodeXModeSeedsDerivedBackend() {
+	s.T().Setenv(forwardRuntimeNodeXModeEnvVar, "true")
+	s.T().Setenv(forwardRuntimeBackendEnvVar, model.ForwardRuntimeBackendIptablesAnsible)
+	s.T().Setenv(forwardRuntimeNodeXBaseURLEnvVar, "http://127.0.0.1:18080")
+	s.T().Setenv(forwardRuntimeNodeXTokenEnvVar, "nodex-secret")
+
+	err := InitForwardRuntimeSystemConfigFromEnv(database.Get())
+	assert.NoError(s.T(), err)
+
+	configService := NewSystemConfigService(database.Get())
+	mode, err := configService.Get(forwardRuntimeNodeXModeConfigKey)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "true", mode)
+
+	backend, err := configService.Get(forwardRuntimeBackendConfigKey)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendGost, backend)
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_NodeXModeDisabledSeedsIptablesBackend() {
+	s.T().Setenv(forwardRuntimeNodeXModeEnvVar, "false")
+	s.T().Setenv(forwardRuntimeBackendEnvVar, model.ForwardRuntimeBackendGost)
+
+	err := InitForwardRuntimeSystemConfigFromEnv(database.Get())
+	assert.NoError(s.T(), err)
+
+	configService := NewSystemConfigService(database.Get())
+	mode, err := configService.Get(forwardRuntimeNodeXModeConfigKey)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "false", mode)
+
+	backend, err := configService.Get(forwardRuntimeBackendConfigKey)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, backend)
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_NodeXModeRequiresBaseURL() {
+	s.T().Setenv(forwardRuntimeNodeXModeEnvVar, "true")
+	s.T().Setenv(forwardRuntimeNodeXTokenEnvVar, "nodex-secret")
+
+	err := InitForwardRuntimeSystemConfigFromEnv(database.Get())
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), forwardRuntimeNodeXBaseURLConfigKey)
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_NodeXModeRequiresToken() {
+	s.T().Setenv(forwardRuntimeNodeXModeEnvVar, "true")
+	s.T().Setenv(forwardRuntimeNodeXBaseURLEnvVar, "http://127.0.0.1:18080")
+
+	err := InitForwardRuntimeSystemConfigFromEnv(database.Get())
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), forwardRuntimeNodeXTokenConfigKey)
+}
+
+func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_RejectsInvalidNodeXMode() {
+	s.T().Setenv(forwardRuntimeNodeXModeEnvVar, "maybe")
+
+	err := InitForwardRuntimeSystemConfigFromEnv(database.Get())
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), forwardRuntimeNodeXModeEnvVar)
 }
 
 func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfigFromEnv_RejectsInvalidExtraVarsJSON() {
