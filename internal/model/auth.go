@@ -20,7 +20,8 @@ type LoginResponse struct {
 
 // AdminCreateUserRequest 管理员创建用户请求
 type AdminCreateUserRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
-	IsAdmin  int    `json:"is_admin"`
+	Email         string `json:"email" binding:"required,email"`
+	Password      string `json:"password" binding:"required,min=6"`
+	IsAdmin       int    `json:"is_admin"`
+	FlowResetTime int64  `json:"flowResetTime"`
 }

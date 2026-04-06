@@ -23,6 +23,7 @@ import AdminTickets from '@/views/admin/Tickets.vue'
 import AdminCoupons from '@/views/admin/Coupons.vue'
 import AdminKnowledge from '@/views/admin/Knowledge.vue'
 import AdminForward from '@/views/admin/Forward.vue'
+import AdminLimit from '@/views/admin/Limit.vue'
 import AdminPayment from '@/views/admin/Payment.vue'
 import AdminTelegram from '@/views/admin/Telegram.vue'
 import AdminMFA from '@/views/admin/MFA.vue'
@@ -118,6 +119,10 @@ const routes = [
       {
         path: 'forward',
         component: AdminForward
+      },
+      {
+        path: 'limit',
+        component: AdminLimit
       },
       {
         path: 'payment',

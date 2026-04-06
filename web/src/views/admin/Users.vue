@@ -133,6 +133,10 @@
             <input v-model.number="editingUser.expired_at" type="number" />
           </div>
           <div class="form-group">
+            <label>流量重置日</label>
+            <input v-model.number="editingUser.flowResetTime" type="number" min="0" max="31" />
+          </div>
+          <div class="form-group">
             <label>备注</label>
             <textarea v-model="editingUser.remark_content" rows="3"></textarea>
           </div>
@@ -166,6 +170,10 @@
               <option :value="1">管理员</option>
             </select>
           </div>
+          <div class="form-group">
+            <label>流量重置日</label>
+            <input v-model.number="newUser.flowResetTime" type="number" min="0" max="31" />
+          </div>
           <div v-if="createError" class="error-msg">{{ createError }}</div>
         </div>
         <div class="modal-footer">
@@ -188,7 +196,7 @@
           <div class="form-grid">
             <div class="form-group">
               <label>隧道{{ editingTunnelId ? '（编辑时不可更改）' : '' }}</label>
-              <select v-model="tunnelForm.tunnelId" :disabled="Boolean(editingTunnelId)">
+              <select v-model="tunnelForm.tunnelId" :disabled="Boolean(editingTunnelId)" @change="handleTunnelChange">
                 <option value="">{{ availableTunnelOptions.length === 0 && !editingTunnelId ? '暂无可分配隧道' : '请选择隧道' }}</option>
                 <option v-for="item in availableTunnelOptions" :key="item.id" :value="item.id">
                   {{ item.name }} (ID: {{ item.id }})
@@ -225,8 +233,21 @@
           </div>
           <div class="form-grid">
             <div class="form-group">
-              <label>SpeedID（兼容占位）</label>
-              <input v-model.number="tunnelForm.speedId" type="number" min="0" placeholder="可选" />
+              <label>限速规则</label>
+              <select
+                v-model="tunnelForm.speedId"
+                :disabled="speedLimitLoading || !tunnelForm.tunnelId"
+                @change="handleSpeedLimitChange"
+              >
+                <option :value="null">不限速</option>
+                <option v-if="!tunnelForm.tunnelId" disabled value="">请先选择隧道</option>
+                <option v-else-if="!speedLimitLoading && availableSpeedLimitOptions.length === 0" disabled value="">
+                  当前隧道暂无限速规则
+                </option>
+                <option v-for="item in availableSpeedLimitOptions" :key="item.id" :value="item.id">
+                  {{ formatSpeedLimitOptionLabel(item) }}
+                </option>
+              </select>
             </div>
             <div class="form-group tunnel-form-actions">
               <button v-if="editingTunnelId" class="btn-secondary" @click="resetTunnelForm">取消编辑</button>
@@ -270,7 +291,7 @@
                   <td>{{ formatTunnelExpire(item.expTime) }}</td>
                   <td>{{ formatFlowResetDay(item.flowResetTime) }}</td>
                   <td>{{ formatBytes(calculateTunnelUsedFlow(item)) }}</td>
-                  <td>{{ item.speedLimitName || (item.speedId ?? '-') }}</td>
+                  <td>{{ formatTunnelRateLimit(item) }}</td>
                   <td>
                     <div class="action-buttons">
                       <button class="btn-sm btn-ghost" @click="editTunnelGrant(item)">编辑</button>
@@ -324,6 +345,7 @@ import {
   createUser,
   getAdminUserTunnelList,
   getForwardTunnels,
+  getSpeedLimitList,
   getUserList,
   getUserStats,
   removeAdminUserTunnel,
@@ -353,15 +375,18 @@ const createError = ref('')
 const newUser = ref({
   email: '',
   password: '',
-  is_admin: 0
+  is_admin: 0,
+  flowResetTime: 0
 })
 
 const showTunnelModal = ref(false)
 const tunnelUser = ref(null)
 const tunnelOptions = ref([])
+const speedLimitOptions = ref([])
 const userTunnels = ref([])
 const tunnelListLoading = ref(false)
 const tunnelLoading = ref(false)
+const speedLimitLoading = ref(false)
 const editingTunnelId = ref(null)
 const showResetFlowModal = ref(false)
 const resetFlowLoading = ref(false)
@@ -395,6 +420,11 @@ const availableTunnelOptions = computed(() => {
     return tunnelOptions.value
   }
   return tunnelOptions.value.filter(item => !assignedTunnelIds.value.has(Number(item?.id || 0)))
+})
+const availableSpeedLimitOptions = computed(() => {
+  const targetTunnelId = Number(tunnelForm.value.tunnelId || 0)
+  if (!targetTunnelId) return []
+  return speedLimitOptions.value.filter(item => Number(item?.tunnelId || 0) === targetTunnelId)
 })
 
 const assertCompatSuccess = (res, fallback = '操作失败') => {
@@ -446,7 +476,7 @@ const handleCreateUser = async () => {
   try {
     await createUser(newUser.value)
     showCreateModal.value = false
-    newUser.value = { email: '', password: '', is_admin: 0 }
+    newUser.value = { email: '', password: '', is_admin: 0, flowResetTime: 0 }
     fetchUsers()
     fetchStats()
     alert('用户创建成功')
@@ -483,7 +513,10 @@ const fetchStats = async () => {
 }
 
 const editUser = (user) => {
-  editingUser.value = { ...user }
+  editingUser.value = {
+    ...user,
+    flowResetTime: Number(user?.flowResetTime || 0)
+  }
   showEditModal.value = true
 }
 
@@ -494,6 +527,7 @@ const saveUser = async () => {
       balance: editingUser.value.balance,
       transfer_enable: editingUser.value.transfer_enable,
       expired_at: editingUser.value.expired_at,
+      flowResetTime: Number(editingUser.value.flowResetTime || 0),
       remark_content: editingUser.value.remark_content
     })
     showEditModal.value = false
@@ -544,6 +578,74 @@ const loadTunnelOptions = async () => {
   }
 }
 
+const normalizeSpeedLimitList = (items) => {
+  if (!Array.isArray(items)) return []
+  return items
+    .map(item => {
+      const id = Number(item?.id || 0)
+      if (!Number.isFinite(id) || id <= 0) return null
+      return {
+        id,
+        name: item?.name || `Rule-${id}`,
+        speed: Number(item?.speed || 0),
+        tunnelId: Number(item?.tunnelId ?? item?.tunnel_id ?? 0)
+      }
+    })
+    .filter(Boolean)
+}
+
+const loadSpeedLimitOptions = async () => {
+  speedLimitLoading.value = true
+  try {
+    const res = await getSpeedLimitList()
+    const payload = getResData(res, '获取限速规则失败')
+    const list = Array.isArray(payload) ? payload : (payload?.list || [])
+    speedLimitOptions.value = normalizeSpeedLimitList(list)
+  } catch (err) {
+    alert(err.response?.data?.msg || err.response?.data?.message || err.message || '获取限速规则失败')
+    speedLimitOptions.value = []
+  } finally {
+    speedLimitLoading.value = false
+  }
+}
+
+const normalizeSpeedId = (speedId, tunnelId) => {
+  if (speedId === null || speedId === '' || typeof speedId === 'undefined') {
+    return null
+  }
+  const value = Number(speedId)
+  if (!Number.isFinite(value) || value <= 0) return null
+  const currentTunnelId = Number(tunnelId || 0)
+  if (!currentTunnelId) return null
+  const inTunnel = speedLimitOptions.value.some(
+    item => Number(item.id) === value && Number(item.tunnelId || 0) === currentTunnelId
+  )
+  return inTunnel ? value : null
+}
+
+const handleSpeedLimitChange = () => {
+  tunnelForm.value.speedId = normalizeSpeedId(tunnelForm.value.speedId, tunnelForm.value.tunnelId)
+}
+
+const handleTunnelChange = () => {
+  tunnelForm.value.speedId = normalizeSpeedId(tunnelForm.value.speedId, tunnelForm.value.tunnelId)
+}
+
+const formatSpeedLimitOptionLabel = (item) => {
+  return item?.name || `Rule-${item?.id}`
+}
+
+const formatTunnelRateLimit = (item) => {
+  if (item?.speedLimitName) return item.speedLimitName
+  const speedId = Number(item?.speedId || 0)
+  if (speedId > 0) {
+    const found = speedLimitOptions.value.find(limit => Number(limit?.id || 0) === speedId)
+    if (found) return formatSpeedLimitOptionLabel(found)
+    return speedId
+  }
+  return '不限速'
+}
+
 const loadUserTunnels = async (userId) => {
   tunnelListLoading.value = true
   try {
@@ -560,7 +662,7 @@ const openTunnelModal = async (user) => {
   tunnelUser.value = user
   resetTunnelForm()
   showTunnelModal.value = true
-  await Promise.all([loadTunnelOptions(), loadUserTunnels(user.id)])
+  await Promise.all([loadTunnelOptions(), loadSpeedLimitOptions(), loadUserTunnels(user.id)])
 }
 
 const closeTunnelModal = () => {
@@ -594,7 +696,7 @@ const submitTunnelForm = async () => {
       num: Number(tunnelForm.value.num || 0),
       expTime: fromDateTimeLocal(tunnelForm.value.expTime),
       flowResetTime: Number(tunnelForm.value.flowResetTime || 0),
-      speedId: tunnelForm.value.speedId === null || tunnelForm.value.speedId === '' ? null : Number(tunnelForm.value.speedId),
+      speedId: normalizeSpeedId(tunnelForm.value.speedId, tunnelForm.value.tunnelId),
       status: Number(tunnelForm.value.status || 1)
     }
 
@@ -630,7 +732,7 @@ const editTunnelGrant = (item) => {
     num: item.num ?? 0,
     expTime: toDateTimeLocal(item.expTime),
     flowResetTime: item.flowResetTime ?? 0,
-    speedId: item.speedId ?? null,
+    speedId: normalizeSpeedId(item.speedId ?? null, item.tunnelId || ''),
     status: item.status ?? 1
   }
 }

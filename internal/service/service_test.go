@@ -64,6 +64,8 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.ForwardTunnel{},
 			&model.ForwardUserTunnel{},
 			&model.Forward{},
+			&model.ForwardRuntimeJob{},
+			&model.SpeedLimit{},
 			&model.UserMFA{},
 			&model.MFALoginAttempt{},
 			&model.InviteCode{},
@@ -138,8 +140,10 @@ func (s *ServiceTestSuite) SetupTest() {
 	db.Exec("DELETE FROM v2_forward_rule")
 	db.Exec("DELETE FROM v2_forward_stats")
 	db.Exec("DELETE FROM v2_forward")
+	db.Exec("DELETE FROM v2_forward_runtime_job")
 	db.Exec("DELETE FROM v2_forward_user_tunnel")
 	db.Exec("DELETE FROM v2_forward_tunnel")
+	db.Exec("DELETE FROM v2_speed_limit")
 	db.Exec("DELETE FROM v2_user_mfa")
 	db.Exec("DELETE FROM v2_mfa_login_attempt")
 	db.Exec("DELETE FROM v2_invite_code")
@@ -251,6 +255,20 @@ func (s *AuthServiceTestSuite) TestLogin_BannedUser() {
 	_, _, err := svc.Login("banned@example.com", "password123", s.cfg)
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "用户已被封禁")
+}
+
+func (s *AuthServiceTestSuite) TestLogin_ExpiredUser() {
+	svc := NewAuthService()
+
+	_, user, err := svc.Register("expired-login@example.com", "password123", s.cfg)
+	assert.NoError(s.T(), err)
+
+	expiredAt := time.Now().Add(-time.Hour).Unix()
+	assert.NoError(s.T(), database.Get().Model(user).Update("expired_at", expiredAt).Error)
+
+	_, _, err = svc.Login("expired-login@example.com", "password123", s.cfg)
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "用户已过期")
 }
 
 func TestAuthService(t *testing.T) {

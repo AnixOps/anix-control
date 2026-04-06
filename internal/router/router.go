@@ -359,7 +359,13 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			{
 				adminCompatHandler := handler.NewAdminHandler()
 				forwardCompatHandler := handler.NewForwardHandler()
+				speedLimitHandler := handler.NewSpeedLimitHandler()
 				adminCompat.POST("/user/reset", adminCompatHandler.ResetCompatFlow)
+				adminCompat.POST("/speed-limit/create", speedLimitHandler.CreatePanelSpeedLimit)
+				adminCompat.POST("/speed-limit/list", speedLimitHandler.ListPanelSpeedLimits)
+				adminCompat.POST("/speed-limit/update", speedLimitHandler.UpdatePanelSpeedLimit)
+				adminCompat.POST("/speed-limit/delete", speedLimitHandler.DeletePanelSpeedLimit)
+				adminCompat.POST("/speed-limit/tunnels", speedLimitHandler.ListPanelSpeedLimitTunnels)
 				adminCompat.POST("/tunnel/user/assign", forwardCompatHandler.AssignPanelUserTunnel)
 				adminCompat.POST("/tunnel/user/list", forwardCompatHandler.ListPanelUserTunnels)
 				adminCompat.POST("/tunnel/user/remove", forwardCompatHandler.RemovePanelUserTunnel)

@@ -17,14 +17,21 @@ Use it before changing:
 
 - `springboot-backend/src/main/java/com/admin/controller/ForwardController.java`
 - `springboot-backend/src/main/java/com/admin/controller/TunnelController.java`
+- `springboot-backend/src/main/java/com/admin/controller/UserController.java`
+- `springboot-backend/src/main/java/com/admin/controller/SpeedLimitController.java`
 - `springboot-backend/src/main/java/com/admin/controller/FlowController.java`
+- `springboot-backend/src/main/java/com/admin/service/impl/UserServiceImpl.java`
 - `springboot-backend/src/main/java/com/admin/service/impl/ForwardServiceImpl.java`
 - `springboot-backend/src/main/java/com/admin/service/impl/TunnelServiceImpl.java`
 - `springboot-backend/src/main/java/com/admin/service/impl/UserTunnelServiceImpl.java`
+- `springboot-backend/src/main/java/com/admin/service/impl/SpeedLimitServiceImpl.java`
+- `springboot-backend/src/main/java/com/admin/common/task/ResetFlowAsync.java`
 - `springboot-backend/src/main/java/com/admin/common/dto/TunnelListDto.java`
 - `vite-frontend/src/pages/forward.tsx`
 - `vite-frontend/src/pages/tunnel.tsx`
 - `vite-frontend/src/pages/user.tsx`
+- `vite-frontend/src/pages/limit.tsx`
+- `vite-frontend/src/api/index.ts`
 
 Local reference repo:
 
@@ -69,22 +76,77 @@ Expected compat error envelope:
 | `POST /api/v1/forward/update-order` | JWT user | `POST /api/v2/forward/update-order` | JWT user | available | admin mirror also exists |
 | `POST /api/v1/user/reset` | role-restricted | `POST /api/v2/user/reset` | JWT user + `AdminAuth` | available | request body `{id,type}` is cloned; success keeps `data: null` |
 | `POST /api/v1/tunnel/user/tunnel` | JWT user, not admin-only | `POST /api/v2/tunnel/user/tunnel` | JWT user | available | admin mirror also exists |
-| `POST /api/v1/tunnel/user/assign` | role-restricted | `POST /api/v2/tunnel/user/assign` | JWT user + `AdminAuth` | partially aligned | route exists; create DTO matches Flux, but UI still lacks speed-limit picker and duplicate filtering |
-| `POST /api/v1/tunnel/user/list` | role-restricted | `POST /api/v2/tunnel/user/list` | JWT user + `AdminAuth` | partially aligned | field names match; `inFlow/outFlow`, speed-limit values, and sort order still differ |
+| `POST /api/v1/tunnel/user/assign` | role-restricted | `POST /api/v2/tunnel/user/assign` | JWT user + `AdminAuth` | partially aligned | route exists; duplicate-tunnel filtering, tunnel-scoped speed-limit selection, and `speedId` validation are live, but runtime side effects still differ |
+| `POST /api/v1/tunnel/user/list` | role-restricted | `POST /api/v2/tunnel/user/list` | JWT user + `AdminAuth` | partially aligned | field names, ascending relation order, and joined speed-limit names are aligned; used flow still depends on compat backfill from `v2_forward` |
 | `POST /api/v1/tunnel/user/remove` | role-restricted | `POST /api/v2/tunnel/user/remove` | JWT user + `AdminAuth` | partially aligned | route exists; cascade semantics on affected forwards are still local-only |
-| `POST /api/v1/tunnel/user/update` | role-restricted | `POST /api/v2/tunnel/user/update` | JWT user + `AdminAuth` | partially aligned | route exists; runtime speed propagation and detailed UI flow still differ |
+| `POST /api/v1/tunnel/user/update` | role-restricted | `POST /api/v2/tunnel/user/update` | JWT user + `AdminAuth` | partially aligned | route exists; request body keeps `speedId`, tunnel-scoped validation exists, but runtime speed propagation and detailed UI flow still differ |
+
+## Adjacent User-page Resources
+
+These resources are part of the real Flux user-page surface even though they are not `/forward/*` routes:
+
+| Flux Resource | Flux Scope | Local Status | Notes |
+|------|------|------|------|
+| `POST /api/v1/speed-limit/list` | role-restricted | available | local backend now serves `/api/v2/speed-limit/list` with Flux-style `code/msg/ts/data` envelope |
+| `SpeedLimit` resource (`/speed-limit/create|list|update|delete`) | role-restricted | partially aligned | backend model/service/handler/routes exist, `/api/v2/speed-limit/tunnels` exists, and the standalone admin page now lives at `/admin/limit`; remaining gaps are exact `limit.tsx` layout parity and runtime-side limiter propagation |
+| `ResetFlowAsync` scheduled monthly reset | backend task | partially aligned | local `ForwardFlowResetWorker` now resets users and user-tunnel grants, handles month-end overflow days, pauses expired-user forwards, and disables expired grants; the remaining gap is exact parity with Flux's dedicated user-disable state model |
+
+## Flow Reset Semantics
+
+Upstream Flux behavior:
+
+- `ResetFlowAsync` runs daily at `00:00:05`.
+- `flowResetTime = 0` means "do not auto reset".
+- `flowResetTime = 1..31` means "reset on that day of the month".
+- If the configured day does not exist in the current month, Flux resets on the last day of that month.
+- The scheduler resets both user flow and user-tunnel flow, then separately disables expired users and expired user-tunnel grants.
+
+Current local behavior:
+
+- `POST /api/v2/user/reset` supports the same manual `{id,type}` contract.
+- `type = 1` resets user flow; `type = 2` resets user-tunnel flow.
+- `flowResetTime` is stored and displayed with the Flux-style monthly-day meaning in the admin user page.
+- Startup now launches `ForwardFlowResetWorker`, performs one catch-up run, and then schedules daily `00:00:05` local-time monthly-reset scans.
+- The worker resets both user flow and user-tunnel flow, and month-end overflow days (`31` on short months) are handled.
+- After the reset scan, expired users have their active forwards paused, and expired user-tunnel grants have their active forwards paused before the grant is disabled.
+- Expired login is rejected through `auth_service`, so the remaining reset gap is exact parity with Flux's user-disable state mutation rather than the scheduler itself.
+- Manual reset only clears flow counters; it must not be documented as proof that quota-triggered pauses or monthly resume semantics are fully cloned.
+
+## Current User-page Linkage
+
+The current local operator surface for Flux user-page work is `web/src/views/admin/Users.vue`.
+
+Already wired:
+
+- `POST /api/v2/user/reset`
+- `POST /api/v2/tunnel/user/assign`
+- `POST /api/v2/tunnel/user/list`
+- `POST /api/v2/tunnel/user/remove`
+- `POST /api/v2/tunnel/user/update`
+- standalone `/admin/limit` CRUD for `SpeedLimit`
+- duplicate-tunnel filtering on create
+- read-only tunnel selection while editing an existing grant
+- used-flow summary and dedicated confirm modals for user flow and user-tunnel flow resets
+- rate-limit column, reset-day column, and used-flow column in the grant table
+
+Still not wired to the full Flux resource graph:
+
+- native relation counter writes for `ForwardUserTunnel.inFlow/outFlow`
+- exact `user.tsx` / `limit.tsx` layout and interaction parity
+- runtime-side propagation of speed-limit rules beyond CRUD/resource selection
 
 ## Remaining Clone Gaps
 
 These gaps still block a full 1:1 clone even though the base compat routes now exist:
 
 | Surface | Local Status | Notes |
-|------|------|------|------|
-| `POST /api/v2/tunnel/user/list` detail semantics | partially aligned | Flux reads `inFlow/outFlow` from `user_tunnel`, joins `speed_limit`, and sorts by relation id ascending; local code still aggregates flow from `v2_forward`, synthesizes `speedLimitName`, and orders by `id DESC` |
-| `POST /api/v2/tunnel/user/assign` UI | partially aligned | local create flow no longer sends `status` and now filters already-assigned tunnels, but it still lacks the Flux speed-limit selector |
-| reset confirmation flow | partially aligned | local page now uses dedicated confirm modals with used-flow summary for user flow and tunnel flow, but visual/layout details still differ from Flux |
-| monthly flow reset automation | not cloned | `flowResetTime` is stored and displayed, but automatic reset scheduling is still missing |
-| flow side effects in `FlowController` | not cloned | quota exhaustion, expire and disable behavior still do not mirror the reference runtime path |
+|------|------|------|
+| `POST /api/v2/tunnel/user/list` detail semantics | partially aligned | Flux reads `inFlow/outFlow` from `user_tunnel`; local code now joins real `speed_limit` data and sorts by relation id ascending, but flow counters still rely on compat backfill from `v2_forward` rather than native relation writes |
+| `POST /api/v2/tunnel/user/assign` and `update` UI | partially aligned | duplicate-tunnel filtering, edit-locking, reset dialogs, and tunnel-scoped speed-limit selection are in place; the remaining gap is exact Flux visual/layout parity |
+| real speed-limit resource | partially aligned | backend `/api/v2/speed-limit/*` and standalone `/admin/limit` CRUD are live; remaining gaps are exact `limit.tsx` layout parity and runtime-side limiter propagation |
+| reset confirmation and reset semantics | partially aligned | dedicated confirm modals, scheduled monthly reset, expired-user forward pause, and expired-grant pause+disable are live; remaining gaps are exact Flux user-state parity and other `FlowController` side effects |
+| monthly flow reset automation | partially aligned | `flowResetTime` is stored, displayed, and scheduled; remaining gaps are exact Flux user disable-state parity and deeper quota/runtime linkage |
+| flow side effects in `FlowController` | not cloned | quota exhaustion, expire, disable, and runtime pause behavior still do not mirror the reference runtime path |
 
 ## Local Extension Surface
 
@@ -93,7 +155,7 @@ The following pieces are local extensions for dual-runtime support and are not p
 - `GET /api/v2/admin/forward/runtime/jobs`
 - system config key `forward.runtime_backend`
 - system config key `forward.runtime.iptables_ansible.config`
-- background worker started by `cmd/server/main.go` that executes pending `iptables_ansible` jobs
+- optional async executor implementation in `internal/service/forward_runtime_job_executor.go`
 
 Rules for this extension surface:
 
@@ -280,8 +342,8 @@ Fields currently required by the Flux-cloned admin user page:
 
 Current known differences:
 
-- Flux sources `inFlow/outFlow` from `user_tunnel`; local code now stores counters on the relation, but still backfills them from `v2_forward` until a native runtime writer exists.
-- Flux joins `speed_limit` to expose display values; local code still synthesizes `speedLimitName` and falls back to user-level speed.
+- Flux sources `inFlow/outFlow` from `user_tunnel`; local code still derives those values from aggregated `v2_forward` traffic because no native relation counter writer exists yet.
+- Flux joins `speed_limit` to expose display values; local code still synthesizes `speedLimitName` from `speedId` and falls back to user-level or plan-level `speed_limit` for the numeric speed.
 
 ## Authorization Semantics
 
@@ -309,8 +371,8 @@ Do not "simplify" this distinction unless the reference changes.
 | create/update/delete | changes Gost / remote runtime | mainly DB compatibility layer |
 | pause/resume | runtime side effects + persistence | mainly local status persistence |
 | diagnose | node-chain diagnosis | mostly panel-side direct dialing |
-| user-tunnel quota | active flow/expire/status linkage | partially cloned; reset route and grant checks exist, but automatic monthly reset and stored relation counters are still missing |
-| user-tunnel admin UI | speed-limit selector, reset dialogs, filtered tunnel picker | partially cloned; local page now filters duplicate tunnels and uses dedicated reset modals, but still lacks the Flux speed-limit selector and exact visual flow |
+| user-tunnel quota | active flow/expire/status linkage | partially cloned; reset route, grant checks, monthly reset scheduling, expired-user forward pause, and expired-grant disablement exist, but stored relation counters and full `FlowController` parity are still missing |
+| user-tunnel admin UI | speed-limit selector, reset dialogs, filtered tunnel picker | partially cloned; local pages now include the speed-limit selector and dedicated reset modals, but exact `user.tsx` / `limit.tsx` visual flow still differs |
 | flow reporting | controller-driven runtime enforcement | not cloned |
 
 ## Future Clone Guardrails

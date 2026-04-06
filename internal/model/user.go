@@ -22,6 +22,7 @@ type User struct {
 	UUID              string    `gorm:"size:36;uniqueIndex" json:"uuid"`
 	DeviceLimit       *int      `json:"device_limit"`
 	SpeedLimit        *int64    `json:"speed_limit"`
+	FlowResetTime     int64     `gorm:"default:0" json:"flowResetTime"`
 	TransferEnable    int64     `gorm:"default:0" json:"transfer_enable"` // bytes
 	U                 int64     `gorm:"default:0" json:"u"`               // upload bytes
 	D                 int64     `gorm:"default:0" json:"d"`               // download bytes

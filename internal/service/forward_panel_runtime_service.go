@@ -75,14 +75,6 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 	if err != nil {
 		return failedPanelForwardRuntimeResult(backend, err), err
 	}
-	if nodeID == nil && backend == model.ForwardRuntimeBackendGost &&
-		(action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause) {
-		return &panelForwardRuntimeResult{
-			Backend: backend,
-			Status:  model.ForwardRuntimeJobStatusSuccess,
-			Message: "gost runtime skipped because ingress node is not configured",
-		}, nil
-	}
 
 	payloadJSON, err := json.Marshal(req)
 	if err != nil {
@@ -104,6 +96,25 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 	}
 	if err := s.db.Create(job).Error; err != nil {
 		return failedPanelForwardRuntimeResult(backend, err), err
+	}
+
+	if nodeID == nil && backend == model.ForwardRuntimeBackendGost &&
+		(action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause) {
+		result := &panelForwardRuntimeResult{
+			Backend: backend,
+			Status:  model.ForwardRuntimeJobStatusSuccess,
+			Message: "gost runtime skipped because ingress node is not configured",
+		}
+		completedAt := time.Now()
+		if err := s.db.Model(&model.ForwardRuntimeJob{}).Where("id = ?", job.ID).Updates(map[string]interface{}{
+			"status":       result.Status,
+			"result":       result.Message,
+			"error":        "",
+			"completed_at": &completedAt,
+		}).Error; err != nil {
+			result.Message = strings.TrimSpace(result.Message + "; local audit update failed: " + err.Error())
+		}
+		return result, nil
 	}
 
 	execResult, execErr := s.client.Execute(ctx, req)

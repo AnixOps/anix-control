@@ -947,6 +947,59 @@ $env:GOWORK='off'; go test ./internal/router ./internal/handler ./internal/servi
 cd web && npm run build
 ```
 
+### 10.8 Flux 复刻边界补充 (2026-04-06，覆盖上方旧表述)
+
+- 当前可用的 compat 入口已经包括:
+  - `/api/v2/forward/*`
+  - `/api/v2/user/reset`
+  - `/api/v2/tunnel/user/tunnel`
+  - `/api/v2/tunnel/user/assign`
+  - `/api/v2/tunnel/user/list`
+  - `/api/v2/tunnel/user/remove`
+  - `/api/v2/tunnel/user/update`
+- 当前用户页联动落点是 `web/src/views/admin/Users.vue`，不是上游 `user.tsx` 的完整 1:1 页面；这里已经接上:
+  - 授权列表
+  - 已用流量列
+  - 每月重置日列
+  - Rate Limit 列
+  - 用户流量/隧道流量重置确认弹窗
+  - 创建授权时过滤已分配隧道
+  - 编辑授权时隧道只读
+- `POST /api/v2/user/reset` 当前只代表“手动 reset 兼容入口”:
+  - `type = 1` 重置用户流量
+  - `type = 2` 重置用户隧道授权流量
+- 上游 `flux-panel` 还有 `ResetFlowAsync` 自动月重置任务:
+  - `flowResetTime = 0` 表示不自动重置
+  - `flowResetTime = 1..31` 表示每月第几号重置
+  - 当月没有该日期时，月末补执行
+- 本仓库当前只完成了 `flowResetTime` 的存储、展示和手动 reset 对接。
+- 本仓库当前还没有:
+  - cron / ticker / init worker 形式的自动月重置
+  - 对应上游 `ResetFlowAsync` 的后台调度
+- 当前真实 speed-limit 边界必须按下面理解:
+  - 上游有独立 `SpeedLimit` 资源与 `/api/v1/speed-limit/*`
+  - 本仓库当前只有 `web/src/api/admin.js` 中的 `getSpeedLimitList()` 前端 helper
+  - 本仓库还没有真正落地 `/api/v2/speed-limit/list` 或独立 `SpeedLimit` model / handler / service
+  - 当前 `speedId` 只是 compat DTO 字段，不代表独立限速资源已经复刻完成
+  - 当前授权列表中的 `speed` 仍来自现有用户或套餐 `speed_limit`
+  - 当前 `speedLimitName` 仍是基于 `speedId` 的占位语义，不是上游 `speed_limit` join
+- 后续继续复刻时，必须额外核对这些上游文件，不能只盯着 `/forward`:
+  - `springboot-backend/src/main/java/com/admin/controller/UserController.java`
+  - `springboot-backend/src/main/java/com/admin/controller/SpeedLimitController.java`
+  - `springboot-backend/src/main/java/com/admin/service/impl/UserServiceImpl.java`
+  - `springboot-backend/src/main/java/com/admin/service/impl/UserTunnelServiceImpl.java`
+  - `springboot-backend/src/main/java/com/admin/service/impl/SpeedLimitServiceImpl.java`
+  - `springboot-backend/src/main/java/com/admin/common/task/ResetFlowAsync.java`
+  - `vite-frontend/src/pages/user.tsx`
+  - `vite-frontend/src/pages/limit.tsx`
+  - `vite-frontend/src/api/index.ts`
+- 当前仍未视为完成复刻的差距:
+  - `/tunnel/user/list` 的 `inFlow/outFlow`、`speedLimitName/speed` 语义仍未与上游 `user_tunnel + speed_limit join` 对齐
+  - 当前 relation 流量仍主要从 `v2_forward` 聚合回填，不是运行时原生写入链路
+  - 真实 `SpeedLimit` 资源仍未落地
+  - 自动月重置仍未落地
+  - 当前用户授权入口仍不是上游 `user.tsx` 的完整页面
+
 ## Flux-panel Clone Docs
 
 - Read `docs/guide/flux-panel-clone.md` before touching forward/tunnel/user-tunnel pages so you follow the mandatory workflow and validation checklist.
@@ -974,6 +1027,34 @@ cd web && npm run build
 - Public docs should describe this layer as `NodeX`/internal backend and avoid implementation-topology language.
 
 ## Flux-panel Doc Sync
+
+## Flux Clone Status Override (2026-04-06)
+
+This section overrides older stale statements above when they conflict. Treat it as the current source of truth for clone status.
+
+- `POST /api/v2/speed-limit/create|list|update|delete|tunnels` now exists and is backed by a real `SpeedLimit` model/service/handler.
+- `web/src/views/admin/Users.vue` now uses a tunnel-scoped speed-limit selector instead of a raw numeric placeholder input.
+- `web/src/views/admin/Limit.vue` plus route/menu `/admin/limit` now provide the standalone speed-limit admin surface modeled after Flux `limit.tsx`.
+- `flowResetTime` is no longer storage-only:
+  - `ForwardFlowResetWorker` runs one catch-up scan on startup.
+  - It then schedules daily `00:00:05` local-time scans.
+  - Month-end overflow days are handled like upstream `ResetFlowAsync`.
+  - Both user flow and user-tunnel flow are reset.
+  - Expired-user active forwards are paused during the reset sweep.
+  - Expired user-tunnel grants have active forwards paused and the grant is then disabled.
+  - Expired login is rejected through `auth_service` using `expired_at`.
+- Current remaining Flux gaps are:
+  - native runtime writes into `ForwardUserTunnel.inFlow/outFlow`
+  - exact `user.tsx` / `limit.tsx` visual and interaction parity
+  - runtime-side propagation or enforcement of speed-limit rules beyond resource/API/UI selection
+  - exact user disable-state parity with Flux `ResetFlowAsync` / `FlowController`
+
+When planning future clone work, prioritize the remaining gaps in this order:
+
+1. Replace compat backfill with native relation counters.
+2. Reconcile runtime speed-limit propagation and deeper forward runtime semantics.
+3. Close the remaining user disable-state parity gap versus Flux.
+4. Finish exact `user.tsx` / `limit.tsx` layout parity.
 
 - When forward, tunnel, or user-tunnel behavior changes, also update `docs/guide/flux-panel-clone.md`, `docs/guide/flux-forward-contract.md`, `docs/guide/flux-panel-workstream.md`, `docs/guide/api-reference.md`, and `docs/FEATURE_ROADMAP.md`.
 - If user-facing scope or onboarding entry points change, refresh the `Flux-panel` section in `readme.md`.
