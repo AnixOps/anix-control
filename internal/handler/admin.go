@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
@@ -14,19 +15,26 @@ import (
 
 // AdminHandler 管理员处理器
 type AdminHandler struct {
-	userService  *service.UserService
-	orderService *service.OrderService
-	statsService *service.StatsService
-	planService  *service.PlanService
+	userService    *service.UserService
+	orderService   *service.OrderService
+	statsService   *service.StatsService
+	planService    *service.PlanService
+	forwardService *service.PanelForwardService
+}
+
+type compatResetFlowRequest struct {
+	ID   uint `json:"id" binding:"required"`
+	Type int  `json:"type" binding:"required"`
 }
 
 // NewAdminHandler 创建管理员处理器
 func NewAdminHandler() *AdminHandler {
 	return &AdminHandler{
-		userService:  service.NewUserService(),
-		orderService: service.NewOrderService(),
-		statsService: service.NewStatsService(),
-		planService:  service.NewPlanService(),
+		userService:    service.NewUserService(),
+		orderService:   service.NewOrderService(),
+		statsService:   service.NewStatsService(),
+		planService:    service.NewPlanService(),
+		forwardService: service.NewPanelForwardService(database.Get()),
 	}
 }
 
@@ -335,6 +343,49 @@ func (h *AdminHandler) ResetUserTraffic(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "流量重置成功"})
+}
+
+func (h *AdminHandler) ResetCompatFlow(c *gin.Context) {
+	var req compatResetFlowRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		compatError(c, "参数错误")
+		return
+	}
+
+	var err error
+	switch req.Type {
+	case 1:
+		err = h.userService.ResetTraffic(req.ID)
+	case 2:
+		err = h.forwardService.ResetUserTunnelTraffic(req.ID)
+	default:
+		compatError(c, "type must be 1 or 2")
+		return
+	}
+	if err != nil {
+		compatError(c, err.Error())
+		return
+	}
+
+	compatSuccess(c, nil)
+}
+
+func compatSuccess(c *gin.Context, data interface{}) {
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"msg":  "操作成功",
+		"ts":   time.Now().UnixMilli(),
+		"data": data,
+	})
+}
+
+func compatError(c *gin.Context, msg string) {
+	c.JSON(http.StatusOK, gin.H{
+		"code": -1,
+		"msg":  msg,
+		"ts":   time.Now().UnixMilli(),
+		"data": nil,
+	})
 }
 
 // DeleteUser godoc

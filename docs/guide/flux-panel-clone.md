@@ -78,7 +78,8 @@ This matrix is the minimum route surface that must stay visible in clone plannin
 |------|------|------|------|------|
 | Forward user routes | `POST /api/v1/forward/create|list|update|delete|force-delete|pause|resume|diagnose|update-order` | JWT user | partial clone | local compat routes exist and are detailed in `flux-forward-contract.md` |
 | Tunnel admin routes | `POST /api/v1/tunnel/create|list|update|delete|diagnose` | role-restricted | not started | do not collapse these into user routes |
-| UserTunnel admin routes | `POST /api/v1/tunnel/user/assign|list|remove|update` | role-restricted | not started | these are required for the full clone surface |
+| UserTunnel admin routes | `POST /api/v1/tunnel/user/assign|list|remove|update` | role-restricted | partial clone | compat routes exist, but list field semantics and UI flow still differ |
+| User reset route | `POST /api/v1/user/reset` | role-restricted | partial clone | compat route exists at `/api/v2/user/reset`; success/error wrapper now mirrors Flux |
 | Tunnel user route | `POST /api/v1/tunnel/user/tunnel` | JWT user | partial clone | this is the only user-scope route under `TunnelController` |
 
 ## Non-negotiable Rules
@@ -148,10 +149,20 @@ As of `2026-04-05`, the local project already has these pieces:
   - `internal/router/router.go`
 - frontend request wrapper:
   - `web/src/api/admin.js`
+- user management/tunnel grant page:
+  - `web/src/views/admin/Users.vue`
 - explicit auth relation:
   - `internal/model/forward_panel.go` -> `ForwardUserTunnel`
 - base tests:
   - `internal/service/forward_panel_service_test.go`
+
+As of `2026-04-06`, the compat route surface additionally includes:
+
+- `POST /api/v2/user/reset`
+- `POST /api/v2/tunnel/user/assign`
+- `POST /api/v2/tunnel/user/list`
+- `POST /api/v2/tunnel/user/remove`
+- `POST /api/v2/tunnel/user/update`
 
 ## Current Completion Status
 
@@ -159,18 +170,26 @@ Already aligned:
 
 - forward page main UI
 - `/forward/*` compat endpoints
+- `/user/reset` compat endpoint
 - `/tunnel/user/tunnel` compat endpoint
+- `/tunnel/user/assign|list|remove|update` compat endpoints
 - response wrapper `code/msg/ts/data`
 - explicit `ForwardUserTunnel` auth model
 - tunnel list fields required by the current forward page
+- admin user page tunnel grant table now shows used flow, monthly reset day, rate-limit column, and manual reset action
 
 Still incomplete:
 
-1. full `UserTunnel` management flows
+1. full `UserTunnel` management semantics
+    - Flux sources `inFlow/outFlow` from the relation record and joins `speed_limit`
+    - Flux sorts the list by relation id ascending
+    - create flow should filter already-granted tunnels and use a speed-limit selector
 2. forward runtime semantics
     - create/update/delete/pause/resume side effects on remote services
 3. tunnel / forward diagnose node-chain semantics
 4. quota / expire / flow reset behavior tied to `UserTunnel`
+    - monthly automatic reset scheduler still missing
+    - reset confirmation dialogs are still simplified `confirm/alert`
 
 ## Local Dual-runtime Extension Rules
 
@@ -197,7 +216,8 @@ Guardrails:
 |------|------|------|------|
 | forward page | `forward.tsx` + `/api/v1/forward/*` | partial clone | main page and compat endpoints exist |
 | tunnel selector for forward | `/api/v1/tunnel/user/tunnel` | partial clone | current DTO is aligned for the page |
-| user-tunnel admin management | `/api/v1/tunnel/user/assign|list|remove|update` | not started | admin management semantics still missing |
+| user reset | `/api/v1/user/reset` | partial clone | route and wrapper exist; Flux dialog flow still differs |
+| user-tunnel admin management | `/api/v1/tunnel/user/assign|list|remove|update` | partial clone | routes and first-pass UI exist, but detail semantics and dialogs still differ |
 | flow and quota side effects | `FlowController.java` | not started | runtime pause/disable paths still not cloned |
 | diagnose runtime chain | `ForwardServiceImpl.java` and `TunnelServiceImpl.java` | partial clone | panel-side checks exist, node-chain semantics do not |
 
@@ -237,6 +257,9 @@ Extra rules:
 - Drag-sort payload stays `{ "forwards": [{ "id": 1, "inx": 0 }] }`.
 - The "direct" ordering flow persists order only for the current user's forwards, not the whole dataset.
 - Diagnose modals expect top-level fields such as `forwardName`, `timestamp`, and `results[]`, and each result item needs `success`, `description`, `nodeName`, `nodeId`, `targetIp`, `targetPort`, `message`, `averageTime`, and `packetLoss`.
+- `POST /api/v1/user/reset` uses `{ "id": <id>, "type": 1|2 }`; success keeps `data = null`, errors use `code = -1` with `data = null`.
+- `UserTunnelDto` create flow must not send `status`; status belongs to `UserTunnelUpdateDto`.
+- The Flux user page filters already-assigned tunnels from the create selector and uses a speed-limit picker backed by `/speed-limit/list`; a raw numeric `speedId` input is not considered aligned.
 
 ## Detailed Runtime Gap Checklist
 

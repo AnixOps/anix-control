@@ -195,7 +195,7 @@
                 </option>
               </select>
             </div>
-            <div class="form-group">
+            <div v-if="editingTunnelId" class="form-group">
               <label>状态</label>
               <select v-model.number="tunnelForm.status">
                 <option :value="1">启用</option>
@@ -248,13 +248,14 @@
                   <th>数量</th>
                   <th>到期</th>
                   <th>重置</th>
-                  <th>SpeedID</th>
+                  <th>Used Flow</th>
+                  <th>Rate Limit</th>
                   <th>操作</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-if="tunnelListLoading">
-                  <td colspan="9" class="empty-row">加载中...</td>
+                  <td colspan="10" class="empty-row">加载中...</td>
                 </tr>
                 <tr v-for="item in userTunnels" :key="item.id">
                   <td>{{ item.id }}</td>
@@ -267,17 +268,21 @@
                   <td>{{ item.flow ?? 0 }}</td>
                   <td>{{ item.num ?? 0 }}</td>
                   <td>{{ formatTunnelExpire(item.expTime) }}</td>
-                  <td>{{ item.flowResetTime ?? 0 }}</td>
-                  <td>{{ item.speedId ?? '-' }}</td>
+                  <td>{{ formatFlowResetDay(item.flowResetTime) }}</td>
+                  <td>{{ formatBytes(calculateTunnelUsedFlow(item)) }}</td>
+                  <td>{{ item.speedLimitName || (item.speedId ?? '-') }}</td>
                   <td>
                     <div class="action-buttons">
                       <button class="btn-sm btn-ghost" @click="editTunnelGrant(item)">编辑</button>
+                      <button class="btn-sm btn-ghost" :disabled="resettingTunnelTrafficId === item.id" @click="handleResetTunnelTraffic(item)">
+                        {{ resettingTunnelTrafficId === item.id ? '重置中...' : '重置流量' }}
+                      </button>
                       <button class="btn-sm btn-ghost" @click="removeTunnelGrant(item)">删除</button>
                     </div>
                   </td>
                 </tr>
                 <tr v-if="!tunnelListLoading && userTunnels.length === 0">
-                  <td colspan="9" class="empty-row">暂无授权</td>
+                  <td colspan="10" class="empty-row">暂无授权</td>
                 </tr>
               </tbody>
             </table>
@@ -303,6 +308,7 @@ import {
   getUserStats,
   removeAdminUserTunnel,
   resetUserTraffic,
+  resetUserTunnelTraffic,
   unbanUser,
   updateAdminUserTunnel,
   updateUser
@@ -337,6 +343,7 @@ const userTunnels = ref([])
 const tunnelListLoading = ref(false)
 const tunnelLoading = ref(false)
 const editingTunnelId = ref(null)
+const resettingTunnelTrafficId = ref(null)
 
 const newTunnelForm = () => ({
   tunnelId: '',
@@ -351,9 +358,21 @@ const tunnelForm = ref(newTunnelForm())
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value) || 1)
 
-const getResData = (res) => {
+const assertCompatSuccess = (res, fallback = '操作失败') => {
+  if (res && typeof res.code === 'number' && res.code !== 0) {
+    throw new Error(res.msg || fallback)
+  }
+  return res
+}
+
+const getResData = (res, fallback = '操作失败') => {
   if (!res) return null
-  if (typeof res.code === 'number') return res.data
+  if (typeof res.code === 'number') {
+    if (res.code !== 0) {
+      throw new Error(res.msg || fallback)
+    }
+    return res.data
+  }
   return res.data
 }
 
@@ -470,25 +489,31 @@ const handleUnban = async (user) => {
 const handleResetTraffic = async (user) => {
   if (!confirm(`确定要重置用户 ${user.email} 的流量吗?`)) return
   try {
-    await resetUserTraffic(user.id)
-    fetchUsers()
+    const res = await resetUserTraffic(user.id)
+    assertCompatSuccess(res, '重置失败')
+    await fetchUsers()
   } catch (err) {
-    alert('操作失败')
+    alert(err.response?.data?.msg || err.response?.data?.message || err.message || '操作失败')
   }
 }
 
 const loadTunnelOptions = async () => {
-  const res = await getForwardTunnels()
-  tunnelOptions.value = getResData(res) || []
+  try {
+    const res = await getForwardTunnels()
+    tunnelOptions.value = getResData(res, '获取隧道列表失败') || []
+  } catch (err) {
+    alert(err.response?.data?.msg || err.response?.data?.message || err.message || '获取隧道列表失败')
+    tunnelOptions.value = []
+  }
 }
 
 const loadUserTunnels = async (userId) => {
   tunnelListLoading.value = true
   try {
     const res = await getAdminUserTunnelList({ userId })
-    userTunnels.value = getResData(res) || []
+    userTunnels.value = getResData(res, '获取隧道授权失败') || []
   } catch (err) {
-    alert('获取隧道授权失败')
+    alert(err.response?.data?.msg || err.response?.data?.message || err.message || '获取隧道授权失败')
   } finally {
     tunnelListLoading.value = false
   }
@@ -533,16 +558,18 @@ const submitTunnelForm = async () => {
     }
 
     if (editingTunnelId.value) {
-      await updateAdminUserTunnel({
+      const res = await updateAdminUserTunnel({
         id: Number(editingTunnelId.value),
         ...payload
       })
+      assertCompatSuccess(res, '授权更新失败')
       alert('授权更新成功')
     } else {
-      await assignAdminUserTunnel({
+      const res = await assignAdminUserTunnel({
         userId: Number(tunnelUser.value.id),
         ...payload
       })
+      assertCompatSuccess(res, '授权创建失败')
       alert('授权创建成功')
     }
     await loadUserTunnels(tunnelUser.value.id)
@@ -570,7 +597,8 @@ const editTunnelGrant = (item) => {
 const removeTunnelGrant = async (item) => {
   if (!confirm(`确定删除隧道授权 #${item.id} 吗?`)) return
   try {
-    await removeAdminUserTunnel({ id: item.id })
+    const res = await removeAdminUserTunnel({ id: item.id })
+    assertCompatSuccess(res, '删除授权失败')
     if (tunnelUser.value) {
       await loadUserTunnels(tunnelUser.value.id)
     }
@@ -580,6 +608,35 @@ const removeTunnelGrant = async (item) => {
   } catch (err) {
     alert(err.response?.data?.msg || err.response?.data?.message || '删除授权失败')
   }
+}
+
+const calculateTunnelUsedFlow = (item) => {
+  return Number(item?.inFlow || 0) + Number(item?.outFlow || 0)
+}
+
+const handleResetTunnelTraffic = async (item) => {
+  if (!item?.id) return
+  if (!confirm(`确定重置隧道授权 #${item.id} 的已用流量吗？`)) return
+
+  resettingTunnelTrafficId.value = item.id
+  try {
+    const res = await resetUserTunnelTraffic(item.id)
+    assertCompatSuccess(res, '重置失败')
+    if (tunnelUser.value) {
+      await loadUserTunnels(tunnelUser.value.id)
+    }
+    alert('隧道流量已重置')
+  } catch (err) {
+    alert(err.response?.data?.msg || err.response?.data?.message || err.message || '重置失败')
+  } finally {
+    resettingTunnelTrafficId.value = null
+  }
+}
+
+const formatFlowResetDay = (value) => {
+  const day = Number(value || 0)
+  if (!day) return '不重置'
+  return `每月${day}号`
 }
 
 const formatTunnelExpire = (value) => {

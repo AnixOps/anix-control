@@ -873,9 +873,16 @@ protoc --go_out=. --go-grpc_out=. api/grpc/v2board.proto
 
 - 流量转发页面已按参考页复刻到:
   - `web/src/views/admin/Forward.vue`
+- 用户管理页中的隧道授权区已接入首版 Flux 兼容交互:
+  - `web/src/views/admin/Users.vue`
 - 兼容 API 入口已建立:
   - `/api/v2/forward/*`
+  - `/api/v2/user/reset`
   - `/api/v2/tunnel/user/tunnel`
+  - `/api/v2/tunnel/user/assign`
+  - `/api/v2/tunnel/user/list`
+  - `/api/v2/tunnel/user/remove`
+  - `/api/v2/tunnel/user/update`
   - 保留 `/api/v2/admin/forward/*` 与 `/api/v2/admin/tunnel/user/tunnel` 作为现有管理后台兼容镜像
 - 当前转发授权关系模型:
   - `internal/model/forward_panel.go` 中的 `ForwardUserTunnel`
@@ -883,8 +890,26 @@ protoc --go_out=. --go-grpc_out=. api/grpc/v2board.proto
   - `internal/service/forward_panel_service.go`
   - `internal/handler/forward_panel.go`
   - `internal/router/router.go`
+  - `internal/handler/admin.go`
   - `web/src/api/admin.js`
+  - `web/src/views/admin/Users.vue`
   - `internal/service/forward_panel_service_test.go`
+
+当前已对齐到可用层的用户侧能力:
+
+- 管理员可以通过 `POST /api/v2/user/reset` 重置用户流量或用户隧道授权流量，返回包与 Flux 保持 `code/msg/ts/data` 结构。
+- 管理员可以通过 `/api/v2/tunnel/user/assign|list|remove|update` 完成用户隧道授权的增删改查。
+- 用户管理页授权表已展示:
+  - 已用流量
+  - 每月重置日
+  - 限速列
+  - 手动“重置流量”操作
+
+当前仍未视为完成复刻的差距:
+
+- `/tunnel/user/list` 的 `inFlow/outFlow`、`speedLimitName/speed` 语义仍未与参考库的 relation/speed-limit join 完全一致。
+- Flux 用户页的限速规则下拉、已授权隧道过滤、以及 reset 确认弹窗交互仍需继续补齐。
+- `flowResetTime` 目前仅完成存储与展示，自动月重置调度尚未落地。
 
 ### 10.5 后续复刻时的检查清单
 

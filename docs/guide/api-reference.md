@@ -222,6 +222,113 @@ POST /api/v2/admin/auth-keys
 DELETE /api/v2/admin/auth-keys/:id
 ```
 
+### Flux user/tunnel compatibility
+
+这些接口用于对齐 `flux-panel` 的用户页与隧道授权页，响应包统一保持：
+
+```json
+{
+  "code": 0,
+  "msg": "操作成功",
+  "ts": 1712300000000,
+  "data": null
+}
+```
+
+错误时：
+
+```json
+{
+  "code": -1,
+  "msg": "请求失败",
+  "ts": 1712300000000,
+  "data": null
+}
+```
+
+说明：
+
+- 路径沿用 Flux 形状，但 `POST /api/v2/user/reset` 与 `POST /api/v2/tunnel/user/assign|list|remove|update` 仍受管理员权限保护。
+- `POST /api/v2/tunnel/user/tunnel` 是 JWT 用户作用域，可同时被普通用户和管理员使用。
+- 当前 `/api/v2/tunnel/user/list` 的字段名已对齐，但 `inFlow/outFlow` 与限速展示值仍是本地兼容实现，不应误标为完全复刻。
+
+```http
+# 重置用户/隧道授权流量
+POST /api/v2/user/reset
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "id": 1,
+  "type": 1
+}
+```
+
+`type = 1` 重置用户流量，`type = 2` 重置用户隧道授权流量。
+
+```http
+# 获取当前用户可选隧道
+POST /api/v2/tunnel/user/tunnel
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+```http
+# 分配隧道授权
+POST /api/v2/tunnel/user/assign
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "userId": 2,
+  "tunnelId": 1,
+  "flow": 100,
+  "num": 10,
+  "flowResetTime": 0,
+  "expTime": 1712300000000,
+  "speedId": null
+}
+```
+
+```http
+# 获取某个用户的隧道授权列表
+POST /api/v2/tunnel/user/list
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "userId": 2
+}
+```
+
+```http
+# 删除隧道授权
+POST /api/v2/tunnel/user/remove
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "id": 1
+}
+```
+
+```http
+# 更新隧道授权
+POST /api/v2/tunnel/user/update
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "id": 1,
+  "flow": 100,
+  "num": 10,
+  "flowResetTime": 0,
+  "expTime": 1712300000000,
+  "status": 1,
+  "speedId": null
+}
+```
+
 ### Forward runtime backend compatibility
 
 ```http
