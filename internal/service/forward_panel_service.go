@@ -19,6 +19,7 @@ const (
 	diagnosisTimeout       = 3 * time.Second
 	defaultRuntimeJobLimit = 50
 	maxRuntimeJobLimit     = 200
+	bytesPerGiB            = 1073741824
 )
 
 type PanelForwardService struct {
@@ -31,6 +32,13 @@ type PanelRuntimeJobFilter struct {
 	Status    *int
 	ForwardID *uint
 	Limit     int
+}
+
+type panelForwardPermissionOptions struct {
+	ExcludeForwardID        uint
+	CheckUserTraffic        bool
+	CheckTunnelTraffic      bool
+	CheckTunnelForwardQuota bool
 }
 
 func NewPanelForwardService(db *gorm.DB) *PanelForwardService {
@@ -258,13 +266,18 @@ func (s *PanelForwardService) CreateForward(userID uint, isAdmin bool, input Pan
 		return nil, errors.New("用户不存在")
 	}
 
-	if !isAdmin && !user.IsValid() {
-		return nil, errors.New("invalid user status")
-	}
-
-	tunnel, err := s.getAccessibleTunnel(input.TunnelID, userID, isAdmin)
+	tunnel, err := s.getActiveTunnel(input.TunnelID)
 	if err != nil {
 		return nil, err
+	}
+	if !isAdmin {
+		if _, _, err := s.validateForwardPermission(userID, tunnel.ID, panelForwardPermissionOptions{
+			CheckUserTraffic:        true,
+			CheckTunnelTraffic:      true,
+			CheckTunnelForwardQuota: true,
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	inPort, err := s.resolvePort(tunnel, input.InPort, 0)
@@ -324,20 +337,33 @@ func (s *PanelForwardService) UpdateForward(userID uint, isAdmin bool, input Pan
 		return nil, err
 	}
 
-	if !isAdmin {
-		if _, err := s.getActiveUser(userID); err != nil {
-			return nil, err
-		}
-	}
-
 	record, err := s.getForwardForActor(input.ID, userID, isAdmin)
 	if err != nil {
 		return nil, err
 	}
 
-	tunnel, err := s.getAccessibleTunnel(input.TunnelID, userID, isAdmin)
+	tunnel, err := s.getActiveTunnel(input.TunnelID)
 	if err != nil {
 		return nil, err
+	}
+	if !isAdmin {
+		if _, _, err := s.validateForwardPermission(userID, tunnel.ID, panelForwardPermissionOptions{
+			ExcludeForwardID:        record.ID,
+			CheckUserTraffic:        true,
+			CheckTunnelTraffic:      true,
+			CheckTunnelForwardQuota: true,
+		}); err != nil {
+			return nil, err
+		}
+	} else if record.UserID != userID && record.TunnelID != tunnel.ID {
+		if _, _, err := s.validateForwardPermission(record.UserID, tunnel.ID, panelForwardPermissionOptions{
+			ExcludeForwardID:        record.ID,
+			CheckUserTraffic:        true,
+			CheckTunnelTraffic:      true,
+			CheckTunnelForwardQuota: true,
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	inPort, err := s.resolvePort(tunnel, input.InPort, record.ID)
@@ -398,15 +424,12 @@ func (s *PanelForwardService) SetForwardStatus(userID uint, isAdmin bool, forwar
 		return err
 	}
 	if !isAdmin && status == model.ForwardStatusActive {
-		if _, err := s.getActiveUser(userID); err != nil {
+		if _, _, err := s.validateForwardPermission(userID, record.TunnelID, panelForwardPermissionOptions{
+			ExcludeForwardID:   record.ID,
+			CheckUserTraffic:   true,
+			CheckTunnelTraffic: true,
+		}); err != nil {
 			return err
-		}
-		allowed, err := s.userHasTunnelAccess(userID, record.TunnelID)
-		if err != nil {
-			return err
-		}
-		if !allowed {
-			return errors.New("no active tunnel permission")
 		}
 	}
 
@@ -659,6 +682,14 @@ func (s *PanelForwardService) RemoveUserTunnel(id uint) error {
 		return err
 	}
 
+	forwards, err := s.listUserTunnelForwards(record.UserID, record.TunnelID, 0)
+	if err != nil {
+		return err
+	}
+	for i := range forwards {
+		_ = s.syncForwardRuntime(&forwards[i], model.ForwardRuntimeJobActionDelete)
+	}
+
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("user_id = ? AND tunnel_id = ?", record.UserID, record.TunnelID).
 			Delete(&model.Forward{}).Error; err != nil {
@@ -684,7 +715,24 @@ func (s *PanelForwardService) UpdateUserTunnel(input PanelUserTunnelUpdateInput)
 	record.ExpTime = input.ExpTime
 	record.Status = input.Status
 	record.SpeedID = input.SpeedID
-	return s.db.Save(record).Error
+	if err := s.db.Save(record).Error; err != nil {
+		return err
+	}
+	return s.reconcileUserTunnelForwards(record)
+}
+
+func (s *PanelForwardService) ResetUserTunnelTraffic(id uint) error {
+	record, err := s.getUserTunnelByID(id)
+	if err != nil {
+		return err
+	}
+
+	return s.db.Model(&model.Forward{}).
+		Where("user_id = ? AND tunnel_id = ?", record.UserID, record.TunnelID).
+		Updates(map[string]interface{}{
+			"in_flow":  0,
+			"out_flow": 0,
+		}).Error
 }
 
 func (s *PanelForwardService) getActiveTunnel(tunnelID uint) (*model.ForwardTunnel, error) {
@@ -720,6 +768,44 @@ func (s *PanelForwardService) getAccessibleTunnel(tunnelID, userID uint, isAdmin
 	return tunnel, nil
 }
 
+func (s *PanelForwardService) validateForwardPermission(userID, tunnelID uint, opts panelForwardPermissionOptions) (*model.User, *model.ForwardUserTunnel, error) {
+	user, err := s.getActiveUser(userID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	permission, err := s.getActiveUserTunnelPermission(userID, tunnelID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if opts.CheckUserTraffic && !user.HasTraffic() {
+		return nil, nil, errors.New("user total traffic exhausted")
+	}
+
+	if opts.CheckTunnelTraffic && permission.Flow > 0 {
+		totalTraffic, err := s.sumUserTunnelTraffic(userID, tunnelID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if totalTraffic >= permission.Flow*bytesPerGiB {
+			return nil, nil, errors.New("tunnel traffic exhausted")
+		}
+	}
+
+	if opts.CheckTunnelForwardQuota && permission.Num > 0 {
+		forwardCount, err := s.countUserTunnelForwards(userID, tunnelID, opts.ExcludeForwardID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if forwardCount >= int64(permission.Num) {
+			return nil, nil, fmt.Errorf("tunnel forward quota exceeded: %d", permission.Num)
+		}
+	}
+
+	return user, permission, nil
+}
+
 func (s *PanelForwardService) getActiveUser(userID uint) (*model.User, error) {
 	var user model.User
 	if err := s.db.First(&user, userID).Error; err != nil {
@@ -732,6 +818,27 @@ func (s *PanelForwardService) getActiveUser(userID uint) (*model.User, error) {
 		return nil, errors.New("invalid user status")
 	}
 	return &user, nil
+}
+
+func (s *PanelForwardService) getActiveUserTunnelPermission(userID, tunnelID uint) (*model.ForwardUserTunnel, error) {
+	if userID == 0 || tunnelID == 0 {
+		return nil, errors.New("no active tunnel permission")
+	}
+
+	var permission model.ForwardUserTunnel
+	if err := s.db.Where("user_id = ? AND tunnel_id = ?", userID, tunnelID).First(&permission).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("no active tunnel permission")
+		}
+		return nil, err
+	}
+	if permission.Status != model.ForwardUserTunnelStatusActive {
+		return nil, errors.New("tunnel permission is disabled")
+	}
+	if permission.ExpTime > 0 && permission.ExpTime <= time.Now().UnixMilli() {
+		return nil, errors.New("tunnel permission expired")
+	}
+	return &permission, nil
 }
 
 func (s *PanelForwardService) getForwardForActor(forwardID, userID uint, isAdmin bool) (*model.Forward, error) {
@@ -818,6 +925,108 @@ func (s *PanelForwardService) nextIndexForUser(userID uint) (int, error) {
 		return records[i].Inx < records[j].Inx
 	})
 	return records[len(records)-1].Inx + 1, nil
+}
+
+func (s *PanelForwardService) countUserTunnelForwards(userID, tunnelID, excludeForwardID uint) (int64, error) {
+	query := s.db.Model(&model.Forward{}).Where("user_id = ? AND tunnel_id = ?", userID, tunnelID)
+	if excludeForwardID != 0 {
+		query = query.Where("id <> ?", excludeForwardID)
+	}
+
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (s *PanelForwardService) sumUserTunnelTraffic(userID, tunnelID uint) (int64, error) {
+	var traffic struct {
+		Total int64 `gorm:"column:total"`
+	}
+	if err := s.db.Model(&model.Forward{}).
+		Select("COALESCE(SUM(in_flow + out_flow), 0) AS total").
+		Where("user_id = ? AND tunnel_id = ?", userID, tunnelID).
+		Scan(&traffic).Error; err != nil {
+		return 0, err
+	}
+	return traffic.Total, nil
+}
+
+func (s *PanelForwardService) listUserTunnelForwards(userID, tunnelID uint, status int) ([]model.Forward, error) {
+	query := s.db.Where("user_id = ? AND tunnel_id = ?", userID, tunnelID).Order("id ASC")
+	if status != 0 {
+		query = query.Where("status = ?", status)
+	}
+
+	var forwards []model.Forward
+	if err := query.Find(&forwards).Error; err != nil {
+		return nil, err
+	}
+	return forwards, nil
+}
+
+func (s *PanelForwardService) reconcileUserTunnelForwards(permission *model.ForwardUserTunnel) error {
+	if permission == nil {
+		return nil
+	}
+
+	shouldPause, err := s.userTunnelRequiresPause(permission)
+	if err != nil {
+		return err
+	}
+	if !shouldPause {
+		return nil
+	}
+
+	forwards, err := s.listUserTunnelForwards(permission.UserID, permission.TunnelID, model.ForwardStatusActive)
+	if err != nil {
+		return err
+	}
+
+	var firstErr error
+	for i := range forwards {
+		if err := s.pauseManagedForward(&forwards[i]); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func (s *PanelForwardService) userTunnelRequiresPause(permission *model.ForwardUserTunnel) (bool, error) {
+	if permission.Status != model.ForwardUserTunnelStatusActive {
+		return true, nil
+	}
+	if permission.ExpTime > 0 && permission.ExpTime <= time.Now().UnixMilli() {
+		return true, nil
+	}
+	if permission.Flow > 0 {
+		totalTraffic, err := s.sumUserTunnelTraffic(permission.UserID, permission.TunnelID)
+		if err != nil {
+			return false, err
+		}
+		if totalTraffic >= permission.Flow*bytesPerGiB {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *PanelForwardService) pauseManagedForward(record *model.Forward) error {
+	if record == nil || record.ID == 0 {
+		return nil
+	}
+
+	if err := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionPause); err != nil {
+		record.Status = model.ForwardStatusError
+		if saveErr := s.db.Model(&model.Forward{}).Where("id = ?", record.ID).Update("status", model.ForwardStatusError).Error; saveErr != nil {
+			return saveErr
+		}
+		return err
+	}
+
+	record.Status = model.ForwardStatusPaused
+	return s.db.Model(&model.Forward{}).Where("id = ?", record.ID).Update("status", model.ForwardStatusPaused).Error
 }
 
 func (s *PanelForwardService) getAccessibleTunnels(userID uint, isAdmin bool) ([]model.ForwardTunnel, error) {
