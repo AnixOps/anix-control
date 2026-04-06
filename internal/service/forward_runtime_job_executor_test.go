@@ -1,9 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +14,7 @@ import (
 	"github.com/anixops/v2board/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"gorm.io/gorm"
 )
 
 type stubPanelForwardRuntimeCommandRunner struct {
@@ -268,6 +272,50 @@ func (s *PanelForwardRuntimeJobExecutorTestSuite) TestRunPendingJobs_MarksForwar
 	assert.NotNil(s.T(), updatedForward.RuntimeLastSyncAt)
 }
 
+func (s *PanelForwardRuntimeJobExecutorTestSuite) TestRunPendingJobs_NoPendingJobsSkipsRunner() {
+	err := s.executor.RunPendingJobs(context.Background())
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), 0, s.runner.runs)
+}
+
 func TestPanelForwardRuntimeJobExecutor(t *testing.T) {
 	suite.Run(t, new(PanelForwardRuntimeJobExecutorTestSuite))
+}
+
+func TestNewPanelForwardRuntimeJobExecutor_NormalizesIdleIntervalFromEnv(t *testing.T) {
+	t.Setenv(forwardRuntimeJobPollIntervalEnvVar, "7s")
+	t.Setenv(forwardRuntimeJobIdlePollIntervalEnvVar, "2s")
+	t.Setenv(forwardRuntimeJobErrorLogIntervalEnvVar, "90s")
+
+	executor := NewPanelForwardRuntimeJobExecutor(&gorm.DB{})
+	assert.Equal(t, 7*time.Second, executor.pollInterval)
+	assert.Equal(t, 7*time.Second, executor.idlePollInterval)
+	assert.Equal(t, 90*time.Second, executor.errorLogger.interval)
+}
+
+func TestForwardBackgroundErrorLogger_SuppressesRepeatedMessages(t *testing.T) {
+	var buf bytes.Buffer
+	originalWriter := log.Writer()
+	originalFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	defer func() {
+		log.SetOutput(originalWriter)
+		log.SetFlags(originalFlags)
+	}()
+
+	logger := newForwardBackgroundErrorLogger(time.Hour)
+	logger.Logf("cycle", "forward runtime executor cycle failed: %v", errors.New("db unavailable"))
+	logger.Logf("cycle", "forward runtime executor cycle failed: %v", errors.New("db unavailable"))
+	logger.Logf("cycle", "forward runtime executor cycle failed: %v", errors.New("db unavailable again"))
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	assert.Len(t, lines, 2)
+	assert.Contains(t, lines[0], "db unavailable")
+	assert.Contains(t, lines[1], "db unavailable again")
+
+	buf.Reset()
+	logger.Clear("cycle")
+	logger.Logf("cycle", "forward runtime executor cycle failed: %v", errors.New("db unavailable"))
+	assert.Contains(t, strings.TrimSpace(buf.String()), "db unavailable")
 }

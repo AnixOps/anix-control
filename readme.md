@@ -44,6 +44,41 @@ v2board_AnixOps/
 └── docker-compose.yml          # 本地一键部署
 ```
 
+## 转发运维文档
+
+Forward/Tunnel 的执行层有两套互斥的运维方案，对应 `forward.runtime_backend`：
+
+| 模式 | 描述 | 核心控制 | 运行时作用的节点 |
+|------|------|---------------|----------------|
+| NodeX Mode = true | gost + NodeX 控制面，执行时走 `forward.runtime.nodex.*` 控制平面 | `forward.runtime_backend=gost` + `forward.runtime.nodex.base_url`/`token`/`timeout_seconds` | `ForwardNode`（`type=relay`）通过 HTTP 拉取 job；代理节点 `model.Node` 仅承担正常用户代理 |
+| NodeX Mode = false | 基于 `ansible-playbook` 触发 SSH 命令的无状态同步 | `forward.runtime_backend=iptables_ansible` + `forward.runtime.iptables_ansible.config`（可选 `inventory`/`playbook`/`extraVars` 等） | 只需转发节点的 SSH 凭证；proxy `model.Node` 不参与 runtime |
+
+### 运行时环境示例
+
+```env
+FORWARD_RUNTIME_BACKEND=gost
+FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18080
+FORWARD_RUNTIME_NODEX_TOKEN=nodex-secret
+FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=20
+
+# 或者，切换到 Ansible 模式
+FORWARD_RUNTIME_BACKEND=iptables_ansible
+FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON={"inventory":"/etc/ansible/forward_inventory.ini","playbookApply":"/etc/ansible/forward_apply.yml","playbookRemove":"/etc/ansible/forward_remove.yml"}
+FORWARD_RUNTIME_ANSIBLE_INVENTORY=/etc/ansible/forward_inventory.ini
+```
+
+### 手工验证与文档
+
+1. NodeX 模式：先确认 `ForwardNode` 记录的 `host`/`api_port`/`api_token` 可访问 NodeX 控制面，再参考 `docs/guide/forward-tunnel-runtime-ops.md` 和 `docs/guide/forward-tunnel-smoke-test.md` 按步骤发起 runtime job（`/api/v2/admin/forward/runtime/jobs` + `v2_forward_runtime_job` 记录）。
+2. Ansible 模式：检查 `forward.runtime.iptables_ansible.config` 中的 inventory/playbook/SSH 参数，确认 `ansible-playbook` 能在 inventory 指定的 host 上运行；`docs/guide/forward-tunnel-runtime-ops.md` 和 `docs/guide/forward-tunnel-smoke-test.md` 提供完整 smoke 验证。
+3. 任何环境变量刷新后，`InitForwardRuntimeSystemConfigFromEnv` 会把值写入 `forward.runtime.*` 系列配置，前端可在 `/admin/system` 看到当前值。
+
+### 节点角色区分
+
+- **Proxy Node (`model.Node`)** 由 `/admin/nodes` 管理，用于用户连接代理服务，与运行 forwarding job 的控制面没有直接对应关系。
+- **Forward Node (`model.ForwardNode`)** 只存在于 `v2_forward_node`，用于 NodeX Mode（REST）或 Ansible Mode（SSH）立即执行 runtime job；其 `host/api_port/api_token` 是 NodeX 控制面调用目标。
+- 这些节点角色绝不能混用；在 smoke 目录的文档里也会多次强调 proxy node online 与 forward node job 流程分别校验的步骤。
+
 ## 快速开始
 
 ### 方式一：Docker Compose（推荐）
@@ -194,6 +229,15 @@ go test -coverprofile=coverage.out ./internal/...
 go tool cover -html=coverage.out
 ```
 
+如果只验证当前 Flux 兼容的 Forward/Tunnel 改动，建议使用以下命令，避免父级 `go.work` 干扰模块测试：
+
+```bash
+$env:GOWORK='off'; go test ./internal/handler -run ForwardPanel
+$env:GOWORK='off'; go test ./internal/service -run 'TestPanelForwardService|TestPanelForwardRuntimeService|^TestForwardFlowResetWorker$|TestForwardRuntimeJobExecutor|TestForwardRuntimeProvider|TestForwardGostStatsWorker|TestForwardRuntimeLocalBypass'
+cd web && npm test -- adminApi.test.js
+cd web && npm run build
+```
+
 ## Flux-panel 复刻
 
 仓库已经进入 `flux-panel` 定向兼容阶段。后续凡是复刻 `flux-panel` 页面或接口，默认遵循“路径、DTO、返回包、交互和业务语义一比一对齐”的原则，而不是先做本项目风格版本。
@@ -206,6 +250,8 @@ go tool cover -html=coverage.out
 - 历史规划与当前工作流挂钩：`docs/FEATURE_ROADMAP.md`
 - 当前已完成基础模块：流量转发页面与兼容 API
 - 当前本机参考仓库：`C:\Users\z7299\AppData\Local\Temp\flux-panel`
+- 运行时与排查文档：`docs/guide/forward-tunnel-runtime-ops.md`（NodeX / iptables_ansible 启动说明、前端 401 排查）
+- 手工联调与验收文档：`docs/guide/forward-tunnel-smoke-test.md`（Tunnel/Forward 页面、兼容 API、双运行时最小验收路径）
 
 ## 可选内部执行面部署
 

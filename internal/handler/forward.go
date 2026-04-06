@@ -151,7 +151,7 @@ func (h *ForwardHandler) GetNode(c *gin.Context) {
 
 	node, err := h.nodeService.GetByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "node not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "forward node not found"})
 		return
 	}
 

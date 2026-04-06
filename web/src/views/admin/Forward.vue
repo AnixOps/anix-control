@@ -170,9 +170,9 @@
           </article>
         </div>
 
-        <section v-if="forwards.length === 0" class="empty-state">
+        <section v-if="!sortedDirectForwards.length" class="empty-state">
           <h3>暂无转发配置</h3>
-          <p>创建第一条转发后，这里会显示当前用户的直连卡片视图。</p>
+          <p>创建第一条转发后，这里会显示当前转发的直连卡片视图。</p>
         </section>
       </section>
     </template>
@@ -710,6 +710,29 @@ function normalizeForward(raw) {
   }
 }
 
+function mergeReferencedTunnels(list, forwardList) {
+  const merged = Array.isArray(list) ? [...list] : []
+  const tunnelMap = new Map(merged.map(item => [Number(item.id), item]))
+
+  for (const forward of Array.isArray(forwardList) ? forwardList : []) {
+    const tunnelId = Number(forward.tunnelId)
+    if (!Number.isFinite(tunnelId) || tunnelId <= 0 || tunnelMap.has(tunnelId)) {
+      continue
+    }
+
+    const fallbackTunnel = normalizeTunnel({
+      id: tunnelId,
+      name: forward.tunnelName || `Tunnel #${tunnelId}`,
+      inIp: forward.inIp || '',
+      status: 0
+    })
+    merged.push(fallbackTunnel)
+    tunnelMap.set(tunnelId, fallbackTunnel)
+  }
+
+  return merged.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+}
+
 function filterCurrentUserForwards(list) {
   if (!Array.isArray(list)) return []
   if (currentUserId.value == null) return list
@@ -763,9 +786,11 @@ async function loadData(showLoading = true) {
 
   try {
     const [forwardsRes, tunnelsRes] = await Promise.all([getForwardList(), getForwardTunnels()])
+    let items = forwards.value
+    let availableTunnels = tunnels.value
 
     if (forwardsRes.code === 0) {
-      const items = Array.isArray(forwardsRes.data) ? forwardsRes.data.map(normalizeForward) : []
+      items = Array.isArray(forwardsRes.data) ? forwardsRes.data.map(normalizeForward) : []
       forwards.value = items
       if (viewMode.value === 'direct') {
         initializeOrder(items)
@@ -775,10 +800,11 @@ async function loadData(showLoading = true) {
     }
 
     if (tunnelsRes.code === 0) {
-      tunnels.value = Array.isArray(tunnelsRes.data) ? tunnelsRes.data.map(normalizeTunnel) : []
+      availableTunnels = Array.isArray(tunnelsRes.data) ? tunnelsRes.data.map(normalizeTunnel) : []
     } else {
       setFeedback('warning', tunnelsRes.msg || '获取隧道列表失败')
     }
+    tunnels.value = mergeReferencedTunnels(availableTunnels, items)
   } catch (error) {
     console.error('加载转发页数据失败:', error)
     setFeedback('error', '加载数据失败')

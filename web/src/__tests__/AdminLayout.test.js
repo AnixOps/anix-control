@@ -23,6 +23,8 @@ const adminMenuPaths = [
   '/admin/nodes',
   '/admin/subscriptions',
   '/admin/forward',
+  '/admin/tunnel',
+  '/admin/limit',
   '/admin/agent',
   '/admin/plans',
   '/admin/coupons',

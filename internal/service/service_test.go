@@ -2803,12 +2803,14 @@ func (s *ForwardRuleServiceTestSuite) SetupTest() {
 
 	// 鍒涘缓涓浆鑺傜偣
 	s.relayNode = &model.ForwardNode{
-		Name:    "Test Relay",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "192.168.1.100",
-		Port:    443,
-		Enabled: true,
-		Status:  model.ForwardNodeStatusOnline,
+		Name:     "Test Relay",
+		Type:     model.ForwardNodeTypeRelay,
+		Host:     "192.168.1.100",
+		Port:     443,
+		APIPort:  19090,
+		APIToken: "test-relay-token",
+		Enabled:  true,
+		Status:   model.ForwardNodeStatusOnline,
 	}
 	database.Get().Create(s.relayNode)
 
