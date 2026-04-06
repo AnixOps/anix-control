@@ -23,8 +23,9 @@ const adminMenuPaths = [
   '/admin/nodes',
   '/admin/subscriptions',
   '/admin/forward',
-  '/admin/tunnel',
-  '/admin/limit',
+  '/admin/forward/tunnels',
+  '/admin/forward/limits',
+  '/admin/forward/nodes',
   '/admin/agent',
   '/admin/plans',
   '/admin/coupons',
@@ -105,6 +106,10 @@ describe('AdminLayout.vue', () => {
     mockRoute.path = '/admin/agent'
     await nextTick()
     expect(wrapper.find('h1').text()).toContain('Agent')
+
+    mockRoute.path = '/admin/forward/nodes'
+    await nextTick()
+    expect(wrapper.find('h1').text()).toContain('中转节点')
   })
 
   it('logs out and redirects to login', async () => {

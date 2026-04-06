@@ -48,6 +48,13 @@ func NewPanelForwardService(db *gorm.DB) *PanelForwardService {
 	}
 }
 
+func (s *PanelForwardService) resolveRuntimeBackend() (string, error) {
+	if s.runtimeService == nil {
+		return model.ForwardRuntimeBackendGost, nil
+	}
+	return s.runtimeService.resolveBackend()
+}
+
 type PanelForwardInput struct {
 	Name          string `json:"name"`
 	TunnelID      uint   `json:"tunnelId"`
@@ -281,25 +288,28 @@ func (s *PanelForwardService) CreateTunnel(input PanelTunnelInput) (*PanelAdminT
 	input.UDPListenAddr = normalizePanelTunnelListenAddr(input.UDPListenAddr)
 
 	trafficRatio := normalizePanelTunnelTrafficRatio(input.TrafficRatio)
-	if err := validatePanelTunnelCreateInput(input, trafficRatio); err != nil {
+	backend, err := s.resolveRuntimeBackend()
+	if err != nil {
+		return nil, err
+	}
+	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+		if (input.OutNodeID == nil || *input.OutNodeID == 0) && input.InNodeID != 0 {
+			executionNodeID := input.InNodeID
+			input.OutNodeID = &executionNodeID
+		}
+		if input.InNodeID == 0 {
+			input.InNodeID = selectPanelTunnelExecutionNodeID(input.InNodeID, input.OutNodeID)
+		}
+	}
+	if err := validatePanelTunnelCreateInput(input, trafficRatio, backend); err != nil {
 		return nil, err
 	}
 	if err := s.ensureTunnelNameUnique(input.Name, 0); err != nil {
 		return nil, err
 	}
 
-	inNode, err := s.getEnabledForwardNode(input.InNodeID, "入口节点")
-	if err != nil {
-		return nil, err
-	}
-	if err := validateForwardNodeType(inNode, model.ForwardNodeTypeRelay, "入口节点"); err != nil {
-		return nil, err
-	}
-
 	record := &model.ForwardTunnel{
 		Name:          input.Name,
-		InNodeID:      inNode.ID,
-		InIP:          strings.TrimSpace(inNode.Host),
 		Type:          input.Type,
 		Flow:          input.Flow,
 		TrafficRatio:  trafficRatio,
@@ -309,23 +319,50 @@ func (s *PanelForwardService) CreateTunnel(input PanelTunnelInput) (*PanelAdminT
 		Status:        model.ForwardTunnelStatusActive,
 	}
 
-	if input.Type == 2 {
-		outNode, err := s.getEnabledForwardNode(pointerUintValue(input.OutNodeID), "出口节点")
+	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+		executionNodeID := selectPanelTunnelExecutionNodeID(input.InNodeID, input.OutNodeID)
+		executionNode, err := s.getEnabledForwardNode(executionNodeID, "中转执行节点")
 		if err != nil {
 			return nil, err
 		}
-		if err := validateForwardNodeType(outNode, model.ForwardNodeTypeExit, "出口节点"); err != nil {
+		if err := validateForwardNodeType(executionNode, model.ForwardNodeTypeRelay, "中转执行节点"); err != nil {
 			return nil, err
 		}
-		if outNode.ID == inNode.ID {
-			return nil, errors.New("隧道转发模式下，入口和出口不能是同一个节点")
-		}
-		record.OutNodeID = &outNode.ID
-		record.OutIP = strings.TrimSpace(outNode.Host)
-		record.Protocol = normalizePanelTunnelProtocol(input.Protocol)
+
+		record.InNodeID = 0
+		record.InIP = strings.TrimSpace(executionNode.Host)
+		record.OutNodeID = &executionNode.ID
+		record.OutIP = strings.TrimSpace(executionNode.Host)
+		record.Protocol = ""
 	} else {
-		record.OutNodeID = &inNode.ID
-		record.OutIP = strings.TrimSpace(inNode.Host)
+		inNode, err := s.getEnabledForwardNode(input.InNodeID, "入口节点")
+		if err != nil {
+			return nil, err
+		}
+		if err := validateForwardNodeType(inNode, model.ForwardNodeTypeRelay, "入口节点"); err != nil {
+			return nil, err
+		}
+
+		record.InNodeID = inNode.ID
+		record.InIP = strings.TrimSpace(inNode.Host)
+		if input.Type == 2 {
+			outNode, err := s.getEnabledForwardNode(pointerUintValue(input.OutNodeID), "出口节点")
+			if err != nil {
+				return nil, err
+			}
+			if err := validateForwardNodeType(outNode, model.ForwardNodeTypeExit, "出口节点"); err != nil {
+				return nil, err
+			}
+			if outNode.ID == inNode.ID {
+				return nil, errors.New("隧道转发模式下，入口和出口不能是同一个节点")
+			}
+			record.OutNodeID = &outNode.ID
+			record.OutIP = strings.TrimSpace(outNode.Host)
+			record.Protocol = normalizePanelTunnelProtocol(input.Protocol)
+		} else {
+			record.OutNodeID = &inNode.ID
+			record.OutIP = strings.TrimSpace(inNode.Host)
+		}
 	}
 
 	if err := s.db.Create(record).Error; err != nil {
@@ -348,12 +385,16 @@ func (s *PanelForwardService) UpdateTunnel(input PanelTunnelUpdateInput) (*Panel
 	input.UDPListenAddr = normalizePanelTunnelListenAddr(input.UDPListenAddr)
 
 	trafficRatio := normalizePanelTunnelTrafficRatio(input.TrafficRatio)
-	if err := validatePanelTunnelUpdateInput(input, trafficRatio); err != nil {
-		return nil, err
-	}
-
 	record, err := s.getTunnelByID(input.ID)
 	if err != nil {
+		return nil, err
+	}
+	backend, err := s.resolveRuntimeBackend()
+	if err != nil {
+		return nil, err
+	}
+	requireProtocol := backend != model.ForwardRuntimeBackendIptablesAnsible && record.Type == 2
+	if err := validatePanelTunnelUpdateInput(input, trafficRatio, requireProtocol); err != nil {
 		return nil, err
 	}
 	if err := s.ensureTunnelNameUnique(input.Name, record.ID); err != nil {
@@ -369,7 +410,11 @@ func (s *PanelForwardService) UpdateTunnel(input PanelTunnelUpdateInput) (*Panel
 	record.Flow = input.Flow
 	record.TrafficRatio = trafficRatio
 	record.InterfaceName = input.InterfaceName
-	record.Protocol = input.Protocol
+	if requireProtocol {
+		record.Protocol = input.Protocol
+	} else {
+		record.Protocol = ""
+	}
 	record.TCPListenAddr = input.TCPListenAddr
 	record.UDPListenAddr = input.UDPListenAddr
 
@@ -417,6 +462,10 @@ func (s *PanelForwardService) DiagnoseTunnel(id uint) (*TunnelDiagnosisReport, e
 	if err != nil {
 		return nil, err
 	}
+	backend, err := s.resolveRuntimeBackend()
+	if err != nil {
+		return nil, err
+	}
 
 	checks := make([]struct {
 		description string
@@ -426,7 +475,28 @@ func (s *PanelForwardService) DiagnoseTunnel(id uint) (*TunnelDiagnosisReport, e
 		port        int
 	}, 0, 2)
 
-	if tunnel.InNodeID > 0 {
+	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+		executionNodeID := storedPanelTunnelExecutionNodeID(tunnel)
+		if executionNodeID > 0 {
+			executionNode, err := s.getForwardNodeByID(executionNodeID)
+			if err != nil {
+				return nil, err
+			}
+			checks = append(checks, struct {
+				description string
+				nodeLabel   string
+				nodeID      uint
+				host        string
+				port        int
+			}{
+				description: "管理端->中转执行节点",
+				nodeLabel:   executionNode.Name,
+				nodeID:      executionNode.ID,
+				host:        strings.TrimSpace(executionNode.Host),
+				port:        executionNode.Port,
+			})
+		}
+	} else if tunnel.InNodeID > 0 {
 		inNode, err := s.getForwardNodeByID(tunnel.InNodeID)
 		if err != nil {
 			return nil, err
@@ -446,7 +516,7 @@ func (s *PanelForwardService) DiagnoseTunnel(id uint) (*TunnelDiagnosisReport, e
 		})
 	}
 
-	if tunnel.Type == 2 && tunnel.OutNodeID != nil {
+	if backend != model.ForwardRuntimeBackendIptablesAnsible && tunnel.Type == 2 && tunnel.OutNodeID != nil {
 		outNode, err := s.getForwardNodeByID(*tunnel.OutNodeID)
 		if err != nil {
 			return nil, err
@@ -1752,12 +1822,9 @@ func tunnelPortRange(tunnel *model.ForwardTunnel) (int, int) {
 	return start, end
 }
 
-func validatePanelTunnelCreateInput(input PanelTunnelInput, trafficRatio float64) error {
+func validatePanelTunnelCreateInput(input PanelTunnelInput, trafficRatio float64, backend string) error {
 	if strings.TrimSpace(input.Name) == "" {
 		return errors.New("请输入隧道名称")
-	}
-	if input.InNodeID == 0 {
-		return errors.New("请选择入口节点")
 	}
 	if input.Type != 1 && input.Type != 2 {
 		return errors.New("隧道类型必须是 1 或 2")
@@ -1767,6 +1834,18 @@ func validatePanelTunnelCreateInput(input PanelTunnelInput, trafficRatio float64
 	}
 	if trafficRatio <= 0 || trafficRatio > 100 {
 		return errors.New("流量倍率必须在 0.0-100.0 之间")
+	}
+	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+		if input.Type != 1 {
+			return errors.New("Ansible 转发模式仅支持端口转发")
+		}
+		if selectPanelTunnelExecutionNodeID(input.InNodeID, input.OutNodeID) == 0 {
+			return errors.New("请选择中转执行节点")
+		}
+		return nil
+	}
+	if input.InNodeID == 0 {
+		return errors.New("请选择入口节点")
 	}
 	if input.Type == 2 {
 		if input.OutNodeID == nil || *input.OutNodeID == 0 {
@@ -1779,7 +1858,7 @@ func validatePanelTunnelCreateInput(input PanelTunnelInput, trafficRatio float64
 	return nil
 }
 
-func validatePanelTunnelUpdateInput(input PanelTunnelUpdateInput, trafficRatio float64) error {
+func validatePanelTunnelUpdateInput(input PanelTunnelUpdateInput, trafficRatio float64, requireProtocol bool) error {
 	if strings.TrimSpace(input.Name) == "" {
 		return errors.New("请输入隧道名称")
 	}
@@ -1789,7 +1868,7 @@ func validatePanelTunnelUpdateInput(input PanelTunnelUpdateInput, trafficRatio f
 	if trafficRatio <= 0 || trafficRatio > 100 {
 		return errors.New("流量倍率必须在 0.0-100.0 之间")
 	}
-	if strings.TrimSpace(input.Protocol) == "" {
+	if requireProtocol && strings.TrimSpace(input.Protocol) == "" {
 		return errors.New("请选择协议类型")
 	}
 	if strings.TrimSpace(input.TCPListenAddr) == "" {
@@ -1910,6 +1989,20 @@ func pointerUintValue(value *uint) uint {
 		return 0
 	}
 	return *value
+}
+
+func selectPanelTunnelExecutionNodeID(inNodeID uint, outNodeID *uint) uint {
+	if outNodeID != nil && *outNodeID != 0 {
+		return *outNodeID
+	}
+	return inNodeID
+}
+
+func storedPanelTunnelExecutionNodeID(tunnel *model.ForwardTunnel) uint {
+	if tunnel == nil {
+		return 0
+	}
+	return selectPanelTunnelExecutionNodeID(tunnel.InNodeID, tunnel.OutNodeID)
 }
 
 func sameUintPointer(left, right *uint) bool {

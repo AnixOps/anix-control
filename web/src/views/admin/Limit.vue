@@ -10,6 +10,7 @@
         <button @click="openCreateModal">新增</button>
       </div>
     </div>
+    <ForwardSuiteNav />
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
@@ -122,6 +123,7 @@ import {
   getSpeedLimitTunnels,
   updateSpeedLimit
 } from '@/api/admin'
+import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 
 const loading = ref(false)
 const limits = ref([])

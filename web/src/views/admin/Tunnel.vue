@@ -9,6 +9,7 @@
         <button class="btn btn-primary" @click="openCreateModal">新增</button>
       </div>
     </div>
+    <ForwardSuiteNav />
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
       <span>{{ feedback.message }}</span>
@@ -27,6 +28,7 @@
             <div class="card-title">
               <h3>{{ tunnel.name }}</h3>
               <p>{{ resolveTypeMeta(tunnel.type).text }}</p>
+              <p class="card-mode">{{ runtimeModeLabel }}</p>
             </div>
             <div class="card-head-actions">
               <span :class="['tag', resolveTypeMeta(tunnel.type).className]">
@@ -39,13 +41,15 @@
           </div>
 
           <div class="meta-list">
-            <div class="meta-item">
+            <div v-if="runtimeNodeXMode" class="meta-item">
               <span class="meta-label">转发入口节点</span>
               <strong>{{ resolveNodeName(tunnel.inNodeId) }}</strong>
               <code>{{ tunnel.inIp || '-' }}</code>
             </div>
             <div class="meta-item">
-              <span class="meta-label">转发出口节点</span>
+              <span class="meta-label">
+                {{ runtimeNodeXMode ? '转发出口节点' : '中转执行节点' }}
+              </span>
               <strong>{{ resolveNodeName(tunnel.outNodeId || tunnel.inNodeId) }}</strong>
               <code>{{ tunnel.outIp || tunnel.inIp || '-' }}</code>
             </div>
@@ -93,7 +97,7 @@
 
             <div class="form-group">
               <label>隧道类型</label>
-              <select v-model.number="form.type" :disabled="isEdit">
+              <select v-model.number="form.type" :disabled="isEdit || !runtimeNodeXMode">
                 <option :value="1">端口转发</option>
                 <option :value="2">隧道转发</option>
               </select>
@@ -118,8 +122,8 @@
           </div>
 
           <div class="form-grid">
-            <div class="form-group">
-              <label>转发入口节点</label>
+            <div v-if="runtimeNodeXMode" class="form-group">
+              <label>NodeX 入口节点</label>
               <select
                 data-test="forward-entry-select"
                 v-model.number="form.inNodeId"
@@ -131,6 +135,20 @@
                 </option>
               </select>
               <p v-if="errors.inNodeId" class="form-error">{{ errors.inNodeId }}</p>
+            </div>
+            <div v-else class="form-group">
+              <label>中转执行节点</label>
+              <select data-test="forward-execution-select" v-model.number="form.outNodeId" :disabled="isEdit">
+                <option :value="0">请选择中转执行节点</option>
+                <option
+                  v-for="node in relayNodeOptions"
+                  :key="`exec-${node.id}`"
+                  :value="node.id"
+                >
+                  {{ node.name }} · 中转执行节点 · {{ node.host }}
+                </option>
+              </select>
+              <p v-if="errors.outNodeId" class="form-error">{{ errors.outNodeId }}</p>
             </div>
 
             <div class="form-group">
@@ -153,7 +171,7 @@
             </div>
           </div>
 
-          <div v-if="form.type === 2" class="form-grid">
+          <div v-if="runtimeNodeXMode && form.type === 2" class="form-grid">
             <div class="form-group">
               <label>协议类型</label>
               <select v-model="form.protocol">
@@ -291,12 +309,17 @@ import {
   diagnoseForwardTunnel,
   getAdminForwardTunnelList,
   getForwardNodes,
+  getSystemConfig,
   updateForwardTunnel
 } from '@/api/admin'
+import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 
 const loading = ref(true)
 const tunnels = ref([])
 const nodes = ref([])
+const runtimeNodeXModeKey = 'forward.runtime.nodex_mode'
+const runtimeBackendKey = 'forward.runtime_backend'
+const runtimeNodeXMode = ref(false)
 
 const relayNodeOptions = computed(() =>
   nodes.value.filter(
@@ -308,6 +331,12 @@ const exitNodeOptions = computed(() =>
   nodes.value.filter(
     node => node.id > 0 && String(node.type ?? '').toLowerCase() === 'exit'
   )
+)
+
+const runtimeModeLabel = computed(() =>
+  runtimeNodeXMode.value
+    ? 'NodeX/Gost runtime (转发入口/出口节点)'
+    : 'Ansible/iptables runtime (中转执行节点)'
 )
 
 const modalOpen = ref(false)
@@ -340,7 +369,54 @@ const errors = reactive({
   udpListenAddr: ''
 })
 
+const enforceFormMode = () => {
+  if (!runtimeNodeXMode.value) {
+    form.type = 1
+    form.inNodeId = 0
+    form.outNodeId = 0
+    form.protocol = ''
+  }
+}
+
+const parseBooleanConfig = (value) => {
+  if (value === undefined || value === null) {
+    return null
+  }
+  if (typeof value === 'boolean') {
+    return value
+  }
+  const normalized = String(value).trim().toLowerCase()
+  if (!normalized) {
+    return null
+  }
+  return ['1', 'true', 'yes', 'on', 'enabled'].includes(normalized)
+}
+
+async function loadRuntimeMode() {
+  try {
+    const res = await getSystemConfig(runtimeNodeXModeKey)
+    const parsedValue = parseBooleanConfig(res.data?.value)
+    if (parsedValue !== null) {
+      runtimeNodeXMode.value = parsedValue
+      enforceFormMode()
+      return
+    }
+  } catch (err) {
+    console.error('鑾峰彇 runtime NodeX mode 澶辫触:', err)
+  }
+
+  try {
+    const res = await getSystemConfig(runtimeBackendKey)
+    const backend = String(res.data?.value || '').toLowerCase()
+    runtimeNodeXMode.value = backend === 'gost'
+    enforceFormMode()
+  } catch (err) {
+    console.error('鑾峰彇 runtime backend 澶辫触:', err)
+  }
+}
+
 onMounted(async () => {
+  await loadRuntimeMode()
   await loadData(true)
 })
 
@@ -478,6 +554,11 @@ function formatAddress(host, port) {
 function openCreateModal() {
   isEdit.value = false
   resetForm()
+  if (!runtimeNodeXMode.value) {
+    form.type = 1
+    form.inNodeId = 0
+    form.outNodeId = 0
+  }
   modalOpen.value = true
 }
 
@@ -488,7 +569,7 @@ function openEditModal(tunnel) {
     name: tunnel.name,
     type: tunnel.type,
     inNodeId: tunnel.inNodeId,
-    outNodeId: tunnel.outNodeId || 0,
+    outNodeId: tunnel.outNodeId || tunnel.inNodeId || 0,
     flow: tunnel.flow,
     trafficRatio: tunnel.trafficRatio,
     protocol: tunnel.protocol || 'tls',
@@ -517,10 +598,12 @@ function validateForm() {
     errors.type = '请选择有效的隧道类型'
   }
 
-  if (!form.inNodeId) {
-    errors.inNodeId = '请选择转发入口节点'
-  } else if (!relayNodeOptions.value.some(node => node.id === Number(form.inNodeId))) {
-    errors.inNodeId = '入口节点必须是转发中继节点'
+  if (runtimeNodeXMode.value) {
+    if (!form.inNodeId) {
+      errors.inNodeId = '请选择转发入口节点'
+    } else if (!relayNodeOptions.value.some(node => node.id === Number(form.inNodeId))) {
+      errors.inNodeId = '入口节点必须是转发中继节点'
+    }
   }
 
   const trafficRatio = Number(form.trafficRatio)
@@ -536,7 +619,7 @@ function validateForm() {
     errors.udpListenAddr = '请输入 UDP 监听地址'
   }
 
-  if (Number(form.type) === 2) {
+  if (runtimeNodeXMode.value && Number(form.type) === 2) {
     if (!form.outNodeId) {
       errors.outNodeId = '请选择转发出口节点'
     } else if (Number(form.outNodeId) === Number(form.inNodeId)) {
@@ -547,6 +630,14 @@ function validateForm() {
 
     if (!String(form.protocol || '').trim()) {
       errors.protocol = '请选择协议类型'
+    }
+  }
+
+  if (!runtimeNodeXMode.value) {
+    if (!form.outNodeId) {
+      errors.outNodeId = '请选择中转执行节点'
+    } else if (!relayNodeOptions.value.some(node => node.id === Number(form.outNodeId))) {
+      errors.outNodeId = '中转执行节点必须是转发中继节点'
     }
   }
 
@@ -570,18 +661,29 @@ async function handleSubmit() {
       interfaceName: String(form.interfaceName || '').trim()
     }
 
+    const typeValue = runtimeNodeXMode.value ? Number(form.type) : 1
+    const normalizedOutNode = runtimeNodeXMode.value
+      ? Number(form.type) === 2
+        ? Number(form.outNodeId)
+        : null
+      : Number(form.outNodeId) || null
+    const normalizedInNode = runtimeNodeXMode.value ? Number(form.inNodeId) : 0
+    const protocolValue = runtimeNodeXMode.value && Number(form.type) === 2 ? payload.protocol : ''
+
+    const requestPayload = {
+      ...payload,
+      type: typeValue,
+      inNodeId: normalizedInNode,
+      outNodeId: normalizedOutNode,
+      protocol: protocolValue
+    }
+
     const response = isEdit.value
       ? await updateForwardTunnel({
           id: form.id,
-          ...payload
+          ...requestPayload
         })
-      : await createForwardTunnel({
-          ...payload,
-          type: Number(form.type),
-          inNodeId: Number(form.inNodeId),
-          outNodeId: Number(form.type) === 2 ? Number(form.outNodeId) : null,
-          protocol: Number(form.type) === 2 ? payload.protocol : ''
-        })
+      : await createForwardTunnel(requestPayload)
 
     if (response.code === 0) {
       modalOpen.value = false

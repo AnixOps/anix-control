@@ -19,6 +19,7 @@
         <button class="btn btn-primary" @click="openCreateModal">新增</button>
       </div>
     </div>
+    <ForwardSuiteNav />
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
       <span>{{ feedback.message }}</span>
@@ -483,6 +484,7 @@ import {
   updateForwardOrder,
   getForwardTunnels
 } from '@/api/admin'
+import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 
 const userStore = useUserStore()
 
