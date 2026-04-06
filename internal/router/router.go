@@ -11,6 +11,10 @@ import (
 
 // Setup 设置路由
 func Setup(r *gin.Engine, cfg *config.Config) {
+	if cfg != nil {
+		config.Set(cfg)
+	}
+
 	// 全局中间件
 	r.Use(middleware.CORS())
 	r.Use(middleware.Logger())
@@ -52,6 +56,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	}
 	subscribeHandler := handler.NewSubscribeHandler(cfg)
 	r.GET("/"+subscribePath+"/:token", subscribeHandler.GetSubscription)
+
+	forwardFlowHandler := handler.NewForwardHandler()
+	r.POST("/flow/upload", middleware.AppTokenAuth(), forwardFlowHandler.UploadPanelFlowData)
 
 	// API v2
 	v2 := r.Group("/api/v2")
@@ -501,6 +508,14 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			agentAdmin.GET("/tasks/:task_id", agentHandler.GetTaskResult)
 			agentAdmin.POST("/execute", agentHandler.ExecuteCommand)
 			agentAdmin.GET("/monitor", agentHandler.GetMonitor)
+		}
+
+		internalAPI := v2.Group("/internal")
+		internalAPI.Use(middleware.AppTokenAuth())
+		{
+			internalAPI.POST("/forward/traffic/upload", forwardFlowHandler.UploadPanelFlowData)
+			internalAPI.POST("/forward/traffic/report", forwardFlowHandler.ReportPanelForwardTraffic)
+			internalAPI.POST("/forward/traffic/snapshot", forwardFlowHandler.SnapshotPanelForwardTraffic)
 		}
 	}
 }

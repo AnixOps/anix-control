@@ -47,3 +47,19 @@ type ForwardRuntimeJob struct {
 func (ForwardRuntimeJob) TableName() string {
 	return "v2_forward_runtime_job"
 }
+
+// ForwardTrafficCursor stores the last runtime totals seen for a forward/backend pair
+// so snapshot-based collectors can safely convert cumulative counters into deltas.
+type ForwardTrafficCursor struct {
+	ID            uint      `gorm:"primaryKey" json:"id"`
+	ForwardID     uint      `gorm:"uniqueIndex:idx_forward_traffic_cursor" json:"forwardId"`
+	Backend       string    `gorm:"size:50;uniqueIndex:idx_forward_traffic_cursor" json:"backend"`
+	UploadTotal   int64     `gorm:"default:0" json:"uploadTotal"`
+	DownloadTotal int64     `gorm:"default:0" json:"downloadTotal"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+func (ForwardTrafficCursor) TableName() string {
+	return "v2_forward_traffic_cursor"
+}

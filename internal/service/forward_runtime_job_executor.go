@@ -94,6 +94,7 @@ type panelForwardAnsibleRuntimePayload struct {
 	Forward        panelForwardAnsibleForwardPayload  `json:"forward"`
 	Tunnel         panelForwardAnsibleTunnelPayload   `json:"tunnel"`
 	Node           panelForwardAnsibleNodePayload     `json:"node"`
+	Limiter        *panelForwardLimiterPayload        `json:"limiter,omitempty"`
 	Targets        []panelForwardAnsibleTargetPayload `json:"targets"`
 	Command        string                             `json:"command,omitempty"`
 	WorkingDir     string                             `json:"workingDir,omitempty"`
@@ -349,6 +350,9 @@ func (p *panelForwardAnsibleRuntimePayload) buildExtraVars() map[string]interfac
 	result["forward"] = p.Forward
 	result["tunnel"] = p.Tunnel
 	result["node"] = p.Node
+	if p.Limiter != nil {
+		result["limiter"] = p.Limiter
+	}
 	result["targets"] = p.Targets
 	result["forwardId"] = p.Forward.ID
 	result["tunnelId"] = p.Tunnel.ID

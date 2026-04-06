@@ -184,6 +184,10 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string,
 	if err != nil {
 		return nodeXForwardExecuteRequest{}, nil, err
 	}
+	limiter, err := s.loadForwardLimiter(forward, tunnel)
+	if err != nil {
+		return nodeXForwardExecuteRequest{}, nil, err
+	}
 
 	req := nodeXForwardExecuteRequest{
 		ResourceType: nodeXForwardResourceTypePanelForward,
@@ -209,6 +213,7 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string,
 				UDPListenAddr: tunnel.UDPListenAddr,
 				InterfaceName: tunnel.InterfaceName,
 			},
+			Limiter: limiter,
 		},
 	}
 
@@ -256,6 +261,48 @@ func (s *PanelForwardRuntimeService) loadIngressNode(tunnel *model.ForwardTunnel
 	return &node, nil
 }
 
+func (s *PanelForwardRuntimeService) loadForwardLimiter(forward *model.Forward, tunnel *model.ForwardTunnel) (*panelForwardLimiterPayload, error) {
+	if forward == nil || forward.UserID == 0 {
+		return nil, nil
+	}
+
+	tunnelID := forward.TunnelID
+	if tunnel != nil && tunnel.ID != 0 {
+		tunnelID = tunnel.ID
+	}
+	if tunnelID == 0 {
+		return nil, nil
+	}
+
+	var permission model.ForwardUserTunnel
+	if err := s.db.Where("user_id = ? AND tunnel_id = ?", forward.UserID, tunnelID).First(&permission).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if permission.SpeedID == nil || *permission.SpeedID == 0 {
+		return nil, nil
+	}
+
+	var speedLimit model.SpeedLimit
+	if err := s.db.First(&speedLimit, *permission.SpeedID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("speed limit %d not found for forward %d", *permission.SpeedID, forward.ID)
+		}
+		return nil, err
+	}
+	if speedLimit.TunnelID != tunnelID {
+		return nil, fmt.Errorf("speed limit %d does not belong to tunnel %d", speedLimit.ID, tunnelID)
+	}
+
+	return &panelForwardLimiterPayload{
+		SpeedID: speedLimit.ID,
+		Name:    speedLimit.Name,
+		Speed:   speedLimit.Speed,
+	}, nil
+}
+
 func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(action string, forward *model.Forward, tunnel *model.ForwardTunnel, node *model.ForwardNode) (*panelForwardAnsibleRuntimePayload, error) {
 	if node == nil {
 		return nil, errors.New("forward ingress node is required for ansible runtime")
@@ -265,6 +312,10 @@ func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(action string, f
 		return nil, err
 	}
 	targets, err := buildPanelForwardAnsibleTargets(forward.RemoteAddr)
+	if err != nil {
+		return nil, err
+	}
+	limiter, err := s.loadForwardLimiter(forward, tunnel)
 	if err != nil {
 		return nil, err
 	}
@@ -305,6 +356,7 @@ func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(action string, f
 			Port:    node.Port,
 			APIPort: node.APIPort,
 		},
+		Limiter: limiter,
 		Targets: targets,
 	}, nil
 }

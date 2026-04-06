@@ -81,9 +81,10 @@ type nodeXForwardExecuteResult struct {
 }
 
 type nodeXPanelForwardRequest struct {
-	Forward     nodeXPanelForwardPayload `json:"forward"`
-	Tunnel      nodeXPanelTunnelPayload  `json:"tunnel"`
-	IngressNode nodeXForwardNodePayload  `json:"ingressNode"`
+	Forward     nodeXPanelForwardPayload    `json:"forward"`
+	Tunnel      nodeXPanelTunnelPayload     `json:"tunnel"`
+	IngressNode nodeXForwardNodePayload     `json:"ingressNode"`
+	Limiter     *panelForwardLimiterPayload `json:"limiter,omitempty"`
 }
 
 type nodeXPanelForwardPayload struct {
@@ -95,6 +96,12 @@ type nodeXPanelForwardPayload struct {
 	InterfaceName string `json:"interfaceName"`
 	Strategy      string `json:"strategy"`
 	Status        int    `json:"status"`
+}
+
+type panelForwardLimiterPayload struct {
+	SpeedID uint   `json:"speedId"`
+	Name    string `json:"name,omitempty"`
+	Speed   int64  `json:"speed"`
 }
 
 type nodeXPanelTunnelPayload struct {

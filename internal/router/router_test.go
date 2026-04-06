@@ -45,6 +45,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *config.Config) {
 			TrafficLogEnable: true,
 		},
 	}
+	config.Set(cfg)
 
 	r := gin.New()
 	Setup(r, cfg)

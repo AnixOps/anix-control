@@ -259,6 +259,7 @@ func main() {
 			&model.Forward{},
 			&model.SpeedLimit{},
 			&model.ForwardRuntimeJob{},
+			&model.ForwardTrafficCursor{},
 			// 支付网关
 			&model.PaymentGateway{},
 			&model.PaymentRecord{},
@@ -312,10 +313,20 @@ func main() {
 
 	// 设置Gin模式
 	go func() {
+		executor := service.NewPanelForwardRuntimeJobExecutor(database.Get())
+		executor.Start(context.Background())
+	}()
+
+	go func() {
 		worker := service.NewForwardFlowResetWorker(database.Get())
 		if err := worker.RunOnce(time.Now()); err != nil {
 			log.Printf("Initial forward flow reset run failed: %v", err)
 		}
+		worker.Start(context.Background())
+	}()
+
+	go func() {
+		worker := service.NewForwardGostStatsWorker(database.Get())
 		worker.Start(context.Background())
 	}()
 
