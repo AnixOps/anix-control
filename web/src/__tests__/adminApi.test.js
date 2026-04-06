@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import request from '@/utils/request'
 import * as adminApi from '@/api/admin'
 
@@ -43,6 +43,22 @@ describe('admin api mapping', () => {
           url: '/admin/forward/nodes',
           method: 'get',
           params: { type: 'relay' },
+        },
+      },
+      {
+        call: () => adminApi.getAdminForwardTunnelList(),
+        expected: { url: '/admin/tunnel/list', method: 'post' },
+      },
+      {
+        call: () => adminApi.getForwardTunnels(),
+        expected: { url: '/tunnel/user/tunnel', method: 'post' },
+      },
+      {
+        call: () => adminApi.diagnoseForward(77),
+        expected: {
+          url: '/forward/diagnose',
+          method: 'post',
+          data: { forwardId: 77 },
         },
       },
       {
@@ -146,6 +162,38 @@ describe('admin api mapping', () => {
         },
       },
       {
+        call: () => adminApi.createForwardTunnel({ name: 'Tunnel A', type: 1 }),
+        expected: {
+          url: '/admin/tunnel/create',
+          method: 'post',
+          data: { name: 'Tunnel A', type: 1 },
+        },
+      },
+      {
+        call: () => adminApi.updateForwardTunnel({ id: 8, name: 'Tunnel B' }),
+        expected: {
+          url: '/admin/tunnel/update',
+          method: 'post',
+          data: { id: 8, name: 'Tunnel B' },
+        },
+      },
+      {
+        call: () => adminApi.deleteForwardTunnel(6),
+        expected: {
+          url: '/admin/tunnel/delete',
+          method: 'post',
+          data: { id: 6 },
+        },
+      },
+      {
+        call: () => adminApi.diagnoseForwardTunnel(11),
+        expected: {
+          url: '/admin/tunnel/diagnose',
+          method: 'post',
+          data: { tunnelId: 11 },
+        },
+      },
+      {
         call: () => adminApi.togglePaymentGateway(4, false),
         expected: {
           url: '/admin/payment/gateways/4/toggle',
@@ -201,5 +249,94 @@ describe('admin api mapping', () => {
       expect(request).toHaveBeenCalledTimes(1)
       expect(request).toHaveBeenCalledWith(c.expected)
     }
+  })
+})
+
+async function loadActualRequestModule({ token = '' } = {}) {
+  vi.resetModules()
+
+  const requestInterceptors = {}
+  const responseInterceptors = {}
+  const logout = vi.fn()
+
+  vi.doMock('axios', () => ({
+    default: {
+      create: vi.fn(() => ({
+        interceptors: {
+          request: {
+            use: vi.fn((fulfilled, rejected) => {
+              requestInterceptors.fulfilled = fulfilled
+              requestInterceptors.rejected = rejected
+            }),
+          },
+          response: {
+            use: vi.fn((fulfilled, rejected) => {
+              responseInterceptors.fulfilled = fulfilled
+              responseInterceptors.rejected = rejected
+            }),
+          },
+        },
+      })),
+    },
+  }))
+
+  vi.doMock('@/stores/user', () => ({
+    useUserStore: () => ({
+      token,
+      logout,
+    }),
+  }))
+
+  await vi.importActual('@/utils/request')
+
+  return {
+    requestInterceptors,
+    responseInterceptors,
+    logout,
+  }
+}
+
+describe('request auth handling', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it('adds a Bearer authorization header when a token exists', async () => {
+    const { requestInterceptors } = await loadActualRequestModule({ token: 'panel-token' })
+    const config = await requestInterceptors.fulfilled({
+      headers: {},
+      url: '/admin/dashboard',
+    })
+
+    expect(config.headers.Authorization).toBe('Bearer panel-token')
+  })
+
+  it('clears auth state and redirects to login on stale 401 responses', async () => {
+    window.history.replaceState({}, '', '/admin/dashboard')
+    const replaceSpy = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+    const { responseInterceptors, logout } = await loadActualRequestModule({ token: 'stale-token' })
+    const error = {
+      response: { status: 401 },
+      config: { url: '/admin/users' },
+    }
+
+    await expect(responseInterceptors.rejected(error)).rejects.toBe(error)
+    expect(logout).toHaveBeenCalledTimes(1)
+    expect(replaceSpy).toHaveBeenCalledWith('/login')
+  })
+
+  it('does not force redirect on login endpoint 401 responses', async () => {
+    window.history.replaceState({}, '', '/login')
+    const replaceSpy = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+    const { responseInterceptors, logout } = await loadActualRequestModule()
+    const error = {
+      response: { status: 401 },
+      config: { url: '/login' },
+    }
+
+    await expect(responseInterceptors.rejected(error)).rejects.toBe(error)
+    expect(logout).not.toHaveBeenCalled()
+    expect(replaceSpy).not.toHaveBeenCalled()
   })
 })

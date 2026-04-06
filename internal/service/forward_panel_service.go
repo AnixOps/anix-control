@@ -148,6 +148,8 @@ type PanelAdminTunnelItem struct {
 	InIP          string  `json:"inIp"`
 	OutIP         string  `json:"outIp"`
 	Status        int     `json:"status"`
+	CreatedTime   int64   `json:"createdTime"`
+	UpdatedTime   int64   `json:"updatedTime"`
 }
 
 type PanelUserTunnelInput struct {
@@ -193,7 +195,9 @@ type PanelUserTunnelDetailItem struct {
 }
 
 type TunnelDiagnosisReport struct {
+	TunnelID   uint               `json:"tunnelId"`
 	TunnelName string             `json:"tunnelName"`
+	TunnelType string             `json:"tunnelType"`
 	Timestamp  int64              `json:"timestamp"`
 	Results    []DiagnosisOutcome `json:"results"`
 }
@@ -254,6 +258,277 @@ func (s *PanelForwardService) ListTunnels(userID uint, isAdmin bool) ([]PanelTun
 		})
 	}
 	return items, nil
+}
+
+func (s *PanelForwardService) ListAdminTunnels() ([]PanelAdminTunnelItem, error) {
+	var tunnels []model.ForwardTunnel
+	if err := s.db.Order("name ASC").Order("id ASC").Find(&tunnels).Error; err != nil {
+		return nil, err
+	}
+
+	items := make([]PanelAdminTunnelItem, 0, len(tunnels))
+	for i := range tunnels {
+		items = append(items, buildPanelAdminTunnelItem(&tunnels[i]))
+	}
+	return items, nil
+}
+
+func (s *PanelForwardService) CreateTunnel(input PanelTunnelInput) (*PanelAdminTunnelItem, error) {
+	input.Name = strings.TrimSpace(input.Name)
+	input.InterfaceName = strings.TrimSpace(input.InterfaceName)
+	input.Protocol = strings.TrimSpace(input.Protocol)
+	input.TCPListenAddr = normalizePanelTunnelListenAddr(input.TCPListenAddr)
+	input.UDPListenAddr = normalizePanelTunnelListenAddr(input.UDPListenAddr)
+
+	trafficRatio := normalizePanelTunnelTrafficRatio(input.TrafficRatio)
+	if err := validatePanelTunnelCreateInput(input, trafficRatio); err != nil {
+		return nil, err
+	}
+	if err := s.ensureTunnelNameUnique(input.Name, 0); err != nil {
+		return nil, err
+	}
+
+	inNode, err := s.getEnabledForwardNode(input.InNodeID, "入口节点")
+	if err != nil {
+		return nil, err
+	}
+	if err := validateForwardNodeType(inNode, model.ForwardNodeTypeRelay, "入口节点"); err != nil {
+		return nil, err
+	}
+
+	record := &model.ForwardTunnel{
+		Name:          input.Name,
+		InNodeID:      inNode.ID,
+		InIP:          strings.TrimSpace(inNode.Host),
+		Type:          input.Type,
+		Flow:          input.Flow,
+		TrafficRatio:  trafficRatio,
+		InterfaceName: input.InterfaceName,
+		TCPListenAddr: input.TCPListenAddr,
+		UDPListenAddr: input.UDPListenAddr,
+		Status:        model.ForwardTunnelStatusActive,
+	}
+
+	if input.Type == 2 {
+		outNode, err := s.getEnabledForwardNode(pointerUintValue(input.OutNodeID), "出口节点")
+		if err != nil {
+			return nil, err
+		}
+		if err := validateForwardNodeType(outNode, model.ForwardNodeTypeExit, "出口节点"); err != nil {
+			return nil, err
+		}
+		if outNode.ID == inNode.ID {
+			return nil, errors.New("隧道转发模式下，入口和出口不能是同一个节点")
+		}
+		record.OutNodeID = &outNode.ID
+		record.OutIP = strings.TrimSpace(outNode.Host)
+		record.Protocol = normalizePanelTunnelProtocol(input.Protocol)
+	} else {
+		record.OutNodeID = &inNode.ID
+		record.OutIP = strings.TrimSpace(inNode.Host)
+	}
+
+	if err := s.db.Create(record).Error; err != nil {
+		return nil, err
+	}
+
+	item := buildPanelAdminTunnelItem(record)
+	return &item, nil
+}
+
+func (s *PanelForwardService) UpdateTunnel(input PanelTunnelUpdateInput) (*PanelAdminTunnelItem, error) {
+	if input.ID == 0 {
+		return nil, errors.New("缺少隧道 ID")
+	}
+
+	input.Name = strings.TrimSpace(input.Name)
+	input.InterfaceName = strings.TrimSpace(input.InterfaceName)
+	input.Protocol = strings.TrimSpace(input.Protocol)
+	input.TCPListenAddr = normalizePanelTunnelListenAddr(input.TCPListenAddr)
+	input.UDPListenAddr = normalizePanelTunnelListenAddr(input.UDPListenAddr)
+
+	trafficRatio := normalizePanelTunnelTrafficRatio(input.TrafficRatio)
+	if err := validatePanelTunnelUpdateInput(input, trafficRatio); err != nil {
+		return nil, err
+	}
+
+	record, err := s.getTunnelByID(input.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureTunnelNameUnique(input.Name, record.ID); err != nil {
+		return nil, err
+	}
+
+	runtimeChanged := strings.TrimSpace(record.Protocol) != input.Protocol ||
+		strings.TrimSpace(record.TCPListenAddr) != input.TCPListenAddr ||
+		strings.TrimSpace(record.UDPListenAddr) != input.UDPListenAddr ||
+		strings.TrimSpace(record.InterfaceName) != input.InterfaceName
+
+	record.Name = input.Name
+	record.Flow = input.Flow
+	record.TrafficRatio = trafficRatio
+	record.InterfaceName = input.InterfaceName
+	record.Protocol = input.Protocol
+	record.TCPListenAddr = input.TCPListenAddr
+	record.UDPListenAddr = input.UDPListenAddr
+
+	if err := s.db.Save(record).Error; err != nil {
+		return nil, err
+	}
+
+	if runtimeChanged {
+		if err := s.syncActiveTunnelForwards(record.ID); err != nil {
+			return nil, fmt.Errorf("隧道更新成功，但部分转发同步失败: %w", err)
+		}
+	}
+
+	item := buildPanelAdminTunnelItem(record)
+	return &item, nil
+}
+
+func (s *PanelForwardService) DeleteTunnel(id uint) error {
+	record, err := s.getTunnelByID(id)
+	if err != nil {
+		return err
+	}
+
+	var forwardCount int64
+	if err := s.db.Model(&model.Forward{}).Where("tunnel_id = ?", record.ID).Count(&forwardCount).Error; err != nil {
+		return err
+	}
+	if forwardCount > 0 {
+		return fmt.Errorf("该隧道还有 %d 个转发在使用，请先删除相关转发", forwardCount)
+	}
+
+	var permissionCount int64
+	if err := s.db.Model(&model.ForwardUserTunnel{}).Where("tunnel_id = ?", record.ID).Count(&permissionCount).Error; err != nil {
+		return err
+	}
+	if permissionCount > 0 {
+		return fmt.Errorf("该隧道还有 %d 个用户权限关联，请先取消用户授权", permissionCount)
+	}
+
+	return s.db.Delete(&model.ForwardTunnel{}, record.ID).Error
+}
+
+func (s *PanelForwardService) DiagnoseTunnel(id uint) (*TunnelDiagnosisReport, error) {
+	tunnel, err := s.getTunnelByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	checks := make([]struct {
+		description string
+		nodeLabel   string
+		nodeID      uint
+		host        string
+		port        int
+	}, 0, 2)
+
+	if tunnel.InNodeID > 0 {
+		inNode, err := s.getForwardNodeByID(tunnel.InNodeID)
+		if err != nil {
+			return nil, err
+		}
+		checks = append(checks, struct {
+			description string
+			nodeLabel   string
+			nodeID      uint
+			host        string
+			port        int
+		}{
+			description: "管理端->入口节点",
+			nodeLabel:   inNode.Name,
+			nodeID:      inNode.ID,
+			host:        strings.TrimSpace(inNode.Host),
+			port:        inNode.Port,
+		})
+	}
+
+	if tunnel.Type == 2 && tunnel.OutNodeID != nil {
+		outNode, err := s.getForwardNodeByID(*tunnel.OutNodeID)
+		if err != nil {
+			return nil, err
+		}
+		checks = append(checks, struct {
+			description string
+			nodeLabel   string
+			nodeID      uint
+			host        string
+			port        int
+		}{
+			description: "管理端->出口节点",
+			nodeLabel:   outNode.Name,
+			nodeID:      outNode.ID,
+			host:        strings.TrimSpace(outNode.Host),
+			port:        outNode.Port,
+		})
+	}
+
+	results := make([]DiagnosisOutcome, 0, len(checks))
+	for _, check := range checks {
+		if check.host == "" || check.port <= 0 {
+			results = append(results, DiagnosisOutcome{
+				Success:     false,
+				Description: check.description,
+				NodeName:    check.nodeLabel,
+				NodeID:      fmt.Sprintf("%d", check.nodeID),
+				TargetIP:    check.host,
+				TargetPort:  check.port,
+				Message:     "节点地址未配置",
+			})
+			continue
+		}
+
+		target := net.JoinHostPort(strings.Trim(check.host, "[]"), fmt.Sprintf("%d", check.port))
+		start := time.Now()
+		conn, dialErr := net.DialTimeout("tcp", target, diagnosisTimeout)
+		elapsed := time.Since(start)
+		if dialErr == nil {
+			_ = conn.Close()
+			results = append(results, DiagnosisOutcome{
+				Success:     true,
+				Description: check.description,
+				NodeName:    check.nodeLabel,
+				NodeID:      fmt.Sprintf("%d", check.nodeID),
+				TargetIP:    check.host,
+				TargetPort:  check.port,
+				AverageTime: float64(elapsed.Milliseconds()),
+				PacketLoss:  0,
+			})
+			continue
+		}
+
+		results = append(results, DiagnosisOutcome{
+			Success:     false,
+			Description: check.description,
+			NodeName:    check.nodeLabel,
+			NodeID:      fmt.Sprintf("%d", check.nodeID),
+			TargetIP:    check.host,
+			TargetPort:  check.port,
+			Message:     dialErr.Error(),
+		})
+	}
+
+	if len(results) == 0 {
+		results = append(results, DiagnosisOutcome{
+			Success:     false,
+			Description: "隧道诊断",
+			NodeName:    resolveTunnelName(tunnel),
+			NodeID:      fmt.Sprintf("%d", tunnel.ID),
+			TargetIP:    "-",
+			Message:     "没有可诊断的节点",
+		})
+	}
+
+	return &TunnelDiagnosisReport{
+		TunnelID:   tunnel.ID,
+		TunnelName: tunnel.Name,
+		TunnelType: resolvePanelTunnelTypeName(tunnel.Type),
+		Timestamp:  time.Now().UnixMilli(),
+		Results:    results,
+	}, nil
 }
 
 func (s *PanelForwardService) CreateForward(userID uint, isAdmin bool, input PanelForwardInput) (*PanelForwardListItem, error) {
@@ -411,11 +686,16 @@ func (s *PanelForwardService) DeleteForward(userID uint, isAdmin bool, forwardID
 		return errors.New("转发服务正在运行，请先暂停或使用强制删除")
 	}
 
-	if runtimeErr := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionDelete); runtimeErr != nil {
+	if runtimeErr := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionDelete); runtimeErr != nil && !force {
 		return runtimeErr
 	}
 
-	return s.db.Delete(&model.Forward{}, record.ID).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&model.Forward{}, record.ID).Error; err != nil {
+			return err
+		}
+		return tx.Where("forward_id = ?", record.ID).Delete(&model.ForwardTrafficCursor{}).Error
+	})
 }
 
 func (s *PanelForwardService) SetForwardStatus(userID uint, isAdmin bool, forwardID uint, status int) error {
@@ -1194,6 +1474,96 @@ func (s *PanelForwardService) pauseManagedForward(record *model.Forward) error {
 	return s.db.Model(&model.Forward{}).Where("id = ?", record.ID).Update("status", model.ForwardStatusPaused).Error
 }
 
+func (s *PanelForwardService) getTunnelByID(id uint) (*model.ForwardTunnel, error) {
+	var tunnel model.ForwardTunnel
+	if err := s.db.First(&tunnel, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("隧道不存在")
+		}
+		return nil, err
+	}
+	return &tunnel, nil
+}
+
+func (s *PanelForwardService) ensureTunnelNameUnique(name string, excludeID uint) error {
+	var count int64
+	query := s.db.Model(&model.ForwardTunnel{}).Where("name = ?", name)
+	if excludeID > 0 {
+		query = query.Where("id <> ?", excludeID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return errors.New("隧道名称已存在")
+	}
+	return nil
+}
+
+func (s *PanelForwardService) getForwardNodeByID(id uint) (*model.ForwardNode, error) {
+	var node model.ForwardNode
+	if err := s.db.First(&node, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("节点不存在")
+		}
+		return nil, err
+	}
+	return &node, nil
+}
+
+func (s *PanelForwardService) getEnabledForwardNode(id uint, label string) (*model.ForwardNode, error) {
+	if id == 0 {
+		return nil, fmt.Errorf("%s不能为空", label)
+	}
+
+	node, err := s.getForwardNodeByID(id)
+	if err != nil {
+		if err.Error() == "节点不存在" {
+			return nil, fmt.Errorf("%s不存在", label)
+		}
+		return nil, err
+	}
+	if !node.Enabled {
+		return nil, fmt.Errorf("%s当前已禁用，请先启用节点", label)
+	}
+	return node, nil
+}
+
+func validateForwardNodeType(node *model.ForwardNode, expectedType, label string) error {
+	if node == nil {
+		return fmt.Errorf("%s不存在", label)
+	}
+	if strings.EqualFold(strings.TrimSpace(node.Type), expectedType) {
+		return nil
+	}
+	if expectedType == model.ForwardNodeTypeRelay {
+		return fmt.Errorf("%s必须是转发中继节点", label)
+	}
+	return fmt.Errorf("%s必须是转发出口节点", label)
+}
+
+func (s *PanelForwardService) syncActiveTunnelForwards(tunnelID uint) error {
+	var forwards []model.Forward
+	if err := s.db.Where("tunnel_id = ? AND status = ?", tunnelID, model.ForwardStatusActive).Order("id ASC").Find(&forwards).Error; err != nil {
+		return err
+	}
+
+	var firstErr error
+	for i := range forwards {
+		if err := s.syncForwardRuntime(&forwards[i], model.ForwardRuntimeJobActionUpdate); err != nil {
+			forwards[i].Status = model.ForwardStatusError
+			if saveErr := s.db.Model(&model.Forward{}).Where("id = ?", forwards[i].ID).Update("status", model.ForwardStatusError).Error; saveErr != nil && firstErr == nil {
+				firstErr = saveErr
+				continue
+			}
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
 func (s *PanelForwardService) getAccessibleTunnels(userID uint, isAdmin bool) ([]model.ForwardTunnel, error) {
 	var tunnels []model.ForwardTunnel
 	if isAdmin {
@@ -1278,6 +1648,31 @@ func (s *PanelForwardService) ListRuntimeJobs(filter PanelRuntimeJobFilter) ([]m
 	return jobs, err
 }
 
+func buildPanelAdminTunnelItem(record *model.ForwardTunnel) PanelAdminTunnelItem {
+	item := PanelAdminTunnelItem{
+		ID:            record.ID,
+		Name:          record.Name,
+		InNodeID:      record.InNodeID,
+		OutNodeID:     record.OutNodeID,
+		Type:          record.Type,
+		Flow:          record.Flow,
+		TrafficRatio:  record.TrafficRatio,
+		InterfaceName: record.InterfaceName,
+		Protocol:      record.Protocol,
+		TCPListenAddr: record.TCPListenAddr,
+		UDPListenAddr: record.UDPListenAddr,
+		InIP:          record.InIP,
+		OutIP:         record.OutIP,
+		Status:        record.Status,
+		CreatedTime:   record.CreatedAt.UnixMilli(),
+		UpdatedTime:   record.UpdatedAt.UnixMilli(),
+	}
+	if item.TrafficRatio <= 0 {
+		item.TrafficRatio = 1
+	}
+	return item
+}
+
 func buildPanelForwardItem(record *model.Forward) PanelForwardListItem {
 	item := PanelForwardListItem{
 		ID:             record.ID,
@@ -1357,6 +1752,85 @@ func tunnelPortRange(tunnel *model.ForwardTunnel) (int, int) {
 	return start, end
 }
 
+func validatePanelTunnelCreateInput(input PanelTunnelInput, trafficRatio float64) error {
+	if strings.TrimSpace(input.Name) == "" {
+		return errors.New("请输入隧道名称")
+	}
+	if input.InNodeID == 0 {
+		return errors.New("请选择入口节点")
+	}
+	if input.Type != 1 && input.Type != 2 {
+		return errors.New("隧道类型必须是 1 或 2")
+	}
+	if input.Flow != 1 && input.Flow != 2 {
+		return errors.New("流量计算方式必须是 1 或 2")
+	}
+	if trafficRatio <= 0 || trafficRatio > 100 {
+		return errors.New("流量倍率必须在 0.0-100.0 之间")
+	}
+	if input.Type == 2 {
+		if input.OutNodeID == nil || *input.OutNodeID == 0 {
+			return errors.New("请选择出口节点")
+		}
+		if *input.OutNodeID == input.InNodeID {
+			return errors.New("隧道转发模式下，入口和出口不能是同一个节点")
+		}
+	}
+	return nil
+}
+
+func validatePanelTunnelUpdateInput(input PanelTunnelUpdateInput, trafficRatio float64) error {
+	if strings.TrimSpace(input.Name) == "" {
+		return errors.New("请输入隧道名称")
+	}
+	if input.Flow != 1 && input.Flow != 2 {
+		return errors.New("流量计算方式必须是 1 或 2")
+	}
+	if trafficRatio <= 0 || trafficRatio > 100 {
+		return errors.New("流量倍率必须在 0.0-100.0 之间")
+	}
+	if strings.TrimSpace(input.Protocol) == "" {
+		return errors.New("请选择协议类型")
+	}
+	if strings.TrimSpace(input.TCPListenAddr) == "" {
+		return errors.New("请输入 TCP 监听地址")
+	}
+	if strings.TrimSpace(input.UDPListenAddr) == "" {
+		return errors.New("请输入 UDP 监听地址")
+	}
+	return nil
+}
+
+func normalizePanelTunnelTrafficRatio(value *float64) float64 {
+	if value == nil || *value == 0 {
+		return 1
+	}
+	return *value
+}
+
+func normalizePanelTunnelProtocol(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return "tls"
+	}
+	return strings.TrimSpace(raw)
+}
+
+func normalizePanelTunnelListenAddr(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return "[::]"
+	}
+	return strings.TrimSpace(raw)
+}
+
+func resolvePanelTunnelTypeName(tunnelType int) string {
+	switch tunnelType {
+	case 2:
+		return "隧道转发"
+	default:
+		return "端口转发"
+	}
+}
+
 func validatePanelForwardInput(input PanelForwardInput) error {
 	if strings.TrimSpace(input.Name) == "" {
 		return errors.New("请输入转发名称")
@@ -1429,6 +1903,13 @@ func resolveTunnelName(tunnel *model.ForwardTunnel) string {
 		return "系统"
 	}
 	return tunnel.Name
+}
+
+func pointerUintValue(value *uint) uint {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 func sameUintPointer(left, right *uint) bool {

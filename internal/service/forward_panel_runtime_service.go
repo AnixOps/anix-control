@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 
 const (
 	forwardRuntimeConfigGroup                    = "forward"
+	forwardRuntimeNodeXModeConfigKey             = "forward.runtime.nodex_mode"
 	forwardRuntimeBackendConfigKey               = "forward.runtime_backend"
 	forwardRuntimeAnsibleConfigJSONKey           = "forward.runtime.iptables_ansible.config"
 	forwardRuntimeAnsibleInventoryConfigKey      = "forward.ansible.inventory"
@@ -70,10 +72,17 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 	if err != nil {
 		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendGost, err), err
 	}
+	if err := s.validateBackendConfig(backend); err != nil {
+		return failedPanelForwardRuntimeResult(backend, err), err
+	}
 
 	req, nodeID, err := s.buildExecuteRequest(backend, action, forward, tunnel)
 	if err != nil {
 		return failedPanelForwardRuntimeResult(backend, err), err
+	}
+
+	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+		return s.enqueueLocalAnsibleJob(action, forward, tunnel, req, nodeID)
 	}
 
 	payloadJSON, err := json.Marshal(req)
@@ -81,7 +90,6 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 		return failedPanelForwardRuntimeResult(backend, err), err
 	}
 
-	startedAt := time.Now()
 	job := &model.ForwardRuntimeJob{
 		Backend:      backend,
 		Action:       action,
@@ -90,10 +98,12 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 		ForwardID:    uintPtr(forward.ID),
 		TunnelID:     uintPtr(tunnel.ID),
 		NodeID:       nodeID,
-		Status:       model.ForwardRuntimeJobStatusRunning,
 		Payload:      string(payloadJSON),
-		StartedAt:    &startedAt,
 	}
+
+	startedAt := time.Now()
+	job.Status = model.ForwardRuntimeJobStatusRunning
+	job.StartedAt = &startedAt
 	if err := s.db.Create(job).Error; err != nil {
 		return failedPanelForwardRuntimeResult(backend, err), err
 	}
@@ -153,7 +163,53 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 	return result, execErr
 }
 
+func (s *PanelForwardRuntimeService) enqueueLocalAnsibleJob(action string, forward *model.Forward, tunnel *model.ForwardTunnel, req nodeXForwardExecuteRequest, nodeID *uint) (*panelForwardRuntimeResult, error) {
+	if req.AnsibleRuntime == nil {
+		err := errors.New("ansible runtime payload is required for local execution")
+		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendIptablesAnsible, err), err
+	}
+
+	payloadJSON, err := json.Marshal(req.AnsibleRuntime)
+	if err != nil {
+		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendIptablesAnsible, err), err
+	}
+
+	job := &model.ForwardRuntimeJob{
+		Backend:      model.ForwardRuntimeBackendIptablesAnsible,
+		Action:       action,
+		ResourceType: nodeXForwardResourceTypePanelForward,
+		ResourceID:   uintPtr(forward.ID),
+		ForwardID:    uintPtr(forward.ID),
+		TunnelID:     uintPtr(tunnel.ID),
+		NodeID:       nodeID,
+		Status:       model.ForwardRuntimeJobStatusPending,
+		Payload:      string(payloadJSON),
+	}
+	if err := s.db.Create(job).Error; err != nil {
+		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendIptablesAnsible, err), err
+	}
+
+	return &panelForwardRuntimeResult{
+		Backend: model.ForwardRuntimeBackendIptablesAnsible,
+		Status:  model.ForwardRuntimeJobStatusPending,
+		Message: queuedPanelForwardRuntimeMessage(action),
+		Async:   true,
+	}, nil
+}
+
 func (s *PanelForwardRuntimeService) resolveBackend() (string, error) {
+	if s.configService == nil {
+		return model.ForwardRuntimeBackendGost, nil
+	}
+
+	nodeXMode, err := s.resolveNodeXMode()
+	if err != nil {
+		return "", err
+	}
+	if nodeXMode != nil {
+		return forwardRuntimeBackendForMode(*nodeXMode), nil
+	}
+
 	value, err := s.configService.Get(forwardRuntimeBackendConfigKey)
 	if err != nil {
 		return "", err
@@ -167,6 +223,42 @@ func (s *PanelForwardRuntimeService) resolveBackend() (string, error) {
 	default:
 		return "", fmt.Errorf("invalid %s value: %s", forwardRuntimeBackendConfigKey, value)
 	}
+}
+
+func (s *PanelForwardRuntimeService) resolveNodeXMode() (*bool, error) {
+	if s.configService == nil {
+		return nil, nil
+	}
+
+	value, err := s.configService.Get(forwardRuntimeNodeXModeConfigKey)
+	if err != nil {
+		return nil, err
+	}
+	return parseForwardRuntimeBoolValue(value, forwardRuntimeNodeXModeConfigKey)
+}
+
+func (s *PanelForwardRuntimeService) validateBackendConfig(backend string) error {
+	if backend != model.ForwardRuntimeBackendGost || s.configService == nil {
+		return nil
+	}
+
+	baseURL, err := s.configService.Get(forwardRuntimeNodeXBaseURLConfigKey)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(baseURL) == "" {
+		return fmt.Errorf("%s is required for NodeX forward runtime", forwardRuntimeNodeXBaseURLConfigKey)
+	}
+
+	token, err := s.configService.Get(forwardRuntimeNodeXTokenConfigKey)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(token) == "" {
+		return fmt.Errorf("%s is required for NodeX forward runtime", forwardRuntimeNodeXTokenConfigKey)
+	}
+
+	return nil
 }
 
 func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string, forward *model.Forward, tunnel *model.ForwardTunnel) (nodeXForwardExecuteRequest, *uint, error) {
@@ -201,7 +293,7 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string,
 				InPort:        forward.InPort,
 				RemoteAddr:    forward.RemoteAddr,
 				InterfaceName: forward.InterfaceName,
-				Strategy:      normalizeStrategy(forward.Strategy, forward.RemoteAddr),
+				Strategy:      normalizeRuntimeStrategy(forward.Strategy, forward.RemoteAddr),
 				Status:        forward.Status,
 			},
 			Tunnel: nodeXPanelTunnelPayload{
@@ -337,7 +429,7 @@ func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(action string, f
 			InPort:        forward.InPort,
 			RemoteAddr:    forward.RemoteAddr,
 			InterfaceName: forward.InterfaceName,
-			Strategy:      normalizeStrategy(forward.Strategy, forward.RemoteAddr),
+			Strategy:      normalizeRuntimeStrategy(forward.Strategy, forward.RemoteAddr),
 			Status:        forward.Status,
 		},
 		Tunnel: panelForwardAnsibleTunnelPayload{
@@ -403,7 +495,7 @@ func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfig(action string
 }
 
 func buildPanelForwardAnsibleTargets(remoteAddr string) ([]panelForwardAnsibleTargetPayload, error) {
-	rawTargets := strings.Split(normalizeRemoteAddr(remoteAddr), ",")
+	rawTargets := strings.Split(normalizeRuntimeRemoteAddr(remoteAddr), ",")
 	targets := make([]panelForwardAnsibleTargetPayload, 0, len(rawTargets))
 	count := 0
 	for _, raw := range rawTargets {
@@ -411,7 +503,7 @@ func buildPanelForwardAnsibleTargets(remoteAddr string) ([]panelForwardAnsibleTa
 		if target == "" {
 			continue
 		}
-		host, port, err := splitTarget(target)
+		host, port, err := splitRuntimeTarget(target)
 		if err != nil {
 			return nil, fmt.Errorf("invalid remote address %s: %w", target, err)
 		}
@@ -485,6 +577,13 @@ func defaultPanelForwardRuntimeMessage(action string) string {
 	return "forward runtime synchronized"
 }
 
+func queuedPanelForwardRuntimeMessage(action string) string {
+	if action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause {
+		return "ansible runtime removal queued for local executor"
+	}
+	return "ansible runtime queued for local executor"
+}
+
 func failedPanelForwardRuntimeResult(backend string, err error) *panelForwardRuntimeResult {
 	return &panelForwardRuntimeResult{
 		Backend: backend,
@@ -502,6 +601,51 @@ func normalizePanelRuntimeProtocol(protocol string) string {
 	default:
 		return "tcp"
 	}
+}
+
+func normalizeRuntimeRemoteAddr(raw string) string {
+	lines := strings.Split(raw, "\n")
+	items := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		items = append(items, line)
+	}
+	return strings.Join(items, ",")
+}
+
+func normalizeRuntimeStrategy(strategy, remoteAddr string) string {
+	count := 0
+	for _, raw := range strings.Split(normalizeRuntimeRemoteAddr(remoteAddr), ",") {
+		if strings.TrimSpace(raw) != "" {
+			count++
+		}
+	}
+	if count <= 1 {
+		return "fifo"
+	}
+
+	switch strategy {
+	case "fifo", "round", "rand", "hash":
+		return strategy
+	default:
+		return "fifo"
+	}
+}
+
+func splitRuntimeTarget(target string) (string, int, error) {
+	host, portStr, err := net.SplitHostPort(target)
+	if err != nil {
+		return "", 0, errors.New("unable to parse target address")
+	}
+	host = strings.Trim(host, "[]")
+	var port int
+	if _, scanErr := fmt.Sscanf(portStr, "%d", &port); scanErr != nil || port <= 0 || port > 65535 {
+		return "", 0, errors.New("unable to parse target port")
+	}
+	return host, port, nil
 }
 
 func isForwardRuntimeTerminalStatus(status int) bool {
@@ -561,4 +705,27 @@ func (c *panelForwardAnsibleConfig) validate(action string) error {
 
 func uintPtr(v uint) *uint {
 	return &v
+}
+
+func parseForwardRuntimeBoolValue(value, key string) (*bool, error) {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	switch normalized {
+	case "":
+		return nil, nil
+	case "1", "true", "yes", "on":
+		enabled := true
+		return &enabled, nil
+	case "0", "false", "no", "off":
+		enabled := false
+		return &enabled, nil
+	default:
+		return nil, fmt.Errorf("invalid %s value: %s", key, value)
+	}
+}
+
+func forwardRuntimeBackendForMode(enabled bool) string {
+	if enabled {
+		return model.ForwardRuntimeBackendGost
+	}
+	return model.ForwardRuntimeBackendIptablesAnsible
 }

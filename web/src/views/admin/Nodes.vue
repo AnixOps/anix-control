@@ -442,14 +442,23 @@ const newKeyRemark = ref('')
 const generatedKey = ref('')  // 一次性显示的密钥
 
 // 加载数据
+const normalizeNode = (node) => ({
+  ...node,
+  address: node.address || node.host || '',
+  api_port: node.api_port || node.port || 443,
+  traffic_today: node.traffic_today || (Number(node.total_upload || 0) + Number(node.total_download || 0))
+})
+
 const loadNodes = async () => {
   loading.value = true
   try {
-    const res = await getNodes({ page: pagination.page, size: pagination.size })
-    nodes.value = res.data.list || []
+    const res = await getNodes({ page: pagination.page, page_size: pagination.size })
+    nodes.value = (res.data.list || []).map(normalizeNode)
     pagination.total = res.data.total || 0
+    return true
   } catch (e) {
     console.error('Failed to load nodes:', e)
+    return false
   } finally {
     loading.value = false
   }
@@ -493,8 +502,8 @@ const openEditModal = (node) => {
   editingNode.value = node
   Object.assign(nodeForm, {
     name: node.name,
-    address: node.address,
-    api_port: node.api_port,
+    address: node.address || node.host || '',
+    api_port: node.api_port || node.port || 443,
     tags: node.tags || '',
     rate: node.rate || 1.0,
     sort: node.sort || 0,
@@ -515,10 +524,19 @@ const saveNode = async () => {
   }
   saving.value = true
   try {
+    const payload = {
+      name: nodeForm.name,
+      host: nodeForm.address,
+      port: Number(nodeForm.api_port),
+      tags: nodeForm.tags,
+      rate: Number(nodeForm.rate),
+      sort: Number(nodeForm.sort),
+      status: Number(nodeForm.status)
+    }
     if (editingNode.value) {
-      await updateNode(editingNode.value.id, nodeForm)
+      await updateNode(editingNode.value.id, payload)
     } else {
-      await createNode(nodeForm)
+      await createNode(payload)
     }
     closeNodeModal()
     loadNodes()
@@ -635,8 +653,7 @@ const saveProtocol = async () => {
       transport_settings: protocolForm.transport_settings,
       reality_settings: protocolForm.reality_settings,
       custom_config: protocolForm.mode === 'custom' ? protocolForm.custom_config : null,
-      show: protocolForm.show,
-      group_id: protocolForm.group_id
+      show: protocolForm.show
     }
     
     if (editingProtocol.value) {
@@ -745,12 +762,16 @@ const formatDate = (timestamp) => {
 }
 
 // 初始化
-onMounted(() => {
-  loadNodes()
-  loadStats()
-  loadProtocolTemplates()
-  loadAuthKeys()
-  loadSubscriptionGroups()
+onMounted(async () => {
+  const nodesLoaded = await loadNodes()
+  if (!nodesLoaded) {
+    return
+  }
+  await Promise.all([
+    loadStats(),
+    loadProtocolTemplates(),
+    loadAuthKeys()
+  ])
 })
 </script>
 

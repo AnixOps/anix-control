@@ -196,6 +196,14 @@ func (s *ForwardFlowResetWorkerTestSuite) TestRunOnce_ResetsUserTrafficWhenFlowR
 func (s *ForwardFlowResetWorkerTestSuite) TestRunOnce_DisablesExpiredUserTunnelAndPausesItsActiveForwards() {
 	db := database.Get()
 	now := time.Date(2026, time.April, 6, 0, 0, 5, 0, time.Local)
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeBackendConfigKey,
+		model.ForwardRuntimeBackendIptablesAnsible,
+		"string",
+		forwardRuntimeConfigGroup,
+		"test local runtime backend",
+	))
 
 	user := &model.User{
 		Email:          "worker-expired-permission@example.com",
@@ -204,8 +212,28 @@ func (s *ForwardFlowResetWorkerTestSuite) TestRunOnce_DisablesExpiredUserTunnelA
 		UUID:           "worker-expired-permission-uuid",
 		TransferEnable: 1073741824,
 	}
-	expiredTunnel := &model.ForwardTunnel{Name: "Expired Permission Tunnel", InIP: "10.40.2.1", Status: model.ForwardTunnelStatusActive}
-	validTunnel := &model.ForwardTunnel{Name: "Valid Permission Tunnel", InIP: "10.40.2.2", Status: model.ForwardTunnelStatusActive}
+	ingressNode := &model.ForwardNode{
+		Name:     "Expired Permission Relay",
+		Type:     model.ForwardNodeTypeRelay,
+		Host:     "10.40.2.1",
+		APIPort:  19090,
+		APIToken: "expired-permission-relay-token",
+		Status:   model.ForwardNodeStatusOnline,
+		Enabled:  true,
+	}
+	assert.NoError(s.T(), db.Create(ingressNode).Error)
+	expiredTunnel := &model.ForwardTunnel{
+		Name:     "Expired Permission Tunnel",
+		InNodeID: ingressNode.ID,
+		InIP:     ingressNode.Host,
+		Status:   model.ForwardTunnelStatusActive,
+	}
+	validTunnel := &model.ForwardTunnel{
+		Name:     "Valid Permission Tunnel",
+		InNodeID: ingressNode.ID,
+		InIP:     ingressNode.Host,
+		Status:   model.ForwardTunnelStatusActive,
+	}
 	assert.NoError(s.T(), db.Create(user).Error)
 	assert.NoError(s.T(), db.Create(expiredTunnel).Error)
 	assert.NoError(s.T(), db.Create(validTunnel).Error)
@@ -283,6 +311,14 @@ func (s *ForwardFlowResetWorkerTestSuite) TestRunOnce_DisablesExpiredUserTunnelA
 func (s *ForwardFlowResetWorkerTestSuite) TestRunOnce_PausesActiveForwardsForExpiredUserWithoutBanning() {
 	db := database.Get()
 	now := time.Date(2026, time.April, 6, 0, 0, 5, 0, time.Local)
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeBackendConfigKey,
+		model.ForwardRuntimeBackendIptablesAnsible,
+		"string",
+		forwardRuntimeConfigGroup,
+		"test local runtime backend",
+	))
 
 	expiredAt := now.Add(-time.Hour).Unix()
 	expiredUser := &model.User{
@@ -302,7 +338,22 @@ func (s *ForwardFlowResetWorkerTestSuite) TestRunOnce_PausesActiveForwardsForExp
 		TransferEnable: 1073741824,
 		Banned:         0,
 	}
-	tunnel := &model.ForwardTunnel{Name: "Expired User Tunnel", InIP: "10.40.3.1", Status: model.ForwardTunnelStatusActive}
+	ingressNode := &model.ForwardNode{
+		Name:     "Expired User Relay",
+		Type:     model.ForwardNodeTypeRelay,
+		Host:     "10.40.3.1",
+		APIPort:  19091,
+		APIToken: "expired-user-relay-token",
+		Status:   model.ForwardNodeStatusOnline,
+		Enabled:  true,
+	}
+	assert.NoError(s.T(), db.Create(ingressNode).Error)
+	tunnel := &model.ForwardTunnel{
+		Name:     "Expired User Tunnel",
+		InNodeID: ingressNode.ID,
+		InIP:     ingressNode.Host,
+		Status:   model.ForwardTunnelStatusActive,
+	}
 	assert.NoError(s.T(), db.Create(expiredUser).Error)
 	assert.NoError(s.T(), db.Create(activeUser).Error)
 	assert.NoError(s.T(), db.Create(tunnel).Error)
