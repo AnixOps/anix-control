@@ -222,7 +222,7 @@ POST /api/v2/admin/auth-keys
 DELETE /api/v2/admin/auth-keys/:id
 ```
 
-### Forward runtime extension
+### Forward runtime backend compatibility
 
 ```http
 # Runtime job list
@@ -249,11 +249,11 @@ PUT /api/v2/admin/system/configs/forward.runtime.iptables_ansible.config
 
 Notes:
 
-- This is a local extension for dual-runtime support.
-- Keep the Flux-compatible `/admin/forward` page free of extra runtime panels; use `System.vue` for backend switching and runtime job observability.
-- The server now starts an in-process runtime worker that consumes pending `iptables_ansible` jobs automatically.
+- This section documents compatibility controls for delegating execution to an optional internal backend/execution plane (`NodeX` in public docs); it is not part of the Flux `/admin/forward` contract.
+- Keep the Flux-compatible `/admin/forward` page free of extra runtime panels; use `System.vue` and deployment surfaces for backend switching and runtime job observability.
 - Optional JSON keys inside `forward.runtime.iptables_ansible.config`: `command`, `workingDir`, `targetPattern`, `timeoutSeconds`, `environment`.
 - Docker and one-click installs can preseed the same values with `FORWARD_RUNTIME_BACKEND` and `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON` before the admin UI is used.
+- Public docs intentionally avoid internal executor topology; see `docs/guide/nodex-internal-extension.md` for the contract boundary.
 
 ---
 

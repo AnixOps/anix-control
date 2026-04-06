@@ -207,15 +207,15 @@ go tool cover -html=coverage.out
 - 当前已完成基础模块：流量转发页面与兼容 API
 - 当前本机参考仓库：`C:\Users\z7299\AppData\Local\Temp\flux-panel`
 
-## 双运行时部署
+## 可选内部执行面部署
 
-流量转发当前支持两条运行时路径：
+流量转发对外仍以 `flux-panel` 的 `/admin/forward` 契约为主。实际执行层可以按部署需要走以下路径：
 
 - `gost`：Flux 对齐路径
-- `iptables_ansible`：本地扩展路径，由后台 worker 调用 `ansible-playbook`
+- `iptables_ansible`：兼容命名的内部后端入口，对应可选内部执行面 `NodeX`
 
-Docker 镜像已经内置 `ansible-playbook`，示例 playbook 位于 `config/deploy/ansible/`，一键安装脚本会同时写入 `FORWARD_RUNTIME_BACKEND` 与 `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`，应用启动后会自动同步到 `forward.runtime_backend` 与 `forward.runtime.iptables_ansible.config`。
-如果没有 SSH 密钥，可以直接在 `.env` 填写 `FORWARD_RUNTIME_ANSIBLE_HOST`、`FORWARD_RUNTIME_ANSIBLE_USER`、`FORWARD_RUNTIME_ANSIBLE_PASSWORD`；启动时会自动生成临时 inventory。非 root 登录再补 `FORWARD_RUNTIME_ANSIBLE_BECOME=true` 和 `FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD`。
+Docker 镜像已经内置 `ansible-playbook`，示例 playbook 位于 `config/deploy/ansible/`。一键安装脚本会预置 `FORWARD_RUNTIME_BACKEND` 与 `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`，应用启动后再同步到 `forward.runtime_backend` 与 `forward.runtime.iptables_ansible.config`。这些键属于系统部署/内部后端初始化，不属于 Flux `/admin/forward` 页面契约。
+如果需要在 Docker 部署时初始化该内部后端，可在 `.env` 提供 SSH 与提权相关变量，容器会生成兼容 inventory 并同步到系统配置。边界说明见 `docs/guide/nodex-internal-extension.md`，部署细节见 `docs/DEPLOYMENT.md`。
 
 ## 相关项目
 

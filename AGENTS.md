@@ -921,25 +921,26 @@ cd web && npm run build
 - Read `docs/guide/flux-panel-clone.md` before touching forward/tunnel/user-tunnel pages so you follow the mandatory workflow and validation checklist.
 - Use `docs/guide/flux-forward-contract.md` as the source for response envelopes, endpoint mapping, DTO requirements, and documented gaps.
 - Before labeling anything as `1:1 clone`, record remaining runtime or diagnose differences so reviewers understand what still diverges from `flux-panel`.
-- Dual-runtime support (`gost` + `iptables_ansible`) is a local extension, not part of the upstream Flux `/forward` page contract.
+- Dual-runtime support (`gost` + compatibility backend `iptables_ansible`) is an optional internal execution plane (`NodeX` in public docs), not part of the upstream Flux `/forward` page contract.
 - Keep `web/src/views/admin/Forward.vue` aligned with `vite-frontend/src/pages/forward.tsx`; do not add runtime backend selectors or runtime job tables there.
-- Put extension controls and observability in `web/src/views/admin/System.vue`.
-- Current extension surface:
+- Put backend controls and observability in `web/src/views/admin/System.vue` or deployment-oriented docs, not in the Flux-cloned page.
+- Current internal-backend compatibility surface:
   - system config key `forward.runtime_backend`
   - system config key `forward.runtime.iptables_ansible.config`
   - admin endpoint `GET /api/v2/admin/forward/runtime/jobs`
-  - server-side worker started by `cmd/server/main.go` to execute pending `iptables_ansible` jobs
   - optional ansible config keys: `command`, `workingDir`, `targetPattern`, `timeoutSeconds`, `environment`
   - one-click Docker installer: `install.sh` (`panel_install.sh` wrapper)
   - bundled ansible deployment assets: `config/deploy/ansible/`
   - env bootstrap keys: `FORWARD_RUNTIME_BACKEND`, `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`
+  - public boundary note: `docs/guide/nodex-internal-extension.md`
 
 ## Deploy Extension Rules
 
-- `install.sh`, `panel_install.sh`, and `config/deploy/ansible/` are local deployment extensions.
-- They improve Docker/bootstrap and runtime setup, but they do not count toward Flux `/forward` clone completion.
-- Keep deployment/runtime extensions documented separately from Flux-compatible UI/API work.
-- Do not move installer-only or ansible bootstrap controls into `web/src/views/admin/Forward.vue`.
+- `install.sh`, `panel_install.sh`, and `config/deploy/ansible/` are deployment/backplane integration surfaces for the optional internal execution plane.
+- They improve Docker/bootstrap and backend execution setup, but they do not count toward Flux `/forward` clone completion.
+- Keep deployment/runtime backend docs documented separately from Flux-compatible UI/API work.
+- Do not move installer-only, backend selection, runtime job observability, or ansible bootstrap controls into `web/src/views/admin/Forward.vue`.
+- Public docs should describe this layer as `NodeX`/internal backend and avoid implementation-topology language.
 
 ## Flux-panel Doc Sync
 
