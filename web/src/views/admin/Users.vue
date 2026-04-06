@@ -92,7 +92,7 @@
                 <button class="btn-sm btn-ghost" @click="openTunnelModal(user)" title="管理隧道授权">🔗</button>
                 <button v-if="user.banned === 0" class="btn-sm btn-ghost" @click="handleBan(user)" title="封禁">🚫</button>
                 <button v-else class="btn-sm btn-ghost" @click="handleUnban(user)" title="解封">✅</button>
-                <button class="btn-sm btn-ghost" @click="handleResetTraffic(user)" title="重置流量">🔄</button>
+                <button class="btn-sm btn-ghost" @click="openResetUserDialog(user)" title="重置流量">🔄</button>
               </div>
             </td>
           </tr>
@@ -187,10 +187,10 @@
           <div class="section-title">授权表单</div>
           <div class="form-grid">
             <div class="form-group">
-              <label>隧道</label>
-              <select v-model="tunnelForm.tunnelId">
-                <option value="">请选择隧道</option>
-                <option v-for="item in tunnelOptions" :key="item.id" :value="item.id">
+              <label>隧道{{ editingTunnelId ? '（编辑时不可更改）' : '' }}</label>
+              <select v-model="tunnelForm.tunnelId" :disabled="Boolean(editingTunnelId)">
+                <option value="">{{ availableTunnelOptions.length === 0 && !editingTunnelId ? '暂无可分配隧道' : '请选择隧道' }}</option>
+                <option v-for="item in availableTunnelOptions" :key="item.id" :value="item.id">
                   {{ item.name }} (ID: {{ item.id }})
                 </option>
               </select>
@@ -225,7 +225,7 @@
           </div>
           <div class="form-grid">
             <div class="form-group">
-              <label>SpeedID</label>
+              <label>SpeedID（兼容占位）</label>
               <input v-model.number="tunnelForm.speedId" type="number" min="0" placeholder="可选" />
             </div>
             <div class="form-group tunnel-form-actions">
@@ -274,9 +274,7 @@
                   <td>
                     <div class="action-buttons">
                       <button class="btn-sm btn-ghost" @click="editTunnelGrant(item)">编辑</button>
-                      <button class="btn-sm btn-ghost" :disabled="resettingTunnelTrafficId === item.id" @click="handleResetTunnelTraffic(item)">
-                        {{ resettingTunnelTrafficId === item.id ? '重置中...' : '重置流量' }}
-                      </button>
+                      <button class="btn-sm btn-ghost" @click="openResetTunnelDialog(item)">重置流量</button>
                       <button class="btn-sm btn-ghost" @click="removeTunnelGrant(item)">删除</button>
                     </div>
                   </td>
@@ -290,6 +288,28 @@
         </div>
         <div class="modal-footer">
           <button class="btn-secondary" @click="closeTunnelModal">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showResetFlowModal" class="modal-overlay" @click.self="closeResetFlowModal">
+      <div class="modal reset-flow-modal">
+        <div class="modal-header">
+          <h3>{{ resetFlowTitle }}</h3>
+          <button class="close-btn" :disabled="resetFlowLoading" @click="closeResetFlowModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="reset-flow-copy">{{ resetFlowMessage }}</p>
+          <div class="reset-flow-summary">
+            <div><strong>当前已用</strong> {{ resetFlowUsedFlow }}</div>
+            <div v-if="resetFlowQuota"><strong>当前配额</strong> {{ resetFlowQuota }}</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" :disabled="resetFlowLoading" @click="closeResetFlowModal">取消</button>
+          <button :disabled="resetFlowLoading" @click="confirmResetFlow">
+            {{ resetFlowLoading ? '重置中...' : '确认重置' }}
+          </button>
         </div>
       </div>
     </div>
@@ -343,7 +363,13 @@ const userTunnels = ref([])
 const tunnelListLoading = ref(false)
 const tunnelLoading = ref(false)
 const editingTunnelId = ref(null)
-const resettingTunnelTrafficId = ref(null)
+const showResetFlowModal = ref(false)
+const resetFlowLoading = ref(false)
+const resetFlowTarget = ref(null)
+const resetFlowTitle = ref('')
+const resetFlowMessage = ref('')
+const resetFlowUsedFlow = ref('')
+const resetFlowQuota = ref('')
 
 const newTunnelForm = () => ({
   tunnelId: '',
@@ -357,6 +383,19 @@ const newTunnelForm = () => ({
 const tunnelForm = ref(newTunnelForm())
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value) || 1)
+const assignedTunnelIds = computed(() => {
+  return new Set(
+    userTunnels.value
+      .map(item => Number(item?.tunnelId || 0))
+      .filter(id => id > 0)
+  )
+})
+const availableTunnelOptions = computed(() => {
+  if (editingTunnelId.value) {
+    return tunnelOptions.value
+  }
+  return tunnelOptions.value.filter(item => !assignedTunnelIds.value.has(Number(item?.id || 0)))
+})
 
 const assertCompatSuccess = (res, fallback = '操作失败') => {
   if (res && typeof res.code === 'number' && res.code !== 0) {
@@ -486,15 +525,13 @@ const handleUnban = async (user) => {
   }
 }
 
-const handleResetTraffic = async (user) => {
-  if (!confirm(`确定要重置用户 ${user.email} 的流量吗?`)) return
-  try {
-    const res = await resetUserTraffic(user.id)
-    assertCompatSuccess(res, '重置失败')
-    await fetchUsers()
-  } catch (err) {
-    alert(err.response?.data?.msg || err.response?.data?.message || err.message || '操作失败')
-  }
+const openResetUserDialog = (user) => {
+  resetFlowTarget.value = { type: 'user', id: user.id }
+  resetFlowTitle.value = `重置用户流量`
+  resetFlowMessage.value = `确认将用户 ${user.email} 的已用流量清零吗？`
+  resetFlowUsedFlow.value = formatBytes((user.u || 0) + (user.d || 0))
+  resetFlowQuota.value = user.transfer_enable ? formatBytes(user.transfer_enable) : ''
+  showResetFlowModal.value = true
 }
 
 const loadTunnelOptions = async () => {
@@ -542,6 +579,10 @@ const submitTunnelForm = async () => {
   if (!tunnelUser.value) return
   if (!tunnelForm.value.tunnelId) {
     alert('请选择隧道')
+    return
+  }
+  if (!editingTunnelId.value && assignedTunnelIds.value.has(Number(tunnelForm.value.tunnelId))) {
+    alert('该隧道已授权给当前用户')
     return
   }
 
@@ -614,22 +655,49 @@ const calculateTunnelUsedFlow = (item) => {
   return Number(item?.inFlow || 0) + Number(item?.outFlow || 0)
 }
 
-const handleResetTunnelTraffic = async (item) => {
+const openResetTunnelDialog = (item) => {
   if (!item?.id) return
-  if (!confirm(`确定重置隧道授权 #${item.id} 的已用流量吗？`)) return
+  resetFlowTarget.value = { type: 'tunnel', id: item.id }
+  resetFlowTitle.value = `重置隧道授权流量`
+  resetFlowMessage.value = `确认将隧道授权 #${item.id} 的已用流量清零吗？`
+  resetFlowUsedFlow.value = formatBytes(calculateTunnelUsedFlow(item))
+  resetFlowQuota.value = Number(item?.flow || 0) > 0 ? `${item.flow} GB` : ''
+  showResetFlowModal.value = true
+}
 
-  resettingTunnelTrafficId.value = item.id
+const closeResetFlowModal = (force = false) => {
+  if (resetFlowLoading.value && !force) return
+  showResetFlowModal.value = false
+  resetFlowTarget.value = null
+  resetFlowTitle.value = ''
+  resetFlowMessage.value = ''
+  resetFlowUsedFlow.value = ''
+  resetFlowQuota.value = ''
+}
+
+const confirmResetFlow = async () => {
+  if (!resetFlowTarget.value?.id) return
+
+  resetFlowLoading.value = true
   try {
-    const res = await resetUserTunnelTraffic(item.id)
-    assertCompatSuccess(res, '重置失败')
-    if (tunnelUser.value) {
-      await loadUserTunnels(tunnelUser.value.id)
+    if (resetFlowTarget.value.type === 'user') {
+      const res = await resetUserTraffic(resetFlowTarget.value.id)
+      assertCompatSuccess(res, '重置失败')
+      await fetchUsers()
+      alert('用户流量已重置')
+    } else {
+      const res = await resetUserTunnelTraffic(resetFlowTarget.value.id)
+      assertCompatSuccess(res, '重置失败')
+      if (tunnelUser.value) {
+        await loadUserTunnels(tunnelUser.value.id)
+      }
+      alert('隧道流量已重置')
     }
-    alert('隧道流量已重置')
+    closeResetFlowModal(true)
   } catch (err) {
     alert(err.response?.data?.msg || err.response?.data?.message || err.message || '重置失败')
   } finally {
-    resettingTunnelTrafficId.value = null
+    resetFlowLoading.value = false
   }
 }
 
@@ -870,6 +938,10 @@ onMounted(() => {
   max-width: 1100px;
 }
 
+.reset-flow-modal {
+  max-width: 520px;
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -957,6 +1029,27 @@ onMounted(() => {
 
 .tunnel-list-wrap {
   margin-top: 8px;
+}
+
+.reset-flow-copy {
+  margin: 0 0 16px;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.reset-flow-summary {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-color);
+  color: var(--text-secondary);
+}
+
+.reset-flow-summary strong {
+  margin-right: 8px;
+  color: var(--text-primary);
 }
 
 @media (max-width: 768px) {

@@ -619,21 +619,15 @@ func (s *PanelForwardService) ListUserTunnels(query PanelUserTunnelQueryInput) (
 		Preload("User").
 		Preload("Tunnel").
 		Where("user_id = ?", query.UserID).
-		Order("id DESC").
+		Order("id ASC").
 		Find(&records).Error; err != nil {
 		return nil, err
 	}
 
 	items := make([]PanelUserTunnelDetailItem, 0, len(records))
-	for _, record := range records {
-		var traffic struct {
-			InFlow  int64 `gorm:"column:in_flow"`
-			OutFlow int64 `gorm:"column:out_flow"`
-		}
-		if err := s.db.Model(&model.Forward{}).
-			Select("COALESCE(SUM(in_flow), 0) AS in_flow, COALESCE(SUM(out_flow), 0) AS out_flow").
-			Where("user_id = ? AND tunnel_id = ?", record.UserID, record.TunnelID).
-			Scan(&traffic).Error; err != nil {
+	for i := range records {
+		record := &records[i]
+		if err := s.syncUserTunnelTrafficSnapshot(record); err != nil {
 			return nil, err
 		}
 
@@ -667,8 +661,8 @@ func (s *PanelForwardService) ListUserTunnels(query PanelUserTunnelQueryInput) (
 			Speed:          speed,
 			TunnelName:     tunnelName,
 			TunnelFlow:     tunnelFlow,
-			InFlow:         traffic.InFlow,
-			OutFlow:        traffic.OutFlow,
+			InFlow:         record.InFlow,
+			OutFlow:        record.OutFlow,
 			Status:         record.Status,
 		})
 	}
@@ -727,12 +721,23 @@ func (s *PanelForwardService) ResetUserTunnelTraffic(id uint) error {
 		return err
 	}
 
-	return s.db.Model(&model.Forward{}).
-		Where("user_id = ? AND tunnel_id = ?", record.UserID, record.TunnelID).
-		Updates(map[string]interface{}{
-			"in_flow":  0,
-			"out_flow": 0,
-		}).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.Forward{}).
+			Where("user_id = ? AND tunnel_id = ?", record.UserID, record.TunnelID).
+			Updates(map[string]interface{}{
+				"in_flow":  0,
+				"out_flow": 0,
+			}).Error; err != nil {
+			return err
+		}
+
+		return tx.Model(&model.ForwardUserTunnel{}).
+			Where("id = ?", record.ID).
+			Updates(map[string]interface{}{
+				"in_flow":  0,
+				"out_flow": 0,
+			}).Error
+	})
 }
 
 func (s *PanelForwardService) getActiveTunnel(tunnelID uint) (*model.ForwardTunnel, error) {
@@ -941,16 +946,18 @@ func (s *PanelForwardService) countUserTunnelForwards(userID, tunnelID, excludeF
 }
 
 func (s *PanelForwardService) sumUserTunnelTraffic(userID, tunnelID uint) (int64, error) {
-	var traffic struct {
-		Total int64 `gorm:"column:total"`
-	}
-	if err := s.db.Model(&model.Forward{}).
-		Select("COALESCE(SUM(in_flow + out_flow), 0) AS total").
-		Where("user_id = ? AND tunnel_id = ?", userID, tunnelID).
-		Scan(&traffic).Error; err != nil {
+	var permission model.ForwardUserTunnel
+	if err := s.db.Where("user_id = ? AND tunnel_id = ?", userID, tunnelID).First(&permission).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, nil
+		}
 		return 0, err
 	}
-	return traffic.Total, nil
+
+	if err := s.syncUserTunnelTrafficSnapshot(&permission); err != nil {
+		return 0, err
+	}
+	return permission.InFlow + permission.OutFlow, nil
 }
 
 func (s *PanelForwardService) listUserTunnelForwards(userID, tunnelID uint, status int) ([]model.Forward, error) {
@@ -1010,6 +1017,49 @@ func (s *PanelForwardService) userTunnelRequiresPause(permission *model.ForwardU
 		}
 	}
 	return false, nil
+}
+
+func (s *PanelForwardService) syncUserTunnelTrafficSnapshot(permission *model.ForwardUserTunnel) error {
+	if permission == nil || permission.ID == 0 {
+		return nil
+	}
+
+	var traffic struct {
+		InFlow  int64 `gorm:"column:in_flow"`
+		OutFlow int64 `gorm:"column:out_flow"`
+	}
+	if err := s.db.Model(&model.Forward{}).
+		Select("COALESCE(SUM(in_flow), 0) AS in_flow, COALESCE(SUM(out_flow), 0) AS out_flow").
+		Where("user_id = ? AND tunnel_id = ?", permission.UserID, permission.TunnelID).
+		Scan(&traffic).Error; err != nil {
+		return err
+	}
+
+	nextInFlow := permission.InFlow
+	if traffic.InFlow > nextInFlow {
+		nextInFlow = traffic.InFlow
+	}
+	nextOutFlow := permission.OutFlow
+	if traffic.OutFlow > nextOutFlow {
+		nextOutFlow = traffic.OutFlow
+	}
+
+	if nextInFlow == permission.InFlow && nextOutFlow == permission.OutFlow {
+		return nil
+	}
+
+	if err := s.db.Model(&model.ForwardUserTunnel{}).
+		Where("id = ?", permission.ID).
+		Updates(map[string]interface{}{
+			"in_flow":  nextInFlow,
+			"out_flow": nextOutFlow,
+		}).Error; err != nil {
+		return err
+	}
+
+	permission.InFlow = nextInFlow
+	permission.OutFlow = nextOutFlow
+	return nil
 }
 
 func (s *PanelForwardService) pauseManagedForward(record *model.Forward) error {

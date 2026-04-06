@@ -81,8 +81,8 @@ These gaps still block a full 1:1 clone even though the base compat routes now e
 | Surface | Local Status | Notes |
 |------|------|------|------|
 | `POST /api/v2/tunnel/user/list` detail semantics | partially aligned | Flux reads `inFlow/outFlow` from `user_tunnel`, joins `speed_limit`, and sorts by relation id ascending; local code still aggregates flow from `v2_forward`, synthesizes `speedLimitName`, and orders by `id DESC` |
-| `POST /api/v2/tunnel/user/assign` UI | partially aligned | Flux create flow does not send `status`; it filters already-assigned tunnels and uses a speed-limit selector rather than a raw numeric `speedId` input |
-| reset confirmation flow | partially aligned | Flux shows dedicated reset modals with current flow summary for user flow and tunnel flow; local page still uses `confirm/alert` |
+| `POST /api/v2/tunnel/user/assign` UI | partially aligned | local create flow no longer sends `status` and now filters already-assigned tunnels, but it still lacks the Flux speed-limit selector |
+| reset confirmation flow | partially aligned | local page now uses dedicated confirm modals with used-flow summary for user flow and tunnel flow, but visual/layout details still differ from Flux |
 | monthly flow reset automation | not cloned | `flowResetTime` is stored and displayed, but automatic reset scheduling is still missing |
 | flow side effects in `FlowController` | not cloned | quota exhaustion, expire and disable behavior still do not mirror the reference runtime path |
 
@@ -280,7 +280,7 @@ Fields currently required by the Flux-cloned admin user page:
 
 Current known differences:
 
-- Flux sources `inFlow/outFlow` from `user_tunnel`; local code still derives them by summing forward rows under the same user/tunnel pair.
+- Flux sources `inFlow/outFlow` from `user_tunnel`; local code now stores counters on the relation, but still backfills them from `v2_forward` until a native runtime writer exists.
 - Flux joins `speed_limit` to expose display values; local code still synthesizes `speedLimitName` and falls back to user-level speed.
 
 ## Authorization Semantics
@@ -310,7 +310,7 @@ Do not "simplify" this distinction unless the reference changes.
 | pause/resume | runtime side effects + persistence | mainly local status persistence |
 | diagnose | node-chain diagnosis | mostly panel-side direct dialing |
 | user-tunnel quota | active flow/expire/status linkage | partially cloned; reset route and grant checks exist, but automatic monthly reset and stored relation counters are still missing |
-| user-tunnel admin UI | speed-limit selector, reset dialogs, filtered tunnel picker | partially cloned; local page shows used flow/reset action/rate column but still uses simplified controls |
+| user-tunnel admin UI | speed-limit selector, reset dialogs, filtered tunnel picker | partially cloned; local page now filters duplicate tunnels and uses dedicated reset modals, but still lacks the Flux speed-limit selector and exact visual flow |
 | flow reporting | controller-driven runtime enforcement | not cloned |
 
 ## Future Clone Guardrails
