@@ -25,6 +25,7 @@ import AdminKnowledge from '@/views/admin/Knowledge.vue'
 import AdminForward from '@/views/admin/Forward.vue'
 import AdminTunnel from '@/views/admin/Tunnel.vue'
 import AdminLimit from '@/views/admin/Limit.vue'
+import AdminForwardNodes from '@/views/admin/ForwardNodes.vue'
 import AdminPayment from '@/views/admin/Payment.vue'
 import AdminTelegram from '@/views/admin/Telegram.vue'
 import AdminMFA from '@/views/admin/MFA.vue'
@@ -122,12 +123,32 @@ const routes = [
         component: AdminForward
       },
       {
-        path: 'tunnel',
+        path: 'forward/tunnel',
         component: AdminTunnel
       },
       {
-        path: 'limit',
+        path: 'forward/limit',
         component: AdminLimit
+      },
+      {
+        path: 'forward/nodes',
+        component: AdminForwardNodes
+      },
+      {
+        path: 'forward/tunnels',
+        redirect: '/admin/forward/tunnel'
+      },
+      {
+        path: 'forward/limits',
+        redirect: '/admin/forward/limit'
+      },
+      {
+        path: 'tunnel',
+        redirect: '/admin/forward/tunnel'
+      },
+      {
+        path: 'limit',
+        redirect: '/admin/forward/limit'
       },
       {
         path: 'payment',

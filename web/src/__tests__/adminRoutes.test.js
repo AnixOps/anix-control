@@ -11,7 +11,13 @@ describe('admin routes', () => {
       '/admin/nodes',
       '/admin/subscriptions',
       '/admin/forward',
-      '/admin/agent',
+      '/admin/forward/tunnel',
+      '/admin/forward/limit',
+      '/admin/forward/nodes',
+      '/admin/forward/tunnels',
+      '/admin/forward/limits',
+      '/admin/tunnel',
+      '/admin/limit',
       '/admin/plans',
       '/admin/coupons',
       '/admin/invite',
@@ -21,6 +27,7 @@ describe('admin routes', () => {
       '/admin/knowledge',
       '/admin/mfa',
       '/admin/system',
+      '/admin/agent',
     ]
 
     const routePaths = router.getRoutes().map(route => route.path)

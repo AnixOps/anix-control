@@ -272,13 +272,29 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string,
 	allowMissingIngress := backend == model.ForwardRuntimeBackendGost &&
 		(action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause)
 
-	node, err := s.loadIngressNode(tunnel, allowMissingIngress)
+	var node *model.ForwardNode
+	var err error
+	switch backend {
+	case model.ForwardRuntimeBackendGost:
+		node, err = s.loadIngressNode(tunnel, allowMissingIngress)
+	case model.ForwardRuntimeBackendIptablesAnsible:
+		if err := ensureAnsibleTunnelSupportsExecution(tunnel); err != nil {
+			return nodeXForwardExecuteRequest{}, nil, err
+		}
+		node, err = s.loadExecutionNode(tunnel)
+	default:
+		node, err = s.loadIngressNode(tunnel, allowMissingIngress)
+	}
 	if err != nil {
 		return nodeXForwardExecuteRequest{}, nil, err
 	}
 	limiter, err := s.loadForwardLimiter(forward, tunnel)
 	if err != nil {
 		return nodeXForwardExecuteRequest{}, nil, err
+	}
+	tunnelNodeID := tunnel.InNodeID
+	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+		tunnelNodeID = storedPanelTunnelExecutionNodeID(tunnel)
 	}
 
 	req := nodeXForwardExecuteRequest{
@@ -299,7 +315,7 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string,
 			Tunnel: nodeXPanelTunnelPayload{
 				ID:            tunnel.ID,
 				Name:          tunnel.Name,
-				InNodeID:      tunnel.InNodeID,
+				InNodeID:      tunnelNodeID,
 				Protocol:      normalizePanelRuntimeProtocol(tunnel.Protocol),
 				TCPListenAddr: tunnel.TCPListenAddr,
 				UDPListenAddr: tunnel.UDPListenAddr,
@@ -353,6 +369,35 @@ func (s *PanelForwardRuntimeService) loadIngressNode(tunnel *model.ForwardTunnel
 	return &node, nil
 }
 
+func (s *PanelForwardRuntimeService) loadExecutionNode(tunnel *model.ForwardTunnel) (*model.ForwardNode, error) {
+	if tunnel == nil {
+		return nil, errors.New("forward tunnel is required")
+	}
+	executionNodeID := storedPanelTunnelExecutionNodeID(tunnel)
+	if executionNodeID == 0 {
+		return nil, errors.New("forward tunnel execution node is not configured")
+	}
+
+	var node model.ForwardNode
+	if err := s.db.First(&node, executionNodeID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("forward execution node not found")
+		}
+		return nil, err
+	}
+	return &node, nil
+}
+
+func ensureAnsibleTunnelSupportsExecution(tunnel *model.ForwardTunnel) error {
+	if tunnel == nil {
+		return errors.New("forward tunnel is required")
+	}
+	if tunnel.Type != 1 {
+		return errors.New("iptables_ansible runtime only supports type 1 tunnels")
+	}
+	return nil
+}
+
 func (s *PanelForwardRuntimeService) loadForwardLimiter(forward *model.Forward, tunnel *model.ForwardTunnel) (*panelForwardLimiterPayload, error) {
 	if forward == nil || forward.UserID == 0 {
 		return nil, nil
@@ -397,7 +442,7 @@ func (s *PanelForwardRuntimeService) loadForwardLimiter(forward *model.Forward, 
 
 func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(action string, forward *model.Forward, tunnel *model.ForwardTunnel, node *model.ForwardNode) (*panelForwardAnsibleRuntimePayload, error) {
 	if node == nil {
-		return nil, errors.New("forward ingress node is required for ansible runtime")
+		return nil, errors.New("forward execution node is required for ansible runtime")
 	}
 	cfg, err := s.loadPanelForwardAnsibleConfig(action)
 	if err != nil {
@@ -435,7 +480,7 @@ func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(action string, f
 		Tunnel: panelForwardAnsibleTunnelPayload{
 			ID:            tunnel.ID,
 			Name:          tunnel.Name,
-			InNodeID:      tunnel.InNodeID,
+			InNodeID:      storedPanelTunnelExecutionNodeID(tunnel),
 			Protocol:      normalizePanelRuntimeProtocol(tunnel.Protocol),
 			TCPListenAddr: tunnel.TCPListenAddr,
 			UDPListenAddr: tunnel.UDPListenAddr,

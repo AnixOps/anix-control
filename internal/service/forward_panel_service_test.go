@@ -389,6 +389,50 @@ func (s *PanelForwardServiceTestSuite) TestCreateTunnel_RejectsDuplicateNameAndI
 	assert.NoError(s.T(), err)
 }
 
+func (s *PanelForwardServiceTestSuite) TestCreateTunnel_AnsibleExecNodeOnly() {
+	db := database.Get()
+	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendIptablesAnsible)
+	defer setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendGost)
+	defer setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendGost)
+
+	execNode := s.createForwardNode("Ansible Execution Node", "10.0.0.77", model.ForwardNodeStatusOnline)
+	outNodeID := execNode.ID
+
+	tunnel, err := s.svc.CreateTunnel(PanelTunnelInput{
+		Name:          "Ansible Exec Only Tunnel",
+		Flow:          1,
+		Type:          1,
+		InNodeID:      0,
+		OutNodeID:     &outNodeID,
+		Protocol:      "tcp",
+		TCPListenAddr: "0.0.0.0",
+		UDPListenAddr: "127.0.0.1",
+		TrafficRatio:  float64Ptr(1),
+	})
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), tunnel)
+
+	var record model.ForwardTunnel
+	assert.NoError(s.T(), db.First(&record, tunnel.ID).Error)
+	assert.Equal(s.T(), uint(0), record.InNodeID)
+	assert.NotNil(s.T(), record.OutNodeID)
+	assert.Equal(s.T(), execNode.ID, *record.OutNodeID)
+}
+
+func (s *PanelForwardServiceTestSuite) TestValidatePanelTunnelCreateInput_AnsibleRejectsType2() {
+	outNodeID := uint(2)
+	err := validatePanelTunnelCreateInput(PanelTunnelInput{
+		Name:      "Validator Type2",
+		InNodeID:  1,
+		OutNodeID: &outNodeID,
+		Type:      2,
+		Flow:      1,
+	}, 1, model.ForwardRuntimeBackendIptablesAnsible)
+	if assert.Error(s.T(), err) {
+		assert.Contains(s.T(), err.Error(), "Ansible 转发模式仅支持端口转发")
+	}
+}
+
 func (s *PanelForwardServiceTestSuite) TestUpdateTunnel_UpdatesEditableFieldsOnly() {
 	db := database.Get()
 	outNodeID := uint(44)

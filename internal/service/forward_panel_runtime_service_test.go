@@ -73,6 +73,13 @@ func (s *PanelForwardRuntimeServiceTestSuite) SetupTest() {
 		forwardRuntimeConfigGroup,
 		"test NodeX runtime token",
 	))
+	assert.NoError(s.T(), configSvc.Set(
+		forwardRuntimeNodeXModeConfigKey,
+		"",
+		"bool",
+		forwardRuntimeConfigGroup,
+		"reset NodeX mode",
+	))
 }
 
 func (s *PanelForwardRuntimeServiceTestSuite) TestApply_DispatchesPanelForwardRequestAndPersistsSuccessJob() {
@@ -544,6 +551,146 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_AttachesLimiterToRuntime
 		assert.Equal(s.T(), speedLimit.Name, payload.Limiter.Name)
 		assert.Equal(s.T(), speedLimit.Speed, payload.Limiter.Speed)
 	}
+}
+
+func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleQueuesLocalJobWithExecutionNodeFromOutNode() {
+	db := database.Get()
+	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendIptablesAnsible)
+
+	outNode := &model.ForwardNode{
+		Name:     "Out Node",
+		Type:     model.ForwardNodeTypeExit,
+		Host:     "198.51.100.20",
+		Port:     22,
+		APIPort:  19180,
+		APIToken: "out-token",
+		Enabled:  true,
+	}
+	assert.NoError(s.T(), db.Create(outNode).Error)
+	outNodeID := outNode.ID
+
+	tunnel := &model.ForwardTunnel{
+		Name:          "Out Execution Tunnel",
+		Type:          1,
+		OutNodeID:     &outNodeID,
+		Protocol:      "tcp",
+		TCPListenAddr: "0.0.0.0",
+		Status:        model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	forward := &model.Forward{
+		UserID:     104,
+		UserName:   "runtime-out@example.com",
+		Name:       "Execution Forward",
+		TunnelID:   tunnel.ID,
+		InPort:     23001,
+		RemoteAddr: "execution.example.com:443",
+		Status:     model.ForwardStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.SetJSON(
+		forwardRuntimeAnsibleConfigJSONKey,
+		panelForwardAnsibleConfig{
+			Inventory:      "/var/ansible/hosts",
+			ApplyPlaybook:  "/tmp/ansible/apply.yml",
+			RemovePlaybook: "/tmp/ansible/remove.yml",
+		},
+		forwardRuntimeConfigGroup,
+		"test ansible runtime with out node",
+	))
+
+	client := &stubForwardRuntimeNodeXClient{}
+	s.svc.client = client
+
+	result, err := s.svc.Apply(context.Background(), model.ForwardRuntimeJobActionCreate, forward, tunnel)
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), result)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, result.Status)
+	assert.Empty(s.T(), client.calls)
+
+	var job model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.Last(&job).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, job.Backend)
+	if assert.NotNil(s.T(), job.NodeID) {
+		assert.Equal(s.T(), outNode.ID, *job.NodeID)
+	}
+
+	var payload panelForwardAnsibleRuntimePayload
+	assert.NoError(s.T(), json.Unmarshal([]byte(job.Payload), &payload))
+	assert.Equal(s.T(), outNode.ID, payload.Node.ID)
+	assert.Equal(s.T(), "/var/ansible/hosts", payload.Inventory)
+	assert.Equal(s.T(), "/tmp/ansible/apply.yml", payload.Playbook)
+}
+
+func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleRejectsTunnelTypeNotSupported() {
+	db := database.Get()
+	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendIptablesAnsible)
+
+	node := &model.ForwardNode{
+		Name:     "Unsupported Node",
+		Type:     model.ForwardNodeTypeRelay,
+		Host:     "203.0.113.5",
+		Port:     22,
+		APIPort:  19200,
+		APIToken: "unsupported-token",
+		Enabled:  true,
+	}
+	assert.NoError(s.T(), db.Create(node).Error)
+	nodeID := node.ID
+
+	tunnel := &model.ForwardTunnel{
+		Name:          "Unsupported Tunnel",
+		Type:          2,
+		InNodeID:      nodeID,
+		OutNodeID:     &nodeID,
+		Protocol:      "tcp",
+		TCPListenAddr: "0.0.0.0",
+		Status:        model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	forward := &model.Forward{
+		UserID:        105,
+		UserName:      "runtime-unsupported@example.com",
+		Name:          "Unsupported Forward",
+		TunnelID:      tunnel.ID,
+		InPort:        24001,
+		RemoteAddr:    "unsupported.example.com:443",
+		Status:        model.ForwardStatusActive,
+		InterfaceName: "eth1",
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.SetJSON(
+		forwardRuntimeAnsibleConfigJSONKey,
+		panelForwardAnsibleConfig{
+			Inventory:      "/var/ansible/hosts",
+			ApplyPlaybook:  "/tmp/ansible/apply.yml",
+			RemovePlaybook: "/tmp/ansible/remove.yml",
+		},
+		forwardRuntimeConfigGroup,
+		"test ansible runtime type guard",
+	))
+
+	client := &stubForwardRuntimeNodeXClient{}
+	s.svc.client = client
+
+	result, err := s.svc.Apply(context.Background(), model.ForwardRuntimeJobActionCreate, forward, tunnel)
+	assert.Error(s.T(), err)
+	if assert.NotNil(s.T(), result) {
+		assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, result.Backend)
+		assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, result.Status)
+	}
+	assert.Contains(s.T(), err.Error(), "type 1")
+	assert.Empty(s.T(), client.calls)
+
+	var jobCount int64
+	assert.NoError(s.T(), db.Model(&model.ForwardRuntimeJob{}).Count(&jobCount).Error)
+	assert.Zero(s.T(), jobCount)
 }
 
 func setForwardRuntimeBackendForTest(t *testing.T, db *gorm.DB, backend string) {

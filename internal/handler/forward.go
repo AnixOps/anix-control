@@ -204,6 +204,12 @@ func (h *ForwardHandler) UpdateNode(c *gin.Context) {
 	if req.Port > 0 {
 		node.Port = req.Port
 	}
+	if req.APIPort > 0 {
+		node.APIPort = req.APIPort
+	}
+	if req.APIToken != "" {
+		node.APIToken = req.APIToken
+	}
 	if req.Region != "" {
 		node.Region = req.Region
 	}
@@ -715,6 +721,8 @@ type UpdateNodeRequest struct {
 	Type      string `json:"type" binding:"omitempty,oneof=relay exit"`
 	Host      string `json:"host"`
 	Port      int    `json:"port"`
+	APIPort   int    `json:"api_port"`
+	APIToken  string `json:"api_token"`
 	Region    string `json:"region"`
 	ISP       string `json:"isp"`
 	Bandwidth int64  `json:"bandwidth"`
