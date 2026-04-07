@@ -472,7 +472,7 @@ jwt:
 
 app:
   name: "V2Board"
-  version: "2.0.0"
+  version: "2.0.1"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
@@ -547,7 +547,7 @@ jwt:
 
 app:
   name: "V2Board"
-  version: "2.0.0"
+  version: "2.0.1"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"

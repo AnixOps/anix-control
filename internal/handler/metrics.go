@@ -16,9 +16,9 @@ type MetricsHandler struct {
 	db *gorm.DB
 
 	// 计数器
-	requestCount    uint64
-	errorCount      uint64
-	successCount    uint64
+	requestCount uint64
+	errorCount   uint64
+	successCount uint64
 
 	// 启动时间
 	startTime time.Time
@@ -66,7 +66,7 @@ func (h *MetricsHandler) GetMetrics(c *gin.Context) {
 	// 构建指标
 	metrics := `# HELP v2board_info Application information
 # TYPE v2board_info gauge
-v2board_info{version="2.0.0",go_version="` + runtime.Version() + `"} 1
+v2board_info{version="2.0.1",go_version="` + runtime.Version() + `"} 1
 
 # HELP v2board_uptime_seconds Application uptime in seconds
 # TYPE v2board_uptime_seconds gauge
@@ -129,8 +129,8 @@ type User struct{}
 type Node struct{}
 type Order struct{}
 
-func (User) TableName() string   { return "v2_user" }
-func (Node) TableName() string   { return "v2_node" }
+func (User) TableName() string  { return "v2_user" }
+func (Node) TableName() string  { return "v2_node" }
 func (Order) TableName() string { return "v2_order" }
 
 func formatInt(v int64) string {
