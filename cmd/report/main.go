@@ -20,56 +20,56 @@ import (
 
 // TestReport 测试报告
 type TestReport struct {
-	GeneratedAt   time.Time     `json:"generated_at"`
-	ServerVersion string        `json:"server_version"`
-	GoVersion     string        `json:"go_version"`
-	Platform      string        `json:"platform"`
-	Summary       TestSummary   `json:"summary"`
-	Results       []TestResult  `json:"results"`
-	E2EResults    []E2EResult   `json:"e2e_results"`
-	APIResults    []APITest     `json:"api_tests"`
+	GeneratedAt   time.Time    `json:"generated_at"`
+	ServerVersion string       `json:"server_version"`
+	GoVersion     string       `json:"go_version"`
+	Platform      string       `json:"platform"`
+	Summary       TestSummary  `json:"summary"`
+	Results       []TestResult `json:"results"`
+	E2EResults    []E2EResult  `json:"e2e_results"`
+	APIResults    []APITest    `json:"api_tests"`
 }
 
 // TestSummary 测试汇总
 type TestSummary struct {
-	TotalTests     int     `json:"total_tests"`
-	PassedTests    int     `json:"passed_tests"`
-	FailedTests    int     `json:"failed_tests"`
-	SkippedTests   int     `json:"skipped_tests"`
-	PassRate       float64 `json:"pass_rate"`
-	TotalDuration  string  `json:"total_duration"`
+	TotalTests    int     `json:"total_tests"`
+	PassedTests   int     `json:"passed_tests"`
+	FailedTests   int     `json:"failed_tests"`
+	SkippedTests  int     `json:"skipped_tests"`
+	PassRate      float64 `json:"pass_rate"`
+	TotalDuration string  `json:"total_duration"`
 }
 
 // TestResult 单元测试结果
 type TestResult struct {
-	Package    string        `json:"package"`
-	TestName   string        `json:"test_name"`
-	Status     string        `json:"status"` // PASS, FAIL, SKIP
-	Duration   time.Duration `json:"duration"`
-	Error      string        `json:"error,omitempty"`
+	Package  string        `json:"package"`
+	TestName string        `json:"test_name"`
+	Status   string        `json:"status"` // PASS, FAIL, SKIP
+	Duration time.Duration `json:"duration"`
+	Error    string        `json:"error,omitempty"`
 }
 
 // E2EResult E2E测试结果
 type E2EResult struct {
-	Protocol    string        `json:"protocol"`
-	ServerPort  int           `json:"server_port"`
-	ProxyPort   int           `json:"proxy_port"`
-	EchoPort    int           `json:"echo_port"`
-	Success     bool          `json:"success"`
-	Latency     time.Duration `json:"latency"`
-	Error       string        `json:"error,omitempty"`
-	Duration    time.Duration `json:"duration"`
+	Protocol   string        `json:"protocol"`
+	ServerPort int           `json:"server_port"`
+	ProxyPort  int           `json:"proxy_port"`
+	EchoPort   int           `json:"echo_port"`
+	Success    bool          `json:"success"`
+	Latency    time.Duration `json:"latency"`
+	Error      string        `json:"error,omitempty"`
+	Duration   time.Duration `json:"duration"`
 }
 
 // APITest API测试结果
 type APITest struct {
-	Endpoint    string        `json:"endpoint"`
-	Method      string        `json:"method"`
-	Status      int           `json:"status"`
-	Latency     time.Duration `json:"latency"`
-	Success     bool          `json:"success"`
-	Response    string        `json:"response,omitempty"`
-	Error       string        `json:"error,omitempty"`
+	Endpoint string        `json:"endpoint"`
+	Method   string        `json:"method"`
+	Status   int           `json:"status"`
+	Latency  time.Duration `json:"latency"`
+	Success  bool          `json:"success"`
+	Response string        `json:"response,omitempty"`
+	Error    string        `json:"error,omitempty"`
 }
 
 var report TestReport
@@ -77,7 +77,7 @@ var report TestReport
 func main() {
 	report = TestReport{
 		GeneratedAt:   time.Now(),
-		ServerVersion: "v2.0.0",
+		ServerVersion: "v2.0.1",
 		GoVersion:     runtime.Version(),
 		Platform:      fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 		Results:       make([]TestResult, 0),

@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install build tools
 RUN apk add --no-cache git make nodejs npm
@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Generate Swagger docs
-RUN go install github.com/swaggo/swag/cmd/swag@latest && \
+RUN go install github.com/swaggo/swag/cmd/swag@v1.16.6 && \
     $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal
 
 # Build frontend (if package.json exists)
