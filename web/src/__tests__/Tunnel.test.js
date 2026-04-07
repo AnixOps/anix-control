@@ -54,8 +54,6 @@ describe('Tunnel.vue', () => {
     const wrapper = mountTunnel()
     await flushPromises()
 
-    console.log('nodeX mode', wrapper.vm.runtimeNodeXMode)
-
     wrapper.vm.openCreateModal()
     await wrapper.vm.$nextTick()
 
@@ -75,6 +73,9 @@ describe('Tunnel.vue', () => {
 
     const wrapper = mountTunnel()
     await flushPromises()
+
+    wrapper.vm.openCreateModal()
+    await wrapper.vm.$nextTick()
 
     expect(wrapper.find('[data-test="forward-entry-select"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="forward-exit-select"]').exists()).toBe(false)
@@ -152,6 +153,9 @@ describe('Tunnel.vue', () => {
 
     const wrapper = mountTunnel()
     await flushPromises()
+
+    wrapper.vm.openCreateModal()
+    await wrapper.vm.$nextTick()
 
     expect(wrapper.vm.runtimeNodeXMode).toBe(false)
     expect(wrapper.find('[data-test="forward-entry-select"]').exists()).toBe(false)

@@ -8,114 +8,38 @@
       <button class="btn-ghost btn-sm" @click="logout">退出</button>
     </header>
 
-    <div
-      class="sidebar-overlay"
-      :class="{ active: sidebarOpen }"
-      @click="sidebarOpen = false"
-    ></div>
+    <div class="sidebar-overlay" :class="{ active: sidebarOpen }" @click="sidebarOpen = false"></div>
 
     <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="sidebar-header">
-        <div class="logo">V2Board</div>
-        <span class="badge">Admin</span>
-        <button class="close-btn" @click="sidebarOpen = false">✕</button>
+        <div class="sidebar-brand">
+          <div class="logo">V2Board</div>
+          <span class="badge">Admin</span>
+        </div>
+        <button class="close-btn" @click="sidebarOpen = false">×</button>
       </div>
 
-      
       <nav class="sidebar-nav">
-        <div class="nav-section">
-          <div class="nav-title">概览</div>
-          <router-link to="/admin/dashboard" @click="closeSidebar">
-            <span class="nav-icon">🏠</span> 浠〃鐩?
-          </router-link>
-        </div>
-
-        <div class="nav-section">
-          <div class="nav-title">转发套件</div>
-          <ForwardSuiteNav />
-        </div>
-
-        <div class="nav-section">
-          <div class="nav-title">用户管理</div>
-          <router-link to="/admin/users" @click="closeSidebar">
-            <span class="nav-icon">👥</span> 鐢ㄦ埛鍒楄〃
-          </router-link>
-          <router-link to="/admin/orders" @click="closeSidebar">
-            <span class="nav-icon">📦</span> 璁㈠崟绠＄悊
-          </router-link>
-          <router-link to="/admin/tickets" @click="closeSidebar">
-            <span class="nav-icon">🎫</span> 宸ュ崟绠＄悊
-          </router-link>
-        </div>
-
-        <div class="nav-section">
-          <div class="nav-title">节点管理</div>
-          <router-link to="/admin/nodes" @click="closeSidebar">
-            <span class="nav-icon">🖥️</span> 鑺傜偣鍒楄〃
-          </router-link>
-          <router-link to="/admin/subscriptions" @click="closeSidebar">
-            <span class="nav-icon">📚</span> 璁㈤槄绠＄悊
-          </router-link>
-          <router-link to="/admin/agent" @click="closeSidebar">
-            <span class="nav-icon">🤖</span> Agent 绠＄悊
-          </router-link>
-        </div>
-
-        <div class="nav-section">
-          <div class="nav-title">营销管理</div>
-          <router-link to="/admin/plans" @click="closeSidebar">
-            <span class="nav-icon">🔖</span> 濂楅绠＄悊
-          </router-link>
-          <router-link to="/admin/coupons" @click="closeSidebar">
-            <span class="nav-icon">🎟️</span> 浼樻儬鍒?
-          </router-link>
-          <router-link to="/admin/invite" @click="closeSidebar">
-            <span class="nav-icon">✉️</span> 閭€璇疯繑鍒?
-          </router-link>
-        </div>
-
-        <div class="nav-section">
-          <div class="nav-title">财务</div>
-          <router-link to="/admin/payment" @click="closeSidebar">
-            <span class="nav-icon">💰</span> 鏀粯缃戝叧
-          </router-link>
-        </div>
-
-        <div class="nav-section">
-          <div class="nav-title">通知</div>
-          <router-link to="/admin/telegram" @click="closeSidebar">
-            <span class="nav-icon">💬</span> Telegram Bot
-          </router-link>
-          <router-link to="/admin/notifications" @click="closeSidebar">
-            <span class="nav-icon">📢</span> 閫氱煡绠＄悊
-          </router-link>
-        </div>
-
-        <div class="nav-section">
-          <div class="nav-title">内容管理</div>
-          <router-link to="/admin/knowledge" @click="closeSidebar">
-            <span class="nav-icon">📖</span> 鐭ヨ瘑搴?
-          </router-link>
-        </div>
-
-        <div class="nav-section">
-          <div class="nav-title">系统</div>
-          <router-link to="/admin/mfa" @click="closeSidebar">
-            <span class="nav-icon">🔐</span> MFA 璁剧疆
-          </router-link>
-          <router-link to="/admin/system" @click="closeSidebar">
-            <span class="nav-icon">⚙️</span> 绯荤粺绠＄悊
-          </router-link>
+        <div v-for="section in navSections" :key="section.title" class="nav-section">
+          <div class="nav-title">{{ section.title }}</div>
+          <template v-if="section.kind === 'forward'">
+            <ForwardSuiteNav />
+          </template>
+          <template v-else>
+            <router-link v-for="item in section.items" :key="item.to" :to="item.to" @click="closeSidebar">
+              <span class="nav-icon">{{ item.icon }}</span>
+              <span>{{ item.label }}</span>
+            </router-link>
+          </template>
         </div>
       </nav>
-
 
       <div class="sidebar-footer">
         <div class="user-info">
           <div class="user-avatar">👤</div>
           <div class="user-details">
             <div class="user-name">管理员</div>
-            <div class="user-email">{{ userStore.userInfo?.email }}</div>
+            <div class="user-email">{{ userStore.userInfo?.email || '-' }}</div>
           </div>
         </div>
         <button class="btn-ghost btn-sm w-full" @click="logout">退出登录</button>
@@ -126,6 +50,7 @@
       <header class="content-header">
         <div class="header-title">
           <h1>{{ pageTitle }}</h1>
+          <p class="header-subtitle">控制面、转发套件和运维入口统一收敛在此导航。</p>
         </div>
         <div class="header-actions">
           <span class="current-time">{{ currentTime }}</span>
@@ -139,16 +64,73 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { useRouter, useRoute } from 'vue-router'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 
-const userStore = useUserStore()
 const router = useRouter()
 const route = useRoute()
+const userStore = useUserStore()
 const sidebarOpen = ref(false)
 const currentTime = ref('')
+
+const navSections = [
+  {
+    title: '概览',
+    items: [{ to: '/admin/dashboard', icon: '🏠', label: '仪表盘' }]
+  },
+  {
+    title: '转发套件',
+    kind: 'forward'
+  },
+  {
+    title: '用户管理',
+    items: [
+      { to: '/admin/users', icon: '👥', label: '用户管理' },
+      { to: '/admin/orders', icon: '📦', label: '订单管理' },
+      { to: '/admin/tickets', icon: '🎫', label: '工单管理' }
+    ]
+  },
+  {
+    title: '节点管理',
+    items: [
+      { to: '/admin/nodes', icon: '🖥️', label: '节点管理' },
+      { to: '/admin/subscriptions', icon: '📚', label: '订阅管理' },
+      { to: '/admin/agent', icon: '🤖', label: 'Agent 管理' }
+    ]
+  },
+  {
+    title: '营销管理',
+    items: [
+      { to: '/admin/plans', icon: '🔖', label: '套餐管理' },
+      { to: '/admin/coupons', icon: '🎟️', label: '优惠券' },
+      { to: '/admin/invite', icon: '✉️', label: '邀请返利' }
+    ]
+  },
+  {
+    title: '财务',
+    items: [{ to: '/admin/payment', icon: '💰', label: '支付网关' }]
+  },
+  {
+    title: '通知',
+    items: [
+      { to: '/admin/telegram', icon: '💬', label: 'Telegram Bot' },
+      { to: '/admin/notifications', icon: '📢', label: '通知管理' }
+    ]
+  },
+  {
+    title: '内容管理',
+    items: [{ to: '/admin/knowledge', icon: '📖', label: '知识库' }]
+  },
+  {
+    title: '系统',
+    items: [
+      { to: '/admin/mfa', icon: '🔐', label: 'MFA 设置' },
+      { to: '/admin/system', icon: '⚙️', label: '系统管理' }
+    ]
+  }
+]
 
 const pageTitles = {
   '/admin/dashboard': '仪表盘',
@@ -160,12 +142,12 @@ const pageTitles = {
   '/admin/tickets': '工单管理',
   '/admin/coupons': '优惠券管理',
   '/admin/knowledge': '知识库管理',
-  '/admin/forward': '转发套件',
-  '/admin/forward/tunnels': '隧道管理',
-  '/admin/forward/limits': '限速管理',
-  '/admin/forward/nodes': '中转节点管理',
+  '/admin/forward': '流量转发管理',
   '/admin/forward/tunnel': '隧道管理',
   '/admin/forward/limit': '限速管理',
+  '/admin/forward/nodes': '中转节点与规则',
+  '/admin/forward/tunnels': '隧道管理',
+  '/admin/forward/limits': '限速管理',
   '/admin/tunnel': '隧道管理',
   '/admin/limit': '限速管理',
   '/admin/payment': '支付网关管理',
@@ -174,31 +156,32 @@ const pageTitles = {
   '/admin/notifications': '通知管理',
   '/admin/invite': '邀请返利管理',
   '/admin/system': '系统管理',
-  '/admin/agent': 'Agent 管理',
+  '/admin/agent': 'Agent 管理'
 }
 
 const pageTitle = computed(() => pageTitles[route.path] || '管理面板')
 
-const closeSidebar = () => {
+function closeSidebar() {
   sidebarOpen.value = false
 }
 
-const logout = () => {
+function logout() {
   userStore.logout()
   router.push('/login')
 }
 
-const updateTime = () => {
-  const now = new Date()
-  currentTime.value = now.toLocaleString('zh-CN', {
+function updateTime() {
+  currentTime.value = new Date().toLocaleString('zh-CN', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false
   })
 }
 
 let timer
+
 onMounted(() => {
   updateTime()
   timer = setInterval(updateTime, 60000)
@@ -220,155 +203,135 @@ onUnmounted(() => {
 }
 
 .mobile-header {
-  display: flex;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: var(--header-height);
-  background: var(--surface-color);
-  border-bottom: 1px solid var(--border-color);
+  display: none;
   align-items: center;
-  padding: 0 16px;
-  z-index: 100;
+  justify-content: space-between;
   gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-color);
+  position: sticky;
+  top: 0;
+  z-index: 1200;
 }
 
-.menu-toggle {
-  display: flex;
-  padding: 8px;
+.menu-toggle,
+.close-btn {
+  border: 0;
   background: transparent;
-  border: none;
-  font-size: 20px;
-}
-
-.mobile-header .logo {
-  flex: 1;
-  font-weight: 700;
-  font-size: 16px;
+  color: var(--text-color);
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .sidebar-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 200;
+  background: rgba(15, 23, 42, 0.45);
   opacity: 0;
-  visibility: hidden;
-  transition: var(--transition);
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 1090;
 }
 
 .sidebar-overlay.active {
   opacity: 1;
-  visibility: visible;
+  pointer-events: auto;
 }
 
 .sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: var(--sidebar-width);
-  max-width: 85vw;
-  height: 100vh;
-  background: var(--surface-color);
-  border-right: 1px solid var(--border-color);
+  width: 288px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  z-index: 300;
-  transform: translateX(-100%);
-  transition: transform 0.3s ease;
+  border-right: 1px solid var(--border-color);
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 28%),
+    var(--surface-color);
+  position: sticky;
+  top: 0;
+  height: 100vh;
 }
 
-.sidebar.open {
-  transform: translateX(0);
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 20px;
+.sidebar-header,
+.sidebar-footer {
+  padding: 18px 20px;
   border-bottom: 1px solid var(--border-color);
 }
 
-.sidebar-header .logo {
+.sidebar-footer {
+  border-top: 1px solid var(--border-color);
+  border-bottom: 0;
+  margin-top: auto;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo {
+  font-size: 20px;
   font-weight: 700;
-  font-size: 18px;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
 .badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  background: var(--primary-color);
-  border-radius: 10px;
-  font-weight: 600;
-}
-
-.close-btn {
-  margin-left: auto;
-  padding: 8px;
-  background: transparent;
-  border: none;
-  font-size: 18px;
-  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .sidebar-nav {
-  flex: 1;
+  padding: 16px 12px 20px;
   overflow-y: auto;
-  padding: 16px 12px;
 }
 
-.nav-section {
-  margin-bottom: 24px;
+.nav-section + .nav-section {
+  margin-top: 16px;
 }
 
 .nav-title {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text-secondary);
+  margin: 0 0 8px;
   padding: 0 12px;
-  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
 }
 
-.sidebar-nav a {
+.sidebar-nav :deep(a) {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
   color: var(--text-secondary);
   text-decoration: none;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  transition: var(--transition);
-  margin-bottom: 2px;
 }
 
-.sidebar-nav a:hover {
+.sidebar-nav :deep(a:hover) {
   background: var(--bg-color);
   color: var(--text-color);
 }
 
-.sidebar-nav a.router-link-active {
+.sidebar-nav :deep(a.router-link-active) {
   background: var(--primary-color);
-  color: white;
+  color: #fff;
 }
 
 .nav-icon {
-  font-size: 16px;
   width: 20px;
   text-align: center;
-}
-
-.sidebar-footer {
-  padding: 16px;
-  border-top: 1px solid var(--border-color);
+  font-size: 16px;
 }
 
 .user-info {
@@ -381,101 +344,98 @@ onUnmounted(() => {
 .user-avatar {
   width: 40px;
   height: 40px;
-  background: var(--bg-color);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
-}
-
-.user-details {
-  flex: 1;
-  min-width: 0;
+  background: rgba(37, 99, 235, 0.12);
 }
 
 .user-name {
-  font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .user-email {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-all;
 }
 
 .main-content {
+  min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-top: var(--header-height);
-  min-width: 0;
 }
 
 .content-header {
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 32px;
+  gap: 16px;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--border-color);
-  background: var(--surface-color);
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 900;
 }
 
 .header-title h1 {
-  font-size: 24px;
-  font-weight: 600;
+  margin: 0;
+  font-size: 28px;
+}
+
+.header-subtitle {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
 }
 
 .current-time {
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
   color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .page-content {
-  flex: 1;
-  padding: 20px 16px;
-  overflow-y: auto;
+  padding: 24px;
 }
 
-@media (min-width: 768px) {
+@media (max-width: 960px) {
+  .admin-layout {
+    display: block;
+  }
+
   .mobile-header {
-    display: none;
-  }
-
-  .sidebar-overlay {
-    display: none;
-  }
-
-  .sidebar {
-    position: sticky;
-    top: 0;
-    transform: translateX(0);
-    flex-shrink: 0;
-  }
-
-  .close-btn {
-    display: none;
-  }
-
-  .main-content {
-    margin-top: 0;
-  }
-
-  .content-header {
     display: flex;
   }
 
-  .page-content {
-    padding: 24px 32px;
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    z-index: 1100;
   }
-}
 
-@media (min-width: 1024px) {
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .content-header {
+    top: 57px;
+    padding: 18px 16px;
+  }
+
   .page-content {
-    padding: 32px 40px;
+    padding: 16px;
   }
 }
 </style>
