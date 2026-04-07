@@ -1,5 +1,16 @@
 # V2Board AnixOps Guide
 
+This folder is the deep-dive layer of the documentation tree.
+
+Start elsewhere first when possible:
+
+- overview and boundary: [`../intro/README.md`](../intro/README.md)
+- startup and config examples: [`../reference/README.md`](../reference/README.md)
+- repository ownership: [`../reference/repository-layout.md`](../reference/repository-layout.md)
+- runtime entrypoint: [`../reference/runtime.md`](../reference/runtime.md)
+
+Use this folder when you need implementation detail, clone contracts, runtime operations, or smoke-test checklists.
+
 ## Documents
 
 | Document | Purpose |

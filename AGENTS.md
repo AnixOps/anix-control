@@ -1094,4 +1094,27 @@ When planning future clone work, prioritize the remaining gaps in this order:
   - `readme.md` when onboarding entry points materially change
 - Prefer copyable commands, explicit mode-specific prerequisites, and smoke-test checklists over vague prose.
 - Do not add dead UI actions. If install/doctor/version/upgrade buttons or copy actions are proposed in admin pages, first ensure the backend automation or documented command flow actually exists.
+- Keep the repository root NodeX-like:
+  - one short root README
+  - one docs landing page at `docs/README.md`
+  - no duplicate repository-layout documents outside `docs/reference/`
+- The documentation tree is now intentional and must stay layered:
+  - `docs/intro/` for ownership and boundary
+  - `docs/reference/` for startup, configuration, runtime, and layout
+  - `docs/guide/` for implementation deep dives
+- Treat these files as the operator entrypoints and update them together when startup behavior changes:
+  - `readme.md`
+  - `docs/README.md`
+  - `docs/reference/quickstart.md`
+  - `docs/reference/startup-config.md`
+  - `docs/reference/configuration.md`
+  - `docs/reference/runtime.md`
+- Sample YAML inputs and helper-generated examples belong under `config/examples/`, never the repository root.
+- Root-local scratch artifacts must stay ignored or be deleted quickly:
+  - `.codex_*.log`
+  - `tmp_*.log`
+  - `full_internal_test.log`
+  - `.ui-smoke/`
+- Do not reintroduce an empty top-level `deploy/` placeholder while the real deployment assets live under `config/deploy/`.
+- When Docker or env behavior changes, verify both the compose files and the startup/reference docs in the same change.
 - 更详细的模块映射、当前完成度和下一步待补项目，见 `docs/guide/flux-panel-clone.md`。

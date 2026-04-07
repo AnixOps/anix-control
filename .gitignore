@@ -30,6 +30,9 @@ Thumbs.db
 # Logs
 logs/
 *.log
+.codex_*.log
+tmp_*.log
+full_internal_test.log
 
 # Local config
 config/config.yaml
@@ -55,3 +58,4 @@ config/data/
 config/workspace/bin/
 config/workspace/output/
 test-reports/
+.ui-smoke/
