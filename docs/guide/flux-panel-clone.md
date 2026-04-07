@@ -321,7 +321,6 @@ If the task touches forward/tunnel behavior, also verify:
 Every time a `flux-panel` module is cloned or significantly adjusted, update:
 
 - `AGENTS.md`
-- `CLAUDE.md`
 - `docs/guide/flux-panel-clone.md`
 - `docs/guide/flux-forward-contract.md` when forward/tunnel contracts change
 - `docs/guide/api-reference.md` when exposed compat endpoints or DTOs change
