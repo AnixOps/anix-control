@@ -2,6 +2,21 @@
 
 本文档覆盖本项目的常见部署方式：本地开发、Docker Compose、生产环境部署与运维。
 
+如果你只需要最短启动路径，先看：
+
+- [`../readme.md`](../readme.md)
+- [`README.md`](README.md)
+- [`reference/quickstart.md`](reference/quickstart.md)
+- [`reference/startup-config.md`](reference/startup-config.md)
+- [`reference/configuration.md`](reference/configuration.md)
+- [`reference/runtime.md`](reference/runtime.md)
+- [`reference/repository-layout.md`](reference/repository-layout.md)
+
+部署前先记住两条规则：
+
+- 后端始终先读取 `config/config.yaml`；本地 `go run` 不会自动读取 `.env`
+- `FORWARD_RUNTIME_*` 会在启动时写入 `v2_system_config`，但 `jwt.secret`、`app.api_token`、`admin.*`、数据库和缓存配置仍以 `config/config.yaml` 为准
+
 ## 目录
 
 1. 环境要求
@@ -55,15 +70,22 @@ cd v2board_AnixOps
 cp .env.example .env
 cp config/config.yaml.example config/config.yaml
 
-# 3) 按需修改配置（至少设置 jwt.secret）
+# 3) 按需修改配置
+# 至少设置 jwt.secret、app.api_token、admin.email、admin.password
 # nano config/config.yaml
 
-# 4) 启动
-docker-compose up -d
+# 4) 如需 NodeX mode，再编辑 .env
+# FORWARD_RUNTIME_NODEX_MODE=true
+# FORWARD_RUNTIME_BACKEND=gost
+# FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18080
+# FORWARD_RUNTIME_NODEX_TOKEN=replace-with-shared-token
 
-# 5) 查看状态与日志
-docker-compose ps
-docker-compose logs -f
+# 5) 启动
+docker compose up -d
+
+# 6) 查看状态与日志
+docker compose ps
+docker compose logs -f v2board
 ```
 
 默认访问地址：`http://localhost:8080`
@@ -131,10 +153,11 @@ bash ./panel_install.sh
 - 示例 inventory 模板位于 `config/deploy/ansible/inventory.ini.example`，安装脚本会复制为 `inventory.ini`。
 - SSH 密钥目录为 `config/deploy/ssh/`，会被挂载到容器内的 `/home/v2board/.ssh`。
 - Docker 启动时会读取 `FORWARD_RUNTIME_BACKEND` 与 `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`，并把它们作为内部后端初始化值同步到系统配置表。
+- Docker 启动时也会读取 `FORWARD_RUNTIME_NODEX_MODE`、`FORWARD_RUNTIME_NODEX_BASE_URL`、`FORWARD_RUNTIME_NODEX_TOKEN` 与 `FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS`，并同步到系统配置表。
 - 如果没有 SSH 私钥，可以直接在 `.env` 中设置 `FORWARD_RUNTIME_ANSIBLE_HOST`、`FORWARD_RUNTIME_ANSIBLE_USER`、`FORWARD_RUNTIME_ANSIBLE_PASSWORD`。
 - 容器启动时会基于这些环境变量生成兼容 inventory，并把路径同步到运行时配置；非 root 用户可再设置 `FORWARD_RUNTIME_ANSIBLE_BECOME=true` 与 `FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD`。
 - 后端切换、运行时任务观测和部署引导应停留在系统/部署文档范围内，不应并入 Flux 克隆的 `/admin/forward` 页面。
-- 公开边界说明见 `docs/guide/nodex-internal-extension.md`。
+- 公开边界说明见 [`guide/nodex-internal-extension.md`](guide/nodex-internal-extension.md)。
 
 ---
 
@@ -143,13 +166,20 @@ bash ./panel_install.sh
 ```bash
 # 后端
 go mod download
-go run cmd/server/main.go
+cp config/config.yaml.example config/config.yaml
+go run ./cmd/server/main.go -config ./config/config.yaml
 
 # 前端
 cd web
 npm install
 npm run dev
 ```
+
+本地开发补充说明：
+
+- 如果只跑本地开发，不会自动读取 `.env`
+- 如果你要在本地带上 NodeX mode 或 `iptables_ansible` mode，先在 shell 中导出 `FORWARD_RUNTIME_*`
+- 运行时值会在启动阶段写进 `v2_system_config`，后续可在 `/admin/system` 里继续调整
 
 生产构建：
 
@@ -177,19 +207,19 @@ npm run build
 ### 启动生产编排
 
 ```bash
-docker-compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 如需只启动 Prometheus：
 
 ```bash
-docker-compose -f docker-compose.prod.yml --profile prometheus up -d
+docker compose -f docker-compose.prod.yml --profile prometheus up -d
 ```
 
 如需同时启用内置 Grafana：
 
 ```bash
-docker-compose -f docker-compose.prod.yml --profile prometheus --profile grafana up -d
+docker compose -f docker-compose.prod.yml --profile prometheus --profile grafana up -d
 ```
 
 ---
@@ -197,6 +227,17 @@ docker-compose -f docker-compose.prod.yml --profile prometheus --profile grafana
 ## 5. 关键配置说明
 
 配置文件：`config/config.yaml`
+
+配置边界：
+
+- `config/config.yaml`
+  - 启动必读
+  - 管 server/database/cache/jwt/app/admin
+- `.env`
+  - 主要给 Docker Compose、安装器和 `FORWARD_RUNTIME_*` 使用
+- `v2_system_config`
+  - 启动后持久化的运行时配置
+  - `/admin/system` 编辑的也是这一层
 
 ### NodeX 控制面（当前 `forward` 运行时调用路径）
 
@@ -296,14 +337,14 @@ sudo certbot certonly --standalone -d panel.example.com
 
 ```bash
 # 全部服务日志
-docker-compose logs -f
+docker compose logs -f
 
 # 指定服务日志
-docker-compose logs -f api
-docker-compose logs -f nginx
+docker compose logs -f api
+docker compose logs -f nginx
 
 # 最近 100 行
-docker-compose logs --tail=100 api
+docker compose logs --tail=100 api
 ```
 
 ---
@@ -339,7 +380,7 @@ docker exec -i v2board-db psql -U v2board v2board < backup.sql
 ### 1) 服务无法启动
 
 ```bash
-docker-compose logs api
+docker compose logs api
 ```
 
 重点检查：
@@ -351,7 +392,7 @@ docker-compose logs api
 ### 2) 数据库连接失败
 
 ```bash
-docker-compose exec db pg_isready
+docker compose exec db pg_isready
 ```
 
 检查数据库主机、端口、用户名、密码、数据库名。
@@ -359,7 +400,7 @@ docker-compose exec db pg_isready
 ### 3) 前端访问异常
 
 ```bash
-docker-compose exec nginx nginx -t
+docker compose exec nginx nginx -t
 ```
 
 确认反向代理配置、生效证书和静态资源路径。
@@ -387,11 +428,11 @@ curl -H "X-API-Key: your_node_api_key" "http://localhost:8080/api/v2/server/UniP
 git pull
 
 # 3) 重新构建并重启
-docker-compose -f docker-compose.prod.yml build
-docker-compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml up -d
 
 # 4) 检查日志
-docker-compose -f docker-compose.prod.yml logs -f api
+docker compose -f docker-compose.prod.yml logs -f api
 ```
 
 建议先在预发布环境验证，再进行生产升级。
