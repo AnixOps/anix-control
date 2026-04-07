@@ -17,6 +17,7 @@ Use this tree like NodeX:
 - Exact startup flow: [`reference/startup-config.md`](reference/startup-config.md)
 - Config source-of-truth: [`reference/configuration.md`](reference/configuration.md)
 - Runtime mode entrypoint: [`reference/runtime.md`](reference/runtime.md)
+- Relay onboarding: [`guide/forward-relay-onboarding.md`](guide/forward-relay-onboarding.md)
 - Config examples: [`../config/examples/README.md`](../config/examples/README.md)
 
 ## Rule Of Thumb

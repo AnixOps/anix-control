@@ -39,7 +39,19 @@ If you use [`install.sh`](install.sh) or [`panel_install.sh`](panel_install.sh),
 - Docker: [`docs/reference/quickstart.md`](docs/reference/quickstart.md)
 - Local dev: [`docs/reference/startup-config.md`](docs/reference/startup-config.md)
 - NodeX mode and runtime semantics: [`docs/reference/runtime.md`](docs/reference/runtime.md)
+- Verified relay proof and manual smoke: [`docs/guide/forward-tunnel-smoke-test.md`](docs/guide/forward-tunnel-smoke-test.md)
+- Relay onboarding and acceptance: [`docs/guide/forward-relay-onboarding.md`](docs/guide/forward-relay-onboarding.md)
 - Config examples: [`config/examples/README.md`](config/examples/README.md)
+
+Current verified deployment truth:
+
+- the currently proven dual-runtime path is `binary + SQLite + systemd`
+- the verified single-UI runtime split is:
+  - `v2board` UI on `3000`
+  - `v2board` API on `8080`
+  - NodeX control-plane on `18081`
+  - relay gost API on `18080`
+- Docker deployment docs remain important, but the full real-machine proof recorded today is not the Docker path yet
 
 ## Runtime Modes
 

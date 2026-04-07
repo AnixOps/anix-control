@@ -1,62 +1,228 @@
 # Forward/Tunnel Runtime Operations
 
-本指南将 NodeX Mode（`gost` 控制面）和 iptables/ansible Mode（SSH+`ansible-playbook`）作为两套并行的运行时方案，对应 `forward.runtime_backend`。请勿在同一次部署中混用两种模式，所有运维、文档和 smoke 路径都应清晰标注当前模式。
+This guide documents the real runtime behavior behind the Flux-shaped `/admin/forward*` pages.
 
-## 双运行时概览
+Do not treat the UI model as proof that a relay is already attached. Attachment is runtime-specific.
 
-| 运行时模式 | 启用配置 | 控制面 | 核心节点角色 |
-|------------|----------|--------|---------------|
-| NodeX Mode | `forward.runtime_backend=gost` + `forward.runtime.nodex.base_url`/`forward.runtime.nodex.token` | 走 NodeX REST API（`defaultForwardRuntimeNodeXExecutePath`） | `ForwardNode`（`type=relay`）提供 `host`/`api_port`/`api_token` 供控制面调度；代理 `model.Node` 只做用户连接 |
-| iptables/ansible Mode | `forward.runtime_backend=iptables_ansible` + `forward.runtime.iptables_ansible.config`（可选 inventory/playbook/extra vars） | 借助远程 SSH/`ansible-playbook` 执行 `iptables` 设备配置 | `ForwardNode` 提供 SSH 连接（`ssh_host`/`ssh_port`/`ssh_user`/`ssh_password`/`ssh_key`）；代理 `model.Node` 不参与 |
+## Runtime Ownership
 
-代理节点（`/admin/nodes`）与转发节点（`v2_forward_node`）不是一回事，前者承载用户连接，后者只在 runtime job 中出现。务必在所有调试与文档中标明正在观察的是哪个实体。
+`v2board_AnixOps` owns:
 
-## NodeX Mode（`gost` 控制面）
+- forward, tunnel, and forward-node persistence
+- the admin UI
+- runtime job records in `v2_forward_runtime_job`
+- NodeX status, doctor, and job proxy endpoints under `/api/v2/admin/forward/runtime/*`
 
-### 核心配置
+It does not own the relay execution plane itself.
 
-以下环境变量可通过 `.env`、容器环境或脚本注入，`InitForwardRuntimeSystemConfigFromEnv` 会把它们写入系统配置：
+The execution plane is one of:
 
-```env
-FORWARD_RUNTIME_BACKEND=gost
-FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18080
-FORWARD_RUNTIME_NODEX_TOKEN=nodex-secret
-FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=20
+- `NodeX/gost`
+  - `v2board -> NodeX -> relay gost API`
+- `iptables_ansible`
+  - `v2board local job executor -> ansible-playbook -> relay host`
+
+## Current Verified Baseline
+
+The current real-machine validated deployment baseline is:
+
+- `v2board` UI on `3000`
+- `v2board` API on `8080`
+- NodeX control-plane on `18081`
+- relay gost API on `18080`
+- `binary + SQLite + systemd`
+
+This matters because the port split is easy to misread:
+
+- `forward.runtime.nodex.base_url` must point to the NodeX control-plane
+- the relay host `api_port` is for the relay gost management API
+- those are different addresses unless you intentionally co-locate them on one machine
+
+## Current Model Truth
+
+Current `ForwardNode` model fields are centered on target identification and relay API access:
+
+- `host`
+- `port`
+- `api_port`
+- `api_token`
+
+Current `ForwardNode` does not store per-node SSH credentials such as:
+
+- `ssh_user`
+- `ssh_password`
+- `ssh_key`
+
+For `iptables_ansible`, SSH data comes from:
+
+- ansible inventory files
+- env-generated inventory via `FORWARD_RUNTIME_ANSIBLE_*`
+- playbook environment settings
+
+## NodeX/Gost Mode
+
+### Required prerequisites
+
+All of these must be true before a relay is really attached:
+
+1. NodeX control-plane is running.
+2. `forward.runtime.nodex.base_url` is configured and reachable from `v2board`.
+3. `forward.runtime.nodex.token` matches the NodeX control-plane token.
+4. The relay host already exposes a gost management API on `ForwardNode.api_port`.
+5. `ForwardNode.api_token` matches what the relay gost API expects.
+6. The selected tunnel has a valid ingress node (`InNodeID`).
+
+### Runtime behavior
+
+When a forward is created, updated, resumed, paused, or deleted:
+
+1. `PanelForwardRuntimeService` resolves backend `gost`.
+2. It loads the ingress `ForwardNode` from the tunnel.
+3. It writes a `backend='gost'` runtime job for audit.
+4. It calls NodeX `/api/v2/internal/forward/runtime/execute`.
+5. NodeX calls relay gost `/api/config/services` and `/api/config/limiters`.
+
+### Verification
+
+Check all three layers:
+
+1. `v2board`
+  - `/api/v2/admin/forward/runtime/status`
+  - `/api/v2/admin/forward/runtime/doctor`
+  - `SELECT * FROM v2_forward_runtime_job WHERE backend='gost' ORDER BY id DESC LIMIT 10;`
+2. `NodeX`
+  - `/health`
+  - `/api/v2/internal/forward/runtime/status`
+3. relay host
+  - `curl -u admin:<TOKEN> http://<HOST>:<API_PORT>/api/config/services`
+  - confirm the created service and limiter exist
+
+## `iptables_ansible` Mode
+
+### Required prerequisites
+
+All of these must be true before a relay is really attached:
+
+1. `ansible-playbook` exists on the machine running `v2board`.
+2. inventory and playbook paths are valid.
+3. the relay host is reachable over SSH through inventory or env-generated inventory.
+4. the selected tunnel is supported by the ansible runtime.
+5. the tunnel resolves to an execution node.
+
+### Runtime behavior
+
+When a forward is created, updated, resumed, paused, or deleted:
+
+1. `PanelForwardRuntimeService` resolves backend `iptables_ansible`.
+2. It validates the tunnel and loads the execution node.
+3. It writes a pending `backend='iptables_ansible'` job.
+4. `PanelForwardRuntimeJobExecutor` polls pending jobs.
+5. The executor runs `ansible-playbook`.
+6. The playbook writes or removes relay `iptables` rules.
+
+### Verification
+
+Check all three layers:
+
+1. local executor host
+  - confirm `ansible-playbook` exists
+  - confirm inventory path exists
+2. `v2board`
+  - `SELECT * FROM v2_forward_runtime_job WHERE backend='iptables_ansible' ORDER BY id DESC LIMIT 10;`
+  - confirm job transitions `pending -> running -> success`
+3. relay host
+  - inspect `iptables` or `iptables-save`
+  - confirm the expected rule exists or was removed
+
+## Current Misleading Signals
+
+Do not over-read the current UI indicators.
+
+- `ForwardNode` online means only `host:port` TCP reachability
+- it does not prove NodeX health
+- it does not prove gost API health
+- it does not prove SSH login works
+- it does not prove runtime state already exists on the relay
+
+## Evidence Chain For "Really Attached"
+
+Do not call a relay "done" until you have evidence from all required layers.
+
+### Control plane evidence
+
+- `/admin/system`
+  - confirm the selected runtime backend and NodeX mode values
+- `/api/v2/admin/forward/runtime/status`
+  - confirm the control plane is reachable
+- `/api/v2/admin/forward/runtime/doctor`
+  - confirm readiness, warnings, and the currently selected attachment model
+
+### Job plane evidence
+
+- `GET /api/v2/admin/forward/runtime/jobs`
+- `SELECT * FROM v2_forward_runtime_job ORDER BY id DESC LIMIT 20;`
+
+What you want to see:
+
+- latest action for the target forward is `success`
+- `gost` jobs show NodeX-side success
+- `iptables_ansible` jobs show the playbook succeeded and the relay host was reachable
+
+### Relay plane evidence
+
+- `gost`
+  - `curl -u admin:<TOKEN> http://<HOST>:<API_PORT>/api/config/services`
+  - `curl -u admin:<TOKEN> http://<HOST>:<API_PORT>/api/config/limiters`
+- `iptables_ansible`
+  - `iptables-save`
+  - `iptables -t nat -S`
+
+### Network plane evidence
+
+The final proof is not the UI. It is the forwarded port behavior.
+
+- confirm the source target is reachable
+- confirm the forwarded port connects
+- confirm the forwarded port behaves the same way as the source target
+
+That last step matters for non-HTTP services. In the verified 2026-04-07 example, the target accepted TCP connections but returned an empty reply to HTTP input, and both forwarded ports behaved the same way.
+
+## Verified 2026-04-07 Example
+
+The panel was used to create two forwards against the same target TCP service:
+
+- target service: `155.117.224.30:11111`
+- `143.20.204.14:11111` via `iptables_ansible`
+- `143.20.204.14:11112` via `gost`
+
+The final pass condition was not only "job success". It was:
+
+1. panel runtime status reachable
+2. latest jobs marked `success`
+3. relay-side `iptables` rule present for `11111`
+4. relay-side gost service present for `11112`
+5. all three TCP endpoints showed the same connect-and-empty-reply behavior
+
+## Runtime Job Queries
+
+Use these SQL queries as the fastest operator checks:
+
+```sql
+SELECT * FROM v2_forward_runtime_job
+WHERE backend = 'gost'
+ORDER BY id DESC
+LIMIT 10;
 ```
 
-`forward.runtime.nodex.base_url` 必须指向部署好的 NodeX 控制面（通常与 NodeX 执行器同机），`token` 用来与控制面通信并被写进 HTTP header `Authorization`/`X-API-Key`。`forward.runtime.nodex.timeout_seconds` 用于 HTTP client 超时控制。
-
-`ForwardNode`（`model.ForwardNode`）需要包含 `host`/`api_port`/`api_token` 字段，NodeX 控制面将请求推送到这些节点，不再尝试默认用 ingress node 的 SSH 信息。若 `forward.runtime.nodex.base_url` 未配置，请求立刻失败并在 `v2_forward_runtime_job` 中以 `backend=gost` 记录 error。
-
-### 运行时校验
-
-1. 在面板 `/admin/system` 核实 `forward.runtime_backend`、`forward.runtime.nodex.base_url`、`forward.runtime.nodex.token` 处于预期值。
-2. 确认相关 `ForwardNode`（`type=relay`）已配置 REST 所需字段，并在 `v2_forward_node` 表中还原出使用中的 job。
-3. NodeX 工作流程会写入 `v2_forward_runtime_job.backend=gost` 的记录。可通过 `SELECT * FROM v2_forward_runtime_job WHERE backend='gost' ORDER BY id DESC LIMIT 10` 检查 job 状态/错误。
-4. 调试时使用 `curl -H "Authorization: Bearer <token>" <base_url>/api/v2/admin/forward/runtime/jobs?backend=gost` 查看 NodeX job 列表，确认控制面可达。
-
-## iptables/ansible Mode（内置 SSH + Ansible）
-
-### 核心配置
-
-环境变量示例（可通过 `.env`、Docker Compose 或安装脚本注入）：
-
-```env
-FORWARD_RUNTIME_BACKEND=iptables_ansible
-FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON={"inventory":"/etc/ansible/forward_inventory.ini","playbookApply":"/etc/ansible/forward_apply.yml","playbookRemove":"/etc/ansible/forward_remove.yml","workingDir":"/etc/ansible"}
-FORWARD_RUNTIME_ANSIBLE_INVENTORY=/etc/ansible/forward_inventory.ini
+```sql
+SELECT * FROM v2_forward_runtime_job
+WHERE backend = 'iptables_ansible'
+ORDER BY id DESC
+LIMIT 10;
 ```
 
-配置界面会把这个 JSON 写入 `forward.runtime.iptables_ansible.config`，其中可携带 `targetPattern`、`command`、`extraVars`、`environment` 等字段。`ForwardNode` 需提供 SSH 连接所需 `ssh_host`/`ssh_port`/`ssh_user`/`ssh_password`/`ssh_key`（根据 inventory）字段；Ansible 控制面通过这些字段触发 `ansible-playbook`。
+## Related Guides
 
-### 运行时校验
-
-1. 在 runtime job 报错前，先在运行时节点或 CI 环境上手动执行 `ansible-playbook`（使用相同 inventory 与 playbook）看是否能连接目标 ForwardNode。
-2. 使用 `SELECT * FROM v2_forward_runtime_job WHERE backend='iptables_ansible' ORDER BY id DESC LIMIT 10` 验证 job 状态。
-3. 执行 `ansible-playbook -i <inventory> <apply.yml>` 时候，可以加 `-vv` 输出诊断信息，验证 `forward.runtime.iptables_ansible.inventory` 对应 `ForwardNode` 的 SSH host。
-
-## 相关文档
-
-- NodeX Mode 与 iptables/ansible Mode 的详细操作步骤在 `docs/guide/forward-tunnel-smoke-test.md`。
-- NodeX 内部扩展边界与代理 vs 转发节点职责在 `docs/guide/nodex-internal-extension.md`。
-- Flux clone runtime/401 诊断提醒仍保留在 `docs/guide/forward-tunnel-runtime-ops.md` 之中，任何 runtime 变更请同步更新此文件再通知团队。
+- relay onboarding: [`forward-relay-onboarding.md`](forward-relay-onboarding.md)
+- smoke tests: [`forward-tunnel-smoke-test.md`](forward-tunnel-smoke-test.md)
+- NodeX boundary: [`nodex-internal-extension.md`](nodex-internal-extension.md)

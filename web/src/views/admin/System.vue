@@ -28,7 +28,7 @@
         <div class="runtime-config-head">
           <div>
             <p class="eyebrow">Forward Runtime</p>
-            <h3>璁剧疆杞彂運行鍊?</h3>
+            <h3>双运行时控制面</h3>
           </div>
           <div class="runtime-config-actions">
             <button class="btn btn-secondary btn-sm" :disabled="runtimeJobsLoading" @click="fetchForwardRuntimeJobs">
@@ -45,11 +45,11 @@
             <h3>NodeX Mode</h3>
             <p class="text-secondary mode-description">
               NodeX Mode delegates runtime actions to the gost-backed control plane. When disabled, the system
-              falls back to the existing iptables/Ansible runner.
+              falls back to the local iptables/Ansible executor.
             </p>
             <p class="text-secondary mode-description">
               NodeX Mode requires an explicit base URL and token even for local deployments (think
-              http://localhost:PORT + your shared token).
+              http://localhost:PORT + your shared token). This mode preserves ingress/egress semantics.
             </p>
           </div>
           <label class="mode-switch">
@@ -94,18 +94,135 @@
               can authenticate.
             </p>
           </div>
-          <div v-else class="form-group ansible-config">
-            <label>iptables ansible JSON</label>
-            <textarea
-              v-model="runtimeConfigJson"
-              rows="5"
-              placeholder='{"inventory":"...","playbookApply":"...","playbookRemove":"..."}'
-            ></textarea>
-            <p class="text-secondary">
-              Optional keys: <code>command</code>, <code>workingDir</code>, <code>targetPattern</code>,
-              <code>timeoutSeconds</code>, <code>environment</code>. This path remains stateless and only needs
-              the relay node SSH info.
-            </p>
+          <div v-else class="ansible-config">
+            <div class="runtime-local-head">
+              <div>
+                <p class="eyebrow">Local iptables/Ansible</p>
+                <h4>Stateless executor config</h4>
+                <p class="text-secondary">
+                  This path stores only execution-node identity on the tunnel. SSH credentials still come from the
+                  inventory or environment variables, not from ForwardNode records.
+                </p>
+              </div>
+              <button class="btn btn-secondary btn-sm" :disabled="runtimeSaving" @click="applyDefaultRuntimeAnsibleConfig">
+                Use defaults
+              </button>
+            </div>
+
+            <div class="form-grid ansible-form-grid">
+              <div class="form-group">
+                <label for="ansible-inventory">Inventory</label>
+                <input
+                  id="ansible-inventory"
+                  v-model.trim="runtimeAnsibleForm.inventory"
+                  type="text"
+                  placeholder="config/deploy/ansible/inventory.ini"
+                />
+              </div>
+              <div class="form-group">
+                <label for="ansible-apply-playbook">Apply playbook</label>
+                <input
+                  id="ansible-apply-playbook"
+                  v-model.trim="runtimeAnsibleForm.playbookApply"
+                  type="text"
+                  placeholder="config/deploy/ansible/playbooks/forward_apply.yml"
+                />
+              </div>
+              <div class="form-group">
+                <label for="ansible-remove-playbook">Remove playbook</label>
+                <input
+                  id="ansible-remove-playbook"
+                  v-model.trim="runtimeAnsibleForm.playbookRemove"
+                  type="text"
+                  placeholder="config/deploy/ansible/playbooks/forward_remove.yml"
+                />
+              </div>
+              <div class="form-group">
+                <label for="ansible-command">Command</label>
+                <input
+                  id="ansible-command"
+                  v-model.trim="runtimeAnsibleForm.command"
+                  type="text"
+                  placeholder="ansible-playbook"
+                />
+              </div>
+              <div class="form-group">
+                <label for="ansible-working-dir">Working dir</label>
+                <input
+                  id="ansible-working-dir"
+                  v-model.trim="runtimeAnsibleForm.workingDir"
+                  type="text"
+                  placeholder="config/deploy/ansible"
+                />
+              </div>
+              <div class="form-group">
+                <label for="ansible-target-pattern">Target pattern</label>
+                <input
+                  id="ansible-target-pattern"
+                  v-model.trim="runtimeAnsibleForm.targetPattern"
+                  type="text"
+                  placeholder="{{node.host}}"
+                />
+              </div>
+              <div class="form-group">
+                <label for="ansible-timeout-seconds">Timeout (seconds)</label>
+                <input
+                  id="ansible-timeout-seconds"
+                  v-model.number="runtimeAnsibleForm.timeoutSeconds"
+                  type="number"
+                  min="1"
+                  placeholder="120"
+                />
+              </div>
+              <div class="form-group">
+                <label for="ansible-config-path">ANSIBLE_CONFIG</label>
+                <input
+                  id="ansible-config-path"
+                  v-model.trim="runtimeAnsibleForm.ansibleConfig"
+                  type="text"
+                  placeholder="config/deploy/ansible/ansible.cfg"
+                />
+              </div>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input v-model="runtimeAnsibleForm.become" type="checkbox" />
+                <span>Use sudo / become on the execution node</span>
+              </label>
+            </div>
+
+            <div class="form-grid ansible-form-grid ansible-json-grid">
+              <div class="form-group">
+                <label for="ansible-extra-vars-json">Extra vars JSON</label>
+                <textarea
+                  id="ansible-extra-vars-json"
+                  v-model="runtimeAnsibleForm.extraVarsJson"
+                  rows="6"
+                  placeholder='{"manage_with":"iptables"}'
+                ></textarea>
+                <p class="text-secondary small">Additional Ansible vars merged into the generated payload.</p>
+              </div>
+              <div class="form-group">
+                <label for="ansible-environment-json">Environment JSON</label>
+                <textarea
+                  id="ansible-environment-json"
+                  v-model="runtimeAnsibleForm.environmentJson"
+                  rows="6"
+                  placeholder='{"ANSIBLE_HOST_KEY_CHECKING":"False"}'
+                ></textarea>
+                <p class="text-secondary small">Extra environment variables for the local executor process.</p>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Generated runtime JSON</label>
+              <textarea :value="runtimeConfigPreview" rows="8" class="runtime-config-preview" readonly></textarea>
+              <p class="text-secondary">
+                Saved payload is generated from the structured fields above. Use the JSON blocks only for advanced
+                vars and environment overrides.
+              </p>
+            </div>
           </div>
         </div>
         <p v-if="runtimeValidationError" class="form-error">{{ runtimeValidationError }}</p>
@@ -140,63 +257,82 @@
         <div class="runtime-operator-panel">
           <div class="operator-head">
             <div>
-              <p class="eyebrow">NodeX Operator Console</p>
+              <p class="eyebrow">Forward Runtime Doctor</p>
               <h4>运行时状态与命令</h4>
               <p class="text-secondary mode-description">
-                汇总控制面健康、医生诊断与一键命令，配合 NodeX mode 与 ansible 双方案。
+                Reachability only means the control plane or local executor can be contacted. It is not proof that a
+                relay has already attached or that iptables rules already exist.
+              </p>
+              <p class="text-secondary mode-description">
+                汇总控制面健康、运行时诊断与一键命令，统一覆盖 NodeX/gost 与本地 ansible 两种执行路径。
               </p>
             </div>
             <div class="operator-actions">
-              <button class="btn btn-secondary btn-sm" :disabled="runtimeStatusLoading" @click="fetchRuntimeStatus">
+              <button class="btn btn-secondary btn-sm" :disabled="runtimeStatusLoading" @click="fetchRuntimeStatusSafe">
                 {{ runtimeStatusLoading ? 'Loading...' : '刷新状态' }}
               </button>
-              <button class="btn btn-secondary btn-sm" :disabled="runtimeDoctorRunning" @click="runRuntimeDoctorCheck">
+              <button class="btn btn-secondary btn-sm" :disabled="runtimeDoctorRunning" @click="runRuntimeDoctorCheckSafe">
                 {{ runtimeDoctorRunning ? 'Running...' : 'Run Doctor' }}
               </button>
             </div>
           </div>
 
-          <div v-if="runtimeStatusLoading" class="operator-loading">Fetching NodeX runtime status...</div>
+          <div v-if="runtimeStatusLoading" class="operator-loading">Fetching forward runtime status...</div>
           <div v-else>
             <div v-if="runtimeStatusError" class="form-error">{{ runtimeStatusError }}</div>
             <div v-else class="operator-status-grid">
               <div class="status-card operator-card">
-                <p class="metric-label">版本</p>
-                <p class="metric-value">{{ runtimeStatus?.version || '未知' }}</p>
-                <p class="metric-detail">Execute: {{ runtimeStatus?.executePath || '-' }}</p>
-                <p class="metric-detail">Status: {{ runtimeStatus?.statusPath || '-' }}</p>
-                <p class="metric-detail">
-                  Auth: {{ runtimeStatus?.authRequired ? 'Required' : 'Optional' }}
-                </p>
+                <p class="metric-label">Backend</p>
+                <p class="metric-value">{{ runtimeStatus?.config?.backend || (runtimeNodeXMode ? 'gost' : 'iptables_ansible') }}</p>
+                <p class="metric-detail">NodeX Mode: {{ runtimeStatus?.config?.nodeXMode ? 'Enabled' : 'Disabled' }}</p>
+                <p class="metric-detail">Attachment: {{ runtimeStatus?.attachment?.model || '-' }}</p>
+                <p class="metric-detail">{{ runtimeStatus?.attachment?.description || '-' }}</p>
               </div>
               <div class="status-card operator-card">
-                <p class="metric-label">支持矩阵</p>
-                <p class="metric-detail">资源: {{ (runtimeStatus?.supports?.resourceTypes || []).join(', ') || '—' }}</p>
-                <p class="metric-detail">Backend: {{ (runtimeStatus?.supports?.backends || []).join(', ') || '—' }}</p>
-                <p class="metric-detail">Actions: {{ (runtimeStatus?.supports?.actions || []).join(', ') || '—' }}</p>
+                <p class="metric-label">Panel Verdict</p>
+                <p class="metric-value">{{ runtimeStatus?.runtimeReady?.ready ? 'Ready' : 'Not ready' }}</p>
+                <p class="metric-detail">Reachability: {{ runtimeStatus?.reachability?.ready ? 'Ready' : 'Not ready' }}</p>
+                <p class="metric-detail">{{ runtimeStatus?.reachability?.reason || '-' }}</p>
+                <p class="metric-detail">{{ runtimeStatus?.runtimeReady?.reason || '-' }}</p>
               </div>
               <div class="status-card operator-card">
-                <p class="metric-label">iptables_ansible</p>
-                <p class="metric-detail">Ready: {{ runtimeStatus?.modes?.iptablesAnsible?.ready ? '✓' : '✗' }}</p>
-                <p class="metric-detail">Command: {{ runtimeStatus?.modes?.iptablesAnsible?.command || '-' }}</p>
-                <p class="metric-detail" v-if="runtimeStatus?.modes?.iptablesAnsible?.issues?.length">
-                  Issues:
-                  <span v-for="issue in runtimeStatus.modes.iptablesAnsible.issues" :key="issue">{{ issue }}</span>
-                </p>
+                <template v-if="runtimeStatus?.config?.nodeXMode">
+                  <p class="metric-label">NodeX Snapshot</p>
+                  <p class="metric-detail">Base URL: {{ runtimeStatus?.config?.baseUrl || '-' }}</p>
+                  <p class="metric-detail">Base URL configured: {{ runtimeStatus?.config?.baseUrlConfigured ? 'Yes' : 'No' }}</p>
+                  <p class="metric-detail">Token configured: {{ runtimeStatus?.config?.tokenConfigured ? 'Yes' : 'No' }}</p>
+                  <p class="metric-detail">Health: {{ runtimeStatus?.health?.ok ? 'OK' : 'Unavailable' }}</p>
+                  <p class="metric-detail">Runtime version: {{ runtimeStatus?.runtimeStatus?.version || '-' }}</p>
+                </template>
+                <template v-else>
+                  <p class="metric-label">Local ansible</p>
+                  <p class="metric-detail">Command: {{ runtimeStatus?.localAnsible?.command || 'ansible-playbook' }}</p>
+                  <p class="metric-detail">Command found: {{ runtimeStatus?.localAnsible?.commandFound ? 'Yes' : 'No' }}</p>
+                  <p class="metric-detail">Inventory: {{ runtimeStatus?.localAnsible?.inventoryExists ? 'Present' : 'Missing' }}</p>
+                  <p class="metric-detail">Playbooks: {{ runtimeStatus?.localAnsible?.applyPlaybookExists && runtimeStatus?.localAnsible?.removePlaybookExists ? 'Ready' : 'Missing' }}</p>
+                  <p class="metric-detail">Working dir: {{ runtimeStatus?.localAnsible?.workingDirExists ? 'Present' : 'Missing' }}</p>
+                </template>
               </div>
             </div>
           </div>
 
+          <div v-if="runtimeStatus?.warnings?.length" class="operator-commands">
+            <p class="metric-label">Warnings</p>
+            <code v-for="warning in runtimeStatus.warnings" :key="warning">{{ warning }}</code>
+          </div>
+
           <div class="operator-commands">
-            <p class="metric-label">CLI 命令</p>
-            <code>{{ runtimeOperatorStatusCommand }}</code>
-            <code>{{ runtimeOperatorDoctorCommand }}</code>
-            <code>{{ runtimeOperatorUpgradeCommand }}</code>
+            <p class="metric-label">PowerShell</p>
+            <code v-for="command in runtimeDisplayedCommands.powerShell" :key="`ps-${command}`">{{ command }}</code>
+            <p class="metric-label">Bash</p>
+            <code v-for="command in runtimeDisplayedCommands.bash" :key="`bash-${command}`">{{ command }}</code>
+            <p class="metric-label">Upgrade / Verify</p>
+            <code v-for="command in runtimeDisplayedCommands.upgrade" :key="`upgrade-${command}`">{{ command }}</code>
             <p class="metric-label">Reference</p>
-            <code v-for="reference in runtimeOperatorReferences" :key="reference">{{ reference }}</code>
+            <code v-for="reference in runtimeDisplayedCommands.references" :key="reference">{{ reference }}</code>
           </div>
           <div class="operator-doctor-output">
-            <p class="metric-label">doctor 输出</p>
+            <p class="metric-label">Doctor 输出</p>
             <pre>{{ runtimeDoctorOutput || '尚未运行 doctor' }}</pre>
           </div>
         </div>
@@ -487,9 +623,25 @@ const balancerForm = ref({
 const runtimeNodeXModeKey = 'forward.runtime.nodex_mode'
 const runtimeBackendKey = 'forward.runtime_backend'
 const runtimeAnsibleConfigKey = 'forward.runtime.iptables_ansible.config'
+const runtimeAnsibleInventoryKey = 'forward.ansible.inventory'
+const runtimeAnsibleApplyPlaybookKey = 'forward.ansible.playbook_apply'
+const runtimeAnsibleRemovePlaybookKey = 'forward.ansible.playbook_remove'
+const runtimeAnsibleBecomeKey = 'forward.ansible.become'
+const runtimeAnsibleExtraVarsKey = 'forward.ansible.extra_vars_json'
 const runtimeNodeXBaseUrlKey = 'forward.runtime.nodex.base_url'
 const runtimeNodeXTokenKey = 'forward.runtime.nodex.token'
 const runtimeNodeXTimeoutKey = 'forward.runtime.nodex.timeout_seconds'
+const defaultRuntimeAnsibleConfig = Object.freeze({
+  inventory: 'config/deploy/ansible/inventory.ini',
+  playbookApply: 'config/deploy/ansible/playbooks/forward_apply.yml',
+  playbookRemove: 'config/deploy/ansible/playbooks/forward_remove.yml',
+  command: 'ansible-playbook',
+  workingDir: 'config/deploy/ansible',
+  targetPattern: '{{node.host}}',
+  timeoutSeconds: 120,
+  ansibleConfig: 'config/deploy/ansible/ansible.cfg',
+  become: false
+})
 const runtimeBackendOptions = [
   { value: 'gost', label: 'gost (默认)' },
   { value: 'iptables_ansible', label: 'iptables_ansible' }
@@ -499,7 +651,7 @@ const runtimeNodeXMode = ref(false)
 const runtimeNodeXBaseUrl = ref('')
 const runtimeNodeXToken = ref('')
 const runtimeNodeXTimeout = ref(15)
-const runtimeConfigJson = ref('')
+const runtimeAnsibleForm = ref(createRuntimeAnsibleForm())
 const runtimeSaving = ref(false)
 const runtimeValidationError = ref('')
 const runtimeJobs = ref([])
@@ -509,6 +661,7 @@ const runtimeStatusLoading = ref(false)
 const runtimeStatusError = ref('')
 const runtimeDoctorOutput = ref('')
 const runtimeDoctorRunning = ref(false)
+const runtimeDoctorSummary = ref(null)
 
 const defaultNodeXBaseUrl = 'http://127.0.0.1:8080'
 const runtimeOperatorBaseUrl = computed(() => runtimeNodeXBaseUrl.value?.trim() || defaultNodeXBaseUrl)
@@ -522,6 +675,37 @@ const runtimeOperatorReferences = [
   'docs/reference/connect-model.md',
   'docs/reference/nodeclient-faq.md'
 ]
+const runtimeDisplayedCommands = computed(() => {
+  const source = runtimeDoctorSummary.value?.commands
+  if (source) {
+    return {
+      powerShell: Array.isArray(source.powerShell) ? source.powerShell : [],
+      bash: Array.isArray(source.bash) ? source.bash : [],
+      upgrade: Array.isArray(source.upgrade) ? source.upgrade : [],
+      references: Array.isArray(source.references) ? source.references : []
+    }
+  }
+
+  if (runtimeNodeXMode.value) {
+    return {
+      powerShell: [],
+      bash: [runtimeOperatorStatusCommand.value, runtimeOperatorDoctorCommand.value],
+      upgrade: [runtimeOperatorUpgradeCommand.value],
+      references: runtimeOperatorReferences
+    }
+  }
+
+  return {
+    powerShell: ['Get-Command ansible-playbook', 'ansible-playbook --version'],
+    bash: ['command -v ansible-playbook', 'ansible-playbook --version'],
+    upgrade: ['git pull --ff-only', 'go test ./internal/service/... -run ForwardRuntime'],
+    references: [
+      'docs/guide/forward-relay-onboarding.md',
+      'docs/guide/forward-tunnel-runtime-ops.md',
+      'docs/guide/forward-tunnel-smoke-test.md'
+    ]
+  }
+})
 
 function parseRuntimeBoolean(value) {
   if (typeof value === 'boolean') {
@@ -543,6 +727,137 @@ function parseRuntimeBoolean(value) {
     return false
   }
   return null
+}
+
+function normalizeJsonObjectText(value) {
+  const trimmed = String(value ?? '').trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+      return trimmed
+    }
+    return JSON.stringify(parsed, null, 2)
+  } catch {
+    return trimmed
+  }
+}
+
+function createRuntimeAnsibleForm(source = {}) {
+  const extraVars = source.extraVars && typeof source.extraVars === 'object' && !Array.isArray(source.extraVars)
+    ? source.extraVars
+    : {}
+  const rawEnvironment = source.environment && typeof source.environment === 'object' && !Array.isArray(source.environment)
+    ? source.environment
+    : {}
+  const environment = { ...rawEnvironment }
+  const ansibleConfig = String(source.ansibleConfig ?? environment.ANSIBLE_CONFIG ?? defaultRuntimeAnsibleConfig.ansibleConfig).trim() ||
+    defaultRuntimeAnsibleConfig.ansibleConfig
+  delete environment.ANSIBLE_CONFIG
+
+  return {
+    inventory: String(source.inventory ?? defaultRuntimeAnsibleConfig.inventory).trim() || defaultRuntimeAnsibleConfig.inventory,
+    playbookApply: String(source.playbookApply ?? source.applyPlaybook ?? defaultRuntimeAnsibleConfig.playbookApply).trim() || defaultRuntimeAnsibleConfig.playbookApply,
+    playbookRemove: String(source.playbookRemove ?? source.removePlaybook ?? defaultRuntimeAnsibleConfig.playbookRemove).trim() || defaultRuntimeAnsibleConfig.playbookRemove,
+    command: String(source.command ?? defaultRuntimeAnsibleConfig.command).trim() || defaultRuntimeAnsibleConfig.command,
+    workingDir: String(source.workingDir ?? defaultRuntimeAnsibleConfig.workingDir).trim() || defaultRuntimeAnsibleConfig.workingDir,
+    targetPattern: String(source.targetPattern ?? defaultRuntimeAnsibleConfig.targetPattern).trim() || defaultRuntimeAnsibleConfig.targetPattern,
+    timeoutSeconds: Number.isFinite(Number(source.timeoutSeconds)) && Number(source.timeoutSeconds) > 0
+      ? Number(source.timeoutSeconds)
+      : defaultRuntimeAnsibleConfig.timeoutSeconds,
+    ansibleConfig,
+    become: parseRuntimeBoolean(source.become) ?? defaultRuntimeAnsibleConfig.become,
+    extraVarsJson: Object.keys(extraVars).length ? JSON.stringify(extraVars, null, 2) : '',
+    environmentJson: Object.keys(environment).length ? JSON.stringify(environment, null, 2) : ''
+  }
+}
+
+function normalizeRuntimeAnsibleForm(source = {}) {
+  const form = createRuntimeAnsibleForm(source)
+  return {
+    ...form,
+    extraVarsJson: normalizeJsonObjectText(source.extraVarsJson ?? form.extraVarsJson),
+    environmentJson: normalizeJsonObjectText(source.environmentJson ?? form.environmentJson)
+  }
+}
+
+function parseRuntimeJsonObject(value, label) {
+  const trimmed = String(value ?? '').trim()
+  if (!trimmed) {
+    return {}
+  }
+
+  let parsed
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    throw new Error(`${label} must be valid JSON`)
+  }
+
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+    throw new Error(`${label} must be a JSON object`)
+  }
+
+  return parsed
+}
+
+function buildRuntimeAnsiblePayload(source = runtimeAnsibleForm.value) {
+  const form = normalizeRuntimeAnsibleForm(source)
+  const extraVars = parseRuntimeJsonObject(form.extraVarsJson, 'Extra vars JSON')
+  const environmentOverrides = parseRuntimeJsonObject(form.environmentJson, 'Environment JSON')
+  const environment = {}
+
+  if (form.ansibleConfig) {
+    environment.ANSIBLE_CONFIG = form.ansibleConfig
+  }
+
+  Object.entries(environmentOverrides).forEach(([key, value]) => {
+    const normalizedKey = String(key ?? '').trim()
+    if (!normalizedKey) {
+      return
+    }
+    environment[normalizedKey] = value == null ? '' : String(value)
+  })
+
+  const normalizedExtraVars = {}
+  Object.entries(extraVars).forEach(([key, value]) => {
+    const normalizedKey = String(key ?? '').trim()
+    if (!normalizedKey) {
+      return
+    }
+    normalizedExtraVars[normalizedKey] = value
+  })
+
+  return {
+    inventory: form.inventory,
+    playbookApply: form.playbookApply,
+    playbookRemove: form.playbookRemove,
+    become: !!form.become,
+    extraVars: normalizedExtraVars,
+    command: form.command,
+    workingDir: form.workingDir,
+    targetPattern: form.targetPattern,
+    environment,
+    timeoutSeconds: Number.isFinite(Number(form.timeoutSeconds)) && Number(form.timeoutSeconds) > 0
+      ? Number(form.timeoutSeconds)
+      : defaultRuntimeAnsibleConfig.timeoutSeconds
+  }
+}
+
+const runtimeConfigPreview = computed(() => {
+  try {
+    return JSON.stringify(buildRuntimeAnsiblePayload(runtimeAnsibleForm.value), null, 2)
+  } catch (err) {
+    return `Invalid runtime config: ${err.message}`
+  }
+})
+
+function applyDefaultRuntimeAnsibleConfig() {
+  runtimeValidationError.value = ''
+  runtimeAnsibleForm.value = createRuntimeAnsibleForm(defaultRuntimeAnsibleConfig)
 }
 
 const filteredConfigs = computed(() => {
@@ -646,40 +961,31 @@ const fetchForwardRuntimeJobs = async () => {
   }
 }
 
-const fetchRuntimeStatus = async () => {
+const fetchRuntimeStatusSafe = async () => {
   runtimeStatusLoading.value = true
   runtimeStatusError.value = ''
-  if (!runtimeNodeXBaseUrl.value?.trim() || !runtimeNodeXToken.value?.trim()) {
-    runtimeStatus.value = null
-    runtimeStatusError.value = 'Set NodeX base URL and token before querying runtime status'
-    runtimeStatusLoading.value = false
-    return
-  }
   try {
     const res = await getForwardRuntimeStatus()
     runtimeStatus.value = res.data?.data || res.data || null
+    runtimeDoctorSummary.value = null
   } catch (err) {
-    runtimeStatusError.value = err.response?.data?.msg || err.message || '获取 NodeX 运行状态失败'
+    runtimeStatusError.value = err.response?.data?.msg || err.message || 'Failed to fetch forward runtime status'
     runtimeStatus.value = null
   } finally {
     runtimeStatusLoading.value = false
   }
 }
 
-const runRuntimeDoctorCheck = async () => {
+const runRuntimeDoctorCheckSafe = async () => {
   runtimeDoctorRunning.value = true
   runtimeDoctorOutput.value = ''
-  if (!runtimeNodeXBaseUrl.value?.trim() || !runtimeNodeXToken.value?.trim()) {
-    runtimeDoctorOutput.value = 'Set NodeX base URL and token before running doctor'
-    runtimeDoctorRunning.value = false
-    return
-  }
   try {
     const res = await runForwardRuntimeDoctor()
     const payload = res.data?.data || res.data || res
+    runtimeDoctorSummary.value = payload
     runtimeDoctorOutput.value = JSON.stringify(payload, null, 2)
   } catch (err) {
-    runtimeDoctorOutput.value = err.response?.data?.msg || err.message || 'NodeX doctor 运行失败'
+    runtimeDoctorOutput.value = err.response?.data?.msg || err.message || 'Forward runtime doctor failed'
   } finally {
     runtimeDoctorRunning.value = false
   }
@@ -687,6 +993,8 @@ const runRuntimeDoctorCheck = async () => {
 
 const fetchForwardRuntimeConfig = async () => {
   let explicitNodeXMode = null
+  runtimeValidationError.value = ''
+  runtimeAnsibleForm.value = createRuntimeAnsibleForm()
   try {
     const nodeXModeRes = await getSystemConfig(runtimeNodeXModeKey)
     explicitNodeXMode = parseRuntimeBoolean(nodeXModeRes.data?.value)
@@ -709,13 +1017,16 @@ const fetchForwardRuntimeConfig = async () => {
   try {
     const configRes = await getSystemConfig(runtimeAnsibleConfigKey)
     const rawValue = configRes.data?.value || ''
-    if (!rawValue) {
-      runtimeConfigJson.value = ''
-    } else {
+    if (rawValue) {
       try {
-        runtimeConfigJson.value = JSON.stringify(JSON.parse(rawValue), null, 2)
+        const parsed = JSON.parse(rawValue)
+        if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+          throw new Error('saved payload must be a JSON object')
+        }
+        runtimeAnsibleForm.value = normalizeRuntimeAnsibleForm(parsed)
       } catch {
-        runtimeConfigJson.value = rawValue
+        runtimeValidationError.value = 'Saved ansible runtime config is invalid. Defaults were loaded; save again to repair it.'
+        runtimeAnsibleForm.value = createRuntimeAnsibleForm()
       }
     }
   } catch (err) {
@@ -758,12 +1069,13 @@ const saveForwardRuntimeConfig = async () => {
     }
   }
 
-  let parsed = null
-  if (!runtimeNodeXMode.value && runtimeConfigJson.value.trim()) {
+  let ansiblePayload = null
+  if (!runtimeNodeXMode.value) {
     try {
-      parsed = JSON.parse(runtimeConfigJson.value)
+      runtimeAnsibleForm.value = normalizeRuntimeAnsibleForm(runtimeAnsibleForm.value)
+      ansiblePayload = buildRuntimeAnsiblePayload(runtimeAnsibleForm.value)
     } catch (err) {
-      runtimeValidationError.value = 'ansible JSON invalid'
+      runtimeValidationError.value = err.message || 'ansible JSON invalid'
       return
     }
   }
@@ -810,10 +1122,40 @@ const saveForwardRuntimeConfig = async () => {
     if (!runtimeNodeXMode.value) {
       updates.push(
         setSystemConfig(runtimeAnsibleConfigKey, {
-          value: parsed ? JSON.stringify(parsed) : '',
+          value: ansiblePayload ? JSON.stringify(ansiblePayload) : '',
           type: 'json',
           group: 'forward',
           description: 'Forward runtime ansible config'
+        }),
+        setSystemConfig(runtimeAnsibleInventoryKey, {
+          value: ansiblePayload?.inventory || '',
+          type: 'string',
+          group: 'forward',
+          description: 'Forward ansible inventory path'
+        }),
+        setSystemConfig(runtimeAnsibleApplyPlaybookKey, {
+          value: ansiblePayload?.playbookApply || '',
+          type: 'string',
+          group: 'forward',
+          description: 'Forward ansible apply playbook path'
+        }),
+        setSystemConfig(runtimeAnsibleRemovePlaybookKey, {
+          value: ansiblePayload?.playbookRemove || '',
+          type: 'string',
+          group: 'forward',
+          description: 'Forward ansible remove playbook path'
+        }),
+        setSystemConfig(runtimeAnsibleBecomeKey, {
+          value: ansiblePayload?.become || false,
+          type: 'bool',
+          group: 'forward',
+          description: 'Forward ansible become flag'
+        }),
+        setSystemConfig(runtimeAnsibleExtraVarsKey, {
+          value: JSON.stringify(ansiblePayload?.extraVars || {}),
+          type: 'json',
+          group: 'forward',
+          description: 'Forward ansible extra vars JSON'
         })
       )
     }
@@ -821,6 +1163,7 @@ const saveForwardRuntimeConfig = async () => {
     await Promise.all(updates)
     await fetchForwardRuntimeConfig()
     await fetchForwardRuntimeJobs()
+    await fetchRuntimeStatusSafe()
     fetchConfigs()
   } catch (err) {
     runtimeValidationError.value = err.response?.data?.error || err.message || '保存失败'
@@ -1021,9 +1364,7 @@ onMounted(async () => {
   fetchConfigs()
   await fetchForwardRuntimeConfig()
   fetchForwardRuntimeJobs()
-  if (runtimeNodeXBaseUrl.value?.trim() && runtimeNodeXToken.value?.trim()) {
-    fetchRuntimeStatus()
-  }
+  fetchRuntimeStatusSafe()
   fetchBackupConfig()
   fetchBackups()
   fetchBackupStats()
@@ -1128,8 +1469,38 @@ onMounted(async () => {
 .node-config .form-group {
   margin-bottom: 12px;
 }
+.runtime-local-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.runtime-local-head h4 {
+  margin: 0 0 6px;
+}
+.ansible-config {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.ansible-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.ansible-json-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
 .ansible-config textarea {
   min-height: 160px;
+}
+.checkbox-group {
+  margin: 0;
+}
+.runtime-config-preview {
+  min-height: 220px;
+  background: rgba(15, 23, 42, 0.04);
 }
 .text-secondary.small {
   font-size: 12px;
@@ -1336,5 +1707,14 @@ onMounted(async () => {
 .checkbox-label input[type="checkbox"] {
   width: 18px;
   height: 18px;
+}
+@media (max-width: 768px) {
+  .runtime-config-head,
+  .runtime-mode-toggle,
+  .runtime-local-head,
+  .operator-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>

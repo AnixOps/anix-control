@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/anixops/v2board/internal/database"
@@ -86,6 +88,75 @@ func (s *PanelForwardRuntimeDiagnosticsTestSuite) TestNodeXDoctorSummarizesHealt
 		assert.Contains(s.T(), summary.Commands.PowerShell[1], server.URL)
 		assert.Contains(s.T(), summary.Commands.Bash[1], fmt.Sprintf("BASE_URL=%s", server.URL))
 		assert.Contains(s.T(), summary.Commands.References, "docs/reference/upgrade.md")
+	}
+}
+
+func (s *PanelForwardRuntimeDiagnosticsTestSuite) TestPanelRuntimeStatusSummarizesNodeXMode() {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case defaultForwardRuntimeNodeXHealthPath:
+			_, _ = w.Write([]byte("ok"))
+		case defaultForwardRuntimeNodeXStatusPath:
+			assert.Equal(s.T(), "Bearer summary-token", r.Header.Get("Authorization"))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"version":"v0.0.18","executePath":"/api/v2/internal/forward/runtime/execute","statusPath":"/api/v2/internal/forward/runtime/status","authRequired":true,"supports":{"resourceTypes":["panel_forward"],"backends":["gost","iptables_ansible"],"actions":["create","update","delete"]},"modes":{"gost":{"supported":true},"iptablesAnsible":{"supported":true,"ready":false,"command":"ansible-playbook","commandFound":false,"inventoryPath":"inventory.ini","inventoryExists":false,"applyPlaybookPath":"apply.yml","applyPlaybookExists":false,"removePlaybookPath":"remove.yml","removePlaybookExists":false,"workingDir":"playbooks","workingDirExists":true,"targetPattern":"relay","become":false,"timeoutSeconds":30}}}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	configSvc := NewSystemConfigService(database.Get())
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeNodeXBaseURLConfigKey, server.URL, "string", forwardRuntimeConfigGroup, "summary url"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeNodeXTokenConfigKey, "summary-token", "string", forwardRuntimeConfigGroup, "summary token"))
+
+	svc := NewPanelForwardRuntimeService(database.Get())
+	summary, err := svc.GetPanelRuntimeStatus(context.Background())
+	assert.NoError(s.T(), err)
+	if assert.NotNil(s.T(), summary) {
+		assert.Equal(s.T(), model.ForwardRuntimeBackendGost, summary.Config.Backend)
+		assert.True(s.T(), summary.Config.NodeXMode)
+		assert.True(s.T(), summary.Reachability.Ready)
+		assert.True(s.T(), summary.RuntimeReady.Ready)
+		assert.Equal(s.T(), panelForwardRuntimeAttachmentModelNodeXGost, summary.Attachment.Model)
+		assert.Equal(s.T(), "v0.0.18", summary.RuntimeStatus.Version)
+	}
+}
+
+func (s *PanelForwardRuntimeDiagnosticsTestSuite) TestPanelRuntimeStatusSummarizesLocalAnsibleMode() {
+	tempDir := s.T().TempDir()
+	inventoryPath := filepath.Join(tempDir, "inventory.ini")
+	applyPath := filepath.Join(tempDir, "apply.yml")
+	removePath := filepath.Join(tempDir, "remove.yml")
+	ansibleConfigPath := filepath.Join(tempDir, "ansible.cfg")
+
+	assert.NoError(s.T(), os.WriteFile(inventoryPath, []byte("[forward_nodes]\nrelay ansible_host=127.0.0.1\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(applyPath, []byte("---\n- hosts: all\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(removePath, []byte("---\n- hosts: all\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(ansibleConfigPath, []byte("[defaults]\n"), 0o600))
+
+	configSvc := NewSystemConfigService(database.Get())
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeNodeXModeConfigKey, "false", "bool", forwardRuntimeConfigGroup, "disable NodeX mode"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeBackendConfigKey, model.ForwardRuntimeBackendIptablesAnsible, "string", forwardRuntimeConfigGroup, "local ansible backend"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeAnsibleConfigJSONKey, fmt.Sprintf(`{"inventory":%q,"playbookApply":%q,"playbookRemove":%q,"command":"go","workingDir":%q,"environment":{"ANSIBLE_CONFIG":%q}}`, inventoryPath, applyPath, removePath, tempDir, ansibleConfigPath), "json", forwardRuntimeConfigGroup, "local ansible runtime config"))
+
+	svc := NewPanelForwardRuntimeService(database.Get())
+	summary, err := svc.GetPanelRuntimeStatus(context.Background())
+	assert.NoError(s.T(), err)
+	if assert.NotNil(s.T(), summary) {
+		assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, summary.Config.Backend)
+		assert.False(s.T(), summary.Config.NodeXMode)
+		assert.Equal(s.T(), panelForwardRuntimeAttachmentModelLocalAnsible, summary.Attachment.Model)
+		if assert.NotNil(s.T(), summary.LocalAnsible) {
+			assert.Equal(s.T(), "go", summary.LocalAnsible.Command)
+			assert.True(s.T(), summary.LocalAnsible.CommandFound)
+			assert.True(s.T(), summary.LocalAnsible.InventoryExists)
+			assert.True(s.T(), summary.LocalAnsible.ApplyPlaybookExists)
+			assert.True(s.T(), summary.LocalAnsible.RemovePlaybookExists)
+			assert.True(s.T(), summary.LocalAnsible.Ready)
+		}
+		assert.True(s.T(), summary.Reachability.Ready)
+		assert.True(s.T(), summary.RuntimeReady.Ready)
 	}
 }
 

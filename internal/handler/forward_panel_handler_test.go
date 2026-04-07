@@ -195,6 +195,8 @@ func (s *ForwardPanelHandlerTestSuite) TestDiagnosePanelTunnel_ReturnsReport() {
 func (s *ForwardPanelHandlerTestSuite) TestGetPanelRuntimeStatus_ProxiesNodeXStatus() {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/health":
+			_, _ = w.Write([]byte("ok"))
 		case "/api/v2/internal/forward/runtime/status":
 			assert.Equal(s.T(), "Bearer handler-token", r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
@@ -217,8 +219,16 @@ func (s *ForwardPanelHandlerTestSuite) TestGetPanelRuntimeStatus_ProxiesNodeXSta
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), float64(0), resp["code"])
 	data := resp["data"].(map[string]interface{})
-	assert.Equal(s.T(), "v0.0.17-test.5", data["version"])
-	assert.Equal(s.T(), "/api/v2/internal/forward/runtime/status", data["statusPath"])
+	config := data["config"].(map[string]interface{})
+	runtimeStatus := data["runtimeStatus"].(map[string]interface{})
+	reachability := data["reachability"].(map[string]interface{})
+	runtimeReady := data["runtimeReady"].(map[string]interface{})
+	assert.Equal(s.T(), "gost", config["backend"])
+	assert.Equal(s.T(), true, config["nodeXMode"])
+	assert.Equal(s.T(), "v0.0.17-test.5", runtimeStatus["version"])
+	assert.Equal(s.T(), "/api/v2/internal/forward/runtime/status", runtimeStatus["statusPath"])
+	assert.Equal(s.T(), true, reachability["ready"])
+	assert.Equal(s.T(), true, runtimeReady["ready"])
 }
 
 func (s *ForwardPanelHandlerTestSuite) TestDiagnosePanelRuntime_ReturnsDoctorSummary() {
@@ -248,12 +258,19 @@ func (s *ForwardPanelHandlerTestSuite) TestDiagnosePanelRuntime_ReturnsDoctorSum
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), float64(0), resp["code"])
 	data := resp["data"].(map[string]interface{})
+	config := data["config"].(map[string]interface{})
 	health := data["health"].(map[string]interface{})
 	status := data["runtimeStatus"].(map[string]interface{})
+	reachability := data["reachability"].(map[string]interface{})
+	runtimeReady := data["runtimeReady"].(map[string]interface{})
 	commands := data["commands"].(map[string]interface{})
+	assert.Equal(s.T(), "gost", config["backend"])
+	assert.Equal(s.T(), true, config["nodeXMode"])
 	assert.Equal(s.T(), true, health["ok"])
 	assert.Equal(s.T(), true, status["ok"])
 	assert.Equal(s.T(), "v0.0.17-test.5", status["version"])
+	assert.Equal(s.T(), true, reachability["ready"])
+	assert.Equal(s.T(), true, runtimeReady["ready"])
 	assert.NotEmpty(s.T(), commands["powerShell"])
 }
 

@@ -10,6 +10,10 @@
       </div>
     </div>
     <ForwardSuiteNav />
+    <p class="text-secondary small runtime-note">
+      NodeX mode separates ingress and execution nodes; `iptables_ansible` mode only needs the execution node mapped in inventory.
+      Tunnel "online" only checks host:port reachability and does not confirm gost services or iptables rules are already in place.
+    </p>
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
       <span>{{ feedback.message }}</span>
@@ -134,6 +138,7 @@
                   {{ node.name }} · 转发入口节点 · {{ node.host }}
                 </option>
               </select>
+              <p class="hint">Only NodeX/Gost mode uses an ingress node here. This is a forward relay role and stays separate from proxy nodes.</p>
               <p v-if="errors.inNodeId" class="form-error">{{ errors.inNodeId }}</p>
             </div>
             <div v-else class="form-group">
@@ -148,6 +153,7 @@
                   {{ node.name }} · 中转执行节点 · {{ node.host }}
                 </option>
               </select>
+              <p class="hint">`iptables_ansible` only needs the execution node identity. SSH credentials still come from inventory or environment variables.</p>
               <p v-if="errors.outNodeId" class="form-error">{{ errors.outNodeId }}</p>
             </div>
 
@@ -202,6 +208,7 @@
                   {{ node.name }} · 转发出口节点 · {{ node.host }}
                 </option>
               </select>
+              <p class="hint">Exit nodes are only used by NodeX/Gost tunnel forwarding. A successful panel save still needs the runtime job to attach remotely.</p>
               <p v-if="errors.outNodeId" class="form-error">{{ errors.outNodeId }}</p>
             </div>
           </div>

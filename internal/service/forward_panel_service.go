@@ -55,6 +55,15 @@ func (s *PanelForwardService) resolveRuntimeBackend() (string, error) {
 	return s.runtimeService.resolveBackend()
 }
 
+func (s *PanelForwardService) resolveEffectiveForwardRuntimeBackend(record *model.Forward) (string, error) {
+	if record != nil {
+		if backend, ok := normalizeForwardRuntimeBackend(record.RuntimeBackend); ok {
+			return backend, nil
+		}
+	}
+	return s.resolveRuntimeBackend()
+}
+
 type PanelForwardInput struct {
 	Name          string `json:"name"`
 	TunnelID      uint   `json:"tunnelId"`
@@ -249,9 +258,16 @@ func (s *PanelForwardService) ListTunnels(userID uint, isAdmin bool) ([]PanelTun
 	if err != nil {
 		return nil, err
 	}
+	backend, err := s.resolveRuntimeBackend()
+	if err != nil {
+		return nil, err
+	}
 
 	items := make([]PanelTunnelListItem, 0, len(tunnels))
 	for _, tunnel := range tunnels {
+		if err := validatePanelForwardTunnelCompatibility(&tunnel, backend); err != nil {
+			continue
+		}
 		items = append(items, PanelTunnelListItem{
 			ID:            tunnel.ID,
 			Name:          tunnel.Name,
@@ -615,6 +631,13 @@ func (s *PanelForwardService) CreateForward(userID uint, isAdmin bool, input Pan
 	if err != nil {
 		return nil, err
 	}
+	backend, err := s.resolveRuntimeBackend()
+	if err != nil {
+		return nil, err
+	}
+	if err := validatePanelForwardTunnelCompatibility(tunnel, backend); err != nil {
+		return nil, err
+	}
 	if !isAdmin {
 		if _, _, err := s.validateForwardPermission(userID, tunnel.ID, panelForwardPermissionOptions{
 			CheckUserTraffic:        true,
@@ -636,16 +659,17 @@ func (s *PanelForwardService) CreateForward(userID uint, isAdmin bool, input Pan
 	}
 
 	record := &model.Forward{
-		UserID:        user.ID,
-		UserName:      resolveForwardUserName(&user),
-		Name:          strings.TrimSpace(input.Name),
-		TunnelID:      tunnel.ID,
-		InPort:        inPort,
-		RemoteAddr:    normalizeRemoteAddr(input.RemoteAddr),
-		InterfaceName: strings.TrimSpace(input.InterfaceName),
-		Strategy:      normalizeStrategy(input.Strategy, input.RemoteAddr),
-		Status:        model.ForwardStatusActive,
-		Inx:           nextInx,
+		UserID:         user.ID,
+		UserName:       resolveForwardUserName(&user),
+		Name:           strings.TrimSpace(input.Name),
+		TunnelID:       tunnel.ID,
+		InPort:         inPort,
+		RemoteAddr:     normalizeRemoteAddr(input.RemoteAddr),
+		InterfaceName:  strings.TrimSpace(input.InterfaceName),
+		Strategy:       normalizeStrategy(input.Strategy, input.RemoteAddr),
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: backend,
+		Inx:            nextInx,
 	}
 
 	if err := s.db.Create(record).Error; err != nil {
@@ -689,6 +713,13 @@ func (s *PanelForwardService) UpdateForward(userID uint, isAdmin bool, input Pan
 
 	tunnel, err := s.getActiveTunnel(input.TunnelID)
 	if err != nil {
+		return nil, err
+	}
+	backend, err := s.resolveEffectiveForwardRuntimeBackend(record)
+	if err != nil {
+		return nil, err
+	}
+	if err := validatePanelForwardTunnelCompatibility(tunnel, backend); err != nil {
 		return nil, err
 	}
 	if !isAdmin {
@@ -784,6 +815,13 @@ func (s *PanelForwardService) SetForwardStatus(userID uint, isAdmin bool, forwar
 	}
 
 	if status == model.ForwardStatusActive {
+		backend, err := s.resolveEffectiveForwardRuntimeBackend(record)
+		if err != nil {
+			return err
+		}
+		if err := validatePanelForwardTunnelCompatibility(record.Tunnel, backend); err != nil {
+			return err
+		}
 		record.Status = model.ForwardStatusActive
 		if err := s.db.Save(record).Error; err != nil {
 			return err
@@ -2003,6 +2041,31 @@ func storedPanelTunnelExecutionNodeID(tunnel *model.ForwardTunnel) uint {
 		return 0
 	}
 	return selectPanelTunnelExecutionNodeID(tunnel.InNodeID, tunnel.OutNodeID)
+}
+
+func validatePanelForwardTunnelCompatibility(tunnel *model.ForwardTunnel, backend string) error {
+	if tunnel == nil {
+		return errors.New("隧道不存在")
+	}
+	switch backend {
+	case model.ForwardRuntimeBackendIptablesAnsible:
+		if tunnel.Type != 1 {
+			return errors.New("当前为 Ansible/iptables 模式，仅可使用端口转发隧道")
+		}
+		if storedPanelTunnelExecutionNodeID(tunnel) == 0 {
+			return errors.New("当前隧道未配置中转执行节点，无法用于 Ansible/iptables 模式")
+		}
+	case model.ForwardRuntimeBackendGost:
+		if tunnel.InNodeID == 0 {
+			return errors.New("当前为 NodeX/Gost 模式，所选隧道未配置入口节点")
+		}
+		if tunnel.Type == 2 && (tunnel.OutNodeID == nil || *tunnel.OutNodeID == 0) {
+			return errors.New("当前为 NodeX/Gost 模式，隧道转发缺少出口节点")
+		}
+	default:
+		return fmt.Errorf("unsupported forward runtime backend: %s", backend)
+	}
+	return nil
 }
 
 func sameUintPointer(left, right *uint) bool {

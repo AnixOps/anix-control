@@ -82,7 +82,7 @@ Copy-Item config/config.yaml.example config/config.yaml
 - NodeX mode:
   - `FORWARD_RUNTIME_NODEX_MODE=true`
   - `FORWARD_RUNTIME_BACKEND=gost`
-  - `FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18080`
+  - `FORWARD_RUNTIME_NODEX_BASE_URL=http://<nodex-host>:18081`
   - `FORWARD_RUNTIME_NODEX_TOKEN=...`
 - or stateless mode:
   - `FORWARD_RUNTIME_NODEX_MODE=false`
@@ -125,7 +125,7 @@ Before `go run`, export:
 ```powershell
 $env:FORWARD_RUNTIME_NODEX_MODE = 'true'
 $env:FORWARD_RUNTIME_BACKEND = 'gost'
-$env:FORWARD_RUNTIME_NODEX_BASE_URL = 'http://127.0.0.1:18080'
+$env:FORWARD_RUNTIME_NODEX_BASE_URL = 'http://127.0.0.1:18081'
 $env:FORWARD_RUNTIME_NODEX_TOKEN = 'replace-with-your-token'
 $env:FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS = '15'
 go run .\cmd\server\main.go -config .\config\config.yaml
@@ -160,7 +160,24 @@ Required assets already live here:
 - `config/deploy/ansible/playbooks/forward_apply.yml`
 - `config/deploy/ansible/playbooks/forward_remove.yml`
 
-## 7. Where To Edit Later
+## 7. Verified Systemd Baseline
+
+The current real-machine validated deployment path is:
+
+- `v2board` backend as a systemd service
+- `v2board` frontend served on `3000`
+- SQLite for the control-plane data store
+- NodeX control-plane as a separate systemd service on `18081`
+- relay gost API on `18080`
+
+This is why local or host-native startup still works without Docker:
+
+- `config/config.yaml` bootstraps the app
+- `FORWARD_RUNTIME_*` is read from the process environment
+- `InitForwardRuntimeSystemConfigFromEnv` persists those values into `v2_system_config`
+- NodeX mode only needs a reachable `base_url` and token; it does not require Docker specifically
+
+## 8. Where To Edit Later
 
 After initial boot:
 
@@ -170,7 +187,7 @@ After initial boot:
   - doctor output
   - operator commands
 
-## 8. Validation Checklist
+## 9. Validation Checklist
 
 After startup, verify:
 
@@ -180,3 +197,8 @@ After startup, verify:
 4. `GET /api/v2/admin/forward/runtime/doctor` returns health + runtime summary
 5. `/admin/forward`, `/admin/forward/tunnel`, and `/admin/forward/nodes` load normally
 6. proxy nodes under `/admin/nodes` and forward nodes under `/admin/forward/nodes` stay clearly separated
+
+If you need the exact definition of "relay attached successfully", continue with:
+
+- [`../guide/forward-relay-onboarding.md`](../guide/forward-relay-onboarding.md)
+- [`../guide/forward-tunnel-smoke-test.md`](../guide/forward-tunnel-smoke-test.md)

@@ -7,8 +7,9 @@
 - The current local user-page linkage lives inside `web/src/views/admin/Users.vue`: it already shows used flow, reset day, and rate-limit columns, filters duplicate tunnels on create, locks tunnel selection on edit, and uses dedicated reset-confirmation dialogs against `/api/v2/user/reset`.
 - The real Flux speed-limit resource now exists locally as `/api/v2/speed-limit/create|list|update|delete|tunnels`, with a dedicated `SpeedLimit` model/service/handler, Flux-style `code/msg/ts/data` envelope, and a standalone admin page at `/admin/limit`. The remaining gap is exact `limit.tsx` layout parity plus runtime-side limiter propagation.
 - Upstream Flux monthly reset semantics are now partially cloned through `ForwardFlowResetWorker`: startup performs a catch-up run, then daily `00:00:05` local-time scans reset user flow and user-tunnel flow, handle month-end overflow days, pause expired-user forwards, and disable expired user-tunnel grants. The remaining gap is exact parity with Flux's dedicated user-disable state model.
-- Admin-side runtime controls remain outside the Flux-cloned `/admin/forward` page. `web/src/views/admin/System.vue` currently hosts `forward.runtime_backend`, `forward.runtime.iptables_ansible.config`, and `GET /api/v2/admin/forward/runtime/jobs` as the compatibility surface for optional internal backend delegation (`NodeX` in public docs). `install.sh` (`panel_install.sh` wrapper) and the Docker bootstrap keys (`FORWARD_RUNTIME_BACKEND`, `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`) belong to the same deployment/backplane surface and must not change the Flux-shaped page.
-- Current internal runtime calls for `panel_forward` and `legacy_rule` now require an explicit NodeX control-plane base URL (`forward.runtime.nodex.base_url` / `FORWARD_RUNTIME_NODEX_BASE_URL`) and no longer fall back to the ingress node transport for the outer control-plane hop; keep this requirement documented outside the Flux-cloned page.
+- Admin-side runtime controls remain outside the Flux-cloned `/admin/forward` page. `web/src/views/admin/System.vue` currently hosts `forward.runtime_backend`, `forward.runtime.iptables_ansible.config`, and `GET /api/v2/admin/forward/runtime/jobs` as the compatibility surface for the proprietary execution layer. In current code, `NodeX/gost` and local `iptables_ansible` are distinct runtime paths and must stay documented as such. `install.sh` (`panel_install.sh` wrapper) and the Docker bootstrap keys (`FORWARD_RUNTIME_BACKEND`, `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`) belong to the same deployment/backplane surface and must not change the Flux-shaped page.
+- Current `gost` runtime calls for `panel_forward` and `legacy_rule` require an explicit NodeX control-plane base URL (`forward.runtime.nodex.base_url` / `FORWARD_RUNTIME_NODEX_BASE_URL`) and no longer fall back to the ingress node transport for the outer control-plane hop; keep this requirement documented outside the Flux-cloned page.
+- Proprietary runtime follow-up tasks now live in `docs/guide/forward-runtime-work-plan.md`. Keep Flux-clone parity work there only when the task directly affects public contract behavior.
 
 ## Reference Mapping
 
@@ -47,6 +48,8 @@
 2. Reconcile forward runtime semantics: create/update/delete/pause/resume side effects, diagnose node paths, quota/expiry-driven runtime pauses, and runtime-side speed-limit propagation.
 3. Close the remaining user-state parity gap between local `expired_at` handling and Flux's dedicated disable semantics.
 4. Finish the last-mile `user.tsx` / `limit.tsx` visual and interaction parity after the remaining runtime gaps are closed.
+
+For the current multi-agent decomposition of runtime work, use [`forward-runtime-work-plan.md`](forward-runtime-work-plan.md). This workstream remains the Flux-clone status ledger; the work plan is the execution checklist for the next implementation wave.
 
 ## Definition Of Done
 

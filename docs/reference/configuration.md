@@ -86,7 +86,7 @@ PANEL_API_PORT=8080
 PANEL_GRPC_PORT=50051
 FORWARD_RUNTIME_NODEX_MODE=true
 FORWARD_RUNTIME_BACKEND=gost
-FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18080
+FORWARD_RUNTIME_NODEX_BASE_URL=http://<nodex-host>:18081
 FORWARD_RUNTIME_NODEX_TOKEN=replace-with-shared-token
 FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=15
 ```
@@ -104,7 +104,7 @@ Required values:
 ```env
 FORWARD_RUNTIME_NODEX_MODE=true
 FORWARD_RUNTIME_BACKEND=gost
-FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18080
+FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18081
 FORWARD_RUNTIME_NODEX_TOKEN=replace-with-shared-token
 FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=15
 ```
@@ -113,6 +113,7 @@ Behavior:
 
 - `v2board` stores config and exposes the admin UI
 - `NodeX` owns doctor, runtime status, and actual private execution
+- the current verified single-UI deployment uses `18081` for the NodeX control-plane and `18080` for the relay gost API
 - the admin UI now uses `/api/v2/admin/forward/runtime/status` and `/api/v2/admin/forward/runtime/doctor` as control-plane proxies
 
 ### iptables_ansible Mode
@@ -163,5 +164,6 @@ After config is in place:
 
 - [`quickstart.md`](quickstart.md)
 - [`runtime.md`](runtime.md)
+- [`../guide/forward-relay-onboarding.md`](../guide/forward-relay-onboarding.md)
 - [`../guide/nodex-internal-extension.md`](../guide/nodex-internal-extension.md)
 - [`../guide/forward-tunnel-runtime-ops.md`](../guide/forward-tunnel-runtime-ops.md)
