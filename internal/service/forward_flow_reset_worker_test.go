@@ -254,31 +254,34 @@ func (s *ForwardFlowResetWorkerTestSuite) TestRunOnce_DisablesExpiredUserTunnelA
 	assert.NoError(s.T(), db.Create(validPermission).Error)
 
 	expiredActiveForward := &model.Forward{
-		UserID:     user.ID,
-		UserName:   user.Email,
-		Name:       "Expired Permission Active Forward",
-		TunnelID:   expiredTunnel.ID,
-		InPort:     15101,
-		RemoteAddr: "expired-perm-active.example:443",
-		Status:     model.ForwardStatusActive,
+		UserID:         user.ID,
+		UserName:       user.Email,
+		Name:           "Expired Permission Active Forward",
+		TunnelID:       expiredTunnel.ID,
+		InPort:         15101,
+		RemoteAddr:     "expired-perm-active.example:443",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendIptablesAnsible,
 	}
 	expiredPausedForward := &model.Forward{
-		UserID:     user.ID,
-		UserName:   user.Email,
-		Name:       "Expired Permission Paused Forward",
-		TunnelID:   expiredTunnel.ID,
-		InPort:     15102,
-		RemoteAddr: "expired-perm-paused.example:443",
-		Status:     model.ForwardStatusPaused,
+		UserID:         user.ID,
+		UserName:       user.Email,
+		Name:           "Expired Permission Paused Forward",
+		TunnelID:       expiredTunnel.ID,
+		InPort:         15102,
+		RemoteAddr:     "expired-perm-paused.example:443",
+		Status:         model.ForwardStatusPaused,
+		RuntimeBackend: model.ForwardRuntimeBackendIptablesAnsible,
 	}
 	validActiveForward := &model.Forward{
-		UserID:     user.ID,
-		UserName:   user.Email,
-		Name:       "Valid Permission Active Forward",
-		TunnelID:   validTunnel.ID,
-		InPort:     15103,
-		RemoteAddr: "valid-perm-active.example:443",
-		Status:     model.ForwardStatusActive,
+		UserID:         user.ID,
+		UserName:       user.Email,
+		Name:           "Valid Permission Active Forward",
+		TunnelID:       validTunnel.ID,
+		InPort:         15103,
+		RemoteAddr:     "valid-perm-active.example:443",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendIptablesAnsible,
 	}
 	assert.NoError(s.T(), db.Create(expiredActiveForward).Error)
 	assert.NoError(s.T(), db.Create(expiredPausedForward).Error)
@@ -359,22 +362,24 @@ func (s *ForwardFlowResetWorkerTestSuite) TestRunOnce_PausesActiveForwardsForExp
 	assert.NoError(s.T(), db.Create(tunnel).Error)
 
 	expiredUserActiveForward := &model.Forward{
-		UserID:     expiredUser.ID,
-		UserName:   expiredUser.Email,
-		Name:       "Expired User Active Forward",
-		TunnelID:   tunnel.ID,
-		InPort:     15201,
-		RemoteAddr: "expired-user-active.example:443",
-		Status:     model.ForwardStatusActive,
+		UserID:         expiredUser.ID,
+		UserName:       expiredUser.Email,
+		Name:           "Expired User Active Forward",
+		TunnelID:       tunnel.ID,
+		InPort:         15201,
+		RemoteAddr:     "expired-user-active.example:443",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendIptablesAnsible,
 	}
 	activeUserForward := &model.Forward{
-		UserID:     activeUser.ID,
-		UserName:   activeUser.Email,
-		Name:       "Active User Forward",
-		TunnelID:   tunnel.ID,
-		InPort:     15202,
-		RemoteAddr: "active-user-forward.example:443",
-		Status:     model.ForwardStatusActive,
+		UserID:         activeUser.ID,
+		UserName:       activeUser.Email,
+		Name:           "Active User Forward",
+		TunnelID:       tunnel.ID,
+		InPort:         15202,
+		RemoteAddr:     "active-user-forward.example:443",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendIptablesAnsible,
 	}
 	assert.NoError(s.T(), db.Create(expiredUserActiveForward).Error)
 	assert.NoError(s.T(), db.Create(activeUserForward).Error)

@@ -116,13 +116,14 @@ func TestPanelForwardRuntimeService_LocalAnsibleBypassQueuesDirectPayload(t *tes
 	}
 
 	forward := &model.Forward{
-		UserID:     1,
-		UserName:   "queue@example.com",
-		Name:       "Queued Forward",
-		TunnelID:   tunnel.ID,
-		InPort:     20001,
-		RemoteAddr: "example.com:443",
-		Status:     model.ForwardStatusActive,
+		UserID:         1,
+		UserName:       "queue@example.com",
+		Name:           "Queued Forward",
+		TunnelID:       tunnel.ID,
+		InPort:         20001,
+		RemoteAddr:     "example.com:443",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendIptablesAnsible,
 	}
 	if err := db.Create(forward).Error; err != nil {
 		t.Fatalf("create forward: %v", err)

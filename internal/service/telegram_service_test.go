@@ -6,23 +6,18 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
+	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
-func setupTelegramTestDB(t *testing.T) func() {
-	cfg := &config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	}
-
-	err := database.Init(cfg)
+func setupTelegramTestDB(t *testing.T) *gorm.DB {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 
-	err = database.AutoMigrate(
+	err = db.AutoMigrate(
 		&model.TelegramBot{},
 		&model.TelegramUser{},
 		&model.TelegramChat{},
@@ -31,26 +26,20 @@ func setupTelegramTestDB(t *testing.T) func() {
 	)
 	require.NoError(t, err)
 
-	return func() {
-		database.Close()
-	}
+	return db
 }
 
 func TestNewTelegramBotService(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramBotService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
 	assert.NotNil(t, svc)
 	assert.NotNil(t, svc.db)
 	assert.NotNil(t, svc.client)
 }
 
 func TestTelegramBotService_GetBot(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramBotService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
 
 	// Test with no bot configured
 	_, err := svc.GetBot()
@@ -61,7 +50,7 @@ func TestTelegramBotService_GetBot(t *testing.T) {
 		Token: "test-token",
 		Name:  "testbot",
 	}
-	database.GetDB().Create(bot)
+	db.Create(bot)
 
 	// Test with bot configured
 	result, err := svc.GetBot()
@@ -71,16 +60,14 @@ func TestTelegramBotService_GetBot(t *testing.T) {
 }
 
 func TestTelegramBotService_UpdateBot(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramBotService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
 
 	bot := &model.TelegramBot{
 		Token: "test-token",
 		Name:  "testbot",
 	}
-	database.GetDB().Create(bot)
+	db.Create(bot)
 
 	// Update bot
 	bot.Name = "updatedbot"
@@ -102,17 +89,15 @@ func TestTelegramBotService_SetWebhook(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramBotService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
 
 	// Create bot
 	bot := &model.TelegramBot{
 		Token: "test-token",
 		Name:  "testbot",
 	}
-	database.GetDB().Create(bot)
+	db.Create(bot)
 
 	// We need to mock the API request, but since the URL is built with the token,
 	// we can't easily redirect to our test server. Instead, we test the error path.
@@ -124,34 +109,30 @@ func TestTelegramBotService_SetWebhook(t *testing.T) {
 }
 
 func TestTelegramBotService_DeleteWebhook(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramBotService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
 
 	// Create bot
 	bot := &model.TelegramBot{
 		Token: "test-token",
 		Name:  "testbot",
 	}
-	database.GetDB().Create(bot)
+	db.Create(bot)
 
 	// Test delete webhook (will fail due to API call, but tests the flow)
 	_ = svc.DeleteWebhook()
 }
 
 func TestTelegramBotService_HandleUpdate_Message(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramBotService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
 
 	// Create bot
 	bot := &model.TelegramBot{
 		Token: "test-token",
 		Name:  "testbot",
 	}
-	database.GetDB().Create(bot)
+	db.Create(bot)
 
 	// Test update without command
 	update := &TelegramUpdate{
@@ -169,17 +150,15 @@ func TestTelegramBotService_HandleUpdate_Message(t *testing.T) {
 }
 
 func TestTelegramBotService_HandleUpdate_Command(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramBotService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
 
 	// Create bot
 	bot := &model.TelegramBot{
 		Token: "test-token",
 		Name:  "testbot",
 	}
-	database.GetDB().Create(bot)
+	db.Create(bot)
 
 	// Test /help command
 	update := &TelegramUpdate{
@@ -197,17 +176,15 @@ func TestTelegramBotService_HandleUpdate_Command(t *testing.T) {
 }
 
 func TestTelegramBotService_HandleUpdate_Callback(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramBotService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
 
 	// Create bot
 	bot := &model.TelegramBot{
 		Token: "test-token",
 		Name:  "testbot",
 	}
-	database.GetDB().Create(bot)
+	db.Create(bot)
 
 	// Test callback query
 	update := &TelegramUpdate{
@@ -223,10 +200,8 @@ func TestTelegramBotService_HandleUpdate_Callback(t *testing.T) {
 }
 
 func TestTelegramBotService_BindUser(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramBotService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
 
 	// Create test user
 	user := &model.User{
@@ -235,14 +210,14 @@ func TestTelegramBotService_BindUser(t *testing.T) {
 		UUID:           "test-uuid",
 		TransferEnable: 1073741824, // 1GB
 	}
-	database.GetDB().Create(user)
+	db.Create(user)
 
 	// Create bot
 	bot := &model.TelegramBot{
 		Token: "test-token",
 		Name:  "testbot",
 	}
-	database.GetDB().Create(bot)
+	db.Create(bot)
 
 	// Test bind user
 	from := &TelegramUser{
@@ -256,17 +231,15 @@ func TestTelegramBotService_BindUser(t *testing.T) {
 
 	// Verify binding
 	var tgUser model.TelegramUser
-	err = database.GetDB().Where("telegram_id = ?", 12345).First(&tgUser).Error
+	err = db.Where("telegram_id = ?", 12345).First(&tgUser).Error
 	require.NoError(t, err)
 	assert.Equal(t, user.ID, tgUser.UserID)
 	assert.Equal(t, int64(12345), tgUser.TelegramID)
 }
 
 func TestTelegramBotService_BindUser_UserNotFound(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramBotService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
 
 	from := &TelegramUser{
 		ID:        12345,
@@ -279,17 +252,15 @@ func TestTelegramBotService_BindUser_UserNotFound(t *testing.T) {
 }
 
 func TestTelegramBotService_HandleUnbind(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramBotService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
 
 	// Create bot
 	bot := &model.TelegramBot{
 		Token: "test-token",
 		Name:  "testbot",
 	}
-	database.GetDB().Create(bot)
+	db.Create(bot)
 
 	// Create user and telegram user
 	user := &model.User{
@@ -298,20 +269,20 @@ func TestTelegramBotService_HandleUnbind(t *testing.T) {
 		UUID:           "test-uuid",
 		TransferEnable: 1073741824,
 	}
-	database.GetDB().Create(user)
+	db.Create(user)
 
 	tgUser := &model.TelegramUser{
 		UserID:     user.ID,
 		TelegramID: 12345,
 	}
-	database.GetDB().Create(tgUser)
+	db.Create(tgUser)
 
 	// Test unbind
 	_ = svc.handleUnbind(12345, 12345)
 
 	// Verify deleted
 	var count int64
-	database.GetDB().Model(&model.TelegramUser{}).Where("telegram_id = ?", 12345).Count(&count)
+	db.Model(&model.TelegramUser{}).Where("telegram_id = ?", 12345).Count(&count)
 	assert.Equal(t, int64(0), count)
 }
 
@@ -336,10 +307,8 @@ func TestParseAdminIDs(t *testing.T) {
 }
 
 func TestTelegramUserService_GetByTelegramID(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramUserService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramUserService(db)
 
 	// Create test user
 	user := &model.User{
@@ -348,13 +317,13 @@ func TestTelegramUserService_GetByTelegramID(t *testing.T) {
 		UUID:           "test-uuid",
 		TransferEnable: 1073741824,
 	}
-	database.GetDB().Create(user)
+	db.Create(user)
 
 	tgUser := &model.TelegramUser{
 		UserID:     user.ID,
 		TelegramID: 12345,
 	}
-	database.GetDB().Create(tgUser)
+	db.Create(tgUser)
 
 	// Test get by telegram ID
 	result, err := svc.GetByTelegramID(12345)
@@ -367,10 +336,8 @@ func TestTelegramUserService_GetByTelegramID(t *testing.T) {
 }
 
 func TestTelegramUserService_GetByUserID(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramUserService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramUserService(db)
 
 	// Create test user
 	user := &model.User{
@@ -379,13 +346,13 @@ func TestTelegramUserService_GetByUserID(t *testing.T) {
 		UUID:           "test-uuid",
 		TransferEnable: 1073741824,
 	}
-	database.GetDB().Create(user)
+	db.Create(user)
 
 	tgUser := &model.TelegramUser{
 		UserID:     user.ID,
 		TelegramID: 12345,
 	}
-	database.GetDB().Create(tgUser)
+	db.Create(tgUser)
 
 	// Test get by user ID
 	result, err := svc.GetByUserID(user.ID)
@@ -394,10 +361,8 @@ func TestTelegramUserService_GetByUserID(t *testing.T) {
 }
 
 func TestTelegramUserService_UpdateLastActive(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramUserService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramUserService(db)
 
 	// Create test user
 	user := &model.User{
@@ -406,14 +371,14 @@ func TestTelegramUserService_UpdateLastActive(t *testing.T) {
 		UUID:           "test-uuid",
 		TransferEnable: 1073741824,
 	}
-	database.GetDB().Create(user)
+	db.Create(user)
 
 	tgUser := &model.TelegramUser{
 		UserID:       user.ID,
 		TelegramID:   12345,
 		MessageCount: 0,
 	}
-	database.GetDB().Create(tgUser)
+	db.Create(tgUser)
 
 	// Update last active
 	err := svc.UpdateLastActive(12345)
@@ -421,15 +386,13 @@ func TestTelegramUserService_UpdateLastActive(t *testing.T) {
 
 	// Verify
 	var updated model.TelegramUser
-	database.GetDB().Where("telegram_id = ?", 12345).First(&updated)
+	db.Where("telegram_id = ?", 12345).First(&updated)
 	assert.Equal(t, int64(1), updated.MessageCount)
 }
 
 func TestTelegramUserService_Ban(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramUserService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramUserService(db)
 
 	// Create test user
 	user := &model.User{
@@ -438,13 +401,13 @@ func TestTelegramUserService_Ban(t *testing.T) {
 		UUID:           "test-uuid",
 		TransferEnable: 1073741824,
 	}
-	database.GetDB().Create(user)
+	db.Create(user)
 
 	tgUser := &model.TelegramUser{
 		UserID:     user.ID,
 		TelegramID: 12345,
 	}
-	database.GetDB().Create(tgUser)
+	db.Create(tgUser)
 
 	// Ban user
 	err := svc.Ban(12345)
@@ -452,15 +415,13 @@ func TestTelegramUserService_Ban(t *testing.T) {
 
 	// Verify
 	var banned model.TelegramUser
-	database.GetDB().Where("telegram_id = ?", 12345).First(&banned)
+	db.Where("telegram_id = ?", 12345).First(&banned)
 	assert.True(t, banned.IsBanned)
 }
 
 func TestTelegramUserService_Unban(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramUserService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramUserService(db)
 
 	// Create test user
 	user := &model.User{
@@ -469,14 +430,14 @@ func TestTelegramUserService_Unban(t *testing.T) {
 		UUID:           "test-uuid",
 		TransferEnable: 1073741824,
 	}
-	database.GetDB().Create(user)
+	db.Create(user)
 
 	tgUser := &model.TelegramUser{
 		UserID:     user.ID,
 		TelegramID: 12345,
 		IsBanned:   true,
 	}
-	database.GetDB().Create(tgUser)
+	db.Create(tgUser)
 
 	// Unban user
 	err := svc.Unban(12345)
@@ -484,15 +445,13 @@ func TestTelegramUserService_Unban(t *testing.T) {
 
 	// Verify
 	var unbanned model.TelegramUser
-	database.GetDB().Where("telegram_id = ?", 12345).First(&unbanned)
+	db.Where("telegram_id = ?", 12345).First(&unbanned)
 	assert.False(t, unbanned.IsBanned)
 }
 
 func TestTelegramBotService_GetTelegramUserService(t *testing.T) {
-	cleanup := setupTelegramTestDB(t)
-	defer cleanup()
-
-	svc := NewTelegramBotService(database.GetDB())
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
 	userSvc := svc.GetTelegramUserService()
 	assert.NotNil(t, userSvc)
 }

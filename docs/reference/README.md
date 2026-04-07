@@ -12,6 +12,7 @@ This section is the operator/developer reference index for `v2board_AnixOps`.
 
 ## Runtime And Boundary References
 
+- [../guide/forward-relay-onboarding.md](../guide/forward-relay-onboarding.md): exact meaning of "relay really joined" in NodeX mode vs `iptables_ansible` mode
 - [../guide/nodex-internal-extension.md](../guide/nodex-internal-extension.md): NodeX boundary and dual-mode semantics
 - [../guide/forward-tunnel-runtime-ops.md](../guide/forward-tunnel-runtime-ops.md): runtime operation details
 - [../guide/forward-tunnel-smoke-test.md](../guide/forward-tunnel-smoke-test.md): manual smoke path

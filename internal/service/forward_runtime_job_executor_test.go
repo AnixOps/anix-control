@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -151,14 +153,14 @@ func (s *PanelForwardRuntimeJobExecutorTestSuite) TestRunPendingJobs_CompletesAn
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 1, s.runner.runs)
 	assert.Equal(s.T(), "custom-ansible-playbook", s.runner.lastCommand)
-	assert.Equal(s.T(), "/opt/ansible", s.runner.lastWorkdir)
-	assert.Equal(s.T(), "/etc/ansible/ansible.cfg", s.runner.lastEnv["ANSIBLE_CONFIG"])
+	assert.Equal(s.T(), resolveForwardRuntimeWorkingDir("/opt/ansible"), s.runner.lastWorkdir)
+	assert.Equal(s.T(), resolveForwardRuntimeEnvPath("/opt/ansible", "/etc/ansible/ansible.cfg"), s.runner.lastEnv["ANSIBLE_CONFIG"])
 	assert.Contains(s.T(), s.runner.lastArgs, "-i")
-	assert.Contains(s.T(), s.runner.lastArgs, "/etc/ansible/hosts")
+	assert.Contains(s.T(), s.runner.lastArgs, resolveForwardRuntimeFilePath("/opt/ansible", "/etc/ansible/hosts"))
 	assert.Contains(s.T(), s.runner.lastArgs, "--limit")
 	assert.Contains(s.T(), s.runner.lastArgs, "relay-a.example.com")
 	assert.Contains(s.T(), s.runner.lastArgs, "--become")
-	assert.Contains(s.T(), s.runner.lastArgs, "/opt/ansible/apply.yml")
+	assert.Contains(s.T(), s.runner.lastArgs, resolveForwardRuntimeFilePath("/opt/ansible", "/opt/ansible/apply.yml"))
 
 	var extraVarsJSON string
 	for idx := 0; idx < len(s.runner.lastArgs)-1; idx++ {
@@ -190,6 +192,35 @@ func (s *PanelForwardRuntimeJobExecutorTestSuite) TestRunPendingJobs_CompletesAn
 	assert.Equal(s.T(), "ansible runtime synchronized", updatedForward.RuntimeMessage)
 	assert.Equal(s.T(), model.ForwardStatusActive, updatedForward.Status)
 	assert.NotNil(s.T(), updatedForward.RuntimeLastSyncAt)
+}
+
+func (s *PanelForwardRuntimeJobExecutorTestSuite) TestAnsiblePayloadResolvesRelativePathsAgainstWorkingDir() {
+	tempDir := s.T().TempDir()
+	playbookDir := filepath.Join(tempDir, "playbooks")
+	assert.NoError(s.T(), os.MkdirAll(playbookDir, 0o755))
+
+	inventoryPath := filepath.Join(tempDir, "inventory.ini")
+	playbookPath := filepath.Join(playbookDir, "apply.yml")
+	ansibleConfigPath := filepath.Join(tempDir, "ansible.cfg")
+	assert.NoError(s.T(), os.WriteFile(inventoryPath, []byte("[forward_nodes]\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(playbookPath, []byte("---\n- hosts: all\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(ansibleConfigPath, []byte("[defaults]\n"), 0o600))
+
+	payload := panelForwardAnsibleRuntimePayload{
+		Inventory:  "inventory.ini",
+		Playbook:   filepath.Join("playbooks", "apply.yml"),
+		WorkingDir: tempDir,
+		Environment: map[string]string{
+			"ANSIBLE_CONFIG": "ansible.cfg",
+		},
+	}
+
+	args, err := payload.commandArgs()
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), tempDir, payload.workingDirectory())
+	assert.Contains(s.T(), args, inventoryPath)
+	assert.Contains(s.T(), args, playbookPath)
+	assert.Equal(s.T(), ansibleConfigPath, payload.environment()["ANSIBLE_CONFIG"])
 }
 
 func (s *PanelForwardRuntimeJobExecutorTestSuite) TestRunPendingJobs_MarksForwardAsErrorWhenExecutionFails() {

@@ -19,6 +19,10 @@
         <button class="btn btn-primary" @click="openCreateModal">新增</button>
       </div>
     </div>
+    <p class="text-secondary small runtime-note">
+      NodeX mode keeps ingress/exit semantics; `iptables_ansible` mode only targets execution nodes resolved by inventory.
+      Forward node "online" only checks TCP reachability and does not prove gost services or iptables rules already exist.
+    </p>
     <ForwardSuiteNav />
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
@@ -64,13 +68,16 @@
                       <input
                         type="checkbox"
                         :checked="forward.serviceRunning"
-                        :disabled="Number(forward.status) !== 0 && Number(forward.status) !== 1"
+                        :disabled="isForwardToggleDisabled(forward)"
                         @change="handleToggleService(forward)"
                       />
                       <span class="switch-slider"></span>
                     </label>
                     <span :class="['tag', getStatusMeta(forward.status).className]">
                       {{ getStatusMeta(forward.status).text }}
+                    </span>
+                    <span v-if="getRuntimeMeta(forward)" :class="['tag', getRuntimeMeta(forward).className]">
+                      {{ getRuntimeMeta(forward).text }}
                     </span>
                   </div>
                 </div>
@@ -92,6 +99,10 @@
                   <span class="tag">入 {{ formatFlow(forward.inFlow || 0) }}</span>
                   <span class="tag tag-success">出 {{ formatFlow(forward.outFlow || 0) }}</span>
                 </div>
+
+                <p v-if="getRuntimeSummary(forward)" class="runtime-summary">
+                  {{ getRuntimeSummary(forward) }}
+                </p>
 
                 <div class="card-actions">
                   <button class="btn btn-secondary btn-sm" @click="openEditModal(forward)">编辑</button>
@@ -134,13 +145,16 @@
                   <input
                     type="checkbox"
                     :checked="forward.serviceRunning"
-                    :disabled="Number(forward.status) !== 0 && Number(forward.status) !== 1"
+                    :disabled="isForwardToggleDisabled(forward)"
                     @change="handleToggleService(forward)"
                   />
                   <span class="switch-slider"></span>
                 </label>
                 <span :class="['tag', getStatusMeta(forward.status).className]">
                   {{ getStatusMeta(forward.status).text }}
+                </span>
+                <span v-if="getRuntimeMeta(forward)" :class="['tag', getRuntimeMeta(forward).className]">
+                  {{ getRuntimeMeta(forward).text }}
                 </span>
               </div>
             </div>
@@ -162,6 +176,10 @@
               <span class="tag">入 {{ formatFlow(forward.inFlow || 0) }}</span>
               <span class="tag tag-success">出 {{ formatFlow(forward.outFlow || 0) }}</span>
             </div>
+
+            <p v-if="getRuntimeSummary(forward)" class="runtime-summary">
+              {{ getRuntimeSummary(forward) }}
+            </p>
 
             <div class="card-actions">
               <button class="btn btn-secondary btn-sm" @click="openEditModal(forward)">编辑</button>
@@ -203,6 +221,7 @@
                 <option v-for="tunnel in tunnels" :key="tunnel.id" :value="tunnel.id">{{ tunnel.name }}</option>
               </select>
               <p v-if="errors.tunnelId" class="form-error">{{ errors.tunnelId }}</p>
+              <p class="hint">{{ selectedTunnelModeHint }}</p>
             </div>
           </div>
 
@@ -213,6 +232,7 @@
               <p v-if="selectedTunnel && selectedTunnel.inNodePortSta && selectedTunnel.inNodePortEnd" class="hint">
                 允许范围：{{ selectedTunnel.inNodePortSta }} - {{ selectedTunnel.inNodePortEnd }}
               </p>
+              <p v-else class="hint">{{ selectedTunnelPortHint }}</p>
               <p v-if="errors.inPort" class="form-error">{{ errors.inPort }}</p>
             </div>
 
@@ -482,7 +502,8 @@ import {
   resumeForwardService,
   diagnoseForward,
   updateForwardOrder,
-  getForwardTunnels
+  getForwardTunnels,
+  getSystemConfig
 } from '@/api/admin'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 
@@ -494,6 +515,9 @@ const viewMode = ref(getSavedViewMode())
 const forwardOrder = ref(getSavedOrder())
 const forwards = ref([])
 const tunnels = ref([])
+const runtimeNodeXModeKey = 'forward.runtime.nodex_mode'
+const runtimeBackendKey = 'forward.runtime_backend'
+const runtimeNodeXMode = ref(false)
 
 const modalOpen = ref(false)
 const deleteModalOpen = ref(false)
@@ -555,6 +579,26 @@ const addressLineCount = computed(() => splitLines(form.remoteAddr).length)
 const sortedDirectForwards = computed(() => getSortedForwards('direct'))
 const groupedForwards = computed(() => buildGroupedForwards())
 const importSuccessCount = computed(() => importResults.value.filter(item => item.success).length)
+const selectedTunnelModeHint = computed(() => {
+  if (!selectedTunnel.value) {
+    return runtimeNodeXMode.value
+      ? 'NodeX/Gost mode keeps ingress and exit semantics. A selected tunnel still requires NodeX runtime jobs to succeed before forwarding is really attached.'
+      : 'iptables_ansible mode only records the execution node. SSH credentials come from inventory or environment variables, not from ForwardNode records.'
+  }
+
+  const tunnelName = selectedTunnel.value.name || `Tunnel #${selectedTunnel.value.id || '-'}`
+  return runtimeNodeXMode.value
+    ? `${tunnelName} will be attached through NodeX/gost. Panel-side “online” or status checks do not prove the remote relay has finished attaching.`
+    : `${tunnelName} will be applied on the execution node only. This path stays stateless until the queued ansible job finishes successfully.`
+})
+const selectedTunnelPortHint = computed(() => {
+  if (selectedTunnel.value?.inNodePortSta && selectedTunnel.value?.inNodePortEnd) {
+    return `Allowed range: ${selectedTunnel.value.inNodePortSta} - ${selectedTunnel.value.inNodePortEnd}`
+  }
+  return runtimeNodeXMode.value
+    ? 'Leaving the port empty lets the panel allocate one from the tunnel entry-node range.'
+    : 'Leaving the port empty lets the panel allocate one on the selected execution node.'
+})
 
 watch(portInput, value => {
   if (value === '' || value === null) {
@@ -594,6 +638,47 @@ watch(
   }
 )
 
+function parseRuntimeBoolean(value) {
+  if (typeof value === 'boolean') {
+    return value
+  }
+  if (typeof value === 'number') {
+    return value !== 0
+  }
+
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (!normalized) {
+    return null
+  }
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true
+  }
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false
+  }
+  return null
+}
+
+async function loadRuntimeMode() {
+  try {
+    const res = await getSystemConfig(runtimeNodeXModeKey)
+    const parsed = parseRuntimeBoolean(res.data?.value)
+    if (parsed !== null) {
+      runtimeNodeXMode.value = parsed
+      return
+    }
+  } catch (error) {
+    console.error('get forward runtime NodeX mode failed:', error)
+  }
+
+  try {
+    const res = await getSystemConfig(runtimeBackendKey)
+    runtimeNodeXMode.value = String(res.data?.value || '').toLowerCase() === 'gost'
+  } catch (error) {
+    console.error('get forward runtime backend failed:', error)
+  }
+}
+
 onMounted(async () => {
   updateViewport()
   window.addEventListener('resize', updateViewport)
@@ -602,6 +687,7 @@ onMounted(async () => {
     await userStore.getUserInfo()
   }
 
+  await loadRuntimeMode()
   await loadData(true)
 })
 
@@ -700,16 +786,38 @@ function normalizeTunnel(raw) {
 }
 
 function normalizeForward(raw) {
+  const runtimeStatus = Number(raw.runtimeStatus ?? raw.runtime_status ?? 0)
+  const runtimeBackend = String(raw.runtimeBackend ?? raw.runtime_backend ?? '').trim()
+  const runtimeMessage = String(raw.runtimeMessage ?? raw.runtime_message ?? '').trim()
+  const lastRuntimeSyncTime = Number(raw.lastRuntimeSyncTime ?? raw.last_runtime_sync_time ?? 0)
+  const hasTrackedRuntime = Boolean(runtimeBackend || runtimeMessage || lastRuntimeSyncTime > 0 || runtimeStatus === 2 || runtimeStatus === 3)
+  const serviceRunning = hasTrackedRuntime ? Number(raw.status) === 1 && runtimeStatus === 2 : Number(raw.status) === 1
   return {
     ...raw,
     id: Number(raw.id),
     tunnelId: Number(raw.tunnelId),
     inPort: Number(raw.inPort ?? 0),
     status: Number(raw.status ?? 0),
+    runtimeStatus,
+    runtimeBackend,
+    runtimeMessage,
+    lastRuntimeSyncTime,
+    hasTrackedRuntime,
     inx: raw.inx == null ? 0 : Number(raw.inx),
     userId: raw.userId == null ? null : Number(raw.userId),
-    serviceRunning: Number(raw.status) === 1
+    serviceRunning
   }
+}
+
+function isForwardRuntimeBusy(forward) {
+  return Boolean(forward?.hasTrackedRuntime) && [0, 1].includes(Number(forward?.runtimeStatus))
+}
+
+function isForwardToggleDisabled(forward) {
+  if (Number(forward?.status) !== 0 && Number(forward?.status) !== 1) {
+    return true
+  }
+  return isForwardRuntimeBusy(forward)
 }
 
 function mergeReferencedTunnels(list, forwardList) {
@@ -886,7 +994,7 @@ function buildGroupedForwards() {
     }
 
     tunnelGroup.forwards.push(forward)
-    if (forward.serviceRunning || Number(forward.status) === 1) {
+    if (forward.serviceRunning) {
       tunnelGroup.running += 1
     }
   })
@@ -1074,6 +1182,10 @@ async function handleSubmit() {
 }
 
 async function handleToggleService(forward) {
+  if (isForwardRuntimeBusy(forward)) {
+    setFeedback('warning', '当前运行时任务仍在排队或执行中，请等待完成后再操作')
+    return
+  }
   if (Number(forward.status) !== 1 && Number(forward.status) !== 0) {
     setFeedback('error', '转发状态异常，无法操作')
     return
@@ -1088,12 +1200,8 @@ async function handleToggleService(forward) {
     const response = targetState ? await resumeForwardService(forward.id) : await pauseForwardService(forward.id)
 
     if (response.code === 0) {
-      forwards.value = forwards.value.map(item =>
-        item.id === forward.id
-          ? { ...item, serviceRunning: targetState, status: targetState ? 1 : 0 }
-          : item
-      )
-      setFeedback('success', targetState ? '服务已启动' : '服务已暂停')
+      await loadData(false)
+      setFeedback('success', targetState ? '服务变更已提交' : '暂停请求已提交')
       return
     }
 
@@ -1503,6 +1611,45 @@ function getStatusMeta(status) {
       return { text: '异常', className: 'tag-danger' }
     default:
       return { text: '未知', className: 'tag-muted' }
+  }
+}
+
+function getRuntimeMeta(forward) {
+  if (!forward?.hasTrackedRuntime) {
+    return null
+  }
+
+  switch (Number(forward.runtimeStatus)) {
+    case 0:
+      return { text: '待下发', className: 'tag-warning' }
+    case 1:
+      return { text: '执行中', className: 'tag-primary' }
+    case 2:
+      return {
+        text: forward.runtimeBackend === 'iptables_ansible' ? '已应用' : '已同步',
+        className: 'tag-success'
+      }
+    case 3:
+      return { text: '同步失败', className: 'tag-danger' }
+    default:
+      return null
+  }
+}
+
+function getRuntimeSummary(forward) {
+  if (!forward?.hasTrackedRuntime) {
+    return ''
+  }
+  if (forward.runtimeMessage) {
+    return forward.runtimeMessage
+  }
+  switch (Number(forward.runtimeStatus)) {
+    case 0:
+      return '运行时任务已入队，等待执行器完成。'
+    case 1:
+      return '运行时任务正在执行。'
+    default:
+      return ''
   }
 }
 
@@ -2032,6 +2179,13 @@ function onDragEnd() {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.runtime-summary {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
 }
 
 .card-actions {

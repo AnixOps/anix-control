@@ -68,7 +68,7 @@ func NewPanelForwardRuntimeService(db *gorm.DB) *PanelForwardRuntimeService {
 }
 
 func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, forward *model.Forward, tunnel *model.ForwardTunnel) (*panelForwardRuntimeResult, error) {
-	backend, err := s.resolveBackend()
+	backend, err := s.resolveBackendForForward(forward)
 	if err != nil {
 		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendGost, err), err
 	}
@@ -163,6 +163,15 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 	return result, execErr
 }
 
+func (s *PanelForwardRuntimeService) resolveBackendForForward(forward *model.Forward) (string, error) {
+	if forward != nil {
+		if backend, ok := normalizeForwardRuntimeBackend(forward.RuntimeBackend); ok {
+			return backend, nil
+		}
+	}
+	return s.resolveBackend()
+}
+
 func (s *PanelForwardRuntimeService) enqueueLocalAnsibleJob(action string, forward *model.Forward, tunnel *model.ForwardTunnel, req nodeXForwardExecuteRequest, nodeID *uint) (*panelForwardRuntimeResult, error) {
 	if req.AnsibleRuntime == nil {
 		err := errors.New("ansible runtime payload is required for local execution")
@@ -235,6 +244,17 @@ func (s *PanelForwardRuntimeService) resolveNodeXMode() (*bool, error) {
 		return nil, err
 	}
 	return parseForwardRuntimeBoolValue(value, forwardRuntimeNodeXModeConfigKey)
+}
+
+func normalizeForwardRuntimeBackend(value string) (string, bool) {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case model.ForwardRuntimeBackendGost:
+		return model.ForwardRuntimeBackendGost, true
+	case model.ForwardRuntimeBackendIptablesAnsible:
+		return model.ForwardRuntimeBackendIptablesAnsible, true
+	default:
+		return "", false
+	}
 }
 
 func (s *PanelForwardRuntimeService) validateBackendConfig(backend string) error {
@@ -498,7 +518,7 @@ func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(action string, f
 	}, nil
 }
 
-func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfig(action string) (*panelForwardAnsibleConfig, error) {
+func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfigForDiagnostics() (*panelForwardAnsibleConfig, error) {
 	cfg := &panelForwardAnsibleConfig{}
 	if err := s.configService.GetJSON(forwardRuntimeAnsibleConfigJSONKey, cfg); err != nil {
 		return nil, err
@@ -533,6 +553,14 @@ func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfig(action string
 		cfg.ExtraVars = extraVars
 	}
 	cfg.ensureDefaults()
+	return cfg, nil
+}
+
+func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfig(action string) (*panelForwardAnsibleConfig, error) {
+	cfg, err := s.loadPanelForwardAnsibleConfigForDiagnostics()
+	if err != nil {
+		return nil, err
+	}
 	if err := cfg.validate(action); err != nil {
 		return nil, err
 	}

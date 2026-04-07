@@ -66,9 +66,9 @@
 Current clone note (`2026-04-05`):
 
 - Flux clone fidelity for `/admin/forward` remains primary
-- optional runtime delegation exists for `gost` and the compatibility-named `iptables_ansible` backend
+- optional internal execution exists for `gost` and the compatibility-named `iptables_ansible` backend, but they are distinct runtime paths rather than one shared execution plane
 - runtime backend selection and runtime job observability live under admin system/deployment surfaces, not inside the Flux-cloned page
-- the compatibility backend should be documented as an optional internal execution plane (`NodeX`) rather than as a public product surface
+- `NodeX/gost` and local `iptables_ansible` should be documented separately rather than flattened into one generic backend story
 - this backend layer must not change the Flux-shaped forward page while clone work is still in progress
 
 ```
@@ -648,3 +648,7 @@ type NotificationTemplate struct {
 - After delivering a piece, refresh the workstream and ensure other docs (like `docs/guide/flux-forward-contract.md`) and this roadmap keep pointing to the latest reference.
 - Current partial-clone surface already includes `/api/v2/user/reset`, `/api/v2/tunnel/user/tunnel`, `/api/v2/tunnel/user/assign|list|remove|update`, the standalone `/api/v2/speed-limit/*` resource, the admin user-page tunnel grant table in `web/src/views/admin/Users.vue`, and the standalone limit page at `web/src/views/admin/Limit.vue`.
 - Do not upgrade the status beyond `Partial` until relation-backed flow counters, runtime-side speed-limit enforcement, and the remaining Flux UI/runtime parity gaps are closed.
+> Note
+> This document contains historical design material.
+> Runtime model snippets here are not the current source of truth for `ForwardNode` fields or relay attachment semantics.
+> Use `internal/model/forward.go`, `internal/model/forward_panel.go`, `docs/reference/runtime.md`, and `docs/guide/forward-relay-onboarding.md` for the current implementation.

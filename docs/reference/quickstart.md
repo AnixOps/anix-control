@@ -38,7 +38,7 @@ Copy-Item config\config.yaml.example config\config.yaml
 
 - `FORWARD_RUNTIME_NODEX_MODE=true`
 - `FORWARD_RUNTIME_BACKEND=gost`
-- `FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18080`
+- `FORWARD_RUNTIME_NODEX_BASE_URL=http://<nodex-host>:18081`
 - `FORWARD_RUNTIME_NODEX_TOKEN=replace-with-shared-token`
 - `FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=15`
 
@@ -88,10 +88,17 @@ npm run dev
 ```env
 FORWARD_RUNTIME_NODEX_MODE=true
 FORWARD_RUNTIME_BACKEND=gost
-FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18080
+FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18081
 FORWARD_RUNTIME_NODEX_TOKEN=replace-with-shared-token
 FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=15
 ```
+
+Current verified single-UI port split:
+
+- `v2board` API: `8080`
+- `v2board` UI: `3000`
+- NodeX control-plane: `18081`
+- relay gost API: `18080`
 
 After container or app startup, these values are synced into system config keys:
 
@@ -109,6 +116,8 @@ In the admin UI, check:
 - `/admin/forward/tunnel`
 - `/admin/forward/nodes`
 
+Do not treat a saved `ForwardNode` as proof that the relay is already attached. In this mode, real attachment happens only when `v2board -> NodeX -> relay gost API` succeeds.
+
 ## Minimum iptables_ansible Mode Setup
 
 ```env
@@ -122,9 +131,22 @@ FORWARD_RUNTIME_ANSIBLE_PASSWORD=replace-with-password
 
 Use this path when you do not want NodeX stateful ingress/egress orchestration and only need stateless forwarding execution on relay hosts.
 
+Do not treat a saved `ForwardNode` as proof that the relay is already attached. In this mode, real attachment happens only when the local executor can run `ansible-playbook` successfully against the relay host.
+
+## Current Proven Deployment Path
+
+The current end-to-end proof in this repository is:
+
+- `binary + SQLite + systemd`
+- real `iptables_ansible` relay rules
+- real `NodeX/gost` relay services
+
+Docker remains supported for startup and future deployment work, but the recorded dual-runtime proof today is not the Docker path.
+
 ## What To Read Next
 
 - [`configuration.md`](configuration.md)
 - [`runtime.md`](runtime.md)
+- [`../guide/forward-relay-onboarding.md`](../guide/forward-relay-onboarding.md)
 - [`../guide/forward-tunnel-runtime-ops.md`](../guide/forward-tunnel-runtime-ops.md)
 - [`../guide/forward-tunnel-smoke-test.md`](../guide/forward-tunnel-smoke-test.md)

@@ -58,7 +58,7 @@ Forward runtime has two distinct modes:
 - `iptables_ansible` mode
   - `forward.runtime_backend = iptables_ansible`
   - stateless ansible-driven runtime
-  - uses execution-node SSH/inventory/playbook material
+  - uses the local executor plus execution-node SSH/inventory/playbook material
 
 Do not mix proxy-node language and forward-node language.
 
@@ -69,4 +69,5 @@ Do not mix proxy-node language and forward-node language.
 
 - [`../reference/startup-config.md`](../reference/startup-config.md)
 - [`../reference/repository-layout.md`](../reference/repository-layout.md)
+- [`../guide/forward-relay-onboarding.md`](../guide/forward-relay-onboarding.md)
 - [`../guide/nodex-internal-extension.md`](../guide/nodex-internal-extension.md)

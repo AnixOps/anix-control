@@ -384,6 +384,75 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestResolveBackend_NodeXModeOverri
 	assert.Equal(s.T(), model.ForwardRuntimeBackendGost, backend)
 }
 
+func (s *PanelForwardRuntimeServiceTestSuite) TestApply_UsesStoredForwardRuntimeBackendBeforeGlobalConfig() {
+	db := database.Get()
+	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendIptablesAnsible)
+
+	node := &model.ForwardNode{
+		Name:     "Stored Backend Ingress",
+		Type:     model.ForwardNodeTypeRelay,
+		Host:     "198.51.100.44",
+		Port:     22,
+		APIPort:  18081,
+		APIToken: "stored-backend-token",
+		Enabled:  true,
+	}
+	assert.NoError(s.T(), db.Create(node).Error)
+
+	tunnel := &model.ForwardTunnel{
+		Name:     "Stored Backend Tunnel",
+		InNodeID: node.ID,
+		InIP:     node.Host,
+		Type:     1,
+		Status:   model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	forward := &model.Forward{
+		UserID:         201,
+		UserName:       "stored-backend@example.com",
+		Name:           "Stored Backend Forward",
+		TunnelID:       tunnel.ID,
+		InPort:         10443,
+		RemoteAddr:     "example.com:443",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendGost,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	client := &stubForwardRuntimeNodeXClient{
+		executeFn: func(_ context.Context, req nodeXForwardExecuteRequest) (*nodeXForwardExecuteResult, error) {
+			assert.Equal(s.T(), model.ForwardRuntimeBackendGost, req.Backend)
+			return &nodeXForwardExecuteResult{
+				Backend: model.ForwardRuntimeBackendGost,
+				Status:  model.ForwardRuntimeJobStatusSuccess,
+				Message: "stored backend synchronized",
+				Result:  "stored backend applied",
+			}, nil
+		},
+	}
+	s.svc.client = client
+
+	result, err := s.svc.Apply(context.Background(), model.ForwardRuntimeJobActionUpdate, forward, tunnel)
+	assert.NoError(s.T(), err)
+	if assert.NotNil(s.T(), result) {
+		assert.Equal(s.T(), model.ForwardRuntimeBackendGost, result.Backend)
+		assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, result.Status)
+	}
+	assert.Len(s.T(), client.calls, 1)
+
+	var jobs []model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.Order("id ASC").Find(&jobs).Error)
+	if assert.Len(s.T(), jobs, 1) {
+		assert.Equal(s.T(), model.ForwardRuntimeBackendGost, jobs[0].Backend)
+		assert.Equal(s.T(), model.ForwardRuntimeJobActionUpdate, jobs[0].Action)
+		assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, jobs[0].Status)
+		assert.NotNil(s.T(), jobs[0].NodeID)
+		assert.Equal(s.T(), node.ID, *jobs[0].NodeID)
+		assert.Contains(s.T(), jobs[0].Result, "stored backend applied")
+	}
+}
+
 func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleQueuesLocalJobWithoutNodeX() {
 	db := database.Get()
 	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendIptablesAnsible)
@@ -409,13 +478,14 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleQueuesLoc
 	assert.NoError(s.T(), db.Create(tunnel).Error)
 
 	forward := &model.Forward{
-		UserID:     102,
-		UserName:   "runtime-async@example.com",
-		Name:       "Async Forward",
-		TunnelID:   tunnel.ID,
-		InPort:     21001,
-		RemoteAddr: "async.example.com:443",
-		Status:     model.ForwardStatusActive,
+		UserID:         102,
+		UserName:       "runtime-async@example.com",
+		Name:           "Async Forward",
+		TunnelID:       tunnel.ID,
+		InPort:         21001,
+		RemoteAddr:     "async.example.com:443",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendIptablesAnsible,
 	}
 	assert.NoError(s.T(), db.Create(forward).Error)
 
@@ -501,14 +571,15 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_AttachesLimiterToRuntime
 	assert.NoError(s.T(), db.Create(speedLimit).Error)
 
 	forward := &model.Forward{
-		UserID:        103,
-		UserName:      "runtime-limiter@example.com",
-		Name:          "Limiter Forward",
-		TunnelID:      tunnel.ID,
-		InPort:        22001,
-		RemoteAddr:    "limiter.example.com:443",
-		InterfaceName: "eth0",
-		Status:        model.ForwardStatusActive,
+		UserID:         103,
+		UserName:       "runtime-limiter@example.com",
+		Name:           "Limiter Forward",
+		TunnelID:       tunnel.ID,
+		InPort:         22001,
+		RemoteAddr:     "limiter.example.com:443",
+		InterfaceName:  "eth0",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendIptablesAnsible,
 	}
 	assert.NoError(s.T(), db.Create(forward).Error)
 	assert.NoError(s.T(), db.Create(&model.ForwardUserTunnel{
@@ -580,13 +651,14 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleQueuesLoc
 	assert.NoError(s.T(), db.Create(tunnel).Error)
 
 	forward := &model.Forward{
-		UserID:     104,
-		UserName:   "runtime-out@example.com",
-		Name:       "Execution Forward",
-		TunnelID:   tunnel.ID,
-		InPort:     23001,
-		RemoteAddr: "execution.example.com:443",
-		Status:     model.ForwardStatusActive,
+		UserID:         104,
+		UserName:       "runtime-out@example.com",
+		Name:           "Execution Forward",
+		TunnelID:       tunnel.ID,
+		InPort:         23001,
+		RemoteAddr:     "execution.example.com:443",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendIptablesAnsible,
 	}
 	assert.NoError(s.T(), db.Create(forward).Error)
 
@@ -653,14 +725,15 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleRejectsTu
 	assert.NoError(s.T(), db.Create(tunnel).Error)
 
 	forward := &model.Forward{
-		UserID:        105,
-		UserName:      "runtime-unsupported@example.com",
-		Name:          "Unsupported Forward",
-		TunnelID:      tunnel.ID,
-		InPort:        24001,
-		RemoteAddr:    "unsupported.example.com:443",
-		Status:        model.ForwardStatusActive,
-		InterfaceName: "eth1",
+		UserID:         105,
+		UserName:       "runtime-unsupported@example.com",
+		Name:           "Unsupported Forward",
+		TunnelID:       tunnel.ID,
+		InPort:         24001,
+		RemoteAddr:     "unsupported.example.com:443",
+		Status:         model.ForwardStatusActive,
+		InterfaceName:  "eth1",
+		RuntimeBackend: model.ForwardRuntimeBackendIptablesAnsible,
 	}
 	assert.NoError(s.T(), db.Create(forward).Error)
 

@@ -10,12 +10,31 @@
 - [`reference/startup-config.md`](reference/startup-config.md)
 - [`reference/configuration.md`](reference/configuration.md)
 - [`reference/runtime.md`](reference/runtime.md)
+- [`guide/forward-relay-onboarding.md`](guide/forward-relay-onboarding.md)
 - [`reference/repository-layout.md`](reference/repository-layout.md)
 
 部署前先记住两条规则：
 
 - 后端始终先读取 `config/config.yaml`；本地 `go run` 不会自动读取 `.env`
 - `FORWARD_RUNTIME_*` 会在启动时写入 `v2_system_config`，但 `jwt.secret`、`app.api_token`、`admin.*`、数据库和缓存配置仍以 `config/config.yaml` 为准
+
+## Verified Deployment Baseline (2026-04-07)
+
+当前已经实机验证通过的路径是：
+
+- `binary + SQLite + systemd`
+- `v2board` UI: `3000`
+- `v2board` API: `8080`
+- NodeX control-plane: `18081`
+- relay gost API: `18080`
+- 已验证运行时：
+  - `iptables_ansible`
+  - `gost`
+
+这套基线的意义：
+
+- 它是当前文档里最权威的“已跑通”版本
+- Docker 部署仍然会继续补齐，但不应被误读成当前已经完成同等级实机验证的 forward-runtime 基线
 
 ## 目录
 
@@ -77,7 +96,7 @@ cp config/config.yaml.example config/config.yaml
 # 4) 如需 NodeX mode，再编辑 .env
 # FORWARD_RUNTIME_NODEX_MODE=true
 # FORWARD_RUNTIME_BACKEND=gost
-# FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18080
+# FORWARD_RUNTIME_NODEX_BASE_URL=http://nodex-control-plane:18081
 # FORWARD_RUNTIME_NODEX_TOKEN=replace-with-shared-token
 
 # 5) 启动
@@ -149,11 +168,12 @@ bash ./panel_install.sh
 
 说明：
 
-- `iptables_ansible` 是兼容命名的内部后端入口，用于把执行委托给可选内部执行面（文档中统称 `NodeX`），不属于 `flux-panel` 原始 `/forward` 页面契约。
+- `iptables_ansible` 是兼容命名的内部后端入口，但当前 `v2board` 已内置本地后台执行器；它不等同于 `NodeX`，也不属于 `flux-panel` 原始 `/forward` 页面契约。
 - 示例 inventory 模板位于 `config/deploy/ansible/inventory.ini.example`，安装脚本会复制为 `inventory.ini`。
 - SSH 密钥目录为 `config/deploy/ssh/`，会被挂载到容器内的 `/home/v2board/.ssh`。
 - Docker 启动时会读取 `FORWARD_RUNTIME_BACKEND` 与 `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`，并把它们作为内部后端初始化值同步到系统配置表。
 - Docker 启动时也会读取 `FORWARD_RUNTIME_NODEX_MODE`、`FORWARD_RUNTIME_NODEX_BASE_URL`、`FORWARD_RUNTIME_NODEX_TOKEN` 与 `FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS`，并同步到系统配置表。
+- 如果 NodeX 与 `v2board` 不在同一个网络命名空间，`FORWARD_RUNTIME_NODEX_BASE_URL` 不能写成容器内的 `127.0.0.1`，应写成可达的宿主机地址或 Compose service 名。
 - 如果没有 SSH 私钥，可以直接在 `.env` 中设置 `FORWARD_RUNTIME_ANSIBLE_HOST`、`FORWARD_RUNTIME_ANSIBLE_USER`、`FORWARD_RUNTIME_ANSIBLE_PASSWORD`。
 - 容器启动时会基于这些环境变量生成兼容 inventory，并把路径同步到运行时配置；非 root 用户可再设置 `FORWARD_RUNTIME_ANSIBLE_BECOME=true` 与 `FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD`。
 - 后端切换、运行时任务观测和部署引导应停留在系统/部署文档范围内，不应并入 Flux 克隆的 `/admin/forward` 页面。
@@ -244,7 +264,7 @@ docker compose -f docker-compose.prod.yml --profile prometheus --profile grafana
 | 配置项 | 说明 |
 |--------|------|
 | `forward.runtime.nodex.base_url` | NodeX 控制面基础地址（如 `https://nodex.example.com`）。当前 `/admin/forward` 运行时与 legacy rule sync 的 NodeX 调用都要求显式配置该值。 |
-| `forward.runtime.nodex.token` | 控制面认证令牌；若配置，会同时填充 `Authorization: Bearer` 与 `X-API-Key`。若留空，客户端才会回退到请求内节点的 `api_token`。 |
+| `forward.runtime.nodex.token` | NodeX 控制面认证令牌。当前 `panel_forward` 运行时要求显式配置该值，请不要把它和 relay `ForwardNode.api_token` 混用。前者用于 `v2board -> NodeX`，后者用于 `NodeX -> relay gost API`。 |
 | `forward.runtime.nodex.timeout_seconds` | 可选；请求超时时间（秒，默认 15）。也可通过 `FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS` 环境变量预设。 |
 
 > 当前 `panel_forward`（`/admin/forward` 创建、更新、暂停、删除、诊断等）与 `legacy_rule` 同步都会走 NodeX control-plane 的 `/api/v2/internal/forward/runtime/execute`。因此 `forward.runtime.nodex.base_url` 现在必须显式指向 NodeX 控制面；客户端不会再隐式猜测 ingress/relay 节点的 `host:apiPort` 作为外层控制面地址，缺失该值会直接报错。

@@ -18,6 +18,10 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 | [Flux-panel Clone Guide](flux-panel-clone.md) | Source-of-truth workflow for future `flux-panel` 1:1 cloning work |
 | [Flux Forward Contract](flux-forward-contract.md) | Concrete forward/tunnel endpoint mapping, DTO fields, auth scope and known gaps |
 | [Flux-panel Clone Workstream](flux-panel-workstream.md) | Current module status, reference mapping, implementation order and definition of done |
+| [Forward Relay Onboarding](forward-relay-onboarding.md) | Exact operator checklist for making a relay actually join the runtime |
+| [Forward Runtime Operations](forward-tunnel-runtime-ops.md) | Runtime ownership, evidence chain, and what counts as a real relay attachment |
+| [Forward/Tunnel Manual Smoke Tests](forward-tunnel-smoke-test.md) | Manual and real-machine proof steps for `gost` and `iptables_ansible` |
+| [Forward Runtime Work Plan](forward-runtime-work-plan.md) | Parallel work-package plan for the next dual-runtime implementation stage |
 | [Node Management](node-management.md) | Node registration, heartbeat, protocol config and operations |
 | [Client Compatibility](client-compatibility.md) | V2bX/XrayR and related compatibility notes |
 | [API Reference](api-reference.md) | Existing project API overview |
@@ -34,3 +38,10 @@ If the task is to continue cloning `flux-panel`:
 5. Only then start changing routes, services, DTOs or pages.
 
 If the task is not related to `flux-panel`, use the other topic-specific guides.
+
+If the task is to validate or operate forwarding runtime:
+
+1. Read [`../reference/runtime.md`](../reference/runtime.md).
+2. Read [Forward Relay Onboarding](forward-relay-onboarding.md).
+3. Read [Forward Runtime Operations](forward-tunnel-runtime-ops.md).
+4. Run [Forward/Tunnel Manual Smoke Tests](forward-tunnel-smoke-test.md).

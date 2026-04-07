@@ -976,8 +976,9 @@ cd web && npm run build
 - Read `docs/guide/flux-panel-clone.md` before touching forward/tunnel/user-tunnel pages so you follow the mandatory workflow and validation checklist.
 - Use `docs/guide/flux-forward-contract.md` as the source for response envelopes, endpoint mapping, DTO requirements, and documented gaps.
 - Before labeling anything as `1:1 clone`, record remaining runtime or diagnose differences so reviewers understand what still diverges from `flux-panel`.
-- Dual-runtime support (`gost` + compatibility backend `iptables_ansible`) is an optional internal execution plane (`NodeX` in public docs), not part of the upstream Flux `/forward` page contract.
+- Dual-runtime support (`NodeX/gost` + compatibility backend `iptables_ansible`) is a proprietary internal execution layer, not part of the upstream Flux `/forward` page contract.
 - Supplementary runtime/401 guidance lives in `docs/guide/forward-tunnel-runtime-ops.md`; NodeX Mode vs iptables ansible Mode descriptions now sit each in the runtime doc and its smoke-test companion, so read both whenever validating NodeX/iptables ansible startups or debugging 401/SSH traces.
+- Relay onboarding truth now lives in `docs/guide/forward-relay-onboarding.md`; use it whenever a task depends on the phrase “node really joined” or “relay attached successfully”.
 - When running targeted Go verification in this repository, prefer `GOWORK=off go test ...`.
 - The repository lives under a parent `go.work`, and handler/service suites may fail before they even execute if the module is not listed there.
 - Keep `web/src/views/admin/Forward.vue` aligned with `vite-frontend/src/pages/forward.tsx`; do not add runtime backend selectors or runtime job tables there.
@@ -991,6 +992,7 @@ cd web && npm run build
   - bundled ansible deployment assets: `config/deploy/ansible/`
   - env bootstrap keys: `FORWARD_RUNTIME_BACKEND`, `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`
   - public boundary note: `docs/guide/nodex-internal-extension.md`
+  - relay onboarding note: `docs/guide/forward-relay-onboarding.md`
 - Current verified clone entry points:
   - `web/src/views/admin/Forward.vue`
   - `web/src/views/admin/Tunnel.vue`
@@ -1009,9 +1011,14 @@ cd web && npm run build
 
 ## NodeX Runtime Docs
 
-- NodeX Mode (`forward.runtime_backend=gost`) and iptables/ansible Mode (`forward.runtime_backend=iptables_ansible`) are two distinct execution planes. Keep the operational guide in `docs/guide/forward-tunnel-runtime-ops.md`, validation steps in `docs/guide/forward-tunnel-smoke-test.md`, and the extension boundary in `docs/guide/nodex-internal-extension.md`. Synchronize all three whenever runtime behavior or deployment scripts change.
+- `/admin/forward/nodes` online state currently means only `host:port` TCP reachability. Do not document or review it as if it proved gost API health, NodeX health, or ansible SSH readiness.
+- Do not describe `iptables_ansible` as if `ForwardNode` stored `ssh_*` credentials. Current SSH access comes from inventory or env-generated inventory, not from the `ForwardNode` schema.
+- Relay attachment semantics now have a dedicated guide at `docs/guide/forward-relay-onboarding.md`. Treat it as the first doc to update whenever someone changes what "node really joined" means in NodeX mode or `iptables_ansible` mode.
+- NodeX Mode (`forward.runtime_backend=gost`) and iptables/ansible Mode (`forward.runtime_backend=iptables_ansible`) are two distinct execution planes. Keep the relay onboarding guide in `docs/guide/forward-relay-onboarding.md`, the operational guide in `docs/guide/forward-tunnel-runtime-ops.md`, validation steps in `docs/guide/forward-tunnel-smoke-test.md`, and the extension boundary in `docs/guide/nodex-internal-extension.md`. Synchronize all four whenever runtime behavior or deployment scripts change.
+- `docs/guide/forward-relay-onboarding.md` is the source of truth for the difference between “ForwardNode record saved” and “relay actually attached”.
 - Highlight the difference between proxy `Node` entries (`/admin/nodes`) and runtime-only `ForwardNode` records so that operators do not mix control-plane roles.
 - Reference these docs when adding env/config bootstrapping, smoke tests, or runtime backplane automation so reviewers always know where to find NodeX vs ansible guidance.
+- Use `docs/guide/forward-runtime-work-plan.md` when splitting follow-up work across multiple agents so clone work and proprietary runtime work stay separated.
 
 ## Flux-panel Doc Sync
 
@@ -1055,7 +1062,8 @@ When planning future clone work, prioritize the remaining gaps in this order:
   - Flux clone surface: `web/src/views/admin/Forward.vue`, `web/src/views/admin/Tunnel.vue`, `web/src/views/admin/Limit.vue`, `internal/handler/forward_panel.go`, `internal/service/forward_panel_service.go`
   - Internal execution surface: `internal/service/forward_nodex_*`, `internal/service/forward_panel_runtime_service.go`, `install.sh`, `panel_install.sh`, `config/deploy/ansible/`, runtime job endpoints, and related system-config keys
 - Do not move NodeX-specific install controls, inventory controls, runtime job observability, or execution knobs into the Flux-cloned `/admin/forward` page just because they are operationally related.
-- If a change touches the internal execution surface, update all three runtime boundary docs together:
+- If a change touches the internal execution surface, update all four runtime boundary docs together:
+  - `docs/guide/forward-relay-onboarding.md`
   - `docs/guide/nodex-internal-extension.md`
   - `docs/guide/forward-tunnel-runtime-ops.md`
   - `docs/guide/forward-tunnel-smoke-test.md`
@@ -1066,6 +1074,7 @@ When planning future clone work, prioritize the remaining gaps in this order:
 
 ## Dual-Mode Runtime Rules
 
+- In `NodeX Mode`, `ForwardNode.api_token` is the relay gost API credential, not a replacement for the NodeX control-plane token.
 - `NodeX Mode` means `forward.runtime_backend=gost`.
   - It is stateful.
   - It requires the NodeX control-plane handshake via `forward.runtime.nodex.base_url` and `forward.runtime.nodex.token`.
@@ -1088,6 +1097,7 @@ When planning future clone work, prioritize the remaining gaps in this order:
   - connection model / control-vs-execution explanation
   - troubleshooting / doctor / diagnostics
 - In this repository, the control-plane side of that experience must stay discoverable through:
+  - `docs/guide/forward-relay-onboarding.md`
   - `docs/guide/nodex-internal-extension.md`
   - `docs/guide/forward-tunnel-runtime-ops.md`
   - `docs/guide/forward-tunnel-smoke-test.md`

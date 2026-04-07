@@ -348,7 +348,7 @@ func (p *panelForwardAnsibleRuntimePayload) commandName() string {
 }
 
 func (p *panelForwardAnsibleRuntimePayload) workingDirectory() string {
-	return strings.TrimSpace(p.WorkingDir)
+	return resolveForwardRuntimeWorkingDir(p.WorkingDir)
 }
 
 func (p *panelForwardAnsibleRuntimePayload) environment() map[string]string {
@@ -357,6 +357,10 @@ func (p *panelForwardAnsibleRuntimePayload) environment() map[string]string {
 	}
 	result := make(map[string]string, len(p.Environment))
 	for key, value := range p.Environment {
+		if strings.EqualFold(strings.TrimSpace(key), "ANSIBLE_CONFIG") {
+			result[key] = resolveForwardRuntimeEnvPath(p.WorkingDir, value)
+			continue
+		}
 		result[key] = value
 	}
 	return result
@@ -376,20 +380,22 @@ func (p *panelForwardAnsibleRuntimePayload) commandArgs() ([]string, error) {
 	if strings.TrimSpace(p.Playbook) == "" {
 		return nil, fmt.Errorf("playbook is required")
 	}
+	inventoryPath := resolveForwardRuntimeFilePath(p.WorkingDir, p.Inventory)
+	playbookPath := resolveForwardRuntimeFilePath(p.WorkingDir, p.Playbook)
 
 	extraVars, err := json.Marshal(p.buildExtraVars())
 	if err != nil {
 		return nil, fmt.Errorf("marshal ansible extra vars: %w", err)
 	}
 
-	args := []string{"-i", strings.TrimSpace(p.Inventory)}
+	args := []string{"-i", inventoryPath}
 	if limit := p.limitPattern(); limit != "" {
 		args = append(args, "--limit", limit)
 	}
 	if p.Become {
 		args = append(args, "--become")
 	}
-	args = append(args, "--extra-vars", string(extraVars), strings.TrimSpace(p.Playbook))
+	args = append(args, "--extra-vars", string(extraVars), playbookPath)
 	return args, nil
 }
 
