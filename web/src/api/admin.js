@@ -1513,6 +1513,8 @@ export default {
   updateForwardNode,
   deleteForwardNode,
   checkForwardNode,
+  syncForwardNodeStats,
+  testForwardConnection,
   toggleForwardNode,
   getForwardRules,
   createForwardRule,
@@ -1585,5 +1587,20 @@ export default {
   deleteLoadBalancer,
   getLoadBalancerStats,
   runHealthCheck
+}
+
+export function syncForwardNodeStats(id) {
+  return request({
+    url: `/admin/forward/nodes/${id}/sync-stats`,
+    method: 'post'
+  })
+}
+
+export function testForwardConnection(data) {
+  return request({
+    url: '/admin/forward/test-connection',
+    method: 'post',
+    data
+  })
 }
 

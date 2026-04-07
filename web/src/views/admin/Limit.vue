@@ -60,7 +60,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ isEditMode ? '编辑限速规则' : '新增限速规则' }}</h3>
-          <button class="close-btn" @click="closeFormModal">脳</button>
+          <button class="close-btn" @click="closeFormModal">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -95,7 +95,7 @@
       <div class="modal modal-sm">
         <div class="modal-header">
           <h3>确认删除</h3>
-          <button class="close-btn" @click="closeDeleteModal">脳</button>
+          <button class="close-btn" @click="closeDeleteModal">×</button>
         </div>
         <div class="modal-body">
           <p class="delete-copy">

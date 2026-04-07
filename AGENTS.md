@@ -1128,3 +1128,32 @@ When planning future clone work, prioritize the remaining gaps in this order:
 - Do not reintroduce an empty top-level `deploy/` placeholder while the real deployment assets live under `config/deploy/`.
 - When Docker or env behavior changes, verify both the compose files and the startup/reference docs in the same change.
 - 更详细的模块映射、当前完成度和下一步待补项目，见 `docs/guide/flux-panel-clone.md`。
+
+## UTF-8 / Chinese Copy Rules
+
+- 所有包含中文文案的源码和文档文件必须保持 `UTF-8` 编码，默认不要写成 `GBK`、`ANSI` 或带 BOM 的变体。
+- 不要把 PowerShell 终端里看到的中文乱码直接当成文件已损坏。
+  - 当前环境下，`Get-Content` 和部分命令输出会把正常的 UTF-8 中文显示成假乱码。
+  - 真正修文案前，先用 UTF-8 感知方式核对源码，例如：
+    - Python `Path(...).read_text(encoding='utf-8')`
+    - `line.encode('unicode_escape').decode()` 检查真实码点
+- 如果要判断“是否真的乱码”，优先查这些信号：
+  - 私有区字符，如 `U+E000` 到 `U+F8FF`
+  - 替换字符 `U+FFFD`
+  - 明显错误的占位字符或异常混入的拉丁乱码片段
+- 在这个仓库里，以下路径一旦改动了中文文案，提交前必须做一次 UTF-8 复查：
+  - `web/src/views/`
+  - `web/src/components/`
+  - `web/src/layouts/`
+  - `internal/handler/`
+  - `docs/`
+  - `AGENTS.md`
+- 对话框关闭按钮统一使用 `×` 或 `✕`，不要使用来源不明的替代字形，也不要把乱码字符当成关闭图标保留下来。
+- 如果需要批量排查 UI 乱码，先跑一轮源码扫描，再人工核对关键入口页面：
+  - `web/src/layouts/AdminLayout.vue`
+  - `web/src/components/admin/ForwardSuiteNav.vue`
+  - `web/src/views/admin/Forward.vue`
+  - `web/src/views/admin/Tunnel.vue`
+  - `web/src/views/admin/Limit.vue`
+  - `web/src/views/admin/ForwardNodes.vue`
+- 修复过乱码后，把“终端显示问题”和“源码真实损坏”区分记录到变更说明里，避免后续重复误判。

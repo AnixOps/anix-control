@@ -46,6 +46,10 @@ describe('admin api mapping', () => {
         },
       },
       {
+        call: () => adminApi.getForwardStats(),
+        expected: { url: '/admin/forward/stats', method: 'get' },
+      },
+      {
         call: () => adminApi.getAdminForwardTunnelList(),
         expected: { url: '/admin/tunnel/list', method: 'post' },
       },
@@ -159,6 +163,21 @@ describe('admin api mapping', () => {
           url: '/admin/forward/rules/9/toggle',
           method: 'post',
           data: { enabled: true },
+        },
+      },
+      {
+        call: () => adminApi.syncForwardNodeStats(7),
+        expected: {
+          url: '/admin/forward/nodes/7/sync-stats',
+          method: 'post',
+        },
+      },
+      {
+        call: () => adminApi.testForwardConnection({ host: '127.0.0.1', api_port: 18080 }),
+        expected: {
+          url: '/admin/forward/test-connection',
+          method: 'post',
+          data: { host: '127.0.0.1', api_port: 18080 },
         },
       },
       {
