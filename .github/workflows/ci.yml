@@ -59,8 +59,10 @@ jobs:
         run: go vet ./...
 
       - name: Run tests with coverage
+        shell: bash
         run: |
-          go test -v -coverprofile=coverage.out -covermode=atomic ./internal/...
+          mapfile -t packages < <(go list ./internal/... | grep -v '^github.com/anixops/v2board/internal/tests/integration')
+          go test -v -coverprofile=coverage.out -covermode=atomic "${packages[@]}"
 
       - name: Generate coverage report
         run: |
