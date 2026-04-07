@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -66,8 +67,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestIptablesAnsibleFullChain() {
 	s.mustWriteFile(filepath.Join(tempDir, "forward_apply.yml"), "---\n- hosts: all\n  tasks:\n    - debug: msg=\"apply\"\n")
 	s.mustWriteFile(filepath.Join(tempDir, "forward_remove.yml"), "---\n- hosts: all\n  tasks:\n    - debug: msg=\"remove\"\n")
 	s.mustWriteFile(filepath.Join(tempDir, "ansible.cfg"), "[defaults]\nhost_key_checking = False\n")
-	fakeCommand := filepath.Join(tempDir, "fake-ansible.cmd")
-	s.mustWriteFile(fakeCommand, "@echo off\r\necho smoke-runtime %*\r\nexit /b 0\r\n")
+	fakeCommand := s.mustWriteFakeCommand(tempDir, "fake-ansible", "smoke-runtime")
 
 	s.mustSetSystemConfig("forward.runtime.nodex_mode", false, "bool", "Enable NodeX forward runtime mode")
 	s.mustSetSystemConfig("forward.runtime_backend", model.ForwardRuntimeBackendIptablesAnsible, "string", "Forward runtime backend")
@@ -396,6 +396,23 @@ func (s *ForwardPanelRouterSmokeTestSuite) mustRequest(method, path string, payl
 func (s *ForwardPanelRouterSmokeTestSuite) mustWriteFile(path, content string) {
 	s.T().Helper()
 	s.Require().NoError(os.WriteFile(path, []byte(content), 0o600))
+}
+
+func (s *ForwardPanelRouterSmokeTestSuite) mustWriteFakeCommand(dir, baseName, marker string) string {
+	s.T().Helper()
+
+	if runtime.GOOS == "windows" {
+		path := filepath.Join(dir, baseName+".cmd")
+		s.Require().NoError(os.WriteFile(path, []byte("@echo off\r\necho "+marker+" %*\r\nexit /b 0\r\n"), 0o600))
+		return path
+	}
+
+	path := filepath.Join(dir, baseName+".sh")
+	script := "#!/bin/sh\n" +
+		"echo " + marker + " \"$@\"\n"
+	s.Require().NoError(os.WriteFile(path, []byte(script), 0o700))
+	s.Require().NoError(os.Chmod(path, 0o700))
+	return path
 }
 
 func (s *ForwardPanelRouterSmokeTestSuite) mustMap(value interface{}) map[string]interface{} {
