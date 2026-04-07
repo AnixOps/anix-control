@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -168,8 +169,15 @@ func generateSampleConfig() {
 	}
 
 	data, _ := yaml.Marshal(config)
-	filename := "test_nodes.yaml"
-	os.WriteFile(filename, data, 0644)
+	filename := filepath.Join("config", "examples", "test_nodes.yaml")
+	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+		fmt.Printf("failed to create sample directory: %v\n", err)
+		return
+	}
+	if err := os.WriteFile(filename, data, 0644); err != nil {
+		fmt.Printf("failed to write sample config: %v\n", err)
+		return
+	}
 	fmt.Printf("已生成示例配置: %s\n", filename)
 	fmt.Println("")
 	fmt.Println(string(data))

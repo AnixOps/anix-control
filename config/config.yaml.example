@@ -1,5 +1,10 @@
 env: "development"
 
+# Bootstrap rules:
+# - the backend always reads this file on startup
+# - local go run does not auto-load .env
+# - FORWARD_RUNTIME_* env vars are imported separately into v2_system_config
+
 server:
   host: "0.0.0.0"
   port: 8080

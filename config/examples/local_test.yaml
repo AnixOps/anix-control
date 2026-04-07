@@ -1,5 +1,5 @@
-# 本地测试节点配置
-# 使用方法: .\subtest.exe sub local_test.yaml v2ray
+# Local test node config
+# Usage: .\subtest.exe sub config/examples/local_test.yaml v2ray
 
 groups:
     default:
