@@ -37,15 +37,14 @@ This is the main source of confusion and should stay explicit:
   - controls server, frontend, database, cache, jwt, admin
 - `.env`
   - deployment-time variables
-  - used by Docker Compose, install scripts, and env-seeded runtime config
-  - especially important for `FORWARD_RUNTIME_*`
+  - used by Docker Compose and install scripts
 - `v2_system_config`
   - runtime-persisted values shown in `/admin/system`
-  - seeded from env on startup by `InitForwardRuntimeSystemConfigFromEnv`
+  - seeded from `config/config.yaml.forward_runtime` on startup by `InitForwardRuntimeSystemConfig`
 
 Important:
 - local `go run` does not automatically read `.env`
-- if you start locally without Docker, export the env vars in the shell first
+- if you start locally without Docker, edit `config/config.yaml` directly before startup
 
 ## Runtime Modes
 

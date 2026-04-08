@@ -165,6 +165,25 @@ func resolveSQLitePath(rawDBPath, resolvedConfigPath string) string {
 	return resolveRuntimePath(rawDBPath, resolvedConfigPath)
 }
 
+func resolveForwardRuntimePaths(cfg *config.Config, resolvedConfigPath string) {
+	if cfg == nil {
+		return
+	}
+
+	ansibleCfg := &cfg.ForwardRuntime.IptablesAnsible
+	ansibleCfg.Inventory = resolveRuntimePath(ansibleCfg.Inventory, resolvedConfigPath)
+	ansibleCfg.ApplyPlaybook = resolveRuntimePath(ansibleCfg.ApplyPlaybook, resolvedConfigPath)
+	ansibleCfg.RemovePlaybook = resolveRuntimePath(ansibleCfg.RemovePlaybook, resolvedConfigPath)
+	ansibleCfg.WorkingDir = resolveRuntimePath(ansibleCfg.WorkingDir, resolvedConfigPath)
+
+	if len(ansibleCfg.Environment) == 0 {
+		return
+	}
+	if value := strings.TrimSpace(ansibleCfg.Environment["ANSIBLE_CONFIG"]); value != "" {
+		ansibleCfg.Environment["ANSIBLE_CONFIG"] = resolveRuntimePath(value, resolvedConfigPath)
+	}
+}
+
 func main() {
 	flag.Parse()
 
@@ -199,6 +218,7 @@ func main() {
 	}
 	cfg.Frontend.Path = resolveRuntimePath(frontendPath, resolvedConfigPath)
 	log.Printf("Frontend static path: %s", cfg.Frontend.Path)
+	resolveForwardRuntimePaths(cfg, resolvedConfigPath)
 
 	env := cfg.Env
 	if env == "" {
@@ -305,8 +325,8 @@ func main() {
 	service.InitDefaultPlan()
 
 	// 初始化缓存 (默认使用内存缓存)
-	if err := service.InitForwardRuntimeSystemConfigFromEnv(database.Get()); err != nil {
-		log.Fatalf("Failed to initialize forward runtime config from env: %v", err)
+	if err := service.InitForwardRuntimeSystemConfig(database.Get()); err != nil {
+		log.Fatalf("Failed to initialize forward runtime config: %v", err)
 	}
 	cache.InitMemory()
 	defer cache.CloseMemory()

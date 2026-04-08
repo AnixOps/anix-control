@@ -3,262 +3,224 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
+	appconfig "github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/model"
 	"gorm.io/gorm"
 )
 
-const (
-	forwardRuntimeNodeXModeEnvVar             = "FORWARD_RUNTIME_NODEX_MODE"
-	forwardRuntimeBackendEnvVar              = "FORWARD_RUNTIME_BACKEND"
-	forwardRuntimeAnsibleConfigJSONEnvVar    = "FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON"
-	forwardRuntimeAnsibleInventoryEnvVar     = "FORWARD_RUNTIME_ANSIBLE_INVENTORY"
-	forwardRuntimeAnsibleApplyEnvVar         = "FORWARD_RUNTIME_ANSIBLE_PLAYBOOK_APPLY"
-	forwardRuntimeAnsibleRemoveEnvVar        = "FORWARD_RUNTIME_ANSIBLE_PLAYBOOK_REMOVE"
-	forwardRuntimeAnsibleWorkdirEnvVar       = "FORWARD_RUNTIME_ANSIBLE_WORKDIR"
-	forwardRuntimeAnsibleTargetPatternEnvVar = "FORWARD_RUNTIME_ANSIBLE_TARGET_PATTERN"
-	forwardRuntimeAnsibleCommandEnvVar       = "FORWARD_RUNTIME_ANSIBLE_COMMAND"
-	forwardRuntimeAnsibleTimeoutEnvVar       = "FORWARD_RUNTIME_ANSIBLE_TIMEOUT_SECONDS"
-	forwardRuntimeAnsibleBecomeEnvVar        = "FORWARD_RUNTIME_ANSIBLE_BECOME"
-	forwardRuntimeAnsibleExtraVarsEnvVar     = "FORWARD_RUNTIME_ANSIBLE_EXTRA_VARS_JSON"
-	forwardRuntimeAnsibleEnvEnvVar           = "FORWARD_RUNTIME_ANSIBLE_ENV_JSON"
-	forwardRuntimeNodeXBaseURLEnvVar         = "FORWARD_RUNTIME_NODEX_BASE_URL"
-	forwardRuntimeNodeXTokenEnvVar           = "FORWARD_RUNTIME_NODEX_TOKEN"
-	forwardRuntimeNodeXTimeoutSecondsEnvVar  = "FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS"
-)
+const forwardRuntimeBootstrapRemark = "Forward runtime bootstrapped from config.yaml"
 
-func InitForwardRuntimeSystemConfigFromEnv(db *gorm.DB) error {
+type forwardRuntimeBootstrapConfig struct {
+	NodeXMode *bool
+	Backend   string
+	NodeX     appconfig.ForwardRuntimeNodeXConfig
+	Ansible   panelForwardAnsibleConfig
+}
+
+func InitForwardRuntimeSystemConfig(db *gorm.DB) error {
 	if db == nil {
 		return nil
 	}
 
 	configService := NewSystemConfigService(db)
-	nodeXMode, err := parseForwardRuntimeBoolValue(os.Getenv(forwardRuntimeNodeXModeEnvVar), forwardRuntimeNodeXModeEnvVar)
+	bootstrapCfg, err := loadForwardRuntimeBootstrapConfig()
 	if err != nil {
 		return err
 	}
-	if nodeXMode != nil {
-		if err := configService.Set(
-			forwardRuntimeNodeXModeConfigKey,
-			strconv.FormatBool(*nodeXMode),
-			"bool",
-			forwardRuntimeConfigGroup,
-			"Forward runtime NodeX mode injected from environment",
-		); err != nil {
-			return err
-		}
+
+	effectiveBackend := bootstrapCfg.Backend
+	if bootstrapCfg.NodeXMode != nil {
+		effectiveBackend = forwardRuntimeBackendForMode(*bootstrapCfg.NodeXMode)
 	}
 
-	backend := strings.TrimSpace(strings.ToLower(os.Getenv(forwardRuntimeBackendEnvVar)))
-	switch backend {
-	case "":
-	case model.ForwardRuntimeBackendGost, model.ForwardRuntimeBackendIptablesAnsible:
-	default:
-		return fmt.Errorf("invalid %s value: %s", forwardRuntimeBackendEnvVar, backend)
+	if err := syncForwardRuntimeNodeXMode(configService, bootstrapCfg.NodeXMode); err != nil {
+		return err
+	}
+	if err := syncForwardRuntimeValue(configService, forwardRuntimeBackendConfigKey, effectiveBackend, "string"); err != nil {
+		return err
+	}
+	if err := syncForwardRuntimeValue(configService, forwardRuntimeNodeXBaseURLConfigKey, strings.TrimSpace(bootstrapCfg.NodeX.BaseURL), "string"); err != nil {
+		return err
+	}
+	if err := syncForwardRuntimeValue(configService, forwardRuntimeNodeXTokenConfigKey, strings.TrimSpace(bootstrapCfg.NodeX.Token), "string"); err != nil {
+		return err
 	}
 
-	effectiveBackend := backend
-	if nodeXMode != nil {
-		effectiveBackend = forwardRuntimeBackendForMode(*nodeXMode)
+	nodeXTimeout := ""
+	if bootstrapCfg.NodeX.TimeoutSeconds > 0 {
+		nodeXTimeout = strconv.Itoa(bootstrapCfg.NodeX.TimeoutSeconds)
 	}
-	if effectiveBackend != "" {
-		if err := configService.Set(
-			forwardRuntimeBackendConfigKey,
-			effectiveBackend,
-			"string",
-			forwardRuntimeConfigGroup,
-			"Forward runtime backend injected from environment",
-		); err != nil {
-			return err
-		}
-	}
-
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeNodeXBaseURLEnvVar)); value != "" {
-		if err := configService.Set(
-			forwardRuntimeNodeXBaseURLConfigKey,
-			value,
-			"string",
-			forwardRuntimeConfigGroup,
-			"Forward runtime NodeX base URL injected from environment",
-		); err != nil {
-			return err
-		}
-	}
-
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeNodeXTokenEnvVar)); value != "" {
-		if err := configService.Set(
-			forwardRuntimeNodeXTokenConfigKey,
-			value,
-			"string",
-			forwardRuntimeConfigGroup,
-			"Forward runtime NodeX token injected from environment",
-		); err != nil {
-			return err
-		}
-	}
-
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeNodeXTimeoutSecondsEnvVar)); value != "" {
-		timeout, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("invalid %s value: %w", forwardRuntimeNodeXTimeoutSecondsEnvVar, err)
-		}
-		if timeout <= 0 {
-			return fmt.Errorf("%s must be greater than zero", forwardRuntimeNodeXTimeoutSecondsEnvVar)
-		}
-		if err := configService.Set(
-			forwardRuntimeNodeXTimeoutSecondsConfigKey,
-			strconv.Itoa(timeout),
-			"int",
-			forwardRuntimeConfigGroup,
-			"Forward runtime NodeX timeout injected from environment",
-		); err != nil {
-			return err
-		}
+	if err := syncForwardRuntimeValue(configService, forwardRuntimeNodeXTimeoutSecondsConfigKey, nodeXTimeout, "int"); err != nil {
+		return err
 	}
 
 	if effectiveBackend == model.ForwardRuntimeBackendGost {
-		baseURL, err := configService.Get(forwardRuntimeNodeXBaseURLConfigKey)
-		if err != nil {
-			return err
-		}
-		if strings.TrimSpace(baseURL) == "" {
+		if strings.TrimSpace(bootstrapCfg.NodeX.BaseURL) == "" {
 			return fmt.Errorf("%s is required for NodeX forward runtime", forwardRuntimeNodeXBaseURLConfigKey)
 		}
-
-		token, err := configService.Get(forwardRuntimeNodeXTokenConfigKey)
-		if err != nil {
-			return err
-		}
-		if strings.TrimSpace(token) == "" {
+		if strings.TrimSpace(bootstrapCfg.NodeX.Token) == "" {
 			return fmt.Errorf("%s is required for NodeX forward runtime", forwardRuntimeNodeXTokenConfigKey)
 		}
 	}
 
-	cfg := &panelForwardAnsibleConfig{}
-
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleConfigJSONEnvVar)); value != "" {
-		if err := json.Unmarshal([]byte(value), cfg); err != nil {
-			return fmt.Errorf("invalid %s value: %w", forwardRuntimeAnsibleConfigJSONEnvVar, err)
-		}
+	if shouldPersistForwardRuntimeAnsibleConfig(bootstrapCfg, effectiveBackend) {
+		bootstrapCfg.Ansible.ensureDefaults()
+		return syncForwardRuntimeAnsibleConfig(configService, &bootstrapCfg.Ansible)
 	}
 
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleInventoryEnvVar)); value != "" {
-		cfg.Inventory = value
-	}
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleApplyEnvVar)); value != "" {
-		cfg.ApplyPlaybook = value
-	}
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleRemoveEnvVar)); value != "" {
-		cfg.RemovePlaybook = value
-	}
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleWorkdirEnvVar)); value != "" {
-		cfg.WorkingDir = value
-	}
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleTargetPatternEnvVar)); value != "" {
-		cfg.TargetPattern = value
-	}
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleCommandEnvVar)); value != "" {
-		cfg.Command = value
-	}
+	return clearForwardRuntimeAnsibleConfig(configService)
+}
 
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleTimeoutEnvVar)); value != "" {
-		timeout, err := strconv.Atoi(value)
-		if err != nil {
-			return fmt.Errorf("invalid %s value: %w", forwardRuntimeAnsibleTimeoutEnvVar, err)
-		}
-		cfg.TimeoutSeconds = timeout
+func syncForwardRuntimeNodeXMode(configService *SystemConfigService, value *bool) error {
+	serialized := ""
+	if value != nil {
+		serialized = strconv.FormatBool(*value)
 	}
+	return syncForwardRuntimeValue(configService, forwardRuntimeNodeXModeConfigKey, serialized, "bool")
+}
 
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleBecomeEnvVar)); value != "" {
-		cfg.Become = strings.EqualFold(value, "true") || value == "1"
-	}
+func syncForwardRuntimeValue(configService *SystemConfigService, key, value, cfgType string) error {
+	return configService.Set(key, value, cfgType, forwardRuntimeConfigGroup, forwardRuntimeBootstrapRemark)
+}
 
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleExtraVarsEnvVar)); value != "" {
-		if err := json.Unmarshal([]byte(value), &cfg.ExtraVars); err != nil {
-			return fmt.Errorf("invalid %s value: %w", forwardRuntimeAnsibleExtraVarsEnvVar, err)
-		}
-	}
-
-	if value := strings.TrimSpace(os.Getenv(forwardRuntimeAnsibleEnvEnvVar)); value != "" {
-		if err := json.Unmarshal([]byte(value), &cfg.Environment); err != nil {
-			return fmt.Errorf("invalid %s value: %w", forwardRuntimeAnsibleEnvEnvVar, err)
-		}
-	}
-
-	shouldPersist := effectiveBackend == model.ForwardRuntimeBackendIptablesAnsible ||
-		strings.TrimSpace(cfg.Inventory) != "" ||
-		strings.TrimSpace(cfg.ApplyPlaybook) != "" ||
-		strings.TrimSpace(cfg.RemovePlaybook) != "" ||
-		strings.TrimSpace(cfg.WorkingDir) != "" ||
-		strings.TrimSpace(cfg.TargetPattern) != "" ||
-		strings.TrimSpace(cfg.Command) != "" ||
-		cfg.TimeoutSeconds > 0 ||
-		cfg.Become ||
-		len(cfg.ExtraVars) > 0 ||
-		len(cfg.Environment) > 0
-	if !shouldPersist {
-		return nil
+func syncForwardRuntimeAnsibleConfig(configService *SystemConfigService, cfg *panelForwardAnsibleConfig) error {
+	if cfg == nil {
+		return clearForwardRuntimeAnsibleConfig(configService)
 	}
 
 	cfg.ensureDefaults()
-	if err := configService.SetJSON(
-		forwardRuntimeAnsibleConfigJSONKey,
-		cfg,
-		forwardRuntimeConfigGroup,
-		"Forward runtime ansible config injected from environment",
-	); err != nil {
+	ansibleJSON, err := json.Marshal(cfg)
+	if err != nil {
 		return err
 	}
-
-	if err := configService.Set(
-		forwardRuntimeAnsibleInventoryConfigKey,
-		cfg.Inventory,
-		"string",
-		forwardRuntimeConfigGroup,
-		"Forward ansible inventory injected from environment",
-	); err != nil {
-		return err
-	}
-	if err := configService.Set(
-		forwardRuntimeAnsibleApplyPlaybookConfigKey,
-		cfg.ApplyPlaybook,
-		"string",
-		forwardRuntimeConfigGroup,
-		"Forward ansible apply playbook injected from environment",
-	); err != nil {
-		return err
-	}
-	if err := configService.Set(
-		forwardRuntimeAnsibleRemovePlaybookConfigKey,
-		cfg.RemovePlaybook,
-		"string",
-		forwardRuntimeConfigGroup,
-		"Forward ansible remove playbook injected from environment",
-	); err != nil {
-		return err
-	}
-	if err := configService.Set(
-		forwardRuntimeAnsibleBecomeConfigKey,
-		strconv.FormatBool(cfg.Become),
-		"bool",
-		forwardRuntimeConfigGroup,
-		"Forward ansible become flag injected from environment",
-	); err != nil {
-		return err
-	}
-
 	extraVarsJSON, err := json.Marshal(cfg.ExtraVars)
 	if err != nil {
 		return err
 	}
-	return configService.Set(
-		forwardRuntimeAnsibleExtraVarsConfigKey,
-		string(extraVarsJSON),
-		"json",
-		forwardRuntimeConfigGroup,
-		"Forward ansible extra vars injected from environment",
-	)
+
+	if err := syncForwardRuntimeValue(configService, forwardRuntimeAnsibleConfigJSONKey, string(ansibleJSON), "json"); err != nil {
+		return err
+	}
+	if err := syncForwardRuntimeValue(configService, forwardRuntimeAnsibleInventoryConfigKey, cfg.Inventory, "string"); err != nil {
+		return err
+	}
+	if err := syncForwardRuntimeValue(configService, forwardRuntimeAnsibleApplyPlaybookConfigKey, cfg.ApplyPlaybook, "string"); err != nil {
+		return err
+	}
+	if err := syncForwardRuntimeValue(configService, forwardRuntimeAnsibleRemovePlaybookConfigKey, cfg.RemovePlaybook, "string"); err != nil {
+		return err
+	}
+	if err := syncForwardRuntimeValue(configService, forwardRuntimeAnsibleBecomeConfigKey, strconv.FormatBool(cfg.Become), "bool"); err != nil {
+		return err
+	}
+	return syncForwardRuntimeValue(configService, forwardRuntimeAnsibleExtraVarsConfigKey, string(extraVarsJSON), "json")
+}
+
+func clearForwardRuntimeAnsibleConfig(configService *SystemConfigService) error {
+	keys := []struct {
+		Key  string
+		Type string
+	}{
+		{Key: forwardRuntimeAnsibleConfigJSONKey, Type: "json"},
+		{Key: forwardRuntimeAnsibleInventoryConfigKey, Type: "string"},
+		{Key: forwardRuntimeAnsibleApplyPlaybookConfigKey, Type: "string"},
+		{Key: forwardRuntimeAnsibleRemovePlaybookConfigKey, Type: "string"},
+		{Key: forwardRuntimeAnsibleBecomeConfigKey, Type: "bool"},
+		{Key: forwardRuntimeAnsibleExtraVarsConfigKey, Type: "json"},
+	}
+	for _, item := range keys {
+		if err := syncForwardRuntimeValue(configService, item.Key, "", item.Type); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func loadForwardRuntimeBootstrapConfig() (*forwardRuntimeBootstrapConfig, error) {
+	if cfg := appconfig.Get(); cfg != nil {
+		return buildForwardRuntimeBootstrapConfig(cfg.ForwardRuntime)
+	}
+	return &forwardRuntimeBootstrapConfig{}, nil
+}
+
+func buildForwardRuntimeBootstrapConfig(cfg appconfig.ForwardRuntimeConfig) (*forwardRuntimeBootstrapConfig, error) {
+	backend, err := normalizeForwardRuntimeBootstrapBackend(cfg.Backend, "forward_runtime.backend")
+	if err != nil {
+		return nil, err
+	}
+
+	return &forwardRuntimeBootstrapConfig{
+		NodeXMode: cfg.NodeXMode,
+		Backend:   backend,
+		NodeX: appconfig.ForwardRuntimeNodeXConfig{
+			BaseURL:        strings.TrimSpace(cfg.NodeX.BaseURL),
+			Token:          strings.TrimSpace(cfg.NodeX.Token),
+			TimeoutSeconds: cfg.NodeX.TimeoutSeconds,
+		},
+		Ansible: panelForwardAnsibleConfig{
+			Inventory:      strings.TrimSpace(cfg.IptablesAnsible.Inventory),
+			ApplyPlaybook:  strings.TrimSpace(cfg.IptablesAnsible.ApplyPlaybook),
+			RemovePlaybook: strings.TrimSpace(cfg.IptablesAnsible.RemovePlaybook),
+			Become:         cfg.IptablesAnsible.Become,
+			ExtraVars:      cloneForwardRuntimeExtraVars(cfg.IptablesAnsible.ExtraVars),
+			Command:        strings.TrimSpace(cfg.IptablesAnsible.Command),
+			WorkingDir:     strings.TrimSpace(cfg.IptablesAnsible.WorkingDir),
+			TargetPattern:  strings.TrimSpace(cfg.IptablesAnsible.TargetPattern),
+			Environment:    cloneForwardRuntimeEnvironment(cfg.IptablesAnsible.Environment),
+			TimeoutSeconds: cfg.IptablesAnsible.TimeoutSeconds,
+		},
+	}, nil
+}
+
+func shouldPersistForwardRuntimeAnsibleConfig(cfg *forwardRuntimeBootstrapConfig, backend string) bool {
+	if cfg == nil {
+		return false
+	}
+	return backend == model.ForwardRuntimeBackendIptablesAnsible ||
+		strings.TrimSpace(cfg.Ansible.Inventory) != "" ||
+		strings.TrimSpace(cfg.Ansible.ApplyPlaybook) != "" ||
+		strings.TrimSpace(cfg.Ansible.RemovePlaybook) != "" ||
+		strings.TrimSpace(cfg.Ansible.WorkingDir) != "" ||
+		strings.TrimSpace(cfg.Ansible.TargetPattern) != "" ||
+		strings.TrimSpace(cfg.Ansible.Command) != "" ||
+		cfg.Ansible.TimeoutSeconds > 0 ||
+		cfg.Ansible.Become ||
+		len(cfg.Ansible.ExtraVars) > 0 ||
+		len(cfg.Ansible.Environment) > 0
+}
+
+func normalizeForwardRuntimeBootstrapBackend(value, key string) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", nil
+	}
+	if backend, ok := normalizeForwardRuntimeBackend(trimmed); ok {
+		return backend, nil
+	}
+	return "", fmt.Errorf("invalid %s value: %s", key, value)
+}
+
+func cloneForwardRuntimeExtraVars(input map[string]interface{}) map[string]interface{} {
+	if len(input) == 0 {
+		return nil
+	}
+	output := make(map[string]interface{}, len(input))
+	for key, value := range input {
+		output[key] = value
+	}
+	return output
+}
+
+func cloneForwardRuntimeEnvironment(input map[string]string) map[string]string {
+	if len(input) == 0 {
+		return nil
+	}
+	output := make(map[string]string, len(input))
+	for key, value := range input {
+		output[key] = value
+	}
+	return output
 }

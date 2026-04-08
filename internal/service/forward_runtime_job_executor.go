@@ -22,10 +22,6 @@ const (
 	defaultForwardRuntimeJobTimeout          = 2 * time.Minute
 	defaultForwardRuntimeJobErrorLogInterval = time.Minute
 	defaultAnsibleCommand                    = "ansible-playbook"
-
-	forwardRuntimeJobPollIntervalEnvVar     = "FORWARD_RUNTIME_JOB_POLL_INTERVAL"
-	forwardRuntimeJobIdlePollIntervalEnvVar = "FORWARD_RUNTIME_JOB_IDLE_POLL_INTERVAL"
-	forwardRuntimeJobErrorLogIntervalEnvVar = "FORWARD_RUNTIME_JOB_ERROR_LOG_INTERVAL"
 )
 
 type forwardBackgroundErrorLogState struct {
@@ -123,20 +119,15 @@ type panelForwardAnsibleRuntimePayload struct {
 }
 
 func NewPanelForwardRuntimeJobExecutor(db *gorm.DB) *PanelForwardRuntimeJobExecutor {
-	pollInterval := loadForwardBackgroundIntervalFromEnv(forwardRuntimeJobPollIntervalEnvVar, defaultForwardRuntimeJobPollInterval)
-	idlePollInterval := normalizeForwardIdlePollInterval(
-		pollInterval,
-		loadForwardBackgroundIntervalFromEnv(forwardRuntimeJobIdlePollIntervalEnvVar, defaultForwardRuntimeJobIdlePollInterval),
-	)
-	errorLogInterval := loadForwardBackgroundIntervalFromEnv(forwardRuntimeJobErrorLogIntervalEnvVar, defaultForwardRuntimeJobErrorLogInterval)
+	settings := loadForwardRuntimeJobExecutorSettings()
 	return &PanelForwardRuntimeJobExecutor{
 		db:               db,
 		runner:           osExecPanelForwardRuntimeCommandRunner{},
-		pollInterval:     pollInterval,
-		idlePollInterval: idlePollInterval,
-		batchSize:        defaultForwardRuntimeJobBatchSize,
-		jobTimeout:       defaultForwardRuntimeJobTimeout,
-		errorLogger:      newForwardBackgroundErrorLogger(errorLogInterval),
+		pollInterval:     settings.PollInterval,
+		idlePollInterval: settings.IdlePollInterval,
+		batchSize:        settings.BatchSize,
+		jobTimeout:       settings.Timeout,
+		errorLogger:      newForwardBackgroundErrorLogger(settings.ErrorLogInterval),
 	}
 }
 
@@ -503,20 +494,6 @@ func (l *forwardBackgroundErrorLogger) Clear(key string) {
 		return
 	}
 	delete(l.states, key)
-}
-
-func loadForwardBackgroundIntervalFromEnv(envKey string, fallback time.Duration) time.Duration {
-	raw := strings.TrimSpace(os.Getenv(envKey))
-	if raw == "" {
-		return fallback
-	}
-
-	value, err := time.ParseDuration(raw)
-	if err != nil || value <= 0 {
-		log.Printf("invalid %s=%q, using default %s", envKey, raw, fallback)
-		return fallback
-	}
-	return value
 }
 
 func normalizeForwardIdlePollInterval(activeInterval, idleInterval time.Duration) time.Duration {

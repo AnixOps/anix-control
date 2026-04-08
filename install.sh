@@ -346,17 +346,12 @@ run_compose() {
   )
 }
 
-forward_runtime_ansible_json() {
-  printf '%s' '{"inventory":"/app/config/deploy/ansible/inventory.ini","playbookApply":"/app/config/deploy/ansible/playbooks/forward_apply.yml","playbookRemove":"/app/config/deploy/ansible/playbooks/forward_remove.yml","workingDir":"/app/config/deploy/ansible","targetPattern":"{{node.host}}","timeoutSeconds":120,"become":true,"environment":{"ANSIBLE_CONFIG":"/app/config/deploy/ansible/ansible.cfg","ANSIBLE_HOST_KEY_CHECKING":"False"}}'
-}
-
 write_quick_env() {
   local install_dir=$1
   local timezone=$2
   local frontend_port=$3
   local api_port=$4
   local grpc_port=$5
-  local runtime_backend=${6:-gost}
 
   cat >"$install_dir/.env" <<EOF
 TZ=${timezone}
@@ -368,16 +363,6 @@ GRAFANA_PORT=3001
 NGINX_HTTP_PORT=80
 NGINX_HTTPS_PORT=443
 DOCKER_IMAGE=v2board:latest
-FORWARD_RUNTIME_BACKEND=${runtime_backend}
-FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON=$(forward_runtime_ansible_json)
-FORWARD_RUNTIME_ANSIBLE_INVENTORY=
-FORWARD_RUNTIME_ANSIBLE_BECOME=
-FORWARD_RUNTIME_ANSIBLE_HOST_ALIAS=
-FORWARD_RUNTIME_ANSIBLE_HOST=
-FORWARD_RUNTIME_ANSIBLE_PORT=22
-FORWARD_RUNTIME_ANSIBLE_USER=root
-FORWARD_RUNTIME_ANSIBLE_PASSWORD=
-FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD=
 EOF
 }
 
@@ -394,7 +379,6 @@ write_prod_env() {
   local db_name=${10}
   local redis_password=${11}
   local jwt_secret=${12}
-  local runtime_backend=${13:-gost}
 
   cat >"$install_dir/.env" <<EOF
 TZ=${timezone}
@@ -416,16 +400,6 @@ GRAFANA_ADMIN=admin
 GRAFANA_PASSWORD=$(random_secret)
 DOMAIN=panel.example.com
 EMAIL=admin@example.com
-FORWARD_RUNTIME_BACKEND=${runtime_backend}
-FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON=$(forward_runtime_ansible_json)
-FORWARD_RUNTIME_ANSIBLE_INVENTORY=
-FORWARD_RUNTIME_ANSIBLE_BECOME=
-FORWARD_RUNTIME_ANSIBLE_HOST_ALIAS=
-FORWARD_RUNTIME_ANSIBLE_HOST=
-FORWARD_RUNTIME_ANSIBLE_PORT=22
-FORWARD_RUNTIME_ANSIBLE_USER=root
-FORWARD_RUNTIME_ANSIBLE_PASSWORD=
-FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD=
 EOF
 }
 
@@ -434,6 +408,7 @@ write_quick_config() {
   local admin_email=$2
   local admin_password=$3
   local jwt_secret=$4
+  local runtime_backend=${5:-gost}
 
   cat >"$install_dir/config/config.yaml" <<EOF
 env: "production"
@@ -477,6 +452,25 @@ app:
   traffic_log_enable: true
   subscribe_path: "s"
 
+forward_runtime:
+  backend: "${runtime_backend}"
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: ""
+    timeout_seconds: 15
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    become: false
+    extra_vars: {}
+    command: ""
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
+
 admin:
   email: "${admin_email}"
   password: "${admin_password}"
@@ -498,6 +492,7 @@ write_prod_config() {
   local db_password=$6
   local db_name=$7
   local redis_password=$8
+  local runtime_backend=${9:-gost}
 
   cat >"$install_dir/config/config.yaml" <<EOF
 env: "production"
@@ -551,6 +546,25 @@ app:
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
+
+forward_runtime:
+  backend: "${runtime_backend}"
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: ""
+    timeout_seconds: 15
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    become: false
+    extra_vars: {}
+    command: ""
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
 
 admin:
   email: "${admin_email}"
@@ -651,10 +665,10 @@ install_panel() {
 
   if [ "$deploy_mode" = "production" ]; then
     write_prod_env "$install_dir" "$timezone" "$frontend_port" "$api_port" "$grpc_port" "$http_port" "$https_port" "$db_user" "$db_password" "$db_name" "$redis_password" "$jwt_secret" "$runtime_backend"
-    write_prod_config "$install_dir" "$admin_email" "$admin_password" "$jwt_secret" "$db_user" "$db_password" "$db_name" "$redis_password"
+    write_prod_config "$install_dir" "$admin_email" "$admin_password" "$jwt_secret" "$db_user" "$db_password" "$db_name" "$redis_password" "$runtime_backend"
   else
     write_quick_env "$install_dir" "$timezone" "$frontend_port" "$api_port" "$grpc_port" "$runtime_backend"
-    write_quick_config "$install_dir" "$admin_email" "$admin_password" "$jwt_secret"
+    write_quick_config "$install_dir" "$admin_email" "$admin_password" "$jwt_secret" "$runtime_backend"
   fi
 
   seed_inventory "$install_dir" "$seed_host" "$seed_user" "$seed_port" "$seed_key"
@@ -693,8 +707,8 @@ install_panel() {
   printf 'SSH key directory: %s\n' "$install_dir/config/deploy/ssh"
   printf 'Default runtime:   %s\n' "$runtime_backend"
   printf '\n'
-  printf 'Use config/deploy/ssh + inventory.ini for key auth, or fill FORWARD_RUNTIME_ANSIBLE_HOST/USER/PASSWORD in .env for password auth.\n'
-  printf 'The runtime backend and ansible config are seeded from .env during service startup.\n'
+  printf 'Runtime defaults are written to config/config.yaml.forward_runtime.\n'
+  printf 'Use config/deploy/ssh + inventory.ini for playbook auth and edit config/config.yaml.forward_runtime to tune runtime fields.\n'
 }
 
 resolve_existing_install_dir() {

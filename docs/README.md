@@ -16,6 +16,7 @@ Use this tree like NodeX:
 - Docker quickstart: [`reference/quickstart.md`](reference/quickstart.md)
 - Exact startup flow: [`reference/startup-config.md`](reference/startup-config.md)
 - Config source-of-truth: [`reference/configuration.md`](reference/configuration.md)
+- Runtime config migration: [`reference/forward-runtime-migration.md`](reference/forward-runtime-migration.md)
 - Runtime mode entrypoint: [`reference/runtime.md`](reference/runtime.md)
 - Relay onboarding: [`guide/forward-relay-onboarding.md`](guide/forward-relay-onboarding.md)
 - Config examples: [`../config/examples/README.md`](../config/examples/README.md)

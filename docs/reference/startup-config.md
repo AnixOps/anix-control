@@ -1,23 +1,22 @@
 # Startup And Config
 
-This page gives the exact startup flow for `v2board_AnixOps` and clarifies how `config/config.yaml`, `.env`, and runtime system config interact.
+This page describes the exact startup flow after the unified runtime config update.
 
-## 1. Config Ownership
+## 1. Ownership Model
 
-| Location | What it controls | When it is read |
-|------|------|------|
-| `config/config.yaml` | app bootstrap: server, frontend, database, cache, jwt, admin | always on backend startup |
-| `.env` | Docker Compose and install/runtime seed vars | when Compose/scripts load it, or when you export values manually |
-| `v2_system_config` | persisted runtime settings such as `forward.runtime.*` | read by services and `/admin/system` after startup |
+| Location | Purpose |
+|------|------|
+| [`config/config.yaml`](../../config/config.yaml) | canonical startup config for app settings and `forward_runtime` |
+| [`.env`](../../.env) | optional Docker or installer env file |
+| `v2_system_config` | persisted merged runtime snapshot used by runtime services |
 
 Important:
-- `go run .\cmd\server\main.go` does **not** auto-load `.env`
-- Docker Compose does load `.env`
-- current backend bootstrap still reads `jwt.secret`, `app.api_token`, database, cache, and admin values from `config/config.yaml`
-- current environment import during backend startup is specific to `FORWARD_RUNTIME_*`
-- `InitForwardRuntimeSystemConfigFromEnv` seeds `v2_system_config` from `FORWARD_RUNTIME_*` during backend startup
 
-## 2. Minimal `config/config.yaml`
+- backend startup always begins from [`config/config.yaml`](../../config/config.yaml)
+- local `go run` does not auto-load [`.env`](../../.env)
+- runtime services read the forward runtime values that were written into `v2_system_config`
+
+## 2. Minimal Local Config
 
 Copy the template first:
 
@@ -25,7 +24,7 @@ Copy the template first:
 Copy-Item config/config.yaml.example config/config.yaml
 ```
 
-Minimal sqlite example:
+Minimum sqlite example:
 
 ```yaml
 env: "development"
@@ -61,56 +60,24 @@ app:
 admin:
   email: "admin@example.com"
   password: "replace-me"
+
+forward_runtime:
+  backend: "gost"
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: "replace-with-shared-token"
+    timeout_seconds: 15
 ```
 
-## 3. Docker Compose Startup
+## 3. Local Binary Startup
 
-1. Prepare files:
-
-```powershell
-Copy-Item .env.example .env
-Copy-Item config/config.yaml.example config/config.yaml
-```
-
-2. Fill `config/config.yaml` at minimum:
-- `jwt.secret`
-- `app.api_token`
-- `admin.email`
-- `admin.password`
-
-3. If you want runtime bootstrap, fill `.env`:
-- NodeX mode:
-  - `FORWARD_RUNTIME_NODEX_MODE=true`
-  - `FORWARD_RUNTIME_BACKEND=gost`
-  - `FORWARD_RUNTIME_NODEX_BASE_URL=http://<nodex-host>:18081`
-  - `FORWARD_RUNTIME_NODEX_TOKEN=...`
-- or stateless mode:
-  - `FORWARD_RUNTIME_NODEX_MODE=false`
-  - `FORWARD_RUNTIME_BACKEND=iptables_ansible`
-
-4. Start:
-
-```powershell
-docker compose up -d
-docker compose logs -f v2board
-```
-
-5. Open:
-- UI: `http://127.0.0.1:3000`
-- API health: `http://127.0.0.1:8080/health`
-
-## 4. Local Startup Without Docker
-
-1. Prepare `config/config.yaml`
-2. Fill `jwt.secret`, `app.api_token`, and `admin.password`
-3. Export runtime env vars if you need forward runtime bootstrap
-4. Start backend:
+Backend:
 
 ```powershell
 go run .\cmd\server\main.go -config .\config\config.yaml
 ```
 
-5. Start frontend:
+Frontend:
 
 ```powershell
 Set-Location .\web
@@ -118,87 +85,71 @@ npm install
 npm run dev
 ```
 
-## 5. Local Startup With NodeX Mode
+Default local URLs:
 
-Before `go run`, export:
+- UI: `http://127.0.0.1:3000`
+- API: `http://127.0.0.1:8080`
+- health: `http://127.0.0.1:8080/health`
 
-```powershell
-$env:FORWARD_RUNTIME_NODEX_MODE = 'true'
-$env:FORWARD_RUNTIME_BACKEND = 'gost'
-$env:FORWARD_RUNTIME_NODEX_BASE_URL = 'http://127.0.0.1:18081'
-$env:FORWARD_RUNTIME_NODEX_TOKEN = 'replace-with-your-token'
-$env:FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS = '15'
-go run .\cmd\server\main.go -config .\config\config.yaml
-```
+## 4. Docker Startup
 
-What happens on startup:
-
-1. `config/config.yaml` is loaded
-2. database is initialized
-3. `InitForwardRuntimeSystemConfigFromEnv` reads `FORWARD_RUNTIME_*`
-4. values are written to `v2_system_config`
-5. `/admin/system` shows the persisted values
-
-That is why local runtime settings still "work" without Docker:
-- not because `.env` is auto-read
-- but because the process environment is read at startup and persisted into the database
-
-## 6. Local Startup With `iptables_ansible`
-
-Example shell exports:
+Prepare files:
 
 ```powershell
-$env:FORWARD_RUNTIME_NODEX_MODE = 'false'
-$env:FORWARD_RUNTIME_BACKEND = 'iptables_ansible'
-$env:FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON = '{"inventory":"config/deploy/ansible/inventory.ini","playbookApply":"config/deploy/ansible/playbooks/forward_apply.yml","playbookRemove":"config/deploy/ansible/playbooks/forward_remove.yml","workingDir":"config/deploy/ansible","targetPattern":"{{node.host}}","timeoutSeconds":120,"environment":{"ANSIBLE_CONFIG":"config/deploy/ansible/ansible.cfg"}}'
-go run .\cmd\server\main.go -config .\config\config.yaml
+Copy-Item .env.example .env
+Copy-Item config/config.yaml.example config/config.yaml
 ```
 
-Required assets already live here:
-- `config/deploy/ansible/ansible.cfg`
-- `config/deploy/ansible/inventory.ini.example`
-- `config/deploy/ansible/playbooks/forward_apply.yml`
-- `config/deploy/ansible/playbooks/forward_remove.yml`
+Then:
 
-## 7. Verified Systemd Baseline
+1. fill `config/config.yaml`
+2. optionally customize `.env` for deployment-specific values that are unrelated to runtime selection
+3. start containers
 
-The current real-machine validated deployment path is:
+```powershell
+docker compose up -d
+docker compose logs -f v2board
+```
 
-- `v2board` backend as a systemd service
-- `v2board` frontend served on `3000`
-- SQLite for the control-plane data store
-- NodeX control-plane as a separate systemd service on `18081`
-- relay gost API on `18080`
+## 5. What Happens On Startup
 
-This is why local or host-native startup still works without Docker:
+The runtime flow is now:
 
-- `config/config.yaml` bootstraps the app
-- `FORWARD_RUNTIME_*` is read from the process environment
-- `InitForwardRuntimeSystemConfigFromEnv` persists those values into `v2_system_config`
-- NodeX mode only needs a reachable `base_url` and token; it does not require Docker specifically
+1. resolve `config/config.yaml`
+2. load app config and `forward_runtime`
+3. normalize sqlite path, frontend path, and ansible runtime paths
+4. initialize database
+5. run `InitForwardRuntimeSystemConfig`
+6. persist the parsed runtime snapshot into `v2_system_config`
 
-## 8. Where To Edit Later
+That is why local startup and Docker startup now share the same primary config structure.
 
-After initial boot:
+## 6. Runtime Tuning
 
-- use `/admin/system` to inspect or change `forward.runtime.*`
-- use `/admin/system` -> `NodeX Operator Console` to query:
-  - runtime status
-  - doctor output
-  - operator commands
+If you need to change runtime behavior, edit `config/config.yaml.forward_runtime` before startup. That now includes:
 
-## 9. Validation Checklist
+- backend selection under `forward_runtime.backend`
+- NodeX or ansible runtime details under `forward_runtime.nodex` and `forward_runtime.iptables_ansible`
+- local worker tuning under `forward_runtime.jobs` and `forward_runtime.gost_stats`
+
+Any downstream services will read whichever values were persisted into `v2_system_config` when the backend initialized.
+
+## 7. Validation Checklist
 
 After startup, verify:
 
 1. `GET /health` returns `200`
-2. `/admin/system` shows the expected runtime backend and NodeX values
-3. `GET /api/v2/admin/forward/runtime/status` succeeds when NodeX mode is configured
-4. `GET /api/v2/admin/forward/runtime/doctor` returns health + runtime summary
-5. `/admin/forward`, `/admin/forward/tunnel`, and `/admin/forward/nodes` load normally
-6. proxy nodes under `/admin/nodes` and forward nodes under `/admin/forward/nodes` stay clearly separated
+2. `/admin/system` shows the expected merged runtime config
+3. `/admin/forward`
+4. `/admin/forward/tunnel`
+5. `/admin/forward/nodes`
+6. `GET /api/v2/admin/forward/runtime/status` works in NodeX mode
+7. `GET /api/v2/admin/forward/runtime/doctor` works when NodeX is reachable
 
-If you need the exact definition of "relay attached successfully", continue with:
+## 8. Related Docs
 
+- [`configuration.md`](configuration.md)
+- [`forward-runtime-migration.md`](forward-runtime-migration.md)
+- [`runtime.md`](runtime.md)
 - [`../guide/forward-relay-onboarding.md`](../guide/forward-relay-onboarding.md)
 - [`../guide/forward-tunnel-smoke-test.md`](../guide/forward-tunnel-smoke-test.md)

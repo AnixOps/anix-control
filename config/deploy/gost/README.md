@@ -16,6 +16,21 @@ Real attachment requires the full chain below:
 4. the relay gost API token matches the `ForwardNode.api_token`
 5. a tunnel and forward are created and synchronized successfully
 
+## Canonical Config Entry
+
+Put the runtime selection in `config/config.yaml`:
+
+```yaml
+forward_runtime:
+  backend: "gost"
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: "replace-with-shared-token"
+    timeout_seconds: 15
+```
+
+`config/config.yaml.forward_runtime` is the source of truth for gost/NodeX runtime configuration; environment overrides are ignored.
+
 ## Expected Runtime Chain
 
 ```text
@@ -24,7 +39,7 @@ v2board -> NodeX control-plane -> relay gost API
 
 Current implementation does not use the relay host as the outer control-plane address.
 
-`forward.runtime.nodex.base_url` must point to NodeX.
+`forward_runtime.nodex.base_url` must point to NodeX.
 
 The relay `ForwardNode.host` and `ForwardNode.api_port` are used by NodeX only after `v2board` has already reached the NodeX control-plane.
 
@@ -64,9 +79,9 @@ curl -u admin:<RELAY_API_TOKEN> http://<RELAY_HOST>:<API_PORT>/api/config/limite
 
 After relay deployment, finish the panel side:
 
-1. configure `FORWARD_RUNTIME_BACKEND=gost`
-2. configure `FORWARD_RUNTIME_NODEX_BASE_URL`
-3. configure `FORWARD_RUNTIME_NODEX_TOKEN`
+1. configure `forward_runtime.backend=gost`
+2. configure `forward_runtime.nodex.base_url`
+3. configure `forward_runtime.nodex.token`
 4. create the relay `ForwardNode`
 5. create a tunnel and forward
 6. confirm:
@@ -78,7 +93,7 @@ Current verified single-UI split:
 - NodeX control-plane: `18081`
 - relay gost API: `18080`
 
-`forward.runtime.nodex.base_url` must point to the NodeX control-plane, not to the relay gost API port.
+`forward_runtime.nodex.base_url` must point to the NodeX control-plane, not to the relay gost API port.
 
 ## Related Docs
 

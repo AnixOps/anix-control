@@ -7,6 +7,7 @@ This section is the operator/developer reference index for `v2board_AnixOps`.
 - [quickstart.md](quickstart.md): shortest Docker/local startup path
 - [startup-config.md](startup-config.md): exact backend startup flow and runtime bootstrap order
 - [configuration.md](configuration.md): config source-of-truth, key ownership, and mode-specific examples
+- [forward-runtime-migration.md](forward-runtime-migration.md): old `FORWARD_RUNTIME_*` inputs to the new YAML-only runtime config
 - [repository-layout.md](repository-layout.md): root and directory ownership, plus root hygiene rules
 - [runtime.md](runtime.md): NodeX mode vs `iptables_ansible` mode and where to operate each path
 

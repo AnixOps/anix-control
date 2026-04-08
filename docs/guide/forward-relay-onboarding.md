@@ -28,12 +28,13 @@ Use this when you want the private stateful runtime.
 
 1. `v2board` with:
 
-```env
-FORWARD_RUNTIME_NODEX_MODE=true
-FORWARD_RUNTIME_BACKEND=gost
-FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18081
-FORWARD_RUNTIME_NODEX_TOKEN=replace-with-shared-token
-FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=15
+```yaml
+forward_runtime:
+  backend: "gost"
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: "replace-with-shared-token"
+    timeout_seconds: 15
 ```
 
 2. NodeX control-plane running on the configured `base_url`
@@ -95,14 +96,22 @@ Use this when you want stateless relay execution without NodeX.
 
 1. `v2board` with:
 
-```env
-FORWARD_RUNTIME_NODEX_MODE=false
-FORWARD_RUNTIME_BACKEND=iptables_ansible
-FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON={"inventory":"config/deploy/ansible/inventory.ini","playbookApply":"config/deploy/ansible/playbooks/forward_apply.yml","playbookRemove":"config/deploy/ansible/playbooks/forward_remove.yml","workingDir":"config/deploy/ansible","targetPattern":"{{node.host}}","timeoutSeconds":120,"environment":{"ANSIBLE_CONFIG":"config/deploy/ansible/ansible.cfg"}}
+```yaml
+forward_runtime:
+  backend: "iptables_ansible"
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
 ```
 
 2. `ansible-playbook` available on the machine running `v2board`
-3. inventory or env-generated inventory that can SSH into the relay host
+3. an ansible inventory file, referenced by `config/config.yaml.forward_runtime.iptables_ansible.inventory`, that can SSH into the relay host
 4. a supported tunnel and forward
 5. a relay `ForwardNode`
 
@@ -113,7 +122,7 @@ Current `ForwardNode` does not store SSH credentials.
 That means ansible attachment depends on:
 
 - inventory files
-- env-generated inventory
+- ansible inventory files referenced from `config/config.yaml.forward_runtime`
 - SSH and sudo behavior on the executor host
 
 not on extra fields inside `v2_forward_node`.

@@ -19,15 +19,15 @@ const (
 	defaultForwardRuntimeNodeXHealthPath = "/health"
 	defaultForwardRuntimeNodeXStatusPath = "/api/v2/internal/forward/runtime/status"
 
-	panelForwardRuntimeAttachmentModelNodeXGost        = "nodex_gost_stateful"
-	panelForwardRuntimeAttachmentModelLocalAnsible     = "local_iptables_ansible_stateless"
-	panelForwardRuntimeIgnoredNodeXConfigWarning       = "NodeX base_url/token are configured but ignored while runtime backend is iptables_ansible"
-	panelForwardRuntimeMissingNodeXBaseURLReason       = "NodeX mode requires forward.runtime.nodex.base_url before the panel can probe the control plane"
-	panelForwardRuntimeMissingNodeXTokenReason         = "NodeX mode requires forward.runtime.nodex.token before runtime readiness can be confirmed"
-	panelForwardRuntimeNodeXHealthSuccessReason        = "NodeX /health responded with ok from the panel host"
-	panelForwardRuntimeLocalExecutorReachableReason    = "ansible-playbook is available on the panel host"
-	panelForwardRuntimeLocalExecutorReadyReason        = "Local ansible executor resolved inventory/playbooks and is ready to queue jobs"
-	panelForwardRuntimeNodeXRuntimeReadyReason         = "NodeX runtime status responded and advertises gost support"
+	panelForwardRuntimeAttachmentModelNodeXGost         = "nodex_gost_stateful"
+	panelForwardRuntimeAttachmentModelLocalAnsible      = "local_iptables_ansible_stateless"
+	panelForwardRuntimeIgnoredNodeXConfigWarning        = "NodeX base_url/token are configured but ignored while runtime backend is iptables_ansible"
+	panelForwardRuntimeMissingNodeXBaseURLReason        = "NodeX mode requires forward.runtime.nodex.base_url before the panel can probe the control plane"
+	panelForwardRuntimeMissingNodeXTokenReason          = "NodeX mode requires forward.runtime.nodex.token before runtime readiness can be confirmed"
+	panelForwardRuntimeNodeXHealthSuccessReason         = "NodeX /health responded with ok from the panel host"
+	panelForwardRuntimeLocalExecutorReachableReason     = "ansible-playbook is available on the panel host"
+	panelForwardRuntimeLocalExecutorReadyReason         = "Local ansible executor resolved inventory/playbooks and is ready to queue jobs"
+	panelForwardRuntimeNodeXRuntimeReadyReason          = "NodeX runtime status responded and advertises gost support"
 	panelForwardRuntimeNodeXRuntimeMissingBackendReason = "NodeX runtime status responded, but gost support is not advertised yet"
 )
 
@@ -130,17 +130,17 @@ type PanelForwardRuntimeAttachmentState struct {
 }
 
 type PanelForwardRuntimeStatusSummary struct {
-	BaseURL       string                            `json:"baseUrl,omitempty"`
-	CheckedAt     string                            `json:"checkedAt"`
-	Config        PanelForwardRuntimeConfigState    `json:"config"`
+	BaseURL       string                             `json:"baseUrl,omitempty"`
+	CheckedAt     string                             `json:"checkedAt"`
+	Config        PanelForwardRuntimeConfigState     `json:"config"`
 	Attachment    PanelForwardRuntimeAttachmentState `json:"attachment"`
-	Reachability  PanelForwardRuntimeReadiness      `json:"reachability"`
-	RuntimeReady  PanelForwardRuntimeReadiness      `json:"runtimeReady"`
-	Summary       string                            `json:"summary,omitempty"`
-	Warnings      []string                          `json:"warnings,omitempty"`
-	Health        PanelForwardRuntimeProbe          `json:"health"`
-	RuntimeStatus PanelForwardRuntimeStatusSnapshot `json:"runtimeStatus"`
-	LocalAnsible  *nodeXForwardRuntimeAnsibleStatus `json:"localAnsible,omitempty"`
+	Reachability  PanelForwardRuntimeReadiness       `json:"reachability"`
+	RuntimeReady  PanelForwardRuntimeReadiness       `json:"runtimeReady"`
+	Summary       string                             `json:"summary,omitempty"`
+	Warnings      []string                           `json:"warnings,omitempty"`
+	Health        PanelForwardRuntimeProbe           `json:"health"`
+	RuntimeStatus PanelForwardRuntimeStatusSnapshot  `json:"runtimeStatus"`
+	LocalAnsible  *nodeXForwardRuntimeAnsibleStatus  `json:"localAnsible,omitempty"`
 }
 
 type PanelForwardRuntimeDoctorSummary struct {
@@ -318,7 +318,7 @@ func buildPanelForwardRuntimeAttachmentState(backend string) PanelForwardRuntime
 	if backend == model.ForwardRuntimeBackendIptablesAnsible {
 		return PanelForwardRuntimeAttachmentState{
 			Model:       panelForwardRuntimeAttachmentModelLocalAnsible,
-			Description: "Stateless iptables/Ansible path. Only the execution node identity is stored on the tunnel; SSH access still comes from inventory or environment variables.",
+			Description: "Stateless iptables/Ansible path. Only the execution node identity is stored on the tunnel; SSH access comes from the configured ansible inventory.",
 		}
 	}
 	return PanelForwardRuntimeAttachmentState{
