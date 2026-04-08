@@ -12,76 +12,123 @@ var (
 	once sync.Once
 )
 
-// Config 应用配置
+// Config is the root application configuration loaded from config.yaml.
 type Config struct {
-	Env      string         `yaml:"env"` // development, production
-	Server   ServerConfig   `yaml:"server"`
-	Frontend FrontendConfig `yaml:"frontend"`
-	Database DatabaseConfig `yaml:"database"`
-	Cache    CacheConfig    `yaml:"cache"`
-	Log      LogConfig      `yaml:"log"`
-	JWT      JWTConfig      `yaml:"jwt"`
-	App      AppConfig      `yaml:"app"`
-	Admin    AdminConfig    `yaml:"admin"`
-	TLS      TLSConfig      `yaml:"tls"`
+	Env            string               `yaml:"env"`
+	Server         ServerConfig         `yaml:"server"`
+	Frontend       FrontendConfig       `yaml:"frontend"`
+	Database       DatabaseConfig       `yaml:"database"`
+	Cache          CacheConfig          `yaml:"cache"`
+	Log            LogConfig            `yaml:"log"`
+	JWT            JWTConfig            `yaml:"jwt"`
+	App            AppConfig            `yaml:"app"`
+	Admin          AdminConfig          `yaml:"admin"`
+	TLS            TLSConfig            `yaml:"tls"`
+	ForwardRuntime ForwardRuntimeConfig `yaml:"forward_runtime"`
 }
 
-// TLSConfig TLS/HTTPS 配置
+// ForwardRuntimeConfig stores the canonical forward runtime settings from config.yaml.
+type ForwardRuntimeConfig struct {
+	NodeXMode       *bool                         `yaml:"nodex_mode"`
+	Backend         string                        `yaml:"backend"`
+	NodeX           ForwardRuntimeNodeXConfig     `yaml:"nodex"`
+	IptablesAnsible ForwardRuntimeAnsibleConfig   `yaml:"iptables_ansible"`
+	Jobs            ForwardRuntimeJobsConfig      `yaml:"jobs"`
+	GostStats       ForwardRuntimeGostStatsConfig `yaml:"gost_stats"`
+}
+
+// ForwardRuntimeNodeXConfig stores NodeX or gost runtime settings.
+type ForwardRuntimeNodeXConfig struct {
+	BaseURL        string `yaml:"base_url"`
+	Token          string `yaml:"token"`
+	TimeoutSeconds int    `yaml:"timeout_seconds"`
+}
+
+// ForwardRuntimeAnsibleConfig stores local ansible runtime settings.
+type ForwardRuntimeAnsibleConfig struct {
+	Inventory      string                 `yaml:"inventory"`
+	ApplyPlaybook  string                 `yaml:"apply_playbook"`
+	RemovePlaybook string                 `yaml:"remove_playbook"`
+	Become         bool                   `yaml:"become"`
+	ExtraVars      map[string]interface{} `yaml:"extra_vars"`
+	Command        string                 `yaml:"command"`
+	WorkingDir     string                 `yaml:"working_dir"`
+	TargetPattern  string                 `yaml:"target_pattern"`
+	Environment    map[string]string      `yaml:"environment"`
+	TimeoutSeconds int                    `yaml:"timeout_seconds"`
+}
+
+// ForwardRuntimeJobsConfig stores local ansible job executor polling settings.
+type ForwardRuntimeJobsConfig struct {
+	PollInterval     string `yaml:"poll_interval"`
+	IdlePollInterval string `yaml:"idle_poll_interval"`
+	ErrorLogInterval string `yaml:"error_log_interval"`
+	BatchSize        int    `yaml:"batch_size"`
+	TimeoutSeconds   int    `yaml:"timeout_seconds"`
+}
+
+// ForwardRuntimeGostStatsConfig stores gost stats polling settings.
+type ForwardRuntimeGostStatsConfig struct {
+	PollInterval     string `yaml:"poll_interval"`
+	IdlePollInterval string `yaml:"idle_poll_interval"`
+	ErrorLogInterval string `yaml:"error_log_interval"`
+}
+
+// TLSConfig defines TLS settings.
 type TLSConfig struct {
-	Enable   bool   `yaml:"enable"`    // 是否启用 TLS
-	CertFile string `yaml:"cert_file"` // 证书文件路径
-	KeyFile  string `yaml:"key_file"`  // 私钥文件路径
-	Domain   string `yaml:"domain"`    // 域名 (用于生成订阅链接等)
+	Enable   bool   `yaml:"enable"`
+	CertFile string `yaml:"cert_file"`
+	KeyFile  string `yaml:"key_file"`
+	Domain   string `yaml:"domain"`
 }
 
-// AdminConfig 默认管理员配置
+// AdminConfig defines the bootstrap admin account.
 type AdminConfig struct {
 	Email    string `yaml:"email"`
 	Password string `yaml:"password"`
 }
 
-// ServerConfig 服务器配置
+// ServerConfig defines backend server settings.
 type ServerConfig struct {
 	Host           string   `yaml:"host"`
 	Port           int      `yaml:"port"`
-	Mode           string   `yaml:"mode"` // debug, release, test
+	Mode           string   `yaml:"mode"`
 	ReadTimeout    int      `yaml:"read_timeout"`
 	WriteTimeout   int      `yaml:"write_timeout"`
-	TrustedProxies []string `yaml:"trusted_proxies"` // 可信代理 IP 列表
+	TrustedProxies []string `yaml:"trusted_proxies"`
 }
 
-// FrontendConfig 前端服务器配置
+// FrontendConfig defines static frontend serving settings.
 type FrontendConfig struct {
-	Enable bool   `yaml:"enable"` // 是否启用前端服务
-	Port   int    `yaml:"port"`   // 前端服务端口
-	Path   string `yaml:"path"`   // 前端静态文件目录
+	Enable bool   `yaml:"enable"`
+	Port   int    `yaml:"port"`
+	Path   string `yaml:"path"`
 }
 
-// DatabaseConfig 数据库配置
+// DatabaseConfig defines database connection settings.
 type DatabaseConfig struct {
-	Driver          string `yaml:"driver"`            // sqlite, postgres
-	Database        string `yaml:"database"`          // SQLite: 文件路径, PostgreSQL: 数据库名
-	Host            string `yaml:"host"`              // PostgreSQL only
-	Port            int    `yaml:"port"`              // PostgreSQL only
-	Username        string `yaml:"username"`          // PostgreSQL only
-	Password        string `yaml:"password"`          // PostgreSQL only
-	LogLevel        string `yaml:"log_level"`         // silent, error, warn, info
-	MaxIdleConns    int    `yaml:"max_idle_conns"`    // PostgreSQL only
-	MaxOpenConns    int    `yaml:"max_open_conns"`    // PostgreSQL only
-	ConnMaxLifetime int    `yaml:"conn_max_lifetime"` // PostgreSQL only (seconds)
+	Driver          string `yaml:"driver"`
+	Database        string `yaml:"database"`
+	Host            string `yaml:"host"`
+	Port            int    `yaml:"port"`
+	Username        string `yaml:"username"`
+	Password        string `yaml:"password"`
+	LogLevel        string `yaml:"log_level"`
+	MaxIdleConns    int    `yaml:"max_idle_conns"`
+	MaxOpenConns    int    `yaml:"max_open_conns"`
+	ConnMaxLifetime int    `yaml:"conn_max_lifetime"`
 }
 
-// CacheConfig 缓存配置
+// CacheConfig defines cache settings.
 type CacheConfig struct {
-	Driver string `yaml:"driver"` // memory (默认), redis
-	// Redis 专用配置 (使用 memory 时可忽略)
+	Driver        string `yaml:"driver"`
 	RedisHost     string `yaml:"redis_host"`
 	RedisPort     int    `yaml:"redis_port"`
 	RedisPassword string `yaml:"redis_password"`
 	RedisDB       int    `yaml:"redis_db"`
 }
 
-// LogConfig 日志配置
+// LogConfig defines log settings.
 type LogConfig struct {
 	Level      string `yaml:"level"`
 	Output     string `yaml:"output"`
@@ -91,13 +138,13 @@ type LogConfig struct {
 	MaxAge     int    `yaml:"max_age"`
 }
 
-// JWTConfig JWT配置
+// JWTConfig defines JWT settings.
 type JWTConfig struct {
 	Secret string `yaml:"secret"`
 	Expire int    `yaml:"expire"`
 }
 
-// AppConfig 应用配置
+// AppConfig defines generic app settings.
 type AppConfig struct {
 	Name             string `yaml:"name"`
 	Version          string `yaml:"version"`
@@ -106,7 +153,7 @@ type AppConfig struct {
 	SubscribePath    string `yaml:"subscribe_path"`
 }
 
-// Load 加载配置文件
+// Load reads a YAML config file once per process.
 func Load(path string) (*Config, error) {
 	var err error
 	once.Do(func() {
@@ -123,12 +170,12 @@ func Load(path string) (*Config, error) {
 	return cfg, err
 }
 
-// Get 获取配置
+// Get returns the loaded config.
 func Get() *Config {
 	return cfg
 }
 
-// Set 设置配置 (用于测试)
+// Set replaces the loaded config, mainly for tests.
 func Set(c *Config) {
 	cfg = c
 }

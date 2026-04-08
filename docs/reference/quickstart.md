@@ -1,21 +1,23 @@
 # Quickstart
 
-This page is the shortest path to getting `v2board_AnixOps` running.
+This page is the shortest path to getting `v2board_AnixOps` running with the unified config model.
 
 ## What The Backend Actually Reads
 
 Always prepare these inputs first:
 
 - [`config/config.yaml`](../../config/config.yaml)
-  - authoritative bootstrap config for server, database, cache, JWT, app token, and admin account
+  - canonical bootstrap config for server, database, cache, JWT, admin, and `forward_runtime`
 - [`.env`](../../.env)
-  - Compose and installer env file
-  - also used for `FORWARD_RUNTIME_*` when you want runtime bootstrap
+  - optional Docker Compose and installer env file
+  - use it for deployment-specific ports or metadata; runtime selection comes from `config/config.yaml.forward_runtime`
 
 Important:
+
 - local `go run` does not auto-load `.env`
-- only `FORWARD_RUNTIME_*` are imported from the process environment into `v2_system_config`
-- if you skip the installer, you must fill [`config/config.yaml`](../../config/config.yaml) yourself
+- `config/config.yaml` is the primary source of truth
+- runtime selection is defined in `config/config.yaml.forward_runtime`
+- merged runtime values are persisted into `v2_system_config`
 
 ## Docker Quickstart
 
@@ -26,33 +28,52 @@ Copy-Item .env.example .env
 Copy-Item config\config.yaml.example config\config.yaml
 ```
 
-2. Edit `config/config.yaml` at minimum:
+2. Edit [`config/config.yaml`](../../config/config.yaml) at minimum:
 
 - `jwt.secret`
 - `app.api_token`
 - `admin.email`
 - `admin.password`
-- database/cache values if you are not using the default sqlite + memory path
+- `forward_runtime.backend`
 
-3. If you want NodeX mode, also set in `.env`:
+3. If you need NodeX mode, set it in `config/config.yaml`:
 
-- `FORWARD_RUNTIME_NODEX_MODE=true`
-- `FORWARD_RUNTIME_BACKEND=gost`
-- `FORWARD_RUNTIME_NODEX_BASE_URL=http://<nodex-host>:18081`
-- `FORWARD_RUNTIME_NODEX_TOKEN=replace-with-shared-token`
-- `FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=15`
+```yaml
+forward_runtime:
+  backend: "gost"
+  nodex:
+    base_url: "http://nodex-control-plane:18081"
+    token: "replace-with-shared-token"
+    timeout_seconds: 15
+```
 
-4. Start:
+4. If you need iptables/ansible mode, set it in `config/config.yaml`:
+
+```yaml
+forward_runtime:
+  backend: "iptables_ansible"
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
+```
+
+5. Start:
 
 ```powershell
 docker compose up -d
 docker compose logs -f v2board
 ```
 
-5. Open:
+6. Open:
 
 - panel API: `http://127.0.0.1:8080`
-- admin/user frontend: `http://127.0.0.1:3000`
+- admin or user frontend: `http://127.0.0.1:3000`
 
 ## Local Development
 
@@ -62,18 +83,16 @@ docker compose logs -f v2board
 Copy-Item config\config.yaml.example config\config.yaml
 ```
 
-2. Fill `jwt.secret`, `app.api_token`, and `admin.password`.
+2. Fill `jwt.secret`, `app.api_token`, `admin.password`, and `forward_runtime`.
 
-3. If you need runtime bootstrap, export `FORWARD_RUNTIME_*` in the shell first.
-
-4. Start backend:
+3. Start backend:
 
 ```powershell
 go mod download
 go run .\cmd\server\main.go -config .\config\config.yaml
 ```
 
-5. Start frontend:
+4. Start frontend:
 
 ```powershell
 Set-Location web
@@ -81,16 +100,21 @@ npm install
 npm run dev
 ```
 
+## Runtime Overrides
+
+Adjust runtime behavior by editing `config/config.yaml.forward_runtime` and restarting the backend. The `.env` file remains reserved for ports, secret tokens, and ancillary deployment flags rather than runtime selection.
+
 ## Minimum NodeX Mode Setup
 
-`v2board` only acts as the public control plane. For actual private forward runtime execution, set:
+Use this in `config/config.yaml`:
 
-```env
-FORWARD_RUNTIME_NODEX_MODE=true
-FORWARD_RUNTIME_BACKEND=gost
-FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18081
-FORWARD_RUNTIME_NODEX_TOKEN=replace-with-shared-token
-FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=15
+```yaml
+forward_runtime:
+  backend: "gost"
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: "replace-with-shared-token"
+    timeout_seconds: 15
 ```
 
 Current verified single-UI port split:
@@ -100,38 +124,25 @@ Current verified single-UI port split:
 - NodeX control-plane: `18081`
 - relay gost API: `18080`
 
-After container or app startup, these values are synced into system config keys:
+## Minimum `iptables_ansible` Mode Setup
 
-- `forward.runtime_backend`
-- `forward.runtime.nodex_mode`
-- `forward.runtime.nodex.base_url`
-- `forward.runtime.nodex.token`
-- `forward.runtime.nodex.timeout_seconds`
+Use this in `config/config.yaml`:
 
-In the admin UI, check:
-
-- `/admin/system` -> NodeX mode enabled
-- `/admin/system` -> NodeX Operator Console
-- `/admin/forward`
-- `/admin/forward/tunnel`
-- `/admin/forward/nodes`
-
-Do not treat a saved `ForwardNode` as proof that the relay is already attached. In this mode, real attachment happens only when `v2board -> NodeX -> relay gost API` succeeds.
-
-## Minimum iptables_ansible Mode Setup
-
-```env
-FORWARD_RUNTIME_NODEX_MODE=false
-FORWARD_RUNTIME_BACKEND=iptables_ansible
-FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON={"inventory":"/app/config/deploy/ansible/inventory.ini","playbookApply":"/app/config/deploy/ansible/playbooks/forward_apply.yml","playbookRemove":"/app/config/deploy/ansible/playbooks/forward_remove.yml","workingDir":"/app/config/deploy/ansible","targetPattern":"{{node.host}}","timeoutSeconds":120,"environment":{"ANSIBLE_CONFIG":"/app/config/deploy/ansible/ansible.cfg"}}
-FORWARD_RUNTIME_ANSIBLE_HOST=198.51.100.10
-FORWARD_RUNTIME_ANSIBLE_USER=root
-FORWARD_RUNTIME_ANSIBLE_PASSWORD=replace-with-password
+```yaml
+forward_runtime:
+  backend: "iptables_ansible"
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
 ```
 
-Use this path when you do not want NodeX stateful ingress/egress orchestration and only need stateless forwarding execution on relay hosts.
-
-Do not treat a saved `ForwardNode` as proof that the relay is already attached. In this mode, real attachment happens only when the local executor can run `ansible-playbook` successfully against the relay host.
+If you prefer password auth instead of SSH keys, keep the runtime config in `config/config.yaml.forward_runtime` and keep inventory entries or extra vars updated with the relay credentials. Do not rely on `FORWARD_RUNTIME_*` for configuring runtime access.
 
 ## Current Proven Deployment Path
 
@@ -146,6 +157,8 @@ Docker remains supported for startup and future deployment work, but the recorde
 ## What To Read Next
 
 - [`configuration.md`](configuration.md)
+- [`forward-runtime-migration.md`](forward-runtime-migration.md)
+- [`startup-config.md`](startup-config.md)
 - [`runtime.md`](runtime.md)
 - [`../guide/forward-relay-onboarding.md`](../guide/forward-relay-onboarding.md)
 - [`../guide/forward-tunnel-runtime-ops.md`](../guide/forward-tunnel-runtime-ops.md)

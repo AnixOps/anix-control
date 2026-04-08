@@ -1,17 +1,39 @@
 # Runtime Modes
 
-This page is the reference entrypoint for the forward runtime split in `v2board_AnixOps`.
+This page is the runtime reference for the forward split in `v2board_AnixOps`.
 
-## One Important Truth
+## Core Rule
 
-Creating a `ForwardNode` under `/admin/forward/nodes` does not mean the relay has already joined the execution plane.
+Creating a `ForwardNode` under `/admin/forward/nodes` only creates control-plane metadata.
 
-A `ForwardNode` record only stores metadata used later by runtime jobs. Real attachment happens only when the selected runtime path can execute successfully:
+Real runtime attachment happens only when one of these execution paths succeeds:
 
-- `NodeX/gost`
-  - `v2board -> NodeX control-plane -> relay gost API`
-- `iptables_ansible`
-  - `v2board local executor -> ansible-playbook -> SSH/inventory -> relay host`
+- `gost` via NodeX
+- `iptables_ansible` via the local executor
+
+## Unified Config Entry
+
+Both modes now start from the same place:
+
+```yaml
+forward_runtime:
+  backend: "gost"
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: "replace-with-shared-token"
+    timeout_seconds: 15
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
+```
+
+Runtime configuration now comes exclusively from `config/config.yaml.forward_runtime`. Legacy `FORWARD_RUNTIME_*` variables are no longer consulted during startup.
 
 ## Control Plane Vs Execution Plane
 
@@ -19,116 +41,105 @@ A `ForwardNode` record only stores metadata used later by runtime jobs. Real att
   - public control plane
   - admin UI
   - persistence
-  - `/api/v2/admin/forward/runtime/*` diagnostics and job views
+  - diagnostics and job views
 - `NodeX`
   - internal-only execution control plane
   - stateful `gost` runtime
   - doctor, version, and operator tooling
 - `iptables_ansible`
-  - stateless execution path
-  - local background executor inside `v2board`
-  - `ansible-playbook` + SSH + playbook driven forwarding
+  - stateless local execution path
+  - background executor inside `v2board`
+  - `ansible-playbook` plus SSH and playbooks
 
-## Mode Split
+## NodeX Mode
 
-### NodeX Mode
+Use this when you want the private stateful runtime:
 
-Use this when you want the private stateful runtime.
-
-Required bootstrap:
-
-```env
-FORWARD_RUNTIME_NODEX_MODE=true
-FORWARD_RUNTIME_BACKEND=gost
-FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18081
-FORWARD_RUNTIME_NODEX_TOKEN=replace-with-shared-token
-FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=15
+```yaml
+forward_runtime:
+  backend: "gost"
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: "replace-with-shared-token"
+    timeout_seconds: 15
 ```
 
 Operational implications:
 
-- `InNodeID` ingress semantics are valid only in this mode
-- `forward.runtime.nodex.base_url` and `forward.runtime.nodex.token` are required
-- in the current verified single-UI deployment, NodeX uses `18081` while the relay gost API uses `18080`
-- the relay `ForwardNode` must expose `host`, `api_port`, and `api_token`
-- the relay host must already be running a reachable gost management API
-- attachment is not complete until NodeX can create or update relay services and limiters
+- `InNodeID` ingress semantics apply only in this mode
+- `forward_runtime.nodex.base_url` and `forward_runtime.nodex.token` are required
+- `ForwardNode.host`, `ForwardNode.api_port`, and `ForwardNode.api_token` must point to a reachable relay gost API
+- the runtime is not attached until NodeX can create or update relay services and limiters
 
 Actual flow:
 
-1. `v2board` builds a runtime request from the selected forward and tunnel.
-2. `v2board` calls NodeX at `/api/v2/internal/forward/runtime/execute`.
-3. NodeX uses the relay `ForwardNode.host`, `ForwardNode.api_port`, and `ForwardNode.api_token`.
-4. NodeX writes to relay gost endpoints such as `/api/config/services` and `/api/config/limiters`.
+1. `v2board` builds a runtime request from the selected forward and tunnel
+2. `v2board` calls NodeX
+3. NodeX talks to the relay gost API
+4. NodeX creates or updates relay services and limiters
 
-If `v2board` runs inside Docker, do not point `FORWARD_RUNTIME_NODEX_BASE_URL` at `127.0.0.1` unless NodeX is in the same network namespace. Use the actual reachable host or service name instead.
+## `iptables_ansible` Mode
 
-### `iptables_ansible` Mode
+Use this when you want stateless relay execution without NodeX:
 
-Use this when you want stateless relay execution without NodeX.
-
-Required bootstrap:
-
-```env
-FORWARD_RUNTIME_NODEX_MODE=false
-FORWARD_RUNTIME_BACKEND=iptables_ansible
-FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON={"inventory":"config/deploy/ansible/inventory.ini","playbookApply":"config/deploy/ansible/playbooks/forward_apply.yml","playbookRemove":"config/deploy/ansible/playbooks/forward_remove.yml","workingDir":"config/deploy/ansible","targetPattern":"{{node.host}}","timeoutSeconds":120,"environment":{"ANSIBLE_CONFIG":"config/deploy/ansible/ansible.cfg"}}
+```yaml
+forward_runtime:
+  backend: "iptables_ansible"
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
 ```
 
 Operational implications:
 
 - no NodeX control-plane is required
-- no node-side self-register flow is required
-- the real dependency is `ansible-playbook` on the `v2board` executor host
-- SSH credentials are provided by inventory files or env-generated inventory, not by `ForwardNode` table columns
-- the selected execution target is resolved from the tunnel, then targeted through inventory or `targetPattern`
-- attachment is complete only after the local executor runs the playbook successfully and the relay host has the expected `iptables` rules
+- no proxy ingress node is required
+- `ansible-playbook` must exist on the `v2board` executor host
+- SSH credentials come from the configured ansible inventory
+- the runtime is attached only after the playbook succeeds on the relay host
 
 Actual flow:
 
-1. `v2board` stores a pending runtime job in `v2_forward_runtime_job`.
-2. The local background executor polls pending `iptables_ansible` jobs.
-3. The executor runs `ansible-playbook`.
-4. The playbook uses inventory or env-generated inventory to reach the relay host.
-5. The relay host receives or removes `iptables` rules.
+1. `v2board` stores a pending runtime job in `v2_forward_runtime_job`
+2. the local executor polls pending `iptables_ansible` jobs
+3. the executor runs `ansible-playbook`
+4. the relay host receives or removes `iptables` rules
 
 ## Current Health Semantics
 
-The current forward-node online indicator is intentionally limited.
+The current forward-node online indicator is limited:
 
-- panel health check only tests TCP reachability to `ForwardNode.host:ForwardNode.port`
-- a green node in the UI does not prove:
+- panel health only tests TCP reachability to `ForwardNode.host:ForwardNode.port`
+- a green node does not prove:
   - NodeX is reachable
-  - gost API on `api_port` is healthy
-  - `api_token` matches the relay
+  - relay gost API is healthy
+  - `api_token` matches
   - ansible can SSH into the host
-  - the host already has active forward rules
+  - active forward rules already exist
 
-Treat `/admin/forward/nodes` online status as a coarse reachability signal, not as runtime attachment proof.
-
-## Operator Entry Points
-
-Use these together:
-
-- startup and config: [`startup-config.md`](startup-config.md)
-- config source-of-truth: [`configuration.md`](configuration.md)
-- control-plane evidence:
-  - `/admin/system`
-  - `/api/v2/admin/forward/runtime/status`
-  - `/api/v2/admin/forward/runtime/doctor`
-  - `/api/v2/admin/forward/runtime/jobs`
-- relay onboarding: [`../guide/forward-relay-onboarding.md`](../guide/forward-relay-onboarding.md)
-- runtime operations: [`../guide/forward-tunnel-runtime-ops.md`](../guide/forward-tunnel-runtime-ops.md)
-- manual smoke tests: [`../guide/forward-tunnel-smoke-test.md`](../guide/forward-tunnel-smoke-test.md)
-- NodeX boundary: [`../guide/nodex-internal-extension.md`](../guide/nodex-internal-extension.md)
+Treat `/admin/forward/nodes` status as coarse reachability only.
 
 ## Resource Naming Rule
 
-Do not mix these resource types in docs or UI copy:
+Keep these resource types separate:
 
 - `/admin/nodes`
-  - proxy-node inventory
+  - proxy nodes
 - `/admin/forward/nodes`
   - forward execution nodes
 - `/admin/forward/tunnel`
-  - tunnel inventory bound to forward execution behavior
+  - tunnel inventory
+
+## Related Docs
+
+- [`configuration.md`](configuration.md)
+- [`startup-config.md`](startup-config.md)
+- [`../guide/forward-relay-onboarding.md`](../guide/forward-relay-onboarding.md)
+- [`../guide/forward-tunnel-smoke-test.md`](../guide/forward-tunnel-smoke-test.md)
+- [`../guide/nodex-internal-extension.md`](../guide/nodex-internal-extension.md)

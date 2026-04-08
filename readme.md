@@ -28,8 +28,8 @@ Before you try to start the panel, keep these rules straight:
 
 - the backend always loads [`config/config.yaml`](config/config.yaml) through `-config`
 - local `go run` does not auto-load [`.env`](.env)
-- Docker Compose can pass `FORWARD_RUNTIME_*` values into the process environment
-- on startup, `InitForwardRuntimeSystemConfigFromEnv` persists `FORWARD_RUNTIME_*` into `v2_system_config`
+- `config/config.yaml.forward_runtime` is the canonical runtime entry
+- `InitForwardRuntimeSystemConfig` normalizes the YAML contents and writes them into `v2_system_config`
 - current app bootstrap still expects `jwt.secret`, `app.api_token`, `admin.*`, and database/cache values in [`config/config.yaml`](config/config.yaml)
 
 If you use [`install.sh`](install.sh) or [`panel_install.sh`](panel_install.sh), those scripts generate [`config/config.yaml`](config/config.yaml) for you. If you skip the installer, fill it manually.
@@ -38,6 +38,7 @@ If you use [`install.sh`](install.sh) or [`panel_install.sh`](panel_install.sh),
 
 - Docker: [`docs/reference/quickstart.md`](docs/reference/quickstart.md)
 - Local dev: [`docs/reference/startup-config.md`](docs/reference/startup-config.md)
+- Runtime config migration: [`docs/reference/forward-runtime-migration.md`](docs/reference/forward-runtime-migration.md)
 - NodeX mode and runtime semantics: [`docs/reference/runtime.md`](docs/reference/runtime.md)
 - Verified relay proof and manual smoke: [`docs/guide/forward-tunnel-smoke-test.md`](docs/guide/forward-tunnel-smoke-test.md)
 - Relay onboarding and acceptance: [`docs/guide/forward-relay-onboarding.md`](docs/guide/forward-relay-onboarding.md)
@@ -56,13 +57,11 @@ Current verified deployment truth:
 ## Runtime Modes
 
 - `NodeX mode`
-  - `FORWARD_RUNTIME_NODEX_MODE=true`
-  - `FORWARD_RUNTIME_BACKEND=gost`
-  - requires `FORWARD_RUNTIME_NODEX_BASE_URL` and `FORWARD_RUNTIME_NODEX_TOKEN`
+  - `forward_runtime.backend=gost` via `config/config.yaml.forward_runtime`
+  - requires `forward_runtime.nodex.base_url` and `forward_runtime.nodex.token`
   - stateful private runtime handoff to NodeX
 - `iptables_ansible mode`
-  - `FORWARD_RUNTIME_NODEX_MODE=false`
-  - `FORWARD_RUNTIME_BACKEND=iptables_ansible`
+  - `forward_runtime.backend=iptables_ansible` via `config/config.yaml.forward_runtime`
   - stateless ansible/iptables execution on forward nodes
   - does not use proxy-node ingress semantics
 

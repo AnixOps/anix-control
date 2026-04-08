@@ -18,10 +18,6 @@ const (
 	defaultForwardGostStatsPollInterval     = 30 * time.Second
 	defaultForwardGostStatsIdlePollInterval = 2 * time.Minute
 	defaultForwardGostStatsErrorLogInterval = 5 * time.Minute
-
-	forwardGostStatsPollIntervalEnvVar     = "FORWARD_GOST_STATS_POLL_INTERVAL"
-	forwardGostStatsIdlePollIntervalEnvVar = "FORWARD_GOST_STATS_IDLE_POLL_INTERVAL"
-	forwardGostStatsErrorLogIntervalEnvVar = "FORWARD_GOST_STATS_ERROR_LOG_INTERVAL"
 )
 
 type ForwardGostStatsWorker struct {
@@ -35,17 +31,12 @@ func NewForwardGostStatsWorker(db *gorm.DB) *ForwardGostStatsWorker {
 	if db == nil {
 		db = database.Get()
 	}
-	interval := loadForwardBackgroundIntervalFromEnv(forwardGostStatsPollIntervalEnvVar, defaultForwardGostStatsPollInterval)
-	idleInterval := normalizeForwardIdlePollInterval(
-		interval,
-		loadForwardBackgroundIntervalFromEnv(forwardGostStatsIdlePollIntervalEnvVar, defaultForwardGostStatsIdlePollInterval),
-	)
-	errorLogInterval := loadForwardBackgroundIntervalFromEnv(forwardGostStatsErrorLogIntervalEnvVar, defaultForwardGostStatsErrorLogInterval)
+	settings := loadForwardGostStatsWorkerSettings()
 	return &ForwardGostStatsWorker{
 		db:           db,
-		interval:     interval,
-		idleInterval: idleInterval,
-		errorLogger:  newForwardBackgroundErrorLogger(errorLogInterval),
+		interval:     settings.PollInterval,
+		idleInterval: settings.IdlePollInterval,
+		errorLogger:  newForwardBackgroundErrorLogger(settings.ErrorLogInterval),
 	}
 }
 

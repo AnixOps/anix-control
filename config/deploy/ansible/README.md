@@ -2,24 +2,44 @@
 
 These files back the local `iptables_ansible` forward runtime extension.
 
-Default paths used by Docker and the one-click installer:
+## Canonical Config Entry
 
-- `inventory`: `/app/config/deploy/ansible/inventory.ini`
-- `playbookApply`: `/app/config/deploy/ansible/playbooks/forward_apply.yml`
-- `playbookRemove`: `/app/config/deploy/ansible/playbooks/forward_remove.yml`
-- `workingDir`: `/app/config/deploy/ansible`
-- `ANSIBLE_CONFIG`: `/app/config/deploy/ansible/ansible.cfg`
+Put the runtime selection in `config/config.yaml`:
 
-How to use:
+```yaml
+forward_runtime:
+  backend: "iptables_ansible"
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
+```
+
+## How To Use
 
 1. Copy `inventory.ini.example` to `inventory.ini`.
-2. Add your ingress/relay hosts and SSH details.
+2. Add your relay hosts and SSH details.
 3. Place SSH keys under `config/deploy/ssh/` when you use key-based auth.
-4. Set `FORWARD_RUNTIME_BACKEND=iptables_ansible` in `.env`, or switch it in `System.vue`.
-5. If you use SSH password auth instead of a private key, set `FORWARD_RUNTIME_ANSIBLE_HOST`, `FORWARD_RUNTIME_ANSIBLE_USER`, and `FORWARD_RUNTIME_ANSIBLE_PASSWORD` in `.env`.
-6. For non-root SSH users, also set `FORWARD_RUNTIME_ANSIBLE_BECOME=true` and `FORWARD_RUNTIME_ANSIBLE_BECOME_PASSWORD`.
+4. Keep the runtime backend in `config/config.yaml` set to `iptables_ansible`.
+5. If you use SSH password auth instead of a private key, encode the credentials in `config/deploy/ansible/inventory.ini` or `forward_runtime.iptables_ansible.extra_vars`.
+6. For non-root SSH users, set `forward_runtime.iptables_ansible.become: true`, and keep sudo credentials in the inventory or other ansible-supported vars.
 
-Notes:
+## Default Paths
+
+Default paths used by the local binary, Docker, and the one-click installer:
+
+- `inventory`: `config/deploy/ansible/inventory.ini`
+- `playbookApply`: `config/deploy/ansible/playbooks/forward_apply.yml`
+- `playbookRemove`: `config/deploy/ansible/playbooks/forward_remove.yml`
+- `workingDir`: `config/deploy/ansible`
+- `ANSIBLE_CONFIG`: `config/deploy/ansible/ansible.cfg`
+
+## Notes
 
 - The Flux-compatible `/admin/forward` page stays unchanged. Runtime controls remain in `System.vue`.
-- The bundled playbooks already handle `tcp`, `udp`, `both`, and multi-target `round` / `rand` strategies.
+- The bundled playbooks already handle `tcp`, `udp`, `both`, and multi-target `round` or `rand` strategies.

@@ -81,6 +81,76 @@ app:
 	assert.Equal(t, "TestApp", loadedCfg.App.Name)
 }
 
+func TestLoadForwardRuntimeConfig(t *testing.T) {
+	resetConfig()
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := `
+env: development
+forward_runtime:
+  nodex_mode: true
+  backend: gost
+  jobs:
+    poll_interval: 7s
+    idle_poll_interval: 30s
+    error_log_interval: 1m
+    batch_size: 4
+    timeout_seconds: 90
+  gost_stats:
+    poll_interval: 45s
+    idle_poll_interval: 2m
+    error_log_interval: 5m
+  nodex:
+    base_url: http://127.0.0.1:18081
+    token: test-nodex-token
+    timeout_seconds: 20
+  iptables_ansible:
+    inventory: config/deploy/ansible/inventory.ini
+    apply_playbook: config/deploy/ansible/playbooks/forward_apply.yml
+    remove_playbook: config/deploy/ansible/playbooks/forward_remove.yml
+    working_dir: config/deploy/ansible
+    target_pattern: "{{node.host}}"
+    timeout_seconds: 120
+    become: true
+    extra_vars:
+      retry: 3
+    environment:
+      ANSIBLE_CONFIG: config/deploy/ansible/ansible.cfg
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	loadedCfg, err := Load(configPath)
+	require.NoError(t, err)
+	require.NotNil(t, loadedCfg)
+	require.NotNil(t, loadedCfg.ForwardRuntime.NodeXMode)
+
+	assert.True(t, *loadedCfg.ForwardRuntime.NodeXMode)
+	assert.Equal(t, "gost", loadedCfg.ForwardRuntime.Backend)
+	assert.Equal(t, "7s", loadedCfg.ForwardRuntime.Jobs.PollInterval)
+	assert.Equal(t, "30s", loadedCfg.ForwardRuntime.Jobs.IdlePollInterval)
+	assert.Equal(t, "1m", loadedCfg.ForwardRuntime.Jobs.ErrorLogInterval)
+	assert.Equal(t, 4, loadedCfg.ForwardRuntime.Jobs.BatchSize)
+	assert.Equal(t, 90, loadedCfg.ForwardRuntime.Jobs.TimeoutSeconds)
+	assert.Equal(t, "45s", loadedCfg.ForwardRuntime.GostStats.PollInterval)
+	assert.Equal(t, "2m", loadedCfg.ForwardRuntime.GostStats.IdlePollInterval)
+	assert.Equal(t, "5m", loadedCfg.ForwardRuntime.GostStats.ErrorLogInterval)
+	assert.Equal(t, "http://127.0.0.1:18081", loadedCfg.ForwardRuntime.NodeX.BaseURL)
+	assert.Equal(t, "test-nodex-token", loadedCfg.ForwardRuntime.NodeX.Token)
+	assert.Equal(t, 20, loadedCfg.ForwardRuntime.NodeX.TimeoutSeconds)
+	assert.Equal(t, "config/deploy/ansible/inventory.ini", loadedCfg.ForwardRuntime.IptablesAnsible.Inventory)
+	assert.Equal(t, "config/deploy/ansible/playbooks/forward_apply.yml", loadedCfg.ForwardRuntime.IptablesAnsible.ApplyPlaybook)
+	assert.Equal(t, "config/deploy/ansible/playbooks/forward_remove.yml", loadedCfg.ForwardRuntime.IptablesAnsible.RemovePlaybook)
+	assert.Equal(t, "config/deploy/ansible", loadedCfg.ForwardRuntime.IptablesAnsible.WorkingDir)
+	assert.Equal(t, "{{node.host}}", loadedCfg.ForwardRuntime.IptablesAnsible.TargetPattern)
+	assert.Equal(t, 120, loadedCfg.ForwardRuntime.IptablesAnsible.TimeoutSeconds)
+	assert.True(t, loadedCfg.ForwardRuntime.IptablesAnsible.Become)
+	assert.Equal(t, "config/deploy/ansible/ansible.cfg", loadedCfg.ForwardRuntime.IptablesAnsible.Environment["ANSIBLE_CONFIG"])
+	assert.Equal(t, 3, loadedCfg.ForwardRuntime.IptablesAnsible.ExtraVars["retry"])
+}
+
 func TestLoadFileNotFound(t *testing.T) {
 	resetConfig()
 

@@ -3,7 +3,7 @@ env: "development"
 # Bootstrap rules:
 # - the backend always reads this file on startup
 # - local go run does not auto-load .env
-# - FORWARD_RUNTIME_* env vars are imported separately into v2_system_config
+# - runtime backend selection comes only from forward_runtime below
 
 server:
   host: "0.0.0.0"
@@ -44,15 +44,6 @@ log:
   max_backups: 30
   max_age: 7
 
-# Optional background polling overrides via environment variables.
-# Values use Go duration syntax such as 5s, 30s, 2m.
-# FORWARD_RUNTIME_JOB_POLL_INTERVAL=5s
-# FORWARD_RUNTIME_JOB_IDLE_POLL_INTERVAL=30s
-# FORWARD_RUNTIME_JOB_ERROR_LOG_INTERVAL=1m
-# FORWARD_GOST_STATS_POLL_INTERVAL=30s
-# FORWARD_GOST_STATS_IDLE_POLL_INTERVAL=2m
-# FORWARD_GOST_STATS_ERROR_LOG_INTERVAL=5m
-
 jwt:
   secret: "your-jwt-secret-key-change-in-production"
   expire: 86400
@@ -63,6 +54,58 @@ app:
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
+
+# Canonical forward runtime config for Windows/Linux/local binary/Docker.
+# Startup order:
+# 1. read forward_runtime from config.yaml
+# 2. normalize relative runtime paths
+# 3. persist the runtime snapshot into v2_system_config
+forward_runtime:
+  # Optional compatibility switch:
+  # - true  => backend forced to gost
+  # - false => backend forced to iptables_ansible
+  # If omitted, backend below is used directly.
+  # nodex_mode: true
+
+  # Choose one backend:
+  # - gost              => NodeX mode, stateful runtime
+  # - iptables_ansible  => local ansible/iptables mode, stateless runtime
+  backend: "gost"
+
+  # NodeX / gost runtime.
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: "replace-with-shared-token"
+    timeout_seconds: 15
+
+  # Local ansible execution runtime.
+  # Relative paths are resolved from config.yaml/project location at startup.
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    become: false
+    extra_vars: {}
+    command: ""
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
+
+  # Optional local background worker tuning.
+  # Duration values use Go syntax such as 5s, 30s, 2m.
+  jobs:
+    poll_interval: "5s"
+    idle_poll_interval: "30s"
+    error_log_interval: "1m"
+    batch_size: 10
+    timeout_seconds: 120
+
+  gost_stats:
+    poll_interval: "30s"
+    idle_poll_interval: "2m"
+    error_log_interval: "5m"
 
 admin:
   email: "v2board@anixops.com"

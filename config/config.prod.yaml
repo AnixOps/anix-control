@@ -61,15 +61,6 @@ log:
   max_backups: 30
   max_age: 30
 
-# Optional background polling overrides via environment variables.
-# Values use Go duration syntax such as 5s, 30s, 2m.
-# FORWARD_RUNTIME_JOB_POLL_INTERVAL=5s
-# FORWARD_RUNTIME_JOB_IDLE_POLL_INTERVAL=30s
-# FORWARD_RUNTIME_JOB_ERROR_LOG_INTERVAL=1m
-# FORWARD_GOST_STATS_POLL_INTERVAL=30s
-# FORWARD_GOST_STATS_IDLE_POLL_INTERVAL=2m
-# FORWARD_GOST_STATS_ERROR_LOG_INTERVAL=5m
-
 jwt:
   secret: "CHANGE-THIS-TO-A-VERY-LONG-RANDOM-STRING-IN-PRODUCTION"
   expire: 86400
@@ -80,6 +71,35 @@ app:
   api_token: "your-secure-api-token-for-nodes"
   traffic_log_enable: true
   subscribe_path: "s"
+
+forward_runtime:
+  backend: "gost"
+  jobs:
+    poll_interval: "5s"
+    idle_poll_interval: "30s"
+    error_log_interval: "1m"
+    batch_size: 10
+    timeout_seconds: 120
+  gost_stats:
+    poll_interval: "30s"
+    idle_poll_interval: "2m"
+    error_log_interval: "5m"
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: "replace-with-shared-token"
+    timeout_seconds: 15
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    become: false
+    extra_vars: {}
+    command: ""
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
 
 # 榛樿绠＄悊鍛橀厤缃?
 admin:

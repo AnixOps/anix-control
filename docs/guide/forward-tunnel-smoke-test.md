@@ -26,8 +26,8 @@ Real attachment must be proven by runtime job success plus relay-side state.
 ### Preconditions
 
 1. NodeX control-plane is running.
-2. `FORWARD_RUNTIME_BACKEND=gost`.
-3. `FORWARD_RUNTIME_NODEX_BASE_URL` and `FORWARD_RUNTIME_NODEX_TOKEN` are set and match NodeX.
+2. `config/config.yaml` has `forward_runtime.backend=gost`.
+3. `forward_runtime.nodex.base_url` and `forward_runtime.nodex.token` are set and match NodeX.
 4. The relay host is already running gost with a management API.
 5. The relay `ForwardNode` has the correct `host`, `api_port`, and `api_token`.
 
@@ -78,10 +78,10 @@ curl -u admin:<RELAY_API_TOKEN> http://<RELAY_HOST>:<API_PORT>/api/config/limite
 
 ### Preconditions
 
-1. `FORWARD_RUNTIME_BACKEND=iptables_ansible`.
+1. `config/config.yaml` has `forward_runtime.backend=iptables_ansible`.
 2. `ansible-playbook` exists on the machine running `v2board`.
 3. inventory and playbooks exist.
-4. inventory or env-generated inventory can SSH into the relay host.
+4. the configured ansible inventory can SSH into the relay host.
 5. the selected tunnel supports ansible execution.
 
 ### Checks
@@ -93,10 +93,7 @@ Get-Command ansible-playbook
 ```
 
 2. Confirm the inventory path and playbooks exist.
-3. If using env-generated inventory, confirm these are present before startup:
-   - `FORWARD_RUNTIME_ANSIBLE_HOST`
-   - `FORWARD_RUNTIME_ANSIBLE_USER`
-   - `FORWARD_RUNTIME_ANSIBLE_PASSWORD`
+3. Confirm `config/config.yaml.forward_runtime.iptables_ansible.inventory` points at the executor inventory file used by the panel host.
 4. Run a manual ansible reachability check on the same executor host when possible:
 
 ```bash

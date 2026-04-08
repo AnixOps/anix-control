@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	appconfig "github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/stretchr/testify/assert"
@@ -28,6 +29,7 @@ func (s *ForwardGostStatsWorkerTestSuite) SetupSuite() {
 
 func (s *ForwardGostStatsWorkerTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
+	appconfig.Set(nil)
 	s.worker = NewForwardGostStatsWorker(database.Get())
 }
 
@@ -41,10 +43,17 @@ func TestForwardGostStatsWorker(t *testing.T) {
 	suite.Run(t, new(ForwardGostStatsWorkerTestSuite))
 }
 
-func TestNewForwardGostStatsWorker_NormalizesIdleIntervalFromEnv(t *testing.T) {
-	t.Setenv(forwardGostStatsPollIntervalEnvVar, "45s")
-	t.Setenv(forwardGostStatsIdlePollIntervalEnvVar, "10s")
-	t.Setenv(forwardGostStatsErrorLogIntervalEnvVar, "3m")
+func TestNewForwardGostStatsWorker_LoadsPollingSettingsFromConfig(t *testing.T) {
+	appconfig.Set(&appconfig.Config{
+		ForwardRuntime: appconfig.ForwardRuntimeConfig{
+			GostStats: appconfig.ForwardRuntimeGostStatsConfig{
+				PollInterval:     "45s",
+				IdlePollInterval: "10s",
+				ErrorLogInterval: "3m",
+			},
+		},
+	})
+	defer appconfig.Set(nil)
 
 	worker := NewForwardGostStatsWorker(&gorm.DB{})
 	assert.Equal(t, 45*time.Second, worker.interval)

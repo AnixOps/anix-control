@@ -1,146 +1,140 @@
 # Configuration
 
-This page explains the minimum files and values you need to configure `v2board_AnixOps`.
+This page defines the unified configuration scheme for `v2board_AnixOps`.
 
 ## Source Of Truth
 
-| Location | Role | Read by |
+| Location | Role | Notes |
 |------|------|------|
-| [`config/config.yaml`](../../config/config.yaml) | bootstrap app config for server, database, cache, JWT, app token, admin | backend startup |
-| [`.env`](../../.env) | Compose/install env file and `FORWARD_RUNTIME_*` source | Docker Compose, installer scripts, process environment |
-| `v2_system_config` | persisted runtime/system config | runtime services and `/admin/system` |
+ | [`config/config.yaml`](../../config/config.yaml) | canonical app and forward runtime config | always read on backend startup |
+ | `v2_system_config` | persisted runtime snapshot | written on startup from the YAML config and consumed by runtime services and `/admin/system` |
 
 Important:
+
 - local `go run` does not auto-load [`.env`](../../.env)
-- the backend does not automatically map `JWT_SECRET`, `API_TOKEN`, `DB_*`, or `REDIS_*` into the config object
-- current env bootstrap is specific to `FORWARD_RUNTIME_*`, which are persisted into `v2_system_config`
-- if you use the install scripts, they render [`config/config.yaml`](../../config/config.yaml) for you
+- `jwt.secret`, `app.api_token`, `admin.*`, database, cache, and frontend settings still come from [`config/config.yaml`](../../config/config.yaml)
+- the runtime selection resides in `config/config.yaml.forward_runtime`; startup writes exactly those values into `v2_system_config`
 
-## Primary Files
+## Unified Forward Runtime Layout
 
-- root env file: [`.env`](../../.env)
-- env example: [`.env.example`](../../.env.example)
-- app config: [`config/config.yaml`](../../config/config.yaml)
-- app config example: [`config/config.yaml.example`](../../config/config.yaml.example)
-- compose entry: [`docker-compose.yml`](../../docker-compose.yml)
-
-## Minimum Bootstrap Config
-
-`config/config.yaml`:
+Put the runtime selection in [`config/config.yaml`](../../config/config.yaml):
 
 ```yaml
-env: "development"
+forward_runtime:
+  backend: "gost"
 
-server:
-  host: "0.0.0.0"
-  port: 8080
-  mode: "release"
+  jobs:
+    poll_interval: "5s"
+    idle_poll_interval: "30s"
+    error_log_interval: "1m"
+    batch_size: 10
+    timeout_seconds: 120
 
-frontend:
-  enable: true
-  port: 3000
-  path: "web/public"
+  gost_stats:
+    poll_interval: "30s"
+    idle_poll_interval: "2m"
+    error_log_interval: "5m"
 
-database:
-  driver: "sqlite"
-  database: "config/data/v2board.db"
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: "replace-with-shared-token"
+    timeout_seconds: 15
 
-cache:
-  driver: "memory"
-
-jwt:
-  secret: "replace-with-32-char-secret"
-  expire: 86400
-
-admin:
-  email: "admin@example.com"
-  password: "replace-with-admin-password"
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    become: false
+    extra_vars: {}
+    command: ""
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
 ```
 
-At minimum, fill:
+Startup behavior:
 
-- `jwt.secret`
-- `app.api_token`
-- `admin.email`
-- `admin.password`
+1. backend loads `config/config.yaml`
+2. `forward_runtime` is parsed
+3. merged values from `forward_runtime` are persisted into `v2_system_config`
+4. `/admin/system` and forward runtime services consume the persisted values
 
-## `.env` Usage
+Optional worker tuning now also stays inside `forward_runtime`:
 
-Use [`.env`](../../.env) for:
+- `forward_runtime.jobs.*` controls the local ansible runtime job executor
+- `forward_runtime.gost_stats.*` controls the gost traffic polling worker
+- both use the same YAML file instead of separate env overrides
 
-- Docker host port mapping and timezone
-- installer-driven config generation
-- `FORWARD_RUNTIME_*` runtime bootstrap
+## `nodex_mode` Compatibility Switch
 
-Do not assume [`.env`](../../.env) replaces [`config/config.yaml`](../../config/config.yaml) for local startup.
+`forward_runtime.nodex_mode` remains supported for compatibility:
 
-## Minimum Docker Env For Runtime Bootstrap
+- `true` forces backend to `gost`
+- `false` forces backend to `iptables_ansible`
+- if omitted, `forward_runtime.backend` is used directly
 
-`.env`:
+If both are present, `nodex_mode` wins.
 
-```env
-TZ=Asia/Shanghai
-GIN_MODE=release
-PANEL_FRONTEND_PORT=3000
-PANEL_API_PORT=8080
-PANEL_GRPC_PORT=50051
-FORWARD_RUNTIME_NODEX_MODE=true
-FORWARD_RUNTIME_BACKEND=gost
-FORWARD_RUNTIME_NODEX_BASE_URL=http://<nodex-host>:18081
-FORWARD_RUNTIME_NODEX_TOKEN=replace-with-shared-token
-FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=15
+## NodeX Mode
+
+Use this for the private stateful runtime:
+
+```yaml
+forward_runtime:
+  backend: "gost"
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: "replace-with-shared-token"
+    timeout_seconds: 15
 ```
-
-If you use [`docker-compose.prod.yml`](../../docker-compose.prod.yml) or [`install.sh`](../../install.sh), keep `DB_*`, `REDIS_*`, `JWT_SECRET`, and `API_TOKEN` in sync with the final values written into [`config/config.yaml`](../../config/config.yaml).
-
-## Forward Runtime Modes
-
-### NodeX Mode
-
-Use when you want the private stateful runtime.
 
 Required values:
 
-```env
-FORWARD_RUNTIME_NODEX_MODE=true
-FORWARD_RUNTIME_BACKEND=gost
-FORWARD_RUNTIME_NODEX_BASE_URL=http://127.0.0.1:18081
-FORWARD_RUNTIME_NODEX_TOKEN=replace-with-shared-token
-FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS=15
+- `forward_runtime.nodex.base_url`
+- `forward_runtime.nodex.token`
+
+## `iptables_ansible` Mode
+
+Use this for the local stateless executor:
+
+```yaml
+forward_runtime:
+  backend: "iptables_ansible"
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
 ```
 
-Behavior:
+Operational rules:
 
-- `v2board` stores config and exposes the admin UI
-- `NodeX` owns doctor, runtime status, and actual private execution
-- the current verified single-UI deployment uses `18081` for the NodeX control-plane and `18080` for the relay gost API
-- the admin UI now uses `/api/v2/admin/forward/runtime/status` and `/api/v2/admin/forward/runtime/doctor` as control-plane proxies
+- no NodeX control-plane is required
+- no proxy ingress node is required
+- the executor host must have `ansible-playbook`
+- SSH credentials still come from inventory files referenced by `config/config.yaml.forward_runtime.iptables_ansible.inventory`
 
-### iptables_ansible Mode
+## Path Resolution
 
-Use when you want stateless forwarding execution without NodeX ingress/egress semantics.
+`forward_runtime.iptables_ansible` path fields are normalized on startup:
 
-Minimum example:
+- `inventory`
+- `apply_playbook`
+- `remove_playbook`
+- `working_dir`
+- `environment.ANSIBLE_CONFIG`
 
-```env
-FORWARD_RUNTIME_NODEX_MODE=false
-FORWARD_RUNTIME_BACKEND=iptables_ansible
-FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON={"inventory":"/app/config/deploy/ansible/inventory.ini","playbookApply":"/app/config/deploy/ansible/playbooks/forward_apply.yml","playbookRemove":"/app/config/deploy/ansible/playbooks/forward_remove.yml","workingDir":"/app/config/deploy/ansible","targetPattern":"{{node.host}}","timeoutSeconds":120,"environment":{"ANSIBLE_CONFIG":"/app/config/deploy/ansible/ansible.cfg"}}
-FORWARD_RUNTIME_ANSIBLE_HOST=198.51.100.10
-FORWARD_RUNTIME_ANSIBLE_PORT=22
-FORWARD_RUNTIME_ANSIBLE_USER=root
-FORWARD_RUNTIME_ANSIBLE_PASSWORD=replace-with-password
-```
-
-Behavior:
-
-- no NodeX ingress node selection is required
-- only the forward execution node, SSH path, and playbook material matter
-- this mode should stay operationally separate from proxy nodes under `/admin/nodes`
+Relative paths are resolved from the config file and project/runtime location so local binary, Windows, Linux, and Docker stay aligned.
 
 ## Runtime Keys Written Into System Config
 
-Startup initialization syncs runtime env values into these keys:
+Startup persists the merged runtime snapshot into these keys:
 
 - `forward.runtime_backend`
 - `forward.runtime.nodex_mode`
@@ -148,22 +142,16 @@ Startup initialization syncs runtime env values into these keys:
 - `forward.runtime.nodex.token`
 - `forward.runtime.nodex.timeout_seconds`
 - `forward.runtime.iptables_ansible.config`
-
-## Runtime Verification
-
-After config is in place:
-
-1. open `/admin/system`
-2. verify the NodeX mode or ansible settings
-3. use the NodeX Operator Console to run status and doctor
-4. create a forward node under `/admin/forward/nodes`
-5. create a tunnel under `/admin/forward/tunnel`
-6. create a forward under `/admin/forward`
+- `forward.ansible.inventory`
+- `forward.ansible.playbook_apply`
+- `forward.ansible.playbook_remove`
+- `forward.ansible.become`
+- `forward.ansible.extra_vars_json`
 
 ## Related Docs
 
-- [`quickstart.md`](quickstart.md)
+- [`forward-runtime-migration.md`](forward-runtime-migration.md)
+- [`startup-config.md`](startup-config.md)
 - [`runtime.md`](runtime.md)
 - [`../guide/forward-relay-onboarding.md`](../guide/forward-relay-onboarding.md)
-- [`../guide/nodex-internal-extension.md`](../guide/nodex-internal-extension.md)
-- [`../guide/forward-tunnel-runtime-ops.md`](../guide/forward-tunnel-runtime-ops.md)
+- [`../guide/forward-tunnel-smoke-test.md`](../guide/forward-tunnel-smoke-test.md)

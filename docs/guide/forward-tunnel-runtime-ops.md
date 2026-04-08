@@ -56,7 +56,6 @@ Current `ForwardNode` does not store per-node SSH credentials such as:
 For `iptables_ansible`, SSH data comes from:
 
 - ansible inventory files
-- env-generated inventory via `FORWARD_RUNTIME_ANSIBLE_*`
 - playbook environment settings
 
 ## NodeX/Gost Mode
@@ -105,7 +104,7 @@ All of these must be true before a relay is really attached:
 
 1. `ansible-playbook` exists on the machine running `v2board`.
 2. inventory and playbook paths are valid.
-3. the relay host is reachable over SSH through inventory or env-generated inventory.
+3. the relay host is reachable over SSH through the configured ansible inventory.
 4. the selected tunnel is supported by the ansible runtime.
 5. the tunnel resolves to an execution node.
 

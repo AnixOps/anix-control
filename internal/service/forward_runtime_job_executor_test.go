@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	appconfig "github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/stretchr/testify/assert"
@@ -62,6 +63,7 @@ func (s *PanelForwardRuntimeJobExecutorTestSuite) SetupSuite() {
 
 func (s *PanelForwardRuntimeJobExecutorTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
+	appconfig.Set(nil)
 
 	db := database.Get()
 	db.Exec("DELETE FROM v2_forward_runtime_job")
@@ -313,15 +315,26 @@ func TestPanelForwardRuntimeJobExecutor(t *testing.T) {
 	suite.Run(t, new(PanelForwardRuntimeJobExecutorTestSuite))
 }
 
-func TestNewPanelForwardRuntimeJobExecutor_NormalizesIdleIntervalFromEnv(t *testing.T) {
-	t.Setenv(forwardRuntimeJobPollIntervalEnvVar, "7s")
-	t.Setenv(forwardRuntimeJobIdlePollIntervalEnvVar, "2s")
-	t.Setenv(forwardRuntimeJobErrorLogIntervalEnvVar, "90s")
+func TestNewPanelForwardRuntimeJobExecutor_LoadsWorkerSettingsFromConfig(t *testing.T) {
+	appconfig.Set(&appconfig.Config{
+		ForwardRuntime: appconfig.ForwardRuntimeConfig{
+			Jobs: appconfig.ForwardRuntimeJobsConfig{
+				PollInterval:     "7s",
+				IdlePollInterval: "2s",
+				ErrorLogInterval: "90s",
+				BatchSize:        4,
+				TimeoutSeconds:   75,
+			},
+		},
+	})
+	defer appconfig.Set(nil)
 
 	executor := NewPanelForwardRuntimeJobExecutor(&gorm.DB{})
 	assert.Equal(t, 7*time.Second, executor.pollInterval)
 	assert.Equal(t, 7*time.Second, executor.idlePollInterval)
 	assert.Equal(t, 90*time.Second, executor.errorLogger.interval)
+	assert.Equal(t, 4, executor.batchSize)
+	assert.Equal(t, 75*time.Second, executor.jobTimeout)
 }
 
 func TestForwardBackgroundErrorLogger_SuppressesRepeatedMessages(t *testing.T) {
