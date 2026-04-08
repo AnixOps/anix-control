@@ -63,13 +63,14 @@ app:
 forward_runtime:
   # Optional compatibility switch:
   # - true  => backend forced to gost
-  # - false => backend forced to iptables_ansible
+  # - false => backend forced to the configured local ansible backend
   # If omitted, backend below is used directly.
   # nodex_mode: true
 
   # Choose one backend:
-  # - gost              => NodeX mode, stateful runtime
-  # - iptables_ansible  => local ansible/iptables mode, stateless runtime
+  # - gost               => NodeX mode, stateful runtime
+  # - nftables_ansible   => local ansible/nftables mode, stateless runtime
+  # - iptables_ansible   => legacy local ansible/iptables mode
   backend: "gost"
 
   # NodeX / gost runtime.
@@ -78,7 +79,22 @@ forward_runtime:
     token: "replace-with-shared-token"
     timeout_seconds: 15
 
-  # Local ansible execution runtime.
+  # Preferred local ansible execution runtime for modern Debian/Ubuntu hosts.
+  # Relative paths are resolved from config.yaml/project location at startup.
+  nftables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply_nftables.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove_nftables.yml"
+    become: false
+    extra_vars: {}
+    command: ""
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
+
+  # Legacy local ansible execution runtime.
   # Relative paths are resolved from config.yaml/project location at startup.
   iptables_ansible:
     inventory: "config/deploy/ansible/inventory.ini"

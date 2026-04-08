@@ -308,7 +308,7 @@ func (s *PanelForwardService) CreateTunnel(input PanelTunnelInput) (*PanelAdminT
 	if err != nil {
 		return nil, err
 	}
-	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+	if isForwardRuntimeLocalAnsibleBackend(backend) {
 		if (input.OutNodeID == nil || *input.OutNodeID == 0) && input.InNodeID != 0 {
 			executionNodeID := input.InNodeID
 			input.OutNodeID = &executionNodeID
@@ -335,7 +335,7 @@ func (s *PanelForwardService) CreateTunnel(input PanelTunnelInput) (*PanelAdminT
 		Status:        model.ForwardTunnelStatusActive,
 	}
 
-	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+	if isForwardRuntimeLocalAnsibleBackend(backend) {
 		executionNodeID := selectPanelTunnelExecutionNodeID(input.InNodeID, input.OutNodeID)
 		executionNode, err := s.getEnabledForwardNode(executionNodeID, "中转执行节点")
 		if err != nil {
@@ -409,7 +409,7 @@ func (s *PanelForwardService) UpdateTunnel(input PanelTunnelUpdateInput) (*Panel
 	if err != nil {
 		return nil, err
 	}
-	requireProtocol := backend != model.ForwardRuntimeBackendIptablesAnsible && record.Type == 2
+	requireProtocol := !isForwardRuntimeLocalAnsibleBackend(backend) && record.Type == 2
 	if err := validatePanelTunnelUpdateInput(input, trafficRatio, requireProtocol); err != nil {
 		return nil, err
 	}
@@ -491,7 +491,7 @@ func (s *PanelForwardService) DiagnoseTunnel(id uint) (*TunnelDiagnosisReport, e
 		port        int
 	}, 0, 2)
 
-	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+	if isForwardRuntimeLocalAnsibleBackend(backend) {
 		executionNodeID := storedPanelTunnelExecutionNodeID(tunnel)
 		if executionNodeID > 0 {
 			executionNode, err := s.getForwardNodeByID(executionNodeID)
@@ -532,7 +532,7 @@ func (s *PanelForwardService) DiagnoseTunnel(id uint) (*TunnelDiagnosisReport, e
 		})
 	}
 
-	if backend != model.ForwardRuntimeBackendIptablesAnsible && tunnel.Type == 2 && tunnel.OutNodeID != nil {
+	if !isForwardRuntimeLocalAnsibleBackend(backend) && tunnel.Type == 2 && tunnel.OutNodeID != nil {
 		outNode, err := s.getForwardNodeByID(*tunnel.OutNodeID)
 		if err != nil {
 			return nil, err
@@ -1873,7 +1873,7 @@ func validatePanelTunnelCreateInput(input PanelTunnelInput, trafficRatio float64
 	if trafficRatio <= 0 || trafficRatio > 100 {
 		return errors.New("流量倍率必须在 0.0-100.0 之间")
 	}
-	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+	if isForwardRuntimeLocalAnsibleBackend(backend) {
 		if input.Type != 1 {
 			return errors.New("Ansible 转发模式仅支持端口转发")
 		}
@@ -2048,7 +2048,7 @@ func validatePanelForwardTunnelCompatibility(tunnel *model.ForwardTunnel, backen
 		return errors.New("隧道不存在")
 	}
 	switch backend {
-	case model.ForwardRuntimeBackendIptablesAnsible:
+	case model.ForwardRuntimeBackendNftablesAnsible, model.ForwardRuntimeBackendIptablesAnsible:
 		if tunnel.Type != 1 {
 			return errors.New("当前为 Ansible/iptables 模式，仅可使用端口转发隧道")
 		}

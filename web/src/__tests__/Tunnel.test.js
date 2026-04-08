@@ -93,7 +93,7 @@ describe('Tunnel.vue', () => {
         return Promise.resolve({ data: { value: 'false' } })
       }
       if (key === 'forward.runtime_backend') {
-        return Promise.resolve({ data: { value: 'iptables_ansible' } })
+        return Promise.resolve({ data: { value: 'nftables_ansible' } })
       }
       return Promise.resolve({ data: { value: '' } })
     })
@@ -138,7 +138,7 @@ describe('Tunnel.vue', () => {
         return Promise.resolve({ data: { value: 'false' } })
       }
       if (key === 'forward.runtime_backend') {
-        return Promise.resolve({ data: { value: 'iptables_ansible' } })
+        return Promise.resolve({ data: { value: 'nftables_ansible' } })
       }
       return Promise.resolve({ data: { value: '' } })
     })
@@ -219,7 +219,7 @@ describe('Tunnel.vue', () => {
         return Promise.resolve({ data: { value: 'false' } })
       }
       if (key === 'forward.runtime_backend') {
-        return Promise.resolve({ data: { value: 'iptables_ansible' } })
+        return Promise.resolve({ data: { value: 'nftables_ansible' } })
       }
       return Promise.resolve({ data: { value: '' } })
     })

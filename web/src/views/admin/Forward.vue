@@ -20,9 +20,17 @@
       </div>
     </div>
     <p class="text-secondary small runtime-note">
-      NodeX mode keeps ingress/exit semantics; `iptables_ansible` mode only targets execution nodes resolved by inventory.
-      Forward node "online" only checks TCP reachability and does not prove gost services or iptables rules already exist.
+      NodeX mode keeps ingress/exit semantics; local Ansible mode only targets execution nodes resolved by inventory.
+      Forward node "online" only checks TCP reachability and does not prove remote attachment or firewall state already exists.
     </p>
+    <div class="runtime-context-bar">
+      <span class="tag tag-primary">{{ runtimeModeLabel }}</span>
+      <span class="runtime-context-summary">{{ runtimeModeSummary }}</span>
+      <div class="runtime-context-links">
+        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">Local Runtime</router-link>
+        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">NodeX Runtime</router-link>
+      </div>
+    </div>
     <ForwardSuiteNav />
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
@@ -518,6 +526,15 @@ const tunnels = ref([])
 const runtimeNodeXModeKey = 'forward.runtime.nodex_mode'
 const runtimeBackendKey = 'forward.runtime_backend'
 const runtimeNodeXMode = ref(false)
+const runtimeBackend = ref('nftables_ansible')
+const runtimeModeLabel = computed(() => (
+  runtimeNodeXMode.value ? 'Active Runtime: NodeX / gost' : `Active Runtime: Local / ${runtimeBackend.value}`
+))
+const runtimeModeSummary = computed(() => (
+  runtimeNodeXMode.value
+    ? 'Edit NodeX control-plane URL, token and gost operator checks on the dedicated NodeX Runtime page.'
+    : 'Edit inventory, playbooks and panel-host executor settings on the dedicated Local Runtime page.'
+))
 
 const modalOpen = ref(false)
 const deleteModalOpen = ref(false)
@@ -583,7 +600,7 @@ const selectedTunnelModeHint = computed(() => {
   if (!selectedTunnel.value) {
     return runtimeNodeXMode.value
       ? 'NodeX/Gost mode keeps ingress and exit semantics. A selected tunnel still requires NodeX runtime jobs to succeed before forwarding is really attached.'
-      : 'iptables_ansible mode only records the execution node. SSH credentials come from inventory or environment variables, not from ForwardNode records.'
+      : 'Local Ansible mode only records the execution node. SSH access comes from the configured ansible inventory and local runtime settings, not from NodeX topology records.'
   }
 
   const tunnelName = selectedTunnel.value.name || `Tunnel #${selectedTunnel.value.id || '-'}`
@@ -660,22 +677,23 @@ function parseRuntimeBoolean(value) {
 }
 
 async function loadRuntimeMode() {
+  let explicitMode = null
   try {
     const res = await getSystemConfig(runtimeNodeXModeKey)
-    const parsed = parseRuntimeBoolean(res.data?.value)
-    if (parsed !== null) {
-      runtimeNodeXMode.value = parsed
-      return
-    }
+    explicitMode = parseRuntimeBoolean(res.data?.value)
   } catch (error) {
     console.error('get forward runtime NodeX mode failed:', error)
   }
 
   try {
     const res = await getSystemConfig(runtimeBackendKey)
-    runtimeNodeXMode.value = String(res.data?.value || '').toLowerCase() === 'gost'
+    runtimeBackend.value = String(res.data?.value || 'nftables_ansible').toLowerCase() || 'nftables_ansible'
+    runtimeNodeXMode.value = explicitMode === null ? runtimeBackend.value === 'gost' : explicitMode
   } catch (error) {
     console.error('get forward runtime backend failed:', error)
+    if (explicitMode !== null) {
+      runtimeNodeXMode.value = explicitMode
+    }
   }
 }
 
@@ -1626,7 +1644,7 @@ function getRuntimeMeta(forward) {
       return { text: '执行中', className: 'tag-primary' }
     case 2:
       return {
-        text: forward.runtimeBackend === 'iptables_ansible' ? '已应用' : '已同步',
+        text: forward.runtimeBackend === 'gost' ? '已同步' : '已应用',
         className: 'tag-success'
       }
     case 3:
@@ -2186,6 +2204,25 @@ function onDragEnd() {
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-secondary);
+}
+.runtime-context-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.runtime-context-summary {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.runtime-context-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .card-actions {

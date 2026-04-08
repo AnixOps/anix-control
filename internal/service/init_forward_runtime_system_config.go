@@ -14,10 +14,11 @@ import (
 const forwardRuntimeBootstrapRemark = "Forward runtime bootstrapped from config.yaml"
 
 type forwardRuntimeBootstrapConfig struct {
-	NodeXMode *bool
-	Backend   string
-	NodeX     appconfig.ForwardRuntimeNodeXConfig
-	Ansible   panelForwardAnsibleConfig
+	NodeXMode     *bool
+	Backend       string
+	LocalBackend  string
+	NodeX         appconfig.ForwardRuntimeNodeXConfig
+	Ansible       panelForwardAnsibleConfig
 }
 
 func InitForwardRuntimeSystemConfig(db *gorm.DB) error {
@@ -33,13 +34,21 @@ func InitForwardRuntimeSystemConfig(db *gorm.DB) error {
 
 	effectiveBackend := bootstrapCfg.Backend
 	if bootstrapCfg.NodeXMode != nil {
-		effectiveBackend = forwardRuntimeBackendForMode(*bootstrapCfg.NodeXMode)
+		if *bootstrapCfg.NodeXMode {
+			effectiveBackend = model.ForwardRuntimeBackendGost
+		} else {
+			effectiveBackend = normalizeForwardRuntimeLocalBackendOrDefault(bootstrapCfg.LocalBackend)
+		}
 	}
+	localBackend := normalizeForwardRuntimeLocalBackendOrDefault(bootstrapCfg.LocalBackend)
 
 	if err := syncForwardRuntimeNodeXMode(configService, bootstrapCfg.NodeXMode); err != nil {
 		return err
 	}
 	if err := syncForwardRuntimeValue(configService, forwardRuntimeBackendConfigKey, effectiveBackend, "string"); err != nil {
+		return err
+	}
+	if err := syncForwardRuntimeValue(configService, forwardRuntimeLocalBackendConfigKey, localBackend, "string"); err != nil {
 		return err
 	}
 	if err := syncForwardRuntimeValue(configService, forwardRuntimeNodeXBaseURLConfigKey, strings.TrimSpace(bootstrapCfg.NodeX.BaseURL), "string"); err != nil {
@@ -66,9 +75,9 @@ func InitForwardRuntimeSystemConfig(db *gorm.DB) error {
 		}
 	}
 
-	if shouldPersistForwardRuntimeAnsibleConfig(bootstrapCfg, effectiveBackend) {
-		bootstrapCfg.Ansible.ensureDefaults()
-		return syncForwardRuntimeAnsibleConfig(configService, &bootstrapCfg.Ansible)
+	if shouldPersistForwardRuntimeAnsibleConfig(bootstrapCfg, localBackend) {
+		bootstrapCfg.Ansible.ensureDefaults(localBackend)
+		return syncForwardRuntimeAnsibleConfig(configService, localBackend, &bootstrapCfg.Ansible)
 	}
 
 	return clearForwardRuntimeAnsibleConfig(configService)
@@ -83,15 +92,39 @@ func syncForwardRuntimeNodeXMode(configService *SystemConfigService, value *bool
 }
 
 func syncForwardRuntimeValue(configService *SystemConfigService, key, value, cfgType string) error {
+	shouldSync, err := shouldSyncForwardRuntimeValue(configService, key)
+	if err != nil {
+		return err
+	}
+	if !shouldSync {
+		return nil
+	}
 	return configService.Set(key, value, cfgType, forwardRuntimeConfigGroup, forwardRuntimeBootstrapRemark)
 }
 
-func syncForwardRuntimeAnsibleConfig(configService *SystemConfigService, cfg *panelForwardAnsibleConfig) error {
+func shouldSyncForwardRuntimeValue(configService *SystemConfigService, key string) (bool, error) {
+	if configService == nil || configService.db == nil {
+		return false, nil
+	}
+
+	var cfg model.SystemConfig
+	err := configService.db.Where("key = ?", key).First(&cfg).Error
+	if err == gorm.ErrRecordNotFound {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	return strings.TrimSpace(cfg.Remark) == forwardRuntimeBootstrapRemark, nil
+}
+
+func syncForwardRuntimeAnsibleConfig(configService *SystemConfigService, backend string, cfg *panelForwardAnsibleConfig) error {
 	if cfg == nil {
 		return clearForwardRuntimeAnsibleConfig(configService)
 	}
 
-	cfg.ensureDefaults()
+	cfg.ensureDefaults(backend)
 	ansibleJSON, err := json.Marshal(cfg)
 	if err != nil {
 		return err
@@ -116,7 +149,27 @@ func syncForwardRuntimeAnsibleConfig(configService *SystemConfigService, cfg *pa
 	if err := syncForwardRuntimeValue(configService, forwardRuntimeAnsibleBecomeConfigKey, strconv.FormatBool(cfg.Become), "bool"); err != nil {
 		return err
 	}
-	return syncForwardRuntimeValue(configService, forwardRuntimeAnsibleExtraVarsConfigKey, string(extraVarsJSON), "json")
+	if err := syncForwardRuntimeValue(configService, forwardRuntimeAnsibleExtraVarsConfigKey, string(extraVarsJSON), "json"); err != nil {
+		return err
+	}
+
+	legacyKeys := []struct {
+		Key  string
+		Type string
+	}{
+		{Key: legacyForwardRuntimeAnsibleConfigJSONKey, Type: "json"},
+		{Key: legacyForwardRuntimeAnsibleInventoryConfigKey, Type: "string"},
+		{Key: legacyForwardRuntimeAnsibleApplyPlaybookConfigKey, Type: "string"},
+		{Key: legacyForwardRuntimeAnsibleRemovePlaybookConfigKey, Type: "string"},
+		{Key: legacyForwardRuntimeAnsibleBecomeConfigKey, Type: "bool"},
+		{Key: legacyForwardRuntimeAnsibleExtraVarsConfigKey, Type: "json"},
+	}
+	for _, item := range legacyKeys {
+		if err := syncForwardRuntimeValue(configService, item.Key, "", item.Type); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func clearForwardRuntimeAnsibleConfig(configService *SystemConfigService) error {
@@ -130,6 +183,12 @@ func clearForwardRuntimeAnsibleConfig(configService *SystemConfigService) error 
 		{Key: forwardRuntimeAnsibleRemovePlaybookConfigKey, Type: "string"},
 		{Key: forwardRuntimeAnsibleBecomeConfigKey, Type: "bool"},
 		{Key: forwardRuntimeAnsibleExtraVarsConfigKey, Type: "json"},
+		{Key: legacyForwardRuntimeAnsibleConfigJSONKey, Type: "json"},
+		{Key: legacyForwardRuntimeAnsibleInventoryConfigKey, Type: "string"},
+		{Key: legacyForwardRuntimeAnsibleApplyPlaybookConfigKey, Type: "string"},
+		{Key: legacyForwardRuntimeAnsibleRemovePlaybookConfigKey, Type: "string"},
+		{Key: legacyForwardRuntimeAnsibleBecomeConfigKey, Type: "bool"},
+		{Key: legacyForwardRuntimeAnsibleExtraVarsConfigKey, Type: "json"},
 	}
 	for _, item := range keys {
 		if err := syncForwardRuntimeValue(configService, item.Key, "", item.Type); err != nil {
@@ -152,26 +211,18 @@ func buildForwardRuntimeBootstrapConfig(cfg appconfig.ForwardRuntimeConfig) (*fo
 		return nil, err
 	}
 
+	localBackend, ansibleCfg := selectForwardRuntimeBootstrapAnsibleConfig(cfg, backend)
+
 	return &forwardRuntimeBootstrapConfig{
-		NodeXMode: cfg.NodeXMode,
-		Backend:   backend,
+		NodeXMode:    cfg.NodeXMode,
+		Backend:      backend,
+		LocalBackend: localBackend,
 		NodeX: appconfig.ForwardRuntimeNodeXConfig{
 			BaseURL:        strings.TrimSpace(cfg.NodeX.BaseURL),
 			Token:          strings.TrimSpace(cfg.NodeX.Token),
 			TimeoutSeconds: cfg.NodeX.TimeoutSeconds,
 		},
-		Ansible: panelForwardAnsibleConfig{
-			Inventory:      strings.TrimSpace(cfg.IptablesAnsible.Inventory),
-			ApplyPlaybook:  strings.TrimSpace(cfg.IptablesAnsible.ApplyPlaybook),
-			RemovePlaybook: strings.TrimSpace(cfg.IptablesAnsible.RemovePlaybook),
-			Become:         cfg.IptablesAnsible.Become,
-			ExtraVars:      cloneForwardRuntimeExtraVars(cfg.IptablesAnsible.ExtraVars),
-			Command:        strings.TrimSpace(cfg.IptablesAnsible.Command),
-			WorkingDir:     strings.TrimSpace(cfg.IptablesAnsible.WorkingDir),
-			TargetPattern:  strings.TrimSpace(cfg.IptablesAnsible.TargetPattern),
-			Environment:    cloneForwardRuntimeEnvironment(cfg.IptablesAnsible.Environment),
-			TimeoutSeconds: cfg.IptablesAnsible.TimeoutSeconds,
-		},
+		Ansible: ansibleCfg,
 	}, nil
 }
 
@@ -179,7 +230,7 @@ func shouldPersistForwardRuntimeAnsibleConfig(cfg *forwardRuntimeBootstrapConfig
 	if cfg == nil {
 		return false
 	}
-	return backend == model.ForwardRuntimeBackendIptablesAnsible ||
+	return isForwardRuntimeLocalAnsibleBackend(backend) ||
 		strings.TrimSpace(cfg.Ansible.Inventory) != "" ||
 		strings.TrimSpace(cfg.Ansible.ApplyPlaybook) != "" ||
 		strings.TrimSpace(cfg.Ansible.RemovePlaybook) != "" ||
@@ -201,6 +252,52 @@ func normalizeForwardRuntimeBootstrapBackend(value, key string) (string, error) 
 		return backend, nil
 	}
 	return "", fmt.Errorf("invalid %s value: %s", key, value)
+}
+
+func selectForwardRuntimeBootstrapAnsibleConfig(cfg appconfig.ForwardRuntimeConfig, backend string) (string, panelForwardAnsibleConfig) {
+	switch backend {
+	case model.ForwardRuntimeBackendNftablesAnsible:
+		return model.ForwardRuntimeBackendNftablesAnsible, mapBootstrapAnsibleConfig(cfg.NftablesAnsible)
+	case model.ForwardRuntimeBackendIptablesAnsible:
+		return model.ForwardRuntimeBackendIptablesAnsible, mapBootstrapAnsibleConfig(cfg.IptablesAnsible)
+	}
+
+	if hasForwardRuntimeAnsibleConfig(cfg.NftablesAnsible) {
+		return model.ForwardRuntimeBackendNftablesAnsible, mapBootstrapAnsibleConfig(cfg.NftablesAnsible)
+	}
+	if hasForwardRuntimeAnsibleConfig(cfg.IptablesAnsible) {
+		return model.ForwardRuntimeBackendIptablesAnsible, mapBootstrapAnsibleConfig(cfg.IptablesAnsible)
+	}
+
+	return defaultForwardLocalAnsibleBackend, panelForwardAnsibleConfig{}
+}
+
+func hasForwardRuntimeAnsibleConfig(cfg appconfig.ForwardRuntimeAnsibleConfig) bool {
+	return strings.TrimSpace(cfg.Inventory) != "" ||
+		strings.TrimSpace(cfg.ApplyPlaybook) != "" ||
+		strings.TrimSpace(cfg.RemovePlaybook) != "" ||
+		strings.TrimSpace(cfg.Command) != "" ||
+		strings.TrimSpace(cfg.WorkingDir) != "" ||
+		strings.TrimSpace(cfg.TargetPattern) != "" ||
+		cfg.TimeoutSeconds > 0 ||
+		cfg.Become ||
+		len(cfg.ExtraVars) > 0 ||
+		len(cfg.Environment) > 0
+}
+
+func mapBootstrapAnsibleConfig(cfg appconfig.ForwardRuntimeAnsibleConfig) panelForwardAnsibleConfig {
+	return panelForwardAnsibleConfig{
+		Inventory:      strings.TrimSpace(cfg.Inventory),
+		ApplyPlaybook:  strings.TrimSpace(cfg.ApplyPlaybook),
+		RemovePlaybook: strings.TrimSpace(cfg.RemovePlaybook),
+		Become:         cfg.Become,
+		ExtraVars:      cloneForwardRuntimeExtraVars(cfg.ExtraVars),
+		Command:        strings.TrimSpace(cfg.Command),
+		WorkingDir:     strings.TrimSpace(cfg.WorkingDir),
+		TargetPattern:  strings.TrimSpace(cfg.TargetPattern),
+		Environment:    cloneForwardRuntimeEnvironment(cfg.Environment),
+		TimeoutSeconds: cfg.TimeoutSeconds,
+	}
 }
 
 func cloneForwardRuntimeExtraVars(input map[string]interface{}) map[string]interface{} {

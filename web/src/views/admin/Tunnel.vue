@@ -11,9 +11,17 @@
     </div>
     <ForwardSuiteNav />
     <p class="text-secondary small runtime-note">
-      NodeX mode separates ingress and execution nodes; `iptables_ansible` mode only needs the execution node mapped in inventory.
-      Tunnel "online" only checks host:port reachability and does not confirm gost services or iptables rules are already in place.
+      NodeX mode separates ingress and execution nodes; local Ansible mode only needs the execution node mapped in inventory.
+      Tunnel "online" only checks host:port reachability and does not confirm remote attachment or firewall state is already in place.
     </p>
+    <div class="runtime-context-bar">
+      <span class="tag tag-primary">{{ runtimeModeLabel }}</span>
+      <span class="runtime-context-summary">{{ runtimeModeSummary }}</span>
+      <div class="runtime-context-links">
+        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">Local Runtime</router-link>
+        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">NodeX Runtime</router-link>
+      </div>
+    </div>
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
       <span>{{ feedback.message }}</span>
@@ -153,7 +161,7 @@
                   {{ node.name }} · 中转执行节点 · {{ node.host }}
                 </option>
               </select>
-              <p class="hint">`iptables_ansible` only needs the execution node identity. SSH credentials still come from inventory or environment variables.</p>
+              <p class="hint">Local Ansible mode only needs the execution node identity. SSH access still comes from the configured inventory and local runtime settings.</p>
               <p v-if="errors.outNodeId" class="form-error">{{ errors.outNodeId }}</p>
             </div>
 
@@ -327,6 +335,7 @@ const nodes = ref([])
 const runtimeNodeXModeKey = 'forward.runtime.nodex_mode'
 const runtimeBackendKey = 'forward.runtime_backend'
 const runtimeNodeXMode = ref(false)
+const runtimeBackend = ref('nftables_ansible')
 
 const relayNodeOptions = computed(() =>
   nodes.value.filter(
@@ -343,7 +352,12 @@ const exitNodeOptions = computed(() =>
 const runtimeModeLabel = computed(() =>
   runtimeNodeXMode.value
     ? 'NodeX/Gost runtime (转发入口/出口节点)'
-    : 'Ansible/iptables runtime (中转执行节点)'
+    : `Local Ansible runtime (${runtimeBackend.value})`
+)
+const runtimeModeSummary = computed(() =>
+  runtimeNodeXMode.value
+    ? 'Ingress and egress semantics are controlled through NodeX/gost. Use NodeX Runtime for the control-plane URL, token and gost readiness.'
+    : 'Only the execution node identity is stored here. Use Local Runtime for inventory, playbooks and the panel-host ansible executor.'
 )
 
 const modalOpen = ref(false)
@@ -400,22 +414,18 @@ const parseBooleanConfig = (value) => {
 }
 
 async function loadRuntimeMode() {
+  let explicitMode = null
   try {
     const res = await getSystemConfig(runtimeNodeXModeKey)
-    const parsedValue = parseBooleanConfig(res.data?.value)
-    if (parsedValue !== null) {
-      runtimeNodeXMode.value = parsedValue
-      enforceFormMode()
-      return
-    }
+    explicitMode = parseBooleanConfig(res.data?.value)
   } catch (err) {
     console.error('鑾峰彇 runtime NodeX mode 澶辫触:', err)
   }
 
   try {
     const res = await getSystemConfig(runtimeBackendKey)
-    const backend = String(res.data?.value || '').toLowerCase()
-    runtimeNodeXMode.value = backend === 'gost'
+    runtimeBackend.value = String(res.data?.value || 'nftables_ansible').toLowerCase() || 'nftables_ansible'
+    runtimeNodeXMode.value = explicitMode === null ? runtimeBackend.value === 'gost' : explicitMode
     enforceFormMode()
   } catch (err) {
     console.error('鑾峰彇 runtime backend 澶辫触:', err)
@@ -960,6 +970,26 @@ async function rerunDiagnosis() {
 .meta-label {
   margin: 4px 0 0;
   color: var(--text-secondary);
+}
+
+.runtime-context-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.runtime-context-summary {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.runtime-context-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .card-head-actions,

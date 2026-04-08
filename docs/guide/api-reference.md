@@ -418,8 +418,17 @@ PUT /api/v2/admin/system/configs/forward.runtime_backend
   "description": "Forward runtime backend"
 }
 
-# iptables/ansible runtime config
-PUT /api/v2/admin/system/configs/forward.runtime.iptables_ansible.config
+# local ansible runtime backend selector
+PUT /api/v2/admin/system/configs/forward.runtime.ansible.backend
+{
+  "value": "nftables_ansible",
+  "type": "string",
+  "group": "forward",
+  "description": "Preferred local ansible backend"
+}
+
+# local ansible runtime config
+PUT /api/v2/admin/system/configs/forward.runtime.ansible.config
 {
   "value": "{\"inventory\":\"hosts.ini\",\"playbookApply\":\"apply.yml\",\"playbookRemove\":\"remove.yml\"}",
   "type": "json",
@@ -430,11 +439,13 @@ PUT /api/v2/admin/system/configs/forward.runtime.iptables_ansible.config
 
 Notes:
 
-- This section documents compatibility controls for two internal execution paths: stateful `NodeX/gost` and local `iptables_ansible`. It is not part of the Flux `/admin/forward` contract.
+- This section documents compatibility controls for two internal execution paths: stateful `NodeX/gost` and stateless local ansible executor. It is not part of the Flux `/admin/forward` contract.
+- Recommended local backend is `nftables_ansible`; `iptables_ansible` is legacy compatibility only.
 - Keep the Flux-compatible `/admin/forward` page free of extra runtime panels; use `System.vue` and deployment surfaces for backend switching and runtime job observability.
-- Optional JSON keys inside `forward.runtime.iptables_ansible.config`: `command`, `workingDir`, `targetPattern`, `timeoutSeconds`, `environment`.
-- Docker and one-click installs can preseed the same values with `FORWARD_RUNTIME_BACKEND` and `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON` before the admin UI is used.
-- Current `gost` runtime for `panel_forward` and `legacy_rule` depends on `forward.runtime.nodex.base_url`/`FORWARD_RUNTIME_NODEX_BASE_URL`; this base URL must point at the NodeX control-plane because the client no longer guesses `host:apiPort` from the ingress/relay node for the outer control-plane hop.
+- Optional JSON keys inside `forward.runtime.ansible.config`: `command`, `workingDir`, `targetPattern`, `timeoutSeconds`, `environment`.
+- Legacy compatibility readers still support `forward.runtime.iptables_ansible.config` and `forward.ansible.*` keys.
+- Docker and one-click installs now write the canonical runtime values into `config/config.yaml.forward_runtime`.
+- Current `gost` runtime for `panel_forward` and `legacy_rule` depends on `forward_runtime.nodex.base_url`; this base URL must point at the NodeX control-plane because the client no longer guesses `host:apiPort` from the ingress/relay node for the outer control-plane hop.
 - Public docs intentionally avoid internal executor topology; see `docs/guide/nodex-internal-extension.md` for the contract boundary.
 
 ---

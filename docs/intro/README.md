@@ -54,10 +54,11 @@ Forward runtime has two distinct modes:
   - `forward.runtime_backend = gost`
   - requires `forward.runtime.nodex.base_url` and `forward.runtime.nodex.token`
   - stateful runtime handoff to NodeX
-- `iptables_ansible` mode
-  - `forward.runtime_backend = iptables_ansible`
-  - stateless ansible-driven runtime
+- local Ansible mode (recommended: `nftables_ansible`)
+  - `forward.runtime_backend = nftables_ansible`
+  - stateless ansible-driven runtime on the panel host
   - uses the local executor plus execution-node SSH/inventory/playbook material
+  - `iptables_ansible` remains available only as legacy compatibility for older relay playbooks/firewall environments
 
 Do not mix proxy-node language and forward-node language.
 

@@ -20,8 +20,7 @@ const (
 	defaultForwardRuntimeNodeXStatusPath = "/api/v2/internal/forward/runtime/status"
 
 	panelForwardRuntimeAttachmentModelNodeXGost         = "nodex_gost_stateful"
-	panelForwardRuntimeAttachmentModelLocalAnsible      = "local_iptables_ansible_stateless"
-	panelForwardRuntimeIgnoredNodeXConfigWarning        = "NodeX base_url/token are configured but ignored while runtime backend is iptables_ansible"
+	panelForwardRuntimeIgnoredNodeXConfigWarning        = "NodeX base_url/token are configured but ignored while runtime backend is a local ansible backend"
 	panelForwardRuntimeMissingNodeXBaseURLReason        = "NodeX mode requires forward.runtime.nodex.base_url before the panel can probe the control plane"
 	panelForwardRuntimeMissingNodeXTokenReason          = "NodeX mode requires forward.runtime.nodex.token before runtime readiness can be confirmed"
 	panelForwardRuntimeNodeXHealthSuccessReason         = "NodeX /health responded with ok from the panel host"
@@ -63,6 +62,8 @@ type nodeXForwardRuntimeModeStatus struct {
 }
 
 type nodeXForwardRuntimeAnsibleStatus struct {
+	Backend              string   `json:"backend,omitempty"`
+	FirewallDriver       string   `json:"firewallDriver,omitempty"`
 	Supported            bool     `json:"supported"`
 	Ready                bool     `json:"ready"`
 	Command              string   `json:"command"`
@@ -159,6 +160,38 @@ func (s *PanelForwardRuntimeService) GetNodeXRuntimeStatus(ctx context.Context) 
 	return s.nodeXDiagnosticsClient().Status(ctx)
 }
 
+func (s *PanelForwardRuntimeService) GetNodeXOperatorStatus(ctx context.Context) (*PanelForwardRuntimeStatusSummary, error) {
+	doctor, err := s.nodeXDiagnosticsClient().Doctor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if doctor == nil {
+		return nil, nil
+	}
+	summary := doctor.PanelForwardRuntimeStatusSummary
+	return &summary, nil
+}
+
+func (s *PanelForwardRuntimeService) DiagnoseNodeXOperator(ctx context.Context) (*PanelForwardRuntimeDoctorSummary, error) {
+	return s.nodeXDiagnosticsClient().Doctor(ctx)
+}
+
+func (s *PanelForwardRuntimeService) GetLocalOperatorStatus(ctx context.Context) (*PanelForwardRuntimeStatusSummary, error) {
+	summary, err := s.buildLocalOperatorStatusSummary(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if summary == nil {
+		return nil, nil
+	}
+	base := summary.PanelForwardRuntimeStatusSummary
+	return &base, nil
+}
+
+func (s *PanelForwardRuntimeService) DiagnoseLocalOperator(ctx context.Context) (*PanelForwardRuntimeDoctorSummary, error) {
+	return s.buildLocalOperatorStatusSummary(ctx)
+}
+
 func (s *PanelForwardRuntimeService) GetPanelRuntimeStatus(ctx context.Context) (*PanelForwardRuntimeStatusSummary, error) {
 	return s.buildRuntimeStatusSummary(ctx)
 }
@@ -181,11 +214,39 @@ func (s *PanelForwardService) GetRuntimeStatus(ctx context.Context) (*PanelForwa
 	return s.runtimeService.GetPanelRuntimeStatus(ctx)
 }
 
+func (s *PanelForwardService) GetNodeXOperatorStatus(ctx context.Context) (*PanelForwardRuntimeStatusSummary, error) {
+	if s.runtimeService == nil {
+		return nil, fmt.Errorf("forward runtime service is not configured")
+	}
+	return s.runtimeService.GetNodeXOperatorStatus(ctx)
+}
+
+func (s *PanelForwardService) GetLocalOperatorStatus(ctx context.Context) (*PanelForwardRuntimeStatusSummary, error) {
+	if s.runtimeService == nil {
+		return nil, fmt.Errorf("forward runtime service is not configured")
+	}
+	return s.runtimeService.GetLocalOperatorStatus(ctx)
+}
+
 func (s *PanelForwardService) DiagnoseRuntime(ctx context.Context) (*PanelForwardRuntimeDoctorSummary, error) {
 	if s.runtimeService == nil {
 		return nil, fmt.Errorf("forward runtime service is not configured")
 	}
 	return s.runtimeService.DiagnosePanelRuntime(ctx)
+}
+
+func (s *PanelForwardService) DiagnoseNodeXOperator(ctx context.Context) (*PanelForwardRuntimeDoctorSummary, error) {
+	if s.runtimeService == nil {
+		return nil, fmt.Errorf("forward runtime service is not configured")
+	}
+	return s.runtimeService.DiagnoseNodeXOperator(ctx)
+}
+
+func (s *PanelForwardService) DiagnoseLocalOperator(ctx context.Context) (*PanelForwardRuntimeDoctorSummary, error) {
+	if s.runtimeService == nil {
+		return nil, fmt.Errorf("forward runtime service is not configured")
+	}
+	return s.runtimeService.DiagnoseLocalOperator(ctx)
 }
 
 func (s *PanelForwardRuntimeService) buildRuntimeStatusSummary(ctx context.Context) (*PanelForwardRuntimeStatusSummary, error) {
@@ -209,8 +270,8 @@ func (s *PanelForwardRuntimeService) buildRuntimeStatusSummary(ctx context.Conte
 		RuntimeReady: PanelForwardRuntimeReadiness{Ready: false},
 	}
 
-	if backend == model.ForwardRuntimeBackendIptablesAnsible {
-		summary.LocalAnsible = s.inspectLocalAnsibleRuntime()
+	if isForwardRuntimeLocalAnsibleBackend(backend) {
+		summary.LocalAnsible = s.inspectLocalAnsibleRuntime(backend)
 		summary.Reachability = buildLocalAnsibleReachability(summary.LocalAnsible)
 		summary.RuntimeReady = buildLocalAnsibleRuntimeReady(summary.LocalAnsible)
 		if summary.Config.BaseURLConfigured || summary.Config.TokenConfigured {
@@ -225,12 +286,49 @@ func (s *PanelForwardRuntimeService) buildRuntimeStatusSummary(ctx context.Conte
 	return summary, nil
 }
 
-func (s *PanelForwardRuntimeService) inspectLocalAnsibleRuntime() *nodeXForwardRuntimeAnsibleStatus {
-	status := &nodeXForwardRuntimeAnsibleStatus{
-		Supported: true,
+func (s *PanelForwardRuntimeService) buildLocalOperatorStatusSummary(_ context.Context) (*PanelForwardRuntimeDoctorSummary, error) {
+	client := s.nodeXDiagnosticsClient()
+	settings, err := client.loadSettings()
+	if err != nil {
+		return nil, err
+	}
+	backend, err := s.resolveLocalAnsibleBackend()
+	if err != nil {
+		return nil, err
 	}
 
-	cfg, err := s.loadPanelForwardAnsibleConfigForDiagnostics()
+	summary := &PanelForwardRuntimeDoctorSummary{
+		PanelForwardRuntimeStatusSummary: PanelForwardRuntimeStatusSummary{
+			BaseURL:      settings.BaseURL,
+			CheckedAt:    time.Now().Format(time.RFC3339),
+			Config:       buildPanelForwardRuntimeConfigState(backend, settings),
+			Attachment:   buildPanelForwardRuntimeAttachmentState(backend),
+			Reachability: PanelForwardRuntimeReadiness{Ready: false},
+			RuntimeReady: PanelForwardRuntimeReadiness{Ready: false},
+		},
+		Commands: buildPanelForwardRuntimeCommands(backend, ""),
+	}
+
+	summary.LocalAnsible = s.inspectLocalAnsibleRuntime(backend)
+	summary.Reachability = buildLocalAnsibleReachability(summary.LocalAnsible)
+	summary.RuntimeReady = buildLocalAnsibleRuntimeReady(summary.LocalAnsible)
+	if summary.Config.BaseURLConfigured || summary.Config.TokenConfigured {
+		summary.Warnings = append(summary.Warnings, panelForwardRuntimeIgnoredNodeXConfigWarning)
+	}
+	summary.Warnings = uniqueNonEmptyStrings(summary.Warnings, summary.RuntimeStatus.Issues)
+	summary.Summary = buildPanelForwardRuntimeSummary(&summary.PanelForwardRuntimeStatusSummary)
+	return summary, nil
+}
+
+func (s *PanelForwardRuntimeService) inspectLocalAnsibleRuntime(backend string) *nodeXForwardRuntimeAnsibleStatus {
+	backend = normalizeForwardRuntimeLocalBackendOrDefault(backend)
+	status := &nodeXForwardRuntimeAnsibleStatus{
+		Backend:        backend,
+		FirewallDriver: forwardRuntimeLocalFirewallDriver(backend),
+		Supported:      true,
+	}
+
+	cfg, err := s.loadPanelForwardAnsibleConfigForDiagnosticsWithBackend(backend)
 	if err != nil {
 		status.Issues = append(status.Issues, err.Error())
 		return status
@@ -315,10 +413,16 @@ func buildPanelForwardRuntimeConfigState(backend string, settings *nodeXForwardR
 }
 
 func buildPanelForwardRuntimeAttachmentState(backend string) PanelForwardRuntimeAttachmentState {
-	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+	if isForwardRuntimeLocalAnsibleBackend(backend) {
+		attachmentModel := "local_nftables_ansible_stateless"
+		description := "Stateless nftables/Ansible path. Only the execution node identity is stored on the tunnel; SSH access comes from the configured ansible inventory."
+		if backend == model.ForwardRuntimeBackendIptablesAnsible {
+			attachmentModel = "local_iptables_ansible_stateless"
+			description = "Stateless iptables/Ansible path. Only the execution node identity is stored on the tunnel; SSH access comes from the configured ansible inventory."
+		}
 		return PanelForwardRuntimeAttachmentState{
-			Model:       panelForwardRuntimeAttachmentModelLocalAnsible,
-			Description: "Stateless iptables/Ansible path. Only the execution node identity is stored on the tunnel; SSH access comes from the configured ansible inventory.",
+			Model:       attachmentModel,
+			Description: description,
 		}
 	}
 	return PanelForwardRuntimeAttachmentState{
@@ -428,14 +532,15 @@ func buildPanelForwardRuntimeSummary(summary *PanelForwardRuntimeStatusSummary) 
 	if summary == nil {
 		return ""
 	}
-	if summary.Config.Backend == model.ForwardRuntimeBackendIptablesAnsible {
+	if isForwardRuntimeLocalAnsibleBackend(summary.Config.Backend) {
+		label := forwardRuntimeLocalBackendLabel(summary.Config.Backend)
 		if summary.RuntimeReady.Ready {
-			return "Local iptables/Ansible executor is ready. This path stays stateless and still requires queued jobs to finish successfully before a forward actually exists."
+			return fmt.Sprintf("Local %s executor is ready. This path stays stateless and still requires queued jobs to finish successfully before a forward actually exists.", label)
 		}
 		if summary.Reachability.Ready {
 			return "ansible-playbook is reachable on the panel host, but inventory/playbooks or related runtime files are not ready yet."
 		}
-		return "Local iptables/Ansible executor is not ready on the panel host yet."
+		return fmt.Sprintf("Local %s executor is not ready on the panel host yet.", label)
 	}
 
 	if !summary.Config.BaseURLConfigured {
@@ -454,20 +559,32 @@ func buildPanelForwardRuntimeSummary(summary *PanelForwardRuntimeStatusSummary) 
 }
 
 func buildPanelForwardRuntimeCommands(backend, baseURL string) PanelForwardRuntimeCommandHints {
-	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+	if isForwardRuntimeLocalAnsibleBackend(backend) {
+		applyPlaybook := defaultForwardApplyPlaybookPathForBackend(backend)
+		removePlaybook := defaultForwardRemovePlaybookPathForBackend(backend)
+		firewallCommand := "nft --version"
+		firewallListCommand := "nft list tables"
+		if backend == model.ForwardRuntimeBackendIptablesAnsible {
+			firewallCommand = "iptables --version"
+			firewallListCommand = "iptables -t nat -S"
+		}
 		return PanelForwardRuntimeCommandHints{
 			PowerShell: []string{
 				"Get-Command ansible-playbook",
 				"ansible-playbook --version",
 				"Get-Content .\\config\\deploy\\ansible\\inventory.ini",
+				firewallCommand,
 			},
 			Bash: []string{
 				"command -v ansible-playbook",
 				"ansible-playbook --version",
 				"cat ./config/deploy/ansible/inventory.ini",
+				firewallListCommand,
 			},
 			Upgrade: []string{
 				"git pull --ff-only",
+				fmt.Sprintf("cat ./%s", strings.ReplaceAll(applyPlaybook, "\\", "/")),
+				fmt.Sprintf("cat ./%s", strings.ReplaceAll(removePlaybook, "\\", "/")),
 				"go test ./internal/service/... -run ForwardRuntime",
 			},
 			References: []string{
@@ -704,30 +821,30 @@ func (c *nodeXForwardRuntimeClient) performNodeXRequest(ctx context.Context, met
 func buildNodeXOperatorCommands(baseURL string) PanelForwardRuntimeCommandHints {
 	normalized := strings.TrimSpace(baseURL)
 	if normalized == "" {
-		normalized = "http://127.0.0.1:8080"
+		normalized = "http://127.0.0.1:18081"
 	}
 
 	return PanelForwardRuntimeCommandHints{
 		PowerShell: []string{
-			"powershell -File .\\tools\\nodex.ps1 check-version",
-			fmt.Sprintf("powershell -File .\\tools\\nodex.ps1 doctor -BaseUrl %s -ForwardApiToken <FORWARD_API_TOKEN>", normalized),
-			fmt.Sprintf("powershell -File .\\tools\\nodex.ps1 runtime-status -BaseUrl %s -ForwardApiToken <FORWARD_API_TOKEN>", normalized),
+			fmt.Sprintf("Invoke-WebRequest '%s/health' | Select-Object -ExpandProperty Content", normalized),
+			fmt.Sprintf("Invoke-WebRequest '%s/api/v2/internal/forward/runtime/status' -Headers @{ Authorization = 'Bearer <FORWARD_API_TOKEN>' } | Select-Object -ExpandProperty Content", normalized),
+			"Invoke-WebRequest 'http://<RELAY_HOST>:<API_PORT>/api/config/services' -Headers @{ Authorization = 'Basic <BASE64(admin:RELAY_API_TOKEN)>' } | Select-Object -ExpandProperty Content",
 		},
 		Bash: []string{
-			"bash ./tools/nodex.sh check-version",
-			fmt.Sprintf("BASE_URL=%s FORWARD_API_TOKEN=<FORWARD_API_TOKEN> bash ./tools/nodex.sh doctor", normalized),
-			fmt.Sprintf("BASE_URL=%s FORWARD_API_TOKEN=<FORWARD_API_TOKEN> bash ./tools/nodex.sh runtime-status", normalized),
+			fmt.Sprintf("curl -fsSL '%s/health'", normalized),
+			fmt.Sprintf("curl -fsSL -H 'Authorization: Bearer <FORWARD_API_TOKEN>' '%s/api/v2/internal/forward/runtime/status'", normalized),
+			"curl -fsSL -u 'admin:<RELAY_API_TOKEN>' 'http://<RELAY_HOST>:<API_PORT>/api/config/services'",
 		},
 		Upgrade: []string{
-			"git pull --ff-only",
-			"powershell -File .\\tools\\nodex.ps1 version",
-			"powershell -File .\\tools\\nodex.ps1 sync-config",
+			"git clone https://github.com/zdwtest/NodeX.git",
+			"cd NodeX/control-plane && go run ./cmd/control-plane --version",
+			"cd NodeX/control-plane && go run ./cmd/control-plane --config ../deploy/config/control-plane.yaml --addr :18081 --forward-api-token <FORWARD_API_TOKEN>",
 		},
 		References: []string{
-			"docs/reference/check-version.md",
-			"docs/reference/upgrade.md",
-			"docs/reference/connect-model.md",
-			"docs/reference/nodeclient-faq.md",
+			"Current repo: docs/reference/runtime.md",
+			"Current repo: docs/guide/forward-relay-onboarding.md",
+			"NodeX repo: https://github.com/zdwtest/NodeX",
+			"NodeX doc: docs/forward-runtime-relay-onboarding.md",
 		},
 	}
 }

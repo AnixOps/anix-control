@@ -28,24 +28,30 @@ Now the runtime config path is single-source:
 
 ## Old To New Mapping
 
-| Old input | New YAML key |
-|-----------|--------------|
-| `FORWARD_RUNTIME_BACKEND` | `forward_runtime.backend` |
-| `FORWARD_RUNTIME_NODEX_MODE` | `forward_runtime.nodex_mode` |
-| `FORWARD_RUNTIME_NODEX_BASE_URL` | `forward_runtime.nodex.base_url` |
-| `FORWARD_RUNTIME_NODEX_TOKEN` | `forward_runtime.nodex.token` |
-| `FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS` | `forward_runtime.nodex.timeout_seconds` |
-| `FORWARD_RUNTIME_ANSIBLE_INVENTORY` | `forward_runtime.iptables_ansible.inventory` |
-| `FORWARD_RUNTIME_ANSIBLE_PLAYBOOK_APPLY` | `forward_runtime.iptables_ansible.apply_playbook` |
-| `FORWARD_RUNTIME_ANSIBLE_PLAYBOOK_REMOVE` | `forward_runtime.iptables_ansible.remove_playbook` |
-| `FORWARD_RUNTIME_ANSIBLE_WORKDIR` | `forward_runtime.iptables_ansible.working_dir` |
-| `FORWARD_RUNTIME_ANSIBLE_TARGET_PATTERN` | `forward_runtime.iptables_ansible.target_pattern` |
-| `FORWARD_RUNTIME_ANSIBLE_COMMAND` | `forward_runtime.iptables_ansible.command` |
-| `FORWARD_RUNTIME_ANSIBLE_TIMEOUT_SECONDS` | `forward_runtime.iptables_ansible.timeout_seconds` |
-| `FORWARD_RUNTIME_ANSIBLE_BECOME` | `forward_runtime.iptables_ansible.become` |
-| `FORWARD_RUNTIME_ANSIBLE_EXTRA_VARS_JSON` | `forward_runtime.iptables_ansible.extra_vars` |
-| `FORWARD_RUNTIME_ANSIBLE_ENV_JSON` | `forward_runtime.iptables_ansible.environment` |
-| `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON` | split into the individual `forward_runtime.iptables_ansible.*` keys above |
+| Old input | New YAML key (recommended) | Legacy-compatible key |
+|-----------|-----------------------------|-----------------------|
+| `FORWARD_RUNTIME_BACKEND` | `forward_runtime.backend` | same |
+| `FORWARD_RUNTIME_NODEX_MODE` | `forward_runtime.nodex_mode` | same |
+| `FORWARD_RUNTIME_NODEX_BASE_URL` | `forward_runtime.nodex.base_url` | same |
+| `FORWARD_RUNTIME_NODEX_TOKEN` | `forward_runtime.nodex.token` | same |
+| `FORWARD_RUNTIME_NODEX_TIMEOUT_SECONDS` | `forward_runtime.nodex.timeout_seconds` | same |
+| `FORWARD_RUNTIME_ANSIBLE_INVENTORY` | `forward_runtime.nftables_ansible.inventory` | `forward_runtime.iptables_ansible.inventory` |
+| `FORWARD_RUNTIME_ANSIBLE_PLAYBOOK_APPLY` | `forward_runtime.nftables_ansible.apply_playbook` | `forward_runtime.iptables_ansible.apply_playbook` |
+| `FORWARD_RUNTIME_ANSIBLE_PLAYBOOK_REMOVE` | `forward_runtime.nftables_ansible.remove_playbook` | `forward_runtime.iptables_ansible.remove_playbook` |
+| `FORWARD_RUNTIME_ANSIBLE_WORKDIR` | `forward_runtime.nftables_ansible.working_dir` | `forward_runtime.iptables_ansible.working_dir` |
+| `FORWARD_RUNTIME_ANSIBLE_TARGET_PATTERN` | `forward_runtime.nftables_ansible.target_pattern` | `forward_runtime.iptables_ansible.target_pattern` |
+| `FORWARD_RUNTIME_ANSIBLE_COMMAND` | `forward_runtime.nftables_ansible.command` | `forward_runtime.iptables_ansible.command` |
+| `FORWARD_RUNTIME_ANSIBLE_TIMEOUT_SECONDS` | `forward_runtime.nftables_ansible.timeout_seconds` | `forward_runtime.iptables_ansible.timeout_seconds` |
+| `FORWARD_RUNTIME_ANSIBLE_BECOME` | `forward_runtime.nftables_ansible.become` | `forward_runtime.iptables_ansible.become` |
+| `FORWARD_RUNTIME_ANSIBLE_EXTRA_VARS_JSON` | `forward_runtime.nftables_ansible.extra_vars` | `forward_runtime.iptables_ansible.extra_vars` |
+| `FORWARD_RUNTIME_ANSIBLE_ENV_JSON` | `forward_runtime.nftables_ansible.environment` | `forward_runtime.iptables_ansible.environment` |
+| `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON` | split into the individual `forward_runtime.nftables_ansible.*` keys above | split into `forward_runtime.iptables_ansible.*` keys |
+
+Historical note:
+
+- old `FORWARD_RUNTIME_ANSIBLE_*` values were originally consumed by the iptables-oriented local path.
+- migration now recommends placing those values under `forward_runtime.nftables_ansible.*`.
+- use `forward_runtime.iptables_ansible.*` only when you intentionally keep the legacy iptables playbook path.
 
 Worker tuning also moved into YAML:
 
@@ -73,7 +79,7 @@ Use one of these instead:
 
 - put SSH credentials directly in `config/deploy/ansible/inventory.ini`
 - use SSH keys under `config/deploy/ssh/`
-- pass ansible-level values through `forward_runtime.iptables_ansible.extra_vars`
+- pass ansible-level values through `forward_runtime.nftables_ansible.extra_vars` (or `forward_runtime.iptables_ansible.extra_vars` for legacy compatibility)
 
 Do not expect `v2board` to generate inventory files from env variables anymore.
 
@@ -100,15 +106,15 @@ forward_runtime:
     timeout_seconds: 15
 ```
 
-### Local ansible / iptables
+### Local ansible / nftables (recommended)
 
 Old habit:
 
 ```dotenv
-FORWARD_RUNTIME_BACKEND=iptables_ansible
+FORWARD_RUNTIME_BACKEND=nftables_ansible
 FORWARD_RUNTIME_ANSIBLE_INVENTORY=config/deploy/ansible/inventory.ini
-FORWARD_RUNTIME_ANSIBLE_PLAYBOOK_APPLY=config/deploy/ansible/playbooks/forward_apply.yml
-FORWARD_RUNTIME_ANSIBLE_PLAYBOOK_REMOVE=config/deploy/ansible/playbooks/forward_remove.yml
+FORWARD_RUNTIME_ANSIBLE_PLAYBOOK_APPLY=config/deploy/ansible/playbooks/forward_apply_nftables.yml
+FORWARD_RUNTIME_ANSIBLE_PLAYBOOK_REMOVE=config/deploy/ansible/playbooks/forward_remove_nftables.yml
 FORWARD_RUNTIME_ANSIBLE_BECOME=true
 ```
 
@@ -116,11 +122,11 @@ New config:
 
 ```yaml
 forward_runtime:
-  backend: "iptables_ansible"
-  iptables_ansible:
+  backend: "nftables_ansible"
+  nftables_ansible:
     inventory: "config/deploy/ansible/inventory.ini"
-    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
-    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply_nftables.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove_nftables.yml"
     working_dir: "config/deploy/ansible"
     target_pattern: "{{node.host}}"
     become: true
@@ -128,6 +134,9 @@ forward_runtime:
     environment:
       ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
 ```
+
+If you need the old firewall driver/playbooks, keep the same structure but switch `backend` and block name to `iptables_ansible`.
+Historical note: older local deployments often used `FORWARD_RUNTIME_BACKEND=iptables_ansible` together with `forward_apply.yml` / `forward_remove.yml`; keep that combination only when you intentionally stay on the legacy iptables path.
 
 ## Operational Checks
 

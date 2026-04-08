@@ -154,13 +154,16 @@ The following pieces are local extensions for dual-runtime support and are not p
 
 - `GET /api/v2/admin/forward/runtime/jobs`
 - system config key `forward.runtime_backend`
-- system config key `forward.runtime.iptables_ansible.config`
+- system config keys `forward.runtime.ansible.backend` and `forward.runtime.ansible.config`
 - optional async executor implementation in `internal/service/forward_runtime_job_executor.go`
 
 Rules for this extension surface:
 
 - keep the main forward clone UI in `web/src/views/admin/Forward.vue` aligned with Flux
-- place runtime backend selection and runtime job observability in `web/src/views/admin/System.vue`
+- place runtime backend selection and runtime job observability in the dedicated runtime surfaces:
+  - `web/src/views/admin/LocalRuntime.vue`
+  - `web/src/views/admin/NodeX.vue`
+  - `web/src/views/admin/System.vue` as the shared workbench/overview
 - do not describe these extension endpoints as proof that the Flux forward page clone is complete
 
 ## Request DTOs

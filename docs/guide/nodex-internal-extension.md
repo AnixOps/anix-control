@@ -2,7 +2,7 @@
 
 `v2board_AnixOps` still clones the Flux `/admin/forward*` surface.
 
-`NodeX` and `iptables_ansible` are internal execution extensions behind that surface. They are not part of the public Flux contract.
+`NodeX` and local ansible execution are internal extensions behind that surface. They are not part of the public Flux contract.
 
 ## Boundary Summary
 
@@ -14,8 +14,8 @@
 - `NodeX`
   - internal-only execution control plane
   - stateful `gost` runtime orchestration
-- `iptables_ansible`
-  - local execution path in `v2board`
+- local ansible execution (`nftables_ansible` default, `iptables_ansible` legacy)
+  - local execution path in `v2board` panel host
   - stateless SSH + playbook driven forwarding
 
 ## Two Runtime Modes
@@ -23,7 +23,7 @@
 | Mode | `forward.runtime_backend` | Execution path | What the relay must expose |
 |------|------|------|------|
 | NodeX mode | `gost` | `v2board -> NodeX -> relay gost API` | `host`, `api_port`, `api_token` |
-| ansible mode | `iptables_ansible` | `v2board local executor -> ansible-playbook -> relay host` | SSH reachability through inventory or env-generated inventory |
+| local ansible mode | `nftables_ansible` (recommended) / `iptables_ansible` (legacy) | `v2board local executor -> ansible-playbook -> relay host` | SSH reachability through the configured ansible inventory |
 
 ## Proxy Nodes Vs Forward Nodes
 
@@ -52,7 +52,7 @@ Current `ForwardNode` does not contain per-node SSH credential fields.
 That means:
 
 - NodeX mode uses relay API access from the `ForwardNode` record
-- ansible mode uses inventory or env-generated SSH inventory outside the `ForwardNode` schema
+- local ansible mode uses inventory or env-generated SSH inventory outside the `ForwardNode` schema
 
 ## Current Online Semantics
 
@@ -73,8 +73,21 @@ These endpoints belong to the internal runtime layer, not to the Flux-cloned pag
 - `/api/v2/admin/forward/runtime/jobs`
 - `/api/v2/admin/forward/runtime/status`
 - `/api/v2/admin/forward/runtime/doctor`
+- `/api/v2/admin/forward/nodex/status`
+- `/api/v2/admin/forward/nodex/doctor`
 
 They are intentionally documented as operator surfaces, not as Flux-compatible product APIs.
+
+Current admin UI entry split:
+
+- `/admin/forward/ansible-machines`
+  - stateless execution-machine inventory
+- `/admin/forward/local`
+  - local ansible runtime config and diagnostics (`nftables_ansible` recommended)
+- `/admin/forward/nodex`
+  - dedicated NodeX operator page (stateful control-plane/agent path)
+- `/admin/system`
+  - shared system page for runtime overview and compatibility controls
 
 ## Related Docs
 

@@ -30,12 +30,13 @@ Real attachment must be proven by runtime job success plus relay-side state.
 3. `forward_runtime.nodex.base_url` and `forward_runtime.nodex.token` are set and match NodeX.
 4. The relay host is already running gost with a management API.
 5. The relay `ForwardNode` has the correct `host`, `api_port`, and `api_token`.
+6. NodeX-side agent/operator path is available for runtime orchestration.
 
 ### Checks
 
 1. Confirm `v2board` runtime config:
-   - open `/admin/system`
-   - confirm NodeX mode values
+   - open `/admin/forward/nodex`
+   - confirm NodeX mode values and doctor/readiness
 2. Confirm NodeX health:
 
 ```powershell
@@ -74,15 +75,21 @@ curl -u admin:<RELAY_API_TOKEN> http://<RELAY_HOST>:<API_PORT>/api/config/limite
 - relay gost contains the expected service
 - relay gost contains the expected limiter when rate limits are enabled
 
-## 2. `iptables_ansible` Smoke
+## 2. Local Ansible Smoke (`nftables_ansible` Default)
+
+Recommended path in this section is `nftables_ansible`.
+`iptables_ansible` is a legacy compatibility variant and should not be treated as default.
 
 ### Preconditions
 
-1. `config/config.yaml` has `forward_runtime.backend=iptables_ansible`.
+1. `config/config.yaml` has `forward_runtime.backend=nftables_ansible`.
 2. `ansible-playbook` exists on the machine running `v2board`.
 3. inventory and playbooks exist.
 4. the configured ansible inventory can SSH into the relay host.
 5. the selected tunnel supports ansible execution.
+6. execution-machine records and diagnostics are managed from:
+   - `/admin/forward/ansible-machines`
+   - `/admin/forward/local`
 
 ### Checks
 
@@ -93,7 +100,7 @@ Get-Command ansible-playbook
 ```
 
 2. Confirm the inventory path and playbooks exist.
-3. Confirm `config/config.yaml.forward_runtime.iptables_ansible.inventory` points at the executor inventory file used by the panel host.
+3. Confirm `config/config.yaml.forward_runtime.nftables_ansible.inventory` points at the executor inventory file used by the panel host.
 4. Run a manual ansible reachability check on the same executor host when possible:
 
 ```bash
@@ -106,23 +113,43 @@ ansible all -i config/deploy/ansible/inventory.ini -m ping
 ```sql
 SELECT id, backend, action, status, node_id, result, error, created_at
 FROM v2_forward_runtime_job
-WHERE backend = 'iptables_ansible'
+WHERE backend = 'nftables_ansible'
 ORDER BY id DESC
 LIMIT 10;
 ```
 
-7. Inspect relay-side `iptables` state:
+7. Inspect relay-side `nftables` state:
 
 ```bash
-sudo iptables -t nat -S
-sudo iptables-save
+sudo nft list ruleset
 ```
 
 ### Pass criteria
 
 - runtime job status is `success`
-- relay host contains the expected `iptables` rules
+- relay host contains the expected `nftables` rules
 - removing or pausing the forward removes the expected rules
+
+### Legacy compatibility variant (`iptables_ansible`)
+
+Use only when old relay environments cannot switch yet:
+
+1. set `forward_runtime.backend=iptables_ansible`
+2. use `forward_runtime.iptables_ansible.*`
+3. verify with:
+
+```sql
+SELECT id, backend, action, status
+FROM v2_forward_runtime_job
+WHERE backend = 'iptables_ansible'
+ORDER BY id DESC
+LIMIT 10;
+```
+
+```bash
+sudo iptables -t nat -S
+sudo iptables-save
+```
 
 ## 3. Real-Machine Verified Example (2026-04-07)
 
@@ -136,7 +163,7 @@ The current authoritative proof was validated on a temporary Debian host with:
 Verified forwarding case:
 
 - source target: `155.117.224.30:11111`
-- `143.20.204.14:11111` via `iptables_ansible`
+- `143.20.204.14:11111` via `iptables_ansible` (legacy compatibility in that run)
 - `143.20.204.14:11112` via `gost`
 
 ### TCP evidence
@@ -200,7 +227,7 @@ Observed gost relay config:
 This is the currently validated path:
 
 - `binary + SQLite + systemd`
-- `iptables_ansible` verified on real relay rules
+- local ansible runtime verified on real relay rules (`iptables` sample from legacy compatibility run)
 - `NodeX/gost` verified on real relay dynamic config
 
 The Dockerized forward-runtime runbook is still a follow-up task. Do not treat container deployment as the already-proven path until that runbook and evidence are added.
@@ -223,10 +250,11 @@ It does not prove:
   - admin auth problem, not relay runtime problem
 - `backend='gost'` job fails before relay changes
   - check NodeX base URL, token, relay gost API reachability, relay API token
-- `backend='iptables_ansible'` job stays pending
+- `backend='nftables_ansible'` job stays pending
   - check local background executor and command availability
-- `backend='iptables_ansible'` job fails during execution
+- `backend='nftables_ansible'` job fails during execution
   - check inventory, SSH, and sudo/become behavior
+- `backend='iptables_ansible'` failures should be treated as legacy-mode troubleshooting
 
 ## 6. Related Docs
 

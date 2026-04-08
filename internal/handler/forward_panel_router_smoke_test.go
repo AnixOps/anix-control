@@ -61,7 +61,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) SetupTest() {
 	s.adminToken = s.loginAdmin("smoke-admin@example.com", "SmokePass123!")
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) TestIptablesAnsibleFullChain() {
+func (s *ForwardPanelRouterSmokeTestSuite) TestNftablesAnsibleFullChain() {
 	tempDir := s.T().TempDir()
 	s.mustWriteFile(filepath.Join(tempDir, "inventory.ini"), "[forward_nodes]\nrelay ansible_host=192.0.2.10\n")
 	s.mustWriteFile(filepath.Join(tempDir, "forward_apply.yml"), "---\n- hosts: all\n  tasks:\n    - debug: msg=\"apply\"\n")
@@ -70,8 +70,9 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestIptablesAnsibleFullChain() {
 	fakeCommand := s.mustWriteFakeCommand(tempDir, "fake-ansible", "smoke-runtime")
 
 	s.mustSetSystemConfig("forward.runtime.nodex_mode", false, "bool", "Enable NodeX forward runtime mode")
-	s.mustSetSystemConfig("forward.runtime_backend", model.ForwardRuntimeBackendIptablesAnsible, "string", "Forward runtime backend")
-	s.mustSetSystemConfig("forward.runtime.iptables_ansible.config", map[string]interface{}{
+	s.mustSetSystemConfig("forward.runtime_backend", model.ForwardRuntimeBackendNftablesAnsible, "string", "Forward runtime backend")
+	s.mustSetSystemConfig("forward.runtime.ansible.backend", model.ForwardRuntimeBackendNftablesAnsible, "string", "Forward runtime local backend")
+	s.mustSetSystemConfig("forward.runtime.ansible.config", map[string]interface{}{
 		"inventory":      "inventory.ini",
 		"playbookApply":  "forward_apply.yml",
 		"playbookRemove": "forward_remove.yml",
@@ -89,7 +90,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestIptablesAnsibleFullChain() {
 	statusConfig := s.mustMap(statusData["config"])
 	statusReady := s.mustMap(statusData["runtimeReady"])
 	statusLocal := s.mustMap(statusData["localAnsible"])
-	s.Equal(model.ForwardRuntimeBackendIptablesAnsible, s.mustString(statusConfig["backend"]))
+	s.Equal(model.ForwardRuntimeBackendNftablesAnsible, s.mustString(statusConfig["backend"]))
 	s.False(s.mustBool(statusConfig["nodeXMode"]))
 	s.True(s.mustBool(statusReady["ready"]))
 	s.True(s.mustBool(statusLocal["commandFound"]))
@@ -124,7 +125,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestIptablesAnsibleFullChain() {
 	})
 
 	jobs := s.mustListRuntimeJobs(map[string]string{
-		"backend":    model.ForwardRuntimeBackendIptablesAnsible,
+		"backend":    model.ForwardRuntimeBackendNftablesAnsible,
 		"forward_id": fmt.Sprintf("%d", forwardID),
 		"limit":      "10",
 	})
@@ -135,7 +136,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestIptablesAnsibleFullChain() {
 	s.mustRunLocalExecutor()
 
 	jobs = s.mustListRuntimeJobs(map[string]string{
-		"backend":    model.ForwardRuntimeBackendIptablesAnsible,
+		"backend":    model.ForwardRuntimeBackendNftablesAnsible,
 		"forward_id": fmt.Sprintf("%d", forwardID),
 		"limit":      "10",
 	})
@@ -146,14 +147,14 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestIptablesAnsibleFullChain() {
 	forwards := s.mustListPanelForwards()
 	s.Require().Len(forwards, 1)
 	s.Equal(forwardID, s.mustUint(forwards[0]["id"]))
-	s.Equal(model.ForwardRuntimeBackendIptablesAnsible, s.mustString(forwards[0]["runtimeBackend"]))
+	s.Equal(model.ForwardRuntimeBackendNftablesAnsible, s.mustString(forwards[0]["runtimeBackend"]))
 	s.Equal(model.ForwardRuntimeJobStatusSuccess, s.mustInt(forwards[0]["runtimeStatus"]))
 	s.Equal(model.ForwardStatusActive, s.mustInt(forwards[0]["status"]))
 
 	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/pause", map[string]interface{}{"id": forwardID})
 	s.mustRunLocalExecutor()
 	jobs = s.mustListRuntimeJobs(map[string]string{
-		"backend":    model.ForwardRuntimeBackendIptablesAnsible,
+		"backend":    model.ForwardRuntimeBackendNftablesAnsible,
 		"forward_id": fmt.Sprintf("%d", forwardID),
 		"limit":      "10",
 	})
@@ -168,7 +169,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestIptablesAnsibleFullChain() {
 	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/resume", map[string]interface{}{"id": forwardID})
 	s.mustRunLocalExecutor()
 	jobs = s.mustListRuntimeJobs(map[string]string{
-		"backend":    model.ForwardRuntimeBackendIptablesAnsible,
+		"backend":    model.ForwardRuntimeBackendNftablesAnsible,
 		"forward_id": fmt.Sprintf("%d", forwardID),
 		"limit":      "10",
 	})
@@ -183,7 +184,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestIptablesAnsibleFullChain() {
 	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/force-delete", map[string]interface{}{"id": forwardID})
 	s.mustRunLocalExecutor()
 	jobs = s.mustListRuntimeJobs(map[string]string{
-		"backend":    model.ForwardRuntimeBackendIptablesAnsible,
+		"backend":    model.ForwardRuntimeBackendNftablesAnsible,
 		"forward_id": fmt.Sprintf("%d", forwardID),
 		"limit":      "10",
 	})

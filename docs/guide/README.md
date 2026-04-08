@@ -20,7 +20,7 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 | [Flux-panel Clone Workstream](flux-panel-workstream.md) | Current module status, reference mapping, implementation order and definition of done |
 | [Forward Relay Onboarding](forward-relay-onboarding.md) | Exact operator checklist for making a relay actually join the runtime |
 | [Forward Runtime Operations](forward-tunnel-runtime-ops.md) | Runtime ownership, evidence chain, and what counts as a real relay attachment |
-| [Forward/Tunnel Manual Smoke Tests](forward-tunnel-smoke-test.md) | Manual and real-machine proof steps for `gost` and `iptables_ansible` |
+| [Forward/Tunnel Manual Smoke Tests](forward-tunnel-smoke-test.md) | Manual and real-machine proof steps for `gost`, `nftables_ansible`, and legacy `iptables_ansible` |
 | [Forward Runtime Work Plan](forward-runtime-work-plan.md) | Parallel work-package plan for the next dual-runtime implementation stage |
 | [Node Management](node-management.md) | Node registration, heartbeat, protocol config and operations |
 | [Client Compatibility](client-compatibility.md) | V2bX/XrayR and related compatibility notes |

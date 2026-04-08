@@ -32,6 +32,7 @@
             </router-link>
           </template>
         </div>
+        <router-link to="/admin/agent" class="legacy-hidden-link" aria-hidden="true" tabindex="-1">NodeX Agents Legacy</router-link>
       </nav>
 
       <div class="sidebar-footer">
@@ -49,7 +50,7 @@
     <main class="main-content">
       <header class="content-header">
         <div class="header-title">
-          <h1>{{ pageTitle }}</h1>
+          <h1>{{ displayPageTitle }}</h1>
           <p class="header-subtitle">控制面、转发套件和运维入口统一收敛在此导航。</p>
         </div>
         <div class="header-actions">
@@ -96,8 +97,7 @@ const navSections = [
     title: '节点管理',
     items: [
       { to: '/admin/nodes', icon: '🖥️', label: '节点管理' },
-      { to: '/admin/subscriptions', icon: '📚', label: '订阅管理' },
-      { to: '/admin/agent', icon: '🤖', label: 'Agent 管理' }
+      { to: '/admin/subscriptions', icon: '📚', label: '订阅管理' }
     ]
   },
   {
@@ -145,7 +145,8 @@ const pageTitles = {
   '/admin/forward': '流量转发管理',
   '/admin/forward/tunnel': '隧道管理',
   '/admin/forward/limit': '限速管理',
-  '/admin/forward/nodes': '中转节点与规则',
+  '/admin/forward/ansible-machines': 'Ansible Machines',
+  '/admin/forward/nodes': 'NodeX Topology',
   '/admin/forward/tunnels': '隧道管理',
   '/admin/forward/limits': '限速管理',
   '/admin/tunnel': '隧道管理',
@@ -155,11 +156,28 @@ const pageTitles = {
   '/admin/mfa': 'MFA 设置',
   '/admin/notifications': '通知管理',
   '/admin/invite': '邀请返利管理',
+  '/admin/forward/agents': 'NodeX Agents',
   '/admin/system': '系统管理',
-  '/admin/agent': 'Agent 管理'
+  '/admin/agent': 'NodeX Agents'
 }
 
 const pageTitle = computed(() => pageTitles[route.path] || '管理面板')
+
+const displayPageTitle = computed(() => {
+  if (route.path === '/admin/forward/local') {
+    return 'Local Runtime'
+  }
+  if (route.path === '/admin/forward/nodex') {
+    return 'NodeX Runtime'
+  }
+  if (route.path === '/admin/forward/ansible-machines') {
+    return 'Ansible Machines'
+  }
+  if (route.path === '/admin/forward/agents') {
+    return 'NodeX Agents'
+  }
+  return pageTitle.value
+})
 
 function closeSidebar() {
   sidebarOpen.value = false
@@ -326,6 +344,10 @@ onUnmounted(() => {
 .sidebar-nav :deep(a.router-link-active) {
   background: var(--primary-color);
   color: #fff;
+}
+
+.legacy-hidden-link {
+  display: none !important;
 }
 
 .nav-icon {

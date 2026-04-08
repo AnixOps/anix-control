@@ -2,16 +2,18 @@
   <div class="forward-nodes-page">
     <div class="toolbar">
       <div class="toolbar-copy">
-        <p class="eyebrow">Flux Compatible</p>
-        <h2>中转节点与规则</h2>
+        <p class="eyebrow">NodeX Topology</p>
+        <h2>NodeX Topology + Legacy Rules</h2>
         <p class="toolbar-subtitle">
-          汇总中转节点、旧版端口转发规则、连通性测试和统计概览，确保转发套件覆盖所有管理 API。
+          这里聚合 NodeX 的 relay/exit 拓扑与 Legacy 规则兼容层。无状态 Ansible 执行机器请在 Ansible Machines 页面单独管理。
         </p>
       </div>
       <div class="toolbar-actions">
         <button class="btn btn-secondary" :disabled="pageBusy" @click="refreshAll">刷新</button>
         <button class="btn btn-secondary" @click="openConnectionModal()">测试连接</button>
-        <button class="btn btn-secondary" @click="openRuleEditor()">新增规则</button>
+        <button class="btn btn-secondary" @click="openRuleEditor()">新增 Legacy 规则</button>
+        <router-link class="btn btn-secondary" to="/admin/forward/ansible-machines">Ansible Machines</router-link>
+        <router-link class="btn btn-secondary" to="/admin/forward/nodex">NodeX Runtime</router-link>
         <button class="btn btn-primary" @click="openNodeEditor()">新增节点</button>
       </div>
     </div>
@@ -34,9 +36,9 @@
       <div class="section-header">
         <div>
           <p class="eyebrow">Nodes</p>
-          <h3>中转节点管理</h3>
+          <h3>NodeX Relay / Exit Topology</h3>
           <p class="section-subtitle">
-            涵盖列表、详情、健康检测、状态切换、统计同步和 gost API 测试。
+            只用于 NodeX 有状态运行时的 relay/exit 拓扑、连通性检测和 gost API 相关操作，不承载 Ansible 机器管理。
           </p>
         </div>
         <div class="section-actions">
@@ -61,12 +63,12 @@
 
       <div v-if="nodeLoading" class="loading-state">
         <div class="spinner"></div>
-        <span>正在加载中转节点...</span>
+        <span>正在加载 NodeX 拓扑节点...</span>
       </div>
 
       <div v-else-if="!nodes.length" class="empty-state">
-        <h4>暂无中转节点</h4>
-        <p>先创建 relay / exit 节点，再配置旧版端口转发规则或 NodeX 转发拓扑。</p>
+        <h4>暂无 NodeX 拓扑节点</h4>
+        <p>请先创建 relay / exit 节点用于 NodeX 模式。若只做无状态执行，请改到 Ansible Machines 页面。</p>
       </div>
 
       <div v-else class="nodes-grid">
@@ -177,10 +179,10 @@
     <section class="panel">
       <div class="section-header">
         <div>
-          <p class="eyebrow">Rules</p>
-          <h3>旧版端口转发规则</h3>
+          <p class="eyebrow">Legacy Rules</p>
+          <h3>Legacy Port Forward Rules</h3>
           <p class="section-subtitle">
-            对应 `/admin/forward/rules*` 全量接口，保留 legacy 规则能力，避免 UI 漏 API。
+            对应 `/admin/forward/rules*` 兼容接口。该区块仅用于保留旧规则能力，不代表 NodeX 或 Ansible 当前主执行路径。
           </p>
         </div>
         <div class="section-actions">
@@ -202,11 +204,11 @@
 
       <div v-if="ruleLoading" class="loading-state">
         <div class="spinner"></div>
-        <span>正在加载转发规则...</span>
+        <span>正在加载 Legacy 规则...</span>
       </div>
 
       <div v-else-if="!rules.length" class="empty-state">
-        <h4>暂无旧版规则</h4>
+        <h4>暂无 Legacy 规则</h4>
         <p>如果需要兼容 relay + exit 的端口级转发，可以先在这里新增规则。</p>
       </div>
 
@@ -393,7 +395,7 @@
         <div class="modal-header">
           <div>
             <p class="eyebrow">Rule</p>
-            <h3>{{ ruleEditMode ? '编辑旧版规则' : '新增旧版规则' }}</h3>
+            <h3>{{ ruleEditMode ? '编辑 Legacy 规则' : '新增 Legacy 规则' }}</h3>
           </div>
           <button class="modal-close" @click="closeRuleModal">×</button>
         </div>

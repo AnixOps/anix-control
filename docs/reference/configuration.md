@@ -40,7 +40,21 @@ forward_runtime:
     token: "replace-with-shared-token"
     timeout_seconds: 15
 
+  nftables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply_nftables.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove_nftables.yml"
+    become: false
+    extra_vars: {}
+    command: ""
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
+
   iptables_ansible:
+    # Legacy compatibility only
     inventory: "config/deploy/ansible/inventory.ini"
     apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
     remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
@@ -72,7 +86,7 @@ Optional worker tuning now also stays inside `forward_runtime`:
 `forward_runtime.nodex_mode` remains supported for compatibility:
 
 - `true` forces backend to `gost`
-- `false` forces backend to `iptables_ansible`
+- `false` forces backend to the local ansible path, defaulting to `nftables_ansible`
 - if omitted, `forward_runtime.backend` is used directly
 
 If both are present, `nodex_mode` wins.
@@ -95,17 +109,17 @@ Required values:
 - `forward_runtime.nodex.base_url`
 - `forward_runtime.nodex.token`
 
-## `iptables_ansible` Mode
+## Local Ansible Mode (`nftables_ansible` Recommended)
 
 Use this for the local stateless executor:
 
 ```yaml
 forward_runtime:
-  backend: "iptables_ansible"
-  iptables_ansible:
+  backend: "nftables_ansible"
+  nftables_ansible:
     inventory: "config/deploy/ansible/inventory.ini"
-    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
-    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply_nftables.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove_nftables.yml"
     working_dir: "config/deploy/ansible"
     target_pattern: "{{node.host}}"
     environment:
@@ -118,11 +132,12 @@ Operational rules:
 - no NodeX control-plane is required
 - no proxy ingress node is required
 - the executor host must have `ansible-playbook`
-- SSH credentials still come from inventory files referenced by `config/config.yaml.forward_runtime.iptables_ansible.inventory`
+- SSH credentials still come from inventory files referenced by the selected ansible block under `config/config.yaml.forward_runtime`
+- `iptables_ansible` remains available only for legacy relay environments that still need the old firewall driver and playbooks
 
 ## Path Resolution
 
-`forward_runtime.iptables_ansible` path fields are normalized on startup:
+The selected local ansible block (`forward_runtime.nftables_ansible` by default, `forward_runtime.iptables_ansible` for legacy hosts) has these path fields normalized on startup:
 
 - `inventory`
 - `apply_playbook`
@@ -138,15 +153,21 @@ Startup persists the merged runtime snapshot into these keys:
 
 - `forward.runtime_backend`
 - `forward.runtime.nodex_mode`
+- `forward.runtime.ansible.backend`
 - `forward.runtime.nodex.base_url`
 - `forward.runtime.nodex.token`
 - `forward.runtime.nodex.timeout_seconds`
+- `forward.runtime.ansible.config`
+- `forward.runtime.ansible.inventory`
+- `forward.runtime.ansible.apply_playbook`
+- `forward.runtime.ansible.remove_playbook`
+- `forward.runtime.ansible.become`
+- `forward.runtime.ansible.extra_vars_json`
+
+Legacy compatibility readers still understand:
+
 - `forward.runtime.iptables_ansible.config`
-- `forward.ansible.inventory`
-- `forward.ansible.playbook_apply`
-- `forward.ansible.playbook_remove`
-- `forward.ansible.become`
-- `forward.ansible.extra_vars_json`
+- `forward.ansible.*`
 
 ## Related Docs
 

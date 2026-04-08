@@ -24,6 +24,12 @@ It does not mean:
 
 Use this when you want the private stateful runtime.
 
+UI ownership:
+
+- `NodeX Runtime` (`/admin/forward/nodex`) for control-plane status/doctor
+- `NodeX Topology` (`/admin/forward/nodes`) for relay/exit semantics
+- `NodeX Agents` (`/admin/forward/agents`) for agent-side operations
+
 ### Required pieces
 
 1. `v2board` with:
@@ -38,15 +44,16 @@ forward_runtime:
 ```
 
 2. NodeX control-plane running on the configured `base_url`
-3. relay host running gost with management API enabled
+3. NodeX-side agent/operator path available for runtime orchestration
+4. relay host running gost with management API enabled
    - current verified version: `3.2.6`
    - older `3.0.0-rc10` was not compatible with the current dynamic config flow
-4. relay `ForwardNode` filled with:
+5. relay `ForwardNode` filled with:
    - `host`
    - `api_port`
    - `api_token`
-5. one tunnel with a valid ingress node
-6. one forward bound to that tunnel
+6. one tunnel with a valid ingress node
+7. one forward bound to that tunnel
 
 ### Execution chain
 
@@ -80,7 +87,7 @@ Important port split:
 This verified example forwarded the same target service through two runtime paths:
 
 - target TCP service: `155.117.224.30:11111`
-- `143.20.204.14:11111` via `iptables_ansible`
+- `143.20.204.14:11111` via `iptables_ansible` (legacy compatibility path in that test window)
 - `143.20.204.14:11112` via `gost`
 
 That proof is recorded in the smoke guide and the NodeX internal runbook. The public-panel side takeaway is simple:
@@ -88,9 +95,23 @@ That proof is recorded in the smoke guide and the NodeX internal runbook. The pu
 - a relay is not "joined" because the panel saved a `ForwardNode`
 - it is joined only after the selected backend leaves relay-side evidence
 
-## Path B: `iptables_ansible`
+## Path B: Local Ansible (`nftables_ansible` Default)
 
-Use this when you want stateless relay execution without NodeX.
+Use local Ansible when you want stateless relay execution without NodeX.
+
+Recommended backend:
+
+- `nftables_ansible` (default operational path)
+
+Legacy compatibility backend:
+
+- `iptables_ansible` (only for old relay environments)
+
+UI ownership:
+
+- `Ansible Machines` (`/admin/forward/ansible-machines`) for execution-machine records
+- `Local Runtime` (`/admin/forward/local`) for inventory/playbook/executor diagnostics
+- avoid using `NodeX Topology` to represent local Ansible execution-machine inventory
 
 ### Required pieces
 
@@ -98,11 +119,11 @@ Use this when you want stateless relay execution without NodeX.
 
 ```yaml
 forward_runtime:
-  backend: "iptables_ansible"
-  iptables_ansible:
+  backend: "nftables_ansible"
+  nftables_ansible:
     inventory: "config/deploy/ansible/inventory.ini"
-    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
-    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply_nftables.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove_nftables.yml"
     working_dir: "config/deploy/ansible"
     target_pattern: "{{node.host}}"
     environment:
@@ -111,9 +132,13 @@ forward_runtime:
 ```
 
 2. `ansible-playbook` available on the machine running `v2board`
-3. an ansible inventory file, referenced by `config/config.yaml.forward_runtime.iptables_ansible.inventory`, that can SSH into the relay host
+3. an ansible inventory file, referenced by `config/config.yaml.forward_runtime.nftables_ansible.inventory`, that can SSH into the relay host
 4. a supported tunnel and forward
 5. a relay `ForwardNode`
+
+Legacy compatibility note:
+
+- if you must keep old `iptables` relay playbooks, switch `backend` to `iptables_ansible` and use `forward_runtime.iptables_ansible.*`.
 
 ### Important current limitation
 
@@ -133,12 +158,13 @@ not on extra fields inside `v2_forward_node`.
 2. `v2board` stores a pending runtime job
 3. local executor runs `ansible-playbook`
 4. ansible reaches the relay host over SSH
-5. relay host receives `iptables` rules
+5. relay host receives `nftables` rules (or `iptables` rules in legacy mode)
 
 ### Acceptance checks
 
-- `v2_forward_runtime_job.backend='iptables_ansible'` shows `success`
-- relay host contains the expected `iptables` rules
+- `v2_forward_runtime_job.backend='nftables_ansible'` shows `success`
+- relay host contains the expected `nftables` rules
+- if running legacy compatibility mode, allow `backend='iptables_ansible'` with expected `iptables` rules
 
 ## Current UI Caveat
 
@@ -166,7 +192,8 @@ Treat a relay as really attached only when all of these line up:
    - `v2_forward_runtime_job` shows the latest action as `success`
 3. relay evidence
    - `gost` path: `/api/config/services` contains the service
-   - `iptables_ansible` path: `iptables-save` contains the NAT rules
+   - local ansible path: `nft list ruleset` contains the expected rules
+   - legacy local ansible path: `iptables-save` contains the expected NAT rules
 4. network evidence
    - the forwarded port behaves the same way as the source target service
 
@@ -189,7 +216,7 @@ Ansible side:
 
 ```bash
 ansible all -i config/deploy/ansible/inventory.ini -m ping
-ansible-playbook -i config/deploy/ansible/inventory.ini config/deploy/ansible/playbooks/forward_apply.yml
+ansible-playbook -i config/deploy/ansible/inventory.ini config/deploy/ansible/playbooks/forward_apply_nftables.yml
 ```
 
 Database side:
@@ -197,6 +224,16 @@ Database side:
 ```sql
 SELECT id, backend, action, status, node_id, result, error, created_at
 FROM v2_forward_runtime_job
+ORDER BY id DESC
+LIMIT 20;
+```
+
+For legacy compatibility smoke:
+
+```sql
+SELECT id, backend, action, status
+FROM v2_forward_runtime_job
+WHERE backend IN ('nftables_ansible', 'iptables_ansible')
 ORDER BY id DESC
 LIMIT 20;
 ```

@@ -9,9 +9,7 @@ const mockPush = vi.fn()
 const mockRoute = reactive({ path: '/admin/dashboard' })
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({
-    push: mockPush,
-  }),
+  useRouter: () => ({ push: mockPush }),
   useRoute: () => mockRoute,
 }))
 
@@ -25,7 +23,11 @@ const adminMenuPaths = [
   '/admin/forward',
   '/admin/forward/tunnel',
   '/admin/forward/limit',
+  '/admin/forward/ansible-machines',
   '/admin/forward/nodes',
+  '/admin/forward/local',
+  '/admin/forward/nodex',
+  '/admin/forward/agents',
   '/admin/agent',
   '/admin/plans',
   '/admin/coupons',
@@ -77,9 +79,7 @@ describe('AdminLayout.vue', () => {
       },
     })
 
-    const links = wrapper
-      .findAll('a.menu-link')
-      .map(link => link.attributes('data-to'))
+    const links = wrapper.findAll('a.menu-link').map(link => link.attributes('data-to'))
 
     expect(links).toEqual(expect.arrayContaining(adminMenuPaths))
     expect(new Set(links).size).toBe(adminMenuPaths.length)
@@ -103,13 +103,58 @@ describe('AdminLayout.vue', () => {
     await nextTick()
     expect(wrapper.find('h1').text()).toContain('MFA')
 
-    mockRoute.path = '/admin/agent'
+    mockRoute.path = '/admin/forward/agents'
     await nextTick()
-    expect(wrapper.find('h1').text()).toContain('Agent')
+    expect(wrapper.find('h1').text()).toContain('NodeX Agents')
 
     mockRoute.path = '/admin/forward/nodes'
     await nextTick()
-    expect(wrapper.find('h1').text()).toContain('中转节点')
+    expect(wrapper.find('h1').text()).toContain('NodeX Topology')
+  })
+
+  it('shows NodeX title for the dedicated runtime route', async () => {
+    const wrapper = mount(AdminLayout, {
+      global: {
+        stubs: {
+          'router-link': true,
+          'router-view': true,
+        },
+      },
+    })
+
+    mockRoute.path = '/admin/forward/nodex'
+    await nextTick()
+    expect(wrapper.find('h1').text()).toContain('NodeX')
+  })
+
+  it('shows Local Runtime title for the dedicated local route', async () => {
+    const wrapper = mount(AdminLayout, {
+      global: {
+        stubs: {
+          'router-link': true,
+          'router-view': true,
+        },
+      },
+    })
+
+    mockRoute.path = '/admin/forward/local'
+    await nextTick()
+    expect(wrapper.find('h1').text()).toContain('Local Runtime')
+  })
+
+  it('shows Ansible Machines title for the dedicated route', async () => {
+    const wrapper = mount(AdminLayout, {
+      global: {
+        stubs: {
+          'router-link': true,
+          'router-view': true,
+        },
+      },
+    })
+
+    mockRoute.path = '/admin/forward/ansible-machines'
+    await nextTick()
+    expect(wrapper.find('h1').text()).toContain('Ansible Machines')
   })
 
   it('logs out and redirects to login', async () => {

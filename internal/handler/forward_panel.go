@@ -86,8 +86,44 @@ func (h *ForwardHandler) GetPanelRuntimeStatus(c *gin.Context) {
 	panelSuccess(c, status)
 }
 
+func (h *ForwardHandler) GetNodeXRuntimeStatus(c *gin.Context) {
+	status, err := h.panelService.GetNodeXOperatorStatus(c.Request.Context())
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, status)
+}
+
+func (h *ForwardHandler) GetLocalRuntimeStatus(c *gin.Context) {
+	status, err := h.panelService.GetLocalOperatorStatus(c.Request.Context())
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, status)
+}
+
 func (h *ForwardHandler) DiagnosePanelRuntime(c *gin.Context) {
 	summary, err := h.panelService.DiagnoseRuntime(c.Request.Context())
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, summary)
+}
+
+func (h *ForwardHandler) DiagnoseNodeXRuntime(c *gin.Context) {
+	summary, err := h.panelService.DiagnoseNodeXOperator(c.Request.Context())
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, summary)
+}
+
+func (h *ForwardHandler) DiagnoseLocalRuntime(c *gin.Context) {
+	summary, err := h.panelService.DiagnoseLocalOperator(c.Request.Context())
 	if err != nil {
 		panelError(c, err.Error())
 		return

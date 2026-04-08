@@ -85,9 +85,9 @@ func (s *PanelForwardRuntimeDiagnosticsTestSuite) TestNodeXDoctorSummarizesHealt
 		assert.True(s.T(), summary.RuntimeStatus.OK)
 		assert.Equal(s.T(), "v0.0.17-test.5", summary.RuntimeStatus.Version)
 		assert.Contains(s.T(), summary.RuntimeStatus.Issues, "inventory missing: inventory.ini")
-		assert.Contains(s.T(), summary.Commands.PowerShell[1], server.URL)
-		assert.Contains(s.T(), summary.Commands.Bash[1], fmt.Sprintf("BASE_URL=%s", server.URL))
-		assert.Contains(s.T(), summary.Commands.References, "docs/reference/upgrade.md")
+		assert.Contains(s.T(), summary.Commands.PowerShell[0], server.URL)
+		assert.Contains(s.T(), summary.Commands.Bash[1], server.URL)
+		assert.Contains(s.T(), summary.Commands.References, "NodeX repo: https://github.com/zdwtest/NodeX")
 	}
 }
 
@@ -146,7 +146,7 @@ func (s *PanelForwardRuntimeDiagnosticsTestSuite) TestPanelRuntimeStatusSummariz
 	if assert.NotNil(s.T(), summary) {
 		assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, summary.Config.Backend)
 		assert.False(s.T(), summary.Config.NodeXMode)
-		assert.Equal(s.T(), panelForwardRuntimeAttachmentModelLocalAnsible, summary.Attachment.Model)
+		assert.Equal(s.T(), "local_iptables_ansible_stateless", summary.Attachment.Model)
 		if assert.NotNil(s.T(), summary.LocalAnsible) {
 			assert.Equal(s.T(), "go", summary.LocalAnsible.Command)
 			assert.True(s.T(), summary.LocalAnsible.CommandFound)
@@ -157,6 +157,42 @@ func (s *PanelForwardRuntimeDiagnosticsTestSuite) TestPanelRuntimeStatusSummariz
 		}
 		assert.True(s.T(), summary.Reachability.Ready)
 		assert.True(s.T(), summary.RuntimeReady.Ready)
+	}
+}
+
+func (s *PanelForwardRuntimeDiagnosticsTestSuite) TestDedicatedLocalOperatorIgnoresActiveNodeXMode() {
+	tempDir := s.T().TempDir()
+	inventoryPath := filepath.Join(tempDir, "inventory.ini")
+	applyPath := filepath.Join(tempDir, "apply.yml")
+	removePath := filepath.Join(tempDir, "remove.yml")
+
+	assert.NoError(s.T(), os.WriteFile(inventoryPath, []byte("[forward_nodes]\nrelay ansible_host=127.0.0.1\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(applyPath, []byte("---\n- hosts: all\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(removePath, []byte("---\n- hosts: all\n"), 0o600))
+
+	configSvc := NewSystemConfigService(database.Get())
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeNodeXModeConfigKey, "true", "bool", forwardRuntimeConfigGroup, "enable NodeX mode"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeBackendConfigKey, model.ForwardRuntimeBackendGost, "string", forwardRuntimeConfigGroup, "gost backend"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeLocalBackendConfigKey, model.ForwardRuntimeBackendNftablesAnsible, "string", forwardRuntimeConfigGroup, "standby local backend"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeNodeXBaseURLConfigKey, "http://127.0.0.1:18081", "string", forwardRuntimeConfigGroup, "standby NodeX url"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeNodeXTokenConfigKey, "standby-token", "string", forwardRuntimeConfigGroup, "standby NodeX token"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeAnsibleConfigJSONKey, fmt.Sprintf(`{"inventory":%q,"playbookApply":%q,"playbookRemove":%q,"command":"go","workingDir":%q}`, inventoryPath, applyPath, removePath, tempDir), "json", forwardRuntimeConfigGroup, "local ansible runtime config"))
+
+	svc := NewPanelForwardRuntimeService(database.Get())
+	summary, err := svc.DiagnoseLocalOperator(context.Background())
+	assert.NoError(s.T(), err)
+	if assert.NotNil(s.T(), summary) {
+		assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, summary.Config.Backend)
+		assert.False(s.T(), summary.Config.NodeXMode)
+		assert.Equal(s.T(), "local_nftables_ansible_stateless", summary.Attachment.Model)
+		assert.True(s.T(), summary.Reachability.Ready)
+		assert.True(s.T(), summary.RuntimeReady.Ready)
+		assert.NotEmpty(s.T(), summary.Commands.PowerShell)
+		assert.Contains(s.T(), summary.Warnings, panelForwardRuntimeIgnoredNodeXConfigWarning)
+		if assert.NotNil(s.T(), summary.LocalAnsible) {
+			assert.Equal(s.T(), "go", summary.LocalAnsible.Command)
+			assert.True(s.T(), summary.LocalAnsible.Ready)
+		}
 	}
 }
 

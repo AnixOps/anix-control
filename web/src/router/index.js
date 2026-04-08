@@ -25,7 +25,10 @@ import AdminKnowledge from '@/views/admin/Knowledge.vue'
 import AdminForward from '@/views/admin/Forward.vue'
 import AdminTunnel from '@/views/admin/Tunnel.vue'
 import AdminLimit from '@/views/admin/Limit.vue'
+import AdminAnsibleMachines from '@/views/admin/AnsibleMachines.vue'
 import AdminForwardNodes from '@/views/admin/ForwardNodes.vue'
+import AdminLocalRuntime from '@/views/admin/LocalRuntime.vue'
+import AdminNodeX from '@/views/admin/NodeX.vue'
 import AdminPayment from '@/views/admin/Payment.vue'
 import AdminTelegram from '@/views/admin/Telegram.vue'
 import AdminMFA from '@/views/admin/MFA.vue'
@@ -131,8 +134,24 @@ const routes = [
         component: AdminLimit
       },
       {
+        path: 'forward/ansible-machines',
+        component: AdminAnsibleMachines
+      },
+      {
         path: 'forward/nodes',
         component: AdminForwardNodes
+      },
+      {
+        path: 'forward/local',
+        component: AdminLocalRuntime
+      },
+      {
+        path: 'forward/nodex',
+        component: AdminNodeX
+      },
+      {
+        path: 'forward/agents',
+        component: AdminAgent
       },
       {
         path: 'forward/tunnels',
@@ -141,6 +160,18 @@ const routes = [
       {
         path: 'forward/limits',
         redirect: '/admin/forward/limit'
+      },
+      {
+        path: 'forward/ansible',
+        redirect: '/admin/forward/ansible-machines'
+      },
+      {
+        path: 'local',
+        redirect: '/admin/forward/local'
+      },
+      {
+        path: 'nodex',
+        redirect: '/admin/forward/nodex'
       },
       {
         path: 'tunnel',

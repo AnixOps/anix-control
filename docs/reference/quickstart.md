@@ -47,15 +47,15 @@ forward_runtime:
     timeout_seconds: 15
 ```
 
-4. If you need iptables/ansible mode, set it in `config/config.yaml`:
+4. If you need the local stateless Ansible path, set it in `config/config.yaml`:
 
 ```yaml
 forward_runtime:
-  backend: "iptables_ansible"
-  iptables_ansible:
+  backend: "nftables_ansible"
+  nftables_ansible:
     inventory: "config/deploy/ansible/inventory.ini"
-    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
-    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply_nftables.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove_nftables.yml"
     working_dir: "config/deploy/ansible"
     target_pattern: "{{node.host}}"
     environment:
@@ -124,23 +124,25 @@ Current verified single-UI port split:
 - NodeX control-plane: `18081`
 - relay gost API: `18080`
 
-## Minimum `iptables_ansible` Mode Setup
+## Minimum Local Ansible Mode Setup
 
 Use this in `config/config.yaml`:
 
 ```yaml
 forward_runtime:
-  backend: "iptables_ansible"
-  iptables_ansible:
+  backend: "nftables_ansible"
+  nftables_ansible:
     inventory: "config/deploy/ansible/inventory.ini"
-    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
-    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply_nftables.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove_nftables.yml"
     working_dir: "config/deploy/ansible"
     target_pattern: "{{node.host}}"
     environment:
       ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
     timeout_seconds: 120
 ```
+
+`nftables_ansible` is the recommended backend. `iptables_ansible` remains available only for legacy relay hosts that still need the old playbooks and firewall driver.
 
 If you prefer password auth instead of SSH keys, keep the runtime config in `config/config.yaml.forward_runtime` and keep inventory entries or extra vars updated with the relay credentials. Do not rely on `FORWARD_RUNTIME_*` for configuring runtime access.
 
@@ -149,7 +151,7 @@ If you prefer password auth instead of SSH keys, keep the runtime config in `con
 The current end-to-end proof in this repository is:
 
 - `binary + SQLite + systemd`
-- real `iptables_ansible` relay rules
+- real `nftables_ansible` or legacy `iptables_ansible` relay rules, depending on the target host firewall stack
 - real `NodeX/gost` relay services
 
 Docker remains supported for startup and future deployment work, but the recorded dual-runtime proof today is not the Docker path.

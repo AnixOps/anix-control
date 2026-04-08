@@ -19,8 +19,10 @@ The execution plane is one of:
 
 - `NodeX/gost`
   - `v2board -> NodeX -> relay gost API`
-- `iptables_ansible`
+- local ansible
   - `v2board local job executor -> ansible-playbook -> relay host`
+  - recommended backend: `nftables_ansible`
+  - legacy backend: `iptables_ansible`
 
 ## Current Verified Baseline
 
@@ -53,7 +55,7 @@ Current `ForwardNode` does not store per-node SSH credentials such as:
 - `ssh_password`
 - `ssh_key`
 
-For `iptables_ansible`, SSH data comes from:
+For local ansible mode, SSH data comes from:
 
 - ansible inventory files
 - playbook environment settings
@@ -96,7 +98,7 @@ Check all three layers:
   - `curl -u admin:<TOKEN> http://<HOST>:<API_PORT>/api/config/services`
   - confirm the created service and limiter exist
 
-## `iptables_ansible` Mode
+## Local Ansible Mode
 
 ### Required prerequisites
 
@@ -108,16 +110,24 @@ All of these must be true before a relay is really attached:
 4. the selected tunnel is supported by the ansible runtime.
 5. the tunnel resolves to an execution node.
 
+Recommended default:
+
+- `nftables_ansible`
+
+Legacy compatibility:
+
+- `iptables_ansible`
+
 ### Runtime behavior
 
 When a forward is created, updated, resumed, paused, or deleted:
 
-1. `PanelForwardRuntimeService` resolves backend `iptables_ansible`.
+1. `PanelForwardRuntimeService` resolves the selected local ansible backend.
 2. It validates the tunnel and loads the execution node.
-3. It writes a pending `backend='iptables_ansible'` job.
+3. It writes a pending runtime job (`backend='nftables_ansible'` by default, `backend='iptables_ansible'` for legacy hosts).
 4. `PanelForwardRuntimeJobExecutor` polls pending jobs.
 5. The executor runs `ansible-playbook`.
-6. The playbook writes or removes relay `iptables` rules.
+6. The playbook writes or removes relay firewall rules (`nftables` by default, `iptables` for legacy hosts).
 
 ### Verification
 
@@ -127,10 +137,10 @@ Check all three layers:
   - confirm `ansible-playbook` exists
   - confirm inventory path exists
 2. `v2board`
-  - `SELECT * FROM v2_forward_runtime_job WHERE backend='iptables_ansible' ORDER BY id DESC LIMIT 10;`
+  - `SELECT * FROM v2_forward_runtime_job WHERE backend IN ('nftables_ansible','iptables_ansible') ORDER BY id DESC LIMIT 10;`
   - confirm job transitions `pending -> running -> success`
 3. relay host
-  - inspect `iptables` or `iptables-save`
+  - inspect `nft` ruleset for the default path, or `iptables-save` for the legacy path
   - confirm the expected rule exists or was removed
 
 ## Current Misleading Signals
@@ -165,16 +175,16 @@ What you want to see:
 
 - latest action for the target forward is `success`
 - `gost` jobs show NodeX-side success
-- `iptables_ansible` jobs show the playbook succeeded and the relay host was reachable
+- local ansible jobs show the playbook succeeded and the relay host was reachable
 
 ### Relay plane evidence
 
 - `gost`
   - `curl -u admin:<TOKEN> http://<HOST>:<API_PORT>/api/config/services`
   - `curl -u admin:<TOKEN> http://<HOST>:<API_PORT>/api/config/limiters`
-- `iptables_ansible`
-  - `iptables-save`
-  - `iptables -t nat -S`
+- local ansible
+  - `nft list ruleset` for `nftables_ansible`
+  - `iptables-save` / `iptables -t nat -S` for `iptables_ansible`
 
 ### Network plane evidence
 
@@ -191,14 +201,14 @@ That last step matters for non-HTTP services. In the verified 2026-04-07 example
 The panel was used to create two forwards against the same target TCP service:
 
 - target service: `155.117.224.30:11111`
-- `143.20.204.14:11111` via `iptables_ansible`
+- `143.20.204.14:11111` via local ansible
 - `143.20.204.14:11112` via `gost`
 
 The final pass condition was not only "job success". It was:
 
 1. panel runtime status reachable
 2. latest jobs marked `success`
-3. relay-side `iptables` rule present for `11111`
+3. relay-side firewall rule present for `11111`
 4. relay-side gost service present for `11112`
 5. all three TCP endpoints showed the same connect-and-empty-reply behavior
 
@@ -215,7 +225,7 @@ LIMIT 10;
 
 ```sql
 SELECT * FROM v2_forward_runtime_job
-WHERE backend = 'iptables_ansible'
+WHERE backend IN ('nftables_ansible', 'iptables_ansible')
 ORDER BY id DESC
 LIMIT 10;
 ```

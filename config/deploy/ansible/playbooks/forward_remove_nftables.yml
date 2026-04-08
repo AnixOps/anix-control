@@ -1,0 +1,33 @@
+- name: Remove V2Board forward nftables rules
+  hosts: all
+  gather_facts: false
+  become: true
+  vars:
+    forward_protocols: "{{ ['tcp', 'udp'] if tunnel.protocol == 'both' else (['udp'] if tunnel.protocol == 'udp' else ['tcp']) }}"
+  tasks:
+    - name: Remove NAT chain for each protocol from nftables
+      ansible.builtin.shell: |
+        set -euo pipefail
+        TABLE="v2b_forward"
+        CHAIN="v2b_fwd_{{ forward.id }}_{{ item }}"
+        PROTO="{{ item }}"
+        PREROUTING_COMMENT="v2b-forward-{{ forward.id }}-${PROTO}-prerouting"
+
+        nft list table ip "$TABLE" >/dev/null 2>&1 || exit 0
+
+        while read -r HANDLE; do
+          [ -n "${HANDLE:-}" ] && nft delete rule ip "$TABLE" prerouting handle "$HANDLE"
+        done < <(nft -a list chain ip "$TABLE" prerouting 2>/dev/null | awk '/comment "'"${PREROUTING_COMMENT}"'"/ {print $NF}')
+
+        {% for target in targets | default([]) %}
+        POSTROUTING_COMMENT="v2b-forward-{{ forward.id }}-${PROTO}-postrouting-{{ loop.index }}"
+        while read -r HANDLE; do
+          [ -n "${HANDLE:-}" ] && nft delete rule ip "$TABLE" postrouting handle "$HANDLE"
+        done < <(nft -a list chain ip "$TABLE" postrouting 2>/dev/null | awk '/comment "'"${POSTROUTING_COMMENT}"'"/ {print $NF}')
+        {% endfor %}
+
+        nft flush chain ip "$TABLE" "$CHAIN" 2>/dev/null || true
+        nft delete chain ip "$TABLE" "$CHAIN" 2>/dev/null || true
+      args:
+        executable: /bin/bash
+      loop: "{{ forward_protocols }}"
