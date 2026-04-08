@@ -17,19 +17,32 @@ const (
 	forwardRuntimeConfigGroup                    = "forward"
 	forwardRuntimeNodeXModeConfigKey             = "forward.runtime.nodex_mode"
 	forwardRuntimeBackendConfigKey               = "forward.runtime_backend"
-	forwardRuntimeAnsibleConfigJSONKey           = "forward.runtime.iptables_ansible.config"
-	forwardRuntimeAnsibleInventoryConfigKey      = "forward.ansible.inventory"
-	forwardRuntimeAnsibleApplyPlaybookConfigKey  = "forward.ansible.playbook_apply"
-	forwardRuntimeAnsibleRemovePlaybookConfigKey = "forward.ansible.playbook_remove"
-	forwardRuntimeAnsibleBecomeConfigKey         = "forward.ansible.become"
-	forwardRuntimeAnsibleExtraVarsConfigKey      = "forward.ansible.extra_vars_json"
+	forwardRuntimeLocalBackendConfigKey          = "forward.runtime.ansible.backend"
+	forwardRuntimeAnsibleConfigJSONKey           = "forward.runtime.ansible.config"
+	forwardRuntimeAnsibleInventoryConfigKey      = "forward.runtime.ansible.inventory"
+	forwardRuntimeAnsibleApplyPlaybookConfigKey  = "forward.runtime.ansible.apply_playbook"
+	forwardRuntimeAnsibleRemovePlaybookConfigKey = "forward.runtime.ansible.remove_playbook"
+	forwardRuntimeAnsibleBecomeConfigKey         = "forward.runtime.ansible.become"
+	forwardRuntimeAnsibleExtraVarsConfigKey      = "forward.runtime.ansible.extra_vars_json"
 
-	defaultForwardAnsibleInventoryPath      = "config/deploy/ansible/inventory.ini"
-	defaultForwardAnsibleApplyPlaybookPath  = "config/deploy/ansible/playbooks/forward_apply.yml"
-	defaultForwardAnsibleRemovePlaybookPath = "config/deploy/ansible/playbooks/forward_remove.yml"
-	defaultForwardAnsibleWorkingDir         = "config/deploy/ansible"
-	defaultForwardAnsibleConfigPath         = "config/deploy/ansible/ansible.cfg"
-	defaultForwardAnsibleTargetPattern      = "{{node.host}}"
+	legacyForwardRuntimeAnsibleConfigJSONKey           = "forward.runtime.iptables_ansible.config"
+	legacyForwardRuntimeAnsibleInventoryConfigKey      = "forward.ansible.inventory"
+	legacyForwardRuntimeAnsibleApplyPlaybookConfigKey  = "forward.ansible.playbook_apply"
+	legacyForwardRuntimeAnsibleRemovePlaybookConfigKey = "forward.ansible.playbook_remove"
+	legacyForwardRuntimeAnsibleBecomeConfigKey         = "forward.ansible.become"
+	legacyForwardRuntimeAnsibleExtraVarsConfigKey      = "forward.ansible.extra_vars_json"
+
+	defaultForwardAnsibleInventoryPath          = "config/deploy/ansible/inventory.ini"
+	defaultForwardNftablesApplyPlaybookPath     = "config/deploy/ansible/playbooks/forward_apply_nftables.yml"
+	defaultForwardNftablesRemovePlaybookPath    = "config/deploy/ansible/playbooks/forward_remove_nftables.yml"
+	defaultForwardIptablesApplyPlaybookPath     = "config/deploy/ansible/playbooks/forward_apply.yml"
+	defaultForwardIptablesRemovePlaybookPath    = "config/deploy/ansible/playbooks/forward_remove.yml"
+	defaultForwardAnsibleWorkingDir             = "config/deploy/ansible"
+	defaultForwardAnsibleConfigPath             = "config/deploy/ansible/ansible.cfg"
+	defaultForwardAnsibleTargetPattern          = "{{node.host}}"
+	defaultForwardLocalAnsibleBackend           = model.ForwardRuntimeBackendNftablesAnsible
+	defaultForwardLocalAnsibleFirewallDriverNft = "nftables"
+	defaultForwardLocalAnsibleFirewallDriverIpt = "iptables"
 )
 
 type panelForwardRuntimeResult struct {
@@ -81,7 +94,7 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 		return failedPanelForwardRuntimeResult(backend, err), err
 	}
 
-	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+	if isForwardRuntimeLocalAnsibleBackend(backend) {
 		return s.enqueueLocalAnsibleJob(action, forward, tunnel, req, nodeID)
 	}
 
@@ -173,18 +186,22 @@ func (s *PanelForwardRuntimeService) resolveBackendForForward(forward *model.For
 }
 
 func (s *PanelForwardRuntimeService) enqueueLocalAnsibleJob(action string, forward *model.Forward, tunnel *model.ForwardTunnel, req nodeXForwardExecuteRequest, nodeID *uint) (*panelForwardRuntimeResult, error) {
+	backend, ok := normalizeForwardRuntimeLocalAnsibleBackend(req.Backend)
+	if !ok {
+		backend = defaultForwardLocalAnsibleBackend
+	}
 	if req.AnsibleRuntime == nil {
 		err := errors.New("ansible runtime payload is required for local execution")
-		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendIptablesAnsible, err), err
+		return failedPanelForwardRuntimeResult(backend, err), err
 	}
 
 	payloadJSON, err := json.Marshal(req.AnsibleRuntime)
 	if err != nil {
-		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendIptablesAnsible, err), err
+		return failedPanelForwardRuntimeResult(backend, err), err
 	}
 
 	job := &model.ForwardRuntimeJob{
-		Backend:      model.ForwardRuntimeBackendIptablesAnsible,
+		Backend:      backend,
 		Action:       action,
 		ResourceType: nodeXForwardResourceTypePanelForward,
 		ResourceID:   uintPtr(forward.ID),
@@ -195,11 +212,11 @@ func (s *PanelForwardRuntimeService) enqueueLocalAnsibleJob(action string, forwa
 		Payload:      string(payloadJSON),
 	}
 	if err := s.db.Create(job).Error; err != nil {
-		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendIptablesAnsible, err), err
+		return failedPanelForwardRuntimeResult(backend, err), err
 	}
 
 	return &panelForwardRuntimeResult{
-		Backend: model.ForwardRuntimeBackendIptablesAnsible,
+		Backend: backend,
 		Status:  model.ForwardRuntimeJobStatusPending,
 		Message: queuedPanelForwardRuntimeMessage(action),
 		Async:   true,
@@ -216,7 +233,10 @@ func (s *PanelForwardRuntimeService) resolveBackend() (string, error) {
 		return "", err
 	}
 	if nodeXMode != nil {
-		return forwardRuntimeBackendForMode(*nodeXMode), nil
+		if *nodeXMode {
+			return model.ForwardRuntimeBackendGost, nil
+		}
+		return s.resolveLocalAnsibleBackend()
 	}
 
 	value, err := s.configService.Get(forwardRuntimeBackendConfigKey)
@@ -224,14 +244,38 @@ func (s *PanelForwardRuntimeService) resolveBackend() (string, error) {
 		return "", err
 	}
 
-	switch strings.TrimSpace(strings.ToLower(value)) {
-	case "", model.ForwardRuntimeBackendGost:
+	switch backend, ok := normalizeForwardRuntimeBackend(value); {
+	case strings.TrimSpace(value) == "":
 		return model.ForwardRuntimeBackendGost, nil
-	case model.ForwardRuntimeBackendIptablesAnsible:
-		return model.ForwardRuntimeBackendIptablesAnsible, nil
+	case ok:
+		return backend, nil
 	default:
 		return "", fmt.Errorf("invalid %s value: %s", forwardRuntimeBackendConfigKey, value)
 	}
+}
+
+func (s *PanelForwardRuntimeService) resolveLocalAnsibleBackend() (string, error) {
+	if s.configService == nil {
+		return defaultForwardLocalAnsibleBackend, nil
+	}
+
+	value, err := s.configService.Get(forwardRuntimeLocalBackendConfigKey)
+	if err != nil {
+		return "", err
+	}
+	if backend, ok := normalizeForwardRuntimeLocalAnsibleBackend(value); ok {
+		return backend, nil
+	}
+
+	value, err = s.configService.Get(forwardRuntimeBackendConfigKey)
+	if err != nil {
+		return "", err
+	}
+	if backend, ok := normalizeForwardRuntimeLocalAnsibleBackend(value); ok {
+		return backend, nil
+	}
+
+	return defaultForwardLocalAnsibleBackend, nil
 }
 
 func (s *PanelForwardRuntimeService) resolveNodeXMode() (*bool, error) {
@@ -250,11 +294,43 @@ func normalizeForwardRuntimeBackend(value string) (string, bool) {
 	switch strings.TrimSpace(strings.ToLower(value)) {
 	case model.ForwardRuntimeBackendGost:
 		return model.ForwardRuntimeBackendGost, true
+	case model.ForwardRuntimeBackendNftablesAnsible:
+		return model.ForwardRuntimeBackendNftablesAnsible, true
 	case model.ForwardRuntimeBackendIptablesAnsible:
 		return model.ForwardRuntimeBackendIptablesAnsible, true
 	default:
 		return "", false
 	}
+}
+
+func normalizeForwardRuntimeLocalAnsibleBackend(value string) (string, bool) {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case model.ForwardRuntimeBackendNftablesAnsible:
+		return model.ForwardRuntimeBackendNftablesAnsible, true
+	case model.ForwardRuntimeBackendIptablesAnsible:
+		return model.ForwardRuntimeBackendIptablesAnsible, true
+	default:
+		return "", false
+	}
+}
+
+func isForwardRuntimeLocalAnsibleBackend(backend string) bool {
+	_, ok := normalizeForwardRuntimeLocalAnsibleBackend(backend)
+	return ok
+}
+
+func forwardRuntimeLocalFirewallDriver(backend string) string {
+	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+		return defaultForwardLocalAnsibleFirewallDriverIpt
+	}
+	return defaultForwardLocalAnsibleFirewallDriverNft
+}
+
+func forwardRuntimeLocalBackendLabel(backend string) string {
+	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+		return "iptables / Ansible"
+	}
+	return "nftables / Ansible"
 }
 
 func (s *PanelForwardRuntimeService) validateBackendConfig(backend string) error {
@@ -297,7 +373,7 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string,
 	switch backend {
 	case model.ForwardRuntimeBackendGost:
 		node, err = s.loadIngressNode(tunnel, allowMissingIngress)
-	case model.ForwardRuntimeBackendIptablesAnsible:
+	case model.ForwardRuntimeBackendNftablesAnsible, model.ForwardRuntimeBackendIptablesAnsible:
 		if err := ensureAnsibleTunnelSupportsExecution(tunnel); err != nil {
 			return nodeXForwardExecuteRequest{}, nil, err
 		}
@@ -313,7 +389,7 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string,
 		return nodeXForwardExecuteRequest{}, nil, err
 	}
 	tunnelNodeID := tunnel.InNodeID
-	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+	if isForwardRuntimeLocalAnsibleBackend(backend) {
 		tunnelNodeID = storedPanelTunnelExecutionNodeID(tunnel)
 	}
 
@@ -349,8 +425,8 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string,
 		return req, nil, nil
 	}
 
-	if backend == model.ForwardRuntimeBackendIptablesAnsible {
-		ansiblePayload, err := s.buildAnsibleRuntimePayload(action, forward, tunnel, node)
+	if isForwardRuntimeLocalAnsibleBackend(backend) {
+		ansiblePayload, err := s.buildAnsibleRuntimePayload(backend, action, forward, tunnel, node)
 		if err != nil {
 			return nodeXForwardExecuteRequest{}, nil, err
 		}
@@ -413,7 +489,7 @@ func ensureAnsibleTunnelSupportsExecution(tunnel *model.ForwardTunnel) error {
 		return errors.New("forward tunnel is required")
 	}
 	if tunnel.Type != 1 {
-		return errors.New("iptables_ansible runtime only supports type 1 tunnels")
+		return errors.New("local ansible runtime only supports type 1 tunnels")
 	}
 	return nil
 }
@@ -460,11 +536,11 @@ func (s *PanelForwardRuntimeService) loadForwardLimiter(forward *model.Forward, 
 	}, nil
 }
 
-func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(action string, forward *model.Forward, tunnel *model.ForwardTunnel, node *model.ForwardNode) (*panelForwardAnsibleRuntimePayload, error) {
+func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(backend, action string, forward *model.Forward, tunnel *model.ForwardTunnel, node *model.ForwardNode) (*panelForwardAnsibleRuntimePayload, error) {
 	if node == nil {
 		return nil, errors.New("forward execution node is required for ansible runtime")
 	}
-	cfg, err := s.loadPanelForwardAnsibleConfig(action)
+	cfg, err := s.loadPanelForwardAnsibleConfig(backend, action)
 	if err != nil {
 		return nil, err
 	}
@@ -477,9 +553,11 @@ func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(action string, f
 		return nil, err
 	}
 	return &panelForwardAnsibleRuntimePayload{
+		Backend:        backend,
+		FirewallDriver: forwardRuntimeLocalFirewallDriver(backend),
 		Action:         action,
 		Inventory:      cfg.Inventory,
-		Playbook:       cfg.playbookForAction(action),
+		Playbook:       cfg.playbookForAction(backend, action),
 		Become:         cfg.Become,
 		ExtraVars:      copyStringInterfaceMap(cfg.ExtraVars),
 		Command:        cfg.Command,
@@ -519,11 +597,28 @@ func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(action string, f
 }
 
 func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfigForDiagnostics() (*panelForwardAnsibleConfig, error) {
+	backend, err := s.resolveLocalAnsibleBackend()
+	if err != nil {
+		return nil, err
+	}
+	return s.loadPanelForwardAnsibleConfigForDiagnosticsWithBackend(backend)
+}
+
+func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfigForDiagnosticsWithBackend(backend string) (*panelForwardAnsibleConfig, error) {
 	cfg := &panelForwardAnsibleConfig{}
 	if err := s.configService.GetJSON(forwardRuntimeAnsibleConfigJSONKey, cfg); err != nil {
 		return nil, err
 	}
+	if isZeroPanelForwardAnsibleConfig(cfg) {
+		if err := s.configService.GetJSON(legacyForwardRuntimeAnsibleConfigJSONKey, cfg); err != nil {
+			return nil, err
+		}
+	}
 	if value, err := s.configService.Get(forwardRuntimeAnsibleInventoryConfigKey); err != nil {
+		return nil, err
+	} else if strings.TrimSpace(value) != "" {
+		cfg.Inventory = value
+	} else if value, err := s.configService.Get(legacyForwardRuntimeAnsibleInventoryConfigKey); err != nil {
 		return nil, err
 	} else if strings.TrimSpace(value) != "" {
 		cfg.Inventory = value
@@ -532,13 +627,25 @@ func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfigForDiagnostics
 		return nil, err
 	} else if strings.TrimSpace(value) != "" {
 		cfg.ApplyPlaybook = value
+	} else if value, err := s.configService.Get(legacyForwardRuntimeAnsibleApplyPlaybookConfigKey); err != nil {
+		return nil, err
+	} else if strings.TrimSpace(value) != "" {
+		cfg.ApplyPlaybook = value
 	}
 	if value, err := s.configService.Get(forwardRuntimeAnsibleRemovePlaybookConfigKey); err != nil {
 		return nil, err
 	} else if strings.TrimSpace(value) != "" {
 		cfg.RemovePlaybook = value
+	} else if value, err := s.configService.Get(legacyForwardRuntimeAnsibleRemovePlaybookConfigKey); err != nil {
+		return nil, err
+	} else if strings.TrimSpace(value) != "" {
+		cfg.RemovePlaybook = value
 	}
 	if value, err := s.configService.Get(forwardRuntimeAnsibleBecomeConfigKey); err != nil {
+		return nil, err
+	} else if strings.TrimSpace(value) != "" {
+		cfg.Become = strings.EqualFold(value, "true") || strings.TrimSpace(value) == "1"
+	} else if value, err := s.configService.Get(legacyForwardRuntimeAnsibleBecomeConfigKey); err != nil {
 		return nil, err
 	} else if strings.TrimSpace(value) != "" {
 		cfg.Become = strings.EqualFold(value, "true") || strings.TrimSpace(value) == "1"
@@ -551,17 +658,25 @@ func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfigForDiagnostics
 			return nil, fmt.Errorf("%s is invalid JSON: %w", forwardRuntimeAnsibleExtraVarsConfigKey, err)
 		}
 		cfg.ExtraVars = extraVars
+	} else if value, err := s.configService.Get(legacyForwardRuntimeAnsibleExtraVarsConfigKey); err != nil {
+		return nil, err
+	} else if strings.TrimSpace(value) != "" {
+		extraVars := map[string]interface{}{}
+		if err := json.Unmarshal([]byte(value), &extraVars); err != nil {
+			return nil, fmt.Errorf("%s is invalid JSON: %w", legacyForwardRuntimeAnsibleExtraVarsConfigKey, err)
+		}
+		cfg.ExtraVars = extraVars
 	}
-	cfg.ensureDefaults()
+	cfg.ensureDefaults(backend)
 	return cfg, nil
 }
 
-func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfig(action string) (*panelForwardAnsibleConfig, error) {
-	cfg, err := s.loadPanelForwardAnsibleConfigForDiagnostics()
+func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfig(backend, action string) (*panelForwardAnsibleConfig, error) {
+	cfg, err := s.loadPanelForwardAnsibleConfigForDiagnosticsWithBackend(backend)
 	if err != nil {
 		return nil, err
 	}
-	if err := cfg.validate(action); err != nil {
+	if err := cfg.validate(backend, action); err != nil {
 		return nil, err
 	}
 	return cfg, nil
@@ -725,21 +840,22 @@ func isForwardRuntimeTerminalStatus(status int) bool {
 	return status == model.ForwardRuntimeJobStatusSuccess || status == model.ForwardRuntimeJobStatusFailed
 }
 
-func (c *panelForwardAnsibleConfig) ensureDefaults() {
+func (c *panelForwardAnsibleConfig) ensureDefaults(backend string) {
 	if c.ExtraVars == nil {
 		c.ExtraVars = map[string]interface{}{}
 	}
 	if c.Environment == nil {
 		c.Environment = map[string]string{}
 	}
+	backend = normalizeForwardRuntimeLocalBackendOrDefault(backend)
 	if strings.TrimSpace(c.Inventory) == "" {
 		c.Inventory = defaultForwardAnsibleInventoryPath
 	}
 	if strings.TrimSpace(c.ApplyPlaybook) == "" {
-		c.ApplyPlaybook = defaultForwardAnsibleApplyPlaybookPath
+		c.ApplyPlaybook = defaultForwardApplyPlaybookPathForBackend(backend)
 	}
 	if strings.TrimSpace(c.RemovePlaybook) == "" {
-		c.RemovePlaybook = defaultForwardAnsibleRemovePlaybookPath
+		c.RemovePlaybook = defaultForwardRemovePlaybookPathForBackend(backend)
 	}
 	if strings.TrimSpace(c.WorkingDir) == "" {
 		c.WorkingDir = defaultForwardAnsibleWorkingDir
@@ -755,25 +871,64 @@ func (c *panelForwardAnsibleConfig) ensureDefaults() {
 	}
 }
 
-func (c *panelForwardAnsibleConfig) playbookForAction(action string) string {
+func defaultForwardApplyPlaybookPathForBackend(backend string) string {
+	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+		return defaultForwardIptablesApplyPlaybookPath
+	}
+	return defaultForwardNftablesApplyPlaybookPath
+}
+
+func defaultForwardRemovePlaybookPathForBackend(backend string) string {
+	if backend == model.ForwardRuntimeBackendIptablesAnsible {
+		return defaultForwardIptablesRemovePlaybookPath
+	}
+	return defaultForwardNftablesRemovePlaybookPath
+}
+
+func normalizeForwardRuntimeLocalBackendOrDefault(backend string) string {
+	if normalized, ok := normalizeForwardRuntimeLocalAnsibleBackend(backend); ok {
+		return normalized
+	}
+	return defaultForwardLocalAnsibleBackend
+}
+
+func (c *panelForwardAnsibleConfig) playbookForAction(backend, action string) string {
+	_ = backend
 	if action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause {
 		return strings.TrimSpace(c.RemovePlaybook)
 	}
 	return strings.TrimSpace(c.ApplyPlaybook)
 }
 
-func (c *panelForwardAnsibleConfig) validate(action string) error {
+func (c *panelForwardAnsibleConfig) validate(backend, action string) error {
+	backend = normalizeForwardRuntimeLocalBackendOrDefault(backend)
 	if strings.TrimSpace(c.Inventory) == "" {
-		return fmt.Errorf("%s is required for iptables_ansible runtime", forwardRuntimeAnsibleInventoryConfigKey)
+		return fmt.Errorf("%s is required for %s runtime", forwardRuntimeAnsibleInventoryConfigKey, backend)
 	}
-	playbook := c.playbookForAction(action)
+	playbook := c.playbookForAction(backend, action)
 	if strings.TrimSpace(playbook) == "" {
 		if action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause {
-			return fmt.Errorf("%s is required for iptables_ansible runtime", forwardRuntimeAnsibleRemovePlaybookConfigKey)
+			return fmt.Errorf("%s is required for %s runtime", forwardRuntimeAnsibleRemovePlaybookConfigKey, backend)
 		}
-		return fmt.Errorf("%s is required for iptables_ansible runtime", forwardRuntimeAnsibleApplyPlaybookConfigKey)
+		return fmt.Errorf("%s is required for %s runtime", forwardRuntimeAnsibleApplyPlaybookConfigKey, backend)
 	}
 	return nil
+}
+
+func isZeroPanelForwardAnsibleConfig(cfg *panelForwardAnsibleConfig) bool {
+	if cfg == nil {
+		return true
+	}
+	return strings.TrimSpace(cfg.Inventory) == "" &&
+		strings.TrimSpace(cfg.ApplyPlaybook) == "" &&
+		strings.TrimSpace(cfg.RemovePlaybook) == "" &&
+		!cfg.Become &&
+		len(cfg.ExtraVars) == 0 &&
+		strings.TrimSpace(cfg.Command) == "" &&
+		strings.TrimSpace(cfg.WorkingDir) == "" &&
+		strings.TrimSpace(cfg.TargetPattern) == "" &&
+		len(cfg.Environment) == 0 &&
+		cfg.TimeoutSeconds == 0
 }
 
 func uintPtr(v uint) *uint {
@@ -800,5 +955,5 @@ func forwardRuntimeBackendForMode(enabled bool) string {
 	if enabled {
 		return model.ForwardRuntimeBackendGost
 	}
-	return model.ForwardRuntimeBackendIptablesAnsible
+	return defaultForwardLocalAnsibleBackend
 }

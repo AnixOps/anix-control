@@ -702,6 +702,34 @@ export function runForwardRuntimeDoctor() {
   })
 }
 
+export function getLocalRuntimeStatus() {
+  return request({
+    url: '/admin/forward/local/status',
+    method: 'get'
+  })
+}
+
+export function runLocalRuntimeDoctor() {
+  return request({
+    url: '/admin/forward/local/doctor',
+    method: 'get'
+  })
+}
+
+export function getNodeXRuntimeStatus() {
+  return request({
+    url: '/admin/forward/nodex/status',
+    method: 'get'
+  })
+}
+
+export function runNodeXRuntimeDoctor() {
+  return request({
+    url: '/admin/forward/nodex/doctor',
+    method: 'get'
+  })
+}
+
 export function getForwardTunnels() {
   return request({
     url: '/tunnel/user/tunnel',
@@ -1525,6 +1553,10 @@ export default {
   getForwardStats,
   getForwardRuntimeStatus,
   runForwardRuntimeDoctor,
+  getLocalRuntimeStatus,
+  runLocalRuntimeDoctor,
+  getNodeXRuntimeStatus,
+  runNodeXRuntimeDoctor,
   // 支付网关
   getPaymentGateways,
   createPaymentGateway,

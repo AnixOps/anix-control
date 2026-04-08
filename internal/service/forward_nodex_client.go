@@ -331,7 +331,7 @@ func resolveNodeXTargetNode(req nodeXForwardExecuteRequest) *nodeXForwardNodePay
 }
 
 func requiresConfiguredNodeXControlPlane(req nodeXForwardExecuteRequest) bool {
-	if req.Backend == model.ForwardRuntimeBackendIptablesAnsible && req.AnsibleRuntime != nil {
+	if isForwardRuntimeLocalAnsibleBackend(req.Backend) && req.AnsibleRuntime != nil {
 		return false
 	}
 	return true

@@ -9,7 +9,7 @@ It is intentionally implementation-oriented so multiple agents can work in paral
 The next stage should achieve all of these:
 
 1. operators can tell whether a relay is only saved or actually attached
-2. NodeX mode and `iptables_ansible` mode stay explicitly separated in UI copy, backend validation, and diagnostics
+2. NodeX mode and local Ansible mode stay explicitly separated in UI copy, backend validation, and diagnostics
 3. the Flux-cloned `/admin/forward*` surface stays clean while proprietary execution controls stay discoverable
 4. onboarding, doctor, version, upgrade, and smoke-test flows become copyable and predictable
 
@@ -24,9 +24,12 @@ Goal:
 - make operators understand the mode split without reading source code
 
 Tasks:
-- rename ambiguous labels such as generic "entry node" when the mode is `iptables_ansible`
+- rename ambiguous labels such as generic "entry node" when the mode is local Ansible
 - add direct links or help copy to relay onboarding and smoke-test docs
-- ensure `/admin/system` makes it clear which controls belong to NodeX mode and which belong to ansible mode
+- ensure runtime pages keep clear ownership:
+  - `NodeX Topology` for relay/exit semantics
+  - `Ansible Machines` for stateless execution-machine records
+  - `Local Runtime` for panel-host ansible executor settings
 
 Dependencies:
 - existing runtime docs and onboarding docs
@@ -111,7 +114,7 @@ Definition of done:
 - a fresh operator can start NodeX and verify relay attachment from one doc chain
 - every command in the onboarding flow is copyable
 
-## Work Package 5: `iptables_ansible` Operator Path
+## Work Package 5: Local Ansible Operator Path (`nftables_ansible` Default)
 
 Area:
 - `config/deploy/ansible/`
@@ -119,16 +122,18 @@ Area:
 - installation/bootstrap scripts
 
 Goal:
-- make stateless ansible execution as turnkey as NodeX mode
+- make stateless ansible execution as turnkey as NodeX mode, with `nftables_ansible` as the recommended default and `iptables_ansible` as legacy compatibility
 
 Tasks:
-- document inventory-driven and env-generated inventory separately
+- document key-login and password-login inventory examples under the YAML-only runtime flow
 - standardize the minimal password-login and key-login examples
 - define exact executor-host prerequisites:
   - `ansible-playbook`
   - inventory path
   - sudo/become behavior
-- verify one-click bootstrap still matches the documented runtime JSON keys
+- verify one-click bootstrap still matches:
+  - `forward_runtime.nftables_ansible.*` (recommended)
+  - `forward_runtime.iptables_ansible.*` (legacy compatibility)
 
 Dependencies:
 - existing ansible assets
@@ -203,7 +208,7 @@ Before any agent starts editing code, keep these truths fixed:
 
 1. creating a `ForwardNode` is not the same as runtime attachment
 2. `NodeX/gost` means `v2board -> NodeX -> relay gost API`
-3. `iptables_ansible` means local `v2board` executor unless the workflow explicitly routes through NodeX
+3. `nftables_ansible` means local stateless `v2board` executor by default; `iptables_ansible` is legacy compatibility on the same path
 4. panel forward-node online state is only coarse `host:port` TCP reachability
 
 If a task changes one of those truths, update these docs first:

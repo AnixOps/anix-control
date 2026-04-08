@@ -101,6 +101,8 @@ type panelForwardAnsibleNodePayload struct {
 }
 
 type panelForwardAnsibleRuntimePayload struct {
+	Backend        string                             `json:"backend,omitempty"`
+	FirewallDriver string                             `json:"firewallDriver,omitempty"`
 	Action         string                             `json:"action"`
 	Inventory      string                             `json:"inventory"`
 	Playbook       string                             `json:"playbook"`
@@ -188,7 +190,10 @@ func (e *PanelForwardRuntimeJobExecutor) runPendingJobs(ctx context.Context) (in
 func (e *PanelForwardRuntimeJobExecutor) processNext(ctx context.Context) (bool, error) {
 	var jobs []model.ForwardRuntimeJob
 	if err := e.queryDB().
-		Where("backend = ? AND status = ?", model.ForwardRuntimeBackendIptablesAnsible, model.ForwardRuntimeJobStatusPending).
+		Where("backend IN ? AND status = ?", []string{
+			model.ForwardRuntimeBackendNftablesAnsible,
+			model.ForwardRuntimeBackendIptablesAnsible,
+		}, model.ForwardRuntimeJobStatusPending).
 		Order("id ASC").
 		Limit(e.batchSize).
 		Find(&jobs).Error; err != nil {
@@ -300,7 +305,7 @@ func (e *PanelForwardRuntimeJobExecutor) updateForwardRuntimeState(job *model.Fo
 	}
 
 	updates := map[string]interface{}{
-		"runtime_backend":      model.ForwardRuntimeBackendIptablesAnsible,
+		"runtime_backend":      job.Backend,
 		"runtime_status":       runtimeStatus,
 		"runtime_message":      strings.TrimSpace(message),
 		"runtime_last_sync_at": syncedAt,
@@ -315,7 +320,10 @@ func (e *PanelForwardRuntimeJobExecutor) updateForwardRuntimeState(job *model.Fo
 
 func (e *PanelForwardRuntimeJobExecutor) requeueRunningJobs() error {
 	return e.queryDB().Model(&model.ForwardRuntimeJob{}).
-		Where("backend = ? AND status = ?", model.ForwardRuntimeBackendIptablesAnsible, model.ForwardRuntimeJobStatusRunning).
+		Where("backend IN ? AND status = ?", []string{
+			model.ForwardRuntimeBackendNftablesAnsible,
+			model.ForwardRuntimeBackendIptablesAnsible,
+		}, model.ForwardRuntimeJobStatusRunning).
 		Updates(map[string]interface{}{
 			"status":     model.ForwardRuntimeJobStatusPending,
 			"started_at": nil,
@@ -396,6 +404,12 @@ func (p *panelForwardAnsibleRuntimePayload) buildExtraVars() map[string]interfac
 		result[key] = value
 	}
 	result["runtimeAction"] = p.Action
+	if strings.TrimSpace(p.Backend) != "" {
+		result["runtimeBackend"] = p.Backend
+	}
+	if strings.TrimSpace(p.FirewallDriver) != "" {
+		result["firewallDriver"] = p.FirewallDriver
+	}
 	result["forward"] = p.Forward
 	result["tunnel"] = p.Tunnel
 	result["node"] = p.Node

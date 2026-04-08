@@ -129,7 +129,7 @@ That is why local startup and Docker startup now share the same primary config s
 If you need to change runtime behavior, edit `config/config.yaml.forward_runtime` before startup. That now includes:
 
 - backend selection under `forward_runtime.backend`
-- NodeX or ansible runtime details under `forward_runtime.nodex` and `forward_runtime.iptables_ansible`
+- NodeX or local ansible runtime details under `forward_runtime.nodex`, `forward_runtime.nftables_ansible`, and the legacy-compatible `forward_runtime.iptables_ansible`
 - local worker tuning under `forward_runtime.jobs` and `forward_runtime.gost_stats`
 
 Any downstream services will read whichever values were persisted into `v2_system_config` when the backend initialized.
@@ -142,9 +142,10 @@ After startup, verify:
 2. `/admin/system` shows the expected merged runtime config
 3. `/admin/forward`
 4. `/admin/forward/tunnel`
-5. `/admin/forward/nodes`
-6. `GET /api/v2/admin/forward/runtime/status` works in NodeX mode
-7. `GET /api/v2/admin/forward/runtime/doctor` works when NodeX is reachable
+5. `/admin/forward/ansible-machines` for stateless execution hosts
+6. `/admin/forward/nodes` for NodeX relay/exit topology
+7. `GET /api/v2/admin/forward/runtime/status` works in NodeX mode
+8. `GET /api/v2/admin/forward/runtime/doctor` works when NodeX is reachable
 
 ## 8. Related Docs
 

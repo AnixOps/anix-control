@@ -3,7 +3,8 @@ package model
 import "time"
 
 const (
-	ForwardRuntimeBackendGost            = "gost"
+	ForwardRuntimeBackendGost             = "gost"
+	ForwardRuntimeBackendNftablesAnsible = "nftables_ansible"
 	ForwardRuntimeBackendIptablesAnsible = "iptables_ansible"
 )
 

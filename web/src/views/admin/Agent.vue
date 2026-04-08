@@ -1,8 +1,8 @@
 <template>
   <div class="agent-page">
     <div class="page-header">
-      <h1>Agent 管理</h1>
-      <p class="text-secondary">管理远程节点 Agent，执行命令和监控状态</p>
+      <h1>NodeX Agents</h1>
+      <p class="text-secondary">Only NodeX mode needs agents. Use this page for agent status, remote terminal and task delivery.</p>
     </div>
 
     <!-- 标签切换 -->

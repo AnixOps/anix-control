@@ -36,6 +36,10 @@ func TestSetup_ForwardCompatAdminEndpoints_RequireAdmin(t *testing.T) {
 		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/jobs"},
 		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/status"},
 		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/doctor"},
+		{method: http.MethodGet, path: "/api/v2/admin/forward/local/status"},
+		{method: http.MethodGet, path: "/api/v2/admin/forward/local/doctor"},
+		{method: http.MethodGet, path: "/api/v2/admin/forward/nodex/status"},
+		{method: http.MethodGet, path: "/api/v2/admin/forward/nodex/doctor"},
 	}
 
 	for _, ep := range endpoints {

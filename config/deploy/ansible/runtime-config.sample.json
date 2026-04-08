@@ -1,7 +1,7 @@
 {
   "inventory": "/app/config/deploy/ansible/inventory.ini",
-  "playbookApply": "/app/config/deploy/ansible/playbooks/forward_apply.yml",
-  "playbookRemove": "/app/config/deploy/ansible/playbooks/forward_remove.yml",
+  "playbookApply": "/app/config/deploy/ansible/playbooks/forward_apply_nftables.yml",
+  "playbookRemove": "/app/config/deploy/ansible/playbooks/forward_remove_nftables.yml",
   "workingDir": "/app/config/deploy/ansible",
   "targetPattern": "{{node.host}}",
   "timeoutSeconds": 120,

@@ -362,7 +362,7 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestResolveBackend_NodeXModeOverri
 
 	backend, err := s.svc.resolveBackend()
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, backend)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, backend)
 
 	assert.NoError(s.T(), configSvc.Set(
 		forwardRuntimeNodeXModeConfigKey,
@@ -775,6 +775,17 @@ func setForwardRuntimeBackendForTest(t *testing.T, db *gorm.DB, backend string) 
 		"string",
 		forwardRuntimeConfigGroup,
 		"forward runtime backend",
+	))
+	localBackend := ""
+	if isForwardRuntimeLocalAnsibleBackend(backend) {
+		localBackend = backend
+	}
+	assert.NoError(t, configSvc.Set(
+		forwardRuntimeLocalBackendConfigKey,
+		localBackend,
+		"string",
+		forwardRuntimeConfigGroup,
+		"forward runtime local backend",
 	))
 }
 

@@ -7,17 +7,24 @@
       class="forward-suite-link"
     >
       <span class="icon">{{ link.icon }}</span>
-      <span class="label">{{ link.label }}</span>
+      <span class="link-copy">
+        <span class="label">{{ link.label }}</span>
+        <span v-if="link.hint" class="hint">{{ link.hint }}</span>
+      </span>
     </router-link>
   </div>
 </template>
 
 <script setup>
 const links = [
-  { label: '流量转发', to: '/admin/forward', icon: '⚙️' },
-  { label: '隧道管理', to: '/admin/forward/tunnel', icon: '🔌' },
-  { label: '限速管理', to: '/admin/forward/limit', icon: '⏱️' },
-  { label: '中转节点管理', to: '/admin/forward/nodes', icon: '🛰️' }
+  { label: 'Forwards', to: '/admin/forward', icon: 'F' },
+  { label: 'Tunnels', to: '/admin/forward/tunnel', icon: 'T' },
+  { label: 'Limits', to: '/admin/forward/limit', icon: 'L' },
+  { label: 'Ansible Machines', to: '/admin/forward/ansible-machines', icon: 'A', hint: 'Stateless execution machines' },
+  { label: 'Local Runtime', to: '/admin/forward/local', icon: 'R', hint: 'Stateless panel-host executor' },
+  { label: 'NodeX Topology', to: '/admin/forward/nodes', icon: 'N', hint: 'Stateful relay/exit topology' },
+  { label: 'NodeX Runtime', to: '/admin/forward/nodex', icon: 'X', hint: 'Stateful gost control-plane' },
+  { label: 'NodeX Agents', to: '/admin/forward/agents', icon: 'G', hint: 'Stateful agent task channel' }
 ]
 </script>
 
@@ -51,5 +58,17 @@ const links = [
 .icon {
   width: 20px;
   text-align: center;
+  font-weight: 700;
+}
+
+.link-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hint {
+  font-size: 12px;
+  opacity: 0.8;
 }
 </style>

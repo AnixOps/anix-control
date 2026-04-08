@@ -29,12 +29,13 @@ type Config struct {
 
 // ForwardRuntimeConfig stores the canonical forward runtime settings from config.yaml.
 type ForwardRuntimeConfig struct {
-	NodeXMode       *bool                         `yaml:"nodex_mode"`
-	Backend         string                        `yaml:"backend"`
-	NodeX           ForwardRuntimeNodeXConfig     `yaml:"nodex"`
-	IptablesAnsible ForwardRuntimeAnsibleConfig   `yaml:"iptables_ansible"`
-	Jobs            ForwardRuntimeJobsConfig      `yaml:"jobs"`
-	GostStats       ForwardRuntimeGostStatsConfig `yaml:"gost_stats"`
+	NodeXMode        *bool                         `yaml:"nodex_mode"`
+	Backend          string                        `yaml:"backend"`
+	NodeX            ForwardRuntimeNodeXConfig     `yaml:"nodex"`
+	NftablesAnsible  ForwardRuntimeAnsibleConfig   `yaml:"nftables_ansible"`
+	IptablesAnsible  ForwardRuntimeAnsibleConfig   `yaml:"iptables_ansible"`
+	Jobs             ForwardRuntimeJobsConfig      `yaml:"jobs"`
+	GostStats        ForwardRuntimeGostStatsConfig `yaml:"gost_stats"`
 }
 
 // ForwardRuntimeNodeXConfig stores NodeX or gost runtime settings.

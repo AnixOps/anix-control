@@ -10,7 +10,9 @@ const adminApi = vi.hoisted(() => ({
   getBackups: vi.fn(),
   getBackupStats: vi.fn(),
   getLoadBalancers: vi.fn(),
-  listForwardRuntimeJobs: vi.fn()
+  listForwardRuntimeJobs: vi.fn(),
+  getForwardRuntimeStatus: vi.fn(),
+  runForwardRuntimeDoctor: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => adminApi)
@@ -18,6 +20,9 @@ vi.mock('@/api/admin', () => adminApi)
 function mountSystem() {
   return mount(System, {
     global: {
+      stubs: {
+        'router-link': true
+      },
       mocks: {
         $t: (_key, fallback) => fallback || _key
       }
@@ -31,8 +36,9 @@ describe('System runtime configuration', () => {
 
     const configMap = {
       'forward.runtime.nodex_mode': { value: false },
-      'forward.runtime_backend': { value: 'iptables_ansible' },
-      'forward.runtime.iptables_ansible.config': { value: '{"inventory":"local"}' },
+      'forward.runtime_backend': { value: 'nftables_ansible' },
+      'forward.runtime.ansible.backend': { value: 'nftables_ansible' },
+      'forward.runtime.ansible.config': { value: '{"inventory":"local"}' },
       'forward.runtime.nodex.base_url': { value: 'https://nodex.example' },
       'forward.runtime.nodex.token': { value: 'token' },
       'forward.runtime.nodex.timeout_seconds': { value: 15 }
@@ -46,6 +52,8 @@ describe('System runtime configuration', () => {
     adminApi.getBackupStats.mockResolvedValue({ data: {} })
     adminApi.getLoadBalancers.mockResolvedValue({ data: { list: [] } })
     adminApi.listForwardRuntimeJobs.mockResolvedValue({ data: { list: [] } })
+    adminApi.getForwardRuntimeStatus.mockResolvedValue({ data: { data: null } })
+    adminApi.runForwardRuntimeDoctor.mockResolvedValue({ data: { data: null } })
   })
 
   it('saves NodeX runtime config when NodeX mode is enabled', async () => {
@@ -64,7 +72,7 @@ describe('System runtime configuration', () => {
     const calls = adminApi.setSystemConfig.mock.calls
     const modeCall = calls.find(([key]) => key === 'forward.runtime.nodex_mode')
     const backendCall = calls.find(([key]) => key === 'forward.runtime_backend')
-    const ansibleCall = calls.find(([key]) => key === 'forward.runtime.iptables_ansible.config')
+    const ansibleCall = calls.find(([key]) => key === 'forward.runtime.ansible.config')
     const baseUrlCall = calls.find(([key]) => key === 'forward.runtime.nodex.base_url')
     const tokenCall = calls.find(([key]) => key === 'forward.runtime.nodex.token')
     const timeoutCall = calls.find(([key]) => key === 'forward.runtime.nodex.timeout_seconds')

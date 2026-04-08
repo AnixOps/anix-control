@@ -9,11 +9,11 @@ This section is the operator/developer reference index for `v2board_AnixOps`.
 - [configuration.md](configuration.md): config source-of-truth, key ownership, and mode-specific examples
 - [forward-runtime-migration.md](forward-runtime-migration.md): old `FORWARD_RUNTIME_*` inputs to the new YAML-only runtime config
 - [repository-layout.md](repository-layout.md): root and directory ownership, plus root hygiene rules
-- [runtime.md](runtime.md): NodeX mode vs `iptables_ansible` mode and where to operate each path
+- [runtime.md](runtime.md): NodeX mode vs local Ansible mode, recommended `nftables_ansible` defaults, and where to operate each path
 
 ## Runtime And Boundary References
 
-- [../guide/forward-relay-onboarding.md](../guide/forward-relay-onboarding.md): exact meaning of "relay really joined" in NodeX mode vs `iptables_ansible` mode
+- [../guide/forward-relay-onboarding.md](../guide/forward-relay-onboarding.md): exact meaning of "relay really joined" in NodeX mode vs local Ansible mode
 - [../guide/nodex-internal-extension.md](../guide/nodex-internal-extension.md): NodeX boundary and dual-mode semantics
 - [../guide/forward-tunnel-runtime-ops.md](../guide/forward-tunnel-runtime-ops.md): runtime operation details
 - [../guide/forward-tunnel-smoke-test.md](../guide/forward-tunnel-smoke-test.md): manual smoke path
