@@ -269,6 +269,16 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/tunnel/user/remove", forwardHandler.RemovePanelUserTunnel)
 			admin.POST("/tunnel/user/update", forwardHandler.UpdatePanelUserTunnel)
 
+			// Ansible 执行机器管理
+			admin.GET("/forward/ansible-machines", forwardHandler.ListAnsibleMachines)
+			admin.POST("/forward/ansible-machines", forwardHandler.CreateAnsibleMachine)
+			admin.GET("/forward/ansible-machines/:id", forwardHandler.GetAnsibleMachine)
+			admin.PUT("/forward/ansible-machines/:id", forwardHandler.UpdateAnsibleMachine)
+			admin.DELETE("/forward/ansible-machines/:id", forwardHandler.DeleteAnsibleMachine)
+			admin.POST("/forward/ansible-machines/:id/check", forwardHandler.CheckAnsibleMachine)
+			admin.POST("/forward/ansible-machines/:id/toggle", forwardHandler.ToggleAnsibleMachine)
+			admin.POST("/forward/ansible-machines/:id/sync-stats", forwardHandler.SyncAnsibleMachineStats)
+
 			// 中转节点管理
 			admin.GET("/forward/nodes", forwardHandler.ListNodes)
 			admin.POST("/forward/nodes", forwardHandler.CreateNode)

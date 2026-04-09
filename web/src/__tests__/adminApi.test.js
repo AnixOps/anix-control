@@ -46,8 +46,19 @@ describe('admin api mapping', () => {
         },
       },
       {
+        call: () => adminApi.getAnsibleMachine(8),
+        expected: {
+          url: '/admin/forward/ansible-machines/8',
+          method: 'get',
+        },
+      },
+      {
         call: () => adminApi.getForwardStats(),
         expected: { url: '/admin/forward/stats', method: 'get' },
+      },
+      {
+        call: () => adminApi.getAnsibleMachines({ type: 'relay' }),
+        expected: { url: '/admin/forward/ansible-machines', method: 'get', params: { type: 'relay' } },
       },
       {
         call: () => adminApi.getAdminForwardTunnelList(),
@@ -169,6 +180,51 @@ describe('admin api mapping', () => {
         call: () => adminApi.syncForwardNodeStats(7),
         expected: {
           url: '/admin/forward/nodes/7/sync-stats',
+          method: 'post',
+        },
+      },
+      {
+        call: () => adminApi.createAnsibleMachine({ name: 'Machine A' }),
+        expected: {
+          url: '/admin/forward/ansible-machines',
+          method: 'post',
+          data: { name: 'Machine A' },
+        },
+      },
+      {
+        call: () => adminApi.updateAnsibleMachine(8, { name: 'Updated' }),
+        expected: {
+          url: '/admin/forward/ansible-machines/8',
+          method: 'put',
+          data: { name: 'Updated' },
+        },
+      },
+      {
+        call: () => adminApi.deleteAnsibleMachine(9),
+        expected: {
+          url: '/admin/forward/ansible-machines/9',
+          method: 'delete',
+        },
+      },
+      {
+        call: () => adminApi.checkAnsibleMachine(4),
+        expected: {
+          url: '/admin/forward/ansible-machines/4/check',
+          method: 'post',
+        },
+      },
+      {
+        call: () => adminApi.toggleAnsibleMachine(5, true),
+        expected: {
+          url: '/admin/forward/ansible-machines/5/toggle',
+          method: 'post',
+          data: { enabled: true },
+        },
+      },
+      {
+        call: () => adminApi.syncAnsibleMachineStats(6),
+        expected: {
+          url: '/admin/forward/ansible-machines/6/sync-stats',
           method: 'post',
         },
       },

@@ -805,6 +805,66 @@ export function toggleForwardNode(id, enabled) {
   })
 }
 
+export function getAnsibleMachines(params) {
+  return request({
+    url: '/admin/forward/ansible-machines',
+    method: 'get',
+    params
+  })
+}
+
+export function createAnsibleMachine(data) {
+  return request({
+    url: '/admin/forward/ansible-machines',
+    method: 'post',
+    data
+  })
+}
+
+export function getAnsibleMachine(id) {
+  return request({
+    url: `/admin/forward/ansible-machines/${id}`,
+    method: 'get'
+  })
+}
+
+export function updateAnsibleMachine(id, data) {
+  return request({
+    url: `/admin/forward/ansible-machines/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+export function deleteAnsibleMachine(id) {
+  return request({
+    url: `/admin/forward/ansible-machines/${id}`,
+    method: 'delete'
+  })
+}
+
+export function checkAnsibleMachine(id) {
+  return request({
+    url: `/admin/forward/ansible-machines/${id}/check`,
+    method: 'post'
+  })
+}
+
+export function toggleAnsibleMachine(id, enabled) {
+  return request({
+    url: `/admin/forward/ansible-machines/${id}/toggle`,
+    method: 'post',
+    data: { enabled }
+  })
+}
+
+export function syncAnsibleMachineStats(id) {
+  return request({
+    url: `/admin/forward/ansible-machines/${id}/sync-stats`,
+    method: 'post'
+  })
+}
+
 export function getForwardRules(params) {
   return request({
     url: '/admin/forward/rules',
@@ -1364,6 +1424,14 @@ export default {
   syncForwardNodeStats,
   testForwardConnection,
   toggleForwardNode,
+  getAnsibleMachines,
+  createAnsibleMachine,
+  getAnsibleMachine,
+  updateAnsibleMachine,
+  deleteAnsibleMachine,
+  checkAnsibleMachine,
+  toggleAnsibleMachine,
+  syncAnsibleMachineStats,
   getForwardRules,
   createForwardRule,
   getForwardRule,

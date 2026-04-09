@@ -1311,7 +1311,8 @@ async function loadNodes() {
   try {
     const params = {
       page: nodePage.value,
-      page_size: nodePageSize.value
+      page_size: nodePageSize.value,
+      scope: 'nodex'
     }
     if (nodeTypeFilter.value) {
       params.type = nodeTypeFilter.value
@@ -1336,7 +1337,7 @@ async function loadNodes() {
 async function loadNodeOptions() {
   nodeOptionsLoading.value = true
   try {
-    const payload = unwrapResponse(await getForwardNodes({ page: 1, page_size: 500 }))
+    const payload = unwrapResponse(await getForwardNodes({ page: 1, page_size: 500, scope: 'nodex' }))
     const list = Array.isArray(payload?.list) ? payload.list : Array.isArray(payload) ? payload : []
     nodeOptions.value = list.map(normalizeNode).sort((left, right) => {
       if (left.type === right.type) {

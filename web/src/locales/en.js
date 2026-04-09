@@ -620,8 +620,9 @@ export default {
         enabled: 'Enabled'
       },
       sectionEyebrow: 'Machines',
-      sectionTitle: 'Relay Execution Nodes',
-      sectionCopy: 'These records are used by the local Ansible runtime as execution-node identity only.',
+      sectionTitle: 'Execution Targets',
+      sectionCopy: 'These records only identify hosts for the local Ansible runtime. They are not NodeX control-plane nodes.',
+      inventoryHint: 'SSH user, password, and private key are not stored on this page. Define them in Ansible inventory, playbooks, or Local Runtime environment settings.',
       filterLabel: 'Status',
       filters: {
         all: 'All',
@@ -632,7 +633,8 @@ export default {
       empty: 'No Ansible execution machines yet.',
       machineEyebrow: 'Machine #{id}',
       meta: {
-        apiPort: 'API Port',
+        authSource: 'Auth Source',
+        authSourceValue: 'Inventory / Local Runtime',
         regionIsp: 'Region / ISP',
         currentConn: 'Current Conn',
         traffic: 'Traffic'
@@ -662,9 +664,7 @@ export default {
       fields: {
         name: 'Name',
         host: 'Host',
-        servicePort: 'Service Port',
-        apiPort: 'API Port',
-        apiToken: 'API Token',
+        reachabilityPort: 'Reachability Port',
         weight: 'Weight',
         region: 'Region',
         isp: 'ISP'
@@ -672,7 +672,6 @@ export default {
       placeholders: {
         name: 'relay-exec-01',
         host: '1.2.3.4',
-        apiToken: 'optional',
         region: 'HK / JP / US',
         isp: 'CMI / NTT / Cogent'
       },
@@ -683,7 +682,7 @@ export default {
         synced: 'Stats synced'
       },
       errors: {
-        required: 'Name, host and service port are required.',
+        required: 'Name, host and reachability port are required.',
         saveFailed: 'Failed to save machine'
       }
     },
