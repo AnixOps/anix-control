@@ -629,8 +629,9 @@ export default {
         enabled: '\u5df2\u542f\u7528'
       },
       sectionEyebrow: '\u673a\u5668',
-      sectionTitle: '\u4e2d\u7ee7\u6267\u884c\u8282\u70b9',
-      sectionCopy: '\u8fd9\u4e9b\u8bb0\u5f55\u53ea\u88ab\u672c\u5730 Ansible \u8fd0\u884c\u65f6\u7528\u4f5c\u6267\u884c\u8282\u70b9\u8eab\u4efd\u3002',
+      sectionTitle: '\u6267\u884c\u76ee\u6807',
+      sectionCopy: '\u8fd9\u4e9b\u8bb0\u5f55\u53ea\u7528\u4e8e\u672c\u5730 Ansible \u8fd0\u884c\u65f6\u8bc6\u522b\u6267\u884c\u76ee\u6807\u4e3b\u673a\uff0c\u4e0d\u5c5e\u4e8e NodeX \u63a7\u5236\u9762\u8282\u70b9\u3002',
+      inventoryHint: 'SSH \u7528\u6237\u540d\u3001\u5bc6\u7801\u548c\u79c1\u94a5\u4e0d\u5728\u6b64\u9875\u9762\u4fdd\u5b58\uff0c\u8bf7\u5728 Ansible inventory\u3001playbook \u6216 Local Runtime \u73af\u5883\u914d\u7f6e\u4e2d\u63d0\u4f9b\u3002',
       filterLabel: '\u72b6\u6001',
       filters: {
         all: '\u5168\u90e8',
@@ -641,7 +642,8 @@ export default {
       empty: '\u6682\u65e0 Ansible \u6267\u884c\u673a\u5668\u3002',
       machineEyebrow: '\u673a\u5668 #{id}',
       meta: {
-        apiPort: 'API Port',
+        authSource: '\u51ed\u636e\u6765\u6e90',
+        authSourceValue: 'Inventory / Local Runtime',
         regionIsp: '\u533a\u57df / ISP',
         currentConn: '\u5f53\u524d\u8fde\u63a5',
         traffic: '\u6d41\u91cf'
@@ -671,9 +673,7 @@ export default {
       fields: {
         name: '\u540d\u79f0',
         host: '\u4e3b\u673a',
-        servicePort: '\u670d\u52a1\u7aef\u53e3',
-        apiPort: 'API Port',
-        apiToken: 'API Token',
+        reachabilityPort: '\u8fde\u901a\u6027\u7aef\u53e3',
         weight: '\u6743\u91cd',
         region: '\u533a\u57df',
         isp: 'ISP'
@@ -681,7 +681,6 @@ export default {
       placeholders: {
         name: 'relay-exec-01',
         host: '1.2.3.4',
-        apiToken: '\u53ef\u9009',
         region: 'HK / JP / US',
         isp: 'CMI / NTT / Cogent'
       },
@@ -692,7 +691,7 @@ export default {
         synced: '\u7edf\u8ba1\u5df2\u540c\u6b65'
       },
       errors: {
-        required: '\u540d\u79f0\u3001\u4e3b\u673a\u548c\u670d\u52a1\u7aef\u53e3\u4e3a\u5fc5\u586b\u9879\u3002',
+        required: '\u540d\u79f0\u3001\u4e3b\u673a\u548c\u8fde\u901a\u6027\u7aef\u53e3\u4e3a\u5fc5\u586b\u9879\u3002',
         saveFailed: '\u4fdd\u5b58\u673a\u5668\u5931\u8d25'
       }
     },

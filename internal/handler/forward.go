@@ -51,6 +51,7 @@ func NewForwardHandler() *ForwardHandler {
 // @Router /admin/forward/nodes [get]
 func (h *ForwardHandler) ListNodes(c *gin.Context) {
 	nodeType := c.Query("type")
+	scope := c.Query("scope")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	var status *int
@@ -63,7 +64,7 @@ func (h *ForwardHandler) ListNodes(c *gin.Context) {
 		status = &parsedStatus
 	}
 
-	nodes, total, err := h.nodeService.List(nodeType, status, page, pageSize)
+	nodes, total, err := h.nodeService.ListByInventoryScope(scope, nodeType, status, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

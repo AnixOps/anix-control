@@ -339,6 +339,7 @@ func TestSetup_AdminForwardEndpoints(t *testing.T) {
 		method string
 		path   string
 	}{
+		{"GET", "/api/v2/admin/forward/ansible-machines"},
 		{"GET", "/api/v2/admin/forward/nodes"},
 		{"GET", "/api/v2/admin/forward/rules"},
 		{"GET", "/api/v2/admin/forward/stats"},

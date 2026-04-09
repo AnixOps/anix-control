@@ -50,6 +50,7 @@
           </select>
         </label>
       </div>
+      <p class="inventory-hint">{{ t('runtime.ansibleMachines.inventoryHint') }}</p>
 
       <div v-if="loading" class="state-card">{{ t('runtime.ansibleMachines.loading') }}</div>
       <div v-else-if="!machines.length" class="state-card">{{ t('runtime.ansibleMachines.empty') }}</div>
@@ -69,8 +70,8 @@
 
           <div class="meta-grid">
             <div class="meta-item">
-              <span class="meta-label">{{ t('runtime.ansibleMachines.meta.apiPort') }}</span>
-              <strong>{{ machine.apiPort || '-' }}</strong>
+              <span class="meta-label">{{ t('runtime.ansibleMachines.meta.authSource') }}</span>
+              <strong>{{ t('runtime.ansibleMachines.meta.authSourceValue') }}</strong>
             </div>
             <div class="meta-item">
               <span class="meta-label">{{ t('runtime.ansibleMachines.meta.regionIsp') }}</span>
@@ -117,6 +118,7 @@
           <button class="modal-close" @click="closeEditor">×</button>
         </div>
         <div class="modal-body">
+          <p class="inventory-hint compact">{{ t('runtime.ansibleMachines.inventoryHint') }}</p>
           <div class="form-grid">
             <label class="form-group">
               <span>{{ t('runtime.ansibleMachines.fields.name') }}</span>
@@ -129,18 +131,8 @@
           </div>
           <div class="form-grid">
             <label class="form-group">
-              <span>{{ t('runtime.ansibleMachines.fields.servicePort') }}</span>
+              <span>{{ t('runtime.ansibleMachines.fields.reachabilityPort') }}</span>
               <input v-model.trim="form.port" type="number" min="1" max="65535" />
-            </label>
-            <label class="form-group">
-              <span>{{ t('runtime.ansibleMachines.fields.apiPort') }}</span>
-              <input v-model.trim="form.apiPort" type="number" min="1" max="65535" />
-            </label>
-          </div>
-          <div class="form-grid">
-            <label class="form-group">
-              <span>{{ t('runtime.ansibleMachines.fields.apiToken') }}</span>
-              <input v-model.trim="form.apiToken" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.apiToken')" />
             </label>
             <label class="form-group">
               <span>{{ t('runtime.ansibleMachines.fields.weight') }}</span>
@@ -191,14 +183,14 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import {
-  checkForwardNode,
-  createForwardNode,
-  deleteForwardNode,
-  getForwardNode,
-  getForwardNodes,
-  syncForwardNodeStats,
-  toggleForwardNode,
-  updateForwardNode
+  checkAnsibleMachine,
+  createAnsibleMachine,
+  deleteAnsibleMachine,
+  getAnsibleMachine,
+  getAnsibleMachines,
+  syncAnsibleMachineStats,
+  toggleAnsibleMachine,
+  updateAnsibleMachine
 } from '@/api/admin'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 
@@ -228,7 +220,7 @@ function translateRuntimeText(value, fallback = '-') {
 }
 
 function createForm() {
-  return { id: null, name: '', host: '', port: '', apiPort: '', apiToken: '', region: '', isp: '', weight: '1' }
+  return { id: null, name: '', host: '', port: '', region: '', isp: '', weight: '1' }
 }
 
 function resetForm() {
@@ -246,7 +238,6 @@ function normalizeMachine(node) {
     name: node?.name || '-',
     host: node?.host || '-',
     port: Number(node?.port || 0),
-    apiPort: Number(node?.api_port || node?.apiPort || 0),
     region: node?.region || '',
     isp: node?.isp || '',
     weight: Number(node?.weight || 1),
@@ -254,8 +245,7 @@ function normalizeMachine(node) {
     status: Number(node?.status ?? 0),
     currentConn: Number(node?.current_conn || node?.currentConn || 0),
     totalUpload: Number(node?.total_upload || node?.totalUpload || 0),
-    totalDownload: Number(node?.total_download || node?.totalDownload || 0),
-    apiToken: node?.api_token || node?.apiToken || ''
+    totalDownload: Number(node?.total_download || node?.totalDownload || 0)
   }
 }
 
@@ -272,7 +262,7 @@ async function refreshAll() {
   try {
     const params = { page: 1, page_size: 200, type: 'relay' }
     if (statusFilter.value !== 'all') params.status = Number(statusFilter.value)
-    const payload = unwrapResponse(await getForwardNodes(params))
+    const payload = unwrapResponse(await getAnsibleMachines(params))
     const list = Array.isArray(payload?.list) ? payload.list : Array.isArray(payload) ? payload : []
     machines.value = list.map(normalizeMachine)
   } catch (error) {
@@ -288,14 +278,12 @@ async function openEditor(machine = null) {
   editorMode.value = Boolean(machine?.id)
   editorOpen.value = true
   if (!machine?.id) return
-  const detail = normalizeMachine(unwrapResponse(await getForwardNode(machine.id)))
+  const detail = normalizeMachine(unwrapResponse(await getAnsibleMachine(machine.id)))
   Object.assign(form, {
     id: detail.id,
     name: detail.name,
     host: detail.host,
     port: detail.port ? String(detail.port) : '',
-    apiPort: detail.apiPort ? String(detail.apiPort) : '',
-    apiToken: detail.apiToken || '',
     region: detail.region,
     isp: detail.isp,
     weight: String(detail.weight || 1)
@@ -322,17 +310,15 @@ async function submitForm() {
     port: Number(form.port),
     weight: Number(form.weight || 1)
   }
-  if (Number(form.apiPort)) payload.api_port = Number(form.apiPort)
-  if (form.apiToken.trim()) payload.api_token = form.apiToken.trim()
   if (form.region.trim()) payload.region = form.region.trim()
   if (form.isp.trim()) payload.isp = form.isp.trim()
 
   saving.value = true
   try {
     if (editorMode.value && form.id) {
-      await updateForwardNode(form.id, payload)
+      await updateAnsibleMachine(form.id, payload)
     } else {
-      await createForwardNode(payload)
+      await createAnsibleMachine(payload)
     }
     closeEditor()
     await refreshAll()
@@ -351,7 +337,7 @@ async function confirmDelete() {
   if (!deleteTarget.value?.id) return
   saving.value = true
   try {
-    await deleteForwardNode(deleteTarget.value.id)
+    await deleteAnsibleMachine(deleteTarget.value.id)
     deleteTarget.value = null
     await refreshAll()
   } finally {
@@ -362,7 +348,7 @@ async function confirmDelete() {
 async function checkMachine(machine) {
   pendingAction.value = `${machine.id}:check`
   try {
-    const payload = unwrapResponse(await checkForwardNode(machine.id))
+    const payload = unwrapResponse(await checkAnsibleMachine(machine.id))
     const success = Number(payload?.status ?? 0) === 1 && !payload?.error
     results[machine.id] = {
       success,
@@ -381,7 +367,7 @@ async function checkMachine(machine) {
 async function syncMachine(machine) {
   pendingAction.value = `${machine.id}:sync`
   try {
-    const payload = unwrapResponse(await syncForwardNodeStats(machine.id))
+    const payload = unwrapResponse(await syncAnsibleMachineStats(machine.id))
     results[machine.id] = { success: true, message: translateRuntimeText(payload?.message, t('runtime.ansibleMachines.results.synced')) }
     await refreshAll()
   } finally {
@@ -392,7 +378,7 @@ async function syncMachine(machine) {
 async function toggleMachine(machine) {
   pendingAction.value = `${machine.id}:toggle`
   try {
-    await toggleForwardNode(machine.id, !machine.enabled)
+    await toggleAnsibleMachine(machine.id, !machine.enabled)
     await refreshAll()
   } finally {
     pendingAction.value = ''
@@ -409,6 +395,8 @@ onMounted(async () => {
 .hero-card, .panel-card, .stat-card { border: 1px solid var(--border-color); border-radius: 20px; background: var(--surface-color); }
 .hero-card { display: flex; justify-content: space-between; gap: 20px; padding: 24px; background: radial-gradient(circle at top right, rgba(16,185,129,.14), transparent 28%), var(--surface-color); }
 .hero-text, .section-copy, .machine-meta, .meta-label { color: var(--text-secondary); line-height: 1.6; }
+.inventory-hint { margin: 0 0 18px; padding: 12px 14px; border: 1px solid rgba(16,185,129,.24); border-radius: 14px; background: rgba(16,185,129,.08); color: var(--text-secondary); line-height: 1.6; }
+.inventory-hint.compact { margin: 0; }
 .hero-actions, .section-head, .status-stack, .card-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 12px; padding: 10px 16px; text-decoration: none; cursor: pointer; }
 .btn-primary { background: var(--primary-color); color: #fff; }
