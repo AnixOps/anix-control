@@ -1,58 +1,58 @@
 <template>
   <div class="page nodes-page">
     <div class="page-header">
-      <h1>{{ $t('admin.nodes.title', '节点管理') }}</h1>
+      <h1>{{ t('admin.nodes.title') }}</h1>
       <div class="header-actions">
         <button class="btn btn-secondary" @click="showAuthKeys = true">
-          🔑 {{ $t('admin.nodes.authKeys', '授权密钥') }}
+          🔑 {{ t('admin.nodes.authKeys') }}
         </button>
         <button class="btn btn-primary" @click="openCreateModal">
-          + {{ $t('admin.nodes.addNode', '添加节点') }}
+          + {{ t('admin.nodes.addNode') }}
         </button>
       </div>
     </div>
 
-    <!-- 节点统计 -->
+    <!-- Node stats -->
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value">{{ stats.total }}</div>
-        <div class="stat-label">{{ $t('admin.nodes.total', '总节点') }}</div>
+        <div class="stat-label">{{ t('admin.nodes.stats.total') }}</div>
       </div>
       <div class="stat-card online">
         <div class="stat-value">{{ stats.online }}</div>
-        <div class="stat-label">{{ $t('admin.nodes.online', '在线') }}</div>
+        <div class="stat-label">{{ t('admin.nodes.stats.online') }}</div>
       </div>
       <div class="stat-card warning">
         <div class="stat-value">{{ stats.offline }}</div>
-        <div class="stat-label">{{ $t('admin.nodes.offline', '离线') }}</div>
+        <div class="stat-label">{{ t('admin.nodes.stats.offline') }}</div>
       </div>
       <div class="stat-card pending">
         <div class="stat-value">{{ stats.pending }}</div>
-        <div class="stat-label">{{ $t('admin.nodes.pending', '待激活') }}</div>
+        <div class="stat-label">{{ t('admin.nodes.stats.pending') }}</div>
       </div>
     </div>
 
-    <!-- 节点列表 -->
+    <!-- Node list -->
     <div class="table-container">
       <table class="table">
         <thead>
           <tr>
             <th>ID</th>
-            <th>{{ $t('admin.nodes.name', '名称') }}</th>
-            <th>{{ $t('admin.nodes.address', '地址') }}</th>
-            <th>{{ $t('admin.nodes.status', '状态') }}</th>
-            <th>{{ $t('admin.nodes.protocols', '协议数') }}</th>
-            <th>{{ $t('admin.nodes.traffic', '今日流量') }}</th>
-            <th>{{ $t('admin.nodes.lastHeartbeat', '最后心跳') }}</th>
-            <th>{{ $t('admin.actions', '操作') }}</th>
+            <th>{{ t('admin.nodes.table.name') }}</th>
+            <th>{{ t('admin.nodes.table.address') }}</th>
+            <th>{{ t('admin.nodes.table.status') }}</th>
+            <th>{{ t('admin.nodes.table.protocols') }}</th>
+            <th>{{ t('admin.nodes.table.traffic') }}</th>
+            <th>{{ t('admin.nodes.table.lastHeartbeat') }}</th>
+            <th>{{ t('admin.nodes.table.actions') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td colspan="8" class="text-center">加载中...</td>
+            <td colspan="8" class="text-center">{{ t('admin.nodes.table.loading') }}</td>
           </tr>
           <tr v-else-if="nodes.length === 0">
-            <td colspan="8" class="text-center">暂无节点</td>
+            <td colspan="8" class="text-center">{{ t('admin.nodes.table.empty') }}</td>
           </tr>
           <tr v-for="node in nodes" :key="node.id">
             <td>{{ node.id }}</td>
@@ -74,13 +74,28 @@
             <td>{{ formatBytes(node.traffic_today || 0) }}</td>
             <td>{{ formatTime(node.last_check_at) }}</td>
             <td class="actions">
-              <button class="btn btn-sm btn-info" @click="openProtocols(node)">
-                📡 协议
+              <button
+                class="btn btn-sm btn-info"
+                :title="t('admin.nodes.actions.manageProtocols')"
+                :aria-label="t('admin.nodes.actions.manageProtocols')"
+                @click="openProtocols(node)"
+              >
+                📡 {{ t('admin.nodes.actions.protocols') }}
               </button>
-              <button class="btn btn-sm btn-warning" @click="openEditModal(node)">
+              <button
+                class="btn btn-sm btn-warning"
+                :title="t('admin.nodes.actions.edit')"
+                :aria-label="t('admin.nodes.actions.edit')"
+                @click="openEditModal(node)"
+              >
                 ✏️
               </button>
-              <button class="btn btn-sm btn-danger" @click="confirmDelete(node)">
+              <button
+                class="btn btn-sm btn-danger"
+                :title="t('admin.nodes.actions.delete')"
+                :aria-label="t('admin.nodes.actions.delete')"
+                @click="confirmDelete(node)"
+              >
                 🗑️
               </button>
             </td>
@@ -89,87 +104,93 @@
       </table>
     </div>
 
-    <!-- 分页 -->
+    <!-- Pagination -->
     <div class="pagination" v-if="pagination.total > pagination.size">
-      <button :disabled="pagination.page === 1" @click="changePage(pagination.page - 1)">上一页</button>
+      <button :disabled="pagination.page === 1" @click="changePage(pagination.page - 1)">
+        {{ t('admin.nodes.pagination.previous') }}
+      </button>
       <span>{{ pagination.page }} / {{ Math.ceil(pagination.total / pagination.size) }}</span>
-      <button :disabled="pagination.page >= Math.ceil(pagination.total / pagination.size)" @click="changePage(pagination.page + 1)">下一页</button>
+      <button :disabled="pagination.page >= Math.ceil(pagination.total / pagination.size)" @click="changePage(pagination.page + 1)">
+        {{ t('admin.nodes.pagination.next') }}
+      </button>
     </div>
 
-    <!-- 创建/编辑节点模态框 -->
+    <!-- Create/edit node modal -->
     <div class="modal-overlay" v-if="showNodeModal" @click.self="closeNodeModal">
       <div class="modal">
         <div class="modal-header">
-          <h3>{{ editingNode ? '编辑节点' : '添加节点' }}</h3>
+          <h3>{{ editingNode ? t('admin.nodes.nodeModal.titleEdit') : t('admin.nodes.nodeModal.titleCreate') }}</h3>
           <button class="close-btn" @click="closeNodeModal">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>节点名称 *</label>
-            <input v-model="nodeForm.name" type="text" placeholder="输入节点名称" />
+            <label>{{ t('admin.nodes.nodeModal.fields.name') }}</label>
+            <input v-model="nodeForm.name" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.name')" />
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>节点地址 *</label>
-              <input v-model="nodeForm.address" type="text" placeholder="IP 或域名" />
+              <label>{{ t('admin.nodes.nodeModal.fields.address') }}</label>
+              <input v-model="nodeForm.address" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.address')" />
             </div>
             <div class="form-group">
-              <label>API 端口 *</label>
-              <input v-model.number="nodeForm.api_port" type="number" placeholder="8080" />
+              <label>{{ t('admin.nodes.nodeModal.fields.apiPort') }}</label>
+              <input v-model.number="nodeForm.api_port" type="number" :placeholder="t('admin.nodes.nodeModal.placeholders.apiPort')" />
             </div>
           </div>
           <div class="form-group">
-            <label>标签 (逗号分隔)</label>
-            <input v-model="nodeForm.tags" type="text" placeholder="香港,IEPL,高速" />
+            <label>{{ t('admin.nodes.nodeModal.fields.tags') }}</label>
+            <input v-model="nodeForm.tags" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.tags')" />
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>节点倍率</label>
-              <input v-model.number="nodeForm.rate" type="number" step="0.1" placeholder="1.0" />
+              <label>{{ t('admin.nodes.nodeModal.fields.rate') }}</label>
+              <input v-model.number="nodeForm.rate" type="number" step="0.1" :placeholder="t('admin.nodes.nodeModal.placeholders.rate')" />
             </div>
             <div class="form-group">
-              <label>排序</label>
-              <input v-model.number="nodeForm.sort" type="number" placeholder="0" />
+              <label>{{ t('admin.nodes.nodeModal.fields.sort') }}</label>
+              <input v-model.number="nodeForm.sort" type="number" :placeholder="t('admin.nodes.nodeModal.placeholders.sort')" />
             </div>
           </div>
           <div class="form-group" v-if="editingNode">
-            <label>状态</label>
+            <label>{{ t('admin.nodes.nodeModal.fields.status') }}</label>
             <select v-model.number="nodeForm.status">
-              <option :value="0">待激活</option>
-              <option :value="1">在线</option>
-              <option :value="2">离线</option>
-              <option :value="3">禁用</option>
+              <option :value="0">{{ t('admin.nodes.statusText.pending') }}</option>
+              <option :value="1">{{ t('admin.nodes.statusText.online') }}</option>
+              <option :value="2">{{ t('admin.nodes.statusText.offline') }}</option>
+              <option :value="3">{{ t('admin.nodes.statusText.disabled') }}</option>
             </select>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeNodeModal">取消</button>
+          <button class="btn btn-secondary" @click="closeNodeModal">{{ t('admin.nodes.actions.cancel') }}</button>
           <button class="btn btn-primary" @click="saveNode" :disabled="saving">
-            {{ saving ? '保存中...' : '保存' }}
+            {{ saving ? t('admin.nodes.actions.saving') : t('admin.nodes.actions.save') }}
           </button>
         </div>
       </div>
     </div>
 
-    <!-- 协议管理模态框 -->
+    <!-- Protocol management modal -->
     <div class="modal-overlay" v-if="showProtocolModal" @click.self="closeProtocolModal">
       <div class="modal modal-lg">
         <div class="modal-header">
-          <h3>协议管理 - {{ selectedNode?.name }}</h3>
+          <h3>{{ t('admin.nodes.protocolModal.title', { name: selectedNode?.name || "-" }) }}</h3>
           <button class="close-btn" @click="closeProtocolModal">×</button>
         </div>
         <div class="modal-body">
           <div class="protocol-header">
-            <button class="btn btn-primary btn-sm" @click="openAddProtocol">+ 添加协议</button>
+            <button class="btn btn-primary btn-sm" @click="openAddProtocol">
+              + {{ t('admin.nodes.protocolModal.addProtocol') }}
+            </button>
           </div>
           
           <table class="table" v-if="protocols.length > 0">
             <thead>
               <tr>
-                <th>协议类型</th>
-                <th>端口</th>
-                <th>状态</th>
-                <th>操作</th>
+                <th>{{ t('admin.nodes.protocolModal.table.type') }}</th>
+                <th>{{ t('admin.nodes.protocolModal.table.port') }}</th>
+                <th>{{ t('admin.nodes.protocolModal.table.status') }}</th>
+                <th>{{ t('admin.nodes.protocolModal.table.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -180,31 +201,31 @@
                 <td>{{ protocol.port }}</td>
                 <td>
                   <span :class="['status-badge', protocol.enable ? 'status-online' : 'status-disabled']">
-                    {{ protocol.enable ? '启用' : '禁用' }}
+                    {{ protocol.enable ? t('admin.nodes.protocolModal.status.enabled') : t('admin.nodes.protocolModal.status.disabled') }}
                   </span>
                 </td>
                 <td>
-                  <button class="btn btn-sm btn-warning" @click="editProtocol(protocol)">编辑</button>
-                  <button class="btn btn-sm btn-danger" @click="deleteProtocol(protocol)">删除</button>
+                  <button class="btn btn-sm btn-warning" @click="editProtocol(protocol)">{{ t('admin.nodes.actions.edit') }}</button>
+                  <button class="btn btn-sm btn-danger" @click="deleteProtocol(protocol)">{{ t('admin.nodes.actions.delete') }}</button>
                 </td>
               </tr>
             </tbody>
           </table>
-          <div v-else class="empty-message">暂无协议配置</div>
+          <div v-else class="empty-message">{{ t('admin.nodes.protocolModal.empty') }}</div>
         </div>
       </div>
     </div>
 
-    <!-- 添加/编辑协议模态框 -->
+    <!-- Create/edit protocol modal -->
     <div class="modal-overlay" v-if="showProtocolFormModal" @click.self="closeProtocolFormModal">
       <div class="modal modal-lg">
         <div class="modal-header">
-          <h3>{{ editingProtocol ? '编辑协议' : '添加协议' }}</h3>
+          <h3>{{ editingProtocol ? t('admin.nodes.protocolForm.titleEdit') : t('admin.nodes.protocolForm.titleCreate') }}</h3>
           <button class="close-btn" @click="closeProtocolFormModal">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group" v-if="!editingProtocol">
-            <label>协议模板库 (Prefab Templates)</label>
+            <label>{{ t('admin.nodes.protocolForm.templateLibrary') }}</label>
             <div class="template-grid">
               <div 
                 v-for="tpl in protocolTemplates" 
@@ -219,14 +240,18 @@
           </div>
 
           <div class="tabs">
-            <button :class="['tab-btn', protocolForm.mode === 'general' ? 'active' : '']" @click="protocolForm.mode = 'general'">基础配置</button>
-            <button :class="['tab-btn', protocolForm.mode === 'custom' ? 'active' : '']" @click="protocolForm.mode = 'custom'">JSON 高级模式</button>
+            <button :class="['tab-btn', protocolForm.mode === 'general' ? 'active' : '']" @click="protocolForm.mode = 'general'">
+              {{ t('admin.nodes.protocolForm.tabs.general') }}
+            </button>
+            <button :class="['tab-btn', protocolForm.mode === 'custom' ? 'active' : '']" @click="protocolForm.mode = 'custom'">
+              {{ t('admin.nodes.protocolForm.tabs.custom') }}
+            </button>
           </div>
 
           <div v-if="protocolForm.mode === 'general'" class="protocol-editor">
             <div class="form-row">
               <div class="form-group">
-                <label>协议类型 *</label>
+                <label>{{ t('admin.nodes.protocolForm.fields.type') }}</label>
                 <select v-model="protocolForm.type">
                   <option value="vmess">VMess</option>
                   <option value="vless">VLESS</option>
@@ -237,59 +262,59 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>监听端口 *</label>
-                <input v-model.number="protocolForm.port" type="number" placeholder="443" />
+                <label>{{ t('admin.nodes.protocolForm.fields.port') }}</label>
+                <input v-model.number="protocolForm.port" type="number" :placeholder="t('admin.nodes.protocolForm.placeholders.port')" />
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-group">
-                <label>TLS 模式</label>
+                <label>{{ t('admin.nodes.protocolForm.fields.tls') }}</label>
                 <select v-model.number="protocolForm.tls">
-                  <option :value="0">无 TLS</option>
-                  <option :value="1">标准 TLS</option>
-                  <option :value="2">Reality (推荐)</option>
+                  <option :value="0">{{ t('admin.nodes.tlsModes.none') }}</option>
+                  <option :value="1">{{ t('admin.nodes.tlsModes.standard') }}</option>
+                  <option :value="2">{{ t('admin.nodes.tlsModes.reality') }}</option>
                 </select>
               </div>
               <div class="form-group">
-                <label>传输层协议</label>
+                <label>{{ t('admin.nodes.protocolForm.fields.transport') }}</label>
                 <select v-model="protocolForm.transport">
-                  <option value="tcp">TCP</option>
-                  <option value="ws">WebSocket</option>
-                  <option value="grpc">gRPC</option>
-                  <option value="quic">QUIC</option>
-                  <option value="h2">HTTP/2</option>
+                  <option value="tcp">{{ t('admin.nodes.transports.tcp') }}</option>
+                  <option value="ws">{{ t('admin.nodes.transports.ws') }}</option>
+                  <option value="grpc">{{ t('admin.nodes.transports.grpc') }}</option>
+                  <option value="quic">{{ t('admin.nodes.transports.quic') }}</option>
+                  <option value="h2">{{ t('admin.nodes.transports.h2') }}</option>
                 </select>
               </div>
             </div>
 
             <div class="form-group">
-              <label>协议设置 (JSON Settings)</label>
+              <label>{{ t('admin.nodes.protocolForm.fields.settings') }}</label>
               <textarea v-model="protocolForm.settings" rows="3" placeholder='{"flow": "xtls-rprx-vision"}'></textarea>
             </div>
 
             <div class="form-group" v-if="protocolForm.tls > 0">
-              <label>TLS 设置 (JSON)</label>
+              <label>{{ t('admin.nodes.protocolForm.fields.tlsSettings') }}</label>
               <textarea v-model="protocolForm.tls_settings" rows="3" placeholder='{"server_name": "example.com"}'></textarea>
             </div>
 
             <div class="form-group" v-if="protocolForm.tls === 2">
-              <label>Reality 设置 (JSON)</label>
+              <label>{{ t('admin.nodes.protocolForm.fields.realitySettings') }}</label>
               <textarea v-model="protocolForm.reality_settings" rows="3" placeholder='{"short_id": "..."}'></textarea>
             </div>
 
             <div class="form-group" v-if="protocolForm.transport !== 'tcp'">
-              <label>传输层设置 (JSON)</label>
+              <label>{{ t('admin.nodes.protocolForm.fields.transportSettings') }}</label>
               <textarea v-model="protocolForm.transport_settings" rows="3" placeholder='{"path": "/ws"}'></textarea>
             </div>
           </div>
 
           <div v-else class="protocol-editor">
             <div class="info-box">
-              高级模式将全量覆盖此协议的所有配置。请输入完整的 JSON 对象。
+              {{ t('admin.nodes.protocolForm.customModeHint') }}
             </div>
             <div class="form-group">
-              <label>自定义全量配置 (Custom JSON Override)</label>
+              <label>{{ t('admin.nodes.protocolForm.fields.customConfig') }}</label>
               <textarea v-model="protocolForm.custom_config" rows="15" placeholder='{ "node_type": "vless", ... }'></textarea>
             </div>
           </div>
@@ -298,55 +323,60 @@
             <div class="form-group">
               <label class="checkbox-label">
                 <input type="checkbox" v-model="protocolForm.enable" :true-value="1" :false-value="0" />
-                <span>启用协议 (节点端运行)</span>
+                <span>{{ t('admin.nodes.protocolForm.enableHint') }}</span>
               </label>
             </div>
             <div class="form-group">
               <label class="checkbox-label">
                 <input type="checkbox" v-model="protocolForm.show" :true-value="1" :false-value="0" />
-                <span>显示在订阅协议池中 (可在“订阅管理”中配置关联)</span>
+                <span>{{ t('admin.nodes.protocolForm.showHint') }}</span>
               </label>
             </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeProtocolFormModal">取消</button>
+          <button class="btn btn-secondary" @click="closeProtocolFormModal">{{ t('admin.nodes.actions.cancel') }}</button>
           <button class="btn btn-primary" @click="saveProtocol" :disabled="savingProtocol">
-            {{ savingProtocol ? '保存中...' : '保存' }}
+            {{ savingProtocol ? t('admin.nodes.actions.saving') : t('admin.nodes.actions.save') }}
           </button>
         </div>
       </div>
     </div>
 
-    <!-- 授权密钥模态框 -->
+    <!-- Auth key modal -->
     <div class="modal-overlay" v-if="showAuthKeys" @click.self="showAuthKeys = false">
       <div class="modal modal-lg">
         <div class="modal-header">
-          <h3>🔑 授权密钥管理</h3>
+          <h3>🔑 {{ t('admin.nodes.authKeyModal.title') }}</h3>
           <button class="close-btn" @click="showAuthKeys = false">×</button>
         </div>
         <div class="modal-body">
           <div class="info-box">
-            <p>授权密钥用于节点自动注册。将密钥配置到节点后，节点启动时会自动向面板注册。</p>
+            <p>{{ t('admin.nodes.authKeyModal.description') }}</p>
           </div>
           
-          <!-- 一次性密钥显示 -->
+          <!-- One-time key preview -->
           <div v-if="generatedKey" class="key-display-box">
             <div class="key-display-header">
-              <span>⚠️ 请立即复制此密钥，关闭后将无法再次查看！</span>
+              <span>⚠️ {{ t('admin.nodes.authKeyModal.oneTimeWarning') }}</span>
               <button class="close-btn" @click="generatedKey = ''">×</button>
             </div>
             <div class="key-display-content">
               <code class="key-text-large">{{ generatedKey }}</code>
-              <button class="btn btn-primary" @click="copyKey(generatedKey); generatedKey = ''">复制并关闭</button>
+              <button class="btn btn-primary" @click="copyGeneratedKey">{{ t('admin.nodes.authKeyModal.copyAndClose') }}</button>
             </div>
           </div>
 
           <div class="protocol-header">
             <div class="form-inline">
-              <input v-model="newKeyRemark" type="text" placeholder="备注（可选）" style="width: 200px;" />
+              <input
+                v-model="newKeyRemark"
+                type="text"
+                :placeholder="t('admin.nodes.authKeyModal.remarkPlaceholder')"
+                style="width: 200px;"
+              />
               <button class="btn btn-primary btn-sm" @click="generateKey" :disabled="generatingKey">
-                {{ generatingKey ? '生成中...' : '+ 生成新密钥' }}
+                {{ generatingKey ? t('admin.nodes.authKeyModal.generating') : `+ ${t('admin.nodes.authKeyModal.generateNew')}` }}
               </button>
             </div>
           </div>
@@ -354,10 +384,10 @@
           <table class="table" v-if="authKeys.length > 0">
             <thead>
               <tr>
-                <th>名称/备注</th>
-                <th>状态</th>
-                <th>创建时间</th>
-                <th>操作</th>
+                <th>{{ t('admin.nodes.authKeyModal.table.name') }}</th>
+                <th>{{ t('admin.nodes.authKeyModal.table.status') }}</th>
+                <th>{{ t('admin.nodes.authKeyModal.table.createdAt') }}</th>
+                <th>{{ t('admin.nodes.authKeyModal.table.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -366,17 +396,19 @@
                   <code class="key-text">{{ key.name || '-' }}</code>
                 </td>
                 <td>
-                  <span v-if="key.used_by_node_id" class="badge badge-success">已使用</span>
-                  <span v-else class="badge badge-info">未使用</span>
+                  <span v-if="key.used_by_node_id" class="badge badge-success">{{ t('admin.nodes.authKeyModal.status.used') }}</span>
+                  <span v-else class="badge badge-info">{{ t('admin.nodes.authKeyModal.status.unused') }}</span>
                 </td>
                 <td>{{ formatDate(key.created_at) }}</td>
                 <td>
-                  <button class="btn btn-sm btn-danger" @click="removeAuthKey(key)" :disabled="key.used_by_node_id">删除</button>
+                  <button class="btn btn-sm btn-danger" @click="removeAuthKey(key)" :disabled="key.used_by_node_id">
+                    {{ t('admin.nodes.actions.delete') }}
+                  </button>
                 </td>
               </tr>
             </tbody>
           </table>
-          <div v-else class="empty-message">暂无授权密钥</div>
+          <div v-else class="empty-message">{{ t('admin.nodes.authKeyModal.empty') }}</div>
         </div>
       </div>
     </div>
@@ -390,8 +422,11 @@ import {
   getNodeProtocols, createNodeProtocol, updateNodeProtocol, deleteNodeProtocol,
   getProtocolTemplates, getAuthKeys, generateAuthKey, deleteAuthKey
 } from '@/api/admin'
+import { useAppI18n } from '@/composables/useAppI18n'
 
-// 状态
+const { t, formatDateTime } = useAppI18n()
+
+// State
 const loading = ref(false)
 const saving = ref(false)
 const savingProtocol = ref(false)
@@ -439,9 +474,9 @@ const selectedTemplate = ref('')
 const showAuthKeys = ref(false)
 const authKeys = ref([])
 const newKeyRemark = ref('')
-const generatedKey = ref('')  // 一次性显示的密钥
+const generatedKey = ref('')
 
-// 加载数据
+// Data loaders
 const normalizeNode = (node) => ({
   ...node,
   address: node.address || node.host || '',
@@ -491,7 +526,7 @@ const loadAuthKeys = async () => {
   }
 }
 
-// 节点操作
+// Node actions
 const openCreateModal = () => {
   editingNode.value = null
   Object.assign(nodeForm, { name: '', address: '', api_port: 8080, tags: '', rate: 1.0, sort: 0, status: 0 })
@@ -519,7 +554,7 @@ const closeNodeModal = () => {
 
 const saveNode = async () => {
   if (!nodeForm.name || !nodeForm.address || !nodeForm.api_port) {
-    alert('请填写必填字段')
+    alert(t('admin.nodes.messages.requiredFields'))
     return
   }
   saving.value = true
@@ -542,24 +577,24 @@ const saveNode = async () => {
     loadNodes()
     loadStats()
   } catch (e) {
-    alert('保存失败: ' + (e.message || e))
+    alert(t('admin.nodes.messages.saveFailed', { message: e.message || e }))
   } finally {
     saving.value = false
   }
 }
 
 const confirmDelete = async (node) => {
-  if (!confirm(`确定要删除节点 "${node.name}" 吗？`)) return
+  if (!confirm(t('admin.nodes.messages.deleteNodeConfirm', { name: node.name }))) return
   try {
     await deleteNode(node.id)
     loadNodes()
     loadStats()
   } catch (e) {
-    alert('删除失败: ' + (e.message || e))
+    alert(t('admin.nodes.messages.deleteFailed', { message: e.message || e }))
   }
 }
 
-// 协议操作
+// Protocol actions
 const openProtocols = async (node) => {
   selectedNode.value = node
   showProtocolModal.value = true
@@ -636,7 +671,7 @@ const applyTemplate = (tpl) => {
 
 const saveProtocol = async () => {
   if (protocolForm.mode === 'general' && (!protocolForm.type || !protocolForm.port)) {
-    alert('请填写必填字段')
+    alert(t('admin.nodes.messages.requiredFields'))
     return
   }
   
@@ -663,75 +698,83 @@ const saveProtocol = async () => {
     }
     
     closeProtocolFormModal()
-    // 刷新协议列表
     const res = await getNodeProtocols(selectedNode.value.id)
     protocols.value = res.data || []
   } catch (e) {
-    alert('保存失败: ' + (e.message || e))
+    alert(t('admin.nodes.messages.saveFailed', { message: e.message || e }))
   } finally {
     savingProtocol.value = false
   }
 }
 
 const deleteProtocol = async (protocol) => {
-  if (!confirm('确定要删除此协议吗？')) return
+  if (!confirm(t('admin.nodes.messages.deleteProtocolConfirm'))) return
   try {
     await deleteNodeProtocol(selectedNode.value.id, protocol.id)
     const res = await getNodeProtocols(selectedNode.value.id)
     protocols.value = res.data || []
   } catch (e) {
-    alert('删除失败: ' + (e.message || e))
+    alert(t('admin.nodes.messages.deleteFailed', { message: e.message || e }))
   }
 }
 
-// 授权密钥操作
+// Auth key actions
 const generateKey = async () => {
   generatingKey.value = true
   try {
     const res = await generateAuthKey({ name: newKeyRemark.value })
     newKeyRemark.value = ''
-    // 显示一次性密钥
     if (res.data && res.data.key) {
       generatedKey.value = res.data.key
     }
     loadAuthKeys()
   } catch (e) {
-    alert('生成失败: ' + (e.message || e))
+    alert(t('admin.nodes.messages.generateFailed', { message: e.message || e }))
   } finally {
     generatingKey.value = false
   }
 }
 
 const removeAuthKey = async (key) => {
-  if (!confirm('确定要删除此授权密钥吗？')) return
+  if (!confirm(t('admin.nodes.messages.deleteAuthKeyConfirm'))) return
   try {
     await deleteAuthKey(key.id)
     loadAuthKeys()
   } catch (e) {
-    alert('删除失败: ' + (e.message || e))
+    alert(t('admin.nodes.messages.deleteFailed', { message: e.message || e }))
   }
 }
 
-const copyKey = (key) => {
-  navigator.clipboard.writeText(key)
-  alert('已复制到剪贴板')
+const copyKey = async (key) => {
+  try {
+    await navigator.clipboard.writeText(key)
+    alert(t('admin.nodes.messages.copied'))
+  } catch (e) {
+    alert(t('admin.nodes.messages.copyFailed', { message: e.message || e }))
+  }
 }
 
-// 分页
+const copyGeneratedKey = async () => {
+  await copyKey(generatedKey.value)
+  generatedKey.value = ''
+}
+
+// Pagination
 const changePage = (page) => {
   pagination.page = page
   loadNodes()
 }
 
-// 工具函数
+// Helpers
 const getStatusClass = (status) => {
   const classes = ['status-pending', 'status-online', 'status-offline', 'status-disabled']
   return classes[status] || 'status-pending'
 }
 
 const getStatusText = (status) => {
-  const texts = ['待激活', '在线', '离线', '禁用']
-  return texts[status] || '未知'
+  const keys = ['pending', 'online', 'offline', 'disabled']
+  const key = keys[status]
+  return key ? t(`admin.nodes.statusText.${key}`) : t('admin.nodes.statusText.unknown')
 }
 
 const formatBytes = (bytes) => {
@@ -750,18 +793,18 @@ const formatTime = (timestamp) => {
   const date = new Date(timestamp * 1000)
   const now = new Date()
   const diff = (now - date) / 1000
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前'
-  if (diff < 86400) return Math.floor(diff / 3600) + ' 小时前'
-  return date.toLocaleString()
+  if (diff < 60) return t('admin.nodes.relativeTime.justNow')
+  if (diff < 3600) return t('admin.nodes.relativeTime.minutesAgo', { count: Math.floor(diff / 60) })
+  if (diff < 86400) return t('admin.nodes.relativeTime.hoursAgo', { count: Math.floor(diff / 3600) })
+  return formatDateTime(timestamp)
 }
 
 const formatDate = (timestamp) => {
   if (!timestamp) return '-'
-  return new Date(timestamp * 1000).toLocaleString()
+  return formatDateTime(timestamp)
 }
 
-// 初始化
+// Init
 onMounted(async () => {
   const nodesLoaded = await loadNodes()
   if (!nodesLoaded) {
@@ -802,7 +845,7 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 
-/* 统计卡片 - 使用深色主题 */
+/* Stats cards */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -839,7 +882,7 @@ onMounted(async () => {
   margin-top: 4px;
 }
 
-/* 表格容器 - 深色主题 */
+/* Table container */
 .table-container {
   background: var(--surface-color);
   border: 1px solid var(--border-color);
@@ -895,7 +938,7 @@ onMounted(async () => {
   font-size: 11px;
 }
 
-/* 状态徽章 - 深色主题 */
+/* Status badges */
 .status-badge {
   display: inline-block;
   padding: 4px 12px;
@@ -914,7 +957,7 @@ onMounted(async () => {
   gap: 8px;
 }
 
-/* 按钮样式 - 使用主题变量 */
+/* Buttons */
 .btn {
   padding: 8px 16px;
   border: none;
@@ -941,7 +984,7 @@ onMounted(async () => {
 
 .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
-/* 分页 */
+/* Pagination */
 .pagination {
   display: flex;
   justify-content: center;
@@ -961,7 +1004,7 @@ onMounted(async () => {
   opacity: 0.4;
 }
 
-/* 模态框 - 深色主题 */
+/* Modal */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -1033,7 +1076,7 @@ onMounted(async () => {
   border-top: 1px solid var(--border-color);
 }
 
-/* 表单样式 - 深色主题 */
+/* Form styles */
 .form-group {
   margin-bottom: 20px;
 }
@@ -1176,7 +1219,7 @@ onMounted(async () => {
   color: var(--text-color);
 }
 
-/* 协议模板样式 */
+/* Protocol templates */
 .template-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -1217,7 +1260,7 @@ onMounted(async () => {
   line-height: 1.4;
 }
 
-/* 标签页 */
+/* Tabs */
 .tabs {
   display: flex;
   gap: 8px;
@@ -1268,7 +1311,7 @@ onMounted(async () => {
   text-align: center;
 }
 
-/* 响应式优化 */
+/* Responsive */
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;

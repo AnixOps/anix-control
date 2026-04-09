@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { getProfile } from '@/api/user'
 
 function isMockLoginEnabled() {
   return import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK_LOGIN === 'true'
@@ -75,7 +76,6 @@ export const useUserStore = defineStore('user', () => {
 
   async function getUserInfo() {
     try {
-      const { getProfile } = await import('@/api/user')
       const res = await getProfile()
       if (res.data) {
         userInfo.value = normalizeUserInfo(res.data)

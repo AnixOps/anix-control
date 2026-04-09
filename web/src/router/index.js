@@ -5,37 +5,37 @@ import { useUserStore } from '@/stores/user'
 import UserLayout from '@/layouts/UserLayout.vue'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 
-// Views
-import Login from '@/views/Login.vue'
-import UserDashboard from '@/views/user/Dashboard.vue'
-import UserSubscribe from '@/views/user/Subscribe.vue'
-import UserKnowledge from '@/views/user/Knowledge.vue'
-import UserTickets from '@/views/user/Tickets.vue'
-import UserPlans from '@/views/user/Plans.vue'
-import UserOrders from '@/views/user/Orders.vue'
-import AdminDashboard from '@/views/admin/Dashboard.vue'
-import AdminUsers from '@/views/admin/Users.vue'
-import AdminOrders from '@/views/admin/Orders.vue'
-import AdminNodes from '@/views/admin/Nodes.vue'
-import AdminSubscriptions from '@/views/admin/Subscriptions.vue'
-import AdminPlans from '@/views/admin/Plans.vue'
-import AdminTickets from '@/views/admin/Tickets.vue'
-import AdminCoupons from '@/views/admin/Coupons.vue'
-import AdminKnowledge from '@/views/admin/Knowledge.vue'
-import AdminForward from '@/views/admin/Forward.vue'
-import AdminTunnel from '@/views/admin/Tunnel.vue'
-import AdminLimit from '@/views/admin/Limit.vue'
-import AdminAnsibleMachines from '@/views/admin/AnsibleMachines.vue'
-import AdminForwardNodes from '@/views/admin/ForwardNodes.vue'
-import AdminLocalRuntime from '@/views/admin/LocalRuntime.vue'
-import AdminNodeX from '@/views/admin/NodeX.vue'
-import AdminPayment from '@/views/admin/Payment.vue'
-import AdminTelegram from '@/views/admin/Telegram.vue'
-import AdminMFA from '@/views/admin/MFA.vue'
-import AdminNotifications from '@/views/admin/Notifications.vue'
-import AdminInvite from '@/views/admin/Invite.vue'
-import AdminSystem from '@/views/admin/System.vue'
-import AdminAgent from '@/views/admin/Agent.vue'
+// Lazy-loaded views
+const Login = () => import('@/views/Login.vue')
+const UserDashboard = () => import('@/views/user/Dashboard.vue')
+const UserSubscribe = () => import('@/views/user/Subscribe.vue')
+const UserKnowledge = () => import('@/views/user/Knowledge.vue')
+const UserTickets = () => import('@/views/user/Tickets.vue')
+const UserPlans = () => import('@/views/user/Plans.vue')
+const UserOrders = () => import('@/views/user/Orders.vue')
+const AdminDashboard = () => import('@/views/admin/Dashboard.vue')
+const AdminUsers = () => import('@/views/admin/Users.vue')
+const AdminOrders = () => import('@/views/admin/Orders.vue')
+const AdminNodes = () => import('@/views/admin/Nodes.vue')
+const AdminSubscriptions = () => import('@/views/admin/Subscriptions.vue')
+const AdminPlans = () => import('@/views/admin/Plans.vue')
+const AdminTickets = () => import('@/views/admin/Tickets.vue')
+const AdminCoupons = () => import('@/views/admin/Coupons.vue')
+const AdminKnowledge = () => import('@/views/admin/Knowledge.vue')
+const AdminForward = () => import('@/views/admin/Forward.vue')
+const AdminTunnel = () => import('@/views/admin/Tunnel.vue')
+const AdminLimit = () => import('@/views/admin/Limit.vue')
+const AdminAnsibleMachines = () => import('@/views/admin/AnsibleMachines.vue')
+const AdminForwardNodes = () => import('@/views/admin/ForwardNodes.vue')
+const AdminLocalRuntime = () => import('@/views/admin/LocalRuntime.vue')
+const AdminNodeX = () => import('@/views/admin/NodeX.vue')
+const AdminPayment = () => import('@/views/admin/Payment.vue')
+const AdminTelegram = () => import('@/views/admin/Telegram.vue')
+const AdminMFA = () => import('@/views/admin/MFA.vue')
+const AdminNotifications = () => import('@/views/admin/Notifications.vue')
+const AdminInvite = () => import('@/views/admin/Invite.vue')
+const AdminSystem = () => import('@/views/admin/System.vue')
+const AdminAgent = () => import('@/views/admin/Agent.vue')
 
 const routes = [
   {

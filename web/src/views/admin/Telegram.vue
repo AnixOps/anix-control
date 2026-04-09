@@ -1,81 +1,101 @@
 <template>
   <div class="telegram-page">
     <div class="page-header">
-      <h1>Telegram Bot 管理</h1>
-      <p class="text-secondary">配置 Telegram 机器人和消息通知</p>
+      <h1>{{ t('adminTelegram.title') }}</h1>
+      <p class="text-secondary">{{ t('adminTelegram.subtitle') }}</p>
     </div>
 
-    <!-- 标签切换 -->
     <div class="tabs">
       <button :class="['tab', { active: activeTab === 'config' }]" @click="activeTab = 'config'">
-        Bot 配置
+        {{ t('adminTelegram.tabs.config') }}
       </button>
       <button :class="['tab', { active: activeTab === 'users' }]" @click="activeTab = 'users'">
-        绑定用户
+        {{ t('adminTelegram.tabs.users') }}
       </button>
       <button :class="['tab', { active: activeTab === 'notify' }]" @click="activeTab = 'notify'">
-        发送通知
+        {{ t('adminTelegram.tabs.notify') }}
       </button>
     </div>
 
-    <!-- Bot 配置 -->
     <div v-show="activeTab === 'config'">
       <div class="config-section">
-        <h3>基础配置</h3>
+        <h3>{{ t('adminTelegram.config.basicTitle') }}</h3>
         <div class="form-group">
-          <label>Bot Token <span class="required">*</span></label>
-          <input v-model="botConfig.token" type="text" placeholder="从 @BotFather 获取的 Token" />
+          <label>{{ t('adminTelegram.config.token') }} <span class="required">*</span></label>
+          <input
+            v-model="botConfig.token"
+            type="text"
+            :placeholder="t('adminTelegram.placeholders.token')"
+          />
         </div>
         <div class="form-group">
-          <label>Webhook URL</label>
+          <label>{{ t('adminTelegram.config.webhookUrl') }}</label>
           <div class="input-group">
             <input :value="webhookUrl" readonly />
-            <button class="btn-secondary" @click="setWebhook">设置 Webhook</button>
-            <button class="btn-secondary" @click="deleteWebhook">删除 Webhook</button>
+            <button class="btn-secondary" @click="setWebhookConfig">
+              {{ t('adminTelegram.actions.setWebhook') }}
+            </button>
+            <button class="btn-secondary" @click="deleteWebhookConfig">
+              {{ t('adminTelegram.actions.deleteWebhook') }}
+            </button>
           </div>
         </div>
         <div class="form-group">
-          <label>管理员 ID (逗号分隔)</label>
-          <input v-model="adminIdsStr" type="text" placeholder="如: 123456,789012" />
+          <label>{{ t('adminTelegram.config.adminIds') }}</label>
+          <input
+            v-model="adminIdsStr"
+            type="text"
+            :placeholder="t('adminTelegram.placeholders.adminIds')"
+          />
         </div>
         <div class="form-group">
-          <label>欢迎消息</label>
-          <textarea v-model="botConfig.welcome_message" rows="3" placeholder="用户 /start 时的欢迎消息"></textarea>
+          <label>{{ t('adminTelegram.config.welcomeMessage') }}</label>
+          <textarea
+            v-model="botConfig.welcome_message"
+            rows="3"
+            :placeholder="t('adminTelegram.placeholders.welcomeMessage')"
+          ></textarea>
         </div>
         <div class="form-actions">
-          <button class="btn-primary" @click="saveBotConfig">保存配置</button>
+          <button class="btn-primary" @click="saveBotConfig">{{ t('common.actions.save') }}</button>
         </div>
       </div>
 
       <div class="config-section">
-        <h3>可用命令</h3>
+        <h3>{{ t('adminTelegram.commands.title') }}</h3>
         <div class="commands-list">
-          <div class="command-item" v-for="cmd in commands" :key="cmd.cmd">
-            <code>{{ cmd.cmd }}</code>
-            <span class="command-desc">{{ cmd.desc }}</span>
+          <div v-for="command in commands" :key="command.cmd" class="command-item">
+            <code>{{ command.cmd }}</code>
+            <span class="command-desc">{{ command.desc }}</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 绑定用户 -->
     <div v-show="activeTab === 'users'">
       <div class="toolbar">
-        <input v-model="userSearch" type="text" placeholder="搜索用户..." class="search-input" />
-        <button class="btn-secondary" @click="fetchUsers">🔍 刷新</button>
+        <input
+          v-model="userSearch"
+          type="text"
+          class="search-input"
+          :placeholder="t('adminTelegram.users.searchPlaceholder')"
+        />
+        <button class="btn-secondary" @click="fetchUsers">
+          {{ t('adminTelegram.actions.refreshUsers') }}
+        </button>
       </div>
 
       <div class="table-container">
         <table class="data-table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Telegram ID</th>
-              <th>用户ID</th>
-              <th>用户邮箱</th>
-              <th>绑定时间</th>
-              <th>通知状态</th>
-              <th>操作</th>
+              <th>{{ t('adminTelegram.users.table.id') }}</th>
+              <th>{{ t('adminTelegram.users.table.telegramId') }}</th>
+              <th>{{ t('adminTelegram.users.table.userId') }}</th>
+              <th>{{ t('adminTelegram.users.table.userEmail') }}</th>
+              <th>{{ t('adminTelegram.users.table.boundAt') }}</th>
+              <th>{{ t('adminTelegram.users.table.notifyStatus') }}</th>
+              <th>{{ t('adminTelegram.users.table.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -84,62 +104,74 @@
               <td>{{ user.telegram_id }}</td>
               <td>{{ user.user_id }}</td>
               <td>{{ user.user_email || '-' }}</td>
-              <td>{{ formatTime(user.created_at) }}</td>
+              <td>{{ formatBoundTime(user.created_at) }}</td>
               <td>
                 <span :class="['status-badge', user.notify_enabled ? 'status-active' : 'status-disabled']">
-                  {{ user.notify_enabled ? '已启用' : '已禁用' }}
+                  {{ user.notify_enabled ? t('adminTelegram.status.enabled') : t('adminTelegram.status.disabled') }}
                 </span>
               </td>
               <td>
                 <div class="action-buttons">
-                  <button class="btn-sm btn-ghost" @click="toggleUserNotify(user)" title="切换通知">
-                    {{ user.notify_enabled ? '🔔' : '🔕' }}
+                  <button
+                    class="btn-sm btn-ghost"
+                    :title="t('adminTelegram.actions.toggleNotify')"
+                    :aria-label="t('adminTelegram.actions.toggleNotify')"
+                    @click="toggleUserNotify(user)"
+                  >
+                    {{ user.notify_enabled ? '🔂' : '🔃' }}
                   </button>
                 </div>
               </td>
             </tr>
             <tr v-if="filteredUsers.length === 0">
-              <td colspan="7" class="empty-row">暂无绑定用户</td>
+              <td colspan="7" class="empty-row">{{ t('adminTelegram.users.empty') }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- 发送通知 -->
     <div v-show="activeTab === 'notify'">
       <div class="notify-section">
         <div class="form-group">
-          <label>通知类型</label>
+          <label>{{ t('adminTelegram.notify.type') }}</label>
           <select v-model="notifyForm.type">
-            <option value="single">单个用户</option>
-            <option value="broadcast">广播消息</option>
+            <option value="single">{{ t('adminTelegram.notify.types.single') }}</option>
+            <option value="broadcast">{{ t('adminTelegram.notify.types.broadcast') }}</option>
           </select>
         </div>
 
-        <div class="form-group" v-if="notifyForm.type === 'single'">
-          <label>Telegram ID</label>
-          <input v-model="notifyForm.telegram_id" type="text" placeholder="用户 Telegram ID" />
+        <div v-if="notifyForm.type === 'single'" class="form-group">
+          <label>{{ t('adminTelegram.notify.telegramId') }}</label>
+          <input
+            v-model="notifyForm.telegram_id"
+            type="text"
+            :placeholder="t('adminTelegram.placeholders.telegramId')"
+          />
         </div>
 
         <div class="form-group">
-          <label>消息内容</label>
-          <textarea v-model="notifyForm.message" rows="5" placeholder="支持 Markdown 格式"></textarea>
+          <label>{{ t('adminTelegram.notify.message') }}</label>
+          <textarea
+            v-model="notifyForm.message"
+            rows="5"
+            :placeholder="t('adminTelegram.placeholders.message')"
+          ></textarea>
         </div>
 
         <div class="form-actions">
           <button class="btn-primary" @click="sendNotification">
-            {{ notifyForm.type === 'broadcast' ? '广播消息' : '发送通知' }}
+            {{ notifyForm.type === 'broadcast' ? t('adminTelegram.actions.broadcast') : t('adminTelegram.actions.send') }}
           </button>
         </div>
       </div>
 
       <div class="broadcast-tips">
-        <h4>💡 提示</h4>
+        <h4>{{ t('adminTelegram.tips.title') }}</h4>
         <ul>
-          <li>广播消息将发送给所有已绑定并启用通知的用户</li>
-          <li>消息支持 Markdown 格式: *粗体* _斜体_ `代码`</li>
-          <li>建议先测试单个用户再进行广播</li>
+          <li>{{ t('adminTelegram.tips.broadcastScope') }}</li>
+          <li>{{ t('adminTelegram.tips.markdown') }}</li>
+          <li>{{ t('adminTelegram.tips.singleFirst') }}</li>
         </ul>
       </div>
     </div>
@@ -147,11 +179,20 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
-  getTelegramBot, updateTelegramBot, setTelegramWebhook, deleteTelegramWebhook,
-  getTelegramUsers, updateTelegramUserNotify, sendTelegramNotification, broadcastTelegram
+  broadcastTelegram,
+  deleteTelegramWebhook,
+  getTelegramBot,
+  getTelegramUsers,
+  sendTelegramNotification,
+  setTelegramWebhook,
+  updateTelegramBot,
+  updateTelegramUserNotify
 } from '@/api/admin'
+import { useAppI18n } from '@/composables/useAppI18n'
+
+const { t, formatDateTime } = useAppI18n()
 
 const activeTab = ref('config')
 const userSearch = ref('')
@@ -169,21 +210,24 @@ const notifyForm = ref({
   message: ''
 })
 
-const commands = [
-  { cmd: '/start', desc: '开始使用 Bot' },
-  { cmd: '/bind', desc: '绑定账户' },
-  { cmd: '/unbind', desc: '解绑账户' },
-  { cmd: '/info', desc: '查看账户信息' },
-  { cmd: '/sub', desc: '获取订阅链接' },
-  { cmd: '/renew', desc: '续费套餐' },
-  { cmd: '/ticket', desc: '创建工单' },
-  { cmd: '/help', desc: '帮助信息' }
-]
+const commands = computed(() => ([
+  { cmd: '/start', desc: t('adminTelegram.commands.items.start') },
+  { cmd: '/bind', desc: t('adminTelegram.commands.items.bind') },
+  { cmd: '/unbind', desc: t('adminTelegram.commands.items.unbind') },
+  { cmd: '/info', desc: t('adminTelegram.commands.items.info') },
+  { cmd: '/sub', desc: t('adminTelegram.commands.items.sub') },
+  { cmd: '/renew', desc: t('adminTelegram.commands.items.renew') },
+  { cmd: '/ticket', desc: t('adminTelegram.commands.items.ticket') },
+  { cmd: '/help', desc: t('adminTelegram.commands.items.help') }
+]))
 
 const adminIdsStr = computed({
   get: () => botConfig.value.admin_ids?.join(',') || '',
-  set: (val) => {
-    botConfig.value.admin_ids = val.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
+  set: (value) => {
+    botConfig.value.admin_ids = value
+      .split(',')
+      .map((id) => parseInt(id.trim(), 10))
+      .filter((id) => !Number.isNaN(id))
   }
 })
 
@@ -195,59 +239,66 @@ const webhookUrl = computed(() => {
 const filteredUsers = computed(() => {
   if (!userSearch.value) return users.value
   const search = userSearch.value.toLowerCase()
-  return users.value.filter(u =>
-    u.telegram_id?.toString().includes(search) ||
-    u.user_email?.toLowerCase().includes(search)
-  )
+  return users.value.filter((user) => (
+    user.telegram_id?.toString().includes(search) ||
+    user.user_email?.toLowerCase().includes(search)
+  ))
 })
 
-const formatTime = (time) => {
+const resolveApiError = (error, fallbackKey) => (
+  error?.response?.data?.error ||
+  error?.response?.data?.msg ||
+  error?.message ||
+  t(fallbackKey)
+)
+
+const formatBoundTime = (time) => {
   if (!time) return '-'
-  return new Date(time).toLocaleString()
+  return formatDateTime(time)
 }
 
 const fetchBotConfig = async () => {
   try {
     const res = await getTelegramBot()
     botConfig.value = res.data || { token: '', admin_ids: [], welcome_message: '' }
-  } catch (err) {
-    console.error('获取配置失败:', err)
+  } catch (error) {
+    console.error(t('adminTelegram.messages.fetchConfigFailed'), error)
   }
 }
 
 const saveBotConfig = async () => {
   try {
     await updateTelegramBot(botConfig.value)
-    alert('保存成功')
-  } catch (err) {
-    alert('保存失败: ' + (err.response?.data?.error || err.message))
+    window.alert(t('adminTelegram.messages.saveSuccess'))
+  } catch (error) {
+    window.alert(t('adminTelegram.messages.saveFailed', { message: resolveApiError(error, 'adminTelegram.messages.saveFailedShort') }))
   }
 }
 
-const setWebhook = async () => {
+const setWebhookConfig = async () => {
   try {
-    await setTelegramWebhook()
-    alert('Webhook 设置成功')
-  } catch (err) {
-    alert('设置失败: ' + (err.response?.data?.error || err.message))
+    await setTelegramWebhook(webhookUrl.value || undefined)
+    window.alert(t('adminTelegram.messages.webhookSetSuccess'))
+  } catch (error) {
+    window.alert(t('adminTelegram.messages.webhookSetFailed', { message: resolveApiError(error, 'adminTelegram.messages.webhookSetFailedShort') }))
   }
 }
 
-const deleteWebhook = async () => {
+const deleteWebhookConfig = async () => {
   try {
     await deleteTelegramWebhook()
-    alert('Webhook 已删除')
-  } catch (err) {
-    alert('删除失败')
+    window.alert(t('adminTelegram.messages.webhookDeleteSuccess'))
+  } catch (error) {
+    window.alert(t('adminTelegram.messages.webhookDeleteFailed', { message: resolveApiError(error, 'adminTelegram.messages.webhookDeleteFailedShort') }))
   }
 }
 
 const fetchUsers = async () => {
   try {
     const res = await getTelegramUsers({ all: true })
-    users.value = res.data?.list || []
-  } catch (err) {
-    console.error('获取用户失败:', err)
+    users.value = res.data?.list || res.data || []
+  } catch (error) {
+    console.error(t('adminTelegram.messages.fetchUsersFailed'), error)
   }
 }
 
@@ -260,35 +311,38 @@ const toggleUserNotify = async (user) => {
     user.notify_expire = !!updated.notify_expire
     user.notify_traffic = !!updated.notify_traffic
     user.notify_ticket = !!updated.notify_ticket
-  } catch (err) {
-    alert('操作失败: ' + (err.response?.data?.error || err.message))
+  } catch (error) {
+    window.alert(t('adminTelegram.messages.toggleNotifyFailed', { message: resolveApiError(error, 'adminTelegram.messages.toggleNotifyFailedShort') }))
   }
 }
 
 const sendNotification = async () => {
   if (!notifyForm.value.message) {
-    alert('请输入消息内容')
+    window.alert(t('adminTelegram.messages.messageRequired'))
     return
   }
 
   try {
     if (notifyForm.value.type === 'broadcast') {
       const res = await broadcastTelegram(notifyForm.value.message)
-      alert(`广播完成，成功: ${res.data?.success || 0}，失败: ${res.data?.failed || 0}`)
+      window.alert(t('adminTelegram.messages.broadcastComplete', {
+        success: res.data?.success || 0,
+        failed: res.data?.failed || 0
+      }))
     } else {
       if (!notifyForm.value.telegram_id) {
-        alert('请输入 Telegram ID')
+        window.alert(t('adminTelegram.messages.telegramIdRequired'))
         return
       }
       await sendTelegramNotification({
         telegram_id: notifyForm.value.telegram_id,
         message: notifyForm.value.message
       })
-      alert('发送成功')
+      window.alert(t('adminTelegram.messages.sendSuccess'))
     }
     notifyForm.value.message = ''
-  } catch (err) {
-    alert('发送失败: ' + (err.response?.data?.error || err.message))
+  } catch (error) {
+    window.alert(t('adminTelegram.messages.sendFailed', { message: resolveApiError(error, 'adminTelegram.messages.sendFailedShort') }))
   }
 }
 
@@ -299,7 +353,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.config-section, .notify-section {
+.config-section,
+.notify-section {
   background: var(--surface-color);
   padding: 24px;
   border-radius: var(--radius-lg);
@@ -307,7 +362,8 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.config-section h3, .notify-section h3 {
+.config-section h3,
+.notify-section h3 {
   margin-bottom: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border-color);

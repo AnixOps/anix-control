@@ -1,5 +1,5 @@
 <template>
-  <div class="forward-suite-links">
+  <div class="forward-suite-nav">
     <router-link
       v-for="link in links"
       :key="link.to"
@@ -16,20 +16,25 @@
 </template>
 
 <script setup>
-const links = [
-  { label: 'Forwards', to: '/admin/forward', icon: 'F' },
-  { label: 'Tunnels', to: '/admin/forward/tunnel', icon: 'T' },
-  { label: 'Limits', to: '/admin/forward/limit', icon: 'L' },
-  { label: 'Ansible Machines', to: '/admin/forward/ansible-machines', icon: 'A', hint: 'Stateless execution machines' },
-  { label: 'Local Runtime', to: '/admin/forward/local', icon: 'R', hint: 'Stateless panel-host executor' },
-  { label: 'NodeX Topology', to: '/admin/forward/nodes', icon: 'N', hint: 'Stateful relay/exit topology' },
-  { label: 'NodeX Runtime', to: '/admin/forward/nodex', icon: 'X', hint: 'Stateful gost control-plane' },
-  { label: 'NodeX Agents', to: '/admin/forward/agents', icon: 'G', hint: 'Stateful agent task channel' }
-]
+import { computed } from 'vue'
+import { useAppI18n } from '@/composables/useAppI18n'
+
+const { t } = useAppI18n()
+
+const links = computed(() => ([
+  { label: t('forwardSuite.nav.forwards'), to: '/admin/forward', icon: 'F' },
+  { label: t('forwardSuite.nav.tunnels'), to: '/admin/forward/tunnel', icon: 'T' },
+  { label: t('forwardSuite.nav.limits'), to: '/admin/forward/limit', icon: 'L' },
+  { label: t('forwardSuite.nav.ansibleMachines'), to: '/admin/forward/ansible-machines', icon: 'A', hint: t('forwardSuite.hints.ansibleMachines') },
+  { label: t('forwardSuite.nav.localRuntime'), to: '/admin/forward/local', icon: 'R', hint: t('forwardSuite.hints.localRuntime') },
+  { label: t('forwardSuite.nav.nodeXTopology'), to: '/admin/forward/nodes', icon: 'N', hint: t('forwardSuite.hints.nodeXTopology') },
+  { label: t('forwardSuite.nav.nodeXRuntime'), to: '/admin/forward/nodex', icon: 'X', hint: t('forwardSuite.hints.nodeXRuntime') },
+  { label: t('forwardSuite.nav.nodeXAgents'), to: '/admin/forward/agents', icon: 'G', hint: t('forwardSuite.hints.nodeXAgents') }
+]))
 </script>
 
 <style scoped>
-.forward-suite-links {
+.forward-suite-nav {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -39,20 +44,6 @@ const links = [
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  color: var(--text-secondary);
-  text-decoration: none;
-}
-
-.forward-suite-link:hover {
-  background: var(--bg-color);
-  color: var(--text-color);
-}
-
-.forward-suite-link.router-link-active {
-  background: var(--primary-color);
-  color: white;
 }
 
 .icon {

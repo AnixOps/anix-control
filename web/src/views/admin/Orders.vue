@@ -1,83 +1,76 @@
 <template>
   <div class="orders-page">
     <div class="page-header">
-      <h1>订单管理</h1>
-      <p class="text-secondary">管理所有订单</p>
+      <h1>{{ t('adminOrders.title') }}</h1>
+      <p class="text-secondary">{{ t('adminOrders.subtitle') }}</p>
     </div>
 
-    <!-- 统计卡片 -->
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-icon">📋</div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.total_orders || 0 }}</div>
-          <div class="stat-label">总订单数</div>
+          <div class="stat-label">{{ t('adminOrders.stats.totalOrders') }}</div>
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon">⏳</div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.pending_orders || 0 }}</div>
-          <div class="stat-label">待支付</div>
+          <div class="stat-label">{{ t('adminOrders.stats.pendingOrders') }}</div>
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon">💰</div>
         <div class="stat-info">
-          <div class="stat-value">¥{{ formatMoney(stats.total_revenue) }}</div>
-          <div class="stat-label">总收入</div>
+          <div class="stat-value">{{ formatMoney(stats.total_revenue) }}</div>
+          <div class="stat-label">{{ t('adminOrders.stats.totalRevenue') }}</div>
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon">📈</div>
         <div class="stat-info">
-          <div class="stat-value">¥{{ formatMoney(stats.today_revenue) }}</div>
-          <div class="stat-label">今日收入</div>
+          <div class="stat-value">{{ formatMoney(stats.today_revenue) }}</div>
+          <div class="stat-label">{{ t('adminOrders.stats.todayRevenue') }}</div>
         </div>
       </div>
     </div>
 
-    <!-- 筛选栏 -->
     <div class="filter-bar">
       <input
         v-model="filters.trade_no"
         type="text"
-        placeholder="搜索订单号..."
+        :placeholder="t('adminOrders.filters.tradeNo')"
         class="search-input"
         @keyup.enter="fetchOrders"
       />
       <input
         v-model="filters.email"
         type="text"
-        placeholder="搜索用户邮箱..."
+        :placeholder="t('adminOrders.filters.email')"
         class="search-input"
         @keyup.enter="fetchOrders"
       />
       <select v-model="filters.status" @change="fetchOrders">
-        <option value="">全部状态</option>
-        <option value="0">待支付</option>
-        <option value="1">已支付</option>
-        <option value="2">已取消</option>
-        <option value="3">已完成</option>
+        <option value="">{{ t('adminOrders.filters.allStatus') }}</option>
+        <option value="0">{{ t('adminOrders.status.pending') }}</option>
+        <option value="1">{{ t('adminOrders.status.paid') }}</option>
+        <option value="2">{{ t('adminOrders.status.cancelled') }}</option>
+        <option value="3">{{ t('adminOrders.status.completed') }}</option>
       </select>
       <button class="btn-secondary" @click="fetchOrders">
-        🔍 搜索
+        {{ t('adminOrders.actions.search') }}
       </button>
     </div>
 
-    <!-- 订单列表 -->
     <div class="table-container">
       <table class="data-table">
         <thead>
           <tr>
-            <th>订单号</th>
-            <th>用户</th>
-            <th>套餐</th>
-            <th>周期</th>
-            <th>金额</th>
-            <th>状态</th>
-            <th>创建时间</th>
-            <th>操作</th>
+            <th>{{ t('adminOrders.table.tradeNo') }}</th>
+            <th>{{ t('adminOrders.table.user') }}</th>
+            <th>{{ t('adminOrders.table.plan') }}</th>
+            <th>{{ t('adminOrders.table.period') }}</th>
+            <th>{{ t('adminOrders.table.amount') }}</th>
+            <th>{{ t('adminOrders.table.status') }}</th>
+            <th>{{ t('adminOrders.table.createdAt') }}</th>
+            <th>{{ t('adminOrders.table.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -89,117 +82,122 @@
             <td>{{ order.plan?.name || '-' }}</td>
             <td>{{ getPeriodText(order.period) }}</td>
             <td>
-              <div class="amount">¥{{ formatMoney(order.total_amount) }}</div>
+              <div class="amount">{{ formatMoney(order.total_amount) }}</div>
             </td>
             <td>
               <span :class="['status-badge', getStatusClass(order.status)]">
                 {{ getStatusText(order.status) }}
               </span>
             </td>
-            <td>{{ formatDateTime(order.created_at) }}</td>
+            <td>{{ formatTimestamp(order.created_at) }}</td>
             <td>
               <div class="action-buttons">
-                <button 
-                  v-if="order.status === 0"
-                  class="btn-sm btn-ghost" 
-                  @click="handleMarkPaid(order)" 
-                  title="手动开通"
+                <button
+                  v-if="Number(order.status) === 0"
+                  class="btn-sm btn-ghost"
+                  :title="t('adminOrders.actions.markPaid')"
+                  :aria-label="t('adminOrders.actions.markPaid')"
+                  @click="handleMarkPaid(order)"
                 >
-                  ✅
+                  {{ t('adminOrders.actions.markPaid') }}
                 </button>
-                <button 
-                  v-if="order.status === 0"
-                  class="btn-sm btn-ghost" 
-                  @click="handleCancel(order)" 
-                  title="取消订单"
+                <button
+                  v-if="Number(order.status) === 0"
+                  class="btn-sm btn-ghost"
+                  :title="t('adminOrders.actions.cancelOrder')"
+                  :aria-label="t('adminOrders.actions.cancelOrder')"
+                  @click="handleCancel(order)"
                 >
-                  ❌
+                  {{ t('adminOrders.actions.cancelOrder') }}
                 </button>
-                <button class="btn-sm btn-ghost" @click="viewDetail(order)" title="查看详情">
-                  👁️
+                <button
+                  class="btn-sm btn-ghost"
+                  :title="t('common.actions.details')"
+                  :aria-label="t('common.actions.details')"
+                  @click="viewDetail(order)"
+                >
+                  {{ t('common.actions.details') }}
                 </button>
               </div>
             </td>
           </tr>
           <tr v-if="orders.length === 0">
-            <td colspan="8" class="empty-row">暂无订单</td>
+            <td colspan="8" class="empty-row">{{ t('adminOrders.empty.noData') }}</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- 分页 -->
     <div class="pagination">
-      <button 
-        class="btn-sm btn-secondary" 
+      <button
+        class="btn-sm btn-secondary"
         :disabled="page <= 1"
-        @click="page--; fetchOrders()"
+        @click="page -= 1; fetchOrders()"
       >
-        上一页
+        {{ t('adminOrders.pagination.prev') }}
       </button>
-      <span class="page-info">第 {{ page }} 页 / 共 {{ totalPages }} 页</span>
-      <button 
+      <span class="page-info">{{ t('adminOrders.pagination.info', { page, totalPages }) }}</span>
+      <button
         class="btn-sm btn-secondary"
         :disabled="page >= totalPages"
-        @click="page++; fetchOrders()"
+        @click="page += 1; fetchOrders()"
       >
-        下一页
+        {{ t('adminOrders.pagination.next') }}
       </button>
     </div>
 
-    <!-- 详情弹窗 -->
     <div v-if="showDetailModal" class="modal-overlay" @click.self="showDetailModal = false">
       <div class="modal">
         <div class="modal-header">
-          <h3>订单详情</h3>
-          <button class="close-btn" @click="showDetailModal = false">✕</button>
+          <h3>{{ t('adminOrders.detailModal.title') }}</h3>
+          <button class="close-btn" @click="showDetailModal = false">×</button>
         </div>
         <div class="modal-body">
           <div class="detail-row">
-            <span class="label">订单号</span>
+            <span class="label">{{ t('adminOrders.detailModal.tradeNo') }}</span>
             <span class="value">{{ selectedOrder.trade_no }}</span>
           </div>
           <div class="detail-row">
-            <span class="label">用户邮箱</span>
-            <span class="value">{{ selectedOrder.user?.email }}</span>
+            <span class="label">{{ t('adminOrders.detailModal.userEmail') }}</span>
+            <span class="value">{{ selectedOrder.user?.email || '-' }}</span>
           </div>
           <div class="detail-row">
-            <span class="label">套餐</span>
-            <span class="value">{{ selectedOrder.plan?.name }}</span>
+            <span class="label">{{ t('adminOrders.detailModal.plan') }}</span>
+            <span class="value">{{ selectedOrder.plan?.name || '-' }}</span>
           </div>
           <div class="detail-row">
-            <span class="label">周期</span>
+            <span class="label">{{ t('adminOrders.detailModal.period') }}</span>
             <span class="value">{{ getPeriodText(selectedOrder.period) }}</span>
           </div>
           <div class="detail-row">
-            <span class="label">金额</span>
-            <span class="value amount">¥{{ formatMoney(selectedOrder.total_amount) }}</span>
+            <span class="label">{{ t('adminOrders.detailModal.amount') }}</span>
+            <span class="value amount">{{ formatMoney(selectedOrder.total_amount) }}</span>
           </div>
           <div class="detail-row">
-            <span class="label">状态</span>
+            <span class="label">{{ t('adminOrders.detailModal.status') }}</span>
             <span :class="['value', 'status-badge', getStatusClass(selectedOrder.status)]">
               {{ getStatusText(selectedOrder.status) }}
             </span>
           </div>
           <div class="detail-row">
-            <span class="label">订单类型</span>
+            <span class="label">{{ t('adminOrders.detailModal.type') }}</span>
             <span class="value">{{ getTypeText(selectedOrder.type) }}</span>
           </div>
           <div class="detail-row">
-            <span class="label">创建时间</span>
-            <span class="value">{{ formatDateTime(selectedOrder.created_at) }}</span>
+            <span class="label">{{ t('adminOrders.detailModal.createdAt') }}</span>
+            <span class="value">{{ formatTimestamp(selectedOrder.created_at) }}</span>
           </div>
           <div v-if="selectedOrder.paid_at" class="detail-row">
-            <span class="label">支付时间</span>
-            <span class="value">{{ formatDateTime(selectedOrder.paid_at * 1000) }}</span>
+            <span class="label">{{ t('adminOrders.detailModal.paidAt') }}</span>
+            <span class="value">{{ formatPaidAt(selectedOrder.paid_at) }}</span>
           </div>
           <div v-if="selectedOrder.callback_no" class="detail-row">
-            <span class="label">外部交易号</span>
+            <span class="label">{{ t('adminOrders.detailModal.callbackNo') }}</span>
             <span class="value">{{ selectedOrder.callback_no }}</span>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="showDetailModal = false">关闭</button>
+          <button class="btn-secondary" @click="showDetailModal = false">{{ t('common.actions.close') }}</button>
         </div>
       </div>
     </div>
@@ -207,8 +205,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { getOrderList, getOrderStats, markOrderPaid, cancelOrder } from '@/api/admin'
+import { computed, onMounted, ref } from 'vue'
+import { cancelOrder, getOrderList, getOrderStats, markOrderPaid } from '@/api/admin'
+import { useAppI18n } from '@/composables/useAppI18n'
+
+const { currentLocale, t, formatDateTime } = useAppI18n()
 
 const orders = ref([])
 const stats = ref({})
@@ -225,6 +226,14 @@ const selectedOrder = ref({})
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value) || 1)
 
+const resolveApiError = (error, fallbackKey) => (
+  error?.response?.data?.error ||
+  error?.response?.data?.message ||
+  error?.response?.data?.msg ||
+  error?.message ||
+  t(fallbackKey)
+)
+
 const fetchOrders = async () => {
   try {
     const res = await getOrderList({
@@ -236,8 +245,8 @@ const fetchOrders = async () => {
     })
     orders.value = res.data?.list || []
     total.value = res.data?.total || 0
-  } catch (err) {
-    console.error('获取订单列表失败:', err)
+  } catch (error) {
+    console.error(t('adminOrders.messages.fetchOrdersFailed'), error)
   }
 }
 
@@ -245,8 +254,8 @@ const fetchStats = async () => {
   try {
     const res = await getOrderStats()
     stats.value = res.data || {}
-  } catch (err) {
-    console.error('获取统计失败:', err)
+  } catch (error) {
+    console.error(t('adminOrders.messages.fetchStatsFailed'), error)
   }
 }
 
@@ -256,25 +265,35 @@ const viewDetail = (order) => {
 }
 
 const handleMarkPaid = async (order) => {
-  if (!confirm(`确定要手动开通订单 ${order.trade_no} 吗？这将为用户开通对应套餐。`)) return
+  if (!window.confirm(t('adminOrders.messages.markPaidConfirm', { tradeNo: order.trade_no }))) {
+    return
+  }
+
   try {
     await markOrderPaid(order.id)
-    alert('订单已开通')
-    fetchOrders()
-    fetchStats()
-  } catch (err) {
-    alert('操作失败: ' + (err.response?.data?.message || err.message))
+    window.alert(t('adminOrders.messages.markPaidSuccess'))
+    await fetchOrders()
+    await fetchStats()
+  } catch (error) {
+    window.alert(t('adminOrders.messages.markPaidFailed', {
+      message: resolveApiError(error, 'adminOrders.messages.markPaidFailedShort')
+    }))
   }
 }
 
 const handleCancel = async (order) => {
-  if (!confirm(`确定要取消订单 ${order.trade_no} 吗？`)) return
+  if (!window.confirm(t('adminOrders.messages.cancelConfirm', { tradeNo: order.trade_no }))) {
+    return
+  }
+
   try {
     await cancelOrder(order.id)
-    fetchOrders()
-    fetchStats()
-  } catch (err) {
-    alert('操作失败')
+    await fetchOrders()
+    await fetchStats()
+  } catch (error) {
+    window.alert(t('adminOrders.messages.cancelFailed', {
+      message: resolveApiError(error, 'adminOrders.messages.cancelFailedShort')
+    }))
   }
 }
 
@@ -285,50 +304,80 @@ const getStatusClass = (status) => {
     2: 'status-cancelled',
     3: 'status-completed'
   }
-  return classes[status] || ''
+  return classes[Number(status)] || ''
 }
 
 const getStatusText = (status) => {
-  const texts = {
-    0: '待支付',
-    1: '已支付',
-    2: '已取消',
-    3: '已完成'
+  switch (Number(status)) {
+    case 0:
+      return t('adminOrders.status.pending')
+    case 1:
+      return t('adminOrders.status.paid')
+    case 2:
+      return t('adminOrders.status.cancelled')
+    case 3:
+      return t('adminOrders.status.completed')
+    default:
+      return t('adminOrders.status.unknown')
   }
-  return texts[status] || '未知'
 }
 
 const getTypeText = (type) => {
-  const texts = {
-    1: '新购',
-    2: '续费',
-    3: '升级',
-    4: '重置流量'
+  switch (Number(type)) {
+    case 1:
+      return t('adminOrders.types.new')
+    case 2:
+      return t('adminOrders.types.renew')
+    case 3:
+      return t('adminOrders.types.upgrade')
+    case 4:
+      return t('adminOrders.types.resetTraffic')
+    default:
+      return t('adminOrders.types.unknown')
   }
-  return texts[type] || '未知'
 }
 
 const getPeriodText = (period) => {
-  const texts = {
-    'month': '月付',
-    'quarter': '季付',
-    'half_year': '半年付',
-    'year': '年付',
-    'two_year': '两年付',
-    'three_year': '三年付',
-    'onetime': '一次性'
+  switch (period) {
+    case 'month':
+      return t('common.periods.month')
+    case 'quarter':
+      return t('common.periods.quarter')
+    case 'half_year':
+      return t('common.periods.halfYear')
+    case 'year':
+      return t('common.periods.year')
+    case 'two_year':
+      return t('common.periods.twoYear')
+    case 'three_year':
+      return t('common.periods.threeYear')
+    case 'onetime':
+      return t('common.periods.onetime')
+    default:
+      return period || '-'
   }
-  return texts[period] || period
 }
 
 const formatMoney = (cents) => {
-  if (!cents) return '0.00'
-  return (cents / 100).toFixed(2)
+  const amount = Number(cents || 0) / 100
+  return `¥${new Intl.NumberFormat(currentLocale.value, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount)}`
 }
 
-const formatDateTime = (datetime) => {
-  if (!datetime) return '-'
-  return new Date(datetime).toLocaleString('zh-CN')
+const formatTimestamp = (value) => {
+  if (!value) return '-'
+  return formatDateTime(value)
+}
+
+const formatPaidAt = (value) => {
+  const numericValue = Number(value)
+  if (!value) return '-'
+  if (Number.isFinite(numericValue) && numericValue < 1e12) {
+    return formatTimestamp(numericValue * 1000)
+  }
+  return formatTimestamp(value)
 }
 
 onMounted(() => {
@@ -369,13 +418,6 @@ onMounted(() => {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.stat-icon {
-  font-size: 32px;
 }
 
 .stat-value {
@@ -496,7 +538,6 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-/* 弹窗样式 */
 .modal-overlay {
   position: fixed;
   inset: 0;

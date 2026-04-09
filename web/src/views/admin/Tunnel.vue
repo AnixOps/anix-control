@@ -3,23 +3,20 @@
     <div class="toolbar">
       <div class="toolbar-copy">
         <p class="eyebrow">Flux Compatible</p>
-        <h2>隧道管理</h2>
+        <h2>{{ t('pageTitles.admin.forwardTunnel') }}</h2>
       </div>
       <div class="toolbar-actions">
-        <button class="btn btn-primary" @click="openCreateModal">新增</button>
+        <button class="btn btn-primary" @click="openCreateModal">{{ t('runtime.tunnel.actions.add') }}</button>
       </div>
     </div>
     <ForwardSuiteNav />
-    <p class="text-secondary small runtime-note">
-      NodeX mode separates ingress and execution nodes; local Ansible mode only needs the execution node mapped in inventory.
-      Tunnel "online" only checks host:port reachability and does not confirm remote attachment or firewall state is already in place.
-    </p>
+    <p class="text-secondary small runtime-note">{{ t('runtime.tunnel.note') }}</p>
     <div class="runtime-context-bar">
       <span class="tag tag-primary">{{ runtimeModeLabel }}</span>
       <span class="runtime-context-summary">{{ runtimeModeSummary }}</span>
       <div class="runtime-context-links">
-        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">Local Runtime</router-link>
-        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">NodeX Runtime</router-link>
+        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">{{ t('forwardSuite.nav.localRuntime') }}</router-link>
+        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">{{ t('forwardSuite.nav.nodeXRuntime') }}</router-link>
       </div>
     </div>
 
@@ -30,7 +27,7 @@
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <span>正在加载隧道与节点数据...</span>
+      <span>{{ t('runtime.tunnel.loading') }}</span>
     </div>
 
     <template v-else>
@@ -54,38 +51,38 @@
 
           <div class="meta-list">
             <div v-if="runtimeNodeXMode" class="meta-item">
-              <span class="meta-label">转发入口节点</span>
+              <span class="meta-label">{{ t('runtime.tunnel.meta.ingressNode') }}</span>
               <strong>{{ resolveNodeName(tunnel.inNodeId) }}</strong>
               <code>{{ tunnel.inIp || '-' }}</code>
             </div>
             <div class="meta-item">
               <span class="meta-label">
-                {{ runtimeNodeXMode ? '转发出口节点' : '中转执行节点' }}
+                {{ runtimeNodeXMode ? t('runtime.tunnel.meta.egressNode') : t('runtime.tunnel.meta.executionNode') }}
               </span>
               <strong>{{ resolveNodeName(tunnel.outNodeId || tunnel.inNodeId) }}</strong>
               <code>{{ tunnel.outIp || tunnel.inIp || '-' }}</code>
             </div>
             <div class="meta-item">
-              <span class="meta-label">流量计算</span>
+              <span class="meta-label">{{ t('runtime.tunnel.meta.flowAccounting') }}</span>
               <strong>{{ resolveFlowLabel(tunnel.flow) }}</strong>
             </div>
             <div class="meta-item">
-              <span class="meta-label">流量倍率</span>
+              <span class="meta-label">{{ t('runtime.tunnel.meta.trafficRatio') }}</span>
               <strong>{{ formatTrafficRatio(tunnel.trafficRatio) }}</strong>
             </div>
           </div>
 
           <div class="card-actions">
-            <button class="btn btn-secondary btn-sm" @click="openEditModal(tunnel)">编辑</button>
-            <button class="btn btn-secondary btn-sm" @click="openDiagnosisModal(tunnel)">诊断</button>
-            <button class="btn btn-secondary btn-sm danger-text" @click="openDeleteModal(tunnel)">删除</button>
+            <button class="btn btn-secondary btn-sm" @click="openEditModal(tunnel)">{{ t('runtime.tunnel.actions.edit') }}</button>
+            <button class="btn btn-secondary btn-sm" @click="openDiagnosisModal(tunnel)">{{ t('runtime.tunnel.actions.diagnose') }}</button>
+            <button class="btn btn-secondary btn-sm danger-text" @click="openDeleteModal(tunnel)">{{ t('runtime.tunnel.actions.delete') }}</button>
           </div>
         </article>
       </section>
 
       <section v-else class="empty-state">
-        <h3>暂无隧道配置</h3>
-        <p>先创建入口节点和出口节点，再新增第一个可供转发引用的隧道。</p>
+        <h3>{{ t('runtime.tunnel.emptyTitle') }}</h3>
+        <p>{{ t('runtime.tunnel.emptyText') }}</p>
       </section>
     </template>
 
@@ -93,8 +90,8 @@
       <div class="modal modal-lg">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">Tunnel</p>
-            <h3>{{ isEdit ? '编辑隧道' : '新增隧道' }}</h3>
+            <p class="eyebrow">{{ t('runtime.tunnel.modal.eyebrow') }}</p>
+            <h3>{{ isEdit ? t('runtime.tunnel.modal.titleEdit') : t('runtime.tunnel.modal.titleAdd') }}</h3>
           </div>
           <button class="modal-close" @click="closeEditorModal">×</button>
         </div>
@@ -102,16 +99,16 @@
         <div class="modal-body">
           <div class="form-grid">
             <div class="form-group">
-              <label>隧道名称</label>
-              <input v-model.trim="form.name" type="text" maxlength="50" placeholder="例如：HK-Tunnel-01" />
+              <label>{{ t('runtime.tunnel.fields.name') }}</label>
+              <input v-model.trim="form.name" type="text" maxlength="50" :placeholder="t('runtime.tunnel.placeholders.name')" />
               <p v-if="errors.name" class="form-error">{{ errors.name }}</p>
             </div>
 
             <div class="form-group">
-              <label>隧道类型</label>
+              <label>{{ t('runtime.tunnel.fields.tunnelType') }}</label>
               <select v-model.number="form.type" :disabled="isEdit || !runtimeNodeXMode">
-                <option :value="1">端口转发</option>
-                <option :value="2">隧道转发</option>
+                <option :value="1">{{ t('runtime.tunnel.options.portForward') }}</option>
+                <option :value="2">{{ t('runtime.tunnel.options.tunnelForward') }}</option>
               </select>
               <p v-if="errors.type" class="form-error">{{ errors.type }}</p>
             </div>
@@ -119,15 +116,15 @@
 
           <div class="form-grid">
             <div class="form-group">
-              <label>流量计算</label>
+              <label>{{ t('runtime.tunnel.fields.flowAccounting') }}</label>
               <select v-model.number="form.flow">
-                <option :value="1">单向计算</option>
-                <option :value="2">双向计算</option>
+                <option :value="1">{{ t('runtime.tunnel.options.oneWayAccounting') }}</option>
+                <option :value="2">{{ t('runtime.tunnel.options.twoWayAccounting') }}</option>
               </select>
             </div>
 
             <div class="form-group">
-              <label>流量倍率</label>
+              <label>{{ t('runtime.tunnel.fields.trafficRatio') }}</label>
               <input v-model.number="form.trafficRatio" type="number" min="0.1" max="100" step="0.1" />
               <p v-if="errors.trafficRatio" class="form-error">{{ errors.trafficRatio }}</p>
             </div>
@@ -135,38 +132,38 @@
 
           <div class="form-grid">
             <div v-if="runtimeNodeXMode" class="form-group">
-              <label>NodeX 入口节点</label>
+              <label>{{ t('runtime.tunnel.fields.ingressNode') }}</label>
               <select
                 data-test="forward-entry-select"
                 v-model.number="form.inNodeId"
                 :disabled="isEdit"
               >
-                <option :value="0">请选择转发入口节点</option>
+                <option :value="0">{{ t('runtime.tunnel.validation.ingressRequired') }}</option>
                 <option v-for="node in relayNodeOptions" :key="node.id" :value="node.id">
-                  {{ node.name }} · 转发入口节点 · {{ node.host }}
+                  {{ node.name }} · {{ t('runtime.tunnel.meta.ingressNode') }} · {{ node.host }}
                 </option>
               </select>
-              <p class="hint">Only NodeX/Gost mode uses an ingress node here. This is a forward relay role and stays separate from proxy nodes.</p>
+              <p class="hint">{{ t('runtime.tunnel.hints.ingressNode') }}</p>
               <p v-if="errors.inNodeId" class="form-error">{{ errors.inNodeId }}</p>
             </div>
             <div v-else class="form-group">
-              <label>中转执行节点</label>
+              <label>{{ t('runtime.tunnel.fields.executionNode') }}</label>
               <select data-test="forward-execution-select" v-model.number="form.outNodeId" :disabled="isEdit">
-                <option :value="0">请选择中转执行节点</option>
+                <option :value="0">{{ t('runtime.tunnel.validation.executionRequired') }}</option>
                 <option
                   v-for="node in relayNodeOptions"
                   :key="`exec-${node.id}`"
                   :value="node.id"
                 >
-                  {{ node.name }} · 中转执行节点 · {{ node.host }}
+                  {{ node.name }} · {{ t('runtime.tunnel.meta.executionNode') }} · {{ node.host }}
                 </option>
               </select>
-              <p class="hint">Local Ansible mode only needs the execution node identity. SSH access still comes from the configured inventory and local runtime settings.</p>
+              <p class="hint">{{ t('runtime.tunnel.hints.executionNode') }}</p>
               <p v-if="errors.outNodeId" class="form-error">{{ errors.outNodeId }}</p>
             </div>
 
             <div class="form-group">
-              <label>TCP 监听地址</label>
+              <label>{{ t('runtime.tunnel.fields.tcpListenAddr') }}</label>
               <input v-model.trim="form.tcpListenAddr" type="text" placeholder="[::]" />
               <p v-if="errors.tcpListenAddr" class="form-error">{{ errors.tcpListenAddr }}</p>
             </div>
@@ -174,20 +171,20 @@
 
           <div class="form-grid">
             <div class="form-group">
-              <label>UDP 监听地址</label>
+              <label>{{ t('runtime.tunnel.fields.udpListenAddr') }}</label>
               <input v-model.trim="form.udpListenAddr" type="text" placeholder="[::]" />
               <p v-if="errors.udpListenAddr" class="form-error">{{ errors.udpListenAddr }}</p>
             </div>
 
             <div v-if="form.type === 2" class="form-group">
-              <label>出口网卡名或 IP</label>
-              <input v-model.trim="form.interfaceName" type="text" placeholder="例如：eth0 / 192.0.2.10" />
+              <label>{{ t('runtime.tunnel.fields.interfaceName') }}</label>
+              <input v-model.trim="form.interfaceName" type="text" :placeholder="t('runtime.tunnel.placeholders.interfaceName')" />
             </div>
           </div>
 
           <div v-if="runtimeNodeXMode && form.type === 2" class="form-grid">
             <div class="form-group">
-              <label>协议类型</label>
+              <label>{{ t('runtime.tunnel.fields.protocol') }}</label>
               <select v-model="form.protocol">
                 <option value="tls">tls</option>
                 <option value="tcp">tcp</option>
@@ -201,31 +198,31 @@
             </div>
 
             <div class="form-group">
-              <label>转发出口节点</label>
+              <label>{{ t('runtime.tunnel.fields.egressNode') }}</label>
               <select
                 data-test="forward-exit-select"
                 v-model.number="form.outNodeId"
                 :disabled="isEdit"
               >
-                <option :value="0">请选择转发出口节点</option>
+                <option :value="0">{{ t('runtime.tunnel.validation.egressRequired') }}</option>
                 <option
                   v-for="node in exitNodeOptions"
                   :key="`out-${node.id}`"
                   :value="node.id"
                 >
-                  {{ node.name }} · 转发出口节点 · {{ node.host }}
+                  {{ node.name }} · {{ t('runtime.tunnel.meta.egressNode') }} · {{ node.host }}
                 </option>
               </select>
-              <p class="hint">Exit nodes are only used by NodeX/Gost tunnel forwarding. A successful panel save still needs the runtime job to attach remotely.</p>
+              <p class="hint">{{ t('runtime.tunnel.hints.egressNode') }}</p>
               <p v-if="errors.outNodeId" class="form-error">{{ errors.outNodeId }}</p>
             </div>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeEditorModal">取消</button>
+          <button class="btn btn-secondary" @click="closeEditorModal">{{ t('common.actions.cancel') }}</button>
           <button class="btn btn-primary" :disabled="submitLoading" @click="handleSubmit">
-            {{ submitLoading ? '提交中...' : (isEdit ? '更新' : '创建') }}
+            {{ submitLoading ? t('runtime.tunnel.modal.submitLoading') : (isEdit ? t('runtime.tunnel.modal.submitUpdate') : t('runtime.tunnel.modal.submitCreate')) }}
           </button>
         </div>
       </div>
@@ -235,19 +232,19 @@
       <div class="modal">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">Delete</p>
-            <h3>确认删除</h3>
+            <p class="eyebrow">{{ t('runtime.tunnel.modal.deleteEyebrow') }}</p>
+            <h3>{{ t('runtime.tunnel.modal.deleteTitle') }}</h3>
           </div>
           <button class="modal-close" @click="deleteModalOpen = false">×</button>
         </div>
         <div class="modal-body">
-          <p class="modal-copy">确认删除 <strong>{{ tunnelToDelete?.name }}</strong> 吗？</p>
-          <p class="hint">如果该隧道仍被转发规则或用户权限引用，后端会阻止删除。</p>
+          <p class="modal-copy">{{ t('runtime.tunnel.modal.deleteConfirmMessage', { name: tunnelToDelete?.name || '-' }) }}</p>
+          <p class="hint">{{ t('runtime.tunnel.modal.deleteHint') }}</p>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="deleteModalOpen = false">取消</button>
+          <button class="btn btn-secondary" @click="deleteModalOpen = false">{{ t('common.actions.cancel') }}</button>
           <button class="btn btn-primary danger" :disabled="deleteLoading" @click="confirmDelete">
-            {{ deleteLoading ? '删除中...' : '确认删除' }}
+            {{ deleteLoading ? t('runtime.tunnel.modal.deleteLoading') : t('runtime.tunnel.modal.confirmDelete') }}
           </button>
         </div>
       </div>
@@ -257,8 +254,8 @@
       <div class="modal modal-xl">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">Diagnosis</p>
-            <h3>隧道诊断结果</h3>
+            <p class="eyebrow">{{ t('runtime.tunnel.diagnosis.eyebrow') }}</p>
+            <h3>{{ t('runtime.tunnel.diagnosis.title') }}</h3>
             <p v-if="currentDiagnosisTunnel" class="modal-subtitle">{{ currentDiagnosisTunnel.name }}</p>
           </div>
           <button class="modal-close" @click="diagnosisModalOpen = false">×</button>
@@ -267,7 +264,7 @@
         <div class="modal-body">
           <div v-if="diagnosisLoading" class="loading-state compact">
             <div class="spinner"></div>
-            <span>正在诊断隧道连通性...</span>
+            <span>{{ t('runtime.tunnel.diagnosis.loading') }}</span>
           </div>
 
           <div v-else-if="diagnosisResult?.results?.length" class="diagnosis-list">
@@ -278,37 +275,37 @@
                   <p>{{ result.nodeName }} · Node {{ result.nodeId }}</p>
                 </div>
                 <span :class="['tag', result.success ? 'tag-success' : 'tag-danger']">
-                  {{ result.success ? '成功' : '失败' }}
+                  {{ result.success ? t('runtime.shared.success') : t('runtime.shared.failed') }}
                 </span>
               </div>
 
               <div class="diagnosis-meta">
                 <div>
-                  <span class="meta-label">目标地址</span>
+                  <span class="meta-label">{{ t('runtime.tunnel.diagnosis.targetAddress') }}</span>
                   <code>{{ formatAddress(result.targetIp, result.targetPort) }}</code>
                 </div>
                 <div v-if="result.averageTime">
-                  <span class="meta-label">耗时</span>
+                  <span class="meta-label">{{ t('runtime.tunnel.diagnosis.duration') }}</span>
                   <strong>{{ result.averageTime.toFixed(0) }} ms</strong>
                 </div>
                 <div v-if="result.message">
-                  <span class="meta-label">信息</span>
-                  <strong>{{ result.message }}</strong>
+                  <span class="meta-label">{{ t('runtime.tunnel.diagnosis.message') }}</span>
+                  <strong>{{ translateLiteral(result.message) }}</strong>
                 </div>
               </div>
             </article>
           </div>
 
           <div v-else class="empty-state compact">
-            <h3>暂无诊断结果</h3>
-            <p>当前没有可展示的节点诊断数据。</p>
+            <h3>{{ t('runtime.tunnel.diagnosis.emptyTitle') }}</h3>
+            <p>{{ t('runtime.tunnel.diagnosis.emptyText') }}</p>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="diagnosisModalOpen = false">关闭</button>
+          <button class="btn btn-secondary" @click="diagnosisModalOpen = false">{{ t('common.actions.close') }}</button>
           <button class="btn btn-primary" :disabled="diagnosisLoading" @click="rerunDiagnosis">
-            {{ diagnosisLoading ? '诊断中...' : '重新诊断' }}
+            {{ diagnosisLoading ? t('runtime.tunnel.diagnosis.rerunning') : t('runtime.tunnel.diagnosis.rerun') }}
           </button>
         </div>
       </div>
@@ -318,6 +315,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useAppI18n } from '@/composables/useAppI18n'
 import {
   createForwardTunnel,
   deleteForwardTunnel,
@@ -328,6 +326,8 @@ import {
   updateForwardTunnel
 } from '@/api/admin'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
+
+const { t, translateLiteral } = useAppI18n()
 
 const loading = ref(true)
 const tunnels = ref([])
@@ -351,13 +351,13 @@ const exitNodeOptions = computed(() =>
 
 const runtimeModeLabel = computed(() =>
   runtimeNodeXMode.value
-    ? 'NodeX/Gost runtime (转发入口/出口节点)'
-    : `Local Ansible runtime (${runtimeBackend.value})`
+    ? t('runtime.tunnel.modeLabelNodeX')
+    : t('runtime.tunnel.modeLabelLocal', { backend: runtimeBackendLabel(runtimeBackend.value) })
 )
 const runtimeModeSummary = computed(() =>
   runtimeNodeXMode.value
-    ? 'Ingress and egress semantics are controlled through NodeX/gost. Use NodeX Runtime for the control-plane URL, token and gost readiness.'
-    : 'Only the execution node identity is stored here. Use Local Runtime for inventory, playbooks and the panel-host ansible executor.'
+    ? t('runtime.tunnel.modeSummaryNodeX')
+    : t('runtime.tunnel.modeSummaryLocal')
 )
 
 const modalOpen = ref(false)
@@ -419,7 +419,7 @@ async function loadRuntimeMode() {
     const res = await getSystemConfig(runtimeNodeXModeKey)
     explicitMode = parseBooleanConfig(res.data?.value)
   } catch (err) {
-    console.error('鑾峰彇 runtime NodeX mode 澶辫触:', err)
+    console.error('Failed to fetch runtime NodeX mode:', err)
   }
 
   try {
@@ -428,7 +428,7 @@ async function loadRuntimeMode() {
     runtimeNodeXMode.value = explicitMode === null ? runtimeBackend.value === 'gost' : explicitMode
     enforceFormMode()
   } catch (err) {
-    console.error('鑾峰彇 runtime backend 澶辫触:', err)
+    console.error('Failed to fetch runtime backend:', err)
   }
 }
 
@@ -478,6 +478,26 @@ function clearFeedback() {
   feedback.message = ''
 }
 
+function translateMessage(value, fallback = '') {
+  const text = String(value ?? '').trim()
+  if (!text) return fallback
+  return translateLiteral(text)
+}
+
+function runtimeBackendLabel(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (normalized === 'gost') {
+    return t('runtime.nodeX.backends.gost')
+  }
+  if (normalized === 'nftables_ansible') {
+    return t('runtime.localRuntime.backends.nftables.label')
+  }
+  if (normalized === 'iptables_ansible') {
+    return t('runtime.localRuntime.backends.iptables.label')
+  }
+  return value || '-'
+}
+
 function normalizeTunnel(raw) {
   return {
     ...raw,
@@ -523,13 +543,13 @@ async function loadData(showLoading = true) {
     if (tunnelRes.code === 0) {
       tunnels.value = Array.isArray(tunnelRes.data) ? tunnelRes.data.map(normalizeTunnel) : []
     } else {
-      setFeedback('error', tunnelRes.msg || '获取隧道列表失败')
+      setFeedback('error', translateMessage(tunnelRes.msg, t('runtime.tunnel.messages.loadListFailed')))
     }
 
     nodes.value = extractNodeList(nodeRes)
   } catch (error) {
-    console.error('加载隧道页数据失败:', error)
-    setFeedback('error', '加载数据失败')
+    console.error('Failed to load tunnel page data:', error)
+    setFeedback('error', t('runtime.tunnel.messages.loadDataFailed'))
   } finally {
     loading.value = false
   }
@@ -542,18 +562,18 @@ function resolveNodeName(nodeId) {
 
 function resolveTypeMeta(type) {
   return Number(type) === 2
-    ? { text: '隧道转发', className: 'tag-primary' }
-    : { text: '端口转发', className: 'tag-neutral' }
+    ? { text: t('runtime.tunnel.options.tunnelForward'), className: 'tag-primary' }
+    : { text: t('runtime.tunnel.options.portForward'), className: 'tag-neutral' }
 }
 
 function resolveStatusMeta(status) {
   return Number(status) === 1
-    ? { text: '启用', className: 'tag-success' }
-    : { text: '禁用', className: 'tag-danger' }
+    ? { text: t('runtime.shared.enabled'), className: 'tag-success' }
+    : { text: t('runtime.shared.disabled'), className: 'tag-danger' }
 }
 
 function resolveFlowLabel(flow) {
-  return Number(flow) === 2 ? '双向计算' : '单向计算'
+  return Number(flow) === 2 ? t('runtime.tunnel.options.twoWayAccounting') : t('runtime.tunnel.options.oneWayAccounting')
 }
 
 function formatTrafficRatio(value) {
@@ -606,55 +626,55 @@ function validateForm() {
   clearErrors()
 
   if (!form.name.trim()) {
-    errors.name = '请输入隧道名称'
+    errors.name = t('runtime.tunnel.validation.nameRequired')
   } else if (form.name.trim().length < 2 || form.name.trim().length > 50) {
-    errors.name = '隧道名称长度应在 2-50 个字符之间'
+    errors.name = t('runtime.tunnel.validation.nameLength')
   }
 
   if (![1, 2].includes(Number(form.type))) {
-    errors.type = '请选择有效的隧道类型'
+    errors.type = t('runtime.tunnel.validation.typeInvalid')
   }
 
   if (runtimeNodeXMode.value) {
     if (!form.inNodeId) {
-      errors.inNodeId = '请选择转发入口节点'
+      errors.inNodeId = t('runtime.tunnel.validation.ingressRequired')
     } else if (!relayNodeOptions.value.some(node => node.id === Number(form.inNodeId))) {
-      errors.inNodeId = '入口节点必须是转发中继节点'
+      errors.inNodeId = t('runtime.tunnel.validation.ingressMustRelay')
     }
   }
 
   const trafficRatio = Number(form.trafficRatio)
   if (!Number.isFinite(trafficRatio) || trafficRatio <= 0 || trafficRatio > 100) {
-    errors.trafficRatio = '流量倍率必须在 0.1-100.0 之间'
+    errors.trafficRatio = t('runtime.tunnel.validation.trafficRatio')
   }
 
   if (!String(form.tcpListenAddr || '').trim()) {
-    errors.tcpListenAddr = '请输入 TCP 监听地址'
+    errors.tcpListenAddr = t('runtime.tunnel.validation.tcpListenRequired')
   }
 
   if (!String(form.udpListenAddr || '').trim()) {
-    errors.udpListenAddr = '请输入 UDP 监听地址'
+    errors.udpListenAddr = t('runtime.tunnel.validation.udpListenRequired')
   }
 
   if (runtimeNodeXMode.value && Number(form.type) === 2) {
     if (!form.outNodeId) {
-      errors.outNodeId = '请选择转发出口节点'
+      errors.outNodeId = t('runtime.tunnel.validation.egressRequired')
     } else if (Number(form.outNodeId) === Number(form.inNodeId)) {
-      errors.outNodeId = '转发入口节点和转发出口节点不能相同'
+      errors.outNodeId = t('runtime.tunnel.validation.ingressEgressDifferent')
     } else if (!exitNodeOptions.value.some(node => node.id === Number(form.outNodeId))) {
-      errors.outNodeId = '出口节点必须是转发出口节点'
+      errors.outNodeId = t('runtime.tunnel.validation.egressMustExit')
     }
 
     if (!String(form.protocol || '').trim()) {
-      errors.protocol = '请选择协议类型'
+      errors.protocol = t('runtime.tunnel.validation.protocolRequired')
     }
   }
 
   if (!runtimeNodeXMode.value) {
     if (!form.outNodeId) {
-      errors.outNodeId = '请选择中转执行节点'
+      errors.outNodeId = t('runtime.tunnel.validation.executionRequired')
     } else if (!relayNodeOptions.value.some(node => node.id === Number(form.outNodeId))) {
-      errors.outNodeId = '中转执行节点必须是转发中继节点'
+      errors.outNodeId = t('runtime.tunnel.validation.executionMustRelay')
     }
   }
 
@@ -704,15 +724,15 @@ async function handleSubmit() {
 
     if (response.code === 0) {
       modalOpen.value = false
-      setFeedback('success', isEdit.value ? '隧道更新成功' : '隧道创建成功')
+      setFeedback('success', isEdit.value ? t('runtime.tunnel.messages.updated') : t('runtime.tunnel.messages.created'))
       await loadData(false)
       return
     }
 
-    setFeedback('error', response.msg || '操作失败')
+    setFeedback('error', translateMessage(response.msg, t('runtime.tunnel.messages.actionFailed')))
   } catch (error) {
-    console.error('提交隧道失败:', error)
-    setFeedback('error', '操作失败')
+    console.error('Failed to submit tunnel:', error)
+    setFeedback('error', t('runtime.tunnel.messages.actionFailed'))
   } finally {
     submitLoading.value = false
   }
@@ -734,14 +754,14 @@ async function confirmDelete() {
     if (response.code === 0) {
       deleteModalOpen.value = false
       tunnelToDelete.value = null
-      setFeedback('success', '隧道删除成功')
+      setFeedback('success', t('runtime.tunnel.messages.deleted'))
       await loadData(false)
       return
     }
-    setFeedback('error', response.msg || '删除失败')
+    setFeedback('error', translateMessage(response.msg, t('runtime.tunnel.messages.deleteFailed')))
   } catch (error) {
-    console.error('删除隧道失败:', error)
-    setFeedback('error', '删除失败')
+    console.error('Failed to delete tunnel:', error)
+    setFeedback('error', t('runtime.tunnel.messages.deleteFailed'))
   } finally {
     deleteLoading.value = false
   }
@@ -763,16 +783,16 @@ async function runDiagnosis(tunnel) {
       results: [
         {
           success: false,
-          description: '隧道诊断',
+          description: t('runtime.tunnel.messages.diagnosis'),
           nodeName: '-',
           nodeId: '-',
           targetIp: '-',
-          message: response.msg || '诊断失败'
+          message: translateMessage(response.msg, t('runtime.tunnel.messages.diagnosisFailed'))
         }
       ]
     }
   } catch (error) {
-    console.error('诊断隧道失败:', error)
+    console.error('Failed to diagnose tunnel:', error)
     diagnosisResult.value = {
       tunnelName: tunnel.name,
       tunnelType: resolveTypeMeta(tunnel.type).text,
@@ -780,11 +800,11 @@ async function runDiagnosis(tunnel) {
       results: [
         {
           success: false,
-          description: '隧道诊断',
+          description: t('runtime.tunnel.messages.diagnosis'),
           nodeName: '-',
           nodeId: '-',
           targetIp: '-',
-          message: '诊断请求失败'
+          message: t('runtime.tunnel.messages.diagnosisRequestFailed')
         }
       ]
     }

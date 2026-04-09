@@ -1,63 +1,39 @@
 <template>
   <div class="user-layout">
-    <!-- 移动端头部 -->
     <header class="header">
-      <button class="menu-toggle" @click="sidebarOpen = !sidebarOpen">
-        <span class="menu-icon">☰</span>
+      <button class="menu-toggle" type="button" @click="sidebarOpen = !sidebarOpen">
+        <span class="menu-icon">+</span>
       </button>
       <div class="logo">V2Board</div>
       <nav class="desktop-nav">
-        <router-link to="/user/dashboard">仪表盘</router-link>
-        <router-link to="/user/subscribe">订阅</router-link>
-        <router-link to="/user/knowledge">使用教程</router-link>
-        <router-link to="/user/tickets">我的工单</router-link>
-        <router-link to="/user/plans">购买套餐</router-link>
-        <router-link to="/user/orders">我的订单</router-link>
+        <router-link v-for="item in navItems" :key="item.to" :to="item.to">{{ item.label }}</router-link>
       </nav>
       <div class="user-actions">
+        <LocaleSwitcher compact />
         <span class="user-email">{{ userStore.userInfo?.email }}</span>
-        <button class="btn-ghost btn-sm" @click="logout">退出</button>
+        <button class="btn-ghost btn-sm" type="button" @click="logout">{{ t('common.actions.logout') }}</button>
       </div>
     </header>
-    
-    <!-- 移动端侧边栏遮罩 -->
-    <div 
-      class="sidebar-overlay" 
-      :class="{ active: sidebarOpen }" 
-      @click="sidebarOpen = false"
-    ></div>
-    
-    <!-- 移动端侧边栏 -->
+
+    <div class="sidebar-overlay" :class="{ active: sidebarOpen }" @click="sidebarOpen = false"></div>
+
     <aside class="mobile-sidebar" :class="{ open: sidebarOpen }">
       <div class="sidebar-header">
         <div class="logo">V2Board</div>
-        <button class="close-btn" @click="sidebarOpen = false">✕</button>
+        <button class="close-btn" type="button" @click="sidebarOpen = false">×</button>
       </div>
       <nav class="sidebar-nav">
-        <router-link to="/user/dashboard" @click="sidebarOpen = false">
-          <span class="nav-icon">📊</span> 仪表盘
-        </router-link>
-        <router-link to="/user/subscribe" @click="sidebarOpen = false">
-          <span class="nav-icon">📦</span> 订阅管理
-        </router-link>
-        <router-link to="/user/knowledge" @click="sidebarOpen = false">
-          <span class="nav-icon">📚</span> 使用教程
-        </router-link>
-        <router-link to="/user/tickets" @click="sidebarOpen = false">
-          <span class="nav-icon">🎫</span> 我的工单
-        </router-link>
-        <router-link to="/user/plans" @click="sidebarOpen = false">
-          <span class="nav-icon">💰</span> 购买套餐
-        </router-link>
-        <router-link to="/user/orders" @click="sidebarOpen = false">
-          <span class="nav-icon">📦</span> 我的订单
+        <router-link v-for="item in navItems" :key="item.to" :to="item.to" @click="sidebarOpen = false">
+          <span class="nav-icon">{{ item.icon }}</span>
+          <span>{{ item.label }}</span>
         </router-link>
       </nav>
       <div class="sidebar-footer">
-        <button class="btn-secondary w-full" @click="logout">退出登录</button>
+        <LocaleSwitcher />
+        <button class="btn-secondary w-full" type="button" @click="logout">{{ t('common.actions.logout') }}</button>
       </div>
     </aside>
-    
+
     <main class="main-content">
       <div class="container">
         <router-view></router-view>
@@ -67,15 +43,27 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useUserStore } from '@/stores/user'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/user'
+import { useAppI18n } from '@/composables/useAppI18n'
+import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 
-const userStore = useUserStore()
 const router = useRouter()
+const userStore = useUserStore()
+const { t } = useAppI18n()
 const sidebarOpen = ref(false)
 
-const logout = () => {
+const navItems = computed(() => ([
+  { to: '/user/dashboard', label: t('layout.user.nav.dashboard'), icon: 'D' },
+  { to: '/user/subscribe', label: t('layout.user.nav.subscribe'), icon: 'S' },
+  { to: '/user/knowledge', label: t('layout.user.nav.knowledge'), icon: 'K' },
+  { to: '/user/tickets', label: t('layout.user.nav.tickets'), icon: 'T' },
+  { to: '/user/plans', label: t('layout.user.nav.plans'), icon: 'P' },
+  { to: '/user/orders', label: t('layout.user.nav.orders'), icon: 'O' }
+]))
+
+function logout() {
   userStore.logout()
   router.push('/login')
 }
@@ -113,6 +101,7 @@ onMounted(() => {
   background: transparent;
   border: none;
   font-size: 20px;
+  color: var(--text-color);
 }
 
 .menu-icon {
@@ -162,7 +151,6 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-/* 移动端侧边栏 */
 .sidebar-overlay {
   position: fixed;
   inset: 0;
@@ -241,12 +229,17 @@ onMounted(() => {
 }
 
 .nav-icon {
-  font-size: 18px;
+  width: 24px;
+  text-align: center;
+  font-weight: 700;
 }
 
 .sidebar-footer {
   padding: 16px;
   border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .main-content {
@@ -254,37 +247,26 @@ onMounted(() => {
   padding: 24px 0;
 }
 
-/* 平板和桌面端 */
 @media (min-width: 768px) {
   .menu-toggle {
     display: none;
   }
-  
+
   .desktop-nav {
     display: flex;
   }
-  
+
   .user-email {
     display: block;
   }
-  
+
   .mobile-sidebar,
   .sidebar-overlay {
     display: none;
   }
-  
+
   .header {
     padding: 0 24px;
-  }
-  
-  .main-content {
-    padding: 32px 0;
-  }
-}
-
-@media (min-width: 1024px) {
-  .header {
-    padding: 0 32px;
   }
 }
 </style>

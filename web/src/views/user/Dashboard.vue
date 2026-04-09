@@ -2,36 +2,32 @@
   <div class="dashboard-page">
     <div class="page-header">
       <div>
-        <h1>我的订阅</h1>
-        <p class="text-secondary">查看您的套餐和使用情况</p>
+        <h1>{{ t('user.dashboard.title') }}</h1>
+        <p class="text-secondary">{{ t('user.dashboard.subtitle') }}</p>
       </div>
-      <button class="btn-secondary" @click="refreshData" :disabled="loading">
-        {{ loading ? '刷新中...' : '🔄 刷新' }}
+      <button class="btn-secondary" :disabled="loading" @click="refreshData">
+        {{ loading ? t('user.dashboard.refreshing') : t('user.dashboard.refresh') }}
       </button>
     </div>
 
-    <!-- 套餐信息 -->
     <div class="subscription-card" :class="{ expired: sub.is_expired }">
       <div class="plan-header">
         <div class="plan-info">
-          <div class="plan-name">{{ sub.plan_name || '未订阅' }}</div>
-          <div class="plan-status" :class="statusClass">
-            {{ statusText }}
-          </div>
+          <div class="plan-name">{{ sub.plan_name || t('common.states.none') }}</div>
+          <div class="plan-status" :class="statusClass">{{ statusText }}</div>
         </div>
         <div class="plan-expire">
           <div v-if="sub.expired_at > 0">
-            <span class="label">到期时间</span>
+            <span class="label">{{ t('common.labels.expiresAt') }}</span>
             <span class="value">{{ formatExpireDate(sub.expired_at) }}</span>
           </div>
-          <div v-else class="permanent">永久有效</div>
+          <div v-else class="permanent">{{ t('common.states.permanent') }}</div>
         </div>
       </div>
 
-      <!-- 流量使用 -->
       <div class="traffic-section">
         <div class="traffic-header">
-          <span class="traffic-label">流量使用</span>
+          <span class="traffic-label">{{ t('user.dashboard.trafficUsage') }}</span>
           <span class="traffic-value">
             {{ formatBytes(sub.used_traffic) }} / {{ formatBytes(sub.transfer_enable) }}
           </span>
@@ -40,55 +36,54 @@
           <div class="traffic-progress" :style="{ width: progressWidth }" :class="progressClass"></div>
         </div>
         <div class="traffic-detail">
-          <span>↑ 上传 {{ formatBytes(sub.upload_traffic) }}</span>
-          <span>↓ 下载 {{ formatBytes(sub.download_traffic) }}</span>
+          <span>{{ t('user.dashboard.upload') }} {{ formatBytes(sub.upload_traffic) }}</span>
+          <span>{{ t('user.dashboard.download') }} {{ formatBytes(sub.download_traffic) }}</span>
         </div>
       </div>
 
-      <!-- 剩余时间 -->
-      <div class="remaining-section" v-if="!sub.is_expired && sub.days_remaining >= 0">
+      <div v-if="!sub.is_expired && sub.days_remaining >= 0" class="remaining-section">
         <div class="remaining-box">
           <div class="remaining-value">{{ sub.days_remaining }}</div>
-          <div class="remaining-label">剩余天数</div>
+          <div class="remaining-label">{{ t('user.dashboard.remainingDays') }}</div>
         </div>
         <div class="remaining-box">
           <div class="remaining-value">{{ remainingPercent }}%</div>
-          <div class="remaining-label">流量剩余</div>
+          <div class="remaining-label">{{ t('user.dashboard.trafficRemaining') }}</div>
         </div>
       </div>
     </div>
 
-    <!-- 快捷操作 -->
     <div class="quick-actions">
       <router-link to="/user/subscribe" class="action-card">
-        <span class="action-icon">📋</span>
-        <span class="action-text">订阅管理</span>
+        <span class="action-icon">S</span>
+        <span class="action-text">{{ t('user.dashboard.quickActions.subscribe') }}</span>
       </router-link>
       <router-link to="/user/orders" class="action-card">
-        <span class="action-icon">📦</span>
-        <span class="action-text">我的订单</span>
+        <span class="action-icon">O</span>
+        <span class="action-text">{{ t('user.dashboard.quickActions.orders') }}</span>
       </router-link>
-      <router-link to="/user/invite" class="action-card">
-        <span class="action-icon">🎁</span>
-        <span class="action-text">邀请返利</span>
+      <router-link to="/user/tickets" class="action-card">
+        <span class="action-icon">T</span>
+        <span class="action-text">{{ t('user.dashboard.quickActions.tickets') }}</span>
       </router-link>
-      <router-link to="/user/settings" class="action-card">
-        <span class="action-icon">⚙️</span>
-        <span class="action-text">账户设置</span>
+      <router-link to="/user/knowledge" class="action-card">
+        <span class="action-icon">K</span>
+        <span class="action-text">{{ t('user.dashboard.quickActions.knowledge') }}</span>
       </router-link>
     </div>
 
-    <!-- 缓存提示 -->
-    <div class="cache-info" v-if="sub.cached_at">
-      <span>数据更新于 {{ formatDateTime(sub.cached_at) }}</span>
+    <div v-if="sub.cached_at" class="cache-info">
+      {{ t('user.dashboard.cacheUpdatedAt', { value: formatDateTime(sub.cached_at) }) }}
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { getSubscription } from '@/api/user'
+import { useAppI18n } from '@/composables/useAppI18n'
 
+const { t, formatDate, formatDateTime } = useAppI18n()
 const sub = ref({})
 const loading = ref(false)
 
@@ -99,15 +94,12 @@ const statusClass = computed(() => {
 })
 
 const statusText = computed(() => {
-  if (sub.value.is_expired) return '已过期'
-  if (!sub.value.plan_id) return '未订阅'
-  return '有效'
+  if (sub.value.is_expired) return t('common.states.expired')
+  if (!sub.value.plan_id) return t('common.states.none')
+  return t('common.states.active')
 })
 
-const progressWidth = computed(() => {
-  const percent = sub.value.usage_percent || 0
-  return Math.min(percent, 100) + '%'
-})
+const progressWidth = computed(() => `${Math.min(sub.value.usage_percent || 0, 100)}%`)
 
 const progressClass = computed(() => {
   const percent = sub.value.usage_percent || 0
@@ -116,51 +108,46 @@ const progressClass = computed(() => {
   return 'normal'
 })
 
-const remainingPercent = computed(() => {
-  const percent = sub.value.usage_percent || 0
-  return Math.max(0, (100 - percent)).toFixed(1)
-})
+const remainingPercent = computed(() => Math.max(0, 100 - (sub.value.usage_percent || 0)).toFixed(1))
 
-const fetchData = async (refresh = false) => {
+async function fetchData(refresh = false) {
   loading.value = true
   try {
     const res = await getSubscription(refresh)
     sub.value = res.data || {}
   } catch (err) {
-    console.error('获取订阅信息失败:', err)
+    console.error('Failed to fetch subscription info:', err)
   } finally {
     loading.value = false
   }
 }
 
-const refreshData = () => {
+function refreshData() {
   fetchData(true)
 }
 
-const formatBytes = (bytes) => {
+function formatBytes(bytes) {
   if (!bytes) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let i = 0
-  while (bytes >= 1024 && i < units.length - 1) {
-    bytes /= 1024
-    i++
+  let value = bytes
+  let index = 0
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024
+    index += 1
   }
-  return bytes.toFixed(2) + ' ' + units[i]
+  return `${value.toFixed(2)} ${units[index]}`
 }
 
-const formatExpireDate = (timestamp) => {
-  if (!timestamp) return '永久'
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleDateString('zh-CN')
+function formatExpireDate(timestamp) {
+  if (!timestamp) {
+    return t('common.states.permanent')
+  }
+  return formatDate(timestamp, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-const formatDateTime = (dateStr) => {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN')
-}
-
-onMounted(() => fetchData())
+onMounted(() => {
+  fetchData()
+})
 </script>
 
 <style scoped>
@@ -359,7 +346,9 @@ onMounted(() => fetchData())
 }
 
 .action-icon {
-  font-size: 28px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary-color);
 }
 
 .action-text {
@@ -375,7 +364,6 @@ onMounted(() => fetchData())
   color: var(--text-secondary);
 }
 
-/* 移动端适配 */
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;

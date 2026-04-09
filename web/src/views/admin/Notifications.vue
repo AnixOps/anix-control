@@ -1,45 +1,45 @@
 <template>
   <div class="notification-page">
     <div class="page-header">
-      <h1>通知管理</h1>
-      <p class="text-secondary">配置通知模板和邮件设置</p>
+      <h1>{{ t('adminNotifications.title') }}</h1>
+      <p class="text-secondary">{{ t('adminNotifications.subtitle') }}</p>
     </div>
 
-    <!-- 标签切换 -->
     <div class="tabs">
       <button :class="['tab', { active: activeTab === 'templates' }]" @click="activeTab = 'templates'">
-        通知模板
+        {{ t('adminNotifications.tabs.templates') }}
       </button>
       <button :class="['tab', { active: activeTab === 'email' }]" @click="activeTab = 'email'">
-        邮件配置
+        {{ t('adminNotifications.tabs.email') }}
       </button>
       <button :class="['tab', { active: activeTab === 'logs' }]" @click="activeTab = 'logs'">
-        发送日志
+        {{ t('adminNotifications.tabs.logs') }}
       </button>
     </div>
 
-    <!-- 通知模板 -->
     <div v-show="activeTab === 'templates'">
       <div class="toolbar">
-        <button class="btn-primary" @click="openTemplateModal()">➕ 新增模板</button>
+        <button class="btn-primary" @click="openTemplateModal()">
+          + {{ t('adminNotifications.actions.createTemplate') }}
+        </button>
       </div>
 
       <div class="table-container">
         <table class="data-table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>名称</th>
-              <th>类型</th>
-              <th>触发事件</th>
-              <th>状态</th>
-              <th>操作</th>
+              <th>{{ t('adminNotifications.templates.table.id') }}</th>
+              <th>{{ t('adminNotifications.templates.table.name') }}</th>
+              <th>{{ t('adminNotifications.templates.table.type') }}</th>
+              <th>{{ t('adminNotifications.templates.table.event') }}</th>
+              <th>{{ t('adminNotifications.templates.table.status') }}</th>
+              <th>{{ t('adminNotifications.templates.table.actions') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="template in templates" :key="template.id">
               <td>{{ template.id }}</td>
-              <td>{{ template.name }}</td>
+              <td>{{ template.name || '-' }}</td>
               <td>
                 <span :class="['type-badge', template.type]">
                   {{ getTypeLabel(template.type) }}
@@ -48,99 +48,135 @@
               <td>{{ getEventLabel(template.event) }}</td>
               <td>
                 <span :class="['status-badge', template.enabled ? 'status-active' : 'status-disabled']">
-                  {{ template.enabled ? '启用' : '禁用' }}
+                  {{ template.enabled ? t('adminNotifications.status.enabled') : t('adminNotifications.status.disabled') }}
                 </span>
               </td>
               <td>
                 <div class="action-buttons">
-                  <button class="btn-sm btn-ghost" @click="openTemplateModal(template)" title="编辑">✏️</button>
-                  <button class="btn-sm btn-ghost" @click="deleteTemplate(template)" title="删除">🗑️</button>
+                  <button
+                    class="btn-sm btn-ghost"
+                    :title="t('adminNotifications.actions.edit')"
+                    :aria-label="t('adminNotifications.actions.edit')"
+                    @click="openTemplateModal(template)"
+                  >
+                    {{ t('adminNotifications.actions.edit') }}
+                  </button>
+                  <button
+                    class="btn-sm btn-danger"
+                    :title="t('adminNotifications.actions.delete')"
+                    :aria-label="t('adminNotifications.actions.delete')"
+                    @click="deleteTemplateItem(template)"
+                  >
+                    {{ t('adminNotifications.actions.delete') }}
+                  </button>
                 </div>
               </td>
             </tr>
             <tr v-if="templates.length === 0">
-              <td colspan="6" class="empty-row">暂无模板数据</td>
+              <td colspan="6" class="empty-row">{{ t('adminNotifications.templates.empty') }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- 邮件配置 -->
     <div v-show="activeTab === 'email'">
       <div class="config-section">
-        <h3>SMTP 配置</h3>
+        <h3>{{ t('adminNotifications.email.title') }}</h3>
         <div class="form-row">
           <div class="form-group">
-            <label>SMTP 服务器</label>
-            <input v-model="emailConfig.host" type="text" placeholder="smtp.example.com" />
+            <label>{{ t('adminNotifications.email.fields.host') }}</label>
+            <input
+              v-model="emailConfig.host"
+              type="text"
+              :placeholder="t('adminNotifications.email.placeholders.host')"
+            />
           </div>
           <div class="form-group">
-            <label>端口</label>
-            <input v-model.number="emailConfig.port" type="number" placeholder="465" />
+            <label>{{ t('adminNotifications.email.fields.port') }}</label>
+            <input
+              v-model.number="emailConfig.port"
+              type="number"
+              :placeholder="t('adminNotifications.email.placeholders.port')"
+            />
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>用户名</label>
-            <input v-model="emailConfig.username" type="text" placeholder="your@email.com" />
+            <label>{{ t('adminNotifications.email.fields.username') }}</label>
+            <input
+              v-model="emailConfig.username"
+              type="text"
+              :placeholder="t('adminNotifications.email.placeholders.username')"
+            />
           </div>
           <div class="form-group">
-            <label>密码</label>
-            <input v-model="emailConfig.password" type="password" placeholder="••••••••" />
+            <label>{{ t('adminNotifications.email.fields.password') }}</label>
+            <input
+              v-model="emailConfig.password"
+              type="password"
+              :placeholder="t('adminNotifications.email.placeholders.password')"
+            />
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>发件人名称</label>
-            <input v-model="emailConfig.from_name" type="text" placeholder="V2Board" />
+            <label>{{ t('adminNotifications.email.fields.fromName') }}</label>
+            <input
+              v-model="emailConfig.from_name"
+              type="text"
+              :placeholder="t('adminNotifications.email.placeholders.fromName')"
+            />
           </div>
           <div class="form-group">
-            <label>发件人地址</label>
-            <input v-model="emailConfig.from_address" type="email" placeholder="noreply@example.com" />
+            <label>{{ t('adminNotifications.email.fields.fromAddress') }}</label>
+            <input
+              v-model="emailConfig.from_address"
+              type="email"
+              :placeholder="t('adminNotifications.email.placeholders.fromAddress')"
+            />
           </div>
         </div>
         <div class="form-group">
           <label class="checkbox-label">
-            <input type="checkbox" v-model="emailConfig.encryption" />
-            <span>启用 TLS 加密</span>
+            <input v-model="emailConfig.encryption" type="checkbox" />
+            <span>{{ t('adminNotifications.email.fields.encryption') }}</span>
           </label>
         </div>
         <div class="form-actions">
-          <button class="btn-primary" @click="saveEmailConfig">保存配置</button>
-          <button class="btn-secondary" @click="openTestModal">发送测试邮件</button>
+          <button class="btn-primary" @click="saveEmailSettings">{{ t('common.actions.save') }}</button>
+          <button class="btn-secondary" @click="openTestModal">{{ t('adminNotifications.actions.sendTest') }}</button>
         </div>
       </div>
     </div>
 
-    <!-- 发送日志 -->
     <div v-show="activeTab === 'logs'">
       <div class="toolbar">
         <select v-model="logFilter.type">
-          <option value="">全部类型</option>
-          <option value="email">邮件</option>
-          <option value="telegram">Telegram</option>
-          <option value="webhook">Webhook</option>
+          <option value="">{{ t('adminNotifications.logs.filters.allTypes') }}</option>
+          <option v-for="type in notificationTypes" :key="type" :value="type">
+            {{ getTypeLabel(type) }}
+          </option>
         </select>
         <select v-model="logFilter.status">
-          <option value="">全部状态</option>
-          <option value="pending">Pending</option>
-          <option value="success">成功</option>
-          <option value="failed">失败</option>
+          <option value="">{{ t('adminNotifications.logs.filters.allStatuses') }}</option>
+          <option v-for="status in logStatuses" :key="status" :value="status">
+            {{ getLogStatusLabel(status) }}
+          </option>
         </select>
-        <button class="btn-secondary" @click="fetchLogs">🔍 搜索</button>
+        <button class="btn-secondary" @click="fetchLogs">{{ t('adminNotifications.actions.search') }}</button>
       </div>
 
       <div class="table-container">
         <table class="data-table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>类型</th>
-              <th>接收者</th>
-              <th>标题</th>
-              <th>状态</th>
-              <th>发送时间</th>
+              <th>{{ t('adminNotifications.logs.table.id') }}</th>
+              <th>{{ t('adminNotifications.logs.table.type') }}</th>
+              <th>{{ t('adminNotifications.logs.table.recipient') }}</th>
+              <th>{{ t('adminNotifications.logs.table.title') }}</th>
+              <th>{{ t('adminNotifications.logs.table.status') }}</th>
+              <th>{{ t('adminNotifications.logs.table.sentAt') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -149,7 +185,7 @@
               <td>
                 <span :class="['type-badge', log.type]">{{ getTypeLabel(log.type) }}</span>
               </td>
-              <td>{{ log.recipient }}</td>
+              <td>{{ log.recipient || '-' }}</td>
               <td>{{ log.title || '-' }}</td>
               <td>
                 <span :class="['status-badge', getLogStatusClass(log.status)]">
@@ -159,86 +195,95 @@
               <td>{{ formatTime(log.created_at) }}</td>
             </tr>
             <tr v-if="logs.length === 0">
-              <td colspan="6" class="empty-row">暂无日志数据</td>
+              <td colspan="6" class="empty-row">{{ t('adminNotifications.logs.empty') }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- 模板弹窗 -->
     <div v-if="showTemplateModal" class="modal-overlay" @click.self="showTemplateModal = false">
       <div class="modal">
         <div class="modal-header">
-          <h3>{{ editingTemplate ? '编辑模板' : '新增模板' }}</h3>
-          <button class="close-btn" @click="showTemplateModal = false">✕</button>
+          <h3>{{ editingTemplate ? t('adminNotifications.modal.editTitle') : t('adminNotifications.modal.createTitle') }}</h3>
+          <button class="close-btn" @click="showTemplateModal = false">x</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>名称 <span class="required">*</span></label>
-            <input v-model="templateForm.name" type="text" placeholder="模板名称" />
+            <label>{{ t('adminNotifications.modal.fields.name') }} <span class="required">*</span></label>
+            <input
+              v-model="templateForm.name"
+              type="text"
+              :placeholder="t('adminNotifications.modal.placeholders.name')"
+            />
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>类型</label>
+              <label>{{ t('adminNotifications.modal.fields.type') }}</label>
               <select v-model="templateForm.type">
-                <option value="email">邮件</option>
-                <option value="telegram">Telegram</option>
-                <option value="webhook">Webhook</option>
+                <option v-for="type in notificationTypes" :key="type" :value="type">
+                  {{ getTypeLabel(type) }}
+                </option>
               </select>
             </div>
             <div class="form-group">
-              <label>触发事件</label>
+              <label>{{ t('adminNotifications.modal.fields.event') }}</label>
               <select v-model="templateForm.event">
-                <option value="user.register">用户注册</option>
-                <option value="user.login">用户登录</option>
-                <option value="user.expire">用户到期</option>
-                <option value="user.traffic_low">流量不足</option>
-                <option value="order.paid">订单支付</option>
-                <option value="ticket.reply">工单回复</option>
-                <option value="node.offline">节点离线</option>
-                <option value="node.online">节点上线</option>
+                <option v-for="event in notificationEvents" :key="event" :value="event">
+                  {{ getEventLabel(event) }}
+                </option>
               </select>
             </div>
           </div>
           <div class="form-group">
-            <label>标题模板</label>
-            <input v-model="templateForm.title" type="text" placeholder="支持变量: {username}, {site_name}" />
+            <label>{{ t('adminNotifications.modal.fields.title') }}</label>
+            <input
+              v-model="templateForm.title"
+              type="text"
+              :placeholder="t('adminNotifications.modal.placeholders.title')"
+            />
           </div>
           <div class="form-group">
-            <label>内容模板</label>
-            <textarea v-model="templateForm.content" rows="5" placeholder="支持变量: {username}, {email}, {expire_time}"></textarea>
+            <label>{{ t('adminNotifications.modal.fields.content') }}</label>
+            <textarea
+              v-model="templateForm.content"
+              rows="5"
+              :placeholder="t('adminNotifications.modal.placeholders.content')"
+            ></textarea>
           </div>
           <div class="form-group">
             <label class="checkbox-label">
-              <input type="checkbox" v-model="templateForm.enabled" />
-              <span>启用</span>
+              <input v-model="templateForm.enabled" type="checkbox" />
+              <span>{{ t('adminNotifications.modal.fields.enabled') }}</span>
             </label>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="showTemplateModal = false">取消</button>
-          <button @click="saveTemplate">保存</button>
+          <button class="btn-secondary" @click="showTemplateModal = false">{{ t('common.actions.cancel') }}</button>
+          <button @click="saveTemplate">{{ t('common.actions.save') }}</button>
         </div>
       </div>
     </div>
 
-    <!-- 测试邮件弹窗 -->
     <div v-if="showTestModal" class="modal-overlay" @click.self="showTestModal = false">
       <div class="modal modal-sm">
         <div class="modal-header">
-          <h3>发送测试邮件</h3>
-          <button class="close-btn" @click="showTestModal = false">✕</button>
+          <h3>{{ t('adminNotifications.testModal.title') }}</h3>
+          <button class="close-btn" @click="showTestModal = false">x</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>收件人地址</label>
-            <input v-model="testEmail" type="email" placeholder="test@example.com" />
+            <label>{{ t('adminNotifications.testModal.fields.recipient') }}</label>
+            <input
+              v-model="testEmail"
+              type="email"
+              :placeholder="t('adminNotifications.testModal.placeholders.recipient')"
+            />
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="showTestModal = false">取消</button>
-          <button @click="sendTestEmail">发送</button>
+          <button class="btn-secondary" @click="showTestModal = false">{{ t('common.actions.cancel') }}</button>
+          <button @click="sendTestEmail">{{ t('adminNotifications.testModal.actions.send') }}</button>
         </div>
       </div>
     </div>
@@ -246,75 +291,120 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import {
-  getNotificationTemplates, createNotificationTemplate, updateNotificationTemplate,
-  deleteNotificationTemplate, getNotificationLogs, sendTestNotification,
-  getEmailConfig, updateEmailConfig
+  createNotificationTemplate,
+  deleteNotificationTemplate,
+  getEmailConfig,
+  getNotificationLogs,
+  getNotificationTemplates,
+  sendTestNotification,
+  updateEmailConfig,
+  updateNotificationTemplate
 } from '@/api/admin'
+import { useAppI18n } from '@/composables/useAppI18n'
+
+const { t, formatDateTime } = useAppI18n()
+
+const notificationTypes = ['email', 'telegram', 'webhook']
+const notificationEvents = [
+  'user.register',
+  'user.login',
+  'user.expire',
+  'user.traffic_low',
+  'order.paid',
+  'ticket.reply',
+  'node.offline',
+  'node.online'
+]
+const logStatuses = ['pending', 'success', 'failed']
 
 const activeTab = ref('templates')
 const templates = ref([])
 const logs = ref([])
-
 const logFilter = ref({ type: '', status: '' })
 
 const showTemplateModal = ref(false)
 const editingTemplate = ref(null)
-const templateForm = ref({
-  name: '', type: 'email', event: 'user.register', title: '', content: '', enabled: true
-})
+const templateForm = ref(createTemplateForm())
 
 const showTestModal = ref(false)
 const testEmail = ref('')
 
 const emailConfig = ref({
-  host: '', port: 465, username: '', password: '',
-  from_name: '', from_address: '', encryption: true
+  host: '',
+  port: 465,
+  username: '',
+  password: '',
+  from_name: '',
+  from_address: '',
+  encryption: true
 })
 
-const typeLabels = {
-  email: '邮件',
-  telegram: 'Telegram',
-  webhook: 'Webhook'
+function createTemplateForm(source = {}) {
+  return {
+    name: '',
+    type: 'email',
+    event: 'user.register',
+    title: '',
+    content: '',
+    enabled: true,
+    ...source
+  }
 }
 
-const eventLabels = {
-  'user.register': '用户注册',
-  'user.login': '用户登录',
-  'user.expire': '用户到期',
-  'user.traffic_low': '流量不足',
-  'order.paid': '订单支付',
-  'ticket.reply': '工单回复',
-  'node.offline': '节点离线',
-  'node.online': '节点上线'
+const resolveApiError = (error, fallbackKey) => (
+  error?.response?.data?.error ||
+  error?.response?.data?.msg ||
+  error?.message ||
+  t(fallbackKey)
+)
+
+const typeKeyMap = {
+  email: 'adminNotifications.types.email',
+  telegram: 'adminNotifications.types.telegram',
+  webhook: 'adminNotifications.types.webhook'
 }
 
-const getTypeLabel = (type) => typeLabels[type] || type
-const getEventLabel = (event) => eventLabels[event] || event
+const eventKeyMap = {
+  'user.register': 'adminNotifications.events.userRegister',
+  'user.login': 'adminNotifications.events.userLogin',
+  'user.expire': 'adminNotifications.events.userExpire',
+  'user.traffic_low': 'adminNotifications.events.userTrafficLow',
+  'order.paid': 'adminNotifications.events.orderPaid',
+  'ticket.reply': 'adminNotifications.events.ticketReply',
+  'node.offline': 'adminNotifications.events.nodeOffline',
+  'node.online': 'adminNotifications.events.nodeOnline'
+}
+
+const logStatusKeyMap = {
+  pending: 'adminNotifications.status.pending',
+  success: 'adminNotifications.status.success',
+  failed: 'adminNotifications.status.failed'
+}
+
+const getTypeLabel = (type) => (typeKeyMap[type] ? t(typeKeyMap[type]) : type || '-')
+const getEventLabel = (event) => (eventKeyMap[event] ? t(eventKeyMap[event]) : event || '-')
+
 const getLogStatusClass = (status) => {
-  if (status === 'success') return 'status-active'
+  if (status === 'success') return 'status-success'
   if (status === 'pending') return 'status-pending'
   return 'status-failed'
 }
-const getLogStatusLabel = (status) => {
-  if (status === 'success') return 'Success'
-  if (status === 'pending') return 'Pending'
-  return 'Failed'
-}
 
+const getLogStatusLabel = (status) => (logStatusKeyMap[status] ? t(logStatusKeyMap[status]) : status || '-')
 
-const formatTime = (time) => {
-  if (!time) return '-'
-  return new Date(time).toLocaleString()
+const formatTime = (value) => {
+  if (!value) return '-'
+  return formatDateTime(value)
 }
 
 const fetchTemplates = async () => {
   try {
     const res = await getNotificationTemplates()
     templates.value = res.data?.list || []
-  } catch (err) {
-    console.error('获取模板失败:', err)
+  } catch (error) {
+    console.error(t('adminNotifications.messages.fetchTemplatesFailed'), error)
   }
 }
 
@@ -322,32 +412,25 @@ const fetchLogs = async () => {
   try {
     const res = await getNotificationLogs(logFilter.value)
     logs.value = res.data?.list || []
-  } catch (err) {
-    console.error('获取日志失败:', err)
+  } catch (error) {
+    console.error(t('adminNotifications.messages.fetchLogsFailed'), error)
   }
 }
 
-const fetchEmailConfig = async () => {
+const fetchEmailSettings = async () => {
   try {
     const res = await getEmailConfig()
     if (res.data) {
       emailConfig.value = { ...emailConfig.value, ...res.data }
     }
-  } catch (err) {
-    console.error('获取邮件配置失败:', err)
+  } catch (error) {
+    console.error(t('adminNotifications.messages.fetchEmailConfigFailed'), error)
   }
 }
 
 const openTemplateModal = (template = null) => {
-  if (template) {
-    editingTemplate.value = template
-    templateForm.value = { ...template }
-  } else {
-    editingTemplate.value = null
-    templateForm.value = {
-      name: '', type: 'email', event: 'user.register', title: '', content: '', enabled: true
-    }
-  }
+  editingTemplate.value = template
+  templateForm.value = createTemplateForm(template || {})
   showTemplateModal.value = true
 }
 
@@ -358,29 +441,42 @@ const saveTemplate = async () => {
     } else {
       await createNotificationTemplate(templateForm.value)
     }
+    window.alert(t('adminNotifications.messages.templateSaveSuccess'))
     showTemplateModal.value = false
-    fetchTemplates()
-  } catch (err) {
-    alert('保存失败: ' + (err.response?.data?.error || err.message))
+    await fetchTemplates()
+  } catch (error) {
+    window.alert(
+      t('adminNotifications.messages.templateSaveFailed', {
+        message: resolveApiError(error, 'adminNotifications.messages.templateSaveFailedShort')
+      })
+    )
   }
 }
 
-const deleteTemplate = async (template) => {
-  if (!confirm(`确定删除模板 ${template.name}?`)) return
+const deleteTemplateItem = async (template) => {
+  if (!window.confirm(t('adminNotifications.messages.deleteConfirm', { name: template.name }))) return
   try {
     await deleteNotificationTemplate(template.id)
-    fetchTemplates()
-  } catch (err) {
-    alert('删除失败')
+    await fetchTemplates()
+  } catch (error) {
+    window.alert(
+      t('adminNotifications.messages.deleteFailed', {
+        message: resolveApiError(error, 'adminNotifications.messages.deleteFailedShort')
+      })
+    )
   }
 }
 
-const saveEmailConfig = async () => {
+const saveEmailSettings = async () => {
   try {
     await updateEmailConfig(emailConfig.value)
-    alert('保存成功')
-  } catch (err) {
-    alert('保存失败: ' + (err.response?.data?.error || err.message))
+    window.alert(t('adminNotifications.messages.emailSaveSuccess'))
+  } catch (error) {
+    window.alert(
+      t('adminNotifications.messages.emailSaveFailed', {
+        message: resolveApiError(error, 'adminNotifications.messages.emailSaveFailedShort')
+      })
+    )
   }
 }
 
@@ -389,28 +485,34 @@ const openTestModal = () => {
 }
 
 const sendTestEmail = async () => {
-  if (!testEmail.value) {
-    alert('请输入收件人地址')
+  if (!testEmail.value.trim()) {
+    window.alert(t('adminNotifications.messages.testRecipientRequired'))
     return
   }
+
   try {
     await sendTestNotification({
       type: 'email',
-      recipient: testEmail.value,
-      subject: '测试邮件',
-      content: '这是一封测试邮件，如果您收到此邮件，说明邮件配置正确。'
+      recipient: testEmail.value.trim(),
+      subject: t('adminNotifications.testPayload.subject'),
+      content: t('adminNotifications.testPayload.content')
     })
-    alert('发送成功')
+    window.alert(t('adminNotifications.messages.testSendSuccess'))
     showTestModal.value = false
-  } catch (err) {
-    alert('发送失败: ' + (err.response?.data?.error || err.message))
+    testEmail.value = ''
+  } catch (error) {
+    window.alert(
+      t('adminNotifications.messages.testSendFailed', {
+        message: resolveApiError(error, 'adminNotifications.messages.testSendFailedShort')
+      })
+    )
   }
 }
 
 onMounted(() => {
   fetchTemplates()
   fetchLogs()
-  fetchEmailConfig()
+  fetchEmailSettings()
 })
 </script>
 
@@ -434,12 +536,35 @@ onMounted(() => {
   border-radius: 4px;
 }
 
-.type-badge.email { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
-.type-badge.telegram { background: rgba(0, 136, 204, 0.15); color: #0088cc; }
-.type-badge.webhook { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+.type-badge.email {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
 
-.status-pending { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-.status-failed { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.type-badge.telegram {
+  background: rgba(0, 136, 204, 0.15);
+  color: #0088cc;
+}
+
+.type-badge.webhook {
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+}
+
+.status-success {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.status-pending {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.status-failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
 
 .checkbox-label {
   display: flex;
@@ -448,9 +573,25 @@ onMounted(() => {
   cursor: pointer;
 }
 
-.checkbox-label input[type="checkbox"] {
+.checkbox-label input[type='checkbox'] {
   width: 18px;
   height: 18px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.18);
 }
 
 .modal-sm {

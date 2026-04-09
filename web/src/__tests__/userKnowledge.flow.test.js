@@ -5,7 +5,7 @@ import Knowledge from '@/views/user/Knowledge.vue'
 const mockGetKnowledgeList = vi.fn()
 
 vi.mock('@/api/user', () => ({
-  getKnowledgeList: (...args) => mockGetKnowledgeList(...args),
+  getKnowledgeList: (...args) => mockGetKnowledgeList(...args)
 }))
 
 describe('User Knowledge flow', () => {
@@ -21,16 +21,16 @@ describe('User Knowledge flow', () => {
           title: 'Billing overview',
           body: 'Use this to track payments',
           category: 'Billing',
-          updated_at: 1710000000,
+          updated_at: 1710000000
         },
         {
           id: 2,
           title: 'Connectivity tips',
           body: 'Check Firewall and DNS',
           category: 'Networking',
-          updated_at: 1710001000,
-        },
-      ],
+          updated_at: 1710001000
+        }
+      ]
     })
 
     const wrapper = mount(Knowledge)
@@ -40,12 +40,11 @@ describe('User Knowledge flow', () => {
     expect(wrapper.findAll('.article-card')).toHaveLength(2)
 
     const tabs = wrapper.findAll('.category-tabs .tab-item')
-    expect(tabs.map(tab => tab.text())).toEqual(
-      expect.arrayContaining(['全部', 'Billing', 'Networking'])
+    expect(tabs.map((tab) => tab.text())).toEqual(
+      expect.arrayContaining(['All', 'Billing', 'Networking'])
     )
 
-    // Filter to Networking category, only its articles remain
-    await tabs.find(tab => tab.text() === 'Networking').trigger('click')
+    await tabs.find((tab) => tab.text() === 'Networking').trigger('click')
     await flushPromises()
 
     const visibleCards = wrapper.findAll('.article-card')
@@ -61,9 +60,9 @@ describe('User Knowledge flow', () => {
           title: 'Subscription security',
           body: 'Use strong passwords and MFA',
           category: 'Security',
-          updated_at: 1710002000,
-        },
-      ],
+          updated_at: 1710002000
+        }
+      ]
     })
 
     const wrapper = mount(Knowledge)

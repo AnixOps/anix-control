@@ -2,19 +2,18 @@
   <div class="ansible-machines-page">
     <section class="hero-card">
       <div>
-        <p class="eyebrow">Execution Fleet</p>
-        <h2>Ansible Machines</h2>
+        <p class="eyebrow">{{ t('runtime.ansibleMachines.heroEyebrow') }}</p>
+        <h2>{{ t('runtime.ansibleMachines.title') }}</h2>
         <p class="hero-text">
-          This page is only for stateless Ansible execution machines. These hosts do not need Node-Agent and do not
-          need a persistent control-plane connection.
+          {{ t('runtime.ansibleMachines.heroText') }}
         </p>
       </div>
       <div class="hero-actions">
-        <router-link class="btn btn-secondary" to="/admin/forward/local">Local Runtime</router-link>
-        <router-link class="btn btn-secondary" to="/admin/forward/nodes">NodeX Topology</router-link>
-        <router-link class="btn btn-secondary" to="/admin/forward/agents">NodeX Agents</router-link>
-        <button class="btn btn-secondary" :disabled="loading" @click="refreshAll">{{ loading ? 'Refreshing...' : 'Refresh' }}</button>
-        <button class="btn btn-primary" @click="openEditor()">Add Machine</button>
+        <router-link class="btn btn-secondary" to="/admin/forward/local">{{ t('forwardSuite.nav.localRuntime') }}</router-link>
+        <router-link class="btn btn-secondary" to="/admin/forward/nodes">{{ t('forwardSuite.nav.nodeXTopology') }}</router-link>
+        <router-link class="btn btn-secondary" to="/admin/forward/agents">{{ t('forwardSuite.nav.nodeXAgents') }}</router-link>
+        <button class="btn btn-secondary" :disabled="loading" @click="refreshAll">{{ loading ? t('runtime.ansibleMachines.refreshLoading') : t('common.actions.refresh') }}</button>
+        <button class="btn btn-primary" @click="openEditor()">{{ t('runtime.ansibleMachines.addMachine') }}</button>
       </div>
     </section>
 
@@ -22,15 +21,15 @@
 
     <section class="stats-grid">
       <article class="stat-card">
-        <p class="stat-label">Machines</p>
+        <p class="stat-label">{{ t('runtime.ansibleMachines.stats.machines') }}</p>
         <strong class="stat-value">{{ machines.length }}</strong>
       </article>
       <article class="stat-card">
-        <p class="stat-label">Online</p>
+        <p class="stat-label">{{ t('runtime.ansibleMachines.stats.online') }}</p>
         <strong class="stat-value">{{ onlineCount }}</strong>
       </article>
       <article class="stat-card">
-        <p class="stat-label">Enabled</p>
+        <p class="stat-label">{{ t('runtime.ansibleMachines.stats.enabled') }}</p>
         <strong class="stat-value">{{ enabledCount }}</strong>
       </article>
     </section>
@@ -38,51 +37,51 @@
     <section class="panel-card">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Machines</p>
-          <h3>Relay Execution Nodes</h3>
-          <p class="section-copy">These records are used by the local Ansible runtime as execution-node identity only.</p>
+          <p class="eyebrow">{{ t('runtime.ansibleMachines.sectionEyebrow') }}</p>
+          <h3>{{ t('runtime.ansibleMachines.sectionTitle') }}</h3>
+          <p class="section-copy">{{ t('runtime.ansibleMachines.sectionCopy') }}</p>
         </div>
         <label class="filter-group">
-          <span>Status</span>
+          <span>{{ t('runtime.ansibleMachines.filterLabel') }}</span>
           <select v-model="statusFilter" @change="refreshAll">
-            <option value="all">All</option>
-            <option value="1">Online</option>
-            <option value="0">Offline</option>
+            <option value="all">{{ t('runtime.ansibleMachines.filters.all') }}</option>
+            <option value="1">{{ t('runtime.ansibleMachines.filters.online') }}</option>
+            <option value="0">{{ t('runtime.ansibleMachines.filters.offline') }}</option>
           </select>
         </label>
       </div>
 
-      <div v-if="loading" class="state-card">Loading Ansible machines...</div>
-      <div v-else-if="!machines.length" class="state-card">No Ansible execution machines yet.</div>
+      <div v-if="loading" class="state-card">{{ t('runtime.ansibleMachines.loading') }}</div>
+      <div v-else-if="!machines.length" class="state-card">{{ t('runtime.ansibleMachines.empty') }}</div>
       <div v-else class="machine-grid">
         <article v-for="machine in machines" :key="machine.id" class="machine-card">
           <div class="machine-head">
             <div>
-              <p class="eyebrow">Machine #{{ machine.id }}</p>
+              <p class="eyebrow">{{ t('runtime.ansibleMachines.machineEyebrow', { id: machine.id }) }}</p>
               <h4>{{ machine.name }}</h4>
               <p class="machine-meta">{{ machine.host }}:{{ machine.port }}</p>
             </div>
             <div class="status-stack">
-              <span :class="['tag', machine.enabled ? 'tag-success' : 'tag-muted']">{{ machine.enabled ? 'Enabled' : 'Disabled' }}</span>
-              <span :class="['tag', machine.status === 1 ? 'tag-success' : 'tag-danger']">{{ machine.status === 1 ? 'Online' : 'Offline' }}</span>
+              <span :class="['tag', machine.enabled ? 'tag-success' : 'tag-muted']">{{ machine.enabled ? t('runtime.shared.enabled') : t('runtime.shared.disabled') }}</span>
+              <span :class="['tag', machine.status === 1 ? 'tag-success' : 'tag-danger']">{{ machine.status === 1 ? t('runtime.shared.online') : t('runtime.shared.offline') }}</span>
             </div>
           </div>
 
           <div class="meta-grid">
             <div class="meta-item">
-              <span class="meta-label">API Port</span>
+              <span class="meta-label">{{ t('runtime.ansibleMachines.meta.apiPort') }}</span>
               <strong>{{ machine.apiPort || '-' }}</strong>
             </div>
             <div class="meta-item">
-              <span class="meta-label">Region / ISP</span>
+              <span class="meta-label">{{ t('runtime.ansibleMachines.meta.regionIsp') }}</span>
               <strong>{{ machine.region || '-' }} / {{ machine.isp || '-' }}</strong>
             </div>
             <div class="meta-item">
-              <span class="meta-label">Current Conn</span>
+              <span class="meta-label">{{ t('runtime.ansibleMachines.meta.currentConn') }}</span>
               <strong>{{ machine.currentConn }}</strong>
             </div>
             <div class="meta-item">
-              <span class="meta-label">Traffic</span>
+              <span class="meta-label">{{ t('runtime.ansibleMachines.meta.traffic') }}</span>
               <strong>{{ formatBytes(machine.totalUpload) }} / {{ formatBytes(machine.totalDownload) }}</strong>
             </div>
           </div>
@@ -92,17 +91,17 @@
           </p>
 
           <div class="card-actions">
-            <button class="btn btn-secondary btn-sm" @click="openEditor(machine)">Edit</button>
+            <button class="btn btn-secondary btn-sm" @click="openEditor(machine)">{{ t('runtime.ansibleMachines.actions.edit') }}</button>
             <button class="btn btn-secondary btn-sm" :disabled="pendingAction === `${machine.id}:check`" @click="checkMachine(machine)">
-              {{ pendingAction === `${machine.id}:check` ? 'Checking...' : 'Health Check' }}
+              {{ pendingAction === `${machine.id}:check` ? t('runtime.ansibleMachines.actions.checking') : t('runtime.ansibleMachines.actions.check') }}
             </button>
             <button class="btn btn-secondary btn-sm" :disabled="pendingAction === `${machine.id}:sync`" @click="syncMachine(machine)">
-              {{ pendingAction === `${machine.id}:sync` ? 'Syncing...' : 'Sync Stats' }}
+              {{ pendingAction === `${machine.id}:sync` ? t('runtime.ansibleMachines.actions.syncing') : t('runtime.ansibleMachines.actions.sync') }}
             </button>
             <button class="btn btn-secondary btn-sm" :disabled="pendingAction === `${machine.id}:toggle`" @click="toggleMachine(machine)">
-              {{ machine.enabled ? 'Disable' : 'Enable' }}
+              {{ machine.enabled ? t('runtime.ansibleMachines.actions.disable') : t('runtime.ansibleMachines.actions.enable') }}
             </button>
-            <button class="btn btn-secondary btn-sm danger-text" @click="openDelete(machine)">Delete</button>
+            <button class="btn btn-secondary btn-sm danger-text" @click="openDelete(machine)">{{ t('runtime.ansibleMachines.actions.delete') }}</button>
           </div>
         </article>
       </div>
@@ -112,57 +111,57 @@
       <div class="modal">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">Machine</p>
-            <h3>{{ editorMode ? 'Edit Ansible Machine' : 'Add Ansible Machine' }}</h3>
+            <p class="eyebrow">{{ t('runtime.ansibleMachines.modal.eyebrow') }}</p>
+            <h3>{{ editorMode ? t('runtime.ansibleMachines.modal.titleEdit') : t('runtime.ansibleMachines.modal.titleAdd') }}</h3>
           </div>
           <button class="modal-close" @click="closeEditor">×</button>
         </div>
         <div class="modal-body">
           <div class="form-grid">
             <label class="form-group">
-              <span>Name</span>
-              <input v-model.trim="form.name" type="text" placeholder="relay-exec-01" />
+              <span>{{ t('runtime.ansibleMachines.fields.name') }}</span>
+              <input v-model.trim="form.name" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.name')" />
             </label>
             <label class="form-group">
-              <span>Host</span>
-              <input v-model.trim="form.host" type="text" placeholder="1.2.3.4" />
+              <span>{{ t('runtime.ansibleMachines.fields.host') }}</span>
+              <input v-model.trim="form.host" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.host')" />
             </label>
           </div>
           <div class="form-grid">
             <label class="form-group">
-              <span>Service Port</span>
+              <span>{{ t('runtime.ansibleMachines.fields.servicePort') }}</span>
               <input v-model.trim="form.port" type="number" min="1" max="65535" />
             </label>
             <label class="form-group">
-              <span>API Port</span>
+              <span>{{ t('runtime.ansibleMachines.fields.apiPort') }}</span>
               <input v-model.trim="form.apiPort" type="number" min="1" max="65535" />
             </label>
           </div>
           <div class="form-grid">
             <label class="form-group">
-              <span>API Token</span>
-              <input v-model.trim="form.apiToken" type="text" placeholder="optional" />
+              <span>{{ t('runtime.ansibleMachines.fields.apiToken') }}</span>
+              <input v-model.trim="form.apiToken" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.apiToken')" />
             </label>
             <label class="form-group">
-              <span>Weight</span>
+              <span>{{ t('runtime.ansibleMachines.fields.weight') }}</span>
               <input v-model.trim="form.weight" type="number" min="1" />
             </label>
           </div>
           <div class="form-grid">
             <label class="form-group">
-              <span>Region</span>
-              <input v-model.trim="form.region" type="text" placeholder="HK / JP / US" />
+              <span>{{ t('runtime.ansibleMachines.fields.region') }}</span>
+              <input v-model.trim="form.region" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.region')" />
             </label>
             <label class="form-group">
-              <span>ISP</span>
-              <input v-model.trim="form.isp" type="text" placeholder="CMI / NTT / Cogent" />
+              <span>{{ t('runtime.ansibleMachines.fields.isp') }}</span>
+              <input v-model.trim="form.isp" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.isp')" />
             </label>
           </div>
           <p v-if="formError" class="form-error">{{ formError }}</p>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeEditor">Cancel</button>
-          <button class="btn btn-primary" :disabled="saving" @click="submitForm">{{ saving ? 'Saving...' : 'Save' }}</button>
+          <button class="btn btn-secondary" @click="closeEditor">{{ t('runtime.ansibleMachines.modal.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="submitForm">{{ saving ? t('runtime.ansibleMachines.modal.saveLoading') : t('runtime.ansibleMachines.modal.save') }}</button>
         </div>
       </div>
     </div>
@@ -171,17 +170,17 @@
       <div class="modal modal-sm">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">Delete</p>
-            <h3>Delete Machine</h3>
+            <p class="eyebrow">{{ t('runtime.ansibleMachines.modal.deleteEyebrow') }}</p>
+            <h3>{{ t('runtime.ansibleMachines.modal.deleteTitle') }}</h3>
           </div>
           <button class="modal-close" @click="deleteTarget = null">×</button>
         </div>
         <div class="modal-body">
-          <p>Delete <strong>{{ deleteTarget?.name }}</strong> from the Ansible execution fleet?</p>
+          <p>{{ t('runtime.ansibleMachines.modal.deleteConfirm', { name: deleteTarget?.name || '' }) }}</p>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="deleteTarget = null">Cancel</button>
-          <button class="btn btn-primary" :disabled="saving" @click="confirmDelete">{{ saving ? 'Deleting...' : 'Delete' }}</button>
+          <button class="btn btn-secondary" @click="deleteTarget = null">{{ t('runtime.ansibleMachines.modal.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="saving" @click="confirmDelete">{{ saving ? t('runtime.ansibleMachines.modal.deleteLoading') : t('runtime.ansibleMachines.actions.delete') }}</button>
         </div>
       </div>
     </div>
@@ -190,6 +189,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useAppI18n } from '@/composables/useAppI18n'
 import {
   checkForwardNode,
   createForwardNode,
@@ -201,6 +201,8 @@ import {
   updateForwardNode
 } from '@/api/admin'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
+
+const { t, translateLiteral } = useAppI18n()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -216,6 +218,14 @@ const form = reactive(createForm())
 
 const onlineCount = computed(() => machines.value.filter(item => item.status === 1).length)
 const enabledCount = computed(() => machines.value.filter(item => item.enabled).length)
+
+function translateRuntimeText(value, fallback = '-') {
+  const text = String(value ?? '').trim()
+  if (!text) {
+    return fallback
+  }
+  return translateLiteral(text)
+}
 
 function createForm() {
   return { id: null, name: '', host: '', port: '', apiPort: '', apiToken: '', region: '', isp: '', weight: '1' }
@@ -302,7 +312,7 @@ function closeEditor() {
 async function submitForm() {
   formError.value = ''
   if (!form.name || !form.host || !Number(form.port)) {
-    formError.value = 'Name, host and service port are required.'
+    formError.value = t('runtime.ansibleMachines.errors.required')
     return
   }
   const payload = {
@@ -327,7 +337,7 @@ async function submitForm() {
     closeEditor()
     await refreshAll()
   } catch (error) {
-    formError.value = error.response?.data?.msg || error.message || 'Failed to save machine'
+    formError.value = translateRuntimeText(error.response?.data?.msg || error.message, t('runtime.ansibleMachines.errors.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -354,7 +364,14 @@ async function checkMachine(machine) {
   try {
     const payload = unwrapResponse(await checkForwardNode(machine.id))
     const success = Number(payload?.status ?? 0) === 1 && !payload?.error
-    results[machine.id] = { success, message: success ? (payload?.latency ? `Latency ${payload.latency} ms` : 'Machine reachable') : (payload?.error || 'Machine unavailable') }
+    results[machine.id] = {
+      success,
+      message: success
+        ? (payload?.latency
+          ? t('runtime.ansibleMachines.results.latency', { value: payload.latency })
+          : t('runtime.ansibleMachines.results.reachable'))
+        : translateRuntimeText(payload?.error, t('runtime.ansibleMachines.results.unavailable'))
+    }
     await refreshAll()
   } finally {
     pendingAction.value = ''
@@ -365,7 +382,7 @@ async function syncMachine(machine) {
   pendingAction.value = `${machine.id}:sync`
   try {
     const payload = unwrapResponse(await syncForwardNodeStats(machine.id))
-    results[machine.id] = { success: true, message: payload?.message || 'Stats synced' }
+    results[machine.id] = { success: true, message: translateRuntimeText(payload?.message, t('runtime.ansibleMachines.results.synced')) }
     await refreshAll()
   } finally {
     pendingAction.value = ''
@@ -426,7 +443,8 @@ onMounted(async () => {
 .modal-header, .modal-footer { display: flex; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--border-color); }
 .modal-footer { border-top: 1px solid var(--border-color); border-bottom: 0; justify-content: flex-end; }
 .modal-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
-.modal-close { border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 24px; }
+.modal-close { border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 0; line-height: 1; }
+.modal-close::before { content: '\00d7'; font-size: 24px; }
 .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 900px) {
   .hero-card, .section-head, .machine-head, .modal-header, .modal-footer { flex-direction: column; }

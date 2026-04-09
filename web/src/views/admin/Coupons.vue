@@ -1,105 +1,116 @@
 <template>
   <div class="coupons-page">
     <div class="page-header">
-      <h1>优惠券管理</h1>
-      <p class="text-secondary">创建和管理优惠券</p>
+      <h1>{{ t('adminCoupons.title') }}</h1>
+      <p class="text-secondary">{{ t('adminCoupons.subtitle') }}</p>
     </div>
 
-    <!-- 筛选栏 -->
     <div class="filter-bar">
-      <button @click="showCreate = true">➕ 新建优惠券</button>
+      <button @click="showCreate = true">{{ t('adminCoupons.actions.createCoupon') }}</button>
     </div>
 
-    <!-- 优惠券列表 -->
     <div class="table-container">
       <table class="data-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>优惠码</th>
-            <th>名称</th>
-            <th>类型</th>
-            <th>优惠值</th>
-            <th>使用次数</th>
-            <th>有效期</th>
-            <th>操作</th>
+            <th>{{ t('adminCoupons.table.id') }}</th>
+            <th>{{ t('adminCoupons.table.code') }}</th>
+            <th>{{ t('adminCoupons.table.name') }}</th>
+            <th>{{ t('adminCoupons.table.type') }}</th>
+            <th>{{ t('adminCoupons.table.value') }}</th>
+            <th>{{ t('adminCoupons.table.usageCount') }}</th>
+            <th>{{ t('adminCoupons.table.validity') }}</th>
+            <th>{{ t('adminCoupons.table.actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="c in coupons" :key="c.id">
-            <td>{{ c.id }}</td>
-            <td><code class="coupon-code">{{ c.code }}</code></td>
-            <td>{{ c.name }}</td>
+          <tr v-for="coupon in coupons" :key="coupon.id">
+            <td>{{ coupon.id }}</td>
+            <td><code class="coupon-code">{{ coupon.code }}</code></td>
+            <td>{{ coupon.name }}</td>
             <td>
-              <span :class="['status-badge', c.type === 1 ? 'type-percent' : 'type-fixed']">
-                {{ c.type === 1 ? '折扣' : '固定金额' }}
+              <span :class="['status-badge', coupon.type === 1 ? 'type-percent' : 'type-fixed']">
+                {{ coupon.type === 1 ? t('adminCoupons.types.discount') : t('adminCoupons.types.fixed') }}
               </span>
             </td>
-            <td>{{ c.type === 1 ? c.value + '%' : '¥' + (c.value / 100).toFixed(2) }}</td>
-            <td>{{ c.use_count }} / {{ c.limit_use === -1 ? '∞' : c.limit_use }}</td>
-            <td class="date-range">{{ formatDate(c.started_at) }} ~ {{ formatDate(c.ended_at) }}</td>
+            <td>{{ formatCouponValue(coupon) }}</td>
+            <td>{{ coupon.use_count }} / {{ coupon.limit_use === -1 ? t('adminCoupons.table.unlimited') : coupon.limit_use }}</td>
+            <td class="date-range">{{ formatCouponDate(coupon.started_at) }} ~ {{ formatCouponDate(coupon.ended_at) }}</td>
             <td>
               <div class="action-buttons">
-                <button class="btn-sm btn-ghost" @click="remove(c)" title="删除">🗑️</button>
+                <button
+                  class="btn-sm btn-ghost"
+                  :title="t('common.actions.delete')"
+                  :aria-label="t('common.actions.delete')"
+                  @click="removeCoupon(coupon)"
+                >
+                  🗑️
+                </button>
               </div>
             </td>
           </tr>
           <tr v-if="coupons.length === 0">
-            <td colspan="8" class="empty-row">暂无优惠券</td>
+            <td colspan="8" class="empty-row">{{ t('adminCoupons.empty.noData') }}</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- 创建弹窗 -->
     <div v-if="showCreate" class="modal-overlay" @click.self="closeModal">
       <div class="modal">
         <div class="modal-header">
-          <h3>新建优惠券</h3>
-          <button class="close-btn" @click="closeModal">✕</button>
+          <h3>{{ t('adminCoupons.modal.title') }}</h3>
+          <button
+            class="close-btn"
+            :aria-label="t('common.actions.close')"
+            :title="t('common.actions.close')"
+            @click="closeModal"
+          >
+            ×
+          </button>
         </div>
         <div class="modal-body">
           <div class="form-row">
             <div class="form-group">
-              <label>优惠码 <span class="required">*</span></label>
-              <input v-model="form.code" type="text" placeholder="如: NEWYEAR2026">
+              <label>{{ t('adminCoupons.fields.code') }} <span class="required">*</span></label>
+              <input v-model="form.code" type="text" :placeholder="t('adminCoupons.placeholders.code')" />
             </div>
             <div class="form-group">
-              <label>名称 <span class="required">*</span></label>
-              <input v-model="form.name" type="text" placeholder="如: 新年特惠">
+              <label>{{ t('adminCoupons.fields.name') }} <span class="required">*</span></label>
+              <input v-model="form.name" type="text" :placeholder="t('adminCoupons.placeholders.name')" />
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>类型</label>
+              <label>{{ t('adminCoupons.fields.type') }}</label>
               <select v-model="form.type">
-                <option :value="1">折扣（百分比）</option>
-                <option :value="2">固定金额（分）</option>
+                <option :value="1">{{ t('adminCoupons.types.discountPercent') }}</option>
+                <option :value="2">{{ t('adminCoupons.types.fixedCents') }}</option>
               </select>
             </div>
             <div class="form-group">
-              <label>{{ form.type === 1 ? '折扣百分比 (0-100)' : '优惠金额 (分)' }}</label>
-              <input v-model.number="form.value" type="number" min="0">
+              <label>{{ form.type === 1 ? t('adminCoupons.fields.discountValue') : t('adminCoupons.fields.fixedValue') }}</label>
+              <input v-model.number="form.value" type="number" min="0" />
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>开始时间</label>
-              <input v-model="form.started_at" type="datetime-local">
+              <label>{{ t('adminCoupons.fields.startTime') }}</label>
+              <input v-model="form.started_at" type="datetime-local" />
             </div>
             <div class="form-group">
-              <label>结束时间</label>
-              <input v-model="form.ended_at" type="datetime-local">
+              <label>{{ t('adminCoupons.fields.endTime') }}</label>
+              <input v-model="form.ended_at" type="datetime-local" />
             </div>
           </div>
           <div class="form-group">
-            <label>使用次数限制 (-1 表示无限)</label>
-            <input v-model.number="form.limit_use" type="number">
+            <label>{{ t('adminCoupons.fields.limitUse') }}</label>
+            <input v-model.number="form.limit_use" type="number" />
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closeModal">取消</button>
-          <button @click="create">创建</button>
+          <button class="btn-secondary" @click="closeModal">{{ t('common.actions.cancel') }}</button>
+          <button @click="createCoupon">{{ t('common.actions.create') }}</button>
         </div>
       </div>
     </div>
@@ -107,8 +118,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import adminApi from '@/api/admin'
+import { useAppI18n } from '@/composables/useAppI18n'
+
+const { t, formatDate } = useAppI18n()
 
 const coupons = ref([])
 const showCreate = ref(false)
@@ -122,24 +136,7 @@ const form = reactive({
   ended_at: ''
 })
 
-const load = async () => {
-  try {
-    const res = await adminApi.getCoupons()
-    coupons.value = res.data || []
-  } catch (e) {
-    console.error('加载失败:', e)
-  }
-}
-
-onMounted(() => { load() })
-
-const formatDate = (ts) => {
-  if (!ts) return '-'
-  return new Date(ts * 1000).toLocaleDateString('zh-CN')
-}
-
-const closeModal = () => {
-  showCreate.value = false
+const resetForm = () => {
   form.code = ''
   form.name = ''
   form.type = 1
@@ -149,11 +146,41 @@ const closeModal = () => {
   form.ended_at = ''
 }
 
-const create = async () => {
+const load = async () => {
+  try {
+    const res = await adminApi.getCoupons()
+    coupons.value = res.data || []
+  } catch (error) {
+    console.error(t('adminCoupons.messages.fetchFailed'), error)
+  }
+}
+
+onMounted(() => {
+  load()
+})
+
+const formatCouponDate = (ts) => {
+  if (!ts) return '-'
+  return formatDate(ts)
+}
+
+const formatCouponValue = (coupon) => (
+  coupon.type === 1
+    ? `${coupon.value}%`
+    : `¥${(coupon.value / 100).toFixed(2)}`
+)
+
+const closeModal = () => {
+  showCreate.value = false
+  resetForm()
+}
+
+const createCoupon = async () => {
   if (!form.code || !form.name) {
-    alert('请填写优惠码和名称')
+    window.alert(t('adminCoupons.messages.requiredFields'))
     return
   }
+
   try {
     const payload = {
       code: form.code.toUpperCase(),
@@ -161,25 +188,31 @@ const create = async () => {
       type: form.type,
       value: form.value,
       limit_use: form.limit_use,
-      started_at: form.started_at ? Math.floor(new Date(form.started_at).getTime() / 1000) : Math.floor(Date.now() / 1000),
-      ended_at: form.ended_at ? Math.floor(new Date(form.ended_at).getTime() / 1000) : Math.floor(Date.now() / 1000) + 30 * 24 * 3600
+      started_at: form.started_at
+        ? Math.floor(new Date(form.started_at).getTime() / 1000)
+        : Math.floor(Date.now() / 1000),
+      ended_at: form.ended_at
+        ? Math.floor(new Date(form.ended_at).getTime() / 1000)
+        : Math.floor(Date.now() / 1000) + 30 * 24 * 3600
     }
+
     await adminApi.createCoupon(payload)
-    alert('创建成功')
+    window.alert(t('adminCoupons.messages.createSuccess'))
     closeModal()
     await load()
-  } catch (e) {
-    alert(e.message || '创建失败')
+  } catch (error) {
+    window.alert(error.message || t('adminCoupons.messages.createFailed'))
   }
 }
 
-const remove = async (c) => {
-  if (!confirm(`确定删除优惠券 "${c.code}"？`)) return
+const removeCoupon = async (coupon) => {
+  if (!window.confirm(t('adminCoupons.messages.deleteConfirm', { code: coupon.code }))) return
+
   try {
-    await adminApi.deleteCoupon(c.id)
+    await adminApi.deleteCoupon(coupon.id)
     await load()
-  } catch (e) {
-    alert(e.message || '删除失败')
+  } catch (error) {
+    window.alert(error.message || t('adminCoupons.messages.deleteFailed'))
   }
 }
 </script>
@@ -278,7 +311,6 @@ const remove = async (c) => {
   padding: 40px !important;
 }
 
-/* 弹窗样式 */
 .modal-overlay {
   position: fixed;
   inset: 0;

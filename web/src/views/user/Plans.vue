@@ -1,124 +1,113 @@
 <template>
   <div class="plans-page">
     <div class="page-header">
-      <h1>💰 订阅计划</h1>
-      <p class="text-secondary">选择最适合您的流量套餐，随时开启高速网络体验</p>
+      <h1>{{ t('user.plans.title') }}</h1>
+      <p class="text-secondary">{{ t('user.plans.subtitle') }}</p>
     </div>
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <p>正在加载精品套餐...</p>
+      <p>{{ t('user.plans.loading') }}</p>
     </div>
 
-    <!-- 套餐列表 -->
     <div v-else class="plans-grid">
       <div v-for="plan in plans" :key="plan.id" class="plan-card">
-        <div class="plan-badge" v-if="plan.onetime_price">永久</div>
+        <div v-if="plan.onetime_price" class="plan-badge">{{ t('user.plans.permanentBadge') }}</div>
         <h3 class="plan-name">{{ plan.name }}</h3>
         <div class="plan-price">
           <span class="currency">¥</span>
           <span class="amount">{{ formatPrice(getDisplayPrice(plan)) }}</span>
-          <span class="period">/ {{ periodText }}</span>
+          <span class="period">/ {{ displayPeriodLabel(plan) }}</span>
         </div>
-        
+
         <div class="plan-features">
           <div class="feature-item">
-            <span class="icon">🚀</span>
-            <span>{{ formatBytes(plan.transfer_enable * 1024 * 1024 * 1024) }} 流量</span>
+            <span class="icon">T</span>
+            <span>{{ t('user.plans.trafficFeature', { value: formatBytes(plan.transfer_enable * 1024 * 1024 * 1024) }) }}</span>
           </div>
-          <div class="feature-item" v-if="plan.speed_limit">
-            <span class="icon">⚡</span>
-            <span>{{ plan.speed_limit }}Mbps 速率限制</span>
+          <div v-if="plan.speed_limit" class="feature-item">
+            <span class="icon">S</span>
+            <span>{{ t('user.plans.speedLimitFeature', { value: plan.speed_limit }) }}</span>
           </div>
-          <div class="feature-item" v-if="plan.device_limit">
-            <span class="icon">📱</span>
-            <span>{{ plan.device_limit }} 台设备同时在线</span>
+          <div v-if="plan.device_limit" class="feature-item">
+            <span class="icon">D</span>
+            <span>{{ t('user.plans.deviceLimitFeature', { value: plan.device_limit }) }}</span>
           </div>
           <div class="feature-item">
-            <span class="icon">🌍</span>
-            <span>多国节点全协议支持</span>
+            <span class="icon">N</span>
+            <span>{{ t('user.plans.unlimitedFeature') }}</span>
           </div>
         </div>
 
-        <button class="btn-primary w-full" @click="openPurchase(plan)">
-          立即选购
-        </button>
+        <button class="btn-primary w-full" @click="openPurchase(plan)">{{ t('common.actions.buyNow') }}</button>
       </div>
     </div>
 
-    <!-- 结算弹窗 -->
     <div v-if="showPurchase" class="modal-overlay" @click.self="closePurchase">
       <div class="modal modal-md">
         <div class="modal-header">
-          <h3>确认订单</h3>
-          <button class="close-btn" @click="closePurchase">✕</button>
+          <h3>{{ t('user.plans.confirmOrder') }}</h3>
+          <button class="close-btn" @click="closePurchase">×</button>
         </div>
         <div class="modal-body">
           <div class="order-summary">
             <div class="summary-item">
-              <span class="label">所选套餐</span>
-              <span class="value">{{ selectedPlan.name }}</span>
+              <span class="label">{{ t('user.plans.selectedPlan') }}</span>
+              <span class="value">{{ selectedPlan?.name }}</span>
             </div>
-            
+
             <div class="form-group mt-4">
-              <label>选择支付周期</label>
+              <label>{{ t('user.plans.choosePeriod') }}</label>
               <div class="period-selector">
-                <button 
-                  v-for="p in availablePeriods" 
-                  :key="p.key"
-                  :class="['period-btn', { active: selectedPeriod === p.key }]"
-                  @click="selectedPeriod = p.key"
+                <button
+                  v-for="item in availablePeriods"
+                  :key="item.key"
+                  :class="['period-btn', { active: selectedPeriod === item.key }]"
+                  @click="selectedPeriod = item.key"
                 >
-                  <span class="period-name">{{ p.label }}</span>
-                  <span class="period-price">¥{{ formatPrice(p.price) }}</span>
+                  <span class="period-name">{{ item.label }}</span>
+                  <span class="period-price">¥{{ formatPrice(item.price) }}</span>
                 </button>
               </div>
             </div>
 
-            <!-- 优惠券部分 -->
             <div class="coupon-section mt-4">
-              <label>使用优惠码 (可选)</label>
+              <label>{{ t('user.plans.optionalCoupon') }}</label>
               <div class="coupon-input-group">
-                <input 
-                  v-model="couponCode" 
-                  type="text" 
-                  placeholder="输入优惠码"
+                <input
+                  v-model.trim="couponCode"
+                  type="text"
+                  :placeholder="t('user.plans.couponPlaceholder')"
                   :disabled="couponApplied"
                 >
-                <button 
-                  v-if="!couponApplied" 
-                  class="btn-secondary" 
-                  @click="applyCoupon"
+                <button
+                  v-if="!couponApplied"
+                  class="btn-secondary"
                   :disabled="checkingCoupon"
+                  @click="applyCoupon"
                 >
-                  {{ checkingCoupon ? '检查中' : '验证' }}
+                  {{ checkingCoupon ? t('common.actions.refresh') : t('common.actions.verify') }}
                 </button>
-                <button 
-                  v-else 
-                  class="btn-ghost text-error" 
-                  @click="removeCoupon"
-                >
-                  移除
-                </button>
+                <button v-else class="btn-ghost text-error" @click="removeCoupon">{{ t('common.actions.remove') }}</button>
               </div>
               <p v-if="couponError" class="coupon-tip text-error">{{ couponError }}</p>
               <p v-if="couponApplied" class="coupon-tip text-success">
-                已应用优惠: {{ couponData.name }} (-¥{{ formatPrice(discountAmount) }})
+                {{ t('user.plans.couponApplied', { name: couponData.name, value: formatPrice(discountAmount) }) }}
               </p>
             </div>
           </div>
 
           <div class="order-total mt-6">
             <div class="total-row">
-              <span>应付总额</span>
+              <span>{{ t('user.plans.totalAmount') }}</span>
               <span class="total-price">¥{{ formatPrice(finalPrice) }}</span>
             </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-ghost" @click="closePurchase">返回重选</button>
-          <button class="btn-primary" @click="submitOrder" :disabled="creatingOrder">
-            {{ creatingOrder ? '正在下单' : '提交订单' }}
+          <button class="btn-ghost" @click="closePurchase">{{ t('user.plans.backToEdit') }}</button>
+          <button class="btn-primary" :disabled="creatingOrder" @click="submitOrder">
+            {{ creatingOrder ? t('user.plans.creatingOrder') : t('common.actions.submit') }}
           </button>
         </div>
       </div>
@@ -127,145 +116,139 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getPlans, checkCoupon, saveOrder } from '@/api/user'
+import { checkCoupon, getPlans, saveOrder } from '@/api/user'
+import { useAppI18n } from '@/composables/useAppI18n'
 
 const router = useRouter()
+const { t } = useAppI18n()
+
 const plans = ref([])
 const loading = ref(true)
 const showPurchase = ref(false)
 const selectedPlan = ref(null)
 const selectedPeriod = ref('month')
-
-// 优惠券相关
 const couponCode = ref('')
 const couponApplied = ref(false)
 const couponData = ref(null)
 const checkingCoupon = ref(false)
 const couponError = ref('')
-
-// 下单相关
 const creatingOrder = ref(false)
 
-const loadPlans = async () => {
+async function loadPlans() {
   loading.value = true
   try {
     const res = await getPlans()
     plans.value = res.data || []
   } catch (err) {
-    console.error('加载套餐失败:', err)
+    console.error('Failed to load plans:', err)
   } finally {
     loading.value = false
   }
 }
 
-const getDisplayPrice = (plan) => {
+function getDisplayPrice(plan) {
   if (plan.month_price) return plan.month_price
   if (plan.onetime_price) return plan.onetime_price
   return 0
 }
 
-const periodText = '月' // 简化显示
+function displayPeriodLabel(plan) {
+  return plan.month_price ? t('common.periods.month') : t('common.periods.onetime')
+}
 
 const availablePeriods = computed(() => {
   if (!selectedPlan.value) return []
-  const p = selectedPlan.value
+  const plan = selectedPlan.value
   const list = []
-  if (p.month_price) list.push({ key: 'month', label: '月付', price: p.month_price })
-  if (p.quarter_price) list.push({ key: 'quarter', label: '季付', price: p.quarter_price })
-  if (p.half_year_price) list.push({ key: 'half_year', label: '半年付', price: p.half_year_price })
-  if (p.year_price) list.push({ key: 'year', label: '年付', price: p.year_price })
-  if (p.onetime_price) list.push({ key: 'onetime', label: '一次性', price: p.onetime_price })
+  if (plan.month_price) list.push({ key: 'month', label: t('common.periods.month'), price: plan.month_price })
+  if (plan.quarter_price) list.push({ key: 'quarter', label: t('common.periods.quarter'), price: plan.quarter_price })
+  if (plan.half_year_price) list.push({ key: 'half_year', label: t('common.periods.halfYear'), price: plan.half_year_price })
+  if (plan.year_price) list.push({ key: 'year', label: t('common.periods.year'), price: plan.year_price })
+  if (plan.two_year_price) list.push({ key: 'two_year', label: t('common.periods.twoYear'), price: plan.two_year_price })
+  if (plan.three_year_price) list.push({ key: 'three_year', label: t('common.periods.threeYear'), price: plan.three_year_price })
+  if (plan.onetime_price) list.push({ key: 'onetime', label: t('common.periods.onetime'), price: plan.onetime_price })
   return list
 })
 
-const currentPeriodPrice = computed(() => {
-  const period = availablePeriods.value.find(p => p.key === selectedPeriod.value)
-  return period ? period.price : 0
-})
+const currentPeriodPrice = computed(() => availablePeriods.value.find((item) => item.key === selectedPeriod.value)?.price || 0)
 
 const discountAmount = computed(() => {
   if (!couponApplied.value || !couponData.value) return 0
-  const price = currentPeriodPrice.value
-  if (couponData.value.type === 1) { // 百分比
-    return price * couponData.value.value / 100
-  } else { // 固定金额
-    return couponData.value.value
+  if (couponData.value.type === 1) {
+    return currentPeriodPrice.value * couponData.value.value / 100
   }
+  return couponData.value.value
 })
 
-const finalPrice = computed(() => {
-  return Math.max(0, currentPeriodPrice.value - discountAmount.value)
-})
+const finalPrice = computed(() => Math.max(0, currentPeriodPrice.value - discountAmount.value))
 
-const formatPrice = (cent) => {
-  return (cent / 100).toFixed(2)
+function formatPrice(amount) {
+  return ((amount || 0) / 100).toFixed(2)
 }
 
-const formatBytes = (bytes) => {
+function formatBytes(bytes) {
   if (!bytes) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let i = 0
-  while (bytes >= 1024 && i < units.length - 1) {
-    bytes /= 1024
-    i++
+  let value = bytes
+  let index = 0
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024
+    index += 1
   }
-  return bytes.toFixed(2) + ' ' + units[i]
+  return `${value.toFixed(2)} ${units[index]}`
 }
 
-const openPurchase = (plan) => {
+function openPurchase(plan) {
   selectedPlan.value = plan
-  // 默认选择第一个可用的周期
-  const periods = availablePeriods.value
-  if (periods.length > 0) {
-    selectedPeriod.value = periods[0].key
-  }
+  selectedPeriod.value = availablePeriods.value[0]?.key || 'month'
   showPurchase.value = true
 }
 
-const closePurchase = () => {
+function closePurchase() {
   showPurchase.value = false
   removeCoupon()
 }
 
-const applyCoupon = async () => {
-  if (!couponCode.value.trim()) return
+async function applyCoupon() {
+  if (!couponCode.value || !selectedPlan.value) {
+    return
+  }
   checkingCoupon.value = true
   couponError.value = ''
   try {
-    const res = await checkCoupon({ 
-      code: couponCode.value.trim(),
-      plan_id: selectedPlan.value.id 
+    const res = await checkCoupon({
+      code: couponCode.value,
+      plan_id: selectedPlan.value.id
     })
     couponData.value = res.data
     couponApplied.value = true
   } catch (err) {
-    couponError.value = err.response?.data?.message || '无效的优惠码'
+    couponError.value = err.response?.data?.message || t('common.messages.invalidCoupon')
   } finally {
     checkingCoupon.value = false
   }
 }
 
-const removeCoupon = () => {
+function removeCoupon() {
   couponCode.value = ''
   couponApplied.value = false
   couponData.value = null
   couponError.value = ''
 }
 
-const submitOrder = async () => {
+async function submitOrder() {
   creatingOrder.value = true
   try {
-    const res = await saveOrder({
+    await saveOrder({
       plan_id: selectedPlan.value.id,
       period: selectedPeriod.value,
       coupon_id: couponApplied.value ? couponData.value.id : null
     })
-    // 下单成功后跳转到订单列表（或支付页面）
     router.push('/user/orders')
   } catch (err) {
-    alert(err.response?.data?.message || '下单失败')
+    alert(err.response?.data?.message || t('common.messages.submitFailed'))
   } finally {
     creatingOrder.value = false
   }
@@ -370,13 +353,13 @@ onMounted(() => {
 }
 
 .feature-item .icon {
-  font-size: 18px;
+  font-size: 14px;
   width: 24px;
   display: inline-flex;
   justify-content: center;
+  font-weight: 700;
 }
 
-/* 结算弹窗 */
 .order-summary {
   background: var(--bg-color);
   padding: 20px;
@@ -467,10 +450,14 @@ onMounted(() => {
   color: var(--primary-color);
 }
 
-.text-error { color: var(--error-color); }
-.text-success { color: var(--success-color); }
+.text-error {
+  color: var(--error-color);
+}
 
-/* 状态样式 */
+.text-success {
+  color: var(--success-color);
+}
+
 .loading-state {
   display: flex;
   flex-direction: column;
@@ -489,6 +476,8 @@ onMounted(() => {
 }
 
 @keyframes rotate {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

@@ -990,7 +990,7 @@ cd web && npm run build
   - optional ansible config keys: `command`, `workingDir`, `targetPattern`, `timeoutSeconds`, `environment`
   - one-click Docker installer: `install.sh` (`panel_install.sh` wrapper)
   - bundled ansible deployment assets: `config/deploy/ansible/`
-  - env bootstrap keys: `FORWARD_RUNTIME_BACKEND`, `FORWARD_RUNTIME_ANSIBLE_CONFIG_JSON`
+- runtime override surface: `config/config.yaml.forward_runtime`
   - public boundary note: `docs/guide/nodex-internal-extension.md`
   - relay onboarding note: `docs/guide/forward-relay-onboarding.md`
 - Current verified clone entry points:
@@ -1012,7 +1012,7 @@ cd web && npm run build
 ## NodeX Runtime Docs
 
 - `/admin/forward/nodes` online state currently means only `host:port` TCP reachability. Do not document or review it as if it proved gost API health, NodeX health, or ansible SSH readiness.
-- Do not describe `iptables_ansible` as if `ForwardNode` stored `ssh_*` credentials. Current SSH access comes from inventory or env-generated inventory, not from the `ForwardNode` schema.
+- Do not describe `iptables_ansible` as if `ForwardNode` stored `ssh_*` credentials. Current SSH access comes from the ansible inventory configured under `config/config.yaml.forward_runtime.iptables_ansible`, not from the `ForwardNode` schema.
 - Relay attachment semantics now have a dedicated guide at `docs/guide/forward-relay-onboarding.md`. Treat it as the first doc to update whenever someone changes what "node really joined" means in NodeX mode or `iptables_ansible` mode.
 - NodeX Mode (`forward.runtime_backend=gost`) and iptables/ansible Mode (`forward.runtime_backend=iptables_ansible`) are two distinct execution planes. Keep the relay onboarding guide in `docs/guide/forward-relay-onboarding.md`, the operational guide in `docs/guide/forward-tunnel-runtime-ops.md`, validation steps in `docs/guide/forward-tunnel-smoke-test.md`, and the extension boundary in `docs/guide/nodex-internal-extension.md`. Synchronize all four whenever runtime behavior or deployment scripts change.
 - `docs/guide/forward-relay-onboarding.md` is the source of truth for the difference between “ForwardNode record saved” and “relay actually attached”.

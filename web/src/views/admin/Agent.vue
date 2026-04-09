@@ -1,40 +1,38 @@
 <template>
   <div class="agent-page">
     <div class="page-header">
-      <h1>NodeX Agents</h1>
-      <p class="text-secondary">Only NodeX mode needs agents. Use this page for agent status, remote terminal and task delivery.</p>
+      <h1>{{ t('runtime.nodeXAgents.title') }}</h1>
+      <p class="text-secondary">{{ t('runtime.nodeXAgents.subtitle') }}</p>
     </div>
 
-    <!-- 标签切换 -->
     <div class="tabs">
       <button :class="['tab', { active: activeTab === 'agents' }]" @click="activeTab = 'agents'">
-        在线 Agent
+        {{ t('runtime.nodeXAgents.tabs.agents') }}
       </button>
       <button :class="['tab', { active: activeTab === 'terminal' }]" @click="activeTab = 'terminal'">
-        远程终端
+        {{ t('runtime.nodeXAgents.tabs.terminal') }}
       </button>
       <button :class="['tab', { active: activeTab === 'tasks' }]" @click="activeTab = 'tasks'">
-        任务历史
+        {{ t('runtime.nodeXAgents.tabs.tasks') }}
       </button>
     </div>
 
-    <!-- Agent 列表 -->
     <div v-show="activeTab === 'agents'">
       <div class="toolbar">
-        <button class="btn-secondary" @click="fetchAgents">刷新</button>
+        <button class="btn-secondary" @click="fetchAgents">{{ t('runtime.nodeXAgents.actions.refresh') }}</button>
       </div>
 
       <div class="table-container">
         <table class="data-table">
           <thead>
             <tr>
-              <th>节点 ID</th>
-              <th>版本</th>
-              <th>系统</th>
-              <th>最后在线</th>
-              <th>状态</th>
-              <th>能力</th>
-              <th>操作</th>
+              <th>{{ t('runtime.nodeXAgents.table.nodeId') }}</th>
+              <th>{{ t('runtime.nodeXAgents.table.version') }}</th>
+              <th>{{ t('runtime.nodeXAgents.table.system') }}</th>
+              <th>{{ t('runtime.nodeXAgents.table.lastSeen') }}</th>
+              <th>{{ t('runtime.nodeXAgents.table.status') }}</th>
+              <th>{{ t('runtime.nodeXAgents.table.capabilities') }}</th>
+              <th>{{ t('runtime.nodeXAgents.table.action') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -50,7 +48,7 @@
               <td>{{ formatTime(agent.last_seen) }}</td>
               <td>
                 <span :class="['status-badge', agent.online ? 'status-active' : 'status-offline']">
-                  {{ agent.online ? '在线' : '离线' }}
+                  {{ agent.online ? t('runtime.nodeXAgents.status.online') : t('runtime.nodeXAgents.status.offline') }}
                 </span>
               </td>
               <td>
@@ -62,41 +60,52 @@
               </td>
               <td>
                 <div class="action-buttons">
-                  <button class="btn-sm btn-ghost" @click="openTerminal(agent)" title="终端">
-                    💻
+                  <button
+                    class="btn-sm btn-ghost"
+                    :title="t('runtime.nodeXAgents.tabs.terminal')"
+                    @click="openTerminal(agent)"
+                  >
+                    {{ t('runtime.nodeXAgents.actions.terminalShort') }}
                   </button>
-                  <button class="btn-sm btn-ghost" @click="openTaskModal(agent)" title="下发任务">
-                    📤
+                  <button
+                    class="btn-sm btn-ghost"
+                    :title="t('runtime.nodeXAgents.taskModal.title')"
+                    @click="openTaskModal(agent)"
+                  >
+                    {{ t('runtime.nodeXAgents.actions.taskShort') }}
                   </button>
-                  <button class="btn-sm btn-ghost" @click="viewMonitor(agent)" title="监控">
-                    📊
+                  <button
+                    class="btn-sm btn-ghost"
+                    :title="t('runtime.nodeXAgents.actions.monitor')"
+                    @click="viewMonitor(agent)"
+                  >
+                    {{ t('runtime.nodeXAgents.actions.monitorShort') }}
                   </button>
                 </div>
               </td>
             </tr>
             <tr v-if="agents.length === 0">
-              <td colspan="7" class="empty-row">暂无在线 Agent</td>
+              <td colspan="7" class="empty-row">{{ t('runtime.nodeXAgents.empty.agents') }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- 远程终端 -->
     <div v-show="activeTab === 'terminal'">
       <div class="terminal-container">
         <div class="terminal-header">
           <select v-model="selectedNodeId" class="node-select">
-            <option value="">选择节点</option>
+            <option value="">{{ t('runtime.nodeXAgents.terminal.chooseNode') }}</option>
             <option v-for="agent in onlineAgents" :key="agent.node_id" :value="agent.node_id">
-              Node #{{ agent.node_id }}
+              {{ t('runtime.nodeXAgents.terminal.nodeLabel', { id: agent.node_id }) }}
             </option>
           </select>
           <span class="terminal-status" :class="{ connected: wsConnected }">
-            {{ wsConnected ? '已连接' : '未连接' }}
+            {{ wsConnected ? t('runtime.nodeXAgents.status.connected') : t('runtime.nodeXAgents.status.disconnected') }}
           </span>
         </div>
-        <div class="terminal-output" ref="terminalOutput">
+        <div ref="terminalOutput" class="terminal-output">
           <div v-for="(line, index) in terminalLines" :key="index" class="terminal-line">
             <span class="line-prompt">{{ line.prompt }}</span>
             <span class="line-content" :class="line.type">{{ line.content }}</span>
@@ -106,89 +115,100 @@
           <span class="prompt">$</span>
           <input
             v-model="commandInput"
-            @keyup.enter="executeCommand"
-            placeholder="输入命令..."
             :disabled="!selectedNodeId"
+            :placeholder="t('runtime.nodeXAgents.terminal.promptPlaceholder')"
+            @keyup.enter="executeCommand"
           />
-          <button @click="executeCommand" :disabled="!selectedNodeId || !commandInput">执行</button>
+          <button :disabled="!selectedNodeId || !commandInput" @click="executeCommand">
+            {{ t('runtime.nodeXAgents.actions.execute') }}
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- 任务历史 -->
     <div v-show="activeTab === 'tasks'">
       <div class="table-container">
         <table class="data-table">
           <thead>
             <tr>
-              <th>任务 ID</th>
-              <th>节点</th>
-              <th>类型</th>
-              <th>命令/动作</th>
-              <th>状态</th>
-              <th>耗时</th>
-              <th>时间</th>
+              <th>{{ t('runtime.nodeXAgents.table.taskId') }}</th>
+              <th>{{ t('runtime.nodeXAgents.table.node') }}</th>
+              <th>{{ t('runtime.nodeXAgents.table.type') }}</th>
+              <th>{{ t('runtime.nodeXAgents.table.command') }}</th>
+              <th>{{ t('runtime.nodeXAgents.table.status') }}</th>
+              <th>{{ t('runtime.nodeXAgents.table.duration') }}</th>
+              <th>{{ t('runtime.nodeXAgents.table.time') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="task in taskHistory" :key="task.task_id">
               <td>{{ task.task_id }}</td>
-              <td>Node #{{ task.node_id }}</td>
+              <td>{{ t('runtime.nodeXAgents.terminal.nodeLabel', { id: task.node_id }) }}</td>
               <td>{{ task.type }}</td>
               <td><code>{{ task.action }}</code></td>
               <td>
                 <span :class="['status-badge', task.success ? 'status-active' : 'status-error']">
-                  {{ task.success ? '成功' : '失败' }}
+                  {{ task.success ? t('runtime.nodeXAgents.status.success') : t('runtime.nodeXAgents.status.failed') }}
                 </span>
               </td>
-              <td>{{ task.duration_ms }}ms</td>
+              <td>{{ task.duration_ms }} ms</td>
               <td>{{ formatTime(task.timestamp) }}</td>
             </tr>
             <tr v-if="taskHistory.length === 0">
-              <td colspan="7" class="empty-row">暂无任务记录</td>
+              <td colspan="7" class="empty-row">{{ t('runtime.nodeXAgents.empty.tasks') }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- 任务下发弹窗 -->
     <div v-if="showTaskModal" class="modal-overlay" @click.self="showTaskModal = false">
       <div class="modal">
         <div class="modal-header">
-          <h3>下发任务</h3>
-          <button class="close-btn" @click="showTaskModal = false">x</button>
+          <h3>{{ t('runtime.nodeXAgents.taskModal.title') }}</h3>
+          <button
+            class="close-btn"
+            :aria-label="t('common.actions.close')"
+            :title="t('common.actions.close')"
+            @click="showTaskModal = false"
+          >
+            x
+          </button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>目标节点</label>
+            <label>{{ t('runtime.nodeXAgents.taskModal.targetNode') }}</label>
             <input :value="taskTargetNode?.node_id" disabled />
           </div>
           <div class="form-group">
-            <label>任务类型</label>
+            <label>{{ t('runtime.nodeXAgents.taskModal.taskType') }}</label>
             <select v-model="taskForm.type">
-              <option value="command">执行命令</option>
-              <option value="file">文件操作</option>
-              <option value="service">服务管理</option>
-              <option value="gost">GOST 管理</option>
+              <option value="command">{{ t('runtime.nodeXAgents.taskTypes.command') }}</option>
+              <option value="file">{{ t('runtime.nodeXAgents.taskTypes.file') }}</option>
+              <option value="service">{{ t('runtime.nodeXAgents.taskTypes.service') }}</option>
+              <option value="gost">{{ t('runtime.nodeXAgents.taskTypes.gost') }}</option>
             </select>
           </div>
           <div class="form-group">
-            <label>动作</label>
-            <input v-model="taskForm.action" placeholder="命令或动作" />
+            <label>{{ t('runtime.nodeXAgents.taskModal.action') }}</label>
+            <input v-model="taskForm.action" :placeholder="t('runtime.nodeXAgents.table.command')" />
           </div>
           <div class="form-group">
-            <label>参数 (JSON)</label>
-            <textarea v-model="taskForm.paramsJson" placeholder='{"key": "value"}' rows="3"></textarea>
+            <label>{{ t('runtime.nodeXAgents.taskModal.paramsJson') }}</label>
+            <textarea
+              v-model="taskForm.paramsJson"
+              :placeholder="t('runtime.nodeXAgents.taskModal.paramsPlaceholder')"
+              rows="3"
+            ></textarea>
           </div>
           <div class="form-group">
-            <label>超时 (秒)</label>
+            <label>{{ t('runtime.nodeXAgents.taskModal.timeoutSeconds') }}</label>
             <input v-model.number="taskForm.timeout" type="number" />
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="showTaskModal = false">取消</button>
-          <button @click="sendTask">发送</button>
+          <button class="btn-secondary" @click="showTaskModal = false">{{ t('runtime.nodeXAgents.actions.cancel') }}</button>
+          <button @click="sendTask">{{ t('runtime.nodeXAgents.actions.send') }}</button>
         </div>
       </div>
     </div>
@@ -196,8 +216,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { getAgents, createAgentTask, executeAgentCommand } from '@/api/admin'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { useAppI18n } from '@/composables/useAppI18n'
+import { createAgentTask, executeAgentCommand, getAgents } from '@/api/admin'
+
+const { t, formatDateTime } = useAppI18n()
 
 const activeTab = ref('agents')
 const agents = ref([])
@@ -216,27 +239,26 @@ const taskForm = ref({
   timeout: 30
 })
 
-const onlineAgents = computed(() => agents.value.filter(a => a.online))
+const onlineAgents = computed(() => agents.value.filter(agent => agent.online))
+const notify = message => window.alert(message)
 
 const fetchAgents = async () => {
   try {
     const res = await getAgents()
     agents.value = res.data?.agents || []
   } catch (err) {
-    console.error('获取 Agent 列表失败:', err)
+    console.error(t('runtime.nodeXAgents.messages.fetchFailed'), err)
   }
 }
 
 const formatTime = (time) => {
-  if (!time) return '-'
-  const date = new Date(time)
-  return date.toLocaleString('zh-CN', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  if (!time) {
+    return '-'
+  }
+
+  return formatDateTime(time, {
     second: '2-digit'
-  })
+  }) || String(time)
 }
 
 const openTerminal = (agent) => {
@@ -256,17 +278,17 @@ const openTaskModal = (agent) => {
 }
 
 const viewMonitor = (agent) => {
-  // TODO: 打开监控面板
-  alert(`查看节点 #${agent.node_id} 的监控数据`)
+  notify(t('runtime.nodeXAgents.hints.monitor', { id: agent.node_id }))
 }
 
 const executeCommand = async () => {
-  if (!selectedNodeId.value || !commandInput.value) return
+  if (!selectedNodeId.value || !commandInput.value) {
+    return
+  }
 
   const cmd = commandInput.value
   commandInput.value = ''
 
-  // 添加到终端输出
   terminalLines.value.push({
     prompt: '$ ',
     content: cmd,
@@ -281,7 +303,6 @@ const executeCommand = async () => {
       timeout: 30
     })
 
-    // 添加结果
     const result = res.data
     terminalLines.value.push({
       prompt: '',
@@ -289,7 +310,6 @@ const executeCommand = async () => {
       type: result.success ? 'output' : 'error'
     })
 
-    // 记录到任务历史
     taskHistory.value.unshift({
       task_id: result.task_id || Date.now().toString(),
       node_id: selectedNodeId.value,
@@ -302,12 +322,13 @@ const executeCommand = async () => {
   } catch (err) {
     terminalLines.value.push({
       prompt: '',
-      content: 'Error: ' + (err.response?.data?.error || err.message),
+      content: t('runtime.nodeXAgents.messages.commandError', {
+        message: err.response?.data?.error || err.message
+      }),
       type: 'error'
     })
   }
 
-  // 滚动到底部
   await nextTick()
   if (terminalOutput.value) {
     terminalOutput.value.scrollTop = terminalOutput.value.scrollHeight
@@ -316,18 +337,19 @@ const executeCommand = async () => {
 
 const sendTask = async () => {
   if (!taskTargetNode.value || !taskForm.value.action) {
-    alert('请填写完整信息')
+    notify(t('runtime.nodeXAgents.messages.taskIncomplete'))
+    return
+  }
+
+  let params = {}
+  try {
+    params = JSON.parse(taskForm.value.paramsJson || '{}')
+  } catch (error) {
+    notify(t('runtime.nodeXAgents.messages.invalidParamsJson'))
     return
   }
 
   try {
-    let params = {}
-    try {
-      params = JSON.parse(taskForm.value.paramsJson || '{}')
-    } catch (e) {
-      // ignore
-    }
-
     await createAgentTask({
       node_id: taskTargetNode.value.node_id,
       type: taskForm.value.type,
@@ -337,16 +359,17 @@ const sendTask = async () => {
     })
 
     showTaskModal.value = false
-    alert('任务已发送')
+    notify(t('runtime.nodeXAgents.messages.taskSent'))
   } catch (err) {
-    alert('发送失败: ' + (err.response?.data?.error || err.message))
+    notify(t('runtime.nodeXAgents.messages.taskSendFailed', {
+      message: err.response?.data?.error || err.message
+    }))
   }
 }
 
 let refreshTimer
 onMounted(() => {
   fetchAgents()
-  // 每 30 秒刷新一次
   refreshTimer = setInterval(fetchAgents, 30000)
 })
 
@@ -375,6 +398,39 @@ onUnmounted(() => {
   background: var(--primary-color);
   color: white;
   border-color: var(--primary-color);
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-sm {
+  min-width: 32px;
+}
+
+.btn-ghost {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-color);
+  cursor: pointer;
+}
+
+.btn-ghost:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .capability-tags {
@@ -434,7 +490,7 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: Consolas, Monaco, monospace;
   font-size: 13px;
   line-height: 1.5;
 }
@@ -476,7 +532,7 @@ onUnmounted(() => {
 
 .terminal-input .prompt {
   color: #22c55e;
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: Consolas, Monaco, monospace;
 }
 
 .terminal-input input {
@@ -484,7 +540,7 @@ onUnmounted(() => {
   background: transparent;
   border: none;
   color: #fff;
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: Consolas, Monaco, monospace;
   font-size: 13px;
   outline: none;
 }
@@ -512,11 +568,19 @@ onUnmounted(() => {
   color: var(--error-color);
 }
 
+.close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+}
+
 code {
   background: var(--bg-color);
   padding: 2px 6px;
   border-radius: 4px;
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: Consolas, Monaco, monospace;
   font-size: 12px;
 }
 </style>

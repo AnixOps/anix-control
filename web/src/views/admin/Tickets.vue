@@ -1,95 +1,122 @@
 <template>
   <div class="tickets-page">
     <div class="page-header">
-      <h1>工单管理</h1>
-      <p class="text-secondary">查看和回复用户提交的工单</p>
+      <h1>{{ t('adminTickets.title') }}</h1>
+      <p class="text-secondary">{{ t('adminTickets.subtitle') }}</p>
     </div>
 
-    <!-- 统计卡片 -->
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-icon">📬</div>
+        <div class="stat-icon">📤</div>
         <div class="stat-info">
           <div class="stat-value">{{ openCount }}</div>
-          <div class="stat-label">待处理</div>
+          <div class="stat-label">{{ t('adminTickets.stats.open') }}</div>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon">✅</div>
         <div class="stat-info">
           <div class="stat-value">{{ answeredCount }}</div>
-          <div class="stat-label">已回复</div>
+          <div class="stat-label">{{ t('adminTickets.stats.answered') }}</div>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon">🔒</div>
         <div class="stat-info">
           <div class="stat-value">{{ closedCount }}</div>
-          <div class="stat-label">已关闭</div>
+          <div class="stat-label">{{ t('adminTickets.stats.closed') }}</div>
         </div>
       </div>
     </div>
 
-    <!-- 工单列表 -->
     <div class="table-container">
       <table class="data-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>用户ID</th>
-            <th>主题</th>
-            <th>优先级</th>
-            <th>状态</th>
-            <th>创建时间</th>
-            <th>操作</th>
+            <th>{{ t('adminTickets.table.id') }}</th>
+            <th>{{ t('adminTickets.table.userId') }}</th>
+            <th>{{ t('adminTickets.table.subject') }}</th>
+            <th>{{ t('adminTickets.table.priority') }}</th>
+            <th>{{ t('adminTickets.table.status') }}</th>
+            <th>{{ t('adminTickets.table.createdAt') }}</th>
+            <th>{{ t('adminTickets.table.actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="t in tickets" :key="t.id">
-            <td>{{ t.id }}</td>
-            <td>{{ t.user_id }}</td>
-            <td>{{ t.subject }}</td>
+          <tr v-for="ticket in tickets" :key="ticket.id">
+            <td>{{ ticket.id }}</td>
+            <td>{{ ticket.user_id }}</td>
+            <td>{{ ticket.subject }}</td>
             <td>
-              <span :class="['status-badge', levelClass(t.level)]">{{ levelText(t.level) }}</span>
+              <span :class="['status-badge', levelClass(ticket.level)]">
+                {{ levelText(ticket.level) }}
+              </span>
             </td>
             <td>
-              <span :class="['status-badge', statusClass(t.status)]">{{ statusText(t.status) }}</span>
+              <span :class="['status-badge', statusClass(ticket.status)]">
+                {{ statusText(ticket.status) }}
+              </span>
             </td>
-            <td>{{ formatDate(t.created_at) }}</td>
+            <td>{{ formatTicketDate(ticket.created_at) }}</td>
             <td>
               <div class="action-buttons">
-                <button class="btn-sm btn-ghost" @click="openReply(t)" title="回复">💬</button>
-                <button class="btn-sm btn-ghost" @click="close(t)" v-if="t.status !== 2" title="关闭">🔒</button>
+                <button
+                  class="btn-sm btn-ghost"
+                  :title="t('adminTickets.actions.reply')"
+                  :aria-label="t('adminTickets.actions.reply')"
+                  @click="openReply(ticket)"
+                >
+                  💬
+                </button>
+                <button
+                  v-if="ticket.status !== 2"
+                  class="btn-sm btn-ghost"
+                  :title="t('adminTickets.actions.closeTicket')"
+                  :aria-label="t('adminTickets.actions.closeTicket')"
+                  @click="closeTicket(ticket)"
+                >
+                  🔒
+                </button>
               </div>
             </td>
           </tr>
           <tr v-if="tickets.length === 0">
-            <td colspan="7" class="empty-row">暂无工单</td>
+            <td colspan="7" class="empty-row">{{ t('adminTickets.empty.noData') }}</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- 回复弹窗 -->
     <div v-if="showReply" class="modal-overlay" @click.self="closeReply">
       <div class="modal">
         <div class="modal-header">
-          <h3>回复工单 #{{ currentTicket?.id }}</h3>
-          <button class="close-btn" @click="closeReply">✕</button>
+          <h3>{{ t('adminTickets.replyModal.title', { id: currentTicket?.id ?? '-' }) }}</h3>
+          <button
+            class="close-btn"
+            :aria-label="t('common.actions.close')"
+            :title="t('common.actions.close')"
+            @click="closeReply"
+          >
+            ×
+          </button>
         </div>
         <div class="modal-body">
           <div class="ticket-info">
-            <p><strong>主题：</strong>{{ currentTicket?.subject }}</p>
-            <p><strong>用户ID：</strong>{{ currentTicket?.user_id }}</p>
+            <p><strong>{{ t('adminTickets.replyModal.subject') }}</strong>{{ currentTicket?.subject }}</p>
+            <p><strong>{{ t('adminTickets.replyModal.userId') }}</strong>{{ currentTicket?.user_id }}</p>
           </div>
           <div class="form-group">
-            <label>回复内容</label>
-            <textarea v-model="replyMessage" rows="5" placeholder="输入回复内容..."></textarea>
+            <label>{{ t('adminTickets.replyModal.content') }}</label>
+            <textarea
+              v-model="replyMessage"
+              rows="5"
+              :placeholder="t('adminTickets.replyModal.placeholder')"
+            ></textarea>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closeReply">取消</button>
-          <button @click="submitReply">发送回复</button>
+          <button class="btn-secondary" @click="closeReply">{{ t('common.actions.cancel') }}</button>
+          <button @click="submitReply">{{ t('adminTickets.actions.sendReply') }}</button>
         </div>
       </div>
     </div>
@@ -97,41 +124,71 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import adminApi from '@/api/admin'
+import { useAppI18n } from '@/composables/useAppI18n'
+
+const { t, formatDateTime } = useAppI18n()
 
 const tickets = ref([])
 const showReply = ref(false)
 const currentTicket = ref(null)
 const replyMessage = ref('')
 
-const openCount = computed(() => tickets.value.filter(t => t.status === 0).length)
-const answeredCount = computed(() => tickets.value.filter(t => t.status === 1).length)
-const closedCount = computed(() => tickets.value.filter(t => t.status === 2).length)
+const openCount = computed(() => tickets.value.filter((ticket) => ticket.status === 0).length)
+const answeredCount = computed(() => tickets.value.filter((ticket) => ticket.status === 1).length)
+const closedCount = computed(() => tickets.value.filter((ticket) => ticket.status === 2).length)
 
 const load = async () => {
   try {
     const res = await adminApi.getTickets()
     tickets.value = res.data || []
-  } catch (e) {
-    console.error('加载失败:', e)
+  } catch (error) {
+    console.error(t('adminTickets.messages.fetchFailed'), error)
   }
 }
 
-onMounted(() => { load() })
+onMounted(() => {
+  load()
+})
 
-const levelText = (level) => ['低', '中', '高'][level] || '未知'
-const levelClass = (level) => ['level-low', 'level-medium', 'level-high'][level] || ''
-const statusText = (status) => ['待处理', '已回复', '已关闭'][status] || '未知'
-const statusClass = (status) => ['status-open', 'status-answered', 'status-closed'][status] || ''
-
-const formatDate = (ts) => {
-  if (!ts) return '-'
-  return new Date(ts * 1000).toLocaleString('zh-CN')
+const levelText = (level) => {
+  switch (Number(level)) {
+    case 0:
+      return t('adminTickets.levels.low')
+    case 1:
+      return t('adminTickets.levels.medium')
+    case 2:
+      return t('adminTickets.levels.high')
+    default:
+      return t('adminTickets.levels.unknown')
+  }
 }
 
-const openReply = (t) => {
-  currentTicket.value = t
+const levelClass = (level) => ['level-low', 'level-medium', 'level-high'][level] || ''
+
+const statusText = (status) => {
+  switch (Number(status)) {
+    case 0:
+      return t('adminTickets.status.open')
+    case 1:
+      return t('adminTickets.status.answered')
+    case 2:
+      return t('adminTickets.status.closed')
+    default:
+      return t('adminTickets.status.unknown')
+  }
+}
+
+const statusClass = (status) => ['status-open', 'status-answered', 'status-closed'][status] || ''
+
+const formatTicketDate = (ts) => {
+  if (!ts) return '-'
+  return formatDateTime(ts)
+}
+
+const openReply = (ticket) => {
+  currentTicket.value = ticket
   replyMessage.value = ''
   showReply.value = true
 }
@@ -143,29 +200,31 @@ const closeReply = () => {
 
 const submitReply = async () => {
   if (!replyMessage.value.trim()) {
-    alert('请输入回复内容')
+    window.alert(t('adminTickets.messages.replyRequired'))
     return
   }
+
   try {
     await adminApi.replyTicket({
       ticket_id: currentTicket.value.id,
       message: replyMessage.value
     })
-    alert('回复成功')
+    window.alert(t('adminTickets.messages.replySuccess'))
     closeReply()
     await load()
-  } catch (e) {
-    alert(e.message || '回复失败')
+  } catch (error) {
+    window.alert(error.message || t('adminTickets.messages.replyFailed'))
   }
 }
 
-const close = async (t) => {
-  if (!confirm('确定关闭此工单？')) return
+const closeTicket = async (ticket) => {
+  if (!window.confirm(t('adminTickets.messages.closeConfirm'))) return
+
   try {
-    await adminApi.closeTicket(t.id)
+    await adminApi.closeTicket(ticket.id)
     await load()
-  } catch (e) {
-    alert(e.message || '关闭失败')
+  } catch (error) {
+    window.alert(error.message || t('adminTickets.messages.closeFailed'))
   }
 }
 </script>
@@ -300,7 +359,6 @@ const close = async (t) => {
   padding: 40px !important;
 }
 
-/* 弹窗样式 */
 .modal-overlay {
   position: fixed;
   inset: 0;

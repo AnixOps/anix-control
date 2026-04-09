@@ -1,144 +1,178 @@
 <template>
   <div class="plans-page">
     <div class="page-header">
-      <h1>套餐管理</h1>
-      <p class="text-secondary">创建、编辑、删除套餐并管理订阅分组关联</p>
+      <h1>{{ t('adminPlans.title') }}</h1>
+      <p class="text-secondary">{{ t('adminPlans.subtitle') }}</p>
     </div>
 
-    <!-- 筛选栏 -->
     <div class="filter-bar">
-      <button @click="showCreate = true">➕ 新建套餐</button>
+      <button @click="openCreateModal">{{ t('adminPlans.actions.create') }}</button>
     </div>
 
-    <!-- 套餐列表 -->
     <div class="table-container">
       <table class="data-table">
         <thead>
           <tr>
             <th>ID</th>
-            <th>名称</th>
-            <th>流量(GB)</th>
-            <th>月价(分)</th>
-            <th>关联订阅分组</th>
-            <th>操作</th>
+            <th>{{ t('adminPlans.table.name') }}</th>
+            <th>{{ t('adminPlans.table.transfer') }}</th>
+            <th>{{ t('adminPlans.table.monthPrice') }}</th>
+            <th>{{ t('adminPlans.table.subscriptionGroups') }}</th>
+            <th>{{ t('adminPlans.table.actions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="p in plans" :key="p.id">
-            <td>{{ p.id }}</td>
-            <td>{{ p.name }}</td>
-            <td>{{ p.transfer_enable }}</td>
-            <td>{{ p.month_price || '-' }}</td>
+          <tr v-for="plan in plans" :key="plan.id">
+            <td>{{ plan.id }}</td>
+            <td>{{ plan.name }}</td>
+            <td>{{ plan.transfer_enable }}</td>
+            <td>{{ plan.month_price ?? '-' }}</td>
             <td>
               <div class="group-tags">
-                <span v-for="g in (planGroups[p.id] || [])" :key="g.id" class="group-tag">
-                  {{ g.name }}
-                  <button class="tag-remove" @click="removeGroup(p.id, g.id)" title="移除">×</button>
+                <span v-for="group in (planGroups[plan.id] || [])" :key="group.id" class="group-tag">
+                  {{ group.name }}
+                  <button
+                    class="tag-remove"
+                    :title="t('adminPlans.actions.removeGroup')"
+                    :aria-label="t('adminPlans.actions.removeGroup')"
+                    @click="removeGroup(plan.id, group.id)"
+                  >
+                    ×
+                  </button>
                 </span>
-                <button class="btn-sm btn-ghost" @click="openGroupModal(p)" title="管理分组">➕</button>
+                <button
+                  class="btn-sm btn-ghost"
+                  :title="t('adminPlans.actions.manageGroups')"
+                  :aria-label="t('adminPlans.actions.manageGroups')"
+                  @click="openGroupModal(plan)"
+                >
+                  {{ t('adminPlans.actions.manageGroups') }}
+                </button>
               </div>
             </td>
             <td>
               <div class="action-buttons">
-                <button class="btn-sm btn-ghost" @click="edit(p)" title="编辑">✏️</button>
-                <button class="btn-sm btn-ghost" @click="remove(p)" title="删除">🗑️</button>
-                <button class="btn-sm btn-ghost" @click="openAssign(p)" title="分配给用户">👤</button>
+                <button
+                  class="btn-sm btn-ghost"
+                  :title="t('adminPlans.actions.edit')"
+                  :aria-label="t('adminPlans.actions.edit')"
+                  @click="edit(plan)"
+                >
+                  {{ t('adminPlans.actions.edit') }}
+                </button>
+                <button
+                  class="btn-sm btn-ghost"
+                  :title="t('adminPlans.actions.delete')"
+                  :aria-label="t('adminPlans.actions.delete')"
+                  @click="remove(plan)"
+                >
+                  {{ t('adminPlans.actions.delete') }}
+                </button>
+                <button
+                  class="btn-sm btn-ghost"
+                  :title="t('adminPlans.actions.assign')"
+                  :aria-label="t('adminPlans.actions.assign')"
+                  @click="openAssign(plan)"
+                >
+                  {{ t('adminPlans.actions.assign') }}
+                </button>
               </div>
             </td>
           </tr>
           <tr v-if="plans.length === 0">
-            <td colspan="6" class="empty-row">暂无套餐</td>
+            <td colspan="6" class="empty-row">{{ t('adminPlans.empty.noData') }}</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- Create/Edit Modal -->
-    <div v-if="showCreate || showEdit" class="modal-overlay" @click.self="closeModal">
+    <div v-if="showPlanModal" class="modal-overlay" @click.self="closePlanModal">
       <div class="modal">
         <div class="modal-header">
-          <h3>{{ showEdit ? '编辑套餐' : '新建套餐' }}</h3>
-          <button class="close-btn" @click="closeModal">✕</button>
+          <h3>{{ editingPlanId ? t('adminPlans.planModal.editTitle') : t('adminPlans.planModal.createTitle') }}</h3>
+          <button class="close-btn" @click="closePlanModal">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>名称 <span class="required">*</span></label>
-            <input v-model="form.name" type="text" placeholder="套餐名称">
+            <label>{{ t('adminPlans.planModal.fields.name') }} <span class="required">*</span></label>
+            <input v-model="form.name" type="text" :placeholder="t('adminPlans.planModal.placeholders.name')" />
           </div>
           <div class="form-group">
-            <label>流量(GB)</label>
-            <input v-model.number="form.transfer_enable" type="number" min="0">
+            <label>{{ t('adminPlans.planModal.fields.transfer') }}</label>
+            <input v-model.number="form.transfer_enable" type="number" min="0" />
           </div>
           <div class="form-group">
-            <label>月价(分)</label>
-            <input v-model.number="form.month_price" type="number" min="0">
+            <label>{{ t('adminPlans.planModal.fields.monthPrice') }}</label>
+            <input v-model.number="form.month_price" type="number" min="0" />
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closeModal">取消</button>
-          <button @click="save">保存</button>
+          <button class="btn-secondary" @click="closePlanModal">{{ t('common.actions.cancel') }}</button>
+          <button @click="save">{{ t('common.actions.save') }}</button>
         </div>
       </div>
     </div>
 
-    <!-- Assign to User Modal -->
     <div v-if="showAssign" class="modal-overlay" @click.self="closeAssign">
       <div class="modal">
         <div class="modal-header">
-          <h3>将套餐分配给用户</h3>
-          <button class="close-btn" @click="closeAssign">✕</button>
+          <h3>{{ t('adminPlans.assignModal.title') }}</h3>
+          <button class="close-btn" @click="closeAssign">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>用户 ID <span class="required">*</span></label>
-            <input v-model.number="assignForm.user_id" type="number" placeholder="输入用户ID">
+            <label>{{ t('adminPlans.assignModal.fields.userId') }} <span class="required">*</span></label>
+            <input
+              v-model.number="assignForm.user_id"
+              type="number"
+              :placeholder="t('adminPlans.assignModal.placeholders.userId')"
+            />
           </div>
           <div class="form-group">
-            <label>过期时间 (Unix 秒，留空表示不变)</label>
-            <input v-model.number="assignForm.expire_at" type="number">
+            <label>{{ t('adminPlans.assignModal.fields.expireAt') }}</label>
+            <input v-model.number="assignForm.expire_at" type="number" />
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closeAssign">取消</button>
-          <button @click="assign">分配</button>
+          <button class="btn-secondary" @click="closeAssign">{{ t('common.actions.cancel') }}</button>
+          <button @click="assign">{{ t('adminPlans.actions.assign') }}</button>
         </div>
       </div>
     </div>
 
-    <!-- Manage Groups Modal -->
     <div v-if="showGroupModal" class="modal-overlay" @click.self="closeGroupModal">
       <div class="modal">
         <div class="modal-header">
-          <h3>管理订阅分组 - {{ currentPlan?.name }}</h3>
-          <button class="close-btn" @click="closeGroupModal">✕</button>
+          <h3>{{ t('adminPlans.groupModal.title', { name: currentPlan?.name || '' }) }}</h3>
+          <button class="close-btn" @click="closeGroupModal">×</button>
         </div>
         <div class="modal-body">
-          <p class="text-secondary" style="margin-bottom: 16px;">选择要关联到此套餐的订阅分组，用户购买此套餐后将自动获得所选分组的订阅权限。</p>
-          
+          <p class="text-secondary" style="margin-bottom: 16px;">{{ t('adminPlans.groupModal.description') }}</p>
+
           <div v-if="allGroups.length === 0" class="empty-msg">
-            暂无可用的订阅分组，请先在"订阅管理"中创建分组。
+            {{ t('adminPlans.groupModal.empty') }}
           </div>
-          
+
           <div v-else class="group-list">
-            <div 
-              v-for="g in allGroups" 
-              :key="g.id" 
+            <div
+              v-for="group in allGroups"
+              :key="group.id"
               class="group-item"
-              :class="{ selected: isGroupSelected(g.id) }"
-              @click="toggleGroup(g)"
+              :class="{ selected: isGroupSelected(group.id) }"
+              @click="toggleGroup(group)"
             >
               <div class="group-info">
-                <div class="group-name">{{ g.name }}</div>
-                <div class="group-desc text-secondary">{{ g.description || '无描述' }}</div>
+                <div class="group-name">{{ group.name }}</div>
+                <div class="group-desc text-secondary">{{ group.description || t('adminPlans.groupModal.noDescription') }}</div>
               </div>
               <div class="group-check">
-                <span v-if="isGroupSelected(g.id)">✓</span>
+                <span>{{ isGroupSelected(group.id) ? t('adminPlans.groupModal.selectedShort') : '' }}</span>
               </div>
             </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closeGroupModal">关闭</button>
+          <button class="btn-secondary" @click="closeGroupModal">{{ t('common.actions.close') }}</button>
         </div>
       </div>
     </div>
@@ -146,50 +180,91 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import adminApi from '@/api/admin'
+import { onMounted, reactive, ref } from 'vue'
+import {
+  addGroupToPlan,
+  assignPlanToUser,
+  createPlan,
+  deletePlan,
+  getPlanGroups,
+  getPlans,
+  getSubscriptionGroups,
+  removeGroupFromPlan,
+  updatePlan
+} from '@/api/admin'
+import { useAppI18n } from '@/composables/useAppI18n'
+
+const { t } = useAppI18n()
 
 const plans = ref([])
 const allGroups = ref([])
-const planGroups = ref({}) // { planId: [groups] }
+const planGroups = ref({})
 
-const showCreate = ref(false)
-const showEdit = ref(false)
+const showPlanModal = ref(false)
 const showAssign = ref(false)
 const showGroupModal = ref(false)
 
+const editingPlanId = ref(null)
 const currentPlan = ref(null)
-const form = reactive({ id: null, name: '', transfer_enable: 0, month_price: null })
-const assignForm = reactive({ user_id: null, expire_at: null, plan_id: null })
+
+const form = reactive({
+  name: '',
+  transfer_enable: 0,
+  month_price: null
+})
+
+const assignForm = reactive({
+  user_id: null,
+  expire_at: null,
+  plan_id: null
+})
+
+const resolveApiError = (error, fallbackKey) => (
+  error?.response?.data?.error ||
+  error?.response?.data?.message ||
+  error?.response?.data?.msg ||
+  error?.message ||
+  t(fallbackKey)
+)
+
+const resetPlanForm = () => {
+  editingPlanId.value = null
+  form.name = ''
+  form.transfer_enable = 0
+  form.month_price = null
+}
+
+const resetAssignForm = () => {
+  assignForm.plan_id = null
+  assignForm.user_id = null
+  assignForm.expire_at = null
+}
+
+const loadPlanGroups = async (planId) => {
+  try {
+    const res = await getPlanGroups(planId)
+    planGroups.value[planId] = res.data || []
+  } catch {
+    planGroups.value[planId] = []
+  }
+}
 
 const load = async () => {
   try {
-    const res = await adminApi.getPlans()
+    const res = await getPlans()
     plans.value = res.data || []
-    // 加载每个套餐关联的分组
-    for (const plan of plans.value) {
-      await loadPlanGroups(plan.id)
-    }
-  } catch (e) {
-    console.error('加载失败:', e)
+    await Promise.all(plans.value.map((plan) => loadPlanGroups(plan.id)))
+  } catch (error) {
+    console.error(t('adminPlans.messages.loadFailed'), error)
   }
 }
 
 const loadAllGroups = async () => {
   try {
-    const res = await adminApi.getSubscriptionGroups()
+    const res = await getSubscriptionGroups()
     allGroups.value = res.data || []
-  } catch (e) {
-    console.error('加载订阅分组失败:', e)
-  }
-}
-
-const loadPlanGroups = async (planId) => {
-  try {
-    const res = await adminApi.getPlanGroups(planId)
-    planGroups.value[planId] = res.data || []
-  } catch (e) {
-    planGroups.value[planId] = []
+  } catch (error) {
+    console.error(t('adminPlans.messages.loadGroupsFailed'), error)
   }
 }
 
@@ -198,87 +273,99 @@ onMounted(() => {
   loadAllGroups()
 })
 
-const edit = (p) => {
-  form.id = p.id
-  form.name = p.name
-  form.transfer_enable = p.transfer_enable
-  form.month_price = p.month_price
-  showEdit.value = true
+const openCreateModal = () => {
+  resetPlanForm()
+  showPlanModal.value = true
 }
 
-const remove = async (p) => {
-  if (!confirm('确认删除该套餐？')) return
+const edit = (plan) => {
+  editingPlanId.value = plan.id
+  form.name = plan.name || ''
+  form.transfer_enable = plan.transfer_enable || 0
+  form.month_price = plan.month_price
+  showPlanModal.value = true
+}
+
+const remove = async (plan) => {
+  if (!window.confirm(t('adminPlans.messages.deleteConfirm'))) {
+    return
+  }
+
   try {
-    await adminApi.deletePlan(p.id)
+    await deletePlan(plan.id)
     await load()
-  } catch (e) {
-    alert(e.message || '删除失败')
+  } catch (error) {
+    window.alert(t('adminPlans.messages.deleteFailed', {
+      message: resolveApiError(error, 'adminPlans.messages.deleteFailedShort')
+    }))
   }
 }
 
-const closeModal = () => {
-  showCreate.value = false
-  showEdit.value = false
-  form.id = null
-  form.name = ''
-  form.transfer_enable = 0
-  form.month_price = null
+const closePlanModal = () => {
+  showPlanModal.value = false
+  resetPlanForm()
 }
 
 const save = async () => {
   if (!form.name || form.name.trim() === '') {
-    alert('请输入名称')
+    window.alert(t('adminPlans.messages.nameRequired'))
     return
   }
+
   const payload = {
     name: form.name.trim(),
     transfer_enable: form.transfer_enable,
     month_price: form.month_price
   }
+
   try {
-    if (showEdit.value) {
-      await adminApi.updatePlan(form.id, payload)
+    if (editingPlanId.value) {
+      await updatePlan(editingPlanId.value, payload)
     } else {
-      await adminApi.createPlan(payload)
+      await createPlan(payload)
     }
-    closeModal()
+    closePlanModal()
     await load()
-  } catch (e) {
-    alert(e.message || '保存失败')
+  } catch (error) {
+    window.alert(t('adminPlans.messages.saveFailed', {
+      message: resolveApiError(error, 'adminPlans.messages.saveFailedShort')
+    }))
   }
 }
 
-const openAssign = (p) => {
-  assignForm.plan_id = p.id
-  assignForm.user_id = null
-  assignForm.expire_at = null
+const openAssign = (plan) => {
+  resetAssignForm()
+  assignForm.plan_id = plan.id
   showAssign.value = true
 }
 
 const closeAssign = () => {
   showAssign.value = false
+  resetAssignForm()
 }
 
 const assign = async () => {
   if (!assignForm.user_id) {
-    alert('请输入用户ID')
+    window.alert(t('adminPlans.messages.userIdRequired'))
     return
   }
+
   try {
-    await adminApi.assignPlanToUser(assignForm.plan_id, {
+    await assignPlanToUser(assignForm.plan_id, {
       user_id: assignForm.user_id,
       expire_at: assignForm.expire_at
     })
     closeAssign()
-    alert('分配成功')
-  } catch (e) {
-    alert(e.message || '分配失败')
+    window.alert(t('adminPlans.messages.assignSuccess'))
+  } catch (error) {
+    window.alert(t('adminPlans.messages.assignFailed', {
+      message: resolveApiError(error, 'adminPlans.messages.assignFailedShort')
+    }))
   }
 }
 
-// 订阅分组管理
-const openGroupModal = (p) => {
-  currentPlan.value = p
+const openGroupModal = (plan) => {
+  currentPlan.value = plan
   showGroupModal.value = true
 }
 
@@ -290,32 +377,40 @@ const closeGroupModal = () => {
 const isGroupSelected = (groupId) => {
   if (!currentPlan.value) return false
   const groups = planGroups.value[currentPlan.value.id] || []
-  return groups.some(g => g.id === groupId)
+  return groups.some((group) => group.id === groupId)
 }
 
 const toggleGroup = async (group) => {
   if (!currentPlan.value) return
+
   const planId = currentPlan.value.id
-  
+
   try {
     if (isGroupSelected(group.id)) {
-      await adminApi.removeGroupFromPlan(planId, group.id)
+      await removeGroupFromPlan(planId, group.id)
     } else {
-      await adminApi.addGroupToPlan(planId, group.id)
+      await addGroupToPlan(planId, group.id)
     }
     await loadPlanGroups(planId)
-  } catch (e) {
-    alert(e.message || '操作失败')
+  } catch (error) {
+    window.alert(t('adminPlans.messages.toggleGroupFailed', {
+      message: resolveApiError(error, 'adminPlans.messages.toggleGroupFailedShort')
+    }))
   }
 }
 
 const removeGroup = async (planId, groupId) => {
-  if (!confirm('确定移除此订阅分组关联？')) return
+  if (!window.confirm(t('adminPlans.messages.removeGroupConfirm'))) {
+    return
+  }
+
   try {
-    await adminApi.removeGroupFromPlan(planId, groupId)
+    await removeGroupFromPlan(planId, groupId)
     await loadPlanGroups(planId)
-  } catch (e) {
-    alert(e.message || '移除失败')
+  } catch (error) {
+    window.alert(t('adminPlans.messages.removeGroupFailed', {
+      message: resolveApiError(error, 'adminPlans.messages.removeGroupFailedShort')
+    }))
   }
 }
 </script>
@@ -394,7 +489,7 @@ const removeGroup = async (planId, groupId) => {
 .tag-remove {
   background: transparent;
   border: none;
-  color: rgba(255,255,255,0.7);
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   padding: 0;
   font-size: 14px;
@@ -417,7 +512,6 @@ const removeGroup = async (planId, groupId) => {
   padding: 40px !important;
 }
 
-/* 弹窗样式 */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -496,7 +590,6 @@ const removeGroup = async (planId, groupId) => {
   min-width: 80px;
 }
 
-/* 分组列表样式 */
 .empty-msg {
   text-align: center;
   color: var(--text-secondary);
@@ -544,16 +637,16 @@ const removeGroup = async (planId, groupId) => {
 }
 
 .group-check {
-  width: 24px;
+  min-width: 48px;
   height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--primary-color);
   color: white;
-  border-radius: 50%;
-  font-size: 14px;
-  font-weight: bold;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .group-item:not(.selected) .group-check {
