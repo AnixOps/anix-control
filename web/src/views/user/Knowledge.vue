@@ -1,38 +1,36 @@
 <template>
   <div class="knowledge-page">
     <div class="page-header">
-      <h1>📚 使用教程</h1>
-      <p class="text-secondary">获取最新的使用说明、公告和常见问题解答</p>
+      <h1>{{ t('user.knowledge.title') }}</h1>
+      <p class="text-secondary">{{ t('user.knowledge.subtitle') }}</p>
     </div>
 
-    <!-- 分类筛选 -->
     <div class="category-tabs">
-      <button 
-        v-for="cat in categories" 
-        :key="cat"
-        :class="['tab-item', { active: currentCategory === cat }]"
-        @click="currentCategory = cat"
+      <button
+        v-for="category in categories"
+        :key="category"
+        :class="['tab-item', { active: currentCategory === category }]"
+        @click="currentCategory = category"
       >
-        {{ cat }}
+        {{ category }}
       </button>
     </div>
 
-    <!-- 文章列表 -->
     <div class="content-container">
       <div v-if="loading" class="loading-state">
         <div class="spinner"></div>
-        <p>加载中...</p>
+        <p>{{ t('user.knowledge.loading') }}</p>
       </div>
 
       <div v-else-if="filteredArticles.length === 0" class="empty-state">
-        <div class="empty-icon">📭</div>
-        <p>暂无相关教程</p>
+        <div class="empty-icon">K</div>
+        <p>{{ t('user.knowledge.empty') }}</p>
       </div>
 
       <div v-else class="articles-grid">
-        <div 
-          v-for="article in filteredArticles" 
-          :key="article.id" 
+        <div
+          v-for="article in filteredArticles"
+          :key="article.id"
           class="article-card"
           @click="viewDetail(article)"
         >
@@ -43,28 +41,27 @@
           <h3 class="article-title">{{ article.title }}</h3>
           <p class="article-excerpt">{{ truncate(article.body, 120) }}</p>
           <div class="article-footer">
-            <span class="read-more">阅读全文 →</span>
+            <span class="read-more">{{ t('user.knowledge.readMore') }}</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 文章详情弹窗 -->
     <div v-if="showDetail" class="modal-overlay" @click.self="showDetail = false">
       <div class="modal modal-lg article-detail-modal">
         <div class="modal-header">
           <div class="header-info">
             <span class="category-tag">{{ detailArticle.category }}</span>
-            <span class="date text-secondary">{{ formatDate(detailArticle.updated_at) }} 更新</span>
+            <span class="date text-secondary">{{ formatDate(detailArticle.updated_at) }} {{ t('user.knowledge.updated') }}</span>
           </div>
           <h3>{{ detailArticle.title }}</h3>
-          <button class="close-btn" @click="showDetail = false">✕</button>
+          <button class="close-btn" @click="showDetail = false">×</button>
         </div>
         <div class="modal-body markdown-body">
           <pre style="white-space: pre-wrap; font-family: inherit;">{{ detailArticle.body }}</pre>
         </div>
         <div class="modal-footer">
-          <button class="btn-primary" @click="showDetail = false">我知道了</button>
+          <button class="btn-primary" @click="showDetail = false">{{ t('user.knowledge.closeAction') }}</button>
         </div>
       </div>
     </div>
@@ -72,58 +69,63 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { getKnowledgeList } from '@/api/user'
+import { useAppI18n } from '@/composables/useAppI18n'
 
+const { t, formatDate } = useAppI18n()
 const articles = ref([])
 const loading = ref(true)
-const currentCategory = ref('全部')
+const currentCategory = ref('')
 const showDetail = ref(false)
 const detailArticle = ref({})
 
+const allCategoryLabel = computed(() => t('user.knowledge.all'))
+
 const categories = computed(() => {
-  const cats = ['全部']
-  articles.value.forEach(a => {
-    if (!cats.includes(a.category)) {
-      cats.push(a.category)
+  const result = [allCategoryLabel.value]
+  for (const article of articles.value) {
+    if (article.category && !result.includes(article.category)) {
+      result.push(article.category)
     }
-  })
-  return cats
+  }
+  return result
 })
 
 const filteredArticles = computed(() => {
-  if (currentCategory.value === '全部') return articles.value
-  return articles.value.filter(a => a.category === currentCategory.value)
+  if (currentCategory.value === allCategoryLabel.value) {
+    return articles.value
+  }
+  return articles.value.filter((article) => article.category === currentCategory.value)
 })
 
-const fetchArticles = async () => {
+async function fetchArticles() {
   loading.value = true
   try {
     const res = await getKnowledgeList()
     articles.value = res.data || []
+    if (!currentCategory.value) {
+      currentCategory.value = allCategoryLabel.value
+    }
   } catch (err) {
-    console.error('获取知识库失败:', err)
+    console.error('Failed to load knowledge articles:', err)
   } finally {
     loading.value = false
   }
 }
 
-const formatDate = (ts) => {
-  if (!ts) return '-'
-  return new Date(ts * 1000).toLocaleDateString('zh-CN')
-}
-
-const truncate = (text, length) => {
+function truncate(text, length) {
   if (!text) return ''
-  return text.length > length ? text.substring(0, length) + '...' : text
+  return text.length > length ? `${text.slice(0, length)}...` : text
 }
 
-const viewDetail = (article) => {
+function viewDetail(article) {
   detailArticle.value = article
   showDetail.value = true
 }
 
 onMounted(() => {
+  currentCategory.value = allCategoryLabel.value
   fetchArticles()
 })
 </script>
@@ -259,7 +261,6 @@ onMounted(() => {
   color: var(--primary-color);
 }
 
-/* 详情弹窗增强 */
 .article-detail-modal .modal-header {
   display: block;
 }
@@ -282,8 +283,8 @@ onMounted(() => {
   color: var(--text-color);
 }
 
-/* 状态样式 */
-.loading-state, .empty-state {
+.loading-state,
+.empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -303,7 +304,9 @@ onMounted(() => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .empty-icon {

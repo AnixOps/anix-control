@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import Tunnel from '@/views/admin/Tunnel.vue'
+import i18n, { setLocale } from '@/i18n'
 
 const adminApi = vi.hoisted(() => ({
   createForwardTunnel: vi.fn(),
@@ -30,8 +31,9 @@ function mountTunnel() {
 }
 
 describe('Tunnel.vue', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetAllMocks()
+    await setLocale('zh-CN')
     adminApi.getAdminForwardTunnelList.mockResolvedValue({ code: 0, data: [] })
     adminApi.createForwardTunnel.mockResolvedValue({ code: 0 })
     adminApi.deleteForwardTunnel.mockResolvedValue({ code: 0 })
@@ -209,8 +211,8 @@ describe('Tunnel.vue', () => {
     await wrapper.vm.handleSubmit()
 
     expect(adminApi.createForwardTunnel).not.toHaveBeenCalled()
-    expect(wrapper.vm.errors.inNodeId).toBe('入口节点必须是转发中继节点')
-    expect(wrapper.vm.errors.outNodeId).toBe('出口节点必须是转发出口节点')
+    expect(wrapper.vm.errors.inNodeId).toBe(i18n.global.t('runtime.tunnel.validation.ingressMustRelay'))
+    expect(wrapper.vm.errors.outNodeId).toBe(i18n.global.t('runtime.tunnel.validation.egressMustExit'))
   })
 
   it('locks legacy ansible tunnels to execution nodes when editing', async () => {

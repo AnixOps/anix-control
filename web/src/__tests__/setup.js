@@ -1,29 +1,52 @@
-// Vitest Setup
 import { config } from '@vue/test-utils'
-
-// Global test configuration
+import { beforeAll, beforeEach, vi } from 'vitest'
+config.global.plugins = []
 config.global.mocks = {
-  $t: (key) => key, // i18n mock
   $router: {
     push: vi.fn(),
     replace: vi.fn(),
-    go: vi.fn(),
+    go: vi.fn()
   },
   $route: {
     path: '/',
     params: {},
-    query: {},
-  },
+    query: {}
+  }
 }
 
-// Mock localStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  clear: vi.fn(),
-  removeItem: vi.fn(),
+function createStorageMock() {
+  let store = {}
+  return {
+    getItem: vi.fn((key) => (key in store ? store[key] : null)),
+    setItem: vi.fn((key, value) => {
+      store[key] = String(value)
+    }),
+    clear: vi.fn(() => {
+      store = {}
+    }),
+    removeItem: vi.fn((key) => {
+      delete store[key]
+    })
+  }
 }
+
+const localStorageMock = createStorageMock()
+const sessionStorageMock = createStorageMock()
+
 global.localStorage = localStorageMock
+global.sessionStorage = sessionStorageMock
 
-// Mock sessionStorage
-global.sessionStorage = localStorageMock
+let i18nModule = null
+
+beforeAll(async () => {
+  i18nModule = await import('@/i18n')
+  config.global.plugins = [i18nModule.default]
+  await i18nModule.initI18n()
+})
+
+beforeEach(async () => {
+  localStorage.clear()
+  sessionStorage.clear()
+  localStorage.setItem('app.locale', 'en')
+  await i18nModule.setLocale('en')
+})

@@ -5,7 +5,7 @@
       <p class="subtitle">{{ $t('admin.subscriptions.subtitle') }}</p>
     </div>
 
-    <!-- 分组列表 -->
+    <!-- Group list -->
     <div class="groups-section">
       <div class="section-header">
         <h2>{{ $t('admin.subscriptions.groups') }}</h2>
@@ -26,7 +26,7 @@
           <div class="group-header">
             <h3>{{ group.name }}</h3>
             <span class="badge" :class="group.enable ? 'badge-success' : 'badge-secondary'">
-              {{ group.enable ? $t('common.enabled') : $t('common.disabled') }}
+              {{ group.enable ? $t('admin.subscriptions.enabled') : $t('admin.subscriptions.disabled') }}
             </span>
           </div>
           <p class="group-desc">{{ group.description || $t('admin.subscriptions.noDescription') }}</p>
@@ -54,7 +54,7 @@
       </div>
     </div>
 
-    <!-- 模板列表 -->
+    <!-- Template list -->
     <div class="templates-section" v-if="selectedGroup">
       <div class="section-header">
         <h2>{{ $t('admin.subscriptions.templatesFor') }} {{ selectedGroup.name }}</h2>
@@ -80,7 +80,7 @@
               <th>{{ $t('admin.subscriptions.port') }}</th>
               <th>{{ $t('admin.subscriptions.tls') }}</th>
               <th>{{ $t('admin.subscriptions.status') }}</th>
-              <th>{{ $t('common.actions') }}</th>
+              <th>{{ $t('admin.subscriptions.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -121,16 +121,16 @@
       </div>
     </div>
 
-    <!-- 生产节点列表 (物理节点协议) -->
+    <!-- Production node protocol list -->
     <div class="templates-section" v-if="selectedGroup">
       <div class="section-header">
-        <h2>{{ $t('admin.subscriptions.productionNodes') || '物理节点协议' }}</h2>
+        <h2>{{ $t('admin.subscriptions.productionNodes') }}</h2>
         <div class="header-actions">
            <button class="btn btn-secondary" @click="openManageProtocolsModal">
               <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-1-7h2v2h-2v-2zm0-4h2v2h-2V9z"/></svg>
-              管理关联
+              {{ $t('admin.subscriptions.manageRelations') }}
            </button>
-           <span class="info-badge">已关联到此分组的协议</span>
+           <span class="info-badge">{{ $t('admin.subscriptions.linkedProtocolsInfo') }}</span>
         </div>
       </div>
 
@@ -138,13 +138,13 @@
         <table v-if="protocols.length > 0">
           <thead>
             <tr>
-              <th>节点</th>
-              <th>协议</th>
-              <th>名称</th>
-              <th>端口</th>
-              <th>可见</th>
-              <th>状态</th>
-              <th>操作</th>
+              <th>{{ $t('admin.subscriptions.productionTable.node') }}</th>
+              <th>{{ $t('admin.subscriptions.productionTable.protocol') }}</th>
+              <th>{{ $t('admin.subscriptions.productionTable.name') }}</th>
+              <th>{{ $t('admin.subscriptions.productionTable.port') }}</th>
+              <th>{{ $t('admin.subscriptions.productionTable.visibility') }}</th>
+              <th>{{ $t('admin.subscriptions.productionTable.status') }}</th>
+              <th>{{ $t('admin.subscriptions.productionTable.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -159,16 +159,16 @@
               <td>{{ protocol.port }}</td>
               <td>
                 <span :class="['status-badge', protocol.show ? 'status-online' : 'status-disabled']">
-                  {{ protocol.show ? '显示' : '隐藏' }}
+                  {{ protocol.show ? $t('admin.subscriptions.visibilityShown') : $t('admin.subscriptions.visibilityHidden') }}
                 </span>
               </td>
               <td>
                 <span :class="['status-badge', protocol.enable ? 'status-online' : 'status-disabled']">
-                  {{ protocol.enable ? '在线' : '下线' }}
+                  {{ protocol.enable ? $t('admin.subscriptions.protocolOnline') : $t('admin.subscriptions.protocolOffline') }}
                 </span>
               </td>
               <td>
-                <button class="btn btn-sm btn-outline" @click="goToNode(protocol.node_id)" title="前往管理">
+                <button class="btn btn-sm btn-outline" @click="goToNode(protocol.node_id)" :title="$t('admin.subscriptions.goToNode')">
                   <svg class="icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
                 </button>
               </td>
@@ -176,36 +176,36 @@
           </tbody>
         </table>
         <div v-else class="empty-state">
-          <p>此分组暂无关联的物理节点协议</p>
+          <p>{{ $t('admin.subscriptions.productionNodesEmpty') }}</p>
         </div>
       </div>
     </div>
 
-    <!-- 管理关联协议弹窗 -->
+    <!-- Manage linked protocols modal -->
     <div class="modal" v-if="showManageProtocolsModal" @click.self="showManageProtocolsModal = false">
       <div class="modal-content modal-lg">
         <div class="modal-header">
-          <h3>管理物理节点协议关联</h3>
+          <h3>{{ $t('admin.subscriptions.manageProtocolsTitle') }}</h3>
           <button class="close-btn" @click="showManageProtocolsModal = false">&times;</button>
         </div>
         <div class="modal-body">
-          <p class="subtitle mb-4">勾选要包含在 <strong>{{ selectedGroup?.name }}</strong> 分组中的节点协议。只有在“节点管理”中开启了“显示在订阅中”的协议才会出现在此处。</p>
+          <p class="subtitle mb-4">{{ $t('admin.subscriptions.manageProtocolsDescription', { group: selectedGroup?.name || '' }) }}</p>
           
           <div class="protocol-pool-table">
             <table>
               <thead>
                 <tr>
                   <th width="40"><input type="checkbox" @change="toggleAllAvailable" :checked="isAllSelected"></th>
-                  <th>节点</th>
-                  <th>协议/名称</th>
-                  <th>端口</th>
-                  <th>已关联分组</th>
+                  <th>{{ $t('admin.subscriptions.protocolPool.node') }}</th>
+                  <th>{{ $t('admin.subscriptions.protocolPool.protocolName') }}</th>
+                  <th>{{ $t('admin.subscriptions.protocolPool.port') }}</th>
+                  <th>{{ $t('admin.subscriptions.protocolPool.linkedGroups') }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="p in availableProtocols" :key="p.id" @click="toggleProtocolSelection(p.id)" class="clickable-row">
                   <td><input type="checkbox" :checked="selectedProtocolIds.includes(p.id)" @click.stop></td>
-                  <td>{{ p.node?.name || '未知节点' }}</td>
+                  <td>{{ p.node?.name || $t('admin.subscriptions.unknownNode') }}</td>
                   <td>
                     <span class="protocol-badge" :class="'protocol-' + p.type">{{ p.type.toUpperCase() }}</span>
                     <span class="ml-2">{{ p.name }}</span>
@@ -224,13 +224,13 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showManageProtocolsModal = false">取消</button>
-          <button class="btn btn-primary" @click="saveGroupProtocols">确认保存</button>
+          <button class="btn btn-secondary" @click="showManageProtocolsModal = false">{{ $t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" @click="saveGroupProtocols">{{ $t('admin.subscriptions.confirmSave') }}</button>
         </div>
       </div>
     </div>
 
-    <!-- 订阅内容查看弹窗 -->
+    <!-- Preview modal -->
     <div class="modal" v-if="showPreviewModal" @click.self="showPreviewModal = false">
       <div class="modal-content modal-lg">
         <div class="modal-header">
@@ -241,16 +241,16 @@
           <div class="preview-format-selector">
             <label>{{ $t('admin.subscriptions.format') }}:</label>
             <select v-model="previewFormat" @change="loadPreview">
-              <option value="v2ray">V2Ray (Base64)</option>
-              <option value="clash">Clash (YAML)</option>
-              <option value="stash">Stash (YAML)</option>
-              <option value="egern">Egern (YAML)</option>
-              <option value="surge">Surge</option>
-              <option value="loon">Loon</option>
-              <option value="shadowrocket">ShadowRocket</option>
-              <option value="quantumultx">QuantumultX</option>
-              <option value="json">JSON</option>
-              <option value="base64json">Base64 JSON</option>
+              <option value="v2ray">{{ $t('admin.subscriptions.formats.v2ray') }}</option>
+              <option value="clash">{{ $t('admin.subscriptions.formats.clash') }}</option>
+              <option value="stash">{{ $t('admin.subscriptions.formats.stash') }}</option>
+              <option value="egern">{{ $t('admin.subscriptions.formats.egern') }}</option>
+              <option value="surge">{{ $t('admin.subscriptions.formats.surge') }}</option>
+              <option value="loon">{{ $t('admin.subscriptions.formats.loon') }}</option>
+              <option value="shadowrocket">{{ $t('admin.subscriptions.formats.shadowrocket') }}</option>
+              <option value="quantumultx">{{ $t('admin.subscriptions.formats.quantumultx') }}</option>
+              <option value="json">{{ $t('admin.subscriptions.formats.json') }}</option>
+              <option value="base64json">{{ $t('admin.subscriptions.formats.base64json') }}</option>
             </select>
           </div>
           <div class="preview-content">
@@ -270,7 +270,7 @@
       </div>
     </div>
 
-    <!-- 订阅链接弹窗 -->
+    <!-- Subscription links modal -->
     <div class="modal" v-if="showSubscriptionModal" @click.self="showSubscriptionModal = false">
       <div class="modal-content">
         <div class="modal-header">
@@ -293,7 +293,7 @@
       </div>
     </div>
 
-    <!-- 创建/编辑分组弹窗 -->
+    <!-- Create/edit group modal -->
     <div class="modal" v-if="showCreateGroupModal || showEditGroupModal" @click.self="closeGroupModal">
       <div class="modal-content">
         <div class="modal-header">
@@ -324,13 +324,13 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeGroupModal">{{ $t('common.cancel') }}</button>
-          <button class="btn btn-primary" @click="saveGroup">{{ $t('common.save') }}</button>
+          <button class="btn btn-secondary" @click="closeGroupModal">{{ $t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" @click="saveGroup">{{ $t('common.actions.save') }}</button>
         </div>
       </div>
     </div>
 
-    <!-- 创建/编辑模板弹窗 -->
+    <!-- Create/edit template modal -->
     <div class="modal" v-if="showCreateTemplateModal || showEditTemplateModal" @click.self="closeTemplateModal">
       <div class="modal-content modal-lg">
         <div class="modal-header">
@@ -341,7 +341,7 @@
           <div class="form-row">
             <div class="form-group">
               <label>{{ $t('admin.subscriptions.nodeName') }} *</label>
-              <input type="text" v-model="templateForm.name" placeholder="🇺🇸 美国节点">
+              <input type="text" v-model="templateForm.name" :placeholder="$t('admin.subscriptions.nodeNamePlaceholder')">
             </div>
             <div class="form-group">
               <label>{{ $t('admin.subscriptions.protocol') }} *</label>
@@ -386,23 +386,23 @@
             </div>
           </div>
           <div class="form-group" v-if="templateForm.tls > 0">
-            <label>SNI (Server Name)</label>
+            <label>{{ $t('admin.subscriptions.sni') }}</label>
             <input type="text" v-model="templateForm.server_name" placeholder="www.example.com">
           </div>
           <div class="form-row" v-if="templateForm.tls === 2">
             <div class="form-group">
-              <label>Reality Public Key</label>
+              <label>{{ $t('admin.subscriptions.realityPublicKey') }}</label>
               <input type="text" v-model="templateForm.reality_public_key">
             </div>
             <div class="form-group">
-              <label>Reality Short ID</label>
+              <label>{{ $t('admin.subscriptions.realityShortId') }}</label>
               <input type="text" v-model="templateForm.reality_short_id">
             </div>
           </div>
           <div class="form-group" v-if="templateForm.tls > 0">
-            <label>TLS Fingerprint</label>
+            <label>{{ $t('admin.subscriptions.tlsFingerprint') }}</label>
             <select v-model="templateForm.tls_fingerprint">
-              <option value="">{{ $t('common.default') }}</option>
+              <option value="">{{ $t('admin.subscriptions.defaultOption') }}</option>
               <option value="chrome">Chrome</option>
               <option value="firefox">Firefox</option>
               <option value="safari">Safari</option>
@@ -411,13 +411,13 @@
             </select>
           </div>
           <div class="form-group" v-if="templateForm.transport === 'ws'">
-            <label>WebSocket Path</label>
+            <label>{{ $t('admin.subscriptions.websocketPath') }}</label>
             <input type="text" v-model="wsPath" placeholder="/ws">
           </div>
           <div class="form-group" v-if="templateForm.type === 'vless' && templateForm.tls === 2">
-            <label>Flow</label>
+            <label>{{ $t('admin.subscriptions.flow') }}</label>
             <select v-model="vlessFlow">
-              <option value="">None</option>
+              <option value="">{{ $t('admin.subscriptions.noneOption') }}</option>
               <option value="xtls-rprx-vision">xtls-rprx-vision</option>
             </select>
           </div>
@@ -430,13 +430,13 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeTemplateModal">{{ $t('common.cancel') }}</button>
-          <button class="btn btn-primary" @click="saveTemplate">{{ $t('common.save') }}</button>
+          <button class="btn btn-secondary" @click="closeTemplateModal">{{ $t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" @click="saveTemplate">{{ $t('common.actions.save') }}</button>
         </div>
       </div>
     </div>
 
-    <!-- Toast 消息 -->
+    <!-- Toast -->
     <div class="toast" v-if="toastMessage" :class="toastType">
       {{ toastMessage }}
     </div>
@@ -445,14 +445,14 @@
 
 <script>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import adminApi from '@/api/admin'
 import { useUserStore } from '@/stores/user'
+import { useAppI18n } from '@/composables/useAppI18n'
 
 export default {
   name: 'Subscriptions',
   setup() {
-    const { t } = useI18n()
+    const { t } = useAppI18n()
     const userStore = useUserStore()
     
     // Data
@@ -508,27 +508,25 @@ export default {
     const toastMessage = ref('')
     const toastType = ref('success')
     
-    // Subscription formats
-    const subscriptionFormats = [
-      { value: 'auto', label: 'Auto (By User-Agent)' },
-      { value: 'v2ray', label: 'V2Ray (Base64)' },
-      { value: 'clash', label: 'Clash (YAML)' },
-      { value: 'stash', label: 'Stash (YAML)' },
-      { value: 'egern', label: 'Egern (YAML)' },
-      { value: 'surge', label: 'Surge' },
-      { value: 'loon', label: 'Loon' },
-      { value: 'shadowrocket', label: 'ShadowRocket' },
-      { value: 'quantumultx', label: 'QuantumultX' },
-      { value: 'json', label: 'JSON' },
-      { value: 'base64json', label: 'Base64 JSON' }
-    ]
+    const subscriptionFormats = computed(() => [
+      { value: 'auto', label: t('admin.subscriptions.formats.auto') },
+      { value: 'v2ray', label: t('admin.subscriptions.formats.v2ray') },
+      { value: 'clash', label: t('admin.subscriptions.formats.clash') },
+      { value: 'stash', label: t('admin.subscriptions.formats.stash') },
+      { value: 'egern', label: t('admin.subscriptions.formats.egern') },
+      { value: 'surge', label: t('admin.subscriptions.formats.surge') },
+      { value: 'loon', label: t('admin.subscriptions.formats.loon') },
+      { value: 'shadowrocket', label: t('admin.subscriptions.formats.shadowrocket') },
+      { value: 'quantumultx', label: t('admin.subscriptions.formats.quantumultx') },
+      { value: 'json', label: t('admin.subscriptions.formats.json') },
+      { value: 'base64json', label: t('admin.subscriptions.formats.base64json') }
+    ])
     
     // Methods
     const loadGroups = async () => {
       try {
         const res = await adminApi.getSubscriptionGroups()
         groups.value = res.data || []
-        // 自动选中第一个分组
         if (groups.value.length > 0 && !selectedGroup.value) {
           selectGroup(groups.value[0])
         }
@@ -558,8 +556,7 @@ export default {
     const openManageProtocolsModal = async () => {
       if (!selectedGroup.value) return
       await loadAvailableProtocols()
-      // 设置当前已选中的协议
-      selectedProtocolIds.value = protocols.value.map(p => p.id)
+      selectedProtocolIds.value = protocols.value.map((p) => p.id)
       showManageProtocolsModal.value = true
     }
 
@@ -568,7 +565,7 @@ export default {
         const res = await adminApi.getAvailableProtocols()
         availableProtocols.value = res.data || []
       } catch (error) {
-        showToast('获取可用协议失败', 'error')
+        showToast(t('admin.subscriptions.availableProtocolsLoadError'), 'error')
       }
     }
 
@@ -596,11 +593,11 @@ export default {
     const saveGroupProtocols = async () => {
       try {
         await adminApi.updateGroupProtocols(selectedGroup.value.id, selectedProtocolIds.value)
-        showToast('更新关联成功', 'success')
+        showToast(t('admin.subscriptions.groupProtocolsUpdated'), 'success')
         showManageProtocolsModal.value = false
-        loadProtocols(selectedGroup.value.id) // 重新加载当前分组的协议列表
+        loadProtocols(selectedGroup.value.id)
       } catch (error) {
-        showToast('更新失败', 'error')
+        showToast(t('admin.subscriptions.groupProtocolsUpdateFailed'), 'error')
       }
     }
     
@@ -615,12 +612,12 @@ export default {
       showSubscriptionModal.value = true
     }
 
-    // 复制分组合并订阅内容（服务端已按组合并并返回 base64 编码的内容）
+    // Copy merged subscription content for a group
     const copyGroupCombined = async (group) => {
       selectedGroup.value = group
       if (!confirm(t('admin.subscriptions.copyCombinedConfirm'))) return
 
-      // 优先尝试后端生成合并结果
+      // Prefer the server-side merged result first
       try {
         const res = await adminApi.previewSubscription({ group_ids: [group.id], format: 'v2ray' })
         const content = res.data?.content || ''
@@ -630,10 +627,9 @@ export default {
           return
         }
       } catch (e) {
-        // 继续走前端回退逻辑
+        // Fall through to the panel-side fallback merge
       }
 
-      // 后端不可用或返回空，使用前端合并（仅基于模板，不包含内部节点）
       try {
         const tplRes = await adminApi.getSubscriptionTemplates(group.id)
         const tplList = tplRes.data || []
@@ -656,7 +652,7 @@ export default {
     }
     
     const getSubscriptionUrl = (format) => {
-      // 使用当前登录管理员的真实订阅 token
+      // Use the current logged-in administrator subscription token
       const baseUrl = window.location.origin
       const token = userStore.userInfo?.token || ''
       if (!token) return ''
@@ -791,7 +787,7 @@ export default {
         enable: template.enable === 1
       })
       
-      // 解析 transport_settings
+      // Parse transport_settings
       if (template.transport_settings) {
         try {
           const settings = JSON.parse(template.transport_settings)
@@ -799,7 +795,7 @@ export default {
         } catch (e) {}
       }
       
-      // 解析 protocol_settings
+      // Parse protocol_settings
       if (template.protocol_settings) {
         try {
           const settings = JSON.parse(template.protocol_settings)
@@ -889,7 +885,6 @@ export default {
     }
     
     const copyTemplateLink = async (template) => {
-      // 生成单个节点的链接
       const link = generateNodeLink(template)
       copyToClipboard(link)
     }
@@ -968,7 +963,7 @@ export default {
     }
     
     const getTLSLabel = (tls) => {
-      return tls === 2 ? 'Reality' : tls === 1 ? 'TLS' : t('admin.subscriptions.tlsNone')
+      return tls === 2 ? t('admin.subscriptions.tlsReality') : tls === 1 ? t('admin.subscriptions.tlsEnabled') : t('admin.subscriptions.tlsNone')
     }
     
     const showToast = (message, type = 'success') => {

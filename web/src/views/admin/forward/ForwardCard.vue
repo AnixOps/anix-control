@@ -6,7 +6,7 @@
         <p>{{ forward.tunnelName || '-' }}</p>
       </div>
       <div class="head-actions">
-        <span v-if="draggable" class="drag-handle" title="拖拽排序">⋮⋮</span>
+        <span v-if="draggable" class="drag-handle" :title="t('runtime.forward.card.dragHandleTitle')">⋮⋮</span>
         <label class="switch">
           <input type="checkbox" :checked="isRunning" @change="$emit('toggle', forward)" />
           <span class="slider"></span>
@@ -15,13 +15,21 @@
       </div>
     </header>
 
-    <button class="endpoint" type="button" @click="$emit('address', { value: forward.inIp, port: forward.inPort, title: '入口地址' })">
-      <span class="label">入口</span>
+    <button
+      class="endpoint"
+      type="button"
+      @click="$emit('address', { value: forward.inIp, port: forward.inPort, title: t('runtime.forward.card.ingressAddressTitle') })"
+    >
+      <span class="label">{{ t('runtime.forward.card.ingressLabel') }}</span>
       <code>{{ inAddressText }}</code>
     </button>
 
-    <button class="endpoint" type="button" @click="$emit('address', { value: forward.remoteAddr, title: '目标地址' })">
-      <span class="label">目标</span>
+    <button
+      class="endpoint"
+      type="button"
+      @click="$emit('address', { value: forward.remoteAddr, title: t('runtime.forward.card.targetAddressTitle') })"
+    >
+      <span class="label">{{ t('runtime.forward.card.targetLabel') }}</span>
       <code>{{ remoteAddressText }}</code>
     </button>
 
@@ -32,15 +40,16 @@
     </div>
 
     <footer class="actions">
-      <button class="btn-secondary btn-sm" @click="$emit('edit', forward)">编辑</button>
-      <button class="btn-secondary btn-sm" @click="$emit('diagnose', forward)">诊断</button>
-      <button class="btn-secondary btn-sm danger-text" @click="$emit('delete', forward)">删除</button>
+      <button class="btn-secondary btn-sm" @click="$emit('edit', forward)">{{ t('runtime.forward.actions.edit') }}</button>
+      <button class="btn-secondary btn-sm" @click="$emit('diagnose', forward)">{{ t('runtime.forward.actions.diagnose') }}</button>
+      <button class="btn-secondary btn-sm danger-text" @click="$emit('delete', forward)">{{ t('runtime.forward.actions.delete') }}</button>
     </footer>
   </section>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import { useAppI18n } from '@/composables/useAppI18n'
 
 const props = defineProps({
   forward: {
@@ -55,31 +64,33 @@ const props = defineProps({
 
 defineEmits(['toggle', 'edit', 'delete', 'diagnose', 'address'])
 
+const { t } = useAppI18n()
+
 const isRunning = computed(() => Number(props.forward.status) === 1)
 
 const statusMeta = computed(() => {
   switch (Number(props.forward.status)) {
     case 1:
-      return { text: '正常', className: 'success' }
+      return { text: t('runtime.forward.card.status.normal'), className: 'success' }
     case 0:
-      return { text: '暂停', className: 'warning' }
+      return { text: t('runtime.forward.card.status.paused'), className: 'warning' }
     case -1:
-      return { text: '异常', className: 'danger' }
+      return { text: t('runtime.forward.card.status.error'), className: 'danger' }
     default:
-      return { text: '未知', className: '' }
+      return { text: t('runtime.forward.card.status.unknown'), className: '' }
   }
 })
 
 const strategyMeta = computed(() => {
   switch (props.forward.strategy) {
     case 'round':
-      return { text: '轮询', className: 'success' }
+      return { text: t('runtime.forward.card.strategy.round'), className: 'success' }
     case 'rand':
-      return { text: '随机', className: 'warning' }
+      return { text: t('runtime.forward.card.strategy.random'), className: 'warning' }
     case 'hash':
-      return { text: '哈希', className: 'primary' }
+      return { text: t('runtime.forward.card.strategy.hash'), className: 'primary' }
     default:
-      return { text: '主备', className: 'primary' }
+      return { text: t('runtime.forward.card.strategy.primaryBackup'), className: 'primary' }
   }
 })
 

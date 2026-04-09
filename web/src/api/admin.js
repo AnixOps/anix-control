@@ -1,8 +1,5 @@
 import request from '@/utils/request'
 
-// ====== 管理员接口 ======
-
-// 获取仪表盘数据
 export function getDashboard(refresh = false) {
   return request({
     url: '/admin/dashboard',
@@ -11,9 +8,6 @@ export function getDashboard(refresh = false) {
   })
 }
 
-// ====== 用户管理 ======
-
-// 创建用户
 export function createUser(data) {
   return request({
     url: '/admin/users',
@@ -22,7 +16,6 @@ export function createUser(data) {
   })
 }
 
-// 获取用户列表
 export function getUserList(params) {
   return request({
     url: '/admin/users',
@@ -31,7 +24,6 @@ export function getUserList(params) {
   })
 }
 
-// 获取用户统计
 export function getUserStats() {
   return request({
     url: '/admin/users/stats',
@@ -39,7 +31,6 @@ export function getUserStats() {
   })
 }
 
-// 获取用户详情
 export function getUser(id) {
   return request({
     url: `/admin/users/${id}`,
@@ -47,7 +38,6 @@ export function getUser(id) {
   })
 }
 
-// 更新用户
 export function updateUser(id, data) {
   return request({
     url: `/admin/users/${id}`,
@@ -56,7 +46,6 @@ export function updateUser(id, data) {
   })
 }
 
-// 删除用户
 export function deleteUser(id) {
   return request({
     url: `/admin/users/${id}`,
@@ -64,7 +53,6 @@ export function deleteUser(id) {
   })
 }
 
-// 封禁用户
 export function banUser(id) {
   return request({
     url: `/admin/users/${id}/ban`,
@@ -72,7 +60,6 @@ export function banUser(id) {
   })
 }
 
-// 解封用户
 export function unbanUser(id) {
   return request({
     url: `/admin/users/${id}/unban`,
@@ -80,7 +67,6 @@ export function unbanUser(id) {
   })
 }
 
-// 重置用户流量
 export function resetUserTraffic(id) {
   return request({
     url: '/user/reset',
@@ -103,9 +89,6 @@ export function resetUserTunnelTraffic(id) {
   })
 }
 
-// ====== 订单管理 ======
-
-// 获取订单列表
 export function getOrderList(params) {
   return request({
     url: '/admin/orders',
@@ -114,7 +97,6 @@ export function getOrderList(params) {
   })
 }
 
-// 获取订单统计
 export function getOrderStats() {
   return request({
     url: '/admin/orders/stats',
@@ -122,7 +104,6 @@ export function getOrderStats() {
   })
 }
 
-// 获取订单详情
 export function getOrder(id) {
   return request({
     url: `/admin/orders/${id}`,
@@ -130,7 +111,6 @@ export function getOrder(id) {
   })
 }
 
-// 更新订单状态
 export function updateOrderStatus(id, status) {
   return request({
     url: `/admin/orders/${id}/status`,
@@ -139,7 +119,6 @@ export function updateOrderStatus(id, status) {
   })
 }
 
-// 标记订单已支付
 export function markOrderPaid(id) {
   return request({
     url: `/admin/orders/${id}/paid`,
@@ -147,7 +126,6 @@ export function markOrderPaid(id) {
   })
 }
 
-// 取消订单
 export function cancelOrder(id) {
   return request({
     url: `/admin/orders/${id}/cancel`,
@@ -155,9 +133,6 @@ export function cancelOrder(id) {
   })
 }
 
-// ====== 节点管理 ======
-
-// 获取节点列表
 export function getNodes(params) {
   return request({
     url: '/admin/nodes',
@@ -166,7 +141,6 @@ export function getNodes(params) {
   })
 }
 
-// 获取节点统计
 export function getNodeStats() {
   return request({
     url: '/admin/nodes/stats',
@@ -174,7 +148,6 @@ export function getNodeStats() {
   })
 }
 
-// 获取节点详情
 export function getNode(id) {
   return request({
     url: `/admin/nodes/${id}`,
@@ -182,7 +155,6 @@ export function getNode(id) {
   })
 }
 
-// 创建节点
 export function createNode(data) {
   return request({
     url: '/admin/nodes',
@@ -191,7 +163,6 @@ export function createNode(data) {
   })
 }
 
-// 更新节点
 export function updateNode(id, data) {
   return request({
     url: `/admin/nodes/${id}`,
@@ -200,7 +171,6 @@ export function updateNode(id, data) {
   })
 }
 
-// 删除节点
 export function deleteNode(id) {
   return request({
     url: `/admin/nodes/${id}`,
@@ -208,7 +178,6 @@ export function deleteNode(id) {
   })
 }
 
-// 同步节点协议
 export function syncNodeProtocol(id) {
   return request({
     url: `/admin/nodes/${id}/sync`,
@@ -216,7 +185,6 @@ export function syncNodeProtocol(id) {
   })
 }
 
-// 获取节点原始配置
 export function getNodeRawConfig(id) {
   return request({
     url: `/admin/nodes/${id}/raw-config`,
@@ -224,7 +192,6 @@ export function getNodeRawConfig(id) {
   })
 }
 
-// 更新节点原始配置
 export function updateNodeRawConfig(id, data) {
   return request({
     url: `/admin/nodes/${id}/raw-config`,
@@ -233,7 +200,6 @@ export function updateNodeRawConfig(id, data) {
   })
 }
 
-// 验证节点配置
 export function validateNodeConfig(data) {
   return request({
     url: '/admin/nodes/validate-config',
@@ -242,9 +208,6 @@ export function validateNodeConfig(data) {
   })
 }
 
-// ====== 节点协议管理 ======
-
-// 获取节点协议列表
 export function getNodeProtocols(nodeId) {
   return request({
     url: `/admin/nodes/${nodeId}/protocols`,
@@ -252,7 +215,6 @@ export function getNodeProtocols(nodeId) {
   })
 }
 
-// 创建节点协议
 export function createNodeProtocol(nodeId, data) {
   return request({
     url: `/admin/nodes/${nodeId}/protocols`,
@@ -261,7 +223,6 @@ export function createNodeProtocol(nodeId, data) {
   })
 }
 
-// 更新节点协议
 export function updateNodeProtocol(nodeId, protocolId, data) {
   return request({
     url: `/admin/nodes/${nodeId}/protocols/${protocolId}`,
@@ -270,7 +231,6 @@ export function updateNodeProtocol(nodeId, protocolId, data) {
   })
 }
 
-// 删除节点协议
 export function deleteNodeProtocol(nodeId, protocolId) {
   return request({
     url: `/admin/nodes/${nodeId}/protocols/${protocolId}`,
@@ -278,7 +238,6 @@ export function deleteNodeProtocol(nodeId, protocolId) {
   })
 }
 
-// 获取协议模板
 export function getProtocolTemplates() {
   return request({
     url: '/admin/protocol-templates',
@@ -286,9 +245,6 @@ export function getProtocolTemplates() {
   })
 }
 
-// ====== 授权密钥管理 ======
-
-// 获取授权密钥列表
 export function getAuthKeys() {
   return request({
     url: '/admin/auth-keys',
@@ -296,7 +252,6 @@ export function getAuthKeys() {
   })
 }
 
-// 生成授权密钥
 export function generateAuthKey(data) {
   return request({
     url: '/admin/auth-keys',
@@ -305,7 +260,6 @@ export function generateAuthKey(data) {
   })
 }
 
-// 删除授权密钥
 export function deleteAuthKey(id) {
   return request({
     url: `/admin/auth-keys/${id}`,
@@ -313,9 +267,6 @@ export function deleteAuthKey(id) {
   })
 }
 
-// ====== 订阅管理 ======
-
-// 获取订阅分组列表
 export function getSubscriptionGroups() {
   return request({
     url: '/admin/subscription/groups',
@@ -323,7 +274,6 @@ export function getSubscriptionGroups() {
   })
 }
 
-// 创建订阅分组
 export function createSubscriptionGroup(data) {
   return request({
     url: '/admin/subscription/groups',
@@ -332,7 +282,6 @@ export function createSubscriptionGroup(data) {
   })
 }
 
-// 获取订阅分组详情
 export function getSubscriptionGroup(id) {
   return request({
     url: `/admin/subscription/groups/${id}`,
@@ -340,7 +289,6 @@ export function getSubscriptionGroup(id) {
   })
 }
 
-// 更新订阅分组
 export function updateSubscriptionGroup(id, data) {
   return request({
     url: `/admin/subscription/groups/${id}`,
@@ -349,7 +297,6 @@ export function updateSubscriptionGroup(id, data) {
   })
 }
 
-// 删除订阅分组
 export function deleteSubscriptionGroup(id) {
   return request({
     url: `/admin/subscription/groups/${id}`,
@@ -357,7 +304,6 @@ export function deleteSubscriptionGroup(id) {
   })
 }
 
-// 获取分组下的模板列表
 export function getSubscriptionTemplates(groupId) {
   return request({
     url: `/admin/subscription/groups/${groupId}/templates`,
@@ -365,7 +311,6 @@ export function getSubscriptionTemplates(groupId) {
   })
 }
 
-// 获取分组下的物理节点协议列表
 export function getSubscriptionProtocols(groupId) {
   return request({
     url: `/admin/subscription/groups/${groupId}/protocols`,
@@ -373,7 +318,6 @@ export function getSubscriptionProtocols(groupId) {
   })
 }
 
-// 更新分组关联的物理节点协议
 export function updateGroupProtocols(groupId, protocolIds) {
   return request({
     url: `/admin/subscription/groups/${groupId}/protocols`,
@@ -382,7 +326,6 @@ export function updateGroupProtocols(groupId, protocolIds) {
   })
 }
 
-// 获取所有可用的物理节点协议 (Protocol Pool)
 export function getAvailableProtocols() {
   return request({
     url: '/admin/subscription/protocols/available',
@@ -390,7 +333,6 @@ export function getAvailableProtocols() {
   })
 }
 
-// 创建订阅模板
 export function createSubscriptionTemplate(groupId, data) {
   return request({
     url: `/admin/subscription/groups/${groupId}/templates`,
@@ -399,7 +341,6 @@ export function createSubscriptionTemplate(groupId, data) {
   })
 }
 
-// 获取订阅模板详情
 export function getSubscriptionTemplate(id) {
   return request({
     url: `/admin/subscription/templates/${id}`,
@@ -407,7 +348,6 @@ export function getSubscriptionTemplate(id) {
   })
 }
 
-// 更新订阅模板
 export function updateSubscriptionTemplate(id, data) {
   return request({
     url: `/admin/subscription/templates/${id}`,
@@ -416,7 +356,6 @@ export function updateSubscriptionTemplate(id, data) {
   })
 }
 
-// 删除订阅模板
 export function deleteSubscriptionTemplate(id) {
   return request({
     url: `/admin/subscription/templates/${id}`,
@@ -424,7 +363,6 @@ export function deleteSubscriptionTemplate(id) {
   })
 }
 
-// 预览订阅内容
 export function previewSubscription(data) {
   return request({
     url: '/admin/subscription/preview',
@@ -433,9 +371,6 @@ export function previewSubscription(data) {
   })
 }
 
-// ====== 套餐管理 ======
-
-// 获取套餐列表
 export function getPlans() {
   return request({
     url: '/admin/plans',
@@ -443,7 +378,6 @@ export function getPlans() {
   })
 }
 
-// 创建套餐
 export function createPlan(data) {
   return request({
     url: '/admin/plans',
@@ -452,7 +386,6 @@ export function createPlan(data) {
   })
 }
 
-// 获取套餐
 export function getPlan(id) {
   return request({
     url: `/admin/plans/${id}`,
@@ -460,7 +393,6 @@ export function getPlan(id) {
   })
 }
 
-// 更新套餐
 export function updatePlan(id, data) {
   return request({
     url: `/admin/plans/${id}`,
@@ -469,7 +401,6 @@ export function updatePlan(id, data) {
   })
 }
 
-// 删除套餐
 export function deletePlan(id) {
   return request({
     url: `/admin/plans/${id}`,
@@ -477,7 +408,6 @@ export function deletePlan(id) {
   })
 }
 
-// 分配套餐给用户
 export function assignPlanToUser(id, data) {
   return request({
     url: `/admin/plans/${id}/assign`,
@@ -486,9 +416,6 @@ export function assignPlanToUser(id, data) {
   })
 }
 
-// ====== 套餐-订阅分组关联 ======
-
-// 获取套餐关联的订阅分组
 export function getPlanGroups(planId) {
   return request({
     url: `/admin/subscription/plans/${planId}/groups`,
@@ -496,7 +423,6 @@ export function getPlanGroups(planId) {
   })
 }
 
-// 给套餐添加订阅分组
 export function addGroupToPlan(planId, groupId) {
   return request({
     url: `/admin/subscription/plans/${planId}/groups`,
@@ -505,7 +431,6 @@ export function addGroupToPlan(planId, groupId) {
   })
 }
 
-// 从套餐移除订阅分组
 export function removeGroupFromPlan(planId, groupId) {
   return request({
     url: `/admin/subscription/plans/${planId}/groups/${groupId}`,
@@ -513,9 +438,6 @@ export function removeGroupFromPlan(planId, groupId) {
   })
 }
 
-// ====== 工单管理 ======
-
-// 获取工单列表
 export function getTickets(params) {
   return request({
     url: '/admin/ticket',
@@ -524,7 +446,6 @@ export function getTickets(params) {
   })
 }
 
-// 回复工单
 export function replyTicket(data) {
   return request({
     url: '/admin/ticket/reply',
@@ -533,7 +454,6 @@ export function replyTicket(data) {
   })
 }
 
-// 关闭工单
 export function closeTicket(id) {
   return request({
     url: `/admin/ticket/${id}/close`,
@@ -541,9 +461,6 @@ export function closeTicket(id) {
   })
 }
 
-// ====== 优惠券管理 ======
-
-// 获取优惠券列表
 export function getCoupons(params) {
   return request({
     url: '/admin/coupon',
@@ -552,7 +469,6 @@ export function getCoupons(params) {
   })
 }
 
-// 创建优惠券
 export function createCoupon(data) {
   return request({
     url: '/admin/coupon',
@@ -561,7 +477,6 @@ export function createCoupon(data) {
   })
 }
 
-// 删除优惠券
 export function deleteCoupon(id) {
   return request({
     url: `/admin/coupon/${id}`,
@@ -569,9 +484,6 @@ export function deleteCoupon(id) {
   })
 }
 
-// ====== 知识库管理 ======
-
-// 获取知识库文章列表
 export function getKnowledgeList(params) {
   return request({
     url: '/admin/knowledge',
@@ -580,7 +492,6 @@ export function getKnowledgeList(params) {
   })
 }
 
-// 创建知识库文章
 export function createKnowledge(data) {
   return request({
     url: '/admin/knowledge',
@@ -589,7 +500,6 @@ export function createKnowledge(data) {
   })
 }
 
-// 更新知识库文章
 export function updateKnowledge(id, data) {
   return request({
     url: `/admin/knowledge/${id}`,
@@ -598,7 +508,6 @@ export function updateKnowledge(id, data) {
   })
 }
 
-// 删除知识库文章
 export function deleteKnowledge(id) {
   return request({
     url: `/admin/knowledge/${id}`,
@@ -606,9 +515,6 @@ export function deleteKnowledge(id) {
   })
 }
 
-// ====== 流量转发管理 ======
-
-// 获取转发节点列表
 export function createForward(data) {
   return request({
     url: '/forward/create',
@@ -854,7 +760,6 @@ export function getForwardNodes(params) {
   })
 }
 
-// 创建转发节点
 export function createForwardNode(data) {
   return request({
     url: '/admin/forward/nodes',
@@ -863,7 +768,6 @@ export function createForwardNode(data) {
   })
 }
 
-// 获取转发节点详情
 export function getForwardNode(id) {
   return request({
     url: `/admin/forward/nodes/${id}`,
@@ -871,7 +775,6 @@ export function getForwardNode(id) {
   })
 }
 
-// 更新转发节点
 export function updateForwardNode(id, data) {
   return request({
     url: `/admin/forward/nodes/${id}`,
@@ -880,7 +783,6 @@ export function updateForwardNode(id, data) {
   })
 }
 
-// 删除转发节点
 export function deleteForwardNode(id) {
   return request({
     url: `/admin/forward/nodes/${id}`,
@@ -888,7 +790,6 @@ export function deleteForwardNode(id) {
   })
 }
 
-// 检查转发节点
 export function checkForwardNode(id) {
   return request({
     url: `/admin/forward/nodes/${id}/check`,
@@ -896,7 +797,6 @@ export function checkForwardNode(id) {
   })
 }
 
-// 切换转发节点状态
 export function toggleForwardNode(id, enabled) {
   return request({
     url: `/admin/forward/nodes/${id}/toggle`,
@@ -905,7 +805,6 @@ export function toggleForwardNode(id, enabled) {
   })
 }
 
-// 获取转发规则列表
 export function getForwardRules(params) {
   return request({
     url: '/admin/forward/rules',
@@ -914,7 +813,6 @@ export function getForwardRules(params) {
   })
 }
 
-// 创建转发规则
 export function createForwardRule(data) {
   return request({
     url: '/admin/forward/rules',
@@ -923,7 +821,6 @@ export function createForwardRule(data) {
   })
 }
 
-// 获取转发规则详情
 export function getForwardRule(id) {
   return request({
     url: `/admin/forward/rules/${id}`,
@@ -931,7 +828,6 @@ export function getForwardRule(id) {
   })
 }
 
-// 更新转发规则
 export function updateForwardRule(id, data) {
   return request({
     url: `/admin/forward/rules/${id}`,
@@ -940,7 +836,6 @@ export function updateForwardRule(id, data) {
   })
 }
 
-// 删除转发规则
 export function deleteForwardRule(id) {
   return request({
     url: `/admin/forward/rules/${id}`,
@@ -948,7 +843,6 @@ export function deleteForwardRule(id) {
   })
 }
 
-// 切换转发规则状态
 export function toggleForwardRule(id, enabled) {
   return request({
     url: `/admin/forward/rules/${id}/toggle`,
@@ -957,7 +851,6 @@ export function toggleForwardRule(id, enabled) {
   })
 }
 
-// 获取转发统计
 export function getForwardStats() {
   return request({
     url: '/admin/forward/stats',
@@ -965,9 +858,6 @@ export function getForwardStats() {
   })
 }
 
-// ====== 支付网关管理 ======
-
-// 获取支付网关列表
 export function getPaymentGateways() {
   return request({
     url: '/admin/payment/gateways',
@@ -975,7 +865,6 @@ export function getPaymentGateways() {
   })
 }
 
-// 创建支付网关
 export function createPaymentGateway(data) {
   return request({
     url: '/admin/payment/gateways',
@@ -984,7 +873,6 @@ export function createPaymentGateway(data) {
   })
 }
 
-// 更新支付网关
 export function updatePaymentGateway(id, data) {
   return request({
     url: `/admin/payment/gateways/${id}`,
@@ -993,7 +881,6 @@ export function updatePaymentGateway(id, data) {
   })
 }
 
-// 删除支付网关
 export function deletePaymentGateway(id) {
   return request({
     url: `/admin/payment/gateways/${id}`,
@@ -1001,7 +888,6 @@ export function deletePaymentGateway(id) {
   })
 }
 
-// 切换支付网关状态
 export function togglePaymentGateway(id, enabled) {
   return request({
     url: `/admin/payment/gateways/${id}/toggle`,
@@ -1010,7 +896,6 @@ export function togglePaymentGateway(id, enabled) {
   })
 }
 
-// 获取支付统计
 export function getPaymentStats(params) {
   return request({
     url: '/admin/payment/stats',
@@ -1019,7 +904,6 @@ export function getPaymentStats(params) {
   })
 }
 
-// 获取支付记录
 export function getPaymentRecords(params) {
   return request({
     url: '/admin/payment/records',
@@ -1028,9 +912,6 @@ export function getPaymentRecords(params) {
   })
 }
 
-// ====== Telegram Bot管理 ======
-
-// 获取Bot配置
 export function getTelegramBot() {
   return request({
     url: '/admin/telegram/bot',
@@ -1038,7 +919,6 @@ export function getTelegramBot() {
   })
 }
 
-// 更新Bot配置
 export function updateTelegramBot(data) {
   return request({
     url: '/admin/telegram/bot',
@@ -1047,7 +927,6 @@ export function updateTelegramBot(data) {
   })
 }
 
-// 设置Webhook
 export function setTelegramWebhook(url) {
   return request({
     url: '/admin/telegram/webhook',
@@ -1056,7 +935,6 @@ export function setTelegramWebhook(url) {
   })
 }
 
-// 删除Webhook
 export function deleteTelegramWebhook() {
   return request({
     url: '/admin/telegram/webhook',
@@ -1064,7 +942,6 @@ export function deleteTelegramWebhook() {
   })
 }
 
-// 发送通知
 export function sendTelegramNotification(data) {
   return request({
     url: '/admin/telegram/notify',
@@ -1073,7 +950,6 @@ export function sendTelegramNotification(data) {
   })
 }
 
-// 广播消息
 export function broadcastTelegram(message) {
   return request({
     url: '/admin/telegram/broadcast',
@@ -1082,7 +958,6 @@ export function broadcastTelegram(message) {
   })
 }
 
-// 获取用户绑定列表
 export function getTelegramUsers(params) {
   return request({
     url: '/admin/telegram/users',
@@ -1091,7 +966,6 @@ export function getTelegramUsers(params) {
   })
 }
 
-// 更新用户通知设置
 export function updateTelegramUserNotify(id, data) {
   return request({
     url: `/admin/telegram/users/${id}/notify`,
@@ -1100,9 +974,6 @@ export function updateTelegramUserNotify(id, data) {
   })
 }
 
-// ====== MFA管理 ======
-
-// 获取MFA配置
 export function getMFAConfig() {
   return request({
     url: '/admin/mfa/config',
@@ -1110,7 +981,6 @@ export function getMFAConfig() {
   })
 }
 
-// 更新MFA配置
 export function updateMFAConfig(data) {
   return request({
     url: '/admin/mfa/config',
@@ -1119,9 +989,6 @@ export function updateMFAConfig(data) {
   })
 }
 
-// ====== 通知管理 ======
-
-// 获取通知模板列表
 export function getNotificationTemplates(params) {
   return request({
     url: '/admin/notification/templates',
@@ -1130,7 +997,6 @@ export function getNotificationTemplates(params) {
   })
 }
 
-// 创建通知模板
 export function createNotificationTemplate(data) {
   return request({
     url: '/admin/notification/templates',
@@ -1139,7 +1005,6 @@ export function createNotificationTemplate(data) {
   })
 }
 
-// 更新通知模板
 export function updateNotificationTemplate(id, data) {
   return request({
     url: `/admin/notification/templates/${id}`,
@@ -1148,7 +1013,6 @@ export function updateNotificationTemplate(id, data) {
   })
 }
 
-// 删除通知模板
 export function deleteNotificationTemplate(id) {
   return request({
     url: `/admin/notification/templates/${id}`,
@@ -1156,7 +1020,6 @@ export function deleteNotificationTemplate(id) {
   })
 }
 
-// 获取通知日志
 export function getNotificationLogs(params) {
   return request({
     url: '/admin/notification/logs',
@@ -1165,7 +1028,6 @@ export function getNotificationLogs(params) {
   })
 }
 
-// 发送测试通知
 export function sendTestNotification(data) {
   return request({
     url: '/admin/notification/test',
@@ -1174,7 +1036,6 @@ export function sendTestNotification(data) {
   })
 }
 
-// 获取邮件配置
 export function getEmailConfig() {
   return request({
     url: '/admin/notification/email/config',
@@ -1182,7 +1043,6 @@ export function getEmailConfig() {
   })
 }
 
-// 更新邮件配置
 export function updateEmailConfig(data) {
   return request({
     url: '/admin/notification/email/config',
@@ -1191,9 +1051,6 @@ export function updateEmailConfig(data) {
   })
 }
 
-// ====== 邀请返利管理 ======
-
-// 获取邀请配置
 export function getInviteConfig() {
   return request({
     url: '/admin/invite/config',
@@ -1201,7 +1058,6 @@ export function getInviteConfig() {
   })
 }
 
-// 更新邀请配置
 export function updateInviteConfig(data) {
   return request({
     url: '/admin/invite/config',
@@ -1210,7 +1066,6 @@ export function updateInviteConfig(data) {
   })
 }
 
-// 获取邀请统计
 export function getInviteStats() {
   return request({
     url: '/admin/invite/stats',
@@ -1218,7 +1073,6 @@ export function getInviteStats() {
   })
 }
 
-// 获取提现申请列表
 export function getWithdrawals(params) {
   return request({
     url: '/admin/invite/withdrawals',
@@ -1227,7 +1081,6 @@ export function getWithdrawals(params) {
   })
 }
 
-// 处理提现申请
 export function processWithdrawal(id, data) {
   return request({
     url: `/admin/invite/withdrawals/${id}/process`,
@@ -1236,9 +1089,6 @@ export function processWithdrawal(id, data) {
   })
 }
 
-// ====== 系统配置管理 ======
-
-// 获取系统配置
 export function getSystemConfigs(params) {
   return request({
     url: '/admin/system/configs',
@@ -1247,7 +1097,6 @@ export function getSystemConfigs(params) {
   })
 }
 
-// 获取单个配置
 export function getSystemConfig(key) {
   return request({
     url: `/admin/system/configs/${key}`,
@@ -1255,7 +1104,6 @@ export function getSystemConfig(key) {
   })
 }
 
-// 设置系统配置
 export function setSystemConfig(key, data) {
   return request({
     url: `/admin/system/configs/${key}`,
@@ -1264,7 +1112,6 @@ export function setSystemConfig(key, data) {
   })
 }
 
-// 删除系统配置
 export function deleteSystemConfig(key) {
   return request({
     url: `/admin/system/configs/${key}`,
@@ -1272,9 +1119,6 @@ export function deleteSystemConfig(key) {
   })
 }
 
-// ====== 备份管理 ======
-
-// 获取备份配置
 export function getBackupConfig() {
   return request({
     url: '/admin/system/backup/config',
@@ -1282,7 +1126,6 @@ export function getBackupConfig() {
   })
 }
 
-// 更新备份配置
 export function updateBackupConfig(data) {
   return request({
     url: '/admin/system/backup/config',
@@ -1291,7 +1134,6 @@ export function updateBackupConfig(data) {
   })
 }
 
-// 创建备份
 export function createBackup(type = 'database') {
   return request({
     url: '/admin/system/backup',
@@ -1300,7 +1142,6 @@ export function createBackup(type = 'database') {
   })
 }
 
-// 获取备份列表
 export function getBackups(params) {
   return request({
     url: '/admin/system/backups',
@@ -1309,7 +1150,6 @@ export function getBackups(params) {
   })
 }
 
-// 获取备份统计
 export function getBackupStats() {
   return request({
     url: '/admin/system/backup/stats',
@@ -1317,7 +1157,6 @@ export function getBackupStats() {
   })
 }
 
-// 删除备份
 export function deleteBackup(id) {
   return request({
     url: `/admin/system/backups/${id}`,
@@ -1325,7 +1164,6 @@ export function deleteBackup(id) {
   })
 }
 
-// 恢复备份
 export function restoreBackup(id) {
   return request({
     url: `/admin/system/backups/${id}/restore`,
@@ -1333,9 +1171,6 @@ export function restoreBackup(id) {
   })
 }
 
-// ====== Agent 管理 ======
-
-// 获取在线 Agent 列表
 export function getAgents() {
   return request({
     url: '/admin/agent/list',
@@ -1343,7 +1178,6 @@ export function getAgents() {
   })
 }
 
-// 创建 Agent 任务
 export function createAgentTask(data) {
   return request({
     url: '/admin/agent/tasks',
@@ -1352,7 +1186,6 @@ export function createAgentTask(data) {
   })
 }
 
-// 执行命令
 export function executeAgentCommand(data) {
   return request({
     url: '/admin/agent/execute',
@@ -1361,7 +1194,6 @@ export function executeAgentCommand(data) {
   })
 }
 
-// 获取 Agent 任务结果
 export function getAgentTaskResult(taskId) {
   return request({
     url: `/admin/agent/tasks/${taskId}`,
@@ -1369,7 +1201,6 @@ export function getAgentTaskResult(taskId) {
   })
 }
 
-// 获取 Agent 监控数据
 export function getAgentMonitor(nodeId) {
   return request({
     url: '/admin/agent/monitor',
@@ -1378,9 +1209,6 @@ export function getAgentMonitor(nodeId) {
   })
 }
 
-// ====== 负载均衡管理 ======
-
-// 获取负载均衡器列表
 export function getLoadBalancers(params) {
   return request({
     url: '/admin/loadbalancers',
@@ -1389,7 +1217,6 @@ export function getLoadBalancers(params) {
   })
 }
 
-// 创建负载均衡器
 export function createLoadBalancer(data) {
   return request({
     url: '/admin/loadbalancers',
@@ -1398,7 +1225,6 @@ export function createLoadBalancer(data) {
   })
 }
 
-// 获取负载均衡器详情
 export function getLoadBalancer(id) {
   return request({
     url: `/admin/loadbalancers/${id}`,
@@ -1406,7 +1232,6 @@ export function getLoadBalancer(id) {
   })
 }
 
-// 更新负载均衡器
 export function updateLoadBalancer(id, data) {
   return request({
     url: `/admin/loadbalancers/${id}`,
@@ -1415,7 +1240,6 @@ export function updateLoadBalancer(id, data) {
   })
 }
 
-// 删除负载均衡器
 export function deleteLoadBalancer(id) {
   return request({
     url: `/admin/loadbalancers/${id}`,
@@ -1423,7 +1247,6 @@ export function deleteLoadBalancer(id) {
   })
 }
 
-// 获取负载均衡器统计
 export function getLoadBalancerStats(id) {
   return request({
     url: `/admin/loadbalancers/${id}/stats`,
@@ -1431,7 +1254,6 @@ export function getLoadBalancerStats(id) {
   })
 }
 
-// 执行健康检查
 export function runHealthCheck(id) {
   return request({
     url: `/admin/loadbalancers/${id}/check`,
@@ -1439,7 +1261,6 @@ export function runHealthCheck(id) {
   })
 }
 
-// 默认导出
 export default {
   getDashboard,
   createUser,
@@ -1509,7 +1330,6 @@ export default {
   createKnowledge,
   updateKnowledge,
   deleteKnowledge,
-  // 流量转发
   createForward,
   getForwardList,
   updateForward,
@@ -1557,7 +1377,6 @@ export default {
   runLocalRuntimeDoctor,
   getNodeXRuntimeStatus,
   runNodeXRuntimeDoctor,
-  // 支付网关
   getPaymentGateways,
   createPaymentGateway,
   updatePaymentGateway,
@@ -1565,7 +1384,6 @@ export default {
   togglePaymentGateway,
   getPaymentStats,
   getPaymentRecords,
-  // Telegram
   getTelegramBot,
   updateTelegramBot,
   setTelegramWebhook,
@@ -1574,10 +1392,8 @@ export default {
   broadcastTelegram,
   getTelegramUsers,
   updateTelegramUserNotify,
-  // MFA
   getMFAConfig,
   updateMFAConfig,
-  // 通知
   getNotificationTemplates,
   createNotificationTemplate,
   updateNotificationTemplate,
@@ -1586,18 +1402,15 @@ export default {
   sendTestNotification,
   getEmailConfig,
   updateEmailConfig,
-  // 邀请返利
   getInviteConfig,
   updateInviteConfig,
   getInviteStats,
   getWithdrawals,
   processWithdrawal,
-  // 系统配置
   getSystemConfigs,
   getSystemConfig,
   setSystemConfig,
   deleteSystemConfig,
-  // 备份
   getBackupConfig,
   updateBackupConfig,
   createBackup,
@@ -1605,13 +1418,11 @@ export default {
   getBackupStats,
   deleteBackup,
   restoreBackup,
-  // Agent
   getAgents,
   createAgentTask,
   executeAgentCommand,
   getAgentTaskResult,
   getAgentMonitor,
-  // 负载均衡
   getLoadBalancers,
   createLoadBalancer,
   getLoadBalancer,

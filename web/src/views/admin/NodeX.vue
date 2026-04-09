@@ -2,38 +2,36 @@
   <div class="nodex-page">
     <section class="hero-card">
       <div class="hero-copy">
-        <p class="eyebrow">Private Runtime</p>
-        <h2>NodeX Runtime</h2>
+        <p class="eyebrow">{{ t('runtime.nodeX.heroEyebrow') }}</p>
+        <h2>{{ t('runtime.nodeX.title') }}</h2>
         <p class="hero-text">
-          Dedicated operator entry for the stateful NodeX/gost path. This page probes the configured NodeX control
-          plane directly, even when the current global runtime backend is still a local Ansible backend.
+          {{ t('runtime.nodeX.heroTextPrimary') }}
         </p>
         <p class="hero-text">
-          Local Ansible execution now lives under Local Runtime and Ansible Machines. Node "online" still means TCP
-          reachability only and is not proof that NodeX or the relay gost API is already attached.
+          {{ t('runtime.nodeX.heroTextSecondary') }}
         </p>
       </div>
       <div class="hero-actions">
-        <router-link class="btn btn-secondary" to="/admin/forward/nodes">NodeX Topology</router-link>
-        <router-link class="btn btn-secondary" to="/admin/forward/agents">NodeX Agents</router-link>
-        <router-link class="btn btn-secondary" to="/admin/forward/local">Local Runtime</router-link>
-        <router-link class="btn btn-secondary" to="/admin/system">System Overview</router-link>
+        <router-link class="btn btn-secondary" to="/admin/forward/nodes">{{ t('forwardSuite.nav.nodeXTopology') }}</router-link>
+        <router-link class="btn btn-secondary" to="/admin/forward/agents">{{ t('forwardSuite.nav.nodeXAgents') }}</router-link>
+        <router-link class="btn btn-secondary" to="/admin/forward/local">{{ t('forwardSuite.nav.localRuntime') }}</router-link>
+        <router-link class="btn btn-secondary" to="/admin/system">{{ t('pageTitles.admin.system') }}</router-link>
         <button class="btn btn-secondary" :disabled="jobsLoading || statusLoading" @click="refreshAll">
-          {{ jobsLoading || statusLoading ? 'Refreshing...' : 'Refresh' }}
+          {{ jobsLoading || statusLoading ? t('runtime.nodeX.refreshLoading') : t('common.actions.refresh') }}
         </button>
         <button class="btn btn-primary" :disabled="saving" @click="saveNodeXConfig">
-          {{ saving ? 'Saving...' : 'Save NodeX Config' }}
+          {{ saving ? t('runtime.nodeX.saveLoading') : t('runtime.nodeX.save') }}
         </button>
       </div>
     </section>
 
     <section :class="['mode-banner', nodeXMode ? 'banner-success' : 'banner-warning']">
-      <strong>{{ nodeXMode ? 'NodeX Mode is enabled' : 'NodeX Mode is disabled' }}</strong>
+      <strong>{{ nodeXMode ? t('runtime.nodeX.enabledBannerTitle') : t('runtime.nodeX.disabledBannerTitle') }}</strong>
       <span>
         {{
           nodeXMode
-            ? 'Panel forward jobs can route through NodeX/gost, but each runtime job still has to succeed before relay attachment is real.'
-            : 'You can validate the configured NodeX control plane here first, then switch the global backend when you are ready.'
+            ? t('runtime.nodeX.enabledBannerText')
+            : t('runtime.nodeX.disabledBannerText')
         }}
       </span>
     </section>
@@ -41,44 +39,44 @@
     <section class="panel-card">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Configuration</p>
-          <h3>NodeX Control Plane</h3>
+          <p class="eyebrow">{{ t('runtime.nodeX.configEyebrow') }}</p>
+          <h3>{{ t('runtime.nodeX.configTitle') }}</h3>
         </div>
       </div>
 
       <div class="form-grid">
         <label class="toggle-card">
           <span class="toggle-copy">
-            <strong>Enable NodeX Mode</strong>
-            <span>Writes `forward.runtime.nodex_mode=true` and `forward.runtime_backend=gost`.</span>
+            <strong>{{ t('runtime.nodeX.enableModeTitle') }}</strong>
+            <span>{{ t('runtime.nodeX.enableModeHint') }}</span>
           </span>
           <input v-model="nodeXMode" type="checkbox" />
         </label>
 
         <div class="form-group">
-          <label for="nodex-base-url">NodeX Base URL</label>
+          <label for="nodex-base-url">{{ t('runtime.nodeX.fields.baseUrl') }}</label>
           <input
             id="nodex-base-url"
             v-model.trim="nodeXBaseUrl"
             type="text"
             placeholder="http://127.0.0.1:18081"
           />
-          <p class="hint">This must point to the NodeX control-plane, not directly to the relay gost API.</p>
+          <p class="hint">{{ t('runtime.nodeX.fields.baseUrlHint') }}</p>
         </div>
 
         <div class="form-group">
-          <label for="nodex-token">NodeX Token</label>
+          <label for="nodex-token">{{ t('runtime.nodeX.fields.token') }}</label>
           <input
             id="nodex-token"
             v-model.trim="nodeXToken"
             type="text"
             placeholder="shared forward-api-token"
           />
-          <p class="hint">Matches the NodeX control-plane `--forward-api-token` value.</p>
+          <p class="hint">{{ t('runtime.nodeX.fields.tokenHint') }}</p>
         </div>
 
         <div class="form-group">
-          <label for="nodex-timeout">Timeout (seconds)</label>
+          <label for="nodex-timeout">{{ t('runtime.nodeX.fields.timeout') }}</label>
           <input
             id="nodex-timeout"
             v-model.number="nodeXTimeout"
@@ -86,7 +84,7 @@
             min="1"
             placeholder="15"
           />
-          <p class="hint">Used by the panel when probing or executing NodeX runtime requests.</p>
+          <p class="hint">{{ t('runtime.nodeX.fields.timeoutHint') }}</p>
         </div>
       </div>
 
@@ -96,111 +94,111 @@
     <section class="panel-card">
       <div class="section-head">
         <div>
-          <p class="eyebrow">NodeX Probe</p>
-          <h3>Health And Runtime Status</h3>
+          <p class="eyebrow">{{ t('runtime.nodeX.probeEyebrow') }}</p>
+          <h3>{{ t('runtime.nodeX.probeTitle') }}</h3>
           <p class="section-copy">
-            These checks always target the configured NodeX control plane. They do not depend on the currently active
-            runtime backend.
+            {{ t('runtime.nodeX.probeCopy') }}
           </p>
         </div>
         <div class="section-actions">
           <button class="btn btn-secondary btn-sm" :disabled="statusLoading" @click="fetchNodeXStatus">
-            {{ statusLoading ? 'Loading...' : 'Refresh status' }}
+            {{ statusLoading ? t('runtime.shared.loading') : t('runtime.shared.refreshStatus') }}
           </button>
           <button class="btn btn-secondary btn-sm" :disabled="doctorRunning" @click="runNodeXDoctor">
-            {{ doctorRunning ? 'Running...' : 'Run doctor' }}
+            {{ doctorRunning ? t('runtime.shared.runningDoctor') : t('runtime.shared.runDoctor') }}
           </button>
         </div>
       </div>
 
-      <div v-if="statusLoading" class="state-card">Loading NodeX runtime status...</div>
+      <div v-if="statusLoading" class="state-card">{{ t('runtime.nodeX.loadingStatus') }}</div>
       <div v-else-if="statusError" class="state-card state-error">{{ statusError }}</div>
       <div v-else-if="statusSummary" class="status-grid">
         <article class="status-card">
-          <p class="metric-label">Panel Config</p>
-          <p class="metric-value">{{ statusSummary.config?.nodeXMode ? 'NodeX mode on' : 'NodeX mode off' }}</p>
-          <p class="metric-detail">Backend: {{ statusSummary.config?.backend || (nodeXMode ? 'gost' : localBackend) }}</p>
-          <p class="metric-detail">Base URL: {{ statusSummary.config?.baseUrl || '-' }}</p>
-          <p class="metric-detail">Token configured: {{ statusSummary.config?.tokenConfigured ? 'Yes' : 'No' }}</p>
-          <p class="metric-detail">Timeout: {{ statusSummary.config?.timeoutSeconds || nodeXTimeout || 15 }}s</p>
+          <p class="metric-label">{{ t('runtime.shared.panelConfig') }}</p>
+          <p class="metric-value">{{ statusSummary.config?.nodeXMode ? t('runtime.nodeX.cards.modeOn') : t('runtime.nodeX.cards.modeOff') }}</p>
+          <p class="metric-detail">{{ t('runtime.nodeX.cards.backend') }}: {{ runtimeBackendLabel(statusSummary.config?.backend || (nodeXMode ? 'gost' : localBackend)) }}</p>
+          <p class="metric-detail">{{ t('runtime.nodeX.cards.baseUrl') }}: {{ statusSummary.config?.baseUrl || '-' }}</p>
+          <p class="metric-detail">{{ t('runtime.nodeX.cards.tokenConfigured') }}: {{ statusSummary.config?.tokenConfigured ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
+          <p class="metric-detail">{{ t('runtime.nodeX.cards.timeout') }}: {{ statusSummary.config?.timeoutSeconds || nodeXTimeout || 15 }}s</p>
         </article>
 
         <article class="status-card">
-          <p class="metric-label">Reachability</p>
-          <p class="metric-value">{{ statusSummary.reachability?.ready ? 'Reachable' : 'Not ready' }}</p>
-          <p class="metric-detail">{{ statusSummary.reachability?.reason || '-' }}</p>
-          <p class="metric-detail">Health: {{ statusSummary.health?.ok ? 'OK' : 'Unavailable' }}</p>
-          <p class="metric-detail">HTTP: {{ statusSummary.health?.statusCode || '-' }}</p>
+          <p class="metric-label">{{ t('runtime.shared.reachability') }}</p>
+          <p class="metric-value">{{ statusSummary.reachability?.ready ? t('runtime.shared.reachable') : t('runtime.shared.notReady') }}</p>
+          <p class="metric-detail">{{ translateRuntimeText(statusSummary.reachability?.reason) }}</p>
+          <p class="metric-detail">{{ t('runtime.nodeX.cards.health') }}: {{ statusSummary.health?.ok ? t('runtime.shared.ready') : t('runtime.shared.unavailable') }}</p>
+          <p class="metric-detail">{{ t('runtime.nodeX.cards.http') }}: {{ statusSummary.health?.statusCode || '-' }}</p>
         </article>
 
         <article class="status-card">
-          <p class="metric-label">Runtime Ready</p>
-          <p class="metric-value">{{ statusSummary.runtimeReady?.ready ? 'Ready' : 'Not ready' }}</p>
-          <p class="metric-detail">{{ statusSummary.runtimeReady?.reason || '-' }}</p>
-          <p class="metric-detail">Version: {{ statusSummary.runtimeStatus?.version || '-' }}</p>
-          <p class="metric-detail">Execute path: {{ statusSummary.runtimeStatus?.executePath || '-' }}</p>
+          <p class="metric-label">{{ t('runtime.shared.runtimeReady') }}</p>
+          <p class="metric-value">{{ statusSummary.runtimeReady?.ready ? t('runtime.shared.ready') : t('runtime.shared.notReady') }}</p>
+          <p class="metric-detail">{{ translateRuntimeText(statusSummary.runtimeReady?.reason) }}</p>
+          <p class="metric-detail">{{ t('runtime.nodeX.cards.version') }}: {{ statusSummary.runtimeStatus?.version || '-' }}</p>
+          <p class="metric-detail">{{ t('runtime.nodeX.cards.executePath') }}: {{ statusSummary.runtimeStatus?.executePath || '-' }}</p>
         </article>
       </div>
-      <div v-else class="state-card">No NodeX runtime status loaded yet.</div>
+      <div v-else class="state-card">{{ t('runtime.nodeX.noStatus') }}</div>
 
       <div v-if="statusSummary?.summary" class="summary-card">
-        {{ statusSummary.summary }}
+        {{ translateRuntimeText(statusSummary.summary) }}
       </div>
 
       <div v-if="statusSummary?.warnings?.length" class="warning-list">
-        <p class="metric-label">Warnings</p>
-        <code v-for="warning in statusSummary.warnings" :key="warning">{{ warning }}</code>
+        <p class="metric-label">{{ t('runtime.shared.warnings') }}</p>
+        <code v-for="warning in statusSummary.warnings" :key="warning">{{ translateRuntimeText(warning) }}</code>
       </div>
 
       <div class="command-block">
-        <p class="metric-label">PowerShell</p>
+        <p class="metric-label">{{ t('runtime.shared.powerShell') }}</p>
         <code v-for="command in displayedCommands.powerShell" :key="`ps-${command}`">{{ command }}</code>
-        <p class="metric-label">Bash</p>
+        <p class="metric-label">{{ t('runtime.shared.bash') }}</p>
         <code v-for="command in displayedCommands.bash" :key="`bash-${command}`">{{ command }}</code>
-        <p class="metric-label">Bootstrap / Verify</p>
+        <p class="metric-label">{{ t('runtime.shared.bootstrapVerify') }}</p>
         <code v-for="command in displayedCommands.upgrade" :key="`verify-${command}`">{{ command }}</code>
-        <p class="metric-label">References</p>
+        <p class="metric-label">{{ t('runtime.shared.references') }}</p>
         <code v-for="reference in displayedCommands.references" :key="reference">{{ reference }}</code>
       </div>
 
       <div class="doctor-output">
-        <p class="metric-label">Doctor Output</p>
-        <pre>{{ doctorOutput || 'Doctor has not been executed yet.' }}</pre>
+        <p class="metric-label">{{ t('runtime.shared.doctorOutput') }}</p>
+        <pre>{{ doctorOutput || t('runtime.shared.doctorNotExecuted') }}</pre>
       </div>
     </section>
 
     <section class="panel-card">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Runtime Jobs</p>
-          <h3>Latest gost Jobs</h3>
-          <p class="section-copy">Recent panel-side runtime audit rows filtered to the `gost` backend.</p>
+          <p class="eyebrow">{{ t('runtime.nodeX.jobsEyebrow') }}</p>
+          <h3>{{ t('runtime.nodeX.jobsTitle') }}</h3>
+          <p class="section-copy">{{ t('runtime.nodeX.jobsCopy') }}</p>
         </div>
       </div>
 
-      <div v-if="jobsLoading" class="state-card">Loading runtime jobs...</div>
+      <div v-if="jobsLoading" class="state-card">{{ t('runtime.nodeX.loadingJobs') }}</div>
       <div v-else-if="jobs.length" class="job-list">
         <article v-for="job in jobs" :key="job.id" class="job-item">
           <div class="job-main">
             <div>
               <strong>#{{ job.id }} {{ job.action }}</strong>
-              <p class="job-meta">forward {{ job.forwardId || '-' }} / tunnel {{ job.tunnelId || '-' }} / node {{ job.nodeId || '-' }}</p>
+              <p class="job-meta">{{ t('runtime.nodeX.jobMeta', { forwardId: job.forwardId || '-', tunnelId: job.tunnelId || '-', nodeId: job.nodeId || '-' }) }}</p>
             </div>
             <div class="job-side">
               <span :class="['status-chip', `status-${job.status}`]">{{ runtimeJobStatusLabel(job.status) }}</span>
               <span class="job-time">{{ formatJobTime(job) }}</span>
             </div>
           </div>
-          <code v-if="job.message" class="job-message">{{ job.message }}</code>
+          <code v-if="job.message" class="job-message">{{ translateRuntimeText(job.message) }}</code>
         </article>
       </div>
-      <div v-else class="state-card">No gost runtime jobs yet.</div>
+      <div v-else class="state-card">{{ t('runtime.nodeX.noJobs') }}</div>
     </section>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useAppI18n } from '@/composables/useAppI18n'
 import {
   getNodeXRuntimeStatus,
   getSystemConfig,
@@ -215,6 +213,8 @@ const runtimeAnsibleBackendKey = 'forward.runtime.ansible.backend'
 const runtimeNodeXBaseUrlKey = 'forward.runtime.nodex.base_url'
 const runtimeNodeXTokenKey = 'forward.runtime.nodex.token'
 const runtimeNodeXTimeoutKey = 'forward.runtime.nodex.timeout_seconds'
+
+const { t, formatDateTime, translateLiteral } = useAppI18n()
 
 const nodeXMode = ref(false)
 const localBackend = ref('nftables_ansible')
@@ -273,6 +273,32 @@ const displayedCommands = computed(() => {
   }
 })
 
+function translateRuntimeText(value, fallback = '-') {
+  const text = String(value ?? '').trim()
+  if (!text) {
+    return fallback
+  }
+  return translateLiteral(text)
+}
+
+function resolveRuntimeError(error, fallbackKey) {
+  return translateRuntimeText(error?.response?.data?.msg || error?.message, t(fallbackKey))
+}
+
+function runtimeBackendLabel(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (normalized === 'gost') {
+    return t('runtime.nodeX.backends.gost')
+  }
+  if (normalized === 'nftables_ansible') {
+    return t('runtime.localRuntime.backends.nftables.label')
+  }
+  if (normalized === 'iptables_ansible') {
+    return t('runtime.localRuntime.backends.iptables.label')
+  }
+  return value || '-'
+}
+
 function parseRuntimeBoolean(value) {
   if (typeof value === 'boolean') {
     return value
@@ -316,15 +342,15 @@ function normalizeRuntimeJob(job) {
 function runtimeJobStatusLabel(status) {
   switch (Number(status)) {
     case 0:
-      return 'Pending'
+      return t('runtime.shared.pending')
     case 1:
-      return 'Running'
+      return t('runtime.shared.running')
     case 2:
-      return 'Success'
+      return t('runtime.shared.success')
     case 3:
-      return 'Failed'
+      return t('runtime.shared.failed')
     default:
-      return 'Unknown'
+      return t('runtime.shared.unknown')
   }
 }
 
@@ -333,11 +359,7 @@ function formatJobTime(job) {
   if (!raw) {
     return '-'
   }
-  const time = new Date(raw)
-  if (Number.isNaN(time.getTime())) {
-    return String(raw)
-  }
-  return time.toLocaleString()
+  return formatDateTime(raw) || String(raw)
 }
 
 async function fetchNodeXConfig() {
@@ -400,11 +422,11 @@ async function saveNodeXConfig() {
   const timeout = Number(nodeXTimeout.value)
 
   if (nodeXMode.value && !trimmedBaseUrl) {
-    validationError.value = 'NodeX base URL is required when NodeX mode is enabled'
+    validationError.value = t('runtime.nodeX.errors.baseUrlRequired')
     return
   }
   if (nodeXMode.value && !trimmedToken) {
-    validationError.value = 'NodeX token is required when NodeX mode is enabled'
+    validationError.value = t('runtime.nodeX.errors.tokenRequired')
     return
   }
 
@@ -446,7 +468,7 @@ async function saveNodeXConfig() {
     await fetchNodeXStatus()
     await fetchJobs()
   } catch (error) {
-    validationError.value = error.response?.data?.msg || error.message || 'Failed to save NodeX config'
+    validationError.value = resolveRuntimeError(error, 'runtime.nodeX.errors.saveFailed')
   } finally {
     saving.value = false
   }
@@ -474,7 +496,7 @@ async function fetchNodeXStatus() {
     const res = await getNodeXRuntimeStatus()
     statusSummary.value = extractPayload(res) || null
   } catch (error) {
-    statusError.value = error.response?.data?.msg || error.message || 'Failed to fetch NodeX runtime status'
+    statusError.value = resolveRuntimeError(error, 'runtime.nodeX.errors.fetchStatusFailed')
     statusSummary.value = null
   } finally {
     statusLoading.value = false
@@ -491,7 +513,7 @@ async function runNodeXDoctor() {
     statusSummary.value = payload
     doctorOutput.value = JSON.stringify(payload, null, 2)
   } catch (error) {
-    doctorOutput.value = error.response?.data?.msg || error.message || 'NodeX runtime doctor failed'
+    doctorOutput.value = resolveRuntimeError(error, 'runtime.nodeX.errors.doctorFailed')
   } finally {
     doctorRunning.value = false
   }

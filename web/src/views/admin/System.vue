@@ -1,88 +1,88 @@
 <template>
   <div class="system-page">
     <div class="page-header">
-      <h1>系统管理</h1>
-      <p class="text-secondary">系统配置、数据备份与负载均衡</p>
+      <h1>{{ t('runtime.systemPage.title') }}</h1>
+      <p class="text-secondary">{{ t('runtime.systemPage.subtitle') }}</p>
     </div>
 
-    <!-- 标签切换 -->
+    <!-- Tab switcher -->
     <div class="tabs">
       <button :class="['tab', { active: activeTab === 'config' }]" @click="activeTab = 'config'">
-        系统配置
+        {{ t('runtime.systemPage.tabs.config') }}
       </button>
       <button :class="['tab', { active: activeTab === 'backup' }]" @click="activeTab = 'backup'">
-        数据备份
+        {{ t('runtime.systemPage.tabs.backup') }}
       </button>
       <button :class="['tab', { active: activeTab === 'balancer' }]" @click="activeTab = 'balancer'">
-        负载均衡
+        {{ t('runtime.systemPage.tabs.balancer') }}
       </button>
     </div>
 
-    <!-- 系统配置 -->
+    <!-- System config -->
     <div v-show="activeTab === 'config'">
       <div class="toolbar">
-        <input v-model="configSearch" type="text" placeholder="搜索配置项..." class="search-input" />
-        <button class="btn-primary" @click="openConfigModal()">➕ 新增配置</button>
+        <input v-model="configSearch" type="text" :placeholder="t('runtime.systemPage.config.searchPlaceholder')" class="search-input" />
+        <button class="btn-primary" @click="openConfigModal()">{{ t('runtime.systemPage.actions.addConfig') }}</button>
       </div>
       <section class="runtime-config-card">
         <div class="runtime-config-head">
           <div>
-            <p class="eyebrow">Forward Runtime</p>
-            <p class="runtime-workbench-title">Runtime Workbench</p>
-            <h3>双运行时控制面</h3>
+            <p class="eyebrow">{{ t('runtime.workbench.eyebrow') }}</p>
+            <p class="runtime-workbench-title">{{ t('runtime.workbench.title') }}</p>
+            <h3>{{ t('runtime.workbench.subtitle') }}</h3>
           </div>
           <div class="runtime-config-actions">
             <button class="btn btn-secondary btn-sm" :disabled="runtimeStatusLoading" @click="fetchRuntimeStatusSafe">
-              {{ runtimeStatusLoading ? 'Refreshing...' : 'Refresh status' }}
+              {{ runtimeStatusLoading ? t('runtime.shared.loading') : t('runtime.shared.refreshStatus') }}
             </button>
             <button class="btn btn-secondary btn-sm" :disabled="runtimeJobsLoading" @click="fetchForwardRuntimeJobs">
-              {{ runtimeJobsLoading ? 'Refreshing...' : 'Refresh jobs' }}
+              {{ runtimeJobsLoading ? t('runtime.shared.loading') : t('runtime.workbench.actions.refreshJobs') }}
             </button>
-            <router-link class="btn btn-secondary btn-sm" to="/admin/forward/ansible-machines">Open Ansible Machines</router-link>
-            <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">Open Local Runtime</router-link>
-            <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">Open NodeX Runtime</router-link>
+            <router-link class="btn btn-secondary btn-sm" to="/admin/forward/ansible-machines">{{ t('runtime.workbench.actions.openAnsibleMachines') }}</router-link>
+            <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">{{ t('runtime.workbench.actions.openLocalRuntime') }}</router-link>
+            <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">{{ t('runtime.workbench.actions.openNodeXRuntime') }}</router-link>
           </div>
         </div>
         <div class="runtime-mode-overview">
           <article :class="['runtime-mode-card', { active: !runtimeNodeXMode }]">
-            <p class="eyebrow">Local Runtime</p>
-            <h4>Local Ansible executor</h4>
+            <p class="eyebrow">{{ t('runtime.workbench.localCard.eyebrow') }}</p>
+            <h4>{{ t('runtime.workbench.localCard.title') }}</h4>
             <p class="text-secondary mode-description">
-              Stateless panel-host execution. Inventory, playbooks and SSH access are managed separately from NodeX.
+              {{ t('runtime.workbench.localCard.description') }}
             </p>
-            <p class="metric-detail">Current state: {{ runtimeNodeXMode ? 'Standby' : 'Active backend' }}</p>
-            <p class="metric-detail">Inventory: {{ runtimeAnsibleForm.inventory || '-' }}</p>
-            <p class="metric-detail">Command: {{ runtimeAnsibleForm.command || 'ansible-playbook' }}</p>
-            <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">Manage Local Runtime / Ansible</router-link>
+            <p class="metric-detail">{{ t('runtime.workbench.localCard.currentState') }}: {{ runtimeNodeXMode ? t('runtime.workbench.state.standby') : t('runtime.workbench.state.activeBackend') }}</p>
+            <p class="metric-detail">{{ t('runtime.localRuntime.fields.inventory') }}: {{ runtimeAnsibleForm.inventory || '-' }}</p>
+            <p class="metric-detail">{{ t('runtime.localRuntime.fields.command') }}: {{ runtimeAnsibleForm.command || defaultRuntimeAnsibleConfig.command }}</p>
+            <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">{{ t('runtime.workbench.localCard.manage') }}</router-link>
           </article>
 
           <article :class="['runtime-mode-card', { active: runtimeNodeXMode }]">
-            <p class="eyebrow">NodeX Runtime</p>
-            <h4>Stateful gost control-plane</h4>
+            <p class="eyebrow">{{ t('runtime.workbench.nodeXCard.eyebrow') }}</p>
+            <h4>{{ t('runtime.workbench.nodeXCard.title') }}</h4>
             <p class="text-secondary mode-description">
-              Panel talks to the internal NodeX control-plane. Real relay attachment only exists after gost runtime jobs succeed.
+              {{ t('runtime.workbench.nodeXCard.description') }}
             </p>
-            <p class="metric-detail">Current state: {{ runtimeNodeXMode ? 'Active backend' : 'Standby' }}</p>
-            <p class="metric-detail">Base URL: {{ runtimeNodeXBaseUrl || '-' }}</p>
-            <p class="metric-detail">Token configured: {{ runtimeNodeXToken ? 'Yes' : 'No' }}</p>
-            <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">Manage NodeX Runtime</router-link>
+            <p class="metric-detail">{{ t('runtime.workbench.localCard.currentState') }}: {{ runtimeNodeXMode ? t('runtime.workbench.state.activeBackend') : t('runtime.workbench.state.standby') }}</p>
+            <p class="metric-detail">{{ t('runtime.nodeX.cards.baseUrl') }}: {{ runtimeNodeXBaseUrl || '-' }}</p>
+            <p class="metric-detail">{{ t('runtime.nodeX.cards.tokenConfigured') }}: {{ runtimeNodeXToken ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
+            <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">{{ t('runtime.workbench.nodeXCard.manage') }}</router-link>
           </article>
         </div>
 
         <div class="runtime-jobs-block">
           <div class="runtime-jobs-head">
-            <h4>Recent runtime jobs</h4>
-            <span class="text-secondary">Latest queued and executed actions across the dedicated Local Runtime and NodeX Runtime pages.</span>
+            <h4>{{ t('runtime.workbench.recentJobsTitle') }}</h4>
+            <span class="text-secondary">{{ t('runtime.workbench.recentJobsSubtitle') }}</span>
           </div>
 
-          <div v-if="runtimeJobsLoading" class="runtime-jobs-empty">Loading runtime jobs...</div>
+          <div v-if="runtimeJobsLoading" class="runtime-jobs-empty">{{ t('runtime.workbench.loadingJobs') }}</div>
 
           <div v-else-if="runtimeJobs.length" class="runtime-jobs-list">
             <article v-for="job in runtimeJobs" :key="job.id" class="runtime-job-item">
               <div class="runtime-job-main">
                 <div class="runtime-job-title">
                   <strong>#{{ job.id }} {{ job.action }}</strong>
-                  <span>{{ job.backend }} · forward {{ job.forwardId || '-' }} · tunnel {{ job.tunnelId || '-' }} · node {{ job.nodeId || '-' }}</span>
+                  <span>{{ t('runtime.workbench.jobMeta', { backend: runtimeBackendLabel(job.backend), forwardId: job.forwardId || '-', tunnelId: job.tunnelId || '-', nodeId: job.nodeId || '-' }) }}</span>
                 </div>
                 <div class="runtime-job-side">
                   <span :class="['status-badge', `runtime-status-${job.status}`]">{{ getRuntimeJobStatusLabel(job.status) }}</span>
@@ -93,93 +93,91 @@
             </article>
           </div>
 
-          <div v-else class="runtime-jobs-empty">No runtime jobs yet.</div>
+          <div v-else class="runtime-jobs-empty">{{ t('runtime.workbench.noJobs') }}</div>
         </div>
 
         <div class="runtime-operator-panel">
           <div class="operator-head">
             <div>
-              <p class="eyebrow">Forward Runtime Doctor</p>
-              <h4>Active Runtime Snapshot</h4>
+              <p class="eyebrow">{{ t('runtime.workbench.doctor.eyebrow') }}</p>
+              <h4>{{ t('runtime.workbench.doctor.title') }}</h4>
               <p class="text-secondary mode-description">
-                Reachability only means the control plane or local executor can be contacted. It is not proof that a
-                relay has already attached or that iptables rules already exist.
+                {{ t('runtime.workbench.doctor.description') }}
+              </p>
+              <p class="text-secondary mode-description">
+                {{ t('runtime.workbench.doctor.note') }}
               </p>
               <p class="text-secondary mode-description runtime-operator-note">
-                This workbench only shows the currently active backend. Use the dedicated Local Runtime and NodeX Runtime
-                pages to edit config and run mode-specific probes.
-              </p>
-              <p class="text-secondary mode-description">
-                汇总控制面健康、运行时诊断与一键命令，统一覆盖 NodeX/gost 与本地 ansible 两种执行路径。
+                {{ t('runtime.workbench.doctor.summary') }}
               </p>
             </div>
             <div class="operator-actions">
               <button class="btn btn-secondary btn-sm" :disabled="runtimeStatusLoading" @click="fetchRuntimeStatusSafe">
-                {{ runtimeStatusLoading ? 'Loading...' : 'Refresh active runtime' }}
+                {{ runtimeStatusLoading ? t('runtime.shared.loading') : t('runtime.workbench.actions.refreshActiveRuntime') }}
               </button>
               <button class="btn btn-secondary btn-sm" :disabled="runtimeDoctorRunning" @click="runRuntimeDoctorCheckSafe">
-                {{ runtimeDoctorRunning ? 'Running...' : 'Run doctor on active runtime' }}
+                {{ runtimeDoctorRunning ? t('runtime.shared.runningDoctor') : t('runtime.workbench.actions.runDoctorActiveRuntime') }}
               </button>
             </div>
           </div>
 
-          <div v-if="runtimeStatusLoading" class="operator-loading">Fetching forward runtime status...</div>
+          <div v-if="runtimeStatusLoading" class="operator-loading">{{ t('runtime.workbench.doctor.loadingStatus') }}</div>
           <div v-else>
             <div v-if="runtimeStatusError" class="form-error">{{ runtimeStatusError }}</div>
             <div v-else class="operator-status-grid">
               <div class="status-card operator-card">
-                <p class="metric-label">Backend</p>
-                <p class="metric-value">{{ runtimeStatus?.config?.backend || (runtimeNodeXMode ? 'gost' : runtimeBackend) }}</p>
-                <p class="metric-detail">NodeX Mode: {{ runtimeStatus?.config?.nodeXMode ? 'Enabled' : 'Disabled' }}</p>
-                <p class="metric-detail">Attachment: {{ runtimeStatus?.attachment?.model || '-' }}</p>
-                <p class="metric-detail">{{ runtimeStatus?.attachment?.description || '-' }}</p>
+                <p class="metric-label">{{ t('runtime.workbench.cards.backend') }}</p>
+                <p class="metric-value">{{ runtimeBackendLabel(runtimeStatus?.config?.backend || (runtimeNodeXMode ? 'gost' : runtimeBackend)) }}</p>
+                <p class="metric-detail">{{ t('runtime.workbench.cards.nodeXMode') }}: {{ runtimeStatus?.config?.nodeXMode ? t('runtime.shared.enabled') : t('runtime.shared.disabled') }}</p>
+                <p class="metric-detail">{{ t('runtime.workbench.cards.attachment') }}: {{ runtimeStatus?.attachment?.model || '-' }}</p>
+                <p class="metric-detail">{{ translateRuntimeText(runtimeStatus?.attachment?.description) }}</p>
               </div>
               <div class="status-card operator-card">
-                <p class="metric-label">Panel Verdict</p>
-                <p class="metric-value">{{ runtimeStatus?.runtimeReady?.ready ? 'Ready' : 'Not ready' }}</p>
-                <p class="metric-detail">Reachability: {{ runtimeStatus?.reachability?.ready ? 'Ready' : 'Not ready' }}</p>
-                <p class="metric-detail">{{ runtimeStatus?.reachability?.reason || '-' }}</p>
-                <p class="metric-detail">{{ runtimeStatus?.runtimeReady?.reason || '-' }}</p>
+                <p class="metric-label">{{ t('runtime.workbench.cards.panelVerdict') }}</p>
+                <p class="metric-value">{{ runtimeStatus?.runtimeReady?.ready ? t('runtime.shared.ready') : t('runtime.shared.notReady') }}</p>
+                <p class="metric-detail">{{ t('runtime.shared.reachability') }}: {{ runtimeStatus?.reachability?.ready ? t('runtime.shared.ready') : t('runtime.shared.notReady') }}</p>
+                <p class="metric-detail">{{ translateRuntimeText(runtimeStatus?.reachability?.reason) }}</p>
+                <p class="metric-detail">{{ translateRuntimeText(runtimeStatus?.runtimeReady?.reason) }}</p>
               </div>
               <div class="status-card operator-card">
                 <template v-if="runtimeStatus?.config?.nodeXMode">
-                  <p class="metric-label">NodeX Snapshot</p>
-                  <p class="metric-detail">Base URL: {{ runtimeStatus?.config?.baseUrl || '-' }}</p>
-                  <p class="metric-detail">Base URL configured: {{ runtimeStatus?.config?.baseUrlConfigured ? 'Yes' : 'No' }}</p>
-                  <p class="metric-detail">Token configured: {{ runtimeStatus?.config?.tokenConfigured ? 'Yes' : 'No' }}</p>
-                  <p class="metric-detail">Health: {{ runtimeStatus?.health?.ok ? 'OK' : 'Unavailable' }}</p>
-                  <p class="metric-detail">Runtime version: {{ runtimeStatus?.runtimeStatus?.version || '-' }}</p>
+                  <p class="metric-label">{{ t('runtime.workbench.cards.nodeXSnapshot') }}</p>
+                  <p class="metric-detail">{{ t('runtime.nodeX.cards.baseUrl') }}: {{ runtimeStatus?.config?.baseUrl || '-' }}</p>
+                  <p class="metric-detail">{{ t('runtime.workbench.cards.baseUrlConfigured') }}: {{ runtimeStatus?.config?.baseUrlConfigured ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
+                  <p class="metric-detail">{{ t('runtime.nodeX.cards.tokenConfigured') }}: {{ runtimeStatus?.config?.tokenConfigured ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
+                  <p class="metric-detail">{{ t('runtime.nodeX.cards.health') }}: {{ runtimeStatus?.health?.ok ? t('runtime.shared.ready') : t('runtime.shared.unavailable') }}</p>
+                  <p class="metric-detail">{{ t('runtime.workbench.cards.runtimeVersion') }}: {{ runtimeStatus?.runtimeStatus?.version || '-' }}</p>
                 </template>
                 <template v-else>
-                  <p class="metric-label">Local ansible</p>
-                  <p class="metric-detail">Command: {{ runtimeStatus?.localAnsible?.command || 'ansible-playbook' }}</p>
-                  <p class="metric-detail">Command found: {{ runtimeStatus?.localAnsible?.commandFound ? 'Yes' : 'No' }}</p>
-                  <p class="metric-detail">Inventory: {{ runtimeStatus?.localAnsible?.inventoryExists ? 'Present' : 'Missing' }}</p>
-                  <p class="metric-detail">Playbooks: {{ runtimeStatus?.localAnsible?.applyPlaybookExists && runtimeStatus?.localAnsible?.removePlaybookExists ? 'Ready' : 'Missing' }}</p>
-                  <p class="metric-detail">Working dir: {{ runtimeStatus?.localAnsible?.workingDirExists ? 'Present' : 'Missing' }}</p>
+                  <p class="metric-label">{{ t('runtime.workbench.cards.localAnsible') }}</p>
+                  <p class="metric-detail">{{ t('runtime.localRuntime.fields.command') }}: {{ runtimeStatus?.localAnsible?.command || defaultRuntimeAnsibleConfig.command }}</p>
+                  <p class="metric-detail">{{ t('runtime.localRuntime.cards.commandFound') }}: {{ runtimeStatus?.localAnsible?.commandFound ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
+                  <p class="metric-detail">{{ t('runtime.localRuntime.fields.inventory') }}: {{ runtimeStatus?.localAnsible?.inventoryExists ? t('runtime.shared.present') : t('runtime.shared.missing') }}</p>
+                  <p class="metric-detail">{{ t('runtime.workbench.cards.playbooks') }}: {{ runtimeStatus?.localAnsible?.applyPlaybookExists && runtimeStatus?.localAnsible?.removePlaybookExists ? t('runtime.shared.ready') : t('runtime.shared.missing') }}</p>
+                  <p class="metric-detail">{{ t('runtime.localRuntime.fields.workingDir') }}: {{ runtimeStatus?.localAnsible?.workingDirExists ? t('runtime.shared.present') : t('runtime.shared.missing') }}</p>
                 </template>
               </div>
             </div>
           </div>
 
           <div v-if="runtimeStatus?.warnings?.length" class="operator-commands">
-            <p class="metric-label">Warnings</p>
-            <code v-for="warning in runtimeStatus.warnings" :key="warning">{{ warning }}</code>
+            <p class="metric-label">{{ t('runtime.shared.warnings') }}</p>
+            <code v-for="warning in runtimeStatus.warnings" :key="warning">{{ translateRuntimeText(warning) }}</code>
           </div>
 
           <div class="operator-commands">
-            <p class="metric-label">PowerShell</p>
+            <p class="metric-label">{{ t('runtime.shared.powerShell') }}</p>
             <code v-for="command in runtimeDisplayedCommands.powerShell" :key="`ps-${command}`">{{ command }}</code>
-            <p class="metric-label">Bash</p>
+            <p class="metric-label">{{ t('runtime.shared.bash') }}</p>
             <code v-for="command in runtimeDisplayedCommands.bash" :key="`bash-${command}`">{{ command }}</code>
-            <p class="metric-label">Upgrade / Verify</p>
+            <p class="metric-label">{{ t('runtime.shared.bootstrapVerify') }}</p>
             <code v-for="command in runtimeDisplayedCommands.upgrade" :key="`upgrade-${command}`">{{ command }}</code>
-            <p class="metric-label">Reference</p>
+            <p class="metric-label">{{ t('runtime.shared.references') }}</p>
             <code v-for="reference in runtimeDisplayedCommands.references" :key="reference">{{ reference }}</code>
           </div>
           <div class="operator-doctor-output">
-            <p class="metric-label">Doctor Output</p>
-            <pre>{{ runtimeDoctorOutput || 'Doctor has not been executed yet.' }}</pre>
+            <p class="metric-label">{{ t('runtime.shared.doctorOutput') }}</p>
+            <pre>{{ runtimeDoctorOutput || t('runtime.shared.doctorNotExecuted') }}</pre>
           </div>
         </div>
       </section>
@@ -188,86 +186,86 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>键名</th>
-              <th>值</th>
-              <th>描述</th>
-              <th>更新时间</th>
-              <th>操作</th>
+              <th>{{ t('runtime.systemPage.config.table.key') }}</th>
+              <th>{{ t('runtime.systemPage.config.table.value') }}</th>
+              <th>{{ t('runtime.systemPage.config.table.description') }}</th>
+              <th>{{ t('runtime.systemPage.config.table.updatedAt') }}</th>
+              <th>{{ t('runtime.systemPage.config.table.actions') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="config in filteredConfigs" :key="config.key">
               <td><code>{{ config.key }}</code></td>
               <td class="value-cell">{{ truncateValue(config.value) }}</td>
-              <td>{{ config.description || '-' }}</td>
+              <td>{{ translateRuntimeText(config.description, config.description || '-') }}</td>
               <td>{{ formatTime(config.updated_at) }}</td>
               <td>
                 <div class="action-buttons">
-                  <button class="btn-sm btn-ghost" @click="openConfigModal(config)" title="编辑">✏️</button>
-                  <button class="btn-sm btn-ghost" @click="deleteConfig(config)" title="删除">🗑️</button>
+                  <button class="btn-sm btn-ghost" @click="openConfigModal(config)">{{ t('common.actions.edit') }}</button>
+                  <button class="btn-sm btn-ghost" @click="deleteConfig(config)">{{ t('common.actions.delete') }}</button>
                 </div>
               </td>
             </tr>
             <tr v-if="filteredConfigs.length === 0">
-              <td colspan="5" class="empty-row">暂无配置数据</td>
+              <td colspan="5" class="empty-row">{{ t('runtime.systemPage.config.empty') }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- 数据备份 -->
+    <!-- Backups -->
     <div v-show="activeTab === 'backup'">
       <div class="backup-config">
-        <h3>自动备份配置</h3>
+        <h3>{{ t('runtime.systemPage.backup.title') }}</h3>
         <div class="form-row">
           <div class="form-group">
             <label class="checkbox-label">
               <input type="checkbox" v-model="backupConfig.enabled" />
-              <span>启用自动备份</span>
+              <span>{{ t('runtime.systemPage.backup.enabled') }}</span>
             </label>
           </div>
           <div class="form-group">
-            <label>备份间隔 (小时)</label>
+            <label>{{ t('runtime.systemPage.backup.intervalHours') }}</label>
             <input v-model.number="backupConfig.interval" type="number" min="1" />
           </div>
           <div class="form-group">
-            <label>保留数量</label>
+            <label>{{ t('runtime.systemPage.backup.keepCount') }}</label>
             <input v-model.number="backupConfig.keep_count" type="number" min="1" />
           </div>
         </div>
         <div class="form-actions">
-          <button class="btn-secondary" @click="saveBackupConfig">保存配置</button>
-          <button class="btn-primary" @click="createBackupRequest">立即备份</button>
+          <button class="btn-secondary" @click="saveBackupConfig">{{ t('runtime.systemPage.backup.saveConfig') }}</button>
+          <button class="btn-primary" @click="createBackupRequest">{{ t('runtime.systemPage.backup.backupNow') }}</button>
         </div>
       </div>
 
       <div class="backup-stats">
         <div class="stat-item">
-          <span class="stat-label">总备份数:</span>
+          <span class="stat-label">{{ t('runtime.systemPage.backup.stats.totalCount') }}</span>
           <span class="stat-value">{{ backupStats.total_count || 0 }}</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">总大小:</span>
+          <span class="stat-label">{{ t('runtime.systemPage.backup.stats.totalSize') }}</span>
           <span class="stat-value">{{ formatSize(backupStats.total_size) }}</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">最近备份:</span>
+          <span class="stat-label">{{ t('runtime.systemPage.backup.stats.lastBackup') }}</span>
           <span class="stat-value">{{ backupStats.last_backup ? formatTime(backupStats.last_backup) : '-' }}</span>
         </div>
       </div>
 
       <div class="table-container">
-        <h3>备份列表</h3>
+        <h3>{{ t('runtime.systemPage.backup.listTitle') }}</h3>
         <table class="data-table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>文件名</th>
-              <th>大小</th>
-              <th>状态</th>
-              <th>创建时间</th>
-              <th>操作</th>
+              <th>{{ t('runtime.systemPage.backup.table.id') }}</th>
+              <th>{{ t('runtime.systemPage.backup.table.filename') }}</th>
+              <th>{{ t('runtime.systemPage.backup.table.size') }}</th>
+              <th>{{ t('runtime.systemPage.backup.table.status') }}</th>
+              <th>{{ t('runtime.systemPage.backup.table.createdAt') }}</th>
+              <th>{{ t('runtime.systemPage.backup.table.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -283,36 +281,36 @@
               <td>{{ formatTime(backup.created_at) }}</td>
               <td>
                 <div class="action-buttons">
-                  <button class="btn-sm btn-ghost" @click="restoreBackupRequest(backup)" title="恢复" :disabled="backup.status !== 'completed'">📥</button>
-                  <button class="btn-sm btn-ghost" @click="deleteBackupRequest(backup)" title="删除">🗑️</button>
+                  <button class="btn-sm btn-ghost" @click="restoreBackupRequest(backup)" :disabled="backup.status !== 'completed'">{{ t('runtime.systemPage.actions.restore') }}</button>
+                  <button class="btn-sm btn-ghost" @click="deleteBackupRequest(backup)">{{ t('common.actions.delete') }}</button>
                 </div>
               </td>
             </tr>
             <tr v-if="backups.length === 0">
-              <td colspan="6" class="empty-row">暂无备份数据</td>
+              <td colspan="6" class="empty-row">{{ t('runtime.systemPage.backup.empty') }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- 负载均衡 -->
+    <!-- Load balancing -->
     <div v-show="activeTab === 'balancer'">
       <div class="toolbar">
-        <button class="btn-primary" @click="openBalancerModal()">➕ 新建负载均衡器</button>
+        <button class="btn-primary" @click="openBalancerModal()">{{ t('runtime.systemPage.actions.createBalancer') }}</button>
       </div>
 
       <div class="table-container">
         <table class="data-table">
           <thead>
             <tr>
-              <th>ID</th>
-              <th>名称</th>
-              <th>节点组</th>
-              <th>策略</th>
-              <th>健康检查</th>
-              <th>状态</th>
-              <th>操作</th>
+              <th>{{ t('runtime.systemPage.balancer.table.id') }}</th>
+              <th>{{ t('runtime.systemPage.balancer.table.name') }}</th>
+              <th>{{ t('runtime.systemPage.balancer.table.group') }}</th>
+              <th>{{ t('runtime.systemPage.balancer.table.strategy') }}</th>
+              <th>{{ t('runtime.systemPage.balancer.table.healthCheck') }}</th>
+              <th>{{ t('runtime.systemPage.balancer.table.enabled') }}</th>
+              <th>{{ t('runtime.systemPage.balancer.table.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -325,83 +323,83 @@
               </td>
               <td>
                 <span :class="['status-badge', lb.health_check ? 'status-active' : 'status-disabled']">
-                  {{ lb.health_check ? '启用' : '禁用' }}
+                  {{ lb.health_check ? t('runtime.systemPage.booleans.enabled') : t('runtime.systemPage.booleans.disabled') }}
                 </span>
               </td>
               <td>
                 <span :class="['status-badge', lb.enabled ? 'status-active' : 'status-disabled']">
-                  {{ lb.enabled ? '启用' : '禁用' }}
+                  {{ lb.enabled ? t('runtime.systemPage.booleans.enabled') : t('runtime.systemPage.booleans.disabled') }}
                 </span>
               </td>
               <td>
                 <div class="action-buttons">
-                  <button class="btn-sm btn-ghost" @click="runHealthCheckRequest(lb)" title="健康检查">🔍</button>
-                  <button class="btn-sm btn-ghost" @click="openBalancerModal(lb)" title="编辑">✏️</button>
-                  <button class="btn-sm btn-ghost" @click="deleteBalancer(lb)" title="删除">🗑️</button>
+                  <button class="btn-sm btn-ghost" @click="runHealthCheckRequest(lb)">{{ t('runtime.systemPage.actions.healthCheck') }}</button>
+                  <button class="btn-sm btn-ghost" @click="openBalancerModal(lb)">{{ t('common.actions.edit') }}</button>
+                  <button class="btn-sm btn-ghost" @click="deleteBalancer(lb)">{{ t('common.actions.delete') }}</button>
                 </div>
               </td>
             </tr>
             <tr v-if="balancers.length === 0">
-              <td colspan="7" class="empty-row">暂无负载均衡器</td>
+              <td colspan="7" class="empty-row">{{ t('runtime.systemPage.balancer.empty') }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- 配置弹窗 -->
+    <!-- Config modal -->
     <div v-if="showConfigModal" class="modal-overlay" @click.self="showConfigModal = false">
       <div class="modal">
         <div class="modal-header">
-          <h3>{{ editingConfig ? '编辑配置' : '新增配置' }}</h3>
-          <button class="close-btn" @click="showConfigModal = false">✕</button>
+          <h3>{{ editingConfig ? t('runtime.systemPage.configModal.titleEdit') : t('runtime.systemPage.configModal.titleCreate') }}</h3>
+          <button class="close-btn" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="showConfigModal = false">x</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>键名 <span class="required">*</span></label>
-            <input v-model="configForm.key" type="text" placeholder="如: site.name" :disabled="!!editingConfig" />
+            <label>{{ t('runtime.systemPage.configModal.key') }} <span class="required">*</span></label>
+            <input v-model="configForm.key" type="text" :placeholder="t('runtime.systemPage.configModal.keyPlaceholder')" :disabled="!!editingConfig" />
           </div>
           <div class="form-group">
-            <label>值</label>
-            <textarea v-model="configForm.value" rows="3" placeholder="配置值，支持 JSON 格式"></textarea>
+            <label>{{ t('runtime.systemPage.configModal.value') }}</label>
+            <textarea v-model="configForm.value" rows="3" :placeholder="t('runtime.systemPage.configModal.valuePlaceholder')"></textarea>
           </div>
           <div class="form-group">
-            <label>描述</label>
-            <input v-model="configForm.description" type="text" placeholder="配置说明" />
+            <label>{{ t('runtime.systemPage.configModal.description') }}</label>
+            <input v-model="configForm.description" type="text" :placeholder="t('runtime.systemPage.configModal.descriptionPlaceholder')" />
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="showConfigModal = false">取消</button>
-          <button @click="saveConfig">保存</button>
+          <button class="btn-secondary" @click="showConfigModal = false">{{ t('common.actions.cancel') }}</button>
+          <button @click="saveConfig">{{ t('common.actions.save') }}</button>
         </div>
       </div>
     </div>
 
-    <!-- 负载均衡器弹窗 -->
+    <!-- Balancer modal -->
     <div v-if="showBalancerModal" class="modal-overlay" @click.self="showBalancerModal = false">
       <div class="modal">
         <div class="modal-header">
-          <h3>{{ editingBalancer ? '编辑负载均衡器' : '新建负载均衡器' }}</h3>
-          <button class="close-btn" @click="showBalancerModal = false">✕</button>
+          <h3>{{ editingBalancer ? t('runtime.systemPage.balancerModal.titleEdit') : t('runtime.systemPage.balancerModal.titleCreate') }}</h3>
+          <button class="close-btn" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="showBalancerModal = false">x</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>名称 <span class="required">*</span></label>
-            <input v-model="balancerForm.name" type="text" placeholder="负载均衡器名称" />
+            <label>{{ t('runtime.systemPage.balancerModal.name') }} <span class="required">*</span></label>
+            <input v-model="balancerForm.name" type="text" :placeholder="t('runtime.systemPage.balancerModal.namePlaceholder')" />
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>节点组ID</label>
+              <label>{{ t('runtime.systemPage.balancerModal.groupId') }}</label>
               <input v-model.number="balancerForm.group_id" type="number" />
             </div>
             <div class="form-group">
-              <label>策略</label>
+              <label>{{ t('runtime.systemPage.balancerModal.strategy') }}</label>
               <select v-model="balancerForm.strategy">
-                <option value="round-robin">轮询</option>
-                <option value="least-load">最少负载</option>
-                <option value="latency">最低延迟</option>
-                <option value="weight">加权</option>
-                <option value="random">随机</option>
+                <option value="round-robin">{{ t('runtime.systemPage.strategy.roundRobin') }}</option>
+                <option value="least-load">{{ t('runtime.systemPage.strategy.leastLoad') }}</option>
+                <option value="latency">{{ t('runtime.systemPage.strategy.latency') }}</option>
+                <option value="weight">{{ t('runtime.systemPage.strategy.weight') }}</option>
+                <option value="random">{{ t('runtime.systemPage.strategy.random') }}</option>
               </select>
             </div>
           </div>
@@ -409,22 +407,22 @@
             <div class="form-group">
               <label class="checkbox-label">
                 <input type="checkbox" v-model="balancerForm.health_check" />
-                <span>启用健康检查</span>
+                <span>{{ t('runtime.systemPage.balancerModal.healthCheck') }}</span>
               </label>
             </div>
             <div class="form-group">
-              <label>检查间隔 (秒)</label>
+              <label>{{ t('runtime.systemPage.balancerModal.checkInterval') }}</label>
               <input v-model.number="balancerForm.check_interval" type="number" min="10" />
             </div>
           </div>
           <div class="form-group">
-            <label>节点权重 (JSON)</label>
-            <textarea v-model="balancerForm.weights_json" rows="3" placeholder='{"1": 10, "2": 5}'></textarea>
+            <label>{{ t('runtime.systemPage.balancerModal.weightsJson') }}</label>
+            <textarea v-model="balancerForm.weights_json" rows="3" :placeholder="t('runtime.systemPage.balancerModal.weightsPlaceholder')"></textarea>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="showBalancerModal = false">取消</button>
-          <button @click="saveBalancer">保存</button>
+          <button class="btn-secondary" @click="showBalancerModal = false">{{ t('common.actions.cancel') }}</button>
+          <button @click="saveBalancer">{{ t('common.actions.save') }}</button>
         </div>
       </div>
     </div>
@@ -433,6 +431,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useAppI18n } from '@/composables/useAppI18n'
 import {
   getSystemConfigs, getSystemConfig, setSystemConfig, deleteSystemConfig,
   getBackupConfig, updateBackupConfig, createBackup, getBackups,
@@ -440,6 +439,8 @@ import {
   getLoadBalancers, createLoadBalancer, updateLoadBalancer,
   deleteLoadBalancer, runHealthCheck, listForwardRuntimeJobs, getForwardRuntimeStatus, runForwardRuntimeDoctor
 } from '@/api/admin'
+
+const { t, formatDateTime, translateLiteral } = useAppI18n()
 
 const activeTab = ref('config')
 const configSearch = ref('')
@@ -496,7 +497,7 @@ const defaultRuntimeAnsibleConfig = Object.freeze({
   become: false
 })
 const runtimeBackendOptions = [
-  { value: 'gost', label: 'gost (默认)' },
+  { value: 'gost', label: `${t('runtime.nodeX.backends.gost')} (default)` },
   { value: 'nftables_ansible', label: 'nftables_ansible' },
   { value: 'iptables_ansible', label: 'iptables_ansible (legacy)' }
 ]
@@ -520,12 +521,12 @@ const runtimeDoctorSummary = ref(null)
 const defaultNodeXBaseUrl = 'http://127.0.0.1:18081'
 const runtimeOperatorBaseUrl = computed(() => runtimeNodeXBaseUrl.value?.trim() || defaultNodeXBaseUrl)
 const runtimeOperatorToken = computed(() => runtimeNodeXToken.value?.trim() || '<FORWARD_API_TOKEN>')
-const runtimeOperatorReferences = [
-  'Current repo: docs/reference/runtime.md',
-  'Current repo: docs/guide/forward-relay-onboarding.md',
-  'NodeX repo: https://github.com/zdwtest/NodeX',
-  'NodeX doc: docs/forward-runtime-relay-onboarding.md'
-]
+const runtimeOperatorReferences = computed(() => ([
+  t('runtime.workbench.references.panelRuntimeDoc'),
+  t('runtime.workbench.references.panelRelayOnboarding'),
+  t('runtime.workbench.references.nodeXRepo'),
+  t('runtime.workbench.references.panelNodeXOnboarding')
+]))
 const runtimeDisplayedCommands = computed(() => {
   const source = runtimeDoctorSummary.value?.commands
   if (source) {
@@ -552,7 +553,7 @@ const runtimeDisplayedCommands = computed(() => {
         'cd NodeX/control-plane && go run ./cmd/control-plane --version',
         'cd NodeX/control-plane && go run ./cmd/control-plane --config ../deploy/config/control-plane.yaml --addr :18081 --forward-api-token <FORWARD_API_TOKEN>'
       ],
-      references: runtimeOperatorReferences
+      references: runtimeOperatorReferences.value
     }
   }
 
@@ -655,11 +656,11 @@ function parseRuntimeJsonObject(value, label) {
   try {
     parsed = JSON.parse(trimmed)
   } catch {
-    throw new Error(`${label} must be valid JSON`)
+    throw new Error(t('runtime.localRuntime.errors.invalidJson', { label }))
   }
 
   if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
-    throw new Error(`${label} must be a JSON object`)
+    throw new Error(t('runtime.localRuntime.errors.invalidObject', { label }))
   }
 
   return parsed
@@ -667,8 +668,8 @@ function parseRuntimeJsonObject(value, label) {
 
 function buildRuntimeAnsiblePayload(source = runtimeAnsibleForm.value) {
   const form = normalizeRuntimeAnsibleForm(source)
-  const extraVars = parseRuntimeJsonObject(form.extraVarsJson, 'Extra vars JSON')
-  const environmentOverrides = parseRuntimeJsonObject(form.environmentJson, 'Environment JSON')
+  const extraVars = parseRuntimeJsonObject(form.extraVarsJson, t('runtime.localRuntime.fields.extraVarsJson'))
+  const environmentOverrides = parseRuntimeJsonObject(form.environmentJson, t('runtime.localRuntime.fields.environmentJson'))
   const environment = {}
 
   if (form.ansibleConfig) {
@@ -712,7 +713,7 @@ const runtimeConfigPreview = computed(() => {
   try {
     return JSON.stringify(buildRuntimeAnsiblePayload(runtimeAnsibleForm.value), null, 2)
   } catch (err) {
-    return `Invalid runtime config: ${err.message}`
+    return t('runtime.localRuntime.errors.invalidPreview', { message: err.message })
   }
 })
 
@@ -730,27 +731,46 @@ const filteredConfigs = computed(() => {
   )
 })
 
-const strategyLabels = {
-  'round-robin': '轮询',
-  'least-load': '最少负载',
-  'latency': '最低延迟',
-  'weight': '加权',
-  'random': '随机'
+const getStrategyLabel = (strategy) => {
+  switch (strategy) {
+    case 'round-robin':
+      return t('runtime.systemPage.strategy.roundRobin')
+    case 'least-load':
+      return t('runtime.systemPage.strategy.leastLoad')
+    case 'latency':
+      return t('runtime.systemPage.strategy.latency')
+    case 'weight':
+      return t('runtime.systemPage.strategy.weight')
+    case 'random':
+      return t('runtime.systemPage.strategy.random')
+    default:
+      return strategy
+  }
 }
 
-const statusLabels = {
-  pending: '处理中',
-  completed: '已完成',
-  failed: '失败'
+const getStatusLabel = (status) => {
+  switch (status) {
+    case 'pending':
+      return t('runtime.systemPage.status.pending')
+    case 'completed':
+      return t('runtime.systemPage.status.completed')
+    case 'failed':
+      return t('runtime.systemPage.status.failed')
+    default:
+      return status
+  }
 }
-
-const getStrategyLabel = (strategy) => strategyLabels[strategy] || strategy
-const getStatusLabel = (status) => statusLabels[status] || status
 
 const formatTime = (time) => {
   if (!time) return '-'
-  return new Date(time).toLocaleString()
+  return formatDateTime(time) || String(time)
 }
+
+const notify = (message) => window.alert(message)
+const confirmAction = (message) => window.confirm(message)
+const resolveSystemError = (error, fallbackKey) => (
+  translateRuntimeText(error?.response?.data?.msg || error?.response?.data?.error || error?.message, t(fallbackKey))
+)
 
 const formatSize = (bytes) => {
   if (!bytes) return '0 B'
@@ -782,31 +802,56 @@ const normalizeRuntimeJob = (raw) => ({
   completedAt: raw.completedAt ?? raw.completed_at ?? null
 })
 
+const translateRuntimeText = (value, fallback = '-') => {
+  const text = String(value ?? '').trim()
+  if (!text) return fallback
+  return translateLiteral(text)
+}
+
+const resolveRuntimeError = (error, fallbackKey) => (
+  translateRuntimeText(error?.response?.data?.msg || error?.message, t(fallbackKey))
+)
+
+const runtimeBackendLabel = (value) => {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (normalized === 'gost') {
+    return t('runtime.nodeX.backends.gost')
+  }
+  if (normalized === 'nftables_ansible') {
+    return t('runtime.localRuntime.backends.nftables.label')
+  }
+  if (normalized === 'iptables_ansible') {
+    return t('runtime.localRuntime.backends.iptables.label')
+  }
+  return value || '-'
+}
+
 const getRuntimeJobStatusLabel = (status) => {
   switch (Number(status)) {
     case 0:
-      return 'Pending'
+      return t('runtime.shared.pending')
     case 1:
-      return 'Running'
+      return t('runtime.shared.running')
     case 2:
-      return 'Success'
+      return t('runtime.shared.success')
     case 3:
-      return 'Failed'
+      return t('runtime.shared.failed')
     default:
-      return 'Unknown'
+      return t('runtime.shared.unknown')
   }
 }
 
 const formatRuntimeJobTime = (job) => {
   const value = job.completedAt || job.startedAt || job.updatedAt || job.createdAt
-  return value ? formatTime(value) : '-'
+  return value ? (formatDateTime(value) || String(value)) : '-'
 }
 
 const formatRuntimeJobMessage = (job) => {
   const source = job.error || job.result || job.payload || ''
   const text = String(source).trim()
   if (!text) return ''
-  return text.length > 220 ? `${text.slice(0, 217)}...` : text
+  const translated = translateLiteral(text)
+  return translated.length > 220 ? `${translated.slice(0, 217)}...` : translated
 }
 
 const fetchForwardRuntimeJobs = async () => {
@@ -830,7 +875,7 @@ const fetchRuntimeStatusSafe = async () => {
     runtimeStatus.value = res.data?.data || res.data || null
     runtimeDoctorSummary.value = null
   } catch (err) {
-    runtimeStatusError.value = err.response?.data?.msg || err.message || 'Failed to fetch forward runtime status'
+    runtimeStatusError.value = resolveRuntimeError(err, 'runtime.workbench.errors.fetchStatusFailed')
     runtimeStatus.value = null
   } finally {
     runtimeStatusLoading.value = false
@@ -846,7 +891,7 @@ const runRuntimeDoctorCheckSafe = async () => {
     runtimeDoctorSummary.value = payload
     runtimeDoctorOutput.value = JSON.stringify(payload, null, 2)
   } catch (err) {
-    runtimeDoctorOutput.value = err.response?.data?.msg || err.message || 'Forward runtime doctor failed'
+    runtimeDoctorOutput.value = resolveRuntimeError(err, 'runtime.workbench.errors.doctorFailed')
   } finally {
     runtimeDoctorRunning.value = false
   }
@@ -868,7 +913,7 @@ const fetchForwardRuntimeConfig = async () => {
     const backendValue = String(backendRes.data?.value || 'nftables_ansible').trim().toLowerCase()
     runtimeBackend.value = backendValue || 'nftables_ansible'
   } catch (err) {
-    console.error('鑾峰彇 forward runtime backend 澶辫触:', err)
+    console.error('get forward runtime backend config failed:', err)
   }
   runtimeNodeXMode.value = explicitNodeXMode === null
     ? runtimeBackend.value === 'gost'
@@ -903,12 +948,12 @@ const fetchForwardRuntimeConfig = async () => {
         }
         runtimeAnsibleForm.value = normalizeRuntimeAnsibleForm(parsed)
       } catch {
-        runtimeValidationError.value = 'Saved ansible runtime config is invalid. Defaults were loaded; save again to repair it.'
+        runtimeValidationError.value = t('runtime.workbench.errors.savedConfigInvalid')
         runtimeAnsibleForm.value = createRuntimeAnsibleForm()
       }
     }
   } catch (err) {
-    console.error('鑾峰彇 forward runtime ansible 配置澶辫触:', err)
+    console.error('get forward runtime ansible config failed:', err)
   }
   try {
     const baseUrlRes = await getSystemConfig(runtimeNodeXBaseUrlKey)
@@ -938,11 +983,11 @@ const saveForwardRuntimeConfig = async () => {
 
   if (runtimeNodeXMode.value) {
     if (!trimmedNodeXBaseUrl) {
-      runtimeValidationError.value = 'NodeX base URL is required in NodeX Mode'
+      runtimeValidationError.value = t('runtime.workbench.errors.nodeXBaseUrlRequired')
       return
     }
     if (!trimmedNodeXToken) {
-      runtimeValidationError.value = 'NodeX token is required in NodeX Mode'
+      runtimeValidationError.value = t('runtime.workbench.errors.nodeXTokenRequired')
       return
     }
   }
@@ -952,8 +997,8 @@ const saveForwardRuntimeConfig = async () => {
     try {
       runtimeAnsibleForm.value = normalizeRuntimeAnsibleForm(runtimeAnsibleForm.value)
       ansiblePayload = buildRuntimeAnsiblePayload(runtimeAnsibleForm.value)
-    } catch (err) {
-      runtimeValidationError.value = err.message || 'ansible JSON invalid'
+    } catch {
+      runtimeValidationError.value = t('runtime.workbench.errors.invalidRuntimeJson')
       return
     }
   }
@@ -1050,19 +1095,22 @@ const saveForwardRuntimeConfig = async () => {
     await fetchRuntimeStatusSafe()
     fetchConfigs()
   } catch (err) {
-    runtimeValidationError.value = err.response?.data?.error || err.message || '保存失败'
+    runtimeValidationError.value = translateRuntimeText(
+      err.response?.data?.error || err.message,
+      t('runtime.workbench.errors.saveFailed')
+    )
   } finally {
     runtimeSaving.value = false
   }
 }
 
-// 系统配置
+// System config
 const fetchConfigs = async () => {
   try {
     const res = await getSystemConfigs()
     configs.value = res.data?.list || []
   } catch (err) {
-    console.error('获取配置失败:', err)
+    console.error(t('runtime.systemPage.messages.fetchConfigsFailed'), err)
   }
 }
 
@@ -1083,21 +1131,23 @@ const saveConfig = async () => {
     showConfigModal.value = false
     fetchConfigs()
   } catch (err) {
-    alert('保存失败: ' + (err.response?.data?.error || err.message))
+    notify(t('runtime.systemPage.messages.saveConfigFailed', {
+      message: resolveSystemError(err, 'runtime.systemPage.messages.fetchConfigsFailed')
+    }))
   }
 }
 
 const deleteConfig = async (config) => {
-  if (!confirm(`确定删除配置 ${config.key}?`)) return
+  if (!confirmAction(t('runtime.systemPage.messages.deleteConfigConfirm', { key: config.key }))) return
   try {
     await deleteSystemConfig(config.key)
     fetchConfigs()
   } catch (err) {
-    alert('删除失败')
+    notify(resolveSystemError(err, 'runtime.systemPage.messages.deleteConfigFailed'))
   }
 }
 
-// 备份
+// Backups
 const fetchBackupConfig = async () => {
   try {
     const res = await getBackupConfig()
@@ -1105,27 +1155,27 @@ const fetchBackupConfig = async () => {
       backupConfig.value = { ...backupConfig.value, ...res.data }
     }
   } catch (err) {
-    console.error('获取备份配置失败:', err)
+    console.error(t('runtime.systemPage.messages.fetchBackupConfigFailed'), err)
   }
 }
 
 const saveBackupConfig = async () => {
   try {
     await updateBackupConfig(backupConfig.value)
-    alert('保存成功')
+    notify(t('runtime.systemPage.messages.backupConfigSaved'))
   } catch (err) {
-    alert('保存失败')
+    notify(resolveSystemError(err, 'runtime.systemPage.messages.backupConfigSaveFailed'))
   }
 }
 
 const createBackupRequest = async () => {
   try {
     await createBackup()
-    alert('备份已开始')
+    notify(t('runtime.systemPage.messages.backupStarted'))
     fetchBackups()
     fetchBackupStats()
   } catch (err) {
-    alert('创建备份失败')
+    notify(resolveSystemError(err, 'runtime.systemPage.messages.backupStartFailed'))
   }
 }
 
@@ -1134,7 +1184,7 @@ const fetchBackups = async () => {
     const res = await getBackups()
     backups.value = res.data?.list || []
   } catch (err) {
-    console.error('获取备份列表失败:', err)
+    console.error(t('runtime.systemPage.messages.fetchBackupsFailed'), err)
   }
 }
 
@@ -1143,38 +1193,40 @@ const fetchBackupStats = async () => {
     const res = await getBackupStats()
     backupStats.value = res.data || {}
   } catch (err) {
-    console.error('获取备份统计失败:', err)
+    console.error(t('runtime.systemPage.messages.fetchBackupStatsFailed'), err)
   }
 }
 
 const deleteBackupRequest = async (backup) => {
-  if (!confirm(`确定删除备份 ${backup.filename}?`)) return
+  if (!confirmAction(t('runtime.systemPage.messages.deleteBackupConfirm', { filename: backup.filename }))) return
   try {
     await deleteBackup(backup.id)
     fetchBackups()
     fetchBackupStats()
   } catch (err) {
-    alert('删除失败')
+    notify(resolveSystemError(err, 'runtime.systemPage.messages.deleteBackupFailed'))
   }
 }
 
 const restoreBackupRequest = async (backup) => {
-  if (!confirm(`确定恢复备份 ${backup.filename}? 当前数据将被覆盖!`)) return
+  if (!confirmAction(t('runtime.systemPage.messages.restoreBackupConfirm', { filename: backup.filename }))) return
   try {
     await restoreBackup(backup.id)
-    alert('恢复成功')
+    notify(t('runtime.systemPage.messages.restoreBackupSuccess'))
   } catch (err) {
-    alert('恢复失败: ' + (err.response?.data?.error || err.message))
+    notify(t('runtime.systemPage.messages.restoreBackupFailed', {
+      message: resolveSystemError(err, 'runtime.systemPage.messages.restoreBackupFailed')
+    }))
   }
 }
 
-// 负载均衡
+// Load balancing
 const fetchBalancers = async () => {
   try {
     const res = await getLoadBalancers()
     balancers.value = res.data?.list || []
   } catch (err) {
-    console.error('获取负载均衡器失败:', err)
+    console.error(t('runtime.systemPage.messages.fetchBalancersFailed'), err)
   }
 }
 
@@ -1206,7 +1258,7 @@ const saveBalancer = async () => {
       try {
         data.weights = JSON.parse(data.weights_json)
       } catch (e) {
-        alert('权重 JSON 格式错误')
+        notify(t('runtime.systemPage.messages.weightsJsonInvalid'))
         return
       }
     }
@@ -1220,27 +1272,29 @@ const saveBalancer = async () => {
     showBalancerModal.value = false
     fetchBalancers()
   } catch (err) {
-    alert('保存失败: ' + (err.response?.data?.error || err.message))
+    notify(t('runtime.systemPage.messages.saveBalancerFailed', {
+      message: resolveSystemError(err, 'runtime.systemPage.messages.saveBalancerFailed')
+    }))
   }
 }
 
 const deleteBalancer = async (lb) => {
-  if (!confirm(`确定删除负载均衡器 ${lb.name}?`)) return
+  if (!confirmAction(t('runtime.systemPage.messages.deleteBalancerConfirm', { name: lb.name }))) return
   try {
     await deleteLoadBalancer(lb.id)
     fetchBalancers()
   } catch (err) {
-    alert('删除失败')
+    notify(resolveSystemError(err, 'runtime.systemPage.messages.deleteBalancerFailed'))
   }
 }
 
 const runHealthCheckRequest = async (lb) => {
   try {
     await runHealthCheck(lb.id)
-    alert('健康检查已完成')
+    notify(t('runtime.systemPage.messages.healthCheckCompleted'))
     fetchBalancers()
   } catch (err) {
-    alert('健康检查失败')
+    notify(resolveSystemError(err, 'runtime.systemPage.messages.healthCheckFailed'))
   }
 }
 

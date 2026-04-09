@@ -2,24 +2,24 @@
   <div class="dashboard-page">
     <div class="page-header">
       <div>
-        <h1>控制台</h1>
-        <p class="text-secondary">系统运行概览</p>
+        <h1>{{ t('adminDashboard.title') }}</h1>
+        <p class="text-secondary">{{ t('adminDashboard.subtitle') }}</p>
       </div>
       <button class="btn-secondary" @click="refreshData" :disabled="loading">
-        {{ loading ? '刷新中...' : '🔄 刷新数据' }}
+        {{ loading ? t('adminDashboard.actions.refreshing') : t('adminDashboard.actions.refresh') }}
       </button>
     </div>
 
-    <!-- 核心指标 -->
+    <!-- Core metrics -->
     <div class="stats-grid">
       <div class="stat-card primary">
         <div class="stat-icon">👥</div>
         <div class="stat-info">
           <div class="stat-value">{{ formatNumber(stats.total_users) }}</div>
-          <div class="stat-label">总用户数</div>
+          <div class="stat-label">{{ t('adminDashboard.stats.totalUsers') }}</div>
         </div>
         <div class="stat-detail">
-          今日新增 <span class="highlight">+{{ stats.today_new_users || 0 }}</span>
+          {{ t('adminDashboard.stats.todayNewUsers') }} <span class="highlight">+{{ stats.today_new_users || 0 }}</span>
         </div>
       </div>
 
@@ -27,10 +27,10 @@
         <div class="stat-icon">✅</div>
         <div class="stat-info">
           <div class="stat-value">{{ formatNumber(stats.active_users) }}</div>
-          <div class="stat-label">有效用户</div>
+          <div class="stat-label">{{ t('adminDashboard.stats.activeUsers') }}</div>
         </div>
         <div class="stat-detail">
-          过期 {{ stats.expired_users || 0 }} · 封禁 {{ stats.banned_users || 0 }}
+          {{ t('adminDashboard.stats.expiredBanned', { expired: stats.expired_users || 0, banned: stats.banned_users || 0 }) }}
         </div>
       </div>
 
@@ -38,10 +38,10 @@
         <div class="stat-icon">🖥️</div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.active_nodes || 0 }} / {{ stats.total_nodes || 0 }}</div>
-          <div class="stat-label">活跃节点</div>
+          <div class="stat-label">{{ t('adminDashboard.stats.activeNodes') }}</div>
         </div>
         <div class="stat-detail">
-          在线用户 <span class="highlight">{{ formatNumber(stats.online_users) }}</span>
+          {{ t('adminDashboard.stats.onlineUsers') }} <span class="highlight">{{ formatNumber(stats.online_users) }}</span>
         </div>
       </div>
 
@@ -49,52 +49,52 @@
         <div class="stat-icon">💰</div>
         <div class="stat-info">
           <div class="stat-value">¥{{ formatMoney(stats.monthly_income) }}</div>
-          <div class="stat-label">本月收入</div>
+          <div class="stat-label">{{ t('adminDashboard.stats.monthlyIncome') }}</div>
         </div>
         <div class="stat-detail">
-          今日 ¥{{ formatMoney(stats.today_income) }} · 总计 ¥{{ formatMoney(stats.total_revenue) }}
+          {{ t('adminDashboard.stats.incomeSummary', { today: formatMoney(stats.today_income), total: formatMoney(stats.total_revenue) }) }}
         </div>
       </div>
     </div>
 
-    <!-- 订单概览 -->
+    <!-- Order overview -->
     <div class="section-grid">
       <div class="section-card">
-        <h3>📋 订单概览</h3>
+        <h3>{{ t('adminDashboard.orders.title') }}</h3>
         <div class="order-stats">
           <div class="order-stat-item">
-            <span class="label">总订单</span>
+            <span class="label">{{ t('adminDashboard.orders.total') }}</span>
             <span class="value">{{ formatNumber(stats.total_orders) }}</span>
           </div>
           <div class="order-stat-item">
-            <span class="label">待支付</span>
+            <span class="label">{{ t('adminDashboard.orders.pending') }}</span>
             <span class="value pending">{{ stats.pending_orders || 0 }}</span>
           </div>
           <div class="order-stat-item">
-            <span class="label">已完成</span>
+            <span class="label">{{ t('adminDashboard.orders.completed') }}</span>
             <span class="value success">{{ stats.paid_orders || 0 }}</span>
           </div>
         </div>
       </div>
 
       <div class="section-card">
-        <h3>📊 流量统计</h3>
+        <h3>{{ t('adminDashboard.traffic.title') }}</h3>
         <div class="traffic-stats">
           <div class="traffic-item">
-            <span class="label">总使用流量</span>
+            <span class="label">{{ t('adminDashboard.traffic.totalUsed') }}</span>
             <span class="value">{{ formatBytes(stats.total_traffic_used) }}</span>
           </div>
           <div class="traffic-item">
-            <span class="label">今日流量</span>
+            <span class="label">{{ t('adminDashboard.traffic.today') }}</span>
             <span class="value">{{ formatBytes(stats.today_traffic) }}</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 缓存信息 -->
+    <!-- Cache info -->
     <div class="cache-info" v-if="stats.cached_at">
-      <span>📌 数据缓存于 {{ formatDateTime(stats.cached_at) }}</span>
+      <span>{{ t('adminDashboard.cache.cachedAt', { time: formatDateTime(stats.cached_at) }) }}</span>
     </div>
   </div>
 </template>
@@ -102,7 +102,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getDashboard } from '@/api/admin'
+import { useAppI18n } from '@/composables/useAppI18n'
 
+const { t, formatDateTime } = useAppI18n()
 const stats = ref({})
 const loading = ref(false)
 
@@ -112,7 +114,7 @@ const fetchData = async (refresh = false) => {
     const res = await getDashboard(refresh)
     stats.value = res.data || {}
   } catch (err) {
-    console.error('获取数据失败:', err)
+    console.error(t('adminDashboard.messages.fetchFailed'), err)
   } finally {
     loading.value = false
   }
@@ -141,12 +143,6 @@ const formatBytes = (bytes) => {
     i++
   }
   return bytes.toFixed(2) + ' ' + units[i]
-}
-
-const formatDateTime = (dateStr) => {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN')
 }
 
 onMounted(() => fetchData())
@@ -293,7 +289,7 @@ onMounted(() => fetchData())
   color: var(--text-secondary);
 }
 
-/* 移动端适配 */
+/* Mobile layout */
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;

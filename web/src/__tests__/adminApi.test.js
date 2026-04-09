@@ -316,6 +316,10 @@ async function loadActualRequestModule({ token = '' } = {}) {
 }
 
 describe('request auth handling', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
   afterEach(() => {
     vi.restoreAllMocks()
     vi.resetModules()

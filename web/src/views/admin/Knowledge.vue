@@ -1,83 +1,104 @@
 <template>
   <div class="knowledge-page">
     <div class="page-header">
-      <h1>知识库管理</h1>
-      <p class="text-secondary">管理使用教程和公告</p>
+      <h1>{{ t('adminKnowledge.title') }}</h1>
+      <p class="text-secondary">{{ t('adminKnowledge.subtitle') }}</p>
     </div>
 
-    <!-- 筛选栏 -->
     <div class="filter-bar">
-      <button @click="openCreate">➕ 新建文章</button>
+      <button @click="openCreate">{{ t('adminKnowledge.actions.createArticle') }}</button>
     </div>
 
-    <!-- 文章列表 -->
     <div class="articles-grid">
-      <div class="article-card" v-for="a in articles" :key="a.id">
+      <div v-for="article in articles" :key="article.id" class="article-card">
         <div class="article-header">
-          <span class="category-badge">{{ a.category }}</span>
-          <span :class="['visibility-badge', a.show ? 'visible' : 'hidden']">
-            {{ a.show ? '可见' : '隐藏' }}
+          <span class="category-badge">{{ categoryLabel(article.category) }}</span>
+          <span :class="['visibility-badge', article.show ? 'visible' : 'hidden']">
+            {{ article.show ? t('adminKnowledge.visibility.visible') : t('adminKnowledge.visibility.hidden') }}
           </span>
         </div>
-        <h3 class="article-title">{{ a.title }}</h3>
-        <p class="article-preview">{{ truncate(a.body, 100) }}</p>
+        <h3 class="article-title">{{ article.title }}</h3>
+        <p class="article-preview">{{ truncate(article.body, 100) }}</p>
         <div class="article-footer">
-          <span class="article-date">{{ formatDate(a.updated_at) }}</span>
+          <span class="article-date">{{ formatArticleDate(article.updated_at) }}</span>
           <div class="action-buttons">
-            <button class="btn-sm btn-ghost" @click="edit(a)" title="编辑">✏️</button>
-            <button class="btn-sm btn-ghost" @click="remove(a)" title="删除">🗑️</button>
+            <button
+              class="btn-sm btn-ghost"
+              :title="t('common.actions.edit')"
+              :aria-label="t('common.actions.edit')"
+              @click="editArticle(article)"
+            >
+              ✏️
+            </button>
+            <button
+              class="btn-sm btn-ghost"
+              :title="t('common.actions.delete')"
+              :aria-label="t('common.actions.delete')"
+              @click="removeArticle(article)"
+            >
+              🗑️
+            </button>
           </div>
         </div>
       </div>
       <div v-if="articles.length === 0" class="empty-card">
-        暂无文章
+        {{ t('adminKnowledge.empty.noData') }}
       </div>
     </div>
 
-    <!-- 创建/编辑弹窗 -->
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
       <div class="modal modal-lg">
         <div class="modal-header">
-          <h3>{{ isEdit ? '编辑文章' : '新建文章' }}</h3>
-          <button class="close-btn" @click="closeModal">✕</button>
+          <h3>{{ isEdit ? t('adminKnowledge.modal.editTitle') : t('adminKnowledge.modal.createTitle') }}</h3>
+          <button
+            class="close-btn"
+            :aria-label="t('common.actions.close')"
+            :title="t('common.actions.close')"
+            @click="closeModal"
+          >
+            ×
+          </button>
         </div>
         <div class="modal-body">
           <div class="form-row">
             <div class="form-group flex-2">
-              <label>标题 <span class="required">*</span></label>
-              <input v-model="form.title" type="text" placeholder="文章标题">
+              <label>{{ t('adminKnowledge.fields.title') }} <span class="required">*</span></label>
+              <input v-model="form.title" type="text" :placeholder="t('adminKnowledge.placeholders.title')" />
             </div>
             <div class="form-group">
-              <label>分类</label>
+              <label>{{ t('adminKnowledge.fields.category') }}</label>
               <select v-model="form.category">
-                <option value="公告">公告</option>
-                <option value="教程">教程</option>
-                <option value="常见问题">常见问题</option>
-                <option value="其他">其他</option>
+                <option v-for="category in categoryOptions" :key="category.value" :value="category.value">
+                  {{ category.label }}
+                </option>
               </select>
             </div>
           </div>
           <div class="form-group">
-            <label>内容 <span class="required">*</span></label>
-            <textarea v-model="form.body" rows="12" placeholder="支持 Markdown 格式..."></textarea>
+            <label>{{ t('adminKnowledge.fields.content') }} <span class="required">*</span></label>
+            <textarea
+              v-model="form.body"
+              rows="12"
+              :placeholder="t('adminKnowledge.placeholders.body')"
+            ></textarea>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>排序（数字越小越靠前）</label>
-              <input v-model.number="form.sort" type="number" min="0">
+              <label>{{ t('adminKnowledge.fields.sort') }}</label>
+              <input v-model.number="form.sort" type="number" min="0" />
             </div>
             <div class="form-group">
-              <label>是否显示</label>
+              <label>{{ t('adminKnowledge.fields.visibility') }}</label>
               <select v-model="form.show">
-                <option :value="1">显示</option>
-                <option :value="0">隐藏</option>
+                <option :value="1">{{ t('adminKnowledge.visibility.visible') }}</option>
+                <option :value="0">{{ t('adminKnowledge.visibility.hidden') }}</option>
               </select>
             </div>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closeModal">取消</button>
-          <button @click="save">{{ isEdit ? '保存' : '发布' }}</button>
+          <button class="btn-secondary" @click="closeModal">{{ t('common.actions.cancel') }}</button>
+          <button @click="saveArticle">{{ isEdit ? t('common.actions.save') : t('adminKnowledge.actions.publish') }}</button>
         </div>
       </div>
     </div>
@@ -85,8 +106,26 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import adminApi from '@/api/admin'
+import { useAppI18n } from '@/composables/useAppI18n'
+
+const { t, formatDate } = useAppI18n()
+
+const KNOWLEDGE_CATEGORY_VALUES = Object.freeze({
+  announcement: '公告',
+  tutorial: '教程',
+  faq: '常见问题',
+  other: '其他'
+})
+
+const defaultCategory = () => KNOWLEDGE_CATEGORY_VALUES.announcement
+const categoryOptions = computed(() => ([
+  { value: KNOWLEDGE_CATEGORY_VALUES.announcement, label: t('adminKnowledge.categories.announcement') },
+  { value: KNOWLEDGE_CATEGORY_VALUES.tutorial, label: t('adminKnowledge.categories.tutorial') },
+  { value: KNOWLEDGE_CATEGORY_VALUES.faq, label: t('adminKnowledge.categories.faq') },
+  { value: KNOWLEDGE_CATEGORY_VALUES.other, label: t('adminKnowledge.categories.other') }
+]))
 
 const articles = ref([])
 const showModal = ref(false)
@@ -94,7 +133,7 @@ const isEdit = ref(false)
 const form = reactive({
   id: null,
   title: '',
-  category: '公告',
+  category: defaultCategory(),
   body: '',
   sort: 0,
   show: 1
@@ -104,27 +143,44 @@ const load = async () => {
   try {
     const res = await adminApi.getKnowledgeList()
     articles.value = res.data || []
-  } catch (e) {
-    console.error('加载失败:', e)
+  } catch (error) {
+    console.error(t('adminKnowledge.messages.fetchFailed'), error)
   }
 }
 
-onMounted(() => { load() })
+onMounted(() => {
+  load()
+})
 
-const formatDate = (ts) => {
+const formatArticleDate = (ts) => {
   if (!ts) return '-'
-  return new Date(ts * 1000).toLocaleDateString('zh-CN')
+  return formatDate(ts)
+}
+
+const categoryLabel = (category) => {
+  switch (category) {
+    case KNOWLEDGE_CATEGORY_VALUES.announcement:
+      return t('adminKnowledge.categories.announcement')
+    case KNOWLEDGE_CATEGORY_VALUES.tutorial:
+      return t('adminKnowledge.categories.tutorial')
+    case KNOWLEDGE_CATEGORY_VALUES.faq:
+      return t('adminKnowledge.categories.faq')
+    case KNOWLEDGE_CATEGORY_VALUES.other:
+      return t('adminKnowledge.categories.other')
+    default:
+      return category || t('adminKnowledge.categories.other')
+  }
 }
 
 const truncate = (text, length) => {
   if (!text) return ''
-  return text.length > length ? text.substring(0, length) + '...' : text
+  return text.length > length ? `${text.substring(0, length)}...` : text
 }
 
 const resetForm = () => {
   form.id = null
   form.title = ''
-  form.category = '公告'
+  form.category = defaultCategory()
   form.body = ''
   form.sort = 0
   form.show = 1
@@ -136,13 +192,13 @@ const openCreate = () => {
   showModal.value = true
 }
 
-const edit = (a) => {
-  form.id = a.id
-  form.title = a.title
-  form.category = a.category
-  form.body = a.body
-  form.sort = a.sort
-  form.show = a.show
+const editArticle = (article) => {
+  form.id = article.id
+  form.title = article.title
+  form.category = article.category
+  form.body = article.body
+  form.sort = article.sort
+  form.show = article.show
   isEdit.value = true
   showModal.value = true
 }
@@ -151,11 +207,12 @@ const closeModal = () => {
   showModal.value = false
 }
 
-const save = async () => {
+const saveArticle = async () => {
   if (!form.title.trim() || !form.body.trim()) {
-    alert('请填写标题和内容')
+    window.alert(t('adminKnowledge.messages.requiredFields'))
     return
   }
+
   try {
     const payload = {
       title: form.title.trim(),
@@ -164,27 +221,30 @@ const save = async () => {
       sort: form.sort,
       show: form.show
     }
+
     if (isEdit.value) {
       await adminApi.updateKnowledge(form.id, payload)
-      alert('保存成功')
+      window.alert(t('adminKnowledge.messages.saveSuccess'))
     } else {
       await adminApi.createKnowledge(payload)
-      alert('发布成功')
+      window.alert(t('adminKnowledge.messages.publishSuccess'))
     }
+
     closeModal()
     await load()
-  } catch (e) {
-    alert(e.message || '操作失败')
+  } catch (error) {
+    window.alert(error.message || t('adminKnowledge.messages.actionFailed'))
   }
 }
 
-const remove = async (a) => {
-  if (!confirm(`确定删除文章 "${a.title}"？`)) return
+const removeArticle = async (article) => {
+  if (!window.confirm(t('adminKnowledge.messages.deleteConfirm', { title: article.title }))) return
+
   try {
-    await adminApi.deleteKnowledge(a.id)
+    await adminApi.deleteKnowledge(article.id)
     await load()
-  } catch (e) {
-    alert(e.message || '删除失败')
+  } catch (error) {
+    window.alert(error.message || t('adminKnowledge.messages.deleteFailed'))
   }
 }
 </script>
@@ -302,7 +362,6 @@ const remove = async (a) => {
   border-radius: var(--radius-lg);
 }
 
-/* 弹窗样式 */
 .modal-overlay {
   position: fixed;
   inset: 0;

@@ -2,33 +2,30 @@
   <div class="forward-page">
     <div class="toolbar">
       <div class="toolbar-copy">
-        <p class="eyebrow">Flux Compatible</p>
-        <h2>流量转发管理</h2>
+        <p class="eyebrow">{{ t('runtime.forward.heroEyebrow') }}</p>
+        <h2>{{ t('runtime.forward.title') }}</h2>
       </div>
       <div class="toolbar-actions">
         <button
           class="btn btn-secondary icon-button"
-          :title="viewMode === 'grouped' ? '切换到直连视图' : '切换到分组视图'"
+          :title="viewMode === 'grouped' ? t('runtime.forward.view.switchToDirectTitle') : t('runtime.forward.view.switchToGroupedTitle')"
           @click="toggleViewMode"
         >
-          <span class="icon-mark">{{ viewMode === 'grouped' ? '直' : '组' }}</span>
-          <span>{{ viewMode === 'grouped' ? '直连' : '分组' }}</span>
+          <span class="icon-mark">{{ viewMode === 'grouped' ? t('runtime.forward.view.directShort') : t('runtime.forward.view.groupedShort') }}</span>
+          <span>{{ viewMode === 'grouped' ? t('runtime.forward.view.directLabel') : t('runtime.forward.view.groupedLabel') }}</span>
         </button>
-        <button class="btn btn-secondary" @click="openImportModal">导入</button>
-        <button class="btn btn-secondary" @click="openExportModal">导出</button>
-        <button class="btn btn-primary" @click="openCreateModal">新增</button>
+        <button class="btn btn-secondary" @click="openImportModal">{{ t('runtime.forward.actions.import') }}</button>
+        <button class="btn btn-secondary" @click="openExportModal">{{ t('runtime.forward.actions.export') }}</button>
+        <button class="btn btn-primary" @click="openCreateModal">{{ t('runtime.forward.actions.add') }}</button>
       </div>
     </div>
-    <p class="text-secondary small runtime-note">
-      NodeX mode keeps ingress/exit semantics; local Ansible mode only targets execution nodes resolved by inventory.
-      Forward node "online" only checks TCP reachability and does not prove remote attachment or firewall state already exists.
-    </p>
+    <p class="text-secondary small runtime-note">{{ t('runtime.forward.note') }}</p>
     <div class="runtime-context-bar">
       <span class="tag tag-primary">{{ runtimeModeLabel }}</span>
       <span class="runtime-context-summary">{{ runtimeModeSummary }}</span>
       <div class="runtime-context-links">
-        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">Local Runtime</router-link>
-        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">NodeX Runtime</router-link>
+        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">{{ t('forwardSuite.nav.localRuntime') }}</router-link>
+        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">{{ t('forwardSuite.nav.nodeXRuntime') }}</router-link>
       </div>
     </div>
     <ForwardSuiteNav />
@@ -40,7 +37,7 @@
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <span>正在加载转发与隧道数据...</span>
+      <span>{{ t('runtime.forward.loading') }}</span>
     </div>
 
     <template v-else>
@@ -48,18 +45,18 @@
         <article v-for="userGroup in groupedForwards" :key="userGroup.userKey" class="user-group">
           <div class="user-group-head">
             <div>
-              <p class="eyebrow">User</p>
+              <p class="eyebrow">{{ t('runtime.forward.group.eyebrow') }}</p>
               <h3>{{ userGroup.userName }}</h3>
-              <p class="group-summary">{{ userGroup.tunnelGroups.length }} 个隧道，{{ userGroup.total }} 个转发</p>
+              <p class="group-summary">{{ t('runtime.forward.group.summary', { tunnels: userGroup.tunnelGroups.length, forwards: userGroup.total }) }}</p>
             </div>
-            <span class="tag tag-primary">用户</span>
+            <span class="tag tag-primary">{{ t('runtime.forward.group.userTag') }}</span>
           </div>
 
           <details v-for="tunnelGroup in userGroup.tunnelGroups" :key="`${userGroup.userKey}-${tunnelGroup.tunnelId}`" class="accordion" open>
             <summary>
               <div>
                 <span class="accordion-title">{{ tunnelGroup.tunnelName }}</span>
-                <span class="accordion-meta">Tunnel #{{ tunnelGroup.tunnelId }}</span>
+                <span class="accordion-meta">{{ t('runtime.forward.group.tunnelMeta', { id: tunnelGroup.tunnelId }) }}</span>
               </div>
               <span class="tag">{{ tunnelGroup.running }}/{{ tunnelGroup.forwards.length }}</span>
             </summary>
@@ -90,13 +87,13 @@
                   </div>
                 </div>
 
-                <button class="endpoint" type="button" @click="showAddressModal({ value: forward.inIp, port: forward.inPort, title: '入口地址' })">
-                  <span>入口</span>
+                <button class="endpoint" type="button" @click="showAddressModal({ value: forward.inIp, port: forward.inPort, title: t('runtime.forward.card.ingressAddressTitle') })">
+                  <span>{{ t('runtime.forward.card.ingressLabel') }}</span>
                   <code>{{ formatInAddress(forward.inIp, forward.inPort) }}</code>
                 </button>
 
-                <button class="endpoint" type="button" @click="showAddressModal({ value: forward.remoteAddr, title: '目标地址' })">
-                  <span>目标</span>
+                <button class="endpoint" type="button" @click="showAddressModal({ value: forward.remoteAddr, title: t('runtime.forward.card.targetAddressTitle') })">
+                  <span>{{ t('runtime.forward.card.targetLabel') }}</span>
                   <code>{{ formatRemoteAddress(forward.remoteAddr) }}</code>
                 </button>
 
@@ -104,8 +101,8 @@
                   <span :class="['tag', getStrategyMeta(forward.strategy).className]">
                     {{ getStrategyMeta(forward.strategy).text }}
                   </span>
-                  <span class="tag">入 {{ formatFlow(forward.inFlow || 0) }}</span>
-                  <span class="tag tag-success">出 {{ formatFlow(forward.outFlow || 0) }}</span>
+                  <span class="tag">{{ t('runtime.forward.labels.inbound') }} {{ formatFlow(forward.inFlow || 0) }}</span>
+                  <span class="tag tag-success">{{ t('runtime.forward.labels.outbound') }} {{ formatFlow(forward.outFlow || 0) }}</span>
                 </div>
 
                 <p v-if="getRuntimeSummary(forward)" class="runtime-summary">
@@ -113,9 +110,9 @@
                 </p>
 
                 <div class="card-actions">
-                  <button class="btn btn-secondary btn-sm" @click="openEditModal(forward)">编辑</button>
-                  <button class="btn btn-secondary btn-sm" @click="openDiagnosisModal(forward)">诊断</button>
-                  <button class="btn btn-secondary btn-sm danger-text" @click="openDeleteModal(forward)">删除</button>
+                  <button class="btn btn-secondary btn-sm" @click="openEditModal(forward)">{{ t('runtime.forward.actions.edit') }}</button>
+                  <button class="btn btn-secondary btn-sm" @click="openDiagnosisModal(forward)">{{ t('runtime.forward.actions.diagnose') }}</button>
+                  <button class="btn btn-secondary btn-sm danger-text" @click="openDeleteModal(forward)">{{ t('runtime.forward.actions.delete') }}</button>
                 </div>
               </article>
             </div>
@@ -123,8 +120,8 @@
         </article>
 
         <section v-if="!groupedForwards.length" class="empty-state">
-          <h3>暂无转发配置</h3>
-          <p>当前系统里还没有任何兼容 flux-panel 的转发记录。</p>
+          <h3>{{ t('runtime.forward.emptyGroupedTitle') }}</h3>
+          <p>{{ t('runtime.forward.emptyGroupedText') }}</p>
         </section>
       </section>
 
@@ -148,7 +145,7 @@
                 <p>{{ forward.tunnelName }}</p>
               </div>
               <div class="card-head-actions">
-                <span :class="['drag-handle', { visible: isMobile }]" title="拖拽排序">⋮⋮</span>
+                <span :class="['drag-handle', { visible: isMobile }]" :title="t('runtime.forward.card.dragHandleTitle')">⋮⋮</span>
                 <label class="switch">
                   <input
                     type="checkbox"
@@ -167,13 +164,13 @@
               </div>
             </div>
 
-            <button class="endpoint" type="button" @click="showAddressModal({ value: forward.inIp, port: forward.inPort, title: '入口地址' })">
-              <span>入口</span>
+            <button class="endpoint" type="button" @click="showAddressModal({ value: forward.inIp, port: forward.inPort, title: t('runtime.forward.card.ingressAddressTitle') })">
+              <span>{{ t('runtime.forward.card.ingressLabel') }}</span>
               <code>{{ formatInAddress(forward.inIp, forward.inPort) }}</code>
             </button>
 
-            <button class="endpoint" type="button" @click="showAddressModal({ value: forward.remoteAddr, title: '目标地址' })">
-              <span>目标</span>
+            <button class="endpoint" type="button" @click="showAddressModal({ value: forward.remoteAddr, title: t('runtime.forward.card.targetAddressTitle') })">
+              <span>{{ t('runtime.forward.card.targetLabel') }}</span>
               <code>{{ formatRemoteAddress(forward.remoteAddr) }}</code>
             </button>
 
@@ -181,8 +178,8 @@
               <span :class="['tag', getStrategyMeta(forward.strategy).className]">
                 {{ getStrategyMeta(forward.strategy).text }}
               </span>
-              <span class="tag">入 {{ formatFlow(forward.inFlow || 0) }}</span>
-              <span class="tag tag-success">出 {{ formatFlow(forward.outFlow || 0) }}</span>
+              <span class="tag">{{ t('runtime.forward.labels.inbound') }} {{ formatFlow(forward.inFlow || 0) }}</span>
+              <span class="tag tag-success">{{ t('runtime.forward.labels.outbound') }} {{ formatFlow(forward.outFlow || 0) }}</span>
             </div>
 
             <p v-if="getRuntimeSummary(forward)" class="runtime-summary">
@@ -190,16 +187,16 @@
             </p>
 
             <div class="card-actions">
-              <button class="btn btn-secondary btn-sm" @click="openEditModal(forward)">编辑</button>
-              <button class="btn btn-secondary btn-sm" @click="openDiagnosisModal(forward)">诊断</button>
-              <button class="btn btn-secondary btn-sm danger-text" @click="openDeleteModal(forward)">删除</button>
+              <button class="btn btn-secondary btn-sm" @click="openEditModal(forward)">{{ t('runtime.forward.actions.edit') }}</button>
+              <button class="btn btn-secondary btn-sm" @click="openDiagnosisModal(forward)">{{ t('runtime.forward.actions.diagnose') }}</button>
+              <button class="btn btn-secondary btn-sm danger-text" @click="openDeleteModal(forward)">{{ t('runtime.forward.actions.delete') }}</button>
             </div>
           </article>
         </div>
 
         <section v-if="!sortedDirectForwards.length" class="empty-state">
-          <h3>暂无转发配置</h3>
-          <p>创建第一条转发后，这里会显示当前转发的直连卡片视图。</p>
+          <h3>{{ t('runtime.forward.emptyDirectTitle') }}</h3>
+          <p>{{ t('runtime.forward.emptyDirectText') }}</p>
         </section>
       </section>
     </template>
@@ -208,8 +205,8 @@
       <div class="modal modal-lg">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">Forward</p>
-            <h3>{{ isEdit ? '编辑转发' : '新增转发' }}</h3>
+            <p class="eyebrow">{{ t('runtime.forward.editor.eyebrow') }}</p>
+            <h3>{{ isEdit ? t('runtime.forward.editor.titleEdit') : t('runtime.forward.editor.titleAdd') }}</h3>
           </div>
           <button class="modal-close" @click="closeEditorModal">×</button>
         </div>
@@ -217,15 +214,15 @@
         <div class="modal-body">
           <div class="form-grid">
             <div class="form-group">
-              <label>转发名称</label>
-              <input v-model.trim="form.name" type="text" maxlength="50" placeholder="例如：HK-Web-01" />
+              <label>{{ t('runtime.forward.editor.fields.name') }}</label>
+              <input v-model.trim="form.name" type="text" maxlength="50" :placeholder="t('runtime.forward.editor.placeholders.name')" />
               <p v-if="errors.name" class="form-error">{{ errors.name }}</p>
             </div>
 
             <div class="form-group">
-              <label>关联隧道</label>
+              <label>{{ t('runtime.forward.editor.fields.tunnel') }}</label>
               <select :value="form.tunnelId ?? ''" @change="handleTunnelChange($event.target.value)">
-                <option value="">请选择隧道</option>
+                <option value="">{{ t('runtime.forward.editor.placeholders.tunnel') }}</option>
                 <option v-for="tunnel in tunnels" :key="tunnel.id" :value="tunnel.id">{{ tunnel.name }}</option>
               </select>
               <p v-if="errors.tunnelId" class="form-error">{{ errors.tunnelId }}</p>
@@ -235,47 +232,47 @@
 
           <div class="form-grid">
             <div class="form-group">
-              <label>入口端口</label>
-              <input v-model="portInput" type="number" min="1" max="65535" placeholder="留空自动分配" />
+              <label>{{ t('runtime.forward.editor.fields.ingressPort') }}</label>
+              <input v-model="portInput" type="number" min="1" max="65535" :placeholder="t('runtime.forward.editor.placeholders.ingressPort')" />
               <p v-if="selectedTunnel && selectedTunnel.inNodePortSta && selectedTunnel.inNodePortEnd" class="hint">
-                允许范围：{{ selectedTunnel.inNodePortSta }} - {{ selectedTunnel.inNodePortEnd }}
+                {{ t('runtime.forward.portRange', { start: selectedTunnel.inNodePortSta, end: selectedTunnel.inNodePortEnd }) }}
               </p>
               <p v-else class="hint">{{ selectedTunnelPortHint }}</p>
               <p v-if="errors.inPort" class="form-error">{{ errors.inPort }}</p>
             </div>
 
             <div class="form-group">
-              <label>网卡名称</label>
-              <input v-model.trim="form.interfaceName" type="text" placeholder="可选，例如 eth0" />
+              <label>{{ t('runtime.forward.editor.fields.interfaceName') }}</label>
+              <input v-model.trim="form.interfaceName" type="text" :placeholder="t('runtime.forward.editor.placeholders.interfaceName')" />
             </div>
           </div>
 
           <div class="form-group">
-            <label>目标地址</label>
+            <label>{{ t('runtime.forward.editor.fields.remoteAddress') }}</label>
             <textarea
               v-model="form.remoteAddr"
               rows="7"
-              placeholder="每行一个目标，例如：&#10;1.1.1.1:443&#10;example.com:8443&#10;[2001:db8::1]:443"
+              :placeholder="t('runtime.forward.editor.placeholders.remoteAddress')"
             ></textarea>
-            <p class="hint">支持 IPv4:port、domain:port、[完整 IPv6]:port。多地址请每行一个。</p>
+            <p class="hint">{{ t('runtime.forward.editor.remoteHint') }}</p>
             <p v-if="errors.remoteAddr" class="form-error">{{ errors.remoteAddr }}</p>
           </div>
 
           <div v-if="addressLineCount > 1" class="form-group">
-            <label>调度策略</label>
+            <label>{{ t('runtime.forward.editor.fields.strategy') }}</label>
             <select v-model="form.strategy">
-              <option value="fifo">主备</option>
-              <option value="round">轮询</option>
-              <option value="rand">随机</option>
-              <option value="hash">Hash</option>
+              <option value="fifo">{{ t('runtime.forward.strategy.fifo') }}</option>
+              <option value="round">{{ t('runtime.forward.strategy.round') }}</option>
+              <option value="rand">{{ t('runtime.forward.strategy.rand') }}</option>
+              <option value="hash">{{ t('runtime.forward.strategy.hash') }}</option>
             </select>
           </div>
         </div>
 
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeEditorModal">取消</button>
+          <button class="btn btn-secondary" @click="closeEditorModal">{{ t('common.actions.cancel') }}</button>
           <button class="btn btn-primary" :disabled="submitLoading" @click="handleSubmit">
-            {{ submitLoading ? '提交中...' : (isEdit ? '保存修改' : '创建转发') }}
+            {{ submitLoading ? t('runtime.forward.editor.submitLoading') : (isEdit ? t('runtime.forward.editor.submitUpdate') : t('runtime.forward.editor.submitCreate')) }}
           </button>
         </div>
       </div>
@@ -285,19 +282,19 @@
       <div class="modal">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">Delete</p>
-            <h3>删除转发</h3>
+            <p class="eyebrow">{{ t('runtime.forward.deleteModal.eyebrow') }}</p>
+            <h3>{{ t('runtime.forward.deleteModal.title') }}</h3>
           </div>
           <button class="modal-close" @click="deleteModalOpen = false">×</button>
         </div>
         <div class="modal-body">
-          <p class="modal-copy">确认删除 <strong>{{ forwardToDelete?.name }}</strong> 吗？</p>
-          <p class="hint">常规删除失败时，会继续给出强制删除确认。</p>
+          <p class="modal-copy">{{ t('runtime.forward.deleteModal.confirmText', { name: forwardToDelete?.name || '-' }) }}</p>
+          <p class="hint">{{ t('runtime.forward.deleteModal.hint') }}</p>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="deleteModalOpen = false">取消</button>
+          <button class="btn btn-secondary" @click="deleteModalOpen = false">{{ t('common.actions.cancel') }}</button>
           <button class="btn btn-primary danger" :disabled="deleteLoading" @click="confirmDelete">
-            {{ deleteLoading ? '删除中...' : '确认删除' }}
+            {{ deleteLoading ? t('runtime.forward.deleteModal.deleteLoading') : t('runtime.forward.deleteModal.confirmDelete') }}
           </button>
         </div>
       </div>
@@ -307,20 +304,20 @@
       <div class="modal modal-lg">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">Address</p>
+            <p class="eyebrow">{{ t('runtime.forward.addressModal.eyebrow') }}</p>
             <h3>{{ addressModalTitle }}</h3>
           </div>
           <button class="modal-close" @click="addressModalOpen = false">×</button>
         </div>
         <div class="modal-body">
           <div class="modal-toolbar">
-            <button class="btn btn-secondary btn-sm" @click="copyAllAddresses">复制全部</button>
+            <button class="btn btn-secondary btn-sm" @click="copyAllAddresses">{{ t('runtime.forward.actions.copyAll') }}</button>
           </div>
           <div class="list-stack">
             <div v-for="item in addressList" :key="item.id" class="list-item">
               <code>{{ item.address }}</code>
               <button class="btn btn-secondary btn-sm" :disabled="item.copying" @click="copyAddress(item)">
-                {{ item.copying ? '复制中...' : '复制' }}
+                {{ item.copying ? t('runtime.forward.addressModal.copying') : t('runtime.forward.addressModal.copy') }}
               </button>
             </div>
           </div>
@@ -332,38 +329,45 @@
       <div class="modal modal-lg">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">Export</p>
-            <h3>导出转发数据</h3>
-            <p class="modal-subtitle">格式：remoteAddr|name|inPort</p>
+            <p class="eyebrow">{{ t('runtime.forward.exportModal.eyebrow') }}</p>
+            <h3>{{ t('runtime.forward.exportModal.title') }}</h3>
+            <p class="modal-subtitle">{{ t('runtime.forward.exportModal.subtitle') }}</p>
           </div>
           <button class="modal-close" @click="exportModalOpen = false">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>选择导出隧道</label>
+            <label>{{ t('runtime.forward.exportModal.tunnelLabel') }}</label>
             <select :value="selectedTunnelForExport ?? ''" @change="handleExportTunnelChange($event.target.value)">
-              <option value="">请选择隧道</option>
+              <option value="">{{ t('runtime.forward.exportModal.tunnelPlaceholder') }}</option>
               <option v-for="tunnel in tunnels" :key="tunnel.id" :value="tunnel.id">{{ tunnel.name }}</option>
             </select>
           </div>
 
           <div v-if="exportData" class="modal-toolbar">
             <button class="btn btn-primary btn-sm" :disabled="exportLoading" @click="executeExport">
-              {{ exportLoading ? '生成中...' : '重新生成' }}
+              {{ exportLoading ? t('runtime.forward.exportModal.generating') : t('runtime.forward.exportModal.regenerate') }}
             </button>
-            <button class="btn btn-secondary btn-sm" @click="copyExportData">复制</button>
+            <button class="btn btn-secondary btn-sm" @click="copyExportData">{{ t('common.actions.copy') }}</button>
           </div>
 
           <div v-else class="modal-toolbar align-end">
             <button class="btn btn-primary btn-sm" :disabled="exportLoading || !selectedTunnelForExport" @click="executeExport">
-              {{ exportLoading ? '生成中...' : '生成导出数据' }}
+              {{ exportLoading ? t('runtime.forward.exportModal.generating') : t('runtime.forward.exportModal.generate') }}
             </button>
           </div>
 
-          <textarea v-if="exportData" :value="exportData" class="mono-area" rows="12" readonly placeholder="暂无导出数据"></textarea>
+          <textarea
+            v-if="exportData"
+            :value="exportData"
+            class="mono-area"
+            rows="12"
+            readonly
+            :placeholder="t('runtime.forward.exportModal.noDataPlaceholder')"
+          ></textarea>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="exportModalOpen = false">关闭</button>
+          <button class="btn btn-secondary" @click="exportModalOpen = false">{{ t('common.actions.close') }}</button>
         </div>
       </div>
     </div>
@@ -372,36 +376,36 @@
       <div class="modal modal-xl">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">Import</p>
-            <h3>导入转发数据</h3>
-            <p class="modal-subtitle">格式：remoteAddr|name|inPort，每行一条，inPort 可留空。</p>
-            <p class="modal-subtitle muted">目标地址支持单地址或逗号拼接的多地址，例如：3.3.3.3:3,4.4.4.4:4</p>
+            <p class="eyebrow">{{ t('runtime.forward.importModal.eyebrow') }}</p>
+            <h3>{{ t('runtime.forward.importModal.title') }}</h3>
+            <p class="modal-subtitle">{{ t('runtime.forward.importModal.subtitle') }}</p>
+            <p class="modal-subtitle muted">{{ t('runtime.forward.importModal.subtitleSecondary') }}</p>
           </div>
           <button class="modal-close" @click="importModalOpen = false">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>选择导入隧道</label>
+            <label>{{ t('runtime.forward.importModal.tunnelLabel') }}</label>
             <select :value="selectedTunnelForImport ?? ''" @change="handleImportTunnelChange($event.target.value)">
-              <option value="">请选择隧道</option>
+              <option value="">{{ t('runtime.forward.importModal.tunnelPlaceholder') }}</option>
               <option v-for="tunnel in tunnels" :key="tunnel.id" :value="tunnel.id">{{ tunnel.name }}</option>
             </select>
           </div>
 
           <div class="form-group">
-            <label>导入数据</label>
+            <label>{{ t('runtime.forward.importModal.dataLabel') }}</label>
             <textarea
               v-model="importData"
               class="mono-area"
               rows="10"
-              placeholder="example.com:8080|业务入口|10086"
+              :placeholder="t('runtime.forward.importModal.placeholder')"
             ></textarea>
           </div>
 
           <div v-if="importResults.length" class="result-panel">
             <div class="result-head">
-              <h4>导入结果</h4>
-              <span>成功：{{ importSuccessCount }} / 总计：{{ importResults.length }}</span>
+              <h4>{{ t('runtime.forward.importModal.resultTitle') }}</h4>
+              <span>{{ t('runtime.forward.importModal.resultSummary', { success: importSuccessCount, total: importResults.length }) }}</span>
             </div>
             <div class="result-list">
               <div
@@ -409,7 +413,7 @@
                 :key="`${result.line}-${index}`"
                 :class="['result-item', result.success ? 'result-success' : 'result-failed']"
               >
-                <div class="result-status">{{ result.success ? '成功' : '失败' }}</div>
+                <div class="result-status">{{ result.success ? t('runtime.forward.importModal.statusSuccess') : t('runtime.forward.importModal.statusFailed') }}</div>
                 <code>{{ result.line }}</code>
                 <p>{{ result.message }}</p>
               </div>
@@ -417,9 +421,9 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="importModalOpen = false">关闭</button>
+          <button class="btn btn-secondary" @click="importModalOpen = false">{{ t('common.actions.close') }}</button>
           <button class="btn btn-primary" :disabled="importLoading || !importData.trim() || !selectedTunnelForImport" @click="executeImport">
-            {{ importLoading ? '导入中...' : '开始导入' }}
+            {{ importLoading ? t('runtime.forward.importModal.importing') : t('runtime.forward.importModal.startImport') }}
           </button>
         </div>
       </div>
@@ -429,8 +433,8 @@
       <div class="modal modal-xl">
         <div class="modal-header">
           <div>
-            <p class="eyebrow">Diagnosis</p>
-            <h3>转发诊断结果</h3>
+            <p class="eyebrow">{{ t('runtime.forward.diagnosis.eyebrow') }}</p>
+            <h3>{{ t('runtime.forward.diagnosis.title') }}</h3>
             <p v-if="currentDiagnosisForward" class="modal-subtitle">{{ currentDiagnosisForward.name }}</p>
           </div>
           <button class="modal-close" @click="diagnosisModalOpen = false">×</button>
@@ -438,7 +442,7 @@
         <div class="modal-body">
           <div v-if="diagnosisLoading" class="loading-state compact">
             <div class="spinner"></div>
-            <span>正在诊断转发连接...</span>
+            <span>{{ t('runtime.forward.diagnosis.loading') }}</span>
           </div>
 
           <div v-else-if="diagnosisResult && diagnosisResult.results?.length" class="diagnosis-list">
@@ -446,50 +450,50 @@
               <div class="diagnosis-head">
                 <div>
                   <h4>{{ result.description }}</h4>
-                  <p>{{ result.nodeName }} · Node {{ result.nodeId }}</p>
+                  <p>{{ formatDiagnosisNodeMeta(result) }}</p>
                 </div>
                 <span :class="['tag', result.success ? 'tag-success' : 'tag-danger']">
-                  {{ result.success ? '连接成功' : '连接失败' }}
+                  {{ result.success ? t('runtime.forward.diagnosis.connectionSuccess') : t('runtime.forward.diagnosis.connectionFailed') }}
                 </span>
               </div>
 
               <div class="diagnosis-body">
                 <div class="diagnosis-metric">
-                  <span>目标地址</span>
+                  <span>{{ t('runtime.forward.diagnosis.targetAddress') }}</span>
                   <code>{{ result.targetIp }}<template v-if="result.targetPort">:{{ result.targetPort }}</template></code>
                 </div>
 
                 <template v-if="result.success">
                   <div class="metric-grid">
                     <div class="metric-card">
-                      <span>平均延迟</span>
+                      <span>{{ t('runtime.forward.diagnosis.averageLatency') }}</span>
                       <strong>{{ result.averageTime?.toFixed(0) || '0' }} ms</strong>
                     </div>
                     <div class="metric-card">
-                      <span>丢包率</span>
+                      <span>{{ t('runtime.forward.diagnosis.packetLoss') }}</span>
                       <strong>{{ result.packetLoss?.toFixed(1) || '0.0' }}%</strong>
                     </div>
                     <div class="metric-card">
-                      <span>质量</span>
+                      <span>{{ t('runtime.forward.diagnosis.quality') }}</span>
                       <strong>{{ getQualityMeta(result.averageTime, result.packetLoss).text }}</strong>
                     </div>
                   </div>
                 </template>
 
-                <p v-else class="diagnosis-error">{{ result.message || '诊断失败' }}</p>
+                <p v-else class="diagnosis-error">{{ translateLiteral(result.message) || t('runtime.forward.diagnosis.failedFallback') }}</p>
               </div>
             </article>
           </div>
 
           <div v-else class="empty-state compact">
-            <h3>暂无诊断数据</h3>
-            <p>发起一次诊断后，这里会展示与参考页一致的结果卡片。</p>
+            <h3>{{ t('runtime.forward.diagnosis.emptyTitle') }}</h3>
+            <p>{{ t('runtime.forward.diagnosis.emptyText') }}</p>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="diagnosisModalOpen = false">关闭</button>
+          <button class="btn btn-secondary" @click="diagnosisModalOpen = false">{{ t('common.actions.close') }}</button>
           <button v-if="currentDiagnosisForward" class="btn btn-primary" :disabled="diagnosisLoading" @click="openDiagnosisModal(currentDiagnosisForward)">
-            {{ diagnosisLoading ? '诊断中...' : '重新诊断' }}
+            {{ diagnosisLoading ? t('runtime.forward.diagnosis.rerunning') : t('runtime.forward.diagnosis.rerun') }}
           </button>
         </div>
       </div>
@@ -499,6 +503,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { useAppI18n } from '@/composables/useAppI18n'
 import { useUserStore } from '@/stores/user'
 import {
   createForward,
@@ -515,6 +520,7 @@ import {
 } from '@/api/admin'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 
+const { t, translateLiteral } = useAppI18n()
 const userStore = useUserStore()
 
 const loading = ref(true)
@@ -528,12 +534,14 @@ const runtimeBackendKey = 'forward.runtime_backend'
 const runtimeNodeXMode = ref(false)
 const runtimeBackend = ref('nftables_ansible')
 const runtimeModeLabel = computed(() => (
-  runtimeNodeXMode.value ? 'Active Runtime: NodeX / gost' : `Active Runtime: Local / ${runtimeBackend.value}`
+  runtimeNodeXMode.value
+    ? t('runtime.forward.modeLabelNodeX')
+    : t('runtime.forward.modeLabelLocal', { backend: runtimeBackend.value })
 ))
 const runtimeModeSummary = computed(() => (
   runtimeNodeXMode.value
-    ? 'Edit NodeX control-plane URL, token and gost operator checks on the dedicated NodeX Runtime page.'
-    : 'Edit inventory, playbooks and panel-host executor settings on the dedicated Local Runtime page.'
+    ? t('runtime.forward.modeSummaryNodeX')
+    : t('runtime.forward.modeSummaryLocal')
 ))
 
 const modalOpen = ref(false)
@@ -599,22 +607,25 @@ const importSuccessCount = computed(() => importResults.value.filter(item => ite
 const selectedTunnelModeHint = computed(() => {
   if (!selectedTunnel.value) {
     return runtimeNodeXMode.value
-      ? 'NodeX/Gost mode keeps ingress and exit semantics. A selected tunnel still requires NodeX runtime jobs to succeed before forwarding is really attached.'
-      : 'Local Ansible mode only records the execution node. SSH access comes from the configured ansible inventory and local runtime settings, not from NodeX topology records.'
+      ? t('runtime.forward.modeHintNodeX')
+      : t('runtime.forward.modeHintLocal')
   }
 
-  const tunnelName = selectedTunnel.value.name || `Tunnel #${selectedTunnel.value.id || '-'}`
+  const tunnelName = selectedTunnel.value.name || formatTunnelReference(selectedTunnel.value.id || '-')
   return runtimeNodeXMode.value
-    ? `${tunnelName} will be attached through NodeX/gost. Panel-side “online” or status checks do not prove the remote relay has finished attaching.`
-    : `${tunnelName} will be applied on the execution node only. This path stays stateless until the queued ansible job finishes successfully.`
+    ? t('runtime.forward.tunnelHintNodeX', { name: tunnelName })
+    : t('runtime.forward.tunnelHintLocal', { name: tunnelName })
 })
 const selectedTunnelPortHint = computed(() => {
   if (selectedTunnel.value?.inNodePortSta && selectedTunnel.value?.inNodePortEnd) {
-    return `Allowed range: ${selectedTunnel.value.inNodePortSta} - ${selectedTunnel.value.inNodePortEnd}`
+    return t('runtime.forward.portRange', {
+      start: selectedTunnel.value.inNodePortSta,
+      end: selectedTunnel.value.inNodePortEnd
+    })
   }
   return runtimeNodeXMode.value
-    ? 'Leaving the port empty lets the panel allocate one from the tunnel entry-node range.'
-    : 'Leaving the port empty lets the panel allocate one on the selected execution node.'
+    ? t('runtime.forward.portHintNodeX')
+    : t('runtime.forward.portHintLocal')
 })
 
 watch(portInput, value => {
@@ -738,7 +749,7 @@ function saveOrder(order) {
   try {
     localStorage.setItem('forward-order', JSON.stringify(order))
   } catch (error) {
-    console.warn('无法保存排序到 localStorage:', error)
+    console.warn('Failed to save order to localStorage:', error)
   }
 }
 
@@ -792,6 +803,17 @@ function clearFeedback() {
     feedbackTimer = null
   }
   feedback.message = ''
+}
+
+function translateMessage(message, fallbackKey = null, params = {}) {
+  const translated = translateLiteral(message)
+  if (translated && translated !== message) {
+    return translated
+  }
+  if (message) {
+    return message
+  }
+  return fallbackKey ? t(fallbackKey, params) : ''
 }
 
 function normalizeTunnel(raw) {
@@ -850,7 +872,7 @@ function mergeReferencedTunnels(list, forwardList) {
 
     const fallbackTunnel = normalizeTunnel({
       id: tunnelId,
-      name: forward.tunnelName || `Tunnel #${tunnelId}`,
+      name: forward.tunnelName || formatTunnelReference(tunnelId),
       inIp: forward.inIp || '',
       status: 0
     })
@@ -924,18 +946,18 @@ async function loadData(showLoading = true) {
         initializeOrder(items)
       }
     } else {
-      setFeedback('error', forwardsRes.msg || '获取转发列表失败')
+      setFeedback('error', translateMessage(forwardsRes.msg, 'runtime.forward.messages.loadForwardsFailed'))
     }
 
     if (tunnelsRes.code === 0) {
       availableTunnels = Array.isArray(tunnelsRes.data) ? tunnelsRes.data.map(normalizeTunnel) : []
     } else {
-      setFeedback('warning', tunnelsRes.msg || '获取隧道列表失败')
+      setFeedback('warning', translateMessage(tunnelsRes.msg, 'runtime.forward.messages.loadTunnelsFailed'))
     }
     tunnels.value = mergeReferencedTunnels(availableTunnels, items)
   } catch (error) {
-    console.error('加载转发页数据失败:', error)
-    setFeedback('error', '加载数据失败')
+    console.error('Failed to load forward page data:', error)
+    setFeedback('error', t('runtime.forward.messages.loadDataFailed'))
   } finally {
     loading.value = false
   }
@@ -986,7 +1008,7 @@ function buildGroupedForwards() {
 
   sorted.forEach(forward => {
     const userKey = forward.userId ? String(forward.userId) : 'unknown'
-    const userName = forward.userName || '未知用户'
+    const userName = forward.userName || t('runtime.forward.messages.unknownUser')
 
     if (!userMap.has(userKey)) {
       userMap.set(userKey, {
@@ -1004,7 +1026,7 @@ function buildGroupedForwards() {
     if (!tunnelGroup) {
       tunnelGroup = {
         tunnelId: forward.tunnelId,
-        tunnelName: forward.tunnelName || `Tunnel #${forward.tunnelId}`,
+        tunnelName: forward.tunnelName || formatTunnelReference(forward.tunnelId),
         running: 0,
         forwards: []
       }
@@ -1030,7 +1052,7 @@ function toggleViewMode() {
   try {
     localStorage.setItem('forward-view-mode', viewMode.value)
   } catch (error) {
-    console.warn('无法保存显示模式到 localStorage:', error)
+    console.warn('Failed to save view mode to localStorage:', error)
   }
 
   if (viewMode.value === 'direct') {
@@ -1064,17 +1086,17 @@ function validateForm() {
   errors.inPort = ''
 
   if (!form.name.trim()) {
-    errors.name = '请输入转发名称'
+    errors.name = t('runtime.forward.messages.nameRequired')
   } else if (form.name.length < 2 || form.name.length > 50) {
-    errors.name = '转发名称长度应在 2-50 个字符之间'
+    errors.name = t('runtime.forward.messages.nameLength')
   }
 
   if (!form.tunnelId) {
-    errors.tunnelId = '请选择关联隧道'
+    errors.tunnelId = t('runtime.forward.messages.tunnelRequired')
   }
 
   if (!form.remoteAddr.trim()) {
-    errors.remoteAddr = '请输入远程地址'
+    errors.remoteAddr = t('runtime.forward.messages.remoteAddrRequired')
   } else {
     const addresses = splitLines(form.remoteAddr)
     const ipv4Pattern = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):\d+$/
@@ -1084,14 +1106,14 @@ function validateForm() {
     for (let index = 0; index < addresses.length; index += 1) {
       const address = addresses[index]
       if (!ipv4Pattern.test(address) && !ipv6FullPattern.test(address) && !domainPattern.test(address)) {
-        errors.remoteAddr = `第 ${index + 1} 行地址格式错误`
+        errors.remoteAddr = t('runtime.forward.messages.remoteAddrLineInvalid', { line: index + 1 })
         break
       }
     }
   }
 
   if (form.inPort !== null && (form.inPort < 1 || form.inPort > 65535)) {
-    errors.inPort = '端口号必须在 1-65535 之间'
+    errors.inPort = t('runtime.forward.messages.portRange')
   }
 
   if (
@@ -1101,7 +1123,10 @@ function validateForm() {
     form.inPort
   ) {
     if (form.inPort < selectedTunnel.value.inNodePortSta || form.inPort > selectedTunnel.value.inNodePortEnd) {
-      errors.inPort = `端口号必须在 ${selectedTunnel.value.inNodePortSta}-${selectedTunnel.value.inNodePortEnd} 范围内`
+      errors.inPort = t('runtime.forward.messages.portRangeTunnel', {
+        start: selectedTunnel.value.inNodePortSta,
+        end: selectedTunnel.value.inNodePortEnd
+      })
     }
   }
 
@@ -1186,14 +1211,14 @@ async function handleSubmit() {
 
     if (response.code === 0) {
       modalOpen.value = false
-      setFeedback('success', isEdit.value ? '修改成功' : '创建成功')
+      setFeedback('success', isEdit.value ? t('runtime.forward.messages.updated') : t('runtime.forward.messages.created'))
       await loadData(true)
     } else {
-      setFeedback('error', response.msg || '操作失败')
+      setFeedback('error', translateMessage(response.msg, 'runtime.forward.messages.actionFailed'))
     }
   } catch (error) {
-    console.error('提交转发失败:', error)
-    setFeedback('error', '操作失败')
+    console.error('Failed to submit forward:', error)
+    setFeedback('error', t('runtime.forward.messages.actionFailed'))
   } finally {
     submitLoading.value = false
   }
@@ -1201,11 +1226,11 @@ async function handleSubmit() {
 
 async function handleToggleService(forward) {
   if (isForwardRuntimeBusy(forward)) {
-    setFeedback('warning', '当前运行时任务仍在排队或执行中，请等待完成后再操作')
+    setFeedback('warning', t('runtime.forward.messages.runtimeBusy'))
     return
   }
   if (Number(forward.status) !== 1 && Number(forward.status) !== 0) {
-    setFeedback('error', '转发状态异常，无法操作')
+    setFeedback('error', t('runtime.forward.messages.invalidStatus'))
     return
   }
 
@@ -1219,20 +1244,20 @@ async function handleToggleService(forward) {
 
     if (response.code === 0) {
       await loadData(false)
-      setFeedback('success', targetState ? '服务变更已提交' : '暂停请求已提交')
+      setFeedback('success', targetState ? t('runtime.forward.messages.serviceChanged') : t('runtime.forward.messages.servicePaused'))
       return
     }
 
     forwards.value = forwards.value.map(item =>
       item.id === forward.id ? { ...item, serviceRunning: !targetState } : item
     )
-    setFeedback('error', response.msg || '操作失败')
+    setFeedback('error', translateMessage(response.msg, 'runtime.forward.messages.actionFailed'))
   } catch (error) {
-    console.error('切换转发服务失败:', error)
+    console.error('Failed to toggle forward service:', error)
     forwards.value = forwards.value.map(item =>
       item.id === forward.id ? { ...item, serviceRunning: !targetState } : item
     )
-    setFeedback('error', '网络错误，操作失败')
+    setFeedback('error', t('runtime.forward.messages.networkActionFailed'))
   }
 }
 
@@ -1251,13 +1276,13 @@ async function confirmDelete() {
     const response = await deleteForward(forwardToDelete.value.id)
     if (response.code === 0) {
       deleteModalOpen.value = false
-      setFeedback('success', '删除成功')
+      setFeedback('success', t('runtime.forward.messages.deleted'))
       await loadData(true)
       return
     }
 
     const shouldForceDelete = window.confirm(
-      `常规删除失败：${response.msg || '删除失败'}\n\n是否需要强制删除？\n\n⚠️ 注意：强制删除不会去验证节点端是否已经删除对应的转发服务。`
+      buildForceDeleteConfirmMessage(translateMessage(response.msg, 'runtime.forward.messages.deleteFailed'))
     )
 
     if (!shouldForceDelete) {
@@ -1267,17 +1292,25 @@ async function confirmDelete() {
     const forceResponse = await forceDeleteForward(forwardToDelete.value.id)
     if (forceResponse.code === 0) {
       deleteModalOpen.value = false
-      setFeedback('success', '强制删除成功')
+      setFeedback('success', t('runtime.forward.messages.forceDeleted'))
       await loadData(true)
     } else {
-      setFeedback('error', forceResponse.msg || '强制删除失败')
+      setFeedback('error', translateMessage(forceResponse.msg, 'runtime.forward.messages.forceDeleteFailed'))
     }
   } catch (error) {
-    console.error('删除转发失败:', error)
-    setFeedback('error', '删除失败')
+    console.error('Failed to delete forward:', error)
+    setFeedback('error', t('runtime.forward.messages.deleteFailed'))
   } finally {
     deleteLoading.value = false
   }
+}
+
+function buildForceDeleteConfirmMessage(message) {
+  return [
+    t('runtime.forward.deleteModal.forceDeleteIntro', { message }),
+    t('runtime.forward.deleteModal.forceDeleteQuestion'),
+    t('runtime.forward.deleteModal.forceDeleteWarning')
+  ].join('\n\n')
 }
 
 function buildDiagnosisFallback(forward, title, message) {
@@ -1308,13 +1341,22 @@ async function openDiagnosisModal(forward) {
     if (response.code === 0) {
       diagnosisResult.value = response.data
     } else {
-      setFeedback('error', response.msg || '诊断失败')
-      diagnosisResult.value = buildDiagnosisFallback(forward, '诊断失败', response.msg || '诊断过程中发生错误')
+      const diagnosisMessage = translateMessage(response.msg, 'runtime.forward.messages.diagnosisFailed')
+      setFeedback('error', diagnosisMessage)
+      diagnosisResult.value = buildDiagnosisFallback(
+        forward,
+        t('runtime.forward.messages.diagnosisFailed'),
+        translateMessage(response.msg, 'runtime.forward.messages.diagnosisProcessingFailed')
+      )
     }
   } catch (error) {
-    console.error('诊断转发失败:', error)
-    setFeedback('error', '网络错误，诊断失败')
-    diagnosisResult.value = buildDiagnosisFallback(forward, '网络错误', '无法连接到服务器')
+    console.error('Failed to diagnose forward:', error)
+    setFeedback('error', t('runtime.forward.messages.diagnosisNetworkFailed'))
+    diagnosisResult.value = buildDiagnosisFallback(
+      forward,
+      t('runtime.forward.messages.diagnosisNetworkFailed'),
+      t('runtime.forward.messages.unableConnectServer')
+    )
   } finally {
     diagnosisLoading.value = false
   }
@@ -1365,6 +1407,28 @@ function formatRemoteAddress(addressString) {
   return `${addresses[0]} (+${addresses.length - 1})`
 }
 
+function formatTunnelReference(id) {
+  return t('runtime.forward.references.tunnel', { id })
+}
+
+function formatNodeReference(id) {
+  return t('runtime.forward.references.node', { id })
+}
+
+function formatDiagnosisNodeMeta(result) {
+  const nodeRef = formatNodeReference(result?.nodeId ?? '-')
+  const nodeName = String(result?.nodeName ?? '').trim()
+
+  if (!nodeName || nodeName === '-') {
+    return nodeRef
+  }
+
+  return t('runtime.forward.diagnosis.nodeMeta', {
+    name: nodeName,
+    node: nodeRef
+  })
+}
+
 function hasMultipleAddresses(addressString) {
   return String(addressString || '')
     .split(',')
@@ -1372,13 +1436,13 @@ function hasMultipleAddresses(addressString) {
     .filter(Boolean).length > 1
 }
 
-async function copyToClipboard(text, label = '内容') {
+async function copyToClipboard(text, label = '') {
   try {
     await navigator.clipboard.writeText(text)
-    setFeedback('success', `${label}已复制`)
+    setFeedback('success', t('runtime.forward.messages.contentCopied', { label }))
   } catch (error) {
-    console.error('复制失败:', error)
-    setFeedback('error', '复制失败：HTTP 下无法复制，需 HTTPS/反代')
+    console.error('Copy failed:', error)
+    setFeedback('error', t('runtime.forward.messages.copyFailedHttp'))
   }
 }
 
@@ -1417,7 +1481,7 @@ function showAddressModal({ value, port = null, title }) {
     address,
     copying: false
   }))
-  addressModalTitle.value = `${title} (${addresses.length})`
+  addressModalTitle.value = t('runtime.forward.addressModal.titleWithCount', { title, count: addresses.length })
   addressModalOpen.value = true
 }
 
@@ -1426,7 +1490,7 @@ async function copyAddress(item) {
     entry.id === item.id ? { ...entry, copying: true } : entry
   )
   try {
-    await copyToClipboard(item.address, '地址')
+    await copyToClipboard(item.address, t('runtime.forward.card.targetLabel'))
   } finally {
     addressList.value = addressList.value.map(entry =>
       entry.id === item.id ? { ...entry, copying: false } : entry
@@ -1438,7 +1502,7 @@ async function copyAllAddresses() {
   if (!addressList.value.length) {
     return
   }
-  await copyToClipboard(addressList.value.map(item => item.address).join('\n'), '所有地址')
+  await copyToClipboard(addressList.value.map(item => item.address).join('\n'), t('runtime.forward.actions.copyAll'))
 }
 
 function openExportModal() {
@@ -1465,7 +1529,7 @@ function getExportSource() {
 
 async function executeExport() {
   if (!selectedTunnelForExport.value) {
-    setFeedback('error', '请选择要导出的隧道')
+    setFeedback('error', t('runtime.forward.messages.selectExportTunnel'))
     return
   }
 
@@ -1473,21 +1537,21 @@ async function executeExport() {
   try {
     const items = getExportSource()
     if (!items.length) {
-      setFeedback('error', '所选隧道没有转发数据')
+      setFeedback('error', t('runtime.forward.messages.noExportData'))
       return
     }
 
     exportData.value = items.map(item => `${item.remoteAddr}|${item.name}|${item.inPort}`).join('\n')
   } catch (error) {
-    console.error('导出转发失败:', error)
-    setFeedback('error', '导出失败')
+    console.error('Failed to export forwards:', error)
+    setFeedback('error', t('runtime.forward.messages.exportFailed'))
   } finally {
     exportLoading.value = false
   }
 }
 
 async function copyExportData() {
-  await copyToClipboard(exportData.value, '转发数据')
+  await copyToClipboard(exportData.value, t('runtime.forward.exportModal.title'))
 }
 
 function openImportModal() {
@@ -1503,12 +1567,12 @@ function appendImportResult(result) {
 
 async function executeImport() {
   if (!importData.value.trim()) {
-    setFeedback('error', '请输入要导入的数据')
+    setFeedback('error', t('runtime.forward.messages.enterImportData'))
     return
   }
 
   if (!selectedTunnelForImport.value) {
-    setFeedback('error', '请选择要导入的隧道')
+    setFeedback('error', t('runtime.forward.messages.selectImportTunnel'))
     return
   }
 
@@ -1529,7 +1593,7 @@ async function executeImport() {
         appendImportResult({
           line,
           success: false,
-          message: '格式错误：至少需要包含目标地址和转发名称'
+          message: t('runtime.forward.messages.importFormatError')
         })
         continue
       }
@@ -1542,7 +1606,7 @@ async function executeImport() {
         appendImportResult({
           line,
           success: false,
-          message: '目标地址和转发名称不能为空'
+          message: t('runtime.forward.messages.importRequiredFields')
         })
         continue
       }
@@ -1557,7 +1621,7 @@ async function executeImport() {
         appendImportResult({
           line,
           success: false,
-          message: '目标地址格式错误，应为 host:port，多个地址用逗号分隔'
+          message: t('runtime.forward.messages.importAddressInvalid')
         })
         continue
       }
@@ -1569,7 +1633,7 @@ async function executeImport() {
           appendImportResult({
             line,
             success: false,
-            message: '入口端口格式错误，应为 1-65535 之间的数字'
+            message: t('runtime.forward.messages.importPortInvalid')
           })
           continue
         }
@@ -1589,31 +1653,31 @@ async function executeImport() {
           appendImportResult({
             line,
             success: true,
-            message: '创建成功',
+            message: t('runtime.forward.messages.importCreateSuccess'),
             forwardName: name
           })
         } else {
           appendImportResult({
             line,
             success: false,
-            message: response.msg || '创建失败'
+            message: translateMessage(response.msg, 'runtime.forward.messages.importCreateFailed')
           })
         }
       } catch (error) {
-        console.error('导入创建失败:', error)
+        console.error('Failed to create imported forward:', error)
         appendImportResult({
           line,
           success: false,
-          message: '网络错误，创建失败'
+          message: t('runtime.forward.messages.importNetworkCreateFailed')
         })
       }
     }
 
-    setFeedback('success', '导入执行完成')
+    setFeedback('success', t('runtime.forward.messages.importCompleted'))
     await loadData(false)
   } catch (error) {
-    console.error('导入转发失败:', error)
-    setFeedback('error', '导入过程中发生错误')
+    console.error('Failed to import forwards:', error)
+    setFeedback('error', t('runtime.forward.messages.importFailed'))
   } finally {
     importLoading.value = false
   }
@@ -1622,13 +1686,13 @@ async function executeImport() {
 function getStatusMeta(status) {
   switch (Number(status)) {
     case 1:
-      return { text: '正常', className: 'tag-success' }
+      return { text: t('runtime.forward.status.normal'), className: 'tag-success' }
     case 0:
-      return { text: '暂停', className: 'tag-warning' }
+      return { text: t('runtime.forward.status.paused'), className: 'tag-warning' }
     case -1:
-      return { text: '异常', className: 'tag-danger' }
+      return { text: t('runtime.forward.status.error'), className: 'tag-danger' }
     default:
-      return { text: '未知', className: 'tag-muted' }
+      return { text: t('runtime.forward.status.unknown'), className: 'tag-muted' }
   }
 }
 
@@ -1639,16 +1703,16 @@ function getRuntimeMeta(forward) {
 
   switch (Number(forward.runtimeStatus)) {
     case 0:
-      return { text: '待下发', className: 'tag-warning' }
+      return { text: t('runtime.forward.runtimeStatus.pending'), className: 'tag-warning' }
     case 1:
-      return { text: '执行中', className: 'tag-primary' }
+      return { text: t('runtime.forward.runtimeStatus.running'), className: 'tag-primary' }
     case 2:
       return {
-        text: forward.runtimeBackend === 'gost' ? '已同步' : '已应用',
+        text: forward.runtimeBackend === 'gost' ? t('runtime.forward.runtimeStatus.synced') : t('runtime.forward.runtimeStatus.applied'),
         className: 'tag-success'
       }
     case 3:
-      return { text: '同步失败', className: 'tag-danger' }
+      return { text: t('runtime.forward.runtimeStatus.failed'), className: 'tag-danger' }
     default:
       return null
   }
@@ -1659,13 +1723,13 @@ function getRuntimeSummary(forward) {
     return ''
   }
   if (forward.runtimeMessage) {
-    return forward.runtimeMessage
+    return translateLiteral(forward.runtimeMessage) || forward.runtimeMessage
   }
   switch (Number(forward.runtimeStatus)) {
     case 0:
-      return '运行时任务已入队，等待执行器完成。'
+      return t('runtime.forward.runtimeStatus.queuedSummary')
     case 1:
-      return '运行时任务正在执行。'
+      return t('runtime.forward.runtimeStatus.runningSummary')
     default:
       return ''
   }
@@ -1674,26 +1738,28 @@ function getRuntimeSummary(forward) {
 function getStrategyMeta(strategy) {
   switch (strategy) {
     case 'fifo':
-      return { text: '主备', className: 'tag-primary' }
+      return { text: t('runtime.forward.strategy.fifo'), className: 'tag-primary' }
     case 'round':
-      return { text: '轮询', className: 'tag-success' }
+      return { text: t('runtime.forward.strategy.round'), className: 'tag-success' }
     case 'rand':
-      return { text: '随机', className: 'tag-warning' }
+      return { text: t('runtime.forward.strategy.rand'), className: 'tag-warning' }
+    case 'hash':
+      return { text: t('runtime.forward.strategy.hash'), className: 'tag-primary' }
     default:
-      return { text: '未知', className: 'tag-muted' }
+      return { text: t('runtime.forward.strategy.unknown'), className: 'tag-muted' }
   }
 }
 
 function getQualityMeta(averageTime, packetLoss) {
   if (averageTime == null || packetLoss == null) {
-    return { text: '未知' }
+    return { text: t('runtime.forward.quality.unknown') }
   }
-  if (averageTime < 30 && packetLoss === 0) return { text: '优秀' }
-  if (averageTime < 50 && packetLoss === 0) return { text: '很好' }
-  if (averageTime < 100 && packetLoss < 1) return { text: '良好' }
-  if (averageTime < 150 && packetLoss < 2) return { text: '一般' }
-  if (averageTime < 200 && packetLoss < 5) return { text: '较差' }
-  return { text: '很差' }
+  if (averageTime < 30 && packetLoss === 0) return { text: t('runtime.forward.quality.excellent') }
+  if (averageTime < 50 && packetLoss === 0) return { text: t('runtime.forward.quality.veryGood') }
+  if (averageTime < 100 && packetLoss < 1) return { text: t('runtime.forward.quality.good') }
+  if (averageTime < 150 && packetLoss < 2) return { text: t('runtime.forward.quality.fair') }
+  if (averageTime < 200 && packetLoss < 5) return { text: t('runtime.forward.quality.poor') }
+  return { text: t('runtime.forward.quality.veryPoor') }
 }
 
 function formatFlow(value) {
@@ -1756,11 +1822,13 @@ async function reorderDirectForwards(activeId, overId) {
     })
 
     if (response.code !== 0) {
-      setFeedback('error', `保存排序失败：${response.msg || '未知错误'}`)
+      setFeedback('error', t('runtime.forward.messages.orderSaveFailed', {
+        message: translateMessage(response.msg, 'runtime.forward.messages.unknownError')
+      }))
     }
   } catch (error) {
-    console.error('保存转发排序失败:', error)
-    setFeedback('error', '保存排序失败，请重试')
+    console.error('Failed to save forward order:', error)
+    setFeedback('error', t('runtime.forward.messages.orderSaveRetry'))
   }
 }
 

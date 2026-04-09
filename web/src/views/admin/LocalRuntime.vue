@@ -2,37 +2,35 @@
   <div class="local-runtime-page">
     <section class="hero-card">
       <div class="hero-copy">
-        <p class="eyebrow">Stateless Runtime</p>
-        <h2>Local Runtime / Ansible</h2>
+        <p class="eyebrow">{{ t('runtime.localRuntime.heroEyebrow') }}</p>
+        <h2>{{ t('runtime.localRuntime.title') }}</h2>
         <p class="hero-text">
-          This page owns the panel-host Ansible executor only. It is the stateless runtime path for panel-side
-          forwarding and does not require a persistent NodeX control-plane or Node-Agent connection.
+          {{ t('runtime.localRuntime.heroTextPrimary') }}
         </p>
         <p class="hero-text">
-          The recommended backend is <code>nftables_ansible</code>. <code>iptables_ansible</code> remains available as a
-          legacy compatibility path.
+          {{ t('runtime.localRuntime.heroTextSecondary') }}
         </p>
       </div>
       <div class="hero-actions">
-        <router-link class="btn btn-secondary" to="/admin/forward/ansible-machines">Ansible Machines</router-link>
-        <router-link class="btn btn-secondary" to="/admin/forward/nodex">NodeX Runtime</router-link>
-        <router-link class="btn btn-secondary" to="/admin/forward/agents">NodeX Agents</router-link>
+        <router-link class="btn btn-secondary" to="/admin/forward/ansible-machines">{{ t('forwardSuite.nav.ansibleMachines') }}</router-link>
+        <router-link class="btn btn-secondary" to="/admin/forward/nodex">{{ t('forwardSuite.nav.nodeXRuntime') }}</router-link>
+        <router-link class="btn btn-secondary" to="/admin/forward/agents">{{ t('forwardSuite.nav.nodeXAgents') }}</router-link>
         <button class="btn btn-secondary" :disabled="jobsLoading || statusLoading" @click="refreshAll">
-          {{ jobsLoading || statusLoading ? 'Refreshing...' : 'Refresh' }}
+          {{ jobsLoading || statusLoading ? t('runtime.localRuntime.refreshLoading') : t('common.actions.refresh') }}
         </button>
         <button class="btn btn-primary" :disabled="saving" @click="saveLocalConfig">
-          {{ saving ? 'Saving...' : 'Save And Activate Local Runtime' }}
+          {{ saving ? t('runtime.localRuntime.saveLoading') : t('runtime.localRuntime.saveActivate') }}
         </button>
       </div>
     </section>
 
     <section :class="['mode-banner', localModeActive ? 'banner-success' : 'banner-warning']">
-      <strong>{{ localModeActive ? 'Local runtime is active' : 'Local runtime is configured as standby' }}</strong>
+      <strong>{{ localModeActive ? t('runtime.localRuntime.activeBannerTitle') : t('runtime.localRuntime.standbyBannerTitle') }}</strong>
       <span>
         {{
           localModeActive
-            ? `Forward jobs currently use ${localBackendLabel(selectedLocalBackend)}. SSH transport and privilege escalation are resolved from this Ansible runtime config.`
-            : 'NodeX/gost remains active globally. You can still stage and validate the local Ansible runtime here before switching back.'
+            ? t('runtime.localRuntime.activeBannerText', { backend: localBackendLabel(selectedLocalBackend) })
+            : t('runtime.localRuntime.standbyBannerText')
         }}
       </span>
     </section>
@@ -40,11 +38,10 @@
     <section class="panel-card">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Configuration</p>
-          <h3>Panel-Host Ansible Executor</h3>
+          <p class="eyebrow">{{ t('runtime.localRuntime.configEyebrow') }}</p>
+          <h3>{{ t('runtime.localRuntime.configTitle') }}</h3>
           <p class="section-copy">
-            Ansible mode is stateless: the panel stores execution-node identity on tunnel and forward records, while
-            inventory, playbooks, sudo and SSH behavior live here.
+            {{ t('runtime.localRuntime.configCopy') }}
           </p>
         </div>
       </div>
@@ -60,7 +57,7 @@
           <div class="backend-head">
             <strong>{{ option.label }}</strong>
             <span :class="['backend-chip', option.recommended ? 'backend-chip-primary' : 'backend-chip-muted']">
-              {{ option.recommended ? 'Recommended' : 'Legacy' }}
+              {{ option.recommended ? t('runtime.localRuntime.recommended') : t('runtime.localRuntime.legacy') }}
             </span>
           </div>
           <p>{{ option.description }}</p>
@@ -70,50 +67,48 @@
 
       <div class="runtime-local-head">
         <div>
-          <p class="eyebrow">Executor</p>
+          <p class="eyebrow">{{ t('runtime.localRuntime.executorEyebrow') }}</p>
           <h4>{{ localBackendLabel(selectedLocalBackend) }}</h4>
           <p class="hint">
-            Saving here writes <code>forward.runtime_backend={{ selectedLocalBackend }}</code>,
-            <code>forward.runtime.ansible.backend={{ selectedLocalBackend }}</code> and
-            <code>forward.runtime.nodex_mode=false</code>.
+            {{ t('runtime.localRuntime.executorHint', { backend: selectedLocalBackend }) }}
           </p>
         </div>
         <button class="btn btn-secondary btn-sm" :disabled="saving" @click="applyDefaultRuntimeAnsibleConfig">
-          Use backend defaults
+          {{ t('runtime.localRuntime.defaultsAction') }}
         </button>
       </div>
 
       <div class="form-grid ansible-form-grid">
         <div class="form-group">
-          <label for="ansible-inventory">Inventory</label>
+          <label for="ansible-inventory">{{ t('runtime.localRuntime.fields.inventory') }}</label>
           <input id="ansible-inventory" v-model.trim="runtimeAnsibleForm.inventory" type="text" placeholder="config/deploy/ansible/inventory.ini" />
         </div>
         <div class="form-group">
-          <label for="ansible-apply-playbook">Apply playbook</label>
+          <label for="ansible-apply-playbook">{{ t('runtime.localRuntime.fields.applyPlaybook') }}</label>
           <input id="ansible-apply-playbook" v-model.trim="runtimeAnsibleForm.playbookApply" type="text" :placeholder="defaultRuntimeAnsibleConfig.playbookApply" />
         </div>
         <div class="form-group">
-          <label for="ansible-remove-playbook">Remove playbook</label>
+          <label for="ansible-remove-playbook">{{ t('runtime.localRuntime.fields.removePlaybook') }}</label>
           <input id="ansible-remove-playbook" v-model.trim="runtimeAnsibleForm.playbookRemove" type="text" :placeholder="defaultRuntimeAnsibleConfig.playbookRemove" />
         </div>
         <div class="form-group">
-          <label for="ansible-command">Command</label>
+          <label for="ansible-command">{{ t('runtime.localRuntime.fields.command') }}</label>
           <input id="ansible-command" v-model.trim="runtimeAnsibleForm.command" type="text" placeholder="ansible-playbook" />
         </div>
         <div class="form-group">
-          <label for="ansible-working-dir">Working dir</label>
+          <label for="ansible-working-dir">{{ t('runtime.localRuntime.fields.workingDir') }}</label>
           <input id="ansible-working-dir" v-model.trim="runtimeAnsibleForm.workingDir" type="text" placeholder="config/deploy/ansible" />
         </div>
         <div class="form-group">
-          <label for="ansible-target-pattern">Target pattern</label>
+          <label for="ansible-target-pattern">{{ t('runtime.localRuntime.fields.targetPattern') }}</label>
           <input id="ansible-target-pattern" v-model.trim="runtimeAnsibleForm.targetPattern" type="text" placeholder="{{node.host}}" />
         </div>
         <div class="form-group">
-          <label for="ansible-timeout-seconds">Timeout (seconds)</label>
+          <label for="ansible-timeout-seconds">{{ t('runtime.localRuntime.fields.timeoutSeconds') }}</label>
           <input id="ansible-timeout-seconds" v-model.number="runtimeAnsibleForm.timeoutSeconds" type="number" min="1" placeholder="120" />
         </div>
         <div class="form-group">
-          <label for="ansible-config-path">ANSIBLE_CONFIG</label>
+          <label for="ansible-config-path">{{ t('runtime.localRuntime.fields.ansibleConfig') }}</label>
           <input id="ansible-config-path" v-model.trim="runtimeAnsibleForm.ansibleConfig" type="text" placeholder="config/deploy/ansible/ansible.cfg" />
         </div>
       </div>
@@ -121,27 +116,27 @@
       <div class="form-group checkbox-group">
         <label class="checkbox-label">
           <input v-model="runtimeAnsibleForm.become" type="checkbox" />
-          <span>Use sudo / become on the execution node</span>
+          <span>{{ t('runtime.localRuntime.fields.useBecome') }}</span>
         </label>
       </div>
 
       <div class="form-grid ansible-form-grid ansible-json-grid">
         <div class="form-group">
-          <label for="ansible-extra-vars-json">Extra vars JSON</label>
+          <label for="ansible-extra-vars-json">{{ t('runtime.localRuntime.fields.extraVarsJson') }}</label>
           <textarea id="ansible-extra-vars-json" v-model="runtimeAnsibleForm.extraVarsJson" rows="6" placeholder='{"change_window":"maintenance"}'></textarea>
-          <p class="hint">Backend-specific fields such as firewall driver are injected automatically by the backend.</p>
+          <p class="hint">{{ t('runtime.localRuntime.extraVarsHint') }}</p>
         </div>
         <div class="form-group">
-          <label for="ansible-environment-json">Environment JSON</label>
+          <label for="ansible-environment-json">{{ t('runtime.localRuntime.fields.environmentJson') }}</label>
           <textarea id="ansible-environment-json" v-model="runtimeAnsibleForm.environmentJson" rows="6" placeholder='{"ANSIBLE_HOST_KEY_CHECKING":"False"}'></textarea>
-          <p class="hint">Extra process environment variables for the panel-host executor.</p>
+          <p class="hint">{{ t('runtime.localRuntime.environmentHint') }}</p>
         </div>
       </div>
 
       <div class="form-group">
-        <label>Generated runtime JSON</label>
+        <label>{{ t('runtime.localRuntime.fields.generatedJson') }}</label>
         <textarea :value="runtimeConfigPreview" rows="8" class="runtime-config-preview" readonly></textarea>
-        <p class="hint">The JSON payload is generated from the structured fields above and stored in <code>forward.runtime.ansible.config</code>.</p>
+        <p class="hint">{{ t('runtime.localRuntime.generatedHint') }}</p>
       </div>
 
       <p v-if="validationError" class="form-error">{{ validationError }}</p>
@@ -150,105 +145,106 @@
     <section class="panel-card">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Local Probe</p>
-          <h3>Executor Reachability And Runtime Readiness</h3>
+          <p class="eyebrow">{{ t('runtime.localRuntime.probeEyebrow') }}</p>
+          <h3>{{ t('runtime.localRuntime.probeTitle') }}</h3>
         </div>
         <div class="section-actions">
           <button class="btn btn-secondary btn-sm" :disabled="statusLoading" @click="fetchLocalStatus">
-            {{ statusLoading ? 'Loading...' : 'Refresh status' }}
+            {{ statusLoading ? t('runtime.shared.loading') : t('runtime.shared.refreshStatus') }}
           </button>
           <button class="btn btn-secondary btn-sm" :disabled="doctorRunning" @click="runLocalDoctor">
-            {{ doctorRunning ? 'Running...' : 'Run doctor' }}
+            {{ doctorRunning ? t('runtime.shared.runningDoctor') : t('runtime.shared.runDoctor') }}
           </button>
         </div>
       </div>
 
-      <div v-if="statusLoading" class="state-card">Loading local runtime status...</div>
+      <div v-if="statusLoading" class="state-card">{{ t('runtime.localRuntime.loadingStatus') }}</div>
       <div v-else-if="statusError" class="state-card state-error">{{ statusError }}</div>
       <div v-else-if="statusSummary" class="status-grid">
         <article class="status-card">
-          <p class="metric-label">Panel Config</p>
-          <p class="metric-value">{{ localModeActive ? 'Local runtime active' : 'Standby config' }}</p>
-          <p class="metric-detail">Backend: {{ localBackendLabel(actualBackend) }}</p>
-          <p class="metric-detail">Preferred local backend: {{ localBackendLabel(selectedLocalBackend) }}</p>
-          <p class="metric-detail">Attachment: {{ statusSummary.attachment?.model || '-' }}</p>
+          <p class="metric-label">{{ t('runtime.shared.panelConfig') }}</p>
+          <p class="metric-value">{{ localModeActive ? t('runtime.localRuntime.cards.localActiveValue') : t('runtime.localRuntime.cards.standbyValue') }}</p>
+          <p class="metric-detail">{{ t('runtime.localRuntime.cards.backend') }}: {{ localBackendLabel(actualBackend) }}</p>
+          <p class="metric-detail">{{ t('runtime.localRuntime.cards.preferredLocalBackend') }}: {{ localBackendLabel(selectedLocalBackend) }}</p>
+          <p class="metric-detail">{{ t('runtime.localRuntime.cards.attachment') }}: {{ statusSummary.attachment?.model || '-' }}</p>
         </article>
         <article class="status-card">
-          <p class="metric-label">Reachability</p>
-          <p class="metric-value">{{ statusSummary.reachability?.ready ? 'Reachable' : 'Not ready' }}</p>
-          <p class="metric-detail">{{ statusSummary.reachability?.reason || '-' }}</p>
-          <p class="metric-detail">Runtime ready: {{ statusSummary.runtimeReady?.ready ? 'Yes' : 'No' }}</p>
-          <p class="metric-detail">{{ statusSummary.runtimeReady?.reason || '-' }}</p>
+          <p class="metric-label">{{ t('runtime.shared.reachability') }}</p>
+          <p class="metric-value">{{ statusSummary.reachability?.ready ? t('runtime.shared.reachable') : t('runtime.shared.notReady') }}</p>
+          <p class="metric-detail">{{ translateRuntimeText(statusSummary.reachability?.reason) }}</p>
+          <p class="metric-detail">{{ t('runtime.localRuntime.cards.runtimeReady') }}: {{ statusSummary.runtimeReady?.ready ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
+          <p class="metric-detail">{{ translateRuntimeText(statusSummary.runtimeReady?.reason) }}</p>
         </article>
         <article class="status-card">
-          <p class="metric-label">Executor</p>
+          <p class="metric-label">{{ t('runtime.shared.executor') }}</p>
           <p class="metric-value">{{ statusSummary.localAnsible?.command || runtimeAnsibleForm.command || 'ansible-playbook' }}</p>
-          <p class="metric-detail">Firewall driver: {{ statusSummary.localAnsible?.firewallDriver || firewallDriverLabel(selectedLocalBackend) }}</p>
-          <p class="metric-detail">Command found: {{ statusSummary.localAnsible?.commandFound ? 'Yes' : 'No' }}</p>
-          <p class="metric-detail">Become: {{ statusSummary.localAnsible?.become ? 'Yes' : 'No' }}</p>
+          <p class="metric-detail">{{ t('runtime.localRuntime.cards.firewallDriver') }}: {{ statusSummary.localAnsible?.firewallDriver || firewallDriverLabel(selectedLocalBackend) }}</p>
+          <p class="metric-detail">{{ t('runtime.localRuntime.cards.commandFound') }}: {{ statusSummary.localAnsible?.commandFound ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
+          <p class="metric-detail">{{ t('runtime.localRuntime.cards.become') }}: {{ statusSummary.localAnsible?.become ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
         </article>
         <article class="status-card">
-          <p class="metric-label">Files</p>
-          <p class="metric-detail">Inventory: {{ statusSummary.localAnsible?.inventoryExists ? 'Present' : 'Missing' }}</p>
-          <p class="metric-detail">Apply playbook: {{ statusSummary.localAnsible?.applyPlaybookExists ? 'Present' : 'Missing' }}</p>
-          <p class="metric-detail">Remove playbook: {{ statusSummary.localAnsible?.removePlaybookExists ? 'Present' : 'Missing' }}</p>
-          <p class="metric-detail">Working dir: {{ statusSummary.localAnsible?.workingDirExists ? 'Present' : 'Missing' }}</p>
+          <p class="metric-label">{{ t('runtime.shared.files') }}</p>
+          <p class="metric-detail">{{ t('runtime.localRuntime.cards.inventory') }}: {{ statusSummary.localAnsible?.inventoryExists ? t('runtime.shared.present') : t('runtime.shared.missing') }}</p>
+          <p class="metric-detail">{{ t('runtime.localRuntime.cards.applyPlaybook') }}: {{ statusSummary.localAnsible?.applyPlaybookExists ? t('runtime.shared.present') : t('runtime.shared.missing') }}</p>
+          <p class="metric-detail">{{ t('runtime.localRuntime.cards.removePlaybook') }}: {{ statusSummary.localAnsible?.removePlaybookExists ? t('runtime.shared.present') : t('runtime.shared.missing') }}</p>
+          <p class="metric-detail">{{ t('runtime.localRuntime.cards.workingDir') }}: {{ statusSummary.localAnsible?.workingDirExists ? t('runtime.shared.present') : t('runtime.shared.missing') }}</p>
         </article>
       </div>
-      <div v-else class="state-card">No local runtime status loaded yet.</div>
+      <div v-else class="state-card">{{ t('runtime.localRuntime.noStatus') }}</div>
 
-      <div v-if="statusSummary?.summary" class="summary-card">{{ statusSummary.summary }}</div>
+      <div v-if="statusSummary?.summary" class="summary-card">{{ translateRuntimeText(statusSummary.summary) }}</div>
       <div v-if="statusSummary?.warnings?.length" class="warning-list">
-        <p class="metric-label">Warnings</p>
-        <code v-for="warning in statusSummary.warnings" :key="warning">{{ warning }}</code>
+        <p class="metric-label">{{ t('runtime.shared.warnings') }}</p>
+        <code v-for="warning in statusSummary.warnings" :key="warning">{{ translateRuntimeText(warning) }}</code>
       </div>
       <div class="command-block">
-        <p class="metric-label">PowerShell</p>
+        <p class="metric-label">{{ t('runtime.shared.powerShell') }}</p>
         <code v-for="command in displayedCommands.powerShell" :key="`ps-${command}`">{{ command }}</code>
-        <p class="metric-label">Bash</p>
+        <p class="metric-label">{{ t('runtime.shared.bash') }}</p>
         <code v-for="command in displayedCommands.bash" :key="`bash-${command}`">{{ command }}</code>
-        <p class="metric-label">Bootstrap / Verify</p>
+        <p class="metric-label">{{ t('runtime.shared.bootstrapVerify') }}</p>
         <code v-for="command in displayedCommands.upgrade" :key="`verify-${command}`">{{ command }}</code>
-        <p class="metric-label">References</p>
+        <p class="metric-label">{{ t('runtime.shared.references') }}</p>
         <code v-for="reference in displayedCommands.references" :key="reference">{{ reference }}</code>
       </div>
       <div class="doctor-output">
-        <p class="metric-label">Doctor Output</p>
-        <pre>{{ doctorOutput || 'Doctor has not been executed yet.' }}</pre>
+        <p class="metric-label">{{ t('runtime.shared.doctorOutput') }}</p>
+        <pre>{{ doctorOutput || t('runtime.shared.doctorNotExecuted') }}</pre>
       </div>
     </section>
 
     <section class="panel-card">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Runtime Jobs</p>
-          <h3>Latest {{ selectedLocalBackend }} Jobs</h3>
+          <p class="eyebrow">{{ t('runtime.localRuntime.jobsEyebrow') }}</p>
+          <h3>{{ t('runtime.localRuntime.latestJobs', { backend: localBackendLabel(selectedLocalBackend) }) }}</h3>
         </div>
       </div>
 
-      <div v-if="jobsLoading" class="state-card">Loading runtime jobs...</div>
+      <div v-if="jobsLoading" class="state-card">{{ t('runtime.localRuntime.loadingJobs') }}</div>
       <div v-else-if="jobs.length" class="job-list">
         <article v-for="job in jobs" :key="job.id" class="job-item">
           <div class="job-main">
             <div>
               <strong>#{{ job.id }} {{ job.action }}</strong>
-              <p class="job-meta">forward {{ job.forwardId || '-' }} / tunnel {{ job.tunnelId || '-' }} / node {{ job.nodeId || '-' }}</p>
+              <p class="job-meta">{{ t('runtime.localRuntime.jobMeta', { forwardId: job.forwardId || '-', tunnelId: job.tunnelId || '-', nodeId: job.nodeId || '-' }) }}</p>
             </div>
             <div class="job-side">
               <span :class="['status-chip', `status-${job.status}`]">{{ runtimeJobStatusLabel(job.status) }}</span>
               <span class="job-time">{{ formatJobTime(job) }}</span>
             </div>
           </div>
-          <code v-if="job.message" class="job-message">{{ job.message }}</code>
+          <code v-if="job.message" class="job-message">{{ translateRuntimeText(job.message) }}</code>
         </article>
       </div>
-      <div v-else class="state-card">No local runtime jobs yet.</div>
+      <div v-else class="state-card">{{ t('runtime.localRuntime.noJobs') }}</div>
     </section>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useAppI18n } from '@/composables/useAppI18n'
 import { getLocalRuntimeStatus, getSystemConfig, listForwardRuntimeJobs, runLocalRuntimeDoctor, setSystemConfig } from '@/api/admin'
 
 const runtimeNodeXModeKey = 'forward.runtime.nodex_mode'
@@ -267,36 +263,38 @@ const runtimeLegacyAnsibleRemovePlaybookKey = 'forward.ansible.playbook_remove'
 const runtimeLegacyAnsibleBecomeKey = 'forward.ansible.become'
 const runtimeLegacyAnsibleExtraVarsKey = 'forward.ansible.extra_vars_json'
 
-const localBackendOptions = Object.freeze([
+const { t, formatDateTime, translateLiteral } = useAppI18n()
+
+const localBackendOptions = computed(() => ([
   {
     value: 'nftables_ansible',
-    label: 'nftables / Ansible',
-    description: 'Modern Linux hosts should prefer nftables.',
+    label: t('runtime.localRuntime.backends.nftables.label'),
+    description: t('runtime.localRuntime.backends.nftables.description'),
     applyPlaybook: 'config/deploy/ansible/playbooks/forward_apply_nftables.yml',
     removePlaybook: 'config/deploy/ansible/playbooks/forward_remove_nftables.yml',
     recommended: true
   },
   {
     value: 'iptables_ansible',
-    label: 'iptables / Ansible',
-    description: 'Legacy compatibility for existing playbooks.',
+    label: t('runtime.localRuntime.backends.iptables.label'),
+    description: t('runtime.localRuntime.backends.iptables.description'),
     applyPlaybook: 'config/deploy/ansible/playbooks/forward_apply.yml',
     removePlaybook: 'config/deploy/ansible/playbooks/forward_remove.yml',
     recommended: false
   }
-])
+]))
 
 function normalizeLocalBackend(value) {
   const normalized = String(value ?? '').trim().toLowerCase()
-  return localBackendOptions.some(option => option.value === normalized) ? normalized : 'nftables_ansible'
+  return localBackendOptions.value.some(option => option.value === normalized) ? normalized : 'nftables_ansible'
 }
 
 function isLocalBackend(value) {
-  return localBackendOptions.some(option => option.value === String(value ?? '').trim().toLowerCase())
+  return localBackendOptions.value.some(option => option.value === String(value ?? '').trim().toLowerCase())
 }
 
 function getLocalBackendMeta(value) {
-  return localBackendOptions.find(option => option.value === normalizeLocalBackend(value)) || localBackendOptions[0]
+  return localBackendOptions.value.find(option => option.value === normalizeLocalBackend(value)) || localBackendOptions.value[0]
 }
 
 function firewallDriverLabel(value) {
@@ -391,25 +389,36 @@ function normalizeRuntimeAnsibleForm(source = {}) {
   }
 }
 
-function parseRuntimeJsonObject(value, label) {
+function translateRuntimeText(value, fallback = '-') {
+  const text = String(value ?? '').trim()
+  if (!text) return fallback
+  return translateLiteral(text)
+}
+
+function resolveRuntimeError(error, fallbackKey) {
+  return translateRuntimeText(error?.response?.data?.msg || error?.message, t(fallbackKey))
+}
+
+function parseRuntimeJsonObject(value, labelKey) {
   const trimmed = String(value ?? '').trim()
   if (!trimmed) return {}
+  const label = t(labelKey)
   let parsed
   try {
     parsed = JSON.parse(trimmed)
   } catch {
-    throw new Error(`${label} must be valid JSON`)
+    throw new Error(t('runtime.localRuntime.errors.invalidJson', { label }))
   }
   if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
-    throw new Error(`${label} must be a JSON object`)
+    throw new Error(t('runtime.localRuntime.errors.invalidObject', { label }))
   }
   return parsed
 }
 
 function buildRuntimeAnsiblePayload(source = runtimeAnsibleForm.value) {
   const form = normalizeRuntimeAnsibleForm(source)
-  const extraVars = parseRuntimeJsonObject(form.extraVarsJson, 'Extra vars JSON')
-  const environmentOverrides = parseRuntimeJsonObject(form.environmentJson, 'Environment JSON')
+  const extraVars = parseRuntimeJsonObject(form.extraVarsJson, 'runtime.localRuntime.fields.extraVarsJson')
+  const environmentOverrides = parseRuntimeJsonObject(form.environmentJson, 'runtime.localRuntime.fields.environmentJson')
   const environment = {}
   if (form.ansibleConfig) environment.ANSIBLE_CONFIG = form.ansibleConfig
   Object.entries(environmentOverrides).forEach(([key, value]) => {
@@ -458,20 +467,18 @@ function normalizeRuntimeJob(job) {
 
 function runtimeJobStatusLabel(status) {
   switch (Number(status)) {
-    case 0: return 'Pending'
-    case 1: return 'Running'
-    case 2: return 'Success'
-    case 3: return 'Failed'
-    default: return 'Unknown'
+    case 0: return t('runtime.shared.pending')
+    case 1: return t('runtime.shared.running')
+    case 2: return t('runtime.shared.success')
+    case 3: return t('runtime.shared.failed')
+    default: return t('runtime.shared.unknown')
   }
 }
 
 function formatJobTime(job) {
   const raw = job?.completedAt || job?.updatedAt || job?.createdAt
   if (!raw) return '-'
-  const time = new Date(raw)
-  if (Number.isNaN(time.getTime())) return String(raw)
-  return time.toLocaleString()
+  return formatDateTime(raw) || String(raw)
 }
 
 function safeParseObject(value) {
@@ -518,7 +525,7 @@ const runtimeConfigPreview = computed(() => {
   try {
     return JSON.stringify(buildRuntimeAnsiblePayload(runtimeAnsibleForm.value), null, 2)
   } catch (error) {
-    return `Invalid runtime config: ${error.message}`
+    return t('runtime.localRuntime.errors.invalidPreview', { message: error.message })
   }
 })
 
@@ -591,7 +598,7 @@ async function fetchLocalConfig() {
       if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('invalid')
       parsedPayload = parsed
     } catch {
-      validationError.value = 'Saved local runtime config is invalid. Defaults were loaded; save again to repair it.'
+      validationError.value = t('runtime.localRuntime.errors.savedConfigInvalid')
     }
   }
 
@@ -613,7 +620,7 @@ async function saveLocalConfig() {
     runtimeAnsibleForm.value = normalizeRuntimeAnsibleForm(runtimeAnsibleForm.value)
     ansiblePayload = buildRuntimeAnsiblePayload(runtimeAnsibleForm.value)
   } catch (error) {
-    validationError.value = error.message || 'Local runtime JSON is invalid'
+    validationError.value = error.message || t('runtime.localRuntime.errors.invalidRuntimeJson')
     return
   }
 
@@ -634,7 +641,7 @@ async function saveLocalConfig() {
     localModeActive.value = true
     await refreshAll()
   } catch (error) {
-    validationError.value = error.response?.data?.msg || error.message || 'Failed to save local runtime config'
+    validationError.value = resolveRuntimeError(error, 'runtime.localRuntime.errors.saveFailed')
   } finally {
     saving.value = false
   }
@@ -662,7 +669,7 @@ async function fetchLocalStatus() {
     const res = await getLocalRuntimeStatus()
     statusSummary.value = extractPayload(res) || null
   } catch (error) {
-    statusError.value = error.response?.data?.msg || error.message || 'Failed to fetch local runtime status'
+    statusError.value = resolveRuntimeError(error, 'runtime.localRuntime.errors.fetchStatusFailed')
     statusSummary.value = null
   } finally {
     statusLoading.value = false
@@ -679,7 +686,7 @@ async function runLocalDoctor() {
     statusSummary.value = payload
     doctorOutput.value = JSON.stringify(payload, null, 2)
   } catch (error) {
-    doctorOutput.value = error.response?.data?.msg || error.message || 'Local runtime doctor failed'
+    doctorOutput.value = resolveRuntimeError(error, 'runtime.localRuntime.errors.doctorFailed')
   } finally {
     doctorRunning.value = false
   }

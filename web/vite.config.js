@@ -2,7 +2,42 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
-// https://vitejs.dev/config/
+function manualChunks(id) {
+  if (id.includes('/src/locales/en.js')) {
+    return 'locale-en'
+  }
+
+  if (id.includes('/src/locales/zh-CN.js')) {
+    return 'locale-zh-CN'
+  }
+
+  if (id.includes('/src/api/')) {
+    return 'api'
+  }
+
+  if (!id.includes('node_modules')) {
+    return undefined
+  }
+
+  if (id.includes('vue-i18n')) {
+    return 'i18n'
+  }
+
+  if (id.includes('vue-router')) {
+    return 'router'
+  }
+
+  if (id.includes('pinia') || id.includes('/vue/')) {
+    return 'vue-vendor'
+  }
+
+  if (id.includes('axios')) {
+    return 'network'
+  }
+
+  return 'vendor'
+}
+
 export default defineConfig({
   plugins: [vue()],
   publicDir: false,
@@ -14,7 +49,6 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // 开发模式下，将 /api 请求代理到后端服务器
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true
@@ -23,6 +57,11 @@ export default defineConfig({
   },
   build: {
     outDir: './public',
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks
+      }
+    }
   }
 })

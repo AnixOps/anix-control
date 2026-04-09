@@ -1,85 +1,81 @@
 <template>
   <div class="login-page">
-    <div class="login-container">
-      <div class="login-brand">
-        <div class="brand-icon">🚀</div>
-        <h1>V2Board</h1>
-        <p>高性能代理服务管理面板</p>
+    <div class="login-shell">
+      <div class="login-toolbar">
+        <LocaleSwitcher />
       </div>
-      
-      <div class="login-box">
-        <h2>{{ isRegisterMode ? '创建账户' : '欢迎回来' }}</h2>
-        <p class="login-subtitle">{{ isRegisterMode ? '请填写以下信息注册' : '请登录您的账户' }}</p>
-        
-        <form @submit.prevent="isRegisterMode ? handleRegister() : handleLogin()" class="login-form">
-          <div class="form-group">
-            <label for="email">邮箱</label>
-            <input 
-              id="email"
-              v-model="email" 
-              type="email" 
-              placeholder="请输入邮箱地址"
-              autocomplete="email"
-            />
-          </div>
-          
-          <div class="form-group">
-            <label for="password">密码</label>
-            <input 
-              id="password"
-              v-model="password" 
-              type="password" 
-              :placeholder="isRegisterMode ? '请输入密码（至少6位）' : '请输入密码'"
-              autocomplete="current-password"
-            />
-          </div>
 
-          <div class="form-group" v-if="isRegisterMode">
-            <label for="confirmPassword">确认密码</label>
-            <input 
-              id="confirmPassword"
-              v-model="confirmPassword" 
-              type="password" 
-              placeholder="请再次输入密码"
-              autocomplete="new-password"
-            />
-          </div>
-          
-          <div v-if="errorMsg" class="error-msg">
-            <span class="error-icon">⚠️</span>
-            {{ errorMsg }}
-          </div>
-
-          <div v-if="successMsg" class="success-msg">
-            <span class="success-icon">✅</span>
-            {{ successMsg }}
-          </div>
-          
-          <button type="submit" class="login-btn" :disabled="loading">
-            <span v-if="loading" class="spinner"></span>
-            {{ loading ? (isRegisterMode ? '注册中...' : '登录中...') : (isRegisterMode ? '注册' : '登录') }}
-          </button>
-        </form>
-        
-        <div class="login-footer">
-          <a href="#" v-if="!isRegisterMode">忘记密码?</a>
-          <a href="#" @click.prevent="toggleMode">
-            {{ isRegisterMode ? '已有账户？去登录' : '没有账户？去注册' }}
-          </a>
+      <div class="login-container">
+        <div class="login-brand">
+          <div class="brand-icon">V</div>
+          <h1>V2Board</h1>
+          <p>{{ t('login.brandSubtitle') }}</p>
         </div>
-        
-        <!-- 开发模式快速登录 -->
-        <div class="dev-actions" v-if="enableMockLogin && !isRegisterMode">
-          <div class="dev-divider">
-            <span>开发模式</span>
+
+        <div class="login-box">
+          <h2>{{ isRegisterMode ? t('login.registerTitle') : t('login.signInTitle') }}</h2>
+          <p class="login-subtitle">{{ isRegisterMode ? t('login.registerSubtitle') : t('login.signInSubtitle') }}</p>
+
+          <form class="login-form" @submit.prevent="isRegisterMode ? handleRegister() : handleLogin()">
+            <div class="form-group">
+              <label for="email">{{ t('common.labels.email') }}</label>
+              <input
+                id="email"
+                v-model.trim="email"
+                type="email"
+                :placeholder="t('login.emailPlaceholder')"
+                autocomplete="email"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="password">{{ t('common.labels.password') }}</label>
+              <input
+                id="password"
+                v-model="password"
+                type="password"
+                :placeholder="isRegisterMode ? t('login.registerPasswordPlaceholder') : t('login.passwordPlaceholder')"
+                :autocomplete="isRegisterMode ? 'new-password' : 'current-password'"
+              />
+            </div>
+
+            <div v-if="isRegisterMode" class="form-group">
+              <label for="confirm-password">{{ t('common.labels.confirmPassword') }}</label>
+              <input
+                id="confirm-password"
+                v-model="confirmPassword"
+                type="password"
+                :placeholder="t('login.confirmPasswordPlaceholder')"
+                autocomplete="new-password"
+              />
+            </div>
+
+            <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
+            <div v-if="successMsg" class="success-msg">{{ successMsg }}</div>
+
+            <button type="submit" class="login-btn" :disabled="loading">
+              <span v-if="loading" class="spinner"></span>
+              {{ loading
+                ? (isRegisterMode ? t('login.loadingRegister') : t('login.loadingLogin'))
+                : (isRegisterMode ? t('login.submitRegister') : t('login.submitLogin')) }}
+            </button>
+          </form>
+
+          <div class="login-footer">
+            <a v-if="!isRegisterMode" href="#" @click.prevent>{{ t('login.forgotPassword') }}</a>
+            <a href="#" @click.prevent="toggleMode">
+              {{ isRegisterMode ? t('login.switchToLogin') : t('login.switchToRegister') }}
+            </a>
           </div>
-          <div class="dev-buttons">
-            <button type="button" class="btn-ghost" @click="mockLogin('user')">
-              👤 模拟用户
-            </button>
-            <button type="button" class="btn-ghost" @click="mockLogin('admin')">
-              👑 模拟管理员
-            </button>
+
+          <div v-if="enableMockLogin && !isRegisterMode" class="dev-actions">
+            <div class="dev-divider">
+              <span>{{ t('login.mockMode') }}</span>
+            </div>
+            <div class="dev-buttons">
+              <button type="button" class="btn-ghost" @click="mockLogin('user')">{{ t('login.mockUser') }}</button>
+              <button type="button" class="btn-ghost" @click="mockLogin('admin')">{{ t('login.mockAdmin') }}</button>
+            </div>
           </div>
         </div>
       </div>
@@ -88,28 +84,31 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { useAppI18n } from '@/composables/useAppI18n'
 import { login, register } from '@/api/auth'
+import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+
+const router = useRouter()
+const userStore = useUserStore()
+const { t } = useAppI18n()
 
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
-const router = useRouter()
-const userStore = useUserStore()
 const loading = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 const isRegisterMode = ref(false)
 
-// 检测是否为开发环境
 const enableMockLogin = computed(() => {
   const flag = String(import.meta.env.VITE_ENABLE_MOCK_LOGIN || '').trim().toLowerCase()
   return flag === 'true' || flag === '1' || flag === 'yes'
 })
 
-const toggleMode = () => {
+function toggleMode() {
   isRegisterMode.value = !isRegisterMode.value
   errorMsg.value = ''
   successMsg.value = ''
@@ -117,112 +116,100 @@ const toggleMode = () => {
   confirmPassword.value = ''
 }
 
-const handleRegister = async () => {
+async function handleRegister() {
   if (!email.value || !password.value) {
-    errorMsg.value = '请输入邮箱和密码'
+    errorMsg.value = t('login.errors.emailPasswordRequired')
     return
   }
-  
   if (password.value.length < 6) {
-    errorMsg.value = '密码长度至少6位'
+    errorMsg.value = t('login.errors.passwordMin')
+    return
+  }
+  if (password.value !== confirmPassword.value) {
+    errorMsg.value = t('login.errors.passwordMismatch')
     return
   }
 
-  if (password.value !== confirmPassword.value) {
-    errorMsg.value = '两次输入的密码不一致'
-    return
-  }
-  
   loading.value = true
   errorMsg.value = ''
   successMsg.value = ''
-  
+
   try {
     const res = await register({
       email: email.value,
       password: password.value
     })
-    
-    if (res.data?.token) {
-      const { token, is_admin, user_id, email: userEmail } = res.data
-      userStore.login(token, {
-        id: user_id,
-        email: userEmail,
-        is_admin: is_admin
-      })
-      
-      successMsg.value = '注册成功！正在跳转...'
-      setTimeout(() => {
-        if (is_admin) {
-          router.push('/admin/dashboard')
-        } else {
-          router.push('/user/dashboard')
-        }
-      }, 1000)
-    } else {
+
+    if (!res.data?.token) {
       throw new Error('register response missing token')
     }
+
+    const { token, is_admin, user_id, email: userEmail } = res.data
+    userStore.login(token, {
+      id: user_id,
+      email: userEmail,
+      is_admin
+    })
+
+    successMsg.value = t('login.success.registerCompleted')
+    setTimeout(() => {
+      router.push(is_admin ? '/admin/dashboard' : '/user/dashboard')
+    }, 1000)
   } catch (err) {
-    errorMsg.value = err.response?.data?.message || '注册失败，请稍后重试'
+    errorMsg.value = err.response?.data?.message || t('login.errors.registerFailed')
   } finally {
     loading.value = false
   }
 }
 
-const handleLogin = async () => {
+async function handleLogin() {
   if (!email.value || !password.value) {
-    errorMsg.value = '请输入邮箱和密码'
+    errorMsg.value = t('login.errors.emailPasswordRequired')
     return
   }
-  
+
   loading.value = true
   errorMsg.value = ''
-  
+  successMsg.value = ''
+
   try {
     const res = await login({
       email: email.value,
       password: password.value
     })
-    
-    if (res.data?.token) {
-      const { token, is_admin, user_id, email: userEmail } = res.data
-      userStore.login(token, {
-        id: user_id,
-        email: userEmail,
-        is_admin: is_admin
-      })
-      
-      if (is_admin) {
-        router.push('/admin/dashboard')
-      } else {
-        router.push('/user/dashboard')
-      }
-    } else {
+
+    if (!res.data?.token) {
       throw new Error('login response missing token')
     }
+
+    const { token, is_admin, user_id, email: userEmail } = res.data
+    userStore.login(token, {
+      id: user_id,
+      email: userEmail,
+      is_admin
+    })
+
+    router.push(is_admin ? '/admin/dashboard' : '/user/dashboard')
   } catch (err) {
-    errorMsg.value = err.response?.data?.message || '登录失败，请检查邮箱和密码'
+    errorMsg.value = err.response?.data?.message || t('login.errors.loginFailed')
   } finally {
     loading.value = false
   }
 }
 
-const mockLogin = (role) => {
+function mockLogin(role) {
   if (!enableMockLogin.value) {
     return
   }
+
   const mockUser = {
     id: 1,
     email: role === 'admin' ? 'admin@example.com' : 'user@example.com',
     is_admin: role === 'admin'
   }
-  userStore.login('mock-token-' + role, mockUser)
-  
-  if (role === 'admin') {
-    router.push('/admin/dashboard')
-  } else {
-    router.push('/user/dashboard')
-  }
+
+  userStore.login(`mock-token-${role}`, mockUser)
+  router.push(role === 'admin' ? '/admin/dashboard' : '/user/dashboard')
 }
 </script>
 
@@ -233,150 +220,173 @@ const mockLogin = (role) => {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.25), transparent 32%),
+    linear-gradient(135deg, #08111f 0%, #111827 50%, #0f172a 100%);
+}
+
+.login-shell {
+  width: 100%;
+  max-width: 460px;
+}
+
+.login-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 18px;
 }
 
 .login-container {
   width: 100%;
-  max-width: 420px;
 }
 
 .login-brand {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .brand-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  box-shadow: 0 18px 35px rgba(37, 99, 235, 0.28);
 }
 
 .login-brand h1 {
   font-size: 28px;
   font-weight: 700;
   margin-bottom: 8px;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #fff;
 }
 
 .login-brand p {
-  color: var(--text-secondary);
-  font-size: 14px;
+  color: rgba(226, 232, 240, 0.8);
+  margin: 0;
 }
 
 .login-box {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 32px;
-  box-shadow: var(--shadow-lg);
+  padding: 28px;
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 30px 60px rgba(2, 6, 23, 0.38);
 }
 
 .login-box h2 {
-  font-size: 24px;
-  font-weight: 600;
   margin-bottom: 8px;
+  color: #fff;
 }
 
 .login-subtitle {
-  color: var(--text-secondary);
   margin-bottom: 24px;
-  font-size: 14px;
+  color: rgba(226, 232, 240, 0.72);
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  gap: 16px;
 }
 
 .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #e2e8f0;
   font-size: 14px;
-  font-weight: 500;
-  color: var(--text-color);
+}
+
+.form-group input {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.65);
+  color: #fff;
+  padding: 14px 16px;
+}
+
+.form-group input::placeholder {
+  color: rgba(148, 163, 184, 0.72);
+}
+
+.error-msg,
+.success-msg {
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
 }
 
 .error-msg {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: var(--radius-md);
-  color: var(--error-color);
-  font-size: 14px;
+  background: rgba(239, 68, 68, 0.14);
+  color: #fecaca;
 }
 
 .success-msg {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  border-radius: var(--radius-md);
-  color: var(--success-color);
-  font-size: 14px;
+  background: rgba(34, 197, 94, 0.14);
+  color: #bbf7d0;
 }
 
 .login-btn {
   width: 100%;
-  padding: 14px 24px;
-  font-size: 16px;
-  font-weight: 600;
-  margin-top: 8px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.login-btn:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
 }
 
 .spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+  animation: rotate 1s linear infinite;
 }
 
 .login-footer {
-  text-align: center;
-  margin-top: 20px;
+  margin-top: 18px;
   display: flex;
-  justify-content: center;
-  gap: 16px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .login-footer a {
-  color: var(--primary-color);
+  color: #93c5fd;
   text-decoration: none;
   font-size: 14px;
 }
 
-.login-footer a:hover {
-  text-decoration: underline;
-}
-
 .dev-actions {
-  margin-top: 24px;
+  margin-top: 22px;
 }
 
 .dev-divider {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: rgba(226, 232, 240, 0.6);
+  font-size: 13px;
 }
 
 .dev-divider::before,
@@ -384,56 +394,32 @@ const mockLogin = (role) => {
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--border-color);
-}
-
-.dev-divider span {
-  font-size: 12px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  background: rgba(148, 163, 184, 0.18);
 }
 
 .dev-buttons {
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.dev-buttons .btn-ghost {
-  flex: 1;
-  padding: 10px 16px;
-  font-size: 13px;
-}
-
-/* 移动端适配 */
-@media (max-width: 480px) {
-  .login-page {
-    padding: 16px;
-    align-items: flex-start;
-    padding-top: 60px;
+@keyframes rotate {
+  to {
+    transform: rotate(360deg);
   }
-  
+}
+
+@media (max-width: 520px) {
   .login-box {
-    padding: 24px;
+    padding: 22px;
   }
-  
-  .login-brand h1 {
-    font-size: 24px;
-  }
-  
-  .dev-buttons {
+
+  .login-footer {
     flex-direction: column;
   }
-}
 
-/* 平板适配 */
-@media (min-width: 768px) {
-  .login-container {
-    max-width: 440px;
-  }
-  
-  .login-box {
-    padding: 40px;
+  .dev-buttons {
+    grid-template-columns: 1fr;
   }
 }
 </style>
