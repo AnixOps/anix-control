@@ -21,21 +21,35 @@ type Config struct {
 	Cache          CacheConfig          `yaml:"cache"`
 	Log            LogConfig            `yaml:"log"`
 	JWT            JWTConfig            `yaml:"jwt"`
+	Auth           AuthConfig           `yaml:"auth"`
 	App            AppConfig            `yaml:"app"`
 	Admin          AdminConfig          `yaml:"admin"`
 	TLS            TLSConfig            `yaml:"tls"`
 	ForwardRuntime ForwardRuntimeConfig `yaml:"forward_runtime"`
 }
 
+// AuthConfig defines authentication security settings.
+type AuthConfig struct {
+	LoginRateLimit LoginRateLimitConfig `yaml:"login_rate_limit"`
+}
+
+// LoginRateLimitConfig controls brute-force protection for login.
+type LoginRateLimitConfig struct {
+	Enabled        *bool `yaml:"enabled"`
+	MaxAttempts    int   `yaml:"max_attempts"`
+	WindowSeconds  int   `yaml:"window_seconds"`
+	LockoutSeconds int   `yaml:"lockout_seconds"`
+}
+
 // ForwardRuntimeConfig stores the canonical forward runtime settings from config.yaml.
 type ForwardRuntimeConfig struct {
-	NodeXMode        *bool                         `yaml:"nodex_mode"`
-	Backend          string                        `yaml:"backend"`
-	NodeX            ForwardRuntimeNodeXConfig     `yaml:"nodex"`
-	NftablesAnsible  ForwardRuntimeAnsibleConfig   `yaml:"nftables_ansible"`
-	IptablesAnsible  ForwardRuntimeAnsibleConfig   `yaml:"iptables_ansible"`
-	Jobs             ForwardRuntimeJobsConfig      `yaml:"jobs"`
-	GostStats        ForwardRuntimeGostStatsConfig `yaml:"gost_stats"`
+	NodeXMode       *bool                         `yaml:"nodex_mode"`
+	Backend         string                        `yaml:"backend"`
+	NodeX           ForwardRuntimeNodeXConfig     `yaml:"nodex"`
+	NftablesAnsible ForwardRuntimeAnsibleConfig   `yaml:"nftables_ansible"`
+	IptablesAnsible ForwardRuntimeAnsibleConfig   `yaml:"iptables_ansible"`
+	Jobs            ForwardRuntimeJobsConfig      `yaml:"jobs"`
+	GostStats       ForwardRuntimeGostStatsConfig `yaml:"gost_stats"`
 }
 
 // ForwardRuntimeNodeXConfig stores NodeX or gost runtime settings.

@@ -16,6 +16,9 @@
       <button :class="['tab', { active: activeTab === 'balancer' }]" @click="activeTab = 'balancer'">
         {{ t('runtime.systemPage.tabs.balancer') }}
       </button>
+      <button :class="['tab', { active: activeTab === 'audit' }]" @click="activeTab = 'audit'">
+        {{ t('runtime.systemPage.tabs.audit') }}
+      </button>
     </div>
 
     <!-- System config -->
@@ -196,7 +199,7 @@
           <tbody>
             <tr v-for="config in filteredConfigs" :key="config.key">
               <td><code>{{ config.key }}</code></td>
-              <td class="value-cell">{{ truncateValue(config.value) }}</td>
+              <td class="value-cell">{{ truncateValue(getConfigDisplayValue(config)) }}</td>
               <td>{{ translateRuntimeText(config.description, config.description || '-') }}</td>
               <td>{{ formatTime(config.updated_at) }}</td>
               <td>
@@ -232,6 +235,69 @@
           <div class="form-group">
             <label>{{ t('runtime.systemPage.backup.keepCount') }}</label>
             <input v-model.number="backupConfig.keep_count" type="number" min="1" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="backupConfig.backup_database" />
+              <span>{{ t('runtime.systemPage.backup.backupDatabase') }}</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="backupConfig.backup_files" />
+              <span>{{ t('runtime.systemPage.backup.backupFiles') }}</span>
+            </label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>{{ t('runtime.systemPage.backup.storageType') }}</label>
+            <select v-model="backupConfig.storage_type">
+              <option value="local">{{ t('runtime.systemPage.backup.storageTypes.local') }}</option>
+              <option value="s3">{{ t('runtime.systemPage.backup.storageTypes.s3') }}</option>
+            </select>
+          </div>
+          <div class="form-group" v-if="backupConfig.storage_type === 'local'">
+            <label>{{ t('runtime.systemPage.backup.storagePath') }}</label>
+            <input v-model="backupConfig.storage_path" type="text" :placeholder="t('runtime.systemPage.backup.storagePathPlaceholder')" />
+          </div>
+        </div>
+        <div v-if="backupConfig.storage_type === 's3'" class="form-grid">
+          <div class="form-group">
+            <label>{{ t('runtime.systemPage.backup.s3Bucket') }}</label>
+            <input v-model="backupConfig.s3_bucket" type="text" :placeholder="t('runtime.systemPage.backup.s3BucketPlaceholder')" />
+          </div>
+          <div class="form-group">
+            <label>{{ t('runtime.systemPage.backup.s3Region') }}</label>
+            <input v-model="backupConfig.s3_region" type="text" :placeholder="t('runtime.systemPage.backup.s3RegionPlaceholder')" />
+          </div>
+          <div class="form-group">
+            <label>{{ t('runtime.systemPage.backup.s3Endpoint') }}</label>
+            <input v-model="backupConfig.s3_endpoint" type="text" :placeholder="t('runtime.systemPage.backup.s3EndpointPlaceholder')" />
+          </div>
+          <div class="form-group">
+            <label>{{ t('runtime.systemPage.backup.s3AccessKey') }}</label>
+            <input v-model="backupConfig.s3_access_key" type="text" :placeholder="t('runtime.systemPage.backup.s3AccessKeyPlaceholder')" />
+            <p v-if="backupConfig.s3_access_key_sensitive" class="text-secondary">
+              {{
+                backupConfig.s3_access_key_has_value
+                  ? t('runtime.systemPage.backup.sensitiveHintWithValue')
+                  : t('runtime.systemPage.backup.sensitiveHintWithoutValue')
+              }}
+            </p>
+          </div>
+          <div class="form-group">
+            <label>{{ t('runtime.systemPage.backup.s3SecretKey') }}</label>
+            <input v-model="backupConfig.s3_secret_key" type="password" :placeholder="t('runtime.systemPage.backup.s3SecretKeyPlaceholder')" autocomplete="new-password" />
+            <p v-if="backupConfig.s3_secret_key_sensitive" class="text-secondary">
+              {{
+                backupConfig.s3_secret_key_has_value
+                  ? t('runtime.systemPage.backup.sensitiveHintWithValue')
+                  : t('runtime.systemPage.backup.sensitiveHintWithoutValue')
+              }}
+            </p>
           </div>
         </div>
         <div class="form-actions">
@@ -347,6 +413,93 @@
       </div>
     </div>
 
+    <!-- Audit logs -->
+    <div v-show="activeTab === 'audit'">
+      <div class="audit-toolbar">
+        <h3>{{ t('runtime.systemPage.audit.title') }}</h3>
+        <div class="audit-toolbar-actions">
+          <input
+            v-model="auditFilters.action"
+            type="text"
+            class="search-input"
+            :placeholder="t('runtime.systemPage.audit.filters.actionPlaceholder')"
+            @keyup.enter="applyAuditFilters"
+          />
+          <input
+            v-model="auditFilters.target_type"
+            type="text"
+            class="search-input"
+            :placeholder="t('runtime.systemPage.audit.filters.targetTypePlaceholder')"
+            @keyup.enter="applyAuditFilters"
+          />
+          <button class="btn-secondary" :disabled="auditLoading" @click="applyAuditFilters">
+            {{ t('runtime.systemPage.audit.actions.filter') }}
+          </button>
+          <button class="btn-primary" :disabled="auditLoading" @click="refreshAuditLogs">
+            {{ t('runtime.systemPage.audit.actions.refresh') }}
+          </button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>{{ t('runtime.systemPage.audit.table.id') }}</th>
+              <th>{{ t('runtime.systemPage.audit.table.action') }}</th>
+              <th>{{ t('runtime.systemPage.audit.table.module') }}</th>
+              <th>{{ t('runtime.systemPage.audit.table.targetType') }}</th>
+              <th>{{ t('runtime.systemPage.audit.table.username') }}</th>
+              <th>{{ t('runtime.systemPage.audit.table.content') }}</th>
+              <th>{{ t('runtime.systemPage.audit.table.ip') }}</th>
+              <th>{{ t('runtime.systemPage.audit.table.status') }}</th>
+              <th>{{ t('runtime.systemPage.audit.table.createdAt') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="log in auditLogs" :key="log.id">
+              <td>{{ log.id ?? '-' }}</td>
+              <td>{{ log.action || '-' }}</td>
+              <td>{{ log.module || '-' }}</td>
+              <td>{{ log.target_type || '-' }}</td>
+              <td>{{ log.username || '-' }}</td>
+              <td class="audit-content-cell">{{ log.content || '-' }}</td>
+              <td>{{ log.ip || '-' }}</td>
+              <td>{{ log.status || '-' }}</td>
+              <td>{{ formatTime(log.created_at) }}</td>
+            </tr>
+            <tr v-if="!auditLoading && auditLogs.length === 0">
+              <td colspan="9" class="empty-row">{{ t('runtime.systemPage.audit.empty') }}</td>
+            </tr>
+            <tr v-if="auditLoading">
+              <td colspan="9" class="empty-row">{{ t('runtime.shared.loading') }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="audit-pagination">
+        <div class="text-secondary">
+          {{ t('runtime.systemPage.audit.pagination.total', { total: auditTotal }) }}
+        </div>
+        <div class="audit-pagination-controls">
+          <label>
+            {{ t('runtime.systemPage.audit.pagination.pageSize') }}
+            <select v-model.number="auditFilters.page_size" @change="changeAuditPageSize">
+              <option v-for="size in auditPageSizeOptions" :key="size" :value="size">{{ size }}</option>
+            </select>
+          </label>
+          <button class="btn-sm btn-ghost" :disabled="auditLoading || !auditHasPrev" @click="changeAuditPage(auditFilters.page - 1)">
+            {{ t('runtime.systemPage.audit.pagination.prev') }}
+          </button>
+          <span>{{ t('runtime.systemPage.audit.pagination.page', { page: auditFilters.page, totalPages: auditTotalPages }) }}</span>
+          <button class="btn-sm btn-ghost" :disabled="auditLoading || !auditHasNext" @click="changeAuditPage(auditFilters.page + 1)">
+            {{ t('runtime.systemPage.audit.pagination.next') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Config modal -->
     <div v-if="showConfigModal" class="modal-overlay" @click.self="showConfigModal = false">
       <div class="modal">
@@ -362,6 +515,13 @@
           <div class="form-group">
             <label>{{ t('runtime.systemPage.configModal.value') }}</label>
             <textarea v-model="configForm.value" rows="3" :placeholder="t('runtime.systemPage.configModal.valuePlaceholder')"></textarea>
+            <p v-if="editingConfig && configForm.sensitive" class="text-secondary">
+              {{
+                configForm.has_value
+                  ? t('runtime.systemPage.configModal.sensitiveHintWithValue')
+                  : t('runtime.systemPage.configModal.sensitiveHintWithoutValue')
+              }}
+            </p>
           </div>
           <div class="form-group">
             <label>{{ t('runtime.systemPage.configModal.description') }}</label>
@@ -434,6 +594,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import {
   getSystemConfigs, getSystemConfig, setSystemConfig, deleteSystemConfig,
+  getSystemAuditLogs,
   getBackupConfig, updateBackupConfig, createBackup, getBackups,
   getBackupStats, deleteBackup, restoreBackup,
   getLoadBalancers, createLoadBalancer, updateLoadBalancer,
@@ -448,18 +609,65 @@ const configSearch = ref('')
 const configs = ref([])
 const backups = ref([])
 const balancers = ref([])
-
-const backupConfig = ref({
-  enabled: false,
-  interval: 24,
-  keep_count: 7
+const auditLogs = ref([])
+const auditLoading = ref(false)
+const auditTotal = ref(0)
+const auditFilters = ref({
+  action: '',
+  target_type: '',
+  page: 1,
+  page_size: 20
 })
+const auditPageSizeOptions = [20, 50, 100]
+
+const createBackupConfigForm = (source = {}) => ({
+  enabled: Boolean(source.enabled),
+  interval: Number.isFinite(Number(source.interval)) && Number(source.interval) > 0
+    ? Number(source.interval)
+    : Number.isFinite(Number(source.retention_days)) && Number(source.retention_days) > 0
+      ? Number(source.retention_days)
+      : 24,
+  keep_count: Number.isFinite(Number(source.keep_count)) && Number(source.keep_count) > 0
+    ? Number(source.keep_count)
+    : Number.isFinite(Number(source.retention_days)) && Number(source.retention_days) > 0
+      ? Number(source.retention_days)
+      : 7,
+  backup_database: source.backup_database !== false,
+  backup_files: Boolean(source.backup_files),
+  storage_type: String(source.storage_type || 'local').trim().toLowerCase() || 'local',
+  storage_path: String(source.storage_path || 'backups'),
+  s3_bucket: String(source.s3_bucket || ''),
+  s3_region: String(source.s3_region || ''),
+  s3_endpoint: String(source.s3_endpoint || ''),
+  s3_access_key: Boolean(source.s3_access_key_sensitive)
+    ? ''
+    : String(source.s3_access_key || ''),
+  s3_secret_key: Boolean(source.s3_secret_key_sensitive)
+    ? ''
+    : String(source.s3_secret_key || ''),
+  s3_access_key_display_value: String(source.s3_access_key_display_value || ''),
+  s3_secret_key_display_value: String(source.s3_secret_key_display_value || ''),
+  s3_access_key_sensitive: Boolean(source.s3_access_key_sensitive),
+  s3_secret_key_sensitive: Boolean(source.s3_secret_key_sensitive),
+  s3_access_key_has_value: Boolean(source.s3_access_key_has_value),
+  s3_secret_key_has_value: Boolean(source.s3_secret_key_has_value)
+})
+
+const backupConfig = ref(createBackupConfigForm())
 
 const backupStats = ref({})
 
 const showConfigModal = ref(false)
 const editingConfig = ref(null)
-const configForm = ref({ key: '', value: '', description: '' })
+const configForm = ref({
+  key: '',
+  value: '',
+  description: '',
+  type: 'string',
+  group: '',
+  sensitive: false,
+  has_value: false
+})
 
 const showBalancerModal = ref(false)
 const editingBalancer = ref(null)
@@ -726,6 +934,13 @@ const filteredConfigs = computed(() => {
     c.description?.toLowerCase().includes(search)
   )
 })
+const auditTotalPages = computed(() => {
+  const pageSize = Number(auditFilters.value.page_size) || 20
+  const total = Number(auditTotal.value) || 0
+  return Math.max(1, Math.ceil(total / pageSize))
+})
+const auditHasPrev = computed(() => Number(auditFilters.value.page) > 1)
+const auditHasNext = computed(() => Number(auditFilters.value.page) < auditTotalPages.value)
 
 const getStrategyLabel = (strategy) => {
   switch (strategy) {
@@ -762,7 +977,13 @@ const formatTime = (time) => {
   return formatDateTime(time) || String(time)
 }
 
-const notify = (message) => window.alert(message)
+const notify = (message) => {
+  if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+    window.alert(message)
+    return
+  }
+  console.warn(message)
+}
 const confirmAction = (message) => window.confirm(message)
 const resolveSystemError = (error, fallbackKey) => (
   translateRuntimeText(error?.response?.data?.msg || error?.response?.data?.error || error?.message, t(fallbackKey))
@@ -783,6 +1004,11 @@ const truncateValue = (value) => {
   if (!value) return '-'
   const str = String(value)
   return str.length > 50 ? str.substring(0, 50) + '...' : str
+}
+
+const getConfigDisplayValue = (config) => {
+  if (!config || typeof config !== 'object') return ''
+  return config.display_value ?? config.value
 }
 
 const normalizeRuntimeJob = (raw) => ({
@@ -1094,26 +1320,141 @@ const saveForwardRuntimeConfig = async () => {
 const fetchConfigs = async () => {
   try {
     const res = await getSystemConfigs()
-    configs.value = res.data?.list || []
+    const list = res.data?.list || res.data?.data?.list || []
+    configs.value = list.map((config) => ({
+      ...config,
+      description: config.description || config.remark || '',
+      sensitive: Boolean(config.sensitive),
+      has_value: typeof config.has_value === 'boolean'
+        ? config.has_value
+        : String(config.value || '').trim() !== ''
+    }))
   } catch (err) {
     console.error(t('runtime.systemPage.messages.fetchConfigsFailed'), err)
   }
 }
 
+const fetchAuditLogs = async () => {
+  auditLoading.value = true
+  try {
+    const params = {
+      page: Number(auditFilters.value.page) || 1,
+      page_size: Number(auditFilters.value.page_size) || 20
+    }
+    const action = String(auditFilters.value.action || '').trim()
+    const targetType = String(auditFilters.value.target_type || '').trim()
+    if (action) {
+      params.action = action
+    }
+    if (targetType) {
+      params.target_type = targetType
+    }
+
+    const res = await getSystemAuditLogs(params)
+    const payload = res.data?.data || res.data || {}
+    const list = Array.isArray(payload.list) ? payload.list : []
+    auditLogs.value = list.map((item) => ({
+      id: item?.id ?? null,
+      action: item?.action ?? '',
+      module: item?.module ?? '',
+      target_type: item?.target_type ?? '',
+      username: item?.username ?? '',
+      content: item?.content ?? '',
+      ip: item?.ip ?? '',
+      status: item?.status ?? '',
+      created_at: item?.created_at ?? ''
+    }))
+    auditTotal.value = Number(payload.total) || 0
+    if (Number.isFinite(Number(payload.page)) && Number(payload.page) > 0) {
+      auditFilters.value.page = Number(payload.page)
+    }
+    if (Number.isFinite(Number(payload.page_size)) && Number(payload.page_size) > 0) {
+      auditFilters.value.page_size = Number(payload.page_size)
+    }
+  } catch (err) {
+    auditLogs.value = []
+    auditTotal.value = 0
+    notify(resolveSystemError(err, 'runtime.systemPage.messages.fetchAuditLogsFailed'))
+  } finally {
+    auditLoading.value = false
+  }
+}
+
+const refreshAuditLogs = async () => {
+  await fetchAuditLogs()
+}
+
+const applyAuditFilters = async () => {
+  auditFilters.value.page = 1
+  await fetchAuditLogs()
+}
+
+const changeAuditPage = async (page) => {
+  const next = Number(page)
+  if (!Number.isFinite(next)) return
+  const bounded = Math.min(Math.max(1, next), auditTotalPages.value)
+  if (bounded === auditFilters.value.page) return
+  auditFilters.value.page = bounded
+  await fetchAuditLogs()
+}
+
+const changeAuditPageSize = async () => {
+  const next = Number(auditFilters.value.page_size)
+  auditFilters.value.page_size = Number.isFinite(next) && next > 0 ? next : 20
+  auditFilters.value.page = 1
+  await fetchAuditLogs()
+}
+
 const openConfigModal = (config = null) => {
   if (config) {
     editingConfig.value = config
-    configForm.value = { ...config }
+    const sensitive = Boolean(config.sensitive)
+    const rawValue = config.value ?? ''
+    configForm.value = {
+      key: config.key || '',
+      value: sensitive ? '' : rawValue,
+      description: config.description || config.remark || '',
+      type: config.type || 'string',
+      group: config.group || '',
+      sensitive,
+      has_value: typeof config.has_value === 'boolean'
+        ? config.has_value
+        : String(rawValue).trim() !== ''
+    }
   } else {
     editingConfig.value = null
-    configForm.value = { key: '', value: '', description: '' }
+    configForm.value = {
+      key: '',
+      value: '',
+      description: '',
+      type: 'string',
+      group: '',
+      sensitive: false,
+      has_value: false
+    }
   }
   showConfigModal.value = true
 }
 
 const saveConfig = async () => {
   try {
-    await setSystemConfig(configForm.value.key, configForm.value)
+    const value = typeof configForm.value.value === 'string'
+      ? configForm.value.value
+      : String(configForm.value.value ?? '')
+    const preserveExisting = Boolean(
+      editingConfig.value &&
+      configForm.value.sensitive &&
+      configForm.value.has_value &&
+      value.trim() === ''
+    )
+
+    await setSystemConfig(configForm.value.key, {
+      value,
+      type: configForm.value.type || 'string',
+      group: configForm.value.group || '',
+      description: configForm.value.description || '',
+      preserve_existing: preserveExisting
+    })
     showConfigModal.value = false
     fetchConfigs()
   } catch (err) {
@@ -1134,11 +1475,40 @@ const deleteConfig = async (config) => {
 }
 
 // Backups
+const hasEmptySensitiveBackupField = (form) => {
+  if (!form || typeof form !== 'object') return false
+  const accessKeyEmpty = Boolean(form.s3_access_key_sensitive && form.s3_access_key_has_value && String(form.s3_access_key || '').trim() === '')
+  const secretKeyEmpty = Boolean(form.s3_secret_key_sensitive && form.s3_secret_key_has_value && String(form.s3_secret_key || '').trim() === '')
+  return accessKeyEmpty || secretKeyEmpty
+}
+
+const buildBackupConfigPayload = (form) => {
+  const normalizedStorageType = String(form.storage_type || 'local').trim().toLowerCase() || 'local'
+  const preserveExistingSensitive = hasEmptySensitiveBackupField(form)
+  return {
+    enabled: !!form.enabled,
+    auto_backup: !!form.enabled,
+    interval: Number.isFinite(Number(form.interval)) && Number(form.interval) > 0 ? Number(form.interval) : 24,
+    keep_count: Number.isFinite(Number(form.keep_count)) && Number(form.keep_count) > 0 ? Number(form.keep_count) : 7,
+    backup_database: !!form.backup_database,
+    backup_files: !!form.backup_files,
+    storage_type: normalizedStorageType,
+    storage_path: normalizedStorageType === 'local' ? String(form.storage_path || '').trim() : String(form.storage_path || ''),
+    s3_bucket: normalizedStorageType === 's3' ? String(form.s3_bucket || '').trim() : String(form.s3_bucket || ''),
+    s3_region: normalizedStorageType === 's3' ? String(form.s3_region || '').trim() : String(form.s3_region || ''),
+    s3_endpoint: normalizedStorageType === 's3' ? String(form.s3_endpoint || '').trim() : String(form.s3_endpoint || ''),
+    s3_access_key: normalizedStorageType === 's3' ? String(form.s3_access_key || '').trim() : String(form.s3_access_key || ''),
+    s3_secret_key: normalizedStorageType === 's3' ? String(form.s3_secret_key || '').trim() : String(form.s3_secret_key || ''),
+    preserve_existing_sensitive: preserveExistingSensitive
+  }
+}
+
 const fetchBackupConfig = async () => {
   try {
     const res = await getBackupConfig()
-    if (res.data) {
-      backupConfig.value = { ...backupConfig.value, ...res.data }
+    const payload = res.data || {}
+    if (payload && typeof payload === 'object') {
+      backupConfig.value = createBackupConfigForm(payload)
     }
   } catch (err) {
     console.error(t('runtime.systemPage.messages.fetchBackupConfigFailed'), err)
@@ -1147,7 +1517,7 @@ const fetchBackupConfig = async () => {
 
 const saveBackupConfig = async () => {
   try {
-    await updateBackupConfig(backupConfig.value)
+    await updateBackupConfig(buildBackupConfigPayload(backupConfig.value))
     notify(t('runtime.systemPage.messages.backupConfigSaved'))
   } catch (err) {
     notify(resolveSystemError(err, 'runtime.systemPage.messages.backupConfigSaveFailed'))
@@ -1286,6 +1656,7 @@ const runHealthCheckRequest = async (lb) => {
 
 onMounted(async () => {
   fetchConfigs()
+  fetchAuditLogs()
   await fetchForwardRuntimeConfig()
   fetchForwardRuntimeJobs()
   fetchRuntimeStatusSafe()
@@ -1545,6 +1916,53 @@ onMounted(async () => {
   min-width: 200px;
 }
 
+.audit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.audit-toolbar h3 {
+  margin: 0;
+}
+
+.audit-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.audit-content-cell {
+  max-width: 320px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.audit-pagination {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.audit-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.audit-pagination-controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .value-cell {
   font-family: monospace;
   font-size: 13px;
@@ -1565,6 +1983,11 @@ onMounted(async () => {
 @media (max-width: 768px) {
   .runtime-config-head,
   .operator-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .audit-toolbar {
     flex-direction: column;
     align-items: flex-start;
   }

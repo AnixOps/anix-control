@@ -1,20 +1,24 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { reactive } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import UserLayout from '@/layouts/UserLayout.vue'
 
 const mockPush = vi.fn()
+const mockRoute = reactive({ path: '/user/dashboard' })
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({
     push: mockPush,
   }),
+  useRoute: () => mockRoute,
 }))
 
 describe('UserLayout.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    mockRoute.path = '/user/dashboard'
     mockPush.mockReset()
     localStorage.clear()
   })
@@ -30,6 +34,23 @@ describe('UserLayout.vue', () => {
     })
 
     expect(wrapper.find('router-view-stub').exists()).toBe(true)
+  })
+
+  it('exposes accessible navigation controls and main landmark', () => {
+    const wrapper = mount(UserLayout, {
+      global: {
+        stubs: {
+          'router-link': true,
+          'router-view': true,
+        },
+      },
+    })
+
+    expect(wrapper.find('.menu-toggle').attributes('aria-controls')).toBe('user-sidebar')
+    expect(wrapper.find('.menu-toggle').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.mobile-sidebar').attributes('id')).toBe('user-sidebar')
+    expect(wrapper.find('main.main-content').attributes('id')).toBe('app-main-content')
+    expect(wrapper.find('main.main-content').attributes('tabindex')).toBe('-1')
   })
 
   it('contains all user menu routes', () => {

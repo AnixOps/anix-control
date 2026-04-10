@@ -184,6 +184,22 @@ func resolveForwardRuntimePaths(cfg *config.Config, resolvedConfigPath string) {
 	}
 }
 
+func applyTrustedProxies(r *gin.Engine, proxies []string) error {
+	normalized := make([]string, 0, len(proxies))
+	for _, proxy := range proxies {
+		value := strings.TrimSpace(proxy)
+		if value != "" {
+			normalized = append(normalized, value)
+		}
+	}
+
+	if len(normalized) == 0 {
+		return r.SetTrustedProxies(nil)
+	}
+
+	return r.SetTrustedProxies(normalized)
+}
+
 func main() {
 	flag.Parse()
 
@@ -377,6 +393,9 @@ func main() {
 // startAPIServer 启动API服务器
 func startAPIServer(cfg *config.Config) {
 	r := gin.New()
+	if err := applyTrustedProxies(r, cfg.Server.TrustedProxies); err != nil {
+		log.Fatalf("Failed to configure trusted proxies for API server: %v", err)
+	}
 	router.Setup(r, cfg)
 
 	server := &http.Server{
@@ -408,6 +427,9 @@ func startFrontendServer(cfg *config.Config) {
 	}
 
 	r := gin.New()
+	if err := applyTrustedProxies(r, cfg.Server.TrustedProxies); err != nil {
+		log.Fatalf("Failed to configure trusted proxies for frontend server: %v", err)
+	}
 	r.Use(gin.Recovery())
 
 	// API 代理 - 将 /api 请求转发到 API 服务器

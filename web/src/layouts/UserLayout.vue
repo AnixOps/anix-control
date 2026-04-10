@@ -1,11 +1,19 @@
 <template>
   <div class="user-layout">
     <header class="header">
-      <button class="menu-toggle" type="button" @click="sidebarOpen = !sidebarOpen">
-        <span class="menu-icon">+</span>
+      <button
+        class="menu-toggle"
+        type="button"
+        :aria-label="t('common.a11y.openNavigation')"
+        :title="t('common.a11y.openNavigation')"
+        aria-controls="user-sidebar"
+        :aria-expanded="sidebarOpen ? 'true' : 'false'"
+        @click="sidebarOpen = !sidebarOpen"
+      >
+        <span class="menu-icon" aria-hidden="true"></span>
       </button>
       <div class="logo">{{ t('layout.user.brand') }}</div>
-      <nav class="desktop-nav">
+      <nav class="desktop-nav" :aria-label="t('layout.user.brand')">
         <router-link v-for="item in navItems" :key="item.to" :to="item.to">{{ item.label }}</router-link>
       </nav>
       <div class="user-actions">
@@ -15,16 +23,22 @@
       </div>
     </header>
 
-    <div class="sidebar-overlay" :class="{ active: sidebarOpen }" @click="sidebarOpen = false"></div>
+    <div class="sidebar-overlay" :class="{ active: sidebarOpen }" aria-hidden="true" @click="sidebarOpen = false"></div>
 
-    <aside class="mobile-sidebar" :class="{ open: sidebarOpen }">
+    <aside id="user-sidebar" class="mobile-sidebar" :class="{ open: sidebarOpen }" :aria-label="t('layout.user.brand')">
       <div class="sidebar-header">
         <div class="logo">{{ t('layout.user.brand') }}</div>
-        <button class="close-btn" type="button" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="sidebarOpen = false">×</button>
+        <button
+          class="close-btn"
+          type="button"
+          :aria-label="t('common.a11y.closeNavigation')"
+          :title="t('common.a11y.closeNavigation')"
+          @click="sidebarOpen = false"
+        ></button>
       </div>
-      <nav class="sidebar-nav">
+      <nav class="sidebar-nav" :aria-label="t('layout.user.brand')">
         <router-link v-for="item in navItems" :key="item.to" :to="item.to" @click="sidebarOpen = false">
-          <span class="nav-icon">{{ item.icon }}</span>
+          <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
           <span>{{ item.label }}</span>
         </router-link>
       </nav>
@@ -34,7 +48,7 @@
       </div>
     </aside>
 
-    <main class="main-content">
+    <main id="app-main-content" class="main-content" tabindex="-1" :aria-label="pageTitle">
       <div class="container">
         <router-view></router-view>
       </div>
@@ -44,12 +58,14 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+import { resolveRoutePageTitle } from '@/utils/pageMeta'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const { t } = useAppI18n()
 const sidebarOpen = ref(false)
@@ -62,6 +78,8 @@ const navItems = computed(() => ([
   { to: '/user/plans', label: t('layout.user.nav.plans'), icon: 'P' },
   { to: '/user/orders', label: t('layout.user.nav.orders'), icon: 'O' }
 ]))
+
+const pageTitle = computed(() => resolveRoutePageTitle(t, route.path, t('layout.user.brand')))
 
 function logout() {
   userStore.logout()
@@ -100,12 +118,17 @@ onMounted(() => {
   padding: 8px;
   background: transparent;
   border: none;
-  font-size: 20px;
+  font-size: 0;
   color: var(--text-color);
 }
 
 .menu-icon {
   line-height: 1;
+}
+
+.menu-icon::before {
+  content: '\2630';
+  font-size: 20px;
 }
 
 .logo {
@@ -198,8 +221,13 @@ onMounted(() => {
   padding: 8px;
   background: transparent;
   border: none;
-  font-size: 18px;
+  font-size: 0;
   color: var(--text-secondary);
+}
+
+.close-btn::before {
+  content: '\00d7';
+  font-size: 20px;
 }
 
 .sidebar-nav {

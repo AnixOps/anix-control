@@ -119,6 +119,11 @@ export default {
       zhShort: '中',
       enShort: 'EN'
     },
+    a11y: {
+      skipToContent: '跳转到主内容',
+      openNavigation: '打开导航菜单',
+      closeNavigation: '关闭导航菜单'
+    },
     actions: {
       cancel: '取消',
       close: '关闭',
@@ -192,6 +197,18 @@ export default {
     }
   },
   pageTitles: {
+    auth: {
+      login: '登录'
+    },
+    user: {
+      dashboard: '仪表盘',
+      subscribe: '订阅',
+      knowledge: '使用教程',
+      tickets: '我的工单',
+      plans: '购买套餐',
+      orders: '我的订单',
+      fallback: '用户中心'
+    },
     admin: {
       dashboard: '仪表盘',
       users: '用户管理',
@@ -217,6 +234,15 @@ export default {
       invite: '邀请返利管理',
       system: '系统管理',
       fallback: '管理面板'
+    }
+  },
+  app: {
+    meta: {
+      defaultDescription: '面向商业化运行的订阅、支付、节点、NodeX 运行时与本地 Ansible 转发控制台。',
+      loginDescription: '登录 V2Board AnixOps，管理订阅、账单、节点与转发运行时。',
+      userDescription: '用户中心，查看订阅、工单、套餐与账单记录。',
+      adminDescription: '管理后台，用于用户、账单、节点、通知与系统运维。',
+      forwardDescription: '转发运维工作台，覆盖 Local Runtime、Ansible Machines、NodeX 拓扑、隧道与运行时诊断。'
     }
   },
   layout: {
@@ -1139,7 +1165,8 @@ export default {
       tabs: {
         config: '系统配置',
         backup: '数据备份',
-        balancer: '负载均衡'
+        balancer: '负载均衡',
+        audit: '审计日志'
       },
       actions: {
         addConfig: '新增配置',
@@ -1163,6 +1190,27 @@ export default {
         enabled: '启用自动备份',
         intervalHours: '备份间隔 (小时)',
         keepCount: '保留数量',
+        backupDatabase: '包含数据库',
+        backupFiles: '包含文件',
+        storageType: '存储类型',
+        storagePath: '本地存储路径',
+        storagePathPlaceholder: '例如：backups',
+        s3Bucket: 'S3 Bucket',
+        s3BucketPlaceholder: '例如：panel-backups',
+        s3Region: 'S3 Region',
+        s3RegionPlaceholder: '例如：us-east-1',
+        s3Endpoint: 'S3 Endpoint（可选）',
+        s3EndpointPlaceholder: '例如：https://s3.amazonaws.com',
+        s3AccessKey: 'S3 Access Key',
+        s3AccessKeyPlaceholder: '留空则保留当前密钥',
+        s3SecretKey: 'S3 Secret Key',
+        s3SecretKeyPlaceholder: '留空则保留当前密钥',
+        storageTypes: {
+          local: '本地',
+          s3: 'S3 兼容存储'
+        },
+        sensitiveHintWithValue: '敏感值已隐藏。留空将保留当前值，输入新值可进行轮换。',
+        sensitiveHintWithoutValue: '该敏感字段尚未设置，请输入后保存。',
         saveConfig: '保存配置',
         backupNow: '立即备份',
         stats: {
@@ -1193,6 +1241,36 @@ export default {
         },
         empty: '暂无负载均衡器'
       },
+      audit: {
+        title: '操作审计日志',
+        actions: {
+          filter: '筛选',
+          refresh: '刷新'
+        },
+        filters: {
+          actionPlaceholder: '按 action 过滤',
+          targetTypePlaceholder: '按 target_type 过滤'
+        },
+        table: {
+          id: 'ID',
+          action: '动作',
+          module: '模块',
+          targetType: '目标类型',
+          username: '操作人',
+          content: '内容',
+          ip: 'IP',
+          status: '状态',
+          createdAt: '创建时间'
+        },
+        pagination: {
+          total: '总数: {total}',
+          pageSize: '每页',
+          page: '第 {page} / {totalPages} 页',
+          prev: '上一页',
+          next: '下一页'
+        },
+        empty: '暂无审计日志'
+      },
       configModal: {
         titleEdit: '编辑配置',
         titleCreate: '新增配置',
@@ -1201,7 +1279,9 @@ export default {
         description: '描述',
         keyPlaceholder: '如: site.name',
         valuePlaceholder: '配置值，支持 JSON 格式',
-        descriptionPlaceholder: '配置说明'
+        descriptionPlaceholder: '配置说明',
+        sensitiveHintWithValue: '敏感值已隐藏。留空将保留当前值，输入新值将覆盖。',
+        sensitiveHintWithoutValue: '该配置为敏感项，请输入值后保存。'
       },
       balancerModal: {
         titleEdit: '编辑负载均衡器',
@@ -1233,6 +1313,7 @@ export default {
       },
       messages: {
         fetchConfigsFailed: '获取配置失败',
+        fetchAuditLogsFailed: '获取审计日志失败',
         saveConfigFailed: '保存失败: {message}',
         deleteConfigConfirm: '确定删除配置 {key}?',
         deleteConfigFailed: '删除失败',

@@ -11,6 +11,9 @@ server:
   mode: "release"
   read_timeout: 30
   write_timeout: 30
+  # Leave empty to disable trusting forwarded client IP headers.
+  # Populate this only with the reverse proxies/load balancers that sit in front of V2Board.
+  trusted_proxies: []
 
 frontend:
   enable: true
@@ -47,6 +50,13 @@ log:
 jwt:
   secret: "your-jwt-secret-key-change-in-production"
   expire: 86400
+
+auth:
+  login_rate_limit:
+    enabled: true
+    max_attempts: 6
+    window_seconds: 300
+    lockout_seconds: 600
 
 app:
   name: "V2Board"

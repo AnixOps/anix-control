@@ -1,5 +1,5 @@
 <template>
-  <div class="login-page">
+  <main id="app-main-content" tabindex="-1" class="login-page" aria-labelledby="login-page-title">
     <div class="login-shell">
       <div class="login-toolbar">
         <LocaleSwitcher />
@@ -13,10 +13,10 @@
         </div>
 
         <div class="login-box">
-          <h2>{{ isRegisterMode ? t('login.registerTitle') : t('login.signInTitle') }}</h2>
+          <h2 id="login-page-title">{{ isRegisterMode ? t('login.registerTitle') : t('login.signInTitle') }}</h2>
           <p class="login-subtitle">{{ isRegisterMode ? t('login.registerSubtitle') : t('login.signInSubtitle') }}</p>
 
-          <form class="login-form" @submit.prevent="isRegisterMode ? handleRegister() : handleLogin()">
+          <form class="login-form" :aria-busy="loading ? 'true' : 'false'" @submit.prevent="isRegisterMode ? handleRegister() : handleLogin()">
             <div class="form-group">
               <label for="email">{{ t('common.labels.email') }}</label>
               <input
@@ -50,8 +50,8 @@
               />
             </div>
 
-            <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
-            <div v-if="successMsg" class="success-msg">{{ successMsg }}</div>
+            <div v-if="errorMsg" class="error-msg" role="alert">{{ errorMsg }}</div>
+            <div v-if="successMsg" class="success-msg" role="status" aria-live="polite">{{ successMsg }}</div>
 
             <button type="submit" class="login-btn" :disabled="loading">
               <span v-if="loading" class="spinner"></span>
@@ -80,7 +80,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </main>
 </template>
 
 <script setup>

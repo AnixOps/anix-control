@@ -106,6 +106,7 @@ func initTestDB() *gorm.DB {
 		&model.ForwardTrafficCursor{},
 		&model.BackupConfig{},
 		&model.BackupRecord{},
+		&model.OperationLog{},
 		&model.LoadBalancer{},
 		&model.UserSubscriptionGroup{},
 		&model.PlanSubscriptionGroup{},
@@ -156,7 +157,7 @@ func (s *HandlerTestSuite) SetupTest() {
 		"v2_notification_log", "v2_telegram_bot", "v2_telegram_user", "v2_telegram_chat", "v2_system_config",
 		"v2_payment_gateway", "v2_payment_record", "v2_forward_node", "v2_forward",
 		"v2_forward_tunnel", "v2_forward_user_tunnel", "v2_forward_runtime_job", "v2_forward_traffic_cursor", "v2_forward_rule", "v2_backup_config", "v2_backup_record",
-		"v2_load_balancer", "v2_user_subscription_group",
+		"v2_operation_log", "v2_load_balancer", "v2_user_subscription_group",
 		"v2_plan_subscription_group", "v2_event", "v2_subscription_group",
 		"v2_subscription_template",
 	}

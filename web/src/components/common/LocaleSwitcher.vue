@@ -1,14 +1,19 @@
 <template>
-  <div class="locale-switcher" :class="{ compact }" :aria-label="t('common.locale.label')">
+  <div class="locale-switcher" :class="{ compact }" role="radiogroup" :aria-label="t('common.locale.label')">
     <button
       v-for="option in localeOptions"
       :key="option.value"
+      :ref="(el) => setOptionRef(el, option.value)"
       type="button"
       class="locale-option"
       :class="{ active: currentLocale === option.value }"
-      :aria-pressed="currentLocale === option.value"
+      role="radio"
+      :tabindex="currentLocale === option.value ? 0 : -1"
+      :aria-checked="currentLocale === option.value"
+      :aria-label="`${t('common.locale.switch')}: ${option.label}`"
       :title="`${t('common.locale.switch')}: ${option.label}`"
-      @click="switchLocale(option.value)"
+      @click="activateLocale(option.value)"
+      @keydown="onOptionKeydown($event, option.value)"
     >
       {{ compact ? option.shortLabel : option.label }}
     </button>
@@ -16,6 +21,7 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 
 defineProps({
@@ -26,6 +32,61 @@ defineProps({
 })
 
 const { t, currentLocale, localeOptions, switchLocale } = useAppI18n()
+const optionRefs = ref({})
+
+function setOptionRef(el, key) {
+  if (el) {
+    optionRefs.value[key] = el
+  }
+}
+
+function focusOptionByValue(value) {
+  const element = optionRefs.value[value]
+  if (element && typeof element.focus === 'function') {
+    element.focus()
+  }
+}
+
+function activateLocale(value) {
+  switchLocale(value)
+}
+
+function onOptionKeydown(event, value) {
+  const options = localeOptions.value || []
+  const currentIndex = options.findIndex(item => item.value === value)
+  if (currentIndex < 0) return
+
+  const move = (nextIndex) => {
+    const normalizedIndex = (nextIndex + options.length) % options.length
+    const nextValue = options[normalizedIndex]?.value
+    if (!nextValue) return
+    activateLocale(nextValue)
+    focusOptionByValue(nextValue)
+  }
+
+  switch (event.key) {
+    case 'ArrowRight':
+    case 'ArrowDown':
+      event.preventDefault()
+      move(currentIndex + 1)
+      break
+    case 'ArrowLeft':
+    case 'ArrowUp':
+      event.preventDefault()
+      move(currentIndex - 1)
+      break
+    case 'Home':
+      event.preventDefault()
+      move(0)
+      break
+    case 'End':
+      event.preventDefault()
+      move(options.length - 1)
+      break
+    default:
+      break
+  }
+}
 </script>
 
 <style scoped>

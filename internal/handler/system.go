@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -15,9 +16,151 @@ import (
 )
 
 // SystemHandler 系统处理器
+// SystemHandler handles system configuration, backup, and load balancer endpoints.
 type SystemHandler struct {
-	configService *service.SystemConfigService
-	backupService *service.BackupService
+	configService       *service.SystemConfigService
+	backupService       *service.BackupService
+	operationLogService *service.OperationLogService
+}
+
+func systemConfigResponse(cfg *model.SystemConfig, maskSensitive bool) gin.H {
+	if cfg == nil {
+		return gin.H{}
+	}
+
+	displayValue, sensitive, hasValue := service.MaskSystemConfigValue(cfg.Key, cfg.Value)
+	value := cfg.Value
+	if maskSensitive && sensitive {
+		value = displayValue
+	}
+
+	return gin.H{
+		"id":            cfg.ID,
+		"key":           cfg.Key,
+		"value":         value,
+		"display_value": displayValue,
+		"sensitive":     sensitive,
+		"has_value":     hasValue,
+		"type":          cfg.Type,
+		"group":         cfg.Group,
+		"remark":        cfg.Remark,
+		"description":   cfg.Remark,
+		"created_at":    cfg.CreatedAt,
+		"updated_at":    cfg.UpdatedAt,
+	}
+}
+
+func systemConfigTargetID(cfg *model.SystemConfig) *uint {
+	if cfg == nil || cfg.ID == 0 {
+		return nil
+	}
+
+	targetID := cfg.ID
+	return &targetID
+}
+
+func contextUint(c *gin.Context, key string) *uint {
+	if c == nil {
+		return nil
+	}
+
+	raw, exists := c.Get(key)
+	if !exists {
+		return nil
+	}
+
+	switch value := raw.(type) {
+	case uint:
+		id := value
+		return &id
+	case *uint:
+		return value
+	case uint64:
+		id := uint(value)
+		return &id
+	case uint32:
+		id := uint(value)
+		return &id
+	case int:
+		if value < 0 {
+			return nil
+		}
+		id := uint(value)
+		return &id
+	case int64:
+		if value < 0 {
+			return nil
+		}
+		id := uint(value)
+		return &id
+	case float64:
+		if value < 0 {
+			return nil
+		}
+		id := uint(value)
+		return &id
+	default:
+		return nil
+	}
+}
+
+func contextString(c *gin.Context, key string) string {
+	if c == nil {
+		return ""
+	}
+
+	raw, exists := c.Get(key)
+	if !exists {
+		return ""
+	}
+
+	value, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+
+	return strings.TrimSpace(value)
+}
+
+func systemConfigAuditContent(cfg *model.SystemConfig, preserveExisting bool) string {
+	if cfg == nil {
+		return ""
+	}
+
+	content, err := json.Marshal(gin.H{
+		"key":               cfg.Key,
+		"group":             cfg.Group,
+		"type":              cfg.Type,
+		"sensitive":         service.IsSensitiveSystemConfigKey(cfg.Key),
+		"has_value":         strings.TrimSpace(cfg.Value) != "",
+		"preserve_existing": preserveExisting,
+	})
+	if err != nil {
+		return cfg.Key
+	}
+
+	return string(content)
+}
+
+func (h *SystemHandler) recordSystemConfigAudit(c *gin.Context, action string, cfg *model.SystemConfig, preserveExisting bool) {
+	if h == nil || h.operationLogService == nil || cfg == nil {
+		return
+	}
+
+	if err := h.operationLogService.Record(&service.OperationLogInput{
+		UserID:     contextUint(c, "user_id"),
+		Username:   contextString(c, "email"),
+		Action:     action,
+		Module:     "system",
+		TargetType: "system_config",
+		TargetID:   systemConfigTargetID(cfg),
+		Content:    systemConfigAuditContent(cfg, preserveExisting),
+		IP:         c.ClientIP(),
+		UserAgent:  c.Request.UserAgent(),
+		Status:     1,
+	}); err != nil {
+		log.Printf("record system config audit failed for key=%s: %v", cfg.Key, err)
+	}
 }
 
 func backupStatusToText(status int) string {
@@ -42,36 +185,203 @@ func backupIntervalFromSchedule(schedule string) int {
 	return 24
 }
 
+func maskBackupSensitiveValue(value string) (displayValue string, sensitive bool, hasValue bool) {
+	hasValue = strings.TrimSpace(value) != ""
+	if !hasValue {
+		return "", true, false
+	}
+
+	return service.SensitiveSystemConfigPlaceholder, true, true
+}
+
 func backupConfigResponse(cfg *model.BackupConfig) gin.H {
+	s3AccessKeyDisplayValue, s3AccessKeySensitive, s3AccessKeyHasValue := maskBackupSensitiveValue(cfg.S3AccessKey)
+	s3SecretKeyDisplayValue, s3SecretKeySensitive, s3SecretKeyHasValue := maskBackupSensitiveValue(cfg.S3SecretKey)
+
 	return gin.H{
-		"id":              cfg.ID,
-		"enabled":         cfg.Enabled,
-		"auto_backup":     cfg.AutoBackup,
-		"schedule":        cfg.Schedule,
-		"retention_days":  cfg.RetentionDays,
-		"backup_database": cfg.BackupDatabase,
-		"backup_files":    cfg.BackupFiles,
-		"storage_type":    cfg.StorageType,
-		"storage_path":    cfg.StoragePath,
-		"s3_bucket":       cfg.S3Bucket,
-		"s3_region":       cfg.S3Region,
-		"s3_endpoint":     cfg.S3Endpoint,
-		"s3_access_key":   cfg.S3AccessKey,
-		"s3_secret_key":   cfg.S3SecretKey,
-		"created_at":      cfg.CreatedAt,
-		"updated_at":      cfg.UpdatedAt,
+		"id":                          cfg.ID,
+		"enabled":                     cfg.Enabled,
+		"auto_backup":                 cfg.AutoBackup,
+		"schedule":                    cfg.Schedule,
+		"retention_days":              cfg.RetentionDays,
+		"backup_database":             cfg.BackupDatabase,
+		"backup_files":                cfg.BackupFiles,
+		"storage_type":                cfg.StorageType,
+		"storage_path":                cfg.StoragePath,
+		"s3_bucket":                   cfg.S3Bucket,
+		"s3_region":                   cfg.S3Region,
+		"s3_endpoint":                 cfg.S3Endpoint,
+		"s3_access_key":               s3AccessKeyDisplayValue,
+		"s3_access_key_display_value": s3AccessKeyDisplayValue,
+		"s3_access_key_sensitive":     s3AccessKeySensitive,
+		"s3_access_key_has_value":     s3AccessKeyHasValue,
+		"s3_secret_key":               s3SecretKeyDisplayValue,
+		"s3_secret_key_display_value": s3SecretKeyDisplayValue,
+		"s3_secret_key_sensitive":     s3SecretKeySensitive,
+		"s3_secret_key_has_value":     s3SecretKeyHasValue,
+		"created_at":                  cfg.CreatedAt,
+		"updated_at":                  cfg.UpdatedAt,
 		// Frontend aliases used by System.vue.
 		"interval":   backupIntervalFromSchedule(cfg.Schedule),
 		"keep_count": cfg.RetentionDays,
 	}
 }
 
+func backupConfigTargetID(cfg *model.BackupConfig) *uint {
+	if cfg == nil || cfg.ID == 0 {
+		return nil
+	}
+
+	targetID := cfg.ID
+	return &targetID
+}
+
+func backupConfigAuditContent(cfg *model.BackupConfig, preservedSensitiveFields []string) string {
+	if cfg == nil {
+		return ""
+	}
+
+	content, err := json.Marshal(gin.H{
+		"enabled":                    cfg.Enabled,
+		"auto_backup":                cfg.AutoBackup,
+		"schedule":                   cfg.Schedule,
+		"retention_days":             cfg.RetentionDays,
+		"backup_database":            cfg.BackupDatabase,
+		"backup_files":               cfg.BackupFiles,
+		"storage_type":               cfg.StorageType,
+		"storage_path":               cfg.StoragePath,
+		"s3_bucket":                  cfg.S3Bucket,
+		"s3_region":                  cfg.S3Region,
+		"s3_endpoint":                cfg.S3Endpoint,
+		"s3_access_key_has_value":    strings.TrimSpace(cfg.S3AccessKey) != "",
+		"s3_secret_key_has_value":    strings.TrimSpace(cfg.S3SecretKey) != "",
+		"preserved_sensitive_fields": preservedSensitiveFields,
+	})
+	if err != nil {
+		return cfg.StorageType
+	}
+
+	return string(content)
+}
+
+func (h *SystemHandler) recordBackupConfigAudit(c *gin.Context, action string, cfg *model.BackupConfig, preservedSensitiveFields []string) {
+	if h == nil || h.operationLogService == nil || cfg == nil {
+		return
+	}
+
+	if err := h.operationLogService.Record(&service.OperationLogInput{
+		UserID:     contextUint(c, "user_id"),
+		Username:   contextString(c, "email"),
+		Action:     action,
+		Module:     "system",
+		TargetType: "backup_config",
+		TargetID:   backupConfigTargetID(cfg),
+		Content:    backupConfigAuditContent(cfg, preservedSensitiveFields),
+		IP:         c.ClientIP(),
+		UserAgent:  c.Request.UserAgent(),
+		Status:     1,
+	}); err != nil {
+		log.Printf("record backup config audit failed: %v", err)
+	}
+}
+
+func applyBackupSensitiveFieldUpdate(req map[string]interface{}, fieldName, currentValue string, preserveRequested bool) (updatedValue string, preserved bool) {
+	rawValue, exists := req[fieldName]
+	if !exists {
+		return currentValue, false
+	}
+
+	if rawValue == nil {
+		if preserveRequested {
+			return currentValue, true
+		}
+		return "", false
+	}
+
+	stringValue, ok := rawValue.(string)
+	if !ok {
+		return currentValue, false
+	}
+
+	if stringValue == service.SensitiveSystemConfigPlaceholder {
+		return currentValue, true
+	}
+	if preserveRequested && strings.TrimSpace(stringValue) == "" {
+		return currentValue, true
+	}
+
+	return stringValue, false
+}
+
+func backupRecordTargetID(record *model.BackupRecord) *uint {
+	if record == nil || record.ID == 0 {
+		return nil
+	}
+
+	targetID := record.ID
+	return &targetID
+}
+
+func backupRecordAuditContent(record *model.BackupRecord) string {
+	if record == nil {
+		return ""
+	}
+
+	filename := record.Name
+	if strings.TrimSpace(record.Path) != "" {
+		filename = filepath.Base(record.Path)
+	}
+
+	content, err := json.Marshal(gin.H{
+		"name":         record.Name,
+		"filename":     filename,
+		"type":         record.Type,
+		"size":         record.Size,
+		"status":       backupStatusToText(record.Status),
+		"status_code":  record.Status,
+		"auto":         record.Auto,
+		"created_by":   record.CreatedBy,
+		"has_error":    strings.TrimSpace(record.Error) != "",
+		"completed_at": record.CompletedAt,
+		"created_at":   record.CreatedAt,
+		"updated_at":   record.UpdatedAt,
+	})
+	if err != nil {
+		return record.Name
+	}
+
+	return string(content)
+}
+
+func (h *SystemHandler) recordBackupRecordAudit(c *gin.Context, action string, record *model.BackupRecord) {
+	if h == nil || h.operationLogService == nil || record == nil {
+		return
+	}
+
+	if err := h.operationLogService.Record(&service.OperationLogInput{
+		UserID:     contextUint(c, "user_id"),
+		Username:   contextString(c, "email"),
+		Action:     action,
+		Module:     "system",
+		TargetType: "backup_record",
+		TargetID:   backupRecordTargetID(record),
+		Content:    backupRecordAuditContent(record),
+		IP:         c.ClientIP(),
+		UserAgent:  c.Request.UserAgent(),
+		Status:     1,
+	}); err != nil {
+		log.Printf("record backup record audit failed: %v", err)
+	}
+}
+
 // NewSystemHandler 创建处理器
+// NewSystemHandler creates a system handler.
 func NewSystemHandler() *SystemHandler {
 	db := database.Get()
 	return &SystemHandler{
-		configService: service.NewSystemConfigService(db),
-		backupService: service.NewBackupService(db),
+		configService:       service.NewSystemConfigService(db),
+		backupService:       service.NewBackupService(db),
+		operationLogService: service.NewOperationLogService(db),
 	}
 }
 
@@ -106,18 +416,8 @@ func (h *SystemHandler) GetConfigs(c *gin.Context) {
 	}
 
 	list := make([]gin.H, 0, len(configs))
-	for _, cfg := range configs {
-		list = append(list, gin.H{
-			"id":          cfg.ID,
-			"key":         cfg.Key,
-			"value":       cfg.Value,
-			"type":        cfg.Type,
-			"group":       cfg.Group,
-			"remark":      cfg.Remark,
-			"description": cfg.Remark,
-			"created_at":  cfg.CreatedAt,
-			"updated_at":  cfg.UpdatedAt,
-		})
+	for i := range configs {
+		list = append(list, systemConfigResponse(&configs[i], true))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -144,13 +444,27 @@ func (h *SystemHandler) GetConfigs(c *gin.Context) {
 func (h *SystemHandler) GetConfig(c *gin.Context) {
 	key := c.Param("key")
 
-	value, err := h.configService.Get(key)
+	entry, err := h.configService.GetEntry(key)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{"key": key, "value": value}})
+	if entry == nil {
+		displayValue, sensitive, hasValue := service.MaskSystemConfigValue(key, "")
+		c.JSON(http.StatusOK, gin.H{
+			"data": gin.H{
+				"key":           key,
+				"value":         "",
+				"display_value": displayValue,
+				"sensitive":     sensitive,
+				"has_value":     hasValue,
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": systemConfigResponse(entry, false)})
 }
 
 // SetConfig godoc
@@ -170,19 +484,26 @@ func (h *SystemHandler) SetConfig(c *gin.Context) {
 	key := c.Param("key")
 
 	var req struct {
-		Value       json.RawMessage `json:"value"`
-		Type        string          `json:"type"`
-		Group       string          `json:"group"`
-		Remark      string          `json:"remark"`
-		Description string          `json:"description"`
+		Value            json.RawMessage `json:"value"`
+		Type             string          `json:"type"`
+		Group            string          `json:"group"`
+		Remark           string          `json:"remark"`
+		Description      string          `json:"description"`
+		PreserveExisting bool            `json:"preserve_existing"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	existingEntry, err := h.configService.GetEntry(key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	rawValue := bytes.TrimSpace(req.Value)
-	if len(rawValue) == 0 {
+	if len(rawValue) == 0 && existingEntry == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "value is required"})
 		return
 	}
@@ -202,12 +523,66 @@ func (h *SystemHandler) SetConfig(c *gin.Context) {
 		remark = req.Description
 	}
 
+	preserveExisting := req.PreserveExisting
+	sensitiveConfig := service.IsSensitiveSystemConfigKey(key)
+	if existingEntry != nil {
+		sensitiveConfig = sensitiveConfig || service.IsSensitiveSystemConfigKey(existingEntry.Key)
+	}
+	if existingEntry != nil && sensitiveConfig && (preserveExisting || value == service.SensitiveSystemConfigPlaceholder) {
+		value = existingEntry.Value
+		preserveExisting = true
+	}
+	if len(rawValue) == 0 && existingEntry != nil {
+		if !preserveExisting {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "value is required"})
+			return
+		}
+		value = existingEntry.Value
+	}
+
 	if err := h.configService.Set(key, value, req.Type, req.Group, remark); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "config updated"})
+	savedEntry, err := h.configService.GetEntry(key)
+	if err != nil {
+		log.Printf("load saved system config failed: %v", err)
+	}
+	if savedEntry == nil {
+		savedEntry = &model.SystemConfig{
+			Key:    key,
+			Value:  value,
+			Type:   req.Type,
+			Group:  req.Group,
+			Remark: remark,
+		}
+		if existingEntry != nil {
+			if savedEntry.Type == "" {
+				savedEntry.Type = existingEntry.Type
+			}
+			if savedEntry.Group == "" {
+				savedEntry.Group = existingEntry.Group
+			}
+			if savedEntry.Remark == "" {
+				savedEntry.Remark = existingEntry.Remark
+			}
+		}
+		if savedEntry.Type == "" {
+			savedEntry.Type = "string"
+		}
+	}
+
+	action := "update"
+	if existingEntry == nil {
+		action = "create"
+	}
+	h.recordSystemConfigAudit(c, action, savedEntry, preserveExisting)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "config updated",
+		"data":    systemConfigResponse(savedEntry, true),
+	})
 }
 
 // DeleteConfig godoc
@@ -224,9 +599,19 @@ func (h *SystemHandler) SetConfig(c *gin.Context) {
 func (h *SystemHandler) DeleteConfig(c *gin.Context) {
 	key := c.Param("key")
 
+	existingEntry, err := h.configService.GetEntry(key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err := h.configService.Delete(key); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if existingEntry != nil {
+		h.recordSystemConfigAudit(c, "delete", existingEntry, false)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "config deleted"})
@@ -280,6 +665,9 @@ func (h *SystemHandler) UpdateBackupConfig(c *gin.Context) {
 		return
 	}
 
+	preserveExistingSensitive, _ := req["preserve_existing_sensitive"].(bool)
+	preservedSensitiveFields := make([]string, 0, 2)
+
 	if rawEnabled, ok := req["enabled"].(bool); ok {
 		cfg.Enabled = rawEnabled
 	}
@@ -318,11 +706,15 @@ func (h *SystemHandler) UpdateBackupConfig(c *gin.Context) {
 	if rawS3Endpoint, ok := req["s3_endpoint"].(string); ok {
 		cfg.S3Endpoint = rawS3Endpoint
 	}
-	if rawS3AccessKey, ok := req["s3_access_key"].(string); ok {
-		cfg.S3AccessKey = rawS3AccessKey
+	updatedS3AccessKey, preservedS3AccessKey := applyBackupSensitiveFieldUpdate(req, "s3_access_key", cfg.S3AccessKey, preserveExistingSensitive)
+	cfg.S3AccessKey = updatedS3AccessKey
+	if preservedS3AccessKey {
+		preservedSensitiveFields = append(preservedSensitiveFields, "s3_access_key")
 	}
-	if rawS3SecretKey, ok := req["s3_secret_key"].(string); ok {
-		cfg.S3SecretKey = rawS3SecretKey
+	updatedS3SecretKey, preservedS3SecretKey := applyBackupSensitiveFieldUpdate(req, "s3_secret_key", cfg.S3SecretKey, preserveExistingSensitive)
+	cfg.S3SecretKey = updatedS3SecretKey
+	if preservedS3SecretKey {
+		preservedSensitiveFields = append(preservedSensitiveFields, "s3_secret_key")
 	}
 	if rawKeepCount, ok := req["keep_count"]; ok {
 		switch v := rawKeepCount.(type) {
@@ -350,6 +742,8 @@ func (h *SystemHandler) UpdateBackupConfig(c *gin.Context) {
 		return
 	}
 
+	h.recordBackupConfigAudit(c, "update", &cfg, preservedSensitiveFields)
+
 	c.JSON(http.StatusOK, gin.H{"data": backupConfigResponse(&cfg)})
 }
 
@@ -367,11 +761,13 @@ func (h *SystemHandler) UpdateBackupConfig(c *gin.Context) {
 func (h *SystemHandler) CreateBackup(c *gin.Context) {
 	backupType := c.DefaultQuery("type", "database")
 
-	record, err := h.backupService.CreateBackup(backupType, nil)
+	record, err := h.backupService.CreateBackup(backupType, contextUint(c, "user_id"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	h.recordBackupRecordAudit(c, "create", record)
 
 	c.JSON(http.StatusOK, gin.H{"data": record})
 }
@@ -481,9 +877,16 @@ func (h *SystemHandler) DeleteBackup(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
+
+	var record model.BackupRecord
+	recordLoaded := database.Get().First(&record, uint(backupID)).Error == nil
 	if err := h.backupService.DeleteBackup(uint(backupID)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if recordLoaded {
+		h.recordBackupRecordAudit(c, "delete", &record)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "backup deleted"})
@@ -508,9 +911,15 @@ func (h *SystemHandler) RestoreBackup(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
+	var record model.BackupRecord
+	recordLoaded := database.Get().First(&record, uint(backupID)).Error == nil
 	if err := h.backupService.RestoreBackup(uint(backupID)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if recordLoaded {
+		h.recordBackupRecordAudit(c, "restore", &record)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "backup restored, please restart server"})

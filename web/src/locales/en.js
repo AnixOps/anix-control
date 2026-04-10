@@ -110,6 +110,11 @@ export default {
       zhShort: '中',
       enShort: 'EN'
     },
+    a11y: {
+      skipToContent: 'Skip to main content',
+      openNavigation: 'Open navigation menu',
+      closeNavigation: 'Close navigation menu'
+    },
     actions: {
       cancel: 'Cancel',
       close: 'Close',
@@ -183,6 +188,18 @@ export default {
     }
   },
   pageTitles: {
+    auth: {
+      login: 'Sign In'
+    },
+    user: {
+      dashboard: 'Dashboard',
+      subscribe: 'Subscriptions',
+      knowledge: 'Guides',
+      tickets: 'Tickets',
+      plans: 'Plans',
+      orders: 'Orders',
+      fallback: 'User Center'
+    },
     admin: {
       dashboard: 'Dashboard',
       users: 'Users',
@@ -208,6 +225,15 @@ export default {
       invite: 'Invite Rewards',
       system: 'System',
       fallback: 'Admin Console'
+    }
+  },
+  app: {
+    meta: {
+      defaultDescription: 'Commercial-ready control plane for subscriptions, payments, nodes, NodeX runtime, and local Ansible relay operations.',
+      loginDescription: 'Sign in to V2Board AnixOps to manage subscriptions, billing, nodes, and forwarding runtimes.',
+      userDescription: 'User portal for subscriptions, tickets, plans, and billing records.',
+      adminDescription: 'Administration console for users, billing, nodes, notifications, and system operations.',
+      forwardDescription: 'Forwarding operations workspace for Local Runtime, Ansible Machines, NodeX topology, tunnels, and runtime diagnostics.'
     }
   },
   layout: {
@@ -1131,7 +1157,8 @@ export default {
       tabs: {
         config: 'System Config',
         backup: 'Backups',
-        balancer: 'Load Balancers'
+        balancer: 'Load Balancers',
+        audit: 'Audit Logs'
       },
       actions: {
         addConfig: 'Add Config',
@@ -1155,6 +1182,27 @@ export default {
         enabled: 'Enable automatic backup',
         intervalHours: 'Backup Interval (hours)',
         keepCount: 'Retention Count',
+        backupDatabase: 'Include database',
+        backupFiles: 'Include files',
+        storageType: 'Storage Type',
+        storagePath: 'Local Storage Path',
+        storagePathPlaceholder: 'For example: backups',
+        s3Bucket: 'S3 Bucket',
+        s3BucketPlaceholder: 'For example: panel-backups',
+        s3Region: 'S3 Region',
+        s3RegionPlaceholder: 'For example: us-east-1',
+        s3Endpoint: 'S3 Endpoint (optional)',
+        s3EndpointPlaceholder: 'For example: https://s3.amazonaws.com',
+        s3AccessKey: 'S3 Access Key',
+        s3AccessKeyPlaceholder: 'Leave blank to keep current key',
+        s3SecretKey: 'S3 Secret Key',
+        s3SecretKeyPlaceholder: 'Leave blank to keep current secret',
+        storageTypes: {
+          local: 'Local',
+          s3: 'S3 Compatible'
+        },
+        sensitiveHintWithValue: 'Sensitive value is hidden. Leave blank to keep current value, or enter a new value to rotate it.',
+        sensitiveHintWithoutValue: 'This sensitive field is not set yet. Enter a value to save it.',
         saveConfig: 'Save Config',
         backupNow: 'Backup Now',
         stats: {
@@ -1185,6 +1233,36 @@ export default {
         },
         empty: 'No load balancers'
       },
+      audit: {
+        title: 'Operation Audit Logs',
+        actions: {
+          filter: 'Filter',
+          refresh: 'Refresh'
+        },
+        filters: {
+          actionPlaceholder: 'Filter by action',
+          targetTypePlaceholder: 'Filter by target type'
+        },
+        table: {
+          id: 'ID',
+          action: 'Action',
+          module: 'Module',
+          targetType: 'Target Type',
+          username: 'Username',
+          content: 'Content',
+          ip: 'IP',
+          status: 'Status',
+          createdAt: 'Created At'
+        },
+        pagination: {
+          total: 'Total: {total}',
+          pageSize: 'Page size',
+          page: 'Page {page} / {totalPages}',
+          prev: 'Previous',
+          next: 'Next'
+        },
+        empty: 'No audit logs'
+      },
       configModal: {
         titleEdit: 'Edit Config',
         titleCreate: 'Create Config',
@@ -1193,7 +1271,9 @@ export default {
         description: 'Description',
         keyPlaceholder: 'For example: site.name',
         valuePlaceholder: 'Config value, JSON is supported',
-        descriptionPlaceholder: 'Config description'
+        descriptionPlaceholder: 'Config description',
+        sensitiveHintWithValue: 'Sensitive value is hidden. Leave blank to keep the current value, or enter a new value to replace it.',
+        sensitiveHintWithoutValue: 'This is a sensitive key. Enter a value to set it.'
       },
       balancerModal: {
         titleEdit: 'Edit Load Balancer',
@@ -1246,7 +1326,8 @@ export default {
         deleteBalancerConfirm: 'Delete load balancer {name}?',
         deleteBalancerFailed: 'Delete failed',
         healthCheckCompleted: 'Health check completed',
-        healthCheckFailed: 'Health check failed'
+        healthCheckFailed: 'Health check failed',
+        fetchAuditLogsFailed: 'Failed to load audit logs'
       }
     },
     nodeXTopology: {
