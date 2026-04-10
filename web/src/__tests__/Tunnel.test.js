@@ -8,6 +8,7 @@ const adminApi = vi.hoisted(() => ({
   deleteForwardTunnel: vi.fn(),
   diagnoseForwardTunnel: vi.fn(),
   getAdminForwardTunnelList: vi.fn(),
+  getAnsibleMachines: vi.fn(),
   getForwardNodes: vi.fn(),
   getSystemConfig: vi.fn(),
   updateForwardTunnel: vi.fn()
@@ -38,6 +39,7 @@ describe('Tunnel.vue', () => {
     adminApi.createForwardTunnel.mockResolvedValue({ code: 0 })
     adminApi.deleteForwardTunnel.mockResolvedValue({ code: 0 })
     adminApi.diagnoseForwardTunnel.mockResolvedValue({ code: 0, data: { results: [] } })
+    adminApi.getAnsibleMachines.mockResolvedValue({ data: { list: [] } })
     adminApi.updateForwardTunnel.mockResolvedValue({ code: 0 })
     adminApi.getSystemConfig.mockImplementation((key) => {
       if (key === 'forward.runtime.nodex_mode') {
@@ -55,16 +57,21 @@ describe('Tunnel.vue', () => {
 
     const wrapper = mountTunnel()
     await flushPromises()
+    wrapper.vm.nodes = [
+      { id: 10, name: 'Relay-a', host: 'relay-a.host', type: 'relay', status: 1 }
+    ]
+    await wrapper.vm.$nextTick()
 
     wrapper.vm.openCreateModal()
     await wrapper.vm.$nextTick()
 
     expect(adminApi.getSystemConfig).toHaveBeenCalledWith('forward.runtime.nodex_mode')
+    expect(adminApi.getForwardNodes).toHaveBeenCalledWith({ page_size: 200, scope: 'nodex' })
     expect(wrapper.vm.runtimeNodeXMode).toBe(true)
   })
 
   it('shows NodeX entry and exit selects when NodeX mode is active', async () => {
-    adminApi.getForwardNodes.mockResolvedValue({
+    adminApi.getAnsibleMachines.mockResolvedValue({
       data: {
         list: [
           { id: 10, name: 'Relay-a', host: 'relay-a.host', type: 'relay', status: 1 },
@@ -99,17 +106,20 @@ describe('Tunnel.vue', () => {
       }
       return Promise.resolve({ data: { value: '' } })
     })
-    adminApi.getForwardNodes.mockResolvedValue({
+    adminApi.getAnsibleMachines.mockResolvedValue({
       data: {
         list: [
-          { id: 10, name: 'Relay-a', host: 'relay-a.host', type: 'relay', status: 1 },
-          { id: 20, name: 'Exit-a', host: 'exit-a.host', type: 'exit', status: 1 }
+          { id: 10, name: 'Relay-a', host: 'relay-a.host', type: 'relay', status: 1 }
         ]
       }
     })
 
     const wrapper = mountTunnel()
     await flushPromises()
+    wrapper.vm.nodes = [
+      { id: 10, name: 'Relay-a', host: 'relay-a.host', type: 'relay', status: 1 }
+    ]
+    await wrapper.vm.$nextTick()
 
     wrapper.vm.openCreateModal()
     await wrapper.vm.$nextTick()
@@ -124,6 +134,8 @@ describe('Tunnel.vue', () => {
     await wrapper.vm.handleSubmit()
     await flushPromises()
 
+    expect(adminApi.getAnsibleMachines).toHaveBeenCalledWith({ page_size: 200, type: 'relay' })
+    expect(adminApi.getForwardNodes).not.toHaveBeenCalled()
     expect(adminApi.createForwardTunnel).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 1,
@@ -145,7 +157,7 @@ describe('Tunnel.vue', () => {
       return Promise.resolve({ data: { value: '' } })
     })
 
-    adminApi.getForwardNodes.mockResolvedValue({
+    adminApi.getAnsibleMachines.mockResolvedValue({
       data: {
         list: [
           { id: 10, name: 'Relay-a', host: 'relay-a.host', type: 'relay', status: 1 }
@@ -160,8 +172,43 @@ describe('Tunnel.vue', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.vm.runtimeNodeXMode).toBe(false)
+    expect(adminApi.getAnsibleMachines).toHaveBeenCalledWith({ page_size: 200, type: 'relay' })
     expect(wrapper.find('[data-test="forward-entry-select"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="forward-execution-select"]').exists()).toBe(true)
+  })
+
+  it('shows local runtime compatibility warnings instead of mislabeling tunnel ownership', async () => {
+    adminApi.getSystemConfig.mockImplementation((key) => {
+      if (key === 'forward.runtime.nodex_mode') {
+        return Promise.resolve({ data: { value: 'false' } })
+      }
+      if (key === 'forward.runtime_backend') {
+        return Promise.resolve({ data: { value: 'nftables_ansible' } })
+      }
+      return Promise.resolve({ data: { value: '' } })
+    })
+    adminApi.getAdminForwardTunnelList.mockResolvedValue({
+      code: 0,
+      data: [
+        {
+          id: 91,
+          name: 'NodeX-style tunnel',
+          type: 2,
+          inNodeId: 10,
+          outNodeId: 20,
+          flow: 1,
+          trafficRatio: 1,
+          tcpListenAddr: '[::]',
+          udpListenAddr: '[::]'
+        }
+      ]
+    })
+    adminApi.getAnsibleMachines.mockResolvedValue({ data: { list: [] } })
+
+    const wrapper = mountTunnel()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(i18n.global.t('runtime.tunnel.compatibility.localOnlyPortForward'))
   })
 
   it('splits entry and exit nodes by type', async () => {
@@ -226,7 +273,7 @@ describe('Tunnel.vue', () => {
       return Promise.resolve({ data: { value: '' } })
     })
 
-    adminApi.getForwardNodes.mockResolvedValue({
+    adminApi.getAnsibleMachines.mockResolvedValue({
       data: {
         list: [{ id: 15, name: 'Relay-legacy', host: 'legacy.host', type: 'relay', status: 1 }]
       }

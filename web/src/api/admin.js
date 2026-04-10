@@ -760,48 +760,61 @@ export function getForwardNodes(params) {
   })
 }
 
-export function createForwardNode(data) {
+export function createForwardNode(data, options = {}) {
   return request({
     url: '/admin/forward/nodes',
     method: 'post',
-    data
+    data,
+    params: normalizeForwardNodeRequestOptions(options).params || {}
   })
 }
 
-export function getForwardNode(id) {
+function normalizeForwardNodeRequestOptions(options = {}) {
+  if (!options || typeof options !== 'object') {
+    return {}
+  }
+  return options
+}
+
+export function getForwardNode(id, options = {}) {
   return request({
     url: `/admin/forward/nodes/${id}`,
-    method: 'get'
+    method: 'get',
+    params: normalizeForwardNodeRequestOptions(options).params || {}
   })
 }
 
-export function updateForwardNode(id, data) {
+export function updateForwardNode(id, data, options = {}) {
   return request({
     url: `/admin/forward/nodes/${id}`,
     method: 'put',
-    data
+    data,
+    params: normalizeForwardNodeRequestOptions(options).params || {}
   })
 }
 
-export function deleteForwardNode(id) {
+export function deleteForwardNode(id, options = {}) {
   return request({
     url: `/admin/forward/nodes/${id}`,
-    method: 'delete'
+    method: 'delete',
+    params: normalizeForwardNodeRequestOptions(options).params || {}
   })
 }
 
-export function checkForwardNode(id) {
+export function checkForwardNode(id, options = {}) {
   return request({
     url: `/admin/forward/nodes/${id}/check`,
-    method: 'post'
+    method: 'post',
+    params: normalizeForwardNodeRequestOptions(options).params || {}
   })
 }
 
-export function toggleForwardNode(id, enabled) {
+export function toggleForwardNode(id, enabled, options = {}) {
   return request({
     url: `/admin/forward/nodes/${id}/toggle`,
     method: 'post',
-    data: { enabled }
+    data: { enabled },
+    params: normalizeForwardNodeRequestOptions(options).params || {}
   })
 }
 
@@ -1500,10 +1513,12 @@ export default {
   runHealthCheck
 }
 
-export function syncForwardNodeStats(id) {
+export function syncForwardNodeStats(id, options = {}) {
+  const normalizedOptions = normalizeForwardNodeRequestOptions(options)
   return request({
     url: `/admin/forward/nodes/${id}/sync-stats`,
-    method: 'post'
+    method: 'post',
+    ...(normalizedOptions.params ? { params: normalizedOptions.params } : {})
   })
 }
 

@@ -52,7 +52,8 @@
       </div>
       <p class="inventory-hint">{{ t('runtime.ansibleMachines.inventoryHint') }}</p>
 
-      <div v-if="loading" class="state-card">{{ t('runtime.ansibleMachines.loading') }}</div>
+      <div v-if="pageError" class="state-card state-error">{{ pageError }}</div>
+      <div v-else-if="loading" class="state-card">{{ t('runtime.ansibleMachines.loading') }}</div>
       <div v-else-if="!machines.length" class="state-card">{{ t('runtime.ansibleMachines.empty') }}</div>
       <div v-else class="machine-grid">
         <article v-for="machine in machines" :key="machine.id" class="machine-card">
@@ -115,7 +116,7 @@
             <p class="eyebrow">{{ t('runtime.ansibleMachines.modal.eyebrow') }}</p>
             <h3>{{ editorMode ? t('runtime.ansibleMachines.modal.titleEdit') : t('runtime.ansibleMachines.modal.titleAdd') }}</h3>
           </div>
-          <button class="modal-close" @click="closeEditor">×</button>
+          <button class="modal-close" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="closeEditor">&times;</button>
         </div>
         <div class="modal-body">
           <p class="inventory-hint compact">{{ t('runtime.ansibleMachines.inventoryHint') }}</p>
@@ -165,7 +166,7 @@
             <p class="eyebrow">{{ t('runtime.ansibleMachines.modal.deleteEyebrow') }}</p>
             <h3>{{ t('runtime.ansibleMachines.modal.deleteTitle') }}</h3>
           </div>
-          <button class="modal-close" @click="deleteTarget = null">×</button>
+          <button class="modal-close" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="deleteTarget = null">&times;</button>
         </div>
         <div class="modal-body">
           <p>{{ t('runtime.ansibleMachines.modal.deleteConfirm', { name: deleteTarget?.name || '' }) }}</p>
@@ -206,6 +207,7 @@ const editorOpen = ref(false)
 const editorMode = ref(false)
 const deleteTarget = ref(null)
 const formError = ref('')
+const pageError = ref('')
 const form = reactive(createForm())
 
 const onlineCount = computed(() => machines.value.filter(item => item.status === 1).length)
@@ -217,6 +219,10 @@ function translateRuntimeText(value, fallback = '-') {
     return fallback
   }
   return translateLiteral(text)
+}
+
+function resolveRuntimeError(error, fallbackKey) {
+  return translateRuntimeText(error?.response?.data?.msg || error?.message, t(fallbackKey))
 }
 
 function createForm() {
@@ -259,6 +265,7 @@ function formatBytes(value) {
 
 async function refreshAll() {
   loading.value = true
+  pageError.value = ''
   try {
     const params = { page: 1, page_size: 200, type: 'relay' }
     if (statusFilter.value !== 'all') params.status = Number(statusFilter.value)
@@ -266,7 +273,7 @@ async function refreshAll() {
     const list = Array.isArray(payload?.list) ? payload.list : Array.isArray(payload) ? payload : []
     machines.value = list.map(normalizeMachine)
   } catch (error) {
-    console.error('load ansible machines failed:', error)
+    pageError.value = resolveRuntimeError(error, 'runtime.ansibleMachines.errors.loadFailed')
     machines.value = []
   } finally {
     loading.value = false
@@ -275,23 +282,28 @@ async function refreshAll() {
 
 async function openEditor(machine = null) {
   resetForm()
+  pageError.value = ''
   editorMode.value = Boolean(machine?.id)
   editorOpen.value = true
   if (!machine?.id) return
-  const detail = normalizeMachine(unwrapResponse(await getAnsibleMachine(machine.id)))
-  Object.assign(form, {
-    id: detail.id,
-    name: detail.name,
-    host: detail.host,
-    port: detail.port ? String(detail.port) : '',
-    region: detail.region,
-    isp: detail.isp,
-    weight: String(detail.weight || 1)
-  })
+  try {
+    const detail = normalizeMachine(unwrapResponse(await getAnsibleMachine(machine.id)))
+    Object.assign(form, {
+      id: detail.id,
+      name: detail.name,
+      host: detail.host,
+      port: detail.port ? String(detail.port) : '',
+      region: detail.region,
+      isp: detail.isp,
+      weight: String(detail.weight || 1)
+    })
+  } catch (error) {
+    formError.value = resolveRuntimeError(error, 'runtime.ansibleMachines.errors.detailFailed')
+  }
 }
 
-function closeEditor() {
-  if (saving.value) return
+function closeEditor(force = false) {
+  if (saving.value && !force) return
   editorOpen.value = false
   editorMode.value = false
   resetForm()
@@ -320,10 +332,10 @@ async function submitForm() {
     } else {
       await createAnsibleMachine(payload)
     }
-    closeEditor()
     await refreshAll()
+    closeEditor(true)
   } catch (error) {
-    formError.value = translateRuntimeText(error.response?.data?.msg || error.message, t('runtime.ansibleMachines.errors.saveFailed'))
+    formError.value = resolveRuntimeError(error, 'runtime.ansibleMachines.errors.saveFailed')
   } finally {
     saving.value = false
   }
@@ -340,6 +352,8 @@ async function confirmDelete() {
     await deleteAnsibleMachine(deleteTarget.value.id)
     deleteTarget.value = null
     await refreshAll()
+  } catch (error) {
+    pageError.value = resolveRuntimeError(error, 'runtime.ansibleMachines.errors.deleteFailed')
   } finally {
     saving.value = false
   }
@@ -359,6 +373,8 @@ async function checkMachine(machine) {
         : translateRuntimeText(payload?.error, t('runtime.ansibleMachines.results.unavailable'))
     }
     await refreshAll()
+  } catch (error) {
+    results[machine.id] = { success: false, message: resolveRuntimeError(error, 'runtime.ansibleMachines.errors.checkFailed') }
   } finally {
     pendingAction.value = ''
   }
@@ -370,6 +386,8 @@ async function syncMachine(machine) {
     const payload = unwrapResponse(await syncAnsibleMachineStats(machine.id))
     results[machine.id] = { success: true, message: translateRuntimeText(payload?.message, t('runtime.ansibleMachines.results.synced')) }
     await refreshAll()
+  } catch (error) {
+    results[machine.id] = { success: false, message: resolveRuntimeError(error, 'runtime.ansibleMachines.errors.syncFailed') }
   } finally {
     pendingAction.value = ''
   }
@@ -380,6 +398,8 @@ async function toggleMachine(machine) {
   try {
     await toggleAnsibleMachine(machine.id, !machine.enabled)
     await refreshAll()
+  } catch (error) {
+    results[machine.id] = { success: false, message: resolveRuntimeError(error, 'runtime.ansibleMachines.errors.toggleFailed') }
   } finally {
     pendingAction.value = ''
   }
@@ -425,6 +445,7 @@ onMounted(async () => {
 .result-text.ok { color: #047857; }
 .result-text.fail, .danger-text, .form-error { color: #b91c1c; }
 .state-card { padding: 16px; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-color); }
+.state-error { color: #b91c1c; border-color: rgba(239,68,68,.24); background: rgba(239,68,68,.08); }
 .modal-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15,23,42,.62); z-index: 1100; }
 .modal { width: min(100%, 720px); border-radius: 18px; border: 1px solid var(--border-color); background: var(--surface-color); }
 .modal-sm { width: min(100%, 420px); }

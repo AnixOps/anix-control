@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/anixops/v2board/internal/database"
@@ -123,6 +124,11 @@ func (h *ForwardHandler) CreateNode(c *gin.Context) {
 		node.APIToken = h.nodeService.GenerateAPIToken()
 	}
 
+	if err := h.validateScopedNodeInventory(c, node); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err := h.nodeService.Create(node); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -144,15 +150,8 @@ func (h *ForwardHandler) CreateNode(c *gin.Context) {
 // @Failure 404 {object} map[string]interface{}
 // @Router /admin/forward/nodes/{id} [get]
 func (h *ForwardHandler) GetNode(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-		return
-	}
-
-	node, err := h.nodeService.GetByID(uint(id))
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "forward node not found"})
+	node, ok := h.loadScopedForwardNode(c, "forward node not found")
+	if !ok {
 		return
 	}
 
@@ -174,15 +173,8 @@ func (h *ForwardHandler) GetNode(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /admin/forward/nodes/{id} [put]
 func (h *ForwardHandler) UpdateNode(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-		return
-	}
-
-	node, err := h.nodeService.GetByID(uint(id))
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "node not found"})
+	node, ok := h.loadScopedForwardNode(c, "node not found")
+	if !ok {
 		return
 	}
 
@@ -230,6 +222,11 @@ func (h *ForwardHandler) UpdateNode(c *gin.Context) {
 		node.Enabled = *req.Enabled
 	}
 
+	if err := h.validateScopedNodeInventory(c, node); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	if err := h.nodeService.Update(node); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -251,13 +248,12 @@ func (h *ForwardHandler) UpdateNode(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /admin/forward/nodes/{id} [delete]
 func (h *ForwardHandler) DeleteNode(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+	node, ok := h.loadScopedForwardNode(c, "node not found")
+	if !ok {
 		return
 	}
 
-	if err := h.nodeService.Delete(uint(id)); err != nil {
+	if err := h.nodeService.Delete(node.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -278,13 +274,12 @@ func (h *ForwardHandler) DeleteNode(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /admin/forward/nodes/{id}/check [post]
 func (h *ForwardHandler) CheckNode(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+	node, ok := h.loadScopedForwardNode(c, "node not found")
+	if !ok {
 		return
 	}
 
-	result, err := h.nodeService.HealthCheck(c.Request.Context(), uint(id))
+	result, err := h.nodeService.HealthCheck(c.Request.Context(), node.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -308,21 +303,14 @@ func (h *ForwardHandler) CheckNode(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /admin/forward/nodes/{id}/toggle [post]
 func (h *ForwardHandler) ToggleNode(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-		return
-	}
-
 	var req ToggleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	node, err := h.nodeService.GetByID(uint(id))
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "node not found"})
+	node, ok := h.loadScopedForwardNode(c, "node not found")
+	if !ok {
 		return
 	}
 
@@ -832,14 +820,13 @@ func (h *ForwardHandler) TestGostConnection(c *gin.Context) {
 // @Failure 400 {object} map[string]interface{}
 // @Router /admin/forward/nodes/{id}/sync-stats [post]
 func (h *ForwardHandler) SyncNodeStats(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+	node, ok := h.loadScopedForwardNode(c, "node not found")
+	if !ok {
 		return
 	}
 
 	ctx := context.Background()
-	stats, err := h.gostManager.GetNodeStats(ctx, uint(id))
+	stats, err := h.gostManager.GetNodeStats(ctx, node.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -849,4 +836,44 @@ func (h *ForwardHandler) SyncNodeStats(c *gin.Context) {
 		"message": "Stats synced",
 		"stats":   stats,
 	})
+}
+
+func (h *ForwardHandler) loadScopedForwardNode(c *gin.Context, notFoundMessage string) (*model.ForwardNode, bool) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return nil, false
+	}
+
+	scope := strings.TrimSpace(strings.ToLower(c.Query("scope")))
+	var node *model.ForwardNode
+	switch scope {
+	case "":
+		node, err = h.nodeService.GetByID(uint(id))
+	default:
+		node, err = h.nodeService.GetByIDForInventoryScope(uint(id), scope)
+	}
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": notFoundMessage})
+		return nil, false
+	}
+
+	return node, true
+}
+
+func (h *ForwardHandler) validateScopedNodeInventory(c *gin.Context, node *model.ForwardNode) error {
+	if node == nil {
+		return nil
+	}
+
+	scope := strings.TrimSpace(strings.ToLower(c.Query("scope")))
+	if scope != service.ForwardNodeInventoryScopeNodeX {
+		return nil
+	}
+
+	if node.APIPort <= 0 || node.APIPort > 65535 {
+		return fmt.Errorf("nodex scope requires a valid api_port")
+	}
+
+	return nil
 }

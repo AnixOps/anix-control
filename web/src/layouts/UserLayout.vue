@@ -4,7 +4,7 @@
       <button class="menu-toggle" type="button" @click="sidebarOpen = !sidebarOpen">
         <span class="menu-icon">+</span>
       </button>
-      <div class="logo">V2Board</div>
+      <div class="logo">{{ t('layout.user.brand') }}</div>
       <nav class="desktop-nav">
         <router-link v-for="item in navItems" :key="item.to" :to="item.to">{{ item.label }}</router-link>
       </nav>
@@ -19,8 +19,8 @@
 
     <aside class="mobile-sidebar" :class="{ open: sidebarOpen }">
       <div class="sidebar-header">
-        <div class="logo">V2Board</div>
-        <button class="close-btn" type="button" @click="sidebarOpen = false">×</button>
+        <div class="logo">{{ t('layout.user.brand') }}</div>
+        <button class="close-btn" type="button" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="sidebarOpen = false">×</button>
       </div>
       <nav class="sidebar-nav">
         <router-link v-for="item in navItems" :key="item.to" :to="item.to" @click="sidebarOpen = false">
