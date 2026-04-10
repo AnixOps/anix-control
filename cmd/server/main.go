@@ -26,7 +26,7 @@ import (
 )
 
 // @title V2Board AnixOps API
-// @version 2.0.1
+// @version 2.0.2-test.1
 // @description V2Board 高性能代理面板管理系统 API 文档
 // @description 支持用户管理、节点管理、订阅系统、支付网关、流量转发等功能
 // @termsOfService https://github.com/anixops/v2board
@@ -61,7 +61,7 @@ import (
 
 var (
 	configPath string
-	version    = "2.0.1"
+	version    = "2.0.2-test.1"
 	buildTime  = "unknown"
 	commit     = "unknown"
 )
@@ -531,7 +531,7 @@ func createDefaultIndex(path string) {
 <body>
     <div class="container">
         <h1>🚀 V2Board</h1>
-        <p>Go Backend v2.0.1</p>
+        <p>Go Backend v2.0.2-test.1</p>
         <div class="status">
             <span class="dot"></span>
             服务运行中

@@ -201,7 +201,7 @@ func TestConfigDefaults(t *testing.T) {
 		},
 		App: AppConfig{
 			Name:    "V2Board",
-			Version: "2.0.1",
+			Version: "2.0.2-test.1",
 		},
 		TLS: TLSConfig{
 			Enable: true,

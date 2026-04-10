@@ -77,7 +77,7 @@ var report TestReport
 func main() {
 	report = TestReport{
 		GeneratedAt:   time.Now(),
-		ServerVersion: "v2.0.1",
+		ServerVersion: "v2.0.2-test.1",
 		GoVersion:     runtime.Version(),
 		Platform:      fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 		Results:       make([]TestResult, 0),
