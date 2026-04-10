@@ -88,10 +88,18 @@ describe('Local runtime admin page', () => {
   it('loads dedicated local status and local jobs on mount', async () => {
     const wrapper = mountLocalRuntime()
     await flushPromises()
+    const heroText = wrapper.find('.hero-card').text()
+    const bannerText = wrapper.find('.mode-banner').text()
+    const executorHint = wrapper.find('.runtime-local-head .hint').text()
 
     expect(adminApi.getLocalRuntimeStatus).toHaveBeenCalledTimes(1)
     expect(adminApi.listForwardRuntimeJobs).toHaveBeenCalledWith({ backend: 'nftables_ansible', limit: 10 })
     expect(wrapper.text()).toContain('Local runtime active')
+    expect(heroText).toContain('nftables / Ansible')
+    expect(heroText).not.toContain('nftables_ansible')
+    expect(bannerText).toContain('nftables / Ansible')
+    expect(bannerText).not.toContain('nftables_ansible')
+    expect(executorHint).toContain('forward.runtime_backend=nftables_ansible')
     expect(wrapper.text()).toContain('#2 attach')
   })
 

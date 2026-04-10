@@ -70,7 +70,7 @@
           <p class="eyebrow">{{ t('runtime.localRuntime.executorEyebrow') }}</p>
           <h4>{{ localBackendLabel(selectedLocalBackend) }}</h4>
           <p class="hint">
-            {{ t('runtime.localRuntime.executorHint', { backend: selectedLocalBackend }) }}
+            {{ t('runtime.localRuntime.executorHint', { backend: localBackendLabel(selectedLocalBackend), backendKey: selectedLocalBackend }) }}
           </p>
         </div>
         <button class="btn btn-secondary btn-sm" :disabled="saving" @click="applyDefaultRuntimeAnsibleConfig">

@@ -485,7 +485,7 @@ export default {
       heroEyebrow: '\u65e0\u72b6\u6001\u8fd0\u884c\u65f6',
       title: '\u672c\u5730\u8fd0\u884c\u65f6 / Ansible',
       heroTextPrimary: '\u8be5\u9875\u9762\u53ea\u7ba1\u7406\u9762\u677f\u4e3b\u673a\u4e0a\u7684 Ansible \u6267\u884c\u5668\u3002\u5b83\u662f\u9762\u677f\u4fa7\u8f6c\u53d1\u7684\u65e0\u72b6\u6001\u8fd0\u884c\u65f6\u8def\u5f84\uff0c\u4e0d\u9700\u8981\u6301\u7eed\u7684 NodeX \u63a7\u5236\u9762\u6216 Node-Agent \u8fde\u63a5\u3002',
-      heroTextSecondary: '\u63a8\u8350\u540e\u7aef\u4e3a `nftables_ansible`\u3002`iptables_ansible` \u4ecd\u4f5c\u4e3a\u65e7\u73af\u5883\u517c\u5bb9\u8def\u5f84\u4fdd\u7559\u3002',
+      heroTextSecondary: '\u63a8\u8350\u540e\u7aef\u4e3a nftables / Ansible\u3002iptables / Ansible \u4ecd\u4f5c\u4e3a\u65e7\u73af\u5883\u517c\u5bb9\u8def\u5f84\u4fdd\u7559\u3002',
       refreshLoading: '\u5237\u65b0\u4e2d...',
       saveLoading: '\u4fdd\u5b58\u4e2d...',
       saveActivate: '\u4fdd\u5b58\u5e76\u542f\u7528\u672c\u5730\u8fd0\u884c\u65f6',
@@ -500,7 +500,7 @@ export default {
       legacy: '\u65e7\u517c\u5bb9',
       executorEyebrow: '\u6267\u884c\u5668',
       defaultsAction: '\u4f7f\u7528\u540e\u7aef\u9ed8\u8ba4\u503c',
-      executorHint: '\u4fdd\u5b58\u540e\u4f1a\u5199\u5165 `forward.runtime_backend={backend}`\u3001`forward.runtime.ansible.backend={backend}` \u4ee5\u53ca `forward.runtime.nodex_mode=false`\u3002',
+      executorHint: '\u4fdd\u5b58\u540e\u4f1a\u5c06 {backend} \u8bbe\u4e3a\u5f53\u524d\u672c\u5730 runtime\uff0c\u5e76\u5199\u5165 `forward.runtime_backend={backendKey}`\u3001`forward.runtime.ansible.backend={backendKey}` \u4ee5\u53ca `forward.runtime.nodex_mode=false`\u3002',
       fields: {
         inventory: 'Inventory',
         applyPlaybook: '\u4e0b\u53d1 Playbook',

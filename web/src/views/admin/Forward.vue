@@ -524,6 +524,7 @@ import {
   getSystemConfig
 } from '@/api/admin'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
+import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
 
 const { t, translateLiteral } = useAppI18n()
 const userStore = useUserStore()
@@ -541,7 +542,7 @@ const runtimeBackend = ref('nftables_ansible')
 const runtimeModeLabel = computed(() => (
   runtimeNodeXMode.value
     ? t('runtime.forward.modeLabelNodeX')
-    : t('runtime.forward.modeLabelLocal', { backend: runtimeBackendLabel(runtimeBackend.value) })
+    : t('runtime.forward.modeLabelLocal', { backend: humanizeForwardRuntimeBackend(t, runtimeBackend.value) })
 ))
 const runtimeModeSummary = computed(() => (
   runtimeNodeXMode.value
@@ -712,20 +713,6 @@ function tunnelTypeLabel(type) {
   return Number(type) === 2
     ? t('runtime.tunnel.options.tunnelForward')
     : t('runtime.tunnel.options.portForward')
-}
-
-function runtimeBackendLabel(value) {
-  const normalized = String(value ?? '').trim().toLowerCase()
-  if (normalized === 'gost') {
-    return t('runtime.nodeX.backends.gost')
-  }
-  if (normalized === 'nftables_ansible') {
-    return t('runtime.localRuntime.backends.nftables.label')
-  }
-  if (normalized === 'iptables_ansible') {
-    return t('runtime.localRuntime.backends.iptables.label')
-  }
-  return normalized || '-'
 }
 
 async function loadRuntimeMode() {
