@@ -8,7 +8,7 @@
       <div class="login-container">
         <div class="login-brand">
           <div class="brand-icon">V</div>
-          <h1>V2Board</h1>
+          <h1>{{ t('layout.user.brand') }}</h1>
           <p>{{ t('login.brandSubtitle') }}</p>
         </div>
 

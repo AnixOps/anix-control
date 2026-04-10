@@ -212,7 +212,9 @@ export default {
   },
   layout: {
     admin: {
+      brand: 'V2Board',
       badge: 'Admin',
+      mobileTitle: 'V2Board Admin',
       subtitle: 'Control plane, forwarding suite, and operations entry points are centralized in this navigation.',
       adminUser: 'Administrator',
       sections: {
@@ -241,10 +243,12 @@ export default {
         notifications: 'Notifications',
         knowledge: 'Knowledge Base',
         mfa: 'MFA',
-        system: 'System'
+        system: 'System',
+        nodeXAgentsLegacy: 'NodeX Agents Legacy'
       }
     },
     user: {
+      brand: 'V2Board',
       nav: {
         dashboard: 'Dashboard',
         subscribe: 'Subscriptions',
@@ -683,7 +687,13 @@ export default {
       },
       errors: {
         required: 'Name, host and reachability port are required.',
-        saveFailed: 'Failed to save machine'
+        saveFailed: 'Failed to save machine',
+        loadFailed: 'Failed to load Ansible machines',
+        detailFailed: 'Failed to load machine details',
+        deleteFailed: 'Failed to delete machine',
+        checkFailed: 'Health check failed',
+        syncFailed: 'Failed to sync machine stats',
+        toggleFailed: 'Failed to change machine status'
       }
     },
     forward: {
@@ -694,10 +704,12 @@ export default {
       modeLabelLocal: 'Active Runtime: Local / {backend}',
       modeSummaryNodeX: 'Edit NodeX control-plane URL, token and gost operator checks on the dedicated NodeX Runtime page.',
       modeSummaryLocal: 'Edit inventory, playbooks and panel-host executor settings on the dedicated Local Runtime page.',
+      modeCompatibilityHint: 'Forward editor options are filtered by the currently active runtime. Local Ansible runtime only accepts Port Forward tunnels, while NodeX/gost can attach both compatible port-forward and tunnel-forward layouts.',
       modeHintNodeX: 'NodeX/gost mode keeps ingress and exit semantics. A selected tunnel still requires NodeX runtime jobs to succeed before forwarding is really attached.',
       modeHintLocal: 'Local Ansible mode only records the execution node. SSH access comes from the configured ansible inventory and local runtime settings, not from NodeX topology records.',
       tunnelHintNodeX: '{name} will be attached through NodeX/gost. Panel-side "online" or status checks do not prove the remote relay has finished attaching.',
       tunnelHintLocal: '{name} will be applied on the execution node only. This path stays stateless until the queued ansible job finishes successfully.',
+      tunnelHintLocalIncompatible: '{name} is a Tunnel Forward tunnel and requires NodeX/gost. Local Ansible runtime cannot attach it directly.',
       portRange: 'Allowed range: {start} - {end}',
       portHintNodeX: 'Leaving the port empty lets the panel allocate one from the tunnel entry-node range.',
       portHintLocal: 'Leaving the port empty lets the panel allocate one on the selected execution node.',
@@ -907,7 +919,8 @@ export default {
         importNetworkCreateFailed: 'Network error, create failed',
         orderSaveFailed: 'Failed to save order: {message}',
         orderSaveRetry: 'Failed to save order, please try again',
-        unknownError: 'Unknown error'
+        unknownError: 'Unknown error',
+        localRuntimeTunnelForwardUnsupported: 'Local Ansible runtime cannot attach Tunnel Forward tunnels. Switch to NodeX Runtime or choose a Port Forward tunnel.'
       },
       card: {
         dragHandleTitle: 'Drag to reorder',
@@ -935,6 +948,7 @@ export default {
       modeLabelLocal: 'Active Runtime: Local / {backend}',
       modeSummaryNodeX: 'Ingress and egress semantics are controlled through NodeX/gost. Use NodeX Runtime for the control-plane URL, token and gost readiness.',
       modeSummaryLocal: 'Only the execution node identity is stored here. Use Local Runtime for inventory, playbooks and the panel-host ansible executor.',
+      modeCompatibilityHint: 'Tunnel cards below are evaluated against the currently active runtime. Legacy type-1 tunnels may stay schema-compatible with both runtimes, so use the compatibility badge instead of assuming ownership from stored fields.',
       loading: 'Loading tunnels and nodes...',
       emptyTitle: 'No tunnels yet.',
       emptyText: 'Create the required topology first, then add the first tunnel that forwards can reference.',
@@ -992,6 +1006,14 @@ export default {
         ingressNode: 'Only NodeX/gost mode uses an ingress node here. This is a forward relay role and stays separate from proxy nodes.',
         executionNode: 'Local Ansible mode only needs the execution node identity. SSH access still comes from the configured inventory and local runtime settings.',
         egressNode: 'Exit nodes are only used by NodeX/gost tunnel forwarding. A successful panel save still needs the runtime job to attach remotely.'
+      },
+      compatibility: {
+        nodeXReady: 'Ready for NodeX runtime',
+        nodeXNeedsIngress: 'NodeX runtime needs an ingress node',
+        nodeXNeedsEgress: 'NodeX tunnel-forward needs an egress node',
+        localReady: 'Ready for Local Runtime',
+        localNeedsExecution: 'Local Runtime needs an execution node',
+        localOnlyPortForward: 'Local Runtime only supports port-forward tunnels'
       },
       messages: {
         loadListFailed: 'Failed to load tunnel list',
@@ -1362,6 +1384,9 @@ export default {
           apiToken: 'Leave blank to auto-generate',
           region: 'HK / JP / US',
           isp: 'CMI / NTT / Cogent'
+        },
+        hints: {
+          apiPort: 'Required for NodeX management API health checks, stats sync, and connection tests.'
         }
       },
       ruleModal: {
@@ -1424,6 +1449,7 @@ export default {
         nodeNameRequired: 'Node name is required',
         nodeHostRequired: 'Host is required',
         nodePortRange: 'Service port must be between 1 and 65535',
+        nodeApiPortRequired: 'NodeX management API port is required',
         nodeApiPortRange: 'API port must be between 1 and 65535',
         ruleNameRequired: 'Rule name is required',
         relayNodeRequired: 'Please select an ingress Relay node',

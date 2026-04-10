@@ -110,11 +110,134 @@ func (s *ForwardAnsibleHandlerTestSuite) TestListNodes_NodeXScopeExcludesAnsible
 	assert.Contains(s.T(), w.Body.String(), "NodeX Relay 01")
 }
 
+func (s *ForwardAnsibleHandlerTestSuite) TestCreateNode_NodeXScopeRequiresAPIPort() {
+	handler := NewForwardHandler()
+	s.router.POST("/forward/nodes", handler.CreateNode)
+
+	body := map[string]interface{}{
+		"name": "NodeX Relay Missing API",
+		"type": model.ForwardNodeTypeRelay,
+		"host": "203.0.113.40",
+		"port": 8443,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/forward/nodes?scope=nodex", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Contains(s.T(), w.Body.String(), "api_port")
+}
+
 func (s *ForwardAnsibleHandlerTestSuite) TestGetAnsibleMachine_RejectsNodeXRelay() {
 	handler := NewForwardHandler()
 	s.router.GET("/forward/ansible-machines/:id", handler.GetAnsibleMachine)
 
 	req, _ := http.NewRequest("GET", "/forward/ansible-machines/"+strconv.FormatUint(uint64(s.nodeXRelay.ID), 10), nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+}
+
+func (s *ForwardAnsibleHandlerTestSuite) TestUpdateNode_NodeXScopeRequiresAPIPort() {
+	handler := NewForwardHandler()
+	s.nodeXRelay.APIPort = 0
+	s.nodeXRelay.APIToken = ""
+	assert.NoError(s.T(), s.db.Save(s.nodeXRelay).Error)
+
+	s.router.PUT("/forward/nodes/:id", handler.UpdateNode)
+
+	body := map[string]interface{}{
+		"name": "NodeX Relay Missing API",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/forward/nodes/"+strconv.FormatUint(uint64(s.nodeXRelay.ID), 10)+"?scope=nodex", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assert.Contains(s.T(), w.Body.String(), "node not found")
+}
+
+func (s *ForwardAnsibleHandlerTestSuite) TestUpdateExitNode_NodeXScopeRequiresAPIPort() {
+	handler := NewForwardHandler()
+	exitNode := &model.ForwardNode{
+		Name:     "NodeX Exit 01",
+		Type:     model.ForwardNodeTypeExit,
+		Host:     "198.51.100.20",
+		Port:     443,
+		APIPort:  0,
+		APIToken: "exit-token",
+		Weight:   1,
+		Status:   model.ForwardNodeStatusOnline,
+		Enabled:  true,
+	}
+	assert.NoError(s.T(), s.db.Create(exitNode).Error)
+
+	s.router.PUT("/forward/nodes/:id", handler.UpdateNode)
+
+	body := map[string]interface{}{
+		"name": "NodeX Exit Missing API",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/forward/nodes/"+strconv.FormatUint(uint64(exitNode.ID), 10)+"?scope=nodex", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Contains(s.T(), w.Body.String(), "api_port")
+}
+
+func (s *ForwardAnsibleHandlerTestSuite) TestGetNode_NodeXScopeRejectsAnsibleMachine() {
+	handler := NewForwardHandler()
+	s.router.GET("/forward/nodes/:id", handler.GetNode)
+
+	req, _ := http.NewRequest("GET", "/forward/nodes/"+strconv.FormatUint(uint64(s.ansibleNode.ID), 10)+"?scope=nodex", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+}
+
+func (s *ForwardAnsibleHandlerTestSuite) TestUpdateNode_NodeXScopeRejectsAnsibleMachine() {
+	handler := NewForwardHandler()
+	s.router.PUT("/forward/nodes/:id", handler.UpdateNode)
+
+	body := map[string]interface{}{
+		"name": "Should Not Update",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/forward/nodes/"+strconv.FormatUint(uint64(s.ansibleNode.ID), 10)+"?scope=nodex", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+
+	var refreshed model.ForwardNode
+	assert.NoError(s.T(), s.db.First(&refreshed, s.ansibleNode.ID).Error)
+	assert.Equal(s.T(), "Ansible Exec 01", refreshed.Name)
+}
+
+func (s *ForwardAnsibleHandlerTestSuite) TestToggleNode_NodeXScopeRejectsAnsibleMachine() {
+	handler := NewForwardHandler()
+	s.router.POST("/forward/nodes/:id/toggle", handler.ToggleNode)
+
+	body := map[string]interface{}{
+		"enabled": false,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/forward/nodes/"+strconv.FormatUint(uint64(s.ansibleNode.ID), 10)+"?scope=nodex", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
@@ -131,6 +254,17 @@ func (s *ForwardAnsibleHandlerTestSuite) TestSyncAnsibleMachineStats() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 	assert.Contains(s.T(), w.Body.String(), "panel-side counters")
+}
+
+func (s *ForwardAnsibleHandlerTestSuite) TestSyncNodeStats_NodeXScopeRejectsAnsibleMachine() {
+	handler := NewForwardHandler()
+	s.router.POST("/forward/nodes/:id/sync-stats", handler.SyncNodeStats)
+
+	req, _ := http.NewRequest("POST", "/forward/nodes/"+strconv.FormatUint(uint64(s.ansibleNode.ID), 10)+"?scope=nodex", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
 }
 
 func TestForwardAnsibleHandler(t *testing.T) {

@@ -221,6 +221,8 @@ export default {
   },
   layout: {
     admin: {
+      brand: 'V2Board',
+      mobileTitle: 'V2Board 管理端',
       badge: '管理端',
       subtitle: '控制面、转发套件和运维入口统一收敛在此导航。',
       adminUser: '管理员',
@@ -250,10 +252,12 @@ export default {
         notifications: '通知管理',
         knowledge: '知识库',
         mfa: 'MFA 设置',
-        system: '系统管理'
+        system: '系统管理',
+        nodeXAgentsLegacy: 'NodeX Agents Legacy'
       }
     },
     user: {
+      brand: 'V2Board',
       nav: {
         dashboard: '仪表盘',
         subscribe: '订阅',
@@ -692,7 +696,13 @@ export default {
       },
       errors: {
         required: '\u540d\u79f0\u3001\u4e3b\u673a\u548c\u8fde\u901a\u6027\u7aef\u53e3\u4e3a\u5fc5\u586b\u9879\u3002',
-        saveFailed: '\u4fdd\u5b58\u673a\u5668\u5931\u8d25'
+        saveFailed: '\u4fdd\u5b58\u673a\u5668\u5931\u8d25',
+        loadFailed: '\u52a0\u8f7d Ansible \u673a\u5668\u5931\u8d25',
+        detailFailed: '\u52a0\u8f7d\u673a\u5668\u8be6\u60c5\u5931\u8d25',
+        deleteFailed: '\u5220\u9664\u673a\u5668\u5931\u8d25',
+        checkFailed: '\u5065\u5eb7\u68c0\u67e5\u5931\u8d25',
+        syncFailed: '\u540c\u6b65\u673a\u5668\u7edf\u8ba1\u5931\u8d25',
+        toggleFailed: '\u5207\u6362\u673a\u5668\u72b6\u6001\u5931\u8d25'
       }
     },
     forward: {
@@ -703,10 +713,12 @@ export default {
       modeLabelLocal: '\u5f53\u524d\u8fd0\u884c\u65f6\uff1aLocal / {backend}',
       modeSummaryNodeX: '\u8bf7\u5728\u4e13\u7528\u7684 NodeX Runtime \u9875\u9762\u7f16\u8f91 NodeX \u63a7\u5236\u9762 URL\u3001Token \u548c gost \u64cd\u4f5c\u68c0\u67e5\u3002',
       modeSummaryLocal: '\u8bf7\u5728\u4e13\u7528\u7684 Local Runtime \u9875\u9762\u7f16\u8f91 inventory\u3001playbook \u548c\u9762\u677f\u4e3b\u673a\u6267\u884c\u5668\u914d\u7f6e\u3002',
+      modeCompatibilityHint: '\u8f6c\u53d1\u7f16\u8f91\u5668\u4f1a\u6309\u5f53\u524d runtime \u81ea\u52a8\u8fc7\u6ee4\u53ef\u9009 tunnel\u3002\u672c\u5730 Ansible runtime \u53ea\u63a5\u53d7 Port Forward \u96a7\u9053\uff0cNodeX/gost \u5219\u53ef\u4ee5\u9644\u7740\u517c\u5bb9\u7684 Port Forward \u548c Tunnel Forward \u5e03\u5c40\u3002',
       modeHintNodeX: 'NodeX/gost \u6a21\u5f0f\u4fdd\u7559 ingress \u548c exit \u8bed\u4e49\u3002\u5373\u4f7f\u5df2\u9009\u62e9 tunnel\uff0c\u4e5f\u4ecd\u9700 NodeX runtime \u4efb\u52a1\u6267\u884c\u6210\u529f\uff0c\u8f6c\u53d1\u624d\u7b97\u771f\u6b63\u6302\u8f7d\u3002',
       modeHintLocal: '\u672c\u5730 Ansible \u6a21\u5f0f\u53ea\u8bb0\u5f55\u6267\u884c\u8282\u70b9\u3002SSH \u8bbf\u95ee\u4f9d\u8d56\u5df2\u914d\u7f6e\u7684 ansible inventory \u548c local runtime \u53c2\u6570\uff0c\u4e0d\u6765\u81ea NodeX \u62d3\u6251\u8bb0\u5f55\u3002',
       tunnelHintNodeX: '{name} \u5c06\u901a\u8fc7 NodeX/gost \u6302\u8f7d\u3002\u9762\u677f\u4fa7\u201c\u5728\u7ebf\u201d\u6216\u72b6\u6001\u68c0\u67e5\u4e0d\u80fd\u8bc1\u660e\u8fdc\u7a0b relay \u5df2\u5b8c\u6210\u6302\u8f7d\u3002',
       tunnelHintLocal: '{name} \u53ea\u4f1a\u5728\u6267\u884c\u8282\u70b9\u4e0a\u88ab\u5e94\u7528\u3002\u8be5\u8def\u5f84\u4fdd\u6301\u65e0\u72b6\u6001\uff0c\u76f4\u5230\u6392\u961f\u7684 ansible \u4efb\u52a1\u6210\u529f\u7ed3\u675f\u3002',
+      tunnelHintLocalIncompatible: '{name} \u662f Tunnel Forward \u96a7\u9053\uff0c\u53ea\u80fd\u7531 NodeX/gost \u6302\u8f7d\uff0c\u672c\u5730 Ansible runtime \u4e0d\u80fd\u76f4\u63a5\u9644\u7740\u5b83\u3002',
       portRange: '\u53ef\u7528\u7aef\u53e3\u8303\u56f4\uff1a{start} - {end}',
       portHintNodeX: '\u7aef\u53e3\u7559\u7a7a\u65f6\uff0c\u9762\u677f\u4f1a\u4ece tunnel \u5165\u53e3\u8282\u70b9\u7aef\u53e3\u6bb5\u4e2d\u81ea\u52a8\u5206\u914d\u3002',
       portHintLocal: '\u7aef\u53e3\u7559\u7a7a\u65f6\uff0c\u9762\u677f\u4f1a\u5728\u6240\u9009\u6267\u884c\u8282\u70b9\u4e0a\u81ea\u52a8\u5206\u914d\u3002',
@@ -915,7 +927,8 @@ export default {
         importNetworkCreateFailed: '\u7f51\u7edc\u9519\u8bef\uff0c\u521b\u5efa\u5931\u8d25',
         orderSaveFailed: '\u4fdd\u5b58\u6392\u5e8f\u5931\u8d25\uff1a{message}',
         orderSaveRetry: '\u4fdd\u5b58\u6392\u5e8f\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5',
-        unknownError: '\u672a\u77e5\u9519\u8bef'
+        unknownError: '\u672a\u77e5\u9519\u8bef',
+        localRuntimeTunnelForwardUnsupported: '\u672c\u5730 Ansible runtime \u4e0d\u80fd\u9644\u7740 Tunnel Forward \u96a7\u9053\uff0c\u8bf7\u5207\u6362\u5230 NodeX Runtime \u6216\u6539\u9009 Port Forward \u96a7\u9053'
       },
       card: {
         dragHandleTitle: '\u62d6\u62fd\u6392\u5e8f',
@@ -943,6 +956,7 @@ export default {
       modeLabelLocal: '\u5f53\u524d\u8fd0\u884c\u65f6\uff1aLocal / {backend}',
       modeSummaryNodeX: 'ingress \u4e0e egress \u8bed\u4e49\u7531 NodeX/gost \u63a7\u5236\u3002NodeX Runtime \u9875\u9762\u8d1f\u8d23\u63a7\u5236\u9762 URL\u3001Token \u548c gost \u5c31\u7eea\u6027\u3002',
       modeSummaryLocal: '\u8fd9\u91cc\u53ea\u5b58\u50a8\u6267\u884c\u8282\u70b9\u8eab\u4efd\u3002inventory\u3001playbook \u548c\u9762\u677f\u5bbf\u4e3b ansible \u6267\u884c\u5668\u8bf7\u5230 Local Runtime \u9875\u9762\u7ba1\u7406\u3002',
+      modeCompatibilityHint: '\u4e0b\u65b9\u96a7\u9053\u5361\u7247\u662f\u6309\u201c\u5f53\u524d\u8fd0\u884c\u65f6\u80fd\u5426\u6267\u884c\u201d\u6765\u6807\u8bb0\u7684\u3002\u4e00\u4e9b\u5386\u53f2 type-1 \u96a7\u9053\u5728\u8868\u7ed3\u6784\u4e0a\u53ef\u80fd\u540c\u65f6\u517c\u5bb9\u4e24\u79cd\u8fd0\u884c\u65f6\uff0c\u4e0d\u8981\u4ec5\u51ed\u5b58\u50a8\u5b57\u6bb5\u63a8\u65ad\u5b83\u5c5e\u4e8e NodeX \u8fd8\u662f Ansible\u3002',
       loading: '\u6b63\u5728\u52a0\u8f7d\u96a7\u9053\u4e0e\u8282\u70b9\u6570\u636e...',
       emptyTitle: '\u6682\u65e0\u96a7\u9053\u914d\u7f6e',
       emptyText: '\u8bf7\u5148\u5b8c\u6210\u6240\u9700\u62d3\u6251\uff0c\u518d\u521b\u5efa\u7b2c\u4e00\u4e2a\u53ef\u88ab\u8f6c\u53d1\u5f15\u7528\u7684\u96a7\u9053\u3002',
@@ -1000,6 +1014,14 @@ export default {
         ingressNode: '\u53ea\u6709 NodeX/gost \u6a21\u5f0f\u4f1a\u5728\u8fd9\u91cc\u4f7f\u7528 ingress \u8282\u70b9\u3002\u8fd9\u662f\u8f6c\u53d1 relay \u89d2\u8272\uff0c\u4e0e\u4ee3\u7406\u8282\u70b9\u4fdd\u6301\u5206\u79bb\u3002',
         executionNode: '\u672c\u5730 Ansible \u6a21\u5f0f\u53ea\u9700\u8981\u6267\u884c\u8282\u70b9\u8eab\u4efd\u3002SSH \u8bbf\u95ee\u4ecd\u7136\u6765\u81ea\u5df2\u914d\u7f6e\u7684 inventory \u548c local runtime \u53c2\u6570\u3002',
         egressNode: '\u51fa\u53e3\u8282\u70b9\u53ea\u7528\u4e8e NodeX/gost \u96a7\u9053\u8f6c\u53d1\u3002\u9762\u677f\u4fdd\u5b58\u6210\u529f\u540e\uff0c\u4ecd\u7136\u9700\u8981 runtime \u4efb\u52a1\u5728\u8fdc\u7a0b\u5b8c\u6210\u6302\u8f7d\u3002'
+      },
+      compatibility: {
+        nodeXReady: '\u53ef\u7528\u4e8e NodeX Runtime',
+        nodeXNeedsIngress: 'NodeX Runtime \u9700\u8981\u5165\u53e3\u8282\u70b9',
+        nodeXNeedsEgress: 'NodeX \u96a7\u9053\u8f6c\u53d1\u7f3a\u5c11\u51fa\u53e3\u8282\u70b9',
+        localReady: '\u53ef\u7528\u4e8e Local Runtime',
+        localNeedsExecution: 'Local Runtime \u9700\u8981\u6267\u884c\u8282\u70b9',
+        localOnlyPortForward: 'Local Runtime \u53ea\u652f\u6301\u7aef\u53e3\u8f6c\u53d1\u96a7\u9053'
       },
       messages: {
         loadListFailed: '\u83b7\u53d6\u96a7\u9053\u5217\u8868\u5931\u8d25',
@@ -1370,6 +1392,9 @@ export default {
           apiToken: '\u7559\u7a7a\u5219\u540e\u7aef\u81ea\u52a8\u751f\u6210',
           region: 'HK / JP / US',
           isp: 'CMI / NTT / Cogent'
+        },
+        hints: {
+          apiPort: 'NodeX \u7ba1\u7406 API \u7684\u5065\u5eb7\u68c0\u67e5\u3001\u7edf\u8ba1\u540c\u6b65\u548c\u8fde\u901a\u6d4b\u8bd5\u90fd\u9700\u8981\u8be5\u7aef\u53e3\u3002'
         }
       },
       ruleModal: {
@@ -1432,6 +1457,7 @@ export default {
         nodeNameRequired: '\u8282\u70b9\u540d\u79f0\u4e0d\u80fd\u4e3a\u7a7a',
         nodeHostRequired: '\u4e3b\u673a\u5730\u5740\u4e0d\u80fd\u4e3a\u7a7a',
         nodePortRange: '\u4e1a\u52a1\u7aef\u53e3\u5fc5\u987b\u5728 1 \u5230 65535 \u4e4b\u95f4',
+        nodeApiPortRequired: 'NodeX \u7ba1\u7406 API \u7aef\u53e3\u4e0d\u80fd\u4e3a\u7a7a',
         nodeApiPortRange: 'API \u7aef\u53e3\u5fc5\u987b\u5728 1 \u5230 65535 \u4e4b\u95f4',
         ruleNameRequired: '\u89c4\u5219\u540d\u79f0\u4e0d\u80fd\u4e3a\u7a7a',
         relayNodeRequired: '\u8bf7\u9009\u62e9\u5165\u53e3 Relay \u8282\u70b9',

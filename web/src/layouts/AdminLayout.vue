@@ -4,7 +4,7 @@
       <button class="menu-toggle" type="button" @click="sidebarOpen = !sidebarOpen">
         <span class="menu-icon">+</span>
       </button>
-      <div class="logo">V2Board Admin</div>
+      <div class="logo">{{ t('layout.admin.mobileTitle') }}</div>
       <div class="mobile-header-actions">
         <LocaleSwitcher compact />
         <button class="btn-ghost btn-sm" type="button" @click="logout">{{ t('common.actions.logout') }}</button>
@@ -16,7 +16,7 @@
     <aside class="sidebar" :class="{ open: sidebarOpen }">
       <div class="sidebar-header">
         <div class="sidebar-brand">
-          <div class="logo">V2Board</div>
+          <div class="logo">{{ t('layout.admin.brand') }}</div>
           <span class="badge">{{ t('layout.admin.badge') }}</span>
         </div>
         <button class="close-btn" type="button" @click="sidebarOpen = false">×</button>
@@ -35,7 +35,7 @@
             </router-link>
           </template>
         </div>
-        <router-link to="/admin/agent" class="legacy-hidden-link" aria-hidden="true" tabindex="-1">NodeX Agents Legacy</router-link>
+        <router-link to="/admin/agent" class="legacy-hidden-link" aria-hidden="true" tabindex="-1">{{ t('layout.admin.nav.nodeXAgentsLegacy') }}</router-link>
       </nav>
 
       <div class="sidebar-footer">
@@ -243,8 +243,17 @@ watchEffect(() => {
   background: transparent;
   color: var(--text-color);
   cursor: pointer;
-  font-size: 22px;
+  font-size: 0;
   line-height: 1;
+}
+
+.menu-toggle {
+  font-size: 22px;
+}
+
+.close-btn::before {
+  content: '\00d7';
+  font-size: 22px;
 }
 
 .sidebar-overlay {

@@ -19,6 +19,9 @@
         <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">{{ t('forwardSuite.nav.nodeXRuntime') }}</router-link>
       </div>
     </div>
+    <p class="text-secondary small runtime-note runtime-compatibility-note">
+      {{ t('runtime.tunnel.modeCompatibilityHint') }}
+    </p>
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
       <span>{{ feedback.message }}</span>
@@ -37,11 +40,14 @@
             <div class="card-title">
               <h3>{{ tunnel.name }}</h3>
               <p>{{ resolveTypeMeta(tunnel.type).text }}</p>
-              <p class="card-mode">{{ runtimeModeLabel }}</p>
+              <p class="card-mode">{{ resolveRuntimeCompatibility(tunnel).text }}</p>
             </div>
             <div class="card-head-actions">
               <span :class="['tag', resolveTypeMeta(tunnel.type).className]">
                 {{ resolveTypeMeta(tunnel.type).text }}
+              </span>
+              <span :class="['tag', resolveRuntimeCompatibility(tunnel).className]">
+                {{ resolveRuntimeCompatibility(tunnel).text }}
               </span>
               <span :class="['tag', resolveStatusMeta(tunnel.status).className]">
                 {{ resolveStatusMeta(tunnel.status).text }}
@@ -321,6 +327,7 @@ import {
   deleteForwardTunnel,
   diagnoseForwardTunnel,
   getAdminForwardTunnelList,
+  getAnsibleMachines,
   getForwardNodes,
   getSystemConfig,
   updateForwardTunnel
@@ -538,7 +545,11 @@ async function loadData(showLoading = true) {
 
   clearFeedback()
   try {
-    const [tunnelRes, nodeRes] = await Promise.all([getAdminForwardTunnelList(), getForwardNodes({ page_size: 200 })])
+    const inventoryPromise = runtimeNodeXMode.value
+      ? getForwardNodes({ page_size: 200, scope: 'nodex' })
+      : getAnsibleMachines({ page_size: 200, type: 'relay' })
+
+    const [tunnelRes, nodeRes] = await Promise.all([getAdminForwardTunnelList(), inventoryPromise])
 
     if (tunnelRes.code === 0) {
       tunnels.value = Array.isArray(tunnelRes.data) ? tunnelRes.data.map(normalizeTunnel) : []
@@ -574,6 +585,28 @@ function resolveStatusMeta(status) {
 
 function resolveFlowLabel(flow) {
   return Number(flow) === 2 ? t('runtime.tunnel.options.twoWayAccounting') : t('runtime.tunnel.options.oneWayAccounting')
+}
+
+function resolveRuntimeCompatibility(tunnel) {
+  const executionNodeId = Number(tunnel?.outNodeId || tunnel?.inNodeId || 0)
+
+  if (runtimeNodeXMode.value) {
+    if (!Number(tunnel?.inNodeId || 0)) {
+      return { text: t('runtime.tunnel.compatibility.nodeXNeedsIngress'), className: 'tag-danger' }
+    }
+    if (Number(tunnel?.type) === 2 && !Number(tunnel?.outNodeId || 0)) {
+      return { text: t('runtime.tunnel.compatibility.nodeXNeedsEgress'), className: 'tag-danger' }
+    }
+    return { text: t('runtime.tunnel.compatibility.nodeXReady'), className: 'tag-success' }
+  }
+
+  if (Number(tunnel?.type) !== 1) {
+    return { text: t('runtime.tunnel.compatibility.localOnlyPortForward'), className: 'tag-danger' }
+  }
+  if (!executionNodeId) {
+    return { text: t('runtime.tunnel.compatibility.localNeedsExecution'), className: 'tag-danger' }
+  }
+  return { text: t('runtime.tunnel.compatibility.localReady'), className: 'tag-success' }
 }
 
 function formatTrafficRatio(value) {

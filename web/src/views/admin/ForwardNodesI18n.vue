@@ -379,11 +379,12 @@
               </label>
             </div>
             <div class="form-grid">
-              <label class="form-group">
-                <span>{{ t('runtime.nodeXTopology.nodeModal.fields.apiPort') }}</span>
-                <input v-model.trim="nodeForm.apiPort" type="number" min="1" max="65535" />
-                <small v-if="nodeFormErrors.apiPort">{{ nodeFormErrors.apiPort }}</small>
-              </label>
+            <label class="form-group">
+              <span>{{ t('runtime.nodeXTopology.nodeModal.fields.apiPort') }}</span>
+              <input v-model.trim="nodeForm.apiPort" type="number" min="1" max="65535" />
+              <small v-if="nodeFormErrors.apiPort">{{ nodeFormErrors.apiPort }}</small>
+              <small v-else>{{ t('runtime.nodeXTopology.nodeModal.hints.apiPort') }}</small>
+            </label>
               <label class="form-group">
                 <span>{{ t('runtime.nodeXTopology.nodeModal.fields.apiToken') }}</span>
                 <input
@@ -806,6 +807,7 @@ const connectionErrors = reactive({ host: '', apiPort: '' })
 const deleteModalOpen = ref(false)
 const deleteLoading = ref(false)
 const deleteState = reactive({ kind: 'node', id: null, name: '' })
+const nodeXScopeParams = Object.freeze({ params: { scope: 'nodex' } })
 
 const pageBusy = computed(() => statsLoading.value || nodeLoading.value || ruleLoading.value || nodeOptionsLoading.value)
 const nodePageCount = computed(() => Math.max(1, Math.ceil(nodeTotal.value / nodePageSize.value)))
@@ -1157,7 +1159,9 @@ function validateNodeForm() {
   if (!parsePositiveInt(nodeForm.port) || parsePositiveInt(nodeForm.port) > 65535) {
     nodeFormErrors.port = t('runtime.nodeXTopology.validation.nodePortRange')
   }
-  if (String(nodeForm.apiPort).trim() && (!parsePositiveInt(nodeForm.apiPort) || parsePositiveInt(nodeForm.apiPort) > 65535)) {
+  if (!String(nodeForm.apiPort).trim()) {
+    nodeFormErrors.apiPort = t('runtime.nodeXTopology.validation.nodeApiPortRequired')
+  } else if (!parsePositiveInt(nodeForm.apiPort) || parsePositiveInt(nodeForm.apiPort) > 65535) {
     nodeFormErrors.apiPort = t('runtime.nodeXTopology.validation.nodeApiPortRange')
   }
 
@@ -1426,7 +1430,7 @@ async function openNodeEditor(node = null) {
 
   nodeModalLoading.value = true
   try {
-    const detail = normalizeNode(unwrapResponse(await getForwardNode(node.id)))
+    const detail = normalizeNode(unwrapResponse(await getForwardNode(node.id, nodeXScopeParams)))
     fillNodeForm(detail)
   } catch (error) {
     setFeedback('error', extractErrorMessage(error, t('runtime.nodeXTopology.messages.loadNodeDetailFailed')))
@@ -1485,10 +1489,10 @@ async function submitNodeForm() {
     }
 
     if (nodeEditMode.value && nodeForm.id) {
-      await updateForwardNode(nodeForm.id, payload)
+      await updateForwardNode(nodeForm.id, payload, nodeXScopeParams)
       setFeedback('success', t('runtime.nodeXTopology.messages.nodeUpdated'))
     } else {
-      await createForwardNode(payload)
+      await createForwardNode(payload, nodeXScopeParams)
       setFeedback('success', t('runtime.nodeXTopology.messages.nodeCreated'))
     }
 
@@ -1504,7 +1508,7 @@ async function submitNodeForm() {
 async function runNodeCheck(node) {
   pendingNodeAction.value = `${node.id}:check`
   try {
-    const payload = unwrapResponse(await checkForwardNode(node.id))
+    const payload = unwrapResponse(await checkForwardNode(node.id, nodeXScopeParams))
     const success = Number(payload.status ?? 0) === 1 && !payload.error
     const latency = Number(payload.latency ?? 0)
     const message = success
@@ -1528,7 +1532,7 @@ async function runNodeCheck(node) {
 async function syncNodeStatsAction(node) {
   pendingNodeAction.value = `${node.id}:sync`
   try {
-    const payload = unwrapResponse(await syncForwardNodeStats(node.id))
+    const payload = unwrapResponse(await syncForwardNodeStats(node.id, nodeXScopeParams))
     const statsPayload = payload?.stats || null
     const baseMessage = translateLiteral(payload?.message || t('runtime.nodeXTopology.messages.syncSuccess'))
     const suffix =
@@ -1551,7 +1555,7 @@ async function syncNodeStatsAction(node) {
 async function toggleNodeStatus(node) {
   pendingNodeAction.value = `${node.id}:toggle`
   try {
-    await toggleForwardNode(node.id, !node.enabled)
+    await toggleForwardNode(node.id, !node.enabled, nodeXScopeParams)
     setFeedback(
       'success',
       t(node.enabled ? 'runtime.nodeXTopology.messages.nodeDisabled' : 'runtime.nodeXTopology.messages.nodeEnabled', {
@@ -1752,7 +1756,7 @@ async function confirmDelete() {
   deleteLoading.value = true
   try {
     if (deleteState.kind === 'node') {
-      await deleteForwardNode(deleteState.id)
+      await deleteForwardNode(deleteState.id, nodeXScopeParams)
       setFeedback('success', t('runtime.nodeXTopology.messages.nodeDeleted'))
       await Promise.all([loadNodes(), loadNodeOptions(), loadRules(), loadStats()])
     } else {

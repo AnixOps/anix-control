@@ -46,6 +46,14 @@ describe('admin api mapping', () => {
         },
       },
       {
+        call: () => adminApi.getForwardNode(7, { params: { scope: 'nodex' } }),
+        expected: {
+          url: '/admin/forward/nodes/7',
+          method: 'get',
+          params: { scope: 'nodex' },
+        },
+      },
+      {
         call: () => adminApi.getAnsibleMachine(8),
         expected: {
           url: '/admin/forward/ansible-machines/8',
@@ -177,10 +185,46 @@ describe('admin api mapping', () => {
         },
       },
       {
-        call: () => adminApi.syncForwardNodeStats(7),
+        call: () => adminApi.createForwardNode({ name: 'relay-7' }, { params: { scope: 'nodex' } }),
+        expected: {
+          url: '/admin/forward/nodes',
+          method: 'post',
+          data: { name: 'relay-7' },
+          params: { scope: 'nodex' },
+        },
+      },
+      {
+        call: () => adminApi.updateForwardNode(7, { name: 'relay-7' }, { params: { scope: 'nodex' } }),
+        expected: {
+          url: '/admin/forward/nodes/7',
+          method: 'put',
+          data: { name: 'relay-7' },
+          params: { scope: 'nodex' },
+        },
+      },
+      {
+        call: () => adminApi.checkForwardNode(7, { params: { scope: 'nodex' } }),
+        expected: {
+          url: '/admin/forward/nodes/7/check',
+          method: 'post',
+          params: { scope: 'nodex' },
+        },
+      },
+      {
+        call: () => adminApi.toggleForwardNode(7, false, { params: { scope: 'nodex' } }),
+        expected: {
+          url: '/admin/forward/nodes/7/toggle',
+          method: 'post',
+          data: { enabled: false },
+          params: { scope: 'nodex' },
+        },
+      },
+      {
+        call: () => adminApi.syncForwardNodeStats(7, { params: { scope: 'nodex' } }),
         expected: {
           url: '/admin/forward/nodes/7/sync-stats',
           method: 'post',
+          params: { scope: 'nodex' },
         },
       },
       {

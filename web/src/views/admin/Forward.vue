@@ -29,6 +29,9 @@
       </div>
     </div>
     <ForwardSuiteNav />
+    <p class="text-secondary small runtime-note runtime-compatibility-note">
+      {{ t('runtime.forward.modeCompatibilityHint') }}
+    </p>
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
       <span>{{ feedback.message }}</span>
@@ -221,9 +224,11 @@
 
             <div class="form-group">
               <label>{{ t('runtime.forward.editor.fields.tunnel') }}</label>
-              <select :value="form.tunnelId ?? ''" @change="handleTunnelChange($event.target.value)">
+              <select data-test="forward-tunnel-select" :value="form.tunnelId ?? ''" @change="handleTunnelChange($event.target.value)">
                 <option value="">{{ t('runtime.forward.editor.placeholders.tunnel') }}</option>
-                <option v-for="tunnel in tunnels" :key="tunnel.id" :value="tunnel.id">{{ tunnel.name }}</option>
+                <option v-for="tunnel in selectableTunnels" :key="tunnel.id" :value="tunnel.id">
+                  {{ tunnel.name }} · {{ tunnelTypeLabel(tunnel.type) }}
+                </option>
               </select>
               <p v-if="errors.tunnelId" class="form-error">{{ errors.tunnelId }}</p>
               <p class="hint">{{ selectedTunnelModeHint }}</p>
@@ -536,7 +541,7 @@ const runtimeBackend = ref('nftables_ansible')
 const runtimeModeLabel = computed(() => (
   runtimeNodeXMode.value
     ? t('runtime.forward.modeLabelNodeX')
-    : t('runtime.forward.modeLabelLocal', { backend: runtimeBackend.value })
+    : t('runtime.forward.modeLabelLocal', { backend: runtimeBackendLabel(runtimeBackend.value) })
 ))
 const runtimeModeSummary = computed(() => (
   runtimeNodeXMode.value
@@ -604,6 +609,15 @@ const addressLineCount = computed(() => splitLines(form.remoteAddr).length)
 const sortedDirectForwards = computed(() => getSortedForwards('direct'))
 const groupedForwards = computed(() => buildGroupedForwards())
 const importSuccessCount = computed(() => importResults.value.filter(item => item.success).length)
+const selectableTunnels = computed(() => {
+  const selectedTunnelID = Number(selectedTunnel.value?.id || form.tunnelId || 0)
+  return tunnels.value.filter(tunnel => {
+    if (Number(tunnel.id) === selectedTunnelID) {
+      return true
+    }
+    return runtimeNodeXMode.value || !isNodeXOnlyTunnel(tunnel)
+  })
+})
 const selectedTunnelModeHint = computed(() => {
   if (!selectedTunnel.value) {
     return runtimeNodeXMode.value
@@ -612,6 +626,9 @@ const selectedTunnelModeHint = computed(() => {
   }
 
   const tunnelName = selectedTunnel.value.name || formatTunnelReference(selectedTunnel.value.id || '-')
+  if (!runtimeNodeXMode.value && isNodeXOnlyTunnel(selectedTunnel.value)) {
+    return t('runtime.forward.tunnelHintLocalIncompatible', { name: tunnelName })
+  }
   return runtimeNodeXMode.value
     ? t('runtime.forward.tunnelHintNodeX', { name: tunnelName })
     : t('runtime.forward.tunnelHintLocal', { name: tunnelName })
@@ -685,6 +702,30 @@ function parseRuntimeBoolean(value) {
     return false
   }
   return null
+}
+
+function isNodeXOnlyTunnel(tunnel) {
+  return Number(tunnel?.type ?? 0) === 2
+}
+
+function tunnelTypeLabel(type) {
+  return Number(type) === 2
+    ? t('runtime.tunnel.options.tunnelForward')
+    : t('runtime.tunnel.options.portForward')
+}
+
+function runtimeBackendLabel(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (normalized === 'gost') {
+    return t('runtime.nodeX.backends.gost')
+  }
+  if (normalized === 'nftables_ansible') {
+    return t('runtime.localRuntime.backends.nftables.label')
+  }
+  if (normalized === 'iptables_ansible') {
+    return t('runtime.localRuntime.backends.iptables.label')
+  }
+  return normalized || '-'
 }
 
 async function loadRuntimeMode() {
@@ -1093,6 +1134,8 @@ function validateForm() {
 
   if (!form.tunnelId) {
     errors.tunnelId = t('runtime.forward.messages.tunnelRequired')
+  } else if (selectedTunnel.value && !runtimeNodeXMode.value && isNodeXOnlyTunnel(selectedTunnel.value)) {
+    errors.tunnelId = t('runtime.forward.messages.localRuntimeTunnelForwardUnsupported')
   }
 
   if (!form.remoteAddr.trim()) {
@@ -2206,8 +2249,15 @@ function onDragEnd() {
   color: var(--text-secondary);
   background: rgba(15, 23, 42, 0.04);
   cursor: grab;
+  font-size: 0;
   opacity: 0;
   transition: opacity 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.drag-handle::before {
+  content: '|||';
+  font-size: 12px;
+  letter-spacing: 1px;
 }
 
 .forward-card:hover .drag-handle,
