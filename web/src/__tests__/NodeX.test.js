@@ -99,6 +99,7 @@ describe('NodeX admin page', () => {
     expect(adminApi.getNodeXRuntimeStatus).toHaveBeenCalledTimes(1)
     expect(adminApi.listForwardRuntimeJobs).toHaveBeenCalledWith({ backend: 'gost', limit: 10 })
     expect(wrapper.text()).toContain('Reachable')
+    expect(wrapper.text()).toContain('gost / NodeX')
     expect(wrapper.text()).toContain('#1 attach')
   })
 

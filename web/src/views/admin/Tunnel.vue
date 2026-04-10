@@ -333,6 +333,7 @@ import {
   updateForwardTunnel
 } from '@/api/admin'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
+import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
 
 const { t, translateLiteral } = useAppI18n()
 
@@ -359,7 +360,7 @@ const exitNodeOptions = computed(() =>
 const runtimeModeLabel = computed(() =>
   runtimeNodeXMode.value
     ? t('runtime.tunnel.modeLabelNodeX')
-    : t('runtime.tunnel.modeLabelLocal', { backend: runtimeBackendLabel(runtimeBackend.value) })
+    : t('runtime.tunnel.modeLabelLocal', { backend: humanizeForwardRuntimeBackend(t, runtimeBackend.value) })
 )
 const runtimeModeSummary = computed(() =>
   runtimeNodeXMode.value
@@ -489,20 +490,6 @@ function translateMessage(value, fallback = '') {
   const text = String(value ?? '').trim()
   if (!text) return fallback
   return translateLiteral(text)
-}
-
-function runtimeBackendLabel(value) {
-  const normalized = String(value ?? '').trim().toLowerCase()
-  if (normalized === 'gost') {
-    return t('runtime.nodeX.backends.gost')
-  }
-  if (normalized === 'nftables_ansible') {
-    return t('runtime.localRuntime.backends.nftables.label')
-  }
-  if (normalized === 'iptables_ansible') {
-    return t('runtime.localRuntime.backends.iptables.label')
-  }
-  return value || '-'
 }
 
 function normalizeTunnel(raw) {

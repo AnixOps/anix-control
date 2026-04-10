@@ -439,6 +439,7 @@ import {
   getLoadBalancers, createLoadBalancer, updateLoadBalancer,
   deleteLoadBalancer, runHealthCheck, listForwardRuntimeJobs, getForwardRuntimeStatus, runForwardRuntimeDoctor
 } from '@/api/admin'
+import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
 
 const { t, formatDateTime, translateLiteral } = useAppI18n()
 
@@ -496,11 +497,6 @@ const defaultRuntimeAnsibleConfig = Object.freeze({
   ansibleConfig: 'config/deploy/ansible/ansible.cfg',
   become: false
 })
-const runtimeBackendOptions = [
-  { value: 'gost', label: `${t('runtime.nodeX.backends.gost')} (default)` },
-  { value: 'nftables_ansible', label: 'nftables_ansible' },
-  { value: 'iptables_ansible', label: 'iptables_ansible (legacy)' }
-]
 const runtimeBackend = ref('nftables_ansible')
 const runtimeNodeXMode = ref(false)
 const runtimeNodeXBaseUrl = ref('')
@@ -813,17 +809,7 @@ const resolveRuntimeError = (error, fallbackKey) => (
 )
 
 const runtimeBackendLabel = (value) => {
-  const normalized = String(value ?? '').trim().toLowerCase()
-  if (normalized === 'gost') {
-    return t('runtime.nodeX.backends.gost')
-  }
-  if (normalized === 'nftables_ansible') {
-    return t('runtime.localRuntime.backends.nftables.label')
-  }
-  if (normalized === 'iptables_ansible') {
-    return t('runtime.localRuntime.backends.iptables.label')
-  }
-  return value || '-'
+  return humanizeForwardRuntimeBackend(t, value)
 }
 
 const getRuntimeJobStatusLabel = (status) => {
