@@ -410,7 +410,7 @@ func NewHealthGRPCServer() *HealthGRPCServer {
 func (s *HealthGRPCServer) Check(ctx context.Context, req *pb.HealthCheckRequest) (*pb.HealthCheckResponse, error) {
 	return &pb.HealthCheckResponse{
 		Status:        pb.HealthCheckResponse_SERVING,
-		ServerVersion: "2.0.1",
+		ServerVersion: "2.0.2-test.1",
 		Timestamp:     time.Now().Unix(),
 	}, nil
 }
@@ -425,7 +425,7 @@ func (s *HealthGRPCServer) Watch(stream pb.HealthService_WatchServer) error {
 
 		resp := &pb.HealthCheckResponse{
 			Status:        pb.HealthCheckResponse_SERVING,
-			ServerVersion: "2.0.1",
+			ServerVersion: "2.0.2-test.1",
 			Timestamp:     time.Now().Unix(),
 		}
 
