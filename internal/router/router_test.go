@@ -89,6 +89,37 @@ func TestSetup_CORS(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Contains(t, w.Header().Get("Access-Control-Expose-Headers"), "X-Request-ID")
+}
+
+func TestSetup_SecurityHeadersAndRequestID(t *testing.T) {
+	r, _ := setupTestRouter(t)
+	defer teardownTestRouter()
+
+	req, _ := http.NewRequest("GET", "/health", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.NotEmpty(t, w.Header().Get("X-Request-ID"))
+	assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
+	assert.Equal(t, "SAMEORIGIN", w.Header().Get("X-Frame-Options"))
+	assert.Equal(t, "strict-origin-when-cross-origin", w.Header().Get("Referrer-Policy"))
+	assert.Equal(t, "none", w.Header().Get("X-Permitted-Cross-Domain-Policies"))
+	assert.Contains(t, w.Header().Get("Permissions-Policy"), "camera=()")
+	assert.Equal(t, "max-age=31536000; includeSubDomains", w.Header().Get("Strict-Transport-Security"))
+}
+
+func TestSetup_RequestIDHonorsInboundHeader(t *testing.T) {
+	r, _ := setupTestRouter(t)
+	defer teardownTestRouter()
+
+	req, _ := http.NewRequest("GET", "/health", nil)
+	req.Header.Set("X-Request-ID", "external-trace-id")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, "external-trace-id", w.Header().Get("X-Request-ID"))
 }
 
 func TestSetup_RegisterEndpoint(t *testing.T) {

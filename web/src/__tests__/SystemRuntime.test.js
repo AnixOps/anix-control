@@ -6,6 +6,7 @@ const adminApi = vi.hoisted(() => ({
   getSystemConfig: vi.fn(),
   setSystemConfig: vi.fn(),
   getSystemConfigs: vi.fn(),
+  getSystemAuditLogs: vi.fn(),
   getBackupConfig: vi.fn(),
   getBackups: vi.fn(),
   getBackupStats: vi.fn(),
@@ -47,6 +48,7 @@ describe('System runtime configuration', () => {
     adminApi.getSystemConfig.mockImplementation((key) => Promise.resolve({ data: configMap[key] ?? { value: '' } }))
     adminApi.setSystemConfig.mockResolvedValue({})
     adminApi.getSystemConfigs.mockResolvedValue({ data: { list: [] } })
+    adminApi.getSystemAuditLogs.mockResolvedValue({ data: { data: { list: [], total: 0, page: 1, page_size: 20 } } })
     adminApi.getBackupConfig.mockResolvedValue({ data: {} })
     adminApi.getBackups.mockResolvedValue({ data: { list: [] } })
     adminApi.getBackupStats.mockResolvedValue({ data: {} })

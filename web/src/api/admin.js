@@ -1192,6 +1192,14 @@ export function deleteSystemConfig(key) {
   })
 }
 
+export function getSystemAuditLogs(params) {
+  return request({
+    url: '/admin/system/audit-logs',
+    method: 'get',
+    params
+  })
+}
+
 export function getBackupConfig() {
   return request({
     url: '/admin/system/backup/config',
@@ -1492,6 +1500,7 @@ export default {
   getSystemConfig,
   setSystemConfig,
   deleteSystemConfig,
+  getSystemAuditLogs,
   getBackupConfig,
   updateBackupConfig,
   createBackup,

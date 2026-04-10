@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/model"
@@ -84,11 +85,25 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	loginRateLimitOptions := service.ResolveLoginRateLimitOptions(h.cfg)
+	loginRateLimitKey := service.BuildLoginRateLimitKey(req.Email, c.ClientIP())
+	if blocked, retryAfter := service.GetLoginRateLimiter().Check(loginRateLimitKey, loginRateLimitOptions); blocked {
+		retryAfterSeconds := int(retryAfter.Seconds())
+		if retryAfterSeconds < 1 {
+			retryAfterSeconds = 1
+		}
+		c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
+		c.JSON(http.StatusTooManyRequests, gin.H{"message": "too many login attempts, please try again later"})
+		return
+	}
+
 	token, user, err := h.authService.Login(req.Email, req.Password, h.cfg)
 	if err != nil {
+		service.GetLoginRateLimiter().RecordFailure(loginRateLimitKey, loginRateLimitOptions)
 		c.JSON(http.StatusUnauthorized, gin.H{"message": err.Error()})
 		return
 	}
+	service.GetLoginRateLimiter().RecordSuccess(loginRateLimitKey)
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{

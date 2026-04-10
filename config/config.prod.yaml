@@ -11,6 +11,8 @@ server:
   read_timeout: 30
   write_timeout: 30
   # 鍙俊浠ｇ悊鍒楄〃 (鐢ㄤ簬鑾峰彇鐪熷疄 IP锛屽鍦?Nginx/Cloudflare 鍚庨潰)
+  # Only trust forwarded client IP headers from these reverse proxies/load balancers.
+  # If the API is exposed directly, keep this list empty.
   trusted_proxies:
     - "127.0.0.1"
     - "10.0.0.0/8"
@@ -64,6 +66,13 @@ log:
 jwt:
   secret: "CHANGE-THIS-TO-A-VERY-LONG-RANDOM-STRING-IN-PRODUCTION"
   expire: 86400
+
+auth:
+  login_rate_limit:
+    enabled: true
+    max_attempts: 6
+    window_seconds: 300
+    lockout_seconds: 600
 
 app:
   name: "V2Board"

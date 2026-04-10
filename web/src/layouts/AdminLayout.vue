@@ -1,8 +1,16 @@
 <template>
   <div class="admin-layout">
     <header class="mobile-header">
-      <button class="menu-toggle" type="button" @click="sidebarOpen = !sidebarOpen">
-        <span class="menu-icon">+</span>
+      <button
+        class="menu-toggle"
+        type="button"
+        :aria-label="t('common.a11y.openNavigation')"
+        :title="t('common.a11y.openNavigation')"
+        aria-controls="admin-sidebar"
+        :aria-expanded="sidebarOpen ? 'true' : 'false'"
+        @click="sidebarOpen = !sidebarOpen"
+      >
+        <span class="menu-icon" aria-hidden="true"></span>
       </button>
       <div class="logo">{{ t('layout.admin.mobileTitle') }}</div>
       <div class="mobile-header-actions">
@@ -11,18 +19,24 @@
       </div>
     </header>
 
-    <div class="sidebar-overlay" :class="{ active: sidebarOpen }" @click="sidebarOpen = false"></div>
+    <div class="sidebar-overlay" :class="{ active: sidebarOpen }" aria-hidden="true" @click="sidebarOpen = false"></div>
 
-    <aside class="sidebar" :class="{ open: sidebarOpen }">
+    <aside id="admin-sidebar" class="sidebar" :class="{ open: sidebarOpen }" :aria-label="t('layout.admin.mobileTitle')">
       <div class="sidebar-header">
         <div class="sidebar-brand">
           <div class="logo">{{ t('layout.admin.brand') }}</div>
           <span class="badge">{{ t('layout.admin.badge') }}</span>
         </div>
-        <button class="close-btn" type="button" @click="sidebarOpen = false">×</button>
+        <button
+          class="close-btn"
+          type="button"
+          :aria-label="t('common.a11y.closeNavigation')"
+          :title="t('common.a11y.closeNavigation')"
+          @click="sidebarOpen = false"
+        ></button>
       </div>
 
-      <nav class="sidebar-nav">
+      <nav class="sidebar-nav" :aria-label="t('layout.admin.mobileTitle')">
         <div v-for="section in navSections" :key="section.title" class="nav-section">
           <div class="nav-title">{{ section.title }}</div>
           <template v-if="section.kind === 'forward'">
@@ -30,7 +44,7 @@
           </template>
           <template v-else>
             <router-link v-for="item in section.items" :key="item.to" :to="item.to" @click="closeSidebar">
-              <span class="nav-icon">{{ item.icon }}</span>
+              <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
               <span>{{ item.label }}</span>
             </router-link>
           </template>
@@ -53,7 +67,7 @@
       </div>
     </aside>
 
-    <main class="main-content">
+    <main id="app-main-content" class="main-content" tabindex="-1" :aria-label="pageTitle">
       <header class="content-header">
         <div class="header-title">
           <h1>{{ pageTitle }}</h1>
@@ -78,6 +92,7 @@ import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+import { resolveRoutePageTitle } from '@/utils/pageMeta'
 
 const router = useRouter()
 const route = useRoute()
@@ -143,34 +158,7 @@ const navSections = computed(() => ([
   }
 ]))
 
-const pageTitleKeyMap = {
-  '/admin/dashboard': 'pageTitles.admin.dashboard',
-  '/admin/users': 'pageTitles.admin.users',
-  '/admin/nodes': 'pageTitles.admin.nodes',
-  '/admin/subscriptions': 'pageTitles.admin.subscriptions',
-  '/admin/orders': 'pageTitles.admin.orders',
-  '/admin/plans': 'pageTitles.admin.plans',
-  '/admin/tickets': 'pageTitles.admin.tickets',
-  '/admin/coupons': 'pageTitles.admin.coupons',
-  '/admin/knowledge': 'pageTitles.admin.knowledge',
-  '/admin/forward': 'pageTitles.admin.forward',
-  '/admin/forward/tunnel': 'pageTitles.admin.forwardTunnel',
-  '/admin/forward/limit': 'pageTitles.admin.forwardLimit',
-  '/admin/forward/ansible-machines': 'pageTitles.admin.forwardAnsibleMachines',
-  '/admin/forward/nodes': 'pageTitles.admin.forwardNodes',
-  '/admin/forward/local': 'pageTitles.admin.forwardLocal',
-  '/admin/forward/nodex': 'pageTitles.admin.forwardNodeX',
-  '/admin/forward/agents': 'pageTitles.admin.forwardAgents',
-  '/admin/agent': 'pageTitles.admin.forwardAgents',
-  '/admin/payment': 'pageTitles.admin.payment',
-  '/admin/telegram': 'pageTitles.admin.telegram',
-  '/admin/mfa': 'pageTitles.admin.mfa',
-  '/admin/notifications': 'pageTitles.admin.notifications',
-  '/admin/invite': 'pageTitles.admin.invite',
-  '/admin/system': 'pageTitles.admin.system'
-}
-
-const pageTitle = computed(() => t(pageTitleKeyMap[route.path] || 'pageTitles.admin.fallback'))
+const pageTitle = computed(() => resolveRoutePageTitle(t, route.path, t('pageTitles.admin.fallback')))
 
 function closeSidebar() {
   sidebarOpen.value = false
@@ -248,11 +236,16 @@ watchEffect(() => {
 }
 
 .menu-toggle {
-  font-size: 22px;
+  font-size: 0;
 }
 
 .close-btn::before {
   content: '\00d7';
+  font-size: 22px;
+}
+
+.menu-icon::before {
+  content: '\2630';
   font-size: 22px;
 }
 

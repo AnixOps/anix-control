@@ -1,18 +1,22 @@
 <template>
-  <div class="forward-suite-nav">
-    <router-link
-      v-for="link in links"
-      :key="link.to"
-      :to="link.to"
-      class="forward-suite-link"
-    >
-      <span class="icon">{{ link.icon }}</span>
-      <span class="link-copy">
-        <span class="label">{{ link.label }}</span>
-        <span v-if="link.hint" class="hint">{{ link.hint }}</span>
-      </span>
-    </router-link>
-  </div>
+  <nav class="forward-suite-nav" :aria-label="t('layout.admin.sections.forwardSuite')">
+    <ul class="forward-suite-list">
+      <li v-for="link in links" :key="link.to" class="forward-suite-item">
+        <router-link
+          :to="link.to"
+          class="forward-suite-link"
+          active-class="forward-suite-link-active"
+          :aria-label="link.hint ? `${link.label}: ${link.hint}` : link.label"
+        >
+          <span class="icon" aria-hidden="true">{{ link.icon }}</span>
+          <span class="link-copy">
+            <span class="label">{{ link.label }}</span>
+            <span v-if="link.hint" class="hint">{{ link.hint }}</span>
+          </span>
+        </router-link>
+      </li>
+    </ul>
+  </nav>
 </template>
 
 <script setup>
@@ -35,15 +39,30 @@ const links = computed(() => ([
 
 <style scoped>
 .forward-suite-nav {
+  width: 100%;
+}
+
+.forward-suite-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.forward-suite-item {
+  margin: 0;
 }
 
 .forward-suite-link {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.forward-suite-link-active {
+  font-weight: 700;
 }
 
 .icon {

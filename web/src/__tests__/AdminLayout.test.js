@@ -66,6 +66,23 @@ describe('AdminLayout.vue', () => {
     expect(wrapper.find('router-view-stub').exists()).toBe(true)
   })
 
+  it('exposes accessible navigation controls and main landmark', () => {
+    const wrapper = mount(AdminLayout, {
+      global: {
+        stubs: {
+          'router-link': true,
+          'router-view': true,
+        },
+      },
+    })
+
+    expect(wrapper.find('.menu-toggle').attributes('aria-controls')).toBe('admin-sidebar')
+    expect(wrapper.find('.menu-toggle').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('.sidebar').attributes('id')).toBe('admin-sidebar')
+    expect(wrapper.find('main.main-content').attributes('id')).toBe('app-main-content')
+    expect(wrapper.find('main.main-content').attributes('tabindex')).toBe('-1')
+  })
+
   it('contains all admin menu routes in sidebar', () => {
     const wrapper = mount(AdminLayout, {
       global: {

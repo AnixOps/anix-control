@@ -16,6 +16,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	}
 
 	// 全局中间件
+	r.Use(middleware.RequestID())
+	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
@@ -357,6 +359,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/system/configs/:key", systemHandler.GetConfig)
 			admin.PUT("/system/configs/:key", systemHandler.SetConfig)
 			admin.DELETE("/system/configs/:key", systemHandler.DeleteConfig)
+			admin.GET("/system/audit-logs", systemHandler.GetAuditLogs)
 
 			// ========== 备份管理 ==========
 			admin.GET("/system/backup/config", systemHandler.GetBackupConfig)
