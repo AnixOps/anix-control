@@ -93,7 +93,7 @@
         </div>
         <div class="form-group">
           <label for="ansible-command">{{ t('runtime.localRuntime.fields.command') }}</label>
-          <input id="ansible-command" v-model.trim="runtimeAnsibleForm.command" type="text" placeholder="ansible-playbook" />
+          <input id="ansible-command" v-model.trim="runtimeAnsibleForm.command" type="text" :placeholder="t('runtimePages.localRuntime.placeholders.command')" />
         </div>
         <div class="form-group">
           <label for="ansible-working-dir">{{ t('runtime.localRuntime.fields.workingDir') }}</label>
@@ -177,7 +177,7 @@
         </article>
         <article class="status-card">
           <p class="metric-label">{{ t('runtime.shared.executor') }}</p>
-          <p class="metric-value">{{ statusSummary.localAnsible?.command || runtimeAnsibleForm.command || 'ansible-playbook' }}</p>
+          <p class="metric-value">{{ statusSummary.localAnsible?.command || runtimeAnsibleForm.command || t('runtimePages.localRuntime.defaults.command') }}</p>
           <p class="metric-detail">{{ t('runtime.localRuntime.cards.firewallDriver') }}: {{ statusSummary.localAnsible?.firewallDriver || firewallDriverLabel(selectedLocalBackend) }}</p>
           <p class="metric-detail">{{ t('runtime.localRuntime.cards.commandFound') }}: {{ statusSummary.localAnsible?.commandFound ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
           <p class="metric-detail">{{ t('runtime.localRuntime.cards.become') }}: {{ statusSummary.localAnsible?.become ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
@@ -453,7 +453,7 @@ function extractPayload(response) {
 function normalizeRuntimeJob(job) {
   return {
     id: job?.id,
-    action: job?.action || 'unknown',
+    action: job?.action || t('runtime.shared.unknown'),
     forwardId: job?.forwardId ?? job?.forward_id ?? null,
     tunnelId: job?.tunnelId ?? job?.tunnel_id ?? null,
     nodeId: job?.nodeId ?? job?.node_id ?? null,

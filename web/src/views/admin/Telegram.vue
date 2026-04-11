@@ -118,7 +118,7 @@
                     :aria-label="t('adminTelegram.actions.toggleNotify')"
                     @click="toggleUserNotify(user)"
                   >
-                    {{ user.notify_enabled ? '🔂' : '🔃' }}
+                    {{ user.notify_enabled ? t('adminTelegram.actions.disableNotifyLabel') : t('adminTelegram.actions.enableNotifyLabel') }}
                   </button>
                 </div>
               </td>

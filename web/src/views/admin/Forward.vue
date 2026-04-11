@@ -35,7 +35,7 @@
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
       <span>{{ feedback.message }}</span>
-      <button class="feedback-close" @click="clearFeedback">×</button>
+      <button class="feedback-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="clearFeedback">×</button>
     </div>
 
     <div v-if="loading" class="loading-state">
@@ -211,7 +211,7 @@
             <p class="eyebrow">{{ t('runtime.forward.editor.eyebrow') }}</p>
             <h3>{{ isEdit ? t('runtime.forward.editor.titleEdit') : t('runtime.forward.editor.titleAdd') }}</h3>
           </div>
-          <button class="modal-close" @click="closeEditorModal">×</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeEditorModal">×</button>
         </div>
 
         <div class="modal-body">
@@ -290,7 +290,7 @@
             <p class="eyebrow">{{ t('runtime.forward.deleteModal.eyebrow') }}</p>
             <h3>{{ t('runtime.forward.deleteModal.title') }}</h3>
           </div>
-          <button class="modal-close" @click="deleteModalOpen = false">×</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="deleteModalOpen = false">×</button>
         </div>
         <div class="modal-body">
           <p class="modal-copy">{{ t('runtime.forward.deleteModal.confirmText', { name: forwardToDelete?.name || '-' }) }}</p>
@@ -312,7 +312,7 @@
             <p class="eyebrow">{{ t('runtime.forward.addressModal.eyebrow') }}</p>
             <h3>{{ addressModalTitle }}</h3>
           </div>
-          <button class="modal-close" @click="addressModalOpen = false">×</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="addressModalOpen = false">×</button>
         </div>
         <div class="modal-body">
           <div class="modal-toolbar">
@@ -338,7 +338,7 @@
             <h3>{{ t('runtime.forward.exportModal.title') }}</h3>
             <p class="modal-subtitle">{{ t('runtime.forward.exportModal.subtitle') }}</p>
           </div>
-          <button class="modal-close" @click="exportModalOpen = false">×</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="exportModalOpen = false">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -386,7 +386,7 @@
             <p class="modal-subtitle">{{ t('runtime.forward.importModal.subtitle') }}</p>
             <p class="modal-subtitle muted">{{ t('runtime.forward.importModal.subtitleSecondary') }}</p>
           </div>
-          <button class="modal-close" @click="importModalOpen = false">×</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="importModalOpen = false">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -442,7 +442,7 @@
             <h3>{{ t('runtime.forward.diagnosis.title') }}</h3>
             <p v-if="currentDiagnosisForward" class="modal-subtitle">{{ currentDiagnosisForward.name }}</p>
           </div>
-          <button class="modal-close" @click="diagnosisModalOpen = false">×</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="diagnosisModalOpen = false">×</button>
         </div>
         <div class="modal-body">
           <div v-if="diagnosisLoading" class="loading-state compact">

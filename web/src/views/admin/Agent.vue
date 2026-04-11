@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="agent-page">
     <div class="page-header">
       <h1>{{ t('runtime.nodeXAgents.title') }}</h1>
@@ -172,7 +172,7 @@
             :title="t('common.actions.close')"
             @click="showTaskModal = false"
           >
-            x
+            ×
           </button>
         </div>
         <div class="modal-body">
@@ -584,3 +584,4 @@ code {
   font-size: 12px;
 }
 </style>
+

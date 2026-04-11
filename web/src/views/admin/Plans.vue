@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="plans-page">
     <div class="page-header">
       <h1>{{ t('adminPlans.title') }}</h1>
@@ -13,7 +13,7 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>ID</th>
+            <th>{{ t('miscPages.shared.id') }}</th>
             <th>{{ t('adminPlans.table.name') }}</th>
             <th>{{ t('adminPlans.table.transfer') }}</th>
             <th>{{ t('adminPlans.table.monthPrice') }}</th>
@@ -90,7 +90,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ editingPlanId ? t('adminPlans.planModal.editTitle') : t('adminPlans.planModal.createTitle') }}</h3>
-          <button class="close-btn" @click="closePlanModal">×</button>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closePlanModal">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -117,7 +117,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ t('adminPlans.assignModal.title') }}</h3>
-          <button class="close-btn" @click="closeAssign">×</button>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeAssign">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -144,7 +144,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ t('adminPlans.groupModal.title', { name: currentPlan?.name || '' }) }}</h3>
-          <button class="close-btn" @click="closeGroupModal">×</button>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeGroupModal">×</button>
         </div>
         <div class="modal-body">
           <p class="text-secondary" style="margin-bottom: 16px;">{{ t('adminPlans.groupModal.description') }}</p>
@@ -654,3 +654,4 @@ const removeGroup = async (planId, groupId) => {
   color: transparent;
 }
 </style>
+

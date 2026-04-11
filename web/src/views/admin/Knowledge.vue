@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="knowledge-page">
     <div class="page-header">
       <h1>{{ t('adminKnowledge.title') }}</h1>
@@ -28,7 +28,7 @@
               :aria-label="t('common.actions.edit')"
               @click="editArticle(article)"
             >
-              ✏️
+              {{ t('common.actions.edit') }}
             </button>
             <button
               class="btn-sm btn-ghost"
@@ -36,7 +36,7 @@
               :aria-label="t('common.actions.delete')"
               @click="removeArticle(article)"
             >
-              🗑️
+              {{ t('common.actions.delete') }}
             </button>
           </div>
         </div>
@@ -113,12 +113,28 @@ import { useAppI18n } from '@/composables/useAppI18n'
 const { t, formatDate } = useAppI18n()
 
 const KNOWLEDGE_CATEGORY_VALUES = Object.freeze({
-  announcement: '公告',
-  tutorial: '教程',
-  faq: '常见问题',
-  other: '其他'
+  announcement: 'announcement',
+  tutorial: 'tutorial',
+  faq: 'faq',
+  other: 'other'
 })
 
+const LEGACY_CATEGORY_ALIASES = Object.freeze({
+  '公告': KNOWLEDGE_CATEGORY_VALUES.announcement,
+  '教程': KNOWLEDGE_CATEGORY_VALUES.tutorial,
+  '常见问题': KNOWLEDGE_CATEGORY_VALUES.faq,
+  '其他': KNOWLEDGE_CATEGORY_VALUES.other
+})
+
+const CATEGORY_STORAGE_VALUES = Object.freeze({
+  [KNOWLEDGE_CATEGORY_VALUES.announcement]: '公告',
+  [KNOWLEDGE_CATEGORY_VALUES.tutorial]: '教程',
+  [KNOWLEDGE_CATEGORY_VALUES.faq]: '常见问题',
+  [KNOWLEDGE_CATEGORY_VALUES.other]: '其他'
+})
+
+const normalizeCategory = (category) => LEGACY_CATEGORY_ALIASES[category] || category || KNOWLEDGE_CATEGORY_VALUES.other
+const toStorageCategory = (category) => CATEGORY_STORAGE_VALUES[normalizeCategory(category)] || category
 const defaultCategory = () => KNOWLEDGE_CATEGORY_VALUES.announcement
 const categoryOptions = computed(() => ([
   { value: KNOWLEDGE_CATEGORY_VALUES.announcement, label: t('adminKnowledge.categories.announcement') },
@@ -142,7 +158,10 @@ const form = reactive({
 const load = async () => {
   try {
     const res = await adminApi.getKnowledgeList()
-    articles.value = res.data || []
+    articles.value = (res.data || []).map((article) => ({
+      ...article,
+      category: normalizeCategory(article.category)
+    }))
   } catch (error) {
     console.error(t('adminKnowledge.messages.fetchFailed'), error)
   }
@@ -158,7 +177,7 @@ const formatArticleDate = (ts) => {
 }
 
 const categoryLabel = (category) => {
-  switch (category) {
+  switch (normalizeCategory(category)) {
     case KNOWLEDGE_CATEGORY_VALUES.announcement:
       return t('adminKnowledge.categories.announcement')
     case KNOWLEDGE_CATEGORY_VALUES.tutorial:
@@ -195,7 +214,7 @@ const openCreate = () => {
 const editArticle = (article) => {
   form.id = article.id
   form.title = article.title
-  form.category = article.category
+  form.category = normalizeCategory(article.category)
   form.body = article.body
   form.sort = article.sort
   form.show = article.show
@@ -216,7 +235,7 @@ const saveArticle = async () => {
   try {
     const payload = {
       title: form.title.trim(),
-      category: form.category,
+      category: toStorageCategory(form.category),
       body: form.body,
       sort: form.sort,
       show: form.show
@@ -465,3 +484,4 @@ const removeArticle = async (article) => {
   min-width: 80px;
 }
 </style>
+

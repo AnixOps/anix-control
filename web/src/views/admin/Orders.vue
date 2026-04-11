@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="orders-page">
     <div class="page-header">
       <h1>{{ t('adminOrders.title') }}</h1>
@@ -150,7 +150,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ t('adminOrders.detailModal.title') }}</h3>
-          <button class="close-btn" @click="showDetailModal = false">×</button>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showDetailModal = false">×</button>
         </div>
         <div class="modal-body">
           <div class="detail-row">
@@ -614,3 +614,4 @@ onMounted(() => {
   border-top: 1px solid var(--border-color);
 }
 </style>
+

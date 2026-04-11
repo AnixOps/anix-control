@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="invite-page">
     <div class="page-header">
       <h1>{{ t('adminInvite.title') }}</h1>
@@ -142,7 +142,7 @@
                     :aria-label="t('adminInvite.actions.approve')"
                     @click="processWithdrawalRequest(item, true)"
                   >
-                    ✓
+                    {{ t('adminInvite.actions.approve') }}
                   </button>
                   <button
                     class="btn-sm btn-danger"
@@ -150,7 +150,7 @@
                     :aria-label="t('adminInvite.actions.reject')"
                     @click="processWithdrawalRequest(item, false)"
                   >
-                    ✕
+                    {{ t('adminInvite.actions.reject') }}
                   </button>
                 </div>
                 <span v-else class="text-secondary">-</span>
@@ -314,7 +314,8 @@ const formatTime = (time) => {
 
 const formatMoney = (value) => {
   const amount = Number(value || 0)
-  return `¥${amount.toFixed(2)}`
+  const currencySymbol = t('adminInvite.currencySymbol')
+  return `${currencySymbol}${amount.toFixed(2)}`
 }
 
 const maskAccount = (account) => {
@@ -498,3 +499,4 @@ onMounted(() => {
   background: rgba(239, 68, 68, 0.2);
 }
 </style>
+

@@ -198,7 +198,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ editingGateway ? t('adminPayment.modal.editTitle') : t('adminPayment.modal.createTitle') }}</h3>
-          <button class="close-btn" @click="showGatewayModal = false">x</button>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showGatewayModal = false">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">

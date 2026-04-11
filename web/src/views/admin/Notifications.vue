@@ -206,7 +206,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ editingTemplate ? t('adminNotifications.modal.editTitle') : t('adminNotifications.modal.createTitle') }}</h3>
-          <button class="close-btn" @click="showTemplateModal = false">x</button>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showTemplateModal = false">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -269,7 +269,7 @@
       <div class="modal modal-sm">
         <div class="modal-header">
           <h3>{{ t('adminNotifications.testModal.title') }}</h3>
-          <button class="close-btn" @click="showTestModal = false">x</button>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showTestModal = false">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">

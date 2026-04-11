@@ -44,7 +44,7 @@
                   :aria-label="t('common.actions.delete')"
                   @click="removeCoupon(coupon)"
                 >
-                  🗑️
+                  {{ t('common.actions.delete') }}
                 </button>
               </div>
             </td>
@@ -66,7 +66,7 @@
             :title="t('common.actions.close')"
             @click="closeModal"
           >
-            ×
+            {{ t('common.actions.close') }}
           </button>
         </div>
         <div class="modal-body">
@@ -164,11 +164,13 @@ const formatCouponDate = (ts) => {
   return formatDate(ts)
 }
 
-const formatCouponValue = (coupon) => (
-  coupon.type === 1
+const formatCouponValue = (coupon) => {
+  if (!coupon) return ''
+  const currencySymbol = t('adminCoupons.currencySymbol')
+  return coupon.type === 1
     ? `${coupon.value}%`
-    : `¥${(coupon.value / 100).toFixed(2)}`
-)
+    : `${currencySymbol}${(coupon.value / 100).toFixed(2)}`
+}
 
 const closeModal = () => {
   showCreate.value = false

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="tickets-page">
     <div class="page-header">
       <h1>{{ t('adminTickets.title') }}</h1>
@@ -7,21 +7,21 @@
 
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-icon">📤</div>
+        <div class="stat-icon" aria-hidden="true">{{ t('adminTickets.icons.open') }}</div>
         <div class="stat-info">
           <div class="stat-value">{{ openCount }}</div>
           <div class="stat-label">{{ t('adminTickets.stats.open') }}</div>
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon">✅</div>
+        <div class="stat-icon" aria-hidden="true">{{ t('adminTickets.icons.answered') }}</div>
         <div class="stat-info">
           <div class="stat-value">{{ answeredCount }}</div>
           <div class="stat-label">{{ t('adminTickets.stats.answered') }}</div>
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon">🔒</div>
+        <div class="stat-icon" aria-hidden="true">{{ t('adminTickets.icons.closed') }}</div>
         <div class="stat-info">
           <div class="stat-value">{{ closedCount }}</div>
           <div class="stat-label">{{ t('adminTickets.stats.closed') }}</div>
@@ -66,7 +66,7 @@
                   :aria-label="t('adminTickets.actions.reply')"
                   @click="openReply(ticket)"
                 >
-                  💬
+                  {{ t('adminTickets.actions.reply') }}
                 </button>
                 <button
                   v-if="ticket.status !== 2"
@@ -75,7 +75,7 @@
                   :aria-label="t('adminTickets.actions.closeTicket')"
                   @click="closeTicket(ticket)"
                 >
-                  🔒
+                  {{ t('adminTickets.actions.closeTicket') }}
                 </button>
               </div>
             </td>
@@ -445,3 +445,4 @@ const closeTicket = async (ticket) => {
   min-width: 80px;
 }
 </style>
+
