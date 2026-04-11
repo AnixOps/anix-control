@@ -1,8 +1,8 @@
-<template>
+﻿<template>
   <div class="tunnel-page">
     <div class="toolbar">
       <div class="toolbar-copy">
-        <p class="eyebrow">Flux Compatible</p>
+        <p class="eyebrow">{{ t('miscPages.shared.compatibilityEyebrow') }}</p>
         <h2>{{ t('pageTitles.admin.forwardTunnel') }}</h2>
       </div>
       <div class="toolbar-actions">
@@ -25,7 +25,7 @@
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
       <span>{{ feedback.message }}</span>
-      <button class="feedback-close" @click="clearFeedback">×</button>
+      <button class="feedback-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="clearFeedback">×</button>
     </div>
 
     <div v-if="loading" class="loading-state">
@@ -99,7 +99,7 @@
             <p class="eyebrow">{{ t('runtime.tunnel.modal.eyebrow') }}</p>
             <h3>{{ isEdit ? t('runtime.tunnel.modal.titleEdit') : t('runtime.tunnel.modal.titleAdd') }}</h3>
           </div>
-          <button class="modal-close" @click="closeEditorModal">×</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeEditorModal">×</button>
         </div>
 
         <div class="modal-body">
@@ -241,7 +241,7 @@
             <p class="eyebrow">{{ t('runtime.tunnel.modal.deleteEyebrow') }}</p>
             <h3>{{ t('runtime.tunnel.modal.deleteTitle') }}</h3>
           </div>
-          <button class="modal-close" @click="deleteModalOpen = false">×</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="deleteModalOpen = false">×</button>
         </div>
         <div class="modal-body">
           <p class="modal-copy">{{ t('runtime.tunnel.modal.deleteConfirmMessage', { name: tunnelToDelete?.name || '-' }) }}</p>
@@ -264,7 +264,7 @@
             <h3>{{ t('runtime.tunnel.diagnosis.title') }}</h3>
             <p v-if="currentDiagnosisTunnel" class="modal-subtitle">{{ currentDiagnosisTunnel.name }}</p>
           </div>
-          <button class="modal-close" @click="diagnosisModalOpen = false">×</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="diagnosisModalOpen = false">×</button>
         </div>
 
         <div class="modal-body">
@@ -555,7 +555,7 @@ async function loadData(showLoading = true) {
 
 function resolveNodeName(nodeId) {
   const match = nodes.value.find(node => node.id === Number(nodeId))
-  return match?.name || (nodeId ? `Node #${nodeId}` : '-')
+  return match?.name || (nodeId ? t('miscPages.shared.nodeNumber', { id: nodeId }) : '-')
 }
 
 function resolveTypeMeta(type) {
@@ -1206,3 +1206,4 @@ async function rerunDiagnosis() {
   }
 }
 </style>
+

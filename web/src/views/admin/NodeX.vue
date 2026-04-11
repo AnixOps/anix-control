@@ -70,7 +70,7 @@
             id="nodex-token"
             v-model.trim="nodeXToken"
             type="text"
-            placeholder="shared forward-api-token"
+            :placeholder="t('runtimePages.nodeX.placeholders.token')"
           />
           <p class="hint">{{ t('runtime.nodeX.fields.tokenHint') }}</p>
         </div>
@@ -254,10 +254,10 @@ const fallbackCommands = computed(() => ({
     'cd NodeX/control-plane && go run ./cmd/control-plane --config ../deploy/config/control-plane.yaml --addr :18081 --forward-api-token <FORWARD_API_TOKEN>'
   ],
   references: [
-    'Current repo: docs/reference/runtime.md',
-    'Current repo: docs/guide/forward-relay-onboarding.md',
-    'NodeX repo: https://github.com/zdwtest/NodeX',
-    'NodeX doc: docs/forward-runtime-relay-onboarding.md'
+    t('runtimePages.nodeX.references.currentRepoRuntime'),
+    t('runtimePages.nodeX.references.currentRepoOnboarding'),
+    t('runtimePages.nodeX.references.nodeXRepo'),
+    t('runtimePages.nodeX.references.nodeXDoc')
   ]
 }))
 
@@ -318,7 +318,7 @@ function extractPayload(response) {
 function normalizeRuntimeJob(job) {
   return {
     id: job?.id,
-    action: job?.action || 'unknown',
+    action: job?.action || t('runtime.shared.unknown'),
     forwardId: job?.forwardId ?? job?.forward_id ?? null,
     tunnelId: job?.tunnelId ?? job?.tunnel_id ?? null,
     nodeId: job?.nodeId ?? job?.node_id ?? null,

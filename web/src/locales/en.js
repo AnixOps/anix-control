@@ -1,3 +1,8 @@
+﻿import runtimePages from './modules/en/runtimePages'
+import networkPages from './modules/en/networkPages'
+import miscPages from './modules/en/miscPages'
+import adminSupportPages from './modules/en/adminSupportPages'
+
 const legacy = {
   'V2Board 管理端': 'V2Board Admin',
   '管理端': 'Admin',
@@ -101,6 +106,10 @@ const legacy = {
 }
 
 export default {
+  ...runtimePages,
+  ...networkPages,
+  ...miscPages,
+  ...adminSupportPages,
   common: {
     locale: {
       label: 'Language',
@@ -2134,7 +2143,7 @@ export default {
   adminPayment: {
     title: 'Payment Gateway Management',
     subtitle: 'Manage gateways, payment records, and aggregated stats.',
-    currencySymbol: '楼',
+    currencySymbol: '¥',
     tabs: {
       gateways: 'Gateways',
       records: 'Records',
@@ -2446,3 +2455,4 @@ export default {
   },
   legacy
 }
+

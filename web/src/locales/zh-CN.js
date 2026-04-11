@@ -1,3 +1,8 @@
+﻿import runtimePages from './modules/zh-CN/runtimePages'
+import networkPages from './modules/zh-CN/networkPages'
+import miscPages from './modules/zh-CN/miscPages'
+import adminSupportPages from './modules/zh-CN/adminSupportPages'
+
 const legacy = {
   'V2Board Admin': 'V2Board 管理端',
   'Admin': '管理端',
@@ -110,6 +115,10 @@ const legacy = {
 }
 
 export default {
+  ...runtimePages,
+  ...networkPages,
+  ...miscPages,
+  ...adminSupportPages,
   common: {
     locale: {
       label: '语言',
@@ -2142,7 +2151,7 @@ export default {
   adminPayment: {
     title: '支付网关管理',
     subtitle: '管理支付渠道、支付记录和统计数据。',
-    currencySymbol: '楼',
+    currencySymbol: '¥',
     tabs: {
       gateways: '支付网关',
       records: '支付记录',
@@ -2454,3 +2463,4 @@ export default {
   },
   legacy
 }
+

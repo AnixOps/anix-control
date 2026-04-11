@@ -1,10 +1,10 @@
-<template>
+﻿<template>
   <div class="page nodes-page">
     <div class="page-header">
       <h1>{{ t('admin.nodes.title') }}</h1>
       <div class="header-actions">
         <button class="btn btn-secondary" @click="showAuthKeys = true">
-          🔑 {{ t('admin.nodes.authKeys') }}
+          {{ t('admin.nodes.authKeys') }}
         </button>
         <button class="btn btn-primary" @click="openCreateModal">
           + {{ t('admin.nodes.addNode') }}
@@ -37,7 +37,7 @@
       <table class="table">
         <thead>
           <tr>
-            <th>ID</th>
+            <th>{{ t('networkPages.nodes.table.id') }}</th>
             <th>{{ t('admin.nodes.table.name') }}</th>
             <th>{{ t('admin.nodes.table.address') }}</th>
             <th>{{ t('admin.nodes.table.status') }}</th>
@@ -80,7 +80,7 @@
                 :aria-label="t('admin.nodes.actions.manageProtocols')"
                 @click="openProtocols(node)"
               >
-                📡 {{ t('admin.nodes.actions.protocols') }}
+                {{ t('admin.nodes.actions.protocols') }}
               </button>
               <button
                 class="btn btn-sm btn-warning"
@@ -88,7 +88,7 @@
                 :aria-label="t('admin.nodes.actions.edit')"
                 @click="openEditModal(node)"
               >
-                ✏️
+                {{ t('admin.nodes.actions.edit') }}
               </button>
               <button
                 class="btn btn-sm btn-danger"
@@ -96,7 +96,7 @@
                 :aria-label="t('admin.nodes.actions.delete')"
                 @click="confirmDelete(node)"
               >
-                🗑️
+                {{ t('admin.nodes.actions.delete') }}
               </button>
             </td>
           </tr>
@@ -120,7 +120,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ editingNode ? t('admin.nodes.nodeModal.titleEdit') : t('admin.nodes.nodeModal.titleCreate') }}</h3>
-          <button class="close-btn" @click="closeNodeModal">×</button>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeNodeModal">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -175,7 +175,7 @@
       <div class="modal modal-lg">
         <div class="modal-header">
           <h3>{{ t('admin.nodes.protocolModal.title', { name: selectedNode?.name || "-" }) }}</h3>
-          <button class="close-btn" @click="closeProtocolModal">×</button>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeProtocolModal">×</button>
         </div>
         <div class="modal-body">
           <div class="protocol-header">
@@ -221,7 +221,7 @@
       <div class="modal modal-lg">
         <div class="modal-header">
           <h3>{{ editingProtocol ? t('admin.nodes.protocolForm.titleEdit') : t('admin.nodes.protocolForm.titleCreate') }}</h3>
-          <button class="close-btn" @click="closeProtocolFormModal">×</button>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeProtocolFormModal">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group" v-if="!editingProtocol">
@@ -253,12 +253,12 @@
               <div class="form-group">
                 <label>{{ t('admin.nodes.protocolForm.fields.type') }}</label>
                 <select v-model="protocolForm.type">
-                  <option value="vmess">VMess</option>
-                  <option value="vless">VLESS</option>
-                  <option value="trojan">Trojan</option>
-                  <option value="shadowsocks">Shadowsocks</option>
-                  <option value="hysteria2">Hysteria2</option>
-                  <option value="tuic">TUIC</option>
+                  <option value="vmess">{{ t('networkPages.nodes.protocols.vmess') }}</option>
+                  <option value="vless">{{ t('networkPages.nodes.protocols.vless') }}</option>
+                  <option value="trojan">{{ t('networkPages.nodes.protocols.trojan') }}</option>
+                  <option value="shadowsocks">{{ t('networkPages.nodes.protocols.shadowsocks') }}</option>
+                  <option value="hysteria2">{{ t('networkPages.nodes.protocols.hysteria2') }}</option>
+                  <option value="tuic">{{ t('networkPages.nodes.protocols.tuic') }}</option>
                 </select>
               </div>
               <div class="form-group">
@@ -290,22 +290,38 @@
 
             <div class="form-group">
               <label>{{ t('admin.nodes.protocolForm.fields.settings') }}</label>
-              <textarea v-model="protocolForm.settings" rows="3" placeholder='{"flow": "xtls-rprx-vision"}'></textarea>
+              <textarea
+                v-model="protocolForm.settings"
+                rows="3"
+                :placeholder="t('networkPages.nodes.protocolPlaceholders.settings')"
+              ></textarea>
             </div>
 
             <div class="form-group" v-if="protocolForm.tls > 0">
               <label>{{ t('admin.nodes.protocolForm.fields.tlsSettings') }}</label>
-              <textarea v-model="protocolForm.tls_settings" rows="3" placeholder='{"server_name": "example.com"}'></textarea>
+              <textarea
+                v-model="protocolForm.tls_settings"
+                rows="3"
+                :placeholder="t('networkPages.nodes.protocolPlaceholders.tlsSettings')"
+              ></textarea>
             </div>
 
             <div class="form-group" v-if="protocolForm.tls === 2">
               <label>{{ t('admin.nodes.protocolForm.fields.realitySettings') }}</label>
-              <textarea v-model="protocolForm.reality_settings" rows="3" placeholder='{"short_id": "..."}'></textarea>
+              <textarea
+                v-model="protocolForm.reality_settings"
+                rows="3"
+                :placeholder="t('networkPages.nodes.protocolPlaceholders.realitySettings')"
+              ></textarea>
             </div>
 
             <div class="form-group" v-if="protocolForm.transport !== 'tcp'">
               <label>{{ t('admin.nodes.protocolForm.fields.transportSettings') }}</label>
-              <textarea v-model="protocolForm.transport_settings" rows="3" placeholder='{"path": "/ws"}'></textarea>
+              <textarea
+                v-model="protocolForm.transport_settings"
+                rows="3"
+                :placeholder="t('networkPages.nodes.protocolPlaceholders.transportSettings')"
+              ></textarea>
             </div>
           </div>
 
@@ -315,7 +331,11 @@
             </div>
             <div class="form-group">
               <label>{{ t('admin.nodes.protocolForm.fields.customConfig') }}</label>
-              <textarea v-model="protocolForm.custom_config" rows="15" placeholder='{ "node_type": "vless", ... }'></textarea>
+              <textarea
+                v-model="protocolForm.custom_config"
+                rows="15"
+                :placeholder="t('networkPages.nodes.protocolPlaceholders.customConfig')"
+              ></textarea>
             </div>
           </div>
 
@@ -347,8 +367,8 @@
     <div class="modal-overlay" v-if="showAuthKeys" @click.self="showAuthKeys = false">
       <div class="modal modal-lg">
         <div class="modal-header">
-          <h3>🔑 {{ t('admin.nodes.authKeyModal.title') }}</h3>
-          <button class="close-btn" @click="showAuthKeys = false">×</button>
+          <h3>{{ t('admin.nodes.authKeyModal.title') }}</h3>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showAuthKeys = false">×</button>
         </div>
         <div class="modal-body">
           <div class="info-box">
@@ -358,8 +378,8 @@
           <!-- One-time key preview -->
           <div v-if="generatedKey" class="key-display-box">
             <div class="key-display-header">
-              <span>⚠️ {{ t('admin.nodes.authKeyModal.oneTimeWarning') }}</span>
-              <button class="close-btn" @click="generatedKey = ''">×</button>
+              <span>{{ t('admin.nodes.authKeyModal.oneTimeWarning') }}</span>
+              <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="generatedKey = ''">×</button>
             </div>
             <div class="key-display-content">
               <code class="key-text-large">{{ generatedKey }}</code>
@@ -1347,3 +1367,4 @@ onMounted(async () => {
   }
 }
 </style>
+

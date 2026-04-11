@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="forward-nodes-page">
     <div class="toolbar">
       <div class="toolbar-copy">
@@ -32,7 +32,7 @@
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
       <span>{{ feedback.message }}</span>
-      <button class="feedback-close" @click="clearFeedback">&times;</button>
+      <button class="feedback-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="clearFeedback">&times;</button>
     </div>
 
     <section class="stats-grid">
@@ -338,7 +338,7 @@
               {{ nodeEditMode ? t('runtime.nodeXTopology.nodeModal.titleEdit') : t('runtime.nodeXTopology.nodeModal.titleAdd') }}
             </h3>
           </div>
-          <button class="modal-close" @click="closeNodeModal">&times;</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeNodeModal">&times;</button>
         </div>
         <div class="modal-body">
           <div v-if="nodeModalLoading" class="modal-loading">{{ t('runtime.nodeXTopology.nodeModal.loading') }}</div>
@@ -456,7 +456,7 @@
               {{ ruleEditMode ? t('runtime.nodeXTopology.ruleModal.titleEdit') : t('runtime.nodeXTopology.ruleModal.titleAdd') }}
             </h3>
           </div>
-          <button class="modal-close" @click="closeRuleModal">&times;</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeRuleModal">&times;</button>
         </div>
         <div class="modal-body">
           <div v-if="ruleModalLoading" class="modal-loading">{{ t('runtime.nodeXTopology.ruleModal.loading') }}</div>
@@ -599,7 +599,7 @@
             <p class="eyebrow">{{ t('runtime.nodeXTopology.connectionModal.eyebrow') }}</p>
             <h3>{{ t('runtime.nodeXTopology.connectionModal.title') }}</h3>
           </div>
-          <button class="modal-close" @click="closeConnectionModal">&times;</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeConnectionModal">&times;</button>
         </div>
         <div class="modal-body">
           <div class="form-grid">
@@ -664,7 +664,7 @@
       <div class="modal modal-sm">
         <div class="modal-header">
           <h3>{{ t('runtime.nodeXTopology.deleteModal.title') }}</h3>
-          <button class="modal-close" @click="closeDeleteDialog">&times;</button>
+          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeDeleteDialog">&times;</button>
         </div>
         <div class="modal-body">
           <p>
@@ -2318,3 +2318,4 @@ onMounted(() => {
   }
 }
 </style>
+

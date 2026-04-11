@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="subscriptions-page">
     <div class="page-header">
       <h1>{{ $t('admin.subscriptions.title') }}</h1>
@@ -149,7 +149,7 @@
           </thead>
           <tbody>
             <tr v-for="protocol in protocols" :key="protocol.id">
-              <td>{{ protocol.node?.name || 'ID: ' + protocol.node_id }}</td>
+              <td>{{ protocol.node?.name || $t('networkPages.subscriptions.nodeIdFallback', { id: protocol.node_id }) }}</td>
               <td>
                 <span class="protocol-badge" :class="'protocol-' + protocol.type">
                   {{ (protocol.type || '').toUpperCase() }}
@@ -186,7 +186,7 @@
       <div class="modal-content modal-lg">
         <div class="modal-header">
           <h3>{{ $t('admin.subscriptions.manageProtocolsTitle') }}</h3>
-          <button class="close-btn" @click="showManageProtocolsModal = false">&times;</button>
+          <button class="close-btn" :title="$t('common.actions.close')" :aria-label="$t('common.actions.close')" @click="showManageProtocolsModal = false">&times;</button>
         </div>
         <div class="modal-body">
           <p class="subtitle mb-4">{{ $t('admin.subscriptions.manageProtocolsDescription', { group: selectedGroup?.name || '' }) }}</p>
@@ -235,7 +235,7 @@
       <div class="modal-content modal-lg">
         <div class="modal-header">
           <h3>{{ $t('admin.subscriptions.previewTitle') }}</h3>
-          <button class="close-btn" @click="showPreviewModal = false">&times;</button>
+          <button class="close-btn" :title="$t('common.actions.close')" :aria-label="$t('common.actions.close')" @click="showPreviewModal = false">&times;</button>
         </div>
         <div class="modal-body">
           <div class="preview-format-selector">
@@ -275,7 +275,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3>{{ $t('admin.subscriptions.subscriptionLinks') }}</h3>
-          <button class="close-btn" @click="showSubscriptionModal = false">&times;</button>
+          <button class="close-btn" :title="$t('common.actions.close')" :aria-label="$t('common.actions.close')" @click="showSubscriptionModal = false">&times;</button>
         </div>
         <div class="modal-body">
           <div class="subscription-links">
@@ -298,7 +298,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3>{{ showEditGroupModal ? $t('admin.subscriptions.editGroup') : $t('admin.subscriptions.createGroup') }}</h3>
-          <button class="close-btn" @click="closeGroupModal">&times;</button>
+          <button class="close-btn" :title="$t('common.actions.close')" :aria-label="$t('common.actions.close')" @click="closeGroupModal">&times;</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -335,7 +335,7 @@
       <div class="modal-content modal-lg">
         <div class="modal-header">
           <h3>{{ showEditTemplateModal ? $t('admin.subscriptions.editTemplate') : $t('admin.subscriptions.createTemplate') }}</h3>
-          <button class="close-btn" @click="closeTemplateModal">&times;</button>
+          <button class="close-btn" :title="$t('common.actions.close')" :aria-label="$t('common.actions.close')" @click="closeTemplateModal">&times;</button>
         </div>
         <div class="modal-body">
           <div class="form-row">
@@ -346,23 +346,23 @@
             <div class="form-group">
               <label>{{ $t('admin.subscriptions.protocol') }} *</label>
               <select v-model="templateForm.type">
-                <option value="vless">VLESS</option>
-                <option value="vmess">VMess</option>
-                <option value="trojan">Trojan</option>
-                <option value="shadowsocks">Shadowsocks</option>
-                <option value="hysteria2">Hysteria2</option>
-                <option value="tuic">TUIC</option>
+                <option value="vless">{{ $t('networkPages.subscriptions.protocols.vless') }}</option>
+                <option value="vmess">{{ $t('networkPages.subscriptions.protocols.vmess') }}</option>
+                <option value="trojan">{{ $t('networkPages.subscriptions.protocols.trojan') }}</option>
+                <option value="shadowsocks">{{ $t('networkPages.subscriptions.protocols.shadowsocks') }}</option>
+                <option value="hysteria2">{{ $t('networkPages.subscriptions.protocols.hysteria2') }}</option>
+                <option value="tuic">{{ $t('networkPages.subscriptions.protocols.tuic') }}</option>
               </select>
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
               <label>{{ $t('admin.subscriptions.server') }} *</label>
-              <input type="text" v-model="templateForm.server" placeholder="us.example.com">
+              <input type="text" v-model="templateForm.server" :placeholder="$t('networkPages.subscriptions.placeholders.server')">
             </div>
             <div class="form-group">
               <label>{{ $t('admin.subscriptions.port') }} *</label>
-              <input type="number" v-model.number="templateForm.port" placeholder="443">
+              <input type="number" v-model.number="templateForm.port" :placeholder="$t('networkPages.subscriptions.placeholders.port')">
             </div>
           </div>
           <div class="form-row">
@@ -370,24 +370,24 @@
               <label>{{ $t('admin.subscriptions.tls') }}</label>
               <select v-model.number="templateForm.tls">
                 <option :value="0">{{ $t('admin.subscriptions.tlsNone') }}</option>
-                <option :value="1">TLS</option>
-                <option :value="2">Reality</option>
+                <option :value="1">{{ $t('networkPages.subscriptions.tlsModes.tls') }}</option>
+                <option :value="2">{{ $t('networkPages.subscriptions.tlsModes.reality') }}</option>
               </select>
             </div>
             <div class="form-group">
               <label>{{ $t('admin.subscriptions.transport') }}</label>
               <select v-model="templateForm.transport">
-                <option value="tcp">TCP</option>
-                <option value="ws">WebSocket</option>
-                <option value="grpc">gRPC</option>
-                <option value="h2">HTTP/2</option>
-                <option value="quic">QUIC</option>
+                <option value="tcp">{{ $t('networkPages.subscriptions.transports.tcp') }}</option>
+                <option value="ws">{{ $t('networkPages.subscriptions.transports.ws') }}</option>
+                <option value="grpc">{{ $t('networkPages.subscriptions.transports.grpc') }}</option>
+                <option value="h2">{{ $t('networkPages.subscriptions.transports.h2') }}</option>
+                <option value="quic">{{ $t('networkPages.subscriptions.transports.quic') }}</option>
               </select>
             </div>
           </div>
           <div class="form-group" v-if="templateForm.tls > 0">
             <label>{{ $t('admin.subscriptions.sni') }}</label>
-            <input type="text" v-model="templateForm.server_name" placeholder="www.example.com">
+            <input type="text" v-model="templateForm.server_name" :placeholder="$t('networkPages.subscriptions.placeholders.sni')">
           </div>
           <div class="form-row" v-if="templateForm.tls === 2">
             <div class="form-group">
@@ -403,22 +403,22 @@
             <label>{{ $t('admin.subscriptions.tlsFingerprint') }}</label>
             <select v-model="templateForm.tls_fingerprint">
               <option value="">{{ $t('admin.subscriptions.defaultOption') }}</option>
-              <option value="chrome">Chrome</option>
-              <option value="firefox">Firefox</option>
-              <option value="safari">Safari</option>
-              <option value="edge">Edge</option>
-              <option value="random">Random</option>
+              <option value="chrome">{{ $t('networkPages.subscriptions.fingerprints.chrome') }}</option>
+              <option value="firefox">{{ $t('networkPages.subscriptions.fingerprints.firefox') }}</option>
+              <option value="safari">{{ $t('networkPages.subscriptions.fingerprints.safari') }}</option>
+              <option value="edge">{{ $t('networkPages.subscriptions.fingerprints.edge') }}</option>
+              <option value="random">{{ $t('networkPages.subscriptions.fingerprints.random') }}</option>
             </select>
           </div>
           <div class="form-group" v-if="templateForm.transport === 'ws'">
             <label>{{ $t('admin.subscriptions.websocketPath') }}</label>
-            <input type="text" v-model="wsPath" placeholder="/ws">
+            <input type="text" v-model="wsPath" :placeholder="$t('networkPages.subscriptions.placeholders.wsPath')">
           </div>
           <div class="form-group" v-if="templateForm.type === 'vless' && templateForm.tls === 2">
             <label>{{ $t('admin.subscriptions.flow') }}</label>
             <select v-model="vlessFlow">
               <option value="">{{ $t('admin.subscriptions.noneOption') }}</option>
-              <option value="xtls-rprx-vision">xtls-rprx-vision</option>
+              <option value="xtls-rprx-vision">{{ $t('networkPages.subscriptions.flows.xtlsRprxVision') }}</option>
             </select>
           </div>
           <div class="form-group">
@@ -1170,3 +1170,4 @@ input:checked + .slider:before { transform: translateX(20px); }
 .group-badges { display: flex; flex-wrap: wrap; gap: 4px; }
 .mini-badge { padding: 1px 6px; background: rgba(59,130,246,0.08); color: var(--primary-color); border-radius: 4px; font-size: 11px; }
 </style>
+
