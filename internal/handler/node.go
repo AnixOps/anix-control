@@ -707,3 +707,54 @@ func (h *NodeHandler) DeleteAuthKey(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
 }
+
+// ========== 内部API (API Token认证) ==========
+
+// InternalGenerateAuthKey godoc
+// @Summary 内部生成授权密钥
+// @Description 使用API Token认证生成节点自动注册的授权密钥（供Ansible等自动化工具使用）
+// @Tags 内部API
+// @Accept json
+// @Produce json
+// @Security ApiTokenAuth
+// @Param request body map[string]interface{} true "密钥请求 {name, expire_days, node_name}"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /internal/auth-keys [post]
+func (h *NodeHandler) InternalGenerateAuthKey(c *gin.Context) {
+	var req struct {
+		Name       string `json:"name"`
+		ExpireDays int    `json:"expire_days"`
+		NodeName   string `json:"node_name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
+		return
+	}
+
+	// 自动生成名称
+	if req.Name == "" {
+		if req.NodeName != "" {
+			req.Name = "Ansible-" + req.NodeName
+		} else {
+			req.Name = "Ansible-Auto-Generated"
+		}
+	}
+
+	authKey, key, err := h.nodeService.GenerateAuthKey(req.Name, req.ExpireDays)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "生成失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "生成成功",
+		"data": gin.H{
+			"id":        authKey.ID,
+			"name":      authKey.Name,
+			"key":       key,
+			"expire_at": authKey.ExpireAt,
+		},
+	})
+}
