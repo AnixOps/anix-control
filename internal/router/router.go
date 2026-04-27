@@ -15,19 +15,18 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		config.Set(cfg)
 	}
 
-	// 全局中间件
-	r.Use(middleware.RequestID())
+	// 全局中间�?	r.Use(middleware.RequestID())
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
 
 	// Swagger API 文档
-	// 自定义 handler 来正确处理 doc.json
+	// 自定�?handler 来正确处�?doc.json
 	r.GET("/swagger/*any", func(c *gin.Context) {
 		path := c.Param("any")
 		if path == "/doc.json" || path == "doc.json" {
-			// 直接返回静态 swagger.json 文件
+			// 直接返回静�?swagger.json 文件
 			c.File("./docs/swagger.json")
 			return
 		}
@@ -35,10 +34,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		ginSwagger.WrapHandler(swaggerFiles.Handler)(c)
 	})
 
-	// 健康检查
-	// @Summary 健康检查
-	// @Description 检查服务是否正常运行
-	// @Tags 系统
+	// 健康检�?	// @Summary 健康检�?	// @Description 检查服务是否正常运�?	// @Tags 系统
 	// @Produce json
 	// @Success 200 {object} map[string]string
 	// @Router /health [get]
@@ -50,8 +46,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	metricsHandler := handler.NewMetricsHandler()
 	r.GET("/metrics", metricsHandler.GetMetrics)
 
-	// 订阅接口 (公开，使用用户 token 认证)
-	// 路径可通过配置 app.subscribe_path 自定义，默认为 "s"
+	// 订阅接口 (公开，使用用�?token 认证)
+	// 路径可通过配置 app.subscribe_path 自定义，默认�?"s"
 	subscribePath := cfg.App.SubscribePath
 	if subscribePath == "" {
 		subscribePath = "s"
@@ -91,8 +87,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			// 用户订阅接口
 			auth.GET("/user/subscription", userHandler.GetSubscription)
 
-			// 知识库接口
-			knowledgeHandler := handler.NewKnowledgeHandler()
+			// 知识库接�?			knowledgeHandler := handler.NewKnowledgeHandler()
 			auth.GET("/user/knowledge", knowledgeHandler.GetArticles)
 			auth.GET("/user/knowledge/:id", knowledgeHandler.GetArticle)
 
@@ -108,8 +103,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			planHandler := handler.NewUserPlanHandler()
 			auth.GET("/user/plan", planHandler.GetPlans)
 
-			// 优惠券接口
-			couponHandler := handler.NewCouponHandler()
+			// 优惠券接�?			couponHandler := handler.NewCouponHandler()
 			auth.POST("/user/coupon/check", couponHandler.CheckCoupon)
 
 			// 订单接口
@@ -124,15 +118,13 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			auth.POST("/payment/fiat/create", paymentHandler.FiatCreatePayment)
 		}
 
-		// 管理员接口
-		admin := v2.Group("/admin")
+		// 管理员接�?		admin := v2.Group("/admin")
 		admin.Use(middleware.JWTAuth())
 		admin.Use(middleware.AdminAuth())
 		{
 			adminHandler := handler.NewAdminHandler()
 
-			// 仪表盘
-			admin.GET("/dashboard", adminHandler.GetDashboard)
+			// 仪表�?			admin.GET("/dashboard", adminHandler.GetDashboard)
 
 			// 用户管理
 			admin.POST("/users", adminHandler.CreateUser)
@@ -180,8 +172,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/auth-keys", nodeHandler.GenerateAuthKey)
 			admin.DELETE("/auth-keys/:id", nodeHandler.DeleteAuthKey)
 
-			// 订阅分组和模板管理
-			subAdmin := handler.NewSubscriptionAdminHandler()
+			// 订阅分组和模板管�?			subAdmin := handler.NewSubscriptionAdminHandler()
 
 			// 订阅分组
 			admin.GET("/subscription/groups", subAdmin.GetGroups)
@@ -229,13 +220,13 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/ticket/reply", ticketHandler.ReplyTicket)
 			admin.POST("/ticket/:id/close", ticketHandler.CloseTicket)
 
-			// 优惠券管理 (V2 Stub)
+			// 优惠券管�?(V2 Stub)
 			couponHandler := handler.NewAdminCouponHandler()
 			admin.GET("/coupon", couponHandler.GetCoupons)
 			admin.POST("/coupon", couponHandler.CreateCoupon)
 			admin.DELETE("/coupon/:id", couponHandler.DeleteCoupon)
 
-			// 知识库管理 (V2 Stub)
+			// 知识库管�?(V2 Stub)
 			knowledgeHandler := handler.NewAdminKnowledgeHandler()
 			admin.GET("/knowledge", knowledgeHandler.GetArticles)
 			admin.POST("/knowledge", knowledgeHandler.CreateArticle)
@@ -313,8 +304,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.DELETE("/payment/gateways/:id", paymentGatewayHandler.DeleteGateway)
 			admin.POST("/payment/gateways/:id/toggle", paymentGatewayHandler.ToggleGateway)
 
-			// 支付统计和记录
-			admin.GET("/payment/stats", paymentGatewayHandler.GetPaymentStats)
+			// 支付统计和记�?			admin.GET("/payment/stats", paymentGatewayHandler.GetPaymentStats)
 			admin.GET("/payment/records", paymentGatewayHandler.ListPaymentRecords)
 
 			// ========== Telegram Bot 管理 ==========
@@ -345,7 +335,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/notification/email/config", notificationHandler.GetEmailConfig)
 			admin.PUT("/notification/email/config", notificationHandler.UpdateEmailConfig)
 
-			// ========== 邀请返利管理 ==========
+			// ========== 邀请返利管�?==========
 			inviteHandler := handler.NewInviteHandler()
 			admin.GET("/invite/config", inviteHandler.GetConfig)
 			admin.PUT("/invite/config", inviteHandler.UpdateConfig)
@@ -447,8 +437,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			authUser.POST("/user/notifications/:id/read", notificationHandler.MarkAsRead)
 			authUser.POST("/user/notifications/read-all", notificationHandler.MarkAllAsRead)
 
-			// 用户邀请
-			inviteHandler := handler.NewInviteHandler()
+			// 用户邀�?			inviteHandler := handler.NewInviteHandler()
 			authUser.GET("/user/invite", inviteHandler.GetInviteInfo)
 			authUser.POST("/user/invite/generate", inviteHandler.GenerateCode)
 			authUser.GET("/user/invite/commissions", inviteHandler.GetCommissionRecords)
@@ -474,10 +463,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			nodePublic.GET("/ws", agentHandler.AgentWebSocketUnified)
 		}
 
-		// 节点通信 API (需要 API Key 认证 + 可选签名验证)
+		// 节点通信 API (需�?API Key 认证 + 可选签名验�?
 		nodeAPI := v2.Group("/node")
 		nodeAPI.Use(middleware.NodeAPIKeyAuth())
-		nodeAPI.Use(middleware.SignatureAuth())    // 签名验证 (向后兼容，可选)
+		nodeAPI.Use(middleware.SignatureAuth())    // 签名验证 (向后兼容，可�?
 		nodeAPI.Use(middleware.NodeSecureLogger()) // 安全审计日志
 		{
 			nodeHandler := handler.NewNodeHandler()
@@ -508,7 +497,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			uniproxyV1.POST("/alive", h.PushAlive)
 		}
 
-		// Agent API (NAT 后节点主动连接)
+		// Agent API (NAT 后节点主动连�?
 		agentPublic := v2.Group("/agent")
 		{
 			agentPublic.POST("/register", agentHandler.AgentRegister)
@@ -522,7 +511,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// 转发规则同步 (Agent 使用)
 		v2.GET("/forward/agent/rules", agentHandler.AgentGetForwardRules)
 
-		// Agent 管理接口 (管理员)
+		// Agent 管理接口 (管理�?
 		agentAdmin := v2.Group("/admin/agent")
 		agentAdmin.Use(middleware.JWTAuth())
 		agentAdmin.Use(middleware.AdminAuth())
@@ -540,6 +529,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			internalAPI.POST("/forward/traffic/upload", forwardFlowHandler.UploadPanelFlowData)
 			internalAPI.POST("/forward/traffic/report", forwardFlowHandler.ReportPanelForwardTraffic)
 			internalAPI.POST("/forward/traffic/snapshot", forwardFlowHandler.SnapshotPanelForwardTraffic)
+				// �ڲ�AuthKey���ɣ���Ansible�Զ�������
+				nodeHandlerForInternal := handler.NewNodeHandler()
+				internalAPI.POST("/auth-keys", nodeHandlerForInternal.InternalGenerateAuthKey)
 		}
 	}
 }
