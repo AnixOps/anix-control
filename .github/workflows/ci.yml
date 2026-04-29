@@ -107,10 +107,29 @@ jobs:
           fi
           echo "gRPC coverage check passed: ${COVERAGE}%"
 
+  cmd-test:
+    name: CLI Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run CLI tests
+        run: |
+          go test -v -coverprofile=cmd_coverage.out ./cmd/...
+          COVERAGE=$(go tool cover -func=cmd_coverage.out | grep total | awk '{print $3}')
+          echo "CLI coverage: ${COVERAGE}"
+
   e2e-test:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: backend-test
+    needs: [backend-test, cmd-test]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -156,7 +175,7 @@ jobs:
   backend-build:
     name: Backend Build
     runs-on: ubuntu-latest
-    needs: [backend-test, grpc-test]
+    needs: [backend-test, grpc-test, cmd-test]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -187,7 +206,7 @@ jobs:
   release-binaries:
     name: Build Release Binary (${{ matrix.goos }}-${{ matrix.goarch }})
     runs-on: ubuntu-latest
-    needs: [backend-test, grpc-test, tag-gate]
+    needs: [backend-test, grpc-test, cmd-test, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     strategy:
       fail-fast: false
