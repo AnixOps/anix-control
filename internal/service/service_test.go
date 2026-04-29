@@ -425,7 +425,7 @@ func (s *NodeServiceTestSuite) TestGenerateAuthKey_NoExpiry() {
 }
 
 func (s *NodeServiceTestSuite) TestProtocolCRUD() {
-	// 鍒涘缓鑺傜偣
+	// 创建节点
 	node := &model.Node{
 		Name: "Protocol Test Node",
 		Host: "192.168.1.5",
@@ -435,7 +435,13 @@ func (s *NodeServiceTestSuite) TestProtocolCRUD() {
 	}
 	s.svc.CreateNode(node)
 
-	// 鍒涘缓鍗忚
+	// CreateNode auto-creates a default VMess protocol; delete it so we test CRUD cleanly
+	protocolsBefore, _ := s.svc.GetProtocols(node.ID)
+	for _, p := range protocolsBefore {
+		_ = s.svc.DeleteProtocol(p.ID)
+	}
+
+	// 创建协议
 	transport := "tcp"
 	protocol := &model.NodeProtocol{
 		NodeID:    node.ID,
@@ -449,19 +455,19 @@ func (s *NodeServiceTestSuite) TestProtocolCRUD() {
 	err := s.svc.CreateProtocol(protocol)
 	assert.NoError(s.T(), err)
 
-	// 鑾峰彇鍗忚
+	// 获取协议
 	protocols, err := s.svc.GetProtocols(node.ID)
 	assert.NoError(s.T(), err)
 	assert.Len(s.T(), protocols, 1)
 
-	// 鏇存柊鍗忚
+	// 更新协议
 	updates := map[string]any{
 		"name": "Updated VLESS",
 	}
 	err = s.svc.UpdateProtocol(protocol.ID, updates)
 	assert.NoError(s.T(), err)
 
-	// 鍒犻櫎鍗忚
+	// 删除协议
 	err = s.svc.DeleteProtocol(protocol.ID)
 	assert.NoError(s.T(), err)
 }
