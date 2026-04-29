@@ -482,8 +482,6 @@ func newAPIServer(cfg *config.Config) *http.Server {
 		log.Fatalf("Failed to configure trusted proxies for API server: %v", err)
 	}
 	router.Setup(r, cfg)
-	// Override /health with draining-aware handler (registered after router.Setup).
-	r.GET("/health", healthHandler())
 
 	readTimeout := time.Duration(cfg.Server.ReadTimeout) * time.Second
 	if readTimeout == 0 {
