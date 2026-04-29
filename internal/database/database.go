@@ -135,7 +135,7 @@ func Reset() {
 }
 
 // AutoMigrate 鑷姩杩佺Щ鏁版嵁搴撹〃
-func AutoMigrate(models ...interface{}) error {
+func AutoMigrate(models ...any) error {
 	return db.AutoMigrate(models...)
 }
 

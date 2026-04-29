@@ -65,7 +65,7 @@ type ForwardRuntimeAnsibleConfig struct {
 	ApplyPlaybook  string                 `yaml:"apply_playbook"`
 	RemovePlaybook string                 `yaml:"remove_playbook"`
 	Become         bool                   `yaml:"become"`
-	ExtraVars      map[string]interface{} `yaml:"extra_vars"`
+	ExtraVars      map[string]any `yaml:"extra_vars"`
 	Command        string                 `yaml:"command"`
 	WorkingDir     string                 `yaml:"working_dir"`
 	TargetPattern  string                 `yaml:"target_pattern"`
@@ -111,6 +111,16 @@ type ServerConfig struct {
 	ReadTimeout    int      `yaml:"read_timeout"`
 	WriteTimeout   int      `yaml:"write_timeout"`
 	TrustedProxies []string `yaml:"trusted_proxies"`
+	CORS           CORSConfig `yaml:"cors"`
+}
+
+// CORSConfig defines Cross-Origin Resource Sharing settings.
+type CORSConfig struct {
+	AllowedOrigins []string `yaml:"allowed_origins"`
+	AllowedMethods []string `yaml:"allowed_methods"`
+	AllowedHeaders []string `yaml:"allowed_headers"`
+	AllowCredentials bool   `yaml:"allow_credentials"`
+	MaxAge         int      `yaml:"max_age"` // preflight cache duration in seconds
 }
 
 // FrontendConfig defines static frontend serving settings.

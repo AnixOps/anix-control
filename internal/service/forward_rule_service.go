@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -162,6 +164,32 @@ func (s *ForwardRuleService) Toggle(id uint, enabled bool) error {
 	return nil
 }
 
+// ValidateUserForRule validates that a user-bound rule's associated user is valid.
+// Checks: user exists, is not banned, and has remaining traffic allowance.
+func (s *ForwardRuleService) ValidateUserForRule(rule *model.ForwardRule) error {
+	if rule.UserID == nil {
+		return nil
+	}
+
+	var user model.User
+	if err := s.db.First(&user, *rule.UserID).Error; err != nil {
+		return fmt.Errorf("user %d not found", *rule.UserID)
+	}
+
+	if user.Banned != 0 {
+		return fmt.Errorf("user %d is banned", user.ID)
+	}
+
+	if user.TransferEnable > 0 {
+		used := user.U + user.D
+		if used >= user.TransferEnable {
+			return fmt.Errorf("user %d has exhausted traffic allowance", user.ID)
+		}
+	}
+
+	return nil
+}
+
 // validateRule validates rule topology and port uniqueness.
 func (s *ForwardRuleService) validateRule(rule *model.ForwardRule) error {
 	relayNode, err := s.nodeService.GetByID(rule.RelayNodeID)
@@ -209,8 +237,10 @@ func (s *ForwardRuleService) MatchRule(sourceIP string, targetHost string, targe
 		}
 
 		if rule.UserID != nil {
-			// TODO: implement user validation for user-bound rules.
-			continue
+			if err := s.ValidateUserForRule(rule); err != nil {
+				log.Printf("[forward_rule] skipping user-bound rule %d: %v", rule.ID, err)
+				continue
+			}
 		}
 
 		if rule.ExpireTime != nil && rule.ExpireTime.Before(time.Now()) {
@@ -232,7 +262,7 @@ func (s *ForwardRuleService) MatchRule(sourceIP string, targetHost string, targe
 
 // UpdateTraffic updates traffic counters.
 func (s *ForwardRuleService) UpdateTraffic(ruleID uint, upload, download int64) error {
-	return s.db.Model(&model.ForwardRule{}).Where("id = ?", ruleID).Updates(map[string]interface{}{
+	return s.db.Model(&model.ForwardRule{}).Where("id = ?", ruleID).Updates(map[string]any{
 		"upload":   gorm.Expr("upload + ?", upload),
 		"download": gorm.Expr("download + ?", download),
 	}).Error
@@ -240,7 +270,7 @@ func (s *ForwardRuleService) UpdateTraffic(ruleID uint, upload, download int64) 
 
 // UpdateConnections updates connection counters.
 func (s *ForwardRuleService) UpdateConnections(ruleID uint, delta int) error {
-	return s.db.Model(&model.ForwardRule{}).Where("id = ?", ruleID).Updates(map[string]interface{}{
+	return s.db.Model(&model.ForwardRule{}).Where("id = ?", ruleID).Updates(map[string]any{
 		"connections": gorm.Expr("connections + ?", delta),
 		"total_conns": gorm.Expr("total_conns + ?", max(delta, 0)),
 	}).Error
@@ -418,12 +448,48 @@ type ForwardRuleConfig struct {
 }
 
 // CheckIPAllowed checks whether an IP is allowed to access the rule.
+// If the rule has an AllowedIPs list (comma-separated CIDRs or single IPs),
+// the client IP must fall within at least one entry. If no allowlist is
+// configured, all IPs are permitted.
 func (s *ForwardRuleService) CheckIPAllowed(rule *model.ForwardRule, ip string) bool {
-	if rule.UserID != nil {
-		// TODO: implement IP allowlist checks.
+	if rule.AllowedIPs == "" {
 		return true
 	}
-	return true
+
+	clientIP := net.ParseIP(ip)
+	if clientIP == nil {
+		log.Printf("[forward_rule] CheckIPAllowed: invalid client IP %q", ip)
+		return false
+	}
+
+	for _, entry := range splitAllowedIPs(rule.AllowedIPs) {
+		_, cidr, err := net.ParseCIDR(entry)
+		if err == nil {
+			if cidr.Contains(clientIP) {
+				return true
+			}
+			continue
+		}
+
+		allowedIP := net.ParseIP(entry)
+		if allowedIP != nil && allowedIP.Equal(clientIP) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// splitAllowedIPs splits a comma-separated list of CIDRs / single IPs.
+func splitAllowedIPs(s string) []string {
+	var entries []string
+	for _, entry := range strings.Split(s, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry != "" {
+			entries = append(entries, entry)
+		}
+	}
+	return entries
 }
 
 // ParseIPRange parses CIDR or single-IP input.

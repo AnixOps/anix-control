@@ -86,7 +86,7 @@ func (p *Base64Parser) Parse(content []byte) ([]*model.ParsedNode, error) {
 			node, parseErr = p.parseTUIC(line)
 		}
 
-		if parseErr == nil && node != nil {
+		if parseErr == nil && node != nil && node.IsValid() {
 			nodes = append(nodes, node)
 		}
 	}
@@ -107,12 +107,12 @@ func (p *Base64Parser) parseVMess(link string) (*model.ParsedNode, error) {
 	}
 
 	var vmess struct {
-		V    interface{} `json:"v"`
+		V    any `json:"v"`
 		Ps   string      `json:"ps"`
 		Add  string      `json:"add"`
-		Port interface{} `json:"port"`
+		Port any `json:"port"`
 		ID   string      `json:"id"`
-		Aid  interface{} `json:"aid"`
+		Aid  any `json:"aid"`
 		Scy  string      `json:"scy"`
 		Net  string      `json:"net"`
 		Type string      `json:"type"`
@@ -142,7 +142,7 @@ func (p *Base64Parser) parseVMess(link string) (*model.ParsedNode, error) {
 		ServerName:     vmess.Sni,
 		ALPN:           vmess.Alpn,
 		Transport:      vmess.Net,
-		Settings: map[string]interface{}{
+		Settings: map[string]any{
 			"alter_id": aid,
 			"security": vmess.Scy,
 		},
@@ -150,7 +150,7 @@ func (p *Base64Parser) parseVMess(link string) (*model.ParsedNode, error) {
 
 	// 传输层配置
 	if vmess.Net != "" && vmess.Net != "tcp" {
-		node.TransportSettings = map[string]interface{}{}
+		node.TransportSettings = map[string]any{}
 		switch vmess.Net {
 		case "ws":
 			node.TransportSettings["path"] = vmess.Path
@@ -190,7 +190,7 @@ func (p *Base64Parser) parseVLESS(link string) (*model.ParsedNode, error) {
 		ServerName:     query.Get("sni"),
 		ALPN:           query.Get("alpn"),
 		Transport:      query.Get("type"),
-		Settings:       map[string]interface{}{},
+		Settings:       map[string]any{},
 	}
 
 	// Flow
@@ -207,17 +207,17 @@ func (p *Base64Parser) parseVLESS(link string) (*model.ParsedNode, error) {
 	// 传输层配置
 	switch node.Transport {
 	case "ws":
-		node.TransportSettings = map[string]interface{}{
+		node.TransportSettings = map[string]any{
 			"path": query.Get("path"),
 			"host": query.Get("host"),
 		}
 	case "grpc":
-		node.TransportSettings = map[string]interface{}{
+		node.TransportSettings = map[string]any{
 			"serviceName": query.Get("serviceName"),
 			"mode":        query.Get("mode"),
 		}
 	case "h2":
-		node.TransportSettings = map[string]interface{}{
+		node.TransportSettings = map[string]any{
 			"path": query.Get("path"),
 			"host": query.Get("host"),
 		}
@@ -251,7 +251,7 @@ func (p *Base64Parser) parseTrojan(link string) (*model.ParsedNode, error) {
 		ServerName:     query.Get("sni"),
 		ALPN:           query.Get("alpn"),
 		Transport:      query.Get("type"),
-		Settings:       map[string]interface{}{},
+		Settings:       map[string]any{},
 	}
 
 	if query.Get("allowInsecure") == "1" {
@@ -261,12 +261,12 @@ func (p *Base64Parser) parseTrojan(link string) (*model.ParsedNode, error) {
 	// 传输层配置
 	switch node.Transport {
 	case "ws":
-		node.TransportSettings = map[string]interface{}{
+		node.TransportSettings = map[string]any{
 			"path": query.Get("path"),
 			"host": query.Get("host"),
 		}
 	case "grpc":
-		node.TransportSettings = map[string]interface{}{
+		node.TransportSettings = map[string]any{
 			"serviceName": query.Get("serviceName"),
 		}
 	}
@@ -352,7 +352,7 @@ func (p *Base64Parser) parseShadowsocks(link string) (*model.ParsedNode, error) 
 		Server:   server,
 		Port:     port,
 		Password: password,
-		Settings: map[string]interface{}{
+		Settings: map[string]any{
 			"cipher": method,
 		},
 	}
@@ -383,7 +383,7 @@ func (p *Base64Parser) parseHysteria2(link string) (*model.ParsedNode, error) {
 		Password:   password,
 		TLS:        true,
 		ServerName: query.Get("sni"),
-		Settings:   map[string]interface{}{},
+		Settings:   map[string]any{},
 	}
 
 	if query.Get("insecure") == "1" {
@@ -424,7 +424,7 @@ func (p *Base64Parser) parseTUIC(link string) (*model.ParsedNode, error) {
 		TLS:        true,
 		ServerName: query.Get("sni"),
 		ALPN:       query.Get("alpn"),
-		Settings: map[string]interface{}{
+		Settings: map[string]any{
 			"congestion_control": query.Get("congestion_control"),
 			"udp_relay_mode":     query.Get("udp_relay_mode"),
 		},
@@ -433,8 +433,8 @@ func (p *Base64Parser) parseTUIC(link string) (*model.ParsedNode, error) {
 	return node, nil
 }
 
-// toInt 将 interface{} 转换为 int
-func toInt(v interface{}) int {
+// toInt 将 any 转换为 int
+func toInt(v any) int {
 	switch val := v.(type) {
 	case int:
 		return val

@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,7 +20,7 @@ type PaymentGatewayHandler struct {
 	gatewayService *service.PaymentGatewayService
 }
 
-func normalizeGatewayConfig(raw interface{}) (string, error) {
+func normalizeGatewayConfig(raw any) (string, error) {
 	if raw == nil {
 		return "", nil
 	}
@@ -77,8 +78,8 @@ func NewPaymentGatewayHandler() *PaymentGatewayHandler {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/payment/gateways [get]
 func (h *PaymentGatewayHandler) ListGateways(c *gin.Context) {
 	gateways, err := h.gatewayService.List()
@@ -105,9 +106,9 @@ func (h *PaymentGatewayHandler) ListGateways(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body CreateGatewayRequest true "网关信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/payment/gateways [post]
 func (h *PaymentGatewayHandler) CreateGateway(c *gin.Context) {
 	var req CreateGatewayRequest
@@ -152,10 +153,10 @@ func (h *PaymentGatewayHandler) CreateGateway(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "网关ID"
 // @Param request body UpdateGatewayRequest true "网关更新信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/payment/gateways/{id} [put]
 func (h *PaymentGatewayHandler) UpdateGateway(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -228,9 +229,9 @@ func (h *PaymentGatewayHandler) UpdateGateway(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "网关ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/payment/gateways/{id} [delete]
 func (h *PaymentGatewayHandler) DeleteGateway(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -256,9 +257,9 @@ func (h *PaymentGatewayHandler) DeleteGateway(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "网关ID"
 // @Param request body ToggleRequest true "状态请求"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/payment/gateways/{id}/toggle [post]
 func (h *PaymentGatewayHandler) ToggleGateway(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -267,7 +268,7 @@ func (h *PaymentGatewayHandler) ToggleGateway(c *gin.Context) {
 		return
 	}
 
-	var req map[string]interface{}
+	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil && err != io.EOF {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -312,9 +313,9 @@ func (h *PaymentGatewayHandler) ToggleGateway(c *gin.Context) {
 // @Security BearerAuth
 // @Param start query string false "开始日期 (格式: 2006-01-02)"
 // @Param end query string false "结束日期 (格式: 2006-01-02)"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/payment/stats [get]
 func (h *PaymentGatewayHandler) GetPaymentStats(c *gin.Context) {
 	startStr := c.DefaultQuery("start", time.Now().AddDate(0, 0, -30).Format("2006-01-02"))
@@ -339,14 +340,18 @@ func (h *PaymentGatewayHandler) GetPaymentStats(c *gin.Context) {
 	}
 
 	var totalOrders int64
-	database.Get().Model(&model.PaymentRecord{}).
+	if err := database.Get().Model(&model.PaymentRecord{}).
 		Where("created_at BETWEEN ? AND ?", start, end).
-		Count(&totalOrders)
+		Count(&totalOrders).Error; err != nil {
+		log.Printf("failed to count total orders: %v", err)
+	}
 
 	var successOrders int64
-	database.Get().Model(&model.PaymentRecord{}).
+	if err := database.Get().Model(&model.PaymentRecord{}).
 		Where("status = ? AND paid_at BETWEEN ? AND ?", model.PaymentStatusPaid, start, end).
-		Count(&successOrders)
+		Count(&successOrders).Error; err != nil {
+		log.Printf("failed to count success orders: %v", err)
+	}
 
 	successRate := float64(0)
 	if totalOrders > 0 {
@@ -358,11 +363,13 @@ func (h *PaymentGatewayHandler) GetPaymentStats(c *gin.Context) {
 		Amount      float64
 		Count       int64
 	}
-	database.Get().Model(&model.PaymentRecord{}).
+	if err := database.Get().Model(&model.PaymentRecord{}).
 		Select("gateway_type, COALESCE(SUM(actual_amount), 0) AS amount, COUNT(*) AS count").
 		Where("status = ? AND paid_at BETWEEN ? AND ?", model.PaymentStatusPaid, start, end).
 		Group("gateway_type").
-		Scan(&byGatewayRows)
+		Scan(&byGatewayRows).Error; err != nil {
+		log.Printf("failed to scan gateway rows: %v", err)
+	}
 
 	byGateway := make(map[string]gin.H, len(byGatewayRows))
 	for _, row := range byGatewayRows {
@@ -396,12 +403,13 @@ func (h *PaymentGatewayHandler) GetPaymentStats(c *gin.Context) {
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页数量" default(20)
 // @Param status query int false "支付状态"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/payment/records [get]
 func (h *PaymentGatewayHandler) ListPaymentRecords(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = ClampPagination(page, pageSize)
 	gatewayType := c.Query("gateway_type")
 
 	var status *int
@@ -466,8 +474,8 @@ func (h *PaymentGatewayHandler) ListPaymentRecords(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /user/payment/channels [get]
 func (h *PaymentGatewayHandler) GetChannels(c *gin.Context) {
 	channels, err := h.gatewayService.GetChannels()
@@ -487,9 +495,9 @@ func (h *PaymentGatewayHandler) GetChannels(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body CreatePaymentRequest true "支付请求"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /user/payment/create [post]
 func (h *PaymentGatewayHandler) CreatePayment(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -565,8 +573,8 @@ func (h *PaymentGatewayHandler) CreatePayment(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param trade_no path string true "订单号"
-// @Success 200 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /user/payment/status/{trade_no} [get]
 func (h *PaymentGatewayHandler) GetPaymentStatus(c *gin.Context) {
 	tradeNo := c.Param("trade_no")
@@ -597,8 +605,8 @@ func (h *PaymentGatewayHandler) GetPaymentStatus(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页数量" default(20)
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /user/payment/records [get]
 func (h *PaymentGatewayHandler) GetUserRecords(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -645,7 +653,7 @@ func (h *PaymentGatewayHandler) PaymentCallback(c *gin.Context) {
 		tradeNo := c.Query("out_trade_no")
 		gatewayTradeNo := c.Query("trade_no")
 
-		if err := h.gatewayService.MarkAsPaid(tradeNo, gatewayTradeNo, string(body)); err != nil {
+		if err := h.gatewayService.MarkOrderPaid(tradeNo, gatewayTradeNo, string(body)); err != nil {
 			c.String(http.StatusBadRequest, "fail")
 			return
 		}

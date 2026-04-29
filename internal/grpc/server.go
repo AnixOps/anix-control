@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -22,6 +23,8 @@ type ServerConfig struct {
 	Port int
 	// API Token (可选，用于认证)
 	APIToken string
+	// JWT Secret (可选，用于 JWT 认证)
+	JWTSecret string
 	// Keepalive 时间
 	KeepaliveTime time.Duration
 	// Keepalive 超时
@@ -90,10 +93,11 @@ func (s *Server) Start() error {
 		StreamLoggingInterceptor(),
 	}
 
-	// 如果配置了 API Token，添加认证拦截器
-	if s.config.APIToken != "" {
-		interceptors = append(interceptors, AuthInterceptor(s.config.APIToken))
-		streamInterceptors = append(streamInterceptors, StreamAuthInterceptor(s.config.APIToken))
+	// 如果配置了 API Token 或 JWT Secret，添加认证拦截器
+	hasAuth := s.config.APIToken != "" || s.config.JWTSecret != ""
+	if hasAuth {
+		interceptors = append(interceptors, AuthInterceptor(s.config.APIToken, s.config.JWTSecret))
+		streamInterceptors = append(streamInterceptors, StreamAuthInterceptor(s.config.APIToken, s.config.JWTSecret))
 	}
 
 	// 链式拦截器
@@ -115,9 +119,9 @@ func (s *Server) Start() error {
 
 	// 启动服务器
 	go func() {
-		fmt.Printf("[GRPC] Server listening on %s\n", addr)
+		slog.Info("gRPC server listening", "component", "grpc", "addr", addr)
 		if err := s.grpcServer.Serve(lis); err != nil {
-			fmt.Printf("[GRPC] Server error: %v\n", err)
+			slog.Error("gRPC server error", "component", "grpc", "error", err)
 		}
 	}()
 
@@ -127,9 +131,9 @@ func (s *Server) Start() error {
 // Stop 停止服务器
 func (s *Server) Stop() {
 	if s.grpcServer != nil {
-		fmt.Println("[GRPC] Server stopping...")
+		slog.Info("gRPC server stopping", "component", "grpc")
 		s.grpcServer.GracefulStop()
-		fmt.Println("[GRPC] Server stopped")
+		slog.Info("gRPC server stopped", "component", "grpc")
 	}
 }
 
@@ -140,7 +144,7 @@ func (s *Server) GracefulShutdown(ctx context.Context) error {
 
 	select {
 	case sig := <-sigChan:
-		fmt.Printf("[GRPC] Received signal: %v\n", sig)
+		slog.Info("gRPC received signal", "component", "grpc", "signal", sig.String())
 		s.Stop()
 		return nil
 	case <-ctx.Done():

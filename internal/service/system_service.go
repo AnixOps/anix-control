@@ -361,7 +361,7 @@ func (s *BackupService) CleanupOldBackups() error {
 	return nil
 }
 
-func (s *BackupService) GetBackupStats() (map[string]interface{}, error) {
+func (s *BackupService) GetBackupStats() (map[string]any, error) {
 	var totalBackups int64
 	var totalSize int64
 	var lastBackup time.Time
@@ -375,7 +375,7 @@ func (s *BackupService) GetBackupStats() (map[string]interface{}, error) {
 		lastBackup = record.CreatedAt
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"total_backups": totalBackups,
 		"total_size":    totalSize,
 	}
@@ -678,7 +678,7 @@ func extractArchiveFile(file *zip.File, destination string) error {
 	return err
 }
 
-func writeJSONArchiveEntry(writer *zip.Writer, name string, payload interface{}) error {
+func writeJSONArchiveEntry(writer *zip.Writer, name string, payload any) error {
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		return err
@@ -829,7 +829,7 @@ func (s *SystemConfigService) GetAsMap() (map[string]string, error) {
 	return result, nil
 }
 
-func (s *SystemConfigService) GetJSON(key string, v interface{}) error {
+func (s *SystemConfigService) GetJSON(key string, v any) error {
 	value, err := s.Get(key)
 	if err != nil {
 		return err
@@ -840,7 +840,7 @@ func (s *SystemConfigService) GetJSON(key string, v interface{}) error {
 	return json.Unmarshal([]byte(value), v)
 }
 
-func (s *SystemConfigService) SetJSON(key string, v interface{}, group, remark string) error {
+func (s *SystemConfigService) SetJSON(key string, v any, group, remark string) error {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return err

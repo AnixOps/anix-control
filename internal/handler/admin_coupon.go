@@ -54,13 +54,13 @@ func (h *AdminCouponHandler) GetCoupons(c *gin.Context) {
 // CreateCoupon 创建优惠券
 func (h *AdminCouponHandler) CreateCoupon(c *gin.Context) {
 	var req struct {
-		Code      string `json:"code" binding:"required"`
-		Name      string `json:"name" binding:"required"`
-		Type      int    `json:"type"`
-		Value     int    `json:"value"`
-		LimitUse  int    `json:"limit_use"`
-		StartedAt int64  `json:"started_at"`
-		EndedAt   int64  `json:"ended_at"`
+		Code      string `json:"code" binding:"required,min=1,max=64"`
+		Name      string `json:"name" binding:"required,min=1,max=255"`
+		Type      int    `json:"type" binding:"required,oneof=1 2"`
+		Value     int    `json:"value" binding:"required,gte=0"`
+		LimitUse  int    `json:"limit_use" binding:"gte=0"`
+		StartedAt int64  `json:"started_at" binding:"gte=0"`
+		EndedAt   int64  `json:"ended_at" binding:"gte=0"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -70,7 +70,10 @@ func (h *AdminCouponHandler) CreateCoupon(c *gin.Context) {
 
 	// 检查优惠码是否已存在
 	var count int64
-	database.GetDB().Model(&model.Coupon{}).Where("code = ?", req.Code).Count(&count)
+	if err := database.GetDB().Model(&model.Coupon{}).Where("code = ?", req.Code).Count(&count).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "检查优惠码失败"})
+		return
+	}
 	if count > 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "优惠码已存在"})
 		return

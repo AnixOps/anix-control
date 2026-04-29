@@ -20,8 +20,8 @@ func NewCouponHandler() *CouponHandler {
 // CheckCoupon 校验优惠券是否可用
 func (h *CouponHandler) CheckCoupon(c *gin.Context) {
 	var req struct {
-		Code   string `json:"code" binding:"required"`
-		PlanID uint   `json:"plan_id"`
+		Code   string `json:"code" binding:"required,min=1"`
+		PlanID uint   `json:"plan_id" binding:"gt=0"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -50,7 +50,12 @@ func (h *CouponHandler) CheckCoupon(c *gin.Context) {
 		return
 	}
 
-	// TODO: 校验优惠券是否适用于指定套餐 (如果模型支持的话)
+	// Coupon-plan applicability check stub:
+	// If the coupon model gains plan-specific or category-specific fields, validate here:
+	//   1. Check if coupon has a list of applicable plan IDs
+	//   2. Verify the target planID is in that list
+	//   3. Return an error if the coupon cannot be applied to this plan
+	// Current implementation has no plan-coupon mapping, so all coupons are considered applicable.
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{

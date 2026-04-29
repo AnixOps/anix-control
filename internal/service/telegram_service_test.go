@@ -82,7 +82,7 @@ func TestTelegramBotService_UpdateBot(t *testing.T) {
 
 func TestTelegramBotService_SetWebhook(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := map[string]interface{}{
+		resp := map[string]any{
 			"ok": true,
 		}
 		json.NewEncoder(w).Encode(resp)

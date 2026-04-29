@@ -81,7 +81,7 @@ func TestClashFormatter_Format_Trojan(t *testing.T) {
 			Transport:  "ws",
 			TLS:        true,
 			ServerName: "trojan-ws.example.com",
-			TransportSettings: map[string]interface{}{
+			TransportSettings: map[string]any{
 				"path": "/trojan-ws",
 			},
 		},
@@ -94,7 +94,7 @@ func TestClashFormatter_Format_Trojan(t *testing.T) {
 			Transport:    "grpc",
 			TLS:          true,
 			ServerName:   "trojan-grpc.example.com",
-			TransportSettings: map[string]interface{}{
+			TransportSettings: map[string]any{
 				"serviceName": "trojan-grpc",
 			},
 		},
@@ -155,7 +155,7 @@ func TestClashFormatter_Format_Hysteria2(t *testing.T) {
 			Server:   "hy2-obfs.example.com",
 			Port:     443,
 			Password: "hy2-obfs-password",
-			Settings: map[string]interface{}{
+			Settings: map[string]any{
 				"obfs":          "salamander",
 				"obfs-password": "obfs-password",
 			},
@@ -245,7 +245,7 @@ func TestV2RayFormatter_Format_Trojan_Transport(t *testing.T) {
 			Transport:  "ws",
 			TLS:        true,
 			ServerName: "trojan-ws.example.com",
-			TransportSettings: map[string]interface{}{
+			TransportSettings: map[string]any{
 				"path": "/trojan-ws",
 			},
 		},
@@ -275,7 +275,7 @@ func TestV2RayFormatter_FormatVMess_WS(t *testing.T) {
 			Transport:  "ws",
 			TLS:        true,
 			ServerName: "vmess-ws.example.com",
-			TransportSettings: map[string]interface{}{
+			TransportSettings: map[string]any{
 				"path": "/vmess-ws",
 				"host": "vmess-ws.example.com",
 			},
@@ -305,7 +305,7 @@ func TestV2RayFormatter_FormatVMess_gRPC(t *testing.T) {
 			Transport:  "grpc",
 			TLS:        true,
 			ServerName: "vmess-grpc.example.com",
-			TransportSettings: map[string]interface{}{
+			TransportSettings: map[string]any{
 				"serviceName": "vmess-grpc",
 			},
 		},
@@ -334,7 +334,7 @@ func TestV2RayFormatter_FormatVLESS_WS(t *testing.T) {
 			Transport:  "ws",
 			TLS:        true,
 			ServerName: "vless-ws.example.com",
-			TransportSettings: map[string]interface{}{
+			TransportSettings: map[string]any{
 				"path": "/vless-ws",
 				"host": "vless-ws.example.com",
 			},
@@ -362,7 +362,7 @@ func TestV2RayFormatter_FormatVLESS_gRPC(t *testing.T) {
 			Transport:  "grpc",
 			TLS:        true,
 			ServerName: "vless-grpc.example.com",
-			TransportSettings: map[string]interface{}{
+			TransportSettings: map[string]any{
 				"serviceName": "vless-grpc",
 			},
 		},
@@ -389,7 +389,7 @@ func TestV2RayFormatter_FormatTrojan_gRPC(t *testing.T) {
 			Transport:  "grpc",
 			TLS:        true,
 			ServerName: "trojan-grpc.example.com",
-			TransportSettings: map[string]interface{}{
+			TransportSettings: map[string]any{
 				"serviceName": "trojan-grpc",
 			},
 		},

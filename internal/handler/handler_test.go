@@ -547,9 +547,9 @@ func (s *UserHandlerTestSuite) TestGetProfile_Success() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
-	data := response["data"].(map[string]interface{})
+	data := response["data"].(map[string]any)
 	assert.Equal(s.T(), s.testUser.Email, data["email"])
 }
 
@@ -691,7 +691,7 @@ func (s *NodeHandlerTestSuite) TestCreateNode_Success() {
 	handler := NewNodeHandler()
 	s.router.POST("/nodes", handler.CreateNode)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name": "New Test Node",
 		"host": "192.168.1.200",
 		"port": 443,
@@ -724,7 +724,7 @@ func (s *NodeHandlerTestSuite) TestUpdateNode_Success() {
 	handler := NewNodeHandler()
 	s.router.PUT("/nodes/:id", handler.UpdateNode)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name": "Updated Node Name",
 		"rate": 2.0,
 	}
@@ -742,7 +742,7 @@ func (s *NodeHandlerTestSuite) TestUpdateNode_InvalidID() {
 	handler := NewNodeHandler()
 	s.router.PUT("/nodes/:id", handler.UpdateNode)
 
-	body := map[string]interface{}{"name": "Test"}
+	body := map[string]any{"name": "Test"}
 	jsonBody, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("PUT", "/nodes/invalid", bytes.NewReader(jsonBody))
@@ -825,7 +825,7 @@ func (s *NodeHandlerTestSuite) TestCreateProtocol_Success() {
 	handler := NewNodeHandler()
 	s.router.POST("/nodes/:id/protocols", handler.CreateProtocol)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":      "New Protocol",
 		"type":      "vless",
 		"port":      443,
@@ -847,7 +847,7 @@ func (s *NodeHandlerTestSuite) TestGenerateAuthKey_Success() {
 	handler := NewNodeHandler()
 	s.router.POST("/auth-keys", handler.GenerateAuthKey)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":        "Test Key",
 		"expire_days": 7,
 	}
@@ -876,8 +876,8 @@ func (s *NodeHandlerTestSuite) TestValidateRawConfig_Success() {
 	handler := NewNodeHandler()
 	s.router.POST("/validate-config", handler.ValidateRawConfig)
 
-	body := map[string]interface{}{
-		"raw_config": map[string]interface{}{
+	body := map[string]any{
+		"raw_config": map[string]any{
 			"server_port": 443,
 		},
 	}
@@ -951,7 +951,7 @@ func (s *AdminHandlerTestSuite) TestCreateUser_Success() {
 	handler := NewAdminHandler()
 	s.router.POST("/users", handler.CreateUser)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"email":    "newuser@example.com",
 		"password": "password123",
 		"is_admin": 0,
@@ -970,7 +970,7 @@ func (s *AdminHandlerTestSuite) TestCreateUser_DuplicateEmail() {
 	handler := NewAdminHandler()
 	s.router.POST("/users", handler.CreateUser)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"email":    s.testUser.Email,
 		"password": "password123",
 	}
@@ -1055,7 +1055,7 @@ func (s *AdminHandlerTestSuite) TestUpdateUser_Success() {
 	handler := NewAdminHandler()
 	s.router.PUT("/users/:id", handler.UpdateUser)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"balance":  1000,
 		"banned":   0,
 		"is_admin": 0,
@@ -1074,7 +1074,7 @@ func (s *AdminHandlerTestSuite) TestUpdateUser_InvalidID() {
 	handler := NewAdminHandler()
 	s.router.PUT("/users/:id", handler.UpdateUser)
 
-	body := map[string]interface{}{"balance": 1000}
+	body := map[string]any{"balance": 1000}
 	jsonBody, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("PUT", "/users/invalid", bytes.NewReader(jsonBody))
@@ -1190,7 +1190,7 @@ func (s *AdminHandlerTestSuite) TestCreatePlan_Success() {
 	handler := NewAdminHandler()
 	s.router.POST("/plans", handler.CreatePlan)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":            "New Plan",
 		"group_id":        1,
 		"transfer_enable": 100,
@@ -1344,7 +1344,7 @@ func (s *AdminHandlerTestSuite) TestUpdateOrderStatus_Success() {
 	handler := NewAdminHandler()
 	s.router.PUT("/orders/:id/status", handler.UpdateOrderStatus)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"status": 1,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -1416,7 +1416,7 @@ func (s *AdminHandlerTestSuite) TestAssignPlanToUser_Success() {
 	handler := NewAdminHandler()
 	s.router.POST("/plans/:id/assign", handler.AssignPlanToUser)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"user_id": s.testUser.ID,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -1433,7 +1433,7 @@ func (s *AdminHandlerTestSuite) TestAssignPlanToUser_InvalidID() {
 	handler := NewAdminHandler()
 	s.router.POST("/plans/:id/assign", handler.AssignPlanToUser)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"user_id": s.testUser.ID,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -1469,7 +1469,7 @@ func (s *AdminHandlerTestSuite) TestUpdatePlan_Success() {
 	handler := NewAdminHandler()
 	s.router.PUT("/plans/:id", handler.UpdatePlan)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":            "Updated Plan",
 		"transfer_enable": 200,
 		"show":            1,
@@ -1488,7 +1488,7 @@ func (s *AdminHandlerTestSuite) TestUpdatePlan_InvalidID() {
 	handler := NewAdminHandler()
 	s.router.PUT("/plans/:id", handler.UpdatePlan)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":            "Updated Plan",
 		"transfer_enable": 200,
 	}
@@ -1793,7 +1793,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestCreateGroup_Success() {
 	handler := NewSubscriptionAdminHandler()
 	s.router.POST("/groups", handler.CreateGroup)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name": "Test Group",
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -1832,7 +1832,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestUpdateGroup_InvalidID() {
 	handler := NewSubscriptionAdminHandler()
 	s.router.PUT("/groups/:id", handler.UpdateGroup)
 
-	body := map[string]interface{}{"name": "Updated"}
+	body := map[string]any{"name": "Updated"}
 	jsonBody, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("PUT", "/groups/invalid", bytes.NewReader(jsonBody))
@@ -1880,7 +1880,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestUpdateGroupProtocols_InvalidID()
 	handler := NewSubscriptionAdminHandler()
 	s.router.POST("/groups/:id/protocols", handler.UpdateGroupProtocols)
 
-	body := map[string]interface{}{"protocol_ids": []uint{1, 2}}
+	body := map[string]any{"protocol_ids": []uint{1, 2}}
 	jsonBody, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("POST", "/groups/invalid/protocols", bytes.NewReader(jsonBody))
@@ -1906,7 +1906,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestCreateTemplate_InvalidGroupID() 
 	handler := NewSubscriptionAdminHandler()
 	s.router.POST("/groups/:id/templates", handler.CreateTemplate)
 
-	body := map[string]interface{}{"name": "Test Template"}
+	body := map[string]any{"name": "Test Template"}
 	jsonBody, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("POST", "/groups/invalid/templates", bytes.NewReader(jsonBody))
@@ -1932,7 +1932,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestUpdateTemplate_InvalidID() {
 	handler := NewSubscriptionAdminHandler()
 	s.router.PUT("/templates/:id", handler.UpdateTemplate)
 
-	body := map[string]interface{}{"name": "Updated"}
+	body := map[string]any{"name": "Updated"}
 	jsonBody, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("PUT", "/templates/invalid", bytes.NewReader(jsonBody))
@@ -1958,7 +1958,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestAssignGroupToUser_InvalidUserID(
 	handler := NewSubscriptionAdminHandler()
 	s.router.POST("/users/:user_id/groups", handler.AssignGroupToUser)
 
-	body := map[string]interface{}{"group_id": 1}
+	body := map[string]any{"group_id": 1}
 	jsonBody, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("POST", "/users/invalid/groups", bytes.NewReader(jsonBody))
@@ -2001,7 +2001,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestAssignGroupToPlan_InvalidPlanID(
 	handler := NewSubscriptionAdminHandler()
 	s.router.POST("/plans/:plan_id/groups", handler.AssignGroupToPlan)
 
-	body := map[string]interface{}{"group_id": 1}
+	body := map[string]any{"group_id": 1}
 	jsonBody, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("POST", "/plans/invalid/groups", bytes.NewReader(jsonBody))
@@ -2044,9 +2044,9 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetSubscriptionFormats_Success()
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
-	data := response["data"].([]interface{})
+	data := response["data"].([]any)
 	assert.GreaterOrEqual(s.T(), len(data), 12) // At least 12 formats (including auto)
 }
 
@@ -2060,9 +2060,9 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetProtocolTypes_Success() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
-	data := response["data"].([]interface{})
+	data := response["data"].([]any)
 	assert.GreaterOrEqual(s.T(), len(data), 6) // At least 6 protocol types
 }
 
@@ -2082,7 +2082,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestPreviewSubscription_UserNotFound
 	handler := NewSubscriptionAdminHandler()
 	s.router.POST("/preview", handler.PreviewSubscription)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"user_id": 99999,
 		"format":  "v2ray",
 	}
@@ -2108,6 +2108,30 @@ type PaymentHandlerTestSuite struct {
 func (s *PaymentHandlerTestSuite) SetupTest() {
 	s.HandlerTestSuite.SetupTest()
 	s.router = gin.New()
+
+	// Create a test order for payment tests
+	order := &model.Order{
+		ID:            1,
+		TradeNo:       "test-order-001",
+		UserID:        1,
+		PlanID:        1,
+		Status:        0, // pending
+		TotalAmount:   10000, // 100.00 CNY
+		Period:        "month",
+		Type:          1,
+	}
+	_ = database.Get().Create(order).Error
+
+	// Create a test payment record for status/check/webhook tests
+	payment := &model.PaymentRecord{
+		TradeNo:     "ORDER123",
+		UserID:      1,
+		Amount:      100,
+		Currency:    "CNY",
+		Status:      model.PaymentStatusPending,
+		GatewayType: "crypto",
+	}
+	_ = database.Get().Create(payment).Error
 }
 
 func (s *PaymentHandlerTestSuite) TestGetPaymentMethods_Success() {
@@ -2120,9 +2144,9 @@ func (s *PaymentHandlerTestSuite) TestGetPaymentMethods_Success() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
-	data := response["data"].([]interface{})
+	data := response["data"].([]any)
 	assert.GreaterOrEqual(s.T(), len(data), 3) // At least 3 payment methods
 }
 
@@ -2130,7 +2154,7 @@ func (s *PaymentHandlerTestSuite) TestX402CreatePayment_Success() {
 	handler := NewPaymentHandler()
 	s.router.POST("/x402/create", handler.X402CreatePayment)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"order_id": 1,
 		"token":    "ETH",
 		"network":  "sepolia",
@@ -2161,7 +2185,9 @@ func (s *PaymentHandlerTestSuite) TestX402Callback_Success() {
 	handler := NewPaymentHandler()
 	s.router.POST("/x402/callback", handler.X402Callback)
 
-	req, _ := http.NewRequest("POST", "/x402/callback", nil)
+	body := bytes.NewReader([]byte(`{"trade_no":"` + "ORDER123" + `","tx_hash":"0xabc123","block_number":12345,"confirmations":6,"status":"confirmed","amount":"0.0001","token":"ETH"}`))
+	req, _ := http.NewRequest("POST", "/x402/callback", body)
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
@@ -2172,7 +2198,7 @@ func (s *PaymentHandlerTestSuite) TestX402CheckPayment_Success() {
 	handler := NewPaymentHandler()
 	s.router.GET("/x402/check/:id", handler.X402CheckPayment)
 
-	req, _ := http.NewRequest("GET", "/x402/check/payment123", nil)
+	req, _ := http.NewRequest("GET", "/x402/check/ORDER123", nil)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
@@ -2183,7 +2209,7 @@ func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_Stripe() {
 	handler := NewPaymentHandler()
 	s.router.POST("/fiat/create", handler.FiatCreatePayment)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"order_id": 1,
 		"provider": "stripe",
 	}
@@ -2201,7 +2227,7 @@ func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_PayPal() {
 	handler := NewPaymentHandler()
 	s.router.POST("/fiat/create", handler.FiatCreatePayment)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"order_id": 1,
 		"provider": "paypal",
 	}
@@ -2219,7 +2245,7 @@ func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_InvalidProvider() {
 	handler := NewPaymentHandler()
 	s.router.POST("/fiat/create", handler.FiatCreatePayment)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"order_id": 1,
 		"provider": "unknown",
 	}
@@ -2249,7 +2275,9 @@ func (s *PaymentHandlerTestSuite) TestStripeWebhook_Success() {
 	handler := NewPaymentHandler()
 	s.router.POST("/stripe/webhook", handler.StripeWebhook)
 
-	req, _ := http.NewRequest("POST", "/stripe/webhook", nil)
+	body := bytes.NewReader([]byte(`{"id":"evt_123","type":"checkout.session.completed","data":{"object":{"id":"cs_123","metadata":{"trade_no":"` + "ORDER123" + `"}}}}`))
+	req, _ := http.NewRequest("POST", "/stripe/webhook", body)
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
@@ -2260,7 +2288,9 @@ func (s *PaymentHandlerTestSuite) TestPayPalWebhook_Success() {
 	handler := NewPaymentHandler()
 	s.router.POST("/paypal/webhook", handler.PayPalWebhook)
 
-	req, _ := http.NewRequest("POST", "/paypal/webhook", nil)
+	body := bytes.NewReader([]byte(`{"id":"WH-123","event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"cap_123","supplementary_data":{"related_ids":{"order_id":"ORDER123"}}}}`))
+	req, _ := http.NewRequest("POST", "/paypal/webhook", body)
+	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
@@ -4396,7 +4426,7 @@ func (s *NodeRegisterTestSuite) TestRegister_Success() {
 	handler := NewNodeHandler()
 	s.router.POST("/register", handler.Register)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"auth_key":       s.testAuthKey.KeyHash,
 		"name":           "Test Node",
 		"host":           "192.168.1.1",
@@ -4430,7 +4460,7 @@ func (s *NodeRegisterTestSuite) TestHeartbeat_Unauthorized() {
 	handler := NewNodeHandler()
 	s.router.POST("/heartbeat", handler.Heartbeat)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"cpu_usage":   50.0,
 		"mem_usage":   60.0,
 		"connections": 100,
@@ -4488,7 +4518,7 @@ func (s *ProtocolHandlerTestSuite) TestUpdateProtocol_Success() {
 	handler := NewNodeHandler()
 	s.router.PUT("/protocols/:protocol_id", handler.UpdateProtocol)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":   "Updated Protocol",
 		"enable": 1,
 	}
@@ -4506,7 +4536,7 @@ func (s *ProtocolHandlerTestSuite) TestUpdateProtocol_InvalidID() {
 	handler := NewNodeHandler()
 	s.router.PUT("/protocols/:protocol_id", handler.UpdateProtocol)
 
-	body := map[string]interface{}{"name": "Test"}
+	body := map[string]any{"name": "Test"}
 	jsonBody, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("PUT", "/protocols/invalid", bytes.NewReader(jsonBody))
@@ -4648,7 +4678,7 @@ func (s *ForwardNodeHandlerTestSuite) TestCreateNode() {
 	handler := NewForwardHandler()
 	s.router.POST("/forward/nodes", handler.CreateNode)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":     "New Forward Node",
 		"type":     "exit",
 		"host":     "192.168.1.201",
@@ -4777,7 +4807,7 @@ func (s *ForwardHandlerExtendedTestSuite) TestUpdateNode() {
 	handler := NewForwardHandler()
 	s.router.PUT("/forward/nodes/:id", handler.UpdateNode)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name": "Updated Node",
 		"host": "192.168.1.150",
 		"port": 9090,
@@ -4796,7 +4826,7 @@ func (s *ForwardHandlerExtendedTestSuite) TestUpdateNode_NotFound() {
 	handler := NewForwardHandler()
 	s.router.PUT("/forward/nodes/:id", handler.UpdateNode)
 
-	body := map[string]interface{}{"name": "Updated"}
+	body := map[string]any{"name": "Updated"}
 	jsonBody, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("PUT", "/forward/nodes/99999", bytes.NewReader(jsonBody))
@@ -4811,7 +4841,7 @@ func (s *ForwardHandlerExtendedTestSuite) TestUpdateNode_InvalidID() {
 	handler := NewForwardHandler()
 	s.router.PUT("/forward/nodes/:id", handler.UpdateNode)
 
-	body := map[string]interface{}{"name": "Updated"}
+	body := map[string]any{"name": "Updated"}
 	jsonBody, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("PUT", "/forward/nodes/invalid", bytes.NewReader(jsonBody))
@@ -4933,7 +4963,7 @@ func (s *ForwardHandlerExtendedTestSuite) TestCreateRule() {
 	handler := NewForwardHandler()
 	s.router.POST("/forward/rules", handler.CreateRule)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":          "New Rule",
 		"relay_node_id": s.testRelayNode.ID,
 		"listen_port":   9001,
@@ -4956,7 +4986,7 @@ func (s *ForwardHandlerExtendedTestSuite) TestCreateRule_DefaultProtocol() {
 	handler := NewForwardHandler()
 	s.router.POST("/forward/rules", handler.CreateRule)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":          "New Rule No Protocol",
 		"relay_node_id": s.testRelayNode.ID,
 		"listen_port":   9002,
@@ -5011,7 +5041,7 @@ func (s *ForwardHandlerExtendedTestSuite) TestUpdateRule() {
 	handler := NewForwardHandler()
 	s.router.PUT("/forward/rules/:id", handler.UpdateRule)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":        "Updated Rule",
 		"listen_port": 9100,
 		"target_host": "10.0.0.100",
@@ -5031,7 +5061,7 @@ func (s *ForwardHandlerExtendedTestSuite) TestUpdateRule_NotFound() {
 	handler := NewForwardHandler()
 	s.router.PUT("/forward/rules/:id", handler.UpdateRule)
 
-	body := map[string]interface{}{"name": "Updated"}
+	body := map[string]any{"name": "Updated"}
 	jsonBody, _ := json.Marshal(body)
 
 	req, _ := http.NewRequest("PUT", "/forward/rules/99999", bytes.NewReader(jsonBody))
@@ -5109,7 +5139,7 @@ func (s *ForwardHandlerExtendedTestSuite) TestTestGostConnection() {
 	handler := NewForwardHandler()
 	s.router.POST("/forward/test-connection", handler.TestGostConnection)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"host":      "127.0.0.1",
 		"api_port":  18080,
 		"api_token": "test-token",

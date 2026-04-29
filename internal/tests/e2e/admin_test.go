@@ -164,10 +164,10 @@ func (s *AdminE2ETestSuite) login(email, password string) string {
 		return ""
 	}
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
 
-	data := response["data"].(map[string]interface{})
+	data := response["data"].(map[string]any)
 	return data["token"].(string)
 }
 
@@ -199,7 +199,7 @@ func (s *AdminE2ETestSuite) TestGetDashboard() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
 
 	// 检查仪表盘数据
@@ -216,17 +216,17 @@ func (s *AdminE2ETestSuite) TestGetUsers() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
 
-	data := response["data"].(map[string]interface{})
-	users := data["list"].([]interface{})
+	data := response["data"].(map[string]any)
+	users := data["list"].([]any)
 	assert.GreaterOrEqual(s.T(), len(users), 1)
 }
 
 // TestCreateUser 测试创建用户
 func (s *AdminE2ETestSuite) TestCreateUser() {
-	body := map[string]interface{}{
+	body := map[string]any{
 		"email":          "newuser@admin.test",
 		"password":       "password123",
 		"transfer_enable": 10737418240,
@@ -270,17 +270,17 @@ func (s *AdminE2ETestSuite) TestGetNodes() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
 
-	data := response["data"].(map[string]interface{})
-	nodes := data["list"].([]interface{})
+	data := response["data"].(map[string]any)
+	nodes := data["list"].([]any)
 	assert.GreaterOrEqual(s.T(), len(nodes), 1)
 }
 
 // TestCreateNode 测试创建节点
 func (s *AdminE2ETestSuite) TestCreateNode() {
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":        "New Test Node",
 		"host":        "192.168.1.1",
 		"port":        443,
@@ -313,7 +313,7 @@ func (s *AdminE2ETestSuite) TestGetPlans() {
 
 // TestCreatePlan 测试创建套餐
 func (s *AdminE2ETestSuite) TestCreatePlan() {
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":            "New Test Plan",
 		"transfer_enable": 107374182400,
 		"show":            1,

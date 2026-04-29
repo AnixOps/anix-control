@@ -138,7 +138,7 @@ type TemplateRenderContext struct {
 	UsedTraffic    int64 `json:"used_traffic"`    // 已用流量
 
 	// 自定义变量 (管理员可扩展)
-	Custom map[string]interface{} `json:"custom,omitempty"`
+	Custom map[string]any `json:"custom,omitempty"`
 
 	// 订阅元信息 (用于生成客户端特定配置，如 Surge managed-config)
 	SubscribeURL    string `json:"subscribe_url,omitempty"`
@@ -184,10 +184,10 @@ type ParsedNode struct {
 
 	// 传输层配置 (network)
 	Transport         string                 `json:"transport,omitempty"`          // 传输协议: tcp, ws, grpc, httpupgrade, xhttp
-	TransportSettings map[string]interface{} `json:"transport_settings,omitempty"` // 传输层配置
+	TransportSettings map[string]any `json:"transport_settings,omitempty"` // 传输层配置
 
 	// 协议特定配置 (兼容旧字段)
-	Settings map[string]interface{} `json:"settings,omitempty"`
+	Settings map[string]any `json:"settings,omitempty"`
 
 	// 来源信息
 	SourceType string `json:"source_type"` // template, node, external
@@ -195,6 +195,30 @@ type ParsedNode struct {
 	SourceName string `json:"source_name"` // 来源名称
 	GroupID    uint   `json:"group_id"`    // 所属分组
 	GroupName  string `json:"group_name"`  // 分组名称
+}
+
+// IsValid checks whether a parsed node has all required fields populated.
+func (n *ParsedNode) IsValid() bool {
+	if n.Type == "" {
+		return false
+	}
+	if n.Server == "" {
+		return false
+	}
+	if n.Port <= 0 {
+		return false
+	}
+	switch n.Type {
+	case "vmess", "vless", "tuic":
+		return n.UUID != ""
+	case "trojan", "hysteria2", "anytls":
+		return n.Password != ""
+	case "shadowsocks":
+		return n.Password != "" || n.Cipher != ""
+	default:
+		// Unknown types are considered valid (let downstream handle them)
+		return true
+	}
 }
 
 // EncryptionSettings VLESS 加密设置 (mlkem768x25519plus)
@@ -206,21 +230,21 @@ type EncryptionSettings struct {
 }
 
 // GetTransportSettings 获取传输层配置
-func (t *SubscriptionTemplate) GetTransportSettings() map[string]interface{} {
+func (t *SubscriptionTemplate) GetTransportSettings() map[string]any {
 	if t.TransportSettings == nil || *t.TransportSettings == "" {
 		return nil
 	}
-	var settings map[string]interface{}
+	var settings map[string]any
 	json.Unmarshal([]byte(*t.TransportSettings), &settings)
 	return settings
 }
 
 // GetProtocolSettings 获取协议配置
-func (t *SubscriptionTemplate) GetProtocolSettings() map[string]interface{} {
+func (t *SubscriptionTemplate) GetProtocolSettings() map[string]any {
 	if t.ProtocolSettings == nil || *t.ProtocolSettings == "" {
 		return nil
 	}
-	var settings map[string]interface{}
+	var settings map[string]any
 	json.Unmarshal([]byte(*t.ProtocolSettings), &settings)
 	return settings
 }

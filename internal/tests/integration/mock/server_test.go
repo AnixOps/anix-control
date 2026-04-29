@@ -42,7 +42,7 @@ func TestServerLifecycle(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	assert.Equal(t, "ok", result["status"])
 
@@ -132,7 +132,7 @@ func TestGetUsers(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result struct {
-		Users []map[string]interface{} `json:"users"`
+		Users []map[string]any `json:"users"`
 		Total int                      `json:"total"`
 	}
 	json.NewDecoder(resp.Body).Decode(&result)
@@ -156,8 +156,8 @@ func TestPushTraffic(t *testing.T) {
 	defer srv.Stop(ctx)
 
 	// 上报流量
-	trafficData := map[string]interface{}{
-		"data": []map[string]interface{}{
+	trafficData := map[string]any{
+		"data": []map[string]any{
 			{
 				"uuid": uuid,
 				"u":    1024000,
@@ -190,7 +190,7 @@ func TestNodeRegister(t *testing.T) {
 	defer srv.Stop(ctx)
 
 	// 注册节点
-	registerData := map[string]interface{}{
+	registerData := map[string]any{
 		"auth_key": "test-key",
 		"name":     "test-node",
 		"host":     "192.168.1.1",
@@ -203,7 +203,7 @@ func TestNodeRegister(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 
 	assert.Equal(t, float64(1), result["node_id"])
@@ -241,7 +241,7 @@ func TestGetFreePort(t *testing.T) {
 }
 
 // 辅助函数
-func toJsonReader(v interface{}) *bytes.Reader {
+func toJsonReader(v any) *bytes.Reader {
 	data, _ := json.Marshal(v)
 	return bytes.NewReader(data)
 }

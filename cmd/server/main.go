@@ -10,9 +10,12 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	_ "github.com/anixops/v2board/docs" // swagger docs
@@ -58,6 +61,9 @@ import (
 
 // @tag.name 节点通信
 // @tag.description 节点注册、心跳、配置同步等接口
+
+// shutdownTimeout defines how long to wait for in-flight requests to drain.
+const shutdownTimeout = 30 * time.Second
 
 var (
 	configPath string
@@ -200,6 +206,20 @@ func applyTrustedProxies(r *gin.Engine, proxies []string) error {
 	return r.SetTrustedProxies(normalized)
 }
 
+// draining is set to 1 during graceful shutdown so /health returns 503.
+var draining atomic.Int64
+
+func healthHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if draining.Load() == 1 {
+			c.Header("Retry-After", "30")
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "draining"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	}
+}
+
 func main() {
 	flag.Parse()
 
@@ -324,6 +344,7 @@ func main() {
 			&model.BackupRecord{},
 			&model.BackupConfig{},
 			&model.OperationLog{},
+				&model.AuditLog{},
 		); err != nil {
 			log.Fatalf("Failed to migrate database: %v", err)
 		}
@@ -369,50 +390,127 @@ func main() {
 
 	gin.SetMode(cfg.Server.Mode)
 
+	// Create HTTP servers with proper timeouts before starting goroutines.
+	apiSrv := newAPIServer(cfg)
+
+	var frontendSrv *http.Server
+	if cfg.Frontend.Enable {
+		frontendSrv = newFrontendServer(cfg)
+	}
+
+	// Start the servers in goroutines.
 	var wg sync.WaitGroup
 
-	// 启动前端服务器（如果启用）
-	if cfg.Frontend.Enable {
+	if cfg.Frontend.Enable && frontendSrv != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			startFrontendServer(cfg)
+			if err := runFrontendServer(frontendSrv, cfg); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Failed to start frontend server: %v", err)
+			}
 		}()
 	}
 
-	// 启动API服务器
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		startAPIServer(cfg)
+		if err := runAPIServer(apiSrv); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start API server: %v", err)
+		}
 	}()
 
+	// Wait for shutdown signal, then gracefully stop all servers.
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	<-sigChan
+	log.Println("Shutdown signal received, draining in-flight requests...")
+
+	// Mark servers as draining so /health returns 503 to load balancers.
+	draining.Store(1)
+
+	// Register a second-signal handler for immediate force-exit.
+	forceChan := make(chan os.Signal, 1)
+	signal.Notify(forceChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-forceChan
+		log.Println("Second signal received, forcing immediate exit")
+		os.Exit(1)
+	}()
+
+	// Create a timeout context for graceful shutdown.
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	// Shutdown HTTP servers (drains in-flight requests).
+	var httpWg sync.WaitGroup
+	if frontendSrv != nil {
+		httpWg.Add(1)
+		go func() {
+			defer httpWg.Done()
+			if err := frontendSrv.Shutdown(ctx); err != nil {
+				log.Printf("Frontend server shutdown error: %v", err)
+			}
+		}()
+	}
+
+	httpWg.Add(1)
+	go func() {
+		defer httpWg.Done()
+		if err := apiSrv.Shutdown(ctx); err != nil {
+			log.Printf("API server shutdown error: %v", err)
+		}
+	}()
+
+	httpWg.Wait()
+	log.Println("HTTP servers shut down gracefully")
+
+	// NOTE: gRPC server is not currently started from main.go.
+	// If enabled in the future, call grpcServer.GracefulStop() here
+	// after HTTP shutdown completes (it stops accepting new RPCs and
+	// waits for existing ones to finish).
+
+	// Give goroutines time to finish returning from ListenAndServe.
 	wg.Wait()
+	log.Println("All servers stopped")
 }
 
-// startAPIServer 启动API服务器
-func startAPIServer(cfg *config.Config) {
+// newAPIServer creates the API server with proper timeouts.
+func newAPIServer(cfg *config.Config) *http.Server {
 	r := gin.New()
 	if err := applyTrustedProxies(r, cfg.Server.TrustedProxies); err != nil {
 		log.Fatalf("Failed to configure trusted proxies for API server: %v", err)
 	}
 	router.Setup(r, cfg)
+	// Override /health with draining-aware handler (registered after router.Setup).
+	r.GET("/health", healthHandler())
 
-	server := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
-		Handler:      r,
-		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
+	readTimeout := time.Duration(cfg.Server.ReadTimeout) * time.Second
+	if readTimeout == 0 {
+		readTimeout = 30 * time.Second
+	}
+	writeTimeout := time.Duration(cfg.Server.WriteTimeout) * time.Second
+	if writeTimeout == 0 {
+		writeTimeout = 60 * time.Second
 	}
 
-	log.Printf("API Server starting on %s:%d", cfg.Server.Host, cfg.Server.Port)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Failed to start API server: %v", err)
+	return &http.Server{
+		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port),
+		Handler:      r,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  120 * time.Second,
 	}
 }
 
-// startFrontendServer 启动前端静态文件服务器
-func startFrontendServer(cfg *config.Config) {
+// runAPIServer starts the API server (blocking).
+func runAPIServer(srv *http.Server) error {
+	log.Printf("API Server starting on %s", srv.Addr)
+	return srv.ListenAndServe()
+}
+
+// newFrontendServer creates the frontend server with proper timeouts.
+func newFrontendServer(cfg *config.Config) *http.Server {
 	frontendPath := cfg.Frontend.Path
 	if frontendPath == "" {
 		frontendPath = "web/public"
@@ -431,6 +529,9 @@ func startFrontendServer(cfg *config.Config) {
 		log.Fatalf("Failed to configure trusted proxies for frontend server: %v", err)
 	}
 	r.Use(gin.Recovery())
+
+	// Health check with draining awareness.
+	r.GET("/health", healthHandler())
 
 	// API 代理 - 将 /api 请求转发到 API 服务器
 	apiTarget := fmt.Sprintf("http://127.0.0.1:%d", cfg.Server.Port)
@@ -461,25 +562,32 @@ func startFrontendServer(cfg *config.Config) {
 		port = 3000
 	}
 
-	server := &http.Server{
-		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, port),
-		Handler:      r,
-		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
+	readTimeout := time.Duration(cfg.Server.ReadTimeout) * time.Second
+	if readTimeout == 0 {
+		readTimeout = 30 * time.Second
+	}
+	writeTimeout := time.Duration(cfg.Server.WriteTimeout) * time.Second
+	if writeTimeout == 0 {
+		writeTimeout = 60 * time.Second
 	}
 
-	// 根据 TLS 配置决定启动方式
-	if cfg.TLS.Enable && cfg.TLS.CertFile != "" && cfg.TLS.KeyFile != "" {
-		log.Printf("Frontend Server starting on https://%s:%d (TLS enabled, serving: %s)", cfg.Server.Host, port, frontendPath)
-		if err := server.ListenAndServeTLS(cfg.TLS.CertFile, cfg.TLS.KeyFile); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start frontend server with TLS: %v", err)
-		}
-	} else {
-		log.Printf("Frontend Server starting on http://%s:%d (serving: %s)", cfg.Server.Host, port, frontendPath)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start frontend server: %v", err)
-		}
+	return &http.Server{
+		Addr:         fmt.Sprintf("%s:%d", cfg.Server.Host, port),
+		Handler:      r,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  120 * time.Second,
 	}
+}
+
+// runFrontendServer starts the frontend server (blocking).
+func runFrontendServer(srv *http.Server, cfg *config.Config) error {
+	if cfg.TLS.Enable && cfg.TLS.CertFile != "" && cfg.TLS.KeyFile != "" {
+		log.Printf("Frontend Server starting on https://%s (serving: %s)", srv.Addr, cfg.Frontend.Path)
+		return srv.ListenAndServeTLS(cfg.TLS.CertFile, cfg.TLS.KeyFile)
+	}
+	log.Printf("Frontend Server starting on http://%s (serving: %s)", srv.Addr, cfg.Frontend.Path)
+	return srv.ListenAndServe()
 }
 
 // createDefaultIndex 创建默认的index.html

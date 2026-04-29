@@ -42,7 +42,7 @@ func NewClient(cfg *Config) *Client {
 
 // ============== 通用方法 ==============
 
-func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
+func (c *Client) doRequest(ctx context.Context, method, path string, body any) ([]byte, error) {
 	var reqBody io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)

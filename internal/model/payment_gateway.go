@@ -107,6 +107,7 @@ type PaymentRecord struct {
 	GatewayID     uint      `json:"gateway_id"`       // 支付网关ID
 	GatewayType   string    `json:"gateway_type"`     // 支付类型
 	GatewayTradeNo string   `gorm:"size:100" json:"gateway_trade_no"` // 第三方订单号
+	Provider      string    `gorm:"size:50" json:"provider"` // 支付提供商 (x402/stripe/paypal 等)
 	UserID        uint      `json:"user_id"`
 
 	// 金额信息
@@ -124,6 +125,11 @@ type PaymentRecord struct {
 	// 回调信息
 	NotifyData    string    `gorm:"type:text" json:"notify_data"` // 回调原始数据
 	ClientIP      string    `gorm:"size:50" json:"client_ip"`
+
+	// 区块链相关 (虚拟货币支付)
+	TxHash        *string   `gorm:"size:255" json:"tx_hash"`        // 区块链交易哈希
+	WalletAddress *string   `gorm:"size:255" json:"wallet_address"` // 钱包地址
+	Network       *string   `gorm:"size:50" json:"network"`         // 区块链网络
 
 	// 关联
 	OrderID       *uint     `json:"order_id"`         // 关联订单

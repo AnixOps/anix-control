@@ -41,7 +41,7 @@ func (s *NotificationService) SetEmailConfig(cfg *model.EmailConfig) {
 }
 
 // Send 发送通知
-func (s *NotificationService) Send(userID *uint, notifyType, event, title, content string, data map[string]interface{}) error {
+func (s *NotificationService) Send(userID *uint, notifyType, event, title, content string, data map[string]any) error {
 	// 记录日志
 	log := &model.NotificationLog{
 		UserID:  userID,
@@ -182,15 +182,15 @@ func (s *NotificationService) sendTelegramNotification(userID uint, title, conte
 }
 
 // sendWebhookNotification 发送Webhook通知
-func (s *NotificationService) sendWebhookNotification(event, title, content string, data map[string]interface{}) error {
+func (s *NotificationService) sendWebhookNotification(event, title, content string, data map[string]any) error {
 	// 获取Webhook配置
-	// TODO: 从配置或数据库读取Webhook URL
-	webhookURL := "" // 配置的Webhook地址
+	// When implemented, fetch webhook endpoint from config or database.
+	webhookURL := "" // configured Webhook address
 	if webhookURL == "" {
 		return nil
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"event":     event,
 		"title":     title,
 		"content":   content,
@@ -352,7 +352,7 @@ func (s *NotificationService) NotifyNodeOffline(node *model.Node) error {
 	s.db.Where("is_admin = ?", true).Find(&admins)
 
 	for _, admin := range admins {
-		go s.Send(&admin.ID, "email", model.EventNodeOffline, title, content, map[string]interface{}{
+		go s.Send(&admin.ID, "email", model.EventNodeOffline, title, content, map[string]any{
 			"node_id":   node.ID,
 			"node_name": node.Name,
 		})

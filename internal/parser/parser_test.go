@@ -163,7 +163,7 @@ func TestV2RayFormatter_FormatVMess(t *testing.T) {
 		TLS:        true,
 		ServerName: "example.com",
 		Transport:  "ws",
-		TransportSettings: map[string]interface{}{
+		TransportSettings: map[string]any{
 			"path": "/ws",
 			"host": "example.com",
 		},
@@ -778,7 +778,7 @@ func TestSingBoxFormatter_WithTransport(t *testing.T) {
 		Port:      443,
 		TLS:       true,
 		Transport: "ws",
-		TransportSettings: map[string]interface{}{
+		TransportSettings: map[string]any{
 			"path": "/ws",
 			"host": "example.com",
 		},
@@ -813,7 +813,7 @@ func TestBase64Parser_Detect(t *testing.T) {
 func TestBase64Parser_ParseVMess(t *testing.T) {
 	p := &Base64Parser{}
 
-	vmessData := map[string]interface{}{
+	vmessData := map[string]any{
 		"v":    2,
 		"ps":   "Test Node",
 		"add":  "example.com",
@@ -1105,7 +1105,7 @@ func TestClashParser_Parse_InvalidYAML(t *testing.T) {
 func TestClashParser_parseProxy_UnknownType(t *testing.T) {
 	p := &ClashParser{}
 
-	proxy := map[string]interface{}{
+	proxy := map[string]any{
 		"name":   "Unknown",
 		"type":   "unknown",
 		"server": "example.com",
@@ -1201,7 +1201,7 @@ func TestSIP008Parser_Parse_InvalidJSON(t *testing.T) {
 // ========== Helper Functions Tests ==========
 
 func TestGetString(t *testing.T) {
-	m := map[string]interface{}{
+	m := map[string]any{
 		"string": "value",
 		"number": 123,
 		"nil":    nil,
@@ -1214,7 +1214,7 @@ func TestGetString(t *testing.T) {
 }
 
 func TestGetInt(t *testing.T) {
-	m := map[string]interface{}{
+	m := map[string]any{
 		"int":     123,
 		"int64":   int64(456),
 		"float64": float64(789.5),
@@ -1229,7 +1229,7 @@ func TestGetInt(t *testing.T) {
 }
 
 func TestGetBool(t *testing.T) {
-	m := map[string]interface{}{
+	m := map[string]any{
 		"true":   true,
 		"false":  false,
 		"string": "abc",

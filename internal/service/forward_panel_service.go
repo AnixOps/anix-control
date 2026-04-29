@@ -1146,7 +1146,7 @@ func (s *PanelForwardService) ResetUserTunnelTraffic(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.Forward{}).
 			Where("user_id = ? AND tunnel_id = ?", record.UserID, record.TunnelID).
-			Updates(map[string]interface{}{
+			Updates(map[string]any{
 				"in_flow":  0,
 				"out_flow": 0,
 			}).Error; err != nil {
@@ -1155,7 +1155,7 @@ func (s *PanelForwardService) ResetUserTunnelTraffic(id uint) error {
 
 		return tx.Model(&model.ForwardUserTunnel{}).
 			Where("id = ?", record.ID).
-			Updates(map[string]interface{}{
+			Updates(map[string]any{
 				"in_flow":  0,
 				"out_flow": 0,
 			}).Error
@@ -1553,7 +1553,7 @@ func (s *PanelForwardService) syncUserTunnelTrafficSnapshot(permission *model.Fo
 
 	if err := s.db.Model(&model.ForwardUserTunnel{}).
 		Where("id = ?", permission.ID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"in_flow":  nextInFlow,
 			"out_flow": nextOutFlow,
 		}).Error; err != nil {
@@ -1831,7 +1831,7 @@ func (s *PanelForwardService) syncForwardRuntime(record *model.Forward, action s
 		record.RuntimeMessage = result.Message
 		now := time.Now()
 		record.RuntimeLastSyncAt = &now
-		if saveErr := s.db.Model(&model.Forward{}).Where("id = ?", record.ID).Updates(map[string]interface{}{
+		if saveErr := s.db.Model(&model.Forward{}).Where("id = ?", record.ID).Updates(map[string]any{
 			"runtime_backend":      record.RuntimeBackend,
 			"runtime_status":       record.RuntimeStatus,
 			"runtime_message":      record.RuntimeMessage,

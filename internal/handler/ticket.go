@@ -152,10 +152,13 @@ func (h *TicketHandler) ReplyTicket(c *gin.Context) {
 	}
 
 	// 用户回复后，状态再次变回待理 (0: open)
-	database.GetDB().Model(&ticket).Updates(map[string]interface{}{
+	if err := database.GetDB().Model(&ticket).Updates(map[string]any{
 		"status":     0,
 		"updated_at": time.Now(),
-	})
+	}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新工单状态失败"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "回复成功"})
 }

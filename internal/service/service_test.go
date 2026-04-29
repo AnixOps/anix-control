@@ -2660,14 +2660,14 @@ func (s *SystemConfigServiceTestSuite) TestGet_NotFound() {
 }
 
 func (s *SystemConfigServiceTestSuite) TestSetJSON() {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"host": "localhost",
 		"port": 8080,
 	}
 	err := s.svc.SetJSON("json_config", data, "test", "JSON Config")
 	assert.NoError(s.T(), err)
 
-	var result map[string]interface{}
+	var result map[string]any
 	err = s.svc.GetJSON("json_config", &result)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "localhost", result["host"])
@@ -4912,7 +4912,7 @@ func (s *ServerServiceTestSuite) TestBuildNodeConfig_WithRoutes() {
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), config)
 
-	routes, ok := config["routes"].([]map[string]interface{})
+	routes, ok := config["routes"].([]map[string]any)
 	assert.True(s.T(), ok)
 	assert.Len(s.T(), routes, 1)
 	assert.Equal(s.T(), "geoip:cn", routes[0]["match"])
@@ -4940,9 +4940,9 @@ func (s *ServerServiceTestSuite) TestGetServerRate_NotFound() {
 }
 
 func (s *ServerServiceTestSuite) TestParseTrafficData() {
-	data := map[string]interface{}{
-		"1": []interface{}{float64(1024), float64(2048)},
-		"2": []interface{}{float64(2048), float64(4096)},
+	data := map[string]any{
+		"1": []any{float64(1024), float64(2048)},
+		"2": []any{float64(2048), float64(4096)},
 	}
 
 	result, err := ParseTrafficData(data)
@@ -4953,9 +4953,9 @@ func (s *ServerServiceTestSuite) TestParseTrafficData() {
 }
 
 func (s *ServerServiceTestSuite) TestParseOnlineData() {
-	data := map[string]interface{}{
-		"1": []interface{}{"192.168.1.100", "192.168.1.101"},
-		"2": []interface{}{"192.168.1.102"},
+	data := map[string]any{
+		"1": []any{"192.168.1.100", "192.168.1.101"},
+		"2": []any{"192.168.1.102"},
 	}
 
 	result, err := ParseOnlineData(data)

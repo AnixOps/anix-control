@@ -235,7 +235,7 @@ func (s *OrderService) Create(params CreateOrderParams) (*model.Order, error) {
 
 // UpdateStatus 更新订单状态
 func (s *OrderService) UpdateStatus(orderID uint, status int) error {
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"status": status,
 	}
 	if status == 1 { // 已支付
@@ -306,7 +306,7 @@ func (s *OrderService) Complete(orderID uint) error {
 		}
 
 		// 4. 更新用户主表信息
-		userUpdates := map[string]interface{}{
+		userUpdates := map[string]any{
 			"plan_id":         plan.ID,
 			"group_id":        plan.GroupID, // 保持向后兼容
 			"transfer_enable": plan.TransferEnable * 1073741824,
@@ -362,7 +362,7 @@ func (s *OrderService) GetUserOrders(userID uint, page, pageSize int) (*OrderLis
 }
 
 // GetStats 获取订单统计
-func (s *OrderService) GetStats() (map[string]interface{}, error) {
+func (s *OrderService) GetStats() (map[string]any, error) {
 	var totalOrders int64
 	var pendingOrders int64
 	var paidOrders int64
@@ -382,7 +382,7 @@ func (s *OrderService) GetStats() (map[string]interface{}, error) {
 		Select("COALESCE(SUM(total_amount), 0)").
 		Scan(&todayRevenue)
 
-	return map[string]interface{}{
+	return map[string]any{
 		"total_orders":   totalOrders,
 		"pending_orders": pendingOrders,
 		"paid_orders":    paidOrders,

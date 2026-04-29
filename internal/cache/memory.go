@@ -1,32 +1,57 @@
 package cache
 
 import (
+	"container/list"
 	"strings"
 	"sync"
 	"time"
 )
 
-// MemoryCache 内存缓存实现
-type MemoryCache struct {
-	data   map[string]*cacheItem
-	sets   map[string]map[string]struct{} // 集合数据
-	mu     sync.RWMutex
-	stopCh chan struct{}
+// cacheEntry 缓存条目
+type cacheEntry struct {
+	value      any
+	expiresAt  time.Time
+	lastAccess time.Time
 }
 
-type cacheItem struct {
-	value     interface{}
-	expiresAt time.Time
+// MemoryCache 内存缓存实现（支持 TTL、LRU 淘汰、定期清理）
+type MemoryCache struct {
+	mu      sync.RWMutex
+	items   map[string]*cacheEntry
+	sets    map[string]map[string]struct{} // 集合数据
+	lruList *list.List                     // LRU 链表，尾部是最久未使用的
+	keyMap  map[string]*list.Element       // key -> *list.Element (指向 lruList 中的 *lruNode)
+	maxSize int                            // 最大缓存条目数，0 表示无限制
+	stopCh  chan struct{}
 }
+
+// lruNode LRU 链表节点
+type lruNode struct {
+	key string
+}
+
+// DefaultMaxSize 默认最大缓存条目数
+const DefaultMaxSize = 10000
 
 var memCache *MemoryCache
 
 // InitMemory 初始化内存缓存
 func InitMemory() {
+	InitMemoryWithSize(DefaultMaxSize)
+}
+
+// InitMemoryWithSize 初始化指定最大容量的内存缓存
+func InitMemoryWithSize(maxSize int) {
+	if maxSize <= 0 {
+		maxSize = DefaultMaxSize
+	}
 	memCache = &MemoryCache{
-		data:   make(map[string]*cacheItem),
-		sets:   make(map[string]map[string]struct{}),
-		stopCh: make(chan struct{}),
+		items:   make(map[string]*cacheEntry),
+		sets:    make(map[string]map[string]struct{}),
+		lruList: list.New(),
+		keyMap:  make(map[string]*list.Element),
+		maxSize: maxSize,
+		stopCh:  make(chan struct{}),
 	}
 
 	// 启动过期清理协程
@@ -54,22 +79,67 @@ func (c *MemoryCache) cleanup() {
 	defer c.mu.Unlock()
 
 	now := time.Now()
-	for key, item := range c.data {
+	for key, item := range c.items {
 		if !item.expiresAt.IsZero() && now.After(item.expiresAt) {
-			delete(c.data, key)
+			c.deleteInternal(key)
 		}
 	}
+}
+
+// deleteInternal 内部删除方法（调用者需持有写锁）
+func (c *MemoryCache) deleteInternal(key string) {
+	delete(c.items, key)
+	delete(c.sets, key)
+	if elem, ok := c.keyMap[key]; ok {
+		c.lruList.Remove(elem)
+		delete(c.keyMap, key)
+	}
+}
+
+// evict 当缓存超出最大容量时淘汰最久未使用的条目（调用者需持有写锁）
+func (c *MemoryCache) evict() {
+	for c.lruList.Len() > c.maxSize && c.lruList.Len() > 0 {
+		// 从链表尾部移除最久未使用的条目
+		elem := c.lruList.Back()
+		if elem != nil {
+			node, ok := elem.Value.(*lruNode)
+			if ok {
+				c.deleteInternal(node.key)
+			} else {
+				// 异常情况：直接移除尾部元素并重新检查
+				c.lruList.Remove(elem)
+			}
+		}
+	}
+}
+
+// moveToFront 将访问的键移到 LRU 链表头部（调用者需持有写锁）
+func (c *MemoryCache) moveToFront(key string) {
+	if elem, ok := c.keyMap[key]; ok {
+		c.lruList.MoveToFront(elem)
+	}
+}
+
+// addToFront 将新键添加到 LRU 链表头部（调用者需持有写锁）
+func (c *MemoryCache) addToFront(key string) {
+	elem := c.lruList.PushFront(&lruNode{key: key})
+	c.keyMap[key] = elem
 }
 
 // CloseMemory 关闭内存缓存
 func CloseMemory() {
 	if memCache != nil {
-		close(memCache.stopCh)
+		select {
+		case <-memCache.stopCh:
+			// 已经关闭
+		default:
+			close(memCache.stopCh)
+		}
 	}
 }
 
-// Set 设置缓存
-func Set(key string, value interface{}, expiration time.Duration) error {
+// Set 设置缓存（保持兼容原有签名）
+func Set(key string, value any, expiration time.Duration) error {
 	if memCache == nil {
 		return nil // 缓存未初始化，直接返回
 	}
@@ -81,9 +151,24 @@ func Set(key string, value interface{}, expiration time.Duration) error {
 		expiresAt = time.Now().Add(expiration)
 	}
 
-	memCache.data[key] = &cacheItem{
-		value:     value,
-		expiresAt: expiresAt,
+	now := time.Now()
+	if _, exists := memCache.items[key]; !exists {
+		// 新键，先检查是否需要淘汰
+		memCache.items[key] = &cacheEntry{
+			value:      value,
+			expiresAt:  expiresAt,
+			lastAccess: now,
+		}
+		memCache.addToFront(key)
+		memCache.evict()
+	} else {
+		// 更新已有键
+		memCache.items[key] = &cacheEntry{
+			value:      value,
+			expiresAt:  expiresAt,
+			lastAccess: now,
+		}
+		memCache.moveToFront(key)
 	}
 	return nil
 }
@@ -93,17 +178,22 @@ func GetString(key string) (string, error) {
 	if memCache == nil {
 		return "", ErrKeyNotFound
 	}
-	memCache.mu.RLock()
-	defer memCache.mu.RUnlock()
+	memCache.mu.Lock() // 需要写锁来更新 LRU
+	defer memCache.mu.Unlock()
 
-	item, ok := memCache.data[key]
+	item, ok := memCache.items[key]
 	if !ok {
 		return "", ErrKeyNotFound
 	}
 
 	if !item.expiresAt.IsZero() && time.Now().After(item.expiresAt) {
+		memCache.deleteInternal(key)
 		return "", ErrKeyNotFound
 	}
+
+	// 更新访问时间
+	item.lastAccess = time.Now()
+	memCache.moveToFront(key)
 
 	if str, ok := item.value.(string); ok {
 		return str, nil
@@ -112,26 +202,31 @@ func GetString(key string) (string, error) {
 }
 
 // Get 获取缓存值
-func Get(key string) (interface{}, error) {
+func Get(key string) (any, error) {
 	if memCache == nil {
 		return nil, ErrKeyNotFound
 	}
-	memCache.mu.RLock()
-	defer memCache.mu.RUnlock()
+	memCache.mu.Lock() // 需要写锁来更新 LRU
+	defer memCache.mu.Unlock()
 
-	item, ok := memCache.data[key]
+	item, ok := memCache.items[key]
 	if !ok {
 		return nil, ErrKeyNotFound
 	}
 
 	if !item.expiresAt.IsZero() && time.Now().After(item.expiresAt) {
+		memCache.deleteInternal(key)
 		return nil, ErrKeyNotFound
 	}
+
+	// 更新访问时间
+	item.lastAccess = time.Now()
+	memCache.moveToFront(key)
 
 	return item.value, nil
 }
 
-// Delete 删除单个缓存 (别名)
+// Delete 删除缓存（别名）
 func Delete(key string) error {
 	return Del(key)
 }
@@ -145,14 +240,13 @@ func Del(keys ...string) error {
 	defer memCache.mu.Unlock()
 
 	for _, key := range keys {
-		delete(memCache.data, key)
-		delete(memCache.sets, key)
+		memCache.deleteInternal(key)
 	}
 	return nil
 }
 
 // SAdd 集合添加
-func SAdd(key string, members ...interface{}) error {
+func SAdd(key string, members ...any) error {
 	if memCache == nil {
 		return nil
 	}
@@ -214,8 +308,11 @@ func Expire(key string, expiration time.Duration) error {
 	memCache.mu.Lock()
 	defer memCache.mu.Unlock()
 
-	if item, ok := memCache.data[key]; ok {
+	if item, ok := memCache.items[key]; ok {
 		item.expiresAt = time.Now().Add(expiration)
+		// 更新访问时间
+		item.lastAccess = time.Now()
+		memCache.moveToFront(key)
 	}
 	return nil
 }
@@ -234,7 +331,12 @@ func Keys(pattern string) ([]string, error) {
 	prefix := strings.TrimSuffix(pattern, "*")
 	hasWildcard := strings.Contains(pattern, "*")
 
-	for key := range memCache.data {
+	now := time.Now()
+	for key, item := range memCache.items {
+		// 跳过已过期项
+		if !item.expiresAt.IsZero() && now.After(item.expiresAt) {
+			continue
+		}
 		if hasWildcard {
 			if strings.HasPrefix(key, prefix) {
 				result = append(result, key)
@@ -258,7 +360,7 @@ func Keys(pattern string) ([]string, error) {
 }
 
 // HSet 设置Hash字段
-func HSet(key string, field string, value interface{}) error {
+func HSet(key string, field string, value any) error {
 	if memCache == nil {
 		return nil
 	}
@@ -266,8 +368,17 @@ func HSet(key string, field string, value interface{}) error {
 	defer memCache.mu.Unlock()
 
 	hashKey := key + ":" + field
-	memCache.data[hashKey] = &cacheItem{
-		value: value,
+	if _, exists := memCache.items[hashKey]; !exists {
+		memCache.items[hashKey] = &cacheEntry{
+			value:      value,
+			lastAccess: time.Now(),
+		}
+		memCache.addToFront(hashKey)
+		memCache.evict()
+	} else {
+		memCache.items[hashKey].value = value
+		memCache.items[hashKey].lastAccess = time.Now()
+		memCache.moveToFront(hashKey)
 	}
 	return nil
 }
@@ -289,7 +400,12 @@ func HGetAll(key string) (map[string]string, error) {
 	result := make(map[string]string)
 	prefix := key + ":"
 
-	for k, item := range memCache.data {
+	now := time.Now()
+	for k, item := range memCache.items {
+		// 跳过已过期项
+		if !item.expiresAt.IsZero() && now.After(item.expiresAt) {
+			continue
+		}
 		if strings.HasPrefix(k, prefix) {
 			field := strings.TrimPrefix(k, prefix)
 			if str, ok := item.value.(string); ok {
@@ -310,7 +426,7 @@ func HDel(key string, fields ...string) error {
 
 	for _, field := range fields {
 		hashKey := key + ":" + field
-		delete(memCache.data, hashKey)
+		memCache.deleteInternal(hashKey)
 	}
 	return nil
 }
@@ -335,8 +451,9 @@ func Exists(key string) bool {
 	memCache.mu.RLock()
 	defer memCache.mu.RUnlock()
 
-	if item, ok := memCache.data[key]; ok {
-		if item.expiresAt.IsZero() || time.Now().Before(item.expiresAt) {
+	now := time.Now()
+	if item, ok := memCache.items[key]; ok {
+		if item.expiresAt.IsZero() || now.Before(item.expiresAt) {
 			return true
 		}
 	}
@@ -348,11 +465,16 @@ func Exists(key string) bool {
 
 // Clear 清空所有缓存
 func Clear() {
+	if memCache == nil {
+		return
+	}
 	memCache.mu.Lock()
 	defer memCache.mu.Unlock()
 
-	memCache.data = make(map[string]*cacheItem)
+	memCache.items = make(map[string]*cacheEntry)
 	memCache.sets = make(map[string]map[string]struct{})
+	memCache.lruList.Init()
+	memCache.keyMap = make(map[string]*list.Element)
 }
 
 // Incr 自增计数器
@@ -364,13 +486,21 @@ func Incr(key string) int64 {
 	defer memCache.mu.Unlock()
 
 	var val int64 = 0
-	if item, ok := memCache.data[key]; ok {
+	if item, ok := memCache.items[key]; ok {
 		if i, ok := item.value.(int64); ok {
 			val = i
 		}
 	}
 	val++
-	memCache.data[key] = &cacheItem{value: val}
+	if _, exists := memCache.items[key]; !exists {
+		memCache.items[key] = &cacheEntry{value: val, lastAccess: time.Now()}
+		memCache.addToFront(key)
+		memCache.evict()
+	} else {
+		memCache.items[key].value = val
+		memCache.items[key].lastAccess = time.Now()
+		memCache.moveToFront(key)
+	}
 	return val
 }
 
@@ -383,13 +513,21 @@ func IncrBy(key string, delta int64) int64 {
 	defer memCache.mu.Unlock()
 
 	var val int64 = 0
-	if item, ok := memCache.data[key]; ok {
+	if item, ok := memCache.items[key]; ok {
 		if i, ok := item.value.(int64); ok {
 			val = i
 		}
 	}
 	val += delta
-	memCache.data[key] = &cacheItem{value: val}
+	if _, exists := memCache.items[key]; !exists {
+		memCache.items[key] = &cacheEntry{value: val, lastAccess: time.Now()}
+		memCache.addToFront(key)
+		memCache.evict()
+	} else {
+		memCache.items[key].value = val
+		memCache.items[key].lastAccess = time.Now()
+		memCache.moveToFront(key)
+	}
 	return val
 }
 
@@ -413,4 +551,38 @@ func GetInt(key string) (int64, error) {
 		return i, nil
 	}
 	return 0, ErrKeyNotFound
+}
+
+// Len 返回当前缓存条目数（用于测试和监控）
+func Len() int {
+	if memCache == nil {
+		return 0
+	}
+	memCache.mu.RLock()
+	defer memCache.mu.RUnlock()
+	return len(memCache.items)
+}
+
+// StartCleanup 启动定期清理（如果尚未启动）
+func StartCleanup() {
+	// 该函数主要用于在 Stop 后重新启动清理
+	// 正常情况下 InitMemory 已启动清理
+	if memCache == nil {
+		return
+	}
+	// 如果 stopCh 已关闭，重新创建并启动
+	select {
+	case <-memCache.stopCh:
+		memCache.mu.Lock()
+		memCache.stopCh = make(chan struct{})
+		memCache.mu.Unlock()
+		go memCache.cleanupLoop()
+	default:
+		// 已经在运行
+	}
+}
+
+// Stop 停止定期清理
+func Stop() {
+	CloseMemory()
 }

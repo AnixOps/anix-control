@@ -96,11 +96,11 @@ func TestSensitiveString_Empty(t *testing.T) {
 }
 
 func TestRedactMap(t *testing.T) {
-	input := map[string]interface{}{
+	input := map[string]any{
 		"username": "john",
 		"password": "secret123456789", // 长度超过8才会部分显示
 		"api_key":  "abcdefghijklmnop",
-		"nested": map[string]interface{}{
+		"nested": map[string]any{
 			"token": "xyz789",
 			"name":  "test",
 		},
@@ -118,7 +118,7 @@ func TestRedactMap(t *testing.T) {
 		t.Errorf("api_key should be redacted, got %v", result["api_key"])
 	}
 
-	nested := result["nested"].(map[string]interface{})
+	nested := result["nested"].(map[string]any)
 	if nested["token"] != "****" {
 		t.Errorf("nested token should be redacted, got %v", nested["token"])
 	}
@@ -128,7 +128,7 @@ func TestRedactMap(t *testing.T) {
 }
 
 func TestRedactMap_NonStringSensitive(t *testing.T) {
-	input := map[string]interface{}{
+	input := map[string]any{
 		"password": 12345, // non-string value
 		"api_key":  true,
 	}
@@ -146,7 +146,7 @@ func TestRedactMap_Empty(t *testing.T) {
 	assert.Empty(t, result)
 
 	// Empty map returns empty map
-	result = RedactMap(map[string]interface{}{})
+	result = RedactMap(map[string]any{})
 	assert.NotNil(t, result)
 	assert.Empty(t, result)
 }

@@ -60,7 +60,7 @@ func (g *MihomoGenerator) Generate(cfg *ClientConfig) ([]byte, error) {
 		LogLevel:           "warning",
 		IPv6:               false,
 		ExternalController: "127.0.0.1:9090",
-		Proxies:            []map[string]interface{}{g.generateProxy(cfg)},
+		Proxies:            []map[string]any{g.generateProxy(cfg)},
 		ProxyGroups:        g.generateProxyGroups(),
 		Rules:              g.generateRules(),
 		DNS:                g.generateDNS(),
@@ -80,8 +80,8 @@ func (g *MihomoGenerator) GenerateFromScenario(scenario TestScenario, server Ser
 }
 
 // generateProxy 生成代理配置
-func (g *MihomoGenerator) generateProxy(cfg *ClientConfig) map[string]interface{} {
-	proxy := map[string]interface{}{
+func (g *MihomoGenerator) generateProxy(cfg *ClientConfig) map[string]any {
+	proxy := map[string]any{
 		"name":     cfg.Name,
 		"type":     string(cfg.Server.Protocol),
 		"server":   cfg.Server.Host,
@@ -123,7 +123,7 @@ func (g *MihomoGenerator) generateProxy(cfg *ClientConfig) map[string]interface{
 	case TransportWS:
 		proxy["network"] = "ws"
 		if cfg.Server.TransportWS != nil {
-			proxy["ws-opts"] = map[string]interface{}{
+			proxy["ws-opts"] = map[string]any{
 				"path":    cfg.Server.TransportWS.Path,
 				"headers": cfg.Server.TransportWS.Headers,
 			}
@@ -132,7 +132,7 @@ func (g *MihomoGenerator) generateProxy(cfg *ClientConfig) map[string]interface{
 	case TransportGRPC:
 		proxy["network"] = "grpc"
 		if cfg.Server.TransportGRPC != nil {
-			proxy["grpc-opts"] = map[string]interface{}{
+			proxy["grpc-opts"] = map[string]any{
 				"grpc-service-name": cfg.Server.TransportGRPC.ServiceName,
 			}
 		}
@@ -151,7 +151,7 @@ func (g *MihomoGenerator) generateProxy(cfg *ClientConfig) map[string]interface{
 
 	case TLSReality:
 		proxy["tls"] = true
-		proxy["reality-opts"] = map[string]interface{}{
+		proxy["reality-opts"] = map[string]any{
 			"public-key": cfg.Server.PublicKey,
 			"short-id":   cfg.Server.ShortID,
 		}
@@ -164,8 +164,8 @@ func (g *MihomoGenerator) generateProxy(cfg *ClientConfig) map[string]interface{
 }
 
 // generateProxyGroups 生成代理组
-func (g *MihomoGenerator) generateProxyGroups() []map[string]interface{} {
-	return []map[string]interface{}{
+func (g *MihomoGenerator) generateProxyGroups() []map[string]any {
+	return []map[string]any{
 		{
 			"name":    "PROXY",
 			"type":    "select",
@@ -192,8 +192,8 @@ func (g *MihomoGenerator) generateRules() []string {
 }
 
 // generateDNS 生成 DNS 配置
-func (g *MihomoGenerator) generateDNS() map[string]interface{} {
-	return map[string]interface{}{
+func (g *MihomoGenerator) generateDNS() map[string]any {
+	return map[string]any{
 		"enable":           true,
 		"ipv6":             false,
 		"default-nameserver": []string{
@@ -221,15 +221,15 @@ type MihomoConfig struct {
 	LogLevel           string                         `yaml:"log-level"`
 	IPv6               bool                           `yaml:"ipv6"`
 	ExternalController string                         `yaml:"external-controller"`
-	Proxies            []map[string]interface{}       `yaml:"proxies"`
-	ProxyGroups        []map[string]interface{}       `yaml:"proxy-groups"`
+	Proxies            []map[string]any       `yaml:"proxies"`
+	ProxyGroups        []map[string]any       `yaml:"proxy-groups"`
 	Rules              []string                       `yaml:"rules"`
-	DNS                map[string]interface{}         `yaml:"dns"`
+	DNS                map[string]any         `yaml:"dns"`
 }
 
 // GenerateClashProxies 生成 Clash 代理配置片段
-func (g *MihomoGenerator) GenerateClashProxies(configs []*ClientConfig) ([]map[string]interface{}, error) {
-	proxies := make([]map[string]interface{}, 0, len(configs))
+func (g *MihomoGenerator) GenerateClashProxies(configs []*ClientConfig) ([]map[string]any, error) {
+	proxies := make([]map[string]any, 0, len(configs))
 	for _, cfg := range configs {
 		if g.IsProtocolSupported(cfg.Server.Protocol) {
 			proxies = append(proxies, g.generateProxy(cfg))
@@ -262,13 +262,13 @@ func (g *MihomoGenerator) GenerateClashSubscription(configs []*ClientConfig) ([]
 	return yaml.Marshal(subscription)
 }
 
-func (g *MihomoGenerator) generateProxyGroupsForSubscription(proxyCount int) []map[string]interface{} {
+func (g *MihomoGenerator) generateProxyGroupsForSubscription(proxyCount int) []map[string]any {
 	proxyNames := make([]string, proxyCount)
 	for i := 0; i < proxyCount; i++ {
 		proxyNames[i] = fmt.Sprintf("node-%d", i+1)
 	}
 
-	return []map[string]interface{}{
+	return []map[string]any{
 		{
 			"name":    "PROXY",
 			"type":    "select",

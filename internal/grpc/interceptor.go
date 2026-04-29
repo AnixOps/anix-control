@@ -2,10 +2,12 @@ package grpc
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/anixops/v2board/internal/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -18,7 +20,8 @@ type NodeConnection struct {
 	NodeID      uint32
 	LastSeen    time.Time
 	RemoteAddr  string
-	Connection  interface{} // 可以是具体的流对象
+	Connection  any              // 可以是具体的流对象
+	configChan  chan struct{}    // buffered channel for config push signals
 }
 
 // NodeConnectionManager 节点连接管理器
@@ -44,6 +47,7 @@ func (m *NodeConnectionManager) Register(nodeID uint32, addr string) {
 		NodeID:     nodeID,
 		LastSeen:   time.Now(),
 		RemoteAddr: addr,
+		configChan: make(chan struct{}, 1),
 	}
 }
 
@@ -51,6 +55,9 @@ func (m *NodeConnectionManager) Register(nodeID uint32, addr string) {
 func (m *NodeConnectionManager) Unregister(nodeID uint32) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if conn, ok := m.connections[nodeID]; ok && conn.configChan != nil {
+		close(conn.configChan)
+	}
 	delete(m.connections, nodeID)
 }
 
@@ -107,6 +114,32 @@ func (m *NodeConnectionManager) IsConfigChanged(nodeID uint32, currentVer int64)
 	return currentVer > lastVer
 }
 
+// NotifyConfigChange 通知节点配置变更
+func (m *NodeConnectionManager) NotifyConfigChange(nodeID uint32) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if conn, ok := m.connections[nodeID]; ok && conn.configChan != nil {
+		select {
+		case conn.configChan <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// SetNodeConfigVersion 记录节点已推送的配置版本
+func (m *NodeConnectionManager) SetNodeConfigVersion(nodeID uint32, version int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.configVer[nodeID] = version
+}
+
+// GetNodeConfigVersion 获取节点已推送的配置版本
+func (m *NodeConnectionManager) GetNodeConfigVersion(nodeID uint32) int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.configVer[nodeID]
+}
+
 // 全局连接管理器
 var connectionManager = NewNodeConnectionManager()
 
@@ -115,9 +148,9 @@ func GetConnectionManager() *NodeConnectionManager {
 	return connectionManager
 }
 
-// AuthInterceptor 认证拦截器
-func AuthInterceptor(apiToken string) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+// AuthInterceptor 认证拦截器，支持 API Token 和 JWT 两种认证方式
+func AuthInterceptor(apiToken, jwtSecret string) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		// 健康检查不需要认证
 		if strings.Contains(info.FullMethod, "HealthService") {
 			return handler(ctx, req)
@@ -135,22 +168,28 @@ func AuthInterceptor(apiToken string) grpc.UnaryServerInterceptor {
 		}
 
 		token := tokens[0]
-		if strings.HasPrefix(token, "Bearer ") {
-			token = strings.TrimPrefix(token, "Bearer ")
-		}
+		token, _ = strings.CutPrefix(token, "Bearer ")
 
 		// 验证 token
-		if apiToken != "" && token != apiToken {
-			return nil, status.Error(codes.Unauthenticated, "invalid token")
+		authed, claims, err := validateToken(token, apiToken, jwtSecret)
+		if !authed {
+			return nil, status.Error(codes.Unauthenticated, err)
+		}
+
+		// 如果 JWT 解析成功，将用户信息放入上下文
+		if claims != nil {
+			ctx = SetUserIDToContext(ctx, claims.UserID)
+			ctx = SetUserEmailToContext(ctx, claims.Email)
+			ctx = SetUserAdminToContext(ctx, claims.IsAdmin)
 		}
 
 		return handler(ctx, req)
 	}
 }
 
-// StreamAuthInterceptor 流式认证拦截器
-func StreamAuthInterceptor(apiToken string) grpc.StreamServerInterceptor {
-	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+// StreamAuthInterceptor 流式认证拦截器，支持 API Token 和 JWT 两种认证方式
+func StreamAuthInterceptor(apiToken, jwtSecret string) grpc.StreamServerInterceptor {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		// 健康检查不需要认证
 		if strings.Contains(info.FullMethod, "HealthService") {
 			return handler(srv, ss)
@@ -168,22 +207,71 @@ func StreamAuthInterceptor(apiToken string) grpc.StreamServerInterceptor {
 		}
 
 		token := tokens[0]
-		if strings.HasPrefix(token, "Bearer ") {
-			token = strings.TrimPrefix(token, "Bearer ")
-		}
+		token, _ = strings.CutPrefix(token, "Bearer ")
 
 		// 验证 token
-		if apiToken != "" && token != apiToken {
-			return status.Error(codes.Unauthenticated, "invalid token")
+		authed, claims, errStr := validateToken(token, apiToken, jwtSecret)
+		if !authed {
+			return status.Error(codes.Unauthenticated, errStr)
+		}
+
+		// 如果 JWT 解析成功，将用户信息放入流上下文
+		if claims != nil {
+			wrapped := &streamWithContext{
+				ServerStream: ss,
+				ctx:          ss.Context(),
+			}
+			wrapped.ctx = SetUserIDToContext(wrapped.ctx, claims.UserID)
+			wrapped.ctx = SetUserEmailToContext(wrapped.ctx, claims.Email)
+			wrapped.ctx = SetUserAdminToContext(wrapped.ctx, claims.IsAdmin)
+			return handler(srv, wrapped)
 		}
 
 		return handler(srv, ss)
 	}
 }
 
+// validateToken 验证 token，支持 JWT 和 API Token 两种方式
+// 返回: (是否认证通过, JWT claims(如果不是JWT则为nil), 错误信息)
+func validateToken(token, apiToken, jwtSecret string) (bool, *utils.Claims, string) {
+	// 优先尝试 JWT 验证（如果 token 看起来像 JWT 且配置了 secret）
+	if jwtSecret != "" && strings.Contains(token, ".") {
+		claims, err := utils.ParseTokenWithSecret(token, jwtSecret)
+		if err == nil {
+			return true, claims, ""
+		}
+		// JWT 验证失败，如果同时配置了 API Token 则回退
+		if apiToken == "" {
+			return false, nil, "invalid or expired JWT token"
+		}
+	}
+
+	// API Token 验证
+	if apiToken != "" && token == apiToken {
+		return true, nil, ""
+	}
+
+	if apiToken == "" && jwtSecret == "" {
+		// 没有配置任何认证，放行
+		return true, nil, ""
+	}
+
+	return false, nil, "invalid token"
+}
+
+// streamWithContext 包装 grpc.ServerStream 以便注入自定义 context
+type streamWithContext struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (w *streamWithContext) Context() context.Context {
+	return w.ctx
+}
+
 // LoggingInterceptor 日志拦截器
 func LoggingInterceptor() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		start := time.Now()
 
 		// 获取客户端地址
@@ -202,7 +290,7 @@ func LoggingInterceptor() grpc.UnaryServerInterceptor {
 		}
 
 		// 使用标准日志输出
-		println("[GRPC]", info.FullMethod, "from", clientAddr, "duration", duration.String(), "code", code.String())
+		slog.Info("grpc unary request", "component", "grpc", "method", info.FullMethod, "addr", clientAddr, "duration", duration.Milliseconds(), "code", code.String())
 
 		return resp, err
 	}
@@ -210,7 +298,7 @@ func LoggingInterceptor() grpc.UnaryServerInterceptor {
 
 // StreamLoggingInterceptor 流式日志拦截器
 func StreamLoggingInterceptor() grpc.StreamServerInterceptor {
-	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		start := time.Now()
 
 		// 获取客户端地址
@@ -228,7 +316,7 @@ func StreamLoggingInterceptor() grpc.StreamServerInterceptor {
 			code = status.Code(err)
 		}
 
-		println("[GRPC STREAM]", info.FullMethod, "from", clientAddr, "duration", duration.String(), "code", code.String())
+		slog.Info("grpc stream request", "component", "grpc", "method", info.FullMethod, "addr", clientAddr, "duration", duration.Milliseconds(), "code", code.String())
 
 		return err
 	}
@@ -258,3 +346,42 @@ func SetNodeIDToContext(ctx context.Context, nodeID uint32) context.Context {
 }
 
 type nodeIDKey struct{}
+
+type userIDKey struct{}
+
+type userEmailKey struct{}
+
+type userAdminKey struct{}
+
+// SetUserIDToContext 设置用户ID到上下文
+func SetUserIDToContext(ctx context.Context, userID uint) context.Context {
+	return context.WithValue(ctx, userIDKey{}, userID)
+}
+
+// GetUserIDFromContext 从上下文获取用户ID
+func GetUserIDFromContext(ctx context.Context) (uint, bool) {
+	userID, ok := ctx.Value(userIDKey{}).(uint)
+	return userID, ok
+}
+
+// SetUserEmailToContext 设置用户邮箱到上下文
+func SetUserEmailToContext(ctx context.Context, email string) context.Context {
+	return context.WithValue(ctx, userEmailKey{}, email)
+}
+
+// GetUserEmailFromContext 从上下文获取用户邮箱
+func GetUserEmailFromContext(ctx context.Context) (string, bool) {
+	email, ok := ctx.Value(userEmailKey{}).(string)
+	return email, ok
+}
+
+// SetUserAdminToContext 设置用户管理员状态到上下文
+func SetUserAdminToContext(ctx context.Context, isAdmin bool) context.Context {
+	return context.WithValue(ctx, userAdminKey{}, isAdmin)
+}
+
+// GetUserAdminFromContext 从上下文获取用户管理员状态
+func GetUserAdminFromContext(ctx context.Context) (bool, bool) {
+	isAdmin, ok := ctx.Value(userAdminKey{}).(bool)
+	return isAdmin, ok
+}

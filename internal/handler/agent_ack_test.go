@@ -197,7 +197,7 @@ func TestDispatchWithAckRetry_SucceedsWhenAckArrives(t *testing.T) {
 		readAndAckErr <- nil
 	}()
 
-	messageID, ack, err := h.dispatchWithAckRetry(agentConn, "task.assign", map[string]interface{}{"task": "demo"}, true)
+	messageID, ack, err := h.dispatchWithAckRetry(agentConn, "task.assign", map[string]any{"task": "demo"}, true)
 	require.NoError(t, err)
 	require.NotNil(t, ack)
 	assert.Equal(t, messageID, ack.MessageID)
@@ -231,7 +231,7 @@ func TestDispatchWithAckRetry_FailsOnTimeout(t *testing.T) {
 		readDone <- clientConn.ReadJSON(&outbound)
 	}()
 
-	messageID, ack, err := h.dispatchWithAckRetry(agentConn, "task.assign", map[string]interface{}{"task": "demo"}, true)
+	messageID, ack, err := h.dispatchWithAckRetry(agentConn, "task.assign", map[string]any{"task": "demo"}, true)
 	require.Error(t, err)
 	assert.Nil(t, ack)
 	assert.NotEmpty(t, messageID)

@@ -137,7 +137,7 @@ func (s *PanelForwardService) applyForwardTrafficSnapshot(record PanelForwardTra
 			}
 			if err := tx.Model(&model.ForwardTrafficCursor{}).
 				Where("id = ?", cursor.ID).
-				Updates(map[string]interface{}{
+				Updates(map[string]any{
 					"upload_total":   record.UploadTotal,
 					"download_total": record.DownloadTotal,
 				}).Error; err != nil {
@@ -217,7 +217,7 @@ func (s *PanelForwardService) recordForwardTrafficDeltaTx(tx *gorm.DB, forwardID
 
 	if err := tx.Model(&model.Forward{}).
 		Where("id = ?", forwardID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"in_flow":  gorm.Expr("in_flow + ?", download),
 			"out_flow": gorm.Expr("out_flow + ?", upload),
 		}).Error; err != nil {
@@ -226,7 +226,7 @@ func (s *PanelForwardService) recordForwardTrafficDeltaTx(tx *gorm.DB, forwardID
 
 	if err := tx.Model(&model.User{}).
 		Where("id = ?", forward.UserID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"u": gorm.Expr("u + ?", upload),
 			"d": gorm.Expr("d + ?", download),
 		}).Error; err != nil {
@@ -235,7 +235,7 @@ func (s *PanelForwardService) recordForwardTrafficDeltaTx(tx *gorm.DB, forwardID
 
 	if err := tx.Model(&model.ForwardUserTunnel{}).
 		Where("user_id = ? AND tunnel_id = ?", forward.UserID, forward.TunnelID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"in_flow":  gorm.Expr("in_flow + ?", download),
 			"out_flow": gorm.Expr("out_flow + ?", upload),
 		}).Error; err != nil {

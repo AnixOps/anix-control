@@ -84,11 +84,14 @@ func TestSetup_CORS(t *testing.T) {
 	r, _ := setupTestRouter(t)
 	defer teardownTestRouter()
 
+	// OPTIONS with Origin header — should echo back the origin (default: allow all)
 	req, _ := http.NewRequest("OPTIONS", "/health", nil)
+	req.Header.Set("Origin", "https://example.com")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "https://example.com", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, http.StatusNoContent, w.Code)
 	assert.Contains(t, w.Header().Get("Access-Control-Expose-Headers"), "X-Request-ID")
 }
 
@@ -103,11 +106,12 @@ func TestSetup_SecurityHeadersAndRequestID(t *testing.T) {
 
 	assert.NotEmpty(t, w.Header().Get("X-Request-ID"))
 	assert.Equal(t, "nosniff", w.Header().Get("X-Content-Type-Options"))
-	assert.Equal(t, "SAMEORIGIN", w.Header().Get("X-Frame-Options"))
+	assert.Equal(t, "DENY", w.Header().Get("X-Frame-Options"))
+	assert.Equal(t, "0", w.Header().Get("X-XSS-Protection"))
 	assert.Equal(t, "strict-origin-when-cross-origin", w.Header().Get("Referrer-Policy"))
 	assert.Equal(t, "none", w.Header().Get("X-Permitted-Cross-Domain-Policies"))
 	assert.Contains(t, w.Header().Get("Permissions-Policy"), "camera=()")
-	assert.Equal(t, "max-age=31536000; includeSubDomains", w.Header().Get("Strict-Transport-Security"))
+	assert.Equal(t, "max-age=63072000; includeSubDomains; preload", w.Header().Get("Strict-Transport-Security"))
 }
 
 func TestSetup_RequestIDHonorsInboundHeader(t *testing.T) {

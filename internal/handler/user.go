@@ -29,9 +29,9 @@ func NewUserHandler() *UserHandler {
 // @Produce json
 // @Security BearerAuth
 // @Param refresh query bool false "是否强制刷新缓存"
-// @Success 200 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 401 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /user/subscription [get]
 func (h *UserHandler) GetSubscription(c *gin.Context) {
 	// 从 JWT 中获取用户 ID
@@ -66,9 +66,9 @@ func (h *UserHandler) GetSubscription(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 401 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /user/profile [get]
 func (h *UserHandler) GetProfile(c *gin.Context) {
 	userID, exists := c.Get("user_id")
@@ -107,9 +107,9 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 401 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /user/dashboard [get]
 func (h *UserHandler) GetDashboard(c *gin.Context) {
 	userID, exists := c.Get("user_id")

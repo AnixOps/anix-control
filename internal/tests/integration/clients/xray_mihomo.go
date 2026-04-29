@@ -274,7 +274,7 @@ func (c *MihomoClient) waitForStart(ctx context.Context) error {
 }
 
 // GetProxies 获取代理列表 (Mihomo 特有)
-func (c *MihomoClient) GetProxies(ctx context.Context) (map[string]interface{}, error) {
+func (c *MihomoClient) GetProxies(ctx context.Context) (map[string]any, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, "GET", c.apiURL+"/proxies", nil)
 	if err != nil {
@@ -287,7 +287,7 @@ func (c *MihomoClient) GetProxies(ctx context.Context) (map[string]interface{}, 
 	}
 	defer resp.Body.Close()
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}

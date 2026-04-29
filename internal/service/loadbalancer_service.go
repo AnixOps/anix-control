@@ -242,7 +242,7 @@ func (s *LoadBalancerService) RunHealthCheck(lbID uint) error {
 }
 
 // GetStats 获取负载均衡统计
-func (s *LoadBalancerService) GetStats(lbID uint) (map[string]interface{}, error) {
+func (s *LoadBalancerService) GetStats(lbID uint) (map[string]any, error) {
 	lb, err := s.GetByID(lbID)
 	if err != nil {
 		return nil, err
@@ -270,7 +270,7 @@ func (s *LoadBalancerService) GetStats(lbID uint) (map[string]interface{}, error
 		totalLoad /= float64(onlineCount)
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"total_nodes":  len(nodes),
 		"online_nodes": onlineCount,
 		"avg_load":     totalLoad,

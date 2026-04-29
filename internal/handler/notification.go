@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -46,7 +47,7 @@ func notificationStatusFromText(status string) (int, bool) {
 	}
 }
 
-func parseStringField(raw map[string]interface{}, key string) string {
+func parseStringField(raw map[string]any, key string) string {
 	v, ok := raw[key]
 	if !ok || v == nil {
 		return ""
@@ -57,7 +58,7 @@ func parseStringField(raw map[string]interface{}, key string) string {
 	return ""
 }
 
-func parseIntField(raw map[string]interface{}, key string) int {
+func parseIntField(raw map[string]any, key string) int {
 	v, ok := raw[key]
 	if !ok || v == nil {
 		return 0
@@ -79,7 +80,7 @@ func parseIntField(raw map[string]interface{}, key string) int {
 	}
 }
 
-func normalizeEmailEncryption(raw interface{}) (string, bool) {
+func normalizeEmailEncryption(raw any) (string, bool) {
 	switch v := raw.(type) {
 	case bool:
 		if v {
@@ -129,7 +130,7 @@ func (h *NotificationHandler) loadEmailConfig() (*model.EmailConfig, error) {
 		return cfg, nil
 	}
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal([]byte(value), &raw); err != nil {
 		return nil, err
 	}
@@ -191,7 +192,7 @@ func NewNotificationHandler() *NotificationHandler {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页数量" default(20)
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /user/notifications [get]
 func (h *NotificationHandler) GetUserNotifications(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -202,10 +203,16 @@ func (h *NotificationHandler) GetUserNotifications(c *gin.Context) {
 	var total int64
 
 	db := database.Get()
-	db.Model(&model.NotificationLog{}).Where("user_id = ?", userID).Count(&total)
+	if err := db.Model(&model.NotificationLog{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get notification count"})
+		return
+	}
 
 	offset := (page - 1) * pageSize
-	db.Where("user_id = ?", userID).Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&logs)
+	if err := db.Where("user_id = ?", userID).Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&logs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get notifications"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"data":      logs,
@@ -223,8 +230,8 @@ func (h *NotificationHandler) GetUserNotifications(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "通知ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /user/notifications/{id}/read [post]
 func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -249,7 +256,7 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /user/notifications/read-all [post]
 func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -268,7 +275,7 @@ func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /user/notifications/unread-count [get]
 func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -291,7 +298,7 @@ func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param type query string false "通知类型"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/notification/templates [get]
 func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 	notifyType := c.Query("type")
@@ -303,7 +310,10 @@ func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 		db = db.Where("type = ?", notifyType)
 	}
 
-	db.Find(&templates)
+	if err := db.Find(&templates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load templates"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
@@ -322,10 +332,10 @@ func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body map[string]interface{} true "模板信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Param request body map[string]any true "模板信息"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/notification/templates [post]
 func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
 	var req struct {
@@ -366,11 +376,11 @@ func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "模板ID"
-// @Param request body map[string]interface{} true "模板更新信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Param request body map[string]any true "模板更新信息"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/notification/templates/{id} [put]
 func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 	id := c.Param("id")
@@ -382,11 +392,11 @@ func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 	}
 
 	var req struct {
-		Type    string `json:"type"`
-		Event   string `json:"event"`
-		Name    string `json:"name"`
-		Title   string `json:"title"`
-		Content string `json:"content"`
+		Type    string `json:"type" binding:"omitempty,oneof=email telegram webhook"`
+		Event   string `json:"event" binding:"omitempty,max=128"`
+		Name    string `json:"name" binding:"omitempty,min=1,max=255"`
+		Title   string `json:"title" binding:"omitempty,max=255"`
+		Content string `json:"content" binding:"omitempty"`
 		Enabled *bool  `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -429,8 +439,8 @@ func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "模板ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/notification/templates/{id} [delete]
 func (h *NotificationHandler) DeleteTemplate(c *gin.Context) {
 	id := c.Param("id")
@@ -454,11 +464,12 @@ func (h *NotificationHandler) DeleteTemplate(c *gin.Context) {
 // @Param page_size query int false "每页数量" default(20)
 // @Param type query string false "通知类型"
 // @Param status query string false "发送状态"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/notification/logs [get]
 func (h *NotificationHandler) ListLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = ClampPagination(page, pageSize)
 	notifyType := c.Query("type")
 	status := c.Query("status")
 
@@ -478,10 +489,16 @@ func (h *NotificationHandler) ListLogs(c *gin.Context) {
 		}
 	}
 
-	db.Count(&total)
+	if err := db.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count notification logs"})
+		return
+	}
 
 	offset := (page - 1) * pageSize
-	db.Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&logs)
+	if err := db.Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&logs).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load notification logs"})
+		return
+	}
 
 	list := make([]gin.H, 0, len(logs))
 	for _, log := range logs {
@@ -527,10 +544,10 @@ func (h *NotificationHandler) ListLogs(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body map[string]interface{} true "测试通知请求"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Param request body map[string]any true "测试通知请求"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/notification/test [post]
 func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 	var req struct {
@@ -581,10 +598,19 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 		}
 		err = h.notificationService.SendEmail(recipient, title, content)
 	case "telegram":
-		// TODO: 实现Telegram测试通知
+		// Telegram test notification stub:
+		//   1. Look up the admin's Telegram chat ID from user_telegram_bindings table
+		//   2. Use TelegramBotService.SendNotification(chatID, title, content)
+		//   3. Return error if no admin Telegram binding found
+		log.Printf("[STUB] test notification: Telegram delivery not yet implemented")
 		err = nil
 	case "webhook":
-		// TODO: 实现Webhook测试通知
+		// Webhook test notification stub:
+		//   1. Read webhook URL from system configuration
+		//   2. Build payload: {event: "test_notification", title, content, timestamp}
+		//   3. POST to the configured webhook URL
+		//   4. Return error on HTTP failure
+		log.Printf("[STUB] test notification: Webhook delivery not yet implemented")
 		err = nil
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid notification type"})
@@ -611,7 +637,7 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/notification/email/config [get]
 func (h *NotificationHandler) GetEmailConfig(c *gin.Context) {
 	cfg, err := h.loadEmailConfig()
@@ -644,12 +670,12 @@ func (h *NotificationHandler) GetEmailConfig(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body map[string]interface{} true "邮件配置"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
+// @Param request body map[string]any true "邮件配置"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
 // @Router /admin/notification/email/config [put]
 func (h *NotificationHandler) UpdateEmailConfig(c *gin.Context) {
-	var req map[string]interface{}
+	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

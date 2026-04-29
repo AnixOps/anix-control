@@ -103,8 +103,8 @@ func NodeSecureLogger() gin.HandlerFunc {
 	}
 }
 
-// AuditLog 审计日志结构
-type AuditLog struct {
+// AuditLogEntry 审计日志结构
+type AuditLogEntry struct {
 	Timestamp   time.Time              `json:"timestamp"`
 	Action      string                 `json:"action"`
 	UserID      uint                   `json:"user_id,omitempty"`
@@ -116,11 +116,11 @@ type AuditLog struct {
 	StatusCode  int                    `json:"status_code"`
 	Latency     time.Duration          `json:"latency"`
 	RequestBody string                 `json:"request_body,omitempty"`
-	Extra       map[string]interface{} `json:"extra,omitempty"`
+	Extra       map[string]any `json:"extra,omitempty"`
 }
 
 // WriteAuditLog 写入审计日志（可扩展为写入数据库或外部系统）
-func WriteAuditLog(entry *AuditLog) {
+func WriteAuditLog(entry *AuditLogEntry) {
 	// 脱敏 IP
 	entry.IP = utils.RedactIP(entry.IP)
 

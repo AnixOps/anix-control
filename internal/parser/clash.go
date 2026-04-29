@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/anixops/v2board/internal/model"
@@ -24,8 +25,8 @@ func (p *ClashParser) Detect(content []byte) bool {
 
 func (p *ClashParser) Parse(content []byte) ([]*model.ParsedNode, error) {
 	var clash struct {
-		Proxies []map[string]interface{} `yaml:"proxies"`
-		Proxy   []map[string]interface{} `yaml:"Proxy"` // 兼容旧版
+		Proxies []map[string]any `yaml:"proxies"`
+		Proxy   []map[string]any `yaml:"Proxy"` // 兼容旧版
 	}
 
 	if err := yaml.Unmarshal(content, &clash); err != nil {
@@ -41,7 +42,7 @@ func (p *ClashParser) Parse(content []byte) ([]*model.ParsedNode, error) {
 
 	for _, proxy := range proxies {
 		node := p.parseProxy(proxy)
-		if node != nil {
+		if node != nil && node.IsValid() {
 			nodes = append(nodes, node)
 		}
 	}
@@ -49,13 +50,13 @@ func (p *ClashParser) Parse(content []byte) ([]*model.ParsedNode, error) {
 	return nodes, nil
 }
 
-func (p *ClashParser) parseProxy(proxy map[string]interface{}) *model.ParsedNode {
+func (p *ClashParser) parseProxy(proxy map[string]any) *model.ParsedNode {
 	node := &model.ParsedNode{
 		Name:     getString(proxy, "name"),
 		Type:     strings.ToLower(getString(proxy, "type")),
 		Server:   getString(proxy, "server"),
 		Port:     getInt(proxy, "port"),
-		Settings: make(map[string]interface{}),
+		Settings: make(map[string]any),
 	}
 
 	// 根据类型解析
@@ -70,17 +71,17 @@ func (p *ClashParser) parseProxy(proxy map[string]interface{}) *model.ParsedNode
 		node.Settings["alter_id"] = getInt(proxy, "alterId")
 		node.Settings["security"] = getString(proxy, "cipher")
 
-		if wsOpts, ok := proxy["ws-opts"].(map[string]interface{}); ok {
-			node.TransportSettings = map[string]interface{}{
+		if wsOpts, ok := proxy["ws-opts"].(map[string]any); ok {
+			node.TransportSettings = map[string]any{
 				"path": getString(wsOpts, "path"),
 			}
-			if headers, ok := wsOpts["headers"].(map[string]interface{}); ok {
+			if headers, ok := wsOpts["headers"].(map[string]any); ok {
 				node.TransportSettings["host"] = getString(headers, "Host")
 			}
 		}
 
-		if grpcOpts, ok := proxy["grpc-opts"].(map[string]interface{}); ok {
-			node.TransportSettings = map[string]interface{}{
+		if grpcOpts, ok := proxy["grpc-opts"].(map[string]any); ok {
+			node.TransportSettings = map[string]any{
 				"serviceName": getString(grpcOpts, "grpc-service-name"),
 			}
 		}
@@ -93,11 +94,12 @@ func (p *ClashParser) parseProxy(proxy map[string]interface{}) *model.ParsedNode
 		node.Transport = getString(proxy, "network")
 
 		if flow := getString(proxy, "flow"); flow != "" {
+			node.Flow = flow
 			node.Settings["flow"] = flow
 		}
 
 		// Reality
-		if realityOpts, ok := proxy["reality-opts"].(map[string]interface{}); ok {
+		if realityOpts, ok := proxy["reality-opts"].(map[string]any); ok {
 			node.RealityPublicKey = getString(realityOpts, "public-key")
 			node.RealityShortID = getString(realityOpts, "short-id")
 		}
@@ -109,11 +111,11 @@ func (p *ClashParser) parseProxy(proxy map[string]interface{}) *model.ParsedNode
 		node.SkipCertVerify = getBool(proxy, "skip-cert-verify")
 		node.Transport = getString(proxy, "network")
 
-		if wsOpts, ok := proxy["ws-opts"].(map[string]interface{}); ok {
-			node.TransportSettings = map[string]interface{}{
+		if wsOpts, ok := proxy["ws-opts"].(map[string]any); ok {
+			node.TransportSettings = map[string]any{
 				"path": getString(wsOpts, "path"),
 			}
-			if headers, ok := wsOpts["headers"].(map[string]interface{}); ok {
+			if headers, ok := wsOpts["headers"].(map[string]any); ok {
 				node.TransportSettings["host"] = getString(headers, "Host")
 			}
 		}
@@ -125,7 +127,7 @@ func (p *ClashParser) parseProxy(proxy map[string]interface{}) *model.ParsedNode
 
 		if obfs := getString(proxy, "plugin"); obfs != "" {
 			node.Settings["plugin"] = obfs
-			if pluginOpts, ok := proxy["plugin-opts"].(map[string]interface{}); ok {
+			if pluginOpts, ok := proxy["plugin-opts"].(map[string]any); ok {
 				node.Settings["plugin-opts"] = pluginOpts
 			}
 		}
@@ -186,7 +188,7 @@ func (p *SIP008Parser) Parse(content []byte) ([]*model.ParsedNode, error) {
 		} `json:"servers"`
 	}
 
-	if err := yaml.Unmarshal(content, &sip008); err != nil {
+	if err := json.Unmarshal(content, &sip008); err != nil {
 		return nil, err
 	}
 
@@ -200,7 +202,7 @@ func (p *SIP008Parser) Parse(content []byte) ([]*model.ParsedNode, error) {
 			Server:   server.Server,
 			Port:     server.ServerPort,
 			Password: server.Password,
-			Settings: map[string]interface{}{
+			Settings: map[string]any{
 				"cipher": server.Method,
 			},
 		}
@@ -210,14 +212,16 @@ func (p *SIP008Parser) Parse(content []byte) ([]*model.ParsedNode, error) {
 			node.Settings["plugin_opts"] = server.PluginOpts
 		}
 
-		nodes = append(nodes, node)
+		if node.IsValid() {
+			nodes = append(nodes, node)
+		}
 	}
 
 	return nodes, nil
 }
 
 // 辅助函数
-func getString(m map[string]interface{}, key string) string {
+func getString(m map[string]any, key string) string {
 	if v, ok := m[key]; ok {
 		if s, ok := v.(string); ok {
 			return s
@@ -226,7 +230,7 @@ func getString(m map[string]interface{}, key string) string {
 	return ""
 }
 
-func getInt(m map[string]interface{}, key string) int {
+func getInt(m map[string]any, key string) int {
 	if v, ok := m[key]; ok {
 		switch val := v.(type) {
 		case int:
@@ -240,7 +244,7 @@ func getInt(m map[string]interface{}, key string) int {
 	return 0
 }
 
-func getBool(m map[string]interface{}, key string) bool {
+func getBool(m map[string]any, key string) bool {
 	if v, ok := m[key]; ok {
 		if b, ok := v.(bool); ok {
 			return b

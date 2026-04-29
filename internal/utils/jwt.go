@@ -43,7 +43,7 @@ func ParseToken(tokenString string) (*Claims, error) {
 
 // ParseTokenWithSecret 使用指定secret解析JWT token
 func ParseTokenWithSecret(tokenString string, secret string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
 		return []byte(secret), nil
 	})
 

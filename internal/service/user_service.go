@@ -106,7 +106,7 @@ func (s *UserService) GetActiveUsersForNode(groupID *uint) ([]*model.User, error
 func (s *UserService) UpdateTraffic(userID uint, upload, download int64) error {
 	return s.db.Model(&model.User{}).
 		Where("id = ?", userID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"u": gorm.Expr("u + ?", upload),
 			"d": gorm.Expr("d + ?", download),
 		}).Error
@@ -118,7 +118,7 @@ func (s *UserService) BatchUpdateTraffic(traffics map[uint][2]int64) error {
 		for userID, traffic := range traffics {
 			if err := tx.Model(&model.User{}).
 				Where("id = ?", userID).
-				Updates(map[string]interface{}{
+				Updates(map[string]any{
 					"u": gorm.Expr("u + ?", traffic[0]),
 					"d": gorm.Expr("d + ?", traffic[1]),
 				}).Error; err != nil {
@@ -204,7 +204,7 @@ func (s *UserService) Create(user *model.User) error {
 }
 
 // Update 更新用户
-func (s *UserService) Update(id uint, updates map[string]interface{}) error {
+func (s *UserService) Update(id uint, updates map[string]any) error {
 	return s.db.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error
 }
 
@@ -215,21 +215,21 @@ func (s *UserService) Delete(id uint) error {
 
 // Ban 封禁用户
 func (s *UserService) Ban(id uint) error {
-	return s.Update(id, map[string]interface{}{"banned": 1})
+	return s.Update(id, map[string]any{"banned": 1})
 }
 
 // Unban 解封用户
 func (s *UserService) Unban(id uint) error {
-	return s.Update(id, map[string]interface{}{"banned": 0})
+	return s.Update(id, map[string]any{"banned": 0})
 }
 
 // ResetTraffic 重置用户流量
 func (s *UserService) ResetTraffic(id uint) error {
-	return s.Update(id, map[string]interface{}{"u": 0, "d": 0})
+	return s.Update(id, map[string]any{"u": 0, "d": 0})
 }
 
 // GetStats 获取用户统计
-func (s *UserService) GetStats() (map[string]interface{}, error) {
+func (s *UserService) GetStats() (map[string]any, error) {
 	var totalUsers int64
 	var activeUsers int64
 	var expiredUsers int64
@@ -252,7 +252,7 @@ func (s *UserService) GetStats() (map[string]interface{}, error) {
 	// 今日新增用户
 	s.db.Model(&model.User{}).Where("created_at >= ?", todayStart).Count(&todayNewUsers)
 
-	return map[string]interface{}{
+	return map[string]any{
 		"total_users":     totalUsers,
 		"active_users":    activeUsers,
 		"expired_users":   expiredUsers,

@@ -29,8 +29,8 @@ func NewAuthHandler(cfg *config.Config) *AuthHandler {
 // @Accept json
 // @Produce json
 // @Param request body model.RegisterRequest true "注册请求"
-// @Success 200 {object} map[string]interface{} "注册成功"
-// @Failure 400 {object} map[string]interface{} "参数错误"
+// @Success 200 {object} map[string]any "注册成功"
+// @Failure 400 {object} map[string]any "参数错误"
 // @Router /register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req model.RegisterRequest
@@ -75,8 +75,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body model.LoginRequest true "登录请求"
-// @Success 200 {object} map[string]interface{} "登录成功"
-// @Failure 401 {object} map[string]interface{} "认证失败"
+// @Success 200 {object} map[string]any "登录成功"
+// @Failure 401 {object} map[string]any "认证失败"
 // @Router /login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req model.LoginRequest

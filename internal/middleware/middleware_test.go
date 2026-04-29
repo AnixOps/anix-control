@@ -525,14 +525,26 @@ func TestCORS(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
+	// Request without Origin header — no CORS headers should be set
 	req := httptest.NewRequest("GET", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
 
-	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
-	assert.Contains(t, w.Header().Get("Access-Control-Allow-Methods"), "GET")
-	assert.Contains(t, w.Header().Get("Access-Control-Allow-Methods"), "POST")
+	assert.Equal(t, "", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Request with Origin header — origin should be echoed back (default: allow all)
+	req2 := httptest.NewRequest("GET", "/test", nil)
+	req2.Header.Set("Origin", "https://example.com")
+	w2 := httptest.NewRecorder()
+
+	router.ServeHTTP(w2, req2)
+
+	assert.Equal(t, "https://example.com", w2.Header().Get("Access-Control-Allow-Origin"))
+	assert.Contains(t, w2.Header().Get("Access-Control-Allow-Methods"), "GET")
+	assert.Contains(t, w2.Header().Get("Access-Control-Allow-Methods"), "POST")
+	assert.Equal(t, "Origin", w2.Header().Get("Vary"))
 }
 
 func TestCORS_OptionsRequest(t *testing.T) {
@@ -542,12 +554,102 @@ func TestCORS_OptionsRequest(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
+	// Preflight without Origin — should be rejected
 	req := httptest.NewRequest("OPTIONS", "/test", nil)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	// Preflight with Origin — should succeed with echoed origin
+	req2 := httptest.NewRequest("OPTIONS", "/test", nil)
+	req2.Header.Set("Origin", "https://example.com")
+	w2 := httptest.NewRecorder()
+
+	router.ServeHTTP(w2, req2)
+
+	assert.Equal(t, http.StatusNoContent, w2.Code)
+	assert.Equal(t, "https://example.com", w2.Header().Get("Access-Control-Allow-Origin"))
+	assert.NotEmpty(t, w2.Header().Get("Access-Control-Max-Age"))
+}
+
+func TestCORS_WithAllowedOrigins(t *testing.T) {
+	// Configure allowed origins
+	config.Set(&config.Config{
+		Server: config.ServerConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins:   []string{"https://app.example.com", "https://admin.example.com"},
+				AllowCredentials: true,
+			},
+		},
+	})
+	defer config.Set(nil)
+
+	router := gin.New()
+	router.Use(CORS())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	// Allowed origin
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, "https://app.example.com", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "true", w.Header().Get("Access-Control-Allow-Credentials"))
+
+	// Disallowed origin
+	req2 := httptest.NewRequest("GET", "/test", nil)
+	req2.Header.Set("Origin", "https://evil.com")
+	w2 := httptest.NewRecorder()
+
+	router.ServeHTTP(w2, req2)
+
+	assert.Equal(t, "", w2.Header().Get("Access-Control-Allow-Origin"))
+
+	// Preflight with allowed origin
+	req3 := httptest.NewRequest("OPTIONS", "/test", nil)
+	req3.Header.Set("Origin", "https://app.example.com")
+	w3 := httptest.NewRecorder()
+
+	router.ServeHTTP(w3, req3)
+
+	assert.Equal(t, http.StatusNoContent, w3.Code)
+	assert.Equal(t, "https://app.example.com", w3.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "true", w3.Header().Get("Access-Control-Allow-Credentials"))
+}
+
+func TestCORS_WildcardOriginNoCredentials(t *testing.T) {
+	// Wildcard origin with credentials should be denied (credentials stripped)
+	config.Set(&config.Config{
+		Server: config.ServerConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins:   []string{"*"},
+				AllowCredentials: true,
+			},
+		},
+	})
+	defer config.Set(nil)
+
+	router := gin.New()
+	router.Use(CORS())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "https://example.com")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, "https://example.com", w.Header().Get("Access-Control-Allow-Origin"))
+	// Credentials must NOT be set with wildcard origin
+	assert.Equal(t, "", w.Header().Get("Access-Control-Allow-Credentials"))
 }
 
 func TestSha256Hash(t *testing.T) {
@@ -822,7 +924,7 @@ func TestNodeSecureLogger_WithSignature(t *testing.T) {
 }
 
 func TestAuditLog(t *testing.T) {
-	entry := &AuditLog{
+	entry := &AuditLogEntry{
 		Timestamp:  time.Now(),
 		Action:     "test_action",
 		UserID:     1,
@@ -833,7 +935,7 @@ func TestAuditLog(t *testing.T) {
 		Method:     "GET",
 		StatusCode: 200,
 		Latency:    time.Millisecond * 100,
-		Extra:      map[string]interface{}{"key": "value"},
+		Extra:      map[string]any{"key": "value"},
 	}
 
 	// WriteAuditLog should not panic

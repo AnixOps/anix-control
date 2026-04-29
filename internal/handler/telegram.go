@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -48,7 +49,7 @@ func parseTelegramBotAdminIDs(raw string) []int64 {
 	return ids
 }
 
-func parseTelegramAdminIDsInput(raw interface{}) ([]int64, bool, error) {
+func parseTelegramAdminIDsInput(raw any) ([]int64, bool, error) {
 	if raw == nil {
 		return nil, false, nil
 	}
@@ -56,7 +57,7 @@ func parseTelegramAdminIDsInput(raw interface{}) ([]int64, bool, error) {
 	switch v := raw.(type) {
 	case string:
 		return parseTelegramBotAdminIDs(v), true, nil
-	case []interface{}:
+	case []any:
 		ids := make([]int64, 0, len(v))
 		for _, item := range v {
 			switch typed := item.(type) {
@@ -136,7 +137,7 @@ func requestScheme(c *gin.Context) string {
 	return "http"
 }
 
-func parseTelegramID(raw interface{}) (int64, error) {
+func parseTelegramID(raw any) (int64, error) {
 	switch v := raw.(type) {
 	case float64:
 		return int64(v), nil
@@ -153,11 +154,11 @@ func parseTelegramID(raw interface{}) (int64, error) {
 	}
 }
 
-func extractMessage(raw interface{}) string {
+func extractMessage(raw any) string {
 	switch v := raw.(type) {
 	case string:
 		return strings.TrimSpace(v)
-	case map[string]interface{}:
+	case map[string]any:
 		if inner, ok := v["message"].(string); ok {
 			return strings.TrimSpace(inner)
 		}
@@ -172,8 +173,8 @@ func extractMessage(raw interface{}) string {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /admin/telegram/bot [get]
 func (h *TelegramHandler) GetBot(c *gin.Context) {
 	bot, err := h.botService.GetBot()
@@ -208,10 +209,10 @@ func (h *TelegramHandler) GetBot(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body UpdateBotRequest true "Bot配置"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/telegram/bot [put]
 func (h *TelegramHandler) UpdateBot(c *gin.Context) {
 	var req UpdateBotRequest
@@ -254,7 +255,11 @@ func (h *TelegramHandler) UpdateBot(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	} else if provided {
-		encodedIDs, _ := json.Marshal(adminIDs)
+		encodedIDs, marshalErr := json.Marshal(adminIDs)
+		if marshalErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode admin_ids"})
+			return
+		}
 		bot.AdminIDs = string(encodedIDs)
 	}
 	if req.AllowBind != nil {
@@ -290,9 +295,9 @@ func (h *TelegramHandler) UpdateBot(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body SetWebhookRequest true "Webhook配置"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/telegram/webhook [post]
 func (h *TelegramHandler) SetWebhook(c *gin.Context) {
 	var req SetWebhookRequest
@@ -326,8 +331,8 @@ func (h *TelegramHandler) SetWebhook(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/telegram/webhook [delete]
 func (h *TelegramHandler) DeleteWebhook(c *gin.Context) {
 	if err := h.botService.DeleteWebhook(); err != nil {
@@ -345,8 +350,8 @@ func (h *TelegramHandler) DeleteWebhook(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body service.TelegramUpdate true "Telegram Update"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
 // @Router /telegram/webhook [post]
 func (h *TelegramHandler) TelegramWebhook(c *gin.Context) {
 	var update service.TelegramUpdate
@@ -369,12 +374,12 @@ func (h *TelegramHandler) TelegramWebhook(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body SendNotificationRequest true "通知请求"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/telegram/notify [post]
 func (h *TelegramHandler) SendNotification(c *gin.Context) {
-	var req map[string]interface{}
+	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -427,11 +432,11 @@ func (h *TelegramHandler) SendNotification(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body BroadcastRequest true "广播请求"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
 // @Router /admin/telegram/broadcast [post]
 func (h *TelegramHandler) Broadcast(c *gin.Context) {
-	var req map[string]interface{}
+	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -479,7 +484,7 @@ func (h *TelegramHandler) Broadcast(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页数量" default(20)
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/telegram/users [get]
 func (h *TelegramHandler) GetUserBindings(c *gin.Context) {
 	if strings.EqualFold(c.DefaultQuery("all", "false"), "true") {
@@ -567,10 +572,10 @@ func (h *TelegramHandler) GetUserBindings(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "Telegram缁戝畾ID"
-// @Param request body map[string]interface{} true "閫氱煡璁剧疆"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Param request body map[string]any true "閫氱煡璁剧疆"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /admin/telegram/users/{id}/notify [put]
 func (h *TelegramHandler) UpdateUserNotify(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -579,7 +584,7 @@ func (h *TelegramHandler) UpdateUserNotify(c *gin.Context) {
 		return
 	}
 
-	var req map[string]interface{}
+	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -665,7 +670,7 @@ func (h *TelegramHandler) UpdateUserNotify(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /user/telegram/status [get]
 func (h *TelegramHandler) GetTelegramStatus(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -700,17 +705,19 @@ func (h *TelegramHandler) GetTelegramStatus(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /user/telegram/unbind [post]
 func (h *TelegramHandler) UnbindTelegram(c *gin.Context) {
 	userID := c.GetUint("user_id")
 
-	userService := h.botService.GetTelegramUserService()
-	var tgUser service.TelegramUser
-	// TODO: 实现解绑逻辑
-	_ = userID
-	_ = userService
-	_ = tgUser
+	// Telegram unbind stub:
+	//   1. Look up the user's Telegram binding via TelegramUserService.GetByUserID(userID)
+	//   2. Delete the binding record from user_telegram_bindings table
+	//   3. Optionally send an unbind confirmation message via the bot
+	//   4. Return 404 if no binding exists
+	log.Printf("[STUB] Telegram unbind: deleting binding for user_id=%d not yet implemented", userID)
+
+	_ = h.botService.GetTelegramUserService()
 
 	c.JSON(http.StatusOK, gin.H{"message": "unbound successfully"})
 }
@@ -723,8 +730,8 @@ func (h *TelegramHandler) UnbindTelegram(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body NotifySettingsRequest true "通知设置"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
 // @Router /user/telegram/notify [post]
 func (h *TelegramHandler) UpdateNotifySettings(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -735,8 +742,11 @@ func (h *TelegramHandler) UpdateNotifySettings(c *gin.Context) {
 		return
 	}
 
-	// TODO: 实现更新通知设置
-	_ = userID
+	// Telegram notify settings update stub:
+	//   1. Look up the user's Telegram binding via TelegramUserService.GetByUserID(userID)
+	//   2. Update notify_enabled (and optionally notify_types) on the binding record
+	//   3. Return 404 if no binding exists
+	log.Printf("[STUB] Telegram notify settings update for user_id=%d not yet implemented", userID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "settings updated"})
 }
@@ -745,11 +755,11 @@ func (h *TelegramHandler) UpdateNotifySettings(c *gin.Context) {
 
 // UpdateBotRequest 更新Bot请求
 type UpdateBotRequest struct {
-	Name           string      `json:"name"`
-	Token          string      `json:"token"`
-	WelcomeMsg     string      `json:"welcome_msg"`
-	WelcomeMessage string      `json:"welcome_message"`
-	AdminIDs       interface{} `json:"admin_ids"`
+	Name           string      `json:"name" binding:"omitempty,max=255"`
+	Token          string      `json:"token" binding:"omitempty,min=1"`
+	WelcomeMsg     string      `json:"welcome_msg" binding:"omitempty,max=1024"`
+	WelcomeMessage string      `json:"welcome_message" binding:"omitempty,max=1024"`
+	AdminIDs       any `json:"admin_ids"`
 	AllowBind      *bool       `json:"allow_bind"`
 	AllowSub       *bool       `json:"allow_sub"`
 	AllowTicket    *bool       `json:"allow_ticket"`
@@ -758,15 +768,15 @@ type UpdateBotRequest struct {
 
 // SetWebhookRequest 设置Webhook请求
 type SetWebhookRequest struct {
-	URL string `json:"url"`
+	URL string `json:"url" binding:"omitempty,url,max=512"`
 }
 
 // SendNotificationRequest 发送通知请求
 type SendNotificationRequest struct {
-	TelegramID int64  `json:"telegram_id"`
-	Title      string `json:"title"`
-	Content    string `json:"content"`
-	Message    string `json:"message"`
+	TelegramID int64  `json:"telegram_id" binding:"required"`
+	Title      string `json:"title" binding:"omitempty,max=255"`
+	Content    string `json:"content" binding:"omitempty,max=4096"`
+	Message    string `json:"message" binding:"omitempty,max=4096"`
 }
 
 // BroadcastRequest 广播请求

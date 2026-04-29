@@ -72,7 +72,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestNftablesAnsibleFullChain() {
 	s.mustSetSystemConfig("forward.runtime.nodex_mode", false, "bool", "Enable NodeX forward runtime mode")
 	s.mustSetSystemConfig("forward.runtime_backend", model.ForwardRuntimeBackendNftablesAnsible, "string", "Forward runtime backend")
 	s.mustSetSystemConfig("forward.runtime.ansible.backend", model.ForwardRuntimeBackendNftablesAnsible, "string", "Forward runtime local backend")
-	s.mustSetSystemConfig("forward.runtime.ansible.config", map[string]interface{}{
+	s.mustSetSystemConfig("forward.runtime.ansible.config", map[string]any{
 		"inventory":      "inventory.ini",
 		"playbookApply":  "forward_apply.yml",
 		"playbookRemove": "forward_remove.yml",
@@ -105,7 +105,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestNftablesAnsibleFullChain() {
 	s.NotEmpty(s.mustSlice(doctorCommands["bash"]))
 
 	nodeID := s.mustCreateForwardNode("Ansible Relay", model.ForwardNodeTypeRelay, "192.0.2.10")
-	tunnelID := s.mustCreatePanelTunnel(map[string]interface{}{
+	tunnelID := s.mustCreatePanelTunnel(map[string]any{
 		"name":          "Ansible Tunnel",
 		"inNodeId":      nodeID,
 		"type":          1,
@@ -115,7 +115,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestNftablesAnsibleFullChain() {
 		"udpListenAddr": "[::]",
 		"protocol":      "tcp",
 	})
-	forwardID := s.mustCreatePanelForward(map[string]interface{}{
+	forwardID := s.mustCreatePanelForward(map[string]any{
 		"name":          "Ansible Forward",
 		"tunnelId":      tunnelID,
 		"inPort":        21001,
@@ -151,7 +151,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestNftablesAnsibleFullChain() {
 	s.Equal(model.ForwardRuntimeJobStatusSuccess, s.mustInt(forwards[0]["runtimeStatus"]))
 	s.Equal(model.ForwardStatusActive, s.mustInt(forwards[0]["status"]))
 
-	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/pause", map[string]interface{}{"id": forwardID})
+	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/pause", map[string]any{"id": forwardID})
 	s.mustRunLocalExecutor()
 	jobs = s.mustListRuntimeJobs(map[string]string{
 		"backend":    model.ForwardRuntimeBackendNftablesAnsible,
@@ -166,7 +166,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestNftablesAnsibleFullChain() {
 	s.Require().Len(forwards, 1)
 	s.Equal(model.ForwardStatusPaused, s.mustInt(forwards[0]["status"]))
 
-	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/resume", map[string]interface{}{"id": forwardID})
+	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/resume", map[string]any{"id": forwardID})
 	s.mustRunLocalExecutor()
 	jobs = s.mustListRuntimeJobs(map[string]string{
 		"backend":    model.ForwardRuntimeBackendNftablesAnsible,
@@ -181,7 +181,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestNftablesAnsibleFullChain() {
 	s.Require().Len(forwards, 1)
 	s.Equal(model.ForwardStatusActive, s.mustInt(forwards[0]["status"]))
 
-	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/force-delete", map[string]interface{}{"id": forwardID})
+	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/force-delete", map[string]any{"id": forwardID})
 	s.mustRunLocalExecutor()
 	jobs = s.mustListRuntimeJobs(map[string]string{
 		"backend":    model.ForwardRuntimeBackendNftablesAnsible,
@@ -220,7 +220,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestNodeXGostFullChain() {
 	s.NotEmpty(s.mustSlice(doctorCommands["bash"]))
 
 	nodeID := s.mustCreateForwardNode("NodeX Relay", model.ForwardNodeTypeRelay, "198.51.100.10")
-	tunnelID := s.mustCreatePanelTunnel(map[string]interface{}{
+	tunnelID := s.mustCreatePanelTunnel(map[string]any{
 		"name":          "NodeX Tunnel",
 		"inNodeId":      nodeID,
 		"type":          1,
@@ -230,7 +230,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestNodeXGostFullChain() {
 		"udpListenAddr": "[::]",
 		"protocol":      "tcp",
 	})
-	forwardID := s.mustCreatePanelForward(map[string]interface{}{
+	forwardID := s.mustCreatePanelForward(map[string]any{
 		"name":          "NodeX Forward",
 		"tunnelId":      tunnelID,
 		"inPort":        22001,
@@ -239,9 +239,9 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestNodeXGostFullChain() {
 		"strategy":      "fifo",
 	})
 
-	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/pause", map[string]interface{}{"id": forwardID})
-	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/resume", map[string]interface{}{"id": forwardID})
-	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/force-delete", map[string]interface{}{"id": forwardID})
+	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/pause", map[string]any{"id": forwardID})
+	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/resume", map[string]any{"id": forwardID})
+	s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/force-delete", map[string]any{"id": forwardID})
 
 	jobs := s.mustListRuntimeJobs(map[string]string{
 		"backend":    model.ForwardRuntimeBackendGost,
@@ -276,7 +276,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) loginAdmin(email, password string) st
 	}
 	s.Require().NoError(database.Get().Create(admin).Error)
 
-	body := s.mustRequest(http.MethodPost, "/api/v2/login", map[string]interface{}{
+	body := s.mustRequest(http.MethodPost, "/api/v2/login", map[string]any{
 		"email":    email,
 		"password": password,
 	}, "")
@@ -284,9 +284,9 @@ func (s *ForwardPanelRouterSmokeTestSuite) loginAdmin(email, password string) st
 	return s.mustString(data["token"])
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustSetSystemConfig(key string, value interface{}, valueType, description string) {
+func (s *ForwardPanelRouterSmokeTestSuite) mustSetSystemConfig(key string, value any, valueType, description string) {
 	s.T().Helper()
-	body := s.mustRequest(http.MethodPut, "/api/v2/admin/system/configs/"+key, map[string]interface{}{
+	body := s.mustRequest(http.MethodPut, "/api/v2/admin/system/configs/"+key, map[string]any{
 		"value":       value,
 		"type":        valueType,
 		"group":       "forward",
@@ -297,7 +297,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) mustSetSystemConfig(key string, value
 
 func (s *ForwardPanelRouterSmokeTestSuite) mustCreateForwardNode(name, nodeType, host string) uint {
 	s.T().Helper()
-	body := s.mustRequest(http.MethodPost, "/api/v2/admin/forward/nodes", map[string]interface{}{
+	body := s.mustRequest(http.MethodPost, "/api/v2/admin/forward/nodes", map[string]any{
 		"name":      name,
 		"type":      nodeType,
 		"host":      host,
@@ -311,21 +311,21 @@ func (s *ForwardPanelRouterSmokeTestSuite) mustCreateForwardNode(name, nodeType,
 	return s.mustUint(data["id"])
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustCreatePanelTunnel(payload map[string]interface{}) uint {
+func (s *ForwardPanelRouterSmokeTestSuite) mustCreatePanelTunnel(payload map[string]any) uint {
 	s.T().Helper()
 	body := s.mustPanelRequest(http.MethodPost, "/api/v2/admin/tunnel/create", payload)
 	data := s.mustMap(body["data"])
 	return s.mustUint(data["id"])
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustCreatePanelForward(payload map[string]interface{}) uint {
+func (s *ForwardPanelRouterSmokeTestSuite) mustCreatePanelForward(payload map[string]any) uint {
 	s.T().Helper()
 	body := s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/create", payload)
 	data := s.mustMap(body["data"])
 	return s.mustUint(data["id"])
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustListRuntimeJobs(filters map[string]string) []map[string]interface{} {
+func (s *ForwardPanelRouterSmokeTestSuite) mustListRuntimeJobs(filters map[string]string) []map[string]any {
 	s.T().Helper()
 	query := url.Values{}
 	for key, value := range filters {
@@ -342,9 +342,9 @@ func (s *ForwardPanelRouterSmokeTestSuite) mustListRuntimeJobs(filters map[strin
 	return s.toMapSlice(data["list"])
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustListPanelForwards() []map[string]interface{} {
+func (s *ForwardPanelRouterSmokeTestSuite) mustListPanelForwards() []map[string]any {
 	s.T().Helper()
-	body := s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/list", map[string]interface{}{})
+	body := s.mustPanelRequest(http.MethodPost, "/api/v2/admin/forward/list", map[string]any{})
 	return s.toMapSlice(body["data"])
 }
 
@@ -354,14 +354,14 @@ func (s *ForwardPanelRouterSmokeTestSuite) mustRunLocalExecutor() {
 	s.Require().NoError(executor.RunPendingJobs(context.Background()))
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustPanelRequest(method, path string, payload interface{}) map[string]interface{} {
+func (s *ForwardPanelRouterSmokeTestSuite) mustPanelRequest(method, path string, payload any) map[string]any {
 	s.T().Helper()
 	body := s.mustRequest(method, path, payload, s.adminToken)
 	s.Equal(float64(0), body["code"], "unexpected panel response: %#v", body)
 	return body
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustRequest(method, path string, payload interface{}, token string) map[string]interface{} {
+func (s *ForwardPanelRouterSmokeTestSuite) mustRequest(method, path string, payload any, token string) map[string]any {
 	s.T().Helper()
 
 	var requestBody *bytes.Reader
@@ -386,10 +386,10 @@ func (s *ForwardPanelRouterSmokeTestSuite) mustRequest(method, path string, payl
 	s.Equal(http.StatusOK, recorder.Code, "unexpected status for %s %s: %s", method, path, recorder.Body.String())
 
 	if recorder.Body.Len() == 0 {
-		return map[string]interface{}{}
+		return map[string]any{}
 	}
 
-	var body map[string]interface{}
+	var body map[string]any
 	s.Require().NoError(json.Unmarshal(recorder.Body.Bytes(), &body), "invalid json response for %s %s: %s", method, path, recorder.Body.String())
 	return body
 }
@@ -416,31 +416,31 @@ func (s *ForwardPanelRouterSmokeTestSuite) mustWriteFakeCommand(dir, baseName, m
 	return path
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustMap(value interface{}) map[string]interface{} {
+func (s *ForwardPanelRouterSmokeTestSuite) mustMap(value any) map[string]any {
 	s.T().Helper()
-	result, ok := value.(map[string]interface{})
+	result, ok := value.(map[string]any)
 	s.Require().True(ok, "expected map, got %T", value)
 	return result
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustSlice(value interface{}) []interface{} {
+func (s *ForwardPanelRouterSmokeTestSuite) mustSlice(value any) []any {
 	s.T().Helper()
-	result, ok := value.([]interface{})
+	result, ok := value.([]any)
 	s.Require().True(ok, "expected slice, got %T", value)
 	return result
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) toMapSlice(value interface{}) []map[string]interface{} {
+func (s *ForwardPanelRouterSmokeTestSuite) toMapSlice(value any) []map[string]any {
 	s.T().Helper()
 	items := s.mustSlice(value)
-	result := make([]map[string]interface{}, 0, len(items))
+	result := make([]map[string]any, 0, len(items))
 	for _, item := range items {
 		result = append(result, s.mustMap(item))
 	}
 	return result
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustUint(value interface{}) uint {
+func (s *ForwardPanelRouterSmokeTestSuite) mustUint(value any) uint {
 	s.T().Helper()
 	switch typed := value.(type) {
 	case float64:
@@ -457,7 +457,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) mustUint(value interface{}) uint {
 	}
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustInt(value interface{}) int {
+func (s *ForwardPanelRouterSmokeTestSuite) mustInt(value any) int {
 	s.T().Helper()
 	switch typed := value.(type) {
 	case float64:
@@ -472,14 +472,14 @@ func (s *ForwardPanelRouterSmokeTestSuite) mustInt(value interface{}) int {
 	}
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustString(value interface{}) string {
+func (s *ForwardPanelRouterSmokeTestSuite) mustString(value any) string {
 	s.T().Helper()
 	result, ok := value.(string)
 	s.Require().True(ok, "expected string, got %T", value)
 	return result
 }
 
-func (s *ForwardPanelRouterSmokeTestSuite) mustBool(value interface{}) bool {
+func (s *ForwardPanelRouterSmokeTestSuite) mustBool(value any) bool {
 	s.T().Helper()
 	result, ok := value.(bool)
 	s.Require().True(ok, "expected bool, got %T", value)
@@ -514,7 +514,7 @@ func newNodeXRuntimeMockServer(t *testing.T, token string) *nodeXRuntimeMockServ
 				return
 			}
 			defer r.Body.Close()
-			var payload map[string]interface{}
+			var payload map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return

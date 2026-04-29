@@ -285,7 +285,7 @@ func (h *SystemHandler) recordBackupConfigAudit(c *gin.Context, action string, c
 	}
 }
 
-func applyBackupSensitiveFieldUpdate(req map[string]interface{}, fieldName, currentValue string, preserveRequested bool) (updatedValue string, preserved bool) {
+func applyBackupSensitiveFieldUpdate(req map[string]any, fieldName, currentValue string, preserveRequested bool) (updatedValue string, preserved bool) {
 	rawValue, exists := req[fieldName]
 	if !exists {
 		return currentValue, false
@@ -395,8 +395,8 @@ func NewSystemHandler() *SystemHandler {
 // @Produce json
 // @Security BearerAuth
 // @Param group query string false "配置分组"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/system/configs [get]
 func (h *SystemHandler) GetConfigs(c *gin.Context) {
 	group := c.Query("group")
@@ -438,8 +438,8 @@ func (h *SystemHandler) GetConfigs(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param key path string true "配置键名"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/system/configs/{key} [get]
 func (h *SystemHandler) GetConfig(c *gin.Context) {
 	key := c.Param("key")
@@ -475,20 +475,20 @@ func (h *SystemHandler) GetConfig(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param key path string true "配置键名"
-// @Param request body map[string]interface{} true "配置值"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Param request body map[string]any true "配置值"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/system/configs/{key} [put]
 func (h *SystemHandler) SetConfig(c *gin.Context) {
 	key := c.Param("key")
 
 	var req struct {
 		Value            json.RawMessage `json:"value"`
-		Type             string          `json:"type"`
-		Group            string          `json:"group"`
-		Remark           string          `json:"remark"`
-		Description      string          `json:"description"`
+		Type             string          `json:"type" binding:"omitempty,oneof=string number boolean json bool int"`
+		Group            string          `json:"group" binding:"omitempty,max=64"`
+		Remark           string          `json:"remark" binding:"omitempty,max=255"`
+		Description      string          `json:"description" binding:"omitempty,max=255"`
 		PreserveExisting bool            `json:"preserve_existing"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -593,8 +593,8 @@ func (h *SystemHandler) SetConfig(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param key path string true "配置键名"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/system/configs/{key} [delete]
 func (h *SystemHandler) DeleteConfig(c *gin.Context) {
 	key := c.Param("key")
@@ -626,8 +626,8 @@ func (h *SystemHandler) DeleteConfig(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/system/backup/config [get]
 func (h *SystemHandler) GetBackupConfig(c *gin.Context) {
 	cfg, err := h.backupService.GetConfig()
@@ -647,9 +647,9 @@ func (h *SystemHandler) GetBackupConfig(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body model.BackupConfig true "备份配置"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/system/backup/config [put]
 func (h *SystemHandler) UpdateBackupConfig(c *gin.Context) {
 	currentCfg, err := h.backupService.GetConfig()
@@ -659,7 +659,7 @@ func (h *SystemHandler) UpdateBackupConfig(c *gin.Context) {
 	}
 
 	cfg := *currentCfg
-	var req map[string]interface{}
+	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -755,8 +755,8 @@ func (h *SystemHandler) UpdateBackupConfig(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param type query string false "备份类型 (database/full)" default(database)
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/system/backup [post]
 func (h *SystemHandler) CreateBackup(c *gin.Context) {
 	backupType := c.DefaultQuery("type", "database")
@@ -781,12 +781,13 @@ func (h *SystemHandler) CreateBackup(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页数量" default(20)
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/system/backups [get]
 func (h *SystemHandler) ListBackups(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = ClampPagination(page, pageSize)
 
 	records, total, err := h.backupService.ListBackups(page, pageSize)
 	if err != nil {
@@ -839,8 +840,8 @@ func (h *SystemHandler) ListBackups(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/system/backup/stats [get]
 func (h *SystemHandler) GetBackupStats(c *gin.Context) {
 	stats, err := h.backupService.GetBackupStats()
@@ -866,8 +867,8 @@ func (h *SystemHandler) GetBackupStats(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "备份ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/system/backups/{id} [delete]
 func (h *SystemHandler) DeleteBackup(c *gin.Context) {
 	id := c.Param("id")
@@ -900,8 +901,8 @@ func (h *SystemHandler) DeleteBackup(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "备份ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/system/backups/{id}/restore [post]
 func (h *SystemHandler) RestoreBackup(c *gin.Context) {
 	id := c.Param("id")
@@ -933,9 +934,9 @@ type LoadBalancerHandler struct {
 }
 
 func loadBalancerResponse(lb *model.LoadBalancer) gin.H {
-	weights := interface{}(map[string]interface{}{})
+	weights := any(map[string]any{})
 	if lb.NodeWeights != "" {
-		var decoded interface{}
+		var decoded any
 		if err := json.Unmarshal([]byte(lb.NodeWeights), &decoded); err == nil {
 			weights = decoded
 		}
@@ -959,12 +960,12 @@ func loadBalancerResponse(lb *model.LoadBalancer) gin.H {
 }
 
 type loadBalancerRequest struct {
-	Name          string          `json:"name"`
-	GroupID       uint            `json:"group_id"`
-	Strategy      string          `json:"strategy"`
+	Name          string          `json:"name" binding:"omitempty,min=1,max=255"`
+	GroupID       uint            `json:"group_id" binding:"omitempty,gt=0"`
+	Strategy      string          `json:"strategy" binding:"omitempty,oneof=round-robin least-connections least-load weighted-random weight latency"`
 	HealthCheck   *bool           `json:"health_check"`
-	CheckInterval int             `json:"check_interval"`
-	CheckTimeout  int             `json:"check_timeout"`
+	CheckInterval int             `json:"check_interval" binding:"omitempty,gt=0"`
+	CheckTimeout  int             `json:"check_timeout" binding:"omitempty,gt=0"`
 	Enabled       *bool           `json:"enabled"`
 	NodeWeights   string          `json:"node_weights"`
 	Weights       json.RawMessage `json:"weights"`
@@ -1015,11 +1016,14 @@ func NewLoadBalancerHandler() *LoadBalancerHandler {
 // @Produce json
 // @Security BearerAuth
 // @Param group_id query int false "分组ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/loadbalancers [get]
 func (h *LoadBalancerHandler) ListLoadBalancers(c *gin.Context) {
 	groupID, _ := strconv.Atoi(c.Query("group_id"))
+	if groupID < 0 {
+		groupID = 0
+	}
 
 	lbs, err := h.lbService.List(uint(groupID))
 	if err != nil {
@@ -1050,9 +1054,9 @@ func (h *LoadBalancerHandler) ListLoadBalancers(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body model.LoadBalancer true "负载均衡器配置"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/loadbalancers [post]
 func (h *LoadBalancerHandler) CreateLoadBalancer(c *gin.Context) {
 	var req loadBalancerRequest
@@ -1084,13 +1088,17 @@ func (h *LoadBalancerHandler) CreateLoadBalancer(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "负载均衡器ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /admin/loadbalancers/{id} [get]
 func (h *LoadBalancerHandler) GetLoadBalancer(c *gin.Context) {
 	id := c.Param("id")
 
-	lbID, _ := strconv.ParseUint(id, 10, 32)
+	lbID, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
 	lb, err := h.lbService.GetByID(uint(lbID))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "load balancer not found"})
@@ -1109,15 +1117,19 @@ func (h *LoadBalancerHandler) GetLoadBalancer(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "负载均衡器ID"
 // @Param request body model.LoadBalancer true "负载均衡器配置"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/loadbalancers/{id} [put]
 func (h *LoadBalancerHandler) UpdateLoadBalancer(c *gin.Context) {
 	id := c.Param("id")
 
-	lbID, _ := strconv.ParseUint(id, 10, 32)
+	lbID, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
 	lb, err := h.lbService.GetByID(uint(lbID))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "load balancer not found"})
@@ -1147,13 +1159,17 @@ func (h *LoadBalancerHandler) UpdateLoadBalancer(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "负载均衡器ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/loadbalancers/{id} [delete]
 func (h *LoadBalancerHandler) DeleteLoadBalancer(c *gin.Context) {
 	id := c.Param("id")
 
-	lbID, _ := strconv.ParseUint(id, 10, 32)
+	lbID, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
 	if err := h.lbService.Delete(uint(lbID)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -1170,8 +1186,8 @@ func (h *LoadBalancerHandler) DeleteLoadBalancer(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "负载均衡器ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/loadbalancers/{id}/stats [get]
 func (h *LoadBalancerHandler) GetLoadBalancerStats(c *gin.Context) {
 	id := c.Param("id")
@@ -1198,8 +1214,8 @@ func (h *LoadBalancerHandler) GetLoadBalancerStats(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "负载均衡器ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/loadbalancers/{id}/check [post]
 func (h *LoadBalancerHandler) RunHealthCheck(c *gin.Context) {
 	id := c.Param("id")

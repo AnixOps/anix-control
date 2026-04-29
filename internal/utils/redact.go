@@ -97,8 +97,8 @@ var SensitiveKeys = []string{
 }
 
 // RedactMap 脱敏 Map 中的敏感字段
-func RedactMap(data map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
+func RedactMap(data map[string]any) map[string]any {
+	result := make(map[string]any)
 	for key, value := range data {
 		lowerKey := strings.ToLower(key)
 		isSensitive := false
@@ -116,7 +116,7 @@ func RedactMap(data map[string]interface{}) map[string]interface{} {
 			}
 		} else {
 			// 递归处理嵌套 map
-			if nested, ok := value.(map[string]interface{}); ok {
+			if nested, ok := value.(map[string]any); ok {
 				result[key] = RedactMap(nested)
 			} else {
 				result[key] = value
@@ -131,7 +131,7 @@ func RedactJSON(jsonStr string) string {
 	if jsonStr == "" {
 		return ""
 	}
-	var data map[string]interface{}
+	var data map[string]any
 	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
 		// 不是有效 JSON，尝试正则替换
 		return redactJSONRegex(jsonStr)
@@ -154,18 +154,18 @@ func redactJSONRegex(jsonStr string) string {
 
 // LogSafe 生成安全的日志字符串
 type LogSafe struct {
-	fields map[string]interface{}
+	fields map[string]any
 }
 
 // NewLogSafe 创建安全日志对象
 func NewLogSafe() *LogSafe {
 	return &LogSafe{
-		fields: make(map[string]interface{}),
+		fields: make(map[string]any),
 	}
 }
 
 // Set 设置字段（自动判断是否脱敏）
-func (l *LogSafe) Set(key string, value interface{}) *LogSafe {
+func (l *LogSafe) Set(key string, value any) *LogSafe {
 	lowerKey := strings.ToLower(key)
 	for _, sk := range SensitiveKeys {
 		if strings.Contains(lowerKey, sk) {
@@ -182,7 +182,7 @@ func (l *LogSafe) Set(key string, value interface{}) *LogSafe {
 }
 
 // SetRaw 设置字段（不脱敏，用于非敏感字段）
-func (l *LogSafe) SetRaw(key string, value interface{}) *LogSafe {
+func (l *LogSafe) SetRaw(key string, value any) *LogSafe {
 	l.fields[key] = value
 	return l
 }
@@ -206,6 +206,6 @@ func (l *LogSafe) String() string {
 }
 
 // Fields 获取所有字段
-func (l *LogSafe) Fields() map[string]interface{} {
+func (l *LogSafe) Fields() map[string]any {
 	return l.fields
 }

@@ -2416,7 +2416,7 @@ func (s *PanelForwardServiceTestSuite) TestCreateForward_IptablesAnsibleQueuesLo
 			ApplyPlaybook:  "/opt/ansible/iptables-forward-apply.yml",
 			RemovePlaybook: "/opt/ansible/iptables-forward-remove.yml",
 			Become:         true,
-			ExtraVars: map[string]interface{}{
+			ExtraVars: map[string]any{
 				"manage_with": "iptables",
 			},
 		},

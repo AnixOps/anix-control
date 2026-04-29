@@ -164,7 +164,7 @@ func main() {
 }
 
 // printJSON 鎵撳嵃 JSON 鏍煎紡
-func printJSON(v interface{}) {
+func printJSON(v any) {
 	data, _ := json.MarshalIndent(v, "", "  ")
 	fmt.Println(string(data))
 }

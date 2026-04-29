@@ -497,7 +497,7 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleQueuesLoc
 			ApplyPlaybook:  "/opt/ansible/apply.yml",
 			RemovePlaybook: "/opt/ansible/remove.yml",
 			Become:         true,
-			ExtraVars: map[string]interface{}{
+			ExtraVars: map[string]any{
 				"manage_with": "iptables",
 			},
 		},

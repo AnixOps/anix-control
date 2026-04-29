@@ -87,7 +87,7 @@ func (f *V2RayFormatter) formatVMess(node *model.ParsedNode, ctx *model.Template
 		network = "tcp"
 	}
 
-	vmess := map[string]interface{}{
+	vmess := map[string]any{
 		"v":    "2",
 		"ps":   node.Name,
 		"add":  node.Server,
@@ -118,12 +118,15 @@ func (f *V2RayFormatter) formatVMess(node *model.ParsedNode, ctx *model.Template
 	// 传输层配置
 	f.applyVMessTransport(vmess, node)
 
-	data, _ := json.Marshal(vmess)
+	data, err := json.Marshal(vmess)
+	if err != nil {
+		return "", err
+	}
 	return "vmess://" + base64.StdEncoding.EncodeToString(data), nil
 }
 
 // applyVMessTransport 应用 VMess 传输层配置
-func (f *V2RayFormatter) applyVMessTransport(vmess map[string]interface{}, node *model.ParsedNode) {
+func (f *V2RayFormatter) applyVMessTransport(vmess map[string]any, node *model.ParsedNode) {
 	if node.TransportSettings == nil {
 		return
 	}
@@ -136,7 +139,7 @@ func (f *V2RayFormatter) applyVMessTransport(vmess map[string]interface{}, node 
 		if host, ok := node.TransportSettings["host"].(string); ok {
 			vmess["host"] = host
 		}
-		if headers, ok := node.TransportSettings["headers"].(map[string]interface{}); ok {
+		if headers, ok := node.TransportSettings["headers"].(map[string]any); ok {
 			if h, ok := headers["Host"].(string); ok {
 				vmess["host"] = h
 			}
@@ -252,7 +255,7 @@ func (f *V2RayFormatter) applyVLESSTransport(params url.Values, node *model.Pars
 		if host, ok := node.TransportSettings["host"].(string); ok && host != "" {
 			params.Set("host", host)
 		}
-		if headers, ok := node.TransportSettings["headers"].(map[string]interface{}); ok {
+		if headers, ok := node.TransportSettings["headers"].(map[string]any); ok {
 			if h, ok := headers["Host"].(string); ok && h != "" {
 				params.Set("host", h)
 			}
@@ -557,7 +560,7 @@ func (f *ClashFormatter) FileExtension() string {
 }
 
 func (f *ClashFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRenderContext) ([]byte, error) {
-	proxies := make([]map[string]interface{}, 0, len(nodes))
+	proxies := make([]map[string]any, 0, len(nodes))
 	proxyNames := make([]string, 0, len(nodes))
 
 	for _, node := range nodes {
@@ -574,14 +577,14 @@ func (f *ClashFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRe
 	}
 
 	// 构建 Clash Meta 配置
-	clash := map[string]interface{}{
+	clash := map[string]any{
 		"mixed-port":          7890,
 		"allow-lan":           false,
 		"mode":                "rule",
 		"log-level":           "info",
 		"external-controller": "127.0.0.1:9090",
 		"proxies":             proxies,
-		"proxy-groups": []map[string]interface{}{
+		"proxy-groups": []map[string]any{
 			{
 				"name":    "🚀 节点选择",
 				"type":    "select",
@@ -608,8 +611,8 @@ func (f *ClashFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRe
 	return yaml.Marshal(clash)
 }
 
-func (f *ClashFormatter) buildProxy(node *model.ParsedNode, ctx *model.TemplateRenderContext) map[string]interface{} {
-	proxy := map[string]interface{}{
+func (f *ClashFormatter) buildProxy(node *model.ParsedNode, ctx *model.TemplateRenderContext) map[string]any {
+	proxy := map[string]any{
 		"name":   node.Name,
 		"type":   node.Type,
 		"server": node.Server,
@@ -638,7 +641,7 @@ func (f *ClashFormatter) buildProxy(node *model.ParsedNode, ctx *model.TemplateR
 	return proxy
 }
 
-func (f *ClashFormatter) buildVMess(proxy map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *ClashFormatter) buildVMess(proxy map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	uuid := node.UUID
 	if uuid == "" && ctx != nil {
 		uuid = ctx.UUID
@@ -678,7 +681,7 @@ func (f *ClashFormatter) buildVMess(proxy map[string]interface{}, node *model.Pa
 	f.addTransportOpts(proxy, node)
 }
 
-func (f *ClashFormatter) buildVLESS(proxy map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *ClashFormatter) buildVLESS(proxy map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	uuid := node.UUID
 	if uuid == "" && ctx != nil {
 		uuid = ctx.UUID
@@ -704,7 +707,7 @@ func (f *ClashFormatter) buildVLESS(proxy map[string]interface{}, node *model.Pa
 	// TLS / Reality
 	if node.TLSMode == 2 || node.RealityPublicKey != "" {
 		proxy["tls"] = true
-		realityOpts := map[string]interface{}{
+		realityOpts := map[string]any{
 			"public-key": node.RealityPublicKey,
 		}
 		if node.RealityShortID != "" {
@@ -738,7 +741,7 @@ func (f *ClashFormatter) buildVLESS(proxy map[string]interface{}, node *model.Pa
 	f.addTransportOpts(proxy, node)
 }
 
-func (f *ClashFormatter) buildTrojan(proxy map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *ClashFormatter) buildTrojan(proxy map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	password := node.Password
 	if password == "" && ctx != nil {
 		password = ctx.UUID
@@ -768,7 +771,7 @@ func (f *ClashFormatter) buildTrojan(proxy map[string]interface{}, node *model.P
 	f.addTransportOpts(proxy, node)
 }
 
-func (f *ClashFormatter) buildShadowsocks(proxy map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *ClashFormatter) buildShadowsocks(proxy map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	proxy["type"] = "ss"
 	password := node.Password
 	if password == "" && ctx != nil {
@@ -804,7 +807,7 @@ func (f *ClashFormatter) buildShadowsocks(proxy map[string]interface{}, node *mo
 	proxy["udp"] = true
 }
 
-func (f *ClashFormatter) buildHysteria2(proxy map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *ClashFormatter) buildHysteria2(proxy map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	proxy["type"] = "hysteria2"
 	password := node.Password
 	if password == "" && ctx != nil {
@@ -836,7 +839,7 @@ func (f *ClashFormatter) buildHysteria2(proxy map[string]interface{}, node *mode
 	}
 }
 
-func (f *ClashFormatter) buildTUIC(proxy map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *ClashFormatter) buildTUIC(proxy map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	uuid := node.UUID
 	if uuid == "" && ctx != nil {
 		uuid = ctx.UUID
@@ -865,7 +868,7 @@ func (f *ClashFormatter) buildTUIC(proxy map[string]interface{}, node *model.Par
 	}
 }
 
-func (f *ClashFormatter) buildAnyTLS(proxy map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *ClashFormatter) buildAnyTLS(proxy map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	proxy["type"] = "anytls"
 	password := node.Password
 	if password == "" && ctx != nil {
@@ -884,19 +887,19 @@ func (f *ClashFormatter) buildAnyTLS(proxy map[string]interface{}, node *model.P
 	}
 }
 
-func (f *ClashFormatter) addTransportOpts(proxy map[string]interface{}, node *model.ParsedNode) {
+func (f *ClashFormatter) addTransportOpts(proxy map[string]any, node *model.ParsedNode) {
 	if node.TransportSettings == nil {
 		return
 	}
 
 	switch node.Transport {
 	case "ws":
-		wsOpts := map[string]interface{}{}
+		wsOpts := map[string]any{}
 		if path, ok := node.TransportSettings["path"].(string); ok {
 			wsOpts["path"] = path
 		}
 		if host, ok := node.TransportSettings["host"].(string); ok {
-			wsOpts["headers"] = map[string]interface{}{
+			wsOpts["headers"] = map[string]any{
 				"Host": host,
 			}
 		}
@@ -905,7 +908,7 @@ func (f *ClashFormatter) addTransportOpts(proxy map[string]interface{}, node *mo
 		}
 
 	case "grpc":
-		grpcOpts := map[string]interface{}{}
+		grpcOpts := map[string]any{}
 		if sn, ok := node.TransportSettings["serviceName"].(string); ok {
 			grpcOpts["grpc-service-name"] = sn
 		}
@@ -914,7 +917,7 @@ func (f *ClashFormatter) addTransportOpts(proxy map[string]interface{}, node *mo
 		}
 
 	case "h2":
-		h2Opts := map[string]interface{}{}
+		h2Opts := map[string]any{}
 		if path, ok := node.TransportSettings["path"].(string); ok {
 			h2Opts["path"] = path
 		}
@@ -1088,7 +1091,7 @@ func (f *SurgeFormatter) formatVMess(node *model.ParsedNode, ctx *model.Template
 			}
 			if host, ok := node.TransportSettings["host"].(string); ok && host != "" {
 				parts = append(parts, fmt.Sprintf("ws-headers=Host:%s", host))
-			} else if headers, ok := node.TransportSettings["headers"].(map[string]interface{}); ok {
+			} else if headers, ok := node.TransportSettings["headers"].(map[string]any); ok {
 				if host, ok := headers["Host"].(string); ok && host != "" {
 					parts = append(parts, fmt.Sprintf("ws-headers=Host:%s", host))
 				}
@@ -1141,7 +1144,7 @@ func (f *SurgeFormatter) formatTrojan(node *model.ParsedNode, ctx *model.Templat
 			}
 			if host, ok := node.TransportSettings["host"].(string); ok && host != "" {
 				parts = append(parts, fmt.Sprintf("ws-headers=Host:%s", host))
-			} else if headers, ok := node.TransportSettings["headers"].(map[string]interface{}); ok {
+			} else if headers, ok := node.TransportSettings["headers"].(map[string]any); ok {
 				if host, ok := headers["Host"].(string); ok && host != "" {
 					parts = append(parts, fmt.Sprintf("ws-headers=Host:%s", host))
 				}
@@ -1331,10 +1334,10 @@ func (f *Base64JSONFormatter) Format(nodes []*model.ParsedNode, ctx *model.Templ
 	}
 
 	// 构建响应
-	response := map[string]interface{}{
+	response := map[string]any{
 		"version": 1,
 		"groups":  grouped,
-		"user": map[string]interface{}{
+		"user": map[string]any{
 			"uuid":            ctx.UUID,
 			"expired_at":      ctx.ExpiredAt,
 			"speed_limit":     ctx.SpeedLimit,

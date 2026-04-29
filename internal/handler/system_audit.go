@@ -60,8 +60,8 @@ func auditLogResponse(entry *model.OperationLog) gin.H {
 // @Param action query string false "Filter by action"
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/system/audit-logs [get]
 func (h *SystemHandler) GetAuditLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
