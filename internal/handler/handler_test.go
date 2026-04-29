@@ -15,6 +15,7 @@ import (
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
+	"github.com/anixops/v2board/internal/tests/testutil"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -148,28 +149,7 @@ func (s *HandlerTestSuite) SetupTest() {
 		s.SetupSuite()
 	}
 
-	// 清理数据 (忽略表不存在的错误，AutoMigrate 会创建表)
-	tables := []string{
-		"v2_user", "v2_node", "v2_node_protocol", "v2_plan", "v2_order",
-		"v2_authorized_key", "v2_coupon", "v2_ticket", "v2_ticket_message",
-		"v2_knowledge", "v2_invite_code", "v2_commission_record",
-		"v2_commission_withdraw", "v2_invite_config", "v2_notification_template",
-		"v2_notification_log", "v2_telegram_bot", "v2_telegram_user", "v2_telegram_chat", "v2_system_config",
-		"v2_payment_gateway", "v2_payment_record", "v2_forward_node", "v2_forward",
-		"v2_forward_tunnel", "v2_forward_user_tunnel", "v2_forward_runtime_job", "v2_forward_traffic_cursor", "v2_forward_rule", "v2_backup_config", "v2_backup_record",
-		"v2_operation_log", "v2_load_balancer", "v2_user_subscription_group",
-		"v2_plan_subscription_group", "v2_event", "v2_subscription_group",
-		"v2_subscription_template",
-	}
-	for _, table := range tables {
-		s.db.Exec("DELETE FROM " + table)
-	}
-
-	// 重置自增计数器
-	s.db.Exec("DELETE FROM sqlite_sequence WHERE name IN ('v2_user', 'v2_plan', 'v2_order', 'v2_node', 'v2_node_protocol')")
-	s.db.Exec("DELETE FROM sqlite_sequence WHERE name IN ('v2_user', 'v2_plan', 'v2_order', 'v2_node', 'v2_node_protocol')")
-	s.db.Exec("DELETE FROM v2_subscription_group")
-	s.db.Exec("DELETE FROM v2_subscription_template")
+	testutil.CleanupDB(s.db)
 }
 
 // AuthHandlerTestSuite 认证 Handler 测试套件

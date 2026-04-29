@@ -33,23 +33,24 @@ func (t *TestDB) Close() {
 	}
 }
 
-// Cleanup 清理所有数据
+// Cleanup 清理所有表数据，自动发现所有表并重置自增计数器。
+// 不需要手动维护表名列表。
 func (t *TestDB) Cleanup() {
-	t.DB.Exec("DELETE FROM v2_user")
-	t.DB.Exec("DELETE FROM v2_plan")
-	t.DB.Exec("DELETE FROM v2_order")
-	t.DB.Exec("DELETE FROM v2_node")
-	t.DB.Exec("DELETE FROM v2_node_protocol")
-	t.DB.Exec("DELETE FROM v2_payment")
-	t.DB.Exec("DELETE FROM v2_payment_log")
-	t.DB.Exec("DELETE FROM v2_ticket")
-	t.DB.Exec("DELETE FROM v2_coupon")
-	t.DB.Exec("DELETE FROM v2_knowledge")
-	t.DB.Exec("DELETE FROM v2_subscription_group")
-	t.DB.Exec("DELETE FROM v2_subscription_template")
-	t.DB.Exec("DELETE FROM v2_authorized_key")
-	t.DB.Exec("DELETE FROM v2_stat_user")
-	t.DB.Exec("DELETE FROM v2_stat_server")
+	CleanupDB(t.DB)
+}
+
+// CleanupDB 清理指定 GORM 连接中的所有表数据。
+// handler_test.go 和 service_test.go 可直接调用此函数。
+func CleanupDB(db *gorm.DB) {
+	tables, err := db.Migrator().GetTables()
+	if err != nil {
+		return
+	}
+	for _, table := range tables {
+		db.Exec("DELETE FROM " + table)
+	}
+	// 重置自增计数器，确保测试数据 ID 可预测
+	db.Exec("DELETE FROM sqlite_sequence")
 }
 
 // TestConfig 创建测试配置

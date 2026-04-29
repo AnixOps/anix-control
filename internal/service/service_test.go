@@ -13,6 +13,7 @@ import (
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
+	"github.com/anixops/v2board/internal/tests/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/crypto/bcrypt"
@@ -129,55 +130,8 @@ func TestMain(m *testing.M) {
 }
 
 func (s *ServiceTestSuite) SetupTest() {
-	// 娓呯悊鏁版嵁
-	db := database.Get()
-	db.Exec("DELETE FROM v2_user")
-	db.Exec("DELETE FROM v2_plan")
-	db.Exec("DELETE FROM v2_order")
-	db.Exec("DELETE FROM v2_node")
-	db.Exec("DELETE FROM v2_node_protocol")
-	db.Exec("DELETE FROM v2_authorized_key")
-	db.Exec("DELETE FROM v2_forward_node")
-	db.Exec("DELETE FROM v2_forward_rule")
-	db.Exec("DELETE FROM v2_forward_stats")
-	db.Exec("DELETE FROM v2_forward")
-	db.Exec("DELETE FROM v2_forward_runtime_job")
-	db.Exec("DELETE FROM v2_forward_traffic_cursor")
-	db.Exec("DELETE FROM v2_forward_user_tunnel")
-	db.Exec("DELETE FROM v2_forward_tunnel")
-	db.Exec("DELETE FROM v2_speed_limit")
-	db.Exec("DELETE FROM v2_user_mfa")
-	db.Exec("DELETE FROM v2_mfa_login_attempt")
-	db.Exec("DELETE FROM v2_invite_code")
-	db.Exec("DELETE FROM v2_invite_config")
-	db.Exec("DELETE FROM v2_commission_record")
-	db.Exec("DELETE FROM v2_commission_withdraw")
-	db.Exec("DELETE FROM v2_subscription_group")
-	db.Exec("DELETE FROM v2_subscription_template")
-	db.Exec("DELETE FROM v2_user_subscription_group")
-	db.Exec("DELETE FROM v2_plan_subscription_group")
-	db.Exec("DELETE FROM v2_notification_template")
-	db.Exec("DELETE FROM v2_notification_log")
-	db.Exec("DELETE FROM v2_payment_gateway")
-	db.Exec("DELETE FROM v2_payment_record")
-	db.Exec("DELETE FROM v2_load_balancer")
-	db.Exec("DELETE FROM v2_telegram_bot")
-	db.Exec("DELETE FROM v2_telegram_user")
-	db.Exec("DELETE FROM v2_telegram_chat")
-	db.Exec("DELETE FROM v2_system_config")
-	db.Exec("DELETE FROM v2_backup_config")
-	db.Exec("DELETE FROM v2_backup_record")
-	db.Exec("DELETE FROM v2_server_vmess")
-	db.Exec("DELETE FROM v2_server_vless")
-	db.Exec("DELETE FROM v2_server_trojan")
-	db.Exec("DELETE FROM v2_server_shadowsocks")
-	db.Exec("DELETE FROM v2_server_hysteria")
-	db.Exec("DELETE FROM v2_server_tuic")
-	db.Exec("DELETE FROM v2_server_anytls")
-	db.Exec("DELETE FROM v2_server_route")
-	db.Exec("DELETE FROM v2_server_log")
-	db.Exec("DELETE FROM v2_stat_user")
-	db.Exec("DELETE FROM v2_stat_server")
+	// 清理数据（自动发现所有表）
+	testutil.CleanupDB(database.Get())
 }
 
 // AuthServiceTestSuite 璁よ瘉鏈嶅姟娴嬭瘯濂椾欢

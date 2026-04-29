@@ -1,5 +1,6 @@
 .PHONY: build run clean test test-unit test-e2e test-coverage test-coverage-html test-integration test-frontend
 .PHONY: pre-deploy deploy docker-build docker-run lint vet fmt bench grpc-gen swagger
+.PHONY: test-quick test-clean test-summary test-grpc test-cmd
 
 # 鐗堟湰淇℃伅
 VERSION := 2.0.2-test.1
@@ -50,39 +51,59 @@ clean:
 	go clean -testcache
 
 # ==========================================
-# 娴嬭瘯鐩稿叧
+# 测试相关
 # ==========================================
 
-# 杩愯鎵€鏈夋祴璇?
+# 运行所有单元测试（默认）
 test: test-unit
 
-# 杩愯鍗曞厓娴嬭瘯
+# 运行单元测试
 test-unit:
 	@echo "Running unit tests..."
-	go test $(GO_TEST_FLAGS) ./internal/...
+	GOWORK=off go test $(GO_TEST_FLAGS) ./internal/...
 
-# 杩愯 gRPC 娴嬭瘯
+# 运行 gRPC 测试
 test-grpc:
 	@echo "Running gRPC tests..."
-	go test $(GO_TEST_FLAGS) ./internal/grpc/...
+	GOWORK=off go test $(GO_TEST_FLAGS) -coverprofile=grpc_coverage.out ./internal/grpc/...
+	@echo "gRPC coverage:"; go tool cover -func=grpc_coverage.out | grep total
 
-# 杩愯闆嗘垚娴嬭瘯
+# 运行集成测试（需要 integration build tag）
 test-integration:
 	@echo "Running integration tests..."
-	go test $(GO_TEST_FLAGS) -tags=integration ./internal/tests/integration/...
+	GOWORK=off go test $(GO_TEST_FLAGS) -tags=integration ./internal/tests/integration/...
 
-# 杩愯 e2e 娴嬭瘯
+# 运行 E2E 测试
 test-e2e:
 	@echo "Running e2e tests..."
-	go test $(GO_TEST_FLAGS) ./internal/tests/e2e/...
+	GOWORK=off go test -v -count=1 ./internal/tests/e2e/...
 
-# 杩愯瑕嗙洊鐜囨祴璇?
+# 运行 cmd 包测试
+test-cmd:
+	@echo "Running cmd tests..."
+	GOWORK=off go test $(GO_TEST_FLAGS) ./cmd/...
+
+# 快速测试：遇到失败立即停止
+test-quick:
+	@echo "Running tests (fail-fast)..."
+	GOWORK=off go test -v -race -failfast -timeout 5m $(filter-out $@,$(MAKECMDGOALS))
+
+# 运行全部测试（分阶段执行，避免数据库干扰）
+test-all: test-unit test-grpc test-e2e
+	@echo "All test suites passed!"
+
+# 简洁模式：只显示结果不显示详细日志
+test-summary:
+	@echo "Running tests (summary only)..."
+	GOWORK=off go test -count=1 ./internal/... 2>&1 | grep -E "^(ok|FAIL|---)"
+
+# 运行覆盖率测试
 test-coverage:
 	@echo "Running tests with coverage..."
-	go test -coverprofile=$(COVERAGE_FILE) -covermode=atomic ./...
+	GOWORK=off go test -coverprofile=$(COVERAGE_FILE) -covermode=atomic ./internal/... ./cmd/...
 	@go tool cover -func=$(COVERAGE_FILE) | tail -1
 
-# 妫€鏌ヨ鐩栫巼闃堝€?
+# 检查覆盖率阈值
 test-coverage-check: test-coverage
 	@echo "Checking coverage threshold ($(MIN_COVERAGE)%)..."
 	@COVERAGE=$$(go tool cover -func=$(COVERAGE_FILE) | grep total | awk '{print $$3}' | sed 's/%//'); \
@@ -90,14 +111,23 @@ test-coverage-check: test-coverage
 		echo "Error: Coverage $$COVERAGE% is below minimum $(MIN_COVERAGE)%"; \
 		exit 1; \
 	fi; \
-	echo "鉁?Coverage $$COVERAGE% meets minimum $(MIN_COVERAGE)%"
+	echo "Coverage $$COVERAGE% meets minimum $(MIN_COVERAGE)%"
 
-# 鐢熸垚 HTML 瑕嗙洊鐜囨姤鍛?
+# 生成 HTML 覆盖率报告
 test-coverage-html: test-coverage
 	@echo "Generating HTML coverage report..."
 	mkdir -p coverage
 	go tool cover -html=$(COVERAGE_FILE) -o coverage/$(COVERAGE_HTML)
 	@echo "Coverage report generated: coverage/$(COVERAGE_HTML)"
+
+# 清理测试缓存和临时文件
+test-clean:
+	@echo "Cleaning test cache..."
+	go clean -testcache
+	rm -f *_coverage.out $(COVERAGE_FILE) $(COVERAGE_HTML)
+	find . -name "v2board_*_test.db" -delete 2>/dev/null || true
+	find . -name "*.test" -delete 2>/dev/null || true
+	@echo "Test cache cleaned."
 
 # 鍓嶇娴嬭瘯
 test-frontend:
