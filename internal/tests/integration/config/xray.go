@@ -58,7 +58,7 @@ func (g *XrayGenerator) Generate(cfg *ClientConfig) ([]byte, error) {
 				Listen:  "127.0.0.1",
 				Tag:     "socks-in",
 				Protocol: "socks",
-				Settings: map[string]interface{}{
+				Settings: map[string]any{
 					"udp": true,
 				},
 			},
@@ -122,15 +122,15 @@ func (g *XrayGenerator) generateOutbound(cfg *ClientConfig) XrayOutbound {
 }
 
 // generateOutboundSettings 生成出站设置
-func (g *XrayGenerator) generateOutboundSettings(cfg *ClientConfig) map[string]interface{} {
+func (g *XrayGenerator) generateOutboundSettings(cfg *ClientConfig) map[string]any {
 	switch cfg.Server.Protocol {
 	case ProtocolVMess:
-		return map[string]interface{}{
-			"vnext": []map[string]interface{}{
+		return map[string]any{
+			"vnext": []map[string]any{
 				{
 					"address": cfg.Server.Host,
 					"port":    cfg.Server.Port,
-					"users": []map[string]interface{}{
+					"users": []map[string]any{
 						{
 							"id":       cfg.User.UUID,
 							"alterId":  cfg.User.AlterID,
@@ -142,26 +142,26 @@ func (g *XrayGenerator) generateOutboundSettings(cfg *ClientConfig) map[string]i
 		}
 
 	case ProtocolVLESS:
-		user := map[string]interface{}{
+		user := map[string]any{
 			"id":    cfg.User.UUID,
 			"email": cfg.User.Email,
 		}
 		if cfg.Server.Flow != "" {
 			user["flow"] = cfg.Server.Flow
 		}
-		return map[string]interface{}{
-			"vnext": []map[string]interface{}{
+		return map[string]any{
+			"vnext": []map[string]any{
 				{
 					"address": cfg.Server.Host,
 					"port":    cfg.Server.Port,
-					"users":   []map[string]interface{}{user},
+					"users":   []map[string]any{user},
 				},
 			},
 		}
 
 	case ProtocolTrojan:
-		return map[string]interface{}{
-			"servers": []map[string]interface{}{
+		return map[string]any{
+			"servers": []map[string]any{
 				{
 					"address":  cfg.Server.Host,
 					"port":     cfg.Server.Port,
@@ -171,8 +171,8 @@ func (g *XrayGenerator) generateOutboundSettings(cfg *ClientConfig) map[string]i
 		}
 
 	case ProtocolShadowsocks:
-		return map[string]interface{}{
-			"servers": []map[string]interface{}{
+		return map[string]any{
+			"servers": []map[string]any{
 				{
 					"address":  cfg.Server.Host,
 					"port":     cfg.Server.Port,
@@ -249,13 +249,13 @@ type XrayInbound struct {
 	Listen   string                 `json:"listen"`
 	Tag      string                 `json:"tag"`
 	Protocol string                 `json:"protocol"`
-	Settings map[string]interface{} `json:"settings,omitempty"`
+	Settings map[string]any `json:"settings,omitempty"`
 }
 
 type XrayOutbound struct {
 	Tag            string                 `json:"tag"`
 	Protocol       string                 `json:"protocol"`
-	Settings       map[string]interface{} `json:"settings,omitempty"`
+	Settings       map[string]any `json:"settings,omitempty"`
 	StreamSettings *XrayStreamSettings   `json:"streamSettings,omitempty"`
 }
 
@@ -317,7 +317,7 @@ func (g *XrayGenerator) GenerateV2RayLink(cfg *ClientConfig) (string, error) {
 }
 
 func (g *XrayGenerator) generateVMessLink(cfg *ClientConfig) (string, error) {
-	vmess := map[string]interface{}{
+	vmess := map[string]any{
 		"v":    "2",
 		"ps":   cfg.Name,
 		"add":  cfg.Server.Host,

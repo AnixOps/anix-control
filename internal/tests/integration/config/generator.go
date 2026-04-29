@@ -78,11 +78,11 @@ func GenerateConfig(generatorName string, cfg *ClientConfig) ([]byte, error) {
 }
 
 // ToJSON 辅助函数：转换为格式化的 JSON
-func ToJSON(v interface{}) ([]byte, error) {
+func ToJSON(v any) ([]byte, error) {
 	return json.MarshalIndent(v, "", "  ")
 }
 
 // ToJSONCompact 辅助函数：转换为紧凑的 JSON
-func ToJSONCompact(v interface{}) ([]byte, error) {
+func ToJSONCompact(v any) ([]byte, error) {
 	return json.Marshal(v)
 }

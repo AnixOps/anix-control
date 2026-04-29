@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // MFAHandler handles user and admin MFA endpoints.
@@ -68,7 +70,7 @@ func defaultMFAAdminConfig() mfaAdminConfig {
 	}
 }
 
-func boolFromValue(raw interface{}) (bool, bool) {
+func boolFromValue(raw any) (bool, bool) {
 	switch v := raw.(type) {
 	case bool:
 		return v, true
@@ -91,7 +93,7 @@ func boolFromValue(raw interface{}) (bool, bool) {
 	return false, false
 }
 
-func intFromValue(raw interface{}) (int, bool) {
+func intFromValue(raw any) (int, bool) {
 	switch v := raw.(type) {
 	case int:
 		return v, true
@@ -114,11 +116,11 @@ func intFromValue(raw interface{}) (int, bool) {
 	return 0, false
 }
 
-func parseMethodsMap(raw interface{}) map[string]bool {
+func parseMethodsMap(raw any) map[string]bool {
 	parsed := map[string]bool{}
 
 	switch v := raw.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		for _, key := range []string{"totp", "sms", "email"} {
 			if b, ok := boolFromValue(v[key]); ok {
 				parsed[key] = b
@@ -135,7 +137,7 @@ func parseMethodsMap(raw interface{}) map[string]bool {
 	return parsed
 }
 
-func parseAllowedMethods(raw interface{}) map[string]bool {
+func parseAllowedMethods(raw any) map[string]bool {
 	parsed := map[string]bool{}
 	add := func(method string) {
 		key := strings.ToLower(strings.TrimSpace(method))
@@ -145,7 +147,7 @@ func parseAllowedMethods(raw interface{}) map[string]bool {
 	}
 
 	switch v := raw.(type) {
-	case []interface{}:
+	case []any:
 		for _, item := range v {
 			if s, ok := item.(string); ok {
 				add(s)
@@ -170,7 +172,7 @@ func parseAllowedMethods(raw interface{}) map[string]bool {
 		for _, item := range strings.Split(text, ",") {
 			add(item)
 		}
-	case map[string]interface{}:
+	case map[string]any:
 		return parseMethodsMap(v)
 	case map[string]bool:
 		return parseMethodsMap(v)
@@ -217,7 +219,7 @@ func normalizeMFAConfig(cfg mfaAdminConfig) mfaAdminConfig {
 func (h *MFAHandler) loadAdminConfig() (mfaAdminConfig, error) {
 	cfg := defaultMFAAdminConfig()
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := h.systemConfigService.GetJSON(mfaAdminConfigKey, &raw); err != nil {
 		return cfg, err
 	}
@@ -348,7 +350,11 @@ func (h *MFAHandler) SetupTOTP(c *gin.Context) {
 
 	var user model.User
 	if err := database.Get().First(&user, userID).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "user not found"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
 		return
 	}
 
@@ -466,7 +472,7 @@ func (h *MFAHandler) GetAdminConfig(c *gin.Context) {
 
 // UpdateAdminConfig updates and persists MFA admin config.
 func (h *MFAHandler) UpdateAdminConfig(c *gin.Context) {
-	var req map[string]interface{}
+	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

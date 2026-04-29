@@ -49,7 +49,7 @@ func TestParseTrafficData_Extended(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var data map[string]interface{}
+			var data map[string]any
 			err := json.Unmarshal([]byte(tt.input), &data)
 			assert.NoError(t, err)
 
@@ -113,7 +113,7 @@ func TestParseOnlineData_Extended(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var data map[string]interface{}
+			var data map[string]any
 			err := json.Unmarshal([]byte(tt.input), &data)
 			assert.NoError(t, err)
 
@@ -133,7 +133,7 @@ func TestParseOnlineData_Extended(t *testing.T) {
 func TestToInt64_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
+		input    any
 		expected int64
 		ok       bool
 	}{
@@ -187,7 +187,7 @@ func TestToInt64_EdgeCases(t *testing.T) {
 // BenchmarkParseTrafficData 基准测试
 func BenchmarkParseTrafficData(b *testing.B) {
 	input := `{"1": [1024, 2048], "2": [512, 1024], "3": [100, 200]}`
-	var data map[string]interface{}
+	var data map[string]any
 	json.Unmarshal([]byte(input), &data)
 
 	b.ResetTimer()
@@ -199,7 +199,7 @@ func BenchmarkParseTrafficData(b *testing.B) {
 // BenchmarkParseOnlineData 基准测试
 func BenchmarkParseOnlineData(b *testing.B) {
 	input := `{"1": ["192.168.1.100", "10.0.0.50"], "2": ["172.16.0.1"]}`
-	var data map[string]interface{}
+	var data map[string]any
 	json.Unmarshal([]byte(input), &data)
 
 	b.ResetTimer()

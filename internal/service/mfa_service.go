@@ -5,6 +5,7 @@ import (
 	"encoding/base32"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -213,10 +214,16 @@ func (s *MFAService) Verify(userID uint, code, method string) (bool, error) {
 	case model.MFAMethodBackup:
 		valid = s.VerifyBackupCode(mfa, code)
 	case model.MFAMethodEmail:
-		// TODO: 实现邮箱验证
+		// Unimplemented: email-based MFA verification.
+		// When implemented, this should look up a time-limited verification code
+		// sent to the user's email and compare it with the provided code.
+		log.Printf("[mfa] email MFA method not implemented")
 		valid = false
 	case model.MFAMethodSMS:
-		// TODO: 实现短信验证
+		// Unimplemented: SMS-based MFA verification.
+		// When implemented, this should look up a time-limited verification code
+		// sent via SMS gateway and compare it with the provided code.
+		log.Printf("[mfa] SMS MFA method not implemented")
 		valid = false
 	default:
 		// 默认尝试验证TOTP
@@ -230,7 +237,7 @@ func (s *MFAService) Verify(userID uint, code, method string) (bool, error) {
 	if valid {
 		// 更新最后使用时间
 		now := time.Now()
-		s.db.Model(mfa).Updates(map[string]interface{}{
+		s.db.Model(mfa).Updates(map[string]any{
 			"last_used":   now,
 			"last_method": method,
 		})

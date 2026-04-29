@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -53,7 +54,7 @@ func defaultInviteConfig() *model.InviteConfig {
 	}
 }
 
-func inviteBoolFromAny(v interface{}) (bool, bool) {
+func inviteBoolFromAny(v any) (bool, bool) {
 	switch raw := v.(type) {
 	case bool:
 		return raw, true
@@ -75,7 +76,7 @@ func inviteBoolFromAny(v interface{}) (bool, bool) {
 	return false, false
 }
 
-func inviteIntFromAny(v interface{}) (int, bool) {
+func inviteIntFromAny(v any) (int, bool) {
 	switch raw := v.(type) {
 	case int:
 		return raw, true
@@ -94,7 +95,7 @@ func inviteIntFromAny(v interface{}) (int, bool) {
 	return 0, false
 }
 
-func inviteFloatFromAny(v interface{}) (float64, bool) {
+func inviteFloatFromAny(v any) (float64, bool) {
 	switch raw := v.(type) {
 	case float64:
 		return raw, true
@@ -158,11 +159,11 @@ func inviteConfigResponse(cfg *model.InviteConfig, frontendCfg inviteFrontendCon
 	}
 }
 
-func inviteStringSliceFromAny(v interface{}) ([]string, bool) {
+func inviteStringSliceFromAny(v any) ([]string, bool) {
 	switch raw := v.(type) {
 	case []string:
 		return raw, true
-	case []interface{}:
+	case []any:
 		out := make([]string, 0, len(raw))
 		for _, item := range raw {
 			str, ok := item.(string)
@@ -300,8 +301,8 @@ func (h *InviteHandler) saveFrontendConfig(cfg inviteFrontendConfig) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /user/invite [get]
 func (h *InviteHandler) GetInviteInfo(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -322,7 +323,10 @@ func (h *InviteHandler) GetInviteInfo(c *gin.Context) {
 
 	// 鑾峰彇鐢ㄦ埛浣ｉ噾浣欓
 	var user model.User
-	database.Get().Select("commission_balance").First(&user, userID)
+	if err := database.Get().Select("commission_balance").First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user commission balance"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
@@ -340,8 +344,8 @@ func (h *InviteHandler) GetInviteInfo(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /user/invite/generate [post]
 func (h *InviteHandler) GenerateCode(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -364,8 +368,8 @@ func (h *InviteHandler) GenerateCode(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "椤电爜" default(1)
 // @Param page_size query int false "姣忛〉鏁伴噺" default(20)
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /user/invite/commissions [get]
 func (h *InviteHandler) GetCommissionRecords(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -393,9 +397,9 @@ func (h *InviteHandler) GetCommissionRecords(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body map[string]interface{} true "鎻愮幇璇锋眰 {amount, method, account, name}"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
+// @Param request body map[string]any true "鎻愮幇璇锋眰 {amount, method, account, name}"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
 // @Router /user/invite/withdraw [post]
 func (h *InviteHandler) RequestWithdraw(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -429,8 +433,8 @@ func (h *InviteHandler) RequestWithdraw(c *gin.Context) {
 // @Security BearerAuth
 // @Param page query int false "椤电爜" default(1)
 // @Param page_size query int false "姣忛〉鏁伴噺" default(20)
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /user/invite/withdrawals [get]
 func (h *InviteHandler) GetWithdrawRecords(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -460,8 +464,8 @@ func (h *InviteHandler) GetWithdrawRecords(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/invite/config [get]
 func (h *InviteHandler) GetConfig(c *gin.Context) {
 	cfg, err := h.inviteService.GetConfig()
@@ -485,12 +489,12 @@ func (h *InviteHandler) GetConfig(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body model.InviteConfig true "Invite configuration"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/invite/config [put]
 func (h *InviteHandler) UpdateConfig(c *gin.Context) {
-	var req map[string]interface{}
+	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -711,7 +715,7 @@ func (h *InviteHandler) UpdateConfig(c *gin.Context) {
 // @Param status query string false "Status filter"
 // @Param page query int false "椤电爜" default(1)
 // @Param page_size query int false "姣忛〉鏁伴噺" default(20)
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/invite/withdrawals [get]
 func (h *InviteHandler) GetWithdrawals(c *gin.Context) {
 	status := c.Query("status")
@@ -739,9 +743,15 @@ func (h *InviteHandler) GetWithdrawals(c *gin.Context) {
 		}
 	}
 
-	db.Count(&total)
+	if err := db.Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count withdrawals"})
+		return
+	}
 	offset := (page - 1) * pageSize
-	db.Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&records)
+	if err := db.Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&records).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load withdrawals"})
+		return
+	}
 
 	list := make([]gin.H, 0, len(records))
 	for _, record := range records {
@@ -770,15 +780,15 @@ func (h *InviteHandler) GetWithdrawals(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "鎻愮幇璁板綍ID"
-// @Param request body map[string]interface{} true "澶勭悊璇锋眰 {status, remark}"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Param request body map[string]any true "澶勭悊璇锋眰 {status, remark}"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /admin/invite/withdrawals/{id}/process [post]
 func (h *InviteHandler) ProcessWithdraw(c *gin.Context) {
 	id := c.Param("id")
 
-	var req map[string]interface{}
+	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -847,12 +857,17 @@ func (h *InviteHandler) ProcessWithdraw(c *gin.Context) {
 	withdraw.Remark = remark
 	withdraw.ProcessedAt = &now
 
-	database.Get().Save(&withdraw)
+	if err := database.Get().Save(&withdraw).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process withdrawal"})
+		return
+	}
 
 	// If rejected, return the amount to user commission balance.
 	if status == 2 {
-		database.Get().Model(&model.User{}).Where("id = ?", withdraw.UserID).
-			Update("commission_balance", gorm.Expr("commission_balance + ?", withdraw.Amount))
+		if err := database.Get().Model(&model.User{}).Where("id = ?", withdraw.UserID).
+			Update("commission_balance", gorm.Expr("commission_balance + ?", withdraw.Amount)).Error; err != nil {
+			log.Printf("failed to return commission balance for user %d: %v", withdraw.UserID, err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": inviteWithdrawalResponse(withdraw)})
@@ -865,7 +880,7 @@ func (h *InviteHandler) ProcessWithdraw(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/invite/stats [get]
 func (h *InviteHandler) GetInviteStats(c *gin.Context) {
 	var totalUsers int64
@@ -875,16 +890,28 @@ func (h *InviteHandler) GetInviteStats(c *gin.Context) {
 	var withdrawnCommission float64
 	var pendingWithdraw float64
 
-	database.Get().Model(&model.User{}).Count(&totalUsers)
-	database.Get().Model(&model.User{}).Where("invite_user_id IS NOT NULL").Count(&invitedUsers)
-	database.Get().Model(&model.CommissionRecord{}).Where("status IN ?", []int{1, 2}).
-		Select("COALESCE(SUM(amount), 0)").Scan(&totalCommission)
-	database.Get().Model(&model.CommissionRecord{}).Where("status = 0").
-		Select("COALESCE(SUM(amount), 0)").Scan(&pendingCommission)
-	database.Get().Model(&model.CommissionWithdraw{}).Where("status = 1").
-		Select("COALESCE(SUM(amount), 0)").Scan(&withdrawnCommission)
-	database.Get().Model(&model.CommissionWithdraw{}).Where("status = 0").
-		Select("COALESCE(SUM(amount), 0)").Scan(&pendingWithdraw)
+	if err := database.Get().Model(&model.User{}).Count(&totalUsers).Error; err != nil {
+		log.Printf("failed to count total users: %v", err)
+	}
+	if err := database.Get().Model(&model.User{}).Where("invite_user_id IS NOT NULL").Count(&invitedUsers).Error; err != nil {
+		log.Printf("failed to count invited users: %v", err)
+	}
+	if err := database.Get().Model(&model.CommissionRecord{}).Where("status IN ?", []int{1, 2}).
+		Select("COALESCE(SUM(amount), 0)").Scan(&totalCommission).Error; err != nil {
+		log.Printf("failed to sum total commission: %v", err)
+	}
+	if err := database.Get().Model(&model.CommissionRecord{}).Where("status = 0").
+		Select("COALESCE(SUM(amount), 0)").Scan(&pendingCommission).Error; err != nil {
+		log.Printf("failed to sum pending commission: %v", err)
+	}
+	if err := database.Get().Model(&model.CommissionWithdraw{}).Where("status = 1").
+		Select("COALESCE(SUM(amount), 0)").Scan(&withdrawnCommission).Error; err != nil {
+		log.Printf("failed to sum withdrawn commission: %v", err)
+	}
+	if err := database.Get().Model(&model.CommissionWithdraw{}).Where("status = 0").
+		Select("COALESCE(SUM(amount), 0)").Scan(&pendingWithdraw).Error; err != nil {
+		log.Printf("failed to sum pending withdraw: %v", err)
+	}
 
 	type topInviterRow struct {
 		UserID      uint    `json:"user_id"`
@@ -893,23 +920,27 @@ func (h *InviteHandler) GetInviteStats(c *gin.Context) {
 	}
 
 	var topInviters []topInviterRow
-	database.Get().Table("v2_user").
+	if err := database.Get().Table("v2_user").
 		Select("invite_user_id AS user_id, COUNT(*) AS invite_count").
 		Where("invite_user_id IS NOT NULL").
 		Group("invite_user_id").
 		Order("invite_count DESC").
 		Limit(10).
-		Scan(&topInviters)
+		Scan(&topInviters).Error; err != nil {
+		log.Printf("failed to scan top inviters: %v", err)
+	}
 
 	var commissions []struct {
 		UserID     uint
 		Commission float64
 	}
-	database.Get().Model(&model.CommissionRecord{}).
+	if err := database.Get().Model(&model.CommissionRecord{}).
 		Select("user_id, COALESCE(SUM(amount), 0) AS commission").
 		Where("status IN ?", []int{1, 2}).
 		Group("user_id").
-		Scan(&commissions)
+		Scan(&commissions).Error; err != nil {
+		log.Printf("failed to scan commissions: %v", err)
+	}
 
 	commissionByUser := make(map[uint]float64, len(commissions))
 	for _, row := range commissions {

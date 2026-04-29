@@ -31,8 +31,8 @@ func NewNodeHandler() *NodeHandler {
 // @Accept json
 // @Produce json
 // @Param request body model.NodeRegisterRequest true "注册请求"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
 // @Router /node/register [post]
 func (h *NodeHandler) Register(c *gin.Context) {
 	var req model.NodeRegisterRequest
@@ -70,10 +70,10 @@ func (h *NodeHandler) Register(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body model.NodeHeartbeatRequest true "心跳请求"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 401 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 401 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /node/heartbeat [post]
 func (h *NodeHandler) Heartbeat(c *gin.Context) {
 	// 从中间件获取节点ID
@@ -111,12 +111,13 @@ func (h *NodeHandler) Heartbeat(c *gin.Context) {
 // @Param search query string false "搜索关键词"
 // @Param status query int false "节点状态"
 // @Param group_id query int false "分组ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/nodes [get]
 func (h *NodeHandler) GetNodes(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = ClampPagination(page, pageSize)
 	search := c.Query("search")
 
 	var status *model.NodeStatus
@@ -156,9 +157,9 @@ func (h *NodeHandler) GetNodes(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "节点ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /admin/nodes/{id} [get]
 func (h *NodeHandler) GetNode(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -184,9 +185,9 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body model.Node true "节点信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/nodes [post]
 func (h *NodeHandler) CreateNode(c *gin.Context) {
 	var node model.Node
@@ -218,10 +219,10 @@ func (h *NodeHandler) CreateNode(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "节点ID"
-// @Param request body map[string]interface{} true "节点更新信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Param request body map[string]any true "节点更新信息"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/nodes/{id} [put]
 func (h *NodeHandler) UpdateNode(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -230,7 +231,7 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 		return
 	}
 
-	var updates map[string]interface{}
+	var updates map[string]any
 	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
 		return
@@ -258,9 +259,9 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "节点ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/nodes/{id} [delete]
 func (h *NodeHandler) DeleteNode(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -284,8 +285,8 @@ func (h *NodeHandler) DeleteNode(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/nodes/stats [get]
 func (h *NodeHandler) GetNodeStats(c *gin.Context) {
 	stats, err := h.nodeService.GetNodeStats()
@@ -307,9 +308,9 @@ func (h *NodeHandler) GetNodeStats(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "节点ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /admin/nodes/{id}/raw-config [get]
 func (h *NodeHandler) GetNodeRawConfig(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -324,9 +325,12 @@ func (h *NodeHandler) GetNodeRawConfig(c *gin.Context) {
 		return
 	}
 
-	var config interface{}
+	var config any
 	if node.RawConfig != nil && *node.RawConfig != "" {
-		json.Unmarshal([]byte(*node.RawConfig), &config)
+		if err := json.Unmarshal([]byte(*node.RawConfig), &config); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "节点原始配置 JSON 无效"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -346,10 +350,10 @@ func (h *NodeHandler) GetNodeRawConfig(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "节点ID"
-// @Param request body map[string]interface{} true "原始配置 {raw_config: object}"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Param request body map[string]any true "原始配置 {raw_config: object}"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/nodes/{id}/raw-config [put]
 func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -359,7 +363,7 @@ func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
 	}
 
 	var req struct {
-		RawConfig interface{} `json:"raw_config"`
+		RawConfig any `json:"raw_config" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
@@ -378,7 +382,7 @@ func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
 		rawConfigStr = &str
 	}
 
-	if err := h.nodeService.UpdateNode(uint(id), map[string]interface{}{
+	if err := h.nodeService.UpdateNode(uint(id), map[string]any{
 		"raw_config": rawConfigStr,
 	}); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败"})
@@ -395,13 +399,13 @@ func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body map[string]interface{} true "原始配置 {raw_config: object}"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
+// @Param request body map[string]any true "原始配置 {raw_config: object}"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
 // @Router /admin/nodes/validate-config [post]
 func (h *NodeHandler) ValidateRawConfig(c *gin.Context) {
 	var req struct {
-		RawConfig interface{} `json:"raw_config"`
+		RawConfig any `json:"raw_config" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
@@ -420,7 +424,7 @@ func (h *NodeHandler) ValidateRawConfig(c *gin.Context) {
 	}
 
 	// 检查必要字段
-	var config map[string]interface{}
+	var config map[string]any
 	if err := json.Unmarshal(jsonBytes, &config); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"valid":   false,
@@ -452,9 +456,9 @@ func (h *NodeHandler) ValidateRawConfig(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "节点ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/nodes/{id}/protocols [get]
 func (h *NodeHandler) GetProtocols(c *gin.Context) {
 	nodeID, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -481,9 +485,9 @@ func (h *NodeHandler) GetProtocols(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "节点ID"
 // @Param request body model.NodeProtocol true "协议配置"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/nodes/{id}/protocols [post]
 func (h *NodeHandler) CreateProtocol(c *gin.Context) {
 	nodeID, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -519,10 +523,10 @@ func (h *NodeHandler) CreateProtocol(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param protocol_id path int true "协议ID"
-// @Param request body map[string]interface{} true "协议更新信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Param request body map[string]any true "协议更新信息"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/nodes/protocols/{protocol_id} [put]
 func (h *NodeHandler) UpdateProtocol(c *gin.Context) {
 	protocolID, err := strconv.ParseUint(c.Param("protocol_id"), 10, 32)
@@ -531,7 +535,7 @@ func (h *NodeHandler) UpdateProtocol(c *gin.Context) {
 		return
 	}
 
-	var updates map[string]interface{}
+	var updates map[string]any
 	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
 		return
@@ -556,9 +560,9 @@ func (h *NodeHandler) UpdateProtocol(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param protocol_id path int true "协议ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/nodes/protocols/{protocol_id} [delete]
 func (h *NodeHandler) DeleteProtocol(c *gin.Context) {
 	protocolID, err := strconv.ParseUint(c.Param("protocol_id"), 10, 32)
@@ -582,7 +586,7 @@ func (h *NodeHandler) DeleteProtocol(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/nodes/protocol-templates [get]
 func (h *NodeHandler) GetProtocolTemplates(c *gin.Context) {
 	templates := model.GetProtocolTemplates()
@@ -597,9 +601,9 @@ func (h *NodeHandler) GetProtocolTemplates(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "节点ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/nodes/{id}/sync [post]
 func (h *NodeHandler) SyncProtocol(c *gin.Context) {
 	nodeID, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -625,15 +629,15 @@ func (h *NodeHandler) SyncProtocol(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body map[string]interface{} true "密钥请求 {name, expire_days}"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Param request body map[string]any true "密钥请求 {name, expire_days}"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/auth-keys [post]
 func (h *NodeHandler) GenerateAuthKey(c *gin.Context) {
 	var req struct {
-		Name       string `json:"name"`
-		ExpireDays int    `json:"expire_days"`
+		Name       string `json:"name" binding:"required,min=1,max=255"`
+		ExpireDays int    `json:"expire_days" binding:"gte=0"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
@@ -668,8 +672,8 @@ func (h *NodeHandler) GenerateAuthKey(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/auth-keys [get]
 func (h *NodeHandler) GetAuthKeys(c *gin.Context) {
 	keys, err := h.nodeService.GetAuthKeys()
@@ -689,9 +693,9 @@ func (h *NodeHandler) GetAuthKeys(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "密钥ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/auth-keys/{id} [delete]
 func (h *NodeHandler) DeleteAuthKey(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -717,16 +721,16 @@ func (h *NodeHandler) DeleteAuthKey(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiTokenAuth
-// @Param request body map[string]interface{} true "密钥请求 {name, expire_days, node_name}"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Param request body map[string]any true "密钥请求 {name, expire_days, node_name}"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /internal/auth-keys [post]
 func (h *NodeHandler) InternalGenerateAuthKey(c *gin.Context) {
 	var req struct {
-		Name       string `json:"name"`
-		ExpireDays int    `json:"expire_days"`
-		NodeName   string `json:"node_name"`
+		Name       string `json:"name" binding:"min=1,max=255"`
+		ExpireDays int    `json:"expire_days" binding:"gte=0"`
+		NodeName   string `json:"node_name" binding:"omitempty,max=255"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})

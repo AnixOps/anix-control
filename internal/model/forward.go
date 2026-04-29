@@ -82,6 +82,9 @@ type ForwardRule struct {
 	User        *User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
 	UserGroupID *uint  `json:"user_group_id"`
 
+	// IP allowlist (comma-separated CIDRs or single IPs, empty = allow all)
+	AllowedIPs string `gorm:"size:1000" json:"allowed_ips"`
+
 	// 流量控制
 	SpeedLimit   *int64    `json:"speed_limit"`    // 速度限制(KB/s), nil为不限
 	TrafficLimit *int64    `json:"traffic_limit"`  // 流量限制(字节), nil为不限

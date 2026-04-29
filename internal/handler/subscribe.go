@@ -346,7 +346,7 @@ func (h *SubscriptionAdminHandler) UpdateGroupProtocols(c *gin.Context) {
 	}
 
 	var req struct {
-		ProtocolIDs []uint `json:"protocol_ids"`
+		ProtocolIDs []uint `json:"protocol_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
@@ -427,7 +427,7 @@ func (h *SubscriptionAdminHandler) UpdateTemplate(c *gin.Context) {
 		return
 	}
 
-	var updates map[string]interface{}
+	var updates map[string]any
 	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
 		return
@@ -454,7 +454,7 @@ func (h *SubscriptionAdminHandler) UpdateTemplate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "更新成功", "data": template})
 }
 
-func normalizeTemplateUpdatePayload(updates map[string]interface{}) {
+func normalizeTemplateUpdatePayload(updates map[string]any) {
 	intFields := []string{"group_id", "port", "tls", "enable", "sort"}
 	for _, field := range intFields {
 		val, exists := updates[field]
@@ -658,7 +658,7 @@ func (h *SubscriptionAdminHandler) GetSubscriptionFormats(c *gin.Context) {
 // GetProtocolTypes 获取支持的协议类型
 // GET /api/v2/admin/subscription/protocols
 func (h *SubscriptionAdminHandler) GetProtocolTypes(c *gin.Context) {
-	protocols := []map[string]interface{}{
+	protocols := []map[string]any{
 		{"id": "vmess", "name": "VMess", "description": "V2Ray VMess 协议", "supports_tls": true, "supports_reality": false},
 		{"id": "vless", "name": "VLESS", "description": "V2Ray VLESS 协议", "supports_tls": true, "supports_reality": true},
 		{"id": "trojan", "name": "Trojan", "description": "Trojan 协议", "supports_tls": true, "supports_reality": false},
@@ -674,8 +674,8 @@ func (h *SubscriptionAdminHandler) GetProtocolTypes(c *gin.Context) {
 // POST /api/v2/admin/subscription/preview
 func (h *SubscriptionAdminHandler) PreviewSubscription(c *gin.Context) {
 	var req struct {
-		UserID uint                     `json:"user_id"`
-		Format model.SubscriptionFormat `json:"format"`
+		UserID uint                     `json:"user_id" binding:"required,gt=0"`
+		Format model.SubscriptionFormat `json:"format" binding:"omitempty"`
 		Groups []uint                   `json:"groups"`
 	}
 

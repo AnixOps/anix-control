@@ -95,7 +95,7 @@ func (s *AgentHandlerTestSuite) TestAgentRegister_Success() {
 		NodeID:  s.testNode.ID,
 		Token:   "test-api-token-123",
 		Version: "1.0.0",
-		System: map[string]interface{}{
+		System: map[string]any{
 			"os":   "linux",
 			"arch": "amd64",
 		},
@@ -193,7 +193,7 @@ func (s *AgentHandlerTestSuite) TestAgentHeartbeat_Success() {
 	hbBody := AgentHeartbeatRequest{
 		NodeID: s.testNode.ID,
 		Status: "running",
-		Resources: map[string]interface{}{
+		Resources: map[string]any{
 			"cpu": 0.5,
 			"mem": 0.6,
 		},
@@ -234,9 +234,9 @@ func (s *AgentHandlerTestSuite) TestAgentGetTasks() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	tasks := resp["tasks"].([]interface{})
+	tasks := resp["tasks"].([]any)
 	assert.Equal(s.T(), 0, len(tasks)) // 目前返回空任务列表
 }
 
@@ -285,7 +285,7 @@ func (s *AgentHandlerTestSuite) TestAgentMonitor_Success() {
 
 	body := AgentMonitorRequest{
 		NodeID: s.testNode.ID,
-		System: map[string]interface{}{
+		System: map[string]any{
 			"cpu_percent": 45.5,
 			"mem_percent": 60.0,
 		},
@@ -308,7 +308,7 @@ func (s *AgentHandlerTestSuite) TestGetMonitor_Success() {
 
 	body := AgentMonitorRequest{
 		NodeID: s.testNode.ID,
-		System: map[string]interface{}{
+		System: map[string]any{
 			"cpu_percent": 38.2,
 		},
 	}
@@ -325,9 +325,9 @@ func (s *AgentHandlerTestSuite) TestGetMonitor_Success() {
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	data := resp["data"].(map[string]interface{})
+	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
 }
 
@@ -366,9 +366,9 @@ func (s *AgentHandlerTestSuite) TestGetTaskResult_Success() {
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	data := resp["data"].(map[string]interface{})
+	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), "task-xyz-1", data["task_id"])
 	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
 }
@@ -408,9 +408,9 @@ func (s *AgentHandlerTestSuite) TestAgentGetForwardRules() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	data := resp["data"].([]interface{})
+	data := resp["data"].([]any)
 	assert.GreaterOrEqual(s.T(), len(data), 0)
 }
 
@@ -426,10 +426,10 @@ func (s *AgentHandlerTestSuite) TestListAgents_Empty() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	// agents 可能为 nil 或空数组
-	agents, ok := resp["agents"].([]interface{})
+	agents, ok := resp["agents"].([]any)
 	if ok {
 		assert.Equal(s.T(), 0, len(agents))
 	} else {
@@ -463,12 +463,12 @@ func (s *AgentHandlerTestSuite) TestListAgents_AfterRegister() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	agents := resp["agents"].([]interface{})
+	agents := resp["agents"].([]any)
 	assert.Equal(s.T(), 1, len(agents))
 
-	agent := agents[0].(map[string]interface{})
+	agent := agents[0].(map[string]any)
 	assert.Equal(s.T(), float64(s.testNode.ID), agent["node_id"])
 	assert.Equal(s.T(), "1.0.0", agent["version"])
 }
@@ -528,7 +528,7 @@ func (s *AgentHandlerTestSuite) TestExecuteCommand_MissingFields() {
 	handler := NewAgentHandler()
 	s.router.POST("/admin/agent/execute", handler.ExecuteCommand)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"command": "ls",
 		// 缺少 node_id
 	}

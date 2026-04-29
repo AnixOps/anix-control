@@ -146,7 +146,7 @@ func (s *OrderHandlerExtendedTestSuite) TestSaveOrder_Success() {
 		handler.SaveOrder(c)
 	})
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"plan_id": s.testPlan.ID,
 		"period":  "month",
 	}
@@ -276,11 +276,11 @@ func (s *InviteHandlerExtendedTestSuite) TestGetConfig_FrontendFields() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), "percent", data["commission_type"])
 	assert.InDelta(s.T(), 15.0, data["commission_rate"], 0.0001)
@@ -293,7 +293,7 @@ func (s *InviteHandlerExtendedTestSuite) TestUpdateConfig_FrontendPayloadCompati
 	handler := NewInviteHandler()
 	s.router.PUT("/admin/invite/config", handler.UpdateConfig)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"enabled":          false,
 		"commission_type":  "fixed",
 		"commission_rate":  12.5,
@@ -331,7 +331,7 @@ func (s *InviteHandlerExtendedTestSuite) TestUpdateConfig_FrontendExtraFieldsPer
 	s.router.PUT("/admin/invite/config", handler.UpdateConfig)
 	s.router.GET("/admin/invite/config", handler.GetConfig)
 
-	updateBody := map[string]interface{}{
+	updateBody := map[string]any{
 		"code_prefix":      "ABC",
 		"code_length":      12,
 		"withdraw_fee":     1.5,
@@ -350,15 +350,15 @@ func (s *InviteHandlerExtendedTestSuite) TestUpdateConfig_FrontendExtraFieldsPer
 	s.router.ServeHTTP(getResp, getReq)
 	assert.Equal(s.T(), http.StatusOK, getResp.Code)
 
-	var payload map[string]interface{}
+	var payload map[string]any
 	err := json.Unmarshal(getResp.Body.Bytes(), &payload)
 	assert.NoError(s.T(), err)
-	data, ok := payload["data"].(map[string]interface{})
+	data, ok := payload["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), "ABC", data["code_prefix"])
 	assert.Equal(s.T(), float64(12), data["code_length"])
 	assert.InDelta(s.T(), 1.5, data["withdraw_fee"], 0.0001)
-	methods, ok := data["withdraw_methods"].([]interface{})
+	methods, ok := data["withdraw_methods"].([]any)
 	assert.True(s.T(), ok)
 	assert.Len(s.T(), methods, 2)
 }
@@ -386,7 +386,7 @@ func (s *InviteHandlerExtendedTestSuite) TestProcessWithdraw() {
 	handler := NewInviteHandler()
 	s.router.POST("/admin/invite/withdrawals/:id/process", handler.ProcessWithdraw)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"status": 1,
 		"remark": "Approved",
 	}
@@ -423,7 +423,7 @@ func (s *InviteHandlerExtendedTestSuite) TestProcessWithdraw_ApprovedAlias() {
 	handler := NewInviteHandler()
 	s.router.POST("/admin/invite/withdrawals/:id/process", handler.ProcessWithdraw)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"approved": true,
 		"remark":   "approved by alias",
 	}
@@ -476,17 +476,17 @@ func (s *InviteHandlerExtendedTestSuite) TestGetWithdrawals_StatusTextFilterAndP
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
-	list, ok := data["list"].([]interface{})
+	list, ok := data["list"].([]any)
 	assert.True(s.T(), ok)
 	assert.Len(s.T(), list, 1)
 
-	first, ok := list[0].(map[string]interface{})
+	first, ok := list[0].(map[string]any)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), "pending", first["status"])
 	assert.InDelta(s.T(), 0.0, first["status_code"], 0.0001)
@@ -530,7 +530,7 @@ func (s *TelegramHandlerExtendedTestSuite) TestSendNotification() {
 	handler := NewTelegramHandler()
 	s.router.POST("/admin/telegram/notify", handler.SendNotification)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"telegram_id": "12345",
 		"title":       "Test",
 		"content":     "Test notification",
@@ -550,7 +550,7 @@ func (s *TelegramHandlerExtendedTestSuite) TestSendNotification_MessagePayload()
 	handler := NewTelegramHandler()
 	s.router.POST("/admin/telegram/notify", handler.SendNotification)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"telegram_id": 12345,
 		"message":     "Direct message payload",
 	}
@@ -592,10 +592,10 @@ func (s *TelegramHandlerExtendedTestSuite) TestBroadcast() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	_, hasSuccess := data["success"]
 	_, hasFailed := data["failed"]
@@ -607,8 +607,8 @@ func (s *TelegramHandlerExtendedTestSuite) TestBroadcast_NestedMessage() {
 	handler := NewTelegramHandler()
 	s.router.POST("/admin/telegram/broadcast", handler.Broadcast)
 
-	body := map[string]interface{}{
-		"message": map[string]interface{}{
+	body := map[string]any{
+		"message": map[string]any{
 			"message": "Nested message payload",
 		},
 	}
@@ -659,16 +659,16 @@ func (s *TelegramHandlerExtendedTestSuite) TestGetUserBindings() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
-	list, ok := data["list"].([]interface{})
+	list, ok := data["list"].([]any)
 	assert.True(s.T(), ok)
 	assert.GreaterOrEqual(s.T(), len(list), 1)
-	first, ok := list[0].(map[string]interface{})
+	first, ok := list[0].(map[string]any)
 	assert.True(s.T(), ok)
 	_, hasEmail := first["user_email"]
 	_, hasNotify := first["notify_enabled"]
@@ -703,13 +703,13 @@ func (s *TelegramHandlerExtendedTestSuite) TestGetUserBindings_All() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
-	list, ok := data["list"].([]interface{})
+	list, ok := data["list"].([]any)
 	assert.True(s.T(), ok)
 	assert.GreaterOrEqual(s.T(), len(list), 25)
 }
@@ -735,7 +735,7 @@ func (s *TelegramHandlerExtendedTestSuite) TestUpdateUserNotify() {
 	handler := NewTelegramHandler()
 	s.router.PUT("/admin/telegram/users/:id/notify", handler.UpdateUserNotify)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"notify_enabled": false,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -931,7 +931,7 @@ func (s *PaymentGatewayExtendedTestSuite) TestCreatePayment() {
 		handler.CreatePayment(c)
 	})
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"gateway_id": s.testGateway.ID,
 		"amount":     1000,
 	}
@@ -1054,7 +1054,7 @@ func (s *ForwardUserRulesTestSuite) TestCreateUserRule() {
 		handler.CreateUserRule(c)
 	})
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":          "User Rule",
 		"relay_node_id": s.testRelayNode.ID,
 		"listen_port":   9000,
@@ -1193,11 +1193,11 @@ func (s *SystemBackupTestSuite) TestGetBackupConfig() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	_, hasInterval := data["interval"]
 	_, hasKeepCount := data["keep_count"]
@@ -1209,7 +1209,7 @@ func (s *SystemBackupTestSuite) TestUpdateBackupConfig() {
 	handler := NewSystemHandler()
 	s.router.PUT("/admin/system/backup/config", handler.UpdateBackupConfig)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"enabled":    true,
 		"interval":   12,
 		"keep_count": 9,
@@ -1223,10 +1223,10 @@ func (s *SystemBackupTestSuite) TestUpdateBackupConfig() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	assert.InDelta(s.T(), 12, data["interval"], 0.000001)
 	assert.InDelta(s.T(), 9, data["keep_count"], 0.000001)
@@ -1367,11 +1367,11 @@ func (s *SystemBackupTestSuite) TestGetBackupStats_TotalCountAlias() {
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), float64(2), data["total_count"])
 	assert.Equal(s.T(), float64(2), data["total_backups"])
@@ -1470,26 +1470,26 @@ func (s *LoadBalancerTestSuite) TestListLoadBalancers_IncludesWeightsField() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
-	list, ok := data["list"].([]interface{})
+	list, ok := data["list"].([]any)
 	assert.True(s.T(), ok)
 	assert.NotEmpty(s.T(), list)
 
 	found := false
 	for _, item := range list {
-		row, ok := item.(map[string]interface{})
+		row, ok := item.(map[string]any)
 		assert.True(s.T(), ok)
 		if uint(row["id"].(float64)) != s.testLB.ID {
 			continue
 		}
 		weights, hasWeights := row["weights"]
 		assert.True(s.T(), hasWeights)
-		weightMap, ok := weights.(map[string]interface{})
+		weightMap, ok := weights.(map[string]any)
 		assert.True(s.T(), ok)
 		assert.Equal(s.T(), float64(10), weightMap["1"])
 		assert.Equal(s.T(), float64(5), weightMap["2"])
@@ -1540,15 +1540,15 @@ func (s *LoadBalancerTestSuite) TestCreateLoadBalancer_WithWeights() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 
 	weights, hasWeights := data["weights"]
 	assert.True(s.T(), hasWeights)
-	weightMap, ok := weights.(map[string]interface{})
+	weightMap, ok := weights.(map[string]any)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), float64(10), weightMap["1"])
 	assert.Equal(s.T(), float64(5), weightMap["2"])
@@ -1625,15 +1625,15 @@ func (s *LoadBalancerTestSuite) TestUpdateLoadBalancer_WithWeights() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
 
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	weights, hasWeights := data["weights"]
 	assert.True(s.T(), hasWeights)
-	weightMap, ok := weights.(map[string]interface{})
+	weightMap, ok := weights.(map[string]any)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), float64(3), weightMap["10"])
 	assert.Equal(s.T(), float64(7), weightMap["20"])
@@ -1756,7 +1756,7 @@ func (s *TelegramUserTestSuite) TestUpdateNotifySettings() {
 
 	notifyExpire := true
 	notifyTraffic := false
-	body := map[string]interface{}{
+	body := map[string]any{
 		"notify_expire":  &notifyExpire,
 		"notify_traffic": &notifyTraffic,
 	}
@@ -1827,7 +1827,7 @@ func (s *AdminCouponExtendedTestSuite) TestCreateCoupon() {
 	handler := NewAdminCouponHandler()
 	s.router.POST("/admin/coupons", handler.CreateCoupon)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"code":  "NEWCODE",
 		"name":  "New Coupon",
 		"type":  1,
@@ -2013,7 +2013,7 @@ func (s *AdminTicketExtendedTestSuite) TestReplyTicket() {
 	handler := NewAdminTicketHandler()
 	s.router.POST("/admin/tickets/:id/reply", handler.ReplyTicket)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"ticket_id": s.testTicket.ID,
 		"message":   "Admin reply",
 	}
@@ -2090,7 +2090,7 @@ func (s *PaymentGatewayExtendedTestSuite2) TestCreateGateway() {
 	handler := NewPaymentGatewayHandler()
 	s.router.POST("/admin/payment/gateways", handler.CreateGateway)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":    "New Gateway",
 		"type":    "wechat",
 		"enabled": true,
@@ -2122,7 +2122,7 @@ func (s *PaymentGatewayExtendedTestSuite2) TestUpdateGateway() {
 	handler := NewPaymentGatewayHandler()
 	s.router.PUT("/admin/payment/gateways/:id", handler.UpdateGateway)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":    "Updated Gateway",
 		"type":    "alipay",
 		"enabled": true,
@@ -2146,7 +2146,7 @@ func (s *PaymentGatewayExtendedTestSuite2) TestUpdateGateway_TypeAndZeroMinMax()
 	handler := NewPaymentGatewayHandler()
 	s.router.PUT("/admin/payment/gateways/:id", handler.UpdateGateway)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"type":       "wechat",
 		"min_amount": 0,
 		"max_amount": 0,
@@ -2343,7 +2343,7 @@ func (s *SubscribeExtendedTestSuite) TestPreviewSubscription() {
 	handler := NewSubscriptionAdminHandler()
 	s.router.POST("/admin/subscription/preview", handler.PreviewSubscription)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"user_id":   s.testUser.ID,
 		"format":    "clash",
 		"group_ids": []uint{s.testGroup.ID},
@@ -2390,7 +2390,7 @@ func (s *InviteExtendedTestSuite) TestRequestWithdraw() {
 		handler.RequestWithdraw(c)
 	})
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"amount": 100,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -2516,12 +2516,12 @@ func (s *NotificationExtendedTestSuite) TestListTemplates() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
-	list, ok := data["list"].([]interface{})
+	list, ok := data["list"].([]any)
 	assert.True(s.T(), ok)
 	assert.Len(s.T(), list, 1)
 	assert.Equal(s.T(), float64(1), data["total"])
@@ -2531,7 +2531,7 @@ func (s *NotificationExtendedTestSuite) TestCreateTemplate() {
 	handler := NewNotificationHandler()
 	s.router.POST("/admin/notification/templates", handler.CreateTemplate)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":    "Test Template",
 		"type":    "email",
 		"event":   "user.register",
@@ -2562,7 +2562,7 @@ func (s *NotificationExtendedTestSuite) TestUpdateTemplate_WithTypeAndEvent() {
 	handler := NewNotificationHandler()
 	s.router.PUT("/admin/notification/templates/:id", handler.UpdateTemplate)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":    "Template After",
 		"type":    "telegram",
 		"event":   "ticket.reply",
@@ -2627,16 +2627,16 @@ func (s *NotificationExtendedTestSuite) TestListLogs() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
-	data, ok := resp["data"].(map[string]interface{})
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
-	list, ok := data["list"].([]interface{})
+	list, ok := data["list"].([]any)
 	assert.True(s.T(), ok)
 	assert.Len(s.T(), list, 1)
 
-	row, ok := list[0].(map[string]interface{})
+	row, ok := list[0].(map[string]any)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), "failed", row["status"])
 	assert.Equal(s.T(), float64(2), row["status_code"])
@@ -2657,7 +2657,7 @@ func (s *NotificationExtendedTestSuite) TestUpdateEmailConfig() {
 	handler := NewNotificationHandler()
 	s.router.PUT("/admin/notification/email/config", handler.UpdateEmailConfig)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"host":         "smtp.example.com",
 		"port":         587,
 		"from_address": "noreply@example.com",
@@ -2689,7 +2689,7 @@ func (s *NotificationExtendedTestSuite) TestEmailConfig_RoundTrip_EncryptionStri
 	s.router.GET("/admin/notification/email/config", handler.GetEmailConfig)
 	s.router.PUT("/admin/notification/email/config", handler.UpdateEmailConfig)
 
-	initialBody := map[string]interface{}{
+	initialBody := map[string]any{
 		"host":         "smtp.persist.test",
 		"port":         465,
 		"username":     "notify-user",
@@ -2711,10 +2711,10 @@ func (s *NotificationExtendedTestSuite) TestEmailConfig_RoundTrip_EncryptionStri
 	s.router.ServeHTTP(getResp1, getReq1)
 	assert.Equal(s.T(), http.StatusOK, getResp1.Code)
 
-	var getPayload1 map[string]interface{}
+	var getPayload1 map[string]any
 	err := json.Unmarshal(getResp1.Body.Bytes(), &getPayload1)
 	assert.NoError(s.T(), err)
-	data1, ok := getPayload1["data"].(map[string]interface{})
+	data1, ok := getPayload1["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), "smtp.persist.test", data1["host"])
 	assert.Equal(s.T(), float64(465), data1["port"])
@@ -2737,7 +2737,7 @@ func (s *NotificationExtendedTestSuite) TestEmailConfig_RoundTrip_EncryptionStri
 	assert.Contains(s.T(), storedEmailConfig.Value, "KeepPassword#1")
 
 	// bool encryption input should be accepted; empty password should keep previous secret.
-	updateBody := map[string]interface{}{
+	updateBody := map[string]any{
 		"host":         "smtp.persist.test",
 		"port":         465,
 		"username":     "notify-user",
@@ -2758,10 +2758,10 @@ func (s *NotificationExtendedTestSuite) TestEmailConfig_RoundTrip_EncryptionStri
 	s.router.ServeHTTP(getResp2, getReq2)
 	assert.Equal(s.T(), http.StatusOK, getResp2.Code)
 
-	var getPayload2 map[string]interface{}
+	var getPayload2 map[string]any
 	err = json.Unmarshal(getResp2.Body.Bytes(), &getPayload2)
 	assert.NoError(s.T(), err)
-	data2, ok := getPayload2["data"].(map[string]interface{})
+	data2, ok := getPayload2["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), "Notify Bot Updated", data2["from_name"])
 
@@ -2869,7 +2869,7 @@ func (s *MFAExtendedTestSuite) TestUpdateAdminConfig() {
 	handler := NewMFAHandler()
 	s.router.PUT("/admin/mfa/config", handler.UpdateAdminConfig)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"enabled": true,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -2887,7 +2887,7 @@ func (s *MFAExtendedTestSuite) TestAdminConfig_FrontendFields_RoundTrip() {
 	s.router.GET("/admin/mfa/config", handler.GetAdminConfig)
 	s.router.PUT("/admin/mfa/config", handler.UpdateAdminConfig)
 
-	updateBody := map[string]interface{}{
+	updateBody := map[string]any{
 		"enabled":            true,
 		"required":           true,
 		"methods":            map[string]bool{"totp": true, "sms": true, "email": false},
@@ -2907,10 +2907,10 @@ func (s *MFAExtendedTestSuite) TestAdminConfig_FrontendFields_RoundTrip() {
 	s.router.ServeHTTP(getResp, getReq)
 	assert.Equal(s.T(), http.StatusOK, getResp.Code)
 
-	var payload map[string]interface{}
+	var payload map[string]any
 	err := json.Unmarshal(getResp.Body.Bytes(), &payload)
 	assert.NoError(s.T(), err)
-	data, ok := payload["data"].(map[string]interface{})
+	data, ok := payload["data"].(map[string]any)
 	assert.True(s.T(), ok)
 
 	_, hasRequired := data["required"]
@@ -2931,7 +2931,7 @@ func (s *MFAExtendedTestSuite) TestAdminConfig_FrontendFields_RoundTrip() {
 	assert.Equal(s.T(), float64(6), data["max_attempts"])
 	assert.Equal(s.T(), float64(30), data["lockout_duration"])
 
-	methods, ok := data["methods"].(map[string]interface{})
+	methods, ok := data["methods"].(map[string]any)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), true, methods["totp"])
 	assert.Equal(s.T(), true, methods["sms"])
@@ -2998,7 +2998,7 @@ func (s *NodeExtendedTestSuite) TestCreateNode() {
 	handler := NewNodeHandler()
 	s.router.POST("/admin/nodes", handler.CreateNode)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":    "New Node",
 		"host":    "192.168.1.1",
 		"port":    443,
@@ -3052,7 +3052,7 @@ func (s *NodeExtendedTestSuite) TestUpdateNode() {
 	handler := NewNodeHandler()
 	s.router.PUT("/admin/nodes/:id", handler.UpdateNode)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name": "Updated Node",
 		"host": "192.168.1.2",
 		"port": 8443,
@@ -3253,7 +3253,7 @@ func (s *AdminExtendedTestSuite) TestUpdateOrderStatus_Success() {
 	handler := NewAdminHandler()
 	s.router.PUT("/admin/orders/:id/status", handler.UpdateOrderStatus)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"status": 1,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -3270,7 +3270,7 @@ func (s *AdminExtendedTestSuite) TestUpdateOrderStatus_InvalidID() {
 	handler := NewAdminHandler()
 	s.router.PUT("/admin/orders/:id/status", handler.UpdateOrderStatus)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"status": 1,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -3299,7 +3299,7 @@ func (s *AdminExtendedTestSuite) TestUpdateUser_Success() {
 	handler := NewAdminHandler()
 	s.router.PUT("/admin/users/:id", handler.UpdateUser)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"balance":         1000,
 		"transfer_enable": 21474836480,
 		"remark_content":  "Test remark",
@@ -3318,7 +3318,7 @@ func (s *AdminExtendedTestSuite) TestUpdateUser_NotFound() {
 	handler := NewAdminHandler()
 	s.router.PUT("/admin/users/:id", handler.UpdateUser)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"balance": 1000,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -3370,7 +3370,7 @@ func (s *AdminExtendedTestSuite) TestUpdatePlan_Success() {
 	handler := NewAdminHandler()
 	s.router.PUT("/admin/plans/:id", handler.UpdatePlan)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":            "Updated Plan",
 		"transfer_enable": 21474836480,
 	}
@@ -3388,7 +3388,7 @@ func (s *AdminExtendedTestSuite) TestUpdatePlan_NotFound() {
 	handler := NewAdminHandler()
 	s.router.PUT("/admin/plans/:id", handler.UpdatePlan)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name": "Updated Plan",
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -3443,7 +3443,7 @@ func (s *AdminExtendedTestSuite) TestAssignPlanToUser_Success() {
 	handler := NewAdminHandler()
 	s.router.POST("/admin/plans/:id/assign", handler.AssignPlanToUser)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"user_id": user.ID,
 	}
 	jsonBody, _ := json.Marshal(body)

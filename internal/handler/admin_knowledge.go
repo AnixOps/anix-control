@@ -100,11 +100,11 @@ func (h *AdminKnowledgeHandler) UpdateArticle(c *gin.Context) {
 	}
 
 	var req struct {
-		Category string `json:"category"`
-		Title    string `json:"title"`
-		Body     string `json:"body"`
+		Category string `json:"category" binding:"omitempty,max=64"`
+		Title    string `json:"title" binding:"omitempty,min=1,max=255"`
+		Body     string `json:"body" binding:"omitempty"`
 		Sort     int    `json:"sort"`
-		Show     int    `json:"show"`
+		Show     int    `json:"show" binding:"omitempty,oneof=0 1"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -113,7 +113,7 @@ func (h *AdminKnowledgeHandler) UpdateArticle(c *gin.Context) {
 	}
 
 	// 更新字段
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"updated_at": time.Now(),
 	}
 	if req.Category != "" {

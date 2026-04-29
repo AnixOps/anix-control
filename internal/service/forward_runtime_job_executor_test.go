@@ -104,7 +104,7 @@ func (s *PanelForwardRuntimeJobExecutorTestSuite) TestRunPendingJobs_CompletesAn
 			"ANSIBLE_CONFIG": "/etc/ansible/ansible.cfg",
 		},
 		TimeoutSeconds: 45,
-		ExtraVars: map[string]interface{}{
+		ExtraVars: map[string]any{
 			"manage_with": "iptables",
 		},
 		Forward: panelForwardAnsibleForwardPayload{
@@ -173,7 +173,7 @@ func (s *PanelForwardRuntimeJobExecutorTestSuite) TestRunPendingJobs_CompletesAn
 	}
 	assert.NotEmpty(s.T(), extraVarsJSON)
 
-	var extraVars map[string]interface{}
+	var extraVars map[string]any
 	assert.NoError(s.T(), json.Unmarshal([]byte(extraVarsJSON), &extraVars))
 	assert.Equal(s.T(), model.ForwardRuntimeJobActionCreate, extraVars["runtimeAction"])
 	assert.Equal(s.T(), "iptables", extraVars["manage_with"])

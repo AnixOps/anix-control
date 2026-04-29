@@ -21,12 +21,12 @@ type CreateAnsibleMachineRequest struct {
 }
 
 type UpdateAnsibleMachineRequest struct {
-	Name    string `json:"name"`
-	Host    string `json:"host"`
-	Port    int    `json:"port"`
-	Region  string `json:"region"`
-	ISP     string `json:"isp"`
-	Weight  int    `json:"weight"`
+	Name    string `json:"name" binding:"omitempty,min=1,max=255"`
+	Host    string `json:"host" binding:"omitempty,min=1,max=255"`
+	Port    int    `json:"port" binding:"omitempty,min=1,max=65535"`
+	Region  string `json:"region" binding:"omitempty,max=128"`
+	ISP     string `json:"isp" binding:"omitempty,max=128"`
+	Weight  int    `json:"weight" binding:"omitempty,gte=0"`
 	Enabled *bool  `json:"enabled"`
 }
 
@@ -54,6 +54,7 @@ type ansibleMachineResponse struct {
 func (h *ForwardHandler) ListAnsibleMachines(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = ClampPagination(page, pageSize)
 	var status *int
 	if rawStatus := c.Query("status"); rawStatus != "" {
 		parsedStatus, err := strconv.Atoi(rawStatus)

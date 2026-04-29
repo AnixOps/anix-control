@@ -162,13 +162,13 @@ func (s *UniProxyE2ETestSuite) TestGetUsers_Success() {
 
 	// 验证响应
 	if w.Code == http.StatusOK {
-		var response map[string]interface{}
+		var response map[string]any
 		json.Unmarshal(w.Body.Bytes(), &response)
 
 		// 检查用户列表格式
-		if users, ok := response["users"].([]interface{}); ok {
+		if users, ok := response["users"].([]any); ok {
 			for _, u := range users {
-				user := u.(map[string]interface{})
+				user := u.(map[string]any)
 				assert.NotEmpty(s.T(), user["id"])
 				assert.NotEmpty(s.T(), user["uuid"])
 			}
@@ -178,7 +178,7 @@ func (s *UniProxyE2ETestSuite) TestGetUsers_Success() {
 
 // TestPushTraffic_Success 测试上报流量成功
 func (s *UniProxyE2ETestSuite) TestPushTraffic_Success() {
-	trafficData := map[string]interface{}{
+	trafficData := map[string]any{
 		"1": []int64{1024, 2048}, // 用户ID: [上传, 下载]
 		"2": []int64{512, 1024},
 	}
@@ -200,7 +200,7 @@ func (s *UniProxyE2ETestSuite) TestPushTraffic_Success() {
 
 // TestPushAlive_Success 测试上报在线用户成功
 func (s *UniProxyE2ETestSuite) TestPushAlive_Success() {
-	aliveData := map[string]interface{}{
+	aliveData := map[string]any{
 		"1": []string{"192.168.1.100", "10.0.0.50"},
 		"2": []string{"172.16.0.1"},
 	}

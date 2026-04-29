@@ -33,10 +33,10 @@ func (s *ForwardPanelHandlerTestSuite) TestListPanelTunnels_SucceedsAsAdmin() {
 	s.handler.ListPanelTunnels(ctx)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]interface{}
+	var resp map[string]any
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), float64(0), resp["code"])
-	assert.IsType(s.T(), []interface{}{}, resp["data"])
+	assert.IsType(s.T(), []any{}, resp["data"])
 }
 
 func (s *ForwardPanelHandlerTestSuite) TestCreatePanelTunnel_WorksWithValidNode() {
@@ -49,7 +49,7 @@ func (s *ForwardPanelHandlerTestSuite) TestCreatePanelTunnel_WorksWithValidNode(
 	}
 	assert.NoError(s.T(), database.Get().Create(&node).Error)
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"name":          "Create Tunnel",
 		"inNodeId":      node.ID,
 		"type":          1,
@@ -64,10 +64,10 @@ func (s *ForwardPanelHandlerTestSuite) TestCreatePanelTunnel_WorksWithValidNode(
 	s.handler.CreatePanelTunnel(ctx)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]interface{}
+	var resp map[string]any
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]interface{})
+	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), "Create Tunnel", data["name"])
 }
 
@@ -106,7 +106,7 @@ func (s *ForwardPanelHandlerTestSuite) TestUpdatePanelTunnel_AllowsRuntimeFields
 	}
 	assert.NoError(s.T(), database.Get().Create(&tunnel).Error)
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"id":            tunnel.ID,
 		"name":          "Updated Name",
 		"flow":          2,
@@ -120,7 +120,7 @@ func (s *ForwardPanelHandlerTestSuite) TestUpdatePanelTunnel_AllowsRuntimeFields
 	s.handler.UpdatePanelTunnel(ctx)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]interface{}
+	var resp map[string]any
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), float64(0), resp["code"])
 	var updated model.ForwardTunnel
@@ -151,11 +151,11 @@ func (s *ForwardPanelHandlerTestSuite) TestDeletePanelTunnel_RemovesRecord() {
 	}
 	assert.NoError(s.T(), database.Get().Create(&tunnel).Error)
 
-	ctx, w := s.newAdminContext("POST", "/admin/tunnel/delete", map[string]interface{}{"id": tunnel.ID})
+	ctx, w := s.newAdminContext("POST", "/admin/tunnel/delete", map[string]any{"id": tunnel.ID})
 	s.handler.DeletePanelTunnel(ctx)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]interface{}
+	var resp map[string]any
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), float64(0), resp["code"])
 	var count int64
@@ -185,13 +185,13 @@ func (s *ForwardPanelHandlerTestSuite) TestDiagnosePanelTunnel_ReturnsReport() {
 	}
 	assert.NoError(s.T(), database.Get().Create(&tunnel).Error)
 
-	ctx, w := s.newAdminContext("POST", "/admin/tunnel/diagnose", map[string]interface{}{"tunnelId": tunnel.ID})
+	ctx, w := s.newAdminContext("POST", "/admin/tunnel/diagnose", map[string]any{"tunnelId": tunnel.ID})
 	s.handler.DiagnosePanelTunnel(ctx)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]interface{}
+	var resp map[string]any
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
-	data := resp["data"].(map[string]interface{})
+	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), float64(tunnel.ID), data["tunnelId"])
 }
 
@@ -218,14 +218,14 @@ func (s *ForwardPanelHandlerTestSuite) TestGetPanelRuntimeStatus_ProxiesNodeXSta
 	s.handler.GetPanelRuntimeStatus(ctx)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]interface{}
+	var resp map[string]any
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]interface{})
-	config := data["config"].(map[string]interface{})
-	runtimeStatus := data["runtimeStatus"].(map[string]interface{})
-	reachability := data["reachability"].(map[string]interface{})
-	runtimeReady := data["runtimeReady"].(map[string]interface{})
+	data := resp["data"].(map[string]any)
+	config := data["config"].(map[string]any)
+	runtimeStatus := data["runtimeStatus"].(map[string]any)
+	reachability := data["reachability"].(map[string]any)
+	runtimeReady := data["runtimeReady"].(map[string]any)
 	assert.Equal(s.T(), "gost", config["backend"])
 	assert.Equal(s.T(), true, config["nodeXMode"])
 	assert.Equal(s.T(), "v0.0.17-test.5", runtimeStatus["version"])
@@ -257,16 +257,16 @@ func (s *ForwardPanelHandlerTestSuite) TestDiagnosePanelRuntime_ReturnsDoctorSum
 	s.handler.DiagnosePanelRuntime(ctx)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]interface{}
+	var resp map[string]any
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]interface{})
-	config := data["config"].(map[string]interface{})
-	health := data["health"].(map[string]interface{})
-	status := data["runtimeStatus"].(map[string]interface{})
-	reachability := data["reachability"].(map[string]interface{})
-	runtimeReady := data["runtimeReady"].(map[string]interface{})
-	commands := data["commands"].(map[string]interface{})
+	data := resp["data"].(map[string]any)
+	config := data["config"].(map[string]any)
+	health := data["health"].(map[string]any)
+	status := data["runtimeStatus"].(map[string]any)
+	reachability := data["reachability"].(map[string]any)
+	runtimeReady := data["runtimeReady"].(map[string]any)
+	commands := data["commands"].(map[string]any)
 	assert.Equal(s.T(), "gost", config["backend"])
 	assert.Equal(s.T(), true, config["nodeXMode"])
 	assert.Equal(s.T(), true, health["ok"])
@@ -302,12 +302,12 @@ func (s *ForwardPanelHandlerTestSuite) TestGetNodeXRuntimeStatus_UsesDedicatedNo
 	s.handler.GetNodeXRuntimeStatus(ctx)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]interface{}
+	var resp map[string]any
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]interface{})
-	config := data["config"].(map[string]interface{})
-	status := data["runtimeStatus"].(map[string]interface{})
+	data := resp["data"].(map[string]any)
+	config := data["config"].(map[string]any)
+	status := data["runtimeStatus"].(map[string]any)
 	assert.Equal(s.T(), true, config["nodeXMode"])
 	assert.Equal(s.T(), "v0.0.18-test.5", status["version"])
 }
@@ -335,12 +335,12 @@ func (s *ForwardPanelHandlerTestSuite) TestDiagnoseNodeXRuntime_ReturnsDedicated
 	s.handler.DiagnoseNodeXRuntime(ctx)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]interface{}
+	var resp map[string]any
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]interface{})
-	commands := data["commands"].(map[string]interface{})
-	references := commands["references"].([]interface{})
+	data := resp["data"].(map[string]any)
+	commands := data["commands"].(map[string]any)
+	references := commands["references"].([]any)
 	assert.NotEmpty(s.T(), commands["powerShell"])
 	assert.Contains(s.T(), references[2], "https://github.com/zdwtest/NodeX")
 }
@@ -367,12 +367,12 @@ func (s *ForwardPanelHandlerTestSuite) TestGetLocalRuntimeStatus_UsesDedicatedLo
 	s.handler.GetLocalRuntimeStatus(ctx)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]interface{}
+	var resp map[string]any
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]interface{})
-	config := data["config"].(map[string]interface{})
-	local := data["localAnsible"].(map[string]interface{})
+	data := resp["data"].(map[string]any)
+	config := data["config"].(map[string]any)
+	local := data["localAnsible"].(map[string]any)
 	assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, config["backend"])
 	assert.Equal(s.T(), false, config["nodeXMode"])
 	assert.Equal(s.T(), "go", local["command"])
@@ -397,17 +397,17 @@ func (s *ForwardPanelHandlerTestSuite) TestDiagnoseLocalRuntime_ReturnsDedicated
 	s.handler.DiagnoseLocalRuntime(ctx)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]interface{}
+	var resp map[string]any
 	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), float64(0), resp["code"])
-	data := resp["data"].(map[string]interface{})
-	commands := data["commands"].(map[string]interface{})
-	references := commands["references"].([]interface{})
+	data := resp["data"].(map[string]any)
+	commands := data["commands"].(map[string]any)
+	references := commands["references"].([]any)
 	assert.NotEmpty(s.T(), commands["powerShell"])
 	assert.Contains(s.T(), references[0], "docs/guide/forward-relay-onboarding.md")
 }
 
-func (s *ForwardPanelHandlerTestSuite) newAdminContext(method, path string, payload interface{}) (*gin.Context, *httptest.ResponseRecorder) {
+func (s *ForwardPanelHandlerTestSuite) newAdminContext(method, path string, payload any) (*gin.Context, *httptest.ResponseRecorder) {
 	rec := httptest.NewRecorder()
 	var body bytes.Buffer
 	if payload != nil {

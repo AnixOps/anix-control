@@ -72,7 +72,7 @@ func (s *ForwardAnsibleHandlerTestSuite) TestCreateAnsibleMachine() {
 	handler := NewForwardHandler()
 	s.router.POST("/forward/ansible-machines", handler.CreateAnsibleMachine)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name":   "Ansible Exec 02",
 		"host":   "203.0.113.20",
 		"port":   22,
@@ -114,7 +114,7 @@ func (s *ForwardAnsibleHandlerTestSuite) TestCreateNode_NodeXScopeRequiresAPIPor
 	handler := NewForwardHandler()
 	s.router.POST("/forward/nodes", handler.CreateNode)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name": "NodeX Relay Missing API",
 		"type": model.ForwardNodeTypeRelay,
 		"host": "203.0.113.40",
@@ -150,7 +150,7 @@ func (s *ForwardAnsibleHandlerTestSuite) TestUpdateNode_NodeXScopeRequiresAPIPor
 
 	s.router.PUT("/forward/nodes/:id", handler.UpdateNode)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name": "NodeX Relay Missing API",
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -181,7 +181,7 @@ func (s *ForwardAnsibleHandlerTestSuite) TestUpdateExitNode_NodeXScopeRequiresAP
 
 	s.router.PUT("/forward/nodes/:id", handler.UpdateNode)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name": "NodeX Exit Missing API",
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -210,7 +210,7 @@ func (s *ForwardAnsibleHandlerTestSuite) TestUpdateNode_NodeXScopeRejectsAnsible
 	handler := NewForwardHandler()
 	s.router.PUT("/forward/nodes/:id", handler.UpdateNode)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"name": "Should Not Update",
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -231,7 +231,7 @@ func (s *ForwardAnsibleHandlerTestSuite) TestToggleNode_NodeXScopeRejectsAnsible
 	handler := NewForwardHandler()
 	s.router.POST("/forward/nodes/:id/toggle", handler.ToggleNode)
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"enabled": false,
 	}
 	jsonBody, _ := json.Marshal(body)

@@ -39,7 +39,7 @@ func setupSystemConfigSecurityTest(t *testing.T) (*gorm.DB, *SystemHandler, *gin
 	return db, handler, router
 }
 
-func performSystemConfigJSONRequest(t *testing.T, router *gin.Engine, method, path string, payload interface{}) *httptest.ResponseRecorder {
+func performSystemConfigJSONRequest(t *testing.T, router *gin.Engine, method, path string, payload any) *httptest.ResponseRecorder {
 	t.Helper()
 
 	var body *bytes.Reader
@@ -61,22 +61,22 @@ func performSystemConfigJSONRequest(t *testing.T, router *gin.Engine, method, pa
 	return recorder
 }
 
-func decodeJSONMap(t *testing.T, recorder *httptest.ResponseRecorder) map[string]interface{} {
+func decodeJSONMap(t *testing.T, recorder *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 
-	var payload map[string]interface{}
+	var payload map[string]any
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &payload))
 	return payload
 }
 
-func findConfigByKey(t *testing.T, items interface{}, key string) map[string]interface{} {
+func findConfigByKey(t *testing.T, items any, key string) map[string]any {
 	t.Helper()
 
-	list, ok := items.([]interface{})
+	list, ok := items.([]any)
 	require.True(t, ok)
 
 	for _, item := range list {
-		decoded, ok := item.(map[string]interface{})
+		decoded, ok := item.(map[string]any)
 		require.True(t, ok)
 		if decoded["key"] == key {
 			return decoded
@@ -138,7 +138,7 @@ func TestSystemHandlerGetConfigReturnsRawSensitiveValueWithMaskedDisplay(t *test
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
 	body := decodeJSONMap(t, recorder)
-	data, ok := body["data"].(map[string]interface{})
+	data, ok := body["data"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "runtime-secret-token", data["value"])
 	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, data["display_value"])
@@ -158,7 +158,7 @@ func TestSystemHandlerSetConfigPreservesSensitiveValueAndWritesAuditLog(t *testi
 		Remark: "NodeX runtime token",
 	}).Error)
 
-	recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/system/configs/forward.runtime.nodex.token", map[string]interface{}{
+	recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/system/configs/forward.runtime.nodex.token", map[string]any{
 		"value":             "",
 		"type":              "string",
 		"group":             "forward",
@@ -172,7 +172,7 @@ func TestSystemHandlerSetConfigPreservesSensitiveValueAndWritesAuditLog(t *testi
 	assert.Equal(t, "super-secret-token", stored.Value)
 
 	body := decodeJSONMap(t, recorder)
-	data, ok := body["data"].(map[string]interface{})
+	data, ok := body["data"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, data["value"])
 	assert.Equal(t, true, data["sensitive"])
@@ -199,7 +199,7 @@ func TestSystemHandlerSetConfigTreatsSensitivePlaceholderAsPreserveExisting(t *t
 		Remark: "NodeX runtime token",
 	}).Error)
 
-	recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/system/configs/forward.runtime.nodex.token", map[string]interface{}{
+	recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/system/configs/forward.runtime.nodex.token", map[string]any{
 		"value":       service.SensitiveSystemConfigPlaceholder,
 		"type":        "string",
 		"group":       "forward",
@@ -269,7 +269,7 @@ func TestSystemHandlerGetBackupConfigMasksSensitiveFields(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
 	body := decodeJSONMap(t, recorder)
-	data, ok := body["data"].(map[string]interface{})
+	data, ok := body["data"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, data["s3_access_key"])
 	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, data["s3_secret_key"])
@@ -299,7 +299,7 @@ func TestSystemHandlerUpdateBackupConfigPreservesSensitiveFieldsAndWritesAuditLo
 		S3SecretKey:    "SECRET-KEY-456",
 	}).Error)
 
-	recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/system/backup/config", map[string]interface{}{
+	recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/system/backup/config", map[string]any{
 		"enabled":                     true,
 		"backup_database":             true,
 		"backup_files":                true,
@@ -324,7 +324,7 @@ func TestSystemHandlerUpdateBackupConfigPreservesSensitiveFieldsAndWritesAuditLo
 	assert.Equal(t, "interval:6", stored.Schedule)
 
 	body := decodeJSONMap(t, recorder)
-	data, ok := body["data"].(map[string]interface{})
+	data, ok := body["data"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, data["s3_access_key"])
 	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, data["s3_secret_key"])
@@ -352,7 +352,7 @@ func TestSystemHandlerUpdateBackupConfigTreatsSensitivePlaceholderAsPreserveExis
 		BackupDatabase: true,
 	}).Error)
 
-	recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/system/backup/config", map[string]interface{}{
+	recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/system/backup/config", map[string]any{
 		"storage_type":  "s3",
 		"s3_access_key": service.SensitiveSystemConfigPlaceholder,
 		"s3_secret_key": service.SensitiveSystemConfigPlaceholder,

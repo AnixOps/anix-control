@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"log"
+	"log/slog"
 	"time"
 
 	pb "github.com/anixops/v2board/api/grpc/v2boardpb"
@@ -140,7 +140,7 @@ func (s *NodeGRPCServer) StatusStream(stream pb.NodeService_StatusStreamServer) 
 	defer func() {
 		if nodeID > 0 {
 			mgr.Unregister(nodeID)
-			log.Printf("Node %d disconnected from gRPC stream", nodeID)
+			slog.Info("node gRPC disconnected", "component", "grpc", "method", "StatusStream", "node_id", nodeID)
 		}
 	}()
 
@@ -154,7 +154,7 @@ func (s *NodeGRPCServer) StatusStream(stream pb.NodeService_StatusStreamServer) 
 		if nodeID == 0 {
 			nodeID = req.NodeId
 			mgr.Register(nodeID, clientAddr)
-			log.Printf("Node %d connected via gRPC stream from %s", nodeID, clientAddr)
+			slog.Info("node gRPC connected", "component", "grpc", "method", "StatusStream", "node_id", nodeID, "addr", clientAddr)
 		}
 
 		// 更新活跃时间
@@ -172,7 +172,7 @@ func (s *NodeGRPCServer) StatusStream(stream pb.NodeService_StatusStreamServer) 
 		}
 
 		if err := s.nodeService.Heartbeat(uint(req.NodeId), heartbeatReq); err != nil {
-			log.Printf("Failed to update node status: %v", err)
+			slog.Warn("failed to update node status", "component", "grpc", "method", "StatusStream", "node_id", req.NodeId, "error", err)
 			continue
 		}
 
@@ -180,7 +180,7 @@ func (s *NodeGRPCServer) StatusStream(stream pb.NodeService_StatusStreamServer) 
 		configResp, err := s.checkConfigChanges(req.NodeId)
 		if err == nil && configResp != nil {
 			if err := stream.Send(configResp); err != nil {
-				log.Printf("Failed to send config update: %v", err)
+				slog.Warn("failed to send config update", "component", "grpc", "method", "StatusStream", "node_id", req.NodeId, "error", err)
 			}
 		}
 	}
@@ -270,7 +270,7 @@ func (s *UserGRPCServer) UserChanges(stream pb.UserService_UserChangesServer) er
 		}
 
 		// 记录用户变更
-		log.Printf("User change: type=%v, user_id=%v", notification.Type, notification.User.GetId())
+		slog.Info("user change received", "component", "grpc", "method", "UserChanges", "type", notification.Type, "user_id", notification.User.GetId())
 	}
 }
 
@@ -363,7 +363,7 @@ func (s *TrafficGRPCServer) TrafficStream(stream pb.TrafficService_TrafficStream
 		// 处理流量上报
 		resp, err := s.ReportTraffic(stream.Context(), req)
 		if err != nil {
-			log.Printf("Failed to process traffic: %v", err)
+			slog.Warn("failed to process traffic", "component", "grpc", "method", "TrafficStream", "node_id", req.NodeId, "error", err)
 			continue
 		}
 
@@ -385,7 +385,7 @@ func (s *TrafficGRPCServer) OnlineStream(stream pb.TrafficService_OnlineStreamSe
 		// 处理在线状态上报
 		resp, err := s.ReportOnline(stream.Context(), req)
 		if err != nil {
-			log.Printf("Failed to process online status: %v", err)
+			slog.Warn("failed to process online status", "component", "grpc", "method", "OnlineStream", "node_id", req.NodeId, "error", err)
 			continue
 		}
 

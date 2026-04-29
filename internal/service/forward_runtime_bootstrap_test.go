@@ -71,7 +71,7 @@ func (s *ForwardRuntimeBootstrapTestSuite) TestInitForwardRuntimeSystemConfig_Se
 				TargetPattern:  "{{node.host}}",
 				TimeoutSeconds: 90,
 				Become:         true,
-				ExtraVars: map[string]interface{}{
+				ExtraVars: map[string]any{
 					"retry": 3,
 				},
 				Environment: map[string]string{

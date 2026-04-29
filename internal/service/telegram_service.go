@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -54,7 +55,7 @@ func (s *TelegramBotService) SetWebhook(webhookURL string) error {
 	}
 
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/setWebhook", bot.Token)
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"url": webhookURL,
 	}
 
@@ -354,7 +355,11 @@ func (s *TelegramBotService) handleAdmin(chatID int64, userID int64) error {
 
 // handleCallback 处理回调查询
 func (s *TelegramBotService) handleCallback(update *TelegramUpdate) error {
-	// TODO: 实现回调处理
+	// Unimplemented: Telegram inline button callback handling.
+	// When implemented, this should parse update.CallbackQuery.Data to determine
+	// the action (e.g., confirm subscription, view account, ticket operations)
+	// and respond with an appropriate AnswerCallbackQuery + edit message.
+	log.Printf("[telegram] callback query received but handler not implemented: chat_id=%d", update.CallbackQuery.Message.Chat.ID)
 	return nil
 }
 
@@ -366,7 +371,7 @@ func (s *TelegramBotService) SendMessage(chatID int64, text string) error {
 	}
 
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", bot.Token)
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"chat_id":    chatID,
 		"text":       text,
 		"parse_mode": "Markdown",
@@ -402,7 +407,7 @@ func (s *TelegramBotService) Broadcast(text string) error {
 }
 
 // apiRequest 发送API请求
-func (s *TelegramBotService) apiRequest(url string, payload interface{}) (map[string]interface{}, error) {
+func (s *TelegramBotService) apiRequest(url string, payload any) (map[string]any, error) {
 	var body bytes.Buffer
 	if payload != nil {
 		json.NewEncoder(&body).Encode(payload)
@@ -414,7 +419,7 @@ func (s *TelegramBotService) apiRequest(url string, payload interface{}) (map[st
 	}
 	defer resp.Body.Close()
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
@@ -515,7 +520,7 @@ func (s *TelegramUserService) GetByUserID(userID uint) (*model.TelegramUser, err
 func (s *TelegramUserService) UpdateLastActive(telegramID int64) error {
 	return s.db.Model(&model.TelegramUser{}).
 		Where("telegram_id = ?", telegramID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"last_active":   time.Now(),
 			"message_count": gorm.Expr("message_count + 1"),
 		}).Error
@@ -526,7 +531,7 @@ func (s *TelegramUserService) Ban(telegramID int64) error {
 	now := time.Now()
 	return s.db.Model(&model.TelegramUser{}).
 		Where("telegram_id = ?", telegramID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"is_banned": true,
 			"banned_at": now,
 		}).Error
@@ -536,7 +541,7 @@ func (s *TelegramUserService) Ban(telegramID int64) error {
 func (s *TelegramUserService) Unban(telegramID int64) error {
 	return s.db.Model(&model.TelegramUser{}).
 		Where("telegram_id = ?", telegramID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"is_banned": false,
 			"banned_at": nil,
 		}).Error

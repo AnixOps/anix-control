@@ -28,18 +28,18 @@ func setupSystemAuditTest(t *testing.T) (*gorm.DB, *gin.Engine) {
 	return db, router
 }
 
-func decodeAuditResponse(t *testing.T, recorder *httptest.ResponseRecorder) map[string]interface{} {
+func decodeAuditResponse(t *testing.T, recorder *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
-	var payload map[string]interface{}
+	var payload map[string]any
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &payload))
 	return payload
 }
 
-func extractAuditList(t *testing.T, body map[string]interface{}) []interface{} {
+func extractAuditList(t *testing.T, body map[string]any) []any {
 	t.Helper()
-	data, ok := body["data"].(map[string]interface{})
+	data, ok := body["data"].(map[string]any)
 	require.True(t, ok)
-	list, ok := data["list"].([]interface{})
+	list, ok := data["list"].([]any)
 	require.True(t, ok)
 	return list
 }
@@ -69,7 +69,7 @@ func TestGetAuditLogsSupportsFilterAndPagination(t *testing.T) {
 	assert.Equal(t, float64(1), body["page_size"])
 	require.Len(t, list, 1)
 
-	row, ok := list[0].(map[string]interface{})
+	row, ok := list[0].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "backup_config", row["target_type"])
 	assert.Equal(t, "update", row["action"])
@@ -109,7 +109,7 @@ func TestGetAuditLogsRedactsSensitiveContent(t *testing.T) {
 	require.Len(t, list, 2)
 
 	for _, item := range list {
-		row, ok := item.(map[string]interface{})
+		row, ok := item.(map[string]any)
 		require.True(t, ok)
 		content, ok := row["content"].(string)
 		require.True(t, ok)

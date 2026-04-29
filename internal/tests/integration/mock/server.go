@@ -138,7 +138,7 @@ func (s *Server) URL() string {
 // 处理函数
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"status":    "ok",
 		"timestamp": time.Now().Unix(),
 		"uptime":    time.Since(s.startTime).Seconds(),
@@ -170,9 +170,9 @@ func (s *Server) handleGetUsers(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	users := make([]interface{}, 0, len(s.users))
+	users := make([]any, 0, len(s.users))
 	for _, user := range s.users {
-		users = append(users, map[string]interface{}{
+		users = append(users, map[string]any{
 			"id":              user.ID,
 			"uuid":            user.UUID,
 			"speed_limit":     user.SpeedLimit,
@@ -184,7 +184,7 @@ func (s *Server) handleGetUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"users": users,
 		"total": len(users),
 	})
@@ -243,7 +243,7 @@ func (s *Server) handleNodeRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"node_id": 1,
 		"api_key": "test-api-key",
 		"message": "registered successfully",

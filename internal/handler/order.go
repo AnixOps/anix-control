@@ -39,8 +39,8 @@ func (h *OrderHandler) GetOrders(c *gin.Context) {
 func (h *OrderHandler) SaveOrder(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	var req struct {
-		PlanID   uint   `json:"plan_id" binding:"required"`
-		Period   string `json:"period" binding:"required"`
+		PlanID   uint   `json:"plan_id" binding:"required,gt=0"`
+		Period   string `json:"period" binding:"required,min=1"`
 		CouponID *uint  `json:"coupon_id"`
 	}
 

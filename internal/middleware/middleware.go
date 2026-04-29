@@ -203,14 +203,86 @@ func AppTokenAuth() gin.HandlerFunc {
 	}
 }
 
+// CORS 跨域中间件 — 支持配置允许的源，默认仅允许配置列表中的源
 func CORS() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Response-Format, If-None-Match, X-API-Key, X-Signature, X-Timestamp, X-Nonce, X-Request-ID")
-		c.Header("Access-Control-Expose-Headers", "ETag, X-Request-ID")
+	cfg := config.Get()
 
-		if c.Request.Method == "OPTIONS" {
+	allowedOrigins := []string{}
+	allowedMethods := []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"}
+	allowedHeaders := []string{"Content-Type", "Authorization", "X-Response-Format", "If-None-Match", "X-API-Key", "X-Signature", "X-Timestamp", "X-Nonce", "X-Request-ID"}
+	exposeHeaders := []string{"ETag", "X-Request-ID"}
+	allowCredentials := false
+	maxAge := 86400 // 24 hours
+
+	if cfg != nil {
+		if len(cfg.Server.CORS.AllowedOrigins) > 0 {
+			allowedOrigins = cfg.Server.CORS.AllowedOrigins
+		}
+		if len(cfg.Server.CORS.AllowedMethods) > 0 {
+			allowedMethods = cfg.Server.CORS.AllowedMethods
+		}
+		if len(cfg.Server.CORS.AllowedHeaders) > 0 {
+			allowedHeaders = cfg.Server.CORS.AllowedHeaders
+		}
+		allowCredentials = cfg.Server.CORS.AllowCredentials
+		if cfg.Server.CORS.MaxAge > 0 {
+			maxAge = cfg.Server.CORS.MaxAge
+		}
+	}
+
+	allowAllOrigins := len(allowedOrigins) == 0
+
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		isPreflight := c.Request.Method == "OPTIONS"
+
+		var allowedOrigin string
+		matchedByWildcard := false
+		if allowAllOrigins {
+			// No origins configured: echo the request Origin back
+			allowedOrigin = origin
+			matchedByWildcard = true
+		} else {
+			// Match against the configured allowlist
+			for _, o := range allowedOrigins {
+				if o == "*" {
+					allowedOrigin = origin
+					matchedByWildcard = true
+					break
+				}
+				if o == origin {
+					allowedOrigin = origin
+					break
+				}
+			}
+		}
+
+		// Reject requests with no Origin header or unlisted origin
+		if origin == "" || allowedOrigin == "" {
+			c.Header("Vary", "Origin")
+			if isPreflight {
+				c.AbortWithStatus(http.StatusForbidden)
+				return
+			}
+			c.Next()
+			return
+		}
+
+		// Never combine wildcard origin with credentials (RFC 6454 / CORS spec)
+		reflectCredentials := allowCredentials && !matchedByWildcard
+
+		c.Header("Access-Control-Allow-Origin", allowedOrigin)
+		c.Header("Access-Control-Allow-Methods", strings.Join(allowedMethods, ", "))
+		c.Header("Access-Control-Allow-Headers", strings.Join(allowedHeaders, ", "))
+		c.Header("Access-Control-Expose-Headers", strings.Join(exposeHeaders, ", "))
+		c.Header("Vary", "Origin")
+
+		if reflectCredentials {
+			c.Header("Access-Control-Allow-Credentials", "true")
+		}
+
+		if isPreflight {
+			c.Header("Access-Control-Max-Age", strconv.Itoa(maxAge))
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}

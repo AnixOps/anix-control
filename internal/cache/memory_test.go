@@ -305,3 +305,79 @@ func TestConcurrentAccess(t *testing.T) {
 		<-done
 	}
 }
+
+func TestLRUEviction(t *testing.T) {
+	// 使用小容量缓存测试 LRU 淘汰
+	oldCache := memCache
+	defer func() { memCache = oldCache }()
+
+	InitMemoryWithSize(5)
+	defer CloseMemory()
+
+	// 插入 5 个条目（填满）
+	for i := 0; i < 5; i++ {
+		Set("key_"+string(rune('A'+i)), i, 0)
+	}
+	assert.Equal(t, 5, Len())
+
+	// 访问 key_A 使其成为最近使用
+	Get("key_A")
+
+	// 插入第 6 个条目，应淘汰最久未使用的 key_B
+	Set("key_F", 5, 0)
+
+	// 容量应保持为 5
+	assert.Equal(t, 5, Len())
+
+	// key_B 应被淘汰（最久未使用）
+	assert.False(t, Exists("key_B"))
+	// key_A 应仍然存在（被访问过）
+	assert.True(t, Exists("key_A"))
+	// key_F 应存在
+	assert.True(t, Exists("key_F"))
+}
+
+func TestLRUWithExpiration(t *testing.T) {
+	oldCache := memCache
+	defer func() { memCache = oldCache }()
+
+	InitMemoryWithSize(3)
+	defer CloseMemory()
+
+	// 插入 2 个即将过期的条目
+	Set("exp1", "value1", 50*time.Millisecond)
+	Set("exp2", "value2", 50*time.Millisecond)
+
+	// 插入 1 个不过期的条目
+	Set("perm", "permanent", 0)
+
+	// 等待过期
+	time.Sleep(100 * time.Millisecond)
+
+	// 过期项应被清理
+	assert.False(t, Exists("exp1"))
+	assert.False(t, Exists("exp2"))
+	assert.True(t, Exists("perm"))
+}
+
+func TestInitMemoryWithSize(t *testing.T) {
+	oldCache := memCache
+	defer func() { memCache = oldCache }()
+	defer CloseMemory()
+
+	InitMemoryWithSize(10)
+
+	assert.NotNil(t, memCache)
+	assert.Equal(t, 10, memCache.maxSize)
+}
+
+func TestDefaultMaxSize(t *testing.T) {
+	oldCache := memCache
+	defer func() { memCache = oldCache }()
+	defer CloseMemory()
+
+	InitMemory()
+
+	assert.NotNil(t, memCache)
+	assert.Equal(t, DefaultMaxSize, memCache.maxSize)
+}

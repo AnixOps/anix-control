@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"sync"
@@ -33,7 +34,7 @@ type AgentConnection struct {
 	NodeID       uint
 	LastSeen     time.Time
 	Version      string
-	SystemInfo   map[string]interface{}
+	SystemInfo   map[string]any
 	Capabilities []string
 	WsConn       *websocket.Conn
 	writeMu      sync.Mutex
@@ -42,7 +43,7 @@ type AgentConnection struct {
 type wsAuthInfo struct {
 	NodeID       uint
 	Version      string
-	System       map[string]interface{}
+	System       map[string]any
 	Capabilities []string
 	FromHeaders  bool
 }
@@ -61,7 +62,7 @@ type wsOutboundEnvelope struct {
 	Type       string      `json:"type"`
 	NodeID     uint        `json:"node_id"`
 	Timestamp  int64       `json:"timestamp"`
-	Payload    interface{} `json:"payload,omitempty"`
+	Payload    any `json:"payload,omitempty"`
 	RequireAck bool        `json:"require_ack,omitempty"`
 }
 
@@ -108,7 +109,7 @@ func (h *AgentHandler) verifyForwardNodeToken(nodeID uint, token string) error {
 }
 
 func (h *AgentHandler) markNodeOnline(nodeID uint) {
-	h.db.Model(&model.ForwardNode{}).Where("id = ?", nodeID).Updates(map[string]interface{}{
+	h.db.Model(&model.ForwardNode{}).Where("id = ?", nodeID).Updates(map[string]any{
 		"status":     model.ForwardNodeStatusOnline,
 		"last_check": time.Now(),
 	})
@@ -170,7 +171,7 @@ func (h *AgentHandler) authFromMessage(conn *websocket.Conn) (*wsAuthInfo, error
 		NodeID       uint                   `json:"node_id"`
 		Token        string                 `json:"token"`
 		Version      string                 `json:"version"`
-		System       map[string]interface{} `json:"system"`
+		System       map[string]any `json:"system"`
 		Capabilities []string               `json:"capabilities"`
 	}
 	if err := json.Unmarshal(msg, &authMsg); err != nil || authMsg.Type != "auth" {
@@ -284,7 +285,7 @@ func (h *AgentHandler) sendLegacyTask(agentConn *AgentConnection, task AgentTask
 	}
 	agentConn.writeMu.Lock()
 	defer agentConn.writeMu.Unlock()
-	return agentConn.WsConn.WriteJSON(map[string]interface{}{
+	return agentConn.WsConn.WriteJSON(map[string]any{
 		"type": "task",
 		"task": task,
 	})
@@ -313,7 +314,7 @@ func (h *AgentHandler) sendAck(agentConn *AgentConnection, messageID string, err
 	})
 }
 
-func (h *AgentHandler) dispatchWithAckRetry(agentConn *AgentConnection, messageType string, payload interface{}, requireAck bool) (string, *wsAckPayload, error) {
+func (h *AgentHandler) dispatchWithAckRetry(agentConn *AgentConnection, messageType string, payload any, requireAck bool) (string, *wsAckPayload, error) {
 	messageID := generateMessageID()
 	if !requireAck {
 		return messageID, nil, h.sendEnvelope(agentConn, &wsOutboundEnvelope{
@@ -376,7 +377,7 @@ func (h *AgentHandler) dispatchWithAckRetry(agentConn *AgentConnection, messageT
 }
 
 func (h *AgentHandler) failPendingAcksForNode(nodeID uint, reason string) {
-	h.pendingAcks.Range(func(key, value interface{}) bool {
+	h.pendingAcks.Range(func(key, value any) bool {
 		waiter := value.(*wsPendingAck)
 		if waiter.NodeID != nodeID {
 			return true
@@ -445,7 +446,7 @@ func (h *AgentHandler) handleWebSocketMessage(agentConn *AgentConnection, raw []
 // @Accept json
 // @Produce json
 // @Param request body AgentRegisterRequest true "娉ㄥ唽淇℃伅"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /api/v2/agent/register [post]
 func (h *AgentHandler) AgentRegister(c *gin.Context) {
 	var req AgentRegisterRequest
@@ -485,10 +486,10 @@ func (h *AgentHandler) AgentRegister(c *gin.Context) {
 
 // AgentRegisterRequest 娉ㄥ唽璇锋眰
 type AgentRegisterRequest struct {
-	NodeID       uint                   `json:"node_id"`
-	Token        string                 `json:"token"`
-	Version      string                 `json:"version"`
-	System       map[string]interface{} `json:"system"`
+	NodeID       uint                   `json:"node_id" binding:"required,gt=0"`
+	Token        string                 `json:"token" binding:"required,min=1"`
+	Version      string                 `json:"version" binding:"omitempty,max=64"`
+	System       map[string]any         `json:"system"`
 	Capabilities []string               `json:"capabilities"`
 }
 
@@ -500,7 +501,7 @@ type AgentRegisterRequest struct {
 // @Accept json
 // @Produce json
 // @Param request body AgentHeartbeatRequest true "蹇冭烦淇℃伅"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /api/v2/agent/heartbeat [post]
 func (h *AgentHandler) AgentHeartbeat(c *gin.Context) {
 	var req AgentHeartbeatRequest
@@ -517,9 +518,9 @@ func (h *AgentHandler) AgentHeartbeat(c *gin.Context) {
 
 // AgentHeartbeatRequest 蹇冭烦璇锋眰
 type AgentHeartbeatRequest struct {
-	NodeID    uint                   `json:"node_id"`
-	Status    string                 `json:"status"`
-	Resources map[string]interface{} `json:"resources"`
+	NodeID    uint                   `json:"node_id" binding:"required,gt=0"`
+	Status    string                 `json:"status" binding:"omitempty,max=32"`
+	Resources map[string]any         `json:"resources"`
 }
 
 // ========== 浠诲姟绠＄悊 ==========
@@ -529,14 +530,18 @@ type AgentHeartbeatRequest struct {
 // @Tags Agent
 // @Produce json
 // @Param node_id query int true "鑺傜偣 ID"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /api/v2/agent/tasks [get]
 func (h *AgentHandler) AgentGetTasks(c *gin.Context) {
 	nodeID, _ := strconv.ParseUint(c.Query("node_id"), 10, 32)
-	_ = nodeID // TODO: 浣跨敤 nodeID 杩囨护浠诲姟
 
-	// TODO: 浠庝换鍔￠槦鍒楄幏鍙栬鑺傜偣鐨勫緟鎵ц浠诲姟
-	// 杩欓噷绠€鍖栧疄鐜帮紝杩斿洖绌轰换鍔″垪琛?	tasks := []AgentTask{}
+	// Agent task polling stub: return pending tasks for a specific node.
+	// Integration steps:
+	//   1. Query the task queue/database for tasks assigned to this nodeID
+	//   2. Filter by task status (pending/queued)
+	//   3. Serialize and return as AgentTask list
+	//   4. Include task type, parameters, and deadline
+	log.Printf("[STUB] agent task poll for node_id=%d: returning empty task list", nodeID)
 
 	tasks := []AgentTask{}
 	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
@@ -547,7 +552,7 @@ type AgentTask struct {
 	ID      string                 `json:"id"`
 	Type    string                 `json:"type"`
 	Action  string                 `json:"action"`
-	Params  map[string]interface{} `json:"params"`
+	Params  map[string]any `json:"params"`
 	Timeout int                    `json:"timeout"`
 }
 
@@ -557,7 +562,7 @@ type AgentTaskStatus struct {
 	NodeID      uint                   `json:"node_id"`
 	Type        string                 `json:"type,omitempty"`
 	Action      string                 `json:"action,omitempty"`
-	Params      map[string]interface{} `json:"params,omitempty"`
+	Params      map[string]any `json:"params,omitempty"`
 	Timeout     int                    `json:"timeout,omitempty"`
 	Status      string                 `json:"status"`
 	MessageID   string                 `json:"message_id,omitempty"`
@@ -565,7 +570,7 @@ type AgentTaskStatus struct {
 	Success     bool                   `json:"success"`
 	Output      string                 `json:"output,omitempty"`
 	Error       string                 `json:"error,omitempty"`
-	Data        interface{}            `json:"data,omitempty"`
+	Data        any            `json:"data,omitempty"`
 	DurationMS  int64                  `json:"duration_ms,omitempty"`
 	Timestamp   time.Time              `json:"timestamp"`
 	UpdatedAt   time.Time              `json:"updated_at"`
@@ -578,7 +583,7 @@ type AgentTaskStatus struct {
 // @Accept json
 // @Produce json
 // @Param request body AgentTaskResult true "浠诲姟缁撴灉"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /api/v2/agent/result [post]
 func (h *AgentHandler) AgentReportResult(c *gin.Context) {
 	var result AgentTaskResult
@@ -587,8 +592,11 @@ func (h *AgentHandler) AgentReportResult(c *gin.Context) {
 		return
 	}
 
-	// TODO: 淇濆瓨浠诲姟缁撴灉鍒版暟鎹簱
-	// TODO: 濡傛灉鏈夊洖璋冿紝瑙﹀彂鍥炶皟
+	// Agent task result reporting stub:
+	//   1. Persist the task result to the database (agent_task_results table)
+	//   2. If the task has a callback URL configured, POST the result to it
+	//   3. Update task status in the in-memory cache
+	log.Printf("[STUB] agent task result report for task_id=%s: persistence not yet implemented", result.TaskID)
 
 	now := time.Now()
 	snapshot, _ := h.taskResults.Load(result.TaskID)
@@ -641,7 +649,7 @@ type AgentTaskResult struct {
 	Success   bool        `json:"success"`
 	Output    string      `json:"output"`
 	Error     string      `json:"error,omitempty"`
-	Data      interface{} `json:"data,omitempty"`
+	Data      any `json:"data,omitempty"`
 	Duration  int64       `json:"duration_ms"`
 	Timestamp time.Time   `json:"timestamp"`
 }
@@ -655,7 +663,7 @@ type AgentTaskResult struct {
 // @Accept json
 // @Produce json
 // @Param request body AgentMonitorRequest true "鐩戞帶鏁版嵁"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /api/v2/agent/monitor [post]
 func (h *AgentHandler) AgentMonitor(c *gin.Context) {
 	var req AgentMonitorRequest
@@ -664,7 +672,12 @@ func (h *AgentHandler) AgentMonitor(c *gin.Context) {
 		return
 	}
 
-	// TODO: 淇濆瓨鐩戞帶鏁版嵁鍒版椂搴忔暟鎹簱
+	// Agent monitor data storage stub:
+	//   1. Persist the monitor snapshot to a time-series database (e.g., InfluxDB, Prometheus)
+	//   2. Store metrics: CPU, memory, disk, network, and custom system stats
+	//   3. Enable historical queries via a query endpoint
+	// Current implementation stores only the latest snapshot in memory.
+	log.Printf("[STUB] agent monitor data for node_id=%d: time-series persistence not yet implemented", req.NodeID)
 
 	snapshot := AgentMonitorSnapshot{
 		NodeID:    req.NodeID,
@@ -683,13 +696,13 @@ func (h *AgentHandler) AgentMonitor(c *gin.Context) {
 // AgentMonitorRequest 鐩戞帶璇锋眰
 type AgentMonitorRequest struct {
 	NodeID uint                   `json:"node_id" binding:"required"`
-	System map[string]interface{} `json:"system"`
+	System map[string]any `json:"system"`
 }
 
 // AgentMonitorSnapshot stores the latest monitor payload pushed by an agent node.
 type AgentMonitorSnapshot struct {
 	NodeID    uint                   `json:"node_id"`
-	System    map[string]interface{} `json:"system"`
+	System    map[string]any `json:"system"`
 	UpdatedAt time.Time              `json:"updated_at"`
 }
 
@@ -719,18 +732,18 @@ func (h *AgentHandler) AgentWebSocket(c *gin.Context) {
 		Token  string `json:"token"`
 	}
 	if err := json.Unmarshal(msg, &authMsg); err != nil || authMsg.Type != "auth" {
-		conn.WriteJSON(map[string]string{"error": "invalid auth"})
+		_ = conn.WriteJSON(map[string]string{"error": "invalid auth"})
 		return
 	}
 
 	// 楠岃瘉 Token
 	var node model.ForwardNode
 	if err := h.db.First(&node, authMsg.NodeID).Error; err != nil {
-		conn.WriteJSON(map[string]string{"error": "node not found"})
+		_ = conn.WriteJSON(map[string]string{"error": "node not found"})
 		return
 	}
 	if node.APIToken != authMsg.Token {
-		conn.WriteJSON(map[string]string{"error": "invalid token"})
+		_ = conn.WriteJSON(map[string]string{"error": "invalid token"})
 		return
 	}
 
@@ -742,7 +755,7 @@ func (h *AgentHandler) AgentWebSocket(c *gin.Context) {
 	}
 	h.connections.Store(authMsg.NodeID, agentConn)
 
-	conn.WriteJSON(map[string]string{"type": "auth", "message": "connected"})
+	_ = conn.WriteJSON(map[string]string{"type": "auth", "message": "connected"})
 
 	// 澶勭悊娑堟伅寰幆
 	for {
@@ -751,10 +764,16 @@ func (h *AgentHandler) AgentWebSocket(c *gin.Context) {
 			break
 		}
 
-		// 澶勭悊娑堟伅
-		var m map[string]interface{}
-		json.Unmarshal(msg, &m)
-		// TODO: 澶勭悊涓嶅悓绫诲瀷鐨勬秷鎭?		_ = m
+		// Parse and dispatch WebSocket message types:
+		//   - "heartbeat": update LastSeen timestamp
+		//   - "log": forward log entries to the logging system
+		//   - "status_change": notify about service state changes
+		//   - "error": record and alert error events
+		var m map[string]any
+		if err := json.Unmarshal(msg, &m); err != nil {
+			log.Printf("[WARN] agent ws: failed to parse message: %v", err)
+			continue
+		}
 	}
 
 	// 娓呯悊杩炴帴
@@ -819,7 +838,7 @@ func (h *AgentHandler) AgentWebSocketUnified(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body CreateTaskRequest true "浠诲姟淇℃伅"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/agent/tasks [post]
 func (h *AgentHandler) CreateTask(c *gin.Context) {
 	var req CreateTaskRequest
@@ -872,7 +891,7 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 	}
 	h.taskResults.Store(task.ID, taskStatus)
 
-	messageID, ack, err := h.dispatchWithAckRetry(agentConn, "task.assign", map[string]interface{}{
+	messageID, ack, err := h.dispatchWithAckRetry(agentConn, "task.assign", map[string]any{
 		"task": task,
 	}, true)
 	if err != nil {
@@ -943,7 +962,7 @@ type CreateTaskRequest struct {
 	NodeID  uint                   `json:"node_id" binding:"required"`
 	Type    string                 `json:"type" binding:"required"`
 	Action  string                 `json:"action" binding:"required"`
-	Params  map[string]interface{} `json:"params"`
+	Params  map[string]any `json:"params"`
 	Timeout int                    `json:"timeout"`
 }
 
@@ -953,14 +972,14 @@ type CreateTaskRequest struct {
 // @Tags 绠＄悊绔?Agent
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/agent/list [get]
 func (h *AgentHandler) ListAgents(c *gin.Context) {
-	var agents []map[string]interface{}
+	var agents []map[string]any
 
-	h.connections.Range(func(key, value interface{}) bool {
+	h.connections.Range(func(key, value any) bool {
 		conn := value.(*AgentConnection)
-		agents = append(agents, map[string]interface{}{
+		agents = append(agents, map[string]any{
 			"node_id":      conn.NodeID,
 			"last_seen":    conn.LastSeen,
 			"version":      conn.Version,
@@ -984,8 +1003,8 @@ func (h *AgentHandler) ListAgents(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param task_id path string true "Task ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /admin/agent/tasks/{task_id} [get]
 func (h *AgentHandler) GetTaskResult(c *gin.Context) {
 	taskID := c.Param("task_id")
@@ -1016,8 +1035,8 @@ func (h *AgentHandler) GetTaskResult(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param node_id query int true "Node ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /admin/agent/monitor [get]
 func (h *AgentHandler) GetMonitor(c *gin.Context) {
 	nodeID, err := strconv.ParseUint(c.Query("node_id"), 10, 32)
@@ -1048,7 +1067,7 @@ func (h *AgentHandler) GetMonitor(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body ExecuteCommandRequest true "鍛戒护淇℃伅"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/agent/execute [post]
 func (h *AgentHandler) ExecuteCommand(c *gin.Context) {
 	var req ExecuteCommandRequest
@@ -1062,7 +1081,7 @@ func (h *AgentHandler) ExecuteCommand(c *gin.Context) {
 		NodeID: req.NodeID,
 		Type:   "command",
 		Action: req.Command,
-		Params: map[string]interface{}{
+		Params: map[string]any{
 			"args": req.Args,
 			"env":  req.Env,
 		},
@@ -1079,7 +1098,7 @@ type ExecuteCommandRequest struct {
 	NodeID  uint                   `json:"node_id" binding:"required"`
 	Command string                 `json:"command" binding:"required"`
 	Args    []string               `json:"args"`
-	Env     map[string]interface{} `json:"env"`
+	Env     map[string]any `json:"env"`
 	Timeout int                    `json:"timeout"`
 }
 
@@ -1091,7 +1110,7 @@ type ExecuteCommandRequest struct {
 // @Tags Agent
 // @Produce json
 // @Param node_id query int true "鑺傜偣 ID"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /api/v2/forward/agent/rules [get]
 func (h *AgentHandler) AgentGetForwardRules(c *gin.Context) {
 	nodeID, _ := strconv.ParseUint(c.Query("node_id"), 10, 32)

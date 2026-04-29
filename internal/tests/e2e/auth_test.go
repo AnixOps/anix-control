@@ -109,10 +109,10 @@ func (s *AuthE2ETestSuite) TestRegister_Success() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
 
-	data := response["data"].(map[string]interface{})
+	data := response["data"].(map[string]any)
 	assert.NotEmpty(s.T(), data["token"])
 	assert.Equal(s.T(), "newuser@example.com", data["email"])
 	assert.False(s.T(), data["is_admin"].(bool))
@@ -223,10 +223,10 @@ func (s *AuthE2ETestSuite) TestLogin_Success() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
 
-	data := response["data"].(map[string]interface{})
+	data := response["data"].(map[string]any)
 	assert.NotEmpty(s.T(), data["token"])
 	assert.Equal(s.T(), "login@example.com", data["email"])
 }
@@ -294,9 +294,9 @@ func (s *AuthE2ETestSuite) TestJWTMiddleware_ValidToken() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
-	data := response["data"].(map[string]interface{})
+	data := response["data"].(map[string]any)
 	token := data["token"].(string)
 
 	// 使用 token 访问受保护的接口
@@ -353,10 +353,10 @@ func (s *AuthE2ETestSuite) TestAdminLogin() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	json.Unmarshal(w.Body.Bytes(), &response)
 
-	data := response["data"].(map[string]interface{})
+	data := response["data"].(map[string]any)
 	assert.True(s.T(), data["is_admin"].(bool))
 }
 

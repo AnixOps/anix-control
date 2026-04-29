@@ -39,7 +39,7 @@ func TestMessageJSON(t *testing.T) {
 			name: "node update message",
 			message: Message{
 				Type: MessageTypeNodeUpdate,
-				Data: map[string]interface{}{
+				Data: map[string]any{
 					"node_id":     1,
 					"change_type": "created",
 				},
@@ -58,7 +58,7 @@ func TestMessageJSON(t *testing.T) {
 			name: "user update with data",
 			message: Message{
 				Type: MessageTypeUserUpdate,
-				Data: map[string]interface{}{
+				Data: map[string]any{
 					"change_type": "traffic_updated",
 				},
 				Timestamp: time.Now().Unix(),
@@ -789,7 +789,7 @@ func TestBroadcastMessage_JSONMarshal(t *testing.T) {
 		Exclude: 2,
 		Message: &Message{
 			Type: MessageTypeUserUpdate,
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"change_type": "traffic_updated",
 			},
 			Timestamp: time.Now().Unix(),

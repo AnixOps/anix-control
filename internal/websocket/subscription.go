@@ -39,7 +39,7 @@ const (
 type Message struct {
 	Type      MessageType            `json:"type"`
 	Timestamp int64                  `json:"timestamp"`
-	Data      map[string]interface{} `json:"data,omitempty"`
+	Data      map[string]any `json:"data,omitempty"`
 	Error     string                 `json:"error,omitempty"`
 }
 
@@ -184,7 +184,7 @@ func (sm *SubscriptionManager) sendHeartbeat() {
 func (sm *SubscriptionManager) NotifyNodeUpdate(nodeID uint, changeType string) {
 	msg := &Message{
 		Type: MessageTypeNodeUpdate,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"node_id":     nodeID,
 			"change_type": changeType,
 		},
@@ -198,7 +198,7 @@ func (sm *SubscriptionManager) NotifyNodeUpdate(nodeID uint, changeType string) 
 func (sm *SubscriptionManager) NotifyUserUpdate(userIDs []uint, changeType string) {
 	msg := &Message{
 		Type: MessageTypeUserUpdate,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"change_type": changeType,
 		},
 		Timestamp: time.Now().Unix(),
@@ -214,7 +214,7 @@ func (sm *SubscriptionManager) NotifyUserUpdate(userIDs []uint, changeType strin
 func (sm *SubscriptionManager) NotifyConfigUpdate(userIDs []uint, configType string) {
 	msg := &Message{
 		Type: MessageTypeConfigUpdate,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"config_type": configType,
 		},
 		Timestamp: time.Now().Unix(),
@@ -333,7 +333,7 @@ func (c *Client) sendAck(msgType MessageType) {
 	msg := &Message{
 		Type:      msgType,
 		Timestamp: time.Now().Unix(),
-		Data:      map[string]interface{}{"status": "ok"},
+		Data:      map[string]any{"status": "ok"},
 	}
 	data, _ := json.Marshal(msg)
 	c.send <- data
@@ -415,7 +415,7 @@ func (h *WebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 
 // validateToken 验证 JWT Token
 func (h *WebSocketHandler) validateToken(tokenString string) (uint, bool, error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, jwt.ErrSignatureInvalid
 		}

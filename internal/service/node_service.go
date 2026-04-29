@@ -109,11 +109,34 @@ func (s *NodeService) CreateNode(node *model.Node) error {
 	node.Secret = secret
 	node.Status = model.NodeStatusPending
 
-	return s.db.Create(node).Error
+	// 创建节点 + 默认协议 (事务)
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(node).Error; err != nil {
+			return err
+		}
+
+		// 创建默认 VMess 协议
+		defaultPort := node.Port
+		if defaultPort == 0 {
+			defaultPort = 443
+		}
+		defaultTransport := "tcp"
+		protocol := &model.NodeProtocol{
+			NodeID:    node.ID,
+			Name:      "Default VMess",
+			Type:      model.ProtocolVMess,
+			Port:      defaultPort,
+			Enable:    1,
+			Sort:      0,
+			TLS:       0,
+			Transport: &defaultTransport,
+		}
+		return tx.Create(protocol).Error
+	})
 }
 
 // UpdateNode 更新节点
-func (s *NodeService) UpdateNode(id uint, updates map[string]interface{}) error {
+func (s *NodeService) UpdateNode(id uint, updates map[string]any) error {
 	// 清除缓存
 	cache.Delete(CacheKeyNode + string(rune(id)))
 	cache.Delete(CacheKeyNodeList)
@@ -161,7 +184,7 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 		return nil, errors.New("生成共享密钥失败")
 	}
 
-	// 3. 创建节点
+	// 3. 创建节点 + 默认协议 + 标记授权密钥 (事务)
 	nodeName := req.Name
 	if nodeName == "" {
 		nodeName = "Node-" + clientIP
@@ -184,18 +207,12 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 	now := time.Now().Unix()
 	node.LastCheckAt = &now
 
-	if err := s.db.Create(node).Error; err != nil {
-		return nil, errors.New("创建节点失败")
-	}
-
-	// 4. 创建默认协议配置 (VMess)
 	defaultPort := req.Port
 	if defaultPort == 0 {
 		defaultPort = 443
 	}
 	defaultTransport := "tcp"
 	protocol := &model.NodeProtocol{
-		NodeID:    node.ID,
 		Name:      "Default VMess",
 		Type:      model.ProtocolVMess,
 		Port:      defaultPort,
@@ -204,16 +221,31 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 		TLS:       0,
 		Transport: &defaultTransport,
 	}
-	if err := s.db.Create(protocol).Error; err != nil {
-		// 协议创建失败不影响节点注册，只记录日志
-		log.Printf("创建默认协议失败: %v", err)
-	}
 
-	// 5. 标记授权密钥已使用
-	s.db.Model(&authKey).Updates(map[string]interface{}{
-		"used":            1,
-		"used_by_node_id": node.ID,
-	})
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		// 创建节点
+		if err := tx.Create(node).Error; err != nil {
+			return errors.New("创建节点失败")
+		}
+
+		// 创建默认协议
+		protocol.NodeID = node.ID
+		if err := tx.Create(protocol).Error; err != nil {
+			return errors.New("创建默认协议失败")
+		}
+
+		// 标记授权密钥已使用
+		if err := tx.Model(&authKey).Updates(map[string]any{
+			"used":            1,
+			"used_by_node_id": node.ID,
+		}).Error; err != nil {
+			return errors.New("标记授权密钥失败")
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
 
 	return &model.NodeRegisterResponse{
 		NodeID:  node.ID,
@@ -227,7 +259,7 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 func (s *NodeService) Heartbeat(nodeID uint, req *model.NodeHeartbeatRequest) error {
 	now := time.Now().Unix()
 
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"cpu_usage":     req.CPUUsage,
 		"memory_usage":  req.MemoryUsage,
 		"disk_usage":    req.DiskUsage,
@@ -257,7 +289,7 @@ func (s *NodeService) Heartbeat(nodeID uint, req *model.NodeHeartbeatRequest) er
 // UpdateLastCheckAt 更新节点最后检查时间 (用于 UniProxy 接口)
 func (s *NodeService) UpdateLastCheckAt(nodeID uint) error {
 	now := time.Now().Unix()
-	return s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(map[string]interface{}{
+	return s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(map[string]any{
 		"last_check_at": now,
 		"status":        model.NodeStatusOnline,
 	}).Error
@@ -349,7 +381,7 @@ func (s *NodeService) CreateProtocol(protocol *model.NodeProtocol) error {
 }
 
 // UpdateProtocol 更新协议
-func (s *NodeService) UpdateProtocol(id uint, updates map[string]interface{}) error {
+func (s *NodeService) UpdateProtocol(id uint, updates map[string]any) error {
 	return s.db.Model(&model.NodeProtocol{}).Where("id = ?", id).Updates(updates).Error
 }
 
@@ -360,8 +392,13 @@ func (s *NodeService) DeleteProtocol(id uint) error {
 
 // SyncProtocolToNode 同步协议配置到节点
 func (s *NodeService) SyncProtocolToNode(nodeID uint) error {
-	// TODO: 通过 API 将配置推送到节点
-	// 这需要节点端实现相应的接收接口
+	// Unimplemented: push protocol configuration to node via API.
+	// When implemented, this should fetch the node's protocol configs
+	// (NodeProtocol records) and push them to the node through either:
+	//   - gRPC ConfigSync service (preferred for connected nodes)
+	//   - REST API call to the node's management endpoint
+	// This requires the node to implement a config-receive endpoint.
+	log.Printf("[node] SyncProtocolToNode: config push to node %d not yet implemented", nodeID)
 	return nil
 }
 
@@ -410,7 +447,7 @@ func (s *NodeService) DeleteAuthKey(id uint) error {
 // ========== 统计 ==========
 
 // GetNodeStats 获取节点统计
-func (s *NodeService) GetNodeStats() (map[string]interface{}, error) {
+func (s *NodeService) GetNodeStats() (map[string]any, error) {
 	var totalNodes, onlineNodes, pendingNodes int64
 	var totalUpload, totalDownload int64
 
@@ -427,7 +464,7 @@ func (s *NodeService) GetNodeStats() (map[string]interface{}, error) {
 		Select("COALESCE(SUM(total_download), 0)").
 		Scan(&totalDownload)
 
-	return map[string]interface{}{
+	return map[string]any{
 		"total":   totalNodes,
 		"online":  onlineNodes,
 		"pending": pendingNodes,

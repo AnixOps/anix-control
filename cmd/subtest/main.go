@@ -325,7 +325,7 @@ func generateVLESSLink(node TestNode, uuid string) string {
 }
 
 func generateVMessLink(node TestNode, uuid string) string {
-	vmessConfig := map[string]interface{}{
+	vmessConfig := map[string]any{
 		"v":    "2",
 		"ps":   node.Name,
 		"add":  node.Server,
@@ -410,7 +410,7 @@ func generateHysteria2Link(node TestNode, uuid string) string {
 }
 
 func generateClashSubscription(config TestConfig, userUUID string) {
-	clashConfig := map[string]interface{}{
+	clashConfig := map[string]any{
 		"mixed-port":          7890,
 		"allow-lan":           false,
 		"mode":                "rule",
@@ -418,7 +418,7 @@ func generateClashSubscription(config TestConfig, userUUID string) {
 		"external-controller": ":9090",
 	}
 
-	var proxies []map[string]interface{}
+	var proxies []map[string]any
 	var proxyNames []string
 
 	for _, nodes := range config.Groups {
@@ -428,7 +428,7 @@ func generateClashSubscription(config TestConfig, userUUID string) {
 				uuid = userUUID
 			}
 
-			proxy := map[string]interface{}{
+			proxy := map[string]any{
 				"name":   node.Name,
 				"type":   node.Type,
 				"server": node.Server,
@@ -471,7 +471,7 @@ func generateClashSubscription(config TestConfig, userUUID string) {
 	}
 
 	clashConfig["proxies"] = proxies
-	clashConfig["proxy-groups"] = []map[string]interface{}{
+	clashConfig["proxy-groups"] = []map[string]any{
 		{
 			"name":    "🚀 节点选择",
 			"type":    "select",
@@ -497,10 +497,10 @@ func generateClashSubscription(config TestConfig, userUUID string) {
 }
 
 func generateJSONSubscription(config TestConfig, userUUID string) {
-	result := map[string]interface{}{
+	result := map[string]any{
 		"version": 1,
 		"groups":  config.Groups,
-		"user": map[string]interface{}{
+		"user": map[string]any{
 			"uuid":            userUUID,
 			"expired_at":      1735689600,
 			"speed_limit":     0,
@@ -535,10 +535,10 @@ func generateBase64JSONSubscription(config TestConfig, userUUID string) {
 		}
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"version": 1,
 		"groups":  config.Groups,
-		"user": map[string]interface{}{
+		"user": map[string]any{
 			"uuid":            userUUID,
 			"expired_at":      1735689600,
 			"speed_limit":     0,
@@ -642,7 +642,7 @@ func parseVMessLink(link string) {
 		return
 	}
 
-	var config map[string]interface{}
+	var config map[string]any
 	if err := json.Unmarshal(decoded, &config); err != nil {
 		fmt.Printf("VMess JSON 解析失败: %v\n", err)
 		return

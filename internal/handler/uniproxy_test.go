@@ -41,13 +41,13 @@ func TestPushTrafficDataParsing(t *testing.T) {
 		"2": [512, 1024]
 	}`
 
-	var data map[string]interface{}
+	var data map[string]any
 	err := json.Unmarshal([]byte(trafficJSON), &data)
 	assert.NoError(t, err)
 
 	// 验证数据格式
 	for k, v := range data {
-		traffic, ok := v.([]interface{})
+		traffic, ok := v.([]any)
 		assert.True(t, ok, "traffic data should be an array for key %s", k)
 		assert.Len(t, traffic, 2, "traffic data should have 2 elements")
 	}
@@ -60,13 +60,13 @@ func TestPushAliveDataParsing(t *testing.T) {
 		"2": ["172.16.0.1"]
 	}`
 
-	var data map[string]interface{}
+	var data map[string]any
 	err := json.Unmarshal([]byte(aliveJSON), &data)
 	assert.NoError(t, err)
 
 	// 验证数据格式
 	for k, v := range data {
-		ips, ok := v.([]interface{})
+		ips, ok := v.([]any)
 		assert.True(t, ok, "IP list should be an array for key %s", k)
 		for _, ip := range ips {
 			_, isString := ip.(string)
@@ -149,7 +149,7 @@ func TestPushTrafficAPI(t *testing.T) {
 	r := setupTestRouter()
 
 	r.POST("/api/v1/server/UniProxy/push", func(c *gin.Context) {
-		var data map[string]interface{}
+		var data map[string]any
 		if err := c.ShouldBindJSON(&data); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 			return
@@ -177,7 +177,7 @@ func TestPushAliveAPI(t *testing.T) {
 	r := setupTestRouter()
 
 	r.POST("/api/v1/server/UniProxy/alive", func(c *gin.Context) {
-		var data map[string]interface{}
+		var data map[string]any
 		if err := c.ShouldBindJSON(&data); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 			return

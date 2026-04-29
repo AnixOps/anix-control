@@ -319,7 +319,7 @@ func runUnitTests() {
 		if line == "" {
 			continue
 		}
-		var event map[string]interface{}
+		var event map[string]any
 		if err := json.Unmarshal([]byte(line), &event); err != nil {
 			continue
 		}

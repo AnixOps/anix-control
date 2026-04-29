@@ -47,14 +47,15 @@ func NewForwardHandler() *ForwardHandler {
 // @Param type query string false "节点类型 (relay/exit)"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页数量" default(20)
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/forward/nodes [get]
 func (h *ForwardHandler) ListNodes(c *gin.Context) {
 	nodeType := c.Query("type")
 	scope := c.Query("scope")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = ClampPagination(page, pageSize)
 	var status *int
 	if rawStatus := c.Query("status"); rawStatus != "" {
 		parsedStatus, err := strconv.Atoi(rawStatus)
@@ -93,9 +94,9 @@ func (h *ForwardHandler) ListNodes(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body CreateNodeRequest true "节点信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/forward/nodes [post]
 func (h *ForwardHandler) CreateNode(c *gin.Context) {
 	var req CreateNodeRequest
@@ -145,9 +146,9 @@ func (h *ForwardHandler) CreateNode(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "节点ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /admin/forward/nodes/{id} [get]
 func (h *ForwardHandler) GetNode(c *gin.Context) {
 	node, ok := h.loadScopedForwardNode(c, "forward node not found")
@@ -167,10 +168,10 @@ func (h *ForwardHandler) GetNode(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "节点ID"
 // @Param request body UpdateNodeRequest true "节点更新信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/forward/nodes/{id} [put]
 func (h *ForwardHandler) UpdateNode(c *gin.Context) {
 	node, ok := h.loadScopedForwardNode(c, "node not found")
@@ -243,9 +244,9 @@ func (h *ForwardHandler) UpdateNode(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "节点ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/forward/nodes/{id} [delete]
 func (h *ForwardHandler) DeleteNode(c *gin.Context) {
 	node, ok := h.loadScopedForwardNode(c, "node not found")
@@ -269,9 +270,9 @@ func (h *ForwardHandler) DeleteNode(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "节点ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/forward/nodes/{id}/check [post]
 func (h *ForwardHandler) CheckNode(c *gin.Context) {
 	node, ok := h.loadScopedForwardNode(c, "node not found")
@@ -297,10 +298,10 @@ func (h *ForwardHandler) CheckNode(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "节点ID"
 // @Param request body ToggleRequest true "状态请求"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/forward/nodes/{id}/toggle [post]
 func (h *ForwardHandler) ToggleNode(c *gin.Context) {
 	var req ToggleRequest
@@ -342,12 +343,13 @@ func (h *ForwardHandler) ToggleNode(c *gin.Context) {
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页数量" default(20)
 // @Param user_id query int false "用户ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/forward/rules [get]
 func (h *ForwardHandler) ListRules(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = ClampPagination(page, pageSize)
 
 	var userID *uint
 	if uid := c.Query("user_id"); uid != "" {
@@ -384,9 +386,9 @@ func (h *ForwardHandler) ListRules(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body CreateRuleRequest true "规则信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/forward/rules [post]
 func (h *ForwardHandler) CreateRule(c *gin.Context) {
 	var req CreateRuleRequest
@@ -432,9 +434,9 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "规则ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /admin/forward/rules/{id} [get]
 func (h *ForwardHandler) GetRule(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -461,10 +463,10 @@ func (h *ForwardHandler) GetRule(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "规则ID"
 // @Param request body UpdateRuleRequest true "规则更新信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/forward/rules/{id} [put]
 func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -536,9 +538,9 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "规则ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/forward/rules/{id} [delete]
 func (h *ForwardHandler) DeleteRule(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -564,9 +566,9 @@ func (h *ForwardHandler) DeleteRule(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "规则ID"
 // @Param request body ToggleRequest true "状态请求"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/forward/rules/{id}/toggle [post]
 func (h *ForwardHandler) ToggleRule(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -598,12 +600,20 @@ func (h *ForwardHandler) ToggleRule(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/forward/stats [get]
 func (h *ForwardHandler) GetForwardStats(c *gin.Context) {
 	// 获取中转节点统计
-	relayNodes, _ := h.nodeService.GetByType(model.ForwardNodeTypeRelay)
-	exitNodes, _ := h.nodeService.GetByType(model.ForwardNodeTypeExit)
+	relayNodes, err := h.nodeService.GetByType(model.ForwardNodeTypeRelay)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get relay nodes"})
+		return
+	}
+	exitNodes, err := h.nodeService.GetByType(model.ForwardNodeTypeExit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get exit nodes"})
+		return
+	}
 
 	var totalUpload, totalDownload int64
 	var onlineRelay, onlineExit int
@@ -643,8 +653,8 @@ func (h *ForwardHandler) GetForwardStats(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /user/forward/rules [get]
 func (h *ForwardHandler) GetUserRules(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -666,8 +676,8 @@ func (h *ForwardHandler) GetUserRules(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body service.CreateRuleRequest true "规则信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
 // @Router /user/forward/rules [post]
 func (h *ForwardHandler) CreateUserRule(c *gin.Context) {
 	userID := c.GetUint("user_id")
@@ -767,8 +777,8 @@ type TestGostConnectionRequest struct {
 // @Produce json
 // @Security BearerAuth
 // @Param request body TestGostConnectionRequest true "连接信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
 // @Router /admin/forward/test-connection [post]
 func (h *ForwardHandler) TestGostConnection(c *gin.Context) {
 	var req TestGostConnectionRequest
@@ -816,8 +826,8 @@ func (h *ForwardHandler) TestGostConnection(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "节点ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
 // @Router /admin/forward/nodes/{id}/sync-stats [post]
 func (h *ForwardHandler) SyncNodeStats(c *gin.Context) {
 	node, ok := h.loadScopedForwardNode(c, "node not found")

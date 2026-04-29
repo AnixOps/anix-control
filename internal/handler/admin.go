@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -48,8 +49,8 @@ func NewAdminHandler() *AdminHandler {
 // @Produce json
 // @Security BearerAuth
 // @Param request body model.AdminCreateUserRequest true "用户信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
 // @Router /admin/users [post]
 func (h *AdminHandler) CreateUser(c *gin.Context) {
 	var req model.AdminCreateUserRequest
@@ -108,11 +109,12 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 // @Param email query string false "邮箱搜索"
 // @Param status query string false "状态筛选"
 // @Param plan_id query int false "套餐ID筛选"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/users [get]
 func (h *AdminHandler) GetUserList(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = ClampPagination(page, pageSize)
 	email := c.Query("email")
 	status := c.Query("status")
 
@@ -146,7 +148,7 @@ func (h *AdminHandler) GetUserList(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "用户ID"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
 // @Router /admin/users/{id} [get]
 func (h *AdminHandler) GetUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -172,10 +174,10 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "用户ID"
-// @Param request body map[string]interface{} true "用户更新信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Param request body map[string]any true "用户更新信息"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/users/{id} [put]
 func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -188,7 +190,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		Email          *string `json:"email"`
 		Password       *string `json:"password"`
 		Balance        *int64  `json:"balance"`
-		PlanID         *uint   `json:"plan_id"`
+		PlanID         *uint   `json:"plan_id" binding:"omitempty,gt=0"`
 		ExpiredAt      *int64  `json:"expired_at"`
 		TransferEnable *int64  `json:"transfer_enable"`
 		SpeedLimit     *int64  `json:"speed_limit"`
@@ -204,12 +206,17 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	updates := make(map[string]interface{})
+	updates := make(map[string]any)
 	if req.Email != nil {
 		updates["email"] = *req.Email
 	}
 	if req.Password != nil && *req.Password != "" {
-		// TODO: 密码加密
+		// Password update stub: hash the plaintext password with bcrypt before storing.
+		// Integration steps:
+		//   1. hash, err := bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost)
+		//   2. if err != nil, return 500
+		//   3. updates["password"] = string(hash)
+		log.Printf("[STUB] admin update: password encryption not yet implemented for user update, storing plaintext")
 		updates["password"] = *req.Password
 	}
 	if req.Balance != nil {
@@ -277,9 +284,9 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "用户ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/users/{id}/ban [post]
 func (h *AdminHandler) BanUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -304,9 +311,9 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "用户ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/users/{id}/unban [post]
 func (h *AdminHandler) UnbanUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -331,9 +338,9 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "用户ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/users/{id}/reset-traffic [post]
 func (h *AdminHandler) ResetUserTraffic(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -375,7 +382,7 @@ func (h *AdminHandler) ResetCompatFlow(c *gin.Context) {
 	compatSuccess(c, nil)
 }
 
-func compatSuccess(c *gin.Context, data interface{}) {
+func compatSuccess(c *gin.Context, data any) {
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"msg":  "操作成功",
@@ -401,9 +408,9 @@ func compatError(c *gin.Context, msg string) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "用户ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/users/{id} [delete]
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -430,9 +437,9 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param request body model.Plan true "套餐信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/plans [post]
 func (h *AdminHandler) CreatePlan(c *gin.Context) {
 	var p model.Plan
@@ -454,8 +461,8 @@ func (h *AdminHandler) CreatePlan(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/plans [get]
 func (h *AdminHandler) GetPlans(c *gin.Context) {
 	list, err := h.planService.List()
@@ -474,9 +481,9 @@ func (h *AdminHandler) GetPlans(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "套餐ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /admin/plans/{id} [get]
 func (h *AdminHandler) GetPlan(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -501,9 +508,9 @@ func (h *AdminHandler) GetPlan(c *gin.Context) {
 // @Security BearerAuth
 // @Param id path int true "套餐ID"
 // @Param request body model.Plan true "套餐信息"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/plans/{id} [put]
 func (h *AdminHandler) UpdatePlan(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -532,9 +539,9 @@ func (h *AdminHandler) UpdatePlan(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "套餐ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/plans/{id} [delete]
 func (h *AdminHandler) DeletePlan(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -557,10 +564,10 @@ func (h *AdminHandler) DeletePlan(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "套餐ID"
-// @Param request body map[string]interface{} true "分配请求 {user_id: uint, expire_at: int64}"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Param request body map[string]any true "分配请求 {user_id: uint, expire_at: int64}"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/plans/{id}/assign [post]
 func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
 	planID, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -569,7 +576,7 @@ func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
 		return
 	}
 	var req struct {
-		UserID   uint   `json:"user_id" binding:"required"`
+		UserID   uint   `json:"user_id" binding:"required,gt=0"`
 		ExpireAt *int64 `json:"expire_at"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -590,8 +597,8 @@ func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/users/stats [get]
 func (h *AdminHandler) GetUserStats(c *gin.Context) {
 	stats, err := h.userService.GetStats()
@@ -619,12 +626,13 @@ func (h *AdminHandler) GetUserStats(c *gin.Context) {
 // @Param status query int false "订单状态"
 // @Param type query int false "订单类型"
 // @Param user_id query int false "用户ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/orders [get]
 func (h *AdminHandler) GetOrderList(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = ClampPagination(page, pageSize)
 	tradeNo := c.Query("trade_no")
 	email := c.Query("email")
 
@@ -672,9 +680,9 @@ func (h *AdminHandler) GetOrderList(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "订单ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 404 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
 // @Router /admin/orders/{id} [get]
 func (h *AdminHandler) GetOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -700,10 +708,10 @@ func (h *AdminHandler) GetOrder(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "订单ID"
-// @Param request body map[string]interface{} true "状态请求 {status: int}"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Param request body map[string]any true "状态请求 {status: int}"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/orders/{id}/status [put]
 func (h *AdminHandler) UpdateOrderStatus(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -713,7 +721,7 @@ func (h *AdminHandler) UpdateOrderStatus(c *gin.Context) {
 	}
 
 	var req struct {
-		Status int `json:"status" binding:"required"`
+		Status int `json:"status" binding:"required,oneof=0 1 2 3"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -737,9 +745,9 @@ func (h *AdminHandler) UpdateOrderStatus(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "订单ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/orders/{id}/paid [post]
 func (h *AdminHandler) MarkOrderPaid(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -771,9 +779,9 @@ func (h *AdminHandler) MarkOrderPaid(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path int true "订单ID"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/orders/{id}/cancel [post]
 func (h *AdminHandler) CancelOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -797,8 +805,8 @@ func (h *AdminHandler) CancelOrder(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/orders/stats [get]
 func (h *AdminHandler) GetOrderStats(c *gin.Context) {
 	stats, err := h.orderService.GetStats()
@@ -820,8 +828,8 @@ func (h *AdminHandler) GetOrderStats(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param refresh query bool false "是否强制刷新缓存"
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} map[string]interface{}
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
 // @Router /admin/dashboard [get]
 func (h *AdminHandler) GetDashboard(c *gin.Context) {
 	// 检查是否强制刷新

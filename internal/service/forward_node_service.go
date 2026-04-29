@@ -118,7 +118,7 @@ func (s *ForwardNodeService) HealthCheck(ctx context.Context, nodeID uint) (*Hea
 
 	// 更新节点状态
 	now := time.Now()
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"status":     result.Status,
 		"last_check": now,
 		"latency":    result.Latency,
@@ -252,7 +252,7 @@ func (s *ForwardNodeService) GenerateAPIToken() string {
 
 // UpdateStats 更新节点统计
 func (s *ForwardNodeService) UpdateStats(nodeID uint, upload, download int64, connDelta int) error {
-	return s.db.Model(&model.ForwardNode{}).Where("id = ?", nodeID).Updates(map[string]interface{}{
+	return s.db.Model(&model.ForwardNode{}).Where("id = ?", nodeID).Updates(map[string]any{
 		"total_upload":   gorm.Expr("total_upload + ?", upload),
 		"total_download": gorm.Expr("total_download + ?", download),
 		"current_conn":   gorm.Expr("current_conn + ?", connDelta),

@@ -380,7 +380,7 @@ func (h *ForwardHandler) UpdatePanelUserTunnel(c *gin.Context) {
 	panelSuccess(c, "用户隧道权限更新成功")
 }
 
-func panelSuccess(c *gin.Context, data interface{}) {
+func panelSuccess(c *gin.Context, data any) {
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"msg":  "操作成功",

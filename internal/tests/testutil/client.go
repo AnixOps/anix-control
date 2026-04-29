@@ -34,7 +34,7 @@ func (c *APITestClient) SetAuth(token string) *APITestClient {
 }
 
 // Request 发送请求
-func (c *APITestClient) Request(method, path string, body interface{}) *httptest.ResponseRecorder {
+func (c *APITestClient) Request(method, path string, body any) *httptest.ResponseRecorder {
 	var bodyReader io.Reader
 	if body != nil {
 		jsonBody, err := json.Marshal(body)
@@ -68,12 +68,12 @@ func (c *APITestClient) GET(path string) *httptest.ResponseRecorder {
 }
 
 // POST 发送 POST 请求
-func (c *APITestClient) POST(path string, body interface{}) *httptest.ResponseRecorder {
+func (c *APITestClient) POST(path string, body any) *httptest.ResponseRecorder {
 	return c.Request(http.MethodPost, path, body)
 }
 
 // PUT 发送 PUT 请求
-func (c *APITestClient) PUT(path string, body interface{}) *httptest.ResponseRecorder {
+func (c *APITestClient) PUT(path string, body any) *httptest.ResponseRecorder {
 	return c.Request(http.MethodPut, path, body)
 }
 
@@ -88,8 +88,8 @@ func AssertStatus(t *testing.T, w *httptest.ResponseRecorder, expected int) {
 }
 
 // AssertJSON 断言 JSON 响应
-func AssertJSON(t *testing.T, w *httptest.ResponseRecorder, expected map[string]interface{}) {
-	var response map[string]interface{}
+func AssertJSON(t *testing.T, w *httptest.ResponseRecorder, expected map[string]any) {
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 
@@ -99,7 +99,7 @@ func AssertJSON(t *testing.T, w *httptest.ResponseRecorder, expected map[string]
 }
 
 // ParseResponse 解析响应
-func ParseResponse(t *testing.T, w *httptest.ResponseRecorder, v interface{}) {
+func ParseResponse(t *testing.T, w *httptest.ResponseRecorder, v any) {
 	err := json.Unmarshal(w.Body.Bytes(), v)
 	assert.NoError(t, err)
 }

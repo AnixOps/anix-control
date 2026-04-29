@@ -137,7 +137,7 @@ func (s *InviteService) GetUserInviteCodes(userID uint) ([]model.InviteCode, err
 }
 
 // GetInviteStats 获取邀请统计
-func (s *InviteService) GetInviteStats(userID uint) (map[string]interface{}, error) {
+func (s *InviteService) GetInviteStats(userID uint) (map[string]any, error) {
 	var inviteCount int64
 	var paidCount int64
 	var totalCommission float64
@@ -158,7 +158,7 @@ func (s *InviteService) GetInviteStats(userID uint) (map[string]interface{}, err
 		Select("COALESCE(SUM(amount), 0)").
 		Scan(&totalCommission)
 
-	return map[string]interface{}{
+	return map[string]any{
 		"invite_count":     inviteCount,
 		"paid_count":       paidCount,
 		"total_commission": totalCommission,

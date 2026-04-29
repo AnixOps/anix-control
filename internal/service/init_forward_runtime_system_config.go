@@ -300,11 +300,11 @@ func mapBootstrapAnsibleConfig(cfg appconfig.ForwardRuntimeAnsibleConfig) panelF
 	}
 }
 
-func cloneForwardRuntimeExtraVars(input map[string]interface{}) map[string]interface{} {
+func cloneForwardRuntimeExtraVars(input map[string]any) map[string]any {
 	if len(input) == 0 {
 		return nil
 	}
-	output := make(map[string]interface{}, len(input))
+	output := make(map[string]any, len(input))
 	for key, value := range input {
 		output[key] = value
 	}

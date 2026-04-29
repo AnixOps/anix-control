@@ -23,7 +23,7 @@ func (f *SingBoxFormatter) FileExtension() string {
 }
 
 func (f *SingBoxFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRenderContext) ([]byte, error) {
-	outbounds := make([]interface{}, 0, len(nodes)+10)
+	outbounds := make([]any, 0, len(nodes)+10)
 
 	proxyNames := make([]string, 0, len(nodes))
 	for _, node := range nodes {
@@ -31,7 +31,7 @@ func (f *SingBoxFormatter) Format(nodes []*model.ParsedNode, ctx *model.Template
 	}
 
 	// 1. Selector (策略组)
-	outbounds = append(outbounds, map[string]interface{}{
+	outbounds = append(outbounds, map[string]any{
 		"type":      "selector",
 		"tag":       "🚀 节点选择",
 		"outbounds": append([]string{"♻️ 自动选择", "DIRECT"}, proxyNames...),
@@ -39,7 +39,7 @@ func (f *SingBoxFormatter) Format(nodes []*model.ParsedNode, ctx *model.Template
 	})
 
 	// 2. URLTest (自动选择)
-	outbounds = append(outbounds, map[string]interface{}{
+	outbounds = append(outbounds, map[string]any{
 		"type":      "urltest",
 		"tag":       "♻️ 自动选择",
 		"outbounds": proxyNames,
@@ -58,30 +58,30 @@ func (f *SingBoxFormatter) Format(nodes []*model.ParsedNode, ctx *model.Template
 
 	// 4. 基础 Outbounds (直连、拦截、DNS)
 	outbounds = append(outbounds,
-		map[string]interface{}{"type": "direct", "tag": "DIRECT"},
-		map[string]interface{}{"type": "block", "tag": "REJECT"},
-		map[string]interface{}{"type": "dns", "tag": "dns-out"},
+		map[string]any{"type": "direct", "tag": "DIRECT"},
+		map[string]any{"type": "block", "tag": "REJECT"},
+		map[string]any{"type": "dns", "tag": "dns-out"},
 	)
 
-	config := map[string]interface{}{
-		"dns": map[string]interface{}{
-			"servers": []interface{}{
-				map[string]interface{}{
+	config := map[string]any{
+		"dns": map[string]any{
+			"servers": []any{
+				map[string]any{
 					"tag":     "google",
 					"address": "https://8.8.8.8/dns-query",
 				},
-				map[string]interface{}{
+				map[string]any{
 					"tag":     "local",
 					"address": "https://223.5.5.5/dns-query",
 					"detour":  "DIRECT",
 				},
 			},
-			"rules": []interface{}{
-				map[string]interface{}{
+			"rules": []any{
+				map[string]any{
 					"outbound": "any",
 					"server":   "google",
 				},
-				map[string]interface{}{
+				map[string]any{
 					"geosite": []string{"cn"},
 					"server":  "local",
 				},
@@ -89,12 +89,12 @@ func (f *SingBoxFormatter) Format(nodes []*model.ParsedNode, ctx *model.Template
 			"strategy": "prefer_ipv4",
 		},
 		"outbounds": outbounds,
-		"route": map[string]interface{}{
-			"rules": []interface{}{
-				map[string]interface{}{"protocol": "dns", "outbound": "dns-out"},
-				map[string]interface{}{"geosite": []string{"cn"}, "outbound": "DIRECT"},
-				map[string]interface{}{"geoip": []string{"cn", "private"}, "outbound": "DIRECT"},
-				map[string]interface{}{"geosite": []string{"category-ads-all"}, "outbound": "REJECT"},
+		"route": map[string]any{
+			"rules": []any{
+				map[string]any{"protocol": "dns", "outbound": "dns-out"},
+				map[string]any{"geosite": []string{"cn"}, "outbound": "DIRECT"},
+				map[string]any{"geoip": []string{"cn", "private"}, "outbound": "DIRECT"},
+				map[string]any{"geosite": []string{"category-ads-all"}, "outbound": "REJECT"},
 			},
 			"final":                 "🚀 节点选择",
 			"auto_detect_interface": true,
@@ -104,8 +104,8 @@ func (f *SingBoxFormatter) Format(nodes []*model.ParsedNode, ctx *model.Template
 	return json.MarshalIndent(config, "", "  ")
 }
 
-func (f *SingBoxFormatter) buildOutbound(node *model.ParsedNode, ctx *model.TemplateRenderContext) map[string]interface{} {
-	outbound := map[string]interface{}{
+func (f *SingBoxFormatter) buildOutbound(node *model.ParsedNode, ctx *model.TemplateRenderContext) map[string]any {
+	outbound := map[string]any{
 		"tag":         node.Name,
 		"server":      node.Server,
 		"server_port": node.Port,
@@ -131,7 +131,7 @@ func (f *SingBoxFormatter) buildOutbound(node *model.ParsedNode, ctx *model.Temp
 	return outbound
 }
 
-func (f *SingBoxFormatter) buildVMess(outbound map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *SingBoxFormatter) buildVMess(outbound map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	outbound["type"] = "vmess"
 	uuid := node.UUID
 	if uuid == "" && ctx != nil {
@@ -149,7 +149,7 @@ func (f *SingBoxFormatter) buildVMess(outbound map[string]interface{}, node *mod
 	f.addTransport(outbound, node)
 }
 
-func (f *SingBoxFormatter) buildVLESS(outbound map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *SingBoxFormatter) buildVLESS(outbound map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	outbound["type"] = "vless"
 	uuid := node.UUID
 	if uuid == "" && ctx != nil {
@@ -165,7 +165,7 @@ func (f *SingBoxFormatter) buildVLESS(outbound map[string]interface{}, node *mod
 	f.addTransport(outbound, node)
 }
 
-func (f *SingBoxFormatter) buildTrojan(outbound map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *SingBoxFormatter) buildTrojan(outbound map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	outbound["type"] = "trojan"
 	password := node.Password
 	if password == "" && ctx != nil {
@@ -177,7 +177,7 @@ func (f *SingBoxFormatter) buildTrojan(outbound map[string]interface{}, node *mo
 	f.addTransport(outbound, node)
 }
 
-func (f *SingBoxFormatter) buildShadowsocks(outbound map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *SingBoxFormatter) buildShadowsocks(outbound map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	outbound["type"] = "shadowsocks"
 	password := node.Password
 	if password == "" && ctx != nil {
@@ -206,7 +206,7 @@ func (f *SingBoxFormatter) buildShadowsocks(outbound map[string]interface{}, nod
 	}
 }
 
-func (f *SingBoxFormatter) buildHysteria2(outbound map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *SingBoxFormatter) buildHysteria2(outbound map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	outbound["type"] = "hysteria2"
 	password := node.Password
 	if password == "" && ctx != nil {
@@ -214,7 +214,7 @@ func (f *SingBoxFormatter) buildHysteria2(outbound map[string]interface{}, node 
 	}
 	outbound["password"] = password
 
-	tls := map[string]interface{}{
+	tls := map[string]any{
 		"enabled": true,
 	}
 	if node.ServerName != "" {
@@ -224,7 +224,7 @@ func (f *SingBoxFormatter) buildHysteria2(outbound map[string]interface{}, node 
 	outbound["tls"] = tls
 
 	if obfs, ok := node.Settings["obfs"].(string); ok && obfs != "" {
-		obfsMap := map[string]interface{}{"type": obfs}
+		obfsMap := map[string]any{"type": obfs}
 		if obfsPassword, ok := node.Settings["obfs-password"].(string); ok && obfsPassword != "" {
 			obfsMap["password"] = obfsPassword
 		}
@@ -232,7 +232,7 @@ func (f *SingBoxFormatter) buildHysteria2(outbound map[string]interface{}, node 
 	}
 }
 
-func (f *SingBoxFormatter) buildTUIC(outbound map[string]interface{}, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
+func (f *SingBoxFormatter) buildTUIC(outbound map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {
 	outbound["type"] = "tuic"
 	uuid := node.UUID
 	if uuid == "" && ctx != nil {
@@ -244,12 +244,12 @@ func (f *SingBoxFormatter) buildTUIC(outbound map[string]interface{}, node *mode
 	f.addTLS(outbound, node)
 }
 
-func (f *SingBoxFormatter) addTLS(outbound map[string]interface{}, node *model.ParsedNode) {
+func (f *SingBoxFormatter) addTLS(outbound map[string]any, node *model.ParsedNode) {
 	if node.TLSMode == 0 && !node.TLS {
 		return
 	}
 
-	tls := map[string]interface{}{
+	tls := map[string]any{
 		"enabled": true,
 	}
 
@@ -263,14 +263,14 @@ func (f *SingBoxFormatter) addTLS(outbound map[string]interface{}, node *model.P
 		tls["alpn"] = strings.Split(node.ALPN, ",")
 	}
 	if node.TLSFingerprint != "" {
-		tls["utls"] = map[string]interface{}{
+		tls["utls"] = map[string]any{
 			"enabled":     true,
 			"fingerprint": node.TLSFingerprint,
 		}
 	}
 
 	if node.TLSMode == 2 || node.RealityPublicKey != "" {
-		tls["reality"] = map[string]interface{}{
+		tls["reality"] = map[string]any{
 			"enabled":    true,
 			"public_key": node.RealityPublicKey,
 			"short_id":   node.RealityShortID,
@@ -280,12 +280,12 @@ func (f *SingBoxFormatter) addTLS(outbound map[string]interface{}, node *model.P
 	outbound["tls"] = tls
 }
 
-func (f *SingBoxFormatter) addTransport(outbound map[string]interface{}, node *model.ParsedNode) {
+func (f *SingBoxFormatter) addTransport(outbound map[string]any, node *model.ParsedNode) {
 	if node.Transport == "" || node.Transport == "tcp" {
 		return
 	}
 
-	transport := map[string]interface{}{
+	transport := map[string]any{
 		"type": node.Transport,
 	}
 
@@ -295,7 +295,7 @@ func (f *SingBoxFormatter) addTransport(outbound map[string]interface{}, node *m
 			transport["path"] = path
 		}
 		if host, ok := node.TransportSettings["host"].(string); ok {
-			transport["headers"] = map[string]interface{}{"Host": host}
+			transport["headers"] = map[string]any{"Host": host}
 		}
 	case "grpc":
 		if sn, ok := node.TransportSettings["serviceName"].(string); ok {
@@ -313,7 +313,7 @@ func (f *SingBoxFormatter) addTransport(outbound map[string]interface{}, node *m
 	outbound["transport"] = transport
 }
 
-func toUint32(v interface{}) uint32 {
+func toUint32(v any) uint32 {
 	switch val := v.(type) {
 	case int:
 		return uint32(val)

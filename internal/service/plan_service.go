@@ -77,7 +77,7 @@ func (s *PlanService) AssignToUser(planID, userID uint, expireAt *int64) error {
 	}
 
 	// 更新用户
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"plan_id":         plan.ID,
 		"group_id":        plan.GroupID,
 		"transfer_enable": plan.TransferEnable * 1073741824,
@@ -99,7 +99,7 @@ func (s *PlanService) AssignToUser(planID, userID uint, expireAt *int64) error {
 	}
 
 	// 记录事件
-	payload := map[string]interface{}{"plan_id": planID, "user_id": userID}
+	payload := map[string]any{"plan_id": planID, "user_id": userID}
 	if expireAt != nil {
 		payload["expired_at"] = *expireAt
 	}
@@ -110,7 +110,7 @@ func (s *PlanService) AssignToUser(planID, userID uint, expireAt *int64) error {
 }
 
 // emitEvent 助手：把对象序列化写入事件表（异步处理系统可以消费）
-func (s *PlanService) emitEvent(eventType string, obj interface{}) {
+func (s *PlanService) emitEvent(eventType string, obj any) {
 	b, _ := json.Marshal(obj)
 	pt := string(b)
 	ev := model.Event{Type: eventType, Payload: &pt, Status: "pending", CreatedAt: time.Now()}

@@ -107,7 +107,7 @@ type panelForwardAnsibleRuntimePayload struct {
 	Inventory      string                             `json:"inventory"`
 	Playbook       string                             `json:"playbook"`
 	Become         bool                               `json:"become"`
-	ExtraVars      map[string]interface{}             `json:"extraVars,omitempty"`
+	ExtraVars      map[string]any             `json:"extraVars,omitempty"`
 	Forward        panelForwardAnsibleForwardPayload  `json:"forward"`
 	Tunnel         panelForwardAnsibleTunnelPayload   `json:"tunnel"`
 	Node           panelForwardAnsibleNodePayload     `json:"node"`
@@ -218,7 +218,7 @@ func (e *PanelForwardRuntimeJobExecutor) claimJob(job *model.ForwardRuntimeJob) 
 	now := time.Now()
 	result := e.db.Model(&model.ForwardRuntimeJob{}).
 		Where("id = ? AND status = ?", job.ID, model.ForwardRuntimeJobStatusPending).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"status":     model.ForwardRuntimeJobStatusRunning,
 			"started_at": &now,
 		})
@@ -267,7 +267,7 @@ func (e *PanelForwardRuntimeJobExecutor) finishJobSuccess(job *model.ForwardRunt
 	message := payload.successMessage()
 	if err := e.db.Model(&model.ForwardRuntimeJob{}).
 		Where("id = ?", job.ID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"status":       model.ForwardRuntimeJobStatusSuccess,
 			"result":       output,
 			"error":        "",
@@ -287,7 +287,7 @@ func (e *PanelForwardRuntimeJobExecutor) finishJobFailure(job *model.ForwardRunt
 	}
 	if err := e.db.Model(&model.ForwardRuntimeJob{}).
 		Where("id = ?", job.ID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"status":       model.ForwardRuntimeJobStatusFailed,
 			"result":       strings.TrimSpace(output),
 			"error":        trimmed,
@@ -304,7 +304,7 @@ func (e *PanelForwardRuntimeJobExecutor) updateForwardRuntimeState(job *model.Fo
 		return nil
 	}
 
-	updates := map[string]interface{}{
+	updates := map[string]any{
 		"runtime_backend":      job.Backend,
 		"runtime_status":       runtimeStatus,
 		"runtime_message":      strings.TrimSpace(message),
@@ -324,7 +324,7 @@ func (e *PanelForwardRuntimeJobExecutor) requeueRunningJobs() error {
 			model.ForwardRuntimeBackendNftablesAnsible,
 			model.ForwardRuntimeBackendIptablesAnsible,
 		}, model.ForwardRuntimeJobStatusRunning).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"status":     model.ForwardRuntimeJobStatusPending,
 			"started_at": nil,
 		}).Error
@@ -398,8 +398,8 @@ func (p *panelForwardAnsibleRuntimePayload) commandArgs() ([]string, error) {
 	return args, nil
 }
 
-func (p *panelForwardAnsibleRuntimePayload) buildExtraVars() map[string]interface{} {
-	result := map[string]interface{}{}
+func (p *panelForwardAnsibleRuntimePayload) buildExtraVars() map[string]any {
+	result := map[string]any{}
 	for key, value := range p.ExtraVars {
 		result[key] = value
 	}
@@ -484,7 +484,7 @@ func newForwardBackgroundErrorLogger(interval time.Duration) *forwardBackgroundE
 	}
 }
 
-func (l *forwardBackgroundErrorLogger) Logf(key, format string, args ...interface{}) {
+func (l *forwardBackgroundErrorLogger) Logf(key, format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 	if l == nil {
 		log.Print(message)

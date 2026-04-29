@@ -287,7 +287,7 @@ func (s *SubscriptionService) buildRenderContext(user *model.User, req *model.Su
 		DeviceLimit:    user.GetDeviceLimit(),
 		TransferEnable: user.TransferEnable,
 		UsedTraffic:    user.U + user.D,
-		Custom:         make(map[string]interface{}),
+		Custom:         make(map[string]any),
 	}
 
 	if req != nil {
@@ -351,7 +351,7 @@ func (s *SubscriptionService) renderTemplate(tpl *model.SubscriptionTemplate, ct
 		TLSMode:   tpl.TLS,
 		TLS:       tpl.TLS > 0,
 		Transport: tpl.Transport,
-		Settings:  make(map[string]interface{}),
+		Settings:  make(map[string]any),
 	}
 
 	// TLS 配置
@@ -436,7 +436,7 @@ func (s *SubscriptionService) applyTemplateJSON(node *model.ParsedNode, template
 	rendered := s.renderString(templateJSON, ctx)
 
 	// 解析 JSON
-	var override map[string]interface{}
+	var override map[string]any
 	if err := json.Unmarshal([]byte(rendered), &override); err != nil {
 		return
 	}
@@ -457,7 +457,7 @@ func (s *SubscriptionService) applyTemplateJSON(node *model.ParsedNode, template
 	if password, ok := override["password"].(string); ok {
 		node.Password = password
 	}
-	if settings, ok := override["settings"].(map[string]interface{}); ok {
+	if settings, ok := override["settings"].(map[string]any); ok {
 		for k, v := range settings {
 			node.Settings[k] = v
 		}
@@ -583,7 +583,7 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 		SourceType: "node",
 		SourceID:   node.ID,
 		SourceName: node.Name,
-		Settings:   make(map[string]interface{}),
+		Settings:   make(map[string]any),
 	}
 
 	// 设置分组信息
@@ -599,7 +599,7 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 
 	// Reality
 	if protocol.TLS == 2 && protocol.RealitySettings != nil {
-		var realitySettings map[string]interface{}
+		var realitySettings map[string]any
 		if err := json.Unmarshal([]byte(*protocol.RealitySettings), &realitySettings); err == nil {
 			if pk, ok := realitySettings["public_key"].(string); ok {
 				parsed.RealityPublicKey = pk
@@ -618,7 +618,7 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 
 	// TLS Settings
 	if protocol.TLSSettings != nil {
-		var tlsSettings map[string]interface{}
+		var tlsSettings map[string]any
 		if err := json.Unmarshal([]byte(*protocol.TLSSettings), &tlsSettings); err == nil {
 			if sni, ok := tlsSettings["server_name"].(string); ok {
 				parsed.ServerName = sni
@@ -637,7 +637,7 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 		parsed.Transport = *protocol.Transport
 	}
 	if protocol.TransportSettings != nil {
-		var transportSettings map[string]interface{}
+		var transportSettings map[string]any
 		if err := json.Unmarshal([]byte(*protocol.TransportSettings), &transportSettings); err == nil {
 			parsed.TransportSettings = transportSettings
 		}
@@ -645,7 +645,7 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 
 	// 协议配置
 	if protocol.Settings != nil {
-		var settings map[string]interface{}
+		var settings map[string]any
 		if err := json.Unmarshal([]byte(*protocol.Settings), &settings); err == nil {
 			for k, v := range settings {
 				parsed.Settings[k] = v
@@ -717,7 +717,7 @@ func (s *SubscriptionService) UpdateTemplate(template *model.SubscriptionTemplat
 }
 
 // UpdateTemplateFields 按字段局部更新订阅模板
-func (s *SubscriptionService) UpdateTemplateFields(id uint, fields map[string]interface{}) error {
+func (s *SubscriptionService) UpdateTemplateFields(id uint, fields map[string]any) error {
 	if len(fields) == 0 {
 		return nil
 	}

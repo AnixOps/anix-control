@@ -27,7 +27,7 @@ func NewServerService() *ServerService {
 }
 
 // GetServerByTypeAndID 根据类型和ID获取服务器
-func (s *ServerService) GetServerByTypeAndID(serverType model.ServerType, serverID uint) (interface{}, error) {
+func (s *ServerService) GetServerByTypeAndID(serverType model.ServerType, serverID uint) (any, error) {
 	switch serverType {
 	case model.ServerTypeVMess:
 		var server model.ServerVMess
@@ -233,13 +233,13 @@ func (s *ServerService) GetAllUsersOnlineCount() (map[string]int, error) {
 }
 
 // BuildNodeConfig 构建节点配置
-func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID uint) (map[string]interface{}, error) {
+func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID uint) (map[string]any, error) {
 	server, err := s.GetServerByTypeAndID(serverType, serverID)
 	if err != nil {
 		return nil, err
 	}
 
-	config := make(map[string]interface{})
+	config := make(map[string]any)
 
 	// V2bX 必需字段：node_type 和 type
 	nodeTypeStr := string(serverType)
@@ -256,12 +256,12 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 		config["tls"] = sv.TLS
 		config["network"] = sv.Network
 		if sv.TLSSettings != nil {
-			var tlsSettings map[string]interface{}
+			var tlsSettings map[string]any
 			json.Unmarshal([]byte(*sv.TLSSettings), &tlsSettings)
 			config["tls_settings"] = tlsSettings
 		}
 		if sv.NetworkSettings != nil {
-			var networkSettings map[string]interface{}
+			var networkSettings map[string]any
 			json.Unmarshal([]byte(*sv.NetworkSettings), &networkSettings)
 			config["network_settings"] = networkSettings
 		}
@@ -275,12 +275,12 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 		config["network"] = sv.Network
 		config["flow"] = sv.Flow
 		if sv.TLSSettings != nil {
-			var tlsSettings map[string]interface{}
+			var tlsSettings map[string]any
 			json.Unmarshal([]byte(*sv.TLSSettings), &tlsSettings)
 			config["tls_settings"] = tlsSettings
 		}
 		if sv.NetworkSettings != nil {
-			var networkSettings map[string]interface{}
+			var networkSettings map[string]any
 			json.Unmarshal([]byte(*sv.NetworkSettings), &networkSettings)
 			config["network_settings"] = networkSettings
 		}
@@ -288,7 +288,7 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 			config["encryption"] = *sv.Encryption
 		}
 		if sv.EncryptionSettings != nil {
-			var encSettings map[string]interface{}
+			var encSettings map[string]any
 			json.Unmarshal([]byte(*sv.EncryptionSettings), &encSettings)
 			config["encryption_settings"] = encSettings
 		}
@@ -304,7 +304,7 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 		}
 		config["network"] = sv.Network
 		if sv.NetworkSettings != nil {
-			var networkSettings map[string]interface{}
+			var networkSettings map[string]any
 			json.Unmarshal([]byte(*sv.NetworkSettings), &networkSettings)
 			config["networkSettings"] = networkSettings
 		}
@@ -375,12 +375,12 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 }
 
 // addRoutesAndBaseConfig 添加路由和基础配置
-func (s *ServerService) addRoutesAndBaseConfig(config map[string]interface{}, routeIDs []uint) {
+func (s *ServerService) addRoutesAndBaseConfig(config map[string]any, routeIDs []uint) {
 	// 添加路由
 	routes, _ := s.GetRoutesByIDs(routeIDs)
-	routeList := make([]map[string]interface{}, 0, len(routes))
+	routeList := make([]map[string]any, 0, len(routes))
 	for _, route := range routes {
-		routeList = append(routeList, map[string]interface{}{
+		routeList = append(routeList, map[string]any{
 			"id":           route.ID,
 			"match":        route.Match,
 			"action":       route.Action,
@@ -390,7 +390,7 @@ func (s *ServerService) addRoutesAndBaseConfig(config map[string]interface{}, ro
 	config["routes"] = routeList
 
 	// 添加基础配置
-	config["base_config"] = map[string]interface{}{
+	config["base_config"] = map[string]any{
 		"push_interval": 60,
 		"pull_interval": 60,
 	}
@@ -422,8 +422,8 @@ func (s *ServerService) GetServerRate(serverType model.ServerType, serverID uint
 	return 1.0
 }
 
-func ipsToInterface(ips []string) []interface{} {
-	result := make([]interface{}, len(ips))
+func ipsToInterface(ips []string) []any {
+	result := make([]any, len(ips))
 	for i, ip := range ips {
 		result[i] = ip
 	}
@@ -431,7 +431,7 @@ func ipsToInterface(ips []string) []interface{} {
 }
 
 // ParseTrafficData 解析流量数据
-func ParseTrafficData(data map[string]interface{}) (map[uint][2]int64, error) {
+func ParseTrafficData(data map[string]any) (map[uint][2]int64, error) {
 	result := make(map[uint][2]int64)
 	for k, v := range data {
 		userID, err := strconv.ParseUint(k, 10, 32)
@@ -439,7 +439,7 @@ func ParseTrafficData(data map[string]interface{}) (map[uint][2]int64, error) {
 			continue
 		}
 
-		traffic, ok := v.([]interface{})
+		traffic, ok := v.([]any)
 		if !ok || len(traffic) < 2 {
 			continue
 		}
@@ -453,7 +453,7 @@ func ParseTrafficData(data map[string]interface{}) (map[uint][2]int64, error) {
 }
 
 // ParseOnlineData 解析在线数据
-func ParseOnlineData(data map[string]interface{}) (map[uint][]string, error) {
+func ParseOnlineData(data map[string]any) (map[uint][]string, error) {
 	result := make(map[uint][]string)
 	for k, v := range data {
 		userID, err := strconv.ParseUint(k, 10, 32)
@@ -461,7 +461,7 @@ func ParseOnlineData(data map[string]interface{}) (map[uint][]string, error) {
 			continue
 		}
 
-		ipsRaw, ok := v.([]interface{})
+		ipsRaw, ok := v.([]any)
 		if !ok {
 			continue
 		}
@@ -478,7 +478,7 @@ func ParseOnlineData(data map[string]interface{}) (map[uint][]string, error) {
 	return result, nil
 }
 
-func toInt64(v interface{}) (int64, bool) {
+func toInt64(v any) (int64, bool) {
 	switch val := v.(type) {
 	case float64:
 		return int64(val), true

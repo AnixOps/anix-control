@@ -63,7 +63,7 @@ type panelForwardAnsibleConfig struct {
 	ApplyPlaybook  string                 `json:"playbookApply"`
 	RemovePlaybook string                 `json:"playbookRemove"`
 	Become         bool                   `json:"become"`
-	ExtraVars      map[string]interface{} `json:"extraVars"`
+	ExtraVars      map[string]any `json:"extraVars"`
 	Command        string                 `json:"command"`
 	WorkingDir     string                 `json:"workingDir"`
 	TargetPattern  string                 `json:"targetPattern"`
@@ -129,7 +129,7 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 			Message: "gost runtime skipped because ingress node is not configured",
 		}
 		completedAt := time.Now()
-		if err := s.db.Model(&model.ForwardRuntimeJob{}).Where("id = ?", job.ID).Updates(map[string]interface{}{
+		if err := s.db.Model(&model.ForwardRuntimeJob{}).Where("id = ?", job.ID).Updates(map[string]any{
 			"status":       result.Status,
 			"result":       result.Message,
 			"error":        "",
@@ -146,7 +146,7 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 		execErr = errors.New(result.Message)
 	}
 
-	updateValues := map[string]interface{}{
+	updateValues := map[string]any{
 		"status": result.Status,
 		"result": "",
 		"error":  "",
@@ -653,7 +653,7 @@ func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfigForDiagnostics
 	if value, err := s.configService.Get(forwardRuntimeAnsibleExtraVarsConfigKey); err != nil {
 		return nil, err
 	} else if strings.TrimSpace(value) != "" {
-		extraVars := map[string]interface{}{}
+		extraVars := map[string]any{}
 		if err := json.Unmarshal([]byte(value), &extraVars); err != nil {
 			return nil, fmt.Errorf("%s is invalid JSON: %w", forwardRuntimeAnsibleExtraVarsConfigKey, err)
 		}
@@ -661,7 +661,7 @@ func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfigForDiagnostics
 	} else if value, err := s.configService.Get(legacyForwardRuntimeAnsibleExtraVarsConfigKey); err != nil {
 		return nil, err
 	} else if strings.TrimSpace(value) != "" {
-		extraVars := map[string]interface{}{}
+		extraVars := map[string]any{}
 		if err := json.Unmarshal([]byte(value), &extraVars); err != nil {
 			return nil, fmt.Errorf("%s is invalid JSON: %w", legacyForwardRuntimeAnsibleExtraVarsConfigKey, err)
 		}
@@ -707,11 +707,11 @@ func buildPanelForwardAnsibleTargets(remoteAddr string) ([]panelForwardAnsibleTa
 	return targets, nil
 }
 
-func copyStringInterfaceMap(src map[string]interface{}) map[string]interface{} {
+func copyStringInterfaceMap(src map[string]any) map[string]any {
 	if len(src) == 0 {
 		return nil
 	}
-	result := make(map[string]interface{}, len(src))
+	result := make(map[string]any, len(src))
 	for key, value := range src {
 		result[key] = value
 	}
@@ -842,7 +842,7 @@ func isForwardRuntimeTerminalStatus(status int) bool {
 
 func (c *panelForwardAnsibleConfig) ensureDefaults(backend string) {
 	if c.ExtraVars == nil {
-		c.ExtraVars = map[string]interface{}{}
+		c.ExtraVars = map[string]any{}
 	}
 	if c.Environment == nil {
 		c.Environment = map[string]string{}

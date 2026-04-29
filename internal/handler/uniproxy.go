@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,7 +43,7 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 		return
 	}
 
-	var config map[string]interface{}
+	var config map[string]any
 
 	if nodeType == "" {
 		config, err = h.buildNewNodeConfig(uint(nodeID), "")
@@ -84,14 +85,14 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 	h.sendConfigResponse(c, config)
 }
 
-func (h *UniProxyHandler) buildNewNodeConfig(nodeID uint, preferredType string) (map[string]interface{}, error) {
+func (h *UniProxyHandler) buildNewNodeConfig(nodeID uint, preferredType string) (map[string]any, error) {
 	node, err := h.nodeService.GetNode(nodeID)
 	if err != nil {
 		return nil, err
 	}
 
 	preferredType = normalizeNodeType(preferredType)
-	config := make(map[string]interface{})
+	config := make(map[string]any)
 
 	if node.RawConfig != nil && *node.RawConfig != "" {
 		if err := json.Unmarshal([]byte(*node.RawConfig), &config); err != nil {
@@ -121,7 +122,7 @@ func (h *UniProxyHandler) buildNewNodeConfig(nodeID uint, preferredType string) 
 	return config, nil
 }
 
-func (h *UniProxyHandler) ensureBaseConfig(config map[string]interface{}) {
+func (h *UniProxyHandler) ensureBaseConfig(config map[string]any) {
 	if _, ok := config["node_type"]; !ok {
 		config["node_type"] = "vless"
 	}
@@ -132,32 +133,32 @@ func (h *UniProxyHandler) ensureBaseConfig(config map[string]interface{}) {
 		config["send_through"] = "0.0.0.0"
 	}
 	if _, ok := config["routes"]; !ok {
-		config["routes"] = []interface{}{}
+		config["routes"] = []any{}
 	}
 	if _, ok := config["base_config"]; !ok {
-		config["base_config"] = map[string]interface{}{
+		config["base_config"] = map[string]any{
 			"push_interval": 60,
 			"pull_interval": 60,
 		}
 	}
 }
 
-func (h *UniProxyHandler) buildMinimalConfig(config map[string]interface{}, node *model.Node) {
+func (h *UniProxyHandler) buildMinimalConfig(config map[string]any, node *model.Node) {
 	config["node_type"] = "vless"
 	config["type"] = "vless"
 	config["server_port"] = node.Port
 	config["host"] = node.Host
 	config["server_name"] = node.Host
 	config["send_through"] = "0.0.0.0"
-	config["routes"] = []interface{}{}
-	config["base_config"] = map[string]interface{}{
+	config["routes"] = []any{}
+	config["base_config"] = map[string]any{
 		"push_interval": 60,
 		"pull_interval": 60,
 	}
 	config["_no_protocol"] = true
 }
 
-func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]interface{}, node *model.Node, protocol *model.NodeProtocol) {
+func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]any, node *model.Node, protocol *model.NodeProtocol) {
 	nodeType := normalizeNodeType(string(protocol.Type))
 	if nodeType == "" {
 		nodeType = "vless"
@@ -175,16 +176,21 @@ func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]interface{},
 		config["server_name"] = node.Host
 	}
 
-	var protocolConfig map[string]interface{}
+	var protocolConfig map[string]any
 	if protocol.Settings != nil && *protocol.Settings != "" {
-		_ = json.Unmarshal([]byte(*protocol.Settings), &protocolConfig)
+		if err := json.Unmarshal([]byte(*protocol.Settings), &protocolConfig); err != nil {
+			log.Printf("invalid protocol settings JSON for node %d: %v", node.ID, err)
+		}
 	}
 
 	config["tls"] = protocol.TLS
 	if protocol.TLSSettings != nil && *protocol.TLSSettings != "" {
-		var tlsSettings map[string]interface{}
-		_ = json.Unmarshal([]byte(*protocol.TLSSettings), &tlsSettings)
-		config["tls_settings"] = tlsSettings
+		var tlsSettings map[string]any
+		if err := json.Unmarshal([]byte(*protocol.TLSSettings), &tlsSettings); err != nil {
+			log.Printf("invalid TLS settings JSON for node %d: %v", node.ID, err)
+		} else {
+			config["tls_settings"] = tlsSettings
+		}
 	}
 
 	if protocol.Transport != nil && *protocol.Transport != "" {
@@ -193,9 +199,12 @@ func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]interface{},
 		config["network"] = "tcp"
 	}
 	if protocol.TransportSettings != nil && *protocol.TransportSettings != "" {
-		var transportSettings map[string]interface{}
-		_ = json.Unmarshal([]byte(*protocol.TransportSettings), &transportSettings)
-		config["network_settings"] = transportSettings
+		var transportSettings map[string]any
+		if err := json.Unmarshal([]byte(*protocol.TransportSettings), &transportSettings); err != nil {
+			log.Printf("invalid transport settings JSON for node %d: %v", node.ID, err)
+		} else {
+			config["network_settings"] = transportSettings
+		}
 	}
 
 	switch nodeType {
@@ -216,14 +225,14 @@ func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]interface{},
 	}
 
 	if protocol.TLS == 2 && protocol.RealitySettings != nil && *protocol.RealitySettings != "" {
-		var realitySettings map[string]interface{}
+		var realitySettings map[string]any
 		if err := json.Unmarshal([]byte(*protocol.RealitySettings), &realitySettings); err == nil {
 			if config["tls_settings"] == nil {
-				config["tls_settings"] = make(map[string]interface{})
+				config["tls_settings"] = make(map[string]any)
 			}
-			tlsSettings, _ := config["tls_settings"].(map[string]interface{})
+			tlsSettings, _ := config["tls_settings"].(map[string]any)
 			if tlsSettings == nil {
-				tlsSettings = make(map[string]interface{})
+				tlsSettings = make(map[string]any)
 				config["tls_settings"] = tlsSettings
 			}
 			for k, v := range realitySettings {
@@ -233,7 +242,7 @@ func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]interface{},
 	}
 
 	if protocol.CustomConfig != nil && *protocol.CustomConfig != "" {
-		var customConfig map[string]interface{}
+		var customConfig map[string]any
 		if err := json.Unmarshal([]byte(*protocol.CustomConfig), &customConfig); err == nil {
 			for k, v := range customConfig {
 				config[k] = v
@@ -242,21 +251,25 @@ func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]interface{},
 	}
 
 	config["send_through"] = "0.0.0.0"
-	config["routes"] = []interface{}{}
-	config["base_config"] = map[string]interface{}{
+	config["routes"] = []any{}
+	config["base_config"] = map[string]any{
 		"push_interval": 60,
 		"pull_interval": 60,
 	}
 }
 
-func (h *UniProxyHandler) sendConfigResponse(c *gin.Context, config map[string]interface{}) {
+func (h *UniProxyHandler) sendConfigResponse(c *gin.Context, config map[string]any) {
 	if _, ok := config["type"]; !ok {
 		if nt, ok := config["node_type"]; ok {
 			config["type"] = nt
 		}
 	}
 
-	configJSON, _ := json.Marshal(config)
+	configJSON, err := json.Marshal(config)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode config"})
+		return
+	}
 	etag := generateETag(configJSON)
 	ifNoneMatch := c.GetHeader("If-None-Match")
 	if ifNoneMatch == etag {
@@ -268,7 +281,7 @@ func (h *UniProxyHandler) sendConfigResponse(c *gin.Context, config map[string]i
 	c.JSON(http.StatusOK, config)
 }
 
-func getConfigValue(config map[string]interface{}, key string, defaultValue interface{}) interface{} {
+func getConfigValue(config map[string]any, key string, defaultValue any) any {
 	if config == nil {
 		return defaultValue
 	}
@@ -368,7 +381,7 @@ func (h *UniProxyHandler) getNewNodeUsers(nodeID uint) ([]*model.User, error) {
 }
 
 func (h *UniProxyHandler) sendUsersResponse(c *gin.Context, users []*model.User) {
-	userList := make([]map[string]interface{}, 0, len(users))
+	userList := make([]map[string]any, 0, len(users))
 	for _, user := range users {
 		speedLimit := user.GetSpeedLimit()
 		deviceLimit := user.GetDeviceLimit()
@@ -380,7 +393,7 @@ func (h *UniProxyHandler) sendUsersResponse(c *gin.Context, users []*model.User)
 			deviceLimit = user.Plan.GetDeviceLimit()
 		}
 
-		userList = append(userList, map[string]interface{}{
+		userList = append(userList, map[string]any{
 			"id":           user.ID,
 			"uuid":         user.UUID,
 			"speed_limit":  speedLimit,
@@ -388,11 +401,15 @@ func (h *UniProxyHandler) sendUsersResponse(c *gin.Context, users []*model.User)
 		})
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"users": userList,
 	}
 
-	responseJSON, _ := json.Marshal(response)
+	responseJSON, err := json.Marshal(response)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode response"})
+		return
+	}
 	etag := generateETag(responseJSON)
 	ifNoneMatch := c.GetHeader("If-None-Match")
 	if ifNoneMatch == etag {
@@ -445,7 +462,7 @@ func (h *UniProxyHandler) PushTraffic(c *gin.Context) {
 
 	serverType := model.ServerType(nodeType)
 
-	var trafficData map[string]interface{}
+	var trafficData map[string]any
 	if err := c.ShouldBindJSON(&trafficData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
@@ -502,7 +519,7 @@ func (h *UniProxyHandler) PushAlive(c *gin.Context) {
 
 	serverType := model.ServerType(nodeType)
 
-	var onlineData map[string]interface{}
+	var onlineData map[string]any
 	if err := c.ShouldBindJSON(&onlineData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
