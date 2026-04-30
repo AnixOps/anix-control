@@ -26,7 +26,7 @@ RUN if [ -f "web/package.json" ]; then \
 ARG VERSION=dev
 ARG BUILD_TIME
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" \
+    -ldflags="-s -w -X github.com/anixops/v2board/internal/handler.BuildVersion=${VERSION} -X github.com/anixops/v2board/internal/handler.BuildTime=${BUILD_TIME}" \
     -o v2board ./cmd/server
 
 # Runtime stage

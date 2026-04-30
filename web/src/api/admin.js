@@ -8,6 +8,13 @@ export function getDashboard(refresh = false) {
   })
 }
 
+export function getSystemInfo() {
+  return request({
+    url: '/admin/system/info',
+    method: 'get'
+  })
+}
+
 export function createUser(data) {
   return request({
     url: '/admin/users',

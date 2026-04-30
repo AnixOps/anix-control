@@ -165,6 +165,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 			// 仪表盘
 			admin.GET("/dashboard", adminHandler.GetDashboard)
+			admin.GET("/system/info", adminHandler.GetSystemInfo)
 
 			// 用户管理
 			admin.POST("/users", adminHandler.CreateUser)

@@ -22,6 +22,7 @@ import (
 	"github.com/anixops/v2board/internal/cache"
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
+	"github.com/anixops/v2board/internal/handler"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/router"
 	"github.com/anixops/v2board/internal/service"
@@ -74,6 +75,12 @@ var (
 
 func init() {
 	flag.StringVar(&configPath, "config", "config/config.yaml", "配置文件路径")
+}
+
+func syncBuildInfo() {
+	handler.BuildVersion = version
+	handler.BuildTime = buildTime
+	handler.BuildCommit = commit
 }
 
 func fileExists(path string) bool {
@@ -230,6 +237,7 @@ func main() {
 	}
 
 	// 打印版本信息
+	syncBuildInfo()
 	fmt.Printf("V2Board Go Backend v%s (build: %s)\n", version, buildTime)
 
 	// 加载配置

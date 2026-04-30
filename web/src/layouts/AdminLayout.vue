@@ -60,6 +60,9 @@
             <div class="user-email">{{ userStore.userInfo?.email || '-' }}</div>
           </div>
         </div>
+        <div class="version-info" v-if="systemVersion">
+          AnixOps v{{ systemVersion }}
+        </div>
         <div class="sidebar-footer-actions">
           <LocaleSwitcher compact />
           <button class="btn-ghost btn-sm w-full" type="button" @click="logout">{{ t('common.actions.logout') }}</button>
@@ -93,6 +96,7 @@ import { useAppI18n } from '@/composables/useAppI18n'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
+import { getSystemInfo } from '@/api/admin'
 
 const router = useRouter()
 const route = useRoute()
@@ -101,6 +105,7 @@ const { t, currentLocale, formatDateTime } = useAppI18n()
 
 const sidebarOpen = ref(false)
 const currentTime = ref('')
+const systemVersion = ref('')
 
 const navSections = computed(() => ([
   {
@@ -182,6 +187,15 @@ function updateTime() {
   })
 }
 
+async function loadSystemInfo() {
+  try {
+    const res = await getSystemInfo()
+    systemVersion.value = res.data?.version || ''
+  } catch {
+    // silently ignore
+  }
+}
+
 let timer
 
 onMounted(() => {
@@ -190,6 +204,7 @@ onMounted(() => {
   if (userStore.isLoggedIn) {
     userStore.getUserInfo()
   }
+  loadSystemInfo()
 })
 
 onUnmounted(() => {
@@ -356,6 +371,14 @@ watchEffect(() => {
 .sidebar-footer {
   padding: 16px 14px 20px;
   border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.version-info {
+  font-size: 11px;
+  color: rgba(226, 232, 240, 0.5);
+  text-align: center;
+  padding: 6px 0;
+  letter-spacing: 0.04em;
 }
 
 .sidebar-footer-actions {

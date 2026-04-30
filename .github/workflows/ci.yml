@@ -213,7 +213,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" -o v2board ./cmd/server
+          CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X github.com/anixops/v2board/internal/handler.BuildVersion=${VERSION} -X github.com/anixops/v2board/internal/handler.BuildTime=${BUILD_TIME}" -o v2board ./cmd/server
 
       - name: Upload backend artifacts
         uses: actions/upload-artifact@v4
@@ -266,7 +266,7 @@ jobs:
           BIN_NAME="v2board-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
 
           CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-            go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}" \
+            go build -ldflags="-s -w -X github.com/anixops/v2board/internal/handler.BuildVersion=${VERSION} -X github.com/anixops/v2board/internal/handler.BuildTime=${BUILD_TIME}" \
             -o "${BIN_NAME}" ./cmd/server
 
           mkdir -p dist

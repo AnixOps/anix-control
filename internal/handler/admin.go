@@ -14,6 +14,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// BuildInfo is set via ldflags at build time.
+var (
+	BuildVersion = "dev"
+	BuildTime    = "unknown"
+	BuildCommit  = "unknown"
+)
+
 // AdminHandler 管理员处理器
 type AdminHandler struct {
 	userService    *service.UserService
@@ -852,5 +859,17 @@ func (h *AdminHandler) GetDashboard(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": stats,
+	})
+}
+
+// GetSystemInfo 返回系统版本和信息
+// GET /api/v2/admin/system/info
+func (h *AdminHandler) GetSystemInfo(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"version":    BuildVersion,
+			"build_time": BuildTime,
+			"commit":     BuildCommit,
+		},
 	})
 }
