@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -791,4 +792,128 @@ func setForwardRuntimeBackendForTest(t *testing.T, db *gorm.DB, backend string) 
 
 func TestPanelForwardRuntimeService(t *testing.T) {
 	suite.Run(t, new(PanelForwardRuntimeServiceTestSuite))
+}
+
+func (s *PanelForwardRuntimeServiceTestSuite) TestValidateAnsiblePaths_RejectsMissingInventory() {
+	db := database.Get()
+	configSvc := NewSystemConfigService(db)
+	svc := &PanelForwardRuntimeService{db: db, configService: configSvc}
+
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeNodeXModeConfigKey, "false", "string", forwardRuntimeConfigGroup, "test"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeLocalBackendConfigKey, model.ForwardRuntimeBackendNftablesAnsible, "string", forwardRuntimeConfigGroup, "test"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeAnsibleInventoryConfigKey, "/nonexistent/inventory.ini", "string", forwardRuntimeConfigGroup, "test"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeAnsibleApplyPlaybookConfigKey, "/opt/ansible/apply.yml", "string", forwardRuntimeConfigGroup, "test"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeAnsibleRemovePlaybookConfigKey, "/opt/ansible/remove.yml", "string", forwardRuntimeConfigGroup, "test"))
+
+	err := svc.validateAnsiblePaths(model.ForwardRuntimeBackendNftablesAnsible, model.ForwardRuntimeJobActionCreate)
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "inventory file not found")
+}
+
+func (s *PanelForwardRuntimeServiceTestSuite) TestValidateAnsiblePaths_RejectsMissingPlaybook() {
+	db := database.Get()
+	configSvc := NewSystemConfigService(db)
+	svc := &PanelForwardRuntimeService{db: db, configService: configSvc}
+
+	tempDir := s.T().TempDir()
+	inventoryPath := tempDir + "/inventory.ini"
+	assert.NoError(s.T(), os.WriteFile(inventoryPath, []byte("[nodes]\n"), 0o600))
+
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeNodeXModeConfigKey, "false", "string", forwardRuntimeConfigGroup, "test"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeLocalBackendConfigKey, model.ForwardRuntimeBackendNftablesAnsible, "string", forwardRuntimeConfigGroup, "test"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeAnsibleInventoryConfigKey, inventoryPath, "string", forwardRuntimeConfigGroup, "test"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeAnsibleApplyPlaybookConfigKey, "/nonexistent/apply.yml", "string", forwardRuntimeConfigGroup, "test"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeAnsibleRemovePlaybookConfigKey, "/nonexistent/remove.yml", "string", forwardRuntimeConfigGroup, "test"))
+
+	err := svc.validateAnsiblePaths(model.ForwardRuntimeBackendNftablesAnsible, model.ForwardRuntimeJobActionCreate)
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "playbook file not found")
+}
+
+func (s *PanelForwardRuntimeServiceTestSuite) TestValidateAnsiblePaths_PassesWhenFilesExist() {
+	db := database.Get()
+	configSvc := NewSystemConfigService(db)
+	svc := &PanelForwardRuntimeService{db: db, configService: configSvc}
+
+	tempDir := s.T().TempDir()
+	inventoryPath := tempDir + "/inventory.ini"
+	applyPlaybookPath := tempDir + "/apply.yml"
+	removePlaybookPath := tempDir + "/remove.yml"
+	assert.NoError(s.T(), os.WriteFile(inventoryPath, []byte("[nodes]\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(applyPlaybookPath, []byte("---\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(removePlaybookPath, []byte("---\n"), 0o600))
+
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeNodeXModeConfigKey, "false", "string", forwardRuntimeConfigGroup, "test"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeLocalBackendConfigKey, model.ForwardRuntimeBackendNftablesAnsible, "string", forwardRuntimeConfigGroup, "test"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeAnsibleInventoryConfigKey, inventoryPath, "string", forwardRuntimeConfigGroup, "test"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeAnsibleApplyPlaybookConfigKey, applyPlaybookPath, "string", forwardRuntimeConfigGroup, "test"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeAnsibleRemovePlaybookConfigKey, removePlaybookPath, "string", forwardRuntimeConfigGroup, "test"))
+
+	err := svc.validateAnsiblePaths(model.ForwardRuntimeBackendNftablesAnsible, model.ForwardRuntimeJobActionCreate)
+	assert.NoError(s.T(), err)
+
+	err = svc.validateAnsiblePaths(model.ForwardRuntimeBackendNftablesAnsible, model.ForwardRuntimeJobActionDelete)
+	assert.NoError(s.T(), err)
+}
+
+func (s *PanelForwardRuntimeServiceTestSuite) TestSyncForwardsToBackend_SyncsMismatchedForwards() {
+	db := database.Get()
+	configSvc := NewSystemConfigService(db)
+	stubClient := &stubForwardRuntimeNodeXClient{
+		executeFn: func(ctx context.Context, req nodeXForwardExecuteRequest) (*nodeXForwardExecuteResult, error) {
+			return &nodeXForwardExecuteResult{
+				Status:  model.ForwardRuntimeJobStatusSuccess,
+				Message: "synced",
+			}, nil
+		},
+	}
+	svc := &PanelForwardRuntimeService{db: db, configService: configSvc, client: stubClient}
+
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeNodeXModeConfigKey, "true", "string", forwardRuntimeConfigGroup, "test"))
+
+	// Create a forward on a different backend
+	forward := &model.Forward{
+		UserID:         1,
+		UserName:       "sync-user",
+		Name:           "Sync Forward",
+		TunnelID:       1,
+		InPort:         20001,
+		RemoteAddr:     "10.0.0.1:80",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendNftablesAnsible,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	// Create a tunnel for the forward
+	tunnel := &model.ForwardTunnel{
+		Name:      "Sync Tunnel",
+		Type:      1,
+		Protocol:  "tcp",
+		InNodeID:  1,
+		Status:    1,
+	}
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+	forward.TunnelID = tunnel.ID
+	db.Save(forward)
+
+	// Create a forward node for the tunnel
+	node := &model.ForwardNode{
+		Name:     "sync-node",
+		Host:     "10.0.0.1",
+		Port:     80,
+		APIPort:  9000,
+		APIToken: "token",
+	}
+	assert.NoError(s.T(), db.Create(node).Error)
+	tunnel.InNodeID = node.ID
+	db.Save(tunnel)
+
+	synced, failed, err := svc.SyncForwardsToBackend(model.ForwardRuntimeBackendGost)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), 1, synced)
+	assert.Equal(s.T(), 0, failed)
+
+	var updated model.Forward
+	assert.NoError(s.T(), db.First(&updated, forward.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendGost, updated.RuntimeBackend)
 }

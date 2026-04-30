@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"log"
+	"os"
 	"time"
 
 	"github.com/anixops/v2board/internal/cache"
@@ -157,22 +158,8 @@ func (s *NodeService) DeleteNode(id uint) error {
 
 // RegisterNode 节点自动注册
 func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP string) (*model.NodeRegisterResponse, error) {
-	// 1. 验证授权密钥
+	// 1. 计算密钥哈希
 	keyHash := hashString(req.AuthKey)
-	var authKey model.AuthorizedKey
-	if err := s.db.Where("key_hash = ?", keyHash).First(&authKey).Error; err != nil {
-		return nil, errors.New("授权密钥无效")
-	}
-
-	// 检查是否已使用
-	if authKey.Used == 1 {
-		return nil, errors.New("授权密钥已被使用")
-	}
-
-	// 检查是否过期
-	if authKey.ExpireAt != nil && *authKey.ExpireAt < time.Now().Unix() {
-		return nil, errors.New("授权密钥已过期")
-	}
 
 	// 2. 生成节点凭证
 	apiKey, err := generateSecureToken(32)
@@ -184,7 +171,7 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 		return nil, errors.New("生成共享密钥失败")
 	}
 
-	// 3. 创建节点 + 默认协议 + 标记授权密钥 (事务)
+	// 3. 创建节点 + 默认协议 + 标记授权密钥 (事务 + 悲观锁防并发)
 	nodeName := req.Name
 	if nodeName == "" {
 		nodeName = "Node-" + clientIP
@@ -223,6 +210,17 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 	}
 
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		// 在事务内用 SELECT FOR UPDATE 锁定授权密钥，防止并发注册
+		var authKey model.AuthorizedKey
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").Where("key_hash = ?", keyHash).First(&authKey).Error; err != nil {
+			return errors.New("授权密钥无效")
+		}
+
+		// 检查是否过期
+		if authKey.ExpireAt != nil && *authKey.ExpireAt < time.Now().Unix() {
+			return errors.New("授权密钥已过期")
+		}
+
 		// 创建节点
 		if err := tx.Create(node).Error; err != nil {
 			return errors.New("创建节点失败")
@@ -234,12 +232,9 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 			return errors.New("创建默认协议失败")
 		}
 
-		// 标记授权密钥已使用
-		if err := tx.Model(&authKey).Updates(map[string]any{
-			"used":            1,
-			"used_by_node_id": node.ID,
-		}).Error; err != nil {
-			return errors.New("标记授权密钥失败")
+		// 计数器 +1，记录有多少节点用此密钥注册
+		if err := tx.Model(&authKey).Update("used", authKey.Used+1).Error; err != nil {
+			return errors.New("更新密钥使用计数失败")
 		}
 
 		return nil
@@ -472,6 +467,62 @@ func (s *NodeService) GetNodeStats() (map[string]any, error) {
 		"up":      totalUpload,
 		"down":    totalDownload,
 	}, nil
+}
+
+// ========== 初始化 ==========
+
+// InitDefaultAuthKeyFromEnv 从环境变量初始化默认授权密钥
+// 环境变量: NODE_DEFAULT_AUTH_KEY
+// 如果设置了该环境变量：
+//   - 如果密钥内容已存在 → 跳过
+//   - 如果存在同名默认密钥但内容不同 → 删除旧的，创建新的
+//   - 如果不存在 → 创建
+//
+// Note: 改变 AuthKey 只会影响新节点注册，已注册节点使用 APIKey 通信，不受影响
+func InitDefaultAuthKeyFromEnv() {
+	defaultKey := os.Getenv("NODE_DEFAULT_AUTH_KEY")
+	if defaultKey == "" {
+		return // 环境变量未设置，跳过
+	}
+
+	db := database.Get()
+	keyHash := hashString(defaultKey)
+
+	// 1. 检查密钥内容是否已经存在（相同哈希就是相同密钥）
+	var count int64
+	db.Model(&model.AuthorizedKey{}).Where("key_hash = ?", keyHash).Count(&count)
+	if count > 0 {
+		log.Printf("Default auth key from environment already exists (hash: %s), skipping", keyHash[:12])
+		return
+	}
+
+	// 2. 如果存在同名"Default (from env)"，删除旧的（环境变量已改变，需要更新）
+	var existingIDs []uint
+	db.Model(&model.AuthorizedKey{}).
+		Where("name = ?", "Default (from env)").
+		Pluck("id", &existingIDs)
+	if len(existingIDs) > 0 {
+		log.Printf("Removing old default auth key (name matches, content changed)...")
+		for _, id := range existingIDs {
+			db.Delete(&model.AuthorizedKey{}, id)
+		}
+	}
+
+	// 3. 创建新的授权密钥
+	log.Println("Creating default auth key from environment...")
+	authKey := &model.AuthorizedKey{
+		Name:    "Default (from env)",
+		Key:     defaultKey,
+		KeyHash: keyHash,
+		Used:    0,
+	}
+
+	if err := db.Create(authKey).Error; err != nil {
+		log.Printf("Failed to create default auth key: %v", err)
+		return
+	}
+
+	log.Printf("Default auth key created/updated successfully (name: %s, hash: %s)", authKey.Name, keyHash[:12])
 }
 
 // ========== 辅助函数 ==========

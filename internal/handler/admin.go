@@ -83,7 +83,12 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		Token:         uuid.New().String(),
 		IsAdmin:       req.IsAdmin,
 		FlowResetTime: req.FlowResetTime,
+		GroupID:       req.GroupID,
 		Banned:        0,
+	}
+
+	if req.TransferEnable != nil {
+		user.TransferEnable = *req.TransferEnable
 	}
 
 	if err := db.Create(user).Error; err != nil {
@@ -191,6 +196,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		Password       *string `json:"password"`
 		Balance        *int64  `json:"balance"`
 		PlanID         *uint   `json:"plan_id" binding:"omitempty,gt=0"`
+		GroupID        *uint   `json:"group_id"`
 		ExpiredAt      *int64  `json:"expired_at"`
 		TransferEnable *int64  `json:"transfer_enable"`
 		SpeedLimit     *int64  `json:"speed_limit"`
@@ -266,6 +272,9 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	}
 	if req.RemarkContent != nil {
 		updates["remark_content"] = *req.RemarkContent
+	}
+	if req.GroupID != nil {
+		updates["group_id"] = *req.GroupID
 	}
 
 	if err := h.userService.Update(uint(id), updates); err != nil {

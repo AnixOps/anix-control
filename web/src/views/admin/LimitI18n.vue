@@ -1,72 +1,89 @@
 <template>
   <div class="limit-page">
-    <div class="page-header">
-      <div>
-        <h1>{{ t('runtime.limitPage.title') }}</h1>
-        <p class="text-secondary">{{ t('runtime.limitPage.subtitle') }}</p>
+    <div class="toolbar">
+      <div class="toolbar-copy">
+        <p class="eyebrow">{{ t('runtime.limitPage.heroEyebrow') }}</p>
+        <h2>{{ t('runtime.limitPage.title') }}</h2>
       </div>
-      <div class="header-actions">
-        <button class="btn-secondary" :disabled="loading" @click="refreshAll">{{ t('runtime.limitPage.actions.refresh') }}</button>
-        <button @click="openCreateModal">{{ t('runtime.limitPage.actions.create') }}</button>
+      <div class="toolbar-actions">
+        <button class="btn btn-primary" @click="openCreateModal">{{ t('runtime.limitPage.actions.create') }}</button>
+      </div>
+    </div>
+    <ForwardSuiteNav />
+    <p class="text-secondary small runtime-note">{{ t('runtime.limitPage.note') }}</p>
+    <div class="runtime-context-bar">
+      <span class="tag tag-primary">{{ runtimeModeLabel }}</span>
+      <span class="runtime-context-summary">{{ runtimeModeSummary }}</span>
+      <div class="runtime-context-links">
+        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">{{ t('forwardSuite.nav.localRuntime') }}</router-link>
+        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">{{ t('forwardSuite.nav.nodeXRuntime') }}</router-link>
       </div>
     </div>
 
-    <ForwardSuiteNav />
+    <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
+      <span>{{ feedback.message }}</span>
+      <button class="feedback-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="clearFeedback">×</button>
+    </div>
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
       <span>{{ t('runtime.limitPage.loading') }}</span>
     </div>
 
-    <div v-else-if="limits.length === 0" class="empty-state">
-      <div class="empty-icon">L</div>
-      <h3>{{ t('runtime.limitPage.empty.title') }}</h3>
-      <p class="text-secondary">{{ t('runtime.limitPage.empty.text') }}</p>
-      <button @click="openCreateModal">{{ t('runtime.limitPage.actions.createNow') }}</button>
-    </div>
-
-    <div v-else class="card-grid">
-      <article v-for="item in limits" :key="item.id" class="limit-card">
-        <div class="card-head">
-          <div class="title-wrap">
-            <h3>{{ formatRuleName(item) }}</h3>
-            <span :class="['status-pill', item.status === 1 ? 'status-active' : 'status-disabled']">
-              {{ item.status === 1 ? t('runtime.limitPage.status.active') : t('runtime.limitPage.status.error') }}
-            </span>
+    <template v-else>
+      <section v-if="limits.length" class="card-grid">
+        <article v-for="item in limits" :key="item.id" class="limit-card">
+          <div class="card-head">
+            <div class="card-title">
+              <h3>{{ formatRuleName(item) }}</h3>
+              <p>{{ formatTunnel(item) }}</p>
+            </div>
+            <div class="card-head-actions">
+              <span :class="['tag', item.status === 1 ? 'tag-success' : 'tag-danger']">
+                {{ item.status === 1 ? t('runtime.limitPage.status.active') : t('runtime.limitPage.status.error') }}
+              </span>
+            </div>
           </div>
+
+          <div class="meta-list">
+            <div class="meta-item">
+              <span class="meta-label">{{ t('runtime.limitPage.cards.speed') }}</span>
+              <strong>{{ formatSpeed(item.speed) }}</strong>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">{{ t('runtime.limitPage.cards.updatedAt') }}</span>
+              <strong>{{ formatTime(item.updatedTime || item.createdTime) }}</strong>
+            </div>
+          </div>
+
           <div class="card-actions">
-            <button class="btn-sm btn-ghost" @click="openEditModal(item)">{{ t('runtime.limitPage.actions.edit') }}</button>
-            <button class="btn-sm btn-ghost btn-danger" @click="openDeleteModal(item)">{{ t('runtime.limitPage.actions.delete') }}</button>
+            <button class="btn btn-secondary btn-sm" @click="openEditModal(item)">{{ t('runtime.limitPage.actions.edit') }}</button>
+            <button class="btn btn-secondary btn-sm danger-text" @click="openDeleteModal(item)">{{ t('runtime.limitPage.actions.delete') }}</button>
           </div>
-        </div>
+        </article>
+      </section>
 
-        <div class="kv-list">
-          <div class="kv-item">
-            <span class="k">{{ t('runtime.limitPage.cards.speed') }}</span>
-            <span class="v">{{ formatSpeed(item.speed) }}</span>
-          </div>
-          <div class="kv-item">
-            <span class="k">{{ t('runtime.limitPage.cards.tunnel') }}</span>
-            <span class="v">{{ formatTunnel(item) }}</span>
-          </div>
-          <div class="kv-item">
-            <span class="k">{{ t('runtime.limitPage.cards.updatedAt') }}</span>
-            <span class="v">{{ formatTime(item.updatedTime || item.createdTime) }}</span>
-          </div>
-        </div>
-      </article>
-    </div>
+      <section v-else class="empty-state">
+        <h3>{{ t('runtime.limitPage.empty.title') }}</h3>
+        <p>{{ t('runtime.limitPage.empty.text') }}</p>
+        <button class="btn btn-primary" @click="openCreateModal">{{ t('runtime.limitPage.actions.createNow') }}</button>
+      </section>
+    </template>
 
     <div v-if="showFormModal" class="modal-overlay" @click.self="closeFormModal">
-      <div class="modal">
+      <div class="modal modal-md">
         <div class="modal-header">
-          <h3>{{ isEditMode ? t('runtime.limitPage.formModal.titleEdit') : t('runtime.limitPage.formModal.titleCreate') }}</h3>
-          <button class="close-btn" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="closeFormModal">x</button>
+          <div>
+            <p class="eyebrow">{{ isEditMode ? t('runtime.limitPage.formModal.titleEdit') : t('runtime.limitPage.formModal.titleCreate') }}</p>
+            <h3>{{ isEditMode ? t('runtime.limitPage.formModal.titleEdit') : t('runtime.limitPage.formModal.titleCreate') }}</h3>
+          </div>
+          <button class="modal-close" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="closeFormModal">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
             <label>{{ t('runtime.limitPage.formModal.fields.name') }}</label>
             <input v-model.trim="form.name" type="text" :placeholder="t('runtime.limitPage.formModal.placeholders.name')" />
+            <p v-if="formError" class="form-error">{{ formError }}</p>
           </div>
           <div class="form-group">
             <label>{{ t('runtime.limitPage.formModal.fields.speed') }}</label>
@@ -76,16 +93,15 @@
             <label>{{ t('runtime.limitPage.formModal.fields.tunnel') }}</label>
             <select v-model.number="form.tunnelId">
               <option :value="0">{{ t('runtime.limitPage.formModal.placeholders.tunnel') }}</option>
-              <option v-for="item in tunnels" :key="item.id" :value="item.id">
-                {{ item.name || t('runtime.limitPage.values.tunnelFallback', { id: item.id }) }}
+              <option v-for="t in tunnels" :key="t.id" :value="t.id">
+                {{ t.name || t('runtime.limitPage.values.tunnelFallback', { id: t.id }) }}
               </option>
             </select>
           </div>
-          <p v-if="formError" class="error-msg">{{ formError }}</p>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" :disabled="formSubmitting" @click="closeFormModal">{{ t('common.actions.cancel') }}</button>
-          <button :disabled="formSubmitting" @click="submitForm">
+          <button class="btn btn-secondary" :disabled="formSubmitting" @click="closeFormModal">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="formSubmitting" @click="submitForm">
             {{ formSubmitting ? t('runtime.limitPage.formModal.submitting') : (isEditMode ? t('runtime.limitPage.formModal.submitUpdate') : t('runtime.limitPage.formModal.submitCreate')) }}
           </button>
         </div>
@@ -93,20 +109,21 @@
     </div>
 
     <div v-if="showDeleteModal" class="modal-overlay" @click.self="closeDeleteModal">
-      <div class="modal modal-sm">
+      <div class="modal">
         <div class="modal-header">
-          <h3>{{ t('runtime.limitPage.deleteModal.title') }}</h3>
-          <button class="close-btn" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="closeDeleteModal">x</button>
+          <div>
+            <p class="eyebrow">{{ t('runtime.limitPage.deleteModal.eyebrow') }}</p>
+            <h3>{{ t('runtime.limitPage.deleteModal.title') }}</h3>
+          </div>
+          <button class="modal-close" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="closeDeleteModal">×</button>
         </div>
         <div class="modal-body">
-          <p class="delete-copy">
-            {{ t('runtime.limitPage.deleteModal.confirmText', { name: deletingItem?.name || t('runtime.limitPage.values.ruleFallback', { id: deletingItem?.id || '-' }) }) }}
-          </p>
-          <p class="text-secondary">{{ t('runtime.limitPage.deleteModal.hint') }}</p>
+          <p class="modal-copy">{{ t('runtime.limitPage.deleteModal.confirmText', { name: deletingItem?.name || t('runtime.limitPage.values.ruleFallback', { id: deletingItem?.id || '-' }) }) }}</p>
+          <p class="hint">{{ t('runtime.limitPage.deleteModal.hint') }}</p>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" :disabled="deleteSubmitting" @click="closeDeleteModal">{{ t('common.actions.cancel') }}</button>
-          <button class="btn-danger" :disabled="deleteSubmitting" @click="confirmDelete">
+          <button class="btn btn-secondary" :disabled="deleteSubmitting" @click="closeDeleteModal">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary danger" :disabled="deleteSubmitting" @click="confirmDelete">
             {{ deleteSubmitting ? t('runtime.limitPage.deleteModal.deleting') : t('runtime.limitPage.deleteModal.confirmDelete') }}
           </button>
         </div>
@@ -123,15 +140,32 @@ import {
   deleteSpeedLimit,
   getSpeedLimitList,
   getSpeedLimitTunnels,
+  getSystemConfig,
   updateSpeedLimit
 } from '@/api/admin'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
+import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
 
 const { t, formatDateTime, translateLiteral } = useAppI18n()
 
 const loading = ref(false)
 const limits = ref([])
 const tunnels = ref([])
+
+const runtimeNodeXModeKey = 'forward.runtime.nodex_mode'
+const runtimeBackendKey = 'forward.runtime_backend'
+const runtimeNodeXMode = ref(false)
+const runtimeBackend = ref('nftables_ansible')
+const runtimeModeLabel = computed(() => (
+  runtimeNodeXMode.value
+    ? t('runtime.limitPage.modeLabelNodeX')
+    : t('runtime.limitPage.modeLabelLocal', { backend: humanizeForwardRuntimeBackend(t, runtimeBackend.value) })
+))
+const runtimeModeSummary = computed(() => (
+  runtimeNodeXMode.value
+    ? t('runtime.limitPage.modeSummaryNodeX')
+    : t('runtime.limitPage.modeSummaryLocal')
+))
 
 const showFormModal = ref(false)
 const formSubmitting = ref(false)
@@ -142,35 +176,63 @@ const showDeleteModal = ref(false)
 const deleteSubmitting = ref(false)
 const deletingItem = ref(null)
 
+const feedback = ref({ type: 'info', message: '' })
+let feedbackTimer = null
+
 function newForm() {
-  return {
-    id: null,
-    name: '',
-    speed: 100,
-    tunnelId: 0
-  }
+  return { id: null, name: '', speed: 100, tunnelId: 0 }
 }
 
 const isEditMode = computed(() => Number(form.value.id || 0) > 0)
 const selectedTunnel = computed(() => tunnels.value.find(item => Number(item.id) === Number(form.value.tunnelId || 0)) || null)
 
-function formatErrorMessage(error, fallbackKey) {
-  return translateLiteral(error?.response?.data?.msg || error?.response?.data?.error || error?.message || t(fallbackKey))
+function parseRuntimeBoolean(value) {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (!normalized) return null
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
+  return null
 }
 
-function assertCompat(res, fallbackKey) {
-  if (res && typeof res.code === 'number' && res.code !== 0) {
-    throw new Error(res.msg || t(fallbackKey))
+async function loadRuntimeMode() {
+  let explicitMode = null
+  try {
+    const res = await getSystemConfig(runtimeNodeXModeKey)
+    explicitMode = parseRuntimeBoolean(res.data?.value)
+  } catch (error) {
+    console.error('get forward runtime NodeX mode failed:', error)
   }
-  return res
+  try {
+    const res = await getSystemConfig(runtimeBackendKey)
+    runtimeBackend.value = String(res.data?.value || 'nftables_ansible').toLowerCase() || 'nftables_ansible'
+    runtimeNodeXMode.value = explicitMode === null ? runtimeBackend.value === 'gost' : explicitMode
+  } catch (error) {
+    console.error('get forward runtime backend failed:', error)
+    if (explicitMode !== null) runtimeNodeXMode.value = explicitMode
+  }
+}
+
+function setFeedback(type, message) {
+  feedback.value = { type, message }
+  if (feedbackTimer) clearTimeout(feedbackTimer)
+  feedbackTimer = setTimeout(() => { feedback.value.message = ''; feedbackTimer = null }, 3600)
+}
+
+function clearFeedback() {
+  if (feedbackTimer) { clearTimeout(feedbackTimer); feedbackTimer = null }
+  feedback.value.message = ''
+}
+
+function formatErrorMessage(error, fallbackKey) {
+  return translateLiteral(error?.response?.data?.msg || error?.response?.data?.error || error?.message || t(fallbackKey))
 }
 
 function unwrapData(res, fallbackKey) {
   if (!res) return null
   if (typeof res.code === 'number') {
-    if (res.code !== 0) {
-      throw new Error(res.msg || t(fallbackKey))
-    }
+    if (res.code !== 0) throw new Error(res.msg || t(fallbackKey))
     return res.data
   }
   return res.data
@@ -178,45 +240,35 @@ function unwrapData(res, fallbackKey) {
 
 function normalizeTunnels(input) {
   if (!Array.isArray(input)) return []
-  return input
-    .map(item => {
-      const id = Number(item?.id || 0)
-      if (!id) return null
-      return {
-        id,
-        name: item?.name || item?.tunnelName || ''
-      }
-    })
-    .filter(Boolean)
+  return input.map(item => {
+    const id = Number(item?.id || 0)
+    if (!id) return null
+    return { id, name: item?.name || item?.tunnelName || '' }
+  }).filter(Boolean)
 }
 
 function normalizeLimits(input) {
   if (!Array.isArray(input)) return []
-  return input
-    .map(item => {
-      const id = Number(item?.id || 0)
-      if (!id) return null
-      return {
-        id,
-        name: item?.name || '',
-        speed: Number(item?.speed || 0),
-        tunnelId: Number(item?.tunnelId ?? item?.tunnel_id ?? 0),
-        tunnelName: item?.tunnelName || item?.tunnel_name || '',
-        status: Number(item?.status ?? 1),
-        createdTime: item?.createdTime ?? item?.created_at ?? item?.createdAt ?? 0,
-        updatedTime: item?.updatedTime ?? item?.updated_at ?? item?.updatedAt ?? 0
-      }
-    })
-    .filter(Boolean)
+  return input.map(item => {
+    const id = Number(item?.id || 0)
+    if (!id) return null
+    return {
+      id,
+      name: item?.name || '',
+      speed: Number(item?.speed || 0),
+      tunnelId: Number(item?.tunnelId ?? item?.tunnel_id ?? 0),
+      tunnelName: item?.tunnelName || item?.tunnel_name || '',
+      status: Number(item?.status ?? 1),
+      createdTime: item?.createdTime ?? item?.created_at ?? item?.createdAt ?? 0,
+      updatedTime: item?.updatedTime ?? item?.updated_at ?? item?.updatedAt ?? 0
+    }
+  }).filter(Boolean)
 }
 
 function hydrateLimitTunnelName(items) {
   if (!Array.isArray(items) || items.length === 0) return []
   const tunnelMap = new Map(tunnels.value.map(item => [Number(item.id), item.name || t('runtime.limitPage.values.tunnelFallback', { id: item.id })]))
-  return items.map(item => ({
-    ...item,
-    tunnelName: item.tunnelName || tunnelMap.get(Number(item.tunnelId)) || ''
-  }))
+  return items.map(item => ({ ...item, tunnelName: item.tunnelName || tunnelMap.get(Number(item.tunnelId)) || '' }))
 }
 
 async function fetchTunnels() {
@@ -239,7 +291,7 @@ async function refreshAll() {
     await fetchTunnels()
     await fetchLimits()
   } catch (error) {
-    window.alert(formatErrorMessage(error, 'runtime.limitPage.messages.loadFailed'))
+    setFeedback('error', formatErrorMessage(error, 'runtime.limitPage.messages.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -279,10 +331,7 @@ function validateForm() {
 
 async function submitForm() {
   const invalid = validateForm()
-  if (invalid) {
-    formError.value = invalid
-    return
-  }
+  if (invalid) { formError.value = invalid; return }
 
   formSubmitting.value = true
   formError.value = ''
@@ -295,13 +344,14 @@ async function submitForm() {
     }
 
     if (isEditMode.value) {
-      assertCompat(await updateSpeedLimit({ id: Number(form.value.id), ...payload }), 'runtime.limitPage.messages.updateFailed')
+      await updateSpeedLimit({ id: Number(form.value.id), ...payload })
     } else {
-      assertCompat(await createSpeedLimit(payload), 'runtime.limitPage.messages.createFailed')
+      await createSpeedLimit(payload)
     }
 
     await fetchLimits()
     showFormModal.value = false
+    setFeedback('success', isEditMode.value ? t('runtime.limitPage.messages.updated') : t('runtime.limitPage.messages.created'))
   } catch (error) {
     formError.value = formatErrorMessage(error, 'runtime.limitPage.messages.submitFailed')
   } finally {
@@ -324,11 +374,12 @@ async function confirmDelete() {
   if (!deletingItem.value?.id) return
   deleteSubmitting.value = true
   try {
-    assertCompat(await deleteSpeedLimit(Number(deletingItem.value.id)), 'runtime.limitPage.messages.deleteFailed')
+    await deleteSpeedLimit(Number(deletingItem.value.id))
     await fetchLimits()
     closeDeleteModal()
+    setFeedback('success', t('runtime.limitPage.messages.deleted'))
   } catch (error) {
-    window.alert(formatErrorMessage(error, 'runtime.limitPage.messages.deleteFailed'))
+    setFeedback('error', formatErrorMessage(error, 'runtime.limitPage.messages.deleteFailed'))
   } finally {
     deleteSubmitting.value = false
   }
@@ -336,26 +387,18 @@ async function confirmDelete() {
 
 function formatSpeed(value) {
   const speed = Number(value || 0)
-  if (!Number.isFinite(speed) || speed <= 0) {
-    return t('runtime.limitPage.values.unlimited')
-  }
+  if (!Number.isFinite(speed) || speed <= 0) return t('runtime.limitPage.values.unlimited')
   return `${speed} Mbps`
 }
 
 function formatTunnel(item) {
-  if (item.tunnelName) {
-    return item.tunnelName
-  }
-  if (item.tunnelId) {
-    return t('runtime.limitPage.values.tunnelFallback', { id: item.tunnelId })
-  }
+  if (item.tunnelName) return item.tunnelName
+  if (item.tunnelId) return t('runtime.limitPage.values.tunnelFallback', { id: item.tunnelId })
   return '-'
 }
 
 function formatRuleName(item) {
-  if (item?.name) {
-    return item.name
-  }
+  if (item?.name) return item.name
   return t('runtime.limitPage.values.ruleFallback', { id: item?.id || '-' })
 }
 
@@ -365,240 +408,368 @@ function formatTime(value) {
   return formatDateTime(numeric, { second: '2-digit' }) || '-'
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await loadRuntimeMode()
   refreshAll()
 })
 </script>
 
 <style scoped>
 .limit-page {
-  max-width: 1400px;
+  display: grid;
+  gap: 20px;
 }
 
-.page-header {
+.toolbar {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 24px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.14), transparent 32%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.03), transparent 60%),
+    var(--surface-color);
 }
 
-.page-header h1 {
-  margin: 0 0 6px;
-  font-size: 24px;
+.toolbar-copy h2 {
+  margin: 4px 0 0;
+  font-size: 26px;
+  line-height: 1.1;
 }
 
-.text-secondary {
+.eyebrow {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
   color: var(--text-secondary);
 }
 
-.header-actions {
+.toolbar-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.btn-primary {
+  background: var(--forward-accent, #2563eb);
+  color: #fff;
+  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.2);
+}
+
+.btn-secondary {
+  background: var(--surface-color);
+  color: var(--text-color);
+  border-color: var(--border-color);
+}
+
+.btn-sm { padding: 8px 12px; font-size: 12px; }
+
+.danger { background: #dc2626; }
+.danger:hover { background: #b91c1c; }
+.danger-text { color: #dc2626; }
+
+.feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+}
+
+.feedback-success {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.24);
+}
+
+.feedback-error {
+  background: rgba(239, 68, 68, 0.14);
+  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.feedback-close, .modal-close {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 22px;
+  cursor: pointer;
 }
 
 .loading-state {
+  min-height: 300px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  min-height: 240px;
+  border: 1px dashed rgba(37, 99, 235, 0.2);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.04), transparent 55%), var(--surface-color);
   color: var(--text-secondary);
 }
 
 .spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(148, 163, 184, 0.35);
-  border-top-color: var(--primary-color);
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
+  border: 3px solid rgba(37, 99, 235, 0.2);
+  border-top-color: var(--forward-accent, #2563eb);
   animation: spin 0.8s linear infinite;
 }
 
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 .limit-card {
-  background: var(--surface-color);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 20px;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-  box-shadow: var(--shadow-sm);
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.04), transparent 60%),
+    var(--surface-color);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.limit-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(37, 99, 235, 0.24);
+  box-shadow: 0 20px 38px rgba(15, 23, 42, 0.12);
 }
 
 .card-head {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
 }
 
-.title-wrap {
+.card-title { min-width: 0; }
+
+.card-title h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.card-title p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-head-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-}
-
-.title-wrap h3 {
-  margin: 0;
-  font-size: 16px;
-}
-
-.status-pill {
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.status-active {
-  background: rgba(34, 197, 94, 0.15);
-  color: var(--success-color);
-}
-
-.status-disabled {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--error-color);
+  flex-shrink: 0;
 }
 
 .card-actions {
   display: flex;
-  gap: 6px;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
 }
 
-.kv-list {
+.meta-list {
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
-.kv-item {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  font-size: 13px;
+.meta-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(148, 163, 184, 0.08);
 }
 
-.kv-item .k {
+.meta-item strong { word-break: break-all; }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(148, 163, 184, 0.16);
   color: var(--text-secondary);
 }
 
-.kv-item .v {
-  color: var(--text-color);
-  text-align: right;
+.tag-success {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+}
+
+.tag-danger {
+  background: rgba(239, 68, 68, 0.14);
+  color: #b91c1c;
+}
+
+.tag-primary {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
 }
 
 .empty-state {
-  border: 1px dashed var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 36px 16px;
+  padding: 42px 24px;
   text-align: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
   background: var(--surface-color);
 }
 
-.empty-icon {
-  font-size: 36px;
-  margin-bottom: 8px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-}
+.empty-state h3 { margin: 0 0 8px; }
+.empty-state p { margin: 0 0 20px; color: var(--text-secondary); }
 
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  justify-content: center;
-  align-items: center;
   z-index: 1000;
-  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(6px);
 }
 
 .modal {
-  width: 100%;
-  max-width: 560px;
-  background: var(--surface-color);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-color);
-}
-
-.modal-sm {
-  max-width: 460px;
-}
-
-.modal-header {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 48px);
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.28);
+}
+
+.modal-md { width: min(640px, 100%); }
+
+.modal-header, .modal-footer {
+  display: flex;
   align-items: center;
-  padding: 16px 20px;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
   border-bottom: 1px solid var(--border-color);
 }
 
-.modal-body {
-  padding: 18px 20px;
+.modal-footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border-color);
+  border-bottom: none;
 }
 
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 14px 20px 18px;
-  border-top: 1px solid var(--border-color);
+.modal-body {
+  padding: 22px;
+  overflow: auto;
 }
 
 .form-group {
-  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
 }
 
 .form-group label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.form-group input,
-.form-group select {
-  width: 100%;
-}
-
-.error-msg {
-  margin: 0;
-  color: var(--error-color);
   font-size: 13px;
+  font-weight: 700;
 }
 
-.close-btn {
-  border: none;
-  background: transparent;
+.form-group input, .form-group select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--text-color);
+  font-size: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.form-group input:focus, .form-group select:focus {
+  outline: none;
+  border-color: rgba(37, 99, 235, 0.4);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+  background: rgba(37, 99, 235, 0.03);
+}
+
+.form-error {
+  margin: 0;
+  font-size: 12px;
+  color: #dc2626;
+}
+
+.modal-copy { margin: 0; line-height: 1.7; }
+.hint { margin: 6px 0 0; color: var(--text-secondary); font-size: 13px; }
+.text-secondary { color: var(--text-secondary); }
+.small { font-size: 13px; }
+
+.runtime-context-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.runtime-context-summary {
+  font-size: 12px;
   color: var(--text-secondary);
-  font-size: 20px;
-  cursor: pointer;
 }
 
-.btn-danger {
-  background: var(--error-color);
-  color: #fff;
+.runtime-context-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
 }
 
-.delete-copy {
-  margin: 0 0 10px;
-  line-height: 1.7;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 768px) {
-  .card-grid {
-    grid-template-columns: 1fr;
-  }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .card-grid { grid-template-columns: 1fr; }
+  .modal-overlay { padding: 12px; }
+  .form-group { margin-bottom: 14px; }
 }
 </style>

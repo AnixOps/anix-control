@@ -27,6 +27,10 @@ type PanelForwardService struct {
 	runtimeService *PanelForwardRuntimeService
 }
 
+func (s *PanelForwardService) RuntimeService() *PanelForwardRuntimeService {
+	return s.runtimeService
+}
+
 type PanelRuntimeJobFilter struct {
 	Backend   string
 	Status    *int

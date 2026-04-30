@@ -88,6 +88,11 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 	if err := s.validateBackendConfig(backend); err != nil {
 		return failedPanelForwardRuntimeResult(backend, err), err
 	}
+	if isForwardRuntimeLocalAnsibleBackend(backend) {
+		if err := s.validateAnsiblePaths(backend, action); err != nil {
+			return failedPanelForwardRuntimeResult(backend, err), err
+		}
+	}
 
 	req, nodeID, err := s.buildExecuteRequest(backend, action, forward, tunnel)
 	if err != nil {
@@ -352,6 +357,32 @@ func (s *PanelForwardRuntimeService) validateBackendConfig(backend string) error
 	}
 	if strings.TrimSpace(token) == "" {
 		return fmt.Errorf("%s is required for NodeX forward runtime", forwardRuntimeNodeXTokenConfigKey)
+	}
+
+	return nil
+}
+
+func (s *PanelForwardRuntimeService) validateAnsiblePaths(backend, action string) error {
+	if s.configService == nil {
+		return nil
+	}
+
+	cfg, err := s.loadPanelForwardAnsibleConfig(backend, action)
+	if err != nil {
+		return err
+	}
+
+	// Resolve and validate inventory file exists
+	inventoryPath := resolveForwardRuntimeFilePath(cfg.WorkingDir, cfg.Inventory)
+	if inventoryPath == "" || !pathExists(inventoryPath) {
+		return fmt.Errorf("ansible inventory file not found: %s", cfg.Inventory)
+	}
+
+	// Resolve and validate playbook file exists
+	playbook := cfg.playbookForAction(backend, action)
+	playbookPath := resolveForwardRuntimeFilePath(cfg.WorkingDir, playbook)
+	if playbookPath == "" || !pathExists(playbookPath) {
+		return fmt.Errorf("ansible playbook file not found: %s", playbook)
 	}
 
 	return nil
@@ -956,4 +987,67 @@ func forwardRuntimeBackendForMode(enabled bool) string {
 		return model.ForwardRuntimeBackendGost
 	}
 	return defaultForwardLocalAnsibleBackend
+}
+
+// SyncForwardsToBackend re-synces all active forwards to the current backend.
+// Used when the admin switches between NodeX and Local mode.
+func (s *PanelForwardRuntimeService) SyncForwardsToBackend(targetBackend string) (synced int, failed int, err error) {
+	var forwards []model.Forward
+	if err := s.db.Where("status = ?", model.ForwardStatusActive).Find(&forwards).Error; err != nil {
+		return 0, 0, err
+	}
+
+	for i := range forwards {
+		fwd := &forwards[i]
+		if fwd.RuntimeBackend == targetBackend {
+			continue // already on the target backend
+		}
+
+		// Load tunnel for the forward
+		var tunnel model.ForwardTunnel
+		if err := s.db.First(&tunnel, fwd.TunnelID).Error; err != nil {
+			failed++
+			continue
+		}
+
+		// Apply the forward with the new backend
+		// We temporarily override the forward's backend so resolveBackendForForward picks it up
+		fwd.RuntimeBackend = targetBackend
+
+		result, applyErr := s.Apply(context.Background(), model.ForwardRuntimeJobActionSync, fwd, &tunnel)
+		if applyErr != nil {
+			failed++
+			continue
+		}
+
+		if result.Status == model.ForwardRuntimeJobStatusFailed {
+			failed++
+			continue
+		}
+
+		// Persist the backend change. For Ansible, the executor also updates this when the job runs.
+		// For gost (synchronous), we must do it here since Apply() only updates the job record.
+		if err := s.db.Model(&model.Forward{}).Where("id = ?", fwd.ID).Updates(map[string]any{
+			"runtime_backend": targetBackend,
+		}).Error; err != nil {
+			failed++
+			continue
+		}
+
+		synced++
+	}
+
+	return synced, failed, nil
+}
+
+// MarkForwardsPendingForBackend resets forwards that need re-sync to pending status.
+// Call this after a backend switch to mark mismatched forwards for later re-sync.
+func (s *PanelForwardRuntimeService) MarkForwardsPendingForBackend(targetBackend string) (int64, error) {
+	result := s.db.Model(&model.Forward{}).
+		Where("status = ? AND runtime_backend != ?", model.ForwardStatusActive, targetBackend).
+		Updates(map[string]any{
+			"runtime_status":  model.ForwardRuntimeJobStatusPending,
+			"runtime_message": "pending re-sync to new backend",
+		})
+	return result.RowsAffected, result.Error
 }

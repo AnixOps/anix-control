@@ -309,6 +309,41 @@ func (h *ForwardHandler) DiagnosePanelForward(c *gin.Context) {
 	panelSuccess(c, report)
 }
 
+type syncForwardsToBackendRequest struct {
+	Backend string `json:"backend" binding:"required"`
+}
+
+func (h *ForwardHandler) SyncForwardsToBackend(c *gin.Context) {
+	var req syncForwardsToBackendRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	// Validate backend
+	valid := false
+	for _, b := range []string{"gost", "nftables_ansible", "iptables_ansible"} {
+		if req.Backend == b {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		panelError(c, "不支持的运行时后端")
+		return
+	}
+
+	synced, failed, err := h.panelService.RuntimeService().SyncForwardsToBackend(req.Backend)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, gin.H{
+		"synced": synced,
+		"failed": failed,
+	})
+}
+
 func (h *ForwardHandler) UpdatePanelForwardOrder(c *gin.Context) {
 	var req panelForwardOrderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
