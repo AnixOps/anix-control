@@ -512,7 +512,7 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import adminApi, { getSubscriptionStats } from '@/api/admin'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
@@ -1088,7 +1088,20 @@ export default {
     onMounted(() => {
       loadGroups()
       loadStats()
+      // Auto-refresh stats when page becomes visible
+      document.addEventListener('visibilitychange', handleVisibilityChange)
     })
+
+    onUnmounted(() => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    })
+
+    function handleVisibilityChange() {
+      if (!document.hidden) {
+        loadGroups()
+        loadStats()
+      }
+    }
     
     return {
       groups,

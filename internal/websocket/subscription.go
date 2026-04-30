@@ -26,13 +26,14 @@ var upgrader = websocket.Upgrader{
 type MessageType string
 
 const (
-	MessageTypeSubscribe    MessageType = "subscribe"
-	MessageTypeUnsubscribe  MessageType = "unsubscribe"
-	MessageTypeNodeUpdate   MessageType = "node_update"
-	MessageTypeUserUpdate   MessageType = "user_update"
-	MessageTypeConfigUpdate MessageType = "config_update"
-	MessageTypeHeartbeat    MessageType = "heartbeat"
-	MessageTypeError        MessageType = "error"
+	MessageTypeSubscribe       MessageType = "subscribe"
+	MessageTypeUnsubscribe     MessageType = "unsubscribe"
+	MessageTypeNodeUpdate      MessageType = "node_update"
+	MessageTypeUserUpdate      MessageType = "user_update"
+	MessageTypeConfigUpdate    MessageType = "config_update"
+	MessageTypeSubscriptionUpdate MessageType = "subscription_update"
+	MessageTypeHeartbeat       MessageType = "heartbeat"
+	MessageTypeError           MessageType = "error"
 )
 
 // Message WebSocket 消息
@@ -224,6 +225,23 @@ func (sm *SubscriptionManager) NotifyConfigUpdate(userIDs []uint, configType str
 		UserIDs: userIDs,
 		Message: msg,
 	}
+}
+
+// NotifySubscriptionUpdate 通知订阅更新
+func (sm *SubscriptionManager) NotifySubscriptionUpdate(changeType string, groupID *uint) {
+	data := map[string]any{
+		"change_type": changeType,
+	}
+	if groupID != nil {
+		data["group_id"] = *groupID
+	}
+	msg := &Message{
+		Type:      MessageTypeSubscriptionUpdate,
+		Data:      data,
+		Timestamp: time.Now().Unix(),
+	}
+
+	sm.broadcast <- &BroadcastMessage{Message: msg}
 }
 
 // readPump 读取客户端消息
