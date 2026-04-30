@@ -246,6 +246,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/subscription/protocols", subAdmin.GetProtocolTypes)
 			admin.GET("/subscription/protocols/available", subAdmin.GetAvailableProtocols)
 			admin.POST("/subscription/preview", subAdmin.PreviewSubscription)
+			admin.GET("/subscription/stats", subAdmin.GetGroupStats)
 
 			// 套餐管理
 			admin.GET("/plans", adminHandler.GetPlans)

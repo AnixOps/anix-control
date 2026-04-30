@@ -371,6 +371,13 @@ export function previewSubscription(data) {
   })
 }
 
+export function getSubscriptionStats() {
+  return request({
+    url: '/admin/subscription/stats',
+    method: 'get'
+  })
+}
+
 export function getPlans() {
   return request({
     url: '/admin/plans',
