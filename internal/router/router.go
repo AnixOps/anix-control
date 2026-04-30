@@ -291,6 +291,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/forward/pause", forwardHandler.PausePanelForward)
 			admin.POST("/forward/resume", forwardHandler.ResumePanelForward)
 			admin.POST("/forward/diagnose", forwardHandler.DiagnosePanelForward)
+			admin.POST("/forward/sync-backend", forwardHandler.SyncForwardsToBackend)
 			admin.POST("/forward/update-order", forwardHandler.UpdatePanelForwardOrder)
 			admin.POST("/tunnel/create", forwardHandler.CreatePanelTunnel)
 			admin.POST("/tunnel/list", forwardHandler.ListPanelAdminTunnels)

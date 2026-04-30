@@ -66,6 +66,12 @@
         <label>{{ t('adminUsers.editModal.fields.email') }}<input v-model="editingUser.email" type="email" /></label>
         <label>{{ t('adminUsers.editModal.fields.balance') }}<input v-model.number="editingUser.balance" type="number" /></label>
         <label>{{ t('adminUsers.editModal.fields.transfer') }}<input v-model.number="editingUser.transfer_enable" type="number" /></label>
+        <label>{{ t('adminUsers.editModal.fields.groupId') }}
+          <select v-model="editingUser.group_id">
+            <option :value="null">{{ t('adminUsers.editModal.groupOptions.unassigned') }}</option>
+            <option v-for="g in subscriptionGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
+          </select>
+        </label>
         <label>{{ t('adminUsers.editModal.fields.expiredAt') }}<input v-model.number="editingUser.expired_at" type="number" /></label>
         <label>{{ t('adminUsers.editModal.fields.flowResetTime') }}<input v-model.number="editingUser.flowResetTime" type="number" min="0" max="31" /></label>
         <label>{{ t('adminUsers.editModal.fields.remark') }}<textarea v-model="editingUser.remark_content" rows="3"></textarea></label>
@@ -84,6 +90,13 @@
             <option :value="1">{{ t('adminUsers.createModal.userTypes.admin') }}</option>
           </select>
         </label>
+        <label>{{ t('adminUsers.createModal.fields.groupId') }}
+          <select v-model="newUser.group_id">
+            <option :value="null">{{ t('adminUsers.createModal.groupOptions.unassigned') }}</option>
+            <option v-for="g in subscriptionGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
+          </select>
+        </label>
+        <label>{{ t('adminUsers.createModal.fields.transferEnable') }}<input v-model.number="newUser.transfer_enable" type="number" min="0" :placeholder="t('adminUsers.createModal.placeholders.transferEnable')" /></label>
         <label>{{ t('adminUsers.createModal.fields.flowResetTime') }}<input v-model.number="newUser.flowResetTime" type="number" min="0" max="31" /></label>
         <p v-if="createError" class="error">{{ createError }}</p>
         <div class="row"><button class="btn-secondary" @click="showCreateModal = false">{{ t('common.actions.cancel') }}</button><button @click="handleCreateUser" :disabled="createLoading">{{ createLoading ? t('adminUsers.createModal.creating') : t('common.actions.create') }}</button></div>
@@ -165,10 +178,12 @@ import {
   getUserList, getUserStats, removeAdminUserTunnel, resetUserTraffic, resetUserTunnelTraffic,
   unbanUser, updateAdminUserTunnel, updateUser
 } from '@/api/admin'
+import { getSubscriptionGroups } from '@/api/admin'
 
 const { t, formatDate: i18nFormatDate, formatDateTime: i18nFormatDateTime } = useAppI18n()
 const users = ref([])
 const stats = ref({})
+const subscriptionGroups = ref([])
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
@@ -178,7 +193,7 @@ const editingUser = ref({})
 const showCreateModal = ref(false)
 const createLoading = ref(false)
 const createError = ref('')
-const newUser = ref({ email: '', password: '', is_admin: 0, flowResetTime: 0 })
+const newUser = ref({ email: '', password: '', is_admin: 0, flowResetTime: 0, group_id: null, transfer_enable: 0 })
 const showTunnelModal = ref(false)
 const tunnelUser = ref(null)
 const tunnelOptions = ref([])
@@ -240,7 +255,7 @@ const handleCreateUser = async () => {
   try {
     await createUser(newUser.value)
     showCreateModal.value = false
-    newUser.value = { email: '', password: '', is_admin: 0, flowResetTime: 0 }
+    newUser.value = { email: '', password: '', is_admin: 0, flowResetTime: 0, group_id: null, transfer_enable: 0 }
     fetchUsers()
     fetchStats()
     notify(t('adminUsers.messages.userCreated'))
@@ -272,7 +287,8 @@ const saveUser = async () => {
   try {
     await updateUser(editingUser.value.id, {
       email: editingUser.value.email, balance: editingUser.value.balance, transfer_enable: editingUser.value.transfer_enable,
-      expired_at: editingUser.value.expired_at, flowResetTime: Number(editingUser.value.flowResetTime || 0), remark_content: editingUser.value.remark_content
+      expired_at: editingUser.value.expired_at, flowResetTime: Number(editingUser.value.flowResetTime || 0), remark_content: editingUser.value.remark_content,
+      group_id: editingUser.value.group_id || null
     })
     showEditModal.value = false
     fetchUsers()
@@ -480,7 +496,16 @@ const formatBytes = (bytes) => {
 const formatDate = (timestamp) => (!timestamp ? t('adminUsers.labels.permanent') : (i18nFormatDate(Number(timestamp) * 1000) || '-'))
 const formatDateTime = (datetime) => (!datetime ? '-' : (i18nFormatDateTime(datetime) || '-'))
 
-onMounted(() => { fetchUsers(); fetchStats() })
+onMounted(() => { fetchUsers(); fetchStats(); loadSubscriptionGroups() })
+
+const loadSubscriptionGroups = async () => {
+  try {
+    const res = await getSubscriptionGroups()
+    subscriptionGroups.value = res?.data || []
+  } catch (err) {
+    console.error('Failed to load subscription groups', err)
+  }
+}
 </script>
 
 <style scoped>

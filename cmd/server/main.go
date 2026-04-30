@@ -361,6 +361,9 @@ func main() {
 	// 初始化默认套餐
 	service.InitDefaultPlan()
 
+	// 从环境变量初始化默认授权密钥
+	service.InitDefaultAuthKeyFromEnv()
+
 	// 初始化缓存 (默认使用内存缓存)
 	if err := service.InitForwardRuntimeSystemConfig(database.Get()); err != nil {
 		log.Fatalf("Failed to initialize forward runtime config: %v", err)

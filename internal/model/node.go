@@ -140,12 +140,11 @@ func (NodeGroup) TableName() string {
 // AuthorizedKey 授权密钥 (用于节点自动注册)
 type AuthorizedKey struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
-	Name         string    `gorm:"size:100" json:"name"`         // 密钥名称/备注
-	Key          string    `gorm:"size:64;uniqueIndex" json:"-"` // 授权密钥
-	KeyHash      string    `gorm:"size:64" json:"-"`             // 密钥哈希
-	Used         int       `gorm:"default:0" json:"used"`        // 是否已使用
-	UsedByNodeID *uint     `json:"used_by_node_id"`              // 使用此密钥的节点ID
-	ExpireAt     *int64    `json:"expire_at"`                    // 过期时间 (null=永不过期)
+	Name         string    `gorm:"size:100" json:"name"`    // 密钥名称/备注
+	Key          string    `gorm:"size:64;uniqueIndex" json:"key"` // 授权密钥
+	KeyHash      string    `gorm:"size:64" json:"-"`        // 密钥哈希 (不返回给前端)
+	Used         int       `gorm:"default:0" json:"used"`   // 已注册节点数量
+	ExpireAt     *int64    `json:"expire_at"`               // 过期时间 (null=永不过期)
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

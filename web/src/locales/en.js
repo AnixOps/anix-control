@@ -1603,8 +1603,10 @@ export default {
       }
     },
     limitPage: {
+      heroEyebrow: 'Speed Limit Management',
       title: 'Limits',
       subtitle: 'Maintain rate limit rules per tunnel while keeping the dedicated Flux-style rule page.',
+      note: 'Speed limit rules are enforced by the active forwarding runtime. Changes may take effect after a short delay.',
       actions: {
         refresh: 'Refresh',
         create: 'Create',
@@ -1645,6 +1647,7 @@ export default {
       },
       deleteModal: {
         title: 'Delete Rule',
+        eyebrow: 'Confirm Deletion',
         confirmText: 'Delete limit rule {name}?',
         hint: 'This action cannot be undone. The rule will be permanently removed.',
         deleting: 'Deleting...',
@@ -1655,6 +1658,10 @@ export default {
         tunnelFallback: 'Tunnel #{id}',
         ruleFallback: 'Rule #{id}'
       },
+      modeLabelNodeX: 'NodeX Mode',
+      modeSummaryNodeX: 'Speed limits are synchronized and enforced by NodeX agents.',
+      modeLabelLocal: 'Local Mode',
+      modeSummaryLocal: 'Speed limits are applied locally via {backend} runtime.',
       messages: {
         fetchTunnelsFailed: 'Failed to load tunnel list',
         fetchRulesFailed: 'Failed to load limit rules',
@@ -1667,7 +1674,10 @@ export default {
         createFailed: 'Failed to create limit rule',
         updateFailed: 'Failed to update limit rule',
         submitFailed: 'Submission failed',
-        deleteFailed: 'Failed to delete limit rule'
+        deleteFailed: 'Failed to delete limit rule',
+        created: 'Limit rule created successfully',
+        updated: 'Limit rule updated successfully',
+        deleted: 'Limit rule deleted successfully'
       }
     },
     nodeXAgents: {
@@ -1781,6 +1791,8 @@ export default {
       port: 'Port',
       tls: 'TLS',
       tlsNone: 'None',
+      tlsReality: 'Reality',
+      tlsEnabled: 'TLS',
       status: 'Status',
       actions: 'Actions',
       productionNodes: 'Production Node Protocols',
@@ -1880,7 +1892,8 @@ export default {
         delete: 'Delete',
         cancel: 'Cancel',
         save: 'Save',
-        saving: 'Saving...'
+        saving: 'Saving...',
+        authKey: 'Auth Key'
       },
       pagination: {
         previous: 'Previous',
@@ -1892,7 +1905,6 @@ export default {
         fields: {
           name: 'Node Name *',
           address: 'Node Address *',
-          apiPort: 'API Port *',
           tags: 'Tags (comma separated)',
           rate: 'Node Rate',
           sort: 'Sort',
@@ -1901,11 +1913,20 @@ export default {
         placeholders: {
           name: 'Enter node name',
           address: 'IP or domain',
-          apiPort: '8080',
           tags: 'HK,IEPL,Premium',
           rate: '1.0',
           sort: '0'
         }
+      },
+      authKeyModal: {
+        title: 'Node Auth Key',
+        hint: 'Configure this key in V2bX config.json. The node will auto-register on startup. The same key can register unlimited nodes.',
+        noKey: 'No auth key generated yet. Please create an auth key first.',
+        copy: 'Copy Key',
+        copyConfig: 'Copy Config',
+        configHint: 'Paste this config into V2bX config.json, replace <auth_key> with the key value above.',
+        registeredCount: 'Registered Nodes',
+        copied: 'Copied'
       },
       protocolModal: {
         title: 'Protocol Management - {name}',
@@ -1927,8 +1948,8 @@ export default {
         titleEdit: 'Edit Protocol',
         templateLibrary: 'Protocol Template Library',
         tabs: {
-          general: 'Basic Config',
-          custom: 'JSON Advanced Mode'
+          json: 'JSON',
+          visual: 'Visual Config'
         },
         fields: {
           type: 'Protocol Type *',
@@ -1938,35 +1959,22 @@ export default {
           settings: 'Protocol Settings (JSON)',
           tlsSettings: 'TLS Settings (JSON)',
           realitySettings: 'Reality Settings (JSON)',
-          transportSettings: 'Transport Settings (JSON)',
-          customConfig: 'Custom JSON Override'
+          transportSettings: 'Transport Settings (JSON)'
         },
         placeholders: {
           port: '443'
         },
-        customModeHint: 'Advanced mode overrides the full protocol configuration. Enter a complete JSON object.',
-        enableHint: 'Enable protocol (run on node)',
-        showHint: 'Show in subscription protocol pool (link it in Subscription Management)'
-      },
-      authKeyModal: {
-        title: 'Auth Key Management',
-        description: 'Auth keys are used for automatic node registration. After the key is configured on a node, the node can register itself to the panel at startup.',
-        oneTimeWarning: 'Copy this key now. It cannot be viewed again after closing.',
-        copyAndClose: 'Copy and Close',
-        remarkPlaceholder: 'Remark (optional)',
-        generating: 'Generating...',
-        generateNew: 'Generate New Key',
-        table: {
-          name: 'Name / Remark',
-          status: 'Status',
-          createdAt: 'Created At',
-          actions: 'Actions'
+        jsonActions: {
+          format: 'Format',
+          copy: 'Copy',
+          fromTemplate: 'Load from Template'
         },
-        status: {
-          used: 'Used',
-          unused: 'Unused'
+        jsonStatus: {
+          valid: 'JSON Valid',
+          invalid: 'JSON Invalid'
         },
-        empty: 'No auth keys yet'
+        enable: 'Enable protocol (run on node)',
+        show: 'Show in subscription protocol pool'
       },
       statusText: {
         pending: 'Pending Activation',
@@ -2001,7 +2009,8 @@ export default {
         generateFailed: 'Generation failed: {message}',
         deleteAuthKeyConfirm: 'Delete this auth key?',
         copied: 'Copied to clipboard',
-        copyFailed: 'Copy failed: {message}'
+        copyFailed: 'Copy failed: {message}',
+        invalidJson: 'Invalid JSON'
       }
     }
   },
@@ -2344,9 +2353,13 @@ export default {
         email: 'Email',
         balance: 'Balance (cents)',
         transfer: 'Traffic limit (bytes)',
+        groupId: 'Subscription group',
         expiredAt: 'Expire time (Unix seconds)',
         flowResetTime: 'Flow reset day',
         remark: 'Remark'
+      },
+      groupOptions: {
+        unassigned: 'Unassigned'
       }
     },
     createModal: {
@@ -2356,11 +2369,17 @@ export default {
         email: 'Email',
         password: 'Password',
         userType: 'User type',
+        groupId: 'Subscription group',
+        transferEnable: 'Traffic limit (bytes)',
         flowResetTime: 'Flow reset day'
       },
       placeholders: {
         email: 'Enter email',
-        password: 'Enter password (min 6 chars)'
+        password: 'Enter password (min 6 chars)',
+        transferEnable: 'Leave empty for default 0'
+      },
+      groupOptions: {
+        unassigned: 'Unassigned'
       },
       userTypes: {
         normal: 'Normal user',

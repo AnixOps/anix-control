@@ -1,13 +1,10 @@
-﻿<template>
+<template>
   <div class="page nodes-page">
     <div class="page-header">
       <h1>{{ t('admin.nodes.title') }}</h1>
       <div class="header-actions">
-        <button class="btn btn-secondary" @click="showAuthKeys = true">
-          {{ t('admin.nodes.authKeys') }}
-        </button>
-        <button class="btn btn-primary" @click="openCreateModal">
-          + {{ t('admin.nodes.addNode') }}
+        <button class="btn btn-secondary" @click="openAuthKeyModal">
+          {{ t('admin.nodes.actions.authKey') }}
         </button>
       </div>
     </div>
@@ -63,7 +60,7 @@
               </span>
             </td>
             <td>
-              <code>{{ node.address }}:{{ node.api_port }}</code>
+              <code>{{ node.address }}</code>
             </td>
             <td>
               <span :class="['status-badge', getStatusClass(node.status)]">
@@ -115,57 +112,32 @@
       </button>
     </div>
 
-    <!-- Create/edit node modal -->
-    <div class="modal-overlay" v-if="showNodeModal" @click.self="closeNodeModal">
+    <!-- Auth Key modal -->
+    <div class="modal-overlay" v-if="showAuthKeyModal" @click.self="closeAuthKeyModal">
       <div class="modal">
         <div class="modal-header">
-          <h3>{{ editingNode ? t('admin.nodes.nodeModal.titleEdit') : t('admin.nodes.nodeModal.titleCreate') }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeNodeModal">×</button>
+          <h3>{{ t('admin.nodes.authKeyModal.title') }}</h3>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeAuthKeyModal">×</button>
         </div>
         <div class="modal-body">
-          <div class="form-group">
-            <label>{{ t('admin.nodes.nodeModal.fields.name') }}</label>
-            <input v-model="nodeForm.name" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.name')" />
+          <p class="auth-key-hint">{{ t('admin.nodes.authKeyModal.hint') }}</p>
+          <div class="auth-key-display">
+            <code class="auth-key-value">{{ authKey || t('admin.nodes.authKeyModal.noKey') }}</code>
+            <button class="btn btn-sm" @click="copyAuthKey" :disabled="!authKey">
+              {{ t('admin.nodes.authKeyModal.copy') }}
+            </button>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>{{ t('admin.nodes.nodeModal.fields.address') }}</label>
-              <input v-model="nodeForm.address" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.address')" />
-            </div>
-            <div class="form-group">
-              <label>{{ t('admin.nodes.nodeModal.fields.apiPort') }}</label>
-              <input v-model.number="nodeForm.api_port" type="number" :placeholder="t('admin.nodes.nodeModal.placeholders.apiPort')" />
-            </div>
+          <div class="auth-key-usage" v-if="authKeyUsed > 0">
+            {{ t('admin.nodes.authKeyModal.registeredCount', { count: authKeyUsed }) }}
           </div>
-          <div class="form-group">
-            <label>{{ t('admin.nodes.nodeModal.fields.tags') }}</label>
-            <input v-model="nodeForm.tags" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.tags')" />
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>{{ t('admin.nodes.nodeModal.fields.rate') }}</label>
-              <input v-model.number="nodeForm.rate" type="number" step="0.1" :placeholder="t('admin.nodes.nodeModal.placeholders.rate')" />
-            </div>
-            <div class="form-group">
-              <label>{{ t('admin.nodes.nodeModal.fields.sort') }}</label>
-              <input v-model.number="nodeForm.sort" type="number" :placeholder="t('admin.nodes.nodeModal.placeholders.sort')" />
-            </div>
-          </div>
-          <div class="form-group" v-if="editingNode">
-            <label>{{ t('admin.nodes.nodeModal.fields.status') }}</label>
-            <select v-model.number="nodeForm.status">
-              <option :value="0">{{ t('admin.nodes.statusText.pending') }}</option>
-              <option :value="1">{{ t('admin.nodes.statusText.online') }}</option>
-              <option :value="2">{{ t('admin.nodes.statusText.offline') }}</option>
-              <option :value="3">{{ t('admin.nodes.statusText.disabled') }}</option>
-            </select>
+          <div class="auth-key-config">
+            <label>{{ t('admin.nodes.authKeyModal.configHint') }}</label>
+            <pre class="config-block">{{ configSnippet }}</pre>
+            <button class="btn btn-sm" @click="copyConfig">{{ t('admin.nodes.authKeyModal.copyConfig') }}</button>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeNodeModal">{{ t('admin.nodes.actions.cancel') }}</button>
-          <button class="btn btn-primary" @click="saveNode" :disabled="saving">
-            {{ saving ? t('admin.nodes.actions.saving') : t('admin.nodes.actions.save') }}
-          </button>
+          <button class="btn btn-secondary" @click="closeAuthKeyModal">{{ t('common.actions.close') }}</button>
         </div>
       </div>
     </div>
@@ -183,7 +155,7 @@
               + {{ t('admin.nodes.protocolModal.addProtocol') }}
             </button>
           </div>
-          
+
           <table class="table" v-if="protocols.length > 0">
             <thead>
               <tr>
@@ -216,7 +188,7 @@
       </div>
     </div>
 
-    <!-- Create/edit protocol modal -->
+    <!-- Create/edit protocol modal (JSON-first) -->
     <div class="modal-overlay" v-if="showProtocolFormModal" @click.self="closeProtocolFormModal">
       <div class="modal modal-lg">
         <div class="modal-header">
@@ -224,12 +196,13 @@
           <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeProtocolFormModal">×</button>
         </div>
         <div class="modal-body">
+          <!-- Template quick-select (only when creating) -->
           <div class="form-group" v-if="!editingProtocol">
             <label>{{ t('admin.nodes.protocolForm.templateLibrary') }}</label>
             <div class="template-grid">
-              <div 
-                v-for="tpl in protocolTemplates" 
-                :key="tpl.type + tpl.name" 
+              <div
+                v-for="tpl in protocolTemplates"
+                :key="tpl.type + tpl.name"
                 :class="['template-card', selectedTemplate === tpl.name ? 'active' : '']"
                 @click="applyTemplate(tpl)"
               >
@@ -239,16 +212,44 @@
             </div>
           </div>
 
+          <!-- Mode tabs -->
           <div class="tabs">
-            <button :class="['tab-btn', protocolForm.mode === 'general' ? 'active' : '']" @click="protocolForm.mode = 'general'">
-              {{ t('admin.nodes.protocolForm.tabs.general') }}
+            <button :class="['tab-btn', protocolForm.mode === 'json' ? 'active' : '']" @click="protocolForm.mode = 'json'">
+              JSON
             </button>
-            <button :class="['tab-btn', protocolForm.mode === 'custom' ? 'active' : '']" @click="protocolForm.mode = 'custom'">
-              {{ t('admin.nodes.protocolForm.tabs.custom') }}
+            <button :class="['tab-btn', protocolForm.mode === 'visual' ? 'active' : '']" @click="protocolForm.mode = 'visual'">
+              {{ t('admin.nodes.protocolForm.tabs.visual') }}
             </button>
           </div>
 
-          <div v-if="protocolForm.mode === 'general'" class="protocol-editor">
+          <!-- JSON mode (primary) -->
+          <div v-if="protocolForm.mode === 'json'" class="protocol-editor">
+            <div class="json-editor-actions">
+              <button class="btn btn-sm btn-secondary" @click="formatJson" :disabled="!jsonValid">
+                {{ t('admin.nodes.protocolForm.jsonActions.format') }}
+              </button>
+              <button class="btn btn-sm btn-secondary" @click="copyJson">
+                {{ t('admin.nodes.protocolForm.jsonActions.copy') }}
+              </button>
+              <button class="btn btn-sm btn-secondary" @click="loadTemplateAsJson">
+                {{ t('admin.nodes.protocolForm.jsonActions.fromTemplate') }}
+              </button>
+              <span :class="['json-status', jsonValid ? 'valid' : 'invalid']">
+                {{ jsonValid ? t('admin.nodes.protocolForm.jsonStatus.valid') : t('admin.nodes.protocolForm.jsonStatus.invalid') }}
+              </span>
+            </div>
+            <textarea
+              v-model="jsonEditorContent"
+              class="json-textarea"
+              rows="22"
+              spellcheck="false"
+              :placeholder="jsonPlaceholder"
+              @input="onJsonInput"
+            ></textarea>
+          </div>
+
+          <!-- Visual mode (helper) -->
+          <div v-else class="protocol-editor">
             <div class="form-row">
               <div class="form-group">
                 <label>{{ t('admin.nodes.protocolForm.fields.type') }}</label>
@@ -288,70 +289,65 @@
               </div>
             </div>
 
-            <div class="form-group">
-              <label>{{ t('admin.nodes.protocolForm.fields.settings') }}</label>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" v-model="protocolForm.enable" :true-value="1" :false-value="0" />
+                  <span>{{ t('admin.nodes.protocolForm.enable') }}</span>
+                </label>
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" v-model="protocolForm.show" :true-value="1" :false-value="0" />
+                  <span>{{ t('admin.nodes.protocolForm.show') }}</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- JSON sub-editors for advanced fields -->
+            <details class="advanced-details">
+              <summary>{{ t('admin.nodes.protocolForm.fields.settings') }}</summary>
               <textarea
                 v-model="protocolForm.settings"
-                rows="3"
-                :placeholder="t('networkPages.nodes.protocolPlaceholders.settings')"
+                class="json-textarea"
+                rows="4"
+                spellcheck="false"
+                placeholder='{}'
               ></textarea>
-            </div>
+            </details>
 
-            <div class="form-group" v-if="protocolForm.tls > 0">
-              <label>{{ t('admin.nodes.protocolForm.fields.tlsSettings') }}</label>
+            <details class="advanced-details" v-if="protocolForm.tls > 0">
+              <summary>{{ t('admin.nodes.protocolForm.fields.tlsSettings') }}</summary>
               <textarea
                 v-model="protocolForm.tls_settings"
-                rows="3"
-                :placeholder="t('networkPages.nodes.protocolPlaceholders.tlsSettings')"
+                class="json-textarea"
+                rows="4"
+                spellcheck="false"
+                placeholder='{}'
               ></textarea>
-            </div>
+            </details>
 
-            <div class="form-group" v-if="protocolForm.tls === 2">
-              <label>{{ t('admin.nodes.protocolForm.fields.realitySettings') }}</label>
+            <details class="advanced-details" v-if="protocolForm.tls === 2">
+              <summary>{{ t('admin.nodes.protocolForm.fields.realitySettings') }}</summary>
               <textarea
                 v-model="protocolForm.reality_settings"
-                rows="3"
-                :placeholder="t('networkPages.nodes.protocolPlaceholders.realitySettings')"
+                class="json-textarea"
+                rows="4"
+                spellcheck="false"
+                placeholder='{}'
               ></textarea>
-            </div>
+            </details>
 
-            <div class="form-group" v-if="protocolForm.transport !== 'tcp'">
-              <label>{{ t('admin.nodes.protocolForm.fields.transportSettings') }}</label>
+            <details class="advanced-details" v-if="protocolForm.transport !== 'tcp'">
+              <summary>{{ t('admin.nodes.protocolForm.fields.transportSettings') }}</summary>
               <textarea
                 v-model="protocolForm.transport_settings"
-                rows="3"
-                :placeholder="t('networkPages.nodes.protocolPlaceholders.transportSettings')"
+                class="json-textarea"
+                rows="4"
+                spellcheck="false"
+                placeholder='{}'
               ></textarea>
-            </div>
-          </div>
-
-          <div v-else class="protocol-editor">
-            <div class="info-box">
-              {{ t('admin.nodes.protocolForm.customModeHint') }}
-            </div>
-            <div class="form-group">
-              <label>{{ t('admin.nodes.protocolForm.fields.customConfig') }}</label>
-              <textarea
-                v-model="protocolForm.custom_config"
-                rows="15"
-                :placeholder="t('networkPages.nodes.protocolPlaceholders.customConfig')"
-              ></textarea>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label class="checkbox-label">
-                <input type="checkbox" v-model="protocolForm.enable" :true-value="1" :false-value="0" />
-                <span>{{ t('admin.nodes.protocolForm.enableHint') }}</span>
-              </label>
-            </div>
-            <div class="form-group">
-              <label class="checkbox-label">
-                <input type="checkbox" v-model="protocolForm.show" :true-value="1" :false-value="0" />
-                <span>{{ t('admin.nodes.protocolForm.showHint') }}</span>
-              </label>
-            </div>
+            </details>
           </div>
         </div>
         <div class="modal-footer">
@@ -362,85 +358,16 @@
         </div>
       </div>
     </div>
-
-    <!-- Auth key modal -->
-    <div class="modal-overlay" v-if="showAuthKeys" @click.self="showAuthKeys = false">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <h3>{{ t('admin.nodes.authKeyModal.title') }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showAuthKeys = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="info-box">
-            <p>{{ t('admin.nodes.authKeyModal.description') }}</p>
-          </div>
-          
-          <!-- One-time key preview -->
-          <div v-if="generatedKey" class="key-display-box">
-            <div class="key-display-header">
-              <span>{{ t('admin.nodes.authKeyModal.oneTimeWarning') }}</span>
-              <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="generatedKey = ''">×</button>
-            </div>
-            <div class="key-display-content">
-              <code class="key-text-large">{{ generatedKey }}</code>
-              <button class="btn btn-primary" @click="copyGeneratedKey">{{ t('admin.nodes.authKeyModal.copyAndClose') }}</button>
-            </div>
-          </div>
-
-          <div class="protocol-header">
-            <div class="form-inline">
-              <input
-                v-model="newKeyRemark"
-                type="text"
-                :placeholder="t('admin.nodes.authKeyModal.remarkPlaceholder')"
-                style="width: 200px;"
-              />
-              <button class="btn btn-primary btn-sm" @click="generateKey" :disabled="generatingKey">
-                {{ generatingKey ? t('admin.nodes.authKeyModal.generating') : `+ ${t('admin.nodes.authKeyModal.generateNew')}` }}
-              </button>
-            </div>
-          </div>
-
-          <table class="table" v-if="authKeys.length > 0">
-            <thead>
-              <tr>
-                <th>{{ t('admin.nodes.authKeyModal.table.name') }}</th>
-                <th>{{ t('admin.nodes.authKeyModal.table.status') }}</th>
-                <th>{{ t('admin.nodes.authKeyModal.table.createdAt') }}</th>
-                <th>{{ t('admin.nodes.authKeyModal.table.actions') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="key in authKeys" :key="key.id">
-                <td>
-                  <code class="key-text">{{ key.name || '-' }}</code>
-                </td>
-                <td>
-                  <span v-if="key.used_by_node_id" class="badge badge-success">{{ t('admin.nodes.authKeyModal.status.used') }}</span>
-                  <span v-else class="badge badge-info">{{ t('admin.nodes.authKeyModal.status.unused') }}</span>
-                </td>
-                <td>{{ formatDate(key.created_at) }}</td>
-                <td>
-                  <button class="btn btn-sm btn-danger" @click="removeAuthKey(key)" :disabled="key.used_by_node_id">
-                    {{ t('admin.nodes.actions.delete') }}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-else class="empty-message">{{ t('admin.nodes.authKeyModal.empty') }}</div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { 
+import { ref, reactive, computed, watch, onMounted } from 'vue'
+import {
   getNodes, getNodeStats, createNode, updateNode, deleteNode,
   getNodeProtocols, createNodeProtocol, updateNodeProtocol, deleteNodeProtocol,
-  getProtocolTemplates, getAuthKeys, generateAuthKey, deleteAuthKey
+  getProtocolTemplates,
+  getAuthKeys
 } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 
@@ -450,7 +377,6 @@ const { t, formatDateTime } = useAppI18n()
 const loading = ref(false)
 const saving = ref(false)
 const savingProtocol = ref(false)
-const generatingKey = ref(false)
 
 const nodes = ref([])
 const stats = reactive({ total: 0, online: 0, offline: 0, pending: 0 })
@@ -461,12 +387,15 @@ const editingNode = ref(null)
 const nodeForm = reactive({
   name: '',
   address: '',
-  api_port: 8080,
   tags: '',
   rate: 1.0,
   sort: 0,
   status: 0
 })
+
+const showAuthKeyModal = ref(false)
+const authKey = ref('')
+const authKeyUsed = ref(0)
 
 const showProtocolModal = ref(false)
 const selectedNode = ref(null)
@@ -475,7 +404,7 @@ const protocols = ref([])
 const showProtocolFormModal = ref(false)
 const editingProtocol = ref(null)
 const protocolForm = reactive({
-  mode: 'general', // general | custom
+  mode: 'json', // json | visual
   type: 'vless',
   port: 443,
   enable: 1,
@@ -491,16 +420,131 @@ const protocolForm = reactive({
 const protocolTemplates = ref([])
 const selectedTemplate = ref('')
 
-const showAuthKeys = ref(false)
-const authKeys = ref([])
-const newKeyRemark = ref('')
-const generatedKey = ref('')
+// JSON editor state
+const jsonEditorContent = ref('')
+const jsonParseError = ref('')
+const jsonValid = computed(() => jsonParseError.value === '')
+
+const jsonPlaceholder = `{
+  "type": "vless",
+  "port": 443,
+  "tls": 0,
+  "transport": "tcp",
+  "enable": 1,
+  "show": 1,
+  "settings": {},
+  "tls_settings": {},
+  "transport_settings": {},
+  "reality_settings": {}
+}`
+
+// Convert visual form to JSON object
+function visualToJson() {
+  const obj = {
+    type: protocolForm.type,
+    port: protocolForm.port,
+    tls: protocolForm.tls,
+    transport: protocolForm.transport,
+    enable: protocolForm.enable,
+    show: protocolForm.show,
+  }
+  try { obj.settings = JSON.parse(protocolForm.settings || '{}') } catch { obj.settings = {} }
+  try { obj.tls_settings = JSON.parse(protocolForm.tls_settings || '{}') } catch { obj.tls_settings = {} }
+  try { obj.transport_settings = JSON.parse(protocolForm.transport_settings || '{}') } catch { obj.transport_settings = {} }
+  try { obj.reality_settings = JSON.parse(protocolForm.reality_settings || '{}') } catch { obj.reality_settings = {} }
+  return obj
+}
+
+// Convert JSON object to visual form fields
+function jsonToVisual(json) {
+  protocolForm.type = json.type || 'vless'
+  protocolForm.port = json.port || 443
+  protocolForm.tls = json.tls ?? 0
+  protocolForm.transport = json.transport || 'tcp'
+  protocolForm.enable = json.enable ?? 1
+  protocolForm.show = json.show ?? 1
+  protocolForm.settings = json.settings ? (typeof json.settings === 'string' ? json.settings : JSON.stringify(json.settings, null, 2)) : '{}'
+  protocolForm.tls_settings = json.tls_settings ? (typeof json.tls_settings === 'string' ? json.tls_settings : JSON.stringify(json.tls_settings, null, 2)) : '{}'
+  protocolForm.transport_settings = json.transport_settings ? (typeof json.transport_settings === 'string' ? json.transport_settings : JSON.stringify(json.transport_settings, null, 2)) : '{}'
+  protocolForm.reality_settings = json.reality_settings ? (typeof json.reality_settings === 'string' ? json.reality_settings : JSON.stringify(json.reality_settings, null, 2)) : '{}'
+}
+
+// When switching to JSON mode, sync from visual form
+watch(() => protocolForm.mode, (newMode) => {
+  if (newMode === 'json' && !editingProtocol.value) {
+    const json = visualToJson()
+    jsonEditorContent.value = JSON.stringify(json, null, 2)
+    jsonParseError.value = ''
+  }
+})
+
+// When switching to visual mode, sync from JSON
+watch(() => protocolForm.mode, (newMode) => {
+  if (newMode === 'visual') {
+    try {
+      const json = JSON.parse(jsonEditorContent.value)
+      jsonToVisual(json)
+    } catch {
+      // keep existing visual values if JSON is invalid
+    }
+  }
+})
+
+function onJsonInput() {
+  try {
+    JSON.parse(jsonEditorContent.value)
+    jsonParseError.value = ''
+  } catch (e) {
+    jsonParseError.value = e.message
+  }
+}
+
+function formatJson() {
+  try {
+    const parsed = JSON.parse(jsonEditorContent.value)
+    jsonEditorContent.value = JSON.stringify(parsed, null, 2)
+    jsonParseError.value = ''
+  } catch (e) {
+    jsonParseError.value = e.message
+  }
+}
+
+async function copyJson() {
+  try {
+    await navigator.clipboard.writeText(jsonEditorContent.value)
+  } catch (e) {
+    alert(t('admin.nodes.messages.copyFailed') + ': ' + (e.message || e))
+  }
+}
+
+function loadTemplateAsJson() {
+  if (protocolTemplates.value.length === 0) return
+  // Show a simple prompt to pick template
+  const names = protocolTemplates.value.map((tpl, i) => `${i + 1}. ${tpl.name}`).join('\n')
+  const pick = prompt(`Select template number:\n${names}`)
+  const idx = parseInt(pick) - 1
+  if (isNaN(idx) || idx < 0 || idx >= protocolTemplates.value.length) return
+  const tpl = protocolTemplates.value[idx]
+  const json = {
+    type: tpl.type,
+    port: tpl.default_port,
+    tls: tpl.tls || 0,
+    transport: tpl.transport || 'tcp',
+    enable: 1,
+    show: 1,
+  }
+  try { json.settings = JSON.parse(tpl.settings || '{}') } catch { json.settings = {} }
+  try { json.tls_settings = JSON.parse(tpl.tls_settings || '{}') } catch { json.tls_settings = {} }
+  try { json.transport_settings = JSON.parse(tpl.transport_settings || '{}') } catch { json.transport_settings = {} }
+  try { json.reality_settings = JSON.parse(tpl.reality_settings || '{}') } catch { json.reality_settings = {} }
+  jsonEditorContent.value = JSON.stringify(json, null, 2)
+  jsonParseError.value = ''
+}
 
 // Data loaders
 const normalizeNode = (node) => ({
   ...node,
   address: node.address || node.host || '',
-  api_port: node.api_port || node.port || 443,
   traffic_today: node.traffic_today || (Number(node.total_upload || 0) + Number(node.total_download || 0))
 })
 
@@ -537,28 +581,72 @@ const loadProtocolTemplates = async () => {
   }
 }
 
-const loadAuthKeys = async () => {
+// Node actions
+const openAuthKeyModal = async () => {
   try {
     const res = await getAuthKeys()
-    authKeys.value = res.data || []
+    const keys = res.data || []
+    if (keys.length > 0) {
+      const first = keys[0]
+      authKey.value = first.key
+      authKeyUsed.value = first.used || 0
+    } else {
+      authKey.value = ''
+      authKeyUsed.value = 0
+    }
   } catch (e) {
     console.error('Failed to load auth keys:', e)
+    authKey.value = ''
+    authKeyUsed.value = 0
+  }
+  showAuthKeyModal.value = true
+}
+
+const closeAuthKeyModal = () => {
+  showAuthKeyModal.value = false
+}
+
+const copyAuthKey = async () => {
+  if (!authKey.value) return
+  try {
+    await navigator.clipboard.writeText(authKey.value)
+    alert(t('admin.nodes.messages.copied'))
+  } catch {
+    alert(t('admin.nodes.messages.copyFailed'))
   }
 }
 
-// Node actions
-const openCreateModal = () => {
-  editingNode.value = null
-  Object.assign(nodeForm, { name: '', address: '', api_port: 8080, tags: '', rate: 1.0, sort: 0, status: 0 })
-  showNodeModal.value = true
+const copyConfig = async () => {
+  try {
+    await navigator.clipboard.writeText(configSnippet.value)
+    alert(t('admin.nodes.messages.copied'))
+  } catch {
+    alert(t('admin.nodes.messages.copyFailed'))
+  }
 }
+
+const configSnippet = computed(() => {
+  const host = window.location.origin
+  return `# V2bX config example
+{
+  "Nodes": [
+    {
+      "Type": "v2board",
+      "ApiHost": "${host}",
+      "AuthKey": "${authKey.value || '<your-auth-key>'}",
+      "NodeID": 0,
+      "AutoRegister": true,
+      "Rate": 1.0
+    }
+  ]
+}`
+})
 
 const openEditModal = (node) => {
   editingNode.value = node
   Object.assign(nodeForm, {
     name: node.name,
     address: node.address || node.host || '',
-    api_port: node.api_port || node.port || 443,
     tags: node.tags || '',
     rate: node.rate || 1.0,
     sort: node.sort || 0,
@@ -573,7 +661,7 @@ const closeNodeModal = () => {
 }
 
 const saveNode = async () => {
-  if (!nodeForm.name || !nodeForm.address || !nodeForm.api_port) {
+  if (!nodeForm.name || !nodeForm.address) {
     alert(t('admin.nodes.messages.requiredFields'))
     return
   }
@@ -582,17 +670,12 @@ const saveNode = async () => {
     const payload = {
       name: nodeForm.name,
       host: nodeForm.address,
-      port: Number(nodeForm.api_port),
       tags: nodeForm.tags,
       rate: Number(nodeForm.rate),
       sort: Number(nodeForm.sort),
       status: Number(nodeForm.status)
     }
-    if (editingNode.value) {
-      await updateNode(editingNode.value.id, payload)
-    } else {
-      await createNode(payload)
-    }
+    await updateNode(editingNode.value.id, payload)
     closeNodeModal()
     loadNodes()
     loadStats()
@@ -635,10 +718,11 @@ const closeProtocolModal = () => {
 
 const openAddProtocol = () => {
   editingProtocol.value = null
-  Object.assign(protocolForm, { 
-    mode: 'general',
-    type: 'vless', 
-    port: 443, 
+  selectedTemplate.value = ''
+  Object.assign(protocolForm, {
+    mode: 'json',
+    type: 'vless',
+    port: 443,
     enable: 1,
     tls: 0,
     transport: 'tcp',
@@ -649,26 +733,57 @@ const openAddProtocol = () => {
     custom_config: '',
     show: 1
   })
-  selectedTemplate.value = ''
+  jsonEditorContent.value = JSON.stringify({
+    type: 'vless',
+    port: 443,
+    tls: 0,
+    transport: 'tcp',
+    enable: 1,
+    show: 1,
+    settings: {},
+    tls_settings: {},
+    transport_settings: {},
+    reality_settings: {}
+  }, null, 2)
+  jsonParseError.value = ''
   showProtocolFormModal.value = true
 }
 
 const editProtocol = (protocol) => {
   editingProtocol.value = protocol
-  Object.assign(protocolForm, {
-    mode: protocol.custom_config ? 'custom' : 'general',
-    type: protocol.type,
-    port: protocol.port,
-    enable: protocol.enable,
-    tls: protocol.tls || 0,
+
+  // Parse existing protocol data safely
+  const settings = protocol.settings || '{}'
+  const tlsSettings = protocol.tls_settings || '{}'
+  const transportSettings = protocol.transport_settings || '{}'
+  const realitySettings = protocol.reality_settings || '{}'
+
+  // Build complete JSON for the editor
+  const json = {
+    type: protocol.type || 'vless',
+    port: protocol.port || 443,
+    tls: protocol.tls ?? 0,
     transport: protocol.transport || 'tcp',
-    settings: protocol.settings || '{}',
-    tls_settings: protocol.tls_settings || '{}',
-    transport_settings: protocol.transport_settings || '{}',
-    reality_settings: protocol.reality_settings || '{}',
-    custom_config: protocol.custom_config || '',
-    show: protocol.show ?? 1
-  })
+    enable: protocol.enable ?? 1,
+    show: protocol.show ?? 1,
+  }
+  try { json.settings = typeof settings === 'string' ? JSON.parse(settings) : settings } catch { json.settings = {} }
+  try { json.tls_settings = typeof tlsSettings === 'string' ? JSON.parse(tlsSettings) : tlsSettings } catch { json.tls_settings = {} }
+  try { json.transport_settings = typeof transportSettings === 'string' ? JSON.parse(transportSettings) : transportSettings } catch { json.transport_settings = {} }
+  try { json.reality_settings = typeof realitySettings === 'string' ? JSON.parse(realitySettings) : realitySettings } catch { json.reality_settings = {} }
+  if (protocol.custom_config) {
+    try { json.custom_config = typeof protocol.custom_config === 'string' ? JSON.parse(protocol.custom_config) : protocol.custom_config } catch { json.custom_config = {} }
+  }
+
+  // Sync to visual form
+  jsonToVisual(json)
+
+  // Set JSON editor content
+  jsonEditorContent.value = JSON.stringify(json, null, 2)
+  jsonParseError.value = ''
+
+  // Start in JSON mode
+  protocolForm.mode = 'json'
   showProtocolFormModal.value = true
 }
 
@@ -679,25 +794,61 @@ const closeProtocolFormModal = () => {
 
 const applyTemplate = (tpl) => {
   selectedTemplate.value = tpl.name
-  protocolForm.type = tpl.type
-  protocolForm.port = tpl.default_port
-  protocolForm.tls = tpl.tls || 0
-  protocolForm.transport = tpl.transport || 'tcp'
-  protocolForm.settings = tpl.settings || '{}'
-  protocolForm.tls_settings = tpl.tls_settings || '{}'
-  protocolForm.reality_settings = tpl.reality_settings || '{}'
-  protocolForm.mode = 'general'
+
+  const json = {
+    type: tpl.type,
+    port: tpl.default_port,
+    tls: tpl.tls || 0,
+    transport: tpl.transport || 'tcp',
+    enable: 1,
+    show: 1,
+  }
+  try { json.settings = JSON.parse(tpl.settings || '{}') } catch { json.settings = {} }
+  try { json.tls_settings = JSON.parse(tpl.tls_settings || '{}') } catch { json.tls_settings = {} }
+  try { json.transport_settings = JSON.parse(tpl.transport_settings || '{}') } catch { json.transport_settings = {} }
+  try { json.reality_settings = JSON.parse(tpl.reality_settings || '{}') } catch { json.reality_settings = {} }
+
+  jsonEditorContent.value = JSON.stringify(json, null, 2)
+  jsonParseError.value = ''
+
+  // Also sync to visual
+  jsonToVisual(json)
+  protocolForm.mode = 'json'
 }
 
 const saveProtocol = async () => {
-  if (protocolForm.mode === 'general' && (!protocolForm.type || !protocolForm.port)) {
-    alert(t('admin.nodes.messages.requiredFields'))
-    return
-  }
-  
-  savingProtocol.value = true
-  try {
-    const data = {
+  let payload
+
+  if (protocolForm.mode === 'json') {
+    // Parse from JSON editor
+    try {
+      const json = JSON.parse(jsonEditorContent.value)
+      payload = {
+        type: json.type || 'vless',
+        port: json.port || 443,
+        enable: json.enable ?? 1,
+        tls: json.tls ?? 0,
+        transport: json.transport || 'tcp',
+        settings: JSON.stringify(json.settings || {}),
+        tls_settings: JSON.stringify(json.tls_settings || {}),
+        transport_settings: JSON.stringify(json.transport_settings || {}),
+        reality_settings: JSON.stringify(json.reality_settings || {}),
+        show: json.show ?? 1,
+      }
+      if (json.custom_config) {
+        payload.custom_config = typeof json.custom_config === 'string' ? json.custom_config : JSON.stringify(json.custom_config)
+      }
+    } catch (e) {
+      alert(t('admin.nodes.messages.invalidJson') + ': ' + e.message)
+      return
+    }
+  } else {
+    // Parse from visual form
+    if (!protocolForm.type || !protocolForm.port) {
+      alert(t('admin.nodes.messages.requiredFields'))
+      return
+    }
+    payload = {
       type: protocolForm.type,
       port: protocolForm.port,
       enable: protocolForm.enable,
@@ -707,16 +858,18 @@ const saveProtocol = async () => {
       tls_settings: protocolForm.tls_settings,
       transport_settings: protocolForm.transport_settings,
       reality_settings: protocolForm.reality_settings,
-      custom_config: protocolForm.mode === 'custom' ? protocolForm.custom_config : null,
-      show: protocolForm.show
+      show: protocolForm.show,
     }
-    
+  }
+
+  savingProtocol.value = true
+  try {
     if (editingProtocol.value) {
-      await updateNodeProtocol(selectedNode.value.id, editingProtocol.value.id, data)
+      await updateNodeProtocol(selectedNode.value.id, editingProtocol.value.id, payload)
     } else {
-      await createNodeProtocol(selectedNode.value.id, data)
+      await createNodeProtocol(selectedNode.value.id, payload)
     }
-    
+
     closeProtocolFormModal()
     const res = await getNodeProtocols(selectedNode.value.id)
     protocols.value = res.data || []
@@ -736,47 +889,6 @@ const deleteProtocol = async (protocol) => {
   } catch (e) {
     alert(t('admin.nodes.messages.deleteFailed', { message: e.message || e }))
   }
-}
-
-// Auth key actions
-const generateKey = async () => {
-  generatingKey.value = true
-  try {
-    const res = await generateAuthKey({ name: newKeyRemark.value })
-    newKeyRemark.value = ''
-    if (res.data && res.data.key) {
-      generatedKey.value = res.data.key
-    }
-    loadAuthKeys()
-  } catch (e) {
-    alert(t('admin.nodes.messages.generateFailed', { message: e.message || e }))
-  } finally {
-    generatingKey.value = false
-  }
-}
-
-const removeAuthKey = async (key) => {
-  if (!confirm(t('admin.nodes.messages.deleteAuthKeyConfirm'))) return
-  try {
-    await deleteAuthKey(key.id)
-    loadAuthKeys()
-  } catch (e) {
-    alert(t('admin.nodes.messages.deleteFailed', { message: e.message || e }))
-  }
-}
-
-const copyKey = async (key) => {
-  try {
-    await navigator.clipboard.writeText(key)
-    alert(t('admin.nodes.messages.copied'))
-  } catch (e) {
-    alert(t('admin.nodes.messages.copyFailed', { message: e.message || e }))
-  }
-}
-
-const copyGeneratedKey = async () => {
-  await copyKey(generatedKey.value)
-  generatedKey.value = ''
 }
 
 // Pagination
@@ -819,11 +931,6 @@ const formatTime = (timestamp) => {
   return formatDateTime(timestamp)
 }
 
-const formatDate = (timestamp) => {
-  if (!timestamp) return '-'
-  return formatDateTime(timestamp)
-}
-
 // Init
 onMounted(async () => {
   const nodesLoaded = await loadNodes()
@@ -832,8 +939,7 @@ onMounted(async () => {
   }
   await Promise.all([
     loadStats(),
-    loadProtocolTemplates(),
-    loadAuthKeys()
+    loadProtocolTemplates()
   ])
 })
 </script>
@@ -1000,7 +1106,6 @@ onMounted(async () => {
 .btn-danger:hover { background: #dc2626; }
 
 .btn-sm { padding: 6px 12px; font-size: 12px; }
-.btn-xs { padding: 4px 8px; font-size: 11px; }
 
 .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
@@ -1202,43 +1307,6 @@ onMounted(async () => {
   font-family: monospace;
 }
 
-.key-display-box {
-  background: rgba(245, 158, 11, 0.1);
-  border: 2px solid var(--warning-color);
-  border-radius: var(--radius-md);
-  padding: 20px;
-  margin-bottom: 20px;
-}
-
-.key-display-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  color: var(--warning-color);
-  font-weight: 600;
-}
-
-.key-display-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  align-items: center;
-}
-
-.key-text-large {
-  font-size: 14px;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  background: var(--bg-color);
-  padding: 16px 20px;
-  border-radius: var(--radius-md);
-  word-break: break-all;
-  width: 100%;
-  text-align: center;
-  border: 1px solid var(--warning-color);
-  color: var(--text-color);
-}
-
 /* Protocol templates */
 .template-grid {
   display: grid;
@@ -1309,6 +1377,7 @@ onMounted(async () => {
   color: white;
   background: var(--primary-color);
 }
+
 .badge {
   display: inline-block;
   padding: 4px 10px;
@@ -1331,40 +1400,169 @@ onMounted(async () => {
   text-align: center;
 }
 
+/* JSON editor */
+.json-editor-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.json-textarea {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace !important;
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  color: var(--text-color);
+  width: 100%;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.json-textarea:focus {
+  border-color: var(--primary-color);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.json-status {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.json-status.valid {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success-color);
+}
+
+.json-status.invalid {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--error-color);
+}
+
+/* Advanced details */
+.advanced-details {
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.advanced-details summary {
+  padding: 12px 16px;
+  background: var(--bg-color);
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.advanced-details summary:hover {
+  background: var(--surface-hover);
+}
+
+.advanced-details > .json-textarea {
+  border: none;
+  border-radius: 0;
+  border-top: 1px solid var(--border-color);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .header-actions {
     width: 100%;
   }
-  
+
   .header-actions .btn {
     flex: 1;
   }
-  
+
   .form-row {
     grid-template-columns: 1fr;
   }
-  
+
   .table-container {
     overflow-x: auto;
   }
-  
+
   .table {
     min-width: 800px;
   }
-  
+
   .actions {
     flex-direction: column;
   }
-  
+
   .modal {
     max-width: 95%;
   }
 }
-</style>
 
+/* Auth Key Modal */
+.auth-key-hint {
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.auth-key-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.auth-key-value {
+  flex: 1;
+  background: var(--bg-color);
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  word-break: break-all;
+  border: 1px solid var(--border-color);
+}
+
+.auth-key-usage {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.auth-key-config {
+  margin-top: 20px;
+}
+
+.auth-key-config label {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.config-block {
+  background: var(--bg-color);
+  padding: 16px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border: 1px solid var(--border-color);
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+</style>

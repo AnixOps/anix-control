@@ -1611,8 +1611,10 @@ export default {
       }
     },
     limitPage: {
+      heroEyebrow: '限速管理',
       title: '限速管理',
       subtitle: '按隧道维护限速规则，保持 Flux 风格的独立规则页。',
+      note: '限速规则由当前转发运行时强制执行，更改可能需要短暂时间生效。',
       actions: {
         refresh: '刷新',
         create: '新增',
@@ -1653,6 +1655,7 @@ export default {
       },
       deleteModal: {
         title: '确认删除',
+        eyebrow: '确认删除',
         confirmText: '确定要删除限速规则 {name} 吗？',
         hint: '此操作无法撤销，删除后该规则将永久消失。',
         deleting: '删除中...',
@@ -1663,6 +1666,10 @@ export default {
         tunnelFallback: '隧道 #{id}',
         ruleFallback: '规则 #{id}'
       },
+      modeLabelNodeX: 'NodeX 模式',
+      modeSummaryNodeX: '限速由 NodeX Agent 同步并强制执行。',
+      modeLabelLocal: '本地模式',
+      modeSummaryLocal: '限速通过本地 {backend} 运行时应用。',
       messages: {
         fetchTunnelsFailed: '获取隧道列表失败',
         fetchRulesFailed: '获取限速规则失败',
@@ -1675,7 +1682,10 @@ export default {
         createFailed: '创建限速规则失败',
         updateFailed: '更新限速规则失败',
         submitFailed: '提交失败',
-        deleteFailed: '删除限速规则失败'
+        deleteFailed: '删除限速规则失败',
+        created: '限速规则创建成功',
+        updated: '限速规则更新成功',
+        deleted: '限速规则删除成功'
       }
     },
     nodeXAgents: {
@@ -1789,6 +1799,8 @@ export default {
       port: '端口',
       tls: 'TLS',
       tlsNone: '无',
+      tlsReality: 'Reality',
+      tlsEnabled: 'TLS',
       status: '状态',
       actions: '操作',
       productionNodes: '物理节点协议',
@@ -1888,7 +1900,8 @@ export default {
         delete: '删除',
         cancel: '取消',
         save: '保存',
-        saving: '保存中...'
+        saving: '保存中...',
+        authKey: '授权密钥'
       },
       pagination: {
         previous: '上一页',
@@ -1900,7 +1913,6 @@ export default {
         fields: {
           name: '节点名称 *',
           address: '节点地址 *',
-          apiPort: 'API 端口 *',
           tags: '标签（逗号分隔）',
           rate: '节点倍率',
           sort: '排序',
@@ -1909,11 +1921,20 @@ export default {
         placeholders: {
           name: '输入节点名称',
           address: 'IP 或域名',
-          apiPort: '8080',
           tags: '香港,IEPL,高速',
           rate: '1.0',
           sort: '0'
         }
+      },
+      authKeyModal: {
+        title: '节点授权密钥',
+        hint: '将此密钥配置到 V2bX 的 config.json 中，节点启动后会自动注册到面板。同一密钥可用于多台节点注册。',
+        noKey: '尚未生成授权密钥，请先创建授权密钥。',
+        copy: '复制密钥',
+        copyConfig: '复制配置',
+        configHint: '将此配置粘贴到 V2bX 的 config.json 中，替换 <auth_key> 为上方密钥值。',
+        registeredCount: '已注册节点数',
+        copied: '已复制'
       },
       protocolModal: {
         title: '协议管理 - {name}',
@@ -1935,8 +1956,8 @@ export default {
         titleEdit: '编辑协议',
         templateLibrary: '协议模板库',
         tabs: {
-          general: '基础配置',
-          custom: 'JSON 高级模式'
+          json: 'JSON',
+          visual: '可视化配置'
         },
         fields: {
           type: '协议类型 *',
@@ -1946,35 +1967,22 @@ export default {
           settings: '协议设置 (JSON)',
           tlsSettings: 'TLS 设置 (JSON)',
           realitySettings: 'Reality 设置 (JSON)',
-          transportSettings: '传输层设置 (JSON)',
-          customConfig: '自定义全量配置'
+          transportSettings: '传输层设置 (JSON)'
         },
         placeholders: {
           port: '443'
         },
-        customModeHint: '高级模式将全量覆盖此协议的所有配置。请输入完整的 JSON 对象。',
-        enableHint: '启用协议（节点端运行）',
-        showHint: '显示在订阅协议池中（可在订阅管理中配置关联）'
-      },
-      authKeyModal: {
-        title: '授权密钥管理',
-        description: '授权密钥用于节点自动注册。将密钥配置到节点后，节点启动时会自动向面板注册。',
-        oneTimeWarning: '请立即复制此密钥，关闭后将无法再次查看。',
-        copyAndClose: '复制并关闭',
-        remarkPlaceholder: '备注（可选）',
-        generating: '生成中...',
-        generateNew: '生成新密钥',
-        table: {
-          name: '名称/备注',
-          status: '状态',
-          createdAt: '创建时间',
-          actions: '操作'
+        jsonActions: {
+          format: '格式化',
+          copy: '复制',
+          fromTemplate: '从模板加载'
         },
-        status: {
-          used: '已使用',
-          unused: '未使用'
+        jsonStatus: {
+          valid: 'JSON 有效',
+          invalid: 'JSON 无效'
         },
-        empty: '暂无授权密钥'
+        enable: '启用协议（节点端运行）',
+        show: '显示在订阅协议池中'
       },
       statusText: {
         pending: '待激活',
@@ -2009,7 +2017,8 @@ export default {
         generateFailed: '生成失败: {message}',
         deleteAuthKeyConfirm: '确定要删除此授权密钥吗？',
         copied: '已复制到剪贴板',
-        copyFailed: '复制失败: {message}'
+        copyFailed: '复制失败: {message}',
+        invalidJson: 'JSON 格式无效'
       }
     }
   },
@@ -2352,9 +2361,13 @@ export default {
         email: '邮箱',
         balance: '余额（分）',
         transfer: '流量限制（字节）',
+        groupId: '订阅分组',
         expiredAt: '到期时间（Unix 秒）',
         flowResetTime: '流量重置日',
         remark: '备注'
+      },
+      groupOptions: {
+        unassigned: '未分配'
       }
     },
     createModal: {
@@ -2364,11 +2377,17 @@ export default {
         email: '邮箱',
         password: '密码',
         userType: '用户类型',
+        groupId: '订阅分组',
+        transferEnable: '流量限制（字节）',
         flowResetTime: '流量重置日'
       },
       placeholders: {
         email: '请输入邮箱',
-        password: '请输入密码（至少 6 位）'
+        password: '请输入密码（至少 6 位）',
+        transferEnable: '留空则使用默认值 0'
+      },
+      groupOptions: {
+        unassigned: '未分配'
       },
       userTypes: {
         normal: '普通用户',

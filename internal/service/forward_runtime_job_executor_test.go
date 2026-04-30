@@ -363,3 +363,126 @@ func TestForwardBackgroundErrorLogger_SuppressesRepeatedMessages(t *testing.T) {
 	logger.Logf("cycle", "forward runtime executor cycle failed: %v", errors.New("db unavailable"))
 	assert.Contains(t, strings.TrimSpace(buf.String()), "db unavailable")
 }
+
+func TestPanelForwardAnsibleRuntimePayload_CommandArgs_ValidatesInventoryAndPlaybook(t *testing.T) {
+	payload := panelForwardAnsibleRuntimePayload{
+		Action:    model.ForwardRuntimeJobActionCreate,
+		Inventory: "",
+		Playbook:  "/opt/ansible/apply.yml",
+	}
+	_, err := payload.commandArgs()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "inventory is required")
+
+	payload.Inventory = "/etc/ansible/hosts"
+	payload.Playbook = ""
+	_, err = payload.commandArgs()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "playbook is required")
+}
+
+func TestPanelForwardAnsibleRuntimePayload_SuccessMessage(t *testing.T) {
+	createPayload := panelForwardAnsibleRuntimePayload{Action: model.ForwardRuntimeJobActionCreate}
+	assert.Equal(t, "ansible runtime synchronized", createPayload.successMessage())
+
+	deletePayload := panelForwardAnsibleRuntimePayload{Action: model.ForwardRuntimeJobActionDelete}
+	assert.Equal(t, "ansible runtime removed", deletePayload.successMessage())
+
+	pausePayload := panelForwardAnsibleRuntimePayload{Action: model.ForwardRuntimeJobActionPause}
+	assert.Equal(t, "ansible runtime removed", pausePayload.successMessage())
+
+	updatePayload := panelForwardAnsibleRuntimePayload{Action: model.ForwardRuntimeJobActionUpdate}
+	assert.Equal(t, "ansible runtime synchronized", updatePayload.successMessage())
+}
+
+func TestPanelForwardAnsibleRuntimePayload_BuildExtraVars_IncludesAllFields(t *testing.T) {
+	payload := panelForwardAnsibleRuntimePayload{
+		Action:         model.ForwardRuntimeJobActionCreate,
+		Backend:        model.ForwardRuntimeBackendNftablesAnsible,
+		FirewallDriver: "nftables",
+		ExtraVars:      map[string]any{"custom_key": "custom_value"},
+		Forward:        panelForwardAnsibleForwardPayload{ID: 1, Name: "fwd1"},
+		Tunnel:         panelForwardAnsibleTunnelPayload{ID: 2, Name: "tun2"},
+		Node:           panelForwardAnsibleNodePayload{ID: 3, Name: "node3"},
+		Limiter:        &panelForwardLimiterPayload{SpeedID: 4, Speed: 100},
+		Targets:        []panelForwardAnsibleTargetPayload{{Name: "target-1", Addr: "10.0.0.1:80"}},
+	}
+
+	extraVars := payload.buildExtraVars()
+	assert.Equal(t, model.ForwardRuntimeJobActionCreate, extraVars["runtimeAction"])
+	assert.Equal(t, model.ForwardRuntimeBackendNftablesAnsible, extraVars["runtimeBackend"])
+	assert.Equal(t, "nftables", extraVars["firewallDriver"])
+	assert.Equal(t, "custom_value", extraVars["custom_key"])
+	assert.Equal(t, uint(1), extraVars["forwardId"])
+	assert.Equal(t, uint(2), extraVars["tunnelId"])
+	assert.Equal(t, uint(3), extraVars["nodeId"])
+	assert.NotNil(t, extraVars["limiter"])
+	assert.NotNil(t, extraVars["targets"])
+}
+
+func TestPanelForwardAnsibleRuntimePayload_LimitPattern_WithTemplate(t *testing.T) {
+	payload := panelForwardAnsibleRuntimePayload{
+		TargetPattern: "{{node.host}}:{{forward.id}}",
+		Node:          panelForwardAnsibleNodePayload{Host: "node1.example.com", Name: "node1", ID: 5},
+		Forward:       panelForwardAnsibleForwardPayload{ID: 10},
+		Tunnel:        panelForwardAnsibleTunnelPayload{ID: 20},
+	}
+	limit := payload.limitPattern()
+	assert.Equal(t, "node1.example.com:10", limit)
+}
+
+func TestPanelForwardAnsibleRuntimePayload_LimitPattern_FallsBackToNodeHost(t *testing.T) {
+	payload := panelForwardAnsibleRuntimePayload{
+		Node: panelForwardAnsibleNodePayload{Host: "node2.example.com"},
+	}
+	limit := payload.limitPattern()
+	assert.Equal(t, "node2.example.com", limit)
+}
+
+func TestPanelForwardAnsibleRuntimePayload_LimitPattern_EmptyWhenNoTarget(t *testing.T) {
+	payload := panelForwardAnsibleRuntimePayload{}
+	assert.Empty(t, payload.limitPattern())
+}
+
+func TestNormalizeForwardIdlePollInterval(t *testing.T) {
+	assert.Equal(t, 10*time.Second, normalizeForwardIdlePollInterval(10*time.Second, 30*time.Second))
+	assert.Equal(t, 10*time.Second, normalizeForwardIdlePollInterval(10*time.Second, 5*time.Second))
+	assert.Equal(t, 10*time.Second, normalizeForwardIdlePollInterval(10*time.Second, 0))
+	assert.Equal(t, 10*time.Second, normalizeForwardIdlePollInterval(0, 10*time.Second))
+}
+
+func TestPanelForwardRuntimeJobExecutor_RequeueRunningJobs(t *testing.T) {
+	appconfig.Set(&appconfig.Config{
+		Database: appconfig.DatabaseConfig{
+			Driver:   "sqlite3",
+			Database: ":memory:",
+		},
+	})
+	defer appconfig.Set(nil)
+
+	if err := database.Init(&appconfig.DatabaseConfig{
+		Driver: "sqlite3", Database: ":memory:",
+	}); err != nil {
+		t.Skipf("database init failed: %v", err)
+	}
+	defer database.Close()
+
+	db := database.Get()
+	database.AutoMigrate(&model.ForwardRuntimeJob{})
+	db.Exec("DELETE FROM v2_forward_runtime_job")
+
+	runningJob := &model.ForwardRuntimeJob{
+		Backend: model.ForwardRuntimeBackendNftablesAnsible,
+		Action:  model.ForwardRuntimeJobActionCreate,
+		Status:  model.ForwardRuntimeJobStatusRunning,
+	}
+	assert.NoError(t, db.Create(runningJob).Error)
+
+	executor := NewPanelForwardRuntimeJobExecutor(db)
+	assert.NoError(t, executor.requeueRunningJobs())
+
+	var updated model.ForwardRuntimeJob
+	assert.NoError(t, db.First(&updated, runningJob.ID).Error)
+	assert.Equal(t, model.ForwardRuntimeJobStatusPending, updated.Status)
+	assert.Nil(t, updated.StartedAt)
+}
