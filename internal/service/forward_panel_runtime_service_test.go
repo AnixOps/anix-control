@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,7 @@ func (s *PanelForwardRuntimeServiceTestSuite) SetupSuite() {
 
 func (s *PanelForwardRuntimeServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
+	pathExists = func(raw string) bool { return true }
 	db := database.Get()
 	db.Exec("DELETE FROM v2_forward_runtime_job")
 	db.Exec("DELETE FROM v2_forward")
@@ -591,12 +593,20 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_AttachesLimiterToRuntime
 	}).Error)
 
 	configSvc := NewSystemConfigService(db)
+	tempDir := s.T().TempDir()
+	inventoryPath := filepath.Join(tempDir, "inventory.ini")
+	applyPlaybookPath := filepath.Join(tempDir, "apply.yml")
+	removePlaybookPath := filepath.Join(tempDir, "remove.yml")
+	assert.NoError(s.T(), os.WriteFile(inventoryPath, []byte("[forward_nodes]\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(applyPlaybookPath, []byte("---\n- hosts: all\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(removePlaybookPath, []byte("---\n- hosts: all\n"), 0o600))
 	assert.NoError(s.T(), configSvc.SetJSON(
 		forwardRuntimeAnsibleConfigJSONKey,
 		panelForwardAnsibleConfig{
-			Inventory:      "/etc/ansible/hosts",
-			ApplyPlaybook:  "/opt/ansible/apply.yml",
-			RemovePlaybook: "/opt/ansible/remove.yml",
+			Inventory:      inventoryPath,
+			ApplyPlaybook:  applyPlaybookPath,
+			RemovePlaybook: removePlaybookPath,
+			WorkingDir:     tempDir,
 		},
 		forwardRuntimeConfigGroup,
 		"test ansible runtime",
@@ -798,6 +808,14 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestValidateAnsiblePaths_RejectsMi
 	db := database.Get()
 	configSvc := NewSystemConfigService(db)
 	svc := &PanelForwardRuntimeService{db: db, configService: configSvc}
+	pathExists = func(raw string) bool {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			return false
+		}
+		_, err := os.Stat(trimmed)
+		return err == nil
+	}
 
 	assert.NoError(s.T(), configSvc.Set(forwardRuntimeNodeXModeConfigKey, "false", "string", forwardRuntimeConfigGroup, "test"))
 	assert.NoError(s.T(), configSvc.Set(forwardRuntimeLocalBackendConfigKey, model.ForwardRuntimeBackendNftablesAnsible, "string", forwardRuntimeConfigGroup, "test"))
@@ -814,6 +832,14 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestValidateAnsiblePaths_RejectsMi
 	db := database.Get()
 	configSvc := NewSystemConfigService(db)
 	svc := &PanelForwardRuntimeService{db: db, configService: configSvc}
+	pathExists = func(raw string) bool {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			return false
+		}
+		_, err := os.Stat(trimmed)
+		return err == nil
+	}
 
 	tempDir := s.T().TempDir()
 	inventoryPath := tempDir + "/inventory.ini"

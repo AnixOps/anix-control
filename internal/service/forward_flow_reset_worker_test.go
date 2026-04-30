@@ -1,6 +1,8 @@
 package service
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -197,12 +199,32 @@ func (s *ForwardFlowResetWorkerTestSuite) TestRunOnce_DisablesExpiredUserTunnelA
 	db := database.Get()
 	now := time.Date(2026, time.April, 6, 0, 0, 5, 0, time.Local)
 	configSvc := NewSystemConfigService(db)
+
+	tempDir := s.T().TempDir()
+	inventoryPath := filepath.Join(tempDir, "inventory.ini")
+	applyPlaybookPath := filepath.Join(tempDir, "apply.yml")
+	removePlaybookPath := filepath.Join(tempDir, "remove.yml")
+	assert.NoError(s.T(), os.WriteFile(inventoryPath, []byte("[forward_nodes]\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(applyPlaybookPath, []byte("---\n- hosts: all\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(removePlaybookPath, []byte("---\n- hosts: all\n"), 0o600))
+
 	assert.NoError(s.T(), configSvc.Set(
 		forwardRuntimeBackendConfigKey,
 		model.ForwardRuntimeBackendIptablesAnsible,
 		"string",
 		forwardRuntimeConfigGroup,
 		"test local runtime backend",
+	))
+	assert.NoError(s.T(), configSvc.SetJSON(
+		forwardRuntimeAnsibleConfigJSONKey,
+		panelForwardAnsibleConfig{
+			Inventory:      inventoryPath,
+			ApplyPlaybook:  applyPlaybookPath,
+			RemovePlaybook: removePlaybookPath,
+			WorkingDir:     tempDir,
+		},
+		forwardRuntimeConfigGroup,
+		"test ansible config",
 	))
 
 	user := &model.User{
@@ -315,12 +337,32 @@ func (s *ForwardFlowResetWorkerTestSuite) TestRunOnce_PausesActiveForwardsForExp
 	db := database.Get()
 	now := time.Date(2026, time.April, 6, 0, 0, 5, 0, time.Local)
 	configSvc := NewSystemConfigService(db)
+
+	tempDir := s.T().TempDir()
+	inventoryPath := filepath.Join(tempDir, "inventory.ini")
+	applyPlaybookPath := filepath.Join(tempDir, "apply.yml")
+	removePlaybookPath := filepath.Join(tempDir, "remove.yml")
+	assert.NoError(s.T(), os.WriteFile(inventoryPath, []byte("[forward_nodes]\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(applyPlaybookPath, []byte("---\n- hosts: all\n"), 0o600))
+	assert.NoError(s.T(), os.WriteFile(removePlaybookPath, []byte("---\n- hosts: all\n"), 0o600))
+
 	assert.NoError(s.T(), configSvc.Set(
 		forwardRuntimeBackendConfigKey,
 		model.ForwardRuntimeBackendIptablesAnsible,
 		"string",
 		forwardRuntimeConfigGroup,
 		"test local runtime backend",
+	))
+	assert.NoError(s.T(), configSvc.SetJSON(
+		forwardRuntimeAnsibleConfigJSONKey,
+		panelForwardAnsibleConfig{
+			Inventory:      inventoryPath,
+			ApplyPlaybook:  applyPlaybookPath,
+			RemovePlaybook: removePlaybookPath,
+			WorkingDir:     tempDir,
+		},
+		forwardRuntimeConfigGroup,
+		"test ansible config",
 	))
 
 	expiredAt := now.Add(-time.Hour).Unix()

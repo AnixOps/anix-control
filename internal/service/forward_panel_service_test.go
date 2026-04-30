@@ -74,6 +74,7 @@ func (s *PanelForwardServiceTestSuite) SetupSuite() {
 
 func (s *PanelForwardServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
+	pathExists = func(raw string) bool { return true }
 	db := database.Get()
 	db.Exec("DELETE FROM v2_forward")
 	db.Exec("DELETE FROM v2_forward_runtime_job")

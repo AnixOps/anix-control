@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -132,6 +133,18 @@ func TestMain(m *testing.M) {
 func (s *ServiceTestSuite) SetupTest() {
 	// 清理数据（自动发现所有表）
 	testutil.CleanupDB(database.Get())
+}
+
+func (s *ServiceTestSuite) TearDownTest() {
+	// Reset pathExists to default after each test
+	pathExists = func(raw string) bool {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			return false
+		}
+		_, err := os.Stat(trimmed)
+		return err == nil
+	}
 }
 
 // AuthServiceTestSuite 璁よ瘉鏈嶅姟娴嬭瘯濂椾欢

@@ -445,9 +445,13 @@ func TestPanelForwardAnsibleRuntimePayload_LimitPattern_EmptyWhenNoTarget(t *tes
 }
 
 func TestNormalizeForwardIdlePollInterval(t *testing.T) {
-	assert.Equal(t, 10*time.Second, normalizeForwardIdlePollInterval(10*time.Second, 30*time.Second))
+	// When idleInterval > activeInterval, return idleInterval
+	assert.Equal(t, 30*time.Second, normalizeForwardIdlePollInterval(10*time.Second, 30*time.Second))
+	// When idleInterval < activeInterval, return activeInterval
 	assert.Equal(t, 10*time.Second, normalizeForwardIdlePollInterval(10*time.Second, 5*time.Second))
+	// When idleInterval is 0, return activeInterval
 	assert.Equal(t, 10*time.Second, normalizeForwardIdlePollInterval(10*time.Second, 0))
+	// When activeInterval is 0, return idleInterval
 	assert.Equal(t, 10*time.Second, normalizeForwardIdlePollInterval(0, 10*time.Second))
 }
 
@@ -465,7 +469,7 @@ func TestPanelForwardRuntimeJobExecutor_RequeueRunningJobs(t *testing.T) {
 	}); err != nil {
 		t.Skipf("database init failed: %v", err)
 	}
-	defer database.Close()
+	// Note: do NOT close the database here — it's a shared connection used by other tests.
 
 	db := database.Get()
 	database.AutoMigrate(&model.ForwardRuntimeJob{})
