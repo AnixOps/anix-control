@@ -105,7 +105,10 @@ const currentTime = ref('')
 const navSections = computed(() => ([
   {
     title: t('layout.admin.sections.overview'),
-    items: [{ to: '/admin/dashboard', icon: 'D', label: t('layout.admin.nav.dashboard') }]
+    items: [
+      { to: '/admin/dashboard', icon: 'D', label: t('layout.admin.nav.dashboard') },
+      { to: '/admin/monitor', icon: 'M', label: t('layout.admin.nav.monitor') }
+    ]
   },
   {
     title: t('layout.admin.sections.forwardSuite'),

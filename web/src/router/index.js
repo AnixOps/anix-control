@@ -14,6 +14,7 @@ const UserTickets = () => import('@/views/user/Tickets.vue')
 const UserPlans = () => import('@/views/user/Plans.vue')
 const UserOrders = () => import('@/views/user/Orders.vue')
 const AdminDashboard = () => import('@/views/admin/Dashboard.vue')
+const AdminMonitor = () => import('@/views/admin/Monitor.vue')
 const AdminUsers = () => import('@/views/admin/Users.vue')
 const AdminOrders = () => import('@/views/admin/Orders.vue')
 const AdminNodes = () => import('@/views/admin/Nodes.vue')
@@ -88,6 +89,10 @@ const routes = [
       {
         path: 'dashboard',
         component: AdminDashboard
+      },
+      {
+        path: 'monitor',
+        component: AdminMonitor
       },
       {
         path: 'users',
