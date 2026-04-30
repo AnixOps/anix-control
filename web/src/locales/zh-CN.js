@@ -2,6 +2,8 @@
 import networkPages from './modules/zh-CN/networkPages'
 import miscPages from './modules/zh-CN/miscPages'
 import adminSupportPages from './modules/zh-CN/adminSupportPages'
+import adminDashboard from './modules/zh-CN/adminDashboard'
+import adminMonitor from './modules/zh-CN/adminMonitor'
 
 const legacy = {
   'V2Board Admin': 'V2Board 管理端',
@@ -119,6 +121,8 @@ export default {
   ...networkPages,
   ...miscPages,
   ...adminSupportPages,
+  ...adminDashboard,
+  ...adminMonitor,
   common: {
     locale: {
       label: '语言',
@@ -274,6 +278,7 @@ export default {
       },
       nav: {
         dashboard: '仪表盘',
+        monitor: '实时监控',
         users: '用户管理',
         orders: '订单管理',
         tickets: '工单管理',
