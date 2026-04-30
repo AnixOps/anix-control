@@ -1867,7 +1867,24 @@ export default {
       confirmDeleteTemplate: 'Delete this subscription template?',
       templateDeleted: 'Subscription template deleted',
       updateError: 'Update failed',
-      templateSaved: 'Subscription template saved'
+      templateSaved: 'Subscription template saved',
+      stats: {
+        totalGroups: 'Total Groups',
+        totalUsers: 'Total Users',
+        totalTemplates: 'Total Templates',
+        totalTraffic: 'Total Traffic Used',
+        groupUsage: 'Group Usage',
+        groupName: 'Group',
+        users: 'Users',
+        enabledUsers: 'Active',
+        templates: 'Templates',
+        protocols: 'Protocols',
+        onlineNodes: 'Online Nodes',
+        trafficUsed: 'Traffic Used',
+        plans: 'Plans',
+        view: 'View',
+        empty: 'No subscription groups yet.'
+      }
     },
     nodes: {
       title: 'Node Management',

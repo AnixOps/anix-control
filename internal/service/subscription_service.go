@@ -797,6 +797,87 @@ func (s *SubscriptionService) GetUserGroups(userID uint) ([]*model.SubscriptionG
 	return groups, err
 }
 
+// GroupStats 订阅分组统计数据
+type GroupStats struct {
+	GroupID       uint   `json:"group_id"`
+	GroupName     string `json:"group_name"`
+	UserCount     int64  `json:"user_count"`
+	TemplateCount int64  `json:"template_count"`
+	ProtocolCount int64  `json:"protocol_count"`
+	OnlineNodes   int64  `json:"online_nodes"`
+	TotalTraffic  int64  `json:"total_traffic"` // 用户已用流量总和 (bytes)
+	EnabledUsers  int64  `json:"enabled_users"`  // 未过期用户数
+	PlanCount     int64  `json:"plan_count"`     // 关联套餐数
+}
+
+// GetGroupStats 获取所有订阅分组的统计数据
+func (s *SubscriptionService) GetGroupStats() ([]GroupStats, error) {
+	groups, err := s.GetGroups()
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().Unix()
+	fiveMinutesAgo := now - 300
+	stats := make([]GroupStats, 0, len(groups))
+
+	for _, g := range groups {
+		gs := GroupStats{
+			GroupID:   g.ID,
+			GroupName: g.Name,
+		}
+
+		// 用户数 (直接关联)
+		s.db.Model(&model.UserSubscriptionGroup{}).
+			Where("group_id = ?", g.ID).
+			Count(&gs.UserCount)
+
+		// 未过期用户数
+		s.db.Model(&model.UserSubscriptionGroup{}).
+			Where("group_id = ? AND (expire_at IS NULL OR expire_at > ?)", g.ID, now).
+			Count(&gs.EnabledUsers)
+
+		// 模板数
+		s.db.Model(&model.SubscriptionTemplate{}).
+			Where("group_id = ?", g.ID).
+			Count(&gs.TemplateCount)
+
+		// 关联协议数
+		s.db.Table("v2_subscription_group_node_protocols").
+			Where("subscription_group_id = ?", g.ID).
+			Count(&gs.ProtocolCount)
+
+		// 在线节点数 (关联协议对应的 Node，LastCheckAt 在 5 分钟内)
+		s.db.Table("v2_subscription_group_node_protocols AS sgnp").
+			Joins("JOIN v2_node_protocol AS np ON np.id = sgnp.node_protocol_id").
+			Joins("JOIN v2_node AS n ON n.id = np.node_id").
+			Where("sgnp.subscription_group_id = ? AND n.last_check_at > ?", g.ID, fiveMinutesAgo).
+			Distinct("n.id").
+			Count(&gs.OnlineNodes)
+
+		// 用户总已用流量 (通过直接关联的用户)
+		var trafficResult struct {
+			Total int64
+		}
+		s.db.Raw(`
+			SELECT COALESCE(SUM(u.u + u.d), 0) AS total
+			FROM v2_user u
+			INNER JOIN v2_user_subscription_group usg ON usg.user_id = u.id
+			WHERE usg.group_id = ? AND (usg.expire_at IS NULL OR usg.expire_at > ?)
+		`, g.ID, now).Scan(&trafficResult)
+		gs.TotalTraffic = trafficResult.Total
+
+		// 关联套餐数
+		s.db.Model(&model.PlanSubscriptionGroup{}).
+			Where("group_id = ?", g.ID).
+			Count(&gs.PlanCount)
+
+		stats = append(stats, gs)
+	}
+
+	return stats, nil
+}
+
 // GetPlanGroups 获取套餐的订阅分组
 func (s *SubscriptionService) GetPlanGroups(planID uint) ([]*model.SubscriptionGroup, error) {
 	var groups []*model.SubscriptionGroup

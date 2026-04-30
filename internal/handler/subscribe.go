@@ -670,6 +670,17 @@ func (h *SubscriptionAdminHandler) GetProtocolTypes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": protocols})
 }
 
+// GetGroupStats 获取订阅分组统计数据
+// GET /api/v2/admin/subscription/stats
+func (h *SubscriptionAdminHandler) GetGroupStats(c *gin.Context) {
+	stats, err := h.subscriptionService.GetGroupStats()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取统计失败", "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": stats})
+}
+
 // PreviewSubscription 预览订阅内容
 // POST /api/v2/admin/subscription/preview
 func (h *SubscriptionAdminHandler) PreviewSubscription(c *gin.Context) {

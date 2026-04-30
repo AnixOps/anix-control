@@ -1875,7 +1875,24 @@ export default {
       confirmDeleteTemplate: '确定删除这个订阅模板吗？',
       templateDeleted: '订阅模板已删除',
       updateError: '更新失败',
-      templateSaved: '订阅模板已保存'
+      templateSaved: '订阅模板已保存',
+      stats: {
+        totalGroups: '总分组数',
+        totalUsers: '总用户数',
+        totalTemplates: '总模板数',
+        totalTraffic: '总已用流量',
+        groupUsage: '分组使用情况',
+        groupName: '分组',
+        users: '用户数',
+        enabledUsers: '活跃用户',
+        templates: '模板数',
+        protocols: '协议数',
+        onlineNodes: '在线节点',
+        trafficUsed: '已用流量',
+        plans: '关联套餐',
+        view: '查看',
+        empty: '暂无订阅分组。'
+      }
     },
     nodes: {
       title: '节点管理',

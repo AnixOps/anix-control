@@ -5,6 +5,74 @@
       <p class="subtitle">{{ $t('admin.subscriptions.subtitle') }}</p>
     </div>
 
+    <!-- Overview stats -->
+    <div class="overview-stats">
+      <div class="stat-card">
+        <div class="stat-value">{{ groups.length }}</div>
+        <div class="stat-label">{{ $t('admin.subscriptions.stats.totalGroups') }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ totalUsers }}</div>
+        <div class="stat-label">{{ $t('admin.subscriptions.stats.totalUsers') }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ totalTemplates }}</div>
+        <div class="stat-label">{{ $t('admin.subscriptions.stats.totalTemplates') }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ formatTotalTraffic(totalTraffic) }}</div>
+        <div class="stat-label">{{ $t('admin.subscriptions.stats.totalTraffic') }}</div>
+      </div>
+    </div>
+
+    <!-- Group usage table -->
+    <div class="stats-table-section">
+      <h2>{{ $t('admin.subscriptions.stats.groupUsage') }}</h2>
+      <div class="stats-table-wrapper" v-if="groupStats.length > 0">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>{{ $t('admin.subscriptions.stats.groupName') }}</th>
+              <th>{{ $t('admin.subscriptions.stats.users') }}</th>
+              <th>{{ $t('admin.subscriptions.stats.enabledUsers') }}</th>
+              <th>{{ $t('admin.subscriptions.stats.templates') }}</th>
+              <th>{{ $t('admin.subscriptions.stats.protocols') }}</th>
+              <th>{{ $t('admin.subscriptions.stats.onlineNodes') }}</th>
+              <th>{{ $t('admin.subscriptions.stats.trafficUsed') }}</th>
+              <th>{{ $t('admin.subscriptions.stats.plans') }}</th>
+              <th>{{ $t('admin.subscriptions.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="stat in sortedGroupStats" :key="stat.group_id" class="clickable-row" @click="selectGroupById(stat.group_id)">
+              <td>
+                <span class="group-name">{{ stat.group_name }}</span>
+              </td>
+              <td>{{ stat.user_count }}</td>
+              <td>{{ stat.enabled_users }}</td>
+              <td>{{ stat.template_count }}</td>
+              <td>{{ stat.protocol_count }}</td>
+              <td>
+                <span class="node-count" :class="stat.online_nodes > 0 ? 'online' : 'offline'">
+                  {{ stat.online_nodes }}
+                </span>
+              </td>
+              <td>{{ formatBytes(stat.total_traffic) }}</td>
+              <td>{{ stat.plan_count }}</td>
+              <td>
+                <button class="btn btn-sm btn-outline" @click.stop="selectGroupById(stat.group_id)">
+                  {{ $t('admin.subscriptions.stats.view') }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="empty-state stats-empty">
+        <p>{{ $t('admin.subscriptions.stats.empty') }}</p>
+      </div>
+    </div>
+
     <!-- Group list -->
     <div class="groups-section">
       <div class="section-header">
@@ -445,7 +513,7 @@
 
 <script>
 import { ref, reactive, onMounted, computed } from 'vue'
-import adminApi from '@/api/admin'
+import adminApi, { getSubscriptionStats } from '@/api/admin'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 
@@ -457,6 +525,7 @@ export default {
     
     // Data
     const groups = ref([])
+    const groupStats = ref([])
     const templates = ref([])
     const protocols = ref([])
     const selectedGroup = ref(null)
@@ -521,6 +590,11 @@ export default {
       { value: 'json', label: t('admin.subscriptions.formats.json') },
       { value: 'base64json', label: t('admin.subscriptions.formats.base64json') }
     ])
+
+    const totalUsers = computed(() => groupStats.value.reduce((sum, s) => sum + s.user_count, 0))
+    const totalTemplates = computed(() => groupStats.value.reduce((sum, s) => sum + s.template_count, 0))
+    const totalTraffic = computed(() => groupStats.value.reduce((sum, s) => sum + s.total_traffic, 0))
+    const sortedGroupStats = computed(() => [...groupStats.value].sort((a, b) => b.user_count - a.user_count))
     
     // Methods
     const loadGroups = async () => {
@@ -533,6 +607,38 @@ export default {
       } catch (error) {
         showToast(t('admin.subscriptions.loadError'), 'error')
       }
+    }
+
+    const loadStats = async () => {
+      try {
+        const res = await getSubscriptionStats()
+        groupStats.value = res.data || []
+      } catch (error) {
+        console.error('Failed to load subscription stats:', error)
+      }
+    }
+
+    const selectGroupById = (groupId) => {
+      const group = groups.value.find(g => g.id === groupId)
+      if (group) selectGroup(group)
+    }
+
+    const formatBytes = (bytes) => {
+      if (!bytes || bytes === 0) return '0 B'
+      const units = ['B', 'KB', 'MB', 'GB', 'TB']
+      let i = 0
+      let val = bytes
+      while (val >= 1024 && i < units.length - 1) {
+        val /= 1024
+        i++
+      }
+      return val.toFixed(2) + ' ' + units[i]
+    }
+
+    const formatTotalTraffic = (bytes) => {
+      if (!bytes || bytes === 0) return '0 GB'
+      const gb = (bytes / (1024 * 1024 * 1024)).toFixed(2)
+      return gb + ' GB'
     }
     
     const loadTemplates = async (groupId) => {
@@ -981,10 +1087,12 @@ export default {
     // Lifecycle
     onMounted(() => {
       loadGroups()
+      loadStats()
     })
     
     return {
       groups,
+      groupStats,
       templates,
       protocols,
       selectedGroup,
@@ -1007,8 +1115,14 @@ export default {
       subscriptionFormats,
       toastMessage,
       toastType,
+      totalUsers,
+      totalTemplates,
+      totalTraffic,
+      sortedGroupStats,
       loadGroups,
+      loadStats,
       selectGroup,
+      selectGroupById,
       copyGroupSubscription,
       getSubscriptionUrl,
       copyToClipboard,
@@ -1033,7 +1147,9 @@ export default {
       openManageProtocolsModal,
       toggleProtocolSelection,
       toggleAllAvailable,
-      saveGroupProtocols
+      saveGroupProtocols,
+      formatBytes,
+      formatTotalTraffic
     }
   }
 }
@@ -1045,6 +1161,120 @@ export default {
 .page-header { margin-bottom: 24px; }
 .page-header h1 { margin: 0; font-size: 24px; }
 .subtitle { color: var(--text-secondary); margin-top: 8px; }
+
+/* Overview stats */
+.overview-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.overview-stats .stat-card {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  text-align: center;
+}
+
+.overview-stats .stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.overview-stats .stat-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+/* Stats table */
+.stats-table-section {
+  margin-bottom: 32px;
+}
+
+.stats-table-section h2 {
+  font-size: 18px;
+  margin: 0 0 16px;
+}
+
+.stats-table-wrapper {
+  overflow-x: auto;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.stats-table thead {
+  background: var(--bg-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.stats-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.stats-table td {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.stats-table .clickable-row {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.stats-table .clickable-row:hover {
+  background: var(--bg-color);
+}
+
+.stats-table .group-name {
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.stats-table .node-count {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.stats-table .node-count.online {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--success-color);
+}
+
+.stats-table .node-count.offline {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+}
+
+.stats-empty {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-secondary);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
 
 .section-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
 .section-header h2 { margin:0; font-size:18px; }
