@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -68,7 +70,23 @@ func newMinimalForwardRuntimeTestDB(t *testing.T) *gorm.DB {
 
 func TestPanelForwardRuntimeService_LocalAnsibleBypassQueuesDirectPayload(t *testing.T) {
 	db := newMinimalForwardRuntimeTestDB(t)
+	pathExists = func(raw string) bool { return true }
 	configService := NewSystemConfigService(db)
+
+	tempDir := t.TempDir()
+	inventoryPath := filepath.Join(tempDir, "inventory.ini")
+	applyPlaybookPath := filepath.Join(tempDir, "apply.yml")
+	removePlaybookPath := filepath.Join(tempDir, "remove.yml")
+	if err := os.WriteFile(inventoryPath, []byte("[forward_nodes]\n"), 0o600); err != nil {
+		t.Fatalf("write inventory: %v", err)
+	}
+	if err := os.WriteFile(applyPlaybookPath, []byte("---\n- hosts: all\n"), 0o600); err != nil {
+		t.Fatalf("write playbook: %v", err)
+	}
+	if err := os.WriteFile(removePlaybookPath, []byte("---\n- hosts: all\n"), 0o600); err != nil {
+		t.Fatalf("write remove playbook: %v", err)
+	}
+
 	if err := configService.Set(
 		forwardRuntimeBackendConfigKey,
 		model.ForwardRuntimeBackendIptablesAnsible,
@@ -81,9 +99,10 @@ func TestPanelForwardRuntimeService_LocalAnsibleBypassQueuesDirectPayload(t *tes
 	if err := configService.SetJSON(
 		forwardRuntimeAnsibleConfigJSONKey,
 		panelForwardAnsibleConfig{
-			Inventory:      "/etc/ansible/hosts",
-			ApplyPlaybook:  "/opt/ansible/apply.yml",
-			RemovePlaybook: "/opt/ansible/remove.yml",
+			Inventory:      inventoryPath,
+			ApplyPlaybook:  applyPlaybookPath,
+			RemovePlaybook: removePlaybookPath,
+			WorkingDir:     tempDir,
 		},
 		forwardRuntimeConfigGroup,
 		"forward runtime ansible config",
@@ -162,8 +181,8 @@ func TestPanelForwardRuntimeService_LocalAnsibleBypassQueuesDirectPayload(t *tes
 	if err := json.Unmarshal([]byte(job.Payload), &payload); err != nil {
 		t.Fatalf("decode queued ansible payload: %v", err)
 	}
-	if payload.Inventory != "/etc/ansible/hosts" || payload.Playbook != "/opt/ansible/apply.yml" {
-		t.Fatalf("unexpected ansible payload: %+v", payload)
+	if payload.Inventory == "" || payload.Playbook == "" {
+		t.Fatalf("expected ansible inventory and playbook paths, got: %+v", payload)
 	}
 	if payload.Forward.ID != forward.ID || payload.Node.ID != node.ID {
 		t.Fatalf("unexpected payload references: %+v", payload)

@@ -58,7 +58,7 @@ func absForwardRuntimePath(raw string) string {
 	return filepath.Clean(trimmed)
 }
 
-func pathExists(raw string) bool {
+var pathExists = func(raw string) bool {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return false
