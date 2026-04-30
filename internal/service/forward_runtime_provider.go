@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/anixops/v2board/internal/gost"
 	"github.com/anixops/v2board/internal/model"
 	"gorm.io/gorm"
 )
@@ -25,16 +24,6 @@ func NewForwardRuntimeProvider(db *gorm.DB) ForwardRuntimeProvider {
 		db:     db,
 		client: newNodeXForwardRuntimeClient(configService),
 	}
-}
-
-// NewGostForwardRuntimeProvider creates a gost-backed runtime provider.
-func NewGostForwardRuntimeProvider(db *gorm.DB) ForwardRuntimeProvider {
-	return NewGostForwardRuntimeProviderWithManager(gost.NewManager(db))
-}
-
-// NewGostForwardRuntimeProviderWithManager allows future injection of a custom manager.
-func NewGostForwardRuntimeProviderWithManager(manager *gost.Manager) ForwardRuntimeProvider {
-	return &gostForwardRuntimeProvider{manager: manager}
 }
 
 type nodeXForwardRuntimeProvider struct {
@@ -130,24 +119,4 @@ func mapForwardNodeToNodeXPayload(node *model.ForwardNode) nodeXForwardNodePaylo
 		APIPort:  node.APIPort,
 		APIToken: node.APIToken,
 	}
-}
-
-type gostForwardRuntimeProvider struct {
-	manager *gost.Manager
-}
-
-func (p *gostForwardRuntimeProvider) CreateForwardRule(ctx context.Context, rule *model.ForwardRule) error {
-	return p.manager.CreateForwardRule(ctx, rule)
-}
-
-func (p *gostForwardRuntimeProvider) UpdateForwardRule(ctx context.Context, rule *model.ForwardRule) error {
-	return p.manager.UpdateForwardRule(ctx, rule)
-}
-
-func (p *gostForwardRuntimeProvider) DeleteForwardRule(ctx context.Context, rule *model.ForwardRule) error {
-	return p.manager.DeleteForwardRule(ctx, rule)
-}
-
-func (p *gostForwardRuntimeProvider) SyncForwardRule(ctx context.Context, rule *model.ForwardRule) error {
-	return p.manager.SyncRuleToGost(ctx, rule)
 }
