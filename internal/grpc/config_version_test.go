@@ -517,3 +517,77 @@ func TestConfigVersion_GetNodeConfigVersion_MatchesGetConfigVersion(t *testing.T
 	assert.Equal(t, int64(123), mgr.GetConfigVersion(nodeID))
 	assert.Equal(t, int64(123), mgr.GetNodeConfigVersion(nodeID))
 }
+
+// TestCheckConfigChanges_DetectsAndPushes verifies that checkConfigChanges
+// pushes config on first check, suppresses repeats at the same version, and
+// re-pushes after the node's UpdatedAt advances.
+func TestCheckConfigChanges_DetectsAndPushes(t *testing.T) {
+	cache.InitMemory()
+	database.Init(&config.DatabaseConfig{
+		Driver:   "sqlite",
+		Database: ":memory:",
+	})
+	database.AutoMigrate(
+		&model.Node{},
+		&model.NodeProtocol{},
+		&model.AuthorizedKey{},
+	)
+	db := database.Get()
+	db.Exec("DELETE FROM v2_authorized_key")
+	db.Exec("DELETE FROM v2_node_protocol")
+	db.Exec("DELETE FROM v2_node")
+
+	connectionManager = NewNodeConnectionManager()
+
+	groupID := uint(1)
+	node := &model.Node{
+		Name:    "cfg-change-node",
+		Host:    "10.0.0.210",
+		Port:    443,
+		GroupID: &groupID,
+		Rate:    1.0,
+		Show:    1,
+		Status:  model.NodeStatusOnline,
+		APIKey:  uniqueTestKey("cc"),
+	}
+	require.NoError(t, db.Create(node).Error)
+
+	srv := NewNodeGRPCServer()
+	nodeID := uint32(node.ID)
+
+	// First check: no version recorded -> should push config.
+	resp, err := srv.checkConfigChanges(nodeID)
+	require.NoError(t, err)
+	require.NotNil(t, resp, "first check should push config")
+	assert.Equal(t, node.Host, resp.Host)
+
+	// Second check at the same version -> no push.
+	resp, err = srv.checkConfigChanges(nodeID)
+	require.NoError(t, err)
+	assert.Nil(t, resp, "same version should not push again")
+
+	// Advance the node's UpdatedAt to simulate a config edit.
+	newTime := node.UpdatedAt.Add(10 * time.Second)
+	require.NoError(t, db.Model(node).Update("updated_at", newTime).Error)
+
+	resp, err = srv.checkConfigChanges(nodeID)
+	require.NoError(t, err)
+	require.NotNil(t, resp, "advanced version should push config again")
+}
+
+// TestCheckConfigChanges_UnknownNode verifies an error is returned for a
+// node that does not exist.
+func TestCheckConfigChanges_UnknownNode(t *testing.T) {
+	cache.InitMemory()
+	database.Init(&config.DatabaseConfig{
+		Driver:   "sqlite",
+		Database: ":memory:",
+	})
+	database.AutoMigrate(&model.Node{}, &model.AuthorizedKey{})
+
+	connectionManager = NewNodeConnectionManager()
+	srv := NewNodeGRPCServer()
+
+	_, err := srv.checkConfigChanges(999999)
+	assert.Error(t, err, "unknown node should return an error")
+}

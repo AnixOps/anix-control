@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -96,6 +95,12 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 
 	if req.TransferEnable != nil {
 		user.TransferEnable = *req.TransferEnable
+	}
+	if req.SpeedLimit != nil {
+		user.SpeedLimit = req.SpeedLimit
+	}
+	if req.DeviceLimit != nil {
+		user.DeviceLimit = req.DeviceLimit
 	}
 
 	if err := db.Create(user).Error; err != nil {
@@ -224,13 +229,12 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		updates["email"] = *req.Email
 	}
 	if req.Password != nil && *req.Password != "" {
-		// Password update stub: hash the plaintext password with bcrypt before storing.
-		// Integration steps:
-		//   1. hash, err := bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost)
-		//   2. if err != nil, return 500
-		//   3. updates["password"] = string(hash)
-		log.Printf("[STUB] admin update: password encryption not yet implemented for user update, storing plaintext")
-		updates["password"] = *req.Password
+		hash, err := bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "密码加密失败"})
+			return
+		}
+		updates["password"] = string(hash)
 	}
 	if req.Balance != nil {
 		updates["balance"] = *req.Balance
