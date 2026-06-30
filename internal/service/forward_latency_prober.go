@@ -387,7 +387,19 @@ func aggregateRTTs(rtts []float64, attempts int) latencyAggregate {
 	agg.P95 = sorted[rank]
 
 	agg.Loss = float64(attempts-n) / float64(attempts) * 100
+
+	// Round to 2 decimals so stored values are display-ready (keeps sub-ms
+	// precision for local/same-DC links without noisy long decimals).
+	agg.Min = roundTo2(agg.Min)
+	agg.Avg = roundTo2(agg.Avg)
+	agg.Max = roundTo2(agg.Max)
+	agg.P95 = roundTo2(agg.P95)
+	agg.Loss = roundTo2(agg.Loss)
 	return agg
+}
+
+func roundTo2(v float64) float64 {
+	return math.Round(v*100) / 100
 }
 
 // dialAndMeasureTCP performs a single TCP dial and returns the elapsed time in ms.
@@ -400,5 +412,7 @@ func dialAndMeasureTCP(ctx context.Context, addr string, timeout time.Duration) 
 		return 0, err
 	}
 	_ = conn.Close()
-	return float64(elapsed.Milliseconds()), nil
+	// Use microsecond resolution so sub-millisecond links (local/same-DC) don't
+	// truncate to 0ms. Milliseconds() would floor 0.4ms -> 0.
+	return float64(elapsed.Microseconds()) / 1000.0, nil
 }
