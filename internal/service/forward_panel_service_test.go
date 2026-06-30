@@ -2462,7 +2462,8 @@ func (s *PanelForwardServiceTestSuite) TestCreateForward_IptablesAnsibleQueuesLo
 	})
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), item)
-	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, item.RuntimeBackend)
+	// iptables 已下线: 归一化为 nftables_ansible
+	assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, item.RuntimeBackend)
 	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, item.RuntimeStatus)
 	assert.Equal(s.T(), "ansible runtime queued for local executor", item.RuntimeMessage)
 	assert.Equal(s.T(), 0, s.runtimeClient.calls)
@@ -2470,14 +2471,14 @@ func (s *PanelForwardServiceTestSuite) TestCreateForward_IptablesAnsibleQueuesLo
 	var record model.Forward
 	assert.NoError(s.T(), db.First(&record, item.ID).Error)
 	assert.Equal(s.T(), model.ForwardStatusActive, record.Status)
-	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, record.RuntimeBackend)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, record.RuntimeBackend)
 	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, record.RuntimeStatus)
 	assert.NotNil(s.T(), record.RuntimeLastSyncAt)
 
 	var jobs []model.ForwardRuntimeJob
 	assert.NoError(s.T(), db.Order("id ASC").Find(&jobs).Error)
 	assert.Len(s.T(), jobs, 1)
-	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, jobs[0].Backend)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, jobs[0].Backend)
 	assert.Equal(s.T(), model.ForwardRuntimeJobActionCreate, jobs[0].Action)
 	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, jobs[0].Status)
 	assert.Contains(s.T(), jobs[0].Payload, `"action":"create"`)

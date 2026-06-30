@@ -67,7 +67,6 @@ type ForwardRuntimeConfig struct {
 	NodeX           ForwardRuntimeNodeXConfig      `yaml:"nodex"`
 	CleanAgent      ForwardRuntimeCleanAgentConfig `yaml:"clean_agent"`
 	NftablesAnsible ForwardRuntimeAnsibleConfig    `yaml:"nftables_ansible"`
-	IptablesAnsible ForwardRuntimeAnsibleConfig    `yaml:"iptables_ansible"`
 	Jobs            ForwardRuntimeJobsConfig       `yaml:"jobs"`
 	GostStats       ForwardRuntimeGostStatsConfig  `yaml:"gost_stats"`
 	Latency         ForwardRuntimeLatencyConfig    `yaml:"latency"`

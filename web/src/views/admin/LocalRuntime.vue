@@ -273,14 +273,6 @@ const localBackendOptions = computed(() => ([
     applyPlaybook: 'config/deploy/ansible/playbooks/forward_apply_nftables.yml',
     removePlaybook: 'config/deploy/ansible/playbooks/forward_remove_nftables.yml',
     recommended: true
-  },
-  {
-    value: 'iptables_ansible',
-    label: t('runtime.localRuntime.backends.iptables.label'),
-    description: t('runtime.localRuntime.backends.iptables.description'),
-    applyPlaybook: 'config/deploy/ansible/playbooks/forward_apply.yml',
-    removePlaybook: 'config/deploy/ansible/playbooks/forward_remove.yml',
-    recommended: false
   }
 ]))
 
@@ -290,7 +282,9 @@ function normalizeLocalBackend(value) {
 }
 
 function isLocalBackend(value) {
-  return localBackendOptions.value.some(option => option.value === String(value ?? '').trim().toLowerCase())
+  // iptables 已下线: 归一化为 nftables, 旧值仍识别为本地后端
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return normalized === 'iptables_ansible' || localBackendOptions.value.some(option => option.value === normalized)
 }
 
 function getLocalBackendMeta(value) {
@@ -298,7 +292,7 @@ function getLocalBackendMeta(value) {
 }
 
 function firewallDriverLabel(value) {
-  return normalizeLocalBackend(value) === 'iptables_ansible' ? 'iptables' : 'nftables'
+  return 'nftables'
 }
 
 function localBackendLabel(value) {
@@ -493,20 +487,15 @@ function safeParseObject(value) {
 }
 
 const fallbackCommands = computed(() => {
-  const driver = firewallDriverLabel(selectedLocalBackend.value)
   const base = {
     powerShell: ['Get-Command ansible-playbook', 'ansible-playbook --version', 'Get-Content .\\config\\deploy\\ansible\\inventory.ini'],
     bash: ['command -v ansible-playbook', 'ansible-playbook --version', 'cat ./config/deploy/ansible/inventory.ini'],
     upgrade: ['git pull --ff-only', 'go test ./internal/service/... -run ForwardRuntime'],
     references: ['docs/guide/forward-relay-onboarding.md', 'docs/guide/forward-tunnel-runtime-ops.md', 'docs/reference/runtime.md']
   }
-  if (driver === 'nftables') {
-    base.powerShell.push('wsl nft --version')
-    base.bash.push('nft --version', 'nft list tables')
-  } else {
-    base.powerShell.push('Get-Command iptables')
-    base.bash.push('iptables --version', 'iptables -t nat -S')
-  }
+  // iptables 已下线: 本地后端统一为 nftables
+  base.powerShell.push('wsl nft --version')
+  base.bash.push('nft --version', 'nft list tables')
   return base
 })
 

@@ -593,7 +593,7 @@ export default {
       heroEyebrow: 'Stateless Runtime',
       title: 'Local Runtime / Ansible',
       heroTextPrimary: 'This page owns the panel-host Ansible executor only. It is the stateless runtime path for panel-side forwarding and does not require a persistent NodeX control-plane or Node-Agent connection.',
-      heroTextSecondary: 'The recommended backend is nftables / Ansible. iptables / Ansible remains available as a legacy compatibility path.',
+      heroTextSecondary: 'The backend is nftables / Ansible — a stateless control path for panel-side forwarding.',
       refreshLoading: 'Refreshing...',
       saveLoading: 'Saving...',
       saveActivate: 'Save And Activate Local Runtime',

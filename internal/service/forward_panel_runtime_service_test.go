@@ -521,7 +521,8 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleQueuesLoc
 
 	var job model.ForwardRuntimeJob
 	assert.NoError(s.T(), db.Last(&job).Error)
-	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, job.Backend)
+	// iptables 已下线: 输入 iptables_ansible 被归一化为 nftables_ansible
+	assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, job.Backend)
 	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, job.Status)
 	assert.Nil(s.T(), job.StartedAt)
 	assert.Nil(s.T(), job.CompletedAt)
@@ -696,7 +697,8 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleQueuesLoc
 
 	var job model.ForwardRuntimeJob
 	assert.NoError(s.T(), db.Last(&job).Error)
-	assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, job.Backend)
+	// iptables 已下线: 归一化为 nftables_ansible
+	assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, job.Backend)
 	if assert.NotNil(s.T(), job.NodeID) {
 		assert.Equal(s.T(), outNode.ID, *job.NodeID)
 	}
@@ -766,7 +768,8 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleRejectsTu
 	result, err := s.svc.Apply(context.Background(), model.ForwardRuntimeJobActionCreate, forward, tunnel)
 	assert.Error(s.T(), err)
 	if assert.NotNil(s.T(), result) {
-		assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, result.Backend)
+		// iptables 已下线: 归一化为 nftables_ansible
+		assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, result.Backend)
 		assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, result.Status)
 	}
 	assert.Contains(s.T(), err.Error(), "type 1")
@@ -798,6 +801,56 @@ func setForwardRuntimeBackendForTest(t *testing.T, db *gorm.DB, backend string) 
 		forwardRuntimeConfigGroup,
 		"forward runtime local backend",
 	))
+}
+
+func (s *PanelForwardRuntimeServiceTestSuite) TestForwardRuntimeExecutor_RegistryAndNodeRoles() {
+	// 注册表覆盖全部 backend, 且 iptables 兜底指向 nftables executor
+	gostExec, ok := s.svc.forwardRuntimeExecutor(model.ForwardRuntimeBackendGost)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), forwardNodeRoleIngress, gostExec.nodeRole())
+
+	nftExec, ok := s.svc.forwardRuntimeExecutor(model.ForwardRuntimeBackendNftablesAnsible)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), forwardNodeRoleExecution, nftExec.nodeRole())
+
+	iptExec, ok := s.svc.forwardRuntimeExecutor(model.ForwardRuntimeBackendIptablesAnsible)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, iptExec.backend()) // 兜底
+
+	agentExec, ok := s.svc.forwardRuntimeExecutor(model.ForwardRuntimeBackendCleanAgent)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), forwardNodeRoleExecution, agentExec.nodeRole())
+
+	// 未知 backend
+	_, ok = s.svc.forwardRuntimeExecutor("does-not-exist")
+	assert.False(s.T(), ok)
+}
+
+func (s *PanelForwardRuntimeServiceTestSuite) TestApply_UnsupportedBackendReturnsError() {
+	// 强制注入空注册表, 模拟未知 backend 不 panic、返回友好错误
+	svc := &PanelForwardRuntimeService{
+		db:            database.Get(),
+		configService: NewSystemConfigService(database.Get()),
+		client:        &stubForwardRuntimeNodeXClient{},
+		executors:     map[string]forwardRuntimeExecutor{}, // 非 nil 空表, 不触发惰性初始化
+	}
+	forward := &model.Forward{
+		UserID:         1,
+		Name:           "bad-backend",
+		TunnelID:       1,
+		InPort:         40001,
+		RemoteAddr:     "10.0.0.1:80",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendGost,
+	}
+	tunnel := &model.ForwardTunnel{Name: "t", Type: 1, Protocol: "tcp", InNodeID: 1, Status: 1}
+
+	result, err := svc.Apply(context.Background(), model.ForwardRuntimeJobActionCreate, forward, tunnel)
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "unsupported forward runtime backend")
+	if assert.NotNil(s.T(), result) {
+		assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, result.Status)
+	}
 }
 
 func TestPanelForwardRuntimeService(t *testing.T) {
