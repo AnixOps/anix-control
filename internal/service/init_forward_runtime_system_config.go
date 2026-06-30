@@ -26,6 +26,11 @@ func InitForwardRuntimeSystemConfig(db *gorm.DB) error {
 		return nil
 	}
 
+	// iptables 已下线: 把存量数据归一化为 nftables, 避免删除用户面后旧记录变成未知后端
+	if err := migrateIptablesForwardBackend(db); err != nil {
+		return err
+	}
+
 	configService := NewSystemConfigService(db)
 	bootstrapCfg, err := loadForwardRuntimeBootstrapConfig()
 	if err != nil {
@@ -81,6 +86,56 @@ func InitForwardRuntimeSystemConfig(db *gorm.DB) error {
 	}
 
 	return clearForwardRuntimeAnsibleConfig(configService)
+}
+
+// migrateIptablesForwardBackend 把存量数据里的 iptables_ansible 归一化为 nftables_ansible。
+// iptables 已从用户面下线, normalize 兜底能防新增, 此处清理历史数据让 backend 值统一。
+// 幂等: 多次执行安全。
+func migrateIptablesForwardBackend(db *gorm.DB) error {
+	const ipt = model.ForwardRuntimeBackendIptablesAnsible
+	const nft = model.ForwardRuntimeBackendNftablesAnsible
+
+	// Forward.runtime_backend
+	if err := db.Model(&model.Forward{}).
+		Where("runtime_backend = ?", ipt).
+		Update("runtime_backend", nft).Error; err != nil {
+		return err
+	}
+
+	// 未完成的 job (pending/running) 才迁移; 已完成的保留审计原值
+	if err := db.Model(&model.ForwardRuntimeJob{}).
+		Where("backend = ? AND status IN ?", ipt, []int{
+			model.ForwardRuntimeJobStatusPending,
+			model.ForwardRuntimeJobStatusRunning,
+		}).
+		Update("backend", nft).Error; err != nil {
+		return err
+	}
+
+	// ForwardTrafficCursor 有 (forward_id, backend) 唯一索引: 先删与 nft 行冲突的 ipt 行, 再迁移剩余
+	if err := db.Exec(`DELETE FROM v2_forward_traffic_cursor
+		WHERE backend = ? AND forward_id IN (
+			SELECT forward_id FROM v2_forward_traffic_cursor WHERE backend = ?
+		)`, ipt, nft).Error; err != nil {
+		return err
+	}
+	if err := db.Model(&model.ForwardTrafficCursor{}).
+		Where("backend = ?", ipt).
+		Update("backend", nft).Error; err != nil {
+		return err
+	}
+
+	// systemconfig 里的后端选择值
+	if err := db.Model(&model.SystemConfig{}).
+		Where("key IN ? AND value = ?", []string{
+			forwardRuntimeBackendConfigKey,
+			forwardRuntimeLocalBackendConfigKey,
+		}, ipt).
+		Update("value", nft).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func syncForwardRuntimeNodeXMode(configService *SystemConfigService, value *bool) error {
@@ -255,18 +310,9 @@ func normalizeForwardRuntimeBootstrapBackend(value, key string) (string, error) 
 }
 
 func selectForwardRuntimeBootstrapAnsibleConfig(cfg appconfig.ForwardRuntimeConfig, backend string) (string, panelForwardAnsibleConfig) {
-	switch backend {
-	case model.ForwardRuntimeBackendNftablesAnsible:
-		return model.ForwardRuntimeBackendNftablesAnsible, mapBootstrapAnsibleConfig(cfg.NftablesAnsible)
-	case model.ForwardRuntimeBackendIptablesAnsible:
-		return model.ForwardRuntimeBackendIptablesAnsible, mapBootstrapAnsibleConfig(cfg.IptablesAnsible)
-	}
-
+	// iptables 已下线, 仅支持 nftables 本地 ansible 配置
 	if hasForwardRuntimeAnsibleConfig(cfg.NftablesAnsible) {
 		return model.ForwardRuntimeBackendNftablesAnsible, mapBootstrapAnsibleConfig(cfg.NftablesAnsible)
-	}
-	if hasForwardRuntimeAnsibleConfig(cfg.IptablesAnsible) {
-		return model.ForwardRuntimeBackendIptablesAnsible, mapBootstrapAnsibleConfig(cfg.IptablesAnsible)
 	}
 
 	return defaultForwardLocalAnsibleBackend, panelForwardAnsibleConfig{}

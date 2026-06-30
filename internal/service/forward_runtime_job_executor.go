@@ -190,10 +190,7 @@ func (e *PanelForwardRuntimeJobExecutor) runPendingJobs(ctx context.Context) (in
 func (e *PanelForwardRuntimeJobExecutor) processNext(ctx context.Context) (bool, error) {
 	var jobs []model.ForwardRuntimeJob
 	if err := e.queryDB().
-		Where("backend IN ? AND status = ?", []string{
-			model.ForwardRuntimeBackendNftablesAnsible,
-			model.ForwardRuntimeBackendIptablesAnsible,
-		}, model.ForwardRuntimeJobStatusPending).
+		Where("backend IN ? AND status = ?", localAnsibleJobBackends(), model.ForwardRuntimeJobStatusPending).
 		Order("id ASC").
 		Limit(e.batchSize).
 		Find(&jobs).Error; err != nil {
@@ -320,10 +317,7 @@ func (e *PanelForwardRuntimeJobExecutor) updateForwardRuntimeState(job *model.Fo
 
 func (e *PanelForwardRuntimeJobExecutor) requeueRunningJobs() error {
 	return e.queryDB().Model(&model.ForwardRuntimeJob{}).
-		Where("backend IN ? AND status = ?", []string{
-			model.ForwardRuntimeBackendNftablesAnsible,
-			model.ForwardRuntimeBackendIptablesAnsible,
-		}, model.ForwardRuntimeJobStatusRunning).
+		Where("backend IN ? AND status = ?", localAnsibleJobBackends(), model.ForwardRuntimeJobStatusRunning).
 		Updates(map[string]any{
 			"status":     model.ForwardRuntimeJobStatusPending,
 			"started_at": nil,

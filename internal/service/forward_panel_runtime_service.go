@@ -56,6 +56,7 @@ type PanelForwardRuntimeService struct {
 	db            *gorm.DB
 	configService *SystemConfigService
 	client        forwardRuntimeNodeXExecutor
+	executors     map[string]forwardRuntimeExecutor
 }
 
 type panelForwardAnsibleConfig struct {
@@ -73,11 +74,13 @@ type panelForwardAnsibleConfig struct {
 
 func NewPanelForwardRuntimeService(db *gorm.DB) *PanelForwardRuntimeService {
 	configService := NewSystemConfigService(db)
-	return &PanelForwardRuntimeService{
+	s := &PanelForwardRuntimeService{
 		db:            db,
 		configService: configService,
 		client:        newNodeXForwardRuntimeClient(configService),
 	}
+	s.executors = buildForwardRuntimeExecutors(s)
+	return s
 }
 
 func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, forward *model.Forward, tunnel *model.ForwardTunnel) (*panelForwardRuntimeResult, error) {
@@ -85,103 +88,39 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 	if err != nil {
 		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendGost, err), err
 	}
-	if err := s.validateBackendConfig(backend); err != nil {
+
+	exec, ok := s.forwardRuntimeExecutor(backend)
+	if !ok {
+		err := fmt.Errorf("unsupported forward runtime backend: %s", backend)
 		return failedPanelForwardRuntimeResult(backend, err), err
 	}
-	if isForwardRuntimeLocalAnsibleBackend(backend) {
-		if err := s.validateAnsiblePaths(backend, action); err != nil {
-			return failedPanelForwardRuntimeResult(backend, err), err
-		}
+
+	if err := exec.validate(action); err != nil {
+		return failedPanelForwardRuntimeResult(backend, err), err
 	}
 
-	req, nodeID, err := s.buildExecuteRequest(backend, action, forward, tunnel)
+	req, nodeID, err := s.buildExecuteRequest(exec.nodeRole(), backend, action, forward, tunnel)
 	if err != nil {
 		return failedPanelForwardRuntimeResult(backend, err), err
 	}
 
-	if isForwardRuntimeLocalAnsibleBackend(backend) {
-		return s.enqueueLocalAnsibleJob(action, forward, tunnel, req, nodeID)
-	}
-	if backend == model.ForwardRuntimeBackendCleanAgent {
-		return s.enqueueCleanAgentJob(action, forward, tunnel, req, nodeID)
-	}
+	return exec.run(ctx, forwardRuntimeExecContext{
+		action:  action,
+		forward: forward,
+		tunnel:  tunnel,
+		req:     req,
+		nodeID:  nodeID,
+	})
+}
 
-	payloadJSON, err := json.Marshal(req)
-	if err != nil {
-		return failedPanelForwardRuntimeResult(backend, err), err
+// forwardRuntimeExecutor 按 backend 取对应 executor。
+// executors 为 nil 时惰性初始化，保证直接构造 struct（如测试）也安全。
+func (s *PanelForwardRuntimeService) forwardRuntimeExecutor(backend string) (forwardRuntimeExecutor, bool) {
+	if s.executors == nil {
+		s.executors = buildForwardRuntimeExecutors(s)
 	}
-
-	job := &model.ForwardRuntimeJob{
-		Backend:      backend,
-		Action:       action,
-		ResourceType: nodeXForwardResourceTypePanelForward,
-		ResourceID:   uintPtr(forward.ID),
-		ForwardID:    uintPtr(forward.ID),
-		TunnelID:     uintPtr(tunnel.ID),
-		NodeID:       nodeID,
-		Payload:      string(payloadJSON),
-	}
-
-	startedAt := time.Now()
-	job.Status = model.ForwardRuntimeJobStatusRunning
-	job.StartedAt = &startedAt
-	if err := s.db.Create(job).Error; err != nil {
-		return failedPanelForwardRuntimeResult(backend, err), err
-	}
-
-	if nodeID == nil && backend == model.ForwardRuntimeBackendGost &&
-		(action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause) {
-		result := &panelForwardRuntimeResult{
-			Backend: backend,
-			Status:  model.ForwardRuntimeJobStatusSuccess,
-			Message: "gost runtime skipped because ingress node is not configured",
-		}
-		completedAt := time.Now()
-		if err := s.db.Model(&model.ForwardRuntimeJob{}).Where("id = ?", job.ID).Updates(map[string]any{
-			"status":       result.Status,
-			"result":       result.Message,
-			"error":        "",
-			"completed_at": &completedAt,
-		}).Error; err != nil {
-			result.Message = strings.TrimSpace(result.Message + "; local audit update failed: " + err.Error())
-		}
-		return result, nil
-	}
-
-	execResult, execErr := s.client.Execute(ctx, req)
-	result := buildPanelForwardRuntimeResult(backend, action, execResult, execErr)
-	if execErr == nil && result.Status == model.ForwardRuntimeJobStatusFailed {
-		execErr = errors.New(result.Message)
-	}
-
-	updateValues := map[string]any{
-		"status": result.Status,
-		"result": "",
-		"error":  "",
-	}
-	if execResult != nil {
-		updateValues["result"] = strings.TrimSpace(execResult.Result)
-	}
-	if execErr != nil {
-		updateValues["error"] = execErr.Error()
-	} else if result.Status == model.ForwardRuntimeJobStatusFailed {
-		updateValues["error"] = strings.TrimSpace(result.Message)
-	}
-	if isForwardRuntimeTerminalStatus(result.Status) {
-		completedAt := time.Now()
-		updateValues["completed_at"] = &completedAt
-	} else {
-		updateValues["completed_at"] = nil
-	}
-
-	if err := s.db.Model(&model.ForwardRuntimeJob{}).Where("id = ?", job.ID).Updates(updateValues).Error; err != nil {
-		if execErr != nil {
-			return result, execErr
-		}
-		result.Message = strings.TrimSpace(result.Message + "; local audit update failed: " + err.Error())
-	}
-
-	return result, execErr
+	exec, ok := s.executors[backend]
+	return exec, ok
 }
 
 func (s *PanelForwardRuntimeService) resolveBackendForForward(forward *model.Forward) (string, error) {
@@ -334,7 +273,8 @@ func normalizeForwardRuntimeBackend(value string) (string, bool) {
 	case model.ForwardRuntimeBackendNftablesAnsible:
 		return model.ForwardRuntimeBackendNftablesAnsible, true
 	case model.ForwardRuntimeBackendIptablesAnsible:
-		return model.ForwardRuntimeBackendIptablesAnsible, true
+		// iptables 已下线: 归一化为 nftables, 兼容旧数据/旧配置不报错
+		return model.ForwardRuntimeBackendNftablesAnsible, true
 	case model.ForwardRuntimeBackendCleanAgent:
 		return model.ForwardRuntimeBackendCleanAgent, true
 	default:
@@ -347,7 +287,8 @@ func normalizeForwardRuntimeLocalAnsibleBackend(value string) (string, bool) {
 	case model.ForwardRuntimeBackendNftablesAnsible:
 		return model.ForwardRuntimeBackendNftablesAnsible, true
 	case model.ForwardRuntimeBackendIptablesAnsible:
-		return model.ForwardRuntimeBackendIptablesAnsible, true
+		// iptables 已下线: 归一化为 nftables
+		return model.ForwardRuntimeBackendNftablesAnsible, true
 	default:
 		return "", false
 	}
@@ -356,6 +297,15 @@ func normalizeForwardRuntimeLocalAnsibleBackend(value string) (string, bool) {
 func isForwardRuntimeLocalAnsibleBackend(backend string) bool {
 	_, ok := normalizeForwardRuntimeLocalAnsibleBackend(backend)
 	return ok
+}
+
+// localAnsibleJobBackends 返回由本地 ansible job executor 处理的 backend 标识集合。
+// 仍包含 iptables_ansible 以兼容历史遗留的 pending/running job（其 backend 列值可能未被迁移）。
+func localAnsibleJobBackends() []string {
+	return []string{
+		model.ForwardRuntimeBackendNftablesAnsible,
+		model.ForwardRuntimeBackendIptablesAnsible,
+	}
 }
 
 func isForwardRuntimeExecutionNodeBackend(backend string) bool {
@@ -426,7 +376,7 @@ func (s *PanelForwardRuntimeService) validateAnsiblePaths(backend, action string
 	return nil
 }
 
-func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string, forward *model.Forward, tunnel *model.ForwardTunnel) (nodeXForwardExecuteRequest, *uint, error) {
+func (s *PanelForwardRuntimeService) buildExecuteRequest(role forwardRuntimeNodeRole, backend, action string, forward *model.Forward, tunnel *model.ForwardTunnel) (nodeXForwardExecuteRequest, *uint, error) {
 	if forward == nil {
 		return nodeXForwardExecuteRequest{}, nil, errors.New("forward is required")
 	}
@@ -439,20 +389,12 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string,
 
 	var node *model.ForwardNode
 	var err error
-	switch backend {
-	case model.ForwardRuntimeBackendGost:
-		node, err = s.loadIngressNode(tunnel, allowMissingIngress)
-	case model.ForwardRuntimeBackendNftablesAnsible, model.ForwardRuntimeBackendIptablesAnsible:
+	if role == forwardNodeRoleExecution {
 		if err := ensureAnsibleTunnelSupportsExecution(tunnel); err != nil {
 			return nodeXForwardExecuteRequest{}, nil, err
 		}
 		node, err = s.loadExecutionNode(tunnel)
-	case model.ForwardRuntimeBackendCleanAgent:
-		if err := ensureAnsibleTunnelSupportsExecution(tunnel); err != nil {
-			return nodeXForwardExecuteRequest{}, nil, err
-		}
-		node, err = s.loadExecutionNode(tunnel)
-	default:
+	} else {
 		node, err = s.loadIngressNode(tunnel, allowMissingIngress)
 	}
 	if err != nil {
@@ -463,7 +405,7 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string,
 		return nodeXForwardExecuteRequest{}, nil, err
 	}
 	tunnelNodeID := tunnel.InNodeID
-	if isForwardRuntimeExecutionNodeBackend(backend) {
+	if role == forwardNodeRoleExecution {
 		tunnelNodeID = storedPanelTunnelExecutionNodeID(tunnel)
 	}
 

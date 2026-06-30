@@ -71,3 +71,6 @@ test-reports/
 # Runtime backup artifacts (db/zip dumps)
 internal/handler/backups/
 internal/service/test_backups/
+
+# Local SSH credentials (never commit)
+ssh.txt

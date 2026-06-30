@@ -185,7 +185,7 @@ func resolveForwardRuntimePaths(cfg *config.Config, resolvedConfigPath string) {
 		return
 	}
 
-	ansibleCfg := &cfg.ForwardRuntime.IptablesAnsible
+	ansibleCfg := &cfg.ForwardRuntime.NftablesAnsible
 	ansibleCfg.Inventory = resolveRuntimePath(ansibleCfg.Inventory, resolvedConfigPath)
 	ansibleCfg.ApplyPlaybook = resolveRuntimePath(ansibleCfg.ApplyPlaybook, resolvedConfigPath)
 	ansibleCfg.RemovePlaybook = resolveRuntimePath(ansibleCfg.RemovePlaybook, resolvedConfigPath)

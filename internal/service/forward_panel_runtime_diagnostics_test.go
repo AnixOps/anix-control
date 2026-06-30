@@ -137,16 +137,16 @@ func (s *PanelForwardRuntimeDiagnosticsTestSuite) TestPanelRuntimeStatusSummariz
 
 	configSvc := NewSystemConfigService(database.Get())
 	assert.NoError(s.T(), configSvc.Set(forwardRuntimeNodeXModeConfigKey, "false", "bool", forwardRuntimeConfigGroup, "disable NodeX mode"))
-	assert.NoError(s.T(), configSvc.Set(forwardRuntimeBackendConfigKey, model.ForwardRuntimeBackendIptablesAnsible, "string", forwardRuntimeConfigGroup, "local ansible backend"))
+	assert.NoError(s.T(), configSvc.Set(forwardRuntimeBackendConfigKey, model.ForwardRuntimeBackendNftablesAnsible, "string", forwardRuntimeConfigGroup, "local ansible backend"))
 	assert.NoError(s.T(), configSvc.Set(forwardRuntimeAnsibleConfigJSONKey, fmt.Sprintf(`{"inventory":%q,"playbookApply":%q,"playbookRemove":%q,"command":"go","workingDir":%q,"environment":{"ANSIBLE_CONFIG":%q}}`, inventoryPath, applyPath, removePath, tempDir, ansibleConfigPath), "json", forwardRuntimeConfigGroup, "local ansible runtime config"))
 
 	svc := NewPanelForwardRuntimeService(database.Get())
 	summary, err := svc.GetPanelRuntimeStatus(context.Background())
 	assert.NoError(s.T(), err)
 	if assert.NotNil(s.T(), summary) {
-		assert.Equal(s.T(), model.ForwardRuntimeBackendIptablesAnsible, summary.Config.Backend)
+		assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, summary.Config.Backend)
 		assert.False(s.T(), summary.Config.NodeXMode)
-		assert.Equal(s.T(), "local_iptables_ansible_stateless", summary.Attachment.Model)
+		assert.Equal(s.T(), "local_nftables_ansible_stateless", summary.Attachment.Model)
 		if assert.NotNil(s.T(), summary.LocalAnsible) {
 			assert.Equal(s.T(), "go", summary.LocalAnsible.Command)
 			assert.True(s.T(), summary.LocalAnsible.CommandFound)

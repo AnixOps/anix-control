@@ -190,15 +190,6 @@ forward_runtime:
 	assert.Equal(t, 11, loadedCfg.ForwardRuntime.CleanAgent.HeartbeatIntervalSeconds)
 	assert.Equal(t, 121, loadedCfg.ForwardRuntime.CleanAgent.ActionTimeoutSeconds)
 	assert.Equal(t, 3600, loadedCfg.ForwardRuntime.CleanAgent.TokenExpireSeconds)
-	assert.Equal(t, "config/deploy/ansible/inventory.ini", loadedCfg.ForwardRuntime.IptablesAnsible.Inventory)
-	assert.Equal(t, "config/deploy/ansible/playbooks/forward_apply.yml", loadedCfg.ForwardRuntime.IptablesAnsible.ApplyPlaybook)
-	assert.Equal(t, "config/deploy/ansible/playbooks/forward_remove.yml", loadedCfg.ForwardRuntime.IptablesAnsible.RemovePlaybook)
-	assert.Equal(t, "config/deploy/ansible", loadedCfg.ForwardRuntime.IptablesAnsible.WorkingDir)
-	assert.Equal(t, "{{node.host}}", loadedCfg.ForwardRuntime.IptablesAnsible.TargetPattern)
-	assert.Equal(t, 120, loadedCfg.ForwardRuntime.IptablesAnsible.TimeoutSeconds)
-	assert.True(t, loadedCfg.ForwardRuntime.IptablesAnsible.Become)
-	assert.Equal(t, "config/deploy/ansible/ansible.cfg", loadedCfg.ForwardRuntime.IptablesAnsible.Environment["ANSIBLE_CONFIG"])
-	assert.Equal(t, 3, loadedCfg.ForwardRuntime.IptablesAnsible.ExtraVars["retry"])
 }
 
 func TestLoadFileNotFound(t *testing.T) {
