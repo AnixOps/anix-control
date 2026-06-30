@@ -14,6 +14,11 @@ const (
 	defaultLoginRateLimitMaxAttempts   = 6
 	defaultLoginRateLimitWindowSeconds = 300
 	defaultLoginRateLimitLockoutSecond = 600
+
+	defaultRegisterRateLimitEnabled       = true
+	defaultRegisterRateLimitMaxAttempts   = 5
+	defaultRegisterRateLimitWindowSeconds = 3600
+	defaultRegisterRateLimitLockoutSecond = 3600
 )
 
 type LoginRateLimitOptions struct {
@@ -88,13 +93,55 @@ func ResolveLoginRateLimitOptions(cfg *config.Config) LoginRateLimitOptions {
 	}
 }
 
+func ResolveRegisterRateLimitOptions(cfg *config.Config) LoginRateLimitOptions {
+	enabled := defaultRegisterRateLimitEnabled
+	maxAttempts := defaultRegisterRateLimitMaxAttempts
+	windowSeconds := defaultRegisterRateLimitWindowSeconds
+	lockoutSeconds := defaultRegisterRateLimitLockoutSecond
+
+	if cfg != nil {
+		registerRateCfg := cfg.Auth.RegisterRateLimit
+		if registerRateCfg.Enabled != nil {
+			enabled = *registerRateCfg.Enabled
+		}
+		if registerRateCfg.MaxAttempts > 0 {
+			maxAttempts = registerRateCfg.MaxAttempts
+		}
+		if registerRateCfg.WindowSeconds > 0 {
+			windowSeconds = registerRateCfg.WindowSeconds
+		}
+		if registerRateCfg.LockoutSeconds > 0 {
+			lockoutSeconds = registerRateCfg.LockoutSeconds
+		}
+	}
+
+	window := time.Duration(windowSeconds) * time.Second
+	lockout := time.Duration(lockoutSeconds) * time.Second
+
+	return LoginRateLimitOptions{
+		Enabled:      enabled,
+		MaxAttempts:  maxAttempts,
+		Window:       window,
+		Lockout:      lockout,
+		CleanupAfter: window + lockout + 5*time.Minute,
+	}
+}
+
 func BuildLoginRateLimitKey(email, ip string) string {
 	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
 	normalizedIP := strings.TrimSpace(ip)
 	if normalizedIP == "" {
 		normalizedIP = "unknown"
 	}
-	return fmt.Sprintf("%s|%s", normalizedEmail, normalizedIP)
+	return fmt.Sprintf("login|%s|%s", normalizedEmail, normalizedIP)
+}
+
+func BuildRegisterRateLimitKey(ip string) string {
+	normalizedIP := strings.TrimSpace(ip)
+	if normalizedIP == "" {
+		normalizedIP = "unknown"
+	}
+	return fmt.Sprintf("register|%s", normalizedIP)
 }
 
 func (l *LoginRateLimiter) Check(key string, options LoginRateLimitOptions) (bool, time.Duration) {

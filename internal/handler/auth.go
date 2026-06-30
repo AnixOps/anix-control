@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/model"
@@ -39,6 +40,25 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	registrationPolicy := service.ResolveRegistrationPolicy(h.cfg)
+	if !registrationPolicy.Enabled {
+		c.JSON(http.StatusForbidden, gin.H{"message": "registration is disabled"})
+		return
+	}
+
+	registerRateLimitOptions := service.ResolveRegisterRateLimitOptions(h.cfg)
+	registerRateLimitKey := service.BuildRegisterRateLimitKey(c.ClientIP())
+	if blocked, retryAfter := service.GetLoginRateLimiter().Check(registerRateLimitKey, registerRateLimitOptions); blocked {
+		retryAfterSeconds := int(retryAfter.Seconds())
+		if retryAfterSeconds < 1 {
+			retryAfterSeconds = 1
+		}
+		c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
+		c.JSON(http.StatusTooManyRequests, gin.H{"message": "too many registration attempts, please try again later"})
+		return
+	}
+	service.GetLoginRateLimiter().RecordFailure(registerRateLimitKey, registerRateLimitOptions)
+
 	// 验证密码长度
 	if len(req.Password) < 6 {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "密码长度至少6位"})
@@ -51,7 +71,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	token, user, err := h.authService.Register(req.Email, req.Password, h.cfg)
+	if err := service.ValidateRegistrationEmail(req.Email, registrationPolicy); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+	if registrationPolicy.RequireInvite && strings.TrimSpace(req.InviteCode) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "invite code is required"})
+		return
+	}
+
+	token, user, err := h.authService.RegisterWithInvite(req.Email, req.Password, req.InviteCode, h.cfg)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
