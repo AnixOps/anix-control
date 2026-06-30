@@ -59,16 +59,16 @@ type PanelForwardRuntimeService struct {
 }
 
 type panelForwardAnsibleConfig struct {
-	Inventory      string                 `json:"inventory"`
-	ApplyPlaybook  string                 `json:"playbookApply"`
-	RemovePlaybook string                 `json:"playbookRemove"`
-	Become         bool                   `json:"become"`
-	ExtraVars      map[string]any `json:"extraVars"`
-	Command        string                 `json:"command"`
-	WorkingDir     string                 `json:"workingDir"`
-	TargetPattern  string                 `json:"targetPattern"`
-	Environment    map[string]string      `json:"environment"`
-	TimeoutSeconds int                    `json:"timeoutSeconds"`
+	Inventory      string            `json:"inventory"`
+	ApplyPlaybook  string            `json:"playbookApply"`
+	RemovePlaybook string            `json:"playbookRemove"`
+	Become         bool              `json:"become"`
+	ExtraVars      map[string]any    `json:"extraVars"`
+	Command        string            `json:"command"`
+	WorkingDir     string            `json:"workingDir"`
+	TargetPattern  string            `json:"targetPattern"`
+	Environment    map[string]string `json:"environment"`
+	TimeoutSeconds int               `json:"timeoutSeconds"`
 }
 
 func NewPanelForwardRuntimeService(db *gorm.DB) *PanelForwardRuntimeService {
@@ -101,6 +101,9 @@ func (s *PanelForwardRuntimeService) Apply(ctx context.Context, action string, f
 
 	if isForwardRuntimeLocalAnsibleBackend(backend) {
 		return s.enqueueLocalAnsibleJob(action, forward, tunnel, req, nodeID)
+	}
+	if backend == model.ForwardRuntimeBackendCleanAgent {
+		return s.enqueueCleanAgentJob(action, forward, tunnel, req, nodeID)
 	}
 
 	payloadJSON, err := json.Marshal(req)
@@ -228,6 +231,35 @@ func (s *PanelForwardRuntimeService) enqueueLocalAnsibleJob(action string, forwa
 	}, nil
 }
 
+func (s *PanelForwardRuntimeService) enqueueCleanAgentJob(action string, forward *model.Forward, tunnel *model.ForwardTunnel, req nodeXForwardExecuteRequest, nodeID *uint) (*panelForwardRuntimeResult, error) {
+	payloadJSON, err := json.Marshal(req)
+	if err != nil {
+		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendCleanAgent, err), err
+	}
+
+	job := &model.ForwardRuntimeJob{
+		Backend:      model.ForwardRuntimeBackendCleanAgent,
+		Action:       action,
+		ResourceType: nodeXForwardResourceTypePanelForward,
+		ResourceID:   uintPtr(forward.ID),
+		ForwardID:    uintPtr(forward.ID),
+		TunnelID:     uintPtr(tunnel.ID),
+		NodeID:       nodeID,
+		Status:       model.ForwardRuntimeJobStatusPending,
+		Payload:      string(payloadJSON),
+	}
+	if err := s.db.Create(job).Error; err != nil {
+		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendCleanAgent, err), err
+	}
+
+	return &panelForwardRuntimeResult{
+		Backend: model.ForwardRuntimeBackendCleanAgent,
+		Status:  model.ForwardRuntimeJobStatusPending,
+		Message: queuedCleanAgentRuntimeMessage(action),
+		Async:   true,
+	}, nil
+}
+
 func (s *PanelForwardRuntimeService) resolveBackend() (string, error) {
 	if s.configService == nil {
 		return model.ForwardRuntimeBackendGost, nil
@@ -303,6 +335,8 @@ func normalizeForwardRuntimeBackend(value string) (string, bool) {
 		return model.ForwardRuntimeBackendNftablesAnsible, true
 	case model.ForwardRuntimeBackendIptablesAnsible:
 		return model.ForwardRuntimeBackendIptablesAnsible, true
+	case model.ForwardRuntimeBackendCleanAgent:
+		return model.ForwardRuntimeBackendCleanAgent, true
 	default:
 		return "", false
 	}
@@ -322,6 +356,10 @@ func normalizeForwardRuntimeLocalAnsibleBackend(value string) (string, bool) {
 func isForwardRuntimeLocalAnsibleBackend(backend string) bool {
 	_, ok := normalizeForwardRuntimeLocalAnsibleBackend(backend)
 	return ok
+}
+
+func isForwardRuntimeExecutionNodeBackend(backend string) bool {
+	return isForwardRuntimeLocalAnsibleBackend(backend) || backend == model.ForwardRuntimeBackendCleanAgent
 }
 
 func forwardRuntimeLocalFirewallDriver(backend string) string {
@@ -409,6 +447,11 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string,
 			return nodeXForwardExecuteRequest{}, nil, err
 		}
 		node, err = s.loadExecutionNode(tunnel)
+	case model.ForwardRuntimeBackendCleanAgent:
+		if err := ensureAnsibleTunnelSupportsExecution(tunnel); err != nil {
+			return nodeXForwardExecuteRequest{}, nil, err
+		}
+		node, err = s.loadExecutionNode(tunnel)
 	default:
 		node, err = s.loadIngressNode(tunnel, allowMissingIngress)
 	}
@@ -420,7 +463,7 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(backend, action string,
 		return nodeXForwardExecuteRequest{}, nil, err
 	}
 	tunnelNodeID := tunnel.InNodeID
-	if isForwardRuntimeLocalAnsibleBackend(backend) {
+	if isForwardRuntimeExecutionNodeBackend(backend) {
 		tunnelNodeID = storedPanelTunnelExecutionNodeID(tunnel)
 	}
 
@@ -801,6 +844,13 @@ func queuedPanelForwardRuntimeMessage(action string) string {
 		return "ansible runtime removal queued for local executor"
 	}
 	return "ansible runtime queued for local executor"
+}
+
+func queuedCleanAgentRuntimeMessage(action string) string {
+	if action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause {
+		return "clean agent runtime removal queued"
+	}
+	return "clean agent runtime queued"
 }
 
 func failedPanelForwardRuntimeResult(backend string, err error) *panelForwardRuntimeResult {

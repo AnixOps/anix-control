@@ -322,7 +322,7 @@ func (h *ForwardHandler) SyncForwardsToBackend(c *gin.Context) {
 
 	// Validate backend
 	valid := false
-	for _, b := range []string{"gost", "nftables_ansible", "iptables_ansible"} {
+	for _, b := range []string{"gost", "nftables_ansible", "iptables_ansible", "clean_agent"} {
 		if req.Backend == b {
 			valid = true
 			break

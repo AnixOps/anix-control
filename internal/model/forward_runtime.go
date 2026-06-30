@@ -3,9 +3,10 @@ package model
 import "time"
 
 const (
-	ForwardRuntimeBackendGost             = "gost"
+	ForwardRuntimeBackendGost            = "gost"
 	ForwardRuntimeBackendNftablesAnsible = "nftables_ansible"
 	ForwardRuntimeBackendIptablesAnsible = "iptables_ansible"
+	ForwardRuntimeBackendCleanAgent      = "clean_agent"
 )
 
 const (
@@ -35,11 +36,13 @@ type ForwardRuntimeJob struct {
 	ForwardID    *uint      `gorm:"index" json:"forwardId"`
 	TunnelID     *uint      `gorm:"index" json:"tunnelId"`
 	NodeID       *uint      `gorm:"index" json:"nodeId"`
+	AgentID      *uint      `gorm:"index" json:"agentId"`
 	Status       int        `gorm:"default:0;index" json:"status"`
 	Payload      string     `gorm:"type:text" json:"payload"`
 	Result       string     `gorm:"type:text" json:"result"`
 	Error        string     `gorm:"type:text" json:"error"`
 	StartedAt    *time.Time `json:"startedAt"`
+	ClaimedAt    *time.Time `json:"claimedAt"`
 	CompletedAt  *time.Time `json:"completedAt"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
