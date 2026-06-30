@@ -1,8 +1,10 @@
 <template>
-  <div class="payment-page">
-    <div class="page-header">
-      <h1>{{ t('adminPayment.title') }}</h1>
-      <p class="text-secondary">{{ t('adminPayment.subtitle') }}</p>
+  <div class="page-shell payment-page">
+    <div class="page-toolbar">
+      <div>
+        <h1>{{ t('adminPayment.title') }}</h1>
+        <p>{{ t('adminPayment.subtitle') }}</p>
+      </div>
     </div>
 
     <div class="tabs">
@@ -19,7 +21,7 @@
 
     <div v-show="activeTab === 'gateways'">
       <div class="toolbar">
-        <button class="btn-primary" @click="openGatewayModal()">
+        <button class="btn btn-primary" @click="openGatewayModal()">
           + {{ t('adminPayment.actions.createGateway') }}
         </button>
       </div>
@@ -58,7 +60,7 @@
               <td>
                 <div class="action-buttons">
                   <button
-                    class="btn-sm btn-secondary"
+                    class="btn btn-sm"
                     :title="gateway.enabled ? t('adminPayment.actions.disable') : t('adminPayment.actions.enable')"
                     :aria-label="gateway.enabled ? t('adminPayment.actions.disable') : t('adminPayment.actions.enable')"
                     @click="toggleGatewayStatus(gateway)"
@@ -66,7 +68,7 @@
                     {{ gateway.enabled ? t('adminPayment.actions.disable') : t('adminPayment.actions.enable') }}
                   </button>
                   <button
-                    class="btn-sm btn-ghost"
+                    class="btn btn-sm"
                     :title="t('adminPayment.actions.edit')"
                     :aria-label="t('adminPayment.actions.edit')"
                     @click="openGatewayModal(gateway)"
@@ -74,7 +76,7 @@
                     {{ t('adminPayment.actions.edit') }}
                   </button>
                   <button
-                    class="btn-sm btn-danger"
+                    class="btn btn-sm btn-danger"
                     :title="t('adminPayment.actions.delete')"
                     :aria-label="t('adminPayment.actions.delete')"
                     @click="deleteGatewayItem(gateway)"
@@ -106,7 +108,7 @@
             {{ getGatewayTypeLabel(type) }}
           </option>
         </select>
-        <button class="btn-secondary" @click="fetchRecords">{{ t('adminPayment.actions.search') }}</button>
+        <button class="btn" @click="fetchRecords">{{ t('adminPayment.actions.search') }}</button>
       </div>
 
       <div class="table-container">
@@ -139,7 +141,7 @@
               <td>
                 <div class="action-buttons">
                   <button
-                    class="btn-sm btn-ghost"
+                    class="btn btn-sm"
                     :title="t('adminPayment.actions.details')"
                     :aria-label="t('adminPayment.actions.details')"
                     @click="viewRecord(record)"
@@ -159,25 +161,25 @@
 
     <div v-show="activeTab === 'stats'">
       <div class="stats-grid">
-        <div class="stat-card">
+        <div class="section-panel stat-card">
           <div class="stat-value">{{ formatMoney(stats.total_amount) }}</div>
           <div class="stat-label">{{ t('adminPayment.stats.totalAmount') }}</div>
         </div>
-        <div class="stat-card">
+        <div class="section-panel stat-card">
           <div class="stat-value">{{ stats.total_orders || 0 }}</div>
           <div class="stat-label">{{ t('adminPayment.stats.totalOrders') }}</div>
         </div>
-        <div class="stat-card">
+        <div class="section-panel stat-card">
           <div class="stat-value">{{ stats.success_orders || 0 }}</div>
           <div class="stat-label">{{ t('adminPayment.stats.successOrders') }}</div>
         </div>
-        <div class="stat-card">
+        <div class="section-panel stat-card">
           <div class="stat-value">{{ formatSuccessRate(stats.success_rate) }}</div>
           <div class="stat-label">{{ t('adminPayment.stats.successRate') }}</div>
         </div>
       </div>
 
-      <div class="chart-section">
+      <div class="section-panel chart-section">
         <h3>{{ t('adminPayment.stats.gatewayDistribution') }}</h3>
         <div class="gateway-stats">
           <div v-for="[type, item] in gatewayStatsEntries" :key="type" class="gateway-stat-item">
@@ -198,6 +200,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ editingGateway ? t('adminPayment.modal.editTitle') : t('adminPayment.modal.createTitle') }}</h3>
+          <button class="btn btn-ghost btn-sm close-btn normalized-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showGatewayModal = false">x</button>
           <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showGatewayModal = false">×</button>
         </div>
         <div class="modal-body">
@@ -256,8 +259,8 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="showGatewayModal = false">{{ t('common.actions.cancel') }}</button>
-          <button @click="saveGateway">{{ t('common.actions.save') }}</button>
+          <button class="btn" @click="showGatewayModal = false">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" @click="saveGateway">{{ t('common.actions.save') }}</button>
         </div>
       </div>
     </div>
@@ -472,19 +475,32 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.tabs {
+  margin-bottom: 4px;
+}
+
+.toolbar {
+  margin-bottom: 16px;
+}
+
+.table-container {
+  margin-bottom: 20px;
+}
+
+.modal-header > .close-btn:not(.normalized-close) {
+  display: none;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .stat-card {
-  background: var(--surface-color);
-  padding: 24px;
-  border-radius: var(--radius-lg);
+  padding: 20px;
   text-align: center;
-  border: 1px solid var(--border-color);
 }
 
 .stat-value {
@@ -499,10 +515,7 @@ onMounted(() => {
 }
 
 .chart-section {
-  background: var(--surface-color);
-  padding: 24px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-color);
+  padding: 20px;
 }
 
 .gateway-stats {
@@ -542,9 +555,7 @@ onMounted(() => {
 }
 
 .type-badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
+  font-size: 12px;
 }
 
 .type-badge.alipay {
@@ -593,23 +604,25 @@ onMounted(() => {
   padding: 12px 0;
 }
 
-.status-pending {
-  background: rgba(251, 191, 36, 0.15);
-  color: #fbbf24;
+.status-active,
+.status-paid {
+  background: rgba(22, 163, 74, 0.08);
+  color: var(--success-color);
 }
 
-.status-paid {
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+.status-disabled,
+.status-refunded {
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+}
+
+.status-pending {
+  background: rgba(217, 119, 6, 0.08);
+  color: var(--warning-color);
 }
 
 .status-failed {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-}
-
-.status-refunded {
-  background: rgba(107, 114, 128, 0.15);
-  color: #6b7280;
+  background: rgba(220, 38, 38, 0.08);
+  color: var(--error-color);
 }
 </style>

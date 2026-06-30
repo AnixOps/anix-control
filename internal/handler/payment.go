@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/anixops/v2board/internal/database"
@@ -27,6 +28,56 @@ func NewPaymentHandler() *PaymentHandler {
 	return &PaymentHandler{
 		gatewayService: service.NewPaymentGatewayService(database.Get()),
 	}
+}
+
+// webhookSecretFor 读取指定网关类型已启用配置中的 Webhook 密钥。
+// 未配置网关或密钥为空时返回空串，调用方据此决定 fail-closed。
+func (h *PaymentHandler) webhookSecretFor(gatewayType string) string {
+	gateway, err := h.gatewayService.GetByType(gatewayType)
+	if err != nil || gateway == nil {
+		return ""
+	}
+	cfg, err := h.gatewayService.ParseConfig(gateway)
+	if err != nil {
+		return ""
+	}
+	switch c := cfg.(type) {
+	case *model.StripeConfig:
+		return c.WebhookSecret
+	case *model.X402Config:
+		return c.WebhookSecret
+	}
+	return ""
+}
+
+// verifyPayPalWebhook 调用 PayPal verify-webhook-signature API 校验回调真实性。
+// 未配置 PayPal 网关 (ClientID/Secret/WebhookID 缺失) 时 fail-closed 返回错误。
+func (h *PaymentHandler) verifyPayPalWebhook(c *gin.Context, body []byte) error {
+	gateway, err := h.gatewayService.GetByType(model.PaymentGatewayPayPal)
+	if err != nil || gateway == nil {
+		return errWebhookSecret
+	}
+	cfg, err := h.gatewayService.ParseConfig(gateway)
+	if err != nil {
+		return err
+	}
+	ppCfg, ok := cfg.(*model.PayPalConfig)
+	if !ok || ppCfg.ClientID == "" || ppCfg.ClientSecret == "" || ppCfg.WebhookID == "" {
+		return errWebhookSecret
+	}
+
+	headers := paypalSignatureHeaders{
+		AuthAlgo:         c.GetHeader("Paypal-Auth-Algo"),
+		CertURL:          c.GetHeader("Paypal-Cert-Url"),
+		TransmissionID:   c.GetHeader("Paypal-Transmission-Id"),
+		TransmissionSig:  c.GetHeader("Paypal-Transmission-Sig"),
+		TransmissionTime: c.GetHeader("Paypal-Transmission-Time"),
+	}
+	if headers.TransmissionID == "" || headers.TransmissionSig == "" {
+		return errSignatureMissing
+	}
+
+	return verifyPayPalSignatureRemote(c.Request.Context(), ppCfg, headers, body)
 }
 
 // ====== X402 虚拟货币支付 (测试链) ======
@@ -81,17 +132,17 @@ func (h *PaymentHandler) X402CreatePayment(c *gin.Context) {
 	tradeNo := fmt.Sprintf("X402%s%s", time.Now().Format("20060102150405"), hex.EncodeToString(nonce))
 
 	paymentRecord := &model.PaymentRecord{
-		TradeNo:      tradeNo,
-		GatewayType:  model.PaymentMethodCrypto,
-		Provider:     model.PaymentProviderX402,
-		UserID:       order.UserID,
-		Amount:       float64(order.TotalAmount) / 100, // 分转元
-		ActualAmount: amountETH,
-		Currency:     req.Token,
-		Status:       model.PaymentStatusPending,
-		OrderID:      &req.OrderID,
+		TradeNo:       tradeNo,
+		GatewayType:   model.PaymentMethodCrypto,
+		Provider:      model.PaymentProviderX402,
+		UserID:        order.UserID,
+		Amount:        float64(order.TotalAmount) / 100, // 分转元
+		ActualAmount:  amountETH,
+		Currency:      req.Token,
+		Status:        model.PaymentStatusPending,
+		OrderID:       &req.OrderID,
 		WalletAddress: &walletAddr,
-		Network:      &req.Network,
+		Network:       &req.Network,
 	}
 
 	if err := h.gatewayService.CreateRecord(paymentRecord); err != nil {
@@ -127,14 +178,14 @@ func (h *PaymentHandler) X402Callback(c *gin.Context) {
 
 	// 解析回调数据
 	var callbackData struct {
-		TradeNo     string `json:"trade_no"`
-		TxHash      string `json:"tx_hash"`
-		BlockNumber int64  `json:"block_number"`
-		Confirmations int  `json:"confirmations"`
-		Status      string `json:"status"`     // "confirmed", "confirming", "failed"
-		Amount      string `json:"amount"`
-		Token       string `json:"token"`
-		Signature   string `json:"signature"`  // 回调签名 (用于验证来源)
+		TradeNo       string `json:"trade_no"`
+		TxHash        string `json:"tx_hash"`
+		BlockNumber   int64  `json:"block_number"`
+		Confirmations int    `json:"confirmations"`
+		Status        string `json:"status"` // "confirmed", "confirming", "failed"
+		Amount        string `json:"amount"`
+		Token         string `json:"token"`
+		Signature     string `json:"signature"` // 回调签名 (用于验证来源)
 	}
 
 	if err := json.Unmarshal(body, &callbackData); err != nil {
@@ -142,12 +193,22 @@ func (h *PaymentHandler) X402Callback(c *gin.Context) {
 		return
 	}
 
-	// X402 callback signature verification stub:
-	//   1. Retrieve the Webhook Secret from system configuration
-	//   2. Verify the "signature" field using HMAC-SHA256 or the protocol-specific algorithm
-	//   3. Prevent replay attacks by tracking processed tx_hash values
-	//   4. Reject the request if verification fails (HTTP 400)
-	log.Printf("[STUB] X402 callback signature verification skipped for trade_no=%s", callbackData.TradeNo)
+	// 校验回调签名 (HMAC-SHA256)，防止伪造回调白嫖开通。
+	secret := h.webhookSecretFor(model.PaymentGatewayX402)
+	signFields := map[string]string{
+		"trade_no":      callbackData.TradeNo,
+		"tx_hash":       callbackData.TxHash,
+		"block_number":  strconv.FormatInt(callbackData.BlockNumber, 10),
+		"confirmations": strconv.Itoa(callbackData.Confirmations),
+		"status":        callbackData.Status,
+		"amount":        callbackData.Amount,
+		"token":         callbackData.Token,
+	}
+	if err := verifyX402Signature(signFields, callbackData.Signature, secret); err != nil {
+		log.Printf("X402 callback signature verification failed for trade_no=%s: %v", callbackData.TradeNo, err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "签名验证失败"})
+		return
+	}
 
 	// 查询支付记录
 	payment, err := h.gatewayService.GetRecordByTradeNo(callbackData.TradeNo)
@@ -397,13 +458,13 @@ func (h *PaymentHandler) StripeWebhook(c *gin.Context) {
 	// 获取 Stripe 签名头
 	stripeSig := c.GetHeader("Stripe-Signature")
 
-	// Stripe Webhook signature verification stub:
-	//   1. Retrieve Webhook Secret from system configuration (stripe.WebhookSecret)
-	//   2. Use stripe.ConstructEvent(body, stripeSig, webhookSecret) to verify
-	//   3. Return HTTP 400 if verification fails
-	//   4. Process only relevant events (checkout.session.completed, payment_intent.succeeded)
-	log.Printf("[STUB] Stripe webhook signature verification skipped")
-	_ = stripeSig // Verification disabled until Stripe SDK integration is complete
+	// 按 Stripe 官方算法校验签名 (HMAC-SHA256)，含时间戳防重放。
+	secret := h.webhookSecretFor(model.PaymentGatewayStripe)
+	if err := verifyStripeSignature(body, stripeSig, secret, time.Now()); err != nil {
+		log.Printf("Stripe webhook signature verification failed: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "签名验证失败"})
+		return
+	}
 
 	// 解析事件
 	var event struct {
@@ -411,14 +472,14 @@ func (h *PaymentHandler) StripeWebhook(c *gin.Context) {
 		Type string `json:"type"`
 		Data struct {
 			Object struct {
-				ID             string  `json:"id"`
-				Status         string  `json:"status"`
-				AmountTotal    int64   `json:"amount_total"`
-				Currency       string  `json:"currency"`
+				ID                string `json:"id"`
+				Status            string `json:"status"`
+				AmountTotal       int64  `json:"amount_total"`
+				Currency          string `json:"currency"`
 				ClientReferenceID string `json:"client_reference_id"`
-				Metadata       struct {
-					TradeNo  string `json:"trade_no"`
-					OrderID  string `json:"order_id"`
+				Metadata          struct {
+					TradeNo string `json:"trade_no"`
+					OrderID string `json:"order_id"`
 				} `json:"metadata"`
 			} `json:"object"`
 		} `json:"data"`
@@ -507,20 +568,20 @@ func (h *PaymentHandler) PayPalWebhook(c *gin.Context) {
 	}
 	defer c.Request.Body.Close()
 
-	// PayPal Webhook signature verification stub:
-	//   1. Extract signature headers (paypal-transmission-id, -sig, -cert-url, -auth-algo)
-	//   2. Use PayPal SDK VerifyWebhookSignature to validate
-	//   3. Return HTTP 400 if verification fails
-	//   4. Process only relevant events (CHECKOUT.ORDER.APPROVED, PAYMENT.CAPTURE.COMPLETED)
-	log.Printf("[STUB] PayPal webhook signature verification skipped")
+	// 按 PayPal 官方 verify-webhook-signature API 校验回调真实性。
+	if err := h.verifyPayPalWebhook(c, body); err != nil {
+		log.Printf("PayPal webhook signature verification failed: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"message": "签名验证失败"})
+		return
+	}
 
 	// 解析事件
 	var event struct {
-		ID     string `json:"id"`
+		ID        string `json:"id"`
 		EventType string `json:"event_type"` // CHECKOUT.ORDER.APPROVED, PAYMENT.CAPTURE.COMPLETED 等
-		Resource struct {
-			ID     string `json:"id"`
-			Status string `json:"status"` // COMPLETED, APPROVED, etc.
+		Resource  struct {
+			ID            string `json:"id"`
+			Status        string `json:"status"` // COMPLETED, APPROVED, etc.
 			PurchaseUnits []struct {
 				ReferenceID string `json:"reference_id"`
 				Payments    struct {
