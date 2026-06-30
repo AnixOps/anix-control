@@ -81,6 +81,47 @@ app:
 	assert.Equal(t, "TestApp", loadedCfg.App.Name)
 }
 
+func TestLoadAuthRegistrationConfig(t *testing.T) {
+	resetConfig()
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := `
+env: development
+auth:
+  register_rate_limit:
+    enabled: true
+    max_attempts: 4
+    window_seconds: 1800
+    lockout_seconds: 3600
+  registration:
+    enabled: false
+    require_invite: true
+    allowed_email_domains:
+      - example.com
+    blocked_email_domains:
+      - disposable.example
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	loadedCfg, err := Load(configPath)
+	require.NoError(t, err)
+	require.NotNil(t, loadedCfg)
+	require.NotNil(t, loadedCfg.Auth.Registration.Enabled)
+	require.NotNil(t, loadedCfg.Auth.RegisterRateLimit.Enabled)
+
+	assert.False(t, *loadedCfg.Auth.Registration.Enabled)
+	assert.True(t, loadedCfg.Auth.Registration.RequireInvite)
+	assert.Equal(t, []string{"example.com"}, loadedCfg.Auth.Registration.AllowedEmailDomains)
+	assert.Equal(t, []string{"disposable.example"}, loadedCfg.Auth.Registration.BlockedEmailDomains)
+	assert.True(t, *loadedCfg.Auth.RegisterRateLimit.Enabled)
+	assert.Equal(t, 4, loadedCfg.Auth.RegisterRateLimit.MaxAttempts)
+	assert.Equal(t, 1800, loadedCfg.Auth.RegisterRateLimit.WindowSeconds)
+	assert.Equal(t, 3600, loadedCfg.Auth.RegisterRateLimit.LockoutSeconds)
+}
+
 func TestLoadForwardRuntimeConfig(t *testing.T) {
 	resetConfig()
 
@@ -106,6 +147,11 @@ forward_runtime:
     base_url: http://127.0.0.1:18081
     token: test-nodex-token
     timeout_seconds: 20
+  clean_agent:
+    public_url: https://panel.example.com
+    heartbeat_interval_seconds: 11
+    action_timeout_seconds: 121
+    token_expire_seconds: 3600
   iptables_ansible:
     inventory: config/deploy/ansible/inventory.ini
     apply_playbook: config/deploy/ansible/playbooks/forward_apply.yml
@@ -140,6 +186,10 @@ forward_runtime:
 	assert.Equal(t, "http://127.0.0.1:18081", loadedCfg.ForwardRuntime.NodeX.BaseURL)
 	assert.Equal(t, "test-nodex-token", loadedCfg.ForwardRuntime.NodeX.Token)
 	assert.Equal(t, 20, loadedCfg.ForwardRuntime.NodeX.TimeoutSeconds)
+	assert.Equal(t, "https://panel.example.com", loadedCfg.ForwardRuntime.CleanAgent.PublicURL)
+	assert.Equal(t, 11, loadedCfg.ForwardRuntime.CleanAgent.HeartbeatIntervalSeconds)
+	assert.Equal(t, 121, loadedCfg.ForwardRuntime.CleanAgent.ActionTimeoutSeconds)
+	assert.Equal(t, 3600, loadedCfg.ForwardRuntime.CleanAgent.TokenExpireSeconds)
 	assert.Equal(t, "config/deploy/ansible/inventory.ini", loadedCfg.ForwardRuntime.IptablesAnsible.Inventory)
 	assert.Equal(t, "config/deploy/ansible/playbooks/forward_apply.yml", loadedCfg.ForwardRuntime.IptablesAnsible.ApplyPlaybook)
 	assert.Equal(t, "config/deploy/ansible/playbooks/forward_remove.yml", loadedCfg.ForwardRuntime.IptablesAnsible.RemovePlaybook)

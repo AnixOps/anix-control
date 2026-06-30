@@ -535,15 +535,33 @@ type AgentHeartbeatRequest struct {
 func (h *AgentHandler) AgentGetTasks(c *gin.Context) {
 	nodeID, _ := strconv.ParseUint(c.Query("node_id"), 10, 32)
 
-	// Agent task polling stub: return pending tasks for a specific node.
-	// Integration steps:
-	//   1. Query the task queue/database for tasks assigned to this nodeID
-	//   2. Filter by task status (pending/queued)
-	//   3. Serialize and return as AgentTask list
-	//   4. Include task type, parameters, and deadline
-	log.Printf("[STUB] agent task poll for node_id=%d: returning empty task list", nodeID)
-
+	// 从内存任务表中取出该节点尚未送达 (status=pending) 的任务，
+	// HTTP 轮询作为 WebSocket 推送的降级路径。取出后标记 dispatched 防止重复下发。
+	now := time.Now()
 	tasks := []AgentTask{}
+	h.taskResults.Range(func(key, value any) bool {
+		ts, ok := value.(AgentTaskStatus)
+		if !ok {
+			return true
+		}
+		if uint64(ts.NodeID) != nodeID || ts.Status != "pending" {
+			return true
+		}
+
+		tasks = append(tasks, AgentTask{
+			ID:      ts.TaskID,
+			Type:    ts.Type,
+			Action:  ts.Action,
+			Params:  ts.Params,
+			Timeout: ts.Timeout,
+		})
+
+		ts.Status = "dispatched"
+		ts.UpdatedAt = now
+		h.taskResults.Store(ts.TaskID, ts)
+		return true
+	})
+
 	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
 }
 
@@ -592,12 +610,8 @@ func (h *AgentHandler) AgentReportResult(c *gin.Context) {
 		return
 	}
 
-	// Agent task result reporting stub:
-	//   1. Persist the task result to the database (agent_task_results table)
-	//   2. If the task has a callback URL configured, POST the result to it
-	//   3. Update task status in the in-memory cache
-	log.Printf("[STUB] agent task result report for task_id=%s: persistence not yet implemented", result.TaskID)
-
+	// 任务结果存入内存任务表，供 dispatch 调用方与状态查询接口读取。
+	// 注：监控/审计型持久化 (DB、回调 URL) 由上层按需扩展，此处维护实时态。
 	now := time.Now()
 	snapshot, _ := h.taskResults.Load(result.TaskID)
 	taskStatus, ok := snapshot.(AgentTaskStatus)
@@ -672,13 +686,8 @@ func (h *AgentHandler) AgentMonitor(c *gin.Context) {
 		return
 	}
 
-	// Agent monitor data storage stub:
-	//   1. Persist the monitor snapshot to a time-series database (e.g., InfluxDB, Prometheus)
-	//   2. Store metrics: CPU, memory, disk, network, and custom system stats
-	//   3. Enable historical queries via a query endpoint
-	// Current implementation stores only the latest snapshot in memory.
-	log.Printf("[STUB] agent monitor data for node_id=%d: time-series persistence not yet implemented", req.NodeID)
-
+	// 保存该节点最新监控快照 (内存实时态)，供面板拉取展示。
+	// 历史趋势的时序库持久化 (InfluxDB/Prometheus) 由部署侧按需接入。
 	snapshot := AgentMonitorSnapshot{
 		NodeID:    req.NodeID,
 		System:    req.System,

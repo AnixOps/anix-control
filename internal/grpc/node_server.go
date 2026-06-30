@@ -186,11 +186,58 @@ func (s *NodeGRPCServer) StatusStream(stream pb.NodeService_StatusStreamServer) 
 	}
 }
 
-// checkConfigChanges 检查配置变更
+// checkConfigChanges 检查配置变更：以节点 UpdatedAt 作为配置版本，
+// 与连接管理器记录的已推送版本比对，发现更新则构建配置并推进版本号。
 func (s *NodeGRPCServer) checkConfigChanges(nodeID uint32) (*pb.NodeConfigResponse, error) {
-	// TODO: 实现配置变更检测
-	// 可以通过缓存或数据库版本号来判断是否需要推送
-	return nil, nil
+	node, err := s.nodeService.GetNode(uint(nodeID))
+	if err != nil {
+		return nil, err
+	}
+
+	currentVer := node.UpdatedAt.Unix()
+	mgr := GetConnectionManager()
+	if !mgr.IsConfigChanged(nodeID, currentVer) {
+		return nil, nil
+	}
+
+	resp := s.buildConfigResponse(node)
+	// 记录已推送版本，避免同一配置被重复推送。
+	mgr.SetNodeConfigVersion(nodeID, currentVer)
+	return resp, nil
+}
+
+// buildConfigResponse 根据节点及其协议构建下发配置。
+func (s *NodeGRPCServer) buildConfigResponse(node *model.Node) *pb.NodeConfigResponse {
+	resp := &pb.NodeConfigResponse{
+		Host:        node.Host,
+		ServerPort:  int32(node.Port),
+		ServerName:  node.Host,
+		SendThrough: "0.0.0.0",
+		BaseConfig: &pb.BaseConfig{
+			PushInterval: 60,
+			PullInterval: 60,
+		},
+	}
+
+	protocols, _ := s.nodeService.GetProtocols(node.ID)
+	if len(protocols) > 0 {
+		protocol := protocols[0]
+		resp.NodeType = string(protocol.Type)
+		resp.Type = string(protocol.Type)
+		resp.ServerPort = int32(protocol.Port)
+		resp.Tls = int32(protocol.TLS)
+		if protocol.Transport != nil {
+			resp.Network = *protocol.Transport
+		} else {
+			resp.Network = "tcp"
+		}
+	} else {
+		resp.NodeType = "vless"
+		resp.Type = "vless"
+		resp.Network = "tcp"
+	}
+
+	return resp
 }
 
 // peerFromContext 从上下文获取客户端地址 (已弃用，使用 GetPeerAddr)
