@@ -80,6 +80,48 @@ func TestNodeAuth_ValidAPIKey(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+// TestNodeAuth_UpdatesHeartbeat 验证认证通过后会刷新 last_check_at,
+// 修复节点带 node_type 轮询时心跳不更新导致面板误判离线的问题
+func TestNodeAuth_UpdatesHeartbeat(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	nodeAPIKey := "heartbeat-node-key"
+	stale := time.Now().Unix() - 9999 // 远早于在线阈值
+	node := &model.Node{
+		Name:        "Heartbeat Node",
+		Host:        "127.0.0.1",
+		Port:        443,
+		APIKeyHash:  sha256Hash(nodeAPIKey),
+		Status:      model.NodeStatusOnline,
+		LastCheckAt: &stale,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	// 模拟节点带 node_type 的轮询请求
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID))+"&node_type=vmess", nil)
+	req.Header.Set("X-API-Key", nodeAPIKey)
+	w := httptest.NewRecorder()
+
+	before := time.Now().Unix()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// last_check_at 应被刷新到当前时间附近
+	var updated model.Node
+	require.NoError(t, database.GetDB().First(&updated, node.ID).Error)
+	require.NotNil(t, updated.LastCheckAt)
+	assert.GreaterOrEqual(t, *updated.LastCheckAt, before)
+	assert.True(t, updated.IsOnline(), "节点应被判定为在线")
+}
+
 func TestNodeAuth_InvalidAPIKey(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()

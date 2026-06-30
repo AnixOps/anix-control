@@ -176,6 +176,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			// 仪表盘
 			admin.GET("/dashboard", adminHandler.GetDashboard)
 			admin.GET("/traffic/hourly", adminHandler.GetHourlyTraffic)
+			admin.GET("/traffic/user-ranking", adminHandler.GetUserTrafficRanking)
 			admin.GET("/system/info", adminHandler.GetSystemInfo)
 
 			// 用户管理

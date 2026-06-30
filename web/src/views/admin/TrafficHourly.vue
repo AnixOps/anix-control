@@ -8,13 +8,22 @@
       <div class="toolbar-actions">
         <label class="range-field">
           <span>{{ t('adminTrafficHourly.range.label') }}</span>
-          <select v-model.number="hours" @change="fetchData">
+          <select v-model.number="hours" @change="onRangeChange">
             <option :value="24">{{ t('adminTrafficHourly.range.last24h') }}</option>
             <option :value="168">{{ t('adminTrafficHourly.range.last7d') }}</option>
             <option :value="720">{{ t('adminTrafficHourly.range.last30d') }}</option>
           </select>
         </label>
-        <button class="btn btn-primary" @click="fetchData" :disabled="loading">
+        <label class="range-field">
+          <span>{{ t('adminTrafficHourly.user.label') }}</span>
+          <select v-model.number="selectedUserId" @change="fetchChart">
+            <option :value="0">{{ t('adminTrafficHourly.user.all') }}</option>
+            <option v-for="u in ranking" :key="u.user_id" :value="u.user_id">
+              {{ u.email || ('#' + u.user_id) }}
+            </option>
+          </select>
+        </label>
+        <button class="btn btn-primary" @click="refreshAll" :disabled="loading">
           {{ loading ? t('adminTrafficHourly.actions.refreshing') : t('adminTrafficHourly.actions.refresh') }}
         </button>
       </div>
@@ -24,6 +33,7 @@
       <article class="summary-card section-panel">
         <span class="summary-label">{{ t('adminTrafficHourly.summary.total') }}</span>
         <span class="summary-value">{{ formatBytes(totalTraffic) }}</span>
+        <span class="summary-detail">{{ selectedLabel }}</span>
       </article>
       <article class="summary-card section-panel">
         <span class="summary-label">{{ t('adminTrafficHourly.summary.peak') }}</span>
@@ -36,19 +46,47 @@
       <div v-show="hasData" ref="chartEl" class="chart-canvas"></div>
       <div v-if="!hasData && !loading" class="empty-state">{{ t('adminTrafficHourly.empty') }}</div>
     </section>
+
+    <section class="section-panel ranking-panel">
+      <div class="ranking-header">
+        <h2>{{ t('adminTrafficHourly.ranking.title') }}</h2>
+        <span class="ranking-hint">{{ t('adminTrafficHourly.ranking.hint') }}</span>
+      </div>
+      <div v-if="ranking.length" class="ranking-table">
+        <div class="ranking-row ranking-row-head">
+          <span class="col-rank">#</span>
+          <span class="col-user">{{ t('adminTrafficHourly.ranking.user') }}</span>
+          <span class="col-traffic">{{ t('adminTrafficHourly.ranking.traffic') }}</span>
+        </div>
+        <div
+          v-for="(u, idx) in ranking"
+          :key="u.user_id"
+          class="ranking-row"
+          :class="{ active: u.user_id === selectedUserId }"
+          @click="selectUser(u.user_id)"
+        >
+          <span class="col-rank">{{ idx + 1 }}</span>
+          <span class="col-user" :title="u.email">{{ u.email || ('#' + u.user_id) }}</span>
+          <span class="col-traffic">{{ formatBytes(u.traffic) }}</span>
+        </div>
+      </div>
+      <div v-else class="empty-state">{{ t('adminTrafficHourly.ranking.empty') }}</div>
+    </section>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import { getTrafficHourly } from '@/api/admin'
+import { getTrafficHourly, getUserTrafficRanking } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 
 const { t, formatDateTime } = useAppI18n()
 
 const hours = ref(24)
+const selectedUserId = ref(0)
 const loading = ref(false)
 const points = ref([])
+const ranking = ref([])
 
 const chartEl = ref(null)
 let chart = null
@@ -62,6 +100,11 @@ const peakPoint = computed(() => {
 })
 const peakTraffic = computed(() => peakPoint.value?.traffic || 0)
 const peakLabel = computed(() => (peakPoint.value ? formatHour(peakPoint.value.hour_ts) : '-'))
+const selectedLabel = computed(() => {
+  if (!selectedUserId.value) return t('adminTrafficHourly.user.all')
+  const u = ranking.value.find(x => x.user_id === selectedUserId.value)
+  return u ? (u.email || ('#' + u.user_id)) : ('#' + selectedUserId.value)
+})
 
 function formatHour(ts) {
   // 后端返回整点 Unix 秒
@@ -126,10 +169,10 @@ async function renderChart() {
   chart.resize()
 }
 
-async function fetchData() {
+async function fetchChart() {
   loading.value = true
   try {
-    const res = await getTrafficHourly(hours.value)
+    const res = await getTrafficHourly(hours.value, selectedUserId.value)
     points.value = Array.isArray(res.data) ? res.data : []
     await nextTick()
     renderChart()
@@ -141,12 +184,43 @@ async function fetchData() {
   }
 }
 
+async function fetchRanking() {
+  try {
+    const res = await getUserTrafficRanking(hours.value, 20)
+    ranking.value = Array.isArray(res.data) ? res.data : []
+    // 若当前选中的用户已不在区间内, 回退到全局
+    if (selectedUserId.value && !ranking.value.some(u => u.user_id === selectedUserId.value)) {
+      selectedUserId.value = 0
+    }
+  } catch (err) {
+    console.error(t('adminTrafficHourly.messages.fetchFailed'), err)
+    ranking.value = []
+  }
+}
+
+function selectUser(userId) {
+  selectedUserId.value = userId
+  fetchChart()
+}
+
+// 时间范围变化: 排行榜和图表都要重新拉
+async function onRangeChange() {
+  await fetchRanking()
+  await fetchChart()
+}
+
+async function refreshAll() {
+  await fetchRanking()
+  await fetchChart()
+}
+
 function handleResize() {
   if (chart) chart.resize()
 }
 
-onMounted(() => {
-  fetchData()
+onMounted(async () => {
+  await fetchRanking()
+  await fetchChart()
   window.addEventListener('resize', handleResize)
 })
 
@@ -172,6 +246,7 @@ onUnmounted(() => {
   display: flex;
   align-items: flex-end;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .range-field {
@@ -234,5 +309,80 @@ onUnmounted(() => {
   padding: 60px 16px;
   text-align: center;
   color: var(--text-secondary);
+}
+
+.ranking-panel {
+  padding: 20px;
+  margin-top: 20px;
+}
+
+.ranking-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ranking-header h2 {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.ranking-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.ranking-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.ranking-row {
+  display: grid;
+  grid-template-columns: 48px 1fr 160px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.ranking-row:hover {
+  background: var(--surface-hover);
+}
+
+.ranking-row.active {
+  background: var(--primary-soft);
+}
+
+.ranking-row-head {
+  cursor: default;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ranking-row-head:hover {
+  background: transparent;
+}
+
+.col-rank {
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.col-user {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-traffic {
+  text-align: right;
+  font-weight: 600;
 }
 </style>

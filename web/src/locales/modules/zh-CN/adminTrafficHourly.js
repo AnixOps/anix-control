@@ -8,6 +8,17 @@ export default {
       last7d: '最近 7 天',
       last30d: '最近 30 天'
     },
+    user: {
+      label: '用户',
+      all: '全部用户'
+    },
+    ranking: {
+      title: '用户流量排行',
+      hint: '点击某行可在上方图表中查看该用户',
+      user: '用户',
+      traffic: '流量',
+      empty: '所选区间暂无用户流量'
+    },
     summary: {
       total: '区间总流量',
       peak: '峰值小时',

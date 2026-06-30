@@ -867,7 +867,7 @@ func (h *AdminHandler) GetDashboard(c *gin.Context) {
 }
 
 // GetHourlyTraffic 返回最近 N 小时的流量序列 (默认 24 小时, 最多 720 小时)
-// GET /api/v2/admin/traffic/hourly?hours=24
+// GET /api/v2/admin/traffic/hourly?hours=24&user_id=0
 func (h *AdminHandler) GetHourlyTraffic(c *gin.Context) {
 	hours := 24
 	if v := c.Query("hours"); v != "" {
@@ -876,7 +876,14 @@ func (h *AdminHandler) GetHourlyTraffic(c *gin.Context) {
 		}
 	}
 
-	series, err := h.statsService.GetHourlyTraffic(hours)
+	var userID uint
+	if v := c.Query("user_id"); v != "" {
+		if parsed, err := strconv.ParseUint(v, 10, 32); err == nil {
+			userID = uint(parsed)
+		}
+	}
+
+	series, err := h.statsService.GetHourlyTraffic(hours, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取小时流量失败", "error": err.Error()})
 		return
@@ -884,6 +891,34 @@ func (h *AdminHandler) GetHourlyTraffic(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": series,
+	})
+}
+
+// GetUserTrafficRanking 返回最近 N 小时内按用户聚合的流量排行 (默认 24 小时, top 20)
+// GET /api/v2/admin/traffic/user-ranking?hours=24&limit=20
+func (h *AdminHandler) GetUserTrafficRanking(c *gin.Context) {
+	hours := 24
+	if v := c.Query("hours"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			hours = parsed
+		}
+	}
+
+	limit := 20
+	if v := c.Query("limit"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	ranking, err := h.statsService.GetUserTrafficRanking(hours, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取用户流量排行失败", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": ranking,
 	})
 }
 // GET /api/v2/admin/system/info
