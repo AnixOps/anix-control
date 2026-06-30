@@ -8,8 +8,9 @@ type LoginRequest struct {
 
 // RegisterRequest 注册请求
 type RegisterRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
+	Email      string `json:"email" binding:"required,email"`
+	Password   string `json:"password" binding:"required,min=6"`
+	InviteCode string `json:"invite_code"`
 }
 
 // LoginResponse 登录响应
@@ -26,4 +27,6 @@ type AdminCreateUserRequest struct {
 	FlowResetTime  int64  `json:"flowResetTime"`
 	GroupID        *uint  `json:"group_id"`
 	TransferEnable *int64 `json:"transfer_enable"`
+	SpeedLimit     *int64 `json:"speed_limit"`
+	DeviceLimit    *int   `json:"device_limit"`
 }
