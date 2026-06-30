@@ -26,11 +26,22 @@ type Config struct {
 	Admin          AdminConfig          `yaml:"admin"`
 	TLS            TLSConfig            `yaml:"tls"`
 	ForwardRuntime ForwardRuntimeConfig `yaml:"forward_runtime"`
+	GRPC           GRPCConfig           `yaml:"grpc"`
+}
+
+// GRPCConfig controls the node-facing gRPC server (V2bX nodes connect here).
+type GRPCConfig struct {
+	Enable   bool   `yaml:"enabled"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	APIToken string `yaml:"api_token"`
 }
 
 // AuthConfig defines authentication security settings.
 type AuthConfig struct {
-	LoginRateLimit LoginRateLimitConfig `yaml:"login_rate_limit"`
+	LoginRateLimit    LoginRateLimitConfig   `yaml:"login_rate_limit"`
+	RegisterRateLimit LoginRateLimitConfig   `yaml:"register_rate_limit"`
+	Registration      RegistrationAuthConfig `yaml:"registration"`
 }
 
 // LoginRateLimitConfig controls brute-force protection for login.
@@ -41,15 +52,25 @@ type LoginRateLimitConfig struct {
 	LockoutSeconds int   `yaml:"lockout_seconds"`
 }
 
+// RegistrationAuthConfig controls public account registration policy.
+type RegistrationAuthConfig struct {
+	Enabled             *bool    `yaml:"enabled"`
+	RequireInvite       bool     `yaml:"require_invite"`
+	AllowedEmailDomains []string `yaml:"allowed_email_domains"`
+	BlockedEmailDomains []string `yaml:"blocked_email_domains"`
+}
+
 // ForwardRuntimeConfig stores the canonical forward runtime settings from config.yaml.
 type ForwardRuntimeConfig struct {
-	NodeXMode       *bool                         `yaml:"nodex_mode"`
-	Backend         string                        `yaml:"backend"`
-	NodeX           ForwardRuntimeNodeXConfig     `yaml:"nodex"`
-	NftablesAnsible ForwardRuntimeAnsibleConfig   `yaml:"nftables_ansible"`
-	IptablesAnsible ForwardRuntimeAnsibleConfig   `yaml:"iptables_ansible"`
-	Jobs            ForwardRuntimeJobsConfig      `yaml:"jobs"`
-	GostStats       ForwardRuntimeGostStatsConfig `yaml:"gost_stats"`
+	NodeXMode       *bool                          `yaml:"nodex_mode"`
+	Backend         string                         `yaml:"backend"`
+	NodeX           ForwardRuntimeNodeXConfig      `yaml:"nodex"`
+	CleanAgent      ForwardRuntimeCleanAgentConfig `yaml:"clean_agent"`
+	NftablesAnsible ForwardRuntimeAnsibleConfig    `yaml:"nftables_ansible"`
+	IptablesAnsible ForwardRuntimeAnsibleConfig    `yaml:"iptables_ansible"`
+	Jobs            ForwardRuntimeJobsConfig       `yaml:"jobs"`
+	GostStats       ForwardRuntimeGostStatsConfig  `yaml:"gost_stats"`
+	Latency         ForwardRuntimeLatencyConfig    `yaml:"latency"`
 }
 
 // ForwardRuntimeNodeXConfig stores NodeX or gost runtime settings.
@@ -59,18 +80,26 @@ type ForwardRuntimeNodeXConfig struct {
 	TimeoutSeconds int    `yaml:"timeout_seconds"`
 }
 
+// ForwardRuntimeCleanAgentConfig stores clean-room forward agent defaults.
+type ForwardRuntimeCleanAgentConfig struct {
+	PublicURL                string `yaml:"public_url"`
+	HeartbeatIntervalSeconds int    `yaml:"heartbeat_interval_seconds"`
+	ActionTimeoutSeconds     int    `yaml:"action_timeout_seconds"`
+	TokenExpireSeconds       int    `yaml:"token_expire_seconds"`
+}
+
 // ForwardRuntimeAnsibleConfig stores local ansible runtime settings.
 type ForwardRuntimeAnsibleConfig struct {
-	Inventory      string                 `yaml:"inventory"`
-	ApplyPlaybook  string                 `yaml:"apply_playbook"`
-	RemovePlaybook string                 `yaml:"remove_playbook"`
-	Become         bool                   `yaml:"become"`
-	ExtraVars      map[string]any `yaml:"extra_vars"`
-	Command        string                 `yaml:"command"`
-	WorkingDir     string                 `yaml:"working_dir"`
-	TargetPattern  string                 `yaml:"target_pattern"`
-	Environment    map[string]string      `yaml:"environment"`
-	TimeoutSeconds int                    `yaml:"timeout_seconds"`
+	Inventory      string            `yaml:"inventory"`
+	ApplyPlaybook  string            `yaml:"apply_playbook"`
+	RemovePlaybook string            `yaml:"remove_playbook"`
+	Become         bool              `yaml:"become"`
+	ExtraVars      map[string]any    `yaml:"extra_vars"`
+	Command        string            `yaml:"command"`
+	WorkingDir     string            `yaml:"working_dir"`
+	TargetPattern  string            `yaml:"target_pattern"`
+	Environment    map[string]string `yaml:"environment"`
+	TimeoutSeconds int               `yaml:"timeout_seconds"`
 }
 
 // ForwardRuntimeJobsConfig stores local ansible job executor polling settings.
@@ -89,6 +118,17 @@ type ForwardRuntimeGostStatsConfig struct {
 	ErrorLogInterval string `yaml:"error_log_interval"`
 }
 
+// ForwardRuntimeLatencyConfig stores latency prober (TCPing) settings.
+type ForwardRuntimeLatencyConfig struct {
+	PollInterval     string `yaml:"poll_interval"`
+	IdlePollInterval string `yaml:"idle_poll_interval"`
+	ErrorLogInterval string `yaml:"error_log_interval"`
+	Dials            int    `yaml:"dials"`
+	DialTimeout      string `yaml:"dial_timeout"`
+	Concurrency      int    `yaml:"concurrency"`
+	RetentionDays    int    `yaml:"retention_days"`
+}
+
 // TLSConfig defines TLS settings.
 type TLSConfig struct {
 	Enable   bool   `yaml:"enable"`
@@ -105,22 +145,22 @@ type AdminConfig struct {
 
 // ServerConfig defines backend server settings.
 type ServerConfig struct {
-	Host           string   `yaml:"host"`
-	Port           int      `yaml:"port"`
-	Mode           string   `yaml:"mode"`
-	ReadTimeout    int      `yaml:"read_timeout"`
-	WriteTimeout   int      `yaml:"write_timeout"`
-	TrustedProxies []string `yaml:"trusted_proxies"`
+	Host           string     `yaml:"host"`
+	Port           int        `yaml:"port"`
+	Mode           string     `yaml:"mode"`
+	ReadTimeout    int        `yaml:"read_timeout"`
+	WriteTimeout   int        `yaml:"write_timeout"`
+	TrustedProxies []string   `yaml:"trusted_proxies"`
 	CORS           CORSConfig `yaml:"cors"`
 }
 
 // CORSConfig defines Cross-Origin Resource Sharing settings.
 type CORSConfig struct {
-	AllowedOrigins []string `yaml:"allowed_origins"`
-	AllowedMethods []string `yaml:"allowed_methods"`
-	AllowedHeaders []string `yaml:"allowed_headers"`
-	AllowCredentials bool   `yaml:"allow_credentials"`
-	MaxAge         int      `yaml:"max_age"` // preflight cache duration in seconds
+	AllowedOrigins   []string `yaml:"allowed_origins"`
+	AllowedMethods   []string `yaml:"allowed_methods"`
+	AllowedHeaders   []string `yaml:"allowed_headers"`
+	AllowCredentials bool     `yaml:"allow_credentials"`
+	MaxAge           int      `yaml:"max_age"` // preflight cache duration in seconds
 }
 
 // FrontendConfig defines static frontend serving settings.

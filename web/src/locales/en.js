@@ -123,6 +123,10 @@ export default {
       zhShort: '中',
       enShort: 'EN'
     },
+    theme: {
+      switchToDark: 'Dark mode',
+      switchToLight: 'Light mode'
+    },
     a11y: {
       skipToContent: 'Skip to main content',
       openNavigation: 'Open navigation menu',
@@ -137,6 +141,9 @@ export default {
       refresh: 'Refresh',
       save: 'Save',
       submit: 'Submit',
+      create: 'Create',
+      edit: 'Edit',
+      delete: 'Delete',
       logout: 'Logout',
       details: 'Details',
       back: 'Back',
@@ -308,14 +315,78 @@ export default {
       localRuntime: 'Local Runtime',
       nodeXTopology: 'NodeX Topology',
       nodeXRuntime: 'NodeX Runtime',
-      nodeXAgents: 'NodeX Agents'
+      nodeXAgents: 'NodeX Agents',
+      observability: 'Observability'
     },
     hints: {
       ansibleMachines: 'Stateless execution machines',
       localRuntime: 'Stateless panel-host executor',
       nodeXTopology: 'Stateful relay/exit topology',
       nodeXRuntime: 'Stateful gost control-plane',
-      nodeXAgents: 'Stateful agent task channel'
+      nodeXAgents: 'Stateful agent task channel',
+      observability: 'Network topology & latency metrics'
+    }
+  },
+  observability: {
+    title: 'Forward Observability',
+    subtitle: 'Latency trends, topology and runtime job timeline',
+    refresh: 'Refresh',
+    tabs: {
+      trend: 'Latency Trend',
+      topology: 'Topology',
+      multiIngress: 'Multi-Ingress',
+      jobs: 'Job Timeline'
+    },
+    trend: {
+      targetLabel: 'Target',
+      selectTarget: 'Select a target',
+      noTargets: 'No probe targets yet. Targets appear once forwards/tunnels/nodes are active.',
+      noData: 'No samples in the selected window.',
+      avg: 'Avg',
+      p95: 'P95',
+      min: 'Min',
+      max: 'Max',
+      loss: 'Loss',
+      latencyAxis: 'Latency (ms)',
+      online: 'Online',
+      offline: 'Offline'
+    },
+    topology: {
+      empty: 'No relay/exit nodes to display.',
+      relay: 'Relay',
+      exit: 'Exit',
+      proxy: 'Proxy',
+      latency: 'Latency',
+      load: 'Load',
+      forwards: 'Forwards',
+      online: 'Online',
+      offline: 'Offline'
+    },
+    multiIngress: {
+      forwardLabel: 'Forward',
+      selectForward: 'Select a forward',
+      tunnel: 'Tunnel',
+      ingress: 'Ingress',
+      ingressIp: 'Ingress IP',
+      avgRtt: 'Avg RTT (ms)',
+      loss: 'Loss (%)',
+      status: 'Status',
+      empty: 'Select a forward to compare ingress paths.',
+      noRows: 'No ingress data for this forward.'
+    },
+    jobs: {
+      empty: 'No runtime jobs.',
+      action: 'Action',
+      backend: 'Backend',
+      status: 'Status',
+      createdAt: 'Created',
+      pending: 'Pending',
+      running: 'Running',
+      success: 'Success',
+      failed: 'Failed'
+    },
+    errors: {
+      loadFailed: 'Failed to load observability data'
     }
   },
   login: {
@@ -328,6 +399,8 @@ export default {
     passwordPlaceholder: 'Enter your password',
     registerPasswordPlaceholder: 'Enter a password (minimum 6 characters)',
     confirmPasswordPlaceholder: 'Re-enter your password',
+    inviteCodeLabel: 'Invite code (optional)',
+    inviteCodePlaceholder: 'Enter an invite code if this site requires one',
     forgotPassword: 'Forgot password?',
     switchToRegister: 'No account yet? Register',
     switchToLogin: 'Already have an account? Sign in',
@@ -2322,6 +2395,85 @@ export default {
       saveFailedShort: 'Save failed'
     }
   },
+  adminPlans: {
+    title: 'Plan Management',
+    subtitle: 'Manage subscription plans, traffic quota, speed limits, and device limits.',
+    table: {
+      name: 'Name',
+      transfer: 'Traffic (GB)',
+      limits: 'Limits',
+      monthPrice: 'Monthly price (cents)',
+      subscriptionGroups: 'Subscription groups',
+      actions: 'Actions'
+    },
+    actions: {
+      create: 'Create plan',
+      edit: 'Edit',
+      delete: 'Delete',
+      assign: 'Assign',
+      manageGroups: 'Manage groups',
+      removeGroup: 'Remove group'
+    },
+    empty: {
+      noData: 'No plans'
+    },
+    planModal: {
+      createTitle: 'Create Plan',
+      editTitle: 'Edit Plan',
+      fields: {
+        name: 'Plan name',
+        transfer: 'Traffic quota (GB)',
+        speedLimit: 'Speed limit (Mbps, 0 for unlimited)',
+        deviceLimit: 'Device limit (0 for unlimited)',
+        monthPrice: 'Monthly price (cents)'
+      },
+      placeholders: {
+        name: 'Enter plan name'
+      }
+    },
+    assignModal: {
+      title: 'Assign Plan',
+      fields: {
+        userId: 'User ID',
+        expireAt: 'Expire time (Unix seconds)'
+      },
+      placeholders: {
+        userId: 'Enter user ID'
+      }
+    },
+    groupModal: {
+      title: 'Plan Groups - {name}',
+      description: 'Select the subscription groups this plan can access.',
+      empty: 'No subscription groups',
+      noDescription: 'No description',
+      selectedShort: 'Selected'
+    },
+    labels: {
+      noSpeedLimit: 'No speed limit',
+      noDeviceLimit: 'No device limit',
+      speedLimitMbps: '{value} Mbps',
+      deviceLimitCount: '{value} devices'
+    },
+    messages: {
+      loadFailed: 'Failed to load plans',
+      loadGroupsFailed: 'Failed to load subscription groups',
+      deleteConfirm: 'Delete this plan?',
+      deleteFailed: 'Delete failed: {message}',
+      deleteFailedShort: 'Delete failed',
+      nameRequired: 'Please enter a plan name',
+      saveFailed: 'Save failed: {message}',
+      saveFailedShort: 'Save failed',
+      userIdRequired: 'Please enter a user ID',
+      assignSuccess: 'Assigned successfully',
+      assignFailed: 'Assign failed: {message}',
+      assignFailedShort: 'Assign failed',
+      toggleGroupFailed: 'Failed to toggle group: {message}',
+      toggleGroupFailedShort: 'Failed to toggle group',
+      removeGroupConfirm: 'Remove this subscription group?',
+      removeGroupFailed: 'Failed to remove group: {message}',
+      removeGroupFailedShort: 'Remove failed'
+    }
+  },
   adminUsers: {
     title: 'User Management',
     subtitle: 'Manage all registered users.',
@@ -2340,6 +2492,7 @@ export default {
       email: 'Email',
       plan: 'Plan',
       traffic: 'Traffic',
+      limits: 'Limits',
       expireAt: 'Expires at',
       status: 'Status',
       createdAt: 'Created at',
@@ -2375,6 +2528,8 @@ export default {
         email: 'Email',
         balance: 'Balance (cents)',
         transfer: 'Traffic limit (bytes)',
+        speedLimit: 'Speed limit (Mbps, 0 for unlimited)',
+        deviceLimit: 'Device limit (0 for unlimited)',
         groupId: 'Subscription group',
         expiredAt: 'Expire time (Unix seconds)',
         flowResetTime: 'Flow reset day',
@@ -2393,12 +2548,16 @@ export default {
         userType: 'User type',
         groupId: 'Subscription group',
         transferEnable: 'Traffic limit (bytes)',
+        speedLimit: 'Speed limit (Mbps, 0 for unlimited)',
+        deviceLimit: 'Device limit (0 for unlimited)',
         flowResetTime: 'Flow reset day'
       },
       placeholders: {
         email: 'Enter email',
         password: 'Enter password (min 6 chars)',
-        transferEnable: 'Leave empty for default 0'
+        transferEnable: 'Leave empty for default 0',
+        speedLimit: '0 means no speed limit',
+        deviceLimit: '0 means no device limit'
       },
       groupOptions: {
         unassigned: 'Unassigned'
@@ -2462,6 +2621,10 @@ export default {
     labels: {
       admin: 'Admin',
       noLimit: 'No limit',
+      noSpeedLimit: 'No speed limit',
+      noDeviceLimit: 'No device limit',
+      speedLimitMbps: '{value} Mbps',
+      deviceLimitCount: '{value} devices',
       noReset: 'No reset',
       monthlyDay: 'Day {day} of every month',
       permanent: 'Permanent'

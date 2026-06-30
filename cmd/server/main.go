@@ -22,8 +22,10 @@ import (
 	"github.com/anixops/v2board/internal/cache"
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
+	grpcserver "github.com/anixops/v2board/internal/grpc"
 	"github.com/anixops/v2board/internal/handler"
 	"github.com/anixops/v2board/internal/model"
+	_ "github.com/anixops/v2board/internal/payment/gateways" // register payment gateway plugins
 	"github.com/anixops/v2board/internal/router"
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
@@ -325,6 +327,8 @@ func main() {
 			&model.SpeedLimit{},
 			&model.ForwardRuntimeJob{},
 			&model.ForwardTrafficCursor{},
+			&model.ForwardCleanAgent{},
+			&model.ForwardLatencyBucket{},
 			// 支付网关
 			&model.PaymentGateway{},
 			&model.PaymentRecord{},
@@ -352,7 +356,7 @@ func main() {
 			&model.BackupRecord{},
 			&model.BackupConfig{},
 			&model.OperationLog{},
-				&model.AuditLog{},
+			&model.AuditLog{},
 		); err != nil {
 			log.Fatalf("Failed to migrate database: %v", err)
 		}
@@ -376,6 +380,9 @@ func main() {
 	if err := service.InitForwardRuntimeSystemConfig(database.Get()); err != nil {
 		log.Fatalf("Failed to initialize forward runtime config: %v", err)
 	}
+	if err := service.EnsureObservabilitySchema(database.Get()); err != nil {
+		log.Fatalf("Failed to ensure observability schema: %v", err)
+	}
 	cache.InitMemory()
 	defer cache.CloseMemory()
 	log.Println("Cache initialized: memory")
@@ -397,6 +404,11 @@ func main() {
 	go func() {
 		worker := service.NewForwardGostStatsWorker(database.Get())
 		worker.Start(context.Background())
+	}()
+
+	go func() {
+		prober := service.NewForwardLatencyProber(database.Get())
+		prober.Start(context.Background())
 	}()
 
 	gin.SetMode(cfg.Server.Mode)
@@ -429,6 +441,24 @@ func main() {
 			log.Fatalf("Failed to start API server: %v", err)
 		}
 	}()
+
+	// Start the node-facing gRPC server (V2bX nodes connect here) when enabled.
+	var grpcSrv *grpcserver.Server
+	if cfg.GRPC.Enable {
+		grpcCfg := grpcserver.DefaultServerConfig()
+		if cfg.GRPC.Host != "" {
+			grpcCfg.Host = cfg.GRPC.Host
+		}
+		if cfg.GRPC.Port > 0 {
+			grpcCfg.Port = cfg.GRPC.Port
+		}
+		grpcCfg.APIToken = cfg.GRPC.APIToken
+		grpcSrv = grpcserver.NewServer(grpcCfg)
+		if err := grpcSrv.Start(); err != nil {
+			log.Fatalf("Failed to start gRPC server: %v", err)
+		}
+		log.Printf("gRPC server listening on %s:%d", grpcCfg.Host, grpcCfg.Port)
+	}
 
 	// Wait for shutdown signal, then gracefully stop all servers.
 	sigChan := make(chan os.Signal, 1)
@@ -476,10 +506,11 @@ func main() {
 	httpWg.Wait()
 	log.Println("HTTP servers shut down gracefully")
 
-	// NOTE: gRPC server is not currently started from main.go.
-	// If enabled in the future, call grpcServer.GracefulStop() here
-	// after HTTP shutdown completes (it stops accepting new RPCs and
-	// waits for existing ones to finish).
+	// Stop the gRPC server after HTTP shutdown: it stops accepting new RPCs
+	// and waits for existing ones to finish.
+	if grpcSrv != nil {
+		grpcSrv.Stop()
+	}
 
 	// Give goroutines time to finish returning from ListenAndServe.
 	wg.Wait()

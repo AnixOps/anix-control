@@ -12,7 +12,8 @@ const routes = [
   { path: '/admin/forward/local', component: { template: '<div />' } },
   { path: '/admin/forward/nodes', component: { template: '<div />' } },
   { path: '/admin/forward/nodex', component: { template: '<div />' } },
-  { path: '/admin/forward/agents', component: { template: '<div />' } }
+  { path: '/admin/forward/agents', component: { template: '<div />' } },
+  { path: '/admin/forward/observability', component: { template: '<div />' } }
 ]
 
 function createTestRouter(startPath = '/admin/forward') {
@@ -42,7 +43,7 @@ describe('ForwardSuiteNav.vue', () => {
     expect(nav.exists()).toBe(true)
     expect(nav.attributes('aria-label')).toContain('Forward')
     expect(wrapper.find('ul.forward-suite-list').exists()).toBe(true)
-    expect(listItems).toHaveLength(8)
+    expect(listItems).toHaveLength(9)
     expect(ansibleLink.attributes('aria-label')).toContain('Stateless execution machines')
   })
 

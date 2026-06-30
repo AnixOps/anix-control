@@ -132,6 +132,10 @@ export default {
       zhShort: '中',
       enShort: 'EN'
     },
+    theme: {
+      switchToDark: '深色模式',
+      switchToLight: '浅色模式'
+    },
     a11y: {
       skipToContent: '跳转到主内容',
       openNavigation: '打开导航菜单',
@@ -146,6 +150,9 @@ export default {
       refresh: '刷新',
       save: '保存',
       submit: '提交',
+      create: '创建',
+      edit: '编辑',
+      delete: '删除',
       logout: '退出登录',
       details: '详情',
       back: '返回',
@@ -317,14 +324,78 @@ export default {
       localRuntime: '本地运行时',
       nodeXTopology: 'NodeX 拓扑',
       nodeXRuntime: 'NodeX 运行时',
-      nodeXAgents: 'NodeX Agents'
+      nodeXAgents: 'NodeX Agents',
+      observability: '可观测性'
     },
     hints: {
       ansibleMachines: '无状态执行机器',
       localRuntime: '无状态面板宿主执行器',
       nodeXTopology: '有状态 relay/exit 拓扑',
       nodeXRuntime: '有状态 gost 控制面',
-      nodeXAgents: '有状态 agent 任务通道'
+      nodeXAgents: '有状态 agent 任务通道',
+      observability: '网络拓扑与延迟指标'
+    }
+  },
+  observability: {
+    title: '转发可观测性',
+    subtitle: '延迟趋势、网络拓扑与运行时作业时间线',
+    refresh: '刷新',
+    tabs: {
+      trend: '延迟趋势',
+      topology: '拓扑图',
+      multiIngress: '多入口',
+      jobs: '作业时间线'
+    },
+    trend: {
+      targetLabel: '目标',
+      selectTarget: '选择探测目标',
+      noTargets: '暂无探测目标。转发/隧道/节点激活后将自动出现。',
+      noData: '所选时间范围内无采样数据。',
+      avg: '平均',
+      p95: 'P95',
+      min: '最小',
+      max: '最大',
+      loss: '丢包',
+      latencyAxis: '延迟 (ms)',
+      online: '在线',
+      offline: '离线'
+    },
+    topology: {
+      empty: '暂无 relay/exit 节点可展示。',
+      relay: '中转',
+      exit: '出口',
+      proxy: '代理',
+      latency: '延迟',
+      load: '负载',
+      forwards: '转发数',
+      online: '在线',
+      offline: '离线'
+    },
+    multiIngress: {
+      forwardLabel: '转发',
+      selectForward: '选择转发',
+      tunnel: '隧道',
+      ingress: '入口',
+      ingressIp: '入口 IP',
+      avgRtt: '平均 RTT (ms)',
+      loss: '丢包率 (%)',
+      status: '状态',
+      empty: '选择一个转发以对比入口路径。',
+      noRows: '该转发暂无入口数据。'
+    },
+    jobs: {
+      empty: '暂无运行时作业。',
+      action: '动作',
+      backend: '后端',
+      status: '状态',
+      createdAt: '创建时间',
+      pending: '等待中',
+      running: '运行中',
+      success: '成功',
+      failed: '失败'
+    },
+    errors: {
+      loadFailed: '加载可观测性数据失败'
     }
   },
   login: {
@@ -337,6 +408,8 @@ export default {
     passwordPlaceholder: '请输入密码',
     registerPasswordPlaceholder: '请输入密码（至少 6 位）',
     confirmPasswordPlaceholder: '请再次输入密码',
+    inviteCodeLabel: '邀请码（可选）',
+    inviteCodePlaceholder: '如站点要求邀请码，请在此填写',
     forgotPassword: '忘记密码？',
     switchToRegister: '没有账户？去注册',
     switchToLogin: '已有账户？去登录',
@@ -2330,6 +2403,85 @@ export default {
       saveFailedShort: '\u4fdd\u5b58\u5931\u8d25'
     }
   },
+  adminPlans: {
+    title: '套餐管理',
+    subtitle: '管理订阅套餐、流量额度、速率和设备限制。',
+    table: {
+      name: '名称',
+      transfer: '流量（GB）',
+      limits: '限制',
+      monthPrice: '月付价格（分）',
+      subscriptionGroups: '订阅分组',
+      actions: '操作'
+    },
+    actions: {
+      create: '新增套餐',
+      edit: '编辑',
+      delete: '删除',
+      assign: '分配',
+      manageGroups: '管理分组',
+      removeGroup: '移除分组'
+    },
+    empty: {
+      noData: '暂无套餐'
+    },
+    planModal: {
+      createTitle: '新增套餐',
+      editTitle: '编辑套餐',
+      fields: {
+        name: '套餐名称',
+        transfer: '流量额度（GB）',
+        speedLimit: '速率限制（Mbps，0 为不限）',
+        deviceLimit: '设备限制（0 为不限）',
+        monthPrice: '月付价格（分）'
+      },
+      placeholders: {
+        name: '请输入套餐名称'
+      }
+    },
+    assignModal: {
+      title: '分配套餐',
+      fields: {
+        userId: '用户 ID',
+        expireAt: '到期时间（Unix 秒）'
+      },
+      placeholders: {
+        userId: '请输入用户 ID'
+      }
+    },
+    groupModal: {
+      title: '套餐分组 - {name}',
+      description: '选择该套餐可访问的订阅分组。',
+      empty: '暂无订阅分组',
+      noDescription: '无描述',
+      selectedShort: '已选'
+    },
+    labels: {
+      noSpeedLimit: '不限速',
+      noDeviceLimit: '不限设备',
+      speedLimitMbps: '{value} Mbps',
+      deviceLimitCount: '{value} 台'
+    },
+    messages: {
+      loadFailed: '加载套餐失败',
+      loadGroupsFailed: '加载订阅分组失败',
+      deleteConfirm: '确定删除该套餐吗？',
+      deleteFailed: '删除失败：{message}',
+      deleteFailedShort: '删除失败',
+      nameRequired: '请填写套餐名称',
+      saveFailed: '保存失败：{message}',
+      saveFailedShort: '保存失败',
+      userIdRequired: '请填写用户 ID',
+      assignSuccess: '分配成功',
+      assignFailed: '分配失败：{message}',
+      assignFailedShort: '分配失败',
+      toggleGroupFailed: '切换分组失败：{message}',
+      toggleGroupFailedShort: '切换分组失败',
+      removeGroupConfirm: '确定移除该订阅分组吗？',
+      removeGroupFailed: '移除分组失败：{message}',
+      removeGroupFailedShort: '移除失败'
+    }
+  },
   adminUsers: {
     title: '用户管理',
     subtitle: '管理所有注册用户。',
@@ -2348,6 +2500,7 @@ export default {
       email: '邮箱',
       plan: '套餐',
       traffic: '流量',
+      limits: '限制',
       expireAt: '到期时间',
       status: '状态',
       createdAt: '注册时间',
@@ -2383,6 +2536,8 @@ export default {
         email: '邮箱',
         balance: '余额（分）',
         transfer: '流量限制（字节）',
+        speedLimit: '速率限制（Mbps，0 为不限）',
+        deviceLimit: '设备限制（0 为不限）',
         groupId: '订阅分组',
         expiredAt: '到期时间（Unix 秒）',
         flowResetTime: '流量重置日',
@@ -2401,12 +2556,16 @@ export default {
         userType: '用户类型',
         groupId: '订阅分组',
         transferEnable: '流量限制（字节）',
+        speedLimit: '速率限制（Mbps，0 为不限）',
+        deviceLimit: '设备限制（0 为不限）',
         flowResetTime: '流量重置日'
       },
       placeholders: {
         email: '请输入邮箱',
         password: '请输入密码（至少 6 位）',
-        transferEnable: '留空则使用默认值 0'
+        transferEnable: '留空则使用默认值 0',
+        speedLimit: '0 表示不限速',
+        deviceLimit: '0 表示不限设备'
       },
       groupOptions: {
         unassigned: '未分配'
@@ -2470,6 +2629,10 @@ export default {
     labels: {
       admin: '管理员',
       noLimit: '不限速',
+      noSpeedLimit: '不限速',
+      noDeviceLimit: '不限设备',
+      speedLimitMbps: '{value} Mbps',
+      deviceLimitCount: '{value} 台',
       noReset: '不重置',
       monthlyDay: '每月第 {day} 天',
       permanent: '永久'

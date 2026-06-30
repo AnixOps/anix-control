@@ -68,6 +68,8 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.Forward{},
 			&model.ForwardRuntimeJob{},
 			&model.ForwardTrafficCursor{},
+			&model.ForwardCleanAgent{},
+			&model.ForwardLatencyBucket{},
 			&model.SpeedLimit{},
 			&model.UserMFA{},
 			&model.MFALoginAttempt{},
@@ -173,6 +175,66 @@ func (s *AuthServiceTestSuite) TestRegister_DuplicateEmail() {
 	_, _, err = svc.Register("dup@example.com", "password456", s.cfg)
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "该邮箱已被注册")
+}
+
+func (s *AuthServiceTestSuite) TestRegister_DisabledByPolicy() {
+	svc := NewAuthService()
+	disabled := false
+	cfg := *s.cfg
+	cfg.Auth.Registration.Enabled = &disabled
+
+	_, _, err := svc.Register("closed@example.com", "password123", &cfg)
+
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "registration is disabled")
+}
+
+func (s *AuthServiceTestSuite) TestRegister_RejectsEmailOutsideAllowlist() {
+	svc := NewAuthService()
+	cfg := *s.cfg
+	cfg.Auth.Registration.AllowedEmailDomains = []string{"example.com"}
+
+	_, _, err := svc.Register("user@other.test", "password123", &cfg)
+
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "not in the allowlist")
+}
+
+func (s *AuthServiceTestSuite) TestRegisterWithInvite_ConsumesInviteCode() {
+	svc := NewAuthService()
+	cfg := *s.cfg
+	cfg.Auth.Registration.RequireInvite = true
+
+	inviter := &model.User{
+		Email:    "inviter@example.com",
+		Password: "hash",
+		Token:    "inviter-token",
+		UUID:     "inviter-uuid",
+	}
+	assert.NoError(s.T(), database.Get().Create(inviter).Error)
+
+	invite := &model.InviteCode{
+		Code:   "INVITE123",
+		UserID: &inviter.ID,
+		Status: 0,
+	}
+	assert.NoError(s.T(), database.Get().Create(invite).Error)
+
+	_, user, err := svc.RegisterWithInvite("invited@example.com", "password123", "INVITE123", &cfg)
+
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), user)
+	if assert.NotNil(s.T(), user.InviteUserID) {
+		assert.Equal(s.T(), inviter.ID, *user.InviteUserID)
+	}
+
+	var used model.InviteCode
+	assert.NoError(s.T(), database.Get().First(&used, invite.ID).Error)
+	assert.Equal(s.T(), 1, used.Status)
+	if assert.NotNil(s.T(), used.UsedBy) {
+		assert.Equal(s.T(), user.ID, *used.UsedBy)
+	}
+	assert.NotNil(s.T(), used.UsedAt)
 }
 
 func (s *AuthServiceTestSuite) TestLogin_Success() {

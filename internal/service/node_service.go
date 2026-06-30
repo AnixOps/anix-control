@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"log"
+	"net"
 	"os"
 	"time"
 
@@ -177,9 +178,22 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 		nodeName = "Node-" + clientIP
 	}
 
+	// Fall back to the client IP when the node did not advertise a host. This
+	// matters for gRPC registration (the HTTP handler also fills this in, but
+	// the gRPC path goes straight to the service), and keeps the node probeable.
+	// clientIP may be "ip:port" (gRPC peer addr) — strip the port to a bare host.
+	nodeHost := req.Host
+	if nodeHost == "" && clientIP != "" && clientIP != "unknown" {
+		if host, _, splitErr := net.SplitHostPort(clientIP); splitErr == nil && host != "" {
+			nodeHost = host
+		} else {
+			nodeHost = clientIP
+		}
+	}
+
 	node := &model.Node{
 		Name:          nodeName,
-		Host:          req.Host,
+		Host:          nodeHost,
 		Port:          req.Port,
 		APIKey:        apiKey,
 		APIKeyHash:    hashString(apiKey),

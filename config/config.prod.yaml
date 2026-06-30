@@ -73,6 +73,16 @@ auth:
     max_attempts: 6
     window_seconds: 300
     lockout_seconds: 600
+  register_rate_limit:
+    enabled: true
+    max_attempts: 5
+    window_seconds: 3600
+    lockout_seconds: 3600
+  registration:
+    enabled: true
+    require_invite: false
+    allowed_email_domains: []
+    blocked_email_domains: []
 
 app:
   name: "V2Board"
@@ -93,10 +103,23 @@ forward_runtime:
     poll_interval: "30s"
     idle_poll_interval: "2m"
     error_log_interval: "5m"
+  latency:
+    poll_interval: "60s"
+    idle_poll_interval: "60s"
+    error_log_interval: "5m"
+    dials: 5
+    dial_timeout: "3s"
+    concurrency: 16
+    retention_days: 7
   nodex:
     base_url: "http://127.0.0.1:18081"
     token: "replace-with-shared-token"
     timeout_seconds: 15
+  clean_agent:
+    public_url: ""
+    heartbeat_interval_seconds: 10
+    action_timeout_seconds: 120
+    token_expire_seconds: 0
   iptables_ansible:
     inventory: "config/deploy/ansible/inventory.ini"
     apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
@@ -109,6 +132,13 @@ forward_runtime:
     environment:
       ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
     timeout_seconds: 120
+
+# Node-facing gRPC server (V2bX nodes connect here when Transport=grpc).
+grpc:
+  enabled: false
+  host: "0.0.0.0"
+  port: 50051
+  api_token: ""
 
 # 榛樿绠＄悊鍛橀厤缃?
 admin:

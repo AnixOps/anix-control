@@ -15,6 +15,7 @@ import (
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
+	"github.com/anixops/v2board/internal/service"
 	"github.com/anixops/v2board/internal/tests/testutil"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -105,6 +106,7 @@ func initTestDB() *gorm.DB {
 		&model.ForwardUserTunnel{},
 		&model.ForwardRuntimeJob{},
 		&model.ForwardTrafficCursor{},
+		&model.ForwardLatencyBucket{},
 		&model.BackupConfig{},
 		&model.BackupRecord{},
 		&model.OperationLog{},
@@ -163,6 +165,7 @@ func (s *AuthHandlerTestSuite) SetupSuite() {
 
 func (s *AuthHandlerTestSuite) SetupTest() {
 	s.HandlerTestSuite.SetupTest()
+	service.ResetLoginRateLimiterForTest()
 	s.router = gin.New()
 }
 
@@ -183,6 +186,82 @@ func (s *AuthHandlerTestSuite) TestRegisterHandler() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AuthHandlerTestSuite) TestRegisterHandler_Disabled() {
+	disabled := false
+	cfg := *s.cfg
+	cfg.Auth.Registration.Enabled = &disabled
+	handler := NewAuthHandler(&cfg)
+	s.router.POST("/register", handler.Register)
+
+	body := map[string]string{
+		"email":    "closed-handler@example.com",
+		"password": "password123",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/register", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusForbidden, w.Code)
+}
+
+func (s *AuthHandlerTestSuite) TestRegisterHandler_RequiresInviteCode() {
+	cfg := *s.cfg
+	cfg.Auth.Registration.RequireInvite = true
+	handler := NewAuthHandler(&cfg)
+	s.router.POST("/register", handler.Register)
+
+	body := map[string]string{
+		"email":    "invite-required@example.com",
+		"password": "password123",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/register", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Contains(s.T(), w.Body.String(), "invite code is required")
+}
+
+func (s *AuthHandlerTestSuite) TestRegisterHandler_WithInviteCode() {
+	cfg := *s.cfg
+	cfg.Auth.Registration.RequireInvite = true
+	handler := NewAuthHandler(&cfg)
+	s.router.POST("/register", handler.Register)
+
+	invite := &model.InviteCode{
+		Code:   "HANDLERINV",
+		Status: 0,
+	}
+	assert.NoError(s.T(), s.db.Create(invite).Error)
+
+	body := map[string]string{
+		"email":       "handler-invited@example.com",
+		"password":    "password123",
+		"invite_code": "HANDLERINV",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/register", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	var used model.InviteCode
+	assert.NoError(s.T(), s.db.First(&used, invite.ID).Error)
+	assert.Equal(s.T(), 1, used.Status)
+	assert.NotNil(s.T(), used.UsedBy)
 }
 
 func (s *AuthHandlerTestSuite) TestRegisterHandler_InvalidEmail() {
@@ -931,10 +1010,16 @@ func (s *AdminHandlerTestSuite) TestCreateUser_Success() {
 	handler := NewAdminHandler()
 	s.router.POST("/users", handler.CreateUser)
 
+	speedLimit := int64(80)
+	deviceLimit := 5
+	transferEnable := int64(1073741824)
 	body := map[string]any{
-		"email":    "newuser@example.com",
-		"password": "password123",
-		"is_admin": 0,
+		"email":           "newuser@example.com",
+		"password":        "password123",
+		"is_admin":        0,
+		"transfer_enable": transferEnable,
+		"speed_limit":     speedLimit,
+		"device_limit":    deviceLimit,
 	}
 	jsonBody, _ := json.Marshal(body)
 
@@ -944,6 +1029,15 @@ func (s *AdminHandlerTestSuite) TestCreateUser_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	var created model.User
+	assert.NoError(s.T(), s.db.Where("email = ?", "newuser@example.com").First(&created).Error)
+	assert.Equal(s.T(), transferEnable, created.TransferEnable)
+	if assert.NotNil(s.T(), created.SpeedLimit) {
+		assert.Equal(s.T(), speedLimit, *created.SpeedLimit)
+	}
+	if assert.NotNil(s.T(), created.DeviceLimit) {
+		assert.Equal(s.T(), deviceLimit, *created.DeviceLimit)
+	}
 }
 
 func (s *AdminHandlerTestSuite) TestCreateUser_DuplicateEmail() {
@@ -1170,11 +1264,15 @@ func (s *AdminHandlerTestSuite) TestCreatePlan_Success() {
 	handler := NewAdminHandler()
 	s.router.POST("/plans", handler.CreatePlan)
 
+	speedLimit := int64(100)
+	deviceLimit := 3
 	body := map[string]any{
 		"name":            "New Plan",
 		"group_id":        1,
 		"transfer_enable": 100,
 		"month_price":     1000,
+		"speed_limit":     speedLimit,
+		"device_limit":    deviceLimit,
 		"show":            1,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -1185,6 +1283,14 @@ func (s *AdminHandlerTestSuite) TestCreatePlan_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	var created model.Plan
+	assert.NoError(s.T(), s.db.Where("name = ?", "New Plan").First(&created).Error)
+	if assert.NotNil(s.T(), created.SpeedLimit) {
+		assert.Equal(s.T(), speedLimit, *created.SpeedLimit)
+	}
+	if assert.NotNil(s.T(), created.DeviceLimit) {
+		assert.Equal(s.T(), deviceLimit, *created.DeviceLimit)
+	}
 }
 
 func (s *AdminHandlerTestSuite) TestGetOrderList() {
@@ -1449,9 +1555,13 @@ func (s *AdminHandlerTestSuite) TestUpdatePlan_Success() {
 	handler := NewAdminHandler()
 	s.router.PUT("/plans/:id", handler.UpdatePlan)
 
+	speedLimit := int64(120)
+	deviceLimit := 4
 	body := map[string]any{
 		"name":            "Updated Plan",
 		"transfer_enable": 200,
+		"speed_limit":     speedLimit,
+		"device_limit":    deviceLimit,
 		"show":            1,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -1462,6 +1572,14 @@ func (s *AdminHandlerTestSuite) TestUpdatePlan_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	var updated model.Plan
+	assert.NoError(s.T(), s.db.First(&updated, s.testPlan.ID).Error)
+	if assert.NotNil(s.T(), updated.SpeedLimit) {
+		assert.Equal(s.T(), speedLimit, *updated.SpeedLimit)
+	}
+	if assert.NotNil(s.T(), updated.DeviceLimit) {
+		assert.Equal(s.T(), deviceLimit, *updated.DeviceLimit)
+	}
 }
 
 func (s *AdminHandlerTestSuite) TestUpdatePlan_InvalidID() {
@@ -2091,14 +2209,14 @@ func (s *PaymentHandlerTestSuite) SetupTest() {
 
 	// Create a test order for payment tests
 	order := &model.Order{
-		ID:            1,
-		TradeNo:       "test-order-001",
-		UserID:        1,
-		PlanID:        1,
-		Status:        0, // pending
-		TotalAmount:   10000, // 100.00 CNY
-		Period:        "month",
-		Type:          1,
+		ID:          1,
+		TradeNo:     "test-order-001",
+		UserID:      1,
+		PlanID:      1,
+		Status:      0,     // pending
+		TotalAmount: 10000, // 100.00 CNY
+		Period:      "month",
+		Type:        1,
 	}
 	_ = database.Get().Create(order).Error
 
@@ -2165,13 +2283,57 @@ func (s *PaymentHandlerTestSuite) TestX402Callback_Success() {
 	handler := NewPaymentHandler()
 	s.router.POST("/x402/callback", handler.X402Callback)
 
-	body := bytes.NewReader([]byte(`{"trade_no":"` + "ORDER123" + `","tx_hash":"0xabc123","block_number":12345,"confirmations":6,"status":"confirmed","amount":"0.0001","token":"ETH"}`))
-	req, _ := http.NewRequest("POST", "/x402/callback", body)
+	// 建立带 webhook 密钥的 X402 网关，供回调验签使用。
+	secret := "x402-test-secret"
+	gateway := &model.PaymentGateway{
+		Name:    "X402",
+		Type:    model.PaymentGatewayX402,
+		Enabled: true,
+		Config:  `{"webhook_secret":"` + secret + `"}`,
+	}
+	s.Require().NoError(database.Get().Create(gateway).Error)
+
+	// 构造与 handler 一致的签名体并生成合法签名。
+	fields := map[string]string{
+		"trade_no":      "ORDER123",
+		"tx_hash":       "0xabc123",
+		"block_number":  "12345",
+		"confirmations": "6",
+		"status":        "confirmed",
+		"amount":        "0.0001",
+		"token":         "ETH",
+	}
+	sig := computeHMACSHA256(canonicalizeFields(fields), secret)
+
+	payload := `{"trade_no":"ORDER123","tx_hash":"0xabc123","block_number":12345,"confirmations":6,"status":"confirmed","amount":"0.0001","token":"ETH","signature":"` + sig + `"}`
+	req, _ := http.NewRequest("POST", "/x402/callback", bytes.NewReader([]byte(payload)))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *PaymentHandlerTestSuite) TestX402Callback_ForgedSignatureRejected() {
+	handler := NewPaymentHandler()
+	s.router.POST("/x402/callback", handler.X402Callback)
+
+	gateway := &model.PaymentGateway{
+		Name:    "X402",
+		Type:    model.PaymentGatewayX402,
+		Enabled: true,
+		Config:  `{"webhook_secret":"x402-test-secret"}`,
+	}
+	s.Require().NoError(database.Get().Create(gateway).Error)
+
+	// 伪造签名应被 fail-closed 拒绝。
+	payload := `{"trade_no":"ORDER123","tx_hash":"0xabc123","block_number":12345,"confirmations":6,"status":"confirmed","amount":"0.0001","token":"ETH","signature":"forged0000"}`
+	req, _ := http.NewRequest("POST", "/x402/callback", bytes.NewReader([]byte(payload)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
 }
 
 func (s *PaymentHandlerTestSuite) TestX402CheckPayment_Success() {
@@ -2255,26 +2417,66 @@ func (s *PaymentHandlerTestSuite) TestStripeWebhook_Success() {
 	handler := NewPaymentHandler()
 	s.router.POST("/stripe/webhook", handler.StripeWebhook)
 
-	body := bytes.NewReader([]byte(`{"id":"evt_123","type":"checkout.session.completed","data":{"object":{"id":"cs_123","metadata":{"trade_no":"` + "ORDER123" + `"}}}}`))
-	req, _ := http.NewRequest("POST", "/stripe/webhook", body)
+	secret := "whsec_test_secret"
+	gateway := &model.PaymentGateway{
+		Name:    "Stripe",
+		Type:    model.PaymentGatewayStripe,
+		Enabled: true,
+		Config:  `{"webhook_secret":"` + secret + `"}`,
+	}
+	s.Require().NoError(database.Get().Create(gateway).Error)
+
+	payload := `{"id":"evt_123","type":"checkout.session.completed","data":{"object":{"id":"cs_123","metadata":{"trade_no":"ORDER123"}}}}`
+	// 构造 Stripe 官方签名头：t=<ts>,v1=HMAC(ts.body)。
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+	sig := computeHMACSHA256(ts+"."+payload, secret)
+
+	req, _ := http.NewRequest("POST", "/stripe/webhook", bytes.NewReader([]byte(payload)))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Stripe-Signature", "t="+ts+",v1="+sig)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
-func (s *PaymentHandlerTestSuite) TestPayPalWebhook_Success() {
+func (s *PaymentHandlerTestSuite) TestStripeWebhook_InvalidSignatureRejected() {
 	handler := NewPaymentHandler()
-	s.router.POST("/paypal/webhook", handler.PayPalWebhook)
+	s.router.POST("/stripe/webhook", handler.StripeWebhook)
 
-	body := bytes.NewReader([]byte(`{"id":"WH-123","event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"cap_123","supplementary_data":{"related_ids":{"order_id":"ORDER123"}}}}`))
-	req, _ := http.NewRequest("POST", "/paypal/webhook", body)
+	gateway := &model.PaymentGateway{
+		Name:    "Stripe",
+		Type:    model.PaymentGatewayStripe,
+		Enabled: true,
+		Config:  `{"webhook_secret":"whsec_test_secret"}`,
+	}
+	s.Require().NoError(database.Get().Create(gateway).Error)
+
+	payload := `{"id":"evt_123","type":"checkout.session.completed","data":{"object":{"id":"cs_123","metadata":{"trade_no":"ORDER123"}}}}`
+	req, _ := http.NewRequest("POST", "/stripe/webhook", bytes.NewReader([]byte(payload)))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Stripe-Signature", "t=1700000000,v1=deadbeef")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusOK, w.Code)
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+func (s *PaymentHandlerTestSuite) TestPayPalWebhook_FailsClosedWithoutConfig() {
+	handler := NewPaymentHandler()
+	s.router.POST("/paypal/webhook", handler.PayPalWebhook)
+
+	// 未配置 PayPal 网关（缺 ClientID/Secret/WebhookID）时，验签应 fail-closed 拒绝。
+	// PayPal 正向验签依赖官方远程 API，无法在单元测试中 mock，故此处仅验证拒绝路径。
+	body := bytes.NewReader([]byte(`{"id":"WH-123","event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"cap_123","custom_id":"ORDER123"}}`))
+	req, _ := http.NewRequest("POST", "/paypal/webhook", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Paypal-Transmission-Id", "tx-1")
+	req.Header.Set("Paypal-Transmission-Sig", "sig-1")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
 }
 
 func (s *PaymentHandlerTestSuite) TestGetPaymentStatus_Success() {
