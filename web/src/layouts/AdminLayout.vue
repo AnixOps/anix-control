@@ -112,7 +112,8 @@ const navSections = computed(() => ([
     title: t('layout.admin.sections.overview'),
     items: [
       { to: '/admin/dashboard', icon: 'DB', label: t('layout.admin.nav.dashboard') },
-      { to: '/admin/monitor', icon: 'MT', label: t('layout.admin.nav.monitor') }
+      { to: '/admin/monitor', icon: 'MT', label: t('layout.admin.nav.monitor') },
+      { to: '/admin/traffic-hourly', icon: 'TH', label: t('layout.admin.nav.trafficHourly') }
     ]
   },
   {

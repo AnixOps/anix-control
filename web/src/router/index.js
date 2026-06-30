@@ -15,6 +15,7 @@ const UserPlans = () => import('@/views/user/Plans.vue')
 const UserOrders = () => import('@/views/user/Orders.vue')
 const AdminDashboard = () => import('@/views/admin/Dashboard.vue')
 const AdminMonitor = () => import('@/views/admin/Monitor.vue')
+const AdminTrafficHourly = () => import('@/views/admin/TrafficHourly.vue')
 const AdminUsers = () => import('@/views/admin/Users.vue')
 const AdminOrders = () => import('@/views/admin/Orders.vue')
 const AdminNodes = () => import('@/views/admin/Nodes.vue')
@@ -94,6 +95,10 @@ const routes = [
       {
         path: 'monitor',
         component: AdminMonitor
+      },
+      {
+        path: 'traffic-hourly',
+        component: AdminTrafficHourly
       },
       {
         path: 'users',

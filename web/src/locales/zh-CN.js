@@ -4,6 +4,7 @@ import miscPages from './modules/zh-CN/miscPages'
 import adminSupportPages from './modules/zh-CN/adminSupportPages'
 import adminDashboard from './modules/zh-CN/adminDashboard'
 import adminMonitor from './modules/zh-CN/adminMonitor'
+import adminTrafficHourly from './modules/zh-CN/adminTrafficHourly'
 
 const legacy = {
   'V2Board Admin': 'V2Board 管理端',
@@ -123,6 +124,7 @@ export default {
   ...adminSupportPages,
   ...adminDashboard,
   ...adminMonitor,
+  ...adminTrafficHourly,
   common: {
     locale: {
       label: '语言',
@@ -231,6 +233,7 @@ export default {
     },
     admin: {
       dashboard: '仪表盘',
+      trafficHourly: '小时流量统计',
       users: '用户管理',
       nodes: '节点管理',
       subscriptions: '订阅管理',
@@ -286,6 +289,7 @@ export default {
       nav: {
         dashboard: '仪表盘',
         monitor: '实时监控',
+        trafficHourly: '小时流量',
         users: '用户管理',
         orders: '订单管理',
         tickets: '工单管理',

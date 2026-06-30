@@ -100,6 +100,7 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.ServerAnyTLS{},
 			&model.ServerRoute{},
 			&model.TrafficLog{},
+			&model.OnlineLog{},
 			// Stats models
 			&model.StatUser{},
 			&model.StatServer{},
@@ -1152,6 +1153,106 @@ func (s *StatsServiceTestSuite) TestRefreshDashboardCache() {
 	// 楠岃瘉缂撳瓨瀛樺湪
 	exists := cache.Exists(CacheKeyDashboardStats)
 	assert.True(s.T(), exists)
+}
+
+// TestTodayTraffic_SumsTodayLogsWithRate 验证今日流量从 v2_server_log 按倍率累计,
+// 仅统计本地零点之后的日志, 排除昨日数据
+func (s *StatsServiceTestSuite) TestTodayTraffic_SumsTodayLogsWithRate() {
+	db := database.Get()
+	now := time.Now()
+	todayMidday := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.Local).Unix()
+	yesterday := todayMidday - 24*3600
+
+	logs := []model.TrafficLog{
+		// 今日, rate=1.0, GB 级数值触发 SUM 返回 float64 的扫描路径 -> (1GB+2GB)*1 = 3221225472
+		{UserID: 1, ServerID: 1, ServerType: "node", U: 1073741824, D: 2147483648, Rate: 1.0, LogAt: todayMidday},
+		// 今日, rate=2.0 -> (1GB+0)*2 = 2147483648
+		{UserID: 2, ServerID: 1, ServerType: "node", U: 1073741824, D: 0, Rate: 2.0, LogAt: todayMidday},
+		// 昨日, 应被排除
+		{UserID: 1, ServerID: 1, ServerType: "node", U: 9999, D: 9999, Rate: 1.0, LogAt: yesterday},
+	}
+	for i := range logs {
+		assert.NoError(s.T(), db.Create(&logs[i]).Error)
+	}
+
+	stats, err := s.svc.fetchDashboardFromDB()
+	assert.NoError(s.T(), err)
+	// 3221225472 + 2147483648 = 5368709120, 昨日数据被排除
+	assert.Equal(s.T(), int64(5368709120), stats.TodayTraffic)
+}
+
+// TestTodayTraffic_NoLogsIsZero 无流量日志时今日流量为 0
+func (s *StatsServiceTestSuite) TestTodayTraffic_NoLogsIsZero() {
+	stats, err := s.svc.fetchDashboardFromDB()
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(0), stats.TodayTraffic)
+}
+
+// TestGetHourlyTraffic_BucketsAndFillsZero 验证小时聚合: 按整点分桶、rate 加权、缺失小时补零、范围过滤
+func (s *StatsServiceTestSuite) TestGetHourlyTraffic_BucketsAndFillsZero() {
+	db := database.Get()
+	now := time.Now()
+	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
+	oneHourAgo := currentHour - 3600
+	threeHoursAgo := currentHour - 3*3600
+	outOfRange := currentHour - 10*3600 // 超出 6 小时窗口, 应被排除
+
+	logs := []model.TrafficLog{
+		// 当前小时, GB 级 + rate=2.0 触发 SUM float64 扫描路径: (1GB+0)*2 = 2147483648
+		{UserID: 1, ServerID: 1, ServerType: "node", U: 1073741824, D: 0, Rate: 2.0, LogAt: currentHour + 60},
+		// 当前小时再加一条: (1GB+0)*1 = 1073741824 -> 当前小时合计 3221225472
+		{UserID: 2, ServerID: 1, ServerType: "node", U: 1073741824, D: 0, Rate: 1.0, LogAt: currentHour + 120},
+		// 1 小时前: (1000+0)*1 = 1000
+		{UserID: 1, ServerID: 1, ServerType: "node", U: 1000, D: 0, Rate: 1.0, LogAt: oneHourAgo + 30},
+		// 3 小时前: (0+400)*1 = 400
+		{UserID: 1, ServerID: 1, ServerType: "node", U: 0, D: 400, Rate: 1.0, LogAt: threeHoursAgo + 30},
+		// 超窗口: 应被排除
+		{UserID: 1, ServerID: 1, ServerType: "node", U: 9999, D: 9999, Rate: 1.0, LogAt: outOfRange},
+	}
+	for i := range logs {
+		assert.NoError(s.T(), db.Create(&logs[i]).Error)
+	}
+
+	series, err := s.svc.GetHourlyTraffic(6)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), series, 6) // 6 个小时桶, 含补零
+
+	// 转成 map 便于断言
+	byHour := make(map[int64]int64, len(series))
+	for _, p := range series {
+		byHour[p.HourTs] = p.Traffic
+	}
+	assert.Equal(s.T(), int64(3221225472), byHour[currentHour]) // 2147483648 + 1073741824
+	assert.Equal(s.T(), int64(1000), byHour[oneHourAgo])        // 单条 1000
+	assert.Equal(s.T(), int64(0), byHour[currentHour-2*3600])   // 中间空洞补零
+	assert.Equal(s.T(), int64(400), byHour[threeHoursAgo])      // 400
+	assert.NotContains(s.T(), byHour, outOfRange)               // 超窗口被排除
+
+	// 序列应按时间升序
+	for i := 1; i < len(series); i++ {
+		assert.Greater(s.T(), series[i].HourTs, series[i-1].HourTs)
+	}
+}
+
+// TestGetHourlyTraffic_NoLogsAllZero 无日志时返回全零序列, 长度等于请求小时数
+func (s *StatsServiceTestSuite) TestGetHourlyTraffic_NoLogsAllZero() {
+	series, err := s.svc.GetHourlyTraffic(24)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), series, 24)
+	for _, p := range series {
+		assert.Equal(s.T(), int64(0), p.Traffic)
+	}
+}
+
+// TestGetHourlyTraffic_DefaultsAndClamps hours<=0 默认 24, 超上限被夹紧
+func (s *StatsServiceTestSuite) TestGetHourlyTraffic_DefaultsAndClamps() {
+	def, err := s.svc.GetHourlyTraffic(0)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), def, 24)
+
+	clamped, err := s.svc.GetHourlyTraffic(99999)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), clamped, maxHourlyWindow)
 }
 
 func TestStatsService(t *testing.T) {
