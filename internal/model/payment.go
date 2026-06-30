@@ -94,6 +94,7 @@ type StripeConfig struct {
 type PayPalConfig struct {
 	ClientID     string `json:"client_id"`
 	ClientSecret string `json:"client_secret"`
+	WebhookID    string `json:"webhook_id"`
 	SandboxMode  bool   `json:"sandbox_mode"`
 	Currency     string `json:"currency"`
 }

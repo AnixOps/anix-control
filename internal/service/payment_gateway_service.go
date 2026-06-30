@@ -121,6 +121,18 @@ func (s *PaymentGatewayService) ParseConfig(gateway *model.PaymentGateway) (any,
 			return nil, err
 		}
 		return &config, nil
+	case model.PaymentGatewayPayPal:
+		var config model.PayPalConfig
+		if err := json.Unmarshal([]byte(gateway.Config), &config); err != nil {
+			return nil, err
+		}
+		return &config, nil
+	case model.PaymentGatewayX402:
+		var config model.X402Config
+		if err := json.Unmarshal([]byte(gateway.Config), &config); err != nil {
+			return nil, err
+		}
+		return &config, nil
 	case model.PaymentGatewayUSDT:
 		var config model.USDTConfig
 		if err := json.Unmarshal([]byte(gateway.Config), &config); err != nil {

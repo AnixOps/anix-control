@@ -11,6 +11,7 @@ import (
 
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
+	"github.com/anixops/v2board/internal/payment"
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -648,18 +649,39 @@ func (h *PaymentGatewayHandler) PaymentCallback(c *gin.Context) {
 		return
 	}
 
-	// EPay回调处理
-	if gatewayType == model.PaymentGatewayEPay {
-		tradeNo := c.Query("out_trade_no")
-		gatewayTradeNo := c.Query("trade_no")
+	// 从插件注册表查找网关实现，新增支付方式无需改动此处。
+	gw, ok := payment.Get(gatewayType)
+	if !ok {
+		log.Printf("payment callback: no registered gateway for type=%s", gatewayType)
+		c.String(http.StatusBadRequest, "fail")
+		return
+	}
 
-		if err := h.gatewayService.MarkOrderPaid(tradeNo, gatewayTradeNo, string(body)); err != nil {
+	// 读取该网关已启用配置（含验签密钥）。
+	config := ""
+	if gateway, err := h.gatewayService.GetByType(gatewayType); err == nil && gateway != nil {
+		config = gateway.Config
+	}
+
+	result, err := gw.VerifyCallback(&payment.CallbackContext{
+		RawBody: body,
+		Headers: c.Request.Header,
+		Query:   c.Request.URL.Query(),
+		Config:  config,
+	})
+	if err != nil {
+		log.Printf("payment callback verification failed for type=%s: %v", gatewayType, err)
+		c.String(http.StatusBadRequest, "fail")
+		return
+	}
+
+	// 仅在确认支付成功时入账，防止伪造回调白嫖。
+	if result.Status == payment.StatusPaid {
+		if err := h.gatewayService.MarkOrderPaid(result.TradeNo, result.GatewayTradeNo, result.Raw); err != nil {
+			log.Printf("payment callback: mark paid failed for trade_no=%s: %v", result.TradeNo, err)
 			c.String(http.StatusBadRequest, "fail")
 			return
 		}
-
-		c.String(http.StatusOK, "success")
-		return
 	}
 
 	c.String(http.StatusOK, "success")
