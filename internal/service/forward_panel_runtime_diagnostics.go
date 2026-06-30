@@ -20,12 +20,15 @@ const (
 	defaultForwardRuntimeNodeXStatusPath = "/api/v2/internal/forward/runtime/status"
 
 	panelForwardRuntimeAttachmentModelNodeXGost         = "nodex_gost_stateful"
+	panelForwardRuntimeAttachmentModelCleanAgent        = "clean_agent_pull"
 	panelForwardRuntimeIgnoredNodeXConfigWarning        = "NodeX base_url/token are configured but ignored while runtime backend is a local ansible backend"
 	panelForwardRuntimeMissingNodeXBaseURLReason        = "NodeX mode requires forward.runtime.nodex.base_url before the panel can probe the control plane"
 	panelForwardRuntimeMissingNodeXTokenReason          = "NodeX mode requires forward.runtime.nodex.token before runtime readiness can be confirmed"
 	panelForwardRuntimeNodeXHealthSuccessReason         = "NodeX /health responded with ok from the panel host"
 	panelForwardRuntimeLocalExecutorReachableReason     = "ansible-playbook is available on the panel host"
 	panelForwardRuntimeLocalExecutorReadyReason         = "Local ansible executor resolved inventory/playbooks and is ready to queue jobs"
+	panelForwardRuntimeCleanAgentReadyReason            = "At least one clean forward agent is online and can pull queued jobs"
+	panelForwardRuntimeCleanAgentWaitingReason          = "No online clean forward agent is registered yet"
 	panelForwardRuntimeNodeXRuntimeReadyReason          = "NodeX runtime status responded and advertises gost support"
 	panelForwardRuntimeNodeXRuntimeMissingBackendReason = "NodeX runtime status responded, but gost support is not advertised yet"
 )
@@ -277,6 +280,12 @@ func (s *PanelForwardRuntimeService) buildRuntimeStatusSummary(ctx context.Conte
 		if summary.Config.BaseURLConfigured || summary.Config.TokenConfigured {
 			summary.Warnings = append(summary.Warnings, panelForwardRuntimeIgnoredNodeXConfigWarning)
 		}
+	} else if backend == model.ForwardRuntimeBackendCleanAgent {
+		summary.Reachability = s.buildCleanAgentRuntimeReady()
+		summary.RuntimeReady = summary.Reachability
+		if summary.Config.BaseURLConfigured || summary.Config.TokenConfigured {
+			summary.Warnings = append(summary.Warnings, "NodeX base_url/token are configured but ignored while runtime backend is clean_agent")
+		}
 	} else {
 		client.populateNodeXRuntimeSummary(ctx, settings, summary)
 	}
@@ -413,6 +422,12 @@ func buildPanelForwardRuntimeConfigState(backend string, settings *nodeXForwardR
 }
 
 func buildPanelForwardRuntimeAttachmentState(backend string) PanelForwardRuntimeAttachmentState {
+	if backend == model.ForwardRuntimeBackendCleanAgent {
+		return PanelForwardRuntimeAttachmentState{
+			Model:       panelForwardRuntimeAttachmentModelCleanAgent,
+			Description: "Clean-room pull agent path. The panel stores desired runtime jobs; v2forward-agent polls, applies local firewall state, and reports results back.",
+		}
+	}
 	if isForwardRuntimeLocalAnsibleBackend(backend) {
 		attachmentModel := "local_nftables_ansible_stateless"
 		description := "Stateless nftables/Ansible path. Only the execution node identity is stored on the tunnel; SSH access comes from the configured ansible inventory."
@@ -519,6 +534,23 @@ func buildLocalAnsibleRuntimeReady(status *nodeXForwardRuntimeAnsibleStatus) Pan
 	}
 }
 
+func (s *PanelForwardRuntimeService) buildCleanAgentRuntimeReady() PanelForwardRuntimeReadiness {
+	if s == nil || s.db == nil {
+		return PanelForwardRuntimeReadiness{Ready: false, Reason: "database is not configured"}
+	}
+
+	var onlineCount int64
+	if err := s.db.Model(&model.ForwardCleanAgent{}).
+		Where("status = ? AND revoked_at IS NULL", model.ForwardCleanAgentStatusOnline).
+		Count(&onlineCount).Error; err != nil {
+		return PanelForwardRuntimeReadiness{Ready: false, Reason: err.Error()}
+	}
+	if onlineCount > 0 {
+		return PanelForwardRuntimeReadiness{Ready: true, Reason: panelForwardRuntimeCleanAgentReadyReason}
+	}
+	return PanelForwardRuntimeReadiness{Ready: false, Reason: panelForwardRuntimeCleanAgentWaitingReason}
+}
+
 func firstRuntimeIssue(status *nodeXForwardRuntimeAnsibleStatus, fallback string) string {
 	if status != nil {
 		if issue := firstNonEmpty(status.Issues...); issue != "" {
@@ -543,6 +575,13 @@ func buildPanelForwardRuntimeSummary(summary *PanelForwardRuntimeStatusSummary) 
 		return fmt.Sprintf("Local %s executor is not ready on the panel host yet.", label)
 	}
 
+	if summary.Config.Backend == model.ForwardRuntimeBackendCleanAgent {
+		if summary.RuntimeReady.Ready {
+			return "Clean agent runtime is selected and at least one agent is online. Forward changes will be queued until the bound agent pulls and reports each job."
+		}
+		return "Clean agent runtime is selected, but no online clean agent is registered yet."
+	}
+
 	if !summary.Config.BaseURLConfigured {
 		return "NodeX mode is enabled, but the control plane base URL is still missing."
 	}
@@ -559,6 +598,26 @@ func buildPanelForwardRuntimeSummary(summary *PanelForwardRuntimeStatusSummary) 
 }
 
 func buildPanelForwardRuntimeCommands(backend, baseURL string) PanelForwardRuntimeCommandHints {
+	if backend == model.ForwardRuntimeBackendCleanAgent {
+		return PanelForwardRuntimeCommandHints{
+			PowerShell: []string{
+				"Invoke-WebRequest '/api/v2/admin/forward/agents' -Method POST -Body '{\"name\":\"relay-1\",\"nodeId\":1}'",
+				"Invoke-WebRequest '/api/v2/forward-agent/install.sh'",
+			},
+			Bash: []string{
+				"curl -fsSL \"$PANEL_URL/api/v2/forward-agent/install.sh\" -o install-v2forward-agent.sh",
+				"sudo AGENT_TOKEN='<TOKEN>' NODE_ID='<FORWARD_NODE_ID>' bash install-v2forward-agent.sh",
+			},
+			Upgrade: []string{
+				"go test ./internal/service -run TestForwardCleanAgent",
+				"go build -o v2board ./cmd/server",
+			},
+			References: []string{
+				"docs/forward-clean-room/spec.md",
+				"docs/forward-clean-room/provenance.md",
+			},
+		}
+	}
 	if isForwardRuntimeLocalAnsibleBackend(backend) {
 		applyPlaybook := defaultForwardApplyPlaybookPathForBackend(backend)
 		removePlaybook := defaultForwardRemovePlaybookPathForBackend(backend)
