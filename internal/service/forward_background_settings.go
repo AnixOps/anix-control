@@ -22,6 +22,16 @@ type forwardGostStatsWorkerSettings struct {
 	ErrorLogInterval time.Duration
 }
 
+type forwardLatencyProberSettings struct {
+	PollInterval     time.Duration
+	IdlePollInterval time.Duration
+	ErrorLogInterval time.Duration
+	Dials            int
+	DialTimeout      time.Duration
+	Concurrency      int
+	Retention        time.Duration
+}
+
 func loadForwardRuntimeJobExecutorSettings() forwardRuntimeJobExecutorSettings {
 	settings := forwardRuntimeJobExecutorSettings{
 		PollInterval:     defaultForwardRuntimeJobPollInterval,
@@ -108,6 +118,64 @@ func loadForwardGostStatsWorkerSettings() forwardGostStatsWorkerSettings {
 		defaultForwardGostStatsErrorLogInterval,
 		"forward_runtime.gost_stats.error_log_interval",
 	)
+
+	return settings
+}
+
+func loadForwardLatencyProberSettings() forwardLatencyProberSettings {
+	settings := forwardLatencyProberSettings{
+		PollInterval:     defaultForwardLatencyBucketInterval,
+		IdlePollInterval: defaultForwardLatencyIdleInterval,
+		ErrorLogInterval: defaultForwardLatencyErrorLogInterval,
+		Dials:            defaultForwardLatencyDialsPerProbe,
+		DialTimeout:      defaultForwardLatencyDialTimeout,
+		Concurrency:      defaultForwardLatencyConcurrency,
+		Retention:        time.Duration(defaultForwardLatencyRetentionDays) * 24 * time.Hour,
+	}
+
+	cfg := appconfig.Get()
+	if cfg == nil {
+		return settings
+	}
+
+	settings.PollInterval = loadForwardBackgroundInterval(
+		cfg.ForwardRuntime.Latency.PollInterval,
+		defaultForwardLatencyBucketInterval,
+		"forward_runtime.latency.poll_interval",
+	)
+	settings.IdlePollInterval = normalizeForwardIdlePollInterval(
+		settings.PollInterval,
+		loadForwardBackgroundInterval(
+			cfg.ForwardRuntime.Latency.IdlePollInterval,
+			defaultForwardLatencyIdleInterval,
+			"forward_runtime.latency.idle_poll_interval",
+		),
+	)
+	settings.ErrorLogInterval = loadForwardBackgroundInterval(
+		cfg.ForwardRuntime.Latency.ErrorLogInterval,
+		defaultForwardLatencyErrorLogInterval,
+		"forward_runtime.latency.error_log_interval",
+	)
+	settings.DialTimeout = loadForwardBackgroundInterval(
+		cfg.ForwardRuntime.Latency.DialTimeout,
+		defaultForwardLatencyDialTimeout,
+		"forward_runtime.latency.dial_timeout",
+	)
+	if cfg.ForwardRuntime.Latency.Dials > 0 {
+		settings.Dials = cfg.ForwardRuntime.Latency.Dials
+	} else if cfg.ForwardRuntime.Latency.Dials < 0 {
+		log.Printf("invalid %s=%d, using default %d", "forward_runtime.latency.dials", cfg.ForwardRuntime.Latency.Dials, defaultForwardLatencyDialsPerProbe)
+	}
+	if cfg.ForwardRuntime.Latency.Concurrency > 0 {
+		settings.Concurrency = cfg.ForwardRuntime.Latency.Concurrency
+	} else if cfg.ForwardRuntime.Latency.Concurrency < 0 {
+		log.Printf("invalid %s=%d, using default %d", "forward_runtime.latency.concurrency", cfg.ForwardRuntime.Latency.Concurrency, defaultForwardLatencyConcurrency)
+	}
+	if cfg.ForwardRuntime.Latency.RetentionDays > 0 {
+		settings.Retention = time.Duration(cfg.ForwardRuntime.Latency.RetentionDays) * 24 * time.Hour
+	} else if cfg.ForwardRuntime.Latency.RetentionDays < 0 {
+		log.Printf("invalid %s=%d, using default %d", "forward_runtime.latency.retention_days", cfg.ForwardRuntime.Latency.RetentionDays, defaultForwardLatencyRetentionDays)
+	}
 
 	return settings
 }

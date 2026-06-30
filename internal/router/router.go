@@ -95,6 +95,16 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			authPublic.POST("/register", authHandler.Register)
 		}
 
+		cleanAgentHandler := handler.NewForwardCleanAgentHandler()
+		forwardAgentPublic := v2.Group("/forward-agent")
+		forwardAgentPublic.Use(publicLimiter.Middleware())
+		{
+			forwardAgentPublic.GET("/install.sh", cleanAgentHandler.InstallScript)
+			forwardAgentPublic.POST("/register", cleanAgentHandler.Register)
+			forwardAgentPublic.POST("/heartbeat", cleanAgentHandler.Heartbeat)
+			forwardAgentPublic.POST("/report", cleanAgentHandler.Report)
+		}
+
 		// 支付接口
 		paymentHandler := handler.NewPaymentHandler()
 		v2.GET("/payment/methods", paymentHandler.GetPaymentMethods)
@@ -287,6 +297,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/forward/local/doctor", forwardHandler.DiagnoseLocalRuntime)
 			admin.GET("/forward/nodex/status", forwardHandler.GetNodeXRuntimeStatus)
 			admin.GET("/forward/nodex/doctor", forwardHandler.DiagnoseNodeXRuntime)
+			// 可观测性 (延迟趋势/拓扑/多入口)
+			admin.GET("/forward/observability/targets", forwardHandler.ListObservabilityTargets)
+			admin.GET("/forward/observability/trend", forwardHandler.GetObservabilityTrend)
+			admin.GET("/forward/observability/topology", forwardHandler.GetObservabilityTopology)
+			admin.GET("/forward/observability/multi-ingress", forwardHandler.GetObservabilityMultiIngress)
 			admin.POST("/forward/update", forwardHandler.UpdatePanelForward)
 			admin.POST("/forward/delete", forwardHandler.DeletePanelForward)
 			admin.POST("/forward/force-delete", forwardHandler.ForceDeletePanelForward)
@@ -295,6 +310,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/forward/diagnose", forwardHandler.DiagnosePanelForward)
 			admin.POST("/forward/sync-backend", forwardHandler.SyncForwardsToBackend)
 			admin.POST("/forward/update-order", forwardHandler.UpdatePanelForwardOrder)
+			admin.GET("/forward/agents", cleanAgentHandler.ListAgents)
+			admin.POST("/forward/agents", cleanAgentHandler.CreateAgentToken)
+			admin.POST("/forward/agents/:id/revoke", cleanAgentHandler.RevokeAgent)
 			admin.POST("/tunnel/create", forwardHandler.CreatePanelTunnel)
 			admin.POST("/tunnel/list", forwardHandler.ListPanelAdminTunnels)
 			admin.POST("/tunnel/update", forwardHandler.UpdatePanelTunnel)

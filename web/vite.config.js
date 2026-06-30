@@ -35,6 +35,16 @@ function manualChunks(id) {
     return 'network'
   }
 
+  // Heavy visualization libs are dynamically imported only by the Observability
+  // route; keep them out of the main vendor chunk so they load on demand.
+  if (id.includes('echarts') || id.includes('zrender')) {
+    return 'echarts'
+  }
+
+  if (id.includes('@antv')) {
+    return 'g6'
+  }
+
   return 'vendor'
 }
 

@@ -57,6 +57,16 @@ auth:
     max_attempts: 6
     window_seconds: 300
     lockout_seconds: 600
+  register_rate_limit:
+    enabled: true
+    max_attempts: 5
+    window_seconds: 3600
+    lockout_seconds: 3600
+  registration:
+    enabled: true
+    require_invite: false
+    allowed_email_domains: []
+    blocked_email_domains: []
 
 app:
   name: "V2Board"
@@ -81,6 +91,7 @@ forward_runtime:
   # - gost               => NodeX mode, stateful runtime
   # - nftables_ansible   => local ansible/nftables mode, stateless runtime
   # - iptables_ansible   => legacy local ansible/iptables mode
+  # - clean_agent        => clean-room pull agent mode, no Forwardx code dependency
   backend: "gost"
 
   # NodeX / gost runtime.
@@ -88,6 +99,14 @@ forward_runtime:
     base_url: "http://127.0.0.1:18081"
     token: "replace-with-shared-token"
     timeout_seconds: 15
+
+  # Clean-room pull agent runtime. The panel queues runtime jobs; v2forward-agent
+  # pulls actions from /api/v2/forward-agent/heartbeat and reports results back.
+  clean_agent:
+    public_url: ""
+    heartbeat_interval_seconds: 10
+    action_timeout_seconds: 120
+    token_expire_seconds: 0
 
   # Preferred local ansible execution runtime for modern Debian/Ubuntu hosts.
   # Relative paths are resolved from config.yaml/project location at startup.
@@ -132,6 +151,26 @@ forward_runtime:
     poll_interval: "30s"
     idle_poll_interval: "2m"
     error_log_interval: "5m"
+
+  # Latency prober (TCPing) for the observability page. Probes forward targets,
+  # tunnel relay/exit nodes and ForwardNode endpoints, storing pre-aggregated
+  # buckets in v2_forward_latency_bucket.
+  latency:
+    poll_interval: "60s"        # cycle == bucket interval
+    idle_poll_interval: "60s"   # how often to re-check for targets when idle (new nodes appear within this)
+    error_log_interval: "5m"
+    dials: 5                    # TCP dials per probe used to compute min/avg/max/p95/loss
+    dial_timeout: "3s"
+    concurrency: 16             # max targets probed in parallel
+    retention_days: 7           # buckets older than this are purged hourly
+
+# Node-facing gRPC server. V2bX nodes connect here when Transport=grpc.
+# api_token (optional) is checked by the auth interceptor; leave empty to disable auth.
+grpc:
+  enabled: false
+  host: "0.0.0.0"
+  port: 50051
+  api_token: ""
 
 admin:
   email: "v2board@anixops.com"

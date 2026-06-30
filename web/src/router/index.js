@@ -30,6 +30,7 @@ const AdminAnsibleMachines = () => import('@/views/admin/AnsibleMachines.vue')
 const AdminForwardNodes = () => import('@/views/admin/ForwardNodes.vue')
 const AdminLocalRuntime = () => import('@/views/admin/LocalRuntime.vue')
 const AdminNodeX = () => import('@/views/admin/NodeX.vue')
+const AdminObservability = () => import('@/views/admin/Observability.vue')
 const AdminPayment = () => import('@/views/admin/Payment.vue')
 const AdminTelegram = () => import('@/views/admin/Telegram.vue')
 const AdminMFA = () => import('@/views/admin/MFA.vue')
@@ -153,6 +154,10 @@ const routes = [
       {
         path: 'forward/nodex',
         component: AdminNodeX
+      },
+      {
+        path: 'forward/observability',
+        component: AdminObservability
       },
       {
         path: 'forward/agents',

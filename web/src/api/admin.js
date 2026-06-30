@@ -650,6 +650,36 @@ export function runNodeXRuntimeDoctor() {
   })
 }
 
+export function getForwardObservabilityTargets() {
+  return request({
+    url: '/admin/forward/observability/targets',
+    method: 'get'
+  })
+}
+
+export function getForwardObservabilityTrend(params) {
+  return request({
+    url: '/admin/forward/observability/trend',
+    method: 'get',
+    params
+  })
+}
+
+export function getForwardObservabilityTopology() {
+  return request({
+    url: '/admin/forward/observability/topology',
+    method: 'get'
+  })
+}
+
+export function getForwardObservabilityMultiIngress(targetId) {
+  return request({
+    url: '/admin/forward/observability/multi-ingress',
+    method: 'get',
+    params: { targetId }
+  })
+}
+
 export function getForwardTunnels() {
   return request({
     url: '/tunnel/user/tunnel',

@@ -26,14 +26,15 @@ import { useAppI18n } from '@/composables/useAppI18n'
 const { t } = useAppI18n()
 
 const links = computed(() => ([
-  { label: t('forwardSuite.nav.forwards'), to: '/admin/forward', icon: 'F' },
-  { label: t('forwardSuite.nav.tunnels'), to: '/admin/forward/tunnel', icon: 'T' },
-  { label: t('forwardSuite.nav.limits'), to: '/admin/forward/limit', icon: 'L' },
-  { label: t('forwardSuite.nav.ansibleMachines'), to: '/admin/forward/ansible-machines', icon: 'A', hint: t('forwardSuite.hints.ansibleMachines') },
-  { label: t('forwardSuite.nav.localRuntime'), to: '/admin/forward/local', icon: 'R', hint: t('forwardSuite.hints.localRuntime') },
-  { label: t('forwardSuite.nav.nodeXTopology'), to: '/admin/forward/nodes', icon: 'N', hint: t('forwardSuite.hints.nodeXTopology') },
-  { label: t('forwardSuite.nav.nodeXRuntime'), to: '/admin/forward/nodex', icon: 'X', hint: t('forwardSuite.hints.nodeXRuntime') },
-  { label: t('forwardSuite.nav.nodeXAgents'), to: '/admin/forward/agents', icon: 'G', hint: t('forwardSuite.hints.nodeXAgents') }
+  { label: t('forwardSuite.nav.forwards'), to: '/admin/forward', icon: 'FW' },
+  { label: t('forwardSuite.nav.tunnels'), to: '/admin/forward/tunnel', icon: 'TN' },
+  { label: t('forwardSuite.nav.limits'), to: '/admin/forward/limit', icon: 'LM' },
+  { label: t('forwardSuite.nav.ansibleMachines'), to: '/admin/forward/ansible-machines', icon: 'AM', hint: t('forwardSuite.hints.ansibleMachines') },
+  { label: t('forwardSuite.nav.localRuntime'), to: '/admin/forward/local', icon: 'LR', hint: t('forwardSuite.hints.localRuntime') },
+  { label: t('forwardSuite.nav.nodeXTopology'), to: '/admin/forward/nodes', icon: 'NX', hint: t('forwardSuite.hints.nodeXTopology') },
+  { label: t('forwardSuite.nav.nodeXRuntime'), to: '/admin/forward/nodex', icon: 'RT', hint: t('forwardSuite.hints.nodeXRuntime') },
+  { label: t('forwardSuite.nav.nodeXAgents'), to: '/admin/forward/agents', icon: 'AG', hint: t('forwardSuite.hints.nodeXAgents') },
+  { label: t('forwardSuite.nav.observability'), to: '/admin/forward/observability', icon: 'OB', hint: t('forwardSuite.hints.observability') }
 ]))
 </script>
 
@@ -66,8 +67,14 @@ const links = computed(() => ([
 }
 
 .icon {
-  width: 20px;
-  text-align: center;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -79,6 +86,6 @@ const links = computed(() => ([
 
 .hint {
   font-size: 12px;
-  opacity: 0.8;
+  opacity: 0.76;
 }
 </style>

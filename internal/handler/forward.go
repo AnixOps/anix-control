@@ -20,6 +20,7 @@ type ForwardHandler struct {
 	nodeService  *service.ForwardNodeService
 	ruleService  *service.ForwardRuleService
 	panelService *service.PanelForwardService
+	obsService   *service.ForwardObservabilityService
 	gostManager  *gost.Manager
 }
 
@@ -31,6 +32,7 @@ func NewForwardHandler() *ForwardHandler {
 		nodeService:  nodeService,
 		ruleService:  service.NewForwardRuleService(db, nodeService),
 		panelService: service.NewPanelForwardService(db),
+		obsService:   service.NewForwardObservabilityService(db),
 		gostManager:  gost.NewManager(db),
 	}
 }
