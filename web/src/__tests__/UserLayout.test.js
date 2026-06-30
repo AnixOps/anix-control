@@ -112,7 +112,7 @@ describe('UserLayout.vue', () => {
     const userStore = useUserStore()
     userStore.logout = vi.fn()
 
-    await wrapper.find('.user-actions .btn-ghost').trigger('click')
+    await wrapper.find('.user-actions .btn').trigger('click')
 
     expect(userStore.logout).toHaveBeenCalledTimes(1)
     expect(mockPush).toHaveBeenCalledWith('/login')

@@ -1,84 +1,108 @@
 <template>
   <main id="app-main-content" tabindex="-1" class="login-page" aria-labelledby="login-page-title">
     <div class="login-shell">
-      <div class="login-toolbar">
-        <LocaleSwitcher />
-      </div>
-
-      <div class="login-container">
-        <div class="login-brand">
-          <div class="brand-icon">V</div>
-          <h1>{{ t('layout.user.brand') }}</h1>
-          <p>{{ t('login.brandSubtitle') }}</p>
-        </div>
-
-        <div class="login-box">
-          <h2 id="login-page-title">{{ isRegisterMode ? t('login.registerTitle') : t('login.signInTitle') }}</h2>
-          <p class="login-subtitle">{{ isRegisterMode ? t('login.registerSubtitle') : t('login.signInSubtitle') }}</p>
-
-          <form class="login-form" :aria-busy="loading ? 'true' : 'false'" @submit.prevent="isRegisterMode ? handleRegister() : handleLogin()">
-            <div class="form-group">
-              <label for="email">{{ t('common.labels.email') }}</label>
-              <input
-                id="email"
-                v-model.trim="email"
-                type="email"
-                :placeholder="t('login.emailPlaceholder')"
-                autocomplete="email"
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="password">{{ t('common.labels.password') }}</label>
-              <input
-                id="password"
-                v-model="password"
-                type="password"
-                :placeholder="isRegisterMode ? t('login.registerPasswordPlaceholder') : t('login.passwordPlaceholder')"
-                :autocomplete="isRegisterMode ? 'new-password' : 'current-password'"
-              />
-            </div>
-
-            <div v-if="isRegisterMode" class="form-group">
-              <label for="confirm-password">{{ t('common.labels.confirmPassword') }}</label>
-              <input
-                id="confirm-password"
-                v-model="confirmPassword"
-                type="password"
-                :placeholder="t('login.confirmPasswordPlaceholder')"
-                autocomplete="new-password"
-              />
-            </div>
-
-            <div v-if="errorMsg" class="error-msg" role="alert">{{ errorMsg }}</div>
-            <div v-if="successMsg" class="success-msg" role="status" aria-live="polite">{{ successMsg }}</div>
-
-            <button type="submit" class="login-btn" :disabled="loading">
-              <span v-if="loading" class="spinner"></span>
-              {{ loading
-                ? (isRegisterMode ? t('login.loadingRegister') : t('login.loadingLogin'))
-                : (isRegisterMode ? t('login.submitRegister') : t('login.submitLogin')) }}
-            </button>
-          </form>
-
-          <div class="login-footer">
-            <a v-if="!isRegisterMode" href="#" @click.prevent>{{ t('login.forgotPassword') }}</a>
-            <a href="#" @click.prevent="toggleMode">
-              {{ isRegisterMode ? t('login.switchToLogin') : t('login.switchToRegister') }}
-            </a>
+      <section class="login-aside">
+        <div class="aside-pill">{{ t('layout.admin.badge') }}</div>
+        <h1>{{ t('layout.user.brand') }}</h1>
+        <p>{{ isRegisterMode ? t('login.registerSubtitle') : t('login.signInSubtitle') }}</p>
+        <div class="aside-stats">
+          <div class="aside-stat">
+            <span class="aside-stat-label">{{ t('layout.admin.sections.overview') }}</span>
+            <strong>{{ t('layout.admin.nav.dashboard') }}</strong>
           </div>
-
-          <div v-if="enableMockLogin && !isRegisterMode" class="dev-actions">
-            <div class="dev-divider">
-              <span>{{ t('login.mockMode') }}</span>
-            </div>
-            <div class="dev-buttons">
-              <button type="button" class="btn-ghost" @click="mockLogin('user')">{{ t('login.mockUser') }}</button>
-              <button type="button" class="btn-ghost" @click="mockLogin('admin')">{{ t('login.mockAdmin') }}</button>
-            </div>
+          <div class="aside-stat">
+            <span class="aside-stat-label">{{ t('layout.admin.sections.userManagement') }}</span>
+            <strong>{{ t('layout.admin.nav.users') }}</strong>
+          </div>
+          <div class="aside-stat">
+            <span class="aside-stat-label">{{ t('layout.admin.sections.system') }}</span>
+            <strong>{{ t('layout.admin.nav.system') }}</strong>
           </div>
         </div>
-      </div>
+      </section>
+
+      <section class="login-panel card">
+        <div class="login-panel-header">
+          <div>
+            <h2 id="login-page-title">{{ isRegisterMode ? t('login.registerTitle') : t('login.signInTitle') }}</h2>
+            <p>{{ isRegisterMode ? t('login.registerSubtitle') : t('login.signInSubtitle') }}</p>
+          </div>
+          <LocaleSwitcher />
+        </div>
+
+        <form class="login-form" :aria-busy="loading ? 'true' : 'false'" @submit.prevent="isRegisterMode ? handleRegister() : handleLogin()">
+          <div class="form-row">
+            <label for="email">{{ t('common.labels.email') }}</label>
+            <input
+              id="email"
+              v-model.trim="email"
+              type="email"
+              :placeholder="t('login.emailPlaceholder')"
+              autocomplete="email"
+            />
+          </div>
+
+          <div class="form-row">
+            <label for="password">{{ t('common.labels.password') }}</label>
+            <input
+              id="password"
+              v-model="password"
+              type="password"
+              :placeholder="isRegisterMode ? t('login.registerPasswordPlaceholder') : t('login.passwordPlaceholder')"
+              :autocomplete="isRegisterMode ? 'new-password' : 'current-password'"
+            />
+          </div>
+
+          <div v-if="isRegisterMode" class="form-row">
+            <label for="confirm-password">{{ t('common.labels.confirmPassword') }}</label>
+            <input
+              id="confirm-password"
+              v-model="confirmPassword"
+              type="password"
+              :placeholder="t('login.confirmPasswordPlaceholder')"
+              autocomplete="new-password"
+            />
+          </div>
+
+          <div v-if="isRegisterMode" class="form-row">
+            <label for="invite-code">{{ t('login.inviteCodeLabel') }}</label>
+            <input
+              id="invite-code"
+              v-model.trim="inviteCode"
+              type="text"
+              :placeholder="t('login.inviteCodePlaceholder')"
+              autocomplete="off"
+            />
+          </div>
+
+          <div v-if="errorMsg" class="banner error-banner" role="alert">{{ errorMsg }}</div>
+          <div v-if="successMsg" class="banner success-banner" role="status" aria-live="polite">{{ successMsg }}</div>
+
+          <button type="submit" class="btn btn-primary submit-button" :disabled="loading">
+            <span v-if="loading" class="spinner"></span>
+            {{ loading
+              ? (isRegisterMode ? t('login.loadingRegister') : t('login.loadingLogin'))
+              : (isRegisterMode ? t('login.submitRegister') : t('login.submitLogin')) }}
+          </button>
+        </form>
+
+        <div class="login-footer">
+          <a v-if="!isRegisterMode" href="#" @click.prevent>{{ t('login.forgotPassword') }}</a>
+          <a href="#" @click.prevent="toggleMode">
+            {{ isRegisterMode ? t('login.switchToLogin') : t('login.switchToRegister') }}
+          </a>
+        </div>
+
+        <div v-if="enableMockLogin && !isRegisterMode" class="dev-actions">
+          <div class="dev-divider">
+            <span>{{ t('login.mockMode') }}</span>
+          </div>
+          <div class="dev-buttons">
+            <button type="button" class="btn" @click="mockLogin('user')">{{ t('login.mockUser') }}</button>
+            <button type="button" class="btn" @click="mockLogin('admin')">{{ t('login.mockAdmin') }}</button>
+          </div>
+        </div>
+      </section>
     </div>
   </main>
 </template>
@@ -98,6 +122,7 @@ const { t } = useAppI18n()
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
+const inviteCode = ref('')
 const loading = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
@@ -114,6 +139,7 @@ function toggleMode() {
   successMsg.value = ''
   password.value = ''
   confirmPassword.value = ''
+  inviteCode.value = ''
 }
 
 async function handleRegister() {
@@ -137,7 +163,8 @@ async function handleRegister() {
   try {
     const res = await register({
       email: email.value,
-      password: password.value
+      password: password.value,
+      ...(inviteCode.value ? { invite_code: inviteCode.value } : {})
     })
 
     if (!res.data?.token) {
@@ -219,76 +246,93 @@ function mockLogin(role) {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
-  background:
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.25), transparent 32%),
-    linear-gradient(135deg, #08111f 0%, #111827 50%, #0f172a 100%);
+  padding: 24px;
 }
 
 .login-shell {
   width: 100%;
-  max-width: 460px;
+  max-width: 1120px;
+  display: grid;
+  grid-template-columns: minmax(320px, 1.05fr) minmax(360px, 0.95fr);
+  gap: 24px;
 }
 
-.login-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 18px;
+.login-aside {
+  padding: 36px;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(0, 100, 250, 0.94), rgba(8, 47, 135, 0.94)),
+    #0f172a;
+  color: #fff;
+  box-shadow: var(--shadow-lg);
 }
 
-.login-container {
-  width: 100%;
-}
-
-.login-brand {
-  text-align: center;
-  margin-bottom: 28px;
-}
-
-.brand-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 20px;
-  margin: 0 auto 16px;
-  display: flex;
+.aside-pill {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: 800;
-  color: #fff;
-  background: linear-gradient(135deg, #2563eb, #0ea5e9);
-  box-shadow: 0 18px 35px rgba(37, 99, 235, 0.28);
-}
-
-.login-brand h1 {
-  font-size: 28px;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 12px;
   font-weight: 700;
-  margin-bottom: 8px;
-  color: #fff;
 }
 
-.login-brand p {
-  color: rgba(226, 232, 240, 0.8);
-  margin: 0;
+.login-aside h1 {
+  margin-top: 24px;
+  font-size: 36px;
+  line-height: 1.1;
 }
 
-.login-box {
+.login-aside p {
+  margin-top: 12px;
+  max-width: 440px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.aside-stats {
+  margin-top: 36px;
+  display: grid;
+  gap: 14px;
+}
+
+.aside-stat {
+  padding: 16px 18px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.aside-stat-label {
+  display: block;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.66);
+  margin-bottom: 6px;
+}
+
+.aside-stat strong {
+  font-size: 16px;
+}
+
+.login-panel {
   padding: 28px;
-  border-radius: 24px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.78);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 30px 60px rgba(2, 6, 23, 0.38);
 }
 
-.login-box h2 {
-  margin-bottom: 8px;
-  color: #fff;
-}
-
-.login-subtitle {
+.login-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 24px;
-  color: rgba(226, 232, 240, 0.72);
+}
+
+.login-panel-header h2 {
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.login-panel-header p {
+  margin-top: 8px;
+  color: var(--text-secondary);
 }
 
 .login-form {
@@ -297,66 +341,40 @@ function mockLogin(role) {
   gap: 16px;
 }
 
-.form-group label {
+.form-row label {
   display: block;
   margin-bottom: 8px;
-  color: #e2e8f0;
-  font-size: 14px;
-}
-
-.form-group input {
-  width: 100%;
-  border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  background: rgba(15, 23, 42, 0.65);
-  color: #fff;
-  padding: 14px 16px;
-}
-
-.form-group input::placeholder {
-  color: rgba(148, 163, 184, 0.72);
-}
-
-.error-msg,
-.success-msg {
-  border-radius: 12px;
-  padding: 12px 14px;
-  font-size: 14px;
-}
-
-.error-msg {
-  background: rgba(239, 68, 68, 0.14);
-  color: #fecaca;
-}
-
-.success-msg {
-  background: rgba(34, 197, 94, 0.14);
-  color: #bbf7d0;
-}
-
-.login-btn {
-  width: 100%;
-  min-height: 48px;
-  border: 0;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #2563eb, #0ea5e9);
-  color: #fff;
+  font-size: 13px;
   font-weight: 700;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  color: var(--text-secondary);
 }
 
-.login-btn:disabled {
-  opacity: 0.72;
-  cursor: not-allowed;
+.banner {
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.error-banner {
+  background: rgba(220, 38, 38, 0.08);
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  color: var(--error-color);
+}
+
+.success-banner {
+  background: rgba(22, 163, 74, 0.08);
+  border: 1px solid rgba(22, 163, 74, 0.18);
+  color: var(--success-color);
+}
+
+.submit-button {
+  width: 100%;
+  min-height: 44px;
 }
 
 .spinner {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.35);
   border-top-color: #fff;
   border-radius: 50%;
@@ -371,9 +389,9 @@ function mockLogin(role) {
 }
 
 .login-footer a {
-  color: #93c5fd;
+  color: var(--primary-color);
   text-decoration: none;
-  font-size: 14px;
+  font-weight: 600;
 }
 
 .dev-actions {
@@ -385,7 +403,7 @@ function mockLogin(role) {
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
-  color: rgba(226, 232, 240, 0.6);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -394,7 +412,7 @@ function mockLogin(role) {
   content: '';
   flex: 1;
   height: 1px;
-  background: rgba(148, 163, 184, 0.18);
+  background: var(--border-color);
 }
 
 .dev-buttons {
@@ -409,11 +427,26 @@ function mockLogin(role) {
   }
 }
 
+@media (max-width: 920px) {
+  .login-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .login-aside {
+    display: none;
+  }
+}
+
 @media (max-width: 520px) {
-  .login-box {
+  .login-page {
+    padding: 16px;
+  }
+
+  .login-panel {
     padding: 22px;
   }
 
+  .login-panel-header,
   .login-footer {
     flex-direction: column;
   }

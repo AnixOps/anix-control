@@ -1,20 +1,22 @@
 <template>
-  <div class="orders-page">
-    <div class="page-header">
-      <h1>{{ t('user.orders.title') }}</h1>
-      <p class="text-secondary">{{ t('user.orders.subtitle') }}</p>
+  <div class="page-shell orders-page">
+    <div class="page-toolbar">
+      <div>
+        <h1>{{ t('user.orders.title') }}</h1>
+        <p>{{ t('user.orders.subtitle') }}</p>
+      </div>
     </div>
 
-    <div v-if="loading" class="loading-state">
+    <section v-if="loading" class="section-panel loading-state">
       <div class="spinner"></div>
       <p>{{ t('user.orders.loading') }}</p>
-    </div>
+    </section>
 
-    <div v-else-if="orders.length === 0" class="empty-state">
+    <section v-else-if="orders.length === 0" class="section-panel empty-state">
       <div class="empty-icon">0</div>
       <p>{{ t('user.orders.empty') }}</p>
-      <router-link to="/user/plans" class="btn-primary mt-4">{{ t('user.orders.buyNow') }}</router-link>
-    </div>
+      <router-link to="/user/plans" class="btn btn-primary mt-4">{{ t('user.orders.buyNow') }}</router-link>
+    </section>
 
     <div v-else class="content-container">
       <div class="table-container">
@@ -35,6 +37,7 @@
               <td class="trade-no">{{ order.trade_no }}</td>
               <td>{{ order.plan?.name || t('user.orders.unknownPlan') }}</td>
               <td>{{ formatPeriod(order.period) }}</td>
+              <td class="normalized-amount">{{ formatCurrency(order.total_amount) }}</td>
               <td>¥{{ formatPrice(order.total_amount) }}</td>
               <td>
                 <span :class="['status-badge', statusClass(order.status)]">{{ statusText(order.status) }}</span>
@@ -42,8 +45,8 @@
               <td class="time text-secondary">{{ formatDateTime(order.created_at) }}</td>
               <td>
                 <div class="action-buttons">
-                  <button v-if="order.status === 0" class="btn-sm btn-primary" @click="goPay(order)">{{ t('common.actions.payNow') }}</button>
-                  <button class="btn-sm btn-ghost" @click="viewDetail(order)">{{ t('common.actions.details') }}</button>
+                  <button v-if="order.status === 0" class="btn btn-sm btn-primary" @click="goPay(order)">{{ t('common.actions.payNow') }}</button>
+                  <button class="btn btn-sm" @click="viewDetail(order)">{{ t('common.actions.details') }}</button>
                 </div>
               </td>
             </tr>
@@ -56,6 +59,7 @@
       <div class="modal modal-md">
         <div class="modal-header">
           <h3>{{ t('user.orders.detailTitle') }}</h3>
+          <button class="btn btn-ghost btn-sm close-btn normalized-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showDetail = false">x</button>
           <button class="close-btn" @click="showDetail = false">×</button>
         </div>
         <div class="modal-body">
@@ -78,10 +82,12 @@
             </div>
             <div class="detail-item">
               <span class="label">{{ t('user.orders.labels.totalAmount') }}</span>
+              <span class="value normalized-amount">{{ formatCurrency(currentOrder.total_amount) }}</span>
               <span class="value">¥{{ formatPrice(currentOrder.total_amount) }}</span>
             </div>
             <div v-if="currentOrder.discount_amount" class="detail-item">
               <span class="label">{{ t('user.orders.labels.discount') }}</span>
+              <span class="value text-success normalized-amount">-{{ formatCurrency(currentOrder.discount_amount) }}</span>
               <span class="value text-success">-¥{{ formatPrice(currentOrder.discount_amount) }}</span>
             </div>
             <div class="detail-item">
@@ -95,7 +101,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-primary" @click="showDetail = false">{{ t('common.actions.back') }}</button>
+          <button class="btn btn-primary" @click="showDetail = false">{{ t('common.actions.back') }}</button>
         </div>
       </div>
     </div>
@@ -156,6 +162,10 @@ function formatPrice(amount) {
   return ((amount || 0) / 100).toFixed(2)
 }
 
+function formatCurrency(amount) {
+  return `\u00a5${formatPrice(amount)}`
+}
+
 async function viewDetail(order) {
   try {
     const res = await getOrderDetail(order.id)
@@ -176,15 +186,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.orders-page {
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 32px;
-}
-
 .table-container {
   background: var(--surface-color);
   border: 1px solid var(--border-color);
@@ -215,6 +216,16 @@ onMounted(() => {
 .trade-no {
   font-family: monospace;
   font-size: 13px;
+}
+
+.data-table tbody td:nth-child(5),
+.normalized-amount + .value,
+.modal-header > .close-btn:not(.normalized-close) {
+  display: none;
+}
+
+.normalized-amount {
+  font-weight: 700;
 }
 
 .status-badge {

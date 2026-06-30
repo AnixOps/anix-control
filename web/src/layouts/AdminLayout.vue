@@ -1,90 +1,89 @@
 <template>
   <div class="admin-layout">
-    <header class="mobile-header">
-      <button
-        class="menu-toggle"
-        type="button"
-        :aria-label="t('common.a11y.openNavigation')"
-        :title="t('common.a11y.openNavigation')"
-        aria-controls="admin-sidebar"
-        :aria-expanded="sidebarOpen ? 'true' : 'false'"
-        @click="sidebarOpen = !sidebarOpen"
-      >
-        <span class="menu-icon" aria-hidden="true"></span>
-      </button>
-      <div class="logo">{{ t('layout.admin.mobileTitle') }}</div>
-      <div class="mobile-header-actions">
-        <LocaleSwitcher compact />
-        <button class="btn-ghost btn-sm" type="button" @click="logout">{{ t('common.actions.logout') }}</button>
-      </div>
-    </header>
-
     <div class="sidebar-overlay" :class="{ active: sidebarOpen }" aria-hidden="true" @click="sidebarOpen = false"></div>
 
     <aside id="admin-sidebar" class="sidebar" :class="{ open: sidebarOpen }" :aria-label="t('layout.admin.mobileTitle')">
-      <div class="sidebar-header">
-        <div class="sidebar-brand">
-          <div class="logo">{{ t('layout.admin.brand') }}</div>
-          <span class="badge">{{ t('layout.admin.badge') }}</span>
+      <div class="sidebar-top">
+        <div class="brand-block">
+          <div class="brand-mark">AO</div>
+          <div>
+            <div class="brand-name">{{ t('layout.admin.brand') }}</div>
+            <div class="brand-meta">{{ t('layout.admin.badge') }}</div>
+          </div>
         </div>
         <button
-          class="close-btn"
+          class="btn-ghost btn-sm close-button md:hidden"
           type="button"
           :aria-label="t('common.a11y.closeNavigation')"
           :title="t('common.a11y.closeNavigation')"
           @click="sidebarOpen = false"
-        ></button>
+        >
+          x
+        </button>
       </div>
 
       <nav class="sidebar-nav" :aria-label="t('layout.admin.mobileTitle')">
-        <div v-for="section in navSections" :key="section.title" class="nav-section">
-          <div class="nav-title">{{ section.title }}</div>
+        <section v-for="section in navSections" :key="section.title" class="nav-section">
+          <div class="nav-section-title">{{ section.title }}</div>
           <template v-if="section.kind === 'forward'">
             <ForwardSuiteNav />
           </template>
           <template v-else>
-            <router-link v-for="item in section.items" :key="item.to" :to="item.to" @click="closeSidebar">
-              <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
-              <span>{{ item.label }}</span>
+            <router-link v-for="item in section.items" :key="item.to" :to="item.to" class="nav-link" @click="closeSidebar">
+              <span class="nav-link-icon">{{ item.icon }}</span>
+              <span class="nav-link-label">{{ item.label }}</span>
             </router-link>
           </template>
-        </div>
+        </section>
         <router-link to="/admin/agent" class="legacy-hidden-link" aria-hidden="true" tabindex="-1">{{ t('layout.admin.nav.nodeXAgentsLegacy') }}</router-link>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="user-info">
-          <div class="user-avatar">A</div>
-          <div class="user-details">
-            <div class="user-name">{{ t('layout.admin.adminUser') }}</div>
-            <div class="user-email">{{ userStore.userInfo?.email || '-' }}</div>
+        <div class="operator-card">
+          <div class="operator-avatar">A</div>
+          <div class="operator-copy">
+            <div class="operator-name">{{ t('layout.admin.adminUser') }}</div>
+            <div class="operator-email">{{ userStore.userInfo?.email || '-' }}</div>
           </div>
         </div>
-        <div class="version-info" v-if="systemVersion">
-          AnixOps v{{ systemVersion }}
-        </div>
-        <div class="sidebar-footer-actions">
+        <div v-if="systemVersion" class="version-line">AnixOps v{{ systemVersion }}</div>
+        <div class="sidebar-actions">
           <LocaleSwitcher compact />
-          <button class="btn-ghost btn-sm w-full" type="button" @click="logout">{{ t('common.actions.logout') }}</button>
+          <button class="btn w-full" type="button" @click="logout">{{ t('common.actions.logout') }}</button>
         </div>
       </div>
     </aside>
 
-    <main id="app-main-content" class="main-content" tabindex="-1" :aria-label="pageTitle">
-      <header class="content-header">
-        <div class="header-title">
-          <h1>{{ pageTitle }}</h1>
-          <p class="header-subtitle">{{ t('layout.admin.subtitle') }}</p>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="topbar-primary">
+          <button
+            class="btn btn-ghost btn-sm menu-button"
+            type="button"
+            :aria-label="t('common.a11y.openNavigation')"
+            :title="t('common.a11y.openNavigation')"
+            aria-controls="admin-sidebar"
+            :aria-expanded="sidebarOpen ? 'true' : 'false'"
+            @click="sidebarOpen = !sidebarOpen"
+          >
+            ☰
+          </button>
+          <div>
+            <div class="topbar-title">{{ pageTitle }}</div>
+            <div class="topbar-subtitle">{{ t('layout.admin.subtitle') }}</div>
+          </div>
         </div>
-        <div class="header-actions">
-          <LocaleSwitcher />
+        <div class="topbar-actions">
           <span class="current-time">{{ currentTime }}</span>
+          <ThemeToggle compact />
+          <LocaleSwitcher />
         </div>
       </header>
-      <div class="page-content">
+
+      <main id="app-main-content" class="content" tabindex="-1" :aria-label="pageTitle">
         <router-view></router-view>
-      </div>
-    </main>
+      </main>
+    </div>
   </div>
 </template>
 
@@ -95,6 +94,7 @@ import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
 import { getSystemInfo } from '@/api/admin'
 
@@ -111,8 +111,8 @@ const navSections = computed(() => ([
   {
     title: t('layout.admin.sections.overview'),
     items: [
-      { to: '/admin/dashboard', icon: 'D', label: t('layout.admin.nav.dashboard') },
-      { to: '/admin/monitor', icon: 'M', label: t('layout.admin.nav.monitor') }
+      { to: '/admin/dashboard', icon: 'DB', label: t('layout.admin.nav.dashboard') },
+      { to: '/admin/monitor', icon: 'MT', label: t('layout.admin.nav.monitor') }
     ]
   },
   {
@@ -122,46 +122,46 @@ const navSections = computed(() => ([
   {
     title: t('layout.admin.sections.userManagement'),
     items: [
-      { to: '/admin/users', icon: 'U', label: t('layout.admin.nav.users') },
-      { to: '/admin/orders', icon: 'O', label: t('layout.admin.nav.orders') },
-      { to: '/admin/tickets', icon: 'T', label: t('layout.admin.nav.tickets') }
+      { to: '/admin/users', icon: 'US', label: t('layout.admin.nav.users') },
+      { to: '/admin/orders', icon: 'OR', label: t('layout.admin.nav.orders') },
+      { to: '/admin/tickets', icon: 'TK', label: t('layout.admin.nav.tickets') }
     ]
   },
   {
     title: t('layout.admin.sections.nodeManagement'),
     items: [
-      { to: '/admin/nodes', icon: 'N', label: t('layout.admin.nav.nodes') },
-      { to: '/admin/subscriptions', icon: 'S', label: t('layout.admin.nav.subscriptions') }
+      { to: '/admin/nodes', icon: 'ND', label: t('layout.admin.nav.nodes') },
+      { to: '/admin/subscriptions', icon: 'SB', label: t('layout.admin.nav.subscriptions') }
     ]
   },
   {
     title: t('layout.admin.sections.marketing'),
     items: [
-      { to: '/admin/plans', icon: 'P', label: t('layout.admin.nav.plans') },
-      { to: '/admin/coupons', icon: 'C', label: t('layout.admin.nav.coupons') },
-      { to: '/admin/invite', icon: 'I', label: t('layout.admin.nav.invite') }
+      { to: '/admin/plans', icon: 'PL', label: t('layout.admin.nav.plans') },
+      { to: '/admin/coupons', icon: 'CP', label: t('layout.admin.nav.coupons') },
+      { to: '/admin/invite', icon: 'IV', label: t('layout.admin.nav.invite') }
     ]
   },
   {
     title: t('layout.admin.sections.finance'),
-    items: [{ to: '/admin/payment', icon: '$', label: t('layout.admin.nav.payment') }]
+    items: [{ to: '/admin/payment', icon: 'PY', label: t('layout.admin.nav.payment') }]
   },
   {
     title: t('layout.admin.sections.notifications'),
     items: [
       { to: '/admin/telegram', icon: 'TG', label: t('layout.admin.nav.telegram') },
-      { to: '/admin/notifications', icon: '!', label: t('layout.admin.nav.notifications') }
+      { to: '/admin/notifications', icon: 'NT', label: t('layout.admin.nav.notifications') }
     ]
   },
   {
     title: t('layout.admin.sections.content'),
-    items: [{ to: '/admin/knowledge', icon: 'K', label: t('layout.admin.nav.knowledge') }]
+    items: [{ to: '/admin/knowledge', icon: 'KB', label: t('layout.admin.nav.knowledge') }]
   },
   {
     title: t('layout.admin.sections.system'),
     items: [
-      { to: '/admin/mfa', icon: 'M', label: t('layout.admin.nav.mfa') },
-      { to: '/admin/system', icon: 'SYS', label: t('layout.admin.nav.system') }
+      { to: '/admin/mfa', icon: 'MF', label: t('layout.admin.nav.mfa') },
+      { to: '/admin/system', icon: 'SY', label: t('layout.admin.nav.system') }
     ]
   }
 ]))
@@ -192,7 +192,7 @@ async function loadSystemInfo() {
     const res = await getSystemInfo()
     systemVersion.value = res.data?.version || ''
   } catch {
-    // silently ignore
+    // ignore layout metadata failures
   }
 }
 
@@ -219,62 +219,19 @@ watchEffect(() => {
 
 <style scoped>
 .admin-layout {
-  display: flex;
   min-height: 100vh;
-  background: var(--bg-color);
-}
-
-.mobile-header {
-  display: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--surface-color);
-  position: sticky;
-  top: 0;
-  z-index: 1200;
-}
-
-.mobile-header-actions {
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.menu-toggle,
-.close-btn {
-  border: 0;
   background: transparent;
-  color: var(--text-color);
-  cursor: pointer;
-  font-size: 0;
-  line-height: 1;
-}
-
-.menu-toggle {
-  font-size: 0;
-}
-
-.close-btn::before {
-  content: '\00d7';
-  font-size: 22px;
-}
-
-.menu-icon::before {
-  content: '\2630';
-  font-size: 22px;
 }
 
 .sidebar-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
+  background: rgba(15, 23, 42, 0.32);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
-  z-index: 1090;
+  z-index: 1000;
 }
 
 .sidebar-overlay.active {
@@ -283,181 +240,209 @@ watchEffect(() => {
 }
 
 .sidebar {
-  width: 280px;
-  border-right: 1px solid var(--border-color);
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.9));
-  color: #e2e8f0;
+  width: var(--sidebar-width);
+  background: linear-gradient(180deg, #0f172a 0%, #172033 100%);
+  color: #d8e1f0;
+  padding: 20px 16px 16px;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  gap: 18px;
   position: sticky;
   top: 0;
-  z-index: 1100;
+  height: 100vh;
+  border-right: 1px solid rgba(148, 163, 184, 0.18);
 }
 
-.sidebar-header {
+.sidebar-top,
+.brand-block,
+.operator-card,
+.topbar,
+.topbar-primary,
+.topbar-actions {
   display: flex;
   align-items: center;
+}
+
+.sidebar-top {
   justify-content: space-between;
-  padding: 20px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  gap: 12px;
 }
 
-.sidebar-brand {
-  display: flex;
+.brand-block {
+  gap: 12px;
+}
+
+.brand-mark,
+.nav-link-icon,
+.operator-avatar {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  border-radius: 8px;
 }
 
-.logo {
-  font-size: 18px;
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  background: rgba(0, 100, 250, 0.16);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.brand-name {
+  font-size: 16px;
   font-weight: 700;
   color: #fff;
 }
 
-.badge {
-  font-size: 11px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.16);
-  color: #93c5fd;
+.brand-meta {
+  font-size: 12px;
+  color: rgba(216, 225, 240, 0.72);
 }
 
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;
-  padding: 18px 14px;
+  padding-right: 4px;
 }
 
 .nav-section + .nav-section {
   margin-top: 18px;
 }
 
-.nav-title {
+.nav-section-title {
+  margin-bottom: 8px;
+  padding: 0 8px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(226, 232, 240, 0.7);
-  margin-bottom: 8px;
-  padding: 0 10px;
+  color: rgba(216, 225, 240, 0.62);
 }
 
-.sidebar-nav :deep(a) {
+.nav-link,
+.sidebar :deep(.forward-suite-link) {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: rgba(226, 232, 240, 0.9);
+  min-height: 40px;
+  padding: 9px 10px;
+  color: rgba(216, 225, 240, 0.86);
   text-decoration: none;
-  padding: 11px 12px;
-  border-radius: 12px;
+  border-radius: 8px;
   transition: all 0.2s ease;
 }
 
-.sidebar-nav :deep(a:hover),
-.sidebar-nav :deep(a.router-link-active) {
-  background: rgba(59, 130, 246, 0.12);
+.nav-link:hover,
+.nav-link.router-link-active,
+.sidebar :deep(.forward-suite-link:hover),
+.sidebar :deep(.forward-suite-link.router-link-active),
+.sidebar :deep(.forward-suite-link-active) {
+  background: rgba(255, 255, 255, 0.09);
   color: #fff;
 }
 
-.nav-icon {
+.nav-link-icon {
   width: 28px;
-  font-size: 12px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11px;
   font-weight: 700;
-  text-align: center;
-  opacity: 0.9;
+}
+
+.nav-link-label {
+  min-width: 0;
 }
 
 .sidebar-footer {
-  padding: 16px 14px 20px;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  padding-top: 14px;
 }
 
-.version-info {
-  font-size: 11px;
-  color: rgba(226, 232, 240, 0.5);
-  text-align: center;
-  padding: 6px 0;
-  letter-spacing: 0.04em;
+.operator-card {
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
 }
 
-.sidebar-footer-actions {
+.operator-avatar {
+  width: 36px;
+  height: 36px;
+  background: rgba(0, 100, 250, 0.18);
+  color: #fff;
+  font-weight: 700;
+}
+
+.operator-name {
+  color: #fff;
+  font-weight: 600;
+}
+
+.operator-email {
+  font-size: 12px;
+  color: rgba(216, 225, 240, 0.72);
+  word-break: break-all;
+}
+
+.version-line {
+  margin: 10px 0;
+  font-size: 12px;
+  color: rgba(216, 225, 240, 0.56);
+}
+
+.sidebar-actions {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.user-avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  background: rgba(59, 130, 246, 0.18);
-  color: #bfdbfe;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-}
-
-.user-details {
-  min-width: 0;
-}
-
-.user-name {
-  font-weight: 600;
-  color: #fff;
-}
-
-.user-email {
-  font-size: 12px;
-  color: rgba(226, 232, 240, 0.7);
-  word-break: break-all;
-}
-
-.main-content {
+.workspace {
   flex: 1;
   min-width: 0;
-}
-
-.content-header {
   display: flex;
+  flex-direction: column;
+}
+
+.topbar {
   justify-content: space-between;
-  align-items: center;
   gap: 16px;
-  padding: 28px 32px 20px;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(220, 227, 240, 0.9);
+  backdrop-filter: blur(8px);
 }
 
-.header-title h1 {
-  margin: 0 0 6px;
-  font-size: 30px;
+.topbar-primary {
+  gap: 12px;
+}
+
+.menu-button {
+  display: none;
+}
+
+.topbar-title {
+  font-size: 22px;
   font-weight: 700;
+  line-height: 1.2;
 }
 
-.header-subtitle {
-  margin: 0;
+.topbar-subtitle {
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
+.topbar-actions {
   gap: 12px;
 }
 
 .current-time {
-  color: var(--text-secondary);
   font-size: 13px;
+  color: var(--text-secondary);
 }
 
-.page-content {
-  padding: 0 32px 32px;
+.content {
+  flex: 1;
+  padding: 24px;
 }
 
 .legacy-hidden-link {
@@ -465,17 +450,10 @@ watchEffect(() => {
 }
 
 @media (max-width: 1024px) {
-  .admin-layout {
-    display: block;
-  }
-
-  .mobile-header {
-    display: flex;
-  }
-
   .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
+    z-index: 1010;
     transform: translateX(-100%);
     transition: transform 0.2s ease;
   }
@@ -484,20 +462,20 @@ watchEffect(() => {
     transform: translateX(0);
   }
 
-  .content-header {
-    padding: 22px 20px 16px;
-  }
-
-  .page-content {
-    padding: 0 20px 24px;
+  .menu-button {
+    display: inline-flex;
   }
 }
 
 @media (max-width: 768px) {
-  .content-header,
-  .header-actions {
-    flex-direction: column;
+  .topbar,
+  .topbar-actions {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .content {
+    padding: 18px;
   }
 }
 </style>

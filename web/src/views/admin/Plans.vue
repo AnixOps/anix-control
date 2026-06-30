@@ -1,21 +1,21 @@
-﻿<template>
-  <div class="plans-page">
-    <div class="page-header">
-      <h1>{{ t('adminPlans.title') }}</h1>
-      <p class="text-secondary">{{ t('adminPlans.subtitle') }}</p>
+<template>
+  <div class="page-shell">
+    <div class="page-toolbar">
+      <div>
+        <h1>{{ t('adminPlans.title') }}</h1>
+        <p>{{ t('adminPlans.subtitle') }}</p>
+      </div>
+      <button class="btn btn-primary" @click="openCreateModal">{{ t('adminPlans.actions.create') }}</button>
     </div>
 
-    <div class="filter-bar">
-      <button @click="openCreateModal">{{ t('adminPlans.actions.create') }}</button>
-    </div>
-
-    <div class="table-container">
+    <section class="section-panel data-panel">
       <table class="data-table">
         <thead>
           <tr>
             <th>{{ t('miscPages.shared.id') }}</th>
             <th>{{ t('adminPlans.table.name') }}</th>
             <th>{{ t('adminPlans.table.transfer') }}</th>
+            <th>{{ t('adminPlans.table.limits') }}</th>
             <th>{{ t('adminPlans.table.monthPrice') }}</th>
             <th>{{ t('adminPlans.table.subscriptionGroups') }}</th>
             <th>{{ t('adminPlans.table.actions') }}</th>
@@ -26,6 +26,7 @@
             <td>{{ plan.id }}</td>
             <td>{{ plan.name }}</td>
             <td>{{ plan.transfer_enable }}</td>
+            <td>{{ formatPlanLimits(plan) }}</td>
             <td>{{ plan.month_price ?? '-' }}</td>
             <td>
               <div class="group-tags">
@@ -37,11 +38,11 @@
                     :aria-label="t('adminPlans.actions.removeGroup')"
                     @click="removeGroup(plan.id, group.id)"
                   >
-                    ×
+                    x
                   </button>
                 </span>
                 <button
-                  class="btn-sm btn-ghost"
+                  class="btn btn-sm"
                   :title="t('adminPlans.actions.manageGroups')"
                   :aria-label="t('adminPlans.actions.manageGroups')"
                   @click="openGroupModal(plan)"
@@ -53,7 +54,7 @@
             <td>
               <div class="action-buttons">
                 <button
-                  class="btn-sm btn-ghost"
+                  class="btn btn-sm"
                   :title="t('adminPlans.actions.edit')"
                   :aria-label="t('adminPlans.actions.edit')"
                   @click="edit(plan)"
@@ -61,7 +62,7 @@
                   {{ t('adminPlans.actions.edit') }}
                 </button>
                 <button
-                  class="btn-sm btn-ghost"
+                  class="btn btn-sm"
                   :title="t('adminPlans.actions.delete')"
                   :aria-label="t('adminPlans.actions.delete')"
                   @click="remove(plan)"
@@ -69,7 +70,7 @@
                   {{ t('adminPlans.actions.delete') }}
                 </button>
                 <button
-                  class="btn-sm btn-ghost"
+                  class="btn btn-sm"
                   :title="t('adminPlans.actions.assign')"
                   :aria-label="t('adminPlans.actions.assign')"
                   @click="openAssign(plan)"
@@ -80,17 +81,17 @@
             </td>
           </tr>
           <tr v-if="plans.length === 0">
-            <td colspan="6" class="empty-row">{{ t('adminPlans.empty.noData') }}</td>
+            <td colspan="7" class="empty-row">{{ t('adminPlans.empty.noData') }}</td>
           </tr>
         </tbody>
       </table>
-    </div>
+    </section>
 
     <div v-if="showPlanModal" class="modal-overlay" @click.self="closePlanModal">
       <div class="modal">
         <div class="modal-header">
           <h3>{{ editingPlanId ? t('adminPlans.planModal.editTitle') : t('adminPlans.planModal.createTitle') }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closePlanModal">×</button>
+          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closePlanModal">x</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -102,13 +103,21 @@
             <input v-model.number="form.transfer_enable" type="number" min="0" />
           </div>
           <div class="form-group">
+            <label>{{ t('adminPlans.planModal.fields.speedLimit') }}</label>
+            <input v-model.number="form.speed_limit" data-test="plan-speed-limit-input" type="number" min="0" />
+          </div>
+          <div class="form-group">
+            <label>{{ t('adminPlans.planModal.fields.deviceLimit') }}</label>
+            <input v-model.number="form.device_limit" data-test="plan-device-limit-input" type="number" min="0" />
+          </div>
+          <div class="form-group">
             <label>{{ t('adminPlans.planModal.fields.monthPrice') }}</label>
             <input v-model.number="form.month_price" type="number" min="0" />
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closePlanModal">{{ t('common.actions.cancel') }}</button>
-          <button @click="save">{{ t('common.actions.save') }}</button>
+          <button class="btn" @click="closePlanModal">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" data-test="plan-save-button" @click="save">{{ t('common.actions.save') }}</button>
         </div>
       </div>
     </div>
@@ -117,7 +126,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ t('adminPlans.assignModal.title') }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeAssign">×</button>
+          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeAssign">x</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
@@ -134,8 +143,8 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closeAssign">{{ t('common.actions.cancel') }}</button>
-          <button @click="assign">{{ t('adminPlans.actions.assign') }}</button>
+          <button class="btn" @click="closeAssign">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" @click="assign">{{ t('adminPlans.actions.assign') }}</button>
         </div>
       </div>
     </div>
@@ -144,10 +153,10 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ t('adminPlans.groupModal.title', { name: currentPlan?.name || '' }) }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeGroupModal">×</button>
+          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeGroupModal">x</button>
         </div>
         <div class="modal-body">
-          <p class="text-secondary" style="margin-bottom: 16px;">{{ t('adminPlans.groupModal.description') }}</p>
+          <p class="group-description">{{ t('adminPlans.groupModal.description') }}</p>
 
           <div v-if="allGroups.length === 0" class="empty-msg">
             {{ t('adminPlans.groupModal.empty') }}
@@ -163,7 +172,7 @@
             >
               <div class="group-info">
                 <div class="group-name">{{ group.name }}</div>
-                <div class="group-desc text-secondary">{{ group.description || t('adminPlans.groupModal.noDescription') }}</div>
+                <div class="group-desc">{{ group.description || t('adminPlans.groupModal.noDescription') }}</div>
               </div>
               <div class="group-check">
                 <span>{{ isGroupSelected(group.id) ? t('adminPlans.groupModal.selectedShort') : '' }}</span>
@@ -172,7 +181,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closeGroupModal">{{ t('common.actions.close') }}</button>
+          <button class="btn" @click="closeGroupModal">{{ t('common.actions.close') }}</button>
         </div>
       </div>
     </div>
@@ -210,6 +219,8 @@ const currentPlan = ref(null)
 const form = reactive({
   name: '',
   transfer_enable: 0,
+  speed_limit: 0,
+  device_limit: 0,
   month_price: null
 })
 
@@ -231,6 +242,8 @@ const resetPlanForm = () => {
   editingPlanId.value = null
   form.name = ''
   form.transfer_enable = 0
+  form.speed_limit = 0
+  form.device_limit = 0
   form.month_price = null
 }
 
@@ -282,6 +295,8 @@ const edit = (plan) => {
   editingPlanId.value = plan.id
   form.name = plan.name || ''
   form.transfer_enable = plan.transfer_enable || 0
+  form.speed_limit = Number(plan.speed_limit || 0)
+  form.device_limit = Number(plan.device_limit || 0)
   form.month_price = plan.month_price
   showPlanModal.value = true
 }
@@ -315,6 +330,8 @@ const save = async () => {
   const payload = {
     name: form.name.trim(),
     transfer_enable: form.transfer_enable,
+    speed_limit: Number(form.speed_limit || 0),
+    device_limit: Number(form.device_limit || 0),
     month_price: form.month_price
   }
 
@@ -413,34 +430,20 @@ const removeGroup = async (planId, groupId) => {
     }))
   }
 }
+
+const formatPlanLimits = (plan) => {
+  const speedLimit = Number(plan?.speed_limit || 0)
+  const deviceLimit = Number(plan?.device_limit || 0)
+  const speedText = speedLimit > 0 ? t('adminPlans.labels.speedLimitMbps', { value: speedLimit }) : t('adminPlans.labels.noSpeedLimit')
+  const deviceText = deviceLimit > 0 ? t('adminPlans.labels.deviceLimitCount', { value: deviceLimit }) : t('adminPlans.labels.noDeviceLimit')
+  return `${speedText} / ${deviceText}`
+}
 </script>
 
 <style scoped>
-.plans-page {
-  max-width: 1400px;
-}
-
-.page-header {
-  margin-bottom: 24px;
-}
-
-.page-header h1 {
-  font-size: 24px;
-  margin-bottom: 4px;
-}
-
-.filter-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.table-container {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+.data-panel {
   overflow-x: auto;
+  padding: 0;
 }
 
 .data-table {
@@ -453,18 +456,14 @@ const removeGroup = async (planId, groupId) => {
   padding: 14px 16px;
   text-align: left;
   border-bottom: 1px solid var(--border-color);
+  vertical-align: top;
 }
 
 .data-table th {
-  background: var(--bg-color);
   font-weight: 600;
   font-size: 13px;
   color: var(--text-secondary);
   text-transform: uppercase;
-}
-
-.data-table tr:hover {
-  background: var(--bg-color);
 }
 
 .group-tags {
@@ -478,32 +477,30 @@ const removeGroup = async (planId, groupId) => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--primary-color);
-  color: white;
-  padding: 3px 10px;
-  border-radius: 12px;
+  background: var(--primary-soft);
+  color: var(--primary-color);
+  padding: 4px 10px;
+  border-radius: 999px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .tag-remove {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.7);
+  color: inherit;
   cursor: pointer;
   padding: 0;
   font-size: 14px;
   line-height: 1;
   margin-left: 2px;
-}
-
-.tag-remove:hover {
-  color: white;
+  box-shadow: none;
 }
 
 .action-buttons {
   display: flex;
-  gap: 4px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .empty-row {
@@ -515,7 +512,7 @@ const removeGroup = async (planId, groupId) => {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(15, 23, 42, 0.42);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -526,11 +523,12 @@ const removeGroup = async (planId, groupId) => {
 .modal {
   background: var(--surface-color);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   width: 100%;
   max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
+  box-shadow: var(--shadow-lg);
 }
 
 .modal-header {
@@ -547,16 +545,8 @@ const removeGroup = async (planId, groupId) => {
 }
 
 .close-btn {
-  background: transparent;
-  border: none;
+  min-width: 36px;
   font-size: 18px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
-}
-
-.close-btn:hover {
-  color: var(--text-color);
 }
 
 .modal-body {
@@ -570,8 +560,9 @@ const removeGroup = async (planId, groupId) => {
 .modal-body label {
   display: block;
   margin-bottom: 6px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
 }
 
 .modal-body .required {
@@ -584,16 +575,18 @@ const removeGroup = async (planId, groupId) => {
   gap: 12px;
   padding: 16px 20px;
   border-top: 1px solid var(--border-color);
-}
-
-.modal-footer button {
-  min-width: 80px;
+  flex-wrap: wrap;
 }
 
 .empty-msg {
   text-align: center;
   color: var(--text-secondary);
   padding: 30px 20px;
+}
+
+.group-description {
+  margin-bottom: 16px;
+  color: var(--text-secondary);
 }
 
 .group-list {
@@ -607,7 +600,7 @@ const removeGroup = async (planId, groupId) => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: var(--bg-color);
+  background: var(--surface-muted);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -615,11 +608,11 @@ const removeGroup = async (planId, groupId) => {
 }
 
 .group-item:hover {
-  border-color: var(--primary-color);
+  border-color: var(--border-strong);
 }
 
 .group-item.selected {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(0, 100, 250, 0.06);
   border-color: var(--primary-color);
 }
 
@@ -628,12 +621,13 @@ const removeGroup = async (planId, groupId) => {
 }
 
 .group-name {
-  font-weight: 500;
+  font-weight: 600;
   margin-bottom: 2px;
 }
 
 .group-desc {
   font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .group-check {
@@ -646,7 +640,7 @@ const removeGroup = async (planId, groupId) => {
   color: white;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .group-item:not(.selected) .group-check {
@@ -654,4 +648,3 @@ const removeGroup = async (planId, groupId) => {
   color: transparent;
 }
 </style>
-

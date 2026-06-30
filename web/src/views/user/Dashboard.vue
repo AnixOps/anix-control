@@ -1,78 +1,61 @@
 <template>
-  <div class="dashboard-page">
-    <div class="page-header">
+  <div class="page-shell">
+    <div class="page-toolbar">
       <div>
         <h1>{{ t('user.dashboard.title') }}</h1>
-        <p class="text-secondary">{{ t('user.dashboard.subtitle') }}</p>
+        <p>{{ t('user.dashboard.subtitle') }}</p>
       </div>
-      <button class="btn-secondary" :disabled="loading" @click="refreshData">
+      <button class="btn btn-primary" :disabled="loading" @click="refreshData">
         {{ loading ? t('user.dashboard.refreshing') : t('user.dashboard.refresh') }}
       </button>
     </div>
 
-    <div class="subscription-card" :class="{ expired: sub.is_expired }">
-      <div class="plan-header">
-        <div class="plan-info">
+    <section class="section-panel subscription-card" :class="{ expired: sub.is_expired }">
+      <div class="subscription-header">
+        <div>
           <div class="plan-name">{{ sub.plan_name || t('common.states.none') }}</div>
           <div class="plan-status" :class="statusClass">{{ statusText }}</div>
         </div>
         <div class="plan-expire">
-          <div v-if="sub.expired_at > 0">
-            <span class="label">{{ t('common.labels.expiresAt') }}</span>
-            <span class="value">{{ formatExpireDate(sub.expired_at) }}</span>
-          </div>
-          <div v-else class="permanent">{{ t('common.states.permanent') }}</div>
+          <span class="expire-label">{{ t('common.labels.expiresAt') }}</span>
+          <strong>{{ sub.expired_at > 0 ? formatExpireDate(sub.expired_at) : t('common.states.permanent') }}</strong>
         </div>
       </div>
 
-      <div class="traffic-section">
-        <div class="traffic-header">
-          <span class="traffic-label">{{ t('user.dashboard.trafficUsage') }}</span>
-          <span class="traffic-value">
-            {{ formatBytes(sub.used_traffic) }} / {{ formatBytes(sub.transfer_enable) }}
-          </span>
+      <div class="usage-panel">
+        <div class="usage-head">
+          <span>{{ t('user.dashboard.trafficUsage') }}</span>
+          <strong>{{ formatBytes(sub.used_traffic) }} / {{ formatBytes(sub.transfer_enable) }}</strong>
         </div>
-        <div class="traffic-bar">
-          <div class="traffic-progress" :style="{ width: progressWidth }" :class="progressClass"></div>
+        <div class="usage-bar">
+          <div class="usage-progress" :style="{ width: progressWidth }" :class="progressClass"></div>
         </div>
-        <div class="traffic-detail">
+        <div class="usage-foot">
           <span>{{ t('user.dashboard.upload') }} {{ formatBytes(sub.upload_traffic) }}</span>
           <span>{{ t('user.dashboard.download') }} {{ formatBytes(sub.download_traffic) }}</span>
         </div>
       </div>
 
-      <div v-if="!sub.is_expired && sub.days_remaining >= 0" class="remaining-section">
-        <div class="remaining-box">
-          <div class="remaining-value">{{ sub.days_remaining }}</div>
-          <div class="remaining-label">{{ t('user.dashboard.remainingDays') }}</div>
+      <div v-if="!sub.is_expired && sub.days_remaining >= 0" class="summary-grid">
+        <div class="summary-box">
+          <div class="summary-value">{{ sub.days_remaining }}</div>
+          <div class="summary-label">{{ t('user.dashboard.remainingDays') }}</div>
         </div>
-        <div class="remaining-box">
-          <div class="remaining-value">{{ remainingPercent }}%</div>
-          <div class="remaining-label">{{ t('user.dashboard.trafficRemaining') }}</div>
+        <div class="summary-box">
+          <div class="summary-value">{{ remainingPercent }}%</div>
+          <div class="summary-label">{{ t('user.dashboard.trafficRemaining') }}</div>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="quick-actions">
-      <router-link to="/user/subscribe" class="action-card">
-        <span class="action-icon">S</span>
-        <span class="action-text">{{ t('user.dashboard.quickActions.subscribe') }}</span>
+    <section class="quick-actions-grid">
+      <router-link v-for="item in quickActions" :key="item.to" :to="item.to" class="section-panel quick-action">
+        <span class="quick-action-icon">{{ item.icon }}</span>
+        <span class="quick-action-label">{{ item.label }}</span>
       </router-link>
-      <router-link to="/user/orders" class="action-card">
-        <span class="action-icon">O</span>
-        <span class="action-text">{{ t('user.dashboard.quickActions.orders') }}</span>
-      </router-link>
-      <router-link to="/user/tickets" class="action-card">
-        <span class="action-icon">T</span>
-        <span class="action-text">{{ t('user.dashboard.quickActions.tickets') }}</span>
-      </router-link>
-      <router-link to="/user/knowledge" class="action-card">
-        <span class="action-icon">K</span>
-        <span class="action-text">{{ t('user.dashboard.quickActions.knowledge') }}</span>
-      </router-link>
-    </div>
+    </section>
 
-    <div v-if="sub.cached_at" class="cache-info">
+    <div v-if="sub.cached_at" class="cache-line">
       {{ t('user.dashboard.cacheUpdatedAt', { value: formatDateTime(sub.cached_at) }) }}
     </div>
   </div>
@@ -109,6 +92,13 @@ const progressClass = computed(() => {
 })
 
 const remainingPercent = computed(() => Math.max(0, 100 - (sub.value.usage_percent || 0)).toFixed(1))
+
+const quickActions = computed(() => ([
+  { to: '/user/subscribe', icon: 'SB', label: t('user.dashboard.quickActions.subscribe') },
+  { to: '/user/orders', icon: 'OR', label: t('user.dashboard.quickActions.orders') },
+  { to: '/user/tickets', icon: 'TK', label: t('user.dashboard.quickActions.tickets') },
+  { to: '/user/knowledge', icon: 'KB', label: t('user.dashboard.quickActions.knowledge') }
+]))
 
 async function fetchData(refresh = false) {
   loading.value = true
@@ -151,241 +141,200 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.dashboard-page {
-  padding: 0;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.page-header h1 {
-  font-size: 24px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
 .subscription-card {
-  background: var(--surface-color);
-  border-radius: var(--radius-lg);
   padding: 24px;
-  margin-bottom: 24px;
-  border: 1px solid var(--border-color);
 }
 
 .subscription-card.expired {
-  border-color: var(--error-color);
-  opacity: 0.8;
+  border-color: rgba(220, 38, 38, 0.28);
 }
 
-.plan-header {
+.subscription-header,
+.usage-head,
+.usage-foot {
   display: flex;
   justify-content: space-between;
+  gap: 16px;
+}
+
+.subscription-header {
   align-items: flex-start;
-  margin-bottom: 24px;
 }
 
 .plan-name {
-  font-size: 24px;
+  font-size: 28px;
+  line-height: 1.1;
   font-weight: 700;
-  color: var(--text-color);
-  margin-bottom: 8px;
 }
 
 .plan-status {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin-top: 10px;
+  padding: 0 12px;
+  border-radius: 999px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .plan-status.active {
-  background: rgba(34, 197, 94, 0.15);
   color: var(--success-color);
+  background: rgba(22, 163, 74, 0.08);
 }
 
 .plan-status.expired {
-  background: rgba(239, 68, 68, 0.15);
   color: var(--error-color);
+  background: rgba(220, 38, 38, 0.08);
 }
 
 .plan-status.none {
-  background: rgba(156, 163, 175, 0.15);
   color: var(--text-secondary);
+  background: rgba(148, 163, 184, 0.12);
 }
 
 .plan-expire {
-  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
 }
 
-.plan-expire .label {
-  display: block;
+.expire-label {
   font-size: 12px;
   color: var(--text-secondary);
-  margin-bottom: 4px;
 }
 
-.plan-expire .value {
-  font-size: 16px;
-  font-weight: 600;
+.usage-panel {
+  margin-top: 24px;
+  padding: 18px;
+  border-radius: 8px;
+  background: var(--surface-muted);
 }
 
-.plan-expire .permanent {
-  color: var(--success-color);
-  font-weight: 600;
+.usage-head strong {
+  font-size: 15px;
 }
 
-.traffic-section {
-  background: var(--bg-color);
-  border-radius: var(--radius-md);
-  padding: 20px;
-  margin-bottom: 20px;
-}
-
-.traffic-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.traffic-label {
-  font-size: 14px;
+.usage-head span,
+.usage-foot {
   color: var(--text-secondary);
+  font-size: 13px;
 }
 
-.traffic-value {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.traffic-bar {
-  height: 8px;
-  background: var(--border-color);
-  border-radius: 4px;
+.usage-bar {
+  height: 10px;
+  margin: 14px 0 12px;
+  background: #dbe5f4;
+  border-radius: 999px;
   overflow: hidden;
-  margin-bottom: 12px;
 }
 
-.traffic-progress {
+.usage-progress {
   height: 100%;
-  border-radius: 4px;
-  transition: width 0.3s ease;
+  border-radius: 999px;
+  transition: width 0.25s ease;
 }
 
-.traffic-progress.normal {
+.usage-progress.normal {
   background: var(--primary-color);
 }
 
-.traffic-progress.warning {
-  background: #f59e0b;
+.usage-progress.warning {
+  background: var(--warning-color);
 }
 
-.traffic-progress.danger {
+.usage-progress.danger {
   background: var(--error-color);
 }
 
-.traffic-detail {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.remaining-section {
+.summary-grid,
+.quick-actions-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
 }
 
-.remaining-box {
-  background: var(--bg-color);
-  border-radius: var(--radius-md);
-  padding: 20px;
-  text-align: center;
+.summary-grid {
+  margin-top: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.remaining-value {
-  font-size: 32px;
+.summary-box {
+  padding: 18px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: #fff;
+}
+
+.summary-value {
+  font-size: 28px;
+  line-height: 1.1;
   font-weight: 700;
   color: var(--primary-color);
-  margin-bottom: 4px;
 }
 
-.remaining-label {
-  font-size: 13px;
+.summary-label {
+  margin-top: 6px;
   color: var(--text-secondary);
+  font-size: 13px;
 }
 
-.quick-actions {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+.quick-actions-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
-.action-card {
+.quick-action {
+  min-height: 120px;
+  padding: 20px;
+  text-decoration: none;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 24px 16px;
-  background: var(--surface-color);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-color);
-  text-decoration: none;
+  justify-content: space-between;
+  color: inherit;
   transition: all 0.2s ease;
 }
 
-.action-card:hover {
-  border-color: var(--primary-color);
-  transform: translateY(-2px);
+.quick-action:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
 }
 
-.action-icon {
-  font-size: 18px;
-  font-weight: 700;
+.quick-action-icon {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--primary-soft);
   color: var(--primary-color);
-}
-
-.action-text {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-color);
-}
-
-.cache-info {
-  text-align: center;
-  padding: 12px;
   font-size: 12px;
+  font-weight: 800;
+}
+
+.quick-action-label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.cache-line {
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
 @media (max-width: 768px) {
-  .page-header {
+  .subscription-header,
+  .usage-head,
+  .usage-foot {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
-
-  .plan-header {
-    flex-direction: column;
-    gap: 16px;
   }
 
   .plan-expire {
-    text-align: left;
+    align-items: flex-start;
   }
 
-  .remaining-value {
-    font-size: 24px;
-  }
-
-  .quick-actions {
-    grid-template-columns: repeat(2, 1fr);
+  .summary-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

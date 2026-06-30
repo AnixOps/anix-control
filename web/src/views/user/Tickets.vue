@@ -1,14 +1,14 @@
 <template>
-  <div class="tickets-page">
-    <div class="page-header">
-      <div class="header-content">
+  <div class="page-shell tickets-page">
+    <div class="page-toolbar">
+      <div>
         <h1>{{ t('user.tickets.title') }}</h1>
-        <p class="text-secondary">{{ t('user.tickets.subtitle') }}</p>
+        <p>{{ t('user.tickets.subtitle') }}</p>
       </div>
-      <button class="btn-primary" @click="showCreate = true">{{ t('user.tickets.submitTicket') }}</button>
+      <button class="btn btn-primary" @click="showCreate = true">{{ t('user.tickets.submitTicket') }}</button>
     </div>
 
-    <div class="stats-bar">
+    <section class="section-panel stats-bar">
       <div class="stat-item">
         <span class="label">{{ t('user.tickets.active') }}</span>
         <span class="value">{{ activeCount }}</span>
@@ -17,7 +17,7 @@
         <span class="label">{{ t('user.tickets.resolved') }}</span>
         <span class="value">{{ resolvedCount }}</span>
       </div>
-    </div>
+    </section>
 
     <div class="content-container">
       <div v-if="loading" class="loading-state">
@@ -28,7 +28,7 @@
       <div v-else-if="tickets.length === 0" class="empty-state">
         <div class="empty-icon">?</div>
         <p>{{ t('user.tickets.empty') }}</p>
-        <button class="btn-secondary mt-4" @click="showCreate = true">{{ t('user.tickets.submitNow') }}</button>
+        <button class="btn mt-4" @click="showCreate = true">{{ t('user.tickets.submitNow') }}</button>
       </div>
 
       <div v-else class="tickets-list">
@@ -59,6 +59,7 @@
       <div class="modal">
         <div class="modal-header">
           <h3>{{ t('user.tickets.newTicketTitle') }}</h3>
+          <button class="btn btn-ghost btn-sm close-btn normalized-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showCreate = false">x</button>
           <button class="close-btn" @click="showCreate = false">×</button>
         </div>
         <div class="modal-body">
@@ -80,8 +81,8 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="showCreate = false">{{ t('common.actions.cancel') }}</button>
-          <button class="btn-primary" :disabled="submitting" @click="submitCreate">
+          <button class="btn" @click="showCreate = false">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="submitting" @click="submitCreate">
             {{ submitting ? t('common.states.loading') : t('common.actions.submit') }}
           </button>
         </div>
@@ -96,6 +97,7 @@
             <span class="ticket-id">{{ t('user.tickets.ticketId', { id: detailTicket.id }) }}</span>
           </div>
           <h3>{{ detailTicket.subject }}</h3>
+          <button class="btn btn-ghost btn-sm close-btn normalized-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showDetail = false">x</button>
           <button class="close-btn" @click="showDetail = false">×</button>
         </div>
 
@@ -124,8 +126,8 @@
               @keyup.ctrl.enter="submitReply"
             ></textarea>
             <div class="reply-actions">
-              <button class="btn-ghost" @click="handleClose(detailTicket.id)">{{ t('common.actions.close') }}</button>
-              <button class="btn-primary btn-sm" :disabled="replying" @click="submitReply">
+              <button class="btn btn-ghost" @click="handleClose(detailTicket.id)">{{ t('common.actions.close') }}</button>
+              <button class="btn btn-primary btn-sm" :disabled="replying" @click="submitReply">
                 {{ replying ? t('common.states.loading') : t('common.actions.submit') }}
               </button>
             </div>
@@ -133,7 +135,7 @@
         </div>
         <div v-else class="modal-footer">
           <div class="text-secondary">{{ t('user.tickets.closedHint') }}</div>
-          <button class="btn-secondary" @click="showDetail = false">{{ t('user.tickets.closeWindow') }}</button>
+          <button class="btn" @click="showDetail = false">{{ t('user.tickets.closeWindow') }}</button>
         </div>
       </div>
     </div>
@@ -252,31 +254,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.tickets-page {
-  max-width: 1000px;
-  margin: 0 auto;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 32px;
-}
-
-.page-header h1 {
-  font-size: 28px;
-  margin-bottom: 4px;
-}
-
 .stats-bar {
   display: flex;
   gap: 32px;
-  margin-bottom: 24px;
   padding: 16px 24px;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
 }
 
 .stat-item {
@@ -310,11 +291,12 @@ onMounted(() => {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: var(--transition);
+  box-shadow: var(--shadow-sm);
 }
 
 .ticket-card:hover {
   border-color: var(--primary-color);
-  transform: translateX(4px);
+  box-shadow: var(--shadow-md);
 }
 
 .ticket-status {
@@ -385,7 +367,7 @@ onMounted(() => {
   margin-left: 12px;
 }
 
-.ticket-detail-modal .modal {
+.ticket-detail-modal {
   display: flex;
   flex-direction: column;
   height: 80vh;
@@ -510,7 +492,11 @@ onMounted(() => {
 }
 
 .modal-lg {
-  max-width: 700px;
+  width: min(96vw, 760px);
+}
+
+.modal-header > .close-btn:not(.normalized-close) {
+  display: none;
 }
 
 .loading-state,
