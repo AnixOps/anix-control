@@ -365,6 +365,11 @@ func (s *TrafficGRPCServer) ReportTraffic(ctx context.Context, req *pb.TrafficRe
 		}
 	}
 
+	// 记录流量日志 (原始字节 + 倍率), 用于今日流量等基于时间的统计, 与 REST 上报路径保持一致
+	if err := s.serverService.BatchRecordTrafficLog(model.ServerType("node"), uint(req.NodeId), traffics, rate); err != nil {
+		slog.Warn("failed to record traffic log", "component", "grpc", "method", "ReportTraffic", "node_id", req.NodeId, "error", err)
+	}
+
 	// 批量更新用户流量
 	if err := s.userService.BatchUpdateTraffic(userTraffics); err != nil {
 		return nil, status.Error(codes.Internal, "failed to update traffic")

@@ -7,6 +7,7 @@ const PAGE_TITLE_KEYS = {
   '/user/plans': 'pageTitles.user.plans',
   '/user/orders': 'pageTitles.user.orders',
   '/admin/dashboard': 'pageTitles.admin.dashboard',
+  '/admin/traffic-hourly': 'pageTitles.admin.trafficHourly',
   '/admin/users': 'pageTitles.admin.users',
   '/admin/nodes': 'pageTitles.admin.nodes',
   '/admin/subscriptions': 'pageTitles.admin.subscriptions',

@@ -866,7 +866,26 @@ func (h *AdminHandler) GetDashboard(c *gin.Context) {
 	})
 }
 
-// GetSystemInfo 返回系统版本和信息
+// GetHourlyTraffic 返回最近 N 小时的流量序列 (默认 24 小时, 最多 720 小时)
+// GET /api/v2/admin/traffic/hourly?hours=24
+func (h *AdminHandler) GetHourlyTraffic(c *gin.Context) {
+	hours := 24
+	if v := c.Query("hours"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			hours = parsed
+		}
+	}
+
+	series, err := h.statsService.GetHourlyTraffic(hours)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取小时流量失败", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": series,
+	})
+}
 // GET /api/v2/admin/system/info
 func (h *AdminHandler) GetSystemInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{

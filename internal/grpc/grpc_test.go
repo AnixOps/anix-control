@@ -48,6 +48,7 @@ func (s *GRPCTestSuite) SetupSuite() {
 		&model.Node{},
 		&model.NodeProtocol{},
 		&model.AuthorizedKey{},
+		&model.TrafficLog{},
 	)
 
 	// 启动 gRPC 服务器
@@ -93,6 +94,7 @@ func (s *GRPCTestSuite) SetupTest() {
 	db.Exec("DELETE FROM v2_node")
 	db.Exec("DELETE FROM v2_node_protocol")
 	db.Exec("DELETE FROM v2_authorized_key")
+	db.Exec("DELETE FROM v2_server_log")
 }
 
 // TestHealthCheck 测试健康检查
@@ -161,6 +163,45 @@ func (s *GRPCTestSuite) TestReportTraffic_NodeNotFound() {
 	// 由于节点不存在，可能会返回错误或成功（取决于实现）
 	// 这里主要测试请求能正常发送
 	_ = err // 忽略错误，主要测试不 panic
+}
+
+// TestReportTraffic_WritesTrafficLog 验证 gRPC 上报流量会写入 v2_server_log,
+// 与 REST 上报路径保持一致, 使今日流量等基于时间的统计能覆盖 gRPC 流量
+func (s *GRPCTestSuite) TestReportTraffic_WritesTrafficLog() {
+	db := database.Get()
+
+	node := &model.Node{
+		Name:   "traffic-log-node",
+		Host:   "10.0.0.30",
+		Port:   443,
+		Rate:   1.0,
+		Show:   1,
+		Status: model.NodeStatusOnline,
+		APIKey: "traffic-log-key",
+	}
+	assert.NoError(s.T(), db.Create(node).Error)
+
+	client := pb.NewTrafficServiceClient(s.clientConn)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req := &pb.TrafficReportRequest{
+		NodeId: uint32(node.ID),
+		Traffics: map[uint32]*pb.TrafficData{
+			42: {Upload: 1024, Download: 2048},
+		},
+	}
+
+	resp, err := client.ReportTraffic(ctx, req)
+	assert.NoError(s.T(), err)
+	assert.True(s.T(), resp.Success)
+
+	// 验证写入了原始字节的流量日志
+	var logs []model.TrafficLog
+	db.Where("server_id = ? AND user_id = ?", node.ID, 42).Find(&logs)
+	assert.Len(s.T(), logs, 1)
+	assert.Equal(s.T(), int64(1024), logs[0].U)
+	assert.Equal(s.T(), int64(2048), logs[0].D)
 }
 
 // TestReportOnline_NodeNotFound 测试上报在线状态（节点不存在）

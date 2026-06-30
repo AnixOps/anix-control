@@ -300,6 +300,11 @@ func main() {
 			&model.NodeProtocol{},
 			&model.NodeGroup{},
 			&model.AuthorizedKey{},
+			// 流量与统计日志
+			&model.TrafficLog{},
+			&model.OnlineLog{},
+			&model.StatUser{},
+			&model.StatServer{},
 			// 订阅分组和模板
 			&model.SubscriptionGroup{},
 			&model.SubscriptionTemplate{},
@@ -382,6 +387,9 @@ func main() {
 	}
 	if err := service.EnsureObservabilitySchema(database.Get()); err != nil {
 		log.Fatalf("Failed to ensure observability schema: %v", err)
+	}
+	if err := service.EnsureStatsSchema(database.Get()); err != nil {
+		log.Fatalf("Failed to ensure stats schema: %v", err)
 	}
 	cache.InitMemory()
 	defer cache.CloseMemory()

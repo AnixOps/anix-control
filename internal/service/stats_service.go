@@ -277,6 +277,14 @@ func (s *StatsService) fetchDashboardFromDB() (*DashboardStats, error) {
 		Select("COALESCE(SUM(u + d), 0)").
 		Scan(&stats.TotalTrafficUsed)
 
+	// 今日流量 (从流量日志按本地零点起累计, 与 total_traffic_used 一样按倍率计)
+	// CAST 为整型: rate 是浮点, SUM 结果在 SQLite 下为 float64, 直接扫入 int64 会失败
+	todayStartUnix := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Local).Unix()
+	s.db.Model(&model.TrafficLog{}).
+		Where("log_at >= ?", todayStartUnix).
+		Select("CAST(COALESCE(SUM((u + d) * rate), 0) AS INTEGER)").
+		Scan(&stats.TodayTraffic)
+
 	return stats, nil
 }
 
@@ -341,4 +349,59 @@ func (s *StatsService) getOnlineUsersCount() int64 {
 		return 0
 	}
 	return count
+}
+
+// HourlyTraffic 单个小时的流量统计
+type HourlyTraffic struct {
+	HourTs  int64 `json:"hour_ts"` // 该小时起始的 Unix 秒 (整点)
+	Traffic int64 `json:"traffic"` // 该小时流量 (字节, 已按倍率计)
+}
+
+const (
+	hourSeconds     = int64(3600)
+	maxHourlyWindow = 24 * 30 // 最多查询 30 天
+)
+
+// GetHourlyTraffic 返回最近 hours 个整点小时的流量序列 (含当前未结束的小时),
+// 数据源为 v2_server_log, 按 (log_at/3600) 分桶聚合 SUM((u+d)*rate)。
+// 缺失的小时补零, 结果按时间升序返回, 便于前端直接绘制折线图。
+func (s *StatsService) GetHourlyTraffic(hours int) ([]HourlyTraffic, error) {
+	if hours <= 0 {
+		hours = 24
+	}
+	if hours > maxHourlyWindow {
+		hours = maxHourlyWindow
+	}
+
+	// 当前整点 (本地时区), 作为最后一个桶
+	now := time.Now()
+	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
+	startHour := currentHour - int64(hours-1)*hourSeconds
+
+	// 按小时分桶聚合
+	type bucketRow struct {
+		Hour    int64
+		Traffic int64
+	}
+	var rows []bucketRow
+	if err := s.db.Model(&model.TrafficLog{}).
+		Where("log_at >= ?", startHour).
+		Select("(log_at / ?) * ? AS hour, CAST(COALESCE(SUM((u + d) * rate), 0) AS INTEGER) AS traffic", hourSeconds, hourSeconds).
+		Group("hour").
+		Order("hour ASC").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	// 映射并补零
+	byHour := make(map[int64]int64, len(rows))
+	for _, r := range rows {
+		byHour[r.Hour] = r.Traffic
+	}
+
+	result := make([]HourlyTraffic, 0, hours)
+	for h := startHour; h <= currentHour; h += hourSeconds {
+		result = append(result, HourlyTraffic{HourTs: h, Traffic: byHour[h]})
+	}
+	return result, nil
 }

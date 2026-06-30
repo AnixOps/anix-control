@@ -8,6 +8,14 @@ export function getDashboard(refresh = false) {
   })
 }
 
+export function getTrafficHourly(hours = 24) {
+  return request({
+    url: '/admin/traffic/hourly',
+    method: 'get',
+    params: { hours }
+  })
+}
+
 export function getSystemInfo() {
   return request({
     url: '/admin/system/info',
