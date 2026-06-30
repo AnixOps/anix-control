@@ -1213,7 +1213,7 @@ func (s *StatsServiceTestSuite) TestGetHourlyTraffic_BucketsAndFillsZero() {
 		assert.NoError(s.T(), db.Create(&logs[i]).Error)
 	}
 
-	series, err := s.svc.GetHourlyTraffic(6)
+	series, err := s.svc.GetHourlyTraffic(6, 0)
 	assert.NoError(s.T(), err)
 	assert.Len(s.T(), series, 6) // 6 个小时桶, 含补零
 
@@ -1232,11 +1232,22 @@ func (s *StatsServiceTestSuite) TestGetHourlyTraffic_BucketsAndFillsZero() {
 	for i := 1; i < len(series); i++ {
 		assert.Greater(s.T(), series[i].HourTs, series[i-1].HourTs)
 	}
+
+	// 按 user_id 过滤: user=2 当前小时只有 1073741824, 其它小时为 0
+	u2, err := s.svc.GetHourlyTraffic(6, 2)
+	assert.NoError(s.T(), err)
+	byHourU2 := make(map[int64]int64, len(u2))
+	for _, p := range u2 {
+		byHourU2[p.HourTs] = p.Traffic
+	}
+	assert.Equal(s.T(), int64(1073741824), byHourU2[currentHour]) // 仅 user2 那条
+	assert.Equal(s.T(), int64(0), byHourU2[oneHourAgo])           // oneHourAgo 是 user1 的
+	assert.Equal(s.T(), int64(0), byHourU2[threeHoursAgo])        // threeHoursAgo 是 user1 的
 }
 
 // TestGetHourlyTraffic_NoLogsAllZero 无日志时返回全零序列, 长度等于请求小时数
 func (s *StatsServiceTestSuite) TestGetHourlyTraffic_NoLogsAllZero() {
-	series, err := s.svc.GetHourlyTraffic(24)
+	series, err := s.svc.GetHourlyTraffic(24, 0)
 	assert.NoError(s.T(), err)
 	assert.Len(s.T(), series, 24)
 	for _, p := range series {
@@ -1246,13 +1257,55 @@ func (s *StatsServiceTestSuite) TestGetHourlyTraffic_NoLogsAllZero() {
 
 // TestGetHourlyTraffic_DefaultsAndClamps hours<=0 默认 24, 超上限被夹紧
 func (s *StatsServiceTestSuite) TestGetHourlyTraffic_DefaultsAndClamps() {
-	def, err := s.svc.GetHourlyTraffic(0)
+	def, err := s.svc.GetHourlyTraffic(0, 0)
 	assert.NoError(s.T(), err)
 	assert.Len(s.T(), def, 24)
 
-	clamped, err := s.svc.GetHourlyTraffic(99999)
+	clamped, err := s.svc.GetHourlyTraffic(99999, 0)
 	assert.NoError(s.T(), err)
 	assert.Len(s.T(), clamped, maxHourlyWindow)
+}
+
+// TestGetUserTrafficRanking 验证按用户聚合倒序、关联 email、limit 生效
+func (s *StatsServiceTestSuite) TestGetUserTrafficRanking() {
+	db := database.Get()
+	now := time.Now()
+	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
+	outOfRange := currentHour - 200*3600 // 200 小时前, 超出下面 168 小时窗口
+
+	// 创建两个用户以验证 email 关联
+	u1 := &model.User{Email: "rank1@example.com", Token: "rank-tok-1", UUID: "rank-uuid-1"}
+	u2 := &model.User{Email: "rank2@example.com", Token: "rank-tok-2", UUID: "rank-uuid-2"}
+	assert.NoError(s.T(), db.Create(u1).Error)
+	assert.NoError(s.T(), db.Create(u2).Error)
+
+	logs := []model.TrafficLog{
+		// u1: (1GB+1GB)*1 = 2147483648
+		{UserID: u1.ID, ServerID: 1, ServerType: "node", U: 1073741824, D: 1073741824, Rate: 1.0, LogAt: currentHour + 10},
+		// u2: (1GB+0)*1 = 1073741824
+		{UserID: u2.ID, ServerID: 1, ServerType: "node", U: 1073741824, D: 0, Rate: 1.0, LogAt: currentHour + 20},
+		// u2 超窗口的旧数据, 应被排除
+		{UserID: u2.ID, ServerID: 1, ServerType: "node", U: 9999999, D: 0, Rate: 1.0, LogAt: outOfRange},
+	}
+	for i := range logs {
+		assert.NoError(s.T(), db.Create(&logs[i]).Error)
+	}
+
+	ranking, err := s.svc.GetUserTrafficRanking(168, 10)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), ranking, 2)
+	// 倒序: u1 在前
+	assert.Equal(s.T(), u1.ID, ranking[0].UserID)
+	assert.Equal(s.T(), int64(2147483648), ranking[0].Traffic)
+	assert.Equal(s.T(), "rank1@example.com", ranking[0].Email)
+	assert.Equal(s.T(), u2.ID, ranking[1].UserID)
+	assert.Equal(s.T(), int64(1073741824), ranking[1].Traffic) // 超窗口数据被排除
+
+	// limit 生效
+	top1, err := s.svc.GetUserTrafficRanking(168, 1)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), top1, 1)
+	assert.Equal(s.T(), u1.ID, top1[0].UserID)
 }
 
 func TestStatsService(t *testing.T) {

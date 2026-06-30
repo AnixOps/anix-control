@@ -8,6 +8,17 @@ export default {
       last7d: 'Last 7 days',
       last30d: 'Last 30 days'
     },
+    user: {
+      label: 'User',
+      all: 'All users'
+    },
+    ranking: {
+      title: 'User Traffic Ranking',
+      hint: 'Click a row to view that user in the chart above',
+      user: 'User',
+      traffic: 'Traffic',
+      empty: 'No user traffic in the selected range'
+    },
     summary: {
       total: 'Range total',
       peak: 'Peak hour',

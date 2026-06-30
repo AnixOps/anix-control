@@ -364,8 +364,9 @@ const (
 
 // GetHourlyTraffic 返回最近 hours 个整点小时的流量序列 (含当前未结束的小时),
 // 数据源为 v2_server_log, 按 (log_at/3600) 分桶聚合 SUM((u+d)*rate)。
+// userID > 0 时只统计该用户的流量; userID == 0 时统计全局。
 // 缺失的小时补零, 结果按时间升序返回, 便于前端直接绘制折线图。
-func (s *StatsService) GetHourlyTraffic(hours int) ([]HourlyTraffic, error) {
+func (s *StatsService) GetHourlyTraffic(hours int, userID uint) ([]HourlyTraffic, error) {
 	if hours <= 0 {
 		hours = 24
 	}
@@ -384,8 +385,11 @@ func (s *StatsService) GetHourlyTraffic(hours int) ([]HourlyTraffic, error) {
 		Traffic int64
 	}
 	var rows []bucketRow
-	if err := s.db.Model(&model.TrafficLog{}).
-		Where("log_at >= ?", startHour).
+	query := s.db.Model(&model.TrafficLog{}).Where("log_at >= ?", startHour)
+	if userID > 0 {
+		query = query.Where("user_id = ?", userID)
+	}
+	if err := query.
 		Select("(log_at / ?) * ? AS hour, CAST(COALESCE(SUM((u + d) * rate), 0) AS INTEGER) AS traffic", hourSeconds, hourSeconds).
 		Group("hour").
 		Order("hour ASC").
@@ -404,4 +408,45 @@ func (s *StatsService) GetHourlyTraffic(hours int) ([]HourlyTraffic, error) {
 		result = append(result, HourlyTraffic{HourTs: h, Traffic: byHour[h]})
 	}
 	return result, nil
+}
+
+// UserTrafficRank 单个用户的流量排行项
+type UserTrafficRank struct {
+	UserID  uint   `json:"user_id"`
+	Email   string `json:"email"`
+	Traffic int64  `json:"traffic"` // 区间内总流量 (字节, 已按倍率计)
+}
+
+// GetUserTrafficRanking 返回最近 hours 小时内按用户聚合的流量排行 (倒序),
+// 数据源为 v2_server_log, 关联 v2_user 取 email。limit 限制返回条数。
+func (s *StatsService) GetUserTrafficRanking(hours int, limit int) ([]UserTrafficRank, error) {
+	if hours <= 0 {
+		hours = 24
+	}
+	if hours > maxHourlyWindow {
+		hours = maxHourlyWindow
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	now := time.Now()
+	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
+	startHour := currentHour - int64(hours-1)*hourSeconds
+
+	var ranks []UserTrafficRank
+	if err := s.db.Table("v2_server_log AS l").
+		Select("l.user_id AS user_id, COALESCE(u.email, '') AS email, CAST(COALESCE(SUM((l.u + l.d) * l.rate), 0) AS INTEGER) AS traffic").
+		Joins("LEFT JOIN v2_user AS u ON u.id = l.user_id").
+		Where("l.log_at >= ?", startHour).
+		Group("l.user_id").
+		Order("traffic DESC").
+		Limit(limit).
+		Scan(&ranks).Error; err != nil {
+		return nil, err
+	}
+	return ranks, nil
 }

@@ -8,11 +8,21 @@ export function getDashboard(refresh = false) {
   })
 }
 
-export function getTrafficHourly(hours = 24) {
+export function getTrafficHourly(hours = 24, userId = 0) {
+  const params = { hours }
+  if (userId) params.user_id = userId
   return request({
     url: '/admin/traffic/hourly',
     method: 'get',
-    params: { hours }
+    params
+  })
+}
+
+export function getUserTrafficRanking(hours = 24, limit = 20) {
+  return request({
+    url: '/admin/traffic/user-ranking',
+    method: 'get',
+    params: { hours, limit }
   })
 }
 

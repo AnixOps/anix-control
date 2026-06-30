@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
@@ -61,6 +62,11 @@ func NodeAuth() gin.HandlerFunc {
 
 		c.Set("node_id", node.ID)
 		c.Set("node", &node)
+
+		// 刷新节点心跳: 所有 UniProxy 轮询请求 (config/user/push/alive) 都经过本中间件,
+		// 在此统一更新 last_check_at, 避免节点带 node_type 时心跳不更新导致误判离线
+		db.Model(&model.Node{}).Where("id = ?", node.ID).Update("last_check_at", time.Now().Unix())
+
 		c.Next()
 	}
 }
@@ -120,6 +126,14 @@ func sha256Hash(s string) string {
 func JWTAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
+
+		// WebSocket 握手无法自定义 header, 允许从 query 参数 token 回退获取
+		if authHeader == "" {
+			if queryToken := c.Query("token"); queryToken != "" {
+				authHeader = queryToken
+			}
+		}
+
 		if authHeader == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"message": "not logged in or session expired",
