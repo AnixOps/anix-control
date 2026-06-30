@@ -1,12 +1,13 @@
 ﻿<template>
-  <div class="knowledge-page">
-    <div class="page-header">
-      <h1>{{ t('adminKnowledge.title') }}</h1>
-      <p class="text-secondary">{{ t('adminKnowledge.subtitle') }}</p>
-    </div>
-
-    <div class="filter-bar">
-      <button @click="openCreate">{{ t('adminKnowledge.actions.createArticle') }}</button>
+  <div class="page-shell knowledge-page">
+    <div class="page-toolbar">
+      <div>
+        <h1>{{ t('adminKnowledge.title') }}</h1>
+        <p>{{ t('adminKnowledge.subtitle') }}</p>
+      </div>
+      <button class="btn btn-primary" @click="openCreate">
+        {{ t('adminKnowledge.actions.createArticle') }}
+      </button>
     </div>
 
     <div class="articles-grid">
@@ -23,7 +24,7 @@
           <span class="article-date">{{ formatArticleDate(article.updated_at) }}</span>
           <div class="action-buttons">
             <button
-              class="btn-sm btn-ghost"
+              class="btn btn-sm"
               :title="t('common.actions.edit')"
               :aria-label="t('common.actions.edit')"
               @click="editArticle(article)"
@@ -31,7 +32,7 @@
               {{ t('common.actions.edit') }}
             </button>
             <button
-              class="btn-sm btn-ghost"
+              class="btn btn-sm btn-danger"
               :title="t('common.actions.delete')"
               :aria-label="t('common.actions.delete')"
               @click="removeArticle(article)"
@@ -51,12 +52,12 @@
         <div class="modal-header">
           <h3>{{ isEdit ? t('adminKnowledge.modal.editTitle') : t('adminKnowledge.modal.createTitle') }}</h3>
           <button
-            class="close-btn"
+            class="btn btn-ghost btn-sm close-btn"
             :aria-label="t('common.actions.close')"
             :title="t('common.actions.close')"
             @click="closeModal"
           >
-            ×
+            x
           </button>
         </div>
         <div class="modal-body">
@@ -97,8 +98,8 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closeModal">{{ t('common.actions.cancel') }}</button>
-          <button @click="saveArticle">{{ isEdit ? t('common.actions.save') : t('adminKnowledge.actions.publish') }}</button>
+          <button class="btn" @click="closeModal">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" @click="saveArticle">{{ isEdit ? t('common.actions.save') : t('adminKnowledge.actions.publish') }}</button>
         </div>
       </div>
     </div>
@@ -269,26 +270,6 @@ const removeArticle = async (article) => {
 </script>
 
 <style scoped>
-.knowledge-page {
-  max-width: 1400px;
-}
-
-.page-header {
-  margin-bottom: 24px;
-}
-
-.page-header h1 {
-  font-size: 24px;
-  margin-bottom: 4px;
-}
-
-.filter-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
 .articles-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -301,10 +282,12 @@ const removeArticle = async (article) => {
   border-radius: var(--radius-lg);
   padding: 20px;
   transition: var(--transition);
+  box-shadow: var(--shadow-sm);
 }
 
 .article-card:hover {
-  border-color: var(--text-secondary);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
 }
 
 .article-header {
@@ -315,27 +298,28 @@ const removeArticle = async (article) => {
 }
 
 .category-badge {
-  background: var(--primary-color);
-  color: white;
+  background: var(--primary-soft);
+  color: var(--primary-color);
   padding: 4px 12px;
-  border-radius: 20px;
+  border-radius: 999px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .visibility-badge {
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 10px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-weight: 700;
 }
 
 .visibility-badge.visible {
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(22, 163, 74, 0.08);
   color: var(--success-color);
 }
 
 .visibility-badge.hidden {
-  background: rgba(161, 161, 170, 0.15);
+  background: var(--surface-muted);
   color: var(--text-secondary);
 }
 
@@ -368,7 +352,8 @@ const removeArticle = async (article) => {
 
 .action-buttons {
   display: flex;
-  gap: 4px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .empty-card {
@@ -381,107 +366,17 @@ const removeArticle = async (article) => {
   border-radius: var(--radius-lg);
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-}
-
-.modal {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
 .modal.modal-lg {
-  max-width: 700px;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  font-size: 18px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.form-row {
-  display: flex;
-  gap: 16px;
-}
-
-@media (max-width: 640px) {
-  .form-row {
-    flex-direction: column;
-    gap: 0;
-  }
-}
-
-.form-row .form-group {
-  flex: 1;
+  width: min(96vw, 760px);
 }
 
 .form-row .form-group.flex-2 {
   flex: 2;
 }
 
-.modal-body .form-group {
-  margin-bottom: 16px;
-}
-
-.modal-body label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.modal-body .required {
-  color: var(--error-color);
-}
-
 .modal-body textarea {
   resize: vertical;
   font-family: 'Consolas', 'Monaco', monospace;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid var(--border-color);
-}
-
-.modal-footer button {
-  min-width: 80px;
 }
 </style>
 

@@ -1,23 +1,36 @@
 <template>
-  <div class="page subscriptions-page">
-    <div class="page-header">
-      <h1>{{ t('user.subscribe.title') }}</h1>
-      <p class="subtitle">{{ t('user.subscribe.subtitle') }}</p>
+  <div class="page-shell subscriptions-page">
+    <div class="page-toolbar">
+      <div>
+        <h1>{{ t('user.subscribe.title') }}</h1>
+        <p>{{ t('user.subscribe.subtitle') }}</p>
+      </div>
     </div>
 
-    <div v-if="!token" class="card">
+    <section v-if="!token" class="section-panel info-panel">
       <p>{{ t('user.subscribe.missingToken') }}</p>
-    </div>
+    </section>
 
     <div v-else>
-      <div class="card">
+      <section class="section-panel info-panel">
         <h3>{{ t('user.subscribe.infoTitle') }}</h3>
-        <p>{{ t('common.labels.expiresAt') }}: <strong>{{ subscription.ExpireAt ? formatDateTime(subscription.ExpireAt) : t('common.states.permanent') }}</strong></p>
-        <p>{{ t('user.subscribe.usedTraffic') }}: <strong>{{ formatBytes(subscription.UsedTraffic || 0) }}</strong></p>
-        <p>{{ t('user.subscribe.totalTraffic') }}: <strong>{{ formatBytes(subscription.TotalTraffic || 0) }}</strong></p>
-      </div>
+        <div class="info-grid">
+          <div class="info-item">
+            <span>{{ t('common.labels.expiresAt') }}</span>
+            <strong>{{ subscription.ExpireAt ? formatDateTime(subscription.ExpireAt) : t('common.states.permanent') }}</strong>
+          </div>
+          <div class="info-item">
+            <span>{{ t('user.subscribe.usedTraffic') }}</span>
+            <strong>{{ formatBytes(subscription.UsedTraffic || 0) }}</strong>
+          </div>
+          <div class="info-item">
+            <span>{{ t('user.subscribe.totalTraffic') }}</span>
+            <strong>{{ formatBytes(subscription.TotalTraffic || 0) }}</strong>
+          </div>
+        </div>
+      </section>
 
-      <div class="card">
+      <section class="section-panel links-panel">
         <h3>{{ t('user.subscribe.linksTitle') }}</h3>
         <div v-for="fmt in formats" :key="fmt.value" class="link-item">
           <label>{{ fmt.label }}:</label>
@@ -30,9 +43,9 @@
         <div class="link-actions">
           <button class="btn btn-primary" @click="refresh">{{ t('user.subscribe.refreshCache') }}</button>
         </div>
-      </div>
+      </section>
 
-      <div v-if="showPreview" class="card preview-card">
+      <section v-if="showPreview" class="section-panel preview-card">
         <h3>{{ t('user.subscribe.previewTitle', { format: previewFormat }) }}</h3>
         <div class="preview-controls">
           <button class="btn btn-sm" @click="copyText(previewContent)">{{ t('user.subscribe.copyContent') }}</button>
@@ -40,7 +53,7 @@
           <button class="btn btn-ghost btn-sm" @click="closePreview">{{ t('user.subscribe.closePreview') }}</button>
         </div>
         <textarea readonly rows="12">{{ previewContent }}</textarea>
-      </div>
+      </section>
     </div>
   </div>
 </template>
@@ -160,19 +173,48 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.subscriptions-page .page-header {
+.info-panel,
+.links-panel,
+.preview-card {
+  padding: 20px;
   margin-bottom: 16px;
 }
 
-.card {
-  background: var(--surface-color);
-  padding: 16px;
-  border-radius: 6px;
-  margin-bottom: 12px;
+.info-panel h3,
+.links-panel h3,
+.preview-card h3 {
+  margin-bottom: 14px;
+  font-size: 17px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.info-item {
+  padding: 14px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 4px;
+}
+
+.info-item span,
+.link-item label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.info-item strong {
+  font-size: 16px;
 }
 
 .link-item {
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .link-row {
@@ -183,25 +225,32 @@ onMounted(() => {
 
 .link-row input {
   flex: 1;
-  padding: 6px;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-  background: transparent;
-  color: var(--text-color);
+  min-width: 220px;
+}
+
+.link-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 
 .preview-card textarea {
   width: 100%;
-  background: transparent;
-  color: var(--text-color);
-  border: 1px solid var(--border-color);
-  padding: 8px;
-  border-radius: 6px;
+  resize: vertical;
+  font-family: Consolas, 'Courier New', monospace;
 }
 
 .preview-controls {
   display: flex;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .link-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

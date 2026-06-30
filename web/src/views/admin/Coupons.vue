@@ -1,16 +1,18 @@
 <template>
-  <div class="coupons-page">
-    <div class="page-header">
-      <h1>{{ t('adminCoupons.title') }}</h1>
-      <p class="text-secondary">{{ t('adminCoupons.subtitle') }}</p>
+  <div class="page-shell coupons-page">
+    <div class="page-toolbar">
+      <div>
+        <h1>{{ t('adminCoupons.title') }}</h1>
+        <p>{{ t('adminCoupons.subtitle') }}</p>
+      </div>
+      <button class="btn btn-primary" @click="showCreate = true">
+        {{ t('adminCoupons.actions.createCoupon') }}
+      </button>
     </div>
 
-    <div class="filter-bar">
-      <button @click="showCreate = true">{{ t('adminCoupons.actions.createCoupon') }}</button>
-    </div>
-
-    <div class="table-container">
-      <table class="data-table">
+    <section class="section-panel data-panel">
+      <div class="table-wrap">
+        <table class="data-table">
         <thead>
           <tr>
             <th>{{ t('adminCoupons.table.id') }}</th>
@@ -39,7 +41,7 @@
             <td>
               <div class="action-buttons">
                 <button
-                  class="btn-sm btn-ghost"
+                  class="btn btn-sm btn-danger"
                   :title="t('common.actions.delete')"
                   :aria-label="t('common.actions.delete')"
                   @click="removeCoupon(coupon)"
@@ -53,20 +55,21 @@
             <td colspan="8" class="empty-row">{{ t('adminCoupons.empty.noData') }}</td>
           </tr>
         </tbody>
-      </table>
-    </div>
+        </table>
+      </div>
+    </section>
 
     <div v-if="showCreate" class="modal-overlay" @click.self="closeModal">
       <div class="modal">
         <div class="modal-header">
           <h3>{{ t('adminCoupons.modal.title') }}</h3>
           <button
-            class="close-btn"
+            class="btn btn-ghost btn-sm close-btn"
             :aria-label="t('common.actions.close')"
             :title="t('common.actions.close')"
             @click="closeModal"
           >
-            {{ t('common.actions.close') }}
+            x
           </button>
         </div>
         <div class="modal-body">
@@ -109,8 +112,8 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closeModal">{{ t('common.actions.cancel') }}</button>
-          <button @click="createCoupon">{{ t('common.actions.create') }}</button>
+          <button class="btn" @click="closeModal">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" @click="createCoupon">{{ t('common.actions.create') }}</button>
         </div>
       </div>
     </div>
@@ -220,80 +223,28 @@ const removeCoupon = async (coupon) => {
 </script>
 
 <style scoped>
-.coupons-page {
-  max-width: 1400px;
-}
-
-.page-header {
-  margin-bottom: 24px;
-}
-
-.page-header h1 {
-  font-size: 24px;
-  margin-bottom: 4px;
-}
-
-.filter-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.table-container {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  overflow-x: auto;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 14px 16px;
-  text-align: left;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.data-table th {
-  background: var(--bg-color);
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-}
-
-.data-table tr:hover {
-  background: var(--bg-color);
+.data-panel {
+  padding: 0;
 }
 
 .coupon-code {
-  background: rgba(59, 130, 246, 0.15);
+  display: inline-flex;
+  background: var(--primary-soft);
   color: var(--primary-color);
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: 'Consolas', 'Monaco', monospace;
-  font-weight: 600;
-}
-
-.status-badge {
   font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .type-percent {
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(22, 163, 74, 0.08);
   color: var(--success-color);
 }
 
 .type-fixed {
-  background: rgba(59, 130, 246, 0.15);
+  background: var(--primary-soft);
   color: var(--primary-color);
 }
 
@@ -304,102 +255,11 @@ const removeCoupon = async (coupon) => {
 
 .action-buttons {
   display: flex;
-  gap: 4px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .empty-row {
-  text-align: center;
-  color: var(--text-secondary);
   padding: 40px !important;
-}
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-}
-
-.modal {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 550px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  font-size: 18px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.form-row {
-  display: flex;
-  gap: 16px;
-}
-
-@media (max-width: 640px) {
-  .form-row {
-    flex-direction: column;
-    gap: 0;
-  }
-}
-
-.form-row .form-group {
-  flex: 1;
-}
-
-.modal-body .form-group {
-  margin-bottom: 16px;
-}
-
-.modal-body label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.modal-body .required {
-  color: var(--error-color);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid var(--border-color);
-}
-
-.modal-footer button {
-  min-width: 80px;
 }
 </style>

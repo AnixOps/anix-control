@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { nextTick } from 'vue'
 import Login from '@/views/Login.vue'
+
+const mockRegister = vi.hoisted(() => vi.fn())
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({
@@ -9,9 +12,15 @@ vi.mock('vue-router', () => ({
   }),
 }))
 
+vi.mock('@/api/auth', () => ({
+  login: vi.fn(),
+  register: (...args) => mockRegister(...args),
+}))
+
 describe('Login.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    mockRegister.mockReset()
   })
 
   it('renders login form', () => {
@@ -48,5 +57,38 @@ describe('Login.vue', () => {
 
     // Form validation should trigger
     // Actual behavior depends on implementation
+  })
+
+  it('submits invite code when registering', async () => {
+    mockRegister.mockResolvedValue({
+      data: {
+        token: 'registered-token',
+        is_admin: false,
+        user_id: 7,
+        email: 'invite-user@example.com',
+      },
+    })
+
+    const wrapper = mount(Login, {
+      global: {
+        stubs: ['router-link'],
+      },
+    })
+
+    wrapper.vm.isRegisterMode = true
+    await nextTick()
+
+    await wrapper.find('#email').setValue('invite-user@example.com')
+    await wrapper.find('#password').setValue('password123')
+    await wrapper.find('#confirm-password').setValue('password123')
+    await wrapper.find('#invite-code').setValue('INVITE123')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mockRegister).toHaveBeenCalledWith({
+      email: 'invite-user@example.com',
+      password: 'password123',
+      invite_code: 'INVITE123',
+    })
   })
 })

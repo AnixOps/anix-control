@@ -1,34 +1,55 @@
 <template>
-  <div class="users-page">
-    <div class="page-header">
-      <h1>{{ t('adminUsers.title') }}</h1>
-      <p class="text-secondary">{{ t('adminUsers.subtitle') }}</p>
+  <div class="page-shell">
+    <div class="page-toolbar">
+      <div>
+        <h1>{{ t('adminUsers.title') }}</h1>
+        <p>{{ t('adminUsers.subtitle') }}</p>
+      </div>
+      <button class="btn btn-primary" @click="showCreateModal = true">{{ t('adminUsers.actions.addUser') }}</button>
     </div>
 
-    <div class="stats-grid">
-      <div class="stat-card"><strong>{{ stats.total_users || 0 }}</strong><span>{{ t('adminUsers.stats.totalUsers') }}</span></div>
-      <div class="stat-card"><strong>{{ stats.active_users || 0 }}</strong><span>{{ t('adminUsers.stats.activeUsers') }}</span></div>
-      <div class="stat-card"><strong>{{ stats.expired_users || 0 }}</strong><span>{{ t('adminUsers.stats.expiredUsers') }}</span></div>
-      <div class="stat-card"><strong>{{ stats.banned_users || 0 }}</strong><span>{{ t('adminUsers.stats.bannedUsers') }}</span></div>
-    </div>
+    <section class="metrics-grid">
+      <article class="section-panel metric-card">
+        <span class="metric-code primary">USR</span>
+        <strong>{{ stats.total_users || 0 }}</strong>
+        <span>{{ t('adminUsers.stats.totalUsers') }}</span>
+      </article>
+      <article class="section-panel metric-card">
+        <span class="metric-code success">ACT</span>
+        <strong>{{ stats.active_users || 0 }}</strong>
+        <span>{{ t('adminUsers.stats.activeUsers') }}</span>
+      </article>
+      <article class="section-panel metric-card">
+        <span class="metric-code warning">EXP</span>
+        <strong>{{ stats.expired_users || 0 }}</strong>
+        <span>{{ t('adminUsers.stats.expiredUsers') }}</span>
+      </article>
+      <article class="section-panel metric-card">
+        <span class="metric-code danger">BAN</span>
+        <strong>{{ stats.banned_users || 0 }}</strong>
+        <span>{{ t('adminUsers.stats.bannedUsers') }}</span>
+      </article>
+    </section>
 
-    <div class="filter-bar">
-      <input v-model="filters.email" type="text" :placeholder="t('adminUsers.filters.searchEmail')" @keyup.enter="fetchUsers" />
-      <select v-model="filters.status" @change="fetchUsers">
-        <option value="">{{ t('adminUsers.filters.allStatus') }}</option>
-        <option value="active">{{ t('adminUsers.status.active') }}</option>
-        <option value="expired">{{ t('adminUsers.status.expired') }}</option>
-        <option value="banned">{{ t('adminUsers.status.banned') }}</option>
-      </select>
-      <button class="btn-secondary" @click="fetchUsers">{{ t('adminUsers.actions.search') }}</button>
-      <button class="btn-primary" @click="showCreateModal = true">{{ t('adminUsers.actions.addUser') }}</button>
-    </div>
+    <section class="section-panel filter-panel">
+      <div class="filter-row">
+        <input v-model="filters.email" type="text" :placeholder="t('adminUsers.filters.searchEmail')" @keyup.enter="fetchUsers" />
+        <select v-model="filters.status" @change="fetchUsers">
+          <option value="">{{ t('adminUsers.filters.allStatus') }}</option>
+          <option value="active">{{ t('adminUsers.status.active') }}</option>
+          <option value="expired">{{ t('adminUsers.status.expired') }}</option>
+          <option value="banned">{{ t('adminUsers.status.banned') }}</option>
+        </select>
+        <button class="btn" @click="fetchUsers">{{ t('adminUsers.actions.search') }}</button>
+      </div>
+    </section>
 
-    <div class="table-wrap">
-      <table class="data-table">
+    <section class="section-panel data-panel">
+      <div class="table-wrap">
+        <table class="data-table">
         <thead>
           <tr>
-            <th>{{ t('adminUsers.table.id') }}</th><th>{{ t('adminUsers.table.email') }}</th><th>{{ t('adminUsers.table.plan') }}</th><th>{{ t('adminUsers.table.traffic') }}</th>
+            <th>{{ t('adminUsers.table.id') }}</th><th>{{ t('adminUsers.table.email') }}</th><th>{{ t('adminUsers.table.plan') }}</th><th>{{ t('adminUsers.table.traffic') }}</th><th>{{ t('adminUsers.table.limits') }}</th>
             <th>{{ t('adminUsers.table.expireAt') }}</th><th>{{ t('adminUsers.table.status') }}</th><th>{{ t('adminUsers.table.createdAt') }}</th><th>{{ t('adminUsers.table.actions') }}</th>
           </tr>
         </thead>
@@ -38,27 +59,29 @@
             <td><span v-if="user.is_admin === 1" class="admin-badge">{{ t('adminUsers.labels.admin') }}</span> {{ user.email }}</td>
             <td>{{ user.plan?.name || '-' }}</td>
             <td>{{ formatBytes((user.u || 0) + (user.d || 0)) }} / {{ formatBytes(user.transfer_enable || 0) }}</td>
+            <td>{{ formatUserLimits(user) }}</td>
             <td>{{ formatDate(user.expired_at) }}</td>
             <td><span :class="['status-badge', getStatusClass(user)]">{{ getStatusText(user) }}</span></td>
             <td>{{ formatDateTime(user.created_at) }}</td>
             <td class="actions">
-              <button @click="editUser(user)" :title="t('adminUsers.actions.editUser')">{{ t('common.actions.edit') }}</button>
-              <button @click="openTunnelModal(user)" :title="t('adminUsers.actions.manageTunnel')">{{ t('adminUsers.actions.manageTunnelShort') }}</button>
-              <button v-if="user.banned === 0" @click="handleBan(user)" :title="t('adminUsers.actions.ban')">{{ t('adminUsers.actions.ban') }}</button>
-              <button v-else @click="handleUnban(user)" :title="t('adminUsers.actions.unban')">{{ t('adminUsers.actions.unban') }}</button>
-              <button @click="openResetUserDialog(user)" :title="t('adminUsers.actions.resetTraffic')">{{ t('adminUsers.actions.resetShort') }}</button>
+              <button class="btn btn-sm" @click="editUser(user)" :title="t('adminUsers.actions.editUser')">{{ t('common.actions.edit') }}</button>
+              <button class="btn btn-sm" @click="openTunnelModal(user)" :title="t('adminUsers.actions.manageTunnel')">{{ t('adminUsers.actions.manageTunnelShort') }}</button>
+              <button v-if="user.banned === 0" class="btn btn-sm" @click="handleBan(user)" :title="t('adminUsers.actions.ban')">{{ t('adminUsers.actions.ban') }}</button>
+              <button v-else class="btn btn-sm" @click="handleUnban(user)" :title="t('adminUsers.actions.unban')">{{ t('adminUsers.actions.unban') }}</button>
+              <button class="btn btn-sm" @click="openResetUserDialog(user)" :title="t('adminUsers.actions.resetTraffic')">{{ t('adminUsers.actions.resetShort') }}</button>
             </td>
           </tr>
-          <tr v-if="users.length === 0"><td colspan="8" class="empty-row">{{ t('adminUsers.empty.noData') }}</td></tr>
+          <tr v-if="users.length === 0"><td colspan="9" class="empty-row">{{ t('adminUsers.empty.noData') }}</td></tr>
         </tbody>
-      </table>
-    </div>
+        </table>
+      </div>
 
-    <div class="pagination">
-      <button class="btn-secondary" :disabled="page <= 1" @click="page--; fetchUsers()">{{ t('adminUsers.pagination.prev') }}</button>
-      <span>{{ t('adminUsers.pagination.info', { page, totalPages }) }}</span>
-      <button class="btn-secondary" :disabled="page >= totalPages" @click="page++; fetchUsers()">{{ t('adminUsers.pagination.next') }}</button>
-    </div>
+      <div class="pagination">
+        <button class="btn" :disabled="page <= 1" @click="page--; fetchUsers()">{{ t('adminUsers.pagination.prev') }}</button>
+        <span>{{ t('adminUsers.pagination.info', { page, totalPages }) }}</span>
+        <button class="btn" :disabled="page >= totalPages" @click="page++; fetchUsers()">{{ t('adminUsers.pagination.next') }}</button>
+      </div>
+    </section>
 
     <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
       <div class="modal">
@@ -66,6 +89,8 @@
         <label>{{ t('adminUsers.editModal.fields.email') }}<input v-model="editingUser.email" type="email" /></label>
         <label>{{ t('adminUsers.editModal.fields.balance') }}<input v-model.number="editingUser.balance" type="number" /></label>
         <label>{{ t('adminUsers.editModal.fields.transfer') }}<input v-model.number="editingUser.transfer_enable" type="number" /></label>
+        <label>{{ t('adminUsers.editModal.fields.speedLimit') }}<input v-model.number="editingUser.speed_limit" data-test="user-speed-limit-input" type="number" min="0" /></label>
+        <label>{{ t('adminUsers.editModal.fields.deviceLimit') }}<input v-model.number="editingUser.device_limit" data-test="user-device-limit-input" type="number" min="0" /></label>
         <label>{{ t('adminUsers.editModal.fields.groupId') }}
           <select v-model="editingUser.group_id">
             <option :value="null">{{ t('adminUsers.editModal.groupOptions.unassigned') }}</option>
@@ -75,7 +100,7 @@
         <label>{{ t('adminUsers.editModal.fields.expiredAt') }}<input v-model.number="editingUser.expired_at" type="number" /></label>
         <label>{{ t('adminUsers.editModal.fields.flowResetTime') }}<input v-model.number="editingUser.flowResetTime" type="number" min="0" max="31" /></label>
         <label>{{ t('adminUsers.editModal.fields.remark') }}<textarea v-model="editingUser.remark_content" rows="3"></textarea></label>
-        <div class="row"><button class="btn-secondary" @click="showEditModal = false">{{ t('common.actions.cancel') }}</button><button @click="saveUser">{{ t('common.actions.save') }}</button></div>
+        <div class="row"><button class="btn" @click="showEditModal = false">{{ t('common.actions.cancel') }}</button><button class="btn btn-primary" data-test="user-save-button" @click="saveUser">{{ t('common.actions.save') }}</button></div>
       </div>
     </div>
 
@@ -97,9 +122,11 @@
           </select>
         </label>
         <label>{{ t('adminUsers.createModal.fields.transferEnable') }}<input v-model.number="newUser.transfer_enable" type="number" min="0" :placeholder="t('adminUsers.createModal.placeholders.transferEnable')" /></label>
+        <label>{{ t('adminUsers.createModal.fields.speedLimit') }}<input v-model.number="newUser.speed_limit" data-test="new-user-speed-limit-input" type="number" min="0" :placeholder="t('adminUsers.createModal.placeholders.speedLimit')" /></label>
+        <label>{{ t('adminUsers.createModal.fields.deviceLimit') }}<input v-model.number="newUser.device_limit" data-test="new-user-device-limit-input" type="number" min="0" :placeholder="t('adminUsers.createModal.placeholders.deviceLimit')" /></label>
         <label>{{ t('adminUsers.createModal.fields.flowResetTime') }}<input v-model.number="newUser.flowResetTime" type="number" min="0" max="31" /></label>
         <p v-if="createError" class="error">{{ createError }}</p>
-        <div class="row"><button class="btn-secondary" @click="showCreateModal = false">{{ t('common.actions.cancel') }}</button><button @click="handleCreateUser" :disabled="createLoading">{{ createLoading ? t('adminUsers.createModal.creating') : t('common.actions.create') }}</button></div>
+        <div class="row"><button class="btn" @click="showCreateModal = false">{{ t('common.actions.cancel') }}</button><button class="btn btn-primary" @click="handleCreateUser" :disabled="createLoading">{{ createLoading ? t('adminUsers.createModal.creating') : t('common.actions.create') }}</button></div>
       </div>
     </div>
 
@@ -130,8 +157,8 @@
             </select>
           </label>
           <div class="row">
-            <button v-if="editingTunnelId" class="btn-secondary" @click="resetTunnelForm">{{ t('adminUsers.tunnelModal.actions.cancelEdit') }}</button>
-            <button :disabled="tunnelLoading" @click="submitTunnelForm">{{ tunnelLoading ? t('adminUsers.tunnelModal.actions.submitting') : (editingTunnelId ? t('adminUsers.tunnelModal.actions.updateGrant') : t('adminUsers.tunnelModal.actions.addGrant')) }}</button>
+            <button v-if="editingTunnelId" class="btn" @click="resetTunnelForm">{{ t('adminUsers.tunnelModal.actions.cancelEdit') }}</button>
+            <button class="btn btn-primary" :disabled="tunnelLoading" @click="submitTunnelForm">{{ tunnelLoading ? t('adminUsers.tunnelModal.actions.submitting') : (editingTunnelId ? t('adminUsers.tunnelModal.actions.updateGrant') : t('adminUsers.tunnelModal.actions.addGrant')) }}</button>
           </div>
         </div>
 
@@ -146,12 +173,12 @@
               <td>{{ item.id }}</td><td>{{ item.tunnelName || item.tunnelId }}</td>
               <td><span :class="['status-badge', item.status === 1 ? 'status-active' : 'status-banned']">{{ item.status === 1 ? t('runtime.shared.enabled') : t('runtime.shared.disabled') }}</span></td>
               <td>{{ item.flow ?? 0 }}</td><td>{{ item.num ?? 0 }}</td><td>{{ formatTunnelExpire(item.expTime) }}</td><td>{{ formatFlowResetDay(item.flowResetTime) }}</td><td>{{ formatBytes(calculateTunnelUsedFlow(item)) }}</td><td>{{ formatTunnelRateLimit(item) }}</td>
-              <td class="actions"><button @click="editTunnelGrant(item)">{{ t('common.actions.edit') }}</button><button @click="openResetTunnelDialog(item)">{{ t('adminUsers.actions.resetTraffic') }}</button><button @click="removeTunnelGrant(item)">{{ t('common.actions.delete') }}</button></td>
+              <td class="actions"><button class="btn btn-sm" @click="editTunnelGrant(item)">{{ t('common.actions.edit') }}</button><button class="btn btn-sm" @click="openResetTunnelDialog(item)">{{ t('adminUsers.actions.resetTraffic') }}</button><button class="btn btn-sm" @click="removeTunnelGrant(item)">{{ t('common.actions.delete') }}</button></td>
             </tr>
             <tr v-if="!tunnelListLoading && userTunnels.length === 0"><td colspan="10" class="empty-row">{{ t('adminUsers.tunnelModal.empty') }}</td></tr>
           </tbody>
         </table>
-        <div class="row"><button class="btn-secondary" @click="closeTunnelModal">{{ t('common.actions.close') }}</button></div>
+        <div class="row"><button class="btn" @click="closeTunnelModal">{{ t('common.actions.close') }}</button></div>
       </div>
     </div>
 
@@ -162,8 +189,8 @@
         <div><strong>{{ t('adminUsers.resetFlow.usedFlow') }}</strong> {{ resetFlowUsedFlow }}</div>
         <div v-if="resetFlowQuota"><strong>{{ t('adminUsers.resetFlow.quota') }}</strong> {{ resetFlowQuota }}</div>
         <div class="row">
-          <button class="btn-secondary" :disabled="resetFlowLoading" @click="closeResetFlowModal">{{ t('common.actions.cancel') }}</button>
-          <button :disabled="resetFlowLoading" @click="confirmResetFlow">{{ resetFlowLoading ? t('adminUsers.resetFlow.resetting') : t('adminUsers.resetFlow.confirmAction') }}</button>
+          <button class="btn" :disabled="resetFlowLoading" @click="closeResetFlowModal">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" :disabled="resetFlowLoading" @click="confirmResetFlow">{{ resetFlowLoading ? t('adminUsers.resetFlow.resetting') : t('adminUsers.resetFlow.confirmAction') }}</button>
         </div>
       </div>
     </div>
@@ -193,7 +220,8 @@ const editingUser = ref({})
 const showCreateModal = ref(false)
 const createLoading = ref(false)
 const createError = ref('')
-const newUser = ref({ email: '', password: '', is_admin: 0, flowResetTime: 0, group_id: null, transfer_enable: 0 })
+const newBlankUser = () => ({ email: '', password: '', is_admin: 0, flowResetTime: 0, group_id: null, transfer_enable: 0, speed_limit: 0, device_limit: 0 })
+const newUser = ref(newBlankUser())
 const showTunnelModal = ref(false)
 const tunnelUser = ref(null)
 const tunnelOptions = ref([])
@@ -255,7 +283,7 @@ const handleCreateUser = async () => {
   try {
     await createUser(newUser.value)
     showCreateModal.value = false
-    newUser.value = { email: '', password: '', is_admin: 0, flowResetTime: 0, group_id: null, transfer_enable: 0 }
+    newUser.value = newBlankUser()
     fetchUsers()
     fetchStats()
     notify(t('adminUsers.messages.userCreated'))
@@ -280,13 +308,19 @@ const fetchStats = async () => {
   try { stats.value = getResData(await getUserStats()) || {} } catch (err) { console.error(t('adminUsers.messages.fetchStatsFailed'), err) }
 }
 const editUser = (user) => {
-  editingUser.value = { ...user, flowResetTime: Number(user?.flowResetTime || 0) }
+  editingUser.value = {
+    ...user,
+    flowResetTime: Number(user?.flowResetTime || 0),
+    speed_limit: Number(user?.speed_limit || 0),
+    device_limit: Number(user?.device_limit || 0)
+  }
   showEditModal.value = true
 }
 const saveUser = async () => {
   try {
     await updateUser(editingUser.value.id, {
       email: editingUser.value.email, balance: editingUser.value.balance, transfer_enable: editingUser.value.transfer_enable,
+      speed_limit: Number(editingUser.value.speed_limit || 0), device_limit: Number(editingUser.value.device_limit || 0),
       expired_at: editingUser.value.expired_at, flowResetTime: Number(editingUser.value.flowResetTime || 0), remark_content: editingUser.value.remark_content,
       group_id: editingUser.value.group_id || null
     })
@@ -469,6 +503,13 @@ const formatFlowResetDay = (value) => {
   if (!day) return t('adminUsers.labels.noReset')
   return t('adminUsers.labels.monthlyDay', { day })
 }
+const formatUserLimits = (user) => {
+  const speedLimit = Number(user?.speed_limit || 0)
+  const deviceLimit = Number(user?.device_limit || 0)
+  const speedText = speedLimit > 0 ? t('adminUsers.labels.speedLimitMbps', { value: speedLimit }) : t('adminUsers.labels.noSpeedLimit')
+  const deviceText = deviceLimit > 0 ? t('adminUsers.labels.deviceLimitCount', { value: deviceLimit }) : t('adminUsers.labels.noDeviceLimit')
+  return `${speedText} / ${deviceText}`
+}
 const formatTunnelExpire = (value) => {
   if (!value) return t('adminUsers.labels.permanent')
   const date = new Date(value < 1000000000000 ? value * 1000 : value)
@@ -509,32 +550,191 @@ const loadSubscriptionGroups = async () => {
 </script>
 
 <style scoped>
-.users-page { max-width: 1400px; }
-.page-header { margin-bottom: 16px; }
-.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
-.stat-card { border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--surface-color); padding: 12px; display: grid; gap: 4px; }
-.stat-card span { color: var(--text-secondary); font-size: 12px; }
-.filter-bar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-.filter-bar input { flex: 1; min-width: 240px; }
-.table-wrap { border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--surface-color); overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; }
-.data-table th, .data-table td { padding: 12px 10px; border-bottom: 1px solid var(--border-color); text-align: left; white-space: nowrap; }
-.data-table th { font-size: 12px; text-transform: uppercase; color: var(--text-secondary); }
-.admin-badge { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--primary-color); margin-right: 6px; }
-.status-badge { font-size: 12px; padding: 3px 9px; border-radius: 999px; }
-.status-active { background: rgba(34, 197, 94, 0.15); color: var(--success-color); }
-.status-expired { background: rgba(245, 158, 11, 0.15); color: var(--warning-color); }
-.status-banned { background: rgba(239, 68, 68, 0.15); color: var(--error-color); }
-.actions { display: flex; gap: 4px; flex-wrap: wrap; }
-.actions button { padding: 6px 10px; white-space: nowrap; }
-.empty-row { text-align: center; color: var(--text-secondary); }
-.pagination { margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 12px; }
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 1000; }
-.modal { width: min(96vw, 560px); max-height: 90vh; overflow: auto; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 14px; display: grid; gap: 10px; }
-.modal-wide { width: min(96vw, 1100px); }
-.modal label { display: grid; gap: 6px; }
-.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.row { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
-.error { color: var(--error-color); margin: 0; }
-@media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .grid { grid-template-columns: 1fr; } }
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.metric-card {
+  padding: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.metric-card strong {
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.metric-card span:last-child {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.metric-code {
+  width: fit-content;
+  min-width: 44px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.metric-code.primary { background: rgba(0, 100, 250, 0.08); color: var(--primary-color); }
+.metric-code.success { background: rgba(22, 163, 74, 0.08); color: var(--success-color); }
+.metric-code.warning { background: rgba(217, 119, 6, 0.08); color: var(--warning-color); }
+.metric-code.danger { background: rgba(220, 38, 38, 0.08); color: var(--error-color); }
+
+.filter-panel,
+.data-panel {
+  padding: 18px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-row input {
+  flex: 1;
+  min-width: 260px;
+}
+
+.filter-row select {
+  width: 180px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 14px 10px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.data-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-color);
+  margin-right: 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-active { background: rgba(22, 163, 74, 0.08); color: var(--success-color); }
+.status-expired { background: rgba(217, 119, 6, 0.08); color: var(--warning-color); }
+.status-banned { background: rgba(220, 38, 38, 0.08); color: var(--error-color); }
+
+.actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.empty-row {
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.pagination {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.modal {
+  width: min(96vw, 560px);
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-wide {
+  width: min(96vw, 1100px);
+}
+
+.modal label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.error {
+  color: var(--error-color);
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

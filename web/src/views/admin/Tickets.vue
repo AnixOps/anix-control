@@ -1,36 +1,33 @@
 ﻿<template>
-  <div class="tickets-page">
-    <div class="page-header">
-      <h1>{{ t('adminTickets.title') }}</h1>
-      <p class="text-secondary">{{ t('adminTickets.subtitle') }}</p>
-    </div>
-
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-icon" aria-hidden="true">{{ t('adminTickets.icons.open') }}</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ openCount }}</div>
-          <div class="stat-label">{{ t('adminTickets.stats.open') }}</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon" aria-hidden="true">{{ t('adminTickets.icons.answered') }}</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ answeredCount }}</div>
-          <div class="stat-label">{{ t('adminTickets.stats.answered') }}</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon" aria-hidden="true">{{ t('adminTickets.icons.closed') }}</div>
-        <div class="stat-info">
-          <div class="stat-value">{{ closedCount }}</div>
-          <div class="stat-label">{{ t('adminTickets.stats.closed') }}</div>
-        </div>
+  <div class="page-shell tickets-page">
+    <div class="page-toolbar">
+      <div>
+        <h1>{{ t('adminTickets.title') }}</h1>
+        <p>{{ t('adminTickets.subtitle') }}</p>
       </div>
     </div>
 
-    <div class="table-container">
-      <table class="data-table">
+    <section class="metrics-grid">
+      <article class="section-panel metric-card">
+        <span class="metric-code primary">OPN</span>
+        <strong>{{ openCount }}</strong>
+        <span>{{ t('adminTickets.stats.open') }}</span>
+      </article>
+      <article class="section-panel metric-card">
+        <span class="metric-code success">ANS</span>
+        <strong>{{ answeredCount }}</strong>
+        <span>{{ t('adminTickets.stats.answered') }}</span>
+      </article>
+      <article class="section-panel metric-card">
+        <span class="metric-code muted">CLD</span>
+        <strong>{{ closedCount }}</strong>
+        <span>{{ t('adminTickets.stats.closed') }}</span>
+      </article>
+    </section>
+
+    <section class="section-panel data-panel">
+      <div class="table-wrap">
+        <table class="data-table">
         <thead>
           <tr>
             <th>{{ t('adminTickets.table.id') }}</th>
@@ -61,7 +58,7 @@
             <td>
               <div class="action-buttons">
                 <button
-                  class="btn-sm btn-ghost"
+                  class="btn btn-sm"
                   :title="t('adminTickets.actions.reply')"
                   :aria-label="t('adminTickets.actions.reply')"
                   @click="openReply(ticket)"
@@ -70,7 +67,7 @@
                 </button>
                 <button
                   v-if="ticket.status !== 2"
-                  class="btn-sm btn-ghost"
+                  class="btn btn-sm"
                   :title="t('adminTickets.actions.closeTicket')"
                   :aria-label="t('adminTickets.actions.closeTicket')"
                   @click="closeTicket(ticket)"
@@ -84,20 +81,21 @@
             <td colspan="7" class="empty-row">{{ t('adminTickets.empty.noData') }}</td>
           </tr>
         </tbody>
-      </table>
-    </div>
+        </table>
+      </div>
+    </section>
 
     <div v-if="showReply" class="modal-overlay" @click.self="closeReply">
       <div class="modal">
         <div class="modal-header">
           <h3>{{ t('adminTickets.replyModal.title', { id: currentTicket?.id ?? '-' }) }}</h3>
           <button
-            class="close-btn"
+            class="btn btn-ghost btn-sm close-btn"
             :aria-label="t('common.actions.close')"
             :title="t('common.actions.close')"
             @click="closeReply"
           >
-            ×
+            x
           </button>
         </div>
         <div class="modal-body">
@@ -115,8 +113,8 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="closeReply">{{ t('common.actions.cancel') }}</button>
-          <button @click="submitReply">{{ t('adminTickets.actions.sendReply') }}</button>
+          <button class="btn" @click="closeReply">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" @click="submitReply">{{ t('adminTickets.actions.sendReply') }}</button>
         </div>
       </div>
     </div>
@@ -230,184 +228,92 @@ const closeTicket = async (ticket) => {
 </script>
 
 <style scoped>
-.tickets-page {
-  max-width: 1400px;
-}
-
-.page-header {
-  margin-bottom: 24px;
-}
-
-.page-header h1 {
-  font-size: 24px;
-  margin-bottom: 4px;
-}
-
-.stats-grid {
+.metrics-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-@media (max-width: 768px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.stat-card {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  display: flex;
-  align-items: center;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
 }
 
-.stat-icon {
-  font-size: 32px;
+.metric-card {
+  padding: 18px;
+  display: grid;
+  gap: 6px;
 }
 
-.stat-value {
-  font-size: 24px;
-  font-weight: 700;
+.metric-card strong {
+  font-size: 30px;
+  line-height: 1.1;
 }
 
-.stat-label {
-  font-size: 13px;
+.metric-card span:last-child {
   color: var(--text-secondary);
-}
-
-.table-container {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  overflow-x: auto;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 14px 16px;
-  text-align: left;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.data-table th {
-  background: var(--bg-color);
-  font-weight: 600;
   font-size: 13px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
 }
 
-.data-table tr:hover {
-  background: var(--bg-color);
+.metric-code {
+  width: fit-content;
+  min-width: 44px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.metric-code.primary { background: var(--primary-soft); color: var(--primary-color); }
+.metric-code.success { background: rgba(22, 163, 74, 0.08); color: var(--success-color); }
+.metric-code.muted { background: var(--surface-muted); color: var(--text-secondary); }
+
+.data-panel {
+  padding: 0;
 }
 
 .status-badge {
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
 }
 
 .level-low {
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(22, 163, 74, 0.08);
   color: var(--success-color);
 }
 
 .level-medium {
-  background: rgba(245, 158, 11, 0.15);
+  background: rgba(217, 119, 6, 0.08);
   color: var(--warning-color);
 }
 
 .level-high {
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(220, 38, 38, 0.08);
   color: var(--error-color);
 }
 
 .status-open {
-  background: rgba(59, 130, 246, 0.15);
+  background: var(--primary-soft);
   color: var(--primary-color);
 }
 
 .status-answered {
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(22, 163, 74, 0.08);
   color: var(--success-color);
 }
 
 .status-closed {
-  background: rgba(161, 161, 170, 0.15);
+  background: var(--surface-muted);
   color: var(--text-secondary);
 }
 
 .action-buttons {
   display: flex;
-  gap: 4px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .empty-row {
-  text-align: center;
-  color: var(--text-secondary);
   padding: 40px !important;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-}
-
-.modal {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  font-size: 18px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
 .ticket-info {
-  background: var(--bg-color);
+  background: var(--surface-muted);
   padding: 12px 16px;
   border-radius: var(--radius-md);
   margin-bottom: 16px;
@@ -431,18 +337,6 @@ const closeTicket = async (ticket) => {
 
 .modal-body textarea {
   resize: vertical;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid var(--border-color);
-}
-
-.modal-footer button {
-  min-width: 80px;
 }
 </style>
 

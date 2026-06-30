@@ -97,19 +97,25 @@ function onOptionKeydown(event, value) {
   padding: 4px;
   border: 1px solid var(--border-color);
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-sm);
 }
 
 .locale-option {
+  min-width: 48px;
   border: 0;
   background: transparent;
   color: var(--text-secondary);
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 999px;
   cursor: pointer;
   font-size: 12px;
-  font-weight: 600;
-  transition: var(--transition);
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.locale-option:hover {
+  background: var(--surface-hover);
 }
 
 .locale-option.active {
@@ -119,6 +125,6 @@ function onOptionKeydown(event, value) {
 
 .locale-switcher.compact .locale-option {
   min-width: 40px;
-  padding: 6px 8px;
+  padding: 6px 10px;
 }
 </style>
