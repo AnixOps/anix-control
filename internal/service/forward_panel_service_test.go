@@ -59,6 +59,16 @@ func (c *stubNodeXForwardRuntimeClient) Execute(ctx context.Context, req nodeXFo
 	}, nil
 }
 
+func (c *stubNodeXForwardRuntimeClient) Translate(ctx context.Context, sourceJobID uint, nodeID uint, payload nodeXForwardExecuteRequest) (*nodeXBridgeAgentTask, error) {
+	_ = ctx
+	return &nodeXBridgeAgentTask{
+		TaskID: fmt.Sprintf("forward-runtime-job-%d", sourceJobID),
+		NodeID: nodeID,
+		Type:   "forward",
+		Action: payload.Action,
+	}, nil
+}
+
 func (s *PanelForwardServiceTestSuite) SetupSuite() {
 	s.ServiceTestSuite.SetupSuite()
 	database.AutoMigrate(

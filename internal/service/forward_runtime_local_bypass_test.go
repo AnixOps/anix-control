@@ -29,6 +29,11 @@ func (e *minimalForwardRuntimeNodeXExecutor) Execute(context.Context, nodeXForwa
 	}, nil
 }
 
+func (e *minimalForwardRuntimeNodeXExecutor) Translate(context.Context, uint, uint, nodeXForwardExecuteRequest) (*nodeXBridgeAgentTask, error) {
+	e.calls++
+	return &nodeXBridgeAgentTask{TaskID: "forward-runtime-job-0", Type: "forward"}, nil
+}
+
 type minimalForwardRuntimeHTTPDoer struct {
 	lastRequest *http.Request
 }

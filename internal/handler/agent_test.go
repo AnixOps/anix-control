@@ -45,6 +45,8 @@ func (s *AgentHandlerTestSuite) SetupSuite() {
 	s.db.AutoMigrate(
 		&model.ForwardNode{},
 		&model.ForwardRule{},
+		&model.ForwardRuntimeJob{},
+		&model.ForwardAgentBridgeTask{},
 	)
 }
 
