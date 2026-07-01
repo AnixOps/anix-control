@@ -21,8 +21,9 @@ const (
 	forwardRuntimeNodeXTokenConfigKey          = "forward.runtime.nodex.token"
 	forwardRuntimeNodeXTimeoutSecondsConfigKey = "forward.runtime.nodex.timeout_seconds"
 
-	defaultForwardRuntimeNodeXExecutePath = "/api/v2/internal/forward/runtime/execute"
-	defaultForwardRuntimeNodeXTimeout     = 15 * time.Second
+	defaultForwardRuntimeNodeXExecutePath          = "/api/v2/internal/forward/runtime/execute"
+	defaultForwardRuntimeNodeXBridgeTranslatePath  = "/api/v2/internal/forward/bridge/translate"
+	defaultForwardRuntimeNodeXTimeout              = 15 * time.Second
 
 	nodeXForwardResourceTypePanelForward = "panel_forward"
 	nodeXForwardResourceTypeLegacyRule   = "legacy_rule"
@@ -34,6 +35,34 @@ const (
 
 type forwardRuntimeNodeXExecutor interface {
 	Execute(ctx context.Context, req nodeXForwardExecuteRequest) (*nodeXForwardExecuteResult, error)
+	Translate(ctx context.Context, sourceJobID uint, nodeID uint, payload nodeXForwardExecuteRequest) (*nodeXBridgeAgentTask, error)
+}
+
+// nodeXBridgeTranslateRequest 发送给 NodeX 无状态翻译端点的请求体。
+type nodeXBridgeTranslateRequest struct {
+	SourceJobID uint                       `json:"sourceJobId"`
+	NodeID      uint                       `json:"nodeId"`
+	Payload     nodeXForwardExecuteRequest `json:"payload"`
+}
+
+// nodeXBridgeAgentTask 对应 NodeX 返回的 legacy AgentTask 信封 (data.task)。
+type nodeXBridgeAgentTask struct {
+	TaskID string         `json:"task_id"`
+	NodeID uint           `json:"node_id"`
+	Type   string         `json:"type"`
+	Action string         `json:"action"`
+	Params map[string]any `json:"params"`
+}
+
+type nodeXBridgeTranslateResponse struct {
+	Data    *nodeXBridgeTranslateData `json:"data,omitempty"`
+	Error   string                    `json:"error,omitempty"`
+	Msg     string                    `json:"msg,omitempty"`
+	Message string                    `json:"message,omitempty"`
+}
+
+type nodeXBridgeTranslateData struct {
+	Task *nodeXBridgeAgentTask `json:"task"`
 }
 
 type nodeXForwardHTTPDoer interface {
@@ -277,6 +306,93 @@ func (c *nodeXForwardRuntimeClient) Execute(ctx context.Context, req nodeXForwar
 		}, nil
 	}
 	return result, nil
+}
+
+// Translate 调用 NodeX 无状态翻译端点，将 clean_agent 转发 payload 翻译成 legacy AgentTask。
+// NodeX 不读 DB、不管队列，仅做 payload→task 转换；非 2xx 或 task 为空一律返回 error，
+// 供 bridge worker 判定失败而不误标 success。
+func (c *nodeXForwardRuntimeClient) Translate(ctx context.Context, sourceJobID uint, nodeID uint, payload nodeXForwardExecuteRequest) (*nodeXBridgeAgentTask, error) {
+	settings, err := c.loadSettings()
+	if err != nil {
+		return nil, err
+	}
+	baseURL := strings.TrimRight(strings.TrimSpace(settings.BaseURL), "/")
+	if baseURL == "" {
+		return nil, fmt.Errorf("%s is required for NodeX forward bridge translate", forwardRuntimeNodeXBaseURLConfigKey)
+	}
+	token := strings.TrimSpace(settings.Token)
+	if token == "" {
+		return nil, fmt.Errorf("%s is required for NodeX forward bridge translate", forwardRuntimeNodeXTokenConfigKey)
+	}
+
+	reqBody := nodeXBridgeTranslateRequest{
+		SourceJobID: sourceJobID,
+		NodeID:      nodeID,
+		Payload:     payload,
+	}
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshal NodeX bridge translate request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		baseURL+defaultForwardRuntimeNodeXBridgeTranslatePath,
+		bytes.NewReader(data),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create NodeX bridge translate request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("X-API-Key", token)
+
+	httpClient := c.httpClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: settings.Timeout}
+	}
+
+	resp, err := httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("execute NodeX bridge translate request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read NodeX bridge translate response: %w", err)
+	}
+
+	var apiResp nodeXBridgeTranslateResponse
+	if len(bytes.TrimSpace(body)) > 0 {
+		if err := json.Unmarshal(body, &apiResp); err != nil {
+			return nil, fmt.Errorf("decode NodeX bridge translate response: %w", err)
+		}
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		message := strings.TrimSpace(apiResp.Error)
+		if message == "" {
+			message = strings.TrimSpace(apiResp.Message)
+		}
+		if message == "" {
+			message = strings.TrimSpace(apiResp.Msg)
+		}
+		if message == "" {
+			message = strings.TrimSpace(string(body))
+		}
+		if message == "" {
+			message = fmt.Sprintf("NodeX bridge translate returned %s", resp.Status)
+		}
+		return nil, fmt.Errorf("%s", message)
+	}
+
+	if apiResp.Data == nil || apiResp.Data.Task == nil || strings.TrimSpace(apiResp.Data.Task.TaskID) == "" {
+		return nil, errors.New("NodeX bridge translate returned an empty task")
+	}
+
+	return apiResp.Data.Task, nil
 }
 
 func (c *nodeXForwardRuntimeClient) loadSettings() (*nodeXForwardRuntimeSettings, error) {

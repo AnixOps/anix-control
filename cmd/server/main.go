@@ -333,6 +333,7 @@ func main() {
 			&model.ForwardRuntimeJob{},
 			&model.ForwardTrafficCursor{},
 			&model.ForwardCleanAgent{},
+			&model.ForwardAgentBridgeTask{},
 			&model.ForwardLatencyBucket{},
 			// 支付网关
 			&model.PaymentGateway{},
@@ -391,6 +392,9 @@ func main() {
 	if err := service.EnsureStatsSchema(database.Get()); err != nil {
 		log.Fatalf("Failed to ensure stats schema: %v", err)
 	}
+	if err := service.EnsureForwardBridgeSchema(database.Get()); err != nil {
+		log.Fatalf("Failed to ensure forward bridge schema: %v", err)
+	}
 	cache.InitMemory()
 	defer cache.CloseMemory()
 	log.Println("Cache initialized: memory")
@@ -399,6 +403,11 @@ func main() {
 	go func() {
 		executor := service.NewPanelForwardRuntimeJobExecutor(database.Get())
 		executor.Start(context.Background())
+	}()
+
+	go func() {
+		worker := service.NewForwardAgentBridgeWorker(database.Get())
+		worker.Start(context.Background())
 	}()
 
 	go func() {

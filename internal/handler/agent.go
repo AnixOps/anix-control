@@ -12,6 +12,7 @@ import (
 
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
+	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
@@ -562,7 +563,62 @@ func (h *AgentHandler) AgentGetTasks(c *gin.Context) {
 		return true
 	})
 
+	// 追加持久化的 clean_agent bridge 任务：这些任务存在 DB 里 (重启不丢)，
+	// 只发给目标节点 (node_id 过滤)，取出后原子标记 dispatched 防止并发重复下发。
+	tasks = append(tasks, h.pullBridgeTasks(uint(nodeID))...)
+
 	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
+}
+
+// pullBridgeTasks 取出该节点尚未下发的 clean_agent bridge 任务并原子标记为 dispatched。
+func (h *AgentHandler) pullBridgeTasks(nodeID uint) []AgentTask {
+	tasks := []AgentTask{}
+	if h.db == nil || nodeID == 0 {
+		return tasks
+	}
+
+	var mappings []model.ForwardAgentBridgeTask
+	if err := h.db.
+		Where("node_id = ? AND status = ?", nodeID, model.ForwardAgentBridgeTaskStatusPending).
+		Order("id ASC").
+		Find(&mappings).Error; err != nil {
+		log.Printf("[WARN] agent tasks: load bridge tasks for node %d failed: %v", nodeID, err)
+		return tasks
+	}
+
+	for idx := range mappings {
+		mapping := mappings[idx]
+		// 原子领取：仅当仍为 pending 时才转为 dispatched，避免并发重复下发。
+		result := h.db.Model(&model.ForwardAgentBridgeTask{}).
+			Where("id = ? AND status = ?", mapping.ID, model.ForwardAgentBridgeTaskStatusPending).
+			Updates(map[string]any{
+				"status":     model.ForwardAgentBridgeTaskStatusDispatched,
+				"dispatched": true,
+			})
+		if result.Error != nil {
+			log.Printf("[WARN] agent tasks: dispatch bridge task %s failed: %v", mapping.TaskID, result.Error)
+			continue
+		}
+		if result.RowsAffected == 0 {
+			continue
+		}
+
+		params := map[string]any{}
+		if trimmed := mapping.Params; trimmed != "" {
+			if err := json.Unmarshal([]byte(trimmed), &params); err != nil {
+				log.Printf("[WARN] agent tasks: bridge task %s params decode failed: %v", mapping.TaskID, err)
+			}
+		}
+
+		tasks = append(tasks, AgentTask{
+			ID:     mapping.TaskID,
+			Type:   mapping.Type,
+			Action: mapping.Action,
+			Params: params,
+		})
+	}
+
+	return tasks
 }
 
 // AgentTask 浠诲姟瀹氫箟
@@ -648,10 +704,48 @@ func (h *AgentHandler) AgentReportResult(c *gin.Context) {
 
 	h.taskResults.Store(result.TaskID, taskStatus)
 
+	// 若该 task_id 命中持久化的 clean_agent bridge 映射，则回写 runtime job 与 forward 状态。
+	// 幂等：重复上报同一已完成任务直接返回 200，不二次污染终态。
+	if handled, done, err := h.completeBridgeResult(result); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	} else if handled {
+		c.JSON(http.StatusOK, gin.H{
+			"message":   "received",
+			"data":      taskStatus,
+			"bridged":   true,
+			"duplicate": done,
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "received",
 		"data":    taskStatus,
 	})
+}
+
+// completeBridgeResult 处理 clean_agent bridge 任务的结果回写。
+// 返回 (handled, alreadyDone, err)：handled=false 表示该 task_id 不是 bridge 任务
+// (走原内存路径)；handled=true 表示已回写 (或幂等命中已完成态)。
+func (h *AgentHandler) completeBridgeResult(result AgentTaskResult) (bool, bool, error) {
+	if h.db == nil {
+		return false, false, nil
+	}
+	svc := service.NewForwardAgentBridgeService(h.db)
+	mapping, err := svc.LookupBridgeTask(result.TaskID)
+	if err != nil {
+		return false, false, err
+	}
+	if mapping == nil {
+		return false, false, nil
+	}
+
+	done, err := svc.CompleteJob(result.TaskID, result.Success, result.Output, result.Error)
+	if err != nil {
+		return true, false, err
+	}
+	return true, done, nil
 }
 
 // AgentTaskResult 浠诲姟缁撴灉

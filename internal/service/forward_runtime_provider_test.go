@@ -39,6 +39,14 @@ func (s *stubForwardRuntimeNodeXExecutor) Execute(_ context.Context, req nodeXFo
 	}, s.err
 }
 
+func (s *stubForwardRuntimeNodeXExecutor) Translate(_ context.Context, sourceJobID uint, nodeID uint, _ nodeXForwardExecuteRequest) (*nodeXBridgeAgentTask, error) {
+	return &nodeXBridgeAgentTask{
+		TaskID: "forward-runtime-job-0",
+		NodeID: nodeID,
+		Type:   "forward",
+	}, nil
+}
+
 func (s *stubNodeXHTTPDoer) Do(req *http.Request) (*http.Response, error) {
 	s.lastRequest = req
 	if s.err != nil {
