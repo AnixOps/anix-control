@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,33 +22,35 @@ import (
 
 // AgentHandler Agent 绠＄悊 API
 type AgentHandler struct {
-	db          *gorm.DB
-	connections sync.Map // nodeID -> *AgentConnection
-	pendingAcks sync.Map // messageID -> *wsPendingAck
-	taskResults sync.Map // taskID -> AgentTaskStatus
-	monitorData sync.Map // nodeID -> AgentMonitorSnapshot
-	wsUpgrader  websocket.Upgrader
-	ackTimeout  time.Duration
-	maxRetries  int
+	db            *gorm.DB
+	connections   sync.Map // nodeID -> *AgentConnection
+	pendingAcks   sync.Map // messageID -> *wsPendingAck
+	monitorData   sync.Map // nodeID -> AgentMonitorSnapshot
+	diagnosticSvc *service.AgentDiagnosticTaskService
+	wsUpgrader    websocket.Upgrader
+	ackTimeout    time.Duration
+	maxRetries    int
 }
 
 // AgentConnection Agent 杩炴帴淇℃伅
 type AgentConnection struct {
-	NodeID       uint
-	LastSeen     time.Time
-	Version      string
-	SystemInfo   map[string]any
-	Capabilities []string
-	WsConn       *websocket.Conn
-	writeMu      sync.Mutex
+	NodeID        uint
+	LastSeen      time.Time
+	Version       string
+	SystemInfo    map[string]any
+	Capabilities  []string
+	IsForwardNode bool
+	WsConn        *websocket.Conn
+	writeMu       sync.Mutex
 }
 
 type wsAuthInfo struct {
-	NodeID       uint
-	Version      string
-	System       map[string]any
-	Capabilities []string
-	FromHeaders  bool
+	NodeID        uint
+	Version       string
+	System        map[string]any
+	Capabilities  []string
+	FromHeaders   bool
+	IsForwardNode bool
 }
 
 type wsInboundEnvelope struct {
@@ -84,10 +88,20 @@ var (
 	errAgentInvalidToken = errors.New("invalid token")
 )
 
+// hashString hashes a token with SHA-256, matching the api_key_hash contract
+// used by the UniProxy node-auth middleware and node registration.
+func hashString(s string) string {
+	h := sha256.New()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 // NewAgentHandler 鍒涘缓 Handler
 func NewAgentHandler() *AgentHandler {
+	db := database.Get()
 	return &AgentHandler{
-		db: database.Get(),
+		db:            db,
+		diagnosticSvc: service.NewAgentDiagnosticTaskService(db),
 		wsUpgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true
@@ -98,30 +112,64 @@ func NewAgentHandler() *AgentHandler {
 	}
 }
 
-func (h *AgentHandler) verifyForwardNodeToken(nodeID uint, token string) error {
-	var node model.ForwardNode
-	if err := h.db.First(&node, nodeID).Error; err != nil {
-		return errAgentNodeNotFound
+// verifyForwardNodeToken authenticates an agent/node WebSocket or REST call.
+// It first tries the forward-node table (relay nodes carry an APIToken); if the
+// id is not a forward node it falls back to the proxy-node table (v2_node),
+// matching the same api_key/api_key_hash contract used by the UniProxy
+// middleware. The returned isForwardNode tells callers which table owns the
+// node so online-status writes land in the right place.
+func (h *AgentHandler) verifyForwardNodeToken(nodeID uint, token string) (isForwardNode bool, err error) {
+	var fwd model.ForwardNode
+	if fwdErr := h.db.First(&fwd, nodeID).Error; fwdErr == nil {
+		if fwd.APIToken != token {
+			return true, errAgentInvalidToken
+		}
+		return true, nil
 	}
-	if node.APIToken != token {
-		return errAgentInvalidToken
+
+	var node model.Node
+	if nodeErr := h.db.First(&node, nodeID).Error; nodeErr != nil {
+		return false, errAgentNodeNotFound
 	}
-	return nil
+
+	tokenHash := hashString(token)
+	valid := node.APIKeyHash == tokenHash || (node.APIKeyHash == "" && node.APIKey == token)
+	if !valid {
+		return false, errAgentInvalidToken
+	}
+	return false, nil
 }
 
-func (h *AgentHandler) markNodeOnline(nodeID uint) {
-	h.db.Model(&model.ForwardNode{}).Where("id = ?", nodeID).Updates(map[string]any{
-		"status":     model.ForwardNodeStatusOnline,
-		"last_check": time.Now(),
+// touchNodeOnline marks a node online in the table that owns it.
+func (h *AgentHandler) touchNodeOnline(nodeID uint, isForwardNode bool) {
+	if isForwardNode {
+		h.db.Model(&model.ForwardNode{}).Where("id = ?", nodeID).Updates(map[string]any{
+			"status":     model.ForwardNodeStatusOnline,
+			"last_check": time.Now(),
+		})
+		return
+	}
+	h.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(map[string]any{
+		"status":        model.NodeStatusOnline,
+		"last_check_at": time.Now().Unix(),
 	})
 }
 
+// markNodeOnline marks a forward (relay) node online. Retained for the REST
+// forward-node register/report/heartbeat paths, which only deal with
+// forward nodes.
+func (h *AgentHandler) markNodeOnline(nodeID uint) {
+	h.touchNodeOnline(nodeID, true)
+}
+
 func (h *AgentHandler) updateConnectionLastSeen(nodeID uint) {
+	isForwardNode := true
 	if conn, ok := h.connections.Load(nodeID); ok {
 		ac := conn.(*AgentConnection)
 		ac.LastSeen = time.Now()
+		isForwardNode = ac.IsForwardNode
 	}
-	h.markNodeOnline(nodeID)
+	h.touchNodeOnline(nodeID, isForwardNode)
 }
 
 func (h *AgentHandler) authFromRequest(c *gin.Context) (*wsAuthInfo, bool, error) {
@@ -151,13 +199,15 @@ func (h *AgentHandler) authFromRequest(c *gin.Context) (*wsAuthInfo, bool, error
 	}
 
 	nodeID := uint(nodeID64)
-	if err := h.verifyForwardNodeToken(nodeID, token); err != nil {
+	isForwardNode, err := h.verifyForwardNodeToken(nodeID, token)
+	if err != nil {
 		return nil, true, err
 	}
 
 	return &wsAuthInfo{
-		NodeID:      nodeID,
-		FromHeaders: true,
+		NodeID:        nodeID,
+		FromHeaders:   true,
+		IsForwardNode: isForwardNode,
 	}, true, nil
 }
 
@@ -178,16 +228,18 @@ func (h *AgentHandler) authFromMessage(conn *websocket.Conn) (*wsAuthInfo, error
 	if err := json.Unmarshal(msg, &authMsg); err != nil || authMsg.Type != "auth" {
 		return nil, fmt.Errorf("invalid auth")
 	}
-	if err := h.verifyForwardNodeToken(authMsg.NodeID, authMsg.Token); err != nil {
+	isForwardNode, err := h.verifyForwardNodeToken(authMsg.NodeID, authMsg.Token)
+	if err != nil {
 		return nil, err
 	}
 
 	return &wsAuthInfo{
-		NodeID:       authMsg.NodeID,
-		Version:      authMsg.Version,
-		System:       authMsg.System,
-		Capabilities: authMsg.Capabilities,
-		FromHeaders:  false,
+		NodeID:        authMsg.NodeID,
+		Version:       authMsg.Version,
+		System:        authMsg.System,
+		Capabilities:  authMsg.Capabilities,
+		FromHeaders:   false,
+		IsForwardNode: isForwardNode,
 	}, nil
 }
 
@@ -430,7 +482,7 @@ func (h *AgentHandler) handleWebSocketMessage(agentConn *AgentConnection, raw []
 
 	switch envelope.Type {
 	case "heartbeat", "pong", "traffic_report", "alert", "task_result":
-		h.markNodeOnline(agentConn.NodeID)
+		h.touchNodeOnline(agentConn.NodeID, agentConn.IsForwardNode)
 	}
 
 	if envelope.RequireAck && envelope.ID != "" {
@@ -457,7 +509,8 @@ func (h *AgentHandler) AgentRegister(c *gin.Context) {
 	}
 
 	// 楠岃瘉 Token
-	if err := h.verifyForwardNodeToken(req.NodeID, req.Token); err != nil {
+	isForwardNode, err := h.verifyForwardNodeToken(req.NodeID, req.Token)
+	if err != nil {
 		if errors.Is(err, errAgentInvalidToken) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return
@@ -468,16 +521,15 @@ func (h *AgentHandler) AgentRegister(c *gin.Context) {
 
 	// 璁板綍杩炴帴
 	conn := &AgentConnection{
-		NodeID:       req.NodeID,
-		LastSeen:     time.Now(),
-		Version:      req.Version,
-		SystemInfo:   req.System,
-		Capabilities: req.Capabilities,
+		NodeID:        req.NodeID,
+		LastSeen:      time.Now(),
+		Version:       req.Version,
+		SystemInfo:    req.System,
+		Capabilities:  req.Capabilities,
+		IsForwardNode: isForwardNode,
 	}
 	h.connections.Store(req.NodeID, conn)
-	h.markNodeOnline(req.NodeID)
-
-	// 鏇存柊鑺傜偣鐘舵€?	h.markNodeOnline(req.NodeID)
+	h.touchNodeOnline(req.NodeID, isForwardNode)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "registered",
@@ -536,32 +588,31 @@ type AgentHeartbeatRequest struct {
 func (h *AgentHandler) AgentGetTasks(c *gin.Context) {
 	nodeID, _ := strconv.ParseUint(c.Query("node_id"), 10, 32)
 
-	// 从内存任务表中取出该节点尚未送达 (status=pending) 的任务，
-	// HTTP 轮询作为 WebSocket 推送的降级路径。取出后标记 dispatched 防止重复下发。
-	now := time.Now()
 	tasks := []AgentTask{}
-	h.taskResults.Range(func(key, value any) bool {
-		ts, ok := value.(AgentTaskStatus)
-		if !ok {
-			return true
-		}
-		if uint64(ts.NodeID) != nodeID || ts.Status != "pending" {
-			return true
-		}
 
-		tasks = append(tasks, AgentTask{
-			ID:      ts.TaskID,
-			Type:    ts.Type,
-			Action:  ts.Action,
-			Params:  ts.Params,
-			Timeout: ts.Timeout,
-		})
-
-		ts.Status = "dispatched"
-		ts.UpdatedAt = now
-		h.taskResults.Store(ts.TaskID, ts)
-		return true
-	})
+	// 取出该节点尚未送达 (status=pending) 的白名单诊断任务，HTTP 轮询作为
+	// WebSocket 推送的降级路径。这些任务持久化在 DB 里，重启不丢。取出后
+	// 原子标记 dispatched 防止并发重复下发。
+	if h.diagnosticSvc != nil {
+		diagTasks, err := h.diagnosticSvc.PullPendingTasks(uint(nodeID))
+		if err != nil {
+			log.Printf("[WARN] agent tasks: load diagnostic tasks for node %d failed: %v", nodeID, err)
+		}
+		for i := range diagTasks {
+			params := map[string]any{}
+			if trimmed := diagTasks[i].Params; trimmed != "" {
+				if err := json.Unmarshal([]byte(trimmed), &params); err != nil {
+					log.Printf("[WARN] agent tasks: diagnostic task %s params decode failed: %v", diagTasks[i].TaskID, err)
+				}
+			}
+			tasks = append(tasks, AgentTask{
+				ID:     diagTasks[i].TaskID,
+				Type:   "diagnostic",
+				Action: diagTasks[i].Action,
+				Params: params,
+			})
+		}
+	}
 
 	// 追加持久化的 clean_agent bridge 任务：这些任务存在 DB 里 (重启不丢)，
 	// 只发给目标节点 (node_id 过滤)，取出后原子标记 dispatched 防止并发重复下发。
@@ -630,26 +681,6 @@ type AgentTask struct {
 	Timeout int                    `json:"timeout"`
 }
 
-// AgentTaskStatus stores the latest status/result for a dispatched task.
-type AgentTaskStatus struct {
-	TaskID      string                 `json:"task_id"`
-	NodeID      uint                   `json:"node_id"`
-	Type        string                 `json:"type,omitempty"`
-	Action      string                 `json:"action,omitempty"`
-	Params      map[string]any `json:"params,omitempty"`
-	Timeout     int                    `json:"timeout,omitempty"`
-	Status      string                 `json:"status"`
-	MessageID   string                 `json:"message_id,omitempty"`
-	AckReceived bool                   `json:"ack_received"`
-	Success     bool                   `json:"success"`
-	Output      string                 `json:"output,omitempty"`
-	Error       string                 `json:"error,omitempty"`
-	Data        any            `json:"data,omitempty"`
-	DurationMS  int64                  `json:"duration_ms,omitempty"`
-	Timestamp   time.Time              `json:"timestamp"`
-	UpdatedAt   time.Time              `json:"updated_at"`
-}
-
 // AgentReportResult godoc
 // @Summary 涓婃姤浠诲姟缁撴灉
 // @Description Agent 涓婃姤浠诲姟鎵ц缁撴灉
@@ -666,44 +697,6 @@ func (h *AgentHandler) AgentReportResult(c *gin.Context) {
 		return
 	}
 
-	// 任务结果存入内存任务表，供 dispatch 调用方与状态查询接口读取。
-	// 注：监控/审计型持久化 (DB、回调 URL) 由上层按需扩展，此处维护实时态。
-	now := time.Now()
-	snapshot, _ := h.taskResults.Load(result.TaskID)
-	taskStatus, ok := snapshot.(AgentTaskStatus)
-	if !ok {
-		taskStatus = AgentTaskStatus{
-			TaskID:  result.TaskID,
-			Status:  "completed",
-			Success: result.Success,
-		}
-	}
-
-	if result.NodeID != 0 {
-		taskStatus.NodeID = result.NodeID
-	}
-	if result.Type != "" {
-		taskStatus.Type = result.Type
-	}
-	if result.Action != "" {
-		taskStatus.Action = result.Action
-	}
-
-	taskStatus.Success = result.Success
-	taskStatus.Output = result.Output
-	taskStatus.Error = result.Error
-	taskStatus.Data = result.Data
-	taskStatus.DurationMS = result.Duration
-	taskStatus.Status = "completed"
-	taskStatus.UpdatedAt = now
-	if result.Timestamp.IsZero() {
-		taskStatus.Timestamp = now
-	} else {
-		taskStatus.Timestamp = result.Timestamp
-	}
-
-	h.taskResults.Store(result.TaskID, taskStatus)
-
 	// 若该 task_id 命中持久化的 clean_agent bridge 映射，则回写 runtime job 与 forward 状态。
 	// 幂等：重复上报同一已完成任务直接返回 200，不二次污染终态。
 	if handled, done, err := h.completeBridgeResult(result); err != nil {
@@ -712,11 +705,20 @@ func (h *AgentHandler) AgentReportResult(c *gin.Context) {
 	} else if handled {
 		c.JSON(http.StatusOK, gin.H{
 			"message":   "received",
-			"data":      taskStatus,
 			"bridged":   true,
 			"duplicate": done,
 		})
 		return
+	}
+
+	// 否则按白名单诊断任务处理，结果落库（重启不丢）。
+	var taskStatus *model.AgentDiagnosticTask
+	if h.diagnosticSvc != nil {
+		if err := h.diagnosticSvc.CompleteTask(result.TaskID, result.NodeID, result.Action, result.Success, result.Output, result.Error, result.Duration); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		taskStatus, _ = h.diagnosticSvc.GetTask(result.TaskID)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -906,15 +908,16 @@ func (h *AgentHandler) AgentWebSocketUnified(c *gin.Context) {
 	}
 
 	agentConn := &AgentConnection{
-		NodeID:       authInfo.NodeID,
-		LastSeen:     time.Now(),
-		Version:      authInfo.Version,
-		SystemInfo:   authInfo.System,
-		Capabilities: authInfo.Capabilities,
-		WsConn:       conn,
+		NodeID:        authInfo.NodeID,
+		LastSeen:      time.Now(),
+		Version:       authInfo.Version,
+		SystemInfo:    authInfo.System,
+		Capabilities:  authInfo.Capabilities,
+		IsForwardNode: authInfo.IsForwardNode,
+		WsConn:        conn,
 	}
 	h.connections.Store(authInfo.NodeID, agentConn)
-	h.markNodeOnline(authInfo.NodeID)
+	h.touchNodeOnline(authInfo.NodeID, authInfo.IsForwardNode)
 	defer h.connections.Delete(authInfo.NodeID)
 	defer h.failPendingAcksForNode(authInfo.NodeID, "agent websocket closed")
 
@@ -972,91 +975,79 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
+	// 只接受白名单诊断动作，params 会被归一化（多余字段丢弃，数值裁剪）。
+	normalizedParams, err := service.ValidateAgentDiagnosticTask(req.Action, req.Params)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	task := AgentTask{
 		ID:      generateTaskID(),
 		Type:    req.Type,
 		Action:  req.Action,
-		Params:  req.Params,
+		Params:  normalizedParams,
 		Timeout: req.Timeout,
 	}
 
-	taskStatus := AgentTaskStatus{
-		TaskID:    task.ID,
-		NodeID:    req.NodeID,
-		Type:      req.Type,
-		Action:    req.Action,
-		Params:    req.Params,
-		Timeout:   req.Timeout,
-		Status:    "pending",
-		Success:   false,
-		Timestamp: time.Now(),
-		UpdatedAt: time.Now(),
+	if h.diagnosticSvc == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "diagnostic task service unavailable"})
+		return
 	}
-	h.taskResults.Store(task.ID, taskStatus)
+	taskRow, err := h.diagnosticSvc.CreateTask(task.ID, req.NodeID, req.Action, normalizedParams)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
-	messageID, ack, err := h.dispatchWithAckRetry(agentConn, "task.assign", map[string]any{
+	messageID, ack, dispatchErr := h.dispatchWithAckRetry(agentConn, "task.assign", map[string]any{
 		"task": task,
 	}, true)
-	if err != nil {
+	if dispatchErr != nil {
 		if fallbackErr := h.sendLegacyTask(agentConn, task); fallbackErr != nil {
-			taskStatus.Status = "failed"
-			taskStatus.Error = "send failed: " + fallbackErr.Error()
-			taskStatus.MessageID = messageID
-			taskStatus.UpdatedAt = time.Now()
-			h.taskResults.Store(task.ID, taskStatus)
-
+			_ = h.diagnosticSvc.MarkStatus(task.ID, model.AgentDiagnosticTaskStatusFailed)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":        "send failed",
 				"task_id":      task.ID,
 				"message_id":   messageID,
-				"dispatch_err": err.Error(),
-				"data":         taskStatus,
+				"dispatch_err": dispatchErr.Error(),
+				"data":         taskRow,
 			})
 			return
 		}
 
-		taskStatus.Status = "dispatched"
-		taskStatus.MessageID = messageID
-		taskStatus.AckReceived = false
-		taskStatus.Success = true
-		taskStatus.Output = "task dispatched (legacy fallback)"
-		taskStatus.UpdatedAt = time.Now()
-		h.taskResults.Store(task.ID, taskStatus)
+		_ = h.diagnosticSvc.MarkStatus(task.ID, model.AgentDiagnosticTaskStatusDispatched)
+		taskRow, _ = h.diagnosticSvc.GetTask(task.ID)
 
 		c.JSON(http.StatusOK, gin.H{
 			"message":      "task sent with legacy fallback",
 			"task_id":      task.ID,
 			"node_id":      req.NodeID,
 			"success":      true,
-			"output":       taskStatus.Output,
+			"output":       "task dispatched (legacy fallback)",
 			"duration_ms":  int64(0),
 			"message_id":   messageID,
 			"ack_received": false,
-			"dispatch_err": err.Error(),
-			"data":         taskStatus,
+			"dispatch_err": dispatchErr.Error(),
+			"data":         taskRow,
 		})
 		return
 	}
 
-	taskStatus.Status = "dispatched"
-	taskStatus.MessageID = messageID
-	taskStatus.AckReceived = true
-	taskStatus.Success = true
-	taskStatus.Output = "task dispatched"
-	taskStatus.UpdatedAt = time.Now()
-	h.taskResults.Store(task.ID, taskStatus)
+	_ = h.diagnosticSvc.MarkStatus(task.ID, model.AgentDiagnosticTaskStatusDispatched)
+	taskRow, _ = h.diagnosticSvc.GetTask(task.ID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "task sent",
 		"task_id":      task.ID,
 		"node_id":      req.NodeID,
 		"success":      true,
-		"output":       taskStatus.Output,
+		"output":       "task dispatched",
 		"duration_ms":  int64(0),
 		"message_id":   messageID,
 		"ack_received": true,
 		"ack":          ack,
-		"data":         taskStatus,
+		"data":         taskRow,
 	})
 }
 
@@ -1116,19 +1107,50 @@ func (h *AgentHandler) GetTaskResult(c *gin.Context) {
 		return
 	}
 
-	snapshot, ok := h.taskResults.Load(taskID)
-	if !ok {
+	if h.diagnosticSvc == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "task result not found"})
 		return
 	}
 
-	taskStatus, ok := snapshot.(AgentTaskStatus)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid task result state"})
+	taskRow, err := h.diagnosticSvc.GetTask(taskID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "task result not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": taskStatus})
+	c.JSON(http.StatusOK, gin.H{"data": taskRow})
+}
+
+// ListDiagnosticTasks godoc
+// @Summary List diagnostic task history
+// @Description Query recent whitelisted diagnostic tasks, optionally filtered by node_id
+// @Tags 管理端 Agent
+// @Produce json
+// @Security BearerAuth
+// @Param node_id query int false "Node ID"
+// @Param limit query int false "Limit"
+// @Success 200 {object} map[string]any
+// @Router /admin/agent/tasks [get]
+func (h *AgentHandler) ListDiagnosticTasks(c *gin.Context) {
+	nodeID, _ := strconv.Atoi(c.Query("node_id"))
+	limit, _ := strconv.Atoi(c.Query("limit"))
+
+	if h.diagnosticSvc == nil {
+		c.JSON(http.StatusOK, gin.H{"data": []model.AgentDiagnosticTask{}})
+		return
+	}
+
+	tasks, err := h.diagnosticSvc.ListTasks(uint(nodeID), limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": tasks})
 }
 
 // GetMonitor godoc
@@ -1179,30 +1201,26 @@ func (h *AgentHandler) ExecuteCommand(c *gin.Context) {
 		return
 	}
 
-	// 鍒涘缓鍛戒护浠诲姟
+	// ExecuteCommand 不再接受任意命令字符串，改为白名单诊断动作
 	taskReq := CreateTaskRequest{
-		NodeID: req.NodeID,
-		Type:   "command",
-		Action: req.Command,
-		Params: map[string]any{
-			"args": req.Args,
-			"env":  req.Env,
-		},
+		NodeID:  req.NodeID,
+		Type:    "diagnostic",
+		Action:  req.Action,
+		Params:  req.Params,
 		Timeout: req.Timeout,
 	}
 
-	// 澶嶇敤 CreateTask 閫昏緫
+	// 复用 CreateTask 逻辑
 	c.Set("task_request", taskReq)
 	h.CreateTask(c)
 }
 
-// ExecuteCommandRequest 鎵ц鍛戒护璇锋眰
+// ExecuteCommandRequest 白名单诊断动作请求
 type ExecuteCommandRequest struct {
-	NodeID  uint                   `json:"node_id" binding:"required"`
-	Command string                 `json:"command" binding:"required"`
-	Args    []string               `json:"args"`
-	Env     map[string]any `json:"env"`
-	Timeout int                    `json:"timeout"`
+	NodeID  uint           `json:"node_id" binding:"required"`
+	Action  string         `json:"action" binding:"required"`
+	Params  map[string]any `json:"params"`
+	Timeout int            `json:"timeout"`
 }
 
 // ========== 杞彂瑙勫垯鍚屾 ==========

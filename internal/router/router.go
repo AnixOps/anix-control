@@ -599,6 +599,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		{
 			agentAdmin.GET("/list", agentHandler.ListAgents)
 			agentAdmin.POST("/tasks", agentHandler.CreateTask)
+			agentAdmin.GET("/tasks", agentHandler.ListDiagnosticTasks)
 			agentAdmin.GET("/tasks/:task_id", agentHandler.GetTaskResult)
 			agentAdmin.POST("/execute", agentHandler.ExecuteCommand)
 			agentAdmin.GET("/monitor", agentHandler.GetMonitor)

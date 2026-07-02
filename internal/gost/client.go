@@ -1,28 +1,34 @@
 package gost
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 )
 
 // Client gost API 客户端
 type Client struct {
-	baseURL    string
-	authUser   string
-	authPass   string
-	httpClient *http.Client
+	baseURL     string
+	metricsHost string
+	authUser    string
+	authPass    string
+	httpClient  *http.Client
 }
 
 // Config 客户端配置
 type Config struct {
-	Host     string // gost API 地址，如 "http://192.168.1.1:18080"
-	APIToken string // API 认证令牌
-	Timeout  time.Duration
+	Host        string // gost API 地址，如 "http://192.168.1.1:18080"
+	MetricsHost string // gost Prometheus /metrics 地址，如 "http://192.168.1.1:9000"，为空表示未配置
+	APIToken    string // API 认证令牌
+	Timeout     time.Duration
 }
 
 // NewClient 创建客户端
@@ -32,12 +38,18 @@ func NewClient(cfg *Config) *Client {
 	}
 
 	return &Client{
-		baseURL:  cfg.Host,
-		authPass: cfg.APIToken,
+		baseURL:     cfg.Host,
+		metricsHost: cfg.MetricsHost,
+		authPass:    cfg.APIToken,
 		httpClient: &http.Client{
 			Timeout: cfg.Timeout,
 		},
 	}
+}
+
+// HasMetricsEndpoint 是否已配置 Prometheus /metrics 地址
+func (c *Client) HasMetricsEndpoint() bool {
+	return c.metricsHost != ""
 }
 
 // ============== 通用方法 ==============
@@ -367,6 +379,10 @@ func (c *Client) GetStats(ctx context.Context) (*StatsResponse, error) {
 }
 
 // GetServiceStats 获取单个服务统计
+//
+// Deprecated: gost v3.2.6 的管理 API (端口 18080) 不存在 /api/stats 系列接口，
+// 调用这个方法会一直收到 404。字节计数只能通过 GetServiceTrafficTotals 从
+// Prometheus /metrics 端口读取。保留此方法仅为兼容旧引用，不再作为采集手段。
 func (c *Client) GetServiceStats(ctx context.Context, name string) (*ServiceStats, error) {
 	respBody, err := c.doRequest(ctx, http.MethodGet, "/api/stats/services/"+name, nil)
 	if err != nil {
@@ -379,6 +395,131 @@ func (c *Client) GetServiceStats(ctx context.Context, name string) (*ServiceStat
 	}
 
 	return &resp, nil
+}
+
+// ============== Prometheus /metrics 流量统计 ==============
+
+// ServiceTrafficTotals 单个 service 在所有 client 上的累计字节数
+type ServiceTrafficTotals struct {
+	InBytes  int64
+	OutBytes int64
+}
+
+var gostMetricLineRe = regexp.MustCompile(`^(gost_service_transfer_(?:input|output)_bytes_total)\{([^}]*)\}\s+([0-9eE+\-.]+)\s*$`)
+
+// GetServiceTrafficTotals 从 gost 的 Prometheus /metrics 端点读取指定 service 的累计流量。
+// gost_service_transfer_input_bytes_total / _output_bytes_total 按 client IP 分行，
+// 需要对同一个 service label 的所有行求和才是该服务的总流量。
+func (c *Client) GetServiceTrafficTotals(ctx context.Context, serviceNames []string) (map[string]*ServiceTrafficTotals, error) {
+	wanted := make(map[string]struct{}, len(serviceNames))
+	for _, name := range serviceNames {
+		wanted[name] = struct{}{}
+	}
+
+	all, err := c.fetchAllServiceTrafficTotals(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]*ServiceTrafficTotals, len(serviceNames))
+	for _, name := range serviceNames {
+		result[name] = &ServiceTrafficTotals{}
+	}
+	for service, totals := range all {
+		if _, ok := wanted[service]; ok {
+			result[service] = totals
+		}
+	}
+	return result, nil
+}
+
+// GetAllServiceTrafficTotals 从 gost 的 Prometheus /metrics 端点读取该节点所有 service 的累计流量，
+// 用于节点级统计（不按具体 forward 过滤）。
+func (c *Client) GetAllServiceTrafficTotals(ctx context.Context) (map[string]*ServiceTrafficTotals, error) {
+	return c.fetchAllServiceTrafficTotals(ctx)
+}
+
+func (c *Client) fetchAllServiceTrafficTotals(ctx context.Context) (map[string]*ServiceTrafficTotals, error) {
+	result := make(map[string]*ServiceTrafficTotals)
+	if !c.HasMetricsEndpoint() {
+		return result, fmt.Errorf("metrics endpoint not configured")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.metricsHost+"/metrics", nil)
+	if err != nil {
+		return nil, fmt.Errorf("create metrics request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch metrics: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("metrics API error: %s - %s", resp.Status, string(body))
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		matches := gostMetricLineRe.FindStringSubmatch(line)
+		if matches == nil {
+			continue
+		}
+
+		metricName := matches[1]
+		labels := matches[2]
+		valueStr := matches[3]
+
+		serviceName := parsePrometheusLabel(labels, "service")
+		if serviceName == "" {
+			continue
+		}
+
+		value, err := strconv.ParseFloat(valueStr, 64)
+		if err != nil {
+			continue
+		}
+
+		totals, ok := result[serviceName]
+		if !ok {
+			totals = &ServiceTrafficTotals{}
+			result[serviceName] = totals
+		}
+		switch metricName {
+		case "gost_service_transfer_input_bytes_total":
+			totals.InBytes += int64(value)
+		case "gost_service_transfer_output_bytes_total":
+			totals.OutBytes += int64(value)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("read metrics response: %w", err)
+	}
+
+	return result, nil
+}
+
+// parsePrometheusLabel 从形如 `service="X",client="Y"` 的标签串里提取指定 key 的值
+func parsePrometheusLabel(labels, key string) string {
+	prefix := key + `="`
+	idx := strings.Index(labels, prefix)
+	if idx == -1 {
+		return ""
+	}
+	rest := labels[idx+len(prefix):]
+	end := strings.Index(rest, `"`)
+	if end == -1 {
+		return ""
+	}
+	return rest[:end]
 }
 
 // ============== 重载配置 ==============

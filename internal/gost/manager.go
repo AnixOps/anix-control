@@ -45,9 +45,15 @@ func (m *Manager) createClient(node *model.ForwardNode) (*Client, error) {
 		return nil, fmt.Errorf("node API port not configured")
 	}
 
+	var metricsHost string
+	if node.MetricsPort > 0 {
+		metricsHost = fmt.Sprintf("http://%s:%d", node.Host, node.MetricsPort)
+	}
+
 	client := NewClient(&Config{
-		Host:     fmt.Sprintf("http://%s:%d", node.Host, node.APIPort),
-		APIToken: node.APIToken,
+		Host:        fmt.Sprintf("http://%s:%d", node.Host, node.APIPort),
+		MetricsHost: metricsHost,
+		APIToken:    node.APIToken,
 	})
 
 	m.clients.Store(node.ID, client)
@@ -180,6 +186,9 @@ func (m *Manager) SyncRuleToGost(ctx context.Context, rule *model.ForwardRule) e
 }
 
 // GetNodeStats 获取节点统计信息
+//
+// Deprecated: 依赖 client.GetStats()，而 gost v3.2.6 的 REST API 不存在 /api/stats，
+// 调用会一直 404。节点级流量统计请用 GetNodeTrafficTotals（走 Prometheus /metrics）。
 func (m *Manager) GetNodeStats(ctx context.Context, nodeID uint) (*StatsResponse, error) {
 	client, err := m.GetClient(nodeID)
 	if err != nil {
@@ -187,6 +196,20 @@ func (m *Manager) GetNodeStats(ctx context.Context, nodeID uint) (*StatsResponse
 	}
 
 	return client.GetStats(ctx)
+}
+
+// GetNodeTrafficTotals 通过节点的 Prometheus /metrics 端点汇总该节点上所有 service 的流量，
+// 用于节点级"同步统计"，替代已失效的 GetNodeStats(REST /api/stats)。
+func (m *Manager) GetNodeTrafficTotals(ctx context.Context, nodeID uint) (map[string]*ServiceTrafficTotals, error) {
+	client, err := m.GetClient(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	if !client.HasMetricsEndpoint() {
+		return nil, fmt.Errorf("metrics endpoint not configured for node %d", nodeID)
+	}
+
+	return client.GetAllServiceTrafficTotals(ctx)
 }
 
 // GetRuleStats 获取规则统计信息

@@ -45,15 +45,15 @@
           {% for target in targets %}
           MAP_ENTRIES="${MAP_ENTRIES}{% if not loop.first %}, {% endif %}{{ loop.index0 }} : dnat to {{ target.addr }}"
           {% endfor %}
-          nft add rule ip "$TABLE" "$CHAIN" meta l4proto "$PROTO" numgen inc mod {{ targets | length }} vmap "{ ${MAP_ENTRIES} }"
+          nft add rule ip "$TABLE" "$CHAIN" meta l4proto "$PROTO" counter numgen inc mod {{ targets | length }} vmap "{ ${MAP_ENTRIES} }"
         elif [ "{{ strategy_normalized }}" = "rand" ] && [ "{{ targets | length }}" -gt 1 ]; then
           MAP_ENTRIES=""
           {% for target in targets %}
           MAP_ENTRIES="${MAP_ENTRIES}{% if not loop.first %}, {% endif %}{{ loop.index0 }} : dnat to {{ target.addr }}"
           {% endfor %}
-          nft add rule ip "$TABLE" "$CHAIN" meta l4proto "$PROTO" numgen random mod {{ targets | length }} vmap "{ ${MAP_ENTRIES} }"
+          nft add rule ip "$TABLE" "$CHAIN" meta l4proto "$PROTO" counter numgen random mod {{ targets | length }} vmap "{ ${MAP_ENTRIES} }"
         else
-          nft add rule ip "$TABLE" "$CHAIN" meta l4proto "$PROTO" dnat to "{{ targets[0].addr }}"
+          nft add rule ip "$TABLE" "$CHAIN" meta l4proto "$PROTO" counter dnat to "{{ targets[0].addr }}"
         fi
 
         while read -r HANDLE; do

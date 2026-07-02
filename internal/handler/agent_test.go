@@ -47,6 +47,7 @@ func (s *AgentHandlerTestSuite) SetupSuite() {
 		&model.ForwardRule{},
 		&model.ForwardRuntimeJob{},
 		&model.ForwardAgentBridgeTask{},
+		&model.AgentDiagnosticTask{},
 	)
 }
 

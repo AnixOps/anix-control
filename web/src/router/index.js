@@ -25,6 +25,7 @@ const AdminTickets = () => import('@/views/admin/Tickets.vue')
 const AdminCoupons = () => import('@/views/admin/Coupons.vue')
 const AdminKnowledge = () => import('@/views/admin/Knowledge.vue')
 const AdminForward = () => import('@/views/admin/Forward.vue')
+const AdminForwardWizard = () => import('@/views/admin/ForwardWizard.vue')
 const AdminTunnel = () => import('@/views/admin/Tunnel.vue')
 const AdminLimit = () => import('@/views/admin/Limit.vue')
 const AdminAnsibleMachines = () => import('@/views/admin/AnsibleMachines.vue')
@@ -135,6 +136,10 @@ const routes = [
       {
         path: 'forward',
         component: AdminForward
+      },
+      {
+        path: 'forward/setup',
+        component: AdminForwardWizard
       },
       {
         path: 'forward/tunnel',

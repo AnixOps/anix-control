@@ -321,6 +321,7 @@ export default {
   },
   forwardSuite: {
     nav: {
+      setupWizard: '快速配置向导',
       forwards: '流量转发',
       tunnels: '隧道管理',
       limits: '限速管理',
@@ -332,12 +333,75 @@ export default {
       observability: '可观测性'
     },
     hints: {
+      setupWizard: '一步步配置节点、隧道和转发',
       ansibleMachines: '无状态执行机器',
       localRuntime: '无状态面板宿主执行器',
       nodeXTopology: '有状态 relay/exit 拓扑',
       nodeXRuntime: '有状态 gost 控制面',
       nodeXAgents: '有状态 agent 任务通道',
       observability: '网络拓扑与延迟指标'
+    }
+  },
+  forwardWizard: {
+    title: '转发配置向导',
+    subtitle: '按步骤创建节点、隧道和转发,不用在多个页面之间来回跳转',
+    loading: '正在加载运行模式…',
+    shared: {
+      existingLabel: '已有可复用的记录',
+      useExisting: '使用现有'
+    },
+    steps: {
+      mode: {
+        title: '第一步:选择转发方式',
+        intro: '选一种转发方式,系统会自动配置好对应的运行时后端和隧道类型,无需分别理解这两个概念。',
+        cards: {
+          local: {
+            label: '本地端口转发',
+            description: '直接在 Ansible 管理的机器上转发,无需中转节点。'
+          },
+          gostSingle: {
+            label: '中转 · 单节点转发',
+            description: '通过一个 NodeX 节点转发,不做协议封装。'
+          },
+          gostTunnel: {
+            label: '中转 · 隧道转发',
+            description: '跨入口/出口两个节点转发,支持协议隐藏(tls/ws/grpc 等)。'
+          }
+        },
+        currentBadge: '当前生效',
+        nodeXSetupHint: '首次使用中转转发,需要先填写 NodeX 控制面信息才能继续。',
+        confirmAndContinue: '确认并继续'
+      },
+      machine: {
+        title: '第二步:机器/节点',
+        intro: '先注册一台执行机器或节点,后面的隧道会用到它。',
+        createAndContinue: '创建并继续'
+      },
+      node: {
+        title: '第二步:机器/节点',
+        intro: '先注册一个 NodeX 节点,后面的隧道会用到它。',
+        createAndContinue: '创建并继续'
+      },
+      tunnel: {
+        title: '第三步:隧道',
+        intro: '基于上一步的节点创建隧道,隧道是转发条目的必选项。',
+        inheritedNodeHint: '已自动带入上一步创建的节点,无需重复选择。',
+        createAndContinue: '创建并继续'
+      },
+      forward: {
+        title: '第四步:转发',
+        intro: '基于上一步的隧道创建实际的转发条目,填好目标地址即可生效。',
+        inheritedTunnelHint: '已自动带入上一步创建的隧道,无需重复选择。',
+        createAndFinish: '创建并完成'
+      },
+      done: {
+        title: '完成',
+        summary: '转发「{name}」已创建成功,链路已打通。',
+        gotoForward: '前往流量转发管理',
+        gotoTunnel: '前往隧道管理',
+        gotoNode: '前往机器/节点管理',
+        createAnother: '再建一条转发'
+      }
     }
   },
   observability: {
@@ -1552,6 +1616,7 @@ export default {
           servicePort: '\u4e1a\u52a1\u7aef\u53e3',
           apiPort: 'API \u7aef\u53e3',
           apiToken: 'API Token',
+          metricsPort: 'Metrics \u7aef\u53e3',
           region: '\u5730\u533a',
           isp: 'ISP',
           bandwidth: '\u5e26\u5bbd (Mbps)',
@@ -1566,7 +1631,8 @@ export default {
           isp: 'CMI / NTT / Cogent'
         },
         hints: {
-          apiPort: 'NodeX \u7ba1\u7406 API \u7684\u5065\u5eb7\u68c0\u67e5\u3001\u7edf\u8ba1\u540c\u6b65\u548c\u8fde\u901a\u6d4b\u8bd5\u90fd\u9700\u8981\u8be5\u7aef\u53e3\u3002'
+          apiPort: 'NodeX \u7ba1\u7406 API \u7684\u5065\u5eb7\u68c0\u67e5\u3001\u7edf\u8ba1\u540c\u6b65\u548c\u8fde\u901a\u6d4b\u8bd5\u90fd\u9700\u8981\u8be5\u7aef\u53e3\u3002',
+          metricsPort: 'gost Prometheus /metrics \u7aef\u53e3\uff0c\u7528\u4e8e\u91c7\u96c6\u8f6c\u53d1\u6d41\u91cf\u7edf\u8ba1\uff0c\u7559\u7a7a\u8868\u793a\u4e0d\u91c7\u96c6\u3002'
         }
       },
       ruleModal: {
@@ -1818,7 +1884,21 @@ export default {
       terminal: {
         chooseNode: '\u9009\u62e9\u8282\u70b9',
         nodeLabel: '\u8282\u70b9 #{id}',
-        promptPlaceholder: '\u8f93\u5165\u547d\u4ee4...'
+        promptPlaceholder: '\u8f93\u5165\u547d\u4ee4...',
+        chooseAction: '\u9009\u62e9\u52a8\u4f5c',
+        chooseService: '\u9009\u62e9\u670d\u52a1'
+      },
+      diagnosticActions: {
+        service_status: '\u67e5\u770b\u670d\u52a1\u72b6\u6001',
+        service_restart: '\u91cd\u542f\u670d\u52a1',
+        log_tail: '\u67e5\u770b\u65e5\u5fd7\u5c3e\u90e8'
+      },
+      fields: {
+        service: '\u670d\u52a1',
+        lines: '\u884c\u6570'
+      },
+      services: {
+        gost: 'GOST'
       },
       taskModal: {
         title: '\u4e0b\u53d1\u4efb\u52a1',
@@ -1844,7 +1924,8 @@ export default {
         invalidParamsJson: '\u53c2\u6570 JSON \u683c\u5f0f\u65e0\u6548',
         taskSent: '\u4efb\u52a1\u5df2\u53d1\u9001',
         taskSendFailed: '\u53d1\u9001\u5931\u8d25: {message}',
-        commandError: '\u9519\u8bef: {message}'
+        commandError: '\u9519\u8bef: {message}',
+        selectActionFirst: '\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u52a8\u4f5c'
       }
     }
   },

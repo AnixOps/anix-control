@@ -312,6 +312,7 @@ export default {
   },
   forwardSuite: {
     nav: {
+      setupWizard: 'Setup Wizard',
       forwards: 'Forwards',
       tunnels: 'Tunnels',
       limits: 'Limits',
@@ -323,12 +324,75 @@ export default {
       observability: 'Observability'
     },
     hints: {
+      setupWizard: 'Configure nodes, tunnels and forwards step by step',
       ansibleMachines: 'Stateless execution machines',
       localRuntime: 'Stateless panel-host executor',
       nodeXTopology: 'Stateful relay/exit topology',
       nodeXRuntime: 'Stateful gost control-plane',
       nodeXAgents: 'Stateful agent task channel',
       observability: 'Network topology & latency metrics'
+    }
+  },
+  forwardWizard: {
+    title: 'Forward Setup Wizard',
+    subtitle: 'Create a node, tunnel and forward step by step without jumping between pages',
+    loading: 'Loading runtime mode…',
+    shared: {
+      existingLabel: 'Existing records you can reuse',
+      useExisting: 'Use existing'
+    },
+    steps: {
+      mode: {
+        title: 'Step 1: Choose forward mode',
+        intro: 'Pick a forward mode — the runtime backend and tunnel type are configured automatically, so you don\'t need to understand either concept separately.',
+        cards: {
+          local: {
+            label: 'Local port forward',
+            description: 'Forward directly on an Ansible-managed machine, no relay node needed.'
+          },
+          gostSingle: {
+            label: 'Relay · single-node forward',
+            description: 'Forward through one NodeX node, without protocol wrapping.'
+          },
+          gostTunnel: {
+            label: 'Relay · tunnel forward',
+            description: 'Forward across ingress/egress nodes, with protocol obfuscation (tls/ws/grpc, etc).'
+          }
+        },
+        currentBadge: 'Currently active',
+        nodeXSetupHint: 'First time using relay forwarding requires NodeX control-plane details before continuing.',
+        confirmAndContinue: 'Confirm and continue'
+      },
+      machine: {
+        title: 'Step 2: Machine/Node',
+        intro: 'Register an execution machine or node first — the tunnel step will use it.',
+        createAndContinue: 'Create and continue'
+      },
+      node: {
+        title: 'Step 2: Machine/Node',
+        intro: 'Register a NodeX node first — the tunnel step will use it.',
+        createAndContinue: 'Create and continue'
+      },
+      tunnel: {
+        title: 'Step 3: Tunnel',
+        intro: 'Create a tunnel based on the node from the previous step. A tunnel is required for forwards.',
+        inheritedNodeHint: 'The node from the previous step is filled in automatically.',
+        createAndContinue: 'Create and continue'
+      },
+      forward: {
+        title: 'Step 4: Forward',
+        intro: 'Create the actual forward entry based on the tunnel from the previous step. Just fill in the remote address.',
+        inheritedTunnelHint: 'The tunnel from the previous step is filled in automatically.',
+        createAndFinish: 'Create and finish'
+      },
+      done: {
+        title: 'Done',
+        summary: 'Forward "{name}" was created successfully — the chain is now live.',
+        gotoForward: 'Go to forward management',
+        gotoTunnel: 'Go to tunnel management',
+        gotoNode: 'Go to machine/node management',
+        createAnother: 'Create another forward'
+      }
     }
   },
   observability: {
@@ -1544,6 +1608,7 @@ export default {
           servicePort: 'Service Port',
           apiPort: 'API Port',
           apiToken: 'API Token',
+          metricsPort: 'Metrics Port',
           region: 'Region',
           isp: 'ISP',
           bandwidth: 'Bandwidth (Mbps)',
@@ -1558,7 +1623,8 @@ export default {
           isp: 'CMI / NTT / Cogent'
         },
         hints: {
-          apiPort: 'Required for NodeX management API health checks, stats sync, and connection tests.'
+          apiPort: 'Required for NodeX management API health checks, stats sync, and connection tests.',
+          metricsPort: 'gost Prometheus /metrics port, used to collect traffic stats. Leave blank to skip collection.'
         }
       },
       ruleModal: {
@@ -1810,7 +1876,21 @@ export default {
       terminal: {
         chooseNode: 'Choose node',
         nodeLabel: 'Node #{id}',
-        promptPlaceholder: 'Enter command...'
+        promptPlaceholder: 'Enter command...',
+        chooseAction: 'Choose action',
+        chooseService: 'Choose service'
+      },
+      diagnosticActions: {
+        service_status: 'Check service status',
+        service_restart: 'Restart service',
+        log_tail: 'Tail service log'
+      },
+      fields: {
+        service: 'Service',
+        lines: 'Lines'
+      },
+      services: {
+        gost: 'GOST'
       },
       taskModal: {
         title: 'Send Task',
@@ -1836,7 +1916,8 @@ export default {
         invalidParamsJson: 'Params JSON is invalid',
         taskSent: 'Task sent',
         taskSendFailed: 'Send failed: {message}',
-        commandError: 'Error: {message}'
+        commandError: 'Error: {message}',
+        selectActionFirst: 'Choose an action first'
       }
     }
   },
