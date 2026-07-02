@@ -395,6 +395,12 @@ func main() {
 	if err := service.EnsureForwardBridgeSchema(database.Get()); err != nil {
 		log.Fatalf("Failed to ensure forward bridge schema: %v", err)
 	}
+	if err := service.EnsureForwardNodeMetricsPortColumn(database.Get()); err != nil {
+		log.Fatalf("Failed to ensure forward node metrics_port column: %v", err)
+	}
+	if err := service.EnsureAgentDiagnosticTaskSchema(database.Get()); err != nil {
+		log.Fatalf("Failed to ensure agent diagnostic task schema: %v", err)
+	}
 	cache.InitMemory()
 	defer cache.CloseMemory()
 	log.Println("Cache initialized: memory")
@@ -420,6 +426,11 @@ func main() {
 
 	go func() {
 		worker := service.NewForwardGostStatsWorker(database.Get())
+		worker.Start(context.Background())
+	}()
+
+	go func() {
+		worker := service.NewForwardAnsibleStatsWorker(database.Get())
 		worker.Start(context.Background())
 	}()
 

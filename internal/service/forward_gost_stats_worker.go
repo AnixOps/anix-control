@@ -137,23 +137,33 @@ func (w *ForwardGostStatsWorker) collectForwardTrafficTotals(ctx context.Context
 	if err != nil {
 		return 0, 0, false, err
 	}
+	if !client.HasMetricsEndpoint() {
+		// 节点尚未配置 metrics_port，无法采集，跳过而不报错
+		return 0, 0, false, nil
+	}
+
+	serviceNames := panelForwardGostServiceNames(forward.ID, forward.Tunnel.Protocol)
+	totalsByService, err := client.GetServiceTrafficTotals(ctx, serviceNames)
+	if err != nil {
+		return 0, 0, false, err
+	}
 
 	var (
 		found         bool
 		uploadTotal   int64
 		downloadTotal int64
 	)
-	for _, serviceName := range panelForwardGostServiceNames(forward.ID, forward.Tunnel.Protocol) {
-		stats, err := client.GetServiceStats(ctx, serviceName)
-		if err != nil {
-			if isGostStatsMissing(err) {
-				continue
-			}
-			return 0, 0, false, err
+	for _, serviceName := range serviceNames {
+		totals := totalsByService[serviceName]
+		if totals == nil {
+			continue
+		}
+		if totals.InBytes == 0 && totals.OutBytes == 0 {
+			continue
 		}
 		found = true
-		uploadTotal += stats.Total.InBytes
-		downloadTotal += stats.Total.OutBytes
+		uploadTotal += totals.InBytes
+		downloadTotal += totals.OutBytes
 	}
 
 	return uploadTotal, downloadTotal, found, nil

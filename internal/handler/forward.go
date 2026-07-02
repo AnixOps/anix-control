@@ -108,17 +108,18 @@ func (h *ForwardHandler) CreateNode(c *gin.Context) {
 	}
 
 	node := &model.ForwardNode{
-		Name:      req.Name,
-		Type:      req.Type,
-		Host:      req.Host,
-		Port:      req.Port,
-		APIPort:   req.APIPort,
-		Region:    req.Region,
-		ISP:       req.ISP,
-		Bandwidth: req.Bandwidth,
-		Weight:    req.Weight,
-		MaxConn:   req.MaxConn,
-		Enabled:   true,
+		Name:        req.Name,
+		Type:        req.Type,
+		Host:        req.Host,
+		Port:        req.Port,
+		APIPort:     req.APIPort,
+		MetricsPort: req.MetricsPort,
+		Region:      req.Region,
+		ISP:         req.ISP,
+		Bandwidth:   req.Bandwidth,
+		Weight:      req.Weight,
+		MaxConn:     req.MaxConn,
+		Enabled:     true,
 	}
 
 	if req.APIToken != "" {
@@ -205,6 +206,9 @@ func (h *ForwardHandler) UpdateNode(c *gin.Context) {
 	}
 	if req.APIToken != "" {
 		node.APIToken = req.APIToken
+	}
+	if req.MetricsPort > 0 {
+		node.MetricsPort = req.MetricsPort
 	}
 	if req.Region != "" {
 		node.Region = req.Region
@@ -703,33 +707,35 @@ func (h *ForwardHandler) CreateUserRule(c *gin.Context) {
 
 // CreateNodeRequest 创建节点请求
 type CreateNodeRequest struct {
-	Name      string `json:"name" binding:"required"`
-	Type      string `json:"type" binding:"required,oneof=relay exit"`
-	Host      string `json:"host" binding:"required"`
-	Port      int    `json:"port" binding:"required,min=1,max=65535"`
-	APIPort   int    `json:"api_port"`
-	APIToken  string `json:"api_token"`
-	Region    string `json:"region"`
-	ISP       string `json:"isp"`
-	Bandwidth int64  `json:"bandwidth"`
-	Weight    int    `json:"weight"`
-	MaxConn   int    `json:"max_conn"`
+	Name        string `json:"name" binding:"required"`
+	Type        string `json:"type" binding:"required,oneof=relay exit"`
+	Host        string `json:"host" binding:"required"`
+	Port        int    `json:"port" binding:"required,min=1,max=65535"`
+	APIPort     int    `json:"api_port"`
+	APIToken    string `json:"api_token"`
+	MetricsPort int    `json:"metrics_port"`
+	Region      string `json:"region"`
+	ISP         string `json:"isp"`
+	Bandwidth   int64  `json:"bandwidth"`
+	Weight      int    `json:"weight"`
+	MaxConn     int    `json:"max_conn"`
 }
 
 // UpdateNodeRequest 更新节点请求
 type UpdateNodeRequest struct {
-	Name      string `json:"name"`
-	Type      string `json:"type" binding:"omitempty,oneof=relay exit"`
-	Host      string `json:"host"`
-	Port      int    `json:"port"`
-	APIPort   int    `json:"api_port"`
-	APIToken  string `json:"api_token"`
-	Region    string `json:"region"`
-	ISP       string `json:"isp"`
-	Bandwidth int64  `json:"bandwidth"`
-	Weight    int    `json:"weight"`
-	MaxConn   int    `json:"max_conn"`
-	Enabled   *bool  `json:"enabled"`
+	Name        string `json:"name"`
+	Type        string `json:"type" binding:"omitempty,oneof=relay exit"`
+	Host        string `json:"host"`
+	Port        int    `json:"port"`
+	APIPort     int    `json:"api_port"`
+	APIToken    string `json:"api_token"`
+	MetricsPort int    `json:"metrics_port"`
+	Region      string `json:"region"`
+	ISP         string `json:"isp"`
+	Bandwidth   int64  `json:"bandwidth"`
+	Weight      int    `json:"weight"`
+	MaxConn     int    `json:"max_conn"`
+	Enabled     *bool  `json:"enabled"`
 }
 
 // CreateRuleRequest 创建规则请求
@@ -838,7 +844,7 @@ func (h *ForwardHandler) SyncNodeStats(c *gin.Context) {
 	}
 
 	ctx := context.Background()
-	stats, err := h.gostManager.GetNodeStats(ctx, node.ID)
+	totals, err := h.gostManager.GetNodeTrafficTotals(ctx, node.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -846,7 +852,7 @@ func (h *ForwardHandler) SyncNodeStats(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Stats synced",
-		"stats":   stats,
+		"stats":   totals,
 	})
 }
 

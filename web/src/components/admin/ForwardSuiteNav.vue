@@ -26,6 +26,7 @@ import { useAppI18n } from '@/composables/useAppI18n'
 const { t } = useAppI18n()
 
 const links = computed(() => ([
+  { label: t('forwardSuite.nav.setupWizard'), to: '/admin/forward/setup', icon: 'WZ', hint: t('forwardSuite.hints.setupWizard') },
   { label: t('forwardSuite.nav.forwards'), to: '/admin/forward', icon: 'FW' },
   { label: t('forwardSuite.nav.tunnels'), to: '/admin/forward/tunnel', icon: 'TN' },
   { label: t('forwardSuite.nav.limits'), to: '/admin/forward/limit', icon: 'LM' },

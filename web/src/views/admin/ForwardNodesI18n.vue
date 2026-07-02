@@ -396,6 +396,11 @@
             </div>
             <div class="form-grid">
               <label class="form-group">
+                <span>{{ t('runtime.nodeXTopology.nodeModal.fields.metricsPort') }}</span>
+                <input v-model.trim="nodeForm.metricsPort" type="number" min="1" max="65535" />
+                <small>{{ t('runtime.nodeXTopology.nodeModal.hints.metricsPort') }}</small>
+              </label>
+              <label class="form-group">
                 <span>{{ t('runtime.nodeXTopology.nodeModal.fields.region') }}</span>
                 <input
                   v-model.trim="nodeForm.region"
@@ -760,6 +765,7 @@ const nodeForm = reactive({
   port: '',
   apiPort: '',
   apiToken: '',
+  metricsPort: '',
   region: '',
   isp: '',
   bandwidth: '',
@@ -1061,6 +1067,7 @@ function normalizeNode(item = {}) {
     port: Number(item.port ?? 0) || 0,
     apiPort: Number(item.api_port ?? item.apiPort ?? 0) || '',
     apiToken: item.api_token ?? item.apiToken ?? '',
+    metricsPort: Number(item.metrics_port ?? item.metricsPort ?? 0) || '',
     region: item.region || '',
     isp: item.isp || '',
     bandwidth: Number(item.bandwidth ?? 0) || 0,
@@ -1137,6 +1144,7 @@ function fillNodeForm(node) {
   nodeForm.port = node.port ? String(node.port) : ''
   nodeForm.apiPort = node.apiPort ? String(node.apiPort) : ''
   nodeForm.apiToken = node.apiToken || ''
+  nodeForm.metricsPort = node.metricsPort ? String(node.metricsPort) : ''
   nodeForm.region = node.region || ''
   nodeForm.isp = node.isp || ''
   nodeForm.bandwidth = node.bandwidth ? String(node.bandwidth) : ''
@@ -1474,6 +1482,10 @@ async function submitNodeForm() {
     }
     if (nodeForm.apiToken.trim()) {
       payload.api_token = nodeForm.apiToken.trim()
+    }
+    const metricsPort = parsePositiveInt(nodeForm.metricsPort)
+    if (metricsPort) {
+      payload.metrics_port = metricsPort
     }
     if (nodeForm.region.trim()) {
       payload.region = nodeForm.region.trim()

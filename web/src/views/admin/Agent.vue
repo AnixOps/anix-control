@@ -112,14 +112,31 @@
           </div>
         </div>
         <div class="terminal-input">
-          <span class="prompt">$</span>
+          <select v-model="selectedAction" class="action-select" :disabled="!selectedNodeId">
+            <option value="">{{ t('runtime.nodeXAgents.terminal.chooseAction') }}</option>
+            <option v-for="action in diagnosticActions" :key="action.value" :value="action.value">
+              {{ t(`runtime.nodeXAgents.diagnosticActions.${action.value}`) }}
+            </option>
+          </select>
+          <select
+            v-if="selectedActionSpec?.params.includes('service')"
+            v-model="selectedService"
+            class="service-select"
+          >
+            <option v-for="service in diagnosticServices" :key="service" :value="service">
+              {{ t(`runtime.nodeXAgents.services.${service}`) }}
+            </option>
+          </select>
           <input
-            v-model="commandInput"
-            :disabled="!selectedNodeId"
-            :placeholder="t('runtime.nodeXAgents.terminal.promptPlaceholder')"
-            @keyup.enter="executeCommand"
+            v-if="selectedActionSpec?.params.includes('lines')"
+            v-model.number="logLines"
+            type="number"
+            min="1"
+            max="1000"
+            class="lines-input"
+            :title="t('runtime.nodeXAgents.fields.lines')"
           />
-          <button :disabled="!selectedNodeId || !commandInput" @click="executeCommand">
+          <button :disabled="!selectedNodeId || !selectedAction" @click="executeCommand">
             {{ t('runtime.nodeXAgents.actions.execute') }}
           </button>
         </div>
@@ -133,7 +150,6 @@
             <tr>
               <th>{{ t('runtime.nodeXAgents.table.taskId') }}</th>
               <th>{{ t('runtime.nodeXAgents.table.node') }}</th>
-              <th>{{ t('runtime.nodeXAgents.table.type') }}</th>
               <th>{{ t('runtime.nodeXAgents.table.command') }}</th>
               <th>{{ t('runtime.nodeXAgents.table.status') }}</th>
               <th>{{ t('runtime.nodeXAgents.table.duration') }}</th>
@@ -144,8 +160,7 @@
             <tr v-for="task in taskHistory" :key="task.task_id">
               <td>{{ task.task_id }}</td>
               <td>{{ t('runtime.nodeXAgents.terminal.nodeLabel', { id: task.node_id }) }}</td>
-              <td>{{ task.type }}</td>
-              <td><code>{{ task.action }}</code></td>
+              <td><code>{{ diagnosticActionMap[task.action] ? t(`runtime.nodeXAgents.diagnosticActions.${task.action}`) : task.action }}</code></td>
               <td>
                 <span :class="['status-badge', task.success ? 'status-active' : 'status-error']">
                   {{ task.success ? t('runtime.nodeXAgents.status.success') : t('runtime.nodeXAgents.status.failed') }}
@@ -155,7 +170,7 @@
               <td>{{ formatTime(task.timestamp) }}</td>
             </tr>
             <tr v-if="taskHistory.length === 0">
-              <td colspan="7" class="empty-row">{{ t('runtime.nodeXAgents.empty.tasks') }}</td>
+              <td colspan="6" class="empty-row">{{ t('runtime.nodeXAgents.empty.tasks') }}</td>
             </tr>
           </tbody>
         </table>
@@ -181,25 +196,25 @@
             <input :value="taskTargetNode?.node_id" disabled />
           </div>
           <div class="form-group">
-            <label>{{ t('runtime.nodeXAgents.taskModal.taskType') }}</label>
-            <select v-model="taskForm.type">
-              <option value="command">{{ t('runtime.nodeXAgents.taskTypes.command') }}</option>
-              <option value="file">{{ t('runtime.nodeXAgents.taskTypes.file') }}</option>
-              <option value="service">{{ t('runtime.nodeXAgents.taskTypes.service') }}</option>
-              <option value="gost">{{ t('runtime.nodeXAgents.taskTypes.gost') }}</option>
+            <label>{{ t('runtime.nodeXAgents.taskModal.action') }}</label>
+            <select v-model="taskForm.action">
+              <option value="">{{ t('runtime.nodeXAgents.terminal.chooseAction') }}</option>
+              <option v-for="action in diagnosticActions" :key="action.value" :value="action.value">
+                {{ t(`runtime.nodeXAgents.diagnosticActions.${action.value}`) }}
+              </option>
             </select>
           </div>
-          <div class="form-group">
-            <label>{{ t('runtime.nodeXAgents.taskModal.action') }}</label>
-            <input v-model="taskForm.action" :placeholder="t('runtime.nodeXAgents.table.command')" />
+          <div class="form-group" v-if="taskActionSpec?.params.includes('service')">
+            <label>{{ t('runtime.nodeXAgents.fields.service') }}</label>
+            <select v-model="taskForm.service">
+              <option v-for="service in diagnosticServices" :key="service" :value="service">
+                {{ t(`runtime.nodeXAgents.services.${service}`) }}
+              </option>
+            </select>
           </div>
-          <div class="form-group">
-            <label>{{ t('runtime.nodeXAgents.taskModal.paramsJson') }}</label>
-            <textarea
-              v-model="taskForm.paramsJson"
-              :placeholder="t('runtime.nodeXAgents.taskModal.paramsPlaceholder')"
-              rows="3"
-            ></textarea>
+          <div class="form-group" v-if="taskActionSpec?.params.includes('lines')">
+            <label>{{ t('runtime.nodeXAgents.fields.lines') }}</label>
+            <input v-model.number="taskForm.lines" type="number" min="1" max="1000" />
           </div>
           <div class="form-group">
             <label>{{ t('runtime.nodeXAgents.taskModal.timeoutSeconds') }}</label>
@@ -218,29 +233,58 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { createAgentTask, executeAgentCommand, getAgents } from '@/api/admin'
+import { createAgentTask, executeAgentCommand, getAgents, listAgentDiagnosticTasks } from '@/api/admin'
 
 const { t, formatDateTime } = useAppI18n()
+
+// 与后端 internal/service/agent_diagnostic_actions.go 的白名单保持一致，
+// 前端不接受任意字符串动作，只能从这份列表里选。
+const diagnosticActions = [
+  { value: 'service_status', params: ['service'] },
+  { value: 'service_restart', params: ['service'] },
+  { value: 'log_tail', params: ['service', 'lines'] }
+]
+const diagnosticServices = ['gost']
+const diagnosticActionMap = Object.fromEntries(diagnosticActions.map(action => [action.value, action]))
 
 const activeTab = ref('agents')
 const agents = ref([])
 const selectedNodeId = ref('')
 const wsConnected = ref(false)
-const commandInput = ref('')
+const selectedAction = ref('')
+const selectedService = ref(diagnosticServices[0])
+const logLines = ref(100)
 const terminalLines = ref([])
 const terminalOutput = ref(null)
 const taskHistory = ref([])
 const showTaskModal = ref(false)
 const taskTargetNode = ref(null)
 const taskForm = ref({
-  type: 'command',
   action: '',
-  paramsJson: '{}',
+  service: diagnosticServices[0],
+  lines: 100,
   timeout: 30
 })
 
 const onlineAgents = computed(() => agents.value.filter(agent => agent.online))
+const selectedActionSpec = computed(() => diagnosticActionMap[selectedAction.value] || null)
+const taskActionSpec = computed(() => diagnosticActionMap[taskForm.value.action] || null)
 const notify = message => window.alert(message)
+
+const buildActionParams = (actionValue, service, lines) => {
+  const spec = diagnosticActionMap[actionValue]
+  if (!spec) {
+    return {}
+  }
+  const params = {}
+  if (spec.params.includes('service')) {
+    params.service = service
+  }
+  if (spec.params.includes('lines')) {
+    params.lines = lines
+  }
+  return params
+}
 
 const fetchAgents = async () => {
   try {
@@ -248,6 +292,15 @@ const fetchAgents = async () => {
     agents.value = res.data?.agents || []
   } catch (err) {
     console.error(t('runtime.nodeXAgents.messages.fetchFailed'), err)
+  }
+}
+
+const fetchTaskHistory = async () => {
+  try {
+    const res = await listAgentDiagnosticTasks({ limit: 50 })
+    taskHistory.value = res.data?.data || []
+  } catch (err) {
+    console.error(err)
   }
 }
 
@@ -269,9 +322,9 @@ const openTerminal = (agent) => {
 const openTaskModal = (agent) => {
   taskTargetNode.value = agent
   taskForm.value = {
-    type: 'command',
     action: '',
-    paramsJson: '{}',
+    service: diagnosticServices[0],
+    lines: 100,
     timeout: 30
   }
   showTaskModal.value = true
@@ -282,24 +335,25 @@ const viewMonitor = (agent) => {
 }
 
 const executeCommand = async () => {
-  if (!selectedNodeId.value || !commandInput.value) {
+  if (!selectedNodeId.value || !selectedAction.value) {
+    notify(t('runtime.nodeXAgents.messages.selectActionFirst'))
     return
   }
 
-  const cmd = commandInput.value
-  commandInput.value = ''
+  const actionValue = selectedAction.value
+  const params = buildActionParams(actionValue, selectedService.value, logLines.value)
 
   terminalLines.value.push({
     prompt: '$ ',
-    content: cmd,
+    content: t(`runtime.nodeXAgents.diagnosticActions.${actionValue}`),
     type: 'input'
   })
 
   try {
     const res = await executeAgentCommand({
       node_id: selectedNodeId.value,
-      command: cmd.split(' ')[0],
-      args: cmd.split(' ').slice(1),
+      action: actionValue,
+      params,
       timeout: 30
     })
 
@@ -310,15 +364,7 @@ const executeCommand = async () => {
       type: result.success ? 'output' : 'error'
     })
 
-    taskHistory.value.unshift({
-      task_id: result.task_id || Date.now().toString(),
-      node_id: selectedNodeId.value,
-      type: 'command',
-      action: cmd,
-      success: result.success,
-      duration_ms: result.duration_ms || 0,
-      timestamp: new Date()
-    })
+    await fetchTaskHistory()
   } catch (err) {
     terminalLines.value.push({
       prompt: '',
@@ -341,18 +387,12 @@ const sendTask = async () => {
     return
   }
 
-  let params = {}
-  try {
-    params = JSON.parse(taskForm.value.paramsJson || '{}')
-  } catch (error) {
-    notify(t('runtime.nodeXAgents.messages.invalidParamsJson'))
-    return
-  }
+  const params = buildActionParams(taskForm.value.action, taskForm.value.service, taskForm.value.lines)
 
   try {
     await createAgentTask({
       node_id: taskTargetNode.value.node_id,
-      type: taskForm.value.type,
+      type: 'diagnostic',
       action: taskForm.value.action,
       params,
       timeout: taskForm.value.timeout
@@ -360,6 +400,7 @@ const sendTask = async () => {
 
     showTaskModal.value = false
     notify(t('runtime.nodeXAgents.messages.taskSent'))
+    await fetchTaskHistory()
   } catch (err) {
     notify(t('runtime.nodeXAgents.messages.taskSendFailed', {
       message: err.response?.data?.error || err.message
@@ -370,6 +411,7 @@ const sendTask = async () => {
 let refreshTimer
 onMounted(() => {
   fetchAgents()
+  fetchTaskHistory()
   refreshTimer = setInterval(fetchAgents, 30000)
 })
 
@@ -547,6 +589,29 @@ onUnmounted(() => {
 
 .terminal-input input::placeholder {
   color: #666;
+}
+
+.action-select,
+.service-select {
+  background: #3d3d3d;
+  border: 1px solid #4d4d4d;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+}
+
+.action-select {
+  flex: 1;
+}
+
+.lines-input {
+  width: 80px;
+  background: #3d3d3d;
+  border: 1px solid #4d4d4d;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  font-family: Consolas, Monaco, monospace;
 }
 
 .terminal-input button {

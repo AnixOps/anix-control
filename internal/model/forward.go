@@ -25,6 +25,7 @@ type ForwardNode struct {
 	Port      int       `gorm:"not null" json:"port"`
 	APIPort   int       `json:"api_port"`         // 管理API端口
 	APIToken  string    `gorm:"size:100" json:"api_token"`
+	MetricsPort int     `json:"metrics_port"`     // Prometheus /metrics 端口，0 表示未配置
 
 	// 节点信息
 	Region    string    `gorm:"size:50" json:"region"`   // 地区: HK, US, JP, SG等

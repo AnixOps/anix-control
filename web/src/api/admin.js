@@ -1344,6 +1344,14 @@ export function getAgentTaskResult(taskId) {
   })
 }
 
+export function listAgentDiagnosticTasks(params) {
+  return request({
+    url: '/admin/agent/tasks',
+    method: 'get',
+    params
+  })
+}
+
 export function getAgentMonitor(nodeId) {
   return request({
     url: '/admin/agent/monitor',
@@ -1574,6 +1582,7 @@ export default {
   createAgentTask,
   executeAgentCommand,
   getAgentTaskResult,
+  listAgentDiagnosticTasks,
   getAgentMonitor,
   getLoadBalancers,
   createLoadBalancer,
