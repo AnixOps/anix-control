@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -2204,8 +2205,95 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_Success() {
 	assert.Equal(s.T(), "text/plain; charset=utf-8", resp.ContentType)
 }
 
+func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_LegacyGroupIDFallback() {
+	group := &model.SubscriptionGroup{
+		Name:     "Legacy Group",
+		Priority: 5,
+		Enable:   1,
+	}
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
+
+	monthPrice := int64(1000)
+	plan := &model.Plan{
+		Name:           "Legacy Plan",
+		GroupID:        group.ID,
+		TransferEnable: 100,
+		MonthPrice:     &monthPrice,
+		Show:           1,
+	}
+	assert.NoError(s.T(), database.Get().Create(plan).Error)
+
+	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
+	assert.NoError(s.T(), database.Get().Model(&model.User{}).Where("id = ?", s.testUser.ID).Updates(map[string]any{
+		"plan_id":         plan.ID,
+		"group_id":        group.ID,
+		"transfer_enable": plan.TransferEnable * 1073741824,
+		"expired_at":      expireAt,
+	}).Error)
+
+	node := &model.Node{
+		Name:   "Legacy Node",
+		Host:   "legacy.example.com",
+		Port:   443,
+		Rate:   1.0,
+		Show:   1,
+		Status: model.NodeStatusOnline,
+	}
+	assert.NoError(s.T(), database.Get().Create(node).Error)
+
+	transport := "ws"
+	tlsSettings := `{"server_name":"legacy.example.com","fingerprint":"chrome"}`
+	transportSettings := `{"path":"/ws","headers":{"Host":"legacy.example.com"}}`
+	protocol := &model.NodeProtocol{
+		NodeID:            node.ID,
+		Name:              "Legacy VLESS",
+		Type:              model.ProtocolVLESS,
+		Port:              443,
+		Enable:            1,
+		Show:              1,
+		Transport:         &transport,
+		TLSSettings:       &tlsSettings,
+		TransportSettings: &transportSettings,
+	}
+	assert.NoError(s.T(), database.Get().Create(protocol).Error)
+	assert.NoError(s.T(), database.Get().Exec(
+		"INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)",
+		group.ID,
+		protocol.ID,
+	).Error)
+
+	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{
+		Token:  s.testUser.Token,
+		Format: model.FormatV2Ray,
+	})
+	assert.NoError(s.T(), err)
+	if assert.NotNil(s.T(), resp) {
+		decoded, decodeErr := base64.StdEncoding.DecodeString(resp.Content)
+		assert.NoError(s.T(), decodeErr)
+		assert.Contains(s.T(), string(decoded), "vless://")
+		assert.Contains(s.T(), string(decoded), "legacy.example.com")
+	}
+}
+
 func TestSubscriptionService(t *testing.T) {
 	suite.Run(t, new(SubscriptionServiceTestSuite))
+}
+
+// TestDeriveSS2022ServerKey 校验 SS2022 server_key 派生与老 XBoard
+// Helper::getServerKey($timestamp,$len) 一致: base64(substr(md5(unix秒),0,len))。
+// 期望值用 python/php 手算: md5("1782409707")="b2980b593a367c3ed259d307b50a12a9"。
+func TestDeriveSS2022ServerKey(t *testing.T) {
+	createdAt := time.Unix(1782409707, 0)
+
+	// aes-256-gcm → 前 32 个 hex 字符
+	assert.Equal(t,
+		"YjI5ODBiNTkzYTM2N2MzZWQyNTlkMzA3YjUwYTEyYTk=",
+		DeriveSS2022ServerKey(createdAt, "2022-blake3-aes-256-gcm"))
+
+	// aes-128-gcm → 前 16 个 hex 字符
+	assert.Equal(t,
+		"YjI5ODBiNTkzYTM2N2MzZQ==",
+		DeriveSS2022ServerKey(createdAt, "2022-blake3-aes-128-gcm"))
 }
 
 // NotificationServiceTestSuite 閫氱煡鏈嶅姟娴嬭瘯濂椾欢
@@ -3233,6 +3321,115 @@ func (s *NodeServiceTestSuite) TestHeartbeat() {
 func (s *NodeServiceTestSuite) TestHeartbeat_NodeNotFound() {
 	err := s.svc.Heartbeat(99999, &model.NodeHeartbeatRequest{})
 	assert.Error(s.T(), err)
+}
+
+func (s *NodeServiceTestSuite) TestHeartbeat_AccumulatesUpParentChain() {
+	root := &model.Node{Name: "Root", Host: "192.168.1.70", Port: 443, Rate: 1.0, Show: 1}
+	assert.NoError(s.T(), s.svc.CreateNode(root))
+
+	mid := &model.Node{Name: "Mid", Host: "192.168.1.71", Port: 443, Rate: 1.0, Show: 1, ParentID: &root.ID}
+	assert.NoError(s.T(), s.svc.CreateNode(mid))
+
+	leaf := &model.Node{Name: "Leaf", Host: "192.168.1.72", Port: 443, Rate: 1.0, Show: 1, ParentID: &mid.ID}
+	assert.NoError(s.T(), s.svc.CreateNode(leaf))
+
+	err := s.svc.Heartbeat(leaf.ID, &model.NodeHeartbeatRequest{Upload: 100, Download: 200})
+	assert.NoError(s.T(), err)
+
+	foundLeaf, _ := s.svc.GetNode(leaf.ID)
+	assert.Equal(s.T(), int64(100), foundLeaf.TotalUpload)
+	assert.Equal(s.T(), int64(200), foundLeaf.TotalDownload)
+	assert.Equal(s.T(), int64(100), foundLeaf.MonthlyUpload)
+	assert.Equal(s.T(), int64(200), foundLeaf.MonthlyDownload)
+
+	foundMid, _ := s.svc.GetNode(mid.ID)
+	assert.Equal(s.T(), int64(100), foundMid.TotalUpload)
+	assert.Equal(s.T(), int64(200), foundMid.TotalDownload)
+
+	foundRoot, _ := s.svc.GetNode(root.ID)
+	assert.Equal(s.T(), int64(100), foundRoot.TotalUpload)
+	assert.Equal(s.T(), int64(200), foundRoot.TotalDownload)
+
+	// second heartbeat should add on top, not overwrite
+	assert.NoError(s.T(), s.svc.Heartbeat(leaf.ID, &model.NodeHeartbeatRequest{Upload: 50, Download: 60}))
+	foundRoot2, _ := s.svc.GetNode(root.ID)
+	assert.Equal(s.T(), int64(150), foundRoot2.TotalUpload)
+	assert.Equal(s.T(), int64(260), foundRoot2.TotalDownload)
+}
+
+func (s *NodeServiceTestSuite) TestAccumulateTrafficOnly_AccumulatesUpParentChain() {
+	root := &model.Node{Name: "RootTrafficOnly", Host: "192.168.1.80", Port: 443, Rate: 1.0, Show: 1}
+	assert.NoError(s.T(), s.svc.CreateNode(root))
+
+	leaf := &model.Node{Name: "LeafTrafficOnly", Host: "192.168.1.81", Port: 443, Rate: 1.0, Show: 1, ParentID: &root.ID}
+	assert.NoError(s.T(), s.svc.CreateNode(leaf))
+
+	err := s.svc.AccumulateTrafficOnly(leaf.ID, 321, 654)
+	assert.NoError(s.T(), err)
+
+	foundLeaf, _ := s.svc.GetNode(leaf.ID)
+	assert.Equal(s.T(), int64(321), foundLeaf.TotalUpload)
+	assert.Equal(s.T(), int64(654), foundLeaf.TotalDownload)
+	assert.Equal(s.T(), int64(0), foundLeaf.MonthlyUpload)
+	assert.Equal(s.T(), int64(0), foundLeaf.MonthlyDownload)
+
+	foundRoot, _ := s.svc.GetNode(root.ID)
+	assert.Equal(s.T(), int64(321), foundRoot.TotalUpload)
+	assert.Equal(s.T(), int64(654), foundRoot.TotalDownload)
+	assert.Equal(s.T(), int64(0), foundRoot.MonthlyUpload)
+	assert.Equal(s.T(), int64(0), foundRoot.MonthlyDownload)
+}
+
+func (s *NodeServiceTestSuite) TestUpdateNode_RejectsSelfParent() {
+	node := &model.Node{Name: "SelfParent", Host: "192.168.1.73", Port: 443, Rate: 1.0, Show: 1}
+	assert.NoError(s.T(), s.svc.CreateNode(node))
+
+	err := s.svc.UpdateNode(node.ID, map[string]any{"parent_id": float64(node.ID)})
+	assert.Error(s.T(), err)
+}
+
+func (s *NodeServiceTestSuite) TestUpdateNode_RejectsCyclicParent() {
+	a := &model.Node{Name: "A", Host: "192.168.1.74", Port: 443, Rate: 1.0, Show: 1}
+	assert.NoError(s.T(), s.svc.CreateNode(a))
+
+	b := &model.Node{Name: "B", Host: "192.168.1.75", Port: 443, Rate: 1.0, Show: 1, ParentID: &a.ID}
+	assert.NoError(s.T(), s.svc.CreateNode(b))
+
+	// try to make A's parent be B, which would form a cycle A -> B -> A
+	err := s.svc.UpdateNode(a.ID, map[string]any{"parent_id": float64(b.ID)})
+	assert.Error(s.T(), err)
+}
+
+func (s *NodeServiceTestSuite) TestNodeMonthlyResetWorker_ResetsOnMatchingDay() {
+	node := &model.Node{Name: "MonthlyReset", Host: "192.168.1.76", Port: 443, Rate: 1.0, Show: 1, MonthlyResetDay: 15}
+	assert.NoError(s.T(), s.svc.CreateNode(node))
+	assert.NoError(s.T(), s.svc.Heartbeat(node.ID, &model.NodeHeartbeatRequest{Upload: 100, Download: 200}))
+
+	found, _ := s.svc.GetNode(node.ID)
+	assert.Equal(s.T(), int64(100), found.MonthlyUpload)
+
+	worker := NewNodeMonthlyResetWorker(database.Get())
+	assert.NoError(s.T(), worker.RunOnce(time.Date(2026, 7, 15, 0, 0, 0, 0, time.Local)))
+
+	afterReset, _ := s.svc.GetNode(node.ID)
+	assert.Equal(s.T(), int64(0), afterReset.MonthlyUpload)
+	assert.Equal(s.T(), int64(0), afterReset.MonthlyDownload)
+	// TotalUpload/TotalDownload (lifetime counters) must not be touched by the reset
+	assert.Equal(s.T(), int64(100), afterReset.TotalUpload)
+	assert.Equal(s.T(), int64(200), afterReset.TotalDownload)
+}
+
+func (s *NodeServiceTestSuite) TestNodeMonthlyResetWorker_LeavesOtherDaysAlone() {
+	node := &model.Node{Name: "MonthlyResetSkip", Host: "192.168.1.77", Port: 443, Rate: 1.0, Show: 1, MonthlyResetDay: 15}
+	assert.NoError(s.T(), s.svc.CreateNode(node))
+	assert.NoError(s.T(), s.svc.Heartbeat(node.ID, &model.NodeHeartbeatRequest{Upload: 100, Download: 200}))
+
+	worker := NewNodeMonthlyResetWorker(database.Get())
+	assert.NoError(s.T(), worker.RunOnce(time.Date(2026, 7, 16, 0, 0, 0, 0, time.Local)))
+
+	found, _ := s.svc.GetNode(node.ID)
+	assert.Equal(s.T(), int64(100), found.MonthlyUpload)
+	assert.Equal(s.T(), int64(200), found.MonthlyDownload)
 }
 
 func (s *NodeServiceTestSuite) TestUpdateLastCheckAt() {

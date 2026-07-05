@@ -3,8 +3,12 @@
     <div class="login-shell">
       <section class="login-aside">
         <div class="aside-pill">{{ t('layout.admin.badge') }}</div>
-        <h1>{{ t('layout.user.brand') }}</h1>
-        <p>{{ isRegisterMode ? t('login.registerSubtitle') : t('login.signInSubtitle') }}</p>
+        <div class="aside-copy">
+          <div class="aside-kicker">{{ t('login.brandSubtitle') }}</div>
+          <h1>{{ t('layout.user.brand') }}</h1>
+          <p>{{ t('login.brandDescription') }}</p>
+          <p class="aside-mode-copy">{{ isRegisterMode ? t('login.registerSubtitle') : t('login.signInSubtitle') }}</p>
+        </div>
         <div class="aside-stats">
           <div class="aside-stat">
             <span class="aside-stat-label">{{ t('layout.admin.sections.overview') }}</span>
@@ -267,6 +271,10 @@ function mockLogin(role) {
   box-shadow: var(--shadow-lg);
 }
 
+.aside-copy {
+  margin-top: 24px;
+}
+
 .aside-pill {
   display: inline-flex;
   align-items: center;
@@ -279,15 +287,32 @@ function mockLogin(role) {
 }
 
 .login-aside h1 {
-  margin-top: 24px;
   font-size: 36px;
   line-height: 1.1;
+}
+
+.aside-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .login-aside p {
   margin-top: 12px;
   max-width: 440px;
   color: rgba(255, 255, 255, 0.78);
+}
+
+.aside-mode-copy {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 600;
 }
 
 .aside-stats {

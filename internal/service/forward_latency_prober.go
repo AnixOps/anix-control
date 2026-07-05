@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultForwardLatencyBucketInterval   = 60 * time.Second
+	defaultForwardLatencyBucketInterval = 60 * time.Second
 	// Idle poll equals one active cycle so a newly registered node appears within
 	// ~60s instead of waiting out a long idle sleep. Ops can raise it via config.
 	defaultForwardLatencyIdleInterval     = 60 * time.Second
@@ -198,9 +198,10 @@ func (w *ForwardLatencyProber) enumerateTargets(ctx context.Context) ([]probeTar
 		add(model.LatencyTargetTypeForwardNode, nodes[i].ID, nodes[i].Name, nodes[i].Host, nodes[i].Port)
 	}
 
-	// 4. regular proxy nodes (v2_node, registered by V2bX) that are not disabled
+	// 4. regular parent/root proxy nodes (v2_node, registered by V2bX) that are not disabled.
+	// Child nodes inherit the parent node's latency surface and are not probed separately.
 	var proxyNodes []model.Node
-	if err := db.Where("status <> ?", model.NodeStatusDisabled).Order("id ASC").Find(&proxyNodes).Error; err != nil {
+	if err := db.Where("status <> ? AND parent_id IS NULL", model.NodeStatusDisabled).Order("id ASC").Find(&proxyNodes).Error; err != nil {
 		return nil, err
 	}
 	for i := range proxyNodes {

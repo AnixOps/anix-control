@@ -127,35 +127,24 @@ func (s *ConfigSyncGRPCServer) ConfigChanges(stream pb.ConfigSyncService_ConfigC
 func (s *ConfigSyncGRPCServer) buildNodeConfigResponse(node *model.Node) (*pb.NodeConfigResponse, error) {
 	protocols, _ := s.nodeService.GetProtocols(node.ID)
 
-	resp := &pb.NodeConfigResponse{
+	if len(protocols) > 0 {
+		// 用共享构建器填充完整协议配置, 与 HTTP/订阅端一致
+		return fillNodeConfigResponse(node, &protocols[0]), nil
+	}
+
+	return &pb.NodeConfigResponse{
+		NodeType:    "vless",
+		Type:        "vless",
 		Host:        node.Host,
 		ServerPort:  int32(node.Port),
 		ServerName:  node.Host,
+		Network:     "tcp",
 		SendThrough: "0.0.0.0",
 		BaseConfig: &pb.BaseConfig{
 			PushInterval: 60,
 			PullInterval: 60,
 		},
-	}
-
-	if len(protocols) > 0 {
-		protocol := protocols[0]
-		resp.NodeType = string(protocol.Type)
-		resp.Type = string(protocol.Type)
-		resp.ServerPort = int32(protocol.Port)
-		resp.Tls = int32(protocol.TLS)
-		if protocol.Transport != nil {
-			resp.Network = *protocol.Transport
-		} else {
-			resp.Network = "tcp"
-		}
-	} else {
-		resp.NodeType = "vless"
-		resp.Type = "vless"
-		resp.Network = "tcp"
-	}
-
-	return resp, nil
+	}, nil
 }
 
 // buildUserList 构建用户列表

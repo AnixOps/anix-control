@@ -7,8 +7,8 @@ import adminMonitor from './modules/zh-CN/adminMonitor'
 import adminTrafficHourly from './modules/zh-CN/adminTrafficHourly'
 
 const legacy = {
-  'V2Board Admin': 'V2Board 管理端',
-  'Admin': '管理端',
+  'V2Board Admin': 'AnixOps 工作室管理台',
+  'Admin': '工作室管理台',
   'Overview': '概览',
   'Dashboard': '仪表盘',
   'Forwards': '流量转发',
@@ -261,19 +261,19 @@ export default {
   },
   app: {
     meta: {
-      defaultDescription: '面向商业化运行的订阅、支付、节点、NodeX 运行时与本地 Ansible 转发控制台。',
-      loginDescription: '登录 V2Board AnixOps，管理订阅、账单、节点与转发运行时。',
-      userDescription: '用户中心，查看订阅、工单、套餐与账单记录。',
-      adminDescription: '管理后台，用于用户、账单、节点、通知与系统运维。',
-      forwardDescription: '转发运维工作台，覆盖 Local Runtime、Ansible Machines、NodeX 拓扑、隧道与运行时诊断。'
+      defaultDescription: 'AnixOps 工作室统一管理订阅交付、支付账单、节点编排、NodeX 运行时与本地 Ansible 转发运维。',
+      loginDescription: '登录 AnixOps 工作室，继续管理订阅、账单、节点与转发运行时。',
+      userDescription: 'AnixOps 工作室用户中心，查看订阅、工单、套餐与账单记录。',
+      adminDescription: 'AnixOps 工作室管理后台，用于用户、账单、节点、通知与系统运维。',
+      forwardDescription: 'AnixOps 工作室转发运维工作台，覆盖 Local Runtime、Ansible Machines、NodeX 拓扑、隧道与运行时诊断。'
     }
   },
   layout: {
     admin: {
-      brand: 'V2Board',
-      mobileTitle: 'V2Board 管理端',
-      badge: '管理端',
-      subtitle: '控制面、转发套件和运维入口统一收敛在此导航。',
+      brand: 'AnixOps 工作室',
+      mobileTitle: 'AnixOps 工作室管理台',
+      badge: '工作室管理台',
+      subtitle: '订阅交付、节点编排、转发套件与运维入口统一收敛在此导航。',
       adminUser: '管理员',
       sections: {
         overview: '概览',
@@ -308,7 +308,7 @@ export default {
       }
     },
     user: {
-      brand: 'V2Board',
+      brand: 'AnixOps 工作室',
       nav: {
         dashboard: '仪表盘',
         subscribe: '订阅',
@@ -467,11 +467,12 @@ export default {
     }
   },
   login: {
-    brandSubtitle: '高性能代理服务管理面板',
+    brandSubtitle: 'AnixOps Studio',
+    brandDescription: '面向工作室交付的订阅、节点与转发运维控制台。',
     signInTitle: '欢迎回来',
     registerTitle: '创建账户',
-    signInSubtitle: '请登录您的账户',
-    registerSubtitle: '请填写以下信息注册',
+    signInSubtitle: '登录 AnixOps 工作室，继续管理服务。',
+    registerSubtitle: '创建 AnixOps 工作室账户，开始使用交付与运维能力。',
     emailPlaceholder: '请输入邮箱地址',
     passwordPlaceholder: '请输入密码',
     registerPasswordPlaceholder: '请输入密码（至少 6 位）',
@@ -527,6 +528,7 @@ export default {
       previewTitle: '订阅预览 ({format})',
       usedTraffic: '已用流量',
       totalTraffic: '总流量',
+      domainLabel: '订阅域名',
       copyLink: '复制链接',
       refreshCache: '刷新订阅缓存',
       copyContent: '复制内容',
@@ -1340,6 +1342,28 @@ export default {
         },
         empty: '暂无配置数据'
       },
+      subscription: {
+        eyebrow: '订阅',
+        title: '订阅域名',
+        description: '配置一个或多个用于用户订阅链接和 managed-config 输出的域名。',
+        pathLabel: '订阅路径',
+        currentDomainLabel: '当前请求 Host',
+        domainListLabel: '备用域名列表',
+        domainListPlaceholder: 'sub1.example.com\nsub2.example.com',
+        domainListHelp: '每行一个域名，也支持逗号或分号分隔。',
+        previewLabel: '链接预览',
+        previewEmpty: '未配置备用域名时，将使用当前请求 Host。',
+        actions: {
+          refresh: '刷新',
+          save: '保存域名',
+          saving: '保存中...'
+        },
+        messages: {
+          loadFailed: '加载订阅域名配置失败',
+          saveFailed: '保存订阅域名失败',
+          saveSuccess: '订阅域名已保存'
+        }
+      },
       backup: {
         title: '自动备份配置',
         enabled: '启用自动备份',
@@ -2066,8 +2090,11 @@ export default {
         name: '名称',
         address: '地址',
         status: '状态',
+        parent: '父节点',
         protocols: '协议数',
         traffic: '今日流量',
+        monthlyQuota: '月流量限额',
+        quotaExceeded: '本月已超限',
         lastHeartbeat: '最后心跳',
         actions: '操作',
         loading: '加载中...',
@@ -2076,12 +2103,16 @@ export default {
       actions: {
         manageProtocols: '管理协议',
         protocols: '协议',
+        logs: '日志',
+        deployParents: '部署父节点',
         edit: '编辑',
         delete: '删除',
         cancel: '取消',
         save: '保存',
         saving: '保存中...',
-        authKey: '授权密钥'
+        authKey: '授权密钥',
+        refreshLogs: '刷新日志',
+        loadingLogs: '加载日志中...'
       },
       pagination: {
         previous: '上一页',
@@ -2090,20 +2121,27 @@ export default {
       nodeModal: {
         titleCreate: '添加节点',
         titleEdit: '编辑节点',
+        parentNone: '无(作为根/落地节点)',
+        parentHint: '选择上级节点可组成多级中转链路; 本节点转发的流量会同时累加到自己和每一级上级节点。',
         fields: {
           name: '节点名称 *',
           address: '节点地址 *',
           tags: '标签（逗号分隔）',
           rate: '节点倍率',
           sort: '排序',
-          status: '状态'
+          status: '状态',
+          parent: '父节点(上级/落地节点)',
+          monthlyLimit: '月流量限额 (GB)',
+          monthlyResetDay: '每月重置日 (1-28)'
         },
         placeholders: {
           name: '输入节点名称',
           address: 'IP 或域名',
           tags: '香港,IEPL,高速',
           rate: '1.0',
-          sort: '0'
+          sort: '0',
+          monthlyLimit: '留空则不限',
+          monthlyResetDay: '1'
         }
       },
       authKeyModal: {
@@ -2115,6 +2153,43 @@ export default {
         configHint: '将此配置粘贴到 V2bX 的 config.json 中，替换 <auth_key> 为上方密钥值。',
         registeredCount: '已注册节点数',
         copied: '已复制'
+      },
+      deployModal: {
+        title: '父节点部署助手',
+        summaryEyebrow: '部署',
+        summaryTitle: '已为 {count} 个父节点准备部署信息',
+        summaryText: '这里会生成 legacy 父节点的一键部署清单、group_vars 和命令。你输入的 SSH 密码或私钥路径只保留在当前浏览器会话里。',
+        warning: '此助手基于 config/deploy/ansible/nodes/deploy_v2bx.yml 生成内容，适合父节点批量接管。子节点如有单独需求，仍建议按需单独处理。',
+        loading: '正在加载父节点凭据...',
+        empty: '暂无可部署的父节点',
+        commandsLabel: '部署命令',
+        authModes: {
+          password: '密码',
+          key: '私钥'
+        },
+        fields: {
+          panelApiHost: '面板 API 地址',
+          grpcHost: 'gRPC 地址',
+          grpcServerName: 'gRPC ServerName',
+          amd64BinaryPath: 'AMD64 二进制路径',
+          arm64BinaryPath: 'ARM64 二进制路径',
+          coreType: '核心类型',
+          grpcUseTLS: 'gRPC 使用 TLS'
+        },
+        table: {
+          alias: '别名',
+          node: '父节点',
+          sshHost: 'SSH 主机',
+          port: 'SSH 端口',
+          user: 'SSH 用户',
+          arch: '架构',
+          authMode: '认证方式',
+          authValue: '密码 / 私钥路径'
+        },
+        placeholders: {
+          password: 'sshpass 使用的密码',
+          privateKey: '~/.ssh/id_ed25519'
+        }
       },
       protocolModal: {
         title: '协议管理 - {name}',
@@ -2130,6 +2205,29 @@ export default {
           disabled: '禁用'
         },
         empty: '暂无协议配置'
+      },
+      logModal: {
+        title: '运行日志 - {name}',
+        loading: '正在加载节点日志...',
+        empty: '该节点暂无运行日志',
+        filters: {
+          allLevels: '全部级别',
+          sourcePlaceholder: '来源模块',
+          searchPlaceholder: '搜索日志内容 / 来源 / trace id'
+        },
+        levels: {
+          debug: '调试',
+          info: '信息',
+          warning: '警告',
+          error: '错误'
+        },
+        table: {
+          time: '时间',
+          level: '级别',
+          source: '来源',
+          message: '内容',
+          fields: '结构化字段'
+        }
       },
       protocolForm: {
         titleCreate: '添加协议',
@@ -2196,9 +2294,11 @@ export default {
         deleteProtocolConfirm: '确定要删除此协议吗？',
         generateFailed: '生成失败: {message}',
         deleteAuthKeyConfirm: '确定要删除此授权密钥吗？',
+        deployLoadFailed: '加载父节点凭据失败',
         copied: '已复制到剪贴板',
         copyFailed: '复制失败: {message}',
-        invalidJson: 'JSON 格式无效'
+        invalidJson: 'JSON 格式无效',
+        quotaExceededBanner: '有 {count} 个节点本月流量已超限，仅作提示，不会自动限制'
       }
     }
   },
@@ -2244,7 +2344,7 @@ export default {
         port: '465',
         username: 'your@email.com',
         password: '请输入 SMTP 密码',
-        fromName: 'V2Board',
+        fromName: 'AnixOps 工作室',
         fromAddress: 'noreply@example.com'
       }
     },
@@ -2605,7 +2705,11 @@ export default {
       ban: '封禁',
       unban: '解封',
       resetTraffic: '重置流量',
-      resetShort: '重置'
+      resetShort: '重置',
+      copySubscribe: '复制订阅链接',
+      copySubscribeShort: '复制订阅',
+      resetSubscribe: '重置订阅链接 (旧链接失效)',
+      resetSubscribeShort: '重置订阅'
     },
     empty: {
       noData: '暂无数据'
@@ -2747,9 +2851,15 @@ export default {
       grantDeleteFailed: '删除授权失败',
       resetFailed: '重置失败',
       userFlowReset: '用户流量已重置',
-      tunnelFlowReset: '隧道流量已重置'
+      tunnelFlowReset: '隧道流量已重置',
+      noToken: '该用户没有订阅 token',
+      subscribeCopied: '订阅链接已复制到剪贴板',
+      copyFailed: '复制失败',
+      copyManual: '自动复制失败，请手动复制以下订阅链接：',
+      resetSubscribeConfirm: '确认重置用户 {email} 的订阅链接吗？旧链接将立即失效，用户需重新导入。',
+      resetSubscribeSuccess: '订阅链接已重置',
+      resetSubscribeFailed: '重置订阅失败'
     }
   },
   legacy
 }
-

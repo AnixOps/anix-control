@@ -32,7 +32,7 @@ import (
 )
 
 // @title V2Board AnixOps API
-// @version 2.0.2-test.1
+// @version 2.3.1
 // @description V2Board 高性能代理面板管理系统 API 文档
 // @description 支持用户管理、节点管理、订阅系统、支付网关、流量转发等功能
 // @termsOfService https://github.com/anixops/v2board
@@ -70,7 +70,7 @@ const shutdownTimeout = 30 * time.Second
 
 var (
 	configPath string
-	version    = "2.0.2-test.1"
+	version    = "2.3.1"
 	buildTime  = "unknown"
 	commit     = "unknown"
 )
@@ -305,6 +305,7 @@ func main() {
 			&model.OnlineLog{},
 			&model.StatUser{},
 			&model.StatServer{},
+			&model.NodeLog{},
 			// 订阅分组和模板
 			&model.SubscriptionGroup{},
 			&model.SubscriptionTemplate{},
@@ -420,6 +421,14 @@ func main() {
 		worker := service.NewForwardFlowResetWorker(database.Get())
 		if err := worker.RunOnce(time.Now()); err != nil {
 			log.Printf("Initial forward flow reset run failed: %v", err)
+		}
+		worker.Start(context.Background())
+	}()
+
+	go func() {
+		worker := service.NewNodeMonthlyResetWorker(database.Get())
+		if err := worker.RunOnce(time.Now()); err != nil {
+			log.Printf("Initial node monthly reset run failed: %v", err)
 		}
 		worker.Start(context.Background())
 	}()

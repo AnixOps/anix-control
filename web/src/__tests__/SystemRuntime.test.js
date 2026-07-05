@@ -4,6 +4,7 @@ import System from '@/views/admin/System.vue'
 
 const adminApi = vi.hoisted(() => ({
   getSystemConfig: vi.fn(),
+  getSubscriptionSettings: vi.fn(),
   setSystemConfig: vi.fn(),
   getSystemConfigs: vi.fn(),
   getSystemAuditLogs: vi.fn(),
@@ -46,6 +47,7 @@ describe('System runtime configuration', () => {
     }
 
     adminApi.getSystemConfig.mockImplementation((key) => Promise.resolve({ data: configMap[key] ?? { value: '' } }))
+    adminApi.getSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: [] } })
     adminApi.setSystemConfig.mockResolvedValue({})
     adminApi.getSystemConfigs.mockResolvedValue({ data: { list: [] } })
     adminApi.getSystemAuditLogs.mockResolvedValue({ data: { data: { list: [], total: 0, page: 1, page_size: 20 } } })

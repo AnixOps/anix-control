@@ -139,11 +139,57 @@ func (s *NodeService) CreateNode(node *model.Node) error {
 
 // UpdateNode 更新节点
 func (s *NodeService) UpdateNode(id uint, updates map[string]any) error {
+	if raw, ok := updates["parent_id"]; ok {
+		var parentID *uint
+		switch v := raw.(type) {
+		case nil:
+			parentID = nil
+		case float64:
+			p := uint(v)
+			parentID = &p
+		case uint:
+			parentID = &v
+		}
+		if err := s.validateParentID(id, parentID); err != nil {
+			return err
+		}
+	}
+
 	// 清除缓存
 	cache.Delete(CacheKeyNode + string(rune(id)))
 	cache.Delete(CacheKeyNodeList)
 
 	return s.db.Model(&model.Node{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// validateParentID 防止把节点的父节点设置成会形成环的节点(即父节点链条里
+// 已经包含自己), 否则 accumulateTraffic 的 seen 保护只是兜底, 真正的父子
+// 树结构会被破坏。
+func (s *NodeService) validateParentID(nodeID uint, parentID *uint) error {
+	if parentID == nil {
+		return nil
+	}
+	if *parentID == nodeID {
+		return errors.New("节点不能设置自己为父节点")
+	}
+	currentID := *parentID
+	seen := map[uint]bool{nodeID: true}
+	for {
+		if seen[currentID] {
+			return errors.New("该父节点会形成环状引用")
+		}
+		seen[currentID] = true
+
+		var next *uint
+		if err := s.db.Model(&model.Node{}).Where("id = ?", currentID).
+			Select("parent_id").Scan(&next).Error; err != nil {
+			return err
+		}
+		if next == nil {
+			return nil
+		}
+		currentID = *next
+	}
 }
 
 // DeleteNode 删除节点
@@ -278,19 +324,60 @@ func (s *NodeService) Heartbeat(nodeID uint, req *model.NodeHeartbeatRequest) er
 		"status":        model.NodeStatusOnline,
 	}
 
-	// 累加流量
-	if req.Upload > 0 || req.Download > 0 {
-		s.db.Model(&model.Node{}).Where("id = ?", nodeID).
-			UpdateColumn("total_upload", gorm.Expr("total_upload + ?", req.Upload)).
-			UpdateColumn("total_download", gorm.Expr("total_download + ?", req.Download))
-	}
-
 	result := s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(updates)
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
+	}
+
+	// 累加流量: 沿 ParentID 链条逐级累加(转发子节点的流量同时记到每一级上级/落地节点)。
+	// 心跳/在线状态已落库在前面, 这里失败只向调用方返回错误用于记录日志,
+	// 不能反过来让流量累加失败连带把节点判定为离线。
+	if req.Upload > 0 || req.Download > 0 {
+		if err := s.accumulateTraffic(nodeID, req.Upload, req.Download); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// AccumulateTrafficOnly 仅把流量累加到节点自身及其父节点链，不更新心跳指标。
+func (s *NodeService) AccumulateTrafficOnly(nodeID uint, upload, download int64) error {
+	if upload <= 0 && download <= 0 {
+		return nil
+	}
+	return s.accumulateTraffic(nodeID, upload, download)
+}
+
+// accumulateTraffic 把流量增量累加到节点自身及其每一级上级节点 (ParentID 链),
+// 用于"落地节点为根、转发节点为子"的中转链路场景: 转发节点上报的流量既要算在
+// 自己头上, 也要算在链路上每一层父节点头上。seen 用于防止数据被误配成环时死循环。
+func (s *NodeService) accumulateTraffic(nodeID uint, upload, download int64) error {
+	seen := make(map[uint]bool)
+	currentID := nodeID
+	for currentID != 0 && !seen[currentID] {
+		seen[currentID] = true
+
+		if err := s.db.Model(&model.Node{}).Where("id = ?", currentID).
+			UpdateColumn("total_upload", gorm.Expr("total_upload + ?", upload)).
+			UpdateColumn("total_download", gorm.Expr("total_download + ?", download)).
+			UpdateColumn("monthly_upload", gorm.Expr("monthly_upload + ?", upload)).
+			UpdateColumn("monthly_download", gorm.Expr("monthly_download + ?", download)).Error; err != nil {
+			return err
+		}
+
+		var parentID *uint
+		if err := s.db.Model(&model.Node{}).Where("id = ?", currentID).
+			Select("parent_id").Scan(&parentID).Error; err != nil {
+			return err
+		}
+		if parentID == nil {
+			break
+		}
+		currentID = *parentID
 	}
 	return nil
 }

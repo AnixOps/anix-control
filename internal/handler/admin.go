@@ -377,6 +377,37 @@ func (h *AdminHandler) ResetUserTraffic(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "流量重置成功"})
 }
 
+// ResetUserSubscribe godoc
+// @Summary 重置用户订阅
+// @Description 管理员为用户重新生成订阅 token, 旧订阅链接立即失效 (UUID 不变)
+// @Tags 管理端-用户
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "用户ID"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /admin/users/{id}/reset-subscribe [post]
+func (h *AdminHandler) ResetUserSubscribe(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的用户ID"})
+		return
+	}
+
+	newToken, err := h.userService.ResetToken(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "重置订阅失败", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "订阅重置成功",
+		"data":    gin.H{"token": newToken},
+	})
+}
+
 func (h *AdminHandler) ResetCompatFlow(c *gin.Context) {
 	var req compatResetFlowRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

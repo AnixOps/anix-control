@@ -8,6 +8,7 @@ const adminApi = vi.hoisted(() => ({
   createNode: vi.fn(),
   updateNode: vi.fn(),
   deleteNode: vi.fn(),
+  getNodeCredentials: vi.fn(),
   getNodeProtocols: vi.fn(),
   createNodeProtocol: vi.fn(),
   updateNodeProtocol: vi.fn(),

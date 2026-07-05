@@ -5,6 +5,7 @@ import (
 
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -226,6 +227,17 @@ func (s *UserService) Unban(id uint) error {
 // ResetTraffic 重置用户流量
 func (s *UserService) ResetTraffic(id uint) error {
 	return s.Update(id, map[string]any{"u": 0, "d": 0})
+}
+
+// ResetToken 为用户重新生成订阅 token, 让旧的 /s/<token> 链接立即失效。
+// 不改动 UUID, 所以节点端密码/连接不受影响, 用户只需重新导入订阅。
+// 返回新生成的 token。
+func (s *UserService) ResetToken(id uint) (string, error) {
+	newToken := uuid.New().String()
+	if err := s.Update(id, map[string]any{"token": newToken}); err != nil {
+		return "", err
+	}
+	return newToken, nil
 }
 
 // GetStats 获取用户统计

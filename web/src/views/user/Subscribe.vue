@@ -32,6 +32,12 @@
 
       <section class="section-panel links-panel">
         <h3>{{ t('user.subscribe.linksTitle') }}</h3>
+        <div v-if="subscribeDomains.length > 1" class="domain-selector">
+          <label for="subscribe-domain">{{ t('user.subscribe.domainLabel') }}</label>
+          <select id="subscribe-domain" v-model="selectedDomain">
+            <option v-for="domain in subscribeDomains" :key="domain" :value="domain">{{ domain }}</option>
+          </select>
+        </div>
         <div v-for="fmt in formats" :key="fmt.value" class="link-item">
           <label>{{ fmt.label }}:</label>
           <div class="link-row">
@@ -59,7 +65,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { getSubscription } from '@/api/user'
 import { useAppI18n } from '@/composables/useAppI18n'
@@ -71,6 +77,7 @@ const subscription = ref({})
 const showPreview = ref(false)
 const previewContent = ref('')
 const previewFormat = ref('')
+const selectedDomain = ref(typeof window !== 'undefined' ? window.location.host : '')
 
 const token = computed(() => (userStore.userInfo && userStore.userInfo.token) || '')
 const formats = computed(() => ([
@@ -98,13 +105,33 @@ async function load(refresh = false) {
 }
 
 function getSubscribeUrl(format) {
-  const origin = window.location.origin
-  const path = '/s'
+  const origin = `${window.location.protocol}//${selectedDomain.value || window.location.host}`
+  const path = subscribePath.value
   if (!format || format === 'auto' || format === 'ua') {
     return `${origin}${path}/${token.value}`
   }
   return `${origin}${path}/${token.value}?type=${encodeURIComponent(format)}`
 }
+
+const subscribePath = computed(() => subscription.value.subscribe_path || subscription.value.SubscribePath || '/s')
+const subscribeDomains = computed(() => {
+  const configured = subscription.value.subscribe_domains || subscription.value.SubscribeDomains
+  if (Array.isArray(configured) && configured.length > 0) {
+    return configured
+  }
+  return [typeof window !== 'undefined' ? window.location.host : '']
+})
+
+watch(subscribeDomains, (domains) => {
+  if (!Array.isArray(domains) || domains.length === 0) {
+    return
+  }
+  if (domains.includes(selectedDomain.value)) {
+    return
+  }
+  const currentHost = typeof window !== 'undefined' ? window.location.host : ''
+  selectedDomain.value = domains.includes(currentHost) ? currentHost : domains[0]
+}, { immediate: true })
 
 function getFileExt(format) {
   if (format === 'auto' || format === 'ua') return 'txt'
@@ -127,7 +154,13 @@ async function preview(format) {
   previewFormat.value = format
   showPreview.value = true
   try {
-    const res = await fetch(getSubscribeUrl(format))
+    const previewHost = typeof window !== 'undefined' ? window.location.host : selectedDomain.value
+    const previewOrigin = `${window.location.protocol}//${previewHost}`
+    const path = subscribePath.value
+    const previewURL = !format || format === 'auto' || format === 'ua'
+      ? `${previewOrigin}${path}/${token.value}`
+      : `${previewOrigin}${path}/${token.value}?type=${encodeURIComponent(format)}`
+    const res = await fetch(previewURL)
     if (!res.ok) {
       previewContent.value = t('user.subscribe.fetchPreviewFailed')
       return
@@ -215,6 +248,13 @@ onMounted(() => {
 
 .link-item {
   margin-bottom: 12px;
+}
+
+.domain-selector {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  max-width: 360px;
 }
 
 .link-row {

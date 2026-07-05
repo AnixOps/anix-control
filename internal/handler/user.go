@@ -3,21 +3,27 @@ package handler
 import (
 	"net/http"
 
+	"github.com/anixops/v2board/internal/config"
+	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
 // UserHandler 用户处理器
 type UserHandler struct {
-	statsService *service.StatsService
-	userService  *service.UserService
+	statsService  *service.StatsService
+	userService   *service.UserService
+	configService *service.SystemConfigService
+	cfg           *config.Config
 }
 
 // NewUserHandler 创建用户处理器
 func NewUserHandler() *UserHandler {
 	return &UserHandler{
-		statsService: service.NewStatsService(),
-		userService:  service.NewUserService(),
+		statsService:  service.NewStatsService(),
+		userService:   service.NewUserService(),
+		configService: service.NewSystemConfigService(database.Get()),
+		cfg:           config.Get(),
 	}
 }
 
@@ -55,6 +61,10 @@ func (h *UserHandler) GetSubscription(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取订阅信息失败", "error": err.Error()})
 		return
 	}
+
+	settings := service.GetSubscriptionSettings(h.configService, h.cfg)
+	sub.SubscribePath = settings.SubscribePath
+	sub.SubscribeDomains = settings.SubscribeDomains
 
 	c.JSON(http.StatusOK, gin.H{"data": sub})
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ServerService 服务器服务
@@ -164,6 +165,45 @@ func (s *ServerService) BatchRecordTrafficLog(serverType model.ServerType, serve
 	}
 
 	return s.db.CreateInBatches(logs, 100).Error
+}
+
+// RecordServerStat 记录节点汇总统计，用于面板中的服务器统计表。
+// recordType: d=日统计, m=月统计。
+func (s *ServerService) RecordServerStat(serverType model.ServerType, serverID uint, upload, download int64, recordType string, recordAt int64) error {
+	if upload == 0 && download == 0 {
+		return nil
+	}
+	if recordType == "" {
+		recordType = "d"
+	}
+	if recordAt == 0 {
+		recordAt = time.Now().Unix()
+	}
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var stat model.StatServer
+		err := tx.Where("server_id = ? AND server_type = ? AND record_type = ? AND record_at = ?",
+			serverID, string(serverType), recordType, recordAt).First(&stat).Error
+		switch {
+		case err == nil:
+			return tx.Model(&stat).Updates(map[string]any{
+				"u": gorm.Expr("u + ?", upload),
+				"d": gorm.Expr("d + ?", download),
+			}).Error
+		case err == gorm.ErrRecordNotFound:
+			stat = model.StatServer{
+				ServerID:   serverID,
+				ServerType: string(serverType),
+				U:          upload,
+				D:          download,
+				RecordType: recordType,
+				RecordAt:   recordAt,
+			}
+			return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&stat).Error
+		default:
+			return err
+		}
+	})
 }
 
 // UpdateOnlineStatus 更新用户在线状态

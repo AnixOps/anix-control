@@ -20,6 +20,12 @@ func NodeAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey := c.GetHeader("X-API-Key")
 		if apiKey == "" {
+			apiKey = c.Query("api_key")
+		}
+		if apiKey == "" {
+			apiKey = c.Query("token")
+		}
+		if apiKey == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "missing api key",
 			})
@@ -65,7 +71,10 @@ func NodeAuth() gin.HandlerFunc {
 
 		// 刷新节点心跳: 所有 UniProxy 轮询请求 (config/user/push/alive) 都经过本中间件,
 		// 在此统一更新 last_check_at, 避免节点带 node_type 时心跳不更新导致误判离线
-		db.Model(&model.Node{}).Where("id = ?", node.ID).Update("last_check_at", time.Now().Unix())
+		db.Model(&model.Node{}).Where("id = ?", node.ID).Updates(map[string]any{
+			"last_check_at": time.Now().Unix(),
+			"status":        model.NodeStatusOnline,
+		})
 
 		c.Next()
 	}
@@ -78,6 +87,9 @@ func NodeAPIKeyAuth() gin.HandlerFunc {
 		apiKey := c.GetHeader("X-API-Key")
 		if apiKey == "" {
 			apiKey = c.Query("api_key")
+		}
+		if apiKey == "" {
+			apiKey = c.Query("token")
 		}
 		if apiKey == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{

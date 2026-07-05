@@ -146,14 +146,26 @@ func (s *ForwardLatencyProberTestSuite) TestEnumerateTargets_DedupAndThreeSource
 		InIP:     "3.3.3.3",
 		Status:   model.ForwardTunnelStatusActive,
 	}).Error)
-	// regular proxy node (v2_node, V2bX-registered) — online
-	s.Require().NoError(db.Create(&model.Node{
+	// regular parent proxy node (v2_node, V2bX-registered) — online
+	parentProxy := model.Node{
 		Name:   "proxy-a",
 		Host:   "4.4.4.4",
 		Port:   443,
 		APIKey: "probe-test-key-a",
 		Status: model.NodeStatusOnline,
-	}).Error)
+	}
+	s.Require().NoError(db.Create(&parentProxy).Error)
+	// child proxy node must be skipped in the latency trend target set
+	childParentID := parentProxy.ID
+	childProxy := model.Node{
+		Name:     "proxy-child",
+		Host:     "5.5.5.5",
+		Port:     443,
+		APIKey:   "probe-test-key-child",
+		Status:   model.NodeStatusOnline,
+		ParentID: &childParentID,
+	}
+	s.Require().NoError(db.Create(&childProxy).Error)
 	// disabled proxy node must be skipped
 	s.Require().NoError(db.Create(&model.Node{
 		Name:   "proxy-disabled",
@@ -176,8 +188,13 @@ func (s *ForwardLatencyProberTestSuite) TestEnumerateTargets_DedupAndThreeSource
 	assert.Equal(s.T(), 1, byType[model.LatencyTargetTypeForwardNode])
 	// tunnel_node: ingress endpoint = 1
 	assert.Equal(s.T(), 1, byType[model.LatencyTargetTypeTunnelNode])
-	// node: only the non-disabled proxy node = 1
+	// node: only the non-disabled parent proxy node = 1
 	assert.Equal(s.T(), 1, byType[model.LatencyTargetTypeNode])
+	for _, target := range targets {
+		if target.TargetType == model.LatencyTargetTypeNode {
+			assert.NotEqual(s.T(), childProxy.ID, target.TargetID)
+		}
+	}
 }
 
 func (s *ForwardLatencyProberTestSuite) TestCleanup_DeletesExpiredBuckets() {

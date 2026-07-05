@@ -86,6 +86,22 @@ message NodeStatusRequest {
   int64 download = 8;            // 本次上报的下载流量增量
 }
 
+// 节点运行日志
+message NodeLogEntry {
+  string level = 1;              // debug/info/warning/error
+  string source = 2;             // 模块/组件名称
+  string message = 3;            // 日志正文
+  int64 timestamp = 4;           // Unix 时间戳（秒，或毫秒也兼容）
+  string fields_json = 5;        // 结构化附加字段（JSON字符串）
+  string trace_id = 6;           // 关联追踪ID
+}
+
+// 批量节点运行日志上报
+message NodeLogBatchRequest {
+  uint32 node_id = 1;
+  repeated NodeLogEntry logs = 2;
+}
+
 // 节点服务
 service NodeService {
   // 节点注册
@@ -99,6 +115,12 @@ service NodeService {
 
   // 双向流：节点状态实时通信
   rpc StatusStream(stream NodeStatusRequest) returns (stream NodeConfigResponse);
+}
+
+// 节点日志服务
+service NodeLogService {
+  // 批量上报节点运行日志
+  rpc ReportLogs(NodeLogBatchRequest) returns (StatusResponse);
 }
 
 // ==================== 用户服务 ====================

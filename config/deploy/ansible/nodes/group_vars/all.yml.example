@@ -1,0 +1,42 @@
+---
+# ============================================================================
+# 定制 V2bX 节点部署 —— 全局变量样例
+# 复制成 all.yml 后按你的环境修改。all.yml 已被 .gitignore 忽略(含面板地址等)。
+# ============================================================================
+
+# ---- 面板地址(节点通过 gRPC 接入)------------------------------------------
+# HTTP 直连(内网/公网 IP)场景:
+panel_api_host: "http://203.0.113.5:18080"   # V2bX 的 ApiHost
+grpc_host: "203.0.113.5:50051"               # 面板 gRPC 监听地址:端口
+grpc_use_tls: false                          # HTTP 场景 false
+
+# HTTPS 反代(域名)场景改成:
+# panel_api_host: "https://panel.example.com"
+# grpc_host: "panel.example.com:443"
+# grpc_use_tls: true
+# grpc_server_name: "panel.example.com"      # TLS SNI, 不填默认取 grpc_host 的主机名
+
+# ---- 拉取节点 ApiKey 用的面板管理端地址 -------------------------------------
+# playbook 会调 GET {{panel_api_base}}/api/v2/admin/nodes/{{node_id}}/credentials
+# 自动取每个节点的 api_key(需要 admin_token, 见下)。
+panel_api_base: "http://203.0.113.5:18080"
+
+# 管理员 JWT。不要写在这里! 跑 playbook 时用 -e admin_token=xxx 传入,避免落盘。
+# admin_token: ""
+
+# ---- 定制 V2bX 二进制(本地已按目标机架构编译好)----------------------------
+# 不使用官方 install.sh。playbook 把这个二进制推到节点 /usr/local/V2bX/V2bX。
+# 交叉编译示例: cd /home/dev/anixops/V2bX_AnixOps && GOOS=linux GOARCH=amd64 go build -o V2bX
+v2bx_binary_local: "/home/dev/anixops/V2bX_AnixOps/V2bX"
+v2bx_arch: "amd64"          # 仅提示: 二进制架构必须匹配目标机
+
+# 是否顺便推送 geoip/geosite 数据文件(从 V2bX_AnixOps/example/ 取)
+push_geodata: false
+v2bx_geodata_dir: "/home/dev/anixops/V2bX_AnixOps/example"
+
+# ---- V2bX 运行参数(一般不用改)---------------------------------------------
+core_type: "sing"           # sing | xray
+v2bx_log_level: "info"
+listen_ip: "0.0.0.0"
+send_ip: "0.0.0.0"
+cert_mode: "none"           # 落地节点由面板下发协议, 通常 none

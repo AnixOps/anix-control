@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -58,6 +59,13 @@ func (s *ForwardObservabilityService) GetLatencyTrend(targetKey string, from, to
 	if from.IsZero() {
 		from = to.Add(-time.Hour)
 	}
+	isAllowed, err := s.isAllowedLatencyTrendTarget(targetKey)
+	if err != nil {
+		return nil, err
+	}
+	if !isAllowed {
+		return &LatencyTrend{TargetKey: targetKey, Points: []LatencyPoint{}}, nil
+	}
 
 	var rows []model.ForwardLatencyBucket
 	if err := s.db.
@@ -110,8 +118,17 @@ func (s *ForwardObservabilityService) ListTargets() ([]TargetCatalogItem, error)
 	if err != nil {
 		return nil, err
 	}
+	validNodeIDs, err := s.activeParentProxyNodeIDSet()
+	if err != nil {
+		return nil, err
+	}
 	items := make([]TargetCatalogItem, 0, len(latest))
 	for _, b := range latest {
+		if b.TargetType == model.LatencyTargetTypeNode {
+			if !validNodeIDs[b.TargetID] {
+				continue
+			}
+		}
 		items = append(items, TargetCatalogItem{
 			TargetKey:      b.TargetKey,
 			TargetType:     b.TargetType,
@@ -126,6 +143,47 @@ func (s *ForwardObservabilityService) ListTargets() ([]TargetCatalogItem, error)
 		})
 	}
 	return items, nil
+}
+
+func (s *ForwardObservabilityService) activeParentProxyNodeIDSet() (map[uint]bool, error) {
+	var ids []uint
+	if err := s.db.Model(&model.Node{}).
+		Where("status <> ? AND parent_id IS NULL", model.NodeStatusDisabled).
+		Pluck("id", &ids).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[uint]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, nil
+}
+
+func (s *ForwardObservabilityService) isAllowedLatencyTrendTarget(targetKey string) (bool, error) {
+	targetType, targetID, ok := parseLatencyTargetKey(targetKey)
+	if !ok || targetType != model.LatencyTargetTypeNode {
+		return false, nil
+	}
+
+	var count int64
+	if err := s.db.Model(&model.Node{}).
+		Where("id = ? AND status <> ? AND parent_id IS NULL", targetID, model.NodeStatusDisabled).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func parseLatencyTargetKey(targetKey string) (string, uint, bool) {
+	parts := strings.SplitN(targetKey, ":", 3)
+	if len(parts) < 2 {
+		return "", 0, false
+	}
+	id, err := strconv.ParseUint(parts[1], 10, 32)
+	if err != nil {
+		return "", 0, false
+	}
+	return parts[0], uint(id), true
 }
 
 // latestBucketByTarget returns the most recent bucket row for each target_key.

@@ -5,10 +5,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/service"
@@ -48,6 +48,7 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 	if nodeType == "" {
 		config, err = h.buildNewNodeConfig(uint(nodeID), "")
 		if err == nil {
+			_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
 			h.sendConfigResponse(c, config)
 			return
 		}
@@ -60,6 +61,7 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 		} {
 			config, err = h.serverService.BuildNodeConfig(serverType, uint(nodeID))
 			if err == nil {
+				_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
 				h.sendConfigResponse(c, config)
 				return
 			}
@@ -71,6 +73,7 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 
 	config, err = h.buildNewNodeConfig(uint(nodeID), nodeType)
 	if err == nil {
+		_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
 		h.sendConfigResponse(c, config)
 		return
 	}
@@ -82,6 +85,7 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 		return
 	}
 
+	_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
 	h.sendConfigResponse(c, config)
 }
 
@@ -159,102 +163,10 @@ func (h *UniProxyHandler) buildMinimalConfig(config map[string]any, node *model.
 }
 
 func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]any, node *model.Node, protocol *model.NodeProtocol) {
-	nodeType := normalizeNodeType(string(protocol.Type))
-	if nodeType == "" {
-		nodeType = "vless"
-	}
-
-	config["node_type"] = nodeType
-	config["type"] = nodeType
-	config["server_port"] = protocol.Port
-
-	if protocol.Host != nil && *protocol.Host != "" {
-		config["host"] = *protocol.Host
-		config["server_name"] = *protocol.Host
-	} else {
-		config["host"] = node.Host
-		config["server_name"] = node.Host
-	}
-
-	var protocolConfig map[string]any
-	if protocol.Settings != nil && *protocol.Settings != "" {
-		if err := json.Unmarshal([]byte(*protocol.Settings), &protocolConfig); err != nil {
-			log.Printf("invalid protocol settings JSON for node %d: %v", node.ID, err)
-		}
-	}
-
-	config["tls"] = protocol.TLS
-	if protocol.TLSSettings != nil && *protocol.TLSSettings != "" {
-		var tlsSettings map[string]any
-		if err := json.Unmarshal([]byte(*protocol.TLSSettings), &tlsSettings); err != nil {
-			log.Printf("invalid TLS settings JSON for node %d: %v", node.ID, err)
-		} else {
-			config["tls_settings"] = tlsSettings
-		}
-	}
-
-	if protocol.Transport != nil && *protocol.Transport != "" {
-		config["network"] = *protocol.Transport
-	} else {
-		config["network"] = "tcp"
-	}
-	if protocol.TransportSettings != nil && *protocol.TransportSettings != "" {
-		var transportSettings map[string]any
-		if err := json.Unmarshal([]byte(*protocol.TransportSettings), &transportSettings); err != nil {
-			log.Printf("invalid transport settings JSON for node %d: %v", node.ID, err)
-		} else {
-			config["network_settings"] = transportSettings
-		}
-	}
-
-	switch nodeType {
-	case "vless":
-		config["flow"] = getConfigValue(protocolConfig, "flow", "")
-	case "shadowsocks":
-		cipher := getConfigValue(protocolConfig, "cipher", "")
-		if s, ok := cipher.(string); ok && s != "" {
-			config["cipher"] = s
-		} else if method, ok := protocolConfig["method"]; ok {
-			config["cipher"] = method
-		} else {
-			config["cipher"] = "aes-256-gcm"
-		}
-		if serverKey, ok := protocolConfig["server_key"]; ok {
-			config["server_key"] = serverKey
-		}
-	}
-
-	if protocol.TLS == 2 && protocol.RealitySettings != nil && *protocol.RealitySettings != "" {
-		var realitySettings map[string]any
-		if err := json.Unmarshal([]byte(*protocol.RealitySettings), &realitySettings); err == nil {
-			if config["tls_settings"] == nil {
-				config["tls_settings"] = make(map[string]any)
-			}
-			tlsSettings, _ := config["tls_settings"].(map[string]any)
-			if tlsSettings == nil {
-				tlsSettings = make(map[string]any)
-				config["tls_settings"] = tlsSettings
-			}
-			for k, v := range realitySettings {
-				tlsSettings[k] = v
-			}
-		}
-	}
-
-	if protocol.CustomConfig != nil && *protocol.CustomConfig != "" {
-		var customConfig map[string]any
-		if err := json.Unmarshal([]byte(*protocol.CustomConfig), &customConfig); err == nil {
-			for k, v := range customConfig {
-				config[k] = v
-			}
-		}
-	}
-
-	config["send_through"] = "0.0.0.0"
-	config["routes"] = []any{}
-	config["base_config"] = map[string]any{
-		"push_interval": 60,
-		"pull_interval": 60,
+	// 配置构建的唯一真源在 service.BuildNodeProtocolConfig, gRPC 也走同一套,
+	// 避免 SS2022 server_key / reality / tls_settings 等字段两处不一致。
+	for k, v := range service.BuildNodeProtocolConfig(node, protocol) {
+		config[k] = v
 	}
 }
 
@@ -279,16 +191,6 @@ func (h *UniProxyHandler) sendConfigResponse(c *gin.Context, config map[string]a
 
 	c.Header("ETag", etag)
 	c.JSON(http.StatusOK, config)
-}
-
-func getConfigValue(config map[string]any, key string, defaultValue any) any {
-	if config == nil {
-		return defaultValue
-	}
-	if val, ok := config[key]; ok {
-		return val
-	}
-	return defaultValue
 }
 
 func selectNodeProtocol(protocols []model.NodeProtocol, preferredType string) *model.NodeProtocol {
@@ -330,6 +232,7 @@ func (h *UniProxyHandler) GetUsers(c *gin.Context) {
 
 	users, err := h.getNewNodeUsers(uint(nodeID))
 	if err == nil {
+		_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
 		h.sendUsersResponse(c, users)
 		return
 	}
@@ -347,6 +250,7 @@ func (h *UniProxyHandler) GetUsers(c *gin.Context) {
 				for i := range oldUsers {
 					users[i] = &oldUsers[i]
 				}
+				_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
 				h.sendUsersResponse(c, users)
 				return
 			}
@@ -363,6 +267,7 @@ func (h *UniProxyHandler) GetUsers(c *gin.Context) {
 		}
 	}
 
+	_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
 	h.sendUsersResponse(c, users)
 }
 
@@ -486,11 +391,28 @@ func (h *UniProxyHandler) PushTraffic(c *gin.Context) {
 	}
 
 	userTraffics := make(map[uint][2]int64)
+	var totalUpload, totalDownload int64
 	for userID, traffic := range traffics {
-		userTraffics[userID] = [2]int64{
-			int64(float64(traffic[0]) * rate),
-			int64(float64(traffic[1]) * rate),
-		}
+		upload := int64(float64(traffic[0]) * rate)
+		download := int64(float64(traffic[1]) * rate)
+		userTraffics[userID] = [2]int64{upload, download}
+		totalUpload += upload
+		totalDownload += download
+	}
+
+	if err := h.nodeService.AccumulateTrafficOnly(uint(nodeID), totalUpload, totalDownload); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update node traffic"})
+		return
+	}
+
+	now := time.Now()
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).Unix()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local).Unix()
+	if err := h.serverService.RecordServerStat(serverType, uint(nodeID), totalUpload, totalDownload, "d", dayStart); err != nil {
+		fmt.Printf("[UniProxy] failed to record daily server stat: %v\n", err)
+	}
+	if err := h.serverService.RecordServerStat(serverType, uint(nodeID), totalUpload, totalDownload, "m", monthStart); err != nil {
+		fmt.Printf("[UniProxy] failed to record monthly server stat: %v\n", err)
 	}
 
 	if err := h.userService.BatchUpdateTraffic(userTraffics); err != nil {

@@ -161,7 +161,7 @@ function buildWsUrl() {
   const token = getToken()
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const host = window.location.host
-  return `${proto}//${host}/admin/ws/monitor?token=${encodeURIComponent(token)}`
+  return `${proto}//${host}/api/v2/admin/ws/monitor?token=${encodeURIComponent(token)}`
 }
 
 function connect() {

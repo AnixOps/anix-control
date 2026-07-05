@@ -81,6 +81,34 @@ func TestNodeAuth_ValidAPIKey(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestNodeAuth_LegacyTokenQuery(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	nodeAPIKey := "legacy-token-query-key"
+	node := &model.Node{
+		Name:       "Legacy Token Node",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: sha256Hash(nodeAPIKey),
+		Status:     model.NodeStatusOnline,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID))+"&token="+nodeAPIKey, nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 // TestNodeAuth_UpdatesHeartbeat 验证认证通过后会刷新 last_check_at,
 // 修复节点带 node_type 轮询时心跳不更新导致面板误判离线的问题
 func TestNodeAuth_UpdatesHeartbeat(t *testing.T) {
@@ -119,6 +147,7 @@ func TestNodeAuth_UpdatesHeartbeat(t *testing.T) {
 	require.NoError(t, database.GetDB().First(&updated, node.ID).Error)
 	require.NotNil(t, updated.LastCheckAt)
 	assert.GreaterOrEqual(t, *updated.LastCheckAt, before)
+	assert.Equal(t, model.NodeStatusOnline, updated.Status)
 	assert.True(t, updated.IsOnline(), "节点应被判定为在线")
 }
 

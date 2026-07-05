@@ -636,15 +636,16 @@ func TestQuantumultXFormatter_Properties(t *testing.T) {
 
 func TestGenerateSS2022UserKey(t *testing.T) {
 	uuid := "12345678-1234-5678-1234-567812345678"
-	cipher := "2022-blake3-aes-256-gcm"
 
-	key := generateSS2022UserKey(uuid, cipher)
-	assert.NotEmpty(t, key)
+	// 必须与节点端 V2bX (core/xray/ss.go) 完全一致:
+	//   base64.StdEncoding(uuid[:keyLen])   —— 原始 UUID 带横线, 不去横线
+	// aes-256-gcm → 前 32 字节
+	key := generateSS2022UserKey(uuid, "2022-blake3-aes-256-gcm")
+	assert.Equal(t, "MTIzNDU2NzgtMTIzNC01Njc4LTEyMzQtNTY3ODEyMzQ=", key)
 
-	// Test 128-bit cipher
-	cipher128 := "2022-blake3-aes-128-gcm"
-	key128 := generateSS2022UserKey(uuid, cipher128)
-	assert.NotEmpty(t, key128)
+	// aes-128-gcm → 前 16 字节
+	key128 := generateSS2022UserKey(uuid, "2022-blake3-aes-128-gcm")
+	assert.Equal(t, "MTIzNDU2NzgtMTIzNC01Ng==", key128)
 }
 
 func TestBoolToTLS(t *testing.T) {

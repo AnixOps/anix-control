@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -208,40 +209,58 @@ func (s *SubscriptionService) getUserByToken(token string) (*model.User, error) 
 func (s *SubscriptionService) getUserSubscriptionGroups(user *model.User) ([]*model.SubscriptionGroup, error) {
 	var groups []*model.SubscriptionGroup
 	now := time.Now().Unix()
+	groupIDs := make([]uint, 0)
+	groupSet := make(map[uint]struct{})
+
+	addGroupID := func(groupID uint) {
+		if groupID == 0 {
+			return
+		}
+		if _, exists := groupSet[groupID]; exists {
+			return
+		}
+		groupSet[groupID] = struct{}{}
+		groupIDs = append(groupIDs, groupID)
+	}
 
 	// 1. 通过用户直接关联获取
 	var userGroups []model.UserSubscriptionGroup
 	s.db.Where("user_id = ? AND (expire_at IS NULL OR expire_at > ?)", user.ID, now).Find(&userGroups)
 
-	groupIDs := make([]uint, 0)
 	for _, ug := range userGroups {
-		groupIDs = append(groupIDs, ug.GroupID)
+		addGroupID(ug.GroupID)
 	}
 
-	// 2. 通过套餐关联获取
+	// 2. 兼容旧版单分组字段。很多历史数据只写入 user.group_id / plan.group_id，
+	// 没有同步到 v2_user_subscription_group / v2_plan_subscription_group。
+	if user.GroupID != nil {
+		addGroupID(*user.GroupID)
+	}
+
+	// 3. 通过套餐关联获取
 	if user.PlanID != nil {
 		var planGroups []model.PlanSubscriptionGroup
 		s.db.Where("plan_id = ?", *user.PlanID).Find(&planGroups)
 		for _, pg := range planGroups {
-			exists := false
-			for _, gid := range groupIDs {
-				if gid == pg.GroupID {
-					exists = true
-					break
-				}
-			}
-			if !exists {
-				groupIDs = append(groupIDs, pg.GroupID)
+			addGroupID(pg.GroupID)
+		}
+
+		if user.Plan != nil {
+			addGroupID(user.Plan.GroupID)
+		} else {
+			var plan model.Plan
+			if err := s.db.Select("group_id").First(&plan, *user.PlanID).Error; err == nil {
+				addGroupID(plan.GroupID)
 			}
 		}
 	}
 
-	// 3. 查询分组详情
+	// 4. 查询分组详情
 	if len(groupIDs) > 0 {
 		s.db.Where("id IN ? AND enable = 1", groupIDs).Order("priority DESC, id ASC").Find(&groups)
 	}
 
-	// 4. 如果没有分组，检查是否有默认分组
+	// 5. 如果没有分组，检查是否有默认分组
 	if len(groups) == 0 {
 		var defaultGroup model.SubscriptionGroup
 		if err := s.db.Where("name = ? AND enable = 1", "default").First(&defaultGroup).Error; err == nil {
@@ -663,9 +682,47 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 		if sk, ok := parsed.Settings["server_key"].(string); ok && sk != "" {
 			parsed.ServerKey = sk
 		}
+
+		// SS2022 (2022-blake3-*): 老 XBoard/V2bX 从节点 created_at 派生 server_key,
+		// 老库从不存储它。若 Settings 里没有显式给出, 就按同款算法补上, 否则订阅端
+		// 会退回普通 SS 明文格式导致客户端连不上。子节点(中转)用父节点的 created_at,
+		// 与 XBoard `Server::generateServerPassword` 一致。
+		if parsed.ServerKey == "" && strings.HasPrefix(parsed.Cipher, "2022-blake3-") {
+			createdAt := node.CreatedAt
+			if node.ParentID != nil {
+				var parentCreatedAt time.Time
+				if err := s.db.Model(&model.Node{}).Where("id = ?", *node.ParentID).
+					Select("created_at").Scan(&parentCreatedAt).Error; err == nil && !parentCreatedAt.IsZero() {
+					createdAt = parentCreatedAt
+				}
+			}
+			parsed.ServerKey = DeriveSS2022ServerKey(createdAt, parsed.Cipher)
+		}
 	}
 
 	return parsed
+}
+
+// ss2022KeyLen 返回 SS2022 cipher 对应的密钥字节长度 (aes-128→16, aes-256→32)。
+func ss2022KeyLen(cipher string) int {
+	if strings.Contains(cipher, "128") {
+		return 16
+	}
+	return 32
+}
+
+// DeriveSS2022ServerKey 复刻老 XBoard `Helper::getServerKey($timestamp, $len)`:
+// base64(substr(md5(unix秒的十进制字符串), 0, len))。md5 输出取 hex 字符串的前
+// len 个字符(不是字节), 再 base64。节点端 V2bX 用相同的 server_key, 两边必须一致。
+// 导出供 handler 层 (UniProxy 节点拉配置) 复用, 保证订阅端和节点端算出的值一致。
+func DeriveSS2022ServerKey(createdAt time.Time, cipher string) string {
+	keyLen := ss2022KeyLen(cipher)
+	sum := md5.Sum([]byte(strconv.FormatInt(createdAt.Unix(), 10)))
+	hexStr := hex.EncodeToString(sum[:]) // 32 位 hex 字符串
+	if keyLen > len(hexStr) {
+		keyLen = len(hexStr)
+	}
+	return base64.StdEncoding.EncodeToString([]byte(hexStr[:keyLen]))
 }
 
 // ============ 管理员方法 ============

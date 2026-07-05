@@ -91,6 +91,7 @@ const ranking = ref([])
 const chartEl = ref(null)
 let chart = null
 let echartsLib = null
+let isActive = true
 
 const hasData = computed(() => points.value.length > 0)
 const totalTraffic = computed(() => points.value.reduce((sum, p) => sum + (p.traffic || 0), 0))
@@ -133,6 +134,7 @@ async function ensureECharts() {
 async function renderChart() {
   if (!chartEl.value || !points.value.length) return
   const echarts = await ensureECharts()
+  if (!isActive || !chartEl.value || !chartEl.value.isConnected) return
   if (!chart) {
     chart = echarts.init(chartEl.value)
   }
@@ -225,6 +227,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  isActive = false
   window.removeEventListener('resize', handleResize)
   if (chart) {
     chart.dispose()

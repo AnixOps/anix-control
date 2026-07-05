@@ -103,6 +103,13 @@ export function resetUserTraffic(id) {
   })
 }
 
+export function resetUserSubscribe(id) {
+  return request({
+    url: `/admin/users/${id}/reset-subscribe`,
+    method: 'post'
+  })
+}
+
 export function resetUserTunnelTraffic(id) {
   return request({
     url: '/user/reset',
@@ -173,9 +180,24 @@ export function getNodeStats() {
   })
 }
 
+export function getNodeLogs(id, params) {
+  return request({
+    url: `/admin/nodes/${id}/logs`,
+    method: 'get',
+    params
+  })
+}
+
 export function getNode(id) {
   return request({
     url: `/admin/nodes/${id}`,
+    method: 'get'
+  })
+}
+
+export function getNodeCredentials(id) {
+  return request({
+    url: `/admin/nodes/${id}/credentials`,
     method: 'get'
   })
 }
@@ -1239,6 +1261,13 @@ export function getSystemConfig(key) {
   })
 }
 
+export function getSubscriptionSettings() {
+  return request({
+    url: '/admin/system/subscription-settings',
+    method: 'get'
+  })
+}
+
 export function setSystemConfig(key, data) {
   return request({
     url: `/admin/system/configs/${key}`,
@@ -1432,8 +1461,10 @@ export default {
   cancelOrder,
   getNodes,
   getNodeStats,
+  getNodeLogs,
   createNode,
   getNode,
+  getNodeCredentials,
   updateNode,
   deleteNode,
   syncNodeProtocol,
@@ -1568,6 +1599,7 @@ export default {
   processWithdrawal,
   getSystemConfigs,
   getSystemConfig,
+  getSubscriptionSettings,
   setSystemConfig,
   deleteSystemConfig,
   getSystemAuditLogs,
@@ -1609,4 +1641,3 @@ export function testForwardConnection(data) {
     data
   })
 }
-

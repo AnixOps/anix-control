@@ -49,6 +49,7 @@ func (s *GRPCTestSuite) SetupSuite() {
 		&model.NodeProtocol{},
 		&model.AuthorizedKey{},
 		&model.TrafficLog{},
+		&model.StatServer{},
 	)
 
 	// 启动 gRPC 服务器
@@ -202,6 +203,16 @@ func (s *GRPCTestSuite) TestReportTraffic_WritesTrafficLog() {
 	assert.Len(s.T(), logs, 1)
 	assert.Equal(s.T(), int64(1024), logs[0].U)
 	assert.Equal(s.T(), int64(2048), logs[0].D)
+
+	// 验证节点自身总流量也会被回写，供面板统计和流量监控使用
+	var updated model.Node
+	assert.NoError(s.T(), db.First(&updated, node.ID).Error)
+	assert.Equal(s.T(), int64(1024), updated.TotalUpload)
+	assert.Equal(s.T(), int64(2048), updated.TotalDownload)
+
+	var stats []model.StatServer
+	assert.NoError(s.T(), db.Where("server_id = ?", node.ID).Find(&stats).Error)
+	assert.Len(s.T(), stats, 2)
 }
 
 // TestReportOnline_NodeNotFound 测试上报在线状态（节点不存在）
@@ -608,8 +619,8 @@ func (s *GRPCIntegrationSuite) TestTrafficReportWithRate() {
 	// 上报流量 (上传 1GB, 下载 2GB)
 	traffics := make(map[uint32]*pb.TrafficData)
 	traffics[uint32(user.ID)] = &pb.TrafficData{
-		Upload:   1073741824,  // 1GB
-		Download: 2147483648,  // 2GB
+		Upload:   1073741824, // 1GB
+		Download: 2147483648, // 2GB
 	}
 
 	req := &pb.TrafficReportRequest{
@@ -1147,8 +1158,8 @@ func (s *GRPCStreamSuite) TestUserChangesStream() {
 	notification := &pb.UserChangeNotification{
 		Type: pb.UserChangeNotification_CREATED,
 		User: &pb.UserInfo{
-			Id:     1,
-			Uuid:   uuid.New().String(),
+			Id:   1,
+			Uuid: uuid.New().String(),
 		},
 		Timestamp: time.Now().Unix(),
 	}
