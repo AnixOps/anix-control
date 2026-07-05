@@ -68,19 +68,21 @@ type DashboardStats struct {
 
 // UserSubscription 用户订阅详情
 type UserSubscription struct {
-	UserID          uint      `json:"user_id"`
-	Email           string    `json:"email"`
-	PlanID          *uint     `json:"plan_id"`
-	PlanName        string    `json:"plan_name"`
-	TransferEnable  int64     `json:"transfer_enable"`  // 总流量 (字节)
-	UsedTraffic     int64     `json:"used_traffic"`     // 已用流量 (字节)
-	UploadTraffic   int64     `json:"upload_traffic"`   // 上传流量 (字节)
-	DownloadTraffic int64     `json:"download_traffic"` // 下载流量 (字节)
-	ExpiredAt       int64     `json:"expired_at"`       // 到期时间
-	IsExpired       bool      `json:"is_expired"`
-	DaysRemaining   int       `json:"days_remaining"`
-	UsagePercent    float64   `json:"usage_percent"`
-	CachedAt        time.Time `json:"cached_at"`
+	UserID           uint      `json:"user_id"`
+	Email            string    `json:"email"`
+	PlanID           *uint     `json:"plan_id"`
+	PlanName         string    `json:"plan_name"`
+	TransferEnable   int64     `json:"transfer_enable"`  // 总流量 (字节)
+	UsedTraffic      int64     `json:"used_traffic"`     // 已用流量 (字节)
+	UploadTraffic    int64     `json:"upload_traffic"`   // 上传流量 (字节)
+	DownloadTraffic  int64     `json:"download_traffic"` // 下载流量 (字节)
+	ExpiredAt        int64     `json:"expired_at"`       // 到期时间
+	IsExpired        bool      `json:"is_expired"`
+	DaysRemaining    int       `json:"days_remaining"`
+	UsagePercent     float64   `json:"usage_percent"`
+	SubscribePath    string    `json:"subscribe_path,omitempty"`
+	SubscribeDomains []string  `json:"subscribe_domains,omitempty"`
+	CachedAt         time.Time `json:"cached_at"`
 }
 
 var statsServiceInstance *StatsService

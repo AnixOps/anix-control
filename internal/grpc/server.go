@@ -38,10 +38,10 @@ type ServerConfig struct {
 // DefaultServerConfig 默认配置
 func DefaultServerConfig() *ServerConfig {
 	return &ServerConfig{
-		Host:             "0.0.0.0",
-		Port:             50051,
-		KeepaliveTime:    30 * time.Second,
-		KeepaliveTimeout: 10 * time.Second,
+		Host:              "0.0.0.0",
+		Port:              50051,
+		KeepaliveTime:     30 * time.Second,
+		KeepaliveTimeout:  10 * time.Second,
 		MaxConnectionIdle: 15 * time.Minute,
 		MaxConnectionAge:  30 * time.Minute,
 	}
@@ -113,6 +113,7 @@ func (s *Server) Start() error {
 
 	// 注册服务
 	pb.RegisterNodeServiceServer(s.grpcServer, NewNodeGRPCServer())
+	RegisterNodeLogServiceServer(s.grpcServer, NewNodeLogGRPCServer())
 	pb.RegisterUserServiceServer(s.grpcServer, NewUserGRPCServer())
 	pb.RegisterTrafficServiceServer(s.grpcServer, NewTrafficGRPCServer())
 	pb.RegisterHealthServiceServer(s.grpcServer, NewHealthGRPCServer())

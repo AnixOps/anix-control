@@ -1,0 +1,143 @@
+- name: Deploy custom V2bX node (gRPC into panel)
+  hosts: v2bx_nodes
+  gather_facts: false
+  become: true
+  vars:
+    v2bx_install_dir: /usr/local/V2bX
+    v2bx_config_dir: /etc/V2bX
+    v2bx_service_name: V2bX
+
+  pre_tasks:
+    - name: Validate node_id is set
+      ansible.builtin.assert:
+        that:
+          - node_id is defined
+          - node_id | string | length > 0
+        fail_msg: "每台节点必须在 inventory 里设置 node_id=<面板节点ID>"
+
+    # api_key 优先用 inventory 手填的; 否则用 admin_token 从面板拉取。
+    - name: Fetch node api_key from panel (when not provided in inventory)
+      ansible.builtin.uri:
+        url: "{{ panel_api_base }}/api/v2/admin/nodes/{{ node_id }}/credentials"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ admin_token }}"
+        return_content: true
+        status_code: 200
+      delegate_to: localhost
+      become: false
+      run_once: false
+      register: cred_resp
+      when: api_key is not defined or (api_key | default('') | length == 0)
+
+    - name: Use api_key from inventory when provided
+      ansible.builtin.set_fact:
+        node_api_key: "{{ api_key }}"
+      when: api_key is defined and (api_key | length > 0)
+
+    - name: Use api_key fetched from panel
+      ansible.builtin.set_fact:
+        node_api_key: "{{ cred_resp.json.data.api_key }}"
+      when:
+        - api_key is not defined or (api_key | default('') | length == 0)
+        - cred_resp is defined
+        - cred_resp.json is defined
+
+    - name: Fail if api_key could not be resolved
+      ansible.builtin.assert:
+        that:
+          - node_api_key is defined
+          - node_api_key | length > 0
+        fail_msg: "无法取得 node {{ node_id }} 的 api_key: 请检查 admin_token 或在 inventory 手填 api_key="
+
+  tasks:
+    - name: Ensure V2bX directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ v2bx_install_dir }}"
+        - "{{ v2bx_config_dir }}"
+
+    - name: Push custom V2bX binary
+      ansible.builtin.copy:
+        src: "{{ v2bx_binary_local }}"
+        dest: "{{ v2bx_install_dir }}/V2bX"
+        mode: "0755"
+      notify: Restart V2bX
+
+    - name: Push geodata files (optional)
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ v2bx_config_dir }}/"
+        mode: "0644"
+      loop:
+        - "{{ v2bx_geodata_dir }}/geoip.dat"
+        - "{{ v2bx_geodata_dir }}/geosite.dat"
+      when: push_geodata | default(false) | bool
+
+    - name: Render V2bX config.json
+      ansible.builtin.template:
+        src: templates/config.json.j2
+        dest: "{{ v2bx_config_dir }}/config.json"
+        mode: "0600"
+      notify: Restart V2bX
+
+    - name: Install systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/{{ v2bx_service_name }}.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=V2bX Service
+          After=network.target nss-lookup.target
+          Wants=network.target
+
+          [Service]
+          Type=simple
+          ExecStart={{ v2bx_install_dir }}/V2bX server -c {{ v2bx_config_dir }}/config.json
+          Restart=on-failure
+          RestartSec=5
+          LimitNOFILE=1048576
+
+          [Install]
+          WantedBy=multi-user.target
+      notify:
+        - Reload systemd
+        - Restart V2bX
+
+    - name: Enable and start V2bX
+      ansible.builtin.systemd:
+        name: "{{ v2bx_service_name }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Flush handlers so restart happens before verification
+      ansible.builtin.meta: flush_handlers
+
+    - name: Verify V2bX is active
+      ansible.builtin.command: systemctl is-active {{ v2bx_service_name }}
+      register: v2bx_active
+      changed_when: false
+      failed_when: v2bx_active.stdout != "active"
+
+    - name: Show recent V2bX logs
+      ansible.builtin.command: journalctl -u {{ v2bx_service_name }} -n 20 --no-pager
+      register: v2bx_logs
+      changed_when: false
+
+    - name: Print recent logs
+      ansible.builtin.debug:
+        var: v2bx_logs.stdout_lines
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Restart V2bX
+      ansible.builtin.systemd:
+        name: "{{ v2bx_service_name }}"
+        state: restarted

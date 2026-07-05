@@ -406,21 +406,24 @@ func (f *V2RayFormatter) formatShadowsocks(node *model.ParsedNode, ctx *model.Te
 		userInfo, node.Server, node.Port, url.QueryEscape(node.Name)), nil
 }
 
-// generateSS2022UserKey 生成 SS2022 用户密钥
+// generateSS2022UserKey 生成 SS2022 用户密钥。
+// 必须与节点端 V2bX (core/xray/ss.go) 完全一致:
+//
+//	base64.StdEncoding(uuid[:keyLen])
+//
+// 注意: 用的是原始 UUID (带横线), 直接按字节截取前 keyLen 个, 不能去掉横线,
+// 否则和节点端算出的 user_key 不一致, 客户端会连接失败。
 func generateSS2022UserKey(uuid string, cipher string) string {
-	// SS2022 密钥长度要求
 	keyLen := 32 // 默认 256 位
 	if strings.Contains(cipher, "128") {
 		keyLen = 16
 	}
 
-	// 使用 UUID 前 N 个字符
-	source := strings.ReplaceAll(uuid, "-", "")
-	if len(source) > keyLen {
-		source = source[:keyLen]
+	if len(uuid) < keyLen {
+		// UUID 正常是 36 字符, 理论上不会走到这里; 兜底避免越界。
+		return base64.StdEncoding.EncodeToString([]byte(uuid))
 	}
-
-	return base64.StdEncoding.EncodeToString([]byte(source))
+	return base64.StdEncoding.EncodeToString([]byte(uuid[:keyLen]))
 }
 
 // formatHysteria2 格式化 Hysteria2 链接

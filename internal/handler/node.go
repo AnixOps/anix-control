@@ -12,13 +12,15 @@ import (
 
 // NodeHandler 节点处理器
 type NodeHandler struct {
-	nodeService *service.NodeService
+	nodeService    *service.NodeService
+	nodeLogService *service.NodeLogService
 }
 
 // NewNodeHandler 创建节点处理器
 func NewNodeHandler() *NodeHandler {
 	return &NodeHandler{
-		nodeService: service.NewNodeService(),
+		nodeService:    service.NewNodeService(),
+		nodeLogService: service.NewNodeLogService(),
 	}
 }
 
@@ -177,6 +179,45 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": node})
 }
 
+// GetNodeCredentials godoc
+// @Summary 获取节点凭证
+// @Description 管理员获取指定节点的 api_key / secret, 用于节点端 (V2bX) 对接配置。
+// @Description Node.APIKey/Secret 在普通序列化里是隐藏字段 (json:"-"), 此接口显式返回,
+// @Description 仅限管理员, 供 Ansible 等部署工具自动拉取节点凭证。
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "节点ID"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Router /admin/nodes/{id}/credentials [get]
+func (h *NodeHandler) GetNodeCredentials(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的节点ID"})
+		return
+	}
+
+	node, err := h.nodeService.GetNode(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"node_id": node.ID,
+			"name":    node.Name,
+			"host":    node.Host,
+			"port":    node.Port,
+			"api_key": node.APIKey,
+			"secret":  node.Secret,
+		},
+	})
+}
+
 // CreateNode godoc
 // @Summary 创建节点
 // @Description 管理员手动创建节点
@@ -296,6 +337,87 @@ func (h *NodeHandler) GetNodeStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": stats})
+}
+
+// GetNodeLogs godoc
+// @Summary 获取节点运行日志
+// @Description 管理员获取指定节点通过 gRPC 上报的运行日志
+// @Tags 管理端-节点
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "节点ID"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
+// @Param level query string false "日志级别"
+// @Param source query string false "日志来源"
+// @Param search query string false "关键词"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /admin/nodes/{id}/logs [get]
+func (h *NodeHandler) GetNodeLogs(c *gin.Context) {
+	nodeID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的节点ID"})
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = ClampPagination(page, pageSize)
+
+	if _, err := h.nodeService.GetNode(uint(nodeID)); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
+		return
+	}
+
+	result, err := h.nodeLogService.GetLogs(service.NodeLogListParams{
+		NodeID:   uint(nodeID),
+		Page:     page,
+		PageSize: pageSize,
+		Level:    c.Query("level"),
+		Source:   c.Query("source"),
+		Search:   c.Query("search"),
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取节点日志失败", "error": err.Error()})
+		return
+	}
+
+	list := make([]gin.H, 0, len(result.List))
+	for _, item := range result.List {
+		var fields any
+		if item.FieldsJSON != "" {
+			_ = json.Unmarshal([]byte(item.FieldsJSON), &fields)
+		}
+
+		list = append(list, gin.H{
+			"id":          item.ID,
+			"node_id":     item.NodeID,
+			"level":       item.Level,
+			"source":      item.Source,
+			"message":     item.Message,
+			"trace_id":    item.TraceID,
+			"fields":      fields,
+			"fields_json": item.FieldsJSON,
+			"logged_at":   item.LoggedAt,
+			"created_at":  item.CreatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": gin.H{
+			"list":      list,
+			"total":     result.Total,
+			"page":      page,
+			"page_size": pageSize,
+		},
+		"list":      list,
+		"total":     result.Total,
+		"page":      page,
+		"page_size": pageSize,
+	})
 }
 
 // ========== 高级配置 (RawConfig) ==========

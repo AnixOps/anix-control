@@ -68,6 +68,8 @@
               <button class="btn btn-sm" @click="openTunnelModal(user)" :title="t('adminUsers.actions.manageTunnel')">{{ t('adminUsers.actions.manageTunnelShort') }}</button>
               <button v-if="user.banned === 0" class="btn btn-sm" @click="handleBan(user)" :title="t('adminUsers.actions.ban')">{{ t('adminUsers.actions.ban') }}</button>
               <button v-else class="btn btn-sm" @click="handleUnban(user)" :title="t('adminUsers.actions.unban')">{{ t('adminUsers.actions.unban') }}</button>
+              <button class="btn btn-sm" @click="copySubscribe(user)" :title="t('adminUsers.actions.copySubscribe')">{{ t('adminUsers.actions.copySubscribeShort') }}</button>
+              <button class="btn btn-sm" @click="resetSubscribe(user)" :title="t('adminUsers.actions.resetSubscribe')">{{ t('adminUsers.actions.resetSubscribeShort') }}</button>
               <button class="btn btn-sm" @click="openResetUserDialog(user)" :title="t('adminUsers.actions.resetTraffic')">{{ t('adminUsers.actions.resetShort') }}</button>
             </td>
           </tr>
@@ -202,7 +204,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import {
   assignAdminUserTunnel, banUser, createUser, getAdminUserTunnelList, getForwardTunnels, getSpeedLimitList,
-  getUserList, getUserStats, removeAdminUserTunnel, resetUserTraffic, resetUserTunnelTraffic,
+  getSubscriptionSettings,
+  getUserList, getUserStats, removeAdminUserTunnel, resetUserSubscribe, resetUserTraffic, resetUserTunnelTraffic,
   unbanUser, updateAdminUserTunnel, updateUser
 } from '@/api/admin'
 import { getSubscriptionGroups } from '@/api/admin'
@@ -220,6 +223,7 @@ const editingUser = ref({})
 const showCreateModal = ref(false)
 const createLoading = ref(false)
 const createError = ref('')
+const subscriptionSettings = ref({ subscribe_path: '/s', subscribe_domains: [] })
 const newBlankUser = () => ({ email: '', password: '', is_admin: 0, flowResetTime: 0, group_id: null, transfer_enable: 0, speed_limit: 0, device_limit: 0 })
 const newUser = ref(newBlankUser())
 const showTunnelModal = ref(false)
@@ -347,6 +351,77 @@ const openResetUserDialog = (user) => {
   resetFlowUsedFlow.value = formatBytes((user.u || 0) + (user.d || 0))
   resetFlowQuota.value = user.transfer_enable ? formatBytes(user.transfer_enable) : ''
   showResetFlowModal.value = true
+}
+
+// 拼某用户的订阅链接。订阅路径固定为 /s (与 user/Subscribe.vue 一致)。
+const preferredSubscribeOrigin = computed(() => {
+  const domains = Array.isArray(subscriptionSettings.value.subscribe_domains) ? subscriptionSettings.value.subscribe_domains : []
+  const currentHost = window.location.host
+  const host = domains.includes(currentHost) ? currentHost : (domains[0] || currentHost)
+  return `${window.location.protocol}//${host}`
+})
+
+const buildSubscribeUrl = (user) => `${preferredSubscribeOrigin.value}${subscriptionSettings.value.subscribe_path || '/s'}/${user.token}`
+
+// 复制到剪贴板。navigator.clipboard 只在 HTTPS/localhost 可用, HTTP+IP 直连时
+// 用隐藏 textarea + execCommand('copy') 兜底, 让明文 HTTP 也能复制。
+const copyToClipboard = async (text) => {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // 落到下面的兜底
+    }
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.top = '-9999px'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
+
+const copySubscribe = async (user) => {
+  if (!user.token) {
+    notify(t('adminUsers.messages.noToken'))
+    return
+  }
+  const url = buildSubscribeUrl(user)
+  if (await copyToClipboard(url)) {
+    notify(t('adminUsers.messages.subscribeCopied'))
+  } else {
+    // 兜底也失败: 把链接直接弹出来让用户手动复制
+    window.prompt(t('adminUsers.messages.copyManual'), url)
+  }
+}
+
+const loadSubscriptionSettings = async () => {
+  try {
+    const res = await getSubscriptionSettings()
+    subscriptionSettings.value = res.data || { subscribe_path: '/s', subscribe_domains: [] }
+  } catch {
+    subscriptionSettings.value = { subscribe_path: '/s', subscribe_domains: [] }
+  }
+}
+
+const resetSubscribe = async (user) => {
+  if (!confirm(t('adminUsers.messages.resetSubscribeConfirm', { email: user.email }))) return
+  try {
+    await resetUserSubscribe(user.id)
+    notify(t('adminUsers.messages.resetSubscribeSuccess'))
+    await fetchUsers()
+  } catch (err) {
+    notify(err.response?.data?.message || err.message || t('adminUsers.messages.resetSubscribeFailed'))
+  }
 }
 
 const normalizeSpeedLimitList = items => Array.isArray(items) ? items.map(item => {
@@ -537,7 +612,7 @@ const formatBytes = (bytes) => {
 const formatDate = (timestamp) => (!timestamp ? t('adminUsers.labels.permanent') : (i18nFormatDate(Number(timestamp) * 1000) || '-'))
 const formatDateTime = (datetime) => (!datetime ? '-' : (i18nFormatDateTime(datetime) || '-'))
 
-onMounted(() => { fetchUsers(); fetchStats(); loadSubscriptionGroups() })
+onMounted(() => { fetchUsers(); fetchStats(); loadSubscriptionGroups(); loadSubscriptionSettings() })
 
 const loadSubscriptionGroups = async () => {
   try {

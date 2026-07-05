@@ -1,0 +1,46 @@
+- name: Bootstrap SSH key onto node (first-time password login → key auth)
+  hosts: v2bx_nodes
+  gather_facts: false
+  become: false
+  vars:
+    # 要安装到节点的公钥(默认你的 ed25519 公钥)。跑时可 -e ssh_pubkey_file=... 覆盖。
+    ssh_pubkey_file: "{{ lookup('env', 'HOME') }}/.ssh/id_ed25519.pub"
+
+  tasks:
+    - name: Ensure public key file exists locally
+      ansible.builtin.stat:
+        path: "{{ ssh_pubkey_file }}"
+      delegate_to: localhost
+      register: pubkey_stat
+
+    - name: Fail if public key missing
+      ansible.builtin.assert:
+        that: pubkey_stat.stat.exists
+        fail_msg: >-
+          找不到公钥 {{ ssh_pubkey_file }}。先生成: ssh-keygen -t ed25519,
+          或用 -e ssh_pubkey_file=/path/to/your.pub 指定。
+
+    # 用内置模块装公钥, 不依赖 ansible.posix 集合。
+    - name: Ensure ~/.ssh exists
+      ansible.builtin.file:
+        path: "~{{ ansible_user }}/.ssh"
+        state: directory
+        owner: "{{ ansible_user }}"
+        mode: "0700"
+      become: true
+
+    - name: Append public key to authorized_keys (idempotent)
+      ansible.builtin.lineinfile:
+        path: "~{{ ansible_user }}/.ssh/authorized_keys"
+        line: "{{ lookup('file', ssh_pubkey_file) }}"
+        create: true
+        owner: "{{ ansible_user }}"
+        mode: "0600"
+      become: true
+
+    - name: Done
+      ansible.builtin.debug:
+        msg: >-
+          公钥已装到 {{ inventory_hostname }} 的 {{ ansible_user }}@authorized_keys。
+          现在可把 inventory 里该行的 ansible_ssh_pass 换成
+          ansible_ssh_private_key_file=<对应私钥路径>,后续免密。

@@ -32,6 +32,15 @@ type Node struct {
 	Show         int        `gorm:"default:1" json:"show"`          // 是否显示给用户
 	AutoRegister int        `gorm:"default:0" json:"auto_register"` // 是否自动注册的节点
 
+	// 父子节点 (中转链路: 落地节点为根, 转发节点为子, 支持多级)
+	ParentID *uint `gorm:"index" json:"parent_id"` // 上级节点ID, nil=根节点(落地节点)
+
+	// 月流量限额 (仅本节点自身, 不含子节点单独限额; 子节点流量会同时累加到父节点)
+	MonthlyLimit    *int64 `json:"monthly_limit"`                      // 月流量限额(字节), nil=不限
+	MonthlyUpload   int64  `gorm:"default:0" json:"monthly_upload"`    // 本月已用上传流量
+	MonthlyDownload int64  `gorm:"default:0" json:"monthly_download"`  // 本月已用下载流量
+	MonthlyResetDay int    `gorm:"default:1" json:"monthly_reset_day"` // 每月流量重置日 (1-28)
+
 	// 高级配置 (直接JSON编辑)
 	RawConfig *string `gorm:"type:text" json:"raw_config"` // 原始配置 (JSON, 优先级最高)
 

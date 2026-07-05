@@ -189,6 +189,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.POST("/users/:id/ban", adminHandler.BanUser)
 			admin.POST("/users/:id/unban", adminHandler.UnbanUser)
 			admin.POST("/users/:id/reset-traffic", adminHandler.ResetUserTraffic)
+			admin.POST("/users/:id/reset-subscribe", adminHandler.ResetUserSubscribe)
 
 			// 订单管理
 			admin.GET("/orders", adminHandler.GetOrderList)
@@ -202,8 +203,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			nodeHandler := handler.NewNodeHandler()
 			admin.GET("/nodes", nodeHandler.GetNodes)
 			admin.GET("/nodes/stats", nodeHandler.GetNodeStats)
+			admin.GET("/nodes/:id/logs", nodeHandler.GetNodeLogs)
 			admin.POST("/nodes", nodeHandler.CreateNode)
 			admin.GET("/nodes/:id", nodeHandler.GetNode)
+			admin.GET("/nodes/:id/credentials", nodeHandler.GetNodeCredentials)
 			admin.PUT("/nodes/:id", nodeHandler.UpdateNode)
 			admin.DELETE("/nodes/:id", nodeHandler.DeleteNode)
 			admin.POST("/nodes/:id/sync", nodeHandler.SyncProtocol)
@@ -412,6 +415,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			systemHandler := handler.NewSystemHandler()
 			admin.GET("/system/configs", systemHandler.GetConfigs)
 			admin.GET("/system/configs/:key", systemHandler.GetConfig)
+			admin.GET("/system/subscription-settings", systemHandler.GetSubscriptionSettings)
 			admin.PUT("/system/configs/:key", systemHandler.SetConfig)
 			admin.DELETE("/system/configs/:key", systemHandler.DeleteConfig)
 			admin.GET("/system/audit-logs", systemHandler.GetAuditLogs)

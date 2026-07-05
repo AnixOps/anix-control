@@ -36,7 +36,7 @@ describe('pageMeta helpers', () => {
   })
 
   it('builds a document title that includes the app name when needed', () => {
-    expect(resolveDocumentTitle(t, '/login', 'V2Board AnixOps')).toBe('Sign In | V2Board AnixOps')
-    expect(resolveDocumentTitle(t, '/unknown', 'V2Board AnixOps')).toBe('V2Board AnixOps')
+    expect(resolveDocumentTitle(t, '/login', 'AnixOps Studio')).toBe('Sign In | AnixOps Studio')
+    expect(resolveDocumentTitle(t, '/unknown', 'AnixOps Studio')).toBe('AnixOps Studio')
   })
 })

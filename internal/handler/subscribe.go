@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/anixops/v2board/internal/config"
+	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
@@ -17,6 +18,7 @@ import (
 // SubscribeHandler 订阅处理器
 type SubscribeHandler struct {
 	subscriptionService *service.SubscriptionService
+	configService       *service.SystemConfigService
 	cfg                 *config.Config
 }
 
@@ -24,6 +26,7 @@ type SubscribeHandler struct {
 func NewSubscribeHandler(cfg *config.Config) *SubscribeHandler {
 	return &SubscribeHandler{
 		subscriptionService: service.NewSubscriptionService(),
+		configService:       service.NewSystemConfigService(database.Get()),
 		cfg:                 cfg,
 	}
 }
@@ -133,7 +136,13 @@ func (h *SubscribeHandler) buildSubscribeURL(c *gin.Context) string {
 		}
 	}
 
-	return fmt.Sprintf("%s://%s%s", scheme, c.Request.Host, c.Request.URL.RequestURI())
+	host := c.Request.Host
+	if forwardedHost := c.GetHeader("X-Forwarded-Host"); forwardedHost != "" {
+		host = strings.TrimSpace(strings.Split(forwardedHost, ",")[0])
+	}
+
+	host = h.resolveSubscribeHost(host)
+	return fmt.Sprintf("%s://%s%s", scheme, host, c.Request.URL.RequestURI())
 }
 
 func (h *SubscribeHandler) buildSubscribeDomain(c *gin.Context) string {
@@ -142,12 +151,42 @@ func (h *SubscribeHandler) buildSubscribeDomain(c *gin.Context) string {
 		host = strings.TrimSpace(strings.Split(forwardedHost, ",")[0])
 	}
 
+	host = h.resolveSubscribeHost(host)
+
 	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
 		return parsedHost
 	}
 
 	// IPv6 host without port can appear as [::1]
 	return strings.Trim(host, "[]")
+}
+
+func (h *SubscribeHandler) resolveSubscribeHost(requestHost string) string {
+	settings := service.GetSubscriptionSettings(h.configService, h.cfg)
+	requestHost = strings.TrimSpace(requestHost)
+	if len(settings.SubscribeDomains) == 0 {
+		return requestHost
+	}
+
+	normalized := normalizeSubscriptionRequestHost(requestHost)
+	for _, configured := range settings.SubscribeDomains {
+		if normalizeSubscriptionRequestHost(configured) == normalized {
+			return configured
+		}
+	}
+
+	return settings.SubscribeDomains[0]
+}
+
+func normalizeSubscriptionRequestHost(raw string) string {
+	value := strings.TrimSpace(strings.ToLower(raw))
+	if value == "" {
+		return ""
+	}
+	if host, _, err := net.SplitHostPort(strings.Trim(value, "[]")); err == nil {
+		return host
+	}
+	return strings.Trim(value, "[]")
 }
 
 // detectFormatFromUserAgent 根据 User-Agent 检测输出格式

@@ -3,10 +3,21 @@
     <div class="page-header">
       <h1>{{ t('admin.nodes.title') }}</h1>
       <div class="header-actions">
+        <button class="btn btn-primary" @click="openCreateModal">
+          {{ t('admin.nodes.addNode') }}
+        </button>
+        <button class="btn btn-secondary" @click="openDeployModal">
+          {{ t('admin.nodes.actions.deployParents') }}
+        </button>
         <button class="btn btn-secondary" @click="openAuthKeyModal">
           {{ t('admin.nodes.actions.authKey') }}
         </button>
       </div>
+    </div>
+
+    <!-- Over-quota banner -->
+    <div class="quota-banner" v-if="overQuotaNodes.length > 0">
+      {{ t('admin.nodes.messages.quotaExceededBanner', { count: overQuotaNodes.length }) }}
     </div>
 
     <!-- Node stats -->
@@ -38,20 +49,22 @@
             <th>{{ t('admin.nodes.table.name') }}</th>
             <th>{{ t('admin.nodes.table.address') }}</th>
             <th>{{ t('admin.nodes.table.status') }}</th>
+            <th>{{ t('admin.nodes.table.parent') }}</th>
             <th>{{ t('admin.nodes.table.protocols') }}</th>
             <th>{{ t('admin.nodes.table.traffic') }}</th>
+            <th>{{ t('admin.nodes.table.monthlyQuota') }}</th>
             <th>{{ t('admin.nodes.table.lastHeartbeat') }}</th>
             <th>{{ t('admin.nodes.table.actions') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td colspan="8" class="text-center">{{ t('admin.nodes.table.loading') }}</td>
+            <td colspan="10" class="text-center">{{ t('admin.nodes.table.loading') }}</td>
           </tr>
           <tr v-else-if="nodes.length === 0">
-            <td colspan="8" class="text-center">{{ t('admin.nodes.table.empty') }}</td>
+            <td colspan="10" class="text-center">{{ t('admin.nodes.table.empty') }}</td>
           </tr>
-          <tr v-for="node in nodes" :key="node.id">
+          <tr v-for="node in nodes" :key="node.id" :class="{ 'row-over-quota': isOverQuota(node) }">
             <td>{{ node.id }}</td>
             <td>
               <strong>{{ node.name }}</strong>
@@ -67,8 +80,16 @@
                 {{ getStatusText(node.status) }}
               </span>
             </td>
+            <td>{{ getNodeName(node.parent_id) || '-' }}</td>
             <td>{{ node.protocols?.length || 0 }}</td>
             <td>{{ formatBytes(node.traffic_today || 0) }}</td>
+            <td>
+              <span v-if="!node.monthly_limit">-</span>
+              <span v-else :class="['quota-text', isOverQuota(node) ? 'quota-exceeded' : '']">
+                {{ formatBytes((node.monthly_upload || 0) + (node.monthly_download || 0)) }} / {{ formatBytes(node.monthly_limit) }}
+                <span v-if="isOverQuota(node)" class="quota-tag">{{ t('admin.nodes.table.quotaExceeded') }}</span>
+              </span>
+            </td>
             <td>{{ formatTime(node.last_check_at) }}</td>
             <td class="actions">
               <button
@@ -78,6 +99,14 @@
                 @click="openProtocols(node)"
               >
                 {{ t('admin.nodes.actions.protocols') }}
+              </button>
+              <button
+                class="btn btn-sm btn-secondary"
+                :title="t('admin.nodes.actions.logs')"
+                :aria-label="t('admin.nodes.actions.logs')"
+                @click="openLogModal(node)"
+              >
+                {{ t('admin.nodes.actions.logs') }}
               </button>
               <button
                 class="btn btn-sm btn-warning"
@@ -112,6 +141,80 @@
       </button>
     </div>
 
+    <!-- Create/edit node modal -->
+    <div class="modal-overlay" v-if="showNodeModal" @click.self="closeNodeModal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>{{ editingNode ? t('admin.nodes.nodeModal.titleEdit') : t('admin.nodes.nodeModal.titleCreate') }}</h3>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeNodeModal">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>{{ t('admin.nodes.nodeModal.fields.name') }}</label>
+            <input v-model="nodeForm.name" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.name')" />
+          </div>
+          <div class="form-group">
+            <label>{{ t('admin.nodes.nodeModal.fields.address') }}</label>
+            <input v-model="nodeForm.address" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.address')" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>{{ t('admin.nodes.nodeModal.fields.rate') }}</label>
+              <input v-model.number="nodeForm.rate" type="number" step="0.1" min="0" :placeholder="t('admin.nodes.nodeModal.placeholders.rate')" />
+            </div>
+            <div class="form-group">
+              <label>{{ t('admin.nodes.nodeModal.fields.sort') }}</label>
+              <input v-model.number="nodeForm.sort" type="number" :placeholder="t('admin.nodes.nodeModal.placeholders.sort')" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>{{ t('admin.nodes.nodeModal.fields.tags') }}</label>
+            <input v-model="nodeForm.tags" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.tags')" />
+          </div>
+
+          <!-- 中转链路: 父节点 (落地节点为根, 转发节点为子, 支持多级) -->
+          <div class="form-group">
+            <label>{{ t('admin.nodes.nodeModal.fields.parent') }}</label>
+            <select v-model="nodeForm.parent_id">
+              <option :value="null">{{ t('admin.nodes.nodeModal.parentNone') }}</option>
+              <option v-for="candidate in parentCandidates" :key="candidate.id" :value="candidate.id">
+                {{ candidate.name }} ({{ candidate.address || candidate.host }})
+              </option>
+            </select>
+            <p class="field-hint">{{ t('admin.nodes.nodeModal.parentHint') }}</p>
+          </div>
+
+          <!-- 月流量限额: 每个节点独立统计, 超限只做标记不自动限制 -->
+          <div class="form-row">
+            <div class="form-group">
+              <label>{{ t('admin.nodes.nodeModal.fields.monthlyLimit') }}</label>
+              <input v-model.number="nodeForm.monthly_limit_gb" type="number" min="0" step="0.1" :placeholder="t('admin.nodes.nodeModal.placeholders.monthlyLimit')" />
+            </div>
+            <div class="form-group">
+              <label>{{ t('admin.nodes.nodeModal.fields.monthlyResetDay') }}</label>
+              <input v-model.number="nodeForm.monthly_reset_day" type="number" min="1" max="28" :placeholder="t('admin.nodes.nodeModal.placeholders.monthlyResetDay')" />
+            </div>
+          </div>
+
+          <div class="form-group" v-if="editingNode">
+            <label>{{ t('admin.nodes.nodeModal.fields.status') }}</label>
+            <select v-model.number="nodeForm.status">
+              <option :value="0">{{ t('admin.nodes.statusText.pending') }}</option>
+              <option :value="1">{{ t('admin.nodes.statusText.online') }}</option>
+              <option :value="2">{{ t('admin.nodes.statusText.offline') }}</option>
+              <option :value="3">{{ t('admin.nodes.statusText.disabled') }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="closeNodeModal">{{ t('admin.nodes.actions.cancel') }}</button>
+          <button class="btn btn-primary" @click="saveNode" :disabled="saving">
+            {{ saving ? t('admin.nodes.actions.saving') : t('admin.nodes.actions.save') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Auth Key modal -->
     <div class="modal-overlay" v-if="showAuthKeyModal" @click.self="closeAuthKeyModal">
       <div class="modal">
@@ -138,6 +241,221 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="closeAuthKeyModal">{{ t('common.actions.close') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" v-if="showDeployModal" @click.self="closeDeployModal">
+      <div class="modal modal-xl">
+        <div class="modal-header">
+          <h3>{{ t('admin.nodes.deployModal.title') }}</h3>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeDeployModal">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="deploy-summary">
+            <div>
+              <p class="eyebrow">{{ t('admin.nodes.deployModal.summaryEyebrow') }}</p>
+              <p class="deploy-summary-title">{{ t('admin.nodes.deployModal.summaryTitle', { count: parentNodes.length }) }}</p>
+              <p class="text-secondary">{{ t('admin.nodes.deployModal.summaryText') }}</p>
+            </div>
+            <p class="text-secondary deploy-warning">{{ t('admin.nodes.deployModal.warning') }}</p>
+          </div>
+
+          <div class="deploy-settings-grid">
+            <div class="form-group">
+              <label>{{ t('admin.nodes.deployModal.fields.panelApiHost') }}</label>
+              <input v-model.trim="deploySettings.panelApiHost" type="text" />
+            </div>
+            <div class="form-group">
+              <label>{{ t('admin.nodes.deployModal.fields.grpcHost') }}</label>
+              <input v-model.trim="deploySettings.grpcHost" type="text" />
+            </div>
+            <div class="form-group">
+              <label>{{ t('admin.nodes.deployModal.fields.grpcServerName') }}</label>
+              <input v-model.trim="deploySettings.grpcServerName" type="text" />
+            </div>
+            <div class="form-group">
+              <label>{{ t('admin.nodes.deployModal.fields.amd64BinaryPath') }}</label>
+              <input v-model.trim="deploySettings.amd64BinaryPath" type="text" />
+            </div>
+            <div class="form-group">
+              <label>{{ t('admin.nodes.deployModal.fields.arm64BinaryPath') }}</label>
+              <input v-model.trim="deploySettings.arm64BinaryPath" type="text" />
+            </div>
+            <div class="form-group">
+              <label>{{ t('admin.nodes.deployModal.fields.coreType') }}</label>
+              <select v-model="deploySettings.coreType">
+                <option value="xray">xray</option>
+                <option value="sing">sing</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input v-model="deploySettings.grpcUseTLS" type="checkbox" />
+                <span>{{ t('admin.nodes.deployModal.fields.grpcUseTLS') }}</span>
+              </label>
+            </div>
+          </div>
+
+          <div v-if="deployError" class="form-error">{{ deployError }}</div>
+          <div v-if="deployLoading" class="empty-message">{{ t('admin.nodes.deployModal.loading') }}</div>
+
+          <table v-else class="table deploy-table">
+            <thead>
+              <tr>
+                <th>{{ t('admin.nodes.deployModal.table.alias') }}</th>
+                <th>{{ t('admin.nodes.deployModal.table.node') }}</th>
+                <th>{{ t('admin.nodes.deployModal.table.sshHost') }}</th>
+                <th>{{ t('admin.nodes.deployModal.table.port') }}</th>
+                <th>{{ t('admin.nodes.deployModal.table.user') }}</th>
+                <th>{{ t('admin.nodes.deployModal.table.arch') }}</th>
+                <th>{{ t('admin.nodes.deployModal.table.authMode') }}</th>
+                <th>{{ t('admin.nodes.deployModal.table.authValue') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in deployRows" :key="row.id">
+                <td><input v-model.trim="row.alias" type="text" /></td>
+                <td>
+                  <strong>{{ row.name }}</strong>
+                  <div class="deploy-meta">ID {{ row.nodeId }}</div>
+                </td>
+                <td><input v-model.trim="row.host" type="text" /></td>
+                <td><input v-model.number="row.sshPort" type="number" min="1" max="65535" /></td>
+                <td><input v-model.trim="row.sshUser" type="text" /></td>
+                <td>
+                  <select v-model="row.arch">
+                    <option value="amd64">amd64</option>
+                    <option value="arm64">arm64</option>
+                  </select>
+                </td>
+                <td>
+                  <select v-model="row.authMode">
+                    <option value="password">{{ t('admin.nodes.deployModal.authModes.password') }}</option>
+                    <option value="key">{{ t('admin.nodes.deployModal.authModes.key') }}</option>
+                  </select>
+                </td>
+                <td>
+                  <input
+                    v-model.trim="row.authValue"
+                    :type="row.authMode === 'password' ? 'password' : 'text'"
+                    :placeholder="row.authMode === 'password' ? t('admin.nodes.deployModal.placeholders.password') : t('admin.nodes.deployModal.placeholders.privateKey')"
+                  />
+                </td>
+              </tr>
+              <tr v-if="deployRows.length === 0">
+                <td colspan="8" class="empty-row">{{ t('admin.nodes.deployModal.empty') }}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="deploy-output-grid">
+            <div class="deploy-output-panel">
+              <div class="deploy-output-head">
+                <strong>inventory.ini</strong>
+                <button class="btn btn-sm btn-secondary" @click="copyDeployText(deployInventoryPreview)">{{ t('common.actions.copy') }}</button>
+              </div>
+              <textarea readonly rows="9" :value="deployInventoryPreview"></textarea>
+            </div>
+            <div class="deploy-output-panel">
+              <div class="deploy-output-head">
+                <strong>group_vars/all.yml</strong>
+                <button class="btn btn-sm btn-secondary" @click="copyDeployText(deployGroupVarsPreview)">{{ t('common.actions.copy') }}</button>
+              </div>
+              <textarea readonly rows="9" :value="deployGroupVarsPreview"></textarea>
+            </div>
+          </div>
+
+          <div class="deploy-output-panel deploy-output-panel-full">
+            <div class="deploy-output-head">
+              <strong>{{ t('admin.nodes.deployModal.commandsLabel') }}</strong>
+              <button class="btn btn-sm btn-secondary" @click="copyDeployText(deployCommandsPreview)">{{ t('common.actions.copy') }}</button>
+            </div>
+            <textarea readonly rows="6" :value="deployCommandsPreview"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Node log modal -->
+    <div class="modal-overlay" v-if="showLogModal" @click.self="closeLogModal">
+      <div class="modal modal-xl">
+        <div class="modal-header">
+          <h3>{{ t('admin.nodes.logModal.title', { name: logNode?.name || '-' }) }}</h3>
+          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeLogModal">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="log-toolbar">
+            <select v-model="logFilter.level">
+              <option value="">{{ t('admin.nodes.logModal.filters.allLevels') }}</option>
+              <option v-for="level in logLevels" :key="level" :value="level">
+                {{ getLogLevelLabel(level) }}
+              </option>
+            </select>
+            <input
+              v-model.trim="logFilter.source"
+              type="text"
+              :placeholder="t('admin.nodes.logModal.filters.sourcePlaceholder')"
+            />
+            <input
+              v-model.trim="logFilter.search"
+              type="text"
+              :placeholder="t('admin.nodes.logModal.filters.searchPlaceholder')"
+              @keyup.enter="refreshLogs"
+            />
+            <button class="btn btn-secondary btn-sm" :disabled="logLoading" @click="refreshLogs">
+              {{ logLoading ? t('admin.nodes.actions.loadingLogs') : t('admin.nodes.actions.refreshLogs') }}
+            </button>
+          </div>
+
+          <div v-if="logLoading" class="empty-message">{{ t('admin.nodes.logModal.loading') }}</div>
+
+          <table v-else-if="nodeLogs.length > 0" class="table node-log-table">
+            <thead>
+              <tr>
+                <th>{{ t('admin.nodes.logModal.table.time') }}</th>
+                <th>{{ t('admin.nodes.logModal.table.level') }}</th>
+                <th>{{ t('admin.nodes.logModal.table.source') }}</th>
+                <th>{{ t('admin.nodes.logModal.table.message') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="log in nodeLogs" :key="log.id">
+                <td class="log-time">{{ formatLogTime(log) }}</td>
+                <td>
+                  <span :class="['log-level-badge', `log-level-${normalizeLogLevel(log.level)}`]">
+                    {{ getLogLevelLabel(log.level) }}
+                  </span>
+                </td>
+                <td class="log-source">{{ log.source || '-' }}</td>
+                <td class="log-message-cell">
+                  <div class="log-message">{{ log.message }}</div>
+                  <div v-if="log.trace_id" class="log-meta">
+                    trace: <code>{{ log.trace_id }}</code>
+                  </div>
+                  <details v-if="log.fields_json" class="log-fields">
+                    <summary>{{ t('admin.nodes.logModal.table.fields') }}</summary>
+                    <pre>{{ formatLogFields(log.fields, log.fields_json) }}</pre>
+                  </details>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div v-else class="empty-message">{{ t('admin.nodes.logModal.empty') }}</div>
+
+          <div class="pagination modal-pagination" v-if="logPagination.total > logPagination.size">
+            <button :disabled="logPagination.page === 1 || logLoading" @click="changeLogPage(logPagination.page - 1)">
+              {{ t('admin.nodes.pagination.previous') }}
+            </button>
+            <span>{{ logPagination.page }} / {{ Math.ceil(logPagination.total / logPagination.size) }}</span>
+            <button
+              :disabled="logPagination.page >= Math.ceil(logPagination.total / logPagination.size) || logLoading"
+              @click="changeLogPage(logPagination.page + 1)"
+            >
+              {{ t('admin.nodes.pagination.next') }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -364,7 +682,8 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import {
-  getNodes, getNodeStats, createNode, updateNode, deleteNode,
+  getNodes, getNodeStats, getNodeLogs, createNode, updateNode, deleteNode,
+  getNodeCredentials,
   getNodeProtocols, createNodeProtocol, updateNodeProtocol, deleteNodeProtocol,
   getProtocolTemplates,
   getAuthKeys
@@ -390,12 +709,77 @@ const nodeForm = reactive({
   tags: '',
   rate: 1.0,
   sort: 0,
-  status: 0
+  status: 0,
+  parent_id: null,
+  monthly_limit_gb: null,
+  monthly_reset_day: 1
 })
+
+const BYTES_PER_GB = 1024 * 1024 * 1024
+
+// 可选父节点: 排除自己 (编辑时) 及其所有下级(编辑时), 避免手工配置出环
+const parentCandidates = computed(() => {
+  if (!editingNode.value) return nodes.value
+  const excluded = new Set([editingNode.value.id])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const n of nodes.value) {
+      if (n.parent_id && excluded.has(n.parent_id) && !excluded.has(n.id)) {
+        excluded.add(n.id)
+        changed = true
+      }
+    }
+  }
+  return nodes.value.filter((n) => !excluded.has(n.id))
+})
+
+const getNodeName = (parentId) => {
+  if (!parentId) return ''
+  const parent = nodes.value.find((n) => n.id === parentId)
+  return parent ? parent.name : ''
+}
+
+const isOverQuota = (node) => {
+  if (!node.monthly_limit) return false
+  return (node.monthly_upload || 0) + (node.monthly_download || 0) > node.monthly_limit
+}
+
+const overQuotaNodes = computed(() => nodes.value.filter(isOverQuota))
+const parentNodes = computed(() => nodes.value.filter((node) => !node.parent_id))
 
 const showAuthKeyModal = ref(false)
 const authKey = ref('')
 const authKeyUsed = ref(0)
+const showDeployModal = ref(false)
+const deployLoading = ref(false)
+const deployError = ref('')
+const deployRows = ref([])
+const deploySettings = reactive({
+  panelApiHost: typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:18080',
+  grpcHost: typeof window !== 'undefined' ? `${window.location.hostname}:50051` : '127.0.0.1:50051',
+  grpcUseTLS: typeof window !== 'undefined' ? window.location.protocol === 'https:' : false,
+  grpcServerName: typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1',
+  amd64BinaryPath: '/home/dev/anixops/V2bX_AnixOps/V2bX',
+  arm64BinaryPath: '/home/dev/anixops/V2bX_AnixOps/V2bX_arm64',
+  coreType: 'xray'
+})
+
+const showLogModal = ref(false)
+const logNode = ref(null)
+const logLoading = ref(false)
+const nodeLogs = ref([])
+const logLevels = ['debug', 'info', 'warning', 'error']
+const logFilter = reactive({
+  level: '',
+  source: '',
+  search: ''
+})
+const logPagination = reactive({
+  page: 1,
+  size: 20,
+  total: 0
+})
 
 const showProtocolModal = ref(false)
 const selectedNode = ref(null)
@@ -581,24 +965,115 @@ const loadProtocolTemplates = async () => {
   }
 }
 
-// Node actions
-const openAuthKeyModal = async () => {
+const loadAuthKeysPreview = async () => {
   try {
     const res = await getAuthKeys()
     const keys = res.data || []
     if (keys.length > 0) {
-      const first = keys[0]
-      authKey.value = first.key
-      authKeyUsed.value = first.used || 0
+      authKey.value = keys[0].key || ''
+      authKeyUsed.value = keys[0].used || 0
     } else {
       authKey.value = ''
       authKeyUsed.value = 0
     }
   } catch (e) {
-    console.error('Failed to load auth keys:', e)
+    console.error('Failed to preload auth keys:', e)
     authKey.value = ''
     authKeyUsed.value = 0
   }
+}
+
+const slugifyDeployAlias = (name, id) => {
+  const normalized = String(name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return normalized || `node-${id}`
+}
+
+const buildDeployRow = (node, apiKey = '') => ({
+  id: node.id,
+  nodeId: node.id,
+  name: node.name,
+  alias: slugifyDeployAlias(node.name, node.id),
+  host: node.host || node.address || '',
+  sshPort: 22,
+  sshUser: 'root',
+  arch: 'amd64',
+  authMode: 'password',
+  authValue: '',
+  apiKey
+})
+
+const deployInventoryPreview = computed(() => {
+  const lines = [
+    '[v2bx_nodes]',
+    '# Generated from parent nodes (nodes without parent_id)'
+  ]
+  for (const row of deployRows.value) {
+    const authValue = row.authValue || (row.authMode === 'password' ? '<PASSWORD>' : '~/.ssh/id_ed25519')
+    const authField = row.authMode === 'password'
+      ? `ansible_ssh_pass=${authValue}`
+      : `ansible_ssh_private_key_file=${authValue}`
+    const binaryPath = row.arch === 'arm64'
+      ? (deploySettings.arm64BinaryPath || '/home/dev/anixops/V2bX_AnixOps/V2bX_arm64')
+      : (deploySettings.amd64BinaryPath || '/home/dev/anixops/V2bX_AnixOps/V2bX')
+    lines.push(
+      `${row.alias} ansible_host=${row.host} ansible_port=${row.sshPort || 22} ansible_user=${row.sshUser || 'root'} ${authField} node_id=${row.nodeId} api_key=${row.apiKey || '<API_KEY>'} v2bx_arch=${row.arch} v2bx_binary_local=${binaryPath}`
+    )
+  }
+  return lines.join('\n')
+})
+
+const deployGroupVarsPreview = computed(() => {
+  const lines = [
+    '---',
+    `panel_api_host: "${deploySettings.panelApiHost}"`,
+    `grpc_host: "${deploySettings.grpcHost}"`,
+    `grpc_use_tls: ${deploySettings.grpcUseTLS ? 'true' : 'false'}`
+  ]
+  if (deploySettings.grpcUseTLS && deploySettings.grpcServerName) {
+    lines.push(`grpc_server_name: "${deploySettings.grpcServerName}"`)
+  }
+  lines.push(
+    '',
+    'panel_api_base: "http://127.0.0.1:18080"',
+    '',
+    `v2bx_binary_local: "${deploySettings.amd64BinaryPath}"`,
+    'v2bx_arch: "amd64"',
+    '',
+    'push_geodata: false',
+    'v2bx_geodata_dir: "/home/dev/anixops/V2bX_AnixOps/example"',
+    '',
+    `core_type: "${deploySettings.coreType}"`,
+    'v2bx_log_level: "info"',
+    'listen_ip: "0.0.0.0"',
+    'send_ip: "0.0.0.0"',
+    'cert_mode: "none"'
+  )
+  return lines.join('\n')
+})
+
+const deployCommandsPreview = computed(() => {
+  if (deployRows.value.length === 0) {
+    return 'cd config/deploy/ansible/nodes'
+  }
+  const firstAlias = deployRows.value[0]?.alias || '<node-alias>'
+  return [
+    'cd config/deploy/ansible/nodes',
+    'export ANSIBLE_CONFIG=../ansible.cfg',
+    `GOOS=linux GOARCH=amd64 go build -o ${deploySettings.amd64BinaryPath} -tags "sing xray hysteria2 with_quic with_grpc with_utls with_wireguard with_acme with_gvisor" -trimpath`,
+    `GOOS=linux GOARCH=arm64 go build -o ${deploySettings.arm64BinaryPath} -tags "sing xray hysteria2 with_quic with_grpc with_utls with_wireguard with_acme with_gvisor" -trimpath`,
+    'ansible-playbook -i inventory.ini deploy_v2bx.yml',
+    `ansible-playbook -i inventory.ini deploy_v2bx.yml -l ${firstAlias}`,
+    `ansible-playbook -i inventory.ini bootstrap_ssh_key.yml -l ${firstAlias}`
+  ].join('\n')
+})
+
+// Node actions
+const openAuthKeyModal = async () => {
+  await loadAuthKeysPreview()
   showAuthKeyModal.value = true
 }
 
@@ -625,6 +1100,15 @@ const copyConfig = async () => {
   }
 }
 
+const copyDeployText = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    alert(t('admin.nodes.messages.copied'))
+  } catch {
+    alert(t('admin.nodes.messages.copyFailed'))
+  }
+}
+
 const configSnippet = computed(() => {
   const host = window.location.origin
   return `# V2bX config example
@@ -642,6 +1126,55 @@ const configSnippet = computed(() => {
 }`
 })
 
+const openDeployModal = async () => {
+  showDeployModal.value = true
+  deployLoading.value = true
+  deployError.value = ''
+  try {
+    const roots = parentNodes.value
+    if (roots.length === 0) {
+      deployRows.value = []
+      return
+    }
+    const credentials = await Promise.allSettled(roots.map(async (node) => {
+      const res = await getNodeCredentials(node.id)
+      return { nodeId: node.id, apiKey: res.data?.api_key || '' }
+    }))
+    const apiKeysByNode = new Map(
+      credentials
+        .filter((item) => item.status === 'fulfilled')
+        .map((item) => [item.value.nodeId, item.value.apiKey])
+    )
+    deployRows.value = roots.map((node) => buildDeployRow(node, apiKeysByNode.get(node.id) || ''))
+  } catch (e) {
+    console.error('Failed to load deploy credentials:', e)
+    deployError.value = t('admin.nodes.messages.deployLoadFailed')
+    deployRows.value = parentNodes.value.map((node) => buildDeployRow(node, ''))
+  } finally {
+    deployLoading.value = false
+  }
+}
+
+const closeDeployModal = () => {
+  showDeployModal.value = false
+}
+
+const openCreateModal = () => {
+  editingNode.value = null
+  Object.assign(nodeForm, {
+    name: '',
+    address: '',
+    tags: '',
+    rate: 1.0,
+    sort: 0,
+    status: 0,
+    parent_id: null,
+    monthly_limit_gb: null,
+    monthly_reset_day: 1
+  })
+  showNodeModal.value = true
+}
+
 const openEditModal = (node) => {
   editingNode.value = node
   Object.assign(nodeForm, {
@@ -650,7 +1183,10 @@ const openEditModal = (node) => {
     tags: node.tags || '',
     rate: node.rate || 1.0,
     sort: node.sort || 0,
-    status: node.status
+    status: node.status,
+    parent_id: node.parent_id || null,
+    monthly_limit_gb: node.monthly_limit ? node.monthly_limit / BYTES_PER_GB : null,
+    monthly_reset_day: node.monthly_reset_day || 1
   })
   showNodeModal.value = true
 }
@@ -673,9 +1209,16 @@ const saveNode = async () => {
       tags: nodeForm.tags,
       rate: Number(nodeForm.rate),
       sort: Number(nodeForm.sort),
-      status: Number(nodeForm.status)
+      parent_id: nodeForm.parent_id || null,
+      monthly_limit: nodeForm.monthly_limit_gb ? Math.round(Number(nodeForm.monthly_limit_gb) * BYTES_PER_GB) : null,
+      monthly_reset_day: Number(nodeForm.monthly_reset_day) || 1
     }
-    await updateNode(editingNode.value.id, payload)
+    if (editingNode.value) {
+      payload.status = Number(nodeForm.status)
+      await updateNode(editingNode.value.id, payload)
+    } else {
+      await createNode(payload)
+    }
     closeNodeModal()
     loadNodes()
     loadStats()
@@ -695,6 +1238,54 @@ const confirmDelete = async (node) => {
   } catch (e) {
     alert(t('admin.nodes.messages.deleteFailed', { message: e.message || e }))
   }
+}
+
+const loadNodeLogs = async () => {
+  if (!logNode.value) return
+  logLoading.value = true
+  try {
+    const res = await getNodeLogs(logNode.value.id, {
+      page: logPagination.page,
+      page_size: logPagination.size,
+      level: logFilter.level || undefined,
+      source: logFilter.source || undefined,
+      search: logFilter.search || undefined
+    })
+    nodeLogs.value = res.data?.list || []
+    logPagination.total = res.data?.total || 0
+  } catch (e) {
+    console.error('Failed to load node logs:', e)
+    nodeLogs.value = []
+    logPagination.total = 0
+  } finally {
+    logLoading.value = false
+  }
+}
+
+const refreshLogs = async () => {
+  logPagination.page = 1
+  await loadNodeLogs()
+}
+
+const openLogModal = async (node) => {
+  logNode.value = node
+  showLogModal.value = true
+  logFilter.level = ''
+  logFilter.source = ''
+  logFilter.search = ''
+  logPagination.page = 1
+  await loadNodeLogs()
+}
+
+const closeLogModal = () => {
+  showLogModal.value = false
+  logNode.value = null
+  nodeLogs.value = []
+}
+
+const changeLogPage = async (page) => {
+  logPagination.page = page
+  await loadNodeLogs()
 }
 
 // Protocol actions
@@ -931,6 +1522,39 @@ const formatTime = (timestamp) => {
   return formatDateTime(timestamp)
 }
 
+const normalizeLogLevel = (level) => (logLevels.includes(level) ? level : 'info')
+
+const getLogLevelLabel = (level) => {
+  if (logLevels.includes(level)) {
+    return t(`admin.nodes.logModal.levels.${level}`)
+  }
+  return String(level || 'INFO').toUpperCase()
+}
+
+const formatLogFields = (fields, fallback) => {
+  if (fields) {
+    return JSON.stringify(fields, null, 2)
+  }
+  if (!fallback) {
+    return '{}'
+  }
+  try {
+    return JSON.stringify(JSON.parse(fallback), null, 2)
+  } catch {
+    return fallback
+  }
+}
+
+const formatLogTime = (log) => {
+  if (log.logged_at) {
+    return formatDateTime(log.logged_at)
+  }
+  if (log.created_at) {
+    return formatDateTime(log.created_at)
+  }
+  return '-'
+}
+
 // Init
 onMounted(async () => {
   const nodesLoaded = await loadNodes()
@@ -939,7 +1563,8 @@ onMounted(async () => {
   }
   await Promise.all([
     loadStats(),
-    loadProtocolTemplates()
+    loadProtocolTemplates(),
+    loadAuthKeysPreview()
   ])
 })
 </script>
@@ -1047,6 +1672,46 @@ onMounted(async () => {
   border-radius: var(--radius-sm);
   font-size: 12px;
   color: var(--text-color);
+}
+
+.quota-banner {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid var(--error-color);
+  color: var(--error-color);
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.row-over-quota {
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.quota-text {
+  white-space: nowrap;
+}
+
+.quota-exceeded {
+  color: var(--error-color);
+  font-weight: 600;
+}
+
+.quota-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--error-color);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.field-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .node-tags {
@@ -1157,6 +1822,10 @@ onMounted(async () => {
 
 .modal-lg {
   width: 720px;
+}
+
+.modal-xl {
+  width: min(1080px, 96vw);
 }
 
 .modal-header {
@@ -1493,6 +2162,15 @@ onMounted(async () => {
     grid-template-columns: 1fr;
   }
 
+  .deploy-summary {
+    flex-direction: column;
+  }
+
+  .deploy-settings-grid,
+  .deploy-output-grid {
+    grid-template-columns: 1fr;
+  }
+
   .table-container {
     overflow-x: auto;
   }
@@ -1507,6 +2185,10 @@ onMounted(async () => {
 
   .modal {
     max-width: 95%;
+  }
+
+  .log-toolbar {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1564,5 +2246,199 @@ onMounted(async () => {
   max-height: 300px;
   overflow-y: auto;
   margin-bottom: 12px;
+}
+
+.deploy-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.deploy-summary-title {
+  margin: 4px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.deploy-warning {
+  max-width: 320px;
+}
+
+.deploy-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.deploy-table input,
+.deploy-table select {
+  min-width: 0;
+}
+
+.deploy-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.deploy-output-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.deploy-output-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.deploy-output-panel textarea {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-color);
+  padding: 12px;
+}
+
+.deploy-output-panel-full {
+  margin-top: 16px;
+}
+
+.deploy-output-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.log-toolbar {
+  display: grid;
+  grid-template-columns: 160px 180px minmax(240px, 1fr) auto;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.log-toolbar input,
+.log-toolbar select {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-color);
+  font-size: 14px;
+}
+
+.log-toolbar input:focus,
+.log-toolbar select:focus {
+  border-color: var(--primary-color);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.node-log-table {
+  table-layout: fixed;
+}
+
+.node-log-table th:nth-child(1),
+.node-log-table td:nth-child(1) {
+  width: 180px;
+}
+
+.node-log-table th:nth-child(2),
+.node-log-table td:nth-child(2) {
+  width: 120px;
+}
+
+.node-log-table th:nth-child(3),
+.node-log-table td:nth-child(3) {
+  width: 160px;
+}
+
+.log-time,
+.log-source {
+  color: var(--text-secondary);
+  font-size: 13px;
+  vertical-align: top;
+}
+
+.log-message-cell {
+  vertical-align: top;
+}
+
+.log-message {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-color);
+}
+
+.log-meta {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.log-fields {
+  margin-top: 10px;
+}
+
+.log-fields summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.log-fields pre {
+  margin: 8px 0 0;
+  padding: 12px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-color);
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+.log-level-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.log-level-debug {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+}
+
+.log-level-info {
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+}
+
+.log-level-warning {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+}
+
+.log-level-error {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+}
+
+.modal-pagination {
+  padding: 16px 0 0;
 }
 </style>

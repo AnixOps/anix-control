@@ -75,6 +75,8 @@ describe('User Subscribe flow', () => {
         ExpireAt: 0,
         UsedTraffic: 1024,
         TotalTraffic: 4096,
+        subscribe_domains: ['sub-a.example.com', 'sub-b.example.com'],
+        subscribe_path: '/s',
       },
     })
     mockFetch.mockResolvedValue({
@@ -97,5 +99,27 @@ describe('User Subscribe flow', () => {
 
     expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/s/sub-token-1'))
     expect(wrapper.find('.preview-card textarea').element.value).toContain('preview-subscription-content')
+  })
+
+  it('switches the displayed subscription domain when multiple domains are configured', async () => {
+    mockGetSubscription.mockResolvedValue({
+      data: {
+        ExpireAt: 0,
+        UsedTraffic: 1024,
+        TotalTraffic: 4096,
+        subscribe_domains: ['sub-a.example.com', 'sub-b.example.com'],
+        subscribe_path: '/s',
+      },
+    })
+
+    const wrapper = mount(Subscribe)
+    await flushPromises()
+
+    const domainSelect = wrapper.find('#subscribe-domain')
+    expect(domainSelect.exists()).toBe(true)
+
+    await domainSelect.setValue('sub-b.example.com')
+    const linkInput = wrapper.find('.link-item .link-row input')
+    expect(linkInput.element.value).toContain('sub-b.example.com')
   })
 })

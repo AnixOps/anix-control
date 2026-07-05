@@ -27,6 +27,50 @@
         <input v-model="configSearch" type="text" :placeholder="t('runtime.systemPage.config.searchPlaceholder')" class="search-input" />
         <button class="btn-primary" @click="openConfigModal()">{{ t('runtime.systemPage.actions.addConfig') }}</button>
       </div>
+      <section class="subscription-settings-card">
+        <div class="subscription-settings-head">
+          <div>
+            <p class="eyebrow">{{ t('runtime.systemPage.subscription.eyebrow') }}</p>
+            <h3>{{ t('runtime.systemPage.subscription.title') }}</h3>
+            <p class="text-secondary">{{ t('runtime.systemPage.subscription.description') }}</p>
+          </div>
+          <div class="subscription-settings-actions">
+            <button class="btn btn-secondary btn-sm" :disabled="subscriptionSettingsLoading" @click="loadSubscriptionDomainSettings">
+              {{ subscriptionSettingsLoading ? t('runtime.shared.loading') : t('runtime.systemPage.subscription.actions.refresh') }}
+            </button>
+            <button class="btn btn-primary btn-sm" :disabled="subscriptionSettingsSaving" @click="saveSubscriptionDomainSettings">
+              {{ subscriptionSettingsSaving ? t('runtime.systemPage.subscription.actions.saving') : t('runtime.systemPage.subscription.actions.save') }}
+            </button>
+          </div>
+        </div>
+        <div class="subscription-settings-grid">
+          <div class="form-group">
+            <label>{{ t('runtime.systemPage.subscription.pathLabel') }}</label>
+            <input :value="subscriptionPath" type="text" readonly />
+          </div>
+          <div class="form-group">
+            <label>{{ t('runtime.systemPage.subscription.currentDomainLabel') }}</label>
+            <input :value="subscriptionCurrentHost" type="text" readonly />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>{{ t('runtime.systemPage.subscription.domainListLabel') }}</label>
+          <textarea
+            v-model="subscriptionDomainsText"
+            rows="5"
+            :placeholder="t('runtime.systemPage.subscription.domainListPlaceholder')"
+          ></textarea>
+          <p class="field-help">{{ t('runtime.systemPage.subscription.domainListHelp') }}</p>
+        </div>
+        <div v-if="subscriptionDomainError" class="form-error">{{ subscriptionDomainError }}</div>
+        <div class="subscription-settings-preview">
+          <p class="metric-label">{{ t('runtime.systemPage.subscription.previewLabel') }}</p>
+          <code v-if="normalizedSubscriptionDomains.length === 0">{{ t('runtime.systemPage.subscription.previewEmpty') }}</code>
+          <code v-for="domain in normalizedSubscriptionDomains" :key="domain">
+            {{ `${subscriptionPreviewProtocol}//${domain}${subscriptionPath}` }}
+          </code>
+        </div>
+      </section>
       <section class="runtime-config-card">
         <div class="runtime-config-head">
           <div>
@@ -593,7 +637,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import {
-  getSystemConfigs, getSystemConfig, setSystemConfig, deleteSystemConfig,
+  getSystemConfigs, getSystemConfig, getSubscriptionSettings, setSystemConfig, deleteSystemConfig,
   getSystemAuditLogs,
   getBackupConfig, updateBackupConfig, createBackup, getBackups,
   getBackupStats, deleteBackup, restoreBackup,
@@ -606,6 +650,13 @@ const { t, formatDateTime, translateLiteral } = useAppI18n()
 
 const activeTab = ref('config')
 const configSearch = ref('')
+const subscriptionDomainsConfigKey = 'app.subscribe_domains'
+const subscriptionPath = ref('/s')
+const subscriptionCurrentHost = ref(typeof window !== 'undefined' ? window.location.host : '')
+const subscriptionDomainsText = ref('')
+const subscriptionSettingsLoading = ref(false)
+const subscriptionSettingsSaving = ref(false)
+const subscriptionDomainError = ref('')
 const configs = ref([])
 const backups = ref([])
 const balancers = ref([])
@@ -925,6 +976,35 @@ function applyDefaultRuntimeAnsibleConfig() {
   runtimeValidationError.value = ''
   runtimeAnsibleForm.value = createRuntimeAnsibleForm(defaultRuntimeAnsibleConfig)
 }
+
+const parseSubscriptionDomainInput = (value) => {
+  const text = String(value || '').trim()
+  if (!text) return []
+  const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/,/g, '\n').replace(/;/g, '\n')
+  const lines = normalized.split('\n').map(item => item.trim()).filter(Boolean)
+  const unique = []
+  const seen = new Set()
+  for (const line of lines) {
+    let host = line
+    try {
+      const url = new URL(line.includes('://') ? line : `https://${line}`)
+      host = url.host || line
+    } catch {
+      host = line
+    }
+    host = host.trim().replace(/\/+$/, '')
+    if (!host || seen.has(host)) continue
+    seen.add(host)
+    unique.push(host)
+  }
+  return unique
+}
+
+const normalizedSubscriptionDomains = computed(() => parseSubscriptionDomainInput(subscriptionDomainsText.value))
+const subscriptionPreviewProtocol = computed(() => {
+  if (typeof window === 'undefined') return 'https:'
+  return window.location.protocol || 'https:'
+})
 
 const filteredConfigs = computed(() => {
   if (!configSearch.value) return configs.value
@@ -1316,6 +1396,88 @@ const saveForwardRuntimeConfig = async () => {
   }
 }
 
+const loadSubscriptionDomainSettings = async () => {
+  subscriptionSettingsLoading.value = true
+  subscriptionDomainError.value = ''
+  try {
+    const [settingsRes, rawConfigRes] = await Promise.allSettled([
+      getSubscriptionSettings(),
+      getSystemConfig(subscriptionDomainsConfigKey)
+    ])
+
+    if (settingsRes.status === 'fulfilled') {
+      const payload = settingsRes.value.data || {}
+      subscriptionPath.value = payload.subscribe_path || '/s'
+    }
+
+    if (rawConfigRes.status === 'fulfilled') {
+      const rawValue = rawConfigRes.value.data?.value
+      if (typeof rawValue === 'string' && rawValue.trim()) {
+        try {
+          const parsed = JSON.parse(rawValue)
+          if (Array.isArray(parsed)) {
+            subscriptionDomainsText.value = parsed.join('\n')
+          } else {
+            subscriptionDomainsText.value = rawValue
+          }
+        } catch {
+          subscriptionDomainsText.value = rawValue
+        }
+      } else {
+        const domains = settingsRes.status === 'fulfilled' && Array.isArray(settingsRes.value.data?.subscribe_domains)
+          ? settingsRes.value.data.subscribe_domains
+          : []
+        subscriptionDomainsText.value = domains.join('\n')
+      }
+    } else if (settingsRes.status === 'fulfilled') {
+      const domains = Array.isArray(settingsRes.value.data?.subscribe_domains) ? settingsRes.value.data.subscribe_domains : []
+      subscriptionDomainsText.value = domains.join('\n')
+    } else {
+      throw rawConfigRes.reason || settingsRes.reason || new Error('failed to load subscription settings')
+    }
+  } catch (err) {
+    subscriptionDomainError.value = resolveSystemError(err, 'runtime.systemPage.subscription.messages.loadFailed')
+  } finally {
+    subscriptionSettingsLoading.value = false
+  }
+}
+
+const saveSubscriptionDomainSettings = async () => {
+  subscriptionSettingsSaving.value = true
+  subscriptionDomainError.value = ''
+  try {
+    const domains = normalizedSubscriptionDomains.value
+    if (domains.length === 0) {
+      try {
+        await deleteSystemConfig(subscriptionDomainsConfigKey)
+      } catch {
+        await setSystemConfig(subscriptionDomainsConfigKey, {
+          value: '',
+          type: 'string',
+          group: 'app',
+          description: 'Alternate subscription domains'
+        })
+      }
+    } else {
+      await setSystemConfig(subscriptionDomainsConfigKey, {
+        value: JSON.stringify(domains),
+        type: 'json',
+        group: 'app',
+        description: 'Alternate subscription domains'
+      })
+    }
+    await Promise.all([
+      loadSubscriptionDomainSettings(),
+      fetchConfigs()
+    ])
+    notify(t('runtime.systemPage.subscription.messages.saveSuccess'))
+  } catch (err) {
+    subscriptionDomainError.value = resolveSystemError(err, 'runtime.systemPage.subscription.messages.saveFailed')
+  } finally {
+    subscriptionSettingsSaving.value = false
+  }
+}
+
 // System config
 const fetchConfigs = async () => {
   try {
@@ -1657,6 +1819,7 @@ const runHealthCheckRequest = async (lb) => {
 onMounted(async () => {
   fetchConfigs()
   fetchAuditLogs()
+  loadSubscriptionDomainSettings()
   await fetchForwardRuntimeConfig()
   fetchForwardRuntimeJobs()
   fetchRuntimeStatusSafe()
@@ -1676,6 +1839,59 @@ onMounted(async () => {
   margin-bottom: 20px;
 }
 
+.subscription-settings-card {
+  background: var(--surface-color);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+  margin-bottom: 20px;
+}
+
+.subscription-settings-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.subscription-settings-head h3 {
+  margin: 4px 0;
+}
+
+.subscription-settings-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.subscription-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.field-help {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.subscription-settings-preview {
+  margin-top: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.subscription-settings-preview code {
+  display: block;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
 .runtime-config-card {
   background: var(--surface-color);
   border: 1px solid var(--border-color);
@@ -1690,6 +1906,16 @@ onMounted(async () => {
   justify-content: space-between;
   margin-bottom: 16px;
   gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .subscription-settings-head {
+    flex-direction: column;
+  }
+
+  .subscription-settings-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .runtime-config-head h3 {
   display: none;

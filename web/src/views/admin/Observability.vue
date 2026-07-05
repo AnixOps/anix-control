@@ -32,13 +32,13 @@
           <span>{{ t('observability.trend.targetLabel') }}</span>
           <select v-model="selectedTargetKey" @change="loadTrend">
             <option value="" disabled>{{ t('observability.trend.selectTarget') }}</option>
-            <option v-for="item in targets" :key="item.targetKey" :value="item.targetKey">
+            <option v-for="item in trendTargets" :key="item.targetKey" :value="item.targetKey">
               {{ targetOptionLabel(item) }}
             </option>
           </select>
         </label>
       </div>
-      <div v-if="!targets.length" class="state-card">{{ t('observability.trend.noTargets') }}</div>
+      <div v-if="!trendTargets.length" class="state-card">{{ t('observability.trend.noTargets') }}</div>
       <div v-else-if="selectedTargetKey && !trendPoints.length" class="state-card">{{ t('observability.trend.noData') }}</div>
       <div v-show="selectedTargetKey && trendPoints.length" ref="trendChartEl" class="chart-canvas"></div>
     </section>
@@ -165,6 +165,7 @@ const selectedForwardId = ref('')
 const multiIngressRows = ref([])
 const jobs = ref([])
 
+const trendTargets = computed(() => targets.value.filter(item => item.targetType === 'node'))
 const forwardTargets = computed(() => targets.value.filter(item => item.targetType === 'forward'))
 
 // Response interceptor returns the {code,msg,data} envelope; unwrap defensively.
@@ -222,8 +223,9 @@ async function loadTargets() {
   try {
     const payload = extractPayload(await getForwardObservabilityTargets())
     targets.value = Array.isArray(payload?.list) ? payload.list : []
-    if (!selectedTargetKey.value && targets.value.length) {
-      selectedTargetKey.value = targets.value[0].targetKey
+    const selectedStillVisible = trendTargets.value.some(item => item.targetKey === selectedTargetKey.value)
+    if (!selectedStillVisible) {
+      selectedTargetKey.value = trendTargets.value[0]?.targetKey || ''
     }
   } catch (error) {
     console.error('load observability targets failed:', error)
@@ -232,7 +234,10 @@ async function loadTargets() {
 }
 
 async function loadTrend() {
-  if (!selectedTargetKey.value) return
+  if (!selectedTargetKey.value) {
+    trendPoints.value = []
+    return
+  }
   try {
     const payload = extractPayload(await getForwardObservabilityTrend({ targetKey: selectedTargetKey.value }))
     trendPoints.value = Array.isArray(payload?.points) ? payload.points : []

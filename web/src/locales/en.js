@@ -7,8 +7,8 @@ import adminMonitor from './modules/en/adminMonitor'
 import adminTrafficHourly from './modules/en/adminTrafficHourly'
 
 const legacy = {
-  'V2Board 管理端': 'V2Board Admin',
-  '管理端': 'Admin',
+  'V2Board 管理端': 'AnixOps Studio Console',
+  '管理端': 'Studio Console',
   '概览': 'Overview',
   '仪表盘': 'Dashboard',
   '流量转发': 'Forwards',
@@ -252,19 +252,19 @@ export default {
   },
   app: {
     meta: {
-      defaultDescription: 'Commercial-ready control plane for subscriptions, payments, nodes, NodeX runtime, and local Ansible relay operations.',
-      loginDescription: 'Sign in to V2Board AnixOps to manage subscriptions, billing, nodes, and forwarding runtimes.',
-      userDescription: 'User portal for subscriptions, tickets, plans, and billing records.',
-      adminDescription: 'Administration console for users, billing, nodes, notifications, and system operations.',
-      forwardDescription: 'Forwarding operations workspace for Local Runtime, Ansible Machines, NodeX topology, tunnels, and runtime diagnostics.'
+      defaultDescription: 'AnixOps Studio centralizes subscription delivery, billing, node orchestration, NodeX runtime, and local Ansible forwarding operations.',
+      loginDescription: 'Sign in to AnixOps Studio to manage subscriptions, billing, nodes, and forwarding runtimes.',
+      userDescription: 'AnixOps Studio user portal for subscriptions, tickets, plans, and billing records.',
+      adminDescription: 'AnixOps Studio administration console for users, billing, nodes, notifications, and system operations.',
+      forwardDescription: 'AnixOps Studio forwarding workspace for Local Runtime, Ansible Machines, NodeX topology, tunnels, and runtime diagnostics.'
     }
   },
   layout: {
     admin: {
-      brand: 'V2Board',
-      badge: 'Admin',
-      mobileTitle: 'V2Board Admin',
-      subtitle: 'Control plane, forwarding suite, and operations entry points are centralized in this navigation.',
+      brand: 'AnixOps Studio',
+      badge: 'Studio Console',
+      mobileTitle: 'AnixOps Studio Console',
+      subtitle: 'Subscription delivery, node orchestration, forwarding tools, and studio operations are centralized here.',
       adminUser: 'Administrator',
       sections: {
         overview: 'Overview',
@@ -299,7 +299,7 @@ export default {
       }
     },
     user: {
-      brand: 'V2Board',
+      brand: 'AnixOps Studio',
       nav: {
         dashboard: 'Dashboard',
         subscribe: 'Subscriptions',
@@ -458,11 +458,12 @@ export default {
     }
   },
   login: {
-    brandSubtitle: 'High-performance proxy service control panel',
+    brandSubtitle: 'AnixOps Studio',
+    brandDescription: 'A delivery-focused control plane for subscriptions, nodes, and forwarding operations.',
     signInTitle: 'Welcome back',
     registerTitle: 'Create an account',
-    signInSubtitle: 'Sign in to continue',
-    registerSubtitle: 'Fill in the form below to register',
+    signInSubtitle: 'Sign in to continue managing studio services.',
+    registerSubtitle: 'Create an AnixOps Studio account to start provisioning services.',
     emailPlaceholder: 'Enter your email address',
     passwordPlaceholder: 'Enter your password',
     registerPasswordPlaceholder: 'Enter a password (minimum 6 characters)',
@@ -518,6 +519,7 @@ export default {
       previewTitle: 'Subscription preview ({format})',
       usedTraffic: 'Used traffic',
       totalTraffic: 'Total traffic',
+      domainLabel: 'Subscription domain',
       copyLink: 'Copy link',
       refreshCache: 'Refresh subscription cache',
       copyContent: 'Copy content',
@@ -1332,6 +1334,28 @@ export default {
         },
         empty: 'No config data'
       },
+      subscription: {
+        eyebrow: 'Subscriptions',
+        title: 'Subscription Domains',
+        description: 'Publish one or more domains that should be used for user subscription links and managed-config output.',
+        pathLabel: 'Subscription path',
+        currentDomainLabel: 'Current request host',
+        domainListLabel: 'Alternate domains',
+        domainListPlaceholder: 'sub1.example.com\nsub2.example.com',
+        domainListHelp: 'Enter one domain per line. Commas and semicolons are also accepted.',
+        previewLabel: 'Preview links',
+        previewEmpty: 'No alternate domains configured. The current request host will be used.',
+        actions: {
+          refresh: 'Refresh',
+          save: 'Save domains',
+          saving: 'Saving...'
+        },
+        messages: {
+          loadFailed: 'Failed to load subscription domain settings',
+          saveFailed: 'Failed to save subscription domains',
+          saveSuccess: 'Subscription domains saved'
+        }
+      },
       backup: {
         title: 'Automatic Backup',
         enabled: 'Enable automatic backup',
@@ -2058,8 +2082,11 @@ export default {
         name: 'Name',
         address: 'Address',
         status: 'Status',
+        parent: 'Parent Node',
         protocols: 'Protocols',
         traffic: 'Traffic Today',
+        monthlyQuota: 'Monthly Quota',
+        quotaExceeded: 'Over limit',
         lastHeartbeat: 'Last Heartbeat',
         actions: 'Actions',
         loading: 'Loading...',
@@ -2068,12 +2095,16 @@ export default {
       actions: {
         manageProtocols: 'Manage protocols',
         protocols: 'Protocols',
+        logs: 'Logs',
+        deployParents: 'Deploy Parents',
         edit: 'Edit',
         delete: 'Delete',
         cancel: 'Cancel',
         save: 'Save',
         saving: 'Saving...',
-        authKey: 'Auth Key'
+        authKey: 'Auth Key',
+        refreshLogs: 'Refresh Logs',
+        loadingLogs: 'Loading Logs...'
       },
       pagination: {
         previous: 'Previous',
@@ -2082,20 +2113,27 @@ export default {
       nodeModal: {
         titleCreate: 'Add Node',
         titleEdit: 'Edit Node',
+        parentNone: 'None (root / exit node)',
+        parentHint: 'Pick a parent node to build a multi-level relay chain. Traffic this node forwards is added to both itself and every ancestor.',
         fields: {
           name: 'Node Name *',
           address: 'Node Address *',
           tags: 'Tags (comma separated)',
           rate: 'Node Rate',
           sort: 'Sort',
-          status: 'Status'
+          status: 'Status',
+          parent: 'Parent Node (upstream / exit node)',
+          monthlyLimit: 'Monthly Quota (GB)',
+          monthlyResetDay: 'Monthly Reset Day (1-28)'
         },
         placeholders: {
           name: 'Enter node name',
           address: 'IP or domain',
           tags: 'HK,IEPL,Premium',
           rate: '1.0',
-          sort: '0'
+          sort: '0',
+          monthlyLimit: 'Leave empty for unlimited',
+          monthlyResetDay: '1'
         }
       },
       authKeyModal: {
@@ -2107,6 +2145,43 @@ export default {
         configHint: 'Paste this config into V2bX config.json, replace <auth_key> with the key value above.',
         registeredCount: 'Registered Nodes',
         copied: 'Copied'
+      },
+      deployModal: {
+        title: 'Parent Node Deployment Helper',
+        summaryEyebrow: 'Deployment',
+        summaryTitle: '{count} parent nodes ready for deployment',
+        summaryText: 'This helper prepares inventory, group vars, and commands for legacy parent nodes. SSH credentials entered here stay only in the current browser session.',
+        warning: 'Use the generated snippets with config/deploy/ansible/nodes/deploy_v2bx.yml. Child nodes should still be managed separately when needed.',
+        loading: 'Loading parent node credentials...',
+        empty: 'No parent nodes available',
+        commandsLabel: 'Deployment commands',
+        authModes: {
+          password: 'Password',
+          key: 'Private key'
+        },
+        fields: {
+          panelApiHost: 'Panel API host',
+          grpcHost: 'gRPC host',
+          grpcServerName: 'gRPC server name',
+          amd64BinaryPath: 'AMD64 binary path',
+          arm64BinaryPath: 'ARM64 binary path',
+          coreType: 'Core type',
+          grpcUseTLS: 'Use TLS for gRPC'
+        },
+        table: {
+          alias: 'Alias',
+          node: 'Parent node',
+          sshHost: 'SSH host',
+          port: 'SSH port',
+          user: 'SSH user',
+          arch: 'Arch',
+          authMode: 'Auth mode',
+          authValue: 'Password / key path'
+        },
+        placeholders: {
+          password: 'Password used by sshpass',
+          privateKey: '~/.ssh/id_ed25519'
+        }
       },
       protocolModal: {
         title: 'Protocol Management - {name}',
@@ -2122,6 +2197,29 @@ export default {
           disabled: 'Disabled'
         },
         empty: 'No protocol configuration yet'
+      },
+      logModal: {
+        title: 'Runtime Logs - {name}',
+        loading: 'Loading node logs...',
+        empty: 'No runtime logs for this node',
+        filters: {
+          allLevels: 'All levels',
+          sourcePlaceholder: 'Source',
+          searchPlaceholder: 'Search message / source / trace id'
+        },
+        levels: {
+          debug: 'Debug',
+          info: 'Info',
+          warning: 'Warning',
+          error: 'Error'
+        },
+        table: {
+          time: 'Time',
+          level: 'Level',
+          source: 'Source',
+          message: 'Message',
+          fields: 'Structured fields'
+        }
       },
       protocolForm: {
         titleCreate: 'Add Protocol',
@@ -2188,9 +2286,11 @@ export default {
         deleteProtocolConfirm: 'Delete this protocol?',
         generateFailed: 'Generation failed: {message}',
         deleteAuthKeyConfirm: 'Delete this auth key?',
+        deployLoadFailed: 'Failed to load parent node credentials',
         copied: 'Copied to clipboard',
         copyFailed: 'Copy failed: {message}',
-        invalidJson: 'Invalid JSON'
+        invalidJson: 'Invalid JSON',
+        quotaExceededBanner: '{count} node(s) have exceeded their monthly quota. This is informational only, no automatic restriction is applied.'
       }
     }
   },
@@ -2236,7 +2336,7 @@ export default {
         port: '465',
         username: 'your@email.com',
         password: 'Enter SMTP password',
-        fromName: 'V2Board',
+        fromName: 'AnixOps Studio',
         fromAddress: 'noreply@example.com'
       }
     },
@@ -2597,7 +2697,11 @@ export default {
       ban: 'Ban',
       unban: 'Unban',
       resetTraffic: 'Reset traffic',
-      resetShort: 'Reset'
+      resetShort: 'Reset',
+      copySubscribe: 'Copy subscription link',
+      copySubscribeShort: 'Copy Sub',
+      resetSubscribe: 'Reset subscription link (old link invalidated)',
+      resetSubscribeShort: 'Reset Sub'
     },
     empty: {
       noData: 'No data'
@@ -2739,9 +2843,15 @@ export default {
       grantDeleteFailed: 'Failed to delete grant',
       resetFailed: 'Reset failed',
       userFlowReset: 'User traffic reset successfully',
-      tunnelFlowReset: 'Tunnel traffic reset successfully'
+      tunnelFlowReset: 'Tunnel traffic reset successfully',
+      noToken: 'This user has no subscription token',
+      subscribeCopied: 'Subscription link copied to clipboard',
+      copyFailed: 'Copy failed',
+      copyManual: 'Auto-copy failed, please copy the subscription link manually:',
+      resetSubscribeConfirm: 'Reset the subscription link for {email}? The old link will stop working immediately and the user must re-import.',
+      resetSubscribeSuccess: 'Subscription link reset',
+      resetSubscribeFailed: 'Failed to reset subscription'
     }
   },
   legacy
 }
-

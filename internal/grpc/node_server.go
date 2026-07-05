@@ -63,6 +63,8 @@ func (s *NodeGRPCServer) Register(ctx context.Context, req *pb.NodeRegisterReque
 
 // GetConfig 获取节点配置
 func (s *NodeGRPCServer) GetConfig(ctx context.Context, req *pb.NodeConfigRequest) (*pb.NodeConfigResponse, error) {
+	_ = s.nodeService.UpdateLastCheckAt(uint(req.NodeId))
+
 	node, err := s.nodeService.GetNode(uint(req.NodeId))
 	if err != nil {
 		return nil, status.Error(codes.NotFound, "node not found")
@@ -71,39 +73,25 @@ func (s *NodeGRPCServer) GetConfig(ctx context.Context, req *pb.NodeConfigReques
 	// 获取协议配置
 	protocols, _ := s.nodeService.GetProtocols(uint(req.NodeId))
 
-	// 构建配置响应
-	resp := &pb.NodeConfigResponse{
+	if len(protocols) > 0 {
+		// 用共享构建器填充完整协议配置 (cipher / server_key / flow / tls_settings 等)
+		return fillNodeConfigResponse(node, &protocols[0]), nil
+	}
+
+	// 无协议配置时的默认响应
+	return &pb.NodeConfigResponse{
+		NodeType:    "vless",
+		Type:        "vless",
 		Host:        node.Host,
 		ServerPort:  int32(node.Port),
 		ServerName:  node.Host,
+		Network:     "tcp",
 		SendThrough: "0.0.0.0",
 		BaseConfig: &pb.BaseConfig{
 			PushInterval: 60,
 			PullInterval: 60,
 		},
-	}
-
-	// 如果有协议配置
-	if len(protocols) > 0 {
-		protocol := protocols[0]
-		resp.NodeType = string(protocol.Type)
-		resp.Type = string(protocol.Type)
-		resp.ServerPort = int32(protocol.Port)
-		resp.Tls = int32(protocol.TLS)
-
-		if protocol.Transport != nil {
-			resp.Network = *protocol.Transport
-		} else {
-			resp.Network = "tcp"
-		}
-	} else {
-		// 默认配置
-		resp.NodeType = "vless"
-		resp.Type = "vless"
-		resp.Network = "tcp"
-	}
-
-	return resp, nil
+	}, nil
 }
 
 // ReportStatus 上报节点状态
@@ -263,6 +251,8 @@ func NewUserGRPCServer() *UserGRPCServer {
 
 // GetUsers 获取用户列表
 func (s *UserGRPCServer) GetUsers(ctx context.Context, req *pb.UserListRequest) (*pb.UserListResponse, error) {
+	_ = s.nodeService.UpdateLastCheckAt(uint(req.NodeId))
+
 	// 获取节点信息以确定分组
 	node, err := s.nodeService.GetNode(uint(req.NodeId))
 	if err != nil {
@@ -368,6 +358,27 @@ func (s *TrafficGRPCServer) ReportTraffic(ctx context.Context, req *pb.TrafficRe
 	// 记录流量日志 (原始字节 + 倍率), 用于今日流量等基于时间的统计, 与 REST 上报路径保持一致
 	if err := s.serverService.BatchRecordTrafficLog(model.ServerType("node"), uint(req.NodeId), traffics, rate); err != nil {
 		slog.Warn("failed to record traffic log", "component", "grpc", "method", "ReportTraffic", "node_id", req.NodeId, "error", err)
+	}
+
+	var totalUpload, totalDownload int64
+	for _, traffic := range userTraffics {
+		totalUpload += traffic[0]
+		totalDownload += traffic[1]
+	}
+	// 同步回写节点总流量，保证面板节点统计和流量监控读取的是同一口径。
+	if err := s.nodeService.AccumulateTrafficOnly(uint(req.NodeId), totalUpload, totalDownload); err != nil {
+		slog.Warn("failed to accumulate node traffic", "component", "grpc", "method", "ReportTraffic", "node_id", req.NodeId, "error", err)
+	}
+
+	// 统计表写入：日统计按当前整日分桶，月统计按当前月第一天分桶。
+	now := time.Now()
+	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).Unix()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local).Unix()
+	if err := s.serverService.RecordServerStat(model.ServerType("node"), uint(req.NodeId), totalUpload, totalDownload, "d", dayStart); err != nil {
+		slog.Warn("failed to record daily server stat", "component", "grpc", "method", "ReportTraffic", "node_id", req.NodeId, "error", err)
+	}
+	if err := s.serverService.RecordServerStat(model.ServerType("node"), uint(req.NodeId), totalUpload, totalDownload, "m", monthStart); err != nil {
+		slog.Warn("failed to record monthly server stat", "component", "grpc", "method", "ReportTraffic", "node_id", req.NodeId, "error", err)
 	}
 
 	// 批量更新用户流量
