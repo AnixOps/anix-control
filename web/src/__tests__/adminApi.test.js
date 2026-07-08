@@ -50,6 +50,30 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/subscription/groups', method: 'get' },
       },
       {
+        call: () => adminApi.getSubscriptionGroup(7),
+        expected: { url: '/admin/subscription/groups/7', method: 'get' },
+      },
+      {
+        call: () => adminApi.getSubscriptionTemplates(7),
+        expected: { url: '/admin/subscription/groups/7/templates', method: 'get' },
+      },
+      {
+        call: () => adminApi.getSubscriptionProtocols(7),
+        expected: { url: '/admin/subscription/groups/7/protocols', method: 'get' },
+      },
+      {
+        call: () => adminApi.getAvailableProtocols(),
+        expected: { url: '/admin/subscription/protocols/available', method: 'get' },
+      },
+      {
+        call: () => adminApi.getSubscriptionTemplate(9),
+        expected: { url: '/admin/subscription/templates/9', method: 'get' },
+      },
+      {
+        call: () => adminApi.getSubscriptionStats(),
+        expected: { url: '/admin/subscription/stats', method: 'get' },
+      },
+      {
         call: () => adminApi.getForwardNodes({ type: 'relay' }),
         expected: {
           url: '/admin/forward/nodes',
@@ -234,6 +258,60 @@ describe('admin api mapping', () => {
           url: '/admin/subscription/groups/7/protocols',
           method: 'post',
           data: { protocol_ids: [1, 2, 3] },
+        },
+      },
+      {
+        call: () => adminApi.createSubscriptionGroup({ name: 'VIP' }),
+        expected: {
+          url: '/admin/subscription/groups',
+          method: 'post',
+          data: { name: 'VIP' },
+        },
+      },
+      {
+        call: () => adminApi.updateSubscriptionGroup(7, { name: 'VIP+' }),
+        expected: {
+          url: '/admin/subscription/groups/7',
+          method: 'put',
+          data: { name: 'VIP+' },
+        },
+      },
+      {
+        call: () => adminApi.deleteSubscriptionGroup(7),
+        expected: {
+          url: '/admin/subscription/groups/7',
+          method: 'delete',
+        },
+      },
+      {
+        call: () => adminApi.createSubscriptionTemplate(7, { name: 'HK' }),
+        expected: {
+          url: '/admin/subscription/groups/7/templates',
+          method: 'post',
+          data: { name: 'HK' },
+        },
+      },
+      {
+        call: () => adminApi.updateSubscriptionTemplate(9, { name: 'HK+' }),
+        expected: {
+          url: '/admin/subscription/templates/9',
+          method: 'put',
+          data: { name: 'HK+' },
+        },
+      },
+      {
+        call: () => adminApi.deleteSubscriptionTemplate(9),
+        expected: {
+          url: '/admin/subscription/templates/9',
+          method: 'delete',
+        },
+      },
+      {
+        call: () => adminApi.previewSubscription({ user_id: 1, format: 'v2ray' }),
+        expected: {
+          url: '/admin/subscription/preview',
+          method: 'post',
+          data: { user_id: 1, format: 'v2ray' },
         },
       },
       {

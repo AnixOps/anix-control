@@ -8,7 +8,8 @@ const adminApiMock = vi.hoisted(() => ({
   getAvailableProtocols: vi.fn(),
   getSubscriptionGroups: vi.fn(),
   getSubscriptionProtocols: vi.fn(),
-  getSubscriptionTemplates: vi.fn()
+  getSubscriptionTemplates: vi.fn(),
+  previewSubscription: vi.fn()
 }))
 
 const getSubscriptionStatsMock = vi.hoisted(() => vi.fn())
@@ -29,6 +30,8 @@ describe('Admin Subscriptions', () => {
     adminApiMock.getSubscriptionTemplates.mockResolvedValue({ data: [] })
     adminApiMock.getSubscriptionProtocols.mockResolvedValue({ data: [] })
     adminApiMock.getAvailableProtocols.mockResolvedValue({ data: [] })
+    adminApiMock.previewSubscription.mockResolvedValue({ data: { content: '' } })
+    getSubscriptionStatsMock.mockResolvedValue({ data: [] })
   })
 
   afterEach(() => {
@@ -80,6 +83,78 @@ describe('Admin Subscriptions', () => {
     metricValues = wrapper.findAll('.overview-stats .stat-card .stat-value').map(node => node.text())
     expect(metricValues).toEqual(['0', '21', '5', '3.00 GB'])
     expect(wrapper.text()).toContain('VIP')
+
+    wrapper.unmount()
+  })
+
+  it('loads subscription resources from legacy and panel envelope payloads', async () => {
+    adminApiMock.getSubscriptionGroups.mockResolvedValueOnce({
+      data: [{ id: 1, name: 'Legacy Group', enable: 1 }]
+    })
+    adminApiMock.getSubscriptionTemplates.mockResolvedValueOnce({
+      data: [{ id: 11, group_id: 1, name: 'Legacy Template', type: 'vless', enable: 1 }]
+    })
+    adminApiMock.getSubscriptionProtocols.mockResolvedValueOnce({
+      data: [{ id: 21, name: 'Legacy Protocol', type: 'vless' }]
+    })
+
+    const wrapper = mount(Subscriptions)
+    await flushPromises()
+
+    expect(wrapper.vm.groups[0].name).toBe('Legacy Group')
+    expect(wrapper.vm.templates[0].name).toBe('Legacy Template')
+    expect(wrapper.vm.protocols[0].name).toBe('Legacy Protocol')
+
+    adminApiMock.getSubscriptionGroups.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      data: [{ id: 2, name: 'Envelope Group', enable: 1 }],
+      ts: 1783526400000
+    })
+    adminApiMock.getSubscriptionTemplates.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      data: [{ id: 12, group_id: 2, name: 'Envelope Template', type: 'vless', enable: 1 }],
+      ts: 1783526400000
+    })
+    adminApiMock.getSubscriptionProtocols.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      data: [{ id: 22, name: 'Envelope Protocol', type: 'vless' }],
+      ts: 1783526400000
+    })
+
+    wrapper.vm.selectedGroup = null
+    await wrapper.vm.loadGroups()
+    await flushPromises()
+
+    expect(wrapper.vm.groups[0].name).toBe('Envelope Group')
+    expect(wrapper.vm.templates[0].name).toBe('Envelope Template')
+    expect(wrapper.vm.protocols[0].name).toBe('Envelope Protocol')
+
+    adminApiMock.getAvailableProtocols.mockResolvedValueOnce({
+      data: {
+        data: [{ id: 31, name: 'Nested Available Protocol', type: 'vless' }]
+      }
+    })
+
+    await wrapper.vm.openManageProtocolsModal()
+    await flushPromises()
+
+    expect(wrapper.vm.availableProtocols[0].name).toBe('Nested Available Protocol')
+    expect(wrapper.vm.showManageProtocolsModal).toBe(true)
+
+    adminApiMock.previewSubscription.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      data: { content: 'enveloped-preview-content' },
+      ts: 1783526400000
+    })
+
+    await wrapper.vm.loadPreview()
+    await flushPromises()
+
+    expect(wrapper.vm.previewContent).toBe('enveloped-preview-content')
 
     wrapper.unmount()
   })

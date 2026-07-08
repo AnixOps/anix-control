@@ -121,7 +121,10 @@ Open gaps:
   coverage and Admin Notifications frontend compatibility coverage, admin/user
   Telegram panel API success responses have handler coverage and Admin Telegram
   frontend compatibility coverage while the public Telegram webhook remains a
-  `status=ok` compatibility path, admin
+  `status=ok` compatibility path, admin subscription management group,
+  template, protocol, format, and preview responses have handler coverage plus
+  Subscriptions frontend/API compatibility coverage while public subscription
+  downloads remain plain subscription content, admin
   subscription stats has matching Subscriptions frontend compatibility coverage, admin
   subscription settings has matching System and Users compatibility coverage,
   admin system backup stats, backup config, and backup record operations have

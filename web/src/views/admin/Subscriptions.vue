@@ -596,17 +596,30 @@ export default {
     const totalTraffic = computed(() => groupStats.value.reduce((sum, s) => sum + s.total_traffic, 0))
     const sortedGroupStats = computed(() => [...groupStats.value].sort((a, b) => b.user_count - a.user_count))
 
+    const readSubscriptionPayload = (res) => {
+      if (!res || typeof res !== 'object') return null
+      if (Object.prototype.hasOwnProperty.call(res, 'code')) return res.data ?? null
+      if (res.data && typeof res.data === 'object' && Object.prototype.hasOwnProperty.call(res.data, 'data')) {
+        return res.data.data ?? null
+      }
+      return res.data ?? res
+    }
+
+    const readSubscriptionList = (res) => {
+      const payload = readSubscriptionPayload(res)
+      return Array.isArray(payload) ? payload : []
+    }
+
     const readSubscriptionStats = (res) => {
       if (!res || typeof res !== 'object') return []
-      const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
-      return Array.isArray(payload) ? payload : []
+      return readSubscriptionList(res)
     }
     
     // Methods
     const loadGroups = async () => {
       try {
         const res = await adminApi.getSubscriptionGroups()
-        groups.value = res.data || []
+        groups.value = readSubscriptionList(res)
         if (groups.value.length > 0 && !selectedGroup.value) {
           selectGroup(groups.value[0])
         }
@@ -650,7 +663,7 @@ export default {
     const loadTemplates = async (groupId) => {
       try {
         const res = await adminApi.getSubscriptionTemplates(groupId)
-        templates.value = res.data || []
+        templates.value = readSubscriptionList(res)
       } catch (error) {
         showToast(t('admin.subscriptions.loadError'), 'error')
       }
@@ -659,7 +672,7 @@ export default {
     const loadProtocols = async (groupId) => {
       try {
         const res = await adminApi.getSubscriptionProtocols(groupId)
-        protocols.value = res.data || []
+        protocols.value = readSubscriptionList(res)
       } catch (error) {
         console.error('Failed to load protocols:', error)
       }
@@ -675,7 +688,7 @@ export default {
     const loadAvailableProtocols = async () => {
       try {
         const res = await adminApi.getAvailableProtocols()
-        availableProtocols.value = res.data || []
+        availableProtocols.value = readSubscriptionList(res)
       } catch (error) {
         showToast(t('admin.subscriptions.availableProtocolsLoadError'), 'error')
       }
@@ -732,7 +745,8 @@ export default {
       // Prefer the server-side merged result first
       try {
         const res = await adminApi.previewSubscription({ group_ids: [group.id], format: 'v2ray' })
-        const content = res.data?.content || ''
+        const payload = readSubscriptionPayload(res)
+        const content = payload?.content || ''
         if (content) {
           await copyToClipboard(content)
           showToast(t('admin.subscriptions.copied'), 'success')
@@ -744,7 +758,7 @@ export default {
 
       try {
         const tplRes = await adminApi.getSubscriptionTemplates(group.id)
-        const tplList = tplRes.data || []
+        const tplList = readSubscriptionList(tplRes)
         const lines = []
         for (const tpl of tplList) {
           const link = generateNodeLink(tpl)
@@ -799,7 +813,8 @@ export default {
           group_ids: [selectedGroup.value.id],
           format: previewFormat.value
         })
-        previewContent.value = res.data?.content || ''
+        const payload = readSubscriptionPayload(res)
+        previewContent.value = payload?.content || ''
       } catch (error) {
         previewContent.value = t('admin.subscriptions.previewError')
       }
