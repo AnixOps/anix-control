@@ -117,7 +117,8 @@ Open gaps:
   frontend compatibility coverage, user payment channel/create/status/record
   responses have handler envelope coverage with callback compatibility retained,
   user/admin MFA success responses have handler coverage and Admin MFA frontend
-  compatibility coverage, admin
+  compatibility coverage, user/admin notification success responses have handler
+  coverage and Admin Notifications frontend compatibility coverage, admin
   subscription stats has matching Subscriptions frontend compatibility coverage, admin
   subscription settings has matching System and Users compatibility coverage,
   admin system backup stats, backup config, and backup record operations have

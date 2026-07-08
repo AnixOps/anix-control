@@ -214,8 +214,8 @@ func (h *NotificationHandler) GetUserNotifications(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data":      logs,
+	panelSuccess(c, gin.H{
+		"list":      logs,
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
@@ -246,7 +246,7 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "marked as read"})
+	panelSuccess(c, gin.H{"message": "marked as read"})
 }
 
 // MarkAllAsRead godoc
@@ -265,7 +265,7 @@ func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 		Where("user_id = ? AND read_at IS NULL", userID).
 		Update("read_at", time.Now())
 
-	c.JSON(http.StatusOK, gin.H{"message": "all notifications marked as read"})
+	panelSuccess(c, gin.H{"message": "all notifications marked as read"})
 }
 
 // GetUnreadCount godoc
@@ -285,7 +285,7 @@ func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 		Where("user_id = ? AND read_at IS NULL", userID).
 		Count(&count)
 
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{"count": count}})
+	panelSuccess(c, gin.H{"count": count})
 }
 
 // ========== 管理员接口 ==========
@@ -315,11 +315,7 @@ func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":  templates,
-			"total": len(templates),
-		},
+	panelSuccess(c, gin.H{
 		"list":  templates,
 		"total": len(templates),
 	})
@@ -365,7 +361,7 @@ func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": template})
+	panelSuccess(c, template)
 }
 
 // UpdateTemplate godoc
@@ -428,7 +424,7 @@ func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": template})
+	panelSuccess(c, template)
 }
 
 // DeleteTemplate godoc
@@ -450,7 +446,7 @@ func (h *NotificationHandler) DeleteTemplate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	panelSuccess(c, gin.H{"message": "deleted"})
 }
 
 // ListLogs godoc
@@ -523,13 +519,7 @@ func (h *NotificationHandler) ListLogs(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":      list,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
-		},
+	panelSuccess(c, gin.H{
 		"list":      list,
 		"total":     total,
 		"page":      page,
@@ -622,11 +612,9 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	panelSuccess(c, gin.H{
 		"message": "test notification sent",
-		"data": gin.H{
-			"success": true,
-		},
+		"success": true,
 	})
 }
 
@@ -649,17 +637,15 @@ func (h *NotificationHandler) GetEmailConfig(c *gin.Context) {
 	// Keep service config in sync for test-send path.
 	h.notificationService.SetEmailConfig(cfg)
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"host":            cfg.Host,
-			"port":            cfg.Port,
-			"username":        cfg.Username,
-			"password":        cfg.Password,
-			"from_address":    cfg.FromAddress,
-			"from_name":       cfg.FromName,
-			"encryption":      emailEncryptionBool(cfg.Encryption),
-			"encryption_type": cfg.Encryption,
-		},
+	panelSuccess(c, gin.H{
+		"host":            cfg.Host,
+		"port":            cfg.Port,
+		"username":        cfg.Username,
+		"password":        cfg.Password,
+		"from_address":    cfg.FromAddress,
+		"from_name":       cfg.FromName,
+		"encryption":      emailEncryptionBool(cfg.Encryption),
+		"encryption_type": cfg.Encryption,
 	})
 }
 
@@ -767,5 +753,5 @@ func (h *NotificationHandler) UpdateEmailConfig(c *gin.Context) {
 	// Ensure send-test uses newest config immediately.
 	h.notificationService.SetEmailConfig(cfg)
 
-	c.JSON(http.StatusOK, gin.H{"message": "email config updated"})
+	panelSuccess(c, gin.H{"message": "email config updated"})
 }
