@@ -2098,6 +2098,12 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetGroups_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotNil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestCreateGroup_Success() {
@@ -2115,6 +2121,13 @@ func (s *SubscriptionAdminHandlerTestSuite) TestCreateGroup_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "Test Group", data["name"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetGroup_InvalidID() {
@@ -2211,6 +2224,12 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetAvailableProtocols_Success() 
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotNil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestCreateTemplate_InvalidGroupID() {
@@ -2355,10 +2374,13 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetSubscriptionFormats_Success()
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var response map[string]any
-	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &response))
-	data := response["data"].([]any)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].([]any)
 	assert.GreaterOrEqual(s.T(), len(data), 12) // At least 12 formats (including auto)
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetProtocolTypes_Success() {
@@ -2371,10 +2393,13 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetProtocolTypes_Success() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var response map[string]any
-	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &response))
-	data := response["data"].([]any)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].([]any)
 	assert.GreaterOrEqual(s.T(), len(data), 6) // At least 6 protocol types
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetGroupStats_UsesPanelEnvelope() {

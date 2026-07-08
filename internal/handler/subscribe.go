@@ -271,7 +271,7 @@ func (h *SubscriptionAdminHandler) GetGroups(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": groups})
+	panelSuccess(c, groups)
 }
 
 // CreateGroup 创建订阅分组
@@ -288,7 +288,7 @@ func (h *SubscriptionAdminHandler) CreateGroup(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "创建成功", "data": group})
+	panelSuccess(c, group)
 }
 
 // GetGroup 获取订阅分组详情
@@ -306,7 +306,7 @@ func (h *SubscriptionAdminHandler) GetGroup(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": group})
+	panelSuccess(c, group)
 }
 
 // UpdateGroup 更新订阅分组
@@ -331,7 +331,7 @@ func (h *SubscriptionAdminHandler) UpdateGroup(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "更新成功", "data": group})
+	panelSuccess(c, group)
 }
 
 // DeleteGroup 删除订阅分组
@@ -348,7 +348,7 @@ func (h *SubscriptionAdminHandler) DeleteGroup(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	panelSuccess(c, gin.H{"message": "删除成功"})
 }
 
 // GetTemplates 获取分组的模板列表
@@ -366,7 +366,7 @@ func (h *SubscriptionAdminHandler) GetTemplates(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": templates})
+	panelSuccess(c, templates)
 }
 
 // GetGroupProtocols 获取属于该分组的物理节点协议
@@ -385,7 +385,7 @@ func (h *SubscriptionAdminHandler) GetGroupProtocols(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": protocols})
+	panelSuccess(c, protocols)
 }
 
 // UpdateGroupProtocols 更新分组关联的物理节点协议
@@ -411,7 +411,7 @@ func (h *SubscriptionAdminHandler) UpdateGroupProtocols(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
+	panelSuccess(c, gin.H{"message": "更新成功"})
 }
 
 // GetAvailableProtocols 获取所有可用的物理节点协议 (Protocol Pool)
@@ -424,7 +424,7 @@ func (h *SubscriptionAdminHandler) GetAvailableProtocols(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": protocols})
+	panelSuccess(c, protocols)
 }
 
 // CreateTemplate 创建订阅模板
@@ -449,7 +449,7 @@ func (h *SubscriptionAdminHandler) CreateTemplate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "创建成功", "data": template})
+	panelSuccess(c, template)
 }
 
 // GetTemplate 获取订阅模板详情
@@ -467,7 +467,7 @@ func (h *SubscriptionAdminHandler) GetTemplate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": template})
+	panelSuccess(c, template)
 }
 
 // UpdateTemplate 更新订阅模板
@@ -503,7 +503,7 @@ func (h *SubscriptionAdminHandler) UpdateTemplate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "更新成功", "data": template})
+	panelSuccess(c, template)
 }
 
 func normalizeTemplateUpdatePayload(updates map[string]any) {
@@ -546,7 +546,7 @@ func (h *SubscriptionAdminHandler) DeleteTemplate(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	panelSuccess(c, gin.H{"message": "删除成功"})
 }
 
 // AssignGroupToUser 为用户分配订阅分组
@@ -575,7 +575,7 @@ func (h *SubscriptionAdminHandler) AssignGroupToUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "分配成功"})
+	panelSuccess(c, gin.H{"message": "分配成功"})
 }
 
 // RemoveGroupFromUser 移除用户的订阅分组
@@ -598,7 +598,7 @@ func (h *SubscriptionAdminHandler) RemoveGroupFromUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "移除成功"})
+	panelSuccess(c, gin.H{"message": "移除成功"})
 }
 
 // GetUserGroups 获取用户的订阅分组
@@ -616,7 +616,7 @@ func (h *SubscriptionAdminHandler) GetUserGroups(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": groups})
+	panelSuccess(c, groups)
 }
 
 // AssignGroupToPlan 为套餐分配订阅分组
@@ -642,7 +642,7 @@ func (h *SubscriptionAdminHandler) AssignGroupToPlan(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "分配成功"})
+	panelSuccess(c, gin.H{"message": "分配成功"})
 }
 
 // RemoveGroupFromPlan 移除套餐的订阅分组
@@ -665,7 +665,7 @@ func (h *SubscriptionAdminHandler) RemoveGroupFromPlan(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "移除成功"})
+	panelSuccess(c, gin.H{"message": "移除成功"})
 }
 
 // GetPlanGroups 获取套餐的订阅分组
@@ -683,7 +683,7 @@ func (h *SubscriptionAdminHandler) GetPlanGroups(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": groups})
+	panelSuccess(c, groups)
 }
 
 // GetSubscriptionFormats 获取支持的订阅格式
@@ -704,7 +704,7 @@ func (h *SubscriptionAdminHandler) GetSubscriptionFormats(c *gin.Context) {
 		{"id": "sing-box", "name": "Sing-box", "description": "适用于 Sing-box, Nekobox 等"},
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": formats})
+	panelSuccess(c, formats)
 }
 
 // GetProtocolTypes 获取支持的协议类型
@@ -719,7 +719,7 @@ func (h *SubscriptionAdminHandler) GetProtocolTypes(c *gin.Context) {
 		{"id": "tuic", "name": "TUIC", "description": "TUIC 协议", "supports_tls": true, "supports_reality": false},
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": protocols})
+	panelSuccess(c, protocols)
 }
 
 // GetGroupStats 获取订阅分组统计数据
@@ -769,13 +769,11 @@ func (h *SubscriptionAdminHandler) PreviewSubscription(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"content":       resp.Content,
-			"content_type":  resp.ContentType,
-			"filename":      resp.Filename,
-			"used_traffic":  resp.UsedTraffic,
-			"total_traffic": resp.TotalTraffic,
-		},
+	panelSuccess(c, gin.H{
+		"content":       resp.Content,
+		"content_type":  resp.ContentType,
+		"filename":      resp.Filename,
+		"used_traffic":  resp.UsedTraffic,
+		"total_traffic": resp.TotalTraffic,
 	})
 }

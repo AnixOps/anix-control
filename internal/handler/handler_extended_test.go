@@ -2640,6 +2640,13 @@ func (s *SubscribeExtendedTestSuite) TestGetGroups() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].([]any)
+	assert.NotEmpty(s.T(), data)
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscribeExtendedTestSuite) TestCreateGroup() {
@@ -2657,6 +2664,13 @@ func (s *SubscribeExtendedTestSuite) TestCreateGroup() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "New Group", data["name"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscribeExtendedTestSuite) TestCreateGroup_InvalidBody() {
@@ -2680,6 +2694,38 @@ func (s *SubscribeExtendedTestSuite) TestDeleteGroup() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "删除成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *SubscribeExtendedTestSuite) TestGetTemplates() {
+	tpl := &model.SubscriptionTemplate{
+		Name:    "Test Template",
+		Type:    "vless",
+		GroupID: s.testGroup.ID,
+	}
+	s.db.Create(tpl)
+
+	handler := NewSubscriptionAdminHandler()
+	s.router.GET("/admin/subscription/groups/:id/templates", handler.GetTemplates)
+
+	req, _ := http.NewRequest("GET", "/admin/subscription/groups/"+strconv.FormatUint(uint64(s.testGroup.ID), 10)+"/templates", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].([]any)
+	assert.NotEmpty(s.T(), data)
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscribeExtendedTestSuite) TestGetGroupProtocols() {
@@ -2691,6 +2737,12 @@ func (s *SubscribeExtendedTestSuite) TestGetGroupProtocols() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotNil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscribeExtendedTestSuite) TestDeleteTemplate() {
@@ -2708,6 +2760,13 @@ func (s *SubscribeExtendedTestSuite) TestDeleteTemplate() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "删除成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscribeExtendedTestSuite) TestGetSubscriptionFormats() {
@@ -2719,6 +2778,13 @@ func (s *SubscribeExtendedTestSuite) TestGetSubscriptionFormats() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].([]any)
+	assert.GreaterOrEqual(s.T(), len(data), 12)
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscribeExtendedTestSuite) TestGetProtocolTypes() {
@@ -2730,6 +2796,13 @@ func (s *SubscribeExtendedTestSuite) TestGetProtocolTypes() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].([]any)
+	assert.GreaterOrEqual(s.T(), len(data), 6)
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SubscribeExtendedTestSuite) TestPreviewSubscription() {
@@ -2749,6 +2822,15 @@ func (s *SubscribeExtendedTestSuite) TestPreviewSubscription() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.NotEmpty(s.T(), data["content"])
+	assert.NotEmpty(s.T(), data["content_type"])
+	assert.NotEmpty(s.T(), data["filename"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func TestSubscribeExtended(t *testing.T) {
