@@ -190,7 +190,39 @@ func (s *OrderHandlerExtendedTestSuite) TestSaveOrder_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], "参数错误")
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *OrderHandlerExtendedTestSuite) TestSaveOrder_PlanNotFound() {
+	handler := NewOrderHandler()
+	s.router.POST("/order/save", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		handler.SaveOrder(c)
+	})
+
+	body := map[string]any{
+		"plan_id": 99999,
+		"period":  "month",
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", "/order/save", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], "套餐不存在")
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *OrderHandlerExtendedTestSuite) TestGetOrders() {

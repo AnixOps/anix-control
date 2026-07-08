@@ -1,11 +1,13 @@
 package handler
 
 import (
-	"net/http"
+	"errors"
+	"log"
 	"strconv"
 
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // OrderHandler 用户端订单处理器
@@ -28,7 +30,8 @@ func (h *OrderHandler) GetOrders(c *gin.Context) {
 
 	res, err := h.orderService.GetUserOrders(userID, page, pageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取订单列表失败"})
+		log.Printf("user order list failed: %v", err)
+		panelError(c, "获取订单列表失败")
 		return
 	}
 
@@ -45,7 +48,7 @@ func (h *OrderHandler) SaveOrder(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
+		panelError(c, "参数错误")
 		return
 	}
 
@@ -57,7 +60,7 @@ func (h *OrderHandler) SaveOrder(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -69,13 +72,16 @@ func (h *OrderHandler) GetOrderDetail(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID无效"})
+		panelError(c, "ID无效")
 		return
 	}
 
 	order, err := h.orderService.GetByID(uint(id))
 	if err != nil || order.UserID != userID {
-		c.JSON(http.StatusNotFound, gin.H{"message": "订单不存在"})
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Printf("user order detail lookup failed: %v", err)
+		}
+		panelError(c, "订单不存在")
 		return
 	}
 

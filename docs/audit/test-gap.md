@@ -69,9 +69,9 @@ Local verification status:
 - Admin system backup config handler tests now assert panel `code/msg/ts/data` envelopes, sensitive-field tests preserve S3 credential masking, and System backup frontend tests cover both legacy and enveloped payloads.
 - Admin system backup list/create/delete/restore handler tests now assert panel `code/msg/ts/data` envelopes, audit tests cover backup record mutations, and System backup frontend tests cover legacy and enveloped list payloads.
 - Admin subscription settings handler tests now assert panel `code/msg/ts/data` envelopes, with System and Users frontend tests plus admin API mapping coverage for legacy and enveloped payloads.
-- User registration and order-save handler tests now assert panel `code/msg/ts/data` envelopes while checking the preserved token and order payload fields under `data`.
+- User registration and order-save handler tests now assert panel `code/msg/ts/data` envelopes while checking the preserved token/order payload fields under `data` plus invalid-body and missing-plan order-save errors.
 - User login handler tests now assert panel `code/msg/ts/data` envelopes, and Login frontend tests cover the enveloped token payload.
-- User order list/detail handler tests now assert panel `code/msg/ts/data` envelopes, and user Orders frontend tests cover legacy and enveloped payloads.
+- User order list/detail handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid ID, missing order, and cross-user hidden order paths; user Orders frontend tests cover legacy and enveloped payloads.
 - User subscription info handler tests now assert panel `code/msg/ts/data` envelopes, and user Subscribe frontend tests cover legacy and enveloped payloads.
 - User profile handler tests now assert panel `code/msg/ts/data` envelopes, and user store tests cover the enveloped profile payload.
 - User dashboard handler tests now assert panel `code/msg/ts/data` envelopes, with user API mapping coverage for the route.
