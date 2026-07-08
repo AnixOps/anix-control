@@ -3380,6 +3380,17 @@ func (s *KnowledgeHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *KnowledgeHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *KnowledgeHandlerTestSuite) TestGetArticles_Success() {
 	handler := NewKnowledgeHandler()
 	s.router.GET("/knowledge", handler.GetArticles)
@@ -3453,7 +3464,27 @@ func (s *KnowledgeHandlerTestSuite) TestGetArticle_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "文章不存在")
+}
+
+func (s *KnowledgeHandlerTestSuite) TestGetArticle_HiddenArticleNotFound() {
+	hidden := &model.Knowledge{
+		Category: "test",
+		Title:    "Hidden Article",
+		Body:     "Hidden content",
+		Show:     0,
+	}
+	s.db.Create(hidden)
+	s.db.Model(hidden).Update("show", 0)
+
+	handler := NewKnowledgeHandler()
+	s.router.GET("/knowledge/:id", handler.GetArticle)
+
+	req, _ := http.NewRequest("GET", "/knowledge/"+strconv.FormatUint(uint64(hidden.ID), 10), nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "文章不存在")
 }
 
 func (s *KnowledgeHandlerTestSuite) TestGetArticle_InvalidID() {
@@ -3464,7 +3495,7 @@ func (s *KnowledgeHandlerTestSuite) TestGetArticle_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "无效的文章ID")
 }
 
 func TestKnowledgeHandler(t *testing.T) {

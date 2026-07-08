@@ -77,7 +77,7 @@ Local verification status:
 - User dashboard handler tests now assert panel `code/msg/ts/data` envelopes, with user API mapping coverage for the route.
 - User plan list handler tests now assert panel `code/msg/ts/data` envelopes, and user Plans frontend tests cover legacy and enveloped payloads.
 - User coupon-check handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid body, invalid code, not-started, expired, and usage-limit paths; user Plans frontend tests cover legacy and enveloped coupon payloads.
-- User knowledge list/detail handler tests now assert panel `code/msg/ts/data` envelopes, and user Knowledge frontend tests cover legacy and enveloped article-list payloads.
+- User knowledge list/detail handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid ID, missing article, and hidden-article paths; user Knowledge frontend tests cover legacy and enveloped article-list payloads.
 - User ticket list/create/detail/reply/close handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid body, invalid ID, missing ticket, and closed-ticket reply paths; user Tickets frontend tests cover legacy and enveloped ticket payloads.
 - Public payment methods/status handler tests now assert panel `code/msg/ts/data` envelopes, key payment payload fields, and missing payment record errors.
 - Admin ticket list/reply/close handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid body, invalid ID, missing ticket, and ticket status side effects; admin Tickets frontend tests cover legacy and enveloped payloads.

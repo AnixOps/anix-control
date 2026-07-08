@@ -162,7 +162,7 @@ Open gaps:
   responses now have handler coverage plus System load balancer frontend
   compatibility coverage. User
   registration, login, profile, dashboard, subscription info, plan list,
-  coupon-check success and business-error paths, knowledge list/detail, ticket list/create/detail/reply/close success and user-error paths,
+  coupon-check success and business-error paths, knowledge list/detail success and user-error paths, ticket list/create/detail/reply/close success and user-error paths,
   order-save success/user-error paths, order list/detail success and user-error paths, public payment methods, and public
   payment-status success and missing-record responses now use the same envelope
   while retaining their token, profile, subscription, and order payloads under
