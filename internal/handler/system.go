@@ -1036,11 +1036,7 @@ func (h *LoadBalancerHandler) ListLoadBalancers(c *gin.Context) {
 		list = append(list, loadBalancerResponse(&lbs[i]))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":  list,
-			"total": len(list),
-		},
+	panelSuccess(c, gin.H{
 		"list":  list,
 		"total": len(list),
 	})
@@ -1077,7 +1073,7 @@ func (h *LoadBalancerHandler) CreateLoadBalancer(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": loadBalancerResponse(&lb)})
+	panelSuccess(c, loadBalancerResponse(&lb))
 }
 
 // GetLoadBalancer godoc
@@ -1105,7 +1101,7 @@ func (h *LoadBalancerHandler) GetLoadBalancer(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": loadBalancerResponse(lb)})
+	panelSuccess(c, loadBalancerResponse(lb))
 }
 
 // UpdateLoadBalancer godoc
@@ -1148,7 +1144,7 @@ func (h *LoadBalancerHandler) UpdateLoadBalancer(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": loadBalancerResponse(lb)})
+	panelSuccess(c, loadBalancerResponse(lb))
 }
 
 // DeleteLoadBalancer godoc
@@ -1175,7 +1171,7 @@ func (h *LoadBalancerHandler) DeleteLoadBalancer(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	panelSuccess(c, gin.H{"message": "deleted"})
 }
 
 // GetLoadBalancerStats godoc
@@ -1230,5 +1226,5 @@ func (h *LoadBalancerHandler) RunHealthCheck(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "health check completed"})
+	panelSuccess(c, gin.H{"message": "health check completed"})
 }

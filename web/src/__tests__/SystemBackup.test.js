@@ -213,4 +213,60 @@ describe('System backup configuration', () => {
 
     wrapper.unmount()
   })
+
+  it('loads load balancers from legacy and panel envelope payloads', async () => {
+    adminApi.getLoadBalancers
+      .mockResolvedValueOnce({
+        data: {
+          list: [
+            {
+              id: 1,
+              name: 'Legacy LB',
+              group_id: 1,
+              strategy: 'round-robin',
+              health_check: true,
+              enabled: true,
+              weights: {}
+            }
+          ]
+        }
+      })
+      .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        data: {
+          list: [
+            {
+              id: 2,
+              name: 'Panel LB',
+              group_id: 2,
+              strategy: 'least-load',
+              health_check: false,
+              enabled: true,
+              weights: { '10': 3 }
+            }
+          ],
+          total: 1
+        },
+        ts: 1783526400000
+      })
+
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    expect(wrapper.vm.balancers).toHaveLength(1)
+    expect(wrapper.vm.balancers[0].name).toBe('Legacy LB')
+
+    await wrapper.vm.fetchBalancers()
+    await flushPromises()
+
+    expect(wrapper.vm.balancers).toHaveLength(1)
+    expect(wrapper.vm.balancers[0]).toMatchObject({
+      id: 2,
+      name: 'Panel LB',
+      strategy: 'least-load'
+    })
+
+    wrapper.unmount()
+  })
 })

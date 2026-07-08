@@ -1533,6 +1533,13 @@ func (s *LoadBalancerTestSuite) TestListLoadBalancers() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.NotContains(s.T(), resp, "list")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *LoadBalancerTestSuite) TestListLoadBalancers_IncludesWeightsField() {
@@ -1552,6 +1559,7 @@ func (s *LoadBalancerTestSuite) TestListLoadBalancers_IncludesWeightsField() {
 	var resp map[string]any
 	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), float64(0), resp["code"])
 
 	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
@@ -1586,6 +1594,11 @@ func (s *LoadBalancerTestSuite) TestListLoadBalancers_WithGroupID() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
 }
 
 func (s *LoadBalancerTestSuite) TestCreateLoadBalancer() {
@@ -1605,6 +1618,11 @@ func (s *LoadBalancerTestSuite) TestCreateLoadBalancer() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "New LB", data["name"])
+	assert.Equal(s.T(), "least-load", data["strategy"])
 }
 
 func (s *LoadBalancerTestSuite) TestCreateLoadBalancer_WithWeights() {
@@ -1622,6 +1640,7 @@ func (s *LoadBalancerTestSuite) TestCreateLoadBalancer_WithWeights() {
 	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), float64(0), resp["code"])
 	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 
@@ -1660,6 +1679,11 @@ func (s *LoadBalancerTestSuite) TestGetLoadBalancer() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "Test LB", data["name"])
+	assert.Equal(s.T(), "round-robin", data["strategy"])
 }
 
 func (s *LoadBalancerTestSuite) TestGetLoadBalancer_NotFound() {
@@ -1690,6 +1714,11 @@ func (s *LoadBalancerTestSuite) TestUpdateLoadBalancer() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "Updated LB", data["name"])
+	assert.Equal(s.T(), "latency", data["strategy"])
 }
 
 func (s *LoadBalancerTestSuite) TestUpdateLoadBalancer_WithWeights() {
@@ -1707,6 +1736,7 @@ func (s *LoadBalancerTestSuite) TestUpdateLoadBalancer_WithWeights() {
 	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), float64(0), resp["code"])
 
 	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
@@ -1763,6 +1793,10 @@ func (s *LoadBalancerTestSuite) TestDeleteLoadBalancer() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "deleted", data["message"])
 }
 
 func (s *LoadBalancerTestSuite) TestGetLoadBalancerStats() {
@@ -1774,6 +1808,9 @@ func (s *LoadBalancerTestSuite) TestGetLoadBalancerStats() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotNil(s.T(), resp["data"])
 }
 
 func (s *LoadBalancerTestSuite) TestRunHealthCheck() {
@@ -1785,6 +1822,10 @@ func (s *LoadBalancerTestSuite) TestRunHealthCheck() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "health check completed", data["message"])
 }
 
 func TestLoadBalancer(t *testing.T) {
