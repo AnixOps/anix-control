@@ -4179,6 +4179,15 @@ func (s *InviteHandlerTestSuite) TestGetInviteInfo() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "codes")
+	assert.Contains(s.T(), data, "commission_balance")
+	assert.Contains(s.T(), data, "stats")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *InviteHandlerTestSuite) TestGenerateCode() {
@@ -4193,6 +4202,13 @@ func (s *InviteHandlerTestSuite) TestGenerateCode() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.NotEmpty(s.T(), data["code"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *InviteHandlerTestSuite) TestGetCommissionRecords() {
@@ -4207,6 +4223,16 @@ func (s *InviteHandlerTestSuite) TestGetCommissionRecords() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.Contains(s.T(), data, "page")
+	assert.Contains(s.T(), data, "page_size")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *InviteHandlerTestSuite) TestGetWithdrawRecords() {
@@ -4221,6 +4247,40 @@ func (s *InviteHandlerTestSuite) TestGetWithdrawRecords() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.Contains(s.T(), data, "page")
+	assert.Contains(s.T(), data, "page_size")
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *InviteHandlerTestSuite) TestRequestWithdraw_Success() {
+	handler := NewInviteHandler()
+	s.router.POST("/invite/withdraw", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.RequestWithdraw)
+
+	body := `{"amount": 10, "method": "alipay", "account": "test@example.com", "name": "Test"}`
+	req, _ := http.NewRequest("POST", "/invite/withdraw", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.InDelta(s.T(), 10.0, data["amount"], 0.0001)
+	assert.Equal(s.T(), "alipay", data["method"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *InviteHandlerTestSuite) TestRequestWithdraw_MissingAmount() {
@@ -4248,6 +4308,14 @@ func (s *InviteHandlerTestSuite) TestGetConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "commission_rate")
+	assert.Contains(s.T(), data, "min_withdraw")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *InviteHandlerTestSuite) TestGetWithdrawals() {
@@ -4259,6 +4327,16 @@ func (s *InviteHandlerTestSuite) TestGetWithdrawals() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.Contains(s.T(), data, "page")
+	assert.Contains(s.T(), data, "page_size")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *InviteHandlerTestSuite) TestGetInviteStats() {

@@ -328,12 +328,10 @@ func (h *InviteHandler) GetInviteInfo(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"codes":              codes,
-			"commission_balance": user.CommissionBalance,
-			"stats":              stats,
-		},
+	panelSuccess(c, gin.H{
+		"codes":              codes,
+		"commission_balance": user.CommissionBalance,
+		"stats":              stats,
 	})
 }
 
@@ -356,7 +354,7 @@ func (h *InviteHandler) GenerateCode(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": code})
+	panelSuccess(c, code)
 }
 
 // GetCommissionRecords godoc
@@ -382,8 +380,8 @@ func (h *InviteHandler) GetCommissionRecords(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data":      records,
+	panelSuccess(c, gin.H{
+		"list":      records,
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
@@ -421,7 +419,7 @@ func (h *InviteHandler) RequestWithdraw(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": withdraw})
+	panelSuccess(c, withdraw)
 }
 
 // GetWithdrawRecords godoc
@@ -447,8 +445,8 @@ func (h *InviteHandler) GetWithdrawRecords(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data":      records,
+	panelSuccess(c, gin.H{
+		"list":      records,
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
@@ -702,7 +700,7 @@ func (h *InviteHandler) UpdateConfig(c *gin.Context) {
 	}
 
 	h.inviteService.SetConfig(&cfg)
-	c.JSON(http.StatusOK, gin.H{"data": inviteConfigResponse(&cfg, frontendCfg)})
+	panelSuccess(c, inviteConfigResponse(&cfg, frontendCfg))
 }
 
 // GetWithdrawals godoc
@@ -758,13 +756,7 @@ func (h *InviteHandler) GetWithdrawals(c *gin.Context) {
 		list = append(list, inviteWithdrawalResponse(record))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":      list,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
-		},
+	panelSuccess(c, gin.H{
 		"list":      list,
 		"total":     total,
 		"page":      page,
@@ -870,7 +862,7 @@ func (h *InviteHandler) ProcessWithdraw(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": inviteWithdrawalResponse(withdraw)})
+	panelSuccess(c, inviteWithdrawalResponse(withdraw))
 }
 
 // GetInviteStats godoc

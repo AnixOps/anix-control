@@ -20,7 +20,9 @@ describe('Admin Invite', () => {
     await setLocale('en')
 
     adminApi.getInviteConfig.mockResolvedValue({ data: {} })
+    adminApi.getInviteStats.mockResolvedValue({ data: {} })
     adminApi.getWithdrawals.mockResolvedValue({ data: { list: [] } })
+    adminApi.processWithdrawal.mockResolvedValue({ code: 0, data: {} })
   })
 
   afterEach(() => {
@@ -48,6 +50,16 @@ describe('Admin Invite', () => {
         },
         ts: 1783526400000
       })
+      .mockResolvedValueOnce({
+        data: {
+          data: {
+            enabled: true,
+            commission_rate: 35,
+            min_withdraw: 40,
+            withdraw_methods: ['alipay']
+          }
+        }
+      })
 
     const wrapper = mount(Invite)
     await flushPromises()
@@ -65,10 +77,62 @@ describe('Admin Invite', () => {
     expect(wrapper.vm.config.min_withdraw).toBe(30)
     expect(wrapper.vm.config.withdraw_methods).toEqual(['wechat'])
 
+    await wrapper.vm.fetchConfig()
+    await flushPromises()
+
+    expect(wrapper.vm.config.enabled).toBe(true)
+    expect(wrapper.vm.config.commission_rate).toBe(35)
+    expect(wrapper.vm.config.min_withdraw).toBe(40)
+    expect(wrapper.vm.config.withdraw_methods).toEqual(['alipay'])
+
     wrapper.unmount()
   })
 
-  it('renders invite stats from legacy and panel envelope payloads', async () => {
+  it('renders withdrawals from legacy, panel envelope, and nested payloads', async () => {
+    adminApi.getWithdrawals
+      .mockResolvedValueOnce({
+        data: {
+          list: [{ id: 1, user_id: 7, amount: 12.3, method: 'alipay', account: 'legacy@example.com', status: 'pending' }]
+        }
+      })
+      .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        data: {
+          list: [{ id: 2, user_id: 8, amount: 23.4, method: 'wechat', account: 'panel@example.com', status: 'approved' }]
+        },
+        ts: 1783526400000
+      })
+      .mockResolvedValueOnce({
+        data: {
+          data: {
+            list: [{ id: 3, user_id: 9, amount: 34.5, method: 'bank', account: 'nested@example.com', status: 'rejected' }]
+          }
+        }
+      })
+
+    const wrapper = mount(Invite)
+    await flushPromises()
+
+    expect(wrapper.vm.withdrawals[0].id).toBe(1)
+    expect(wrapper.vm.withdrawals[0].status).toBe('pending')
+
+    await wrapper.vm.fetchWithdrawals()
+    await flushPromises()
+
+    expect(wrapper.vm.withdrawals[0].id).toBe(2)
+    expect(wrapper.vm.withdrawals[0].status).toBe('approved')
+
+    await wrapper.vm.fetchWithdrawals()
+    await flushPromises()
+
+    expect(wrapper.vm.withdrawals[0].id).toBe(3)
+    expect(wrapper.vm.withdrawals[0].status).toBe('rejected')
+
+    wrapper.unmount()
+  })
+
+  it('renders invite stats from legacy, panel envelope, and nested payloads', async () => {
     adminApi.getInviteStats
       .mockResolvedValueOnce({
         data: {
@@ -91,6 +155,17 @@ describe('Admin Invite', () => {
         },
         ts: 1783526400000
       })
+      .mockResolvedValueOnce({
+        data: {
+          data: {
+            total_invites: 31,
+            total_commission: 345.67,
+            pending_commission: 89.01,
+            withdrawn_commission: 12.13,
+            top_inviters: [{ user_id: 9, invite_count: 5, commission: 55.5 }]
+          }
+        }
+      })
 
     const wrapper = mount(Invite)
     await flushPromises()
@@ -107,6 +182,14 @@ describe('Admin Invite', () => {
     expect(metricValues).toEqual(['21', '¥234.56', '¥78.90', '¥11.12'])
     expect(wrapper.text()).toContain('8')
     expect(wrapper.text()).toContain('4')
+
+    await wrapper.vm.fetchStats()
+    await flushPromises()
+
+    metricValues = wrapper.findAll('.stat-card .stat-value').map(node => node.text())
+    expect(metricValues).toEqual(['31', '¥345.67', '¥89.01', '¥12.13'])
+    expect(wrapper.text()).toContain('9')
+    expect(wrapper.text()).toContain('5')
 
     wrapper.unmount()
   })

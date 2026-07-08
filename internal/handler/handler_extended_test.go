@@ -273,6 +273,14 @@ func (s *InviteHandlerExtendedTestSuite) TestUpdateConfig_Create() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "commission_rate")
+	assert.Contains(s.T(), data, "min_withdraw")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *InviteHandlerExtendedTestSuite) TestGetConfig_FrontendFields() {
@@ -335,6 +343,14 @@ func (s *InviteHandlerExtendedTestSuite) TestUpdateConfig_FrontendPayloadCompati
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "fixed", data["commission_type"])
+	assert.InDelta(s.T(), 12.5, data["commission_rate"], 0.0001)
+	assert.NotContains(s.T(), resp, "error")
 
 	var cfg model.InviteConfig
 	err := s.db.First(&cfg).Error
@@ -418,6 +434,14 @@ func (s *InviteHandlerExtendedTestSuite) TestProcessWithdraw() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "approved", data["status"])
+	assert.InDelta(s.T(), 1.0, data["status_code"], 0.0001)
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *InviteHandlerExtendedTestSuite) TestProcessWithdraw_InvalidBody() {
@@ -455,6 +479,14 @@ func (s *InviteHandlerExtendedTestSuite) TestProcessWithdraw_ApprovedAlias() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "approved", data["status"])
+	assert.InDelta(s.T(), 1.0, data["status_code"], 0.0001)
+	assert.NotContains(s.T(), resp, "error")
 
 	var updated model.CommissionWithdraw
 	err := s.db.First(&updated, withdraw.ID).Error
@@ -471,6 +503,14 @@ func (s *InviteHandlerExtendedTestSuite) TestGetWithdrawals() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *InviteHandlerExtendedTestSuite) TestGetWithdrawals_StatusTextFilterAndPaginationBounds() {

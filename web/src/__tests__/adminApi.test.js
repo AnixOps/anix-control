@@ -205,8 +205,16 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/coupon', method: 'get', params: { page: 1 } },
       },
       {
+        call: () => adminApi.getInviteConfig(),
+        expected: { url: '/admin/invite/config', method: 'get' },
+      },
+      {
         call: () => adminApi.getInviteStats(),
         expected: { url: '/admin/invite/stats', method: 'get' },
+      },
+      {
+        call: () => adminApi.getWithdrawals({ status: 'pending' }),
+        expected: { url: '/admin/invite/withdrawals', method: 'get', params: { status: 'pending' } },
       },
       {
         call: () => adminApi.getPaymentGateways(),
@@ -724,6 +732,14 @@ describe('admin api mapping', () => {
           url: '/admin/notification/email/config',
           method: 'put',
           data: { host: 'smtp.example.com' },
+        },
+      },
+      {
+        call: () => adminApi.updateInviteConfig({ enabled: true }),
+        expected: {
+          url: '/admin/invite/config',
+          method: 'put',
+          data: { enabled: true },
         },
       },
       {
