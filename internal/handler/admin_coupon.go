@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"net/http"
+	"log"
 	"strconv"
 	"time"
 
@@ -22,7 +22,8 @@ func NewAdminCouponHandler() *AdminCouponHandler {
 func (h *AdminCouponHandler) GetCoupons(c *gin.Context) {
 	var coupons []model.Coupon
 	if err := database.GetDB().Order("created_at DESC").Find(&coupons).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取优惠券列表失败"})
+		log.Printf("admin coupon list failed: %v", err)
+		panelError(c, "获取优惠券列表失败")
 		return
 	}
 
@@ -64,18 +65,19 @@ func (h *AdminCouponHandler) CreateCoupon(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 
 	// 检查优惠码是否已存在
 	var count int64
 	if err := database.GetDB().Model(&model.Coupon{}).Where("code = ?", req.Code).Count(&count).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "检查优惠码失败"})
+		log.Printf("admin coupon duplicate check failed: %v", err)
+		panelError(c, "检查优惠码失败")
 		return
 	}
 	if count > 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "优惠码已存在"})
+		panelError(c, "优惠码已存在")
 		return
 	}
 
@@ -105,7 +107,8 @@ func (h *AdminCouponHandler) CreateCoupon(c *gin.Context) {
 	}
 
 	if err := database.GetDB().Create(&coupon).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "创建失败"})
+		log.Printf("admin coupon create failed: %v", err)
+		panelError(c, "创建失败")
 		return
 	}
 
@@ -119,18 +122,19 @@ func (h *AdminCouponHandler) CreateCoupon(c *gin.Context) {
 func (h *AdminCouponHandler) DeleteCoupon(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的优惠券ID"})
+		panelError(c, "无效的优惠券ID")
 		return
 	}
 
 	var coupon model.Coupon
 	if err := database.GetDB().First(&coupon, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "优惠券不存在"})
+		panelError(c, "优惠券不存在")
 		return
 	}
 
 	if err := database.GetDB().Delete(&coupon).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "删除失败"})
+		log.Printf("admin coupon delete failed: %v", err)
+		panelError(c, "删除失败")
 		return
 	}
 

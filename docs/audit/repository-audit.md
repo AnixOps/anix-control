@@ -151,8 +151,8 @@ Open gaps:
   frontend API mapping coverage. Admin
   ticket list/reply/close success responses now have handler coverage plus
   Tickets admin frontend compatibility coverage, and admin coupon
-  list/create/delete success responses now have handler coverage plus Coupons
-  admin frontend compatibility coverage. Admin knowledge list/create/update/delete
+  list/create/delete success and user-error responses now have handler coverage
+  plus Coupons admin frontend compatibility coverage. Admin knowledge list/create/update/delete
   success and user-error responses now have handler coverage plus Knowledge
   admin frontend compatibility coverage and restored locale strings. Admin system audit-log
   responses now have handler coverage plus System audit frontend compatibility
