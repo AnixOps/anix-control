@@ -185,7 +185,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize user coupon-check response envelope with handler and Plans frontend compatibility tests.
 - [x] Normalize user knowledge list/detail response envelopes with handler and Knowledge frontend compatibility tests.
 - [x] Normalize user ticket list/create/detail/reply/close response envelopes with handler and Tickets frontend compatibility tests.
-- [x] Normalize public payment methods/status response envelopes with handler tests.
+- [x] Normalize public payment methods/status response envelopes with handler tests, including missing payment records.
 - [x] Normalize admin ticket list/reply/close success response envelopes with handler and Tickets frontend compatibility tests.
 - [x] Normalize admin coupon list/create/delete success response envelopes with handler and Coupons frontend compatibility tests.
 - [x] Normalize admin knowledge list/create/update/delete success response envelopes with handler and Knowledge frontend compatibility tests.

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -749,11 +750,12 @@ func (h *PaymentHandler) GetPaymentStatus(c *gin.Context) {
 	// 从数据库查询支付记录
 	payment, err := h.gatewayService.GetRecordByTradeNo(tradeNo)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"message": "支付记录不存在"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "支付记录不存在")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "数据库错误"})
+		log.Printf("payment status lookup failed: %v", err)
+		panelError(c, "数据库错误")
 		return
 	}
 

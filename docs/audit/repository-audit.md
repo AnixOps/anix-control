@@ -164,7 +164,7 @@ Open gaps:
   registration, login, profile, dashboard, subscription info, plan list,
   coupon-check, knowledge list/detail, ticket list/create/detail/reply/close,
   order-save, order list, order detail, public payment methods, and public
-  payment-status success responses now use the same envelope
+  payment-status success and missing-record responses now use the same envelope
   while retaining their token, profile, subscription, and order payloads under
   `data`;
   remaining older modules still need the same treatment.

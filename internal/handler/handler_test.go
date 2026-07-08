@@ -3332,6 +3332,27 @@ func (s *PaymentHandlerTestSuite) TestGetPaymentStatus_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "ORDER123", data["trade_no"])
+	assert.Equal(s.T(), float64(model.PaymentStatusPending), data["status"])
+	assert.Equal(s.T(), "pending", data["status_text"])
+	assert.Equal(s.T(), "crypto", data["method"])
+}
+
+func (s *PaymentHandlerTestSuite) TestGetPaymentStatus_NotFoundUsesPanelEnvelope() {
+	handler := NewPaymentHandler()
+	s.router.GET("/status/:trade_no", handler.GetPaymentStatus)
+
+	req, _ := http.NewRequest("GET", "/status/MISSING", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPaymentPanelError(w, "支付记录不存在")
 }
 
 func TestPaymentHandler(t *testing.T) {
