@@ -587,6 +587,17 @@ func (s *UserHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *UserHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *UserHandlerTestSuite) TestGetSubscription_Success() {
 	handler := NewUserHandler()
 	s.router.GET("/subscription", func(c *gin.Context) {
@@ -619,7 +630,35 @@ func (s *UserHandlerTestSuite) TestGetSubscription_Unauthorized() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusUnauthorized, w.Code)
+	s.assertPanelError(w, "未登录")
+}
+
+func (s *UserHandlerTestSuite) TestGetSubscription_InvalidUserID() {
+	handler := NewUserHandler()
+	s.router.GET("/subscription", func(c *gin.Context) {
+		c.Set("user_id", "invalid")
+		c.Next()
+	}, handler.GetSubscription)
+
+	req, _ := http.NewRequest("GET", "/subscription", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "用户ID无效")
+}
+
+func (s *UserHandlerTestSuite) TestGetSubscription_UserNotFound() {
+	handler := NewUserHandler()
+	s.router.GET("/subscription", func(c *gin.Context) {
+		c.Set("user_id", uint(99999))
+		c.Next()
+	}, handler.GetSubscription)
+
+	req, _ := http.NewRequest("GET", "/subscription", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "用户不存在")
 }
 
 func (s *UserHandlerTestSuite) TestGetSubscription_WithRefresh() {
@@ -677,7 +716,35 @@ func (s *UserHandlerTestSuite) TestGetProfile_Unauthorized() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusUnauthorized, w.Code)
+	s.assertPanelError(w, "未登录")
+}
+
+func (s *UserHandlerTestSuite) TestGetProfile_InvalidUserID() {
+	handler := NewUserHandler()
+	s.router.GET("/profile", func(c *gin.Context) {
+		c.Set("user_id", "invalid")
+		c.Next()
+	}, handler.GetProfile)
+
+	req, _ := http.NewRequest("GET", "/profile", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "用户ID无效")
+}
+
+func (s *UserHandlerTestSuite) TestGetProfile_UserNotFound() {
+	handler := NewUserHandler()
+	s.router.GET("/profile", func(c *gin.Context) {
+		c.Set("user_id", uint(99999))
+		c.Next()
+	}, handler.GetProfile)
+
+	req, _ := http.NewRequest("GET", "/profile", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "用户不存在")
 }
 
 func (s *UserHandlerTestSuite) TestGetDashboard_Success() {
@@ -712,7 +779,35 @@ func (s *UserHandlerTestSuite) TestGetDashboard_Unauthorized() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusUnauthorized, w.Code)
+	s.assertPanelError(w, "未登录")
+}
+
+func (s *UserHandlerTestSuite) TestGetDashboard_InvalidUserID() {
+	handler := NewUserHandler()
+	s.router.GET("/dashboard", func(c *gin.Context) {
+		c.Set("user_id", "invalid")
+		c.Next()
+	}, handler.GetDashboard)
+
+	req, _ := http.NewRequest("GET", "/dashboard", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "用户ID无效")
+}
+
+func (s *UserHandlerTestSuite) TestGetDashboard_UserNotFound() {
+	handler := NewUserHandler()
+	s.router.GET("/dashboard", func(c *gin.Context) {
+		c.Set("user_id", uint(99999))
+		c.Next()
+	}, handler.GetDashboard)
+
+	req, _ := http.NewRequest("GET", "/dashboard", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "用户不存在")
 }
 
 func TestUserHandler(t *testing.T) {
