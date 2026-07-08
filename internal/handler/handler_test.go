@@ -3518,6 +3518,17 @@ func (s *OrderHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *OrderHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *OrderHandlerTestSuite) TestGetOrders_Success() {
 	handler := NewOrderHandler()
 	s.router.GET("/orders", func(c *gin.Context) {
@@ -3594,7 +3605,21 @@ func (s *OrderHandlerTestSuite) TestGetOrderDetail_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "订单不存在")
+}
+
+func (s *OrderHandlerTestSuite) TestGetOrderDetail_OtherUserHidden() {
+	handler := NewOrderHandler()
+	s.router.GET("/order/:id", func(c *gin.Context) {
+		c.Set("user_id", uint(99999))
+		c.Next()
+	}, handler.GetOrderDetail)
+
+	req, _ := http.NewRequest("GET", "/order/"+strconv.FormatUint(uint64(s.testOrder.ID), 10), nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "订单不存在")
 }
 
 func (s *OrderHandlerTestSuite) TestGetOrderDetail_InvalidID() {
@@ -3608,7 +3633,7 @@ func (s *OrderHandlerTestSuite) TestGetOrderDetail_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "ID无效")
 }
 
 func TestOrderHandler(t *testing.T) {

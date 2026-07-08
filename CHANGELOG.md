@@ -107,9 +107,9 @@
 - Normalized admin user management CRUD, ban/unban, traffic reset, and subscribe-reset success responses to the panel `code/msg/ts/data` envelope while keeping the Users page compatible with legacy, enveloped, and nested payloads.
 - Normalized admin plan management list/detail/create/update/delete/assign success responses to the panel `code/msg/ts/data` envelope while keeping the Plans page compatible with legacy, enveloped, and nested payloads.
 - Normalized admin order management list/detail/status/paid/cancel success responses to the panel `code/msg/ts/data` envelope while keeping the Orders page compatible with legacy, enveloped, and nested payloads.
-- Normalized user registration and order-save success responses to the panel `code/msg/ts/data` envelope while preserving the existing token and order payloads under `data`.
+- Normalized user registration success and order-save success/error responses to the panel `code/msg/ts/data` envelope while preserving the existing token and order payloads under `data`.
 - Normalized user login success responses to the panel `code/msg/ts/data` envelope while keeping the Login page compatible with the enveloped token payload.
-- Normalized user order list and detail responses to the panel `code/msg/ts/data` envelope while keeping the Orders page compatible with legacy and enveloped payloads.
+- Normalized user order list and detail success/error responses to the panel `code/msg/ts/data` envelope while keeping the Orders page compatible with legacy and enveloped payloads.
 - Normalized user subscription info responses to the panel `code/msg/ts/data` envelope while keeping the Subscribe page compatible with legacy and enveloped payloads.
 - Normalized user profile responses to the panel `code/msg/ts/data` envelope while keeping the user store compatible with the enveloped profile payload.
 - Normalized user dashboard responses to the panel `code/msg/ts/data` envelope while preserving the subscription payload under `data.subscription`.
