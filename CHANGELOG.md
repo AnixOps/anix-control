@@ -96,6 +96,7 @@
 - Normalized admin payment gateway list responses to the panel `code/msg/ts/data` envelope while keeping the Payment page compatible with legacy and enveloped payloads.
 - Normalized admin payment gateway create/update/delete/toggle and payment-record list responses to the panel `code/msg/ts/data` envelope while keeping the Payment page compatible with legacy and enveloped payloads.
 - Normalized user payment channels/create/status/records success responses to the panel `code/msg/ts/data` envelope while preserving payment callback plain-text compatibility.
+- Normalized user/admin MFA success responses to the panel `code/msg/ts/data` envelope while keeping the Admin MFA page compatible with legacy and enveloped config payloads.
 - Normalized user registration and order-save success responses to the panel `code/msg/ts/data` envelope while preserving the existing token and order payloads under `data`.
 - Normalized user login success responses to the panel `code/msg/ts/data` envelope while keeping the Login page compatible with the enveloped token payload.
 - Normalized user order list and detail responses to the panel `code/msg/ts/data` envelope while keeping the Orders page compatible with legacy and enveloped payloads.
