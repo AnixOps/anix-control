@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/anixops/v2board/internal/payment"
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // PaymentGatewayHandler 支付网关处理器
@@ -563,7 +565,12 @@ func (h *PaymentGatewayHandler) GetPaymentStatus(c *gin.Context) {
 
 	record, err := h.gatewayService.GetRecordByTradeNo(tradeNo)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "record not found"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "支付记录不存在")
+			return
+		}
+		log.Printf("payment gateway status lookup failed: %v", err)
+		panelError(c, "数据库错误")
 		return
 	}
 
