@@ -103,4 +103,63 @@ describe('System runtime configuration', () => {
     expect(adminApi.setSystemConfig).not.toHaveBeenCalled()
     expect(wrapper.vm.runtimeValidationError).toBe('NodeX base URL is required in NodeX Mode')
   })
+
+  it('loads runtime and config list data from panel envelope responses', async () => {
+    const configMap = {
+      'forward.runtime.nodex_mode': { value: false },
+      'forward.runtime_backend': { value: 'nftables_ansible' },
+      'forward.runtime.ansible.backend': { value: 'nftables_ansible' },
+      'forward.runtime.ansible.config': {
+        value: JSON.stringify({
+          inventory: 'panel-hosts.ini',
+          playbookApply: 'apply-panel.yml',
+          playbookRemove: 'remove-panel.yml'
+        })
+      },
+      'forward.runtime.nodex.base_url': { value: 'https://nodex.panel' },
+      'forward.runtime.nodex.token': { value: 'panel-token' },
+      'forward.runtime.nodex.timeout_seconds': { value: 33 }
+    }
+    adminApi.getSystemConfig.mockImplementation((key) => Promise.resolve({
+      code: 0,
+      msg: '操作成功',
+      data: configMap[key] ?? { value: '' },
+      ts: 1783526400000
+    }))
+    adminApi.getSystemConfigs.mockResolvedValue({
+      code: 0,
+      msg: '操作成功',
+      data: {
+        list: [
+          {
+            key: 'site.name',
+            value: 'AnixOps',
+            remark: 'Site name',
+            sensitive: false,
+            has_value: true
+          }
+        ],
+        total: 1
+      },
+      ts: 1783526400000
+    })
+
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    expect(wrapper.vm.runtimeBackend).toBe('nftables_ansible')
+    expect(wrapper.vm.runtimeNodeXMode).toBe(false)
+    expect(wrapper.vm.runtimeNodeXBaseUrl).toBe('https://nodex.panel')
+    expect(wrapper.vm.runtimeNodeXToken).toBe('panel-token')
+    expect(wrapper.vm.runtimeNodeXTimeout).toBe(33)
+    expect(wrapper.vm.runtimeAnsibleForm.inventory).toBe('panel-hosts.ini')
+    expect(wrapper.vm.configs).toHaveLength(1)
+    expect(wrapper.vm.configs[0]).toMatchObject({
+      key: 'site.name',
+      value: 'AnixOps',
+      description: 'Site name',
+      sensitive: false,
+      has_value: true
+    })
+  })
 })

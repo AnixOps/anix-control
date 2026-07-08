@@ -4142,6 +4142,13 @@ func (s *SystemHandlerTestSuite) TestGetConfigs() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.NotContains(s.T(), resp, "list")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SystemHandlerTestSuite) TestGetConfigs_ByGroup() {
@@ -4153,6 +4160,12 @@ func (s *SystemHandlerTestSuite) TestGetConfigs_ByGroup() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.NotContains(s.T(), resp, "list")
 }
 
 func (s *SystemHandlerTestSuite) TestGetSubscriptionSettings_UsesPanelEnvelope() {
@@ -4183,6 +4196,14 @@ func (s *SystemHandlerTestSuite) TestGetConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "test_key", data["key"])
+	assert.Equal(s.T(), "", data["value"])
+	assert.Contains(s.T(), data, "display_value")
+	assert.Contains(s.T(), data, "sensitive")
+	assert.Contains(s.T(), data, "has_value")
 }
 
 func (s *SystemHandlerTestSuite) TestSetConfig() {
@@ -4196,6 +4217,14 @@ func (s *SystemHandlerTestSuite) TestSetConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "test_key", data["key"])
+	assert.Equal(s.T(), "test_value", data["value"])
+	assert.Equal(s.T(), "string", data["type"])
+	assert.Equal(s.T(), "test", data["group"])
+	assert.Equal(s.T(), "config updated", data["message"])
 }
 
 func (s *SystemHandlerTestSuite) TestSetConfig_MissingValue() {
@@ -4220,6 +4249,10 @@ func (s *SystemHandlerTestSuite) TestDeleteConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "config deleted", data["message"])
 }
 
 func TestSystemHandler(t *testing.T) {

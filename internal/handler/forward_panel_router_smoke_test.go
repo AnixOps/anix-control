@@ -292,7 +292,11 @@ func (s *ForwardPanelRouterSmokeTestSuite) mustSetSystemConfig(key string, value
 		"group":       "forward",
 		"description": description,
 	}, s.adminToken)
-	s.Equal("config updated", s.mustString(body["message"]))
+	message := body["message"]
+	if data, ok := body["data"].(map[string]any); ok && data["message"] != nil {
+		message = data["message"]
+	}
+	s.Equal("config updated", s.mustString(message))
 }
 
 func (s *ForwardPanelRouterSmokeTestSuite) mustCreateForwardNode(name, nodeType, host string) uint {

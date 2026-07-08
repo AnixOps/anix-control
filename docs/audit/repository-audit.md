@@ -126,7 +126,9 @@ Open gaps:
   success responses now have handler coverage plus Knowledge admin frontend
   compatibility coverage and restored locale strings. Admin system audit-log
   responses now have handler coverage plus System audit frontend compatibility
-  coverage. User
+  coverage, and admin system config CRUD success responses now have handler
+  coverage plus System runtime/config compatibility coverage while retaining
+  sensitive-value masking. User
   registration, login, profile, dashboard, subscription info, plan list,
   coupon-check, knowledge list/detail, ticket list/create/detail/reply/close,
   order-save, order list, order detail, public payment methods, and public
