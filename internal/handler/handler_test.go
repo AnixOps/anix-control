@@ -3718,6 +3718,17 @@ func (s *CouponHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *CouponHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *CouponHandlerTestSuite) TestCheckCoupon_Success() {
 	handler := NewCouponHandler()
 	s.router.POST("/coupon/check", handler.CheckCoupon)
@@ -3751,7 +3762,7 @@ func (s *CouponHandlerTestSuite) TestCheckCoupon_InvalidCode() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "无效的优惠码")
 }
 
 func (s *CouponHandlerTestSuite) TestCheckCoupon_MissingCode() {
@@ -3764,7 +3775,7 @@ func (s *CouponHandlerTestSuite) TestCheckCoupon_MissingCode() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "参数错误")
 }
 
 func (s *CouponHandlerTestSuite) TestCheckCoupon_Expired() {
@@ -3780,8 +3791,37 @@ func (s *CouponHandlerTestSuite) TestCheckCoupon_Expired() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-	assert.Contains(s.T(), w.Body.String(), "已过期")
+	s.assertPanelError(w, "该优惠码已过期")
+}
+
+func (s *CouponHandlerTestSuite) TestCheckCoupon_NotStarted() {
+	s.db.Model(s.testCoupon).Update("started_at", time.Now().Unix()+3600)
+
+	handler := NewCouponHandler()
+	s.router.POST("/coupon/check", handler.CheckCoupon)
+
+	body := `{"code": "TESTCODE", "plan_id": 1}`
+	req, _ := http.NewRequest("POST", "/coupon/check", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "该优惠码尚未开始使用")
+}
+
+func (s *CouponHandlerTestSuite) TestCheckCoupon_LimitReached() {
+	s.db.Model(s.testCoupon).Update("use_count", *s.testCoupon.LimitUse)
+
+	handler := NewCouponHandler()
+	s.router.POST("/coupon/check", handler.CheckCoupon)
+
+	body := `{"code": "TESTCODE", "plan_id": 1}`
+	req, _ := http.NewRequest("POST", "/coupon/check", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "该优惠码已达到使用次数上限")
 }
 
 func TestCouponHandler(t *testing.T) {

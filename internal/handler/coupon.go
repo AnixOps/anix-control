@@ -1,12 +1,14 @@
 package handler
 
 import (
-	"net/http"
+	"errors"
+	"log"
 	"time"
 
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // CouponHandler 用户端优惠券处理器
@@ -25,28 +27,33 @@ func (h *CouponHandler) CheckCoupon(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
+		panelError(c, "参数错误")
 		return
 	}
 
 	var coupon model.Coupon
 	if err := database.GetDB().Where("code = ?", req.Code).First(&coupon).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "无效的优惠码"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "无效的优惠码")
+			return
+		}
+		log.Printf("coupon lookup failed: %v", err)
+		panelError(c, "优惠码查询失败")
 		return
 	}
 
 	now := time.Now().Unix()
 	if coupon.StartedAt > now {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "该优惠码尚未开始使用"})
+		panelError(c, "该优惠码尚未开始使用")
 		return
 	}
 	if coupon.EndedAt < now {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "该优惠码已过期"})
+		panelError(c, "该优惠码已过期")
 		return
 	}
 
 	if coupon.LimitUse != nil && *coupon.LimitUse > 0 && coupon.UseCount >= *coupon.LimitUse {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "该优惠码已达到使用次数上限"})
+		panelError(c, "该优惠码已达到使用次数上限")
 		return
 	}
 
