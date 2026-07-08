@@ -468,7 +468,7 @@ func (h *PaymentGatewayHandler) GetChannels(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": channels})
+	panelSuccess(c, channels)
 }
 
 // CreatePayment godoc
@@ -537,15 +537,13 @@ func (h *PaymentGatewayHandler) CreatePayment(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"trade_no":      record.TradeNo,
-			"amount":        record.Amount,
-			"fee_amount":    record.FeeAmount,
-			"actual_amount": record.ActualAmount,
-			"pay_url":       "",
-			"qrcode":        "",
-		},
+	panelSuccess(c, gin.H{
+		"trade_no":      record.TradeNo,
+		"amount":        record.Amount,
+		"fee_amount":    record.FeeAmount,
+		"actual_amount": record.ActualAmount,
+		"pay_url":       "",
+		"qrcode":        "",
 	})
 }
 
@@ -569,14 +567,12 @@ func (h *PaymentGatewayHandler) GetPaymentStatus(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"trade_no":      record.TradeNo,
-			"amount":        record.Amount,
-			"actual_amount": record.ActualAmount,
-			"status":        record.Status,
-			"paid_at":       record.PaidAt,
-		},
+	panelSuccess(c, gin.H{
+		"trade_no":      record.TradeNo,
+		"amount":        record.Amount,
+		"actual_amount": record.ActualAmount,
+		"status":        record.Status,
+		"paid_at":       record.PaidAt,
 	})
 }
 
@@ -603,8 +599,8 @@ func (h *PaymentGatewayHandler) GetUserRecords(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data":      records,
+	panelSuccess(c, gin.H{
+		"list":      records,
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,

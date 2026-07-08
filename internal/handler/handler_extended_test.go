@@ -956,6 +956,15 @@ func (s *PaymentGatewayExtendedTestSuite) TestGetChannels() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].([]any)
+	assert.True(s.T(), ok)
+	assert.Len(s.T(), data, 1)
+	first, ok := data[0].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), s.testGateway.Name, first["name"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *PaymentGatewayExtendedTestSuite) TestCreatePayment() {
@@ -977,9 +986,18 @@ func (s *PaymentGatewayExtendedTestSuite) TestCreatePayment() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.NotEmpty(s.T(), data["trade_no"])
+	assert.InDelta(s.T(), 1000, data["amount"], 0.000001)
+	assert.Contains(s.T(), data, "actual_amount")
+	assert.Contains(s.T(), data, "pay_url")
+	assert.NotContains(s.T(), resp, "error")
 }
 
-func (s *PaymentGatewayExtendedTestSuite) TestGetPaymentStatus() {
+func (s *PaymentGatewayExtendedTestSuite) TestGetPaymentStatus_NotFound() {
 	handler := NewPaymentGatewayHandler()
 	s.router.GET("/payment/status/:trade_no", handler.GetPaymentStatus)
 
@@ -991,7 +1009,48 @@ func (s *PaymentGatewayExtendedTestSuite) TestGetPaymentStatus() {
 	assert.Equal(s.T(), http.StatusNotFound, w.Code)
 }
 
+func (s *PaymentGatewayExtendedTestSuite) TestGetPaymentStatus_Success() {
+	record := &model.PaymentRecord{
+		GatewayID:    s.testGateway.ID,
+		TradeNo:      "PAY-STATUS-001",
+		UserID:       s.testUser.ID,
+		Amount:       100,
+		ActualAmount: 102,
+		GatewayType:  "alipay",
+		Status:       model.PaymentStatusPaid,
+	}
+	s.db.Create(record)
+
+	handler := NewPaymentGatewayHandler()
+	s.router.GET("/payment/status/:trade_no", handler.GetPaymentStatus)
+
+	req, _ := http.NewRequest("GET", "/payment/status/PAY-STATUS-001", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "PAY-STATUS-001", data["trade_no"])
+	assert.InDelta(s.T(), 100, data["amount"], 0.000001)
+	assert.InDelta(s.T(), 102, data["actual_amount"], 0.000001)
+	assert.Equal(s.T(), float64(model.PaymentStatusPaid), data["status"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *PaymentGatewayExtendedTestSuite) TestGetUserRecords() {
+	record := &model.PaymentRecord{
+		GatewayID:   s.testGateway.ID,
+		TradeNo:     "USER-RECORD-001",
+		UserID:      s.testUser.ID,
+		Amount:      25,
+		GatewayType: "alipay",
+		Status:      model.PaymentStatusPending,
+	}
+	s.db.Create(record)
+
 	handler := NewPaymentGatewayHandler()
 	s.router.GET("/payment/records", func(c *gin.Context) {
 		c.Set("user_id", s.testUser.ID)
@@ -1003,6 +1062,22 @@ func (s *PaymentGatewayExtendedTestSuite) TestGetUserRecords() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotContains(s.T(), resp, "total")
+	assert.NotContains(s.T(), resp, "error")
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), float64(1), data["total"])
+	rawList, err := json.Marshal(data["list"])
+	assert.NoError(s.T(), err)
+	var list []struct {
+		TradeNo string `json:"trade_no"`
+	}
+	err = json.Unmarshal(rawList, &list)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), list, 1)
+	assert.Equal(s.T(), "USER-RECORD-001", list[0].TradeNo)
 }
 
 func (s *PaymentGatewayExtendedTestSuite) TestPaymentCallback() {
