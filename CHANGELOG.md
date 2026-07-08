@@ -108,6 +108,7 @@
 - Normalized admin coupon list, create, and delete success responses to the panel `code/msg/ts/data` envelope while keeping the Coupons admin page compatible with legacy and enveloped payloads.
 - Normalized admin knowledge list, create, update, and delete success responses to the panel `code/msg/ts/data` envelope, preserved partial-update sort/visibility fields when omitted, and restored missing Knowledge admin page locale strings.
 - Normalized admin system audit-log responses to the panel `code/msg/ts/data` envelope while keeping the System audit page compatible with legacy and enveloped payloads.
+- Normalized admin system config CRUD success responses to the panel `code/msg/ts/data` envelope while retaining sensitive-value masking and keeping the System runtime/config views compatible with legacy and enveloped payloads.
 
 ### Documentation
 

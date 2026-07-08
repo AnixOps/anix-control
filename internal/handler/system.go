@@ -427,11 +427,7 @@ func (h *SystemHandler) GetConfigs(c *gin.Context) {
 		list = append(list, systemConfigResponse(&configs[i], true))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":  list,
-			"total": len(list),
-		},
+	panelSuccess(c, gin.H{
 		"list":  list,
 		"total": len(list),
 	})
@@ -459,19 +455,17 @@ func (h *SystemHandler) GetConfig(c *gin.Context) {
 
 	if entry == nil {
 		displayValue, sensitive, hasValue := service.MaskSystemConfigValue(key, "")
-		c.JSON(http.StatusOK, gin.H{
-			"data": gin.H{
-				"key":           key,
-				"value":         "",
-				"display_value": displayValue,
-				"sensitive":     sensitive,
-				"has_value":     hasValue,
-			},
+		panelSuccess(c, gin.H{
+			"key":           key,
+			"value":         "",
+			"display_value": displayValue,
+			"sensitive":     sensitive,
+			"has_value":     hasValue,
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": systemConfigResponse(entry, false)})
+	panelSuccess(c, systemConfigResponse(entry, false))
 }
 
 // SetConfig godoc
@@ -586,10 +580,9 @@ func (h *SystemHandler) SetConfig(c *gin.Context) {
 	}
 	h.recordSystemConfigAudit(c, action, savedEntry, preserveExisting)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "config updated",
-		"data":    systemConfigResponse(savedEntry, true),
-	})
+	resp := systemConfigResponse(savedEntry, true)
+	resp["message"] = "config updated"
+	panelSuccess(c, resp)
 }
 
 // DeleteConfig godoc
@@ -621,7 +614,7 @@ func (h *SystemHandler) DeleteConfig(c *gin.Context) {
 		h.recordSystemConfigAudit(c, "delete", existingEntry, false)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "config deleted"})
+	panelSuccess(c, gin.H{"message": "config deleted"})
 }
 
 // ========== 备份管理 ==========

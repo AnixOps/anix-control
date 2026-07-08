@@ -70,6 +70,7 @@ Local verification status:
 - Admin coupon list/create/delete handler tests now assert panel `code/msg/ts/data` envelopes and delete side effects, and admin Coupons frontend tests cover legacy and enveloped payloads.
 - Admin knowledge list/create/update/delete handler tests now assert panel `code/msg/ts/data` envelopes, partial-update field preservation, and delete side effects; admin Knowledge frontend tests cover legacy and enveloped payloads plus restored locale text.
 - Admin system audit-log handler tests now assert panel `code/msg/ts/data` envelopes and sensitive-content redaction, and System audit frontend tests cover legacy and enveloped payloads.
+- Admin system config CRUD handler tests now assert panel `code/msg/ts/data` envelopes, sensitive-field tests preserve secret masking/audit redaction, and System runtime/config frontend tests cover enveloped payloads.
 - Production runtime `gosec` scanning is clean and now blocking in CI for `cmd/server`, generated gRPC package with generated files excluded, and non-test `internal/...` packages.
 - There are no remaining full-repository `G104` findings.
 
