@@ -153,7 +153,7 @@ func (h *NodeHandler) GetNodes(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	panelSuccess(c, result)
 }
 
 // GetNode godoc
@@ -181,7 +181,7 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": node})
+	panelSuccess(c, node)
 }
 
 // GetNodeCredentials godoc
@@ -211,15 +211,13 @@ func (h *NodeHandler) GetNodeCredentials(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"node_id": node.ID,
-			"name":    node.Name,
-			"host":    node.Host,
-			"port":    node.Port,
-			"api_key": node.APIKey,
-			"secret":  node.Secret,
-		},
+	panelSuccess(c, gin.H{
+		"node_id": node.ID,
+		"name":    node.Name,
+		"host":    node.Host,
+		"port":    node.Port,
+		"api_key": node.APIKey,
+		"secret":  node.Secret,
 	})
 }
 
@@ -247,13 +245,10 @@ func (h *NodeHandler) CreateNode(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "节点创建成功",
-		"data": gin.H{
-			"node_id": node.ID,
-			"api_key": node.APIKey,
-			"secret":  node.Secret,
-		},
+	panelSuccess(c, gin.H{
+		"node_id": node.ID,
+		"api_key": node.APIKey,
+		"secret":  node.Secret,
 	})
 }
 
@@ -294,7 +289,7 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
+	panelSuccess(c, gin.H{"message": "更新成功"})
 }
 
 // DeleteNode godoc
@@ -321,7 +316,7 @@ func (h *NodeHandler) DeleteNode(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	panelSuccess(c, gin.H{"message": "删除成功"})
 }
 
 // GetNodeStats godoc
@@ -411,13 +406,7 @@ func (h *NodeHandler) GetNodeLogs(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":      list,
-			"total":     result.Total,
-			"page":      page,
-			"page_size": pageSize,
-		},
+	panelSuccess(c, gin.H{
 		"list":      list,
 		"total":     result.Total,
 		"page":      page,
@@ -460,12 +449,10 @@ func (h *NodeHandler) GetNodeRawConfig(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"node_id":    node.ID,
-			"name":       node.Name,
-			"raw_config": config,
-		},
+	panelSuccess(c, gin.H{
+		"node_id":    node.ID,
+		"name":       node.Name,
+		"raw_config": config,
 	})
 }
 
@@ -516,7 +503,7 @@ func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "配置更新成功"})
+	panelSuccess(c, gin.H{"message": "配置更新成功"})
 }
 
 // ValidateRawConfig godoc
@@ -565,7 +552,7 @@ func (h *NodeHandler) ValidateRawConfig(c *gin.Context) {
 		warnings = append(warnings, "缺少 server_port 字段")
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	panelSuccess(c, gin.H{
 		"valid":    true,
 		"message":  "配置有效",
 		"warnings": warnings,
@@ -600,7 +587,7 @@ func (h *NodeHandler) GetProtocols(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": protocols})
+	panelSuccess(c, protocols)
 }
 
 // CreateProtocol godoc
@@ -636,10 +623,7 @@ func (h *NodeHandler) CreateProtocol(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "协议创建成功",
-		"data":    protocol,
-	})
+	panelSuccess(c, protocol)
 }
 
 // UpdateProtocol godoc
@@ -676,7 +660,7 @@ func (h *NodeHandler) UpdateProtocol(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
+	panelSuccess(c, gin.H{"message": "更新成功"})
 }
 
 // DeleteProtocol godoc
@@ -703,7 +687,7 @@ func (h *NodeHandler) DeleteProtocol(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	panelSuccess(c, gin.H{"message": "删除成功"})
 }
 
 // GetProtocolTemplates godoc
@@ -714,10 +698,10 @@ func (h *NodeHandler) DeleteProtocol(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} map[string]any
-// @Router /admin/nodes/protocol-templates [get]
+// @Router /admin/protocol-templates [get]
 func (h *NodeHandler) GetProtocolTemplates(c *gin.Context) {
 	templates := model.GetProtocolTemplates()
-	c.JSON(http.StatusOK, gin.H{"data": templates})
+	panelSuccess(c, templates)
 }
 
 // SyncProtocol godoc
@@ -744,7 +728,7 @@ func (h *NodeHandler) SyncProtocol(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "同步成功"})
+	panelSuccess(c, gin.H{"message": "同步成功"})
 }
 
 // ========== 授权密钥管理 ==========
@@ -781,14 +765,11 @@ func (h *NodeHandler) GenerateAuthKey(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "生成成功",
-		"data": gin.H{
-			"id":        authKey.ID,
-			"name":      authKey.Name,
-			"key":       key, // 只在创建时返回一次
-			"expire_at": authKey.ExpireAt,
-		},
+	panelSuccess(c, gin.H{
+		"id":        authKey.ID,
+		"name":      authKey.Name,
+		"key":       key, // 只在创建时返回一次
+		"expire_at": authKey.ExpireAt,
 	})
 }
 
@@ -809,7 +790,7 @@ func (h *NodeHandler) GetAuthKeys(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": keys})
+	panelSuccess(c, keys)
 }
 
 // DeleteAuthKey godoc
@@ -836,7 +817,7 @@ func (h *NodeHandler) DeleteAuthKey(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	panelSuccess(c, gin.H{"message": "删除成功"})
 }
 
 // ========== 内部API (API Token认证) ==========

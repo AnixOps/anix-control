@@ -936,8 +936,9 @@ const loadNodes = async () => {
   loading.value = true
   try {
     const res = await getNodes({ page: pagination.page, page_size: pagination.size })
-    nodes.value = (res.data.list || []).map(normalizeNode)
-    pagination.total = res.data.total || 0
+    const payload = readNodePage(res)
+    nodes.value = (payload.list || []).map(normalizeNode)
+    pagination.total = payload.total || 0
     return true
   } catch (e) {
     console.error('Failed to load nodes:', e)
@@ -957,17 +958,47 @@ const loadStats = async () => {
 }
 
 const readNodeStats = (res) => {
+  const payload = readNodePayload(res)
+  return payload && typeof payload === 'object' ? payload : {}
+}
+
+const readNodePayload = (res) => {
   if (!res || typeof res !== 'object') {
-    return {}
+    return null
   }
-  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  if (Object.prototype.hasOwnProperty.call(res, 'code')) {
+    return res.data ?? null
+  }
+  if (
+    res.data &&
+    typeof res.data === 'object' &&
+    Object.prototype.hasOwnProperty.call(res.data, 'data')
+  ) {
+    return res.data.data ?? null
+  }
+  return res.data ?? res
+}
+
+const readNodeList = (res) => {
+  const payload = readNodePayload(res)
+  if (Array.isArray(payload)) {
+    return payload
+  }
+  if (payload && Array.isArray(payload.list)) {
+    return payload.list
+  }
+  return []
+}
+
+const readNodePage = (res) => {
+  const payload = readNodePayload(res)
   return payload && typeof payload === 'object' ? payload : {}
 }
 
 const loadProtocolTemplates = async () => {
   try {
     const res = await getProtocolTemplates()
-    protocolTemplates.value = res.data || []
+    protocolTemplates.value = readNodeList(res)
   } catch (e) {
     console.error('Failed to load templates:', e)
   }
@@ -976,7 +1007,7 @@ const loadProtocolTemplates = async () => {
 const loadAuthKeysPreview = async () => {
   try {
     const res = await getAuthKeys()
-    const keys = res.data || []
+    const keys = readNodeList(res)
     if (keys.length > 0) {
       authKey.value = keys[0].key || ''
       authKeyUsed.value = keys[0].used || 0
@@ -1146,7 +1177,8 @@ const openDeployModal = async () => {
     }
     const credentials = await Promise.allSettled(roots.map(async (node) => {
       const res = await getNodeCredentials(node.id)
-      return { nodeId: node.id, apiKey: res.data?.api_key || '' }
+      const payload = readNodePayload(res)
+      return { nodeId: node.id, apiKey: payload?.api_key || '' }
     }))
     const apiKeysByNode = new Map(
       credentials
@@ -1259,8 +1291,9 @@ const loadNodeLogs = async () => {
       source: logFilter.source || undefined,
       search: logFilter.search || undefined
     })
-    nodeLogs.value = res.data?.list || []
-    logPagination.total = res.data?.total || 0
+    const payload = readNodePage(res)
+    nodeLogs.value = payload.list || []
+    logPagination.total = payload.total || 0
   } catch (e) {
     console.error('Failed to load node logs:', e)
     nodeLogs.value = []
@@ -1302,7 +1335,7 @@ const openProtocols = async (node) => {
   showProtocolModal.value = true
   try {
     const res = await getNodeProtocols(node.id)
-    protocols.value = res.data || []
+    protocols.value = readNodeList(res)
   } catch (e) {
     console.error('Failed to load protocols:', e)
     protocols.value = []
@@ -1471,7 +1504,7 @@ const saveProtocol = async () => {
 
     closeProtocolFormModal()
     const res = await getNodeProtocols(selectedNode.value.id)
-    protocols.value = res.data || []
+    protocols.value = readNodeList(res)
   } catch (e) {
     alert(t('admin.nodes.messages.saveFailed', { message: e.message || e }))
   } finally {
@@ -1484,7 +1517,7 @@ const deleteProtocol = async (protocol) => {
   try {
     await deleteNodeProtocol(selectedNode.value.id, protocol.id)
     const res = await getNodeProtocols(selectedNode.value.id)
-    protocols.value = res.data || []
+    protocols.value = readNodeList(res)
   } catch (e) {
     alert(t('admin.nodes.messages.deleteFailed', { message: e.message || e }))
   }

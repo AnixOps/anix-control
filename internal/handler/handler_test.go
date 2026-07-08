@@ -87,6 +87,7 @@ func initTestDB() *gorm.DB {
 		&model.User{},
 		&model.Node{},
 		&model.NodeProtocol{},
+		&model.NodeLog{},
 		&model.Plan{},
 		&model.Order{},
 		&model.Coupon{},
@@ -736,6 +737,8 @@ func (s *NodeHandlerTestSuite) SetupTest() {
 		Name:        "Handler Test Node",
 		Host:        "192.168.1.100",
 		Port:        443,
+		APIKey:      "handler-test-api-key",
+		Secret:      "handler-test-secret",
 		Status:      model.NodeStatusOnline,
 		Rate:        1.0,
 		TrafficRate: 1.0,
@@ -755,6 +758,12 @@ func (s *NodeHandlerTestSuite) TestGetNodes_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestGetNodes_WithPagination() {
@@ -766,11 +775,12 @@ func (s *NodeHandlerTestSuite) TestGetNodes_WithPagination() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]any
-	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
 	data := resp["data"].(map[string]any)
 	assert.Len(s.T(), data["list"].([]any), 1)
 	assert.Equal(s.T(), float64(1), data["total"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestGetNodes_WithFilters() {
@@ -782,6 +792,10 @@ func (s *NodeHandlerTestSuite) TestGetNodes_WithFilters() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotNil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestGetNode_Success() {
@@ -793,6 +807,31 @@ func (s *NodeHandlerTestSuite) TestGetNode_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(s.testNode.ID), data["id"])
+	assert.Equal(s.T(), s.testNode.Name, data["name"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *NodeHandlerTestSuite) TestGetNodeCredentials_Success() {
+	handler := NewNodeHandler()
+	s.router.GET("/nodes/:id/credentials", handler.GetNodeCredentials)
+
+	req, _ := http.NewRequest("GET", "/nodes/"+strconv.FormatUint(uint64(s.testNode.ID), 10)+"/credentials", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
+	assert.Equal(s.T(), s.testNode.Name, data["name"])
+	assert.NotEmpty(s.T(), data["api_key"])
+	assert.NotEmpty(s.T(), data["secret"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestGetNode_NotFound() {
@@ -836,6 +875,13 @@ func (s *NodeHandlerTestSuite) TestCreateNode_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.NotZero(s.T(), data["node_id"])
+	assert.NotEmpty(s.T(), data["api_key"])
+	assert.NotEmpty(s.T(), data["secret"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestCreateNode_InvalidBody() {
@@ -866,6 +912,11 @@ func (s *NodeHandlerTestSuite) TestUpdateNode_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "更新成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestUpdateNode_InvalidID() {
@@ -892,6 +943,11 @@ func (s *NodeHandlerTestSuite) TestDeleteNode_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "删除成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestGetNodeStats_Success() {
@@ -913,6 +969,41 @@ func (s *NodeHandlerTestSuite) TestGetNodeStats_Success() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
+func (s *NodeHandlerTestSuite) TestGetNodeLogs_Success() {
+	loggedAt := time.Now().UTC()
+	log := &model.NodeLog{
+		NodeID:     s.testNode.ID,
+		Level:      service.NodeLogLevelInfo,
+		Source:     "grpc",
+		Message:    "node started",
+		TraceID:    "trace-1",
+		FieldsJSON: `{"pid":123}`,
+		LoggedAt:   &loggedAt,
+	}
+	assert.NoError(s.T(), s.db.Create(log).Error)
+
+	handler := NewNodeHandler()
+	s.router.GET("/nodes/:id/logs", handler.GetNodeLogs)
+
+	req, _ := http.NewRequest("GET", "/nodes/"+strconv.FormatUint(uint64(s.testNode.ID), 10)+"/logs?page=1&page_size=10", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(1), data["total"])
+	assert.Equal(s.T(), float64(1), data["page"])
+	list := data["list"].([]any)
+	s.Require().Len(list, 1)
+	item := list[0].(map[string]any)
+	assert.Equal(s.T(), "node started", item["message"])
+	assert.Equal(s.T(), "grpc", item["source"])
+	assert.Equal(s.T(), map[string]any{"pid": float64(123)}, item["fields"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *NodeHandlerTestSuite) TestGetProtocolTemplates() {
 	handler := NewNodeHandler()
 	s.router.GET("/protocol-templates", handler.GetProtocolTemplates)
@@ -922,6 +1013,11 @@ func (s *NodeHandlerTestSuite) TestGetProtocolTemplates() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].([]any)
+	assert.NotEmpty(s.T(), data)
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestGetProtocols_Success() {
@@ -946,6 +1042,11 @@ func (s *NodeHandlerTestSuite) TestGetProtocols_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].([]any)
+	assert.Len(s.T(), data, 1)
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestGetProtocols_InvalidNodeID() {
@@ -979,6 +1080,11 @@ func (s *NodeHandlerTestSuite) TestCreateProtocol_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "vless", data["type"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestGenerateAuthKey_Success() {
@@ -997,6 +1103,12 @@ func (s *NodeHandlerTestSuite) TestGenerateAuthKey_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "Test Key", data["name"])
+	assert.NotEmpty(s.T(), data["key"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestGetAuthKeys_Success() {
@@ -1008,6 +1120,11 @@ func (s *NodeHandlerTestSuite) TestGetAuthKeys_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	_, ok := resp["data"].([]any)
+	assert.True(s.T(), ok)
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestValidateRawConfig_Success() {
@@ -1027,6 +1144,12 @@ func (s *NodeHandlerTestSuite) TestValidateRawConfig_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), true, data["valid"])
+	assert.Equal(s.T(), "配置有效", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestValidateRawConfig_InvalidJSON() {
@@ -5671,6 +5794,11 @@ func (s *ProtocolHandlerTestSuite) TestUpdateProtocol_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "更新成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *ProtocolHandlerTestSuite) TestUpdateProtocol_InvalidID() {
@@ -5697,6 +5825,11 @@ func (s *ProtocolHandlerTestSuite) TestDeleteProtocol_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "删除成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *ProtocolHandlerTestSuite) TestDeleteProtocol_InvalidID() {
@@ -5719,6 +5852,11 @@ func (s *ProtocolHandlerTestSuite) TestSyncProtocol_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "同步成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *ProtocolHandlerTestSuite) TestSyncProtocol_InvalidID() {
@@ -5764,6 +5902,11 @@ func (s *AuthKeyDeleteTestSuite) TestDeleteAuthKey_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "删除成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AuthKeyDeleteTestSuite) TestDeleteAuthKey_InvalidID() {

@@ -124,7 +124,10 @@ Open gaps:
   `status=ok` compatibility path, admin subscription management group,
   template, protocol, format, and preview responses have handler coverage plus
   Subscriptions frontend/API compatibility coverage while public subscription
-  downloads remain plain subscription content, admin
+  downloads remain plain subscription content, admin node management CRUD,
+  credentials, logs, protocol, raw-config, and auth-key success responses have
+  handler coverage plus Nodes frontend/API compatibility coverage while node
+  registration and heartbeat remain node-client compatibility responses, admin
   subscription stats has matching Subscriptions frontend compatibility coverage, admin
   subscription settings has matching System and Users compatibility coverage,
   admin system backup stats, backup config, and backup record operations have

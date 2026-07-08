@@ -1427,6 +1427,14 @@ func (s *NodeRawConfigTestSuite) TestGetNodeRawConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
+	assert.Equal(s.T(), s.testNode.Name, data["name"])
+	rawConfig := data["raw_config"].(map[string]any)
+	assert.Equal(s.T(), "value", rawConfig["key"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeRawConfigTestSuite) TestGetNodeRawConfig_InvalidID() {
@@ -1455,6 +1463,11 @@ func (s *NodeRawConfigTestSuite) TestUpdateNodeRawConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "配置更新成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeRawConfigTestSuite) TestUpdateNodeRawConfig_InvalidID() {

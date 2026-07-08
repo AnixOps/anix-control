@@ -46,6 +46,38 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/nodes', method: 'get', params: { page: 1 } },
       },
       {
+        call: () => adminApi.getNodeStats(),
+        expected: { url: '/admin/nodes/stats', method: 'get' },
+      },
+      {
+        call: () => adminApi.getNodeLogs(5, { page: 1 }),
+        expected: { url: '/admin/nodes/5/logs', method: 'get', params: { page: 1 } },
+      },
+      {
+        call: () => adminApi.getNode(5),
+        expected: { url: '/admin/nodes/5', method: 'get' },
+      },
+      {
+        call: () => adminApi.getNodeCredentials(5),
+        expected: { url: '/admin/nodes/5/credentials', method: 'get' },
+      },
+      {
+        call: () => adminApi.getNodeRawConfig(5),
+        expected: { url: '/admin/nodes/5/raw-config', method: 'get' },
+      },
+      {
+        call: () => adminApi.getNodeProtocols(5),
+        expected: { url: '/admin/nodes/5/protocols', method: 'get' },
+      },
+      {
+        call: () => adminApi.getProtocolTemplates(),
+        expected: { url: '/admin/protocol-templates', method: 'get' },
+      },
+      {
+        call: () => adminApi.getAuthKeys(),
+        expected: { url: '/admin/auth-keys', method: 'get' },
+      },
+      {
         call: () => adminApi.getSubscriptionGroups(),
         expected: { url: '/admin/subscription/groups', method: 'get' },
       },
@@ -250,6 +282,82 @@ describe('admin api mapping', () => {
           url: '/admin/nodes/5',
           method: 'put',
           data: { name: 'edge-5' },
+        },
+      },
+      {
+        call: () => adminApi.createNode({ name: 'edge' }),
+        expected: {
+          url: '/admin/nodes',
+          method: 'post',
+          data: { name: 'edge' },
+        },
+      },
+      {
+        call: () => adminApi.deleteNode(5),
+        expected: {
+          url: '/admin/nodes/5',
+          method: 'delete',
+        },
+      },
+      {
+        call: () => adminApi.syncNodeProtocol(5),
+        expected: {
+          url: '/admin/nodes/5/sync',
+          method: 'post',
+        },
+      },
+      {
+        call: () => adminApi.updateNodeRawConfig(5, { raw_config: { server_port: 443 } }),
+        expected: {
+          url: '/admin/nodes/5/raw-config',
+          method: 'put',
+          data: { raw_config: { server_port: 443 } },
+        },
+      },
+      {
+        call: () => adminApi.validateNodeConfig({ raw_config: { server_port: 443 } }),
+        expected: {
+          url: '/admin/nodes/validate-config',
+          method: 'post',
+          data: { raw_config: { server_port: 443 } },
+        },
+      },
+      {
+        call: () => adminApi.createNodeProtocol(5, { type: 'vless' }),
+        expected: {
+          url: '/admin/nodes/5/protocols',
+          method: 'post',
+          data: { type: 'vless' },
+        },
+      },
+      {
+        call: () => adminApi.updateNodeProtocol(5, 9, { type: 'trojan' }),
+        expected: {
+          url: '/admin/nodes/5/protocols/9',
+          method: 'put',
+          data: { type: 'trojan' },
+        },
+      },
+      {
+        call: () => adminApi.deleteNodeProtocol(5, 9),
+        expected: {
+          url: '/admin/nodes/5/protocols/9',
+          method: 'delete',
+        },
+      },
+      {
+        call: () => adminApi.generateAuthKey({ name: 'key' }),
+        expected: {
+          url: '/admin/auth-keys',
+          method: 'post',
+          data: { name: 'key' },
+        },
+      },
+      {
+        call: () => adminApi.deleteAuthKey(8),
+        expected: {
+          url: '/admin/auth-keys/8',
+          method: 'delete',
         },
       },
       {
