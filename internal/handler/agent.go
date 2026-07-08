@@ -1067,7 +1067,7 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 		_ = h.diagnosticSvc.MarkStatus(task.ID, model.AgentDiagnosticTaskStatusDispatched)
 		taskRow, _ = h.diagnosticSvc.GetTask(task.ID)
 
-		c.JSON(http.StatusOK, gin.H{
+		panelSuccess(c, gin.H{
 			"message":      "task sent with legacy fallback",
 			"task_id":      task.ID,
 			"node_id":      req.NodeID,
@@ -1085,7 +1085,7 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 	_ = h.diagnosticSvc.MarkStatus(task.ID, model.AgentDiagnosticTaskStatusDispatched)
 	taskRow, _ = h.diagnosticSvc.GetTask(task.ID)
 
-	c.JSON(http.StatusOK, gin.H{
+	panelSuccess(c, gin.H{
 		"message":      "task sent",
 		"task_id":      task.ID,
 		"node_id":      req.NodeID,
