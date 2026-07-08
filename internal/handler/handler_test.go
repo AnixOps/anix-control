@@ -5000,6 +5000,17 @@ func (s *AdminCouponHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *AdminCouponHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *AdminCouponHandlerTestSuite) TestGetCoupons() {
 	handler := NewAdminCouponHandler()
 	s.router.GET("/admin/coupons", handler.GetCoupons)
@@ -5048,13 +5059,13 @@ func (s *AdminCouponHandlerTestSuite) TestCreateCoupon_DuplicateCode() {
 	handler := NewAdminCouponHandler()
 	s.router.POST("/admin/coupons", handler.CreateCoupon)
 
-	body := `{"code": "TESTCODE", "name": "Duplicate Coupon"}`
+	body := `{"code": "TESTCODE", "name": "Duplicate Coupon", "type": 1, "value": 20}`
 	req, _ := http.NewRequest("POST", "/admin/coupons", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "优惠码已存在")
 }
 
 func (s *AdminCouponHandlerTestSuite) TestCreateCoupon_MissingFields() {
@@ -5067,7 +5078,7 @@ func (s *AdminCouponHandlerTestSuite) TestCreateCoupon_MissingFields() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "参数错误")
 }
 
 func (s *AdminCouponHandlerTestSuite) TestDeleteCoupon() {
@@ -5097,7 +5108,7 @@ func (s *AdminCouponHandlerTestSuite) TestDeleteCoupon_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "优惠券不存在")
 }
 
 func (s *AdminCouponHandlerTestSuite) TestDeleteCoupon_InvalidID() {
@@ -5108,7 +5119,7 @@ func (s *AdminCouponHandlerTestSuite) TestDeleteCoupon_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "无效的优惠券ID")
 }
 
 func TestAdminCouponHandler(t *testing.T) {

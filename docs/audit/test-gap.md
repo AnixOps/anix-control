@@ -81,7 +81,7 @@ Local verification status:
 - User ticket list/create/detail/reply/close handler tests now assert panel `code/msg/ts/data` envelopes, and user Tickets frontend tests cover legacy and enveloped ticket payloads.
 - Public payment methods/status handler tests now assert panel `code/msg/ts/data` envelopes, key payment payload fields, and missing payment record errors.
 - Admin ticket list/reply/close handler tests now assert panel `code/msg/ts/data` envelopes and ticket status side effects, and admin Tickets frontend tests cover legacy and enveloped payloads.
-- Admin coupon list/create/delete handler tests now assert panel `code/msg/ts/data` envelopes and delete side effects, and admin Coupons frontend tests cover legacy and enveloped payloads.
+- Admin coupon list/create/delete handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid body, duplicate code, invalid ID, and missing coupon paths, plus delete side effects; admin Coupons frontend tests cover legacy and enveloped payloads.
 - Admin knowledge list/create/update/delete handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid body, invalid ID, and missing article paths, plus partial-update field preservation and delete side effects; admin Knowledge frontend tests cover legacy and enveloped payloads plus restored locale text.
 - Admin system audit-log handler tests now assert panel `code/msg/ts/data` envelopes and sensitive-content redaction, and System audit frontend tests cover legacy and enveloped payloads.
 - Admin system config CRUD handler tests now assert panel `code/msg/ts/data` envelopes, sensitive-field tests preserve secret masking/audit redaction, and System runtime/config frontend tests cover enveloped payloads.
