@@ -91,7 +91,7 @@ func (h *PaymentHandler) X402CreatePayment(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 
@@ -100,22 +100,24 @@ func (h *PaymentHandler) X402CreatePayment(c *gin.Context) {
 	var order model.Order
 	if err := db.Where("id = ?", req.OrderID).First(&order).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"message": "订单不存在"})
+			panelError(c, "订单不存在")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "数据库错误", "error": err.Error()})
+		log.Printf("x402 payment order lookup failed: %v", err)
+		panelError(c, "数据库错误")
 		return
 	}
 
 	if order.Status != 0 { // 0: pending
-		c.JSON(http.StatusBadRequest, gin.H{"message": "订单已支付或已取消"})
+		panelError(c, "订单已支付或已取消")
 		return
 	}
 
 	// 2. 生成支付地址 (模拟测试链地址)
 	b := make([]byte, 20)
 	if _, err := rand.Read(b); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to generate payment address"})
+		log.Printf("x402 payment address generation failed: %v", err)
+		panelError(c, "生成支付地址失败")
 		return
 	}
 	walletAddr := fmt.Sprintf("0x%s", hex.EncodeToString(b))
@@ -126,7 +128,8 @@ func (h *PaymentHandler) X402CreatePayment(c *gin.Context) {
 	// 4. 创建支付记录
 	nonce := make([]byte, 4)
 	if _, err := rand.Read(nonce); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to generate trade number"})
+		log.Printf("x402 trade number generation failed: %v", err)
+		panelError(c, "生成支付单号失败")
 		return
 	}
 	tradeNo := fmt.Sprintf("X402%s%s", time.Now().Format("20060102150405"), hex.EncodeToString(nonce))
@@ -146,7 +149,8 @@ func (h *PaymentHandler) X402CreatePayment(c *gin.Context) {
 	}
 
 	if err := h.gatewayService.CreateRecord(paymentRecord); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "创建支付记录失败", "error": err.Error()})
+		log.Printf("x402 payment record creation failed: %v", err)
+		panelError(c, "创建支付记录失败")
 		return
 	}
 
@@ -285,10 +289,11 @@ func (h *PaymentHandler) X402CheckPayment(c *gin.Context) {
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound || payment == nil {
-			c.JSON(http.StatusNotFound, gin.H{"message": "支付记录不存在"})
+			panelError(c, "支付记录不存在")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "数据库错误"})
+		log.Printf("x402 payment lookup failed: %v", err)
+		panelError(c, "数据库错误")
 		return
 	}
 
@@ -330,7 +335,7 @@ func (h *PaymentHandler) FiatCreatePayment(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 
@@ -339,22 +344,24 @@ func (h *PaymentHandler) FiatCreatePayment(c *gin.Context) {
 	var order model.Order
 	if err := db.Where("id = ?", req.OrderID).First(&order).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"message": "订单不存在"})
+			panelError(c, "订单不存在")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "数据库错误", "error": err.Error()})
+		log.Printf("fiat payment order lookup failed: %v", err)
+		panelError(c, "数据库错误")
 		return
 	}
 
 	if order.Status != 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "订单已支付或已取消"})
+		panelError(c, "订单已支付或已取消")
 		return
 	}
 
 	// 生成商户订单号
 	fiatNonce := make([]byte, 4)
 	if _, err := rand.Read(fiatNonce); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "failed to generate trade number"})
+		log.Printf("fiat trade number generation failed: %v", err)
+		panelError(c, "生成支付单号失败")
 		return
 	}
 	tradeNo := fmt.Sprintf("FIAT%s%s", time.Now().Format("20060102150405"), hex.EncodeToString(fiatNonce))
@@ -382,7 +389,8 @@ func (h *PaymentHandler) FiatCreatePayment(c *gin.Context) {
 		}
 
 		if err := h.gatewayService.CreateRecord(paymentRecord); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "创建支付记录失败", "error": err.Error()})
+			log.Printf("stripe payment record creation failed: %v", err)
+			panelError(c, "创建支付记录失败")
 			return
 		}
 
@@ -421,7 +429,8 @@ func (h *PaymentHandler) FiatCreatePayment(c *gin.Context) {
 		}
 
 		if err := h.gatewayService.CreateRecord(paymentRecord); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "创建支付记录失败", "error": err.Error()})
+			log.Printf("paypal payment record creation failed: %v", err)
+			panelError(c, "创建支付记录失败")
 			return
 		}
 
@@ -439,7 +448,7 @@ func (h *PaymentHandler) FiatCreatePayment(c *gin.Context) {
 		})
 
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"message": "不支持的支付方式"})
+		panelError(c, "不支持的支付方式")
 	}
 }
 
