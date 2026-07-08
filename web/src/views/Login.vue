@@ -146,6 +146,22 @@ function toggleMode() {
   inviteCode.value = ''
 }
 
+function resolveAuthPayload(res, fallbackMessage) {
+  if (typeof res?.code === 'number' && res.code !== 0) {
+    throw new Error(res.msg || fallbackMessage)
+  }
+
+  const payload = res?.data && typeof res.data === 'object' ? res.data : res
+  if (!payload?.token) {
+    throw new Error(fallbackMessage)
+  }
+  return payload
+}
+
+function resolveAuthErrorMessage(err, fallbackMessage) {
+  return err?.response?.data?.msg || err?.response?.data?.message || err?.message || fallbackMessage
+}
+
 async function handleRegister() {
   if (!email.value || !password.value) {
     errorMsg.value = t('login.errors.emailPasswordRequired')
@@ -171,11 +187,7 @@ async function handleRegister() {
       ...(inviteCode.value ? { invite_code: inviteCode.value } : {})
     })
 
-    if (!res.data?.token) {
-      throw new Error('register response missing token')
-    }
-
-    const { token, is_admin, user_id, email: userEmail } = res.data
+    const { token, is_admin, user_id, email: userEmail } = resolveAuthPayload(res, t('login.errors.registerFailed'))
     userStore.login(token, {
       id: user_id,
       email: userEmail,
@@ -187,7 +199,7 @@ async function handleRegister() {
       router.push(is_admin ? '/admin/dashboard' : '/user/dashboard')
     }, 1000)
   } catch (err) {
-    errorMsg.value = err.response?.data?.message || t('login.errors.registerFailed')
+    errorMsg.value = resolveAuthErrorMessage(err, t('login.errors.registerFailed'))
   } finally {
     loading.value = false
   }
@@ -209,11 +221,7 @@ async function handleLogin() {
       password: password.value
     })
 
-    if (!res.data?.token) {
-      throw new Error('login response missing token')
-    }
-
-    const { token, is_admin, user_id, email: userEmail } = res.data
+    const { token, is_admin, user_id, email: userEmail } = resolveAuthPayload(res, t('login.errors.loginFailed'))
     userStore.login(token, {
       id: user_id,
       email: userEmail,
@@ -222,7 +230,7 @@ async function handleLogin() {
 
     router.push(is_admin ? '/admin/dashboard' : '/user/dashboard')
   } catch (err) {
-    errorMsg.value = err.response?.data?.message || t('login.errors.loginFailed')
+    errorMsg.value = resolveAuthErrorMessage(err, t('login.errors.loginFailed'))
   } finally {
     loading.value = false
   }

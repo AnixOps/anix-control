@@ -14,7 +14,9 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Create `ROADMAP.md`.
 - [x] Create `TODO.md`.
 - [x] Create `docs/manual-intervention.md`.
+- [x] Create `docs/features.md` as the implemented/planned feature status register.
 - [ ] Keep all audit files current as fixes land.
+- [ ] Keep `docs/features.md` current as new features or feature-status changes land.
 
 ## P0: CI Baseline
 
@@ -175,8 +177,8 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize admin user management CRUD/ban/unban/reset response envelopes with handler, Users frontend, and admin API compatibility tests while preserving `/user/reset` compatibility.
 - [x] Normalize admin plan management list/detail/create/update/delete/assign response envelopes with handler, Plans frontend, and admin API compatibility tests.
 - [x] Normalize admin order management list/detail/status/paid/cancel response envelopes with handler, Orders frontend, and admin API compatibility tests.
-- [x] Normalize user register success and order-save success/user-error response envelopes with handler coverage.
-- [x] Normalize user login success response envelope with handler and Login frontend compatibility tests.
+- [x] Normalize user register success/user-error and order-save success/user-error response envelopes with handler coverage.
+- [x] Normalize user login success/user-error response envelope with handler and Login frontend compatibility tests.
 - [x] Normalize user order list/detail success and user-error response envelopes with handler and Orders frontend compatibility tests.
 - [x] Normalize user subscription info success and user-error response envelope with handler and Subscribe frontend compatibility tests.
 - [x] Normalize user profile success and user-error response envelope with handler and user store compatibility tests.

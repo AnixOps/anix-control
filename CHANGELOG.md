@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Added `docs/features.md` as the current feature status register for implemented, partial, planned, deferred, and compatibility surfaces, with an update rule for every feature-status-changing commit.
+
 ### Fixed
 
 - Upgraded vulnerable Go dependencies reported by `govulncheck`: `google.golang.org/grpc` to `v1.79.3`, `github.com/jackc/pgx/v5` to `v5.9.2`, and `github.com/quic-go/quic-go` to `v0.59.1`.
@@ -107,8 +111,8 @@
 - Normalized admin user management CRUD, ban/unban, traffic reset, and subscribe-reset success responses to the panel `code/msg/ts/data` envelope while keeping the Users page compatible with legacy, enveloped, and nested payloads.
 - Normalized admin plan management list/detail/create/update/delete/assign success responses to the panel `code/msg/ts/data` envelope while keeping the Plans page compatible with legacy, enveloped, and nested payloads.
 - Normalized admin order management list/detail/status/paid/cancel success responses to the panel `code/msg/ts/data` envelope while keeping the Orders page compatible with legacy, enveloped, and nested payloads.
-- Normalized user registration success and order-save success/error responses to the panel `code/msg/ts/data` envelope while preserving the existing token and order payloads under `data`.
-- Normalized user login success responses to the panel `code/msg/ts/data` envelope while keeping the Login page compatible with the enveloped token payload.
+- Normalized user registration success/error and order-save success/error responses to the panel `code/msg/ts/data` envelope while preserving the existing token and order payloads under `data`.
+- Normalized user login success/error responses to the panel `code/msg/ts/data` envelope while keeping the Login page compatible with enveloped token and error payloads.
 - Normalized user order list and detail success/error responses to the panel `code/msg/ts/data` envelope while keeping the Orders page compatible with legacy and enveloped payloads.
 - Normalized user subscription info success/error responses to the panel `code/msg/ts/data` envelope while keeping the Subscribe page compatible with legacy and enveloped payloads.
 - Normalized user profile success/error responses to the panel `code/msg/ts/data` envelope while keeping the user store compatible with the enveloped profile payload.

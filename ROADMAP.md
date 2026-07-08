@@ -10,6 +10,7 @@ Status: in progress
 
 - Maintain repository, security, concurrency, performance, and test-gap audits.
 - Keep manual intervention requirements explicit.
+- Keep `docs/features.md` current as the feature status source of truth.
 - Keep `CHANGELOG.md` updated for every fix.
 - Keep full Go test, vet, race, and vulnerability checks green.
 - Separate confirmed product risks from test-only/tooling risks.

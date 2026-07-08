@@ -13,6 +13,7 @@ Use this tree like NodeX:
 
 ## Fast Paths
 
+- Feature status register: [`features.md`](features.md)
 - Docker quickstart: [`reference/quickstart.md`](reference/quickstart.md)
 - Exact startup flow: [`reference/startup-config.md`](reference/startup-config.md)
 - Config source-of-truth: [`reference/configuration.md`](reference/configuration.md)
@@ -26,3 +27,4 @@ Use this tree like NodeX:
 - if you are asking "what does this repo own": read `intro`
 - if you are asking "what do I edit to boot this": read `reference`
 - if you are asking "how was this feature cloned or implemented": read `guide`
+- if you are asking "what is implemented or still planned": read `features.md`

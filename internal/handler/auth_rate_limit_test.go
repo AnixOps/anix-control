@@ -69,6 +69,29 @@ func performLogin(t *testing.T, router *gin.Engine, email, password string) *htt
 	return w
 }
 
+func assertAuthPanelError(t *testing.T, w *httptest.ResponseRecorder, msgContains string) {
+	t.Helper()
+	assert.Equal(t, http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(t, w)
+	assert.Equal(t, float64(-1), resp["code"])
+	assert.Contains(t, resp["msg"], msgContains)
+	assert.NotZero(t, resp["ts"])
+	assert.Nil(t, resp["data"])
+	assert.NotContains(t, resp, "message")
+	assert.NotContains(t, resp, "error")
+}
+
+func assertAuthPanelSuccess(t *testing.T, w *httptest.ResponseRecorder) {
+	t.Helper()
+	assert.Equal(t, http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(t, w)
+	assert.Equal(t, float64(0), resp["code"])
+	assert.NotZero(t, resp["ts"])
+	assert.NotNil(t, resp["data"])
+	assert.NotContains(t, resp, "message")
+	assert.NotContains(t, resp, "error")
+}
+
 func TestAuthLoginRateLimit_BlocksAfterThreshold(t *testing.T) {
 	enabled := true
 	cfg := &config.Config{
@@ -90,13 +113,13 @@ func TestAuthLoginRateLimit_BlocksAfterThreshold(t *testing.T) {
 	defer cleanup()
 
 	resp1 := performLogin(t, router, "ratelimit@example.com", "wrong-password")
-	assert.Equal(t, http.StatusUnauthorized, resp1.Code)
+	assertAuthPanelError(t, resp1, "用户不存在或密码错误")
 
 	resp2 := performLogin(t, router, "ratelimit@example.com", "wrong-password")
-	assert.Equal(t, http.StatusUnauthorized, resp2.Code)
+	assertAuthPanelError(t, resp2, "用户不存在或密码错误")
 
 	resp3 := performLogin(t, router, "ratelimit@example.com", "wrong-password")
-	assert.Equal(t, http.StatusTooManyRequests, resp3.Code)
+	assertAuthPanelError(t, resp3, "too many login attempts")
 	assert.NotEmpty(t, resp3.Header().Get("Retry-After"))
 }
 
@@ -121,13 +144,13 @@ func TestAuthLoginRateLimit_SuccessClearsFailureCounter(t *testing.T) {
 	defer cleanup()
 
 	resp1 := performLogin(t, router, "ratelimit@example.com", "wrong-password")
-	assert.Equal(t, http.StatusUnauthorized, resp1.Code)
+	assertAuthPanelError(t, resp1, "用户不存在或密码错误")
 
 	resp2 := performLogin(t, router, "ratelimit@example.com", "correct-password")
-	assert.Equal(t, http.StatusOK, resp2.Code)
+	assertAuthPanelSuccess(t, resp2)
 
 	resp3 := performLogin(t, router, "ratelimit@example.com", "wrong-password")
-	assert.Equal(t, http.StatusUnauthorized, resp3.Code)
+	assertAuthPanelError(t, resp3, "用户不存在或密码错误")
 }
 
 func TestAuthLoginRateLimit_Disabled(t *testing.T) {
@@ -151,9 +174,9 @@ func TestAuthLoginRateLimit_Disabled(t *testing.T) {
 	defer cleanup()
 
 	resp1 := performLogin(t, router, "ratelimit@example.com", "wrong-password")
-	assert.Equal(t, http.StatusUnauthorized, resp1.Code)
+	assertAuthPanelError(t, resp1, "用户不存在或密码错误")
 
 	resp2 := performLogin(t, router, "ratelimit@example.com", "wrong-password")
-	assert.Equal(t, http.StatusUnauthorized, resp2.Code)
+	assertAuthPanelError(t, resp2, "用户不存在或密码错误")
 	assert.Empty(t, resp2.Header().Get("Retry-After"))
 }
