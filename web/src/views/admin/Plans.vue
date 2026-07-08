@@ -238,6 +238,24 @@ const resolveApiError = (error, fallbackKey) => (
   t(fallbackKey)
 )
 
+const readPlanPayload = (res) => {
+  if (!res || typeof res !== 'object') return null
+  if (Object.prototype.hasOwnProperty.call(res, 'code')) return res.data ?? null
+  if (
+    res.data &&
+    typeof res.data === 'object' &&
+    Object.prototype.hasOwnProperty.call(res.data, 'data')
+  ) {
+    return res.data.data ?? null
+  }
+  return res.data ?? res
+}
+
+const readPlanList = (res) => {
+  const payload = readPlanPayload(res)
+  return Array.isArray(payload) ? payload : []
+}
+
 const resetPlanForm = () => {
   editingPlanId.value = null
   form.name = ''
@@ -256,7 +274,7 @@ const resetAssignForm = () => {
 const loadPlanGroups = async (planId) => {
   try {
     const res = await getPlanGroups(planId)
-    planGroups.value[planId] = res.data || []
+    planGroups.value[planId] = readPlanList(res)
   } catch {
     planGroups.value[planId] = []
   }
@@ -265,7 +283,7 @@ const loadPlanGroups = async (planId) => {
 const load = async () => {
   try {
     const res = await getPlans()
-    plans.value = res.data || []
+    plans.value = readPlanList(res)
     await Promise.all(plans.value.map((plan) => loadPlanGroups(plan.id)))
   } catch (error) {
     console.error(t('adminPlans.messages.loadFailed'), error)
@@ -275,7 +293,7 @@ const load = async () => {
 const loadAllGroups = async () => {
   try {
     const res = await getSubscriptionGroups()
-    allGroups.value = res.data || []
+    allGroups.value = readPlanList(res)
   } catch (error) {
     console.error(t('adminPlans.messages.loadGroupsFailed'), error)
   }

@@ -61,4 +61,39 @@ describe('Admin Plans flow', () => {
       device_limit: 6,
     }))
   })
+
+  it('loads plans and groups from legacy, panel, and nested payloads', async () => {
+    mockGetPlans.mockResolvedValueOnce({
+      data: [{ id: 1, name: 'Legacy Plan', speed_limit: 10, device_limit: 1 }]
+    })
+    mockGetPlanGroups.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      data: [{ id: 9, name: 'Panel Group' }],
+      ts: 1783526400000,
+    })
+    mockGetSubscriptionGroups.mockResolvedValueOnce({
+      data: { data: [{ id: 10, name: 'Nested Group' }] }
+    })
+
+    const wrapper = mount(Plans)
+    await flushPromises()
+
+    expect(wrapper.vm.plans[0].name).toBe('Legacy Plan')
+    expect(wrapper.vm.planGroups[1][0].name).toBe('Panel Group')
+    expect(wrapper.vm.allGroups[0].name).toBe('Nested Group')
+
+    mockGetPlans.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      data: [{ id: 2, name: 'Envelope Plan', speed_limit: 20, device_limit: 2 }],
+      ts: 1783526400000,
+    })
+    mockGetPlanGroups.mockResolvedValueOnce({ data: [] })
+
+    await wrapper.vm.load()
+    await flushPromises()
+
+    expect(wrapper.vm.plans[0].name).toBe('Envelope Plan')
+  })
 })
