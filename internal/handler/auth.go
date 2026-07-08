@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -36,13 +35,13 @@ func NewAuthHandler(cfg *config.Config) *AuthHandler {
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req model.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误")
 		return
 	}
 
 	registrationPolicy := service.ResolveRegistrationPolicy(h.cfg)
 	if !registrationPolicy.Enabled {
-		c.JSON(http.StatusForbidden, gin.H{"message": "registration is disabled"})
+		panelError(c, "registration is disabled")
 		return
 	}
 
@@ -54,35 +53,35 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			retryAfterSeconds = 1
 		}
 		c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
-		c.JSON(http.StatusTooManyRequests, gin.H{"message": "too many registration attempts, please try again later"})
+		panelError(c, "too many registration attempts, please try again later")
 		return
 	}
 	service.GetLoginRateLimiter().RecordFailure(registerRateLimitKey, registerRateLimitOptions)
 
 	// 验证密码长度
 	if len(req.Password) < 6 {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "密码长度至少6位"})
+		panelError(c, "密码长度至少6位")
 		return
 	}
 
 	// 验证邮箱格式
 	if len(req.Email) < 5 {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "请输入有效的邮箱地址"})
+		panelError(c, "请输入有效的邮箱地址")
 		return
 	}
 
 	if err := service.ValidateRegistrationEmail(req.Email, registrationPolicy); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 	if registrationPolicy.RequireInvite && strings.TrimSpace(req.InviteCode) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "invite code is required"})
+		panelError(c, "invite code is required")
 		return
 	}
 
 	token, user, err := h.authService.RegisterWithInvite(req.Email, req.Password, req.InviteCode, h.cfg)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -107,7 +106,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req model.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误")
 		return
 	}
 
@@ -119,14 +118,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			retryAfterSeconds = 1
 		}
 		c.Header("Retry-After", strconv.Itoa(retryAfterSeconds))
-		c.JSON(http.StatusTooManyRequests, gin.H{"message": "too many login attempts, please try again later"})
+		panelError(c, "too many login attempts, please try again later")
 		return
 	}
 
 	token, user, err := h.authService.Login(req.Email, req.Password, h.cfg)
 	if err != nil {
 		service.GetLoginRateLimiter().RecordFailure(loginRateLimitKey, loginRateLimitOptions)
-		c.JSON(http.StatusUnauthorized, gin.H{"message": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 	service.GetLoginRateLimiter().RecordSuccess(loginRateLimitKey)

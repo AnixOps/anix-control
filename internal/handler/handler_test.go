@@ -182,6 +182,17 @@ func (s *AuthHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *AuthHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *AuthHandlerTestSuite) TestRegisterHandler() {
 	handler := NewAuthHandler(s.cfg)
 	s.router.POST("/register", handler.Register)
@@ -230,7 +241,20 @@ func (s *AuthHandlerTestSuite) TestRegisterHandler_Disabled() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusForbidden, w.Code)
+	s.assertPanelError(w, "registration is disabled")
+}
+
+func (s *AuthHandlerTestSuite) TestRegisterHandler_InvalidBody() {
+	handler := NewAuthHandler(s.cfg)
+	s.router.POST("/register", handler.Register)
+
+	req, _ := http.NewRequest("POST", "/register", strings.NewReader("invalid json"))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "参数错误")
 }
 
 func (s *AuthHandlerTestSuite) TestRegisterHandler_RequiresInviteCode() {
@@ -251,8 +275,7 @@ func (s *AuthHandlerTestSuite) TestRegisterHandler_RequiresInviteCode() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-	assert.Contains(s.T(), w.Body.String(), "invite code is required")
+	s.assertPanelError(w, "invite code is required")
 }
 
 func (s *AuthHandlerTestSuite) TestRegisterHandler_WithInviteCode() {
@@ -303,7 +326,7 @@ func (s *AuthHandlerTestSuite) TestRegisterHandler_InvalidEmail() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "参数错误")
 }
 
 func (s *AuthHandlerTestSuite) TestRegisterHandler_ShortPassword() {
@@ -322,7 +345,31 @@ func (s *AuthHandlerTestSuite) TestRegisterHandler_ShortPassword() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "参数错误")
+}
+
+func (s *AuthHandlerTestSuite) TestRegisterHandler_DuplicateEmail() {
+	handler := NewAuthHandler(s.cfg)
+	s.router.POST("/register", handler.Register)
+
+	body := map[string]string{
+		"email":    "duplicate@example.com",
+		"password": "password123",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/register", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	req, _ = http.NewRequest("POST", "/register", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "该邮箱已被注册")
 }
 
 func (s *AuthHandlerTestSuite) TestLoginHandler() {
@@ -369,6 +416,19 @@ func (s *AuthHandlerTestSuite) TestLoginHandler() {
 	assert.Equal(s.T(), float64(1), data["user_id"])
 }
 
+func (s *AuthHandlerTestSuite) TestLoginHandler_InvalidBody() {
+	handler := NewAuthHandler(s.cfg)
+	s.router.POST("/login", handler.Login)
+
+	req, _ := http.NewRequest("POST", "/login", strings.NewReader("invalid json"))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "参数错误")
+}
+
 func (s *AuthHandlerTestSuite) TestLoginHandler_WrongPassword() {
 	// 先注册用户
 	regHandler := NewAuthHandler(s.cfg)
@@ -400,7 +460,7 @@ func (s *AuthHandlerTestSuite) TestLoginHandler_WrongPassword() {
 	w = httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusUnauthorized, w.Code)
+	s.assertPanelError(w, "用户不存在或密码错误")
 }
 
 func TestAuthHandler(t *testing.T) {

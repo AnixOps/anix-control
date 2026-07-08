@@ -161,7 +161,7 @@ Open gaps:
   sensitive-value masking. Admin load balancer CRUD and health-check success
   responses now have handler coverage plus System load balancer frontend
   compatibility coverage. User
-  registration, login, profile success and user-error paths, dashboard success and user-error paths, subscription info success and user-error paths, plan list,
+  registration success and user-error paths, login success and user-error paths, profile success and user-error paths, dashboard success and user-error paths, subscription info success and user-error paths, plan list,
   coupon-check success and business-error paths, knowledge list/detail success and user-error paths, ticket list/create/detail/reply/close success and user-error paths,
   order-save success/user-error paths, order list/detail success and user-error paths, public payment methods, and public
   payment-status success and missing-record responses now use the same envelope

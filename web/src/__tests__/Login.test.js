@@ -132,4 +132,27 @@ describe('Login.vue', () => {
       is_admin: true,
     })
   })
+
+  it('shows panel envelope login errors', async () => {
+    mockLogin.mockResolvedValue({
+      code: -1,
+      msg: '用户不存在或密码错误',
+      ts: 1783536000000,
+      data: null,
+    })
+
+    const wrapper = mount(Login, {
+      global: {
+        stubs: ['router-link'],
+      },
+    })
+
+    await wrapper.find('#email').setValue('admin@example.com')
+    await wrapper.find('#password').setValue('wrong-password')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alert"]').text()).toContain('用户不存在或密码错误')
+    expect(useUserStore().token).toBe('')
+  })
 })

@@ -1,5 +1,12 @@
 # V2Board AnixOps 功能规划
 
+> Status note
+>
+> This document contains historical planning and design notes. The current
+> implemented/partial/planned feature status source of truth is
+> [`docs/features.md`](features.md). Update `docs/features.md` after every
+> feature-status-changing commit.
+
 ## 一、现有功能 vs 市面最佳对比
 
 ### 1.1 功能对比矩阵
