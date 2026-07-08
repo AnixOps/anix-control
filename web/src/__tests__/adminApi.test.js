@@ -193,6 +193,18 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/agent/list', method: 'get' },
       },
       {
+        call: () => adminApi.getAgentTaskResult('task-1'),
+        expected: { url: '/admin/agent/tasks/task-1', method: 'get' },
+      },
+      {
+        call: () => adminApi.listAgentDiagnosticTasks({ limit: 50 }),
+        expected: { url: '/admin/agent/tasks', method: 'get', params: { limit: 50 } },
+      },
+      {
+        call: () => adminApi.getAgentMonitor(7),
+        expected: { url: '/admin/agent/monitor', method: 'get', params: { node_id: 7 } },
+      },
+      {
         call: () => adminApi.getPlans(),
         expected: { url: '/admin/plans', method: 'get' },
       },
@@ -764,6 +776,14 @@ describe('admin api mapping', () => {
           url: '/admin/agent/tasks',
           method: 'post',
           data: { node_id: 1, command: 'ping' },
+        },
+      },
+      {
+        call: () => adminApi.executeAgentCommand({ node_id: 1, action: 'service_status' }),
+        expected: {
+          url: '/admin/agent/execute',
+          method: 'post',
+          data: { node_id: 1, action: 'service_status' },
         },
       },
     ]

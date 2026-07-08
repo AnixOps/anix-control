@@ -131,6 +131,9 @@ Open gaps:
   credentials, logs, protocol, raw-config, and auth-key success responses have
   handler coverage plus Nodes frontend/API compatibility coverage while node
   registration and heartbeat remain node-client compatibility responses, admin
+  Agent list/task-result/task-history/monitor read responses have handler
+  coverage plus Agent frontend/API compatibility coverage while runtime Agent
+  protocol responses remain compatibility responses, admin
   user management CRUD, ban/unban, traffic-reset, and subscribe-reset success
   responses have handler coverage plus Users frontend/API compatibility
   coverage while `/user/reset` remains a Flux compatibility response, admin

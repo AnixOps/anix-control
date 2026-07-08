@@ -1117,7 +1117,7 @@ type CreateTaskRequest struct {
 // @Success 200 {object} map[string]any
 // @Router /admin/agent/list [get]
 func (h *AgentHandler) ListAgents(c *gin.Context) {
-	var agents []map[string]any
+	agents := make([]map[string]any, 0)
 
 	h.connections.Range(func(key, value any) bool {
 		conn := value.(*AgentConnection)
@@ -1132,10 +1132,7 @@ func (h *AgentHandler) ListAgents(c *gin.Context) {
 		return true
 	})
 
-	c.JSON(http.StatusOK, gin.H{
-		"agents": agents,
-		"data":   gin.H{"agents": agents},
-	})
+	panelSuccess(c, gin.H{"agents": agents})
 }
 
 // GetTaskResult godoc
@@ -1170,7 +1167,7 @@ func (h *AgentHandler) GetTaskResult(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": taskRow})
+	panelSuccess(c, taskRow)
 }
 
 // ListDiagnosticTasks godoc
@@ -1188,7 +1185,7 @@ func (h *AgentHandler) ListDiagnosticTasks(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.Query("limit"))
 
 	if h.diagnosticSvc == nil {
-		c.JSON(http.StatusOK, gin.H{"data": []model.AgentDiagnosticTask{}})
+		panelSuccess(c, []model.AgentDiagnosticTask{})
 		return
 	}
 
@@ -1198,7 +1195,7 @@ func (h *AgentHandler) ListDiagnosticTasks(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": tasks})
+	panelSuccess(c, tasks)
 }
 
 // GetMonitor godoc
@@ -1230,7 +1227,7 @@ func (h *AgentHandler) GetMonitor(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": monitor})
+	panelSuccess(c, monitor)
 }
 
 // ExecuteCommand godoc

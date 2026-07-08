@@ -170,6 +170,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize admin/user Telegram panel API success response envelopes with handler and Admin Telegram frontend compatibility tests while preserving webhook compatibility.
 - [x] Normalize admin subscription management response envelopes with handler, Subscriptions frontend, and admin API compatibility tests while preserving public subscription download compatibility.
 - [x] Normalize admin node management CRUD/protocol/log/raw-config/auth-key response envelopes with handler, Nodes frontend, and admin API compatibility tests while preserving node registration/heartbeat compatibility.
+- [x] Normalize admin Agent list/task-result/task-history/monitor read response envelopes with handler, Agent frontend, and admin API compatibility tests while preserving runtime Agent protocol responses.
 - [x] Normalize admin user management CRUD/ban/unban/reset response envelopes with handler, Users frontend, and admin API compatibility tests while preserving `/user/reset` compatibility.
 - [x] Normalize admin plan management list/detail/create/update/delete/assign response envelopes with handler, Plans frontend, and admin API compatibility tests.
 - [x] Normalize admin order management list/detail/status/paid/cancel response envelopes with handler, Orders frontend, and admin API compatibility tests.
