@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"net/http"
+	"log"
 	"strconv"
 	"time"
 
@@ -22,7 +22,8 @@ func NewAdminKnowledgeHandler() *AdminKnowledgeHandler {
 func (h *AdminKnowledgeHandler) GetArticles(c *gin.Context) {
 	var articles []model.Knowledge
 	if err := database.GetDB().Order("sort ASC, created_at DESC").Find(&articles).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取文章列表失败"})
+		log.Printf("admin knowledge list failed: %v", err)
+		panelError(c, "获取文章列表失败")
 		return
 	}
 
@@ -55,7 +56,7 @@ func (h *AdminKnowledgeHandler) CreateArticle(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 
@@ -78,7 +79,8 @@ func (h *AdminKnowledgeHandler) CreateArticle(c *gin.Context) {
 	}
 
 	if err := database.GetDB().Create(&article).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "创建失败"})
+		log.Printf("admin knowledge create failed: %v", err)
+		panelError(c, "创建失败")
 		return
 	}
 
@@ -92,13 +94,13 @@ func (h *AdminKnowledgeHandler) CreateArticle(c *gin.Context) {
 func (h *AdminKnowledgeHandler) UpdateArticle(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的文章ID"})
+		panelError(c, "无效的文章ID")
 		return
 	}
 
 	var article model.Knowledge
 	if err := database.GetDB().First(&article, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "文章不存在"})
+		panelError(c, "文章不存在")
 		return
 	}
 
@@ -111,7 +113,7 @@ func (h *AdminKnowledgeHandler) UpdateArticle(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 
@@ -136,7 +138,8 @@ func (h *AdminKnowledgeHandler) UpdateArticle(c *gin.Context) {
 	}
 
 	if err := database.GetDB().Model(&article).Updates(updates).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败"})
+		log.Printf("admin knowledge update failed: %v", err)
+		panelError(c, "更新失败")
 		return
 	}
 
@@ -147,18 +150,19 @@ func (h *AdminKnowledgeHandler) UpdateArticle(c *gin.Context) {
 func (h *AdminKnowledgeHandler) DeleteArticle(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的文章ID"})
+		panelError(c, "无效的文章ID")
 		return
 	}
 
 	var article model.Knowledge
 	if err := database.GetDB().First(&article, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "文章不存在"})
+		panelError(c, "文章不存在")
 		return
 	}
 
 	if err := database.GetDB().Delete(&article).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "删除失败"})
+		log.Printf("admin knowledge delete failed: %v", err)
+		panelError(c, "删除失败")
 		return
 	}
 
