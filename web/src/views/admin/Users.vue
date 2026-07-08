@@ -355,7 +355,14 @@ const getResData = (res, fallback = t('adminUsers.messages.actionFailed')) => {
     if (res.code !== 0) throw new Error(res.msg || fallback)
     return res.data
   }
-  return res.data
+  if (
+    res.data &&
+    typeof res.data === 'object' &&
+    Object.prototype.hasOwnProperty.call(res.data, 'data')
+  ) {
+    return res.data.data
+  }
+  return res.data ?? res
 }
 
 const toDateTimeLocal = (timestamp) => {
@@ -481,8 +488,7 @@ const copyToClipboard = async (text) => {
 }
 
 const readSubscriptionSettings = (res) => {
-  if (!res || typeof res !== 'object') return { subscribe_path: '/s', subscribe_domains: [] }
-  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  const payload = getResData(res) || {}
   if (!payload || typeof payload !== 'object') return { subscribe_path: '/s', subscribe_domains: [] }
   return {
     subscribe_path: payload.subscribe_path || '/s',
@@ -672,7 +678,8 @@ const loadTrafficDetail = async () => {
   trafficError.value = ''
   try {
     const res = await getTrafficHourly(720, trafficUser.value.id)
-    const list = Array.isArray(res?.data) ? res.data : []
+    const payload = getResData(res, t('adminUsers.trafficModal.fetchFailed'))
+    const list = Array.isArray(payload) ? payload : []
     hourlyTrafficRows.value = list
       .map(item => ({ hour_ts: Number(item?.hour_ts || 0), traffic: Number(item?.traffic || 0) }))
       .filter(item => item.hour_ts > 0)
@@ -761,7 +768,8 @@ onMounted(() => { fetchUsers(); fetchStats(); loadSubscriptionGroups(); loadSubs
 const loadSubscriptionGroups = async () => {
   try {
     const res = await getSubscriptionGroups()
-    subscriptionGroups.value = res?.data || []
+    const payload = getResData(res) || []
+    subscriptionGroups.value = Array.isArray(payload) ? payload : []
   } catch (err) {
     console.error('Failed to load subscription groups', err)
   }

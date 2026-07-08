@@ -9,6 +9,8 @@ const mockGetUserStats = vi.fn()
 const mockUpdateUser = vi.fn()
 const mockGetSubscriptionGroups = vi.fn()
 const mockGetSubscriptionSettings = vi.fn()
+const mockGetTrafficHourly = vi.fn()
+const mockResetUserSubscribe = vi.fn()
 
 vi.mock('@/api/admin', () => ({
   assignAdminUserTunnel: vi.fn(),
@@ -19,9 +21,11 @@ vi.mock('@/api/admin', () => ({
   getSpeedLimitList: vi.fn(),
   getSubscriptionGroups: (...args) => mockGetSubscriptionGroups(...args),
   getSubscriptionSettings: (...args) => mockGetSubscriptionSettings(...args),
+  getTrafficHourly: (...args) => mockGetTrafficHourly(...args),
   getUserList: (...args) => mockGetUserList(...args),
   getUserStats: (...args) => mockGetUserStats(...args),
   removeAdminUserTunnel: vi.fn(),
+  resetUserSubscribe: (...args) => mockResetUserSubscribe(...args),
   resetUserTraffic: vi.fn(),
   resetUserTunnelTraffic: vi.fn(),
   unbanUser: vi.fn(),
@@ -37,11 +41,16 @@ describe('Admin Users flow', () => {
     mockUpdateUser.mockReset()
     mockGetSubscriptionGroups.mockReset()
     mockGetSubscriptionSettings.mockReset()
+    mockGetTrafficHourly.mockReset()
+    mockResetUserSubscribe.mockReset()
     vi.spyOn(window, 'alert').mockImplementation(() => {})
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     mockGetUserStats.mockResolvedValue({ data: {} })
     mockGetSubscriptionGroups.mockResolvedValue({ data: [] })
     mockGetSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: [] } })
+    mockGetTrafficHourly.mockResolvedValue({ data: [] })
+    mockResetUserSubscribe.mockResolvedValue({})
     mockUpdateUser.mockResolvedValue({})
     mockCreateUser.mockResolvedValue({})
   })
@@ -147,5 +156,68 @@ describe('Admin Users flow', () => {
     await flushPromises()
 
     expect(wrapper.vm.buildSubscribeUrl({ token: 'tok_panel' })).toBe('http://panel.example.com/x/tok_panel')
+  })
+
+  it('loads users, subscription groups, and traffic rows from legacy, panel, and nested payloads', async () => {
+    mockGetUserList.mockResolvedValueOnce({
+      data: { list: [{ id: 1, email: 'legacy@example.com', banned: 0 }], total: 1 }
+    })
+    mockGetSubscriptionGroups.mockResolvedValueOnce({ data: [{ id: 10, name: 'Legacy Group' }] })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+
+    expect(wrapper.vm.users[0].email).toBe('legacy@example.com')
+    expect(wrapper.vm.total).toBe(1)
+    expect(wrapper.vm.subscriptionGroups[0].name).toBe('Legacy Group')
+
+    mockGetUserList.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      data: { list: [{ id: 2, email: 'panel@example.com', banned: 0 }], total: 2 },
+      ts: 1783526400000,
+    })
+    await wrapper.vm.fetchUsers()
+    await flushPromises()
+
+    expect(wrapper.vm.users[0].email).toBe('panel@example.com')
+    expect(wrapper.vm.total).toBe(2)
+
+    mockGetSubscriptionGroups.mockResolvedValueOnce({ data: { data: [{ id: 11, name: 'Nested Group' }] } })
+    await wrapper.vm.loadSubscriptionGroups()
+    await flushPromises()
+    expect(wrapper.vm.subscriptionGroups[0].name).toBe('Nested Group')
+
+    mockGetTrafficHourly.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      data: [{ hour_ts: 1783526400, traffic: 4096 }],
+      ts: 1783526400000,
+    })
+    await wrapper.vm.openTrafficModal(wrapper.vm.users[0])
+    await flushPromises()
+
+    expect(mockGetTrafficHourly).toHaveBeenCalledWith(720, 2)
+    expect(wrapper.vm.hourlyTrafficRows).toEqual([{ hour_ts: 1783526400, traffic: 4096 }])
+  })
+
+  it('accepts enveloped reset-subscribe responses', async () => {
+    const user = { id: 3, email: 'reset@example.com', token: 'old-token', banned: 0 }
+    mockGetUserList.mockResolvedValue({ data: { list: [user], total: 1 } })
+    mockResetUserSubscribe.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      data: { token: 'new-token' },
+      ts: 1783526400000,
+    })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+
+    await wrapper.vm.resetSubscribe(user)
+    await flushPromises()
+
+    expect(mockResetUserSubscribe).toHaveBeenCalledWith(3)
+    expect(window.alert).toHaveBeenCalledWith('Subscription link reset')
   })
 })

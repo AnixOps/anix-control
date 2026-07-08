@@ -109,10 +109,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "用户创建成功",
-		"data":    user,
-	})
+	panelSuccess(c, user)
 }
 
 // GetUserList godoc
@@ -155,7 +152,7 @@ func (h *AdminHandler) GetUserList(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	panelSuccess(c, result)
 }
 
 // GetUser godoc
@@ -181,7 +178,7 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": user})
+	panelSuccess(c, user)
 }
 
 // UpdateUser godoc
@@ -294,7 +291,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
+	panelSuccess(c, gin.H{"message": "更新成功"})
 }
 
 // BanUser godoc
@@ -321,7 +318,7 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "封禁成功"})
+	panelSuccess(c, gin.H{"message": "封禁成功"})
 }
 
 // UnbanUser godoc
@@ -348,7 +345,7 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "解封成功"})
+	panelSuccess(c, gin.H{"message": "解封成功"})
 }
 
 // ResetUserTraffic godoc
@@ -375,7 +372,7 @@ func (h *AdminHandler) ResetUserTraffic(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "流量重置成功"})
+	panelSuccess(c, gin.H{"message": "流量重置成功"})
 }
 
 // ResetUserSubscribe godoc
@@ -403,10 +400,7 @@ func (h *AdminHandler) ResetUserSubscribe(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "订阅重置成功",
-		"data":    gin.H{"token": newToken},
-	})
+	panelSuccess(c, gin.H{"token": newToken})
 }
 
 func (h *AdminHandler) ResetCompatFlow(c *gin.Context) {
@@ -476,7 +470,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	panelSuccess(c, gin.H{"message": "删除成功"})
 }
 
 // ====== 套餐管理 ======
