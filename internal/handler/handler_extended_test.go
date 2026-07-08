@@ -537,6 +537,58 @@ func (s *TelegramHandlerExtendedTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *TelegramHandlerExtendedTestSuite) TestGetBot() {
+	handler := NewTelegramHandler()
+	s.router.GET("/admin/telegram/bot", handler.GetBot)
+
+	req, _ := http.NewRequest("GET", "/admin/telegram/bot", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "test-token", data["token"])
+	assert.Equal(s.T(), "testbot", data["name"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *TelegramHandlerExtendedTestSuite) TestUpdateBot() {
+	handler := NewTelegramHandler()
+	s.router.PUT("/admin/telegram/bot", handler.UpdateBot)
+
+	body := map[string]any{
+		"name":            "Panel Bot",
+		"token":           "updated-token",
+		"welcome_message": "Welcome",
+		"admin_ids":       []any{"12345", float64(67890)},
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("PUT", "/admin/telegram/bot", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "Panel Bot", data["name"])
+	assert.Equal(s.T(), "updated-token", data["token"])
+	assert.NotContains(s.T(), resp, "error")
+
+	var updated model.TelegramBot
+	err := s.db.First(&updated, s.testBot.ID).Error
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), "Panel Bot", updated.Name)
+	assert.JSONEq(s.T(), `[12345,67890]`, updated.AdminIDs)
+}
+
 func (s *TelegramHandlerExtendedTestSuite) TestDeleteWebhook() {
 	handler := NewTelegramHandler()
 	s.router.DELETE("/admin/telegram/webhook", handler.DeleteWebhook)
@@ -546,6 +598,13 @@ func (s *TelegramHandlerExtendedTestSuite) TestDeleteWebhook() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "webhook deleted", data["message"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *TelegramHandlerExtendedTestSuite) TestSendNotification() {
@@ -614,15 +673,17 @@ func (s *TelegramHandlerExtendedTestSuite) TestBroadcast() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(s.T(), err)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
 	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
-	_, hasSuccess := data["success"]
-	_, hasFailed := data["failed"]
-	assert.True(s.T(), hasSuccess)
-	assert.True(s.T(), hasFailed)
+	assert.Equal(s.T(), "broadcast completed", data["message"])
+	assert.Equal(s.T(), float64(0), data["success"])
+	assert.Equal(s.T(), float64(0), data["failed"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *TelegramHandlerExtendedTestSuite) TestBroadcast_NestedMessage() {
@@ -642,6 +703,12 @@ func (s *TelegramHandlerExtendedTestSuite) TestBroadcast_NestedMessage() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "broadcast completed", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *TelegramHandlerExtendedTestSuite) TestBroadcast_InvalidBody() {
@@ -681,10 +748,8 @@ func (s *TelegramHandlerExtendedTestSuite) TestGetUserBindings() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(s.T(), err)
-
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
 	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	list, ok := data["list"].([]any)
@@ -696,6 +761,8 @@ func (s *TelegramHandlerExtendedTestSuite) TestGetUserBindings() {
 	_, hasNotify := first["notify_enabled"]
 	assert.True(s.T(), hasEmail)
 	assert.True(s.T(), hasNotify)
+	assert.NotContains(s.T(), resp, "list")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *TelegramHandlerExtendedTestSuite) TestGetUserBindings_All() {
@@ -725,15 +792,15 @@ func (s *TelegramHandlerExtendedTestSuite) TestGetUserBindings_All() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(s.T(), err)
-
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
 	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	list, ok := data["list"].([]any)
 	assert.True(s.T(), ok)
 	assert.GreaterOrEqual(s.T(), len(list), 25)
+	assert.NotContains(s.T(), resp, "list")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *TelegramHandlerExtendedTestSuite) TestUpdateUserNotify() {
@@ -767,6 +834,12 @@ func (s *TelegramHandlerExtendedTestSuite) TestUpdateUserNotify() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), false, data["notify_enabled"])
+	assert.NotContains(s.T(), resp, "error")
 
 	var refreshed model.TelegramUser
 	err := s.db.First(&refreshed, tgUser.ID).Error
@@ -774,6 +847,80 @@ func (s *TelegramHandlerExtendedTestSuite) TestUpdateUserNotify() {
 	assert.False(s.T(), refreshed.NotifyExpire)
 	assert.False(s.T(), refreshed.NotifyTraffic)
 	assert.False(s.T(), refreshed.NotifyTicket)
+}
+
+func (s *TelegramHandlerExtendedTestSuite) TestGetTelegramStatus_NoBinding() {
+	user := &model.User{
+		Email:          "tg-status@example.com",
+		Token:          "tg-status-token",
+		UUID:           "tg-status-uuid",
+		TransferEnable: 1073741824,
+	}
+	s.db.Create(user)
+
+	handler := NewTelegramHandler()
+	s.router.GET("/user/telegram/status", func(c *gin.Context) {
+		c.Set("user_id", user.ID)
+		handler.GetTelegramStatus(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/user/telegram/status", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), false, data["bound"])
+	assert.Equal(s.T(), "", data["username"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *TelegramHandlerExtendedTestSuite) TestUserTelegramActionsEnvelope() {
+	user := &model.User{
+		Email:          "tg-actions@example.com",
+		Token:          "tg-actions-token",
+		UUID:           "tg-actions-uuid",
+		TransferEnable: 1073741824,
+	}
+	s.db.Create(user)
+
+	handler := NewTelegramHandler()
+	s.router.POST("/user/telegram/unbind", func(c *gin.Context) {
+		c.Set("user_id", user.ID)
+		handler.UnbindTelegram(c)
+	})
+	s.router.POST("/user/telegram/notify", func(c *gin.Context) {
+		c.Set("user_id", user.ID)
+		handler.UpdateNotifySettings(c)
+	})
+
+	unbindReq, _ := http.NewRequest("POST", "/user/telegram/unbind", nil)
+	unbindResp := httptest.NewRecorder()
+	s.router.ServeHTTP(unbindResp, unbindReq)
+	assert.Equal(s.T(), http.StatusOK, unbindResp.Code)
+	unbindPayload := decodePanelTestResponse(s.T(), unbindResp)
+	assert.Equal(s.T(), float64(0), unbindPayload["code"])
+	unbindData, ok := unbindPayload["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "unbound successfully", unbindData["message"])
+	assert.NotContains(s.T(), unbindPayload, "message")
+
+	notifyBody := map[string]any{"notify_expire": true}
+	notifyJSON, _ := json.Marshal(notifyBody)
+	notifyReq, _ := http.NewRequest("POST", "/user/telegram/notify", bytes.NewReader(notifyJSON))
+	notifyReq.Header.Set("Content-Type", "application/json")
+	notifyResp := httptest.NewRecorder()
+	s.router.ServeHTTP(notifyResp, notifyReq)
+	assert.Equal(s.T(), http.StatusOK, notifyResp.Code)
+	notifyPayload := decodePanelTestResponse(s.T(), notifyResp)
+	assert.Equal(s.T(), float64(0), notifyPayload["code"])
+	notifyData, ok := notifyPayload["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "settings updated", notifyData["message"])
+	assert.NotContains(s.T(), notifyPayload, "message")
 }
 
 func TestTelegramHandlerExtended(t *testing.T) {

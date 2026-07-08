@@ -166,6 +166,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize user payment channels/create/status/records success response envelopes with handler tests while preserving callback compatibility.
 - [x] Normalize user/admin MFA success response envelopes with handler and Admin MFA frontend compatibility tests.
 - [x] Normalize user/admin notification success response envelopes with handler and Admin Notifications frontend compatibility tests.
+- [x] Normalize admin/user Telegram panel API success response envelopes with handler and Admin Telegram frontend compatibility tests while preserving webhook compatibility.
 - [x] Normalize user register and order-save success response envelopes with handler coverage.
 - [x] Normalize user login success response envelope with handler and Login frontend compatibility tests.
 - [x] Normalize user order list/detail response envelopes with handler and Orders frontend compatibility tests.

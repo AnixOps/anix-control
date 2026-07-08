@@ -252,6 +252,17 @@ const resolveApiError = (error, fallbackKey) => (
   t(fallbackKey)
 )
 
+const readTelegramPayload = (res) => {
+  if (!res || typeof res !== 'object') return {}
+  if (Object.prototype.hasOwnProperty.call(res, 'code')) {
+    return res.data && typeof res.data === 'object' ? res.data : {}
+  }
+  if (res.data && typeof res.data === 'object' && Object.prototype.hasOwnProperty.call(res.data, 'data')) {
+    return res.data.data && typeof res.data.data === 'object' ? res.data.data : {}
+  }
+  return res.data && typeof res.data === 'object' ? res.data : res
+}
+
 const formatBoundTime = (time) => {
   if (!time) return '-'
   return formatDateTime(time)
@@ -260,7 +271,8 @@ const formatBoundTime = (time) => {
 const fetchBotConfig = async () => {
   try {
     const res = await getTelegramBot()
-    botConfig.value = res.data || { token: '', admin_ids: [], welcome_message: '' }
+    const payload = readTelegramPayload(res)
+    botConfig.value = Object.keys(payload).length > 0 ? payload : { token: '', admin_ids: [], welcome_message: '' }
   } catch (error) {
     console.error(t('adminTelegram.messages.fetchConfigFailed'), error)
   }
@@ -296,7 +308,8 @@ const deleteWebhookConfig = async () => {
 const fetchUsers = async () => {
   try {
     const res = await getTelegramUsers({ all: true })
-    users.value = res.data?.list || res.data || []
+    const payload = readTelegramPayload(res)
+    users.value = payload.list || (Array.isArray(payload) ? payload : [])
   } catch (error) {
     console.error(t('adminTelegram.messages.fetchUsersFailed'), error)
   }
@@ -306,7 +319,7 @@ const toggleUserNotify = async (user) => {
   try {
     const nextEnabled = !user.notify_enabled
     const res = await updateTelegramUserNotify(user.id, { notify_enabled: nextEnabled })
-    const updated = res.data || {}
+    const updated = readTelegramPayload(res)
     user.notify_enabled = !!updated.notify_enabled
     user.notify_expire = !!updated.notify_expire
     user.notify_traffic = !!updated.notify_traffic
@@ -325,9 +338,10 @@ const sendNotification = async () => {
   try {
     if (notifyForm.value.type === 'broadcast') {
       const res = await broadcastTelegram(notifyForm.value.message)
+      const payload = readTelegramPayload(res)
       window.alert(t('adminTelegram.messages.broadcastComplete', {
-        success: res.data?.success || 0,
-        failed: res.data?.failed || 0
+        success: payload.success || 0,
+        failed: payload.failed || 0
       }))
     } else {
       if (!notifyForm.value.telegram_id) {

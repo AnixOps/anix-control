@@ -145,6 +145,10 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/telegram/bot', method: 'get' },
       },
       {
+        call: () => adminApi.getTelegramUsers({ all: true }),
+        expected: { url: '/admin/telegram/users', method: 'get', params: { all: true } },
+      },
+      {
         call: () => adminApi.getNotificationTemplates({ page: 1 }),
         expected: {
           url: '/admin/notification/templates',
@@ -382,6 +386,37 @@ describe('admin api mapping', () => {
           url: '/admin/telegram/users/16/notify',
           method: 'put',
           data: { notify: true },
+        },
+      },
+      {
+        call: () => adminApi.updateTelegramBot({ token: 'bot-token' }),
+        expected: {
+          url: '/admin/telegram/bot',
+          method: 'put',
+          data: { token: 'bot-token' },
+        },
+      },
+      {
+        call: () => adminApi.setTelegramWebhook('https://panel.example.com/api/v2/telegram/webhook'),
+        expected: {
+          url: '/admin/telegram/webhook',
+          method: 'post',
+          data: { url: 'https://panel.example.com/api/v2/telegram/webhook' },
+        },
+      },
+      {
+        call: () => adminApi.deleteTelegramWebhook(),
+        expected: {
+          url: '/admin/telegram/webhook',
+          method: 'delete',
+        },
+      },
+      {
+        call: () => adminApi.broadcastTelegram('hello'),
+        expected: {
+          url: '/admin/telegram/broadcast',
+          method: 'post',
+          data: { message: 'hello' },
         },
       },
       {
