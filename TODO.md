@@ -177,5 +177,6 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize admin knowledge list/create/update/delete success response envelopes with handler and Knowledge frontend compatibility tests.
 - [x] Normalize admin system audit-log response envelope with handler and System frontend compatibility tests.
 - [x] Normalize admin system config CRUD success response envelopes with handler, sensitive-field, and System frontend compatibility tests.
+- [x] Normalize admin load balancer CRUD and health-check success response envelopes with handler and System frontend compatibility tests.
 - [ ] Keep frontend build/test/audit green for admin and user workflows.
 - [x] Track frontend bundle size for heavy admin pages.

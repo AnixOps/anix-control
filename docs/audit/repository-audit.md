@@ -128,7 +128,9 @@ Open gaps:
   responses now have handler coverage plus System audit frontend compatibility
   coverage, and admin system config CRUD success responses now have handler
   coverage plus System runtime/config compatibility coverage while retaining
-  sensitive-value masking. User
+  sensitive-value masking. Admin load balancer CRUD and health-check success
+  responses now have handler coverage plus System load balancer frontend
+  compatibility coverage. User
   registration, login, profile, dashboard, subscription info, plan list,
   coupon-check, knowledge list/detail, ticket list/create/detail/reply/close,
   order-save, order list, order detail, public payment methods, and public
