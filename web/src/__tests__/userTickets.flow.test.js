@@ -25,32 +25,72 @@ describe('User Tickets flow', () => {
     mockCloseTicket.mockReset()
   })
 
-  it('loads ticket list and opens ticket detail', async () => {
-    mockGetTickets.mockResolvedValue({
-      data: [
-        {
-          id: 1,
-          subject: 'Cannot connect',
-          status: 0,
-          updated_at: 1710000000,
-        },
-      ],
-    })
-    mockGetTicketDetail.mockResolvedValue({
-      data: {
-        id: 1,
-        subject: 'Cannot connect',
-        status: 0,
-        messages: [
+  it.each([
+    [
+      'legacy ticket payloads',
+      {
+        data: [
           {
-            id: 10,
-            is_admin: false,
-            message: 'Need help',
-            created_at: '2026-04-05T00:00:00.000Z',
+            id: 1,
+            subject: 'Cannot connect',
+            status: 0,
+            updated_at: 1710000000,
           },
         ],
       },
-    })
+      {
+        data: {
+          id: 1,
+          subject: 'Cannot connect',
+          status: 0,
+          messages: [
+            {
+              id: 10,
+              is_admin: false,
+              message: 'Need help',
+              created_at: '2026-04-05T00:00:00.000Z',
+            },
+          ],
+        },
+      },
+    ],
+    [
+      'panel ticket envelopes',
+      {
+        code: 0,
+        msg: '操作成功',
+        ts: 1783536000000,
+        data: [
+          {
+            id: 1,
+            subject: 'Cannot connect',
+            status: 0,
+            updated_at: 1710000000,
+          },
+        ],
+      },
+      {
+        code: 0,
+        msg: '操作成功',
+        ts: 1783536000000,
+        data: {
+          id: 1,
+          subject: 'Cannot connect',
+          status: 0,
+          messages: [
+            {
+              id: 10,
+              is_admin: false,
+              message: 'Need help',
+              created_at: '2026-04-05T00:00:00.000Z',
+            },
+          ],
+        },
+      },
+    ],
+  ])('loads ticket list and opens ticket detail from %s', async (_label, listResponse, detailResponse) => {
+    mockGetTickets.mockResolvedValue(listResponse)
+    mockGetTicketDetail.mockResolvedValue(detailResponse)
 
     const wrapper = mount(Tickets)
     await flushPromises()
@@ -67,15 +107,20 @@ describe('User Tickets flow', () => {
 
   it('creates a ticket and refreshes list', async () => {
     mockGetTickets.mockResolvedValue({ data: [] })
-    mockCreateTicket.mockResolvedValue({ data: { id: 2 } })
+    mockCreateTicket.mockResolvedValue({
+      code: 0,
+      msg: '操作成功',
+      ts: 1783536000000,
+      data: { id: 2 },
+    })
 
     const wrapper = mount(Tickets)
     await flushPromises()
 
-    await wrapper.find('.page-header .btn-primary').trigger('click')
+    await wrapper.find('[data-test="ticket-create-button"]').trigger('click')
     await wrapper.find('.modal .form-group input').setValue('Billing issue')
     await wrapper.find('.modal .form-group textarea').setValue('Please check order status')
-    await wrapper.find('.modal-footer .btn-primary').trigger('click')
+    await wrapper.find('[data-test="ticket-submit-button"]').trigger('click')
     await flushPromises()
 
     expect(mockCreateTicket).toHaveBeenCalledWith({

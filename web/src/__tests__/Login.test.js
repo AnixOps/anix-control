@@ -3,7 +3,9 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import Login from '@/views/Login.vue'
+import { useUserStore } from '@/stores/user'
 
+const mockLogin = vi.hoisted(() => vi.fn())
 const mockRegister = vi.hoisted(() => vi.fn())
 
 vi.mock('vue-router', () => ({
@@ -13,13 +15,15 @@ vi.mock('vue-router', () => ({
 }))
 
 vi.mock('@/api/auth', () => ({
-  login: vi.fn(),
+  login: (...args) => mockLogin(...args),
   register: (...args) => mockRegister(...args),
 }))
 
 describe('Login.vue', () => {
   beforeEach(() => {
+    localStorage.clear()
     setActivePinia(createPinia())
+    mockLogin.mockReset()
     mockRegister.mockReset()
   })
 
@@ -89,6 +93,43 @@ describe('Login.vue', () => {
       email: 'invite-user@example.com',
       password: 'password123',
       invite_code: 'INVITE123',
+    })
+  })
+
+  it('logs in from a panel envelope payload', async () => {
+    mockLogin.mockResolvedValue({
+      code: 0,
+      msg: '操作成功',
+      ts: 1783536000000,
+      data: {
+        token: 'login-token',
+        is_admin: true,
+        user_id: 9,
+        email: 'admin@example.com',
+      },
+    })
+
+    const wrapper = mount(Login, {
+      global: {
+        stubs: ['router-link'],
+      },
+    })
+
+    await wrapper.find('#email').setValue('admin@example.com')
+    await wrapper.find('#password').setValue('password123')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    const userStore = useUserStore()
+    expect(mockLogin).toHaveBeenCalledWith({
+      email: 'admin@example.com',
+      password: 'password123',
+    })
+    expect(userStore.token).toBe('login-token')
+    expect(userStore.userInfo).toMatchObject({
+      id: 9,
+      email: 'admin@example.com',
+      is_admin: true,
     })
   })
 })

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"sync"
@@ -23,14 +24,14 @@ type Server struct {
 
 // MockUser 模拟用户
 type MockUser struct {
-	ID            uint32 `json:"id"`
-	UUID          string `json:"uuid"`
-	Email         string `json:"email"`
-	SpeedLimit    int64  `json:"speed_limit"`
-	DeviceLimit   int    `json:"device_limit"`
+	ID             uint32 `json:"id"`
+	UUID           string `json:"uuid"`
+	Email          string `json:"email"`
+	SpeedLimit     int64  `json:"speed_limit"`
+	DeviceLimit    int    `json:"device_limit"`
 	TransferEnable int64  `json:"transfer_enable"`
-	UsedUpload    int64  `json:"used_upload"`
-	UsedDownload  int64  `json:"used_download"`
+	UsedUpload     int64  `json:"used_upload"`
+	UsedDownload   int64  `json:"used_download"`
 }
 
 // MockStats 模拟流量统计
@@ -51,9 +52,9 @@ type NodeConfig struct {
 // NewServer 创建 Mock 服务器
 func NewServer(port int) *Server {
 	return &Server{
-		port:   port,
-		users:  make(map[string]*MockUser),
-		stats:  make(map[string]*MockStats),
+		port:  port,
+		users: make(map[string]*MockUser),
+		stats: make(map[string]*MockStats),
 	}
 }
 
@@ -75,8 +76,9 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/v2/node/heartbeat", s.handleNodeHeartbeat)
 
 	s.server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", s.port),
-		Handler: mux,
+		Addr:              fmt.Sprintf(":%d", s.port),
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	s.startTime = time.Now()
@@ -137,8 +139,7 @@ func (s *Server) URL() string {
 
 // 处理函数
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "ok",
 		"timestamp": time.Now().Unix(),
 		"uptime":    time.Since(s.startTime).Seconds(),
@@ -163,7 +164,7 @@ func (s *Server) handleNodeConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(config)
+	writeJSON(w, http.StatusOK, config)
 }
 
 func (s *Server) handleGetUsers(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +185,7 @@ func (s *Server) handleGetUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"users": users,
 		"total": len(users),
 	})
@@ -214,8 +215,7 @@ func (s *Server) handlePushTraffic(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
 func (s *Server) handleReportOnline(w http.ResponseWriter, r *http.Request) {
@@ -225,8 +225,7 @@ func (s *Server) handleReportOnline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
 func (s *Server) handleNodeRegister(w http.ResponseWriter, r *http.Request) {
@@ -243,7 +242,7 @@ func (s *Server) handleNodeRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"node_id": 1,
 		"api_key": "test-api-key",
 		"message": "registered successfully",
@@ -255,8 +254,15 @@ func (s *Server) handleNodeHeartbeat(w http.ResponseWriter, r *http.Request) {
 	s.nodeOnline = true
 	s.mu.Unlock()
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(value); err != nil {
+		log.Printf("mock server encode response: %v", err)
+	}
 }
 
 // GetFreePort 获取空闲端口
@@ -270,7 +276,11 @@ func GetFreePort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer l.Close()
+	defer func() {
+		if err := l.Close(); err != nil {
+			log.Printf("close port probe listener: %v", err)
+		}
+	}()
 
 	return l.Addr().(*net.TCPAddr).Port, nil
 }

@@ -224,6 +224,7 @@ export default {
     },
     admin: {
       dashboard: 'Dashboard',
+      monitor: 'Monitor',
       trafficHourly: 'Hourly Traffic',
       users: 'Users',
       nodes: 'Nodes',
@@ -321,7 +322,8 @@ export default {
       nodeXTopology: 'NodeX Topology',
       nodeXRuntime: 'NodeX Runtime',
       nodeXAgents: 'NodeX Agents',
-      observability: 'Observability'
+      observability: 'Observability',
+      more: 'More'
     },
     hints: {
       setupWizard: 'Configure nodes, tunnels and forwards step by step',
@@ -330,7 +332,8 @@ export default {
       nodeXTopology: 'Stateful relay/exit topology',
       nodeXRuntime: 'Stateful gost control-plane',
       nodeXAgents: 'Stateful agent task channel',
-      observability: 'Network topology & latency metrics'
+      observability: 'Network topology & latency metrics',
+      more: 'Advanced runtime tools'
     }
   },
   forwardWizard: {
@@ -918,6 +921,39 @@ export default {
         startImport: 'Start Import',
         rerunDiagnosis: 'Run Again'
       },
+      bulk: {
+        selected: '{count} selected',
+        selectAll: 'Select all forwards',
+        selectRule: 'Select {name}',
+        resume: 'Resume',
+        pause: 'Pause',
+        export: 'Export',
+        delete: 'Delete',
+        clear: 'Clear'
+      },
+      filters: {
+        search: 'Search',
+        searchPlaceholder: 'Rule, tunnel, user, address or port',
+        tunnel: 'Tunnel',
+        allTunnels: 'All tunnels',
+        status: 'Status',
+        allStatuses: 'All statuses',
+        running: 'Running',
+        paused: 'Paused',
+        error: 'Error',
+        clear: 'Reset',
+        emptyTitle: 'No matching forwards',
+        emptyText: 'Adjust the search, tunnel or status filters to show more rules.'
+      },
+      table: {
+        rule: 'Rule / Tunnel',
+        ingress: 'Ingress',
+        target: 'Target',
+        policy: 'Policy',
+        status: 'Status',
+        traffic: 'Traffic',
+        actions: 'Actions'
+      },
       group: {
         eyebrow: 'User',
         userTag: 'User',
@@ -927,7 +963,7 @@ export default {
       emptyGroupedTitle: 'No forwards yet',
       emptyGroupedText: 'There are no flux-panel-compatible forward records in the current system yet.',
       emptyDirectTitle: 'No forwards yet',
-      emptyDirectText: 'After you create the first forward, the direct card view will appear here.',
+      emptyDirectText: 'After you create the first forward, the direct table view will appear here.',
       editor: {
         eyebrow: 'Forward',
         titleEdit: 'Edit Forward',
@@ -972,23 +1008,24 @@ export default {
       exportModal: {
         eyebrow: 'Export',
         title: 'Export Forward Data',
-        subtitle: 'Format: remoteAddr|name|inPort',
+        subtitle: 'Format: relay-panel compatible JSON: [{ "dest": ["host:port"], "listen_port": 10086, "name": "Rule" }]',
         tunnelLabel: 'Select Export Tunnel',
         tunnelPlaceholder: 'Please select a tunnel',
         generating: 'Generating...',
         regenerate: 'Regenerate',
         generate: 'Generate Export Data',
-        noDataPlaceholder: 'No export data yet'
+        noDataPlaceholder: 'No export data yet',
+        selectionHint: 'Exporting {count} selected forwards.'
       },
       importModal: {
         eyebrow: 'Import',
         title: 'Import Forward Data',
-        subtitle: 'Format: remoteAddr|name|inPort, one entry per line, inPort may be blank.',
-        subtitleSecondary: 'Target addresses may contain a single address or multiple comma-separated addresses, for example: 3.3.3.3:3,4.4.4.4:4',
+        subtitle: 'Supports relay-panel JSON and legacy remoteAddr|name|inPort lines. inPort may be blank.',
+        subtitleSecondary: 'JSON example: [{ "dest": ["3.3.3.3:3", "4.4.4.4:4"], "listen_port": 10086, "name": "Business Entry" }]',
         tunnelLabel: 'Select Import Tunnel',
         tunnelPlaceholder: 'Please select a tunnel',
         dataLabel: 'Import Data',
-        placeholder: 'example.com:8080|Business Entry|10086',
+        placeholder: '[{"dest":["example.com:8080"],"listen_port":10086,"name":"Business Entry"}]',
         resultTitle: 'Import Results',
         resultSummary: 'Success: {success} / Total: {total}',
         statusSuccess: 'Success',
@@ -1076,6 +1113,8 @@ export default {
         serviceChanged: 'Service change request submitted',
         servicePaused: 'Pause request submitted',
         networkActionFailed: 'Network error, operation failed',
+        bulkActionComplete: 'Batch completed: {success} succeeded, {failed} failed',
+        bulkDeleteConfirm: 'Delete {count} selected forwards? Failed regular deletes will not be force deleted in batch mode.',
         deleted: 'Deleted successfully',
         forceDeleted: 'Force delete succeeded',
         forceDeleteFailed: 'Force delete failed',
@@ -2701,7 +2740,9 @@ export default {
       copySubscribe: 'Copy subscription link',
       copySubscribeShort: 'Copy Sub',
       resetSubscribe: 'Reset subscription link (old link invalidated)',
-      resetSubscribeShort: 'Reset Sub'
+      resetSubscribeShort: 'Reset Sub',
+      viewTraffic: 'View traffic for last 30 days',
+      viewTrafficShort: 'Traffic'
     },
     empty: {
       noData: 'No data'
@@ -2806,6 +2847,26 @@ export default {
       quota: 'Quota',
       resetting: 'Resetting...',
       confirmAction: 'Confirm reset'
+    },
+    trafficModal: {
+      title: 'Traffic Detail - {email}',
+      subtitle: 'Daily totals and hourly detail for the last 30 days.',
+      refresh: 'Refresh',
+      loading: 'Loading...',
+      dailyTitle: 'Daily Traffic',
+      hourlyTitle: 'Hourly Traffic',
+      empty: 'No traffic records',
+      fetchFailed: 'Failed to load user traffic',
+      summary: {
+        total30d: '30-day total',
+        dailyPeak: 'Daily peak',
+        hourlyPeak: 'Hourly peak'
+      },
+      table: {
+        date: 'Date',
+        hour: 'Hour',
+        traffic: 'Traffic'
+      }
     },
     labels: {
       admin: 'Admin',

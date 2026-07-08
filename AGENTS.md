@@ -980,6 +980,10 @@ cd web && npm run build
 - Supplementary runtime/401 guidance lives in `docs/guide/forward-tunnel-runtime-ops.md`; NodeX Mode vs iptables ansible Mode descriptions now sit each in the runtime doc and its smoke-test companion, so read both whenever validating NodeX/iptables ansible startups or debugging 401/SSH traces.
 - Relay onboarding truth now lives in `docs/guide/forward-relay-onboarding.md`; use it whenever a task depends on the phrase “node really joined” or “relay attached successfully”.
 - When running targeted Go verification in this repository, prefer `GOWORK=off go test ...`.
+- Operator credentials and privileged deployment are user-owned:
+  - All panel/admin/API tokens must be provided by the user. Do not infer, scrape, decode, read from protected config, or generate replacement tokens unless the user explicitly gives the token or asks for that exact local test.
+  - Any deployment, service restart, file replacement under system paths, or other operation requiring `sudo`/root must be left for the user to run through the provided scripts. Do not attempt interactive sudo workarounds.
+  - For database work, Go compilation, frontend builds, or other tool-dependent verification, first check whether the required tool is available. If it is missing, tell the user exactly which tool to install or run locally instead of inventing a workaround.
 - The repository lives under a parent `go.work`, and handler/service suites may fail before they even execute if the module is not listed there.
 - Keep `web/src/views/admin/Forward.vue` aligned with `vite-frontend/src/pages/forward.tsx`; do not add runtime backend selectors or runtime job tables there.
 - Put backend controls and observability in `web/src/views/admin/System.vue` or deployment-oriented docs, not in the Flux-cloned page.

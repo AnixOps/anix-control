@@ -66,7 +66,7 @@ func (h *UserHandler) GetSubscription(c *gin.Context) {
 	sub.SubscribePath = settings.SubscribePath
 	sub.SubscribeDomains = settings.SubscribeDomains
 
-	c.JSON(http.StatusOK, gin.H{"data": sub})
+	panelSuccess(c, sub)
 }
 
 // GetProfile godoc
@@ -99,14 +99,12 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"id":       user.ID,
-			"email":    user.Email,
-			"uuid":     user.UUID,
-			"token":    user.Token,
-			"is_admin": user.IsAdmin == 1,
-		},
+	panelSuccess(c, gin.H{
+		"id":       user.ID,
+		"email":    user.Email,
+		"uuid":     user.UUID,
+		"token":    user.Token,
+		"is_admin": user.IsAdmin == 1,
 	})
 }
 
@@ -141,9 +139,7 @@ func (h *UserHandler) GetDashboard(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"subscription": sub,
-		},
+	panelSuccess(c, gin.H{
+		"subscription": sub,
 	})
 }

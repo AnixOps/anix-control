@@ -50,14 +50,14 @@ type PanelForwardRuntimeServiceTestSuite struct {
 
 func (s *PanelForwardRuntimeServiceTestSuite) SetupSuite() {
 	s.ServiceTestSuite.SetupSuite()
-	database.AutoMigrate(
+	s.Require().NoError(database.AutoMigrate(
 		&model.ForwardNode{},
 		&model.ForwardTunnel{},
 		&model.ForwardUserTunnel{},
 		&model.Forward{},
 		&model.ForwardRuntimeJob{},
 		&model.SpeedLimit{},
-	)
+	))
 }
 
 func (s *PanelForwardRuntimeServiceTestSuite) SetupTest() {
@@ -549,6 +549,73 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestApply_IptablesAnsibleQueuesLoc
 	assert.Equal(s.T(), node.ID, payload.Node.ID)
 }
 
+func (s *PanelForwardRuntimeServiceTestSuite) TestApply_LocalAnsibleRejectsDuplicateActiveJob() {
+	db := newMinimalForwardRuntimeTestDB(s.T())
+	assert.NoError(s.T(), EnsureForwardRuntimeJobSchema(db))
+	svc := NewPanelForwardRuntimeService(db)
+	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendNftablesAnsible)
+
+	node := &model.ForwardNode{
+		Name:    "Duplicate Runtime Node",
+		Type:    model.ForwardNodeTypeRelay,
+		Host:    "203.0.113.60",
+		Enabled: true,
+	}
+	assert.NoError(s.T(), db.Create(node).Error)
+
+	tunnel := &model.ForwardTunnel{
+		Name:     "Duplicate Runtime Tunnel",
+		InNodeID: node.ID,
+		Type:     1,
+		Status:   model.ForwardTunnelStatusActive,
+	}
+	assert.NoError(s.T(), db.Create(tunnel).Error)
+
+	forward := &model.Forward{
+		UserID:         101,
+		UserName:       "runtime-duplicate@example.com",
+		Name:           "Duplicate Runtime Forward",
+		TunnelID:       tunnel.ID,
+		InPort:         19091,
+		RemoteAddr:     "duplicate.example.com:443",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendNftablesAnsible,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	configSvc := NewSystemConfigService(db)
+	assert.NoError(s.T(), configSvc.SetJSON(
+		forwardRuntimeAnsibleConfigJSONKey,
+		panelForwardAnsibleConfig{
+			Inventory:      "/etc/ansible/hosts",
+			ApplyPlaybook:  "/opt/ansible/apply.yml",
+			RemovePlaybook: "/opt/ansible/remove.yml",
+			Become:         true,
+		},
+		forwardRuntimeConfigGroup,
+		"test ansible runtime",
+	))
+	assert.NoError(s.T(), db.Create(&model.ForwardRuntimeJob{
+		Backend:   model.ForwardRuntimeBackendNftablesAnsible,
+		Action:    model.ForwardRuntimeJobActionPause,
+		ForwardID: &forward.ID,
+		TunnelID:  &tunnel.ID,
+		Status:    model.ForwardRuntimeJobStatusPending,
+	}).Error)
+
+	result, err := svc.Apply(context.Background(), model.ForwardRuntimeJobActionResume, forward, tunnel)
+	assert.ErrorIs(s.T(), err, errForwardRuntimeJobInProgress)
+	if assert.NotNil(s.T(), result) {
+		assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, result.Backend)
+		assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, result.Status)
+		assert.Equal(s.T(), errForwardRuntimeJobInProgress.Error(), result.Message)
+	}
+
+	var count int64
+	assert.NoError(s.T(), db.Model(&model.ForwardRuntimeJob{}).Where("forward_id = ?", forward.ID).Count(&count).Error)
+	assert.Equal(s.T(), int64(1), count)
+}
+
 func (s *PanelForwardRuntimeServiceTestSuite) TestApply_AttachesLimiterToRuntimeRequest() {
 	db := database.Get()
 	setForwardRuntimeBackendForTest(s.T(), db, model.ForwardRuntimeBackendIptablesAnsible)
@@ -975,11 +1042,11 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestSyncForwardsToBackend_SyncsMis
 
 	// Create a tunnel for the forward
 	tunnel := &model.ForwardTunnel{
-		Name:      "Sync Tunnel",
-		Type:      1,
-		Protocol:  "tcp",
-		InNodeID:  1,
-		Status:    1,
+		Name:     "Sync Tunnel",
+		Type:     1,
+		Protocol: "tcp",
+		InNodeID: 1,
+		Status:   1,
 	}
 	assert.NoError(s.T(), db.Create(tunnel).Error)
 	forward.TunnelID = tunnel.ID

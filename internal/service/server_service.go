@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -131,6 +130,10 @@ func (s *ServerService) GetServerUsers(serverType model.ServerType, serverID uin
 
 // RecordTrafficLog 记录流量日志
 func (s *ServerService) RecordTrafficLog(serverType model.ServerType, serverID uint, userID uint, upload, download int64, rate float64) error {
+	if err := ValidateTrafficDelta(upload, download); err != nil {
+		return err
+	}
+	rate = normalizeTrafficRate(rate)
 	log := model.TrafficLog{
 		UserID:     userID,
 		ServerID:   serverID,
@@ -148,6 +151,12 @@ func (s *ServerService) BatchRecordTrafficLog(serverType model.ServerType, serve
 	if len(traffics) == 0 {
 		return nil
 	}
+	for _, traffic := range traffics {
+		if err := ValidateTrafficDelta(traffic[0], traffic[1]); err != nil {
+			return err
+		}
+	}
+	rate = normalizeTrafficRate(rate)
 
 	logs := make([]model.TrafficLog, 0, len(traffics))
 	now := time.Now().Unix()
@@ -184,13 +193,13 @@ func (s *ServerService) RecordServerStat(serverType model.ServerType, serverID u
 		var stat model.StatServer
 		err := tx.Where("server_id = ? AND server_type = ? AND record_type = ? AND record_at = ?",
 			serverID, string(serverType), recordType, recordAt).First(&stat).Error
-		switch {
-		case err == nil:
+		switch err {
+		case nil:
 			return tx.Model(&stat).Updates(map[string]any{
 				"u": gorm.Expr("u + ?", upload),
 				"d": gorm.Expr("d + ?", download),
 			}).Error
-		case err == gorm.ErrRecordNotFound:
+		case gorm.ErrRecordNotFound:
 			stat = model.StatServer{
 				ServerID:   serverID,
 				ServerType: string(serverType),
@@ -211,17 +220,26 @@ func (s *ServerService) UpdateOnlineStatus(serverType model.ServerType, serverID
 	cacheKey := fmt.Sprintf("online:%s:%d", serverType, serverID)
 
 	// 清除旧的在线记录
-	oldKeys, _ := cache.Keys(cacheKey + ":*")
+	oldKeys, err := cache.Keys(cacheKey + ":*")
+	if err != nil {
+		return fmt.Errorf("list online cache keys: %w", err)
+	}
 	if len(oldKeys) > 0 {
-		cache.Del(oldKeys...)
+		if err := cache.Del(oldKeys...); err != nil {
+			return fmt.Errorf("delete old online cache keys: %w", err)
+		}
 	}
 
 	// 记录新的在线IP
 	for userID, ips := range userIPs {
 		if len(ips) > 0 {
 			key := fmt.Sprintf("%s:%d", cacheKey, userID)
-			cache.SAdd(key, ipsToInterface(ips)...)
-			cache.Expire(key, 5*time.Minute)
+			if err := cache.SAdd(key, ipsToInterface(ips)...); err != nil {
+				return fmt.Errorf("store online ips for user %d: %w", userID, err)
+			}
+			if err := cache.Expire(key, 5*time.Minute); err != nil {
+				return fmt.Errorf("expire online ips for user %d: %w", userID, err)
+			}
 		}
 	}
 
@@ -286,7 +304,6 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 	config["node_type"] = nodeTypeStr
 	config["type"] = nodeTypeStr
 	config["send_through"] = "0.0.0.0"
-	log.Printf("BuildNodeConfig: node_type=%s, type=%s", nodeTypeStr, nodeTypeStr)
 
 	switch sv := server.(type) {
 	case *model.ServerVMess:
@@ -297,15 +314,21 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 		config["network"] = sv.Network
 		if sv.TLSSettings != nil {
 			var tlsSettings map[string]any
-			json.Unmarshal([]byte(*sv.TLSSettings), &tlsSettings)
+			if err := decodeConfigJSON("tls_settings", *sv.TLSSettings, &tlsSettings); err != nil {
+				return nil, err
+			}
 			config["tls_settings"] = tlsSettings
 		}
 		if sv.NetworkSettings != nil {
 			var networkSettings map[string]any
-			json.Unmarshal([]byte(*sv.NetworkSettings), &networkSettings)
+			if err := decodeConfigJSON("network_settings", *sv.NetworkSettings, &networkSettings); err != nil {
+				return nil, err
+			}
 			config["network_settings"] = networkSettings
 		}
-		s.addRoutesAndBaseConfig(config, sv.GetRouteIDs())
+		if err := s.addRoutesAndBaseConfig(config, sv.GetRouteIDs()); err != nil {
+			return nil, err
+		}
 
 	case *model.ServerVLESS:
 		config["host"] = sv.Host
@@ -316,12 +339,16 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 		config["flow"] = sv.Flow
 		if sv.TLSSettings != nil {
 			var tlsSettings map[string]any
-			json.Unmarshal([]byte(*sv.TLSSettings), &tlsSettings)
+			if err := decodeConfigJSON("tls_settings", *sv.TLSSettings, &tlsSettings); err != nil {
+				return nil, err
+			}
 			config["tls_settings"] = tlsSettings
 		}
 		if sv.NetworkSettings != nil {
 			var networkSettings map[string]any
-			json.Unmarshal([]byte(*sv.NetworkSettings), &networkSettings)
+			if err := decodeConfigJSON("network_settings", *sv.NetworkSettings, &networkSettings); err != nil {
+				return nil, err
+			}
 			config["network_settings"] = networkSettings
 		}
 		if sv.Encryption != nil {
@@ -329,10 +356,14 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 		}
 		if sv.EncryptionSettings != nil {
 			var encSettings map[string]any
-			json.Unmarshal([]byte(*sv.EncryptionSettings), &encSettings)
+			if err := decodeConfigJSON("encryption_settings", *sv.EncryptionSettings, &encSettings); err != nil {
+				return nil, err
+			}
 			config["encryption_settings"] = encSettings
 		}
-		s.addRoutesAndBaseConfig(config, sv.GetRouteIDs())
+		if err := s.addRoutesAndBaseConfig(config, sv.GetRouteIDs()); err != nil {
+			return nil, err
+		}
 
 	case *model.ServerTrojan:
 		config["host"] = sv.Host
@@ -345,10 +376,14 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 		config["network"] = sv.Network
 		if sv.NetworkSettings != nil {
 			var networkSettings map[string]any
-			json.Unmarshal([]byte(*sv.NetworkSettings), &networkSettings)
+			if err := decodeConfigJSON("network_settings", *sv.NetworkSettings, &networkSettings); err != nil {
+				return nil, err
+			}
 			config["networkSettings"] = networkSettings
 		}
-		s.addRoutesAndBaseConfig(config, sv.GetRouteIDs())
+		if err := s.addRoutesAndBaseConfig(config, sv.GetRouteIDs()); err != nil {
+			return nil, err
+		}
 
 	case *model.ServerShadowsocks:
 		config["host"] = sv.Host
@@ -358,7 +393,9 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 		if sv.ServerKey != nil {
 			config["server_key"] = *sv.ServerKey
 		}
-		s.addRoutesAndBaseConfig(config, sv.GetRouteIDs())
+		if err := s.addRoutesAndBaseConfig(config, sv.GetRouteIDs()); err != nil {
+			return nil, err
+		}
 
 	case *model.ServerHysteria:
 		config["host"] = sv.Host
@@ -381,7 +418,9 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 			config["down_mbps"] = sv.DownMbps
 			config["obfs"] = sv.Obfs
 		}
-		s.addRoutesAndBaseConfig(config, sv.GetRouteIDs())
+		if err := s.addRoutesAndBaseConfig(config, sv.GetRouteIDs()); err != nil {
+			return nil, err
+		}
 
 	case *model.ServerTUIC:
 		config["host"] = sv.Host
@@ -393,7 +432,9 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 		}
 		config["congestion_control"] = sv.CongestionControl
 		config["zero_rtt_handshake"] = sv.ZeroRTTHandshake == 1
-		s.addRoutesAndBaseConfig(config, sv.GetRouteIDs())
+		if err := s.addRoutesAndBaseConfig(config, sv.GetRouteIDs()); err != nil {
+			return nil, err
+		}
 
 	case *model.ServerAnyTLS:
 		config["host"] = sv.Host
@@ -405,19 +446,26 @@ func (s *ServerService) BuildNodeConfig(serverType model.ServerType, serverID ui
 		}
 		if sv.PaddingScheme != nil {
 			var paddingScheme []string
-			json.Unmarshal([]byte(*sv.PaddingScheme), &paddingScheme)
+			if err := decodeConfigJSON("padding_scheme", *sv.PaddingScheme, &paddingScheme); err != nil {
+				return nil, err
+			}
 			config["padding_scheme"] = paddingScheme
 		}
-		s.addRoutesAndBaseConfig(config, sv.GetRouteIDs())
+		if err := s.addRoutesAndBaseConfig(config, sv.GetRouteIDs()); err != nil {
+			return nil, err
+		}
 	}
 
 	return config, nil
 }
 
 // addRoutesAndBaseConfig 添加路由和基础配置
-func (s *ServerService) addRoutesAndBaseConfig(config map[string]any, routeIDs []uint) {
+func (s *ServerService) addRoutesAndBaseConfig(config map[string]any, routeIDs []uint) error {
 	// 添加路由
-	routes, _ := s.GetRoutesByIDs(routeIDs)
+	routes, err := s.GetRoutesByIDs(routeIDs)
+	if err != nil {
+		return fmt.Errorf("load server routes: %w", err)
+	}
 	routeList := make([]map[string]any, 0, len(routes))
 	for _, route := range routes {
 		routeList = append(routeList, map[string]any{
@@ -434,6 +482,7 @@ func (s *ServerService) addRoutesAndBaseConfig(config map[string]any, routeIDs [
 		"push_interval": 60,
 		"pull_interval": 60,
 	}
+	return nil
 }
 
 // GetServerRate 获取服务器流量倍率
@@ -445,21 +494,28 @@ func (s *ServerService) GetServerRate(serverType model.ServerType, serverID uint
 
 	switch sv := server.(type) {
 	case *model.ServerVMess:
-		return sv.Rate
+		return normalizeTrafficRate(sv.Rate)
 	case *model.ServerVLESS:
-		return sv.Rate
+		return normalizeTrafficRate(sv.Rate)
 	case *model.ServerTrojan:
-		return sv.Rate
+		return normalizeTrafficRate(sv.Rate)
 	case *model.ServerShadowsocks:
-		return sv.Rate
+		return normalizeTrafficRate(sv.Rate)
 	case *model.ServerHysteria:
-		return sv.Rate
+		return normalizeTrafficRate(sv.Rate)
 	case *model.ServerTUIC:
-		return sv.Rate
+		return normalizeTrafficRate(sv.Rate)
 	case *model.ServerAnyTLS:
-		return sv.Rate
+		return normalizeTrafficRate(sv.Rate)
 	}
 	return 1.0
+}
+
+func normalizeTrafficRate(rate float64) float64 {
+	if rate <= 0 {
+		return 1.0
+	}
+	return rate
 }
 
 func ipsToInterface(ips []string) []any {
@@ -468,6 +524,16 @@ func ipsToInterface(ips []string) []any {
 		result[i] = ip
 	}
 	return result
+}
+
+func decodeConfigJSON(field string, raw string, target any) error {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	if err := json.Unmarshal([]byte(raw), target); err != nil {
+		return fmt.Errorf("invalid %s JSON: %w", field, err)
+	}
+	return nil
 }
 
 // ParseTrafficData 解析流量数据
@@ -484,8 +550,14 @@ func ParseTrafficData(data map[string]any) (map[uint][2]int64, error) {
 			continue
 		}
 
-		upload, _ := toInt64(traffic[0])
-		download, _ := toInt64(traffic[1])
+		upload, uploadOK := toInt64(traffic[0])
+		download, downloadOK := toInt64(traffic[1])
+		if !uploadOK || !downloadOK {
+			continue
+		}
+		if err := ValidateTrafficDelta(upload, download); err != nil {
+			return nil, err
+		}
 
 		result[uint(userID)] = [2]int64{upload, download}
 	}

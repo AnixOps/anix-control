@@ -9,7 +9,6 @@ import (
 
 	pb "github.com/anixops/v2board/api/grpc/v2boardpb"
 	"github.com/anixops/v2board/internal/cache"
-	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/google/uuid"
@@ -222,7 +221,7 @@ func TestConfigVersion_MultipleNodes_ConcurrentUpdates(t *testing.T) {
 
 	// Odd nodes updated, even nodes unchanged
 	for i := 1; i <= numNodes; i++ {
-		expected := int64(i*100)
+		expected := int64(i * 100)
 		if i%2 == 1 {
 			expected = int64(i*100 + 1)
 		}
@@ -260,11 +259,9 @@ func TestConfigVersion_UpdateVsSet_Equivalence(t *testing.T) {
 // config change -> version bump -> notification -> push.
 func TestConfigVersion_StatusStream_Lifecycle(t *testing.T) {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	database.AutoMigrate(
+	requireInMemoryDatabase(t)
+	t.Cleanup(func() { requireDatabaseClosed(t) })
+	requireAutoMigrate(t,
 		&model.User{},
 		&model.Plan{},
 		&model.Node{},
@@ -290,15 +287,15 @@ func TestConfigVersion_StatusStream_Lifecycle(t *testing.T) {
 	pb.RegisterNodeServiceServer(server, NewNodeGRPCServer())
 	pb.RegisterHealthServiceServer(server, NewHealthGRPCServer())
 
-	go server.Serve(lis)
-	t.Cleanup(func() { server.GracefulStop() })
+	serverErr := serveGRPCServerForTest(t, server, lis)
+	t.Cleanup(func() { stopGRPCServerForTest(t, server, serverErr) })
 	time.Sleep(100 * time.Millisecond)
 
 	conn, err := grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	require.NoError(t, err)
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { requireClientConnClosed(t, conn) })
 
 	// Create a node in the database
 	groupID := uint(1)
@@ -386,15 +383,16 @@ func TestConfigVersion_StatusStream_Lifecycle(t *testing.T) {
 	}
 
 	// Clean up
-	stream.CloseSend()
+	requireCloseSend(t, stream)
 }
 
 // TestConfigVersion_StatusStream_MultipleChanges verifies that multiple
 // sequential config changes are tracked correctly through the stream.
 func TestConfigVersion_StatusStream_MultipleChanges(t *testing.T) {
 	cache.InitMemory()
-	// Re-init is safe if already initialized; sqlite :memory: is already set up.
-	database.AutoMigrate(
+	requireInMemoryDatabase(t)
+	t.Cleanup(func() { requireDatabaseClosed(t) })
+	requireAutoMigrate(t,
 		&model.Node{},
 		&model.AuthorizedKey{},
 	)
@@ -414,15 +412,15 @@ func TestConfigVersion_StatusStream_MultipleChanges(t *testing.T) {
 	pb.RegisterNodeServiceServer(server, NewNodeGRPCServer())
 	pb.RegisterHealthServiceServer(server, NewHealthGRPCServer())
 
-	go server.Serve(lis)
-	t.Cleanup(func() { server.GracefulStop() })
+	serverErr := serveGRPCServerForTest(t, server, lis)
+	t.Cleanup(func() { stopGRPCServerForTest(t, server, serverErr) })
 	time.Sleep(100 * time.Millisecond)
 
 	conn, err := grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	require.NoError(t, err)
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { requireClientConnClosed(t, conn) })
 
 	// Create a node
 	groupID := uint(1)
@@ -477,7 +475,7 @@ func TestConfigVersion_StatusStream_MultipleChanges(t *testing.T) {
 			"version should be %d after acknowledgment", v)
 	}
 
-	stream.CloseSend()
+	requireCloseSend(t, stream)
 }
 
 // TestConfigVersion_Unregister_ClearsState verifies that unregistering a
@@ -523,11 +521,9 @@ func TestConfigVersion_GetNodeConfigVersion_MatchesGetConfigVersion(t *testing.T
 // re-pushes after the node's UpdatedAt advances.
 func TestCheckConfigChanges_DetectsAndPushes(t *testing.T) {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	database.AutoMigrate(
+	requireInMemoryDatabase(t)
+	t.Cleanup(func() { requireDatabaseClosed(t) })
+	requireAutoMigrate(t,
 		&model.Node{},
 		&model.NodeProtocol{},
 		&model.AuthorizedKey{},
@@ -579,11 +575,9 @@ func TestCheckConfigChanges_DetectsAndPushes(t *testing.T) {
 // node that does not exist.
 func TestCheckConfigChanges_UnknownNode(t *testing.T) {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	database.AutoMigrate(&model.Node{}, &model.AuthorizedKey{})
+	requireInMemoryDatabase(t)
+	t.Cleanup(func() { requireDatabaseClosed(t) })
+	requireAutoMigrate(t, &model.Node{}, &model.AuthorizedKey{})
 
 	connectionManager = NewNodeConnectionManager()
 	srv := NewNodeGRPCServer()

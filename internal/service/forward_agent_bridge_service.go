@@ -64,7 +64,7 @@ func (s *ForwardAgentBridgeService) LookupBridgeTask(taskID string) (*model.Forw
 
 // CompleteJob writes an agent-reported result back to the runtime job, the forward
 // runtime state, and marks the bridge mapping completed. It is idempotent: a mapping
-// already in the completed state is a no-op (duplicate reports return alreadyDone=true).
+// already in a terminal state is a no-op (duplicate/late reports return alreadyDone=true).
 func (s *ForwardAgentBridgeService) CompleteJob(taskID string, success bool, output, errMsg string) (alreadyDone bool, err error) {
 	db := s.queryDB()
 	if db == nil {
@@ -77,7 +77,7 @@ func (s *ForwardAgentBridgeService) CompleteJob(taskID string, success bool, out
 			return err
 		}
 
-		if mapping.Status == model.ForwardAgentBridgeTaskStatusCompleted {
+		if mapping.Status == model.ForwardAgentBridgeTaskStatusCompleted || mapping.Status == model.ForwardAgentBridgeTaskStatusFailed {
 			alreadyDone = true
 			return nil
 		}
@@ -99,8 +99,13 @@ func (s *ForwardAgentBridgeService) CompleteJob(taskID string, success bool, out
 				}).Error; err != nil {
 				return err
 			}
-			if err := updateForwardRuntimeStateTx(tx, &job, model.ForwardRuntimeJobStatusSuccess, cleanAgentBridgeSuccessMessage(job.Action), successForwardStatusForAction(job.Action), &now); err != nil {
+			if err := cleanupPanelForwardAfterRuntimeDeleteTx(tx, &job); err != nil {
 				return err
+			}
+			if job.Action != model.ForwardRuntimeJobActionDelete {
+				if err := updateForwardRuntimeStateTx(tx, &job, model.ForwardRuntimeJobStatusSuccess, cleanAgentBridgeSuccessMessage(job.Action), successForwardStatusForAction(job.Action), &now); err != nil {
+					return err
+				}
 			}
 		} else {
 			trimmed := strings.TrimSpace(errMsg)
@@ -148,6 +153,46 @@ func updateForwardRuntimeStateTx(tx *gorm.DB, job *model.ForwardRuntimeJob, runt
 		updates["status"] = *forwardStatus
 	}
 	return tx.Model(&model.Forward{}).Where("id = ?", *job.ForwardID).Updates(updates).Error
+}
+
+func updateForwardRuntimeRunningStateTx(tx *gorm.DB, job *model.ForwardRuntimeJob, syncedAt *time.Time) error {
+	return updateForwardRuntimeStateTx(tx, job, model.ForwardRuntimeJobStatusRunning, runningForwardRuntimeMessage(job.Backend, job.Action), nil, syncedAt)
+}
+
+func requeueForwardRuntimeStateTx(tx *gorm.DB, job *model.ForwardRuntimeJob, syncedAt *time.Time) error {
+	if job.ForwardID == nil || *job.ForwardID == 0 {
+		return nil
+	}
+	updates := map[string]any{
+		"runtime_backend":      job.Backend,
+		"runtime_status":       model.ForwardRuntimeJobStatusPending,
+		"runtime_message":      requeuedForwardRuntimeMessage(job.Backend),
+		"runtime_last_sync_at": syncedAt,
+	}
+	return tx.Model(&model.Forward{}).
+		Where("id = ? AND runtime_status = ?", *job.ForwardID, model.ForwardRuntimeJobStatusRunning).
+		Updates(updates).Error
+}
+
+func runningForwardRuntimeMessage(backend, action string) string {
+	removeAction := action == model.ForwardRuntimeJobActionDelete || action == model.ForwardRuntimeJobActionPause
+	if backend == model.ForwardRuntimeBackendCleanAgent {
+		if removeAction {
+			return "clean_agent runtime removing"
+		}
+		return "clean_agent runtime running"
+	}
+	if removeAction {
+		return "ansible runtime removing"
+	}
+	return "ansible runtime applying"
+}
+
+func requeuedForwardRuntimeMessage(backend string) string {
+	if backend == model.ForwardRuntimeBackendCleanAgent {
+		return "clean_agent runtime requeued after worker restart"
+	}
+	return "ansible runtime requeued after worker restart"
 }
 
 func cleanAgentBridgeSuccessMessage(action string) string {

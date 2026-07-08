@@ -6,15 +6,16 @@
 
 # ---- 面板地址(节点通过 gRPC 接入)------------------------------------------
 # HTTP 直连(内网/公网 IP)场景:
-panel_api_host: "http://203.0.113.5:18080"   # V2bX 的 ApiHost
-grpc_host: "203.0.113.5:50051"               # 面板 gRPC 监听地址:端口
-grpc_use_tls: false                          # HTTP 场景 false
+# panel_api_host: "http://203.0.113.5:18080"   # V2bX 的 ApiHost
+# grpc_host: "203.0.113.5:50051"               # 面板 gRPC 监听地址:端口
+# grpc_use_tls: false                          # HTTP 场景 false
 
-# HTTPS 反代(域名)场景改成:
-# panel_api_host: "https://panel.example.com"
-# grpc_host: "panel.example.com:443"
-# grpc_use_tls: true
-# grpc_server_name: "panel.example.com"      # TLS SNI, 不填默认取 grpc_host 的主机名
+# gRPC TLS 场景(域名 + Let's Encrypt 证书, 灰云/DNS only, 见
+# config/deploy/grpc_tls/setup_certbot.sh):
+panel_api_host: "http://203.0.113.5:18080"
+grpc_host: "grpc.example.com:50051"
+grpc_use_tls: true
+grpc_server_name: "grpc.example.com"       # TLS SNI, 不填默认取 grpc_host 的主机名
 
 # ---- 拉取节点 ApiKey 用的面板管理端地址 -------------------------------------
 # playbook 会调 GET {{panel_api_base}}/api/v2/admin/nodes/{{node_id}}/credentials
@@ -25,10 +26,15 @@ panel_api_base: "http://203.0.113.5:18080"
 # admin_token: ""
 
 # ---- 定制 V2bX 二进制(本地已按目标机架构编译好)----------------------------
-# 不使用官方 install.sh。playbook 把这个二进制推到节点 /usr/local/V2bX/V2bX。
-# 交叉编译示例: cd /home/dev/anixops/V2bX_AnixOps && GOOS=linux GOARCH=amd64 go build -o V2bX
-v2bx_binary_local: "/home/dev/anixops/V2bX_AnixOps/V2bX"
-v2bx_arch: "amd64"          # 仅提示: 二进制架构必须匹配目标机
+# 不使用官方 install.sh。playbook 会按 inventory 的 v2bx_arch 或远端 uname
+# 自动选择 amd64/arm64 二进制,再推到节点 /usr/local/V2bX/V2bX。
+# 交叉编译示例:
+# cd /home/dev/anixops/V2bX_AnixOps
+# GOOS=linux GOARCH=amd64 go build -o build/inventory/V2bX_linux_amd64 ./main.go
+# GOOS=linux GOARCH=arm64 go build -o build/inventory/V2bX_linux_arm64 ./main.go
+v2bx_binary_amd64_local: "/home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_amd64"
+v2bx_binary_arm64_local: "/home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_arm64"
+# 单台主机需要临时覆盖时,可在 inventory 该行设置 v2bx_binary_local=/path/to/V2bX。
 
 # 是否顺便推送 geoip/geosite 数据文件(从 V2bX_AnixOps/example/ 取)
 push_geodata: false

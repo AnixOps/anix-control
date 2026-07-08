@@ -143,3 +143,94 @@ func TestForwardFlowHandlers_AppTokenAuth(t *testing.T) {
 		})
 	}
 }
+
+func setupForwardFlowEnvelopeRouter(t *testing.T) *gin.Engine {
+	t.Helper()
+
+	initTestDB()
+	r := gin.New()
+	h := NewForwardHandler()
+	r.POST("/forward/flow/report", h.ReportPanelForwardTraffic)
+	r.POST("/forward/flow/snapshot", h.SnapshotPanelForwardTraffic)
+	return r
+}
+
+func TestForwardFlowHandlers_ResponseEnvelope(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		body     string
+		wantCode float64
+		wantMsg  string
+		wantData any
+	}{
+		{
+			name:     "report success",
+			path:     "/forward/flow/report",
+			body:     `{"records":[]}`,
+			wantCode: 0,
+			wantMsg:  "操作成功",
+			wantData: true,
+		},
+		{
+			name:     "report invalid body",
+			path:     "/forward/flow/report",
+			body:     `{}`,
+			wantCode: -1,
+			wantMsg:  "参数错误",
+			wantData: nil,
+		},
+		{
+			name:     "report service error",
+			path:     "/forward/flow/report",
+			body:     `{"records":[{"forwardId":0,"upload":1,"download":0}]}`,
+			wantCode: -1,
+			wantMsg:  "forwardId is required",
+			wantData: nil,
+		},
+		{
+			name:     "snapshot success",
+			path:     "/forward/flow/snapshot",
+			body:     `{"records":[]}`,
+			wantCode: 0,
+			wantMsg:  "操作成功",
+			wantData: true,
+		},
+		{
+			name:     "snapshot invalid body",
+			path:     "/forward/flow/snapshot",
+			body:     `{}`,
+			wantCode: -1,
+			wantMsg:  "参数错误",
+			wantData: nil,
+		},
+		{
+			name:     "snapshot service error",
+			path:     "/forward/flow/snapshot",
+			body:     `{"records":[{"forwardId":0,"backend":"gost","uploadTotal":1,"downloadTotal":0}]}`,
+			wantCode: -1,
+			wantMsg:  "forwardId is required",
+			wantData: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router := setupForwardFlowEnvelopeRouter(t)
+
+			req, err := http.NewRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusOK, w.Code)
+			resp := decodePanelTestResponse(t, w)
+			assert.Equal(t, tt.wantCode, resp["code"])
+			assert.Equal(t, tt.wantMsg, resp["msg"])
+			assert.Equal(t, tt.wantData, resp["data"])
+			assert.NotContains(t, w.Body.String(), "\"error\"")
+		})
+	}
+}

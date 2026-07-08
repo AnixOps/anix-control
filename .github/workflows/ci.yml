@@ -10,7 +10,7 @@ on:
 
 env:
   GO_VERSION: '1.25'
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
 
 jobs:
   tag-gate:
@@ -31,9 +31,188 @@ jobs:
             echo "Not a strict release tag, skip release-only jobs."
           fi
 
+  deploy-script-test:
+    name: Deployment Script Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate panel deploy script syntax
+        run: bash -n config/deploy/deploy_panel.sh
+
+      - name: Run panel deploy script self-test
+        run: bash config/deploy/deploy_panel.sh --self-test
+
+  go-quality:
+    name: Go Quality Gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Check go mod tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Check gofmt
+        shell: bash
+        run: |
+          unformatted="$(git ls-files '*.go' | xargs gofmt -l)"
+          if [[ -n "$unformatted" ]]; then
+            echo "::error::Go files are not gofmt-formatted"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run full Go test suite
+        run: go test ./... -count=1 -p=1
+
+  go-race:
+    name: Go Race Detector
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run race tests
+        run: go test -race ./... -count=1 -p=1
+
+  go-benchmark-smoke:
+    name: Go Benchmark Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run critical benchmark smoke tests
+        run: go test -run '^$' -bench=. -benchtime=1x ./internal/service ./internal/handler ./internal/router
+
+  go-lint:
+    name: Go Lint Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+      - name: Run golangci-lint gate
+        shell: bash
+        run: |
+          mkdir -p lint-reports
+          set +e
+          golangci-lint run --timeout=8m 2>&1 | tee lint-reports/golangci-lint.txt
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload golangci-lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golangci-lint-report
+          path: lint-reports/golangci-lint.txt
+
+  go-security:
+    name: Go Security Scans
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Run production gosec gate
+        shell: bash
+        run: |
+          mapfile -t production_packages < <(
+            go list -f '{{.Dir}}' ./cmd/server ./api/grpc/v2boardpb ./internal/... \
+              | sed "s#^${PWD}#.#" \
+              | grep -Ev '^\./internal/tests(/|$)' \
+              | sort
+          )
+          gosec -exclude-generated -nosec-require-rules -nosec-require-justification -quiet "${production_packages[@]}"
+
+      - name: Run full repository gosec gate and report
+        run: |
+          mkdir -p security-reports
+          gosec -exclude-generated -fmt=json -out=security-reports/gosec.json ./...
+
+      - name: Upload gosec report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gosec-report
+          path: security-reports/gosec.json
+
+  docker-smoke:
+    name: Docker Build Smoke
+    runs-on: ubuntu-latest
+    needs: [go-quality, go-security]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: v2board:ci
+          build-args: |
+            VERSION=ci
+            BUILD_TIME=1970-01-01T00:00:00Z
+            BUILD_CODE=${{ github.run_number }}
+            COMMIT=${{ github.sha }}
+
   backend-test:
     name: Backend Tests
     runs-on: ubuntu-latest
+    needs: [go-quality]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -62,7 +241,7 @@ jobs:
         shell: bash
         run: |
           mapfile -t packages < <(go list ./internal/... | grep -v '^github.com/anixops/v2board/internal/tests/integration' | grep -v '^github.com/anixops/v2board/internal/tests/e2e')
-          go test -v -coverprofile=coverage.out -covermode=atomic "${packages[@]}"
+          go test -p=1 -count=1 -v -coverprofile=coverage.out -covermode=atomic "${packages[@]}"
 
       - name: Generate coverage report
         run: |
@@ -79,6 +258,126 @@ jobs:
           path: |
             coverage.out
             coverage.txt
+
+  postgres-stats-test:
+    name: PostgreSQL Stats Regression
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: v2board_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d v2board_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run PostgreSQL stats regression tests
+        env:
+          POSTGRES_TEST_DSN: host=127.0.0.1 user=postgres password=postgres dbname=v2board_test port=5432 sslmode=disable TimeZone=UTC
+        run: go test -v ./internal/service -run TestStatsServicePostgres -count=1
+
+  migration-dry-run-test:
+    name: SQLite to PostgreSQL Dry Run
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: v2board_migration_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d v2board_migration_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Create SQLite migration source fixture
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import sqlite3
+
+          db_path = "/tmp/v2board-migration-source.db"
+          conn = sqlite3.connect(db_path)
+          conn.execute("CREATE TABLE v2_user (id INTEGER PRIMARY KEY, email TEXT, token TEXT)")
+          conn.execute("CREATE TABLE v2_plan (id INTEGER PRIMARY KEY, name TEXT)")
+          conn.execute("CREATE TABLE v2_system_config (id INTEGER PRIMARY KEY, key TEXT, value TEXT)")
+          conn.execute("INSERT INTO v2_user (id, email, token) VALUES (1, 'migration@example.com', 'migration-token')")
+          conn.execute("INSERT INTO v2_plan (id, name) VALUES (1, 'Migration Plan')")
+          conn.execute("INSERT INTO v2_system_config (id, key, value) VALUES (1, 'migration.fixture', 'true')")
+          conn.commit()
+          conn.close()
+          print(db_path)
+          PY
+
+      - name: Run SQLite to PostgreSQL migration dry run
+        env:
+          POSTGRES_TEST_DSN: host=127.0.0.1 user=postgres password=postgres dbname=v2board_migration_test port=5432 sslmode=disable TimeZone=UTC
+        shell: bash
+        run: |
+          go run ./cmd/sqlite2postgres \
+            -source /tmp/v2board-migration-source.db \
+            -target-dsn "$POSTGRES_TEST_DSN" \
+            -dry-run | tee migration-dry-run.txt
+          grep -q "dry-run: no PostgreSQL data changed" migration-dry-run.txt
+          grep -q "v2_user" migration-dry-run.txt
+          grep -q "v2_plan" migration-dry-run.txt
+
+  forward-runtime-test:
+    name: Forward Runtime Regression
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run forward runtime service tests
+        run: |
+          go test -v ./internal/service -run 'TestPanelForwardRuntimeJobExecutor|TestForwardAgentBridgeWorker|TestForwardCleanAgentService|TestNewForwardAgentBridgeWorker_LoadsCleanAgentActionTimeoutFromConfig' -count=1
+
+      - name: Run forward runtime config tests
+        run: |
+          go test -v ./internal/config -run TestLoadForwardRuntimeConfig -count=1
+
+      - name: Run forward runtime server startup tests
+        run: |
+          go test -v ./cmd/server -run TestShouldStartForwardAgentBridgeWorker -count=1
+
+      - name: Run forward agent bridge handler tests
+        run: |
+          go test -v ./internal/handler -run TestAgentBridgeHandler -count=1
 
   grpc-test:
     name: gRPC Core Tests
@@ -180,9 +479,21 @@ jobs:
         working-directory: web
         run: npm ci
 
+      - name: Audit frontend dependencies
+        working-directory: web
+        run: npm audit --audit-level=moderate
+
+      - name: Run frontend tests
+        working-directory: web
+        run: npm test
+
       - name: Build frontend
         working-directory: web
         run: npm run build
+
+      - name: Generate frontend bundle size report
+        working-directory: web
+        run: npm run bundle:report
 
       - name: Upload frontend artifacts
         uses: actions/upload-artifact@v4
@@ -190,10 +501,16 @@ jobs:
           name: frontend-dist
           path: web/public/
 
+      - name: Upload frontend bundle size report
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-bundle-size
+          path: web/bundle-reports/
+
   backend-build:
     name: Backend Build
     runs-on: ubuntu-latest
-    needs: [backend-test, grpc-test, cmd-test]
+    needs: [go-quality, go-lint, go-security, go-race, backend-test, postgres-stats-test, migration-dry-run-test, forward-runtime-test, grpc-test, cmd-test]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -213,7 +530,11 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w -X github.com/anixops/v2board/internal/handler.BuildVersion=${VERSION} -X github.com/anixops/v2board/internal/handler.BuildTime=${BUILD_TIME}" -o v2board ./cmd/server
+          BUILD_CODE="${GITHUB_RUN_NUMBER:-0}"
+          COMMIT="${GITHUB_SHA::12}"
+          CGO_ENABLED=0 GOOS=linux go build \
+            -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
+            -o v2board ./cmd/server
 
       - name: Upload backend artifacts
         uses: actions/upload-artifact@v4
@@ -224,7 +545,7 @@ jobs:
   release-binaries:
     name: Build Release Binary (${{ matrix.goos }}-${{ matrix.goarch }})
     runs-on: ubuntu-latest
-    needs: [backend-test, grpc-test, cmd-test, tag-gate]
+    needs: [go-quality, go-lint, go-security, go-race, backend-test, postgres-stats-test, migration-dry-run-test, forward-runtime-test, grpc-test, cmd-test, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     strategy:
       fail-fast: false
@@ -263,10 +584,12 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          BUILD_CODE="${GITHUB_RUN_NUMBER:-0}"
+          COMMIT="${GITHUB_SHA::12}"
           BIN_NAME="v2board-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
 
           CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-            go build -ldflags="-s -w -X github.com/anixops/v2board/internal/handler.BuildVersion=${VERSION} -X github.com/anixops/v2board/internal/handler.BuildTime=${BUILD_TIME}" \
+            go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
             -o "${BIN_NAME}" ./cmd/server
 
           mkdir -p dist
@@ -320,6 +643,8 @@ jobs:
         run: |
           echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          echo "build_code=${GITHUB_RUN_NUMBER:-0}" >> "$GITHUB_OUTPUT"
+          echo "commit=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         id: build
@@ -332,6 +657,8 @@ jobs:
           build-args: |
             VERSION=${{ steps.build_meta.outputs.version }}
             BUILD_TIME=${{ steps.build_meta.outputs.build_time }}
+            BUILD_CODE=${{ steps.build_meta.outputs.build_code }}
+            COMMIT=${{ steps.build_meta.outputs.commit }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -358,10 +685,23 @@ jobs:
     needs: [frontend-build, release-binaries, docker, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     permissions:
+      actions: read
       contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Prepare release directory
+        run: mkdir -p release
+
+      - name: Generate source SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          artifact-name: v2board-source-sbom
+          output-file: release/v2board-source.sbom.spdx.json
+          upload-release-assets: false
 
       - name: Download multi-platform binary artifacts
         uses: actions/download-artifact@v4
@@ -382,6 +722,68 @@ jobs:
           name: docker-metadata
           path: release/
 
+      - name: Create operator deployment runbook
+        shell: bash
+        run: |
+          cat > release/OPERATOR_DEPLOYMENT.md <<'EOF'
+          # Operator Deployment Runbook for {{RELEASE_TAG}}
+
+          This release workflow intentionally does not deploy to production.
+          Production rollout requires an operator-approved maintenance window,
+          database backup, release artifact selection, and rollback plan.
+
+          ## Release Artifacts
+
+          - Multi-platform binaries are attached to this GitHub Release.
+          - Frontend archives are attached as `v2board-frontend.tar.gz` and `v2board-frontend.zip`.
+          - Docker image metadata is attached in `docker-image.txt`.
+          - Source dependency SBOM is attached in `v2board-source.sbom.spdx.json`.
+          - SHA256 checksums are attached in `SHA256SUMS.txt`.
+
+          ## Required Manual Checks
+
+          1. Confirm the target domain, database, service manager, and rollback owner.
+          2. Take and verify a database backup before deploying.
+          3. Confirm any SQLite-to-PostgreSQL migration dry run has passed when applicable.
+          4. Confirm payment, node, and subscription credentials are present on the target host.
+          5. Confirm the health endpoint and external monitoring target for the deployment.
+
+          ## Existing systemd Source-Tree Deployment
+
+          On the current root-operated production layout:
+
+          ```bash
+          cd /home/dev/anixops/v2board_AnixOps
+          git fetch --tags
+          git checkout {{RELEASE_TAG}}
+          PATH=/usr/local/go/bin:/home/dev/.local/opt/node/bin:$PATH \
+          GO_BIN=/usr/local/go/bin/go \
+          NPM_BIN=/home/dev/.local/opt/node/bin/npm \
+          ./config/deploy/deploy_panel.sh
+          ```
+
+          ## Binary Artifact Deployment
+
+          1. Download the matching `v2board-*` binary artifact for the host OS and architecture.
+          2. Verify the artifact against `SHA256SUMS.txt`.
+          3. Stop the service manager or drain traffic.
+          4. Replace the binary and frontend static files.
+          5. Start the service and verify `/health`.
+
+          ## Docker Deployment
+
+          1. Read `docker-image.txt` for the published image tag and digest.
+          2. Pin the digest in the target deployment manifest.
+          3. Apply the deployment through the operator-owned orchestrator.
+          4. Verify `/health`, admin login, subscription generation, and node traffic reporting.
+
+          ## Rollback
+
+          Restore the previous binary/image and frontend assets, then restore the database only
+          if the release required a data migration and the approved rollback plan says so.
+          EOF
+          sed -i "s/{{RELEASE_TAG}}/${GITHUB_REF_NAME}/g" release/OPERATOR_DEPLOYMENT.md
+
       - name: Create release archives
         run: |
           tar -czvf release/v2board-frontend.tar.gz -C web/public .
@@ -395,26 +797,3 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  deploy:
-    name: Deploy to Production
-    runs-on: ubuntu-latest
-    needs: [docker, release, tag-gate]
-    if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
-    environment:
-      name: production
-      url: https://panel.example.com
-    steps:
-      - name: Deploy to server
-        run: |
-          echo "Deploying release ${GITHUB_REF_NAME} to production server..."
-          # Add real deployment script here.
-
-      - name: Health check
-        run: |
-          echo "Running health check..."
-          # curl -f https://panel.example.com/health || exit 1
-
-      - name: Notify deployment
-        run: |
-          echo "Deployment completed successfully"

@@ -1,0 +1,9 @@
+version: "2"
+
+run:
+  timeout: 8m
+
+linters:
+  exclusions:
+    paths:
+      - web/node_modules/.*

@@ -40,11 +40,20 @@
         <span class="summary-value">{{ formatBytes(peakTraffic) }}</span>
         <span class="summary-detail">{{ peakLabel }}</span>
       </article>
+      <article class="summary-card section-panel">
+        <span class="summary-label">{{ t('adminTrafficHourly.summary.latestReport') }}</span>
+        <span class="summary-value summary-value-time">{{ latestReportLabel }}</span>
+        <span class="summary-detail">{{ latestReportHint }}</span>
+      </article>
     </section>
 
     <section class="section-panel chart-panel">
+      <p v-if="errorMessage" class="error-state">{{ errorMessage }}</p>
       <div v-show="hasData" ref="chartEl" class="chart-canvas"></div>
-      <div v-if="!hasData && !loading" class="empty-state">{{ t('adminTrafficHourly.empty') }}</div>
+      <div v-if="!hasData && !loading" class="empty-state">
+        <strong>{{ t('adminTrafficHourly.empty') }}</strong>
+        <span>{{ emptyDetail }}</span>
+      </div>
     </section>
 
     <section class="section-panel ranking-panel">
@@ -52,6 +61,7 @@
         <h2>{{ t('adminTrafficHourly.ranking.title') }}</h2>
         <span class="ranking-hint">{{ t('adminTrafficHourly.ranking.hint') }}</span>
       </div>
+      <p v-if="rankingErrorMessage" class="error-state">{{ rankingErrorMessage }}</p>
       <div v-if="ranking.length" class="ranking-table">
         <div class="ranking-row ranking-row-head">
           <span class="col-rank">#</span>
@@ -82,25 +92,39 @@ import { useAppI18n } from '@/composables/useAppI18n'
 
 const { t, formatDateTime } = useAppI18n()
 
-const hours = ref(24)
+const hours = ref(168)
 const selectedUserId = ref(0)
 const loading = ref(false)
 const points = ref([])
 const ranking = ref([])
+const trafficMeta = ref({})
+const errorMessage = ref('')
+const rankingErrorMessage = ref('')
 
 const chartEl = ref(null)
 let chart = null
 let echartsLib = null
 let isActive = true
+let chartRequestSeq = 0
+let rankingRequestSeq = 0
 
-const hasData = computed(() => points.value.length > 0)
+const hasData = computed(() => points.value.some(p => Number(p?.traffic || 0) > 0))
 const totalTraffic = computed(() => points.value.reduce((sum, p) => sum + (p.traffic || 0), 0))
 const peakPoint = computed(() => {
-  if (!points.value.length) return null
+  if (!hasData.value) return null
   return points.value.reduce((max, p) => (p.traffic > (max?.traffic ?? -1) ? p : max), null)
 })
 const peakTraffic = computed(() => peakPoint.value?.traffic || 0)
 const peakLabel = computed(() => (peakPoint.value ? formatHour(peakPoint.value.hour_ts) : '-'))
+const latestLogAt = computed(() => Number(trafficMeta.value?.latest_log_at || 0))
+const latestReportLabel = computed(() => (latestLogAt.value ? formatHour(latestLogAt.value) : '-'))
+const latestReportHint = computed(() => (latestLogAt.value ? t('adminTrafficHourly.summary.latestReportHint') : t('adminTrafficHourly.summary.noReport')))
+const emptyDetail = computed(() => {
+  if (latestLogAt.value) {
+    return t('adminTrafficHourly.emptyWithLatest', { time: latestReportLabel.value })
+  }
+  return t('adminTrafficHourly.emptyNever')
+})
 const selectedLabel = computed(() => {
   if (!selectedUserId.value) return t('adminTrafficHourly.user.all')
   const u = ranking.value.find(x => x.user_id === selectedUserId.value)
@@ -113,9 +137,10 @@ function formatHour(ts) {
 }
 
 function formatBytes(bytes) {
-  if (!bytes) return '0 B'
+  const numeric = Number(bytes)
+  if (!Number.isFinite(numeric) || numeric <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
-  let value = bytes
+  let value = numeric
   let index = 0
   while (value >= 1024 && index < units.length - 1) {
     value /= 1024
@@ -131,10 +156,57 @@ async function ensureECharts() {
   return echartsLib
 }
 
-async function renderChart() {
-  if (!chartEl.value || !points.value.length) return
+function normalizeTrafficValue(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0
+  return numeric
+}
+
+function normalizePoint(item) {
+  return {
+    hour_ts: Number(item?.hour_ts || 0),
+    traffic: normalizeTrafficValue(item?.traffic)
+  }
+}
+
+function normalizeRankingRow(item) {
+  return {
+    user_id: Number(item?.user_id || 0),
+    email: item?.email || '',
+    traffic: normalizeTrafficValue(item?.traffic)
+  }
+}
+
+function extractResponsePayload(res) {
+  if (res && typeof res === 'object' && Object.prototype.hasOwnProperty.call(res, 'code')) {
+    return res.data ?? {}
+  }
+  return res ?? {}
+}
+
+function readTrafficSeries(res) {
+  const payload = extractResponsePayload(res)
+  if (Array.isArray(payload?.list)) return payload.list
+  if (Array.isArray(payload?.data)) return payload.data
+  return Array.isArray(payload) ? payload : []
+}
+
+function readTrafficMeta(res) {
+  const payload = extractResponsePayload(res)
+  return payload?.meta || res?.meta || {}
+}
+
+function readRankingRows(res) {
+  const payload = extractResponsePayload(res)
+  if (Array.isArray(payload?.list)) return payload.list
+  if (Array.isArray(payload?.data)) return payload.data
+  return Array.isArray(payload) ? payload : []
+}
+
+async function renderChart(requestSeq = chartRequestSeq) {
+  if (!chartEl.value || !hasData.value) return
   const echarts = await ensureECharts()
-  if (!isActive || !chartEl.value || !chartEl.value.isConnected) return
+  if (!isActive || requestSeq !== chartRequestSeq || !chartEl.value || !chartEl.value.isConnected) return
   if (!chart) {
     chart = echarts.init(chartEl.value)
   }
@@ -171,49 +243,67 @@ async function renderChart() {
   chart.resize()
 }
 
-async function fetchChart() {
+async function fetchChart(userId = selectedUserId.value, rangeHours = hours.value) {
+  const requestSeq = ++chartRequestSeq
   loading.value = true
+  errorMessage.value = ''
   try {
-    const res = await getTrafficHourly(hours.value, selectedUserId.value)
-    points.value = Array.isArray(res.data) ? res.data : []
+    const res = await getTrafficHourly(rangeHours, userId)
+    if (!isActive || requestSeq !== chartRequestSeq) return
+    points.value = readTrafficSeries(res).map(normalizePoint)
+    trafficMeta.value = readTrafficMeta(res)
     await nextTick()
-    renderChart()
+    if (!isActive || requestSeq !== chartRequestSeq) return
+    if (hasData.value) {
+      await renderChart(requestSeq)
+    } else if (chart) {
+      chart.clear()
+    }
   } catch (err) {
+    if (!isActive || requestSeq !== chartRequestSeq) return
     console.error(t('adminTrafficHourly.messages.fetchFailed'), err)
+    errorMessage.value = err.response?.data?.message || err.message || t('adminTrafficHourly.messages.fetchFailed')
     points.value = []
+    trafficMeta.value = {}
   } finally {
-    loading.value = false
+    if (isActive && requestSeq === chartRequestSeq) {
+      loading.value = false
+    }
   }
 }
 
 async function fetchRanking() {
+  const requestSeq = ++rankingRequestSeq
+  rankingErrorMessage.value = ''
   try {
-    const res = await getUserTrafficRanking(hours.value, 20)
-    ranking.value = Array.isArray(res.data) ? res.data : []
+    const res = await getUserTrafficRanking(hours.value, 1000, true)
+    if (!isActive || requestSeq !== rankingRequestSeq) return
+    ranking.value = readRankingRows(res).map(normalizeRankingRow).filter(u => u.user_id > 0)
     // 若当前选中的用户已不在区间内, 回退到全局
     if (selectedUserId.value && !ranking.value.some(u => u.user_id === selectedUserId.value)) {
       selectedUserId.value = 0
     }
   } catch (err) {
-    console.error(t('adminTrafficHourly.messages.fetchFailed'), err)
-    ranking.value = []
+    if (!isActive || requestSeq !== rankingRequestSeq) return
+    console.error(t('adminTrafficHourly.messages.rankingFetchFailed'), err)
+    rankingErrorMessage.value = err.response?.data?.message || err.message || t('adminTrafficHourly.messages.rankingFetchFailed')
   }
 }
 
 function selectUser(userId) {
-  selectedUserId.value = userId
-  fetchChart()
+  selectedUserId.value = Number(userId) || 0
+  fetchChart(selectedUserId.value, hours.value)
 }
 
 // 时间范围变化: 排行榜和图表都要重新拉
 async function onRangeChange() {
   await fetchRanking()
-  await fetchChart()
+  await fetchChart(selectedUserId.value, hours.value)
 }
 
 async function refreshAll() {
   await fetchRanking()
-  await fetchChart()
+  await fetchChart(selectedUserId.value, hours.value)
 }
 
 function handleResize() {
@@ -221,8 +311,7 @@ function handleResize() {
 }
 
 onMounted(async () => {
-  await fetchRanking()
-  await fetchChart()
+  await refreshAll()
   window.addEventListener('resize', handleResize)
 })
 
@@ -294,6 +383,11 @@ onUnmounted(() => {
   line-height: 1.1;
 }
 
+.summary-value-time {
+  font-size: 18px;
+  line-height: 1.35;
+}
+
 .summary-detail {
   color: var(--text-secondary);
   font-size: 12px;
@@ -301,6 +395,11 @@ onUnmounted(() => {
 
 .chart-panel {
   padding: 20px;
+}
+
+.error-state {
+  margin: 0 0 16px;
+  color: var(--error-color);
 }
 
 .chart-canvas {
@@ -312,6 +411,13 @@ onUnmounted(() => {
   padding: 60px 16px;
   text-align: center;
   color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty-state strong {
+  color: var(--text-color);
 }
 
 .ranking-panel {

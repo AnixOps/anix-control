@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { reactive, nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUserStore } from '@/stores/user'
@@ -10,6 +10,7 @@ const mockRoute = reactive({ path: '/admin/dashboard' })
 const mockGetSystemInfo = vi.hoisted(() => vi.fn())
 
 vi.mock('vue-router', () => ({
+  routeLocationKey: Symbol('route location'),
   useRouter: () => ({ push: mockPush }),
   useRoute: () => mockRoute,
 }))
@@ -20,11 +21,14 @@ vi.mock('@/api/admin', () => ({
 
 const adminMenuPaths = [
   '/admin/dashboard',
+  '/admin/monitor',
+  '/admin/traffic-hourly',
   '/admin/users',
   '/admin/orders',
   '/admin/tickets',
   '/admin/nodes',
   '/admin/subscriptions',
+  '/admin/forward/setup',
   '/admin/forward',
   '/admin/forward/tunnel',
   '/admin/forward/limit',
@@ -33,6 +37,7 @@ const adminMenuPaths = [
   '/admin/forward/local',
   '/admin/forward/nodex',
   '/admin/forward/agents',
+  '/admin/forward/observability',
   '/admin/agent',
   '/admin/plans',
   '/admin/coupons',
@@ -71,6 +76,57 @@ describe('AdminLayout.vue', () => {
     })
 
     expect(wrapper.find('router-view-stub').exists()).toBe(true)
+  })
+
+  it('shows system version from legacy and panel envelope payloads', async () => {
+    mockGetSystemInfo.mockResolvedValueOnce({
+      data: {
+        version: '2.1.0',
+        build_code: '202607090001',
+        build_time: '2026-07-09T00:00:00Z',
+        commit: 'abc123'
+      }
+    })
+
+    const legacyWrapper = mount(AdminLayout, {
+      global: {
+        stubs: {
+          'router-link': true,
+          'router-view': true,
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(legacyWrapper.find('.version-line').text()).toBe('AnixOps v2.1.0 #202607090001')
+    expect(legacyWrapper.find('.version-line').attributes('title')).toContain('Build code: 202607090001')
+    legacyWrapper.unmount()
+
+    mockGetSystemInfo.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      data: {
+        version: '2.2.0',
+        build_code: '202607090002',
+        build_time: '2026-07-09T00:01:00Z',
+        commit: 'def456'
+      },
+      ts: 1783526400000
+    })
+
+    const envelopeWrapper = mount(AdminLayout, {
+      global: {
+        stubs: {
+          'router-link': true,
+          'router-view': true,
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(envelopeWrapper.find('.version-line').text()).toBe('AnixOps v2.2.0 #202607090002')
+    expect(envelopeWrapper.find('.version-line').attributes('title')).toContain('Commit: def456')
+    envelopeWrapper.unmount()
   })
 
   it('exposes accessible navigation controls and main landmark', () => {
@@ -121,6 +177,14 @@ describe('AdminLayout.vue', () => {
     mockRoute.path = '/admin/telegram'
     await nextTick()
     expect(wrapper.find('.topbar-title').text()).toContain('Telegram')
+
+    mockRoute.path = '/admin/monitor'
+    await nextTick()
+    expect(wrapper.find('.topbar-title').text()).toContain('Monitor')
+
+    mockRoute.path = '/admin/traffic-hourly'
+    await nextTick()
+    expect(wrapper.find('.topbar-title').text()).toContain('Hourly Traffic')
 
     mockRoute.path = '/admin/mfa'
     await nextTick()

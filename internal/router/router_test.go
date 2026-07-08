@@ -31,7 +31,7 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *config.Config) {
 	require.NoError(t, err)
 
 	// 迁移必要的表
-	database.GetDB().AutoMigrate(&model.User{})
+	require.NoError(t, database.GetDB().AutoMigrate(&model.User{}))
 
 	cfg := &config.Config{
 		Env: "test",
@@ -53,13 +53,14 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *config.Config) {
 	return r, cfg
 }
 
-func teardownTestRouter() {
-	database.Close()
+func teardownTestRouter(t *testing.T) {
+	t.Helper()
+	require.NoError(t, database.Close())
 }
 
 func TestSetup_HealthEndpoint(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	req, _ := http.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
@@ -71,7 +72,7 @@ func TestSetup_HealthEndpoint(t *testing.T) {
 
 func TestSetup_MetricsEndpoint(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	req, _ := http.NewRequest("GET", "/metrics", nil)
 	w := httptest.NewRecorder()
@@ -82,7 +83,7 @@ func TestSetup_MetricsEndpoint(t *testing.T) {
 
 func TestSetup_CORS(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	// OPTIONS with Origin header — should echo back the origin (default: allow all)
 	req, _ := http.NewRequest("OPTIONS", "/health", nil)
@@ -97,7 +98,7 @@ func TestSetup_CORS(t *testing.T) {
 
 func TestSetup_SecurityHeadersAndRequestID(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	req, _ := http.NewRequest("GET", "/health", nil)
 	req.Header.Set("X-Forwarded-Proto", "https")
@@ -116,7 +117,7 @@ func TestSetup_SecurityHeadersAndRequestID(t *testing.T) {
 
 func TestSetup_RequestIDHonorsInboundHeader(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	req, _ := http.NewRequest("GET", "/health", nil)
 	req.Header.Set("X-Request-ID", "external-trace-id")
@@ -128,7 +129,7 @@ func TestSetup_RequestIDHonorsInboundHeader(t *testing.T) {
 
 func TestSetup_RegisterEndpoint(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	req, _ := http.NewRequest("POST", "/api/v2/register", nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -141,7 +142,7 @@ func TestSetup_RegisterEndpoint(t *testing.T) {
 
 func TestSetup_LoginEndpoint(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	req, _ := http.NewRequest("POST", "/api/v2/login", nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -154,7 +155,7 @@ func TestSetup_LoginEndpoint(t *testing.T) {
 
 func TestSetup_NodeRegisterEndpoint(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	req, _ := http.NewRequest("POST", "/api/v2/node/register", nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -167,7 +168,7 @@ func TestSetup_NodeRegisterEndpoint(t *testing.T) {
 
 func TestSetup_SubscribeEndpoint(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	// 创建测试用户
 	user := &model.User{
@@ -186,9 +187,28 @@ func TestSetup_SubscribeEndpoint(t *testing.T) {
 	assert.NotEqual(t, http.StatusNotFound, w.Code)
 }
 
+func TestSetup_LegacySubscribeEndpoint(t *testing.T) {
+	r, _ := setupTestRouter(t)
+	defer teardownTestRouter(t)
+
+	user := &model.User{
+		Email:          "legacy-subscribe@example.com",
+		Token:          "legacy-test-token",
+		UUID:           "legacy-test-uuid",
+		TransferEnable: 1073741824,
+	}
+	database.GetDB().Create(user)
+
+	req, _ := http.NewRequest("GET", "/api/v1/client/subscribe?token=legacy-test-token", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.NotEqual(t, http.StatusNotFound, w.Code)
+}
+
 func TestSetup_AdminEndpoints_RequireAuth(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	// Test admin endpoints without auth
 	endpoints := []struct {
@@ -218,7 +238,7 @@ func TestSetup_AdminEndpoints_RequireAuth(t *testing.T) {
 
 func TestSetup_UserEndpoints_RequireAuth(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	// Test user endpoints without auth
 	endpoints := []struct {
@@ -246,7 +266,7 @@ func TestSetup_UserEndpoints_RequireAuth(t *testing.T) {
 
 func TestSetup_UniProxyEndpoints(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	// Test UniProxy endpoints without auth
 	endpoints := []struct {
@@ -272,7 +292,7 @@ func TestSetup_UniProxyEndpoints(t *testing.T) {
 
 func TestSetup_PaymentEndpoints(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	// Public payment endpoints
 	t.Run("payment methods", func(t *testing.T) {
@@ -285,7 +305,7 @@ func TestSetup_PaymentEndpoints(t *testing.T) {
 
 func TestSetup_AgentEndpoints(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	// Agent public endpoints
 	endpoints := []struct {
@@ -311,7 +331,7 @@ func TestSetup_AgentEndpoints(t *testing.T) {
 
 func TestSetup_TelegramWebhook(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	req, _ := http.NewRequest("POST", "/api/v2/telegram/webhook", nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -329,10 +349,12 @@ func TestSetup_CustomSubscribePath(t *testing.T) {
 		Database: ":memory:",
 	})
 	require.NoError(t, err)
-	defer database.Close()
+	defer func() {
+		require.NoError(t, database.Close())
+	}()
 
 	// 迁移用户表用于订阅测试
-	database.GetDB().AutoMigrate(&model.User{}, &model.Plan{})
+	require.NoError(t, database.GetDB().AutoMigrate(&model.User{}, &model.Plan{}))
 
 	// 创建测试用户
 	user := &model.User{
@@ -368,7 +390,7 @@ func TestSetup_CustomSubscribePath(t *testing.T) {
 
 func TestSetup_AdminForwardEndpoints(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	endpoints := []struct {
 		method string
@@ -394,7 +416,7 @@ func TestSetup_AdminForwardEndpoints(t *testing.T) {
 
 func TestSetup_AdminPaymentGatewayEndpoints(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	endpoints := []struct {
 		method string
@@ -419,7 +441,7 @@ func TestSetup_AdminPaymentGatewayEndpoints(t *testing.T) {
 
 func TestSetup_AdminTelegramEndpoints(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	endpoints := []struct {
 		method string
@@ -450,7 +472,7 @@ func TestSetup_AdminTelegramEndpoints(t *testing.T) {
 
 func TestSetup_AdminSystemEndpoints(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	endpoints := []struct {
 		method string

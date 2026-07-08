@@ -62,4 +62,27 @@ describe('Nodes.vue', () => {
     expect(adminApi.getProtocolTemplates).toHaveBeenCalledTimes(1)
     expect(adminApi.getAuthKeys).toHaveBeenCalledTimes(1)
   })
+
+  it('renders node stats from legacy and panel envelope payloads', async () => {
+    adminApi.getNodeStats
+      .mockResolvedValueOnce({ data: { total: 12, online: 7, offline: 4, pending: 1 } })
+      .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        data: { total: 21, online: 18, offline: 2, pending: 1 },
+        ts: 1783526400000
+      })
+
+    const wrapper = mountNodes()
+    await flushPromises()
+
+    let metricValues = wrapper.findAll('.stat-card .stat-value').map(node => node.text())
+    expect(metricValues).toEqual(['12', '7', '4', '1'])
+
+    await wrapper.vm.loadStats()
+    await flushPromises()
+
+    metricValues = wrapper.findAll('.stat-card .stat-value').map(node => node.text())
+    expect(metricValues).toEqual(['21', '18', '2', '1'])
+  })
 })

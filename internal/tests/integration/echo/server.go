@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -61,18 +62,20 @@ func (s *EchoServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/status", s.handleStatus)
 	mux.HandleFunc("/generate_204", s.handleGenerate204)
 
-	s.server = &http.Server{
-		Handler: mux,
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
+	s.server = server
 	s.running = true
 
 	// 启动服务器
-	go func() {
-		if err := s.server.Serve(ln); err != nil && err != http.ErrServerClosed {
-			// 服务器错误
+	go func(server *http.Server, ln net.Listener) {
+		if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
+			log.Printf("echo server serve: %v", err)
 		}
-	}()
+	}(server, ln)
 
 	return nil
 }
@@ -80,27 +83,33 @@ func (s *EchoServer) Start(ctx context.Context) error {
 // Stop 停止服务器
 func (s *EchoServer) Stop(ctx context.Context) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if !s.running {
+		s.mu.Unlock()
 		return nil
 	}
 
 	s.running = false
-	if s.server != nil {
-		return s.server.Shutdown(ctx)
+	server := s.server
+	s.server = nil
+	s.ln = nil
+	s.mu.Unlock()
+
+	if server == nil {
+		return nil
 	}
-	return nil
+	return server.Shutdown(ctx)
 }
 
 // Port 返回端口
 func (s *EchoServer) Port() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.port
 }
 
 // URL 返回服务器 URL
 func (s *EchoServer) URL() string {
-	return fmt.Sprintf("http://127.0.0.1:%d", s.port)
+	return fmt.Sprintf("http://127.0.0.1:%d", s.Port())
 }
 
 // Stats 返回统计信息
@@ -129,7 +138,9 @@ func (s *EchoServer) handleEcho(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	r.Body.Close()
+	if err := r.Body.Close(); err != nil {
+		log.Printf("echo server close request body: %v", err)
+	}
 
 	s.mu.Lock()
 	s.bytesIn += int64(len(body))
@@ -141,19 +152,22 @@ func (s *EchoServer) handleEcho(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Request-Time", time.Now().Format(time.RFC3339))
 
 	// 返回请求信息
-	response := fmt.Sprintf("Echo Response\n")
+	response := "Echo Response\n"
 	response += fmt.Sprintf("Method: %s\n", r.Method)
 	response += fmt.Sprintf("URL: %s\n", r.URL.String())
 	response += fmt.Sprintf("Host: %s\n", r.Host)
 	response += fmt.Sprintf("RemoteAddr: %s\n", r.RemoteAddr)
 	response += fmt.Sprintf("Content-Length: %d\n", len(body))
-	response += fmt.Sprintf("Headers:\n")
+	response += "Headers:\n"
 	for k, v := range r.Header {
 		response += fmt.Sprintf("  %s: %s\n", k, strings.Join(v, ", "))
 	}
 	response += fmt.Sprintf("\nBody:\n%s\n", string(body))
 
-	written, _ := w.Write([]byte(response))
+	written, err := w.Write([]byte(response)) // #nosec G705 -- this integration helper intentionally echoes local test request data.
+	if err != nil {
+		log.Printf("echo server write echo response: %v", err)
+	}
 
 	s.mu.Lock()
 	s.bytesOut += int64(written)
@@ -166,7 +180,9 @@ func (s *EchoServer) handlePing(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte("pong"))
+	if _, err := w.Write([]byte("pong")); err != nil {
+		log.Printf("echo server write ping response: %v", err)
+	}
 }
 
 func (s *EchoServer) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -178,8 +194,10 @@ func (s *EchoServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"status":"ok","requests":%d,"bytes_in":%d,"bytes_out":%d}`,
-		requests, bytesIn, bytesOut)
+	if _, err := fmt.Fprintf(w, `{"status":"ok","requests":%d,"bytes_in":%d,"bytes_out":%d}`,
+		requests, bytesIn, bytesOut); err != nil {
+		log.Printf("echo server write status response: %v", err)
+	}
 }
 
 func (s *EchoServer) handleGenerate204(w http.ResponseWriter, r *http.Request) {
@@ -259,10 +277,17 @@ func (s *HTTPEchoServer) serve(ctx context.Context) {
 }
 
 func (s *HTTPEchoServer) handleConn(ctx context.Context, conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("http echo close connection: %v", err)
+		}
+	}()
 
 	// 设置超时
-	conn.SetDeadline(time.Now().Add(10 * time.Second))
+	if err := conn.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		log.Printf("http echo set deadline: %v", err)
+		return
+	}
 
 	// 读取 HTTP 请求
 	reader := bufio.NewReader(conn)
@@ -272,13 +297,15 @@ func (s *HTTPEchoServer) handleConn(ctx context.Context, conn net.Conn) {
 	}
 
 	// 构建响应
-	response := fmt.Sprintf("HTTP/1.1 200 OK\r\n")
-	response += fmt.Sprintf("Content-Type: text/plain\r\n")
-	response += fmt.Sprintf("Connection: close\r\n")
-	response += fmt.Sprintf("\r\n")
+	response := "HTTP/1.1 200 OK\r\n"
+	response += "Content-Type: text/plain\r\n"
+	response += "Connection: close\r\n"
+	response += "\r\n"
 	response += fmt.Sprintf("Echo: %s %s\n", request.Method, request.URL.String())
 
-	conn.Write([]byte(response))
+	if _, err := conn.Write([]byte(response)); err != nil {
+		log.Printf("http echo write response: %v", err)
+	}
 }
 
 // TCPEchoServer TCP Echo 服务器
@@ -350,8 +377,14 @@ func (s *TCPEchoServer) serve(ctx context.Context) {
 }
 
 func (s *TCPEchoServer) handleConn(conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("tcp echo close connection: %v", err)
+		}
+	}()
 
 	// Echo: 将收到的数据原样返回
-	io.Copy(conn, conn)
+	if _, err := io.Copy(conn, conn); err != nil {
+		log.Printf("tcp echo copy connection: %v", err)
+	}
 }

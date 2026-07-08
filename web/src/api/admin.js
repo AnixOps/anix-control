@@ -18,11 +18,11 @@ export function getTrafficHourly(hours = 24, userId = 0) {
   })
 }
 
-export function getUserTrafficRanking(hours = 24, limit = 20) {
+export function getUserTrafficRanking(hours = 24, limit = 20, includeZeroUsers = false) {
   return request({
     url: '/admin/traffic/user-ranking',
     method: 'get',
-    params: { hours, limit }
+    params: { hours, limit, include_zero_users: includeZeroUsers ? 'true' : undefined }
   })
 }
 

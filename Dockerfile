@@ -25,8 +25,10 @@ RUN if [ -f "web/package.json" ]; then \
 # Build binary with version info
 ARG VERSION=dev
 ARG BUILD_TIME
+ARG BUILD_CODE
+ARG COMMIT=unknown
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w -X github.com/anixops/v2board/internal/handler.BuildVersion=${VERSION} -X github.com/anixops/v2board/internal/handler.BuildTime=${BUILD_TIME}" \
+    -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
     -o v2board ./cmd/server
 
 # Runtime stage

@@ -6,6 +6,7 @@ const (
 	ForwardAgentBridgeTaskStatusPending    = "pending"
 	ForwardAgentBridgeTaskStatusDispatched = "dispatched"
 	ForwardAgentBridgeTaskStatusCompleted  = "completed"
+	ForwardAgentBridgeTaskStatusFailed     = "failed"
 )
 
 // ForwardAgentBridgeTask 持久化 clean_agent 转发任务的 task_id ↔ runtime_job 映射。

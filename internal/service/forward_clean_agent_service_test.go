@@ -18,15 +18,17 @@ type ForwardCleanAgentServiceTestSuite struct {
 
 func (s *ForwardCleanAgentServiceTestSuite) SetupSuite() {
 	s.ServiceTestSuite.SetupSuite()
-	database.AutoMigrate(
+	s.Require().NoError(database.AutoMigrate(
 		&model.User{},
 		&model.ForwardNode{},
 		&model.ForwardTunnel{},
 		&model.ForwardUserTunnel{},
 		&model.Forward{},
+		&model.ForwardPortBinding{},
+		&model.ForwardTrafficCursor{},
 		&model.ForwardRuntimeJob{},
 		&model.ForwardCleanAgent{},
-	)
+	))
 }
 
 func (s *ForwardCleanAgentServiceTestSuite) SetupTest() {
@@ -34,6 +36,8 @@ func (s *ForwardCleanAgentServiceTestSuite) SetupTest() {
 	db := database.Get()
 	db.Exec("DELETE FROM v2_forward_runtime_job")
 	db.Exec("DELETE FROM v2_forward_clean_agent")
+	db.Exec("DELETE FROM v2_forward_port_binding")
+	db.Exec("DELETE FROM v2_forward_traffic_cursor")
 	db.Exec("DELETE FROM v2_forward")
 	db.Exec("DELETE FROM v2_forward_user_tunnel")
 	db.Exec("DELETE FROM v2_forward_tunnel")
@@ -130,6 +134,12 @@ func (s *ForwardCleanAgentServiceTestSuite) TestRegisterHeartbeatAndReportSucces
 	assert.Equal(s.T(), agent.ID, *claimed.AgentID)
 	assert.NotNil(s.T(), claimed.ClaimedAt)
 
+	var runningForward model.Forward
+	assert.NoError(s.T(), db.First(&runningForward, forward.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusRunning, runningForward.RuntimeStatus)
+	assert.Equal(s.T(), "clean_agent runtime running", runningForward.RuntimeMessage)
+	assert.NotNil(s.T(), runningForward.RuntimeLastSyncAt)
+
 	success := true
 	err = s.svc.Report(ForwardCleanAgentReportInput{
 		AgentID:  agent.ID,
@@ -161,6 +171,79 @@ func (s *ForwardCleanAgentServiceTestSuite) TestRegisterHeartbeatAndReportSucces
 	assert.NoError(s.T(), db.First(&updatedUser, forward.UserID).Error)
 	assert.Equal(s.T(), int64(123), updatedUser.U)
 	assert.Equal(s.T(), int64(456), updatedUser.D)
+}
+
+func (s *ForwardCleanAgentServiceTestSuite) TestReportDeleteSuccessRemovesForwardRecords() {
+	db := database.Get()
+	node, tunnel, forward := s.createCleanAgentForwardFixtures()
+
+	tokenResult, err := s.svc.CreateToken(ForwardCleanAgentCreateInput{
+		Name:   "delete-agent",
+		NodeID: &node.ID,
+	})
+	assert.NoError(s.T(), err)
+	agent, err := s.svc.Register(ForwardCleanAgentRegisterInput{
+		Token: tokenResult.Token,
+		Name:  "delete-agent",
+	})
+	assert.NoError(s.T(), err)
+
+	assert.NoError(s.T(), db.Create(&model.ForwardPortBinding{
+		ForwardID:  forward.ID,
+		NodeID:     node.ID,
+		Transport:  "tcp",
+		ListenAddr: "0.0.0.0",
+		InPort:     forward.InPort,
+	}).Error)
+	assert.NoError(s.T(), db.Create(&model.ForwardTrafficCursor{
+		ForwardID:     forward.ID,
+		Backend:       model.ForwardRuntimeBackendCleanAgent,
+		UploadTotal:   10,
+		DownloadTotal: 20,
+	}).Error)
+
+	payload := nodeXForwardExecuteRequest{
+		ResourceType: nodeXForwardResourceTypePanelForward,
+		Backend:      model.ForwardRuntimeBackendCleanAgent,
+		Action:       model.ForwardRuntimeJobActionDelete,
+	}
+	payloadData, err := json.Marshal(payload)
+	assert.NoError(s.T(), err)
+	job := &model.ForwardRuntimeJob{
+		Backend:      model.ForwardRuntimeBackendCleanAgent,
+		Action:       model.ForwardRuntimeJobActionDelete,
+		ResourceType: nodeXForwardResourceTypePanelForward,
+		ResourceID:   uintPtr(forward.ID),
+		ForwardID:    uintPtr(forward.ID),
+		TunnelID:     uintPtr(tunnel.ID),
+		NodeID:       uintPtr(node.ID),
+		AgentID:      uintPtr(agent.ID),
+		Status:       model.ForwardRuntimeJobStatusRunning,
+		Payload:      string(payloadData),
+	}
+	assert.NoError(s.T(), db.Create(job).Error)
+
+	success := true
+	err = s.svc.Report(ForwardCleanAgentReportInput{
+		AgentID: agent.ID,
+		Token:   tokenResult.Token,
+		JobID:   job.ID,
+		Success: &success,
+		Result:  "removed",
+	})
+	assert.NoError(s.T(), err)
+
+	var completed model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.First(&completed, job.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, completed.Status)
+
+	var count int64
+	assert.NoError(s.T(), db.Model(&model.Forward{}).Where("id = ?", forward.ID).Count(&count).Error)
+	assert.Zero(s.T(), count)
+	assert.NoError(s.T(), db.Model(&model.ForwardPortBinding{}).Where("forward_id = ?", forward.ID).Count(&count).Error)
+	assert.Zero(s.T(), count)
+	assert.NoError(s.T(), db.Model(&model.ForwardTrafficCursor{}).Where("forward_id = ?", forward.ID).Count(&count).Error)
+	assert.Zero(s.T(), count)
 }
 
 func (s *ForwardCleanAgentServiceTestSuite) TestRevokedAgentCannotHeartbeat() {

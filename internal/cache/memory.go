@@ -23,6 +23,7 @@ type MemoryCache struct {
 	keyMap  map[string]*list.Element       // key -> *list.Element (指向 lruList 中的 *lruNode)
 	maxSize int                            // 最大缓存条目数，0 表示无限制
 	stopCh  chan struct{}
+	doneCh  chan struct{}
 }
 
 // lruNode LRU 链表节点
@@ -45,23 +46,27 @@ func InitMemoryWithSize(maxSize int) {
 	if maxSize <= 0 {
 		maxSize = DefaultMaxSize
 	}
-	memCache = &MemoryCache{
+	CloseMemory()
+	cache := &MemoryCache{
 		items:   make(map[string]*cacheEntry),
 		sets:    make(map[string]map[string]struct{}),
 		lruList: list.New(),
 		keyMap:  make(map[string]*list.Element),
 		maxSize: maxSize,
 		stopCh:  make(chan struct{}),
+		doneCh:  make(chan struct{}),
 	}
+	memCache = cache
 
 	// 启动过期清理协程
-	go memCache.cleanupLoop()
+	go cache.cleanupLoop()
 }
 
 // cleanupLoop 定期清理过期数据
 func (c *MemoryCache) cleanupLoop() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
+	defer close(c.doneCh)
 
 	for {
 		select {
@@ -129,13 +134,18 @@ func (c *MemoryCache) addToFront(key string) {
 // CloseMemory 关闭内存缓存
 func CloseMemory() {
 	if memCache != nil {
-		select {
-		case <-memCache.stopCh:
-			// 已经关闭
-		default:
-			close(memCache.stopCh)
-		}
+		memCache.close()
 	}
+}
+
+func (c *MemoryCache) close() {
+	select {
+	case <-c.stopCh:
+		// 已经关闭
+	default:
+		close(c.stopCh)
+	}
+	<-c.doneCh
 }
 
 // Set 设置缓存（保持兼容原有签名）
@@ -575,6 +585,7 @@ func StartCleanup() {
 	case <-memCache.stopCh:
 		memCache.mu.Lock()
 		memCache.stopCh = make(chan struct{})
+		memCache.doneCh = make(chan struct{})
 		memCache.mu.Unlock()
 		go memCache.cleanupLoop()
 	default:

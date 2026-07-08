@@ -27,7 +27,7 @@ func (h *TicketHandler) GetTickets(c *gin.Context) {
 		return
 	}
 
-	var result []gin.H
+	result := make([]gin.H, 0, len(tickets))
 	for _, t := range tickets {
 		result = append(result, gin.H{
 			"id":         t.ID,
@@ -39,7 +39,7 @@ func (h *TicketHandler) GetTickets(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	panelSuccess(c, result)
 }
 
 // CreateTicket 提交新工单
@@ -88,7 +88,7 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 	}
 
 	tx.Commit()
-	c.JSON(http.StatusOK, gin.H{"message": "工单提交成功", "data": ticket})
+	panelSuccess(c, ticket)
 }
 
 // GetTicket 获取工单详情及回话
@@ -106,7 +106,7 @@ func (h *TicketHandler) GetTicket(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": ticket})
+	panelSuccess(c, ticket)
 }
 
 // ReplyTicket 回复自己的工单
@@ -160,7 +160,7 @@ func (h *TicketHandler) ReplyTicket(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "回复成功"})
+	panelSuccess(c, "回复成功")
 }
 
 // CloseTicket 用户主动关闭工单
@@ -183,5 +183,5 @@ func (h *TicketHandler) CloseTicket(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "工单已关闭"})
+	panelSuccess(c, "工单已关闭")
 }

@@ -50,6 +50,9 @@ describe('User Subscribe flow', () => {
         },
       })
       .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        ts: 1783536000000,
         data: {
           ExpireAt: 0,
           UsedTraffic: 2048,

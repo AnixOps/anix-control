@@ -1,0 +1,4 @@
+x.kalijerry.uk
+# Add future Nginx server_name values here, one per line.
+# Example:
+# panel-new.example.com

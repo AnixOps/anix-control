@@ -11,7 +11,7 @@ import (
 // (cipher / server_key / flow / tls_settings / network_settings 等)。
 //
 // node_server.GetConfig 和 config_sync.buildNodeConfigResponse 都调它, 统一逻辑。
-func fillNodeConfigResponse(node *model.Node, protocol *model.NodeProtocol) *pb.NodeConfigResponse {
+func fillNodeConfigResponse(node *model.Node, protocol *model.NodeProtocol) (*pb.NodeConfigResponse, error) {
 	cfg := service.BuildNodeProtocolConfig(node, protocol)
 
 	resp := &pb.NodeConfigResponse{
@@ -31,10 +31,14 @@ func fillNodeConfigResponse(node *model.Node, protocol *model.NodeProtocol) *pb.
 	resp.ServerKey = asString(cfg["server_key"])
 	resp.Flow = asString(cfg["flow"])
 
-	if port, ok := asInt32(cfg["server_port"]); ok {
+	if port, ok, err := asInt32("server_port", cfg["server_port"]); err != nil {
+		return nil, err
+	} else if ok {
 		resp.ServerPort = port
 	}
-	if tls, ok := asInt32(cfg["tls"]); ok {
+	if tls, ok, err := asInt32("tls", cfg["tls"]); err != nil {
+		return nil, err
+	} else if ok {
 		resp.Tls = tls
 	}
 
@@ -45,7 +49,7 @@ func fillNodeConfigResponse(node *model.Node, protocol *model.NodeProtocol) *pb.
 		resp.NetworkSettings = service.StringifyConfigMap(ns)
 	}
 
-	return resp
+	return resp, nil
 }
 
 func asString(v any) string {
@@ -57,17 +61,6 @@ func asString(v any) string {
 
 // asInt32 处理 BuildNodeProtocolConfig 里 server_port(int) / tls(model.NodeStatus
 // 或 int) 等数值字段, 兼容 int / int32 / int64 / float64。
-func asInt32(v any) (int32, bool) {
-	switch t := v.(type) {
-	case int:
-		return int32(t), true
-	case int32:
-		return t, true
-	case int64:
-		return int32(t), true
-	case float64:
-		return int32(t), true
-	default:
-		return 0, false
-	}
+func asInt32(label string, v any) (int32, bool, error) {
+	return anyToInt32(label, v)
 }

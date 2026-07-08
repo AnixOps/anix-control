@@ -14,11 +14,11 @@ import (
 const forwardRuntimeBootstrapRemark = "Forward runtime bootstrapped from config.yaml"
 
 type forwardRuntimeBootstrapConfig struct {
-	NodeXMode     *bool
-	Backend       string
-	LocalBackend  string
-	NodeX         appconfig.ForwardRuntimeNodeXConfig
-	Ansible       panelForwardAnsibleConfig
+	NodeXMode    *bool
+	Backend      string
+	LocalBackend string
+	NodeX        appconfig.ForwardRuntimeNodeXConfig
+	Ansible      panelForwardAnsibleConfig
 }
 
 func InitForwardRuntimeSystemConfig(db *gorm.DB) error {

@@ -4,6 +4,8 @@ import { resolveDocumentTitle, resolveRouteMetaDescription, resolveRoutePageTitl
 const messages = {
   'pageTitles.auth.login': 'Sign In',
   'pageTitles.user.dashboard': 'Dashboard',
+  'pageTitles.admin.monitor': 'Monitor',
+  'pageTitles.admin.trafficHourly': 'Hourly Traffic',
   'pageTitles.admin.forwardNodeX': 'NodeX Runtime',
   'app.meta.defaultDescription': 'Default app description',
   'app.meta.loginDescription': 'Login page description',
@@ -20,6 +22,8 @@ describe('pageMeta helpers', () => {
   it('resolves known page titles by route', () => {
     expect(resolveRoutePageTitle(t, '/login', 'Fallback')).toBe('Sign In')
     expect(resolveRoutePageTitle(t, '/user/dashboard', 'Fallback')).toBe('Dashboard')
+    expect(resolveRoutePageTitle(t, '/admin/monitor', 'Fallback')).toBe('Monitor')
+    expect(resolveRoutePageTitle(t, '/admin/traffic-hourly', 'Fallback')).toBe('Hourly Traffic')
     expect(resolveRoutePageTitle(t, '/admin/forward/nodex', 'Fallback')).toBe('NodeX Runtime')
   })
 

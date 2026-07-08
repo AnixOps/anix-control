@@ -2,7 +2,8 @@ package service
 
 import (
 	"bytes"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 -- legacy XBoard/V2bX SS2022 server_key compatibility requires MD5.
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -99,7 +100,7 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 	}
 
 	// 9. 去重 (针对非 V2Ray 分组模式)
-	if !(format == model.FormatV2Ray && len(req.Groups) > 0) {
+	if format != model.FormatV2Ray || len(req.Groups) == 0 {
 		uniqueNodes := make([]*model.ParsedNode, 0, len(nodes))
 		nodeMap := make(map[string]bool)
 		for _, n := range nodes {
@@ -486,7 +487,7 @@ func (s *SubscriptionService) applyTemplateJSON(node *model.ParsedNode, template
 // generateNodeID 生成节点 ID
 func (s *SubscriptionService) generateNodeID(tpl *model.SubscriptionTemplate) string {
 	data := fmt.Sprintf("%d:%s:%s:%d", tpl.ID, tpl.Type, tpl.Server, tpl.Port)
-	hash := md5.Sum([]byte(data))
+	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:8])
 }
 
@@ -717,8 +718,8 @@ func ss2022KeyLen(cipher string) int {
 // 导出供 handler 层 (UniProxy 节点拉配置) 复用, 保证订阅端和节点端算出的值一致。
 func DeriveSS2022ServerKey(createdAt time.Time, cipher string) string {
 	keyLen := ss2022KeyLen(cipher)
-	sum := md5.Sum([]byte(strconv.FormatInt(createdAt.Unix(), 10)))
-	hexStr := hex.EncodeToString(sum[:]) // 32 位 hex 字符串
+	sum := md5.Sum([]byte(strconv.FormatInt(createdAt.Unix(), 10))) // #nosec G401 -- legacy XBoard/V2bX SS2022 server_key compatibility requires MD5.
+	hexStr := hex.EncodeToString(sum[:])                            // 32 位 hex 字符串
 	if keyLen > len(hexStr) {
 		keyLen = len(hexStr)
 	}
@@ -863,8 +864,8 @@ type GroupStats struct {
 	ProtocolCount int64  `json:"protocol_count"`
 	OnlineNodes   int64  `json:"online_nodes"`
 	TotalTraffic  int64  `json:"total_traffic"` // 用户已用流量总和 (bytes)
-	EnabledUsers  int64  `json:"enabled_users"`  // 未过期用户数
-	PlanCount     int64  `json:"plan_count"`     // 关联套餐数
+	EnabledUsers  int64  `json:"enabled_users"` // 未过期用户数
+	PlanCount     int64  `json:"plan_count"`    // 关联套餐数
 }
 
 // GetGroupStats 获取所有订阅分组的统计数据

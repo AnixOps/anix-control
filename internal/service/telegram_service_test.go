@@ -2,8 +2,11 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/anixops/v2board/internal/model"
@@ -27,6 +30,12 @@ func setupTelegramTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 
 	return db
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
 }
 
 func TestNewTelegramBotService(t *testing.T) {
@@ -85,7 +94,7 @@ func TestTelegramBotService_SetWebhook(t *testing.T) {
 		resp := map[string]any{
 			"ok": true,
 		}
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -286,6 +295,87 @@ func TestTelegramBotService_HandleUnbind(t *testing.T) {
 	assert.Equal(t, int64(0), count)
 }
 
+func TestTelegramBotService_BroadcastReturnsSendErrors(t *testing.T) {
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
+	svc.client = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return nil, errors.New("telegram unavailable")
+		}),
+	}
+
+	require.NoError(t, db.Create(&model.TelegramBot{
+		Token:   "test-token",
+		Name:    "testbot",
+		Enabled: true,
+	}).Error)
+	require.NoError(t, db.Create(&model.TelegramUser{
+		TelegramID: 12345,
+		IsBanned:   false,
+	}).Error)
+
+	err := svc.Broadcast("hello")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "send telegram message to 12345")
+	assert.Contains(t, err.Error(), "telegram unavailable")
+}
+
+func TestTelegramBotService_BroadcastSuccess(t *testing.T) {
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
+	svc.client = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(`{"ok":true}`)),
+			}, nil
+		}),
+	}
+
+	require.NoError(t, db.Create(&model.TelegramBot{
+		Token:   "test-token",
+		Name:    "testbot",
+		Enabled: true,
+	}).Error)
+	require.NoError(t, db.Create(&model.TelegramUser{
+		TelegramID: 12345,
+		IsBanned:   false,
+	}).Error)
+
+	assert.NoError(t, svc.Broadcast("hello"))
+}
+
+func TestTelegramBotServiceAPIRequestReturnsEncodeError(t *testing.T) {
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
+
+	result, err := svc.apiRequest("http://127.0.0.1:1", map[string]any{
+		"bad": make(chan int),
+	})
+
+	assert.Nil(t, result)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "encode telegram API request")
+}
+
+func TestTelegramBotServiceHandleAdminRejectsInvalidAdminIDs(t *testing.T) {
+	db := setupTelegramTestDB(t)
+	svc := NewTelegramBotService(db)
+
+	require.NoError(t, db.Create(&model.TelegramBot{
+		Token:    "test-token",
+		Name:     "testbot",
+		AdminIDs: "invalid",
+	}).Error)
+
+	err := svc.handleAdmin(12345, 12345)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse telegram admin_ids")
+}
+
 func TestParseAdminIDs(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -304,6 +394,17 @@ func TestParseAdminIDs(t *testing.T) {
 		}
 		assert.Equal(t, tt.expected, result, "input: %s", tt.input)
 	}
+}
+
+func TestParseAdminIDsWithError(t *testing.T) {
+	result, err := parseAdminIDsWithError("[123456789,987654321]")
+	require.NoError(t, err)
+	assert.Equal(t, []int64{123456789, 987654321}, result)
+
+	result, err = parseAdminIDsWithError("invalid")
+	assert.Nil(t, result)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse telegram admin_ids")
 }
 
 func TestTelegramUserService_GetByTelegramID(t *testing.T) {

@@ -68,6 +68,7 @@
               <button class="btn btn-sm" @click="openTunnelModal(user)" :title="t('adminUsers.actions.manageTunnel')">{{ t('adminUsers.actions.manageTunnelShort') }}</button>
               <button v-if="user.banned === 0" class="btn btn-sm" @click="handleBan(user)" :title="t('adminUsers.actions.ban')">{{ t('adminUsers.actions.ban') }}</button>
               <button v-else class="btn btn-sm" @click="handleUnban(user)" :title="t('adminUsers.actions.unban')">{{ t('adminUsers.actions.unban') }}</button>
+              <button class="btn btn-sm" @click="openTrafficModal(user)" :title="t('adminUsers.actions.viewTraffic')">{{ t('adminUsers.actions.viewTrafficShort') }}</button>
               <button class="btn btn-sm" @click="copySubscribe(user)" :title="t('adminUsers.actions.copySubscribe')">{{ t('adminUsers.actions.copySubscribeShort') }}</button>
               <button class="btn btn-sm" @click="resetSubscribe(user)" :title="t('adminUsers.actions.resetSubscribe')">{{ t('adminUsers.actions.resetSubscribeShort') }}</button>
               <button class="btn btn-sm" @click="openResetUserDialog(user)" :title="t('adminUsers.actions.resetTraffic')">{{ t('adminUsers.actions.resetShort') }}</button>
@@ -196,6 +197,74 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showTrafficModal" class="modal-overlay" @click.self="closeTrafficModal">
+      <div class="modal modal-wide traffic-modal">
+        <div class="traffic-modal-header">
+          <div>
+            <h3>{{ t('adminUsers.trafficModal.title', { email: trafficUser?.email || '-' }) }}</h3>
+            <p>{{ t('adminUsers.trafficModal.subtitle') }}</p>
+          </div>
+          <button class="btn" :disabled="trafficLoading" @click="loadTrafficDetail">{{ trafficLoading ? t('adminUsers.trafficModal.loading') : t('adminUsers.trafficModal.refresh') }}</button>
+        </div>
+        <p v-if="trafficError" class="error">{{ trafficError }}</p>
+        <div class="traffic-summary-grid">
+          <article class="traffic-summary-card">
+            <span>{{ t('adminUsers.trafficModal.summary.total30d') }}</span>
+            <strong>{{ formatBytes(trafficTotal30d) }}</strong>
+          </article>
+          <article class="traffic-summary-card">
+            <span>{{ t('adminUsers.trafficModal.summary.dailyPeak') }}</span>
+            <strong>{{ formatBytes(dailyPeak?.traffic || 0) }}</strong>
+            <small>{{ dailyPeak?.date || '-' }}</small>
+          </article>
+          <article class="traffic-summary-card">
+            <span>{{ t('adminUsers.trafficModal.summary.hourlyPeak') }}</span>
+            <strong>{{ formatBytes(hourlyPeak?.traffic || 0) }}</strong>
+            <small>{{ hourlyPeak ? formatHourTs(hourlyPeak.hour_ts) : '-' }}</small>
+          </article>
+        </div>
+        <div class="traffic-tables">
+          <section>
+            <h4>{{ t('adminUsers.trafficModal.dailyTitle') }}</h4>
+            <div class="traffic-table-wrap">
+              <table class="data-table compact-table">
+                <thead>
+                  <tr><th>{{ t('adminUsers.trafficModal.table.date') }}</th><th>{{ t('adminUsers.trafficModal.table.traffic') }}</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-if="trafficLoading"><td colspan="2" class="empty-row">{{ t('common.states.loading') }}</td></tr>
+                  <tr v-for="item in dailyTrafficRows" :key="item.date">
+                    <td>{{ item.date }}</td>
+                    <td>{{ formatBytes(item.traffic) }}</td>
+                  </tr>
+                  <tr v-if="!trafficLoading && dailyTrafficRows.length === 0"><td colspan="2" class="empty-row">{{ t('adminUsers.trafficModal.empty') }}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section>
+            <h4>{{ t('adminUsers.trafficModal.hourlyTitle') }}</h4>
+            <div class="traffic-table-wrap">
+              <table class="data-table compact-table">
+                <thead>
+                  <tr><th>{{ t('adminUsers.trafficModal.table.hour') }}</th><th>{{ t('adminUsers.trafficModal.table.traffic') }}</th></tr>
+                </thead>
+                <tbody>
+                  <tr v-if="trafficLoading"><td colspan="2" class="empty-row">{{ t('common.states.loading') }}</td></tr>
+                  <tr v-for="item in hourlyTrafficRows" :key="item.hour_ts">
+                    <td>{{ formatHourTs(item.hour_ts) }}</td>
+                    <td>{{ formatBytes(item.traffic) }}</td>
+                  </tr>
+                  <tr v-if="!trafficLoading && hourlyTrafficRows.length === 0"><td colspan="2" class="empty-row">{{ t('adminUsers.trafficModal.empty') }}</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        <div class="row"><button class="btn" @click="closeTrafficModal">{{ t('common.actions.close') }}</button></div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -204,6 +273,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import {
   assignAdminUserTunnel, banUser, createUser, getAdminUserTunnelList, getForwardTunnels, getSpeedLimitList,
+  getTrafficHourly,
   getSubscriptionSettings,
   getUserList, getUserStats, removeAdminUserTunnel, resetUserSubscribe, resetUserTraffic, resetUserTunnelTraffic,
   unbanUser, updateAdminUserTunnel, updateUser
@@ -242,6 +312,11 @@ const resetFlowTitle = ref('')
 const resetFlowMessage = ref('')
 const resetFlowUsedFlow = ref('')
 const resetFlowQuota = ref('')
+const showTrafficModal = ref(false)
+const trafficUser = ref(null)
+const trafficLoading = ref(false)
+const trafficError = ref('')
+const hourlyTrafficRows = ref([])
 const newTunnelForm = () => ({ tunnelId: '', flow: 0, num: 0, expTime: '', flowResetTime: 0, speedId: null, status: 1 })
 const tunnelForm = ref(newTunnelForm())
 
@@ -252,6 +327,21 @@ const availableSpeedLimitOptions = computed(() => {
   const targetTunnelId = Number(tunnelForm.value.tunnelId || 0)
   return targetTunnelId ? speedLimitOptions.value.filter(item => Number(item?.tunnelId || 0) === targetTunnelId) : []
 })
+const trafficTotal30d = computed(() => hourlyTrafficRows.value.reduce((sum, item) => sum + Number(item?.traffic || 0), 0))
+const dailyTrafficRows = computed(() => {
+  const buckets = new Map()
+  for (const item of hourlyTrafficRows.value) {
+    const date = formatDayTs(Number(item?.hour_ts || 0))
+    if (!date) continue
+    buckets.set(date, (buckets.get(date) || 0) + Number(item?.traffic || 0))
+  }
+  return Array.from(buckets.entries())
+    .map(([date, traffic]) => ({ date, traffic }))
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 30)
+})
+const dailyPeak = computed(() => dailyTrafficRows.value.reduce((peak, item) => (item.traffic > (peak?.traffic || 0) ? item : peak), null))
+const hourlyPeak = computed(() => hourlyTrafficRows.value.reduce((peak, item) => (Number(item?.traffic || 0) > Number(peak?.traffic || 0) ? item : peak), null))
 const notify = (message) => window.alert(message)
 const confirmAction = (message) => window.confirm(message)
 
@@ -390,6 +480,16 @@ const copyToClipboard = async (text) => {
   }
 }
 
+const readSubscriptionSettings = (res) => {
+  if (!res || typeof res !== 'object') return { subscribe_path: '/s', subscribe_domains: [] }
+  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  if (!payload || typeof payload !== 'object') return { subscribe_path: '/s', subscribe_domains: [] }
+  return {
+    subscribe_path: payload.subscribe_path || '/s',
+    subscribe_domains: Array.isArray(payload.subscribe_domains) ? payload.subscribe_domains : []
+  }
+}
+
 const copySubscribe = async (user) => {
   if (!user.token) {
     notify(t('adminUsers.messages.noToken'))
@@ -407,7 +507,7 @@ const copySubscribe = async (user) => {
 const loadSubscriptionSettings = async () => {
   try {
     const res = await getSubscriptionSettings()
-    subscriptionSettings.value = res.data || { subscribe_path: '/s', subscribe_domains: [] }
+    subscriptionSettings.value = readSubscriptionSettings(res)
   } catch {
     subscriptionSettings.value = { subscribe_path: '/s', subscribe_domains: [] }
   }
@@ -552,6 +652,38 @@ const closeResetFlowModal = (force = false) => {
   resetFlowUsedFlow.value = ''
   resetFlowQuota.value = ''
 }
+const openTrafficModal = async (user) => {
+  trafficUser.value = user
+  hourlyTrafficRows.value = []
+  trafficError.value = ''
+  showTrafficModal.value = true
+  await loadTrafficDetail()
+}
+const closeTrafficModal = () => {
+  if (trafficLoading.value) return
+  showTrafficModal.value = false
+  trafficUser.value = null
+  hourlyTrafficRows.value = []
+  trafficError.value = ''
+}
+const loadTrafficDetail = async () => {
+  if (!trafficUser.value?.id) return
+  trafficLoading.value = true
+  trafficError.value = ''
+  try {
+    const res = await getTrafficHourly(720, trafficUser.value.id)
+    const list = Array.isArray(res?.data) ? res.data : []
+    hourlyTrafficRows.value = list
+      .map(item => ({ hour_ts: Number(item?.hour_ts || 0), traffic: Number(item?.traffic || 0) }))
+      .filter(item => item.hour_ts > 0)
+      .sort((a, b) => b.hour_ts - a.hour_ts)
+  } catch (err) {
+    trafficError.value = err.response?.data?.message || err.message || t('adminUsers.trafficModal.fetchFailed')
+    hourlyTrafficRows.value = []
+  } finally {
+    trafficLoading.value = false
+  }
+}
 const confirmResetFlow = async () => {
   if (!resetFlowTarget.value?.id) return
   resetFlowLoading.value = true
@@ -611,6 +743,18 @@ const formatBytes = (bytes) => {
 }
 const formatDate = (timestamp) => (!timestamp ? t('adminUsers.labels.permanent') : (i18nFormatDate(Number(timestamp) * 1000) || '-'))
 const formatDateTime = (datetime) => (!datetime ? '-' : (i18nFormatDateTime(datetime) || '-'))
+const formatDayTs = (timestamp) => {
+  if (!timestamp) return ''
+  const date = new Date(timestamp * 1000)
+  if (Number.isNaN(date.getTime())) return ''
+  return i18nFormatDate(date) || date.toISOString().slice(0, 10)
+}
+const formatHourTs = (timestamp) => {
+  if (!timestamp) return '-'
+  const date = new Date(timestamp * 1000)
+  if (Number.isNaN(date.getTime())) return '-'
+  return i18nFormatDateTime(date) || date.toLocaleString()
+}
 
 onMounted(() => { fetchUsers(); fetchStats(); loadSubscriptionGroups(); loadSubscriptionSettings() })
 
@@ -780,6 +924,75 @@ const loadSubscriptionGroups = async () => {
   width: min(96vw, 1100px);
 }
 
+.traffic-modal {
+  width: min(96vw, 1180px);
+}
+
+.traffic-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.traffic-modal-header h3,
+.traffic-modal-header p {
+  margin: 0;
+}
+
+.traffic-modal-header p {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.traffic-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.traffic-summary-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.traffic-summary-card span,
+.traffic-summary-card small {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.traffic-summary-card strong {
+  font-size: 20px;
+}
+
+.traffic-tables {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr);
+  gap: 16px;
+}
+
+.traffic-tables h4 {
+  margin: 0 0 8px;
+}
+
+.traffic-table-wrap {
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.compact-table th,
+.compact-table td {
+  padding: 10px;
+}
+
 .modal label {
   display: grid;
   gap: 6px;
@@ -809,6 +1022,11 @@ const loadSubscriptionGroups = async () => {
 
 @media (max-width: 900px) {
   .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .traffic-summary-grid,
+  .traffic-tables {
     grid-template-columns: 1fr;
   }
 }

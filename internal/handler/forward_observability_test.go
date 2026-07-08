@@ -83,6 +83,7 @@ func TestGetObservabilityTrend_ReturnsOrderedPoints(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, 0, resp.Code)
+	assert.NotContains(t, w.Body.String(), "\"error\"")
 	assert.Equal(t, key, resp.Data.TargetKey)
 	assert.Equal(t, "proxy-parent", resp.Data.Label)
 	require.Len(t, resp.Data.Points, 3)
@@ -104,6 +105,7 @@ func TestGetObservabilityTrend_MissingTargetKeyReturnsError(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, -1, resp.Code)
+	assert.NotContains(t, w.Body.String(), "\"error\"")
 }
 
 func TestListObservabilityTargets_ReturnsLatestPerTarget(t *testing.T) {
@@ -152,6 +154,7 @@ func TestListObservabilityTargets_ReturnsLatestPerTarget(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, 0, resp.Code)
+	assert.NotContains(t, w.Body.String(), "\"error\"")
 
 	var found bool
 	var foundStale bool
@@ -220,6 +223,7 @@ func TestObservabilityLatencyTrend_SkipsChildProxyNodes(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(targetW.Body.Bytes(), &targetsResp))
 	assert.Equal(t, 0, targetsResp.Code)
+	assert.NotContains(t, targetW.Body.String(), "\"error\"")
 
 	var foundParent, foundChild bool
 	for _, item := range targetsResp.Data.List {
@@ -248,6 +252,132 @@ func TestObservabilityLatencyTrend_SkipsChildProxyNodes(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(trendW.Body.Bytes(), &trendResp))
 	assert.Equal(t, 0, trendResp.Code)
+	assert.NotContains(t, trendW.Body.String(), "\"error\"")
 	assert.Equal(t, childKey, trendResp.Data.TargetKey)
 	assert.Empty(t, trendResp.Data.Points)
+}
+
+func TestGetObservabilityTopology_UsesPanelEnvelope(t *testing.T) {
+	r := setupObservabilityRouter(t)
+	db := database.Get()
+
+	relay := model.ForwardNode{
+		Name:    "topology-relay",
+		Type:    model.ForwardNodeTypeRelay,
+		Host:    "10.10.10.1",
+		Port:    8080,
+		Status:  model.ForwardNodeStatusOnline,
+		Latency: 15,
+		Enabled: true,
+	}
+	exit := model.ForwardNode{
+		Name:    "topology-exit",
+		Type:    model.ForwardNodeTypeExit,
+		Host:    "10.10.10.2",
+		Port:    8080,
+		Status:  model.ForwardNodeStatusOnline,
+		Latency: 25,
+		Enabled: true,
+	}
+	require.NoError(t, db.Create(&relay).Error)
+	require.NoError(t, db.Create(&exit).Error)
+
+	outNodeID := exit.ID
+	tunnel := model.ForwardTunnel{
+		Name:      "topology-tunnel",
+		InNodeID:  relay.ID,
+		OutNodeID: &outNodeID,
+		InIP:      relay.Host,
+		OutIP:     exit.Host,
+		Status:    model.ForwardTunnelStatusActive,
+	}
+	require.NoError(t, db.Create(&tunnel).Error)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/admin/forward/observability/topology", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(t, w)
+	assert.Equal(t, float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.NotEmpty(t, data["nodes"])
+	assert.NotEmpty(t, data["edges"])
+	assert.NotContains(t, w.Body.String(), "\"error\"")
+}
+
+func TestGetObservabilityMultiIngress_UsesPanelEnvelope(t *testing.T) {
+	r := setupObservabilityRouter(t)
+	db := database.Get()
+
+	relay := model.ForwardNode{
+		Name:    "multi-ingress-relay",
+		Type:    model.ForwardNodeTypeRelay,
+		Host:    "10.20.20.1",
+		Port:    8080,
+		Status:  model.ForwardNodeStatusOnline,
+		Enabled: true,
+	}
+	exit := model.ForwardNode{
+		Name:    "multi-ingress-exit",
+		Type:    model.ForwardNodeTypeExit,
+		Host:    "10.20.20.2",
+		Port:    8080,
+		Status:  model.ForwardNodeStatusOnline,
+		Enabled: true,
+	}
+	require.NoError(t, db.Create(&relay).Error)
+	require.NoError(t, db.Create(&exit).Error)
+
+	outNodeID := exit.ID
+	tunnel := model.ForwardTunnel{
+		Name:      "multi-ingress-tunnel",
+		InNodeID:  relay.ID,
+		OutNodeID: &outNodeID,
+		InIP:      relay.Host,
+		OutIP:     exit.Host,
+		Status:    model.ForwardTunnelStatusActive,
+	}
+	require.NoError(t, db.Create(&tunnel).Error)
+
+	forward := model.Forward{
+		UserID:     1,
+		UserName:   "observability-user",
+		Name:       "multi-ingress-forward",
+		TunnelID:   tunnel.ID,
+		InPort:     19000,
+		OutPort:    9000,
+		RemoteAddr: "192.0.2.10",
+		Status:     model.ForwardStatusActive,
+	}
+	require.NoError(t, db.Create(&forward).Error)
+
+	require.NoError(t, db.Create(&model.ForwardLatencyBucket{
+		TargetKey:       fmt.Sprintf("tunnel-node:%d", relay.ID),
+		TargetType:      model.LatencyTargetTypeTunnelNode,
+		TargetID:        relay.ID,
+		Label:           "multi-ingress-relay",
+		Host:            relay.Host,
+		Port:            relay.Port,
+		BucketAt:        time.Now().Truncate(time.Minute),
+		IntervalSeconds: 60,
+		SampleCount:     5,
+		SuccessCount:    5,
+		AvgRTT:          18.5,
+	}).Error)
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v2/admin/forward/observability/multi-ingress?targetId=%d", forward.ID), nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(t, w)
+	assert.Equal(t, float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	list := data["list"].([]any)
+	require.NotEmpty(t, list)
+	row := list[0].(map[string]any)
+	assert.Equal(t, "multi-ingress-tunnel", row["tunnelName"])
+	assert.Equal(t, true, row["online"])
+	assert.NotContains(t, w.Body.String(), "\"error\"")
 }

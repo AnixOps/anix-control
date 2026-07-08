@@ -107,4 +107,39 @@ describe('System audit logs', () => {
     expect(text).toContain('admin')
     expect(text).toContain('config')
   })
+
+  it('renders audit log row content from panel envelope response', async () => {
+    adminApi.getSystemAuditLogs.mockResolvedValue({
+      code: 0,
+      msg: '操作成功',
+      data: {
+        list: [
+          {
+            id: 2,
+            action: 'delete',
+            module: 'system',
+            target_type: 'backup_record',
+            username: 'operator',
+            content: 'deleted backup #42',
+            ip: '127.0.0.2',
+            status: 'success',
+            created_at: '2026-04-12T08:00:00Z'
+          }
+        ],
+        total: 1,
+        page: 1,
+        page_size: 20
+      },
+      ts: 1783526400000
+    })
+
+    const wrapper = mountSystem()
+    wrapper.vm.activeTab = 'audit'
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('deleted backup #42')
+    expect(text).toContain('operator')
+    expect(text).toContain('backup_record')
+  })
 })

@@ -951,6 +951,9 @@ func TestToUint32(t *testing.T) {
 	assert.Equal(t, uint32(456), toUint32(int64(456)))
 	assert.Equal(t, uint32(789), toUint32(float64(789)))
 	assert.Equal(t, uint32(0), toUint32("invalid"))
+	assert.Equal(t, uint32(0), toUint32(-1))
+	assert.Equal(t, uint32(0), toUint32(int64(1<<32)))
+	assert.Equal(t, uint32(0), toUint32(float64(1<<32)))
 }
 
 // ========== Clash Parser Tests ==========

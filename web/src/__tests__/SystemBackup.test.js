@@ -112,4 +112,105 @@ describe('System backup configuration', () => {
     expect(payload.s3_secret_key).toBe('')
     expect(payload.preserve_existing_sensitive).toBe(true)
   })
+
+  it('loads backup config from legacy and panel envelope payloads', async () => {
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    expect(wrapper.vm.backupConfig.interval).toBe(12)
+    expect(wrapper.vm.backupConfig.keep_count).toBe(6)
+    expect(wrapper.vm.backupConfig.storage_type).toBe('s3')
+
+    adminApi.getBackupConfig.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      data: {
+        enabled: false,
+        interval: 18,
+        keep_count: 9,
+        storage_type: 'local',
+        storage_path: 'daily-backups'
+      },
+      ts: 1783526400000
+    })
+
+    await wrapper.vm.fetchBackupConfig()
+    await flushPromises()
+
+    expect(wrapper.vm.backupConfig.enabled).toBe(false)
+    expect(wrapper.vm.backupConfig.interval).toBe(18)
+    expect(wrapper.vm.backupConfig.keep_count).toBe(9)
+    expect(wrapper.vm.backupConfig.storage_type).toBe('local')
+    expect(wrapper.vm.backupConfig.storage_path).toBe('daily-backups')
+
+    wrapper.unmount()
+  })
+
+  it('loads subscription settings from legacy and panel envelope payloads', async () => {
+    adminApi.getSubscriptionSettings
+      .mockResolvedValueOnce({
+        data: {
+          subscribe_path: '/sub',
+          subscribe_domains: ['legacy.example.com', 'backup.example.com']
+        }
+      })
+      .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        data: {
+          subscribe_path: '/x',
+          subscribe_domains: ['panel.example.com']
+        },
+        ts: 1783526400000
+      })
+
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    expect(wrapper.vm.subscriptionPath).toBe('/sub')
+    expect(wrapper.vm.subscriptionDomainsText).toBe('legacy.example.com\nbackup.example.com')
+
+    await wrapper.vm.loadSubscriptionDomainSettings()
+    await flushPromises()
+
+    expect(wrapper.vm.subscriptionPath).toBe('/x')
+    expect(wrapper.vm.subscriptionDomainsText).toBe('panel.example.com')
+
+    wrapper.unmount()
+  })
+
+  it('renders backup stats from legacy and panel envelope payloads', async () => {
+    adminApi.getBackupStats
+      .mockResolvedValueOnce({
+        data: {
+          last_backup: null,
+          total_count: 2,
+          total_size: 2048
+        }
+      })
+      .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        data: {
+          last_backup: null,
+          total_count: 3,
+          total_size: 4096
+        },
+        ts: 1783526400000
+      })
+
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    let statValues = wrapper.findAll('.backup-stats .stat-value').map(node => node.text())
+    expect(statValues).toEqual(['2', '2.00 KB', '-'])
+
+    await wrapper.vm.fetchBackupStats()
+    await flushPromises()
+
+    statValues = wrapper.findAll('.backup-stats .stat-value').map(node => node.text())
+    expect(statValues).toEqual(['3', '4.00 KB', '-'])
+
+    wrapper.unmount()
+  })
 })

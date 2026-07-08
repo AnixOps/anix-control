@@ -114,7 +114,7 @@ const fetchData = async (refresh = false) => {
   loading.value = true
   try {
     const res = await getDashboard(refresh)
-    stats.value = res.data || {}
+    stats.value = readDashboardStats(res)
   } catch (err) {
     console.error(t('adminDashboard.messages.fetchFailed'), err)
   } finally {
@@ -124,6 +124,14 @@ const fetchData = async (refresh = false) => {
 
 const refreshData = () => {
   fetchData(true)
+}
+
+function readDashboardStats(res) {
+  if (!res || typeof res !== 'object') {
+    return {}
+  }
+  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  return payload && typeof payload === 'object' ? payload : {}
 }
 
 function formatNumber(num) {

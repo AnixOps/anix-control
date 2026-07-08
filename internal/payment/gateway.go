@@ -20,6 +20,7 @@ type CallbackContext struct {
 type CallbackResult struct {
 	TradeNo        string // 商户订单号
 	GatewayTradeNo string // 第三方订单号
+	Amount         *float64
 	Status         string // paid / failed / pending
 	Raw            string // 原始回调数据，落库备查
 }

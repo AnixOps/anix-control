@@ -97,3 +97,23 @@ type Forward struct {
 func (Forward) TableName() string {
 	return "v2_forward"
 }
+
+// ForwardPortBinding records the concrete socket claims owned by a panel forward.
+// It gives port assignment a database-level exact-conflict guard while the
+// service layer still handles wildcard listen-address overlap semantics.
+type ForwardPortBinding struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	ForwardID  uint      `gorm:"index;not null" json:"forwardId"`
+	NodeID     uint      `gorm:"not null;uniqueIndex:idx_forward_port_binding_socket,priority:1" json:"nodeId"`
+	Transport  string    `gorm:"size:10;not null;uniqueIndex:idx_forward_port_binding_socket,priority:2" json:"transport"`
+	ListenAddr string    `gorm:"size:255;not null;uniqueIndex:idx_forward_port_binding_socket,priority:3" json:"listenAddr"`
+	InPort     int       `gorm:"not null;uniqueIndex:idx_forward_port_binding_socket,priority:4" json:"inPort"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+
+	Forward *Forward `gorm:"foreignKey:ForwardID" json:"forward,omitempty"`
+}
+
+func (ForwardPortBinding) TableName() string {
+	return "v2_forward_port_binding"
+}

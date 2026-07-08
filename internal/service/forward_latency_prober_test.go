@@ -86,12 +86,12 @@ type ForwardLatencyProberTestSuite struct {
 
 func (s *ForwardLatencyProberTestSuite) SetupSuite() {
 	s.ServiceTestSuite.SetupSuite()
-	database.AutoMigrate(
+	s.Require().NoError(database.AutoMigrate(
 		&model.ForwardNode{},
 		&model.ForwardTunnel{},
 		&model.Forward{},
 		&model.ForwardLatencyBucket{},
-	)
+	))
 }
 
 func (s *ForwardLatencyProberTestSuite) SetupTest() {

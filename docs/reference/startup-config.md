@@ -59,7 +59,8 @@ app:
 
 admin:
   email: "admin@example.com"
-  password: "replace-me"
+  # Leave empty to generate and print a one-time random bootstrap password.
+  password: ""
 
 forward_runtime:
   backend: "gost"

@@ -11,6 +11,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func closeResponseBody(t testing.TB, resp *http.Response) {
+	t.Helper()
+	require.NoError(t, resp.Body.Close())
+}
+
+func stopServer(t testing.TB, srv *Server, ctx context.Context) {
+	t.Helper()
+	require.NoError(t, srv.Stop(ctx))
+}
+
 func TestNewServer(t *testing.T) {
 	port, err := GetFreePort()
 	require.NoError(t, err)
@@ -38,12 +48,12 @@ func TestServerLifecycle(t *testing.T) {
 	// 健康检查
 	resp, err := http.Get(srv.URL() + "/health")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer closeResponseBody(t, resp)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result map[string]any
-	json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 	assert.Equal(t, "ok", result["status"])
 
 	// 停止
@@ -89,23 +99,23 @@ func TestNodeConfig(t *testing.T) {
 
 	err = srv.Start(ctx)
 	require.NoError(t, err)
-	defer srv.Stop(ctx)
+	defer stopServer(t, srv, ctx)
 
 	// 无 token 应该返回 401
 	resp, err := http.Get(srv.URL() + "/api/v2/server/UniProxy/config")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	resp.Body.Close()
+	require.NoError(t, resp.Body.Close())
 
 	// 有 token 应该返回配置
 	resp, err = http.Get(srv.URL() + "/api/v2/server/UniProxy/config?token=test")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer closeResponseBody(t, resp)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var config NodeConfig
-	json.NewDecoder(resp.Body).Decode(&config)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&config))
 	assert.NotEmpty(t, config.Type)
 }
 
@@ -122,20 +132,20 @@ func TestGetUsers(t *testing.T) {
 
 	err = srv.Start(ctx)
 	require.NoError(t, err)
-	defer srv.Stop(ctx)
+	defer stopServer(t, srv, ctx)
 
 	// 获取用户列表
 	resp, err := http.Get(srv.URL() + "/api/v2/server/UniProxy/user?node_id=1&token=test")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer closeResponseBody(t, resp)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result struct {
 		Users []map[string]any `json:"users"`
-		Total int                      `json:"total"`
+		Total int              `json:"total"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 
 	assert.Equal(t, 2, result.Total)
 	assert.Len(t, result.Users, 2)
@@ -153,7 +163,7 @@ func TestPushTraffic(t *testing.T) {
 
 	err = srv.Start(ctx)
 	require.NoError(t, err)
-	defer srv.Stop(ctx)
+	defer stopServer(t, srv, ctx)
 
 	// 上报流量
 	trafficData := map[string]any{
@@ -168,7 +178,7 @@ func TestPushTraffic(t *testing.T) {
 
 	resp, err := http.Post(srv.URL()+"/api/v2/server/UniProxy/push", "application/json", toJsonReader(trafficData))
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer closeResponseBody(t, resp)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -187,7 +197,7 @@ func TestNodeRegister(t *testing.T) {
 
 	err = srv.Start(ctx)
 	require.NoError(t, err)
-	defer srv.Stop(ctx)
+	defer stopServer(t, srv, ctx)
 
 	// 注册节点
 	registerData := map[string]any{
@@ -199,12 +209,12 @@ func TestNodeRegister(t *testing.T) {
 
 	resp, err := http.Post(srv.URL()+"/api/v2/node/register", "application/json", toJsonReader(registerData))
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer closeResponseBody(t, resp)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	var result map[string]any
-	json.NewDecoder(resp.Body).Decode(&result)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 
 	assert.Equal(t, float64(1), result["node_id"])
 	assert.NotEmpty(t, result["api_key"])
@@ -219,11 +229,11 @@ func TestNodeHeartbeat(t *testing.T) {
 
 	err = srv.Start(ctx)
 	require.NoError(t, err)
-	defer srv.Stop(ctx)
+	defer stopServer(t, srv, ctx)
 
 	resp, err := http.Post(srv.URL()+"/api/v2/node/heartbeat", "application/json", nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer closeResponseBody(t, resp)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
@@ -242,6 +252,9 @@ func TestGetFreePort(t *testing.T) {
 
 // 辅助函数
 func toJsonReader(v any) *bytes.Reader {
-	data, _ := json.Marshal(v)
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
 	return bytes.NewReader(data)
 }

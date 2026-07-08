@@ -3,6 +3,7 @@ package clients
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +16,7 @@ import (
 type ClientType string
 
 const (
-	ClientXray  ClientType = "xray"
+	ClientXray   ClientType = "xray"
 	ClientMihomo ClientType = "mihomo"
 )
 
@@ -70,17 +71,17 @@ type Client interface {
 
 // BaseClient 基础客户端实现
 type BaseClient struct {
-	name         string
-	clientType   ClientType
-	configPath   string
-	binaryPath   string
-	cmd          *exec.Cmd
-	status       ClientStatus
-	logs         strings.Builder
-	httpPort     int
-	socksPort    int
-	mixedPort    int
-	apiPort      int
+	name       string
+	clientType ClientType
+	configPath string
+	binaryPath string
+	cmd        *exec.Cmd
+	status     ClientStatus
+	logs       strings.Builder
+	httpPort   int
+	socksPort  int
+	mixedPort  int
+	apiPort    int
 }
 
 // ClientOption 客户端选项
@@ -194,8 +195,11 @@ func (c *BaseClient) Stop() error {
 
 	// 尝试优雅关闭
 	if err := c.cmd.Process.Signal(os.Interrupt); err != nil {
+		log.Printf("send interrupt to %s client: %v", c.name, err)
 		// 强制杀死
-		c.cmd.Process.Kill()
+		if killErr := c.cmd.Process.Kill(); killErr != nil {
+			return fmt.Errorf("kill %s client after interrupt failure: %w", c.name, killErr)
+		}
 	}
 
 	// 等待进程退出
@@ -205,11 +209,16 @@ func (c *BaseClient) Stop() error {
 	}()
 
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			log.Printf("wait for %s client process: %v", c.name, err)
+		}
 		c.cmd = nil
 		return nil
 	case <-time.After(5 * time.Second):
-		c.cmd.Process.Kill()
+		if err := c.cmd.Process.Kill(); err != nil {
+			return fmt.Errorf("kill %s client after timeout: %w", c.name, err)
+		}
 		c.cmd = nil
 		return nil
 	}
@@ -263,12 +272,30 @@ func findBinary(name string) string {
 	}
 
 	for _, dir := range searchDirs {
+		root, err := os.OpenRoot(dir)
+		if err != nil {
+			continue
+		}
+
 		for _, bin := range binaryNames {
-			path := filepath.Join(dir, bin)
-			if _, err := os.Stat(path); err == nil {
-				absPath, _ := filepath.Abs(path)
-				return absPath
+			info, err := root.Stat(bin)
+			if err == nil && !info.IsDir() {
+				absDir, absErr := filepath.Abs(dir)
+				if absErr != nil {
+					if closeErr := root.Close(); closeErr != nil {
+						log.Printf("close binary search root: %v", closeErr)
+					}
+					continue
+				}
+				if closeErr := root.Close(); closeErr != nil {
+					log.Printf("close binary search root: %v", closeErr)
+				}
+				return filepath.Join(absDir, bin)
 			}
+		}
+
+		if err := root.Close(); err != nil {
+			log.Printf("close binary search root: %v", err)
 		}
 	}
 
@@ -280,4 +307,29 @@ func findBinary(name string) string {
 	}
 
 	return name // 返回名称，让系统在 PATH 中查找
+}
+
+func resolveClientBinary(clientType ClientType, binaryPath string) (string, error) {
+	if binaryPath == "" {
+		binaryPath = findBinary(string(clientType))
+	}
+
+	base := filepath.Base(filepath.Clean(binaryPath))
+	for _, allowed := range allowedClientBinaryNames(clientType) {
+		if base == allowed {
+			return binaryPath, nil
+		}
+	}
+	return "", fmt.Errorf("binary %q is not allowed for %s client", base, clientType)
+}
+
+func allowedClientBinaryNames(clientType ClientType) []string {
+	switch clientType {
+	case ClientXray:
+		return []string{"xray", "xray.exe"}
+	case ClientMihomo:
+		return []string{"mihomo", "mihomo.exe", "clash-meta", "clash-meta.exe"}
+	default:
+		return nil
+	}
 }

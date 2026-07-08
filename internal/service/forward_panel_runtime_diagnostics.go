@@ -23,7 +23,7 @@ const (
 	panelForwardRuntimeAttachmentModelCleanAgent        = "clean_agent_pull"
 	panelForwardRuntimeIgnoredNodeXConfigWarning        = "NodeX base_url/token are configured but ignored while runtime backend is a local ansible backend"
 	panelForwardRuntimeMissingNodeXBaseURLReason        = "NodeX mode requires forward.runtime.nodex.base_url before the panel can probe the control plane"
-	panelForwardRuntimeMissingNodeXTokenReason          = "NodeX mode requires forward.runtime.nodex.token before runtime readiness can be confirmed"
+	panelForwardRuntimeMissingNodeXTokenReason          = "NodeX mode requires forward.runtime.nodex.token before runtime readiness can be confirmed" // #nosec G101 -- this names a configuration key, not a hardcoded credential.
 	panelForwardRuntimeNodeXHealthSuccessReason         = "NodeX /health responded with ok from the panel host"
 	panelForwardRuntimeLocalExecutorReachableReason     = "ansible-playbook is available on the panel host"
 	panelForwardRuntimeLocalExecutorReadyReason         = "Local ansible executor resolved inventory/playbooks and is ready to queue jobs"
@@ -488,10 +488,7 @@ func buildGostRuntimeReady(snapshot PanelForwardRuntimeStatusSnapshot) PanelForw
 		}
 	}
 
-	supportsGost := false
-	if snapshot.Supports != nil && containsString(snapshot.Supports.Backends, model.ForwardRuntimeBackendGost) {
-		supportsGost = true
-	}
+	supportsGost := snapshot.Supports != nil && containsString(snapshot.Supports.Backends, model.ForwardRuntimeBackendGost)
 	if snapshot.Modes != nil && snapshot.Modes.Gost.Supported {
 		supportsGost = true
 	}
@@ -861,9 +858,9 @@ func (c *nodeXForwardRuntimeClient) performNodeXRequest(ctx context.Context, met
 			Error: err.Error(),
 		}
 	}
-	defer resp.Body.Close()
 
 	body, readErr := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
 	probe := PanelForwardRuntimeProbe{
 		StatusCode: resp.StatusCode,
 		OK:         resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices,
@@ -871,6 +868,11 @@ func (c *nodeXForwardRuntimeClient) performNodeXRequest(ctx context.Context, met
 	if readErr != nil {
 		probe.OK = false
 		probe.Error = fmt.Sprintf("read NodeX response: %v", readErr)
+		return nil, probe
+	}
+	if closeErr != nil {
+		probe.OK = false
+		probe.Error = fmt.Sprintf("close NodeX response: %v", closeErr)
 		return nil, probe
 	}
 

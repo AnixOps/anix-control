@@ -174,7 +174,11 @@ func (h *PaymentHandler) X402Callback(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "读取请求体失败"})
 		return
 	}
-	defer c.Request.Body.Close()
+	defer func() {
+		if err := c.Request.Body.Close(); err != nil {
+			log.Printf("X402 callback request body close failed: %v", err)
+		}
+	}()
 
 	// 解析回调数据
 	var callbackData struct {
@@ -238,14 +242,15 @@ func (h *PaymentHandler) X402Callback(c *gin.Context) {
 	// 根据状态更新订单
 	rawBody := string(body)
 	txHash := callbackData.TxHash
-	if callbackData.Status == "confirmed" || callbackData.Status == "success" {
+	switch callbackData.Status {
+	case "confirmed", "success":
 		if err := h.gatewayService.MarkOrderPaid(callbackData.TradeNo, txHash, rawBody); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "更新支付状态失败", "error": err.Error()})
 			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "payment confirmed"})
-	} else if callbackData.Status == "failed" {
+	case "failed":
 		now := time.Now()
 		if err := database.Get().Model(&model.PaymentRecord{}).
 			Where("trade_no = ?", callbackData.TradeNo).
@@ -258,7 +263,7 @@ func (h *PaymentHandler) X402Callback(c *gin.Context) {
 			log.Printf("failed to mark payment failed for trade_no=%s: %v", callbackData.TradeNo, err)
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "payment failed"})
-	} else {
+	default:
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "pending"})
 	}
 }
@@ -453,7 +458,11 @@ func (h *PaymentHandler) StripeWebhook(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "读取请求体失败"})
 		return
 	}
-	defer c.Request.Body.Close()
+	defer func() {
+		if err := c.Request.Body.Close(); err != nil {
+			log.Printf("Stripe webhook request body close failed: %v", err)
+		}
+	}()
 
 	// 获取 Stripe 签名头
 	stripeSig := c.GetHeader("Stripe-Signature")
@@ -566,7 +575,11 @@ func (h *PaymentHandler) PayPalWebhook(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "读取请求体失败"})
 		return
 	}
-	defer c.Request.Body.Close()
+	defer func() {
+		if err := c.Request.Body.Close(); err != nil {
+			log.Printf("PayPal webhook request body close failed: %v", err)
+		}
+	}()
 
 	// 按 PayPal 官方 verify-webhook-signature API 校验回调真实性。
 	if err := h.verifyPayPalWebhook(c, body); err != nil {
@@ -725,7 +738,7 @@ func (h *PaymentHandler) GetPaymentMethods(c *gin.Context) {
 		},
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": methods})
+	panelSuccess(c, methods)
 }
 
 // GetPaymentStatus 查询支付状态
@@ -780,7 +793,7 @@ func (h *PaymentHandler) GetPaymentStatus(c *gin.Context) {
 		data["network"] = payment.Network
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": data})
+	panelSuccess(c, data)
 }
 
 // getPaymentRecordByID 根据数字 ID 获取支付记录 (辅助方法)

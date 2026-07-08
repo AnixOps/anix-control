@@ -1,9 +1,11 @@
 package service
 
 import (
+	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
-	"math/rand"
+	"math/big"
 	"sync"
 
 	"github.com/anixops/v2board/internal/model"
@@ -17,6 +19,8 @@ type LoadBalancerService struct {
 	counters map[uint]int // 轮询计数器
 	mu       sync.RWMutex
 }
+
+var secureRandomInt = cryptoRandomInt
 
 // NewLoadBalancerService 创建服务
 func NewLoadBalancerService(db *gorm.DB) *LoadBalancerService {
@@ -87,7 +91,9 @@ func (s *LoadBalancerService) SelectNode(lbID uint) (*model.ForwardNode, error) 
 	// 解析节点权重
 	weights := make(map[uint]int)
 	if lb.NodeWeights != "" {
-		json.Unmarshal([]byte(lb.NodeWeights), &weights)
+		if err := json.Unmarshal([]byte(lb.NodeWeights), &weights); err != nil {
+			return nil, err
+		}
 	}
 
 	// 根据策略选择节点
@@ -99,9 +105,9 @@ func (s *LoadBalancerService) SelectNode(lbID uint) (*model.ForwardNode, error) 
 	case "latency":
 		return s.selectLatency(nodes), nil
 	case "weight":
-		return s.selectWeight(nodes, weights), nil
+		return s.selectWeight(nodes, weights)
 	case "random":
-		return s.selectRandom(nodes), nil
+		return s.selectRandom(nodes)
 	default:
 		return s.selectRoundRobin(lbID, nodes), nil
 	}
@@ -169,7 +175,7 @@ func (s *LoadBalancerService) selectLatency(nodes []model.ForwardNode) *model.Fo
 }
 
 // selectWeight 加权选择
-func (s *LoadBalancerService) selectWeight(nodes []model.ForwardNode, weights map[uint]int) *model.ForwardNode {
+func (s *LoadBalancerService) selectWeight(nodes []model.ForwardNode, weights map[uint]int) (*model.ForwardNode, error) {
 	// 计算总权重
 	totalWeight := 0
 	for _, node := range nodes {
@@ -185,7 +191,10 @@ func (s *LoadBalancerService) selectWeight(nodes []model.ForwardNode, weights ma
 	}
 
 	// 随机选择
-	r := rand.Intn(totalWeight)
+	r, err := secureRandomInt(totalWeight)
+	if err != nil {
+		return nil, err
+	}
 	current := 0
 
 	for i := range nodes {
@@ -195,17 +204,31 @@ func (s *LoadBalancerService) selectWeight(nodes []model.ForwardNode, weights ma
 		}
 		current += w
 		if r < current {
-			return &nodes[i]
+			return &nodes[i], nil
 		}
 	}
 
-	return &nodes[0]
+	return &nodes[0], nil
 }
 
 // selectRandom 随机选择
-func (s *LoadBalancerService) selectRandom(nodes []model.ForwardNode) *model.ForwardNode {
-	r := rand.Intn(len(nodes))
-	return &nodes[r]
+func (s *LoadBalancerService) selectRandom(nodes []model.ForwardNode) (*model.ForwardNode, error) {
+	r, err := secureRandomInt(len(nodes))
+	if err != nil {
+		return nil, err
+	}
+	return &nodes[r], nil
+}
+
+func cryptoRandomInt(max int) (int, error) {
+	if max <= 0 {
+		return 0, errors.New("random max must be positive")
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	if err != nil {
+		return 0, err
+	}
+	return int(n.Int64()), nil
 }
 
 // RunHealthCheck 执行健康检查
@@ -227,7 +250,7 @@ func (s *LoadBalancerService) RunHealthCheck(lbID uint) error {
 
 	// 对每个节点执行健康检查
 	for i := range nodes {
-		_, err := s.nodeSvc.HealthCheck(nil, nodes[i].ID)
+		_, err := s.nodeSvc.HealthCheck(context.TODO(), nodes[i].ID)
 		if err != nil {
 			// 标记节点离线
 			nodes[i].Status = 0
@@ -235,7 +258,9 @@ func (s *LoadBalancerService) RunHealthCheck(lbID uint) error {
 			// 标记节点在线
 			nodes[i].Status = 1
 		}
-		s.nodeSvc.Update(&nodes[i])
+		if err := s.nodeSvc.Update(&nodes[i]); err != nil {
+			return err
+		}
 	}
 
 	return nil

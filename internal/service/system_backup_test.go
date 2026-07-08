@@ -110,7 +110,9 @@ func TestBackupServiceFilesBackupCreatesArchive(t *testing.T) {
 
 	reader, err := zip.OpenReader(record.Path)
 	require.NoError(t, err)
-	defer reader.Close()
+	defer func() {
+		require.NoError(t, reader.Close())
+	}()
 
 	names := make(map[string]struct{}, len(reader.File))
 	for _, file := range reader.File {
@@ -185,4 +187,82 @@ func TestBackupServiceFullBackupCanRestoreDatabase(t *testing.T) {
 	restoredRuntimeFile, err := os.ReadFile(runtimeFile)
 	require.NoError(t, err)
 	assert.Equal(t, "mode: original", string(restoredRuntimeFile))
+}
+
+func TestBackupServiceCreateBackupUsesPrivateDirectoryPermissions(t *testing.T) {
+	svc, root, _ := newBackupServiceForTest(t)
+	backupDir := filepath.Join(root, "private-backups")
+
+	require.NoError(t, svc.UpdateConfig(&model.BackupConfig{
+		StorageType: "local",
+		StoragePath: backupDir,
+	}))
+
+	record, err := svc.CreateBackup("database", nil)
+	require.NoError(t, err)
+	require.NotNil(t, record)
+
+	info, err := os.Stat(backupDir)
+	require.NoError(t, err)
+	assert.Equal(t, backupDirectoryMode, info.Mode().Perm())
+}
+
+func TestBackupServiceRestoreArchiveRejectsTraversalEntry(t *testing.T) {
+	svc, root, _ := newBackupServiceForTest(t)
+	backupDir := filepath.Join(root, "backups")
+	require.NoError(t, os.MkdirAll(backupDir, backupDirectoryMode))
+
+	escapePath := filepath.Clean(filepath.Join(root, "..", "escape.txt"))
+	if err := os.Remove(escapePath); err != nil && !os.IsNotExist(err) {
+		require.NoError(t, err)
+	}
+	t.Cleanup(func() { _ = os.Remove(escapePath) })
+
+	zipPath := filepath.Join(backupDir, "traversal.zip")
+	file, err := os.Create(zipPath)
+	require.NoError(t, err)
+	writer := zip.NewWriter(file)
+	entry, err := writer.Create("../escape.txt")
+	require.NoError(t, err)
+	_, err = entry.Write([]byte("escaped"))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	require.NoError(t, file.Close())
+
+	record := &model.BackupRecord{
+		Name:   "traversal",
+		Type:   "files",
+		Status: 1,
+		Path:   zipPath,
+	}
+	require.NoError(t, svc.db.Create(record).Error)
+
+	err = svc.RestoreBackup(record.ID)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid archive entry path")
+	assert.NoFileExists(t, escapePath)
+}
+
+func TestValidateArchiveFileForRestoreRejectsUnsafeEntries(t *testing.T) {
+	oversized := &zip.File{FileHeader: zip.FileHeader{
+		Name:               "huge.bin",
+		UncompressedSize64: maxBackupArchiveFileBytes + 1,
+	}}
+	assert.ErrorContains(t, validateArchiveFileForRestore(oversized, nil), "exceeds maximum restore size")
+
+	total := maxBackupArchiveTotalBytes - 5
+	tooMuchTotal := &zip.File{FileHeader: zip.FileHeader{
+		Name:               "total.bin",
+		UncompressedSize64: 6,
+	}}
+	assert.ErrorContains(t, validateArchiveFileForRestore(tooMuchTotal, &total), "archive exceeds maximum restore size")
+
+	symlinkHeader := zip.FileHeader{
+		Name:               "link",
+		UncompressedSize64: 1,
+	}
+	symlinkHeader.SetMode(os.ModeSymlink | 0o777)
+	symlink := &zip.File{FileHeader: symlinkHeader}
+	assert.ErrorContains(t, validateArchiveFileForRestore(symlink, nil), "unsupported archive entry type")
 }

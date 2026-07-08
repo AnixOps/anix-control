@@ -361,7 +361,11 @@ func (h *TelegramHandler) TelegramWebhook(c *gin.Context) {
 	}
 
 	// 异步处理更新
-	go h.botService.HandleUpdate(&update)
+	go func() {
+		if err := h.botService.HandleUpdate(&update); err != nil {
+			log.Printf("telegram webhook update handling failed: %v", err)
+		}
+	}()
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
@@ -755,15 +759,15 @@ func (h *TelegramHandler) UpdateNotifySettings(c *gin.Context) {
 
 // UpdateBotRequest 更新Bot请求
 type UpdateBotRequest struct {
-	Name           string      `json:"name" binding:"omitempty,max=255"`
-	Token          string      `json:"token" binding:"omitempty,min=1"`
-	WelcomeMsg     string      `json:"welcome_msg" binding:"omitempty,max=1024"`
-	WelcomeMessage string      `json:"welcome_message" binding:"omitempty,max=1024"`
-	AdminIDs       any `json:"admin_ids"`
-	AllowBind      *bool       `json:"allow_bind"`
-	AllowSub       *bool       `json:"allow_sub"`
-	AllowTicket    *bool       `json:"allow_ticket"`
-	AllowInfo      *bool       `json:"allow_info"`
+	Name           string `json:"name" binding:"omitempty,max=255"`
+	Token          string `json:"token" binding:"omitempty,min=1"`
+	WelcomeMsg     string `json:"welcome_msg" binding:"omitempty,max=1024"`
+	WelcomeMessage string `json:"welcome_message" binding:"omitempty,max=1024"`
+	AdminIDs       any    `json:"admin_ids"`
+	AllowBind      *bool  `json:"allow_bind"`
+	AllowSub       *bool  `json:"allow_sub"`
+	AllowTicket    *bool  `json:"allow_ticket"`
+	AllowInfo      *bool  `json:"allow_info"`
 }
 
 // SetWebhookRequest 设置Webhook请求

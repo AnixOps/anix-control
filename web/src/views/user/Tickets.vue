@@ -5,7 +5,7 @@
         <h1>{{ t('user.tickets.title') }}</h1>
         <p>{{ t('user.tickets.subtitle') }}</p>
       </div>
-      <button class="btn btn-primary" @click="showCreate = true">{{ t('user.tickets.submitTicket') }}</button>
+      <button class="btn btn-primary" data-test="ticket-create-button" @click="showCreate = true">{{ t('user.tickets.submitTicket') }}</button>
     </div>
 
     <section class="section-panel stats-bar">
@@ -28,7 +28,7 @@
       <div v-else-if="tickets.length === 0" class="empty-state">
         <div class="empty-icon">?</div>
         <p>{{ t('user.tickets.empty') }}</p>
-        <button class="btn mt-4" @click="showCreate = true">{{ t('user.tickets.submitNow') }}</button>
+        <button class="btn mt-4" data-test="ticket-create-button" @click="showCreate = true">{{ t('user.tickets.submitNow') }}</button>
       </div>
 
       <div v-else class="tickets-list">
@@ -82,7 +82,7 @@
         </div>
         <div class="modal-footer">
           <button class="btn" @click="showCreate = false">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" :disabled="submitting" @click="submitCreate">
+          <button class="btn btn-primary" data-test="ticket-submit-button" :disabled="submitting" @click="submitCreate">
             {{ submitting ? t('common.states.loading') : t('common.actions.submit') }}
           </button>
         </div>

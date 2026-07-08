@@ -23,6 +23,7 @@ import (
 type stubPanelForwardRuntimeCommandRunner struct {
 	output      string
 	err         error
+	runFn       func(ctx context.Context, command string, args []string, workdir string, env map[string]string) (string, error)
 	runs        int
 	lastCommand string
 	lastArgs    []string
@@ -31,7 +32,6 @@ type stubPanelForwardRuntimeCommandRunner struct {
 }
 
 func (r *stubPanelForwardRuntimeCommandRunner) Run(ctx context.Context, command string, args []string, workdir string, env map[string]string) (string, error) {
-	_ = ctx
 	r.runs++
 	r.lastCommand = command
 	r.lastArgs = append([]string(nil), args...)
@@ -44,6 +44,9 @@ func (r *stubPanelForwardRuntimeCommandRunner) Run(ctx context.Context, command 
 	} else {
 		r.lastEnv = nil
 	}
+	if r.runFn != nil {
+		return r.runFn(ctx, command, args, workdir, env)
+	}
 	return r.output, r.err
 }
 
@@ -55,10 +58,12 @@ type PanelForwardRuntimeJobExecutorTestSuite struct {
 
 func (s *PanelForwardRuntimeJobExecutorTestSuite) SetupSuite() {
 	s.ServiceTestSuite.SetupSuite()
-	database.AutoMigrate(
+	s.Require().NoError(database.AutoMigrate(
 		&model.Forward{},
+		&model.ForwardPortBinding{},
+		&model.ForwardTrafficCursor{},
 		&model.ForwardRuntimeJob{},
-	)
+	))
 }
 
 func (s *PanelForwardRuntimeJobExecutorTestSuite) SetupTest() {
@@ -67,6 +72,8 @@ func (s *PanelForwardRuntimeJobExecutorTestSuite) SetupTest() {
 
 	db := database.Get()
 	db.Exec("DELETE FROM v2_forward_runtime_job")
+	db.Exec("DELETE FROM v2_forward_port_binding")
+	db.Exec("DELETE FROM v2_forward_traffic_cursor")
 	db.Exec("DELETE FROM v2_forward")
 
 	s.runner = &stubPanelForwardRuntimeCommandRunner{}
@@ -196,6 +203,60 @@ func (s *PanelForwardRuntimeJobExecutorTestSuite) TestRunPendingJobs_CompletesAn
 	assert.NotNil(s.T(), updatedForward.RuntimeLastSyncAt)
 }
 
+func (s *PanelForwardRuntimeJobExecutorTestSuite) TestFinishDeleteSuccessRemovesForwardRecords() {
+	db := database.Get()
+
+	forward := &model.Forward{
+		UserID:         1,
+		UserName:       "runtime-delete-user",
+		Name:           "Runtime Delete Forward",
+		TunnelID:       1,
+		InPort:         10003,
+		RemoteAddr:     "8.8.4.4:443",
+		Status:         model.ForwardStatusPaused,
+		RuntimeBackend: model.ForwardRuntimeBackendNftablesAnsible,
+		RuntimeStatus:  model.ForwardRuntimeJobStatusPending,
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+	assert.NoError(s.T(), db.Create(&model.ForwardPortBinding{
+		ForwardID:  forward.ID,
+		NodeID:     1,
+		Transport:  "tcp",
+		ListenAddr: "0.0.0.0",
+		InPort:     forward.InPort,
+	}).Error)
+	assert.NoError(s.T(), db.Create(&model.ForwardTrafficCursor{
+		ForwardID:     forward.ID,
+		Backend:       model.ForwardRuntimeBackendNftablesAnsible,
+		UploadTotal:   10,
+		DownloadTotal: 20,
+	}).Error)
+
+	job := &model.ForwardRuntimeJob{
+		Backend:   model.ForwardRuntimeBackendNftablesAnsible,
+		Action:    model.ForwardRuntimeJobActionDelete,
+		ForwardID: uintPtr(forward.ID),
+		Status:    model.ForwardRuntimeJobStatusRunning,
+		Payload:   "{}",
+	}
+	assert.NoError(s.T(), db.Create(job).Error)
+
+	err := s.executor.finishJobSuccess(job, &panelForwardAnsibleRuntimePayload{Action: model.ForwardRuntimeJobActionDelete}, "removed")
+	assert.NoError(s.T(), err)
+
+	var reloadedJob model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.First(&reloadedJob, job.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, reloadedJob.Status)
+
+	var count int64
+	assert.NoError(s.T(), db.Model(&model.Forward{}).Where("id = ?", forward.ID).Count(&count).Error)
+	assert.Zero(s.T(), count)
+	assert.NoError(s.T(), db.Model(&model.ForwardPortBinding{}).Where("forward_id = ?", forward.ID).Count(&count).Error)
+	assert.Zero(s.T(), count)
+	assert.NoError(s.T(), db.Model(&model.ForwardTrafficCursor{}).Where("forward_id = ?", forward.ID).Count(&count).Error)
+	assert.Zero(s.T(), count)
+}
+
 func (s *PanelForwardRuntimeJobExecutorTestSuite) TestAnsiblePayloadResolvesRelativePathsAgainstWorkingDir() {
 	tempDir := s.T().TempDir()
 	playbookDir := filepath.Join(tempDir, "playbooks")
@@ -305,10 +366,155 @@ func (s *PanelForwardRuntimeJobExecutorTestSuite) TestRunPendingJobs_MarksForwar
 	assert.NotNil(s.T(), updatedForward.RuntimeLastSyncAt)
 }
 
+func (s *PanelForwardRuntimeJobExecutorTestSuite) TestClaimJobMarksForwardRuntimeRunning() {
+	db := database.Get()
+
+	forward := &model.Forward{
+		UserID:         1,
+		UserName:       "runtime-user",
+		Name:           "Runtime Forward Running",
+		TunnelID:       1,
+		InPort:         10003,
+		RemoteAddr:     "9.9.9.9:443",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendNftablesAnsible,
+		RuntimeStatus:  model.ForwardRuntimeJobStatusPending,
+		RuntimeMessage: "ansible runtime queued for local executor",
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	job := &model.ForwardRuntimeJob{
+		Backend:   model.ForwardRuntimeBackendNftablesAnsible,
+		Action:    model.ForwardRuntimeJobActionCreate,
+		ForwardID: uintPtr(forward.ID),
+		Status:    model.ForwardRuntimeJobStatusPending,
+		Payload:   "{}",
+	}
+	assert.NoError(s.T(), db.Create(job).Error)
+
+	claimed, err := s.executor.claimJob(job)
+	assert.NoError(s.T(), err)
+	assert.True(s.T(), claimed)
+
+	var updatedJob model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.First(&updatedJob, job.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusRunning, updatedJob.Status)
+	assert.NotNil(s.T(), updatedJob.StartedAt)
+
+	var updatedForward model.Forward
+	assert.NoError(s.T(), db.First(&updatedForward, forward.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, updatedForward.RuntimeBackend)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusRunning, updatedForward.RuntimeStatus)
+	assert.Equal(s.T(), "ansible runtime applying", updatedForward.RuntimeMessage)
+	assert.Equal(s.T(), model.ForwardStatusActive, updatedForward.Status)
+	assert.NotNil(s.T(), updatedForward.RuntimeLastSyncAt)
+}
+
 func (s *PanelForwardRuntimeJobExecutorTestSuite) TestRunPendingJobs_NoPendingJobsSkipsRunner() {
 	err := s.executor.RunPendingJobs(context.Background())
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 0, s.runner.runs)
+}
+
+func (s *PanelForwardRuntimeJobExecutorTestSuite) TestRunPendingJobs_CancelDrainsRunningJob() {
+	db := database.Get()
+
+	forward := &model.Forward{
+		UserID:         1,
+		UserName:       "runtime-cancel-user",
+		Name:           "Runtime Cancel Forward",
+		TunnelID:       1,
+		InPort:         10004,
+		RemoteAddr:     "203.0.113.10:443",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendNftablesAnsible,
+		RuntimeStatus:  model.ForwardRuntimeJobStatusPending,
+		RuntimeMessage: "ansible runtime queued for local executor",
+	}
+	assert.NoError(s.T(), db.Create(forward).Error)
+
+	payload := panelForwardAnsibleRuntimePayload{
+		Action:        model.ForwardRuntimeJobActionCreate,
+		Inventory:     "/etc/ansible/hosts",
+		Playbook:      "/opt/ansible/apply.yml",
+		TargetPattern: "{{node.host}}",
+		Forward: panelForwardAnsibleForwardPayload{
+			ID:         forward.ID,
+			UserID:     forward.UserID,
+			Name:       forward.Name,
+			InPort:     forward.InPort,
+			RemoteAddr: forward.RemoteAddr,
+			Status:     forward.Status,
+		},
+		Tunnel: panelForwardAnsibleTunnelPayload{
+			ID:       1,
+			Name:     "Tunnel Cancel",
+			InNodeID: 9,
+			Protocol: "tcp",
+		},
+		Node: panelForwardAnsibleNodePayload{
+			ID:   9,
+			Name: "relay-cancel",
+			Host: "relay-cancel.example.com",
+			Port: 22,
+		},
+		Targets: []panelForwardAnsibleTargetPayload{
+			{Name: "target-1", Addr: "203.0.113.10:443"},
+		},
+	}
+	payloadJSON, err := json.Marshal(payload)
+	assert.NoError(s.T(), err)
+
+	job := &model.ForwardRuntimeJob{
+		Backend:   model.ForwardRuntimeBackendNftablesAnsible,
+		Action:    model.ForwardRuntimeJobActionCreate,
+		ForwardID: uintPtr(forward.ID),
+		Status:    model.ForwardRuntimeJobStatusPending,
+		Payload:   string(payloadJSON),
+	}
+	assert.NoError(s.T(), db.Create(job).Error)
+
+	started := make(chan struct{})
+	s.runner.runFn = func(ctx context.Context, command string, args []string, workdir string, env map[string]string) (string, error) {
+		close(started)
+		<-ctx.Done()
+		return "", ctx.Err()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- s.executor.RunPendingJobs(ctx)
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		s.T().Fatal("runtime runner did not start")
+	}
+	cancel()
+
+	select {
+	case err := <-done:
+		assert.NoError(s.T(), err)
+	case <-time.After(time.Second):
+		s.T().Fatal("runtime executor did not drain after cancellation")
+	}
+	assert.Equal(s.T(), 1, s.runner.runs)
+
+	var updatedJob model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.First(&updatedJob, job.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, updatedJob.Status)
+	assert.Contains(s.T(), updatedJob.Error, context.Canceled.Error())
+	assert.NotNil(s.T(), updatedJob.CompletedAt)
+
+	var updatedForward model.Forward
+	assert.NoError(s.T(), db.First(&updatedForward, forward.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, updatedForward.RuntimeStatus)
+	assert.Contains(s.T(), updatedForward.RuntimeMessage, context.Canceled.Error())
+	assert.Equal(s.T(), model.ForwardStatusError, updatedForward.Status)
+	assert.NotNil(s.T(), updatedForward.RuntimeLastSyncAt)
 }
 
 func TestPanelForwardRuntimeJobExecutor(t *testing.T) {
@@ -335,6 +541,20 @@ func TestNewPanelForwardRuntimeJobExecutor_LoadsWorkerSettingsFromConfig(t *test
 	assert.Equal(t, 90*time.Second, executor.errorLogger.interval)
 	assert.Equal(t, 4, executor.batchSize)
 	assert.Equal(t, 75*time.Second, executor.jobTimeout)
+}
+
+func TestNewForwardAgentBridgeWorker_LoadsCleanAgentActionTimeoutFromConfig(t *testing.T) {
+	appconfig.Set(&appconfig.Config{
+		ForwardRuntime: appconfig.ForwardRuntimeConfig{
+			CleanAgent: appconfig.ForwardRuntimeCleanAgentConfig{
+				ActionTimeoutSeconds: 121,
+			},
+		},
+	})
+	defer appconfig.Set(nil)
+
+	worker := NewForwardAgentBridgeWorker(&gorm.DB{})
+	assert.Equal(t, 121*time.Second, worker.actionTimeout)
 }
 
 func TestForwardBackgroundErrorLogger_SuppressesRepeatedMessages(t *testing.T) {
@@ -455,6 +675,32 @@ func TestNormalizeForwardIdlePollInterval(t *testing.T) {
 	assert.Equal(t, 10*time.Second, normalizeForwardIdlePollInterval(0, 10*time.Second))
 }
 
+func TestWaitForwardBackgroundCycleStopsOnContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan bool, 1)
+
+	go func() {
+		done <- waitForwardBackgroundCycle(ctx, time.Hour)
+	}()
+
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+
+	select {
+	case ok := <-done:
+		assert.False(t, ok)
+	case <-time.After(time.Second):
+		t.Fatal("background cycle wait did not stop after context cancellation")
+	}
+}
+
+func TestWaitForwardBackgroundCycleSkipsImmediateCycleWhenCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	assert.False(t, waitForwardBackgroundCycle(ctx, 0))
+}
+
 func TestPanelForwardRuntimeJobExecutor_RequeueRunningJobs(t *testing.T) {
 	appconfig.Set(&appconfig.Config{
 		Database: appconfig.DatabaseConfig{
@@ -472,13 +718,29 @@ func TestPanelForwardRuntimeJobExecutor_RequeueRunningJobs(t *testing.T) {
 	// Note: do NOT close the database here — it's a shared connection used by other tests.
 
 	db := database.Get()
-	database.AutoMigrate(&model.ForwardRuntimeJob{})
+	assert.NoError(t, database.AutoMigrate(&model.Forward{}, &model.ForwardRuntimeJob{}))
+	db.Exec("DELETE FROM v2_forward")
 	db.Exec("DELETE FROM v2_forward_runtime_job")
 
+	forward := &model.Forward{
+		UserID:         1,
+		Name:           "requeue-forward",
+		TunnelID:       1,
+		InPort:         12000,
+		RemoteAddr:     "127.0.0.1:8080",
+		Status:         model.ForwardStatusActive,
+		RuntimeBackend: model.ForwardRuntimeBackendNftablesAnsible,
+		RuntimeStatus:  model.ForwardRuntimeJobStatusRunning,
+		RuntimeMessage: "ansible runtime applying",
+	}
+	assert.NoError(t, db.Create(forward).Error)
+	startedAt := time.Now()
 	runningJob := &model.ForwardRuntimeJob{
-		Backend: model.ForwardRuntimeBackendNftablesAnsible,
-		Action:  model.ForwardRuntimeJobActionCreate,
-		Status:  model.ForwardRuntimeJobStatusRunning,
+		Backend:   model.ForwardRuntimeBackendNftablesAnsible,
+		Action:    model.ForwardRuntimeJobActionCreate,
+		ForwardID: uintPtr(forward.ID),
+		Status:    model.ForwardRuntimeJobStatusRunning,
+		StartedAt: &startedAt,
 	}
 	assert.NoError(t, db.Create(runningJob).Error)
 
@@ -489,4 +751,63 @@ func TestPanelForwardRuntimeJobExecutor_RequeueRunningJobs(t *testing.T) {
 	assert.NoError(t, db.First(&updated, runningJob.ID).Error)
 	assert.Equal(t, model.ForwardRuntimeJobStatusPending, updated.Status)
 	assert.Nil(t, updated.StartedAt)
+
+	var updatedForward model.Forward
+	assert.NoError(t, db.First(&updatedForward, forward.ID).Error)
+	assert.Equal(t, model.ForwardRuntimeJobStatusPending, updatedForward.RuntimeStatus)
+	assert.Equal(t, "ansible runtime requeued after worker restart", updatedForward.RuntimeMessage)
+	assert.NotNil(t, updatedForward.RuntimeLastSyncAt)
+}
+
+func TestResolveAnsiblePlaybookCommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		want    string
+		wantErr string
+	}{
+		{
+			name:    "empty uses default",
+			command: "",
+			want:    defaultAnsibleCommand,
+		},
+		{
+			name:    "plain ansible playbook",
+			command: " ansible-playbook ",
+			want:    defaultAnsibleCommand,
+		},
+		{
+			name:    "absolute ansible playbook",
+			command: "/usr/bin/ansible-playbook",
+			want:    "/usr/bin/ansible-playbook",
+		},
+		{
+			name:    "reject shell",
+			command: "sh",
+			wantErr: "unsupported ansible command",
+		},
+		{
+			name:    "reject relative path",
+			command: "bin/ansible-playbook",
+			wantErr: "ansible command path must be absolute",
+		},
+		{
+			name:    "reject newline",
+			command: "ansible-playbook\nwhoami",
+			wantErr: "invalid ansible command",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveAnsiblePlaybookCommand(tt.command)
+			if tt.wantErr != "" {
+				assert.Empty(t, got)
+				assert.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }

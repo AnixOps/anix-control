@@ -18,9 +18,7 @@ import (
 var monitorWSUpgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
+	CheckOrigin:     utils.CheckWebSocketOrigin,
 }
 
 // MonitorWSMessage WebSocket 监控消息
@@ -48,11 +46,11 @@ type NodeSnapshot struct {
 
 // MonitorOverview 监控概览
 type MonitorOverview struct {
-	TotalNodes   int64 `json:"total_nodes"`
-	OnlineNodes  int64 `json:"online_nodes"`
-	OfflineNodes int64 `json:"offline_nodes"`
-	PendingNodes int64 `json:"pending_nodes"`
-	TotalUpload  int64 `json:"total_upload"`
+	TotalNodes    int64 `json:"total_nodes"`
+	OnlineNodes   int64 `json:"online_nodes"`
+	OfflineNodes  int64 `json:"offline_nodes"`
+	PendingNodes  int64 `json:"pending_nodes"`
+	TotalUpload   int64 `json:"total_upload"`
 	TotalDownload int64 `json:"total_download"`
 }
 
@@ -150,14 +148,18 @@ type monitorClient struct {
 // readPump 读取客户端消息
 func (c *monitorClient) readPump() {
 	defer func() {
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Printf("[MonitorWS] Close failed for user_id=%d: %v", c.userID, err)
+		}
 		close(c.stop)
 	}()
 
-	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
+		log.Printf("[MonitorWS] Set read deadline failed for user_id=%d: %v", c.userID, err)
+		return
+	}
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		return nil
+		return c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	})
 
 	for {
@@ -178,12 +180,20 @@ func (c *monitorClient) writePump() {
 		select {
 		case message, ok := <-c.send:
 			if !ok {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				c.mu.Lock()
+				if err := c.conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
+					log.Printf("[MonitorWS] Close frame failed for user_id=%d: %v", c.userID, err)
+				}
+				c.mu.Unlock()
 				return
 			}
 
 			c.mu.Lock()
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				c.mu.Unlock()
+				log.Printf("[MonitorWS] Set write deadline failed for user_id=%d: %v", c.userID, err)
+				return
+			}
 			err := c.conn.WriteMessage(websocket.TextMessage, message)
 			c.mu.Unlock()
 
@@ -194,7 +204,11 @@ func (c *monitorClient) writePump() {
 
 		case <-ticker.C:
 			c.mu.Lock()
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				c.mu.Unlock()
+				log.Printf("[MonitorWS] Set ping deadline failed for user_id=%d: %v", c.userID, err)
+				return
+			}
 			err := c.conn.WriteMessage(websocket.PingMessage, nil)
 			c.mu.Unlock()
 
@@ -227,11 +241,7 @@ func (c *monitorClient) runUpdates() {
 					Timestamp: time.Now().Unix(),
 					Data:      snapshot,
 				}
-				data, _ := json.Marshal(msg)
-				select {
-				case c.send <- data:
-				default:
-				}
+				c.enqueueMessage(msg)
 				prevSnapshot = snapshot
 				continue
 			}
@@ -244,11 +254,7 @@ func (c *monitorClient) runUpdates() {
 					Timestamp: time.Now().Unix(),
 					Data:      delta,
 				}
-				data, _ := json.Marshal(msg)
-				select {
-				case c.send <- data:
-				default:
-				}
+				c.enqueueMessage(msg)
 				prevSnapshot = snapshot
 			}
 
@@ -269,10 +275,20 @@ func (c *monitorClient) sendInitialSnapshot() {
 		Timestamp: time.Now().Unix(),
 		Data:      snapshot,
 	}
-	data, _ := json.Marshal(msg)
+	c.enqueueMessage(msg)
+}
+
+func (c *monitorClient) enqueueMessage(msg MonitorWSMessage) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("[MonitorWS] Marshal %s message failed for user_id=%d: %v", msg.Type, c.userID, err)
+		return
+	}
+
 	select {
 	case c.send <- data:
 	default:
+		log.Printf("[MonitorWS] Send queue full for user_id=%d; dropping %s message", c.userID, msg.Type)
 	}
 }
 
@@ -503,4 +519,3 @@ func compareNodes(prev, curr NodeSnapshot) *NodeDelta {
 		ChangedFields: changed,
 	}
 }
-

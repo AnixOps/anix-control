@@ -54,18 +54,18 @@ func (g *XrayGenerator) Generate(cfg *ClientConfig) ([]byte, error) {
 		},
 		Inbounds: []XrayInbound{
 			{
-				Port:    10808,
-				Listen:  "127.0.0.1",
-				Tag:     "socks-in",
+				Port:     10808,
+				Listen:   "127.0.0.1",
+				Tag:      "socks-in",
 				Protocol: "socks",
 				Settings: map[string]any{
 					"udp": true,
 				},
 			},
 			{
-				Port:    10809,
-				Listen:  "127.0.0.1",
-				Tag:     "http-in",
+				Port:     10809,
+				Listen:   "127.0.0.1",
+				Tag:      "http-in",
 				Protocol: "http",
 			},
 		},
@@ -112,9 +112,9 @@ func (g *XrayGenerator) GenerateFromScenario(scenario TestScenario, server Serve
 // generateOutbound 生成出站配置
 func (g *XrayGenerator) generateOutbound(cfg *ClientConfig) XrayOutbound {
 	outbound := XrayOutbound{
-		Tag:      "proxy",
-		Protocol: string(cfg.Server.Protocol),
-		Settings: g.generateOutboundSettings(cfg),
+		Tag:            "proxy",
+		Protocol:       string(cfg.Server.Protocol),
+		Settings:       g.generateOutboundSettings(cfg),
 		StreamSettings: g.generateStreamSettings(cfg),
 	}
 
@@ -205,10 +205,10 @@ func (g *XrayGenerator) generateStreamSettings(cfg *ClientConfig) *XrayStreamSet
 
 		case TLSReality:
 			settings.RealitySettings = &XrayRealitySettings{
-				ServerName: cfg.Server.SNI,
-				PublicKey:  cfg.Server.PublicKey,
-				ShortId:    cfg.Server.ShortID,
-				SpiderX:    cfg.Server.SpiderX,
+				ServerName:  cfg.Server.SNI,
+				PublicKey:   cfg.Server.PublicKey,
+				ShortId:     cfg.Server.ShortID,
+				SpiderX:     cfg.Server.SpiderX,
 				Fingerprint: "chrome",
 			}
 		}
@@ -234,10 +234,10 @@ func (g *XrayGenerator) generateStreamSettings(cfg *ClientConfig) *XrayStreamSet
 // Xray 配置结构体
 
 type XrayConfig struct {
-	Log       *XrayLog        `json:"log"`
-	Inbounds  []XrayInbound   `json:"inbounds"`
-	Outbounds []XrayOutbound  `json:"outbounds"`
-	Routing   *XrayRouting    `json:"routing"`
+	Log       *XrayLog       `json:"log"`
+	Inbounds  []XrayInbound  `json:"inbounds"`
+	Outbounds []XrayOutbound `json:"outbounds"`
+	Routing   *XrayRouting   `json:"routing"`
 }
 
 type XrayLog struct {
@@ -245,27 +245,27 @@ type XrayLog struct {
 }
 
 type XrayInbound struct {
-	Port     int                    `json:"port"`
-	Listen   string                 `json:"listen"`
-	Tag      string                 `json:"tag"`
-	Protocol string                 `json:"protocol"`
+	Port     int            `json:"port"`
+	Listen   string         `json:"listen"`
+	Tag      string         `json:"tag"`
+	Protocol string         `json:"protocol"`
 	Settings map[string]any `json:"settings,omitempty"`
 }
 
 type XrayOutbound struct {
-	Tag            string                 `json:"tag"`
-	Protocol       string                 `json:"protocol"`
-	Settings       map[string]any `json:"settings,omitempty"`
-	StreamSettings *XrayStreamSettings   `json:"streamSettings,omitempty"`
+	Tag            string              `json:"tag"`
+	Protocol       string              `json:"protocol"`
+	Settings       map[string]any      `json:"settings,omitempty"`
+	StreamSettings *XrayStreamSettings `json:"streamSettings,omitempty"`
 }
 
 type XrayStreamSettings struct {
-	Network        string                `json:"network"`
-	Security       string                `json:"security,omitempty"`
-	TLSSettings    *XrayTLSSettings      `json:"tlsSettings,omitempty"`
+	Network         string               `json:"network"`
+	Security        string               `json:"security,omitempty"`
+	TLSSettings     *XrayTLSSettings     `json:"tlsSettings,omitempty"`
 	RealitySettings *XrayRealitySettings `json:"realitySettings,omitempty"`
-	WSSettings     *XrayWSSettings       `json:"wsSettings,omitempty"`
-	GRPCSettings   *XrayGRPCSettings     `json:"grpcSettings,omitempty"`
+	WSSettings      *XrayWSSettings      `json:"wsSettings,omitempty"`
+	GRPCSettings    *XrayGRPCSettings    `json:"grpcSettings,omitempty"`
 }
 
 type XrayTLSSettings struct {

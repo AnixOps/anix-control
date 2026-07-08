@@ -2,7 +2,25 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
-function manualChunks(id) {
+function pad(value) {
+  return String(value).padStart(2, '0')
+}
+
+function formatBuildCode(date) {
+  return [
+    String(date.getFullYear()).slice(-2),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    pad(date.getHours()),
+    pad(date.getMinutes())
+  ].join('')
+}
+
+const appBuildDate = new Date()
+const appBuildCode = process.env.VITE_APP_BUILD_CODE || formatBuildCode(appBuildDate)
+const appBuildTime = process.env.VITE_APP_BUILD_TIME || appBuildDate.toISOString()
+
+export function manualChunks(id) {
   if (id.includes('/src/locales/en.js')) {
     return 'locale-en'
   }
@@ -51,6 +69,10 @@ function manualChunks(id) {
 export default defineConfig({
   plugins: [vue()],
   publicDir: false,
+  define: {
+    'import.meta.env.VITE_APP_BUILD_CODE': JSON.stringify(appBuildCode),
+    'import.meta.env.VITE_APP_BUILD_TIME': JSON.stringify(appBuildTime)
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src')

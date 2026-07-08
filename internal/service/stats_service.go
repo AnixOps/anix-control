@@ -1,9 +1,10 @@
 package service
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
-	"sync"
+	"log/slog"
 	"time"
 
 	"github.com/anixops/v2board/internal/cache"
@@ -33,7 +34,6 @@ type StatsService struct {
 	db           *gorm.DB
 	userService  *UserService
 	orderService *OrderService
-	mu           sync.RWMutex
 }
 
 // DashboardStats 仪表盘统计数据
@@ -115,7 +115,9 @@ func (s *StatsService) GetDashboardStats(forceRefresh bool) (*DashboardStats, er
 	}
 
 	// 存入缓存
-	s.saveDashboardToCache(stats)
+	if err := s.saveDashboardToCache(stats); err != nil {
+		slog.Warn("cache dashboard stats failed", "error", err)
+	}
 
 	return stats, nil
 }
@@ -138,7 +140,9 @@ func (s *StatsService) GetUserSubscription(userID uint, forceRefresh bool) (*Use
 	}
 
 	// 存入缓存
-	s.saveSubscriptionToCache(cacheKey, sub)
+	if err := s.saveSubscriptionToCache(cacheKey, sub); err != nil {
+		slog.Warn("cache user subscription failed", "user_id", userID, "error", err)
+	}
 
 	return sub, nil
 }
@@ -149,14 +153,20 @@ func (s *StatsService) RefreshDashboardCache() error {
 	if err != nil {
 		return err
 	}
-	s.saveDashboardToCache(stats)
-	return nil
+	return s.saveDashboardToCache(stats)
 }
 
 // InvalidateUserCache 使用户缓存失效 (用户数据变更时调用)
 func (s *StatsService) InvalidateUserCache(userID uint) {
+	if err := s.InvalidateUserCacheWithError(userID); err != nil {
+		slog.Warn("invalidate user subscription cache failed", "user_id", userID, "error", err)
+	}
+}
+
+// InvalidateUserCacheWithError 使用户缓存失效并返回底层缓存错误
+func (s *StatsService) InvalidateUserCacheWithError(userID uint) error {
 	cacheKey := fmt.Sprintf("%s%d", CacheKeyUserSubscription, userID)
-	cache.Delete(cacheKey)
+	return cache.Delete(cacheKey)
 }
 
 // ========== 私有方法 ==========
@@ -185,8 +195,8 @@ func (s *StatsService) getDashboardFromCache() (*DashboardStats, error) {
 }
 
 // 保存仪表盘数据到缓存
-func (s *StatsService) saveDashboardToCache(stats *DashboardStats) {
-	cache.Set(CacheKeyDashboardStats, stats, StatsCacheTTL)
+func (s *StatsService) saveDashboardToCache(stats *DashboardStats) error {
+	return cache.Set(CacheKeyDashboardStats, stats, StatsCacheTTL)
 }
 
 // 从缓存获取订阅数据
@@ -212,8 +222,8 @@ func (s *StatsService) getSubscriptionFromCache(key string) (*UserSubscription, 
 }
 
 // 保存订阅数据到缓存
-func (s *StatsService) saveSubscriptionToCache(key string, sub *UserSubscription) {
-	cache.Set(key, sub, SubscriptionCacheTTL)
+func (s *StatsService) saveSubscriptionToCache(key string, sub *UserSubscription) error {
+	return cache.Set(key, sub, SubscriptionCacheTTL)
 }
 
 // 从数据库获取仪表盘统计
@@ -280,11 +290,10 @@ func (s *StatsService) fetchDashboardFromDB() (*DashboardStats, error) {
 		Scan(&stats.TotalTrafficUsed)
 
 	// 今日流量 (从流量日志按本地零点起累计, 与 total_traffic_used 一样按倍率计)
-	// CAST 为整型: rate 是浮点, SUM 结果在 SQLite 下为 float64, 直接扫入 int64 会失败
 	todayStartUnix := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Local).Unix()
 	s.db.Model(&model.TrafficLog{}).
-		Where("log_at >= ?", todayStartUnix).
-		Select("CAST(COALESCE(SUM((u + d) * rate), 0) AS INTEGER)").
+		Where("log_at >= ? AND log_at < ?", todayStartUnix, todayStartUnix+24*hourSeconds).
+		Select(s.trafficLogAggregateExpr("")).
 		Scan(&stats.TodayTraffic)
 
 	return stats, nil
@@ -359,10 +368,40 @@ type HourlyTraffic struct {
 	Traffic int64 `json:"traffic"` // 该小时流量 (字节, 已按倍率计)
 }
 
+type TrafficLogMeta struct {
+	LatestLogAt int64 `json:"latest_log_at"` // 最近一次流量上报 Unix 秒, 0 表示从未上报
+}
+
 const (
 	hourSeconds     = int64(3600)
 	maxHourlyWindow = 24 * 30 // 最多查询 30 天
+	maxInt64SQL     = "9223372036854775807"
 )
+
+func (s *StatsService) trafficLogAggregateExpr(alias string) string {
+	prefix := ""
+	if alias != "" {
+		prefix = alias + "."
+	}
+
+	u := prefix + "u"
+	d := prefix + "d"
+	rate := prefix + "rate"
+
+	if s.db != nil && s.db.Name() == "postgres" {
+		return "FLOOR(LEAST(COALESCE(SUM((" +
+			"GREATEST(COALESCE(" + u + ", 0), 0)::numeric + " +
+			"GREATEST(COALESCE(" + d + ", 0), 0)::numeric" +
+			") * (CASE WHEN " + rate + " > 0 THEN " + rate + "::numeric ELSE 1::numeric END)), 0), " +
+			maxInt64SQL + "::numeric))::bigint"
+	}
+
+	return "CAST(MIN(COALESCE(SUM((" +
+		"CAST(CASE WHEN " + u + " > 0 THEN " + u + " ELSE 0 END AS REAL) + " +
+		"CAST(CASE WHEN " + d + " > 0 THEN " + d + " ELSE 0 END AS REAL)" +
+		") * (CASE WHEN " + rate + " > 0 THEN " + rate + " ELSE 1 END)), 0), " +
+		maxInt64SQL + ") AS INTEGER)"
+}
 
 // GetHourlyTraffic 返回最近 hours 个整点小时的流量序列 (含当前未结束的小时),
 // 数据源为 v2_server_log, 按 (log_at/3600) 分桶聚合 SUM((u+d)*rate)。
@@ -380,6 +419,7 @@ func (s *StatsService) GetHourlyTraffic(hours int, userID uint) ([]HourlyTraffic
 	now := time.Now()
 	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
 	startHour := currentHour - int64(hours-1)*hourSeconds
+	endHour := currentHour + hourSeconds
 
 	// 按小时分桶聚合
 	type bucketRow struct {
@@ -387,12 +427,12 @@ func (s *StatsService) GetHourlyTraffic(hours int, userID uint) ([]HourlyTraffic
 		Traffic int64
 	}
 	var rows []bucketRow
-	query := s.db.Model(&model.TrafficLog{}).Where("log_at >= ?", startHour)
+	query := s.db.Model(&model.TrafficLog{}).Where("log_at >= ? AND log_at < ?", startHour, endHour)
 	if userID > 0 {
 		query = query.Where("user_id = ?", userID)
 	}
 	if err := query.
-		Select("(log_at / ?) * ? AS hour, CAST(COALESCE(SUM((u + d) * rate), 0) AS INTEGER) AS traffic", hourSeconds, hourSeconds).
+		Select("(log_at / ?) * ? AS hour, "+s.trafficLogAggregateExpr("")+" AS traffic", hourSeconds, hourSeconds).
 		Group("hour").
 		Order("hour ASC").
 		Scan(&rows).Error; err != nil {
@@ -412,6 +452,22 @@ func (s *StatsService) GetHourlyTraffic(hours int, userID uint) ([]HourlyTraffic
 	return result, nil
 }
 
+// GetTrafficLogMeta returns lightweight diagnostics for traffic chart pages.
+func (s *StatsService) GetTrafficLogMeta(userID uint) (TrafficLogMeta, error) {
+	var latest sql.NullInt64
+	query := s.db.Model(&model.TrafficLog{})
+	if userID > 0 {
+		query = query.Where("user_id = ?", userID)
+	}
+	if err := query.Select("MAX(log_at)").Scan(&latest).Error; err != nil {
+		return TrafficLogMeta{}, err
+	}
+	if !latest.Valid {
+		return TrafficLogMeta{}, nil
+	}
+	return TrafficLogMeta{LatestLogAt: latest.Int64}, nil
+}
+
 // UserTrafficRank 单个用户的流量排行项
 type UserTrafficRank struct {
 	UserID  uint   `json:"user_id"`
@@ -421,7 +477,8 @@ type UserTrafficRank struct {
 
 // GetUserTrafficRanking 返回最近 hours 小时内按用户聚合的流量排行 (倒序),
 // 数据源为 v2_server_log, 关联 v2_user 取 email。limit 限制返回条数。
-func (s *StatsService) GetUserTrafficRanking(hours int, limit int) ([]UserTrafficRank, error) {
+// includeZeroUsers 为 true 时从用户表出发返回无区间流量的用户, 便于后台按任意用户筛选小时图。
+func (s *StatsService) GetUserTrafficRanking(hours int, limit int, includeZeroUsers bool) ([]UserTrafficRank, error) {
 	if hours <= 0 {
 		hours = 24
 	}
@@ -431,24 +488,44 @@ func (s *StatsService) GetUserTrafficRanking(hours int, limit int) ([]UserTraffi
 	if limit <= 0 {
 		limit = 20
 	}
-	if limit > 200 {
-		limit = 200
+	maxLimit := 200
+	if includeZeroUsers {
+		maxLimit = 1000
+	}
+	if limit > maxLimit {
+		limit = maxLimit
 	}
 
 	now := time.Now()
 	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
 	startHour := currentHour - int64(hours-1)*hourSeconds
+	endHour := currentHour + hourSeconds
 
 	var ranks []UserTrafficRank
-	if err := s.db.Table("v2_server_log AS l").
-		Select("l.user_id AS user_id, COALESCE(u.email, '') AS email, CAST(COALESCE(SUM((l.u + l.d) * l.rate), 0) AS INTEGER) AS traffic").
-		Joins("LEFT JOIN v2_user AS u ON u.id = l.user_id").
-		Where("l.log_at >= ?", startHour).
-		Group("l.user_id").
-		Order("traffic DESC").
-		Limit(limit).
-		Scan(&ranks).Error; err != nil {
-		return nil, err
+	if includeZeroUsers {
+		trafficSubquery := s.db.Table("v2_server_log").
+			Select("user_id, "+s.trafficLogAggregateExpr("")+" AS traffic").
+			Where("log_at >= ? AND log_at < ?", startHour, endHour).
+			Group("user_id")
+		if err := s.db.Table("v2_user AS u").
+			Select("u.id AS user_id, u.email AS email, COALESCE(t.traffic, 0) AS traffic").
+			Joins("LEFT JOIN (?) AS t ON t.user_id = u.id", trafficSubquery).
+			Order("traffic DESC, u.id ASC").
+			Limit(limit).
+			Scan(&ranks).Error; err != nil {
+			return nil, err
+		}
+	} else {
+		if err := s.db.Table("v2_server_log AS l").
+			Select("l.user_id AS user_id, COALESCE(u.email, '') AS email, "+s.trafficLogAggregateExpr("l")+" AS traffic").
+			Joins("LEFT JOIN v2_user AS u ON u.id = l.user_id").
+			Where("l.log_at >= ? AND l.log_at < ?", startHour, endHour).
+			Group("l.user_id, u.email").
+			Order("traffic DESC").
+			Limit(limit).
+			Scan(&ranks).Error; err != nil {
+			return nil, err
+		}
 	}
 	return ranks, nil
 }

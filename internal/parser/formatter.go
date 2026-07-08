@@ -1295,7 +1295,7 @@ func (f *JSONFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRen
 		}
 	}
 
-	return json.MarshalIndent(nodes, "", "  ")
+	return json.MarshalIndent(nodes, "", "  ") // #nosec G117 -- subscription JSON intentionally includes per-node credentials for the requesting subscriber.
 }
 
 // Base64JSONFormatter Base64 编码的 JSON 格式化器 (你的自定义格式)

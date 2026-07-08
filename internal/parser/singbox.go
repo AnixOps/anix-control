@@ -2,6 +2,7 @@ package parser
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 
 	"github.com/anixops/v2board/internal/model"
@@ -314,12 +315,23 @@ func (f *SingBoxFormatter) addTransport(outbound map[string]any, node *model.Par
 }
 
 func toUint32(v any) uint32 {
+	const maxUint32 = uint64(1<<32 - 1)
+
 	switch val := v.(type) {
 	case int:
+		if val < 0 || uint64(val) > maxUint32 {
+			return 0
+		}
 		return uint32(val)
 	case int64:
+		if val < 0 || uint64(val) > maxUint32 {
+			return 0
+		}
 		return uint32(val)
 	case float64:
+		if math.IsNaN(val) || math.IsInf(val, 0) || val < 0 || val > float64(maxUint32) {
+			return 0
+		}
 		return uint32(val)
 	default:
 		return 0

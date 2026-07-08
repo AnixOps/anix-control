@@ -169,7 +169,7 @@ func (f *MockFactory) CreateCoupon(overrides ...func(*model.Coupon)) *model.Coup
 	coupon := &model.Coupon{
 		Code:      "TEST1234",
 		Name:      "Test Coupon",
-		Type:      1, // 金额
+		Type:      1,    // 金额
 		Value:     1000, // 10.00 元 (单位分)
 		LimitUse:  &limitUse,
 		UseCount:  0,

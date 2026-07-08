@@ -18,6 +18,18 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/dashboard', method: 'get', params: {} },
       },
       {
+        call: () => adminApi.getTrafficHourly(168, 7),
+        expected: { url: '/admin/traffic/hourly', method: 'get', params: { hours: 168, user_id: 7 } },
+      },
+      {
+        call: () => adminApi.getUserTrafficRanking(168, 500, true),
+        expected: {
+          url: '/admin/traffic/user-ranking',
+          method: 'get',
+          params: { hours: 168, limit: 500, include_zero_users: 'true' },
+        },
+      },
+      {
         call: () => adminApi.getUserList({ page: 1 }),
         expected: { url: '/admin/users', method: 'get', params: { page: 1 } },
       },
@@ -63,6 +75,30 @@ describe('admin api mapping', () => {
       {
         call: () => adminApi.getForwardStats(),
         expected: { url: '/admin/forward/stats', method: 'get' },
+      },
+      {
+        call: () => adminApi.getForwardObservabilityTargets(),
+        expected: { url: '/admin/forward/observability/targets', method: 'get' },
+      },
+      {
+        call: () => adminApi.getForwardObservabilityTrend({ targetKey: 'node:1:127.0.0.1:443' }),
+        expected: {
+          url: '/admin/forward/observability/trend',
+          method: 'get',
+          params: { targetKey: 'node:1:127.0.0.1:443' },
+        },
+      },
+      {
+        call: () => adminApi.getForwardObservabilityTopology(),
+        expected: { url: '/admin/forward/observability/topology', method: 'get' },
+      },
+      {
+        call: () => adminApi.getForwardObservabilityMultiIngress(17),
+        expected: {
+          url: '/admin/forward/observability/multi-ingress',
+          method: 'get',
+          params: { targetId: 17 },
+        },
       },
       {
         call: () => adminApi.getAnsibleMachines({ type: 'relay' }),
@@ -131,6 +167,14 @@ describe('admin api mapping', () => {
           method: 'get',
           params: { group: 'email' },
         },
+      },
+      {
+        call: () => adminApi.getSubscriptionSettings(),
+        expected: { url: '/admin/system/subscription-settings', method: 'get' },
+      },
+      {
+        call: () => adminApi.getLoadBalancerStats(9),
+        expected: { url: '/admin/loadbalancers/9/stats', method: 'get' },
       },
     ]
 

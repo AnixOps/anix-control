@@ -29,7 +29,7 @@
     linear-gradient(180deg, #f7f9fc 0%, #f3f5f9 100%);
 }
 
-/* 暗色主题：覆盖自建语义变量，与 Arco 的 body[arco-theme=dark] 同步切换 */
+/* 暗色主题：覆盖自建语义变量。 */
 [data-theme='dark'] {
   --bg-color: #17171a;
   --bg-accent: #1f1f23;

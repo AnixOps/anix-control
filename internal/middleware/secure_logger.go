@@ -105,17 +105,17 @@ func NodeSecureLogger() gin.HandlerFunc {
 
 // AuditLogEntry 审计日志结构
 type AuditLogEntry struct {
-	Timestamp   time.Time              `json:"timestamp"`
-	Action      string                 `json:"action"`
-	UserID      uint                   `json:"user_id,omitempty"`
-	NodeID      uint                   `json:"node_id,omitempty"`
-	IP          string                 `json:"ip"`
-	UserAgent   string                 `json:"user_agent"`
-	Path        string                 `json:"path"`
-	Method      string                 `json:"method"`
-	StatusCode  int                    `json:"status_code"`
-	Latency     time.Duration          `json:"latency"`
-	RequestBody string                 `json:"request_body,omitempty"`
+	Timestamp   time.Time      `json:"timestamp"`
+	Action      string         `json:"action"`
+	UserID      uint           `json:"user_id,omitempty"`
+	NodeID      uint           `json:"node_id,omitempty"`
+	IP          string         `json:"ip"`
+	UserAgent   string         `json:"user_agent"`
+	Path        string         `json:"path"`
+	Method      string         `json:"method"`
+	StatusCode  int            `json:"status_code"`
+	Latency     time.Duration  `json:"latency"`
+	RequestBody string         `json:"request_body,omitempty"`
 	Extra       map[string]any `json:"extra,omitempty"`
 }
 

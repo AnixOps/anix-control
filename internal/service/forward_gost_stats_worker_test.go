@@ -20,11 +20,11 @@ type ForwardGostStatsWorkerTestSuite struct {
 
 func (s *ForwardGostStatsWorkerTestSuite) SetupSuite() {
 	s.ServiceTestSuite.SetupSuite()
-	database.AutoMigrate(
+	s.Require().NoError(database.AutoMigrate(
 		&model.ForwardTunnel{},
 		&model.Forward{},
 		&model.ForwardTrafficCursor{},
-	)
+	))
 }
 
 func (s *ForwardGostStatsWorkerTestSuite) SetupTest() {
@@ -37,6 +37,27 @@ func (s *ForwardGostStatsWorkerTestSuite) TestRunOnce_NoActiveForwardsReturnsNil
 	activeForwards, err := s.worker.runOnce(context.Background())
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 0, activeForwards)
+}
+
+func (s *ForwardGostStatsWorkerTestSuite) TestStart_StopsOnContextCancellationDuringIdleDelay() {
+	s.worker.interval = time.Hour
+	s.worker.idleInterval = time.Hour
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.worker.Start(ctx)
+	}()
+
+	time.Sleep(25 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		s.T().Fatal("gost stats worker did not stop after context cancellation")
+	}
 }
 
 func TestForwardGostStatsWorker(t *testing.T) {

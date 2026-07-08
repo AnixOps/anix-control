@@ -12,6 +12,7 @@ import (
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -62,10 +63,33 @@ func (s *ForwardAnsibleHandlerTestSuite) TestListAnsibleMachines() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 	assert.Contains(s.T(), w.Body.String(), "Ansible Exec 01")
 	assert.NotContains(s.T(), w.Body.String(), "NodeX Relay 01")
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(1), data["total"])
+	assert.Len(s.T(), data["list"], 1)
 
 	var refreshed model.ForwardNode
 	assert.NoError(s.T(), s.db.First(&refreshed, s.ansibleNode.ID).Error)
 	assert.Contains(s.T(), refreshed.Tags, service.ForwardNodeInventoryTagAnsibleMachine)
+}
+
+func (s *ForwardAnsibleHandlerTestSuite) TestListAnsibleMachines_InvalidStatusUsesPanelEnvelope() {
+	handler := NewForwardHandler()
+	s.router.GET("/forward/ansible-machines", handler.ListAnsibleMachines)
+
+	req, _ := http.NewRequest("GET", "/forward/ansible-machines?status=online", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "invalid status", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardAnsibleHandlerTestSuite) TestCreateAnsibleMachine() {
@@ -88,6 +112,9 @@ func (s *ForwardAnsibleHandlerTestSuite) TestCreateAnsibleMachine() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotNil(s.T(), resp["data"])
 
 	var created model.ForwardNode
 	assert.NoError(s.T(), s.db.Where("name = ?", "Ansible Exec 02").First(&created).Error)
@@ -95,6 +122,23 @@ func (s *ForwardAnsibleHandlerTestSuite) TestCreateAnsibleMachine() {
 	assert.Equal(s.T(), 0, created.APIPort)
 	assert.Equal(s.T(), "", created.APIToken)
 	assert.Contains(s.T(), created.Tags, service.ForwardNodeInventoryTagAnsibleMachine)
+}
+
+func (s *ForwardAnsibleHandlerTestSuite) TestCreateAnsibleMachine_InvalidBodyUsesPanelEnvelope() {
+	handler := NewForwardHandler()
+	s.router.POST("/forward/ansible-machines", handler.CreateAnsibleMachine)
+
+	req, _ := http.NewRequest("POST", "/forward/ansible-machines", bytes.NewReader([]byte(`{"name":""}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], "CreateAnsibleMachineRequest.Name")
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardAnsibleHandlerTestSuite) TestListNodes_NodeXScopeExcludesAnsibleMachines() {
@@ -127,8 +171,12 @@ func (s *ForwardAnsibleHandlerTestSuite) TestCreateNode_NodeXScopeRequiresAPIPor
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-	assert.Contains(s.T(), w.Body.String(), "api_port")
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], "api_port")
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardAnsibleHandlerTestSuite) TestGetAnsibleMachine_RejectsNodeXRelay() {
@@ -139,7 +187,12 @@ func (s *ForwardAnsibleHandlerTestSuite) TestGetAnsibleMachine_RejectsNodeXRelay
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "ansible machine not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardAnsibleHandlerTestSuite) TestUpdateNode_NodeXScopeRequiresAPIPort() {
@@ -160,8 +213,12 @@ func (s *ForwardAnsibleHandlerTestSuite) TestUpdateNode_NodeXScopeRequiresAPIPor
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
-	assert.Contains(s.T(), w.Body.String(), "node not found")
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "node not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardAnsibleHandlerTestSuite) TestUpdateExitNode_NodeXScopeRequiresAPIPort() {
@@ -191,8 +248,12 @@ func (s *ForwardAnsibleHandlerTestSuite) TestUpdateExitNode_NodeXScopeRequiresAP
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-	assert.Contains(s.T(), w.Body.String(), "api_port")
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], "api_port")
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardAnsibleHandlerTestSuite) TestGetNode_NodeXScopeRejectsAnsibleMachine() {
@@ -203,7 +264,12 @@ func (s *ForwardAnsibleHandlerTestSuite) TestGetNode_NodeXScopeRejectsAnsibleMac
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "forward node not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardAnsibleHandlerTestSuite) TestUpdateNode_NodeXScopeRejectsAnsibleMachine() {
@@ -220,7 +286,12 @@ func (s *ForwardAnsibleHandlerTestSuite) TestUpdateNode_NodeXScopeRejectsAnsible
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "node not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 
 	var refreshed model.ForwardNode
 	assert.NoError(s.T(), s.db.First(&refreshed, s.ansibleNode.ID).Error)
@@ -236,12 +307,17 @@ func (s *ForwardAnsibleHandlerTestSuite) TestToggleNode_NodeXScopeRejectsAnsible
 	}
 	jsonBody, _ := json.Marshal(body)
 
-	req, _ := http.NewRequest("POST", "/forward/nodes/"+strconv.FormatUint(uint64(s.ansibleNode.ID), 10)+"?scope=nodex", bytes.NewReader(jsonBody))
+	req, _ := http.NewRequest("POST", "/forward/nodes/"+strconv.FormatUint(uint64(s.ansibleNode.ID), 10)+"/toggle?scope=nodex", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "node not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardAnsibleHandlerTestSuite) TestSyncAnsibleMachineStats() {
@@ -254,19 +330,39 @@ func (s *ForwardAnsibleHandlerTestSuite) TestSyncAnsibleMachineStats() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 	assert.Contains(s.T(), w.Body.String(), "panel-side counters")
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data["message"], "panel-side counters")
 }
 
 func (s *ForwardAnsibleHandlerTestSuite) TestSyncNodeStats_NodeXScopeRejectsAnsibleMachine() {
 	handler := NewForwardHandler()
 	s.router.POST("/forward/nodes/:id/sync-stats", handler.SyncNodeStats)
 
-	req, _ := http.NewRequest("POST", "/forward/nodes/"+strconv.FormatUint(uint64(s.ansibleNode.ID), 10)+"?scope=nodex", nil)
+	req, _ := http.NewRequest("POST", "/forward/nodes/"+strconv.FormatUint(uint64(s.ansibleNode.ID), 10)+"/sync-stats?scope=nodex", nil)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "node not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func TestForwardAnsibleHandler(t *testing.T) {
 	suite.Run(t, new(ForwardAnsibleHandlerTestSuite))
+}
+
+func decodePanelTestResponse(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
+	t.Helper()
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Contains(t, resp, "code")
+	require.Contains(t, resp, "msg")
+	require.Contains(t, resp, "ts")
+	return resp
 }

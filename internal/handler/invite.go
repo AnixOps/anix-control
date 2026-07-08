@@ -264,7 +264,7 @@ func (h *InviteHandler) loadFrontendConfig() inviteFrontendConfig {
 	if stored.CodeLength > 0 {
 		cfg.CodeLength = stored.CodeLength
 	}
-	if stored.WithdrawMethods != nil && len(stored.WithdrawMethods) > 0 {
+	if len(stored.WithdrawMethods) > 0 {
 		cfg.WithdrawMethods = stored.WithdrawMethods
 	}
 	cfg.WithdrawFee = stored.WithdrawFee
@@ -478,7 +478,7 @@ func (h *InviteHandler) GetConfig(c *gin.Context) {
 	}
 
 	frontendCfg := h.loadFrontendConfig()
-	c.JSON(http.StatusOK, gin.H{"data": inviteConfigResponse(cfg, frontendCfg)})
+	panelSuccess(c, inviteConfigResponse(cfg, frontendCfg))
 }
 
 // UpdateConfig godoc
@@ -950,16 +950,14 @@ func (h *InviteHandler) GetInviteStats(c *gin.Context) {
 		topInviters[i].Commission = commissionByUser[topInviters[i].UserID]
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"total_invites":        invitedUsers,
-			"total_commission":     totalCommission,
-			"pending_commission":   pendingCommission,
-			"withdrawn_commission": withdrawnCommission,
-			"top_inviters":         topInviters,
-			"total_users":          totalUsers,
-			"invited_users":        invitedUsers,
-			"pending_withdraw":     pendingWithdraw,
-		},
+	panelSuccess(c, gin.H{
+		"total_invites":        invitedUsers,
+		"total_commission":     totalCommission,
+		"pending_commission":   pendingCommission,
+		"withdrawn_commission": withdrawnCommission,
+		"top_inviters":         topInviters,
+		"total_users":          totalUsers,
+		"invited_users":        invitedUsers,
+		"pending_withdraw":     pendingWithdraw,
 	})
 }

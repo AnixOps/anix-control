@@ -23,7 +23,7 @@ type frontendAPIEndpoint struct {
 
 func TestFrontendAPIEndpoints_AreRegistered(t *testing.T) {
 	r, _ := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	apiFiles := []string{
 		"web/src/api/admin.js",

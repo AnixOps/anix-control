@@ -301,5 +301,50 @@ export default {
       closeConfirm: 'Close this ticket?',
       closeFailed: 'Failed to close ticket'
     }
+  },
+  adminKnowledge: {
+    title: 'Knowledge Base',
+    subtitle: 'Publish announcements, tutorials, FAQs, and support articles.',
+    actions: {
+      createArticle: 'Create Article',
+      publish: 'Publish'
+    },
+    categories: {
+      announcement: 'Announcement',
+      tutorial: 'Tutorial',
+      faq: 'FAQ',
+      other: 'Other'
+    },
+    visibility: {
+      visible: 'Visible',
+      hidden: 'Hidden'
+    },
+    fields: {
+      title: 'Title',
+      category: 'Category',
+      content: 'Content',
+      sort: 'Sort',
+      visibility: 'Visibility'
+    },
+    placeholders: {
+      title: 'Article title',
+      body: 'Write the article content...'
+    },
+    modal: {
+      createTitle: 'Create Article',
+      editTitle: 'Edit Article'
+    },
+    empty: {
+      noData: 'No articles'
+    },
+    messages: {
+      fetchFailed: 'Failed to load articles',
+      requiredFields: 'Please fill in title and content',
+      saveSuccess: 'Article saved successfully',
+      publishSuccess: 'Article published successfully',
+      actionFailed: 'Article operation failed',
+      deleteConfirm: 'Delete article "{title}"?',
+      deleteFailed: 'Failed to delete article'
+    }
   }
 }

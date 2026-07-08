@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -37,8 +38,14 @@ func (c *XrayClient) Start(ctx context.Context) error {
 	c.status = StatusStarting
 
 	// 构建命令
+	binaryPath, err := resolveClientBinary(c.clientType, c.binaryPath)
+	if err != nil {
+		c.status = StatusError
+		return err
+	}
+	c.binaryPath = binaryPath
 	args := []string{"run", "-c", c.configPath}
-	c.cmd = exec.CommandContext(ctx, c.binaryPath, args...)
+	c.cmd = exec.CommandContext(ctx, binaryPath, args...) // #nosec G204 -- binary path is restricted to reviewed integration-test client names.
 
 	// 设置环境变量
 	c.cmd.Env = append(os.Environ(),
@@ -102,7 +109,7 @@ func (c *XrayClient) IsHealthy(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer closeResponseBody(resp, "xray health check")
 
 	return resp.StatusCode == 204 || resp.StatusCode == 200
 }
@@ -138,10 +145,15 @@ func (c *XrayClient) waitForStart(ctx context.Context) error {
 				},
 			}
 
-			req, _ := http.NewRequest("GET", "http://www.gstatic.com/generate_204", nil)
+			req, err := http.NewRequestWithContext(ctx, "GET", "http://www.gstatic.com/generate_204", nil)
+			if err != nil {
+				return err
+			}
 			resp, err := client.Do(req)
 			if err == nil {
-				resp.Body.Close()
+				if err := resp.Body.Close(); err != nil {
+					return fmt.Errorf("close xray startup probe response: %w", err)
+				}
 				return nil
 			}
 		}
@@ -178,8 +190,14 @@ func (c *MihomoClient) Start(ctx context.Context) error {
 	c.status = StatusStarting
 
 	// 构建命令
+	binaryPath, err := resolveClientBinary(c.clientType, c.binaryPath)
+	if err != nil {
+		c.status = StatusError
+		return err
+	}
+	c.binaryPath = binaryPath
 	args := []string{"-f", c.configPath}
-	c.cmd = exec.CommandContext(ctx, c.binaryPath, args...)
+	c.cmd = exec.CommandContext(ctx, binaryPath, args...) // #nosec G204 -- binary path is restricted to reviewed integration-test client names.
 
 	// 捕获输出
 	stdoutPipe, err := c.cmd.StdoutPipe()
@@ -193,8 +211,16 @@ func (c *MihomoClient) Start(ctx context.Context) error {
 		return err
 	}
 
-	go io.Copy(&c.logs, stdoutPipe)
-	go io.Copy(&c.logs, stderrPipe)
+	go func() {
+		if _, err := io.Copy(&c.logs, stdoutPipe); err != nil {
+			log.Printf("copy mihomo stdout: %v", err)
+		}
+	}()
+	go func() {
+		if _, err := io.Copy(&c.logs, stderrPipe); err != nil {
+			log.Printf("copy mihomo stderr: %v", err)
+		}
+	}()
 
 	// 启动进程
 	if err := c.cmd.Start(); err != nil {
@@ -238,7 +264,7 @@ func (c *MihomoClient) IsHealthy(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer closeResponseBody(resp, "mihomo health check")
 
 	return resp.StatusCode == 200
 }
@@ -263,10 +289,15 @@ func (c *MihomoClient) waitForStart(ctx context.Context) error {
 
 			// 尝试连接 API
 			client := &http.Client{Timeout: 1 * time.Second}
-			req, _ := http.NewRequest("GET", c.apiURL, nil)
+			req, err := http.NewRequestWithContext(ctx, "GET", c.apiURL, nil)
+			if err != nil {
+				return err
+			}
 			resp, err := client.Do(req)
 			if err == nil {
-				resp.Body.Close()
+				if err := resp.Body.Close(); err != nil {
+					return fmt.Errorf("close mihomo startup probe response: %w", err)
+				}
 				return nil
 			}
 		}
@@ -285,7 +316,7 @@ func (c *MihomoClient) GetProxies(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer closeResponseBody(resp, "mihomo proxies request")
 
 	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -309,7 +340,7 @@ func (c *MihomoClient) SelectProxy(ctx context.Context, group, proxy string) err
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer closeResponseBody(resp, "mihomo proxy selection request")
 
 	if resp.StatusCode != 200 && resp.StatusCode != 204 {
 		return fmt.Errorf("failed to select proxy: status %d", resp.StatusCode)
@@ -333,7 +364,7 @@ func (c *MihomoClient) DelayTest(ctx context.Context, proxyName string) (int, er
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer closeResponseBody(resp, "mihomo delay test request")
 
 	var result struct {
 		Delay int `json:"delay"`
@@ -343,4 +374,13 @@ func (c *MihomoClient) DelayTest(ctx context.Context, proxyName string) (int, er
 	}
 
 	return result.Delay, nil
+}
+
+func closeResponseBody(resp *http.Response, operation string) {
+	if resp == nil || resp.Body == nil {
+		return
+	}
+	if err := resp.Body.Close(); err != nil {
+		log.Printf("close %s response body: %v", operation, err)
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"sort"
@@ -19,8 +20,9 @@ import (
 // ForwardNodeService 转发节点服务
 type ForwardNodeService struct {
 	db *gorm.DB
-	mu sync.RWMutex
 }
+
+var forwardNodeRandomInt = cryptoRandomInt
 
 // NewForwardNodeService 创建服务
 func NewForwardNodeService(db *gorm.DB) *ForwardNodeService {
@@ -94,6 +96,13 @@ func (s *ForwardNodeService) GetOnlineNodes(nodeType string) ([]*model.ForwardNo
 
 // HealthCheck 健康检查
 func (s *ForwardNodeService) HealthCheck(ctx context.Context, nodeID uint) (*HealthCheckResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	node, err := s.GetByID(nodeID)
 	if err != nil {
 		return nil, err
@@ -106,12 +115,18 @@ func (s *ForwardNodeService) HealthCheck(ctx context.Context, nodeID uint) (*Hea
 	}
 
 	// TCP连接测试
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", node.Host, node.Port), 5*time.Second)
+	dialer := net.Dialer{Timeout: 5 * time.Second}
+	conn, err := dialer.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", node.Host, node.Port))
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
 		result.Status = model.ForwardNodeStatusOffline
 		result.Error = err.Error()
 	} else {
-		conn.Close()
+		if err := conn.Close(); err != nil {
+			return nil, fmt.Errorf("close health check connection: %w", err)
+		}
 		result.Status = model.ForwardNodeStatusOnline
 		result.Latency = time.Since(start).Milliseconds()
 	}
@@ -130,16 +145,20 @@ func (s *ForwardNodeService) HealthCheck(ctx context.Context, nodeID uint) (*Hea
 			Total  int64
 			Online int64
 		}
-		s.db.Model(&model.ForwardNode{}).
+		if err := s.db.Model(&model.ForwardNode{}).
 			Where("id = ?", node.ID).
 			Select("COUNT(*) as total, SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as online", model.ForwardNodeStatusOnline).
-			Scan(&stats)
+			Scan(&stats).Error; err != nil {
+			return nil, fmt.Errorf("calculate forward node uptime: %w", err)
+		}
 		if stats.Total > 0 {
 			updates["uptime"] = float64(stats.Online) / float64(stats.Total) * 100
 		}
 	}
 
-	s.db.Model(&node).Updates(updates)
+	if err := s.db.Model(&model.ForwardNode{}).Where("id = ?", node.ID).Updates(updates).Error; err != nil {
+		return nil, fmt.Errorf("update forward node health check: %w", err)
+	}
 
 	return result, nil
 }
@@ -153,19 +172,21 @@ func (s *ForwardNodeService) HealthCheckAll(ctx context.Context) ([]*HealthCheck
 	}
 
 	results := make([]*HealthCheckResult, len(nodes))
+	errs := make([]error, len(nodes))
 	var wg sync.WaitGroup
 
 	for i, node := range nodes {
 		wg.Add(1)
 		go func(idx int, nodeID uint) {
 			defer wg.Done()
-			result, _ := s.HealthCheck(ctx, nodeID)
+			result, err := s.HealthCheck(ctx, nodeID)
 			results[idx] = result
+			errs[idx] = err
 		}(i, node.ID)
 	}
 
 	wg.Wait()
-	return results, nil
+	return results, errors.Join(errs...)
 }
 
 // HealthCheckResult 健康检查结果
@@ -180,7 +201,10 @@ type HealthCheckResult struct {
 // SelectBestNode 选择最佳节点 (负载均衡)
 func (s *ForwardNodeService) SelectBestNode(nodeType string, mode string) (*model.ForwardNode, error) {
 	nodes, err := s.GetOnlineNodes(nodeType)
-	if err != nil || len(nodes) == 0 {
+	if err != nil {
+		return nil, err
+	}
+	if len(nodes) == 0 {
 		return nil, fmt.Errorf("no available nodes")
 	}
 
@@ -203,19 +227,27 @@ func (s *ForwardNodeService) SelectBestNode(nodeType string, mode string) (*mode
 		// 加权随机
 		totalWeight := 0
 		for _, n := range nodes {
-			totalWeight += n.Weight
+			if n.Weight > 0 {
+				totalWeight += n.Weight
+			}
 		}
 		if totalWeight == 0 {
 			return nodes[0], nil
 		}
 		// 简单实现: 按权重比例选择
 		weights := make([]int, len(nodes))
-		weights[0] = nodes[0].Weight
-		for i := 1; i < len(nodes); i++ {
-			weights[i] = weights[i-1] + nodes[i].Weight
+		current := 0
+		for i := range nodes {
+			if nodes[i].Weight > 0 {
+				current += nodes[i].Weight
+			}
+			weights[i] = current
 		}
 		// 随机选择
-		r := int(randBytes(1)[0]) % totalWeight
+		r, err := forwardNodeRandomInt(totalWeight)
+		if err != nil {
+			return nil, fmt.Errorf("select weighted forward node: %w", err)
+		}
 		for i, w := range weights {
 			if r < w {
 				return nodes[i], nil
@@ -225,7 +257,10 @@ func (s *ForwardNodeService) SelectBestNode(nodeType string, mode string) (*mode
 
 	case "random":
 		// 随机选择
-		idx := int(randBytes(1)[0]) % len(nodes)
+		idx, err := forwardNodeRandomInt(len(nodes))
+		if err != nil {
+			return nil, fmt.Errorf("select random forward node: %w", err)
+		}
 		return nodes[idx], nil
 
 	default: // round-robin
@@ -237,17 +272,24 @@ func (s *ForwardNodeService) SelectBestNode(nodeType string, mode string) (*mode
 }
 
 // randBytes 生成随机字节
-func randBytes(n int) []byte {
+func randBytes(n int) ([]byte, error) {
+	if n <= 0 {
+		return nil, errors.New("random byte length must be positive")
+	}
 	b := make([]byte, n)
-	rand.Read(b)
-	return b
+	if _, err := rand.Read(b); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 // GenerateAPIToken 生成API Token
-func (s *ForwardNodeService) GenerateAPIToken() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+func (s *ForwardNodeService) GenerateAPIToken() (string, error) {
+	b, err := randBytes(16)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 // UpdateStats 更新节点统计
@@ -273,17 +315,31 @@ func (s *ForwardNodeService) GetNodesByGroup(nodeType, group string) ([]*model.F
 
 // ParseTags 解析标签
 func (s *ForwardNodeService) ParseTags(tags string) []string {
-	if tags == "" {
+	result, err := s.ParseTagsWithError(tags)
+	if err != nil {
 		return []string{}
 	}
-	var result []string
-	json.Unmarshal([]byte(tags), &result)
 	return result
+}
+
+// ParseTagsWithError 解析标签并返回无效 JSON 错误
+func (s *ForwardNodeService) ParseTagsWithError(tags string) ([]string, error) {
+	if tags == "" {
+		return []string{}, nil
+	}
+	var result []string
+	if err := json.Unmarshal([]byte(tags), &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // SetTags 设置标签
 func (s *ForwardNodeService) SetTags(nodeID uint, tags []string) error {
-	tagsJSON, _ := json.Marshal(tags)
+	tagsJSON, err := json.Marshal(tags)
+	if err != nil {
+		return err
+	}
 	return s.db.Model(&model.ForwardNode{}).Where("id = ?", nodeID).
 		Update("tags", string(tagsJSON)).Error
 }

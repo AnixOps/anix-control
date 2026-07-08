@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/anixops/v2board/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+const defaultForwardCleanAgentActionTimeout = 120 * time.Second
 
 // ForwardAgentBridgeWorker claims pending clean_agent runtime jobs, asks NodeX to
 // translate the panel payload into a legacy AgentTask, and persists the durable
@@ -22,6 +25,7 @@ type ForwardAgentBridgeWorker struct {
 	pollInterval     time.Duration
 	idlePollInterval time.Duration
 	batchSize        int
+	actionTimeout    time.Duration
 	errorLogger      *forwardBackgroundErrorLogger
 }
 
@@ -33,6 +37,7 @@ func NewForwardAgentBridgeWorker(db *gorm.DB) *ForwardAgentBridgeWorker {
 		pollInterval:     settings.PollInterval,
 		idlePollInterval: settings.IdlePollInterval,
 		batchSize:        settings.BatchSize,
+		actionTimeout:    loadForwardCleanAgentActionTimeout(),
 		errorLogger:      newForwardBackgroundErrorLogger(settings.ErrorLogInterval),
 	}
 }
@@ -85,6 +90,10 @@ func (w *ForwardAgentBridgeWorker) RunPendingJobs(ctx context.Context) error {
 }
 
 func (w *ForwardAgentBridgeWorker) runPendingJobs(ctx context.Context) (int, error) {
+	if err := w.expireTimedOutBridgeTasks(time.Now()); err != nil {
+		return 0, err
+	}
+
 	processedCount := 0
 	for {
 		processed, err := w.processNext(ctx)
@@ -124,17 +133,27 @@ func (w *ForwardAgentBridgeWorker) processNext(ctx context.Context) (bool, error
 
 func (w *ForwardAgentBridgeWorker) claimJob(job *model.ForwardRuntimeJob) (bool, error) {
 	now := time.Now()
-	result := w.db.Model(&model.ForwardRuntimeJob{}).
-		Where("id = ? AND status = ?", job.ID, model.ForwardRuntimeJobStatusPending).
-		Updates(map[string]any{
-			"status":     model.ForwardRuntimeJobStatusRunning,
-			"started_at": &now,
-			"claimed_at": &now,
-		})
-	if result.Error != nil {
-		return false, result.Error
+	claimed := false
+	if err := w.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.ForwardRuntimeJob{}).
+			Where("id = ? AND status = ?", job.ID, model.ForwardRuntimeJobStatusPending).
+			Updates(map[string]any{
+				"status":     model.ForwardRuntimeJobStatusRunning,
+				"started_at": &now,
+				"claimed_at": &now,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return nil
+		}
+		claimed = true
+		return updateForwardRuntimeRunningStateTx(tx, job, &now)
+	}); err != nil {
+		return false, err
 	}
-	if result.RowsAffected == 0 {
+	if !claimed {
 		return false, nil
 	}
 	job.Status = model.ForwardRuntimeJobStatusRunning
@@ -227,6 +246,83 @@ func (w *ForwardAgentBridgeWorker) finishJobFailure(job *model.ForwardRuntimeJob
 	return updateForwardRuntimeStateTx(w.queryDB(), job, model.ForwardRuntimeJobStatusFailed, message, failedForwardStatusForAction(job.Action), &now)
 }
 
+func (w *ForwardAgentBridgeWorker) expireTimedOutBridgeTasks(now time.Time) error {
+	db := w.queryDB()
+	if db == nil {
+		return nil
+	}
+
+	timeout := w.actionTimeout
+	if timeout <= 0 {
+		timeout = defaultForwardCleanAgentActionTimeout
+	}
+	cutoff := now.Add(-timeout)
+
+	var mappings []model.ForwardAgentBridgeTask
+	if err := db.
+		Where("status IN ? AND updated_at <= ?", []string{
+			model.ForwardAgentBridgeTaskStatusPending,
+			model.ForwardAgentBridgeTaskStatusDispatched,
+		}, cutoff).
+		Order("id ASC").
+		Find(&mappings).Error; err != nil {
+		return err
+	}
+
+	for idx := range mappings {
+		mapping := mappings[idx]
+		message := fmt.Sprintf("clean_agent task timed out after %s without result", timeout.Round(time.Second))
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			var current model.ForwardAgentBridgeTask
+			if err := tx.
+				Where("id = ? AND status IN ? AND updated_at <= ?", mapping.ID, []string{
+					model.ForwardAgentBridgeTaskStatusPending,
+					model.ForwardAgentBridgeTaskStatusDispatched,
+				}, cutoff).
+				First(&current).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil
+				}
+				return err
+			}
+
+			var job model.ForwardRuntimeJob
+			if err := tx.
+				Where("id = ? AND backend = ? AND status = ?", current.RuntimeJobID, model.ForwardRuntimeBackendCleanAgent, model.ForwardRuntimeJobStatusRunning).
+				First(&job).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil
+				}
+				return err
+			}
+
+			if err := tx.Model(&model.ForwardRuntimeJob{}).
+				Where("id = ? AND status = ?", job.ID, model.ForwardRuntimeJobStatusRunning).
+				Updates(map[string]any{
+					"status":       model.ForwardRuntimeJobStatusFailed,
+					"error":        message,
+					"completed_at": &now,
+				}).Error; err != nil {
+				return err
+			}
+			if err := updateForwardRuntimeStateTx(tx, &job, model.ForwardRuntimeJobStatusFailed, message, failedForwardStatusForAction(job.Action), &now); err != nil {
+				return err
+			}
+			return tx.Model(&model.ForwardAgentBridgeTask{}).
+				Where("id = ? AND status IN ?", current.ID, []string{
+					model.ForwardAgentBridgeTaskStatusPending,
+					model.ForwardAgentBridgeTaskStatusDispatched,
+				}).
+				Updates(map[string]any{
+					"status": model.ForwardAgentBridgeTaskStatusFailed,
+				}).Error
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // requeueStaleJobs recovers clean_agent jobs left running by a crash/restart.
 // A running job that already has a bridge mapping was dispatched and is still awaiting
 // an agent report, so it stays running. A running job with no mapping crashed before or
@@ -254,13 +350,19 @@ func (w *ForwardAgentBridgeWorker) requeueStaleJobs() error {
 		if count > 0 {
 			continue
 		}
-		if err := db.Model(&model.ForwardRuntimeJob{}).
-			Where("id = ? AND status = ?", jobs[idx].ID, model.ForwardRuntimeJobStatusRunning).
-			Updates(map[string]any{
-				"status":     model.ForwardRuntimeJobStatusPending,
-				"started_at": nil,
-				"claimed_at": nil,
-			}).Error; err != nil {
+		now := time.Now()
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Model(&model.ForwardRuntimeJob{}).
+				Where("id = ? AND status = ?", jobs[idx].ID, model.ForwardRuntimeJobStatusRunning).
+				Updates(map[string]any{
+					"status":     model.ForwardRuntimeJobStatusPending,
+					"started_at": nil,
+					"claimed_at": nil,
+				}).Error; err != nil {
+				return err
+			}
+			return requeueForwardRuntimeStateTx(tx, &jobs[idx], &now)
+		}); err != nil {
 			return err
 		}
 	}

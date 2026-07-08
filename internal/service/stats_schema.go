@@ -5,10 +5,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// EnsureStatsSchema creates the traffic/stats tables if they do not exist:
+// EnsureStatsSchema creates or completes the traffic/stats tables:
 // v2_server_log, v2_online_log, v2_stat_user, v2_stat_server.
 // Called unconditionally at startup (including production) because AutoMigrate only
-// runs in dev/test. Idempotent and only touches these new tables, never existing ones.
+// runs in dev/test. Idempotent and limited to these tables; existing legacy tables
+// are only expanded with missing columns/indexes.
 func EnsureStatsSchema(db *gorm.DB) error {
 	if db == nil {
 		return nil
@@ -20,9 +21,6 @@ func EnsureStatsSchema(db *gorm.DB) error {
 		&model.StatServer{},
 	}
 	for _, table := range tables {
-		if db.Migrator().HasTable(table) {
-			continue
-		}
 		if err := db.AutoMigrate(table); err != nil {
 			return err
 		}

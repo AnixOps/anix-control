@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -112,7 +113,14 @@ func (r *Runner) Run(ctx context.Context, server config.ServerConfig, user confi
 	r.report.Results = []TestResult{}
 
 	// 纭繚閰嶇疆鐩綍瀛樺湪
-	os.MkdirAll(r.configDir, 0755)
+	if err := os.MkdirAll(r.configDir, 0o750); err != nil {
+		r.addResult(TestResult{
+			ScenarioName: "prepare-config-dir",
+			Success:      false,
+			Error:        fmt.Sprintf("failed to create config dir: %v", err),
+		})
+		return r.report
+	}
 
 	if r.parallel {
 		r.runParallel(ctx, server, user)
@@ -156,8 +164,8 @@ func (r *Runner) runParallel(ctx context.Context, server config.ServerConfig, us
 }
 
 // runTest 鎵ц鍗曚釜娴嬭瘯
-func (r *Runner) runTest(ctx context.Context, scenario config.TestScenario, server config.ServerConfig, user config.UserConfig, genName string, generator config.Generator) TestResult {
-	result := TestResult{
+func (r *Runner) runTest(ctx context.Context, scenario config.TestScenario, server config.ServerConfig, user config.UserConfig, genName string, generator config.Generator) (result TestResult) {
+	result = TestResult{
 		ScenarioName: scenario.Name,
 		ClientType:   genName,
 		Protocol:     string(scenario.Protocol),
@@ -189,12 +197,16 @@ func (r *Runner) runTest(ctx context.Context, scenario config.TestScenario, serv
 	if genName == "mihomo" {
 		configPath = filepath.Join(r.configDir, fmt.Sprintf("%s_%s.yaml", scenario.Name, genName))
 	}
-	if err := os.WriteFile(configPath, configContent, 0644); err != nil {
+	if err := os.WriteFile(configPath, configContent, 0o600); err != nil {
 		result.Success = false
 		result.Error = fmt.Sprintf("failed to write config: %v", err)
 		return result
 	}
-	defer os.Remove(configPath)
+	defer func() {
+		if err := os.Remove(configPath); err != nil && !os.IsNotExist(err) {
+			log.Printf("remove generated client config %s: %v", configPath, err)
+		}
+	}()
 
 	// 鍒涘缓瀹㈡埛绔?
 	var client clients.Client
@@ -221,7 +233,16 @@ func (r *Runner) runTest(ctx context.Context, scenario config.TestScenario, serv
 		result.Logs = client.Logs()
 		return result
 	}
-	defer client.Stop()
+	defer func() {
+		if err := client.Stop(); err != nil {
+			result.Success = false
+			if result.Error != "" {
+				result.Error += "; "
+			}
+			result.Error += fmt.Sprintf("failed to stop client: %v", err)
+			result.Logs = client.Logs()
+		}
+	}()
 
 	// 绛夊緟瀹㈡埛绔ǔ瀹?
 	time.Sleep(500 * time.Millisecond)
@@ -283,7 +304,7 @@ func (r *Runner) SaveReport(path string) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0o600)
 }
 
 // PrintReport 鎵撳嵃娴嬭瘯鎶ュ憡

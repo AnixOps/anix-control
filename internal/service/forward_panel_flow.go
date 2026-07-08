@@ -62,6 +62,9 @@ func (s *PanelForwardService) UploadFluxForwardFlow(data PanelForwardFlowData) e
 	if err != nil {
 		return err
 	}
+	if err := s.validatePanelForwardFlowRef(ref, forward); err != nil {
+		return err
+	}
 
 	upload, download := applyPanelForwardTrafficRatio(forward.Tunnel, data.U, data.D)
 	return s.recordForwardTrafficDelta(ref.ForwardID, upload, download)
@@ -110,7 +113,7 @@ func (s *PanelForwardService) applyForwardTrafficSnapshot(record PanelForwardTra
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		var forward model.Forward
-		if err := tx.Select("id", "user_id", "tunnel_id").First(&forward, record.ForwardID).Error; err != nil {
+		if err := tx.Preload("Tunnel").Select("id", "user_id", "tunnel_id").First(&forward, record.ForwardID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				_ = tx.Where("forward_id = ? AND backend = ?", record.ForwardID, backend).Delete(&model.ForwardTrafficCursor{}).Error
 				return nil
@@ -161,6 +164,7 @@ func (s *PanelForwardService) applyForwardTrafficSnapshot(record PanelForwardTra
 		if uploadDelta == 0 && downloadDelta == 0 {
 			return nil
 		}
+		uploadDelta, downloadDelta = applyPanelForwardTrafficRatio(forward.Tunnel, uploadDelta, downloadDelta)
 		return s.recordForwardTrafficDeltaTx(tx, record.ForwardID, uploadDelta, downloadDelta)
 	})
 	if err != nil {
@@ -298,6 +302,33 @@ func (s *PanelForwardService) loadForwardWithTunnel(forwardID uint) (*model.Forw
 		return nil, err
 	}
 	return &forward, nil
+}
+
+func (s *PanelForwardService) validatePanelForwardFlowRef(ref *panelForwardFlowRef, forward *model.Forward) error {
+	if ref == nil || forward == nil {
+		return errors.New("forward flow reference is required")
+	}
+	if ref.UserID != 0 && forward.UserID != ref.UserID {
+		return errors.New("forward flow user mismatch")
+	}
+	if ref.UserTunnelID == 0 {
+		return nil
+	}
+
+	var permission model.ForwardUserTunnel
+	if err := s.db.Select("id", "user_id", "tunnel_id").First(&permission, ref.UserTunnelID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("forward flow user tunnel permission not found")
+		}
+		return err
+	}
+	if permission.UserID != forward.UserID || permission.TunnelID != forward.TunnelID {
+		return errors.New("forward flow user tunnel mismatch")
+	}
+	if ref.UserID != 0 && permission.UserID != ref.UserID {
+		return errors.New("forward flow user mismatch")
+	}
+	return nil
 }
 
 func parsePanelForwardFlowRef(raw string) (*panelForwardFlowRef, error) {

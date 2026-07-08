@@ -14,22 +14,24 @@
 1. **编译定制 V2bX 二进制**(按目标机架构):
    ```bash
    cd /home/dev/anixops/V2bX_AnixOps
-   GOOS=linux GOARCH=amd64 go build -o V2bX      # arm64 机器改 GOARCH=arm64
+   GOOS=linux GOARCH=amd64 go build -o build/inventory/V2bX_linux_amd64 ./main.go
+   GOOS=linux GOARCH=arm64 go build -o build/inventory/V2bX_linux_arm64 ./main.go
    ```
-   路径填进 `group_vars/all.yml` 的 `v2bx_binary_local`。二进制架构必须匹配目标机。
+   路径填进 `group_vars/all.yml` 的 `v2bx_binary_amd64_local` / `v2bx_binary_arm64_local`。playbook 会按 `v2bx_arch` 或远端架构自动选择。
 
 2. **准备变量**:
    ```bash
    cd config/deploy/ansible/nodes
    cp group_vars/all.yml.example group_vars/all.yml
-   # 编辑 all.yml: 填面板地址(HTTP 或 HTTPS 二选一)、v2bx_binary_local
+   # 编辑 all.yml: 填面板地址(HTTP 或 HTTPS 二选一)、二进制路径
    ```
 
 3. **准备 inventory**:
    ```bash
    cp inventory.ini.example inventory.ini
    # legacy 节点每台一行, 标 node_id=<面板里该节点ID>, 配好 SSH
-   # Oracle ARM / Ampere 节点额外加: v2bx_arch=arm64
+   # Oracle ARM / Ampere 节点建议加: v2bx_arch=arm64
+   # 不写时 deploy_v2bx.yml 会从远端架构自动识别; deploy_from_inventory.sh 默认为 amd64。
    ```
 
 4. **拿管理员 token**(用于自动拉 legacy 节点的 api_key):登录面板后台,从浏览器 devtools 或登录接口取 JWT。也可跳过自动拉取,在 inventory 里手填 `api_key=`。
@@ -87,7 +89,7 @@ cd config/deploy/ansible/nodes
 akko-uk ansible_host=185.217.110.160 ansible_port=22 ansible_user=root ansible_ssh_pass=... node_id=7 v2bx_arch=arm64
 ```
 
-如果不写,脚本默认按 `amd64` 处理。
+直接跑 `deploy_v2bx.yml` 时,不写 `v2bx_arch` 会从远端架构自动识别。使用 `deploy_from_inventory.sh` 时,脚本为了先编译本地二进制仍默认按 `amd64` 处理,ARM 节点建议显式写 `v2bx_arch=arm64`。
 
 一台跑通后,去掉 `-l` 部署全部,或逐台 `-l <host>` 一个个来:
 ```bash

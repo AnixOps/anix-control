@@ -10,7 +10,6 @@ import (
 
 	pb "github.com/anixops/v2board/api/grpc/v2boardpb"
 	"github.com/anixops/v2board/internal/cache"
-	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/google/uuid"
@@ -33,22 +32,24 @@ func uniqueKey(prefix string) string {
 type StreamBidirectionalTestSuite struct {
 	suite.Suite
 	server     *grpc.Server
+	serverErr  <-chan error
 	clientConn *grpc.ClientConn
 	addr       string
 }
 
 func (s *StreamBidirectionalTestSuite) SetupSuite() {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	database.AutoMigrate(
+	requireInMemoryDatabase(s.T())
+	requireAutoMigrate(s.T(),
 		&model.User{},
 		&model.Plan{},
 		&model.Node{},
 		&model.NodeProtocol{},
 		&model.AuthorizedKey{},
+		&model.TrafficLog{},
+		&model.OnlineLog{},
+		&model.StatUser{},
+		&model.StatServer{},
 	)
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -62,7 +63,7 @@ func (s *StreamBidirectionalTestSuite) SetupSuite() {
 	pb.RegisterHealthServiceServer(s.server, NewHealthGRPCServer())
 	pb.RegisterConfigSyncServiceServer(s.server, NewConfigSyncGRPCServer())
 
-	go s.server.Serve(lis)
+	s.serverErr = serveGRPCServerForTest(s.T(), s.server, lis)
 	time.Sleep(100 * time.Millisecond)
 
 	s.clientConn, err = grpc.NewClient(s.addr,
@@ -73,24 +74,32 @@ func (s *StreamBidirectionalTestSuite) SetupSuite() {
 
 func (s *StreamBidirectionalTestSuite) TearDownSuite() {
 	if s.clientConn != nil {
-		s.clientConn.Close()
+		requireClientConnClosed(s.T(), s.clientConn)
 	}
 	if s.server != nil {
-		s.server.GracefulStop()
+		stopGRPCServerForTest(s.T(), s.server, s.serverErr)
 	}
-	database.Close()
+	requireDatabaseClosed(s.T())
 }
 
 func (s *StreamBidirectionalTestSuite) SetupTest() {
 	// Ensure tables exist (re-migrate in case DB was reset by concurrent access)
-	database.AutoMigrate(
+	requireAutoMigrate(s.T(),
 		&model.User{},
 		&model.Plan{},
 		&model.Node{},
 		&model.NodeProtocol{},
 		&model.AuthorizedKey{},
+		&model.TrafficLog{},
+		&model.OnlineLog{},
+		&model.StatUser{},
+		&model.StatServer{},
 	)
 	db := database.Get()
+	db.Exec("DELETE FROM v2_stat_server")
+	db.Exec("DELETE FROM v2_stat_user")
+	db.Exec("DELETE FROM v2_online_log")
+	db.Exec("DELETE FROM v2_server_log")
 	db.Exec("DELETE FROM v2_authorized_key")
 	db.Exec("DELETE FROM v2_node_protocol")
 	db.Exec("DELETE FROM v2_node")
@@ -166,7 +175,7 @@ func (s *StreamBidirectionalTestSuite) TestStatusStream_HeartbeatUpdatesLastSeen
 	assert.True(s.T(), conn2.LastSeen.After(firstSeen),
 		"LastSeen should be updated after second heartbeat")
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 // TestStatusStream_MultipleHeartbeats verifies multiple sequential heartbeats
@@ -211,7 +220,7 @@ func (s *StreamBidirectionalTestSuite) TestStatusStream_MultipleHeartbeats() {
 	_, ok := mgr.GetConnection(uint32(node.ID))
 	assert.True(s.T(), ok, "node should remain registered after multiple heartbeats")
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 // ---------------------------------------------------------------------------
@@ -284,7 +293,7 @@ func (s *StreamBidirectionalTestSuite) TestStatusStream_ConfigPushViaNotifyConfi
 	// When checkConfigChanges is implemented, responses will be non-empty.
 	_ = responses
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 // ---------------------------------------------------------------------------
@@ -332,7 +341,7 @@ func (s *StreamBidirectionalTestSuite) TestUserChanges_StreamReceivesNotificatio
 	require.NoError(s.T(), err)
 	assert.True(s.T(), resp2.Success)
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 // TestUserChanges_StreamReceivesDeletedNotification verifies DELETED type.
@@ -358,7 +367,7 @@ func (s *StreamBidirectionalTestSuite) TestUserChanges_StreamReceivesDeletedNoti
 	require.NoError(s.T(), err)
 	assert.True(s.T(), resp.Success)
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 // ---------------------------------------------------------------------------
@@ -440,7 +449,7 @@ func (s *StreamBidirectionalTestSuite) TestConfigChanges_StreamVersionTracking()
 	assert.Greater(s.T(), afterVer, int64(0),
 		"config version should be set after node registration via stream")
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 // TestConfigChanges_IncrementalVersionUpdates verifies that multiple
@@ -507,7 +516,7 @@ func (s *StreamBidirectionalTestSuite) TestStatusStream_CleanCloseNoGoroutineLea
 		}))
 		time.Sleep(20 * time.Millisecond)
 
-		stream.CloseSend()
+		requireCloseSend(s.T(), stream)
 		cancel()
 
 		// Wait for server-side goroutine to clean up
@@ -540,7 +549,7 @@ func (s *StreamBidirectionalTestSuite) TestHealthWatch_CleanClose() {
 		_, err = stream.Recv()
 		require.NoError(s.T(), err)
 
-		stream.CloseSend()
+		requireCloseSend(s.T(), stream)
 		cancel()
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -610,7 +619,7 @@ func (s *StreamBidirectionalTestSuite) TestTrafficStream_CleanClose() {
 	_, err = stream.Recv()
 	require.NoError(s.T(), err)
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 	cancel()
 
 	time.Sleep(200 * time.Millisecond)
@@ -914,6 +923,53 @@ func (s *StreamBidirectionalTestSuite) TestTrafficStream_ContextCancellation() {
 	assert.Error(s.T(), err, "send after context cancel should fail")
 }
 
+// TestOnlineStream_ContextCancellation verifies OnlineStream exits on cancel.
+func (s *StreamBidirectionalTestSuite) TestOnlineStream_ContextCancellation() {
+	db := database.Get()
+
+	groupID := uint(1)
+	node := &model.Node{
+		Name:    "online-cancel-node",
+		Host:    "10.0.0.122",
+		Port:    443,
+		GroupID: &groupID,
+		Rate:    1.0,
+		Show:    1,
+		Status:  model.NodeStatusOnline,
+		APIKey:  uniqueKey("osc"),
+	}
+	require.NoError(s.T(), db.Create(node).Error)
+
+	client := pb.NewTrafficServiceClient(s.clientConn)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	stream, err := client.OnlineStream(ctx)
+	require.NoError(s.T(), err)
+
+	online := map[uint32]*pb.OnlineData{
+		1: {
+			Ips:       []string{"192.0.2.10", "192.0.2.11"},
+			Timestamp: time.Now().Unix(),
+		},
+	}
+	require.NoError(s.T(), stream.Send(&pb.OnlineReportRequest{
+		NodeId: uint32(node.ID),
+		Online: online,
+	}))
+
+	_, err = stream.Recv()
+	require.NoError(s.T(), err)
+
+	cancel()
+	time.Sleep(100 * time.Millisecond)
+
+	err = stream.Send(&pb.OnlineReportRequest{
+		NodeId: uint32(node.ID),
+		Online: online,
+	})
+	assert.Error(s.T(), err, "send after context cancel should fail")
+}
+
 // ---------------------------------------------------------------------------
 // 8. Connection manager edge cases
 // ---------------------------------------------------------------------------
@@ -1090,7 +1146,9 @@ func (s *StreamBidirectionalTestSuite) TestMultipleConcurrentStreams() {
 				NodeId: nodeIDs[idx],
 			})
 			time.Sleep(50 * time.Millisecond)
-			stream.CloseSend()
+			if err := stream.CloseSend(); err != nil {
+				s.T().Errorf("close status stream: %v", err)
+			}
 		}(i)
 	}
 
@@ -1139,7 +1197,9 @@ func (s *StreamBidirectionalTestSuite) TestUserChanges_MultipleConcurrentStreams
 			}
 			_ = stream.Send(notification)
 			_, _ = stream.Recv()
-			stream.CloseSend()
+			if err := stream.CloseSend(); err != nil {
+				s.T().Errorf("close user changes stream: %v", err)
+			}
 		}(i)
 	}
 
@@ -1185,7 +1245,9 @@ func (s *StreamBidirectionalTestSuite) TestConfigChanges_MultipleConcurrentStrea
 			}
 			_ = stream.Send(notification)
 			_, _ = stream.Recv()
-			stream.CloseSend()
+			if err := stream.CloseSend(); err != nil {
+				s.T().Errorf("close config changes stream: %v", err)
+			}
 		}(i)
 	}
 

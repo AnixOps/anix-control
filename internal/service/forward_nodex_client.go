@@ -21,16 +21,12 @@ const (
 	forwardRuntimeNodeXTokenConfigKey          = "forward.runtime.nodex.token"
 	forwardRuntimeNodeXTimeoutSecondsConfigKey = "forward.runtime.nodex.timeout_seconds"
 
-	defaultForwardRuntimeNodeXExecutePath          = "/api/v2/internal/forward/runtime/execute"
-	defaultForwardRuntimeNodeXBridgeTranslatePath  = "/api/v2/internal/forward/bridge/translate"
-	defaultForwardRuntimeNodeXTimeout              = 15 * time.Second
+	defaultForwardRuntimeNodeXExecutePath         = "/api/v2/internal/forward/runtime/execute"
+	defaultForwardRuntimeNodeXBridgeTranslatePath = "/api/v2/internal/forward/bridge/translate"
+	defaultForwardRuntimeNodeXTimeout             = 15 * time.Second
 
 	nodeXForwardResourceTypePanelForward = "panel_forward"
 	nodeXForwardResourceTypeLegacyRule   = "legacy_rule"
-
-	// Legacy test compatibility constants kept while the request contract is shared.
-	nodeXForwardRuntimeApplyPath = defaultForwardRuntimeNodeXExecutePath
-	nodeXForwardRuntimeSource    = nodeXForwardResourceTypeLegacyRule
 )
 
 type forwardRuntimeNodeXExecutor interface {
@@ -167,41 +163,6 @@ type nodeXForwardNodePayload struct {
 	APIToken string `json:"apiToken"`
 }
 
-// nodeXForwardRuntimeRequest is a compatibility decoder kept for existing legacy
-// provider tests that asserted the older flat request body shape.
-type nodeXForwardRuntimeRequest struct {
-	Source    string                        `json:"source"`
-	Action    string                        `json:"action"`
-	Rule      nodeXLegacyForwardRulePayload `json:"rule"`
-	RelayNode nodeXForwardNodePayload       `json:"relayNode"`
-	ExitNode  nodeXForwardNodePayload       `json:"exitNode"`
-}
-
-func (r *nodeXForwardRuntimeRequest) UnmarshalJSON(data []byte) error {
-	type legacyAlias nodeXForwardRuntimeRequest
-	var legacy legacyAlias
-	if err := json.Unmarshal(data, &legacy); err == nil {
-		if legacy.Source != "" || legacy.Rule.ID != 0 || legacy.Action != "" {
-			*r = nodeXForwardRuntimeRequest(legacy)
-			return nil
-		}
-	}
-
-	var req nodeXForwardExecuteRequest
-	if err := json.Unmarshal(data, &req); err != nil {
-		return err
-	}
-
-	r.Source = req.ResourceType
-	r.Action = req.Action
-	if req.LegacyRule != nil {
-		r.Rule = req.LegacyRule.Rule
-		r.RelayNode = req.LegacyRule.RelayNode
-		r.ExitNode = req.LegacyRule.ExitNode
-	}
-	return nil
-}
-
 func newNodeXForwardRuntimeClient(configService *SystemConfigService) *nodeXForwardRuntimeClient {
 	return &nodeXForwardRuntimeClient{configService: configService}
 }
@@ -270,11 +231,14 @@ func (c *nodeXForwardRuntimeClient) Execute(ctx context.Context, req nodeXForwar
 	if err != nil {
 		return nil, fmt.Errorf("execute NodeX forward runtime request: %w", err)
 	}
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
 	if err != nil {
 		return nil, fmt.Errorf("read NodeX forward runtime response: %w", err)
+	}
+	if closeErr != nil {
+		return nil, fmt.Errorf("close NodeX forward runtime response: %w", closeErr)
 	}
 
 	var apiResp nodeXForwardExecuteResponse
@@ -357,11 +321,14 @@ func (c *nodeXForwardRuntimeClient) Translate(ctx context.Context, sourceJobID u
 	if err != nil {
 		return nil, fmt.Errorf("execute NodeX bridge translate request: %w", err)
 	}
-	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
 	if err != nil {
 		return nil, fmt.Errorf("read NodeX bridge translate response: %w", err)
+	}
+	if closeErr != nil {
+		return nil, fmt.Errorf("close NodeX bridge translate response: %w", closeErr)
 	}
 
 	var apiResp nodeXBridgeTranslateResponse

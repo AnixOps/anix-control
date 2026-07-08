@@ -4,11 +4,18 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/anixops/v2board/internal/tests/integration/config"
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	// 鍒涘缓鏈嶅姟绔厤缃?
 	server := config.ServerConfig{
 		Host:      "example.com",
@@ -40,7 +47,7 @@ func main() {
 	xrayGen := config.NewXrayGenerator()
 	xrayConfig, err := xrayGen.Generate(client)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	fmt.Println("=== Xray Config (JSON) ===")
 	fmt.Println(string(xrayConfig))
@@ -49,7 +56,7 @@ func main() {
 	mihomoGen := config.NewMihomoGenerator()
 	mihomoConfig, err := mihomoGen.Generate(client)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	fmt.Println("\n=== Mihomo Config (YAML) ===")
 	fmt.Println(string(mihomoConfig))
@@ -62,8 +69,22 @@ func main() {
 	}
 
 	// 淇濆瓨鍒版枃浠?
-	os.MkdirAll("output", 0755)
-	os.WriteFile("output/xray-config.json", xrayConfig, 0644)
-	os.WriteFile("output/mihomo-config.yaml", mihomoConfig, 0644)
+	if err := saveGeneratedConfigs("output", xrayConfig, mihomoConfig); err != nil {
+		return err
+	}
 	fmt.Println("\n鉁?閰嶇疆宸蹭繚瀛樺埌 output/ 鐩綍")
+	return nil
+}
+
+func saveGeneratedConfigs(outputDir string, xrayConfig, mihomoConfig []byte) error {
+	if err := os.MkdirAll(outputDir, 0o750); err != nil {
+		return fmt.Errorf("create output directory: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "xray-config.json"), xrayConfig, 0o600); err != nil {
+		return fmt.Errorf("write xray config: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "mihomo-config.yaml"), mihomoConfig, 0o600); err != nil {
+		return fmt.Errorf("write mihomo config: %w", err)
+	}
+	return nil
 }

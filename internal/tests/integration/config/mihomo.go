@@ -82,10 +82,10 @@ func (g *MihomoGenerator) GenerateFromScenario(scenario TestScenario, server Ser
 // generateProxy 生成代理配置
 func (g *MihomoGenerator) generateProxy(cfg *ClientConfig) map[string]any {
 	proxy := map[string]any{
-		"name":     cfg.Name,
-		"type":     string(cfg.Server.Protocol),
-		"server":   cfg.Server.Host,
-		"port":     cfg.Server.Port,
+		"name":   cfg.Name,
+		"type":   string(cfg.Server.Protocol),
+		"server": cfg.Server.Host,
+		"port":   cfg.Server.Port,
 	}
 
 	switch cfg.Server.Protocol {
@@ -194,8 +194,8 @@ func (g *MihomoGenerator) generateRules() []string {
 // generateDNS 生成 DNS 配置
 func (g *MihomoGenerator) generateDNS() map[string]any {
 	return map[string]any{
-		"enable":           true,
-		"ipv6":             false,
+		"enable": true,
+		"ipv6":   false,
 		"default-nameserver": []string{
 			"223.5.5.5",
 			"119.29.29.29",
@@ -212,19 +212,19 @@ func (g *MihomoGenerator) generateDNS() map[string]any {
 // Mihomo 配置结构体
 
 type MihomoConfig struct {
-	Port               int                            `yaml:"port"`
-	SocksPort          int                            `yaml:"socks-port"`
-	MixedPort          int                            `yaml:"mixed-port"`
-	AllowLan           bool                           `yaml:"allow-lan"`
-	BindAddress        string                         `yaml:"bind-address"`
-	Mode               string                         `yaml:"mode"`
-	LogLevel           string                         `yaml:"log-level"`
-	IPv6               bool                           `yaml:"ipv6"`
-	ExternalController string                         `yaml:"external-controller"`
-	Proxies            []map[string]any       `yaml:"proxies"`
-	ProxyGroups        []map[string]any       `yaml:"proxy-groups"`
-	Rules              []string                       `yaml:"rules"`
-	DNS                map[string]any         `yaml:"dns"`
+	Port               int              `yaml:"port"`
+	SocksPort          int              `yaml:"socks-port"`
+	MixedPort          int              `yaml:"mixed-port"`
+	AllowLan           bool             `yaml:"allow-lan"`
+	BindAddress        string           `yaml:"bind-address"`
+	Mode               string           `yaml:"mode"`
+	LogLevel           string           `yaml:"log-level"`
+	IPv6               bool             `yaml:"ipv6"`
+	ExternalController string           `yaml:"external-controller"`
+	Proxies            []map[string]any `yaml:"proxies"`
+	ProxyGroups        []map[string]any `yaml:"proxy-groups"`
+	Rules              []string         `yaml:"rules"`
+	DNS                map[string]any   `yaml:"dns"`
 }
 
 // GenerateClashProxies 生成 Clash 代理配置片段

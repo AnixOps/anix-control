@@ -8,6 +8,8 @@ This section is the operator/developer reference index for `v2board_AnixOps`.
 - [startup-config.md](startup-config.md): exact backend startup flow and runtime bootstrap order
 - [configuration.md](configuration.md): config source-of-truth, key ownership, and mode-specific examples
 - [forward-runtime-migration.md](forward-runtime-migration.md): old `FORWARD_RUNTIME_*` inputs to the new YAML-only runtime config
+- [sqlite-to-postgres-migration.md](sqlite-to-postgres-migration.md): SQLite to PostgreSQL dry-run, import, verification, and rollback runbook
+- [traffic-stats-operations.md](traffic-stats-operations.md): traffic log indexes, query bounds, and retention runbook
 - [repository-layout.md](repository-layout.md): root and directory ownership, plus root hygiene rules
 - [runtime.md](runtime.md): NodeX mode vs local Ansible mode, recommended `nftables_ansible` defaults, and where to operate each path
 

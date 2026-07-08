@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/anixops/v2board/internal/cache"
 	"github.com/anixops/v2board/internal/config"
@@ -105,6 +107,7 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 		&model.PaymentRecord{},
 		&model.ForwardNode{},
 		&model.Forward{},
+		&model.ForwardPortBinding{},
 		&model.ForwardRule{},
 		&model.ForwardTunnel{},
 		&model.ForwardUserTunnel{},
@@ -212,7 +215,7 @@ func (s *AdminE2ETestSuite) login(email, password string) string {
 	}
 
 	var response map[string]any
-	json.Unmarshal(w.Body.Bytes(), &response)
+	requireJSONUnmarshal(s.T(), w.Body.Bytes(), &response)
 
 	data := response["data"].(map[string]any)
 	return data["token"].(string)
@@ -220,7 +223,7 @@ func (s *AdminE2ETestSuite) login(email, password string) string {
 
 // TearDownSuite 测试套件清理
 func (s *AdminE2ETestSuite) TearDownSuite() {
-	database.Close()
+	requireDatabaseClosed(s.T())
 }
 
 // TestAdminAuth_RequireAdmin 测试管理员权限验证
@@ -247,7 +250,7 @@ func (s *AdminE2ETestSuite) TestGetDashboard() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var response map[string]any
-	json.Unmarshal(w.Body.Bytes(), &response)
+	requireJSONUnmarshal(s.T(), w.Body.Bytes(), &response)
 
 	// 检查仪表盘数据
 	assert.Contains(s.T(), response, "data")
@@ -264,7 +267,7 @@ func (s *AdminE2ETestSuite) TestGetUsers() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var response map[string]any
-	json.Unmarshal(w.Body.Bytes(), &response)
+	requireJSONUnmarshal(s.T(), w.Body.Bytes(), &response)
 
 	data := response["data"].(map[string]any)
 	users := data["list"].([]any)
@@ -274,8 +277,8 @@ func (s *AdminE2ETestSuite) TestGetUsers() {
 // TestCreateUser 测试创建用户
 func (s *AdminE2ETestSuite) TestCreateUser() {
 	body := map[string]any{
-		"email":          "newuser@admin.test",
-		"password":       "password123",
+		"email":           "newuser@admin.test",
+		"password":        "password123",
 		"transfer_enable": 10737418240,
 	}
 	jsonBody, _ := json.Marshal(body)
@@ -313,7 +316,7 @@ func (s *AdminE2ETestSuite) TestGetNodes() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var response map[string]any
-	json.Unmarshal(w.Body.Bytes(), &response)
+	requireJSONUnmarshal(s.T(), w.Body.Bytes(), &response)
 
 	data := response["data"].(map[string]any)
 	nodes := data["list"].([]any)
@@ -323,12 +326,12 @@ func (s *AdminE2ETestSuite) TestGetNodes() {
 // TestCreateNode 测试创建节点
 func (s *AdminE2ETestSuite) TestCreateNode() {
 	body := map[string]any{
-		"name":        "New Test Node",
-		"host":        "192.168.1.1",
-		"port":        443,
-		"rate":        1.0,
+		"name":         "New Test Node",
+		"host":         "192.168.1.1",
+		"port":         443,
+		"rate":         1.0,
 		"traffic_rate": 1.0,
-		"show":        1,
+		"show":         1,
 	}
 	jsonBody, _ := json.Marshal(body)
 
@@ -382,6 +385,83 @@ func (s *AdminE2ETestSuite) TestGetOrders() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+// TestTrafficHourlyEndpoints verifies the real admin HTTP routes that feed
+// /admin/traffic-hourly, including include_zero_users and legacy rate=0 logs.
+func (s *AdminE2ETestSuite) TestTrafficHourlyEndpoints() {
+	trafficUser := &model.User{
+		Email:          "traffic-http@example.com",
+		Password:       "unused",
+		Token:          uuid.New().String(),
+		UUID:           uuid.New().String(),
+		Balance:        0,
+		TransferEnable: 10737418240,
+		Banned:         0,
+		IsAdmin:        0,
+	}
+	s.Require().NoError(s.db.Create(trafficUser).Error)
+
+	now := time.Now()
+	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
+	s.Require().NoError(s.db.Create(&model.TrafficLog{
+		UserID:     trafficUser.ID,
+		ServerID:   s.testNode.ID,
+		ServerType: "node",
+		U:          1024,
+		D:          2048,
+		Rate:       0,
+		LogAt:      currentHour + 10,
+	}).Error)
+
+	hourlyReq, _ := http.NewRequest("GET", "/api/v2/admin/traffic/hourly?hours=2&user_id="+strconv.FormatUint(uint64(trafficUser.ID), 10), nil)
+	hourlyReq.Header.Set("Authorization", "Bearer "+s.adminToken)
+	hourlyRecorder := httptest.NewRecorder()
+	s.router.ServeHTTP(hourlyRecorder, hourlyReq)
+	assert.Equal(s.T(), http.StatusOK, hourlyRecorder.Code, hourlyRecorder.Body.String())
+
+	var hourlyResponse map[string]any
+	s.Require().NoError(json.Unmarshal(hourlyRecorder.Body.Bytes(), &hourlyResponse))
+	hourlyRows := hourlyResponse["data"].([]any)
+	var currentHourTraffic float64
+	for _, item := range hourlyRows {
+		row := item.(map[string]any)
+		if int64(row["hour_ts"].(float64)) == currentHour {
+			currentHourTraffic = row["traffic"].(float64)
+		}
+	}
+	assert.Equal(s.T(), float64(3072), currentHourTraffic)
+
+	rankingReq, _ := http.NewRequest("GET", "/api/v2/admin/traffic/user-ranking?hours=168&limit=500&include_zero_users=true", nil)
+	rankingReq.Header.Set("Authorization", "Bearer "+s.adminToken)
+	rankingRecorder := httptest.NewRecorder()
+	s.router.ServeHTTP(rankingRecorder, rankingReq)
+	assert.Equal(s.T(), http.StatusOK, rankingRecorder.Code, rankingRecorder.Body.String())
+
+	var rankingResponse map[string]any
+	s.Require().NoError(json.Unmarshal(rankingRecorder.Body.Bytes(), &rankingResponse))
+	rankingRows := rankingResponse["data"].([]any)
+	var found bool
+	for _, item := range rankingRows {
+		row := item.(map[string]any)
+		if uint(row["user_id"].(float64)) == trafficUser.ID {
+			found = true
+			assert.Equal(s.T(), "traffic-http@example.com", row["email"])
+			assert.Equal(s.T(), float64(3072), row["traffic"])
+		}
+	}
+	assert.True(s.T(), found)
+
+	oversizedRankingReq, _ := http.NewRequest("GET", "/api/v2/admin/traffic/user-ranking?hours=999999&limit=999999&include_zero_users=true", nil)
+	oversizedRankingReq.Header.Set("Authorization", "Bearer "+s.adminToken)
+	oversizedRankingRecorder := httptest.NewRecorder()
+	s.router.ServeHTTP(oversizedRankingRecorder, oversizedRankingReq)
+	assert.Equal(s.T(), http.StatusOK, oversizedRankingRecorder.Code, oversizedRankingRecorder.Body.String())
+
+	var oversizedRankingResponse map[string]any
+	s.Require().NoError(json.Unmarshal(oversizedRankingRecorder.Body.Bytes(), &oversizedRankingResponse))
+	oversizedRankingRows := oversizedRankingResponse["data"].([]any)
+	assert.LessOrEqual(s.T(), len(oversizedRankingRows), 1000)
 }
 
 // TestAdminE2E 运行测试套件

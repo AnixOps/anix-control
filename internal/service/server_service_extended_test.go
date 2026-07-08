@@ -188,11 +188,15 @@ func TestToInt64_EdgeCases(t *testing.T) {
 func BenchmarkParseTrafficData(b *testing.B) {
 	input := `{"1": [1024, 2048], "2": [512, 1024], "3": [100, 200]}`
 	var data map[string]any
-	json.Unmarshal([]byte(input), &data)
+	if err := json.Unmarshal([]byte(input), &data); err != nil {
+		b.Fatal(err)
+	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ParseTrafficData(data)
+		if _, err := ParseTrafficData(data); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -200,10 +204,14 @@ func BenchmarkParseTrafficData(b *testing.B) {
 func BenchmarkParseOnlineData(b *testing.B) {
 	input := `{"1": ["192.168.1.100", "10.0.0.50"], "2": ["172.16.0.1"]}`
 	var data map[string]any
-	json.Unmarshal([]byte(input), &data)
+	if err := json.Unmarshal([]byte(input), &data); err != nil {
+		b.Fatal(err)
+	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ParseOnlineData(data)
+		if _, err := ParseOnlineData(data); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

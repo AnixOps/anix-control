@@ -356,10 +356,17 @@ const getGatewayPercent = (type) => {
   return Number(((gatewayAmount / totalAmount) * 100).toFixed(1))
 }
 
+const readPaymentGatewayList = (res) => {
+  if (!res || typeof res !== 'object') return []
+  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  if (Array.isArray(payload)) return payload
+  return Array.isArray(payload?.list) ? payload.list : []
+}
+
 const fetchGateways = async () => {
   try {
     const res = await getPaymentGateways()
-    gateways.value = res.data?.list || []
+    gateways.value = readPaymentGatewayList(res)
   } catch (error) {
     console.error(t('adminPayment.messages.fetchGatewaysFailed'), error)
   }
@@ -377,10 +384,18 @@ const fetchRecords = async () => {
 const fetchStats = async () => {
   try {
     const res = await getPaymentStats()
-    stats.value = res.data || {}
+    stats.value = readPaymentStats(res)
   } catch (error) {
     console.error(t('adminPayment.messages.fetchStatsFailed'), error)
   }
+}
+
+const readPaymentStats = (res) => {
+  if (!res || typeof res !== 'object') {
+    return {}
+  }
+  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  return payload && typeof payload === 'object' ? payload : {}
 }
 
 const openGatewayModal = (gateway = null) => {

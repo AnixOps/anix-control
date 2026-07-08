@@ -27,7 +27,7 @@ func (h *AdminCouponHandler) GetCoupons(c *gin.Context) {
 	}
 
 	// 转换为响应格式
-	var result []gin.H
+	result := make([]gin.H, 0, len(coupons))
 	for _, coupon := range coupons {
 		limitUse := -1
 		if coupon.LimitUse != nil {
@@ -48,7 +48,7 @@ func (h *AdminCouponHandler) GetCoupons(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	panelSuccess(c, result)
 }
 
 // CreateCoupon 创建优惠券
@@ -109,7 +109,10 @@ func (h *AdminCouponHandler) CreateCoupon(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "创建成功", "data": coupon})
+	panelSuccess(c, gin.H{
+		"message": "创建成功",
+		"data":    coupon,
+	})
 }
 
 // DeleteCoupon 删除优惠券
@@ -131,5 +134,5 @@ func (h *AdminCouponHandler) DeleteCoupon(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	panelSuccess(c, gin.H{"message": "删除成功"})
 }

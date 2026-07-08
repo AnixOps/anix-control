@@ -8,6 +8,7 @@ const mockGetUserList = vi.fn()
 const mockGetUserStats = vi.fn()
 const mockUpdateUser = vi.fn()
 const mockGetSubscriptionGroups = vi.fn()
+const mockGetSubscriptionSettings = vi.fn()
 
 vi.mock('@/api/admin', () => ({
   assignAdminUserTunnel: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock('@/api/admin', () => ({
   getForwardTunnels: vi.fn(),
   getSpeedLimitList: vi.fn(),
   getSubscriptionGroups: (...args) => mockGetSubscriptionGroups(...args),
+  getSubscriptionSettings: (...args) => mockGetSubscriptionSettings(...args),
   getUserList: (...args) => mockGetUserList(...args),
   getUserStats: (...args) => mockGetUserStats(...args),
   removeAdminUserTunnel: vi.fn(),
@@ -34,10 +36,12 @@ describe('Admin Users flow', () => {
     mockGetUserStats.mockReset()
     mockUpdateUser.mockReset()
     mockGetSubscriptionGroups.mockReset()
+    mockGetSubscriptionSettings.mockReset()
     vi.spyOn(window, 'alert').mockImplementation(() => {})
 
     mockGetUserStats.mockResolvedValue({ data: {} })
     mockGetSubscriptionGroups.mockResolvedValue({ data: [] })
+    mockGetSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: [] } })
     mockUpdateUser.mockResolvedValue({})
     mockCreateUser.mockResolvedValue({})
   })
@@ -77,5 +81,71 @@ describe('Admin Users flow', () => {
       speed_limit: 80,
       device_limit: 5,
     }))
+  })
+
+  it('renders user stats from legacy and panel envelope payloads', async () => {
+    mockGetUserList.mockResolvedValue({ data: { list: [], total: 0 } })
+    mockGetUserStats
+      .mockResolvedValueOnce({
+        data: {
+          total_users: 12,
+          active_users: 9,
+          expired_users: 2,
+          banned_users: 1,
+        },
+      })
+      .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        data: {
+          total_users: 21,
+          active_users: 18,
+          expired_users: 2,
+          banned_users: 1,
+        },
+        ts: 1783526400000,
+      })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+
+    let metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
+    expect(metricValues).toEqual(['12', '9', '2', '1'])
+
+    await wrapper.vm.fetchStats()
+    await flushPromises()
+
+    metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
+    expect(metricValues).toEqual(['21', '18', '2', '1'])
+  })
+
+  it('builds subscribe links from legacy and panel envelope subscription settings', async () => {
+    mockGetUserList.mockResolvedValue({ data: { list: [], total: 0 } })
+    mockGetSubscriptionSettings
+      .mockResolvedValueOnce({
+        data: {
+          subscribe_path: '/sub',
+          subscribe_domains: ['legacy.example.com']
+        }
+      })
+      .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        data: {
+          subscribe_path: '/x',
+          subscribe_domains: ['panel.example.com']
+        },
+        ts: 1783526400000
+      })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+
+    expect(wrapper.vm.buildSubscribeUrl({ token: 'tok_legacy' })).toBe('http://legacy.example.com/sub/tok_legacy')
+
+    await wrapper.vm.loadSubscriptionSettings()
+    await flushPromises()
+
+    expect(wrapper.vm.buildSubscribeUrl({ token: 'tok_panel' })).toBe('http://panel.example.com/x/tok_panel')
   })
 })

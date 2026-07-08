@@ -2,8 +2,11 @@
   <div class="forward-page">
     <div class="toolbar">
       <div class="toolbar-copy">
-        <p class="eyebrow">{{ t('runtime.forward.heroEyebrow') }}</p>
         <h2>{{ t('runtime.forward.title') }}</h2>
+        <div class="toolbar-meta">
+          <span class="tag tag-primary">{{ runtimeModeLabel }}</span>
+          <span class="toolbar-summary">{{ runtimeModeSummary }}</span>
+        </div>
       </div>
       <div class="toolbar-actions">
         <button
@@ -19,19 +22,13 @@
         <button class="btn btn-primary" @click="openCreateModal">{{ t('runtime.forward.actions.add') }}</button>
       </div>
     </div>
-    <p class="text-secondary small runtime-note">{{ t('runtime.forward.note') }}</p>
     <div class="runtime-context-bar">
-      <span class="tag tag-primary">{{ runtimeModeLabel }}</span>
-      <span class="runtime-context-summary">{{ runtimeModeSummary }}</span>
+      <span class="runtime-context-summary">{{ t('runtime.forward.modeCompatibilityHint') }}</span>
       <div class="runtime-context-links">
         <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">{{ t('forwardSuite.nav.localRuntime') }}</router-link>
         <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">{{ t('forwardSuite.nav.nodeXRuntime') }}</router-link>
       </div>
     </div>
-    <ForwardSuiteNav />
-    <p class="text-secondary small runtime-note runtime-compatibility-note">
-      {{ t('runtime.forward.modeCompatibilityHint') }}
-    </p>
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
       <span>{{ feedback.message }}</span>
@@ -129,7 +126,179 @@
       </section>
 
       <section v-else class="direct-stack">
-        <div class="card-grid">
+        <div class="forward-filter-bar" data-test="forward-filter-bar">
+          <label class="filter-field filter-field-search">
+            <span>{{ t('runtime.forward.filters.search') }}</span>
+            <input
+              v-model.trim="directFilters.keyword"
+              data-test="forward-filter-keyword"
+              type="search"
+              :placeholder="t('runtime.forward.filters.searchPlaceholder')"
+            />
+          </label>
+
+          <label class="filter-field">
+            <span>{{ t('runtime.forward.filters.tunnel') }}</span>
+            <select v-model="directFilters.tunnelId" data-test="forward-filter-tunnel">
+              <option value="">{{ t('runtime.forward.filters.allTunnels') }}</option>
+              <option v-for="tunnel in directFilterTunnels" :key="tunnel.id" :value="String(tunnel.id)">
+                {{ tunnel.name }}
+              </option>
+            </select>
+          </label>
+
+          <label class="filter-field">
+            <span>{{ t('runtime.forward.filters.status') }}</span>
+            <select v-model="directFilters.status" data-test="forward-filter-status">
+              <option value="all">{{ t('runtime.forward.filters.allStatuses') }}</option>
+              <option value="running">{{ t('runtime.forward.filters.running') }}</option>
+              <option value="paused">{{ t('runtime.forward.filters.paused') }}</option>
+              <option value="error">{{ t('runtime.forward.filters.error') }}</option>
+            </select>
+          </label>
+
+          <button
+            v-if="hasDirectFilters"
+            class="btn btn-secondary btn-sm"
+            type="button"
+            data-test="forward-filter-clear"
+            @click="clearDirectFilters"
+          >
+            {{ t('runtime.forward.filters.clear') }}
+          </button>
+        </div>
+
+        <div v-if="selectedDirectForwards.length" class="bulk-toolbar" data-test="forward-bulk-toolbar">
+          <span class="bulk-summary">{{ t('runtime.forward.bulk.selected', { count: selectedDirectForwards.length }) }}</span>
+          <div class="bulk-actions">
+            <button class="btn btn-secondary btn-sm" :disabled="bulkLoading" data-test="forward-bulk-resume" @click="runBulkServiceAction('resume')">
+              {{ t('runtime.forward.bulk.resume') }}
+            </button>
+            <button class="btn btn-secondary btn-sm" :disabled="bulkLoading" data-test="forward-bulk-pause" @click="runBulkServiceAction('pause')">
+              {{ t('runtime.forward.bulk.pause') }}
+            </button>
+            <button class="btn btn-secondary btn-sm" :disabled="bulkLoading" data-test="forward-bulk-export" @click="bulkExportSelected">
+              {{ t('runtime.forward.bulk.export') }}
+            </button>
+            <button class="btn btn-secondary btn-sm danger-text" :disabled="bulkLoading" data-test="forward-bulk-delete" @click="bulkDeleteSelected">
+              {{ t('runtime.forward.bulk.delete') }}
+            </button>
+            <button class="btn btn-secondary btn-sm" :disabled="bulkLoading" data-test="forward-bulk-clear" @click="clearBulkSelection">
+              {{ t('runtime.forward.bulk.clear') }}
+            </button>
+          </div>
+        </div>
+
+        <div class="forward-table-wrap">
+          <table class="forward-table">
+            <thead>
+              <tr>
+                <th class="select-column">
+                  <input
+                    class="selection-checkbox"
+                    type="checkbox"
+                    data-test="forward-select-all"
+                    :checked="allDirectSelected"
+                    :indeterminate="partiallyDirectSelected"
+                    :aria-label="t('runtime.forward.bulk.selectAll')"
+                    @change="toggleAllDirectSelection($event.target.checked)"
+                  />
+                </th>
+                <th>{{ t('runtime.forward.table.rule') }}</th>
+                <th>{{ t('runtime.forward.table.ingress') }}</th>
+                <th>{{ t('runtime.forward.table.target') }}</th>
+                <th>{{ t('runtime.forward.table.policy') }}</th>
+                <th>{{ t('runtime.forward.table.status') }}</th>
+                <th>{{ t('runtime.forward.table.traffic') }}</th>
+                <th>{{ t('runtime.forward.table.actions') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="forward in sortedDirectForwards"
+                :key="forward.id"
+                :class="{ dragging: draggingId === forward.id, dragover: dragOverId === forward.id }"
+                draggable="true"
+                @dragstart="onDragStart($event, forward.id)"
+                @dragenter.prevent="onDragEnter(forward.id)"
+                @dragover.prevent="onDragEnter(forward.id)"
+                @drop.prevent="onDrop(forward.id)"
+                @dragend="onDragEnd"
+              >
+                <td class="select-cell">
+                  <input
+                    class="selection-checkbox"
+                    type="checkbox"
+                    data-test="forward-row-select"
+                    :checked="isForwardSelected(forward.id)"
+                    :aria-label="t('runtime.forward.bulk.selectRule', { name: forward.name })"
+                    @change="toggleForwardSelection(forward.id, $event.target.checked)"
+                    @click.stop
+                  />
+                </td>
+                <td>
+                  <div class="table-rule-cell">
+                    <span class="drag-handle table-drag-handle" :title="t('runtime.forward.card.dragHandleTitle')">⋮⋮</span>
+                    <div>
+                      <strong>{{ forward.name }}</strong>
+                      <span>{{ forward.tunnelName || formatTunnelReference(forward.tunnelId) }}</span>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <button class="table-link" type="button" @click="showAddressModal({ value: forward.inIp, port: forward.inPort, title: t('runtime.forward.card.ingressAddressTitle') })">
+                    {{ formatInAddress(forward.inIp, forward.inPort) }}
+                  </button>
+                </td>
+                <td>
+                  <button class="table-link" type="button" @click="showAddressModal({ value: forward.remoteAddr, title: t('runtime.forward.card.targetAddressTitle') })">
+                    {{ formatRemoteAddress(forward.remoteAddr) }}
+                  </button>
+                </td>
+                <td>
+                  <span :class="['tag', getStrategyMeta(forward.strategy).className]">
+                    {{ getStrategyMeta(forward.strategy).text }}
+                  </span>
+                </td>
+                <td>
+                  <div class="table-status-stack">
+                    <label class="switch">
+                      <input
+                        type="checkbox"
+                        :checked="forward.serviceRunning"
+                        :disabled="isForwardToggleDisabled(forward)"
+                        @change="handleToggleService(forward)"
+                      />
+                      <span class="switch-slider"></span>
+                    </label>
+                    <span :class="['tag', getStatusMeta(forward.status).className]">
+                      {{ getStatusMeta(forward.status).text }}
+                    </span>
+                    <span v-if="getRuntimeMeta(forward)" :class="['tag', getRuntimeMeta(forward).className]">
+                      {{ getRuntimeMeta(forward).text }}
+                    </span>
+                  </div>
+                  <p v-if="getRuntimeSummary(forward)" class="runtime-summary table-runtime-summary">
+                    {{ getRuntimeSummary(forward) }}
+                  </p>
+                </td>
+                <td class="traffic-cell">
+                  <span>{{ t('runtime.forward.labels.inbound') }} {{ formatFlow(forward.inFlow || 0) }}</span>
+                  <span>{{ t('runtime.forward.labels.outbound') }} {{ formatFlow(forward.outFlow || 0) }}</span>
+                </td>
+                <td>
+                  <div class="table-actions">
+                    <button class="btn btn-secondary btn-sm" @click="openEditModal(forward)">{{ t('runtime.forward.actions.edit') }}</button>
+                    <button class="btn btn-secondary btn-sm" @click="openDiagnosisModal(forward)">{{ t('runtime.forward.actions.diagnose') }}</button>
+                    <button class="btn btn-secondary btn-sm danger-text" @click="openDeleteModal(forward)">{{ t('runtime.forward.actions.delete') }}</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card-grid mobile-card-grid">
           <article
             v-for="forward in sortedDirectForwards"
             :key="forward.id"
@@ -198,8 +367,8 @@
         </div>
 
         <section v-if="!sortedDirectForwards.length" class="empty-state">
-          <h3>{{ t('runtime.forward.emptyDirectTitle') }}</h3>
-          <p>{{ t('runtime.forward.emptyDirectText') }}</p>
+          <h3>{{ hasDirectFilters ? t('runtime.forward.filters.emptyTitle') : t('runtime.forward.emptyDirectTitle') }}</h3>
+          <p>{{ hasDirectFilters ? t('runtime.forward.filters.emptyText') : t('runtime.forward.emptyDirectText') }}</p>
         </section>
       </section>
     </template>
@@ -341,22 +510,23 @@
           <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="exportModalOpen = false">×</button>
         </div>
         <div class="modal-body">
-          <div class="form-group">
+          <div v-if="exportDataSource === 'tunnel'" class="form-group">
             <label>{{ t('runtime.forward.exportModal.tunnelLabel') }}</label>
             <select :value="selectedTunnelForExport ?? ''" @change="handleExportTunnelChange($event.target.value)">
               <option value="">{{ t('runtime.forward.exportModal.tunnelPlaceholder') }}</option>
               <option v-for="tunnel in tunnels" :key="tunnel.id" :value="tunnel.id">{{ tunnel.name }}</option>
             </select>
           </div>
+          <p v-else class="hint">{{ t('runtime.forward.exportModal.selectionHint', { count: exportSelectionCount }) }}</p>
 
           <div v-if="exportData" class="modal-toolbar">
-            <button class="btn btn-primary btn-sm" :disabled="exportLoading" @click="executeExport">
+            <button v-if="exportDataSource === 'tunnel'" class="btn btn-primary btn-sm" :disabled="exportLoading" @click="executeExport">
               {{ exportLoading ? t('runtime.forward.exportModal.generating') : t('runtime.forward.exportModal.regenerate') }}
             </button>
             <button class="btn btn-secondary btn-sm" @click="copyExportData">{{ t('common.actions.copy') }}</button>
           </div>
 
-          <div v-else class="modal-toolbar align-end">
+          <div v-else-if="exportDataSource === 'tunnel'" class="modal-toolbar align-end">
             <button class="btn btn-primary btn-sm" :disabled="exportLoading || !selectedTunnelForExport" @click="executeExport">
               {{ exportLoading ? t('runtime.forward.exportModal.generating') : t('runtime.forward.exportModal.generate') }}
             </button>
@@ -523,13 +693,13 @@ import {
   getForwardTunnels,
   getSystemConfig
 } from '@/api/admin'
-import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
 
 const { t, translateLiteral } = useAppI18n()
 const userStore = useUserStore()
 
 const loading = ref(true)
+const refreshing = ref(false)
 const isMobile = ref(false)
 const viewMode = ref(getSavedViewMode())
 const forwardOrder = ref(getSavedOrder())
@@ -563,6 +733,7 @@ const deleteLoading = ref(false)
 const diagnosisLoading = ref(false)
 const exportLoading = ref(false)
 const importLoading = ref(false)
+const bulkLoading = ref(false)
 
 const forwardToDelete = ref(null)
 const currentDiagnosisForward = ref(null)
@@ -570,11 +741,14 @@ const diagnosisResult = ref(null)
 const addressModalTitle = ref('')
 const addressList = ref([])
 const exportData = ref('')
+const exportDataSource = ref('tunnel')
+const exportSelectionCount = ref(0)
 const selectedTunnelForExport = ref(null)
 const importData = ref('')
 const selectedTunnelForImport = ref(null)
 const importResults = ref([])
 const selectedTunnel = ref(null)
+const selectedForwardIds = ref([])
 
 const draggingId = ref(null)
 const dragOverId = ref(null)
@@ -603,11 +777,55 @@ const errors = reactive({
   inPort: ''
 })
 
+const directFilters = reactive({
+  keyword: '',
+  tunnelId: '',
+  status: 'all'
+})
+
+const AUTO_REFRESH_INTERVAL_MS = 10000
 let feedbackTimer = null
+let refreshTimer = null
+let dataLoadPromise = null
 
 const currentUserId = computed(() => resolveCurrentUserId())
 const addressLineCount = computed(() => splitLines(form.remoteAddr).length)
-const sortedDirectForwards = computed(() => getSortedForwards('direct'))
+const directForwards = computed(() => getSortedForwards('direct'))
+const sortedDirectForwards = computed(() => filterDirectForwards(directForwards.value))
+const directForwardIds = computed(() => sortedDirectForwards.value.map(item => item.id))
+const selectedDirectForwards = computed(() => {
+  const selectedSet = new Set(selectedForwardIds.value)
+  return sortedDirectForwards.value.filter(forward => selectedSet.has(forward.id))
+})
+const allDirectSelected = computed(() => (
+  directForwardIds.value.length > 0 &&
+  selectedDirectForwards.value.length === directForwardIds.value.length
+))
+const partiallyDirectSelected = computed(() => (
+  selectedDirectForwards.value.length > 0 && !allDirectSelected.value
+))
+const directFilterTunnels = computed(() => {
+  const entries = new Map()
+  directForwards.value.forEach(forward => {
+    const id = Number(forward.tunnelId)
+    if (!Number.isFinite(id)) {
+      return
+    }
+    entries.set(id, {
+      id,
+      name: forward.tunnelName || formatTunnelReference(id)
+    })
+  })
+  return Array.from(entries.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, {
+    numeric: true,
+    sensitivity: 'base'
+  }))
+})
+const hasDirectFilters = computed(() => Boolean(
+  directFilters.keyword.trim() ||
+    directFilters.tunnelId ||
+    directFilters.status !== 'all'
+))
 const groupedForwards = computed(() => buildGroupedForwards())
 const importSuccessCount = computed(() => importResults.value.filter(item => item.success).length)
 const selectableTunnels = computed(() => {
@@ -684,6 +902,13 @@ watch(
   }
 )
 
+watch(
+  directForwardIds,
+  () => {
+    pruneSelectedForwardIds()
+  }
+)
+
 function parseRuntimeBoolean(value) {
   if (typeof value === 'boolean') {
     return value
@@ -746,10 +971,12 @@ onMounted(async () => {
 
   await loadRuntimeMode()
   await loadData(true)
+  startAutoRefresh()
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateViewport)
+  stopAutoRefresh()
   clearFeedback()
 })
 
@@ -833,6 +1060,80 @@ function clearFeedback() {
   feedback.message = ''
 }
 
+function isForwardSelected(id) {
+  return selectedForwardIds.value.includes(Number(id))
+}
+
+function toggleForwardSelection(id, checked) {
+  const normalizedId = Number(id)
+  if (!Number.isFinite(normalizedId)) {
+    return
+  }
+
+  const selectedSet = new Set(selectedForwardIds.value)
+  if (checked) {
+    selectedSet.add(normalizedId)
+  } else {
+    selectedSet.delete(normalizedId)
+  }
+  selectedForwardIds.value = Array.from(selectedSet)
+}
+
+function toggleAllDirectSelection(checked) {
+  selectedForwardIds.value = checked ? [...directForwardIds.value] : []
+}
+
+function clearBulkSelection() {
+  selectedForwardIds.value = []
+}
+
+function pruneSelectedForwardIds() {
+  const validIds = new Set(directForwardIds.value)
+  selectedForwardIds.value = selectedForwardIds.value.filter(id => validIds.has(id))
+}
+
+function shouldSuspendAutoRefresh() {
+  return Boolean(
+    loading.value ||
+      refreshing.value ||
+      dataLoadPromise ||
+      bulkLoading.value ||
+      submitLoading.value ||
+      deleteLoading.value ||
+      diagnosisLoading.value ||
+      exportLoading.value ||
+      importLoading.value ||
+      draggingId.value !== null ||
+      modalOpen.value ||
+      deleteModalOpen.value ||
+      addressModalOpen.value ||
+      diagnosisModalOpen.value ||
+      exportModalOpen.value ||
+      importModalOpen.value
+  )
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh()
+  refreshTimer = window.setInterval(() => {
+    refreshDataSilently()
+  }, AUTO_REFRESH_INTERVAL_MS)
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    window.clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+async function refreshDataSilently() {
+  if (shouldSuspendAutoRefresh()) {
+    return
+  }
+  await loadData(false, { silent: true })
+}
+
 function translateMessage(message, fallbackKey = null, params = {}) {
   const translated = translateLiteral(message)
   if (translated && translated !== message) {
@@ -888,6 +1189,61 @@ function isForwardToggleDisabled(forward) {
   return isForwardRuntimeBusy(forward)
 }
 
+function getDirectFilterStatus(forward) {
+  const status = Number(forward?.status)
+  if (status !== 0 && status !== 1) {
+    return 'error'
+  }
+  if (Number(forward?.runtimeStatus) === 3) {
+    return 'error'
+  }
+  return forward?.serviceRunning ? 'running' : 'paused'
+}
+
+function getForwardSearchText(forward) {
+  return [
+    forward?.id,
+    forward?.name,
+    forward?.userName,
+    forward?.email,
+    forward?.tunnelName,
+    forward?.tunnelId ? formatTunnelReference(forward.tunnelId) : '',
+    forward?.inIp,
+    forward?.inPort,
+    formatInAddress(forward?.inIp, forward?.inPort),
+    forward?.remoteAddr,
+    forward?.strategy
+  ]
+    .filter(value => value !== undefined && value !== null)
+    .join(' ')
+    .toLowerCase()
+}
+
+function filterDirectForwards(list) {
+  const keyword = directFilters.keyword.trim().toLowerCase()
+  const tunnelId = directFilters.tunnelId ? Number(directFilters.tunnelId) : null
+  const status = directFilters.status
+
+  return list.filter(forward => {
+    if (keyword && !getForwardSearchText(forward).includes(keyword)) {
+      return false
+    }
+    if (tunnelId !== null && Number(forward.tunnelId) !== tunnelId) {
+      return false
+    }
+    if (status !== 'all' && getDirectFilterStatus(forward) !== status) {
+      return false
+    }
+    return true
+  })
+}
+
+function clearDirectFilters() {
+  directFilters.keyword = ''
+  directFilters.tunnelId = ''
+  directFilters.status = 'all'
+}
+
 function mergeReferencedTunnels(list, forwardList) {
   const merged = Array.isArray(list) ? [...list] : []
   const tunnelMap = new Map(merged.map(item => [Number(item.id), item]))
@@ -912,9 +1268,10 @@ function mergeReferencedTunnels(list, forwardList) {
 }
 
 function filterCurrentUserForwards(list) {
-  if (!Array.isArray(list)) return []
-  if (currentUserId.value == null) return list
-  return list.filter(forward => Number(forward.userId) === Number(currentUserId.value))
+	if (!Array.isArray(list)) return []
+	if (userStore.isAdmin) return list
+	if (currentUserId.value == null) return list
+	return list.filter(forward => Number(forward.userId) === Number(currentUserId.value))
 }
 
 function hasValidInx(forward) {
@@ -957,38 +1314,58 @@ function initializeOrder(list) {
   saveOrder(order)
 }
 
-async function loadData(showLoading = true) {
+async function loadData(showLoading = true, options = {}) {
+  if (dataLoadPromise) {
+    if (!options.force) {
+      return dataLoadPromise
+    }
+    await dataLoadPromise
+  }
+
   if (showLoading) {
     loading.value = true
+  } else {
+    refreshing.value = true
   }
 
-  try {
-    const [forwardsRes, tunnelsRes] = await Promise.all([getForwardList(), getForwardTunnels()])
-    let items = forwards.value
-    let availableTunnels = tunnels.value
+  dataLoadPromise = (async () => {
+    try {
+      const [forwardsRes, tunnelsRes] = await Promise.all([getForwardList(), getForwardTunnels()])
+      let items = forwards.value
+      let availableTunnels = tunnels.value
 
-    if (forwardsRes.code === 0) {
-      items = Array.isArray(forwardsRes.data) ? forwardsRes.data.map(normalizeForward) : []
-      forwards.value = items
-      if (viewMode.value === 'direct') {
-        initializeOrder(items)
+      if (forwardsRes.code === 0) {
+        items = Array.isArray(forwardsRes.data) ? forwardsRes.data.map(normalizeForward) : []
+        forwards.value = items
+        if (viewMode.value === 'direct') {
+          initializeOrder(items)
+        }
+        pruneSelectedForwardIds()
+      } else if (!options.silent) {
+        setFeedback('error', translateMessage(forwardsRes.msg, 'runtime.forward.messages.loadForwardsFailed'))
       }
-    } else {
-      setFeedback('error', translateMessage(forwardsRes.msg, 'runtime.forward.messages.loadForwardsFailed'))
-    }
 
-    if (tunnelsRes.code === 0) {
-      availableTunnels = Array.isArray(tunnelsRes.data) ? tunnelsRes.data.map(normalizeTunnel) : []
-    } else {
-      setFeedback('warning', translateMessage(tunnelsRes.msg, 'runtime.forward.messages.loadTunnelsFailed'))
+      if (tunnelsRes.code === 0) {
+        availableTunnels = Array.isArray(tunnelsRes.data) ? tunnelsRes.data.map(normalizeTunnel) : []
+      } else if (!options.silent) {
+        setFeedback('warning', translateMessage(tunnelsRes.msg, 'runtime.forward.messages.loadTunnelsFailed'))
+      }
+      tunnels.value = mergeReferencedTunnels(availableTunnels, items)
+    } catch (error) {
+      console.error('Failed to load forward page data:', error)
+      if (!options.silent) {
+        setFeedback('error', t('runtime.forward.messages.loadDataFailed'))
+      }
+    } finally {
+      if (showLoading) {
+        loading.value = false
+      }
+      refreshing.value = false
+      dataLoadPromise = null
     }
-    tunnels.value = mergeReferencedTunnels(availableTunnels, items)
-  } catch (error) {
-    console.error('Failed to load forward page data:', error)
-    setFeedback('error', t('runtime.forward.messages.loadDataFailed'))
-  } finally {
-    loading.value = false
-  }
+  })()
+
+  return dataLoadPromise
 }
 
 function getSortedForwards(mode = viewMode.value) {
@@ -1085,6 +1462,9 @@ function toggleViewMode() {
 
   if (viewMode.value === 'direct') {
     initializeOrder(forwards.value)
+    pruneSelectedForwardIds()
+  } else {
+    clearBulkSelection()
   }
 }
 
@@ -1242,7 +1622,7 @@ async function handleSubmit() {
     if (response.code === 0) {
       modalOpen.value = false
       setFeedback('success', isEdit.value ? t('runtime.forward.messages.updated') : t('runtime.forward.messages.created'))
-      await loadData(true)
+      await loadData(true, { force: true })
     } else {
       setFeedback('error', translateMessage(response.msg, 'runtime.forward.messages.actionFailed'))
     }
@@ -1273,7 +1653,7 @@ async function handleToggleService(forward) {
     const response = targetState ? await resumeForwardService(forward.id) : await pauseForwardService(forward.id)
 
     if (response.code === 0) {
-      await loadData(false)
+      await loadData(false, { force: true })
       setFeedback('success', targetState ? t('runtime.forward.messages.serviceChanged') : t('runtime.forward.messages.servicePaused'))
       return
     }
@@ -1288,6 +1668,99 @@ async function handleToggleService(forward) {
       item.id === forward.id ? { ...item, serviceRunning: !targetState } : item
     )
     setFeedback('error', t('runtime.forward.messages.networkActionFailed'))
+  }
+}
+
+function setBulkResultFeedback(success, failed) {
+  const type = failed > 0 ? (success > 0 ? 'warning' : 'error') : 'success'
+  setFeedback(type, t('runtime.forward.messages.bulkActionComplete', { success, failed }))
+}
+
+function shouldRunBulkServiceAction(forward, action) {
+  if (isForwardToggleDisabled(forward)) {
+    return false
+  }
+  return action === 'resume' ? !forward.serviceRunning : forward.serviceRunning
+}
+
+async function runBulkServiceAction(action) {
+  const items = selectedDirectForwards.value
+  if (!items.length) {
+    return
+  }
+
+  bulkLoading.value = true
+  let success = 0
+  let failed = 0
+
+  try {
+    for (const forward of items) {
+      if (!shouldRunBulkServiceAction(forward, action)) {
+        continue
+      }
+
+      try {
+        const response = action === 'resume'
+          ? await resumeForwardService(forward.id)
+          : await pauseForwardService(forward.id)
+        if (response.code === 0) {
+          success += 1
+        } else {
+          failed += 1
+        }
+      } catch (error) {
+        console.error('Failed to run batch service action:', error)
+        failed += 1
+      }
+    }
+
+    await loadData(false, { force: true })
+    setBulkResultFeedback(success, failed)
+    if (failed === 0) {
+      clearBulkSelection()
+    }
+  } finally {
+    bulkLoading.value = false
+  }
+}
+
+async function bulkDeleteSelected() {
+  const items = selectedDirectForwards.value
+  if (!items.length) {
+    return
+  }
+
+  const confirmed = window.confirm(t('runtime.forward.messages.bulkDeleteConfirm', { count: items.length }))
+  if (!confirmed) {
+    return
+  }
+
+  bulkLoading.value = true
+  let success = 0
+  let failed = 0
+
+  try {
+    for (const forward of items) {
+      try {
+        const response = await deleteForward(forward.id)
+        if (response.code === 0) {
+          success += 1
+        } else {
+          failed += 1
+        }
+      } catch (error) {
+        console.error('Failed to batch delete forward:', error)
+        failed += 1
+      }
+    }
+
+    await loadData(false, { force: true })
+    setBulkResultFeedback(success, failed)
+    if (failed === 0) {
+      clearBulkSelection()
+    }
+  } finally {
+    bulkLoading.value = false
   }
 }
 
@@ -1307,7 +1780,7 @@ async function confirmDelete() {
     if (response.code === 0) {
       deleteModalOpen.value = false
       setFeedback('success', t('runtime.forward.messages.deleted'))
-      await loadData(true)
+      await loadData(true, { force: true })
       return
     }
 
@@ -1323,7 +1796,7 @@ async function confirmDelete() {
     if (forceResponse.code === 0) {
       deleteModalOpen.value = false
       setFeedback('success', t('runtime.forward.messages.forceDeleted'))
-      await loadData(true)
+      await loadData(true, { force: true })
     } else {
       setFeedback('error', translateMessage(forceResponse.msg, 'runtime.forward.messages.forceDeleteFailed'))
     }
@@ -1536,9 +2009,37 @@ async function copyAllAddresses() {
 }
 
 function openExportModal() {
-  selectedTunnelForExport.value = null
-  exportData.value = ''
-  exportModalOpen.value = true
+	selectedTunnelForExport.value = null
+	exportData.value = ''
+	exportDataSource.value = 'tunnel'
+	exportSelectionCount.value = 0
+	exportModalOpen.value = true
+}
+
+function splitRemoteAddresses(value) {
+	return String(value || '')
+		.split(',')
+		.map(item => item.trim())
+		.filter(Boolean)
+}
+
+function formatImportEntryLabel(entry) {
+	if (entry?.source) {
+		return entry.source
+	}
+	if (entry?.name) {
+		return entry.name
+	}
+	return JSON.stringify(entry)
+}
+
+function buildExportData(items) {
+	const rules = items.map(item => ({
+		dest: splitRemoteAddresses(item.remoteAddr),
+		listen_port: Number(item.inPort) || null,
+		name: item.name || ''
+	}))
+	return JSON.stringify(rules, null, 2)
 }
 
 function getExportSource() {
@@ -1557,6 +2058,20 @@ function getExportSource() {
   return getSortedForwards('direct').filter(forward => Number(forward.tunnelId) === Number(selectedTunnelForExport.value))
 }
 
+function bulkExportSelected() {
+  const items = selectedDirectForwards.value
+  if (!items.length) {
+    setFeedback('error', t('runtime.forward.messages.noExportData'))
+    return
+  }
+
+  selectedTunnelForExport.value = null
+  exportDataSource.value = 'selection'
+  exportSelectionCount.value = items.length
+  exportData.value = buildExportData(items)
+  exportModalOpen.value = true
+}
+
 async function executeExport() {
   if (!selectedTunnelForExport.value) {
     setFeedback('error', t('runtime.forward.messages.selectExportTunnel'))
@@ -1571,7 +2086,9 @@ async function executeExport() {
       return
     }
 
-    exportData.value = items.map(item => `${item.remoteAddr}|${item.name}|${item.inPort}`).join('\n')
+    exportDataSource.value = 'tunnel'
+    exportSelectionCount.value = 0
+    exportData.value = buildExportData(items)
   } catch (error) {
     console.error('Failed to export forwards:', error)
     setFeedback('error', t('runtime.forward.messages.exportFailed'))
@@ -1592,12 +2109,56 @@ function openImportModal() {
 }
 
 function appendImportResult(result) {
-  importResults.value = [result, ...importResults.value]
+	importResults.value = [result, ...importResults.value]
+}
+
+function normalizeImportEntry(raw, source = '') {
+	const dest = Array.isArray(raw?.dest) ? raw.dest : []
+	const remoteAddr = dest
+		.map(item => String(item || '').trim())
+		.filter(Boolean)
+		.join(',')
+	const name = String(raw?.name || '').trim()
+	const listenPort = raw?.listen_port ?? raw?.listenPort ?? raw?.inPort ?? raw?.in_port ?? ''
+	return {
+		source: source || formatImportEntryLabel(raw),
+		remoteAddr,
+		name,
+		inPortRaw: listenPort === null || listenPort === undefined ? '' : String(listenPort).trim()
+	}
+}
+
+function parseImportEntries(rawText) {
+	const raw = rawText.trim()
+	if (!raw) {
+		return []
+	}
+
+	if (raw.startsWith('[') || raw.startsWith('{')) {
+		const parsed = JSON.parse(raw)
+		const list = Array.isArray(parsed) ? parsed : [parsed]
+		return list.map(item => normalizeImportEntry(item))
+	}
+
+	return raw
+		.split('\n')
+		.map(item => item.trim())
+		.filter(Boolean)
+		.map(line => {
+			const parts = line.split('|')
+			return {
+				source: line,
+				remoteAddr: String(parts[0] || '').trim(),
+				name: String(parts[1] || '').trim(),
+				inPortRaw: String(parts[2] || '').trim(),
+				legacyParts: parts.length
+			}
+		})
 }
 
 async function executeImport() {
-  if (!importData.value.trim()) {
-    setFeedback('error', t('runtime.forward.messages.enterImportData'))
+	if (!importData.value.trim()) {
+		setFeedback('error', t('runtime.forward.messages.enterImportData'))
     return
   }
 
@@ -1607,33 +2168,29 @@ async function executeImport() {
   }
 
   importLoading.value = true
-  importResults.value = []
+	importResults.value = []
 
-  try {
-    const lines = importData.value
-      .trim()
-      .split('\n')
-      .map(item => item.trim())
-      .filter(Boolean)
+	try {
+		const entries = parseImportEntries(importData.value)
 
-    for (const line of lines) {
-      const parts = line.split('|')
+		for (const entry of entries) {
+			const line = entry.source
 
-      if (parts.length < 2) {
-        appendImportResult({
-          line,
-          success: false,
+			if (entry.legacyParts !== undefined && entry.legacyParts < 2) {
+				appendImportResult({
+					line,
+					success: false,
           message: t('runtime.forward.messages.importFormatError')
         })
-        continue
-      }
+				continue
+			}
 
-      const remoteAddr = String(parts[0] || '').trim()
-      const name = String(parts[1] || '').trim()
-      const inPortRaw = String(parts[2] || '').trim()
+			const remoteAddr = entry.remoteAddr
+			const name = entry.name
+			const inPortRaw = entry.inPortRaw
 
-      if (!remoteAddr || !name) {
-        appendImportResult({
+			if (!remoteAddr || !name) {
+				appendImportResult({
           line,
           success: false,
           message: t('runtime.forward.messages.importRequiredFields')
@@ -1704,7 +2261,7 @@ async function executeImport() {
     }
 
     setFeedback('success', t('runtime.forward.messages.importCompleted'))
-    await loadData(false)
+    await loadData(false, { force: true })
   } catch (error) {
     console.error('Failed to import forwards:', error)
     setFeedback('error', t('runtime.forward.messages.importFailed'))
@@ -1898,22 +2455,32 @@ function onDragEnd() {
 
 .toolbar {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 22px 24px;
+  padding: 16px 18px;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.14), transparent 32%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.03), transparent 60%),
-    var(--surface-color);
+  border-radius: 8px;
+  background: var(--surface-color);
 }
 
 .toolbar-copy h2 {
-  margin: 4px 0 0;
-  font-size: 26px;
-  line-height: 1.1;
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.toolbar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.toolbar-summary {
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .eyebrow {
@@ -2163,6 +2730,207 @@ function onDragEnd() {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
   padding: 18px;
+}
+
+.mobile-card-grid {
+  display: none;
+}
+
+.forward-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+}
+
+.forward-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.6fr) minmax(180px, 0.8fr) minmax(160px, 0.7fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.filter-field span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.filter-field input,
+.filter-field select {
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--text-color);
+  font-size: 13px;
+}
+
+.filter-field input:focus,
+.filter-field select:focus {
+  outline: none;
+  border-color: rgba(37, 99, 235, 0.4);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  background: rgba(37, 99, 235, 0.03);
+}
+
+.bulk-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.06);
+}
+
+.bulk-summary {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--forward-accent);
+}
+
+.bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.forward-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1040px;
+  font-size: 13px;
+}
+
+.forward-table th,
+.forward-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.forward-table th {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.forward-table .select-column,
+.forward-table .select-cell {
+  width: 44px;
+  padding-left: 12px;
+  padding-right: 8px;
+  text-align: center;
+}
+
+.selection-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--forward-accent);
+  cursor: pointer;
+}
+
+.forward-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.forward-table tbody tr:hover {
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.forward-table tr.dragging {
+  opacity: 0.55;
+}
+
+.forward-table tr.dragover {
+  box-shadow: inset 3px 0 0 var(--forward-accent);
+}
+
+.table-rule-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.table-rule-cell strong,
+.table-rule-cell span {
+  display: block;
+}
+
+.table-rule-cell strong {
+  margin-bottom: 4px;
+}
+
+.table-rule-cell span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.table-drag-handle {
+  opacity: 1;
+  flex-shrink: 0;
+}
+
+.table-link {
+  max-width: 220px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-color);
+  cursor: pointer;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-link:hover {
+  color: var(--forward-accent);
+}
+
+.table-status-stack,
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.table-runtime-summary {
+  max-width: 260px;
+  margin-top: 8px;
+}
+
+.traffic-cell span {
+  display: block;
+  white-space: nowrap;
+}
+
+.traffic-cell span + span {
+  margin-top: 4px;
+  color: var(--text-secondary);
 }
 
 .forward-card {
@@ -2708,9 +3476,48 @@ function onDragEnd() {
   .toolbar-actions .btn {
     flex: 1 1 160px;
   }
+
+  .forward-filter-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .filter-field-search,
+  .forward-filter-bar .btn {
+    grid-column: 1 / -1;
+  }
+
+  .bulk-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bulk-actions {
+    justify-content: stretch;
+  }
+
+  .bulk-actions .btn {
+    flex: 1 1 120px;
+  }
 }
 
 @media (max-width: 768px) {
+  .forward-filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-field-search,
+  .forward-filter-bar .btn {
+    grid-column: auto;
+  }
+
+  .forward-table-wrap {
+    display: none;
+  }
+
+  .mobile-card-grid {
+    display: grid;
+  }
+
   .card-grid,
   .form-grid,
   .metric-grid {

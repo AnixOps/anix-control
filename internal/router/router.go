@@ -79,6 +79,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	}
 	subscribeHandler := handler.NewSubscribeHandler(cfg)
 	r.GET("/"+subscribePath+"/:token", subscribeHandler.GetSubscription)
+	r.GET("/api/v1/client/subscribe", subscribeHandler.GetLegacySubscription)
 
 	forwardFlowHandler := handler.NewForwardHandler()
 	r.POST("/flow/upload", middleware.AppTokenAuth(), forwardFlowHandler.UploadPanelFlowData)

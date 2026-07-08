@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -28,6 +29,12 @@ var (
 	testCfg  *config.Config
 	testDBMu sync.Mutex
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 // initTestDB initializes the test database once
 func initTestDB() *gorm.DB {
@@ -74,7 +81,7 @@ func initTestDB() *gorm.DB {
 	testDB = database.Get()
 
 	// 自动迁移
-	testDB.AutoMigrate(
+	if err := testDB.AutoMigrate(
 		&model.User{},
 		&model.Node{},
 		&model.NodeProtocol{},
@@ -101,6 +108,7 @@ func initTestDB() *gorm.DB {
 		&model.PaymentRecord{},
 		&model.ForwardNode{},
 		&model.Forward{},
+		&model.ForwardPortBinding{},
 		&model.ForwardRule{},
 		&model.ForwardTunnel{},
 		&model.ForwardUserTunnel{},
@@ -127,7 +135,9 @@ func initTestDB() *gorm.DB {
 		&model.OnlineLog{},
 		&model.StatServer{},
 		&model.StatUser{},
-	)
+	); err != nil {
+		panic("failed to migrate handler test database: " + err.Error())
+	}
 
 	return testDB
 }
@@ -186,6 +196,16 @@ func (s *AuthHandlerTestSuite) TestRegisterHandler() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.NotEmpty(s.T(), data["token"])
+	assert.Equal(s.T(), "handler@example.com", data["email"])
+	assert.Equal(s.T(), false, data["is_admin"])
+	assert.Equal(s.T(), float64(1), data["user_id"])
 }
 
 func (s *AuthHandlerTestSuite) TestRegisterHandler_Disabled() {
@@ -334,6 +354,16 @@ func (s *AuthHandlerTestSuite) TestLoginHandler() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.NotEmpty(s.T(), data["token"])
+	assert.Equal(s.T(), "login@example.com", data["email"])
+	assert.Equal(s.T(), false, data["is_admin"])
+	assert.Equal(s.T(), float64(1), data["user_id"])
 }
 
 func (s *AuthHandlerTestSuite) TestLoginHandler_WrongPassword() {
@@ -431,7 +461,7 @@ func (s *UniProxyHandlerTestSuite) TestGenerateETag() {
 	etag := generateETag(data)
 
 	assert.NotEmpty(s.T(), etag)
-	assert.Len(s.T(), etag, 32) // MD5 是 32 个字符
+	assert.Len(s.T(), etag, 64) // SHA-256 hex digest
 }
 
 func (s *UniProxyHandlerTestSuite) TestGenerateETag_Consistent() {
@@ -566,6 +596,16 @@ func (s *UserHandlerTestSuite) TestGetSubscription_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), s.testUser.Email, data["email"])
+	assert.Equal(s.T(), float64(s.testUser.ID), data["user_id"])
+	assert.Equal(s.T(), "Test Plan", data["plan_name"])
+	assert.Equal(s.T(), "/s", data["subscribe_path"])
 }
 
 func (s *UserHandlerTestSuite) TestGetSubscription_Unauthorized() {
@@ -591,6 +631,14 @@ func (s *UserHandlerTestSuite) TestGetSubscription_WithRefresh() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), s.testUser.Email, data["email"])
+	assert.Equal(s.T(), float64(s.testUser.ID), data["user_id"])
 }
 
 func (s *UserHandlerTestSuite) TestGetProfile_Success() {
@@ -605,11 +653,17 @@ func (s *UserHandlerTestSuite) TestGetProfile_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-
-	var response map[string]any
-	json.Unmarshal(w.Body.Bytes(), &response)
-	data := response["data"].(map[string]any)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(s.testUser.ID), data["id"])
 	assert.Equal(s.T(), s.testUser.Email, data["email"])
+	assert.Equal(s.T(), s.testUser.UUID, data["uuid"])
+	assert.Equal(s.T(), s.testUser.Token, data["token"])
+	assert.Equal(s.T(), false, data["is_admin"])
 }
 
 func (s *UserHandlerTestSuite) TestGetProfile_Unauthorized() {
@@ -635,6 +689,16 @@ func (s *UserHandlerTestSuite) TestGetDashboard_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	subscription := data["subscription"].(map[string]any)
+	assert.Equal(s.T(), s.testUser.Email, subscription["email"])
+	assert.Equal(s.T(), float64(s.testUser.ID), subscription["user_id"])
+	assert.Equal(s.T(), "Test Plan", subscription["plan_name"])
 }
 
 func (s *UserHandlerTestSuite) TestGetDashboard_Unauthorized() {
@@ -700,6 +764,11 @@ func (s *NodeHandlerTestSuite) TestGetNodes_WithPagination() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	var resp map[string]any
+	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
+	data := resp["data"].(map[string]any)
+	assert.Len(s.T(), data["list"].([]any), 1)
+	assert.Equal(s.T(), float64(1), data["total"])
 }
 
 func (s *NodeHandlerTestSuite) TestGetNodes_WithFilters() {
@@ -832,6 +901,14 @@ func (s *NodeHandlerTestSuite) TestGetNodeStats_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "total")
+	assert.Contains(s.T(), data, "online")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NodeHandlerTestSuite) TestGetProtocolTemplates() {
@@ -1225,6 +1302,99 @@ func (s *AdminHandlerTestSuite) TestGetDashboard() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "total_users")
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *AdminHandlerTestSuite) TestGetHourlyTraffic_UsesPanelEnvelope() {
+	handler := NewAdminHandler()
+	s.router.GET("/traffic/hourly", handler.GetHourlyTraffic)
+
+	now := time.Now()
+	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
+	logAt := currentHour + 60
+	assert.NoError(s.T(), s.db.Create(&model.TrafficLog{
+		UserID:     s.testUser.ID,
+		ServerID:   1,
+		ServerType: string(model.ServerTypeShadowsocks),
+		U:          512,
+		D:          1536,
+		Rate:       1,
+		LogAt:      logAt,
+	}).Error)
+
+	req, _ := http.NewRequest("GET", "/traffic/hourly?hours=2&user_id="+strconv.FormatUint(uint64(s.testUser.ID), 10), nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	list := data["list"].([]any)
+	assert.Len(s.T(), list, 2)
+	meta := data["meta"].(map[string]any)
+	assert.Equal(s.T(), float64(logAt), meta["latest_log_at"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
+}
+
+func (s *AdminHandlerTestSuite) TestGetUserTrafficRanking_UsesPanelEnvelope() {
+	handler := NewAdminHandler()
+	s.router.GET("/traffic/user-ranking", handler.GetUserTrafficRanking)
+
+	now := time.Now()
+	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
+	assert.NoError(s.T(), s.db.Create(&model.TrafficLog{
+		UserID:     s.testUser.ID,
+		ServerID:   1,
+		ServerType: string(model.ServerTypeShadowsocks),
+		U:          1024,
+		D:          2048,
+		Rate:       1,
+		LogAt:      currentHour + 60,
+	}).Error)
+
+	req, _ := http.NewRequest("GET", "/traffic/user-ranking?hours=168&limit=500&include_zero_users=true", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	list := data["list"].([]any)
+	if assert.NotEmpty(s.T(), list) {
+		first := list[0].(map[string]any)
+		assert.NotZero(s.T(), first["user_id"])
+	}
+	assert.Contains(s.T(), w.Body.String(), "adminhandler@example.com")
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
+}
+
+func (s *AdminHandlerTestSuite) TestGetSystemInfo_UsesPanelEnvelope() {
+	handler := NewAdminHandler()
+	s.router.GET("/system/info", handler.GetSystemInfo)
+
+	req, _ := http.NewRequest("GET", "/system/info", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), BuildVersion, data["version"])
+	assert.Contains(s.T(), data, "build_code")
+	assert.Contains(s.T(), data, "build_time")
+	assert.Contains(s.T(), data, "commit")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestGetPlans() {
@@ -1313,6 +1483,14 @@ func (s *AdminHandlerTestSuite) TestGetOrderStats() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "total_orders")
+	assert.Contains(s.T(), data, "total_revenue")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestBanUser_InvalidID() {
@@ -1380,6 +1558,14 @@ func (s *AdminHandlerTestSuite) TestGetUserStats() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "total_users")
+	assert.Contains(s.T(), data, "active_users")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestGetOrder_Success() {
@@ -1644,6 +1830,7 @@ func (s *MetricsHandlerTestSuite) TestFormatInt() {
 	assert.Equal(s.T(), "1", formatInt(1))
 	assert.Equal(s.T(), "123", formatInt(123))
 	assert.Equal(s.T(), "1000000", formatInt(1000000))
+	assert.Equal(s.T(), "-42", formatInt(-42))
 }
 
 func (s *MetricsHandlerTestSuite) TestFormatUint() {
@@ -1791,6 +1978,30 @@ func (s *SubscribeHandlerTestSuite) TestGetSubscription_WithFormat() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *SubscribeHandlerTestSuite) TestGetLegacySubscription_Success() {
+	handler := NewSubscribeHandler(s.cfg)
+	s.router.GET("/api/v1/client/subscribe", handler.GetLegacySubscription)
+
+	req, _ := http.NewRequest("GET", "/api/v1/client/subscribe?token="+s.testUser.Token+"&type=json", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	assert.Contains(s.T(), w.Header().Get("Content-Disposition"), "attachment")
+}
+
+func (s *SubscribeHandlerTestSuite) TestGetLegacySubscription_MissingToken() {
+	handler := NewSubscribeHandler(s.cfg)
+	s.router.GET("/api/v1/client/subscribe", handler.GetLegacySubscription)
+
+	req, _ := http.NewRequest("GET", "/api/v1/client/subscribe", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Contains(s.T(), w.Body.String(), "invalid token")
 }
 
 func (s *SubscribeHandlerTestSuite) TestGetSubscription_WithAutoFormat() {
@@ -2143,7 +2354,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetSubscriptionFormats_Success()
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var response map[string]any
-	json.Unmarshal(w.Body.Bytes(), &response)
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &response))
 	data := response["data"].([]any)
 	assert.GreaterOrEqual(s.T(), len(data), 12) // At least 12 formats (including auto)
 }
@@ -2159,9 +2370,35 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetProtocolTypes_Success() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var response map[string]any
-	json.Unmarshal(w.Body.Bytes(), &response)
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &response))
 	data := response["data"].([]any)
 	assert.GreaterOrEqual(s.T(), len(data), 6) // At least 6 protocol types
+}
+
+func (s *SubscriptionAdminHandlerTestSuite) TestGetGroupStats_UsesPanelEnvelope() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.GET("/stats", handler.GetGroupStats)
+
+	req, _ := http.NewRequest("GET", "/stats", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].([]any)
+	assert.NotNil(s.T(), data)
+	assert.NotContains(s.T(), resp, "error")
+
+	if len(data) > 0 {
+		first := data[0].(map[string]any)
+		assert.Contains(s.T(), first, "group_id")
+		assert.Contains(s.T(), first, "group_name")
+		assert.Contains(s.T(), first, "user_count")
+	}
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestPreviewSubscription_InvalidBody() {
@@ -2241,11 +2478,17 @@ func (s *PaymentHandlerTestSuite) TestGetPaymentMethods_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-
-	var response map[string]any
-	json.Unmarshal(w.Body.Bytes(), &response)
-	data := response["data"].([]any)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].([]any)
 	assert.GreaterOrEqual(s.T(), len(data), 3) // At least 3 payment methods
+	first := data[0].(map[string]any)
+	assert.Contains(s.T(), first, "id")
+	assert.Contains(s.T(), first, "provider")
+	assert.Contains(s.T(), first, "enabled")
 }
 
 func (s *PaymentHandlerTestSuite) TestX402CreatePayment_Success() {
@@ -2479,6 +2722,142 @@ func (s *PaymentHandlerTestSuite) TestPayPalWebhook_FailsClosedWithoutConfig() {
 	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
 }
 
+func (s *PaymentHandlerTestSuite) withPayPalVerifyClient(verificationStatus string) func() {
+	oldClient := paypalHTTPClient
+	paypalHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			switch req.URL.Path {
+			case "/v1/oauth2/token":
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader(`{"access_token":"paypal-test-token"}`)),
+				}, nil
+			case "/v1/notifications/verify-webhook-signature":
+				assert.Equal(s.T(), "Bearer paypal-test-token", req.Header.Get("Authorization"))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader(`{"verification_status":"` + verificationStatus + `"}`)),
+				}, nil
+			default:
+				return &http.Response{
+					StatusCode: http.StatusNotFound,
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader(`{"error":"unexpected paypal endpoint"}`)),
+				}, nil
+			}
+		}),
+	}
+	return func() {
+		paypalHTTPClient = oldClient
+	}
+}
+
+func (s *PaymentHandlerTestSuite) createPayPalRecord(tradeNo string) uint {
+	gateway := &model.PaymentGateway{
+		Name:    "PayPal",
+		Type:    model.PaymentGatewayPayPal,
+		Enabled: true,
+		Config:  `{"client_id":"client-id","client_secret":"client-secret","webhook_id":"webhook-id","sandbox_mode":true}`,
+	}
+	s.Require().NoError(s.db.Create(gateway).Error)
+
+	user := &model.User{
+		Email:    tradeNo + "@paypal.example.com",
+		Password: "hashed",
+		Token:    tradeNo + "-token",
+		UUID:     tradeNo + "-uuid",
+	}
+	s.Require().NoError(s.db.Create(user).Error)
+
+	order := &model.Order{
+		TradeNo:     tradeNo,
+		UserID:      user.ID,
+		TotalAmount: 1000,
+		Status:      0,
+	}
+	s.Require().NoError(s.db.Create(order).Error)
+
+	record := &model.PaymentRecord{
+		GatewayID:    gateway.ID,
+		TradeNo:      tradeNo,
+		GatewayType:  model.PaymentGatewayPayPal,
+		UserID:       user.ID,
+		Amount:       10.00,
+		ActualAmount: 10.00,
+		Status:       model.PaymentStatusPending,
+		OrderID:      &order.ID,
+	}
+	s.Require().NoError(s.db.Create(record).Error)
+	return order.ID
+}
+
+func (s *PaymentHandlerTestSuite) paypalWebhookRequest(payload string) *http.Request {
+	req, _ := http.NewRequest("POST", "/paypal/webhook", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Paypal-Auth-Algo", "SHA256withRSA")
+	req.Header.Set("Paypal-Cert-Url", "https://api-m.sandbox.paypal.com/certs/test.pem")
+	req.Header.Set("Paypal-Transmission-Id", "tx-1")
+	req.Header.Set("Paypal-Transmission-Sig", "sig-1")
+	req.Header.Set("Paypal-Transmission-Time", "2026-07-08T00:00:00Z")
+	return req
+}
+
+func (s *PaymentHandlerTestSuite) TestPayPalWebhook_Success() {
+	restore := s.withPayPalVerifyClient("SUCCESS")
+	defer restore()
+
+	tradeNo := "PAYPAL-CB-SUCCESS"
+	orderID := s.createPayPalRecord(tradeNo)
+
+	handler := NewPaymentHandler()
+	handler.gatewayService = service.NewPaymentGatewayService(s.db)
+	s.router.POST("/paypal/webhook", handler.PayPalWebhook)
+
+	payload := `{"id":"WH-123","event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"cap_123","custom_id":"` + tradeNo + `"}}`
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, s.paypalWebhookRequest(payload))
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var record model.PaymentRecord
+	s.Require().NoError(s.db.Where("trade_no = ?", tradeNo).First(&record).Error)
+	assert.Equal(s.T(), model.PaymentStatusPaid, record.Status)
+	assert.Equal(s.T(), "cap_123", record.GatewayTradeNo)
+
+	var order model.Order
+	s.Require().NoError(s.db.First(&order, orderID).Error)
+	assert.Equal(s.T(), 1, order.Status)
+}
+
+func (s *PaymentHandlerTestSuite) TestPayPalWebhook_RemoteSignatureRejected() {
+	restore := s.withPayPalVerifyClient("FAILURE")
+	defer restore()
+
+	tradeNo := "PAYPAL-CB-REJECTED"
+	orderID := s.createPayPalRecord(tradeNo)
+
+	handler := NewPaymentHandler()
+	handler.gatewayService = service.NewPaymentGatewayService(s.db)
+	s.router.POST("/paypal/webhook", handler.PayPalWebhook)
+
+	payload := `{"id":"WH-123","event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"cap_123","custom_id":"` + tradeNo + `"}}`
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, s.paypalWebhookRequest(payload))
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+
+	var record model.PaymentRecord
+	s.Require().NoError(s.db.Where("trade_no = ?", tradeNo).First(&record).Error)
+	assert.Equal(s.T(), model.PaymentStatusPending, record.Status)
+	assert.Empty(s.T(), record.GatewayTradeNo)
+
+	var order model.Order
+	s.Require().NoError(s.db.First(&order, orderID).Error)
+	assert.Equal(s.T(), 0, order.Status)
+}
+
 func (s *PaymentHandlerTestSuite) TestGetPaymentStatus_Success() {
 	handler := NewPaymentHandler()
 	s.router.GET("/status/:trade_no", handler.GetPaymentStatus)
@@ -2524,6 +2903,20 @@ func (s *KnowledgeHandlerTestSuite) TestGetArticles_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].([]any)
+	if assert.Len(s.T(), data, 1) {
+		first := data[0].(map[string]any)
+		assert.Equal(s.T(), float64(s.testKnowledge.ID), first["id"])
+		assert.Equal(s.T(), "test", first["category"])
+		assert.Equal(s.T(), "Test Article", first["title"])
+		assert.Equal(s.T(), "Test content", first["body"])
+		assert.Contains(s.T(), first, "updated_at")
+	}
 }
 
 func (s *KnowledgeHandlerTestSuite) TestGetArticles_WithCategory() {
@@ -2535,6 +2928,13 @@ func (s *KnowledgeHandlerTestSuite) TestGetArticles_WithCategory() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].([]any)
+	assert.Len(s.T(), data, 1)
 }
 
 func (s *KnowledgeHandlerTestSuite) TestGetArticle_Success() {
@@ -2546,6 +2946,17 @@ func (s *KnowledgeHandlerTestSuite) TestGetArticle_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(s.testKnowledge.ID), data["id"])
+	assert.Equal(s.T(), "test", data["category"])
+	assert.Equal(s.T(), "Test Article", data["title"])
+	assert.Equal(s.T(), "Test content", data["body"])
+	assert.Contains(s.T(), data, "updated_at")
 }
 
 func (s *KnowledgeHandlerTestSuite) TestGetArticle_NotFound() {
@@ -2633,6 +3044,17 @@ func (s *OrderHandlerTestSuite) TestGetOrders_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	list := data["list"].([]any)
+	assert.Len(s.T(), list, 1)
+	assert.Equal(s.T(), float64(1), data["total"])
+	first := list[0].(map[string]any)
+	assert.Equal(s.T(), "ORDER123", first["trade_no"])
 }
 
 func (s *OrderHandlerTestSuite) TestGetOrders_EmptyUserID() {
@@ -2645,6 +3067,11 @@ func (s *OrderHandlerTestSuite) TestGetOrders_EmptyUserID() {
 
 	// Handler returns 200 with empty list for user_id=0
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Empty(s.T(), data["list"])
+	assert.Equal(s.T(), float64(0), data["total"])
 }
 
 func (s *OrderHandlerTestSuite) TestGetOrderDetail_Success() {
@@ -2659,6 +3086,15 @@ func (s *OrderHandlerTestSuite) TestGetOrderDetail_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(s.testOrder.ID), data["id"])
+	assert.Equal(s.T(), "ORDER123", data["trade_no"])
+	assert.Equal(s.T(), float64(s.testUser.ID), data["user_id"])
 }
 
 func (s *OrderHandlerTestSuite) TestGetOrderDetail_NotFound() {
@@ -2737,6 +3173,17 @@ func (s *UserPlanHandlerTestSuite) TestGetPlans_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].([]any)
+	if assert.Len(s.T(), data, 1) {
+		first := data[0].(map[string]any)
+		assert.Equal(s.T(), "Test Plan", first["name"])
+		assert.Equal(s.T(), float64(1), first["show"])
+	}
 }
 
 func (s *UserPlanHandlerTestSuite) TestGetPlans_WithShow() {
@@ -2748,6 +3195,10 @@ func (s *UserPlanHandlerTestSuite) TestGetPlans_WithShow() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].([]any)
+	assert.Len(s.T(), data, 1)
 }
 
 func TestUserPlanHandler(t *testing.T) {
@@ -2792,6 +3243,16 @@ func (s *CouponHandlerTestSuite) TestCheckCoupon_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(s.testCoupon.ID), data["id"])
+	assert.Equal(s.T(), "Test Coupon", data["name"])
+	assert.Equal(s.T(), float64(1), data["type"])
+	assert.Equal(s.T(), float64(10), data["value"])
 }
 
 func (s *CouponHandlerTestSuite) TestCheckCoupon_InvalidCode() {
@@ -2887,6 +3348,19 @@ func (s *TicketHandlerTestSuite) TestGetTickets_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].([]any)
+	if assert.Len(s.T(), data, 1) {
+		first := data[0].(map[string]any)
+		assert.Equal(s.T(), float64(s.testTicket.ID), first["id"])
+		assert.Equal(s.T(), "Test Ticket", first["subject"])
+		assert.Equal(s.T(), float64(1), first["level"])
+		assert.Equal(s.T(), float64(0), first["status"])
+	}
 }
 
 func (s *TicketHandlerTestSuite) TestGetTickets_Empty() {
@@ -2904,6 +3378,13 @@ func (s *TicketHandlerTestSuite) TestGetTickets_Empty() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].([]any)
+	assert.Empty(s.T(), data)
 }
 
 func (s *TicketHandlerTestSuite) TestCreateTicket_Success() {
@@ -2920,6 +3401,16 @@ func (s *TicketHandlerTestSuite) TestCreateTicket_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.NotZero(s.T(), data["id"])
+	assert.Equal(s.T(), "New Ticket", data["subject"])
+	assert.Equal(s.T(), float64(1), data["level"])
+	assert.Equal(s.T(), float64(0), data["status"])
 }
 
 func (s *TicketHandlerTestSuite) TestCreateTicket_MissingFields() {
@@ -2950,6 +3441,15 @@ func (s *TicketHandlerTestSuite) TestGetTicket_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(s.testTicket.ID), data["id"])
+	assert.Equal(s.T(), "Test Ticket", data["subject"])
+	assert.Equal(s.T(), float64(s.testUser.ID), data["user_id"])
 }
 
 func (s *TicketHandlerTestSuite) TestGetTicket_NotFound() {
@@ -2994,6 +3494,12 @@ func (s *TicketHandlerTestSuite) TestReplyTicket_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	assert.Equal(s.T(), "回复成功", resp["data"])
 }
 
 func (s *TicketHandlerTestSuite) TestReplyTicket_Closed() {
@@ -3028,6 +3534,12 @@ func (s *TicketHandlerTestSuite) TestCloseTicket_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	assert.Equal(s.T(), "工单已关闭", resp["data"])
 }
 
 func TestTicketHandler(t *testing.T) {
@@ -3315,6 +3827,15 @@ func (s *InviteHandlerTestSuite) TestGetInviteStats() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "total_invites")
+	assert.Contains(s.T(), data, "total_commission")
+	assert.Contains(s.T(), data, "top_inviters")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func TestInviteHandler(t *testing.T) {
@@ -3634,6 +4155,25 @@ func (s *SystemHandlerTestSuite) TestGetConfigs_ByGroup() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
+func (s *SystemHandlerTestSuite) TestGetSubscriptionSettings_UsesPanelEnvelope() {
+	handler := NewSystemHandler()
+	s.router.GET("/admin/system/subscription-settings", handler.GetSubscriptionSettings)
+
+	req, _ := http.NewRequest("GET", "/admin/system/subscription-settings", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "subscribe_path")
+	assert.Contains(s.T(), data, "subscribe_domains")
+}
+
 func (s *SystemHandlerTestSuite) TestGetConfig() {
 	handler := NewSystemHandler()
 	s.router.GET("/admin/system/configs/:key", handler.GetConfig)
@@ -3718,6 +4258,18 @@ func (s *AdminCouponHandlerTestSuite) TestGetCoupons() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.Equal(s.T(), "操作成功", resp["msg"])
+	assert.NotEmpty(s.T(), resp["ts"])
+	data := resp["data"].([]any)
+	assert.Len(s.T(), data, 1)
+	first := data[0].(map[string]any)
+	assert.Equal(s.T(), float64(s.testCoupon.ID), first["id"])
+	assert.Equal(s.T(), "TESTCODE", first["code"])
+	assert.Equal(s.T(), "Test Coupon", first["name"])
+	assert.Equal(s.T(), float64(100), first["limit_use"])
 }
 
 func (s *AdminCouponHandlerTestSuite) TestCreateCoupon() {
@@ -3731,6 +4283,14 @@ func (s *AdminCouponHandlerTestSuite) TestCreateCoupon() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "创建成功", data["message"])
+	coupon := data["data"].(map[string]any)
+	assert.Equal(s.T(), "NEWCODE", coupon["code"])
+	assert.Equal(s.T(), "New Coupon", coupon["name"])
 }
 
 func (s *AdminCouponHandlerTestSuite) TestCreateCoupon_DuplicateCode() {
@@ -3768,6 +4328,14 @@ func (s *AdminCouponHandlerTestSuite) TestDeleteCoupon() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "删除成功", data["message"])
+
+	var deleted model.Coupon
+	assert.Error(s.T(), s.db.First(&deleted, s.testCoupon.ID).Error)
 }
 
 func (s *AdminCouponHandlerTestSuite) TestDeleteCoupon_NotFound() {
@@ -3826,6 +4394,17 @@ func (s *AdminKnowledgeHandlerTestSuite) TestGetArticles() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.Equal(s.T(), "操作成功", resp["msg"])
+	assert.NotEmpty(s.T(), resp["ts"])
+	data := resp["data"].([]any)
+	assert.Len(s.T(), data, 1)
+	first := data[0].(map[string]any)
+	assert.Equal(s.T(), float64(s.testArticle.ID), first["id"])
+	assert.Equal(s.T(), "Test Article", first["title"])
+	assert.Equal(s.T(), "公告", first["category"])
 }
 
 func (s *AdminKnowledgeHandlerTestSuite) TestCreateArticle() {
@@ -3839,6 +4418,15 @@ func (s *AdminKnowledgeHandlerTestSuite) TestCreateArticle() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "创建成功", data["message"])
+	article := data["data"].(map[string]any)
+	assert.Equal(s.T(), "New Article", article["title"])
+	assert.Equal(s.T(), "公告", article["category"])
+	assert.Equal(s.T(), float64(1), article["show"])
 }
 
 func (s *AdminKnowledgeHandlerTestSuite) TestCreateArticle_MissingFields() {
@@ -3865,6 +4453,18 @@ func (s *AdminKnowledgeHandlerTestSuite) TestUpdateArticle() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "更新成功", data["message"])
+
+	var updated model.Knowledge
+	assert.NoError(s.T(), s.db.First(&updated, s.testArticle.ID).Error)
+	assert.Equal(s.T(), "Updated Title", updated.Title)
+	assert.Equal(s.T(), "Updated content", updated.Body)
+	assert.Equal(s.T(), 1, updated.Sort)
+	assert.Equal(s.T(), 1, updated.Show)
 }
 
 func (s *AdminKnowledgeHandlerTestSuite) TestUpdateArticle_NotFound() {
@@ -3902,6 +4502,14 @@ func (s *AdminKnowledgeHandlerTestSuite) TestDeleteArticle() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "删除成功", data["message"])
+
+	var deleted model.Knowledge
+	assert.Error(s.T(), s.db.First(&deleted, s.testArticle.ID).Error)
 }
 
 func (s *AdminKnowledgeHandlerTestSuite) TestDeleteArticle_NotFound() {
@@ -3958,6 +4566,19 @@ func (s *AdminTicketHandlerTestSuite) TestGetTickets() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]any
+	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.Equal(s.T(), "操作成功", resp["msg"])
+	assert.NotEmpty(s.T(), resp["ts"])
+
+	data := resp["data"].([]any)
+	assert.Len(s.T(), data, 1)
+	first := data[0].(map[string]any)
+	assert.Equal(s.T(), float64(s.testTicket.ID), first["id"])
+	assert.Equal(s.T(), float64(s.testUser.ID), first["user_id"])
+	assert.Equal(s.T(), "Test Ticket", first["subject"])
 }
 
 func (s *AdminTicketHandlerTestSuite) TestReplyTicket() {
@@ -3984,6 +4605,16 @@ func (s *AdminTicketHandlerTestSuite) TestReplyTicket() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]any
+	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "回复成功", data["message"])
+
+	var updated model.Ticket
+	assert.NoError(s.T(), s.db.First(&updated, s.testTicket.ID).Error)
+	assert.Equal(s.T(), 1, updated.Status)
 }
 
 func (s *AdminTicketHandlerTestSuite) TestReplyTicket_MissingFields() {
@@ -4027,6 +4658,17 @@ func (s *AdminTicketHandlerTestSuite) TestCloseTicket() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]any
+	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "工单已关闭", data["message"])
+	assert.Equal(s.T(), float64(s.testTicket.ID), data["id"])
+
+	var updated model.Ticket
+	assert.NoError(s.T(), s.db.First(&updated, s.testTicket.ID).Error)
+	assert.Equal(s.T(), 2, updated.Status)
 }
 
 func (s *AdminTicketHandlerTestSuite) TestCloseTicket_NotFound() {
@@ -4195,6 +4837,16 @@ func (s *PaymentGatewayHandlerTestSuite) TestGetStats() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "total_amount")
+	assert.Contains(s.T(), data, "total_orders")
+	assert.Contains(s.T(), data, "success_rate")
+	assert.Contains(s.T(), data, "by_gateway")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func TestPaymentGatewayHandler(t *testing.T) {
@@ -4268,7 +4920,12 @@ func (s *ForwardHandlerTestSuite) TestCreateNode_MissingFields() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], "CreateNodeRequest.Name")
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerTestSuite) TestGetNode() {
@@ -4290,7 +4947,12 @@ func (s *ForwardHandlerTestSuite) TestGetNode_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "forward node not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerTestSuite) TestGetNode_InvalidID() {
@@ -4301,7 +4963,12 @@ func (s *ForwardHandlerTestSuite) TestGetNode_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "invalid id", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerTestSuite) TestDeleteNode() {
@@ -4657,6 +5324,44 @@ func (s *NodeRegisterTestSuite) TestHeartbeat_Unauthorized() {
 	assert.Equal(s.T(), http.StatusUnauthorized, w.Code)
 }
 
+func (s *NodeRegisterTestSuite) TestHeartbeat_RejectsNegativeTraffic() {
+	node := &model.Node{
+		Name:   "Heartbeat Handler Negative",
+		Host:   "192.168.1.90",
+		Port:   443,
+		Rate:   1,
+		Show:   1,
+		Status: model.NodeStatusOnline,
+	}
+	assert.NoError(s.T(), s.db.Create(node).Error)
+
+	handler := NewNodeHandler()
+	s.router.Use(func(c *gin.Context) {
+		c.Set("node_id", node.ID)
+		c.Next()
+	})
+	s.router.POST("/heartbeat", handler.Heartbeat)
+
+	body := map[string]any{
+		"upload":   -1,
+		"download": 200,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/heartbeat", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+
+	var updated model.Node
+	assert.NoError(s.T(), s.db.First(&updated, node.ID).Error)
+	assert.Nil(s.T(), updated.LastCheckAt)
+	assert.Equal(s.T(), int64(0), updated.TotalUpload)
+	assert.Equal(s.T(), int64(0), updated.TotalDownload)
+}
+
 func TestNodeRegister(t *testing.T) {
 	suite.Run(t, new(NodeRegisterTestSuite))
 }
@@ -4896,7 +5601,12 @@ func (s *ForwardNodeHandlerTestSuite) TestDeleteNode_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "invalid id", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func TestForwardNodeHandler(t *testing.T) {
@@ -4971,7 +5681,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestGetNode_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "forward node not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestGetNode_InvalidID() {
@@ -4982,7 +5697,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestGetNode_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "invalid id", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestUpdateNode() {
@@ -5016,7 +5736,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestUpdateNode_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "node not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestUpdateNode_InvalidID() {
@@ -5031,7 +5756,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestUpdateNode_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "invalid id", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestCheckNode() {
@@ -5054,7 +5784,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestCheckNode_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "invalid id", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestToggleNode() {
@@ -5099,7 +5834,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestToggleNode_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "invalid id", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestToggleNode_NotFound() {
@@ -5114,7 +5854,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestToggleNode_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "node not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 // Forward Rule Tests
@@ -5162,6 +5907,29 @@ func (s *ForwardHandlerExtendedTestSuite) TestCreateRule() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "New Rule", data["name"])
+	assert.Equal(s.T(), "tcp", data["protocol"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
+}
+
+func (s *ForwardHandlerExtendedTestSuite) TestCreateRule_MissingFields() {
+	handler := NewForwardHandler()
+	s.router.POST("/forward/rules", handler.CreateRule)
+
+	req, _ := http.NewRequest("POST", "/forward/rules", bytes.NewReader([]byte(`{}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], "CreateRuleRequest.Name")
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestCreateRule_DefaultProtocol() {
@@ -5184,6 +5952,11 @@ func (s *ForwardHandlerExtendedTestSuite) TestCreateRule_DefaultProtocol() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "tcp", data["protocol"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestGetRule() {
@@ -5195,6 +5968,11 @@ func (s *ForwardHandlerExtendedTestSuite) TestGetRule() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "Test Rule", data["name"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestGetRule_NotFound() {
@@ -5205,7 +5983,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestGetRule_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "rule not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestGetRule_InvalidID() {
@@ -5216,7 +5999,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestGetRule_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "invalid id", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestUpdateRule() {
@@ -5237,6 +6025,32 @@ func (s *ForwardHandlerExtendedTestSuite) TestUpdateRule() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "Updated Rule", data["name"])
+	assert.Equal(s.T(), float64(9100), data["listen_port"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
+}
+
+func (s *ForwardHandlerExtendedTestSuite) TestUpdateRule_InvalidID() {
+	handler := NewForwardHandler()
+	s.router.PUT("/forward/rules/:id", handler.UpdateRule)
+
+	body := map[string]any{"name": "Updated"}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/forward/rules/invalid", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "invalid id", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestUpdateRule_NotFound() {
@@ -5251,7 +6065,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestUpdateRule_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "rule not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestDeleteRule() {
@@ -5263,6 +6082,10 @@ func (s *ForwardHandlerExtendedTestSuite) TestDeleteRule() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.Equal(s.T(), "deleted", resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestDeleteRule_InvalidID() {
@@ -5273,7 +6096,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestDeleteRule_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "invalid id", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestToggleRule() {
@@ -5289,6 +6117,10 @@ func (s *ForwardHandlerExtendedTestSuite) TestToggleRule() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.Equal(s.T(), "updated", resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestToggleRule_InvalidID() {
@@ -5303,7 +6135,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestToggleRule_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "invalid id", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestGetForwardStats() {
@@ -5335,6 +6172,29 @@ func (s *ForwardHandlerExtendedTestSuite) TestTestGostConnection() {
 
 	// Returns OK even if connection fails (handler returns success: false)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), false, data["success"])
+	assert.NotEmpty(s.T(), data["message"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
+}
+
+func (s *ForwardHandlerExtendedTestSuite) TestTestGostConnection_InvalidBody() {
+	handler := NewForwardHandler()
+	s.router.POST("/forward/test-connection", handler.TestGostConnection)
+
+	req, _ := http.NewRequest("POST", "/forward/test-connection", strings.NewReader("invalid"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardHandlerExtendedTestSuite) TestSyncNodeStats() {
@@ -5356,7 +6216,12 @@ func (s *ForwardHandlerExtendedTestSuite) TestSyncNodeStats_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "invalid id", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func TestForwardHandlerExtended(t *testing.T) {

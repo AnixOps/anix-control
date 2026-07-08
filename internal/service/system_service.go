@@ -38,6 +38,13 @@ type backupArchiveManifest struct {
 	DatabaseEntry string    `json:"database_entry,omitempty"`
 }
 
+const (
+	backupDirectoryMode            os.FileMode = 0o750
+	maxBackupArchiveFileBytes      uint64      = 512 << 20
+	maxBackupArchiveTotalBytes     uint64      = 2 << 30
+	defaultRestoredArchiveFileMode os.FileMode = 0o600
+)
+
 func NewBackupService(db *gorm.DB) *BackupService {
 	return &BackupService{db: db}
 }
@@ -116,7 +123,7 @@ func (s *BackupService) CreateBackup(backupType string, createdBy *uint) (*model
 		_ = s.db.Save(record).Error
 		return record, err
 	}
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
+	if err := ensureBackupDirectory(backupDir); err != nil {
 		now := time.Now()
 		record.Status = 2
 		record.Error = err.Error()
@@ -281,7 +288,7 @@ func (s *BackupService) restoreDatabase(backupPath string) error {
 	return copyFileContents(backupPath, dbPath)
 }
 
-func (s *BackupService) restoreArchive(backupPath string, includesDatabase bool) error {
+func (s *BackupService) restoreArchive(backupPath string, includesDatabase bool) (err error) {
 	appRoot, err := s.resolveAppRoot()
 	if err != nil {
 		return err
@@ -302,8 +309,9 @@ func (s *BackupService) restoreArchive(backupPath string, includesDatabase bool)
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer closeIntoError(&err, reader)
 
+	var totalArchiveBytes uint64
 	for _, file := range reader.File {
 		name := strings.TrimSpace(file.Name)
 		if name == "" || strings.HasPrefix(name, "meta/") {
@@ -318,7 +326,7 @@ func (s *BackupService) restoreArchive(backupPath string, includesDatabase bool)
 			if err != nil {
 				return err
 			}
-			if err := os.MkdirAll(targetDir, 0755); err != nil {
+			if err := os.MkdirAll(targetDir, backupDirectoryMode); err != nil {
 				return err
 			}
 			continue
@@ -334,6 +342,9 @@ func (s *BackupService) restoreArchive(backupPath string, includesDatabase bool)
 			continue
 		}
 
+		if err := validateArchiveFileForRestore(file, &totalArchiveBytes); err != nil {
+			return err
+		}
 		if err := extractArchiveFile(file, targetPath); err != nil {
 			return err
 		}
@@ -417,7 +428,7 @@ func (s *BackupService) resolveSQLiteDatabasePath() (string, error) {
 		return "", errors.New("database is not initialized")
 	}
 
-	driver := strings.ToLower(strings.TrimSpace(s.db.Dialector.Name()))
+	driver := strings.ToLower(strings.TrimSpace(s.db.Name()))
 	if driver != "sqlite" {
 		return "", fmt.Errorf("database backup is only supported for sqlite deployments; current driver is %s", driver)
 	}
@@ -447,7 +458,7 @@ func (s *BackupService) resolveSQLiteDatabasePath() (string, error) {
 }
 
 func (s *BackupService) resolveOptionalSQLiteDatabasePath() (string, error) {
-	if s.db == nil || strings.ToLower(strings.TrimSpace(s.db.Dialector.Name())) != "sqlite" {
+	if s.db == nil || strings.ToLower(strings.TrimSpace(s.db.Name())) != "sqlite" {
 		return "", nil
 	}
 	path, err := s.resolveSQLiteDatabasePath()
@@ -461,7 +472,7 @@ func (s *BackupService) resolveOptionalSQLiteDatabasePath() (string, error) {
 }
 
 func (s *BackupService) createSQLiteSnapshot(destination string) error {
-	if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(destination), backupDirectoryMode); err != nil {
 		return err
 	}
 	if err := os.Remove(destination); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -575,7 +586,7 @@ func (s *BackupService) writeBackupArchive(destination string, sources []backupA
 		return "", 0, err
 	}
 
-	file, err := os.Create(destination)
+	file, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600) // #nosec G304 -- destination is generated under a resolved local backup directory.
 	if err != nil {
 		return "", 0, err
 	}
@@ -649,33 +660,93 @@ func isSameOrChildPath(path, parent string) bool {
 	return relative != ".." && !strings.HasPrefix(relative, ".."+string(os.PathSeparator))
 }
 
-func resolveArchiveTargetPath(appRoot, archivePath string) (string, error) {
-	clean := filepath.Clean(filepath.FromSlash(archivePath))
-	if clean == "." || clean == "" || strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) {
-		return "", fmt.Errorf("invalid archive entry path: %s", archivePath)
+func ensureBackupDirectory(path string) error {
+	if err := os.MkdirAll(path, backupDirectoryMode); err != nil {
+		return err
 	}
-	return filepath.Join(appRoot, clean), nil
+	return os.Chmod(path, backupDirectoryMode)
 }
 
-func extractArchiveFile(file *zip.File, destination string) error {
+func resolveArchiveTargetPath(appRoot, archivePath string) (string, error) {
+	clean := filepath.Clean(filepath.FromSlash(strings.TrimSpace(archivePath)))
+	if clean == "." || clean == "" || clean == ".." || strings.HasPrefix(clean, ".."+string(os.PathSeparator)) || filepath.IsAbs(clean) {
+		return "", fmt.Errorf("invalid archive entry path: %s", archivePath)
+	}
+	targetPath := filepath.Join(appRoot, clean)
+	if !isSameOrChildPath(targetPath, appRoot) {
+		return "", fmt.Errorf("archive entry escapes application root: %s", archivePath)
+	}
+	return targetPath, nil
+}
+
+func validateArchiveFileForRestore(file *zip.File, totalBytes *uint64) error {
+	mode := file.Mode()
+	if mode&os.ModeType != 0 {
+		return fmt.Errorf("unsupported archive entry type: %s", file.Name)
+	}
+	if file.UncompressedSize64 > maxBackupArchiveFileBytes {
+		return fmt.Errorf("archive entry %q exceeds maximum restore size", file.Name)
+	}
+	if totalBytes != nil {
+		if *totalBytes > maxBackupArchiveTotalBytes-file.UncompressedSize64 {
+			return fmt.Errorf("archive exceeds maximum restore size")
+		}
+		*totalBytes += file.UncompressedSize64
+	}
+	return nil
+}
+
+func restoredArchiveFileMode(mode os.FileMode) os.FileMode {
+	perm := mode.Perm()
+	if perm == 0 {
+		return defaultRestoredArchiveFileMode
+	}
+	return perm
+}
+
+func archiveDeclaredSize(file *zip.File) (int64, error) {
+	if file.UncompressedSize64 > maxBackupArchiveFileBytes {
+		return 0, fmt.Errorf("archive entry %q exceeds maximum restore size", file.Name)
+	}
+	return int64(file.UncompressedSize64), nil // #nosec G115 -- value is bounded by maxBackupArchiveFileBytes before conversion.
+}
+
+func extractArchiveFile(file *zip.File, destination string) (err error) {
+	if err := validateArchiveFileForRestore(file, nil); err != nil {
+		return err
+	}
+	declaredSize, err := archiveDeclaredSize(file)
+	if err != nil {
+		return err
+	}
+
 	reader, err := file.Open()
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer closeIntoError(&err, reader)
 
-	if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(destination), backupDirectoryMode); err != nil {
 		return err
 	}
 
-	target, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, file.Mode())
+	target, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, restoredArchiveFileMode(file.Mode())) // #nosec G304 -- destination is resolved with resolveArchiveTargetPath or trusted SQLite path before extraction.
 	if err != nil {
 		return err
 	}
-	defer target.Close()
 
-	_, err = io.Copy(target, reader)
-	return err
+	written, copyErr := io.CopyN(target, reader, declaredSize+1)
+	closeErr := target.Close()
+	if copyErr != nil && !errors.Is(copyErr, io.EOF) {
+		return copyErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if written > declaredSize {
+		return fmt.Errorf("archive entry %q exceeded declared size", file.Name)
+	}
+	return nil
 }
 
 func writeJSONArchiveEntry(writer *zip.Writer, name string, payload any) error {
@@ -691,7 +762,7 @@ func writeJSONArchiveEntry(writer *zip.Writer, name string, payload any) error {
 	return err
 }
 
-func writeFileArchiveEntry(writer *zip.Writer, source backupArchiveSource) error {
+func writeFileArchiveEntry(writer *zip.Writer, source backupArchiveSource) (err error) {
 	info, err := os.Stat(source.SourcePath)
 	if err != nil {
 		return err
@@ -709,42 +780,51 @@ func writeFileArchiveEntry(writer *zip.Writer, source backupArchiveSource) error
 		return err
 	}
 
-	file, err := os.Open(source.SourcePath)
+	file, err := os.Open(source.SourcePath) // #nosec G304 -- source paths are collected from fixed runtime allowlist roots and filtered before archiving.
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer closeIntoError(&err, file)
 
 	_, err = io.Copy(entry, file)
 	return err
 }
 
-func copyFileContents(source, destination string) error {
-	src, err := os.Open(source)
+func copyFileContents(source, destination string) (err error) {
+	src, err := os.Open(source) // #nosec G304 -- source is a selected backup file path for restore and destination is the resolved SQLite database path.
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer closeIntoError(&err, src)
 
 	info, err := src.Stat()
 	if err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(destination), backupDirectoryMode); err != nil {
 		return err
 	}
 
-	dst, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode())
+	dst, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode()) // #nosec G304 -- destination is resolved from configured SQLite database path before restore.
 	if err != nil {
 		return err
 	}
-	defer dst.Close()
+	defer closeIntoError(&err, dst)
 
 	if _, err := io.Copy(dst, src); err != nil {
 		return err
 	}
 	return dst.Sync()
+}
+
+func closeIntoError(errp *error, closer io.Closer) {
+	if closer == nil {
+		return
+	}
+	if closeErr := closer.Close(); closeErr != nil && *errp == nil {
+		*errp = closeErr
+	}
 }
 
 type SystemConfigService struct {

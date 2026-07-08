@@ -21,7 +21,7 @@ func testRouterJWT(t *testing.T, secret string, isAdmin bool) string {
 
 func TestSetup_ForwardCompatAdminEndpoints_RequireAdmin(t *testing.T) {
 	r, cfg := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	userToken := testRouterJWT(t, cfg.JWT.Secret, false)
 	adminToken := testRouterJWT(t, cfg.JWT.Secret, true)
@@ -90,7 +90,7 @@ func TestSetup_ForwardCompatAdminEndpoints_RequireAdmin(t *testing.T) {
 
 func TestSetup_ForwardUserEndpoints_RequireJWT(t *testing.T) {
 	r, cfg := setupTestRouter(t)
-	defer teardownTestRouter()
+	defer teardownTestRouter(t)
 
 	userToken := testRouterJWT(t, cfg.JWT.Secret, false)
 	adminToken := testRouterJWT(t, cfg.JWT.Secret, true)

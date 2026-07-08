@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -41,7 +42,11 @@ type panelForwardRuntimeCommandRunner interface {
 type osExecPanelForwardRuntimeCommandRunner struct{}
 
 func (r osExecPanelForwardRuntimeCommandRunner) Run(ctx context.Context, command string, args []string, workdir string, env map[string]string) (string, error) {
-	cmd := exec.CommandContext(ctx, command, args...)
+	commandPath, err := resolveAnsiblePlaybookCommand(command)
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.CommandContext(ctx, commandPath, args...) // #nosec G204 -- commandPath is constrained by resolveAnsiblePlaybookCommand to ansible-playbook only.
 	if strings.TrimSpace(workdir) != "" {
 		cmd.Dir = workdir
 	}
@@ -54,6 +59,26 @@ func (r osExecPanelForwardRuntimeCommandRunner) Run(ctx context.Context, command
 
 	output, err := cmd.CombinedOutput()
 	return string(output), err
+}
+
+func resolveAnsiblePlaybookCommand(command string) (string, error) {
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" {
+		return defaultAnsibleCommand, nil
+	}
+	if strings.ContainsAny(trimmed, "\x00\r\n") {
+		return "", fmt.Errorf("invalid ansible command")
+	}
+	if filepath.Base(trimmed) != defaultAnsibleCommand {
+		return "", fmt.Errorf("unsupported ansible command: %s", trimmed)
+	}
+	if filepath.IsAbs(trimmed) {
+		return filepath.Clean(trimmed), nil
+	}
+	if trimmed != defaultAnsibleCommand {
+		return "", fmt.Errorf("ansible command path must be absolute: %s", trimmed)
+	}
+	return defaultAnsibleCommand, nil
 }
 
 type PanelForwardRuntimeJobExecutor struct {
@@ -107,7 +132,7 @@ type panelForwardAnsibleRuntimePayload struct {
 	Inventory      string                             `json:"inventory"`
 	Playbook       string                             `json:"playbook"`
 	Become         bool                               `json:"become"`
-	ExtraVars      map[string]any             `json:"extraVars,omitempty"`
+	ExtraVars      map[string]any                     `json:"extraVars,omitempty"`
 	Forward        panelForwardAnsibleForwardPayload  `json:"forward"`
 	Tunnel         panelForwardAnsibleTunnelPayload   `json:"tunnel"`
 	Node           panelForwardAnsibleNodePayload     `json:"node"`
@@ -213,16 +238,26 @@ func (e *PanelForwardRuntimeJobExecutor) processNext(ctx context.Context) (bool,
 
 func (e *PanelForwardRuntimeJobExecutor) claimJob(job *model.ForwardRuntimeJob) (bool, error) {
 	now := time.Now()
-	result := e.db.Model(&model.ForwardRuntimeJob{}).
-		Where("id = ? AND status = ?", job.ID, model.ForwardRuntimeJobStatusPending).
-		Updates(map[string]any{
-			"status":     model.ForwardRuntimeJobStatusRunning,
-			"started_at": &now,
-		})
-	if result.Error != nil {
-		return false, result.Error
+	claimed := false
+	if err := e.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.ForwardRuntimeJob{}).
+			Where("id = ? AND status = ?", job.ID, model.ForwardRuntimeJobStatusPending).
+			Updates(map[string]any{
+				"status":     model.ForwardRuntimeJobStatusRunning,
+				"started_at": &now,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return nil
+		}
+		claimed = true
+		return updateForwardRuntimeRunningStateTx(tx, job, &now)
+	}); err != nil {
+		return false, err
 	}
-	if result.RowsAffected == 0 {
+	if !claimed {
 		return false, nil
 	}
 
@@ -262,18 +297,26 @@ func (e *PanelForwardRuntimeJobExecutor) executeClaimedJob(ctx context.Context, 
 func (e *PanelForwardRuntimeJobExecutor) finishJobSuccess(job *model.ForwardRuntimeJob, payload *panelForwardAnsibleRuntimePayload, output string) error {
 	now := time.Now()
 	message := payload.successMessage()
-	if err := e.db.Model(&model.ForwardRuntimeJob{}).
-		Where("id = ?", job.ID).
-		Updates(map[string]any{
-			"status":       model.ForwardRuntimeJobStatusSuccess,
-			"result":       output,
-			"error":        "",
-			"completed_at": &now,
-		}).Error; err != nil {
-		return err
-	}
 
-	return e.updateForwardRuntimeState(job, payload, model.ForwardRuntimeJobStatusSuccess, message, successForwardStatusForAction(job.Action), &now)
+	return e.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.ForwardRuntimeJob{}).
+			Where("id = ?", job.ID).
+			Updates(map[string]any{
+				"status":       model.ForwardRuntimeJobStatusSuccess,
+				"result":       output,
+				"error":        "",
+				"completed_at": &now,
+			}).Error; err != nil {
+			return err
+		}
+		if err := cleanupPanelForwardAfterRuntimeDeleteTx(tx, job); err != nil {
+			return err
+		}
+		if job.Action == model.ForwardRuntimeJobActionDelete {
+			return nil
+		}
+		return updateForwardRuntimeStateTx(tx, job, model.ForwardRuntimeJobStatusSuccess, message, successForwardStatusForAction(job.Action), &now)
+	})
 }
 
 func (e *PanelForwardRuntimeJobExecutor) finishJobFailure(job *model.ForwardRuntimeJob, payload *panelForwardAnsibleRuntimePayload, message, output string) error {
@@ -316,12 +359,44 @@ func (e *PanelForwardRuntimeJobExecutor) updateForwardRuntimeState(job *model.Fo
 }
 
 func (e *PanelForwardRuntimeJobExecutor) requeueRunningJobs() error {
-	return e.queryDB().Model(&model.ForwardRuntimeJob{}).
+	db := e.queryDB()
+	if db == nil {
+		return nil
+	}
+
+	var jobs []model.ForwardRuntimeJob
+	if err := db.
 		Where("backend IN ? AND status = ?", localAnsibleJobBackends(), model.ForwardRuntimeJobStatusRunning).
-		Updates(map[string]any{
-			"status":     model.ForwardRuntimeJobStatusPending,
-			"started_at": nil,
-		}).Error
+		Find(&jobs).Error; err != nil {
+		return err
+	}
+	if len(jobs) == 0 {
+		return nil
+	}
+
+	ids := make([]uint, 0, len(jobs))
+	for idx := range jobs {
+		ids = append(ids, jobs[idx].ID)
+	}
+
+	now := time.Now()
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.ForwardRuntimeJob{}).
+			Where("id IN ? AND status = ?", ids, model.ForwardRuntimeJobStatusRunning).
+			Updates(map[string]any{
+				"status":     model.ForwardRuntimeJobStatusPending,
+				"started_at": nil,
+			}).Error; err != nil {
+			return err
+		}
+
+		for idx := range jobs {
+			if err := requeueForwardRuntimeStateTx(tx, &jobs[idx], &now); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (e *PanelForwardRuntimeJobExecutor) queryDB() *gorm.DB {

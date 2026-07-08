@@ -53,8 +53,13 @@ func (s *NodeGRPCServer) Register(ctx context.Context, req *pb.NodeRegisterReque
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	nodeID, err := uintToUint32("node id", resp.NodeID)
+	if err != nil {
+		return nil, status.Error(codes.OutOfRange, err.Error())
+	}
+
 	return &pb.NodeRegisterResponse{
-		NodeId:  uint32(resp.NodeID),
+		NodeId:  nodeID,
 		ApiKey:  resp.APIKey,
 		Secret:  resp.Secret,
 		Message: resp.Message,
@@ -63,7 +68,9 @@ func (s *NodeGRPCServer) Register(ctx context.Context, req *pb.NodeRegisterReque
 
 // GetConfig 获取节点配置
 func (s *NodeGRPCServer) GetConfig(ctx context.Context, req *pb.NodeConfigRequest) (*pb.NodeConfigResponse, error) {
-	_ = s.nodeService.UpdateLastCheckAt(uint(req.NodeId))
+	if err := s.nodeService.UpdateLastCheckAt(uint(req.NodeId)); err != nil {
+		slog.Warn("failed to update node heartbeat before config fetch", "component", "grpc", "method", "GetConfig", "node_id", req.NodeId, "error", err)
+	}
 
 	node, err := s.nodeService.GetNode(uint(req.NodeId))
 	if err != nil {
@@ -75,7 +82,16 @@ func (s *NodeGRPCServer) GetConfig(ctx context.Context, req *pb.NodeConfigReques
 
 	if len(protocols) > 0 {
 		// 用共享构建器填充完整协议配置 (cipher / server_key / flow / tls_settings 等)
-		return fillNodeConfigResponse(node, &protocols[0]), nil
+		resp, err := fillNodeConfigResponse(node, &protocols[0])
+		if err != nil {
+			return nil, status.Error(codes.OutOfRange, err.Error())
+		}
+		return resp, nil
+	}
+
+	serverPort, err := intToInt32("node port", node.Port)
+	if err != nil {
+		return nil, status.Error(codes.OutOfRange, err.Error())
 	}
 
 	// 无协议配置时的默认响应
@@ -83,7 +99,7 @@ func (s *NodeGRPCServer) GetConfig(ctx context.Context, req *pb.NodeConfigReques
 		NodeType:    "vless",
 		Type:        "vless",
 		Host:        node.Host,
-		ServerPort:  int32(node.Port),
+		ServerPort:  serverPort,
 		ServerName:  node.Host,
 		Network:     "tcp",
 		SendThrough: "0.0.0.0",
@@ -188,44 +204,40 @@ func (s *NodeGRPCServer) checkConfigChanges(nodeID uint32) (*pb.NodeConfigRespon
 		return nil, nil
 	}
 
-	resp := s.buildConfigResponse(node)
+	resp, err := s.buildConfigResponse(node)
+	if err != nil {
+		return nil, err
+	}
 	// 记录已推送版本，避免同一配置被重复推送。
 	mgr.SetNodeConfigVersion(nodeID, currentVer)
 	return resp, nil
 }
 
 // buildConfigResponse 根据节点及其协议构建下发配置。
-func (s *NodeGRPCServer) buildConfigResponse(node *model.Node) *pb.NodeConfigResponse {
-	resp := &pb.NodeConfigResponse{
+func (s *NodeGRPCServer) buildConfigResponse(node *model.Node) (*pb.NodeConfigResponse, error) {
+	protocols, _ := s.nodeService.GetProtocols(node.ID)
+	if len(protocols) > 0 {
+		return fillNodeConfigResponse(node, &protocols[0])
+	}
+
+	serverPort, err := intToInt32("node port", node.Port)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.NodeConfigResponse{
+		NodeType:    "vless",
+		Type:        "vless",
 		Host:        node.Host,
-		ServerPort:  int32(node.Port),
+		ServerPort:  serverPort,
 		ServerName:  node.Host,
+		Network:     "tcp",
 		SendThrough: "0.0.0.0",
 		BaseConfig: &pb.BaseConfig{
 			PushInterval: 60,
 			PullInterval: 60,
 		},
-	}
-
-	protocols, _ := s.nodeService.GetProtocols(node.ID)
-	if len(protocols) > 0 {
-		protocol := protocols[0]
-		resp.NodeType = string(protocol.Type)
-		resp.Type = string(protocol.Type)
-		resp.ServerPort = int32(protocol.Port)
-		resp.Tls = int32(protocol.TLS)
-		if protocol.Transport != nil {
-			resp.Network = *protocol.Transport
-		} else {
-			resp.Network = "tcp"
-		}
-	} else {
-		resp.NodeType = "vless"
-		resp.Type = "vless"
-		resp.Network = "tcp"
-	}
-
-	return resp
+	}, nil
 }
 
 // peerFromContext 从上下文获取客户端地址 (已弃用，使用 GetPeerAddr)
@@ -268,18 +280,11 @@ func (s *UserGRPCServer) GetUsers(ctx context.Context, req *pb.UserListRequest) 
 	// 转换为 proto 格式
 	userInfos := make([]*pb.UserInfo, 0, len(users))
 	for _, user := range users {
-		speedLimit := user.GetSpeedLimit()
-		deviceLimit := user.GetDeviceLimit()
-
-		userInfos = append(userInfos, &pb.UserInfo{
-			Id:             uint32(user.ID),
-			Uuid:           user.UUID,
-			SpeedLimit:     speedLimit,
-			DeviceLimit:    int32(deviceLimit),
-			TransferEnable: user.TransferEnable,
-			UsedUpload:     user.U,
-			UsedDownload:   user.D,
-		})
+		info, err := userInfoFromModel(user)
+		if err != nil {
+			return nil, status.Error(codes.OutOfRange, err.Error())
+		}
+		userInfos = append(userInfos, info)
 	}
 
 	return &pb.UserListResponse{
@@ -331,11 +336,19 @@ func NewTrafficGRPCServer() *TrafficGRPCServer {
 // ReportTraffic 批量上报流量
 func (s *TrafficGRPCServer) ReportTraffic(ctx context.Context, req *pb.TrafficReportRequest) (*pb.TrafficReportResponse, error) {
 	// 更新节点心跳
-	s.nodeService.UpdateLastCheckAt(uint(req.NodeId))
+	if err := s.nodeService.UpdateLastCheckAt(uint(req.NodeId)); err != nil {
+		slog.Warn("failed to update node heartbeat before traffic report", "component", "grpc", "method", "ReportTraffic", "node_id", req.NodeId, "error", err)
+	}
 
 	// 转换流量数据
 	traffics := make(map[uint][2]int64)
 	for userID, data := range req.Traffics {
+		if data == nil {
+			continue
+		}
+		if err := service.ValidateTrafficDelta(data.Upload, data.Download); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 		traffics[uint(userID)] = [2]int64{data.Upload, data.Download}
 	}
 
@@ -395,7 +408,9 @@ func (s *TrafficGRPCServer) ReportTraffic(ctx context.Context, req *pb.TrafficRe
 // ReportOnline 上报在线状态
 func (s *TrafficGRPCServer) ReportOnline(ctx context.Context, req *pb.OnlineReportRequest) (*pb.StatusResponse, error) {
 	// 更新节点心跳
-	s.nodeService.UpdateLastCheckAt(uint(req.NodeId))
+	if err := s.nodeService.UpdateLastCheckAt(uint(req.NodeId)); err != nil {
+		slog.Warn("failed to update node heartbeat before online report", "component", "grpc", "method", "ReportOnline", "node_id", req.NodeId, "error", err)
+	}
 
 	// 转换在线数据
 	userIPs := make(map[uint][]string)

@@ -23,11 +23,11 @@ import (
 // UniProxyE2ETestSuite UniProxy API E2E 测试套件
 type UniProxyE2ETestSuite struct {
 	suite.Suite
-	router   *gin.Engine
-	db       *gorm.DB
-	cfg      *config.Config
-	testNode *model.Node
-	testUser *model.User
+	router         *gin.Engine
+	db             *gorm.DB
+	cfg            *config.Config
+	testNode       *model.Node
+	testUser       *model.User
 	globalAPIToken string
 }
 
@@ -131,7 +131,7 @@ func (s *UniProxyE2ETestSuite) SetupSuite() {
 
 // TearDownSuite 测试套件清理
 func (s *UniProxyE2ETestSuite) TearDownSuite() {
-	database.Close()
+	requireDatabaseClosed(s.T())
 }
 
 // TestGetConfig_Success 测试获取节点配置成功
@@ -163,7 +163,7 @@ func (s *UniProxyE2ETestSuite) TestGetUsers_Success() {
 	// 验证响应
 	if w.Code == http.StatusOK {
 		var response map[string]any
-		json.Unmarshal(w.Body.Bytes(), &response)
+		requireJSONUnmarshal(s.T(), w.Body.Bytes(), &response)
 
 		// 检查用户列表格式
 		if users, ok := response["users"].([]any); ok {

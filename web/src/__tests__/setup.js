@@ -36,6 +36,14 @@ const sessionStorageMock = createStorageMock()
 global.localStorage = localStorageMock
 global.sessionStorage = sessionStorageMock
 
+if (typeof window.alert !== 'function') {
+  window.alert = () => {}
+}
+
+if (typeof window.confirm !== 'function') {
+  window.confirm = () => true
+}
+
 let i18nModule = null
 
 beforeAll(async () => {

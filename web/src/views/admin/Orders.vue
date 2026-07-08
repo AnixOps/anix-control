@@ -247,10 +247,18 @@ const fetchOrders = async () => {
 const fetchStats = async () => {
   try {
     const res = await getOrderStats()
-    stats.value = res.data || {}
+    stats.value = readOrderStats(res)
   } catch (error) {
     console.error(t('adminOrders.messages.fetchStatsFailed'), error)
   }
+}
+
+const readOrderStats = (res) => {
+  if (!res || typeof res !== 'object') {
+    return {}
+  }
+  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  return payload && typeof payload === 'object' ? payload : {}
 }
 
 const viewDetail = (order) => {

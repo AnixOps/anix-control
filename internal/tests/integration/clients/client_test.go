@@ -2,6 +2,7 @@ package clients
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -55,6 +56,26 @@ func TestBaseClient(t *testing.T) {
 		client := NewBaseClient(ClientXray)
 		client.SetConfig("/new/config.json")
 		assert.Equal(t, "/new/config.json", client.configPath)
+	})
+}
+
+func TestResolveClientBinary(t *testing.T) {
+	t.Run("allows xray binary names", func(t *testing.T) {
+		path, err := resolveClientBinary(ClientXray, filepath.Join(t.TempDir(), "xray"))
+		require.NoError(t, err)
+		assert.Equal(t, "xray", filepath.Base(path))
+	})
+
+	t.Run("allows mihomo aliases", func(t *testing.T) {
+		path, err := resolveClientBinary(ClientMihomo, filepath.Join(t.TempDir(), "clash-meta"))
+		require.NoError(t, err)
+		assert.Equal(t, "clash-meta", filepath.Base(path))
+	})
+
+	t.Run("rejects unexpected binary names", func(t *testing.T) {
+		_, err := resolveClientBinary(ClientXray, filepath.Join(t.TempDir(), "sh"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not allowed")
 	})
 }
 
@@ -152,8 +173,8 @@ func TestManager(t *testing.T) {
 
 	t.Run("List", func(t *testing.T) {
 		m := NewManager()
-		m.Add("xray", NewXrayClient())
-		m.Add("mihomo", NewMihomoClient())
+		require.NoError(t, m.Add("xray", NewXrayClient()))
+		require.NoError(t, m.Add("mihomo", NewMihomoClient()))
 
 		list := m.List()
 		assert.Len(t, list, 2)
@@ -163,8 +184,8 @@ func TestManager(t *testing.T) {
 
 	t.Run("Status", func(t *testing.T) {
 		m := NewManager()
-		m.Add("xray", NewXrayClient())
-		m.Add("mihomo", NewMihomoClient())
+		require.NoError(t, m.Add("xray", NewXrayClient()))
+		require.NoError(t, m.Add("mihomo", NewMihomoClient()))
 
 		status := m.Status()
 		assert.Len(t, status, 2)
@@ -209,7 +230,7 @@ func TestClientType(t *testing.T) {
 
 func TestManagerWatch(t *testing.T) {
 	m := NewManager()
-	m.Add("xray", NewXrayClient())
+	require.NoError(t, m.Add("xray", NewXrayClient()))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

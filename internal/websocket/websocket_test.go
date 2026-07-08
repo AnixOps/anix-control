@@ -8,9 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/anixops/v2board/internal/config"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMessageTypeConstants(t *testing.T) {
@@ -257,6 +259,42 @@ func TestClient_SendError(t *testing.T) {
 	}
 }
 
+func TestClient_EnqueueMessageRejectsMarshalError(t *testing.T) {
+	client := &Client{
+		userID: 1,
+		send:   make(chan []byte, 1),
+	}
+
+	client.enqueueMessage(&Message{
+		Type: MessageTypeError,
+		Data: map[string]any{"bad": func() {}},
+	})
+
+	assert.Equal(t, 0, len(client.send))
+}
+
+func TestClient_EnqueueMessageDropsWhenQueueFull(t *testing.T) {
+	client := &Client{
+		userID: 1,
+		send:   make(chan []byte, 1),
+	}
+	client.send <- []byte(`{"type":"heartbeat"}`)
+
+	done := make(chan struct{})
+	go func() {
+		client.enqueueMessage(&Message{Type: MessageTypeHeartbeat, Timestamp: time.Now().Unix()})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("enqueueMessage blocked on a full send queue")
+	}
+
+	assert.Equal(t, 1, len(client.send))
+}
+
 func TestClient_HandleMessage(t *testing.T) {
 	sm := NewSubscriptionManager()
 	client := &Client{
@@ -350,7 +388,7 @@ func TestWebSocketHandler_ValidateToken(t *testing.T) {
 
 	// Create valid token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": float64(1),
+		"user_id":  float64(1),
 		"is_admin": false,
 		"exp":      time.Now().Add(time.Hour).Unix(),
 	})
@@ -365,7 +403,7 @@ func TestWebSocketHandler_ValidateToken(t *testing.T) {
 
 	// Test admin token
 	adminToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": float64(2),
+		"user_id":  float64(2),
 		"is_admin": true,
 		"exp":      time.Now().Add(time.Hour).Unix(),
 	})
@@ -423,7 +461,7 @@ func TestWebSocketHandler_ValidateToken_Invalid(t *testing.T) {
 
 func createTokenWithSecret(secret string, userID uint, isAdmin bool) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": float64(userID),
+		"user_id":  float64(userID),
 		"is_admin": isAdmin,
 		"exp":      time.Now().Add(time.Hour).Unix(),
 	})
@@ -433,7 +471,7 @@ func createTokenWithSecret(secret string, userID uint, isAdmin bool) string {
 
 func createExpiredToken(secret string, userID uint, isAdmin bool) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": float64(userID),
+		"user_id":  float64(userID),
 		"is_admin": isAdmin,
 		"exp":      time.Now().Add(-time.Hour).Unix(), // Expired 1 hour ago
 	})
@@ -720,7 +758,9 @@ func TestWebSocketHandler_HandleWebSocket_ValidToken(t *testing.T) {
 		t.Logf("WebSocket dial failed (expected in test env): %v", err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		require.NoError(t, ws.Close())
+	}()
 
 	// If connection succeeded, verify we can send/receive messages
 	err = ws.WriteJSON(Message{
@@ -757,7 +797,33 @@ func TestWebSocketHandler_HandleWebSocket_TokenFromHeader(t *testing.T) {
 		t.Logf("WebSocket dial failed (expected in test env): %v", err)
 		return
 	}
-	defer ws.Close()
+	defer func() {
+		require.NoError(t, ws.Close())
+	}()
+}
+
+func TestSubscriptionWebSocketUpgraderOriginPolicy(t *testing.T) {
+	config.Set(nil)
+	defer config.Set(nil)
+
+	req := httptest.NewRequest("GET", "http://panel.example.com/ws", nil)
+	req.Header.Set("Origin", "https://evil.example.net")
+	assert.False(t, upgrader.CheckOrigin(req))
+
+	req = httptest.NewRequest("GET", "http://panel.example.com/ws", nil)
+	req.Header.Set("Origin", "https://panel.example.com")
+	assert.True(t, upgrader.CheckOrigin(req))
+
+	config.Set(&config.Config{
+		Server: config.ServerConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins: []string{"https://admin.example.com"},
+			},
+		},
+	})
+	req = httptest.NewRequest("GET", "http://panel.example.com/ws", nil)
+	req.Header.Set("Origin", "https://admin.example.com")
+	assert.True(t, upgrader.CheckOrigin(req))
 }
 
 func TestClient_SendChannel(t *testing.T) {

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -34,7 +36,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("sqlite sql db: %v", err)
 	}
-	defer srcSQL.Close()
+	defer logClose("sqlite source", srcSQL.Close)
 
 	pg, err := openPostgres(*targetConfig, *targetDSN)
 	if err != nil {
@@ -44,7 +46,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("postgres sql db: %v", err)
 	}
-	defer pgSQL.Close()
+	defer logClose("postgres target", pgSQL.Close)
 
 	tables, err := sqliteTables(src)
 	if err != nil {
@@ -118,7 +120,10 @@ func main() {
 				return err
 			}
 		}
-		return nil
+		if err := service.EnsureForwardRuntimeJobSchema(tx); err != nil {
+			return err
+		}
+		return service.BackfillForwardPortBindings(tx)
 	})
 	if err != nil {
 		log.Fatalf("import failed: %v", err)
@@ -162,6 +167,9 @@ func migrateSchema(db *gorm.DB) error {
 	if err := service.EnsureForwardBridgeSchema(db); err != nil {
 		return err
 	}
+	if err := service.EnsureForwardPortBindingSchema(db); err != nil {
+		return err
+	}
 	if err := service.EnsureForwardNodeMetricsPortColumn(db); err != nil {
 		return err
 	}
@@ -177,7 +185,7 @@ func allModels() []any {
 		&model.SubscriptionGroup{}, &model.SubscriptionTemplate{}, &model.UserSubscriptionGroup{}, &model.PlanSubscriptionGroup{},
 		&model.Event{}, &model.Ticket{}, &model.TicketMessage{}, &model.Coupon{}, &model.CouponUsage{}, &model.Knowledge{},
 		&model.ForwardNode{}, &model.ForwardRule{}, &model.ForwardRoute{}, &model.ForwardLog{}, &model.ForwardStats{},
-		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.Forward{}, &model.SpeedLimit{}, &model.ForwardRuntimeJob{},
+		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.Forward{}, &model.ForwardPortBinding{}, &model.SpeedLimit{}, &model.ForwardRuntimeJob{},
 		&model.ForwardTrafficCursor{}, &model.ForwardCleanAgent{}, &model.ForwardAgentBridgeTask{}, &model.ForwardLatencyBucket{},
 		&model.PaymentGateway{}, &model.PaymentRecord{}, &model.TelegramBot{}, &model.TelegramUser{}, &model.TelegramChat{},
 		&model.TelegramCommand{}, &model.TelegramNotification{}, &model.NotificationTemplate{}, &model.NotificationLog{},
@@ -225,7 +233,7 @@ func postgresTableSet(db *gorm.DB) (map[string]bool, error) {
 	return set, nil
 }
 
-func postgresBoolColumns(db *gorm.DB) (map[string]map[string]bool, error) {
+func postgresBoolColumns(db *gorm.DB) (result map[string]map[string]bool, err error) {
 	rows, err := db.Raw(`
 		SELECT table_name, column_name
 		FROM information_schema.columns
@@ -234,9 +242,9 @@ func postgresBoolColumns(db *gorm.DB) (map[string]map[string]bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer joinRowsClose(&err, rows, "postgres boolean columns")
 
-	result := map[string]map[string]bool{}
+	result = map[string]map[string]bool{}
 	for rows.Next() {
 		var table, column string
 		if err := rows.Scan(&table, &column); err != nil {
@@ -348,12 +356,12 @@ func truncateTables(tx *gorm.DB, tables []string) error {
 	return tx.Exec("TRUNCATE TABLE " + strings.Join(quoted, ", ") + " RESTART IDENTITY CASCADE").Error
 }
 
-func copyTable(src, dst *gorm.DB, table string, boolCols map[string]bool) error {
+func copyTable(src, dst *gorm.DB, table string, boolCols map[string]bool) (err error) {
 	rows, err := src.Table(table).Rows()
 	if err != nil {
 		return fmt.Errorf("read %s: %w", table, err)
 	}
-	defer rows.Close()
+	defer joinRowsClose(&err, rows, "copy "+table)
 
 	cols, err := rows.Columns()
 	if err != nil {
@@ -383,6 +391,18 @@ func copyTable(src, dst *gorm.DB, table string, boolCols map[string]bool) error 
 	}
 	log.Printf("imported %-32s %d rows", table, count)
 	return nil
+}
+
+func logClose(name string, closeFn func() error) {
+	if err := closeFn(); err != nil {
+		log.Printf("close %s: %v", name, err)
+	}
+}
+
+func joinRowsClose(errp *error, rows *sql.Rows, label string) {
+	if closeErr := rows.Close(); closeErr != nil {
+		*errp = errors.Join(*errp, fmt.Errorf("close %s rows: %w", label, closeErr))
+	}
 }
 
 func normalizeValue(v any, wantBool bool) any {

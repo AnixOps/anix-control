@@ -129,14 +129,19 @@ func (s *ConfigSyncGRPCServer) buildNodeConfigResponse(node *model.Node) (*pb.No
 
 	if len(protocols) > 0 {
 		// 用共享构建器填充完整协议配置, 与 HTTP/订阅端一致
-		return fillNodeConfigResponse(node, &protocols[0]), nil
+		return fillNodeConfigResponse(node, &protocols[0])
+	}
+
+	serverPort, err := intToInt32("node port", node.Port)
+	if err != nil {
+		return nil, err
 	}
 
 	return &pb.NodeConfigResponse{
 		NodeType:    "vless",
 		Type:        "vless",
 		Host:        node.Host,
-		ServerPort:  int32(node.Port),
+		ServerPort:  serverPort,
 		ServerName:  node.Host,
 		Network:     "tcp",
 		SendThrough: "0.0.0.0",
@@ -156,18 +161,11 @@ func (s *ConfigSyncGRPCServer) buildUserList(groupID *uint) ([]*pb.UserInfo, err
 
 	userInfos := make([]*pb.UserInfo, 0, len(users))
 	for _, user := range users {
-		speedLimit := user.GetSpeedLimit()
-		deviceLimit := user.GetDeviceLimit()
-
-		userInfos = append(userInfos, &pb.UserInfo{
-			Id:             uint32(user.ID),
-			Uuid:           user.UUID,
-			SpeedLimit:     speedLimit,
-			DeviceLimit:    int32(deviceLimit),
-			TransferEnable: user.TransferEnable,
-			UsedUpload:     user.U,
-			UsedDownload:   user.D,
-		})
+		info, err := userInfoFromModel(user)
+		if err != nil {
+			return nil, err
+		}
+		userInfos = append(userInfos, info)
 	}
 
 	return userInfos, nil

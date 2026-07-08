@@ -11,6 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func closeResponseBody(t testing.TB, resp *http.Response) {
+	t.Helper()
+	require.NoError(t, resp.Body.Close())
+}
+
 func TestEchoServer(t *testing.T) {
 	srv := NewEchoServer(0) // 自动分配端口
 	assert.NotNil(t, srv)
@@ -42,7 +47,9 @@ func TestEchoServerEndpoints(t *testing.T) {
 
 	err := srv.Start(ctx)
 	require.NoError(t, err)
-	defer srv.Stop(ctx)
+	defer func() {
+		require.NoError(t, srv.Stop(ctx))
+	}()
 
 	// 等待服务器启动
 	time.Sleep(100 * time.Millisecond)
@@ -50,12 +57,13 @@ func TestEchoServerEndpoints(t *testing.T) {
 	t.Run("/echo", func(t *testing.T) {
 		resp, err := http.Get(srv.URL() + "/echo?test=1")
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer closeResponseBody(t, resp)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "v1", resp.Header.Get("X-Echo-Server"))
 
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
 		assert.Contains(t, string(body), "Echo Response")
 		assert.Contains(t, string(body), "GET")
 	})
@@ -63,18 +71,19 @@ func TestEchoServerEndpoints(t *testing.T) {
 	t.Run("/ping", func(t *testing.T) {
 		resp, err := http.Get(srv.URL() + "/ping")
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer closeResponseBody(t, resp)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
 		assert.Equal(t, "pong", string(body))
 	})
 
 	t.Run("/status", func(t *testing.T) {
 		resp, err := http.Get(srv.URL() + "/status")
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer closeResponseBody(t, resp)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -83,7 +92,7 @@ func TestEchoServerEndpoints(t *testing.T) {
 	t.Run("/generate_204", func(t *testing.T) {
 		resp, err := http.Get(srv.URL() + "/generate_204")
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer closeResponseBody(t, resp)
 
 		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 	})
@@ -95,26 +104,28 @@ func TestEchoServerStats(t *testing.T) {
 
 	err := srv.Start(ctx)
 	require.NoError(t, err)
-	defer srv.Stop(ctx)
+	defer func() {
+		require.NoError(t, srv.Stop(ctx))
+	}()
 
 	// 等待服务器启动
 	time.Sleep(50 * time.Millisecond)
 
 	// 初始统计
-	req, in, out := srv.Stats()
+	req, _, _ := srv.Stats()
 	assert.Equal(t, int64(0), req)
 
 	// 发送请求
 	resp1, err := http.Get(srv.URL() + "/ping")
 	require.NoError(t, err)
-	resp1.Body.Close()
+	require.NoError(t, resp1.Body.Close())
 
 	resp2, err := http.Get(srv.URL() + "/echo")
 	require.NoError(t, err)
-	resp2.Body.Close()
+	require.NoError(t, resp2.Body.Close())
 
 	// 检查统计
-	req, in, out = srv.Stats()
+	req, in, out := srv.Stats()
 	assert.Equal(t, int64(2), req)
 	// bytesIn/bytesOut 可能是 0，因为 ping 和简单的 echo 请求没有 body
 	// 所以我们只检查请求计数
@@ -128,15 +139,18 @@ func TestEchoServerPostBody(t *testing.T) {
 
 	err := srv.Start(ctx)
 	require.NoError(t, err)
-	defer srv.Stop(ctx)
+	defer func() {
+		require.NoError(t, srv.Stop(ctx))
+	}()
 
 	// 发送 POST 请求
 	resp, err := http.Post(srv.URL()+"/echo", "text/plain",
 		nil)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer closeResponseBody(t, resp)
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	assert.Contains(t, string(body), "POST")
 }
 
@@ -146,7 +160,9 @@ func TestHTTPEchoServer(t *testing.T) {
 
 	err := srv.Start(ctx)
 	require.NoError(t, err)
-	defer srv.Stop()
+	defer func() {
+		require.NoError(t, srv.Stop())
+	}()
 
 	assert.Greater(t, srv.Port(), 0)
 	assert.Contains(t, srv.URL(), "127.0.0.1")
@@ -154,9 +170,10 @@ func TestHTTPEchoServer(t *testing.T) {
 	// 发送请求
 	resp, err := http.Get(srv.URL() + "/test")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer closeResponseBody(t, resp)
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	assert.Contains(t, string(body), "Echo")
 	assert.Contains(t, string(body), "GET")
 }
@@ -167,7 +184,9 @@ func TestTCPEchoServer(t *testing.T) {
 
 	err := srv.Start(ctx)
 	require.NoError(t, err)
-	defer srv.Stop()
+	defer func() {
+		require.NoError(t, srv.Stop())
+	}()
 
 	assert.Greater(t, srv.Port(), 0)
 	assert.Contains(t, srv.Addr(), "127.0.0.1")
@@ -194,7 +213,9 @@ func TestEchoServerRestart(t *testing.T) {
 	// 重新启动（应该使用新端口）
 	err = srv.Start(ctx)
 	require.NoError(t, err)
-	defer srv.Stop(ctx)
+	defer func() {
+		require.NoError(t, srv.Stop(ctx))
+	}()
 
 	// 新端口
 	port2 := srv.Port()
@@ -207,7 +228,9 @@ func TestEchoServerConcurrent(t *testing.T) {
 
 	err := srv.Start(ctx)
 	require.NoError(t, err)
-	defer srv.Stop(ctx)
+	defer func() {
+		require.NoError(t, srv.Stop(ctx))
+	}()
 
 	// 并发发送请求
 	done := make(chan bool, 10)
@@ -215,7 +238,9 @@ func TestEchoServerConcurrent(t *testing.T) {
 		go func() {
 			resp, err := http.Get(srv.URL() + "/ping")
 			if err == nil {
-				resp.Body.Close()
+				if closeErr := resp.Body.Close(); closeErr != nil {
+					t.Errorf("close response body: %v", closeErr)
+				}
 			}
 			done <- true
 		}()

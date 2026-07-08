@@ -27,7 +27,11 @@ func main() {
 	if err := database.Init(&cfg.Database); err != nil {
 		log.Fatalf("Failed to init database: %v", err)
 	}
-	defer database.Close()
+	defer func() {
+		if err := database.Close(); err != nil {
+			log.Printf("Failed to close database: %v", err)
+		}
+	}()
 
 	db := database.Get()
 

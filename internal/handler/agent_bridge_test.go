@@ -32,23 +32,23 @@ type AgentBridgeHandlerTestSuite struct {
 func (s *AgentBridgeHandlerTestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
+	s.Require().NoError(database.Init(&config.DatabaseConfig{
 		Driver:   "sqlite",
 		Database: ":memory:",
-	})
+	}))
 	s.db = database.Get()
-	s.db.AutoMigrate(
+	s.Require().NoError(s.db.AutoMigrate(
 		&model.ForwardNode{},
 		&model.ForwardTunnel{},
 		&model.Forward{},
 		&model.ForwardRuntimeJob{},
 		&model.ForwardAgentBridgeTask{},
 		&model.AgentDiagnosticTask{},
-	)
+	))
 }
 
 func (s *AgentBridgeHandlerTestSuite) TearDownSuite() {
-	database.Close()
+	s.Require().NoError(database.Close())
 }
 
 func (s *AgentBridgeHandlerTestSuite) SetupTest() {
@@ -114,7 +114,7 @@ func (s *AgentBridgeHandlerTestSuite) getTasks(nodeID uint) []any {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
 	tasks, _ := resp["tasks"].([]any)
 	return tasks
 }
@@ -176,7 +176,7 @@ func (s *AgentBridgeHandlerTestSuite) TestReportResultWritesBackBridgeJob() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(s.T(), true, resp["bridged"])
 
 	var reloadedJob model.ForwardRuntimeJob
@@ -207,7 +207,7 @@ func (s *AgentBridgeHandlerTestSuite) TestDuplicateReportIsIdempotent() {
 		s.router.ServeHTTP(w, req)
 		assert.Equal(s.T(), http.StatusOK, w.Code)
 		var resp map[string]any
-		json.Unmarshal(w.Body.Bytes(), &resp)
+		s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
 		return resp
 	}
 
@@ -252,7 +252,7 @@ func (s *AgentBridgeHandlerTestSuite) TestNonBridgeResultUsesMemoryPath() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
 	_, bridged := resp["bridged"]
 	assert.False(s.T(), bridged)
 }

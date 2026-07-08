@@ -183,18 +183,27 @@ func (s *MFAService) VerifyTOTP(secret, code string) bool {
 }
 
 // VerifyBackupCode 验证备用码
-func (s *MFAService) VerifyBackupCode(mfa *model.UserMFA, code string) bool {
-	codes := parseBackupCodes(mfa.BackupCodes)
+func (s *MFAService) VerifyBackupCode(mfa *model.UserMFA, code string) (bool, error) {
+	codes, err := parseBackupCodesWithError(mfa.BackupCodes)
+	if err != nil {
+		return false, err
+	}
+
 	for i, c := range codes {
 		if c == code {
 			// 移除已使用的备用码
 			codes = append(codes[:i], codes[i+1:]...)
-			newCodes, _ := json.Marshal(codes)
-			s.db.Model(mfa).Update("backup_codes", string(newCodes))
-			return true
+			newCodes, err := json.Marshal(codes)
+			if err != nil {
+				return false, err
+			}
+			if err := s.db.Model(mfa).Update("backup_codes", string(newCodes)).Error; err != nil {
+				return false, err
+			}
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 // Verify 验证MFA代码
@@ -212,7 +221,10 @@ func (s *MFAService) Verify(userID uint, code, method string) (bool, error) {
 	case model.MFAMethodTOTP:
 		valid = s.VerifyTOTP(mfa.TOTPSecret, code)
 	case model.MFAMethodBackup:
-		valid = s.VerifyBackupCode(mfa, code)
+		valid, err = s.VerifyBackupCode(mfa, code)
+		if err != nil {
+			return false, err
+		}
 	case model.MFAMethodEmail:
 		// Unimplemented: email-based MFA verification.
 		// When implemented, this should look up a time-limited verification code
@@ -230,7 +242,10 @@ func (s *MFAService) Verify(userID uint, code, method string) (bool, error) {
 		valid = s.VerifyTOTP(mfa.TOTPSecret, code)
 		if !valid {
 			// 再尝试备用码
-			valid = s.VerifyBackupCode(mfa, code)
+			valid, err = s.VerifyBackupCode(mfa, code)
+			if err != nil {
+				return false, err
+			}
 		}
 	}
 
@@ -311,9 +326,23 @@ func generateRandomCode(length int) (string, error) {
 
 // parseBackupCodes 解析备用码
 func parseBackupCodes(jsonCodes string) []string {
-	var codes []string
-	json.Unmarshal([]byte(jsonCodes), &codes)
+	codes, err := parseBackupCodesWithError(jsonCodes)
+	if err != nil {
+		return []string{}
+	}
 	return codes
+}
+
+func parseBackupCodesWithError(jsonCodes string) ([]string, error) {
+	if strings.TrimSpace(jsonCodes) == "" {
+		return []string{}, nil
+	}
+
+	var codes []string
+	if err := json.Unmarshal([]byte(jsonCodes), &codes); err != nil {
+		return nil, fmt.Errorf("parse MFA backup codes: %w", err)
+	}
+	return codes, nil
 }
 
 // GetRemainingBackupCodes 获取剩余备用码数量
@@ -325,7 +354,11 @@ func (s *MFAService) GetRemainingBackupCodes(userID uint) (int, error) {
 	if mfa == nil {
 		return 0, nil
 	}
-	return len(parseBackupCodes(mfa.BackupCodes)), nil
+	codes, err := parseBackupCodesWithError(mfa.BackupCodes)
+	if err != nil {
+		return 0, err
+	}
+	return len(codes), nil
 }
 
 // RegenerateBackupCodes 重新生成备用码
@@ -348,7 +381,11 @@ func (s *MFAService) RegenerateBackupCodes(userID uint) ([]string, error) {
 		return nil, err
 	}
 
-	return parseBackupCodes(backupCodes), nil
+	codes, err := parseBackupCodesWithError(backupCodes)
+	if err != nil {
+		return nil, err
+	}
+	return codes, nil
 }
 
 // TOTPSetup TOTP设置结果

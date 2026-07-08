@@ -289,7 +289,9 @@ func TestHealthCheck(t *testing.T) {
 		t.Logf("Health check failed (expected if server not running): %v", err)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		require.NoError(t, resp.Body.Close())
+	}()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }
@@ -317,7 +319,9 @@ func TestFullIntegration(t *testing.T) {
 	// 璁剧疆鏈嶅姟鍣ㄤ俊鎭?
 	serverPort := 443
 	if port != "" {
-		fmt.Sscanf(port, "%d", &serverPort)
+		n, err := fmt.Sscanf(port, "%d", &serverPort)
+		require.NoError(t, err)
+		require.Equal(t, 1, n)
 	}
 
 	proto := config.ProtocolVLESS

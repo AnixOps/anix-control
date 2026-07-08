@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
@@ -54,15 +55,17 @@ type ForwardAgentBridgeWorkerTestSuite struct {
 
 func (s *ForwardAgentBridgeWorkerTestSuite) SetupSuite() {
 	s.ServiceTestSuite.SetupSuite()
-	database.AutoMigrate(
+	s.Require().NoError(database.AutoMigrate(
 		&model.User{},
 		&model.ForwardNode{},
 		&model.ForwardTunnel{},
 		&model.ForwardUserTunnel{},
 		&model.Forward{},
+		&model.ForwardPortBinding{},
+		&model.ForwardTrafficCursor{},
 		&model.ForwardRuntimeJob{},
 		&model.ForwardAgentBridgeTask{},
-	)
+	))
 }
 
 func (s *ForwardAgentBridgeWorkerTestSuite) SetupTest() {
@@ -70,6 +73,8 @@ func (s *ForwardAgentBridgeWorkerTestSuite) SetupTest() {
 	db := database.Get()
 	db.Exec("DELETE FROM v2_forward_agent_bridge_task")
 	db.Exec("DELETE FROM v2_forward_runtime_job")
+	db.Exec("DELETE FROM v2_forward_port_binding")
+	db.Exec("DELETE FROM v2_forward_traffic_cursor")
 	db.Exec("DELETE FROM v2_forward")
 	db.Exec("DELETE FROM v2_forward_user_tunnel")
 	db.Exec("DELETE FROM v2_forward_tunnel")
@@ -83,6 +88,7 @@ func (s *ForwardAgentBridgeWorkerTestSuite) SetupTest() {
 		pollInterval:     defaultForwardRuntimeJobPollInterval,
 		idlePollInterval: defaultForwardRuntimeJobIdlePollInterval,
 		batchSize:        defaultForwardRuntimeJobBatchSize,
+		actionTimeout:    defaultForwardCleanAgentActionTimeout,
 		errorLogger:      newForwardBackgroundErrorLogger(defaultForwardRuntimeJobErrorLogInterval),
 	}
 	s.svc = NewForwardAgentBridgeService(db)
@@ -161,6 +167,12 @@ func (s *ForwardAgentBridgeWorkerTestSuite) TestCleanAgentCreateSuccessEndToEnd(
 	assert.NoError(s.T(), db.First(&reloaded, job.ID).Error)
 	assert.Equal(s.T(), model.ForwardRuntimeJobStatusRunning, reloaded.Status)
 
+	var runningForward model.Forward
+	assert.NoError(s.T(), db.First(&runningForward, forward.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusRunning, runningForward.RuntimeStatus)
+	assert.Equal(s.T(), "clean_agent runtime running", runningForward.RuntimeMessage)
+	assert.NotNil(s.T(), runningForward.RuntimeLastSyncAt)
+
 	var mapping model.ForwardAgentBridgeTask
 	assert.NoError(s.T(), db.Where("runtime_job_id = ?", job.ID).First(&mapping).Error)
 	assert.Equal(s.T(), bridgeTaskID(job.ID), mapping.TaskID)
@@ -188,6 +200,19 @@ func (s *ForwardAgentBridgeWorkerTestSuite) TestCleanAgentCreateSuccessEndToEnd(
 func (s *ForwardAgentBridgeWorkerTestSuite) TestCleanAgentDeleteSuccess() {
 	db := database.Get()
 	node, forward := s.createForwardFixture()
+	assert.NoError(s.T(), db.Create(&model.ForwardPortBinding{
+		ForwardID:  forward.ID,
+		NodeID:     node.ID,
+		Transport:  "tcp",
+		ListenAddr: "0.0.0.0",
+		InPort:     forward.InPort,
+	}).Error)
+	assert.NoError(s.T(), db.Create(&model.ForwardTrafficCursor{
+		ForwardID:     forward.ID,
+		Backend:       model.ForwardRuntimeBackendCleanAgent,
+		UploadTotal:   10,
+		DownloadTotal: 20,
+	}).Error)
 	job := s.enqueueCleanAgentJob(model.ForwardRuntimeJobActionDelete, forward, node.ID)
 
 	assert.NoError(s.T(), s.worker.RunPendingJobs(context.Background()))
@@ -200,10 +225,13 @@ func (s *ForwardAgentBridgeWorkerTestSuite) TestCleanAgentDeleteSuccess() {
 	assert.NoError(s.T(), db.First(&reloaded, job.ID).Error)
 	assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, reloaded.Status)
 
-	// delete success leaves forward status untouched (successForwardStatusForAction=nil for delete).
-	var reloadedForward model.Forward
-	assert.NoError(s.T(), db.First(&reloadedForward, forward.ID).Error)
-	assert.Equal(s.T(), model.ForwardRuntimeJobStatusSuccess, reloadedForward.RuntimeStatus)
+	var count int64
+	assert.NoError(s.T(), db.Model(&model.Forward{}).Where("id = ?", forward.ID).Count(&count).Error)
+	assert.Zero(s.T(), count)
+	assert.NoError(s.T(), db.Model(&model.ForwardPortBinding{}).Where("forward_id = ?", forward.ID).Count(&count).Error)
+	assert.Zero(s.T(), count)
+	assert.NoError(s.T(), db.Model(&model.ForwardTrafficCursor{}).Where("forward_id = ?", forward.ID).Count(&count).Error)
+	assert.Zero(s.T(), count)
 }
 
 func (s *ForwardAgentBridgeWorkerTestSuite) TestAgentFailureResult() {
@@ -270,6 +298,11 @@ func (s *ForwardAgentBridgeWorkerTestSuite) TestRequeuePreservesDispatchedMappin
 	assert.NoError(s.T(), db.First(&reloaded, job.ID).Error)
 	assert.Equal(s.T(), model.ForwardRuntimeJobStatusRunning, reloaded.Status)
 
+	var reloadedForward model.Forward
+	assert.NoError(s.T(), db.First(&reloadedForward, forward.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusRunning, reloadedForward.RuntimeStatus)
+	assert.Equal(s.T(), "clean_agent runtime running", reloadedForward.RuntimeMessage)
+
 	// Durable mapping still resolves so a late agent report can complete the job.
 	mapping, err := s.svc.LookupBridgeTask(bridgeTaskID(job.ID))
 	assert.NoError(s.T(), err)
@@ -283,12 +316,84 @@ func (s *ForwardAgentBridgeWorkerTestSuite) TestRequeueResetsRunningJobWithoutMa
 	job := s.enqueueCleanAgentJob(model.ForwardRuntimeJobActionCreate, forward, node.ID)
 	assert.NoError(s.T(), db.Model(&model.ForwardRuntimeJob{}).Where("id = ?", job.ID).
 		Update("status", model.ForwardRuntimeJobStatusRunning).Error)
+	assert.NoError(s.T(), db.Model(&model.Forward{}).Where("id = ?", forward.ID).Updates(map[string]any{
+		"runtime_status":  model.ForwardRuntimeJobStatusRunning,
+		"runtime_message": "clean_agent runtime running",
+	}).Error)
 
 	assert.NoError(s.T(), s.worker.requeueStaleJobs())
 
 	var reloaded model.ForwardRuntimeJob
 	assert.NoError(s.T(), db.First(&reloaded, job.ID).Error)
 	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, reloaded.Status)
+
+	var reloadedForward model.Forward
+	assert.NoError(s.T(), db.First(&reloadedForward, forward.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusPending, reloadedForward.RuntimeStatus)
+	assert.Equal(s.T(), "clean_agent runtime requeued after worker restart", reloadedForward.RuntimeMessage)
+}
+
+func (s *ForwardAgentBridgeWorkerTestSuite) TestDispatchedBridgeTaskTimesOutAndLateReportIsIgnored() {
+	db := database.Get()
+	node, forward := s.createForwardFixture()
+	job := s.enqueueCleanAgentJob(model.ForwardRuntimeJobActionCreate, forward, node.ID)
+	assert.NoError(s.T(), s.worker.RunPendingJobs(context.Background()))
+
+	now := time.Now()
+	stale := now.Add(-2 * time.Minute)
+	s.worker.actionTimeout = time.Minute
+	assert.NoError(s.T(), db.Model(&model.ForwardAgentBridgeTask{}).
+		Where("runtime_job_id = ?", job.ID).
+		UpdateColumns(map[string]any{
+			"status":     model.ForwardAgentBridgeTaskStatusDispatched,
+			"dispatched": true,
+			"updated_at": stale,
+		}).Error)
+
+	assert.NoError(s.T(), s.worker.expireTimedOutBridgeTasks(now))
+
+	var reloadedJob model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.First(&reloadedJob, job.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, reloadedJob.Status)
+	assert.Contains(s.T(), reloadedJob.Error, "clean_agent task timed out")
+	assert.NotNil(s.T(), reloadedJob.CompletedAt)
+
+	var reloadedForward model.Forward
+	assert.NoError(s.T(), db.First(&reloadedForward, forward.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, reloadedForward.RuntimeStatus)
+	assert.Equal(s.T(), model.ForwardStatusError, reloadedForward.Status)
+	assert.Contains(s.T(), reloadedForward.RuntimeMessage, "clean_agent task timed out")
+
+	var mapping model.ForwardAgentBridgeTask
+	assert.NoError(s.T(), db.Where("runtime_job_id = ?", job.ID).First(&mapping).Error)
+	assert.Equal(s.T(), model.ForwardAgentBridgeTaskStatusFailed, mapping.Status)
+
+	done, err := s.svc.CompleteJob(mapping.TaskID, true, "late success", "")
+	assert.NoError(s.T(), err)
+	assert.True(s.T(), done)
+
+	assert.NoError(s.T(), db.First(&reloadedJob, job.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, reloadedJob.Status)
+	assert.NotContains(s.T(), reloadedJob.Result, "late success")
+}
+
+func (s *ForwardAgentBridgeWorkerTestSuite) TestFreshBridgeTaskDoesNotTimeOut() {
+	db := database.Get()
+	node, forward := s.createForwardFixture()
+	job := s.enqueueCleanAgentJob(model.ForwardRuntimeJobActionCreate, forward, node.ID)
+	assert.NoError(s.T(), s.worker.RunPendingJobs(context.Background()))
+
+	now := time.Now()
+	s.worker.actionTimeout = time.Minute
+	assert.NoError(s.T(), s.worker.expireTimedOutBridgeTasks(now))
+
+	var reloadedJob model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.First(&reloadedJob, job.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusRunning, reloadedJob.Status)
+
+	var mapping model.ForwardAgentBridgeTask
+	assert.NoError(s.T(), db.Where("runtime_job_id = ?", job.ID).First(&mapping).Error)
+	assert.Equal(s.T(), model.ForwardAgentBridgeTaskStatusPending, mapping.Status)
 }
 
 func (s *ForwardAgentBridgeWorkerTestSuite) TestNftablesAnsibleNotBridged() {
@@ -361,6 +466,110 @@ func (s *ForwardAgentBridgeWorkerTestSuite) TestTranslateFailureDoesNotFalseMark
 	var reloadedForward model.Forward
 	assert.NoError(s.T(), db.First(&reloadedForward, forward.ID).Error)
 	assert.NotEqual(s.T(), model.ForwardRuntimeJobStatusSuccess, reloadedForward.RuntimeStatus)
+}
+
+func (s *ForwardAgentBridgeWorkerTestSuite) TestTranslateCancellationFailsJobAndDrains() {
+	db := database.Get()
+	node, forward := s.createForwardFixture()
+	job := s.enqueueCleanAgentJob(model.ForwardRuntimeJobActionCreate, forward, node.ID)
+
+	started := make(chan struct{})
+	s.stub.translateFn = func(ctx context.Context, sourceJobID uint, nodeID uint, payload nodeXForwardExecuteRequest) (*nodeXBridgeAgentTask, error) {
+		close(started)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- s.worker.RunPendingJobs(ctx)
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		s.T().Fatal("bridge worker did not enter NodeX translate")
+	}
+	cancel()
+
+	select {
+	case err := <-done:
+		assert.NoError(s.T(), err)
+	case <-time.After(time.Second):
+		s.T().Fatal("bridge worker did not drain after translate cancellation")
+	}
+
+	var reloaded model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.First(&reloaded, job.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, reloaded.Status)
+	assert.Contains(s.T(), reloaded.Error, context.Canceled.Error())
+	assert.NotNil(s.T(), reloaded.CompletedAt)
+
+	var mappingCount int64
+	assert.NoError(s.T(), db.Model(&model.ForwardAgentBridgeTask{}).Where("runtime_job_id = ?", job.ID).Count(&mappingCount).Error)
+	assert.Zero(s.T(), mappingCount)
+
+	var reloadedForward model.Forward
+	assert.NoError(s.T(), db.First(&reloadedForward, forward.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusFailed, reloadedForward.RuntimeStatus)
+	assert.Equal(s.T(), model.ForwardStatusError, reloadedForward.Status)
+	assert.Contains(s.T(), reloadedForward.RuntimeMessage, context.Canceled.Error())
+	assert.NotNil(s.T(), reloadedForward.RuntimeLastSyncAt)
+}
+
+func (s *ForwardAgentBridgeWorkerTestSuite) TestRetryUpsertsExistingBridgeMapping() {
+	db := database.Get()
+	node, forward := s.createForwardFixture()
+	job := s.enqueueCleanAgentJob(model.ForwardRuntimeJobActionUpdate, forward, node.ID)
+
+	originalMapping := &model.ForwardAgentBridgeTask{
+		TaskID:       "stale-forward-runtime-task",
+		RuntimeJobID: job.ID,
+		NodeID:       node.ID,
+		ForwardID:    job.ForwardID,
+		Action:       model.ForwardRuntimeJobActionCreate,
+		Type:         "forward",
+		Params:       `{"attempt":1}`,
+		Status:       model.ForwardAgentBridgeTaskStatusFailed,
+		Dispatched:   true,
+	}
+	assert.NoError(s.T(), db.Create(originalMapping).Error)
+
+	s.stub.translateFn = func(ctx context.Context, sourceJobID uint, nodeID uint, payload nodeXForwardExecuteRequest) (*nodeXBridgeAgentTask, error) {
+		return &nodeXBridgeAgentTask{
+			TaskID: "retry-forward-runtime-task",
+			NodeID: nodeID,
+			Type:   "forward",
+			Action: payload.Action,
+			Params: map[string]any{
+				"attempt":       2,
+				"source_job_id": sourceJobID,
+			},
+		}, nil
+	}
+
+	assert.NoError(s.T(), s.worker.RunPendingJobs(context.Background()))
+	assert.Equal(s.T(), 1, s.stub.translateCalls)
+
+	var mappingCount int64
+	assert.NoError(s.T(), db.Model(&model.ForwardAgentBridgeTask{}).Where("runtime_job_id = ?", job.ID).Count(&mappingCount).Error)
+	assert.Equal(s.T(), int64(1), mappingCount)
+
+	var mapping model.ForwardAgentBridgeTask
+	assert.NoError(s.T(), db.Where("runtime_job_id = ?", job.ID).First(&mapping).Error)
+	assert.Equal(s.T(), originalMapping.ID, mapping.ID)
+	assert.Equal(s.T(), "retry-forward-runtime-task", mapping.TaskID)
+	assert.Equal(s.T(), node.ID, mapping.NodeID)
+	assert.Equal(s.T(), model.ForwardRuntimeJobActionUpdate, mapping.Action)
+	assert.Equal(s.T(), model.ForwardAgentBridgeTaskStatusPending, mapping.Status)
+	assert.False(s.T(), mapping.Dispatched)
+	assert.JSONEq(s.T(), `{"attempt":2,"source_job_id":`+strconv.FormatUint(uint64(job.ID), 10)+`}`, mapping.Params)
+
+	var reloaded model.ForwardRuntimeJob
+	assert.NoError(s.T(), db.First(&reloaded, job.ID).Error)
+	assert.Equal(s.T(), model.ForwardRuntimeJobStatusRunning, reloaded.Status)
+	assert.NotNil(s.T(), reloaded.ClaimedAt)
 }
 
 func (s *ForwardAgentBridgeWorkerTestSuite) TestMissingExecutionNodeFailsJob() {

@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"testing"
 	"time"
 
 	pb "github.com/anixops/v2board/api/grpc/v2boardpb"
 	"github.com/anixops/v2board/internal/cache"
-	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/service"
@@ -27,6 +27,7 @@ import (
 type GRPCTestSuite struct {
 	suite.Suite
 	server     *grpc.Server
+	serverErr  <-chan error
 	clientConn *grpc.ClientConn
 	addr       string
 }
@@ -36,13 +37,10 @@ func (s *GRPCTestSuite) SetupSuite() {
 	cache.InitMemory()
 
 	// 初始化数据库
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
+	requireInMemoryDatabase(s.T())
 
 	// 自动迁移
-	database.AutoMigrate(
+	requireAutoMigrate(s.T(),
 		&model.User{},
 		&model.Plan{},
 		&model.Node{},
@@ -63,28 +61,26 @@ func (s *GRPCTestSuite) SetupSuite() {
 	pb.RegisterTrafficServiceServer(s.server, NewTrafficGRPCServer())
 	pb.RegisterHealthServiceServer(s.server, NewHealthGRPCServer())
 
-	go s.server.Serve(lis)
+	s.serverErr = serveGRPCServerForTest(s.T(), s.server, lis)
 
 	// 等待服务器启动
 	time.Sleep(100 * time.Millisecond)
 
 	// 创建客户端连接
-	s.clientConn, err = grpc.Dial(s.addr,
+	s.clientConn, err = grpc.NewClient(s.addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-		grpc.WithTimeout(5*time.Second),
 	)
 	assert.NoError(s.T(), err)
 }
 
 func (s *GRPCTestSuite) TearDownSuite() {
 	if s.clientConn != nil {
-		s.clientConn.Close()
+		requireClientConnClosed(s.T(), s.clientConn)
 	}
 	if s.server != nil {
-		s.server.GracefulStop()
+		stopGRPCServerForTest(s.T(), s.server, s.serverErr)
 	}
-	database.Close()
+	requireDatabaseClosed(s.T())
 }
 
 func (s *GRPCTestSuite) SetupTest() {
@@ -215,6 +211,45 @@ func (s *GRPCTestSuite) TestReportTraffic_WritesTrafficLog() {
 	assert.Len(s.T(), stats, 2)
 }
 
+func (s *GRPCTestSuite) TestReportTrafficRejectsNegativeTraffic() {
+	db := database.Get()
+
+	node := &model.Node{
+		Name:   "traffic-negative-node",
+		Host:   "10.0.0.31",
+		Port:   443,
+		Rate:   1.0,
+		Show:   1,
+		Status: model.NodeStatusOnline,
+		APIKey: "traffic-negative-key",
+	}
+	assert.NoError(s.T(), db.Create(node).Error)
+
+	client := pb.NewTrafficServiceClient(s.clientConn)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req := &pb.TrafficReportRequest{
+		NodeId: uint32(node.ID),
+		Traffics: map[uint32]*pb.TrafficData{
+			42: {Upload: -1, Download: 2048},
+		},
+	}
+
+	_, err := client.ReportTraffic(ctx, req)
+	assert.Error(s.T(), err)
+	assert.Equal(s.T(), codes.InvalidArgument, status.Code(err))
+
+	var logCount int64
+	assert.NoError(s.T(), db.Model(&model.TrafficLog{}).Where("server_id = ?", node.ID).Count(&logCount).Error)
+	assert.Equal(s.T(), int64(0), logCount)
+
+	var updated model.Node
+	assert.NoError(s.T(), db.First(&updated, node.ID).Error)
+	assert.Equal(s.T(), int64(0), updated.TotalUpload)
+	assert.Equal(s.T(), int64(0), updated.TotalDownload)
+}
+
 // TestReportOnline_NodeNotFound 测试上报在线状态（节点不存在）
 func (s *GRPCTestSuite) TestReportOnline_NodeNotFound() {
 	client := pb.NewTrafficServiceClient(s.clientConn)
@@ -315,6 +350,7 @@ func TestGRPCSuite(t *testing.T) {
 type GRPCIntegrationSuite struct {
 	suite.Suite
 	server     *grpc.Server
+	serverErr  <-chan error
 	clientConn *grpc.ClientConn
 	addr       string
 }
@@ -324,13 +360,10 @@ func (s *GRPCIntegrationSuite) SetupSuite() {
 	cache.InitMemory()
 
 	// 初始化数据库
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
+	requireInMemoryDatabase(s.T())
 
 	// 自动迁移
-	database.AutoMigrate(
+	requireAutoMigrate(s.T(),
 		&model.User{},
 		&model.Plan{},
 		&model.Node{},
@@ -349,7 +382,7 @@ func (s *GRPCIntegrationSuite) SetupSuite() {
 	pb.RegisterTrafficServiceServer(s.server, NewTrafficGRPCServer())
 	pb.RegisterHealthServiceServer(s.server, NewHealthGRPCServer())
 
-	go s.server.Serve(lis)
+	s.serverErr = serveGRPCServerForTest(s.T(), s.server, lis)
 
 	// 等待服务器启动
 	time.Sleep(100 * time.Millisecond)
@@ -363,12 +396,12 @@ func (s *GRPCIntegrationSuite) SetupSuite() {
 
 func (s *GRPCIntegrationSuite) TearDownSuite() {
 	if s.clientConn != nil {
-		s.clientConn.Close()
+		requireClientConnClosed(s.T(), s.clientConn)
 	}
 	if s.server != nil {
-		s.server.GracefulStop()
+		stopGRPCServerForTest(s.T(), s.server, s.serverErr)
 	}
-	database.Close()
+	requireDatabaseClosed(s.T())
 }
 
 func (s *GRPCIntegrationSuite) SetupTest() {
@@ -652,6 +685,7 @@ func TestGRPCIntegrationSuite(t *testing.T) {
 type GRPCAdvancedSuite struct {
 	suite.Suite
 	server     *grpc.Server
+	serverErr  <-chan error
 	clientConn *grpc.ClientConn
 	addr       string
 	apiToken   string
@@ -662,13 +696,10 @@ func (s *GRPCAdvancedSuite) SetupSuite() {
 	cache.InitMemory()
 
 	// 初始化数据库
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
+	requireInMemoryDatabase(s.T())
 
 	// 自动迁移
-	database.AutoMigrate(
+	requireAutoMigrate(s.T(),
 		&model.User{},
 		&model.Plan{},
 		&model.Node{},
@@ -704,7 +735,7 @@ func (s *GRPCAdvancedSuite) SetupSuite() {
 	pb.RegisterTrafficServiceServer(s.server, NewTrafficGRPCServer())
 	pb.RegisterHealthServiceServer(s.server, NewHealthGRPCServer())
 
-	go s.server.Serve(lis)
+	s.serverErr = serveGRPCServerForTest(s.T(), s.server, lis)
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -717,12 +748,12 @@ func (s *GRPCAdvancedSuite) SetupSuite() {
 
 func (s *GRPCAdvancedSuite) TearDownSuite() {
 	if s.clientConn != nil {
-		s.clientConn.Close()
+		requireClientConnClosed(s.T(), s.clientConn)
 	}
 	if s.server != nil {
-		s.server.GracefulStop()
+		stopGRPCServerForTest(s.T(), s.server, s.serverErr)
 	}
-	database.Close()
+	requireDatabaseClosed(s.T())
 }
 
 func (s *GRPCAdvancedSuite) SetupTest() {
@@ -901,17 +932,15 @@ func TestGRPCAdvancedSuite(t *testing.T) {
 type GRPCStreamSuite struct {
 	suite.Suite
 	server     *grpc.Server
+	serverErr  <-chan error
 	clientConn *grpc.ClientConn
 	addr       string
 }
 
 func (s *GRPCStreamSuite) SetupSuite() {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	database.AutoMigrate(
+	requireInMemoryDatabase(s.T())
+	requireAutoMigrate(s.T(),
 		&model.User{},
 		&model.Plan{},
 		&model.Node{},
@@ -929,7 +958,7 @@ func (s *GRPCStreamSuite) SetupSuite() {
 	pb.RegisterTrafficServiceServer(s.server, NewTrafficGRPCServer())
 	pb.RegisterHealthServiceServer(s.server, NewHealthGRPCServer())
 
-	go s.server.Serve(lis)
+	s.serverErr = serveGRPCServerForTest(s.T(), s.server, lis)
 	time.Sleep(100 * time.Millisecond)
 
 	s.clientConn, err = grpc.NewClient(s.addr,
@@ -940,12 +969,12 @@ func (s *GRPCStreamSuite) SetupSuite() {
 
 func (s *GRPCStreamSuite) TearDownSuite() {
 	if s.clientConn != nil {
-		s.clientConn.Close()
+		requireClientConnClosed(s.T(), s.clientConn)
 	}
 	if s.server != nil {
-		s.server.GracefulStop()
+		stopGRPCServerForTest(s.T(), s.server, s.serverErr)
 	}
-	database.Close()
+	requireDatabaseClosed(s.T())
 }
 
 func (s *GRPCStreamSuite) SetupTest() {
@@ -977,7 +1006,7 @@ func (s *GRPCStreamSuite) TestHealthWatch() {
 	assert.Equal(s.T(), pb.HealthCheckResponse_SERVING, resp.Status)
 
 	// 关闭流
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 // TestStatusStream 测试状态流
@@ -1024,7 +1053,7 @@ func (s *GRPCStreamSuite) TestStatusStream() {
 	_, ok := mgr.GetConnection(uint32(node.ID))
 	assert.True(s.T(), ok, "Node should be registered in connection manager")
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 // TestTrafficStream 测试流量流
@@ -1094,7 +1123,7 @@ func (s *GRPCStreamSuite) TestTrafficStream() {
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), resp.Success)
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 // TestOnlineStream 测试在线状态流
@@ -1141,7 +1170,7 @@ func (s *GRPCStreamSuite) TestOnlineStream() {
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), resp.Success)
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 // TestUserChangesStream 测试用户变更流
@@ -1172,7 +1201,7 @@ func (s *GRPCStreamSuite) TestUserChangesStream() {
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), resp.Success)
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 func TestGRPCStreamSuite(t *testing.T) {
@@ -1184,11 +1213,8 @@ func TestGRPCStreamSuite(t *testing.T) {
 // TestServerStart 测试服务器启动
 func TestServerStart(t *testing.T) {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	defer database.Close()
+	requireInMemoryDatabase(t)
+	defer requireDatabaseClosed(t)
 
 	cfg := &ServerConfig{
 		Host:             "127.0.0.1",
@@ -1213,11 +1239,8 @@ func TestServerStart(t *testing.T) {
 // TestServerStop 测试服务器停止
 func TestServerStop(t *testing.T) {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	defer database.Close()
+	requireInMemoryDatabase(t)
+	defer requireDatabaseClosed(t)
 
 	server := NewServer(&ServerConfig{
 		Host: "127.0.0.1",
@@ -1238,11 +1261,8 @@ func TestServerStop(t *testing.T) {
 // TestServerGetConnectionManager 测试获取连接管理器
 func TestServerGetConnectionManager(t *testing.T) {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	defer database.Close()
+	requireInMemoryDatabase(t)
+	defer requireDatabaseClosed(t)
 
 	server := NewServer(&ServerConfig{Host: "127.0.0.1", Port: 50054})
 	mgr := server.GetConnectionManager()
@@ -1253,12 +1273,9 @@ func TestServerGetConnectionManager(t *testing.T) {
 // TestStreamAuthInterceptor_WithAuth 测试流式认证拦截器
 func TestStreamAuthInterceptor_WithAuth(t *testing.T) {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	database.AutoMigrate(&model.User{}, &model.Plan{}, &model.Node{}, &model.NodeProtocol{}, &model.AuthorizedKey{})
-	defer database.Close()
+	requireInMemoryDatabase(t)
+	requireAutoMigrate(t, &model.User{}, &model.Plan{}, &model.Node{}, &model.NodeProtocol{}, &model.AuthorizedKey{})
+	defer requireDatabaseClosed(t)
 
 	apiToken := "test-stream-token"
 
@@ -1273,8 +1290,8 @@ func TestStreamAuthInterceptor_WithAuth(t *testing.T) {
 	pb.RegisterHealthServiceServer(server, NewHealthGRPCServer())
 	pb.RegisterNodeServiceServer(server, NewNodeGRPCServer())
 
-	go server.Serve(lis)
-	defer server.GracefulStop()
+	serverErr := serveGRPCServerForTest(t, server, lis)
+	defer stopGRPCServerForTest(t, server, serverErr)
 	time.Sleep(100 * time.Millisecond)
 
 	// 创建客户端
@@ -1282,7 +1299,7 @@ func TestStreamAuthInterceptor_WithAuth(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	assert.NoError(t, err)
-	defer conn.Close()
+	defer requireClientConnClosed(t, conn)
 
 	// 测试健康检查 (豁免认证)
 	healthClient := pb.NewHealthServiceClient(conn)
@@ -1307,11 +1324,8 @@ func TestStreamAuthInterceptor_WithAuth(t *testing.T) {
 // TestStreamLoggingInterceptor 测试流式日志拦截器
 func TestStreamLoggingInterceptor(t *testing.T) {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	defer database.Close()
+	requireInMemoryDatabase(t)
+	defer requireDatabaseClosed(t)
 
 	// 创建带日志拦截器的服务器
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1323,8 +1337,8 @@ func TestStreamLoggingInterceptor(t *testing.T) {
 	)
 	pb.RegisterHealthServiceServer(server, NewHealthGRPCServer())
 
-	go server.Serve(lis)
-	defer server.GracefulStop()
+	serverErr := serveGRPCServerForTest(t, server, lis)
+	defer stopGRPCServerForTest(t, server, serverErr)
 	time.Sleep(100 * time.Millisecond)
 
 	// 创建客户端
@@ -1332,7 +1346,7 @@ func TestStreamLoggingInterceptor(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	assert.NoError(t, err)
-	defer conn.Close()
+	defer requireClientConnClosed(t, conn)
 
 	// 测试健康检查流
 	healthClient := pb.NewHealthServiceClient(conn)
@@ -1348,17 +1362,14 @@ func TestStreamLoggingInterceptor(t *testing.T) {
 	_, err = stream.Recv()
 	assert.NoError(t, err)
 
-	stream.CloseSend()
+	requireCloseSend(t, stream)
 }
 
 // TestAuthInterceptor_HealthExemption 测试认证拦截器对健康检查的豁免
 func TestAuthInterceptor_HealthExemption(t *testing.T) {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	defer database.Close()
+	requireInMemoryDatabase(t)
+	defer requireDatabaseClosed(t)
 
 	apiToken := "secret-token"
 
@@ -1372,8 +1383,8 @@ func TestAuthInterceptor_HealthExemption(t *testing.T) {
 	)
 	pb.RegisterHealthServiceServer(server, NewHealthGRPCServer())
 
-	go server.Serve(lis)
-	defer server.GracefulStop()
+	serverErr := serveGRPCServerForTest(t, server, lis)
+	defer stopGRPCServerForTest(t, server, serverErr)
 	time.Sleep(100 * time.Millisecond)
 
 	// 创建客户端
@@ -1381,7 +1392,7 @@ func TestAuthInterceptor_HealthExemption(t *testing.T) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	assert.NoError(t, err)
-	defer conn.Close()
+	defer requireClientConnClosed(t, conn)
 
 	// 健康检查不需要认证
 	healthClient := pb.NewHealthServiceClient(conn)
@@ -1394,12 +1405,9 @@ func TestAuthInterceptor_HealthExemption(t *testing.T) {
 // TestReportStatus_WithNode 测试有节点时的状态上报
 func TestReportStatus_WithNode(t *testing.T) {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	database.AutoMigrate(&model.User{}, &model.Plan{}, &model.Node{}, &model.NodeProtocol{}, &model.AuthorizedKey{})
-	defer database.Close()
+	requireInMemoryDatabase(t)
+	requireAutoMigrate(t, &model.User{}, &model.Plan{}, &model.Node{}, &model.NodeProtocol{}, &model.AuthorizedKey{})
+	defer requireDatabaseClosed(t)
 
 	db := database.Get()
 
@@ -1424,15 +1432,15 @@ func TestReportStatus_WithNode(t *testing.T) {
 	server := grpc.NewServer()
 	pb.RegisterNodeServiceServer(server, NewNodeGRPCServer())
 
-	go server.Serve(lis)
-	defer server.GracefulStop()
+	serverErr := serveGRPCServerForTest(t, server, lis)
+	defer stopGRPCServerForTest(t, server, serverErr)
 	time.Sleep(100 * time.Millisecond)
 
 	conn, err := grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	assert.NoError(t, err)
-	defer conn.Close()
+	defer requireClientConnClosed(t, conn)
 
 	// 上报状态
 	client := pb.NewNodeServiceClient(conn)
@@ -1464,12 +1472,9 @@ func TestReportStatus_WithNode(t *testing.T) {
 // TestGetConfig_WithMultipleProtocols 测试多协议配置
 func TestGetConfig_WithMultipleProtocols(t *testing.T) {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	database.AutoMigrate(&model.User{}, &model.Plan{}, &model.Node{}, &model.NodeProtocol{}, &model.AuthorizedKey{})
-	defer database.Close()
+	requireInMemoryDatabase(t)
+	requireAutoMigrate(t, &model.User{}, &model.Plan{}, &model.Node{}, &model.NodeProtocol{}, &model.AuthorizedKey{})
+	defer requireDatabaseClosed(t)
 
 	db := database.Get()
 
@@ -1513,15 +1518,15 @@ func TestGetConfig_WithMultipleProtocols(t *testing.T) {
 	server := grpc.NewServer()
 	pb.RegisterNodeServiceServer(server, NewNodeGRPCServer())
 
-	go server.Serve(lis)
-	defer server.GracefulStop()
+	serverErr := serveGRPCServerForTest(t, server, lis)
+	defer stopGRPCServerForTest(t, server, serverErr)
 	time.Sleep(100 * time.Millisecond)
 
 	conn, err := grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	assert.NoError(t, err)
-	defer conn.Close()
+	defer requireClientConnClosed(t, conn)
 
 	// 获取配置 (应该返回第一个协议)
 	client := pb.NewNodeServiceClient(conn)
@@ -1542,17 +1547,15 @@ func TestGetConfig_WithMultipleProtocols(t *testing.T) {
 type ConfigSyncE2ETestSuite struct {
 	suite.Suite
 	server     *grpc.Server
+	serverErr  <-chan error
 	clientConn *grpc.ClientConn
 	addr       string
 }
 
 func (s *ConfigSyncE2ETestSuite) SetupSuite() {
 	cache.InitMemory()
-	database.Init(&config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	})
-	database.AutoMigrate(
+	requireInMemoryDatabase(s.T())
+	requireAutoMigrate(s.T(),
 		&model.User{},
 		&model.Plan{},
 		&model.Node{},
@@ -1571,7 +1574,7 @@ func (s *ConfigSyncE2ETestSuite) SetupSuite() {
 	pb.RegisterHealthServiceServer(s.server, NewHealthGRPCServer())
 	pb.RegisterConfigSyncServiceServer(s.server, NewConfigSyncGRPCServer())
 
-	go s.server.Serve(lis)
+	s.serverErr = serveGRPCServerForTest(s.T(), s.server, lis)
 	time.Sleep(100 * time.Millisecond)
 
 	s.clientConn, err = grpc.NewClient(s.addr,
@@ -1582,12 +1585,12 @@ func (s *ConfigSyncE2ETestSuite) SetupSuite() {
 
 func (s *ConfigSyncE2ETestSuite) TearDownSuite() {
 	if s.clientConn != nil {
-		s.clientConn.Close()
+		requireClientConnClosed(s.T(), s.clientConn)
 	}
 	if s.server != nil {
-		s.server.GracefulStop()
+		stopGRPCServerForTest(s.T(), s.server, s.serverErr)
 	}
-	database.Close()
+	requireDatabaseClosed(s.T())
 }
 
 func (s *ConfigSyncE2ETestSuite) SetupTest() {
@@ -1948,7 +1951,7 @@ func (s *ConfigSyncE2ETestSuite) TestConfigChanges_Stream() {
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), resp2.Success)
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 // TestConfigChanges_MultipleChangeTypes 测试多种变更类型
@@ -1991,7 +1994,7 @@ func (s *ConfigSyncE2ETestSuite) TestConfigChanges_MultipleChangeTypes() {
 		assert.True(s.T(), resp.Success)
 	}
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 // TestNotifyConfigChange_Integration 测试 NotifyConfigChange 集成
@@ -2173,9 +2176,59 @@ func (s *ConfigSyncE2ETestSuite) TestConfigChanges_ConfigVersionTracking() {
 	ver := mgr.GetConfigVersion(nodeID)
 	assert.Greater(s.T(), ver, int64(0), "Config version should be set after registration")
 
-	stream.CloseSend()
+	requireCloseSend(s.T(), stream)
 }
 
 func TestConfigSyncE2ETestSuite(t *testing.T) {
 	suite.Run(t, new(ConfigSyncE2ETestSuite))
+}
+
+// TestAuthInterceptor_NodeAPIKey 校验节点级 x-api-key/x-node-id 认证:
+// 无凭证拒绝、key 与 node_id 不匹配拒绝、正确凭证放行。回归 50051 端口
+// 在生产环境无 api_token/JWT 时完全不设防的问题。
+func TestAuthInterceptor_NodeAPIKey(t *testing.T) {
+	cache.InitMemory()
+	requireInMemoryDatabase(t)
+	requireAutoMigrate(t, &model.User{}, &model.Plan{}, &model.Node{}, &model.NodeProtocol{}, &model.AuthorizedKey{})
+	defer requireDatabaseClosed(t)
+
+	db := database.Get()
+
+	nodeA := &model.Node{Name: "node-a", Host: "10.0.0.1", Port: 443, Rate: 1.0, Show: 1, Status: model.NodeStatusOnline, APIKey: "key-a", APIKeyHash: hashString("key-a")}
+	assert.NoError(t, db.Create(nodeA).Error)
+	nodeB := &model.Node{Name: "node-b", Host: "10.0.0.2", Port: 443, Rate: 1.0, Show: 1, Status: model.NodeStatusOnline, APIKey: "key-b", APIKeyHash: hashString("key-b")}
+	assert.NoError(t, db.Create(nodeB).Error)
+
+	// 没有配置全局 api_token/JWT (对应生产环境现状)
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	assert.NoError(t, err)
+	addr := lis.Addr().String()
+
+	server := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(AuthInterceptor("", "")),
+	)
+	pb.RegisterNodeServiceServer(server, NewNodeGRPCServer())
+
+	serverErr := serveGRPCServerForTest(t, server, lis)
+	defer stopGRPCServerForTest(t, server, serverErr)
+	time.Sleep(100 * time.Millisecond)
+
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	assert.NoError(t, err)
+	defer requireClientConnClosed(t, conn)
+	client := pb.NewNodeServiceClient(conn)
+
+	// 完全没带凭证: 之前的 bug 是这种情况会被直接放行, 现在必须拒绝
+	_, err = client.GetConfig(context.Background(), &pb.NodeConfigRequest{NodeId: uint32(nodeA.ID)})
+	assert.Error(t, err)
+
+	// 带 nodeA 的 key, 但冒充 nodeB 的 node_id: 必须拒绝
+	ctxSpoof := metadata.AppendToOutgoingContext(context.Background(), "x-api-key", "key-a", "x-node-id", strconv.Itoa(int(nodeB.ID)))
+	_, err = client.GetConfig(ctxSpoof, &pb.NodeConfigRequest{NodeId: uint32(nodeB.ID)})
+	assert.Error(t, err)
+
+	// 正确的 key + 对应 node_id: 放行
+	ctxOK := metadata.AppendToOutgoingContext(context.Background(), "x-api-key", "key-a", "x-node-id", strconv.Itoa(int(nodeA.ID)))
+	_, err = client.GetConfig(ctxOK, &pb.NodeConfigRequest{NodeId: uint32(nodeA.ID)})
+	assert.NoError(t, err)
 }

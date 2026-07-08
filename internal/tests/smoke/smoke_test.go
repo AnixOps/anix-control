@@ -71,7 +71,7 @@ func (s *SmokeTestSuite) SetupSuite() {
 	s.db = database.Get()
 
 	// Migrate all models
-	s.db.AutoMigrate(
+	s.Require().NoError(s.db.AutoMigrate(
 		&model.User{}, &model.Node{}, &model.NodeProtocol{},
 		&model.Plan{}, &model.Order{}, &model.Coupon{},
 		&model.CouponUsage{}, &model.Ticket{}, &model.TicketMessage{},
@@ -81,7 +81,7 @@ func (s *SmokeTestSuite) SetupSuite() {
 		&model.TelegramBot{}, &model.TelegramUser{}, &model.TelegramChat{},
 		&model.SystemConfig{}, &model.PaymentGateway{}, &model.PaymentRecord{},
 		&model.ForwardNode{}, &model.Forward{}, &model.ForwardRule{},
-		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.ForwardRuntimeJob{},
+		&model.ForwardTunnel{}, &model.ForwardUserTunnel{}, &model.ForwardPortBinding{}, &model.ForwardRuntimeJob{},
 		&model.ForwardTrafficCursor{}, &model.BackupConfig{}, &model.BackupRecord{},
 		&model.OperationLog{}, &model.LoadBalancer{},
 		&model.UserSubscriptionGroup{}, &model.PlanSubscriptionGroup{},
@@ -90,7 +90,7 @@ func (s *SmokeTestSuite) SetupSuite() {
 		&model.ServerShadowsocks{}, &model.ServerHysteria{}, &model.ServerTUIC{},
 		&model.ServerAnyTLS{}, &model.TrafficLog{}, &model.OnlineLog{},
 		&model.StatServer{}, &model.StatUser{},
-	)
+	))
 
 	// Create admin user
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(s.cfg.Admin.Password), bcrypt.DefaultCost)
@@ -207,17 +207,17 @@ func (s *SmokeTestSuite) TestAdminCreatePlanAndNode() {
 
 	// Create a plan
 	planBody := map[string]any{
-		"name":              "Smoke Test Plan",
-		"content":           "Monthly plan",
-		"renew_price":       float64(29.9),
-		"transfer_enable":   int64(10737418240), // 10 GB
-		"device_limit":      3,
-		"speed_limit":       int64(0),
-		"show":              true,
-		"sell_duration":     30,
-		"renew_method":      "on",
-		"with_package":      false,
-		"sort":              1,
+		"name":            "Smoke Test Plan",
+		"content":         "Monthly plan",
+		"renew_price":     float64(29.9),
+		"transfer_enable": int64(10737418240), // 10 GB
+		"device_limit":    3,
+		"speed_limit":     int64(0),
+		"show":            true,
+		"sell_duration":   30,
+		"renew_method":    "on",
+		"with_package":    false,
+		"sort":            1,
 	}
 	data, _ := json.Marshal(planBody)
 	req := httptest.NewRequest("POST", "/api/v2/admin/plan", bytes.NewReader(data))
