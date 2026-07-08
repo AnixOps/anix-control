@@ -2797,6 +2797,21 @@ func (s *PaymentHandlerTestSuite) TestX402CreatePayment_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.NotEmpty(s.T(), data["payment_id"])
+	assert.Contains(s.T(), data["trade_no"], "X402")
+	assert.NotEmpty(s.T(), data["wallet_address"])
+	assert.Equal(s.T(), "ETH", data["token"])
+	assert.Equal(s.T(), "sepolia", data["network"])
+	assert.NotEmpty(s.T(), data["expires_at"])
+	assert.NotEmpty(s.T(), data["qr_code"])
+	assert.Equal(s.T(), "X402 支付订单已创建", data["message"])
 }
 
 func (s *PaymentHandlerTestSuite) TestX402CreatePayment_InvalidBody() {
@@ -2877,6 +2892,17 @@ func (s *PaymentHandlerTestSuite) TestX402CheckPayment_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.NotEmpty(s.T(), data["payment_id"])
+	assert.Equal(s.T(), "ORDER123", data["trade_no"])
+	assert.Equal(s.T(), "pending", data["status"])
+	assert.Equal(s.T(), float64(model.PaymentStatusPending), data["status_code"])
+	assert.Equal(s.T(), float64(0), data["confirms"])
 }
 
 func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_Stripe() {
@@ -2895,6 +2921,21 @@ func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_Stripe() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.NotEmpty(s.T(), data["payment_id"])
+	assert.Contains(s.T(), data["trade_no"], "FIAT")
+	assert.Equal(s.T(), "stripe", data["provider"])
+	assert.Contains(s.T(), data["checkout_url"], "https://checkout.stripe.com/pay/")
+	assert.Contains(s.T(), data["session_id"], "cs_test_")
+	assert.Equal(s.T(), float64(100), data["amount"])
+	assert.Equal(s.T(), "USD", data["currency"])
+	assert.Equal(s.T(), "Stripe 支付订单已创建 (模拟)", data["message"])
 }
 
 func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_PayPal() {
@@ -2913,6 +2954,21 @@ func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_PayPal() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.NotEmpty(s.T(), data["payment_id"])
+	assert.Contains(s.T(), data["trade_no"], "FIAT")
+	assert.Equal(s.T(), "paypal", data["provider"])
+	assert.Contains(s.T(), data["approve_url"], "https://www.paypal.com/checkoutnow")
+	assert.Contains(s.T(), data["order_id"], "PAYPAL_ORDER_")
+	assert.Equal(s.T(), float64(100), data["amount"])
+	assert.Equal(s.T(), "USD", data["currency"])
+	assert.Equal(s.T(), "PayPal 支付订单已创建 (模拟)", data["message"])
 }
 
 func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_InvalidProvider() {

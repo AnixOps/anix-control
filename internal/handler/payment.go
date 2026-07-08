@@ -152,18 +152,16 @@ func (h *PaymentHandler) X402CreatePayment(c *gin.Context) {
 
 	expiresAt := time.Now().Add(30 * time.Minute).Unix()
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"payment_id":     paymentRecord.ID,
-			"trade_no":       tradeNo,
-			"wallet_address": walletAddr,
-			"amount":         fmt.Sprintf("%.8f", amountETH),
-			"token":          req.Token,
-			"network":        req.Network,
-			"expires_at":     expiresAt,
-			"qr_code":        fmt.Sprintf("x402:%s?value=%s&token=%s", walletAddr, fmt.Sprintf("%.8f", amountETH), req.Token),
-		},
-		"message": "X402 支付订单已创建",
+	panelSuccess(c, gin.H{
+		"payment_id":     paymentRecord.ID,
+		"trade_no":       tradeNo,
+		"wallet_address": walletAddr,
+		"amount":         fmt.Sprintf("%.8f", amountETH),
+		"token":          req.Token,
+		"network":        req.Network,
+		"expires_at":     expiresAt,
+		"qr_code":        fmt.Sprintf("x402:%s?value=%s&token=%s", walletAddr, fmt.Sprintf("%.8f", amountETH), req.Token),
+		"message":        "X402 支付订单已创建",
 	})
 }
 
@@ -309,18 +307,16 @@ func (h *PaymentHandler) X402CheckPayment(c *gin.Context) {
 		statusDesc = "expired"
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"payment_id":     payment.ID,
-			"trade_no":       payment.TradeNo,
-			"status":         statusDesc,
-			"status_code":    payment.Status,
-			"confirms":       confirms,
-			"tx_hash":        payment.TxHash,
-			"wallet_address": payment.WalletAddress,
-			"network":        payment.Network,
-			"created_at":     payment.CreatedAt,
-		},
+	panelSuccess(c, gin.H{
+		"payment_id":     payment.ID,
+		"trade_no":       payment.TradeNo,
+		"status":         statusDesc,
+		"status_code":    payment.Status,
+		"confirms":       confirms,
+		"tx_hash":        payment.TxHash,
+		"wallet_address": payment.WalletAddress,
+		"network":        payment.Network,
+		"created_at":     payment.CreatedAt,
 	})
 }
 
@@ -392,17 +388,15 @@ func (h *PaymentHandler) FiatCreatePayment(c *gin.Context) {
 
 		// 模拟 Stripe Checkout URL
 		checkoutURL := fmt.Sprintf("https://checkout.stripe.com/pay/cs_test_%s", tradeNo)
-		c.JSON(http.StatusOK, gin.H{
-			"data": gin.H{
-				"payment_id":   paymentRecord.ID,
-				"trade_no":     tradeNo,
-				"provider":     "stripe",
-				"checkout_url": checkoutURL,
-				"session_id":   fmt.Sprintf("cs_test_%s", tradeNo),
-				"amount":       paymentRecord.Amount,
-				"currency":     "USD",
-			},
-			"message": "Stripe 支付订单已创建 (模拟)",
+		panelSuccess(c, gin.H{
+			"payment_id":   paymentRecord.ID,
+			"trade_no":     tradeNo,
+			"provider":     "stripe",
+			"checkout_url": checkoutURL,
+			"session_id":   fmt.Sprintf("cs_test_%s", tradeNo),
+			"amount":       paymentRecord.Amount,
+			"currency":     "USD",
+			"message":      "Stripe 支付订单已创建 (模拟)",
 		})
 
 	case "paypal":
@@ -433,17 +427,15 @@ func (h *PaymentHandler) FiatCreatePayment(c *gin.Context) {
 
 		// 模拟 PayPal Approve URL
 		approveURL := fmt.Sprintf("https://www.paypal.com/checkoutnow?token=PAYPAL_%s", tradeNo)
-		c.JSON(http.StatusOK, gin.H{
-			"data": gin.H{
-				"payment_id":  paymentRecord.ID,
-				"trade_no":    tradeNo,
-				"provider":    "paypal",
-				"approve_url": approveURL,
-				"order_id":    fmt.Sprintf("PAYPAL_ORDER_%s", tradeNo),
-				"amount":      paymentRecord.Amount,
-				"currency":    "USD",
-			},
-			"message": "PayPal 支付订单已创建 (模拟)",
+		panelSuccess(c, gin.H{
+			"payment_id":  paymentRecord.ID,
+			"trade_no":    tradeNo,
+			"provider":    "paypal",
+			"approve_url": approveURL,
+			"order_id":    fmt.Sprintf("PAYPAL_ORDER_%s", tradeNo),
+			"amount":      paymentRecord.Amount,
+			"currency":    "USD",
+			"message":     "PayPal 支付订单已创建 (模拟)",
 		})
 
 	default:
