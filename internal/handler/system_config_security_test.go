@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 
@@ -67,6 +70,16 @@ func decodeJSONMap(t *testing.T, recorder *httptest.ResponseRecorder) map[string
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &payload))
 	return payload
+}
+
+func createEmptyBackupArchive(t *testing.T, path string) {
+	t.Helper()
+
+	file, err := os.Create(path)
+	require.NoError(t, err)
+	writer := zip.NewWriter(file)
+	require.NoError(t, writer.Close())
+	require.NoError(t, file.Close())
 }
 
 func findConfigByKey(t *testing.T, items any, key string) map[string]any {
@@ -288,6 +301,8 @@ func TestSystemHandlerGetBackupConfigMasksSensitiveFields(t *testing.T) {
 
 	body := decodeJSONMap(t, recorder)
 	assert.Equal(t, float64(0), body["code"])
+	require.NotEmpty(t, body["msg"])
+	require.NotZero(t, body["ts"])
 	assert.NotContains(t, body, "error")
 	data, ok := body["data"].(map[string]any)
 	require.True(t, ok)
@@ -344,6 +359,10 @@ func TestSystemHandlerUpdateBackupConfigPreservesSensitiveFieldsAndWritesAuditLo
 	assert.Equal(t, "interval:6", stored.Schedule)
 
 	body := decodeJSONMap(t, recorder)
+	assert.Equal(t, float64(0), body["code"])
+	require.NotEmpty(t, body["msg"])
+	require.NotZero(t, body["ts"])
+	assert.NotContains(t, body, "error")
 	data, ok := body["data"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, data["s3_access_key"])
@@ -392,6 +411,16 @@ func TestSystemHandlerCreateBackupUsesActorAndWritesAuditLog(t *testing.T) {
 	recorder := performSystemConfigJSONRequest(t, router, http.MethodPost, "/admin/system/backup?type=files", nil)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
+	body := decodeJSONMap(t, recorder)
+	assert.Equal(t, float64(0), body["code"])
+	require.NotEmpty(t, body["msg"])
+	require.NotZero(t, body["ts"])
+	assert.NotContains(t, body, "error")
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "files", data["type"])
+	assert.Equal(t, float64(99), data["created_by"])
+
 	var record model.BackupRecord
 	require.NoError(t, db.Order("id DESC").First(&record).Error)
 	require.NotNil(t, record.CreatedBy)
@@ -422,10 +451,57 @@ func TestSystemHandlerDeleteBackupWritesAuditLog(t *testing.T) {
 	recorder := performSystemConfigJSONRequest(t, router, http.MethodDelete, "/admin/system/backups/"+strconv.FormatUint(uint64(record.ID), 10), nil)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
+	body := decodeJSONMap(t, recorder)
+	assert.Equal(t, float64(0), body["code"])
+	require.NotEmpty(t, body["msg"])
+	require.NotZero(t, body["ts"])
+	assert.NotContains(t, body, "error")
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "backup deleted", data["message"])
+
 	var logs []model.OperationLog
 	require.NoError(t, db.Order("id ASC").Find(&logs).Error)
 	require.Len(t, logs, 1)
 	assert.Equal(t, "backup_record", logs[0].TargetType)
 	assert.Equal(t, "delete", logs[0].Action)
 	assert.Contains(t, logs[0].Content, "\"filename\":\"backup_20260411_000000\"")
+}
+
+func TestSystemHandlerRestoreBackupWritesAuditLog(t *testing.T) {
+	db, handler, router := setupSystemConfigSecurityTest(t)
+	router.POST("/admin/system/backups/:id/restore", handler.RestoreBackup)
+
+	backupPath := filepath.Join(t.TempDir(), "restore.zip")
+	createEmptyBackupArchive(t, backupPath)
+	require.NoError(t, db.Create(&model.BackupRecord{
+		Name:   "backup_20260411_010000",
+		Type:   "files",
+		Status: 1,
+		Path:   backupPath,
+		Auto:   false,
+	}).Error)
+
+	var record model.BackupRecord
+	require.NoError(t, db.Order("id DESC").First(&record).Error)
+
+	recorder := performSystemConfigJSONRequest(t, router, http.MethodPost, "/admin/system/backups/"+strconv.FormatUint(uint64(record.ID), 10)+"/restore", nil)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+
+	body := decodeJSONMap(t, recorder)
+	assert.Equal(t, float64(0), body["code"])
+	require.NotEmpty(t, body["msg"])
+	require.NotZero(t, body["ts"])
+	assert.NotContains(t, body, "error")
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "backup restored, please restart server", data["message"])
+
+	var logs []model.OperationLog
+	require.NoError(t, db.Order("id ASC").Find(&logs).Error)
+	require.Len(t, logs, 1)
+	assert.Equal(t, "backup_record", logs[0].TargetType)
+	assert.Equal(t, "restore", logs[0].Action)
+	assert.Contains(t, logs[0].Content, "\"filename\":\"restore.zip\"")
+	assert.Contains(t, logs[0].Content, "\"name\":\"backup_20260411_010000\"")
 }

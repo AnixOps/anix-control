@@ -146,6 +146,54 @@ describe('System backup configuration', () => {
     wrapper.unmount()
   })
 
+  it('loads backup records from legacy and panel envelope payloads', async () => {
+    adminApi.getBackups
+      .mockResolvedValueOnce({
+        data: {
+          list: [
+            {
+              id: 1,
+              filename: 'legacy-backup.zip',
+              status: 'completed'
+            }
+          ]
+        }
+      })
+      .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        data: {
+          list: [
+            {
+              id: 2,
+              filename: 'panel-backup.zip',
+              status: 'completed'
+            }
+          ],
+          total: 1
+        },
+        ts: 1783526400000
+      })
+
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    expect(wrapper.vm.backups).toHaveLength(1)
+    expect(wrapper.vm.backups[0].filename).toBe('legacy-backup.zip')
+
+    await wrapper.vm.fetchBackups()
+    await flushPromises()
+
+    expect(wrapper.vm.backups).toHaveLength(1)
+    expect(wrapper.vm.backups[0]).toMatchObject({
+      id: 2,
+      filename: 'panel-backup.zip',
+      status: 'completed'
+    })
+
+    wrapper.unmount()
+  })
+
   it('loads subscription settings from legacy and panel envelope payloads', async () => {
     adminApi.getSubscriptionSettings
       .mockResolvedValueOnce({
