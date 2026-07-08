@@ -54,6 +54,7 @@ Local verification status:
 - User payment channels/create/status/records handler tests now assert panel `code/msg/ts/data` envelopes while payment callbacks remain covered as plain-text compatibility responses.
 - User/admin MFA handler tests now assert panel `code/msg/ts/data` envelopes, and Admin MFA frontend tests cover legacy and enveloped config payloads.
 - User/admin notification handler tests now assert panel `code/msg/ts/data` envelopes, and Admin Notifications frontend tests cover legacy and enveloped templates, logs, and email config payloads.
+- Admin/user Telegram panel API handler tests now assert panel `code/msg/ts/data` envelopes, Admin Telegram frontend tests cover legacy and enveloped bot/user/broadcast payloads, and the public Telegram webhook remains covered as a `status=ok` compatibility path.
 - Admin subscription stats handler tests now assert panel `code/msg/ts/data` envelopes, and Subscriptions frontend tests cover both legacy and enveloped payloads.
 - Admin system backup stats handler tests now assert panel `code/msg/ts/data` envelopes, and System backup frontend tests cover both legacy and enveloped payloads.
 - Admin load balancer stats handler tests now assert panel `code/msg/ts/data` envelopes, and admin API mapping tests cover the stats route.

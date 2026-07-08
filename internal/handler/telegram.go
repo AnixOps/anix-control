@@ -180,17 +180,15 @@ func (h *TelegramHandler) GetBot(c *gin.Context) {
 	bot, err := h.botService.GetBot()
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusOK, gin.H{
-				"data": gin.H{
-					"token":           "",
-					"admin_ids":       []int64{},
-					"welcome_msg":     "",
-					"welcome_message": "",
-					"allow_bind":      true,
-					"allow_sub":       true,
-					"allow_ticket":    true,
-					"allow_info":      true,
-				},
+			panelSuccess(c, gin.H{
+				"token":           "",
+				"admin_ids":       []int64{},
+				"welcome_msg":     "",
+				"welcome_message": "",
+				"allow_bind":      true,
+				"allow_sub":       true,
+				"allow_ticket":    true,
+				"allow_info":      true,
 			})
 			return
 		}
@@ -198,7 +196,7 @@ func (h *TelegramHandler) GetBot(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": telegramBotResponse(bot)})
+	panelSuccess(c, telegramBotResponse(bot))
 }
 
 // UpdateBot godoc
@@ -284,7 +282,7 @@ func (h *TelegramHandler) UpdateBot(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": telegramBotResponse(bot)})
+	panelSuccess(c, telegramBotResponse(bot))
 }
 
 // SetWebhook godoc
@@ -316,11 +314,9 @@ func (h *TelegramHandler) SetWebhook(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	panelSuccess(c, gin.H{
 		"message": "webhook set successfully",
-		"data": gin.H{
-			"url": webhookURL,
-		},
+		"url":     webhookURL,
 	})
 }
 
@@ -340,7 +336,7 @@ func (h *TelegramHandler) DeleteWebhook(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "webhook deleted"})
+	panelSuccess(c, gin.H{"message": "webhook deleted"})
 }
 
 // TelegramWebhook godoc
@@ -420,11 +416,9 @@ func (h *TelegramHandler) SendNotification(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	panelSuccess(c, gin.H{
 		"message": "notification sent",
-		"data": gin.H{
-			"success": true,
-		},
+		"success": true,
 	})
 }
 
@@ -470,12 +464,10 @@ func (h *TelegramHandler) Broadcast(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	panelSuccess(c, gin.H{
 		"message": "broadcast completed",
-		"data": gin.H{
-			"success": success,
-			"failed":  failed,
-		},
+		"success": success,
+		"failed":  failed,
 	})
 }
 
@@ -504,13 +496,7 @@ func (h *TelegramHandler) GetUserBindings(c *gin.Context) {
 		for i := range users {
 			list = append(list, telegramUserBindingResponse(&users[i]))
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"data": gin.H{
-				"list":      list,
-				"total":     len(list),
-				"page":      1,
-				"page_size": len(list),
-			},
+		panelSuccess(c, gin.H{
 			"list":      list,
 			"total":     len(list),
 			"page":      1,
@@ -555,13 +541,7 @@ func (h *TelegramHandler) GetUserBindings(c *gin.Context) {
 		list = append(list, telegramUserBindingResponse(&users[i]))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":      list,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
-		},
+	panelSuccess(c, gin.H{
 		"list":      list,
 		"total":     total,
 		"page":      page,
@@ -662,7 +642,7 @@ func (h *TelegramHandler) UpdateUserNotify(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": telegramUserBindingResponse(&user)})
+	panelSuccess(c, telegramUserBindingResponse(&user))
 }
 
 // ========== 用户接口 ==========
@@ -682,23 +662,19 @@ func (h *TelegramHandler) GetTelegramStatus(c *gin.Context) {
 	userService := h.botService.GetTelegramUserService()
 	tgUser, err := userService.GetByUserID(userID)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"data": gin.H{
-				"bound":    false,
-				"username": "",
-			},
+		panelSuccess(c, gin.H{
+			"bound":    false,
+			"username": "",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"bound":          true,
-			"username":       tgUser.Username,
-			"notify_expire":  tgUser.NotifyExpire,
-			"notify_traffic": tgUser.NotifyTraffic,
-			"notify_ticket":  tgUser.NotifyTicket,
-		},
+	panelSuccess(c, gin.H{
+		"bound":          true,
+		"username":       tgUser.Username,
+		"notify_expire":  tgUser.NotifyExpire,
+		"notify_traffic": tgUser.NotifyTraffic,
+		"notify_ticket":  tgUser.NotifyTicket,
 	})
 }
 
@@ -723,7 +699,7 @@ func (h *TelegramHandler) UnbindTelegram(c *gin.Context) {
 
 	_ = h.botService.GetTelegramUserService()
 
-	c.JSON(http.StatusOK, gin.H{"message": "unbound successfully"})
+	panelSuccess(c, gin.H{"message": "unbound successfully"})
 }
 
 // UpdateNotifySettings godoc
@@ -752,7 +728,7 @@ func (h *TelegramHandler) UpdateNotifySettings(c *gin.Context) {
 	//   3. Return 404 if no binding exists
 	log.Printf("[STUB] Telegram notify settings update for user_id=%d not yet implemented", userID)
 
-	c.JSON(http.StatusOK, gin.H{"message": "settings updated"})
+	panelSuccess(c, gin.H{"message": "settings updated"})
 }
 
 // ========== 请求结构�?==========
