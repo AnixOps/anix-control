@@ -25,7 +25,54 @@ describe('Admin Orders', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders order stats from legacy and panel envelope payloads', async () => {
+  it('renders order lists from legacy, panel envelope, and nested payloads', async () => {
+    adminApi.getOrderList
+      .mockResolvedValueOnce({
+        data: {
+          list: [{ id: 1, trade_no: 'LEGACY001', status: 0 }],
+          total: 1
+        }
+      })
+      .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        data: {
+          list: [{ id: 2, trade_no: 'PANEL002', status: 1 }],
+          total: 2
+        },
+        ts: 1783526400000
+      })
+      .mockResolvedValueOnce({
+        data: {
+          data: {
+            list: [{ id: 3, trade_no: 'NESTED003', status: 2 }],
+            total: 3
+          }
+        }
+      })
+
+    const wrapper = mount(Orders)
+    await flushPromises()
+
+    expect(wrapper.vm.orders[0].trade_no).toBe('LEGACY001')
+    expect(wrapper.vm.total).toBe(1)
+
+    await wrapper.vm.fetchOrders()
+    await flushPromises()
+
+    expect(wrapper.vm.orders[0].trade_no).toBe('PANEL002')
+    expect(wrapper.vm.total).toBe(2)
+
+    await wrapper.vm.fetchOrders()
+    await flushPromises()
+
+    expect(wrapper.vm.orders[0].trade_no).toBe('NESTED003')
+    expect(wrapper.vm.total).toBe(3)
+
+    wrapper.unmount()
+  })
+
+  it('renders order stats from legacy, panel envelope, and nested payloads', async () => {
     adminApi.getOrderStats
       .mockResolvedValueOnce({
         data: {
@@ -46,6 +93,16 @@ describe('Admin Orders', () => {
         },
         ts: 1783526400000
       })
+      .mockResolvedValueOnce({
+        data: {
+          data: {
+            total_orders: 31,
+            pending_orders: 9,
+            total_revenue: 34567,
+            today_revenue: 890
+          }
+        }
+      })
 
     const wrapper = mount(Orders)
     await flushPromises()
@@ -58,6 +115,12 @@ describe('Admin Orders', () => {
 
     metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
     expect(metricValues).toEqual(['21', '7', '¥234.56', '¥7.89'])
+
+    await wrapper.vm.fetchStats()
+    await flushPromises()
+
+    metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
+    expect(metricValues).toEqual(['31', '9', '¥345.67', '¥8.90'])
 
     wrapper.unmount()
   })

@@ -1683,6 +1683,14 @@ func (s *AdminHandlerTestSuite) TestGetOrderList() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestGetOrderStats() {
@@ -1799,6 +1807,14 @@ func (s *AdminHandlerTestSuite) TestGetOrder_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(order.ID), data["id"])
+	assert.Equal(s.T(), "TEST001", data["trade_no"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestGetOrder_InvalidID() {
@@ -1838,6 +1854,13 @@ func (s *AdminHandlerTestSuite) TestUpdateOrderStatus_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "更新成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestMarkOrderPaid_Success() {
@@ -1860,6 +1883,13 @@ func (s *AdminHandlerTestSuite) TestMarkOrderPaid_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "订单已开通", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestCancelOrder_Success() {
@@ -1882,6 +1912,13 @@ func (s *AdminHandlerTestSuite) TestCancelOrder_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "取消成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestCancelOrder_InvalidID() {

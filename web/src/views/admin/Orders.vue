@@ -237,8 +237,9 @@ const fetchOrders = async () => {
       email: filters.value.email,
       status: filters.value.status || undefined
     })
-    orders.value = res.data?.list || []
-    total.value = res.data?.total || 0
+    const payload = readOrderPage(res)
+    orders.value = payload.list || []
+    total.value = payload.total || 0
   } catch (error) {
     console.error(t('adminOrders.messages.fetchOrdersFailed'), error)
   }
@@ -253,11 +254,30 @@ const fetchStats = async () => {
   }
 }
 
-const readOrderStats = (res) => {
+const readOrderPayload = (res) => {
   if (!res || typeof res !== 'object') {
-    return {}
+    return null
   }
-  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  if (Object.prototype.hasOwnProperty.call(res, 'code')) {
+    return res.data ?? null
+  }
+  if (
+    res.data &&
+    typeof res.data === 'object' &&
+    Object.prototype.hasOwnProperty.call(res.data, 'data')
+  ) {
+    return res.data.data ?? null
+  }
+  return res.data ?? res
+}
+
+const readOrderPage = (res) => {
+  const payload = readOrderPayload(res)
+  return payload && typeof payload === 'object' ? payload : {}
+}
+
+const readOrderStats = (res) => {
+  const payload = readOrderPayload(res)
   return payload && typeof payload === 'object' ? payload : {}
 }
 
