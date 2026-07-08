@@ -319,28 +319,24 @@ func (h *MFAHandler) GetStatus(c *gin.Context) {
 	}
 
 	if mfa == nil {
-		c.JSON(http.StatusOK, gin.H{
-			"data": gin.H{
-				"enabled":          false,
-				"has_backup_codes": false,
-				"remaining_codes":  0,
-				"last_used":        nil,
-				"enforced":         false,
-			},
+		panelSuccess(c, gin.H{
+			"enabled":          false,
+			"has_backup_codes": false,
+			"remaining_codes":  0,
+			"last_used":        nil,
+			"enforced":         false,
 		})
 		return
 	}
 
 	remainingCodes, _ := h.mfaService.GetRemainingBackupCodes(userID)
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"enabled":          mfa.Enabled,
-			"has_backup_codes": len(mfa.BackupCodes) > 0,
-			"remaining_codes":  remainingCodes,
-			"last_used":        mfa.LastUsed,
-			"last_method":      mfa.LastMethod,
-		},
+	panelSuccess(c, gin.H{
+		"enabled":          mfa.Enabled,
+		"has_backup_codes": len(mfa.BackupCodes) > 0,
+		"remaining_codes":  remainingCodes,
+		"last_used":        mfa.LastUsed,
+		"last_method":      mfa.LastMethod,
 	})
 }
 
@@ -364,13 +360,11 @@ func (h *MFAHandler) SetupTOTP(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"secret":       setup.Secret,
-			"url":          setup.URL,
-			"qr_code":      setup.QRCode,
-			"backup_codes": setup.BackupCodes,
-		},
+	panelSuccess(c, gin.H{
+		"secret":       setup.Secret,
+		"url":          setup.URL,
+		"qr_code":      setup.QRCode,
+		"backup_codes": setup.BackupCodes,
 	})
 }
 
@@ -391,7 +385,7 @@ func (h *MFAHandler) EnableTOTP(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "MFA enabled successfully"})
+	panelSuccess(c, gin.H{"message": "MFA enabled successfully"})
 }
 
 // DisableMFA disables MFA with password confirmation.
@@ -411,7 +405,7 @@ func (h *MFAHandler) DisableMFA(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "MFA disabled successfully"})
+	panelSuccess(c, gin.H{"message": "MFA disabled successfully"})
 }
 
 // VerifyMFA verifies MFA code.
@@ -438,7 +432,7 @@ func (h *MFAHandler) VerifyMFA(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "verified successfully"})
+	panelSuccess(c, gin.H{"message": "verified successfully"})
 }
 
 // RegenerateBackupCodes regenerates backup codes for current user.
@@ -451,11 +445,7 @@ func (h *MFAHandler) RegenerateBackupCodes(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"backup_codes": codes,
-		},
-	})
+	panelSuccess(c, gin.H{"backup_codes": codes})
 }
 
 // GetAdminConfig returns global MFA admin config.
@@ -467,7 +457,7 @@ func (h *MFAHandler) GetAdminConfig(c *gin.Context) {
 	}
 
 	h.applyRuntimeConfig(cfg)
-	c.JSON(http.StatusOK, gin.H{"data": mfaAdminConfigResponse(cfg)})
+	panelSuccess(c, mfaAdminConfigResponse(cfg))
 }
 
 // UpdateAdminConfig updates and persists MFA admin config.
@@ -537,8 +527,5 @@ func (h *MFAHandler) UpdateAdminConfig(c *gin.Context) {
 	}
 
 	h.applyRuntimeConfig(cfg)
-	c.JSON(http.StatusOK, gin.H{
-		"message": "MFA config updated",
-		"data":    mfaAdminConfigResponse(cfg),
-	})
+	panelSuccess(c, mfaAdminConfigResponse(cfg))
 }

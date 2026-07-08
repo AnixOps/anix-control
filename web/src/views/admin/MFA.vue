@@ -130,11 +130,23 @@ const resolveApiError = (error, fallbackKey) => (
   t(fallbackKey)
 )
 
+const readMfaConfigPayload = (res) => {
+  if (!res || typeof res !== 'object') return {}
+  if (Object.prototype.hasOwnProperty.call(res, 'code')) {
+    return res.data && typeof res.data === 'object' ? res.data : {}
+  }
+  if (res.data && typeof res.data === 'object' && Object.prototype.hasOwnProperty.call(res.data, 'data')) {
+    return res.data.data && typeof res.data.data === 'object' ? res.data.data : {}
+  }
+  return res.data && typeof res.data === 'object' ? res.data : res
+}
+
 const fetchConfig = async () => {
   try {
     const res = await getMFAConfig()
-    if (res.data) {
-      config.value = createMfaConfig(res.data)
+    const payload = readMfaConfigPayload(res)
+    if (payload && typeof payload === 'object') {
+      config.value = createMfaConfig(payload)
     }
   } catch (error) {
     console.error(t('adminMfa.messages.fetchFailed'), error)

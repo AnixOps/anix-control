@@ -3084,6 +3084,15 @@ func (s *MFAExtendedTestSuite) TestGetStatus() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), false, data["enabled"])
+	assert.Equal(s.T(), false, data["has_backup_codes"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *MFAExtendedTestSuite) TestSetupTOTP() {
@@ -3098,6 +3107,17 @@ func (s *MFAExtendedTestSuite) TestSetupTOTP() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.NotEmpty(s.T(), data["secret"])
+	assert.NotEmpty(s.T(), data["url"])
+	assert.NotEmpty(s.T(), data["qr_code"])
+	assert.NotEmpty(s.T(), data["backup_codes"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *MFAExtendedTestSuite) TestGetAdminConfig() {
@@ -3109,6 +3129,15 @@ func (s *MFAExtendedTestSuite) TestGetAdminConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Contains(s.T(), data, "enabled")
+	assert.Contains(s.T(), data, "methods")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *MFAExtendedTestSuite) TestUpdateAdminConfig() {
@@ -3126,6 +3155,15 @@ func (s *MFAExtendedTestSuite) TestUpdateAdminConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), true, data["enabled"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *MFAExtendedTestSuite) TestAdminConfig_FrontendFields_RoundTrip() {
@@ -3153,10 +3191,13 @@ func (s *MFAExtendedTestSuite) TestAdminConfig_FrontendFields_RoundTrip() {
 	s.router.ServeHTTP(getResp, getReq)
 	assert.Equal(s.T(), http.StatusOK, getResp.Code)
 
-	var payload map[string]any
-	err := json.Unmarshal(getResp.Body.Bytes(), &payload)
-	assert.NoError(s.T(), err)
-	data, ok := payload["data"].(map[string]any)
+	resp := decodePanelTestResponse(s.T(), getResp)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 
 	_, hasRequired := data["required"]
@@ -3184,7 +3225,7 @@ func (s *MFAExtendedTestSuite) TestAdminConfig_FrontendFields_RoundTrip() {
 	assert.Equal(s.T(), false, methods["email"])
 
 	var storedMFAConfig model.SystemConfig
-	err = s.db.Where("key = ?", mfaAdminConfigKey).First(&storedMFAConfig).Error
+	err := s.db.Where("key = ?", mfaAdminConfigKey).First(&storedMFAConfig).Error
 	assert.NoError(s.T(), err)
 	assert.Contains(s.T(), storedMFAConfig.Value, "\"backup_codes_count\":12")
 	assert.Contains(s.T(), storedMFAConfig.Value, "\"max_attempts\":6")

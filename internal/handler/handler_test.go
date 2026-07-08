@@ -19,8 +19,10 @@ import (
 	"github.com/anixops/v2board/internal/service"
 	"github.com/anixops/v2board/internal/tests/testutil"
 	"github.com/gin-gonic/gin"
+	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -3580,7 +3582,13 @@ func (s *MFAHandlerTestSuite) TestGetStatus_NoMFA() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-	assert.Contains(s.T(), w.Body.String(), "enabled")
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), false, data["enabled"])
+	assert.Equal(s.T(), false, data["has_backup_codes"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *MFAHandlerTestSuite) TestGetAdminConfig() {
@@ -3592,6 +3600,13 @@ func (s *MFAHandlerTestSuite) TestGetAdminConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Contains(s.T(), data, "enabled")
+	assert.Contains(s.T(), data, "methods")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *MFAHandlerTestSuite) TestUpdateAdminConfig_Success() {
@@ -3605,6 +3620,14 @@ func (s *MFAHandlerTestSuite) TestUpdateAdminConfig_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), true, data["enabled"])
+	assert.Equal(s.T(), "TestApp", data["totp_issuer"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *MFAHandlerTestSuite) TestUpdateAdminConfig_InvalidBody() {
@@ -3680,6 +3703,139 @@ func (s *MFAHandlerTestSuite) TestSetupTOTP() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.NotEmpty(s.T(), data["secret"])
+	assert.NotEmpty(s.T(), data["url"])
+	assert.NotEmpty(s.T(), data["backup_codes"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *MFAHandlerTestSuite) TestEnableTOTP_Success() {
+	handler := NewMFAHandler()
+	setup, err := handler.mfaService.SetupTOTP(s.testUser.ID, s.testUser.Email)
+	assert.NoError(s.T(), err)
+	code, err := totp.GenerateCode(setup.Secret, time.Now())
+	assert.NoError(s.T(), err)
+
+	s.router.POST("/mfa/totp/enable", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.EnableTOTP)
+
+	body := `{"code":"` + code + `"}`
+	req, _ := http.NewRequest("POST", "/mfa/totp/enable", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "MFA enabled successfully", data["message"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *MFAHandlerTestSuite) TestDisableMFA_Success() {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.DefaultCost)
+	assert.NoError(s.T(), err)
+	s.testUser.Password = string(hashedPassword)
+	assert.NoError(s.T(), s.db.Save(s.testUser).Error)
+	assert.NoError(s.T(), s.db.Create(&model.UserMFA{
+		UserID:      s.testUser.ID,
+		Enabled:     true,
+		TOTPSecret:  "SECRET",
+		BackupCodes: `["ABCD-EFGH"]`,
+	}).Error)
+
+	handler := NewMFAHandler()
+	s.router.POST("/mfa/disable", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.DisableMFA)
+
+	body := `{"password":"correct-password"}`
+	req, _ := http.NewRequest("POST", "/mfa/disable", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "MFA disabled successfully", data["message"])
+
+	var count int64
+	assert.NoError(s.T(), s.db.Model(&model.UserMFA{}).Where("user_id = ?", s.testUser.ID).Count(&count).Error)
+	assert.Equal(s.T(), int64(0), count)
+}
+
+func (s *MFAHandlerTestSuite) TestVerifyMFA_BackupCodeSuccess() {
+	assert.NoError(s.T(), s.db.Create(&model.UserMFA{
+		UserID:      s.testUser.ID,
+		Enabled:     true,
+		TOTPSecret:  "SECRET",
+		BackupCodes: `["ABCD-EFGH"]`,
+	}).Error)
+
+	handler := NewMFAHandler()
+	s.router.POST("/mfa/verify", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.VerifyMFA)
+
+	body := `{"code":"ABCD-EFGH","method":"backup"}`
+	req, _ := http.NewRequest("POST", "/mfa/verify", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "verified successfully", data["message"])
+
+	remaining, err := handler.mfaService.GetRemainingBackupCodes(s.testUser.ID)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), 0, remaining)
+}
+
+func (s *MFAHandlerTestSuite) TestRegenerateBackupCodes_Success() {
+	assert.NoError(s.T(), s.db.Create(&model.UserMFA{
+		UserID:      s.testUser.ID,
+		Enabled:     true,
+		TOTPSecret:  "SECRET",
+		BackupCodes: `["ABCD-EFGH"]`,
+	}).Error)
+
+	handler := NewMFAHandler()
+	s.router.POST("/mfa/backup-codes/regenerate", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.RegenerateBackupCodes)
+
+	req, _ := http.NewRequest("POST", "/mfa/backup-codes/regenerate", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	codes, ok := data["backup_codes"].([]any)
+	assert.True(s.T(), ok)
+	assert.Len(s.T(), codes, 10)
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *MFAHandlerTestSuite) TestRegenerateBackupCodes_NoMFA() {
