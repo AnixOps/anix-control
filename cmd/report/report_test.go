@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -94,6 +97,39 @@ func TestGenerateSummary_Empty(t *testing.T) {
 	assert.Equal(t, 0.0, report.Summary.PassRate)
 }
 
+func TestGenerateReportsWritePrivateFiles(t *testing.T) {
+	t.Chdir(t.TempDir())
+	report = TestReport{
+		GeneratedAt:   time.Now().Add(-time.Second),
+		ServerVersion: "test",
+		GoVersion:     "go-test",
+		Platform:      "linux/amd64",
+		Results: []TestResult{
+			{Package: "pkg", TestName: "TestA", Status: "pass", Duration: time.Millisecond},
+		},
+		E2EResults: []E2EResult{
+			{Protocol: "vless", Success: true, Latency: time.Millisecond},
+		},
+		APIResults: []APITest{
+			{Endpoint: "/health", Method: "GET", Status: 200, Success: true, Latency: time.Millisecond},
+		},
+	}
+	generateSummary()
+
+	require.NoError(t, generateCSVReport())
+	require.NoError(t, generateHTMLReport())
+
+	dirInfo, err := os.Stat(reportDir)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(reportDirPerm), dirInfo.Mode().Perm())
+
+	for _, name := range []string{"report.csv", "report.html", "report.json"} {
+		info, err := os.Stat(filepath.Join(reportDir, name))
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(reportFilePerm), info.Mode().Perm(), name)
+	}
+}
+
 func TestGenerateServerConfig(t *testing.T) {
 	protocols := []string{"shadowsocks", "vmess", "vless", "trojan"}
 	for _, p := range protocols {
@@ -123,7 +159,8 @@ func TestGenerateClientConfig(t *testing.T) {
 }
 
 func TestGetFreePort(t *testing.T) {
-	port := getFreePort()
+	port, err := getFreePort()
+	require.NoError(t, err)
 	assert.Greater(t, port, 0)
 
 	// Verify the port is actually usable
@@ -131,7 +168,9 @@ func TestGetFreePort(t *testing.T) {
 	require.NoError(t, err)
 	l, err := net.ListenTCP("tcp", addr)
 	require.NoError(t, err)
-	defer l.Close()
+	defer func() {
+		require.NoError(t, l.Close())
+	}()
 
 	realPort := l.Addr().(*net.TCPAddr).Port
 	assert.Greater(t, realPort, 0)
@@ -147,7 +186,9 @@ func TestWaitForPort_WithListener(t *testing.T) {
 	// Start a listener in the background
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	defer l.Close()
+	defer func() {
+		require.NoError(t, l.Close())
+	}()
 
 	port := l.Addr().(*net.TCPAddr).Port
 	result := waitForPort(port, 2*time.Second)
@@ -160,15 +201,33 @@ func TestEchoServerStartStop(t *testing.T) {
 
 	err := server.Start(ctx)
 	require.NoError(t, err)
+	assert.Equal(t, 5*time.Second, server.server.ReadHeaderTimeout)
 
 	// Verify the server is listening
 	time.Sleep(50 * time.Millisecond)
 
 	// Use the actual assigned port
-	actualPort := server.port
-	resp, err := http.Get("http://127.0.0.1:59997/ping")
-	_ = resp
-	_ = actualPort
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/ping", server.port))
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, resp.Body.Close())
+	}()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	// Just verify no panic on start/stop cycle
-	server.Stop()
+	require.NoError(t, server.Stop())
+}
+
+func TestValidateReportXrayPath(t *testing.T) {
+	dir := t.TempDir()
+	xrayPath := filepath.Join(dir, "xray")
+	require.NoError(t, os.WriteFile(xrayPath, []byte("#!/bin/sh\n"), 0o700))
+
+	resolved, err := validateReportXrayPath(xrayPath)
+	require.NoError(t, err)
+	assert.True(t, filepath.IsAbs(resolved))
+
+	badPath := filepath.Join(dir, "sh")
+	require.NoError(t, os.WriteFile(badPath, []byte("#!/bin/sh\n"), 0o700))
+	_, err = validateReportXrayPath(badPath)
+	assert.Error(t, err)
 }

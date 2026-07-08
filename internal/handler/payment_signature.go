@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -184,7 +185,7 @@ func verifyPayPalSignatureRemote(ctx context.Context, cfg *model.PayPalConfig, h
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer closePayPalResponseBody(resp)
 
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
@@ -221,7 +222,7 @@ func paypalAccessToken(ctx context.Context, cfg *model.PayPalConfig) (string, er
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer closePayPalResponseBody(resp)
 
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
@@ -238,4 +239,13 @@ func paypalAccessToken(ctx context.Context, cfg *model.PayPalConfig) (string, er
 		return "", errors.New("empty paypal access token")
 	}
 	return tokenResp.AccessToken, nil
+}
+
+func closePayPalResponseBody(resp *http.Response) {
+	if resp == nil || resp.Body == nil {
+		return
+	}
+	if err := resp.Body.Close(); err != nil {
+		log.Printf("PayPal response body close failed: %v", err)
+	}
 }

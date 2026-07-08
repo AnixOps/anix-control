@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setupTestRouter() *gin.Engine {
@@ -22,7 +23,7 @@ func TestGenerateETag(t *testing.T) {
 	etag := generateETag(data)
 
 	assert.NotEmpty(t, etag)
-	assert.Len(t, etag, 32) // MD5 hash is 32 hex characters
+	assert.Len(t, etag, 64) // SHA-256 hex digest
 
 	// 相同数据应该生成相同的ETag
 	etag2 := generateETag(data)
@@ -169,7 +170,7 @@ func TestPushTrafficAPI(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 	assert.Equal(t, "success", response["status"])
 }
 
@@ -197,6 +198,6 @@ func TestPushAliveAPI(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 	assert.Equal(t, "success", response["status"])
 }

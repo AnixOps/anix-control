@@ -14,6 +14,28 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
+func mustSet(t *testing.T, key string, value any, expiration time.Duration) {
+	t.Helper()
+	require.NoError(t, Set(key, value, expiration))
+}
+
+func mustSAdd(t *testing.T, key string, members ...any) {
+	t.Helper()
+	require.NoError(t, SAdd(key, members...))
+}
+
+func mustHSet(t *testing.T, key, field string, value any) {
+	t.Helper()
+	require.NoError(t, HSet(key, field, value))
+}
+
+func mustGet(t *testing.T, key string) any {
+	t.Helper()
+	value, err := Get(key)
+	require.NoError(t, err)
+	return value
+}
+
 func TestSetAndGet(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -60,7 +82,7 @@ func TestGetNotFound(t *testing.T) {
 }
 
 func TestDel(t *testing.T) {
-	Set("del_key", "value", 0)
+	mustSet(t, "del_key", "value", 0)
 
 	err := Del("del_key")
 	require.NoError(t, err)
@@ -70,9 +92,9 @@ func TestDel(t *testing.T) {
 }
 
 func TestDelMultiple(t *testing.T) {
-	Set("key1", "value1", 0)
-	Set("key2", "value2", 0)
-	Set("key3", "value3", 0)
+	mustSet(t, "key1", "value1", 0)
+	mustSet(t, "key2", "value2", 0)
+	mustSet(t, "key3", "value3", 0)
 
 	err := Del("key1", "key2")
 	require.NoError(t, err)
@@ -83,7 +105,7 @@ func TestDelMultiple(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	Set("delete_key", "value", 0)
+	mustSet(t, "delete_key", "value", 0)
 
 	err := Delete("delete_key")
 	require.NoError(t, err)
@@ -104,7 +126,7 @@ func TestSAddAndSMembers(t *testing.T) {
 }
 
 func TestSCard(t *testing.T) {
-	SAdd("set2", "a", "b", "c")
+	mustSAdd(t, "set2", "a", "b", "c")
 
 	count, err := SCard("set2")
 	require.NoError(t, err)
@@ -112,7 +134,7 @@ func TestSCard(t *testing.T) {
 }
 
 func TestSClear(t *testing.T) {
-	SAdd("set3", "x", "y", "z")
+	mustSAdd(t, "set3", "x", "y", "z")
 
 	err := SClear("set3")
 	require.NoError(t, err)
@@ -132,9 +154,9 @@ func TestHSetAndHGet(t *testing.T) {
 }
 
 func TestHGetAll(t *testing.T) {
-	HSet("hash2", "f1", "v1")
-	HSet("hash2", "f2", "v2")
-	HSet("hash2", "f3", "v3")
+	mustHSet(t, "hash2", "f1", "v1")
+	mustHSet(t, "hash2", "f2", "v2")
+	mustHSet(t, "hash2", "f3", "v3")
 
 	all, err := HGetAll("hash2")
 	require.NoError(t, err)
@@ -145,8 +167,8 @@ func TestHGetAll(t *testing.T) {
 }
 
 func TestHDel(t *testing.T) {
-	HSet("hash3", "f1", "v1")
-	HSet("hash3", "f2", "v2")
+	mustHSet(t, "hash3", "f1", "v1")
+	mustHSet(t, "hash3", "f2", "v2")
 
 	err := HDel("hash3", "f1")
 	require.NoError(t, err)
@@ -163,9 +185,9 @@ func TestKeys(t *testing.T) {
 	// Clear previous data
 	Clear()
 
-	Set("test_key1", "v1", 0)
-	Set("test_key2", "v2", 0)
-	Set("other_key", "v3", 0)
+	mustSet(t, "test_key1", "v1", 0)
+	mustSet(t, "test_key2", "v2", 0)
+	mustSet(t, "other_key", "v3", 0)
 
 	keys, err := Keys("test_*")
 	require.NoError(t, err)
@@ -175,7 +197,7 @@ func TestKeys(t *testing.T) {
 }
 
 func TestExists(t *testing.T) {
-	Set("exists_key", "value", 0)
+	mustSet(t, "exists_key", "value", 0)
 
 	assert.True(t, Exists("exists_key"))
 	assert.False(t, Exists("not_exists_key"))
@@ -220,7 +242,7 @@ func TestSetIntAndGetInt(t *testing.T) {
 }
 
 func TestExpire(t *testing.T) {
-	Set("expire_key", "value", 0)
+	mustSet(t, "expire_key", "value", 0)
 
 	err := Expire("expire_key", 100*time.Millisecond)
 	require.NoError(t, err)
@@ -235,20 +257,21 @@ func TestExpire(t *testing.T) {
 }
 
 func TestClear(t *testing.T) {
-	Set("clear1", "v1", 0)
-	Set("clear2", "v2", 0)
-	SAdd("clear_set", "m1", "m2")
+	mustSet(t, "clear1", "v1", 0)
+	mustSet(t, "clear2", "v2", 0)
+	mustSAdd(t, "clear_set", "m1", "m2")
 
 	Clear()
 
 	assert.False(t, Exists("clear1"))
 	assert.False(t, Exists("clear2"))
-	count, _ := SCard("clear_set")
+	count, err := SCard("clear_set")
+	require.NoError(t, err)
 	assert.Equal(t, int64(0), count)
 }
 
 func TestGetGeneric(t *testing.T) {
-	Set("generic_key", "string_value", 0)
+	mustSet(t, "generic_key", "string_value", 0)
 
 	val, err := Get("generic_key")
 	require.NoError(t, err)
@@ -286,15 +309,22 @@ func TestConcurrentAccess(t *testing.T) {
 	const iterations = 100
 
 	done := make(chan bool, workers)
+	errCh := make(chan error, workers*iterations*3)
 
 	// 并发写入
 	for i := 0; i < workers; i++ {
 		go func(id int) {
 			for j := 0; j < iterations; j++ {
 				key := "concurrent_" + string(rune('A'+id))
-				Set(key, j, 0)
-				GetString(key)
-				Del(key)
+				if err := Set(key, j, 0); err != nil {
+					errCh <- err
+				}
+				if _, err := Get(key); err != nil {
+					errCh <- err
+				}
+				if err := Del(key); err != nil {
+					errCh <- err
+				}
 			}
 			done <- true
 		}(i)
@@ -303,6 +333,10 @@ func TestConcurrentAccess(t *testing.T) {
 	// 等待所有 goroutine 完成
 	for i := 0; i < workers; i++ {
 		<-done
+	}
+	close(errCh)
+	for err := range errCh {
+		require.NoError(t, err)
 	}
 }
 
@@ -316,15 +350,15 @@ func TestLRUEviction(t *testing.T) {
 
 	// 插入 5 个条目（填满）
 	for i := 0; i < 5; i++ {
-		Set("key_"+string(rune('A'+i)), i, 0)
+		mustSet(t, "key_"+string(rune('A'+i)), i, 0)
 	}
 	assert.Equal(t, 5, Len())
 
 	// 访问 key_A 使其成为最近使用
-	Get("key_A")
+	mustGet(t, "key_A")
 
 	// 插入第 6 个条目，应淘汰最久未使用的 key_B
-	Set("key_F", 5, 0)
+	mustSet(t, "key_F", 5, 0)
 
 	// 容量应保持为 5
 	assert.Equal(t, 5, Len())
@@ -345,11 +379,11 @@ func TestLRUWithExpiration(t *testing.T) {
 	defer CloseMemory()
 
 	// 插入 2 个即将过期的条目
-	Set("exp1", "value1", 50*time.Millisecond)
-	Set("exp2", "value2", 50*time.Millisecond)
+	mustSet(t, "exp1", "value1", 50*time.Millisecond)
+	mustSet(t, "exp2", "value2", 50*time.Millisecond)
 
 	// 插入 1 个不过期的条目
-	Set("perm", "permanent", 0)
+	mustSet(t, "perm", "permanent", 0)
 
 	// 等待过期
 	time.Sleep(100 * time.Millisecond)
@@ -380,4 +414,87 @@ func TestDefaultMaxSize(t *testing.T) {
 
 	assert.NotNil(t, memCache)
 	assert.Equal(t, DefaultMaxSize, memCache.maxSize)
+}
+
+func TestInitMemoryWithSizeClosesPreviousCleanup(t *testing.T) {
+	restore := saveAndRestoreMemoryCache(t)
+
+	InitMemoryWithSize(2)
+	first := memCache
+	require.NotNil(t, first)
+	firstStop := first.stopCh
+	firstDone := first.doneCh
+
+	InitMemoryWithSize(3)
+	require.NotNil(t, memCache)
+	assert.NotSame(t, first, memCache)
+	assert.Equal(t, 3, memCache.maxSize)
+
+	assertClosed(t, firstStop)
+	assertClosed(t, firstDone)
+
+	restore()
+}
+
+func TestCloseMemoryIsIdempotentAndRestartable(t *testing.T) {
+	restore := saveAndRestoreMemoryCache(t)
+
+	InitMemoryWithSize(2)
+	current := memCache
+	require.NotNil(t, current)
+
+	CloseMemory()
+	assertClosed(t, current.stopCh)
+	assertClosed(t, current.doneCh)
+	assert.NotPanics(t, CloseMemory)
+
+	StartCleanup()
+	restarted := memCache
+	require.NotNil(t, restarted)
+	assertOpen(t, restarted.stopCh)
+	assertOpen(t, restarted.doneCh)
+
+	CloseMemory()
+	assertClosed(t, restarted.stopCh)
+	assertClosed(t, restarted.doneCh)
+
+	restore()
+}
+
+func saveAndRestoreMemoryCache(t *testing.T) func() {
+	t.Helper()
+
+	oldCache := memCache
+	restored := false
+	restore := func() {
+		if restored {
+			return
+		}
+		restored = true
+		CloseMemory()
+		memCache = oldCache
+		StartCleanup()
+	}
+	t.Cleanup(restore)
+	return restore
+}
+
+func assertClosed(t *testing.T, ch <-chan struct{}) {
+	t.Helper()
+
+	select {
+	case <-ch:
+	default:
+		t.Fatal("channel is open")
+	}
+}
+
+func assertOpen(t *testing.T, ch <-chan struct{}) {
+	t.Helper()
+
+	select {
+	case <-ch:
+		t.Fatal("channel is closed")
+	default:
+	}
 }

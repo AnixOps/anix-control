@@ -30,6 +30,7 @@ type AuthE2ETestSuite struct {
 // SetupSuite 测试套件初始化
 func (s *AuthE2ETestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
+	rateLimitEnabled := false
 
 	// 使用测试配置
 	s.cfg = &config.Config{
@@ -52,6 +53,14 @@ func (s *AuthE2ETestSuite) SetupSuite() {
 			Version:       "test",
 			APIToken:      "test-api-token",
 			SubscribePath: "s",
+		},
+		Auth: config.AuthConfig{
+			LoginRateLimit: config.LoginRateLimitConfig{
+				Enabled: &rateLimitEnabled,
+			},
+			RegisterRateLimit: config.LoginRateLimitConfig{
+				Enabled: &rateLimitEnabled,
+			},
 		},
 		Admin: config.AdminConfig{
 			Email:    "admin@example.com",
@@ -84,11 +93,12 @@ func (s *AuthE2ETestSuite) SetupSuite() {
 
 // TearDownSuite 测试套件清理
 func (s *AuthE2ETestSuite) TearDownSuite() {
-	database.Close()
+	requireDatabaseClosed(s.T())
 }
 
 // SetupTest 每个测试前的清理
 func (s *AuthE2ETestSuite) SetupTest() {
+	service.ResetLoginRateLimiterForTest()
 	// 清理用户数据，保留管理员
 	s.db.Where("is_admin = 0").Delete(&model.User{})
 }
@@ -110,7 +120,7 @@ func (s *AuthE2ETestSuite) TestRegister_Success() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var response map[string]any
-	json.Unmarshal(w.Body.Bytes(), &response)
+	requireJSONUnmarshal(s.T(), w.Body.Bytes(), &response)
 
 	data := response["data"].(map[string]any)
 	assert.NotEmpty(s.T(), data["token"])
@@ -224,7 +234,7 @@ func (s *AuthE2ETestSuite) TestLogin_Success() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var response map[string]any
-	json.Unmarshal(w.Body.Bytes(), &response)
+	requireJSONUnmarshal(s.T(), w.Body.Bytes(), &response)
 
 	data := response["data"].(map[string]any)
 	assert.NotEmpty(s.T(), data["token"])
@@ -295,7 +305,7 @@ func (s *AuthE2ETestSuite) TestJWTMiddleware_ValidToken() {
 	s.router.ServeHTTP(w, req)
 
 	var response map[string]any
-	json.Unmarshal(w.Body.Bytes(), &response)
+	requireJSONUnmarshal(s.T(), w.Body.Bytes(), &response)
 	data := response["data"].(map[string]any)
 	token := data["token"].(string)
 
@@ -354,7 +364,7 @@ func (s *AuthE2ETestSuite) TestAdminLogin() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var response map[string]any
-	json.Unmarshal(w.Body.Bytes(), &response)
+	requireJSONUnmarshal(s.T(), w.Body.Bytes(), &response)
 
 	data := response["data"].(map[string]any)
 	assert.True(s.T(), data["is_admin"].(bool))

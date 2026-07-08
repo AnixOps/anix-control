@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -62,7 +61,7 @@ func (h *ForwardHandler) ListNodes(c *gin.Context) {
 	if rawStatus := c.Query("status"); rawStatus != "" {
 		parsedStatus, err := strconv.Atoi(rawStatus)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
+			panelError(c, "invalid status")
 			return
 		}
 		status = &parsedStatus
@@ -70,17 +69,11 @@ func (h *ForwardHandler) ListNodes(c *gin.Context) {
 
 	nodes, total, err := h.nodeService.ListByInventoryScope(scope, nodeType, status, page, pageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":      nodes,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
-		},
+	panelSuccess(c, gin.H{
 		"list":      nodes,
 		"total":     total,
 		"page":      page,
@@ -103,7 +96,7 @@ func (h *ForwardHandler) ListNodes(c *gin.Context) {
 func (h *ForwardHandler) CreateNode(c *gin.Context) {
 	var req CreateNodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -125,20 +118,25 @@ func (h *ForwardHandler) CreateNode(c *gin.Context) {
 	if req.APIToken != "" {
 		node.APIToken = req.APIToken
 	} else {
-		node.APIToken = h.nodeService.GenerateAPIToken()
+		token, err := h.nodeService.GenerateAPIToken()
+		if err != nil {
+			panelError(c, err.Error())
+			return
+		}
+		node.APIToken = token
 	}
 
 	if err := h.validateScopedNodeInventory(c, node); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	if err := h.nodeService.Create(node); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": node})
+	panelSuccess(c, node)
 }
 
 // GetNode godoc
@@ -159,7 +157,7 @@ func (h *ForwardHandler) GetNode(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": node})
+	panelSuccess(c, node)
 }
 
 // UpdateNode godoc
@@ -184,7 +182,7 @@ func (h *ForwardHandler) UpdateNode(c *gin.Context) {
 
 	var req UpdateNodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -230,16 +228,16 @@ func (h *ForwardHandler) UpdateNode(c *gin.Context) {
 	}
 
 	if err := h.validateScopedNodeInventory(c, node); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	if err := h.nodeService.Update(node); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": node})
+	panelSuccess(c, node)
 }
 
 // DeleteNode godoc
@@ -261,11 +259,11 @@ func (h *ForwardHandler) DeleteNode(c *gin.Context) {
 	}
 
 	if err := h.nodeService.Delete(node.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	panelSuccess(c, "deleted")
 }
 
 // CheckNode godoc
@@ -288,11 +286,11 @@ func (h *ForwardHandler) CheckNode(c *gin.Context) {
 
 	result, err := h.nodeService.HealthCheck(c.Request.Context(), node.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	panelSuccess(c, result)
 }
 
 // ToggleNode godoc
@@ -312,7 +310,7 @@ func (h *ForwardHandler) CheckNode(c *gin.Context) {
 func (h *ForwardHandler) ToggleNode(c *gin.Context) {
 	var req ToggleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -330,11 +328,11 @@ func (h *ForwardHandler) ToggleNode(c *gin.Context) {
 	}
 
 	if err := h.nodeService.Update(node); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "updated"})
+	panelSuccess(c, "updated")
 }
 
 // ========== 转发规则管理 ==========
@@ -366,17 +364,11 @@ func (h *ForwardHandler) ListRules(c *gin.Context) {
 
 	rules, total, err := h.ruleService.List(page, pageSize, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":      rules,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
-		},
+	panelSuccess(c, gin.H{
 		"list":      rules,
 		"total":     total,
 		"page":      page,
@@ -399,7 +391,7 @@ func (h *ForwardHandler) ListRules(c *gin.Context) {
 func (h *ForwardHandler) CreateRule(c *gin.Context) {
 	var req CreateRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -425,11 +417,11 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 	}
 
 	if err := h.ruleService.Create(rule); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": rule})
+	panelSuccess(c, rule)
 }
 
 // GetRule godoc
@@ -447,17 +439,17 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 func (h *ForwardHandler) GetRule(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 
 	rule, err := h.ruleService.GetByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})
+		panelError(c, "rule not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": rule})
+	panelSuccess(c, rule)
 }
 
 // UpdateRule godoc
@@ -477,19 +469,19 @@ func (h *ForwardHandler) GetRule(c *gin.Context) {
 func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 
 	rule, err := h.ruleService.GetByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})
+		panelError(c, "rule not found")
 		return
 	}
 
 	var req UpdateRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -529,11 +521,11 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 	}
 
 	if err := h.ruleService.Update(rule); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": rule})
+	panelSuccess(c, rule)
 }
 
 // DeleteRule godoc
@@ -551,16 +543,16 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 func (h *ForwardHandler) DeleteRule(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 
 	if err := h.ruleService.Delete(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	panelSuccess(c, "deleted")
 }
 
 // ToggleRule godoc
@@ -579,22 +571,22 @@ func (h *ForwardHandler) DeleteRule(c *gin.Context) {
 func (h *ForwardHandler) ToggleRule(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 
 	var req ToggleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	if err := h.ruleService.Toggle(uint(id), req.Enabled); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "updated"})
+	panelSuccess(c, "updated")
 }
 
 // ========== 统计 ==========
@@ -612,12 +604,12 @@ func (h *ForwardHandler) GetForwardStats(c *gin.Context) {
 	// 获取中转节点统计
 	relayNodes, err := h.nodeService.GetByType(model.ForwardNodeTypeRelay)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get relay nodes"})
+		panelError(c, "failed to get relay nodes")
 		return
 	}
 	exitNodes, err := h.nodeService.GetByType(model.ForwardNodeTypeExit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get exit nodes"})
+		panelError(c, "failed to get exit nodes")
 		return
 	}
 
@@ -640,7 +632,7 @@ func (h *ForwardHandler) GetForwardStats(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	panelSuccess(c, gin.H{
 		"relay_nodes":    len(relayNodes),
 		"exit_nodes":     len(exitNodes),
 		"online_relay":   onlineRelay,
@@ -667,11 +659,11 @@ func (h *ForwardHandler) GetUserRules(c *gin.Context) {
 
 	rules, err := h.ruleService.GetUserRules(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": rules})
+	panelSuccess(c, rules)
 }
 
 // CreateUserRule godoc
@@ -690,17 +682,17 @@ func (h *ForwardHandler) CreateUserRule(c *gin.Context) {
 
 	var req service.CreateRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	rule, err := h.ruleService.CreateRuleForUser(userID, &req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": rule})
+	panelSuccess(c, rule)
 }
 
 // ========== 请求结构体 ==========
@@ -791,7 +783,7 @@ type TestGostConnectionRequest struct {
 func (h *ForwardHandler) TestGostConnection(c *gin.Context) {
 	var req TestGostConnectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -802,7 +794,7 @@ func (h *ForwardHandler) TestGostConnection(c *gin.Context) {
 
 	ctx := context.Background()
 	if err := client.HealthCheck(ctx); err != nil {
-		c.JSON(http.StatusOK, gin.H{
+		panelSuccess(c, gin.H{
 			"success": false,
 			"message": err.Error(),
 		})
@@ -812,14 +804,14 @@ func (h *ForwardHandler) TestGostConnection(c *gin.Context) {
 	// 获取服务列表验证
 	services, err := client.GetServices(ctx)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
+		panelSuccess(c, gin.H{
 			"success": false,
 			"message": "API connected but failed to get services: " + err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	panelSuccess(c, gin.H{
 		"success":       true,
 		"message":       "Connection successful",
 		"service_count": services.Count,
@@ -846,11 +838,11 @@ func (h *ForwardHandler) SyncNodeStats(c *gin.Context) {
 	ctx := context.Background()
 	totals, err := h.gostManager.GetNodeTrafficTotals(ctx, node.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	panelSuccess(c, gin.H{
 		"message": "Stats synced",
 		"stats":   totals,
 	})
@@ -859,7 +851,7 @@ func (h *ForwardHandler) SyncNodeStats(c *gin.Context) {
 func (h *ForwardHandler) loadScopedForwardNode(c *gin.Context, notFoundMessage string) (*model.ForwardNode, bool) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return nil, false
 	}
 
@@ -872,7 +864,7 @@ func (h *ForwardHandler) loadScopedForwardNode(c *gin.Context, notFoundMessage s
 		node, err = h.nodeService.GetByIDForInventoryScope(uint(id), scope)
 	}
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": notFoundMessage})
+		panelError(c, notFoundMessage)
 		return nil, false
 	}
 

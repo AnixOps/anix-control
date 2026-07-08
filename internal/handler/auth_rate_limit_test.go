@@ -19,10 +19,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func boolPtr(v bool) *bool {
-	return &v
-}
-
 func setupAuthRateLimitTest(t *testing.T, cfg *config.Config) (*gin.Engine, func()) {
 	gin.SetMode(gin.TestMode)
 	cache.InitMemory()
@@ -52,7 +48,7 @@ func setupAuthRateLimitTest(t *testing.T, cfg *config.Config) (*gin.Engine, func
 	router.POST("/api/v2/login", authHandler.Login)
 
 	cleanup := func() {
-		database.Close()
+		require.NoError(t, database.Close())
 		service.ResetLoginRateLimiterForTest()
 	}
 	return router, cleanup

@@ -3,6 +3,7 @@ package local
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -19,13 +20,12 @@ import (
 
 // TestSuite 鏈湴娴嬭瘯濂椾欢
 type TestSuite struct {
-	t            *testing.T
-	env          *Environment
-	configDir    string
-	serverBinary string
-	xrayPath     string
-	mihomoPath   string
-	echoServer   *echo.EchoServer
+	t          *testing.T
+	env        *Environment
+	configDir  string
+	xrayPath   string
+	mihomoPath string
+	echoServer *echo.EchoServer
 }
 
 // NewTestSuite 鍒涘缓娴嬭瘯濂椾欢
@@ -35,6 +35,24 @@ func NewTestSuite(t *testing.T) *TestSuite {
 		t:         t,
 		env:       NewEnvironment(configDir),
 		configDir: configDir,
+	}
+}
+
+func closeResponseBody(t testing.TB, resp *http.Response) {
+	t.Helper()
+	require.NoError(t, resp.Body.Close())
+}
+
+func stopCommand(t testing.TB, name string, cmd *exec.Cmd) {
+	t.Helper()
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		t.Logf("send interrupt to %s process: %v", name, err)
+	}
+	if err := cmd.Wait(); err != nil {
+		t.Logf("wait for %s process: %v", name, err)
 	}
 }
 
@@ -69,8 +87,10 @@ func (s *TestSuite) StartEchoServer(ctx context.Context) error {
 
 // StopEchoServer 鍋滄 Echo 鏈嶅姟鍣?
 func (s *TestSuite) StopEchoServer(ctx context.Context) {
+	s.t.Helper()
 	if s.echoServer != nil {
-		s.echoServer.Stop(ctx)
+		require.NoError(s.t, s.echoServer.Stop(ctx))
+		s.echoServer = nil
 	}
 }
 
@@ -166,12 +186,7 @@ func (s *TestSuite) RunLocalTestWithEcho(ctx context.Context, protocol string, u
 	if err := serverCmd.Start(); err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
-	defer func() {
-		if serverCmd.Process != nil {
-			serverCmd.Process.Signal(os.Interrupt)
-			serverCmd.Wait()
-		}
-	}()
+	defer stopCommand(s.t, "server", serverCmd)
 
 	// 绛夊緟鏈嶅姟绔惎鍔?
 	if err := WaitForPort(serverPort, 10*time.Second); err != nil {
@@ -188,12 +203,7 @@ func (s *TestSuite) RunLocalTestWithEcho(ctx context.Context, protocol string, u
 	if err := clientCmd.Start(); err != nil {
 		return fmt.Errorf("failed to start client: %w", err)
 	}
-	defer func() {
-		if clientCmd.Process != nil {
-			clientCmd.Process.Signal(os.Interrupt)
-			clientCmd.Wait()
-		}
-	}()
+	defer stopCommand(s.t, "client", clientCmd)
 
 	// 绛夊緟瀹㈡埛绔惎鍔?
 	if err := WaitForPort(clientPort, 10*time.Second); err != nil {
@@ -245,7 +255,7 @@ func (s *TestSuite) testThroughProxy(ctx context.Context, proxyURL, targetURL st
 }
 
 // testWithHTTPClient 浣跨敤 Go HTTP 瀹㈡埛绔祴璇?
-func (s *TestSuite) testWithHTTPClient(ctx context.Context, proxyURL, targetURL string) error {
+func (s *TestSuite) testWithHTTPClient(ctx context.Context, proxyURL, targetURL string) (err error) {
 	// 鍒涘缓 SOCKS5 鎷ㄥ彿鍣ㄩ渶瑕?golang.org/x/net/proxy
 	// 杩欓噷浣跨敤绠€鍗曠殑鏂瑰紡锛氭鏌ョ鍙ｆ槸鍚﹀彲杈?
 	client := &http.Client{
@@ -264,7 +274,11 @@ func (s *TestSuite) testWithHTTPClient(ctx context.Context, proxyURL, targetURL 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close proxy test response: %w", closeErr))
+		}
+	}()
 
 	return nil
 }
@@ -276,7 +290,8 @@ func (s *TestSuite) Teardown() {
 
 // TestEnvironment 娴嬭瘯鐜鍒涘缓
 func TestEnvironment(t *testing.T) {
-	env := NewEnvironment(t.TempDir())
+	configDir := filepath.Join(t.TempDir(), "config")
+	env := NewEnvironment(configDir)
 
 	ctx := context.Background()
 	err := env.Setup(ctx, "shadowsocks")
@@ -285,6 +300,12 @@ func TestEnvironment(t *testing.T) {
 	assert.Greater(t, env.ServerPort(), 0)
 	assert.Greater(t, env.ClientPort(), 0)
 	assert.NotEqual(t, env.ServerPort(), env.ClientPort())
+
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(configDir)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o750), info.Mode().Perm())
+	}
 
 	env.Teardown()
 }
@@ -342,6 +363,26 @@ func TestWaitForPort(t *testing.T) {
 	err := WaitForPort(59999, 1*time.Second)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "timeout")
+}
+
+func TestResolveServerBinary(t *testing.T) {
+	t.Run("allows reviewed xray binary names", func(t *testing.T) {
+		path, err := resolveServerBinary("xray", filepath.Join(t.TempDir(), "xray"))
+		require.NoError(t, err)
+		assert.Equal(t, "xray", filepath.Base(path))
+	})
+
+	t.Run("allows reviewed mihomo binary aliases", func(t *testing.T) {
+		path, err := resolveServerBinary("mihomo", filepath.Join(t.TempDir(), "clash-meta"))
+		require.NoError(t, err)
+		assert.Equal(t, "clash-meta", filepath.Base(path))
+	})
+
+	t.Run("rejects unexpected binary names", func(t *testing.T) {
+		_, err := resolveServerBinary("xray", filepath.Join(t.TempDir(), "sh"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not allowed")
+	})
 }
 
 // TestLocalServer 鏈湴鏈嶅姟鍣ㄦ祴璇?
@@ -497,6 +538,12 @@ func TestSaveConfig(t *testing.T) {
 	readData, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, data, readData)
+
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(path)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	}
 }
 
 // TestLocalWithEchoServer 浣跨敤 Echo 鏈嶅姟鍣ㄧ殑鏈湴娴嬭瘯
@@ -593,14 +640,14 @@ func TestEchoServerIntegration(t *testing.T) {
 	// 鐩存帴娴嬭瘯 Echo 鏈嶅姟鍣?
 	resp, err := http.Get(suite.EchoServerURL() + "/ping")
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer closeResponseBody(t, resp)
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// 娴嬭瘯 /generate_204
 	resp2, err := http.Get(suite.EchoServerURL() + "/generate_204")
 	require.NoError(t, err)
-	defer resp2.Body.Close()
+	defer closeResponseBody(t, resp2)
 
 	assert.Equal(t, http.StatusNoContent, resp2.StatusCode)
 }

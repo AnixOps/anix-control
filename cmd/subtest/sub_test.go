@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,12 +14,12 @@ import (
 
 func TestGenerateVLESSLink_None(t *testing.T) {
 	node := TestNode{
-		Name:     "test-node",
-		Type:     "vless",
-		Server:   "127.0.0.1",
-		Port:     443,
-		UUID:     "test-uuid",
-		Network:  "tcp",
+		Name:    "test-node",
+		Type:    "vless",
+		Server:  "127.0.0.1",
+		Port:    443,
+		UUID:    "test-uuid",
+		Network: "tcp",
 	}
 	link := generateVLESSLink(node, "test-uuid")
 
@@ -135,7 +136,7 @@ func TestGenerateVMessLink_WithTLS(t *testing.T) {
 		TLS:        true,
 		ServerName: "tls.example.com",
 		WSOpts: &WSOpts{
-			Path: "/path",
+			Path:    "/path",
 			Headers: map[string]string{"Host": "tls.example.com"},
 		},
 	}
@@ -210,7 +211,7 @@ func TestParseVLESSLink(t *testing.T) {
 
 func TestParseVMessLink(t *testing.T) {
 	cfg := map[string]any{
-		"v":  "2", "ps": "test", "add": "127.0.0.1",
+		"v": "2", "ps": "test", "add": "127.0.0.1",
 		"port": 8080, "id": "uuid", "aid": 0,
 	}
 	jsonData, _ := json.Marshal(cfg)
@@ -240,13 +241,13 @@ func TestGenerateClashSubscription(t *testing.T) {
 		Groups: map[string][]TestNode{
 			"default": {
 				{
-					Name:     "node-a",
-					Type:     "vless",
-					Server:   "127.0.0.1",
-					Port:     443,
-					UUID:     "{{UUID}}",
-					Network:  "tcp",
-					TLS:      true,
+					Name:       "node-a",
+					Type:       "vless",
+					Server:     "127.0.0.1",
+					Port:       443,
+					UUID:       "{{UUID}}",
+					Network:    "tcp",
+					TLS:        true,
 					ServerName: "example.com",
 				},
 			},
@@ -305,7 +306,46 @@ func TestParseLink_Unknown(t *testing.T) {
 }
 
 func TestGenerateSampleConfig(t *testing.T) {
+	t.Chdir(t.TempDir())
+
 	generateSampleConfig()
-	// Clean up
-	_ = os.Remove("config/examples/test_nodes.yaml")
+
+	dirInfo, err := os.Stat(filepath.Join("config", "examples"))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0), dirInfo.Mode().Perm()&0o027)
+
+	fileInfo, err := os.Stat(filepath.Join("config", "examples", "test_nodes.yaml"))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0), fileInfo.Mode().Perm()&0o077)
+}
+
+func TestResolveSubscriptionConfigPath(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "nodes.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("groups: {}\n"), 0o600))
+
+	resolved, err := resolveSubscriptionConfigPath(configPath)
+	require.NoError(t, err)
+	assert.Equal(t, configPath, resolved)
+
+	for _, path := range []string{
+		"",
+		dir,
+		filepath.Join(dir, "nodes.json"),
+		filepath.Join(dir, "missing.yaml"),
+	} {
+		t.Run(path, func(t *testing.T) {
+			_, err := resolveSubscriptionConfigPath(path)
+			assert.Error(t, err)
+		})
+	}
+}
+
+func TestReadSubscriptionConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nodes.yml")
+	require.NoError(t, os.WriteFile(path, []byte("groups: {}\n"), 0o600))
+
+	data, err := readSubscriptionConfig(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "groups")
 }

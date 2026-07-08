@@ -389,7 +389,7 @@ func NewSystemHandler() *SystemHandler {
 // GetSubscriptionSettings returns current subscription URL settings.
 func (h *SystemHandler) GetSubscriptionSettings(c *gin.Context) {
 	settings := service.GetSubscriptionSettings(h.configService, config.Get())
-	c.JSON(http.StatusOK, gin.H{"data": settings})
+	panelSuccess(c, settings)
 }
 
 // ========== 系统配置 ==========
@@ -643,7 +643,7 @@ func (h *SystemHandler) GetBackupConfig(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": backupConfigResponse(cfg)})
+	panelSuccess(c, backupConfigResponse(cfg))
 }
 
 // UpdateBackupConfig godoc
@@ -863,7 +863,7 @@ func (h *SystemHandler) GetBackupStats(c *gin.Context) {
 		stats["total_count"] = int64(0)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": stats})
+	panelSuccess(c, stats)
 }
 
 // DeleteBackup godoc
@@ -1210,7 +1210,7 @@ func (h *LoadBalancerHandler) GetLoadBalancerStats(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": stats})
+	panelSuccess(c, stats)
 }
 
 // RunHealthCheck godoc

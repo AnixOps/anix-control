@@ -13,7 +13,9 @@ import (
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
+	"github.com/anixops/v2board/internal/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"gorm.io/gorm"
@@ -28,6 +30,36 @@ type AgentHandlerTestSuite struct {
 	testNode2 *model.ForwardNode
 }
 
+func TestAgentWebSocketUpgraderOriginPolicy(t *testing.T) {
+	config.Set(nil)
+	defer config.Set(nil)
+
+	handler := &AgentHandler{
+		wsUpgrader: websocket.Upgrader{
+			CheckOrigin: utils.CheckWebSocketOrigin,
+		},
+	}
+
+	req := httptest.NewRequest("GET", "http://panel.example.com/api/v2/agent/ws", nil)
+	req.Header.Set("Origin", "https://evil.example.net")
+	assert.False(t, handler.wsUpgrader.CheckOrigin(req))
+
+	req = httptest.NewRequest("GET", "http://panel.example.com/api/v2/agent/ws", nil)
+	req.Header.Set("Origin", "https://panel.example.com")
+	assert.True(t, handler.wsUpgrader.CheckOrigin(req))
+
+	config.Set(&config.Config{
+		Server: config.ServerConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins: []string{"https://agent-admin.example.com"},
+			},
+		},
+	})
+	req = httptest.NewRequest("GET", "http://panel.example.com/api/v2/agent/ws", nil)
+	req.Header.Set("Origin", "https://agent-admin.example.com")
+	assert.True(t, handler.wsUpgrader.CheckOrigin(req))
+}
+
 func (s *AgentHandlerTestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
 
@@ -35,24 +67,24 @@ func (s *AgentHandlerTestSuite) SetupSuite() {
 	cache.InitMemory()
 
 	// 初始化数据库
-	database.Init(&config.DatabaseConfig{
+	s.Require().NoError(database.Init(&config.DatabaseConfig{
 		Driver:   "sqlite",
 		Database: ":memory:",
-	})
+	}))
 	s.db = database.Get()
 
 	// 自动迁移
-	s.db.AutoMigrate(
+	s.Require().NoError(s.db.AutoMigrate(
 		&model.ForwardNode{},
 		&model.ForwardRule{},
 		&model.ForwardRuntimeJob{},
 		&model.ForwardAgentBridgeTask{},
 		&model.AgentDiagnosticTask{},
-	)
+	))
 }
 
 func (s *AgentHandlerTestSuite) TearDownSuite() {
-	database.Close()
+	s.Require().NoError(database.Close())
 }
 
 func (s *AgentHandlerTestSuite) SetupTest() {
@@ -238,7 +270,7 @@ func (s *AgentHandlerTestSuite) TestAgentGetTasks() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
 	tasks := resp["tasks"].([]any)
 	assert.Equal(s.T(), 0, len(tasks)) // 目前返回空任务列表
 }
@@ -329,7 +361,7 @@ func (s *AgentHandlerTestSuite) TestGetMonitor_Success() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
 	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
 }
@@ -370,7 +402,7 @@ func (s *AgentHandlerTestSuite) TestGetTaskResult_Success() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
 	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), "task-xyz-1", data["task_id"])
 	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
@@ -412,7 +444,7 @@ func (s *AgentHandlerTestSuite) TestAgentGetForwardRules() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
 	data := resp["data"].([]any)
 	assert.GreaterOrEqual(s.T(), len(data), 0)
 }
@@ -430,7 +462,7 @@ func (s *AgentHandlerTestSuite) TestListAgents_Empty() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
 	// agents 可能为 nil 或空数组
 	agents, ok := resp["agents"].([]any)
 	if ok {
@@ -467,7 +499,7 @@ func (s *AgentHandlerTestSuite) TestListAgents_AfterRegister() {
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
 	var resp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
 	agents := resp["agents"].([]any)
 	assert.Equal(s.T(), 1, len(agents))
 

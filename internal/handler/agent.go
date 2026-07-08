@@ -15,9 +15,15 @@ import (
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/service"
+	"github.com/anixops/v2board/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
+)
+
+var (
+	agentWSReadTimeout  = 60 * time.Second
+	agentWSWriteTimeout = 10 * time.Second
 )
 
 // AgentHandler Agent 绠＄悊 API
@@ -63,12 +69,12 @@ type wsInboundEnvelope struct {
 }
 
 type wsOutboundEnvelope struct {
-	ID         string      `json:"id"`
-	Type       string      `json:"type"`
-	NodeID     uint        `json:"node_id"`
-	Timestamp  int64       `json:"timestamp"`
-	Payload    any `json:"payload,omitempty"`
-	RequireAck bool        `json:"require_ack,omitempty"`
+	ID         string `json:"id"`
+	Type       string `json:"type"`
+	NodeID     uint   `json:"node_id"`
+	Timestamp  int64  `json:"timestamp"`
+	Payload    any    `json:"payload,omitempty"`
+	RequireAck bool   `json:"require_ack,omitempty"`
 }
 
 type wsAckPayload struct {
@@ -103,9 +109,7 @@ func NewAgentHandler() *AgentHandler {
 		db:            db,
 		diagnosticSvc: service.NewAgentDiagnosticTaskService(db),
 		wsUpgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool {
-				return true
-			},
+			CheckOrigin: utils.CheckWebSocketOrigin,
 		},
 		ackTimeout: 3 * time.Second,
 		maxRetries: 2,
@@ -140,6 +144,47 @@ func (h *AgentHandler) verifyForwardNodeToken(nodeID uint, token string) (isForw
 	return false, nil
 }
 
+func prepareAgentWebSocket(conn *websocket.Conn) error {
+	if conn == nil {
+		return fmt.Errorf("ws connection not available")
+	}
+	conn.SetReadLimit(512 * 1024)
+	if err := refreshAgentWebSocketReadDeadline(conn); err != nil {
+		return err
+	}
+	conn.SetPongHandler(func(string) error {
+		return refreshAgentWebSocketReadDeadline(conn)
+	})
+	return nil
+}
+
+func refreshAgentWebSocketReadDeadline(conn *websocket.Conn) error {
+	return conn.SetReadDeadline(time.Now().Add(agentWSReadTimeout))
+}
+
+func readAgentWebSocketMessage(conn *websocket.Conn) ([]byte, error) {
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		return nil, err
+	}
+	if err := refreshAgentWebSocketReadDeadline(conn); err != nil {
+		return nil, err
+	}
+	return msg, nil
+}
+
+func writeAgentWebSocketJSON(agentConn *AgentConnection, payload any) error {
+	if agentConn == nil || agentConn.WsConn == nil {
+		return fmt.Errorf("ws connection not available")
+	}
+	agentConn.writeMu.Lock()
+	defer agentConn.writeMu.Unlock()
+	if err := agentConn.WsConn.SetWriteDeadline(time.Now().Add(agentWSWriteTimeout)); err != nil {
+		return err
+	}
+	return agentConn.WsConn.WriteJSON(payload)
+}
+
 // touchNodeOnline marks a node online in the table that owns it.
 func (h *AgentHandler) touchNodeOnline(nodeID uint, isForwardNode bool) {
 	if isForwardNode {
@@ -153,13 +198,6 @@ func (h *AgentHandler) touchNodeOnline(nodeID uint, isForwardNode bool) {
 		"status":        model.NodeStatusOnline,
 		"last_check_at": time.Now().Unix(),
 	})
-}
-
-// markNodeOnline marks a forward (relay) node online. Retained for the REST
-// forward-node register/report/heartbeat paths, which only deal with
-// forward nodes.
-func (h *AgentHandler) markNodeOnline(nodeID uint) {
-	h.touchNodeOnline(nodeID, true)
 }
 
 func (h *AgentHandler) updateConnectionLastSeen(nodeID uint) {
@@ -212,18 +250,18 @@ func (h *AgentHandler) authFromRequest(c *gin.Context) (*wsAuthInfo, bool, error
 }
 
 func (h *AgentHandler) authFromMessage(conn *websocket.Conn) (*wsAuthInfo, error) {
-	_, msg, err := conn.ReadMessage()
+	msg, err := readAgentWebSocketMessage(conn)
 	if err != nil {
 		return nil, err
 	}
 
 	var authMsg struct {
-		Type         string                 `json:"type"`
-		NodeID       uint                   `json:"node_id"`
-		Token        string                 `json:"token"`
-		Version      string                 `json:"version"`
+		Type         string         `json:"type"`
+		NodeID       uint           `json:"node_id"`
+		Token        string         `json:"token"`
+		Version      string         `json:"version"`
 		System       map[string]any `json:"system"`
-		Capabilities []string               `json:"capabilities"`
+		Capabilities []string       `json:"capabilities"`
 	}
 	if err := json.Unmarshal(msg, &authMsg); err != nil || authMsg.Type != "auth" {
 		return nil, fmt.Errorf("invalid auth")
@@ -324,21 +362,11 @@ func (h *AgentHandler) resolveAck(ack *wsAckPayload) {
 }
 
 func (h *AgentHandler) sendEnvelope(agentConn *AgentConnection, envelope *wsOutboundEnvelope) error {
-	if agentConn == nil || agentConn.WsConn == nil {
-		return fmt.Errorf("ws connection not available")
-	}
-	agentConn.writeMu.Lock()
-	defer agentConn.writeMu.Unlock()
-	return agentConn.WsConn.WriteJSON(envelope)
+	return writeAgentWebSocketJSON(agentConn, envelope)
 }
 
 func (h *AgentHandler) sendLegacyTask(agentConn *AgentConnection, task AgentTask) error {
-	if agentConn == nil || agentConn.WsConn == nil {
-		return fmt.Errorf("ws connection not available")
-	}
-	agentConn.writeMu.Lock()
-	defer agentConn.writeMu.Unlock()
-	return agentConn.WsConn.WriteJSON(map[string]any{
+	return writeAgentWebSocketJSON(agentConn, map[string]any{
 		"type": "task",
 		"task": task,
 	})
@@ -539,11 +567,11 @@ func (h *AgentHandler) AgentRegister(c *gin.Context) {
 
 // AgentRegisterRequest 娉ㄥ唽璇锋眰
 type AgentRegisterRequest struct {
-	NodeID       uint                   `json:"node_id" binding:"required,gt=0"`
-	Token        string                 `json:"token" binding:"required,min=1"`
-	Version      string                 `json:"version" binding:"omitempty,max=64"`
-	System       map[string]any         `json:"system"`
-	Capabilities []string               `json:"capabilities"`
+	NodeID       uint           `json:"node_id" binding:"required,gt=0"`
+	Token        string         `json:"token" binding:"required,min=1"`
+	Version      string         `json:"version" binding:"omitempty,max=64"`
+	System       map[string]any `json:"system"`
+	Capabilities []string       `json:"capabilities"`
 }
 
 // ========== Agent 蹇冭烦 ==========
@@ -571,9 +599,9 @@ func (h *AgentHandler) AgentHeartbeat(c *gin.Context) {
 
 // AgentHeartbeatRequest 蹇冭烦璇锋眰
 type AgentHeartbeatRequest struct {
-	NodeID    uint                   `json:"node_id" binding:"required,gt=0"`
-	Status    string                 `json:"status" binding:"omitempty,max=32"`
-	Resources map[string]any         `json:"resources"`
+	NodeID    uint           `json:"node_id" binding:"required,gt=0"`
+	Status    string         `json:"status" binding:"omitempty,max=32"`
+	Resources map[string]any `json:"resources"`
 }
 
 // ========== 浠诲姟绠＄悊 ==========
@@ -674,11 +702,11 @@ func (h *AgentHandler) pullBridgeTasks(nodeID uint) []AgentTask {
 
 // AgentTask 浠诲姟瀹氫箟
 type AgentTask struct {
-	ID      string                 `json:"id"`
-	Type    string                 `json:"type"`
-	Action  string                 `json:"action"`
+	ID      string         `json:"id"`
+	Type    string         `json:"type"`
+	Action  string         `json:"action"`
 	Params  map[string]any `json:"params"`
-	Timeout int                    `json:"timeout"`
+	Timeout int            `json:"timeout"`
 }
 
 // AgentReportResult godoc
@@ -752,16 +780,16 @@ func (h *AgentHandler) completeBridgeResult(result AgentTaskResult) (bool, bool,
 
 // AgentTaskResult 浠诲姟缁撴灉
 type AgentTaskResult struct {
-	TaskID    string      `json:"task_id" binding:"required"`
-	NodeID    uint        `json:"node_id,omitempty"`
-	Type      string      `json:"type,omitempty"`
-	Action    string      `json:"action,omitempty"`
-	Success   bool        `json:"success"`
-	Output    string      `json:"output"`
-	Error     string      `json:"error,omitempty"`
-	Data      any `json:"data,omitempty"`
-	Duration  int64       `json:"duration_ms"`
-	Timestamp time.Time   `json:"timestamp"`
+	TaskID    string    `json:"task_id" binding:"required"`
+	NodeID    uint      `json:"node_id,omitempty"`
+	Type      string    `json:"type,omitempty"`
+	Action    string    `json:"action,omitempty"`
+	Success   bool      `json:"success"`
+	Output    string    `json:"output"`
+	Error     string    `json:"error,omitempty"`
+	Data      any       `json:"data,omitempty"`
+	Duration  int64     `json:"duration_ms"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // ========== 鐩戞帶鏁版嵁 ==========
@@ -800,15 +828,15 @@ func (h *AgentHandler) AgentMonitor(c *gin.Context) {
 
 // AgentMonitorRequest 鐩戞帶璇锋眰
 type AgentMonitorRequest struct {
-	NodeID uint                   `json:"node_id" binding:"required"`
+	NodeID uint           `json:"node_id" binding:"required"`
 	System map[string]any `json:"system"`
 }
 
 // AgentMonitorSnapshot stores the latest monitor payload pushed by an agent node.
 type AgentMonitorSnapshot struct {
-	NodeID    uint                   `json:"node_id"`
+	NodeID    uint           `json:"node_id"`
 	System    map[string]any `json:"system"`
-	UpdatedAt time.Time              `json:"updated_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
 }
 
 // ========== WebSocket 杩炴帴 ==========
@@ -823,10 +851,18 @@ func (h *AgentHandler) AgentWebSocket(c *gin.Context) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("[WARN] agent ws: failed to close connection: %v", err)
+		}
+	}()
+	if err := prepareAgentWebSocket(conn); err != nil {
+		log.Printf("[WARN] agent ws: failed to prepare connection: %v", err)
+		return
+	}
 
 	// 绛夊緟璁よ瘉娑堟伅
-	_, msg, err := conn.ReadMessage()
+	msg, err := readAgentWebSocketMessage(conn)
 	if err != nil {
 		return
 	}
@@ -837,18 +873,21 @@ func (h *AgentHandler) AgentWebSocket(c *gin.Context) {
 		Token  string `json:"token"`
 	}
 	if err := json.Unmarshal(msg, &authMsg); err != nil || authMsg.Type != "auth" {
-		_ = conn.WriteJSON(map[string]string{"error": "invalid auth"})
+		agentConn := &AgentConnection{WsConn: conn}
+		_ = writeAgentWebSocketJSON(agentConn, map[string]string{"error": "invalid auth"})
 		return
 	}
 
 	// 楠岃瘉 Token
 	var node model.ForwardNode
 	if err := h.db.First(&node, authMsg.NodeID).Error; err != nil {
-		_ = conn.WriteJSON(map[string]string{"error": "node not found"})
+		agentConn := &AgentConnection{WsConn: conn}
+		_ = writeAgentWebSocketJSON(agentConn, map[string]string{"error": "node not found"})
 		return
 	}
 	if node.APIToken != authMsg.Token {
-		_ = conn.WriteJSON(map[string]string{"error": "invalid token"})
+		agentConn := &AgentConnection{WsConn: conn}
+		_ = writeAgentWebSocketJSON(agentConn, map[string]string{"error": "invalid token"})
 		return
 	}
 
@@ -860,11 +899,11 @@ func (h *AgentHandler) AgentWebSocket(c *gin.Context) {
 	}
 	h.connections.Store(authMsg.NodeID, agentConn)
 
-	_ = conn.WriteJSON(map[string]string{"type": "auth", "message": "connected"})
+	_ = writeAgentWebSocketJSON(agentConn, map[string]string{"type": "auth", "message": "connected"})
 
 	// 澶勭悊娑堟伅寰幆
 	for {
-		_, msg, err := conn.ReadMessage()
+		msg, err := readAgentWebSocketMessage(conn)
 		if err != nil {
 			break
 		}
@@ -897,12 +936,21 @@ func (h *AgentHandler) AgentWebSocketUnified(c *gin.Context) {
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("[WARN] agent ws: failed to close connection: %v", err)
+		}
+	}()
+	if err := prepareAgentWebSocket(conn); err != nil {
+		log.Printf("[WARN] agent ws: failed to prepare connection: %v", err)
+		return
+	}
 
 	if !hasHeaderAuth {
 		authInfo, err = h.authFromMessage(conn)
 		if err != nil {
-			_ = conn.WriteJSON(map[string]string{"error": err.Error()})
+			agentConn := &AgentConnection{WsConn: conn}
+			_ = writeAgentWebSocketJSON(agentConn, map[string]string{"error": err.Error()})
 			return
 		}
 	}
@@ -922,11 +970,11 @@ func (h *AgentHandler) AgentWebSocketUnified(c *gin.Context) {
 	defer h.failPendingAcksForNode(authInfo.NodeID, "agent websocket closed")
 
 	if !authInfo.FromHeaders {
-		_ = conn.WriteJSON(map[string]string{"type": "auth", "message": "connected"})
+		_ = writeAgentWebSocketJSON(agentConn, map[string]string{"type": "auth", "message": "connected"})
 	}
 
 	for {
-		_, msg, err := conn.ReadMessage()
+		msg, err := readAgentWebSocketMessage(conn)
 		if err != nil {
 			break
 		}
@@ -1053,11 +1101,11 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 
 // CreateTaskRequest 鍒涘缓浠诲姟璇锋眰
 type CreateTaskRequest struct {
-	NodeID  uint                   `json:"node_id" binding:"required"`
-	Type    string                 `json:"type" binding:"required"`
-	Action  string                 `json:"action" binding:"required"`
+	NodeID  uint           `json:"node_id" binding:"required"`
+	Type    string         `json:"type" binding:"required"`
+	Action  string         `json:"action" binding:"required"`
 	Params  map[string]any `json:"params"`
-	Timeout int                    `json:"timeout"`
+	Timeout int            `json:"timeout"`
 }
 
 // ListAgents godoc

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -17,12 +18,15 @@ import (
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/tests/testutil"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/crypto/bcrypt"
 )
 
 var (
 	dbInitOnce sync.Once
+	dbInitErr  error
+	testDBDir  string
 	testDBPath string
 )
 
@@ -38,20 +42,22 @@ func (s *ServiceTestSuite) SetupSuite() {
 
 	// 浣跨敤 sync.Once 纭繚鏁版嵁搴撳彧鍒濆鍖栦竴娆?
 	dbInitOnce.Do(func() {
-		// 浣跨敤鍥哄畾鐨勬祴璇曟暟鎹簱璺緞
-		tempDir := os.TempDir()
-		testDBPath = filepath.Join(tempDir, "v2board_service_test.db")
+		testDBDir, dbInitErr = os.MkdirTemp("", "v2board-service-test-*")
+		if dbInitErr != nil {
+			return
+		}
+		testDBPath = filepath.Join(testDBDir, "v2board_service_test.db")
 
-		// 鍒犻櫎鏃х殑娴嬭瘯鏁版嵁搴撴枃浠讹紙濡傛灉瀛樺湪锛?
-		os.Remove(testDBPath)
-
-		database.Init(&config.DatabaseConfig{
+		dbInitErr = database.Init(&config.DatabaseConfig{
 			Driver:   "sqlite",
 			Database: testDBPath,
 		})
+		if dbInitErr != nil {
+			return
+		}
 
 		// 鑷姩杩佺Щ鎵€鏈夋ā鍨?
-		database.AutoMigrate(
+		dbInitErr = database.AutoMigrate(
 			&model.User{},
 			&model.Plan{},
 			&model.Order{},
@@ -67,6 +73,7 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.ForwardTunnel{},
 			&model.ForwardUserTunnel{},
 			&model.Forward{},
+			&model.ForwardPortBinding{},
 			&model.ForwardRuntimeJob{},
 			&model.ForwardTrafficCursor{},
 			&model.ForwardCleanAgent{},
@@ -107,6 +114,7 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.StatServer{},
 		)
 	})
+	s.Require().NoError(dbInitErr)
 
 	// 娴嬭瘯閰嶇疆
 	s.cfg = &config.Config{
@@ -127,11 +135,29 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	// 娴嬭瘯瀹屾垚鍚庢竻鐞?
-	if testDBPath != "" {
-		os.Remove(testDBPath)
+	_ = database.Close()
+	cache.CloseMemory()
+	if testDBDir != "" {
+		if err := os.RemoveAll(testDBDir); err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "remove service test database dir: %v\n", err)
+			if code == 0 {
+				code = 1
+			}
+		}
 	}
 
 	os.Exit(code)
+}
+
+func TestServiceTestDatabasePathIsIsolated(t *testing.T) {
+	s := &ServiceTestSuite{}
+	s.SetT(t)
+	s.SetupSuite()
+
+	require.NotEmpty(t, testDBDir)
+	require.NotEmpty(t, testDBPath)
+	assert.True(t, strings.HasPrefix(filepath.Base(testDBDir), "v2board-service-test-"))
+	assert.Equal(t, testDBDir, filepath.Dir(testDBPath))
 }
 
 func (s *ServiceTestSuite) SetupTest() {
@@ -353,8 +379,7 @@ func (s *NodeServiceTestSuite) TestGetNode() {
 		Rate: 1.0,
 		Show: 1,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	// 鑾峰彇鑺傜偣
 	found, err := s.svc.GetNode(node.ID)
 	assert.NoError(s.T(), err)
@@ -375,8 +400,7 @@ func (s *NodeServiceTestSuite) TestUpdateNode() {
 		Rate: 1.0,
 		Show: 1,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	// 鏇存柊鑺傜偣
 	updates := map[string]any{
 		"name": "Updated Node",
@@ -391,6 +415,28 @@ func (s *NodeServiceTestSuite) TestUpdateNode() {
 	assert.Equal(s.T(), 2.0, found.Rate)
 }
 
+func (s *NodeServiceTestSuite) TestUpdateNodeClearsNodeCacheKey() {
+	node := &model.Node{
+		Name: "Update Cache Node",
+		Host: "192.168.1.33",
+		Port: 443,
+		Rate: 1.0,
+		Show: 1,
+	}
+	assert.NoError(s.T(), s.svc.CreateNode(node))
+
+	assert.NoError(s.T(), cache.Set(nodeCacheKey(node.ID), "stale-node", 0))
+	assert.NoError(s.T(), cache.Set(CacheKeyNodeList, "stale-list", 0))
+
+	err := s.svc.UpdateNode(node.ID, map[string]any{"name": "Updated Cache Node"})
+
+	assert.NoError(s.T(), err)
+	_, err = cache.Get(nodeCacheKey(node.ID))
+	assert.ErrorIs(s.T(), err, cache.ErrKeyNotFound)
+	_, err = cache.Get(CacheKeyNodeList)
+	assert.ErrorIs(s.T(), err, cache.ErrKeyNotFound)
+}
+
 func (s *NodeServiceTestSuite) TestDeleteNode() {
 	// 鍒涘缓鑺傜偣
 	node := &model.Node{
@@ -400,8 +446,7 @@ func (s *NodeServiceTestSuite) TestDeleteNode() {
 		Rate: 1.0,
 		Show: 1,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	// 鍒犻櫎鑺傜偣
 	err := s.svc.DeleteNode(node.ID)
 	assert.NoError(s.T(), err)
@@ -421,7 +466,7 @@ func (s *NodeServiceTestSuite) TestGetNodes() {
 			Rate: 1.0,
 			Show: 1,
 		}
-		s.svc.CreateNode(node)
+		assert.NoError(s.T(), s.svc.CreateNode(node))
 	}
 
 	// 鑾峰彇鍒楄〃
@@ -464,8 +509,7 @@ func (s *NodeServiceTestSuite) TestProtocolCRUD() {
 		Rate: 1.0,
 		Show: 1,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	// CreateNode auto-creates a default VMess protocol; delete it so we test CRUD cleanly
 	protocolsBefore, _ := s.svc.GetProtocols(node.ID)
 	for _, p := range protocolsBefore {
@@ -595,6 +639,26 @@ func (s *UserServiceTestSuite) TestUpdateTraffic() {
 	assert.Equal(s.T(), int64(2048), found.D)
 }
 
+func (s *UserServiceTestSuite) TestUpdateTrafficRejectsNegativeTraffic() {
+	user := &model.User{
+		Email:          "traffic-negative@example.com",
+		Password:       "hash",
+		Token:          "token-traffic-negative",
+		UUID:           "uuid-traffic-negative",
+		TransferEnable: 10737418240,
+		U:              100,
+		D:              200,
+	}
+	assert.NoError(s.T(), database.Get().Create(user).Error)
+
+	err := s.svc.UpdateTraffic(user.ID, -1, 20)
+	assert.ErrorIs(s.T(), err, ErrNegativeTraffic)
+
+	found, _ := s.svc.GetByID(user.ID)
+	assert.Equal(s.T(), int64(100), found.U)
+	assert.Equal(s.T(), int64(200), found.D)
+}
+
 func (s *UserServiceTestSuite) TestBatchUpdateTraffic() {
 	// 鍒涘缓澶氫釜鐢ㄦ埛
 	users := []*model.User{
@@ -619,6 +683,29 @@ func (s *UserServiceTestSuite) TestBatchUpdateTraffic() {
 
 	found2, _ := s.svc.GetByID(users[1].ID)
 	assert.Equal(s.T(), int64(2048), found2.U)
+}
+
+func (s *UserServiceTestSuite) TestBatchUpdateTrafficRejectsNegativeTrafficAtomically() {
+	users := []*model.User{
+		{Email: "batch-negative-1@example.com", Password: "hash", Token: "batch-negative-1", UUID: "batch-negative-1", TransferEnable: 10737418240, U: 10, D: 20},
+		{Email: "batch-negative-2@example.com", Password: "hash", Token: "batch-negative-2", UUID: "batch-negative-2", TransferEnable: 10737418240, U: 30, D: 40},
+	}
+	for _, u := range users {
+		assert.NoError(s.T(), database.Get().Create(u).Error)
+	}
+
+	err := s.svc.BatchUpdateTraffic(map[uint][2]int64{
+		users[0].ID: {100, 200},
+		users[1].ID: {-1, 300},
+	})
+	assert.ErrorIs(s.T(), err, ErrNegativeTraffic)
+
+	found1, _ := s.svc.GetByID(users[0].ID)
+	found2, _ := s.svc.GetByID(users[1].ID)
+	assert.Equal(s.T(), int64(10), found1.U)
+	assert.Equal(s.T(), int64(20), found1.D)
+	assert.Equal(s.T(), int64(30), found2.U)
+	assert.Equal(s.T(), int64(40), found2.D)
 }
 
 func (s *UserServiceTestSuite) TestBanUnban() {
@@ -720,8 +807,7 @@ func (s *PlanServiceTestSuite) TestGetPlan() {
 		MonthPrice:     &monthPrice,
 		Show:           1,
 	}
-	s.svc.Create(plan)
-
+	assert.NoError(s.T(), s.svc.Create(plan))
 	found, err := s.svc.Get(plan.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "Get Test Plan", found.Name)
@@ -742,8 +828,7 @@ func (s *PlanServiceTestSuite) TestUpdatePlan() {
 		MonthPrice:     &monthPrice,
 		Show:           1,
 	}
-	s.svc.Create(plan)
-
+	assert.NoError(s.T(), s.svc.Create(plan))
 	plan.Name = "Updated Plan"
 	plan.TransferEnable = 100
 	err := s.svc.Update(plan)
@@ -763,8 +848,7 @@ func (s *PlanServiceTestSuite) TestDeletePlan() {
 		MonthPrice:     &monthPrice,
 		Show:           1,
 	}
-	s.svc.Create(plan)
-
+	assert.NoError(s.T(), s.svc.Create(plan))
 	err := s.svc.Delete(plan.ID)
 	assert.NoError(s.T(), err)
 
@@ -782,7 +866,7 @@ func (s *PlanServiceTestSuite) TestListPlans() {
 			MonthPrice:     &monthPrice,
 			Show:           1,
 		}
-		s.svc.Create(plan)
+		assert.NoError(s.T(), s.svc.Create(plan))
 	}
 
 	list, err := s.svc.List()
@@ -805,8 +889,7 @@ func (s *PlanServiceTestSuite) TestAssignToUser() {
 		MonthPrice:     &monthPrice,
 		Show:           1,
 	}
-	s.svc.Create(plan)
-
+	assert.NoError(s.T(), s.svc.Create(plan))
 	// 鍒涘缓鐢ㄦ埛
 	user := &model.User{
 		Email:          "planuser@example.com",
@@ -877,7 +960,7 @@ func (s *OrderServiceTestSuite) SetupTest() {
 		OnetimePrice:   &onetimePrice,
 		Show:           1,
 	}
-	s.planSvc.Create(plan)
+	assert.NoError(s.T(), s.planSvc.Create(plan))
 	s.testPlan = plan
 }
 
@@ -1007,11 +1090,12 @@ func (s *OrderServiceTestSuite) TestCancelOrder() {
 func (s *OrderServiceTestSuite) TestGetUserOrders() {
 	// 鍒涘缓澶氫釜璁㈠崟
 	for i := 0; i < 3; i++ {
-		s.svc.Create(CreateOrderParams{
+		_, err := s.svc.Create(CreateOrderParams{
 			UserID: s.testUser.ID,
 			PlanID: s.testPlan.ID,
 			Period: "month",
 		})
+		assert.NoError(s.T(), err)
 	}
 
 	result, err := s.svc.GetUserOrders(s.testUser.ID, 1, 10)
@@ -1022,11 +1106,12 @@ func (s *OrderServiceTestSuite) TestGetUserOrders() {
 
 func (s *OrderServiceTestSuite) TestGetStats() {
 	// 鍒涘缓鍑犱釜璁㈠崟
-	s.svc.Create(CreateOrderParams{
+	_, err := s.svc.Create(CreateOrderParams{
 		UserID: s.testUser.ID,
 		PlanID: s.testPlan.ID,
 		Period: "month",
 	})
+	assert.NoError(s.T(), err)
 
 	stats, err := s.svc.GetStats()
 	assert.NoError(s.T(), err)
@@ -1065,7 +1150,8 @@ func (s *StatsServiceTestSuite) SetupTest() {
 func (s *StatsServiceTestSuite) TestGetDashboardStats() {
 	// 鍒涘缓涓€浜涚敤鎴?
 	for i := 0; i < 3; i++ {
-		s.authSvc.Register(fmt.Sprintf("stats%d@example.com", i), "password123", s.cfg)
+		_, _, err := s.authSvc.Register(fmt.Sprintf("stats%d@example.com", i), "password123", s.cfg)
+		assert.NoError(s.T(), err)
 	}
 
 	stats, err := s.svc.GetDashboardStats(false)
@@ -1095,12 +1181,10 @@ func (s *StatsServiceTestSuite) TestGetUserSubscription() {
 		MonthPrice:     &monthPrice,
 		Show:           1,
 	}
-	s.planSvc.Create(plan)
-
+	assert.NoError(s.T(), s.planSvc.Create(plan))
 	// 鍒嗛厤濂楅缁欑敤鎴?
 	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
-	s.planSvc.AssignToUser(plan.ID, user.ID, &expireAt)
-
+	assert.NoError(s.T(), s.planSvc.AssignToUser(plan.ID, user.ID, &expireAt))
 	sub, err := s.svc.GetUserSubscription(user.ID, false)
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), sub)
@@ -1137,12 +1221,25 @@ func (s *StatsServiceTestSuite) TestInvalidateUserCache() {
 	_, user, _ := s.authSvc.Register("cacheuser@example.com", "password123", s.cfg)
 
 	// 鑾峰彇璁㈤槄锛堜細缂撳瓨锛?
-	s.svc.GetUserSubscription(user.ID, false)
+	_, err := s.svc.GetUserSubscription(user.ID, false)
+	assert.NoError(s.T(), err)
 
 	// 浣跨紦瀛樺け鏁?
 	s.svc.InvalidateUserCache(user.ID)
 
 	// 楠岃瘉缂撳瓨宸插垹闄?
+	exists := cache.Exists(fmt.Sprintf("%s%d", CacheKeyUserSubscription, user.ID))
+	assert.False(s.T(), exists)
+}
+
+func (s *StatsServiceTestSuite) TestInvalidateUserCacheWithError() {
+	_, user, _ := s.authSvc.Register("cacheuser-explicit@example.com", "password123", s.cfg)
+	_, err := s.svc.GetUserSubscription(user.ID, false)
+	assert.NoError(s.T(), err)
+
+	err = s.svc.InvalidateUserCacheWithError(user.ID)
+
+	assert.NoError(s.T(), err)
 	exists := cache.Exists(fmt.Sprintf("%s%d", CacheKeyUserSubscription, user.ID))
 	assert.False(s.T(), exists)
 }
@@ -1203,8 +1300,8 @@ func (s *StatsServiceTestSuite) TestGetHourlyTraffic_BucketsAndFillsZero() {
 		{UserID: 1, ServerID: 1, ServerType: "node", U: 1073741824, D: 0, Rate: 2.0, LogAt: currentHour + 60},
 		// 当前小时再加一条: (1GB+0)*1 = 1073741824 -> 当前小时合计 3221225472
 		{UserID: 2, ServerID: 1, ServerType: "node", U: 1073741824, D: 0, Rate: 1.0, LogAt: currentHour + 120},
-		// 1 小时前: (1000+0)*1 = 1000
-		{UserID: 1, ServerID: 1, ServerType: "node", U: 1000, D: 0, Rate: 1.0, LogAt: oneHourAgo + 30},
+		// 1 小时前: rate=0 兼容旧异常日志, 应按 1 倍计费 -> 1000
+		{UserID: 1, ServerID: 1, ServerType: "node", U: 1000, D: 0, Rate: 0, LogAt: oneHourAgo + 30},
 		// 3 小时前: (0+400)*1 = 400
 		{UserID: 1, ServerID: 1, ServerType: "node", U: 0, D: 400, Rate: 1.0, LogAt: threeHoursAgo + 30},
 		// 超窗口: 应被排除
@@ -1246,6 +1343,70 @@ func (s *StatsServiceTestSuite) TestGetHourlyTraffic_BucketsAndFillsZero() {
 	assert.Equal(s.T(), int64(0), byHourU2[threeHoursAgo])        // threeHoursAgo 是 user1 的
 }
 
+func (s *StatsServiceTestSuite) TestTrafficAggregatesSanitizeDirtyLogsAndFractionalRate() {
+	db := database.Get()
+	now := time.Now()
+	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
+
+	user := &model.User{Email: "dirty-traffic@example.com", Token: "dirty-traffic-token", UUID: "dirty-traffic-uuid"}
+	assert.NoError(s.T(), db.Create(user).Error)
+
+	logs := []model.TrafficLog{
+		// 负 upload 是历史脏数据, 查询层应按 0 处理: 0 + 200
+		{UserID: user.ID, ServerID: 1, ServerType: "node", U: -100, D: 200, Rate: 1, LogAt: currentHour + 10},
+		// 负 rate 是历史脏数据, 查询层应按 1 倍处理: 100 + 100
+		{UserID: user.ID, ServerID: 1, ServerType: "node", U: 100, D: 100, Rate: -2, LogAt: currentHour + 20},
+		// 小数 rate 统一向下取整: 3 * 0.5 = 1.5 -> 1
+		{UserID: user.ID, ServerID: 1, ServerType: "node", U: 3, D: 0, Rate: 0.5, LogAt: currentHour + 30},
+	}
+	for i := range logs {
+		assert.NoError(s.T(), db.Create(&logs[i]).Error)
+	}
+
+	series, err := s.svc.GetHourlyTraffic(1, user.ID)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), series, 1)
+	assert.Equal(s.T(), int64(401), series[0].Traffic)
+
+	ranking, err := s.svc.GetUserTrafficRanking(24, 10, false)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), ranking, 1)
+	assert.Equal(s.T(), user.ID, ranking[0].UserID)
+	assert.Equal(s.T(), int64(401), ranking[0].Traffic)
+
+	stats, err := s.svc.fetchDashboardFromDB()
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), int64(401), stats.TodayTraffic)
+}
+
+func (s *StatsServiceTestSuite) TestTrafficAggregatesExcludeFutureHourLogs() {
+	db := database.Get()
+	now := time.Now()
+	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
+	nextHour := currentHour + hourSeconds
+
+	user := &model.User{Email: "future-traffic@example.com", Token: "future-traffic-token", UUID: "future-traffic-uuid"}
+	assert.NoError(s.T(), db.Create(user).Error)
+
+	logs := []model.TrafficLog{
+		{UserID: user.ID, ServerID: 1, ServerType: "node", U: 100, D: 200, Rate: 1, LogAt: currentHour + 10},
+		{UserID: user.ID, ServerID: 1, ServerType: "node", U: 9999, D: 9999, Rate: 1, LogAt: nextHour + 10},
+	}
+	for i := range logs {
+		assert.NoError(s.T(), db.Create(&logs[i]).Error)
+	}
+
+	series, err := s.svc.GetHourlyTraffic(1, user.ID)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), series, 1)
+	assert.Equal(s.T(), int64(300), series[0].Traffic)
+
+	ranking, err := s.svc.GetUserTrafficRanking(24, 10, false)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), ranking, 1)
+	assert.Equal(s.T(), int64(300), ranking[0].Traffic)
+}
+
 // TestGetHourlyTraffic_NoLogsAllZero 无日志时返回全零序列, 长度等于请求小时数
 func (s *StatsServiceTestSuite) TestGetHourlyTraffic_NoLogsAllZero() {
 	series, err := s.svc.GetHourlyTraffic(24, 0)
@@ -1283,8 +1444,8 @@ func (s *StatsServiceTestSuite) TestGetUserTrafficRanking() {
 	logs := []model.TrafficLog{
 		// u1: (1GB+1GB)*1 = 2147483648
 		{UserID: u1.ID, ServerID: 1, ServerType: "node", U: 1073741824, D: 1073741824, Rate: 1.0, LogAt: currentHour + 10},
-		// u2: (1GB+0)*1 = 1073741824
-		{UserID: u2.ID, ServerID: 1, ServerType: "node", U: 1073741824, D: 0, Rate: 1.0, LogAt: currentHour + 20},
+		// u2: rate=0 兼容旧异常日志, 按 1 倍计费 -> 1073741824
+		{UserID: u2.ID, ServerID: 1, ServerType: "node", U: 1073741824, D: 0, Rate: 0, LogAt: currentHour + 20},
 		// u2 超窗口的旧数据, 应被排除
 		{UserID: u2.ID, ServerID: 1, ServerType: "node", U: 9999999, D: 0, Rate: 1.0, LogAt: outOfRange},
 	}
@@ -1292,7 +1453,7 @@ func (s *StatsServiceTestSuite) TestGetUserTrafficRanking() {
 		assert.NoError(s.T(), db.Create(&logs[i]).Error)
 	}
 
-	ranking, err := s.svc.GetUserTrafficRanking(168, 10)
+	ranking, err := s.svc.GetUserTrafficRanking(168, 10, false)
 	assert.NoError(s.T(), err)
 	assert.Len(s.T(), ranking, 2)
 	// 倒序: u1 在前
@@ -1303,10 +1464,37 @@ func (s *StatsServiceTestSuite) TestGetUserTrafficRanking() {
 	assert.Equal(s.T(), int64(1073741824), ranking[1].Traffic) // 超窗口数据被排除
 
 	// limit 生效
-	top1, err := s.svc.GetUserTrafficRanking(168, 1)
+	top1, err := s.svc.GetUserTrafficRanking(168, 1, false)
 	assert.NoError(s.T(), err)
 	assert.Len(s.T(), top1, 1)
 	assert.Equal(s.T(), u1.ID, top1[0].UserID)
+}
+
+// TestGetUserTrafficRanking_IncludeZeroUsers 验证后台筛选用户列表可包含没有区间流量的用户
+func (s *StatsServiceTestSuite) TestGetUserTrafficRanking_IncludeZeroUsers() {
+	db := database.Get()
+	now := time.Now()
+	currentHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local).Unix()
+
+	active := &model.User{Email: "active-traffic@example.com", Token: "traffic-active", UUID: "traffic-active-uuid"}
+	zero := &model.User{Email: "zero-traffic@example.com", Token: "traffic-zero", UUID: "traffic-zero-uuid"}
+	assert.NoError(s.T(), db.Create(active).Error)
+	assert.NoError(s.T(), db.Create(zero).Error)
+	assert.NoError(s.T(), db.Create(&model.TrafficLog{
+		UserID: active.ID, ServerID: 1, ServerType: "node", U: 2048, D: 1024, Rate: 1.0, LogAt: currentHour + 10,
+	}).Error)
+
+	ranking, err := s.svc.GetUserTrafficRanking(24, 100, true)
+	assert.NoError(s.T(), err)
+
+	byUser := make(map[uint]UserTrafficRank, len(ranking))
+	for _, item := range ranking {
+		byUser[item.UserID] = item
+	}
+	assert.Equal(s.T(), int64(3072), byUser[active.ID].Traffic)
+	assert.Equal(s.T(), "active-traffic@example.com", byUser[active.ID].Email)
+	assert.Equal(s.T(), int64(0), byUser[zero.ID].Traffic)
+	assert.Equal(s.T(), "zero-traffic@example.com", byUser[zero.ID].Email)
 }
 
 func TestStatsService(t *testing.T) {
@@ -1433,7 +1621,7 @@ func (s *MFAServiceTestSuite) TestRecordLoginAttempt() {
 func (s *MFAServiceTestSuite) TestCheckBruteForce() {
 	// Record some failed attempts
 	for i := 0; i < 3; i++ {
-		s.svc.RecordLoginAttempt(s.testUser.ID, "192.168.1.1", "TestAgent", false, "totp")
+		assert.NoError(s.T(), s.svc.RecordLoginAttempt(s.testUser.ID, "192.168.1.1", "TestAgent", false, "totp"))
 	}
 
 	blocked, err := s.svc.CheckBruteForce(s.testUser.ID, 3, time.Hour)
@@ -1486,8 +1674,7 @@ func (s *ForwardNodeServiceTestSuite) TestGetByID() {
 		Port:    443,
 		Enabled: true,
 	}
-	s.svc.Create(node)
-
+	assert.NoError(s.T(), s.svc.Create(node))
 	found, err := s.svc.GetByID(node.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), node.Name, found.Name)
@@ -1506,8 +1693,7 @@ func (s *ForwardNodeServiceTestSuite) TestUpdate() {
 		Port:    443,
 		Enabled: true,
 	}
-	s.svc.Create(node)
-
+	assert.NoError(s.T(), s.svc.Create(node))
 	node.Name = "Updated Name"
 	node.Latency = 50
 	err := s.svc.Update(node)
@@ -1526,8 +1712,7 @@ func (s *ForwardNodeServiceTestSuite) TestDelete() {
 		Port:    443,
 		Enabled: true,
 	}
-	s.svc.Create(node)
-
+	assert.NoError(s.T(), s.svc.Create(node))
 	err := s.svc.Delete(node.ID)
 	assert.NoError(s.T(), err)
 
@@ -1544,8 +1729,7 @@ func (s *ForwardNodeServiceTestSuite) TestGetByType() {
 		Port:    443,
 		Enabled: true,
 	}
-	s.svc.Create(relay)
-
+	assert.NoError(s.T(), s.svc.Create(relay))
 	// Create exit node
 	exit := &model.ForwardNode{
 		Name:    "Exit Node",
@@ -1554,8 +1738,7 @@ func (s *ForwardNodeServiceTestSuite) TestGetByType() {
 		Port:    443,
 		Enabled: true,
 	}
-	s.svc.Create(exit)
-
+	assert.NoError(s.T(), s.svc.Create(exit))
 	nodes, err := s.svc.GetByType(model.ForwardNodeTypeRelay)
 	assert.NoError(s.T(), err)
 	assert.Len(s.T(), nodes, 1)
@@ -1572,7 +1755,7 @@ func (s *ForwardNodeServiceTestSuite) TestList() {
 			Port:    443,
 			Enabled: true,
 		}
-		s.svc.Create(node)
+		assert.NoError(s.T(), s.svc.Create(node))
 	}
 
 	nodes, _, err := s.svc.List("", nil, 1, 10)
@@ -1589,8 +1772,7 @@ func (s *ForwardNodeServiceTestSuite) TestListWithType() {
 		Port:    443,
 		Enabled: true,
 	}
-	s.svc.Create(relay)
-
+	assert.NoError(s.T(), s.svc.Create(relay))
 	exit := &model.ForwardNode{
 		Name:    "Exit",
 		Type:    model.ForwardNodeTypeExit,
@@ -1598,8 +1780,7 @@ func (s *ForwardNodeServiceTestSuite) TestListWithType() {
 		Port:    443,
 		Enabled: true,
 	}
-	s.svc.Create(exit)
-
+	assert.NoError(s.T(), s.svc.Create(exit))
 	nodes, _, err := s.svc.List(model.ForwardNodeTypeRelay, nil, 1, 10)
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), nodes)
@@ -1615,8 +1796,7 @@ func (s *ForwardNodeServiceTestSuite) TestGetOnlineNodes() {
 		Enabled: true,
 		Status:  model.ForwardNodeStatusOnline,
 	}
-	s.svc.Create(online)
-
+	assert.NoError(s.T(), s.svc.Create(online))
 	// Create offline node
 	offline := &model.ForwardNode{
 		Name:    "Offline Node",
@@ -1626,8 +1806,7 @@ func (s *ForwardNodeServiceTestSuite) TestGetOnlineNodes() {
 		Enabled: true,
 		Status:  model.ForwardNodeStatusOffline,
 	}
-	s.svc.Create(offline)
-
+	assert.NoError(s.T(), s.svc.Create(offline))
 	nodes, err := s.svc.GetOnlineNodes(model.ForwardNodeTypeRelay)
 	assert.NoError(s.T(), err)
 	assert.Len(s.T(), nodes, 1)
@@ -1635,7 +1814,8 @@ func (s *ForwardNodeServiceTestSuite) TestGetOnlineNodes() {
 }
 
 func (s *ForwardNodeServiceTestSuite) TestGenerateAPIToken() {
-	token := s.svc.GenerateAPIToken()
+	token, err := s.svc.GenerateAPIToken()
+	assert.NoError(s.T(), err)
 	assert.NotEmpty(s.T(), token)
 	assert.Len(s.T(), token, 32) // hex encoding of 16 bytes
 }
@@ -1651,8 +1831,7 @@ func (s *ForwardNodeServiceTestSuite) TestUpdateStats() {
 		TotalDownload: 2000,
 		CurrentConn:   5,
 	}
-	s.svc.Create(node)
-
+	assert.NoError(s.T(), s.svc.Create(node))
 	err := s.svc.UpdateStats(node.ID, 500, 1000, 2)
 	assert.NoError(s.T(), err)
 
@@ -1673,6 +1852,14 @@ func (s *ForwardNodeServiceTestSuite) TestParseTags() {
 	assert.Equal(s.T(), "tag1", tags[0])
 }
 
+func (s *ForwardNodeServiceTestSuite) TestParseTagsWithErrorRejectsInvalidJSON() {
+	tags, err := s.svc.ParseTagsWithError(`["tag1"`)
+
+	assert.Nil(s.T(), tags)
+	assert.Error(s.T(), err)
+	assert.Empty(s.T(), s.svc.ParseTags(`["tag1"`))
+}
+
 func (s *ForwardNodeServiceTestSuite) TestSetTags() {
 	node := &model.ForwardNode{
 		Name:    "Tags Test",
@@ -1681,8 +1868,7 @@ func (s *ForwardNodeServiceTestSuite) TestSetTags() {
 		Port:    443,
 		Enabled: true,
 	}
-	s.svc.Create(node)
-
+	assert.NoError(s.T(), s.svc.Create(node))
 	err := s.svc.SetTags(node.ID, []string{"tag1", "tag2"})
 	assert.NoError(s.T(), err)
 
@@ -1902,8 +2088,7 @@ func (s *SubscriptionServiceTestSuite) TestGetGroup() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	found, err := s.svc.GetGroup(group.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "Get Test Group", found.Name)
@@ -1920,8 +2105,7 @@ func (s *SubscriptionServiceTestSuite) TestUpdateGroup() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	group.Name = "Updated Group"
 	group.Priority = 20
 	err := s.svc.UpdateGroup(group)
@@ -1938,8 +2122,7 @@ func (s *SubscriptionServiceTestSuite) TestDeleteGroup() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	err := s.svc.DeleteGroup(group.ID)
 	assert.NoError(s.T(), err)
 
@@ -1955,7 +2138,7 @@ func (s *SubscriptionServiceTestSuite) TestGetGroups() {
 			Priority: i * 10,
 			Enable:   1,
 		}
-		s.svc.CreateGroup(group)
+		assert.NoError(s.T(), s.svc.CreateGroup(group))
 	}
 
 	groups, err := s.svc.GetGroups()
@@ -1969,8 +2152,7 @@ func (s *SubscriptionServiceTestSuite) TestCreateTemplate() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	tpl := &model.SubscriptionTemplate{
 		GroupID: group.ID,
 		Name:    "Test Template",
@@ -1991,8 +2173,7 @@ func (s *SubscriptionServiceTestSuite) TestGetTemplate() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	tpl := &model.SubscriptionTemplate{
 		GroupID: group.ID,
 		Name:    "Get Test Template",
@@ -2001,8 +2182,7 @@ func (s *SubscriptionServiceTestSuite) TestGetTemplate() {
 		Port:    443,
 		Enable:  1,
 	}
-	s.svc.CreateTemplate(tpl)
-
+	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
 	found, err := s.svc.GetTemplate(tpl.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "Get Test Template", found.Name)
@@ -2014,8 +2194,7 @@ func (s *SubscriptionServiceTestSuite) TestDeleteTemplate() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	tpl := &model.SubscriptionTemplate{
 		GroupID: group.ID,
 		Name:    "Delete Test Template",
@@ -2024,8 +2203,7 @@ func (s *SubscriptionServiceTestSuite) TestDeleteTemplate() {
 		Port:    443,
 		Enable:  1,
 	}
-	s.svc.CreateTemplate(tpl)
-
+	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
 	err := s.svc.DeleteTemplate(tpl.ID)
 	assert.NoError(s.T(), err)
 
@@ -2039,8 +2217,7 @@ func (s *SubscriptionServiceTestSuite) TestGetTemplatesByGroup() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	// 鍒涘缓澶氫釜妯℃澘
 	for i := 1; i <= 3; i++ {
 		tpl := &model.SubscriptionTemplate{
@@ -2052,7 +2229,7 @@ func (s *SubscriptionServiceTestSuite) TestGetTemplatesByGroup() {
 			Enable:  1,
 			Sort:    i,
 		}
-		s.svc.CreateTemplate(tpl)
+		assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
 	}
 
 	templates, err := s.svc.GetTemplatesByGroup(group.ID)
@@ -2066,8 +2243,7 @@ func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	err := s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil)
 	assert.NoError(s.T(), err)
 
@@ -2083,8 +2259,7 @@ func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser_WithExpiry() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
 	err := s.svc.AssignGroupToUser(s.testUser.ID, group.ID, &expireAt, nil, nil)
 	assert.NoError(s.T(), err)
@@ -2096,11 +2271,9 @@ func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromUser() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	// 鍒嗛厤
-	s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil)
-
+	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil))
 	// 绉婚櫎
 	err := s.svc.RemoveGroupFromUser(s.testUser.ID, group.ID)
 	assert.NoError(s.T(), err)
@@ -2115,8 +2288,7 @@ func (s *SubscriptionServiceTestSuite) TestAssignGroupToPlan() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	// 鍒涘缓濂楅
 	monthPrice := int64(1000)
 	plan := &model.Plan{
@@ -2141,8 +2313,7 @@ func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromPlan() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	monthPrice := int64(1000)
 	plan := &model.Plan{
 		Name:           "Remove Plan Test",
@@ -2153,8 +2324,7 @@ func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromPlan() {
 	database.Get().Create(plan)
 
 	// 鍒嗛厤
-	s.svc.AssignGroupToPlan(plan.ID, group.ID)
-
+	assert.NoError(s.T(), s.svc.AssignGroupToPlan(plan.ID, group.ID))
 	// 绉婚櫎
 	err := s.svc.RemoveGroupFromPlan(plan.ID, group.ID)
 	assert.NoError(s.T(), err)
@@ -2179,8 +2349,7 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_Success() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	tpl := &model.SubscriptionTemplate{
 		GroupID: group.ID,
 		Name:    "Test Node",
@@ -2189,11 +2358,9 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_Success() {
 		Port:    443,
 		Enable:  1,
 	}
-	s.svc.CreateTemplate(tpl)
-
+	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
 	// 鍒嗛厤鍒嗙粍缁欑敤鎴?
-	s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil)
-
+	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil))
 	// 鑾峰彇璁㈤槄
 	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{
 		Token:  s.testUser.Token,
@@ -2279,6 +2446,20 @@ func TestSubscriptionService(t *testing.T) {
 	suite.Run(t, new(SubscriptionServiceTestSuite))
 }
 
+func TestGenerateNodeIDUsesStableSHA256Digest(t *testing.T) {
+	svc := &SubscriptionService{}
+
+	got := svc.generateNodeID(&model.SubscriptionTemplate{
+		ID:     42,
+		Type:   "vless",
+		Server: "node.example.com",
+		Port:   443,
+	})
+
+	assert.Equal(t, "e77b41b95a8963a7", got)
+	assert.Len(t, got, 16)
+}
+
 // TestDeriveSS2022ServerKey 校验 SS2022 server_key 派生与老 XBoard
 // Helper::getServerKey($timestamp,$len) 一致: base64(substr(md5(unix秒),0,len))。
 // 期望值用 python/php 手算: md5("1782409707")="b2980b593a367c3ed259d307b50a12a9"。
@@ -2350,8 +2531,7 @@ func (s *NotificationServiceTestSuite) TestGetTemplate() {
 		Content: "Test content",
 		Enabled: true,
 	}
-	s.svc.CreateTemplate(tpl)
-
+	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
 	found, err := s.svc.GetTemplate("email", model.EventOrderPaid)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "Get Test", found.Name)
@@ -2371,8 +2551,7 @@ func (s *NotificationServiceTestSuite) TestUpdateTemplate() {
 		Content: "Original content",
 		Enabled: true,
 	}
-	s.svc.CreateTemplate(tpl)
-
+	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
 	tpl.Content = "Updated content"
 	err := s.svc.UpdateTemplate(tpl)
 	assert.NoError(s.T(), err)
@@ -2392,8 +2571,7 @@ func (s *NotificationServiceTestSuite) TestDeleteTemplate() {
 		Content: "Test",
 		Enabled: true,
 	}
-	s.svc.CreateTemplate(tpl)
-
+	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
 	err := s.svc.DeleteTemplate(tpl.ID)
 	assert.NoError(s.T(), err)
 
@@ -2410,8 +2588,7 @@ func (s *NotificationServiceTestSuite) TestListTemplates() {
 		Content: "Test content",
 		Enabled: true,
 	}
-	s.svc.CreateTemplate(tpl)
-
+	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
 	templates, err := s.svc.ListTemplates()
 	assert.NoError(s.T(), err)
 	assert.GreaterOrEqual(s.T(), len(templates), 1)
@@ -2440,12 +2617,34 @@ func (s *NotificationServiceTestSuite) TestSend() {
 
 func (s *NotificationServiceTestSuite) TestGetLogs() {
 	// 鍙戦€佷竴鏉￠€氱煡
-	s.svc.Send(&s.testUser.ID, "email", model.EventOrderPaid, "Test Title", "Test Content", nil)
+	err := s.svc.Send(&s.testUser.ID, "email", model.EventOrderPaid, "Test Title", "Test Content", nil)
+	_ = err
 
 	logs, total, err := s.svc.GetLogs(1, 10, "")
 	assert.NoError(s.T(), err)
 	assert.GreaterOrEqual(s.T(), total, int64(1))
 	assert.GreaterOrEqual(s.T(), len(logs), 1)
+}
+
+func (s *NotificationServiceTestSuite) TestSendAsyncCopiesUserID() {
+	originalID := s.testUser.ID
+	userID := originalID
+
+	s.svc.sendAsync(&userID, "webhook", "test.async.copy", "Async", "Content", nil)
+	userID = originalID + 1000
+
+	var log model.NotificationLog
+	assert.Eventually(s.T(), func() bool {
+		err := database.Get().
+			Where("event = ?", "test.async.copy").
+			First(&log).Error
+		return err == nil
+	}, 2*time.Second, 10*time.Millisecond)
+
+	if assert.NotNil(s.T(), log.UserID) {
+		assert.Equal(s.T(), originalID, *log.UserID)
+	}
+	assert.Equal(s.T(), 1, log.Status)
 }
 
 func TestNotificationService(t *testing.T) {
@@ -2491,8 +2690,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetByID() {
 		Enabled: true,
 		Config:  `{"app_id": "test"}`,
 	}
-	s.svc.Create(gateway)
-
+	assert.NoError(s.T(), s.svc.Create(gateway))
 	found, err := s.svc.GetByID(gateway.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "WeChat", found.Name)
@@ -2510,8 +2708,7 @@ func (s *PaymentGatewayServiceTestSuite) TestUpdateGateway() {
 		Enabled: true,
 		Config:  `{"api_key": "test"}`,
 	}
-	s.svc.Create(gateway)
-
+	assert.NoError(s.T(), s.svc.Create(gateway))
 	gateway.Name = "Updated Stripe"
 	err := s.svc.Update(gateway)
 	assert.NoError(s.T(), err)
@@ -2527,8 +2724,7 @@ func (s *PaymentGatewayServiceTestSuite) TestDeleteGateway() {
 		Enabled: true,
 		Config:  `{}`,
 	}
-	s.svc.Create(gateway)
-
+	assert.NoError(s.T(), s.svc.Create(gateway))
 	err := s.svc.Delete(gateway.ID)
 	assert.NoError(s.T(), err)
 
@@ -2544,7 +2740,7 @@ func (s *PaymentGatewayServiceTestSuite) TestListGateways() {
 			Enabled: true,
 			Config:  `{}`,
 		}
-		s.svc.Create(gateway)
+		assert.NoError(s.T(), s.svc.Create(gateway))
 	}
 
 	gateways, err := s.svc.List()
@@ -2560,16 +2756,14 @@ func (s *PaymentGatewayServiceTestSuite) TestGetEnabledGateways() {
 		Enabled: true,
 		Config:  `{}`,
 	}
-	s.svc.Create(enabled)
-
+	assert.NoError(s.T(), s.svc.Create(enabled))
 	disabled := &model.PaymentGateway{
 		Name:    "Disabled Gateway",
 		Type:    model.PaymentGatewayAlipay,
 		Enabled: false,
 		Config:  `{}`,
 	}
-	s.svc.Create(disabled)
-
+	assert.NoError(s.T(), s.svc.Create(disabled))
 	gateways, err := s.svc.GetEnabled()
 	assert.NoError(s.T(), err)
 	for _, g := range gateways {
@@ -2586,8 +2780,7 @@ func (s *PaymentGatewayServiceTestSuite) TestCalculateFee() {
 		FeeFixed: 0.5,
 		Config:   `{}`,
 	}
-	s.svc.Create(gateway)
-
+	assert.NoError(s.T(), s.svc.Create(gateway))
 	fee := s.svc.CalculateFee(gateway, 100.0)
 	assert.Equal(s.T(), 1.5, fee) // 100 * 0.01 + 0.5 = 1.5
 }
@@ -2601,8 +2794,7 @@ func (s *PaymentGatewayServiceTestSuite) TestValidateAmount() {
 		MaxAmount: 1000.0,
 		Config:    `{}`,
 	}
-	s.svc.Create(gateway)
-
+	assert.NoError(s.T(), s.svc.Create(gateway))
 	// Valid amount
 	err := s.svc.ValidateAmount(gateway, 100.0)
 	assert.NoError(s.T(), err)
@@ -2630,8 +2822,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetByType() {
 		Enabled: true,
 		Config:  `{"network": "TRC20"}`,
 	}
-	s.svc.Create(gateway)
-
+	assert.NoError(s.T(), s.svc.Create(gateway))
 	found, err := s.svc.GetByType(model.PaymentGatewayUSDT)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "Type Test", found.Name)
@@ -2644,8 +2835,7 @@ func (s *PaymentGatewayServiceTestSuite) TestToggle() {
 		Enabled: true,
 		Config:  `{}`,
 	}
-	s.svc.Create(gateway)
-
+	assert.NoError(s.T(), s.svc.Create(gateway))
 	err := s.svc.Toggle(gateway.ID, false)
 	assert.NoError(s.T(), err)
 
@@ -2696,8 +2886,7 @@ func (s *LoadBalancerServiceTestSuite) TestGetByID() {
 		Strategy: "latency",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	found, err := s.svc.GetByID(lb.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "Get Test LB", found.Name)
@@ -2715,8 +2904,7 @@ func (s *LoadBalancerServiceTestSuite) TestUpdate() {
 		Strategy: "round-robin",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	lb.Strategy = "least-load"
 	err := s.svc.Update(lb)
 	assert.NoError(s.T(), err)
@@ -2732,8 +2920,7 @@ func (s *LoadBalancerServiceTestSuite) TestDelete() {
 		Strategy: "random",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	err := s.svc.Delete(lb.ID)
 	assert.NoError(s.T(), err)
 
@@ -2749,7 +2936,7 @@ func (s *LoadBalancerServiceTestSuite) TestList() {
 			Strategy: "round-robin",
 			Enabled:  true,
 		}
-		s.svc.Create(lb)
+		assert.NoError(s.T(), s.svc.Create(lb))
 	}
 
 	lbs, err := s.svc.List(0)
@@ -2764,8 +2951,7 @@ func (s *LoadBalancerServiceTestSuite) TestSelectNode_NoNodes() {
 		Strategy: "round-robin",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	_, err := s.svc.SelectNode(lb.ID)
 	assert.Error(s.T(), err) // 娌℃湁鑺傜偣锛屽簲璇ユ姤閿?
 }
@@ -2777,8 +2963,7 @@ func (s *LoadBalancerServiceTestSuite) TestSelectNode_DisabledLB() {
 		Strategy: "round-robin",
 		Enabled:  false,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	_, err := s.svc.SelectNode(lb.ID)
 	assert.Error(s.T(), err)
 }
@@ -2790,8 +2975,7 @@ func (s *LoadBalancerServiceTestSuite) TestGetStats() {
 		Strategy: "round-robin",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	stats, err := s.svc.GetStats(lb.ID)
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), stats)
@@ -2884,8 +3068,7 @@ func (s *TelegramUserServiceTestSuite) TestBan() {
 
 func (s *TelegramUserServiceTestSuite) TestUnban() {
 	// 鍏堝皝绂?
-	s.svc.Ban(123456789)
-
+	assert.NoError(s.T(), s.svc.Ban(123456789))
 	// 鍐嶈В灏?
 	err := s.svc.Unban(123456789)
 	assert.NoError(s.T(), err)
@@ -2923,8 +3106,7 @@ func (s *SystemConfigServiceTestSuite) TestSet() {
 }
 
 func (s *SystemConfigServiceTestSuite) TestGet() {
-	s.svc.Set("get_key", "get_value", "string", "test", "")
-
+	assert.NoError(s.T(), s.svc.Set("get_key", "get_value", "string", "test", ""))
 	value, err := s.svc.Get("get_key")
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "get_value", value)
@@ -2951,18 +3133,16 @@ func (s *SystemConfigServiceTestSuite) TestSetJSON() {
 }
 
 func (s *SystemConfigServiceTestSuite) TestGetAll() {
-	s.svc.Set("key1", "value1", "string", "test", "")
-	s.svc.Set("key2", "value2", "string", "test", "")
-
+	assert.NoError(s.T(), s.svc.Set("key1", "value1", "string", "test", ""))
+	assert.NoError(s.T(), s.svc.Set("key2", "value2", "string", "test", ""))
 	configs, err := s.svc.GetAll()
 	assert.NoError(s.T(), err)
 	assert.GreaterOrEqual(s.T(), len(configs), 2)
 }
 
 func (s *SystemConfigServiceTestSuite) TestGetAsMap() {
-	s.svc.Set("map_key1", "value1", "string", "test", "")
-	s.svc.Set("map_key2", "value2", "string", "test", "")
-
+	assert.NoError(s.T(), s.svc.Set("map_key1", "value1", "string", "test", ""))
+	assert.NoError(s.T(), s.svc.Set("map_key2", "value2", "string", "test", ""))
 	result, err := s.svc.GetAsMap()
 	assert.NoError(s.T(), err)
 	assert.GreaterOrEqual(s.T(), len(result), 2)
@@ -2970,8 +3150,7 @@ func (s *SystemConfigServiceTestSuite) TestGetAsMap() {
 }
 
 func (s *SystemConfigServiceTestSuite) TestDelete() {
-	s.svc.Set("delete_key", "value", "string", "test", "")
-
+	assert.NoError(s.T(), s.svc.Set("delete_key", "value", "string", "test", ""))
 	err := s.svc.Delete("delete_key")
 	assert.NoError(s.T(), err)
 
@@ -2980,8 +3159,7 @@ func (s *SystemConfigServiceTestSuite) TestDelete() {
 }
 
 func (s *SystemConfigServiceTestSuite) TestUpdate() {
-	s.svc.Set("update_key", "old_value", "string", "test", "")
-
+	assert.NoError(s.T(), s.svc.Set("update_key", "old_value", "string", "test", ""))
 	err := s.svc.Set("update_key", "new_value", "string", "test", "")
 	assert.NoError(s.T(), err)
 
@@ -3301,8 +3479,7 @@ func (s *NodeServiceTestSuite) TestHeartbeat() {
 		Show:   1,
 		Status: model.NodeStatusOnline,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	err := s.svc.Heartbeat(node.ID, &model.NodeHeartbeatRequest{
 		CPUUsage:    50.0,
 		MemoryUsage: 60.0,
@@ -3321,6 +3498,19 @@ func (s *NodeServiceTestSuite) TestHeartbeat() {
 func (s *NodeServiceTestSuite) TestHeartbeat_NodeNotFound() {
 	err := s.svc.Heartbeat(99999, &model.NodeHeartbeatRequest{})
 	assert.Error(s.T(), err)
+}
+
+func (s *NodeServiceTestSuite) TestHeartbeatRejectsNegativeTraffic() {
+	node := &model.Node{Name: "Heartbeat Negative", Host: "192.168.1.69", Port: 443, Rate: 1.0, Show: 1}
+	assert.NoError(s.T(), s.svc.CreateNode(node))
+
+	err := s.svc.Heartbeat(node.ID, &model.NodeHeartbeatRequest{Upload: -1, Download: 200})
+	assert.ErrorIs(s.T(), err, ErrNegativeTraffic)
+
+	found, _ := s.svc.GetNode(node.ID)
+	assert.Nil(s.T(), found.LastCheckAt)
+	assert.Equal(s.T(), int64(0), found.TotalUpload)
+	assert.Equal(s.T(), int64(0), found.TotalDownload)
 }
 
 func (s *NodeServiceTestSuite) TestHeartbeat_AccumulatesUpParentChain() {
@@ -3378,6 +3568,18 @@ func (s *NodeServiceTestSuite) TestAccumulateTrafficOnly_AccumulatesUpParentChai
 	assert.Equal(s.T(), int64(654), foundRoot.TotalDownload)
 	assert.Equal(s.T(), int64(0), foundRoot.MonthlyUpload)
 	assert.Equal(s.T(), int64(0), foundRoot.MonthlyDownload)
+}
+
+func (s *NodeServiceTestSuite) TestAccumulateTrafficOnlyRejectsNegativeTraffic() {
+	node := &model.Node{Name: "TrafficOnly Negative", Host: "192.168.1.82", Port: 443, Rate: 1.0, Show: 1}
+	assert.NoError(s.T(), s.svc.CreateNode(node))
+
+	err := s.svc.AccumulateTrafficOnly(node.ID, 100, -1)
+	assert.ErrorIs(s.T(), err, ErrNegativeTraffic)
+
+	found, _ := s.svc.GetNode(node.ID)
+	assert.Equal(s.T(), int64(0), found.TotalUpload)
+	assert.Equal(s.T(), int64(0), found.TotalDownload)
 }
 
 func (s *NodeServiceTestSuite) TestUpdateNode_RejectsSelfParent() {
@@ -3440,8 +3642,7 @@ func (s *NodeServiceTestSuite) TestUpdateLastCheckAt() {
 		Rate: 1.0,
 		Show: 1,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	err := s.svc.UpdateLastCheckAt(node.ID)
 	assert.NoError(s.T(), err)
 
@@ -3457,8 +3658,7 @@ func (s *NodeServiceTestSuite) TestGetNodeByAPIKey() {
 		Rate: 1.0,
 		Show: 1,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	found, err := s.svc.GetNodeByAPIKey(node.APIKey)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), node.Name, found.Name)
@@ -3471,8 +3671,10 @@ func (s *NodeServiceTestSuite) TestGetNodeByAPIKey_NotFound() {
 
 func (s *NodeServiceTestSuite) TestGetAuthKeys() {
 	// 鍒涘缓澶氫釜鎺堟潈瀵嗛挜
-	s.svc.GenerateAuthKey("Key 1", 0)
-	s.svc.GenerateAuthKey("Key 2", 0)
+	_, _, err := s.svc.GenerateAuthKey("Key 1", 0)
+	assert.NoError(s.T(), err)
+	_, _, err = s.svc.GenerateAuthKey("Key 2", 0)
+	assert.NoError(s.T(), err)
 
 	keys, err := s.svc.GetAuthKeys()
 	assert.NoError(s.T(), err)
@@ -3500,8 +3702,7 @@ func (s *NodeServiceTestSuite) TestGetNodeStats() {
 		Rate: 1.0,
 		Show: 1,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	stats, err := s.svc.GetNodeStats()
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), stats)
@@ -3516,8 +3717,7 @@ func (s *NodeServiceTestSuite) TestGetProtocol() {
 		Rate: 1.0,
 		Show: 1,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	transport := "tcp"
 	protocol := &model.NodeProtocol{
 		NodeID:    node.ID,
@@ -3528,8 +3728,7 @@ func (s *NodeServiceTestSuite) TestGetProtocol() {
 		Show:      1,
 		Transport: &transport,
 	}
-	s.svc.CreateProtocol(protocol)
-
+	assert.NoError(s.T(), s.svc.CreateProtocol(protocol))
 	found, err := s.svc.GetProtocol(protocol.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "Get Test Protocol", found.Name)
@@ -3548,8 +3747,7 @@ func (s *NodeServiceTestSuite) TestGetProtocolsByGroup() {
 		Rate: 1.0,
 		Show: 1,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	transport := "tcp"
 	protocol := &model.NodeProtocol{
 		NodeID:    node.ID,
@@ -3560,8 +3758,7 @@ func (s *NodeServiceTestSuite) TestGetProtocolsByGroup() {
 		Show:      1,
 		Transport: &transport,
 	}
-	s.svc.CreateProtocol(protocol)
-
+	assert.NoError(s.T(), s.svc.CreateProtocol(protocol))
 	// Create subscription group and associate protocol
 	group := &model.SubscriptionGroup{
 		Name:     "Protocol Test Group",
@@ -3571,8 +3768,7 @@ func (s *NodeServiceTestSuite) TestGetProtocolsByGroup() {
 	database.Get().Create(group)
 
 	// Assign protocol to group
-	s.svc.AssignProtocolsToGroup(group.ID, []uint{protocol.ID})
-
+	assert.NoError(s.T(), s.svc.AssignProtocolsToGroup(group.ID, []uint{protocol.ID}))
 	protocols, err := s.svc.GetProtocolsByGroup(group.ID)
 	assert.NoError(s.T(), err)
 	assert.GreaterOrEqual(s.T(), len(protocols), 1)
@@ -3586,8 +3782,7 @@ func (s *NodeServiceTestSuite) TestGetAllAvailableProtocols() {
 		Rate: 1.0,
 		Show: 1,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	transport := "tcp"
 	protocol := &model.NodeProtocol{
 		NodeID:    node.ID,
@@ -3598,8 +3793,7 @@ func (s *NodeServiceTestSuite) TestGetAllAvailableProtocols() {
 		Show:      1,
 		Transport: &transport,
 	}
-	s.svc.CreateProtocol(protocol)
-
+	assert.NoError(s.T(), s.svc.CreateProtocol(protocol))
 	protocols, err := s.svc.GetAllAvailableProtocols()
 	assert.NoError(s.T(), err)
 	assert.GreaterOrEqual(s.T(), len(protocols), 1)
@@ -3613,8 +3807,7 @@ func (s *NodeServiceTestSuite) TestAssignProtocolsToGroup() {
 		Rate: 1.0,
 		Show: 1,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	transport := "tcp"
 	protocol := &model.NodeProtocol{
 		NodeID:    node.ID,
@@ -3625,8 +3818,7 @@ func (s *NodeServiceTestSuite) TestAssignProtocolsToGroup() {
 		Show:      1,
 		Transport: &transport,
 	}
-	s.svc.CreateProtocol(protocol)
-
+	assert.NoError(s.T(), s.svc.CreateProtocol(protocol))
 	// Create subscription group first
 	group := &model.SubscriptionGroup{
 		Name:     "Test Protocol Group",
@@ -3648,8 +3840,7 @@ func (s *ForwardNodeServiceTestSuite) SkipTestHealthCheck() {
 		Port:    8080,
 		Enabled: true,
 	}
-	s.svc.Create(node)
-
+	assert.NoError(s.T(), s.svc.Create(node))
 	// Health check will likely fail since there's no actual server, but function should run
 	_, err := s.svc.HealthCheck(context.Background(), node.ID)
 	// We just check the function runs, error is expected since no real server
@@ -3670,7 +3861,7 @@ func (s *ForwardNodeServiceTestSuite) SkipTestHealthCheckAll() {
 			Port:    8080 + i,
 			Enabled: true,
 		}
-		s.svc.Create(node)
+		assert.NoError(s.T(), s.svc.Create(node))
 	}
 
 	// Run health check on all nodes
@@ -3691,8 +3882,7 @@ func (s *ForwardNodeServiceTestSuite) TestSelectBestNode() {
 		Latency: 10,
 		Load:    20,
 	}
-	s.svc.Create(relay)
-
+	assert.NoError(s.T(), s.svc.Create(relay))
 	// Create another relay with higher latency
 	relay2 := &model.ForwardNode{
 		Name:    "Slow Relay",
@@ -3704,8 +3894,7 @@ func (s *ForwardNodeServiceTestSuite) TestSelectBestNode() {
 		Latency: 100,
 		Load:    80,
 	}
-	s.svc.Create(relay2)
-
+	assert.NoError(s.T(), s.svc.Create(relay2))
 	selected, err := s.svc.SelectBestNode(model.ForwardNodeTypeRelay, "latency")
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "Best Relay", selected.Name)
@@ -3723,13 +3912,39 @@ func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_RandomMode() {
 			Status:  model.ForwardNodeStatusOnline,
 			Weight:  1,
 		}
-		s.svc.Create(node)
+		assert.NoError(s.T(), s.svc.Create(node))
 	}
 
 	// Test random mode - uses randBytes
 	selected, err := s.svc.SelectBestNode(model.ForwardNodeTypeRelay, "random")
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), selected)
+}
+
+func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_RandomModeReturnsEntropyError() {
+	oldRandomInt := forwardNodeRandomInt
+	forwardNodeRandomInt = func(max int) (int, error) {
+		return 0, fmt.Errorf("entropy unavailable")
+	}
+	defer func() {
+		forwardNodeRandomInt = oldRandomInt
+	}()
+
+	node := &model.ForwardNode{
+		Name:    "Random Entropy Relay",
+		Type:    model.ForwardNodeTypeRelay,
+		Host:    "192.168.1.58",
+		Port:    443,
+		Enabled: true,
+		Status:  model.ForwardNodeStatusOnline,
+		Weight:  1,
+	}
+	assert.NoError(s.T(), s.svc.Create(node))
+
+	selected, err := s.svc.SelectBestNode(model.ForwardNodeTypeRelay, "random")
+
+	assert.Nil(s.T(), selected)
+	assert.EqualError(s.T(), err, "select random forward node: entropy unavailable")
 }
 
 func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_WeightMode() {
@@ -3743,8 +3958,7 @@ func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_WeightMode() {
 		Status:  model.ForwardNodeStatusOnline,
 		Weight:  1,
 	}
-	s.svc.Create(weight1)
-
+	assert.NoError(s.T(), s.svc.Create(weight1))
 	weight5 := &model.ForwardNode{
 		Name:    "Weight 5",
 		Type:    model.ForwardNodeTypeRelay,
@@ -3754,12 +3968,37 @@ func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_WeightMode() {
 		Status:  model.ForwardNodeStatusOnline,
 		Weight:  5,
 	}
-	s.svc.Create(weight5)
-
+	assert.NoError(s.T(), s.svc.Create(weight5))
 	// Test weight mode - uses randBytes
 	selected, err := s.svc.SelectBestNode(model.ForwardNodeTypeRelay, "weight")
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), selected)
+}
+
+func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_WeightModeReturnsEntropyError() {
+	oldRandomInt := forwardNodeRandomInt
+	forwardNodeRandomInt = func(max int) (int, error) {
+		return 0, fmt.Errorf("entropy unavailable")
+	}
+	defer func() {
+		forwardNodeRandomInt = oldRandomInt
+	}()
+
+	node := &model.ForwardNode{
+		Name:    "Weight Entropy Relay",
+		Type:    model.ForwardNodeTypeRelay,
+		Host:    "192.168.1.59",
+		Port:    443,
+		Enabled: true,
+		Status:  model.ForwardNodeStatusOnline,
+		Weight:  1,
+	}
+	assert.NoError(s.T(), s.svc.Create(node))
+
+	selected, err := s.svc.SelectBestNode(model.ForwardNodeTypeRelay, "weight")
+
+	assert.Nil(s.T(), selected)
+	assert.EqualError(s.T(), err, "select weighted forward node: entropy unavailable")
 }
 
 func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_RoundRobinMode() {
@@ -3773,7 +4012,7 @@ func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_RoundRobinMode() {
 			Enabled: true,
 			Status:  model.ForwardNodeStatusOnline,
 		}
-		s.svc.Create(node)
+		assert.NoError(s.T(), s.svc.Create(node))
 	}
 
 	// Test round-robin mode
@@ -3797,8 +4036,7 @@ func (s *ForwardNodeServiceTestSuite) TestGetNodesByGroup() {
 		Status:  model.ForwardNodeStatusOnline,
 		Tags:    `["group1"]`,
 	}
-	s.svc.Create(node)
-
+	assert.NoError(s.T(), s.svc.Create(node))
 	nodes, err := s.svc.GetNodesByGroup(model.ForwardNodeTypeRelay, "group1")
 	assert.NoError(s.T(), err)
 	assert.GreaterOrEqual(s.T(), len(nodes), 1)
@@ -4010,13 +4248,45 @@ func (s *MFAServiceTestSuite) TestVerifyBackupCode() {
 
 	// Use one of the backup codes
 	if mfa != nil && len(setup.BackupCodes) > 0 {
-		valid := s.svc.VerifyBackupCode(mfa, setup.BackupCodes[0])
+		valid, err := s.svc.VerifyBackupCode(mfa, setup.BackupCodes[0])
+		assert.NoError(s.T(), err)
 		assert.True(s.T(), valid)
 
 		// Verify backup code count decreased
-		count, _ := s.svc.GetRemainingBackupCodes(s.testUser.ID)
+		count, err := s.svc.GetRemainingBackupCodes(s.testUser.ID)
+		assert.NoError(s.T(), err)
 		assert.Equal(s.T(), 9, count)
 	}
+}
+
+func (s *MFAServiceTestSuite) TestVerifyBackupCodeRejectsInvalidStoredJSON() {
+	mfa := &model.UserMFA{
+		UserID:      s.testUser.ID,
+		Enabled:     true,
+		BackupCodes: `["code-1"`,
+	}
+	assert.NoError(s.T(), database.Get().Create(mfa).Error)
+
+	valid, err := s.svc.VerifyBackupCode(mfa, "code-1")
+
+	assert.False(s.T(), valid)
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "parse MFA backup codes")
+}
+
+func (s *MFAServiceTestSuite) TestGetRemainingBackupCodesRejectsInvalidStoredJSON() {
+	mfa := &model.UserMFA{
+		UserID:      s.testUser.ID,
+		Enabled:     true,
+		BackupCodes: `["code-1"`,
+	}
+	assert.NoError(s.T(), database.Get().Create(mfa).Error)
+
+	count, err := s.svc.GetRemainingBackupCodes(s.testUser.ID)
+
+	assert.Equal(s.T(), 0, count)
+	assert.Error(s.T(), err)
+	assert.Contains(s.T(), err.Error(), "parse MFA backup codes")
 }
 
 func (s *MFAServiceTestSuite) TestRegenerateBackupCodes() {
@@ -4053,8 +4323,7 @@ func (s *LoadBalancerServiceTestSuite) TestSelectNode_RoundRobin() {
 		Strategy: "round-robin",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	// Create nodes in the group
 	for i := 1; i <= 3; i++ {
 		node := &model.Node{
@@ -4083,8 +4352,7 @@ func (s *LoadBalancerServiceTestSuite) TestRunHealthCheck() {
 		Strategy: "latency",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	err := s.svc.RunHealthCheck(lb.ID)
 	assert.NoError(s.T(), err)
 }
@@ -4129,10 +4397,9 @@ func (s *UserServiceTestSuite) TestGetByEmail_NotFound() {
 
 // Additional SystemConfigService Tests
 func (s *SystemConfigServiceTestSuite) TestGetByGroup() {
-	s.svc.Set("group_key1", "value1", "string", "testgroup", "")
-	s.svc.Set("group_key2", "value2", "string", "testgroup", "")
-	s.svc.Set("other_key", "value3", "string", "othergroup", "")
-
+	assert.NoError(s.T(), s.svc.Set("group_key1", "value1", "string", "testgroup", ""))
+	assert.NoError(s.T(), s.svc.Set("group_key2", "value2", "string", "testgroup", ""))
+	assert.NoError(s.T(), s.svc.Set("other_key", "value3", "string", "othergroup", ""))
 	configs, err := s.svc.GetByGroup("testgroup")
 	assert.NoError(s.T(), err)
 	assert.GreaterOrEqual(s.T(), len(configs), 2)
@@ -4159,6 +4426,23 @@ func (s *NotificationServiceTestSuite) TestSendEmail() {
 	err := s.svc.SendEmail("test@example.com", "Test Subject", "Test Body")
 	// Ignore error since no real SMTP server
 	_ = err
+}
+
+func (s *NotificationServiceTestSuite) TestSMTPTLSConfigVerifiesCertificates() {
+	cfg := smtpTLSConfig("smtp.example.com")
+
+	assert.Equal(s.T(), "smtp.example.com", cfg.ServerName)
+	assert.Equal(s.T(), uint16(tls.VersionTLS12), cfg.MinVersion)
+	assert.False(s.T(), cfg.InsecureSkipVerify)
+}
+
+func (s *NotificationServiceTestSuite) TestGetEmailTemplateEscapesContent() {
+	body, err := s.svc.getEmailTemplate("Security", `<script>alert("x")</script>`)
+
+	assert.NoError(s.T(), err)
+	assert.Contains(s.T(), body, "Security")
+	assert.Contains(s.T(), body, "&lt;script&gt;")
+	assert.NotContains(s.T(), body, `<script>alert("x")</script>`)
 }
 
 func (s *NotificationServiceTestSuite) TestNotifyUserExpire() {
@@ -4371,7 +4655,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetChannels() {
 			Type:    "alipay",
 			Enabled: true,
 		}
-		s.svc.Create(gw)
+		assert.NoError(s.T(), s.svc.Create(gw))
 	}
 
 	channels, err := s.svc.GetChannels()
@@ -4385,8 +4669,7 @@ func (s *PaymentGatewayServiceTestSuite) TestParseConfig() {
 		Type:   "alipay",
 		Config: `{"app_id":"123456","private_key":"test_key"}`,
 	}
-	s.svc.Create(gw)
-
+	assert.NoError(s.T(), s.svc.Create(gw))
 	cfg, err := s.svc.ParseConfig(gw)
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), cfg)
@@ -4397,8 +4680,7 @@ func (s *PaymentGatewayServiceTestSuite) TestUpdateStats() {
 		Name: "Stats Test Gateway",
 		Type: "alipay",
 	}
-	s.svc.Create(gw)
-
+	assert.NoError(s.T(), s.svc.Create(gw))
 	err := s.svc.UpdateStats(gw.ID, 100.50)
 	assert.NoError(s.T(), err)
 
@@ -4413,8 +4695,7 @@ func (s *PaymentGatewayServiceTestSuite) TestCreateRecord() {
 		Name: "Record Test Gateway",
 		Type: "alipay",
 	}
-	s.svc.Create(gw)
-
+	assert.NoError(s.T(), s.svc.Create(gw))
 	record := &model.PaymentRecord{
 		GatewayID:   gw.ID,
 		TradeNo:     "RECORD001",
@@ -4432,8 +4713,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetRecordByTradeNo() {
 		Name: "TradeNo Test Gateway",
 		Type: "alipay",
 	}
-	s.svc.Create(gw)
-
+	assert.NoError(s.T(), s.svc.Create(gw))
 	record := &model.PaymentRecord{
 		GatewayID:   gw.ID,
 		TradeNo:     "TRADENO001",
@@ -4441,8 +4721,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetRecordByTradeNo() {
 		GatewayType: "alipay",
 		Status:      0,
 	}
-	s.svc.CreateRecord(record)
-
+	assert.NoError(s.T(), s.svc.CreateRecord(record))
 	found, err := s.svc.GetRecordByTradeNo("TRADENO001")
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "TRADENO001", found.TradeNo)
@@ -4453,8 +4732,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetRecordByGatewayTradeNo() {
 		Name: "Gateway TradeNo Test",
 		Type: "alipay",
 	}
-	s.svc.Create(gw)
-
+	assert.NoError(s.T(), s.svc.Create(gw))
 	record := &model.PaymentRecord{
 		GatewayID:      gw.ID,
 		TradeNo:        "LOCAL002",
@@ -4463,8 +4741,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetRecordByGatewayTradeNo() {
 		GatewayType:    "alipay",
 		Status:         0,
 	}
-	s.svc.CreateRecord(record)
-
+	assert.NoError(s.T(), s.svc.CreateRecord(record))
 	found, err := s.svc.GetRecordByGatewayTradeNo("GATEWAY002")
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "GATEWAY002", found.GatewayTradeNo)
@@ -4475,8 +4752,7 @@ func (s *PaymentGatewayServiceTestSuite) TestUpdateRecordStatus() {
 		Name: "Status Update Gateway",
 		Type: "alipay",
 	}
-	s.svc.Create(gw)
-
+	assert.NoError(s.T(), s.svc.Create(gw))
 	record := &model.PaymentRecord{
 		GatewayID:   gw.ID,
 		TradeNo:     "STATUS001",
@@ -4484,8 +4760,7 @@ func (s *PaymentGatewayServiceTestSuite) TestUpdateRecordStatus() {
 		GatewayType: "alipay",
 		Status:      0,
 	}
-	s.svc.CreateRecord(record)
-
+	assert.NoError(s.T(), s.svc.CreateRecord(record))
 	err := s.svc.UpdateRecordStatus(record.TradeNo, 1, "GATEWAY_STATUS001")
 	assert.NoError(s.T(), err)
 
@@ -4499,8 +4774,7 @@ func (s *PaymentGatewayServiceTestSuite) SkipTestMarkAsPaid() {
 		Name: "Mark Paid Gateway",
 		Type: "alipay",
 	}
-	s.svc.Create(gw)
-
+	assert.NoError(s.T(), s.svc.Create(gw))
 	plan := &model.Plan{
 		Name:           "Paid Plan",
 		TransferEnable: 1073741824,
@@ -4535,8 +4809,7 @@ func (s *PaymentGatewayServiceTestSuite) SkipTestMarkAsPaid() {
 		GatewayType: "alipay",
 		Status:      0,
 	}
-	s.svc.CreateRecord(record)
-
+	assert.NoError(s.T(), s.svc.CreateRecord(record))
 	err := s.svc.MarkAsPaid(record.TradeNo, "GATEWAY_MARKPAID001", "{}")
 	assert.NoError(s.T(), err)
 
@@ -4555,8 +4828,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetUserRecords() {
 		Name: "User Records Gateway",
 		Type: "alipay",
 	}
-	s.svc.Create(gw)
-
+	assert.NoError(s.T(), s.svc.Create(gw))
 	user := &model.User{
 		Email:          "userrecords@test.com",
 		Password:       "hashed",
@@ -4575,7 +4847,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetUserRecords() {
 			GatewayType: "alipay",
 			Status:      1,
 		}
-		s.svc.CreateRecord(record)
+		assert.NoError(s.T(), s.svc.CreateRecord(record))
 	}
 
 	records, total, err := s.svc.GetUserRecords(user.ID, 1, 10)
@@ -4589,8 +4861,7 @@ func (s *PaymentGatewayServiceTestSuite) TestListRecords() {
 		Name: "List Records Gateway",
 		Type: "alipay",
 	}
-	s.svc.Create(gw)
-
+	assert.NoError(s.T(), s.svc.Create(gw))
 	for i := 1; i <= 3; i++ {
 		record := &model.PaymentRecord{
 			GatewayID:   gw.ID,
@@ -4599,7 +4870,7 @@ func (s *PaymentGatewayServiceTestSuite) TestListRecords() {
 			GatewayType: "alipay",
 			Status:      1,
 		}
-		s.svc.CreateRecord(record)
+		assert.NoError(s.T(), s.svc.CreateRecord(record))
 	}
 
 	records, total, err := s.svc.ListRecords(1, 10, nil, "")
@@ -4613,8 +4884,7 @@ func (s *PaymentGatewayServiceTestSuite) TestListRecords_FilterByStatusAndGatewa
 		Name: "List Records Filter Gateway",
 		Type: "alipay",
 	}
-	s.svc.Create(gw)
-
+	assert.NoError(s.T(), s.svc.Create(gw))
 	recordsToCreate := []*model.PaymentRecord{
 		{
 			GatewayID:   gw.ID,
@@ -4639,7 +4909,7 @@ func (s *PaymentGatewayServiceTestSuite) TestListRecords_FilterByStatusAndGatewa
 		},
 	}
 	for _, record := range recordsToCreate {
-		s.svc.CreateRecord(record)
+		assert.NoError(s.T(), s.svc.CreateRecord(record))
 	}
 
 	paid := model.PaymentStatusPaid
@@ -4665,8 +4935,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetStats() {
 		TotalOrders: 10,
 		TotalAmount: 1000.00,
 	}
-	s.svc.Create(gw)
-
+	assert.NoError(s.T(), s.svc.Create(gw))
 	start := time.Now().AddDate(0, -1, 0)
 	end := time.Now()
 	stats, err := s.svc.GetStats(start, end)
@@ -4685,8 +4954,7 @@ func (s *LoadBalancerServiceTestSuite) TestSelectNode() {
 		Strategy: "round-robin",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	// Create forward nodes
 	for i := 1; i <= 3; i++ {
 		node := &model.ForwardNode{
@@ -4713,8 +4981,7 @@ func (s *LoadBalancerServiceTestSuite) TestSelectNode_LeastLoadStrategy() {
 		Strategy: "least-load",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	// Create forward nodes with different loads
 	for i, load := range []float64{0.9, 0.1, 0.5} {
 		node := &model.ForwardNode{
@@ -4741,8 +5008,7 @@ func (s *LoadBalancerServiceTestSuite) TestSelectNode_LatencyStrategy() {
 		Strategy: "latency",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	// SelectNode should run without error
 	_, err := s.svc.SelectNode(lb.ID)
 	_ = err
@@ -4756,11 +5022,62 @@ func (s *LoadBalancerServiceTestSuite) TestSelectNode_WeightStrategy() {
 		NodeWeights: `{"1": 5, "2": 3, "3": 1}`,
 		Enabled:     true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	// SelectNode should run without error
 	_, err := s.svc.SelectNode(lb.ID)
 	_ = err
+}
+
+func (s *LoadBalancerServiceTestSuite) TestSelectNode_WeightStrategyRejectsInvalidWeights() {
+	lb := &model.LoadBalancer{
+		Name:        "Invalid Weight LB",
+		Strategy:    "weight",
+		NodeWeights: `{"1":`,
+		Enabled:     true,
+	}
+	assert.NoError(s.T(), s.svc.Create(lb))
+	assert.NoError(s.T(), database.Get().Create(&model.ForwardNode{
+		Name:    "Invalid Weight Node",
+		Type:    "gost",
+		Host:    "10.29.0.1",
+		Status:  model.ForwardNodeStatusOnline,
+		Enabled: true,
+	}).Error)
+
+	selected, err := s.svc.SelectNode(lb.ID)
+
+	assert.Nil(s.T(), selected)
+	assert.Error(s.T(), err)
+}
+
+func (s *LoadBalancerServiceTestSuite) TestSelectNode_WeightStrategyReturnsRandomSourceError() {
+	oldRandomInt := secureRandomInt
+	secureRandomInt = func(max int) (int, error) {
+		return 0, fmt.Errorf("entropy unavailable")
+	}
+	defer func() {
+		secureRandomInt = oldRandomInt
+	}()
+
+	lb := &model.LoadBalancer{
+		Name:        "Weight Entropy LB",
+		Strategy:    "weight",
+		NodeWeights: `{"1": 1}`,
+		Enabled:     true,
+	}
+	assert.NoError(s.T(), s.svc.Create(lb))
+	assert.NoError(s.T(), database.Get().Create(&model.ForwardNode{
+		Name:    "Weight Entropy Node",
+		Type:    "gost",
+		Host:    "10.30.0.1",
+		Status:  model.ForwardNodeStatusOnline,
+		Enabled: true,
+	}).Error)
+
+	selected, err := s.svc.SelectNode(lb.ID)
+
+	assert.Nil(s.T(), selected)
+	assert.EqualError(s.T(), err, "entropy unavailable")
 }
 
 func (s *LoadBalancerServiceTestSuite) TestSelectNode_RandomStrategy() {
@@ -4770,11 +5087,39 @@ func (s *LoadBalancerServiceTestSuite) TestSelectNode_RandomStrategy() {
 		Strategy: "random",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	// SelectNode should run without error
 	_, err := s.svc.SelectNode(lb.ID)
 	_ = err
+}
+
+func (s *LoadBalancerServiceTestSuite) TestSelectNode_RandomStrategyReturnsRandomSourceError() {
+	oldRandomInt := secureRandomInt
+	secureRandomInt = func(max int) (int, error) {
+		return 0, fmt.Errorf("entropy unavailable")
+	}
+	defer func() {
+		secureRandomInt = oldRandomInt
+	}()
+
+	lb := &model.LoadBalancer{
+		Name:     "Random Entropy LB",
+		Strategy: "random",
+		Enabled:  true,
+	}
+	assert.NoError(s.T(), s.svc.Create(lb))
+	assert.NoError(s.T(), database.Get().Create(&model.ForwardNode{
+		Name:    "Random Entropy Node",
+		Type:    "gost",
+		Host:    "10.31.0.1",
+		Status:  model.ForwardNodeStatusOnline,
+		Enabled: true,
+	}).Error)
+
+	selected, err := s.svc.SelectNode(lb.ID)
+
+	assert.Nil(s.T(), selected)
+	assert.EqualError(s.T(), err, "entropy unavailable")
 }
 
 // =====================================================
@@ -4802,7 +5147,7 @@ func (s *MFAServiceTestSuite) TestVerify() {
 		UserID:      user.ID,
 		Enabled:     true,
 		TOTPSecret:  setup.Secret,
-		BackupCodes: "code1,code2,code3",
+		BackupCodes: `["code1","code2","code3"]`,
 	}
 	database.Get().Create(mfa)
 
@@ -4826,8 +5171,7 @@ func (s *BackupServiceTestSuite) TestCreateBackup() {
 		StorageType:    "local",
 		StoragePath:    "test_backups",
 	}
-	s.svc.UpdateConfig(cfg)
-
+	assert.NoError(s.T(), s.svc.UpdateConfig(cfg))
 	// Create backup (will fail for non-existent db, but function runs)
 	record, err := s.svc.CreateBackup("database", nil)
 	// Record should be created even if backup fails
@@ -4860,8 +5204,7 @@ func (s *BackupServiceTestSuite) TestCleanupOldBackups() {
 		Enabled:       true,
 		RetentionDays: 1, // Clean backups older than 1 day
 	}
-	s.svc.UpdateConfig(cfg)
-
+	assert.NoError(s.T(), s.svc.UpdateConfig(cfg))
 	// Create old backup record
 	oldRecord := &model.BackupRecord{
 		Name:      "old_backup",
@@ -4939,8 +5282,7 @@ func (s *SystemConfigServiceTestSuite) TestGetJSON() {
 	}
 
 	cfg := TestConfig{Name: "test", Value: 123}
-	s.svc.SetJSON("test_json_key", cfg, "test", "")
-
+	assert.NoError(s.T(), s.svc.SetJSON("test_json_key", cfg, "test", ""))
 	// Get JSON config
 	var retrieved TestConfig
 	err := s.svc.GetJSON("test_json_key", &retrieved)
@@ -5167,6 +5509,46 @@ func (s *ServerServiceTestSuite) TestRecordTrafficLog() {
 	assert.Equal(s.T(), int64(2048), logs[0].D)
 }
 
+func (s *ServerServiceTestSuite) TestRecordTrafficLog_NormalizesInvalidRate() {
+	server := &model.ServerVMess{
+		BaseServer: model.BaseServer{
+			Name:       "Traffic Invalid Rate Test",
+			Host:       "192.168.1.13",
+			ServerPort: 443,
+			Rate:       1.0,
+		},
+		Network: "tcp",
+	}
+	database.Get().Create(server)
+
+	err := s.svc.RecordTrafficLog(model.ServerTypeVMess, server.ID, 7, 1024, 2048, 0)
+	assert.NoError(s.T(), err)
+
+	var log model.TrafficLog
+	assert.NoError(s.T(), database.Get().Where("server_id = ? AND user_id = ?", server.ID, 7).First(&log).Error)
+	assert.Equal(s.T(), 1.0, log.Rate)
+}
+
+func (s *ServerServiceTestSuite) TestRecordTrafficLogRejectsNegativeTraffic() {
+	server := &model.ServerVMess{
+		BaseServer: model.BaseServer{
+			Name:       "Traffic Negative Test",
+			Host:       "192.168.1.14",
+			ServerPort: 443,
+			Rate:       1.0,
+		},
+		Network: "tcp",
+	}
+	assert.NoError(s.T(), database.Get().Create(server).Error)
+
+	err := s.svc.RecordTrafficLog(model.ServerTypeVMess, server.ID, 7, -1, 2048, 1)
+	assert.ErrorIs(s.T(), err, ErrNegativeTraffic)
+
+	var count int64
+	assert.NoError(s.T(), database.Get().Model(&model.TrafficLog{}).Where("server_id = ?", server.ID).Count(&count).Error)
+	assert.Equal(s.T(), int64(0), count)
+}
+
 func (s *ServerServiceTestSuite) TestBatchRecordTrafficLog() {
 	server := &model.ServerVMess{
 		BaseServer: model.BaseServer{
@@ -5191,6 +5573,29 @@ func (s *ServerServiceTestSuite) TestBatchRecordTrafficLog() {
 	var count int64
 	database.Get().Model(&model.TrafficLog{}).Where("server_id = ?", server.ID).Count(&count)
 	assert.Equal(s.T(), int64(3), count)
+}
+
+func (s *ServerServiceTestSuite) TestBatchRecordTrafficLogRejectsNegativeTraffic() {
+	server := &model.ServerVMess{
+		BaseServer: model.BaseServer{
+			Name:       "Batch Traffic Negative Test",
+			Host:       "192.168.1.15",
+			ServerPort: 443,
+			Rate:       1.0,
+		},
+		Network: "tcp",
+	}
+	assert.NoError(s.T(), database.Get().Create(server).Error)
+
+	err := s.svc.BatchRecordTrafficLog(model.ServerTypeVMess, server.ID, map[uint][2]int64{
+		1: {1024, 2048},
+		2: {-1, 4096},
+	}, 1.0)
+	assert.ErrorIs(s.T(), err, ErrNegativeTraffic)
+
+	var count int64
+	assert.NoError(s.T(), database.Get().Model(&model.TrafficLog{}).Where("server_id = ?", server.ID).Count(&count).Error)
+	assert.Equal(s.T(), int64(0), count)
 }
 
 func (s *ServerServiceTestSuite) TestUpdateOnlineStatus() {
@@ -5233,15 +5638,19 @@ func (s *ServerServiceTestSuite) TestGetAllUsersOnlineCount() {
 }
 
 func (s *ServerServiceTestSuite) TestBuildNodeConfig_VMess() {
+	tlsSettings := `{"server_name":"config.example.com"}`
+	networkSettings := `{"path":"/ws"}`
 	server := &model.ServerVMess{
 		BaseServer: model.BaseServer{
-			Name:       "Config Test",
-			Host:       "config.example.com",
-			ServerPort: 443,
-			Rate:       1.0,
-			TLS:        1,
+			Name:        "Config Test",
+			Host:        "config.example.com",
+			ServerPort:  443,
+			Rate:        1.0,
+			TLS:         1,
+			TLSSettings: &tlsSettings,
 		},
-		Network: "ws",
+		Network:         "ws",
+		NetworkSettings: &networkSettings,
 	}
 	database.Get().Create(server)
 
@@ -5252,6 +5661,45 @@ func (s *ServerServiceTestSuite) TestBuildNodeConfig_VMess() {
 	assert.Equal(s.T(), 443, config["server_port"])
 	assert.Equal(s.T(), "vmess", config["node_type"])
 	assert.Equal(s.T(), "vmess", config["type"])
+	assert.Equal(s.T(), map[string]any{"server_name": "config.example.com"}, config["tls_settings"])
+	assert.Equal(s.T(), map[string]any{"path": "/ws"}, config["network_settings"])
+}
+
+func (s *ServerServiceTestSuite) TestBuildNodeConfigRejectsInvalidJSONSettings() {
+	tlsSettings := `{bad-json`
+	server := &model.ServerVMess{
+		BaseServer: model.BaseServer{
+			Name:        "Invalid Config Test",
+			Host:        "invalid-config.example.com",
+			ServerPort:  443,
+			Rate:        1.0,
+			TLSSettings: &tlsSettings,
+		},
+		Network: "ws",
+	}
+	assert.NoError(s.T(), database.Get().Create(server).Error)
+
+	config, err := s.svc.BuildNodeConfig(model.ServerTypeVMess, server.ID)
+	assert.Nil(s.T(), config)
+	assert.ErrorContains(s.T(), err, "invalid tls_settings JSON")
+}
+
+func (s *ServerServiceTestSuite) TestBuildNodeConfigRejectsInvalidAnyTLSPaddingScheme() {
+	paddingScheme := `{bad-json`
+	server := &model.ServerAnyTLS{
+		BaseServer: model.BaseServer{
+			Name:       "Invalid AnyTLS Config Test",
+			Host:       "invalid-anytls.example.com",
+			ServerPort: 443,
+			Rate:       1.0,
+		},
+		PaddingScheme: &paddingScheme,
+	}
+	assert.NoError(s.T(), database.Get().Create(server).Error)
+
+	config, err := s.svc.BuildNodeConfig(model.ServerTypeAnyTLS, server.ID)
+	assert.Nil(s.T(), config)
+	assert.ErrorContains(s.T(), err, "invalid padding_scheme JSON")
 }
 
 func (s *ServerServiceTestSuite) TestBuildNodeConfig_Shadowsocks() {
@@ -5322,6 +5770,22 @@ func (s *ServerServiceTestSuite) TestGetServerRate() {
 
 func (s *ServerServiceTestSuite) TestGetServerRate_NotFound() {
 	rate := s.svc.GetServerRate(model.ServerTypeVMess, 99999)
+	assert.Equal(s.T(), 1.0, rate)
+}
+
+func (s *ServerServiceTestSuite) TestGetServerRate_InvalidRateFallsBackToOne() {
+	server := &model.ServerVMess{
+		BaseServer: model.BaseServer{
+			Name:       "Invalid Rate Test",
+			Host:       "invalid-rate.example.com",
+			ServerPort: 443,
+			Rate:       0,
+		},
+		Network: "tcp",
+	}
+	database.Get().Create(server)
+
+	rate := s.svc.GetServerRate(model.ServerTypeVMess, server.ID)
 	assert.Equal(s.T(), 1.0, rate)
 }
 
@@ -5435,8 +5899,7 @@ func (s *PaymentGatewayServiceTestSuite) TestMarkAsPaid() {
 		Type:    model.PaymentGatewayAlipay,
 		Enabled: true,
 	}
-	s.svc.Create(gateway)
-
+	assert.NoError(s.T(), s.svc.Create(gateway))
 	// Create record using service method
 	record := &model.PaymentRecord{
 		TradeNo:     "MP-TEST-001",
@@ -5460,6 +5923,106 @@ func (s *PaymentGatewayServiceTestSuite) TestMarkAsPaid_NotFound() {
 	assert.Error(s.T(), err)
 }
 
+func (s *PaymentGatewayServiceTestSuite) TestMarkOrderPaidWithAmountRejectsMismatch() {
+	gateway := &model.PaymentGateway{
+		Name:    "Callback Amount Gateway",
+		Type:    model.PaymentGatewayEPay,
+		Enabled: true,
+	}
+	assert.NoError(s.T(), s.svc.Create(gateway))
+
+	user := &model.User{
+		Email:    "callback-amount@example.com",
+		Password: "hashed",
+		Token:    "callback-amount-token",
+		UUID:     "callback-amount-uuid",
+	}
+	assert.NoError(s.T(), database.Get().Create(user).Error)
+
+	order := &model.Order{
+		TradeNo:     "AMOUNT-CHECK-001",
+		UserID:      user.ID,
+		TotalAmount: 1000,
+		Status:      0,
+	}
+	assert.NoError(s.T(), database.Get().Create(order).Error)
+
+	record := &model.PaymentRecord{
+		GatewayID:    gateway.ID,
+		TradeNo:      order.TradeNo,
+		GatewayType:  model.PaymentGatewayEPay,
+		UserID:       user.ID,
+		Amount:       10.00,
+		ActualAmount: 10.00,
+		Status:       model.PaymentStatusPending,
+		OrderID:      &order.ID,
+	}
+	assert.NoError(s.T(), s.svc.CreateRecord(record))
+
+	callbackAmount := 0.01
+	err := s.svc.MarkOrderPaidWithAmount(order.TradeNo, "EP-MISMATCH", `{"money":"0.01"}`, &callbackAmount)
+	assert.Error(s.T(), err)
+
+	found, err := s.svc.GetRecordByTradeNo(order.TradeNo)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), model.PaymentStatusPending, found.Status)
+	assert.Empty(s.T(), found.GatewayTradeNo)
+
+	var refreshedOrder model.Order
+	assert.NoError(s.T(), database.Get().First(&refreshedOrder, order.ID).Error)
+	assert.Equal(s.T(), 0, refreshedOrder.Status)
+}
+
+func (s *PaymentGatewayServiceTestSuite) TestMarkOrderPaidWithAmountAcceptsMatch() {
+	gateway := &model.PaymentGateway{
+		Name:    "Callback Amount Match Gateway",
+		Type:    model.PaymentGatewayEPay,
+		Enabled: true,
+	}
+	assert.NoError(s.T(), s.svc.Create(gateway))
+
+	user := &model.User{
+		Email:    "callback-amount-match@example.com",
+		Password: "hashed",
+		Token:    "callback-amount-match-token",
+		UUID:     "callback-amount-match-uuid",
+	}
+	assert.NoError(s.T(), database.Get().Create(user).Error)
+
+	order := &model.Order{
+		TradeNo:     "AMOUNT-CHECK-002",
+		UserID:      user.ID,
+		TotalAmount: 1000,
+		Status:      0,
+	}
+	assert.NoError(s.T(), database.Get().Create(order).Error)
+
+	record := &model.PaymentRecord{
+		GatewayID:    gateway.ID,
+		TradeNo:      order.TradeNo,
+		GatewayType:  model.PaymentGatewayEPay,
+		UserID:       user.ID,
+		Amount:       10.00,
+		ActualAmount: 10.00,
+		Status:       model.PaymentStatusPending,
+		OrderID:      &order.ID,
+	}
+	assert.NoError(s.T(), s.svc.CreateRecord(record))
+
+	callbackAmount := 10.00
+	err := s.svc.MarkOrderPaidWithAmount(order.TradeNo, "EP-MATCH", `{"money":"10.00"}`, &callbackAmount)
+	assert.NoError(s.T(), err)
+
+	found, err := s.svc.GetRecordByTradeNo(order.TradeNo)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), model.PaymentStatusPaid, found.Status)
+	assert.Equal(s.T(), "EP-MATCH", found.GatewayTradeNo)
+
+	var refreshedOrder model.Order
+	assert.NoError(s.T(), database.Get().First(&refreshedOrder, order.ID).Error)
+	assert.Equal(s.T(), 1, refreshedOrder.Status)
+}
+
 // =====================================================
 // Additional UserService Tests
 // =====================================================
@@ -5471,8 +6034,7 @@ func (s *UserServiceTestSuite) TestGetActiveUsersByGroupID() {
 		TransferEnable: 1073741824,
 	}
 	planSvc := NewPlanService()
-	planSvc.Create(plan)
-
+	require.NoError(s.T(), planSvc.Create(plan))
 	groupID := uint(1)
 	user := &model.User{
 		Email:          "activegroup@test.com",
@@ -5484,8 +6046,7 @@ func (s *UserServiceTestSuite) TestGetActiveUsersByGroupID() {
 		GroupID:        &groupID,
 		Banned:         0,
 	}
-	s.svc.Create(user)
-
+	assert.NoError(s.T(), s.svc.Create(user))
 	// GetActiveUsersByGroupID runs without error
 	users, err := s.svc.GetActiveUsersByGroupID(groupID)
 	_ = users
@@ -5502,8 +6063,7 @@ func (s *UserServiceTestSuite) TestGetActiveUsers() {
 		TransferEnable: 10737418240,
 		Banned:         0,
 	}
-	s.svc.Create(user)
-
+	assert.NoError(s.T(), s.svc.Create(user))
 	// GetActiveUsers runs without error
 	users, err := s.svc.GetActiveUsers()
 	_ = users
@@ -5523,8 +6083,7 @@ func (s *SubscriptionServiceTestSuite) TestUpdateSubscriptionTemplate() {
 		Server: "example.com",
 		Port:   443,
 	}
-	s.svc.CreateTemplate(tpl)
-
+	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
 	// Update
 	tpl.Server = "updated.example.com"
 	err := s.svc.UpdateTemplate(tpl)
@@ -5607,15 +6166,18 @@ func (s *InitServiceTestSuite) SetupTest() {
 
 func (s *InitServiceTestSuite) TestGenerateRandomPassword() {
 	// Test generateRandomPassword function
-	password1 := generateRandomPassword(16)
+	password1, err := generateRandomPassword(16)
+	assert.NoError(s.T(), err)
 	assert.NotEmpty(s.T(), password1)
 	assert.Len(s.T(), password1, 16)
 
-	password2 := generateRandomPassword(32)
+	password2, err := generateRandomPassword(32)
+	assert.NoError(s.T(), err)
 	assert.Len(s.T(), password2, 32)
 
 	// Two passwords should be different (with very high probability)
-	password3 := generateRandomPassword(16)
+	password3, err := generateRandomPassword(16)
+	assert.NoError(s.T(), err)
 	assert.NotEqual(s.T(), password1, password3)
 }
 
@@ -5710,7 +6272,7 @@ func (s *InitServiceTestSuite) TestInitAdmin_AdminAlreadyExists() {
 }
 
 func (s *InitServiceTestSuite) TestInitAdmin_DefaultCredentials() {
-	// Test with empty admin config - should use defaults
+	// Test with empty admin config - should use default email and a generated password.
 	cfg := &config.Config{
 		Admin: config.AdminConfig{
 			Email:    "",
@@ -5729,6 +6291,7 @@ func (s *InitServiceTestSuite) TestInitAdmin_DefaultCredentials() {
 	err := database.Get().Where("is_admin = ?", 1).First(&admin).Error
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "admin@v2board.com", admin.Email)
+	assert.Error(s.T(), bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte("password")))
 }
 
 func (s *InitServiceTestSuite) TestInitSubscriptionDefaults() {
@@ -5901,8 +6464,7 @@ func (s *SubscriptionServiceTestSuite) TestApplyTemplateJSON() {
 		Priority: 5,
 		Enable:   1,
 	}
-	s.svc.CreateGroup(group)
-
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	tpl := &model.SubscriptionTemplate{
 		GroupID:      group.ID,
 		Name:         "Custom JSON Node",
@@ -5912,11 +6474,9 @@ func (s *SubscriptionServiceTestSuite) TestApplyTemplateJSON() {
 		Enable:       1,
 		TemplateJSON: `{"name":"Custom Name","server":"custom.server.com","port":8443,"settings":{"flow":"xtls-rprx-vision"}}`,
 	}
-	s.svc.CreateTemplate(tpl)
-
+	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
 	// Assign to user
-	s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil)
-
+	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil))
 	// Get subscription - applyTemplateJSON is called during renderTemplate
 	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{
 		Token:  s.testUser.Token,
@@ -5966,8 +6526,7 @@ func (s *SubscriptionServiceTestSuite) TestNodeProtocolToParsedNode() {
 	database.Get().Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID)
 
 	// Assign group to user
-	s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil)
-
+	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil))
 	// Get subscription - nodeProtocolToParsedNode is called during getInternalNodes
 	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{
 		Token:  s.testUser.Token,
@@ -5991,8 +6550,7 @@ func (s *NodeServiceTestSuite) TestSyncProtocolToNode() {
 		Rate: 1.0,
 		Show: 1,
 	}
-	s.svc.CreateNode(node)
-
+	assert.NoError(s.T(), s.svc.CreateNode(node))
 	// Create protocol
 	transport := "tcp"
 	protocol := &model.NodeProtocol{
@@ -6004,8 +6562,7 @@ func (s *NodeServiceTestSuite) TestSyncProtocolToNode() {
 		Show:      1,
 		Transport: &transport,
 	}
-	s.svc.CreateProtocol(protocol)
-
+	assert.NoError(s.T(), s.svc.CreateProtocol(protocol))
 	// SyncProtocolToNode currently returns nil (placeholder)
 	err := s.svc.SyncProtocolToNode(protocol.ID)
 	assert.NoError(s.T(), err)
@@ -6033,8 +6590,7 @@ func (s *LoadBalancerServiceTestSuite) TestSelectLatency() {
 		Strategy: "latency",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	// The selection functions are private, but SelectNode calls them
 	_, err := s.svc.SelectNode(lb.ID)
 	// May error due to no proper group association, but function path is tested
@@ -6059,8 +6615,7 @@ func (s *LoadBalancerServiceTestSuite) TestSelectWeight() {
 		NodeWeights: `{"1": 10, "2": 5, "3": 1}`,
 		Enabled:     true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	_, err := s.svc.SelectNode(lb.ID)
 	_ = err
 }
@@ -6084,8 +6639,7 @@ func (s *LoadBalancerServiceTestSuite) TestSelectRandom() {
 		Strategy: "random",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	_, err := s.svc.SelectNode(lb.ID)
 	_ = err
 }
@@ -6107,8 +6661,7 @@ func (s *LoadBalancerServiceTestSuite) TestSelectLeastLoad() {
 		Strategy: "least-load",
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	_, err := s.svc.SelectNode(lb.ID)
 	_ = err
 }
@@ -6119,8 +6672,10 @@ func (s *LoadBalancerServiceTestSuite) TestSelectLeastLoad() {
 
 func (s *ForwardNodeServiceTestSuite) TestRandBytes() {
 	// randBytes is used internally by GenerateAPIToken
-	token1 := s.svc.GenerateAPIToken()
-	token2 := s.svc.GenerateAPIToken()
+	token1, err := s.svc.GenerateAPIToken()
+	assert.NoError(s.T(), err)
+	token2, err := s.svc.GenerateAPIToken()
+	assert.NoError(s.T(), err)
 
 	assert.NotEmpty(s.T(), token1)
 	assert.NotEmpty(s.T(), token2)
@@ -6567,8 +7122,7 @@ func (s *LoadBalancerServiceTestSuite) TestRunHealthCheck_Disabled() {
 		HealthCheck: false,
 		Enabled:     true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	err := s.svc.RunHealthCheck(lb.ID)
 	assert.NoError(s.T(), err)
 }
@@ -6600,8 +7154,7 @@ func (s *LoadBalancerServiceTestSuite) TestRunHealthCheck_Enabled() {
 		GroupID:     1, // Any group ID
 		Enabled:     true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	// RunHealthCheck will attempt to connect (which will fail in test env)
 	err := s.svc.RunHealthCheck(lb.ID)
 	// The function should complete even if health checks fail
@@ -6638,8 +7191,7 @@ func (s *LoadBalancerServiceTestSuite) TestGetStats_MixedNodes() {
 		GroupID:  1, // Any group ID
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	stats, err := s.svc.GetStats(lb.ID)
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), stats)
@@ -6676,8 +7228,7 @@ func (s *LoadBalancerServiceTestSuite) TestGetStats_AllOffline() {
 		GroupID:  1, // Any group ID
 		Enabled:  true,
 	}
-	s.svc.Create(lb)
-
+	assert.NoError(s.T(), s.svc.Create(lb))
 	stats, err := s.svc.GetStats(lb.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 0, stats["online_nodes"])
@@ -6903,4 +7454,14 @@ func (s *ForwardNodeServiceTestSuite) TestHealthCheck_NodeNotFound() {
 	ctx := context.Background()
 	_, err := s.svc.HealthCheck(ctx, 99999)
 	assert.Error(s.T(), err)
+}
+
+func (s *ForwardNodeServiceTestSuite) TestHealthCheckReturnsCanceledContext() {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result, err := s.svc.HealthCheck(ctx, 99999)
+
+	assert.Nil(s.T(), result)
+	assert.ErrorIs(s.T(), err, context.Canceled)
 }

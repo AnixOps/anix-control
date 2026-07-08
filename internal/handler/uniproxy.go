@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -462,6 +462,6 @@ func (h *UniProxyHandler) PushAlive(c *gin.Context) {
 }
 
 func generateETag(data []byte) string {
-	hash := md5.Sum(data)
+	hash := sha256.Sum256(data)
 	return hex.EncodeToString(hash[:])
 }

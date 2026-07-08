@@ -107,21 +107,21 @@ func (p *Base64Parser) parseVMess(link string) (*model.ParsedNode, error) {
 	}
 
 	var vmess struct {
-		V    any `json:"v"`
-		Ps   string      `json:"ps"`
-		Add  string      `json:"add"`
-		Port any `json:"port"`
-		ID   string      `json:"id"`
-		Aid  any `json:"aid"`
-		Scy  string      `json:"scy"`
-		Net  string      `json:"net"`
-		Type string      `json:"type"`
-		Host string      `json:"host"`
-		Path string      `json:"path"`
-		TLS  string      `json:"tls"`
-		Sni  string      `json:"sni"`
-		Alpn string      `json:"alpn"`
-		Fp   string      `json:"fp"`
+		V    any    `json:"v"`
+		Ps   string `json:"ps"`
+		Add  string `json:"add"`
+		Port any    `json:"port"`
+		ID   string `json:"id"`
+		Aid  any    `json:"aid"`
+		Scy  string `json:"scy"`
+		Net  string `json:"net"`
+		Type string `json:"type"`
+		Host string `json:"host"`
+		Path string `json:"path"`
+		TLS  string `json:"tls"`
+		Sni  string `json:"sni"`
+		Alpn string `json:"alpn"`
+		Fp   string `json:"fp"`
 	}
 
 	if err := json.Unmarshal(decoded, &vmess); err != nil {

@@ -595,6 +595,12 @@ export default {
     const totalTemplates = computed(() => groupStats.value.reduce((sum, s) => sum + s.template_count, 0))
     const totalTraffic = computed(() => groupStats.value.reduce((sum, s) => sum + s.total_traffic, 0))
     const sortedGroupStats = computed(() => [...groupStats.value].sort((a, b) => b.user_count - a.user_count))
+
+    const readSubscriptionStats = (res) => {
+      if (!res || typeof res !== 'object') return []
+      const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+      return Array.isArray(payload) ? payload : []
+    }
     
     // Methods
     const loadGroups = async () => {
@@ -612,7 +618,7 @@ export default {
     const loadStats = async () => {
       try {
         const res = await getSubscriptionStats()
-        groupStats.value = res.data || []
+        groupStats.value = readSubscriptionStats(res)
       } catch (error) {
         console.error('Failed to load subscription stats:', error)
       }
@@ -1413,4 +1419,3 @@ input:checked + .slider:before { transform: translateX(20px); }
 .group-badges { display: flex; flex-wrap: wrap; gap: 4px; }
 .mini-badge { padding: 1px 6px; background: rgba(59,130,246,0.08); color: var(--primary-color); border-radius: 4px; font-size: 11px; }
 </style>
-

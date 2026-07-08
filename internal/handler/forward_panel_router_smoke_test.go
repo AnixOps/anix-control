@@ -67,7 +67,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) TestNftablesAnsibleFullChain() {
 	s.mustWriteFile(filepath.Join(tempDir, "forward_apply.yml"), "---\n- hosts: all\n  tasks:\n    - debug: msg=\"apply\"\n")
 	s.mustWriteFile(filepath.Join(tempDir, "forward_remove.yml"), "---\n- hosts: all\n  tasks:\n    - debug: msg=\"remove\"\n")
 	s.mustWriteFile(filepath.Join(tempDir, "ansible.cfg"), "[defaults]\nhost_key_checking = False\n")
-	fakeCommand := s.mustWriteFakeCommand(tempDir, "fake-ansible", "smoke-runtime")
+	fakeCommand := s.mustWriteFakeCommand(tempDir, "ansible-playbook", "smoke-runtime")
 
 	s.mustSetSystemConfig("forward.runtime.nodex_mode", false, "bool", "Enable NodeX forward runtime mode")
 	s.mustSetSystemConfig("forward.runtime_backend", model.ForwardRuntimeBackendNftablesAnsible, "string", "Forward runtime backend")
@@ -408,7 +408,7 @@ func (s *ForwardPanelRouterSmokeTestSuite) mustWriteFakeCommand(dir, baseName, m
 		return path
 	}
 
-	path := filepath.Join(dir, baseName+".sh")
+	path := filepath.Join(dir, baseName)
 	script := "#!/bin/sh\n" +
 		"echo " + marker + " \"$@\"\n"
 	s.Require().NoError(os.WriteFile(path, []byte(script), 0o700))
@@ -513,7 +513,11 @@ func newNodeXRuntimeMockServer(t *testing.T, token string) *nodeXRuntimeMockServ
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
-			defer r.Body.Close()
+			defer func() {
+				if err := r.Body.Close(); err != nil {
+					t.Errorf("close runtime execute request body: %v", err)
+				}
+			}()
 			var payload map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)

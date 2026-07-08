@@ -69,6 +69,9 @@ describe('User Orders flow', () => {
 
   it('opens detail modal after clicking view detail button', async () => {
     mockGetOrders.mockResolvedValue({
+      code: 0,
+      msg: '操作成功',
+      ts: 1783536000000,
       data: {
         list: [
           {
@@ -83,6 +86,9 @@ describe('User Orders flow', () => {
       },
     })
     mockGetOrderDetail.mockResolvedValue({
+      code: 0,
+      msg: '操作成功',
+      ts: 1783536000001,
       data: {
         id: 5,
         trade_no: 'ORD-200',
@@ -104,7 +110,7 @@ describe('User Orders flow', () => {
     })
     await flushPromises()
 
-    await wrapper.find('.btn-sm.btn-ghost').trigger('click')
+    await wrapper.find('[data-test="order-detail-button"]').trigger('click')
     await flushPromises()
 
     expect(mockGetOrderDetail).toHaveBeenCalledWith(5)

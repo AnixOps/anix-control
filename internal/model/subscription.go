@@ -183,7 +183,7 @@ type ParsedNode struct {
 	ServerKey string `json:"server_key,omitempty"` // SS2022 服务器密钥
 
 	// 传输层配置 (network)
-	Transport         string                 `json:"transport,omitempty"`          // 传输协议: tcp, ws, grpc, httpupgrade, xhttp
+	Transport         string         `json:"transport,omitempty"`          // 传输协议: tcp, ws, grpc, httpupgrade, xhttp
 	TransportSettings map[string]any `json:"transport_settings,omitempty"` // 传输层配置
 
 	// 协议特定配置 (兼容旧字段)
@@ -235,7 +235,9 @@ func (t *SubscriptionTemplate) GetTransportSettings() map[string]any {
 		return nil
 	}
 	var settings map[string]any
-	json.Unmarshal([]byte(*t.TransportSettings), &settings)
+	if err := json.Unmarshal([]byte(*t.TransportSettings), &settings); err != nil {
+		return nil
+	}
 	return settings
 }
 
@@ -245,7 +247,9 @@ func (t *SubscriptionTemplate) GetProtocolSettings() map[string]any {
 		return nil
 	}
 	var settings map[string]any
-	json.Unmarshal([]byte(*t.ProtocolSettings), &settings)
+	if err := json.Unmarshal([]byte(*t.ProtocolSettings), &settings); err != nil {
+		return nil
+	}
 	return settings
 }
 
@@ -255,7 +259,9 @@ func (t *SubscriptionTemplate) GetTags() []string {
 		return nil
 	}
 	var tags []string
-	json.Unmarshal([]byte(*t.Tags), &tags)
+	if err := json.Unmarshal([]byte(*t.Tags), &tags); err != nil {
+		return nil
+	}
 	return tags
 }
 

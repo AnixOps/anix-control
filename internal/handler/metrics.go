@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"runtime"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -134,7 +135,7 @@ func (Node) TableName() string  { return "v2_node" }
 func (Order) TableName() string { return "v2_order" }
 
 func formatInt(v int64) string {
-	return formatUint(uint64(v))
+	return strconv.FormatInt(v, 10)
 }
 
 func formatUint(v uint64) string {

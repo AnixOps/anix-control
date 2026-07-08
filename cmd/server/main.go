@@ -72,6 +72,7 @@ var (
 	configPath string
 	version    = "2.3.1"
 	buildTime  = "unknown"
+	buildCode  = ""
 	commit     = "unknown"
 )
 
@@ -79,9 +80,17 @@ func init() {
 	flag.StringVar(&configPath, "config", "config/config.yaml", "配置文件路径")
 }
 
+func formatDisplayVersion(baseVersion, code string) string {
+	if code == "" {
+		return baseVersion
+	}
+	return baseVersion + " #" + code
+}
+
 func syncBuildInfo() {
-	handler.BuildVersion = version
+	handler.BuildVersion = formatDisplayVersion(version, buildCode)
 	handler.BuildTime = buildTime
+	handler.BuildCode = buildCode
 	handler.BuildCommit = commit
 }
 
@@ -229,6 +238,28 @@ func healthHandler() gin.HandlerFunc {
 	}
 }
 
+func shouldStartForwardAgentBridgeWorker(cfg *config.Config) bool {
+	if cfg == nil {
+		return false
+	}
+	return cfg.ForwardRuntime.CleanAgent.LegacyBridgeEnabled
+}
+
+func setHTMLNoCacheHeaders(c *gin.Context) {
+	c.Header("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+	c.Header("Surrogate-Control", "no-store")
+}
+
+func serveAssetFiles(frontendPath string) gin.HandlerFunc {
+	fileServer := http.StripPrefix("/assets/", http.FileServer(http.Dir(filepath.Join(frontendPath, "assets"))))
+	return func(c *gin.Context) {
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		fileServer.ServeHTTP(c.Writer, c.Request)
+	}
+}
+
 func main() {
 	flag.Parse()
 
@@ -281,7 +312,11 @@ func main() {
 	if err := database.Init(&cfg.Database); err != nil {
 		log.Fatalf("Failed to init database: %v", err)
 	}
-	defer database.Close()
+	defer func() {
+		if err := database.Close(); err != nil {
+			log.Printf("Database close error: %v", err)
+		}
+	}()
 
 	// 自动迁移数据库：仅在 development 或 test 环境下运行，避免在生产环境自动修改数据库结构
 	if env == "development" || env == "test" {
@@ -330,6 +365,7 @@ func main() {
 			&model.ForwardTunnel{},
 			&model.ForwardUserTunnel{},
 			&model.Forward{},
+			&model.ForwardPortBinding{},
 			&model.SpeedLimit{},
 			&model.ForwardRuntimeJob{},
 			&model.ForwardTrafficCursor{},
@@ -396,6 +432,12 @@ func main() {
 	if err := service.EnsureForwardBridgeSchema(database.Get()); err != nil {
 		log.Fatalf("Failed to ensure forward bridge schema: %v", err)
 	}
+	if err := service.EnsureForwardRuntimeJobSchema(database.Get()); err != nil {
+		log.Fatalf("Failed to ensure forward runtime job schema: %v", err)
+	}
+	if err := service.EnsureForwardPortBindingSchema(database.Get()); err != nil {
+		log.Fatalf("Failed to ensure forward port binding schema: %v", err)
+	}
 	if err := service.EnsureForwardNodeMetricsPortColumn(database.Get()); err != nil {
 		log.Fatalf("Failed to ensure forward node metrics_port column: %v", err)
 	}
@@ -412,10 +454,14 @@ func main() {
 		executor.Start(context.Background())
 	}()
 
-	go func() {
-		worker := service.NewForwardAgentBridgeWorker(database.Get())
-		worker.Start(context.Background())
-	}()
+	if shouldStartForwardAgentBridgeWorker(cfg) {
+		go func() {
+			worker := service.NewForwardAgentBridgeWorker(database.Get())
+			worker.Start(context.Background())
+		}()
+	} else {
+		log.Println("Forward clean_agent legacy bridge worker disabled")
+	}
 
 	go func() {
 		worker := service.NewForwardFlowResetWorker(database.Get())
@@ -490,6 +536,8 @@ func main() {
 			grpcCfg.Port = cfg.GRPC.Port
 		}
 		grpcCfg.APIToken = cfg.GRPC.APIToken
+		grpcCfg.TLSCertFile = cfg.GRPC.TLSCertFile
+		grpcCfg.TLSKeyFile = cfg.GRPC.TLSKeyFile
 		grpcSrv = grpcserver.NewServer(grpcCfg)
 		if err := grpcSrv.Start(); err != nil {
 			log.Fatalf("Failed to start gRPC server: %v", err)
@@ -596,9 +644,13 @@ func newFrontendServer(cfg *config.Config) *http.Server {
 	// 检查前端目录是否存在
 	if _, err := os.Stat(frontendPath); os.IsNotExist(err) {
 		log.Printf("Frontend directory '%s' not found, creating...", frontendPath)
-		os.MkdirAll(frontendPath, 0755)
+		if err := os.MkdirAll(frontendPath, 0o750); err != nil {
+			log.Fatalf("Failed to create frontend directory %q: %v", frontendPath, err)
+		}
 		// 创建默认的 index.html
-		createDefaultIndex(frontendPath)
+		if err := createDefaultIndex(frontendPath); err != nil {
+			log.Fatalf("Failed to create default frontend index in %q: %v", frontendPath, err)
+		}
 	}
 
 	r := gin.New()
@@ -625,13 +677,17 @@ func newFrontendServer(cfg *config.Config) *http.Server {
 		proxyAPI(c, apiTarget)
 	})
 
-	// 静态文件服务
-	r.Static("/assets", frontendPath+"/assets")
+	// 静态文件服务。Hash assets can be cached aggressively; the SPA HTML
+	// entry below must stay uncached so deploys do not serve stale bundles.
+	assetHandler := serveAssetFiles(frontendPath)
+	r.GET("/assets/*filepath", assetHandler)
+	r.HEAD("/assets/*filepath", assetHandler)
 	r.StaticFile("/favicon.ico", frontendPath+"/favicon.ico")
 
 	// SPA 路由支持 - 所有未匹配的路由返回 index.html
 	r.NoRoute(func(c *gin.Context) {
-		c.File(frontendPath + "/index.html")
+		setHTMLNoCacheHeaders(c)
+		c.File(filepath.Join(frontendPath, "index.html"))
 	})
 
 	port := cfg.Frontend.Port
@@ -668,7 +724,7 @@ func runFrontendServer(srv *http.Server, cfg *config.Config) error {
 }
 
 // createDefaultIndex 创建默认的index.html
-func createDefaultIndex(path string) {
+func createDefaultIndex(path string) error {
 	html := `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -727,7 +783,7 @@ func createDefaultIndex(path string) {
     </div>
 </body>
 </html>`
-	os.WriteFile(path+"/index.html", []byte(html), 0644)
+	return os.WriteFile(filepath.Join(path, "index.html"), []byte(html), 0o600)
 }
 
 // proxyAPI 将 API 请求代理到后端服务器
@@ -742,7 +798,9 @@ func proxyAPI(c *gin.Context, target string) {
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		log.Printf("Proxy error: %v", err)
 		w.WriteHeader(http.StatusBadGateway)
-		io.WriteString(w, `{"error": "API server unavailable"}`)
+		if _, writeErr := io.WriteString(w, `{"error": "API server unavailable"}`); writeErr != nil {
+			log.Printf("Proxy error response write failed: %v", writeErr)
+		}
 	}
 
 	// 修改请求

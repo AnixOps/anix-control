@@ -1,13 +1,53 @@
 - name: Deploy custom V2bX node (gRPC into panel)
   hosts: v2bx_nodes
-  gather_facts: false
+  gather_facts: true
   become: true
   vars:
     v2bx_install_dir: /usr/local/V2bX
     v2bx_config_dir: /etc/V2bX
     v2bx_service_name: V2bX
+    v2bx_binary_amd64_local: /home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_amd64
+    v2bx_binary_arm64_local: /home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_arm64
 
   pre_tasks:
+    - name: Resolve target CPU architecture
+      ansible.builtin.set_fact:
+        v2bx_resolved_arch: >-
+          {{
+            (v2bx_arch | default('') | string | lower)
+            if (v2bx_arch is defined and (v2bx_arch | string | length > 0))
+            else ('arm64' if (ansible_architecture | default('') | lower) in ['aarch64', 'arm64'] else 'amd64')
+          }}
+
+    - name: Validate supported CPU architecture
+      ansible.builtin.assert:
+        that:
+          - v2bx_resolved_arch in ['amd64', 'arm64']
+        fail_msg: "不支持的节点架构 {{ v2bx_resolved_arch }}; 请设置 v2bx_arch=amd64 或 v2bx_arch=arm64"
+
+    - name: Select local V2bX binary for target architecture
+      ansible.builtin.set_fact:
+        v2bx_binary_selected: >-
+          {{
+            v2bx_binary_local | default(
+              v2bx_binary_arm64_local if v2bx_resolved_arch == 'arm64' else v2bx_binary_amd64_local
+            )
+          }}
+
+    - name: Check selected local V2bX binary exists
+      ansible.builtin.stat:
+        path: "{{ v2bx_binary_selected }}"
+      delegate_to: localhost
+      become: false
+      register: v2bx_binary_stat
+
+    - name: Fail if selected local V2bX binary is missing
+      ansible.builtin.assert:
+        that:
+          - v2bx_binary_stat.stat.exists
+          - v2bx_binary_stat.stat.isreg
+        fail_msg: "本地二进制不存在: {{ v2bx_binary_selected }} (resolved arch={{ v2bx_resolved_arch }})"
+
     - name: Validate node_id is set
       ansible.builtin.assert:
         that:
@@ -62,7 +102,7 @@
 
     - name: Push custom V2bX binary
       ansible.builtin.copy:
-        src: "{{ v2bx_binary_local }}"
+        src: "{{ v2bx_binary_selected }}"
         dest: "{{ v2bx_install_dir }}/V2bX"
         mode: "0755"
       notify: Restart V2bX

@@ -37,7 +37,7 @@ func (h *KnowledgeHandler) GetArticles(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	panelSuccess(c, result)
 }
 
 // GetArticle 获取单篇文章详情
@@ -54,13 +54,11 @@ func (h *KnowledgeHandler) GetArticle(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"id":         article.ID,
-			"category":   article.Category,
-			"title":      article.Title,
-			"body":       article.Body,
-			"updated_at": article.UpdatedAt.Unix(),
-		},
+	panelSuccess(c, gin.H{
+		"id":         article.ID,
+		"category":   article.Category,
+		"title":      article.Title,
+		"body":       article.Body,
+		"updated_at": article.UpdatedAt.Unix(),
 	})
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -138,6 +140,10 @@ func TestRunProtocolNotSupported(t *testing.T) {
 
 	// 搴旇鏈夌粨鏋滐紝浣嗗彲鑳戒細澶辫触锛堝洜涓哄崗璁笉鏀寔锛?
 	assert.NotNil(t, report)
+	require.NotEmpty(t, report.Results)
+	for _, result := range report.Results {
+		assert.Positive(t, result.Duration)
+	}
 }
 
 func TestRunnerSaveReport(t *testing.T) {
@@ -159,11 +165,53 @@ func TestRunnerSaveReport(t *testing.T) {
 	err := r.SaveReport(reportPath)
 	require.NoError(t, err)
 
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(reportPath)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	}
+
 	// 璇诲彇骞堕獙璇佹枃浠?
 	data, err := os.ReadFile(reportPath)
 	require.NoError(t, err)
 	assert.Contains(t, string(data), "test1")
 	assert.Contains(t, string(data), "vless")
+}
+
+func TestRunnerRunCreatesPrivateConfigDir(t *testing.T) {
+	configDir := filepath.Join(t.TempDir(), "configs")
+	r := NewRunner(
+		WithConfigDir(configDir),
+		WithScenarios([]config.TestScenario{{
+			Name:      "unsupported-hysteria2",
+			Protocol:  config.ProtocolHysteria2,
+			Transport: config.TransportQUIC,
+			TLS:       config.TLS,
+		}}),
+	)
+
+	report := r.Run(context.Background(), config.ServerConfig{}, config.UserConfig{})
+	require.NotNil(t, report)
+
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(configDir)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o750), info.Mode().Perm())
+	}
+}
+
+func TestRunnerRunReportsConfigDirCreateFailure(t *testing.T) {
+	blockedPath := filepath.Join(t.TempDir(), "blocked")
+	require.NoError(t, os.WriteFile(blockedPath, []byte("not a directory"), 0o600))
+
+	r := NewRunner(WithConfigDir(blockedPath))
+	report := r.Run(context.Background(), config.ServerConfig{}, config.UserConfig{})
+
+	require.NotNil(t, report)
+	require.Len(t, report.Results, 1)
+	assert.False(t, report.Results[0].Success)
+	assert.Equal(t, "prepare-config-dir", report.Results[0].ScenarioName)
+	assert.Contains(t, report.Results[0].Error, "failed to create config dir")
 }
 
 func TestRunnerPrintReport(t *testing.T) {

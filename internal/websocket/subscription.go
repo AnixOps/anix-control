@@ -2,12 +2,14 @@ package websocket
 
 import (
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/anixops/v2board/internal/service"
+	"github.com/anixops/v2board/internal/utils"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 )
@@ -16,32 +18,29 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		// 生产环境应该验证 Origin
-		return true
-	},
+	CheckOrigin:     utils.CheckWebSocketOrigin,
 }
 
 // MessageType 消息类型
 type MessageType string
 
 const (
-	MessageTypeSubscribe       MessageType = "subscribe"
-	MessageTypeUnsubscribe     MessageType = "unsubscribe"
-	MessageTypeNodeUpdate      MessageType = "node_update"
-	MessageTypeUserUpdate      MessageType = "user_update"
-	MessageTypeConfigUpdate    MessageType = "config_update"
+	MessageTypeSubscribe          MessageType = "subscribe"
+	MessageTypeUnsubscribe        MessageType = "unsubscribe"
+	MessageTypeNodeUpdate         MessageType = "node_update"
+	MessageTypeUserUpdate         MessageType = "user_update"
+	MessageTypeConfigUpdate       MessageType = "config_update"
 	MessageTypeSubscriptionUpdate MessageType = "subscription_update"
-	MessageTypeHeartbeat       MessageType = "heartbeat"
-	MessageTypeError           MessageType = "error"
+	MessageTypeHeartbeat          MessageType = "heartbeat"
+	MessageTypeError              MessageType = "error"
 )
 
 // Message WebSocket 消息
 type Message struct {
-	Type      MessageType            `json:"type"`
-	Timestamp int64                  `json:"timestamp"`
+	Type      MessageType    `json:"type"`
+	Timestamp int64          `json:"timestamp"`
 	Data      map[string]any `json:"data,omitempty"`
-	Error     string                 `json:"error,omitempty"`
+	Error     string         `json:"error,omitempty"`
 }
 
 // Client WebSocket 客户端
@@ -51,7 +50,6 @@ type Client struct {
 	isAdmin      bool
 	subscription *SubscriptionManager
 	send         chan []byte
-	mu           sync.Mutex
 }
 
 // SubscriptionManager 订阅管理器
@@ -66,9 +64,9 @@ type SubscriptionManager struct {
 
 // BroadcastMessage 广播消息
 type BroadcastMessage struct {
-	UserIDs []uint      // 目标用户ID，nil 表示广播给所有
-	Message *Message    // 消息内容
-	Exclude uint        // 排除的用户ID
+	UserIDs []uint   // 目标用户ID，nil 表示广播给所有
+	Message *Message // 消息内容
+	Exclude uint     // 排除的用户ID
 }
 
 // NewSubscriptionManager 创建订阅管理器
@@ -248,14 +246,18 @@ func (sm *SubscriptionManager) NotifySubscriptionUpdate(changeType string, group
 func (c *Client) readPump() {
 	defer func() {
 		c.subscription.unregister <- c
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Printf("WebSocket close failed for user_id=%d: %v", c.userID, err)
+		}
 	}()
 
 	c.conn.SetReadLimit(512 * 1024) // 512KB
-	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	if err := c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); err != nil {
+		log.Printf("WebSocket set read deadline failed for user_id=%d: %v", c.userID, err)
+		return
+	}
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		return nil
+		return c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	})
 
 	for {
@@ -279,15 +281,22 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Printf("WebSocket close failed for user_id=%d: %v", c.userID, err)
+		}
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				log.Printf("WebSocket set write deadline failed for user_id=%d: %v", c.userID, err)
+				return
+			}
 			if !ok {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				if err := c.conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
+					log.Printf("WebSocket close frame failed for user_id=%d: %v", c.userID, err)
+				}
 				return
 			}
 
@@ -295,13 +304,25 @@ func (c *Client) writePump() {
 			if err != nil {
 				return
 			}
-			w.Write(message)
+			if _, err := w.Write(message); err != nil {
+				log.Printf("WebSocket write failed for user_id=%d: %v", c.userID, err)
+				c.closeWriter(w)
+				return
+			}
 
 			// 批量发送
 			n := len(c.send)
 			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.send)
+				if _, err := w.Write([]byte{'\n'}); err != nil {
+					log.Printf("WebSocket batch separator write failed for user_id=%d: %v", c.userID, err)
+					c.closeWriter(w)
+					return
+				}
+				if _, err := w.Write(<-c.send); err != nil {
+					log.Printf("WebSocket batch write failed for user_id=%d: %v", c.userID, err)
+					c.closeWriter(w)
+					return
+				}
 			}
 
 			if err := w.Close(); err != nil {
@@ -309,7 +330,10 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+				log.Printf("WebSocket set ping deadline failed for user_id=%d: %v", c.userID, err)
+				return
+			}
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -342,8 +366,7 @@ func (c *Client) sendPong() {
 		Type:      MessageTypeHeartbeat,
 		Timestamp: time.Now().Unix(),
 	}
-	data, _ := json.Marshal(msg)
-	c.send <- data
+	c.enqueueMessage(msg)
 }
 
 // sendAck 发送确认
@@ -353,8 +376,7 @@ func (c *Client) sendAck(msgType MessageType) {
 		Timestamp: time.Now().Unix(),
 		Data:      map[string]any{"status": "ok"},
 	}
-	data, _ := json.Marshal(msg)
-	c.send <- data
+	c.enqueueMessage(msg)
 }
 
 // sendError 发送错误
@@ -364,8 +386,27 @@ func (c *Client) sendError(errMsg string) {
 		Timestamp: time.Now().Unix(),
 		Error:     errMsg,
 	}
-	data, _ := json.Marshal(msg)
-	c.send <- data
+	c.enqueueMessage(msg)
+}
+
+func (c *Client) enqueueMessage(msg *Message) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("WebSocket marshal response failed for user_id=%d: %v", c.userID, err)
+		return
+	}
+
+	select {
+	case c.send <- data:
+	default:
+		log.Printf("WebSocket send queue full for user_id=%d; dropping %s message", c.userID, msg.Type)
+	}
+}
+
+func (c *Client) closeWriter(w io.Closer) {
+	if err := w.Close(); err != nil {
+		log.Printf("WebSocket writer close failed for user_id=%d: %v", c.userID, err)
+	}
 }
 
 // WebSocketHandler WebSocket 处理器

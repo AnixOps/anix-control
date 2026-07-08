@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/anixops/v2board/internal/model"
@@ -19,7 +18,6 @@ type ForwardRuleService struct {
 	db              *gorm.DB
 	nodeService     *ForwardNodeService
 	runtimeProvider ForwardRuntimeProvider
-	mu              sync.RWMutex
 }
 
 // NewForwardRuleService preserves the existing constructor shape and uses the default runtime provider.

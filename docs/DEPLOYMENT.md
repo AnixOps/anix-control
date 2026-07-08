@@ -227,6 +227,42 @@ npm run build
 - 缓存：Redis（多实例/高并发场景）
 - 监控：Prometheus（可选），内置 Grafana（可选）
 
+### systemd 二进制更新脚本
+
+当前已验证的生产更新路径是 `config/deploy/deploy_panel.sh`。脚本会构建 Go 二进制、构建前端、备份当前二进制、停止 systemd 服务、安装新二进制、同步前端静态文件、重启服务并做监听检查。
+
+生产机 root 下推荐命令：
+
+```bash
+cd /home/dev/anixops/v2board_AnixOps
+PATH=/usr/local/go/bin:/home/dev/.local/opt/node/bin:$PATH \
+GO_BIN=/usr/local/go/bin/go \
+NPM_BIN=/home/dev/.local/opt/node/bin/npm \
+./config/deploy/deploy_panel.sh
+```
+
+前置条件：
+
+- systemd 服务名默认是 `v2board.service`，可用 `SERVICE_NAME=xxx.service` 覆盖。
+- `INSTALL_PATH`、`CONFIG_PATH`、`WORKING_DIR` 会优先从 systemd 读取；读取不到时默认使用 `/usr/local/v2board/v2board`、`/etc/v2board/config.yaml` 和配置目录。
+- Go 需要可执行；生产机默认使用 `/usr/local/go/bin/go`，也可以设置 `GO_BIN=/path/to/go`。
+- Node.js 需要 `20.19+` 或 `22.12+`；如果 root 的 `PATH` 没有 node/npm，设置 `NPM_BIN=/home/dev/.local/opt/node/bin/npm`，脚本会自动把 npm 所在目录加入 `PATH`，让 `#!/usr/bin/env node` 能找到 node。
+- 如果 npm 和 node 不在同一目录，额外设置 `NODE_BIN=/path/to/node`。
+- 前端依赖需要已经安装在 `web/node_modules`；缺失时先执行 `cd web && npm install` 或按锁文件执行 `npm ci`。
+- `rsync` 可选；没有时脚本会用 `cp` 同步静态文件。
+
+部署前可在仓库根目录运行脚本自检：
+
+```bash
+bash config/deploy/deploy_panel.sh --self-test
+```
+
+常见错误：
+
+- `go: command not found`：设置 `GO_BIN=/usr/local/go/bin/go`，或把 Go 目录加入 `PATH`。
+- `/usr/bin/env: node: No such file or directory`：设置 `PATH=/home/dev/.local/opt/node/bin:$PATH`，或同时设置 `NPM_BIN`/`NODE_BIN`。
+- `web/public/assets is not writable`：按脚本提示执行一次 `chown`，确保前端构建输出目录归仓库用户所有。
+
 ### 启动生产编排
 
 ```bash
@@ -293,6 +329,8 @@ database:
   username: "postgres"
   password: "your_password"
 ```
+
+从 SQLite 迁移到 PostgreSQL 时，不要直接改生产配置后启动。先按 [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md) 做备份、dry run、导入、验证和 rollback 记录。
 
 ### 缓存
 
@@ -395,6 +433,8 @@ docker exec -i v2board-db psql -U v2board v2board < backup.sql
 ```
 
 建议使用 `crontab` 做每日自动备份，并设置保留策略。
+
+数据库迁移的 dry-run 与 rollback 步骤见 [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)。
 
 ---
 

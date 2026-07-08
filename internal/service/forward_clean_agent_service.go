@@ -234,6 +234,9 @@ func (s *ForwardCleanAgentService) Heartbeat(input ForwardCleanAgentHeartbeatInp
 			if result.RowsAffected == 0 {
 				continue
 			}
+			if err := updateForwardRuntimeRunningStateTx(tx, &job, &now); err != nil {
+				return err
+			}
 			actions = append(actions, buildForwardCleanAgentAction(&job))
 		}
 		return nil
@@ -295,13 +298,21 @@ func (s *ForwardCleanAgentService) Report(input ForwardCleanAgentReportInput) er
 			return err
 		}
 
+		if status == model.ForwardRuntimeJobStatusSuccess {
+			if err := cleanupPanelForwardAfterRuntimeDeleteTx(tx, &job); err != nil {
+				return err
+			}
+			if job.Action == model.ForwardRuntimeJobActionDelete {
+				return nil
+			}
+		}
 		return s.updateForwardRuntimeStateTx(tx, &job, status, message, &now)
 	})
 	if err != nil {
 		return err
 	}
 
-	if status == model.ForwardRuntimeJobStatusSuccess && job.ForwardID != nil && (input.Upload > 0 || input.Download > 0) {
+	if status == model.ForwardRuntimeJobStatusSuccess && job.Action != model.ForwardRuntimeJobActionDelete && job.ForwardID != nil && (input.Upload > 0 || input.Download > 0) {
 		return NewPanelForwardService(s.db).RecordForwardTraffic([]PanelForwardTrafficRecord{{
 			ForwardID: *job.ForwardID,
 			Upload:    input.Upload,

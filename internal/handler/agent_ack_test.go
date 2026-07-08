@@ -53,6 +53,23 @@ func newTestWebSocketPair(t *testing.T) (*websocket.Conn, *websocket.Conn, func(
 	return serverConn, clientConn, cleanup
 }
 
+func TestPrepareAgentWebSocketSetsReadDeadline(t *testing.T) {
+	serverConn, _, cleanup := newTestWebSocketPair(t)
+	defer cleanup()
+
+	oldTimeout := agentWSReadTimeout
+	agentWSReadTimeout = 50 * time.Millisecond
+	defer func() {
+		agentWSReadTimeout = oldTimeout
+	}()
+
+	require.NoError(t, prepareAgentWebSocket(serverConn))
+
+	_, _, err := serverConn.ReadMessage()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "i/o timeout")
+}
+
 func TestHandleWebSocketMessage_RequireAckSendsAck(t *testing.T) {
 	initTestDB()
 
@@ -81,7 +98,7 @@ func TestHandleWebSocketMessage_RequireAckSendsAck(t *testing.T) {
 
 	h.handleWebSocketMessage(agentConn, raw)
 
-	clientConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	require.NoError(t, clientConn.SetReadDeadline(time.Now().Add(2*time.Second)))
 	var outbound struct {
 		Type    string       `json:"type"`
 		NodeID  uint         `json:"node_id"`
@@ -160,7 +177,10 @@ func TestDispatchWithAckRetry_SucceedsWhenAckArrives(t *testing.T) {
 
 	readAndAckErr := make(chan error, 1)
 	go func() {
-		clientConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		if err := clientConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			readAndAckErr <- err
+			return
+		}
 		var outbound wsOutboundEnvelope
 		if err := clientConn.ReadJSON(&outbound); err != nil {
 			readAndAckErr <- err
@@ -226,7 +246,10 @@ func TestDispatchWithAckRetry_FailsOnTimeout(t *testing.T) {
 
 	readDone := make(chan error, 1)
 	go func() {
-		clientConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		if err := clientConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			readDone <- err
+			return
+		}
 		var outbound wsOutboundEnvelope
 		readDone <- clientConn.ReadJSON(&outbound)
 	}()

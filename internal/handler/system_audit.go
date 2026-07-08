@@ -105,13 +105,7 @@ func (h *SystemHandler) GetAuditLogs(c *gin.Context) {
 		list = append(list, auditLogResponse(&records[i]))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":      list,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
-		},
+	panelSuccess(c, gin.H{
 		"list":      list,
 		"total":     total,
 		"page":      page,

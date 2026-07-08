@@ -22,9 +22,9 @@ type AgentTask struct {
 
 // MonitorEntry holds a single monitor data push from an agent.
 type MonitorEntry struct {
-	NodeID    uint32                 `json:"node_id"`
+	NodeID    uint32         `json:"node_id"`
 	System    map[string]any `json:"system"`
-	Timestamp time.Time              `json:"timestamp"`
+	Timestamp time.Time      `json:"timestamp"`
 }
 
 // TaskStore provides a thread-safe in-memory task queue per node.
@@ -134,9 +134,9 @@ func (ts *TaskStore) ListTasksByNode(nodeID uint32) []*AgentTask {
 
 // MonitorStore keeps a ring buffer of the last N monitor entries per node.
 type MonitorStore struct {
-	mu        sync.RWMutex
-	buffers   map[uint32]*monitorRing
-	capacity  int
+	mu       sync.RWMutex
+	buffers  map[uint32]*monitorRing
+	capacity int
 }
 
 type monitorRing struct {

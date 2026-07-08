@@ -31,9 +31,9 @@ func setupTestDB(t *testing.T) func() {
 		Database: ":memory:",
 	})
 	require.NoError(t, err)
-	database.GetDB().AutoMigrate(&model.Node{})
+	require.NoError(t, database.GetDB().AutoMigrate(&model.Node{}))
 	return func() {
-		database.Close()
+		require.NoError(t, database.Close())
 	}
 }
 

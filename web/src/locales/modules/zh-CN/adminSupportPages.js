@@ -301,5 +301,50 @@ export default {
       closeConfirm: '确定关闭该工单吗？',
       closeFailed: '关闭工单失败'
     }
+  },
+  adminKnowledge: {
+    title: '知识库管理',
+    subtitle: '发布公告、教程、常见问题和支持文章。',
+    actions: {
+      createArticle: '新建文章',
+      publish: '发布'
+    },
+    categories: {
+      announcement: '公告',
+      tutorial: '教程',
+      faq: '常见问题',
+      other: '其他'
+    },
+    visibility: {
+      visible: '显示',
+      hidden: '隐藏'
+    },
+    fields: {
+      title: '标题',
+      category: '分类',
+      content: '内容',
+      sort: '排序',
+      visibility: '可见性'
+    },
+    placeholders: {
+      title: '文章标题',
+      body: '填写文章内容...'
+    },
+    modal: {
+      createTitle: '新建文章',
+      editTitle: '编辑文章'
+    },
+    empty: {
+      noData: '暂无文章'
+    },
+    messages: {
+      fetchFailed: '加载文章失败',
+      requiredFields: '请填写标题和内容',
+      saveSuccess: '文章保存成功',
+      publishSuccess: '文章发布成功',
+      actionFailed: '文章操作失败',
+      deleteConfirm: '确认删除文章“{title}”吗？',
+      deleteFailed: '删除文章失败'
+    }
   }
 }

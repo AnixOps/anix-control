@@ -86,14 +86,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "注册成功",
-		"data": gin.H{
-			"token":    token,
-			"is_admin": user.IsAdmin == 1,
-			"user_id":  user.ID,
-			"email":    user.Email,
-		},
+	panelSuccess(c, gin.H{
+		"token":    token,
+		"is_admin": user.IsAdmin == 1,
+		"user_id":  user.ID,
+		"email":    user.Email,
 	})
 }
 
@@ -134,12 +131,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	service.GetLoginRateLimiter().RecordSuccess(loginRateLimitKey)
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"token":    token,
-			"is_admin": user.IsAdmin == 1,
-			"user_id":  user.ID,
-			"email":    user.Email,
-		},
+	panelSuccess(c, gin.H{
+		"token":    token,
+		"is_admin": user.IsAdmin == 1,
+		"user_id":  user.ID,
+		"email":    user.Email,
 	})
 }

@@ -192,9 +192,10 @@ func (s *OrderService) Create(params CreateOrderParams) (*model.Order, error) {
 			now := time.Now().Unix()
 			if coupon.StartedAt <= now && coupon.EndedAt >= now {
 				if coupon.LimitUse == nil || *coupon.LimitUse == 0 || coupon.UseCount < *coupon.LimitUse {
-					if coupon.Type == 1 { // 百分比
+					switch coupon.Type {
+					case 1: // 百分比
 						discountAmount = price * int64(coupon.Value) / 100
-					} else if coupon.Type == 2 { // 固定金额
+					case 2: // 固定金额
 						discountAmount = int64(coupon.Value)
 					}
 

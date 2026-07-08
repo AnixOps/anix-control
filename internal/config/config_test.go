@@ -152,6 +152,7 @@ forward_runtime:
     heartbeat_interval_seconds: 11
     action_timeout_seconds: 121
     token_expire_seconds: 3600
+    legacy_bridge_enabled: true
   iptables_ansible:
     inventory: config/deploy/ansible/inventory.ini
     apply_playbook: config/deploy/ansible/playbooks/forward_apply.yml
@@ -190,6 +191,7 @@ forward_runtime:
 	assert.Equal(t, 11, loadedCfg.ForwardRuntime.CleanAgent.HeartbeatIntervalSeconds)
 	assert.Equal(t, 121, loadedCfg.ForwardRuntime.CleanAgent.ActionTimeoutSeconds)
 	assert.Equal(t, 3600, loadedCfg.ForwardRuntime.CleanAgent.TokenExpireSeconds)
+	assert.True(t, loadedCfg.ForwardRuntime.CleanAgent.LegacyBridgeEnabled)
 }
 
 func TestLoadFileNotFound(t *testing.T) {

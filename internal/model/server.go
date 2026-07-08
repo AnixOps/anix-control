@@ -162,7 +162,9 @@ func (ServerRoute) TableName() string {
 func (s *BaseServer) GetGroupIDs() []uint {
 	var ids []uint
 	if s.GroupID != "" {
-		json.Unmarshal([]byte(s.GroupID), &ids)
+		if err := json.Unmarshal([]byte(s.GroupID), &ids); err != nil {
+			return nil
+		}
 	}
 	return ids
 }
@@ -171,7 +173,9 @@ func (s *BaseServer) GetGroupIDs() []uint {
 func (s *BaseServer) GetRouteIDs() []uint {
 	var ids []uint
 	if s.RouteID != "" {
-		json.Unmarshal([]byte(s.RouteID), &ids)
+		if err := json.Unmarshal([]byte(s.RouteID), &ids); err != nil {
+			return nil
+		}
 	}
 	return ids
 }

@@ -14,6 +14,15 @@ server:
   # Leave empty to disable trusting forwarded client IP headers.
   # Populate this only with the reverse proxies/load balancers that sit in front of V2Board.
   trusted_proxies: []
+  # HTTP CORS and WebSocket Origin allowlist. Empty HTTP CORS echoes any Origin;
+  # empty WebSocket origins keep upgrades same-host only while still allowing
+  # non-browser clients with no Origin header.
+  cors:
+    allowed_origins: []
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+    allowed_headers: ["Content-Type", "Authorization", "X-API-Key"]
+    allow_credentials: false
+    max_age: 86400
 
 frontend:
   enable: true
@@ -107,6 +116,9 @@ forward_runtime:
     heartbeat_interval_seconds: 10
     action_timeout_seconds: 120
     token_expire_seconds: 0
+    # Off by default: v2forward-agent pulls jobs directly from /api/v2/forward-agent/heartbeat.
+    # Enable only when you intentionally use the legacy /api/v2/agent/tasks bridge.
+    legacy_bridge_enabled: false
 
   # Preferred local ansible execution runtime for modern Debian/Ubuntu hosts.
   # Relative paths are resolved from config.yaml/project location at startup.
@@ -165,15 +177,20 @@ forward_runtime:
     retention_days: 7           # buckets older than this are purged hourly
 
 # Node-facing gRPC server. V2bX nodes connect here when Transport=grpc.
-# api_token (optional) is checked by the auth interceptor; leave empty to disable auth.
+# Per-node x-api-key/x-node-id auth is always enforced regardless of api_token.
+# api_token (optional) is a fallback for callers with no node key (e.g. legacy/admin).
+# tls_cert_file/tls_key_file (optional) enable TLS; leave both empty for plaintext.
 grpc:
   enabled: false
   host: "0.0.0.0"
   port: 50051
   api_token: ""
+  tls_cert_file: ""
+  tls_key_file: ""
 
 admin:
   email: "v2board@anixops.com"
+  # Leave empty to generate and print a one-time random bootstrap password.
   password: ""
 
 tls:

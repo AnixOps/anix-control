@@ -31,10 +31,12 @@ type Config struct {
 
 // GRPCConfig controls the node-facing gRPC server (V2bX nodes connect here).
 type GRPCConfig struct {
-	Enable   bool   `yaml:"enabled"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	APIToken string `yaml:"api_token"`
+	Enable      bool   `yaml:"enabled"`
+	Host        string `yaml:"host"`
+	Port        int    `yaml:"port"`
+	APIToken    string `yaml:"api_token"`
+	TLSCertFile string `yaml:"tls_cert_file"`
+	TLSKeyFile  string `yaml:"tls_key_file"`
 }
 
 // AuthConfig defines authentication security settings.
@@ -85,6 +87,7 @@ type ForwardRuntimeCleanAgentConfig struct {
 	HeartbeatIntervalSeconds int    `yaml:"heartbeat_interval_seconds"`
 	ActionTimeoutSeconds     int    `yaml:"action_timeout_seconds"`
 	TokenExpireSeconds       int    `yaml:"token_expire_seconds"`
+	LegacyBridgeEnabled      bool   `yaml:"legacy_bridge_enabled"`
 }
 
 // ForwardRuntimeAnsibleConfig stores local ansible runtime settings.
@@ -222,7 +225,7 @@ func Load(path string) (*Config, error) {
 	var err error
 	once.Do(func() {
 		var data []byte
-		data, err = os.ReadFile(path)
+		data, err = os.ReadFile(path) // #nosec G304 -- config path is supplied by the operator or test harness, not by an HTTP user.
 		if err != nil {
 			return
 		}

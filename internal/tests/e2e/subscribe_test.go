@@ -135,7 +135,7 @@ func (s *SubscribeE2ETestSuite) SetupSuite() {
 	s.db.Create(s.testGroup)
 
 	// 关联协议到分组
-	s.db.Model(s.testGroup).Association("Protocols").Append(s.testProtocol)
+	s.Require().NoError(s.db.Model(s.testGroup).Association("Protocols").Append(s.testProtocol))
 
 	// 将用户关联到订阅分组
 	userGroup := &model.UserSubscriptionGroup{
@@ -151,7 +151,7 @@ func (s *SubscribeE2ETestSuite) SetupSuite() {
 
 // TearDownSuite 测试套件清理
 func (s *SubscribeE2ETestSuite) TearDownSuite() {
-	database.Close()
+	requireDatabaseClosed(s.T())
 }
 
 // TestGetSubscription_Success 测试获取订阅成功

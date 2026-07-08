@@ -3,10 +3,12 @@ package grpc
 import (
 	"context"
 	"log/slog"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/anixops/v2board/internal/service"
 	"github.com/anixops/v2board/internal/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -17,11 +19,11 @@ import (
 
 // NodeConnection 节点连接信息
 type NodeConnection struct {
-	NodeID      uint32
-	LastSeen    time.Time
-	RemoteAddr  string
-	Connection  any              // 可以是具体的流对象
-	configChan  chan struct{}    // buffered channel for config push signals
+	NodeID     uint32
+	LastSeen   time.Time
+	RemoteAddr string
+	Connection any           // 可以是具体的流对象
+	configChan chan struct{} // buffered channel for config push signals
 }
 
 // NodeConnectionManager 节点连接管理器
@@ -148,12 +150,52 @@ func GetConnectionManager() *NodeConnectionManager {
 	return connectionManager
 }
 
-// AuthInterceptor 认证拦截器，支持 API Token 和 JWT 两种认证方式
+// authenticateNode 校验节点自带的 x-api-key/x-node-id metadata (V2bX 通过
+// GRPCClient.withAuth 附带), 而不是全局共享的 api_token/JWT。每个节点用自己的
+// APIKeyHash 校验, 且 x-node-id 必须与 key 对应的节点一致, 防止一个节点的
+// key 被拿来冒充另一个 node_id。Register 方法没有 key (节点还没注册), 由
+// 调用方跳过。
+func authenticateNode(ctx context.Context) (authed bool, errMsg string) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return false, ""
+	}
+	keys := md.Get("x-api-key")
+	if len(keys) == 0 || keys[0] == "" {
+		return false, ""
+	}
+	ids := md.Get("x-node-id")
+	if len(ids) == 0 {
+		return false, "missing x-node-id"
+	}
+	nodeID, err := strconv.ParseUint(ids[0], 10, 32)
+	if err != nil {
+		return false, "invalid x-node-id"
+	}
+
+	node, err := service.NewNodeService().GetNodeByAPIKey(keys[0])
+	if err != nil {
+		return false, "invalid node api key"
+	}
+	if uint64(node.ID) != nodeID {
+		return false, "node api key does not match x-node-id"
+	}
+	return true, ""
+}
+
+// AuthInterceptor 认证拦截器: 先校验节点自身 x-api-key, 否则回退到全局
+// API Token / JWT 两种认证方式 (管理端/兼容旧调用)
 func AuthInterceptor(apiToken, jwtSecret string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		// 健康检查不需要认证
-		if strings.Contains(info.FullMethod, "HealthService") {
+		// 健康检查和节点注册不需要认证 (注册时节点还没有 api key)
+		if strings.Contains(info.FullMethod, "HealthService") || strings.HasSuffix(info.FullMethod, "/Register") {
 			return handler(ctx, req)
+		}
+
+		if authed, errMsg := authenticateNode(ctx); authed {
+			return handler(ctx, req)
+		} else if errMsg != "" {
+			return nil, status.Error(codes.Unauthenticated, errMsg)
 		}
 
 		// 从 metadata 获取 token
@@ -187,12 +229,19 @@ func AuthInterceptor(apiToken, jwtSecret string) grpc.UnaryServerInterceptor {
 	}
 }
 
-// StreamAuthInterceptor 流式认证拦截器，支持 API Token 和 JWT 两种认证方式
+// StreamAuthInterceptor 流式认证拦截器: 先校验节点自身 x-api-key, 否则回退到
+// 全局 API Token / JWT 两种认证方式 (管理端/兼容旧调用)
 func StreamAuthInterceptor(apiToken, jwtSecret string) grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		// 健康检查不需要认证
 		if strings.Contains(info.FullMethod, "HealthService") {
 			return handler(srv, ss)
+		}
+
+		if authed, errMsg := authenticateNode(ss.Context()); authed {
+			return handler(srv, ss)
+		} else if errMsg != "" {
+			return status.Error(codes.Unauthenticated, errMsg)
 		}
 
 		// 从 metadata 获取 token

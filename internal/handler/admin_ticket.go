@@ -27,7 +27,7 @@ func (h *AdminTicketHandler) GetTickets(c *gin.Context) {
 	}
 
 	// 转换为响应格式
-	var result []gin.H
+	result := make([]gin.H, 0, len(tickets))
 	for _, t := range tickets {
 		result = append(result, gin.H{
 			"id":         t.ID,
@@ -40,7 +40,7 @@ func (h *AdminTicketHandler) GetTickets(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	panelSuccess(c, result)
 }
 
 // ReplyTicket 回复工单
@@ -78,9 +78,12 @@ func (h *AdminTicketHandler) ReplyTicket(c *gin.Context) {
 	}
 
 	// 更新工单状态为已回复
-	database.GetDB().Model(&ticket).Update("status", 1)
+	if err := database.GetDB().Model(&ticket).Update("status", 1).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新工单状态失败"})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "回复成功"})
+	panelSuccess(c, gin.H{"message": "回复成功"})
 }
 
 // CloseTicket 关闭工单
@@ -103,5 +106,5 @@ func (h *AdminTicketHandler) CloseTicket(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "工单已关闭", "id": id})
+	panelSuccess(c, gin.H{"message": "工单已关闭", "id": id})
 }

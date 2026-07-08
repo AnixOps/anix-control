@@ -5,11 +5,14 @@ describe('admin routes', () => {
   it('registers all admin menu paths', () => {
     const expectedPaths = [
       '/admin/dashboard',
+      '/admin/monitor',
+      '/admin/traffic-hourly',
       '/admin/users',
       '/admin/orders',
       '/admin/tickets',
       '/admin/nodes',
       '/admin/subscriptions',
+      '/admin/forward/setup',
       '/admin/forward',
       '/admin/forward/tunnel',
       '/admin/forward/limit',
@@ -18,6 +21,7 @@ describe('admin routes', () => {
       '/admin/forward/local',
       '/admin/forward/nodex',
       '/admin/forward/agents',
+      '/admin/forward/observability',
       '/admin/forward/tunnels',
       '/admin/forward/limits',
       '/admin/forward/ansible',

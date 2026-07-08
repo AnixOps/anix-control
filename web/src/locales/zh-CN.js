@@ -233,6 +233,7 @@ export default {
     },
     admin: {
       dashboard: '仪表盘',
+      monitor: '实时监控',
       trafficHourly: '小时流量统计',
       users: '用户管理',
       nodes: '节点管理',
@@ -330,7 +331,8 @@ export default {
       nodeXTopology: 'NodeX 拓扑',
       nodeXRuntime: 'NodeX 运行时',
       nodeXAgents: 'NodeX Agents',
-      observability: '可观测性'
+      observability: '可观测性',
+      more: '更多'
     },
     hints: {
       setupWizard: '一步步配置节点、隧道和转发',
@@ -339,7 +341,8 @@ export default {
       nodeXTopology: '有状态 relay/exit 拓扑',
       nodeXRuntime: '有状态 gost 控制面',
       nodeXAgents: '有状态 agent 任务通道',
-      observability: '网络拓扑与延迟指标'
+      observability: '网络拓扑与延迟指标',
+      more: '高级运行时工具'
     }
   },
   forwardWizard: {
@@ -927,6 +930,39 @@ export default {
         startImport: '\u5f00\u59cb\u5bfc\u5165',
         rerunDiagnosis: '\u91cd\u65b0\u8bca\u65ad'
       },
+      bulk: {
+        selected: '已选择 {count} 条',
+        selectAll: '选择全部转发',
+        selectRule: '选择 {name}',
+        resume: '恢复',
+        pause: '暂停',
+        export: '导出',
+        delete: '删除',
+        clear: '清空'
+      },
+      filters: {
+        search: '搜索',
+        searchPlaceholder: '规则、隧道、用户、地址或端口',
+        tunnel: '隧道',
+        allTunnels: '全部隧道',
+        status: '状态',
+        allStatuses: '全部状态',
+        running: '运行中',
+        paused: '已暂停',
+        error: '错误',
+        clear: '重置',
+        emptyTitle: '没有匹配的转发',
+        emptyText: '调整搜索、隧道或状态筛选后查看更多规则。'
+      },
+      table: {
+        rule: '\u89c4\u5219 / \u96a7\u9053',
+        ingress: '\u5165\u53e3',
+        target: '\u76ee\u6807',
+        policy: '\u7b56\u7565',
+        status: '\u72b6\u6001',
+        traffic: '\u6d41\u91cf',
+        actions: '\u64cd\u4f5c'
+      },
       group: {
         eyebrow: 'User',
         userTag: '\u7528\u6237',
@@ -936,7 +972,7 @@ export default {
       emptyGroupedTitle: '\u6682\u65e0\u8f6c\u53d1\u914d\u7f6e',
       emptyGroupedText: '\u5f53\u524d\u7cfb\u7edf\u91cc\u8fd8\u6ca1\u6709\u4efb\u4f55\u517c\u5bb9 flux-panel \u7684\u8f6c\u53d1\u8bb0\u5f55\u3002',
       emptyDirectTitle: '\u6682\u65e0\u8f6c\u53d1\u914d\u7f6e',
-      emptyDirectText: '\u521b\u5efa\u7b2c\u4e00\u6761\u8f6c\u53d1\u540e\uff0c\u8fd9\u91cc\u4f1a\u663e\u793a\u5f53\u524d\u8f6c\u53d1\u7684\u76f4\u8fde\u5361\u7247\u89c6\u56fe\u3002',
+      emptyDirectText: '\u521b\u5efa\u7b2c\u4e00\u6761\u8f6c\u53d1\u540e\uff0c\u8fd9\u91cc\u4f1a\u663e\u793a\u5f53\u524d\u8f6c\u53d1\u7684\u76f4\u8fde\u8868\u683c\u89c6\u56fe\u3002',
       editor: {
         eyebrow: 'Forward',
         titleEdit: '\u7f16\u8f91\u8f6c\u53d1',
@@ -981,23 +1017,24 @@ export default {
       exportModal: {
         eyebrow: 'Export',
         title: '\u5bfc\u51fa\u8f6c\u53d1\u6570\u636e',
-        subtitle: '\u683c\u5f0f\uff1aremoteAddr|name|inPort',
+        subtitle: '格式：兼容 relay-panel 的 JSON：[{ "dest": ["host:port"], "listen_port": 10086, "name": "规则" }]',
         tunnelLabel: '\u9009\u62e9\u5bfc\u51fa\u96a7\u9053',
         tunnelPlaceholder: '\u8bf7\u9009\u62e9\u96a7\u9053',
         generating: '\u751f\u6210\u4e2d...',
         regenerate: '\u91cd\u65b0\u751f\u6210',
         generate: '\u751f\u6210\u5bfc\u51fa\u6570\u636e',
-        noDataPlaceholder: '\u6682\u65e0\u5bfc\u51fa\u6570\u636e'
+        noDataPlaceholder: '\u6682\u65e0\u5bfc\u51fa\u6570\u636e',
+        selectionHint: '正在导出已选择的 {count} 条转发。'
       },
       importModal: {
         eyebrow: 'Import',
         title: '\u5bfc\u5165\u8f6c\u53d1\u6570\u636e',
-        subtitle: '\u683c\u5f0f\uff1aremoteAddr|name|inPort\uff0c\u6bcf\u884c\u4e00\u6761\uff0cinPort \u53ef\u7559\u7a7a\u3002',
-        subtitleSecondary: '\u76ee\u6807\u5730\u5740\u652f\u6301\u5355\u5730\u5740\u6216\u9017\u53f7\u62fc\u63a5\u7684\u591a\u5730\u5740\uff0c\u4f8b\u5982\uff1a3.3.3.3:3,4.4.4.4:4',
+        subtitle: '支持 relay-panel JSON 和旧格式 remoteAddr|name|inPort，inPort 可留空。',
+        subtitleSecondary: 'JSON 示例：[{ "dest": ["3.3.3.3:3", "4.4.4.4:4"], "listen_port": 10086, "name": "业务入口" }]',
         tunnelLabel: '\u9009\u62e9\u5bfc\u5165\u96a7\u9053',
         tunnelPlaceholder: '\u8bf7\u9009\u62e9\u96a7\u9053',
         dataLabel: '\u5bfc\u5165\u6570\u636e',
-        placeholder: 'example.com:8080|\u4e1a\u52a1\u5165\u53e3|10086',
+        placeholder: '[{"dest":["example.com:8080"],"listen_port":10086,"name":"业务入口"}]',
         resultTitle: '\u5bfc\u5165\u7ed3\u679c',
         resultSummary: '\u6210\u529f\uff1a{success} / \u603b\u8ba1\uff1a{total}',
         statusSuccess: '\u6210\u529f',
@@ -1084,6 +1121,8 @@ export default {
         serviceChanged: '\u670d\u52a1\u53d8\u66f4\u5df2\u63d0\u4ea4',
         servicePaused: '\u6682\u505c\u8bf7\u6c42\u5df2\u63d0\u4ea4',
         networkActionFailed: '\u7f51\u7edc\u9519\u8bef\uff0c\u64cd\u4f5c\u5931\u8d25',
+        bulkActionComplete: '批量操作完成：成功 {success} 条，失败 {failed} 条',
+        bulkDeleteConfirm: '确认删除已选择的 {count} 条转发吗？批量模式下常规删除失败不会自动强制删除。',
         deleted: '\u5220\u9664\u6210\u529f',
         forceDeleted: '\u5f3a\u5236\u5220\u9664\u6210\u529f',
         forceDeleteFailed: '\u5f3a\u5236\u5220\u9664\u5931\u8d25',
@@ -2709,7 +2748,9 @@ export default {
       copySubscribe: '复制订阅链接',
       copySubscribeShort: '复制订阅',
       resetSubscribe: '重置订阅链接 (旧链接失效)',
-      resetSubscribeShort: '重置订阅'
+      resetSubscribeShort: '重置订阅',
+      viewTraffic: '查看最近 30 天流量',
+      viewTrafficShort: '流量详情'
     },
     empty: {
       noData: '暂无数据'
@@ -2814,6 +2855,26 @@ export default {
       quota: '当前配额',
       resetting: '重置中...',
       confirmAction: '确认重置'
+    },
+    trafficModal: {
+      title: '流量详情 - {email}',
+      subtitle: '最近 30 天每日汇总和每小时明细。',
+      refresh: '刷新',
+      loading: '加载中...',
+      dailyTitle: '每日流量',
+      hourlyTitle: '每小时流量',
+      empty: '暂无流量记录',
+      fetchFailed: '加载用户流量失败',
+      summary: {
+        total30d: '30 天总流量',
+        dailyPeak: '单日峰值',
+        hourlyPeak: '单小时峰值'
+      },
+      table: {
+        date: '日期',
+        hour: '小时',
+        traffic: '流量'
+      }
     },
     labels: {
       admin: '管理员',

@@ -123,6 +123,19 @@ func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
 	c.String(http.StatusOK, resp.Content)
 }
 
+// GetLegacySubscription keeps compatibility with the historical
+// /api/v1/client/subscribe?token=TOKEN entrypoint.
+func (h *SubscribeHandler) GetLegacySubscription(c *gin.Context) {
+	token := strings.TrimSpace(c.Query("token"))
+	if token == "" {
+		c.String(http.StatusBadRequest, "invalid token")
+		return
+	}
+
+	c.Params = append(c.Params, gin.Param{Key: "token", Value: token})
+	h.GetSubscription(c)
+}
+
 func (h *SubscribeHandler) buildSubscribeURL(c *gin.Context) string {
 	scheme := "http"
 	if c.Request.TLS != nil {
@@ -717,7 +730,7 @@ func (h *SubscriptionAdminHandler) GetGroupStats(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取统计失败", "error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": stats})
+	panelSuccess(c, stats)
 }
 
 // PreviewSubscription 预览订阅内容

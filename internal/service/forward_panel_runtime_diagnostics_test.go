@@ -21,7 +21,7 @@ type PanelForwardRuntimeDiagnosticsTestSuite struct {
 
 func (s *PanelForwardRuntimeDiagnosticsTestSuite) SetupSuite() {
 	s.ServiceTestSuite.SetupSuite()
-	database.AutoMigrate(&model.SystemConfig{})
+	s.Require().NoError(database.AutoMigrate(&model.SystemConfig{}))
 }
 
 func (s *PanelForwardRuntimeDiagnosticsTestSuite) SetupTest() {

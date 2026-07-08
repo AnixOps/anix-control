@@ -1,7 +1,6 @@
 package database
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -9,6 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func closeDatabase(t testing.TB) {
+	t.Helper()
+	require.NoError(t, Close())
+}
 
 func TestInit_SQLite(t *testing.T) {
 	cfg := &config.DatabaseConfig{
@@ -18,7 +22,7 @@ func TestInit_SQLite(t *testing.T) {
 
 	err := Init(cfg)
 	require.NoError(t, err)
-	defer Close()
+	defer closeDatabase(t)
 
 	assert.NotNil(t, Get())
 	assert.NotNil(t, GetDB())
@@ -34,13 +38,13 @@ func TestInit_SQLite_DefaultPath(t *testing.T) {
 
 	err := Init(cfg)
 	require.NoError(t, err)
-	defer Close()
+	defer closeDatabase(t)
 
 	assert.NotNil(t, Get())
 }
 
 func TestInit_SQLite_WithDirectory(t *testing.T) {
-	tempDir := os.TempDir()
+	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "test_subdir", "test.db")
 
 	cfg := &config.DatabaseConfig{
@@ -50,11 +54,7 @@ func TestInit_SQLite_WithDirectory(t *testing.T) {
 
 	err := Init(cfg)
 	require.NoError(t, err)
-	defer Close()
-
-	// Clean up
-	os.Remove(dbPath)
-	os.Remove(filepath.Dir(dbPath))
+	defer closeDatabase(t)
 }
 
 func TestInit_Postgres_InvalidConfig(t *testing.T) {
@@ -94,7 +94,7 @@ func TestInit_WithConnectionPoolSettings(t *testing.T) {
 
 	err := Init(cfg)
 	require.NoError(t, err)
-	defer Close()
+	defer closeDatabase(t)
 
 	assert.NotNil(t, Get())
 }
@@ -109,8 +109,8 @@ func TestGet(t *testing.T) {
 		Driver:   "sqlite",
 		Database: ":memory:",
 	}
-	Init(cfg)
-	defer Close()
+	require.NoError(t, Init(cfg))
+	defer closeDatabase(t)
 
 	assert.NotNil(t, Get())
 }
@@ -125,8 +125,8 @@ func TestGetDB(t *testing.T) {
 		Driver:   "sqlite",
 		Database: ":memory:",
 	}
-	Init(cfg)
-	defer Close()
+	require.NoError(t, Init(cfg))
+	defer closeDatabase(t)
 
 	assert.NotNil(t, GetDB())
 }
@@ -142,7 +142,7 @@ func TestClose(t *testing.T) {
 		Driver:   "sqlite",
 		Database: ":memory:",
 	}
-	Init(cfg)
+	require.NoError(t, Init(cfg))
 	err = Close()
 	assert.NoError(t, err)
 }
@@ -152,7 +152,7 @@ func TestClose_DoubleClose(t *testing.T) {
 		Driver:   "sqlite",
 		Database: ":memory:",
 	}
-	Init(cfg)
+	require.NoError(t, Init(cfg))
 
 	// First close
 	err := Close()
@@ -170,7 +170,7 @@ func TestAutoMigrate(t *testing.T) {
 	}
 	err := Init(cfg)
 	require.NoError(t, err)
-	defer Close()
+	defer closeDatabase(t)
 
 	// Create a simple test model
 	type TestModel struct {
@@ -189,7 +189,7 @@ func TestAutoMigrate_MultipleModels(t *testing.T) {
 	}
 	err := Init(cfg)
 	require.NoError(t, err)
-	defer Close()
+	defer closeDatabase(t)
 
 	type Model1 struct {
 		ID uint `gorm:"primaryKey"`
@@ -208,8 +208,8 @@ func TestIsSQLite(t *testing.T) {
 		Driver:   "sqlite",
 		Database: ":memory:",
 	}
-	Init(cfg)
-	defer Close()
+	require.NoError(t, Init(cfg))
+	defer closeDatabase(t)
 
 	assert.True(t, IsSQLite())
 	assert.False(t, IsPostgres())
@@ -220,8 +220,8 @@ func TestIsPostgres(t *testing.T) {
 		Driver:   "sqlite",
 		Database: ":memory:",
 	}
-	Init(cfg)
-	defer Close()
+	require.NoError(t, Init(cfg))
+	defer closeDatabase(t)
 
 	assert.False(t, IsPostgres())
 	assert.True(t, IsSQLite())
@@ -249,26 +249,23 @@ func TestInit_WithLogLevel(t *testing.T) {
 
 			err := Init(cfg)
 			require.NoError(t, err)
-			Close()
+			closeDatabase(t)
 		})
 	}
 }
 
 func TestInit_SQLiteWithPath(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_temp.db")
 	cfg := &config.DatabaseConfig{
 		Driver:   "sqlite",
-		Database: "test_temp.db",
+		Database: dbPath,
 	}
 
 	err := Init(cfg)
 	require.NoError(t, err)
-	defer Close()
 
 	assert.NotNil(t, Get())
-
-	// Clean up the test file
-	Close()
-	os.Remove("test_temp.db")
+	closeDatabase(t)
 }
 
 func TestInit_EmptyDriver(t *testing.T) {
@@ -280,7 +277,7 @@ func TestInit_EmptyDriver(t *testing.T) {
 
 	err := Init(cfg)
 	require.NoError(t, err)
-	defer Close()
+	defer closeDatabase(t)
 
 	assert.NotNil(t, Get())
 	assert.True(t, IsSQLite())
@@ -295,7 +292,7 @@ func TestInit_SQLite3Driver(t *testing.T) {
 
 	err := Init(cfg)
 	require.NoError(t, err)
-	defer Close()
+	defer closeDatabase(t)
 
 	assert.NotNil(t, Get())
 	assert.True(t, IsSQLite())
@@ -331,7 +328,7 @@ func TestIsSQLite_AfterClose(t *testing.T) {
 
 	assert.True(t, IsSQLite())
 
-	Close()
+	closeDatabase(t)
 	// After close, db is nil, calling IsSQLite would panic
 	// So we just test that it works when db is valid
 }
@@ -343,7 +340,7 @@ func TestIsPostgres_AfterInit(t *testing.T) {
 	}
 	err := Init(cfg)
 	require.NoError(t, err)
-	defer Close()
+	defer closeDatabase(t)
 
 	assert.False(t, IsPostgres())
 	assert.True(t, IsSQLite())
@@ -356,7 +353,7 @@ func TestGet_AfterInit(t *testing.T) {
 	}
 	err := Init(cfg)
 	require.NoError(t, err)
-	defer Close()
+	defer closeDatabase(t)
 
 	db := Get()
 	assert.NotNil(t, db)

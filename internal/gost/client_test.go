@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewClient(t *testing.T) {
@@ -62,7 +64,7 @@ func TestClient_GetServices(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -101,7 +103,7 @@ func TestClient_GetService(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -218,7 +220,7 @@ func TestClient_GetStats(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -317,7 +319,8 @@ func TestClient_Reload(t *testing.T) {
 func TestClient_ErrorHandling(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("not found"))
+		_, err := w.Write([]byte("not found"))
+		require.NoError(t, err)
 	}))
 	defer server.Close()
 
@@ -363,7 +366,7 @@ func TestClient_GetChains(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		require.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -468,7 +471,7 @@ func TestClient_GetServiceStats(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(stats)
+		require.NoError(t, json.NewEncoder(w).Encode(stats))
 	}))
 	defer server.Close()
 

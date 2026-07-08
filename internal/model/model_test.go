@@ -140,6 +140,19 @@ func TestSubscriptionTemplateTableName(t *testing.T) {
 	assert.Equal(t, "v2_subscription_template", SubscriptionTemplate{}.TableName())
 }
 
+func TestSubscriptionTemplateJSONHelpersRejectInvalidJSON(t *testing.T) {
+	invalid := "{invalid"
+	template := SubscriptionTemplate{
+		TransportSettings: &invalid,
+		ProtocolSettings:  &invalid,
+		Tags:              &invalid,
+	}
+
+	assert.Nil(t, template.GetTransportSettings())
+	assert.Nil(t, template.GetProtocolSettings())
+	assert.Nil(t, template.GetTags())
+}
+
 func TestUserSubscriptionGroupTableName(t *testing.T) {
 	assert.Equal(t, "v2_user_subscription_group", UserSubscriptionGroup{}.TableName())
 }
@@ -491,6 +504,11 @@ func TestBaseServer_GetGroupIDs(t *testing.T) {
 			server:   BaseServer{GroupID: "[1,2,3]"},
 			expected: []uint{1, 2, 3},
 		},
+		{
+			name:     "invalid group json",
+			server:   BaseServer{GroupID: "{invalid"},
+			expected: nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -521,6 +539,11 @@ func TestBaseServer_GetRouteIDs(t *testing.T) {
 			name:     "multiple route ids",
 			server:   BaseServer{RouteID: "[1,2,3]"},
 			expected: []uint{1, 2, 3},
+		},
+		{
+			name:     "invalid route json",
+			server:   BaseServer{RouteID: "{invalid"},
+			expected: nil,
 		},
 	}
 

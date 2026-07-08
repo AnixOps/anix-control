@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -92,6 +93,10 @@ func (h *NodeHandler) Heartbeat(c *gin.Context) {
 	}
 
 	if err := h.nodeService.Heartbeat(nodeID.(uint), &req); err != nil {
+		if errors.Is(err, service.ErrNegativeTraffic) {
+			c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "心跳失败"})
 		return
 	}
@@ -336,7 +341,7 @@ func (h *NodeHandler) GetNodeStats(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": stats})
+	panelSuccess(c, stats)
 }
 
 // GetNodeLogs godoc

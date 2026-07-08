@@ -69,7 +69,9 @@ func (s *E2ETestSuite) StartEchoServer(ctx context.Context) (int, error) {
 // StopEchoServer 鍋滄 Echo 鏈嶅姟鍣?
 func (s *E2ETestSuite) StopEchoServer(ctx context.Context) {
 	if s.echoServer != nil {
-		s.echoServer.Stop(ctx)
+		if err := s.echoServer.Stop(ctx); err != nil {
+			s.t.Errorf("stop echo server: %v", err)
+		}
 	}
 }
 
@@ -84,7 +86,11 @@ func (s *E2ETestSuite) GetFreePort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer l.Close()
+	defer func() {
+		if err := l.Close(); err != nil {
+			s.t.Errorf("close free port listener: %v", err)
+		}
+	}()
 
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
@@ -95,7 +101,9 @@ func (s *E2ETestSuite) WaitForPort(port int, timeout time.Duration) error {
 	for time.Since(start) < timeout {
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), time.Second)
 		if err == nil {
-			conn.Close()
+			if err := conn.Close(); err != nil {
+				return fmt.Errorf("close port probe connection: %w", err)
+			}
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -219,7 +227,11 @@ func (s *E2ETestSuite) testConnectivity(ctx context.Context, proxyPort, echoPort
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			s.t.Errorf("close connectivity response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
@@ -445,7 +457,9 @@ func (s *E2ETestSuite) StopAll() {
 	for i := len(s.processes) - 1; i >= 0; i-- {
 		cmd := s.processes[i]
 		if cmd.Process != nil {
-			cmd.Process.Signal(os.Interrupt)
+			if err := cmd.Process.Signal(os.Interrupt); err != nil {
+				s.t.Logf("interrupt process %d: %v", cmd.Process.Pid, err)
+			}
 			done := make(chan error, 1)
 			go func() {
 				done <- cmd.Wait()
@@ -453,7 +467,9 @@ func (s *E2ETestSuite) StopAll() {
 			select {
 			case <-done:
 			case <-time.After(3 * time.Second):
-				cmd.Process.Kill()
+				if err := cmd.Process.Kill(); err != nil {
+					s.t.Logf("kill process %d: %v", cmd.Process.Pid, err)
+				}
 			}
 		}
 	}
@@ -531,7 +547,9 @@ func TestE2EStartEchoServer(t *testing.T) {
 	// 娴嬭瘯 Echo 鏈嶅姟鍣?
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/ping", port))
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() {
+		require.NoError(t, resp.Body.Close())
+	}()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -775,7 +793,11 @@ func TestE2EConcurrency(t *testing.T) {
 				errors <- err
 				return
 			}
-			defer resp.Body.Close()
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					errors <- fmt.Errorf("close concurrent response body: %w", err)
+				}
+			}()
 
 			if resp.StatusCode != http.StatusOK {
 				errors <- fmt.Errorf("unexpected status: %d", resp.StatusCode)
@@ -838,7 +860,9 @@ func TestE2ELargeData(t *testing.T) {
 
 	resp, err := client.Post(targetURL, "application/octet-stream", bytes.NewReader(largeData))
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() {
+		require.NoError(t, resp.Body.Close())
+	}()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 

@@ -25,5 +25,5 @@ func (h *UserPlanHandler) GetPlans(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": plans})
+	panelSuccess(c, plans)
 }

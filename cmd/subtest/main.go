@@ -170,11 +170,7 @@ func generateSampleConfig() {
 
 	data, _ := yaml.Marshal(config)
 	filename := filepath.Join("config", "examples", "test_nodes.yaml")
-	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
-		fmt.Printf("failed to create sample directory: %v\n", err)
-		return
-	}
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	if err := writeSampleConfig(filename, data); err != nil {
 		fmt.Printf("failed to write sample config: %v\n", err)
 		return
 	}
@@ -183,8 +179,48 @@ func generateSampleConfig() {
 	fmt.Println(string(data))
 }
 
+func writeSampleConfig(filename string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(filename), 0o750); err != nil {
+		return err
+	}
+	return os.WriteFile(filename, data, 0o600)
+}
+
+func resolveSubscriptionConfigPath(configFile string) (string, error) {
+	clean := filepath.Clean(strings.TrimSpace(configFile))
+	if clean == "." || clean == "" {
+		return "", fmt.Errorf("config path is required")
+	}
+
+	ext := strings.ToLower(filepath.Ext(clean))
+	if ext != ".yaml" && ext != ".yml" {
+		return "", fmt.Errorf("config file must use .yaml or .yml extension")
+	}
+
+	info, err := os.Stat(clean)
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("config path %q is a directory", clean)
+	}
+	return clean, nil
+}
+
+func readSubscriptionConfig(configFile string) ([]byte, error) {
+	clean, err := resolveSubscriptionConfigPath(configFile)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(clean) // #nosec G304 G703 -- this CLI reads an operator-provided local YAML file after extension and regular-file validation.
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
 func generateSubscription(configFile, format string) {
-	data, err := os.ReadFile(configFile)
+	data, err := readSubscriptionConfig(configFile)
 	if err != nil {
 		fmt.Printf("读取配置失败: %v\n", err)
 		return

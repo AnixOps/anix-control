@@ -8,23 +8,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPrintJSON_Map(t *testing.T) {
-	// Capture stdout
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
 	data := map[string]any{"key": "value", "num": 42}
-	printJSON(data)
-
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
+	output := capturePrintJSON(t, data)
 
 	// Should be valid JSON
 	var parsed map[string]any
@@ -39,18 +28,7 @@ func TestPrintJSON_Struct(t *testing.T) {
 		Value int    `json:"value"`
 	}
 
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	printJSON(Item{Name: "test", Value: 99})
-
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
+	output := capturePrintJSON(t, Item{Name: "test", Value: 99})
 
 	var parsed map[string]any
 	assert.NoError(t, json.Unmarshal([]byte(output), &parsed))
@@ -59,18 +37,29 @@ func TestPrintJSON_Struct(t *testing.T) {
 }
 
 func TestPrintJSON_Nil(t *testing.T) {
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	printJSON(nil)
-
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
+	output := capturePrintJSON(t, nil)
 
 	assert.Equal(t, "null\n", output)
+}
+
+func capturePrintJSON(t *testing.T, v any) string {
+	t.Helper()
+
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() {
+		os.Stdout = old
+	}()
+
+	printJSON(v)
+	require.NoError(t, w.Close())
+
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, r)
+	require.NoError(t, err)
+	require.NoError(t, r.Close())
+
+	return buf.String()
 }

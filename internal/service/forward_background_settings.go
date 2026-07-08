@@ -88,6 +88,26 @@ func loadForwardRuntimeJobExecutorSettings() forwardRuntimeJobExecutorSettings {
 	return settings
 }
 
+func loadForwardCleanAgentActionTimeout() time.Duration {
+	timeout := defaultForwardCleanAgentActionTimeout
+	cfg := appconfig.Get()
+	if cfg == nil {
+		return timeout
+	}
+	switch seconds := cfg.ForwardRuntime.CleanAgent.ActionTimeoutSeconds; {
+	case seconds > 0:
+		return time.Duration(seconds) * time.Second
+	case seconds < 0:
+		log.Printf(
+			"invalid %s=%d, using default %s",
+			"forward_runtime.clean_agent.action_timeout_seconds",
+			seconds,
+			defaultForwardCleanAgentActionTimeout,
+		)
+	}
+	return timeout
+}
+
 func loadForwardGostStatsWorkerSettings() forwardGostStatsWorkerSettings {
 	settings := forwardGostStatsWorkerSettings{
 		PollInterval:     defaultForwardGostStatsPollInterval,

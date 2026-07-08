@@ -32,7 +32,7 @@ func (h *OrderHandler) GetOrders(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": res})
+	panelSuccess(c, res)
 }
 
 // SaveOrder 保存订单 (下单)
@@ -61,10 +61,7 @@ func (h *OrderHandler) SaveOrder(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "订单已提交",
-		"data":    order,
-	})
+	panelSuccess(c, order)
 }
 
 // GetOrderDetail 获取订单详情
@@ -82,5 +79,5 @@ func (h *OrderHandler) GetOrderDetail(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": order})
+	panelSuccess(c, order)
 }

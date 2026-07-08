@@ -89,11 +89,7 @@ func (h *PaymentGatewayHandler) ListGateways(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":  gateways,
-			"total": len(gateways),
-		},
+	panelSuccess(c, gin.H{
 		"list":  gateways,
 		"total": len(gateways),
 	})
@@ -380,17 +376,15 @@ func (h *PaymentGatewayHandler) GetPaymentStats(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"total_amount":   stats.TotalAmount,
-			"total_count":    stats.TotalCount,
-			"pending_amount": stats.PendingAmount,
-			"pending_count":  stats.PendingCount,
-			"total_orders":   totalOrders,
-			"success_orders": successOrders,
-			"success_rate":   successRate,
-			"by_gateway":     byGateway,
-		},
+	panelSuccess(c, gin.H{
+		"total_amount":   stats.TotalAmount,
+		"total_count":    stats.TotalCount,
+		"pending_amount": stats.PendingAmount,
+		"pending_count":  stats.PendingCount,
+		"total_orders":   totalOrders,
+		"success_orders": successOrders,
+		"success_rate":   successRate,
+		"by_gateway":     byGateway,
 	})
 }
 
@@ -677,7 +671,7 @@ func (h *PaymentGatewayHandler) PaymentCallback(c *gin.Context) {
 
 	// 仅在确认支付成功时入账，防止伪造回调白嫖。
 	if result.Status == payment.StatusPaid {
-		if err := h.gatewayService.MarkOrderPaid(result.TradeNo, result.GatewayTradeNo, result.Raw); err != nil {
+		if err := h.gatewayService.MarkOrderPaidWithAmount(result.TradeNo, result.GatewayTradeNo, result.Raw, result.Amount); err != nil {
 			log.Printf("payment callback: mark paid failed for trade_no=%s: %v", result.TradeNo, err)
 			c.String(http.StatusBadRequest, "fail")
 			return

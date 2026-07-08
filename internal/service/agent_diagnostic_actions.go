@@ -14,7 +14,7 @@ const (
 	AgentDiagnosticActionLogTail        = "log_tail"
 
 	// AgentDiagnosticLogTailMaxLines 限制 log_tail 一次最多返回的行数，避免超大输出。
-	AgentDiagnosticLogTailMaxLines   = 1000
+	AgentDiagnosticLogTailMaxLines     = 1000
 	agentDiagnosticLogTailDefaultLines = 100
 )
 

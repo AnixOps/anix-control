@@ -112,9 +112,10 @@ func main() {
 	if *client != "" && *client != "both" {
 		// 鍙娇鐢ㄦ寚瀹氱殑瀹㈡埛绔?
 		generators := map[string]config.Generator{}
-		if *client == "xray" {
+		switch *client {
+		case "xray":
 			generators["xray"] = config.NewXrayGenerator()
-		} else if *client == "mihomo" {
+		case "mihomo":
 			generators["mihomo"] = config.NewMihomoGenerator()
 		}
 		// 娉ㄦ剰: 闇€瑕佷慨鏀?Runner 鏉ユ敮鎸佽嚜瀹氫箟鐢熸垚鍣?

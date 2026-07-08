@@ -1,11 +1,14 @@
 package binary
 
 import (
+	"compress/gzip"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,11 +31,9 @@ func TestGetCachePath(t *testing.T) {
 	m := NewManager("/tmp/cache")
 
 	path := m.getCachePath(&XrayInfo)
-	expectedSuffix := "xray"
+	expectedSuffix := "xray/xray"
 	if runtime.GOOS == "windows" {
 		expectedSuffix = "xray\\xray.exe"
-	} else {
-		expectedSuffix = "xray/xray"
 	}
 	assert.Contains(t, path, expectedSuffix)
 }
@@ -84,7 +85,7 @@ func TestCopyFile(t *testing.T) {
 	dst := filepath.Join(tmpDir, "dest.txt")
 
 	// 创建源文件
-	err := os.WriteFile(src, []byte("test content"), 0644)
+	err := os.WriteFile(src, []byte("test content"), 0o600)
 	require.NoError(t, err)
 
 	// 复制
@@ -95,6 +96,45 @@ func TestCopyFile(t *testing.T) {
 	data, err := os.ReadFile(dst)
 	require.NoError(t, err)
 	assert.Equal(t, "test content", string(data))
+
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(dst)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	}
+}
+
+func TestExtractGzipRejectsOversizedBinary(t *testing.T) {
+	oldLimit := maxExtractedBinaryBytes
+	maxExtractedBinaryBytes = 4
+	t.Cleanup(func() {
+		maxExtractedBinaryBytes = oldLimit
+	})
+
+	tmpDir := t.TempDir()
+	gzPath := filepath.Join(tmpDir, "mihomo.gz")
+	gzFile, err := os.Create(gzPath)
+	require.NoError(t, err)
+	gzWriter := gzip.NewWriter(gzFile)
+	_, err = gzWriter.Write([]byte("too large"))
+	require.NoError(t, err)
+	require.NoError(t, gzWriter.Close())
+	require.NoError(t, gzFile.Close())
+
+	m := NewManager(tmpDir)
+	dst := filepath.Join(tmpDir, "mihomo")
+	err = m.extractGzip(gzPath, dst, "mihomo")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds")
+}
+
+func TestCopyWithLimit(t *testing.T) {
+	err := copyWithLimit(io.Discard, strings.NewReader("1234"), 4)
+	require.NoError(t, err)
+
+	err = copyWithLimit(io.Discard, strings.NewReader("12345"), 4)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds")
 }
 
 func TestGetLatestVersion(t *testing.T) {
@@ -102,7 +142,8 @@ func TestGetLatestVersion(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"tag_name": "v1.0.0"}`))
+		_, err := w.Write([]byte(`{"tag_name": "v1.0.0"}`))
+		require.NoError(t, err)
 	}))
 	defer server.Close()
 

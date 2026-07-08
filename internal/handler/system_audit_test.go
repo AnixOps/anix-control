@@ -37,11 +37,20 @@ func decodeAuditResponse(t *testing.T, recorder *httptest.ResponseRecorder) map[
 
 func extractAuditList(t *testing.T, body map[string]any) []any {
 	t.Helper()
-	data, ok := body["data"].(map[string]any)
-	require.True(t, ok)
-	list, ok := data["list"].([]any)
+	payload := extractAuditPayload(t, body)
+	list, ok := payload["list"].([]any)
 	require.True(t, ok)
 	return list
+}
+
+func extractAuditPayload(t *testing.T, body map[string]any) map[string]any {
+	t.Helper()
+	assert.Equal(t, float64(0), body["code"])
+	assert.Equal(t, "操作成功", body["msg"])
+	assert.NotEmpty(t, body["ts"])
+	data, ok := body["data"].(map[string]any)
+	require.True(t, ok)
+	return data
 }
 
 func TestGetAuditLogsSupportsFilterAndPagination(t *testing.T) {
@@ -62,11 +71,12 @@ func TestGetAuditLogsSupportsFilterAndPagination(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	body := decodeAuditResponse(t, recorder)
+	payload := extractAuditPayload(t, body)
 	list := extractAuditList(t, body)
 
-	assert.Equal(t, float64(1), body["total"])
-	assert.Equal(t, float64(1), body["page"])
-	assert.Equal(t, float64(1), body["page_size"])
+	assert.Equal(t, float64(1), payload["total"])
+	assert.Equal(t, float64(1), payload["page"])
+	assert.Equal(t, float64(1), payload["page_size"])
 	require.Len(t, list, 1)
 
 	row, ok := list[0].(map[string]any)

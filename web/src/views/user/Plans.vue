@@ -41,7 +41,7 @@
           </div>
         </div>
 
-        <button class="btn btn-primary w-full" @click="openPurchase(plan)">{{ t('common.actions.buyNow') }}</button>
+        <button class="btn btn-primary w-full" data-test="plan-buy-button" @click="openPurchase(plan)">{{ t('common.actions.buyNow') }}</button>
       </div>
     </div>
 
@@ -87,12 +87,13 @@
                 <button
                   v-if="!couponApplied"
                   class="btn"
+                  data-test="coupon-verify-button"
                   :disabled="checkingCoupon"
                   @click="applyCoupon"
                 >
                   {{ checkingCoupon ? t('common.actions.refresh') : t('common.actions.verify') }}
                 </button>
-                <button v-else class="btn btn-ghost text-error" @click="removeCoupon">{{ t('common.actions.remove') }}</button>
+                <button v-else class="btn btn-ghost text-error" data-test="coupon-remove-button" @click="removeCoupon">{{ t('common.actions.remove') }}</button>
               </div>
               <p v-if="couponError" class="coupon-tip text-error">{{ couponError }}</p>
               <p v-if="couponApplied" class="coupon-tip text-success">

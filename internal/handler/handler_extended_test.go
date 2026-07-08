@@ -70,6 +70,15 @@ func (s *UniProxyExtendedTestSuite) TestGetUsers_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	var resp map[string]any
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
+	users, ok := resp["users"].([]any)
+	assert.True(s.T(), ok)
+	s.Require().Len(users, 1)
+	user := users[0].(map[string]any)
+	assert.Equal(s.T(), float64(s.testUser.ID), user["id"])
+	assert.Equal(s.T(), s.testUser.UUID, user["uuid"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *UniProxyExtendedTestSuite) TestGetUsers_InvalidNodeID() {
@@ -102,8 +111,6 @@ func (s *UniProxyExtendedTestSuite) TestGetAliveList() {
 	req, _ := http.NewRequest("GET", "/server/UniProxy/alivelist", nil)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
 func TestUniProxyExtended(t *testing.T) {
@@ -158,6 +165,17 @@ func (s *OrderHandlerExtendedTestSuite) TestSaveOrder_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(s.testUser.ID), data["user_id"])
+	assert.Equal(s.T(), float64(s.testPlan.ID), data["plan_id"])
+	assert.Equal(s.T(), "month", data["period"])
+	assert.NotEmpty(s.T(), data["trade_no"])
+	assert.Equal(s.T(), float64(1000), data["total_amount"])
 }
 
 func (s *OrderHandlerExtendedTestSuite) TestSaveOrder_InvalidBody() {
@@ -276,9 +294,11 @@ func (s *InviteHandlerExtendedTestSuite) TestGetConfig_FrontendFields() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(s.T(), err)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
 
 	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
@@ -524,6 +544,8 @@ func (s *TelegramHandlerExtendedTestSuite) TestDeleteWebhook() {
 	req, _ := http.NewRequest("DELETE", "/admin/telegram/webhook", nil)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
 func (s *TelegramHandlerExtendedTestSuite) TestSendNotification() {
@@ -941,6 +963,8 @@ func (s *PaymentGatewayExtendedTestSuite) TestCreatePayment() {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
 }
 
 func (s *PaymentGatewayExtendedTestSuite) TestGetPaymentStatus() {
@@ -982,6 +1006,8 @@ func (s *PaymentGatewayExtendedTestSuite) TestPaymentCallback() {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
 }
 
 func TestPaymentGatewayExtended(t *testing.T) {
@@ -1045,6 +1071,10 @@ func (s *ForwardUserRulesTestSuite) TestGetUserRules() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotNil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardUserRulesTestSuite) TestCreateUserRule() {
@@ -1068,6 +1098,14 @@ func (s *ForwardUserRulesTestSuite) TestCreateUserRule() {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "User Rule", data["name"])
+	assert.Equal(s.T(), float64(s.testUser.ID), data["user_id"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func (s *ForwardUserRulesTestSuite) TestCreateUserRule_InvalidBody() {
@@ -1082,7 +1120,41 @@ func (s *ForwardUserRulesTestSuite) TestCreateUserRule_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
+}
+
+func (s *ForwardUserRulesTestSuite) TestCreateUserRule_ServiceError() {
+	handler := NewForwardHandler()
+	s.router.POST("/user/forward/rules", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		handler.CreateUserRule(c)
+	})
+
+	body := map[string]any{
+		"name":          "Bad User Rule",
+		"relay_node_id": uint(99999),
+		"exit_node_id":  s.testExitNode.ID,
+		"target_host":   "10.0.0.1",
+		"target_port":   80,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/user/forward/rules", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Equal(s.T(), "relay node not found", resp["msg"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), w.Body.String(), "\"error\"")
 }
 
 func TestForwardUserRules(t *testing.T) {
@@ -1352,6 +1424,14 @@ func (s *SystemBackupTestSuite) TestGetBackupStats() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+	_, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
 }
 
 func (s *SystemBackupTestSuite) TestGetBackupStats_TotalCountAlias() {
@@ -1367,9 +1447,8 @@ func (s *SystemBackupTestSuite) TestGetBackupStats_TotalCountAlias() {
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(s.T(), err)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
 
 	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)

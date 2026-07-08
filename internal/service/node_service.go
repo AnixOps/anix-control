@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/anixops/v2board/internal/cache"
@@ -156,10 +157,14 @@ func (s *NodeService) UpdateNode(id uint, updates map[string]any) error {
 	}
 
 	// 清除缓存
-	cache.Delete(CacheKeyNode + string(rune(id)))
-	cache.Delete(CacheKeyNodeList)
+	_ = cache.Delete(nodeCacheKey(id))
+	_ = cache.Delete(CacheKeyNodeList)
 
 	return s.db.Model(&model.Node{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func nodeCacheKey(id uint) string {
+	return CacheKeyNode + strconv.FormatUint(uint64(id), 10)
 }
 
 // validateParentID 防止把节点的父节点设置成会形成环的节点(即父节点链条里
@@ -312,6 +317,10 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 
 // Heartbeat 节点心跳
 func (s *NodeService) Heartbeat(nodeID uint, req *model.NodeHeartbeatRequest) error {
+	if err := ValidateTrafficDelta(req.Upload, req.Download); err != nil {
+		return err
+	}
+
 	now := time.Now().Unix()
 
 	updates := map[string]any{
@@ -336,7 +345,7 @@ func (s *NodeService) Heartbeat(nodeID uint, req *model.NodeHeartbeatRequest) er
 	// 心跳/在线状态已落库在前面, 这里失败只向调用方返回错误用于记录日志,
 	// 不能反过来让流量累加失败连带把节点判定为离线。
 	if req.Upload > 0 || req.Download > 0 {
-		if err := s.accumulateTraffic(nodeID, req.Upload, req.Download); err != nil {
+		if err := s.accumulateTraffic(nodeID, req.Upload, req.Download, true); err != nil {
 			return err
 		}
 	}
@@ -346,26 +355,33 @@ func (s *NodeService) Heartbeat(nodeID uint, req *model.NodeHeartbeatRequest) er
 
 // AccumulateTrafficOnly 仅把流量累加到节点自身及其父节点链，不更新心跳指标。
 func (s *NodeService) AccumulateTrafficOnly(nodeID uint, upload, download int64) error {
+	if err := ValidateTrafficDelta(upload, download); err != nil {
+		return err
+	}
 	if upload <= 0 && download <= 0 {
 		return nil
 	}
-	return s.accumulateTraffic(nodeID, upload, download)
+	return s.accumulateTraffic(nodeID, upload, download, false)
 }
 
 // accumulateTraffic 把流量增量累加到节点自身及其每一级上级节点 (ParentID 链),
 // 用于"落地节点为根、转发节点为子"的中转链路场景: 转发节点上报的流量既要算在
 // 自己头上, 也要算在链路上每一层父节点头上。seen 用于防止数据被误配成环时死循环。
-func (s *NodeService) accumulateTraffic(nodeID uint, upload, download int64) error {
+func (s *NodeService) accumulateTraffic(nodeID uint, upload, download int64, includeMonthly bool) error {
 	seen := make(map[uint]bool)
 	currentID := nodeID
 	for currentID != 0 && !seen[currentID] {
 		seen[currentID] = true
 
-		if err := s.db.Model(&model.Node{}).Where("id = ?", currentID).
-			UpdateColumn("total_upload", gorm.Expr("total_upload + ?", upload)).
-			UpdateColumn("total_download", gorm.Expr("total_download + ?", download)).
-			UpdateColumn("monthly_upload", gorm.Expr("monthly_upload + ?", upload)).
-			UpdateColumn("monthly_download", gorm.Expr("monthly_download + ?", download)).Error; err != nil {
+		updates := map[string]any{
+			"total_upload":   gorm.Expr("total_upload + ?", upload),
+			"total_download": gorm.Expr("total_download + ?", download),
+		}
+		if includeMonthly {
+			updates["monthly_upload"] = gorm.Expr("monthly_upload + ?", upload)
+			updates["monthly_download"] = gorm.Expr("monthly_download + ?", download)
+		}
+		if err := s.db.Model(&model.Node{}).Where("id = ?", currentID).UpdateColumns(updates).Error; err != nil {
 			return err
 		}
 

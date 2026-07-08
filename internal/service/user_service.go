@@ -105,6 +105,9 @@ func (s *UserService) GetActiveUsersForNode(groupID *uint) ([]*model.User, error
 
 // UpdateTraffic 更新用户流量
 func (s *UserService) UpdateTraffic(userID uint, upload, download int64) error {
+	if err := ValidateTrafficDelta(upload, download); err != nil {
+		return err
+	}
 	return s.db.Model(&model.User{}).
 		Where("id = ?", userID).
 		Updates(map[string]any{
@@ -115,6 +118,12 @@ func (s *UserService) UpdateTraffic(userID uint, upload, download int64) error {
 
 // BatchUpdateTraffic 批量更新用户流量
 func (s *UserService) BatchUpdateTraffic(traffics map[uint][2]int64) error {
+	for _, traffic := range traffics {
+		if err := ValidateTrafficDelta(traffic[0], traffic[1]); err != nil {
+			return err
+		}
+	}
+
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		for userID, traffic := range traffics {
 			if err := tx.Model(&model.User{}).

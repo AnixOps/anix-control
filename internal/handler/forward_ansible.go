@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -59,7 +58,7 @@ func (h *ForwardHandler) ListAnsibleMachines(c *gin.Context) {
 	if rawStatus := c.Query("status"); rawStatus != "" {
 		parsedStatus, err := strconv.Atoi(rawStatus)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
+			panelError(c, "invalid status")
 			return
 		}
 		status = &parsedStatus
@@ -67,7 +66,7 @@ func (h *ForwardHandler) ListAnsibleMachines(c *gin.Context) {
 
 	nodes, total, err := h.nodeService.ListByInventoryScope(service.ForwardNodeInventoryScopeAnsible, model.ForwardNodeTypeRelay, status, page, pageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -83,13 +82,7 @@ func (h *ForwardHandler) ListAnsibleMachines(c *gin.Context) {
 		list = append(list, toAnsibleMachineResponse(node))
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":      list,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
-		},
+	panelSuccess(c, gin.H{
 		"list":      list,
 		"total":     total,
 		"page":      page,
@@ -100,7 +93,7 @@ func (h *ForwardHandler) ListAnsibleMachines(c *gin.Context) {
 func (h *ForwardHandler) CreateAnsibleMachine(c *gin.Context) {
 	var req CreateAnsibleMachineRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -119,11 +112,11 @@ func (h *ForwardHandler) CreateAnsibleMachine(c *gin.Context) {
 	node.Tags = h.mergeForwardNodeTag(node.Tags, service.ForwardNodeInventoryTagAnsibleMachine)
 
 	if err := h.nodeService.Create(node); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": toAnsibleMachineResponse(node)})
+	panelSuccess(c, toAnsibleMachineResponse(node))
 }
 
 func (h *ForwardHandler) GetAnsibleMachine(c *gin.Context) {
@@ -131,7 +124,7 @@ func (h *ForwardHandler) GetAnsibleMachine(c *gin.Context) {
 	if !ok {
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": toAnsibleMachineResponse(node)})
+	panelSuccess(c, toAnsibleMachineResponse(node))
 }
 
 func (h *ForwardHandler) UpdateAnsibleMachine(c *gin.Context) {
@@ -142,7 +135,7 @@ func (h *ForwardHandler) UpdateAnsibleMachine(c *gin.Context) {
 
 	var req UpdateAnsibleMachineRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -174,11 +167,11 @@ func (h *ForwardHandler) UpdateAnsibleMachine(c *gin.Context) {
 	node.Tags = h.mergeForwardNodeTag(node.Tags, service.ForwardNodeInventoryTagAnsibleMachine)
 
 	if err := h.nodeService.Update(node); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": toAnsibleMachineResponse(node)})
+	panelSuccess(c, toAnsibleMachineResponse(node))
 }
 
 func (h *ForwardHandler) DeleteAnsibleMachine(c *gin.Context) {
@@ -188,11 +181,11 @@ func (h *ForwardHandler) DeleteAnsibleMachine(c *gin.Context) {
 	}
 
 	if err := h.nodeService.Delete(node.ID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	panelSuccess(c, "deleted")
 }
 
 func (h *ForwardHandler) CheckAnsibleMachine(c *gin.Context) {
@@ -203,11 +196,11 @@ func (h *ForwardHandler) CheckAnsibleMachine(c *gin.Context) {
 
 	result, err := h.nodeService.HealthCheck(c.Request.Context(), node.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	panelSuccess(c, result)
 }
 
 func (h *ForwardHandler) ToggleAnsibleMachine(c *gin.Context) {
@@ -218,7 +211,7 @@ func (h *ForwardHandler) ToggleAnsibleMachine(c *gin.Context) {
 
 	var req ToggleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -236,11 +229,11 @@ func (h *ForwardHandler) ToggleAnsibleMachine(c *gin.Context) {
 	node.Tags = h.mergeForwardNodeTag(node.Tags, service.ForwardNodeInventoryTagAnsibleMachine)
 
 	if err := h.nodeService.Update(node); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "updated"})
+	panelSuccess(c, "updated")
 }
 
 func (h *ForwardHandler) SyncAnsibleMachineStats(c *gin.Context) {
@@ -249,7 +242,7 @@ func (h *ForwardHandler) SyncAnsibleMachineStats(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	panelSuccess(c, gin.H{
 		"message": "Ansible machines do not expose gost management API stats; keeping panel-side counters",
 		"stats": gin.H{
 			"current_conn":   node.CurrentConn,
@@ -262,13 +255,13 @@ func (h *ForwardHandler) SyncAnsibleMachineStats(c *gin.Context) {
 func (h *ForwardHandler) loadAnsibleMachine(c *gin.Context) (*model.ForwardNode, bool) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return nil, false
 	}
 
 	node, err := h.nodeService.GetByIDForInventoryScope(uint(id), service.ForwardNodeInventoryScopeAnsible)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "ansible machine not found"})
+		panelError(c, "ansible machine not found")
 		return nil, false
 	}
 

@@ -16,7 +16,7 @@ type forwardRuntimeNodeRole int
 
 const (
 	forwardNodeRoleIngress   forwardRuntimeNodeRole = iota // gost：入口节点
-	forwardNodeRoleExecution                              // ansible / clean_agent：执行节点
+	forwardNodeRoleExecution                               // ansible / clean_agent：执行节点
 )
 
 // forwardRuntimeExecContext 携带一次转发运行时执行所需的全部上下文。
@@ -162,7 +162,9 @@ type cleanAgentForwardExecutor struct {
 func (e *cleanAgentForwardExecutor) backend() string {
 	return model.ForwardRuntimeBackendCleanAgent
 }
-func (e *cleanAgentForwardExecutor) nodeRole() forwardRuntimeNodeRole { return forwardNodeRoleExecution }
+func (e *cleanAgentForwardExecutor) nodeRole() forwardRuntimeNodeRole {
+	return forwardNodeRoleExecution
+}
 
 func (e *cleanAgentForwardExecutor) validate(action string) error { return nil }
 

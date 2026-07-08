@@ -2,6 +2,7 @@ package gateways
 
 import (
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/anixops/v2board/internal/payment"
@@ -41,6 +42,23 @@ func TestEpayVerifyCallback_Valid(t *testing.T) {
 	}
 	if result.GatewayTradeNo != "EP998877" {
 		t.Fatalf("expected gateway_trade_no EP998877, got %s", result.GatewayTradeNo)
+	}
+	if result.Amount == nil || *result.Amount != 10.00 {
+		t.Fatalf("expected amount 10.00, got %#v", result.Amount)
+	}
+}
+
+func TestEpayVerifyCallback_UppercaseSignAccepted(t *testing.T) {
+	q := buildEpayQuery("testkey123")
+	q.Set("sign", strings.ToUpper(q.Get("sign")))
+	gw := epayGateway{}
+
+	_, err := gw.VerifyCallback(&payment.CallbackContext{
+		Query:  q,
+		Config: epayTestConfig,
+	})
+	if err != nil {
+		t.Fatalf("expected uppercase sign to be accepted, got error: %v", err)
 	}
 }
 
@@ -82,6 +100,98 @@ func TestEpayVerifyCallback_MissingKeyFailsClosed(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected missing key to fail closed")
+	}
+}
+
+func TestEpayVerifyCallback_MissingTradeNoRejectedForPaid(t *testing.T) {
+	q := buildEpayQuery("testkey123")
+	q.Del("out_trade_no")
+	q.Set("sign", epaySign(q, "testkey123"))
+	gw := epayGateway{}
+
+	_, err := gw.VerifyCallback(&payment.CallbackContext{
+		Query:  q,
+		Config: epayTestConfig,
+	})
+	if err == nil {
+		t.Fatal("expected paid callback without out_trade_no to be rejected")
+	}
+}
+
+func TestEpayVerifyCallback_InvalidMoneyRejectedForPaid(t *testing.T) {
+	q := buildEpayQuery("testkey123")
+	q.Set("money", "not-a-number")
+	q.Set("sign", epaySign(q, "testkey123"))
+	gw := epayGateway{}
+
+	_, err := gw.VerifyCallback(&payment.CallbackContext{
+		Query:  q,
+		Config: epayTestConfig,
+	})
+	if err == nil {
+		t.Fatal("expected invalid money to be rejected")
+	}
+}
+
+func TestRegisteredGatewayCallbackSignatureCoverage(t *testing.T) {
+	type callbackCase struct {
+		valid    func() (*payment.CallbackContext, error)
+		tampered func() (*payment.CallbackContext, error)
+	}
+
+	cases := map[string]callbackCase{
+		"epay": {
+			valid: func() (*payment.CallbackContext, error) {
+				return &payment.CallbackContext{
+					Query:  buildEpayQuery("testkey123"),
+					Config: epayTestConfig,
+				}, nil
+			},
+			tampered: func() (*payment.CallbackContext, error) {
+				q := buildEpayQuery("testkey123")
+				q.Set("money", "0.01")
+				return &payment.CallbackContext{
+					Query:  q,
+					Config: epayTestConfig,
+				}, nil
+			},
+		},
+	}
+
+	registered := payment.Types()
+	for _, typ := range registered {
+		tc, ok := cases[typ]
+		if !ok {
+			t.Fatalf("registered payment gateway %q has no callback signature coverage case", typ)
+		}
+
+		t.Run(typ+"/valid", func(t *testing.T) {
+			gw, ok := payment.Get(typ)
+			if !ok {
+				t.Fatalf("registered payment gateway %q cannot be loaded", typ)
+			}
+			ctx, err := tc.valid()
+			if err != nil {
+				t.Fatalf("build valid callback: %v", err)
+			}
+			if _, err := gw.VerifyCallback(ctx); err != nil {
+				t.Fatalf("valid callback rejected: %v", err)
+			}
+		})
+
+		t.Run(typ+"/tampered", func(t *testing.T) {
+			gw, ok := payment.Get(typ)
+			if !ok {
+				t.Fatalf("registered payment gateway %q cannot be loaded", typ)
+			}
+			ctx, err := tc.tampered()
+			if err != nil {
+				t.Fatalf("build tampered callback: %v", err)
+			}
+			if _, err := gw.VerifyCallback(ctx); err == nil {
+				t.Fatal("tampered callback accepted")
+			}
+		})
 	}
 }
 

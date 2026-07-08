@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/anixops/v2board/internal/model"
@@ -14,7 +15,6 @@ import (
 type Manager struct {
 	db      *gorm.DB
 	clients sync.Map // nodeID -> *Client
-	mu      sync.RWMutex
 }
 
 // NewManager 创建管理器
@@ -143,7 +143,7 @@ func (m *Manager) CreateForwardRule(ctx context.Context, rule *model.ForwardRule
 func (m *Manager) UpdateForwardRule(ctx context.Context, rule *model.ForwardRule) error {
 	// 先删除旧规则
 	if err := m.DeleteForwardRule(ctx, rule); err != nil {
-		// 忽略不存在的错误
+		return fmt.Errorf("delete existing forward rule: %w", err)
 	}
 
 	// 创建新规则
@@ -161,15 +161,30 @@ func (m *Manager) DeleteForwardRule(ctx context.Context, rule *model.ForwardRule
 
 	// 删除 TCP 服务
 	if err := relayClient.DeleteService(ctx, serviceName); err != nil {
-		// 忽略不存在的错误
+		if !isGostNotFoundError(err) {
+			return fmt.Errorf("delete tcp service %s: %w", serviceName, err)
+		}
 	}
 
 	// 删除 UDP 服务（如果存在）
 	if rule.Protocol == "both" || rule.Protocol == "udp" {
-		relayClient.DeleteService(ctx, serviceName+"-udp")
+		udpServiceName := serviceName + "-udp"
+		if err := relayClient.DeleteService(ctx, udpServiceName); err != nil {
+			if !isGostNotFoundError(err) {
+				return fmt.Errorf("delete udp service %s: %w", udpServiceName, err)
+			}
+		}
 	}
 
 	return nil
+}
+
+func isGostNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "404") || strings.Contains(message, "not found")
 }
 
 // getServiceName 生成服务名称

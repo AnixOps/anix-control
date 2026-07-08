@@ -22,7 +22,10 @@ export default {
     summary: {
       total: '区间总流量',
       peak: '峰值小时',
-      peakAt: '峰值时间'
+      peakAt: '峰值时间',
+      latestReport: '最近上报',
+      latestReportHint: '节点最后一次写入流量日志',
+      noReport: '暂无流量上报记录'
     },
     chart: {
       seriesName: '流量',
@@ -33,8 +36,11 @@ export default {
       refreshing: '刷新中...'
     },
     empty: '所选区间暂无流量数据',
+    emptyWithLatest: '最近一次上报是 {time}，请检查节点进程或上报链路。',
+    emptyNever: '还没有任何节点流量上报记录。',
     messages: {
-      fetchFailed: '加载小时流量失败'
+      fetchFailed: '加载小时流量失败',
+      rankingFetchFailed: '加载用户流量排行失败'
     }
   }
 }

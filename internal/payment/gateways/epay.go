@@ -1,11 +1,13 @@
 package gateways
 
 import (
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 -- EPay's public callback protocol uses MD5 signatures.
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/anixops/v2board/internal/model"
@@ -38,7 +40,7 @@ func (epayGateway) VerifyCallback(ctx *payment.CallbackContext) (*payment.Callba
 	}
 
 	expected := epaySign(params, cfg.Key)
-	if !strings.EqualFold(sign, expected) {
+	if !epaySignEqual(sign, expected) {
 		return nil, fmt.Errorf("epay: sign mismatch")
 	}
 
@@ -47,9 +49,21 @@ func (epayGateway) VerifyCallback(ctx *payment.CallbackContext) (*payment.Callba
 		status = payment.StatusPaid
 	}
 
+	amount, err := parseEpayAmount(params.Get("money"))
+	if status == payment.StatusPaid && err != nil {
+		return nil, err
+	}
+	if status == payment.StatusPaid && params.Get("out_trade_no") == "" {
+		return nil, fmt.Errorf("epay: missing out_trade_no")
+	}
+	if status == payment.StatusPaid && params.Get("trade_no") == "" {
+		return nil, fmt.Errorf("epay: missing trade_no")
+	}
+
 	return &payment.CallbackResult{
 		TradeNo:        params.Get("out_trade_no"),
 		GatewayTradeNo: params.Get("trade_no"),
+		Amount:         amount,
 		Status:         status,
 		Raw:            string(ctx.RawBody),
 	}, nil
@@ -77,8 +91,34 @@ func epaySign(params map[string][]string, key string) string {
 	}
 	b.WriteString(key)
 
-	sum := md5.Sum([]byte(b.String()))
+	sum := md5.Sum([]byte(b.String())) // #nosec G401 -- EPay's public callback protocol uses MD5 signatures.
 	return hex.EncodeToString(sum[:])
+}
+
+func epaySignEqual(got, expected string) bool {
+	gotBytes, err := hex.DecodeString(strings.TrimSpace(got))
+	if err != nil {
+		return false
+	}
+	expectedBytes, err := hex.DecodeString(expected)
+	if err != nil {
+		return false
+	}
+	if len(gotBytes) != len(expectedBytes) {
+		return false
+	}
+	return subtle.ConstantTimeCompare(gotBytes, expectedBytes) == 1
+}
+
+func parseEpayAmount(raw string) (*float64, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, fmt.Errorf("epay: missing money")
+	}
+	amount, err := strconv.ParseFloat(raw, 64)
+	if err != nil || amount <= 0 {
+		return nil, fmt.Errorf("epay: invalid money")
+	}
+	return &amount, nil
 }
 
 func init() {

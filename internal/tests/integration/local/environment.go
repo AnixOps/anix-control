@@ -3,6 +3,7 @@ package local
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -84,18 +85,18 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	// 查找二进制文件
-	binary := s.binaryPath
-	if binary == "" {
-		binary = findBinary(s.name)
+	binary, err := resolveServerBinary(s.name, s.binaryPath)
+	if err != nil {
+		return err
 	}
 
 	// 构建命令
 	var cmd *exec.Cmd
 	switch s.name {
 	case "xray":
-		cmd = exec.CommandContext(ctx, binary, "run", "-c", s.configPath)
+		cmd = exec.CommandContext(ctx, binary, "run", "-c", s.configPath) // #nosec G204 -- binary path is restricted to reviewed local integration-test binary names.
 	case "mihomo":
-		cmd = exec.CommandContext(ctx, binary, "-f", s.configPath)
+		cmd = exec.CommandContext(ctx, binary, "-f", s.configPath) // #nosec G204 -- binary path is restricted to reviewed local integration-test binary names.
 	default:
 		return fmt.Errorf("unknown server type: %s", s.name)
 	}
@@ -137,7 +138,10 @@ func (s *Server) Stop() error {
 
 	// 优雅关闭
 	if err := s.cmd.Process.Signal(os.Interrupt); err != nil {
-		s.cmd.Process.Kill()
+		log.Printf("send interrupt to %s: %v", s.name, err)
+		if killErr := s.cmd.Process.Kill(); killErr != nil {
+			return fmt.Errorf("kill %s after interrupt failure: %w", s.name, killErr)
+		}
 	}
 
 	// 等待进程退出
@@ -147,11 +151,16 @@ func (s *Server) Stop() error {
 	}()
 
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			log.Printf("wait for %s process: %v", s.name, err)
+		}
 		s.cmd = nil
 		return nil
 	case <-time.After(5 * time.Second):
-		s.cmd.Process.Kill()
+		if err := s.cmd.Process.Kill(); err != nil {
+			return fmt.Errorf("kill %s after timeout: %w", s.name, err)
+		}
 		s.cmd = nil
 		return nil
 	}
@@ -193,9 +202,34 @@ func findBinary(name string) string {
 	return name
 }
 
+func resolveServerBinary(serverName, configuredPath string) (string, error) {
+	binary := configuredPath
+	if binary == "" {
+		binary = findBinary(serverName)
+	}
+
+	base := filepath.Base(filepath.Clean(binary))
+	for _, allowed := range allowedBinaryNames(serverName) {
+		if base == allowed {
+			return binary, nil
+		}
+	}
+	return "", fmt.Errorf("binary %q is not allowed for server %q", base, serverName)
+}
+
+func allowedBinaryNames(serverName string) []string {
+	switch serverName {
+	case "xray":
+		return []string{"xray", "xray.exe"}
+	case "mihomo":
+		return []string{"mihomo", "mihomo.exe", "clash-meta", "clash-meta.exe"}
+	default:
+		return nil
+	}
+}
+
 // Environment 本地测试环境
 type Environment struct {
-	server     *Server
 	serverPort int
 	clientPort int
 	configDir  string
@@ -233,7 +267,7 @@ func (e *Environment) Setup(ctx context.Context, protocol string) error {
 	e.clientPort = clientPort
 
 	// 创建配置目录
-	if err := os.MkdirAll(e.configDir, 0755); err != nil {
+	if err := os.MkdirAll(e.configDir, 0o750); err != nil {
 		return err
 	}
 
@@ -262,11 +296,6 @@ func (e *Environment) Teardown() {
 	e.cleanup = nil
 }
 
-// addCleanup 添加清理函数
-func (e *Environment) addCleanup(fn func()) {
-	e.cleanup = append(e.cleanup, fn)
-}
-
 // getFreePort 获取空闲端口
 func getFreePort() (int, error) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
@@ -278,7 +307,11 @@ func getFreePort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer l.Close()
+	defer func() {
+		if err := l.Close(); err != nil {
+			log.Printf("close port probe listener: %v", err)
+		}
+	}()
 
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
@@ -289,7 +322,9 @@ func WaitForPort(port int, timeout time.Duration) error {
 	for time.Since(start) < timeout {
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 1*time.Second)
 		if err == nil {
-			conn.Close()
+			if err := conn.Close(); err != nil {
+				return fmt.Errorf("close port probe connection: %w", err)
+			}
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -305,7 +340,9 @@ func WaitForHTTP(url string, timeout time.Duration) error {
 	for time.Since(start) < timeout {
 		resp, err := client.Get(url)
 		if err == nil {
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				return fmt.Errorf("close HTTP probe response: %w", err)
+			}
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -329,11 +366,11 @@ type ConfigBuilder struct {
 // NewConfigBuilder 创建配置构建器
 func NewConfigBuilder() *ConfigBuilder {
 	return &ConfigBuilder{
-		protocol:   "shadowsocks",
-		network:    "tcp",
-		method:     "aes-256-gcm",
-		password:   "test-password",
-		uuid:       "test-uuid-1234",
+		protocol: "shadowsocks",
+		network:  "tcp",
+		method:   "aes-256-gcm",
+		password: "test-password",
+		uuid:     "test-uuid-1234",
 	}
 }
 
@@ -614,7 +651,7 @@ func (b *ConfigBuilder) buildTrojanClientConfig() ([]byte, error) {
 // SaveConfig 保存配置到文件
 func SaveConfig(dir, name string, data []byte) (string, error) {
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return "", err
 	}
 	return path, nil

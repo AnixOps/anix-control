@@ -5,6 +5,7 @@ import { nextTick } from 'vue'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 
 const routes = [
+  { path: '/admin/forward/setup', component: { template: '<div />' } },
   { path: '/admin/forward', component: { template: '<div />' } },
   { path: '/admin/forward/tunnel', component: { template: '<div />' } },
   { path: '/admin/forward/limit', component: { template: '<div />' } },
@@ -38,12 +39,16 @@ describe('ForwardSuiteNav.vue', () => {
 
     const nav = wrapper.find('nav.forward-suite-nav')
     const listItems = wrapper.findAll('li.forward-suite-item')
+    const advancedItems = wrapper.findAll('li.forward-suite-subitem')
     const ansibleLink = wrapper.find('a[href="/admin/forward/ansible-machines"]')
 
     expect(nav.exists()).toBe(true)
     expect(nav.attributes('aria-label')).toContain('Forward')
     expect(wrapper.find('ul.forward-suite-list').exists()).toBe(true)
-    expect(listItems).toHaveLength(9)
+    expect(listItems).toHaveLength(6)
+    expect(advancedItems).toHaveLength(5)
+    expect(wrapper.find('a[href="/admin/forward/setup"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/admin/forward/nodes"]').exists()).toBe(true)
     expect(ansibleLink.attributes('aria-label')).toContain('Stateless execution machines')
   })
 
@@ -60,7 +65,9 @@ describe('ForwardSuiteNav.vue', () => {
     await nextTick()
 
     const activeLink = wrapper.find('a[href="/admin/forward/nodex"]')
+    const advancedDetails = wrapper.find('details.forward-suite-details')
     expect(activeLink.classes()).toContain('forward-suite-link-active')
     expect(activeLink.attributes('aria-current')).toBe('page')
+    expect(advancedDetails.element.open).toBe(true)
   })
 })

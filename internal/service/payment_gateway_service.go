@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/anixops/v2board/internal/model"
@@ -263,6 +264,15 @@ func (s *PaymentGatewayService) MarkAsPaid(tradeNo string, gatewayTradeNo string
 
 // MarkOrderPaid 标记支付并更新订单状态 (事务)
 func (s *PaymentGatewayService) MarkOrderPaid(tradeNo string, gatewayTradeNo string, notifyData string) error {
+	return s.markOrderPaid(tradeNo, gatewayTradeNo, notifyData, nil)
+}
+
+// MarkOrderPaidWithAmount 标记支付并核对回调金额。
+func (s *PaymentGatewayService) MarkOrderPaidWithAmount(tradeNo string, gatewayTradeNo string, notifyData string, paidAmount *float64) error {
+	return s.markOrderPaid(tradeNo, gatewayTradeNo, notifyData, paidAmount)
+}
+
+func (s *PaymentGatewayService) markOrderPaid(tradeNo string, gatewayTradeNo string, notifyData string, paidAmount *float64) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// 查询支付记录
 		var record model.PaymentRecord
@@ -272,6 +282,10 @@ func (s *PaymentGatewayService) MarkOrderPaid(tradeNo string, gatewayTradeNo str
 
 		if record.Status != model.PaymentStatusPending {
 			return fmt.Errorf("payment already processed")
+		}
+
+		if paidAmount != nil && math.Abs(record.ActualAmount-*paidAmount) > 0.01 {
+			return fmt.Errorf("payment amount mismatch")
 		}
 
 		now := time.Now()

@@ -3,8 +3,11 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
+	"errors"
 	"fmt"
+	"log"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -24,11 +27,15 @@ var insertIntoRe = regexp.MustCompile("^INSERT INTO `([^`]+)` VALUES (.+);$")
 // ParseDump reads a mysqldump file (plain .sql or gzip .sql.gz) and returns
 // every table's column list and rows.
 func ParseDump(path string) (map[string]*DumpTable, error) {
-	f, err := os.Open(path)
+	f, closeDump, err := openDumpFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("open dump: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if err := closeDump(); err != nil {
+			log.Printf("close dump reader: %v", err)
+		}
+	}()
 
 	var reader *bufio.Reader
 	if strings.HasSuffix(path, ".gz") {
@@ -36,7 +43,11 @@ func ParseDump(path string) (map[string]*DumpTable, error) {
 		if err != nil {
 			return nil, fmt.Errorf("gzip reader: %w", err)
 		}
-		defer gz.Close()
+		defer func() {
+			if err := gz.Close(); err != nil {
+				log.Printf("close gzip dump reader: %v", err)
+			}
+		}()
 		reader = bufio.NewReaderSize(gz, 1<<20)
 	} else {
 		reader = bufio.NewReaderSize(f, 1<<20)
@@ -100,6 +111,31 @@ func ParseDump(path string) (map[string]*DumpTable, error) {
 	}
 
 	return tables, nil
+}
+
+func openDumpFile(path string) (*os.File, func() error, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, nil, fmt.Errorf("dump path is empty")
+	}
+
+	cleanPath := filepath.Clean(path)
+	root, err := os.OpenRoot(filepath.Dir(cleanPath))
+	if err != nil {
+		return nil, nil, err
+	}
+	file, err := root.Open(filepath.Base(cleanPath))
+	if err != nil {
+		rootErr := root.Close()
+		if rootErr != nil {
+			return nil, nil, errors.Join(err, rootErr)
+		}
+		return nil, nil, err
+	}
+
+	closeFn := func() error {
+		return errors.Join(file.Close(), root.Close())
+	}
+	return file, closeFn, nil
 }
 
 // splitTuples splits "(...),(...),(...)" into its individual "(...)" tuples,

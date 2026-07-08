@@ -47,7 +47,7 @@ describe('User Plans flow', () => {
     expect(mockGetPlans).toHaveBeenCalledTimes(1)
     expect(wrapper.findAll('.plan-card')).toHaveLength(1)
 
-    await wrapper.find('.plan-card .btn-primary.w-full').trigger('click')
+    await wrapper.find('[data-test="plan-buy-button"]').trigger('click')
     await flushPromises()
 
     expect(wrapper.find('.modal').exists()).toBe(true)
@@ -63,8 +63,22 @@ describe('User Plans flow', () => {
     expect(mockPush).toHaveBeenCalledWith('/user/orders')
   })
 
-  it('applies coupon with selected plan id', async () => {
+  it.each([
+    ['legacy coupon payload', { data: { id: 9, name: 'SPRING', type: 2, value: 100 } }],
+    [
+      'panel coupon envelope',
+      {
+        code: 0,
+        msg: '操作成功',
+        ts: 1783536000000,
+        data: { id: 9, name: 'SPRING', type: 2, value: 100 },
+      },
+    ],
+  ])('applies coupon with selected plan id from %s', async (_label, couponResponse) => {
     mockGetPlans.mockResolvedValue({
+      code: 0,
+      msg: '操作成功',
+      ts: 1783536000000,
       data: [
         {
           id: 2,
@@ -74,22 +88,20 @@ describe('User Plans flow', () => {
         },
       ],
     })
-    mockCheckCoupon.mockResolvedValue({
-      data: { id: 9, name: 'SPRING', type: 2, value: 100 },
-    })
+    mockCheckCoupon.mockResolvedValue(couponResponse)
 
     const wrapper = mount(Plans)
     await flushPromises()
 
-    await wrapper.find('.plan-card .btn-primary.w-full').trigger('click')
+    await wrapper.find('[data-test="plan-buy-button"]').trigger('click')
     await wrapper.find('.coupon-input-group input').setValue('SPRING')
-    await wrapper.find('.coupon-input-group .btn-secondary').trigger('click')
+    await wrapper.find('[data-test="coupon-verify-button"]').trigger('click')
     await flushPromises()
 
     expect(mockCheckCoupon).toHaveBeenCalledWith({
       code: 'SPRING',
       plan_id: 2,
     })
-    expect(wrapper.find('.coupon-input-group .btn-ghost').exists()).toBe(true)
+    expect(wrapper.find('[data-test="coupon-remove-button"]').exists()).toBe(true)
   })
 })

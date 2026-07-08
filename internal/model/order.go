@@ -39,13 +39,13 @@ func (Order) TableName() string {
 // TrafficLog 流量日志
 type TrafficLog struct {
 	ID         uint      `gorm:"primaryKey" json:"id"`
-	UserID     uint      `gorm:"index" json:"user_id"`
+	UserID     uint      `gorm:"index;index:idx_server_log_log_at_user_id,priority:2" json:"user_id"`
 	ServerID   uint      `gorm:"index" json:"server_id"`
 	ServerType string    `gorm:"size:20" json:"server_type"`
 	U          int64     `json:"u"` // upload bytes
 	D          int64     `json:"d"` // download bytes
-	Rate       float64   `json:"rate"`
-	LogAt      int64     `gorm:"index" json:"log_at"`
+	Rate       float64   `gorm:"default:1" json:"rate"`
+	LogAt      int64     `gorm:"index;index:idx_server_log_log_at_user_id,priority:1" json:"log_at"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 

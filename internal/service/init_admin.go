@@ -1,8 +1,9 @@
 package service
 
 import (
+	"crypto/rand"
 	"log"
-	"math/rand"
+	"math/big"
 	"time"
 
 	"github.com/anixops/v2board/internal/config"
@@ -16,11 +17,15 @@ import (
 func InitAdmin(cfg *config.Config) {
 	// 确保表存在
 	if !database.GetDB().Migrator().HasTable(&model.User{}) {
-		database.GetDB().AutoMigrate(&model.User{})
+		if err := database.GetDB().AutoMigrate(&model.User{}); err != nil {
+			log.Fatalf("Failed to migrate admin user table: %v", err)
+		}
 	}
 
 	var count int64
-	database.GetDB().Model(&model.User{}).Where("is_admin = ?", 1).Count(&count)
+	if err := database.GetDB().Model(&model.User{}).Where("is_admin = ?", 1).Count(&count).Error; err != nil {
+		log.Fatalf("Failed to check admin account: %v", err)
+	}
 
 	if count > 0 {
 		log.Println("Admin account already exists, skipping creation.")
@@ -37,7 +42,12 @@ func InitAdmin(cfg *config.Config) {
 	}
 
 	if password == "" {
-		password = "password" // Default for dev if not configured
+		generatedPassword, err := generateRandomPassword(32)
+		if err != nil {
+			log.Fatalf("Failed to generate admin password: %v", err)
+		}
+		password = generatedPassword
+		log.Println("Admin password is empty; generated a random bootstrap password.")
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -69,11 +79,16 @@ func InitAdmin(cfg *config.Config) {
 	log.Println("====================================================")
 }
 
-func generateRandomPassword(length int) string {
+func generateRandomPassword(length int) (string, error) {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
 	b := make([]byte, length)
+	max := big.NewInt(int64(len(charset)))
 	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return "", err
+		}
+		b[i] = charset[n.Int64()]
 	}
-	return string(b)
+	return string(b), nil
 }

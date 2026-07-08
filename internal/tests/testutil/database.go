@@ -1,6 +1,9 @@
 package testutil
 
 import (
+	"fmt"
+	"log"
+
 	"github.com/anixops/v2board/internal/config"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -27,10 +30,27 @@ func SetupTestDB() *TestDB {
 
 // Close 关闭测试数据库
 func (t *TestDB) Close() {
-	sqlDB, _ := t.DB.DB()
-	if sqlDB != nil {
-		sqlDB.Close()
+	if err := t.CloseWithError(); err != nil {
+		log.Printf("close test database: %v", err)
 	}
+}
+
+// CloseWithError closes the test database and returns cleanup failures.
+func (t *TestDB) CloseWithError() error {
+	if t == nil || t.DB == nil {
+		return nil
+	}
+
+	sqlDB, err := t.DB.DB()
+	if err != nil {
+		return fmt.Errorf("get test database handle: %w", err)
+	}
+	if sqlDB != nil {
+		if err := sqlDB.Close(); err != nil {
+			return fmt.Errorf("close test database: %w", err)
+		}
+	}
+	return nil
 }
 
 // Cleanup 清理所有表数据，自动发现所有表并重置自增计数器。

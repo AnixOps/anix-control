@@ -54,6 +54,9 @@ describe('User Knowledge flow', () => {
 
   it('opens detail modal when clicking an article', async () => {
     mockGetKnowledgeList.mockResolvedValue({
+      code: 0,
+      msg: '操作成功',
+      ts: 1783536000000,
       data: [
         {
           id: 3,

@@ -78,11 +78,16 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body any) (
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
-	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			return nil, fmt.Errorf("close response after read failure: %w", closeErr)
+		}
 		return nil, fmt.Errorf("read response: %w", err)
+	}
+	if err := resp.Body.Close(); err != nil {
+		return nil, fmt.Errorf("close response: %w", err)
 	}
 
 	if resp.StatusCode >= 400 {
@@ -137,7 +142,7 @@ type ForwarderNode struct {
 
 // SelectorConfig 选择器配置
 type SelectorConfig struct {
-	Strategy    string `json:"strategy"`              // round, rand, hash, failover
+	Strategy    string `json:"strategy"` // round, rand, hash, failover
 	MaxFails    int    `json:"maxFails,omitempty"`
 	FailTimeout string `json:"failTimeout,omitempty"`
 }
@@ -159,7 +164,7 @@ type TLSConfig struct {
 
 // ServiceListResponse 服务列表响应
 type ServiceListResponse struct {
-	Count int               `json:"count"`
+	Count int              `json:"count"`
 	List  []*ServiceConfig `json:"list"`
 }
 
@@ -278,9 +283,9 @@ type HopConfig struct {
 
 // HopNode 跳点节点
 type HopNode struct {
-	Name      string          `json:"name"`
-	Addr      string          `json:"addr"`
-	Interface string          `json:"interface,omitempty"`
+	Name      string           `json:"name"`
+	Addr      string           `json:"addr"`
+	Interface string           `json:"interface,omitempty"`
 	Connector *ConnectorConfig `json:"connector,omitempty"`
 	Dialer    *DialerConfig    `json:"dialer,omitempty"`
 }
@@ -333,11 +338,11 @@ type StatsResponse struct {
 
 // ServiceStats 服务统计
 type ServiceStats struct {
-	Name      string          `json:"name"`
-	Addr      string          `json:"addr"`
-	Events    []ServiceEvent  `json:"events"`
-	Current   CurrentStats    `json:"current"`
-	Total     TotalStats      `json:"total"`
+	Name    string         `json:"name"`
+	Addr    string         `json:"addr"`
+	Events  []ServiceEvent `json:"events"`
+	Current CurrentStats   `json:"current"`
+	Total   TotalStats     `json:"total"`
 }
 
 // ServiceEvent 服务事件
@@ -454,10 +459,18 @@ func (c *Client) fetchAllServiceTrafficTotals(ctx context.Context) (map[string]*
 	if err != nil {
 		return nil, fmt.Errorf("fetch metrics: %w", err)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				return nil, fmt.Errorf("close metrics response after read failure: %w", closeErr)
+			}
+			return nil, fmt.Errorf("read metrics error response: %w", readErr)
+		}
+		if err := resp.Body.Close(); err != nil {
+			return nil, fmt.Errorf("close metrics error response: %w", err)
+		}
 		return nil, fmt.Errorf("metrics API error: %s - %s", resp.Status, string(body))
 	}
 
@@ -501,7 +514,13 @@ func (c *Client) fetchAllServiceTrafficTotals(ctx context.Context) (map[string]*
 	}
 
 	if err := scanner.Err(); err != nil {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			return nil, fmt.Errorf("close metrics response after scanner failure: %w", closeErr)
+		}
 		return nil, fmt.Errorf("read metrics response: %w", err)
+	}
+	if err := resp.Body.Close(); err != nil {
+		return nil, fmt.Errorf("close metrics response: %w", err)
 	}
 
 	return result, nil

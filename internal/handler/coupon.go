@@ -57,12 +57,10 @@ func (h *CouponHandler) CheckCoupon(c *gin.Context) {
 	//   3. Return an error if the coupon cannot be applied to this plan
 	// Current implementation has no plan-coupon mapping, so all coupons are considered applicable.
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"id":    coupon.ID,
-			"name":  coupon.Name,
-			"type":  coupon.Type,  // 1: 百分比, 2: 固定金额
-			"value": coupon.Value, // 折扣值 (百分比[1-99] 或 金额[分])
-		},
+	panelSuccess(c, gin.H{
+		"id":    coupon.ID,
+		"name":  coupon.Name,
+		"type":  coupon.Type,  // 1: 百分比, 2: 固定金额
+		"value": coupon.Value, // 折扣值 (百分比[1-99] 或 金额[分])
 	})
 }

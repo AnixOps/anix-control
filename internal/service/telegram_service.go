@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -17,9 +18,7 @@ import (
 // TelegramBotService Telegram Bot服务
 type TelegramBotService struct {
 	db     *gorm.DB
-	bot    *model.TelegramBot
 	client *http.Client
-	mu     sync.RWMutex
 }
 
 // NewTelegramBotService 创建服务
@@ -100,7 +99,9 @@ func (s *TelegramBotService) HandleUpdate(update *TelegramUpdate) error {
 		if update.Message.From != nil {
 			chat.TelegramID = update.Message.From.ID
 		}
-		s.db.Create(chat)
+		if err := s.db.Create(chat).Error; err != nil {
+			return err
+		}
 	}
 
 	// 处理命令
@@ -254,8 +255,10 @@ func (s *TelegramBotService) BindUser(telegramID int64, email string, from *Tele
 	}
 
 	// 更新Bot统计
-	s.db.Model(&model.TelegramBot{}).Where("id = ?", 1).
-		UpdateColumn("total_users", gorm.Expr("total_users + 1"))
+	if err := s.db.Model(&model.TelegramBot{}).Where("id = ?", 1).
+		UpdateColumn("total_users", gorm.Expr("total_users + 1")).Error; err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -329,7 +332,10 @@ func (s *TelegramBotService) handleAdmin(chatID int64, userID int64) error {
 	}
 
 	// 检查是否为管理员
-	adminIDs := parseAdminIDs(bot.AdminIDs)
+	adminIDs, err := parseAdminIDsWithError(bot.AdminIDs)
+	if err != nil {
+		return err
+	}
 	isAdmin := false
 	for _, id := range adminIDs {
 		if id == userID {
@@ -390,38 +396,55 @@ func (s *TelegramBotService) SendNotification(telegramID int64, title, content s
 // Broadcast 广播消息
 func (s *TelegramBotService) Broadcast(text string) error {
 	var users []model.TelegramUser
-	s.db.Where("is_banned = ?", false).Find(&users)
+	if err := s.db.Where("is_banned = ?", false).Find(&users).Error; err != nil {
+		return err
+	}
 
 	var wg sync.WaitGroup
+	errs := make(chan error, len(users))
 	for _, user := range users {
 		wg.Add(1)
 		go func(telegramID int64) {
 			defer wg.Done()
-			s.SendMessage(telegramID, text)
+			if err := s.SendMessage(telegramID, text); err != nil {
+				errs <- fmt.Errorf("send telegram message to %d: %w", telegramID, err)
+			}
 			time.Sleep(50 * time.Millisecond) // 避免频率限制
 		}(user.TelegramID)
 	}
 	wg.Wait()
+	close(errs)
 
-	return nil
+	var sendErrs []error
+	for err := range errs {
+		sendErrs = append(sendErrs, err)
+	}
+	return errors.Join(sendErrs...)
 }
 
 // apiRequest 发送API请求
 func (s *TelegramBotService) apiRequest(url string, payload any) (map[string]any, error) {
 	var body bytes.Buffer
 	if payload != nil {
-		json.NewEncoder(&body).Encode(payload)
+		if err := json.NewEncoder(&body).Encode(payload); err != nil {
+			return nil, fmt.Errorf("encode telegram API request: %w", err)
+		}
 	}
 
 	resp, err := s.client.Post(url, "application/json", &body)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 
 	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			return nil, fmt.Errorf("decode telegram API response: %w; close response body: %v", err, closeErr)
+		}
 		return nil, err
+	}
+	if err := resp.Body.Close(); err != nil {
+		return nil, fmt.Errorf("close telegram API response body: %w", err)
 	}
 
 	return result, nil
@@ -429,30 +452,40 @@ func (s *TelegramBotService) apiRequest(url string, payload any) (map[string]any
 
 // parseAdminIDs 解析管理员ID
 func parseAdminIDs(ids string) []int64 {
-	if ids == "" {
+	adminIDs, err := parseAdminIDsWithError(ids)
+	if err != nil {
 		return []int64{}
 	}
-	var adminIDs []int64
-	json.Unmarshal([]byte(ids), &adminIDs)
 	return adminIDs
+}
+
+func parseAdminIDsWithError(ids string) ([]int64, error) {
+	if ids == "" {
+		return []int64{}, nil
+	}
+	var adminIDs []int64
+	if err := json.Unmarshal([]byte(ids), &adminIDs); err != nil {
+		return nil, fmt.Errorf("parse telegram admin_ids: %w", err)
+	}
+	return adminIDs, nil
 }
 
 // ========== Telegram API 类型定义 ==========
 
 // TelegramUpdate Telegram更新
 type TelegramUpdate struct {
-	UpdateID      int64               `json:"update_id"`
-	Message       *TelegramMessage    `json:"message,omitempty"`
-	CallbackQuery *TelegramCallback   `json:"callback_query,omitempty"`
+	UpdateID      int64             `json:"update_id"`
+	Message       *TelegramMessage  `json:"message,omitempty"`
+	CallbackQuery *TelegramCallback `json:"callback_query,omitempty"`
 }
 
 // TelegramMessage Telegram消息
 type TelegramMessage struct {
-	MessageID int64        `json:"message_id"`
+	MessageID int64         `json:"message_id"`
 	From      *TelegramUser `json:"from,omitempty"`
-	Chat      TelegramChat `json:"chat"`
-	Date      int64        `json:"date"`
-	Text      string       `json:"text,omitempty"`
+	Chat      TelegramChat  `json:"chat"`
+	Date      int64         `json:"date"`
+	Text      string        `json:"text,omitempty"`
 }
 
 // TelegramUser Telegram用户

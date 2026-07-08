@@ -27,7 +27,7 @@ func (h *AdminKnowledgeHandler) GetArticles(c *gin.Context) {
 	}
 
 	// 转换为响应格式
-	var result []gin.H
+	result := make([]gin.H, 0, len(articles))
 	for _, a := range articles {
 		result = append(result, gin.H{
 			"id":         a.ID,
@@ -41,7 +41,7 @@ func (h *AdminKnowledgeHandler) GetArticles(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	panelSuccess(c, result)
 }
 
 // CreateArticle 创建文章
@@ -82,7 +82,10 @@ func (h *AdminKnowledgeHandler) CreateArticle(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "创建成功", "data": article})
+	panelSuccess(c, gin.H{
+		"message": "创建成功",
+		"data":    article,
+	})
 }
 
 // UpdateArticle 更新文章
@@ -103,8 +106,8 @@ func (h *AdminKnowledgeHandler) UpdateArticle(c *gin.Context) {
 		Category string `json:"category" binding:"omitempty,max=64"`
 		Title    string `json:"title" binding:"omitempty,min=1,max=255"`
 		Body     string `json:"body" binding:"omitempty"`
-		Sort     int    `json:"sort"`
-		Show     int    `json:"show" binding:"omitempty,oneof=0 1"`
+		Sort     *int   `json:"sort"`
+		Show     *int   `json:"show" binding:"omitempty,oneof=0 1"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -125,15 +128,19 @@ func (h *AdminKnowledgeHandler) UpdateArticle(c *gin.Context) {
 	if req.Body != "" {
 		updates["body"] = req.Body
 	}
-	updates["sort"] = req.Sort
-	updates["show"] = req.Show
+	if req.Sort != nil {
+		updates["sort"] = *req.Sort
+	}
+	if req.Show != nil {
+		updates["show"] = *req.Show
+	}
 
 	if err := database.GetDB().Model(&article).Updates(updates).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
+	panelSuccess(c, gin.H{"message": "更新成功"})
 }
 
 // DeleteArticle 删除文章
@@ -155,5 +162,5 @@ func (h *AdminKnowledgeHandler) DeleteArticle(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	panelSuccess(c, gin.H{"message": "删除成功"})
 }

@@ -324,11 +324,18 @@ const maskAccount = (account) => {
   return `${account.substring(0, 2)}***${account.substring(account.length - 2)}`
 }
 
+const readInviteConfig = (res) => {
+  if (!res || typeof res !== 'object') return {}
+  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  return payload && typeof payload === 'object' ? payload : {}
+}
+
 const fetchConfig = async () => {
   try {
     const res = await getInviteConfig()
-    if (res.data) {
-      config.value = createInviteConfig(res.data)
+    const payload = readInviteConfig(res)
+    if (payload) {
+      config.value = createInviteConfig(payload)
     }
   } catch (error) {
     console.error(t('adminInvite.messages.fetchConfigFailed'), error)
@@ -381,10 +388,18 @@ const processWithdrawalRequest = async (item, approve) => {
 const fetchStats = async () => {
   try {
     const res = await getInviteStats()
-    stats.value = res.data || {}
+    stats.value = readInviteStats(res)
   } catch (error) {
     console.error(t('adminInvite.messages.fetchStatsFailed'), error)
   }
+}
+
+const readInviteStats = (res) => {
+  if (!res || typeof res !== 'object') {
+    return {}
+  }
+  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  return payload && typeof payload === 'object' ? payload : {}
 }
 
 onMounted(() => {
@@ -499,4 +514,3 @@ onMounted(() => {
   background: rgba(239, 68, 68, 0.2);
 }
 </style>
-

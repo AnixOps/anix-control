@@ -1006,6 +1006,16 @@ const subscriptionPreviewProtocol = computed(() => {
   return window.location.protocol || 'https:'
 })
 
+const readSubscriptionSettings = (res) => {
+  if (!res || typeof res !== 'object') return { subscribe_path: '/s', subscribe_domains: [] }
+  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  if (!payload || typeof payload !== 'object') return { subscribe_path: '/s', subscribe_domains: [] }
+  return {
+    subscribe_path: payload.subscribe_path || '/s',
+    subscribe_domains: Array.isArray(payload.subscribe_domains) ? payload.subscribe_domains : []
+  }
+}
+
 const filteredConfigs = computed(() => {
   if (!configSearch.value) return configs.value
   const search = configSearch.value.toLowerCase()
@@ -1406,7 +1416,7 @@ const loadSubscriptionDomainSettings = async () => {
     ])
 
     if (settingsRes.status === 'fulfilled') {
-      const payload = settingsRes.value.data || {}
+      const payload = readSubscriptionSettings(settingsRes.value)
       subscriptionPath.value = payload.subscribe_path || '/s'
     }
 
@@ -1424,13 +1434,15 @@ const loadSubscriptionDomainSettings = async () => {
           subscriptionDomainsText.value = rawValue
         }
       } else {
-        const domains = settingsRes.status === 'fulfilled' && Array.isArray(settingsRes.value.data?.subscribe_domains)
-          ? settingsRes.value.data.subscribe_domains
+        const settingsPayload = settingsRes.status === 'fulfilled' ? readSubscriptionSettings(settingsRes.value) : {}
+        const domains = Array.isArray(settingsPayload.subscribe_domains)
+          ? settingsPayload.subscribe_domains
           : []
         subscriptionDomainsText.value = domains.join('\n')
       }
     } else if (settingsRes.status === 'fulfilled') {
-      const domains = Array.isArray(settingsRes.value.data?.subscribe_domains) ? settingsRes.value.data.subscribe_domains : []
+      const settingsPayload = readSubscriptionSettings(settingsRes.value)
+      const domains = Array.isArray(settingsPayload.subscribe_domains) ? settingsPayload.subscribe_domains : []
       subscriptionDomainsText.value = domains.join('\n')
     } else {
       throw rawConfigRes.reason || settingsRes.reason || new Error('failed to load subscription settings')
@@ -1706,10 +1718,16 @@ const fetchBackups = async () => {
   }
 }
 
+const readBackupStats = (res) => {
+  if (!res || typeof res !== 'object') return {}
+  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}
+}
+
 const fetchBackupStats = async () => {
   try {
     const res = await getBackupStats()
-    backupStats.value = res.data || {}
+    backupStats.value = readBackupStats(res)
   } catch (err) {
     console.error(t('runtime.systemPage.messages.fetchBackupStatsFailed'), err)
   }

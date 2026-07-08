@@ -33,6 +33,11 @@ func TestParseTrafficData(t *testing.T) {
 				1: {1073741824, 2147483648},
 			},
 		},
+		{
+			name:     "non numeric traffic values are ignored",
+			input:    `{"1": ["bad", 2048], "2": [512, 1024]}`,
+			expected: map[uint][2]int64{2: {512, 1024}},
+		},
 	}
 
 	for _, tt := range tests {
@@ -50,6 +55,16 @@ func TestParseTrafficData(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseTrafficDataRejectsNegativeTraffic(t *testing.T) {
+	var data map[string]any
+	err := json.Unmarshal([]byte(`{"1": [-1, 2048]}`), &data)
+	assert.NoError(t, err)
+
+	result, err := ParseTrafficData(data)
+	assert.ErrorIs(t, err, ErrNegativeTraffic)
+	assert.Nil(t, result)
 }
 
 func TestParseOnlineData(t *testing.T) {

@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net"
@@ -12,6 +13,7 @@ import (
 
 	pb "github.com/anixops/v2board/api/grpc/v2boardpb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
 )
 
@@ -25,6 +27,9 @@ type ServerConfig struct {
 	APIToken string
 	// JWT Secret (可选，用于 JWT 认证)
 	JWTSecret string
+	// TLS 证书/私钥路径 (可选，都为空时使用明文)
+	TLSCertFile string
+	TLSKeyFile  string
 	// Keepalive 时间
 	KeepaliveTime time.Duration
 	// Keepalive 超时
@@ -93,12 +98,12 @@ func (s *Server) Start() error {
 		StreamLoggingInterceptor(),
 	}
 
-	// 如果配置了 API Token 或 JWT Secret，添加认证拦截器
-	hasAuth := s.config.APIToken != "" || s.config.JWTSecret != ""
-	if hasAuth {
-		interceptors = append(interceptors, AuthInterceptor(s.config.APIToken, s.config.JWTSecret))
-		streamInterceptors = append(streamInterceptors, StreamAuthInterceptor(s.config.APIToken, s.config.JWTSecret))
-	}
+	// 认证拦截器始终启用: 每个节点自带的 x-api-key/x-node-id 必须校验通过,
+	// 不能因为没配置全局 api_token/JWT 就完全跳过认证 (那样任何人接上
+	// gRPC 端口都能冒充任意 node_id 上报数据)。api_token/JWT 仅用于给
+	// 没有节点 key 的旧版调用方或管理端做兼容回退。
+	interceptors = append(interceptors, AuthInterceptor(s.config.APIToken, s.config.JWTSecret))
+	streamInterceptors = append(streamInterceptors, StreamAuthInterceptor(s.config.APIToken, s.config.JWTSecret))
 
 	// 链式拦截器
 	if len(interceptors) > 0 {
@@ -106,6 +111,17 @@ func (s *Server) Start() error {
 	}
 	if len(streamInterceptors) > 0 {
 		opts = append(opts, grpc.ChainStreamInterceptor(streamInterceptors...))
+	}
+
+	// TLS: 配置了证书/私钥时启用, 否则保持明文 (向后兼容)
+	if s.config.TLSCertFile != "" && s.config.TLSKeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(s.config.TLSCertFile, s.config.TLSKeyFile)
+		if err != nil {
+			return fmt.Errorf("failed to load gRPC TLS cert/key: %w", err)
+		}
+		opts = append(opts, grpc.Creds(credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{cert},
+		})))
 	}
 
 	// 创建 gRPC 服务器

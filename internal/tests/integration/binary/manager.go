@@ -4,8 +4,10 @@ import (
 	"archive/zip"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -14,6 +16,8 @@ import (
 	"strings"
 	"time"
 )
+
+var maxExtractedBinaryBytes int64 = 256 << 20
 
 // BinaryInfo 二进制文件信息
 type BinaryInfo struct {
@@ -49,7 +53,10 @@ type Manager struct {
 // NewManager 创建二进制文件管理器
 func NewManager(cacheDir string) *Manager {
 	if cacheDir == "" {
-		homeDir, _ := os.UserHomeDir()
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			homeDir = os.TempDir()
+		}
 		cacheDir = filepath.Join(homeDir, ".cache", "v2board-test")
 	}
 	return &Manager{
@@ -123,7 +130,7 @@ func (m *Manager) download(info *BinaryInfo) error {
 
 	// 创建缓存目录
 	cachePath := m.getCachePath(info)
-	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o750); err != nil {
 		return err
 	}
 
@@ -132,14 +139,28 @@ func (m *Manager) download(info *BinaryInfo) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
+	tmpFileName := tmpFile.Name()
+	tmpFileClosed := false
+	defer func() {
+		if !tmpFileClosed {
+			if err := tmpFile.Close(); err != nil {
+				log.Printf("close temporary download %s: %v", tmpFileName, err)
+			}
+		}
+		if err := os.Remove(tmpFileName); err != nil && !os.IsNotExist(err) {
+			log.Printf("remove temporary download %s: %v", tmpFileName, err)
+		}
+	}()
 
 	resp, err := m.client.Get(downloadURL)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("close download response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed: %s", resp.Status)
@@ -149,7 +170,10 @@ func (m *Manager) download(info *BinaryInfo) error {
 	if err != nil {
 		return err
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("close temporary download: %w", err)
+	}
+	tmpFileClosed = true
 
 	// 解压文件
 	ext := strings.ToLower(filepath.Ext(downloadURL))
@@ -168,7 +192,10 @@ func (m *Manager) download(info *BinaryInfo) error {
 	}
 
 	// 设置可执行权限
-	os.Chmod(cachePath, 0755)
+	// #nosec G302 -- cached integration-test binaries must be executable and live in a private cache directory.
+	if err := os.Chmod(cachePath, 0o750); err != nil {
+		return fmt.Errorf("mark cached binary executable: %w", err)
+	}
 
 	fmt.Printf("Successfully installed %s to %s\n", info.Name, cachePath)
 	return nil
@@ -182,7 +209,11 @@ func (m *Manager) getLatestVersion(repo string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("close latest-version response body: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to get releases: %s", resp.Status)
@@ -212,15 +243,16 @@ func (m *Manager) buildDownloadURL(info *BinaryInfo) (string, error) {
 	var filename string
 	switch info.Name {
 	case "xray":
-		if goos == "windows" {
+		switch goos {
+		case "windows":
 			filename = "Xray-windows-64.zip"
-		} else if goos == "darwin" {
+		case "darwin":
 			if runtime.GOARCH == "arm64" {
 				filename = "Xray-macos-arm64.zip"
 			} else {
 				filename = "Xray-macos-64.zip"
 			}
-		} else {
+		default:
 			filename = "Xray-linux-64.zip"
 		}
 	case "mihomo":
@@ -228,11 +260,12 @@ func (m *Manager) buildDownloadURL(info *BinaryInfo) (string, error) {
 		if runtime.GOARCH == "arm64" {
 			arch = "arm64"
 		}
-		if goos == "windows" {
+		switch goos {
+		case "windows":
 			filename = fmt.Sprintf("mihomo-windows-%s.zip", arch)
-		} else if goos == "darwin" {
+		case "darwin":
 			filename = fmt.Sprintf("mihomo-darwin-%s.gz", arch)
-		} else {
+		default:
 			filename = fmt.Sprintf("mihomo-linux-%s.gz", arch)
 		}
 	default:
@@ -249,7 +282,11 @@ func (m *Manager) extractZip(zipPath, destPath, binaryName string) error {
 	if err != nil {
 		return err
 	}
-	defer r.Close()
+	defer func() {
+		if err := r.Close(); err != nil {
+			log.Printf("close zip archive %s: %v", zipPath, err)
+		}
+	}()
 
 	// Windows 需要 .exe 后缀
 	if runtime.GOOS == "windows" {
@@ -264,16 +301,23 @@ func (m *Manager) extractZip(zipPath, destPath, binaryName string) error {
 			if err != nil {
 				return err
 			}
-			defer rc.Close()
 
-			out, err := os.Create(destPath)
+			out, closeRoot, err := createFileAtPath(destPath, 0o600)
 			if err != nil {
+				if closeErr := rc.Close(); closeErr != nil {
+					return errors.Join(err, fmt.Errorf("close zip entry: %w", closeErr))
+				}
 				return err
 			}
-			defer out.Close()
 
-			_, err = io.Copy(out, rc)
-			return err
+			copyErr := copyWithLimit(out, rc, maxExtractedBinaryBytes)
+			closeErr := out.Close()
+			rootErr := closeRoot()
+			entryErr := rc.Close()
+			if copyErr != nil || closeErr != nil || rootErr != nil || entryErr != nil {
+				return errors.Join(copyErr, closeErr, rootErr, entryErr)
+			}
+			return nil
 		}
 	}
 
@@ -282,42 +326,120 @@ func (m *Manager) extractZip(zipPath, destPath, binaryName string) error {
 
 // extractGzip 解压 GZIP 文件
 func (m *Manager) extractGzip(gzPath, destPath, binaryName string) error {
-	file, err := os.Open(gzPath)
+	file, closeSourceRoot, err := openFileAtPath(gzPath)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 
 	gzReader, err := gzip.NewReader(file)
 	if err != nil {
+		closeErr := file.Close()
+		rootErr := closeSourceRoot()
+		if closeErr != nil || rootErr != nil {
+			return errors.Join(err, closeErr, rootErr)
+		}
 		return err
 	}
-	defer gzReader.Close()
 
-	out, err := os.Create(destPath)
+	out, closeDestRoot, err := createFileAtPath(destPath, 0o600)
 	if err != nil {
+		readerErr := gzReader.Close()
+		fileErr := file.Close()
+		rootErr := closeSourceRoot()
+		if readerErr != nil || fileErr != nil || rootErr != nil {
+			return errors.Join(err, readerErr, fileErr, rootErr)
+		}
 		return err
 	}
-	defer out.Close()
 
-	_, err = io.Copy(out, gzReader)
-	return err
+	copyErr := copyWithLimit(out, gzReader, maxExtractedBinaryBytes)
+	outErr := out.Close()
+	destRootErr := closeDestRoot()
+	readerErr := gzReader.Close()
+	fileErr := file.Close()
+	sourceRootErr := closeSourceRoot()
+	if copyErr != nil || outErr != nil || destRootErr != nil || readerErr != nil || fileErr != nil || sourceRootErr != nil {
+		return errors.Join(copyErr, outErr, destRootErr, readerErr, fileErr, sourceRootErr)
+	}
+	return nil
 }
 
 // copyFile 复制文件
 func copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
+	srcFile, closeSourceRoot, err := openFileAtPath(src)
 	if err != nil {
 		return err
 	}
-	defer srcFile.Close()
 
-	dstFile, err := os.Create(dst)
+	dstFile, closeDestRoot, err := createFileAtPath(dst, 0o600)
+	if err != nil {
+		srcErr := srcFile.Close()
+		rootErr := closeSourceRoot()
+		if srcErr != nil || rootErr != nil {
+			return errors.Join(err, srcErr, rootErr)
+		}
+		return err
+	}
+
+	copyErr := copyWithLimit(dstFile, srcFile, maxExtractedBinaryBytes)
+	dstErr := dstFile.Close()
+	destRootErr := closeDestRoot()
+	srcErr := srcFile.Close()
+	sourceRootErr := closeSourceRoot()
+	if copyErr != nil || dstErr != nil || destRootErr != nil || srcErr != nil || sourceRootErr != nil {
+		return errors.Join(copyErr, dstErr, destRootErr, srcErr, sourceRootErr)
+	}
+	return nil
+}
+
+func openFileAtPath(path string) (*os.File, func() error, error) {
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, nil, err
+	}
+	file, err := root.Open(filepath.Base(path))
+	if err != nil {
+		rootErr := root.Close()
+		if rootErr != nil {
+			return nil, nil, errors.Join(err, rootErr)
+		}
+		return nil, nil, err
+	}
+	return file, root.Close, nil
+}
+
+func createFileAtPath(path string, perm os.FileMode) (*os.File, func() error, error) {
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, nil, err
+	}
+	file, err := root.OpenFile(filepath.Base(path), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		rootErr := root.Close()
+		if rootErr != nil {
+			return nil, nil, errors.Join(err, rootErr)
+		}
+		return nil, nil, err
+	}
+	return file, root.Close, nil
+}
+
+func copyWithLimit(dst io.Writer, src io.Reader, maxBytes int64) error {
+	written, err := io.Copy(dst, io.LimitReader(src, maxBytes))
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
+	if written < maxBytes {
+		return nil
+	}
 
-	_, err = io.Copy(dstFile, srcFile)
-	return err
+	var probe [1]byte
+	n, err := src.Read(probe[:])
+	if err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	if n > 0 {
+		return fmt.Errorf("extracted binary exceeds %d bytes", maxBytes)
+	}
+	return nil
 }

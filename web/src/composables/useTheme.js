@@ -7,15 +7,12 @@ const THEME_DARK = 'dark'
 // 全局单例状态，跨组件共享当前主题。
 const currentTheme = ref(THEME_LIGHT)
 
-// applyTheme 同步主题到 DOM：Arco 用 body[arco-theme]，
-// 自建样式用 html[data-theme]，两者一起切换以保持一致。
+// applyTheme 同步主题到 DOM：自建样式使用 html[data-theme]。
 function applyTheme(theme) {
   const isDark = theme === THEME_DARK
   if (isDark) {
-    document.body.setAttribute('arco-theme', 'dark')
     document.documentElement.setAttribute('data-theme', 'dark')
   } else {
-    document.body.removeAttribute('arco-theme')
     document.documentElement.removeAttribute('data-theme')
   }
   document.documentElement.style.colorScheme = isDark ? 'dark' : 'light'

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"net/smtp"
 	"strings"
@@ -18,17 +20,17 @@ import (
 
 // NotificationService 通知服务
 type NotificationService struct {
-	db           *gorm.DB
-	cfg          *config.Config
-	emailConfig  *model.EmailConfig
-	httpClient   *http.Client
+	db          *gorm.DB
+	cfg         *config.Config
+	emailConfig *model.EmailConfig
+	httpClient  *http.Client
 }
 
 // NewNotificationService 创建服务
 func NewNotificationService(db *gorm.DB, cfg *config.Config) *NotificationService {
 	return &NotificationService{
-		db:   db,
-		cfg:  cfg,
+		db:  db,
+		cfg: cfg,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -82,6 +84,28 @@ func (s *NotificationService) Send(userID *uint, notifyType, event, title, conte
 	return err
 }
 
+func (s *NotificationService) sendAsync(userID *uint, notifyType, event, title, content string, data map[string]any) {
+	var copiedUserID *uint
+	if userID != nil {
+		id := *userID
+		copiedUserID = &id
+	}
+
+	go func() {
+		if err := s.Send(copiedUserID, notifyType, event, title, content, data); err != nil {
+			attrs := []any{
+				"type", notifyType,
+				"event", event,
+				"error", err,
+			}
+			if copiedUserID != nil {
+				attrs = append(attrs, "user_id", *copiedUserID)
+			}
+			slog.Warn("notification send failed", attrs...)
+		}
+	}()
+}
+
 // SendEmail 发送邮件
 func (s *NotificationService) SendEmail(to, subject, body string) error {
 	if s.emailConfig == nil {
@@ -113,23 +137,23 @@ func (s *NotificationService) SendEmail(to, subject, body string) error {
 }
 
 // sendEmailTLS 通过TLS发送邮件
-func (s *NotificationService) sendEmailTLS(addr string, auth smtp.Auth, from string, to []string, msg []byte) error {
+func (s *NotificationService) sendEmailTLS(addr string, auth smtp.Auth, from string, to []string, msg []byte) (err error) {
 	host := strings.Split(addr, ":")[0]
 
-	conn, err := tls.Dial("tcp", addr, &tls.Config{
-		InsecureSkipVerify: true,
-		ServerName:         host,
-	})
+	conn, err := tls.Dial("tcp", addr, smtpTLSConfig(host))
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
 
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
-		return err
+		return errors.Join(err, conn.Close())
 	}
-	defer client.Close()
+	defer func() {
+		if closeErr := client.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("close smtp client: %w", closeErr)
+		}
+	}()
 
 	if auth != nil {
 		if err := client.Auth(auth); err != nil {
@@ -151,10 +175,19 @@ func (s *NotificationService) sendEmailTLS(addr string, auth smtp.Auth, from str
 	if err != nil {
 		return err
 	}
-	defer w.Close()
 
-	_, err = w.Write(msg)
-	return err
+	if _, err := w.Write(msg); err != nil {
+		return errors.Join(err, w.Close())
+	}
+
+	return w.Close()
+}
+
+func smtpTLSConfig(host string) *tls.Config {
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		ServerName: host,
+	}
 }
 
 // sendEmailNotification 发送邮件通知
@@ -165,7 +198,10 @@ func (s *NotificationService) sendEmailNotification(userID uint, title, content 
 	}
 
 	// 使用模板
-	tmpl := s.getEmailTemplate(title, content)
+	tmpl, err := s.getEmailTemplate(title, content)
+	if err != nil {
+		return err
+	}
 	return s.SendEmail(user.Email, title, tmpl)
 }
 
@@ -182,7 +218,7 @@ func (s *NotificationService) sendTelegramNotification(userID uint, title, conte
 }
 
 // sendWebhookNotification 发送Webhook通知
-func (s *NotificationService) sendWebhookNotification(event, title, content string, data map[string]any) error {
+func (s *NotificationService) sendWebhookNotification(event, title, content string, data map[string]any) (err error) {
 	// 获取Webhook配置
 	// When implemented, fetch webhook endpoint from config or database.
 	webhookURL := "" // configured Webhook address
@@ -203,7 +239,11 @@ func (s *NotificationService) sendWebhookNotification(event, title, content stri
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
@@ -213,7 +253,7 @@ func (s *NotificationService) sendWebhookNotification(event, title, content stri
 }
 
 // getEmailTemplate 获取邮件模板
-func (s *NotificationService) getEmailTemplate(title, content string) string {
+func (s *NotificationService) getEmailTemplate(title, content string) (string, error) {
 	htmlTmpl := `<!DOCTYPE html>
 <html>
 <head>
@@ -247,13 +287,19 @@ func (s *NotificationService) getEmailTemplate(title, content string) string {
 </body>
 </html>`
 
-	tmpl, _ := template.New("email").Parse(htmlTmpl)
+	tmpl, err := template.New("email").Parse(htmlTmpl)
+	if err != nil {
+		return "", err
+	}
+
 	var buf bytes.Buffer
-	tmpl.Execute(&buf, map[string]string{
+	if err := tmpl.Execute(&buf, map[string]string{
 		"Title":   title,
 		"Content": content,
-	})
-	return buf.String()
+	}); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 // ========== 事件触发方法 ==========
@@ -269,12 +315,12 @@ func (s *NotificationService) NotifyUserExpire(user *model.User, daysLeft int) e
 
 	// 发送邮件
 	if user.Email != "" {
-		go s.Send(&user.ID, "email", model.EventUserExpire, title, content, nil)
+		s.sendAsync(&user.ID, "email", model.EventUserExpire, title, content, nil)
 	}
 
 	// 发送Telegram
 	if tgUser.ID > 0 {
-		go s.Send(&user.ID, "telegram", model.EventUserExpire, title, content, nil)
+		s.sendAsync(&user.ID, "telegram", model.EventUserExpire, title, content, nil)
 	}
 
 	return nil
@@ -289,11 +335,11 @@ func (s *NotificationService) NotifyTrafficLow(user *model.User, percentLeft flo
 	s.db.Where("user_id = ? AND notify_traffic = ?", user.ID, true).First(&tgUser)
 
 	if user.Email != "" {
-		go s.Send(&user.ID, "email", model.EventUserTrafficLow, title, content, nil)
+		s.sendAsync(&user.ID, "email", model.EventUserTrafficLow, title, content, nil)
 	}
 
 	if tgUser.ID > 0 {
-		go s.Send(&user.ID, "telegram", model.EventUserTrafficLow, title, content, nil)
+		s.sendAsync(&user.ID, "telegram", model.EventUserTrafficLow, title, content, nil)
 	}
 
 	return nil
@@ -313,11 +359,11 @@ func (s *NotificationService) NotifyTicketReply(ticket *model.Ticket, replyBy st
 	s.db.Where("user_id = ? AND notify_ticket = ?", user.ID, true).First(&tgUser)
 
 	if user.Email != "" {
-		go s.Send(&user.ID, "email", model.EventTicketReplied, title, content, nil)
+		s.sendAsync(&user.ID, "email", model.EventTicketReplied, title, content, nil)
 	}
 
 	if tgUser.ID > 0 {
-		go s.Send(&user.ID, "telegram", model.EventTicketReplied, title, content, nil)
+		s.sendAsync(&user.ID, "telegram", model.EventTicketReplied, title, content, nil)
 	}
 
 	return nil
@@ -332,11 +378,11 @@ func (s *NotificationService) NotifyOrderPaid(order *model.Order, user *model.Us
 	s.db.Where("user_id = ?", user.ID).First(&tgUser)
 
 	if user.Email != "" {
-		go s.Send(&user.ID, "email", model.EventOrderPaid, title, content, nil)
+		s.sendAsync(&user.ID, "email", model.EventOrderPaid, title, content, nil)
 	}
 
 	if tgUser.ID > 0 {
-		go s.Send(&user.ID, "telegram", model.EventOrderPaid, title, content, nil)
+		s.sendAsync(&user.ID, "telegram", model.EventOrderPaid, title, content, nil)
 	}
 
 	return nil
@@ -352,14 +398,14 @@ func (s *NotificationService) NotifyNodeOffline(node *model.Node) error {
 	s.db.Where("is_admin = ?", true).Find(&admins)
 
 	for _, admin := range admins {
-		go s.Send(&admin.ID, "email", model.EventNodeOffline, title, content, map[string]any{
+		s.sendAsync(&admin.ID, "email", model.EventNodeOffline, title, content, map[string]any{
 			"node_id":   node.ID,
 			"node_name": node.Name,
 		})
 
 		var tgUser model.TelegramUser
 		if s.db.Where("user_id = ?", admin.ID).First(&tgUser).Error == nil {
-			go s.Send(&admin.ID, "telegram", model.EventNodeOffline, title, content, nil)
+			s.sendAsync(&admin.ID, "telegram", model.EventNodeOffline, title, content, nil)
 		}
 	}
 
@@ -380,7 +426,7 @@ func (s *NotificationService) Broadcast(title, content string) error {
 		}
 
 		for _, user := range users {
-			go s.Send(&user.ID, "email", model.EventSystemBroadcast, title, content, nil)
+			s.sendAsync(&user.ID, "email", model.EventSystemBroadcast, title, content, nil)
 		}
 
 		offset += batchSize

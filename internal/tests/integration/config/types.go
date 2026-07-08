@@ -16,11 +16,11 @@ const (
 type TransportType string
 
 const (
-	TransportTCP       TransportType = "tcp"
-	TransportWS        TransportType = "ws"
-	TransportGRPC      TransportType = "grpc"
-	TransportHTTP2     TransportType = "h2"
-	TransportQUIC      TransportType = "quic"
+	TransportTCP   TransportType = "tcp"
+	TransportWS    TransportType = "ws"
+	TransportGRPC  TransportType = "grpc"
+	TransportHTTP2 TransportType = "h2"
+	TransportQUIC  TransportType = "quic"
 )
 
 // TLSType TLS 类型
@@ -39,25 +39,25 @@ type ServerConfig struct {
 	Protocol Protocol
 
 	// TLS 配置
-	TLSType   TLSType
-	SNI       string // Server Name Indication
-	Insecure  bool   // 跳过证书验证
+	TLSType  TLSType
+	SNI      string // Server Name Indication
+	Insecure bool   // 跳过证书验证
 
 	// Reality 配置
-	PublicKey  string
-	ShortID    string
-	SpiderX    string
+	PublicKey string
+	ShortID   string
+	SpiderX   string
 
 	// 传输层配置
-	Transport   TransportType
-	TransportWS *TransportWSConfig
+	Transport     TransportType
+	TransportWS   *TransportWSConfig
 	TransportGRPC *TransportGRPCConfig
 
 	// 协议特定配置
-	UUID       string // VMess/VLESS UUID
-	Password   string // Trojan/SS 密码
-	Method     string // SS 加密方法
-	Flow       string // VLESS flow (xtls-rprx-vision)
+	UUID     string // VMess/VLESS UUID
+	Password string // Trojan/SS 密码
+	Method   string // SS 加密方法
+	Flow     string // VLESS flow (xtls-rprx-vision)
 }
 
 // TransportWSConfig WebSocket 传输配置
@@ -73,17 +73,17 @@ type TransportGRPCConfig struct {
 
 // UserConfig 用户配置
 type UserConfig struct {
-	UUID     string
-	Email    string
-	AlterID  int // VMess only
-	Flow     string // VLESS only
+	UUID    string
+	Email   string
+	AlterID int    // VMess only
+	Flow    string // VLESS only
 }
 
 // ClientConfig 客户端配置（用于测试）
 type ClientConfig struct {
-	Name     string
-	Server   ServerConfig
-	User     UserConfig
+	Name   string
+	Server ServerConfig
+	User   UserConfig
 
 	// 测试相关
 	TestURLs []string // 测试用的 URL 列表

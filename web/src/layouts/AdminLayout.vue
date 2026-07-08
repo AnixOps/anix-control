@@ -46,7 +46,9 @@
             <div class="operator-email">{{ userStore.userInfo?.email || '-' }}</div>
           </div>
         </div>
-        <div v-if="systemVersion" class="version-line">AnixOps v{{ systemVersion }}</div>
+        <div v-if="systemVersionDisplay" class="version-line" :title="systemVersionTitle">
+          {{ systemVersionDisplay }}
+        </div>
         <div class="sidebar-actions">
           <LocaleSwitcher compact />
           <button class="btn w-full" type="button" @click="logout">{{ t('common.actions.logout') }}</button>
@@ -106,6 +108,11 @@ const { t, currentLocale, formatDateTime } = useAppI18n()
 const sidebarOpen = ref(false)
 const currentTime = ref('')
 const systemVersion = ref('')
+const systemBuildCode = ref(import.meta.env.VITE_APP_BUILD_CODE || '')
+const systemBuildTime = ref('')
+const systemCommit = ref('')
+const frontendBuildCode = import.meta.env.VITE_APP_BUILD_CODE || ''
+const frontendBuildTime = import.meta.env.VITE_APP_BUILD_TIME || ''
 
 const navSections = computed(() => ([
   {
@@ -168,6 +175,36 @@ const navSections = computed(() => ([
 ]))
 
 const pageTitle = computed(() => resolveRoutePageTitle(t, route.path, t('pageTitles.admin.fallback')))
+const systemVersionDisplay = computed(() => {
+  if (!systemVersion.value) {
+    return ''
+  }
+  if (systemVersion.value.includes('#')) {
+    return `AnixOps v${systemVersion.value}`
+  }
+  return systemBuildCode.value
+    ? `AnixOps v${systemVersion.value} #${systemBuildCode.value}`
+    : `AnixOps v${systemVersion.value}`
+})
+const systemVersionTitle = computed(() => {
+  const rows = []
+  if (systemBuildCode.value) {
+    rows.push(`Build code: ${systemBuildCode.value}`)
+  }
+  if (systemBuildTime.value) {
+    rows.push(`Backend build: ${systemBuildTime.value}`)
+  }
+  if (systemCommit.value && systemCommit.value !== 'unknown') {
+    rows.push(`Commit: ${systemCommit.value}`)
+  }
+  if (frontendBuildCode) {
+    rows.push(`Frontend build: ${frontendBuildCode}`)
+  }
+  if (frontendBuildTime) {
+    rows.push(`Frontend time: ${frontendBuildTime}`)
+  }
+  return rows.join('\n')
+})
 
 function closeSidebar() {
   sidebarOpen.value = false
@@ -191,10 +228,22 @@ function updateTime() {
 async function loadSystemInfo() {
   try {
     const res = await getSystemInfo()
-    systemVersion.value = res.data?.version || ''
+    const info = readSystemInfo(res)
+    systemVersion.value = info.version || ''
+    systemBuildCode.value = info.build_code || frontendBuildCode
+    systemBuildTime.value = info.build_time || ''
+    systemCommit.value = info.commit || ''
   } catch {
     // ignore layout metadata failures
   }
+}
+
+function readSystemInfo(res) {
+  if (!res || typeof res !== 'object') {
+    return {}
+  }
+  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  return payload && typeof payload === 'object' ? payload : {}
 }
 
 let timer

@@ -17,7 +17,7 @@ type ForwardRuntimeBootstrapTestSuite struct {
 
 func (s *ForwardRuntimeBootstrapTestSuite) SetupSuite() {
 	s.ServiceTestSuite.SetupSuite()
-	database.AutoMigrate(&model.SystemConfig{})
+	s.Require().NoError(database.AutoMigrate(&model.SystemConfig{}))
 }
 
 func (s *ForwardRuntimeBootstrapTestSuite) SetupTest() {

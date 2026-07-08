@@ -28,7 +28,7 @@ func setupTestDB(t *testing.T) func() {
 	require.NoError(t, err)
 
 	return func() {
-		database.Close()
+		require.NoError(t, database.Close())
 	}
 }
 
@@ -139,7 +139,7 @@ func TestManager_UnregisterNode(t *testing.T) {
 	}
 
 	// Register then unregister
-	manager.RegisterNode(node)
+	require.NoError(t, manager.RegisterNode(node))
 	manager.UnregisterNode(1)
 
 	// Create node in DB so GetClient doesn't fail on DB lookup
@@ -341,6 +341,73 @@ func TestManager_DeleteForwardRule(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestManager_DeleteForwardRule_ReturnsUnexpectedDeleteError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	manager := NewManager(database.GetDB())
+
+	relayNode := &model.ForwardNode{
+		Name:     "relay-node",
+		Host:     "127.0.0.1",
+		Port:     8080,
+		APIPort:  80,
+		APIToken: "test-token",
+	}
+	database.GetDB().Create(relayNode)
+
+	rule := &model.ForwardRule{
+		ID:          1,
+		RelayNodeID: relayNode.ID,
+		ListenPort:  9000,
+		Protocol:    "tcp",
+	}
+
+	manager.clients.Store(relayNode.ID, NewClient(&Config{Host: server.URL}))
+
+	err := manager.DeleteForwardRule(context.Background(), rule)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "delete tcp service")
+}
+
+func TestManager_DeleteForwardRule_IgnoresMissingServices(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	manager := NewManager(database.GetDB())
+
+	relayNode := &model.ForwardNode{
+		Name:     "relay-node",
+		Host:     "127.0.0.1",
+		Port:     8080,
+		APIPort:  80,
+		APIToken: "test-token",
+	}
+	database.GetDB().Create(relayNode)
+
+	rule := &model.ForwardRule{
+		ID:          1,
+		RelayNodeID: relayNode.ID,
+		ListenPort:  9000,
+		Protocol:    "both",
+	}
+
+	manager.clients.Store(relayNode.ID, NewClient(&Config{Host: server.URL}))
+
+	err := manager.DeleteForwardRule(context.Background(), rule)
+	assert.NoError(t, err)
+}
+
 func TestManager_UpdateForwardRule(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -469,7 +536,7 @@ func TestManager_GetNodeStats(t *testing.T) {
 					{Name: "service-1", Addr: ":8080"},
 				},
 			}
-			json.NewEncoder(w).Encode(stats)
+			require.NoError(t, json.NewEncoder(w).Encode(stats))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -505,7 +572,7 @@ func TestManager_GetRuleStats(t *testing.T) {
 				Name: "forward-rule-1",
 				Addr: ":9000",
 			}
-			json.NewEncoder(w).Encode(stats)
+			require.NoError(t, json.NewEncoder(w).Encode(stats))
 			return
 		}
 		w.WriteHeader(http.StatusOK)

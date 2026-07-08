@@ -1,0 +1,132 @@
+# Changelog
+
+## Unreleased
+
+### Fixed
+
+- Upgraded vulnerable Go dependencies reported by `govulncheck`: `google.golang.org/grpc` to `v1.79.3`, `github.com/jackc/pgx/v5` to `v5.9.2`, and `github.com/quic-go/quic-go` to `v0.59.1`.
+- Cleared production runtime `gosec` findings by range-checking sing-box integer conversion, tightening generated runtime file/directory permissions, and documenting reviewed config-path and subscriber credential JSON outputs.
+- Replaced the weak default bootstrap admin password with a generated `crypto/rand` password when `admin.password` is empty.
+- Replaced load balancer random and weighted node selection with `crypto/rand` and explicit random-source error handling.
+- Hardened `cmd/verify` local E2E verification by requiring `V2BOARD_VERIFY_TOKEN`, restricting panel URLs to loopback hosts, allowlisting local Xray binary names, and writing temporary Xray configs with private permissions.
+- Hardened `cmd/subtest` subscription test tooling by validating local YAML config paths and writing generated sample configs with private permissions.
+- Hardened `cmd/configgen` by checking generated config write errors and writing integration client configs with private permissions.
+- Hardened `cmd/report` by checking report generation and E2E cleanup errors, writing reports/configs with private permissions, validating local Xray binary names, and adding a local echo server header timeout.
+- Hardened the integration mock server by checking JSON response encoding failures and adding HTTP header read timeouts.
+- Hardened integration echo helpers by checking close/write/deadline/copy errors and documenting the intentional local echo response behavior.
+- Hardened the integration local environment by checking process/probe cleanup errors, restricting reviewed local server binary names, and writing generated configs with private permissions.
+- Hardened the shared test database helper by returning close failures through `CloseWithError` while keeping the legacy close wrapper observable.
+- Hardened the integration runner by reporting config-directory setup failures, using private generated-file permissions, and logging generated-config cleanup failures.
+- Hardened the integration binary manager by checking download/cache cleanup errors, bounding archive extraction, using private cache permissions, and scoping local file access through `os.Root`.
+- Hardened the integration clients by checking shutdown/probe cleanup errors, allowlisting local client binaries before subprocess launch, and scoping manual binary lookup through `os.Root`.
+- Hardened the migration dump parser by opening operator-provided dump files through `os.Root` and adding plain/gzip dump parser coverage.
+- Hardened `cmd/sqlite2postgres` by logging database close failures, returning row-close failures, and covering table copy behavior.
+- Hardened `cmd/integration-test` JSON-output tests by checking pipe close/copy errors and clearing package-local lint findings.
+- Hardened `cmd/report` tests by checking listener/response cleanup and validating the echo server's assigned-port ping path.
+- Hardened integration echo server tests by checking response/server cleanup errors and clearing package-local lint findings.
+- Hardened integration local environment tests by checking echo shutdown, subprocess cleanup, and HTTP response close errors while clearing package-local lint findings.
+- Hardened integration mock server tests by checking response close, JSON decode, server shutdown, and JSON fixture encoding errors while clearing package-local lint findings.
+- Hardened integration binary manager tests and download URL selection by checking mock response writes, removing ineffectual assignments, and clearing package-local lint findings.
+- Hardened the integration runner by propagating client stop failures into test results and preserving result duration updates while clearing package-local lint findings.
+- Cleared `cmd/verify` lint findings by normalizing local Xray lookup error text.
+- Cleared WebSocket Origin utility lint findings by normalizing scheme mapping through a tagged switch.
+- Hardened database package tests by checking database close paths, isolating SQLite path tests under temporary directories, and clearing package-local lint findings.
+- Hardened the integration setup script by logging database close failures and clearing package-local lint findings.
+- Hardened middleware tests by checking node table migration and database cleanup errors while clearing package-local lint findings.
+- Hardened integration client tests and HTTP probe cleanup by checking manager registration errors and logging deferred response body close failures while clearing package-local lint findings.
+- Hardened command entrypoint shutdown paths by logging `cmd/migrate` and `cmd/server` database close failures while clearing package-local lint findings.
+- Hardened router, smoke, and root integration tests by checking schema migration, database cleanup, response close, and port parsing failures while clearing package-local lint findings.
+- Hardened websocket tests by checking client close failures and removed an unused client mutex while clearing package-local lint findings.
+- Hardened GOST client and manager tests by returning response close failures, checking mock response writes, and removing an unused manager mutex while clearing package-local lint findings.
+- Hardened cache tests by checking cache mutation/read errors and correcting concurrent access coverage to read typed values while clearing package-local lint findings.
+- Hardened gRPC tests by checking database lifecycle, server serve, client connection close, and stream close errors while clearing package-local lint findings.
+- Hardened E2E tests by checking JSON response decoding, database cleanup, and subscription group association errors while clearing package-local lint findings.
+- Hardened integration E2E tests by checking echo shutdown, port probe, process signal/kill, and HTTP response body close errors while clearing package-local lint findings.
+- Hardened handler package cleanup and tests by checking WebSocket, request/response body, Telegram update, database setup, and JSON decoding errors while clearing package-local lint findings.
+- Hardened service small-file cleanup by checking migrations, benchmark setup, response/archive close paths, removing stale private helpers and fields, and clearing service staticcheck/unused findings outside the consolidated `service_test.go` suite.
+- Hardened the consolidated service test suite by checking fixture creation, registration, order setup, auth-key generation, and cleanup errors, clearing the final Go lint baseline.
+- Hardened forward node health checks, tag parsing, API token generation, and random node selection with explicit error handling and context-aware dialing.
+- Enabled SMTP certificate verification for notification email delivery and made asynchronous notification send failures observable.
+- Returned explicit MFA backup-code JSON parse errors instead of silently treating corrupt data as no remaining backup codes.
+- Made dashboard and user subscription statistics cache writes/deletes explicit, with refresh paths returning cache failures and read paths logging non-fatal cache write errors.
+- Made legacy server node config generation reject malformed JSON settings and return online-status cache update failures instead of silently producing partial state.
+- Made Telegram broadcast, API request encoding, and admin ID parsing errors explicit instead of silently treating failures as success or empty configuration.
+- Hardened local backup creation and restore with private backup-directory permissions, zip path traversal checks, non-regular entry rejection, and archive decompression size limits.
+- Restricted local forward runtime command execution to `ansible-playbook` or absolute `ansible-playbook` paths before spawning runtime jobs.
+- Replaced subscription template node ID MD5 hashing with SHA-256 and documented the remaining SS2022 MD5 path as a reviewed legacy compatibility requirement.
+- Made WebSocket response and monitor streams handle JSON, deadline, write, close, and backpressure failures explicitly; also replaced UniProxy ETag MD5 hashing with SHA-256.
+- Restricted WebSocket browser origins through a shared same-host/CORS allowlist policy and added agent WebSocket read/write deadlines.
+- Cleared production-package `G104` findings outside `internal/service` by checking model JSON decode failures, Gost delete/update errors, server startup writes, and verification command I/O/process cleanup.
+- Added range-checked gRPC protobuf integer conversions for node IDs, ports, TLS flags, and user device limits, and made traffic/online heartbeat update failures observable.
+- Added gRPC bidirectional stream cancellation coverage, including online stream cancellation and status-stream connection cleanup.
+- Added background worker cancellation/drain coverage for shared delayed cycles, the Gost stats idle loop, and runtime executor claimed-job cleanup.
+- Added clean-agent bridge worker cancellation and retry coverage, including canceled NodeX translation draining to a failed runtime job and retry upsert of an existing bridge mapping.
+- Made memory cache init/close lifecycle idempotent by closing and waiting for stale cleanup goroutines before replacing or restarting the cache.
+- Isolated the shared service test SQLite database under a per-process temporary directory and close it before cleanup.
+- Fixed node update cache invalidation to delete `node:<id>` keys using decimal node IDs instead of rune conversion.
+- Added compatibility for the legacy `/api/v1/client/subscribe?token=` subscription endpoint.
+- Added service and admin HTTP coverage for oversized traffic ranking requests, verifying the 200/1000 row caps used by `/admin/traffic/user-ranking`.
+- Hardened EPay callbacks with constant-time signature comparison, signed amount parsing, and order amount verification before marking payments paid.
+- Added a registry guard test so every plugin payment callback gateway must provide valid and tampered-signature coverage.
+- Added mocked PayPal webhook verification tests covering remote signature success and rejection without external network calls.
+- Made panel forward pause/resume idempotent while runtime jobs are pending or running, preventing duplicate runtime job enqueueing and stale status overwrites from repeated or bulk actions.
+- Added a partial unique database guard for pending/running forward runtime jobs and a schema repair step that collapses historical duplicates before creating the guard.
+- Filtered bulk forward pause/resume actions in the admin UI so only forwards that actually need the requested state change are submitted.
+- Normalized Ansible Machines admin responses to the panel `code/msg/ts/data` envelope and added handler coverage for success and error responses.
+- Normalized Forward Node management responses to the panel `code/msg/ts/data` envelope and expanded handler coverage for invalid ID, missing body, not-found, scope rejection, toggle, and sync-stats paths.
+- Normalized Forward Rule management responses to the panel `code/msg/ts/data` envelope and expanded handler coverage for list, create, get, update, delete, toggle, missing body, invalid ID, and not-found paths.
+- Normalized Forward stats, user-rule, and connection-test responses to the panel `code/msg/ts/data` envelope while preserving connection-test diagnostics under `data.success=false`.
+- Expanded Forward observability response-envelope coverage for targets, trend, topology, and multi-ingress endpoints, with frontend API mapping tests for all observability calls.
+- Expanded Forward internal traffic report/snapshot handler coverage for panel `code/msg/ts/data` success, binding-error, and service-error responses.
+- Normalized admin traffic hourly and user-ranking responses to the panel `code/msg/ts/data` envelope while keeping the TrafficHourly page compatible with legacy and enveloped payloads.
+- Normalized the admin dashboard response to the panel `code/msg/ts/data` envelope while keeping the Dashboard page compatible with legacy and enveloped payloads.
+- Normalized admin user stats responses to the panel `code/msg/ts/data` envelope while keeping the Users page compatible with legacy and enveloped payloads.
+- Normalized admin order stats responses to the panel `code/msg/ts/data` envelope while keeping the Orders page compatible with legacy and enveloped payloads.
+- Normalized admin node stats responses to the panel `code/msg/ts/data` envelope while keeping the Nodes page compatible with legacy and enveloped payloads.
+- Normalized admin system info responses to the panel `code/msg/ts/data` envelope while keeping the AdminLayout version display compatible with legacy and enveloped payloads.
+- Normalized admin invite stats responses to the panel `code/msg/ts/data` envelope while keeping the Invite page compatible with legacy and enveloped payloads.
+- Normalized admin payment stats responses to the panel `code/msg/ts/data` envelope while keeping the Payment page compatible with legacy and enveloped payloads.
+- Normalized admin subscription stats responses to the panel `code/msg/ts/data` envelope while keeping the Subscriptions page compatible with legacy and enveloped payloads.
+- Normalized admin system backup stats responses to the panel `code/msg/ts/data` envelope while keeping the System backup view compatible with legacy and enveloped payloads.
+- Normalized admin load balancer stats responses to the panel `code/msg/ts/data` envelope and added frontend API mapping coverage for the stats route.
+- Normalized admin system backup config responses to the panel `code/msg/ts/data` envelope while keeping sensitive-field masking and the System backup view compatible with legacy and enveloped payloads.
+- Normalized admin invite config responses to the panel `code/msg/ts/data` envelope while keeping the Invite page compatible with legacy and enveloped payloads.
+- Normalized admin subscription settings responses to the panel `code/msg/ts/data` envelope while keeping System and Users subscription-link flows compatible with legacy and enveloped payloads.
+- Normalized admin payment gateway list responses to the panel `code/msg/ts/data` envelope while keeping the Payment page compatible with legacy and enveloped payloads.
+- Normalized user registration and order-save success responses to the panel `code/msg/ts/data` envelope while preserving the existing token and order payloads under `data`.
+- Normalized user login success responses to the panel `code/msg/ts/data` envelope while keeping the Login page compatible with the enveloped token payload.
+- Normalized user order list and detail responses to the panel `code/msg/ts/data` envelope while keeping the Orders page compatible with legacy and enveloped payloads.
+- Normalized user subscription info responses to the panel `code/msg/ts/data` envelope while keeping the Subscribe page compatible with legacy and enveloped payloads.
+- Normalized user profile responses to the panel `code/msg/ts/data` envelope while keeping the user store compatible with the enveloped profile payload.
+- Normalized user dashboard responses to the panel `code/msg/ts/data` envelope while preserving the subscription payload under `data.subscription`.
+- Normalized user plan list responses to the panel `code/msg/ts/data` envelope while keeping the Plans page compatible with legacy and enveloped payloads.
+- Normalized user coupon-check responses to the panel `code/msg/ts/data` envelope while keeping the Plans page compatible with legacy and enveloped coupon payloads.
+- Normalized user knowledge list and detail responses to the panel `code/msg/ts/data` envelope while keeping the Knowledge page compatible with legacy and enveloped article lists.
+- Normalized user ticket list, create, detail, reply, and close responses to the panel `code/msg/ts/data` envelope while keeping the Tickets page compatible with legacy and enveloped ticket payloads.
+- Normalized public payment methods and payment-status responses to the panel `code/msg/ts/data` envelope with handler coverage for key payload fields.
+- Normalized admin ticket list, reply, and close success responses to the panel `code/msg/ts/data` envelope while keeping the Tickets admin page compatible with legacy and enveloped payloads.
+- Normalized admin coupon list, create, and delete success responses to the panel `code/msg/ts/data` envelope while keeping the Coupons admin page compatible with legacy and enveloped payloads.
+- Normalized admin knowledge list, create, update, and delete success responses to the panel `code/msg/ts/data` envelope, preserved partial-update sort/visibility fields when omitted, and restored missing Knowledge admin page locale strings.
+- Normalized admin system audit-log responses to the panel `code/msg/ts/data` envelope while keeping the System audit page compatible with legacy and enveloped payloads.
+
+### Documentation
+
+- Added the initial repository, concurrency, and performance audit baselines plus root `ROADMAP.md`, root `TODO.md`, and `docs/manual-intervention.md`.
+- Documented the production root deployment command, Go/Node/npm prerequisites, deploy script self-test, and common recovery hints.
+- Added a SQLite-to-PostgreSQL migration runbook covering dry run, import, verification evidence, and rollback.
+- Added the traffic stats operations runbook covering `v2_server_log` indexes, query bounds, and retention maintenance.
+- Added forwarding design, API, security, and compatibility baselines under `docs/forwarding/`, documenting the current runtime boundaries, Flux-shaped route contract, security controls, and remaining clone/runtime gaps.
+
+### CI/CD
+
+- Added Go quality gates for `go mod tidy`, `gofmt`, `go vet`, full `go test ./...`, race testing, benchmark smoke testing, `govulncheck`, blocking production runtime `gosec`, non-blocking full-repository `golangci-lint` reports, and Docker build smoke testing.
+- Promoted full-repository `golangci-lint` from report-only to a blocking CI gate after clearing the baseline.
+- Updated the former full-repository `gosec` report to exclude generated code after all non-generated findings were cleared.
+- Promoted the generated-file-excluded full-repository `gosec` report to a blocking CI gate while preserving the JSON artifact upload.
+- Added `.golangci.yml` to keep frontend dependency trees out of Go lint reports.
+- Added a SQLite-to-PostgreSQL migration dry-run CI gate and made release/backend builds depend on it.
+- Added realistic service benchmarks for hourly traffic and user-ranking queries so benchmark smoke covers stats hot paths.
+- Added forwarding runtime job benchmarks for admin listing filters and clean-agent heartbeat claiming so the service benchmark smoke covers runtime queue hot paths.
+- Added a frontend bundle size report script and CI artifact that tracks total JS/CSS output plus heavy admin/runtime chunks such as Forward, Nodes, System, NodeX, LocalRuntime, echarts, and G6.
+- Replaced the placeholder production deploy job with a release-attached `OPERATOR_DEPLOYMENT.md` manual deployment runbook.
+- Added SPDX JSON SBOM generation to release assets using `anchore/sbom-action`.

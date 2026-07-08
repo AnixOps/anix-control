@@ -39,7 +39,7 @@ func Init(cfg *config.DatabaseConfig) error {
 		// 纭繚鐩綍瀛樺湪
 		dir := filepath.Dir(dbPath)
 		if dir != "" && dir != "." {
-			if err := os.MkdirAll(dir, 0755); err != nil {
+			if err := os.MkdirAll(dir, 0o750); err != nil {
 				return fmt.Errorf("failed to create database directory: %w", err)
 			}
 		}
@@ -63,11 +63,12 @@ func Init(cfg *config.DatabaseConfig) error {
 
 	// 閰嶇疆鏃ュ織绾у埆
 	logLevel := logger.Info
-	if cfg.LogLevel == "silent" {
+	switch cfg.LogLevel {
+	case "silent":
 		logLevel = logger.Silent
-	} else if cfg.LogLevel == "error" {
+	case "error":
 		logLevel = logger.Error
-	} else if cfg.LogLevel == "warn" {
+	case "warn":
 		logLevel = logger.Warn
 	}
 
@@ -141,10 +142,10 @@ func AutoMigrate(models ...any) error {
 
 // IsSQLite 妫€鏌ユ槸鍚︿娇鐢?SQLite
 func IsSQLite() bool {
-	return db.Dialector.Name() == "sqlite"
+	return db.Name() == "sqlite"
 }
 
 // IsPostgres 妫€鏌ユ槸鍚︿娇鐢?PostgreSQL
 func IsPostgres() bool {
-	return db.Dialector.Name() == "postgres"
+	return db.Name() == "postgres"
 }

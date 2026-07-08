@@ -17,6 +17,7 @@ import (
 var (
 	BuildVersion = "dev"
 	BuildTime    = "unknown"
+	BuildCode    = ""
 	BuildCommit  = "unknown"
 )
 
@@ -658,7 +659,7 @@ func (h *AdminHandler) GetUserStats(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": stats})
+	panelSuccess(c, stats)
 }
 
 // ====== 订单管理 ======
@@ -866,7 +867,7 @@ func (h *AdminHandler) GetOrderStats(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": stats})
+	panelSuccess(c, stats)
 }
 
 // ====== 仪表盘 ======
@@ -892,9 +893,7 @@ func (h *AdminHandler) GetDashboard(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": stats,
-	})
+	panelSuccess(c, stats)
 }
 
 // GetHourlyTraffic 返回最近 N 小时的流量序列 (默认 24 小时, 最多 720 小时)
@@ -919,9 +918,15 @@ func (h *AdminHandler) GetHourlyTraffic(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取小时流量失败", "error": err.Error()})
 		return
 	}
+	meta, err := h.statsService.GetTrafficLogMeta(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取流量状态失败", "error": err.Error()})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": series,
+	panelSuccess(c, gin.H{
+		"list": series,
+		"meta": meta,
 	})
 }
 
@@ -942,23 +947,25 @@ func (h *AdminHandler) GetUserTrafficRanking(c *gin.Context) {
 		}
 	}
 
-	ranking, err := h.statsService.GetUserTrafficRanking(hours, limit)
+	includeZeroUsers := c.Query("include_zero_users") == "true" || c.Query("include_zero_users") == "1"
+
+	ranking, err := h.statsService.GetUserTrafficRanking(hours, limit, includeZeroUsers)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取用户流量排行失败", "error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": ranking,
+	panelSuccess(c, gin.H{
+		"list": ranking,
 	})
 }
+
 // GET /api/v2/admin/system/info
 func (h *AdminHandler) GetSystemInfo(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"version":    BuildVersion,
-			"build_time": BuildTime,
-			"commit":     BuildCommit,
-		},
+	panelSuccess(c, gin.H{
+		"version":    BuildVersion,
+		"build_time": BuildTime,
+		"build_code": BuildCode,
+		"commit":     BuildCommit,
 	})
 }

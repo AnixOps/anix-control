@@ -68,11 +68,11 @@ type ForwardRuntimeProviderTestSuite struct {
 
 func (s *ForwardRuntimeProviderTestSuite) SetupSuite() {
 	s.ServiceTestSuite.SetupSuite()
-	database.AutoMigrate(
+	s.Require().NoError(database.AutoMigrate(
 		&model.ForwardNode{},
 		&model.ForwardRule{},
 		&model.SystemConfig{},
-	)
+	))
 }
 
 func (s *ForwardRuntimeProviderTestSuite) SetupTest() {

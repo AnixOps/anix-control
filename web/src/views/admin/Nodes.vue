@@ -760,8 +760,8 @@ const deploySettings = reactive({
   grpcHost: typeof window !== 'undefined' ? `${window.location.hostname}:50051` : '127.0.0.1:50051',
   grpcUseTLS: typeof window !== 'undefined' ? window.location.protocol === 'https:' : false,
   grpcServerName: typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1',
-  amd64BinaryPath: '/home/dev/anixops/V2bX_AnixOps/V2bX',
-  arm64BinaryPath: '/home/dev/anixops/V2bX_AnixOps/V2bX_arm64',
+  amd64BinaryPath: '/home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_amd64',
+  arm64BinaryPath: '/home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_arm64',
   coreType: 'xray'
 })
 
@@ -950,10 +950,18 @@ const loadNodes = async () => {
 const loadStats = async () => {
   try {
     const res = await getNodeStats()
-    Object.assign(stats, res.data)
+    Object.assign(stats, readNodeStats(res))
   } catch (e) {
     console.error('Failed to load stats:', e)
   }
+}
+
+const readNodeStats = (res) => {
+  if (!res || typeof res !== 'object') {
+    return {}
+  }
+  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  return payload && typeof payload === 'object' ? payload : {}
 }
 
 const loadProtocolTemplates = async () => {
@@ -1017,8 +1025,8 @@ const deployInventoryPreview = computed(() => {
       ? `ansible_ssh_pass=${authValue}`
       : `ansible_ssh_private_key_file=${authValue}`
     const binaryPath = row.arch === 'arm64'
-      ? (deploySettings.arm64BinaryPath || '/home/dev/anixops/V2bX_AnixOps/V2bX_arm64')
-      : (deploySettings.amd64BinaryPath || '/home/dev/anixops/V2bX_AnixOps/V2bX')
+      ? (deploySettings.arm64BinaryPath || '/home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_arm64')
+      : (deploySettings.amd64BinaryPath || '/home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_amd64')
     lines.push(
       `${row.alias} ansible_host=${row.host} ansible_port=${row.sshPort || 22} ansible_user=${row.sshUser || 'root'} ${authField} node_id=${row.nodeId} api_key=${row.apiKey || '<API_KEY>'} v2bx_arch=${row.arch} v2bx_binary_local=${binaryPath}`
     )
@@ -1040,8 +1048,8 @@ const deployGroupVarsPreview = computed(() => {
     '',
     'panel_api_base: "http://127.0.0.1:18080"',
     '',
-    `v2bx_binary_local: "${deploySettings.amd64BinaryPath}"`,
-    'v2bx_arch: "amd64"',
+    `v2bx_binary_amd64_local: "${deploySettings.amd64BinaryPath}"`,
+    `v2bx_binary_arm64_local: "${deploySettings.arm64BinaryPath}"`,
     '',
     'push_geodata: false',
     'v2bx_geodata_dir: "/home/dev/anixops/V2bX_AnixOps/example"',

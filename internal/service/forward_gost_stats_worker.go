@@ -183,14 +183,6 @@ func panelForwardGostServiceNames(forwardID uint, protocol string) []string {
 	}
 }
 
-func isGostStatsMissing(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "404") || strings.Contains(message, "not found")
-}
-
 func strconvFormatUint(value uint) string {
 	return strconv.FormatUint(uint64(value), 10)
 }

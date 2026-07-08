@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -74,6 +75,12 @@ type APITest struct {
 
 var report TestReport
 
+const (
+	reportDir      = "test-reports"
+	reportFilePerm = 0o600
+	reportDirPerm  = 0o750
+)
+
 func main() {
 	report = TestReport{
 		GeneratedAt:   time.Now(),
@@ -105,8 +112,12 @@ func main() {
 	// 4. 生成报告
 	fmt.Println("[4/4] 生成报告文件...")
 	generateSummary()
-	generateCSVReport()
-	generateHTMLReport()
+	if err := generateCSVReport(); err != nil {
+		fmt.Printf("  ❌ CSV 报告生成失败: %v\n", err)
+	}
+	if err := generateHTMLReport(); err != nil {
+		fmt.Printf("  ❌ HTML/JSON 报告生成失败: %v\n", err)
+	}
 
 	fmt.Println()
 	fmt.Println("========================================")
@@ -173,7 +184,10 @@ func runAPITests() {
 				} else {
 					result.Response = string(body)
 				}
-				resp.Body.Close()
+				if err := resp.Body.Close(); err != nil {
+					result.Success = false
+					result.Error = err.Error()
+				}
 			}
 		}
 
@@ -187,15 +201,10 @@ func runAPITests() {
 }
 
 func runE2ETests() {
-	xrayPath := "./bin/xray.exe"
-	if _, err := os.Stat(xrayPath); os.IsNotExist(err) {
-		// 尝试从 PATH 查找
-		if path, err := exec.LookPath("xray"); err == nil {
-			xrayPath = path
-		} else {
-			fmt.Println("  ⚠️ Xray 未找到，跳过 E2E 测试")
-			return
-		}
+	xrayPath, err := resolveReportXrayPath()
+	if err != nil {
+		fmt.Println("  ⚠️ Xray 未找到，跳过 E2E 测试")
+		return
 	}
 
 	protocols := []string{"shadowsocks", "vmess", "vless", "trojan"}
@@ -226,12 +235,28 @@ func runE2EProtocolTest(xrayPath, protocol string) E2EResult {
 		result.Error = err.Error()
 		return result
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() {
+		if err := os.RemoveAll(tmpDir); err != nil {
+			result.Error = fmt.Sprintf("cleanup temp dir failed: %v", err)
+		}
+	}()
 
 	// 获取端口
-	echoPort := getFreePort()
-	serverPort := getFreePort()
-	proxyPort := getFreePort()
+	echoPort, err := getFreePort()
+	if err != nil {
+		result.Error = fmt.Sprintf("echo port allocation failed: %v", err)
+		return result
+	}
+	serverPort, err := getFreePort()
+	if err != nil {
+		result.Error = fmt.Sprintf("server port allocation failed: %v", err)
+		return result
+	}
+	proxyPort, err := getFreePort()
+	if err != nil {
+		result.Error = fmt.Sprintf("proxy port allocation failed: %v", err)
+		return result
+	}
 
 	result.EchoPort = echoPort
 	result.ServerPort = serverPort
@@ -243,14 +268,21 @@ func runE2EProtocolTest(xrayPath, protocol string) E2EResult {
 		result.Error = fmt.Sprintf("Echo server failed: %v", err)
 		return result
 	}
-	defer echoServer.Stop()
+	defer func() {
+		if err := echoServer.Stop(); err != nil {
+			log.Printf("stop echo server: %v", err)
+		}
+	}()
 
 	// 生成并启动服务端
 	serverConfig := generateServerConfig(protocol, serverPort)
 	serverConfigPath := filepath.Join(tmpDir, "server.json")
-	os.WriteFile(serverConfigPath, []byte(serverConfig), 0644)
+	if err := writeReportConfig(serverConfigPath, serverConfig); err != nil {
+		result.Error = fmt.Sprintf("server config write failed: %v", err)
+		return result
+	}
 
-	serverCmd := exec.CommandContext(ctx, xrayPath, "run", "-c", serverConfigPath)
+	serverCmd := exec.CommandContext(ctx, xrayPath, "run", "-c", serverConfigPath) // #nosec G204 -- xrayPath is resolved to a local xray/xray.exe binary before execution.
 	if runtime.GOOS != "windows" {
 		serverCmd.Stdout = os.Stdout
 		serverCmd.Stderr = os.Stderr
@@ -269,9 +301,12 @@ func runE2EProtocolTest(xrayPath, protocol string) E2EResult {
 	// 生成并启动客户端
 	clientConfig := generateClientConfig(protocol, serverPort, proxyPort)
 	clientConfigPath := filepath.Join(tmpDir, "client.json")
-	os.WriteFile(clientConfigPath, []byte(clientConfig), 0644)
+	if err := writeReportConfig(clientConfigPath, clientConfig); err != nil {
+		result.Error = fmt.Sprintf("client config write failed: %v", err)
+		return result
+	}
 
-	clientCmd := exec.CommandContext(ctx, xrayPath, "run", "-c", clientConfigPath)
+	clientCmd := exec.CommandContext(ctx, xrayPath, "run", "-c", clientConfigPath) // #nosec G204 -- xrayPath is resolved to a local xray/xray.exe binary before execution.
 	if runtime.GOOS != "windows" {
 		clientCmd.Stdout = os.Stdout
 		clientCmd.Stderr = os.Stderr
@@ -396,41 +431,44 @@ func generateSummary() {
 	}
 }
 
-func generateCSVReport() {
-	// 创建 CSV 文件
-	file, err := os.Create("test-reports/report.csv")
-	if err != nil {
-		fmt.Printf("创建 CSV 失败: %v\n", err)
-		return
+func generateCSVReport() error {
+	if err := ensureReportDir(); err != nil {
+		return err
 	}
-	defer file.Close()
+
+	file, err := os.OpenFile(filepath.Join(reportDir, "report.csv"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, reportFilePerm)
+	if err != nil {
+		return fmt.Errorf("create CSV report: %w", err)
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("close CSV report: %v", err)
+		}
+	}()
 
 	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	// 写入汇总
-	writer.Write([]string{"测试报告汇总"})
-	writer.Write([]string{"生成时间", report.GeneratedAt.Format("2006-01-02 15:04:05")})
-	writer.Write([]string{"服务器版本", report.ServerVersion})
-	writer.Write([]string{"Go 版本", report.GoVersion})
-	writer.Write([]string{"平台", report.Platform})
-	writer.Write([]string{})
-	writer.Write([]string{"总测试数", fmt.Sprintf("%d", report.Summary.TotalTests)})
-	writer.Write([]string{"通过数", fmt.Sprintf("%d", report.Summary.PassedTests)})
-	writer.Write([]string{"失败数", fmt.Sprintf("%d", report.Summary.FailedTests)})
-	writer.Write([]string{"跳过数", fmt.Sprintf("%d", report.Summary.SkippedTests)})
-	writer.Write([]string{"通过率", fmt.Sprintf("%.1f%%", report.Summary.PassRate)})
-	writer.Write([]string{})
-
-	// API 测试结果
-	writer.Write([]string{"API 测试结果"})
-	writer.Write([]string{"端点", "方法", "状态码", "延迟", "结果", "错误"})
+	rows := [][]string{
+		{"测试报告汇总"},
+		{"生成时间", report.GeneratedAt.Format("2006-01-02 15:04:05")},
+		{"服务器版本", report.ServerVersion},
+		{"Go 版本", report.GoVersion},
+		{"平台", report.Platform},
+		{},
+		{"总测试数", fmt.Sprintf("%d", report.Summary.TotalTests)},
+		{"通过数", fmt.Sprintf("%d", report.Summary.PassedTests)},
+		{"失败数", fmt.Sprintf("%d", report.Summary.FailedTests)},
+		{"跳过数", fmt.Sprintf("%d", report.Summary.SkippedTests)},
+		{"通过率", fmt.Sprintf("%.1f%%", report.Summary.PassRate)},
+		{},
+		{"API 测试结果"},
+		{"端点", "方法", "状态码", "延迟", "结果", "错误"},
+	}
 	for _, r := range report.APIResults {
 		status := "成功"
 		if !r.Success {
 			status = "失败"
 		}
-		writer.Write([]string{
+		rows = append(rows, []string{
 			r.Endpoint,
 			r.Method,
 			fmt.Sprintf("%d", r.Status),
@@ -439,17 +477,19 @@ func generateCSVReport() {
 			r.Error,
 		})
 	}
-	writer.Write([]string{})
+	rows = append(rows,
+		[]string{},
+		[]string{"E2E 代理测试结果"},
+		[]string{"协议", "服务端端口", "代理端口", "Echo端口", "延迟", "结果", "错误"},
+	)
 
 	// E2E 测试结果
-	writer.Write([]string{"E2E 代理测试结果"})
-	writer.Write([]string{"协议", "服务端端口", "代理端口", "Echo端口", "延迟", "结果", "错误"})
 	for _, r := range report.E2EResults {
 		status := "成功"
 		if !r.Success {
 			status = "失败"
 		}
-		writer.Write([]string{
+		rows = append(rows, []string{
 			r.Protocol,
 			fmt.Sprintf("%d", r.ServerPort),
 			fmt.Sprintf("%d", r.ProxyPort),
@@ -459,13 +499,15 @@ func generateCSVReport() {
 			r.Error,
 		})
 	}
-	writer.Write([]string{})
+	rows = append(rows,
+		[]string{},
+		[]string{"单元测试结果"},
+		[]string{"包名", "测试名", "状态", "耗时"},
+	)
 
 	// 单元测试结果
-	writer.Write([]string{"单元测试结果"})
-	writer.Write([]string{"包名", "测试名", "状态", "耗时"})
 	for _, r := range report.Results {
-		writer.Write([]string{
+		rows = append(rows, []string{
 			r.Package,
 			r.TestName,
 			r.Status,
@@ -473,10 +515,14 @@ func generateCSVReport() {
 		})
 	}
 
+	if err := writeCSVRows(writer, rows); err != nil {
+		return err
+	}
 	fmt.Println("  ✅ CSV 报告已生成: test-reports/report.csv")
+	return nil
 }
 
-func generateHTMLReport() {
+func generateHTMLReport() error {
 	tmpl := `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -666,32 +712,113 @@ func generateHTMLReport() {
 
 	t, err := template.New("report").Parse(tmpl)
 	if err != nil {
-		fmt.Printf("模板解析失败: %v\n", err)
-		return
+		return fmt.Errorf("parse HTML template: %w", err)
 	}
 
-	file, err := os.Create("test-reports/report.html")
+	if err := ensureReportDir(); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(filepath.Join(reportDir, "report.html"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, reportFilePerm)
 	if err != nil {
-		fmt.Printf("创建 HTML 失败: %v\n", err)
-		return
+		return fmt.Errorf("create HTML report: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("close HTML report: %v", err)
+		}
+	}()
 
-	t.Execute(file, report)
+	if err := t.Execute(file, report); err != nil {
+		return fmt.Errorf("execute HTML template: %w", err)
+	}
 	fmt.Println("  ✅ HTML 报告已生成: test-reports/report.html")
 
 	// 同时生成 JSON
-	jsonData, _ := json.MarshalIndent(report, "", "  ")
-	os.WriteFile("test-reports/report.json", jsonData, 0644)
+	jsonData, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal JSON report: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(reportDir, "report.json"), jsonData, reportFilePerm); err != nil {
+		return fmt.Errorf("write JSON report: %w", err)
+	}
 	fmt.Println("  ✅ JSON 报告已生成: test-reports/report.json")
+	return nil
 }
 
 // 辅助函数
-func getFreePort() int {
-	addr, _ := net.ResolveTCPAddr("tcp", "localhost:0")
-	l, _ := net.ListenTCP("tcp", addr)
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
+func ensureReportDir() error {
+	if err := os.MkdirAll(reportDir, reportDirPerm); err != nil {
+		return fmt.Errorf("create report directory: %w", err)
+	}
+	return nil
+}
+
+func writeCSVRows(writer *csv.Writer, rows [][]string) error {
+	for _, row := range rows {
+		if err := writer.Write(row); err != nil {
+			return fmt.Errorf("write CSV row: %w", err)
+		}
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return fmt.Errorf("flush CSV writer: %w", err)
+	}
+	return nil
+}
+
+func writeReportConfig(path, content string) error {
+	return os.WriteFile(path, []byte(content), reportFilePerm)
+}
+
+func resolveReportXrayPath() (string, error) {
+	candidates := []string{filepath.Join(".", "bin", "xray.exe"), filepath.Join(".", "bin", "xray")}
+	for _, candidate := range candidates {
+		path, err := validateReportXrayPath(candidate)
+		if err == nil {
+			return path, nil
+		}
+	}
+
+	path, err := exec.LookPath("xray")
+	if err != nil {
+		return "", err
+	}
+	return validateReportXrayPath(path)
+}
+
+func validateReportXrayPath(raw string) (string, error) {
+	clean := filepath.Clean(raw)
+	name := filepath.Base(clean)
+	if name != "xray" && name != "xray.exe" {
+		return "", fmt.Errorf("unexpected xray binary name %q", name)
+	}
+
+	info, err := os.Stat(clean)
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("%q is a directory", clean)
+	}
+
+	return filepath.Abs(clean)
+}
+
+func getFreePort() (int, error) {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		if err := l.Close(); err != nil {
+			log.Printf("close port probe listener: %v", err)
+		}
+	}()
+	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
 func waitForPort(port int, timeout time.Duration) bool {
@@ -699,7 +826,9 @@ func waitForPort(port int, timeout time.Duration) bool {
 	for time.Now().Before(deadline) {
 		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), time.Second)
 		if err == nil {
-			conn.Close()
+			if err := conn.Close(); err != nil {
+				return false
+			}
 			return true
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -709,13 +838,20 @@ func waitForPort(port int, timeout time.Duration) bool {
 
 func cleanupProcess(cmd *exec.Cmd) {
 	if cmd.Process != nil {
-		cmd.Process.Signal(os.Interrupt)
+		if err := cmd.Process.Signal(os.Interrupt); err != nil {
+			log.Printf("signal process: %v", err)
+		}
 		done := make(chan error, 1)
 		go func() { done <- cmd.Wait() }()
 		select {
-		case <-done:
+		case err := <-done:
+			if err != nil {
+				log.Printf("wait process: %v", err)
+			}
 		case <-time.After(3 * time.Second):
-			cmd.Process.Kill()
+			if err := cmd.Process.Kill(); err != nil {
+				log.Printf("kill process: %v", err)
+			}
 		}
 	}
 }
@@ -737,9 +873,16 @@ func testThroughProxy(proxyPort, echoPort int) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("close proxy response body: %v", err)
+		}
+	}()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 	if string(body) != "pong" {
 		return fmt.Errorf("unexpected response: %s", string(body))
 	}
@@ -774,15 +917,20 @@ func NewEchoServer(port int) *EchoServer {
 func (s *EchoServer) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("pong"))
+		if _, err := w.Write([]byte("pong")); err != nil {
+			log.Printf("write ping response: %v", err)
+		}
 	})
 	mux.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("echo"))
+		if _, err := w.Write([]byte("echo")); err != nil {
+			log.Printf("write echo response: %v", err)
+		}
 	})
 
 	s.server = &http.Server{
-		Addr:    fmt.Sprintf("127.0.0.1:%d", s.port),
-		Handler: mux,
+		Addr:              fmt.Sprintf("127.0.0.1:%d", s.port),
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	ln, err := net.Listen("tcp", s.server.Addr)
@@ -791,14 +939,21 @@ func (s *EchoServer) Start(ctx context.Context) error {
 	}
 	s.port = ln.Addr().(*net.TCPAddr).Port
 
-	go s.server.Serve(ln)
+	go func() {
+		if err := s.server.Serve(ln); err != nil && err != http.ErrServerClosed {
+			log.Printf("echo server serve: %v", err)
+		}
+	}()
 	return nil
 }
 
-func (s *EchoServer) Stop() {
+func (s *EchoServer) Stop() error {
 	if s.server != nil {
-		s.server.Shutdown(context.Background())
+		if err := s.server.Shutdown(context.Background()); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func generateServerConfig(protocol string, port int) string {

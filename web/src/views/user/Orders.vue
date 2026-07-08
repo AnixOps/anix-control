@@ -46,7 +46,7 @@
               <td>
                 <div class="action-buttons">
                   <button v-if="order.status === 0" class="btn btn-sm btn-primary" @click="goPay(order)">{{ t('common.actions.payNow') }}</button>
-                  <button class="btn btn-sm" @click="viewDetail(order)">{{ t('common.actions.details') }}</button>
+                  <button class="btn btn-sm" data-test="order-detail-button" @click="viewDetail(order)">{{ t('common.actions.details') }}</button>
                 </div>
               </td>
             </tr>

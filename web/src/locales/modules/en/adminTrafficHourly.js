@@ -22,7 +22,10 @@ export default {
     summary: {
       total: 'Range total',
       peak: 'Peak hour',
-      peakAt: 'Peak time'
+      peakAt: 'Peak time',
+      latestReport: 'Latest report',
+      latestReportHint: 'Last traffic log written by a node',
+      noReport: 'No traffic reports yet'
     },
     chart: {
       seriesName: 'Traffic',
@@ -33,8 +36,11 @@ export default {
       refreshing: 'Refreshing...'
     },
     empty: 'No traffic data in the selected range',
+    emptyWithLatest: 'Latest report was {time}. Check node processes or the reporting path.',
+    emptyNever: 'No node traffic report has been recorded yet.',
     messages: {
-      fetchFailed: 'Failed to load hourly traffic'
+      fetchFailed: 'Failed to load hourly traffic',
+      rankingFetchFailed: 'Failed to load user traffic ranking'
     }
   }
 }

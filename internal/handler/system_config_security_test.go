@@ -269,6 +269,8 @@ func TestSystemHandlerGetBackupConfigMasksSensitiveFields(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
 	body := decodeJSONMap(t, recorder)
+	assert.Equal(t, float64(0), body["code"])
+	assert.NotContains(t, body, "error")
 	data, ok := body["data"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, data["s3_access_key"])

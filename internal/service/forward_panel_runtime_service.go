@@ -159,6 +159,9 @@ func (s *PanelForwardRuntimeService) enqueueLocalAnsibleJob(action string, forwa
 		Payload:      string(payloadJSON),
 	}
 	if err := s.db.Create(job).Error; err != nil {
+		if isForwardRuntimeJobActiveConflictError(err) {
+			return failedPanelForwardRuntimeResult(backend, errForwardRuntimeJobInProgress), errForwardRuntimeJobInProgress
+		}
 		return failedPanelForwardRuntimeResult(backend, err), err
 	}
 
@@ -188,6 +191,9 @@ func (s *PanelForwardRuntimeService) enqueueCleanAgentJob(action string, forward
 		Payload:      string(payloadJSON),
 	}
 	if err := s.db.Create(job).Error; err != nil {
+		if isForwardRuntimeJobActiveConflictError(err) {
+			return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendCleanAgent, errForwardRuntimeJobInProgress), errForwardRuntimeJobInProgress
+		}
 		return failedPanelForwardRuntimeResult(model.ForwardRuntimeBackendCleanAgent, err), err
 	}
 
@@ -310,6 +316,17 @@ func localAnsibleJobBackends() []string {
 
 func isForwardRuntimeExecutionNodeBackend(backend string) bool {
 	return isForwardRuntimeLocalAnsibleBackend(backend) || backend == model.ForwardRuntimeBackendCleanAgent
+}
+
+func isForwardRuntimeJobActiveConflictError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, strings.ToLower(forwardRuntimeJobActiveForwardIndex)) {
+		return true
+	}
+	return strings.Contains(message, "unique constraint failed: v2_forward_runtime_job.forward_id")
 }
 
 func forwardRuntimeLocalFirewallDriver(backend string) string {
@@ -610,14 +627,6 @@ func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(backend, action 
 		Limiter: limiter,
 		Targets: targets,
 	}, nil
-}
-
-func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfigForDiagnostics() (*panelForwardAnsibleConfig, error) {
-	backend, err := s.resolveLocalAnsibleBackend()
-	if err != nil {
-		return nil, err
-	}
-	return s.loadPanelForwardAnsibleConfigForDiagnosticsWithBackend(backend)
 }
 
 func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfigForDiagnosticsWithBackend(backend string) (*panelForwardAnsibleConfig, error) {
@@ -972,13 +981,6 @@ func parseForwardRuntimeBoolValue(value, key string) (*bool, error) {
 	default:
 		return nil, fmt.Errorf("invalid %s value: %s", key, value)
 	}
-}
-
-func forwardRuntimeBackendForMode(enabled bool) string {
-	if enabled {
-		return model.ForwardRuntimeBackendGost
-	}
-	return defaultForwardLocalAnsibleBackend
 }
 
 // SyncForwardsToBackend re-synces all active forwards to the current backend.
