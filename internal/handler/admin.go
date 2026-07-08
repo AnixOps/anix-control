@@ -497,7 +497,7 @@ func (h *AdminHandler) CreatePlan(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "创建失败", "error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "创建成功", "data": p})
+	panelSuccess(c, p)
 }
 
 // GetPlans godoc
@@ -516,7 +516,7 @@ func (h *AdminHandler) GetPlans(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取失败", "error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": list})
+	panelSuccess(c, list)
 }
 
 // GetPlan godoc
@@ -542,7 +542,7 @@ func (h *AdminHandler) GetPlan(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "套餐不存在"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": p})
+	panelSuccess(c, p)
 }
 
 // UpdatePlan godoc
@@ -574,7 +574,7 @@ func (h *AdminHandler) UpdatePlan(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败", "error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "更新成功", "data": p})
+	panelSuccess(c, p)
 }
 
 // DeletePlan godoc
@@ -599,7 +599,7 @@ func (h *AdminHandler) DeletePlan(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "删除失败", "error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "删除成功"})
+	panelSuccess(c, gin.H{"message": "删除成功"})
 }
 
 // AssignPlanToUser godoc
@@ -633,7 +633,7 @@ func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "分配失败", "error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "分配成功"})
+	panelSuccess(c, gin.H{"message": "分配成功"})
 }
 
 // GetUserStats godoc

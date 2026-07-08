@@ -131,6 +131,8 @@ Open gaps:
   user management CRUD, ban/unban, traffic-reset, and subscribe-reset success
   responses have handler coverage plus Users frontend/API compatibility
   coverage while `/user/reset` remains a Flux compatibility response, admin
+  plan management list/detail/create/update/delete/assign success responses have
+  handler coverage plus Plans frontend/API compatibility coverage, admin
   subscription stats has matching Subscriptions frontend compatibility coverage, admin
   subscription settings has matching System and Users compatibility coverage,
   admin system backup stats, backup config, and backup record operations have

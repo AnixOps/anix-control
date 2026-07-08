@@ -170,6 +170,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize admin subscription management response envelopes with handler, Subscriptions frontend, and admin API compatibility tests while preserving public subscription download compatibility.
 - [x] Normalize admin node management CRUD/protocol/log/raw-config/auth-key response envelopes with handler, Nodes frontend, and admin API compatibility tests while preserving node registration/heartbeat compatibility.
 - [x] Normalize admin user management CRUD/ban/unban/reset response envelopes with handler, Users frontend, and admin API compatibility tests while preserving `/user/reset` compatibility.
+- [x] Normalize admin plan management list/detail/create/update/delete/assign response envelopes with handler, Plans frontend, and admin API compatibility tests.
 - [x] Normalize user register and order-save success response envelopes with handler coverage.
 - [x] Normalize user login success response envelope with handler and Login frontend compatibility tests.
 - [x] Normalize user order list/detail response envelopes with handler and Orders frontend compatibility tests.

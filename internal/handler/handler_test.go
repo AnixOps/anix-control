@@ -1600,6 +1600,11 @@ func (s *AdminHandlerTestSuite) TestGetPlans() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].([]any)
+	assert.NotEmpty(s.T(), data)
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestGetPlan_Success() {
@@ -1611,6 +1616,12 @@ func (s *AdminHandlerTestSuite) TestGetPlan_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(s.testPlan.ID), data["id"])
+	assert.Equal(s.T(), s.testPlan.Name, data["name"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestGetPlan_NotFound() {
@@ -1647,6 +1658,12 @@ func (s *AdminHandlerTestSuite) TestCreatePlan_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "New Plan", data["name"])
+	assert.NotContains(s.T(), resp, "error")
+
 	var created model.Plan
 	assert.NoError(s.T(), s.db.Where("name = ?", "New Plan").First(&created).Error)
 	if assert.NotNil(s.T(), created.SpeedLimit) {
@@ -1893,6 +1910,11 @@ func (s *AdminHandlerTestSuite) TestAssignPlanToUser_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "分配成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestAssignPlanToUser_InvalidID() {
@@ -1929,6 +1951,11 @@ func (s *AdminHandlerTestSuite) TestDeletePlan_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "删除成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestUpdatePlan_Success() {
@@ -1952,6 +1979,12 @@ func (s *AdminHandlerTestSuite) TestUpdatePlan_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "Updated Plan", data["name"])
+	assert.NotContains(s.T(), resp, "error")
+
 	var updated model.Plan
 	assert.NoError(s.T(), s.db.First(&updated, s.testPlan.ID).Error)
 	if assert.NotNil(s.T(), updated.SpeedLimit) {

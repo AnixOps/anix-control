@@ -193,6 +193,10 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/plans', method: 'get' },
       },
       {
+        call: () => adminApi.getPlan(6),
+        expected: { url: '/admin/plans/6', method: 'get' },
+      },
+      {
         call: () => adminApi.getCoupons({ page: 1 }),
         expected: { url: '/admin/coupon', method: 'get', params: { page: 1 } },
       },
@@ -334,6 +338,37 @@ describe('admin api mapping', () => {
           url: '/admin/nodes/5',
           method: 'put',
           data: { name: 'edge-5' },
+        },
+      },
+      {
+        call: () => adminApi.createPlan({ name: 'Starter' }),
+        expected: {
+          url: '/admin/plans',
+          method: 'post',
+          data: { name: 'Starter' },
+        },
+      },
+      {
+        call: () => adminApi.updatePlan(6, { name: 'Pro' }),
+        expected: {
+          url: '/admin/plans/6',
+          method: 'put',
+          data: { name: 'Pro' },
+        },
+      },
+      {
+        call: () => adminApi.deletePlan(6),
+        expected: {
+          url: '/admin/plans/6',
+          method: 'delete',
+        },
+      },
+      {
+        call: () => adminApi.assignPlanToUser(6, { user_id: 12 }),
+        expected: {
+          url: '/admin/plans/6/assign',
+          method: 'post',
+          data: { user_id: 12 },
         },
       },
       {
