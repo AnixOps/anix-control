@@ -5480,6 +5480,17 @@ func (s *AdminTicketHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *AdminTicketHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *AdminTicketHandlerTestSuite) TestGetTickets() {
 	handler := NewAdminTicketHandler()
 	s.router.GET("/admin/tickets", handler.GetTickets)
@@ -5553,7 +5564,7 @@ func (s *AdminTicketHandlerTestSuite) TestReplyTicket_MissingFields() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "参数错误")
 }
 
 func (s *AdminTicketHandlerTestSuite) TestReplyTicket_NotFound() {
@@ -5569,7 +5580,7 @@ func (s *AdminTicketHandlerTestSuite) TestReplyTicket_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "工单不存在")
 }
 
 func (s *AdminTicketHandlerTestSuite) TestCloseTicket() {
@@ -5602,7 +5613,7 @@ func (s *AdminTicketHandlerTestSuite) TestCloseTicket_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "工单不存在")
 }
 
 func (s *AdminTicketHandlerTestSuite) TestCloseTicket_InvalidID() {
@@ -5613,7 +5624,7 @@ func (s *AdminTicketHandlerTestSuite) TestCloseTicket_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "无效的工单ID")
 }
 
 func TestAdminTicketHandler(t *testing.T) {

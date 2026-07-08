@@ -2499,7 +2499,12 @@ func (s *AdminTicketExtendedTestSuite) TestReplyTicket_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], "参数错误")
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminTicketExtendedTestSuite) TestCloseTicket() {
