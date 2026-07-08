@@ -744,7 +744,7 @@ func (h *SystemHandler) UpdateBackupConfig(c *gin.Context) {
 
 	h.recordBackupConfigAudit(c, "update", &cfg, preservedSensitiveFields)
 
-	c.JSON(http.StatusOK, gin.H{"data": backupConfigResponse(&cfg)})
+	panelSuccess(c, backupConfigResponse(&cfg))
 }
 
 // CreateBackup godoc
@@ -769,7 +769,7 @@ func (h *SystemHandler) CreateBackup(c *gin.Context) {
 
 	h.recordBackupRecordAudit(c, "create", record)
 
-	c.JSON(http.StatusOK, gin.H{"data": record})
+	panelSuccess(c, record)
 }
 
 // ListBackups godoc
@@ -819,13 +819,7 @@ func (h *SystemHandler) ListBackups(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":      list,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
-		},
+	panelSuccess(c, gin.H{
 		"list":      list,
 		"total":     total,
 		"page":      page,
@@ -890,7 +884,7 @@ func (h *SystemHandler) DeleteBackup(c *gin.Context) {
 		h.recordBackupRecordAudit(c, "delete", &record)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "backup deleted"})
+	panelSuccess(c, gin.H{"message": "backup deleted"})
 }
 
 // RestoreBackup godoc
@@ -923,7 +917,7 @@ func (h *SystemHandler) RestoreBackup(c *gin.Context) {
 		h.recordBackupRecordAudit(c, "restore", &record)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "backup restored, please restart server"})
+	panelSuccess(c, gin.H{"message": "backup restored, please restart server"})
 }
 
 // ========== 负载均衡 ==========

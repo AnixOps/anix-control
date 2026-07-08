@@ -158,6 +158,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize admin system backup stats response envelope with handler and System frontend compatibility tests.
 - [x] Normalize admin load balancer stats response envelope with handler and admin API mapping tests.
 - [x] Normalize admin system backup config response envelope with handler, sensitive-field, and System frontend compatibility tests.
+- [x] Normalize admin system backup list/create/delete/restore success response envelopes with handler, audit, and System frontend compatibility tests.
 - [x] Normalize admin invite config response envelope with handler and Invite frontend compatibility tests.
 - [x] Normalize admin subscription settings response envelope with handler, System, Users, and admin API compatibility tests.
 - [x] Normalize admin payment gateway list response envelope with handler and Payment frontend compatibility tests.

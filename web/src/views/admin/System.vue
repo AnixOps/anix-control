@@ -1677,10 +1677,26 @@ const buildBackupConfigPayload = (form) => {
   }
 }
 
+const readBackupPayload = (res) => {
+  if (!res || typeof res !== 'object') return {}
+  if (Object.prototype.hasOwnProperty.call(res, 'code')) {
+    return res.data && typeof res.data === 'object' ? res.data : {}
+  }
+  if (res.data && typeof res.data === 'object' && Object.prototype.hasOwnProperty.call(res.data, 'data')) {
+    return res.data.data && typeof res.data.data === 'object' ? res.data.data : {}
+  }
+  return res.data && typeof res.data === 'object' ? res.data : res
+}
+
+const readBackupList = (res) => {
+  const payload = readBackupPayload(res)
+  return Array.isArray(payload?.list) ? payload.list : []
+}
+
 const fetchBackupConfig = async () => {
   try {
     const res = await getBackupConfig()
-    const payload = res.data || {}
+    const payload = readBackupPayload(res)
     if (payload && typeof payload === 'object') {
       backupConfig.value = createBackupConfigForm(payload)
     }
@@ -1712,7 +1728,7 @@ const createBackupRequest = async () => {
 const fetchBackups = async () => {
   try {
     const res = await getBackups()
-    backups.value = res.data?.list || []
+    backups.value = readBackupList(res)
   } catch (err) {
     console.error(t('runtime.systemPage.messages.fetchBackupsFailed'), err)
   }

@@ -1268,6 +1268,10 @@ func (s *SystemBackupTestSuite) TestGetBackupConfig() {
 	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
 
 	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
@@ -1298,6 +1302,11 @@ func (s *SystemBackupTestSuite) TestUpdateBackupConfig() {
 	var resp map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.NotContains(s.T(), resp, "error")
+
 	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	assert.InDelta(s.T(), 12, data["interval"], 0.000001)
@@ -1336,6 +1345,14 @@ func (s *SystemBackupTestSuite) TestListBackups() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.NotContains(s.T(), resp, "list")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SystemBackupTestSuite) TestListBackups_ResponseShape() {
@@ -1371,26 +1388,34 @@ func (s *SystemBackupTestSuite) TestListBackups_ResponseShape() {
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp struct {
-		Data struct {
-			List []struct {
-				ID         uint   `json:"id"`
-				Filename   string `json:"filename"`
-				Status     string `json:"status"`
-				StatusCode int    `json:"status_code"`
-			} `json:"list"`
-		} `json:"data"`
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotContains(s.T(), resp, "list")
+	assert.NotContains(s.T(), resp, "error")
+
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+
+	var list []struct {
+		ID         uint   `json:"id"`
+		Filename   string `json:"filename"`
+		Status     string `json:"status"`
+		StatusCode int    `json:"status_code"`
 	}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	rawList, err := json.Marshal(data["list"])
 	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), len(resp.Data.List), 3)
+	err = json.Unmarshal(rawList, &list)
+	assert.NoError(s.T(), err)
+	assert.GreaterOrEqual(s.T(), len(list), 3)
 
 	byID := make(map[uint]struct {
 		Filename   string
 		Status     string
 		StatusCode int
 	})
-	for _, item := range resp.Data.List {
+	for _, item := range list {
 		byID[item.ID] = struct {
 			Filename   string
 			Status     string
@@ -1457,14 +1482,28 @@ func (s *SystemBackupTestSuite) TestGetBackupStats_TotalCountAlias() {
 }
 
 func (s *SystemBackupTestSuite) TestDeleteBackup() {
+	record := &model.BackupRecord{
+		Name:   "delete_backup",
+		Type:   "database",
+		Status: 1,
+	}
+	s.db.Create(record)
+
 	handler := NewSystemHandler()
 	s.router.DELETE("/admin/system/backups/:id", handler.DeleteBackup)
 
-	req, _ := http.NewRequest("DELETE", "/admin/system/backups/999", nil)
+	req, _ := http.NewRequest("DELETE", "/admin/system/backups/"+strconv.FormatUint(uint64(record.ID), 10), nil)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	// Returns 500 if backup doesn't exist
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "backup deleted", data["message"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *SystemBackupTestSuite) TestDeleteBackup_InvalidID() {

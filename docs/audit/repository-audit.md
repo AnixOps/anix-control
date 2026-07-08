@@ -116,9 +116,10 @@ Open gaps:
   gateway list have matching Payment frontend compatibility coverage, admin
   subscription stats has matching Subscriptions frontend compatibility coverage, admin
   subscription settings has matching System and Users compatibility coverage,
-  admin system backup stats and backup config have matching System backup-view
-  compatibility coverage with sensitive-field masking retained, and admin load
-  balancer stats has matching handler and frontend API mapping coverage. Admin
+  admin system backup stats, backup config, and backup record operations have
+  matching System backup-view compatibility coverage with sensitive-field
+  masking retained, and admin load balancer stats has matching handler and
+  frontend API mapping coverage. Admin
   ticket list/reply/close success responses now have handler coverage plus
   Tickets admin frontend compatibility coverage, and admin coupon
   list/create/delete success responses now have handler coverage plus Coupons
