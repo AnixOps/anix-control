@@ -325,9 +325,25 @@ const maskAccount = (account) => {
 }
 
 const readInviteConfig = (res) => {
-  if (!res || typeof res !== 'object') return {}
-  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  const payload = readInvitePayload(res)
   return payload && typeof payload === 'object' ? payload : {}
+}
+
+const readInvitePayload = (res) => {
+  if (!res || typeof res !== 'object') {
+    return null
+  }
+  if (Object.prototype.hasOwnProperty.call(res, 'code')) {
+    return res.data ?? null
+  }
+  if (
+    res.data &&
+    typeof res.data === 'object' &&
+    Object.prototype.hasOwnProperty.call(res.data, 'data')
+  ) {
+    return res.data.data ?? null
+  }
+  return res.data ?? res
 }
 
 const fetchConfig = async () => {
@@ -358,10 +374,21 @@ const saveConfig = async () => {
 const fetchWithdrawals = async () => {
   try {
     const res = await getWithdrawals(withdrawalFilter.value)
-    withdrawals.value = res.data?.list || res.data || []
+    withdrawals.value = readWithdrawals(res)
   } catch (error) {
     console.error(t('adminInvite.messages.fetchWithdrawalsFailed'), error)
   }
+}
+
+const readWithdrawals = (res) => {
+  const payload = readInvitePayload(res)
+  if (Array.isArray(payload)) {
+    return payload
+  }
+  if (payload && typeof payload === 'object') {
+    return payload.list || payload.data || []
+  }
+  return []
 }
 
 const processWithdrawalRequest = async (item, approve) => {
@@ -395,10 +422,7 @@ const fetchStats = async () => {
 }
 
 const readInviteStats = (res) => {
-  if (!res || typeof res !== 'object') {
-    return {}
-  }
-  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  const payload = readInvitePayload(res)
   return payload && typeof payload === 'object' ? payload : {}
 }
 

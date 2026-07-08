@@ -112,7 +112,10 @@ Open gaps:
   coverage, admin node stats has matching Nodes frontend compatibility
   coverage, and admin system info has matching AdminLayout version-display
   compatibility coverage. Admin invite stats and invite config now have
-  matching Invite frontend compatibility coverage, admin payment stats,
+  matching Invite frontend compatibility coverage, user invite
+  info/code/commission/withdrawal responses and admin invite config-update and
+  withdrawal responses now have handler coverage plus Invite frontend/API
+  compatibility coverage, admin payment stats,
   gateway CRUD/toggle, and payment-record list responses have matching Payment
   frontend compatibility coverage, user payment channel/create/status/record
   responses have handler envelope coverage with callback compatibility retained,

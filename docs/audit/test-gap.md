@@ -48,6 +48,7 @@ Local verification status:
 - Admin system info handler tests now assert panel `code/msg/ts/data` envelopes, and AdminLayout frontend tests cover both legacy and enveloped payloads.
 - Admin invite stats handler tests now assert panel `code/msg/ts/data` envelopes, and Invite frontend tests cover both legacy and enveloped payloads.
 - Admin invite config handler tests now assert panel `code/msg/ts/data` envelopes, and Invite frontend tests cover both legacy and enveloped payloads.
+- User invite info/code/commission/withdrawal handler tests and admin invite config update/withdrawal handler tests now assert panel `code/msg/ts/data` envelopes; Invite frontend tests cover legacy, enveloped, and nested withdrawal/config/stats payloads with admin API mapping coverage for invite config and withdrawals.
 - Admin payment stats handler tests now assert panel `code/msg/ts/data` envelopes, and Payment frontend tests cover both legacy and enveloped payloads.
 - Admin payment gateway list handler tests now assert panel `code/msg/ts/data` envelopes, and Payment frontend tests cover both legacy and enveloped payloads.
 - Admin payment gateway CRUD/toggle and payment-record list handler tests now assert panel `code/msg/ts/data` envelopes, and Payment frontend tests cover legacy and enveloped record-list payloads.
