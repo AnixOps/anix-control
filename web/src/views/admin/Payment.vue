@@ -356,9 +356,25 @@ const getGatewayPercent = (type) => {
   return Number(((gatewayAmount / totalAmount) * 100).toFixed(1))
 }
 
+const readPaymentPayload = (res) => {
+  if (!res || typeof res !== 'object') return {}
+  if (Object.prototype.hasOwnProperty.call(res, 'code')) {
+    return res.data && typeof res.data === 'object' ? res.data : {}
+  }
+  if (res.data && typeof res.data === 'object' && Object.prototype.hasOwnProperty.call(res.data, 'data')) {
+    return res.data.data && typeof res.data.data === 'object' ? res.data.data : {}
+  }
+  return res.data && typeof res.data === 'object' ? res.data : res
+}
+
 const readPaymentGatewayList = (res) => {
-  if (!res || typeof res !== 'object') return []
-  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  const payload = readPaymentPayload(res)
+  if (Array.isArray(payload)) return payload
+  return Array.isArray(payload?.list) ? payload.list : []
+}
+
+const readPaymentRecordList = (res) => {
+  const payload = readPaymentPayload(res)
   if (Array.isArray(payload)) return payload
   return Array.isArray(payload?.list) ? payload.list : []
 }
@@ -375,7 +391,7 @@ const fetchGateways = async () => {
 const fetchRecords = async () => {
   try {
     const res = await getPaymentRecords(recordFilter.value)
-    records.value = res.data?.list || []
+    records.value = readPaymentRecordList(res)
   } catch (error) {
     console.error(t('adminPayment.messages.fetchRecordsFailed'), error)
   }
@@ -391,10 +407,7 @@ const fetchStats = async () => {
 }
 
 const readPaymentStats = (res) => {
-  if (!res || typeof res !== 'object') {
-    return {}
-  }
-  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  const payload = readPaymentPayload(res)
   return payload && typeof payload === 'object' ? payload : {}
 }
 

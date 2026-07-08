@@ -94,6 +94,7 @@
 - Normalized admin invite config responses to the panel `code/msg/ts/data` envelope while keeping the Invite page compatible with legacy and enveloped payloads.
 - Normalized admin subscription settings responses to the panel `code/msg/ts/data` envelope while keeping System and Users subscription-link flows compatible with legacy and enveloped payloads.
 - Normalized admin payment gateway list responses to the panel `code/msg/ts/data` envelope while keeping the Payment page compatible with legacy and enveloped payloads.
+- Normalized admin payment gateway create/update/delete/toggle and payment-record list responses to the panel `code/msg/ts/data` envelope while keeping the Payment page compatible with legacy and enveloped payloads.
 - Normalized user registration and order-save success responses to the panel `code/msg/ts/data` envelope while preserving the existing token and order payloads under `data`.
 - Normalized user login success responses to the panel `code/msg/ts/data` envelope while keeping the Login page compatible with the enveloped token payload.
 - Normalized user order list and detail responses to the panel `code/msg/ts/data` envelope while keeping the Orders page compatible with legacy and enveloped payloads.

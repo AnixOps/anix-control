@@ -830,19 +830,27 @@ func (s *PaymentGatewayExtendedTestSuite) TestListPaymentRecords() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp struct {
-		Data struct {
-			List []struct {
-				TradeNo string `json:"trade_no"`
-				Status  string `json:"status"`
-			} `json:"list"`
-		} `json:"data"`
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotContains(s.T(), resp, "list")
+	assert.NotContains(s.T(), resp, "error")
+
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+
+	var list []struct {
+		TradeNo string `json:"trade_no"`
+		Status  string `json:"status"`
 	}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	rawList, err := json.Marshal(data["list"])
 	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), len(resp.Data.List), 1)
+	err = json.Unmarshal(rawList, &list)
+	assert.NoError(s.T(), err)
+	assert.GreaterOrEqual(s.T(), len(list), 1)
 	found := false
-	for _, item := range resp.Data.List {
+	for _, item := range list {
 		if item.TradeNo == "LIST-RECORDS-001" {
 			found = true
 			assert.Equal(s.T(), "pending", item.Status)
@@ -880,17 +888,19 @@ func (s *PaymentGatewayExtendedTestSuite) TestListPaymentRecords_StatusTextFilte
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp struct {
-		Data struct {
-			List []struct {
-				Status string `json:"status"`
-			} `json:"list"`
-		} `json:"data"`
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	var list []struct {
+		Status string `json:"status"`
 	}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	rawList, err := json.Marshal(data["list"])
 	assert.NoError(s.T(), err)
-	assert.Len(s.T(), resp.Data.List, 1)
-	assert.Equal(s.T(), "paid", resp.Data.List[0].Status)
+	err = json.Unmarshal(rawList, &list)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), list, 1)
+	assert.Equal(s.T(), "paid", list[0].Status)
 }
 
 func (s *PaymentGatewayExtendedTestSuite) TestListPaymentRecords_GatewayTypeFilter() {
@@ -922,17 +932,19 @@ func (s *PaymentGatewayExtendedTestSuite) TestListPaymentRecords_GatewayTypeFilt
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp struct {
-		Data struct {
-			List []struct {
-				GatewayType string `json:"gateway_type"`
-			} `json:"list"`
-		} `json:"data"`
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	var list []struct {
+		GatewayType string `json:"gateway_type"`
 	}
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
+	rawList, err := json.Marshal(data["list"])
 	assert.NoError(s.T(), err)
-	assert.Len(s.T(), resp.Data.List, 1)
-	assert.Equal(s.T(), "wechat", resp.Data.List[0].GatewayType)
+	err = json.Unmarshal(rawList, &list)
+	assert.NoError(s.T(), err)
+	assert.Len(s.T(), list, 1)
+	assert.Equal(s.T(), "wechat", list[0].GatewayType)
 }
 
 func (s *PaymentGatewayExtendedTestSuite) TestGetChannels() {

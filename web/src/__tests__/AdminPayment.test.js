@@ -23,6 +23,7 @@ describe('Admin Payment', () => {
 
     adminApi.getPaymentGateways.mockResolvedValue({ data: { list: [] } })
     adminApi.getPaymentRecords.mockResolvedValue({ data: { list: [] } })
+    adminApi.getPaymentStats.mockResolvedValue({ data: {} })
   })
 
   afterEach(() => {
@@ -120,6 +121,56 @@ describe('Admin Payment', () => {
     expect(wrapper.text()).toContain('Panel EPay')
     expect(wrapper.text()).toContain('EPay')
     expect(wrapper.text()).toContain('2.00%')
+
+    wrapper.unmount()
+  })
+
+  it('renders payment records from legacy and panel envelope payloads', async () => {
+    adminApi.getPaymentRecords
+      .mockResolvedValueOnce({
+        data: {
+          list: [{
+            amount: 10,
+            gateway_type: 'stripe',
+            id: 1,
+            status: 'paid',
+            trade_no: 'LEGACY-PAY-001',
+            user_id: 7
+          }]
+        }
+      })
+      .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        data: {
+          list: [{
+            amount: 20,
+            gateway_type: 'epay',
+            id: 2,
+            status: 'pending',
+            trade_no: 'PANEL-PAY-001',
+            user_id: 8
+          }],
+          total: 1
+        },
+        ts: 1783526400000
+      })
+
+    const wrapper = mount(Payment)
+    await flushPromises()
+
+    expect(wrapper.vm.records).toHaveLength(1)
+    expect(wrapper.text()).toContain('LEGACY-PAY-001')
+    expect(wrapper.text()).toContain('Stripe')
+    expect(wrapper.text()).toContain('Paid')
+
+    await wrapper.vm.fetchRecords()
+    await flushPromises()
+
+    expect(wrapper.vm.records).toHaveLength(1)
+    expect(wrapper.text()).toContain('PANEL-PAY-001')
+    expect(wrapper.text()).toContain('EPay')
+    expect(wrapper.text()).toContain('Pending')
 
     wrapper.unmount()
   })

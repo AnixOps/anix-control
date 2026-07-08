@@ -112,8 +112,9 @@ Open gaps:
   coverage, admin node stats has matching Nodes frontend compatibility
   coverage, and admin system info has matching AdminLayout version-display
   compatibility coverage. Admin invite stats and invite config now have
-  matching Invite frontend compatibility coverage, admin payment stats and
-  gateway list have matching Payment frontend compatibility coverage, admin
+  matching Invite frontend compatibility coverage, admin payment stats,
+  gateway CRUD/toggle, and payment-record list responses have matching Payment
+  frontend compatibility coverage, admin
   subscription stats has matching Subscriptions frontend compatibility coverage, admin
   subscription settings has matching System and Users compatibility coverage,
   admin system backup stats, backup config, and backup record operations have
