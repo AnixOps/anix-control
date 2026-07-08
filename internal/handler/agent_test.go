@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -120,6 +121,67 @@ func (s *AgentHandlerTestSuite) SetupTest() {
 	s.db.Create(s.testNode2)
 
 	s.router = gin.New()
+}
+
+func (s *AgentHandlerTestSuite) newAckingAgentHandler() (*AgentHandler, <-chan error, func()) {
+	handler := NewAgentHandler()
+	handler.ackTimeout = 500 * time.Millisecond
+	handler.maxRetries = 0
+
+	serverConn, clientConn, cleanup := newTestWebSocketPair(s.T())
+	agentConn := &AgentConnection{
+		NodeID:   s.testNode.ID,
+		WsConn:   serverConn,
+		LastSeen: time.Now(),
+	}
+	handler.connections.Store(s.testNode.ID, agentConn)
+
+	ackDone := make(chan error, 1)
+	go func() {
+		if err := clientConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			ackDone <- err
+			return
+		}
+		var outbound wsOutboundEnvelope
+		if err := clientConn.ReadJSON(&outbound); err != nil {
+			ackDone <- err
+			return
+		}
+		if outbound.Type != "task.assign" {
+			ackDone <- fmt.Errorf("unexpected outbound type %q", outbound.Type)
+			return
+		}
+		if !outbound.RequireAck {
+			ackDone <- fmt.Errorf("outbound task assignment does not require ack")
+			return
+		}
+
+		ackPayload, err := json.Marshal(wsAckPayload{
+			MessageID: outbound.ID,
+			Success:   true,
+			Timestamp: time.Now().Unix(),
+		})
+		if err != nil {
+			ackDone <- err
+			return
+		}
+		rawAck, err := json.Marshal(wsInboundEnvelope{
+			ID:        "ack-for-" + outbound.ID,
+			Type:      "ack",
+			NodeID:    s.testNode.ID,
+			Timestamp: time.Now().Unix(),
+			Payload:   ackPayload,
+		})
+		if err != nil {
+			ackDone <- err
+			return
+		}
+
+		handler.handleWebSocketMessage(agentConn, rawAck)
+		ackDone <- nil
+	}()
+
+	return handler, ackDone, cleanup
 }
 
 // ========== AgentRegister 测试 ==========
@@ -561,6 +623,42 @@ func (s *AgentHandlerTestSuite) TestCreateTask_NodeOffline() {
 	assert.Equal(s.T(), http.StatusBadRequest, w.Code) // 节点不在线
 }
 
+func (s *AgentHandlerTestSuite) TestCreateTask_Success() {
+	handler, ackDone, cleanup := s.newAckingAgentHandler()
+	defer cleanup()
+	s.router.POST("/admin/agent/tasks", handler.CreateTask)
+
+	body := CreateTaskRequest{
+		NodeID:  s.testNode.ID,
+		Type:    "diagnostic",
+		Action:  "service_status",
+		Params:  map[string]any{"service": "gost"},
+		Timeout: 30,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/agent/tasks", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "task sent", data["message"])
+	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
+	assert.True(s.T(), data["success"].(bool))
+	assert.True(s.T(), data["ack_received"].(bool))
+	assert.NotEmpty(s.T(), data["task_id"])
+	assert.NotContains(s.T(), resp, "error")
+
+	s.Require().NoError(<-ackDone)
+}
+
 func (s *AgentHandlerTestSuite) TestCreateTask_InvalidBody() {
 	handler := NewAgentHandler()
 	s.router.POST("/admin/agent/tasks", handler.CreateTask)
@@ -587,6 +685,41 @@ func (s *AgentHandlerTestSuite) TestExecuteCommand_InvalidBody() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+func (s *AgentHandlerTestSuite) TestExecuteCommand_Success() {
+	handler, ackDone, cleanup := s.newAckingAgentHandler()
+	defer cleanup()
+	s.router.POST("/admin/agent/execute", handler.ExecuteCommand)
+
+	body := ExecuteCommandRequest{
+		NodeID:  s.testNode.ID,
+		Action:  "service_status",
+		Params:  map[string]any{"service": "gost"},
+		Timeout: 30,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/agent/execute", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "task sent", data["message"])
+	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
+	assert.True(s.T(), data["success"].(bool))
+	assert.True(s.T(), data["ack_received"].(bool))
+	assert.NotEmpty(s.T(), data["task_id"])
+	assert.NotContains(s.T(), resp, "error")
+
+	s.Require().NoError(<-ackDone)
 }
 
 func (s *AgentHandlerTestSuite) TestExecuteCommand_MissingFields() {

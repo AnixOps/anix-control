@@ -102,7 +102,7 @@
 - Normalized admin/user Telegram panel API success responses to the panel `code/msg/ts/data` envelope while preserving the public Telegram webhook `status=ok` compatibility response.
 - Normalized admin subscription management success responses to the panel `code/msg/ts/data` envelope while keeping the Subscriptions page compatible with legacy and enveloped group, template, protocol, and preview payloads.
 - Normalized admin node management CRUD, protocol, log, raw-config, and auth-key success responses to the panel `code/msg/ts/data` envelope while keeping the Nodes page compatible with legacy and enveloped payloads.
-- Normalized admin Agent list, task result, task history, and monitor read responses to the panel `code/msg/ts/data` envelope while keeping the Agent page compatible with legacy, enveloped, and nested payloads.
+- Normalized admin Agent list, task result, task history, monitor read, task creation, and execute-command success responses to the panel `code/msg/ts/data` envelope while keeping the Agent page compatible with legacy, enveloped, and nested payloads.
 - Normalized admin user management CRUD, ban/unban, traffic reset, and subscribe-reset success responses to the panel `code/msg/ts/data` envelope while keeping the Users page compatible with legacy, enveloped, and nested payloads.
 - Normalized admin plan management list/detail/create/update/delete/assign success responses to the panel `code/msg/ts/data` envelope while keeping the Plans page compatible with legacy, enveloped, and nested payloads.
 - Normalized admin order management list/detail/status/paid/cancel success responses to the panel `code/msg/ts/data` envelope while keeping the Orders page compatible with legacy, enveloped, and nested payloads.
