@@ -5136,6 +5136,17 @@ func (s *AdminKnowledgeHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *AdminKnowledgeHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *AdminKnowledgeHandlerTestSuite) TestGetArticles() {
 	handler := NewAdminKnowledgeHandler()
 	s.router.GET("/admin/knowledge", handler.GetArticles)
@@ -5190,7 +5201,7 @@ func (s *AdminKnowledgeHandlerTestSuite) TestCreateArticle_MissingFields() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "参数错误")
 }
 
 func (s *AdminKnowledgeHandlerTestSuite) TestUpdateArticle() {
@@ -5228,7 +5239,7 @@ func (s *AdminKnowledgeHandlerTestSuite) TestUpdateArticle_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "文章不存在")
 }
 
 func (s *AdminKnowledgeHandlerTestSuite) TestUpdateArticle_InvalidID() {
@@ -5241,7 +5252,20 @@ func (s *AdminKnowledgeHandlerTestSuite) TestUpdateArticle_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "无效的文章ID")
+}
+
+func (s *AdminKnowledgeHandlerTestSuite) TestUpdateArticle_InvalidBodyUsesPanelEnvelope() {
+	handler := NewAdminKnowledgeHandler()
+	s.router.PUT("/admin/knowledge/:id", handler.UpdateArticle)
+
+	body := `{"show": 2}`
+	req, _ := http.NewRequest("PUT", "/admin/knowledge/"+strconv.FormatUint(uint64(s.testArticle.ID), 10), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "参数错误")
 }
 
 func (s *AdminKnowledgeHandlerTestSuite) TestDeleteArticle() {
@@ -5271,7 +5295,18 @@ func (s *AdminKnowledgeHandlerTestSuite) TestDeleteArticle_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "文章不存在")
+}
+
+func (s *AdminKnowledgeHandlerTestSuite) TestDeleteArticle_InvalidIDUsesPanelEnvelope() {
+	handler := NewAdminKnowledgeHandler()
+	s.router.DELETE("/admin/knowledge/:id", handler.DeleteArticle)
+
+	req, _ := http.NewRequest("DELETE", "/admin/knowledge/invalid", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "无效的文章ID")
 }
 
 func TestAdminKnowledgeHandler(t *testing.T) {
