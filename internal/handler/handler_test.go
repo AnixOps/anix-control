@@ -4758,6 +4758,14 @@ func (s *PaymentGatewayHandlerTestSuite) TestListGateways() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.NotContains(s.T(), resp, "list")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *PaymentGatewayHandlerTestSuite) TestCreateGateway() {
@@ -4771,6 +4779,13 @@ func (s *PaymentGatewayHandlerTestSuite) TestCreateGateway() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "New Gateway", data["name"])
+	assert.Equal(s.T(), model.PaymentGatewayWechat, data["type"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *PaymentGatewayHandlerTestSuite) TestCreateGateway_MissingFields() {
@@ -4797,6 +4812,12 @@ func (s *PaymentGatewayHandlerTestSuite) TestUpdateGateway() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "Updated Gateway", data["name"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *PaymentGatewayHandlerTestSuite) TestUpdateGateway_NotFound() {
@@ -4834,6 +4855,13 @@ func (s *PaymentGatewayHandlerTestSuite) TestDeleteGateway() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "deleted", data["message"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *PaymentGatewayHandlerTestSuite) TestDeleteGateway_NotFound() {
@@ -4846,6 +4874,11 @@ func (s *PaymentGatewayHandlerTestSuite) TestDeleteGateway_NotFound() {
 
 	// Delete doesn't fail if gateway doesn't exist (GORM behavior)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "deleted", data["message"])
 }
 
 func (s *PaymentGatewayHandlerTestSuite) TestToggleGateway() {
@@ -4859,6 +4892,13 @@ func (s *PaymentGatewayHandlerTestSuite) TestToggleGateway() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), true, data["enabled"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *PaymentGatewayHandlerTestSuite) TestGetStats() {

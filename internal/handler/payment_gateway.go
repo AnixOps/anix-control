@@ -138,7 +138,7 @@ func (h *PaymentGatewayHandler) CreateGateway(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": gateway})
+	panelSuccess(c, gateway)
 }
 
 // UpdateGateway godoc
@@ -215,7 +215,7 @@ func (h *PaymentGatewayHandler) UpdateGateway(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": gateway})
+	panelSuccess(c, gateway)
 }
 
 // DeleteGateway godoc
@@ -242,7 +242,7 @@ func (h *PaymentGatewayHandler) DeleteGateway(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+	panelSuccess(c, gin.H{"message": "deleted"})
 }
 
 // ToggleGateway godoc
@@ -293,12 +293,7 @@ func (h *PaymentGatewayHandler) ToggleGateway(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "updated",
-		"data": gin.H{
-			"enabled": targetEnabled,
-		},
-	})
+	panelSuccess(c, gin.H{"enabled": targetEnabled})
 }
 
 // GetPaymentStats godoc
@@ -446,13 +441,7 @@ func (h *PaymentGatewayHandler) ListPaymentRecords(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": gin.H{
-			"list":      list,
-			"total":     total,
-			"page":      page,
-			"page_size": pageSize,
-		},
+	panelSuccess(c, gin.H{
 		"list":      list,
 		"total":     total,
 		"page":      page,
