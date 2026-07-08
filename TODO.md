@@ -163,6 +163,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize admin subscription settings response envelope with handler, System, Users, and admin API compatibility tests.
 - [x] Normalize admin payment gateway list response envelope with handler and Payment frontend compatibility tests.
 - [x] Normalize admin payment gateway CRUD/toggle and payment-record list response envelopes with handler and Payment frontend compatibility tests.
+- [x] Normalize user payment channels/create/status/records success response envelopes with handler tests while preserving callback compatibility.
 - [x] Normalize user register and order-save success response envelopes with handler coverage.
 - [x] Normalize user login success response envelope with handler and Login frontend compatibility tests.
 - [x] Normalize user order list/detail response envelopes with handler and Orders frontend compatibility tests.

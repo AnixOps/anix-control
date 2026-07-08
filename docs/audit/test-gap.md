@@ -51,6 +51,7 @@ Local verification status:
 - Admin payment stats handler tests now assert panel `code/msg/ts/data` envelopes, and Payment frontend tests cover both legacy and enveloped payloads.
 - Admin payment gateway list handler tests now assert panel `code/msg/ts/data` envelopes, and Payment frontend tests cover both legacy and enveloped payloads.
 - Admin payment gateway CRUD/toggle and payment-record list handler tests now assert panel `code/msg/ts/data` envelopes, and Payment frontend tests cover legacy and enveloped record-list payloads.
+- User payment channels/create/status/records handler tests now assert panel `code/msg/ts/data` envelopes while payment callbacks remain covered as plain-text compatibility responses.
 - Admin subscription stats handler tests now assert panel `code/msg/ts/data` envelopes, and Subscriptions frontend tests cover both legacy and enveloped payloads.
 - Admin system backup stats handler tests now assert panel `code/msg/ts/data` envelopes, and System backup frontend tests cover both legacy and enveloped payloads.
 - Admin load balancer stats handler tests now assert panel `code/msg/ts/data` envelopes, and admin API mapping tests cover the stats route.
