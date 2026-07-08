@@ -178,9 +178,9 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize user register success and order-save success/user-error response envelopes with handler coverage.
 - [x] Normalize user login success response envelope with handler and Login frontend compatibility tests.
 - [x] Normalize user order list/detail success and user-error response envelopes with handler and Orders frontend compatibility tests.
-- [x] Normalize user subscription info response envelope with handler and Subscribe frontend compatibility tests.
-- [x] Normalize user profile response envelope with handler and user store compatibility tests.
-- [x] Normalize user dashboard response envelope with handler and user API mapping tests.
+- [x] Normalize user subscription info success and user-error response envelope with handler and Subscribe frontend compatibility tests.
+- [x] Normalize user profile success and user-error response envelope with handler and user store compatibility tests.
+- [x] Normalize user dashboard success and user-error response envelope with handler and user API mapping tests.
 - [x] Normalize user plan list response envelope with handler and Plans frontend compatibility tests.
 - [x] Normalize user coupon-check success and business-error response envelopes with handler and Plans frontend compatibility tests.
 - [x] Normalize user knowledge list/detail success and user-error response envelopes with handler and Knowledge frontend compatibility tests.

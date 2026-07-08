@@ -72,9 +72,9 @@ Local verification status:
 - User registration and order-save handler tests now assert panel `code/msg/ts/data` envelopes while checking the preserved token/order payload fields under `data` plus invalid-body and missing-plan order-save errors.
 - User login handler tests now assert panel `code/msg/ts/data` envelopes, and Login frontend tests cover the enveloped token payload.
 - User order list/detail handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid ID, missing order, and cross-user hidden order paths; user Orders frontend tests cover legacy and enveloped payloads.
-- User subscription info handler tests now assert panel `code/msg/ts/data` envelopes, and user Subscribe frontend tests cover legacy and enveloped payloads.
-- User profile handler tests now assert panel `code/msg/ts/data` envelopes, and user store tests cover the enveloped profile payload.
-- User dashboard handler tests now assert panel `code/msg/ts/data` envelopes, with user API mapping coverage for the route.
+- User subscription info handler tests now assert panel `code/msg/ts/data` envelopes for success, missing user context, invalid user ID, and missing user paths; user Subscribe frontend tests cover legacy and enveloped payloads.
+- User profile handler tests now assert panel `code/msg/ts/data` envelopes for success, missing user context, invalid user ID, and missing user paths; user store tests cover the enveloped profile payload.
+- User dashboard handler tests now assert panel `code/msg/ts/data` envelopes for success, missing user context, invalid user ID, and missing user paths; user API mapping coverage remains for the route.
 - User plan list handler tests now assert panel `code/msg/ts/data` envelopes, and user Plans frontend tests cover legacy and enveloped payloads.
 - User coupon-check handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid body, invalid code, not-started, expired, and usage-limit paths; user Plans frontend tests cover legacy and enveloped coupon payloads.
 - User knowledge list/detail handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid ID, missing article, and hidden-article paths; user Knowledge frontend tests cover legacy and enveloped article-list payloads.

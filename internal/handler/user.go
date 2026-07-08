@@ -1,12 +1,14 @@
 package handler
 
 import (
-	"net/http"
+	"errors"
+	"log"
 
 	"github.com/anixops/v2board/internal/config"
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // UserHandler 用户处理器
@@ -27,6 +29,22 @@ func NewUserHandler() *UserHandler {
 	}
 }
 
+func currentPanelUserID(c *gin.Context) (uint, bool) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		panelError(c, "未登录")
+		return 0, false
+	}
+
+	uid, ok := userID.(uint)
+	if !ok {
+		panelError(c, "用户ID无效")
+		return 0, false
+	}
+
+	return uid, true
+}
+
 // GetSubscription godoc
 // @Summary 获取用户订阅详情
 // @Description 获取当前登录用户的订阅信息，包括流量、到期时间等
@@ -40,16 +58,8 @@ func NewUserHandler() *UserHandler {
 // @Failure 500 {object} map[string]any
 // @Router /user/subscription [get]
 func (h *UserHandler) GetSubscription(c *gin.Context) {
-	// 从 JWT 中获取用户 ID
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "未登录"})
-		return
-	}
-
-	uid, ok := userID.(uint)
+	uid, ok := currentPanelUserID(c)
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "用户ID无效"})
 		return
 	}
 
@@ -58,7 +68,12 @@ func (h *UserHandler) GetSubscription(c *gin.Context) {
 
 	sub, err := h.statsService.GetUserSubscription(uid, forceRefresh)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取订阅信息失败", "error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "用户不存在")
+			return
+		}
+		log.Printf("user subscription failed: %v", err)
+		panelError(c, "获取订阅信息失败")
 		return
 	}
 
@@ -81,21 +96,19 @@ func (h *UserHandler) GetSubscription(c *gin.Context) {
 // @Failure 404 {object} map[string]any
 // @Router /user/profile [get]
 func (h *UserHandler) GetProfile(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "未登录"})
-		return
-	}
-
-	uid, ok := userID.(uint)
+	uid, ok := currentPanelUserID(c)
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "用户ID无效"})
 		return
 	}
 
 	user, err := h.userService.GetByID(uid)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "用户不存在"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "用户不存在")
+			return
+		}
+		log.Printf("user profile failed: %v", err)
+		panelError(c, "获取用户信息失败")
 		return
 	}
 
@@ -120,22 +133,20 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 // @Failure 500 {object} map[string]any
 // @Router /user/dashboard [get]
 func (h *UserHandler) GetDashboard(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "未登录"})
-		return
-	}
-
-	uid, ok := userID.(uint)
+	uid, ok := currentPanelUserID(c)
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "用户ID无效"})
 		return
 	}
 
 	// 获取订阅信息
 	sub, err := h.statsService.GetUserSubscription(uid, false)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取信息失败", "error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "用户不存在")
+			return
+		}
+		log.Printf("user dashboard failed: %v", err)
+		panelError(c, "获取信息失败")
 		return
 	}
 

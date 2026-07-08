@@ -110,9 +110,9 @@
 - Normalized user registration success and order-save success/error responses to the panel `code/msg/ts/data` envelope while preserving the existing token and order payloads under `data`.
 - Normalized user login success responses to the panel `code/msg/ts/data` envelope while keeping the Login page compatible with the enveloped token payload.
 - Normalized user order list and detail success/error responses to the panel `code/msg/ts/data` envelope while keeping the Orders page compatible with legacy and enveloped payloads.
-- Normalized user subscription info responses to the panel `code/msg/ts/data` envelope while keeping the Subscribe page compatible with legacy and enveloped payloads.
-- Normalized user profile responses to the panel `code/msg/ts/data` envelope while keeping the user store compatible with the enveloped profile payload.
-- Normalized user dashboard responses to the panel `code/msg/ts/data` envelope while preserving the subscription payload under `data.subscription`.
+- Normalized user subscription info success/error responses to the panel `code/msg/ts/data` envelope while keeping the Subscribe page compatible with legacy and enveloped payloads.
+- Normalized user profile success/error responses to the panel `code/msg/ts/data` envelope while keeping the user store compatible with the enveloped profile payload.
+- Normalized user dashboard success/error responses to the panel `code/msg/ts/data` envelope while preserving the subscription payload under `data.subscription`.
 - Normalized user plan list responses to the panel `code/msg/ts/data` envelope while keeping the Plans page compatible with legacy and enveloped payloads.
 - Normalized user coupon-check success and business-error responses to the panel `code/msg/ts/data` envelope while keeping the Plans page compatible with legacy and enveloped coupon payloads.
 - Normalized user knowledge list and detail success/error responses to the panel `code/msg/ts/data` envelope while keeping the Knowledge page compatible with legacy and enveloped article lists.
