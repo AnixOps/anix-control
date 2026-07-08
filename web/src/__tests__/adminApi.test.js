@@ -46,6 +46,10 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/orders', method: 'get', params: { status: 0 } },
       },
       {
+        call: () => adminApi.getOrder(3),
+        expected: { url: '/admin/orders/3', method: 'get' },
+      },
+      {
         call: () => adminApi.getTickets({ status: 0 }),
         expected: { url: '/admin/ticket', method: 'get', params: { status: 0 } },
       },
@@ -330,6 +334,20 @@ describe('admin api mapping', () => {
           url: '/admin/orders/3/status',
           method: 'put',
           data: { status: 2 },
+        },
+      },
+      {
+        call: () => adminApi.markOrderPaid(3),
+        expected: {
+          url: '/admin/orders/3/paid',
+          method: 'post',
+        },
+      },
+      {
+        call: () => adminApi.cancelOrder(3),
+        expected: {
+          url: '/admin/orders/3/cancel',
+          method: 'post',
         },
       },
       {

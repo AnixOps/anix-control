@@ -715,7 +715,7 @@ func (h *AdminHandler) GetOrderList(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": result})
+	panelSuccess(c, result)
 }
 
 // GetOrder godoc
@@ -743,7 +743,7 @@ func (h *AdminHandler) GetOrder(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": order})
+	panelSuccess(c, order)
 }
 
 // UpdateOrderStatus godoc
@@ -780,7 +780,7 @@ func (h *AdminHandler) UpdateOrderStatus(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "更新成功"})
+	panelSuccess(c, gin.H{"message": "更新成功"})
 }
 
 // MarkOrderPaid godoc
@@ -814,7 +814,7 @@ func (h *AdminHandler) MarkOrderPaid(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "订单已开通"})
+	panelSuccess(c, gin.H{"message": "订单已开通"})
 }
 
 // CancelOrder godoc
@@ -841,7 +841,7 @@ func (h *AdminHandler) CancelOrder(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "取消成功"})
+	panelSuccess(c, gin.H{"message": "取消成功"})
 }
 
 // GetOrderStats godoc
