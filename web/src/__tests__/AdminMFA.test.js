@@ -95,4 +95,24 @@ describe('Admin MFA', () => {
 
     wrapper.unmount()
   })
+
+  it('shows panel envelope save errors', async () => {
+    adminApi.updateMFAConfig.mockResolvedValueOnce({
+      code: -1,
+      msg: 'invalid config',
+      ts: 1783612800000,
+      data: null
+    })
+
+    const wrapper = mount(MFA)
+    await flushPromises()
+
+    await wrapper.vm.saveConfig()
+    await flushPromises()
+
+    expect(window.alert).toHaveBeenCalledWith('Save failed: invalid config')
+    expect(window.alert).not.toHaveBeenCalledWith('Saved successfully')
+
+    wrapper.unmount()
+  })
 })

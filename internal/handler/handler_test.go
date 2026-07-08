@@ -4391,6 +4391,17 @@ func (s *MFAHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *MFAHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *MFAHandlerTestSuite) TestGetStatus_NoMFA() {
 	handler := NewMFAHandler()
 	s.router.GET("/mfa/status", func(c *gin.Context) {
@@ -4461,7 +4472,7 @@ func (s *MFAHandlerTestSuite) TestUpdateAdminConfig_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "invalid")
 }
 
 func (s *MFAHandlerTestSuite) TestEnableTOTP_MissingCode() {
@@ -4477,7 +4488,7 @@ func (s *MFAHandlerTestSuite) TestEnableTOTP_MissingCode() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "Code")
 }
 
 func (s *MFAHandlerTestSuite) TestDisableMFA_MissingPassword() {
@@ -4493,7 +4504,7 @@ func (s *MFAHandlerTestSuite) TestDisableMFA_MissingPassword() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "Password")
 }
 
 func (s *MFAHandlerTestSuite) TestVerifyMFA_MissingCode() {
@@ -4509,7 +4520,7 @@ func (s *MFAHandlerTestSuite) TestVerifyMFA_MissingCode() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "Code")
 }
 
 func (s *MFAHandlerTestSuite) TestSetupTOTP() {
@@ -4532,6 +4543,20 @@ func (s *MFAHandlerTestSuite) TestSetupTOTP() {
 	assert.NotEmpty(s.T(), data["url"])
 	assert.NotEmpty(s.T(), data["backup_codes"])
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *MFAHandlerTestSuite) TestSetupTOTP_MissingUserUsesPanelEnvelope() {
+	handler := NewMFAHandler()
+	s.router.POST("/mfa/totp/setup", func(c *gin.Context) {
+		c.Set("user_id", uint(99999))
+		c.Next()
+	}, handler.SetupTOTP)
+
+	req, _ := http.NewRequest("POST", "/mfa/totp/setup", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "user not found")
 }
 
 func (s *MFAHandlerTestSuite) TestEnableTOTP_Success() {
@@ -4560,6 +4585,24 @@ func (s *MFAHandlerTestSuite) TestEnableTOTP_Success() {
 	assert.Equal(s.T(), "MFA enabled successfully", data["message"])
 	assert.NotContains(s.T(), resp, "message")
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *MFAHandlerTestSuite) TestEnableTOTP_InvalidCodeUsesPanelEnvelope() {
+	handler := NewMFAHandler()
+	_, err := handler.mfaService.SetupTOTP(s.testUser.ID, s.testUser.Email)
+	assert.NoError(s.T(), err)
+
+	s.router.POST("/mfa/totp/enable", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.EnableTOTP)
+
+	req, _ := http.NewRequest("POST", "/mfa/totp/enable", strings.NewReader(`{"code":"000000"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid code")
 }
 
 func (s *MFAHandlerTestSuite) TestDisableMFA_Success() {
@@ -4598,6 +4641,32 @@ func (s *MFAHandlerTestSuite) TestDisableMFA_Success() {
 	assert.Equal(s.T(), int64(0), count)
 }
 
+func (s *MFAHandlerTestSuite) TestDisableMFA_WrongPasswordUsesPanelEnvelope() {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.DefaultCost)
+	assert.NoError(s.T(), err)
+	s.testUser.Password = string(hashedPassword)
+	assert.NoError(s.T(), s.db.Save(s.testUser).Error)
+	assert.NoError(s.T(), s.db.Create(&model.UserMFA{
+		UserID:      s.testUser.ID,
+		Enabled:     true,
+		TOTPSecret:  "SECRET",
+		BackupCodes: `["ABCD-EFGH"]`,
+	}).Error)
+
+	handler := NewMFAHandler()
+	s.router.POST("/mfa/disable", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.DisableMFA)
+
+	req, _ := http.NewRequest("POST", "/mfa/disable", strings.NewReader(`{"password":"wrong-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid password")
+}
+
 func (s *MFAHandlerTestSuite) TestVerifyMFA_BackupCodeSuccess() {
 	assert.NoError(s.T(), s.db.Create(&model.UserMFA{
 		UserID:      s.testUser.ID,
@@ -4628,6 +4697,28 @@ func (s *MFAHandlerTestSuite) TestVerifyMFA_BackupCodeSuccess() {
 	remaining, err := handler.mfaService.GetRemainingBackupCodes(s.testUser.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 0, remaining)
+}
+
+func (s *MFAHandlerTestSuite) TestVerifyMFA_InvalidCodeUsesPanelEnvelope() {
+	assert.NoError(s.T(), s.db.Create(&model.UserMFA{
+		UserID:      s.testUser.ID,
+		Enabled:     true,
+		TOTPSecret:  "SECRET",
+		BackupCodes: `["ABCD-EFGH"]`,
+	}).Error)
+
+	handler := NewMFAHandler()
+	s.router.POST("/mfa/verify", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.VerifyMFA)
+
+	req, _ := http.NewRequest("POST", "/mfa/verify", strings.NewReader(`{"code":"invalid","method":"backup"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid code")
 }
 
 func (s *MFAHandlerTestSuite) TestRegenerateBackupCodes_Success() {
@@ -4670,8 +4761,7 @@ func (s *MFAHandlerTestSuite) TestRegenerateBackupCodes_NoMFA() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	// Should return 400 because user doesn't have MFA enabled
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "MFA not enabled")
 }
 
 func TestMFAHandler(t *testing.T) {
