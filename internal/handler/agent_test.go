@@ -91,6 +91,8 @@ func (s *AgentHandlerTestSuite) SetupTest() {
 	// 清理数据
 	s.db.Exec("DELETE FROM v2_forward_node")
 	s.db.Exec("DELETE FROM v2_forward_rule")
+	s.db.Exec("DELETE FROM v2_agent_diagnostic_task")
+	s.db.Exec("DELETE FROM v2_forward_agent_bridge_task")
 
 	// 创建测试节点
 	s.testNode = &model.ForwardNode{
@@ -360,10 +362,13 @@ func (s *AgentHandlerTestSuite) TestGetMonitor_Success() {
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]any
-	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
 	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AgentHandlerTestSuite) TestGetMonitor_NotFound() {
@@ -401,11 +406,14 @@ func (s *AgentHandlerTestSuite) TestGetTaskResult_Success() {
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]any
-	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
 	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), "task-xyz-1", data["task_id"])
 	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AgentHandlerTestSuite) TestGetTaskResult_NotFound() {
@@ -461,16 +469,16 @@ func (s *AgentHandlerTestSuite) TestListAgents_Empty() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]any
-	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
-	// agents 可能为 nil 或空数组
-	agents, ok := resp["agents"].([]any)
-	if ok {
-		assert.Equal(s.T(), 0, len(agents))
-	} else {
-		// 如果 agents 为 nil，也是有效的空列表
-		assert.Nil(s.T(), resp["agents"])
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	agents, ok := data["agents"].([]any)
+	if assert.True(s.T(), ok) {
+		assert.Empty(s.T(), agents)
 	}
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AgentHandlerTestSuite) TestListAgents_AfterRegister() {
@@ -498,14 +506,36 @@ func (s *AgentHandlerTestSuite) TestListAgents_AfterRegister() {
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
 
-	var resp map[string]any
-	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
-	agents := resp["agents"].([]any)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	agents := data["agents"].([]any)
 	assert.Equal(s.T(), 1, len(agents))
 
 	agent := agents[0].(map[string]any)
 	assert.Equal(s.T(), float64(s.testNode.ID), agent["node_id"])
 	assert.Equal(s.T(), "1.0.0", agent["version"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *AgentHandlerTestSuite) TestListDiagnosticTasks_Empty() {
+	handler := NewAgentHandler()
+	s.router.GET("/admin/agent/tasks", handler.ListDiagnosticTasks)
+
+	req, _ := http.NewRequest("GET", "/admin/agent/tasks?limit=50", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].([]any)
+	assert.Empty(s.T(), data)
+	assert.NotContains(s.T(), resp, "error")
 }
 
 // ========== CreateTask 测试 ==========

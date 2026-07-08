@@ -289,7 +289,8 @@ const buildActionParams = (actionValue, service, lines) => {
 const fetchAgents = async () => {
   try {
     const res = await getAgents()
-    agents.value = res.data?.agents || []
+    const payload = readAgentObject(res)
+    agents.value = payload.agents || payload.list || []
   } catch (err) {
     console.error(t('runtime.nodeXAgents.messages.fetchFailed'), err)
   }
@@ -298,10 +299,43 @@ const fetchAgents = async () => {
 const fetchTaskHistory = async () => {
   try {
     const res = await listAgentDiagnosticTasks({ limit: 50 })
-    taskHistory.value = res.data?.data || []
+    taskHistory.value = readAgentList(res)
   } catch (err) {
     console.error(err)
   }
+}
+
+const readAgentPayload = (res) => {
+  if (!res || typeof res !== 'object') {
+    return null
+  }
+  if (Object.prototype.hasOwnProperty.call(res, 'code')) {
+    return res.data ?? null
+  }
+  if (
+    res.data &&
+    typeof res.data === 'object' &&
+    Object.prototype.hasOwnProperty.call(res.data, 'data')
+  ) {
+    return res.data.data ?? null
+  }
+  return res.data ?? res
+}
+
+const readAgentObject = (res) => {
+  const payload = readAgentPayload(res)
+  return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}
+}
+
+const readAgentList = (res) => {
+  const payload = readAgentPayload(res)
+  if (Array.isArray(payload)) {
+    return payload
+  }
+  if (payload && typeof payload === 'object') {
+    return payload.list || payload.tasks || payload.data || []
+  }
+  return []
 }
 
 const formatTime = (time) => {
@@ -357,7 +391,7 @@ const executeCommand = async () => {
       timeout: 30
     })
 
-    const result = res.data
+    const result = readAgentObject(res)
     terminalLines.value.push({
       prompt: '',
       content: result.output || JSON.stringify(result, null, 2),
@@ -649,4 +683,3 @@ code {
   font-size: 12px;
 }
 </style>
-
