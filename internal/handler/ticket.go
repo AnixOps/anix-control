@@ -1,13 +1,15 @@
 package handler
 
 import (
-	"net/http"
+	"errors"
+	"log"
 	"strconv"
 	"time"
 
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // TicketHandler 用户端工单处理器
@@ -23,7 +25,8 @@ func (h *TicketHandler) GetTickets(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	var tickets []model.Ticket
 	if err := database.GetDB().Where("user_id = ?", userID).Order("updated_at DESC").Find(&tickets).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取工单失败"})
+		log.Printf("user ticket list failed: %v", err)
+		panelError(c, "获取工单失败")
 		return
 	}
 
@@ -52,7 +55,7 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 
@@ -69,7 +72,8 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 
 	if err := tx.Create(&ticket).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "创建工单失败"})
+		log.Printf("user ticket create failed: %v", err)
+		panelError(c, "创建工单失败")
 		return
 	}
 
@@ -83,11 +87,16 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 
 	if err := tx.Create(&message).Error; err != nil {
 		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "发送消息失败"})
+		log.Printf("user ticket initial message create failed: %v", err)
+		panelError(c, "发送消息失败")
 		return
 	}
 
-	tx.Commit()
+	if err := tx.Commit().Error; err != nil {
+		log.Printf("user ticket create commit failed: %v", err)
+		panelError(c, "创建工单失败")
+		return
+	}
 	panelSuccess(c, ticket)
 }
 
@@ -96,13 +105,18 @@ func (h *TicketHandler) GetTicket(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的工单ID"})
+		panelError(c, "无效的工单ID")
 		return
 	}
 
 	var ticket model.Ticket
 	if err := database.GetDB().Preload("Messages").Where("id = ? AND user_id = ?", id, userID).First(&ticket).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "工单不存在"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "工单不存在")
+			return
+		}
+		log.Printf("user ticket detail failed: %v", err)
+		panelError(c, "获取工单失败")
 		return
 	}
 
@@ -114,7 +128,7 @@ func (h *TicketHandler) ReplyTicket(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的工单ID"})
+		panelError(c, "无效的工单ID")
 		return
 	}
 
@@ -123,18 +137,23 @@ func (h *TicketHandler) ReplyTicket(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
+		panelError(c, "参数错误")
 		return
 	}
 
 	var ticket model.Ticket
 	if err := database.GetDB().Where("id = ? AND user_id = ?", id, userID).First(&ticket).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "工单不存在"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "工单不存在")
+			return
+		}
+		log.Printf("user ticket reply lookup failed: %v", err)
+		panelError(c, "获取工单失败")
 		return
 	}
 
 	if ticket.Status == 2 {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "工单已关闭，无法回复"})
+		panelError(c, "工单已关闭，无法回复")
 		return
 	}
 
@@ -147,7 +166,8 @@ func (h *TicketHandler) ReplyTicket(c *gin.Context) {
 	}
 
 	if err := database.GetDB().Create(&message).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "回复失败"})
+		log.Printf("user ticket reply create failed: %v", err)
+		panelError(c, "回复失败")
 		return
 	}
 
@@ -156,7 +176,8 @@ func (h *TicketHandler) ReplyTicket(c *gin.Context) {
 		"status":     0,
 		"updated_at": time.Now(),
 	}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新工单状态失败"})
+		log.Printf("user ticket status update after reply failed: %v", err)
+		panelError(c, "更新工单状态失败")
 		return
 	}
 
@@ -168,18 +189,24 @@ func (h *TicketHandler) CloseTicket(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的工单ID"})
+		panelError(c, "无效的工单ID")
 		return
 	}
 
 	var ticket model.Ticket
 	if err := database.GetDB().Where("id = ? AND user_id = ?", id, userID).First(&ticket).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "工单不存在"})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "工单不存在")
+			return
+		}
+		log.Printf("user ticket close lookup failed: %v", err)
+		panelError(c, "获取工单失败")
 		return
 	}
 
 	if err := database.GetDB().Model(&ticket).Update("status", 2).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "操作失败"})
+		log.Printf("user ticket close update failed: %v", err)
+		panelError(c, "操作失败")
 		return
 	}
 

@@ -116,7 +116,7 @@
 - Normalized user plan list responses to the panel `code/msg/ts/data` envelope while keeping the Plans page compatible with legacy and enveloped payloads.
 - Normalized user coupon-check success and business-error responses to the panel `code/msg/ts/data` envelope while keeping the Plans page compatible with legacy and enveloped coupon payloads.
 - Normalized user knowledge list and detail responses to the panel `code/msg/ts/data` envelope while keeping the Knowledge page compatible with legacy and enveloped article lists.
-- Normalized user ticket list, create, detail, reply, and close responses to the panel `code/msg/ts/data` envelope while keeping the Tickets page compatible with legacy and enveloped ticket payloads.
+- Normalized user ticket list, create, detail, reply, and close success/error responses to the panel `code/msg/ts/data` envelope while keeping the Tickets page compatible with legacy and enveloped ticket payloads.
 - Normalized public payment methods and payment-status responses to the panel `code/msg/ts/data` envelope with handler coverage for key payload fields and missing payment records.
 - Normalized admin ticket list, reply, and close success responses to the panel `code/msg/ts/data` envelope while keeping the Tickets admin page compatible with legacy and enveloped payloads.
 - Normalized admin coupon list, create, and delete success/error responses to the panel `code/msg/ts/data` envelope while keeping the Coupons admin page compatible with legacy and enveloped payloads.
