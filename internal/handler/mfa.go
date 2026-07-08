@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -314,7 +313,7 @@ func (h *MFAHandler) GetStatus(c *gin.Context) {
 
 	mfa, err := h.mfaService.GetUserMFA(userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -347,16 +346,16 @@ func (h *MFAHandler) SetupTOTP(c *gin.Context) {
 	var user model.User
 	if err := database.Get().First(&user, userID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			panelError(c, "user not found")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		panelError(c, "failed to load user")
 		return
 	}
 
 	setup, err := h.mfaService.SetupTOTP(userID, user.Email)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -376,12 +375,12 @@ func (h *MFAHandler) EnableTOTP(c *gin.Context) {
 		Code string `json:"code" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	if err := h.mfaService.EnableTOTP(userID, req.Code); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -396,12 +395,12 @@ func (h *MFAHandler) DisableMFA(c *gin.Context) {
 		Password string `json:"password" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	if err := h.mfaService.DisableMFA(userID, req.Password); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -417,18 +416,18 @@ func (h *MFAHandler) VerifyMFA(c *gin.Context) {
 		Method string `json:"method"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	valid, err := h.mfaService.Verify(userID, req.Code, req.Method)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	if !valid {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid code"})
+		panelError(c, "invalid code")
 		return
 	}
 
@@ -441,7 +440,7 @@ func (h *MFAHandler) RegenerateBackupCodes(c *gin.Context) {
 
 	codes, err := h.mfaService.RegenerateBackupCodes(userID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -452,7 +451,7 @@ func (h *MFAHandler) RegenerateBackupCodes(c *gin.Context) {
 func (h *MFAHandler) GetAdminConfig(c *gin.Context) {
 	cfg, err := h.loadAdminConfig()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -464,13 +463,13 @@ func (h *MFAHandler) GetAdminConfig(c *gin.Context) {
 func (h *MFAHandler) UpdateAdminConfig(c *gin.Context) {
 	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	cfg, err := h.loadAdminConfig()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -522,7 +521,7 @@ func (h *MFAHandler) UpdateAdminConfig(c *gin.Context) {
 		"security",
 		"mfa admin config",
 	); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 

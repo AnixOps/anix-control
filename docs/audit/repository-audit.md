@@ -120,8 +120,8 @@ Open gaps:
   frontend compatibility coverage, user payment channel/create/status/record and
   legacy X402/fiat create/check success and user-error responses have handler
   envelope coverage with callback/webhook compatibility retained,
-  user/admin MFA success responses have handler coverage and Admin MFA frontend
-  compatibility coverage, user/admin notification success responses have handler
+  user/admin MFA success and user-error responses have handler coverage and
+  Admin MFA frontend compatibility coverage, user/admin notification success responses have handler
   coverage and Admin Notifications frontend compatibility coverage, admin/user
   Telegram panel API success responses have handler coverage and Admin Telegram
   frontend compatibility coverage while the public Telegram webhook remains a

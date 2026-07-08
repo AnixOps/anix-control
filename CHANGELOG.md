@@ -102,7 +102,7 @@
 - Normalized admin payment gateway create/update/delete/toggle and payment-record list responses to the panel `code/msg/ts/data` envelope while keeping the Payment page compatible with legacy and enveloped payloads.
 - Normalized user payment channels/create/status/records success responses to the panel `code/msg/ts/data` envelope while preserving payment callback plain-text compatibility.
 - Normalized legacy X402 and fiat payment create/check success and user-error responses to the panel `code/msg/ts/data` envelope while preserving X402, Stripe, and PayPal callback/webhook compatibility responses.
-- Normalized user/admin MFA success responses to the panel `code/msg/ts/data` envelope while keeping the Admin MFA page compatible with legacy and enveloped config payloads.
+- Normalized user/admin MFA success and user-error responses to the panel `code/msg/ts/data` envelope while keeping the Admin MFA page compatible with legacy, enveloped, and error config payloads.
 - Normalized user/admin notification success responses to the panel `code/msg/ts/data` envelope while keeping the Admin Notifications page compatible with legacy and enveloped templates, logs, and email config payloads.
 - Normalized admin/user Telegram panel API success responses to the panel `code/msg/ts/data` envelope while preserving the public Telegram webhook `status=ok` compatibility response.
 - Normalized admin subscription management success responses to the panel `code/msg/ts/data` envelope while keeping the Subscriptions page compatible with legacy and enveloped group, template, protocol, and preview payloads.

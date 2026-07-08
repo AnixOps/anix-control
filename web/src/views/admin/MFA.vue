@@ -130,6 +130,13 @@ const resolveApiError = (error, fallbackKey) => (
   t(fallbackKey)
 )
 
+const requirePanelSuccess = (res, fallbackKey) => {
+  if (typeof res?.code === 'number' && res.code !== 0) {
+    throw new Error(res.msg || t(fallbackKey))
+  }
+  return res
+}
+
 const readMfaConfigPayload = (res) => {
   if (!res || typeof res !== 'object') return {}
   if (Object.prototype.hasOwnProperty.call(res, 'code')) {
@@ -143,7 +150,7 @@ const readMfaConfigPayload = (res) => {
 
 const fetchConfig = async () => {
   try {
-    const res = await getMFAConfig()
+    const res = requirePanelSuccess(await getMFAConfig(), 'adminMfa.messages.fetchFailed')
     const payload = readMfaConfigPayload(res)
     if (payload && typeof payload === 'object') {
       config.value = createMfaConfig(payload)
@@ -155,7 +162,7 @@ const fetchConfig = async () => {
 
 const saveConfig = async () => {
   try {
-    await updateMFAConfig(config.value)
+    requirePanelSuccess(await updateMFAConfig(config.value), 'adminMfa.messages.saveFailedShort')
     window.alert(t('adminMfa.messages.saveSuccess'))
   } catch (error) {
     window.alert(t('adminMfa.messages.saveFailed', { message: resolveApiError(error, 'adminMfa.messages.saveFailedShort') }))
