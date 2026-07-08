@@ -2712,6 +2712,58 @@ func (s *NotificationExtendedTestSuite) TestGetUserNotifications() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	list, ok := data["list"].([]any)
+	assert.True(s.T(), ok)
+	assert.Len(s.T(), list, 0)
+	assert.Equal(s.T(), float64(0), data["total"])
+	assert.Equal(s.T(), float64(1), data["page"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *NotificationExtendedTestSuite) TestMarkAsRead() {
+	logItem := &model.NotificationLog{
+		UserID:  &s.testUser.ID,
+		Type:    "email",
+		Event:   "ticket.reply",
+		Title:   "Reply",
+		Content: "body",
+		Status:  1,
+	}
+	s.db.Create(logItem)
+
+	handler := NewNotificationHandler()
+	s.router.POST("/user/notifications/:id/read", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		handler.MarkAsRead(c)
+	})
+
+	req, _ := http.NewRequest(
+		"POST",
+		"/user/notifications/"+strconv.FormatUint(uint64(logItem.ID), 10)+"/read",
+		nil,
+	)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "marked as read", data["message"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+
+	var updated model.NotificationLog
+	err := s.db.First(&updated, logItem.ID).Error
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), updated.ReadAt)
 }
 
 func (s *NotificationExtendedTestSuite) TestMarkAllAsRead() {
@@ -2726,6 +2778,13 @@ func (s *NotificationExtendedTestSuite) TestMarkAllAsRead() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "all notifications marked as read", data["message"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NotificationExtendedTestSuite) TestGetUnreadCount() {
@@ -2740,6 +2799,12 @@ func (s *NotificationExtendedTestSuite) TestGetUnreadCount() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), float64(0), data["count"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NotificationExtendedTestSuite) TestListTemplates() {
@@ -2761,16 +2826,17 @@ func (s *NotificationExtendedTestSuite) TestListTemplates() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-
-	var resp map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(s.T(), err)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
 	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	list, ok := data["list"].([]any)
 	assert.True(s.T(), ok)
 	assert.Len(s.T(), list, 1)
 	assert.Equal(s.T(), float64(1), data["total"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NotificationExtendedTestSuite) TestCreateTemplate() {
@@ -2792,6 +2858,13 @@ func (s *NotificationExtendedTestSuite) TestCreateTemplate() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "Test Template", data["name"])
+	assert.Equal(s.T(), "email", data["type"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NotificationExtendedTestSuite) TestUpdateTemplate_WithTypeAndEvent() {
@@ -2828,6 +2901,13 @@ func (s *NotificationExtendedTestSuite) TestUpdateTemplate_WithTypeAndEvent() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "Template After", data["name"])
+	assert.Equal(s.T(), "telegram", data["type"])
+	assert.NotContains(s.T(), resp, "error")
 
 	var updated model.NotificationTemplate
 	err := s.db.First(&updated, tpl.ID).Error
@@ -2872,10 +2952,10 @@ func (s *NotificationExtendedTestSuite) TestListLogs() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
-
-	var resp map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &resp)
-	assert.NoError(s.T(), err)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
 	data, ok := resp["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	list, ok := data["list"].([]any)
@@ -2886,6 +2966,33 @@ func (s *NotificationExtendedTestSuite) TestListLogs() {
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), "failed", row["status"])
 	assert.Equal(s.T(), float64(2), row["status_code"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *NotificationExtendedTestSuite) TestSendTestNotification_TelegramSuccess() {
+	handler := NewNotificationHandler()
+	s.router.POST("/admin/notification/test", handler.SendTestNotification)
+
+	body := map[string]any{
+		"type":    "telegram",
+		"title":   "Test",
+		"content": "Body",
+	}
+	jsonBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest("POST", "/admin/notification/test", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), true, data["success"])
+	assert.Equal(s.T(), "test notification sent", data["message"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NotificationExtendedTestSuite) TestGetEmailConfig() {
@@ -2897,6 +3004,13 @@ func (s *NotificationExtendedTestSuite) TestGetEmailConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Contains(s.T(), data, "host")
+	assert.Contains(s.T(), data, "encryption")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NotificationExtendedTestSuite) TestUpdateEmailConfig() {
@@ -2916,6 +3030,13 @@ func (s *NotificationExtendedTestSuite) TestUpdateEmailConfig() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "email config updated", data["message"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NotificationExtendedTestSuite) TestUpdateEmailConfig_InvalidBody() {
@@ -2957,9 +3078,9 @@ func (s *NotificationExtendedTestSuite) TestEmailConfig_RoundTrip_EncryptionStri
 	s.router.ServeHTTP(getResp1, getReq1)
 	assert.Equal(s.T(), http.StatusOK, getResp1.Code)
 
-	var getPayload1 map[string]any
-	err := json.Unmarshal(getResp1.Body.Bytes(), &getPayload1)
-	assert.NoError(s.T(), err)
+	getPayload1 := decodePanelTestResponse(s.T(), getResp1)
+	assert.Equal(s.T(), float64(0), getPayload1["code"])
+	assert.NotContains(s.T(), getPayload1, "error")
 	data1, ok := getPayload1["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), "smtp.persist.test", data1["host"])
@@ -2978,7 +3099,7 @@ func (s *NotificationExtendedTestSuite) TestEmailConfig_RoundTrip_EncryptionStri
 	}
 
 	var storedEmailConfig model.SystemConfig
-	err = s.db.Where("key = ?", notificationEmailConfigKey).First(&storedEmailConfig).Error
+	err := s.db.Where("key = ?", notificationEmailConfigKey).First(&storedEmailConfig).Error
 	assert.NoError(s.T(), err)
 	assert.Contains(s.T(), storedEmailConfig.Value, "KeepPassword#1")
 
@@ -3004,9 +3125,9 @@ func (s *NotificationExtendedTestSuite) TestEmailConfig_RoundTrip_EncryptionStri
 	s.router.ServeHTTP(getResp2, getReq2)
 	assert.Equal(s.T(), http.StatusOK, getResp2.Code)
 
-	var getPayload2 map[string]any
-	err = json.Unmarshal(getResp2.Body.Bytes(), &getPayload2)
-	assert.NoError(s.T(), err)
+	getPayload2 := decodePanelTestResponse(s.T(), getResp2)
+	assert.Equal(s.T(), float64(0), getPayload2["code"])
+	assert.NotContains(s.T(), getPayload2, "error")
 	data2, ok := getPayload2["data"].(map[string]any)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), "Notify Bot Updated", data2["from_name"])
@@ -3045,6 +3166,13 @@ func (s *NotificationExtendedTestSuite) TestDeleteTemplate() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data, ok := resp["data"].(map[string]any)
+	assert.True(s.T(), ok)
+	assert.Equal(s.T(), "deleted", data["message"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func TestNotificationExtended(t *testing.T) {

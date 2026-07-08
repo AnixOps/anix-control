@@ -153,6 +153,18 @@ describe('admin api mapping', () => {
         },
       },
       {
+        call: () => adminApi.getNotificationLogs({ status: 'failed' }),
+        expected: {
+          url: '/admin/notification/logs',
+          method: 'get',
+          params: { status: 'failed' },
+        },
+      },
+      {
+        call: () => adminApi.getEmailConfig(),
+        expected: { url: '/admin/notification/email/config', method: 'get' },
+      },
+      {
         call: () => adminApi.getKnowledgeList({ page: 1 }),
         expected: { url: '/admin/knowledge', method: 'get', params: { page: 1 } },
       },
@@ -378,6 +390,14 @@ describe('admin api mapping', () => {
           url: '/admin/notification/test',
           method: 'post',
           data: { email: 'test@example.com' },
+        },
+      },
+      {
+        call: () => adminApi.updateEmailConfig({ host: 'smtp.example.com' }),
+        expected: {
+          url: '/admin/notification/email/config',
+          method: 'put',
+          data: { host: 'smtp.example.com' },
         },
       },
       {

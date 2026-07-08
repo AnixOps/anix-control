@@ -360,6 +360,17 @@ const resolveApiError = (error, fallbackKey) => (
   t(fallbackKey)
 )
 
+const readNotificationPayload = (res) => {
+  if (!res || typeof res !== 'object') return {}
+  if (Object.prototype.hasOwnProperty.call(res, 'code')) {
+    return res.data && typeof res.data === 'object' ? res.data : {}
+  }
+  if (res.data && typeof res.data === 'object' && Object.prototype.hasOwnProperty.call(res.data, 'data')) {
+    return res.data.data && typeof res.data.data === 'object' ? res.data.data : {}
+  }
+  return res.data && typeof res.data === 'object' ? res.data : res
+}
+
 const typeKeyMap = {
   email: 'adminNotifications.types.email',
   telegram: 'adminNotifications.types.telegram',
@@ -402,7 +413,8 @@ const formatTime = (value) => {
 const fetchTemplates = async () => {
   try {
     const res = await getNotificationTemplates()
-    templates.value = res.data?.list || []
+    const payload = readNotificationPayload(res)
+    templates.value = payload.list || []
   } catch (error) {
     console.error(t('adminNotifications.messages.fetchTemplatesFailed'), error)
   }
@@ -411,7 +423,8 @@ const fetchTemplates = async () => {
 const fetchLogs = async () => {
   try {
     const res = await getNotificationLogs(logFilter.value)
-    logs.value = res.data?.list || []
+    const payload = readNotificationPayload(res)
+    logs.value = payload.list || []
   } catch (error) {
     console.error(t('adminNotifications.messages.fetchLogsFailed'), error)
   }
@@ -420,8 +433,9 @@ const fetchLogs = async () => {
 const fetchEmailSettings = async () => {
   try {
     const res = await getEmailConfig()
-    if (res.data) {
-      emailConfig.value = { ...emailConfig.value, ...res.data }
+    const payload = readNotificationPayload(res)
+    if (payload && typeof payload === 'object') {
+      emailConfig.value = { ...emailConfig.value, ...payload }
     }
   } catch (error) {
     console.error(t('adminNotifications.messages.fetchEmailConfigFailed'), error)
