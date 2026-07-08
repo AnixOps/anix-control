@@ -3862,6 +3862,17 @@ func (s *TicketHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *TicketHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *TicketHandlerTestSuite) TestGetTickets_Success() {
 	handler := NewTicketHandler()
 	s.router.GET("/tickets", func(c *gin.Context) {
@@ -3952,7 +3963,7 @@ func (s *TicketHandlerTestSuite) TestCreateTicket_MissingFields() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "参数错误")
 }
 
 func (s *TicketHandlerTestSuite) TestGetTicket_Success() {
@@ -3989,7 +4000,7 @@ func (s *TicketHandlerTestSuite) TestGetTicket_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "工单不存在")
 }
 
 func (s *TicketHandlerTestSuite) TestGetTicket_InvalidID() {
@@ -4003,7 +4014,7 @@ func (s *TicketHandlerTestSuite) TestGetTicket_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "无效的工单ID")
 }
 
 func (s *TicketHandlerTestSuite) TestReplyTicket_Success() {
@@ -4028,6 +4039,54 @@ func (s *TicketHandlerTestSuite) TestReplyTicket_Success() {
 	assert.Equal(s.T(), "回复成功", resp["data"])
 }
 
+func (s *TicketHandlerTestSuite) TestReplyTicket_InvalidID() {
+	handler := NewTicketHandler()
+	s.router.POST("/tickets/:id/reply", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.ReplyTicket)
+
+	body := `{"message": "Reply message"}`
+	req, _ := http.NewRequest("POST", "/tickets/invalid/reply", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "无效的工单ID")
+}
+
+func (s *TicketHandlerTestSuite) TestReplyTicket_MissingMessage() {
+	handler := NewTicketHandler()
+	s.router.POST("/tickets/:id/reply", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.ReplyTicket)
+
+	body := `{}`
+	req, _ := http.NewRequest("POST", "/tickets/"+strconv.FormatUint(uint64(s.testTicket.ID), 10)+"/reply", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "参数错误")
+}
+
+func (s *TicketHandlerTestSuite) TestReplyTicket_NotFound() {
+	handler := NewTicketHandler()
+	s.router.POST("/tickets/:id/reply", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.ReplyTicket)
+
+	body := `{"message": "Reply message"}`
+	req, _ := http.NewRequest("POST", "/tickets/99999/reply", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "工单不存在")
+}
+
 func (s *TicketHandlerTestSuite) TestReplyTicket_Closed() {
 	// Close the ticket
 	s.db.Model(s.testTicket).Update("status", 2)
@@ -4044,8 +4103,7 @@ func (s *TicketHandlerTestSuite) TestReplyTicket_Closed() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
-	assert.Contains(s.T(), w.Body.String(), "已关闭")
+	s.assertPanelError(w, "工单已关闭，无法回复")
 }
 
 func (s *TicketHandlerTestSuite) TestCloseTicket_Success() {
@@ -4066,6 +4124,34 @@ func (s *TicketHandlerTestSuite) TestCloseTicket_Success() {
 	assert.NotZero(s.T(), resp["ts"])
 	assert.NotContains(s.T(), resp, "error")
 	assert.Equal(s.T(), "工单已关闭", resp["data"])
+}
+
+func (s *TicketHandlerTestSuite) TestCloseTicket_InvalidID() {
+	handler := NewTicketHandler()
+	s.router.POST("/tickets/:id/close", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.CloseTicket)
+
+	req, _ := http.NewRequest("POST", "/tickets/invalid/close", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "无效的工单ID")
+}
+
+func (s *TicketHandlerTestSuite) TestCloseTicket_NotFound() {
+	handler := NewTicketHandler()
+	s.router.POST("/tickets/:id/close", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.CloseTicket)
+
+	req, _ := http.NewRequest("POST", "/tickets/99999/close", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "工单不存在")
 }
 
 func TestTicketHandler(t *testing.T) {
