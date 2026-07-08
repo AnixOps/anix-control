@@ -2758,6 +2758,17 @@ func (s *PaymentHandlerTestSuite) SetupTest() {
 	_ = database.Get().Create(payment).Error
 }
 
+func (s *PaymentHandlerTestSuite) assertPaymentPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *PaymentHandlerTestSuite) TestGetPaymentMethods_Success() {
 	handler := NewPaymentHandler()
 	s.router.GET("/methods", handler.GetPaymentMethods)
@@ -2823,7 +2834,57 @@ func (s *PaymentHandlerTestSuite) TestX402CreatePayment_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPaymentPanelError(w, "参数错误")
+}
+
+func (s *PaymentHandlerTestSuite) TestX402CreatePayment_OrderNotFoundUsesPanelEnvelope() {
+	handler := NewPaymentHandler()
+	s.router.POST("/x402/create", handler.X402CreatePayment)
+
+	body := map[string]any{
+		"order_id": 999,
+		"token":    "ETH",
+		"network":  "sepolia",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/x402/create", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPaymentPanelError(w, "订单不存在")
+}
+
+func (s *PaymentHandlerTestSuite) TestX402CreatePayment_NonPendingOrderUsesPanelEnvelope() {
+	handler := NewPaymentHandler()
+	s.router.POST("/x402/create", handler.X402CreatePayment)
+
+	order := &model.Order{
+		ID:          2,
+		TradeNo:     "test-order-paid-x402",
+		UserID:      1,
+		PlanID:      1,
+		Status:      1,
+		TotalAmount: 10000,
+		Period:      "month",
+		Type:        1,
+	}
+	s.Require().NoError(database.Get().Create(order).Error)
+
+	body := map[string]any{
+		"order_id": 2,
+		"token":    "ETH",
+		"network":  "sepolia",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/x402/create", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPaymentPanelError(w, "订单已支付或已取消")
 }
 
 func (s *PaymentHandlerTestSuite) TestX402Callback_Success() {
@@ -2903,6 +2964,17 @@ func (s *PaymentHandlerTestSuite) TestX402CheckPayment_Success() {
 	assert.Equal(s.T(), "pending", data["status"])
 	assert.Equal(s.T(), float64(model.PaymentStatusPending), data["status_code"])
 	assert.Equal(s.T(), float64(0), data["confirms"])
+}
+
+func (s *PaymentHandlerTestSuite) TestX402CheckPayment_NotFoundUsesPanelEnvelope() {
+	handler := NewPaymentHandler()
+	s.router.GET("/x402/check/:id", handler.X402CheckPayment)
+
+	req, _ := http.NewRequest("GET", "/x402/check/MISSING", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPaymentPanelError(w, "支付记录不存在")
 }
 
 func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_Stripe() {
@@ -2986,7 +3058,7 @@ func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_InvalidProvider() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPaymentPanelError(w, "不支持的支付方式")
 }
 
 func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_InvalidBody() {
@@ -2998,7 +3070,55 @@ func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPaymentPanelError(w, "参数错误")
+}
+
+func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_OrderNotFoundUsesPanelEnvelope() {
+	handler := NewPaymentHandler()
+	s.router.POST("/fiat/create", handler.FiatCreatePayment)
+
+	body := map[string]any{
+		"order_id": 999,
+		"provider": "stripe",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/fiat/create", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPaymentPanelError(w, "订单不存在")
+}
+
+func (s *PaymentHandlerTestSuite) TestFiatCreatePayment_NonPendingOrderUsesPanelEnvelope() {
+	handler := NewPaymentHandler()
+	s.router.POST("/fiat/create", handler.FiatCreatePayment)
+
+	order := &model.Order{
+		ID:          2,
+		TradeNo:     "test-order-paid-fiat",
+		UserID:      1,
+		PlanID:      1,
+		Status:      1,
+		TotalAmount: 10000,
+		Period:      "month",
+		Type:        1,
+	}
+	s.Require().NoError(database.Get().Create(order).Error)
+
+	body := map[string]any{
+		"order_id": 2,
+		"provider": "stripe",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/fiat/create", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPaymentPanelError(w, "订单已支付或已取消")
 }
 
 func (s *PaymentHandlerTestSuite) TestStripeWebhook_Success() {

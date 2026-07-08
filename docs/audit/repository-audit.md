@@ -118,8 +118,8 @@ Open gaps:
   compatibility coverage, admin payment stats,
   gateway CRUD/toggle, and payment-record list responses have matching Payment
   frontend compatibility coverage, user payment channel/create/status/record and
-  legacy X402/fiat create/check responses have handler envelope coverage with
-  callback/webhook compatibility retained,
+  legacy X402/fiat create/check success and user-error responses have handler
+  envelope coverage with callback/webhook compatibility retained,
   user/admin MFA success responses have handler coverage and Admin MFA frontend
   compatibility coverage, user/admin notification success responses have handler
   coverage and Admin Notifications frontend compatibility coverage, admin/user
