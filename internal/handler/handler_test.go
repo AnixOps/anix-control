@@ -1231,6 +1231,15 @@ func (s *AdminHandlerTestSuite) TestCreateUser_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "newuser@example.com", data["email"])
+	assert.NotZero(s.T(), data["id"])
+	assert.NotContains(s.T(), resp, "error")
+
 	var created model.User
 	assert.NoError(s.T(), s.db.Where("email = ?", "newuser@example.com").First(&created).Error)
 	assert.Equal(s.T(), transferEnable, created.TransferEnable)
@@ -1281,6 +1290,12 @@ func (s *AdminHandlerTestSuite) TestGetUserList_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestGetUserList_WithFilters() {
@@ -1292,6 +1307,12 @@ func (s *AdminHandlerTestSuite) TestGetUserList_WithFilters() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "list")
+	assert.Contains(s.T(), data, "total")
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestGetUser_Success() {
@@ -1303,6 +1324,12 @@ func (s *AdminHandlerTestSuite) TestGetUser_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(s.testUser.ID), data["id"])
+	assert.Equal(s.T(), s.testUser.Email, data["email"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestGetUser_NotFound() {
@@ -1344,6 +1371,11 @@ func (s *AdminHandlerTestSuite) TestUpdateUser_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "更新成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestUpdateUser_InvalidID() {
@@ -1380,6 +1412,11 @@ func (s *AdminHandlerTestSuite) TestDeleteUser_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "删除成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestBanUser_Success() {
@@ -1391,6 +1428,11 @@ func (s *AdminHandlerTestSuite) TestBanUser_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "封禁成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestUnbanUser_Success() {
@@ -1405,6 +1447,11 @@ func (s *AdminHandlerTestSuite) TestUnbanUser_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "解封成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestResetUserTraffic_Success() {
@@ -1416,6 +1463,28 @@ func (s *AdminHandlerTestSuite) TestResetUserTraffic_Success() {
 	s.router.ServeHTTP(w, req)
 
 	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "流量重置成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *AdminHandlerTestSuite) TestResetUserSubscribe_Success() {
+	handler := NewAdminHandler()
+	s.router.POST("/users/:id/reset-subscribe", handler.ResetUserSubscribe)
+
+	req, _ := http.NewRequest("POST", "/users/"+strconv.FormatUint(uint64(s.testUser.ID), 10)+"/reset-subscribe", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.NotEmpty(s.T(), data["token"])
+	assert.NotEqual(s.T(), s.testUser.Token, data["token"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminHandlerTestSuite) TestGetDashboard() {

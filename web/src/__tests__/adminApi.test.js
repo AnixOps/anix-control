@@ -34,6 +34,14 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/users', method: 'get', params: { page: 1 } },
       },
       {
+        call: () => adminApi.getUserStats(),
+        expected: { url: '/admin/users/stats', method: 'get' },
+      },
+      {
+        call: () => adminApi.getUser(12),
+        expected: { url: '/admin/users/12', method: 'get' },
+      },
+      {
         call: () => adminApi.getOrderList({ status: 0 }),
         expected: { url: '/admin/orders', method: 'get', params: { status: 0 } },
       },
@@ -266,6 +274,50 @@ describe('admin api mapping', () => {
           url: '/admin/users/12',
           method: 'put',
           data: { email: 'ops@example.com' },
+        },
+      },
+      {
+        call: () => adminApi.createUser({ email: 'new@example.com' }),
+        expected: {
+          url: '/admin/users',
+          method: 'post',
+          data: { email: 'new@example.com' },
+        },
+      },
+      {
+        call: () => adminApi.deleteUser(12),
+        expected: {
+          url: '/admin/users/12',
+          method: 'delete',
+        },
+      },
+      {
+        call: () => adminApi.banUser(12),
+        expected: {
+          url: '/admin/users/12/ban',
+          method: 'post',
+        },
+      },
+      {
+        call: () => adminApi.unbanUser(12),
+        expected: {
+          url: '/admin/users/12/unban',
+          method: 'post',
+        },
+      },
+      {
+        call: () => adminApi.resetUserSubscribe(12),
+        expected: {
+          url: '/admin/users/12/reset-subscribe',
+          method: 'post',
+        },
+      },
+      {
+        call: () => adminApi.resetUserTraffic(12),
+        expected: {
+          url: '/user/reset',
+          method: 'post',
+          data: { id: 12, type: 1 },
         },
       },
       {
