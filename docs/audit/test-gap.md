@@ -66,7 +66,7 @@ Local verification status:
 - Admin order management handler tests now assert panel `code/msg/ts/data` envelopes for list/detail/status/paid/cancel operations; Orders frontend tests cover legacy, enveloped, and nested payloads, with admin API mapping coverage for order management calls.
 - Admin subscription stats handler tests now assert panel `code/msg/ts/data` envelopes, and Subscriptions frontend tests cover both legacy and enveloped payloads.
 - Admin system backup stats handler tests now assert panel `code/msg/ts/data` envelopes, and System backup frontend tests cover both legacy and enveloped payloads.
-- Admin load balancer stats handler tests now assert panel `code/msg/ts/data` envelopes, and admin API mapping tests cover the stats route.
+- Admin load balancer stats handler tests now assert panel `code/msg/ts/data` envelopes for success and user-error paths, and admin API mapping tests cover the stats route.
 - Admin system backup config handler tests now assert panel `code/msg/ts/data` envelopes, sensitive-field tests preserve S3 credential masking, and System backup frontend tests cover both legacy and enveloped payloads.
 - Admin system backup list/create/delete/restore handler tests now assert panel `code/msg/ts/data` envelopes, audit tests cover backup record mutations, and System backup frontend tests cover legacy and enveloped list payloads.
 - Admin subscription settings handler tests now assert panel `code/msg/ts/data` envelopes, with System and Users frontend tests plus admin API mapping coverage for legacy and enveloped payloads.
