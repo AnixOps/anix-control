@@ -579,7 +579,7 @@ func (h *SubscriptionAdminHandler) DeleteTemplate(c *gin.Context) {
 func (h *SubscriptionAdminHandler) AssignGroupToUser(c *gin.Context) {
 	userID, err := strconv.ParseUint(c.Param("user_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "用户 ID 无效"})
+		panelError(c, "用户 ID 无效")
 		return
 	}
 
@@ -591,12 +591,12 @@ func (h *SubscriptionAdminHandler) AssignGroupToUser(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 
 	if err := h.subscriptionService.AssignGroupToUser(uint(userID), req.GroupID, req.ExpireAt, req.TransferEnable, req.NextRenewPrice); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "分配失败", "error": err.Error()})
+		panelSubscriptionBindingError(c, "分配失败", err)
 		return
 	}
 
@@ -608,18 +608,18 @@ func (h *SubscriptionAdminHandler) AssignGroupToUser(c *gin.Context) {
 func (h *SubscriptionAdminHandler) RemoveGroupFromUser(c *gin.Context) {
 	userID, err := strconv.ParseUint(c.Param("user_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "用户 ID 无效"})
+		panelError(c, "用户 ID 无效")
 		return
 	}
 
 	groupID, err := strconv.ParseUint(c.Param("group_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "分组 ID 无效"})
+		panelError(c, "分组 ID 无效")
 		return
 	}
 
 	if err := h.subscriptionService.RemoveGroupFromUser(uint(userID), uint(groupID)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "移除失败", "error": err.Error()})
+		panelSubscriptionBindingError(c, "移除失败", err)
 		return
 	}
 
@@ -631,13 +631,13 @@ func (h *SubscriptionAdminHandler) RemoveGroupFromUser(c *gin.Context) {
 func (h *SubscriptionAdminHandler) GetUserGroups(c *gin.Context) {
 	userID, err := strconv.ParseUint(c.Param("user_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "用户 ID 无效"})
+		panelError(c, "用户 ID 无效")
 		return
 	}
 
 	groups, err := h.subscriptionService.GetUserGroups(uint(userID))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取失败", "error": err.Error()})
+		panelSubscriptionBindingError(c, "获取失败", err)
 		return
 	}
 
@@ -649,7 +649,7 @@ func (h *SubscriptionAdminHandler) GetUserGroups(c *gin.Context) {
 func (h *SubscriptionAdminHandler) AssignGroupToPlan(c *gin.Context) {
 	planID, err := strconv.ParseUint(c.Param("plan_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "套餐 ID 无效"})
+		panelError(c, "套餐 ID 无效")
 		return
 	}
 
@@ -658,12 +658,12 @@ func (h *SubscriptionAdminHandler) AssignGroupToPlan(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 
 	if err := h.subscriptionService.AssignGroupToPlan(uint(planID), req.GroupID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "分配失败", "error": err.Error()})
+		panelSubscriptionBindingError(c, "分配失败", err)
 		return
 	}
 
@@ -675,18 +675,18 @@ func (h *SubscriptionAdminHandler) AssignGroupToPlan(c *gin.Context) {
 func (h *SubscriptionAdminHandler) RemoveGroupFromPlan(c *gin.Context) {
 	planID, err := strconv.ParseUint(c.Param("plan_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "套餐 ID 无效"})
+		panelError(c, "套餐 ID 无效")
 		return
 	}
 
 	groupID, err := strconv.ParseUint(c.Param("group_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "分组 ID 无效"})
+		panelError(c, "分组 ID 无效")
 		return
 	}
 
 	if err := h.subscriptionService.RemoveGroupFromPlan(uint(planID), uint(groupID)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "移除失败", "error": err.Error()})
+		panelSubscriptionBindingError(c, "移除失败", err)
 		return
 	}
 
@@ -698,17 +698,30 @@ func (h *SubscriptionAdminHandler) RemoveGroupFromPlan(c *gin.Context) {
 func (h *SubscriptionAdminHandler) GetPlanGroups(c *gin.Context) {
 	planID, err := strconv.ParseUint(c.Param("plan_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "套餐 ID 无效"})
+		panelError(c, "套餐 ID 无效")
 		return
 	}
 
 	groups, err := h.subscriptionService.GetPlanGroups(uint(planID))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取失败", "error": err.Error()})
+		panelSubscriptionBindingError(c, "获取失败", err)
 		return
 	}
 
 	panelSuccess(c, groups)
+}
+
+func panelSubscriptionBindingError(c *gin.Context, fallback string, err error) {
+	switch {
+	case errors.Is(err, service.ErrSubscriptionUserNotFound),
+		errors.Is(err, service.ErrSubscriptionPlanNotFound),
+		errors.Is(err, service.ErrSubscriptionGroupNotFound),
+		errors.Is(err, service.ErrSubscriptionUserGroupNotFound),
+		errors.Is(err, service.ErrSubscriptionPlanGroupNotFound):
+		panelError(c, err.Error())
+	default:
+		panelError(c, fallback+": "+err.Error())
+	}
 }
 
 // GetSubscriptionFormats 获取支持的订阅格式
