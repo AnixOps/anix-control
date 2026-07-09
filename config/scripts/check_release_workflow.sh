@@ -14,7 +14,8 @@ Usage: config/scripts/check_release_workflow.sh [--self-test|--help]
 Statically checks that the release workflow still provides the required release
 contract: strict tag gating, blocking quality/security/race/test prerequisites,
 multi-platform binaries, Docker metadata, frontend archives, checksums, SBOM,
-operator deployment runbook, and generated GitHub release notes.
+operator deployment runbook, machine-readable release manifest, and generated
+GitHub release notes.
 EOF
 }
 
@@ -122,6 +123,10 @@ check_release_workflow() {
   require_text "v2board-source.sbom.spdx.json" "source SBOM release asset" || failed=1
   require_text "OPERATOR_DEPLOYMENT.md" "operator deployment runbook" || failed=1
   require_text "No Local Release Builds" "operator no-local-build release warning" || failed=1
+  require_text "Generate release manifest" "release manifest generation step" || failed=1
+  require_text "RELEASE_MANIFEST.json" "release manifest asset" || failed=1
+  require_text '"build_source": "github-actions"' "release manifest CI build source" || failed=1
+  require_text "manual_deployment_required" "release manifest manual deployment flag" || failed=1
   require_text "sha256sum * > SHA256SUMS.txt" "release checksum generation" || failed=1
   require_text "softprops/action-gh-release" "GitHub release creation action" || failed=1
   require_text "generate_release_notes: true" "generated release notes" || failed=1
@@ -205,6 +210,11 @@ jobs:
           echo "No Local Release Builds" > release/OPERATOR_DEPLOYMENT.md
           tar -czvf release/v2board-frontend.tar.gz -C web/public .
           zip -r release/v2board-frontend.zip web/public
+      - name: Generate release manifest
+        run: |
+          echo '{"build_source": "github-actions", "manual_deployment_required": true}' > release/RELEASE_MANIFEST.json
+      - name: Create release checksums
+        run: |
           (cd release && sha256sum * > SHA256SUMS.txt)
       - uses: softprops/action-gh-release@v3
         with:
@@ -242,6 +252,13 @@ EOF
   sed -i '/migration-dry-run-report/d' "${fixture}.missing-migration-report"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-migration-report" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing migration report should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-manifest"
+  sed -i '/RELEASE_MANIFEST.json/d' "${fixture}.missing-manifest"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-manifest" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing release manifest should fail" >&2
     return 1
   fi
 

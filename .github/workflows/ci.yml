@@ -838,6 +838,7 @@ jobs:
           - Docker image metadata is attached in `docker-image.txt`.
           - Migration dry-run evidence is attached in `migration-dry-run.txt`.
           - Source dependency SBOM is attached in `v2board-source.sbom.spdx.json`.
+          - Machine-readable release metadata is attached in `RELEASE_MANIFEST.json`.
           - SHA256 checksums are attached in `SHA256SUMS.txt`.
 
           ## Required Manual Checks
@@ -853,7 +854,7 @@ jobs:
           Do not build release binaries or frontend assets on the production host.
           `deploy_panel.sh` performs a local source-tree build and is not an approved
           release deployment path. Release binaries, frontend archives, Docker metadata,
-          checksums, and SBOM must come from this GitHub Actions run.
+          release manifest, checksums, and SBOM must come from this GitHub Actions run.
 
           ## Systemd Binary Artifact Deployment
 
@@ -882,6 +883,46 @@ jobs:
         run: |
           tar -czvf release/v2board-frontend.tar.gz -C web/public .
           zip -r release/v2board-frontend.zip web/public
+
+      - name: Generate release manifest
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          release_dir = Path("release")
+          artifacts = []
+          for path in sorted(release_dir.iterdir()):
+              if not path.is_file() or path.name in {"RELEASE_MANIFEST.json", "SHA256SUMS.txt"}:
+                  continue
+              artifacts.append({
+                  "name": path.name,
+                  "size": path.stat().st_size,
+                  "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+              })
+
+          manifest = {
+              "project": "v2board_AnixOps",
+              "tag": os.environ.get("GITHUB_REF_NAME", ""),
+              "commit": os.environ.get("GITHUB_SHA", ""),
+              "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+              "run_number": os.environ.get("GITHUB_RUN_NUMBER", ""),
+              "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
+              "build_source": "github-actions",
+              "manual_deployment_required": True,
+              "artifacts": artifacts,
+          }
+          (release_dir / "RELEASE_MANIFEST.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Create release checksums
+        run: |
           (cd release && sha256sum * > SHA256SUMS.txt)
 
       - name: Create GitHub Release
