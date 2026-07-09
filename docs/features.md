@@ -48,7 +48,7 @@ two documents disagree, this file is the status source of truth.
 | User | Ticket create/list/detail/reply/close | Implemented | `/api/v2/user/ticket*` | None known. |
 | User | Invite codes, commission records, withdrawals | Implemented | `/api/v2/user/invite*`, admin Invite page | Add provider-specific payout integration only after policy review. |
 | User | User notification inbox | Implemented | `/api/v2/user/notifications*`, unified success/error envelopes | Add broader event coverage as business events grow. |
-| User | Telegram binding status and notification preference | Implemented | `/api/v2/user/telegram/*` | Bot token/webhook operations need operator credentials. |
+| User | Telegram binding status and notification preference | Implemented | `/api/v2/user/telegram/*`, unified success/error envelopes | Bot token/webhook operations need operator credentials. |
 | User | User-managed forwarding/tunnel entries | Partial | `/api/v2/forward/*`, `/api/v2/tunnel/user/tunnel` | Close remaining Flux parity and runtime enforcement gaps. |
 | Admin | Dashboard and system info | Implemented | `/api/v2/admin/dashboard`, `/system/info` | Add more operational health signals over time. |
 | Admin | Hourly traffic and user ranking | Implemented | `/api/v2/admin/traffic/hourly`, `/traffic/user-ranking` | Watch high-volume query performance in production. |
@@ -62,7 +62,7 @@ two documents disagree, this file is the status source of truth.
 | Admin | Knowledge management | Implemented | list/create/update/delete | None known. |
 | Admin | Payment gateway management and payment records | Implemented | gateway CRUD/toggle, stats, records, unified success/error envelopes | Provider-specific live payment creation is not complete for every provider. |
 | Admin | Notification template/log/email config management | Implemented | `/api/v2/admin/notification/*`, unified success/error envelopes | Add more event emitters as needed. |
-| Admin | Telegram bot management | Implemented | bot config, webhook, users, notify, broadcast | Requires live bot credentials for production. |
+| Admin | Telegram bot management | Implemented | bot config, webhook, users, notify, broadcast, unified success/error envelopes | Requires live bot credentials for production. |
 | Admin | MFA global config | Implemented | `/api/v2/admin/mfa/config` | Login enforcement remains incomplete. |
 | Admin | System config and audit logs | Implemented | `/api/v2/admin/system/configs*`, `/audit-logs`, unified audit success/error envelopes | Keep sensitive config masking tests current. |
 | Admin | Backup config, create/list/delete/restore, stats | Implemented | `/api/v2/admin/system/backup*` | Production backup storage and restore are operator-controlled. |

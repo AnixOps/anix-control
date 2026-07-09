@@ -180,4 +180,45 @@ describe('Admin Telegram', () => {
 
     wrapper.unmount()
   })
+
+  it('logs panel envelope load failures instead of accepting empty config payloads', async () => {
+    adminApi.getTelegramBot.mockResolvedValueOnce({
+      code: -1,
+      msg: 'telegram config failed',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Telegram)
+    await flushPromises()
+
+    expect(wrapper.vm.botConfig.token).toBe('')
+    expect(console.error).toHaveBeenCalledWith(
+      'Failed to load Telegram bot config',
+      expect.any(Error)
+    )
+
+    wrapper.unmount()
+  })
+
+  it('does not report write success when a panel envelope mutation fails', async () => {
+    adminApi.updateTelegramBot.mockResolvedValueOnce({
+      code: -1,
+      msg: 'telegram save rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Telegram)
+    await flushPromises()
+
+    await wrapper.vm.saveBotConfig()
+
+    expect(window.alert).toHaveBeenCalledWith(
+      expect.stringContaining('telegram save rejected')
+    )
+    expect(window.alert).not.toHaveBeenCalledWith('Telegram bot config saved')
+
+    wrapper.unmount()
+  })
 })

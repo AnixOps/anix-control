@@ -246,13 +246,34 @@ const filteredUsers = computed(() => {
 })
 
 const resolveApiError = (error, fallbackKey) => (
+  error?.msg ||
   error?.response?.data?.error ||
   error?.response?.data?.msg ||
   error?.message ||
   t(fallbackKey)
 )
 
-const readTelegramPayload = (res) => {
+const readTelegramEnvelopeError = (res) => {
+  const candidates = [res, res?.data]
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue
+    if (!Object.prototype.hasOwnProperty.call(candidate, 'code')) continue
+    if (Number(candidate.code) === 0) return null
+    return candidate.msg || candidate.message || candidate.error || ''
+  }
+  return null
+}
+
+const ensureTelegramApiSuccess = (res, fallbackKey) => {
+  const message = readTelegramEnvelopeError(res)
+  if (message !== null) {
+    throw new Error(message || t(fallbackKey))
+  }
+  return res
+}
+
+const readTelegramPayload = (res, fallbackKey = 'adminTelegram.messages.fetchConfigFailed') => {
+  ensureTelegramApiSuccess(res, fallbackKey)
   if (!res || typeof res !== 'object') return {}
   if (Object.prototype.hasOwnProperty.call(res, 'code')) {
     return res.data && typeof res.data === 'object' ? res.data : {}
@@ -271,7 +292,7 @@ const formatBoundTime = (time) => {
 const fetchBotConfig = async () => {
   try {
     const res = await getTelegramBot()
-    const payload = readTelegramPayload(res)
+    const payload = readTelegramPayload(res, 'adminTelegram.messages.fetchConfigFailed')
     botConfig.value = Object.keys(payload).length > 0 ? payload : { token: '', admin_ids: [], welcome_message: '' }
   } catch (error) {
     console.error(t('adminTelegram.messages.fetchConfigFailed'), error)
@@ -280,7 +301,10 @@ const fetchBotConfig = async () => {
 
 const saveBotConfig = async () => {
   try {
-    await updateTelegramBot(botConfig.value)
+    ensureTelegramApiSuccess(
+      await updateTelegramBot(botConfig.value),
+      'adminTelegram.messages.saveFailedShort'
+    )
     window.alert(t('adminTelegram.messages.saveSuccess'))
   } catch (error) {
     window.alert(t('adminTelegram.messages.saveFailed', { message: resolveApiError(error, 'adminTelegram.messages.saveFailedShort') }))
@@ -289,7 +313,10 @@ const saveBotConfig = async () => {
 
 const setWebhookConfig = async () => {
   try {
-    await setTelegramWebhook(webhookUrl.value || undefined)
+    ensureTelegramApiSuccess(
+      await setTelegramWebhook(webhookUrl.value || undefined),
+      'adminTelegram.messages.webhookSetFailedShort'
+    )
     window.alert(t('adminTelegram.messages.webhookSetSuccess'))
   } catch (error) {
     window.alert(t('adminTelegram.messages.webhookSetFailed', { message: resolveApiError(error, 'adminTelegram.messages.webhookSetFailedShort') }))
@@ -298,7 +325,10 @@ const setWebhookConfig = async () => {
 
 const deleteWebhookConfig = async () => {
   try {
-    await deleteTelegramWebhook()
+    ensureTelegramApiSuccess(
+      await deleteTelegramWebhook(),
+      'adminTelegram.messages.webhookDeleteFailedShort'
+    )
     window.alert(t('adminTelegram.messages.webhookDeleteSuccess'))
   } catch (error) {
     window.alert(t('adminTelegram.messages.webhookDeleteFailed', { message: resolveApiError(error, 'adminTelegram.messages.webhookDeleteFailedShort') }))
@@ -308,7 +338,7 @@ const deleteWebhookConfig = async () => {
 const fetchUsers = async () => {
   try {
     const res = await getTelegramUsers({ all: true })
-    const payload = readTelegramPayload(res)
+    const payload = readTelegramPayload(res, 'adminTelegram.messages.fetchUsersFailed')
     users.value = payload.list || (Array.isArray(payload) ? payload : [])
   } catch (error) {
     console.error(t('adminTelegram.messages.fetchUsersFailed'), error)
@@ -319,7 +349,7 @@ const toggleUserNotify = async (user) => {
   try {
     const nextEnabled = !user.notify_enabled
     const res = await updateTelegramUserNotify(user.id, { notify_enabled: nextEnabled })
-    const updated = readTelegramPayload(res)
+    const updated = readTelegramPayload(res, 'adminTelegram.messages.toggleNotifyFailedShort')
     user.notify_enabled = !!updated.notify_enabled
     user.notify_expire = !!updated.notify_expire
     user.notify_traffic = !!updated.notify_traffic
@@ -338,7 +368,7 @@ const sendNotification = async () => {
   try {
     if (notifyForm.value.type === 'broadcast') {
       const res = await broadcastTelegram(notifyForm.value.message)
-      const payload = readTelegramPayload(res)
+      const payload = readTelegramPayload(res, 'adminTelegram.messages.sendFailedShort')
       window.alert(t('adminTelegram.messages.broadcastComplete', {
         success: payload.success || 0,
         failed: payload.failed || 0
@@ -348,10 +378,13 @@ const sendNotification = async () => {
         window.alert(t('adminTelegram.messages.telegramIdRequired'))
         return
       }
-      await sendTelegramNotification({
-        telegram_id: notifyForm.value.telegram_id,
-        message: notifyForm.value.message
-      })
+      ensureTelegramApiSuccess(
+        await sendTelegramNotification({
+          telegram_id: notifyForm.value.telegram_id,
+          message: notifyForm.value.message
+        }),
+        'adminTelegram.messages.sendFailedShort'
+      )
       window.alert(t('adminTelegram.messages.sendSuccess'))
     }
     notifyForm.value.message = ''

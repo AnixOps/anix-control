@@ -124,8 +124,8 @@ Open gaps:
   user/admin MFA success and user-error responses have handler coverage and
   Admin MFA frontend compatibility coverage, user/admin notification success and user-error responses have handler
   coverage and Admin Notifications frontend compatibility coverage, admin/user
-  Telegram panel API success responses have handler coverage and Admin Telegram
-  frontend compatibility coverage while the public Telegram webhook remains a
+  Telegram panel API success and user-error responses have handler coverage and
+  Admin Telegram frontend compatibility coverage while the public Telegram webhook remains a
   `status=ok` compatibility path, admin subscription management group,
   template, protocol, format, and preview responses have handler coverage plus
   Subscriptions frontend/API compatibility coverage while public subscription

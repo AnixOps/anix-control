@@ -192,7 +192,7 @@ func (h *TelegramHandler) GetBot(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -215,14 +215,14 @@ func (h *TelegramHandler) GetBot(c *gin.Context) {
 func (h *TelegramHandler) UpdateBot(c *gin.Context) {
 	var req UpdateBotRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	bot, err := h.botService.GetBot()
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			panelError(c, err.Error())
 			return
 		}
 		bot = &model.TelegramBot{
@@ -250,12 +250,12 @@ func (h *TelegramHandler) UpdateBot(c *gin.Context) {
 	}
 
 	if adminIDs, provided, err := parseTelegramAdminIDsInput(req.AdminIDs); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	} else if provided {
 		encodedIDs, marshalErr := json.Marshal(adminIDs)
 		if marshalErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode admin_ids"})
+			panelError(c, "failed to encode admin_ids")
 			return
 		}
 		bot.AdminIDs = string(encodedIDs)
@@ -278,7 +278,7 @@ func (h *TelegramHandler) UpdateBot(c *gin.Context) {
 	}
 
 	if err := h.botService.UpdateBot(bot); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -300,7 +300,7 @@ func (h *TelegramHandler) UpdateBot(c *gin.Context) {
 func (h *TelegramHandler) SetWebhook(c *gin.Context) {
 	var req SetWebhookRequest
 	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -310,7 +310,7 @@ func (h *TelegramHandler) SetWebhook(c *gin.Context) {
 	}
 
 	if err := h.botService.SetWebhook(webhookURL); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -332,7 +332,7 @@ func (h *TelegramHandler) SetWebhook(c *gin.Context) {
 // @Router /admin/telegram/webhook [delete]
 func (h *TelegramHandler) DeleteWebhook(c *gin.Context) {
 	if err := h.botService.DeleteWebhook(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -381,13 +381,13 @@ func (h *TelegramHandler) TelegramWebhook(c *gin.Context) {
 func (h *TelegramHandler) SendNotification(c *gin.Context) {
 	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	telegramID, err := parseTelegramID(req["telegram_id"])
 	if err != nil || telegramID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid telegram_id"})
+		panelError(c, "invalid telegram_id")
 		return
 	}
 
@@ -399,7 +399,7 @@ func (h *TelegramHandler) SendNotification(c *gin.Context) {
 		title = strings.TrimSpace(title)
 		content = strings.TrimSpace(content)
 		if title == "" && content == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "message is required"})
+			panelError(c, "message is required")
 			return
 		}
 		if title != "" && content == "" {
@@ -412,7 +412,7 @@ func (h *TelegramHandler) SendNotification(c *gin.Context) {
 	}
 
 	if err := h.botService.SendMessage(telegramID, message); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -436,13 +436,13 @@ func (h *TelegramHandler) SendNotification(c *gin.Context) {
 func (h *TelegramHandler) Broadcast(c *gin.Context) {
 	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	message := extractMessage(req["message"])
 	if message == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "message is required"})
+		panelError(c, "message is required")
 		return
 	}
 
@@ -451,7 +451,7 @@ func (h *TelegramHandler) Broadcast(c *gin.Context) {
 		Where("is_banned = ?", false).
 		Where("notify_expire = ? OR notify_traffic = ? OR notify_ticket = ?", true, true, true).
 		Find(&users).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 	success := 0
@@ -489,7 +489,7 @@ func (h *TelegramHandler) GetUserBindings(c *gin.Context) {
 			Preload("User").
 			Order("id DESC").
 			Find(&users).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			panelError(c, err.Error())
 			return
 		}
 		list := make([]gin.H, 0, len(users))
@@ -520,7 +520,7 @@ func (h *TelegramHandler) GetUserBindings(c *gin.Context) {
 	db := database.Get().Model(&model.TelegramUser{})
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -532,7 +532,7 @@ func (h *TelegramHandler) GetUserBindings(c *gin.Context) {
 		Limit(pageSize).
 		Offset(offset).
 		Find(&users).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -564,23 +564,23 @@ func (h *TelegramHandler) GetUserBindings(c *gin.Context) {
 func (h *TelegramHandler) UpdateUserNotify(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 
 	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	var user model.TelegramUser
 	if err := database.Get().Preload("User").First(&user, uint(id)).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "telegram user not found"})
+			panelError(c, "telegram user not found")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -590,7 +590,7 @@ func (h *TelegramHandler) UpdateUserNotify(c *gin.Context) {
 	if raw, ok := req["notify_enabled"]; ok {
 		value, ok := raw.(bool)
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "notify_enabled must be boolean"})
+			panelError(c, "notify_enabled must be boolean")
 			return
 		}
 		notifyEnabledProvided = true
@@ -600,7 +600,7 @@ func (h *TelegramHandler) UpdateUserNotify(c *gin.Context) {
 	if raw, ok := req["notify_expire"]; ok {
 		value, ok := raw.(bool)
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "notify_expire must be boolean"})
+			panelError(c, "notify_expire must be boolean")
 			return
 		}
 		user.NotifyExpire = value
@@ -609,7 +609,7 @@ func (h *TelegramHandler) UpdateUserNotify(c *gin.Context) {
 	if raw, ok := req["notify_traffic"]; ok {
 		value, ok := raw.(bool)
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "notify_traffic must be boolean"})
+			panelError(c, "notify_traffic must be boolean")
 			return
 		}
 		user.NotifyTraffic = value
@@ -618,7 +618,7 @@ func (h *TelegramHandler) UpdateUserNotify(c *gin.Context) {
 	if raw, ok := req["notify_ticket"]; ok {
 		value, ok := raw.(bool)
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "notify_ticket must be boolean"})
+			panelError(c, "notify_ticket must be boolean")
 			return
 		}
 		user.NotifyTicket = value
@@ -633,12 +633,12 @@ func (h *TelegramHandler) UpdateUserNotify(c *gin.Context) {
 	}
 
 	if !appliedAnyField {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no notify fields provided"})
+		panelError(c, "no notify fields provided")
 		return
 	}
 
 	if err := database.Get().Save(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -718,7 +718,7 @@ func (h *TelegramHandler) UpdateNotifySettings(c *gin.Context) {
 
 	var req NotifySettingsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
