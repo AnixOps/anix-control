@@ -104,7 +104,7 @@ produce:
 - Docker metadata
 - machine-readable `RELEASE_MANIFEST.json`
 - operator deployment runbook
-- generated GitHub release notes
+- deterministic `RELEASE_NOTES.md` plus generated GitHub release notes
 
 Local deploy scripts that perform source-tree builds are guarded and are not a
 release path. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) and

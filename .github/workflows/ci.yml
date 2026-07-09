@@ -50,6 +50,9 @@ jobs:
       - name: Validate release manifest script syntax
         run: python3 -m py_compile config/scripts/generate_release_manifest.py
 
+      - name: Validate release notes script syntax
+        run: python3 -m py_compile config/scripts/generate_release_notes.py
+
       - name: Validate release artifact verification script syntax
         run: python3 -m py_compile config/scripts/verify_release_artifacts.py
 
@@ -70,6 +73,9 @@ jobs:
 
       - name: Run release manifest self-test
         run: python3 config/scripts/generate_release_manifest.py --self-test
+
+      - name: Run release notes self-test
+        run: python3 config/scripts/generate_release_notes.py --self-test
 
       - name: Run release artifact verification self-test
         run: python3 config/scripts/verify_release_artifacts.py --self-test
@@ -853,6 +859,7 @@ jobs:
           - Machine-readable release metadata is attached in `RELEASE_MANIFEST.json`.
           - SHA256 checksums are attached in `SHA256SUMS.txt`.
           - Upgrade and rollback instructions are attached in `UPGRADE.md`.
+          - Deterministic release notes are attached in `RELEASE_NOTES.md`.
 
           ## Required Manual Checks
 
@@ -898,6 +905,16 @@ jobs:
           tar -czvf release/v2board-frontend.tar.gz -C web/public .
           zip -r release/v2board-frontend.zip web/public
 
+      - name: Generate release notes file
+        shell: bash
+        run: |
+          python3 config/scripts/generate_release_notes.py \
+            --changelog CHANGELOG.md \
+            --output release/RELEASE_NOTES.md \
+            --tag "${GITHUB_REF_NAME}" \
+            --commit "${GITHUB_SHA}" \
+            --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
       - name: Generate release manifest
         shell: bash
         run: |
@@ -920,6 +937,7 @@ jobs:
             --checksums release/SHA256SUMS.txt \
             --require OPERATOR_DEPLOYMENT.md \
             --require UPGRADE.md \
+            --require RELEASE_NOTES.md \
             --require RELEASE_MANIFEST.json \
             --require SHA256SUMS.txt \
             --require docker-image.txt \

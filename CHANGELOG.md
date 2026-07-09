@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added deterministic `RELEASE_NOTES.md` generation to GitHub Release assets, with a CI self-test, release workflow policy guard, and artifact verification requirement.
 - Attached `UPGRADE.md` to GitHub Release assets and guarded it with release workflow policy and artifact verification checks so tag releases include upgrade and rollback instructions.
 - Added `docs/UPGRADE.md` with the GitHub Actions artifact verification, systemd/Docker upgrade, database migration, rollback, and post-upgrade evidence runbook.
 - Added a root `README.md` that links the status registers, audit docs, deployment docs, local checks, compatibility surfaces, and GitHub Actions-only release policy.
@@ -158,6 +159,7 @@
 
 ### CI/CD
 
+- Added `config/scripts/generate_release_notes.py` with a CI self-test so tag releases attach deterministic `RELEASE_NOTES.md` generated from the current `CHANGELOG.md` instead of relying only on GitHub's generated notes.
 - Added `config/scripts/verify_release_artifacts.py` with a CI self-test and a release-job verification step so tag releases fail before publishing if required artifacts are missing or `RELEASE_MANIFEST.json`/`SHA256SUMS.txt` disagree with the release directory.
 - Moved release manifest generation into `config/scripts/generate_release_manifest.py` with a CI self-test so release artifact metadata generation is directly validated instead of living only as inline workflow code.
 - Added a machine-readable `RELEASE_MANIFEST.json` to GitHub Release assets with tag, commit, run metadata, CI build-source marker, manual-deployment flag, artifact sizes, and artifact SHA-256 hashes; the release workflow policy guard now fails if the manifest is removed.

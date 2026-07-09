@@ -14,8 +14,8 @@ Usage: config/scripts/check_release_workflow.sh [--self-test|--help]
 Statically checks that the release workflow still provides the required release
 contract: strict tag gating, blocking quality/security/race/test prerequisites,
 multi-platform binaries, Docker metadata, frontend archives, checksums, SBOM,
-operator deployment and upgrade runbooks, machine-readable release manifest, and
-generated GitHub release notes.
+operator deployment and upgrade runbooks, deterministic release notes,
+machine-readable release manifest, and generated GitHub release notes.
 EOF
 }
 
@@ -124,6 +124,9 @@ check_release_workflow() {
   require_text "OPERATOR_DEPLOYMENT.md" "operator deployment runbook" || failed=1
   require_text "UPGRADE.md" "upgrade and rollback runbook release asset" || failed=1
   require_text "No Local Release Builds" "operator no-local-build release warning" || failed=1
+  require_text "Generate release notes file" "release notes generation step" || failed=1
+  require_text "config/scripts/generate_release_notes.py" "release notes generator script" || failed=1
+  require_text "RELEASE_NOTES.md" "release notes release asset" || failed=1
   require_text "Generate release manifest" "release manifest generation step" || failed=1
   require_text "config/scripts/generate_release_manifest.py" "release manifest generator script" || failed=1
   require_text "RELEASE_MANIFEST.json" "release manifest asset" || failed=1
@@ -134,6 +137,7 @@ check_release_workflow() {
   require_text "config/scripts/verify_release_artifacts.py" "release artifact verification script" || failed=1
   require_text "--require OPERATOR_DEPLOYMENT.md" "operator runbook verification requirement" || failed=1
   require_text "--require UPGRADE.md" "upgrade runbook verification requirement" || failed=1
+  require_text "--require RELEASE_NOTES.md" "release notes verification requirement" || failed=1
   require_text "--require v2board-linux-amd64.tar.gz" "linux amd64 release artifact verification requirement" || failed=1
   require_text "--require v2board-windows-arm64.exe.zip" "windows arm64 release artifact verification requirement" || failed=1
   require_text "softprops/action-gh-release" "GitHub release creation action" || failed=1
@@ -219,6 +223,11 @@ jobs:
           cp docs/UPGRADE.md release/UPGRADE.md
           tar -czvf release/v2board-frontend.tar.gz -C web/public .
           zip -r release/v2board-frontend.zip web/public
+      - name: Generate release notes file
+        run: |
+          python3 config/scripts/generate_release_notes.py \
+            --changelog CHANGELOG.md \
+            --output release/RELEASE_NOTES.md
       - name: Generate release manifest
         run: |
           python3 config/scripts/generate_release_manifest.py \
@@ -234,6 +243,7 @@ jobs:
           python3 config/scripts/verify_release_artifacts.py \
             --require OPERATOR_DEPLOYMENT.md \
             --require UPGRADE.md \
+            --require RELEASE_NOTES.md \
             --require v2board-linux-amd64.tar.gz \
             --require v2board-windows-arm64.exe.zip
       - uses: softprops/action-gh-release@v3
@@ -293,6 +303,13 @@ EOF
   sed -i '/UPGRADE.md/d' "${fixture}.missing-upgrade-runbook"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-upgrade-runbook" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing upgrade runbook should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-release-notes"
+  sed -i '/Generate release notes file/d;/generate_release_notes.py/d;/RELEASE_NOTES.md/d' "${fixture}.missing-release-notes"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-release-notes" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing release notes should fail" >&2
     return 1
   fi
 
