@@ -88,11 +88,20 @@ func BuildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map
 		config["allowed_ips"] = configValue(protocolConfig, "allowed_ips", []string{"0.0.0.0/0", "::/0"})
 		config["tunnel_type"] = configValue(protocolConfig, "tunnel_type", "quic")
 		config["relay"] = configValue(protocolConfig, "relay", map[string]any{
-			"backend":     "gost",
-			"mode":        "relay+quic",
-			"wss_compat":  false,
-			"exit_nat":    true,
-			"entry_stats": true,
+			"backend":           "gost",
+			"mode":              "relay+quic",
+			"role":              "entry",
+			"wss_compat":        false,
+			"exit_nat":          true,
+			"entry_stats":       true,
+			"server":            "",
+			"server_port":       0,
+			"tun_port":          8421,
+			"entry_tun_address": "172.31.66.2/24",
+			"exit_tun_address":  "172.31.66.1/24",
+			"outbound_iface":    "",
+			"routing_table":     0,
+			"routing_priority":  0,
 		})
 	case "shadowsocks":
 		cipherStr := "aes-256-gcm"

@@ -7,6 +7,7 @@
 - Added the first P0 WireGuard panel slice: `wireguard` node protocol template, stored per-user peer keypair/PSK/IP custody, native WireGuard `.conf` subscription output, sing-box WireGuard outbound output, and targeted unit coverage.
 - Added WireGuard UniProxy/gRPC runtime user fields so V2bX can receive panel-managed peer IP, public key, and preshared key for domestic entry termination.
 - Updated P0 WireGuard status docs for the V2bX v2.3.3 runtime slice, which adds initial WireGuard peer online-state reporting from recent `wg show <iface> dump` handshakes.
+- Extended the WireGuard relay runtime contract with entry/exit GOST TUN fields for V2bX entry policy routing and overseas exit NAT command application.
 - Added deterministic `RELEASE_NOTES.md` generation to GitHub Release assets, with a CI self-test, release workflow policy guard, and artifact verification requirement.
 - Added opt-in local deploy archive cleanup for stale ignored frontend/internal zip or tarball leftovers while keeping release builds GitHub Actions-only and preserving database backups.
 - Attached `UPGRADE.md` to GitHub Release assets and guarded it with release workflow policy and artifact verification checks so tag releases include upgrade and rollback instructions.

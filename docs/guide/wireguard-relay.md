@@ -50,6 +50,15 @@ The first implementation should expose only these tunnel type enum values:
 | `quic` | Default GOST relay+QUIC tunnel between domestic entry and overseas exit. |
 | `wss` | GOST relay+WSS compatibility tunnel selected by the admin one-click switch. |
 
+The runtime contract now carries explicit GOST TUN relay fields. The entry node
+uses `relay.role=entry`, `relay.server`, `relay.server_port`,
+`relay.tun_port`, and `relay.entry_tun_address` to dial the overseas exit. The
+exit node uses `relay.role=exit`, `relay.tun_port`, `relay.entry_tun_address`,
+`relay.exit_tun_address`, and optional `relay.outbound_iface` to listen for the
+entry tunnel and apply NAT. The default relay mode remains `relay+quic`; setting
+`tunnel_type=wss` or `relay.wss_compat=true` selects `relay+wss` only as the
+compatibility path.
+
 Reserve extension slots for future transports, but do not expose them in the
 first implementation:
 
@@ -144,9 +153,12 @@ feature is marked implemented.
      peer traffic deltas from `wg show <iface> transfer`.
    - V2bX v2.3.3 adds initial peer online-state reporting from recent
      `wg show <iface> dump` handshakes through the existing panel `/alive` path.
-   - Still pending: complete route policy, speed-limit enforcement,
-     entry-to-exit GOST relay+QUIC routing, GOST relay+WSS compatibility mode,
-     overseas exit NAT, and runtime health reporting.
+   - Current V2bX runtime slice adds GOST TUN relay command planning, entry
+     WireGuard-CIDR policy routing, `relay+quic`/`relay+wss` selection, and exit
+     iptables NAT command application.
+   - Still pending: real domestic-entry and overseas-exit integration evidence,
+     speed-limit enforcement, runtime health reporting, and GitHub Actions
+     relay-path verification.
 
 5. Integration testing.
    - Cover panel API validation, CIDR exhaustion, duplicate peer allocation,
