@@ -105,5 +105,11 @@ Root-only cleanup for old local build outputs:
 cd /home/dev/anixops/v2board_AnixOps
 bash config/deploy/clean_local_build_artifacts.sh --dry-run
 bash config/deploy/clean_local_build_artifacts.sh
+# Optional: remove ignored local deploy archive leftovers after reviewing dry-run.
+bash config/deploy/clean_local_build_artifacts.sh --dry-run --include-deploy-backups
+bash config/deploy/clean_local_build_artifacts.sh --include-deploy-backups
 # If the script reports root-owned artifacts, run the exact sudo command it prints.
 ```
+
+The deploy-backup cleanup mode removes stale archive leftovers in the checkout
+only. It keeps database backups, config, certificates, and `web/node_modules`.

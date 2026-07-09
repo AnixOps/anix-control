@@ -58,7 +58,13 @@ Generated local outputs should stay ignored and out of the source tree. Use:
 
 ```bash
 bash config/deploy/clean_local_build_artifacts.sh --dry-run
+bash config/deploy/clean_local_build_artifacts.sh --dry-run --include-deploy-backups
 ```
+
+The `--include-deploy-backups` mode is only for ignored local deploy archive
+leftovers in the checkout, such as stale frontend tarballs and internal zip
+archives. It keeps database backups, config, certificates, and
+`web/node_modules`.
 
 ## Development Checks
 
@@ -85,6 +91,7 @@ After local frontend verification, remove generated outputs with:
 
 ```bash
 bash config/deploy/clean_local_build_artifacts.sh
+bash config/deploy/clean_local_build_artifacts.sh --include-deploy-backups
 ```
 
 ## Release Policy

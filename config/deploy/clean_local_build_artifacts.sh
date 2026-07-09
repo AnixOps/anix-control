@@ -24,17 +24,28 @@ EXACT_ARTIFACTS=(
 
 GLOB_ARTIFACTS=()
 
+DEPLOY_BACKUP_GLOB_ARTIFACTS=(
+  "backups/frontend_*.tar.gz"
+  "backups/frontend_*.zip"
+  "internal/*/backups/*.zip"
+  "internal/*/backups/*.tar.gz"
+  "internal/*/backups/*.tgz"
+)
+
 usage() {
   cat <<'USAGE'
-Usage: config/deploy/clean_local_build_artifacts.sh [--dry-run|--self-test]
+Usage: config/deploy/clean_local_build_artifacts.sh [--dry-run] [--include-deploy-backups] [--self-test]
 
 Removes known local build outputs from the repository checkout. It deliberately
-does not remove config files, databases, certificates, backups, or web/node_modules.
+does not remove config files, databases, certificates, backup databases, or web/node_modules.
 
 Options:
-  --dry-run    Print artifacts that would be removed.
-  --self-test  Run the cleanup self-test in a temporary directory.
-  -h, --help   Show this help.
+  --dry-run                 Print artifacts that would be removed.
+  --include-deploy-backups  Also remove ignored local deploy archive leftovers,
+                            such as backups/frontend_*.tar.gz and
+                            internal/*/backups/*.zip. Database backups are kept.
+  --self-test               Run the cleanup self-test in a temporary directory.
+  -h, --help                Show this help.
 USAGE
 }
 
@@ -58,19 +69,15 @@ add_target() {
   target_map["${rel}"]="${path}"
 }
 
-collect_targets() {
+collect_glob_targets() {
   local root="$1"
   local map_name="$2"
-  local rel pattern path
+  local pattern path
 
-  for rel in "${EXACT_ARTIFACTS[@]}"; do
-    if [[ -e "${root}/${rel}" || -L "${root}/${rel}" ]]; then
-      add_target "${root}" "${root}/${rel}" "${map_name}"
-    fi
-  done
+  shift 2
 
   shopt -s nullglob
-  for pattern in "${GLOB_ARTIFACTS[@]}"; do
+  for pattern in "$@"; do
     for path in "${root}"/${pattern}; do
       [[ -e "${path}" || -L "${path}" ]] || continue
       add_target "${root}" "${path}" "${map_name}"
@@ -79,14 +86,34 @@ collect_targets() {
   shopt -u nullglob
 }
 
+collect_targets() {
+  local root="$1"
+  local map_name="$2"
+  local include_deploy_backups="$3"
+  local rel
+
+  for rel in "${EXACT_ARTIFACTS[@]}"; do
+    if [[ -e "${root}/${rel}" || -L "${root}/${rel}" ]]; then
+      add_target "${root}" "${root}/${rel}" "${map_name}"
+    fi
+  done
+
+  collect_glob_targets "${root}" "${map_name}" "${GLOB_ARTIFACTS[@]}"
+
+  if [[ "${include_deploy_backups}" -eq 1 ]]; then
+    collect_glob_targets "${root}" "${map_name}" "${DEPLOY_BACKUP_GLOB_ARTIFACTS[@]}"
+  fi
+}
+
 clean_artifacts() {
   local root="$1"
   local dry_run="$2"
+  local include_deploy_backups="$3"
   local rel path errfile
   local -a failed=()
   declare -A targets=()
 
-  collect_targets "${root}" targets
+  collect_targets "${root}" targets "${include_deploy_backups}"
 
   if [[ "${#targets[@]}" -eq 0 ]]; then
     echo "No local build artifacts found."
@@ -161,6 +188,7 @@ run_self_test() {
   mkdir -p "${tmpdir}/config" "${tmpdir}/data" "${tmpdir}/web/node_modules/pkg/dist"
   mkdir -p "${tmpdir}/web/public/assets" "${tmpdir}/web/public-check/assets"
   mkdir -p "${tmpdir}/web/coverage" "${tmpdir}/web/bundle-reports" "${tmpdir}/web/bundle-reports-check"
+  mkdir -p "${tmpdir}/backups" "${tmpdir}/internal/handler/backups"
   mkdir -p "${tmpdir}/release"
   touch "${tmpdir}/v2board" "${tmpdir}/v2board.exe" "${tmpdir}/server" "${tmpdir}/migrate"
   touch "${tmpdir}/coverage.out" "${tmpdir}/coverage.html" "${tmpdir}/v2board.bak.20260709"
@@ -168,13 +196,17 @@ run_self_test() {
   touch "${tmpdir}/web/public-check/assets/app.js" "${tmpdir}/web/coverage/coverage-final.json"
   touch "${tmpdir}/web/bundle-reports-check/bundle-size.md"
   touch "${tmpdir}/release/v2board-linux-amd64.tar.gz"
+  touch "${tmpdir}/backups/frontend_20260709_000000.tar.gz"
+  touch "${tmpdir}/backups/backup_20260709_000000.db"
+  touch "${tmpdir}/internal/handler/backups/backup_20260709_000000.zip"
+  touch "${tmpdir}/internal/handler/backups/backup_20260709_000000.db"
   touch "${tmpdir}/config/config.yaml" "${tmpdir}/data/v2board.db"
   touch "${tmpdir}/web/node_modules/pkg/dist/index.js"
 
-  clean_artifacts "${tmpdir}" 1 >/dev/null
+  clean_artifacts "${tmpdir}" 1 0 >/dev/null
   assert_exists "${tmpdir}/web/public/assets/app.js" "dry-run artifact"
 
-  clean_artifacts "${tmpdir}" 0 >/dev/null
+  clean_artifacts "${tmpdir}" 0 0 >/dev/null
 
   assert_missing "${tmpdir}/v2board" "backend binary"
   assert_missing "${tmpdir}/web/public" "frontend build output"
@@ -184,21 +216,36 @@ run_self_test() {
   assert_missing "${tmpdir}/web/bundle-reports-check" "bundle report check output"
   assert_missing "${tmpdir}/release" "release staging directory"
 
+  assert_exists "${tmpdir}/backups/frontend_20260709_000000.tar.gz" "deploy backup archive without opt-in"
+  assert_exists "${tmpdir}/internal/handler/backups/backup_20260709_000000.zip" "internal backup archive without opt-in"
   assert_exists "${tmpdir}/config/config.yaml" "config file"
   assert_exists "${tmpdir}/data/v2board.db" "database file"
   assert_exists "${tmpdir}/v2board.bak.20260709" "local deploy backup"
+  assert_exists "${tmpdir}/backups/backup_20260709_000000.db" "database backup"
+  assert_exists "${tmpdir}/internal/handler/backups/backup_20260709_000000.db" "internal database backup"
   assert_exists "${tmpdir}/web/node_modules/pkg/dist/index.js" "node_modules package dist"
+
+  clean_artifacts "${tmpdir}" 0 1 >/dev/null
+
+  assert_missing "${tmpdir}/backups/frontend_20260709_000000.tar.gz" "deploy backup archive"
+  assert_missing "${tmpdir}/internal/handler/backups/backup_20260709_000000.zip" "internal backup archive"
+  assert_exists "${tmpdir}/backups/backup_20260709_000000.db" "database backup after opt-in cleanup"
+  assert_exists "${tmpdir}/internal/handler/backups/backup_20260709_000000.db" "internal database backup after opt-in cleanup"
 
   echo "clean_local_build_artifacts.sh self-test passed"
 }
 
 main() {
   local dry_run=0
+  local include_deploy_backups=0
 
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --dry-run)
         dry_run=1
+        ;;
+      --include-deploy-backups)
+        include_deploy_backups=1
         ;;
       --self-test)
         run_self_test
@@ -217,7 +264,7 @@ main() {
     shift
   done
 
-  clean_artifacts "${REPO_ROOT}" "${dry_run}"
+  clean_artifacts "${REPO_ROOT}" "${dry_run}" "${include_deploy_backups}"
 }
 
 main "$@"
