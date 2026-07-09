@@ -99,8 +99,9 @@
 - Normalized user invite info/code/commission/withdrawal responses and admin invite config update/withdrawal responses to the panel `code/msg/ts/data` envelope while keeping the Invite page compatible with legacy, enveloped, and nested payloads.
 - Normalized admin subscription settings responses to the panel `code/msg/ts/data` envelope while keeping System and Users subscription-link flows compatible with legacy and enveloped payloads.
 - Normalized admin payment gateway list responses to the panel `code/msg/ts/data` envelope while keeping the Payment page compatible with legacy and enveloped payloads.
-- Normalized admin payment gateway create/update/delete/toggle and payment-record list responses to the panel `code/msg/ts/data` envelope while keeping the Payment page compatible with legacy and enveloped payloads.
-- Normalized user payment channels/create/status/records success responses to the panel `code/msg/ts/data` envelope while preserving payment callback plain-text compatibility.
+- Normalized admin payment gateway create/update/delete/toggle and payment-record list success/user-error responses to the panel `code/msg/ts/data` envelope while keeping the Payment page compatible with legacy, enveloped, and `code=-1` payloads.
+- Normalized user payment channels/create/status/records success/user-error responses to the panel `code/msg/ts/data` envelope while preserving payment callback plain-text compatibility.
+- Updated Auth and admin traffic E2E tests to assert the panel response envelope after login/register and traffic stats response normalization.
 - Normalized legacy X402 and fiat payment create/check success and user-error responses to the panel `code/msg/ts/data` envelope while preserving X402, Stripe, and PayPal callback/webhook compatibility responses.
 - Normalized user/admin MFA success and user-error responses to the panel `code/msg/ts/data` envelope while keeping the Admin MFA page compatible with legacy, enveloped, and error config payloads.
 - Normalized user/admin notification success responses to the panel `code/msg/ts/data` envelope while keeping the Admin Notifications page compatible with legacy and enveloped templates, logs, and email config payloads.

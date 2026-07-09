@@ -1029,6 +1029,17 @@ func (s *PaymentGatewayExtendedTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *PaymentGatewayExtendedTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *PaymentGatewayExtendedTestSuite) TestListPaymentRecords() {
 	record := &model.PaymentRecord{
 		GatewayID:   s.testGateway.ID,
@@ -1214,6 +1225,51 @@ func (s *PaymentGatewayExtendedTestSuite) TestCreatePayment() {
 	assert.Contains(s.T(), data, "actual_amount")
 	assert.Contains(s.T(), data, "pay_url")
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *PaymentGatewayExtendedTestSuite) TestCreatePayment_InvalidGatewayUsesPanelEnvelope() {
+	handler := NewPaymentGatewayHandler()
+	s.router.POST("/payment/create", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		handler.CreatePayment(c)
+	})
+
+	body := map[string]any{
+		"gateway_id": 99999,
+		"amount":     100,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/payment/create", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid gateway")
+}
+
+func (s *PaymentGatewayExtendedTestSuite) TestCreatePayment_DisabledGatewayUsesPanelEnvelope() {
+	s.testGateway.Enabled = false
+	s.db.Save(s.testGateway)
+
+	handler := NewPaymentGatewayHandler()
+	s.router.POST("/payment/create", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		handler.CreatePayment(c)
+	})
+
+	body := map[string]any{
+		"gateway_id": s.testGateway.ID,
+		"amount":     100,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/payment/create", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "gateway is disabled")
 }
 
 func (s *PaymentGatewayExtendedTestSuite) TestGetPaymentStatus_NotFound() {
@@ -2615,7 +2671,13 @@ func (s *PaymentGatewayExtendedTestSuite2) TestCreateGateway_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *PaymentGatewayExtendedTestSuite2) TestUpdateGateway() {

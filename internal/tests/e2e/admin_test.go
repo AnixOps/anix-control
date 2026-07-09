@@ -420,9 +420,8 @@ func (s *AdminE2ETestSuite) TestTrafficHourlyEndpoints() {
 	s.router.ServeHTTP(hourlyRecorder, hourlyReq)
 	assert.Equal(s.T(), http.StatusOK, hourlyRecorder.Code, hourlyRecorder.Body.String())
 
-	var hourlyResponse map[string]any
-	s.Require().NoError(json.Unmarshal(hourlyRecorder.Body.Bytes(), &hourlyResponse))
-	hourlyRows := hourlyResponse["data"].([]any)
+	hourlyData := requirePanelDataMap(s.T(), hourlyRecorder.Body.Bytes())
+	hourlyRows := hourlyData["list"].([]any)
 	var currentHourTraffic float64
 	for _, item := range hourlyRows {
 		row := item.(map[string]any)
@@ -438,9 +437,8 @@ func (s *AdminE2ETestSuite) TestTrafficHourlyEndpoints() {
 	s.router.ServeHTTP(rankingRecorder, rankingReq)
 	assert.Equal(s.T(), http.StatusOK, rankingRecorder.Code, rankingRecorder.Body.String())
 
-	var rankingResponse map[string]any
-	s.Require().NoError(json.Unmarshal(rankingRecorder.Body.Bytes(), &rankingResponse))
-	rankingRows := rankingResponse["data"].([]any)
+	rankingData := requirePanelDataMap(s.T(), rankingRecorder.Body.Bytes())
+	rankingRows := rankingData["list"].([]any)
 	var found bool
 	for _, item := range rankingRows {
 		row := item.(map[string]any)
@@ -458,9 +456,8 @@ func (s *AdminE2ETestSuite) TestTrafficHourlyEndpoints() {
 	s.router.ServeHTTP(oversizedRankingRecorder, oversizedRankingReq)
 	assert.Equal(s.T(), http.StatusOK, oversizedRankingRecorder.Code, oversizedRankingRecorder.Body.String())
 
-	var oversizedRankingResponse map[string]any
-	s.Require().NoError(json.Unmarshal(oversizedRankingRecorder.Body.Bytes(), &oversizedRankingResponse))
-	oversizedRankingRows := oversizedRankingResponse["data"].([]any)
+	oversizedRankingData := requirePanelDataMap(s.T(), oversizedRankingRecorder.Body.Bytes())
+	oversizedRankingRows := oversizedRankingData["list"].([]any)
 	assert.LessOrEqual(s.T(), len(oversizedRankingRows), 1000)
 }
 
