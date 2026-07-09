@@ -5,6 +5,7 @@
 ### Added
 
 - Added deterministic `RELEASE_NOTES.md` generation to GitHub Release assets, with a CI self-test, release workflow policy guard, and artifact verification requirement.
+- Added opt-in local deploy archive cleanup for stale ignored frontend/internal zip or tarball leftovers while keeping release builds GitHub Actions-only and preserving database backups.
 - Attached `UPGRADE.md` to GitHub Release assets and guarded it with release workflow policy and artifact verification checks so tag releases include upgrade and rollback instructions.
 - Added `docs/UPGRADE.md` with the GitHub Actions artifact verification, systemd/Docker upgrade, database migration, rollback, and post-upgrade evidence runbook.
 - Added a root `README.md` that links the status registers, audit docs, deployment docs, local checks, compatibility surfaces, and GitHub Actions-only release policy.

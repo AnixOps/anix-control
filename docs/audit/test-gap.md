@@ -16,6 +16,7 @@ New CI coverage added:
 - Release manifest generation now runs through `config/scripts/generate_release_manifest.py`, and CI runs its self-test to verify deterministic artifact ordering, SHA-256 hashing, manifest/checksum exclusion, run metadata, and newline-terminated JSON output.
 - Release notes generation now runs through `config/scripts/generate_release_notes.py`, and CI runs its self-test to verify `CHANGELOG.md` section extraction, deterministic metadata, local-build warning text, and empty/missing section failures.
 - Release artifact verification now runs through `config/scripts/verify_release_artifacts.py`; CI self-tests cover valid artifacts, tampered files, missing checksum entries, and missing required assets, and tag release jobs verify artifacts before publishing.
+- Local build artifact cleanup now has an opt-in deploy-backup archive mode that removes stale ignored frontend/internal zip or tarball leftovers while preserving database backups, config, certificates, and `web/node_modules`; CI self-tests cover both default and opt-in behavior.
 - `go mod tidy` cleanliness check.
 - `gofmt` check for tracked Go files.
 - `go vet ./...`.
@@ -112,5 +113,5 @@ Known gaps:
 - `.golangci.yml` now excludes `web/node_modules`, so frontend dependency source is no longer treated as first-party Go code.
 - Full-repository generated-file-excluded `gosec` is now a blocking CI gate. Raw generated protobuf `G103` findings remain excluded from gosec gates.
 - Full race testing is now configured in CI, but long-running behavior should be watched on GitHub Actions before making it a release blocker for every branch protection profile.
-- Frontend build outputs should not be kept in the source tree. Use `config/deploy/clean_local_build_artifacts.sh --dry-run` and then `config/deploy/clean_local_build_artifacts.sh` to remove stale `web/public`, `web/public-check`, `web/coverage`, and bundle-report directories; root-owned remnants require the exact elevated cleanup command printed by the script. CI runs from a clean checkout and is not affected by local leftovers.
+- Frontend build outputs should not be kept in the source tree. Use `config/deploy/clean_local_build_artifacts.sh --dry-run` and then `config/deploy/clean_local_build_artifacts.sh` to remove stale `web/public`, `web/public-check`, `web/coverage`, and bundle-report directories. Use `--include-deploy-backups` only after reviewing the dry-run output for ignored local deploy archive leftovers. Root-owned remnants require the exact elevated cleanup command printed by the script. CI runs from a clean checkout and is not affected by local leftovers.
 - Forwarding design/API/security/compatibility docs now exist under `docs/forwarding/`, but the remaining forwarding test gaps are broader permission and quota handler tests, admin audit tests, and end-to-end runtime smoke evidence.

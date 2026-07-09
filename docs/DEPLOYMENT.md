@@ -247,15 +247,21 @@ bash config/scripts/pre-deploy.sh --self-test
 ```bash
 bash config/deploy/clean_local_build_artifacts.sh --dry-run
 bash config/deploy/clean_local_build_artifacts.sh
+
+# 如需同时清理源码树里旧本地部署 archive 残留，先 dry-run 再执行：
+bash config/deploy/clean_local_build_artifacts.sh --dry-run --include-deploy-backups
+bash config/deploy/clean_local_build_artifacts.sh --include-deploy-backups
 ```
 
 该脚本会清理源码树里的本地构建/验证输出，例如 Go 二进制、
 `coverage.out`、`web/public`、`web/public-check`、`web/coverage`、
 `web/bundle-reports`、`web/bundle-reports-check` 和 release 暂存目录。
+显式加 `--include-deploy-backups` 时，还会清理忽略的旧本地部署 archive
+残留，例如 `backups/frontend_*.tar.gz` 和 `internal/*/backups/*.zip`。
 
 如果旧产物由 root 生成导致普通用户无权删除，脚本会输出需要用 root 执行的精确 `sudo rm -rf -- ...` 命令。
 
-不要用上面的清理命令删除 `config/config.yaml`、数据库、TLS 证书、Ansible inventory、备份或 `web/node_modules`。
+清理脚本不会删除 `config/config.yaml`、数据库、TLS 证书、Ansible inventory、数据库备份或 `web/node_modules`。
 
 ### 启动生产编排
 
