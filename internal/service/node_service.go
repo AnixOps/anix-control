@@ -24,6 +24,9 @@ const (
 	CacheKeyNodeProtocols = "node:protocols:" // + nodeID
 )
 
+// ErrNodeProtocolNotFound indicates at least one requested node protocol ID does not exist.
+var ErrNodeProtocolNotFound = errors.New("协议不存在")
+
 // NodeService 节点服务
 type NodeService struct {
 	db *gorm.DB
@@ -451,8 +454,21 @@ func (s *NodeService) AssignProtocolsToGroup(groupID uint, protocolIDs []uint) e
 
 	var protocols []model.NodeProtocol
 	if len(protocolIDs) > 0 {
-		if err := s.db.Where("id IN ?", protocolIDs).Find(&protocols).Error; err != nil {
+		uniqueIDs := make([]uint, 0, len(protocolIDs))
+		seen := make(map[uint]struct{}, len(protocolIDs))
+		for _, id := range protocolIDs {
+			if _, exists := seen[id]; exists {
+				continue
+			}
+			seen[id] = struct{}{}
+			uniqueIDs = append(uniqueIDs, id)
+		}
+
+		if err := s.db.Where("id IN ?", uniqueIDs).Find(&protocols).Error; err != nil {
 			return err
+		}
+		if len(protocols) != len(uniqueIDs) {
+			return ErrNodeProtocolNotFound
 		}
 	}
 

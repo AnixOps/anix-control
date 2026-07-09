@@ -380,14 +380,14 @@ func (h *SubscriptionAdminHandler) GetTemplates(c *gin.Context) {
 func (h *SubscriptionAdminHandler) GetGroupProtocols(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		panelError(c, "ID 无效")
 		return
 	}
 
 	nodeService := service.NewNodeService()
 	protocols, err := nodeService.GetProtocolsByGroup(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取协议失败", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -399,7 +399,7 @@ func (h *SubscriptionAdminHandler) GetGroupProtocols(c *gin.Context) {
 func (h *SubscriptionAdminHandler) UpdateGroupProtocols(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		panelError(c, "ID 无效")
 		return
 	}
 
@@ -407,13 +407,20 @@ func (h *SubscriptionAdminHandler) UpdateGroupProtocols(c *gin.Context) {
 		ProtocolIDs []uint `json:"protocol_ids" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	nodeService := service.NewNodeService()
 	if err := nodeService.AssignProtocolsToGroup(uint(id), req.ProtocolIDs); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败", "error": err.Error()})
+		switch {
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			panelError(c, "分组不存在")
+		case errors.Is(err, service.ErrNodeProtocolNotFound):
+			panelError(c, "协议不存在")
+		default:
+			panelError(c, err.Error())
+		}
 		return
 	}
 
@@ -426,7 +433,7 @@ func (h *SubscriptionAdminHandler) GetAvailableProtocols(c *gin.Context) {
 	nodeService := service.NewNodeService()
 	protocols, err := nodeService.GetAllAvailableProtocols()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取失败", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 

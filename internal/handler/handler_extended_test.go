@@ -3279,6 +3279,112 @@ func (s *SubscribeExtendedTestSuite) TestGetGroupProtocols() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
+func (s *SubscribeExtendedTestSuite) TestGetGroupProtocols_InvalidID() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.GET("/admin/subscription/groups/:id/protocols", handler.GetGroupProtocols)
+
+	req, _ := http.NewRequest("GET", "/admin/subscription/groups/invalid/protocols", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "id")
+}
+
+func (s *SubscribeExtendedTestSuite) TestUpdateGroupProtocols() {
+	node := &model.Node{
+		Name: "Protocol Bind Node",
+		Host: "127.0.0.1",
+		Port: 443,
+		Rate: 1,
+		Show: 1,
+	}
+	s.db.Create(node)
+	protocol := &model.NodeProtocol{
+		NodeID: node.ID,
+		Name:   "Protocol Bind",
+		Type:   model.ProtocolVLESS,
+		Port:   443,
+		Enable: 1,
+		Show:   1,
+	}
+	s.db.Create(protocol)
+
+	handler := NewSubscriptionAdminHandler()
+	s.router.POST("/admin/subscription/groups/:id/protocols", handler.UpdateGroupProtocols)
+
+	body := map[string]any{"protocol_ids": []uint{protocol.ID}}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/subscription/groups/"+strconv.FormatUint(uint64(s.testGroup.ID), 10)+"/protocols", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "更新成功", data["message"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *SubscribeExtendedTestSuite) TestUpdateGroupProtocols_InvalidBody() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.POST("/admin/subscription/groups/:id/protocols", handler.UpdateGroupProtocols)
+
+	req, _ := http.NewRequest("POST", "/admin/subscription/groups/"+strconv.FormatUint(uint64(s.testGroup.ID), 10)+"/protocols", strings.NewReader("invalid"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid")
+}
+
+func (s *SubscribeExtendedTestSuite) TestUpdateGroupProtocols_GroupNotFound() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.POST("/admin/subscription/groups/:id/protocols", handler.UpdateGroupProtocols)
+
+	body := map[string]any{"protocol_ids": []uint{}}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/subscription/groups/99999/protocols", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "分组不存在")
+}
+
+func (s *SubscribeExtendedTestSuite) TestUpdateGroupProtocols_ProtocolNotFound() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.POST("/admin/subscription/groups/:id/protocols", handler.UpdateGroupProtocols)
+
+	body := map[string]any{"protocol_ids": []uint{99999}}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/subscription/groups/"+strconv.FormatUint(uint64(s.testGroup.ID), 10)+"/protocols", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "协议不存在")
+}
+
+func (s *SubscribeExtendedTestSuite) TestGetAvailableProtocols() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.GET("/admin/subscription/protocols/available", handler.GetAvailableProtocols)
+
+	req, _ := http.NewRequest("GET", "/admin/subscription/protocols/available", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotNil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *SubscribeExtendedTestSuite) TestDeleteTemplate() {
 	tpl := &model.SubscriptionTemplate{
 		Name:    "Test Template",

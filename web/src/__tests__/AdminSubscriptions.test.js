@@ -15,6 +15,7 @@ const adminApiMock = vi.hoisted(() => ({
   getSubscriptionTemplates: vi.fn(),
   previewSubscription: vi.fn(),
   updateSubscriptionGroup: vi.fn(),
+  updateGroupProtocols: vi.fn(),
   updateSubscriptionTemplate: vi.fn()
 }))
 
@@ -43,6 +44,7 @@ describe('Admin Subscriptions', () => {
     adminApiMock.createSubscriptionTemplate.mockResolvedValue({})
     adminApiMock.updateSubscriptionTemplate.mockResolvedValue({})
     adminApiMock.deleteSubscriptionTemplate.mockResolvedValue({})
+    adminApiMock.updateGroupProtocols.mockResolvedValue({})
     getSubscriptionStatsMock.mockResolvedValue({ data: [] })
   })
 
@@ -346,6 +348,54 @@ describe('Admin Subscriptions', () => {
     expect(wrapper.vm.toastType).toBe('error')
     expect(wrapper.vm.toastMessage).toBe('Update failed')
     expect(adminApiMock.getSubscriptionTemplates).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('shows an error when available protocols return code -1', async () => {
+    adminApiMock.getAvailableProtocols.mockResolvedValueOnce({
+      code: -1,
+      msg: 'available protocols rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Subscriptions)
+    await flushPromises()
+    wrapper.vm.selectedGroup = { id: 1, name: 'Group' }
+
+    await wrapper.vm.openManageProtocolsModal()
+    await flushPromises()
+
+    expect(wrapper.vm.availableProtocols).toEqual([])
+    expect(wrapper.vm.toastType).toBe('error')
+    expect(wrapper.vm.toastMessage).toBe('Failed to load available protocols')
+
+    wrapper.unmount()
+  })
+
+  it('does not close protocol modal or refresh protocols when enveloped save fails', async () => {
+    adminApiMock.updateGroupProtocols.mockResolvedValueOnce({
+      code: -1,
+      msg: 'protocol update rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Subscriptions)
+    await flushPromises()
+    adminApiMock.getSubscriptionProtocols.mockClear()
+    wrapper.vm.selectedGroup = { id: 1, name: 'Group' }
+    wrapper.vm.showManageProtocolsModal = true
+    wrapper.vm.selectedProtocolIds = [10]
+
+    await wrapper.vm.saveGroupProtocols()
+    await flushPromises()
+
+    expect(wrapper.vm.toastType).toBe('error')
+    expect(wrapper.vm.toastMessage).toBe('Failed to update protocol links')
+    expect(wrapper.vm.showManageProtocolsModal).toBe(true)
+    expect(adminApiMock.getSubscriptionProtocols).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })

@@ -2630,7 +2630,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetGroupProtocols_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "id")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestUpdateGroupProtocols_InvalidID() {
@@ -2645,7 +2645,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestUpdateGroupProtocols_InvalidID()
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "id")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetAvailableProtocols_Success() {
