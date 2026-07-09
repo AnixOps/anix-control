@@ -140,6 +140,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Enforce GitHub Actions-only release build policy and guard local source-tree deploy builds.
 - [x] Pin GitHub Actions Go setup to `1.26.5` and expand gRPC coverage-gate tests.
 - [x] Refresh GitHub Actions dependencies away from Node.js 20 action runtimes.
+- [x] Generate the integration workflow coverage artifact instead of uploading a missing `coverage.out`.
 
 ## P3: API And UI Consistency
 
