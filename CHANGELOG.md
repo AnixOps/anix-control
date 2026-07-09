@@ -154,6 +154,7 @@
 
 ### Documentation
 
+- Documented the P0 WireGuard dual-node relay plan, including WireGuard user access, domestic entry termination, default GOST relay+QUIC transport, overseas exit NAT, and WSS compatibility mode.
 - Added the initial repository, concurrency, and performance audit baselines plus root `ROADMAP.md`, root `TODO.md`, and `docs/manual-intervention.md`.
 - Documented the production root deployment command, Go/Node/npm prerequisites, deploy script self-test, and common recovery hints.
 - Added a SQLite-to-PostgreSQL migration runbook covering dry run, import, verification evidence, and rollback.

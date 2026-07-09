@@ -21,6 +21,7 @@ Use this tree like NodeX:
 - Runtime config migration: [`reference/forward-runtime-migration.md`](reference/forward-runtime-migration.md)
 - Runtime mode entrypoint: [`reference/runtime.md`](reference/runtime.md)
 - Relay onboarding: [`guide/forward-relay-onboarding.md`](guide/forward-relay-onboarding.md)
+- P0 WireGuard relay plan: [`guide/wireguard-relay.md`](guide/wireguard-relay.md)
 - Config examples: [`../config/examples/README.md`](../config/examples/README.md)
 
 ## Rule Of Thumb
