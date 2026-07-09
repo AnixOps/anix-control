@@ -42,6 +42,8 @@ Operational notes:
 - UniProxy HTTP and gRPC user-list responses expose only the runtime fields V2bX
   needs for entry termination: `wireguard_peer_ip`, `wireguard_public_key`, and
   `wireguard_preshared_key`. The user private key remains subscription-only.
-- Do not mark the full WireGuard relay path complete until V2bX runtime, traffic
-  accounting, online state, limits, GOST relay+QUIC, WSS compatibility mode, and
-  GitHub Actions verification are also implemented.
+- Do not mark the full WireGuard relay path complete until V2bX full dual-node
+  runtime, traffic accounting evidence, speed limits, GOST relay+QUIC, WSS
+  compatibility mode, overseas exit NAT, and GitHub Actions verification are
+  also implemented. V2bX v2.3.3 only covers initial peer online-state reporting
+  from recent WireGuard handshakes.

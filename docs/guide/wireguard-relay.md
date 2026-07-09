@@ -2,8 +2,9 @@
 
 Date: 2026-07-10
 
-Status: Partial/P0. The first panel peer-custody and subscription-output slice
-exists. V2bX runtime, admin UI, end-to-end tests, migration evidence, and CI
+Status: Partial/P0. The first panel peer-custody/subscription-output slice and
+initial V2bX entry runtime slices exist. Admin UI, full dual-node routing,
+overseas exit NAT, speed limits, end-to-end tests, migration evidence, and CI
 relay verification are still incomplete.
 
 ## Decision
@@ -141,9 +142,11 @@ feature is marked implemented.
    - Initial V2bX entry runtime support can consume panel WireGuard config and
      peer fields, apply the Linux WireGuard interface with `ip`/`wg`, and report
      peer traffic deltas from `wg show <iface> transfer`.
-   - Still pending: complete route policy, online tracking, speed-limit
-     enforcement, entry-to-exit GOST relay+QUIC routing, GOST relay+WSS
-     compatibility mode, overseas exit NAT, and runtime health reporting.
+   - V2bX v2.3.3 adds initial peer online-state reporting from recent
+     `wg show <iface> dump` handshakes through the existing panel `/alive` path.
+   - Still pending: complete route policy, speed-limit enforcement,
+     entry-to-exit GOST relay+QUIC routing, GOST relay+WSS compatibility mode,
+     overseas exit NAT, and runtime health reporting.
 
 5. Integration testing.
    - Cover panel API validation, CIDR exhaustion, duplicate peer allocation,
