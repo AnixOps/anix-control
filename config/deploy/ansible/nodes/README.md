@@ -11,13 +11,15 @@
 
 ## 前置
 
-1. **编译定制 V2bX 二进制**(按目标机架构):
+1. **准备定制 V2bX 二进制**(按目标机架构):
    ```bash
-   cd /home/dev/anixops/V2bX_AnixOps
-   GOOS=linux GOARCH=amd64 go build -o build/inventory/V2bX_linux_amd64 ./main.go
-   GOOS=linux GOARCH=arm64 go build -o build/inventory/V2bX_linux_arm64 ./main.go
+   mkdir -p /home/dev/anixops/V2bX_AnixOps/build/inventory
+   # 从 GitHub Actions 下载对应架构的 V2bX artifact 后放到:
+   # /home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_amd64
+   # /home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_arm64
    ```
    路径填进 `group_vars/all.yml` 的 `v2bx_binary_amd64_local` / `v2bx_binary_arm64_local`。playbook 会按 `v2bx_arch` 或远端架构自动选择。
+   发行或生产部署不得在本机编译 V2bX。
 
 2. **准备变量**:
    ```bash
@@ -68,8 +70,8 @@ cd config/deploy/ansible/nodes
 
 1. 读取 `inventory.ini` 的 `[v2bx_nodes]`
 2. 优先使用 inventory 手填的 `api_key`, 没填时尝试从本地面板 SQLite 按 `node_id` 自动读取
-3. 按每台主机的 `v2bx_arch` 识别需要编译 `amd64` 还是 `arm64`
-4. 只编译本次选中主机需要的架构
+3. 按每台主机的 `v2bx_arch` 识别需要 `amd64` 还是 `arm64` 二进制
+4. 默认拒绝本地编译；生产/发行路径使用 `--skip-build` 和 GitHub Actions 产物
 5. 生成临时 inventory, 自动注入对应架构的 `v2bx_binary_local`
 6. 调用 `ansible-playbook deploy_v2bx.yml`
 
@@ -77,9 +79,11 @@ cd config/deploy/ansible/nodes
 
 ```bash
 ./deploy_from_inventory.sh --list
-./deploy_from_inventory.sh --host akko-uk --check
-./deploy_from_inventory.sh --all --admin-token <管理员JWT>
+./deploy_from_inventory.sh --host akko-uk --check --skip-build
+./deploy_from_inventory.sh --all --skip-build --admin-token <管理员JWT>
 ```
+
+旧的本地编译路径只保留给开发或紧急人工操作，必须显式设置 `ALLOW_LOCAL_BUILD=1`，且不能作为发行构建来源。
 
 ### Oracle ARM 怎么标
 

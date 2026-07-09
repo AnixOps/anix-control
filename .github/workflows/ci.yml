@@ -44,6 +44,9 @@ jobs:
       - name: Validate local build cleanup script syntax
         run: bash -n config/deploy/clean_local_build_artifacts.sh
 
+      - name: Validate release build policy script syntax
+        run: bash -n config/deploy/check_release_build_policy.sh
+
       - name: Validate legacy deploy script syntax
         run: bash -n config/scripts/deploy.sh
 
@@ -55,6 +58,12 @@ jobs:
 
       - name: Run local build cleanup script self-test
         run: bash config/deploy/clean_local_build_artifacts.sh --self-test
+
+      - name: Run release build policy self-test
+        run: bash config/deploy/check_release_build_policy.sh --self-test
+
+      - name: Enforce release build policy
+        run: bash config/deploy/check_release_build_policy.sh
 
       - name: Run legacy deploy guard self-test
         run: bash config/scripts/deploy.sh --self-test

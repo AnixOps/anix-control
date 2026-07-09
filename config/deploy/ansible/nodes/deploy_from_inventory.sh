@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Release builds must be produced by GitHub Actions. Local V2bX builds are kept
+# only for explicitly approved development or emergency operator work and
+# require ALLOW_LOCAL_BUILD=1.
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PANEL_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 V2BX_ROOT_DEFAULT="$(cd "${PANEL_ROOT}/.." && pwd)/V2bX_AnixOps"
@@ -27,7 +31,7 @@ Options:
   --host <alias>           Deploy a single host alias, repeatable
   --hosts <a,b,c>          Deploy a comma-separated host list
   --check                  Run ansible-playbook --check
-  --skip-build             Skip local V2bX builds
+  --skip-build             Skip local V2bX builds and use prebuilt artifact paths
   --list                   Show parsed hosts and exit
   --inventory <path>       Use a custom inventory file
   --admin-token <token>    Pass admin_token to ansible-playbook
@@ -36,6 +40,11 @@ Options:
 Host inventory hints:
   Add v2bx_arch=arm64 on ARM nodes (for example Oracle ARM).
   If omitted, the script defaults the host to amd64.
+
+Release build policy:
+  Use GitHub Actions artifacts for normal node rollouts. Set AMD64_OUTPUT and
+  ARM64_OUTPUT to the downloaded artifact paths and pass --skip-build. Local
+  builds require ALLOW_LOCAL_BUILD=1 and must not be used for release builds.
 EOF
 }
 
@@ -44,6 +53,20 @@ require_cmd() {
     echo "missing required command: $1" >&2
     exit 1
   fi
+}
+
+require_local_build_opt_in() {
+  if [[ "${ALLOW_LOCAL_BUILD:-}" == "1" ]]; then
+    return 0
+  fi
+
+  cat >&2 <<'EOF'
+!! deploy_from_inventory.sh would build V2bX locally.
+!! Release builds must be produced by GitHub Actions release workflows.
+!! Use --skip-build with verified GitHub Actions artifact paths instead.
+!! For development or emergency operator use, rerun with ALLOW_LOCAL_BUILD=1.
+EOF
+  return 1
 }
 
 resolve_local_sqlite_db_path() {
@@ -172,13 +195,8 @@ if [[ ! -f "${PLAYBOOK_PATH}" ]]; then
   echo "playbook not found: ${PLAYBOOK_PATH}" >&2
   exit 1
 fi
-if [[ ! -d "${V2BX_ROOT}" ]]; then
-  echo "V2bX repo not found: ${V2BX_ROOT}" >&2
-  exit 1
-fi
 
 require_cmd python3
-require_cmd ansible-playbook
 
 HOST_FILTER_CSV=""
 if [[ ${#HOST_FILTERS[@]} -gt 0 ]]; then
@@ -327,13 +345,7 @@ PY
   exit 0
 fi
 
-if [[ "${SKIP_BUILD}" != "1" ]]; then
-  require_cmd "${GO_BIN}"
-  mkdir -p "${BUILD_DIR}"
-  export GOEXPERIMENT=jsonv2
-  export CGO_ENABLED=0
-
-  mapfile -t REQUIRED_ARCHES < <(python3 - <<'PY'
+mapfile -t REQUIRED_ARCHES < <(python3 - <<'PY'
 import json
 import os
 hosts = json.loads(os.environ["HOSTS_JSON"])
@@ -343,19 +355,34 @@ for arch in arches:
 PY
 )
 
+output_path_for_arch() {
+  case "$1" in
+    amd64)
+      printf '%s\n' "${AMD64_OUTPUT}"
+      ;;
+    arm64)
+      printf '%s\n' "${ARM64_OUTPUT}"
+      ;;
+    *)
+      echo "unsupported v2bx_arch in inventory: $1" >&2
+      return 1
+      ;;
+  esac
+}
+
+if [[ "${SKIP_BUILD}" != "1" ]]; then
+  require_local_build_opt_in || exit 1
+  if [[ ! -d "${V2BX_ROOT}" ]]; then
+    echo "V2bX repo not found: ${V2BX_ROOT}" >&2
+    exit 1
+  fi
+  require_cmd "${GO_BIN}"
+  mkdir -p "${BUILD_DIR}"
+  export GOEXPERIMENT=jsonv2
+  export CGO_ENABLED=0
+
   for arch in "${REQUIRED_ARCHES[@]}"; do
-    case "${arch}" in
-      amd64)
-        output_path="${AMD64_OUTPUT}"
-        ;;
-      arm64)
-        output_path="${ARM64_OUTPUT}"
-        ;;
-      *)
-        echo "unsupported v2bx_arch in inventory: ${arch}" >&2
-        exit 1
-        ;;
-    esac
+    output_path="$(output_path_for_arch "${arch}")"
 
     echo "building V2bX for linux/${arch} -> ${output_path}"
     (
@@ -367,6 +394,15 @@ PY
         -o "${output_path}" \
         ./main.go
     )
+  done
+else
+  for arch in "${REQUIRED_ARCHES[@]}"; do
+    output_path="$(output_path_for_arch "${arch}")"
+    if [[ ! -f "${output_path}" ]]; then
+      echo "missing prebuilt V2bX artifact for linux/${arch}: ${output_path}" >&2
+      echo "download the matching GitHub Actions artifact or set AMD64_OUTPUT/ARM64_OUTPUT" >&2
+      exit 1
+    fi
   done
 fi
 
@@ -442,4 +478,5 @@ fi
 
 echo "generated inventory: ${GENERATED_INVENTORY}"
 echo "selected hosts: ${LIMIT_ARG}"
+require_cmd ansible-playbook
 ansible-playbook "${PLAY_ARGS[@]}"

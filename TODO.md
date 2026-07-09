@@ -142,6 +142,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Refresh GitHub Actions dependencies away from Node.js 20 action runtimes.
 - [x] Generate the integration workflow coverage artifact instead of uploading a missing `coverage.out`.
 - [x] Add a CI-tested helper for cleaning local source-tree build artifacts without removing config, databases, certificates, backups, or `web/node_modules`.
+- [x] Add a CI release-build policy check so panel and V2bX deployment scripts cannot add unguarded local build commands.
 
 ## P3: API And UI Consistency
 

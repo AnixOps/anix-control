@@ -230,12 +230,14 @@ npm run dev
 - GitHub Release 中的 `v2board-frontend.tar.gz` 或 `v2board-frontend.zip` 是唯一发行前端来源。
 - 部署前必须校验 `SHA256SUMS.txt`，再停止服务、替换二进制和前端静态文件、启动服务并验证 `/health`。
 
-`config/deploy/deploy_panel.sh` 会执行本地源码构建，默认拒绝运行。旧入口 `config/scripts/deploy.sh` 只是兼容包装器，也默认拒绝运行；`config/scripts/pre-deploy.sh` 的本地构建检查同样默认拒绝。它们只保留给开发或紧急人工操作，不能作为发行版本构建路径。如确需使用，必须显式设置 `ALLOW_LOCAL_BUILD=1`，并在变更记录中说明原因。
+`config/deploy/deploy_panel.sh` 会执行本地源码构建，默认拒绝运行。旧入口 `config/scripts/deploy.sh` 只是兼容包装器，也默认拒绝运行；`config/scripts/pre-deploy.sh` 的本地构建检查同样默认拒绝。它们只保留给开发或紧急人工操作，不能作为发行版本构建路径。如确需使用，必须显式设置 `ALLOW_LOCAL_BUILD=1`，并在变更记录中说明原因。CI 会运行 `config/deploy/check_release_build_policy.sh`，阻止未声明 GitHub Actions-only 策略和 `ALLOW_LOCAL_BUILD` guard 的本地部署 build 命令进入部署脚本。
 
 部署前可在仓库根目录运行脚本自检：
 
 ```bash
 bash config/deploy/deploy_panel.sh --self-test
+bash config/deploy/check_release_build_policy.sh --self-test
+bash config/deploy/check_release_build_policy.sh
 bash config/scripts/deploy.sh --self-test
 bash config/scripts/pre-deploy.sh --self-test
 ```
