@@ -50,7 +50,7 @@ two documents disagree, this file is the status source of truth.
 | User | User notification inbox | Implemented | `/api/v2/user/notifications*`, unified success/error envelopes | Add broader event coverage as business events grow. |
 | User | Telegram binding status and notification preference | Implemented | `/api/v2/user/telegram/*`, unified success/error envelopes | Bot token/webhook operations need operator credentials. |
 | User | User-managed forwarding/tunnel entries | Partial | `/api/v2/forward/*`, `/api/v2/tunnel/user/tunnel` | Close remaining Flux parity and runtime enforcement gaps. |
-| Admin | Dashboard and system info | Implemented | `/api/v2/admin/dashboard`, `/system/info` | Add more operational health signals over time. |
+| Admin | Dashboard and system info | Implemented | `/api/v2/admin/dashboard` success/database-error panel envelopes, `/system/info` | Add more operational health signals over time. |
 | Admin | Hourly traffic and user ranking | Implemented | `/api/v2/admin/traffic/hourly`, `/traffic/user-ranking` | Watch high-volume query performance in production. |
 | Admin | User management | Implemented | CRUD, ban/unban, traffic reset, subscribe reset with unified success/user-error envelopes | Continue authorization regression tests for new admin actions. |
 | Admin | Plan management | Implemented | CRUD and assign with unified success/user-error envelopes | None known. |
@@ -90,10 +90,10 @@ two documents disagree, this file is the status source of truth.
 | Forwarding | Traffic upload/report/snapshot | Implemented | `/flow/upload`, `/api/v2/internal/forward/traffic/*` | Keep app-token auth and stats tests current. |
 | Forwarding | Observability targets, trend, topology, multi-ingress | Implemented | `/api/v2/admin/forward/observability/*` | Add more real runtime data sources if needed. |
 | Forwarding | Complex load balancing, failover, chain orchestration | Deferred | None | Deferred by product scope for simplicity and auditability. |
-| Operations | Deployment script and production deploy docs | Implemented | `config/deploy/deploy_panel.sh`, `docs/DEPLOYMENT.md` | Ensure host Node/Go prerequisites are documented and owned by deploy user. |
+| Operations | Deployment script and production deploy docs | Implemented | GitHub Actions release artifacts, guarded local `config/deploy/deploy_panel.sh`, `docs/DEPLOYMENT.md` | Keep local build guard and artifact deployment docs aligned. |
 | Operations | SQLite to PostgreSQL migration docs and tooling | Implemented | migration commands/docs | Keep dry-run evidence for schema changes. |
 | Operations | CI baseline | Implemented | GitHub Actions for gofmt, vet, test, race, lint, gosec, govulncheck, Docker smoke | Watch runtime of full race testing. |
-| Operations | Release workflow with artifacts, checksums, SBOM | Partial | Release workflow and SBOM generation exist | Keep release notes and migration dry-run artifacts complete for tags. |
+| Operations | Release workflow with artifacts, checksums, SBOM | Partial | GitHub Actions release workflow is the required release build source | Keep release notes and migration dry-run artifacts complete for tags. |
 | Operations | Automated production deployment | Deferred | Operator-controlled manual deployment | Keep credentials and production rollout manual unless explicitly approved. |
 
 ## Not Implemented Or Not Complete

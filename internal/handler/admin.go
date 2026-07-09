@@ -911,7 +911,7 @@ func (h *AdminHandler) GetDashboard(c *gin.Context) {
 
 	stats, err := h.statsService.GetDashboardStats(forceRefresh)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取统计失败", "error": err.Error()})
+		panelError(c, "获取统计失败: "+err.Error())
 		return
 	}
 

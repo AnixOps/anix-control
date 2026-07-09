@@ -42,9 +42,10 @@ Local verification status:
 - Forward internal traffic report/snapshot handler tests now assert panel `code/msg/ts/data` envelopes for success, binding-error, and service-error responses; the Flux-compatible upload endpoint remains covered as a plain `ok` compatibility path.
 - Admin traffic hourly/user-ranking handler tests now assert panel `code/msg/ts/data` envelopes, and TrafficHourly frontend tests cover both legacy and enveloped payloads.
 - Admin traffic E2E tests now assert the enveloped hourly and user-ranking payload shape under `data.list`.
-- Admin dashboard handler tests now assert panel `code/msg/ts/data` envelopes, and Dashboard frontend tests cover both legacy and enveloped payloads.
+- Admin dashboard handler tests now assert panel `code/msg/ts/data` envelopes for success and database-error paths, service tests propagate stats query failures, and Dashboard frontend tests cover both legacy and enveloped payloads.
 - Admin user stats handler tests now assert panel `code/msg/ts/data` envelopes for success and database-error paths, service tests propagate stats query failures, and Users frontend tests cover both legacy and enveloped payloads.
 - Admin order stats handler tests now assert panel `code/msg/ts/data` envelopes for success and database-error paths, service tests propagate stats query failures, and Orders frontend tests cover both legacy and enveloped payloads.
+- Async notification service coverage now waits for final send status before asserting copied user IDs, reducing CI timing sensitivity.
 - Admin node stats handler tests now assert panel `code/msg/ts/data` envelopes, and Nodes frontend tests cover both legacy and enveloped payloads.
 - Admin system info handler tests now assert panel `code/msg/ts/data` envelopes, and AdminLayout frontend tests cover both legacy and enveloped payloads.
 - Admin invite stats handler tests now assert panel `code/msg/ts/data` envelopes, and Invite frontend tests cover both legacy and enveloped payloads.

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Build and deploy the v2board panel binary to production.
+# Build and deploy the v2board panel binary from the local source tree.
 #
 # Usage: ./config/deploy/deploy_panel.sh
+#
+# Release builds must be produced by GitHub Actions. This script is kept for
+# development or emergency operator use only and requires ALLOW_LOCAL_BUILD=1.
 #
 # Steps: build -> backup current binary -> stop service -> install new
 # binary -> restart service -> verify it's listening and the gRPC server
@@ -380,6 +383,13 @@ case "${1:-}" in
     exit 0
     ;;
 esac
+
+if [[ "${ALLOW_LOCAL_BUILD:-}" != "1" ]]; then
+  echo "!! deploy_panel.sh performs a local source-tree build."
+  echo "!! Release builds must be produced by GitHub Actions release workflows."
+  echo "!! For development or emergency operator use, rerun with ALLOW_LOCAL_BUILD=1."
+  exit 1
+fi
 
 trap cleanup EXIT
 

@@ -1271,6 +1271,18 @@ func (s *StatsServiceTestSuite) TestGetDashboardStats_ForceRefresh() {
 	assert.False(s.T(), stats.CachedAt.IsZero())
 }
 
+func (s *StatsServiceTestSuite) TestGetDashboardStats_DBError() {
+	db := database.Get()
+	s.Require().NoError(db.Migrator().DropTable(&model.User{}))
+	defer func() {
+		s.Require().NoError(db.AutoMigrate(&model.User{}))
+	}()
+
+	stats, err := s.svc.GetDashboardStats(true)
+	assert.Error(s.T(), err)
+	assert.Nil(s.T(), stats)
+}
+
 func (s *StatsServiceTestSuite) TestGetUserSubscription() {
 	// 鍒涘缓鐢ㄦ埛
 	_, user, _ := s.authSvc.Register("subuser@example.com", "password123", s.cfg)
@@ -2840,7 +2852,7 @@ func (s *NotificationServiceTestSuite) TestSendAsyncCopiesUserID() {
 		err := database.Get().
 			Where("event = ?", "test.async.copy").
 			First(&log).Error
-		return err == nil
+		return err == nil && log.Status == 1
 	}, 2*time.Second, 10*time.Millisecond)
 
 	if assert.NotNil(s.T(), log.UserID) {

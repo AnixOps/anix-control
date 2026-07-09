@@ -748,27 +748,21 @@ jobs:
           4. Confirm payment, node, and subscription credentials are present on the target host.
           5. Confirm the health endpoint and external monitoring target for the deployment.
 
-          ## Existing systemd Source-Tree Deployment
+          ## No Local Release Builds
 
-          On the current root-operated production layout:
+          Do not build release binaries or frontend assets on the production host.
+          `deploy_panel.sh` performs a local source-tree build and is not an approved
+          release deployment path. Release binaries, frontend archives, Docker metadata,
+          checksums, and SBOM must come from this GitHub Actions run.
 
-          ```bash
-          cd /home/dev/anixops/v2board_AnixOps
-          git fetch --tags
-          git checkout {{RELEASE_TAG}}
-          PATH=/usr/local/go/bin:/home/dev/.local/opt/node/bin:$PATH \
-          GO_BIN=/usr/local/go/bin/go \
-          NPM_BIN=/home/dev/.local/opt/node/bin/npm \
-          ./config/deploy/deploy_panel.sh
-          ```
-
-          ## Binary Artifact Deployment
+          ## Systemd Binary Artifact Deployment
 
           1. Download the matching `v2board-*` binary artifact for the host OS and architecture.
-          2. Verify the artifact against `SHA256SUMS.txt`.
-          3. Stop the service manager or drain traffic.
-          4. Replace the binary and frontend static files.
-          5. Start the service and verify `/health`.
+          2. Download `v2board-frontend.tar.gz` or `v2board-frontend.zip`.
+          3. Verify every downloaded artifact against `SHA256SUMS.txt`.
+          4. Stop the service manager or drain traffic.
+          5. Replace the binary and frontend static files.
+          6. Start the service and verify `/health`.
 
           ## Docker Deployment
 

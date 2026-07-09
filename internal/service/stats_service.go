@@ -231,70 +231,118 @@ func (s *StatsService) fetchDashboardFromDB() (*DashboardStats, error) {
 	stats := &DashboardStats{
 		CachedAt: time.Now(),
 	}
+	checkQuery := func(label string, tx *gorm.DB) error {
+		if tx.Error != nil {
+			return fmt.Errorf("%s: %w", label, tx.Error)
+		}
+		return nil
+	}
 
 	now := time.Now().Unix()
 	todayStart := time.Now().Truncate(24 * time.Hour)
 	monthStart := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.Local)
 
 	// 用户统计 (批量查询优化)
-	s.db.Model(&model.User{}).Count(&stats.TotalUsers)
-	s.db.Model(&model.User{}).
+	if err := checkQuery("count total users", s.db.Model(&model.User{}).Count(&stats.TotalUsers)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("count active users", s.db.Model(&model.User{}).
 		Where("banned = 0 AND (expired_at IS NULL OR expired_at > ?)", now).
-		Count(&stats.ActiveUsers)
-	s.db.Model(&model.User{}).
+		Count(&stats.ActiveUsers)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("count expired users", s.db.Model(&model.User{}).
 		Where("expired_at IS NOT NULL AND expired_at <= ?", now).
-		Count(&stats.ExpiredUsers)
-	s.db.Model(&model.User{}).Where("banned = 1").Count(&stats.BannedUsers)
-	s.db.Model(&model.User{}).Where("created_at >= ?", todayStart).Count(&stats.TodayNewUsers)
+		Count(&stats.ExpiredUsers)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("count banned users", s.db.Model(&model.User{}).Where("banned = 1").Count(&stats.BannedUsers)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("count today new users", s.db.Model(&model.User{}).Where("created_at >= ?", todayStart).Count(&stats.TodayNewUsers)); err != nil {
+		return nil, err
+	}
 
 	// 订单统计
-	s.db.Model(&model.Order{}).Count(&stats.TotalOrders)
-	s.db.Model(&model.Order{}).Where("status = 0").Count(&stats.PendingOrders)
-	s.db.Model(&model.Order{}).Where("status IN (1, 3)").Count(&stats.PaidOrders)
-	s.db.Model(&model.Order{}).
+	if err := checkQuery("count total orders", s.db.Model(&model.Order{}).Count(&stats.TotalOrders)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("count pending orders", s.db.Model(&model.Order{}).Where("status = 0").Count(&stats.PendingOrders)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("count paid orders", s.db.Model(&model.Order{}).Where("status IN (1, 3)").Count(&stats.PaidOrders)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("sum total revenue", s.db.Model(&model.Order{}).
 		Where("status IN (1, 3)").
 		Select("COALESCE(SUM(total_amount), 0)").
-		Scan(&stats.TotalRevenue)
-	s.db.Model(&model.Order{}).
+		Scan(&stats.TotalRevenue)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("sum monthly income", s.db.Model(&model.Order{}).
 		Where("status IN (1, 3) AND paid_at >= ?", monthStart.Unix()).
 		Select("COALESCE(SUM(total_amount), 0)").
-		Scan(&stats.MonthlyIncome)
-	s.db.Model(&model.Order{}).
+		Scan(&stats.MonthlyIncome)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("sum today income", s.db.Model(&model.Order{}).
 		Where("status IN (1, 3) AND paid_at >= ?", todayStart.Unix()).
 		Select("COALESCE(SUM(total_amount), 0)").
-		Scan(&stats.TodayIncome)
+		Scan(&stats.TodayIncome)); err != nil {
+		return nil, err
+	}
 
 	// 节点统计
 	var vmessCount, vlessCount, trojanCount, ssCount int64
-	s.db.Model(&model.ServerVMess{}).Where("show = 1").Count(&vmessCount)
-	s.db.Model(&model.ServerVLESS{}).Where("show = 1").Count(&vlessCount)
-	s.db.Model(&model.ServerTrojan{}).Where("show = 1").Count(&trojanCount)
-	s.db.Model(&model.ServerShadowsocks{}).Where("show = 1").Count(&ssCount)
+	if err := checkQuery("count vmess nodes", s.db.Model(&model.ServerVMess{}).Where("show = 1").Count(&vmessCount)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("count vless nodes", s.db.Model(&model.ServerVLESS{}).Where("show = 1").Count(&vlessCount)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("count trojan nodes", s.db.Model(&model.ServerTrojan{}).Where("show = 1").Count(&trojanCount)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("count shadowsocks nodes", s.db.Model(&model.ServerShadowsocks{}).Where("show = 1").Count(&ssCount)); err != nil {
+		return nil, err
+	}
 	stats.TotalNodes = vmessCount + vlessCount + trojanCount + ssCount
 
 	// 活跃节点 (最近5分钟有心跳)
 	fiveMinAgo := now - 300
 	var activeVmess, activeVless, activeTrojan, activeSS int64
-	s.db.Model(&model.ServerVMess{}).Where("show = 1 AND last_check_at > ?", fiveMinAgo).Count(&activeVmess)
-	s.db.Model(&model.ServerVLESS{}).Where("show = 1 AND last_check_at > ?", fiveMinAgo).Count(&activeVless)
-	s.db.Model(&model.ServerTrojan{}).Where("show = 1 AND last_check_at > ?", fiveMinAgo).Count(&activeTrojan)
-	s.db.Model(&model.ServerShadowsocks{}).Where("show = 1 AND last_check_at > ?", fiveMinAgo).Count(&activeSS)
+	if err := checkQuery("count active vmess nodes", s.db.Model(&model.ServerVMess{}).Where("show = 1 AND last_check_at > ?", fiveMinAgo).Count(&activeVmess)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("count active vless nodes", s.db.Model(&model.ServerVLESS{}).Where("show = 1 AND last_check_at > ?", fiveMinAgo).Count(&activeVless)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("count active trojan nodes", s.db.Model(&model.ServerTrojan{}).Where("show = 1 AND last_check_at > ?", fiveMinAgo).Count(&activeTrojan)); err != nil {
+		return nil, err
+	}
+	if err := checkQuery("count active shadowsocks nodes", s.db.Model(&model.ServerShadowsocks{}).Where("show = 1 AND last_check_at > ?", fiveMinAgo).Count(&activeSS)); err != nil {
+		return nil, err
+	}
 	stats.ActiveNodes = activeVmess + activeVless + activeTrojan + activeSS
 
 	// 在线用户数 (从缓存的 alive list 获取)
 	stats.OnlineUsers = s.getOnlineUsersCount()
 
 	// 流量统计
-	s.db.Model(&model.User{}).
+	if err := checkQuery("sum total traffic used", s.db.Model(&model.User{}).
 		Select("COALESCE(SUM(u + d), 0)").
-		Scan(&stats.TotalTrafficUsed)
+		Scan(&stats.TotalTrafficUsed)); err != nil {
+		return nil, err
+	}
 
 	// 今日流量 (从流量日志按本地零点起累计, 与 total_traffic_used 一样按倍率计)
 	todayStartUnix := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Local).Unix()
-	s.db.Model(&model.TrafficLog{}).
+	if err := checkQuery("sum today traffic", s.db.Model(&model.TrafficLog{}).
 		Where("log_at >= ? AND log_at < ?", todayStartUnix, todayStartUnix+24*hourSeconds).
 		Select(s.trafficLogAggregateExpr("")).
-		Scan(&stats.TodayTraffic)
+		Scan(&stats.TodayTraffic)); err != nil {
+		return nil, err
+	}
 
 	return stats, nil
 }

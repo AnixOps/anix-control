@@ -137,6 +137,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Document production deploy command and environment prerequisites.
 - [x] Document SQLite-to-PostgreSQL migration dry run and rollback.
 - [x] Replace placeholder release deploy job with explicit manual/operator flow.
+- [x] Enforce GitHub Actions-only release build policy and guard local source-tree deploy builds.
 
 ## P3: API And UI Consistency
 
@@ -149,7 +150,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Cover Forward observability response envelopes with handler and frontend API compatibility tests.
 - [x] Cover Forward internal traffic report/snapshot response envelopes with handler tests.
 - [x] Normalize admin traffic hourly/user-ranking response envelopes with handler and TrafficHourly frontend compatibility tests.
-- [x] Normalize admin dashboard response envelope with handler and Dashboard frontend compatibility tests.
+- [x] Normalize admin dashboard success/database-error response envelopes with handler, service error propagation, and Dashboard frontend compatibility tests.
 - [x] Normalize admin user stats success/database-error response envelopes with handler, service error propagation, and Users frontend compatibility tests.
 - [x] Normalize admin order stats success/database-error response envelopes with handler, service error propagation, and Orders frontend compatibility tests.
 - [x] Normalize admin node stats response envelope with handler and Nodes frontend compatibility tests.
