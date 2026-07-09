@@ -2008,7 +2008,18 @@ func (s *AdminHandlerTestSuite) TestGetOrder_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "订单ID")
+}
+
+func (s *AdminHandlerTestSuite) TestGetOrder_NotFound() {
+	handler := NewAdminHandler()
+	s.router.GET("/orders/:id", handler.GetOrder)
+
+	req, _ := http.NewRequest("GET", "/orders/99999", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "订单不存在")
 }
 
 func (s *AdminHandlerTestSuite) TestUpdateOrderStatus_Success() {
@@ -2046,6 +2057,52 @@ func (s *AdminHandlerTestSuite) TestUpdateOrderStatus_Success() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
+func (s *AdminHandlerTestSuite) TestUpdateOrderStatus_InvalidID() {
+	handler := NewAdminHandler()
+	s.router.PUT("/orders/:id/status", handler.UpdateOrderStatus)
+
+	body := map[string]any{
+		"status": 1,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/orders/invalid/status", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "订单ID")
+}
+
+func (s *AdminHandlerTestSuite) TestUpdateOrderStatus_InvalidBody() {
+	handler := NewAdminHandler()
+	s.router.PUT("/orders/:id/status", handler.UpdateOrderStatus)
+
+	req, _ := http.NewRequest("PUT", "/orders/99999/status", strings.NewReader("invalid"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "参数错误")
+}
+
+func (s *AdminHandlerTestSuite) TestUpdateOrderStatus_NotFound() {
+	handler := NewAdminHandler()
+	s.router.PUT("/orders/:id/status", handler.UpdateOrderStatus)
+
+	body := map[string]any{
+		"status": 1,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/orders/99999/status", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "订单不存在")
+}
+
 func (s *AdminHandlerTestSuite) TestMarkOrderPaid_Success() {
 	// Create an order
 	order := &model.Order{
@@ -2073,6 +2130,28 @@ func (s *AdminHandlerTestSuite) TestMarkOrderPaid_Success() {
 	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), "订单已开通", data["message"])
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *AdminHandlerTestSuite) TestMarkOrderPaid_NotFound() {
+	handler := NewAdminHandler()
+	s.router.POST("/orders/:id/paid", handler.MarkOrderPaid)
+
+	req, _ := http.NewRequest("POST", "/orders/99999/paid", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "订单不存在")
+}
+
+func (s *AdminHandlerTestSuite) TestMarkOrderPaid_InvalidID() {
+	handler := NewAdminHandler()
+	s.router.POST("/orders/:id/paid", handler.MarkOrderPaid)
+
+	req, _ := http.NewRequest("POST", "/orders/invalid/paid", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "订单ID")
 }
 
 func (s *AdminHandlerTestSuite) TestCancelOrder_Success() {
@@ -2112,7 +2191,18 @@ func (s *AdminHandlerTestSuite) TestCancelOrder_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "订单ID")
+}
+
+func (s *AdminHandlerTestSuite) TestCancelOrder_NotFound() {
+	handler := NewAdminHandler()
+	s.router.POST("/orders/:id/cancel", handler.CancelOrder)
+
+	req, _ := http.NewRequest("POST", "/orders/99999/cancel", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "订单不存在")
 }
 
 func (s *AdminHandlerTestSuite) TestAssignPlanToUser_Success() {
@@ -6736,7 +6826,7 @@ func (s *AdminOrderHandlerTestSuite) TestGetOrder_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "订单ID")
 }
 
 func (s *AdminOrderHandlerTestSuite) TestUpdateOrderStatus() {
@@ -6762,7 +6852,7 @@ func (s *AdminOrderHandlerTestSuite) TestUpdateOrderStatus_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "订单ID")
 }
 
 func (s *AdminOrderHandlerTestSuite) TestMarkOrderPaid() {
@@ -6773,8 +6863,10 @@ func (s *AdminOrderHandlerTestSuite) TestMarkOrderPaid() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	// Service might fail if order not properly configured
-	assert.True(s.T(), w.Code == http.StatusOK || w.Code == http.StatusInternalServerError)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminOrderHandlerTestSuite) TestCancelOrder() {

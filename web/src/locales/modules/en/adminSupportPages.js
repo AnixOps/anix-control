@@ -52,6 +52,82 @@ export default {
       deleteFailed: 'Failed to delete coupon'
     }
   },
+  adminOrders: {
+    title: 'Order Management',
+    subtitle: 'Review orders, handle pending payments, and cancel invalid records.',
+    stats: {
+      totalOrders: 'Total orders',
+      pendingOrders: 'Pending orders',
+      totalRevenue: 'Total revenue',
+      todayRevenue: 'Revenue today'
+    },
+    filters: {
+      tradeNo: 'Order number',
+      email: 'User email',
+      allStatus: 'All statuses'
+    },
+    status: {
+      pending: 'Pending',
+      paid: 'Paid',
+      cancelled: 'Cancelled',
+      completed: 'Completed',
+      unknown: 'Unknown'
+    },
+    actions: {
+      search: 'Search',
+      markPaid: 'Mark paid',
+      cancelOrder: 'Cancel'
+    },
+    table: {
+      tradeNo: 'Order #',
+      user: 'User',
+      plan: 'Plan',
+      period: 'Billing',
+      amount: 'Amount',
+      status: 'Status',
+      createdAt: 'Created at',
+      actions: 'Actions'
+    },
+    detailModal: {
+      title: 'Order details',
+      tradeNo: 'Order number',
+      userEmail: 'User email',
+      plan: 'Plan',
+      period: 'Billing period',
+      amount: 'Amount',
+      status: 'Status',
+      type: 'Order type',
+      createdAt: 'Created at',
+      paidAt: 'Paid at',
+      callbackNo: 'Callback number'
+    },
+    types: {
+      new: 'New purchase',
+      renew: 'Renewal',
+      upgrade: 'Upgrade',
+      resetTraffic: 'Traffic reset',
+      unknown: 'Unknown'
+    },
+    empty: {
+      noData: 'No orders'
+    },
+    pagination: {
+      prev: 'Previous',
+      next: 'Next',
+      info: 'Page {page} of {totalPages}'
+    },
+    messages: {
+      fetchOrdersFailed: 'Failed to load orders',
+      fetchStatsFailed: 'Failed to load order stats',
+      markPaidConfirm: 'Mark order {tradeNo} as paid?',
+      markPaidSuccess: 'Order marked as paid',
+      markPaidFailed: 'Failed to mark order as paid: {message}',
+      markPaidFailedShort: 'Mark paid failed',
+      cancelConfirm: 'Cancel order {tradeNo}?',
+      cancelFailed: 'Failed to cancel order: {message}',
+      cancelFailedShort: 'Cancel failed'
+    }
+  },
   adminInvite: {
     title: 'Invite Rewards',
     subtitle: 'Configure invite commissions, review withdrawals, and track rankings.',

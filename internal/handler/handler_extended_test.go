@@ -4850,7 +4850,7 @@ func (s *AdminExtendedTestSuite) TestMarkOrderPaid_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "订单ID")
 }
 
 func (s *AdminExtendedTestSuite) TestCancelOrder_Success() {
@@ -4881,7 +4881,7 @@ func (s *AdminExtendedTestSuite) TestCancelOrder_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "订单ID")
 }
 
 func (s *AdminExtendedTestSuite) TestUpdateOrderStatus_Success() {
@@ -4915,7 +4915,7 @@ func (s *AdminExtendedTestSuite) TestUpdateOrderStatus_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "订单ID")
 }
 
 func (s *AdminExtendedTestSuite) TestUpdateOrderStatus_InvalidBody() {
@@ -4927,7 +4927,7 @@ func (s *AdminExtendedTestSuite) TestUpdateOrderStatus_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "参数错误")
 }
 
 func (s *AdminExtendedTestSuite) TestUpdateUser_Success() {

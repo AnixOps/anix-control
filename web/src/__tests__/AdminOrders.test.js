@@ -19,6 +19,9 @@ describe('Admin Orders', () => {
     await setLocale('en')
 
     adminApi.getOrderList.mockResolvedValue({ data: { list: [], total: 0 } })
+    adminApi.getOrderStats.mockResolvedValue({ data: {} })
+    adminApi.markOrderPaid.mockResolvedValue({})
+    adminApi.cancelOrder.mockResolvedValue({})
   })
 
   afterEach(() => {
@@ -121,6 +124,50 @@ describe('Admin Orders', () => {
 
     metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
     expect(metricValues).toEqual(['31', '9', '¥345.67', '¥8.90'])
+
+    wrapper.unmount()
+  })
+
+  it('treats panel code -1 mark-paid responses as errors', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    adminApi.markOrderPaid.mockResolvedValueOnce({
+      code: -1,
+      msg: '订单不存在',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Orders)
+    await flushPromises()
+
+    await wrapper.vm.handleMarkPaid({ id: 99, trade_no: 'MISSING-ORDER' })
+    await flushPromises()
+
+    expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('订单不存在'))
+    expect(adminApi.markOrderPaid).toHaveBeenCalledWith(99)
+
+    wrapper.unmount()
+  })
+
+  it('treats panel code -1 cancel responses as errors', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    adminApi.cancelOrder.mockResolvedValueOnce({
+      code: -1,
+      msg: '订单不存在',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Orders)
+    await flushPromises()
+
+    await wrapper.vm.handleCancel({ id: 88, trade_no: 'MISSING-CANCEL' })
+    await flushPromises()
+
+    expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('订单不存在'))
+    expect(adminApi.cancelOrder).toHaveBeenCalledWith(88)
 
     wrapper.unmount()
   })

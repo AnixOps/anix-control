@@ -721,7 +721,7 @@ func (h *AdminHandler) GetOrderList(c *gin.Context) {
 		Email:    email,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取订单列表失败", "error": err.Error()})
+		panelError(c, "获取订单列表失败: "+err.Error())
 		return
 	}
 
@@ -743,13 +743,13 @@ func (h *AdminHandler) GetOrderList(c *gin.Context) {
 func (h *AdminHandler) GetOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的订单ID"})
+		panelError(c, "无效的订单ID")
 		return
 	}
 
 	order, err := h.orderService.GetByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "订单不存在"})
+		panelAdminOrderError(c, "获取订单失败", err)
 		return
 	}
 
@@ -772,7 +772,7 @@ func (h *AdminHandler) GetOrder(c *gin.Context) {
 func (h *AdminHandler) UpdateOrderStatus(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的订单ID"})
+		panelError(c, "无效的订单ID")
 		return
 	}
 
@@ -781,12 +781,12 @@ func (h *AdminHandler) UpdateOrderStatus(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 
 	if err := h.orderService.UpdateStatus(uint(id), req.Status); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败", "error": err.Error()})
+		panelAdminOrderError(c, "更新失败", err)
 		return
 	}
 
@@ -808,19 +808,19 @@ func (h *AdminHandler) UpdateOrderStatus(c *gin.Context) {
 func (h *AdminHandler) MarkOrderPaid(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的订单ID"})
+		panelError(c, "无效的订单ID")
 		return
 	}
 
 	// 先标记为已支付
 	if err := h.orderService.UpdateStatus(uint(id), 1); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败", "error": err.Error()})
+		panelAdminOrderError(c, "更新失败", err)
 		return
 	}
 
 	// 然后完成订单
 	if err := h.orderService.Complete(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "订单完成失败", "error": err.Error()})
+		panelAdminOrderError(c, "订单完成失败", err)
 		return
 	}
 
@@ -842,16 +842,25 @@ func (h *AdminHandler) MarkOrderPaid(c *gin.Context) {
 func (h *AdminHandler) CancelOrder(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的订单ID"})
+		panelError(c, "无效的订单ID")
 		return
 	}
 
 	if err := h.orderService.Cancel(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "取消失败", "error": err.Error()})
+		panelAdminOrderError(c, "取消失败", err)
 		return
 	}
 
 	panelSuccess(c, gin.H{"message": "取消成功"})
+}
+
+func panelAdminOrderError(c *gin.Context, fallback string, err error) {
+	switch {
+	case errors.Is(err, service.ErrOrderNotFound), errors.Is(err, service.ErrOrderPlanNotFound):
+		panelError(c, err.Error())
+	default:
+		panelError(c, fallback+": "+err.Error())
+	}
 }
 
 // GetOrderStats godoc
