@@ -241,9 +241,11 @@ bash config/deploy/deploy_panel.sh --self-test
 本机构建残留清理：
 
 ```bash
-rm -rf v2board v2board.exe server migrate v2board.bak.* web/bundle-reports
-sudo rm -rf web/public
+bash config/deploy/clean_local_build_artifacts.sh --dry-run
+bash config/deploy/clean_local_build_artifacts.sh
 ```
+
+如果旧产物由 root 生成导致普通用户无权删除，脚本会输出需要用 root 执行的精确 `sudo rm -rf -- ...` 命令。
 
 不要用上面的清理命令删除 `config/config.yaml`、数据库、TLS 证书、Ansible inventory、备份或 `web/node_modules`。
 

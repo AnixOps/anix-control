@@ -41,8 +41,14 @@ jobs:
       - name: Validate panel deploy script syntax
         run: bash -n config/deploy/deploy_panel.sh
 
+      - name: Validate local build cleanup script syntax
+        run: bash -n config/deploy/clean_local_build_artifacts.sh
+
       - name: Run panel deploy script self-test
         run: bash config/deploy/deploy_panel.sh --self-test
+
+      - name: Run local build cleanup script self-test
+        run: bash config/deploy/clean_local_build_artifacts.sh --self-test
 
   go-quality:
     name: Go Quality Gates

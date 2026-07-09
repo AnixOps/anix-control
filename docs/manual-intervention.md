@@ -100,6 +100,7 @@ Root-only cleanup for old local build outputs:
 
 ```bash
 cd /home/dev/anixops/v2board_AnixOps
-rm -rf v2board v2board.exe server migrate v2board.bak.* web/bundle-reports
-rm -rf web/public
+bash config/deploy/clean_local_build_artifacts.sh --dry-run
+bash config/deploy/clean_local_build_artifacts.sh
+# If the script reports root-owned artifacts, run the exact sudo command it prints.
 ```

@@ -7,6 +7,7 @@ New CI coverage added:
 - Go setup is pinned to `1.26.5` in CI workflows so `govulncheck` runs against the fixed stdlib baseline used for Actions release artifacts.
 - GitHub Actions dependencies are refreshed to current major versions so CI and release jobs do not depend on deprecated Node.js 20 action runtimes.
 - Integration workflow unit tests now generate `coverage.out` before artifact upload.
+- Local build artifact cleanup has a script self-test in CI covering removal of known outputs while preserving config, database, and `web/node_modules` content.
 - `go mod tidy` cleanliness check.
 - `gofmt` check for tracked Go files.
 - `go vet ./...`.

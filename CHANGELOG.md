@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added a safe local build artifact cleanup helper with CI self-tests so stale source-tree outputs can be removed without touching config, database, certificates, backups, or `web/node_modules`.
 - Added `docs/features.md` as the current feature status register for implemented, partial, planned, deferred, and compatibility surfaces, with an update rule for every feature-status-changing commit.
 
 ### Fixed
