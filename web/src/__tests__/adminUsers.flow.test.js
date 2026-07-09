@@ -7,6 +7,7 @@ const mockCreateUser = vi.fn()
 const mockGetUserList = vi.fn()
 const mockGetUserStats = vi.fn()
 const mockUpdateUser = vi.fn()
+const mockBanUser = vi.fn()
 const mockGetSubscriptionGroups = vi.fn()
 const mockGetSubscriptionSettings = vi.fn()
 const mockGetTrafficHourly = vi.fn()
@@ -14,7 +15,7 @@ const mockResetUserSubscribe = vi.fn()
 
 vi.mock('@/api/admin', () => ({
   assignAdminUserTunnel: vi.fn(),
-  banUser: vi.fn(),
+  banUser: (...args) => mockBanUser(...args),
   createUser: (...args) => mockCreateUser(...args),
   getAdminUserTunnelList: vi.fn(),
   getForwardTunnels: vi.fn(),
@@ -39,6 +40,7 @@ describe('Admin Users flow', () => {
     mockGetUserList.mockReset()
     mockGetUserStats.mockReset()
     mockUpdateUser.mockReset()
+    mockBanUser.mockReset()
     mockGetSubscriptionGroups.mockReset()
     mockGetSubscriptionSettings.mockReset()
     mockGetTrafficHourly.mockReset()
@@ -46,12 +48,14 @@ describe('Admin Users flow', () => {
     vi.spyOn(window, 'alert').mockImplementation(() => {})
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
+    mockGetUserList.mockResolvedValue({ data: { list: [], total: 0 } })
     mockGetUserStats.mockResolvedValue({ data: {} })
     mockGetSubscriptionGroups.mockResolvedValue({ data: [] })
     mockGetSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: [] } })
     mockGetTrafficHourly.mockResolvedValue({ data: [] })
     mockResetUserSubscribe.mockResolvedValue({})
     mockUpdateUser.mockResolvedValue({})
+    mockBanUser.mockResolvedValue({})
     mockCreateUser.mockResolvedValue({})
   })
 
@@ -219,5 +223,86 @@ describe('Admin Users flow', () => {
 
     expect(mockResetUserSubscribe).toHaveBeenCalledWith(3)
     expect(window.alert).toHaveBeenCalledWith('Subscription link reset')
+  })
+
+  it('treats panel code -1 create-user responses as form errors', async () => {
+    mockCreateUser.mockResolvedValueOnce({
+      code: -1,
+      msg: '该邮箱已被注册',
+      data: null,
+      ts: 1783526400000,
+    })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+
+    wrapper.vm.newUser.email = 'duplicate@example.com'
+    wrapper.vm.newUser.password = 'password123'
+    await wrapper.vm.handleCreateUser()
+    await flushPromises()
+
+    expect(wrapper.vm.createError).toBe('该邮箱已被注册')
+    expect(window.alert).not.toHaveBeenCalledWith('User created successfully')
+  })
+
+  it('treats panel code -1 update-user responses as errors', async () => {
+    const user = { id: 404, email: 'missing@example.com', banned: 0 }
+    mockGetUserList.mockResolvedValue({ data: { list: [user], total: 1 } })
+    mockUpdateUser.mockResolvedValueOnce({
+      code: -1,
+      msg: '用户不存在',
+      data: null,
+      ts: 1783526400000,
+    })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+
+    wrapper.vm.editUser(user)
+    await wrapper.vm.saveUser()
+    await flushPromises()
+
+    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('用户不存在'))
+    expect(mockUpdateUser).toHaveBeenCalledWith(404, expect.any(Object))
+  })
+
+  it('treats panel code -1 ban responses as errors', async () => {
+    const user = { id: 405, email: 'ban-missing@example.com', banned: 0 }
+    mockGetUserList.mockResolvedValue({ data: { list: [user], total: 1 } })
+    mockBanUser.mockResolvedValueOnce({
+      code: -1,
+      msg: '用户不存在',
+      data: null,
+      ts: 1783526400000,
+    })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+
+    await wrapper.vm.handleBan(user)
+    await flushPromises()
+
+    expect(window.alert).toHaveBeenCalledWith('用户不存在')
+    expect(mockBanUser).toHaveBeenCalledWith(405)
+  })
+
+  it('treats panel code -1 reset-subscribe responses as errors', async () => {
+    const user = { id: 406, email: 'sub-missing@example.com', token: 'old-token', banned: 0 }
+    mockGetUserList.mockResolvedValue({ data: { list: [user], total: 1 } })
+    mockResetUserSubscribe.mockResolvedValueOnce({
+      code: -1,
+      msg: '用户不存在',
+      data: null,
+      ts: 1783526400000,
+    })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+
+    await wrapper.vm.resetSubscribe(user)
+    await flushPromises()
+
+    expect(window.alert).toHaveBeenCalledWith('用户不存在')
+    expect(mockResetUserSubscribe).toHaveBeenCalledWith(406)
   })
 })

@@ -349,6 +349,12 @@ const assertCompatSuccess = (res, fallback = t('adminUsers.messages.actionFailed
   if (res && typeof res.code === 'number' && res.code !== 0) throw new Error(res.msg || fallback)
   return res
 }
+const readApiError = (err, fallback = t('adminUsers.messages.actionFailed')) => (
+  err?.response?.data?.msg ||
+  err?.response?.data?.message ||
+  err?.message ||
+  fallback
+)
 const getResData = (res, fallback = t('adminUsers.messages.actionFailed')) => {
   if (!res) return null
   if (typeof res.code === 'number') {
@@ -382,14 +388,14 @@ const handleCreateUser = async () => {
   createLoading.value = true
   createError.value = ''
   try {
-    await createUser(newUser.value)
+    assertCompatSuccess(await createUser(newUser.value), t('adminUsers.messages.createFailed'))
     showCreateModal.value = false
     newUser.value = newBlankUser()
     fetchUsers()
     fetchStats()
     notify(t('adminUsers.messages.userCreated'))
   } catch (err) {
-    createError.value = err.response?.data?.message || t('adminUsers.messages.createFailed')
+    createError.value = readApiError(err, t('adminUsers.messages.createFailed'))
   } finally {
     createLoading.value = false
   }
@@ -419,26 +425,26 @@ const editUser = (user) => {
 }
 const saveUser = async () => {
   try {
-    await updateUser(editingUser.value.id, {
+    assertCompatSuccess(await updateUser(editingUser.value.id, {
       email: editingUser.value.email, balance: editingUser.value.balance, transfer_enable: editingUser.value.transfer_enable,
       speed_limit: Number(editingUser.value.speed_limit || 0), device_limit: Number(editingUser.value.device_limit || 0),
       expired_at: editingUser.value.expired_at, flowResetTime: Number(editingUser.value.flowResetTime || 0), remark_content: editingUser.value.remark_content,
       group_id: editingUser.value.group_id || null
-    })
+    }), t('adminUsers.messages.actionFailed'))
     showEditModal.value = false
     fetchUsers()
   } catch (err) {
-    notify(t('adminUsers.messages.saveFailed', { message: err.response?.data?.message || err.message }))
+    notify(t('adminUsers.messages.saveFailed', { message: readApiError(err) }))
   }
 }
 
 const handleBan = async (user) => {
   if (!confirmAction(t('adminUsers.messages.confirmBan', { email: user.email }))) return
-  try { await banUser(user.id); fetchUsers(); fetchStats() } catch (err) { notify(t('adminUsers.messages.actionFailed')) }
+  try { assertCompatSuccess(await banUser(user.id)); fetchUsers(); fetchStats() } catch (err) { notify(readApiError(err)) }
 }
 const handleUnban = async (user) => {
   if (!confirmAction(t('adminUsers.messages.confirmUnban', { email: user.email }))) return
-  try { await unbanUser(user.id); fetchUsers(); fetchStats() } catch (err) { notify(t('adminUsers.messages.actionFailed')) }
+  try { assertCompatSuccess(await unbanUser(user.id)); fetchUsers(); fetchStats() } catch (err) { notify(readApiError(err)) }
 }
 
 const openResetUserDialog = (user) => {
@@ -522,11 +528,11 @@ const loadSubscriptionSettings = async () => {
 const resetSubscribe = async (user) => {
   if (!confirm(t('adminUsers.messages.resetSubscribeConfirm', { email: user.email }))) return
   try {
-    await resetUserSubscribe(user.id)
+    assertCompatSuccess(await resetUserSubscribe(user.id), t('adminUsers.messages.resetSubscribeFailed'))
     notify(t('adminUsers.messages.resetSubscribeSuccess'))
     await fetchUsers()
   } catch (err) {
-    notify(err.response?.data?.message || err.message || t('adminUsers.messages.resetSubscribeFailed'))
+    notify(readApiError(err, t('adminUsers.messages.resetSubscribeFailed')))
   }
 }
 

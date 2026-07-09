@@ -1438,7 +1438,7 @@ func (s *AdminHandlerTestSuite) TestCreateUser_DuplicateEmail() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "该邮箱已被注册")
 }
 
 func (s *AdminHandlerTestSuite) TestCreateUser_InvalidBody() {
@@ -1450,7 +1450,7 @@ func (s *AdminHandlerTestSuite) TestCreateUser_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "参数错误")
 }
 
 func (s *AdminHandlerTestSuite) TestGetUserList_Success() {
@@ -1512,7 +1512,7 @@ func (s *AdminHandlerTestSuite) TestGetUser_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assertPanelTestError(s.T(), w, "用户不存在")
 }
 
 func (s *AdminHandlerTestSuite) TestGetUser_InvalidID() {
@@ -1523,7 +1523,7 @@ func (s *AdminHandlerTestSuite) TestGetUser_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "用户ID")
 }
 
 func (s *AdminHandlerTestSuite) TestUpdateUser_Success() {
@@ -1562,7 +1562,34 @@ func (s *AdminHandlerTestSuite) TestUpdateUser_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "用户ID")
+}
+
+func (s *AdminHandlerTestSuite) TestUpdateUser_InvalidBody() {
+	handler := NewAdminHandler()
+	s.router.PUT("/users/:id", handler.UpdateUser)
+
+	req, _ := http.NewRequest("PUT", "/users/"+strconv.FormatUint(uint64(s.testUser.ID), 10), strings.NewReader("invalid"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "参数错误")
+}
+
+func (s *AdminHandlerTestSuite) TestUpdateUser_NotFound() {
+	handler := NewAdminHandler()
+	s.router.PUT("/users/:id", handler.UpdateUser)
+
+	body := map[string]any{"balance": 1000}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/users/99999", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "用户不存在")
 }
 
 func (s *AdminHandlerTestSuite) TestDeleteUser_Success() {
@@ -1903,7 +1930,18 @@ func (s *AdminHandlerTestSuite) TestBanUser_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "用户ID")
+}
+
+func (s *AdminHandlerTestSuite) TestBanUser_NotFound() {
+	handler := NewAdminHandler()
+	s.router.POST("/users/:id/ban", handler.BanUser)
+
+	req, _ := http.NewRequest("POST", "/users/99999/ban", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "用户不存在")
 }
 
 func (s *AdminHandlerTestSuite) TestUnbanUser_InvalidID() {
@@ -1914,7 +1952,18 @@ func (s *AdminHandlerTestSuite) TestUnbanUser_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "用户ID")
+}
+
+func (s *AdminHandlerTestSuite) TestUnbanUser_NotFound() {
+	handler := NewAdminHandler()
+	s.router.POST("/users/:id/unban", handler.UnbanUser)
+
+	req, _ := http.NewRequest("POST", "/users/99999/unban", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "用户不存在")
 }
 
 func (s *AdminHandlerTestSuite) TestResetUserTraffic_InvalidID() {
@@ -1925,7 +1974,40 @@ func (s *AdminHandlerTestSuite) TestResetUserTraffic_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "用户ID")
+}
+
+func (s *AdminHandlerTestSuite) TestResetUserTraffic_NotFound() {
+	handler := NewAdminHandler()
+	s.router.POST("/users/:id/reset-traffic", handler.ResetUserTraffic)
+
+	req, _ := http.NewRequest("POST", "/users/99999/reset-traffic", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "用户不存在")
+}
+
+func (s *AdminHandlerTestSuite) TestResetUserSubscribe_InvalidID() {
+	handler := NewAdminHandler()
+	s.router.POST("/users/:id/reset-subscribe", handler.ResetUserSubscribe)
+
+	req, _ := http.NewRequest("POST", "/users/invalid/reset-subscribe", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "用户ID")
+}
+
+func (s *AdminHandlerTestSuite) TestResetUserSubscribe_NotFound() {
+	handler := NewAdminHandler()
+	s.router.POST("/users/:id/reset-subscribe", handler.ResetUserSubscribe)
+
+	req, _ := http.NewRequest("POST", "/users/99999/reset-subscribe", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "用户不存在")
 }
 
 func (s *AdminHandlerTestSuite) TestDeleteUser_InvalidID() {
@@ -1936,7 +2018,18 @@ func (s *AdminHandlerTestSuite) TestDeleteUser_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "用户ID")
+}
+
+func (s *AdminHandlerTestSuite) TestDeleteUser_NotFound() {
+	handler := NewAdminHandler()
+	s.router.DELETE("/users/:id", handler.DeleteUser)
+
+	req, _ := http.NewRequest("DELETE", "/users/99999", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "用户不存在")
 }
 
 func (s *AdminHandlerTestSuite) TestCreatePlan_InvalidBody() {

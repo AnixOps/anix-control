@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"time"
 
 	"github.com/anixops/v2board/internal/database"
@@ -13,6 +14,9 @@ import (
 type UserService struct {
 	db *gorm.DB
 }
+
+// ErrUserNotFound is returned when a mutating user operation targets no row.
+var ErrUserNotFound = errors.New("用户不存在")
 
 // NewUserService 创建用户服务
 func NewUserService() *UserService {
@@ -215,12 +219,28 @@ func (s *UserService) Create(user *model.User) error {
 
 // Update 更新用户
 func (s *UserService) Update(id uint, updates map[string]any) error {
+	if err := s.ensureUserExists(id); err != nil {
+		return err
+	}
+	if len(updates) == 0 {
+		return nil
+	}
 	return s.db.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error
 }
 
 // Delete 删除用户
 func (s *UserService) Delete(id uint) error {
-	return s.db.Delete(&model.User{}, id).Error
+	if id == 0 {
+		return ErrUserNotFound
+	}
+	res := s.db.Delete(&model.User{}, id)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrUserNotFound
+	}
+	return nil
 }
 
 // Ban 封禁用户
@@ -247,6 +267,21 @@ func (s *UserService) ResetToken(id uint) (string, error) {
 		return "", err
 	}
 	return newToken, nil
+}
+
+func (s *UserService) ensureUserExists(id uint) error {
+	if id == 0 {
+		return ErrUserNotFound
+	}
+
+	var user model.User
+	if err := s.db.Select("id").First(&user, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 // GetStats 获取用户统计

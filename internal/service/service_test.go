@@ -733,6 +733,11 @@ func (s *UserServiceTestSuite) TestBanUnban() {
 	assert.Equal(s.T(), 0, found.Banned)
 }
 
+func (s *UserServiceTestSuite) TestBanUnban_NotFound() {
+	assert.ErrorIs(s.T(), s.svc.Ban(99999), ErrUserNotFound)
+	assert.ErrorIs(s.T(), s.svc.Unban(99999), ErrUserNotFound)
+}
+
 func (s *UserServiceTestSuite) TestResetTraffic() {
 	user := &model.User{
 		Email:          "reset@example.com",
@@ -752,6 +757,16 @@ func (s *UserServiceTestSuite) TestResetTraffic() {
 	found, _ := s.svc.GetByID(user.ID)
 	assert.Equal(s.T(), int64(0), found.U)
 	assert.Equal(s.T(), int64(0), found.D)
+}
+
+func (s *UserServiceTestSuite) TestResetTraffic_NotFound() {
+	assert.ErrorIs(s.T(), s.svc.ResetTraffic(99999), ErrUserNotFound)
+}
+
+func (s *UserServiceTestSuite) TestResetToken_NotFound() {
+	token, err := s.svc.ResetToken(99999)
+	assert.ErrorIs(s.T(), err, ErrUserNotFound)
+	assert.Empty(s.T(), token)
 }
 
 func TestUserService(t *testing.T) {
@@ -4765,6 +4780,11 @@ func (s *UserServiceTestSuite) TestCreate() {
 	assert.NotZero(s.T(), user.ID)
 }
 
+func (s *UserServiceTestSuite) TestUpdate_NotFound() {
+	err := s.svc.Update(99999, map[string]any{"balance": 100})
+	assert.ErrorIs(s.T(), err, ErrUserNotFound)
+}
+
 func (s *UserServiceTestSuite) TestDelete() {
 	user := &model.User{
 		Email:          "deletetest@test.com",
@@ -4780,6 +4800,11 @@ func (s *UserServiceTestSuite) TestDelete() {
 
 	_, err = s.svc.GetByID(user.ID)
 	assert.Error(s.T(), err)
+}
+
+func (s *UserServiceTestSuite) TestDelete_NotFound() {
+	err := s.svc.Delete(99999)
+	assert.ErrorIs(s.T(), err, ErrUserNotFound)
 }
 
 // =====================================================

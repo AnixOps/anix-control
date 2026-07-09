@@ -63,7 +63,7 @@ func NewAdminHandler() *AdminHandler {
 func (h *AdminHandler) CreateUser(c *gin.Context) {
 	var req model.AdminCreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 
@@ -72,14 +72,14 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	// 检查邮箱是否已存在
 	var existingUser model.User
 	if err := db.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "该邮箱已被注册"})
+		panelError(c, "该邮箱已被注册")
 		return
 	}
 
 	// 密码加密
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "密码加密失败"})
+		panelError(c, "密码加密失败")
 		return
 	}
 
@@ -106,7 +106,7 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 	}
 
 	if err := db.Create(user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "创建用户失败", "error": err.Error()})
+		panelError(c, "创建用户失败: "+err.Error())
 		return
 	}
 
@@ -149,7 +149,7 @@ func (h *AdminHandler) GetUserList(c *gin.Context) {
 		Status:   status,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取用户列表失败", "error": err.Error()})
+		panelError(c, "获取用户列表失败: "+err.Error())
 		return
 	}
 
@@ -169,13 +169,13 @@ func (h *AdminHandler) GetUserList(c *gin.Context) {
 func (h *AdminHandler) GetUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的用户ID"})
+		panelError(c, "无效的用户ID")
 		return
 	}
 
 	user, err := h.userService.GetByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "用户不存在"})
+		panelError(c, "用户不存在")
 		return
 	}
 
@@ -198,7 +198,7 @@ func (h *AdminHandler) GetUser(c *gin.Context) {
 func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的用户ID"})
+		panelError(c, "无效的用户ID")
 		return
 	}
 
@@ -219,7 +219,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 
@@ -230,7 +230,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	if req.Password != nil && *req.Password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "密码加密失败"})
+			panelError(c, "密码加密失败")
 			return
 		}
 		updates["password"] = string(hash)
@@ -288,7 +288,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	}
 
 	if err := h.userService.Update(uint(id), updates); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败", "error": err.Error()})
+		panelAdminUserError(c, "更新失败", err)
 		return
 	}
 
@@ -310,12 +310,12 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 func (h *AdminHandler) BanUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的用户ID"})
+		panelError(c, "无效的用户ID")
 		return
 	}
 
 	if err := h.userService.Ban(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "封禁失败", "error": err.Error()})
+		panelAdminUserError(c, "封禁失败", err)
 		return
 	}
 
@@ -337,12 +337,12 @@ func (h *AdminHandler) BanUser(c *gin.Context) {
 func (h *AdminHandler) UnbanUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的用户ID"})
+		panelError(c, "无效的用户ID")
 		return
 	}
 
 	if err := h.userService.Unban(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "解封失败", "error": err.Error()})
+		panelAdminUserError(c, "解封失败", err)
 		return
 	}
 
@@ -364,12 +364,12 @@ func (h *AdminHandler) UnbanUser(c *gin.Context) {
 func (h *AdminHandler) ResetUserTraffic(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的用户ID"})
+		panelError(c, "无效的用户ID")
 		return
 	}
 
 	if err := h.userService.ResetTraffic(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "重置失败", "error": err.Error()})
+		panelAdminUserError(c, "重置失败", err)
 		return
 	}
 
@@ -391,13 +391,13 @@ func (h *AdminHandler) ResetUserTraffic(c *gin.Context) {
 func (h *AdminHandler) ResetUserSubscribe(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的用户ID"})
+		panelError(c, "无效的用户ID")
 		return
 	}
 
 	newToken, err := h.userService.ResetToken(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "重置订阅失败", "error": err.Error()})
+		panelAdminUserError(c, "重置订阅失败", err)
 		return
 	}
 
@@ -447,6 +447,15 @@ func compatError(c *gin.Context, msg string) {
 	})
 }
 
+func panelAdminUserError(c *gin.Context, fallback string, err error) {
+	switch {
+	case errors.Is(err, service.ErrUserNotFound):
+		panelError(c, err.Error())
+	default:
+		panelError(c, fallback+": "+err.Error())
+	}
+}
+
 // DeleteUser godoc
 // @Summary 删除用户
 // @Description 管理员删除指定用户
@@ -462,12 +471,12 @@ func compatError(c *gin.Context, msg string) {
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "无效的用户ID"})
+		panelError(c, "无效的用户ID")
 		return
 	}
 
 	if err := h.userService.Delete(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "删除失败", "error": err.Error()})
+		panelAdminUserError(c, "删除失败", err)
 		return
 	}
 
