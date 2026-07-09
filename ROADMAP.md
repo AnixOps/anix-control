@@ -3,6 +3,7 @@
 Date: 2026-07-08
 
 This roadmap is ordered by stability and release risk. Items move to done only after code, tests, and CI evidence exist.
+The P0 WireGuard protocol support phase takes priority over ordinary P1/P2 cleanup once implementation starts.
 
 ## Phase 1: Audit And Baseline
 
@@ -57,7 +58,23 @@ Status: in progress
 - Add forwarding design, API, security, and compatibility docs.
 - Review long-running worker cancellation and drain behavior.
 
-## Phase 6: API And UI Consistency
+## Phase 6: P0 WireGuard Protocol Support
+
+Status: planned
+
+Priority: P0, above ordinary P1/P2 finishing work.
+
+- Deliver WireGuard user access through the selected dual-node relay path: WireGuard access -> domestic entry termination -> GOST relay+QUIC -> overseas exit NAT.
+- Keep GOST relay+QUIC as the default domestic-entry to overseas-exit tunnel backend.
+- Provide a panel UI one-click switch for WSS compatibility mode through GOST relay+WSS; WSS is not the default mode.
+- Add panel models, API contracts, validation, and admin UI for WireGuard CIDR, automatic peer IP allocation, keypair and preshared key custody, MTU, DNS, routes, limits, online state, traffic accounting, entry node, exit node, and tunnel type.
+- Add subscription output for Shadowrocket, Loon, v2rayN, and other common clients that can import WireGuard profiles.
+- Add V2bX runtime support so both domestic entry nodes and overseas exit nodes receive panel configuration and apply the running WireGuard, relay tunnel, and NAT state.
+- Add integration tests and GitHub Actions verification before marking the protocol path complete.
+
+Current slice: documentation and planning only. No WireGuard code, runtime behavior, tests, or CI jobs are implemented yet.
+
+## Phase 7: API And UI Consistency
 
 Status: planned
 
@@ -67,7 +84,7 @@ Status: planned
 - Keep frontend test/build/audit jobs green.
 - Avoid copying third-party AGPL code, assets, UI text, or implementation details.
 
-## Phase 7: Release Maturity
+## Phase 8: Release Maturity
 
 Status: planned
 

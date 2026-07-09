@@ -47,6 +47,18 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Attach `UPGRADE.md` to GitHub Release assets and guard it in release workflow policy/artifact verification.
 - [x] Attach deterministic `RELEASE_NOTES.md` generated from `CHANGELOG.md` to GitHub Release assets and guard it in release workflow policy/artifact verification.
 
+## P0: WireGuard Dual-Node Entry/Exit Support
+
+- [x] Document the first-stage plan for WireGuard access through a domestic entry node and overseas exit node.
+- [ ] Implement panel models, API contracts, validation, and admin UI for WireGuard CIDR, peer allocation, tunnel type, key material, MTU, DNS, entry node, and exit node configuration.
+- [ ] Implement subscription output for common WireGuard clients, including Shadowrocket, Loon, and v2rayN.
+- [ ] Implement V2bX runtime application for both domestic entry termination and overseas exit NAT configuration.
+- [ ] Add integration, compatibility, traffic-accounting, online-state, limit, and migration tests.
+- [ ] Add GitHub Actions verification coverage for the WireGuard relay path before marking any runtime behavior complete.
+
+First-stage scope: documentation and planning only. No panel code, runtime code, tests, or CI jobs are implemented in this slice.
+Target path: WireGuard access -> domestic entry termination -> GOST relay+QUIC -> overseas exit NAT. WSS is a one-click compatibility mode, not the default tunnel mode.
+
 ## P1: Security And Error Handling
 
 - [x] Replace fixed bootstrap admin password when `admin.password` is empty.

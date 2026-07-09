@@ -22,6 +22,7 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 | [Forward Runtime Operations](forward-tunnel-runtime-ops.md) | Runtime ownership, evidence chain, and what counts as a real relay attachment |
 | [Forward/Tunnel Manual Smoke Tests](forward-tunnel-smoke-test.md) | Manual and real-machine proof steps for `gost`, `nftables_ansible`, and legacy `iptables_ansible` |
 | [Forward Runtime Work Plan](forward-runtime-work-plan.md) | Parallel work-package plan for the next dual-runtime implementation stage |
+| [WireGuard Dual-Node Relay Plan](wireguard-relay.md) | P0 WireGuard access, domestic entry termination, GOST relay+QUIC default transport, WSS compatibility mode, and phased implementation plan |
 | [Node Management](node-management.md) | Node registration, heartbeat, protocol config and operations |
 | [Client Compatibility](client-compatibility.md) | V2bX/XrayR and related compatibility notes |
 | [API Reference](api-reference.md) | Existing project API overview |

@@ -90,6 +90,10 @@ two documents disagree, this file is the status source of truth.
 | Forwarding | Traffic upload/report/snapshot | Implemented | `/flow/upload`, `/api/v2/internal/forward/traffic/*` | Keep app-token auth and stats tests current. |
 | Forwarding | Observability targets, trend, topology, multi-ingress | Implemented | `/api/v2/admin/forward/observability/*` | Add more real runtime data sources if needed. |
 | Forwarding | Complex load balancing, failover, chain orchestration | Deferred | None | Deferred by product scope for simplicity and auditability. |
+| WireGuard | WireGuard user access over dual-node relay | Planned/P0 | `docs/guide/wireguard-relay.md` planning only | Implement WireGuard access -> domestic entry termination -> GOST relay+QUIC -> overseas exit NAT across panel, subscription output, V2bX runtime, tests, and GitHub Actions verification. |
+| WireGuard | WireGuard subscription output for Shadowrocket/Loon/v2rayN | Planned | `docs/guide/wireguard-relay.md` planning only | Add client-compatible WireGuard config generation after panel peer allocation and key management exist. |
+| WireGuard | GOST relay+QUIC tunnel backend | Planned | `docs/guide/wireguard-relay.md` planning only | Add panel tunnel config and V2bX entry/exit runtime support; this is the default entry-to-exit transport for the P0 WireGuard path. |
+| WireGuard | WSS compatibility tunnel mode | Planned | `docs/guide/wireguard-relay.md` planning only | Add admin one-click switch to GOST relay+WSS for restrictive networks; WSS is compatibility mode, not the default. |
 | Operations | Deployment, upgrade, and production docs | Implemented | GitHub Actions release artifacts, guarded local `config/deploy/deploy_panel.sh`, guarded legacy `config/scripts/deploy.sh` and `config/scripts/pre-deploy.sh`, guarded V2bX Ansible rollout helper, CI release-build policy check, safe local artifact cleanup helper with opt-in deploy archive cleanup, `docs/DEPLOYMENT.md`, `docs/UPGRADE.md` | Keep local build guard, cleanup helper, artifact deployment docs, and upgrade rollback docs aligned. |
 | Operations | SQLite to PostgreSQL migration docs and tooling | Implemented | migration commands/docs | Keep dry-run evidence for schema changes. |
 | Operations | CI baseline | Implemented | GitHub Actions on Go 1.26.5 with current action runtimes for gofmt, vet, test, race, lint, gosec, govulncheck, Docker smoke, release-build policy, documentation sync, and release workflow policy checks | Watch runtime of full race testing. |
@@ -111,6 +115,7 @@ These items must not be described as production-complete until the listed gaps a
 | Full Flux Panel clone parity | Partial | Compatibility API and major UI surfaces exist, but relation-backed counters, runtime enforcement, and several parity gaps remain. |
 | Runtime-side speed-limit enforcement | Partial | Management APIs/UI exist; enforcement still needs proof in runtime paths. |
 | gRPC production node transport | Partial | Protobuf/server/client code exists; production startup, config, and integration rollout are not complete. |
+| P0 WireGuard dual-node relay | Planned/P0 | Only planning documentation exists. The panel has no WireGuard peer model/API/UI, no subscription output for WireGuard clients, no V2bX runtime application for domestic entry termination or overseas exit NAT, no GOST relay+QUIC/WSS tunnel orchestration, and no traffic/online/limit/integration/CI evidence. |
 | Automatic node deployment | Planned | Agent/Ansible surfaces exist, but one-click safe production provisioning is not complete. |
 | Complex forwarding failover/load orchestration | Deferred | Deliberately postponed to keep forwarding minimal and auditable. |
 | Anonymous or unaudited forwarding | Deferred | Explicitly out of scope for security and compliance reasons. |
@@ -138,5 +143,6 @@ Do not normalize these responses blindly, because external clients depend on the
 - `docs/forwarding/design.md`: forwarding module design.
 - `docs/forwarding/api.md`: forwarding API contract.
 - `docs/forwarding/security.md`: forwarding security constraints.
+- `docs/guide/wireguard-relay.md`: P0 WireGuard dual-node relay plan.
 - `docs/guide/flux-panel-workstream.md`: Flux clone status and parity requirements.
 - `docs/DEPLOYMENT.md`: deployment command and prerequisites.
