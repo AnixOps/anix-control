@@ -482,10 +482,14 @@ export default {
     confirmPasswordPlaceholder: '请再次输入密码',
     inviteCodeLabel: '邀请码（可选）',
     inviteCodePlaceholder: '如站点要求邀请码，请在此填写',
+    mfaCodeLabel: '认证码',
+    mfaCodePlaceholder: '输入 TOTP 或备用码',
+    mfaRequired: '请输入 MFA 认证码完成登录。',
     forgotPassword: '忘记密码？',
     switchToRegister: '没有账户？去注册',
     switchToLogin: '已有账户？去登录',
     submitLogin: '登录',
+    submitMFA: '验证并登录',
     submitRegister: '注册',
     loadingLogin: '登录中...',
     loadingRegister: '注册中...',
@@ -497,7 +501,8 @@ export default {
       passwordMin: '密码长度至少 6 位',
       passwordMismatch: '两次输入的密码不一致',
       registerFailed: '注册失败，请稍后重试',
-      loginFailed: '登录失败，请检查邮箱和密码'
+      loginFailed: '登录失败，请检查邮箱和密码',
+      mfaCodeRequired: '请输入 MFA 认证码。'
     },
     success: {
       registerCompleted: '注册成功，正在跳转...'

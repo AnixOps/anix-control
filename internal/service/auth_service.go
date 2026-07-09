@@ -108,33 +108,48 @@ func (s *AuthService) RegisterWithInvite(email, password, inviteCode string, cfg
 	return token, user, nil
 }
 
-// Login validates credentials and returns a JWT token.
-func (s *AuthService) Login(email, password string, cfg *config.Config) (string, *model.User, error) {
+// Authenticate validates login credentials and account state without issuing a token.
+func (s *AuthService) Authenticate(email, password string) (*model.User, error) {
 	var user model.User
+	email = strings.ToLower(strings.TrimSpace(email))
 	if err := database.GetDB().Where("email = ?", email).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return "", nil, errors.New("用户不存在或密码错误")
+			return nil, errors.New("用户不存在或密码错误")
 		}
-		return "", nil, err
+		return nil, err
 	}
 
 	if !checkPassword(password, user.Password) {
-		return "", nil, errors.New("用户不存在或密码错误")
+		return nil, errors.New("用户不存在或密码错误")
 	}
 
 	if user.Banned == 1 {
-		return "", nil, errors.New("用户已被封禁")
+		return nil, errors.New("用户已被封禁")
 	}
 	if user.ExpiredAt != nil && *user.ExpiredAt > 0 && *user.ExpiredAt <= time.Now().Unix() {
-		return "", nil, errors.New("用户已过期")
+		return nil, errors.New("用户已过期")
 	}
 
-	token, err := utils.GenerateToken(user.ID, user.Email, user.IsAdmin == 1, cfg.JWT.Secret, cfg.JWT.Expire)
+	return &user, nil
+}
+
+// IssueToken signs a JWT for an already authenticated user.
+func (s *AuthService) IssueToken(user *model.User, cfg *config.Config) (string, error) {
+	return utils.GenerateToken(user.ID, user.Email, user.IsAdmin == 1, cfg.JWT.Secret, cfg.JWT.Expire)
+}
+
+// Login validates credentials and returns a JWT token.
+func (s *AuthService) Login(email, password string, cfg *config.Config) (string, *model.User, error) {
+	user, err := s.Authenticate(email, password)
+	if err != nil {
+		return "", nil, err
+	}
+	token, err := s.IssueToken(user, cfg)
 	if err != nil {
 		return "", nil, err
 	}
 
-	return token, &user, nil
+	return token, user, nil
 }
 
 // checkPassword verifies a bcrypt password hash.

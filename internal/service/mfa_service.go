@@ -216,6 +216,8 @@ func (s *MFAService) Verify(userID uint, code, method string) (bool, error) {
 		return true, nil // MFA未启用，直接通过
 	}
 
+	method = strings.ToLower(strings.TrimSpace(method))
+	usedMethod := method
 	var valid bool
 	switch method {
 	case model.MFAMethodTOTP:
@@ -239,6 +241,7 @@ func (s *MFAService) Verify(userID uint, code, method string) (bool, error) {
 		valid = false
 	default:
 		// 默认尝试验证TOTP
+		usedMethod = model.MFAMethodTOTP
 		valid = s.VerifyTOTP(mfa.TOTPSecret, code)
 		if !valid {
 			// 再尝试备用码
@@ -246,16 +249,21 @@ func (s *MFAService) Verify(userID uint, code, method string) (bool, error) {
 			if err != nil {
 				return false, err
 			}
+			if valid {
+				usedMethod = model.MFAMethodBackup
+			}
 		}
 	}
 
 	if valid {
 		// 更新最后使用时间
 		now := time.Now()
-		s.db.Model(mfa).Updates(map[string]any{
+		if err := s.db.Model(mfa).Updates(map[string]any{
 			"last_used":   now,
-			"last_method": method,
-		})
+			"last_method": usedMethod,
+		}).Error; err != nil {
+			return false, err
+		}
 	}
 
 	return valid, nil

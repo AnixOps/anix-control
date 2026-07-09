@@ -2,8 +2,10 @@ package model
 
 // LoginRequest 登录请求
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
+	Password  string `json:"password" binding:"required"`
+	MFACode   string `json:"mfa_code"`
+	MFAMethod string `json:"mfa_method"`
 }
 
 // RegisterRequest 注册请求

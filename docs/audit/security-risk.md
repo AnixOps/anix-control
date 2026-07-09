@@ -1848,6 +1848,33 @@ PATH=/usr/local/go/bin:/tmp/v2board-go-tools:$PATH gosec -quiet ./internal/servi
 PATH=/usr/local/go/bin:/tmp/v2board-lint-tools:$PATH golangci-lint run --timeout=8m ./internal/service
 ```
 
+### 2026-07-10 MFA Login Challenge Remediation
+
+Finding:
+
+- Users could enable TOTP/backup-code MFA, but the primary `/api/v2/login` path still issued a JWT after only email/password verification.
+- The frontend login page treated an MFA challenge response without a token as a generic login failure.
+
+Impact:
+
+- Enabled MFA did not protect account login sessions.
+- Stolen or reused passwords could still produce a valid JWT without proving possession of the second factor.
+
+Remediation:
+
+- Split first-factor authentication from token issuance in `AuthService`.
+- `AuthHandler.Login` now checks the user's enabled MFA record before issuing a JWT.
+- Missing MFA codes return an enveloped `mfa_required` challenge without a token.
+- Valid TOTP or backup codes proceed to JWT issuance; invalid codes are recorded in `v2_mfa_login_attempt`, counted by the existing login rate limiter, and return a panel error.
+- The login UI now handles the two-step MFA challenge and only stores the token after the second step succeeds.
+
+Verification:
+
+```bash
+PATH=/usr/local/go/bin:$PATH go test ./internal/handler -run TestAuthHandler -count=1
+cd web && npm test -- Login.test.js
+```
+
 ### 2026-07-08 Stats Cache Error Handling Remediation
 
 Finding:

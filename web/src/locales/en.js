@@ -473,10 +473,14 @@ export default {
     confirmPasswordPlaceholder: 'Re-enter your password',
     inviteCodeLabel: 'Invite code (optional)',
     inviteCodePlaceholder: 'Enter an invite code if this site requires one',
+    mfaCodeLabel: 'Authentication code',
+    mfaCodePlaceholder: 'Enter TOTP or backup code',
+    mfaRequired: 'Enter your MFA code to finish signing in.',
     forgotPassword: 'Forgot password?',
     switchToRegister: 'No account yet? Register',
     switchToLogin: 'Already have an account? Sign in',
     submitLogin: 'Sign in',
+    submitMFA: 'Verify and sign in',
     submitRegister: 'Register',
     loadingLogin: 'Signing in...',
     loadingRegister: 'Registering...',
@@ -488,7 +492,8 @@ export default {
       passwordMin: 'Password must be at least 6 characters.',
       passwordMismatch: 'The two passwords do not match.',
       registerFailed: 'Registration failed. Please try again later.',
-      loginFailed: 'Sign-in failed. Check your email and password.'
+      loginFailed: 'Sign-in failed. Check your email and password.',
+      mfaCodeRequired: 'Please enter your MFA code.'
     },
     success: {
       registerCompleted: 'Registration completed. Redirecting...'
