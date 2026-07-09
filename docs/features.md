@@ -92,8 +92,8 @@ two documents disagree, this file is the status source of truth.
 | Forwarding | Complex load balancing, failover, chain orchestration | Deferred | None | Deferred by product scope for simplicity and auditability. |
 | Operations | Deployment script and production deploy docs | Implemented | GitHub Actions release artifacts, guarded local `config/deploy/deploy_panel.sh`, guarded legacy `config/scripts/deploy.sh` and `config/scripts/pre-deploy.sh`, guarded V2bX Ansible rollout helper, CI release-build policy check, safe local artifact cleanup helper, `docs/DEPLOYMENT.md` | Keep local build guard, cleanup helper, and artifact deployment docs aligned. |
 | Operations | SQLite to PostgreSQL migration docs and tooling | Implemented | migration commands/docs | Keep dry-run evidence for schema changes. |
-| Operations | CI baseline | Implemented | GitHub Actions on Go 1.26.5 with current action runtimes for gofmt, vet, test, race, lint, gosec, govulncheck, Docker smoke, release-build policy, and documentation sync checks | Watch runtime of full race testing. |
-| Operations | Release workflow with artifacts, checksums, SBOM | Partial | GitHub Actions release workflow is the required release build source | Keep release notes and migration dry-run artifacts complete for tags. |
+| Operations | CI baseline | Implemented | GitHub Actions on Go 1.26.5 with current action runtimes for gofmt, vet, test, race, lint, gosec, govulncheck, Docker smoke, release-build policy, documentation sync, and release workflow policy checks | Watch runtime of full race testing. |
+| Operations | Release workflow with artifacts, checksums, SBOM | Partial | GitHub Actions release workflow is the required release build source; CI now guards strict tag gating, release prerequisites, multi-platform binaries, Docker metadata, frontend archives, checksums, SBOM, operator runbook, and release notes | Keep migration dry-run evidence complete for tags. |
 | Operations | Automated production deployment | Deferred | Operator-controlled manual deployment | Keep credentials and production rollout manual unless explicitly approved. |
 
 ## Not Implemented Or Not Complete

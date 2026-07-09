@@ -10,6 +10,7 @@ New CI coverage added:
 - Local build artifact cleanup has a script self-test in CI covering removal of known outputs while preserving config, database, and `web/node_modules` content.
 - Release-build policy checks now fail deployment shell scripts that add local Go/frontend build commands without the GitHub Actions-only policy and `ALLOW_LOCAL_BUILD` guard.
 - Documentation sync checks now fail implementation, frontend, deployment, workflow, or config diffs that omit maintained status documentation, with a script self-test covering source-only failure, source-plus-changelog success, and docs-only success.
+- Release workflow policy checks now fail workflow changes that remove strict release tag gating, release quality/security/race/test prerequisites, required OS/arch release binary targets, frontend archives, Docker metadata, checksums, SBOM, operator runbook, or generated GitHub release notes; script self-tests cover a complete fixture plus missing-platform, missing-checksum, and missing-SBOM failures.
 - `go mod tidy` cleanliness check.
 - `gofmt` check for tracked Go files.
 - `go vet ./...`.
