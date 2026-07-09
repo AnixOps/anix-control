@@ -2,6 +2,8 @@ module github.com/anixops/v2board
 
 go 1.25.0
 
+toolchain go1.26.5
+
 require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/glebarez/sqlite v1.11.0

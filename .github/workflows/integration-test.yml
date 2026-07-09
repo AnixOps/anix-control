@@ -14,6 +14,9 @@ on:
       - 'cmd/integration-test/**'
   workflow_dispatch:
 
+env:
+  GO_VERSION: '1.26.5'
+
 jobs:
   unit-tests:
     name: Unit Tests
@@ -24,7 +27,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Run unit tests
@@ -48,7 +51,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Build test binary
@@ -96,7 +99,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Run mock server tests

@@ -188,6 +188,7 @@ Current workflow files:
 
 Current CI coverage includes:
 
+- Go setup pinned to `1.26.5` for Actions verification and release artifact generation.
 - `go mod tidy` diff check.
 - `gofmt` check.
 - `go vet ./...`.
@@ -203,7 +204,7 @@ Current CI coverage includes:
 - Frontend test/build/audit jobs.
 - Frontend bundle size report artifact for Vite assets and heavy admin/runtime chunks.
 - PostgreSQL stats regression job.
-- Forward runtime, gRPC, and command-focused jobs.
+- Forward runtime, gRPC coverage-gated, and command-focused jobs.
 - Strict release tag gate for `vX.Y.Z`.
 - Multi-platform release binaries for linux, darwin, and windows on amd64/arm64.
 - Release checksums.
