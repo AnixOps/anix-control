@@ -129,6 +129,11 @@ check_release_workflow() {
   require_text "--build-source github-actions" "release manifest CI build source" || failed=1
   require_text "--manual-deployment-required true" "release manifest manual deployment flag" || failed=1
   require_text "sha256sum * > SHA256SUMS.txt" "release checksum generation" || failed=1
+  require_text "Verify release artifacts" "release artifact verification step" || failed=1
+  require_text "config/scripts/verify_release_artifacts.py" "release artifact verification script" || failed=1
+  require_text "--require OPERATOR_DEPLOYMENT.md" "operator runbook verification requirement" || failed=1
+  require_text "--require v2board-linux-amd64.tar.gz" "linux amd64 release artifact verification requirement" || failed=1
+  require_text "--require v2board-windows-arm64.exe.zip" "windows arm64 release artifact verification requirement" || failed=1
   require_text "softprops/action-gh-release" "GitHub release creation action" || failed=1
   require_text "generate_release_notes: true" "generated release notes" || failed=1
   require_text "files: release/*" "release asset upload glob" || failed=1
@@ -221,6 +226,12 @@ jobs:
       - name: Create release checksums
         run: |
           (cd release && sha256sum * > SHA256SUMS.txt)
+      - name: Verify release artifacts
+        run: |
+          python3 config/scripts/verify_release_artifacts.py \
+            --require OPERATOR_DEPLOYMENT.md \
+            --require v2board-linux-amd64.tar.gz \
+            --require v2board-windows-arm64.exe.zip
       - uses: softprops/action-gh-release@v3
         with:
           files: release/*
@@ -264,6 +275,13 @@ EOF
   sed -i '/RELEASE_MANIFEST.json/d' "${fixture}.missing-manifest"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-manifest" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing release manifest should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-artifact-verification"
+  sed -i '/verify_release_artifacts.py/d' "${fixture}.missing-artifact-verification"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-artifact-verification" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing artifact verification should fail" >&2
     return 1
   fi
 

@@ -14,6 +14,7 @@ New CI coverage added:
 - Migration dry-run output is now uploaded as `migration-dry-run-report`, downloaded into tag release assets as `migration-dry-run.txt`, and covered by `SHA256SUMS.txt`; the release workflow policy guard now fails if that migration evidence is removed.
 - Tag releases now include `RELEASE_MANIFEST.json` with tag, commit, GitHub Actions run metadata, a `build_source=github-actions` marker, manual deployment flag, artifact sizes, and artifact SHA-256 hashes; the release workflow policy guard self-test now fails if that manifest is removed.
 - Release manifest generation now runs through `config/scripts/generate_release_manifest.py`, and CI runs its self-test to verify deterministic artifact ordering, SHA-256 hashing, manifest/checksum exclusion, run metadata, and newline-terminated JSON output.
+- Release artifact verification now runs through `config/scripts/verify_release_artifacts.py`; CI self-tests cover valid artifacts, tampered files, missing checksum entries, and missing required assets, and tag release jobs verify artifacts before publishing.
 - `go mod tidy` cleanliness check.
 - `gofmt` check for tracked Go files.
 - `go vet ./...`.

@@ -50,6 +50,9 @@ jobs:
       - name: Validate release manifest script syntax
         run: python3 -m py_compile config/scripts/generate_release_manifest.py
 
+      - name: Validate release artifact verification script syntax
+        run: python3 -m py_compile config/scripts/verify_release_artifacts.py
+
       - name: Validate legacy deploy script syntax
         run: bash -n config/scripts/deploy.sh
 
@@ -67,6 +70,9 @@ jobs:
 
       - name: Run release manifest self-test
         run: python3 config/scripts/generate_release_manifest.py --self-test
+
+      - name: Run release artifact verification self-test
+        run: python3 config/scripts/verify_release_artifacts.py --self-test
 
       - name: Enforce release build policy
         run: bash config/deploy/check_release_build_policy.sh
@@ -902,6 +908,28 @@ jobs:
       - name: Create release checksums
         run: |
           (cd release && sha256sum * > SHA256SUMS.txt)
+
+      - name: Verify release artifacts
+        shell: bash
+        run: |
+          python3 config/scripts/verify_release_artifacts.py \
+            --release-dir release \
+            --manifest release/RELEASE_MANIFEST.json \
+            --checksums release/SHA256SUMS.txt \
+            --require OPERATOR_DEPLOYMENT.md \
+            --require RELEASE_MANIFEST.json \
+            --require SHA256SUMS.txt \
+            --require docker-image.txt \
+            --require migration-dry-run.txt \
+            --require v2board-source.sbom.spdx.json \
+            --require v2board-frontend.tar.gz \
+            --require v2board-frontend.zip \
+            --require v2board-linux-amd64.tar.gz \
+            --require v2board-linux-arm64.tar.gz \
+            --require v2board-windows-amd64.exe.zip \
+            --require v2board-windows-arm64.exe.zip \
+            --require v2board-darwin-amd64.tar.gz \
+            --require v2board-darwin-arm64.tar.gz
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3

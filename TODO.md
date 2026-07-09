@@ -41,6 +41,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Attach migration dry-run output to release artifacts and include it in release checksum coverage.
 - [x] Add a machine-readable release manifest with CI run metadata and artifact hashes, and guard it in the release workflow policy check.
 - [x] Add a CI-tested release manifest generator script instead of keeping manifest generation as inline workflow code.
+- [x] Add a CI-tested release artifact verifier that blocks tag publishing when required assets, manifest entries, or checksums are inconsistent.
 
 ## P1: Security And Error Handling
 
@@ -153,6 +154,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Include migration dry-run evidence in GitHub Release assets for tag builds.
 - [x] Include a machine-readable release manifest in GitHub Release assets for tag builds.
 - [x] Cover release manifest generation with a script self-test in GitHub Actions.
+- [x] Verify release artifact, manifest, and checksum consistency before creating GitHub Releases.
 
 ## P3: API And UI Consistency
 

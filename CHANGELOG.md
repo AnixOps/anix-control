@@ -152,6 +152,7 @@
 
 ### CI/CD
 
+- Added `config/scripts/verify_release_artifacts.py` with a CI self-test and a release-job verification step so tag releases fail before publishing if required artifacts are missing or `RELEASE_MANIFEST.json`/`SHA256SUMS.txt` disagree with the release directory.
 - Moved release manifest generation into `config/scripts/generate_release_manifest.py` with a CI self-test so release artifact metadata generation is directly validated instead of living only as inline workflow code.
 - Added a machine-readable `RELEASE_MANIFEST.json` to GitHub Release assets with tag, commit, run metadata, CI build-source marker, manual-deployment flag, artifact sizes, and artifact SHA-256 hashes; the release workflow policy guard now fails if the manifest is removed.
 - Attached SQLite-to-PostgreSQL migration dry-run output as `migration-dry-run.txt` in release artifacts, included it in release checksums, and extended the release workflow policy guard to prevent removing that evidence.
