@@ -2619,7 +2619,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetTemplates_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "id")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetGroupProtocols_InvalidID() {
@@ -2677,7 +2677,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestCreateTemplate_InvalidGroupID() 
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "id")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetTemplate_InvalidID() {
@@ -2688,7 +2688,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetTemplate_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "id")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestUpdateTemplate_InvalidID() {
@@ -2703,7 +2703,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestUpdateTemplate_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "id")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestDeleteTemplate_InvalidID() {
@@ -2714,7 +2714,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestDeleteTemplate_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "id")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestAssignGroupToUser_InvalidUserID() {

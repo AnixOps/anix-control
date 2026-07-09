@@ -968,7 +968,10 @@ export default {
     const deleteTemplate = async (template) => {
       if (!confirm(t('admin.subscriptions.confirmDeleteTemplate'))) return
       try {
-        await adminApi.deleteSubscriptionTemplate(template.id)
+        ensureSubscriptionSuccess(
+          await adminApi.deleteSubscriptionTemplate(template.id),
+          t('admin.subscriptions.deleteError')
+        )
         showToast(t('admin.subscriptions.templateDeleted'), 'success')
         loadTemplates(selectedGroup.value.id)
       } catch (error) {
@@ -978,9 +981,12 @@ export default {
     
     const toggleTemplate = async (template) => {
       try {
-        await adminApi.updateSubscriptionTemplate(template.id, {
-          enable: template.enable === 1 ? 0 : 1
-        })
+        ensureSubscriptionSuccess(
+          await adminApi.updateSubscriptionTemplate(template.id, {
+            enable: template.enable === 1 ? 0 : 1
+          }),
+          t('admin.subscriptions.updateError')
+        )
         loadTemplates(selectedGroup.value.id)
       } catch (error) {
         showToast(t('admin.subscriptions.updateError'), 'error')
@@ -1030,9 +1036,15 @@ export default {
         }
         
         if (templateForm.id) {
-          await adminApi.updateSubscriptionTemplate(templateForm.id, data)
+          ensureSubscriptionSuccess(
+            await adminApi.updateSubscriptionTemplate(templateForm.id, data),
+            t('admin.subscriptions.saveError')
+          )
         } else {
-          await adminApi.createSubscriptionTemplate(selectedGroup.value.id, data)
+          ensureSubscriptionSuccess(
+            await adminApi.createSubscriptionTemplate(selectedGroup.value.id, data),
+            t('admin.subscriptions.saveError')
+          )
         }
         
         showToast(t('admin.subscriptions.templateSaved'), 'success')

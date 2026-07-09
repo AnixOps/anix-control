@@ -3110,6 +3110,158 @@ func (s *SubscribeExtendedTestSuite) TestGetTemplates() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
+func (s *SubscribeExtendedTestSuite) TestGetTemplates_InvalidID() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.GET("/admin/subscription/groups/:id/templates", handler.GetTemplates)
+
+	req, _ := http.NewRequest("GET", "/admin/subscription/groups/invalid/templates", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "id")
+}
+
+func (s *SubscribeExtendedTestSuite) TestCreateTemplate() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.POST("/admin/subscription/groups/:id/templates", handler.CreateTemplate)
+
+	body := map[string]any{
+		"name":   "Created Template",
+		"type":   "vless",
+		"server": "example.com",
+		"port":   443,
+		"enable": 1,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/subscription/groups/"+strconv.FormatUint(uint64(s.testGroup.ID), 10)+"/templates", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "Created Template", data["name"])
+	assert.Equal(s.T(), float64(s.testGroup.ID), data["group_id"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *SubscribeExtendedTestSuite) TestCreateTemplate_InvalidBody() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.POST("/admin/subscription/groups/:id/templates", handler.CreateTemplate)
+
+	req, _ := http.NewRequest("POST", "/admin/subscription/groups/"+strconv.FormatUint(uint64(s.testGroup.ID), 10)+"/templates", strings.NewReader("invalid"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid")
+}
+
+func (s *SubscribeExtendedTestSuite) TestGetTemplate() {
+	tpl := &model.SubscriptionTemplate{
+		Name:    "Get Template",
+		Type:    "vless",
+		GroupID: s.testGroup.ID,
+	}
+	s.db.Create(tpl)
+
+	handler := NewSubscriptionAdminHandler()
+	s.router.GET("/admin/subscription/templates/:id", handler.GetTemplate)
+
+	req, _ := http.NewRequest("GET", "/admin/subscription/templates/"+strconv.FormatUint(uint64(tpl.ID), 10), nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "Get Template", data["name"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *SubscribeExtendedTestSuite) TestGetTemplate_NotFound() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.GET("/admin/subscription/templates/:id", handler.GetTemplate)
+
+	req, _ := http.NewRequest("GET", "/admin/subscription/templates/99999", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "模板不存在")
+}
+
+func (s *SubscribeExtendedTestSuite) TestUpdateTemplate() {
+	tpl := &model.SubscriptionTemplate{
+		Name:    "Old Template",
+		Type:    "vless",
+		GroupID: s.testGroup.ID,
+		Enable:  1,
+	}
+	s.db.Create(tpl)
+
+	handler := NewSubscriptionAdminHandler()
+	s.router.PUT("/admin/subscription/templates/:id", handler.UpdateTemplate)
+
+	body := map[string]any{"name": "Updated Template", "enable": 0}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/admin/subscription/templates/"+strconv.FormatUint(uint64(tpl.ID), 10), bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "Updated Template", data["name"])
+	assert.Equal(s.T(), float64(0), data["enable"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *SubscribeExtendedTestSuite) TestUpdateTemplate_InvalidBody() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.PUT("/admin/subscription/templates/:id", handler.UpdateTemplate)
+
+	req, _ := http.NewRequest("PUT", "/admin/subscription/templates/99999", strings.NewReader("invalid"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid")
+}
+
+func (s *SubscribeExtendedTestSuite) TestUpdateTemplate_EmptyBody() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.PUT("/admin/subscription/templates/:id", handler.UpdateTemplate)
+
+	req, _ := http.NewRequest("PUT", "/admin/subscription/templates/99999", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "参数错误")
+}
+
+func (s *SubscribeExtendedTestSuite) TestUpdateTemplate_NotFound() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.PUT("/admin/subscription/templates/:id", handler.UpdateTemplate)
+
+	body := map[string]any{"name": "Missing Template"}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/admin/subscription/templates/99999", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "模板不存在")
+}
+
 func (s *SubscribeExtendedTestSuite) TestGetGroupProtocols() {
 	handler := NewSubscriptionAdminHandler()
 	s.router.GET("/admin/subscription/groups/:id/protocols", handler.GetGroupProtocols)
@@ -3149,6 +3301,17 @@ func (s *SubscribeExtendedTestSuite) TestDeleteTemplate() {
 	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), "删除成功", data["message"])
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *SubscribeExtendedTestSuite) TestDeleteTemplate_NotFound() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.DELETE("/admin/subscription/templates/:id", handler.DeleteTemplate)
+
+	req, _ := http.NewRequest("DELETE", "/admin/subscription/templates/99999", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "模板不存在")
 }
 
 func (s *SubscribeExtendedTestSuite) TestGetSubscriptionFormats() {

@@ -6,13 +6,16 @@ import { setLocale } from '@/i18n'
 
 const adminApiMock = vi.hoisted(() => ({
   createSubscriptionGroup: vi.fn(),
+  createSubscriptionTemplate: vi.fn(),
   deleteSubscriptionGroup: vi.fn(),
+  deleteSubscriptionTemplate: vi.fn(),
   getAvailableProtocols: vi.fn(),
   getSubscriptionGroups: vi.fn(),
   getSubscriptionProtocols: vi.fn(),
   getSubscriptionTemplates: vi.fn(),
   previewSubscription: vi.fn(),
-  updateSubscriptionGroup: vi.fn()
+  updateSubscriptionGroup: vi.fn(),
+  updateSubscriptionTemplate: vi.fn()
 }))
 
 const getSubscriptionStatsMock = vi.hoisted(() => vi.fn())
@@ -37,6 +40,9 @@ describe('Admin Subscriptions', () => {
     adminApiMock.createSubscriptionGroup.mockResolvedValue({})
     adminApiMock.updateSubscriptionGroup.mockResolvedValue({})
     adminApiMock.deleteSubscriptionGroup.mockResolvedValue({})
+    adminApiMock.createSubscriptionTemplate.mockResolvedValue({})
+    adminApiMock.updateSubscriptionTemplate.mockResolvedValue({})
+    adminApiMock.deleteSubscriptionTemplate.mockResolvedValue({})
     getSubscriptionStatsMock.mockResolvedValue({ data: [] })
   })
 
@@ -233,6 +239,113 @@ describe('Admin Subscriptions', () => {
     expect(wrapper.vm.toastType).toBe('error')
     expect(wrapper.vm.toastMessage).toBe('Delete failed')
     expect(adminApiMock.getSubscriptionGroups).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('shows an error when subscription template list returns code -1', async () => {
+    adminApiMock.getSubscriptionGroups.mockResolvedValueOnce({
+      data: [{ id: 1, name: 'Group', enable: 1 }]
+    })
+    adminApiMock.getSubscriptionTemplates.mockResolvedValueOnce({
+      code: -1,
+      msg: 'template list rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Subscriptions)
+    await flushPromises()
+
+    expect(wrapper.vm.templates).toEqual([])
+    expect(wrapper.vm.toastType).toBe('error')
+    expect(wrapper.vm.toastMessage).toBe('Failed to load subscription data')
+
+    wrapper.unmount()
+  })
+
+  it('does not close template modal or refresh templates when enveloped save fails', async () => {
+    adminApiMock.createSubscriptionTemplate.mockResolvedValueOnce({
+      code: -1,
+      msg: 'template save rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Subscriptions)
+    await flushPromises()
+    adminApiMock.getSubscriptionTemplates.mockClear()
+    wrapper.vm.selectedGroup = { id: 1, name: 'Group' }
+    wrapper.vm.showCreateTemplateModal = true
+    Object.assign(wrapper.vm.templateForm, {
+      id: null,
+      name: 'Rejected Template',
+      type: 'vless',
+      server: 'example.com',
+      port: 443,
+      server_name: '',
+      tls: 1,
+      tls_fingerprint: 'chrome',
+      transport: 'tcp',
+      reality_public_key: '',
+      reality_short_id: '',
+      enable: true
+    })
+
+    await wrapper.vm.saveTemplate()
+    await flushPromises()
+
+    expect(wrapper.vm.toastType).toBe('error')
+    expect(wrapper.vm.toastMessage).toBe('Save failed')
+    expect(wrapper.vm.showCreateTemplateModal).toBe(true)
+    expect(adminApiMock.getSubscriptionTemplates).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('does not refresh templates when enveloped template delete fails', async () => {
+    vi.spyOn(window, 'confirm').mockImplementation(() => true)
+    adminApiMock.deleteSubscriptionTemplate.mockResolvedValueOnce({
+      code: -1,
+      msg: 'template delete rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Subscriptions)
+    await flushPromises()
+    adminApiMock.getSubscriptionTemplates.mockClear()
+    wrapper.vm.selectedGroup = { id: 1, name: 'Group' }
+
+    await wrapper.vm.deleteTemplate({ id: 10, name: 'Rejected Template' })
+    await flushPromises()
+
+    expect(wrapper.vm.toastType).toBe('error')
+    expect(wrapper.vm.toastMessage).toBe('Delete failed')
+    expect(adminApiMock.getSubscriptionTemplates).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('does not refresh templates when enveloped template toggle fails', async () => {
+    adminApiMock.updateSubscriptionTemplate.mockResolvedValueOnce({
+      code: -1,
+      msg: 'template update rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Subscriptions)
+    await flushPromises()
+    adminApiMock.getSubscriptionTemplates.mockClear()
+    wrapper.vm.selectedGroup = { id: 1, name: 'Group' }
+
+    await wrapper.vm.toggleTemplate({ id: 10, name: 'Rejected Template', enable: 1 })
+    await flushPromises()
+
+    expect(wrapper.vm.toastType).toBe('error')
+    expect(wrapper.vm.toastMessage).toBe('Update failed')
+    expect(adminApiMock.getSubscriptionTemplates).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })
