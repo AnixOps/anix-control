@@ -18,16 +18,18 @@ import (
 
 // UniProxyHandler handles node polling APIs.
 type UniProxyHandler struct {
-	serverService *service.ServerService
-	userService   *service.UserService
-	nodeService   *service.NodeService
+	serverService       *service.ServerService
+	userService         *service.UserService
+	nodeService         *service.NodeService
+	subscriptionService *service.SubscriptionService
 }
 
 func NewUniProxyHandler() *UniProxyHandler {
 	return &UniProxyHandler{
-		serverService: service.NewServerService(),
-		userService:   service.NewUserService(),
-		nodeService:   service.NewNodeService(),
+		serverService:       service.NewServerService(),
+		userService:         service.NewUserService(),
+		nodeService:         service.NewNodeService(),
+		subscriptionService: service.NewSubscriptionService(),
 	}
 }
 
@@ -233,7 +235,7 @@ func (h *UniProxyHandler) GetUsers(c *gin.Context) {
 	users, err := h.getNewNodeUsers(uint(nodeID))
 	if err == nil {
 		_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
-		h.sendUsersResponse(c, users)
+		h.sendUsersResponse(c, users, uint(nodeID), nodeType)
 		return
 	}
 
@@ -251,7 +253,7 @@ func (h *UniProxyHandler) GetUsers(c *gin.Context) {
 					users[i] = &oldUsers[i]
 				}
 				_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
-				h.sendUsersResponse(c, users)
+				h.sendUsersResponse(c, users, uint(nodeID), nodeType)
 				return
 			}
 		}
@@ -268,7 +270,7 @@ func (h *UniProxyHandler) GetUsers(c *gin.Context) {
 	}
 
 	_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
-	h.sendUsersResponse(c, users)
+	h.sendUsersResponse(c, users, uint(nodeID), nodeType)
 }
 
 func (h *UniProxyHandler) getNewNodeUsers(nodeID uint) ([]*model.User, error) {
@@ -285,7 +287,13 @@ func (h *UniProxyHandler) getNewNodeUsers(nodeID uint) ([]*model.User, error) {
 	return users, nil
 }
 
-func (h *UniProxyHandler) sendUsersResponse(c *gin.Context, users []*model.User) {
+func (h *UniProxyHandler) sendUsersResponse(c *gin.Context, users []*model.User, nodeID uint, nodeType string) {
+	wireGuardExtras, err := h.buildWireGuardUserExtras(nodeID, nodeType, users)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build wireguard users"})
+		return
+	}
+
 	userList := make([]map[string]any, 0, len(users))
 	for _, user := range users {
 		speedLimit := user.GetSpeedLimit()
@@ -298,12 +306,20 @@ func (h *UniProxyHandler) sendUsersResponse(c *gin.Context, users []*model.User)
 			deviceLimit = user.Plan.GetDeviceLimit()
 		}
 
-		userList = append(userList, map[string]any{
+		item := map[string]any{
 			"id":           user.ID,
 			"uuid":         user.UUID,
 			"speed_limit":  speedLimit,
 			"device_limit": deviceLimit,
-		})
+		}
+		if extra, ok := wireGuardExtras[user.ID]; ok {
+			item["wireguard_peer_ip"] = extra["wireguard_peer_ip"]
+			item["wireguard_public_key"] = extra["wireguard_public_key"]
+			item["wireguard_preshared_key"] = extra["wireguard_preshared_key"]
+			item["wireguard_protocol_id"] = extra["wireguard_protocol_id"]
+			item["extra"] = extra
+		}
+		userList = append(userList, item)
 	}
 
 	response := map[string]any{
@@ -335,6 +351,25 @@ func (h *UniProxyHandler) sendUsersResponse(c *gin.Context, users []*model.User)
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func (h *UniProxyHandler) buildWireGuardUserExtras(nodeID uint, nodeType string, users []*model.User) (map[uint]map[string]string, error) {
+	if nodeID == 0 || len(users) == 0 {
+		return nil, nil
+	}
+	protocol, err := h.selectRuntimeProtocol(nodeID, nodeType)
+	if err != nil || protocol == nil || protocol.Type != model.ProtocolWireGuard {
+		return nil, err
+	}
+	return h.subscriptionService.BuildWireGuardRuntimeUserExtras(protocol, users)
+}
+
+func (h *UniProxyHandler) selectRuntimeProtocol(nodeID uint, preferredType string) (*model.NodeProtocol, error) {
+	protocols, err := h.nodeService.GetProtocols(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	return selectNodeProtocol(protocols, normalizeNodeType(preferredType)), nil
 }
 
 // GetAliveList returns online counts.

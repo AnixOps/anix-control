@@ -70,10 +70,10 @@ Priority: P0, above ordinary P1/P2 finishing work.
 - Panel first slice is implemented: `wireguard` protocol template, `v2_wireguard_peer`, automatic IPv4 peer IP allocation, X25519 keypair custody, preshared key custody, default MTU/DNS/allowed IPs, native WireGuard `.conf` output, sing-box WireGuard outbound output, and unit coverage.
 - Add remaining panel API contracts, validation, and admin UI for CIDR, server keys, tunnel type, routes, limits, online state, traffic accounting, entry node, exit node, and WSS compatibility switching.
 - Verify Shadowrocket, Loon, v2rayN, and other common client import behavior beyond the native `.conf`/sing-box outputs now covered by tests.
-- Add V2bX runtime support so both domestic entry nodes and overseas exit nodes receive panel configuration and apply the running WireGuard, relay tunnel, and NAT state.
+- V2bX runtime slice is in progress: the panel now exposes runtime peer fields over UniProxy HTTP and gRPC, and V2bX can consume those fields for the WireGuard entry runtime. Full dual-node relay, WSS mode, exit NAT, online/limit behavior, and CI relay-path evidence remain required.
 - Add integration tests and GitHub Actions verification before marking the protocol path complete.
 
-Current slice: panel peer custody and subscription output are implemented. Runtime behavior, admin UI, integration evidence, migration dry-run evidence, and CI relay-path verification remain pending.
+Current slice: panel peer custody, subscription output, runtime peer downlink fields, and initial V2bX WireGuard entry runtime coverage are implemented. Admin UI, full GOST relay+QUIC/WSS dual-node orchestration, exit NAT evidence, migration dry-run evidence, and CI relay-path verification remain pending.
 
 ## Phase 7: API And UI Consistency
 

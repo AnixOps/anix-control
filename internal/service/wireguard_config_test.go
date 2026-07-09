@@ -64,17 +64,17 @@ func TestWireGuardPeerAllocationAndKeyGeneration(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(&model.WireGuardPeer{}))
 
 	svc := &SubscriptionService{db: db}
-	first, err := svc.getOrCreateWireGuardPeer(10, 100, "10.99.0.0/29")
+	first, err := svc.GetOrCreateWireGuardPeer(10, 100, "10.99.0.0/29")
 	require.NoError(t, err)
 	require.Equal(t, "10.99.0.2", first.PeerIP)
 
-	again, err := svc.getOrCreateWireGuardPeer(10, 100, "10.99.0.0/29")
+	again, err := svc.GetOrCreateWireGuardPeer(10, 100, "10.99.0.0/29")
 	require.NoError(t, err)
 	require.Equal(t, first.ID, again.ID)
 	require.Equal(t, first.PrivateKey, again.PrivateKey)
 	require.Equal(t, first.PeerIP, again.PeerIP)
 
-	second, err := svc.getOrCreateWireGuardPeer(10, 101, "10.99.0.0/29")
+	second, err := svc.GetOrCreateWireGuardPeer(10, 101, "10.99.0.0/29")
 	require.NoError(t, err)
 	require.Equal(t, "10.99.0.3", second.PeerIP)
 	require.NotEqual(t, first.PublicKey, second.PublicKey)
@@ -82,6 +82,36 @@ func TestWireGuardPeerAllocationAndKeyGeneration(t *testing.T) {
 	requireBase64KeyLen(t, first.PrivateKey, 32)
 	requireBase64KeyLen(t, first.PublicKey, 32)
 	requireBase64KeyLen(t, first.PresharedKey, 32)
+}
+
+func TestBuildWireGuardRuntimeUserExtras(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.WireGuardPeer{}))
+
+	settings := `{"cidr":"10.77.0.0/29"}`
+	protocol := &model.NodeProtocol{
+		ID:       12,
+		Type:     model.ProtocolWireGuard,
+		Settings: &settings,
+	}
+	users := []*model.User{
+		{ID: 201, UUID: "user-a"},
+		{ID: 202, UUID: "user-b"},
+	}
+	svc := &SubscriptionService{db: db}
+
+	extras, err := svc.BuildWireGuardRuntimeUserExtras(protocol, users)
+	require.NoError(t, err)
+	require.Equal(t, "10.77.0.2", extras[201]["wireguard_peer_ip"])
+	require.Equal(t, "10.77.0.3", extras[202]["wireguard_peer_ip"])
+	require.NotEmpty(t, extras[201]["wireguard_public_key"])
+	require.NotEmpty(t, extras[201]["wireguard_preshared_key"])
+
+	again, err := svc.BuildWireGuardRuntimeUserExtras(protocol, users[:1])
+	require.NoError(t, err)
+	require.Equal(t, extras[201]["wireguard_peer_ip"], again[201]["wireguard_peer_ip"])
+	require.Equal(t, extras[201]["wireguard_public_key"], again[201]["wireguard_public_key"])
 }
 
 func requireBase64KeyLen(t *testing.T, key string, want int) {
