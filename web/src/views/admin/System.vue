@@ -1098,6 +1098,23 @@ const ensureSystemSuccess = (res, fallbackKey) => {
   return res
 }
 
+const readSystemPayload = (res, fallbackKey) => {
+  const payload = ensureSystemSuccess(res, fallbackKey)
+  if (!payload || typeof payload !== 'object') return {}
+  if (Object.prototype.hasOwnProperty.call(payload, 'code')) {
+    return payload.data && typeof payload.data === 'object' ? payload.data : {}
+  }
+  if (payload.data && typeof payload.data === 'object') {
+    if (Object.prototype.hasOwnProperty.call(payload.data, 'code')) {
+      return payload.data.data && typeof payload.data.data === 'object' ? payload.data.data : {}
+    }
+    return payload.data.data && typeof payload.data.data === 'object' ? payload.data.data : payload.data
+  }
+  return payload
+}
+
+const ensureSystemMutation = async (promise, fallbackKey) => ensureSystemSuccess(await promise, fallbackKey)
+
 const formatSize = (bytes) => {
   if (!bytes) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB']
@@ -1331,82 +1348,82 @@ const saveForwardRuntimeConfig = async () => {
   runtimeSaving.value = true
   try {
     const updates = [
-      setSystemConfig(runtimeNodeXModeKey, {
+      ensureSystemMutation(setSystemConfig(runtimeNodeXModeKey, {
         value: runtimeNodeXMode.value,
         type: 'bool',
         group: 'forward',
         description: 'Enable NodeX forward runtime mode'
-      }),
-      setSystemConfig(runtimeBackendKey, {
+      }), 'runtime.workbench.errors.saveFailed'),
+      ensureSystemMutation(setSystemConfig(runtimeBackendKey, {
         value: backendValue,
         type: 'string',
         group: 'forward',
         description: 'Forward runtime backend'
-      }),
-      setSystemConfig(runtimeAnsibleBackendKey, {
+      }), 'runtime.workbench.errors.saveFailed'),
+      ensureSystemMutation(setSystemConfig(runtimeAnsibleBackendKey, {
         value: backendValue === 'gost' ? 'nftables_ansible' : backendValue,
         type: 'string',
         group: 'forward',
         description: 'Preferred local ansible backend'
-      }),
-      setSystemConfig(runtimeNodeXBaseUrlKey, {
+      }), 'runtime.workbench.errors.saveFailed'),
+      ensureSystemMutation(setSystemConfig(runtimeNodeXBaseUrlKey, {
         value: trimmedNodeXBaseUrl,
         type: 'string',
         group: 'forward',
         description: 'Forward runtime NodeX base URL'
-      }),
-      setSystemConfig(runtimeNodeXTokenKey, {
+      }), 'runtime.workbench.errors.saveFailed'),
+      ensureSystemMutation(setSystemConfig(runtimeNodeXTokenKey, {
         value: trimmedNodeXToken,
         type: 'string',
         group: 'forward',
         description: 'Forward runtime NodeX token'
-      }),
-      setSystemConfig(runtimeNodeXTimeoutKey, {
+      }), 'runtime.workbench.errors.saveFailed'),
+      ensureSystemMutation(setSystemConfig(runtimeNodeXTimeoutKey, {
         value: Number.isFinite(timeoutValue) && timeoutValue > 0 ? timeoutValue : 15,
         type: 'number',
         group: 'forward',
         description: 'Forward runtime NodeX timeout'
-      })
+      }), 'runtime.workbench.errors.saveFailed')
     ]
 
     if (!runtimeNodeXMode.value) {
       updates.push(
-        setSystemConfig(runtimeAnsibleConfigKey, {
+        ensureSystemMutation(setSystemConfig(runtimeAnsibleConfigKey, {
           value: ansiblePayload ? JSON.stringify(ansiblePayload) : '',
           type: 'json',
           group: 'forward',
           description: 'Forward runtime ansible config'
-        }),
-        setSystemConfig(runtimeAnsibleInventoryKey, {
+        }), 'runtime.workbench.errors.saveFailed'),
+        ensureSystemMutation(setSystemConfig(runtimeAnsibleInventoryKey, {
           value: ansiblePayload?.inventory || '',
           type: 'string',
           group: 'forward',
           description: 'Forward ansible inventory path'
-        }),
-        setSystemConfig(runtimeAnsibleApplyPlaybookKey, {
+        }), 'runtime.workbench.errors.saveFailed'),
+        ensureSystemMutation(setSystemConfig(runtimeAnsibleApplyPlaybookKey, {
           value: ansiblePayload?.playbookApply || '',
           type: 'string',
           group: 'forward',
           description: 'Forward ansible apply playbook path'
-        }),
-        setSystemConfig(runtimeAnsibleRemovePlaybookKey, {
+        }), 'runtime.workbench.errors.saveFailed'),
+        ensureSystemMutation(setSystemConfig(runtimeAnsibleRemovePlaybookKey, {
           value: ansiblePayload?.playbookRemove || '',
           type: 'string',
           group: 'forward',
           description: 'Forward ansible remove playbook path'
-        }),
-        setSystemConfig(runtimeAnsibleBecomeKey, {
+        }), 'runtime.workbench.errors.saveFailed'),
+        ensureSystemMutation(setSystemConfig(runtimeAnsibleBecomeKey, {
           value: ansiblePayload?.become || false,
           type: 'bool',
           group: 'forward',
           description: 'Forward ansible become flag'
-        }),
-        setSystemConfig(runtimeAnsibleExtraVarsKey, {
+        }), 'runtime.workbench.errors.saveFailed'),
+        ensureSystemMutation(setSystemConfig(runtimeAnsibleExtraVarsKey, {
           value: JSON.stringify(ansiblePayload?.extraVars || {}),
           type: 'json',
           group: 'forward',
           description: 'Forward ansible extra vars JSON'
-        })
+        }), 'runtime.workbench.errors.saveFailed')
       )
     }
 
@@ -1480,22 +1497,31 @@ const saveSubscriptionDomainSettings = async () => {
     const domains = normalizedSubscriptionDomains.value
     if (domains.length === 0) {
       try {
-        await deleteSystemConfig(subscriptionDomainsConfigKey)
+        await ensureSystemMutation(
+          deleteSystemConfig(subscriptionDomainsConfigKey),
+          'runtime.systemPage.subscription.messages.saveFailed'
+        )
       } catch {
-        await setSystemConfig(subscriptionDomainsConfigKey, {
-          value: '',
-          type: 'string',
-          group: 'app',
-          description: 'Alternate subscription domains'
-        })
+        await ensureSystemMutation(
+          setSystemConfig(subscriptionDomainsConfigKey, {
+            value: '',
+            type: 'string',
+            group: 'app',
+            description: 'Alternate subscription domains'
+          }),
+          'runtime.systemPage.subscription.messages.saveFailed'
+        )
       }
     } else {
-      await setSystemConfig(subscriptionDomainsConfigKey, {
-        value: JSON.stringify(domains),
-        type: 'json',
-        group: 'app',
-        description: 'Alternate subscription domains'
-      })
+      await ensureSystemMutation(
+        setSystemConfig(subscriptionDomainsConfigKey, {
+          value: JSON.stringify(domains),
+          type: 'json',
+          group: 'app',
+          description: 'Alternate subscription domains'
+        }),
+        'runtime.systemPage.subscription.messages.saveFailed'
+      )
     }
     await Promise.all([
       loadSubscriptionDomainSettings(),
@@ -1512,8 +1538,11 @@ const saveSubscriptionDomainSettings = async () => {
 // System config
 const fetchConfigs = async () => {
   try {
-    const res = await getSystemConfigs()
-    const list = res.data?.list || res.data?.data?.list || []
+    const payload = readSystemPayload(
+      await getSystemConfigs(),
+      'runtime.systemPage.messages.fetchConfigsFailed'
+    )
+    const list = Array.isArray(payload.list) ? payload.list : []
     configs.value = list.map((config) => ({
       ...config,
       description: config.description || config.remark || '',
@@ -1644,13 +1673,16 @@ const saveConfig = async () => {
       value.trim() === ''
     )
 
-    await setSystemConfig(configForm.value.key, {
-      value,
-      type: configForm.value.type || 'string',
-      group: configForm.value.group || '',
-      description: configForm.value.description || '',
-      preserve_existing: preserveExisting
-    })
+    await ensureSystemMutation(
+      setSystemConfig(configForm.value.key, {
+        value,
+        type: configForm.value.type || 'string',
+        group: configForm.value.group || '',
+        description: configForm.value.description || '',
+        preserve_existing: preserveExisting
+      }),
+      'runtime.systemPage.messages.fetchConfigsFailed'
+    )
     showConfigModal.value = false
     fetchConfigs()
   } catch (err) {
@@ -1663,7 +1695,10 @@ const saveConfig = async () => {
 const deleteConfig = async (config) => {
   if (!confirmAction(t('runtime.systemPage.messages.deleteConfigConfirm', { key: config.key }))) return
   try {
-    await deleteSystemConfig(config.key)
+    await ensureSystemMutation(
+      deleteSystemConfig(config.key),
+      'runtime.systemPage.messages.deleteConfigFailed'
+    )
     fetchConfigs()
   } catch (err) {
     notify(resolveSystemError(err, 'runtime.systemPage.messages.deleteConfigFailed'))

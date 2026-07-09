@@ -64,7 +64,7 @@ two documents disagree, this file is the status source of truth.
 | Admin | Notification template/log/email config management | Implemented | `/api/v2/admin/notification/*`, unified success/error envelopes | Add more event emitters as needed. |
 | Admin | Telegram bot management | Implemented | bot config, webhook, users, notify, broadcast, unified success/error envelopes | Requires live bot credentials for production. |
 | Admin | MFA global config | Implemented | `/api/v2/admin/mfa/config` | Login enforcement remains incomplete. |
-| Admin | System config and audit logs | Implemented | `/api/v2/admin/system/configs*`, `/audit-logs`, unified audit success/error envelopes | Keep sensitive config masking tests current. |
+| Admin | System config and audit logs | Implemented | `/api/v2/admin/system/configs*`, `/audit-logs`, unified config/audit success/error envelopes | Keep sensitive config masking tests current. |
 | Admin | Backup config, create/list/delete/restore, stats | Implemented | `/api/v2/admin/system/backup*` | Production backup storage and restore are operator-controlled. |
 | Admin | Load balancer CRUD, stats, health check | Implemented | `/api/v2/admin/loadbalancers*` | Add deeper runtime traffic integration if needed. |
 | Admin | WebSocket monitor | Implemented | `/api/v2/admin/ws/monitor` | Continue origin/deadline/race coverage. |

@@ -418,7 +418,7 @@ func (h *SystemHandler) GetConfigs(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -449,7 +449,7 @@ func (h *SystemHandler) GetConfig(c *gin.Context) {
 
 	entry, err := h.configService.GetEntry(key)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -493,19 +493,19 @@ func (h *SystemHandler) SetConfig(c *gin.Context) {
 		PreserveExisting bool            `json:"preserve_existing"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	existingEntry, err := h.configService.GetEntry(key)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	rawValue := bytes.TrimSpace(req.Value)
 	if len(rawValue) == 0 && existingEntry == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "value is required"})
+		panelError(c, "value is required")
 		return
 	}
 
@@ -535,14 +535,14 @@ func (h *SystemHandler) SetConfig(c *gin.Context) {
 	}
 	if len(rawValue) == 0 && existingEntry != nil {
 		if !preserveExisting {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "value is required"})
+			panelError(c, "value is required")
 			return
 		}
 		value = existingEntry.Value
 	}
 
 	if err := h.configService.Set(key, value, req.Type, req.Group, remark); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -601,12 +601,12 @@ func (h *SystemHandler) DeleteConfig(c *gin.Context) {
 
 	existingEntry, err := h.configService.GetEntry(key)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	if err := h.configService.Delete(key); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 

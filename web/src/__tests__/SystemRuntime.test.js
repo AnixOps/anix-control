@@ -162,4 +162,51 @@ describe('System runtime configuration', () => {
       has_value: true
     })
   })
+
+  it('logs panel envelope config list failures instead of accepting them as empty lists', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    adminApi.getSystemConfigs.mockResolvedValueOnce({
+      code: -1,
+      msg: 'config list rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    expect(wrapper.vm.configs).toEqual([])
+    expect(consoleError).toHaveBeenCalledWith(
+      'Failed to load configs',
+      expect.any(Error)
+    )
+
+    consoleError.mockRestore()
+  })
+
+  it('keeps the config modal open when an enveloped config save fails', async () => {
+    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    adminApi.getSystemConfigs.mockClear()
+    adminApi.setSystemConfig.mockResolvedValueOnce({
+      code: -1,
+      msg: 'config save rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    wrapper.vm.openConfigModal()
+    wrapper.vm.configForm.key = 'site.name'
+    wrapper.vm.configForm.value = 'AnixOps'
+    await wrapper.vm.saveConfig()
+    await flushPromises()
+
+    expect(alert).toHaveBeenCalledWith(expect.stringContaining('config save rejected'))
+    expect(wrapper.vm.showConfigModal).toBe(true)
+    expect(adminApi.getSystemConfigs).not.toHaveBeenCalled()
+
+    alert.mockRestore()
+  })
 })
