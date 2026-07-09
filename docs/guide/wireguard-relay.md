@@ -2,10 +2,11 @@
 
 Date: 2026-07-10
 
-Status: Partial/P0. The first panel peer-custody/subscription-output slice and
-initial V2bX entry runtime slices exist. Admin UI, full dual-node routing,
-overseas exit NAT, speed limits, end-to-end tests, migration evidence, and CI
-relay verification are still incomplete.
+Status: Partial/P0. The first panel peer-custody/subscription-output slice,
+first admin visual protocol form, and initial V2bX entry/exit runtime slices
+exist. Hardened API validation, real dual-node routing evidence, speed limits,
+end-to-end tests, migration evidence, and CI relay verification are still
+incomplete.
 
 ## Decision
 
@@ -136,10 +137,12 @@ feature is marked implemented.
      automatic IPv4 peer allocation, user keypair storage, preshared key storage,
      default MTU/DNS/allowed IPs, node-config relay defaults, and UniProxy/gRPC
      runtime user fields for peer IP, public key, and preshared key.
-   - Still pending: admin API validation, admin UI, server key management,
-     entry/exit node selection, route policy, and WSS compatibility switching.
-   - Add admin UI for WireGuard protocol configuration and one-click WSS
-     compatibility mode switching.
+   - Done for the first admin UI slice: the node protocol visual form can produce
+     WireGuard CIDR, server key material, MTU, DNS, entry/exit GOST relay role,
+     QUIC/WSS tunnel selection, one-click WSS compatibility mode, TUN addresses,
+     routing table/priority, and exit NAT hints.
+   - Still pending: hardened admin API validation, safer server key management,
+     entry/exit node selection workflow, route policy, and migration behavior.
 
 3. Subscription output.
    - Done for the first slice: native WireGuard `.conf` output and sing-box

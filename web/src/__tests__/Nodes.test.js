@@ -172,4 +172,87 @@ describe('Nodes.vue', () => {
     await wrapper.vm.openDeployModal()
     expect(wrapper.vm.deployRows[0].apiKey).toBe('node-api-key')
   })
+
+  it('builds WireGuard relay JSON from the visual protocol form', async () => {
+    const wrapper = mountNodes()
+    await flushPromises()
+
+    wrapper.vm.openAddProtocol()
+    wrapper.vm.protocolForm.mode = 'visual'
+    await wrapper.vm.$nextTick()
+    wrapper.vm.protocolForm.type = 'wireguard'
+    await wrapper.vm.$nextTick()
+
+    Object.assign(wrapper.vm.wireGuardForm, {
+      cidr: '10.88.0.0/24',
+      serverAddress: '10.88.0.1/24',
+      serverPrivateKey: 'server-private',
+      serverPublicKey: 'server-public',
+      role: 'exit',
+      wssCompat: true,
+      relayServerPort: 9443,
+      tunPort: 8422,
+      entryTunAddress: '172.31.88.2/24',
+      exitTunAddress: '172.31.88.1/24',
+      outboundIface: 'eth0',
+      routingTable: 32088,
+      routingPriority: 12088
+    })
+
+    const json = wrapper.vm.visualToJson()
+
+    expect(json.type).toBe('wireguard')
+    expect(json.port).toBe(51820)
+    expect(json.transport).toBe('udp')
+    expect(json.settings.cidr).toBe('10.88.0.0/24')
+    expect(json.settings.tunnel_type).toBe('wss')
+    expect(json.settings.relay.mode).toBe('relay+wss')
+    expect(json.settings.relay.role).toBe('exit')
+    expect(json.settings.relay.wss_compat).toBe(true)
+    expect(json.settings.relay.entry_tun_address).toBe('172.31.88.2/24')
+    expect(json.settings.relay.exit_tun_address).toBe('172.31.88.1/24')
+    expect(json.settings.relay.outbound_iface).toBe('eth0')
+  })
+
+  it('saves WireGuard visual protocol settings through the node protocol API', async () => {
+    adminApi.createNodeProtocol.mockResolvedValueOnce({ data: { id: 101 } })
+    adminApi.getNodeProtocols.mockResolvedValueOnce({ data: [] })
+
+    const wrapper = mountNodes()
+    await flushPromises()
+
+    wrapper.vm.selectedNode = { id: 77, name: 'Entry Node' }
+    wrapper.vm.openAddProtocol()
+    wrapper.vm.protocolForm.mode = 'visual'
+    await wrapper.vm.$nextTick()
+    wrapper.vm.protocolForm.type = 'wireguard'
+    await wrapper.vm.$nextTick()
+
+    Object.assign(wrapper.vm.wireGuardForm, {
+      cidr: '10.77.0.0/24',
+      serverAddress: '10.77.0.1/24',
+      serverPrivateKey: 'server-private',
+      serverPublicKey: 'server-public',
+      role: 'entry',
+      relayServer: 'exit.example.com',
+      relayServerPort: 8443,
+      wssCompat: false
+    })
+
+    await wrapper.vm.saveProtocol()
+    await flushPromises()
+
+    expect(adminApi.createNodeProtocol).toHaveBeenCalledTimes(1)
+    const [nodeID, payload] = adminApi.createNodeProtocol.mock.calls[0]
+    expect(nodeID).toBe(77)
+    expect(payload.type).toBe('wireguard')
+    expect(payload.port).toBe(51820)
+    expect(payload.transport).toBe('udp')
+    const settings = JSON.parse(payload.settings)
+    expect(settings.tunnel_type).toBe('quic')
+    expect(settings.relay.mode).toBe('relay+quic')
+    expect(settings.relay.role).toBe('entry')
+    expect(settings.relay.server).toBe('exit.example.com')
+    expect(settings.relay.server_port).toBe(8443)
+  })
 })

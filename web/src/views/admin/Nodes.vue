@@ -578,6 +578,7 @@
                   <option value="shadowsocks">{{ t('networkPages.nodes.protocols.shadowsocks') }}</option>
                   <option value="hysteria2">{{ t('networkPages.nodes.protocols.hysteria2') }}</option>
                   <option value="tuic">{{ t('networkPages.nodes.protocols.tuic') }}</option>
+                  <option value="wireguard">WireGuard</option>
                 </select>
               </div>
               <div class="form-group">
@@ -622,8 +623,123 @@
               </div>
             </div>
 
+            <div v-if="protocolForm.type === 'wireguard'" class="wireguard-editor">
+              <div class="section-title">{{ t('admin.nodes.protocolForm.wireguard.sections.access') }}</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.cidr') }}</label>
+                  <input v-model.trim="wireGuardForm.cidr" type="text" />
+                </div>
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.serverAddress') }}</label>
+                  <input v-model.trim="wireGuardForm.serverAddress" type="text" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.serverPrivateKey') }}</label>
+                  <input v-model.trim="wireGuardForm.serverPrivateKey" type="password" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.serverPublicKey') }}</label>
+                  <input v-model.trim="wireGuardForm.serverPublicKey" type="text" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.mtu') }}</label>
+                  <input v-model.number="wireGuardForm.mtu" type="number" min="576" max="1500" />
+                </div>
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.dns') }}</label>
+                  <input v-model.trim="wireGuardForm.dns" type="text" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label>{{ t('admin.nodes.protocolForm.wireguard.fields.allowedIps') }}</label>
+                <input v-model.trim="wireGuardForm.allowedIps" type="text" />
+              </div>
+
+              <div class="section-title">{{ t('admin.nodes.protocolForm.wireguard.sections.relay') }}</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.role') }}</label>
+                  <select v-model="wireGuardForm.role">
+                    <option value="entry">{{ t('admin.nodes.protocolForm.wireguard.values.entry') }}</option>
+                    <option value="exit">{{ t('admin.nodes.protocolForm.wireguard.values.exit') }}</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.tunnelType') }}</label>
+                  <select v-model="wireGuardForm.tunnelType">
+                    <option value="quic">GOST relay+QUIC</option>
+                    <option value="wss">GOST relay+WSS</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input v-model="wireGuardForm.wssCompat" type="checkbox" />
+                  <span>{{ t('admin.nodes.protocolForm.wireguard.fields.wssCompat') }}</span>
+                </label>
+                <p class="field-hint">{{ t('admin.nodes.protocolForm.wireguard.hints.wssCompat') }}</p>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.relayServer') }}</label>
+                  <input v-model.trim="wireGuardForm.relayServer" type="text" />
+                </div>
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.relayServerPort') }}</label>
+                  <input v-model.number="wireGuardForm.relayServerPort" type="number" min="0" max="65535" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.tunPort') }}</label>
+                  <input v-model.number="wireGuardForm.tunPort" type="number" min="1" max="65535" />
+                </div>
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.tunName') }}</label>
+                  <input v-model.trim="wireGuardForm.tunName" type="text" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.entryTunAddress') }}</label>
+                  <input v-model.trim="wireGuardForm.entryTunAddress" type="text" />
+                </div>
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.exitTunAddress') }}</label>
+                  <input v-model.trim="wireGuardForm.exitTunAddress" type="text" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.outboundIface') }}</label>
+                  <input v-model.trim="wireGuardForm.outboundIface" type="text" />
+                </div>
+                <div class="form-group">
+                  <label class="checkbox-label">
+                    <input v-model="wireGuardForm.exitNat" type="checkbox" />
+                    <span>{{ t('admin.nodes.protocolForm.wireguard.fields.exitNat') }}</span>
+                  </label>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.routingTable') }}</label>
+                  <input v-model.number="wireGuardForm.routingTable" type="number" min="0" />
+                </div>
+                <div class="form-group">
+                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.routingPriority') }}</label>
+                  <input v-model.number="wireGuardForm.routingPriority" type="number" min="0" />
+                </div>
+              </div>
+            </div>
+
             <!-- JSON sub-editors for advanced fields -->
-            <details class="advanced-details">
+            <details class="advanced-details" v-if="protocolForm.type !== 'wireguard'">
               <summary>{{ t('admin.nodes.protocolForm.fields.settings') }}</summary>
               <textarea
                 v-model="protocolForm.settings"
@@ -801,6 +917,30 @@ const protocolForm = reactive({
   custom_config: '',
   show: 1
 })
+
+const defaultWireGuardForm = () => ({
+  cidr: '10.66.0.0/24',
+  serverAddress: '10.66.0.1/24',
+  serverPrivateKey: '',
+  serverPublicKey: '',
+  mtu: 1280,
+  dns: '1.1.1.1,8.8.8.8',
+  allowedIps: '0.0.0.0/0,::/0',
+  tunnelType: 'quic',
+  role: 'entry',
+  wssCompat: false,
+  relayServer: '',
+  relayServerPort: 0,
+  tunPort: 8421,
+  tunName: '',
+  entryTunAddress: '172.31.66.2/24',
+  exitTunAddress: '172.31.66.1/24',
+  outboundIface: '',
+  exitNat: true,
+  routingTable: 0,
+  routingPriority: 0
+})
+const wireGuardForm = reactive(defaultWireGuardForm())
 const protocolTemplates = ref([])
 const selectedTemplate = ref('')
 
@@ -822,6 +962,85 @@ const jsonPlaceholder = `{
   "reality_settings": {}
 }`
 
+const splitList = (value) => String(value || '')
+  .split(',')
+  .map(item => item.trim())
+  .filter(Boolean)
+
+const asListText = (value, fallback) => {
+  if (Array.isArray(value)) return value.join(',')
+  if (typeof value === 'string' && value.trim()) return value
+  return fallback
+}
+
+const asNumber = (value, fallback) => {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : fallback
+}
+
+const resetWireGuardForm = () => {
+  Object.assign(wireGuardForm, defaultWireGuardForm())
+}
+
+const buildWireGuardSettings = () => {
+  const tunnelType = wireGuardForm.wssCompat ? 'wss' : (wireGuardForm.tunnelType || 'quic')
+  const relayMode = tunnelType === 'wss' ? 'relay+wss' : 'relay+quic'
+  return {
+    cidr: wireGuardForm.cidr || '10.66.0.0/24',
+    server_address: wireGuardForm.serverAddress || '10.66.0.1/24',
+    server_private_key: wireGuardForm.serverPrivateKey || '',
+    server_public_key: wireGuardForm.serverPublicKey || '',
+    mtu: asNumber(wireGuardForm.mtu, 1280),
+    dns: splitList(wireGuardForm.dns),
+    allowed_ips: splitList(wireGuardForm.allowedIps),
+    tunnel_type: tunnelType,
+    relay: {
+      backend: 'gost',
+      mode: relayMode,
+      role: wireGuardForm.role === 'exit' ? 'exit' : 'entry',
+      wss_compat: tunnelType === 'wss',
+      exit_nat: Boolean(wireGuardForm.exitNat),
+      entry_stats: true,
+      server: wireGuardForm.relayServer || '',
+      server_port: asNumber(wireGuardForm.relayServerPort, 0),
+      tun_port: asNumber(wireGuardForm.tunPort, 8421),
+      tun_name: wireGuardForm.tunName || '',
+      entry_tun_address: wireGuardForm.entryTunAddress || '172.31.66.2/24',
+      exit_tun_address: wireGuardForm.exitTunAddress || '172.31.66.1/24',
+      outbound_iface: wireGuardForm.outboundIface || '',
+      routing_table: asNumber(wireGuardForm.routingTable, 0),
+      routing_priority: asNumber(wireGuardForm.routingPriority, 0)
+    }
+  }
+}
+
+const hydrateWireGuardForm = (settings = {}) => {
+  const relay = settings.relay && typeof settings.relay === 'object' ? settings.relay : {}
+  const tunnelType = relay.wss_compat || settings.tunnel_type === 'wss' || String(relay.mode || '').includes('wss') ? 'wss' : 'quic'
+  Object.assign(wireGuardForm, {
+    cidr: settings.cidr || '10.66.0.0/24',
+    serverAddress: settings.server_address || '10.66.0.1/24',
+    serverPrivateKey: settings.server_private_key || '',
+    serverPublicKey: settings.server_public_key || '',
+    mtu: asNumber(settings.mtu, 1280),
+    dns: asListText(settings.dns, '1.1.1.1,8.8.8.8'),
+    allowedIps: asListText(settings.allowed_ips, '0.0.0.0/0,::/0'),
+    tunnelType,
+    role: relay.role === 'exit' ? 'exit' : 'entry',
+    wssCompat: tunnelType === 'wss',
+    relayServer: relay.server || '',
+    relayServerPort: asNumber(relay.server_port, 0),
+    tunPort: asNumber(relay.tun_port, 8421),
+    tunName: relay.tun_name || '',
+    entryTunAddress: relay.entry_tun_address || '172.31.66.2/24',
+    exitTunAddress: relay.exit_tun_address || '172.31.66.1/24',
+    outboundIface: relay.outbound_iface || '',
+    exitNat: relay.exit_nat !== false,
+    routingTable: asNumber(relay.routing_table, 0),
+    routingPriority: asNumber(relay.routing_priority, 0)
+  })
+}
+
 // Convert visual form to JSON object
 function visualToJson() {
   const obj = {
@@ -831,6 +1050,16 @@ function visualToJson() {
     transport: protocolForm.transport,
     enable: protocolForm.enable,
     show: protocolForm.show,
+  }
+  if (protocolForm.type === 'wireguard') {
+    obj.port = protocolForm.port || 51820
+    obj.tls = 0
+    obj.transport = 'udp'
+    obj.settings = buildWireGuardSettings()
+    obj.tls_settings = {}
+    obj.transport_settings = {}
+    obj.reality_settings = {}
+    return obj
   }
   try { obj.settings = JSON.parse(protocolForm.settings || '{}') } catch { obj.settings = {} }
   try { obj.tls_settings = JSON.parse(protocolForm.tls_settings || '{}') } catch { obj.tls_settings = {} }
@@ -851,6 +1080,13 @@ function jsonToVisual(json) {
   protocolForm.tls_settings = json.tls_settings ? (typeof json.tls_settings === 'string' ? json.tls_settings : JSON.stringify(json.tls_settings, null, 2)) : '{}'
   protocolForm.transport_settings = json.transport_settings ? (typeof json.transport_settings === 'string' ? json.transport_settings : JSON.stringify(json.transport_settings, null, 2)) : '{}'
   protocolForm.reality_settings = json.reality_settings ? (typeof json.reality_settings === 'string' ? json.reality_settings : JSON.stringify(json.reality_settings, null, 2)) : '{}'
+  if (protocolForm.type === 'wireguard') {
+    let settings = json.settings || {}
+    if (typeof settings === 'string') {
+      try { settings = JSON.parse(settings) } catch { settings = {} }
+    }
+    hydrateWireGuardForm(settings)
+  }
 }
 
 // When switching to JSON mode, sync from visual form
@@ -872,6 +1108,23 @@ watch(() => protocolForm.mode, (newMode) => {
       // keep existing visual values if JSON is invalid
     }
   }
+})
+
+watch(() => protocolForm.type, (newType, oldType) => {
+  if (newType === 'wireguard' && oldType !== 'wireguard') {
+    protocolForm.port = protocolForm.port === 443 ? 51820 : protocolForm.port
+    protocolForm.tls = 0
+    protocolForm.transport = 'udp'
+    resetWireGuardForm()
+  }
+})
+
+watch(() => wireGuardForm.wssCompat, (enabled) => {
+  wireGuardForm.tunnelType = enabled ? 'wss' : 'quic'
+})
+
+watch(() => wireGuardForm.tunnelType, (value) => {
+  wireGuardForm.wssCompat = value === 'wss'
 })
 
 function onJsonInput() {
@@ -1351,6 +1604,7 @@ const closeProtocolModal = () => {
 const openAddProtocol = () => {
   editingProtocol.value = null
   selectedTemplate.value = ''
+  resetWireGuardForm()
   Object.assign(protocolForm, {
     mode: 'json',
     type: 'vless',
@@ -1439,6 +1693,9 @@ const applyTemplate = (tpl) => {
   try { json.tls_settings = JSON.parse(tpl.tls_settings || '{}') } catch { json.tls_settings = {} }
   try { json.transport_settings = JSON.parse(tpl.transport_settings || '{}') } catch { json.transport_settings = {} }
   try { json.reality_settings = JSON.parse(tpl.reality_settings || '{}') } catch { json.reality_settings = {} }
+  if (json.type === 'wireguard') {
+    hydrateWireGuardForm(json.settings)
+  }
 
   jsonEditorContent.value = JSON.stringify(json, null, 2)
   jsonParseError.value = ''
@@ -1480,16 +1737,17 @@ const saveProtocol = async () => {
       alert(t('admin.nodes.messages.requiredFields'))
       return
     }
+    const json = visualToJson()
     payload = {
-      type: protocolForm.type,
-      port: protocolForm.port,
-      enable: protocolForm.enable,
-      tls: protocolForm.tls,
-      transport: protocolForm.transport,
-      settings: protocolForm.settings,
-      tls_settings: protocolForm.tls_settings,
-      transport_settings: protocolForm.transport_settings,
-      reality_settings: protocolForm.reality_settings,
+      type: json.type,
+      port: json.port,
+      enable: json.enable,
+      tls: json.tls,
+      transport: json.transport,
+      settings: JSON.stringify(json.settings || {}),
+      tls_settings: JSON.stringify(json.tls_settings || {}),
+      transport_settings: JSON.stringify(json.transport_settings || {}),
+      reality_settings: JSON.stringify(json.reality_settings || {}),
       show: protocolForm.show,
     }
   }
@@ -1753,6 +2011,21 @@ onMounted(async () => {
   margin: 6px 0 0;
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+.wireguard-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-title {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-color);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .node-tags {
