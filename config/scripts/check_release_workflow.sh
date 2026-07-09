@@ -14,8 +14,8 @@ Usage: config/scripts/check_release_workflow.sh [--self-test|--help]
 Statically checks that the release workflow still provides the required release
 contract: strict tag gating, blocking quality/security/race/test prerequisites,
 multi-platform binaries, Docker metadata, frontend archives, checksums, SBOM,
-operator deployment runbook, machine-readable release manifest, and generated
-GitHub release notes.
+operator deployment and upgrade runbooks, machine-readable release manifest, and
+generated GitHub release notes.
 EOF
 }
 
@@ -122,6 +122,7 @@ check_release_workflow() {
   require_text "spdx-json" "SPDX JSON SBOM format" || failed=1
   require_text "v2board-source.sbom.spdx.json" "source SBOM release asset" || failed=1
   require_text "OPERATOR_DEPLOYMENT.md" "operator deployment runbook" || failed=1
+  require_text "UPGRADE.md" "upgrade and rollback runbook release asset" || failed=1
   require_text "No Local Release Builds" "operator no-local-build release warning" || failed=1
   require_text "Generate release manifest" "release manifest generation step" || failed=1
   require_text "config/scripts/generate_release_manifest.py" "release manifest generator script" || failed=1
@@ -132,6 +133,7 @@ check_release_workflow() {
   require_text "Verify release artifacts" "release artifact verification step" || failed=1
   require_text "config/scripts/verify_release_artifacts.py" "release artifact verification script" || failed=1
   require_text "--require OPERATOR_DEPLOYMENT.md" "operator runbook verification requirement" || failed=1
+  require_text "--require UPGRADE.md" "upgrade runbook verification requirement" || failed=1
   require_text "--require v2board-linux-amd64.tar.gz" "linux amd64 release artifact verification requirement" || failed=1
   require_text "--require v2board-windows-arm64.exe.zip" "windows arm64 release artifact verification requirement" || failed=1
   require_text "softprops/action-gh-release" "GitHub release creation action" || failed=1
@@ -214,6 +216,7 @@ jobs:
       - run: |
           cp migration-dry-run.txt release/migration-dry-run.txt
           echo "No Local Release Builds" > release/OPERATOR_DEPLOYMENT.md
+          cp docs/UPGRADE.md release/UPGRADE.md
           tar -czvf release/v2board-frontend.tar.gz -C web/public .
           zip -r release/v2board-frontend.zip web/public
       - name: Generate release manifest
@@ -230,6 +233,7 @@ jobs:
         run: |
           python3 config/scripts/verify_release_artifacts.py \
             --require OPERATOR_DEPLOYMENT.md \
+            --require UPGRADE.md \
             --require v2board-linux-amd64.tar.gz \
             --require v2board-windows-arm64.exe.zip
       - uses: softprops/action-gh-release@v3
@@ -282,6 +286,13 @@ EOF
   sed -i '/verify_release_artifacts.py/d' "${fixture}.missing-artifact-verification"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-artifact-verification" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing artifact verification should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-upgrade-runbook"
+  sed -i '/UPGRADE.md/d' "${fixture}.missing-upgrade-runbook"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-upgrade-runbook" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing upgrade runbook should fail" >&2
     return 1
   fi
 

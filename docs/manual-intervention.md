@@ -75,7 +75,7 @@ Current state:
 
 - CI can build binaries and Docker images.
 - The release workflow intentionally does not deploy to production.
-- GitHub Releases include `OPERATOR_DEPLOYMENT.md` with the manual deployment, verification, and rollback flow, `migration-dry-run.txt` as the CI migration dry-run evidence for that tag, and `RELEASE_MANIFEST.json` with GitHub Actions run metadata and artifact hashes.
+- GitHub Releases include `OPERATOR_DEPLOYMENT.md` with the manual deployment, verification, and rollback flow, `UPGRADE.md` with upgrade and rollback instructions, `migration-dry-run.txt` as the CI migration dry-run evidence for that tag, and `RELEASE_MANIFEST.json` with GitHub Actions run metadata and artifact hashes.
 
 ## High-Risk Operations
 

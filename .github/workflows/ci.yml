@@ -852,6 +852,7 @@ jobs:
           - Source dependency SBOM is attached in `v2board-source.sbom.spdx.json`.
           - Machine-readable release metadata is attached in `RELEASE_MANIFEST.json`.
           - SHA256 checksums are attached in `SHA256SUMS.txt`.
+          - Upgrade and rollback instructions are attached in `UPGRADE.md`.
 
           ## Required Manual Checks
 
@@ -890,6 +891,7 @@ jobs:
           if the release required a data migration and the approved rollback plan says so.
           EOF
           sed -i "s/{{RELEASE_TAG}}/${GITHUB_REF_NAME}/g" release/OPERATOR_DEPLOYMENT.md
+          cp docs/UPGRADE.md release/UPGRADE.md
 
       - name: Create release archives
         run: |
@@ -917,6 +919,7 @@ jobs:
             --manifest release/RELEASE_MANIFEST.json \
             --checksums release/SHA256SUMS.txt \
             --require OPERATOR_DEPLOYMENT.md \
+            --require UPGRADE.md \
             --require RELEASE_MANIFEST.json \
             --require SHA256SUMS.txt \
             --require docker-image.txt \
