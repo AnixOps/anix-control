@@ -189,6 +189,7 @@ Current workflow files:
 Current CI coverage includes:
 
 - Go setup pinned to `1.26.5` for Actions verification and release artifact generation.
+- Workflow actions refreshed to current major versions to avoid Node.js 20 action-runtime deprecation warnings.
 - `go mod tidy` diff check.
 - `gofmt` check.
 - `go vet ./...`.
