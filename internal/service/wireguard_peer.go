@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -26,7 +27,7 @@ func (s *SubscriptionService) applyWireGuardPeer(parsed *model.ParsedNode, proto
 
 	settings := parsed.Settings
 	cidr := stringSetting(settings, "cidr", defaultWireGuardCIDR)
-	peer, err := s.getOrCreateWireGuardPeer(protocol.ID, ctx.UserID, cidr)
+	peer, err := s.GetOrCreateWireGuardPeer(protocol.ID, ctx.UserID, cidr)
 	if err != nil {
 		parsed.Settings["wireguard_error"] = err.Error()
 		return
@@ -53,7 +54,7 @@ func (s *SubscriptionService) applyWireGuardPeer(parsed *model.ParsedNode, proto
 	}
 }
 
-func (s *SubscriptionService) getOrCreateWireGuardPeer(protocolID, userID uint, cidr string) (*model.WireGuardPeer, error) {
+func (s *SubscriptionService) GetOrCreateWireGuardPeer(protocolID, userID uint, cidr string) (*model.WireGuardPeer, error) {
 	if protocolID == 0 || userID == 0 {
 		return nil, errors.New("wireguard protocol_id and user_id are required")
 	}
@@ -90,6 +91,43 @@ func (s *SubscriptionService) getOrCreateWireGuardPeer(protocolID, userID uint, 
 		return nil, err
 	}
 	return &peer, nil
+}
+
+func (s *SubscriptionService) BuildWireGuardRuntimeUserExtras(protocol *model.NodeProtocol, users []*model.User) (map[uint]map[string]string, error) {
+	if protocol == nil || protocol.Type != model.ProtocolWireGuard {
+		return nil, nil
+	}
+	cidr := defaultWireGuardCIDR
+	if protocol.Settings != nil && *protocol.Settings != "" {
+		cidr = stringSetting(parseWireGuardSettings(*protocol.Settings), "cidr", defaultWireGuardCIDR)
+	}
+
+	extras := make(map[uint]map[string]string, len(users))
+	for _, user := range users {
+		if user == nil {
+			continue
+		}
+		peer, err := s.GetOrCreateWireGuardPeer(protocol.ID, user.ID, cidr)
+		if err != nil {
+			return nil, err
+		}
+		extras[user.ID] = map[string]string{
+			"wireguard_protocol_id":     fmt.Sprintf("%d", protocol.ID),
+			"wireguard_peer_ip":         peer.PeerIP,
+			"wireguard_public_key":      peer.PublicKey,
+			"wireguard_preshared_key":   peer.PresharedKey,
+			"wireguard_peer_public_key": peer.PublicKey,
+		}
+	}
+	return extras, nil
+}
+
+func parseWireGuardSettings(raw string) map[string]any {
+	var settings map[string]any
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		return nil
+	}
+	return settings
 }
 
 func (s *SubscriptionService) allocateWireGuardPeerIP(protocolID uint, cidr string) (string, error) {

@@ -277,12 +277,20 @@ func (s *UserGRPCServer) GetUsers(ctx context.Context, req *pb.UserListRequest) 
 		return nil, status.Error(codes.Internal, "failed to get users")
 	}
 
+	wireGuardExtras, err := s.buildWireGuardUserExtras(uint(req.NodeId), users)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to build wireguard users")
+	}
+
 	// 转换为 proto 格式
 	userInfos := make([]*pb.UserInfo, 0, len(users))
 	for _, user := range users {
 		info, err := userInfoFromModel(user)
 		if err != nil {
 			return nil, status.Error(codes.OutOfRange, err.Error())
+		}
+		if extra, ok := wireGuardExtras[user.ID]; ok {
+			info.Extra = extra
 		}
 		userInfos = append(userInfos, info)
 	}
@@ -292,6 +300,17 @@ func (s *UserGRPCServer) GetUsers(ctx context.Context, req *pb.UserListRequest) 
 		Total:     int64(len(userInfos)),
 		UpdatedAt: time.Now().Unix(),
 	}, nil
+}
+
+func (s *UserGRPCServer) buildWireGuardUserExtras(nodeID uint, users []*model.User) (map[uint]map[string]string, error) {
+	if nodeID == 0 || len(users) == 0 {
+		return nil, nil
+	}
+	protocols, err := s.nodeService.GetProtocols(nodeID)
+	if err != nil || len(protocols) == 0 || protocols[0].Type != model.ProtocolWireGuard {
+		return nil, err
+	}
+	return service.NewSubscriptionService().BuildWireGuardRuntimeUserExtras(&protocols[0], users)
 }
 
 // UserChanges 双向流：用户变更实时推送

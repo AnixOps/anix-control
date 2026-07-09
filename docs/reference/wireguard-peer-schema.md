@@ -39,6 +39,9 @@ Operational notes:
 
 - Back up the panel database before applying the migration.
 - Keep `private_key` and `preshared_key` treated as secrets in exports and logs.
+- UniProxy HTTP and gRPC user-list responses expose only the runtime fields V2bX
+  needs for entry termination: `wireguard_peer_ip`, `wireguard_public_key`, and
+  `wireguard_preshared_key`. The user private key remains subscription-only.
 - Do not mark the full WireGuard relay path complete until V2bX runtime, traffic
   accounting, online state, limits, GOST relay+QUIC, WSS compatibility mode, and
   GitHub Actions verification are also implemented.

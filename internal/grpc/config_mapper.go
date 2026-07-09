@@ -48,8 +48,42 @@ func fillNodeConfigResponse(node *model.Node, protocol *model.NodeProtocol) (*pb
 	if ns, ok := cfg["network_settings"].(map[string]any); ok {
 		resp.NetworkSettings = service.StringifyConfigMap(ns)
 	}
+	resp.Extra = service.StringifyConfigMap(extraNodeConfigFields(cfg))
 
 	return resp, nil
+}
+
+func extraNodeConfigFields(cfg map[string]any) map[string]any {
+	if len(cfg) == 0 {
+		return nil
+	}
+	skip := map[string]bool{
+		"node_type":        true,
+		"type":             true,
+		"host":             true,
+		"server_port":      true,
+		"server_name":      true,
+		"tls":              true,
+		"tls_settings":     true,
+		"network":          true,
+		"network_settings": true,
+		"cipher":           true,
+		"flow":             true,
+		"server_key":       true,
+		"base_config":      true,
+		"routes":           true,
+		"send_through":     true,
+	}
+	extra := make(map[string]any)
+	for k, v := range cfg {
+		if !skip[k] {
+			extra[k] = v
+		}
+	}
+	if len(extra) == 0 {
+		return nil
+	}
+	return extra
 }
 
 func asString(v any) string {

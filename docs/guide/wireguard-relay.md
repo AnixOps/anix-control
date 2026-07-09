@@ -124,7 +124,8 @@ feature is marked implemented.
 2. Panel model and API.
    - Done for the first slice: `wireguard` protocol template, `v2_wireguard_peer`,
      automatic IPv4 peer allocation, user keypair storage, preshared key storage,
-     default MTU/DNS/allowed IPs, and node-config relay defaults.
+     default MTU/DNS/allowed IPs, node-config relay defaults, and UniProxy/gRPC
+     runtime user fields for peer IP, public key, and preshared key.
    - Still pending: admin API validation, admin UI, server key management,
      entry/exit node selection, route policy, and WSS compatibility switching.
    - Add admin UI for WireGuard protocol configuration and one-click WSS
@@ -137,11 +138,12 @@ feature is marked implemented.
      import behavior.
 
 4. V2bX runtime.
-   - Apply domestic entry WireGuard termination, peer state, route policy, limits,
-     online tracking, and peer traffic accounting.
-   - Apply entry-to-exit GOST relay+QUIC by default and GOST relay+WSS when
-     compatibility mode is enabled.
-   - Apply overseas exit NAT and runtime health reporting.
+   - Initial V2bX entry runtime support can consume panel WireGuard config and
+     peer fields, apply the Linux WireGuard interface with `ip`/`wg`, and report
+     peer traffic deltas from `wg show <iface> transfer`.
+   - Still pending: complete route policy, online tracking, speed-limit
+     enforcement, entry-to-exit GOST relay+QUIC routing, GOST relay+WSS
+     compatibility mode, overseas exit NAT, and runtime health reporting.
 
 5. Integration testing.
    - Cover panel API validation, CIDR exhaustion, duplicate peer allocation,
