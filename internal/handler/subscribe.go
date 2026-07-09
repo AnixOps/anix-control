@@ -362,13 +362,13 @@ func (h *SubscriptionAdminHandler) DeleteGroup(c *gin.Context) {
 func (h *SubscriptionAdminHandler) GetTemplates(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		panelError(c, "ID 无效")
 		return
 	}
 
 	templates, err := h.subscriptionService.GetTemplatesByGroup(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取模板失败", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -438,20 +438,20 @@ func (h *SubscriptionAdminHandler) GetAvailableProtocols(c *gin.Context) {
 func (h *SubscriptionAdminHandler) CreateTemplate(c *gin.Context) {
 	groupID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "分组 ID 无效"})
+		panelError(c, "分组 ID 无效")
 		return
 	}
 
 	var template model.SubscriptionTemplate
 	if err := c.ShouldBindJSON(&template); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	template.GroupID = uint(groupID)
 
 	if err := h.subscriptionService.CreateTemplate(&template); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "创建模板失败", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -463,13 +463,13 @@ func (h *SubscriptionAdminHandler) CreateTemplate(c *gin.Context) {
 func (h *SubscriptionAdminHandler) GetTemplate(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		panelError(c, "ID 无效")
 		return
 	}
 
 	template, err := h.subscriptionService.GetTemplate(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "模板不存在"})
+		panelError(c, "模板不存在")
 		return
 	}
 
@@ -481,31 +481,39 @@ func (h *SubscriptionAdminHandler) GetTemplate(c *gin.Context) {
 func (h *SubscriptionAdminHandler) UpdateTemplate(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		panelError(c, "ID 无效")
 		return
 	}
 
 	var updates map[string]any
 	if err := c.ShouldBindJSON(&updates); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	if len(updates) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
+		panelError(c, "参数错误")
 		return
 	}
 
 	normalizeTemplateUpdatePayload(updates)
 
 	if err := h.subscriptionService.UpdateTemplateFields(uint(id), updates); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新模板失败", "error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "模板不存在")
+			return
+		}
+		panelError(c, err.Error())
 		return
 	}
 
 	template, err := h.subscriptionService.GetTemplate(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新成功但读取失败", "error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "模板不存在")
+			return
+		}
+		panelError(c, err.Error())
 		return
 	}
 
@@ -543,12 +551,16 @@ func normalizeTemplateUpdatePayload(updates map[string]any) {
 func (h *SubscriptionAdminHandler) DeleteTemplate(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		panelError(c, "ID 无效")
 		return
 	}
 
 	if err := h.subscriptionService.DeleteTemplate(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "删除模板失败", "error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "模板不存在")
+			return
+		}
+		panelError(c, err.Error())
 		return
 	}
 

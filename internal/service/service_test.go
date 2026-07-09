@@ -2193,6 +2193,11 @@ func (s *SubscriptionServiceTestSuite) TestGetTemplate() {
 	assert.Equal(s.T(), "Get Test Template", found.Name)
 }
 
+func (s *SubscriptionServiceTestSuite) TestUpdateTemplateFields_NotFound() {
+	err := s.svc.UpdateTemplateFields(99999, map[string]any{"name": "missing"})
+	assert.Error(s.T(), err)
+}
+
 func (s *SubscriptionServiceTestSuite) TestDeleteTemplate() {
 	group := &model.SubscriptionGroup{
 		Name:     "Delete Template Group",
@@ -2213,6 +2218,11 @@ func (s *SubscriptionServiceTestSuite) TestDeleteTemplate() {
 	assert.NoError(s.T(), err)
 
 	_, err = s.svc.GetTemplate(tpl.ID)
+	assert.Error(s.T(), err)
+}
+
+func (s *SubscriptionServiceTestSuite) TestDeleteTemplate_NotFound() {
+	err := s.svc.DeleteTemplate(99999)
 	assert.Error(s.T(), err)
 }
 

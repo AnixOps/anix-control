@@ -794,14 +794,25 @@ func (s *SubscriptionService) UpdateTemplateFields(id uint, fields map[string]an
 	delete(fields, "created_at")
 	delete(fields, "updated_at")
 
-	return s.db.Model(&model.SubscriptionTemplate{}).
-		Where("id = ?", id).
-		Updates(fields).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var template model.SubscriptionTemplate
+		if err := tx.First(&template, id).Error; err != nil {
+			return err
+		}
+
+		return tx.Model(&template).Updates(fields).Error
+	})
 }
 
 // DeleteTemplate 删除订阅模板
 func (s *SubscriptionService) DeleteTemplate(id uint) error {
-	return s.db.Delete(&model.SubscriptionTemplate{}, id).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var template model.SubscriptionTemplate
+		if err := tx.First(&template, id).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&template).Error
+	})
 }
 
 // GetTemplate 获取订阅模板
