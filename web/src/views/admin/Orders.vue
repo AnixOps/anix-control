@@ -228,15 +228,25 @@ const resolveApiError = (error, fallbackKey) => (
   t(fallbackKey)
 )
 
+const ensureOrderSuccess = (res, fallbackKey) => {
+  if (res && typeof res === 'object' && typeof res.code === 'number' && res.code !== 0) {
+    throw new Error(res.msg || t(fallbackKey))
+  }
+  return res
+}
+
 const fetchOrders = async () => {
   try {
-    const res = await getOrderList({
-      page: page.value,
-      page_size: pageSize.value,
-      trade_no: filters.value.trade_no,
-      email: filters.value.email,
-      status: filters.value.status || undefined
-    })
+    const res = ensureOrderSuccess(
+      await getOrderList({
+        page: page.value,
+        page_size: pageSize.value,
+        trade_no: filters.value.trade_no,
+        email: filters.value.email,
+        status: filters.value.status || undefined
+      }),
+      'adminOrders.messages.fetchOrdersFailed'
+    )
     const payload = readOrderPage(res)
     orders.value = payload.list || []
     total.value = payload.total || 0
@@ -247,7 +257,10 @@ const fetchOrders = async () => {
 
 const fetchStats = async () => {
   try {
-    const res = await getOrderStats()
+    const res = ensureOrderSuccess(
+      await getOrderStats(),
+      'adminOrders.messages.fetchStatsFailed'
+    )
     stats.value = readOrderStats(res)
   } catch (error) {
     console.error(t('adminOrders.messages.fetchStatsFailed'), error)
@@ -292,7 +305,10 @@ const handleMarkPaid = async (order) => {
   }
 
   try {
-    await markOrderPaid(order.id)
+    ensureOrderSuccess(
+      await markOrderPaid(order.id),
+      'adminOrders.messages.markPaidFailedShort'
+    )
     window.alert(t('adminOrders.messages.markPaidSuccess'))
     await fetchOrders()
     await fetchStats()
@@ -309,7 +325,10 @@ const handleCancel = async (order) => {
   }
 
   try {
-    await cancelOrder(order.id)
+    ensureOrderSuccess(
+      await cancelOrder(order.id),
+      'adminOrders.messages.cancelFailedShort'
+    )
     await fetchOrders()
     await fetchStats()
   } catch (error) {

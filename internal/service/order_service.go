@@ -14,6 +14,11 @@ type OrderService struct {
 	db *gorm.DB
 }
 
+var (
+	ErrOrderNotFound     = errors.New("订单不存在")
+	ErrOrderPlanNotFound = errors.New("关联套餐不存在")
+)
+
 // NewOrderService 创建订单服务
 func NewOrderService() *OrderService {
 	return &OrderService{
@@ -93,8 +98,15 @@ func (s *OrderService) GetList(params OrderListParams) (*OrderListResult, error)
 
 // GetByID 根据ID获取订单
 func (s *OrderService) GetByID(id uint) (*model.Order, error) {
+	if id == 0 {
+		return nil, ErrOrderNotFound
+	}
+
 	var order model.Order
 	if err := s.db.Preload("User").Preload("Plan").First(&order, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOrderNotFound
+		}
 		return nil, err
 	}
 	return &order, nil
@@ -236,6 +248,18 @@ func (s *OrderService) Create(params CreateOrderParams) (*model.Order, error) {
 
 // UpdateStatus 更新订单状态
 func (s *OrderService) UpdateStatus(orderID uint, status int) error {
+	if orderID == 0 {
+		return ErrOrderNotFound
+	}
+
+	var order model.Order
+	if err := s.db.Select("id").First(&order, orderID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrOrderNotFound
+		}
+		return err
+	}
+
 	updates := map[string]any{
 		"status": status,
 	}
@@ -253,11 +277,18 @@ func (s *OrderService) Cancel(orderID uint) error {
 
 // Complete 完成订单 (支付成功后处理)
 func (s *OrderService) Complete(orderID uint) error {
+	if orderID == 0 {
+		return ErrOrderNotFound
+	}
+
 	// 启用事务执行订单完成逻辑
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// 1. 获取并锁定订单记录
 		var order model.Order
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").Preload("User").First(&order, orderID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrOrderNotFound
+			}
 			return err
 		}
 
@@ -268,7 +299,10 @@ func (s *OrderService) Complete(orderID uint) error {
 		// 2. 获取套餐详情及关联分组
 		var plan model.Plan
 		if err := tx.First(&plan, order.PlanID).Error; err != nil {
-			return errors.New("关联套餐不存在")
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrOrderPlanNotFound
+			}
+			return err
 		}
 
 		var planGroups []model.PlanSubscriptionGroup

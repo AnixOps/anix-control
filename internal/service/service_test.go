@@ -1096,6 +1096,12 @@ func (s *OrderServiceTestSuite) TestGetOrderByID() {
 	assert.Equal(s.T(), order.TradeNo, found.TradeNo)
 }
 
+func (s *OrderServiceTestSuite) TestGetOrderByID_NotFound() {
+	found, err := s.svc.GetByID(99999)
+	assert.ErrorIs(s.T(), err, ErrOrderNotFound)
+	assert.Nil(s.T(), found)
+}
+
 func (s *OrderServiceTestSuite) TestGetOrderByTradeNo() {
 	order, _ := s.svc.Create(CreateOrderParams{
 		UserID: s.testUser.ID,
@@ -1123,6 +1129,22 @@ func (s *OrderServiceTestSuite) TestUpdateStatus() {
 	assert.NotZero(s.T(), found.PaidAt)
 }
 
+func (s *OrderServiceTestSuite) TestUpdateStatus_NotFound() {
+	err := s.svc.UpdateStatus(99999, 1)
+	assert.ErrorIs(s.T(), err, ErrOrderNotFound)
+}
+
+func (s *OrderServiceTestSuite) TestUpdateStatus_ExistingSameStatus() {
+	order, _ := s.svc.Create(CreateOrderParams{
+		UserID: s.testUser.ID,
+		PlanID: s.testPlan.ID,
+		Period: "month",
+	})
+
+	err := s.svc.UpdateStatus(order.ID, order.Status)
+	assert.NoError(s.T(), err)
+}
+
 func (s *OrderServiceTestSuite) TestCancelOrder() {
 	order, _ := s.svc.Create(CreateOrderParams{
 		UserID: s.testUser.ID,
@@ -1135,6 +1157,11 @@ func (s *OrderServiceTestSuite) TestCancelOrder() {
 
 	found, _ := s.svc.GetByID(order.ID)
 	assert.Equal(s.T(), 2, found.Status)
+}
+
+func (s *OrderServiceTestSuite) TestCancelOrder_NotFound() {
+	err := s.svc.Cancel(99999)
+	assert.ErrorIs(s.T(), err, ErrOrderNotFound)
 }
 
 func (s *OrderServiceTestSuite) TestGetUserOrders() {
@@ -4806,6 +4833,38 @@ func (s *OrderServiceTestSuite) TestComplete() {
 	var updatedUser model.User
 	database.Get().First(&updatedUser, user.ID)
 	assert.Equal(s.T(), plan.ID, *updatedUser.PlanID)
+}
+
+func (s *OrderServiceTestSuite) TestComplete_NotFound() {
+	err := s.svc.Complete(99999)
+	assert.ErrorIs(s.T(), err, ErrOrderNotFound)
+}
+
+func (s *OrderServiceTestSuite) TestComplete_PlanNotFound() {
+	user := &model.User{
+		Email:          "missing-plan-order@test.com",
+		Password:       "hashed",
+		Token:          "token-missing-plan-order",
+		UUID:           "uuid-missing-plan-order",
+		TransferEnable: 0,
+	}
+	assert.NoError(s.T(), database.Get().Create(user).Error)
+
+	paidAt := time.Now().Unix()
+	order := &model.Order{
+		TradeNo:     "COMPLETE-MISSING-PLAN",
+		UserID:      user.ID,
+		PlanID:      99999,
+		Type:        1,
+		Period:      "month",
+		TotalAmount: 1000,
+		Status:      1,
+		PaidAt:      &paidAt,
+	}
+	assert.NoError(s.T(), database.Get().Create(order).Error)
+
+	err := s.svc.Complete(order.ID)
+	assert.ErrorIs(s.T(), err, ErrOrderPlanNotFound)
 }
 
 // =====================================================

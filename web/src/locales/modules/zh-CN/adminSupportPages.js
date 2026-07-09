@@ -52,6 +52,82 @@ export default {
       deleteFailed: '删除优惠券失败'
     }
   },
+  adminOrders: {
+    title: '订单管理',
+    subtitle: '查看订单、处理待支付订单并取消无效记录。',
+    stats: {
+      totalOrders: '订单总数',
+      pendingOrders: '待支付订单',
+      totalRevenue: '总收入',
+      todayRevenue: '今日收入'
+    },
+    filters: {
+      tradeNo: '订单号',
+      email: '用户邮箱',
+      allStatus: '全部状态'
+    },
+    status: {
+      pending: '待支付',
+      paid: '已支付',
+      cancelled: '已取消',
+      completed: '已完成',
+      unknown: '未知'
+    },
+    actions: {
+      search: '搜索',
+      markPaid: '标记已支付',
+      cancelOrder: '取消订单'
+    },
+    table: {
+      tradeNo: '订单号',
+      user: '用户',
+      plan: '套餐',
+      period: '周期',
+      amount: '金额',
+      status: '状态',
+      createdAt: '创建时间',
+      actions: '操作'
+    },
+    detailModal: {
+      title: '订单详情',
+      tradeNo: '订单编号',
+      userEmail: '用户邮箱',
+      plan: '套餐',
+      period: '购买周期',
+      amount: '金额',
+      status: '状态',
+      type: '订单类型',
+      createdAt: '创建时间',
+      paidAt: '支付时间',
+      callbackNo: '回调单号'
+    },
+    types: {
+      new: '新购',
+      renew: '续费',
+      upgrade: '升级',
+      resetTraffic: '重置流量',
+      unknown: '未知'
+    },
+    empty: {
+      noData: '暂无订单'
+    },
+    pagination: {
+      prev: '上一页',
+      next: '下一页',
+      info: '第 {page} / {totalPages} 页'
+    },
+    messages: {
+      fetchOrdersFailed: '加载订单失败',
+      fetchStatsFailed: '加载订单统计失败',
+      markPaidConfirm: '确定将订单 {tradeNo} 标记为已支付吗？',
+      markPaidSuccess: '订单已标记为支付成功',
+      markPaidFailed: '标记订单支付失败：{message}',
+      markPaidFailedShort: '标记失败',
+      cancelConfirm: '确定取消订单 {tradeNo} 吗？',
+      cancelFailed: '取消订单失败：{message}',
+      cancelFailedShort: '取消失败'
+    }
+  },
   adminInvite: {
     title: '邀请返利',
     subtitle: '配置邀请佣金、审核提现申请并查看排行。',
