@@ -44,11 +44,23 @@ jobs:
       - name: Validate local build cleanup script syntax
         run: bash -n config/deploy/clean_local_build_artifacts.sh
 
+      - name: Validate legacy deploy script syntax
+        run: bash -n config/scripts/deploy.sh
+
+      - name: Validate legacy pre-deploy script syntax
+        run: bash -n config/scripts/pre-deploy.sh
+
       - name: Run panel deploy script self-test
         run: bash config/deploy/deploy_panel.sh --self-test
 
       - name: Run local build cleanup script self-test
         run: bash config/deploy/clean_local_build_artifacts.sh --self-test
+
+      - name: Run legacy deploy guard self-test
+        run: bash config/scripts/deploy.sh --self-test
+
+      - name: Run legacy pre-deploy guard self-test
+        run: bash config/scripts/pre-deploy.sh --self-test
 
   go-quality:
     name: Go Quality Gates
