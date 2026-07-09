@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Refreshed GitHub Actions workflow dependencies to current action major versions so CI/release jobs no longer depend on Node.js 20 action runtimes.
 - Fixed the GitHub Actions CI baseline by pinning Go setup to `1.26.5` for stdlib vulnerability scanning and adding focused gRPC NodeLog/server-context tests so the gRPC coverage gate remains above 80%.
 - Guarded the local source-tree deploy script behind `ALLOW_LOCAL_BUILD=1`, documented GitHub Actions as the only release build source, and updated the generated release runbook to deploy release artifacts instead of building on the host.
 - Upgraded vulnerable Go dependencies reported by `govulncheck`: `google.golang.org/grpc` to `v1.79.3`, `github.com/jackc/pgx/v5` to `v5.9.2`, and `github.com/quic-go/quic-go` to `v0.59.1`.
