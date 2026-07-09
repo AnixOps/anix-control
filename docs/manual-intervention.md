@@ -89,16 +89,17 @@ Manual approval required before:
 - Disabling authentication, rate limiting, or audit logging.
 - Replacing production reverse proxy or TLS configuration.
 
-## Current Known Local Deployment Command
+## Release Build Policy
 
-For the current server layout, root deployment can use:
+- All release binaries and frontend assets must be produced by GitHub Actions.
+- Operators must deploy GitHub Release artifacts after verifying `SHA256SUMS.txt`.
+- Do not build release artifacts on the production host or from a local checkout.
+- `config/deploy/deploy_panel.sh` performs a local source-tree build and is guarded by `ALLOW_LOCAL_BUILD=1`; use it only for explicitly approved development or emergency operator work, not release builds.
+
+Root-only cleanup for old local build outputs:
 
 ```bash
 cd /home/dev/anixops/v2board_AnixOps
-PATH=/usr/local/go/bin:/home/dev/.local/opt/node/bin:$PATH \
-GO_BIN=/usr/local/go/bin/go \
-NPM_BIN=/home/dev/.local/opt/node/bin/npm \
-./config/deploy/deploy_panel.sh
+rm -rf v2board v2board.exe server migrate v2board.bak.* web/bundle-reports
+rm -rf web/public
 ```
-
-This command still depends on the local Go and Node paths being valid on the target host. If npm and node are not in the same directory, also set `NODE_BIN=/path/to/node`.

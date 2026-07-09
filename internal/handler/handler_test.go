@@ -1704,6 +1704,22 @@ func (s *AdminHandlerTestSuite) TestGetDashboard() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
+func (s *AdminHandlerTestSuite) TestGetDashboard_DBErrorUsesPanelEnvelope() {
+	s.Require().NoError(s.db.Migrator().DropTable(&model.User{}))
+	defer func() {
+		s.Require().NoError(s.db.AutoMigrate(&model.User{}))
+	}()
+
+	handler := NewAdminHandler()
+	s.router.GET("/dashboard", handler.GetDashboard)
+
+	req, _ := http.NewRequest("GET", "/dashboard?refresh=true", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "获取统计失败")
+}
+
 func (s *AdminHandlerTestSuite) TestGetHourlyTraffic_UsesPanelEnvelope() {
 	handler := NewAdminHandler()
 	s.router.GET("/traffic/hourly", handler.GetHourlyTraffic)

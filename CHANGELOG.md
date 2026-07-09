@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Guarded the local source-tree deploy script behind `ALLOW_LOCAL_BUILD=1`, documented GitHub Actions as the only release build source, and updated the generated release runbook to deploy release artifacts instead of building on the host.
 - Upgraded vulnerable Go dependencies reported by `govulncheck`: `google.golang.org/grpc` to `v1.79.3`, `github.com/jackc/pgx/v5` to `v5.9.2`, and `github.com/quic-go/quic-go` to `v0.59.1`.
 - Cleared production runtime `gosec` findings by range-checking sing-box integer conversion, tightening generated runtime file/directory permissions, and documenting reviewed config-path and subscriber credential JSON outputs.
 - Replaced the weak default bootstrap admin password with a generated `crypto/rand` password when `admin.password` is empty.
@@ -83,9 +84,10 @@
 - Expanded Forward observability response-envelope coverage for targets, trend, topology, and multi-ingress endpoints, with frontend API mapping tests for all observability calls.
 - Expanded Forward internal traffic report/snapshot handler coverage for panel `code/msg/ts/data` success, binding-error, and service-error responses.
 - Normalized admin traffic hourly and user-ranking responses to the panel `code/msg/ts/data` envelope while keeping the TrafficHourly page compatible with legacy and enveloped payloads.
-- Normalized the admin dashboard response to the panel `code/msg/ts/data` envelope while keeping the Dashboard page compatible with legacy and enveloped payloads.
+- Normalized the admin dashboard success/database-error response to the panel `code/msg/ts/data` envelope while keeping the Dashboard page compatible with legacy and enveloped payloads.
 - Normalized admin user stats success/database-error responses to the panel `code/msg/ts/data` envelope while keeping the Users page compatible with legacy and enveloped payloads.
 - Normalized admin order stats success/database-error responses to the panel `code/msg/ts/data` envelope while keeping the Orders page compatible with legacy and enveloped payloads.
+- Stabilized async notification service coverage by waiting for the final send status before asserting copied user IDs.
 - Normalized admin node stats responses to the panel `code/msg/ts/data` envelope while keeping the Nodes page compatible with legacy and enveloped payloads.
 - Normalized admin system info responses to the panel `code/msg/ts/data` envelope while keeping the AdminLayout version display compatible with legacy and enveloped payloads.
 - Normalized admin invite stats responses to the panel `code/msg/ts/data` envelope while keeping the Invite page compatible with legacy and enveloped payloads.

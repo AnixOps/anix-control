@@ -204,16 +204,12 @@ npm run dev
 - 需要临时调整 runtime 字段时，重新编辑 `config/config.yaml.forward_runtime` 并重启后台
 - 运行时合并值会在启动阶段写进 `v2_system_config`，后续可在 `/admin/system` 里继续调整
 
-生产构建：
+发行构建：
 
-```bash
-# 后端
-go build -o v2board ./cmd/server
-
-# 前端
-cd web
-npm run build
-```
+- 所有发行版本必须由 GitHub Actions release workflow 构建。
+- 后端二进制、前端静态包、Docker 镜像元数据、校验和、SBOM 都以 GitHub Release 附件为准。
+- 不要在生产机或本机用 `go build`、`npm run build`、`deploy_panel.sh` 生成发行产物。
+- 本地 `go run`、前端 `npm run dev` 只用于开发调试，不作为发行或生产更新来源。
 
 ---
 
@@ -227,29 +223,14 @@ npm run build
 - 缓存：Redis（多实例/高并发场景）
 - 监控：Prometheus（可选），内置 Grafana（可选）
 
-### systemd 二进制更新脚本
-
-当前已验证的生产更新路径是 `config/deploy/deploy_panel.sh`。脚本会构建 Go 二进制、构建前端、备份当前二进制、停止 systemd 服务、安装新二进制、同步前端静态文件、重启服务并做监听检查。
-
-生产机 root 下推荐命令：
-
-```bash
-cd /home/dev/anixops/v2board_AnixOps
-PATH=/usr/local/go/bin:/home/dev/.local/opt/node/bin:$PATH \
-GO_BIN=/usr/local/go/bin/go \
-NPM_BIN=/home/dev/.local/opt/node/bin/npm \
-./config/deploy/deploy_panel.sh
-```
-
-前置条件：
+### systemd 二进制更新
 
 - systemd 服务名默认是 `v2board.service`，可用 `SERVICE_NAME=xxx.service` 覆盖。
-- `INSTALL_PATH`、`CONFIG_PATH`、`WORKING_DIR` 会优先从 systemd 读取；读取不到时默认使用 `/usr/local/v2board/v2board`、`/etc/v2board/config.yaml` 和配置目录。
-- Go 需要可执行；生产机默认使用 `/usr/local/go/bin/go`，也可以设置 `GO_BIN=/path/to/go`。
-- Node.js 需要 `20.19+` 或 `22.12+`；如果 root 的 `PATH` 没有 node/npm，设置 `NPM_BIN=/home/dev/.local/opt/node/bin/npm`，脚本会自动把 npm 所在目录加入 `PATH`，让 `#!/usr/bin/env node` 能找到 node。
-- 如果 npm 和 node 不在同一目录，额外设置 `NODE_BIN=/path/to/node`。
-- 前端依赖需要已经安装在 `web/node_modules`；缺失时先执行 `cd web && npm install` 或按锁文件执行 `npm ci`。
-- `rsync` 可选；没有时脚本会用 `cp` 同步静态文件。
+- GitHub Release 中的匹配平台二进制是唯一发行二进制来源。
+- GitHub Release 中的 `v2board-frontend.tar.gz` 或 `v2board-frontend.zip` 是唯一发行前端来源。
+- 部署前必须校验 `SHA256SUMS.txt`，再停止服务、替换二进制和前端静态文件、启动服务并验证 `/health`。
+
+`config/deploy/deploy_panel.sh` 会执行本地源码构建，默认拒绝运行。它只保留给开发或紧急人工操作，不能作为发行版本构建路径。如确需使用，必须显式设置 `ALLOW_LOCAL_BUILD=1`，并在变更记录中说明原因。
 
 部署前可在仓库根目录运行脚本自检：
 
@@ -257,11 +238,14 @@ NPM_BIN=/home/dev/.local/opt/node/bin/npm \
 bash config/deploy/deploy_panel.sh --self-test
 ```
 
-常见错误：
+本机构建残留清理：
 
-- `go: command not found`：设置 `GO_BIN=/usr/local/go/bin/go`，或把 Go 目录加入 `PATH`。
-- `/usr/bin/env: node: No such file or directory`：设置 `PATH=/home/dev/.local/opt/node/bin:$PATH`，或同时设置 `NPM_BIN`/`NODE_BIN`。
-- `web/public/assets is not writable`：按脚本提示执行一次 `chown`，确保前端构建输出目录归仓库用户所有。
+```bash
+rm -rf v2board v2board.exe server migrate v2board.bak.* web/bundle-reports
+sudo rm -rf web/public
+```
+
+不要用上面的清理命令删除 `config/config.yaml`、数据库、TLS 证书、Ansible inventory、备份或 `web/node_modules`。
 
 ### 启动生产编排
 
