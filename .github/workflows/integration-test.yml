@@ -31,7 +31,7 @@ jobs:
           cache: true
 
       - name: Run unit tests
-        run: go test -v -short ./internal/tests/integration/...
+        run: go test -v -short -coverprofile=coverage.out ./internal/tests/integration/...
 
       - name: Upload coverage
         if: always()
