@@ -138,6 +138,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Document SQLite-to-PostgreSQL migration dry run and rollback.
 - [x] Replace placeholder release deploy job with explicit manual/operator flow.
 - [x] Enforce GitHub Actions-only release build policy and guard local source-tree deploy builds.
+- [x] Pin GitHub Actions Go setup to `1.26.5` and expand gRPC coverage-gate tests.
 
 ## P3: API And UI Consistency
 

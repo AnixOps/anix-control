@@ -4,6 +4,7 @@
 
 New CI coverage added:
 
+- Go setup is pinned to `1.26.5` in CI workflows so `govulncheck` runs against the fixed stdlib baseline used for Actions release artifacts.
 - `go mod tidy` cleanliness check.
 - `gofmt` check for tracked Go files.
 - `go vet ./...`.
@@ -17,6 +18,7 @@ New CI coverage added:
 - `gosec` report artifact upload for the blocking full-repository generated-file-excluded scan.
 - Docker build smoke test.
 - Release SBOM generation for source dependencies.
+- Focused gRPC NodeLog dynamic-message, handler/client, persistence, context, and graceful-shutdown tests keep the gRPC package coverage gate above 80%.
 
 Local verification status:
 

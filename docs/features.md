@@ -92,7 +92,7 @@ two documents disagree, this file is the status source of truth.
 | Forwarding | Complex load balancing, failover, chain orchestration | Deferred | None | Deferred by product scope for simplicity and auditability. |
 | Operations | Deployment script and production deploy docs | Implemented | GitHub Actions release artifacts, guarded local `config/deploy/deploy_panel.sh`, `docs/DEPLOYMENT.md` | Keep local build guard and artifact deployment docs aligned. |
 | Operations | SQLite to PostgreSQL migration docs and tooling | Implemented | migration commands/docs | Keep dry-run evidence for schema changes. |
-| Operations | CI baseline | Implemented | GitHub Actions for gofmt, vet, test, race, lint, gosec, govulncheck, Docker smoke | Watch runtime of full race testing. |
+| Operations | CI baseline | Implemented | GitHub Actions on Go 1.26.5 for gofmt, vet, test, race, lint, gosec, govulncheck, Docker smoke | Watch runtime of full race testing. |
 | Operations | Release workflow with artifacts, checksums, SBOM | Partial | GitHub Actions release workflow is the required release build source | Keep release notes and migration dry-run artifacts complete for tags. |
 | Operations | Automated production deployment | Deferred | Operator-controlled manual deployment | Keep credentials and production rollout manual unless explicitly approved. |
 
