@@ -174,4 +174,54 @@ describe('Admin Notifications', () => {
 
     wrapper.unmount()
   })
+
+  it('logs panel envelope load failures instead of treating them as empty success payloads', async () => {
+    adminApi.getNotificationTemplates.mockResolvedValueOnce({
+      code: -1,
+      msg: 'failed to load templates',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Notifications)
+    await flushPromises()
+
+    expect(wrapper.vm.templates).toHaveLength(0)
+    expect(console.error).toHaveBeenCalledWith(
+      'Failed to load notification templates',
+      expect.any(Error)
+    )
+
+    wrapper.unmount()
+  })
+
+  it('does not report write success when a panel envelope mutation fails', async () => {
+    adminApi.createNotificationTemplate.mockResolvedValueOnce({
+      code: -1,
+      msg: 'server rejected template',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Notifications)
+    await flushPromises()
+
+    wrapper.vm.openTemplateModal()
+    wrapper.vm.templateForm = {
+      name: 'Rejected Template',
+      type: 'email',
+      event: 'user.login',
+      title: 'Login',
+      content: 'Body',
+      enabled: true
+    }
+    await wrapper.vm.saveTemplate()
+
+    expect(window.alert).toHaveBeenCalledWith(
+      expect.stringContaining('server rejected template')
+    )
+    expect(window.alert).not.toHaveBeenCalledWith('Template saved successfully')
+
+    wrapper.unmount()
+  })
 })

@@ -354,13 +354,34 @@ function createTemplateForm(source = {}) {
 }
 
 const resolveApiError = (error, fallbackKey) => (
+  error?.msg ||
   error?.response?.data?.error ||
   error?.response?.data?.msg ||
   error?.message ||
   t(fallbackKey)
 )
 
-const readNotificationPayload = (res) => {
+const readNotificationEnvelopeError = (res) => {
+  const candidates = [res, res?.data]
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue
+    if (!Object.prototype.hasOwnProperty.call(candidate, 'code')) continue
+    if (Number(candidate.code) === 0) return null
+    return candidate.msg || candidate.message || candidate.error || ''
+  }
+  return null
+}
+
+const ensureNotificationApiSuccess = (res, fallbackKey) => {
+  const message = readNotificationEnvelopeError(res)
+  if (message !== null) {
+    throw new Error(message || t(fallbackKey))
+  }
+  return res
+}
+
+const readNotificationPayload = (res, fallbackKey = 'adminNotifications.messages.fetchTemplatesFailed') => {
+  ensureNotificationApiSuccess(res, fallbackKey)
   if (!res || typeof res !== 'object') return {}
   if (Object.prototype.hasOwnProperty.call(res, 'code')) {
     return res.data && typeof res.data === 'object' ? res.data : {}
@@ -413,7 +434,7 @@ const formatTime = (value) => {
 const fetchTemplates = async () => {
   try {
     const res = await getNotificationTemplates()
-    const payload = readNotificationPayload(res)
+    const payload = readNotificationPayload(res, 'adminNotifications.messages.fetchTemplatesFailed')
     templates.value = payload.list || []
   } catch (error) {
     console.error(t('adminNotifications.messages.fetchTemplatesFailed'), error)
@@ -423,7 +444,7 @@ const fetchTemplates = async () => {
 const fetchLogs = async () => {
   try {
     const res = await getNotificationLogs(logFilter.value)
-    const payload = readNotificationPayload(res)
+    const payload = readNotificationPayload(res, 'adminNotifications.messages.fetchLogsFailed')
     logs.value = payload.list || []
   } catch (error) {
     console.error(t('adminNotifications.messages.fetchLogsFailed'), error)
@@ -433,7 +454,7 @@ const fetchLogs = async () => {
 const fetchEmailSettings = async () => {
   try {
     const res = await getEmailConfig()
-    const payload = readNotificationPayload(res)
+    const payload = readNotificationPayload(res, 'adminNotifications.messages.fetchEmailConfigFailed')
     if (payload && typeof payload === 'object') {
       emailConfig.value = { ...emailConfig.value, ...payload }
     }
@@ -451,9 +472,15 @@ const openTemplateModal = (template = null) => {
 const saveTemplate = async () => {
   try {
     if (editingTemplate.value) {
-      await updateNotificationTemplate(editingTemplate.value.id, templateForm.value)
+      ensureNotificationApiSuccess(
+        await updateNotificationTemplate(editingTemplate.value.id, templateForm.value),
+        'adminNotifications.messages.templateSaveFailedShort'
+      )
     } else {
-      await createNotificationTemplate(templateForm.value)
+      ensureNotificationApiSuccess(
+        await createNotificationTemplate(templateForm.value),
+        'adminNotifications.messages.templateSaveFailedShort'
+      )
     }
     window.alert(t('adminNotifications.messages.templateSaveSuccess'))
     showTemplateModal.value = false
@@ -470,7 +497,10 @@ const saveTemplate = async () => {
 const deleteTemplateItem = async (template) => {
   if (!window.confirm(t('adminNotifications.messages.deleteConfirm', { name: template.name }))) return
   try {
-    await deleteNotificationTemplate(template.id)
+    ensureNotificationApiSuccess(
+      await deleteNotificationTemplate(template.id),
+      'adminNotifications.messages.deleteFailedShort'
+    )
     await fetchTemplates()
   } catch (error) {
     window.alert(
@@ -483,7 +513,10 @@ const deleteTemplateItem = async (template) => {
 
 const saveEmailSettings = async () => {
   try {
-    await updateEmailConfig(emailConfig.value)
+    ensureNotificationApiSuccess(
+      await updateEmailConfig(emailConfig.value),
+      'adminNotifications.messages.emailSaveFailedShort'
+    )
     window.alert(t('adminNotifications.messages.emailSaveSuccess'))
   } catch (error) {
     window.alert(
@@ -505,12 +538,15 @@ const sendTestEmail = async () => {
   }
 
   try {
-    await sendTestNotification({
-      type: 'email',
-      recipient: testEmail.value.trim(),
-      subject: t('adminNotifications.testPayload.subject'),
-      content: t('adminNotifications.testPayload.content')
-    })
+    ensureNotificationApiSuccess(
+      await sendTestNotification({
+        type: 'email',
+        recipient: testEmail.value.trim(),
+        subject: t('adminNotifications.testPayload.subject'),
+        content: t('adminNotifications.testPayload.content')
+      }),
+      'adminNotifications.messages.testSendFailedShort'
+    )
     window.alert(t('adminNotifications.messages.testSendSuccess'))
     showTestModal.value = false
     testEmail.value = ''
