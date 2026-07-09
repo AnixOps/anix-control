@@ -2870,7 +2870,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestPreviewSubscription_InvalidBody(
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "invalid")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestPreviewSubscription_UserNotFound() {
@@ -2888,7 +2888,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestPreviewSubscription_UserNotFound
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "用户不存在")
 }
 
 func TestSubscriptionAdminHandler(t *testing.T) {

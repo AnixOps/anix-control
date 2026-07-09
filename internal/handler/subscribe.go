@@ -762,21 +762,36 @@ func (h *SubscriptionAdminHandler) GetGroupStats(c *gin.Context) {
 // POST /api/v2/admin/subscription/preview
 func (h *SubscriptionAdminHandler) PreviewSubscription(c *gin.Context) {
 	var req struct {
-		UserID uint                     `json:"user_id" binding:"required,gt=0"`
-		Format model.SubscriptionFormat `json:"format" binding:"omitempty"`
-		Groups []uint                   `json:"groups"`
+		UserID   uint                     `json:"user_id"`
+		Format   model.SubscriptionFormat `json:"format" binding:"omitempty"`
+		Groups   []uint                   `json:"groups"`
+		GroupIDs []uint                   `json:"group_ids"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, err.Error())
 		return
+	}
+
+	userID := req.UserID
+	if userID == 0 {
+		var ok bool
+		userID, ok = currentPanelUserID(c)
+		if !ok {
+			return
+		}
+	}
+
+	groups := req.Groups
+	if len(groups) == 0 {
+		groups = req.GroupIDs
 	}
 
 	// 获取用户
 	userService := service.NewUserService()
-	user, err := userService.GetByID(req.UserID)
+	user, err := userService.GetByID(userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "用户不存在"})
+		panelError(c, "用户不存在")
 		return
 	}
 
@@ -784,13 +799,13 @@ func (h *SubscriptionAdminHandler) PreviewSubscription(c *gin.Context) {
 	subReq := &model.SubscriptionRequest{
 		Token:  user.Token,
 		Format: req.Format,
-		Groups: req.Groups,
+		Groups: groups,
 	}
 
 	// 获取订阅
 	resp, err := h.subscriptionService.GetUserSubscription(subReq)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取订阅失败", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
