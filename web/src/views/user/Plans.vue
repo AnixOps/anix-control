@@ -142,11 +142,37 @@ const checkingCoupon = ref(false)
 const couponError = ref('')
 const creatingOrder = ref(false)
 
+function readPanelEnvelopeError(res) {
+  const candidates = [res, res?.data]
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue
+    if (!Object.prototype.hasOwnProperty.call(candidate, 'code')) continue
+    if (Number(candidate.code) === 0) return null
+    return candidate.msg || candidate.message || candidate.error || ''
+  }
+  return null
+}
+
+function ensureUserApiSuccess(res, fallbackMessage) {
+  const message = readPanelEnvelopeError(res)
+  if (message !== null) {
+    throw new Error(message || fallbackMessage)
+  }
+  return res
+}
+
+function readPlanList(res) {
+  if (Array.isArray(res)) return res
+  if (Array.isArray(res?.data)) return res.data
+  if (Array.isArray(res?.data?.data)) return res.data.data
+  return []
+}
+
 async function loadPlans() {
   loading.value = true
   try {
-    const res = await getPlans()
-    plans.value = res.data || []
+    const res = ensureUserApiSuccess(await getPlans(), 'Failed to load plans')
+    plans.value = readPlanList(res)
   } catch (err) {
     console.error('Failed to load plans:', err)
   } finally {

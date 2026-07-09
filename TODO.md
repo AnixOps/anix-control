@@ -183,7 +183,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize user subscription info success and user-error response envelope with handler and Subscribe frontend compatibility tests.
 - [x] Normalize user profile success and user-error response envelope with handler and user store compatibility tests.
 - [x] Normalize user dashboard success and user-error response envelope with handler and user API mapping tests.
-- [x] Normalize user plan list response envelope with handler and Plans frontend compatibility tests.
+- [x] Normalize user plan list success/error response envelopes with handler and Plans frontend compatibility tests.
 - [x] Normalize user coupon-check success and business-error response envelopes with handler and Plans frontend compatibility tests.
 - [x] Normalize user knowledge list/detail success and user-error response envelopes with handler and Knowledge frontend compatibility tests.
 - [x] Normalize user ticket list/create/detail/reply/close success and user-error response envelopes with handler and Tickets frontend compatibility tests.

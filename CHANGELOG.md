@@ -118,7 +118,7 @@
 - Normalized user subscription info success/error responses to the panel `code/msg/ts/data` envelope while keeping the Subscribe page compatible with legacy and enveloped payloads.
 - Normalized user profile success/error responses to the panel `code/msg/ts/data` envelope while keeping the user store compatible with the enveloped profile payload.
 - Normalized user dashboard success/error responses to the panel `code/msg/ts/data` envelope while preserving the subscription payload under `data.subscription`.
-- Normalized user plan list responses to the panel `code/msg/ts/data` envelope while keeping the Plans page compatible with legacy and enveloped payloads.
+- Normalized user plan list success/database-error responses to the panel `code/msg/ts/data` envelope while keeping the Plans page compatible with legacy, enveloped, and `code=-1` payloads.
 - Normalized user coupon-check success and business-error responses to the panel `code/msg/ts/data` envelope while keeping the Plans page compatible with legacy and enveloped coupon payloads.
 - Normalized user knowledge list and detail success/error responses to the panel `code/msg/ts/data` envelope while keeping the Knowledge page compatible with legacy and enveloped article lists.
 - Normalized user ticket list, create, detail, reply, and close success/error responses to the panel `code/msg/ts/data` envelope while keeping the Tickets page compatible with legacy and enveloped ticket payloads.

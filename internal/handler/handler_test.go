@@ -3898,6 +3898,28 @@ func (s *UserPlanHandlerTestSuite) TestGetPlans_WithShow() {
 	assert.Len(s.T(), data, 1)
 }
 
+func (s *UserPlanHandlerTestSuite) TestGetPlans_DatabaseErrorUsesPanelEnvelope() {
+	handler := NewUserPlanHandler()
+	s.router.GET("/plans", handler.GetPlans)
+	s.Require().NoError(s.db.Migrator().DropTable(&model.Plan{}))
+	s.T().Cleanup(func() {
+		s.Require().NoError(s.db.AutoMigrate(&model.Plan{}))
+	})
+
+	req, _ := http.NewRequest("GET", "/plans", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], "获取套餐列表失败")
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func TestUserPlanHandler(t *testing.T) {
 	suite.Run(t, new(UserPlanHandlerTestSuite))
 }

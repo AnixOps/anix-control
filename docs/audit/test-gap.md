@@ -77,7 +77,7 @@ Local verification status:
 - User subscription info handler tests now assert panel `code/msg/ts/data` envelopes for success, missing user context, invalid user ID, and missing user paths; user Subscribe frontend tests cover legacy and enveloped payloads.
 - User profile handler tests now assert panel `code/msg/ts/data` envelopes for success, missing user context, invalid user ID, and missing user paths; user store tests cover the enveloped profile payload.
 - User dashboard handler tests now assert panel `code/msg/ts/data` envelopes for success, missing user context, invalid user ID, and missing user paths; user API mapping coverage remains for the route.
-- User plan list handler tests now assert panel `code/msg/ts/data` envelopes, and user Plans frontend tests cover legacy and enveloped payloads.
+- User plan list handler tests now assert panel `code/msg/ts/data` envelopes for success and database-error paths, and user Plans frontend tests cover legacy, enveloped, and `code=-1` payloads.
 - User coupon-check handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid body, invalid code, not-started, expired, and usage-limit paths; user Plans frontend tests cover legacy and enveloped coupon payloads.
 - User knowledge list/detail handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid ID, missing article, and hidden-article paths; user Knowledge frontend tests cover legacy and enveloped article-list payloads.
 - User ticket list/create/detail/reply/close handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid body, invalid ID, missing ticket, and closed-ticket reply paths; user Tickets frontend tests cover legacy and enveloped ticket payloads.

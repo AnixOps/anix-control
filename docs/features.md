@@ -41,7 +41,7 @@ two documents disagree, this file is the status source of truth.
 | Auth | JWT authenticated user/admin APIs | Implemented | `middleware.JWTAuth`, `middleware.AdminAuth` | Continue permission tests for new routes. |
 | Auth | MFA setup and verification APIs | Partial | User MFA API and admin MFA config | Wire MFA into the primary login challenge flow before marking complete. |
 | User | Profile, dashboard, subscription summary | Implemented | `/api/v2/user/profile`, `/dashboard`, `/subscription` | Continue UI regression coverage as payloads evolve. |
-| User | User plan browsing | Implemented | `/api/v2/user/plan`, user Plans page | None known. |
+| User | User plan browsing | Implemented | `/api/v2/user/plan`, user Plans page, unified success/error envelopes | None known. |
 | User | Order list, detail, and order creation | Implemented | `/api/v2/user/order*` | Keep amount/traffic boundary tests current. |
 | User | Coupon validation | Implemented | `/api/v2/user/coupon/check` | None known. |
 | User | Knowledge base browsing | Implemented | `/api/v2/user/knowledge*` | None known. |
