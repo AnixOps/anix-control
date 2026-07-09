@@ -313,9 +313,29 @@ const gatewayStatsEntries = computed(() => Object.entries(stats.value.by_gateway
 const resolveApiError = (error, fallbackKey) => (
   error?.response?.data?.error ||
   error?.response?.data?.msg ||
+  error?.msg ||
   error?.message ||
   t(fallbackKey)
 )
+
+const readPanelEnvelopeError = (res) => {
+  const candidates = [res, res?.data]
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue
+    if (!Object.prototype.hasOwnProperty.call(candidate, 'code')) continue
+    if (Number(candidate.code) === 0) return null
+    return candidate.msg || candidate.error || ''
+  }
+  return null
+}
+
+const ensurePaymentSuccess = (res, fallbackKey) => {
+  const message = readPanelEnvelopeError(res)
+  if (message !== null) {
+    throw new Error(message || t(fallbackKey))
+  }
+  return res
+}
 
 const gatewayTypeKeyMap = {
   alipay: 'adminPayment.types.alipay',
@@ -381,7 +401,10 @@ const readPaymentRecordList = (res) => {
 
 const fetchGateways = async () => {
   try {
-    const res = await getPaymentGateways()
+    const res = ensurePaymentSuccess(
+      await getPaymentGateways(),
+      'adminPayment.messages.fetchGatewaysFailed'
+    )
     gateways.value = readPaymentGatewayList(res)
   } catch (error) {
     console.error(t('adminPayment.messages.fetchGatewaysFailed'), error)
@@ -390,7 +413,10 @@ const fetchGateways = async () => {
 
 const fetchRecords = async () => {
   try {
-    const res = await getPaymentRecords(recordFilter.value)
+    const res = ensurePaymentSuccess(
+      await getPaymentRecords(recordFilter.value),
+      'adminPayment.messages.fetchRecordsFailed'
+    )
     records.value = readPaymentRecordList(res)
   } catch (error) {
     console.error(t('adminPayment.messages.fetchRecordsFailed'), error)
@@ -399,7 +425,10 @@ const fetchRecords = async () => {
 
 const fetchStats = async () => {
   try {
-    const res = await getPaymentStats()
+    const res = ensurePaymentSuccess(
+      await getPaymentStats(),
+      'adminPayment.messages.fetchStatsFailed'
+    )
     stats.value = readPaymentStats(res)
   } catch (error) {
     console.error(t('adminPayment.messages.fetchStatsFailed'), error)
@@ -443,9 +472,15 @@ const saveGateway = async () => {
     delete payload.config_json
 
     if (editingGateway.value) {
-      await updatePaymentGateway(editingGateway.value.id, payload)
+      ensurePaymentSuccess(
+        await updatePaymentGateway(editingGateway.value.id, payload),
+        'adminPayment.messages.gatewaySaveFailedShort'
+      )
     } else {
-      await createPaymentGateway(payload)
+      ensurePaymentSuccess(
+        await createPaymentGateway(payload),
+        'adminPayment.messages.gatewaySaveFailedShort'
+      )
     }
     window.alert(t('adminPayment.messages.gatewaySaveSuccess'))
     showGatewayModal.value = false
@@ -461,7 +496,10 @@ const saveGateway = async () => {
 
 const toggleGatewayStatus = async (gateway) => {
   try {
-    await togglePaymentGateway(gateway.id, !gateway.enabled)
+    ensurePaymentSuccess(
+      await togglePaymentGateway(gateway.id, !gateway.enabled),
+      'adminPayment.messages.toggleFailedShort'
+    )
     await fetchGateways()
   } catch (error) {
     window.alert(
@@ -475,7 +513,10 @@ const toggleGatewayStatus = async (gateway) => {
 const deleteGatewayItem = async (gateway) => {
   if (!window.confirm(t('adminPayment.messages.deleteConfirm', { name: gateway.name }))) return
   try {
-    await deletePaymentGateway(gateway.id)
+    ensurePaymentSuccess(
+      await deletePaymentGateway(gateway.id),
+      'adminPayment.messages.deleteFailedShort'
+    )
     await fetchGateways()
   } catch (error) {
     window.alert(

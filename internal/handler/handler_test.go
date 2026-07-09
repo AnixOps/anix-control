@@ -5951,6 +5951,17 @@ func (s *PaymentGatewayHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *PaymentGatewayHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.Contains(s.T(), resp["msg"], msgContains)
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+}
+
 func (s *PaymentGatewayHandlerTestSuite) TestListGateways() {
 	handler := NewPaymentGatewayHandler()
 	s.router.GET("/admin/payment/gateways", handler.ListGateways)
@@ -6000,7 +6011,7 @@ func (s *PaymentGatewayHandlerTestSuite) TestCreateGateway_MissingFields() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "Name")
 }
 
 func (s *PaymentGatewayHandlerTestSuite) TestUpdateGateway() {
@@ -6032,7 +6043,7 @@ func (s *PaymentGatewayHandlerTestSuite) TestUpdateGateway_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "gateway not found")
 }
 
 func (s *PaymentGatewayHandlerTestSuite) TestUpdateGateway_InvalidID() {
@@ -6045,7 +6056,7 @@ func (s *PaymentGatewayHandlerTestSuite) TestUpdateGateway_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "invalid id")
 }
 
 func (s *PaymentGatewayHandlerTestSuite) TestDeleteGateway() {
@@ -6083,6 +6094,17 @@ func (s *PaymentGatewayHandlerTestSuite) TestDeleteGateway_NotFound() {
 	assert.Equal(s.T(), "deleted", data["message"])
 }
 
+func (s *PaymentGatewayHandlerTestSuite) TestDeleteGateway_InvalidIDUsesPanelEnvelope() {
+	handler := NewPaymentGatewayHandler()
+	s.router.DELETE("/admin/payment/gateways/:id", handler.DeleteGateway)
+
+	req, _ := http.NewRequest("DELETE", "/admin/payment/gateways/invalid", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid id")
+}
+
 func (s *PaymentGatewayHandlerTestSuite) TestToggleGateway() {
 	handler := NewPaymentGatewayHandler()
 	s.router.POST("/admin/payment/gateways/:id/toggle", handler.ToggleGateway)
@@ -6101,6 +6123,42 @@ func (s *PaymentGatewayHandlerTestSuite) TestToggleGateway() {
 	assert.Equal(s.T(), true, data["enabled"])
 	assert.NotContains(s.T(), resp, "message")
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *PaymentGatewayHandlerTestSuite) TestToggleGateway_InvalidIDUsesPanelEnvelope() {
+	handler := NewPaymentGatewayHandler()
+	s.router.POST("/admin/payment/gateways/:id/toggle", handler.ToggleGateway)
+
+	req, _ := http.NewRequest("POST", "/admin/payment/gateways/invalid/toggle", strings.NewReader(`{"enabled": true}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid id")
+}
+
+func (s *PaymentGatewayHandlerTestSuite) TestToggleGateway_InvalidEnabledUsesPanelEnvelope() {
+	handler := NewPaymentGatewayHandler()
+	s.router.POST("/admin/payment/gateways/:id/toggle", handler.ToggleGateway)
+
+	req, _ := http.NewRequest("POST", "/admin/payment/gateways/"+strconv.FormatUint(uint64(s.testGateway.ID), 10)+"/toggle", strings.NewReader(`{"enabled": "yes"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "enabled must be boolean")
+}
+
+func (s *PaymentGatewayHandlerTestSuite) TestToggleGateway_NotFoundUsesPanelEnvelope() {
+	handler := NewPaymentGatewayHandler()
+	s.router.POST("/admin/payment/gateways/:id/toggle", handler.ToggleGateway)
+
+	req, _ := http.NewRequest("POST", "/admin/payment/gateways/99999/toggle", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "gateway not found")
 }
 
 func (s *PaymentGatewayHandlerTestSuite) TestGetStats() {
@@ -6122,6 +6180,28 @@ func (s *PaymentGatewayHandlerTestSuite) TestGetStats() {
 	assert.Contains(s.T(), data, "success_rate")
 	assert.Contains(s.T(), data, "by_gateway")
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *PaymentGatewayHandlerTestSuite) TestGetStats_InvalidStartUsesPanelEnvelope() {
+	handler := NewPaymentGatewayHandler()
+	s.router.GET("/admin/payment/stats", handler.GetPaymentStats)
+
+	req, _ := http.NewRequest("GET", "/admin/payment/stats?start=bad-date", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid start date")
+}
+
+func (s *PaymentGatewayHandlerTestSuite) TestGetStats_InvalidEndUsesPanelEnvelope() {
+	handler := NewPaymentGatewayHandler()
+	s.router.GET("/admin/payment/stats", handler.GetPaymentStats)
+
+	req, _ := http.NewRequest("GET", "/admin/payment/stats?end=bad-date", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid end date")
 }
 
 func TestPaymentGatewayHandler(t *testing.T) {

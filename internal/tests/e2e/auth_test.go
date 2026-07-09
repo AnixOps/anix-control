@@ -154,7 +154,7 @@ func (s *AuthE2ETestSuite) TestRegister_InvalidEmail() {
 			w := httptest.NewRecorder()
 			s.router.ServeHTTP(w, req)
 
-			assert.Equal(t, http.StatusBadRequest, w.Code)
+			requirePanelErrorResponse(t, w.Code, w.Body.Bytes(), "参数错误")
 		})
 	}
 }
@@ -173,7 +173,7 @@ func (s *AuthE2ETestSuite) TestRegister_ShortPassword() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	requirePanelErrorResponse(s.T(), w.Code, w.Body.Bytes(), "参数错误")
 }
 
 // TestRegister_DuplicateEmail 测试重复邮箱注册
@@ -198,7 +198,7 @@ func (s *AuthE2ETestSuite) TestRegister_DuplicateEmail() {
 
 	w2 := httptest.NewRecorder()
 	s.router.ServeHTTP(w2, req2)
-	assert.Equal(s.T(), http.StatusBadRequest, w2.Code)
+	requirePanelErrorResponse(s.T(), w2.Code, w2.Body.Bytes(), "该邮箱已被注册")
 }
 
 // TestLogin_Success 测试登录成功
@@ -269,7 +269,7 @@ func (s *AuthE2ETestSuite) TestLogin_WrongPassword() {
 	w = httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusUnauthorized, w.Code)
+	requirePanelErrorResponse(s.T(), w.Code, w.Body.Bytes(), "用户不存在或密码错误")
 }
 
 // TestLogin_UserNotFound 测试用户不存在
@@ -286,7 +286,7 @@ func (s *AuthE2ETestSuite) TestLogin_UserNotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusUnauthorized, w.Code)
+	requirePanelErrorResponse(s.T(), w.Code, w.Body.Bytes(), "用户不存在或密码错误")
 }
 
 // TestJWTMiddleware_ValidToken 测试有效 JWT Token

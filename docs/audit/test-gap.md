@@ -41,6 +41,7 @@ Local verification status:
 - Forward observability handler tests now assert panel `code/msg/ts/data` envelopes for targets, trend, topology, and multi-ingress responses, with frontend admin API mapping tests covering all observability calls.
 - Forward internal traffic report/snapshot handler tests now assert panel `code/msg/ts/data` envelopes for success, binding-error, and service-error responses; the Flux-compatible upload endpoint remains covered as a plain `ok` compatibility path.
 - Admin traffic hourly/user-ranking handler tests now assert panel `code/msg/ts/data` envelopes, and TrafficHourly frontend tests cover both legacy and enveloped payloads.
+- Admin traffic E2E tests now assert the enveloped hourly and user-ranking payload shape under `data.list`.
 - Admin dashboard handler tests now assert panel `code/msg/ts/data` envelopes, and Dashboard frontend tests cover both legacy and enveloped payloads.
 - Admin user stats handler tests now assert panel `code/msg/ts/data` envelopes, and Users frontend tests cover both legacy and enveloped payloads.
 - Admin order stats handler tests now assert panel `code/msg/ts/data` envelopes, and Orders frontend tests cover both legacy and enveloped payloads.
@@ -51,8 +52,8 @@ Local verification status:
 - User invite info/code/commission/withdrawal handler tests and admin invite config update/withdrawal handler tests now assert panel `code/msg/ts/data` envelopes; Invite frontend tests cover legacy, enveloped, and nested withdrawal/config/stats payloads with admin API mapping coverage for invite config and withdrawals.
 - Admin payment stats handler tests now assert panel `code/msg/ts/data` envelopes, and Payment frontend tests cover both legacy and enveloped payloads.
 - Admin payment gateway list handler tests now assert panel `code/msg/ts/data` envelopes, and Payment frontend tests cover both legacy and enveloped payloads.
-- Admin payment gateway CRUD/toggle and payment-record list handler tests now assert panel `code/msg/ts/data` envelopes, and Payment frontend tests cover legacy and enveloped record-list payloads.
-- User payment channels/create/status/records handler tests now assert panel `code/msg/ts/data` envelopes while payment callbacks remain covered as plain-text compatibility responses.
+- Admin payment gateway CRUD/toggle and payment-record list handler tests now assert panel `code/msg/ts/data` envelopes for success and user-error paths, including invalid IDs, invalid toggle values, missing/not-found gateways, and invalid stats dates. Payment frontend tests cover legacy/enveloped list payloads and `code=-1` mutation errors.
+- User payment channels/create/status/records handler tests now assert panel `code/msg/ts/data` envelopes for success and user-error paths, including invalid and disabled gateway payment creation, while payment callbacks remain covered as plain-text compatibility responses.
 - Legacy X402 and fiat payment create/check handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid body, missing order, non-pending order, missing payment, and unsupported provider paths while X402, Stripe, and PayPal callbacks/webhooks remain covered as compatibility responses.
 - User/admin MFA handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid body, missing field, missing user, invalid code, wrong password, and backup-code regeneration errors; Admin MFA frontend tests cover legacy, enveloped, and error config payloads.
 - User/admin notification handler tests now assert panel `code/msg/ts/data` envelopes, and Admin Notifications frontend tests cover legacy and enveloped templates, logs, and email config payloads.
@@ -71,6 +72,7 @@ Local verification status:
 - Admin subscription settings handler tests now assert panel `code/msg/ts/data` envelopes, with System and Users frontend tests plus admin API mapping coverage for legacy and enveloped payloads.
 - User registration and order-save handler tests now assert panel `code/msg/ts/data` envelopes while checking the preserved token/order payload fields under `data` plus registration invalid-body, disabled, invite-required, invalid-email, short-password, order invalid-body, and missing-plan errors.
 - User login handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid body, wrong-password, and rate-limit `Retry-After` paths, and Login frontend tests cover enveloped token and error payloads.
+- Auth E2E tests now assert login/register business errors as HTTP 200 panel `code=-1` envelopes while keeping JWT middleware failures as HTTP 401.
 - User order list/detail handler tests now assert panel `code/msg/ts/data` envelopes for success, invalid ID, missing order, and cross-user hidden order paths; user Orders frontend tests cover legacy and enveloped payloads.
 - User subscription info handler tests now assert panel `code/msg/ts/data` envelopes for success, missing user context, invalid user ID, and missing user paths; user Subscribe frontend tests cover legacy and enveloped payloads.
 - User profile handler tests now assert panel `code/msg/ts/data` envelopes for success, missing user context, invalid user ID, and missing user paths; user store tests cover the enveloped profile payload.

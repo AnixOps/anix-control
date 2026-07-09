@@ -60,7 +60,7 @@ two documents disagree, this file is the status source of truth.
 | Admin | Ticket management | Implemented | list/reply/close | None known. |
 | Admin | Coupon management | Implemented | list/create/delete | Add update API only if product requires it. |
 | Admin | Knowledge management | Implemented | list/create/update/delete | None known. |
-| Admin | Payment gateway management and payment records | Implemented | gateway CRUD/toggle, stats, records | Provider-specific live payment creation is not complete for every provider. |
+| Admin | Payment gateway management and payment records | Implemented | gateway CRUD/toggle, stats, records, unified success/error envelopes | Provider-specific live payment creation is not complete for every provider. |
 | Admin | Notification template/log/email config management | Implemented | `/api/v2/admin/notification/*` | Add more event emitters as needed. |
 | Admin | Telegram bot management | Implemented | bot config, webhook, users, notify, broadcast | Requires live bot credentials for production. |
 | Admin | MFA global config | Implemented | `/api/v2/admin/mfa/config` | Login enforcement remains incomplete. |

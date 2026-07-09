@@ -87,7 +87,7 @@ func NewPaymentGatewayHandler() *PaymentGatewayHandler {
 func (h *PaymentGatewayHandler) ListGateways(c *gin.Context) {
 	gateways, err := h.gatewayService.List()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -112,7 +112,7 @@ func (h *PaymentGatewayHandler) ListGateways(c *gin.Context) {
 func (h *PaymentGatewayHandler) CreateGateway(c *gin.Context) {
 	var req CreateGatewayRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -130,13 +130,13 @@ func (h *PaymentGatewayHandler) CreateGateway(c *gin.Context) {
 	}
 	config, err := normalizeGatewayConfig(req.Config)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid config"})
+		panelError(c, "invalid config")
 		return
 	}
 	gateway.Config = config
 
 	if err := h.gatewayService.Create(gateway); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -160,19 +160,19 @@ func (h *PaymentGatewayHandler) CreateGateway(c *gin.Context) {
 func (h *PaymentGatewayHandler) UpdateGateway(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 
 	gateway, err := h.gatewayService.GetByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "gateway not found"})
+		panelError(c, "gateway not found")
 		return
 	}
 
 	var req UpdateGatewayRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -188,7 +188,7 @@ func (h *PaymentGatewayHandler) UpdateGateway(c *gin.Context) {
 	if req.Config != nil {
 		config, err := normalizeGatewayConfig(req.Config)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid config"})
+			panelError(c, "invalid config")
 			return
 		}
 		gateway.Config = config
@@ -213,7 +213,7 @@ func (h *PaymentGatewayHandler) UpdateGateway(c *gin.Context) {
 	}
 
 	if err := h.gatewayService.Update(gateway); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -235,12 +235,12 @@ func (h *PaymentGatewayHandler) UpdateGateway(c *gin.Context) {
 func (h *PaymentGatewayHandler) DeleteGateway(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 
 	if err := h.gatewayService.Delete(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -263,13 +263,13 @@ func (h *PaymentGatewayHandler) DeleteGateway(c *gin.Context) {
 func (h *PaymentGatewayHandler) ToggleGateway(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 
 	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil && err != io.EOF {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -277,21 +277,21 @@ func (h *PaymentGatewayHandler) ToggleGateway(c *gin.Context) {
 	if rawEnabled, ok := req["enabled"]; ok {
 		enabled, ok := rawEnabled.(bool)
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "enabled must be boolean"})
+			panelError(c, "enabled must be boolean")
 			return
 		}
 		targetEnabled = enabled
 	} else {
 		gateway, err := h.gatewayService.GetByID(uint(id))
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "gateway not found"})
+			panelError(c, "gateway not found")
 			return
 		}
 		targetEnabled = !gateway.Enabled
 	}
 
 	if err := h.gatewayService.Toggle(uint(id), targetEnabled); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -317,19 +317,19 @@ func (h *PaymentGatewayHandler) GetPaymentStats(c *gin.Context) {
 
 	start, err := time.Parse("2006-01-02", startStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid start date"})
+		panelError(c, "invalid start date")
 		return
 	}
 
 	end, err := time.Parse("2006-01-02", endStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid end date"})
+		panelError(c, "invalid end date")
 		return
 	}
 
 	stats, err := h.gatewayService.GetStats(start, end)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -415,7 +415,7 @@ func (h *PaymentGatewayHandler) ListPaymentRecords(c *gin.Context) {
 
 	records, total, err := h.gatewayService.ListRecords(page, pageSize, status, gatewayType)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -466,7 +466,7 @@ func (h *PaymentGatewayHandler) ListPaymentRecords(c *gin.Context) {
 func (h *PaymentGatewayHandler) GetChannels(c *gin.Context) {
 	channels, err := h.gatewayService.GetChannels()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -490,25 +490,25 @@ func (h *PaymentGatewayHandler) CreatePayment(c *gin.Context) {
 
 	var req CreatePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	// 获取网关
 	gateway, err := h.gatewayService.GetByID(req.GatewayID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid gateway"})
+		panelError(c, "invalid gateway")
 		return
 	}
 
 	if !gateway.Enabled {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "gateway is disabled"})
+		panelError(c, "gateway is disabled")
 		return
 	}
 
 	// 验证金额
 	if err := h.gatewayService.ValidateAmount(gateway, req.Amount); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -535,7 +535,7 @@ func (h *PaymentGatewayHandler) CreatePayment(c *gin.Context) {
 	}
 
 	if err := h.gatewayService.CreateRecord(record); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -602,7 +602,7 @@ func (h *PaymentGatewayHandler) GetUserRecords(c *gin.Context) {
 
 	records, total, err := h.gatewayService.GetUserRecords(userID, page, pageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 

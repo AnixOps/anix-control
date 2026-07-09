@@ -174,4 +174,44 @@ describe('Admin Payment', () => {
 
     wrapper.unmount()
   })
+
+  it('shows panel envelope errors for gateway mutations', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    adminApi.getPaymentGateways.mockResolvedValue({
+      code: 0,
+      msg: '操作成功',
+      data: {
+        list: [{
+          enabled: false,
+          fee_rate: 0.01,
+          id: 1,
+          max_amount: 1000,
+          min_amount: 10,
+          name: 'Panel Stripe',
+          type: 'stripe'
+        }]
+      },
+      ts: 1783526400000
+    })
+    adminApi.togglePaymentGateway.mockResolvedValue({
+      code: -1,
+      msg: 'gateway not found',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Payment)
+    await flushPromises()
+
+    await wrapper.vm.toggleGatewayStatus({ id: 1, enabled: false })
+    await flushPromises()
+
+    expect(adminApi.togglePaymentGateway).toHaveBeenCalledWith(1, true)
+    expect(alertSpy).toHaveBeenCalledWith(
+      expect.stringContaining('gateway not found')
+    )
+    expect(adminApi.getPaymentGateways).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
 })

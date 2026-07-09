@@ -116,10 +116,11 @@ Open gaps:
   info/code/commission/withdrawal responses and admin invite config-update and
   withdrawal responses now have handler coverage plus Invite frontend/API
   compatibility coverage, admin payment stats,
-  gateway CRUD/toggle, and payment-record list responses have matching Payment
-  frontend compatibility coverage, user payment channel/create/status/record and
-  legacy X402/fiat create/check success and user-error responses have handler
-  envelope coverage with callback/webhook compatibility retained,
+  gateway CRUD/toggle, and payment-record list success/user-error responses have
+  matching Payment frontend compatibility coverage, user payment
+  channel/create/status/record success/user-error responses and legacy
+  X402/fiat create/check success and user-error responses have handler envelope
+  coverage with callback/webhook compatibility retained,
   user/admin MFA success and user-error responses have handler coverage and
   Admin MFA frontend compatibility coverage, user/admin notification success responses have handler
   coverage and Admin Notifications frontend compatibility coverage, admin/user
