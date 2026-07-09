@@ -2268,6 +2268,22 @@ func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser() {
 	assert.Equal(s.T(), "User Group", groups[0].Name)
 }
 
+func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser_UserNotFound() {
+	group := &model.SubscriptionGroup{
+		Name:   "Missing User Group",
+		Enable: 1,
+	}
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
+
+	err := s.svc.AssignGroupToUser(99999, group.ID, nil, nil, nil)
+	assert.ErrorIs(s.T(), err, ErrSubscriptionUserNotFound)
+}
+
+func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser_GroupNotFound() {
+	err := s.svc.AssignGroupToUser(s.testUser.ID, 99999, nil, nil, nil)
+	assert.ErrorIs(s.T(), err, ErrSubscriptionGroupNotFound)
+}
+
 func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser_WithExpiry() {
 	group := &model.SubscriptionGroup{
 		Name:     "Expiry Group",
@@ -2297,6 +2313,23 @@ func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromUser() {
 	assert.Empty(s.T(), groups)
 }
 
+func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromUser_NotFound() {
+	group := &model.SubscriptionGroup{
+		Name:   "Missing User Relation Group",
+		Enable: 1,
+	}
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
+
+	err := s.svc.RemoveGroupFromUser(s.testUser.ID, group.ID)
+	assert.ErrorIs(s.T(), err, ErrSubscriptionUserGroupNotFound)
+}
+
+func (s *SubscriptionServiceTestSuite) TestGetUserGroups_UserNotFound() {
+	groups, err := s.svc.GetUserGroups(99999)
+	assert.ErrorIs(s.T(), err, ErrSubscriptionUserNotFound)
+	assert.Nil(s.T(), groups)
+}
+
 func (s *SubscriptionServiceTestSuite) TestAssignGroupToPlan() {
 	group := &model.SubscriptionGroup{
 		Name:     "Plan Group",
@@ -2320,6 +2353,31 @@ func (s *SubscriptionServiceTestSuite) TestAssignGroupToPlan() {
 	groups, err := s.svc.GetPlanGroups(plan.ID)
 	assert.NoError(s.T(), err)
 	assert.Len(s.T(), groups, 1)
+}
+
+func (s *SubscriptionServiceTestSuite) TestAssignGroupToPlan_PlanNotFound() {
+	group := &model.SubscriptionGroup{
+		Name:   "Missing Plan Group",
+		Enable: 1,
+	}
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
+
+	err := s.svc.AssignGroupToPlan(99999, group.ID)
+	assert.ErrorIs(s.T(), err, ErrSubscriptionPlanNotFound)
+}
+
+func (s *SubscriptionServiceTestSuite) TestAssignGroupToPlan_GroupNotFound() {
+	monthPrice := int64(1000)
+	plan := &model.Plan{
+		Name:           "Missing Group Plan",
+		TransferEnable: 100,
+		MonthPrice:     &monthPrice,
+		Show:           1,
+	}
+	assert.NoError(s.T(), database.Get().Create(plan).Error)
+
+	err := s.svc.AssignGroupToPlan(plan.ID, 99999)
+	assert.ErrorIs(s.T(), err, ErrSubscriptionGroupNotFound)
 }
 
 func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromPlan() {
@@ -2346,6 +2404,31 @@ func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromPlan() {
 
 	groups, _ := s.svc.GetPlanGroups(plan.ID)
 	assert.Empty(s.T(), groups)
+}
+
+func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromPlan_NotFound() {
+	group := &model.SubscriptionGroup{
+		Name:   "Missing Plan Relation Group",
+		Enable: 1,
+	}
+	assert.NoError(s.T(), s.svc.CreateGroup(group))
+	monthPrice := int64(1000)
+	plan := &model.Plan{
+		Name:           "Missing Plan Relation Test",
+		TransferEnable: 100,
+		MonthPrice:     &monthPrice,
+		Show:           1,
+	}
+	assert.NoError(s.T(), database.Get().Create(plan).Error)
+
+	err := s.svc.RemoveGroupFromPlan(plan.ID, group.ID)
+	assert.ErrorIs(s.T(), err, ErrSubscriptionPlanGroupNotFound)
+}
+
+func (s *SubscriptionServiceTestSuite) TestGetPlanGroups_PlanNotFound() {
+	groups, err := s.svc.GetPlanGroups(99999)
+	assert.ErrorIs(s.T(), err, ErrSubscriptionPlanNotFound)
+	assert.Nil(s.T(), groups)
 }
 
 func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_InvalidToken() {

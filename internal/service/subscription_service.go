@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -25,6 +26,14 @@ type SubscriptionService struct {
 	db       *gorm.DB
 	registry *parser.Registry
 }
+
+var (
+	ErrSubscriptionUserNotFound      = errors.New("用户不存在")
+	ErrSubscriptionPlanNotFound      = errors.New("套餐不存在")
+	ErrSubscriptionGroupNotFound     = errors.New("分组不存在")
+	ErrSubscriptionUserGroupNotFound = errors.New("用户订阅分组不存在")
+	ErrSubscriptionPlanGroupNotFound = errors.New("套餐订阅分组不存在")
+)
 
 // NewSubscriptionService 创建订阅服务
 func NewSubscriptionService() *SubscriptionService {
@@ -831,42 +840,96 @@ func (s *SubscriptionService) GetTemplatesByGroup(groupID uint) ([]*model.Subscr
 
 // AssignGroupToUser 为用户分配订阅分组
 func (s *SubscriptionService) AssignGroupToUser(userID, groupID uint, expireAt *int64, transferEnable *int64, nextRenewPrice *int64) error {
-	ug := model.UserSubscriptionGroup{
-		UserID:         userID,
-		GroupID:        groupID,
-		ExpireAt:       expireAt,
-		TransferEnable: transferEnable,
-		NextRenewPrice: nextRenewPrice,
-	}
-	// Upsert (assign will update specified fields on conflict)
-	return s.db.Where("user_id = ? AND group_id = ?", userID, groupID).
-		Assign(ug).FirstOrCreate(&ug).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := subscriptionUserExists(tx, userID); err != nil {
+			return err
+		}
+		if err := subscriptionGroupExists(tx, groupID); err != nil {
+			return err
+		}
+
+		ug := model.UserSubscriptionGroup{
+			UserID:         userID,
+			GroupID:        groupID,
+			ExpireAt:       expireAt,
+			TransferEnable: transferEnable,
+			NextRenewPrice: nextRenewPrice,
+		}
+		// Upsert (assign will update specified fields on conflict)
+		return tx.Where("user_id = ? AND group_id = ?", userID, groupID).
+			Assign(ug).FirstOrCreate(&ug).Error
+	})
 }
 
 // RemoveGroupFromUser 移除用户的订阅分组
 func (s *SubscriptionService) RemoveGroupFromUser(userID, groupID uint) error {
-	return s.db.Where("user_id = ? AND group_id = ?", userID, groupID).
-		Delete(&model.UserSubscriptionGroup{}).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := subscriptionUserExists(tx, userID); err != nil {
+			return err
+		}
+		if err := subscriptionGroupExists(tx, groupID); err != nil {
+			return err
+		}
+
+		res := tx.Where("user_id = ? AND group_id = ?", userID, groupID).
+			Delete(&model.UserSubscriptionGroup{})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrSubscriptionUserGroupNotFound
+		}
+		return nil
+	})
 }
 
 // AssignGroupToPlan 为套餐分配订阅分组
 func (s *SubscriptionService) AssignGroupToPlan(planID, groupID uint) error {
-	pg := model.PlanSubscriptionGroup{
-		PlanID:  planID,
-		GroupID: groupID,
-	}
-	return s.db.Where("plan_id = ? AND group_id = ?", planID, groupID).
-		FirstOrCreate(&pg).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := subscriptionPlanExists(tx, planID); err != nil {
+			return err
+		}
+		if err := subscriptionGroupExists(tx, groupID); err != nil {
+			return err
+		}
+
+		pg := model.PlanSubscriptionGroup{
+			PlanID:  planID,
+			GroupID: groupID,
+		}
+		return tx.Where("plan_id = ? AND group_id = ?", planID, groupID).
+			FirstOrCreate(&pg).Error
+	})
 }
 
 // RemoveGroupFromPlan 移除套餐的订阅分组
 func (s *SubscriptionService) RemoveGroupFromPlan(planID, groupID uint) error {
-	return s.db.Where("plan_id = ? AND group_id = ?", planID, groupID).
-		Delete(&model.PlanSubscriptionGroup{}).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := subscriptionPlanExists(tx, planID); err != nil {
+			return err
+		}
+		if err := subscriptionGroupExists(tx, groupID); err != nil {
+			return err
+		}
+
+		res := tx.Where("plan_id = ? AND group_id = ?", planID, groupID).
+			Delete(&model.PlanSubscriptionGroup{})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrSubscriptionPlanGroupNotFound
+		}
+		return nil
+	})
 }
 
 // GetUserGroups 获取用户的订阅分组
 func (s *SubscriptionService) GetUserGroups(userID uint) ([]*model.SubscriptionGroup, error) {
+	if err := subscriptionUserExists(s.db, userID); err != nil {
+		return nil, err
+	}
+
 	var groups []*model.SubscriptionGroup
 	now := time.Now().Unix()
 
@@ -960,6 +1023,10 @@ func (s *SubscriptionService) GetGroupStats() ([]GroupStats, error) {
 
 // GetPlanGroups 获取套餐的订阅分组
 func (s *SubscriptionService) GetPlanGroups(planID uint) ([]*model.SubscriptionGroup, error) {
+	if err := subscriptionPlanExists(s.db, planID); err != nil {
+		return nil, err
+	}
+
 	var groups []*model.SubscriptionGroup
 
 	err := s.db.Joins("JOIN v2_plan_subscription_group ON v2_subscription_group.id = v2_plan_subscription_group.group_id").
@@ -967,4 +1034,37 @@ func (s *SubscriptionService) GetPlanGroups(planID uint) ([]*model.SubscriptionG
 		Find(&groups).Error
 
 	return groups, err
+}
+
+func subscriptionUserExists(db *gorm.DB, userID uint) error {
+	var user model.User
+	if err := db.Select("id").First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrSubscriptionUserNotFound
+		}
+		return err
+	}
+	return nil
+}
+
+func subscriptionPlanExists(db *gorm.DB, planID uint) error {
+	var plan model.Plan
+	if err := db.Select("id").First(&plan, planID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrSubscriptionPlanNotFound
+		}
+		return err
+	}
+	return nil
+}
+
+func subscriptionGroupExists(db *gorm.DB, groupID uint) error {
+	var group model.SubscriptionGroup
+	if err := db.Select("id").First(&group, groupID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrSubscriptionGroupNotFound
+		}
+		return err
+	}
+	return nil
 }

@@ -128,7 +128,8 @@ Open gaps:
   Admin Telegram frontend compatibility coverage while the public Telegram webhook remains a
   `status=ok` compatibility path, admin subscription group and template CRUD, protocol
   binding/read, and preview success-user-error responses have handler, service
-  not-found/missing-protocol, and Subscriptions frontend compatibility coverage, while format success payloads remain covered and public
+  not-found/missing-protocol, and Subscriptions frontend compatibility coverage; admin subscription user/plan group binding
+  success-user-error responses have handler and service missing-reference/missing-relation coverage, while format success payloads remain covered and public
   subscription downloads remain plain subscription content, admin node management CRUD,
   credentials, logs, protocol, raw-config, and auth-key success responses have
   handler coverage plus Nodes frontend/API compatibility coverage while node

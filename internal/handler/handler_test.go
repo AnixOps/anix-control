@@ -2729,7 +2729,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestAssignGroupToUser_InvalidUserID(
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "用户")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestRemoveGroupFromUser_InvalidIDs() {
@@ -2740,13 +2740,13 @@ func (s *SubscriptionAdminHandlerTestSuite) TestRemoveGroupFromUser_InvalidIDs()
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "用户")
 
 	req, _ = http.NewRequest("DELETE", "/users/1/groups/invalid", nil)
 	w = httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "分组")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetUserGroups_InvalidUserID() {
@@ -2757,7 +2757,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetUserGroups_InvalidUserID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "用户")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestAssignGroupToPlan_InvalidPlanID() {
@@ -2772,7 +2772,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestAssignGroupToPlan_InvalidPlanID(
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "套餐")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestRemoveGroupFromPlan_InvalidIDs() {
@@ -2783,7 +2783,13 @@ func (s *SubscriptionAdminHandlerTestSuite) TestRemoveGroupFromPlan_InvalidIDs()
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "套餐")
+
+	req, _ = http.NewRequest("DELETE", "/plans/1/groups/invalid", nil)
+	w = httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "分组")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetPlanGroups_InvalidPlanID() {
@@ -2794,7 +2800,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetPlanGroups_InvalidPlanID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "套餐")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetSubscriptionFormats_Success() {
