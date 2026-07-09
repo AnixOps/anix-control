@@ -96,6 +96,8 @@ Manual approval required before:
 - Do not build release artifacts on the production host or from a local checkout.
 - `config/deploy/deploy_panel.sh` performs a local source-tree build and is guarded by `ALLOW_LOCAL_BUILD=1`; use it only for explicitly approved development or emergency operator work, not release builds.
 - Legacy local entrypoints `config/scripts/deploy.sh` and `config/scripts/pre-deploy.sh` are also guarded by `ALLOW_LOCAL_BUILD=1`; they are not approved release build paths.
+- V2bX Ansible rollout helper `config/deploy/ansible/nodes/deploy_from_inventory.sh` must use prebuilt artifacts with `--skip-build` for release or production rollouts; its local build path is also guarded by `ALLOW_LOCAL_BUILD=1`.
+- CI enforces the local deployment build guard with `config/deploy/check_release_build_policy.sh`.
 
 Root-only cleanup for old local build outputs:
 
