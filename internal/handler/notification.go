@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"log"
-	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -204,13 +203,13 @@ func (h *NotificationHandler) GetUserNotifications(c *gin.Context) {
 
 	db := database.Get()
 	if err := db.Model(&model.NotificationLog{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get notification count"})
+		panelError(c, "failed to get notification count")
 		return
 	}
 
 	offset := (page - 1) * pageSize
 	if err := db.Where("user_id = ?", userID).Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&logs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get notifications"})
+		panelError(c, "failed to get notifications")
 		return
 	}
 
@@ -242,7 +241,7 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 		Update("read_at", time.Now())
 
 	if result.RowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "notification not found"})
+		panelError(c, "notification not found")
 		return
 	}
 
@@ -311,7 +310,7 @@ func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 	}
 
 	if err := db.Find(&templates).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load templates"})
+		panelError(c, "failed to load templates")
 		return
 	}
 
@@ -343,7 +342,7 @@ func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
 		Enabled bool   `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -357,7 +356,7 @@ func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
 	}
 
 	if err := database.Get().Create(template).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -383,7 +382,7 @@ func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 
 	var template model.NotificationTemplate
 	if err := database.Get().First(&template, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "template not found"})
+		panelError(c, "template not found")
 		return
 	}
 
@@ -396,7 +395,7 @@ func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 		Enabled *bool  `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -420,7 +419,7 @@ func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 	}
 
 	if err := database.Get().Save(&template).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -442,7 +441,7 @@ func (h *NotificationHandler) DeleteTemplate(c *gin.Context) {
 	id := c.Param("id")
 
 	if err := database.Get().Delete(&model.NotificationTemplate{}, id).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -486,13 +485,13 @@ func (h *NotificationHandler) ListLogs(c *gin.Context) {
 	}
 
 	if err := db.Count(&total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count notification logs"})
+		panelError(c, "failed to count notification logs")
 		return
 	}
 
 	offset := (page - 1) * pageSize
 	if err := db.Order("created_at DESC").Limit(pageSize).Offset(offset).Find(&logs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load notification logs"})
+		panelError(c, "failed to load notification logs")
 		return
 	}
 
@@ -549,7 +548,7 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 		Content   string `json:"content"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -573,12 +572,12 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 	switch req.Type {
 	case "email":
 		if recipient == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "email address required"})
+			panelError(c, "email address required")
 			return
 		}
 		cfg, cfgErr := h.loadEmailConfig()
 		if cfgErr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": cfgErr.Error()})
+			panelError(c, cfgErr.Error())
 			return
 		}
 		if cfg.Host == "" || cfg.FromAddress == "" {
@@ -603,12 +602,12 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 		log.Printf("[STUB] test notification: Webhook delivery not yet implemented")
 		err = nil
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid notification type"})
+		panelError(c, "invalid notification type")
 		return
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -630,7 +629,7 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 func (h *NotificationHandler) GetEmailConfig(c *gin.Context) {
 	cfg, err := h.loadEmailConfig()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -663,31 +662,31 @@ func (h *NotificationHandler) GetEmailConfig(c *gin.Context) {
 func (h *NotificationHandler) UpdateEmailConfig(c *gin.Context) {
 	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	host := parseStringField(req, "host")
 	if host == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "host is required"})
+		panelError(c, "host is required")
 		return
 	}
 
 	port := parseIntField(req, "port")
 	if port <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "port is required"})
+		panelError(c, "port is required")
 		return
 	}
 
 	fromAddress := parseStringField(req, "from_address")
 	if fromAddress == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "from_address is required"})
+		panelError(c, "from_address is required")
 		return
 	}
 
 	existing, err := h.loadEmailConfig()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -720,7 +719,7 @@ func (h *NotificationHandler) UpdateEmailConfig(c *gin.Context) {
 	if encRaw, ok := req["encryption_type"]; ok {
 		normalized, valid := normalizeEmailEncryption(encRaw)
 		if !valid {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid encryption_type"})
+			panelError(c, "invalid encryption_type")
 			return
 		}
 		cfg.Encryption = normalized
@@ -730,7 +729,7 @@ func (h *NotificationHandler) UpdateEmailConfig(c *gin.Context) {
 		if encRaw, ok := req["encryption"]; ok {
 			normalized, valid := normalizeEmailEncryption(encRaw)
 			if !valid {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid encryption"})
+				panelError(c, "invalid encryption")
 				return
 			}
 			cfg.Encryption = normalized
@@ -746,7 +745,7 @@ func (h *NotificationHandler) UpdateEmailConfig(c *gin.Context) {
 		"notification",
 		"Email notification config",
 	); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 

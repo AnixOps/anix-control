@@ -169,7 +169,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize user payment channels/create/status/records success/user-error response envelopes with handler tests while preserving callback compatibility.
 - [x] Normalize legacy X402 and fiat payment create/check success and user-error response envelopes with handler tests while preserving callback/webhook compatibility.
 - [x] Normalize user/admin MFA success and user-error response envelopes with handler and Admin MFA frontend compatibility tests.
-- [x] Normalize user/admin notification success response envelopes with handler and Admin Notifications frontend compatibility tests.
+- [x] Normalize user/admin notification success and user-error response envelopes with handler and Admin Notifications frontend compatibility tests.
 - [x] Normalize admin/user Telegram panel API success response envelopes with handler and Admin Telegram frontend compatibility tests while preserving webhook compatibility.
 - [x] Normalize admin subscription management response envelopes with handler, Subscriptions frontend, and admin API compatibility tests while preserving public subscription download compatibility.
 - [x] Normalize admin node management CRUD/protocol/log/raw-config/auth-key response envelopes with handler, Nodes frontend, and admin API compatibility tests while preserving node registration/heartbeat compatibility.

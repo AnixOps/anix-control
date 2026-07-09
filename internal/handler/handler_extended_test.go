@@ -3327,7 +3327,13 @@ func (s *NotificationExtendedTestSuite) TestCreateTemplate_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NotificationExtendedTestSuite) TestListLogs() {
@@ -3446,7 +3452,13 @@ func (s *NotificationExtendedTestSuite) TestUpdateEmailConfig_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *NotificationExtendedTestSuite) TestEmailConfig_RoundTrip_EncryptionStringAndBool_KeepPasswordOnEmpty() {
