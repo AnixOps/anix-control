@@ -44,6 +44,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Add a machine-readable release manifest with CI run metadata and artifact hashes, and guard it in the release workflow policy check.
 - [x] Add a CI-tested release manifest generator script instead of keeping manifest generation as inline workflow code.
 - [x] Add a CI-tested release artifact verifier that blocks tag publishing when required assets, manifest entries, or checksums are inconsistent.
+- [x] Attach `UPGRADE.md` to GitHub Release assets and guard it in release workflow policy/artifact verification.
 
 ## P1: Security And Error Handling
 

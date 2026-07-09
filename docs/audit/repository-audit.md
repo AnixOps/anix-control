@@ -210,6 +210,7 @@ Current CI coverage includes:
 - Multi-platform release binaries for linux, darwin, and windows on amd64/arm64.
 - Release checksums.
 - Release assets include `OPERATOR_DEPLOYMENT.md` with the manual deployment, verification, and rollback flow.
+- Release assets include `UPGRADE.md` with the operator upgrade, artifact verification, migration-evidence, and rollback flow.
 - Release assets include `RELEASE_MANIFEST.json` with GitHub Actions run metadata and per-artifact hashes.
 - `docs/UPGRADE.md` now documents GitHub Actions artifact verification, systemd/Docker upgrade paths, migration evidence, rollback, and post-upgrade records.
 - Release manifest generation is provided by `config/scripts/generate_release_manifest.py` and covered by a CI self-test.
