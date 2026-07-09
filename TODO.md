@@ -39,6 +39,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Add SBOM generation to release workflow.
 - [x] Add a release workflow policy CI check for tag gating, required release prerequisites, multi-platform artifacts, checksums, SBOM, Docker metadata, operator runbook, and release notes.
 - [x] Attach migration dry-run output to release artifacts and include it in release checksum coverage.
+- [x] Add a machine-readable release manifest with CI run metadata and artifact hashes, and guard it in the release workflow policy check.
 
 ## P1: Security And Error Handling
 
@@ -149,6 +150,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Add a documentation sync CI check so source, frontend, deployment, workflow, and config changes cannot land without updated status docs or changelog evidence.
 - [x] Add a release workflow policy CI check so release artifact, checksum, SBOM, Docker metadata, and runbook requirements cannot be removed silently.
 - [x] Include migration dry-run evidence in GitHub Release assets for tag builds.
+- [x] Include a machine-readable release manifest in GitHub Release assets for tag builds.
 
 ## P3: API And UI Consistency
 
