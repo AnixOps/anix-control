@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -89,14 +88,14 @@ func (h *SystemHandler) GetAuditLogs(c *gin.Context) {
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	var records []model.OperationLog
 	offset := (page - 1) * pageSize
 	if err := query.Order("id DESC").Limit(pageSize).Offset(offset).Find(&records).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 

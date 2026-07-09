@@ -1076,8 +1076,27 @@ const notify = (message) => {
 }
 const confirmAction = (message) => window.confirm(message)
 const resolveSystemError = (error, fallbackKey) => (
-  translateRuntimeText(error?.response?.data?.msg || error?.response?.data?.error || error?.message, t(fallbackKey))
+  translateRuntimeText(error?.response?.data?.msg || error?.response?.data?.error || error?.msg || error?.message, t(fallbackKey))
 )
+
+const readPanelEnvelopeError = (res) => {
+  const candidates = [res, res?.data]
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue
+    if (!Object.prototype.hasOwnProperty.call(candidate, 'code')) continue
+    if (Number(candidate.code) === 0) return null
+    return candidate.msg || candidate.error || ''
+  }
+  return null
+}
+
+const ensureSystemSuccess = (res, fallbackKey) => {
+  const message = readPanelEnvelopeError(res)
+  if (message !== null) {
+    throw new Error(message || t(fallbackKey))
+  }
+  return res
+}
 
 const formatSize = (bytes) => {
   if (!bytes) return '0 B'
@@ -1524,7 +1543,10 @@ const fetchAuditLogs = async () => {
       params.target_type = targetType
     }
 
-    const res = await getSystemAuditLogs(params)
+    const res = ensureSystemSuccess(
+      await getSystemAuditLogs(params),
+      'runtime.systemPage.messages.fetchAuditLogsFailed'
+    )
     const payload = res.data?.data || res.data || {}
     const list = Array.isArray(payload.list) ? payload.list : []
     auditLogs.value = list.map((item) => ({
