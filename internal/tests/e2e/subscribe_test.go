@@ -77,6 +77,9 @@ func (s *SubscribeE2ETestSuite) SetupSuite() {
 		&model.SubscriptionTemplate{},
 		&model.UserSubscriptionGroup{},
 		&model.Order{},
+		&model.UserMFA{},
+		&model.MFALoginAttempt{},
+		&model.SystemConfig{},
 	)
 	s.Require().NoError(err)
 

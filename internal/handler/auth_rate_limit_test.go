@@ -29,7 +29,11 @@ func setupAuthRateLimitTest(t *testing.T, cfg *config.Config) (*gin.Engine, func
 		Database: ":memory:",
 	})
 	require.NoError(t, err)
-	require.NoError(t, database.GetDB().AutoMigrate(&model.User{}))
+	require.NoError(t, database.GetDB().AutoMigrate(
+		&model.User{},
+		&model.UserMFA{},
+		&model.MFALoginAttempt{},
+	))
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.DefaultCost)
 	require.NoError(t, err)
