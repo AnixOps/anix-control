@@ -155,12 +155,31 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) handleLoginMFA(c *gin.Context, user *model.User, req model.LoginRequest, loginRateLimitKey string, loginRateLimitOptions service.LoginRateLimitOptions) (bool, error) {
-	mfaService := service.NewMFAService(database.GetDB(), nil)
+	db := database.GetDB()
+	mfaService := service.NewMFAService(db, nil)
+	mfaConfig, err := loadMFAAdminConfig(db)
+	if err != nil {
+		return false, err
+	}
+	mfaService.SetConfig(mfaRuntimeConfig(mfaConfig))
+
 	mfa, err := mfaService.GetUserMFA(user.ID)
 	if err != nil {
 		return false, err
 	}
 	if mfa == nil || !mfa.Enabled {
+		if mfaService.IsEnforcedForUser(user) {
+			methods := loginMFAEnrollmentMethods(mfaConfig)
+			panelSuccess(c, gin.H{
+				"mfa_enrollment_required": true,
+				"mfa_setup_required":      true,
+				"methods":                 methods,
+				"mfa_methods":             methods,
+				"user_id":                 user.ID,
+				"email":                   user.Email,
+			})
+			return true, nil
+		}
 		return false, nil
 	}
 
@@ -198,6 +217,17 @@ func (h *AuthHandler) handleLoginMFA(c *gin.Context, user *model.User, req model
 	}
 
 	return false, nil
+}
+
+func loginMFAEnrollmentMethods(cfg mfaAdminConfig) []string {
+	methods := make([]string, 0, 1)
+	if cfg.Methods[model.MFAMethodTOTP] || len(cfg.Methods) == 0 {
+		methods = append(methods, model.MFAMethodTOTP)
+	}
+	if len(methods) == 0 {
+		methods = append(methods, model.MFAMethodTOTP)
+	}
+	return methods
 }
 
 func loginMFAMethods(mfa *model.UserMFA) []string {

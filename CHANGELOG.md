@@ -15,6 +15,7 @@
 
 ### Fixed
 
+- Enforced global MFA `enforce_for_all` and `enforce_for_admin` login enrollment policies by returning no-token enrollment-required responses for covered users who have not enabled MFA, with handler coverage for all-users, admin-only, and regular-user bypass prevention paths plus a Login page enrollment-required prompt.
 - Enforced user-enabled TOTP/backup MFA during login before issuing JWTs, counting invalid MFA codes in the login rate limiter and adding backend handler coverage plus a frontend two-step MFA challenge flow.
 - Blocked Alipay, WeChat, and USDT payment gateways from being enabled or used for new payment records until their live callback or confirmation implementations and tests exist, including historical enabled-row filtering.
 - Made notification async sends return a completion signal and updated the user-ID copy regression test to wait for the send path, removing a timing race with shared service-test database cleanup.

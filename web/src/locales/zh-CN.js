@@ -502,7 +502,8 @@ export default {
       passwordMismatch: '两次输入的密码不一致',
       registerFailed: '注册失败，请稍后重试',
       loginFailed: '登录失败，请检查邮箱和密码',
-      mfaCodeRequired: '请输入 MFA 认证码。'
+      mfaCodeRequired: '请输入 MFA 认证码。',
+      mfaEnrollmentRequired: '登录前必须先启用 MFA，请联系站点管理员。'
     },
     success: {
       registerCompleted: '注册成功，正在跳转...'

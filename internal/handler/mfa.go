@@ -264,15 +264,25 @@ func (h *MFAHandler) loadAdminConfig() (mfaAdminConfig, error) {
 }
 
 func (h *MFAHandler) applyRuntimeConfig(cfg mfaAdminConfig) {
+	h.mfaService.SetConfig(mfaRuntimeConfig(cfg))
+}
+
+func loadMFAAdminConfig(db *gorm.DB) (mfaAdminConfig, error) {
+	return (&MFAHandler{
+		systemConfigService: service.NewSystemConfigService(db),
+	}).loadAdminConfig()
+}
+
+func mfaRuntimeConfig(cfg mfaAdminConfig) *model.MFAConfig {
 	allowedBytes, _ := json.Marshal(cfg.AllowedMethods)
-	h.mfaService.SetConfig(&model.MFAConfig{
+	return &model.MFAConfig{
 		Enabled:         cfg.Enabled,
 		EnforceForAll:   cfg.Required,
 		EnforceForAdmin: cfg.EnforceForAdmin,
 		AllowedMethods:  string(allowedBytes),
 		TOTPIssuer:      cfg.TOTPIssuer,
 		BackupCodeCount: cfg.BackupCodesCount,
-	})
+	}
 }
 
 func mfaAdminConfigResponse(cfg mfaAdminConfig) gin.H {

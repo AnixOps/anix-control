@@ -220,6 +220,40 @@ describe('Login.vue', () => {
     expect(useUserStore().token).toBe('')
   })
 
+  it('shows MFA enrollment-required responses without storing a token', async () => {
+    mockLogin.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      ts: 1783536000000,
+      data: {
+        mfa_enrollment_required: true,
+        mfa_setup_required: true,
+        methods: ['totp'],
+        user_id: 12,
+        email: 'mfa-enroll@example.com',
+      },
+    })
+
+    const wrapper = mount(Login, {
+      global: {
+        stubs: ['router-link'],
+      },
+    })
+
+    await wrapper.find('#email').setValue('mfa-enroll@example.com')
+    await wrapper.find('#password').setValue('password123')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mockLogin).toHaveBeenCalledWith({
+      email: 'mfa-enroll@example.com',
+      password: 'password123',
+    })
+    expect(wrapper.find('#mfa-code').exists()).toBe(false)
+    expect(wrapper.find('[role="alert"]').text()).toContain('MFA')
+    expect(useUserStore().token).toBe('')
+  })
+
   it('shows panel envelope login errors', async () => {
     mockLogin.mockResolvedValue({
       code: -1,

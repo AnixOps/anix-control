@@ -211,7 +211,7 @@ func (s *AuthHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, ms
 	assert.NotContains(s.T(), resp, "error")
 }
 
-func (s *AuthHandlerTestSuite) createMFAEnabledLoginUser(email, password string) (*model.User, string) {
+func (s *AuthHandlerTestSuite) createLoginUser(email, password string, isAdmin int) *model.User {
 	s.T().Helper()
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -222,8 +222,28 @@ func (s *AuthHandlerTestSuite) createMFAEnabledLoginUser(email, password string)
 		Token:          "token-" + strings.ReplaceAll(email, "@", "-"),
 		UUID:           "uuid-" + strings.ReplaceAll(email, "@", "-"),
 		TransferEnable: 1073741824,
+		IsAdmin:        isAdmin,
 	}
 	s.Require().NoError(s.db.Create(user).Error)
+	return user
+}
+
+func (s *AuthHandlerTestSuite) setMFAAdminConfig(cfg map[string]any) {
+	s.T().Helper()
+
+	err := service.NewSystemConfigService(s.db).SetJSON(
+		mfaAdminConfigKey,
+		cfg,
+		"security",
+		"mfa admin config",
+	)
+	s.Require().NoError(err)
+}
+
+func (s *AuthHandlerTestSuite) createMFAEnabledLoginUser(email, password string) (*model.User, string) {
+	s.T().Helper()
+
+	user := s.createLoginUser(email, password, 0)
 
 	mfaService := service.NewMFAService(s.db, nil)
 	setup, err := mfaService.SetupTOTP(user.ID, user.Email)
@@ -538,6 +558,119 @@ func (s *AuthHandlerTestSuite) TestLoginHandler_MFARequiresCodeBeforeToken() {
 	var attempts int64
 	s.Require().NoError(s.db.Model(&model.MFALoginAttempt{}).Where("user_id = ?", user.ID).Count(&attempts).Error)
 	assert.Equal(s.T(), int64(0), attempts)
+}
+
+func (s *AuthHandlerTestSuite) TestLoginHandler_GlobalMFAEnforceForAllRequiresEnrollmentBeforeToken() {
+	s.setMFAAdminConfig(map[string]any{
+		"enabled":  true,
+		"required": true,
+		"methods":  map[string]bool{"totp": true, "sms": false, "email": false},
+	})
+
+	handler := NewAuthHandler(s.cfg)
+	s.router.POST("/login", handler.Login)
+	user := s.createLoginUser("mfa-enroll-all@example.com", "password123", 0)
+
+	loginBody := map[string]string{
+		"email":    "mfa-enroll-all@example.com",
+		"password": "password123",
+	}
+	jsonLoginBody, err := json.Marshal(loginBody)
+	s.Require().NoError(err)
+
+	req, err := http.NewRequest("POST", "/login", bytes.NewReader(jsonLoginBody))
+	s.Require().NoError(err)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), true, data["mfa_enrollment_required"])
+	assert.Equal(s.T(), true, data["mfa_setup_required"])
+	assert.Empty(s.T(), data["token"])
+	assert.Empty(s.T(), data["mfa_required"])
+	assert.Equal(s.T(), "mfa-enroll-all@example.com", data["email"])
+	assert.Equal(s.T(), float64(user.ID), data["user_id"])
+	assert.ElementsMatch(s.T(), []any{model.MFAMethodTOTP}, data["methods"].([]any))
+	assert.ElementsMatch(s.T(), data["methods"], data["mfa_methods"])
+
+	var attempts int64
+	s.Require().NoError(s.db.Model(&model.MFALoginAttempt{}).Where("user_id = ?", user.ID).Count(&attempts).Error)
+	assert.Equal(s.T(), int64(0), attempts)
+}
+
+func (s *AuthHandlerTestSuite) TestLoginHandler_GlobalMFAEnforceForAdminRequiresAdminEnrollmentBeforeToken() {
+	s.setMFAAdminConfig(map[string]any{
+		"enabled":           true,
+		"required":          false,
+		"enforce_for_admin": true,
+	})
+
+	handler := NewAuthHandler(s.cfg)
+	s.router.POST("/login", handler.Login)
+	admin := s.createLoginUser("mfa-enroll-admin@example.com", "password123", 1)
+
+	loginBody := map[string]string{
+		"email":    "mfa-enroll-admin@example.com",
+		"password": "password123",
+	}
+	jsonLoginBody, err := json.Marshal(loginBody)
+	s.Require().NoError(err)
+
+	req, err := http.NewRequest("POST", "/login", bytes.NewReader(jsonLoginBody))
+	s.Require().NoError(err)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), true, data["mfa_enrollment_required"])
+	assert.Empty(s.T(), data["token"])
+	assert.Equal(s.T(), "mfa-enroll-admin@example.com", data["email"])
+	assert.Equal(s.T(), float64(admin.ID), data["user_id"])
+}
+
+func (s *AuthHandlerTestSuite) TestLoginHandler_GlobalMFAEnforceForAdminAllowsRegularUserWithoutMFA() {
+	s.setMFAAdminConfig(map[string]any{
+		"enabled":           true,
+		"required":          false,
+		"enforce_for_admin": true,
+	})
+
+	handler := NewAuthHandler(s.cfg)
+	s.router.POST("/login", handler.Login)
+	user := s.createLoginUser("mfa-admin-policy-user@example.com", "password123", 0)
+
+	loginBody := map[string]string{
+		"email":    "mfa-admin-policy-user@example.com",
+		"password": "password123",
+	}
+	jsonLoginBody, err := json.Marshal(loginBody)
+	s.Require().NoError(err)
+
+	req, err := http.NewRequest("POST", "/login", bytes.NewReader(jsonLoginBody))
+	s.Require().NoError(err)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.NotEmpty(s.T(), data["token"])
+	assert.Empty(s.T(), data["mfa_enrollment_required"])
+	assert.Equal(s.T(), "mfa-admin-policy-user@example.com", data["email"])
+	assert.Equal(s.T(), float64(user.ID), data["user_id"])
 }
 
 func (s *AuthHandlerTestSuite) TestLoginHandler_MFASuccessIssuesTokenAndRecordsAttempt() {

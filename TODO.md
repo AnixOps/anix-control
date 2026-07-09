@@ -1,6 +1,6 @@
 # TODO
 
-Date: 2026-07-09
+Date: 2026-07-10
 
 This list is intentionally concrete. Do not mark an item done without code, tests, and verification evidence where applicable.
 
@@ -60,7 +60,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Remove SMTP `InsecureSkipVerify` from notification delivery.
 - [x] Return explicit errors for corrupt MFA backup-code JSON.
 - [x] Enforce user-enabled TOTP/backup MFA during login before issuing JWTs.
-- [ ] Enforce global MFA enrollment policy for users/admins covered by `enforce_for_all` or `enforce_for_admin`.
+- [x] Enforce global MFA enrollment policy for users/admins covered by `enforce_for_all` or `enforce_for_admin`.
 - [x] Handle stats cache write/delete errors explicitly.
 - [x] Return explicit errors for node online cache updates and malformed legacy server config JSON.
 - [x] Harden local backup restore path validation, archive size limits, and backup directory permissions.
