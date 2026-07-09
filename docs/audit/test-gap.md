@@ -9,6 +9,7 @@ New CI coverage added:
 - Integration workflow unit tests now generate `coverage.out` before artifact upload.
 - Local build artifact cleanup has a script self-test in CI covering removal of known outputs while preserving config, database, and `web/node_modules` content.
 - Release-build policy checks now fail deployment shell scripts that add local Go/frontend build commands without the GitHub Actions-only policy and `ALLOW_LOCAL_BUILD` guard.
+- Documentation sync checks now fail implementation, frontend, deployment, workflow, or config diffs that omit maintained status documentation, with a script self-test covering source-only failure, source-plus-changelog success, and docs-only success.
 - `go mod tidy` cleanliness check.
 - `gofmt` check for tracked Go files.
 - `go vet ./...`.
