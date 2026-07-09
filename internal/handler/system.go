@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
-	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -632,7 +631,7 @@ func (h *SystemHandler) DeleteConfig(c *gin.Context) {
 func (h *SystemHandler) GetBackupConfig(c *gin.Context) {
 	cfg, err := h.backupService.GetConfig()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -654,14 +653,14 @@ func (h *SystemHandler) GetBackupConfig(c *gin.Context) {
 func (h *SystemHandler) UpdateBackupConfig(c *gin.Context) {
 	currentCfg, err := h.backupService.GetConfig()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	cfg := *currentCfg
 	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -738,7 +737,7 @@ func (h *SystemHandler) UpdateBackupConfig(c *gin.Context) {
 	}
 
 	if err := h.backupService.UpdateConfig(&cfg); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -763,7 +762,7 @@ func (h *SystemHandler) CreateBackup(c *gin.Context) {
 
 	record, err := h.backupService.CreateBackup(backupType, contextUint(c, "user_id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -791,7 +790,7 @@ func (h *SystemHandler) ListBackups(c *gin.Context) {
 
 	records, total, err := h.backupService.ListBackups(page, pageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -840,7 +839,7 @@ func (h *SystemHandler) ListBackups(c *gin.Context) {
 func (h *SystemHandler) GetBackupStats(c *gin.Context) {
 	stats, err := h.backupService.GetBackupStats()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -869,14 +868,14 @@ func (h *SystemHandler) DeleteBackup(c *gin.Context) {
 
 	backupID, err := strconv.ParseUint(id, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 
 	var record model.BackupRecord
 	recordLoaded := database.Get().First(&record, uint(backupID)).Error == nil
 	if err := h.backupService.DeleteBackup(uint(backupID)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -903,13 +902,13 @@ func (h *SystemHandler) RestoreBackup(c *gin.Context) {
 
 	backupID, err := strconv.ParseUint(id, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 	var record model.BackupRecord
 	recordLoaded := database.Get().First(&record, uint(backupID)).Error == nil
 	if err := h.backupService.RestoreBackup(uint(backupID)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 

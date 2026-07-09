@@ -262,6 +262,130 @@ describe('System backup configuration', () => {
     wrapper.unmount()
   })
 
+  it('logs backup panel envelope read failures instead of accepting empty payloads', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    adminApi.getBackupConfig.mockResolvedValueOnce({
+      code: -1,
+      msg: 'backup config rejected',
+      data: null,
+      ts: 1783526400000
+    })
+    adminApi.getBackups.mockResolvedValueOnce({
+      code: -1,
+      msg: 'backup list rejected',
+      data: null,
+      ts: 1783526400000
+    })
+    adminApi.getBackupStats.mockResolvedValueOnce({
+      code: -1,
+      msg: 'backup stats rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    const loggedErrors = consoleError.mock.calls.map(call => call[1]).filter(err => err instanceof Error)
+    expect(loggedErrors.map(err => err.message)).toEqual(expect.arrayContaining([
+      'backup config rejected',
+      'backup list rejected',
+      'backup stats rejected'
+    ]))
+    expect(wrapper.vm.backups).toEqual([])
+    expect(wrapper.vm.backupStats).toEqual({})
+
+    consoleError.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('does not report backup config save success when enveloped response fails', async () => {
+    const wrapper = mountSystem()
+    await flushPromises()
+    window.alert.mockClear()
+    adminApi.updateBackupConfig.mockResolvedValueOnce({
+      code: -1,
+      msg: 'backup config save rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    await wrapper.vm.saveBackupConfig()
+    await flushPromises()
+
+    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('backup config save rejected'))
+    expect(window.alert).not.toHaveBeenCalledWith(expect.stringContaining('Saved successfully'))
+
+    wrapper.unmount()
+  })
+
+  it('does not refresh backups when enveloped create response fails', async () => {
+    const wrapper = mountSystem()
+    await flushPromises()
+    window.alert.mockClear()
+    adminApi.getBackups.mockClear()
+    adminApi.getBackupStats.mockClear()
+    adminApi.createBackup.mockResolvedValueOnce({
+      code: -1,
+      msg: 'backup create rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    await wrapper.vm.createBackupRequest()
+    await flushPromises()
+
+    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('backup create rejected'))
+    expect(window.alert).not.toHaveBeenCalledWith(expect.stringContaining('Backup started'))
+    expect(adminApi.getBackups).not.toHaveBeenCalled()
+    expect(adminApi.getBackupStats).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('does not refresh backups when enveloped delete response fails', async () => {
+    const wrapper = mountSystem()
+    await flushPromises()
+    window.alert.mockClear()
+    adminApi.getBackups.mockClear()
+    adminApi.getBackupStats.mockClear()
+    adminApi.deleteBackup.mockResolvedValueOnce({
+      code: -1,
+      msg: 'backup delete rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    await wrapper.vm.deleteBackupRequest({ id: 1, filename: 'rejected.zip' })
+    await flushPromises()
+
+    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('backup delete rejected'))
+    expect(adminApi.getBackups).not.toHaveBeenCalled()
+    expect(adminApi.getBackupStats).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('does not report restore success when enveloped response fails', async () => {
+    const wrapper = mountSystem()
+    await flushPromises()
+    window.alert.mockClear()
+    adminApi.restoreBackup.mockResolvedValueOnce({
+      code: -1,
+      msg: 'backup restore rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    await wrapper.vm.restoreBackupRequest({ id: 1, filename: 'rejected.zip' })
+    await flushPromises()
+
+    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('backup restore rejected'))
+    expect(window.alert).not.toHaveBeenCalledWith(expect.stringContaining('Restore completed'))
+
+    wrapper.unmount()
+  })
+
   it('loads load balancers from legacy and panel envelope payloads', async () => {
     adminApi.getLoadBalancers
       .mockResolvedValueOnce({

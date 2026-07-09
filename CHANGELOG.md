@@ -91,10 +91,10 @@
 - Normalized admin invite stats responses to the panel `code/msg/ts/data` envelope while keeping the Invite page compatible with legacy and enveloped payloads.
 - Normalized admin payment stats responses to the panel `code/msg/ts/data` envelope while keeping the Payment page compatible with legacy and enveloped payloads.
 - Normalized admin subscription stats responses to the panel `code/msg/ts/data` envelope while keeping the Subscriptions page compatible with legacy and enveloped payloads.
-- Normalized admin system backup stats responses to the panel `code/msg/ts/data` envelope while keeping the System backup view compatible with legacy and enveloped payloads.
+- Normalized admin system backup stats success/user-error responses to the panel `code/msg/ts/data` envelope while keeping the System backup view compatible with legacy, enveloped, and `code=-1` payloads.
 - Normalized admin load balancer stats success/user-error responses to the panel `code/msg/ts/data` envelope and added frontend API mapping coverage for the stats route.
-- Normalized admin system backup config responses to the panel `code/msg/ts/data` envelope while keeping sensitive-field masking and the System backup view compatible with legacy and enveloped payloads.
-- Normalized admin system backup list/create/delete/restore success responses to the panel `code/msg/ts/data` envelope while keeping the System backup list compatible with legacy and enveloped payloads.
+- Normalized admin system backup config success/user-error responses to the panel `code/msg/ts/data` envelope while keeping sensitive-field masking and the System backup view compatible with legacy, enveloped, and `code=-1` payloads.
+- Normalized admin system backup list/create/delete/restore success/user-error responses to the panel `code/msg/ts/data` envelope while keeping the System backup list compatible with legacy, enveloped, and `code=-1` payloads.
 - Normalized admin invite config responses to the panel `code/msg/ts/data` envelope while keeping the Invite page compatible with legacy and enveloped payloads.
 - Normalized user invite info/code/commission/withdrawal responses and admin invite config update/withdrawal responses to the panel `code/msg/ts/data` envelope while keeping the Invite page compatible with legacy, enveloped, and nested payloads.
 - Normalized admin subscription settings responses to the panel `code/msg/ts/data` envelope while keeping System and Users subscription-link flows compatible with legacy and enveloped payloads.

@@ -1734,26 +1734,27 @@ const buildBackupConfigPayload = (form) => {
   }
 }
 
-const readBackupPayload = (res) => {
-  if (!res || typeof res !== 'object') return {}
-  if (Object.prototype.hasOwnProperty.call(res, 'code')) {
-    return res.data && typeof res.data === 'object' ? res.data : {}
+const readBackupPayload = (res, fallbackKey) => {
+  const payload = ensureSystemSuccess(res, fallbackKey)
+  if (!payload || typeof payload !== 'object') return {}
+  if (Object.prototype.hasOwnProperty.call(payload, 'code')) {
+    return payload.data && typeof payload.data === 'object' ? payload.data : {}
   }
-  if (res.data && typeof res.data === 'object' && Object.prototype.hasOwnProperty.call(res.data, 'data')) {
-    return res.data.data && typeof res.data.data === 'object' ? res.data.data : {}
+  if (payload.data && typeof payload.data === 'object' && Object.prototype.hasOwnProperty.call(payload.data, 'data')) {
+    return payload.data.data && typeof payload.data.data === 'object' ? payload.data.data : {}
   }
-  return res.data && typeof res.data === 'object' ? res.data : res
+  return payload.data && typeof payload.data === 'object' ? payload.data : payload
 }
 
-const readBackupList = (res) => {
-  const payload = readBackupPayload(res)
+const readBackupList = (res, fallbackKey) => {
+  const payload = readBackupPayload(res, fallbackKey)
   return Array.isArray(payload?.list) ? payload.list : []
 }
 
 const fetchBackupConfig = async () => {
   try {
     const res = await getBackupConfig()
-    const payload = readBackupPayload(res)
+    const payload = readBackupPayload(res, 'runtime.systemPage.messages.fetchBackupConfigFailed')
     if (payload && typeof payload === 'object') {
       backupConfig.value = createBackupConfigForm(payload)
     }
@@ -1764,7 +1765,10 @@ const fetchBackupConfig = async () => {
 
 const saveBackupConfig = async () => {
   try {
-    await updateBackupConfig(buildBackupConfigPayload(backupConfig.value))
+    await ensureSystemMutation(
+      updateBackupConfig(buildBackupConfigPayload(backupConfig.value)),
+      'runtime.systemPage.messages.backupConfigSaveFailed'
+    )
     notify(t('runtime.systemPage.messages.backupConfigSaved'))
   } catch (err) {
     notify(resolveSystemError(err, 'runtime.systemPage.messages.backupConfigSaveFailed'))
@@ -1773,7 +1777,10 @@ const saveBackupConfig = async () => {
 
 const createBackupRequest = async () => {
   try {
-    await createBackup()
+    await ensureSystemMutation(
+      createBackup(),
+      'runtime.systemPage.messages.backupStartFailed'
+    )
     notify(t('runtime.systemPage.messages.backupStarted'))
     fetchBackups()
     fetchBackupStats()
@@ -1785,15 +1792,14 @@ const createBackupRequest = async () => {
 const fetchBackups = async () => {
   try {
     const res = await getBackups()
-    backups.value = readBackupList(res)
+    backups.value = readBackupList(res, 'runtime.systemPage.messages.fetchBackupsFailed')
   } catch (err) {
     console.error(t('runtime.systemPage.messages.fetchBackupsFailed'), err)
   }
 }
 
 const readBackupStats = (res) => {
-  if (!res || typeof res !== 'object') return {}
-  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
+  const payload = readSystemPayload(res, 'runtime.systemPage.messages.fetchBackupStatsFailed')
   return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {}
 }
 
@@ -1809,7 +1815,10 @@ const fetchBackupStats = async () => {
 const deleteBackupRequest = async (backup) => {
   if (!confirmAction(t('runtime.systemPage.messages.deleteBackupConfirm', { filename: backup.filename }))) return
   try {
-    await deleteBackup(backup.id)
+    await ensureSystemMutation(
+      deleteBackup(backup.id),
+      'runtime.systemPage.messages.deleteBackupFailed'
+    )
     fetchBackups()
     fetchBackupStats()
   } catch (err) {
@@ -1820,7 +1829,10 @@ const deleteBackupRequest = async (backup) => {
 const restoreBackupRequest = async (backup) => {
   if (!confirmAction(t('runtime.systemPage.messages.restoreBackupConfirm', { filename: backup.filename }))) return
   try {
-    await restoreBackup(backup.id)
+    await ensureSystemMutation(
+      restoreBackup(backup.id),
+      'runtime.systemPage.messages.restoreBackupFailed'
+    )
     notify(t('runtime.systemPage.messages.restoreBackupSuccess'))
   } catch (err) {
     notify(t('runtime.systemPage.messages.restoreBackupFailed', {

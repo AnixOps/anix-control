@@ -157,10 +157,10 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize admin invite stats response envelope with handler and Invite frontend compatibility tests.
 - [x] Normalize admin payment stats response envelope with handler and Payment frontend compatibility tests.
 - [x] Normalize admin subscription stats response envelope with handler and Subscriptions frontend compatibility tests.
-- [x] Normalize admin system backup stats response envelope with handler and System frontend compatibility tests.
+- [x] Normalize admin system backup stats success/user-error response envelopes with handler and System frontend `code=-1` compatibility tests.
 - [x] Normalize admin load balancer stats success/user-error response envelopes with handler and admin API mapping tests.
-- [x] Normalize admin system backup config response envelope with handler, sensitive-field, and System frontend compatibility tests.
-- [x] Normalize admin system backup list/create/delete/restore success response envelopes with handler, audit, and System frontend compatibility tests.
+- [x] Normalize admin system backup config success/user-error response envelopes with handler, sensitive-field, and System frontend `code=-1` compatibility tests.
+- [x] Normalize admin system backup list/create/delete/restore success/user-error response envelopes with handler, audit, and System frontend `code=-1` compatibility tests.
 - [x] Normalize admin invite config response envelope with handler and Invite frontend compatibility tests.
 - [x] Normalize user invite info/code/commission/withdrawal and admin invite config update/withdrawal response envelopes with handler, Invite frontend, and admin API compatibility tests.
 - [x] Normalize admin subscription settings response envelope with handler, System, Users, and admin API compatibility tests.
