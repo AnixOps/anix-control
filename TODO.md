@@ -150,8 +150,8 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Cover Forward internal traffic report/snapshot response envelopes with handler tests.
 - [x] Normalize admin traffic hourly/user-ranking response envelopes with handler and TrafficHourly frontend compatibility tests.
 - [x] Normalize admin dashboard response envelope with handler and Dashboard frontend compatibility tests.
-- [x] Normalize admin user stats response envelope with handler and Users frontend compatibility tests.
-- [x] Normalize admin order stats response envelope with handler and Orders frontend compatibility tests.
+- [x] Normalize admin user stats success/database-error response envelopes with handler, service error propagation, and Users frontend compatibility tests.
+- [x] Normalize admin order stats success/database-error response envelopes with handler, service error propagation, and Orders frontend compatibility tests.
 - [x] Normalize admin node stats response envelope with handler and Nodes frontend compatibility tests.
 - [x] Normalize admin system info response envelope with handler and AdminLayout frontend compatibility tests.
 - [x] Normalize admin invite stats response envelope with handler and Invite frontend compatibility tests.

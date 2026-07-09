@@ -141,6 +141,7 @@ Open gaps:
   user management CRUD, ban/unban, traffic-reset, and subscribe-reset success/user-error
   responses have handler coverage plus service missing-user coverage and Users frontend/API compatibility
   coverage while `/user/reset` remains a Flux compatibility response, admin
+  user/order stats database-error paths now propagate service failures into panel errors, admin
   plan management list/detail/create/update/delete/assign success and user-error responses have
   handler coverage plus service missing-reference coverage and Plans frontend/API compatibility coverage, admin
   order management list/detail/status/paid/cancel success and user-error responses have handler

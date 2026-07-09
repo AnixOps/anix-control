@@ -403,19 +403,29 @@ func (s *OrderService) GetStats() (map[string]any, error) {
 	var paidOrders int64
 	var totalRevenue int64
 
-	s.db.Model(&model.Order{}).Count(&totalOrders)
-	s.db.Model(&model.Order{}).Where("status = 0").Count(&pendingOrders)
-	s.db.Model(&model.Order{}).Where("status IN (1, 3)").Count(&paidOrders)
-	s.db.Model(&model.Order{}).Where("status IN (1, 3)").Select("COALESCE(SUM(total_amount), 0)").Scan(&totalRevenue)
+	if err := s.db.Model(&model.Order{}).Count(&totalOrders).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.Model(&model.Order{}).Where("status = 0").Count(&pendingOrders).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.Model(&model.Order{}).Where("status IN (1, 3)").Count(&paidOrders).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.Model(&model.Order{}).Where("status IN (1, 3)").Select("COALESCE(SUM(total_amount), 0)").Scan(&totalRevenue).Error; err != nil {
+		return nil, err
+	}
 
 	// 今日收入
 	today := time.Now().Truncate(24 * time.Hour).Unix()
 	var todayRevenue int64
-	s.db.Model(&model.Order{}).
+	if err := s.db.Model(&model.Order{}).
 		Where("status IN (1, 3)").
 		Where("paid_at >= ?", today).
 		Select("COALESCE(SUM(total_amount), 0)").
-		Scan(&todayRevenue)
+		Scan(&todayRevenue).Error; err != nil {
+		return nil, err
+	}
 
 	return map[string]any{
 		"total_orders":   totalOrders,

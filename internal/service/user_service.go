@@ -295,18 +295,28 @@ func (s *UserService) GetStats() (map[string]any, error) {
 	now := time.Now().Unix()
 	todayStart := time.Now().Truncate(24 * time.Hour)
 
-	s.db.Model(&model.User{}).Count(&totalUsers)
-	s.db.Model(&model.User{}).
+	if err := s.db.Model(&model.User{}).Count(&totalUsers).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.Model(&model.User{}).
 		Where("banned = 0").
 		Where("(expired_at IS NULL OR expired_at > ?)", now).
-		Count(&activeUsers)
-	s.db.Model(&model.User{}).
+		Count(&activeUsers).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.Model(&model.User{}).
 		Where("expired_at IS NOT NULL AND expired_at <= ?", now).
-		Count(&expiredUsers)
-	s.db.Model(&model.User{}).Where("banned = 1").Count(&bannedUsers)
+		Count(&expiredUsers).Error; err != nil {
+		return nil, err
+	}
+	if err := s.db.Model(&model.User{}).Where("banned = 1").Count(&bannedUsers).Error; err != nil {
+		return nil, err
+	}
 
 	// 今日新增用户
-	s.db.Model(&model.User{}).Where("created_at >= ?", todayStart).Count(&todayNewUsers)
+	if err := s.db.Model(&model.User{}).Where("created_at >= ?", todayStart).Count(&todayNewUsers).Error; err != nil {
+		return nil, err
+	}
 
 	return map[string]any{
 		"total_users":     totalUsers,

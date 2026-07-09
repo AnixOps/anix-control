@@ -1922,6 +1922,22 @@ func (s *AdminHandlerTestSuite) TestGetOrderStats() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
+func (s *AdminHandlerTestSuite) TestGetOrderStats_DBErrorUsesPanelEnvelope() {
+	s.Require().NoError(s.db.Migrator().DropTable(&model.Order{}))
+	defer func() {
+		s.Require().NoError(s.db.AutoMigrate(&model.Order{}))
+	}()
+
+	handler := NewAdminHandler()
+	s.router.GET("/orders/stats", handler.GetOrderStats)
+
+	req, _ := http.NewRequest("GET", "/orders/stats", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "获取统计失败")
+}
+
 func (s *AdminHandlerTestSuite) TestBanUser_InvalidID() {
 	handler := NewAdminHandler()
 	s.router.POST("/users/:id/ban", handler.BanUser)
@@ -2061,6 +2077,22 @@ func (s *AdminHandlerTestSuite) TestGetUserStats() {
 	assert.Contains(s.T(), data, "total_users")
 	assert.Contains(s.T(), data, "active_users")
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *AdminHandlerTestSuite) TestGetUserStats_DBErrorUsesPanelEnvelope() {
+	s.Require().NoError(s.db.Migrator().DropTable(&model.User{}))
+	defer func() {
+		s.Require().NoError(s.db.AutoMigrate(&model.User{}))
+	}()
+
+	handler := NewAdminHandler()
+	s.router.GET("/users/stats", handler.GetUserStats)
+
+	req, _ := http.NewRequest("GET", "/users/stats", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "获取统计失败")
 }
 
 func (s *AdminHandlerTestSuite) TestGetOrder_Success() {

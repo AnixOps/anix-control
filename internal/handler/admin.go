@@ -668,7 +668,7 @@ func panelAdminPlanError(c *gin.Context, fallback string, err error) {
 func (h *AdminHandler) GetUserStats(c *gin.Context) {
 	stats, err := h.userService.GetStats()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取统计失败", "error": err.Error()})
+		panelError(c, "获取统计失败: "+err.Error())
 		return
 	}
 
@@ -885,7 +885,7 @@ func panelAdminOrderError(c *gin.Context, fallback string, err error) {
 func (h *AdminHandler) GetOrderStats(c *gin.Context) {
 	stats, err := h.orderService.GetStats()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取统计失败", "error": err.Error()})
+		panelError(c, "获取统计失败: "+err.Error())
 		return
 	}
 
