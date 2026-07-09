@@ -80,7 +80,12 @@ func (s *AuthE2ETestSuite) SetupSuite() {
 	s.db = database.Get()
 
 	// 自动迁移
-	err = database.AutoMigrate(&model.User{})
+	err = database.AutoMigrate(
+		&model.User{},
+		&model.UserMFA{},
+		&model.MFALoginAttempt{},
+		&model.SystemConfig{},
+	)
 	s.Require().NoError(err)
 
 	// 初始化管理员

@@ -81,6 +81,9 @@ func (s *UniProxyE2ETestSuite) SetupSuite() {
 		&model.TrafficLog{},
 		&model.StatUser{},
 		&model.StatServer{},
+		&model.UserMFA{},
+		&model.MFALoginAttempt{},
+		&model.SystemConfig{},
 	)
 	s.Require().NoError(err)
 
