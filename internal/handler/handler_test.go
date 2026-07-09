@@ -5269,7 +5269,13 @@ func (s *TelegramHandlerTestSuite) TestSetWebhook_MissingURL() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusInternalServerError, w.Code)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *TelegramHandlerTestSuite) TestTelegramWebhook_MissingBody() {
