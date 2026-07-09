@@ -167,6 +167,23 @@ func (s *HandlerTestSuite) SetupTest() {
 	testutil.CleanupDB(s.db)
 }
 
+func assertPanelTestError(t *testing.T, w *httptest.ResponseRecorder, msgContains string) {
+	t.Helper()
+	assert.Equal(t, http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(t, w)
+	assert.Equal(t, float64(-1), resp["code"])
+	assert.NotEmpty(t, resp["msg"])
+	assert.NotZero(t, resp["ts"])
+	assert.Nil(t, resp["data"])
+	assert.NotContains(t, resp, "message")
+	assert.NotContains(t, resp, "error")
+	if msgContains != "" {
+		msg, ok := resp["msg"].(string)
+		assert.True(t, ok)
+		assert.Contains(t, strings.ToLower(msg), strings.ToLower(msgContains))
+	}
+}
+
 // AuthHandlerTestSuite 认证 Handler 测试套件
 type AuthHandlerTestSuite struct {
 	HandlerTestSuite
@@ -1787,7 +1804,18 @@ func (s *AdminHandlerTestSuite) TestGetPlan_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	assertPanelTestError(s.T(), w, "套餐不存在")
+}
+
+func (s *AdminHandlerTestSuite) TestGetPlan_InvalidID() {
+	handler := NewAdminHandler()
+	s.router.GET("/plans/:id", handler.GetPlan)
+
+	req, _ := http.NewRequest("GET", "/plans/invalid", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "ID")
 }
 
 func (s *AdminHandlerTestSuite) TestCreatePlan_Success() {
@@ -1920,7 +1948,7 @@ func (s *AdminHandlerTestSuite) TestCreatePlan_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "参数错误")
 }
 
 func (s *AdminHandlerTestSuite) TestGetUserStats() {
@@ -2123,7 +2151,41 @@ func (s *AdminHandlerTestSuite) TestAssignPlanToUser_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "套餐")
+}
+
+func (s *AdminHandlerTestSuite) TestAssignPlanToUser_UserNotFound() {
+	handler := NewAdminHandler()
+	s.router.POST("/plans/:id/assign", handler.AssignPlanToUser)
+
+	body := map[string]any{
+		"user_id": 99999,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/plans/"+strconv.FormatUint(uint64(s.testPlan.ID), 10)+"/assign", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "用户不存在")
+}
+
+func (s *AdminHandlerTestSuite) TestAssignPlanToUser_PlanNotFound() {
+	handler := NewAdminHandler()
+	s.router.POST("/plans/:id/assign", handler.AssignPlanToUser)
+
+	body := map[string]any{
+		"user_id": s.testUser.ID,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/plans/99999/assign", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "套餐不存在")
 }
 
 func (s *AdminHandlerTestSuite) TestDeletePlan_Success() {
@@ -2148,6 +2210,17 @@ func (s *AdminHandlerTestSuite) TestDeletePlan_Success() {
 	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), "删除成功", data["message"])
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *AdminHandlerTestSuite) TestDeletePlan_NotFound() {
+	handler := NewAdminHandler()
+	s.router.DELETE("/plans/:id", handler.DeletePlan)
+
+	req, _ := http.NewRequest("DELETE", "/plans/99999", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "套餐不存在")
 }
 
 func (s *AdminHandlerTestSuite) TestUpdatePlan_Success() {
@@ -2202,7 +2275,25 @@ func (s *AdminHandlerTestSuite) TestUpdatePlan_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "ID")
+}
+
+func (s *AdminHandlerTestSuite) TestUpdatePlan_NotFound() {
+	handler := NewAdminHandler()
+	s.router.PUT("/plans/:id", handler.UpdatePlan)
+
+	body := map[string]any{
+		"name":            "Missing Plan",
+		"transfer_enable": 200,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/plans/99999", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assertPanelTestError(s.T(), w, "套餐不存在")
 }
 
 func TestAdminHandler(t *testing.T) {
@@ -6518,7 +6609,7 @@ func (s *AdminPlanHandlerTestSuite) TestUpdatePlan_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "ID")
 }
 
 func (s *AdminPlanHandlerTestSuite) TestDeletePlan() {
@@ -6540,7 +6631,7 @@ func (s *AdminPlanHandlerTestSuite) TestDeletePlan_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "ID")
 }
 
 func (s *AdminPlanHandlerTestSuite) TestAssignPlanToUser() {
@@ -6553,9 +6644,10 @@ func (s *AdminPlanHandlerTestSuite) TestAssignPlanToUser() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	// Service might fail if plan/user not properly configured
-	// Test covers handler logic, not service implementation
-	assert.True(s.T(), w.Code == http.StatusOK || w.Code == http.StatusInternalServerError)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotContains(s.T(), resp, "error")
 }
 
 func (s *AdminPlanHandlerTestSuite) TestAssignPlanToUser_MissingUserID() {
@@ -6568,7 +6660,7 @@ func (s *AdminPlanHandlerTestSuite) TestAssignPlanToUser_MissingUserID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "参数错误")
 }
 
 func (s *AdminPlanHandlerTestSuite) TestGetUserStats() {

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -490,11 +491,11 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 func (h *AdminHandler) CreatePlan(c *gin.Context) {
 	var p model.Plan
 	if err := c.ShouldBindJSON(&p); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 	if err := h.planService.Create(&p); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "创建失败", "error": err.Error()})
+		panelError(c, "创建失败: "+err.Error())
 		return
 	}
 	panelSuccess(c, p)
@@ -513,7 +514,7 @@ func (h *AdminHandler) CreatePlan(c *gin.Context) {
 func (h *AdminHandler) GetPlans(c *gin.Context) {
 	list, err := h.planService.List()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取失败", "error": err.Error()})
+		panelError(c, "获取失败: "+err.Error())
 		return
 	}
 	panelSuccess(c, list)
@@ -534,12 +535,12 @@ func (h *AdminHandler) GetPlans(c *gin.Context) {
 func (h *AdminHandler) GetPlan(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		panelError(c, "ID 无效")
 		return
 	}
 	p, err := h.planService.Get(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "套餐不存在"})
+		panelAdminPlanError(c, "获取失败", err)
 		return
 	}
 	panelSuccess(c, p)
@@ -561,17 +562,17 @@ func (h *AdminHandler) GetPlan(c *gin.Context) {
 func (h *AdminHandler) UpdatePlan(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		panelError(c, "ID 无效")
 		return
 	}
 	var p model.Plan
 	if err := c.ShouldBindJSON(&p); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 	p.ID = uint(id)
 	if err := h.planService.Update(&p); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败", "error": err.Error()})
+		panelAdminPlanError(c, "更新失败", err)
 		return
 	}
 	panelSuccess(c, p)
@@ -592,11 +593,11 @@ func (h *AdminHandler) UpdatePlan(c *gin.Context) {
 func (h *AdminHandler) DeletePlan(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		panelError(c, "ID 无效")
 		return
 	}
 	if err := h.planService.Delete(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "删除失败", "error": err.Error()})
+		panelAdminPlanError(c, "删除失败", err)
 		return
 	}
 	panelSuccess(c, gin.H{"message": "删除成功"})
@@ -618,7 +619,7 @@ func (h *AdminHandler) DeletePlan(c *gin.Context) {
 func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
 	planID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "套餐ID 无效"})
+		panelError(c, "套餐ID 无效")
 		return
 	}
 	var req struct {
@@ -626,14 +627,23 @@ func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
 		ExpireAt *int64 `json:"expire_at"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, "参数错误: "+err.Error())
 		return
 	}
 	if err := h.planService.AssignToUser(uint(planID), req.UserID, req.ExpireAt); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "分配失败", "error": err.Error()})
+		panelAdminPlanError(c, "分配失败", err)
 		return
 	}
 	panelSuccess(c, gin.H{"message": "分配成功"})
+}
+
+func panelAdminPlanError(c *gin.Context, fallback string, err error) {
+	switch {
+	case errors.Is(err, service.ErrPlanNotFound), errors.Is(err, service.ErrPlanUserNotFound):
+		panelError(c, err.Error())
+	default:
+		panelError(c, fallback+": "+err.Error())
+	}
 }
 
 // GetUserStats godoc

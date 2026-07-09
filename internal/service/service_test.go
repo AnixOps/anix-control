@@ -816,7 +816,7 @@ func (s *PlanServiceTestSuite) TestGetPlan() {
 
 func (s *PlanServiceTestSuite) TestGetPlan_NotFound() {
 	_, err := s.svc.Get(99999)
-	assert.Error(s.T(), err)
+	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
 }
 
 func (s *PlanServiceTestSuite) TestUpdatePlan() {
@@ -839,6 +839,22 @@ func (s *PlanServiceTestSuite) TestUpdatePlan() {
 	assert.Equal(s.T(), int64(100), found.TransferEnable)
 }
 
+func (s *PlanServiceTestSuite) TestUpdatePlan_NotFound() {
+	plan := &model.Plan{
+		ID:             99999,
+		Name:           "Missing Plan",
+		GroupID:        1,
+		TransferEnable: 50,
+		Show:           1,
+	}
+
+	err := s.svc.Update(plan)
+	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
+
+	_, err = s.svc.Get(plan.ID)
+	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
+}
+
 func (s *PlanServiceTestSuite) TestDeletePlan() {
 	monthPrice := int64(4000)
 	plan := &model.Plan{
@@ -853,7 +869,12 @@ func (s *PlanServiceTestSuite) TestDeletePlan() {
 	assert.NoError(s.T(), err)
 
 	_, err = s.svc.Get(plan.ID)
-	assert.Error(s.T(), err)
+	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
+}
+
+func (s *PlanServiceTestSuite) TestDeletePlan_NotFound() {
+	err := s.svc.Delete(99999)
+	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
 }
 
 func (s *PlanServiceTestSuite) TestListPlans() {
@@ -910,6 +931,35 @@ func (s *PlanServiceTestSuite) TestAssignToUser() {
 	database.Get().First(&updatedUser, user.ID)
 	assert.Equal(s.T(), plan.ID, *updatedUser.PlanID)
 	assert.Equal(s.T(), int64(100*1073741824), updatedUser.TransferEnable)
+}
+
+func (s *PlanServiceTestSuite) TestAssignToUser_PlanNotFound() {
+	user := &model.User{
+		Email:          "missing-plan-user@example.com",
+		Password:       "hash",
+		Token:          "missing-plan-token",
+		UUID:           "missing-plan-uuid",
+		TransferEnable: 10737418240,
+	}
+	assert.NoError(s.T(), database.Get().Create(user).Error)
+
+	err := s.svc.AssignToUser(99999, user.ID, nil)
+	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
+}
+
+func (s *PlanServiceTestSuite) TestAssignToUser_UserNotFound() {
+	monthPrice := int64(1000)
+	plan := &model.Plan{
+		Name:           "Missing User Assign Plan",
+		GroupID:        1,
+		TransferEnable: 100,
+		MonthPrice:     &monthPrice,
+		Show:           1,
+	}
+	assert.NoError(s.T(), s.svc.Create(plan))
+
+	err := s.svc.AssignToUser(plan.ID, 99999, nil)
+	assert.ErrorIs(s.T(), err, ErrPlanUserNotFound)
 }
 
 func TestPlanService(t *testing.T) {

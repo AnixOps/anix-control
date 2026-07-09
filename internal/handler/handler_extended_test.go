@@ -4998,7 +4998,7 @@ func (s *AdminExtendedTestSuite) TestCreatePlan_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "参数错误")
 }
 
 func (s *AdminExtendedTestSuite) TestUpdatePlan_Success() {
@@ -5033,8 +5033,7 @@ func (s *AdminExtendedTestSuite) TestUpdatePlan_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	// Handler doesn't check if plan exists, just performs update
-	assert.Equal(s.T(), http.StatusOK, w.Code)
+	assertPanelTestError(s.T(), w, "套餐不存在")
 }
 
 func (s *AdminExtendedTestSuite) TestDeletePlan_Success() {
@@ -5062,7 +5061,7 @@ func (s *AdminExtendedTestSuite) TestDeletePlan_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "ID")
 }
 
 func (s *AdminExtendedTestSuite) TestAssignPlanToUser_Success() {
@@ -5100,7 +5099,7 @@ func (s *AdminExtendedTestSuite) TestAssignPlanToUser_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	assertPanelTestError(s.T(), w, "参数错误")
 }
 
 func TestAdminExtended(t *testing.T) {

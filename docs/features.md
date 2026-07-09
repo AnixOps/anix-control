@@ -53,7 +53,7 @@ two documents disagree, this file is the status source of truth.
 | Admin | Dashboard and system info | Implemented | `/api/v2/admin/dashboard`, `/system/info` | Add more operational health signals over time. |
 | Admin | Hourly traffic and user ranking | Implemented | `/api/v2/admin/traffic/hourly`, `/traffic/user-ranking` | Watch high-volume query performance in production. |
 | Admin | User management | Implemented | CRUD, ban/unban, traffic reset, subscribe reset | Continue authorization regression tests for new admin actions. |
-| Admin | Plan management | Implemented | CRUD and assign | None known. |
+| Admin | Plan management | Implemented | CRUD and assign with unified success/user-error envelopes | None known. |
 | Admin | Order management | Implemented | list/detail/status/paid/cancel | Payment provider callbacks remain separate. |
 | Admin | Node management and protocol configuration | Implemented | CRUD, credentials, raw config, protocol templates, auth keys | Keep V2bX compatibility tests current. |
 | Admin | Subscription groups, templates, preview, user/plan binding | Implemented | `/api/v2/admin/subscription/*`, unified group/template CRUD, protocol-binding, preview, and user/plan binding success/user-error envelopes | Keep public subscription compatibility separate. |
