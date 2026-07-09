@@ -3484,6 +3484,81 @@ func (s *SubscribeExtendedTestSuite) TestPreviewSubscription() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
+func (s *SubscribeExtendedTestSuite) TestPreviewSubscription_UsesContextUserAndGroupIDs() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.POST("/admin/subscription/preview", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		handler.PreviewSubscription(c)
+	})
+
+	body := map[string]any{
+		"format":    "v2ray",
+		"group_ids": []uint{s.testGroup.ID},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/subscription/preview", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Contains(s.T(), data, "content")
+	assert.NotEmpty(s.T(), data["content_type"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *SubscribeExtendedTestSuite) TestPreviewSubscription_MissingUserContext() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.POST("/admin/subscription/preview", handler.PreviewSubscription)
+
+	body := map[string]any{
+		"format":    "v2ray",
+		"group_ids": []uint{s.testGroup.ID},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/subscription/preview", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "未登录")
+}
+
+func (s *SubscribeExtendedTestSuite) TestPreviewSubscription_InvalidBody() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.POST("/admin/subscription/preview", handler.PreviewSubscription)
+
+	req, _ := http.NewRequest("POST", "/admin/subscription/preview", strings.NewReader("invalid"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid")
+}
+
+func (s *SubscribeExtendedTestSuite) TestPreviewSubscription_UserNotFound() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.POST("/admin/subscription/preview", handler.PreviewSubscription)
+
+	body := map[string]any{
+		"user_id": 99999,
+		"format":  "v2ray",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/subscription/preview", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "用户不存在")
+}
+
 func TestSubscribeExtended(t *testing.T) {
 	suite.Run(t, new(SubscribeExtendedTestSuite))
 }

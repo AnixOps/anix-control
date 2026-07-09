@@ -399,4 +399,28 @@ describe('Admin Subscriptions', () => {
 
     wrapper.unmount()
   })
+
+  it('shows preview fallback text when enveloped preview fails', async () => {
+    adminApiMock.previewSubscription.mockResolvedValueOnce({
+      code: -1,
+      msg: 'preview rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Subscriptions)
+    await flushPromises()
+    wrapper.vm.selectedGroup = { id: 1, name: 'Group' }
+
+    await wrapper.vm.loadPreview()
+    await flushPromises()
+
+    expect(adminApiMock.previewSubscription).toHaveBeenCalledWith({
+      group_ids: [1],
+      format: 'v2ray'
+    })
+    expect(wrapper.vm.previewContent).toBe('Failed to load preview content')
+
+    wrapper.unmount()
+  })
 })
