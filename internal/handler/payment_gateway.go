@@ -501,8 +501,8 @@ func (h *PaymentGatewayHandler) CreatePayment(c *gin.Context) {
 		return
 	}
 
-	if !gateway.Enabled {
-		panelError(c, "gateway is disabled")
+	if err := h.gatewayService.ValidateGatewayUsable(gateway); err != nil {
+		panelError(c, err.Error())
 		return
 	}
 

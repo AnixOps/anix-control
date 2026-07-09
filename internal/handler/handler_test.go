@@ -6364,8 +6364,8 @@ func (s *PaymentGatewayHandlerTestSuite) SetupTest() {
 	s.HandlerTestSuite.SetupTest()
 	s.testGateway = &model.PaymentGateway{
 		Name:   "Test Gateway",
-		Type:   model.PaymentGatewayAlipay,
-		Config: `{"app_id": "test"}`,
+		Type:   model.PaymentGatewayEPay,
+		Config: `{}`,
 	}
 	s.db.Create(s.testGateway)
 	s.router = gin.New()
@@ -6543,6 +6543,31 @@ func (s *PaymentGatewayHandlerTestSuite) TestToggleGateway() {
 	assert.Equal(s.T(), true, data["enabled"])
 	assert.NotContains(s.T(), resp, "message")
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *PaymentGatewayHandlerTestSuite) TestToggleGatewayRejectsUnsupportedProviderEnable() {
+	gateway := &model.PaymentGateway{
+		Name:    "Unsupported Alipay",
+		Type:    model.PaymentGatewayAlipay,
+		Enabled: false,
+		Config:  `{}`,
+	}
+	s.Require().NoError(s.db.Create(gateway).Error)
+
+	handler := NewPaymentGatewayHandler()
+	s.router.POST("/admin/payment/gateways/:id/toggle", handler.ToggleGateway)
+
+	body := `{"enabled": true}`
+	req, _ := http.NewRequest("POST", "/admin/payment/gateways/"+strconv.FormatUint(uint64(gateway.ID), 10)+"/toggle", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "cannot be enabled")
+
+	var refreshed model.PaymentGateway
+	s.Require().NoError(s.db.First(&refreshed, gateway.ID).Error)
+	assert.False(s.T(), refreshed.Enabled)
 }
 
 func (s *PaymentGatewayHandlerTestSuite) TestToggleGateway_InvalidIDUsesPanelEnvelope() {

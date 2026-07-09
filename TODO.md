@@ -104,6 +104,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Harden EPay callback signature and amount verification.
 - [x] Ensure plugin payment callback signature tests cover every registered gateway.
 - [x] Ensure implemented payment callback/webhook handlers cover valid and rejected signatures for EPay, Stripe, PayPal, and X402.
+- [x] Block Alipay, WeChat, and USDT payment gateways from being enabled or used until callback implementations and tests exist.
 - [ ] Add callback implementations and tests before enabling Alipay, WeChat, or USDT payment callbacks.
 
 ## P1: Concurrency And Lifecycle

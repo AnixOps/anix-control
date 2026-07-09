@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- Blocked Alipay, WeChat, and USDT payment gateways from being enabled or used for new payment records until their live callback or confirmation implementations and tests exist, including historical enabled-row filtering.
 - Made notification async sends return a completion signal and updated the user-ID copy regression test to wait for the send path, removing a timing race with shared service-test database cleanup.
 - Fixed the integration workflow coverage upload by generating `coverage.out` during integration unit tests before uploading the artifact.
 - Refreshed GitHub Actions workflow dependencies to current action major versions so CI/release jobs no longer depend on Node.js 20 action runtimes.

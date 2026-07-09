@@ -1026,6 +1026,7 @@ Remediation:
 - Stripe, PayPal, and X402 remain on the legacy `PaymentHandler` webhook paths; their dedicated signature tests are tracked separately from the plugin `/payment/callback/:type` registry.
 - PayPal webhook tests now mock the official OAuth and verify-webhook-signature endpoints to cover both remote signature success and rejection without external network calls.
 - Runtime callback coverage is complete for currently implemented handlers: EPay, Stripe, PayPal, and X402. Alipay, WeChat, and USDT must not be treated as callback-complete until callback implementations and tests are added.
+- `PaymentGatewayService` now rejects enabling Alipay, WeChat, and USDT gateways until their live callback or confirmation implementations and tests exist. Enabled historical rows for those types are filtered from user channels and rejected during payment creation.
 
 Verification:
 
