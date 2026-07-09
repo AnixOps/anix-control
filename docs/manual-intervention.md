@@ -75,7 +75,7 @@ Current state:
 
 - CI can build binaries and Docker images.
 - The release workflow intentionally does not deploy to production.
-- GitHub Releases include `OPERATOR_DEPLOYMENT.md` with the manual deployment, verification, and rollback flow, `UPGRADE.md` with upgrade and rollback instructions, `migration-dry-run.txt` as the CI migration dry-run evidence for that tag, and `RELEASE_MANIFEST.json` with GitHub Actions run metadata and artifact hashes.
+- GitHub Releases include `OPERATOR_DEPLOYMENT.md` with the manual deployment, verification, and rollback flow, `UPGRADE.md` with upgrade and rollback instructions, `RELEASE_NOTES.md` generated from `CHANGELOG.md`, `migration-dry-run.txt` as the CI migration dry-run evidence for that tag, and `RELEASE_MANIFEST.json` with GitHub Actions run metadata and artifact hashes.
 
 ## High-Risk Operations
 
@@ -92,7 +92,7 @@ Manual approval required before:
 ## Release Build Policy
 
 - All release binaries and frontend assets must be produced by GitHub Actions.
-- Operators must deploy GitHub Release artifacts after verifying `SHA256SUMS.txt` and checking `RELEASE_MANIFEST.json`.
+- Operators must deploy GitHub Release artifacts after reviewing `RELEASE_NOTES.md`, verifying `SHA256SUMS.txt`, and checking `RELEASE_MANIFEST.json`.
 - Do not build release artifacts on the production host or from a local checkout.
 - `config/deploy/deploy_panel.sh` performs a local source-tree build and is guarded by `ALLOW_LOCAL_BUILD=1`; use it only for explicitly approved development or emergency operator work, not release builds.
 - Legacy local entrypoints `config/scripts/deploy.sh` and `config/scripts/pre-deploy.sh` are also guarded by `ALLOW_LOCAL_BUILD=1`; they are not approved release build paths.

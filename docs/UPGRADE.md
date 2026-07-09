@@ -62,6 +62,7 @@ download:
 - `SHA256SUMS.txt`
 - `RELEASE_MANIFEST.json`
 - `OPERATOR_DEPLOYMENT.md`
+- `RELEASE_NOTES.md`
 - `migration-dry-run.txt`
 - `v2board-source.sbom.spdx.json`
 

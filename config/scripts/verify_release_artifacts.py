@@ -196,6 +196,8 @@ def expect_failure(label: str, func: Any) -> None:
 def run_self_test() -> None:
     required = [
         "OPERATOR_DEPLOYMENT.md",
+        "UPGRADE.md",
+        "RELEASE_NOTES.md",
         "RELEASE_MANIFEST.json",
         "SHA256SUMS.txt",
         "docker-image.txt",

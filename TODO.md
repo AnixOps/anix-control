@@ -45,6 +45,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Add a CI-tested release manifest generator script instead of keeping manifest generation as inline workflow code.
 - [x] Add a CI-tested release artifact verifier that blocks tag publishing when required assets, manifest entries, or checksums are inconsistent.
 - [x] Attach `UPGRADE.md` to GitHub Release assets and guard it in release workflow policy/artifact verification.
+- [x] Attach deterministic `RELEASE_NOTES.md` generated from `CHANGELOG.md` to GitHub Release assets and guard it in release workflow policy/artifact verification.
 
 ## P1: Security And Error Handling
 
@@ -158,6 +159,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Include migration dry-run evidence in GitHub Release assets for tag builds.
 - [x] Include a machine-readable release manifest in GitHub Release assets for tag builds.
 - [x] Cover release manifest generation with a script self-test in GitHub Actions.
+- [x] Cover release notes generation with a script self-test in GitHub Actions.
 - [x] Verify release artifact, manifest, and checksum consistency before creating GitHub Releases.
 
 ## P3: API And UI Consistency
