@@ -44,6 +44,13 @@ func TestBuildNodeProtocolConfig_WireGuardDefaults(t *testing.T) {
 	require.Equal(t, 1280, config["mtu"])
 	require.Equal(t, "quic", config["tunnel_type"])
 	require.Equal(t, "udp", config["network"])
+	relay, ok := config["relay"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "gost", relay["backend"])
+	require.Equal(t, "entry", relay["role"])
+	require.Equal(t, 8421, relay["tun_port"])
+	require.Equal(t, "172.31.66.2/24", relay["entry_tun_address"])
+	require.Equal(t, "172.31.66.1/24", relay["exit_tun_address"])
 }
 
 func TestProtocolWireGuardTemplate(t *testing.T) {

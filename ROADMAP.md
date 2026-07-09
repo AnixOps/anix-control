@@ -70,10 +70,10 @@ Priority: P0, above ordinary P1/P2 finishing work.
 - Panel first slice is implemented: `wireguard` protocol template, `v2_wireguard_peer`, automatic IPv4 peer IP allocation, X25519 keypair custody, preshared key custody, default MTU/DNS/allowed IPs, native WireGuard `.conf` output, sing-box WireGuard outbound output, and unit coverage.
 - Add remaining panel API contracts, validation, and admin UI for CIDR, server keys, tunnel type, routes, limits, traffic accounting, entry node, exit node, and WSS compatibility switching.
 - Verify Shadowrocket, Loon, v2rayN, and other common client import behavior beyond the native `.conf`/sing-box outputs now covered by tests.
-- V2bX runtime slice is in progress: the panel now exposes runtime peer fields over UniProxy HTTP and gRPC, and V2bX can consume those fields for the WireGuard entry runtime, parse peer traffic deltas, and report initial peer online state in v2.3.3. Full dual-node relay, WSS mode, exit NAT, speed-limit behavior, and CI relay-path evidence remain required.
+- V2bX runtime slice is in progress: the panel now exposes runtime peer fields and relay TUN contract fields over UniProxy HTTP and gRPC, and V2bX can consume those fields for the WireGuard entry runtime, parse peer traffic deltas, report initial peer online state, plan entry/exit GOST TUN relay commands, apply entry policy routing, and apply exit NAT commands. Real dual-node relay evidence, WSS compatibility evidence, speed-limit behavior, and CI relay-path evidence remain required.
 - Add integration tests and GitHub Actions verification before marking the protocol path complete.
 
-Current slice: panel peer custody, subscription output, runtime peer downlink fields, initial V2bX WireGuard entry runtime, traffic delta parsing, and peer online-state reporting are implemented. Admin UI, full GOST relay+QUIC/WSS dual-node orchestration, exit NAT evidence, migration dry-run evidence, speed-limit behavior, and CI relay-path verification remain pending.
+Current slice: panel peer custody, subscription output, runtime peer downlink fields, relay TUN contract fields, initial V2bX WireGuard entry runtime, traffic delta parsing, peer online-state reporting, GOST TUN command planning, entry policy routing, and exit NAT command application are implemented. Admin UI, real GOST relay+QUIC/WSS dual-node evidence, migration dry-run evidence, speed-limit behavior, and CI relay-path verification remain pending.
 
 ## Phase 7: API And UI Consistency
 

@@ -293,7 +293,7 @@ func GetProtocolTemplates() []ProtocolTemplate {
 			Description: "P0 WireGuard 用户接入，国内入口终止，默认通过 GOST relay+QUIC 到海外出口 NAT",
 			DefaultPort: 51820,
 			TLS:         0,
-			Settings:    `{"cidr":"10.66.0.0/24","server_address":"10.66.0.1/24","server_public_key":"","mtu":1280,"dns":["1.1.1.1","8.8.8.8"],"allowed_ips":["0.0.0.0/0","::/0"],"tunnel_type":"quic","relay":{"backend":"gost","mode":"relay+quic","wss_compat":false}}`,
+			Settings:    `{"cidr":"10.66.0.0/24","server_address":"10.66.0.1/24","server_public_key":"","mtu":1280,"dns":["1.1.1.1","8.8.8.8"],"allowed_ips":["0.0.0.0/0","::/0"],"tunnel_type":"quic","relay":{"backend":"gost","mode":"relay+quic","role":"entry","wss_compat":false,"exit_nat":true,"entry_stats":true,"server":"","server_port":0,"tun_port":8421,"entry_tun_address":"172.31.66.2/24","exit_tun_address":"172.31.66.1/24","outbound_iface":"","routing_table":0,"routing_priority":0}}`,
 			Transport:   "udp",
 		},
 	}
