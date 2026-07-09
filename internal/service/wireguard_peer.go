@@ -117,11 +117,11 @@ func (s *SubscriptionService) allocateWireGuardPeerIP(protocolID uint, cidr stri
 	}
 
 	baseBytes := prefix.Masked().Addr().As4()
-	base := binary.BigEndian.Uint32(baseBytes[:])
-	total := uint32(1) << uint32(32-ones)
+	base := uint64(binary.BigEndian.Uint32(baseBytes[:]))
+	total := uint64(1) << uint(32-ones)
 	// Reserve host .1 for the WireGuard entry interface.
-	for offset := uint32(2); offset < total-1; offset++ {
-		candidate := uint32ToIPv4(base + offset)
+	for offset := uint64(2); offset < total-1; offset++ {
+		candidate := uint64ToIPv4(base + offset)
 		if !used[candidate] {
 			return candidate, nil
 		}
@@ -147,9 +147,12 @@ func generateWireGuardPresharedKey() (string, error) {
 	return base64.StdEncoding.EncodeToString(key), nil
 }
 
-func uint32ToIPv4(v uint32) string {
+func uint64ToIPv4(v uint64) string {
+	if v > uint64(^uint32(0)) {
+		return ""
+	}
 	var b [4]byte
-	binary.BigEndian.PutUint32(b[:], v)
+	binary.BigEndian.PutUint32(b[:], uint32(v)) // #nosec G115 -- v is explicitly bounded to MaxUint32 above.
 	return netip.AddrFrom4(b).String()
 }
 
