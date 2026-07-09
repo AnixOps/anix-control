@@ -2296,6 +2296,41 @@ export default {
           valid: 'JSON Valid',
           invalid: 'JSON Invalid'
         },
+        wireguard: {
+          sections: {
+            access: 'WireGuard access',
+            relay: 'Dual-node relay'
+          },
+          fields: {
+            cidr: 'Peer CIDR',
+            serverAddress: 'Entry interface address',
+            serverPrivateKey: 'Server private key',
+            serverPublicKey: 'Server public key',
+            mtu: 'MTU',
+            dns: 'DNS servers',
+            allowedIps: 'Allowed IPs',
+            role: 'Node role',
+            tunnelType: 'Entry-to-exit tunnel',
+            wssCompat: 'WSS compatibility mode',
+            relayServer: 'Exit relay host',
+            relayServerPort: 'Exit relay port',
+            tunPort: 'GOST TUN port',
+            tunName: 'GOST TUN name',
+            entryTunAddress: 'Entry TUN address',
+            exitTunAddress: 'Exit TUN address',
+            outboundIface: 'Exit outbound interface',
+            exitNat: 'Enable exit NAT',
+            routingTable: 'Routing table',
+            routingPriority: 'Routing priority'
+          },
+          values: {
+            entry: 'Domestic entry',
+            exit: 'Overseas exit'
+          },
+          hints: {
+            wssCompat: 'QUIC is the default. WSS is only for compatibility when UDP relay traffic is blocked or unstable.'
+          }
+        },
         enable: 'Enable protocol (run on node)',
         show: 'Show in subscription protocol pool'
       },

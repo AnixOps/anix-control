@@ -2304,6 +2304,41 @@ export default {
           valid: 'JSON 有效',
           invalid: 'JSON 无效'
         },
+        wireguard: {
+          sections: {
+            access: 'WireGuard 接入',
+            relay: '双机中转'
+          },
+          fields: {
+            cidr: 'Peer CIDR',
+            serverAddress: '入口接口地址',
+            serverPrivateKey: '服务端私钥',
+            serverPublicKey: '服务端公钥',
+            mtu: 'MTU',
+            dns: 'DNS 服务器',
+            allowedIps: 'Allowed IPs',
+            role: '节点角色',
+            tunnelType: '入口到出口隧道',
+            wssCompat: 'WSS 兼容模式',
+            relayServer: '出口中转主机',
+            relayServerPort: '出口中转端口',
+            tunPort: 'GOST TUN 端口',
+            tunName: 'GOST TUN 名称',
+            entryTunAddress: '入口 TUN 地址',
+            exitTunAddress: '出口 TUN 地址',
+            outboundIface: '出口网卡',
+            exitNat: '启用出口 NAT',
+            routingTable: '路由表',
+            routingPriority: '路由优先级'
+          },
+          values: {
+            entry: '国内入口',
+            exit: '海外出口'
+          },
+          hints: {
+            wssCompat: '默认使用 QUIC。WSS 只作为 UDP 中转受阻或不稳定时的一键兼容模式。'
+          }
+        },
         enable: '启用协议（节点端运行）',
         show: '显示在订阅协议池中'
       },
