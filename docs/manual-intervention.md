@@ -1,6 +1,6 @@
 # Manual Intervention Register
 
-Date: 2026-07-08
+Date: 2026-07-10
 
 The project can continue automated code, test, and CI hardening without asking for routine confirmation. The items below still require operator or owner action because they involve credentials, money, infrastructure, legal exposure, or destructive production changes.
 
@@ -84,10 +84,16 @@ Manual approval required before:
 - Deleting or rewriting production database records.
 - Running destructive migration or rollback commands.
 - Rotating production secrets.
+- Enabling global MFA enforcement for all users or admins before confirming enrollment and recovery procedures.
 - Enabling automatic payments or paid forwarding products.
 - Opening new public TCP/UDP forwarding ranges.
 - Disabling authentication, rate limiting, or audit logging.
 - Replacing production reverse proxy or TLS configuration.
+
+MFA enforcement note:
+
+- Global `enforce_for_all` and `enforce_for_admin` login policies now block JWT issuance for covered accounts that have not enabled MFA.
+- Operators must confirm an administrator recovery path and user enrollment communication before enabling the policy in production.
 
 ## Release Build Policy
 

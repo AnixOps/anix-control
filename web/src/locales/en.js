@@ -493,7 +493,8 @@ export default {
       passwordMismatch: 'The two passwords do not match.',
       registerFailed: 'Registration failed. Please try again later.',
       loginFailed: 'Sign-in failed. Check your email and password.',
-      mfaCodeRequired: 'Please enter your MFA code.'
+      mfaCodeRequired: 'Please enter your MFA code.',
+      mfaEnrollmentRequired: 'MFA setup is required before signing in. Contact the site administrator.'
     },
     success: {
       registerCompleted: 'Registration completed. Redirecting...'

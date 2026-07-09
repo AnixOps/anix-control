@@ -39,7 +39,7 @@ two documents disagree, this file is the status source of truth.
 | Auth | Login and registration rate limiting | Implemented | `AuthHandler`, `auth_rate_limit` service | Tune limits from production signals. |
 | Auth | Registration policy and invite requirement | Implemented | Config-driven registration policy | Add operator docs for production policy choices if needed. |
 | Auth | JWT authenticated user/admin APIs | Implemented | `middleware.JWTAuth`, `middleware.AdminAuth` | Continue permission tests for new routes. |
-| Auth | MFA setup, verification, and login challenge | Partial | User MFA API, admin MFA config, `/api/v2/login`, `web/src/views/Login.vue` | User-enabled TOTP/backup MFA now gates token issuance; forced enrollment from global MFA policy still needs implementation evidence. |
+| Auth | MFA setup, verification, and login challenge | Partial | User MFA API, admin MFA config, `/api/v2/login`, `web/src/views/Login.vue` | User-enabled TOTP/backup MFA gates token issuance, and global `enforce_for_all`/`enforce_for_admin` policies now return no-token enrollment-required responses; user-facing self-service enrollment UI still needs implementation evidence. |
 | User | Profile, dashboard, subscription summary | Implemented | `/api/v2/user/profile`, `/dashboard`, `/subscription` | Continue UI regression coverage as payloads evolve. |
 | User | User plan browsing | Implemented | `/api/v2/user/plan`, user Plans page, unified success/error envelopes | None known. |
 | User | Order list, detail, and order creation | Implemented | `/api/v2/user/order*` | Keep amount/traffic boundary tests current. |
@@ -63,7 +63,7 @@ two documents disagree, this file is the status source of truth.
 | Admin | Payment gateway management and payment records | Implemented | gateway CRUD/toggle, stats, records, unified success/error envelopes | Provider-specific live payment creation is not complete for every provider. |
 | Admin | Notification template/log/email config management | Implemented | `/api/v2/admin/notification/*`, unified success/error envelopes | Add more event emitters as needed. |
 | Admin | Telegram bot management | Implemented | bot config, webhook, users, notify, broadcast, unified success/error envelopes | Requires live bot credentials for production. |
-| Admin | MFA global config | Implemented | `/api/v2/admin/mfa/config` | User-enabled MFA is enforced during login; global forced-enrollment policy remains separate work. |
+| Admin | MFA global config | Implemented | `/api/v2/admin/mfa/config` | Global policy now affects login; user-facing enrollment UI remains tracked under Auth. |
 | Admin | System config and audit logs | Implemented | `/api/v2/admin/system/configs*`, `/audit-logs`, unified config/audit success/error envelopes | Keep sensitive config masking tests current. |
 | Admin | Backup config, create/list/delete/restore, stats | Implemented | `/api/v2/admin/system/backup*`, unified backup success-error envelopes | Production backup storage and restore are operator-controlled. |
 | Admin | Load balancer CRUD, stats, health check | Implemented | `/api/v2/admin/loadbalancers*`, unified CRUD/stats/health success-error envelopes | Add deeper runtime traffic integration if needed. |
@@ -102,7 +102,7 @@ These items must not be described as production-complete until the listed gaps a
 
 | Feature | Status | Why It Is Not Complete |
 |---------|--------|------------------------|
-| MFA forced enrollment from global policy | Partial | Users who already enabled MFA must complete the login challenge before a JWT is issued, but global `enforce_for_all`/`enforce_for_admin` enrollment gating is not complete. |
+| MFA self-service forced enrollment UI | Partial | Backend login now blocks JWT issuance for global `enforce_for_all`/`enforce_for_admin` policies when a covered user has not enabled MFA, but the user-facing enrollment page/flow is not complete. |
 | Alipay live payment callback | Planned | Config model exists, but no provider callback implementation and tests; enable/use is blocked at service level. |
 | WeChat Pay live payment callback | Planned | Config model exists, but no provider callback implementation and tests; enable/use is blocked at service level. |
 | USDT live payment confirmation workflow | Planned | Config model exists, but no blockchain confirmation implementation and tests; enable/use is blocked at service level. |

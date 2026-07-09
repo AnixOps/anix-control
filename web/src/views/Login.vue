@@ -180,7 +180,7 @@ function resolveAuthPayload(res, fallbackMessage, options = {}) {
   }
 
   const payload = res?.data && typeof res.data === 'object' ? res.data : res
-  if (options.allowMFAChallenge && payload?.mfa_required) {
+  if (options.allowMFAChallenge && (payload?.mfa_required || payload?.mfa_enrollment_required)) {
     return payload
   }
   if (!payload?.token) {
@@ -259,6 +259,11 @@ async function handleLogin() {
     })
 
     const payload = resolveAuthPayload(res, t('login.errors.loginFailed'), { allowMFAChallenge: true })
+    if (payload.mfa_enrollment_required) {
+      resetMFAChallenge()
+      errorMsg.value = t('login.errors.mfaEnrollmentRequired')
+      return
+    }
     if (payload.mfa_required) {
       mfaRequired.value = true
       mfaCode.value = ''

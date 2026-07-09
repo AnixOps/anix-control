@@ -33,6 +33,7 @@ func setupAuthRateLimitTest(t *testing.T, cfg *config.Config) (*gin.Engine, func
 		&model.User{},
 		&model.UserMFA{},
 		&model.MFALoginAttempt{},
+		&model.SystemConfig{},
 	))
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("correct-password"), bcrypt.DefaultCost)

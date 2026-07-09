@@ -1875,6 +1875,30 @@ PATH=/usr/local/go/bin:$PATH go test ./internal/handler -run TestAuthHandler -co
 cd web && npm test -- Login.test.js
 ```
 
+### 2026-07-10 MFA Global Enrollment Policy Remediation
+
+Finding:
+
+- The admin MFA config supported `enforce_for_all` and `enforce_for_admin`, and `MFAService.IsEnforcedForUser` modeled the policy, but `/api/v2/login` constructed MFA service state without loading the persisted admin config.
+- Covered users without an enabled MFA record could still receive a JWT after password authentication.
+
+Impact:
+
+- Operators could enable a global MFA policy while password-only login remained valid for users or admins who had not enrolled MFA.
+- Admin-only enforcement did not protect administrator accounts until each admin had already enabled MFA.
+
+Remediation:
+
+- Login now loads the persisted admin MFA config from `security.mfa.config` before deciding whether to issue a token.
+- Users covered by `enforce_for_all` or admins covered by `enforce_for_admin` receive an enveloped no-token `mfa_enrollment_required` response when MFA is not yet enabled.
+- Users who already enabled MFA continue through the existing TOTP/backup-code challenge, and regular users are not blocked by admin-only enforcement.
+
+Verification:
+
+```bash
+PATH=/usr/local/go/bin:$PATH go test ./internal/handler -run 'TestAuthHandler/(TestLoginHandler_GlobalMFAEnforceForAllRequiresEnrollmentBeforeToken|TestLoginHandler_GlobalMFAEnforceForAdminRequiresAdminEnrollmentBeforeToken|TestLoginHandler_GlobalMFAEnforceForAdminAllowsRegularUserWithoutMFA|TestLoginHandler_MFARequiresCodeBeforeToken|TestLoginHandler_MFASuccessIssuesTokenAndRecordsAttempt|TestLoginHandler_MFAInvalidCodeRecordsAttemptWithoutToken)' -count=1
+```
+
 ### 2026-07-08 Stats Cache Error Handling Remediation
 
 Finding:
