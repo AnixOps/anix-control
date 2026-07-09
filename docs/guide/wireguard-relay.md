@@ -2,8 +2,9 @@
 
 Date: 2026-07-10
 
-Status: Planned/P0. This document is planning only. It does not mean the panel,
-subscription formatter, V2bX runtime, tests, or CI verification already exist.
+Status: Partial/P0. The first panel peer-custody and subscription-output slice
+exists. V2bX runtime, admin UI, end-to-end tests, migration evidence, and CI
+relay verification are still incomplete.
 
 ## Decision
 
@@ -121,17 +122,19 @@ feature is marked implemented.
      relevant audit/test documents synchronized.
 
 2. Panel model and API.
-   - Add WireGuard protocol fields for CIDR, MTU, DNS, tunnel type, entry node,
-     exit node, and routing policy.
-   - Add user peer allocation, keypair storage, preshared key storage, and
-     validation.
+   - Done for the first slice: `wireguard` protocol template, `v2_wireguard_peer`,
+     automatic IPv4 peer allocation, user keypair storage, preshared key storage,
+     default MTU/DNS/allowed IPs, and node-config relay defaults.
+   - Still pending: admin API validation, admin UI, server key management,
+     entry/exit node selection, route policy, and WSS compatibility switching.
    - Add admin UI for WireGuard protocol configuration and one-click WSS
      compatibility mode switching.
 
 3. Subscription output.
-   - Add WireGuard formatters for Shadowrocket, Loon, v2rayN, and other common
-     clients where format behavior is verified.
-   - Add compatibility tests for generated profiles.
+   - Done for the first slice: native WireGuard `.conf` output and sing-box
+     WireGuard outbound output with unit coverage.
+   - Still pending: verified Shadowrocket, Loon, and v2rayN client-specific
+     import behavior.
 
 4. V2bX runtime.
    - Apply domestic entry WireGuard termination, peer state, route policy, limits,

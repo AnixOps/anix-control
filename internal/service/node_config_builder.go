@@ -78,6 +78,22 @@ func BuildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map
 	switch nodeType {
 	case "vless":
 		config["flow"] = configValue(protocolConfig, "flow", "")
+	case "wireguard":
+		config["cidr"] = configValue(protocolConfig, "cidr", "10.66.0.0/24")
+		config["server_address"] = configValue(protocolConfig, "server_address", "10.66.0.1/24")
+		config["server_private_key"] = configValue(protocolConfig, "server_private_key", "")
+		config["server_public_key"] = configValue(protocolConfig, "server_public_key", "")
+		config["mtu"] = configValue(protocolConfig, "mtu", 1280)
+		config["dns"] = configValue(protocolConfig, "dns", []string{"1.1.1.1", "8.8.8.8"})
+		config["allowed_ips"] = configValue(protocolConfig, "allowed_ips", []string{"0.0.0.0/0", "::/0"})
+		config["tunnel_type"] = configValue(protocolConfig, "tunnel_type", "quic")
+		config["relay"] = configValue(protocolConfig, "relay", map[string]any{
+			"backend":     "gost",
+			"mode":        "relay+quic",
+			"wss_compat":  false,
+			"exit_nat":    true,
+			"entry_stats": true,
+		})
 	case "shadowsocks":
 		cipherStr := "aes-256-gcm"
 		if c, ok := protocolConfig["cipher"].(string); ok && c != "" {

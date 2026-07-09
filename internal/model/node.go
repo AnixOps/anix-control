@@ -90,6 +90,7 @@ const (
 	ProtocolHysteria2   ProtocolType = "hysteria2"
 	ProtocolTUIC        ProtocolType = "tuic"
 	ProtocolAnyTLS      ProtocolType = "anytls"
+	ProtocolWireGuard   ProtocolType = "wireguard"
 )
 
 // NodeProtocol 节点协议配置
@@ -131,6 +132,28 @@ type NodeProtocol struct {
 
 func (NodeProtocol) TableName() string {
 	return "v2_node_protocol"
+}
+
+// WireGuardPeer stores the panel-managed per-user WireGuard credentials for a
+// concrete node protocol. It is keyed by protocol+user so subscriptions stay
+// stable across refreshes.
+type WireGuardPeer struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	NodeProtocolID uint      `gorm:"uniqueIndex:idx_wg_peer_protocol_user;index;uniqueIndex:idx_wg_peer_protocol_ip" json:"node_protocol_id"`
+	UserID         uint      `gorm:"uniqueIndex:idx_wg_peer_protocol_user;index" json:"user_id"`
+	PeerIP         string    `gorm:"size:64;uniqueIndex:idx_wg_peer_protocol_ip" json:"peer_ip"`
+	PrivateKey     string    `gorm:"size:64" json:"-"`
+	PublicKey      string    `gorm:"size:64" json:"public_key"`
+	PresharedKey   string    `gorm:"size:64" json:"-"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+
+	NodeProtocol *NodeProtocol `gorm:"foreignKey:NodeProtocolID" json:"node_protocol,omitempty"`
+	User         *User         `gorm:"foreignKey:UserID" json:"user,omitempty"`
+}
+
+func (WireGuardPeer) TableName() string {
+	return "v2_wireguard_peer"
 }
 
 // NodeGroup 节点分组
@@ -262,6 +285,15 @@ func GetProtocolTemplates() []ProtocolTemplate {
 			DefaultPort: 443,
 			TLS:         1,
 			Settings:    `{"congestion_control":"bbr"}`,
+			Transport:   "udp",
+		},
+		{
+			Type:        ProtocolWireGuard,
+			Name:        "WireGuard 双机入口",
+			Description: "P0 WireGuard 用户接入，国内入口终止，默认通过 GOST relay+QUIC 到海外出口 NAT",
+			DefaultPort: 51820,
+			TLS:         0,
+			Settings:    `{"cidr":"10.66.0.0/24","server_address":"10.66.0.1/24","server_public_key":"","mtu":1280,"dns":["1.1.1.1","8.8.8.8"],"allowed_ips":["0.0.0.0/0","::/0"],"tunnel_type":"quic","relay":{"backend":"gost","mode":"relay+quic","wss_compat":false}}`,
 			Transport:   "udp",
 		},
 	}

@@ -110,7 +110,7 @@ Local verification status:
 
 Known gaps:
 
-- P0 WireGuard dual-node relay is documentation-only. There are no panel model/API/UI tests, no WireGuard subscription formatter tests, no V2bX domestic-entry or overseas-exit runtime tests, no GOST relay+QUIC or WSS compatibility integration tests, no peer traffic/online/limit tests, and no GitHub Actions verification for `WireGuard access -> domestic entry termination -> GOST relay+QUIC -> overseas exit NAT`.
+- P0 WireGuard dual-node relay has first panel unit coverage for protocol config defaults, native `.conf` output, and sing-box WireGuard outbound output. Gaps remain for admin API/UI validation, production migration dry-run evidence, Shadowrocket/Loon/v2rayN real-client compatibility, V2bX domestic-entry and overseas-exit runtime tests, GOST relay+QUIC and WSS compatibility integration tests, peer traffic/online/limit tests, and GitHub Actions verification for `WireGuard access -> domestic entry termination -> GOST relay+QUIC -> overseas exit NAT`.
 - `golangci-lint` is now a blocking CI gate; keep the zero-finding baseline clean.
 - `.golangci.yml` now excludes `web/node_modules`, so frontend dependency source is no longer treated as first-party Go code.
 - Full-repository generated-file-excluded `gosec` is now a blocking CI gate. Raw generated protobuf `G103` findings remain excluded from gosec gates.

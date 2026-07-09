@@ -333,6 +333,7 @@ func main() {
 			// 新版节点管理
 			&model.Node{},
 			&model.NodeProtocol{},
+			&model.WireGuardPeer{},
 			&model.NodeGroup{},
 			&model.AuthorizedKey{},
 			// 流量与统计日志

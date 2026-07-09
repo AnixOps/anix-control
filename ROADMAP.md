@@ -60,19 +60,20 @@ Status: in progress
 
 ## Phase 6: P0 WireGuard Protocol Support
 
-Status: planned
+Status: in progress
 
 Priority: P0, above ordinary P1/P2 finishing work.
 
 - Deliver WireGuard user access through the selected dual-node relay path: WireGuard access -> domestic entry termination -> GOST relay+QUIC -> overseas exit NAT.
 - Keep GOST relay+QUIC as the default domestic-entry to overseas-exit tunnel backend.
 - Provide a panel UI one-click switch for WSS compatibility mode through GOST relay+WSS; WSS is not the default mode.
-- Add panel models, API contracts, validation, and admin UI for WireGuard CIDR, automatic peer IP allocation, keypair and preshared key custody, MTU, DNS, routes, limits, online state, traffic accounting, entry node, exit node, and tunnel type.
-- Add subscription output for Shadowrocket, Loon, v2rayN, and other common clients that can import WireGuard profiles.
+- Panel first slice is implemented: `wireguard` protocol template, `v2_wireguard_peer`, automatic IPv4 peer IP allocation, X25519 keypair custody, preshared key custody, default MTU/DNS/allowed IPs, native WireGuard `.conf` output, sing-box WireGuard outbound output, and unit coverage.
+- Add remaining panel API contracts, validation, and admin UI for CIDR, server keys, tunnel type, routes, limits, online state, traffic accounting, entry node, exit node, and WSS compatibility switching.
+- Verify Shadowrocket, Loon, v2rayN, and other common client import behavior beyond the native `.conf`/sing-box outputs now covered by tests.
 - Add V2bX runtime support so both domestic entry nodes and overseas exit nodes receive panel configuration and apply the running WireGuard, relay tunnel, and NAT state.
 - Add integration tests and GitHub Actions verification before marking the protocol path complete.
 
-Current slice: documentation and planning only. No WireGuard code, runtime behavior, tests, or CI jobs are implemented yet.
+Current slice: panel peer custody and subscription output are implemented. Runtime behavior, admin UI, integration evidence, migration dry-run evidence, and CI relay-path verification remain pending.
 
 ## Phase 7: API And UI Consistency
 

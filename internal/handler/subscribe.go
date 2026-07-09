@@ -36,7 +36,7 @@ func NewSubscribeHandler(cfg *config.Config) *SubscribeHandler {
 // GetSubscription 获取用户订阅
 // GET /s/:token
 // 支持 URL 参数:
-//   - type: 指定输出格式 (v2ray, clash, stash, egern, surge, loon, shadowrocket, quantumultx, json, base64json)
+//   - type: 指定输出格式 (v2ray, clash, stash, egern, surge, loon, shadowrocket, quantumultx, json, base64json, wireguard)
 //     也支持 type=auto 或 type=ua，强制按 User-Agent 自动识别格式
 //   - include: 包含节点名关键词 (正则)
 //   - exclude: 排除节点名关键词 (正则)
@@ -71,6 +71,8 @@ func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
 				formatStr = "surge"
 			case "json":
 				formatStr = "sing-box"
+			case "wg":
+				formatStr = "wireguard"
 			case "txt":
 				formatStr = "v2ray"
 			}
@@ -740,6 +742,7 @@ func (h *SubscriptionAdminHandler) GetSubscriptionFormats(c *gin.Context) {
 		{"id": "json", "name": "JSON", "description": "原始 JSON 格式"},
 		{"id": "base64json", "name": "Base64 JSON", "description": "Base64 编码的分组 JSON 格式"},
 		{"id": "sing-box", "name": "Sing-box", "description": "适用于 Sing-box, Nekobox 等"},
+		{"id": "wireguard", "name": "WireGuard", "description": "原生 WireGuard 配置，适用于 WireGuard/Shadowrocket/Loon 等支持导入 .conf 的客户端"},
 	}
 
 	panelSuccess(c, formats)
@@ -755,6 +758,7 @@ func (h *SubscriptionAdminHandler) GetProtocolTypes(c *gin.Context) {
 		{"id": "shadowsocks", "name": "Shadowsocks", "description": "Shadowsocks 协议", "supports_tls": false, "supports_reality": false},
 		{"id": "hysteria2", "name": "Hysteria2", "description": "Hysteria2 协议", "supports_tls": true, "supports_reality": false},
 		{"id": "tuic", "name": "TUIC", "description": "TUIC 协议", "supports_tls": true, "supports_reality": false},
+		{"id": "wireguard", "name": "WireGuard", "description": "WireGuard 用户接入协议", "supports_tls": false, "supports_reality": false},
 	}
 
 	panelSuccess(c, protocols)
