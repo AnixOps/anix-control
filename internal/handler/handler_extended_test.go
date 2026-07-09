@@ -4963,8 +4963,7 @@ func (s *AdminExtendedTestSuite) TestUpdateUser_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	// Handler doesn't check if user exists, just performs update
-	assert.Equal(s.T(), http.StatusOK, w.Code)
+	assertPanelTestError(s.T(), w, "用户不存在")
 }
 
 func (s *AdminExtendedTestSuite) TestGetPlans_WithGroupId() {

@@ -52,7 +52,7 @@ two documents disagree, this file is the status source of truth.
 | User | User-managed forwarding/tunnel entries | Partial | `/api/v2/forward/*`, `/api/v2/tunnel/user/tunnel` | Close remaining Flux parity and runtime enforcement gaps. |
 | Admin | Dashboard and system info | Implemented | `/api/v2/admin/dashboard`, `/system/info` | Add more operational health signals over time. |
 | Admin | Hourly traffic and user ranking | Implemented | `/api/v2/admin/traffic/hourly`, `/traffic/user-ranking` | Watch high-volume query performance in production. |
-| Admin | User management | Implemented | CRUD, ban/unban, traffic reset, subscribe reset | Continue authorization regression tests for new admin actions. |
+| Admin | User management | Implemented | CRUD, ban/unban, traffic reset, subscribe reset with unified success/user-error envelopes | Continue authorization regression tests for new admin actions. |
 | Admin | Plan management | Implemented | CRUD and assign with unified success/user-error envelopes | None known. |
 | Admin | Order management | Implemented | list/detail/status/paid/cancel with unified success/user-error envelopes and localized admin error prompts | Payment provider callbacks remain separate. |
 | Admin | Node management and protocol configuration | Implemented | CRUD, credentials, raw config, protocol templates, auth keys | Keep V2bX compatibility tests current. |

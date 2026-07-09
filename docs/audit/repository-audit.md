@@ -138,8 +138,8 @@ Open gaps:
   have handler coverage, including WebSocket ack dispatch success paths, plus
   Agent frontend/API compatibility coverage while runtime Agent protocol
   responses remain compatibility responses, admin
-  user management CRUD, ban/unban, traffic-reset, and subscribe-reset success
-  responses have handler coverage plus Users frontend/API compatibility
+  user management CRUD, ban/unban, traffic-reset, and subscribe-reset success/user-error
+  responses have handler coverage plus service missing-user coverage and Users frontend/API compatibility
   coverage while `/user/reset` remains a Flux compatibility response, admin
   plan management list/detail/create/update/delete/assign success and user-error responses have
   handler coverage plus service missing-reference coverage and Plans frontend/API compatibility coverage, admin
