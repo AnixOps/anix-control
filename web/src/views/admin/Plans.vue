@@ -256,6 +256,13 @@ const readPlanList = (res) => {
   return Array.isArray(payload) ? payload : []
 }
 
+const ensurePlanSuccess = (res, fallbackKey) => {
+  if (res && typeof res === 'object' && typeof res.code === 'number' && res.code !== 0) {
+    throw new Error(res.msg || t(fallbackKey))
+  }
+  return res
+}
+
 const resetPlanForm = () => {
   editingPlanId.value = null
   form.name = ''
@@ -273,7 +280,10 @@ const resetAssignForm = () => {
 
 const loadPlanGroups = async (planId) => {
   try {
-    const res = await getPlanGroups(planId)
+    const res = ensurePlanSuccess(
+      await getPlanGroups(planId),
+      'adminPlans.messages.loadGroupsFailed'
+    )
     planGroups.value[planId] = readPlanList(res)
   } catch {
     planGroups.value[planId] = []
@@ -282,7 +292,10 @@ const loadPlanGroups = async (planId) => {
 
 const load = async () => {
   try {
-    const res = await getPlans()
+    const res = ensurePlanSuccess(
+      await getPlans(),
+      'adminPlans.messages.loadFailed'
+    )
     plans.value = readPlanList(res)
     await Promise.all(plans.value.map((plan) => loadPlanGroups(plan.id)))
   } catch (error) {
@@ -292,7 +305,10 @@ const load = async () => {
 
 const loadAllGroups = async () => {
   try {
-    const res = await getSubscriptionGroups()
+    const res = ensurePlanSuccess(
+      await getSubscriptionGroups(),
+      'adminPlans.messages.loadGroupsFailed'
+    )
     allGroups.value = readPlanList(res)
   } catch (error) {
     console.error(t('adminPlans.messages.loadGroupsFailed'), error)
@@ -325,7 +341,10 @@ const remove = async (plan) => {
   }
 
   try {
-    await deletePlan(plan.id)
+    ensurePlanSuccess(
+      await deletePlan(plan.id),
+      'adminPlans.messages.deleteFailedShort'
+    )
     await load()
   } catch (error) {
     window.alert(t('adminPlans.messages.deleteFailed', {
@@ -355,9 +374,15 @@ const save = async () => {
 
   try {
     if (editingPlanId.value) {
-      await updatePlan(editingPlanId.value, payload)
+      ensurePlanSuccess(
+        await updatePlan(editingPlanId.value, payload),
+        'adminPlans.messages.saveFailedShort'
+      )
     } else {
-      await createPlan(payload)
+      ensurePlanSuccess(
+        await createPlan(payload),
+        'adminPlans.messages.saveFailedShort'
+      )
     }
     closePlanModal()
     await load()
@@ -386,10 +411,13 @@ const assign = async () => {
   }
 
   try {
-    await assignPlanToUser(assignForm.plan_id, {
-      user_id: assignForm.user_id,
-      expire_at: assignForm.expire_at
-    })
+    ensurePlanSuccess(
+      await assignPlanToUser(assignForm.plan_id, {
+        user_id: assignForm.user_id,
+        expire_at: assignForm.expire_at
+      }),
+      'adminPlans.messages.assignFailedShort'
+    )
     closeAssign()
     window.alert(t('adminPlans.messages.assignSuccess'))
   } catch (error) {
@@ -422,9 +450,15 @@ const toggleGroup = async (group) => {
 
   try {
     if (isGroupSelected(group.id)) {
-      await removeGroupFromPlan(planId, group.id)
+      ensurePlanSuccess(
+        await removeGroupFromPlan(planId, group.id),
+        'adminPlans.messages.toggleGroupFailedShort'
+      )
     } else {
-      await addGroupToPlan(planId, group.id)
+      ensurePlanSuccess(
+        await addGroupToPlan(planId, group.id),
+        'adminPlans.messages.toggleGroupFailedShort'
+      )
     }
     await loadPlanGroups(planId)
   } catch (error) {
@@ -440,7 +474,10 @@ const removeGroup = async (planId, groupId) => {
   }
 
   try {
-    await removeGroupFromPlan(planId, groupId)
+    ensurePlanSuccess(
+      await removeGroupFromPlan(planId, groupId),
+      'adminPlans.messages.removeGroupFailedShort'
+    )
     await loadPlanGroups(planId)
   } catch (error) {
     window.alert(t('adminPlans.messages.removeGroupFailed', {

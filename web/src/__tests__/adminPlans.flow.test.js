@@ -6,13 +6,16 @@ import Plans from '@/views/admin/Plans.vue'
 const mockGetPlans = vi.fn()
 const mockGetPlanGroups = vi.fn()
 const mockGetSubscriptionGroups = vi.fn()
+const mockAssignPlanToUser = vi.fn()
+const mockCreatePlan = vi.fn()
+const mockDeletePlan = vi.fn()
 const mockUpdatePlan = vi.fn()
 
 vi.mock('@/api/admin', () => ({
   addGroupToPlan: vi.fn(),
-  assignPlanToUser: vi.fn(),
-  createPlan: vi.fn(),
-  deletePlan: vi.fn(),
+  assignPlanToUser: (...args) => mockAssignPlanToUser(...args),
+  createPlan: (...args) => mockCreatePlan(...args),
+  deletePlan: (...args) => mockDeletePlan(...args),
   getPlanGroups: (...args) => mockGetPlanGroups(...args),
   getPlans: (...args) => mockGetPlans(...args),
   getSubscriptionGroups: (...args) => mockGetSubscriptionGroups(...args),
@@ -22,13 +25,20 @@ vi.mock('@/api/admin', () => ({
 
 describe('Admin Plans flow', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     mockGetPlans.mockReset()
     mockGetPlanGroups.mockReset()
     mockGetSubscriptionGroups.mockReset()
+    mockAssignPlanToUser.mockReset()
+    mockCreatePlan.mockReset()
+    mockDeletePlan.mockReset()
     mockUpdatePlan.mockReset()
 
     mockGetPlanGroups.mockResolvedValue({ data: [] })
     mockGetSubscriptionGroups.mockResolvedValue({ data: [] })
+    mockAssignPlanToUser.mockResolvedValue({})
+    mockCreatePlan.mockResolvedValue({})
+    mockDeletePlan.mockResolvedValue({})
     mockUpdatePlan.mockResolvedValue({})
   })
 
@@ -95,5 +105,65 @@ describe('Admin Plans flow', () => {
     await flushPromises()
 
     expect(wrapper.vm.plans[0].name).toBe('Envelope Plan')
+  })
+
+  it('treats panel code -1 save responses as errors', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    const plan = {
+      id: 3,
+      name: 'Rejected',
+      transfer_enable: 100,
+      speed_limit: 0,
+      device_limit: 0,
+      month_price: 1000,
+    }
+    mockGetPlans.mockResolvedValue({ data: [plan] })
+    mockUpdatePlan.mockResolvedValueOnce({
+      code: -1,
+      msg: '套餐不存在',
+      data: null,
+      ts: 1783526400000,
+    })
+
+    const wrapper = mount(Plans)
+    await flushPromises()
+
+    wrapper.vm.edit(plan)
+    await nextTick()
+    await wrapper.find('[data-test="plan-save-button"]').trigger('click')
+    await flushPromises()
+
+    expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('套餐不存在'))
+    expect(mockGetPlans).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats panel code -1 assign responses as errors', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    const plan = {
+      id: 4,
+      name: 'Assign Rejected',
+      transfer_enable: 100,
+      speed_limit: 0,
+      device_limit: 0,
+      month_price: 1000,
+    }
+    mockGetPlans.mockResolvedValue({ data: [plan] })
+    mockAssignPlanToUser.mockResolvedValueOnce({
+      code: -1,
+      msg: '用户不存在',
+      data: null,
+      ts: 1783526400000,
+    })
+
+    const wrapper = mount(Plans)
+    await flushPromises()
+
+    wrapper.vm.openAssign(plan)
+    wrapper.vm.assignForm.user_id = 99999
+    await wrapper.vm.assign()
+    await flushPromises()
+
+    expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('用户不存在'))
+    expect(wrapper.vm.showAssign).toBe(true)
   })
 })
