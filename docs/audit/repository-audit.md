@@ -157,7 +157,7 @@ Open gaps:
   success and user-error responses now have handler coverage plus Knowledge
   admin frontend compatibility coverage and restored locale strings. Admin system audit-log
   success and database-error responses now have handler coverage plus System audit frontend compatibility
-  coverage, and admin system config CRUD success responses now have handler
+  coverage, and admin system config CRUD success and user-error responses now have handler
   coverage plus System runtime/config compatibility coverage while retaining
   sensitive-value masking. Admin load balancer CRUD and health-check success
   responses now have handler coverage plus System load balancer frontend
