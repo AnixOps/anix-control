@@ -51,6 +51,7 @@ config/deploy/ansible/nodes/group_vars/all.yml
 dist/
 build/
 web/public/
+web/public-check/
 web/node_modules/
 
 # Database
@@ -65,7 +66,9 @@ config/workspace/bin/
 config/workspace/output/
 test-reports/
 .ui-smoke/
+web/coverage/
 web/bundle-reports/
+web/bundle-reports-check/
 
 # Secrets and local state (never commit)
 .authkey

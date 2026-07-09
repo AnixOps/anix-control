@@ -7,7 +7,7 @@ New CI coverage added:
 - Go setup is pinned to `1.26.5` in CI workflows so `govulncheck` runs against the fixed stdlib baseline used for Actions release artifacts.
 - GitHub Actions dependencies are refreshed to current major versions so CI and release jobs do not depend on deprecated Node.js 20 action runtimes.
 - Integration workflow unit tests now generate `coverage.out` before artifact upload.
-- Local build artifact cleanup has a script self-test in CI covering removal of known outputs while preserving config, database, and `web/node_modules` content.
+- Local build artifact cleanup has a script self-test in CI covering removal of known Go, frontend build, frontend coverage, bundle-report, and release staging outputs while preserving config, database, and `web/node_modules` content.
 - Release-build policy checks now fail deployment shell scripts that add local Go/frontend build commands without the GitHub Actions-only policy and `ALLOW_LOCAL_BUILD` guard.
 - Documentation sync checks now fail implementation, frontend, deployment, workflow, or config diffs that omit maintained status documentation, with a script self-test covering source-only failure, source-plus-changelog success, and docs-only success.
 - Release workflow policy checks now fail workflow changes that remove strict release tag gating, release quality/security/race/test prerequisites, required OS/arch release binary targets, frontend archives, Docker metadata, checksums, SBOM, operator runbook, or generated GitHub release notes; script self-tests cover a complete fixture plus missing-platform, missing-checksum, and missing-SBOM failures.
@@ -110,5 +110,5 @@ Known gaps:
 - `.golangci.yml` now excludes `web/node_modules`, so frontend dependency source is no longer treated as first-party Go code.
 - Full-repository generated-file-excluded `gosec` is now a blocking CI gate. Raw generated protobuf `G103` findings remain excluded from gosec gates.
 - Full race testing is now configured in CI, but long-running behavior should be watched on GitHub Actions before making it a release blocker for every branch protection profile.
-- Frontend local `npm run build` may fail on this host while `web/public` or `web/public/assets` is owned by root. CI runs from a clean checkout and is not affected.
+- Frontend build outputs should not be kept in the source tree. Use `config/deploy/clean_local_build_artifacts.sh --dry-run` and then `config/deploy/clean_local_build_artifacts.sh` to remove stale `web/public`, `web/public-check`, `web/coverage`, and bundle-report directories; root-owned remnants require the exact elevated cleanup command printed by the script. CI runs from a clean checkout and is not affected by local leftovers.
 - Forwarding design/API/security/compatibility docs now exist under `docs/forwarding/`, but the remaining forwarding test gaps are broader permission and quota handler tests, admin audit tests, and end-to-end runtime smoke evidence.

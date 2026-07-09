@@ -168,6 +168,7 @@ PATH=/usr/local/go/bin:$PATH go test ./internal/service -run 'TestStatsService|T
 (cd web && npm run bundle:report)
 (cd web && npm run build -- --outDir ./public-check)
 (cd web && BUNDLE_PUBLIC_DIR="$PWD/public-check" BUNDLE_REPORT_DIR="$PWD/bundle-reports-check" npm run bundle:report)
+bash config/deploy/clean_local_build_artifacts.sh --dry-run
 ```
 
 ## Priority
