@@ -1647,6 +1647,22 @@ func (s *SystemBackupTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *SystemBackupTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+	if msgContains != "" {
+		msg, ok := resp["msg"].(string)
+		assert.True(s.T(), ok)
+		assert.Contains(s.T(), strings.ToLower(msg), strings.ToLower(msgContains))
+	}
+}
+
 func (s *SystemBackupTestSuite) TestGetBackupConfig() {
 	handler := NewSystemHandler()
 	s.router.GET("/admin/system/backup/config", handler.GetBackupConfig)
@@ -1714,7 +1730,7 @@ func (s *SystemBackupTestSuite) TestUpdateBackupConfig_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "invalid")
 }
 
 func (s *SystemBackupTestSuite) TestCreateBackup() {
@@ -1906,7 +1922,18 @@ func (s *SystemBackupTestSuite) TestDeleteBackup_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "invalid id")
+}
+
+func (s *SystemBackupTestSuite) TestDeleteBackup_NotFound() {
+	handler := NewSystemHandler()
+	s.router.DELETE("/admin/system/backups/:id", handler.DeleteBackup)
+
+	req, _ := http.NewRequest("DELETE", "/admin/system/backups/99999", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "record not found")
 }
 
 func (s *SystemBackupTestSuite) TestRestoreBackup() {
@@ -1917,7 +1944,7 @@ func (s *SystemBackupTestSuite) TestRestoreBackup() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	// Returns 500 if backup doesn't exist
+	s.assertPanelError(w, "record not found")
 }
 
 func (s *SystemBackupTestSuite) TestRestoreBackup_InvalidID() {
@@ -1928,7 +1955,25 @@ func (s *SystemBackupTestSuite) TestRestoreBackup_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "invalid id")
+}
+
+func (s *SystemBackupTestSuite) TestRestoreBackup_NotSuccessful() {
+	record := &model.BackupRecord{
+		Name:   "pending_restore",
+		Type:   "database",
+		Status: 0,
+	}
+	s.db.Create(record)
+
+	handler := NewSystemHandler()
+	s.router.POST("/admin/system/backups/:id/restore", handler.RestoreBackup)
+
+	req, _ := http.NewRequest("POST", "/admin/system/backups/"+strconv.FormatUint(uint64(record.ID), 10)+"/restore", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "backup not successful")
 }
 
 func TestSystemBackup(t *testing.T) {

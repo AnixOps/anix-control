@@ -146,9 +146,10 @@ Open gaps:
   coverage plus Orders frontend/API compatibility coverage, admin
   subscription stats has matching Subscriptions frontend compatibility coverage, admin
   subscription settings has matching System and Users compatibility coverage,
-  admin system backup stats, backup config, and backup record operations have
-  matching System backup-view compatibility coverage with sensitive-field
-  masking retained, and admin load balancer stats success/user-error paths have
+  admin system backup stats, backup config, and backup record operation
+  success/user-error paths have matching System backup-view compatibility
+  coverage with sensitive-field masking retained, and admin load balancer stats
+  success/user-error paths have
   matching handler and frontend API mapping coverage. Admin
   ticket list/reply/close success and user-error responses now have handler coverage plus
   Tickets admin frontend compatibility coverage, and admin coupon
