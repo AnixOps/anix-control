@@ -5,6 +5,47 @@
 
 set -e
 
+show_help() {
+    cat <<'EOF'
+Usage: config/scripts/pre-deploy.sh [--self-test|--help]
+
+This legacy pre-deploy check runs local tests and a local build check. Release
+builds must be produced by GitHub Actions. For explicitly approved development
+or emergency operator work, set ALLOW_LOCAL_BUILD=1.
+EOF
+}
+
+require_local_build_opt_in() {
+    if [[ "${ALLOW_LOCAL_BUILD:-}" == "1" ]]; then
+        return 0
+    fi
+
+    cat >&2 <<'EOF'
+!! config/scripts/pre-deploy.sh is a legacy local pre-deploy build path.
+!! Release builds must be produced by GitHub Actions release workflows.
+!! Use GitHub Actions checks and verified GitHub Release artifacts instead.
+!! For development or emergency operator use, rerun with ALLOW_LOCAL_BUILD=1.
+EOF
+    return 1
+}
+
+case "${1:-}" in
+    --self-test)
+        if require_local_build_opt_in >/dev/null 2>&1; then
+            echo "self-test failed: default guard should reject local builds" >&2
+            exit 1
+        fi
+        echo "legacy pre-deploy guard self-test passed"
+        exit 0
+        ;;
+    -h|--help)
+        show_help
+        exit 0
+        ;;
+esac
+
+require_local_build_opt_in || exit 1
+
 # 颜色定义
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'

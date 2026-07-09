@@ -95,6 +95,7 @@ Manual approval required before:
 - Operators must deploy GitHub Release artifacts after verifying `SHA256SUMS.txt`.
 - Do not build release artifacts on the production host or from a local checkout.
 - `config/deploy/deploy_panel.sh` performs a local source-tree build and is guarded by `ALLOW_LOCAL_BUILD=1`; use it only for explicitly approved development or emergency operator work, not release builds.
+- Legacy local entrypoints `config/scripts/deploy.sh` and `config/scripts/pre-deploy.sh` are also guarded by `ALLOW_LOCAL_BUILD=1`; they are not approved release build paths.
 
 Root-only cleanup for old local build outputs:
 
