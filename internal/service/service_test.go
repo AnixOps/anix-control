@@ -1210,6 +1210,18 @@ func (s *OrderServiceTestSuite) TestGetStats() {
 	assert.GreaterOrEqual(s.T(), stats["total_orders"].(int64), int64(1))
 }
 
+func (s *OrderServiceTestSuite) TestGetStats_DBError() {
+	db := database.Get()
+	s.Require().NoError(db.Migrator().DropTable(&model.Order{}))
+	defer func() {
+		s.Require().NoError(db.AutoMigrate(&model.Order{}))
+	}()
+
+	stats, err := s.svc.GetStats()
+	assert.Error(s.T(), err)
+	assert.Nil(s.T(), stats)
+}
+
 func TestOrderService(t *testing.T) {
 	suite.Run(t, new(OrderServiceTestSuite))
 }
@@ -4580,6 +4592,18 @@ func (s *UserServiceTestSuite) TestGetStats() {
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), stats)
 	assert.Contains(s.T(), stats, "total_users")
+}
+
+func (s *UserServiceTestSuite) TestGetStats_DBError() {
+	db := database.Get()
+	s.Require().NoError(db.Migrator().DropTable(&model.User{}))
+	defer func() {
+		s.Require().NoError(db.AutoMigrate(&model.User{}))
+	}()
+
+	stats, err := s.svc.GetStats()
+	assert.Error(s.T(), err)
+	assert.Nil(s.T(), stats)
 }
 
 func (s *UserServiceTestSuite) TestGetByEmail() {
