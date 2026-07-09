@@ -113,6 +113,10 @@ check_release_workflow() {
   require_text "v2board-frontend.zip" "frontend zip archive" || failed=1
   require_text "docker-image.txt" "Docker image metadata artifact" || failed=1
   require_text "digest=\${{ steps.build.outputs.digest }}" "Docker digest metadata" || failed=1
+  require_text "Upload migration dry-run report" "migration dry-run report upload step" || failed=1
+  require_text "Download migration dry-run report" "migration dry-run report download step" || failed=1
+  require_text "migration-dry-run-report" "migration dry-run report artifact" || failed=1
+  require_text "migration-dry-run.txt" "migration dry-run report release asset" || failed=1
   require_text "anchore/sbom-action" "SBOM generation action" || failed=1
   require_text "spdx-json" "SPDX JSON SBOM format" || failed=1
   require_text "v2board-source.sbom.spdx.json" "source SBOM release asset" || failed=1
@@ -174,6 +178,14 @@ jobs:
       - run: |
           echo "digest=${{ steps.build.outputs.digest }}" > release/docker-image.txt
 
+  migration-dry-run-test:
+    steps:
+      - name: Upload migration dry-run report
+        uses: actions/upload-artifact@v7
+        with:
+          name: migration-dry-run-report
+          path: migration-dry-run.txt
+
   release:
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     steps:
@@ -184,7 +196,12 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: frontend-dist
+      - name: Download migration dry-run report
+        uses: actions/download-artifact@v8
+        with:
+          name: migration-dry-run-report
       - run: |
+          cp migration-dry-run.txt release/migration-dry-run.txt
           echo "No Local Release Builds" > release/OPERATOR_DEPLOYMENT.md
           tar -czvf release/v2board-frontend.tar.gz -C web/public .
           zip -r release/v2board-frontend.zip web/public
@@ -218,6 +235,13 @@ EOF
   sed -i '/anchore\/sbom-action/d' "${fixture}.missing-sbom"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-sbom" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing SBOM should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-migration-report"
+  sed -i '/migration-dry-run-report/d' "${fixture}.missing-migration-report"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-migration-report" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing migration report should fail" >&2
     return 1
   fi
 

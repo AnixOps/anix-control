@@ -38,6 +38,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Make `golangci-lint` blocking after baseline cleanup.
 - [x] Add SBOM generation to release workflow.
 - [x] Add a release workflow policy CI check for tag gating, required release prerequisites, multi-platform artifacts, checksums, SBOM, Docker metadata, operator runbook, and release notes.
+- [x] Attach migration dry-run output to release artifacts and include it in release checksum coverage.
 
 ## P1: Security And Error Handling
 
@@ -147,6 +148,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Add a CI release-build policy check so panel and V2bX deployment scripts cannot add unguarded local build commands.
 - [x] Add a documentation sync CI check so source, frontend, deployment, workflow, and config changes cannot land without updated status docs or changelog evidence.
 - [x] Add a release workflow policy CI check so release artifact, checksum, SBOM, Docker metadata, and runbook requirements cannot be removed silently.
+- [x] Include migration dry-run evidence in GitHub Release assets for tag builds.
 
 ## P3: API And UI Consistency
 
