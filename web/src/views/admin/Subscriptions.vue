@@ -740,7 +740,10 @@ export default {
 
     const saveGroupProtocols = async () => {
       try {
-        await adminApi.updateGroupProtocols(selectedGroup.value.id, selectedProtocolIds.value)
+        ensureSubscriptionSuccess(
+          await adminApi.updateGroupProtocols(selectedGroup.value.id, selectedProtocolIds.value),
+          t('admin.subscriptions.groupProtocolsUpdateFailed')
+        )
         showToast(t('admin.subscriptions.groupProtocolsUpdated'), 'success')
         showManageProtocolsModal.value = false
         loadProtocols(selectedGroup.value.id)

@@ -3846,6 +3846,23 @@ func (s *NodeServiceTestSuite) TestAssignProtocolsToGroup() {
 	assert.NoError(s.T(), err)
 }
 
+func (s *NodeServiceTestSuite) TestAssignProtocolsToGroup_NotFoundGroup() {
+	err := s.svc.AssignProtocolsToGroup(99999, nil)
+	assert.Error(s.T(), err)
+}
+
+func (s *NodeServiceTestSuite) TestAssignProtocolsToGroup_MissingProtocol() {
+	group := &model.SubscriptionGroup{
+		Name:     "Missing Protocol Group",
+		Priority: 5,
+		Enable:   1,
+	}
+	database.Get().Create(group)
+
+	err := s.svc.AssignProtocolsToGroup(group.ID, []uint{99999})
+	assert.ErrorIs(s.T(), err, ErrNodeProtocolNotFound)
+}
+
 // Additional ForwardNodeService Tests
 func (s *ForwardNodeServiceTestSuite) SkipTestHealthCheck() {
 	node := &model.ForwardNode{
