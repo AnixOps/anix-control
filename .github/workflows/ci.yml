@@ -437,6 +437,12 @@ jobs:
           grep -q "v2_user" migration-dry-run.txt
           grep -q "v2_plan" migration-dry-run.txt
 
+      - name: Upload migration dry-run report
+        uses: actions/upload-artifact@v7
+        with:
+          name: migration-dry-run-report
+          path: migration-dry-run.txt
+
   forward-runtime-test:
     name: Forward Runtime Regression
     runs-on: ubuntu-latest
@@ -809,6 +815,12 @@ jobs:
           name: docker-metadata
           path: release/
 
+      - name: Download migration dry-run report
+        uses: actions/download-artifact@v8
+        with:
+          name: migration-dry-run-report
+          path: release/
+
       - name: Create operator deployment runbook
         shell: bash
         run: |
@@ -824,6 +836,7 @@ jobs:
           - Multi-platform binaries are attached to this GitHub Release.
           - Frontend archives are attached as `v2board-frontend.tar.gz` and `v2board-frontend.zip`.
           - Docker image metadata is attached in `docker-image.txt`.
+          - Migration dry-run evidence is attached in `migration-dry-run.txt`.
           - Source dependency SBOM is attached in `v2board-source.sbom.spdx.json`.
           - SHA256 checksums are attached in `SHA256SUMS.txt`.
 
