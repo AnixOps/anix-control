@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added `docs/UPGRADE.md` with the GitHub Actions artifact verification, systemd/Docker upgrade, database migration, rollback, and post-upgrade evidence runbook.
 - Added a root `README.md` that links the status registers, audit docs, deployment docs, local checks, compatibility surfaces, and GitHub Actions-only release policy.
 - Added a safe local build artifact cleanup helper with CI self-tests so stale source-tree outputs can be removed without touching config, database, certificates, backups, or `web/node_modules`.
 - Extended local cleanup coverage to frontend verification outputs including `web/public-check`, `web/coverage`, and `web/bundle-reports-check`, keeping local test/build artifacts out of the source tree.

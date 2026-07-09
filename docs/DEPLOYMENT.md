@@ -476,20 +476,16 @@ curl -H "X-API-Key: your_node_api_key" "http://localhost:8080/api/v2/server/UniP
 
 ## 10. 更新升级
 
-```bash
-# 1) 备份
-# SQLite: 复制 db 文件
-# PostgreSQL: pg_dump
+生产升级必须使用 GitHub Release 附件中的已验证产物，不要在生产机
+`git pull` 后本地构建发行二进制、前端静态文件或 Docker 镜像。
 
-# 2) 拉取新代码
-git pull
+升级前先阅读 [`UPGRADE.md`](UPGRADE.md)，确认：
 
-# 3) 重新构建并重启
-docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml up -d
-
-# 4) 检查日志
-docker compose -f docker-compose.prod.yml logs -f api
-```
+- 目标 tag、发布说明、`CHANGELOG.md` 和 `docs/features.md`
+- `SHA256SUMS.txt` 校验通过
+- `RELEASE_MANIFEST.json` 中 `build_source` 为 `github-actions`
+- 数据库和配置已备份
+- 如涉及迁移，已保留 `migration-dry-run.txt`
+- 已有明确 rollback owner 和 rollback window
 
 建议先在预发布环境验证，再进行生产升级。
