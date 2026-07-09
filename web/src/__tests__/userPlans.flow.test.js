@@ -104,4 +104,24 @@ describe('User Plans flow', () => {
     })
     expect(wrapper.find('[data-test="coupon-remove-button"]').exists()).toBe(true)
   })
+
+  it('does not render plans when panel envelope loading fails', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockGetPlans.mockResolvedValue({
+      code: -1,
+      msg: '获取套餐列表失败',
+      data: null,
+      ts: 1783536000000,
+    })
+
+    const wrapper = mount(Plans)
+    await flushPromises()
+
+    expect(wrapper.findAll('.plan-card')).toHaveLength(0)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Failed to load plans:',
+      expect.any(Error)
+    )
+    errorSpy.mockRestore()
+  })
 })

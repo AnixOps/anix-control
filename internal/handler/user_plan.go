@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"net/http"
-
 	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/gin-gonic/gin"
@@ -21,7 +19,7 @@ func (h *UserPlanHandler) GetPlans(c *gin.Context) {
 	var plans []model.Plan
 	// 仅显示已上架的套餐 (show=1)
 	if err := database.GetDB().Where("show = ?", 1).Order("sort ASC").Find(&plans).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取套餐列表失败"})
+		panelError(c, "获取套餐列表失败")
 		return
 	}
 
