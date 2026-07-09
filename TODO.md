@@ -14,6 +14,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Create `ROADMAP.md`.
 - [x] Create `TODO.md`.
 - [x] Create root `README.md` as the repository entrypoint for status, docs, checks, and release policy.
+- [x] Create `docs/UPGRADE.md` as the GitHub Actions artifact upgrade and rollback runbook.
 - [x] Create `docs/manual-intervention.md`.
 - [x] Create `docs/features.md` as the implemented/planned feature status register.
 - [ ] Keep all audit files current as fixes land.

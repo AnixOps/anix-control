@@ -14,6 +14,7 @@ Use this tree like NodeX:
 ## Fast Paths
 
 - Feature status register: [`features.md`](features.md)
+- Upgrade runbook: [`UPGRADE.md`](UPGRADE.md)
 - Docker quickstart: [`reference/quickstart.md`](reference/quickstart.md)
 - Exact startup flow: [`reference/startup-config.md`](reference/startup-config.md)
 - Config source-of-truth: [`reference/configuration.md`](reference/configuration.md)

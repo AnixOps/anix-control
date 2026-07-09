@@ -32,6 +32,7 @@ complete.
 - Concrete backlog: [`TODO.md`](TODO.md)
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 - Deployment guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+- Upgrade runbook: [`docs/UPGRADE.md`](docs/UPGRADE.md)
 - Manual intervention requirements:
   [`docs/manual-intervention.md`](docs/manual-intervention.md)
 - Audit registers:
@@ -106,8 +107,9 @@ produce:
 - generated GitHub release notes
 
 Local deploy scripts that perform source-tree builds are guarded and are not a
-release path. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for operator
-deployment and rollback expectations.
+release path. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) and
+[`docs/UPGRADE.md`](docs/UPGRADE.md) for operator deployment, upgrade, and
+rollback expectations.
 
 ## Security Notes
 
