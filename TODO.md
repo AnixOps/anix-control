@@ -17,6 +17,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Create `docs/features.md` as the implemented/planned feature status register.
 - [ ] Keep all audit files current as fixes land.
 - [ ] Keep `docs/features.md` current as new features or feature-status changes land.
+- [x] Add a CI documentation sync gate so implementation, CI, deployment, and config changes must include maintained status documentation.
 
 ## P0: CI Baseline
 
@@ -143,6 +144,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Generate the integration workflow coverage artifact instead of uploading a missing `coverage.out`.
 - [x] Add a CI-tested helper for cleaning local source-tree build artifacts without removing config, databases, certificates, backups, or `web/node_modules`.
 - [x] Add a CI release-build policy check so panel and V2bX deployment scripts cannot add unguarded local build commands.
+- [x] Add a documentation sync CI check so source, frontend, deployment, workflow, and config changes cannot land without updated status docs or changelog evidence.
 
 ## P3: API And UI Consistency
 

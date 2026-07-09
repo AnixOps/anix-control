@@ -71,6 +71,50 @@ jobs:
       - name: Run legacy pre-deploy guard self-test
         run: bash config/scripts/pre-deploy.sh --self-test
 
+  docs-sync:
+    name: Documentation Sync Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate documentation sync script syntax
+        run: bash -n config/scripts/check_docs_updated.sh
+
+      - name: Run documentation sync self-test
+        run: bash config/scripts/check_docs_updated.sh --self-test
+
+      - name: Require docs for implementation changes
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            echo "Release tag build; documentation sync was checked when the commit landed."
+            exit 0
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+
+          if [[ -z "${base}" || "${base}" =~ ^0+$ ]]; then
+            if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+              base="HEAD~1"
+            else
+              echo "No previous commit is available; skipping documentation sync diff."
+              exit 0
+            fi
+          fi
+
+          if [[ "${base}" != "HEAD~1" ]] && ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            git fetch --depth=1 origin "${base}" || true
+          fi
+
+          bash config/scripts/check_docs_updated.sh --base "${base}" --head HEAD
+
   go-quality:
     name: Go Quality Gates
     runs-on: ubuntu-latest
