@@ -152,6 +152,7 @@
 
 ### CI/CD
 
+- Moved release manifest generation into `config/scripts/generate_release_manifest.py` with a CI self-test so release artifact metadata generation is directly validated instead of living only as inline workflow code.
 - Added a machine-readable `RELEASE_MANIFEST.json` to GitHub Release assets with tag, commit, run metadata, CI build-source marker, manual-deployment flag, artifact sizes, and artifact SHA-256 hashes; the release workflow policy guard now fails if the manifest is removed.
 - Attached SQLite-to-PostgreSQL migration dry-run output as `migration-dry-run.txt` in release artifacts, included it in release checksums, and extended the release workflow policy guard to prevent removing that evidence.
 - Added a release workflow policy CI gate with self-tests so tag-gated release jobs keep their quality/security/race/test prerequisites, multi-platform binary matrix, Docker metadata, frontend archives, checksums, SBOM, operator deployment runbook, and generated release notes.

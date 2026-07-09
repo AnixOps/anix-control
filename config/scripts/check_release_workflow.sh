@@ -28,7 +28,7 @@ require_text() {
   local needle="$1"
   local description="$2"
 
-  if grep -Fq "${needle}" "${WORKFLOW_PATH}"; then
+  if grep -Fq -- "${needle}" "${WORKFLOW_PATH}"; then
     echo "ok: ${description}"
     return 0
   fi
@@ -124,9 +124,10 @@ check_release_workflow() {
   require_text "OPERATOR_DEPLOYMENT.md" "operator deployment runbook" || failed=1
   require_text "No Local Release Builds" "operator no-local-build release warning" || failed=1
   require_text "Generate release manifest" "release manifest generation step" || failed=1
+  require_text "config/scripts/generate_release_manifest.py" "release manifest generator script" || failed=1
   require_text "RELEASE_MANIFEST.json" "release manifest asset" || failed=1
-  require_text '"build_source": "github-actions"' "release manifest CI build source" || failed=1
-  require_text "manual_deployment_required" "release manifest manual deployment flag" || failed=1
+  require_text "--build-source github-actions" "release manifest CI build source" || failed=1
+  require_text "--manual-deployment-required true" "release manifest manual deployment flag" || failed=1
   require_text "sha256sum * > SHA256SUMS.txt" "release checksum generation" || failed=1
   require_text "softprops/action-gh-release" "GitHub release creation action" || failed=1
   require_text "generate_release_notes: true" "generated release notes" || failed=1
@@ -212,7 +213,11 @@ jobs:
           zip -r release/v2board-frontend.zip web/public
       - name: Generate release manifest
         run: |
-          echo '{"build_source": "github-actions", "manual_deployment_required": true}' > release/RELEASE_MANIFEST.json
+          python3 config/scripts/generate_release_manifest.py \
+            --release-dir release \
+            --output release/RELEASE_MANIFEST.json \
+            --build-source github-actions \
+            --manual-deployment-required true
       - name: Create release checksums
         run: |
           (cd release && sha256sum * > SHA256SUMS.txt)

@@ -47,6 +47,9 @@ jobs:
       - name: Validate release build policy script syntax
         run: bash -n config/deploy/check_release_build_policy.sh
 
+      - name: Validate release manifest script syntax
+        run: python3 -m py_compile config/scripts/generate_release_manifest.py
+
       - name: Validate legacy deploy script syntax
         run: bash -n config/scripts/deploy.sh
 
@@ -61,6 +64,9 @@ jobs:
 
       - name: Run release build policy self-test
         run: bash config/deploy/check_release_build_policy.sh --self-test
+
+      - name: Run release manifest self-test
+        run: python3 config/scripts/generate_release_manifest.py --self-test
 
       - name: Enforce release build policy
         run: bash config/deploy/check_release_build_policy.sh
@@ -887,39 +893,11 @@ jobs:
       - name: Generate release manifest
         shell: bash
         run: |
-          python3 - <<'PY'
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-
-          release_dir = Path("release")
-          artifacts = []
-          for path in sorted(release_dir.iterdir()):
-              if not path.is_file() or path.name in {"RELEASE_MANIFEST.json", "SHA256SUMS.txt"}:
-                  continue
-              artifacts.append({
-                  "name": path.name,
-                  "size": path.stat().st_size,
-                  "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-              })
-
-          manifest = {
-              "project": "v2board_AnixOps",
-              "tag": os.environ.get("GITHUB_REF_NAME", ""),
-              "commit": os.environ.get("GITHUB_SHA", ""),
-              "run_id": os.environ.get("GITHUB_RUN_ID", ""),
-              "run_number": os.environ.get("GITHUB_RUN_NUMBER", ""),
-              "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
-              "build_source": "github-actions",
-              "manual_deployment_required": True,
-              "artifacts": artifacts,
-          }
-          (release_dir / "RELEASE_MANIFEST.json").write_text(
-              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
-              encoding="utf-8",
-          )
-          PY
+          python3 config/scripts/generate_release_manifest.py \
+            --release-dir release \
+            --output release/RELEASE_MANIFEST.json \
+            --build-source github-actions \
+            --manual-deployment-required true
 
       - name: Create release checksums
         run: |
