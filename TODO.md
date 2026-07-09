@@ -1,6 +1,6 @@
 # TODO
 
-Date: 2026-07-08
+Date: 2026-07-09
 
 This list is intentionally concrete. Do not mark an item done without code, tests, and verification evidence where applicable.
 
@@ -193,6 +193,6 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Normalize admin knowledge list/create/update/delete success and user-error response envelopes with handler and Knowledge frontend compatibility tests.
 - [x] Normalize admin system audit-log success/error response envelopes with handler and System frontend compatibility tests.
 - [x] Normalize admin system config CRUD success and user-error response envelopes with handler, sensitive-field, and System frontend compatibility tests.
-- [x] Normalize admin load balancer CRUD and health-check success response envelopes with handler and System frontend compatibility tests.
+- [x] Normalize admin load balancer CRUD and health-check success/user-error response envelopes with handler and System frontend `code=-1` compatibility tests.
 - [ ] Keep frontend build/test/audit green for admin and user workflows.
 - [x] Track frontend bundle size for heavy admin pages.

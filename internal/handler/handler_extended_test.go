@@ -1955,6 +1955,22 @@ func (s *LoadBalancerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *LoadBalancerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+	if msgContains != "" {
+		msg, ok := resp["msg"].(string)
+		assert.True(s.T(), ok)
+		assert.Contains(s.T(), strings.ToLower(msg), strings.ToLower(msgContains))
+	}
+}
+
 func (s *LoadBalancerTestSuite) TestListLoadBalancers() {
 	handler := NewLoadBalancerHandler()
 	s.router.GET("/admin/loadbalancers", handler.ListLoadBalancers)
@@ -2098,7 +2114,7 @@ func (s *LoadBalancerTestSuite) TestCreateLoadBalancer_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "invalid")
 }
 
 func (s *LoadBalancerTestSuite) TestGetLoadBalancer() {
@@ -2125,7 +2141,18 @@ func (s *LoadBalancerTestSuite) TestGetLoadBalancer_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "load balancer not found")
+}
+
+func (s *LoadBalancerTestSuite) TestGetLoadBalancer_InvalidID() {
+	handler := NewLoadBalancerHandler()
+	s.router.GET("/admin/loadbalancers/:id", handler.GetLoadBalancer)
+
+	req, _ := http.NewRequest("GET", "/admin/loadbalancers/invalid", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid id")
 }
 
 func (s *LoadBalancerTestSuite) TestUpdateLoadBalancer() {
@@ -2200,7 +2227,25 @@ func (s *LoadBalancerTestSuite) TestUpdateLoadBalancer_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "load balancer not found")
+}
+
+func (s *LoadBalancerTestSuite) TestUpdateLoadBalancer_InvalidID() {
+	handler := NewLoadBalancerHandler()
+	s.router.PUT("/admin/loadbalancers/:id", handler.UpdateLoadBalancer)
+
+	body := model.LoadBalancer{
+		Name:     "Updated LB",
+		Strategy: "latency",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("PUT", "/admin/loadbalancers/invalid", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid id")
 }
 
 func (s *LoadBalancerTestSuite) TestUpdateLoadBalancer_InvalidBody() {
@@ -2212,7 +2257,7 @@ func (s *LoadBalancerTestSuite) TestUpdateLoadBalancer_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "invalid")
 }
 
 func (s *LoadBalancerTestSuite) TestDeleteLoadBalancer() {
@@ -2228,6 +2273,17 @@ func (s *LoadBalancerTestSuite) TestDeleteLoadBalancer() {
 	assert.Equal(s.T(), float64(0), resp["code"])
 	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), "deleted", data["message"])
+}
+
+func (s *LoadBalancerTestSuite) TestDeleteLoadBalancer_InvalidID() {
+	handler := NewLoadBalancerHandler()
+	s.router.DELETE("/admin/loadbalancers/:id", handler.DeleteLoadBalancer)
+
+	req, _ := http.NewRequest("DELETE", "/admin/loadbalancers/invalid", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid id")
 }
 
 func (s *LoadBalancerTestSuite) TestGetLoadBalancerStats() {
@@ -2257,6 +2313,28 @@ func (s *LoadBalancerTestSuite) TestRunHealthCheck() {
 	assert.Equal(s.T(), float64(0), resp["code"])
 	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), "health check completed", data["message"])
+}
+
+func (s *LoadBalancerTestSuite) TestRunHealthCheck_InvalidID() {
+	handler := NewLoadBalancerHandler()
+	s.router.POST("/admin/loadbalancers/:id/check", handler.RunHealthCheck)
+
+	req, _ := http.NewRequest("POST", "/admin/loadbalancers/invalid/check", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid id")
+}
+
+func (s *LoadBalancerTestSuite) TestRunHealthCheck_NotFound() {
+	handler := NewLoadBalancerHandler()
+	s.router.POST("/admin/loadbalancers/:id/check", handler.RunHealthCheck)
+
+	req, _ := http.NewRequest("POST", "/admin/loadbalancers/99999/check", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "load balancer not found")
 }
 
 func TestLoadBalancer(t *testing.T) {

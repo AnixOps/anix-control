@@ -1832,8 +1832,11 @@ const restoreBackupRequest = async (backup) => {
 // Load balancing
 const fetchBalancers = async () => {
   try {
-    const res = await getLoadBalancers()
-    balancers.value = res.data?.list || []
+    const payload = readSystemPayload(
+      await getLoadBalancers(),
+      'runtime.systemPage.messages.fetchBalancersFailed'
+    )
+    balancers.value = Array.isArray(payload.list) ? payload.list : []
   } catch (err) {
     console.error(t('runtime.systemPage.messages.fetchBalancersFailed'), err)
   }
@@ -1874,9 +1877,15 @@ const saveBalancer = async () => {
     delete data.weights_json
 
     if (editingBalancer.value) {
-      await updateLoadBalancer(editingBalancer.value.id, data)
+      await ensureSystemMutation(
+        updateLoadBalancer(editingBalancer.value.id, data),
+        'runtime.systemPage.messages.saveBalancerFailed'
+      )
     } else {
-      await createLoadBalancer(data)
+      await ensureSystemMutation(
+        createLoadBalancer(data),
+        'runtime.systemPage.messages.saveBalancerFailed'
+      )
     }
     showBalancerModal.value = false
     fetchBalancers()
@@ -1890,7 +1899,10 @@ const saveBalancer = async () => {
 const deleteBalancer = async (lb) => {
   if (!confirmAction(t('runtime.systemPage.messages.deleteBalancerConfirm', { name: lb.name }))) return
   try {
-    await deleteLoadBalancer(lb.id)
+    await ensureSystemMutation(
+      deleteLoadBalancer(lb.id),
+      'runtime.systemPage.messages.deleteBalancerFailed'
+    )
     fetchBalancers()
   } catch (err) {
     notify(resolveSystemError(err, 'runtime.systemPage.messages.deleteBalancerFailed'))
@@ -1899,7 +1911,10 @@ const deleteBalancer = async (lb) => {
 
 const runHealthCheckRequest = async (lb) => {
   try {
-    await runHealthCheck(lb.id)
+    await ensureSystemMutation(
+      runHealthCheck(lb.id),
+      'runtime.systemPage.messages.healthCheckFailed'
+    )
     notify(t('runtime.systemPage.messages.healthCheckCompleted'))
     fetchBalancers()
   } catch (err) {

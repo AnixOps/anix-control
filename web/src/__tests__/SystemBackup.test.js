@@ -317,4 +317,79 @@ describe('System backup configuration', () => {
 
     wrapper.unmount()
   })
+
+  it('logs load balancer panel envelope list failures instead of accepting empty lists', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    adminApi.getLoadBalancers.mockResolvedValueOnce({
+      code: -1,
+      msg: 'balancer list rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    expect(wrapper.vm.balancers).toEqual([])
+    expect(consoleError).toHaveBeenCalled()
+    expect(consoleError.mock.calls[0][1]).toBeInstanceOf(Error)
+    expect(consoleError.mock.calls[0][1].message).toBe('balancer list rejected')
+
+    consoleError.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('keeps load balancer modal open when enveloped save fails', async () => {
+    const wrapper = mountSystem()
+    await flushPromises()
+    adminApi.getLoadBalancers.mockClear()
+    window.alert.mockClear()
+    adminApi.createLoadBalancer.mockResolvedValueOnce({
+      code: -1,
+      msg: 'balancer save rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    wrapper.vm.openBalancerModal()
+    Object.assign(wrapper.vm.balancerForm, {
+      name: 'Rejected LB',
+      group_id: 0,
+      strategy: 'round-robin',
+      health_check: true,
+      check_interval: 60,
+      weights_json: ''
+    })
+
+    await wrapper.vm.saveBalancer()
+    await flushPromises()
+
+    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('balancer save rejected'))
+    expect(wrapper.vm.showBalancerModal).toBe(true)
+    expect(adminApi.getLoadBalancers).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('does not report health-check success when enveloped response fails', async () => {
+    const wrapper = mountSystem()
+    await flushPromises()
+    adminApi.getLoadBalancers.mockClear()
+    window.alert.mockClear()
+    adminApi.runHealthCheck.mockResolvedValueOnce({
+      code: -1,
+      msg: 'health check rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    await wrapper.vm.runHealthCheckRequest({ id: 1, name: 'Rejected LB' })
+    await flushPromises()
+
+    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('health check rejected'))
+    expect(window.alert).not.toHaveBeenCalledWith(expect.stringContaining('Health check completed'))
+    expect(adminApi.getLoadBalancers).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
 })

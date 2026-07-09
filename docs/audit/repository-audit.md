@@ -160,8 +160,8 @@ Open gaps:
   coverage, and admin system config CRUD success and user-error responses now have handler
   coverage plus System runtime/config compatibility coverage while retaining
   sensitive-value masking. Admin load balancer CRUD and health-check success
-  responses now have handler coverage plus System load balancer frontend
-  compatibility coverage. User
+  and user-error responses now have handler coverage plus System load balancer
+  frontend compatibility coverage for legacy, enveloped, and `code=-1` payloads. User
   registration success and user-error paths, login success and user-error paths, profile success and user-error paths, dashboard success and user-error paths, subscription info success and user-error paths, plan list success/database-error paths,
   coupon-check success and business-error paths, knowledge list/detail success and user-error paths, ticket list/create/detail/reply/close success and user-error paths,
   order-save success/user-error paths, order list/detail success and user-error paths, public payment methods, and public

@@ -1021,7 +1021,7 @@ func (h *LoadBalancerHandler) ListLoadBalancers(c *gin.Context) {
 
 	lbs, err := h.lbService.List(uint(groupID))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -1051,7 +1051,7 @@ func (h *LoadBalancerHandler) ListLoadBalancers(c *gin.Context) {
 func (h *LoadBalancerHandler) CreateLoadBalancer(c *gin.Context) {
 	var req loadBalancerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -1063,7 +1063,7 @@ func (h *LoadBalancerHandler) CreateLoadBalancer(c *gin.Context) {
 	applyLoadBalancerRequest(&lb, &req)
 
 	if err := h.lbService.Create(&lb); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -1086,12 +1086,12 @@ func (h *LoadBalancerHandler) GetLoadBalancer(c *gin.Context) {
 
 	lbID, err := strconv.ParseUint(id, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 	lb, err := h.lbService.GetByID(uint(lbID))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "load balancer not found"})
+		panelError(c, "load balancer not found")
 		return
 	}
 
@@ -1117,24 +1117,24 @@ func (h *LoadBalancerHandler) UpdateLoadBalancer(c *gin.Context) {
 
 	lbID, err := strconv.ParseUint(id, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 	lb, err := h.lbService.GetByID(uint(lbID))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "load balancer not found"})
+		panelError(c, "load balancer not found")
 		return
 	}
 
 	var req loadBalancerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	applyLoadBalancerRequest(lb, &req)
 	if err := h.lbService.Update(lb); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -1157,11 +1157,11 @@ func (h *LoadBalancerHandler) DeleteLoadBalancer(c *gin.Context) {
 
 	lbID, err := strconv.ParseUint(id, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
 		return
 	}
 	if err := h.lbService.Delete(uint(lbID)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -1212,11 +1212,15 @@ func (h *LoadBalancerHandler) RunHealthCheck(c *gin.Context) {
 
 	lbID, err := strconv.ParseUint(id, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
+		return
+	}
+	if _, err := h.lbService.GetByID(uint(lbID)); err != nil {
+		panelError(c, "load balancer not found")
 		return
 	}
 	if err := h.lbService.RunHealthCheck(uint(lbID)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
