@@ -15,7 +15,10 @@ EXACT_ARTIFACTS=(
   "coverage.out"
   "coverage.html"
   "web/public"
+  "web/public-check"
+  "web/coverage"
   "web/bundle-reports"
+  "web/bundle-reports-check"
   "release"
 )
 
@@ -156,10 +159,14 @@ run_self_test() {
   trap cleanup_self_test_dir RETURN
 
   mkdir -p "${tmpdir}/config" "${tmpdir}/data" "${tmpdir}/web/node_modules/pkg/dist"
-  mkdir -p "${tmpdir}/web/public/assets" "${tmpdir}/web/bundle-reports" "${tmpdir}/release"
+  mkdir -p "${tmpdir}/web/public/assets" "${tmpdir}/web/public-check/assets"
+  mkdir -p "${tmpdir}/web/coverage" "${tmpdir}/web/bundle-reports" "${tmpdir}/web/bundle-reports-check"
+  mkdir -p "${tmpdir}/release"
   touch "${tmpdir}/v2board" "${tmpdir}/v2board.exe" "${tmpdir}/server" "${tmpdir}/migrate"
   touch "${tmpdir}/coverage.out" "${tmpdir}/coverage.html" "${tmpdir}/v2board.bak.20260709"
   touch "${tmpdir}/web/public/assets/app.js" "${tmpdir}/web/bundle-reports/report.md"
+  touch "${tmpdir}/web/public-check/assets/app.js" "${tmpdir}/web/coverage/coverage-final.json"
+  touch "${tmpdir}/web/bundle-reports-check/bundle-size.md"
   touch "${tmpdir}/release/v2board-linux-amd64.tar.gz"
   touch "${tmpdir}/config/config.yaml" "${tmpdir}/data/v2board.db"
   touch "${tmpdir}/web/node_modules/pkg/dist/index.js"
@@ -171,7 +178,10 @@ run_self_test() {
 
   assert_missing "${tmpdir}/v2board" "backend binary"
   assert_missing "${tmpdir}/web/public" "frontend build output"
+  assert_missing "${tmpdir}/web/public-check" "frontend check build output"
+  assert_missing "${tmpdir}/web/coverage" "frontend coverage output"
   assert_missing "${tmpdir}/web/bundle-reports" "bundle report output"
+  assert_missing "${tmpdir}/web/bundle-reports-check" "bundle report check output"
   assert_missing "${tmpdir}/release" "release staging directory"
 
   assert_exists "${tmpdir}/config/config.yaml" "config file"
