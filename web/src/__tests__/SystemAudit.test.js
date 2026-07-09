@@ -142,4 +142,21 @@ describe('System audit logs', () => {
     expect(text).toContain('operator')
     expect(text).toContain('backup_record')
   })
+
+  it('shows panel envelope errors when audit log loading fails', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    adminApi.getSystemAuditLogs.mockResolvedValue({
+      code: -1,
+      msg: 'database unavailable',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    expect(alertSpy).toHaveBeenCalledWith('database unavailable')
+    expect(wrapper.vm.auditLogs).toEqual([])
+    expect(wrapper.vm.auditTotal).toBe(0)
+  })
 })

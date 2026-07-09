@@ -53,6 +53,18 @@ func extractAuditPayload(t *testing.T, body map[string]any) map[string]any {
 	return data
 }
 
+func assertAuditPanelError(t *testing.T, recorder *httptest.ResponseRecorder, msgContains string) {
+	t.Helper()
+
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	body := decodeAuditResponse(t, recorder)
+	assert.Equal(t, float64(-1), body["code"])
+	assert.Contains(t, body["msg"], msgContains)
+	assert.NotEmpty(t, body["ts"])
+	assert.Nil(t, body["data"])
+	assert.NotContains(t, body, "error")
+}
+
 func TestGetAuditLogsSupportsFilterAndPagination(t *testing.T) {
 	db, router := setupSystemAuditTest(t)
 
@@ -126,4 +138,18 @@ func TestGetAuditLogsRedactsSensitiveContent(t *testing.T) {
 		assert.NotContains(t, content, "plain-secret-token")
 		assert.NotContains(t, content, "super-secret-key")
 	}
+}
+
+func TestGetAuditLogsDatabaseErrorUsesPanelEnvelope(t *testing.T) {
+	db, router := setupSystemAuditTest(t)
+	require.NoError(t, db.Migrator().DropTable(&model.OperationLog{}))
+	t.Cleanup(func() {
+		require.NoError(t, db.AutoMigrate(&model.OperationLog{}))
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/system/audit-logs?page=1&page_size=20", nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	assertAuditPanelError(t, recorder, "no such table")
 }
