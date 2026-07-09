@@ -1024,9 +1024,9 @@ func (s *PaymentGatewayExtendedTestSuite) SetupTest() {
 
 	s.testGateway = &model.PaymentGateway{
 		Name:    "Test Gateway",
-		Type:    "alipay",
+		Type:    model.PaymentGatewayEPay,
 		Enabled: true,
-		Config:  `{"app_id":"test"}`,
+		Config:  `{}`,
 	}
 	s.db.Create(s.testGateway)
 
@@ -1237,6 +1237,35 @@ func (s *PaymentGatewayExtendedTestSuite) TestCreatePayment() {
 	assert.Contains(s.T(), data, "actual_amount")
 	assert.Contains(s.T(), data, "pay_url")
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *PaymentGatewayExtendedTestSuite) TestCreatePayment_UnsupportedHistoricalGatewayUsesPanelEnvelope() {
+	gateway := &model.PaymentGateway{
+		Name:    "Historical Alipay",
+		Type:    model.PaymentGatewayAlipay,
+		Enabled: true,
+		Config:  `{}`,
+	}
+	s.Require().NoError(s.db.Create(gateway).Error)
+
+	handler := NewPaymentGatewayHandler()
+	s.router.POST("/payment/create-unsupported", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		handler.CreatePayment(c)
+	})
+
+	body := map[string]any{
+		"gateway_id": gateway.ID,
+		"amount":     100,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/payment/create-unsupported", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "cannot be enabled")
 }
 
 func (s *PaymentGatewayExtendedTestSuite) TestCreatePayment_InvalidGatewayUsesPanelEnvelope() {
@@ -2785,9 +2814,9 @@ func (s *PaymentGatewayExtendedTestSuite2) SetupTest() {
 
 	s.testGateway = &model.PaymentGateway{
 		Name:    "Test Gateway 2",
-		Type:    "alipay",
+		Type:    model.PaymentGatewayEPay,
 		Enabled: true,
-		Config:  `{"app_id":"test"}`,
+		Config:  `{}`,
 	}
 	s.db.Create(s.testGateway)
 
@@ -2849,9 +2878,9 @@ func (s *PaymentGatewayExtendedTestSuite2) TestUpdateGateway() {
 
 	body := map[string]any{
 		"name":    "Updated Gateway",
-		"type":    "alipay",
+		"type":    model.PaymentGatewayEPay,
 		"enabled": true,
-		"config":  `{"updated":"config"}`,
+		"config":  `{}`,
 	}
 	jsonBody, _ := json.Marshal(body)
 
@@ -2866,6 +2895,7 @@ func (s *PaymentGatewayExtendedTestSuite2) TestUpdateGateway() {
 func (s *PaymentGatewayExtendedTestSuite2) TestUpdateGateway_TypeAndZeroMinMax() {
 	s.testGateway.MinAmount = 10
 	s.testGateway.MaxAmount = 100
+	s.testGateway.Enabled = false
 	s.db.Save(s.testGateway)
 
 	handler := NewPaymentGatewayHandler()

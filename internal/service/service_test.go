@@ -2892,7 +2892,7 @@ func (s *PaymentGatewayServiceTestSuite) TestCreateGateway() {
 	gateway := &model.PaymentGateway{
 		Name:    "Alipay",
 		Type:    model.PaymentGatewayAlipay,
-		Enabled: true,
+		Enabled: false,
 		Config:  `{"app_id": "test", "private_key": "key"}`,
 	}
 
@@ -2901,11 +2901,28 @@ func (s *PaymentGatewayServiceTestSuite) TestCreateGateway() {
 	assert.NotZero(s.T(), gateway.ID)
 }
 
+func (s *PaymentGatewayServiceTestSuite) TestCreateRejectsEnabledUnsupportedGateways() {
+	for _, gatewayType := range []string{
+		model.PaymentGatewayAlipay,
+		model.PaymentGatewayWechat,
+		model.PaymentGatewayUSDT,
+	} {
+		gateway := &model.PaymentGateway{
+			Name:    "Unsupported " + gatewayType,
+			Type:    gatewayType,
+			Enabled: true,
+			Config:  `{}`,
+		}
+		err := s.svc.Create(gateway)
+		assert.ErrorContains(s.T(), err, "cannot be enabled")
+	}
+}
+
 func (s *PaymentGatewayServiceTestSuite) TestGetByID() {
 	gateway := &model.PaymentGateway{
 		Name:    "WeChat",
 		Type:    model.PaymentGatewayWechat,
-		Enabled: true,
+		Enabled: false,
 		Config:  `{"app_id": "test"}`,
 	}
 	assert.NoError(s.T(), s.svc.Create(gateway))
@@ -2954,7 +2971,7 @@ func (s *PaymentGatewayServiceTestSuite) TestListGateways() {
 	for i := 1; i <= 3; i++ {
 		gateway := &model.PaymentGateway{
 			Name:    fmt.Sprintf("Gateway %d", i),
-			Type:    model.PaymentGatewayAlipay,
+			Type:    model.PaymentGatewayEPay,
 			Enabled: true,
 			Config:  `{}`,
 		}
@@ -2970,7 +2987,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetEnabledGateways() {
 	// 鍒涘缓鍚敤鍜岀鐢ㄧ殑缃戝叧
 	enabled := &model.PaymentGateway{
 		Name:    "Enabled Gateway",
-		Type:    model.PaymentGatewayAlipay,
+		Type:    model.PaymentGatewayEPay,
 		Enabled: true,
 		Config:  `{}`,
 	}
@@ -2992,7 +3009,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetEnabledGateways() {
 func (s *PaymentGatewayServiceTestSuite) TestCalculateFee() {
 	gateway := &model.PaymentGateway{
 		Name:     "Fee Test",
-		Type:     model.PaymentGatewayAlipay,
+		Type:     model.PaymentGatewayEPay,
 		Enabled:  true,
 		FeeRate:  0.01,
 		FeeFixed: 0.5,
@@ -3006,7 +3023,7 @@ func (s *PaymentGatewayServiceTestSuite) TestCalculateFee() {
 func (s *PaymentGatewayServiceTestSuite) TestValidateAmount() {
 	gateway := &model.PaymentGateway{
 		Name:      "Validate Test",
-		Type:      model.PaymentGatewayAlipay,
+		Type:      model.PaymentGatewayEPay,
 		Enabled:   true,
 		MinAmount: 10.0,
 		MaxAmount: 1000.0,
@@ -3036,20 +3053,44 @@ func (s *PaymentGatewayServiceTestSuite) TestGenerateTradeNo() {
 func (s *PaymentGatewayServiceTestSuite) TestGetByType() {
 	gateway := &model.PaymentGateway{
 		Name:    "Type Test",
-		Type:    model.PaymentGatewayUSDT,
+		Type:    model.PaymentGatewayEPay,
 		Enabled: true,
-		Config:  `{"network": "TRC20"}`,
+		Config:  `{}`,
 	}
 	assert.NoError(s.T(), s.svc.Create(gateway))
-	found, err := s.svc.GetByType(model.PaymentGatewayUSDT)
+	found, err := s.svc.GetByType(model.PaymentGatewayEPay)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "Type Test", found.Name)
+}
+
+func (s *PaymentGatewayServiceTestSuite) TestGetEnabledSkipsUnsupportedHistoricalGateways() {
+	unsupported := &model.PaymentGateway{
+		Name:    "Historical Alipay",
+		Type:    model.PaymentGatewayAlipay,
+		Enabled: true,
+		Config:  `{}`,
+	}
+	require.NoError(s.T(), database.Get().Create(unsupported).Error)
+
+	supported := &model.PaymentGateway{
+		Name:    "Supported EPay",
+		Type:    model.PaymentGatewayEPay,
+		Enabled: true,
+		Config:  `{}`,
+	}
+	require.NoError(s.T(), s.svc.Create(supported))
+
+	gateways, err := s.svc.GetEnabled()
+	require.NoError(s.T(), err)
+	for _, gateway := range gateways {
+		assert.NotEqual(s.T(), model.PaymentGatewayAlipay, gateway.Type)
+	}
 }
 
 func (s *PaymentGatewayServiceTestSuite) TestToggle() {
 	gateway := &model.PaymentGateway{
 		Name:    "Toggle Test",
-		Type:    model.PaymentGatewayAlipay,
+		Type:    model.PaymentGatewayEPay,
 		Enabled: true,
 		Config:  `{}`,
 	}
@@ -3058,6 +3099,23 @@ func (s *PaymentGatewayServiceTestSuite) TestToggle() {
 	assert.NoError(s.T(), err)
 
 	found, _ := s.svc.GetByID(gateway.ID)
+	assert.False(s.T(), found.Enabled)
+}
+
+func (s *PaymentGatewayServiceTestSuite) TestToggleRejectsUnsupportedGatewayEnable() {
+	gateway := &model.PaymentGateway{
+		Name:    "Toggle Unsupported",
+		Type:    model.PaymentGatewayUSDT,
+		Enabled: false,
+		Config:  `{}`,
+	}
+	require.NoError(s.T(), s.svc.Create(gateway))
+
+	err := s.svc.Toggle(gateway.ID, true)
+	assert.ErrorContains(s.T(), err, "cannot be enabled")
+
+	found, err := s.svc.GetByID(gateway.ID)
+	require.NoError(s.T(), err)
 	assert.False(s.T(), found.Enabled)
 }
 
@@ -4941,7 +4999,7 @@ func (s *PaymentGatewayServiceTestSuite) TestGetChannels() {
 	for i := 1; i <= 2; i++ {
 		gw := &model.PaymentGateway{
 			Name:    fmt.Sprintf("Channel %d", i),
-			Type:    "alipay",
+			Type:    model.PaymentGatewayEPay,
 			Enabled: true,
 		}
 		assert.NoError(s.T(), s.svc.Create(gw))
@@ -6185,7 +6243,7 @@ func (s *PaymentGatewayServiceTestSuite) TestMarkAsPaid() {
 	// Create gateway
 	gateway := &model.PaymentGateway{
 		Name:    "MarkPaid Test",
-		Type:    model.PaymentGatewayAlipay,
+		Type:    model.PaymentGatewayEPay,
 		Enabled: true,
 	}
 	assert.NoError(s.T(), s.svc.Create(gateway))
@@ -6193,7 +6251,7 @@ func (s *PaymentGatewayServiceTestSuite) TestMarkAsPaid() {
 	record := &model.PaymentRecord{
 		TradeNo:     "MP-TEST-001",
 		GatewayID:   gateway.ID,
-		GatewayType: model.PaymentGatewayAlipay,
+		GatewayType: model.PaymentGatewayEPay,
 		Amount:      100.0,
 		Status:      0,
 	}

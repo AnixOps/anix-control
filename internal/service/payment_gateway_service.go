@@ -17,6 +17,34 @@ type PaymentGatewayService struct {
 	db *gorm.DB
 }
 
+func paymentGatewayEnabledTypes() []string {
+	return []string{
+		model.PaymentGatewayEPay,
+		model.PaymentGatewayStripe,
+		model.PaymentGatewayPayPal,
+		model.PaymentGatewayX402,
+	}
+}
+
+func paymentGatewayTypeCanBeEnabled(gatewayType string) bool {
+	for _, enabledType := range paymentGatewayEnabledTypes() {
+		if gatewayType == enabledType {
+			return true
+		}
+	}
+	return false
+}
+
+func validatePaymentGatewayCanBeEnabled(gateway *model.PaymentGateway) error {
+	if gateway == nil || !gateway.Enabled {
+		return nil
+	}
+	if paymentGatewayTypeCanBeEnabled(gateway.Type) {
+		return nil
+	}
+	return fmt.Errorf("payment gateway type %q cannot be enabled until live callback implementation and tests are complete", gateway.Type)
+}
+
 // NewPaymentGatewayService 创建服务
 func NewPaymentGatewayService(db *gorm.DB) *PaymentGatewayService {
 	return &PaymentGatewayService{db: db}
@@ -24,11 +52,17 @@ func NewPaymentGatewayService(db *gorm.DB) *PaymentGatewayService {
 
 // Create 创建网关
 func (s *PaymentGatewayService) Create(gateway *model.PaymentGateway) error {
+	if err := validatePaymentGatewayCanBeEnabled(gateway); err != nil {
+		return err
+	}
 	return s.db.Create(gateway).Error
 }
 
 // Update 更新网关
 func (s *PaymentGatewayService) Update(gateway *model.PaymentGateway) error {
+	if err := validatePaymentGatewayCanBeEnabled(gateway); err != nil {
+		return err
+	}
 	return s.db.Save(gateway).Error
 }
 
@@ -49,6 +83,10 @@ func (s *PaymentGatewayService) GetByID(id uint) (*model.PaymentGateway, error) 
 
 // GetByType 根据类型获取网关
 func (s *PaymentGatewayService) GetByType(gatewayType string) (*model.PaymentGateway, error) {
+	if !paymentGatewayTypeCanBeEnabled(gatewayType) {
+		return nil, fmt.Errorf("payment gateway type %q cannot be enabled until live callback implementation and tests are complete", gatewayType)
+	}
+
 	var gateway model.PaymentGateway
 	err := s.db.Where("type = ? AND enabled = ?", gatewayType, true).First(&gateway).Error
 	if err != nil {
@@ -67,7 +105,8 @@ func (s *PaymentGatewayService) List() ([]*model.PaymentGateway, error) {
 // GetEnabled 获取启用的网关
 func (s *PaymentGatewayService) GetEnabled() ([]*model.PaymentGateway, error) {
 	var gateways []*model.PaymentGateway
-	err := s.db.Where("enabled = ?", true).Order("sort ASC, id ASC").Find(&gateways).Error
+	err := s.db.Where("enabled = ? AND type IN ?", true, paymentGatewayEnabledTypes()).
+		Order("sort ASC, id ASC").Find(&gateways).Error
 	return gateways, err
 }
 
@@ -97,8 +136,30 @@ func (s *PaymentGatewayService) GetChannels() ([]*model.PaymentChannel, error) {
 
 // Toggle 切换网关状态
 func (s *PaymentGatewayService) Toggle(id uint, enabled bool) error {
+	if enabled {
+		gateway, err := s.GetByID(id)
+		if err != nil {
+			return err
+		}
+		gateway.Enabled = true
+		if err := validatePaymentGatewayCanBeEnabled(gateway); err != nil {
+			return err
+		}
+	}
 	return s.db.Model(&model.PaymentGateway{}).Where("id = ?", id).
 		Update("enabled", enabled).Error
+}
+
+// ValidateGatewayUsable verifies that a gateway can be shown to users and used
+// to create new payment records.
+func (s *PaymentGatewayService) ValidateGatewayUsable(gateway *model.PaymentGateway) error {
+	if gateway == nil {
+		return fmt.Errorf("invalid gateway")
+	}
+	if !gateway.Enabled {
+		return fmt.Errorf("gateway is disabled")
+	}
+	return validatePaymentGatewayCanBeEnabled(gateway)
 }
 
 // ParseConfig 解析网关配置

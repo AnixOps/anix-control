@@ -81,7 +81,7 @@ two documents disagree, this file is the status source of truth.
 | Payment | EPay callback plugin | Implemented | `/api/v2/payment/callback/epay` | Keep signature and amount verification tests. |
 | Payment | X402 create/check/callback | Partial | `/payment/x402/*` | Current chain/provider behavior needs production integration evidence. |
 | Payment | Stripe and PayPal webhooks | Partial | `/payment/stripe/webhook`, `/payment/paypal/webhook` | Checkout/order creation is still mocked/stubbed. |
-| Payment | Alipay, WeChat, USDT live callbacks | Planned | Config structs and gateway type constants exist | Add callback implementations and tests before enabling. |
+| Payment | Alipay, WeChat, USDT live callbacks | Planned | Config structs and gateway type constants exist; service blocks enable/use until implementations exist | Add callback implementations and tests before enabling. |
 | Forwarding | Flux-compatible forward CRUD and ordering | Partial | `/api/v2/forward/*`, admin Forward page | Remaining Flux parity and runtime edge cases. |
 | Forwarding | Tunnel CRUD and user assignment | Partial | `/api/v2/tunnel/*`, admin Tunnel/Users surfaces | Relation-backed flow counters and enforcement gaps remain. |
 | Forwarding | Speed-limit management | Partial | `/api/v2/speed-limit/*`, admin Limit page | Runtime-side speed-limit enforcement is not fully proven. |
@@ -103,9 +103,9 @@ These items must not be described as production-complete until the listed gaps a
 | Feature | Status | Why It Is Not Complete |
 |---------|--------|------------------------|
 | MFA login challenge enforcement | Partial | Setup/verify APIs exist, but login does not yet require the second factor. |
-| Alipay live payment callback | Planned | Config model exists, but no provider callback implementation and tests. |
-| WeChat Pay live payment callback | Planned | Config model exists, but no provider callback implementation and tests. |
-| USDT live payment confirmation workflow | Planned | Config model exists, but no blockchain confirmation implementation and tests. |
+| Alipay live payment callback | Planned | Config model exists, but no provider callback implementation and tests; enable/use is blocked at service level. |
+| WeChat Pay live payment callback | Planned | Config model exists, but no provider callback implementation and tests; enable/use is blocked at service level. |
+| USDT live payment confirmation workflow | Planned | Config model exists, but no blockchain confirmation implementation and tests; enable/use is blocked at service level. |
 | Stripe live checkout creation | Partial | Webhook verification exists; payment creation currently uses a mocked checkout URL. |
 | PayPal live order creation | Partial | Webhook verification exists; order creation currently uses a mocked approval URL. |
 | Full Flux Panel clone parity | Partial | Compatibility API and major UI surfaces exist, but relation-backed counters, runtime enforcement, and several parity gaps remain. |
