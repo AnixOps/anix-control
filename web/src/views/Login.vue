@@ -57,6 +57,17 @@
             />
           </div>
 
+          <div v-if="mfaRequired && !isRegisterMode" class="form-row">
+            <label for="mfa-code">{{ t('login.mfaCodeLabel') }}</label>
+            <input
+              id="mfa-code"
+              v-model.trim="mfaCode"
+              type="text"
+              :placeholder="t('login.mfaCodePlaceholder')"
+              autocomplete="one-time-code"
+            />
+          </div>
+
           <div v-if="isRegisterMode" class="form-row">
             <label for="confirm-password">{{ t('common.labels.confirmPassword') }}</label>
             <input
@@ -86,7 +97,7 @@
             <span v-if="loading" class="spinner"></span>
             {{ loading
               ? (isRegisterMode ? t('login.loadingRegister') : t('login.loadingLogin'))
-              : (isRegisterMode ? t('login.submitRegister') : t('login.submitLogin')) }}
+              : submitLabel }}
           </button>
         </form>
 
@@ -131,6 +142,16 @@ const loading = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
 const isRegisterMode = ref(false)
+const mfaRequired = ref(false)
+const mfaCode = ref('')
+const mfaMethods = ref([])
+
+const submitLabel = computed(() => {
+  if (isRegisterMode.value) {
+    return t('login.submitRegister')
+  }
+  return mfaRequired.value ? t('login.submitMFA') : t('login.submitLogin')
+})
 
 const enableMockLogin = computed(() => {
   const flag = String(import.meta.env.VITE_ENABLE_MOCK_LOGIN || '').trim().toLowerCase()
@@ -144,14 +165,24 @@ function toggleMode() {
   password.value = ''
   confirmPassword.value = ''
   inviteCode.value = ''
+  resetMFAChallenge()
 }
 
-function resolveAuthPayload(res, fallbackMessage) {
+function resetMFAChallenge() {
+  mfaRequired.value = false
+  mfaCode.value = ''
+  mfaMethods.value = []
+}
+
+function resolveAuthPayload(res, fallbackMessage, options = {}) {
   if (typeof res?.code === 'number' && res.code !== 0) {
     throw new Error(res.msg || fallbackMessage)
   }
 
   const payload = res?.data && typeof res.data === 'object' ? res.data : res
+  if (options.allowMFAChallenge && payload?.mfa_required) {
+    return payload
+  }
   if (!payload?.token) {
     throw new Error(fallbackMessage)
   }
@@ -163,6 +194,7 @@ function resolveAuthErrorMessage(err, fallbackMessage) {
 }
 
 async function handleRegister() {
+  resetMFAChallenge()
   if (!email.value || !password.value) {
     errorMsg.value = t('login.errors.emailPasswordRequired')
     return
@@ -210,6 +242,10 @@ async function handleLogin() {
     errorMsg.value = t('login.errors.emailPasswordRequired')
     return
   }
+  if (mfaRequired.value && !mfaCode.value) {
+    errorMsg.value = t('login.errors.mfaCodeRequired')
+    return
+  }
 
   loading.value = true
   errorMsg.value = ''
@@ -218,16 +254,27 @@ async function handleLogin() {
   try {
     const res = await login({
       email: email.value,
-      password: password.value
+      password: password.value,
+      ...(mfaRequired.value ? { mfa_code: mfaCode.value } : {})
     })
 
-    const { token, is_admin, user_id, email: userEmail } = resolveAuthPayload(res, t('login.errors.loginFailed'))
+    const payload = resolveAuthPayload(res, t('login.errors.loginFailed'), { allowMFAChallenge: true })
+    if (payload.mfa_required) {
+      mfaRequired.value = true
+      mfaCode.value = ''
+      mfaMethods.value = Array.isArray(payload.methods) ? payload.methods : []
+      successMsg.value = t('login.mfaRequired')
+      return
+    }
+
+    const { token, is_admin, user_id, email: userEmail } = payload
     userStore.login(token, {
       id: user_id,
       email: userEmail,
       is_admin
     })
 
+    resetMFAChallenge()
     router.push(is_admin ? '/admin/dashboard' : '/user/dashboard')
   } catch (err) {
     errorMsg.value = resolveAuthErrorMessage(err, t('login.errors.loginFailed'))
@@ -247,6 +294,7 @@ function mockLogin(role) {
     is_admin: role === 'admin'
   }
 
+  resetMFAChallenge()
   userStore.login(`mock-token-${role}`, mockUser)
   router.push(role === 'admin' ? '/admin/dashboard' : '/user/dashboard')
 }

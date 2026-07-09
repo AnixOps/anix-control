@@ -133,6 +133,93 @@ describe('Login.vue', () => {
     })
   })
 
+  it('completes MFA login challenge before storing token', async () => {
+    mockLogin
+      .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        ts: 1783536000000,
+        data: {
+          mfa_required: true,
+          methods: ['totp', 'backup'],
+          user_id: 10,
+          email: 'mfa@example.com',
+        },
+      })
+      .mockResolvedValueOnce({
+        code: 0,
+        msg: '操作成功',
+        ts: 1783536000000,
+        data: {
+          token: 'mfa-token',
+          is_admin: false,
+          user_id: 10,
+          email: 'mfa@example.com',
+        },
+      })
+
+    const wrapper = mount(Login, {
+      global: {
+        stubs: ['router-link'],
+      },
+    })
+
+    await wrapper.find('#email').setValue('mfa@example.com')
+    await wrapper.find('#password').setValue('password123')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mockLogin).toHaveBeenNthCalledWith(1, {
+      email: 'mfa@example.com',
+      password: 'password123',
+    })
+    expect(wrapper.find('#mfa-code').exists()).toBe(true)
+    expect(useUserStore().token).toBe('')
+
+    await wrapper.find('#mfa-code').setValue('123456')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mockLogin).toHaveBeenNthCalledWith(2, {
+      email: 'mfa@example.com',
+      password: 'password123',
+      mfa_code: '123456',
+    })
+    expect(useUserStore().token).toBe('mfa-token')
+  })
+
+  it('requires an MFA code after the challenge response', async () => {
+    mockLogin.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      ts: 1783536000000,
+      data: {
+        mfa_required: true,
+        methods: ['totp'],
+        user_id: 11,
+        email: 'mfa-required@example.com',
+      },
+    })
+
+    const wrapper = mount(Login, {
+      global: {
+        stubs: ['router-link'],
+      },
+    })
+
+    await wrapper.find('#email').setValue('mfa-required@example.com')
+    await wrapper.find('#password').setValue('password123')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mockLogin).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[role="alert"]').text()).toContain('MFA')
+    expect(useUserStore().token).toBe('')
+  })
+
   it('shows panel envelope login errors', async () => {
     mockLogin.mockResolvedValue({
       code: -1,

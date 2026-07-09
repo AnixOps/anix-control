@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/anixops/v2board/internal/config"
+	"github.com/anixops/v2board/internal/database"
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
@@ -122,9 +123,24 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, user, err := h.authService.Login(req.Email, req.Password, h.cfg)
+	user, err := h.authService.Authenticate(req.Email, req.Password)
 	if err != nil {
 		service.GetLoginRateLimiter().RecordFailure(loginRateLimitKey, loginRateLimitOptions)
+		panelError(c, err.Error())
+		return
+	}
+
+	mfaHandled, err := h.handleLoginMFA(c, user, req, loginRateLimitKey, loginRateLimitOptions)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	if mfaHandled {
+		return
+	}
+
+	token, err := h.authService.IssueToken(user, h.cfg)
+	if err != nil {
 		panelError(c, err.Error())
 		return
 	}
@@ -136,4 +152,64 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		"user_id":  user.ID,
 		"email":    user.Email,
 	})
+}
+
+func (h *AuthHandler) handleLoginMFA(c *gin.Context, user *model.User, req model.LoginRequest, loginRateLimitKey string, loginRateLimitOptions service.LoginRateLimitOptions) (bool, error) {
+	mfaService := service.NewMFAService(database.GetDB(), nil)
+	mfa, err := mfaService.GetUserMFA(user.ID)
+	if err != nil {
+		return false, err
+	}
+	if mfa == nil || !mfa.Enabled {
+		return false, nil
+	}
+
+	code := strings.TrimSpace(req.MFACode)
+	method := strings.ToLower(strings.TrimSpace(req.MFAMethod))
+	if code == "" {
+		methods := loginMFAMethods(mfa)
+		panelSuccess(c, gin.H{
+			"mfa_required": true,
+			"methods":      methods,
+			"mfa_methods":  methods,
+			"user_id":      user.ID,
+			"email":        user.Email,
+		})
+		return true, nil
+	}
+
+	valid, err := mfaService.Verify(user.ID, code, method)
+	if err != nil {
+		return false, err
+	}
+
+	attemptMethod := method
+	if attemptMethod == "" {
+		attemptMethod = "auto"
+	}
+	if err := mfaService.RecordLoginAttempt(user.ID, c.ClientIP(), c.GetHeader("User-Agent"), valid, attemptMethod); err != nil {
+		return false, err
+	}
+
+	if !valid {
+		service.GetLoginRateLimiter().RecordFailure(loginRateLimitKey, loginRateLimitOptions)
+		panelError(c, "invalid mfa code")
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func loginMFAMethods(mfa *model.UserMFA) []string {
+	methods := make([]string, 0, 2)
+	if strings.TrimSpace(mfa.TOTPSecret) != "" {
+		methods = append(methods, model.MFAMethodTOTP)
+	}
+	if strings.TrimSpace(mfa.BackupCodes) != "" {
+		methods = append(methods, model.MFAMethodBackup)
+	}
+	if len(methods) == 0 {
+		methods = append(methods, model.MFAMethodTOTP)
+	}
+	return methods
 }

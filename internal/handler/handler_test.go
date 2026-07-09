@@ -97,6 +97,7 @@ func initTestDB() *gorm.DB {
 		&model.Knowledge{},
 		&model.AuthorizedKey{},
 		&model.UserMFA{},
+		&model.MFALoginAttempt{},
 		&model.InviteCode{},
 		&model.CommissionRecord{},
 		&model.CommissionWithdraw{},
@@ -208,6 +209,30 @@ func (s *AuthHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, ms
 	assert.Nil(s.T(), resp["data"])
 	assert.NotContains(s.T(), resp, "message")
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *AuthHandlerTestSuite) createMFAEnabledLoginUser(email, password string) (*model.User, string) {
+	s.T().Helper()
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	s.Require().NoError(err)
+	user := &model.User{
+		Email:          email,
+		Password:       string(hashedPassword),
+		Token:          "token-" + strings.ReplaceAll(email, "@", "-"),
+		UUID:           "uuid-" + strings.ReplaceAll(email, "@", "-"),
+		TransferEnable: 1073741824,
+	}
+	s.Require().NoError(s.db.Create(user).Error)
+
+	mfaService := service.NewMFAService(s.db, nil)
+	setup, err := mfaService.SetupTOTP(user.ID, user.Email)
+	s.Require().NoError(err)
+	code, err := totp.GenerateCode(setup.Secret, time.Now())
+	s.Require().NoError(err)
+	s.Require().NoError(mfaService.EnableTOTP(user.ID, code))
+
+	return user, setup.Secret
 }
 
 func (s *AuthHandlerTestSuite) TestRegisterHandler() {
@@ -478,6 +503,112 @@ func (s *AuthHandlerTestSuite) TestLoginHandler_WrongPassword() {
 	s.router.ServeHTTP(w, req)
 
 	s.assertPanelError(w, "用户不存在或密码错误")
+}
+
+func (s *AuthHandlerTestSuite) TestLoginHandler_MFARequiresCodeBeforeToken() {
+	handler := NewAuthHandler(s.cfg)
+	s.router.POST("/login", handler.Login)
+	user, _ := s.createMFAEnabledLoginUser("mfa-required@example.com", "password123")
+
+	loginBody := map[string]string{
+		"email":    "mfa-required@example.com",
+		"password": "password123",
+	}
+	jsonLoginBody, err := json.Marshal(loginBody)
+	s.Require().NoError(err)
+
+	req, err := http.NewRequest("POST", "/login", bytes.NewReader(jsonLoginBody))
+	s.Require().NoError(err)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), true, data["mfa_required"])
+	assert.Empty(s.T(), data["token"])
+	assert.Equal(s.T(), "mfa-required@example.com", data["email"])
+	assert.Equal(s.T(), float64(user.ID), data["user_id"])
+	assert.ElementsMatch(s.T(), []any{model.MFAMethodTOTP, model.MFAMethodBackup}, data["methods"].([]any))
+	assert.ElementsMatch(s.T(), data["methods"], data["mfa_methods"])
+
+	var attempts int64
+	s.Require().NoError(s.db.Model(&model.MFALoginAttempt{}).Where("user_id = ?", user.ID).Count(&attempts).Error)
+	assert.Equal(s.T(), int64(0), attempts)
+}
+
+func (s *AuthHandlerTestSuite) TestLoginHandler_MFASuccessIssuesTokenAndRecordsAttempt() {
+	handler := NewAuthHandler(s.cfg)
+	s.router.POST("/login", handler.Login)
+	user, secret := s.createMFAEnabledLoginUser("mfa-success@example.com", "password123")
+	code, err := totp.GenerateCode(secret, time.Now())
+	s.Require().NoError(err)
+
+	loginBody := map[string]string{
+		"email":    "mfa-success@example.com",
+		"password": "password123",
+		"mfa_code": code,
+	}
+	jsonLoginBody, err := json.Marshal(loginBody)
+	s.Require().NoError(err)
+
+	req, err := http.NewRequest("POST", "/login", bytes.NewReader(jsonLoginBody))
+	s.Require().NoError(err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "mfa-test")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	data := resp["data"].(map[string]any)
+	assert.NotEmpty(s.T(), data["token"])
+	assert.Equal(s.T(), "mfa-success@example.com", data["email"])
+	assert.Equal(s.T(), float64(user.ID), data["user_id"])
+	assert.Empty(s.T(), data["mfa_required"])
+
+	var attempt model.MFALoginAttempt
+	s.Require().NoError(s.db.Where("user_id = ?", user.ID).First(&attempt).Error)
+	assert.True(s.T(), attempt.Success)
+	assert.Equal(s.T(), "auto", attempt.Method)
+	assert.Equal(s.T(), "mfa-test", attempt.UserAgent)
+
+	var mfa model.UserMFA
+	s.Require().NoError(s.db.Where("user_id = ?", user.ID).First(&mfa).Error)
+	assert.Equal(s.T(), model.MFAMethodTOTP, mfa.LastMethod)
+}
+
+func (s *AuthHandlerTestSuite) TestLoginHandler_MFAInvalidCodeRecordsAttemptWithoutToken() {
+	handler := NewAuthHandler(s.cfg)
+	s.router.POST("/login", handler.Login)
+	user, _ := s.createMFAEnabledLoginUser("mfa-invalid@example.com", "password123")
+
+	loginBody := map[string]string{
+		"email":    "mfa-invalid@example.com",
+		"password": "password123",
+		"mfa_code": "000000",
+	}
+	jsonLoginBody, err := json.Marshal(loginBody)
+	s.Require().NoError(err)
+
+	req, err := http.NewRequest("POST", "/login", bytes.NewReader(jsonLoginBody))
+	s.Require().NoError(err)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid mfa code")
+
+	var attempt model.MFALoginAttempt
+	s.Require().NoError(s.db.Where("user_id = ?", user.ID).First(&attempt).Error)
+	assert.False(s.T(), attempt.Success)
+	assert.Equal(s.T(), "auto", attempt.Method)
 }
 
 func TestAuthHandler(t *testing.T) {
