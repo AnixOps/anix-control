@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // SubscribeHandler 订阅处理器
@@ -267,7 +269,7 @@ func NewSubscriptionAdminHandler() *SubscriptionAdminHandler {
 func (h *SubscriptionAdminHandler) GetGroups(c *gin.Context) {
 	groups, err := h.subscriptionService.GetGroups()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取分组失败", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -279,12 +281,12 @@ func (h *SubscriptionAdminHandler) GetGroups(c *gin.Context) {
 func (h *SubscriptionAdminHandler) CreateGroup(c *gin.Context) {
 	var group model.SubscriptionGroup
 	if err := c.ShouldBindJSON(&group); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	if err := h.subscriptionService.CreateGroup(&group); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "创建分组失败", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -296,13 +298,13 @@ func (h *SubscriptionAdminHandler) CreateGroup(c *gin.Context) {
 func (h *SubscriptionAdminHandler) GetGroup(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		panelError(c, "ID 无效")
 		return
 	}
 
 	group, err := h.subscriptionService.GetGroup(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "分组不存在"})
+		panelError(c, "分组不存在")
 		return
 	}
 
@@ -314,20 +316,20 @@ func (h *SubscriptionAdminHandler) GetGroup(c *gin.Context) {
 func (h *SubscriptionAdminHandler) UpdateGroup(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		panelError(c, "ID 无效")
 		return
 	}
 
 	var group model.SubscriptionGroup
 	if err := c.ShouldBindJSON(&group); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
 	group.ID = uint(id)
 
 	if err := h.subscriptionService.UpdateGroup(&group); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新分组失败", "error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 
@@ -339,12 +341,16 @@ func (h *SubscriptionAdminHandler) UpdateGroup(c *gin.Context) {
 func (h *SubscriptionAdminHandler) DeleteGroup(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID 无效"})
+		panelError(c, "ID 无效")
 		return
 	}
 
 	if err := h.subscriptionService.DeleteGroup(uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "删除分组失败", "error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "分组不存在")
+			return
+		}
+		panelError(c, err.Error())
 		return
 	}
 

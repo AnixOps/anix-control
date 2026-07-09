@@ -596,13 +596,36 @@ export default {
     const totalTraffic = computed(() => groupStats.value.reduce((sum, s) => sum + s.total_traffic, 0))
     const sortedGroupStats = computed(() => [...groupStats.value].sort((a, b) => b.user_count - a.user_count))
 
-    const readSubscriptionPayload = (res) => {
-      if (!res || typeof res !== 'object') return null
-      if (Object.prototype.hasOwnProperty.call(res, 'code')) return res.data ?? null
-      if (res.data && typeof res.data === 'object' && Object.prototype.hasOwnProperty.call(res.data, 'data')) {
-        return res.data.data ?? null
+    const readSubscriptionEnvelopeError = (res) => {
+      const candidates = [res, res?.data]
+      for (const candidate of candidates) {
+        if (!candidate || typeof candidate !== 'object') continue
+        if (!Object.prototype.hasOwnProperty.call(candidate, 'code')) continue
+        if (Number(candidate.code) === 0) return null
+        return candidate.msg || candidate.message || candidate.error || ''
       }
-      return res.data ?? res
+      return null
+    }
+
+    const ensureSubscriptionSuccess = (res, fallbackMessage) => {
+      const message = readSubscriptionEnvelopeError(res)
+      if (message !== null) {
+        throw new Error(message || fallbackMessage)
+      }
+      return res
+    }
+
+    const readSubscriptionPayload = (res, fallbackMessage = t('admin.subscriptions.loadError')) => {
+      const payload = ensureSubscriptionSuccess(res, fallbackMessage)
+      if (!payload || typeof payload !== 'object') return null
+      if (Object.prototype.hasOwnProperty.call(payload, 'code')) return payload.data ?? null
+      if (payload.data && typeof payload.data === 'object' && Object.prototype.hasOwnProperty.call(payload.data, 'code')) {
+        return payload.data.data ?? null
+      }
+      if (payload.data && typeof payload.data === 'object' && Object.prototype.hasOwnProperty.call(payload.data, 'data')) {
+        return payload.data.data ?? null
+      }
+      return payload.data ?? payload
     }
 
     const readSubscriptionList = (res) => {
@@ -857,7 +880,10 @@ export default {
     const deleteGroup = async (group) => {
       if (!confirm(t('admin.subscriptions.confirmDeleteGroup'))) return
       try {
-        await adminApi.deleteSubscriptionGroup(group.id)
+        ensureSubscriptionSuccess(
+          await adminApi.deleteSubscriptionGroup(group.id),
+          t('admin.subscriptions.deleteError')
+        )
         showToast(t('admin.subscriptions.groupDeleted'), 'success')
         loadGroups()
         if (selectedGroup.value?.id === group.id) {
@@ -885,9 +911,15 @@ export default {
         }
         
         if (groupForm.id) {
-          await adminApi.updateSubscriptionGroup(groupForm.id, data)
+          ensureSubscriptionSuccess(
+            await adminApi.updateSubscriptionGroup(groupForm.id, data),
+            t('admin.subscriptions.saveError')
+          )
         } else {
-          await adminApi.createSubscriptionGroup(data)
+          ensureSubscriptionSuccess(
+            await adminApi.createSubscriptionGroup(data),
+            t('admin.subscriptions.saveError')
+          )
         }
         
         showToast(t('admin.subscriptions.groupSaved'), 'success')
