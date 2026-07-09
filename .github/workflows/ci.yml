@@ -115,6 +115,22 @@ jobs:
 
           bash config/scripts/check_docs_updated.sh --base "${base}" --head HEAD
 
+  release-workflow-policy:
+    name: Release Workflow Policy Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Validate release workflow policy script syntax
+        run: bash -n config/scripts/check_release_workflow.sh
+
+      - name: Run release workflow policy self-test
+        run: bash config/scripts/check_release_workflow.sh --self-test
+
+      - name: Enforce release workflow policy
+        run: bash config/scripts/check_release_workflow.sh
+
   go-quality:
     name: Go Quality Gates
     runs-on: ubuntu-latest

@@ -37,6 +37,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Make generated-file-excluded full-repository `gosec` findings blocking after triage.
 - [x] Make `golangci-lint` blocking after baseline cleanup.
 - [x] Add SBOM generation to release workflow.
+- [x] Add a release workflow policy CI check for tag gating, required release prerequisites, multi-platform artifacts, checksums, SBOM, Docker metadata, operator runbook, and release notes.
 
 ## P1: Security And Error Handling
 
@@ -145,6 +146,7 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Add a CI-tested helper for cleaning local source-tree build artifacts without removing config, databases, certificates, backups, or `web/node_modules`.
 - [x] Add a CI release-build policy check so panel and V2bX deployment scripts cannot add unguarded local build commands.
 - [x] Add a documentation sync CI check so source, frontend, deployment, workflow, and config changes cannot land without updated status docs or changelog evidence.
+- [x] Add a release workflow policy CI check so release artifact, checksum, SBOM, Docker metadata, and runbook requirements cannot be removed silently.
 
 ## P3: API And UI Consistency
 

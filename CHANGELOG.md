@@ -152,6 +152,7 @@
 
 ### CI/CD
 
+- Added a release workflow policy CI gate with self-tests so tag-gated release jobs keep their quality/security/race/test prerequisites, multi-platform binary matrix, Docker metadata, frontend archives, checksums, SBOM, operator deployment runbook, and generated release notes.
 - Added a documentation sync CI gate with self-tests so implementation, frontend, deployment, workflow, or config changes must include maintained status documentation such as `CHANGELOG.md`, `TODO.md`, `docs/features.md`, audit docs, forwarding docs, guide docs, reference docs, or manual intervention notes.
 - Added Go quality gates for `go mod tidy`, `gofmt`, `go vet`, full `go test ./...`, race testing, benchmark smoke testing, `govulncheck`, blocking production runtime `gosec`, non-blocking full-repository `golangci-lint` reports, and Docker build smoke testing.
 - Promoted full-repository `golangci-lint` from report-only to a blocking CI gate after clearing the baseline.
