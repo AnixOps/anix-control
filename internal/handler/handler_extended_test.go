@@ -2963,6 +2963,22 @@ func (s *SubscribeExtendedTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *SubscribeExtendedTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+	if msgContains != "" {
+		msg, ok := resp["msg"].(string)
+		assert.True(s.T(), ok)
+		assert.Contains(s.T(), strings.ToLower(msg), strings.ToLower(msgContains))
+	}
+}
+
 func (s *SubscribeExtendedTestSuite) TestGetGroups() {
 	handler := NewSubscriptionAdminHandler()
 	s.router.GET("/admin/subscription/groups", handler.GetGroups)
@@ -3014,7 +3030,30 @@ func (s *SubscribeExtendedTestSuite) TestCreateGroup_InvalidBody() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "invalid")
+}
+
+func (s *SubscribeExtendedTestSuite) TestGetGroup_NotFound() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.GET("/admin/subscription/groups/:id", handler.GetGroup)
+
+	req, _ := http.NewRequest("GET", "/admin/subscription/groups/99999", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "分组不存在")
+}
+
+func (s *SubscribeExtendedTestSuite) TestUpdateGroup_InvalidBody() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.PUT("/admin/subscription/groups/:id", handler.UpdateGroup)
+
+	req, _ := http.NewRequest("PUT", "/admin/subscription/groups/"+strconv.FormatUint(uint64(s.testGroup.ID), 10), strings.NewReader("invalid"))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid")
 }
 
 func (s *SubscribeExtendedTestSuite) TestDeleteGroup() {
@@ -3033,6 +3072,17 @@ func (s *SubscribeExtendedTestSuite) TestDeleteGroup() {
 	data := resp["data"].(map[string]any)
 	assert.Equal(s.T(), "删除成功", data["message"])
 	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *SubscribeExtendedTestSuite) TestDeleteGroup_NotFound() {
+	handler := NewSubscriptionAdminHandler()
+	s.router.DELETE("/admin/subscription/groups/:id", handler.DeleteGroup)
+
+	req, _ := http.NewRequest("DELETE", "/admin/subscription/groups/99999", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "分组不存在")
 }
 
 func (s *SubscribeExtendedTestSuite) TestGetTemplates() {

@@ -5,11 +5,14 @@ import Subscriptions from '@/views/admin/Subscriptions.vue'
 import { setLocale } from '@/i18n'
 
 const adminApiMock = vi.hoisted(() => ({
+  createSubscriptionGroup: vi.fn(),
+  deleteSubscriptionGroup: vi.fn(),
   getAvailableProtocols: vi.fn(),
   getSubscriptionGroups: vi.fn(),
   getSubscriptionProtocols: vi.fn(),
   getSubscriptionTemplates: vi.fn(),
-  previewSubscription: vi.fn()
+  previewSubscription: vi.fn(),
+  updateSubscriptionGroup: vi.fn()
 }))
 
 const getSubscriptionStatsMock = vi.hoisted(() => vi.fn())
@@ -31,6 +34,9 @@ describe('Admin Subscriptions', () => {
     adminApiMock.getSubscriptionProtocols.mockResolvedValue({ data: [] })
     adminApiMock.getAvailableProtocols.mockResolvedValue({ data: [] })
     adminApiMock.previewSubscription.mockResolvedValue({ data: { content: '' } })
+    adminApiMock.createSubscriptionGroup.mockResolvedValue({})
+    adminApiMock.updateSubscriptionGroup.mockResolvedValue({})
+    adminApiMock.deleteSubscriptionGroup.mockResolvedValue({})
     getSubscriptionStatsMock.mockResolvedValue({ data: [] })
   })
 
@@ -155,6 +161,78 @@ describe('Admin Subscriptions', () => {
     await flushPromises()
 
     expect(wrapper.vm.previewContent).toBe('enveloped-preview-content')
+
+    wrapper.unmount()
+  })
+
+  it('shows an error when subscription group list returns code -1', async () => {
+    adminApiMock.getSubscriptionGroups.mockResolvedValueOnce({
+      code: -1,
+      msg: 'group list rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Subscriptions)
+    await flushPromises()
+
+    expect(wrapper.vm.groups).toEqual([])
+    expect(wrapper.vm.toastType).toBe('error')
+    expect(wrapper.vm.toastMessage).toBe('Failed to load subscription data')
+
+    wrapper.unmount()
+  })
+
+  it('does not close group modal or refresh groups when enveloped save fails', async () => {
+    adminApiMock.createSubscriptionGroup.mockResolvedValueOnce({
+      code: -1,
+      msg: 'group save rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Subscriptions)
+    await flushPromises()
+    adminApiMock.getSubscriptionGroups.mockClear()
+    wrapper.vm.showCreateGroupModal = true
+    Object.assign(wrapper.vm.groupForm, {
+      id: null,
+      name: 'Rejected Group',
+      description: '',
+      priority: 0,
+      enable: true
+    })
+
+    await wrapper.vm.saveGroup()
+    await flushPromises()
+
+    expect(wrapper.vm.toastType).toBe('error')
+    expect(wrapper.vm.toastMessage).toBe('Save failed')
+    expect(wrapper.vm.showCreateGroupModal).toBe(true)
+    expect(adminApiMock.getSubscriptionGroups).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('does not refresh groups when enveloped delete fails', async () => {
+    vi.spyOn(window, 'confirm').mockImplementation(() => true)
+    adminApiMock.deleteSubscriptionGroup.mockResolvedValueOnce({
+      code: -1,
+      msg: 'group delete rejected',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mount(Subscriptions)
+    await flushPromises()
+    adminApiMock.getSubscriptionGroups.mockClear()
+
+    await wrapper.vm.deleteGroup({ id: 10, name: 'Rejected Group' })
+    await flushPromises()
+
+    expect(wrapper.vm.toastType).toBe('error')
+    expect(wrapper.vm.toastMessage).toBe('Delete failed')
+    expect(adminApiMock.getSubscriptionGroups).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })

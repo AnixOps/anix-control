@@ -2506,6 +2506,22 @@ func (s *SubscriptionAdminHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+func (s *SubscriptionAdminHandlerTestSuite) assertPanelError(w *httptest.ResponseRecorder, msgContains string) {
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(-1), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	assert.Nil(s.T(), resp["data"])
+	assert.NotContains(s.T(), resp, "message")
+	assert.NotContains(s.T(), resp, "error")
+	if msgContains != "" {
+		msg, ok := resp["msg"].(string)
+		assert.True(s.T(), ok)
+		assert.Contains(s.T(), strings.ToLower(msg), strings.ToLower(msgContains))
+	}
+}
+
 func (s *SubscriptionAdminHandlerTestSuite) TestGetGroups_Success() {
 	handler := NewSubscriptionAdminHandler()
 	s.router.GET("/groups", handler.GetGroups)
@@ -2555,7 +2571,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetGroup_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "id")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetGroup_NotFound() {
@@ -2566,7 +2582,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestGetGroup_NotFound() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	s.assertPanelError(w, "分组不存在")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestUpdateGroup_InvalidID() {
@@ -2581,7 +2597,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestUpdateGroup_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "id")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestDeleteGroup_InvalidID() {
@@ -2592,7 +2608,7 @@ func (s *SubscriptionAdminHandlerTestSuite) TestDeleteGroup_InvalidID() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+	s.assertPanelError(w, "id")
 }
 
 func (s *SubscriptionAdminHandlerTestSuite) TestGetTemplates_InvalidID() {

@@ -56,7 +56,7 @@ two documents disagree, this file is the status source of truth.
 | Admin | Plan management | Implemented | CRUD and assign | None known. |
 | Admin | Order management | Implemented | list/detail/status/paid/cancel | Payment provider callbacks remain separate. |
 | Admin | Node management and protocol configuration | Implemented | CRUD, credentials, raw config, protocol templates, auth keys | Keep V2bX compatibility tests current. |
-| Admin | Subscription groups, templates, preview, user/plan binding | Implemented | `/api/v2/admin/subscription/*` | Keep public subscription compatibility separate. |
+| Admin | Subscription groups, templates, preview, user/plan binding | Implemented | `/api/v2/admin/subscription/*`, unified group CRUD success/user-error envelopes | Keep public subscription compatibility separate. |
 | Admin | Ticket management | Implemented | list/reply/close | None known. |
 | Admin | Coupon management | Implemented | list/create/delete | Add update API only if product requires it. |
 | Admin | Knowledge management | Implemented | list/create/update/delete | None known. |

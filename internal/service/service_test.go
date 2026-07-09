@@ -2130,6 +2130,11 @@ func (s *SubscriptionServiceTestSuite) TestDeleteGroup() {
 	assert.Error(s.T(), err)
 }
 
+func (s *SubscriptionServiceTestSuite) TestDeleteGroup_NotFound() {
+	err := s.svc.DeleteGroup(99999)
+	assert.Error(s.T(), err)
+}
+
 func (s *SubscriptionServiceTestSuite) TestGetGroups() {
 	// 鍒涘缓澶氫釜鍒嗙粍
 	for i := 1; i <= 3; i++ {

@@ -740,14 +740,25 @@ func (s *SubscriptionService) UpdateGroup(group *model.SubscriptionGroup) error 
 
 // DeleteGroup 删除订阅分组
 func (s *SubscriptionService) DeleteGroup(id uint) error {
-	// 先删除关联的模板
-	s.db.Where("group_id = ?", id).Delete(&model.SubscriptionTemplate{})
-	// 删除用户关联
-	s.db.Where("group_id = ?", id).Delete(&model.UserSubscriptionGroup{})
-	// 删除套餐关联
-	s.db.Where("group_id = ?", id).Delete(&model.PlanSubscriptionGroup{})
-	// 删除分组
-	return s.db.Delete(&model.SubscriptionGroup{}, id).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var group model.SubscriptionGroup
+		if err := tx.First(&group, id).Error; err != nil {
+			return err
+		}
+
+		// 先删除关联数据，再删除分组，避免留下孤儿订阅配置。
+		if err := tx.Where("group_id = ?", id).Delete(&model.SubscriptionTemplate{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("group_id = ?", id).Delete(&model.UserSubscriptionGroup{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("group_id = ?", id).Delete(&model.PlanSubscriptionGroup{}).Error; err != nil {
+			return err
+		}
+
+		return tx.Delete(&group).Error
+	})
 }
 
 // GetGroup 获取订阅分组
