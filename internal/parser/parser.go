@@ -63,6 +63,7 @@ func NewRegistry() *Registry {
 	r.RegisterFormatter(model.FormatShadowrocket, &ShadowrocketFormatter{})
 	r.RegisterFormatter(model.FormatQuantumultX, &QuantumultXFormatter{})
 	r.RegisterFormatter(model.FormatSingBox, &SingBoxFormatter{})
+	r.RegisterFormatter(model.FormatWireGuard, &WireGuardFormatter{})
 
 	return r
 }

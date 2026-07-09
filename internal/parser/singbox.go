@@ -125,6 +125,8 @@ func (f *SingBoxFormatter) buildOutbound(node *model.ParsedNode, ctx *model.Temp
 		f.buildHysteria2(outbound, node, ctx)
 	case "tuic":
 		f.buildTUIC(outbound, node, ctx)
+	case "wireguard":
+		f.buildWireGuard(outbound, node)
 	default:
 		return nil
 	}
@@ -243,6 +245,32 @@ func (f *SingBoxFormatter) buildTUIC(outbound map[string]any, node *model.Parsed
 	outbound["password"] = node.Password
 
 	f.addTLS(outbound, node)
+}
+
+func (f *SingBoxFormatter) buildWireGuard(outbound map[string]any, node *model.ParsedNode) {
+	outbound["type"] = "wireguard"
+	outbound["local_address"] = []string{wireGuardAddress(node.PeerIP)}
+	outbound["private_key"] = node.PrivateKey
+	outbound["peer_public_key"] = node.PublicKey
+	if node.PresharedKey != "" {
+		outbound["pre_shared_key"] = node.PresharedKey
+	}
+	if node.MTU > 0 {
+		outbound["mtu"] = node.MTU
+	} else {
+		outbound["mtu"] = 1280
+	}
+	if len(node.AllowedIPs) > 0 {
+		outbound["peers"] = []any{
+			map[string]any{
+				"server":         node.Server,
+				"server_port":    node.Port,
+				"public_key":     node.PublicKey,
+				"pre_shared_key": node.PresharedKey,
+				"allowed_ips":    node.AllowedIPs,
+			},
+		}
+	}
 }
 
 func (f *SingBoxFormatter) addTLS(outbound map[string]any, node *model.ParsedNode) {

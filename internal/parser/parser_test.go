@@ -15,7 +15,7 @@ func TestNewRegistry(t *testing.T) {
 	r := NewRegistry()
 	assert.NotNil(t, r)
 	assert.Len(t, r.parsers, 3)     // Base64, Clash, SIP008
-	assert.Len(t, r.formatters, 11) // All registered formatters
+	assert.Len(t, r.formatters, 12) // All registered formatters
 }
 
 func TestRegistry_RegisterParser(t *testing.T) {
@@ -50,6 +50,7 @@ func TestRegistry_GetFormatter(t *testing.T) {
 		model.FormatShadowrocket,
 		model.FormatQuantumultX,
 		model.FormatSingBox,
+		model.FormatWireGuard,
 	}
 
 	for _, format := range tests {

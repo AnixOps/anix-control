@@ -710,6 +710,10 @@ func (s *SubscriptionService) nodeProtocolToParsedNode(node *model.Node, protoco
 		}
 	}
 
+	if parsed.Type == string(model.ProtocolWireGuard) {
+		s.applyWireGuardPeer(parsed, protocol, ctx)
+	}
+
 	return parsed
 }
 

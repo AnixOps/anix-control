@@ -150,7 +150,7 @@ type TemplateRenderContext struct {
 type ParsedNode struct {
 	ID     string `json:"id"`     // 唯一标识 (hash)
 	Name   string `json:"name"`   // 节点名称
-	Type   string `json:"type"`   // 协议类型: vless, vmess, trojan, shadowsocks, hysteria2, tuic, anytls
+	Type   string `json:"type"`   // 协议类型: vless, vmess, trojan, shadowsocks, hysteria2, tuic, anytls, wireguard
 	Server string `json:"server"` // 服务器地址 (host)
 	Port   int    `json:"port"`   // 服务器端口 (server_port)
 
@@ -181,6 +181,15 @@ type ParsedNode struct {
 	// Shadowsocks 配置
 	Cipher    string `json:"cipher,omitempty"`     // SS 加密方式
 	ServerKey string `json:"server_key,omitempty"` // SS2022 服务器密钥
+
+	// WireGuard 配置
+	PrivateKey   string   `json:"private_key,omitempty"`
+	PublicKey    string   `json:"public_key,omitempty"`
+	PresharedKey string   `json:"preshared_key,omitempty"`
+	PeerIP       string   `json:"peer_ip,omitempty"`
+	AllowedIPs   []string `json:"allowed_ips,omitempty"`
+	DNS          []string `json:"dns,omitempty"`
+	MTU          int      `json:"mtu,omitempty"`
 
 	// 传输层配置 (network)
 	Transport         string         `json:"transport,omitempty"`          // 传输协议: tcp, ws, grpc, httpupgrade, xhttp
@@ -215,6 +224,8 @@ func (n *ParsedNode) IsValid() bool {
 		return n.Password != ""
 	case "shadowsocks":
 		return n.Password != "" || n.Cipher != ""
+	case "wireguard":
+		return n.PrivateKey != "" && n.PublicKey != "" && n.PeerIP != ""
 	default:
 		// Unknown types are considered valid (let downstream handle them)
 		return true
@@ -280,6 +291,7 @@ const (
 	FormatJSON         SubscriptionFormat = "json"         // 原始 JSON
 	FormatBase64JSON   SubscriptionFormat = "base64json"   // Base64 编码的 JSON (你的自定义格式)
 	FormatSingBox      SubscriptionFormat = "sing-box"     // Sing-box JSON
+	FormatWireGuard    SubscriptionFormat = "wireguard"    // WireGuard 原生配置
 )
 
 // SubscriptionRequest 订阅请求参数
