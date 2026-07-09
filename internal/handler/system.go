@@ -1184,12 +1184,16 @@ func (h *LoadBalancerHandler) GetLoadBalancerStats(c *gin.Context) {
 
 	lbID, err := strconv.ParseUint(id, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		panelError(c, "invalid id")
+		return
+	}
+	if _, err := h.lbService.GetByID(uint(lbID)); err != nil {
+		panelError(c, "load balancer not found")
 		return
 	}
 	stats, err := h.lbService.GetStats(uint(lbID))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		panelError(c, err.Error())
 		return
 	}
 

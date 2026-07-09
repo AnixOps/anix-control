@@ -2300,6 +2300,28 @@ func (s *LoadBalancerTestSuite) TestGetLoadBalancerStats() {
 	assert.NotNil(s.T(), resp["data"])
 }
 
+func (s *LoadBalancerTestSuite) TestGetLoadBalancerStats_InvalidID() {
+	handler := NewLoadBalancerHandler()
+	s.router.GET("/admin/loadbalancers/:id/stats", handler.GetLoadBalancerStats)
+
+	req, _ := http.NewRequest("GET", "/admin/loadbalancers/invalid/stats", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "invalid id")
+}
+
+func (s *LoadBalancerTestSuite) TestGetLoadBalancerStats_NotFound() {
+	handler := NewLoadBalancerHandler()
+	s.router.GET("/admin/loadbalancers/:id/stats", handler.GetLoadBalancerStats)
+
+	req, _ := http.NewRequest("GET", "/admin/loadbalancers/99999/stats", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	s.assertPanelError(w, "load balancer not found")
+}
+
 func (s *LoadBalancerTestSuite) TestRunHealthCheck() {
 	handler := NewLoadBalancerHandler()
 	s.router.POST("/admin/loadbalancers/:id/check", handler.RunHealthCheck)
