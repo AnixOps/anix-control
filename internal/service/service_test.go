@@ -2844,16 +2844,20 @@ func (s *NotificationServiceTestSuite) TestSendAsyncCopiesUserID() {
 	originalID := s.testUser.ID
 	userID := originalID
 
-	s.svc.sendAsync(&userID, "webhook", "test.async.copy", "Async", "Content", nil)
+	done := s.svc.sendAsync(&userID, "webhook", "test.async.copy", "Async", "Content", nil)
 	userID = originalID + 1000
 
+	select {
+	case err := <-done:
+		assert.NoError(s.T(), err)
+	case <-time.After(2 * time.Second):
+		s.T().Fatal("timed out waiting for async notification send")
+	}
+
 	var log model.NotificationLog
-	assert.Eventually(s.T(), func() bool {
-		err := database.Get().
-			Where("event = ?", "test.async.copy").
-			First(&log).Error
-		return err == nil && log.Status == 1
-	}, 2*time.Second, 10*time.Millisecond)
+	require.NoError(s.T(), database.Get().
+		Where("event = ?", "test.async.copy").
+		First(&log).Error)
 
 	if assert.NotNil(s.T(), log.UserID) {
 		assert.Equal(s.T(), originalID, *log.UserID)

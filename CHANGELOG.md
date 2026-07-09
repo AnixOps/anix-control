@@ -9,6 +9,7 @@
 
 ### Fixed
 
+- Made notification async sends return a completion signal and updated the user-ID copy regression test to wait for the send path, removing a timing race with shared service-test database cleanup.
 - Fixed the integration workflow coverage upload by generating `coverage.out` during integration unit tests before uploading the artifact.
 - Refreshed GitHub Actions workflow dependencies to current action major versions so CI/release jobs no longer depend on Node.js 20 action runtimes.
 - Fixed the GitHub Actions CI baseline by pinning Go setup to `1.26.5` for stdlib vulnerability scanning and adding focused gRPC NodeLog/server-context tests so the gRPC coverage gate remains above 80%.

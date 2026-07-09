@@ -84,15 +84,17 @@ func (s *NotificationService) Send(userID *uint, notifyType, event, title, conte
 	return err
 }
 
-func (s *NotificationService) sendAsync(userID *uint, notifyType, event, title, content string, data map[string]any) {
+func (s *NotificationService) sendAsync(userID *uint, notifyType, event, title, content string, data map[string]any) <-chan error {
 	var copiedUserID *uint
 	if userID != nil {
 		id := *userID
 		copiedUserID = &id
 	}
 
+	done := make(chan error, 1)
 	go func() {
-		if err := s.Send(copiedUserID, notifyType, event, title, content, data); err != nil {
+		err := s.Send(copiedUserID, notifyType, event, title, content, data)
+		if err != nil {
 			attrs := []any{
 				"type", notifyType,
 				"event", event,
@@ -103,7 +105,11 @@ func (s *NotificationService) sendAsync(userID *uint, notifyType, event, title, 
 			}
 			slog.Warn("notification send failed", attrs...)
 		}
+		done <- err
+		close(done)
 	}()
+
+	return done
 }
 
 // SendEmail 发送邮件
