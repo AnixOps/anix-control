@@ -255,15 +255,16 @@ func validateWireGuardRelay(settings map[string]any, enabled bool, tunnelType st
 		if serverPort < 0 || serverPort > 65535 || (enabled && serverPort < 1) {
 			return fmt.Errorf("WireGuard relay.server_port 必须在 1-65535 之间: %d", serverPort)
 		}
-		if role == "entry" {
+		switch role {
+		case "entry":
 			if enabled && strings.TrimSpace(stringSetting(relay, "server", "")) == "" {
 				return errors.New("启用的 WireGuard entry relay 必须配置 relay.server 和 relay.server_port")
 			}
-		} else if role == "exit" {
+		case "exit":
 			if enabled && stringSetting(relay, "entry_tun_address", "") == "" {
 				return errors.New("启用的 WireGuard exit relay 必须配置 relay.entry_tun_address")
 			}
-		} else {
+		default:
 			return fmt.Errorf("WireGuard relay.role 不支持: %q", role)
 		}
 		if tunnelType == "wss" {

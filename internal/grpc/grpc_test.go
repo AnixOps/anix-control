@@ -371,6 +371,8 @@ func (s *GRPCIntegrationSuite) SetupSuite() {
 		&model.AuthorizedKey{},
 		&model.TrafficLog{},
 		&model.OnlineLog{},
+		&model.StatUser{},
+		&model.StatServer{},
 	)
 
 	// 启动 gRPC 服务器
@@ -995,6 +997,8 @@ func (s *GRPCStreamSuite) SetupSuite() {
 		&model.AuthorizedKey{},
 		&model.TrafficLog{},
 		&model.OnlineLog{},
+		&model.StatUser{},
+		&model.StatServer{},
 	)
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")

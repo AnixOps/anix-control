@@ -494,6 +494,34 @@ func (h *NodeHandler) GetNodeRawConfig(c *gin.Context) {
 	})
 }
 
+func decodeRawConfigObject(raw any) (map[string]any, []byte, error) {
+	var (
+		jsonBytes []byte
+		err       error
+	)
+	if rawString, ok := raw.(string); ok {
+		jsonBytes = []byte(rawString)
+	} else {
+		jsonBytes, err = json.Marshal(raw)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	var config map[string]any
+	if err := json.Unmarshal(jsonBytes, &config); err != nil || config == nil {
+		if err == nil {
+			err = errors.New("raw config must be an object")
+		}
+		return nil, nil, err
+	}
+	normalized, err := json.Marshal(config)
+	if err != nil {
+		return nil, nil, err
+	}
+	return config, normalized, nil
+}
+
 // UpdateNodeRawConfig godoc
 // @Summary 更新节点原始配置
 // @Description 管理员更新指定节点的原始JSON配置（高级模式）
@@ -525,13 +553,8 @@ func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
 	// 验证并序列化 JSON
 	var rawConfigStr *string
 	if req.RawConfig != nil {
-		jsonBytes, err := json.Marshal(req.RawConfig)
+		config, jsonBytes, err := decodeRawConfigObject(req.RawConfig)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "无效的 JSON 配置"})
-			return
-		}
-		var config map[string]any
-		if err := json.Unmarshal(jsonBytes, &config); err != nil || config == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "原始配置必须是 JSON 对象"})
 			return
 		}
@@ -573,20 +596,8 @@ func (h *NodeHandler) ValidateRawConfig(c *gin.Context) {
 		return
 	}
 
-	// 验证 JSON 结构
-	jsonBytes, err := json.Marshal(req.RawConfig)
+	config, jsonBytes, err := decodeRawConfigObject(req.RawConfig)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"valid":   false,
-			"message": "无效的 JSON",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	// 检查必要字段
-	var config map[string]any
-	if err := json.Unmarshal(jsonBytes, &config); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"valid":   false,
 			"message": "配置必须是 JSON 对象",
