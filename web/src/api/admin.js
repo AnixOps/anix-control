@@ -292,6 +292,13 @@ export function getProtocolTemplates() {
   })
 }
 
+export function generateWireGuardKeypair() {
+  return request({
+    url: '/admin/wireguard/keypair',
+    method: 'post'
+  })
+}
+
 export function getAuthKeys() {
   return request({
     url: '/admin/auth-keys',

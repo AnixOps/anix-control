@@ -17,6 +17,7 @@ const adminApi = vi.hoisted(() => ({
   getProtocolTemplates: vi.fn(),
   getAuthKeys: vi.fn(),
   generateAuthKey: vi.fn(),
+  generateWireGuardKeypair: vi.fn(),
   deleteAuthKey: vi.fn()
 }))
 
@@ -43,6 +44,7 @@ describe('Nodes.vue', () => {
     adminApi.getNodeProtocols.mockResolvedValue({ data: [] })
     adminApi.getProtocolTemplates.mockResolvedValue({ data: [] })
     adminApi.getAuthKeys.mockResolvedValue({ data: [] })
+    adminApi.generateWireGuardKeypair.mockResolvedValue({ data: { private_key: '', public_key: '' } })
   })
 
   it('stops follow-up admin requests when the initial nodes load fails', async () => {
@@ -190,6 +192,9 @@ describe('Nodes.vue', () => {
       serverPublicKey: 'server-public',
       role: 'exit',
       wssCompat: true,
+      wssPath: '/wireguard',
+      wssCertFile: '/etc/v2bx/relay-cert.pem',
+      wssKeyFile: '/etc/v2bx/relay-key.pem',
       relayServerPort: 9443,
       tunPort: 8422,
       entryTunAddress: '172.31.88.2/24',
@@ -209,9 +214,16 @@ describe('Nodes.vue', () => {
     expect(json.settings.relay.mode).toBe('relay+wss')
     expect(json.settings.relay.role).toBe('exit')
     expect(json.settings.relay.wss_compat).toBe(true)
+    expect(json.settings.relay.wss_path).toBe('/wireguard')
+    expect(json.settings.relay.wss_secure).toBe(false)
+    expect(json.settings.relay.wss_cert_file).toBe('/etc/v2bx/relay-cert.pem')
+    expect(json.settings.relay.wss_key_file).toBe('/etc/v2bx/relay-key.pem')
     expect(json.settings.relay.entry_tun_address).toBe('172.31.88.2/24')
     expect(json.settings.relay.exit_tun_address).toBe('172.31.88.1/24')
     expect(json.settings.relay.outbound_iface).toBe('eth0')
+    expect(json.show).toBe(0)
+    expect(json.settings.server_private_key).toBe('')
+    expect(json.settings.server_public_key).toBe('')
   })
 
   it('saves WireGuard visual protocol settings through the node protocol API', async () => {

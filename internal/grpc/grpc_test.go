@@ -599,6 +599,49 @@ func (s *GRPCIntegrationSuite) TestUsersWithPlan() {
 	assert.True(s.T(), found, "User should be in the response")
 }
 
+func (s *GRPCIntegrationSuite) TestWireGuardExitDoesNotReceiveRuntimeUsers() {
+	db := database.Get()
+	groupID := uint(1)
+	node := &model.Node{
+		Name:    "wireguard-exit-user-test",
+		Host:    "198.51.100.10",
+		GroupID: &groupID,
+		Status:  model.NodeStatusOnline,
+		APIKey:  "wireguard-exit-api-key",
+	}
+	s.Require().NoError(db.Create(node).Error)
+
+	settings := `{"cidr":"10.66.0.0/24","relay":{"backend":"gost","role":"exit","server_port":8443,"entry_tun_address":"172.31.66.2/24","exit_tun_address":"172.31.66.1/24"}}`
+	protocol := &model.NodeProtocol{
+		NodeID:   node.ID,
+		Type:     model.ProtocolWireGuard,
+		Enable:   1,
+		Settings: &settings,
+	}
+	s.Require().NoError(db.Create(protocol).Error)
+
+	userGroupID := groupID
+	user := &model.User{
+		Email:          "wireguard-exit-user@example.com",
+		Password:       "hashed_password",
+		Token:          "wireguard-exit-token-" + uuid.New().String()[:8],
+		UUID:           uuid.New().String(),
+		GroupID:        &userGroupID,
+		TransferEnable: 1073741824,
+	}
+	s.Require().NoError(db.Create(user).Error)
+
+	client := pb.NewUserServiceClient(s.clientConn)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ctx = metadata.AppendToOutgoingContext(ctx, "x-node-type", "wireguard")
+	resp, err := client.GetUsers(ctx, &pb.UserListRequest{NodeId: uint32(node.ID)})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Zero(resp.Total)
+	s.Empty(resp.Users)
+}
+
 // TestTrafficReportWithRate 测试流量倍率
 func (s *GRPCIntegrationSuite) TestTrafficReportWithRate() {
 	db := database.Get()

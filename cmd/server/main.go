@@ -407,6 +407,12 @@ func main() {
 	} else {
 		log.Println("Production mode: skipping AutoMigrate. Use explicit migrations in production.")
 	}
+	if err := service.EnsureWireGuardPeerSchema(database.Get()); err != nil {
+		log.Fatalf("Failed to ensure WireGuard peer schema: %v", err)
+	}
+	if err := service.EnsureNodeRuntimeHealthSchema(database.Get()); err != nil {
+		log.Fatalf("Failed to ensure node runtime health schema: %v", err)
+	}
 
 	// 初始化管理员账号
 	service.InitAdmin(cfg)

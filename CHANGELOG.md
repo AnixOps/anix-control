@@ -4,7 +4,7 @@
 
 ### Added
 
-- Added the first P0 WireGuard panel slice: `wireguard` node protocol template, stored per-user peer keypair/PSK/IP custody, native WireGuard `.conf` subscription output, sing-box WireGuard outbound output, and targeted unit coverage.
+- Added the first P0 WireGuard panel slice: `wireguard` node protocol template, stored per-user peer keypair/PSK/IP custody, native WireGuard `.conf` subscription output, sing-box 1.13-compatible WireGuard endpoint output, and targeted unit coverage.
 - Added WireGuard UniProxy/gRPC runtime user fields so V2bX can receive panel-managed peer IP, public key, and preshared key for domestic entry termination.
 - Updated P0 WireGuard status docs for the V2bX v2.3.3 runtime slice, which adds initial WireGuard peer online-state reporting from recent `wg show <iface> dump` handshakes.
 - Extended the WireGuard relay runtime contract with entry/exit GOST TUN fields for V2bX entry policy routing and overseas exit NAT command application.

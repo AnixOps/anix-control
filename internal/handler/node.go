@@ -9,6 +9,7 @@ import (
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/service"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // NodeHandler 节点处理器
@@ -101,6 +102,43 @@ func (h *NodeHandler) Heartbeat(c *gin.Context) {
 		return
 	}
 
+	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+// RuntimeHealth godoc
+// @Summary 上报节点运行时健康状态
+// @Description 节点上报 WireGuard/GOST 等托管运行时的进程健康状态，不覆盖普通心跳状态
+// @Tags 节点通信
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body model.NodeRuntimeHealthRequest true "运行时健康状态"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 401 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /node/runtime-health [post]
+func (h *NodeHandler) RuntimeHealth(c *gin.Context) {
+	nodeID, exists := c.Get("node_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "未授权"})
+		return
+	}
+
+	var req model.NodeRuntimeHealthRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "参数错误"})
+		return
+	}
+	if err := h.nodeService.UpdateRuntimeHealth(nodeID.(uint), req.Healthy, req.Error); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "运行时状态更新失败"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
@@ -492,6 +530,15 @@ func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "无效的 JSON 配置"})
 			return
 		}
+		var config map[string]any
+		if err := json.Unmarshal(jsonBytes, &config); err != nil || config == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "原始配置必须是 JSON 对象"})
+			return
+		}
+		if err := service.ValidateWireGuardRuntimeConfig(config); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "WireGuard 配置无效", "error": err.Error()})
+			return
+		}
 		str := string(jsonBytes)
 		rawConfigStr = &str
 	}
@@ -543,6 +590,14 @@ func (h *NodeHandler) ValidateRawConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"valid":   false,
 			"message": "配置必须是 JSON 对象",
+		})
+		return
+	}
+	if err := service.ValidateWireGuardRuntimeConfig(config); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"valid":   false,
+			"message": "WireGuard 配置无效",
+			"error":   err.Error(),
 		})
 		return
 	}
@@ -619,7 +674,11 @@ func (h *NodeHandler) CreateProtocol(c *gin.Context) {
 	protocol.NodeID = uint(nodeID)
 
 	if err := h.nodeService.CreateProtocol(&protocol); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "创建失败", "error": err.Error()})
+		status := http.StatusInternalServerError
+		if errors.Is(err, service.ErrInvalidNodeProtocol) {
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, gin.H{"message": "创建失败", "error": err.Error()})
 		return
 	}
 
@@ -656,7 +715,11 @@ func (h *NodeHandler) UpdateProtocol(c *gin.Context) {
 	delete(updates, "node_id")
 
 	if err := h.nodeService.UpdateProtocol(uint(protocolID), updates); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败"})
+		status := http.StatusInternalServerError
+		if errors.Is(err, service.ErrInvalidNodeProtocol) {
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, gin.H{"message": "更新失败", "error": err.Error()})
 		return
 	}
 
@@ -702,6 +765,18 @@ func (h *NodeHandler) DeleteProtocol(c *gin.Context) {
 func (h *NodeHandler) GetProtocolTemplates(c *gin.Context) {
 	templates := model.GetProtocolTemplates()
 	panelSuccess(c, templates)
+}
+
+// GenerateWireGuardKeypair creates a WireGuard server keypair for the admin
+// protocol form. The private key is returned only to the authenticated caller
+// and is never stored by this endpoint.
+func (h *NodeHandler) GenerateWireGuardKeypair(c *gin.Context) {
+	privateKey, publicKey, err := service.GenerateWireGuardKeypair()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "生成 WireGuard 密钥失败"})
+		return
+	}
+	panelSuccess(c, gin.H{"private_key": privateKey, "public_key": publicKey})
 }
 
 // SyncProtocol godoc

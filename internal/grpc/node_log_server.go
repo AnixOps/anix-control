@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -248,12 +249,35 @@ func (s *NodeLogGRPCServer) ReportLogs(ctx context.Context, req *dynamicpb.Messa
 		})
 	}
 
+	var runtimeHealthy *bool
+	runtimeError := ""
+	for _, input := range inputs {
+		if !strings.EqualFold(strings.TrimSpace(input.Source), "wireguard") || strings.TrimSpace(input.FieldsJSON) == "" {
+			continue
+		}
+		var fields struct {
+			RuntimeHealthy *bool  `json:"runtime_healthy"`
+			RuntimeError   string `json:"runtime_error"`
+		}
+		if err := json.Unmarshal([]byte(input.FieldsJSON), &fields); err != nil || fields.RuntimeHealthy == nil {
+			continue
+		}
+		healthy := *fields.RuntimeHealthy
+		runtimeHealthy = &healthy
+		runtimeError = fields.RuntimeError
+	}
+
 	if err := s.nodeLogService.RecordLogs(nodeID, inputs); err != nil {
 		switch {
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			return nil, status.Error(codes.NotFound, "node not found")
 		default:
 			return nil, status.Error(codes.Internal, err.Error())
+		}
+	}
+	if runtimeHealthy != nil {
+		if err := s.nodeService.UpdateRuntimeHealth(nodeID, *runtimeHealthy, runtimeError); err != nil {
+			return nil, status.Error(codes.Internal, "failed to update runtime health")
 		}
 	}
 

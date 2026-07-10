@@ -12,7 +12,7 @@ usage() {
 Usage: config/scripts/check_release_workflow.sh [--self-test|--help]
 
 Statically checks that the release workflow still provides the required release
-contract: strict tag gating, blocking quality/security/race/test prerequisites,
+contract: release and release-candidate tag gating, blocking quality/security/race/test prerequisites,
 multi-platform binaries, Docker metadata, frontend archives, checksums, SBOM,
 operator deployment and upgrade runbooks, deterministic release notes,
 machine-readable release manifest, and generated GitHub release notes.
@@ -80,7 +80,7 @@ check_release_workflow() {
   [[ -f "${WORKFLOW_PATH}" ]] || fail "workflow file not found: ${WORKFLOW_PATH}" || return 1
 
   require_text "tags: [ 'v*.*.*' ]" "tag trigger pattern" || failed=1
-  require_text '^v[0-9]+\.[0-9]+\.[0-9]+$' "strict semantic release tag gate" || failed=1
+  require_text '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$' "release and release-candidate tag gate" || failed=1
   require_text "needs.tag-gate.outputs.is_release_tag == 'true'" "release-only job gate" || failed=1
 
   for dependency in \
@@ -164,7 +164,7 @@ jobs:
   tag-gate:
     steps:
       - run: |
-          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]
 
   release-binaries:
     needs: [go-quality, go-lint, go-security, go-race, backend-test, postgres-stats-test, migration-dry-run-test, forward-runtime-test, grpc-test, cmd-test, tag-gate]

@@ -547,6 +547,7 @@ export default {
         shadowrocket: 'ShadowRocket',
         quantumultx: 'Quantumult X',
         singBox: 'Sing-box (JSON)',
+        wireguard: 'WireGuard (.conf)',
         json: 'Raw JSON',
         base64json: 'Base64 JSON'
       }
@@ -2127,6 +2128,8 @@ export default {
         name: 'Name',
         address: 'Address',
         status: 'Status',
+        runtimeHealthy: 'Runtime OK',
+        runtimeUnhealthy: 'Runtime Error',
         parent: 'Parent Node',
         protocols: 'Protocols',
         traffic: 'Traffic Today',
@@ -2312,6 +2315,12 @@ export default {
             role: 'Node role',
             tunnelType: 'Entry-to-exit tunnel',
             wssCompat: 'WSS compatibility mode',
+			wssPath: 'WSS path',
+			wssSecure: 'Verify exit certificate',
+			wssServerName: 'WSS server name (SNI)',
+			wssCaFile: 'WSS CA certificate file on entry',
+			wssCertFile: 'WSS certificate file on exit',
+			wssKeyFile: 'WSS private key file on exit',
             relayServer: 'Exit relay host',
             relayServerPort: 'Exit relay port',
             tunPort: 'GOST TUN port',
@@ -2323,12 +2332,15 @@ export default {
             routingTable: 'Routing table',
             routingPriority: 'Routing priority'
           },
+          actions: {
+            generateKeypair: 'Generate keypair'
+          },
           values: {
             entry: 'Domestic entry',
             exit: 'Overseas exit'
           },
           hints: {
-            wssCompat: 'QUIC is the default. WSS is only for compatibility when UDP relay traffic is blocked or unstable.'
+			wssCompat: 'QUIC is the default. WSS verifies the exit certificate and is only for compatibility when UDP relay traffic is blocked or unstable.'
           }
         },
         enable: 'Enable protocol (run on node)',

@@ -233,14 +233,19 @@ func (s *UserService) Delete(id uint) error {
 	if id == 0 {
 		return ErrUserNotFound
 	}
-	res := s.db.Delete(&model.User{}, id)
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected == 0 {
-		return ErrUserNotFound
-	}
-	return nil
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", id).Delete(&model.WireGuardPeer{}).Error; err != nil {
+			return err
+		}
+		res := tx.Delete(&model.User{}, id)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrUserNotFound
+		}
+		return nil
+	})
 }
 
 // Ban 封禁用户

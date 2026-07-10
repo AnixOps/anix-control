@@ -79,6 +79,13 @@
               <span :class="['status-badge', getStatusClass(node.status)]">
                 {{ getStatusText(node.status) }}
               </span>
+              <span
+                v-if="node.runtime_checked_at"
+                :class="['runtime-health-badge', node.runtime_healthy ? 'runtime-healthy' : 'runtime-unhealthy']"
+                :title="node.runtime_healthy ? t('admin.nodes.table.runtimeHealthy') : (node.runtime_error || t('admin.nodes.table.runtimeUnhealthy'))"
+              >
+                {{ node.runtime_healthy ? t('admin.nodes.table.runtimeHealthy') : t('admin.nodes.table.runtimeUnhealthy') }}
+              </span>
             </td>
             <td>{{ getNodeName(node.parent_id) || '-' }}</td>
             <td>{{ node.protocols?.length || 0 }}</td>
@@ -630,14 +637,19 @@
                   <label>{{ t('admin.nodes.protocolForm.wireguard.fields.cidr') }}</label>
                   <input v-model.trim="wireGuardForm.cidr" type="text" />
                 </div>
-                <div class="form-group">
+                <div class="form-group" v-if="wireGuardForm.role !== 'exit'">
                   <label>{{ t('admin.nodes.protocolForm.wireguard.fields.serverAddress') }}</label>
                   <input v-model.trim="wireGuardForm.serverAddress" type="text" />
                 </div>
               </div>
-              <div class="form-row">
+              <div class="form-row" v-if="wireGuardForm.role !== 'exit'">
                 <div class="form-group">
-                  <label>{{ t('admin.nodes.protocolForm.wireguard.fields.serverPrivateKey') }}</label>
+                  <label class="field-label-row">
+                    <span>{{ t('admin.nodes.protocolForm.wireguard.fields.serverPrivateKey') }}</span>
+                    <button type="button" class="btn btn-secondary btn-sm" @click="createWireGuardKeypair">
+                      {{ t('admin.nodes.protocolForm.wireguard.actions.generateKeypair') }}
+                    </button>
+                  </label>
                   <input v-model.trim="wireGuardForm.serverPrivateKey" type="password" autocomplete="off" />
                 </div>
                 <div class="form-group">
@@ -650,12 +662,12 @@
                   <label>{{ t('admin.nodes.protocolForm.wireguard.fields.mtu') }}</label>
                   <input v-model.number="wireGuardForm.mtu" type="number" min="576" max="1500" />
                 </div>
-                <div class="form-group">
+                <div class="form-group" v-if="wireGuardForm.role !== 'exit'">
                   <label>{{ t('admin.nodes.protocolForm.wireguard.fields.dns') }}</label>
                   <input v-model.trim="wireGuardForm.dns" type="text" />
                 </div>
               </div>
-              <div class="form-group">
+              <div class="form-group" v-if="wireGuardForm.role !== 'exit'">
                 <label>{{ t('admin.nodes.protocolForm.wireguard.fields.allowedIps') }}</label>
                 <input v-model.trim="wireGuardForm.allowedIps" type="text" />
               </div>
@@ -684,6 +696,40 @@
                 </label>
                 <p class="field-hint">{{ t('admin.nodes.protocolForm.wireguard.hints.wssCompat') }}</p>
               </div>
+              <template v-if="wireGuardForm.wssCompat || wireGuardForm.tunnelType === 'wss'">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>{{ t('admin.nodes.protocolForm.wireguard.fields.wssPath') }}</label>
+                    <input v-model.trim="wireGuardForm.wssPath" type="text" />
+                  </div>
+                  <div class="form-group" v-if="wireGuardForm.role === 'entry'">
+                    <label>{{ t('admin.nodes.protocolForm.wireguard.fields.wssServerName') }}</label>
+                    <input v-model.trim="wireGuardForm.wssServerName" type="text" autocomplete="off" />
+                  </div>
+                </div>
+                <div class="form-row" v-if="wireGuardForm.role === 'entry'">
+                  <div class="form-group">
+                    <label>{{ t('admin.nodes.protocolForm.wireguard.fields.wssCaFile') }}</label>
+                    <input v-model.trim="wireGuardForm.wssCaFile" type="text" autocomplete="off" />
+                  </div>
+                  <div class="form-group">
+                    <label class="checkbox-label">
+                      <input v-model="wireGuardForm.wssSecure" type="checkbox" disabled />
+                      <span>{{ t('admin.nodes.protocolForm.wireguard.fields.wssSecure') }}</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="form-row" v-else>
+                  <div class="form-group">
+                    <label>{{ t('admin.nodes.protocolForm.wireguard.fields.wssCertFile') }}</label>
+                    <input v-model.trim="wireGuardForm.wssCertFile" type="text" autocomplete="off" />
+                  </div>
+                  <div class="form-group">
+                    <label>{{ t('admin.nodes.protocolForm.wireguard.fields.wssKeyFile') }}</label>
+                    <input v-model.trim="wireGuardForm.wssKeyFile" type="text" autocomplete="off" />
+                  </div>
+                </div>
+              </template>
               <div class="form-row">
                 <div class="form-group">
                   <label>{{ t('admin.nodes.protocolForm.wireguard.fields.relayServer') }}</label>
@@ -801,7 +847,7 @@ import {
   getNodes, getNodeStats, getNodeLogs, createNode, updateNode, deleteNode,
   getNodeCredentials,
   getNodeProtocols, createNodeProtocol, updateNodeProtocol, deleteNodeProtocol,
-  getProtocolTemplates,
+  getProtocolTemplates, generateWireGuardKeypair,
   getAuthKeys
 } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
@@ -925,10 +971,16 @@ const defaultWireGuardForm = () => ({
   serverPublicKey: '',
   mtu: 1280,
   dns: '1.1.1.1,8.8.8.8',
-  allowedIps: '0.0.0.0/0,::/0',
+  allowedIps: '0.0.0.0/0',
   tunnelType: 'quic',
   role: 'entry',
   wssCompat: false,
+  wssPath: '/ws',
+  wssSecure: true,
+  wssServerName: '',
+  wssCaFile: '',
+  wssCertFile: '',
+  wssKeyFile: '',
   relayServer: '',
   relayServerPort: 0,
   tunPort: 8421,
@@ -982,23 +1034,41 @@ const resetWireGuardForm = () => {
   Object.assign(wireGuardForm, defaultWireGuardForm())
 }
 
+const createWireGuardKeypair = async () => {
+  try {
+    const response = await generateWireGuardKeypair()
+    const payload = response?.data?.data || response?.data || response
+    wireGuardForm.serverPrivateKey = payload?.private_key || ''
+    wireGuardForm.serverPublicKey = payload?.public_key || ''
+  } catch (error) {
+    alert(t('admin.nodes.messages.generateFailed', { message: error.message || error }))
+  }
+}
+
 const buildWireGuardSettings = () => {
   const tunnelType = wireGuardForm.wssCompat ? 'wss' : (wireGuardForm.tunnelType || 'quic')
   const relayMode = tunnelType === 'wss' ? 'relay+wss' : 'relay+quic'
+  const isExit = wireGuardForm.role === 'exit'
   return {
     cidr: wireGuardForm.cidr || '10.66.0.0/24',
-    server_address: wireGuardForm.serverAddress || '10.66.0.1/24',
-    server_private_key: wireGuardForm.serverPrivateKey || '',
-    server_public_key: wireGuardForm.serverPublicKey || '',
+    server_address: isExit ? '' : (wireGuardForm.serverAddress || '10.66.0.1/24'),
+    server_private_key: isExit ? '' : (wireGuardForm.serverPrivateKey || ''),
+    server_public_key: isExit ? '' : (wireGuardForm.serverPublicKey || ''),
     mtu: asNumber(wireGuardForm.mtu, 1280),
-    dns: splitList(wireGuardForm.dns),
-    allowed_ips: splitList(wireGuardForm.allowedIps),
+    dns: isExit ? [] : splitList(wireGuardForm.dns),
+    allowed_ips: isExit ? [] : splitList(wireGuardForm.allowedIps),
     tunnel_type: tunnelType,
     relay: {
       backend: 'gost',
       mode: relayMode,
       role: wireGuardForm.role === 'exit' ? 'exit' : 'entry',
       wss_compat: tunnelType === 'wss',
+      wss_path: wireGuardForm.wssPath || '/ws',
+      wss_secure: !isExit && tunnelType === 'wss',
+      wss_server_name: isExit ? '' : (wireGuardForm.wssServerName || ''),
+      wss_ca_file: isExit ? '' : (wireGuardForm.wssCaFile || ''),
+      wss_cert_file: isExit ? (wireGuardForm.wssCertFile || '') : '',
+      wss_key_file: isExit ? (wireGuardForm.wssKeyFile || '') : '',
       exit_nat: Boolean(wireGuardForm.exitNat),
       entry_stats: true,
       server: wireGuardForm.relayServer || '',
@@ -1024,10 +1094,16 @@ const hydrateWireGuardForm = (settings = {}) => {
     serverPublicKey: settings.server_public_key || '',
     mtu: asNumber(settings.mtu, 1280),
     dns: asListText(settings.dns, '1.1.1.1,8.8.8.8'),
-    allowedIps: asListText(settings.allowed_ips, '0.0.0.0/0,::/0'),
+    allowedIps: asListText(settings.allowed_ips, '0.0.0.0/0'),
     tunnelType,
     role: relay.role === 'exit' ? 'exit' : 'entry',
     wssCompat: tunnelType === 'wss',
+    wssPath: relay.wss_path || '/ws',
+    wssSecure: relay.wss_secure !== false,
+    wssServerName: relay.wss_server_name || '',
+    wssCaFile: relay.wss_ca_file || '',
+    wssCertFile: relay.wss_cert_file || '',
+    wssKeyFile: relay.wss_key_file || '',
     relayServer: relay.server || '',
     relayServerPort: asNumber(relay.server_port, 0),
     tunPort: asNumber(relay.tun_port, 8421),
@@ -1056,6 +1132,7 @@ function visualToJson() {
     obj.tls = 0
     obj.transport = 'udp'
     obj.settings = buildWireGuardSettings()
+    if (obj.settings.relay.role === 'exit') obj.show = 0
     obj.tls_settings = {}
     obj.transport_settings = {}
     obj.reality_settings = {}
@@ -1125,6 +1202,10 @@ watch(() => wireGuardForm.wssCompat, (enabled) => {
 
 watch(() => wireGuardForm.tunnelType, (value) => {
   wireGuardForm.wssCompat = value === 'wss'
+})
+
+watch(() => wireGuardForm.role, (role) => {
+  if (role === 'exit') protocolForm.show = 0
 })
 
 function onJsonInput() {
@@ -1355,8 +1436,10 @@ const deployCommandsPreview = computed(() => {
   return [
     'cd config/deploy/ansible/nodes',
     'export ANSIBLE_CONFIG=../ansible.cfg',
-    `GOOS=linux GOARCH=amd64 go build -o ${deploySettings.amd64BinaryPath} -tags "sing xray hysteria2 with_quic with_grpc with_utls with_wireguard with_acme with_gvisor" -trimpath`,
-    `GOOS=linux GOARCH=arm64 go build -o ${deploySettings.arm64BinaryPath} -tags "sing xray hysteria2 with_quic with_grpc with_utls with_wireguard with_acme with_gvisor" -trimpath`,
+    '# Download and verify matching V2bX artifacts from GitHub Actions into the configured paths',
+    `# AMD64 artifact: ${deploySettings.amd64BinaryPath}`,
+    `# ARM64 artifact: ${deploySettings.arm64BinaryPath}`,
+    '# No local build is performed by this deployment flow',
     'ansible-playbook -i inventory.ini deploy_v2bx.yml',
     `ansible-playbook -i inventory.ini deploy_v2bx.yml -l ${firstAlias}`,
     `ansible-playbook -i inventory.ini bootstrap_ssh_key.yml -l ${firstAlias}`
@@ -2013,6 +2096,13 @@ onMounted(async () => {
   color: var(--text-secondary);
 }
 
+.field-label-row {
+	align-items: center;
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+}
+
 .wireguard-editor {
   display: flex;
   flex-direction: column;
@@ -2056,6 +2146,17 @@ onMounted(async () => {
 .status-online { background: rgba(34, 197, 94, 0.2); color: var(--success-color); }
 .status-offline { background: rgba(239, 68, 68, 0.2); color: var(--error-color); }
 .status-disabled { background: rgba(161, 161, 170, 0.2); color: var(--text-secondary); }
+
+.runtime-health-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.runtime-healthy { background: rgba(34, 197, 94, 0.14); color: var(--success-color); }
+.runtime-unhealthy { background: rgba(239, 68, 68, 0.14); color: var(--error-color); }
 
 .actions {
   display: flex;

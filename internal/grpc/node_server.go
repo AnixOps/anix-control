@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/anixops/v2board/internal/model"
 	"github.com/anixops/v2board/internal/service"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -80,13 +82,17 @@ func (s *NodeGRPCServer) GetConfig(ctx context.Context, req *pb.NodeConfigReques
 	// 获取协议配置
 	protocols, _ := s.nodeService.GetProtocols(uint(req.NodeId))
 
-	if len(protocols) > 0 {
+	preferred := requestedNodeType(ctx)
+	if protocol := selectNodeProtocolForRequest(protocols, preferred); protocol != nil {
 		// 用共享构建器填充完整协议配置 (cipher / server_key / flow / tls_settings 等)
-		resp, err := fillNodeConfigResponse(node, &protocols[0])
+		resp, err := fillNodeConfigResponse(node, protocol)
 		if err != nil {
 			return nil, status.Error(codes.OutOfRange, err.Error())
 		}
 		return resp, nil
+	}
+	if err := requireRequestedProtocol(preferred); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	serverPort, err := intToInt32("node port", node.Port)
@@ -108,6 +114,38 @@ func (s *NodeGRPCServer) GetConfig(ctx context.Context, req *pb.NodeConfigReques
 			PullInterval: 60,
 		},
 	}, nil
+}
+
+func requestedNodeType(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	values := md.Get("x-node-type")
+	if len(values) == 0 {
+		return ""
+	}
+	return service.NormalizeNodeType(values[0])
+}
+
+func selectNodeProtocolForRequest(protocols []model.NodeProtocol, preferred string) *model.NodeProtocol {
+	preferred = service.NormalizeNodeType(preferred)
+	for i := range protocols {
+		if protocols[i].Enable != 1 {
+			continue
+		}
+		if preferred == "" || service.NormalizeNodeType(string(protocols[i].Type)) == preferred {
+			return &protocols[i]
+		}
+	}
+	return nil
+}
+
+func requireRequestedProtocol(preferred string) error {
+	if preferred == "" {
+		return nil
+	}
+	return fmt.Errorf("requested node protocol %q is not configured", preferred)
 }
 
 // ReportStatus 上报节点状态
@@ -181,7 +219,7 @@ func (s *NodeGRPCServer) StatusStream(stream pb.NodeService_StatusStreamServer) 
 		}
 
 		// 检查是否有配置变更需要推送
-		configResp, err := s.checkConfigChanges(req.NodeId)
+		configResp, err := s.checkConfigChangesWithContext(stream.Context(), req.NodeId)
 		if err == nil && configResp != nil {
 			if err := stream.Send(configResp); err != nil {
 				slog.Warn("failed to send config update", "component", "grpc", "method", "StatusStream", "node_id", req.NodeId, "error", err)
@@ -193,6 +231,10 @@ func (s *NodeGRPCServer) StatusStream(stream pb.NodeService_StatusStreamServer) 
 // checkConfigChanges 检查配置变更：以节点 UpdatedAt 作为配置版本，
 // 与连接管理器记录的已推送版本比对，发现更新则构建配置并推进版本号。
 func (s *NodeGRPCServer) checkConfigChanges(nodeID uint32) (*pb.NodeConfigResponse, error) {
+	return s.checkConfigChangesWithContext(context.Background(), nodeID)
+}
+
+func (s *NodeGRPCServer) checkConfigChangesWithContext(ctx context.Context, nodeID uint32) (*pb.NodeConfigResponse, error) {
 	node, err := s.nodeService.GetNode(uint(nodeID))
 	if err != nil {
 		return nil, err
@@ -204,7 +246,7 @@ func (s *NodeGRPCServer) checkConfigChanges(nodeID uint32) (*pb.NodeConfigRespon
 		return nil, nil
 	}
 
-	resp, err := s.buildConfigResponse(node)
+	resp, err := s.buildConfigResponse(ctx, node)
 	if err != nil {
 		return nil, err
 	}
@@ -214,10 +256,14 @@ func (s *NodeGRPCServer) checkConfigChanges(nodeID uint32) (*pb.NodeConfigRespon
 }
 
 // buildConfigResponse 根据节点及其协议构建下发配置。
-func (s *NodeGRPCServer) buildConfigResponse(node *model.Node) (*pb.NodeConfigResponse, error) {
+func (s *NodeGRPCServer) buildConfigResponse(ctx context.Context, node *model.Node) (*pb.NodeConfigResponse, error) {
 	protocols, _ := s.nodeService.GetProtocols(node.ID)
-	if len(protocols) > 0 {
-		return fillNodeConfigResponse(node, &protocols[0])
+	preferred := requestedNodeType(ctx)
+	if protocol := selectNodeProtocolForRequest(protocols, preferred); protocol != nil {
+		return fillNodeConfigResponse(node, protocol)
+	}
+	if err := requireRequestedProtocol(preferred); err != nil {
+		return nil, err
 	}
 
 	serverPort, err := intToInt32("node port", node.Port)
@@ -277,9 +323,12 @@ func (s *UserGRPCServer) GetUsers(ctx context.Context, req *pb.UserListRequest) 
 		return nil, status.Error(codes.Internal, "failed to get users")
 	}
 
-	wireGuardExtras, err := s.buildWireGuardUserExtras(uint(req.NodeId), users)
+	wireGuardExtras, wireGuardExit, err := s.buildWireGuardUserExtras(ctx, uint(req.NodeId), users)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to build wireguard users")
+	}
+	if wireGuardExit {
+		users = nil
 	}
 
 	// 转换为 proto 格式
@@ -302,15 +351,30 @@ func (s *UserGRPCServer) GetUsers(ctx context.Context, req *pb.UserListRequest) 
 	}, nil
 }
 
-func (s *UserGRPCServer) buildWireGuardUserExtras(nodeID uint, users []*model.User) (map[uint]map[string]string, error) {
+func (s *UserGRPCServer) buildWireGuardUserExtras(ctx context.Context, nodeID uint, users []*model.User) (map[uint]map[string]string, bool, error) {
 	if nodeID == 0 || len(users) == 0 {
-		return nil, nil
+		return nil, false, nil
 	}
 	protocols, err := s.nodeService.GetProtocols(nodeID)
-	if err != nil || len(protocols) == 0 || protocols[0].Type != model.ProtocolWireGuard {
-		return nil, err
+	if err != nil {
+		return nil, false, err
 	}
-	return service.NewSubscriptionService().BuildWireGuardRuntimeUserExtras(&protocols[0], users)
+	preferred := requestedNodeType(ctx)
+	protocol := selectNodeProtocolForRequest(protocols, preferred)
+	if protocol == nil {
+		if err := requireRequestedProtocol(preferred); err != nil {
+			return nil, false, err
+		}
+		return nil, false, nil
+	}
+	if protocol == nil || protocol.Type != model.ProtocolWireGuard {
+		return nil, false, nil
+	}
+	if service.IsWireGuardExitProtocol(protocol) {
+		return nil, true, nil
+	}
+	extras, err := service.NewSubscriptionService().BuildWireGuardRuntimeUserExtras(protocol, users)
+	return extras, false, err
 }
 
 // UserChanges 双向流：用户变更实时推送
@@ -378,44 +442,8 @@ func (s *TrafficGRPCServer) ReportTraffic(ctx context.Context, req *pb.TrafficRe
 		rate = node.Rate
 	}
 
-	// 按倍率计算实际流量
-	userTraffics := make(map[uint][2]int64)
-	for userID, traffic := range traffics {
-		userTraffics[userID] = [2]int64{
-			int64(float64(traffic[0]) * rate),
-			int64(float64(traffic[1]) * rate),
-		}
-	}
-
-	// 记录流量日志 (原始字节 + 倍率), 用于今日流量等基于时间的统计, 与 REST 上报路径保持一致
-	if err := s.serverService.BatchRecordTrafficLog(model.ServerType("node"), uint(req.NodeId), traffics, rate); err != nil {
-		slog.Warn("failed to record traffic log", "component", "grpc", "method", "ReportTraffic", "node_id", req.NodeId, "error", err)
-	}
-
-	var totalUpload, totalDownload int64
-	for _, traffic := range userTraffics {
-		totalUpload += traffic[0]
-		totalDownload += traffic[1]
-	}
-	// 同步回写节点总流量，保证面板节点统计和流量监控读取的是同一口径。
-	if err := s.nodeService.AccumulateTrafficOnly(uint(req.NodeId), totalUpload, totalDownload); err != nil {
-		slog.Warn("failed to accumulate node traffic", "component", "grpc", "method", "ReportTraffic", "node_id", req.NodeId, "error", err)
-	}
-
-	// 统计表写入：日统计按当前整日分桶，月统计按当前月第一天分桶。
-	now := time.Now()
-	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).Unix()
-	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local).Unix()
-	if err := s.serverService.RecordServerStat(model.ServerType("node"), uint(req.NodeId), totalUpload, totalDownload, "d", dayStart); err != nil {
-		slog.Warn("failed to record daily server stat", "component", "grpc", "method", "ReportTraffic", "node_id", req.NodeId, "error", err)
-	}
-	if err := s.serverService.RecordServerStat(model.ServerType("node"), uint(req.NodeId), totalUpload, totalDownload, "m", monthStart); err != nil {
-		slog.Warn("failed to record monthly server stat", "component", "grpc", "method", "ReportTraffic", "node_id", req.NodeId, "error", err)
-	}
-
-	// 批量更新用户流量
-	if err := s.userService.BatchUpdateTraffic(userTraffics); err != nil {
-		return nil, status.Error(codes.Internal, "failed to update traffic")
+	if err := s.serverService.RecordNodeTrafficReport(model.ServerType("node"), uint(req.NodeId), traffics, rate); err != nil {
+		return nil, status.Error(codes.Internal, "failed to record traffic report")
 	}
 
 	return &pb.TrafficReportResponse{

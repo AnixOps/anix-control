@@ -206,7 +206,7 @@ Current CI coverage includes:
 - Frontend bundle size report artifact for Vite assets and heavy admin/runtime chunks.
 - PostgreSQL stats regression job.
 - Forward runtime, gRPC coverage-gated, and command-focused jobs.
-- Strict release tag gate for `vX.Y.Z`.
+- Release tag gate for `vX.Y.Z` and prerelease candidate tags such as `vX.Y.Z-rc.1`.
 - Multi-platform release binaries for linux, darwin, and windows on amd64/arm64.
 - Release checksums.
 - Release assets include `OPERATOR_DEPLOYMENT.md` with the manual deployment, verification, and rollback flow.
