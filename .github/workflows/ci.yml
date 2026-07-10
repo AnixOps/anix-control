@@ -44,6 +44,11 @@ jobs:
       - name: Validate local build cleanup script syntax
         run: bash -n config/deploy/clean_local_build_artifacts.sh
 
+      - name: Validate release installer syntax
+        run: |
+          bash -n install.sh
+          bash -n scripts/install.sh
+
       - name: Validate release build policy script syntax
         run: bash -n config/deploy/check_release_build_policy.sh
 

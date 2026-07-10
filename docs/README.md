@@ -15,6 +15,8 @@ Use this tree like NodeX:
 
 - Feature status register: [`features.md`](features.md)
 - Upgrade runbook: [`UPGRADE.md`](UPGRADE.md)
+- Native release install: [`guide/release-installation.md`](guide/release-installation.md)
+- Legacy panel migration: [`guide/legacy-migration.md`](guide/legacy-migration.md)
 - Docker quickstart: [`reference/quickstart.md`](reference/quickstart.md)
 - Exact startup flow: [`reference/startup-config.md`](reference/startup-config.md)
 - Config source-of-truth: [`reference/configuration.md`](reference/configuration.md)

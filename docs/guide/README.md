@@ -23,6 +23,8 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 | [Forward/Tunnel Manual Smoke Tests](forward-tunnel-smoke-test.md) | Manual and real-machine proof steps for `gost`, `nftables_ansible`, and legacy `iptables_ansible` |
 | [Forward Runtime Work Plan](forward-runtime-work-plan.md) | Parallel work-package plan for the next dual-runtime implementation stage |
 | [WireGuard Dual-Node Relay Plan](wireguard-relay.md) | P0 WireGuard access, domestic entry termination, GOST relay+QUIC default transport, WSS compatibility mode, and phased implementation plan |
+| [Panel Release Installation](release-installation.md) | Tag-pinned GitHub Release installation, update, rollback, and native service operations without cloning/building on the host |
+| [Legacy Panel Migration](legacy-migration.md) | Supported upgrade paths, foreign-panel migration boundaries, coordinated node cutover, and rollback evidence |
 | [Node Management](node-management.md) | Node registration, heartbeat, protocol config and operations |
 | [Client Compatibility](client-compatibility.md) | V2bX/XrayR and related compatibility notes |
 | [API Reference](api-reference.md) | Existing project API overview |

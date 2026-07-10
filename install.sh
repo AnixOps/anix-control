@@ -1,4 +1,28 @@
 #!/usr/bin/env bash
+
+# The historical source/Docker installer remains available only through an
+# explicit opt-in. The default path downloads the release installer directly
+# from GitHub and never clones or builds the repository on the target host.
+if [[ "${V2BOARD_LEGACY_SOURCE_INSTALL:-0}" != "1" ]]; then
+  set -euo pipefail
+  script_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd || true)"
+  if [[ -n "${script_dir}" && -f "${script_dir}/scripts/install.sh" ]]; then
+    exec bash "${script_dir}/scripts/install.sh" "$@"
+  fi
+
+  command -v curl >/dev/null 2>&1 || {
+    printf '[ERROR] curl is required to download the release installer.\n' >&2
+    exit 1
+  }
+  install_ref="${INSTALL_REF:-go_dev}"
+  installer_url="https://raw.githubusercontent.com/AnixOps/v2board_AnixOps/${install_ref}/scripts/install.sh"
+  installer_file="$(mktemp)"
+  trap 'rm -f "${installer_file}"' EXIT
+  curl -fsSL "${installer_url}" -o "${installer_file}"
+  bash "${installer_file}" "$@"
+  exit $?
+fi
+
 set -euo pipefail
 
 APP_NAME="v2board-anixops"
