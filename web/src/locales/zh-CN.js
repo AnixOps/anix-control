@@ -556,6 +556,7 @@ export default {
         shadowrocket: 'ShadowRocket',
         quantumultx: 'Quantumult X',
         singBox: 'Sing-box（JSON）',
+        wireguard: 'WireGuard（.conf）',
         json: '原始 JSON',
         base64json: 'Base64 JSON'
       }
@@ -2135,6 +2136,8 @@ export default {
         name: '名称',
         address: '地址',
         status: '状态',
+        runtimeHealthy: '运行时正常',
+        runtimeUnhealthy: '运行时异常',
         parent: '父节点',
         protocols: '协议数',
         traffic: '今日流量',
@@ -2320,6 +2323,12 @@ export default {
             role: '节点角色',
             tunnelType: '入口到出口隧道',
             wssCompat: 'WSS 兼容模式',
+			wssPath: 'WSS 路径',
+			wssSecure: '校验出口证书',
+			wssServerName: 'WSS 服务名称（SNI）',
+			wssCaFile: '入口机 WSS CA 证书文件',
+			wssCertFile: '出口机 WSS 证书文件',
+			wssKeyFile: '出口机 WSS 私钥文件',
             relayServer: '出口中转主机',
             relayServerPort: '出口中转端口',
             tunPort: 'GOST TUN 端口',
@@ -2331,12 +2340,15 @@ export default {
             routingTable: '路由表',
             routingPriority: '路由优先级'
           },
+          actions: {
+            generateKeypair: '生成密钥对'
+          },
           values: {
             entry: '国内入口',
             exit: '海外出口'
           },
           hints: {
-            wssCompat: '默认使用 QUIC。WSS 只作为 UDP 中转受阻或不稳定时的一键兼容模式。'
+			wssCompat: '默认使用 QUIC。WSS 会校验出口证书，只作为 UDP 中转受阻或不稳定时的兼容模式。'
           }
         },
         enable: '启用协议（节点端运行）',

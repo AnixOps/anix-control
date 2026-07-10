@@ -25,10 +25,24 @@ func (f *SingBoxFormatter) FileExtension() string {
 
 func (f *SingBoxFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRenderContext) ([]byte, error) {
 	outbounds := make([]any, 0, len(nodes)+10)
-
+	endpoints := make([]any, 0)
 	proxyNames := make([]string, 0, len(nodes))
+	nodeOutbounds := make([]any, 0, len(nodes))
 	for _, node := range nodes {
+		if node == nil {
+			continue
+		}
+		if node.Type == "wireguard" {
+			endpoints = append(endpoints, f.buildWireGuardEndpoint(node))
+			proxyNames = append(proxyNames, node.Name)
+			continue
+		}
+		outbound := f.buildOutbound(node, ctx)
+		if outbound == nil {
+			continue
+		}
 		proxyNames = append(proxyNames, node.Name)
+		nodeOutbounds = append(nodeOutbounds, outbound)
 	}
 
 	// 1. Selector (策略组)
@@ -50,12 +64,7 @@ func (f *SingBoxFormatter) Format(nodes []*model.ParsedNode, ctx *model.Template
 	})
 
 	// 3. 节点 Outbounds
-	for _, node := range nodes {
-		outbound := f.buildOutbound(node, ctx)
-		if outbound != nil {
-			outbounds = append(outbounds, outbound)
-		}
-	}
+	outbounds = append(outbounds, nodeOutbounds...)
 
 	// 4. 基础 Outbounds (直连、拦截、DNS)
 	outbounds = append(outbounds,
@@ -101,6 +110,11 @@ func (f *SingBoxFormatter) Format(nodes []*model.ParsedNode, ctx *model.Template
 			"auto_detect_interface": true,
 		},
 	}
+	if len(endpoints) > 0 {
+		// WireGuard outbound was removed in sing-box 1.13. Endpoints remain
+		// selectable as outbound tags while keeping the modern schema.
+		config["endpoints"] = endpoints
+	}
 
 	return json.MarshalIndent(config, "", "  ")
 }
@@ -125,8 +139,6 @@ func (f *SingBoxFormatter) buildOutbound(node *model.ParsedNode, ctx *model.Temp
 		f.buildHysteria2(outbound, node, ctx)
 	case "tuic":
 		f.buildTUIC(outbound, node, ctx)
-	case "wireguard":
-		f.buildWireGuard(outbound, node)
 	default:
 		return nil
 	}
@@ -247,29 +259,33 @@ func (f *SingBoxFormatter) buildTUIC(outbound map[string]any, node *model.Parsed
 	f.addTLS(outbound, node)
 }
 
-func (f *SingBoxFormatter) buildWireGuard(outbound map[string]any, node *model.ParsedNode) {
-	outbound["type"] = "wireguard"
-	outbound["local_address"] = []string{wireGuardAddress(node.PeerIP)}
-	outbound["private_key"] = node.PrivateKey
-	outbound["peer_public_key"] = node.PublicKey
+func (f *SingBoxFormatter) buildWireGuardEndpoint(node *model.ParsedNode) map[string]any {
+	allowedIPs := node.AllowedIPs
+	if len(allowedIPs) == 0 {
+		allowedIPs = []string{"0.0.0.0/0"}
+	}
+	mtu := node.MTU
+	if mtu <= 0 {
+		mtu = 1280
+	}
+	peer := map[string]any{
+		"address":                       node.Server,
+		"port":                          node.Port,
+		"public_key":                    node.PublicKey,
+		"allowed_ips":                   allowedIPs,
+		"persistent_keepalive_interval": 25,
+	}
 	if node.PresharedKey != "" {
-		outbound["pre_shared_key"] = node.PresharedKey
+		peer["pre_shared_key"] = node.PresharedKey
 	}
-	if node.MTU > 0 {
-		outbound["mtu"] = node.MTU
-	} else {
-		outbound["mtu"] = 1280
-	}
-	if len(node.AllowedIPs) > 0 {
-		outbound["peers"] = []any{
-			map[string]any{
-				"server":         node.Server,
-				"server_port":    node.Port,
-				"public_key":     node.PublicKey,
-				"pre_shared_key": node.PresharedKey,
-				"allowed_ips":    node.AllowedIPs,
-			},
-		}
+	return map[string]any{
+		"type":        "wireguard",
+		"tag":         node.Name,
+		"system":      false,
+		"mtu":         mtu,
+		"address":     []string{wireGuardAddress(node.PeerIP)},
+		"private_key": node.PrivateKey,
+		"peers":       []any{peer},
 	}
 }
 

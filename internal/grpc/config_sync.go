@@ -43,13 +43,13 @@ func (s *ConfigSyncGRPCServer) SyncConfig(ctx context.Context, req *pb.ConfigSyn
 	}
 
 	if hasChanges {
-		config, err := s.buildNodeConfigResponse(node)
+		config, err := s.buildNodeConfigResponse(ctx, node)
 		if err != nil {
 			return nil, status.Error(codes.Internal, "failed to build node config")
 		}
 		resp.Config = config
 
-		users, err := s.buildUserList(node.GroupID)
+		users, err := s.buildUserList(ctx, node.ID, node.GroupID)
 		if err != nil {
 			slog.Warn("failed to get users for config sync", "component", "grpc", "method", "SyncConfig", "node_id", req.NodeId, "error", err)
 		} else {
@@ -70,13 +70,13 @@ func (s *ConfigSyncGRPCServer) FullSync(ctx context.Context, req *pb.ConfigSyncR
 	syncTime := time.Now().Unix()
 
 	// 构建完整节点配置
-	config, err := s.buildNodeConfigResponse(node)
+	config, err := s.buildNodeConfigResponse(ctx, node)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to build node config")
 	}
 
 	// 获取完整用户列表
-	users, err := s.buildUserList(node.GroupID)
+	users, err := s.buildUserList(ctx, node.ID, node.GroupID)
 	if err != nil {
 		slog.Warn("failed to get users for full sync", "component", "grpc", "method", "FullSync", "node_id", req.NodeId, "error", err)
 		users = []*pb.UserInfo{}
@@ -124,12 +124,16 @@ func (s *ConfigSyncGRPCServer) ConfigChanges(stream pb.ConfigSyncService_ConfigC
 }
 
 // buildNodeConfigResponse 构建节点配置响应
-func (s *ConfigSyncGRPCServer) buildNodeConfigResponse(node *model.Node) (*pb.NodeConfigResponse, error) {
+func (s *ConfigSyncGRPCServer) buildNodeConfigResponse(ctx context.Context, node *model.Node) (*pb.NodeConfigResponse, error) {
 	protocols, _ := s.nodeService.GetProtocols(node.ID)
 
-	if len(protocols) > 0 {
+	preferred := requestedNodeType(ctx)
+	if protocol := selectNodeProtocolForRequest(protocols, preferred); protocol != nil {
 		// 用共享构建器填充完整协议配置, 与 HTTP/订阅端一致
-		return fillNodeConfigResponse(node, &protocols[0])
+		return fillNodeConfigResponse(node, protocol)
+	}
+	if err := requireRequestedProtocol(preferred); err != nil {
+		return nil, err
 	}
 
 	serverPort, err := intToInt32("node port", node.Port)
@@ -153,10 +157,31 @@ func (s *ConfigSyncGRPCServer) buildNodeConfigResponse(node *model.Node) (*pb.No
 }
 
 // buildUserList 构建用户列表
-func (s *ConfigSyncGRPCServer) buildUserList(groupID *uint) ([]*pb.UserInfo, error) {
+func (s *ConfigSyncGRPCServer) buildUserList(ctx context.Context, nodeID uint, groupID *uint) ([]*pb.UserInfo, error) {
 	users, err := s.userService.GetActiveUsersForNode(groupID)
 	if err != nil {
 		return nil, err
+	}
+	protocols, err := s.nodeService.GetProtocols(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	var wireGuardExtras map[uint]map[string]string
+	preferred := requestedNodeType(ctx)
+	protocol := selectNodeProtocolForRequest(protocols, preferred)
+	if protocol == nil {
+		if err := requireRequestedProtocol(preferred); err != nil {
+			return nil, err
+		}
+	}
+	if protocol != nil && protocol.Type == model.ProtocolWireGuard {
+		if service.IsWireGuardExitProtocol(protocol) {
+			return []*pb.UserInfo{}, nil
+		}
+		wireGuardExtras, err = service.NewSubscriptionService().BuildWireGuardRuntimeUserExtras(protocol, users)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	userInfos := make([]*pb.UserInfo, 0, len(users))
@@ -164,6 +189,9 @@ func (s *ConfigSyncGRPCServer) buildUserList(groupID *uint) ([]*pb.UserInfo, err
 		info, err := userInfoFromModel(user)
 		if err != nil {
 			return nil, err
+		}
+		if extra, ok := wireGuardExtras[user.ID]; ok {
+			info.Extra = extra
 		}
 		userInfos = append(userInfos, info)
 	}

@@ -125,4 +125,40 @@ describe('User Subscribe flow', () => {
     const linkInput = wrapper.find('.link-item .link-row input')
     expect(linkInput.element.value).toContain('sub-b.example.com')
   })
+
+  it('offers a native WireGuard profile and downloads its preview as a conf file', async () => {
+    mockGetSubscription.mockResolvedValue({
+      data: {
+        ExpireAt: 0,
+        UsedTraffic: 1024,
+        TotalTraffic: 4096,
+        subscribe_path: '/s',
+      },
+    })
+    mockFetch.mockResolvedValue({
+      ok: true,
+      text: async () => '[Interface]\nPrivateKey = test',
+    })
+    const createObjectURL = vi.fn(() => 'blob:wireguard-preview')
+    const revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+
+    const wrapper = mount(Subscribe)
+    await flushPromises()
+
+    const wireGuardRow = wrapper.findAll('.link-item').find((row) => row.text().includes('WireGuard'))
+    expect(wireGuardRow).toBeDefined()
+    expect(wireGuardRow.find('input').element.value).toContain('?type=wireguard')
+
+    await wireGuardRow.findAll('button')[1].trigger('click')
+    await flushPromises()
+    expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('?type=wireguard'))
+
+    await wrapper.findAll('.preview-controls .btn')[1].trigger('click')
+    expect(createObjectURL).toHaveBeenCalled()
+    expect(click).toHaveBeenCalled()
+    expect(click.mock.instances[0].download).toBe('subscription.conf')
+    click.mockRestore()
+  })
 })

@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"strings"
+	"sync"
 
 	"github.com/anixops/v2board/internal/model"
 	"gorm.io/gorm"
@@ -19,6 +21,8 @@ const (
 	defaultWireGuardCIDR = "10.66.0.0/24"
 	defaultWireGuardMTU  = 1280
 )
+
+var wireGuardPeerMu sync.Mutex
 
 func (s *SubscriptionService) applyWireGuardPeer(parsed *model.ParsedNode, protocol *model.NodeProtocol, ctx *model.TemplateRenderContext) {
 	if parsed.Settings == nil {
@@ -39,7 +43,10 @@ func (s *SubscriptionService) applyWireGuardPeer(parsed *model.ParsedNode, proto
 	parsed.Settings["peer_public_key"] = peer.PublicKey
 
 	parsed.PublicKey = firstStringSetting(settings, "server_public_key", "public_key")
-	parsed.AllowedIPs = stringSliceSetting(settings, "allowed_ips", []string{"0.0.0.0/0", "::/0"})
+	if parsed.PublicKey == "" {
+		parsed.PublicKey = wireGuardPublicKeyFromPrivate(stringSetting(settings, "server_private_key", ""))
+	}
+	parsed.AllowedIPs = stringSliceSetting(settings, "allowed_ips", []string{"0.0.0.0/0"})
 	parsed.DNS = stringSliceSetting(settings, "dns", []string{"1.1.1.1", "8.8.8.8"})
 	parsed.MTU = intSetting(settings, "mtu", defaultWireGuardMTU)
 	if parsed.MTU <= 0 {
@@ -47,7 +54,7 @@ func (s *SubscriptionService) applyWireGuardPeer(parsed *model.ParsedNode, proto
 	}
 
 	if _, ok := settings["endpoint"]; !ok {
-		settings["endpoint"] = fmt.Sprintf("%s:%d", parsed.Server, parsed.Port)
+		settings["endpoint"] = net.JoinHostPort(parsed.Server, fmt.Sprintf("%d", parsed.Port))
 	}
 	if _, ok := settings["tunnel_type"]; !ok {
 		settings["tunnel_type"] = "quic"
@@ -58,18 +65,40 @@ func (s *SubscriptionService) GetOrCreateWireGuardPeer(protocolID, userID uint, 
 	if protocolID == 0 || userID == 0 {
 		return nil, errors.New("wireguard protocol_id and user_id are required")
 	}
+	prefix, err := netip.ParsePrefix(strings.TrimSpace(cidr))
+	if err != nil {
+		return nil, fmt.Errorf("invalid wireguard cidr: %w", err)
+	}
+	if prefix.Bits() == 0 {
+		return nil, errors.New("wireguard cidr must not be the entire address space")
+	}
+
+	// The service is constructed per request, so a package-level mutex is used
+	// to keep allocation atomic across subscription and node-sync requests in
+	// the same panel process. The database unique indexes remain the final guard
+	// for multi-process deployments.
+	wireGuardPeerMu.Lock()
+	defer wireGuardPeerMu.Unlock()
 
 	var peer model.WireGuardPeer
 	if err := s.db.Where("node_protocol_id = ? AND user_id = ?", protocolID, userID).First(&peer).Error; err == nil {
+		addr, parseErr := netip.ParseAddr(strings.TrimSpace(peer.PeerIP))
+		if parseErr == nil && prefix.Contains(addr) && !isWireGuardReservedAddress(prefix, addr) {
+			return &peer, nil
+		}
+		peerIP, allocErr := s.allocateWireGuardPeerIPLocked(protocolID, prefix)
+		if allocErr != nil {
+			return nil, allocErr
+		}
+		if err := s.db.Model(&peer).Update("peer_ip", peerIP).Error; err != nil {
+			return nil, err
+		}
+		peer.PeerIP = peerIP
 		return &peer, nil
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
-	peerIP, err := s.allocateWireGuardPeerIP(protocolID, cidr)
-	if err != nil {
-		return nil, err
-	}
 	privateKey, publicKey, err := generateWireGuardKeypair()
 	if err != nil {
 		return nil, err
@@ -82,19 +111,48 @@ func (s *SubscriptionService) GetOrCreateWireGuardPeer(protocolID, userID uint, 
 	peer = model.WireGuardPeer{
 		NodeProtocolID: protocolID,
 		UserID:         userID,
-		PeerIP:         peerIP,
 		PrivateKey:     privateKey,
 		PublicKey:      publicKey,
 		PresharedKey:   presharedKey,
 	}
-	if err := s.db.Create(&peer).Error; err != nil {
-		return nil, err
+	for attempt := 0; attempt < 3; attempt++ {
+		peer.PeerIP, err = s.allocateWireGuardPeerIPLocked(protocolID, prefix)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.db.Create(&peer).Error; err == nil {
+			return &peer, nil
+		} else if !isWireGuardUniqueConstraintError(err) {
+			return nil, err
+		}
+
+		// Another panel replica may have allocated the same address or created
+		// this user's peer concurrently. Re-read before selecting a new address.
+		var existing model.WireGuardPeer
+		lookupErr := s.db.Where("node_protocol_id = ? AND user_id = ?", protocolID, userID).First(&existing).Error
+		if lookupErr == nil {
+			return &existing, nil
+		}
+		if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {
+			return nil, lookupErr
+		}
 	}
-	return &peer, nil
+	return nil, errors.New("wireguard peer allocation conflicted with another writer")
+}
+
+func isWireGuardUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "unique") || strings.Contains(message, "duplicate")
 }
 
 func (s *SubscriptionService) BuildWireGuardRuntimeUserExtras(protocol *model.NodeProtocol, users []*model.User) (map[uint]map[string]string, error) {
 	if protocol == nil || protocol.Type != model.ProtocolWireGuard {
+		return nil, nil
+	}
+	if isWireGuardExitProtocol(protocol) {
 		return nil, nil
 	}
 	cidr := defaultWireGuardCIDR
@@ -130,17 +188,37 @@ func parseWireGuardSettings(raw string) map[string]any {
 	return settings
 }
 
+// IsWireGuardExitProtocol identifies the overseas relay role. Exit nodes do
+// not terminate user WireGuard peers, so they must neither allocate peer keys,
+// appear in user subscriptions, nor receive user runtime metadata.
+func IsWireGuardExitProtocol(protocol *model.NodeProtocol) bool {
+	if protocol == nil || protocol.Type != model.ProtocolWireGuard || protocol.Settings == nil {
+		return false
+	}
+	relay, ok := parseWireGuardSettings(*protocol.Settings)["relay"].(map[string]any)
+	if !ok {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(stringSetting(relay, "role", "entry")), "exit")
+}
+
+func isWireGuardExitProtocol(protocol *model.NodeProtocol) bool {
+	return IsWireGuardExitProtocol(protocol)
+}
+
 func (s *SubscriptionService) allocateWireGuardPeerIP(protocolID uint, cidr string) (string, error) {
 	prefix, err := netip.ParsePrefix(strings.TrimSpace(cidr))
 	if err != nil {
 		return "", fmt.Errorf("invalid wireguard cidr: %w", err)
 	}
-	if !prefix.Addr().Is4() {
-		return "", errors.New("wireguard peer allocation currently supports IPv4 CIDR only")
-	}
-	ones := prefix.Bits()
-	if ones > 30 {
-		return "", errors.New("wireguard cidr must contain at least two usable IPv4 addresses")
+	wireGuardPeerMu.Lock()
+	defer wireGuardPeerMu.Unlock()
+	return s.allocateWireGuardPeerIPLocked(protocolID, prefix)
+}
+
+func (s *SubscriptionService) allocateWireGuardPeerIPLocked(protocolID uint, prefix netip.Prefix) (string, error) {
+	if prefix.Bits() == 0 {
+		return "", errors.New("wireguard cidr must not be the entire address space")
 	}
 
 	var existing []string
@@ -154,17 +232,60 @@ func (s *SubscriptionService) allocateWireGuardPeerIP(protocolID uint, cidr stri
 		used[ip] = true
 	}
 
-	baseBytes := prefix.Masked().Addr().As4()
-	base := uint64(binary.BigEndian.Uint32(baseBytes[:]))
-	total := uint64(1) << uint(32-ones)
-	// Reserve host .1 for the WireGuard entry interface.
-	for offset := uint64(2); offset < total-1; offset++ {
-		candidate := uint64ToIPv4(base + offset)
-		if !used[candidate] {
-			return candidate, nil
+	if prefix.Addr().Is4() {
+		ones := prefix.Bits()
+		if ones > 30 {
+			return "", errors.New("wireguard cidr must contain at least two usable IPv4 addresses")
+		}
+		baseBytes := prefix.Masked().Addr().As4()
+		base := uint64(binary.BigEndian.Uint32(baseBytes[:]))
+		total := uint64(1) << uint(32-ones)
+		// Reserve host .1 for the WireGuard entry interface and the broadcast
+		// address for IPv4 networks.
+		for offset := uint64(2); offset < total-1; offset++ {
+			candidate := uint64ToIPv4(base + offset)
+			if !used[candidate] {
+				return candidate, nil
+			}
+		}
+		return "", errors.New("wireguard cidr has no available peer addresses")
+	}
+
+	// IPv6 has no broadcast address. Start at ::2 (reserving ::1 for the
+	// interface) and scan only as far as the number of existing peers requires,
+	// which keeps /64 allocations practical without iterating the address space.
+	candidate := prefix.Masked().Addr()
+	maxAttempts := len(existing) + 1024
+	for i := 0; i < maxAttempts; i++ {
+		candidate = candidate.Next()
+		if !prefix.Contains(candidate) {
+			break
+		}
+		if isWireGuardReservedAddress(prefix, candidate) {
+			continue
+		}
+		if !used[candidate.String()] {
+			return candidate.String(), nil
 		}
 	}
 	return "", errors.New("wireguard cidr has no available peer addresses")
+}
+
+func isWireGuardReservedAddress(prefix netip.Prefix, addr netip.Addr) bool {
+	if !prefix.Contains(addr) || addr == prefix.Masked().Addr() {
+		return true
+	}
+	if interfaceAddr := prefix.Masked().Addr().Next(); interfaceAddr.IsValid() && addr == interfaceAddr {
+		return true
+	}
+	if prefix.Addr().Is4() && prefix.Bits() < 31 {
+		baseBytes := prefix.Masked().Addr().As4()
+		addrBytes := addr.As4()
+		base := binary.BigEndian.Uint32(baseBytes[:])
+		mask := uint32(^uint32(0) >> uint(prefix.Bits()))
+		return binary.BigEndian.Uint32(addrBytes[:]) == base|mask
+	}
+	return false
 }
 
 func generateWireGuardKeypair() (privateKey string, publicKey string, err error) {
@@ -175,6 +296,13 @@ func generateWireGuardKeypair() (privateKey string, publicKey string, err error)
 	privateKey = base64.StdEncoding.EncodeToString(key.Bytes())
 	publicKey = base64.StdEncoding.EncodeToString(key.PublicKey().Bytes())
 	return privateKey, publicKey, nil
+}
+
+// GenerateWireGuardKeypair exposes server-key generation to the authenticated
+// admin workflow without persisting private material until the protocol is
+// explicitly saved.
+func GenerateWireGuardKeypair() (privateKey string, publicKey string, err error) {
+	return generateWireGuardKeypair()
 }
 
 func generateWireGuardPresharedKey() (string, error) {

@@ -91,6 +91,7 @@ const formats = computed(() => ([
   { value: 'shadowrocket', label: t('user.subscribe.formats.shadowrocket') },
   { value: 'quantumultx', label: t('user.subscribe.formats.quantumultx') },
   { value: 'sing-box', label: t('user.subscribe.formats.singBox') },
+  { value: 'wireguard', label: t('user.subscribe.formats.wireguard') },
   { value: 'json', label: t('user.subscribe.formats.json') },
   { value: 'base64json', label: t('user.subscribe.formats.base64json') }
 ]))
@@ -137,7 +138,7 @@ function getFileExt(format) {
   if (format === 'auto' || format === 'ua') return 'txt'
   if (format === 'clash' || format === 'stash' || format === 'egern') return 'yaml'
   if (format === 'json' || format === 'sing-box') return 'json'
-  if (format === 'surge') return 'conf'
+  if (format === 'surge' || format === 'wireguard') return 'conf'
   return 'txt'
 }
 

@@ -3,9 +3,10 @@
 Date: 2026-07-10
 
 The P0 WireGuard panel slice stores one managed peer per user and node protocol
-in `v2_wireguard_peer`. Development and test environments create this table via
-AutoMigrate. Production mode skips AutoMigrate, so operators must apply an
-explicit schema migration before enabling WireGuard subscriptions.
+in `v2_wireguard_peer`. The server calls the idempotent
+`service.EnsureWireGuardPeerSchema` hook in every environment, including
+production, while the full application schema remains protected from automatic
+production migration. The PostgreSQL migration tool also includes this table.
 
 Required table:
 
@@ -47,7 +48,11 @@ Operational notes:
   `exit_tun_address`, `outbound_iface`, `routing_table`, and
   `routing_priority`. V2bX uses these to plan GOST TUN entry/exit runtime,
   source-based routing, and exit NAT command application.
-- Do not mark the full WireGuard relay path complete until V2bX full dual-node
-  runtime evidence, traffic accounting evidence, speed limits, real GOST
-  relay+QUIC, real WSS compatibility mode, overseas exit NAT evidence, and
-  GitHub Actions verification are also implemented.
+- The first relay runtime is intentionally IPv4-only: peer CIDRs, relay TUN
+  CIDRs, and default AllowedIPs must use IPv4 until an IPv6 route/NAT path is
+  implemented.
+- Do not mark the full WireGuard relay path complete until successful
+  release-gated GitHub Actions QUIC and verified-WSS namespace-acceptance
+  artifacts, real WSS compatibility, and geographically separated entry/exit evidence are
+  recorded. The namespace test exercises the route in one runner but does not
+  replace privileged two-machine evidence.

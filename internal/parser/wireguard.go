@@ -26,14 +26,17 @@ func (f *WireGuardFormatter) FileExtension() string {
 }
 
 func (f *WireGuardFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRenderContext) ([]byte, error) {
-	configs := make([]string, 0)
 	for _, node := range nodes {
 		if node.Type != "wireguard" || !node.IsValid() {
 			continue
 		}
-		configs = append(configs, f.formatNode(node))
+		// A native WireGuard profile can contain only one Interface section.
+		// Returning the first valid profile keeps the .conf importable when a
+		// subscription group also contains multiple WireGuard nodes; formats
+		// such as Sing-box remain responsible for multi-node aggregation.
+		return []byte(f.formatNode(node)), nil
 	}
-	return []byte(strings.Join(configs, "\n\n")), nil
+	return []byte{}, nil
 }
 
 func (f *WireGuardFormatter) formatNode(node *model.ParsedNode) string {
@@ -43,7 +46,7 @@ func (f *WireGuardFormatter) formatNode(node *model.ParsedNode) string {
 	}
 	allowedIPs := node.AllowedIPs
 	if len(allowedIPs) == 0 {
-		allowedIPs = []string{"0.0.0.0/0", "::/0"}
+		allowedIPs = []string{"0.0.0.0/0"}
 	}
 	mtu := node.MTU
 	if mtu <= 0 {

@@ -79,19 +79,17 @@ func BuildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map
 	case "vless":
 		config["flow"] = configValue(protocolConfig, "flow", "")
 	case "wireguard":
-		config["cidr"] = configValue(protocolConfig, "cidr", "10.66.0.0/24")
-		config["server_address"] = configValue(protocolConfig, "server_address", "10.66.0.1/24")
-		config["server_private_key"] = configValue(protocolConfig, "server_private_key", "")
-		config["server_public_key"] = configValue(protocolConfig, "server_public_key", "")
-		config["mtu"] = configValue(protocolConfig, "mtu", 1280)
-		config["dns"] = configValue(protocolConfig, "dns", []string{"1.1.1.1", "8.8.8.8"})
-		config["allowed_ips"] = configValue(protocolConfig, "allowed_ips", []string{"0.0.0.0/0", "::/0"})
-		config["tunnel_type"] = configValue(protocolConfig, "tunnel_type", "quic")
-		config["relay"] = configValue(protocolConfig, "relay", map[string]any{
+		wireGuardRelay := map[string]any{
 			"backend":           "gost",
 			"mode":              "relay+quic",
 			"role":              "entry",
 			"wss_compat":        false,
+			"wss_path":          "/ws",
+			"wss_secure":        true,
+			"wss_server_name":   "",
+			"wss_ca_file":       "",
+			"wss_cert_file":     "",
+			"wss_key_file":      "",
 			"exit_nat":          true,
 			"entry_stats":       true,
 			"server":            "",
@@ -102,7 +100,43 @@ func BuildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map
 			"outbound_iface":    "",
 			"routing_table":     0,
 			"routing_priority":  0,
-		})
+		}
+		if relay, ok := protocolConfig["relay"].(map[string]any); ok {
+			for key, value := range relay {
+				wireGuardRelay[key] = value
+			}
+		}
+		config["cidr"] = configValue(protocolConfig, "cidr", "10.66.0.0/24")
+		if strings.EqualFold(stringSetting(wireGuardRelay, "role", "entry"), "exit") {
+			// The overseas exit only owns GOST/TUN/NAT. Keep entry private keys
+			// out of its runtime config entirely.
+			config["server_address"] = ""
+			config["server_private_key"] = ""
+			config["server_public_key"] = ""
+			wireGuardRelay["wss_secure"] = false
+			wireGuardRelay["wss_server_name"] = ""
+			wireGuardRelay["wss_ca_file"] = ""
+		} else {
+			config["server_address"] = configValue(protocolConfig, "server_address", "10.66.0.1/24")
+			serverPrivateKey := configValue(protocolConfig, "server_private_key", "")
+			serverPublicKey := configValue(protocolConfig, "server_public_key", "")
+			if publicKey, ok := serverPublicKey.(string); !ok || strings.TrimSpace(publicKey) == "" {
+				if privateKey, ok := serverPrivateKey.(string); ok {
+					if derived := wireGuardPublicKeyFromPrivate(privateKey); derived != "" {
+						serverPublicKey = derived
+					}
+				}
+			}
+			config["server_private_key"] = serverPrivateKey
+			config["server_public_key"] = serverPublicKey
+			wireGuardRelay["wss_cert_file"] = ""
+			wireGuardRelay["wss_key_file"] = ""
+		}
+		config["mtu"] = configValue(protocolConfig, "mtu", 1280)
+		config["dns"] = configValue(protocolConfig, "dns", []string{"1.1.1.1", "8.8.8.8"})
+		config["allowed_ips"] = configValue(protocolConfig, "allowed_ips", []string{"0.0.0.0/0"})
+		config["tunnel_type"] = configValue(protocolConfig, "tunnel_type", "quic")
+		config["relay"] = wireGuardRelay
 	case "shadowsocks":
 		cipherStr := "aes-256-gcm"
 		if c, ok := protocolConfig["cipher"].(string); ok && c != "" {
@@ -146,11 +180,16 @@ func BuildNodeProtocolConfig(node *model.Node, protocol *model.NodeProtocol) map
 		}
 	}
 
-	// 自定义配置全量覆盖 (优先级最高)
+	// 自定义配置全量覆盖 (优先级最高)。WireGuard 的运行时字段只允许
+	// Settings 提供；这层过滤同时保护 API 校验上线前已存入数据库的旧记录。
 	if protocol.CustomConfig != nil && *protocol.CustomConfig != "" {
 		var customConfig map[string]any
 		if err := json.Unmarshal([]byte(*protocol.CustomConfig), &customConfig); err == nil {
 			for k, v := range customConfig {
+				if nodeType == string(model.ProtocolWireGuard) && isWireGuardRuntimeConfigKey(k) {
+					log.Printf("ignore legacy WireGuard custom_config runtime override for node %d: %s", node.ID, k)
+					continue
+				}
 				config[k] = v
 			}
 		}
@@ -193,6 +232,17 @@ func configValue(config map[string]any, key string, defaultValue any) any {
 		return val
 	}
 	return defaultValue
+}
+
+func isWireGuardRuntimeConfigKey(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "type", "node_type", "host", "server_name", "server_port",
+		"cidr", "server_address", "server_private_key", "server_public_key", "public_key",
+		"mtu", "dns", "allowed_ips", "tunnel_type", "relay":
+		return true
+	default:
+		return false
+	}
 }
 
 // StringifyConfigMap 把 map[string]any 转成 map[string]string (proto 的

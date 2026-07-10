@@ -173,6 +173,9 @@ func migrateSchema(db *gorm.DB) error {
 	if err := service.EnsureForwardNodeMetricsPortColumn(db); err != nil {
 		return err
 	}
+	if err := service.EnsureNodeRuntimeHealthSchema(db); err != nil {
+		return err
+	}
 	return service.EnsureAgentDiagnosticTaskSchema(db)
 }
 
@@ -180,7 +183,7 @@ func allModels() []any {
 	return []any{
 		&model.User{}, &model.Plan{}, &model.Order{}, &model.Payment{}, &model.PaymentLog{},
 		&model.ServerVMess{}, &model.ServerVLESS{}, &model.ServerTrojan{}, &model.ServerShadowsocks{},
-		&model.Node{}, &model.NodeProtocol{}, &model.NodeGroup{}, &model.AuthorizedKey{},
+		&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.NodeGroup{}, &model.AuthorizedKey{},
 		&model.TrafficLog{}, &model.OnlineLog{}, &model.StatUser{}, &model.StatServer{}, &model.NodeLog{},
 		&model.SubscriptionGroup{}, &model.SubscriptionTemplate{}, &model.UserSubscriptionGroup{}, &model.PlanSubscriptionGroup{},
 		&model.Event{}, &model.Ticket{}, &model.TicketMessage{}, &model.Coupon{}, &model.CouponUsage{}, &model.Knowledge{},

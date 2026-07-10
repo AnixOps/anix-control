@@ -114,6 +114,27 @@ func TestNodeLogGRPCServerReportLogsPersistsNonBlankEntries(t *testing.T) {
 	assert.Equal(t, int64(1_700_000_000_123), logs[0].LoggedAt.UnixMilli())
 }
 
+func TestNodeLogGRPCServerReportLogsUpdatesWireGuardRuntimeHealth(t *testing.T) {
+	requireInMemoryDatabase(t)
+	defer requireDatabaseClosed(t)
+	requireAutoMigrate(t, &model.Node{}, &model.NodeLog{})
+
+	node := model.Node{Name: "wireguard-health-test", Host: "127.0.0.1", Port: 8443}
+	require.NoError(t, database.Get().Create(&node).Error)
+
+	entry := nodeLogEntryForTest("wireguard runtime unhealthy", time.Now().Unix())
+	entry.Set(nodeLogEntrySourceField, protoreflect.ValueOfString("wireguard"))
+	entry.Set(nodeLogEntryFieldsJSONField, protoreflect.ValueOfString(`{"runtime_healthy":false,"runtime_error":"gost exited"}`))
+	_, err := NewNodeLogGRPCServer().ReportLogs(context.Background(), nodeLogRequestForTest(uint32(node.ID), entry))
+	require.NoError(t, err)
+
+	var updated model.Node
+	require.NoError(t, database.Get().First(&updated, node.ID).Error)
+	assert.False(t, updated.RuntimeHealthy)
+	assert.Equal(t, "gost exited", updated.RuntimeError)
+	assert.NotNil(t, updated.RuntimeCheckedAt)
+}
+
 type stubNodeLogServiceServer struct {
 	called bool
 	resp   *pb.StatusResponse

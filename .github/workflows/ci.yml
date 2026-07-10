@@ -19,16 +19,16 @@ jobs:
     outputs:
       is_release_tag: ${{ steps.check.outputs.is_release_tag }}
     steps:
-      - name: Check if tag matches v.X.Y.Z
+      - name: Check if tag matches release or RC version
         id: check
         shell: bash
         run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
             echo "is_release_tag=true" >> "$GITHUB_OUTPUT"
             echo "Release tag accepted: ${GITHUB_REF_NAME}"
           else
             echo "is_release_tag=false" >> "$GITHUB_OUTPUT"
-            echo "Not a strict release tag, skip release-only jobs."
+            echo "Not a release or release-candidate tag, skip release-only jobs."
           fi
 
   deploy-script-test:
@@ -957,5 +957,6 @@ jobs:
         with:
           files: release/*
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-rc.') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -4,11 +4,14 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/anixops/v2board/internal/cache"
@@ -202,11 +205,21 @@ func (s *NodeService) validateParentID(nodeID uint, parentID *uint) error {
 
 // DeleteNode 删除节点
 func (s *NodeService) DeleteNode(id uint) error {
-	// 先删除关联的协议
-	if err := s.db.Where("node_id = ?", id).Delete(&model.NodeProtocol{}).Error; err != nil {
-		return err
-	}
-	return s.db.Delete(&model.Node{}, id).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var protocolIDs []uint
+		if err := tx.Model(&model.NodeProtocol{}).Where("node_id = ?", id).Pluck("id", &protocolIDs).Error; err != nil {
+			return err
+		}
+		if len(protocolIDs) > 0 {
+			if err := tx.Where("node_protocol_id IN ?", protocolIDs).Delete(&model.WireGuardPeer{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("node_id = ?", id).Delete(&model.NodeProtocol{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.Node{}, id).Error
+	})
 }
 
 // ========== 节点自动注册 ==========
@@ -371,6 +384,10 @@ func (s *NodeService) AccumulateTrafficOnly(nodeID uint, upload, download int64)
 // 用于"落地节点为根、转发节点为子"的中转链路场景: 转发节点上报的流量既要算在
 // 自己头上, 也要算在链路上每一层父节点头上。seen 用于防止数据被误配成环时死循环。
 func (s *NodeService) accumulateTraffic(nodeID uint, upload, download int64, includeMonthly bool) error {
+	return accumulateTrafficTx(s.db, nodeID, upload, download, includeMonthly)
+}
+
+func accumulateTrafficTx(db *gorm.DB, nodeID uint, upload, download int64, includeMonthly bool) error {
 	seen := make(map[uint]bool)
 	currentID := nodeID
 	for currentID != 0 && !seen[currentID] {
@@ -384,12 +401,12 @@ func (s *NodeService) accumulateTraffic(nodeID uint, upload, download int64, inc
 			updates["monthly_upload"] = gorm.Expr("monthly_upload + ?", upload)
 			updates["monthly_download"] = gorm.Expr("monthly_download + ?", download)
 		}
-		if err := s.db.Model(&model.Node{}).Where("id = ?", currentID).UpdateColumns(updates).Error; err != nil {
+		if err := db.Model(&model.Node{}).Where("id = ?", currentID).UpdateColumns(updates).Error; err != nil {
 			return err
 		}
 
 		var parentID *uint
-		if err := s.db.Model(&model.Node{}).Where("id = ?", currentID).
+		if err := db.Model(&model.Node{}).Where("id = ?", currentID).
 			Select("parent_id").Scan(&parentID).Error; err != nil {
 			return err
 		}
@@ -408,6 +425,29 @@ func (s *NodeService) UpdateLastCheckAt(nodeID uint) error {
 		"last_check_at": now,
 		"status":        model.NodeStatusOnline,
 	}).Error
+}
+
+// UpdateRuntimeHealth records the health of a node's managed runtime process.
+// It deliberately does not change last_check_at: the node can be reachable
+// while its relay process is unhealthy, and those are different signals.
+func (s *NodeService) UpdateRuntimeHealth(nodeID uint, healthy bool, message string) error {
+	message = strings.TrimSpace(message)
+	if len(message) > 4096 {
+		message = message[:4096]
+	}
+	checkedAt := time.Now().Unix()
+	result := s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(map[string]any{
+		"runtime_healthy":    healthy,
+		"runtime_error":      message,
+		"runtime_checked_at": checkedAt,
+	})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // GetNodeByAPIKey 通过API Key获取节点
@@ -504,18 +544,85 @@ func (s *NodeService) CreateProtocol(protocol *model.NodeProtocol) error {
 	if err := s.db.First(&node, protocol.NodeID).Error; err != nil {
 		return errors.New("节点不存在")
 	}
+	if err := ValidateNodeProtocol(protocol); err != nil {
+		return err
+	}
 
 	return s.db.Create(protocol).Error
 }
 
 // UpdateProtocol 更新协议
 func (s *NodeService) UpdateProtocol(id uint, updates map[string]any) error {
-	return s.db.Model(&model.NodeProtocol{}).Where("id = ?", id).Updates(updates).Error
+	var current model.NodeProtocol
+	if err := s.db.First(&current, id).Error; err != nil {
+		return err
+	}
+
+	normalized, err := normalizeProtocolUpdates(updates)
+	if err != nil {
+		return err
+	}
+	currentJSON, err := json.Marshal(current)
+	if err != nil {
+		return err
+	}
+	var merged map[string]any
+	if err := json.Unmarshal(currentJSON, &merged); err != nil {
+		return err
+	}
+	for key, value := range normalized {
+		merged[key] = value
+	}
+	mergedJSON, err := json.Marshal(merged)
+	if err != nil {
+		return err
+	}
+	var candidate model.NodeProtocol
+	if err := json.Unmarshal(mergedJSON, &candidate); err != nil {
+		return fmt.Errorf("协议更新参数无效: %w", err)
+	}
+	candidate.ID = current.ID
+	candidate.NodeID = current.NodeID
+	if err := ValidateNodeProtocol(&candidate); err != nil {
+		return err
+	}
+
+	return s.db.Model(&model.NodeProtocol{}).Where("id = ?", id).Updates(normalized).Error
 }
 
 // DeleteProtocol 删除协议
 func (s *NodeService) DeleteProtocol(id uint) error {
-	return s.db.Delete(&model.NodeProtocol{}, id).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("node_protocol_id = ?", id).Delete(&model.WireGuardPeer{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.NodeProtocol{}, id).Error
+	})
+}
+
+func normalizeProtocolUpdates(updates map[string]any) (map[string]any, error) {
+	normalized := make(map[string]any, len(updates))
+	for key, value := range updates {
+		switch key {
+		case "settings", "tls_settings", "transport_settings", "reality_settings", "custom_config":
+			if value == nil {
+				normalized[key] = nil
+				continue
+			}
+			if text, ok := value.(string); ok {
+				normalized[key] = text
+				continue
+			}
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				return nil, fmt.Errorf("字段 %s 不是有效 JSON: %w", key, err)
+			}
+			normalized[key] = string(encoded)
+		default:
+			normalized[key] = value
+		}
+	}
+	return normalized, nil
 }
 
 // SyncProtocolToNode 同步协议配置到节点

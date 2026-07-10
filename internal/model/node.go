@@ -54,6 +54,11 @@ type Node struct {
 	Uptime        int64   `gorm:"default:0" json:"uptime"`       // 运行时间(秒)
 	OnlineUsers   int     `gorm:"default:0" json:"online_users"` // 在线用户数
 
+	// 运行时健康状态 (由支持运行时自愈的节点上报)
+	RuntimeHealthy   bool   `gorm:"default:true" json:"runtime_healthy"`
+	RuntimeError     string `gorm:"type:text" json:"runtime_error"`
+	RuntimeCheckedAt *int64 `json:"runtime_checked_at"`
+
 	// 流量统计
 	TotalUpload   int64 `gorm:"default:0" json:"total_upload"`   // 总上传流量
 	TotalDownload int64 `gorm:"default:0" json:"total_download"` // 总下载流量
@@ -214,6 +219,13 @@ type NodeHeartbeatRequest struct {
 	Download    int64   `json:"download"` // 本次下载流量增量
 }
 
+// NodeRuntimeHealthRequest reports process-level runtime health separately
+// from the regular system heartbeat metrics.
+type NodeRuntimeHealthRequest struct {
+	Healthy bool   `json:"healthy"`
+	Error   string `json:"error"`
+}
+
 // ProtocolTemplate 协议模板 (快速添加)
 type ProtocolTemplate struct {
 	Type        ProtocolType `json:"type"`
@@ -293,7 +305,7 @@ func GetProtocolTemplates() []ProtocolTemplate {
 			Description: "P0 WireGuard 用户接入，国内入口终止，默认通过 GOST relay+QUIC 到海外出口 NAT",
 			DefaultPort: 51820,
 			TLS:         0,
-			Settings:    `{"cidr":"10.66.0.0/24","server_address":"10.66.0.1/24","server_public_key":"","mtu":1280,"dns":["1.1.1.1","8.8.8.8"],"allowed_ips":["0.0.0.0/0","::/0"],"tunnel_type":"quic","relay":{"backend":"gost","mode":"relay+quic","role":"entry","wss_compat":false,"exit_nat":true,"entry_stats":true,"server":"","server_port":0,"tun_port":8421,"entry_tun_address":"172.31.66.2/24","exit_tun_address":"172.31.66.1/24","outbound_iface":"","routing_table":0,"routing_priority":0}}`,
+			Settings:    `{"cidr":"10.66.0.0/24","server_address":"10.66.0.1/24","server_public_key":"","mtu":1280,"dns":["1.1.1.1","8.8.8.8"],"allowed_ips":["0.0.0.0/0"],"tunnel_type":"quic","relay":{"backend":"gost","mode":"relay+quic","role":"entry","wss_compat":false,"wss_path":"/ws","wss_secure":true,"wss_server_name":"","wss_ca_file":"","wss_cert_file":"","wss_key_file":"","exit_nat":true,"entry_stats":true,"server":"","server_port":0,"tun_port":8421,"entry_tun_address":"172.31.66.2/24","exit_tun_address":"172.31.66.1/24","outbound_iface":"","routing_table":0,"routing_priority":0}}`,
 			Transport:   "udp",
 		},
 	}

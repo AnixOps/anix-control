@@ -107,6 +107,7 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 	if format == "" {
 		format = model.FormatV2Ray
 	}
+	format = preferNativeWireGuardFormat(format, nodes)
 
 	// 9. 去重 (针对非 V2Ray 分组模式)
 	if format != model.FormatV2Ray || len(req.Groups) == 0 {
@@ -203,6 +204,33 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 		UsedTraffic:  user.U + user.D,
 		TotalTraffic: user.TransferEnable,
 	}, nil
+}
+
+// preferNativeWireGuardFormat prevents user-agent formats based on V2Ray links
+// from silently dropping a subscription that contains only WireGuard profiles.
+// Mixed subscriptions retain their requested format because there is no common
+// portable container for a WireGuard .conf alongside arbitrary V2Ray links.
+func preferNativeWireGuardFormat(format model.SubscriptionFormat, nodes []*model.ParsedNode) model.SubscriptionFormat {
+	switch format {
+	case model.FormatV2Ray, model.FormatShadowrocket, model.FormatLoon:
+	default:
+		return format
+	}
+
+	hasWireGuard := false
+	for _, node := range nodes {
+		if node == nil {
+			continue
+		}
+		if node.Type != string(model.ProtocolWireGuard) {
+			return format
+		}
+		hasWireGuard = true
+	}
+	if hasWireGuard {
+		return model.FormatWireGuard
+	}
+	return format
 }
 
 // getUserByToken 根据 token 获取用户
@@ -563,6 +591,9 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 
 	var result []*model.ParsedNode
 	for _, p := range protocols {
+		if isWireGuardExitProtocol(&p) {
+			continue
+		}
 		if p.Node == nil {
 			fmt.Printf("[Subscription] Protocol %d has no Node associated\n", p.ID)
 			continue

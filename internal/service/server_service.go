@@ -176,6 +176,70 @@ func (s *ServerService) BatchRecordTrafficLog(serverType model.ServerType, serve
 	return s.db.CreateInBatches(logs, 100).Error
 }
 
+// RecordNodeTrafficReport atomically applies a node traffic report. Node
+// clients retry a report when the panel returns an error, so logs, node
+// counters, daily/monthly stats, and user counters must commit together.
+func (s *ServerService) RecordNodeTrafficReport(serverType model.ServerType, nodeID uint, traffics map[uint][2]int64, rate float64) error {
+	if len(traffics) == 0 {
+		return nil
+	}
+	rate = normalizeTrafficRate(rate)
+
+	logs := make([]model.TrafficLog, 0, len(traffics))
+	userTraffics := make(map[uint][2]int64, len(traffics))
+	var totalUpload, totalDownload int64
+	now := time.Now().Unix()
+	for userID, traffic := range traffics {
+		if err := ValidateTrafficDelta(traffic[0], traffic[1]); err != nil {
+			return err
+		}
+		upload := int64(float64(traffic[0]) * rate)
+		download := int64(float64(traffic[1]) * rate)
+		userTraffics[userID] = [2]int64{upload, download}
+		totalUpload += upload
+		totalDownload += download
+		logs = append(logs, model.TrafficLog{
+			UserID:     userID,
+			ServerID:   nodeID,
+			ServerType: string(serverType),
+			U:          traffic[0],
+			D:          traffic[1],
+			Rate:       rate,
+			LogAt:      now,
+		})
+	}
+
+	dayStart := time.Unix(now, 0).In(time.Local)
+	dayStart = time.Date(dayStart.Year(), dayStart.Month(), dayStart.Day(), 0, 0, 0, 0, time.Local)
+	monthStart := time.Date(dayStart.Year(), dayStart.Month(), 1, 0, 0, 0, 0, time.Local)
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.CreateInBatches(logs, 100).Error; err != nil {
+			return err
+		}
+		if totalUpload > 0 || totalDownload > 0 {
+			if err := accumulateTrafficTx(tx, nodeID, totalUpload, totalDownload, false); err != nil {
+				return err
+			}
+			if err := recordServerStatTx(tx, serverType, nodeID, totalUpload, totalDownload, "d", dayStart.Unix()); err != nil {
+				return err
+			}
+			if err := recordServerStatTx(tx, serverType, nodeID, totalUpload, totalDownload, "m", monthStart.Unix()); err != nil {
+				return err
+			}
+		}
+		for userID, traffic := range userTraffics {
+			if err := tx.Model(&model.User{}).Where("id = ?", userID).
+				Updates(map[string]any{
+					"u": gorm.Expr("u + ?", traffic[0]),
+					"d": gorm.Expr("d + ?", traffic[1]),
+				}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // RecordServerStat 记录节点汇总统计，用于面板中的服务器统计表。
 // recordType: d=日统计, m=月统计。
 func (s *ServerService) RecordServerStat(serverType model.ServerType, serverID uint, upload, download int64, recordType string, recordAt int64) error {
@@ -190,29 +254,33 @@ func (s *ServerService) RecordServerStat(serverType model.ServerType, serverID u
 	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		var stat model.StatServer
-		err := tx.Where("server_id = ? AND server_type = ? AND record_type = ? AND record_at = ?",
-			serverID, string(serverType), recordType, recordAt).First(&stat).Error
-		switch err {
-		case nil:
-			return tx.Model(&stat).Updates(map[string]any{
-				"u": gorm.Expr("u + ?", upload),
-				"d": gorm.Expr("d + ?", download),
-			}).Error
-		case gorm.ErrRecordNotFound:
-			stat = model.StatServer{
-				ServerID:   serverID,
-				ServerType: string(serverType),
-				U:          upload,
-				D:          download,
-				RecordType: recordType,
-				RecordAt:   recordAt,
-			}
-			return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&stat).Error
-		default:
-			return err
-		}
+		return recordServerStatTx(tx, serverType, serverID, upload, download, recordType, recordAt)
 	})
+}
+
+func recordServerStatTx(tx *gorm.DB, serverType model.ServerType, serverID uint, upload, download int64, recordType string, recordAt int64) error {
+	var stat model.StatServer
+	err := tx.Where("server_id = ? AND server_type = ? AND record_type = ? AND record_at = ?",
+		serverID, string(serverType), recordType, recordAt).First(&stat).Error
+	switch err {
+	case nil:
+		return tx.Model(&stat).Updates(map[string]any{
+			"u": gorm.Expr("u + ?", upload),
+			"d": gorm.Expr("d + ?", download),
+		}).Error
+	case gorm.ErrRecordNotFound:
+		stat = model.StatServer{
+			ServerID:   serverID,
+			ServerType: string(serverType),
+			U:          upload,
+			D:          download,
+			RecordType: recordType,
+			RecordAt:   recordAt,
+		}
+		return tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&stat).Error
+	default:
+		return err
+	}
 }
 
 // UpdateOnlineStatus 更新用户在线状态

@@ -79,6 +79,10 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 		h.sendConfigResponse(c, config)
 		return
 	}
+	if nodeType == string(model.ProtocolWireGuard) {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
 
 	serverType := model.ServerType(nodeType)
 	config, err = h.serverService.BuildNodeConfig(serverType, uint(nodeID))
@@ -103,6 +107,21 @@ func (h *UniProxyHandler) buildNewNodeConfig(nodeID uint, preferredType string) 
 	if node.RawConfig != nil && *node.RawConfig != "" {
 		if err := json.Unmarshal([]byte(*node.RawConfig), &config); err != nil {
 			return nil, fmt.Errorf("invalid raw_config JSON: %v", err)
+		}
+		if config == nil {
+			return nil, fmt.Errorf("raw_config must be a JSON object")
+		}
+		if preferredType != "" {
+			rawType := normalizeNodeType(stringValue(config["node_type"]))
+			if rawType == "" {
+				rawType = normalizeNodeType(stringValue(config["type"]))
+			}
+			if rawType != preferredType {
+				return nil, fmt.Errorf("raw_config protocol %q does not match requested protocol %q", rawType, preferredType)
+			}
+		}
+		if err := service.ValidateWireGuardRuntimeConfig(config); err != nil {
+			return nil, err
 		}
 		h.ensureBaseConfig(config)
 		return config, nil
@@ -130,7 +149,11 @@ func (h *UniProxyHandler) buildNewNodeConfig(nodeID uint, preferredType string) 
 
 func (h *UniProxyHandler) ensureBaseConfig(config map[string]any) {
 	if _, ok := config["node_type"]; !ok {
-		config["node_type"] = "vless"
+		if protocolType, exists := config["type"]; exists {
+			config["node_type"] = protocolType
+		} else {
+			config["node_type"] = "vless"
+		}
 	}
 	if _, ok := config["type"]; !ok {
 		config["type"] = config["node_type"]
@@ -220,6 +243,11 @@ func normalizeNodeType(nodeType string) string {
 	}
 }
 
+func stringValue(value any) string {
+	text, _ := value.(string)
+	return text
+}
+
 // GetUsers returns active users.
 // GET /api/v1/server/UniProxy/user
 func (h *UniProxyHandler) GetUsers(c *gin.Context) {
@@ -288,10 +316,17 @@ func (h *UniProxyHandler) getNewNodeUsers(nodeID uint) ([]*model.User, error) {
 }
 
 func (h *UniProxyHandler) sendUsersResponse(c *gin.Context, users []*model.User, nodeID uint, nodeType string) {
-	wireGuardExtras, err := h.buildWireGuardUserExtras(nodeID, nodeType, users)
+	wireGuardExtras, wireGuardExit, err := h.buildWireGuardUserExtras(nodeID, nodeType, users)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build wireguard users"})
+		if nodeType == string(model.ProtocolWireGuard) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to build wireguard users"})
+		}
 		return
+	}
+	if wireGuardExit {
+		users = nil
 	}
 
 	userList := make([]map[string]any, 0, len(users))
@@ -353,15 +388,19 @@ func (h *UniProxyHandler) sendUsersResponse(c *gin.Context, users []*model.User,
 	c.JSON(http.StatusOK, response)
 }
 
-func (h *UniProxyHandler) buildWireGuardUserExtras(nodeID uint, nodeType string, users []*model.User) (map[uint]map[string]string, error) {
+func (h *UniProxyHandler) buildWireGuardUserExtras(nodeID uint, nodeType string, users []*model.User) (map[uint]map[string]string, bool, error) {
 	if nodeID == 0 || len(users) == 0 {
-		return nil, nil
+		return nil, false, nil
 	}
 	protocol, err := h.selectRuntimeProtocol(nodeID, nodeType)
 	if err != nil || protocol == nil || protocol.Type != model.ProtocolWireGuard {
-		return nil, err
+		return nil, false, err
 	}
-	return h.subscriptionService.BuildWireGuardRuntimeUserExtras(protocol, users)
+	if service.IsWireGuardExitProtocol(protocol) {
+		return nil, true, nil
+	}
+	extras, err := h.subscriptionService.BuildWireGuardRuntimeUserExtras(protocol, users)
+	return extras, false, err
 }
 
 func (h *UniProxyHandler) selectRuntimeProtocol(nodeID uint, preferredType string) (*model.NodeProtocol, error) {
@@ -369,7 +408,12 @@ func (h *UniProxyHandler) selectRuntimeProtocol(nodeID uint, preferredType strin
 	if err != nil {
 		return nil, err
 	}
-	return selectNodeProtocol(protocols, normalizeNodeType(preferredType)), nil
+	preferredType = normalizeNodeType(preferredType)
+	protocol := selectNodeProtocol(protocols, preferredType)
+	if protocol == nil && preferredType != "" {
+		return nil, fmt.Errorf("protocol %s not found for node %d", preferredType, nodeID)
+	}
+	return protocol, nil
 }
 
 // GetAliveList returns online counts.
@@ -396,9 +440,7 @@ func (h *UniProxyHandler) PushTraffic(c *gin.Context) {
 		return
 	}
 
-	if nodeType == "" {
-		_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
-	}
+	_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
 
 	serverType := model.ServerType(nodeType)
 
@@ -420,38 +462,8 @@ func (h *UniProxyHandler) PushTraffic(c *gin.Context) {
 	}
 
 	rate := h.serverService.GetServerRate(serverType, uint(nodeID))
-	if err := h.serverService.BatchRecordTrafficLog(serverType, uint(nodeID), traffics, rate); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record traffic log"})
-		return
-	}
-
-	userTraffics := make(map[uint][2]int64)
-	var totalUpload, totalDownload int64
-	for userID, traffic := range traffics {
-		upload := int64(float64(traffic[0]) * rate)
-		download := int64(float64(traffic[1]) * rate)
-		userTraffics[userID] = [2]int64{upload, download}
-		totalUpload += upload
-		totalDownload += download
-	}
-
-	if err := h.nodeService.AccumulateTrafficOnly(uint(nodeID), totalUpload, totalDownload); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update node traffic"})
-		return
-	}
-
-	now := time.Now()
-	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).Unix()
-	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local).Unix()
-	if err := h.serverService.RecordServerStat(serverType, uint(nodeID), totalUpload, totalDownload, "d", dayStart); err != nil {
-		fmt.Printf("[UniProxy] failed to record daily server stat: %v\n", err)
-	}
-	if err := h.serverService.RecordServerStat(serverType, uint(nodeID), totalUpload, totalDownload, "m", monthStart); err != nil {
-		fmt.Printf("[UniProxy] failed to record monthly server stat: %v\n", err)
-	}
-
-	if err := h.userService.BatchUpdateTraffic(userTraffics); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update user traffic"})
+	if err := h.serverService.RecordNodeTrafficReport(serverType, uint(nodeID), traffics, rate); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record traffic report"})
 		return
 	}
 
@@ -470,9 +482,7 @@ func (h *UniProxyHandler) PushAlive(c *gin.Context) {
 		return
 	}
 
-	if nodeType == "" {
-		_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
-	}
+	_ = h.nodeService.UpdateLastCheckAt(uint(nodeID))
 
 	serverType := model.ServerType(nodeType)
 

@@ -223,6 +223,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.PUT("/nodes/:id/protocols/:protocol_id", nodeHandler.UpdateProtocol)
 			admin.DELETE("/nodes/:id/protocols/:protocol_id", nodeHandler.DeleteProtocol)
 			admin.GET("/protocol-templates", nodeHandler.GetProtocolTemplates)
+			admin.POST("/wireguard/keypair", nodeHandler.GenerateWireGuardKeypair)
 
 			// 授权密钥管理
 			admin.GET("/auth-keys", nodeHandler.GetAuthKeys)
@@ -553,6 +554,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		{
 			nodeHandler := handler.NewNodeHandler()
 			nodeAPI.POST("/heartbeat", nodeHandler.Heartbeat)
+			nodeAPI.POST("/runtime-health", nodeHandler.RuntimeHealth)
 		}
 
 		// UniProxy API (节点通信接口)

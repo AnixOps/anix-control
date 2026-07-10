@@ -2,11 +2,15 @@
 
 Date: 2026-07-10
 
-Status: Partial/P0. The first panel peer-custody/subscription-output slice,
-first admin visual protocol form, and initial V2bX entry/exit runtime slices
-exist. Hardened API validation, real dual-node routing evidence, speed limits,
-end-to-end tests, migration evidence, and CI relay verification are still
-incomplete.
+Status: Partial/P0. The panel peer-custody/subscription-output slice, admin
+visual/keypair workflow, hardened protocol validation, production peer schema
+hook, V2bX entry/exit runtime slices, and a release-gated GitHub Actions QUIC
+network-namespace route acceptance job exist. A successful acceptance artifact,
+real WSS routing evidence, and real-client import evidence are still incomplete.
+
+The first runtime release is IPv4-only for the managed relay path. IPv6 peer
+CIDRs, relay TUN CIDRs, and IPv6 default routes are rejected until the runtime
+has matching `ip -6`, forwarding, and NAT handling.
 
 ## Decision
 
@@ -54,11 +58,20 @@ The first implementation should expose only these tunnel type enum values:
 The runtime contract now carries explicit GOST TUN relay fields. The entry node
 uses `relay.role=entry`, `relay.server`, `relay.server_port`,
 `relay.tun_port`, and `relay.entry_tun_address` to dial the overseas exit. The
-exit node uses `relay.role=exit`, `relay.tun_port`, `relay.entry_tun_address`,
-`relay.exit_tun_address`, and optional `relay.outbound_iface` to listen for the
-entry tunnel and apply NAT. The default relay mode remains `relay+quic`; setting
+exit node uses `relay.role=exit`, `relay.server_port`, `relay.tun_port`,
+`relay.entry_tun_address`, `relay.exit_tun_address`, and optional
+`relay.outbound_iface` to listen for the entry tunnel and apply NAT. The default relay mode remains `relay+quic`; setting
 `tunnel_type=wss` or `relay.wss_compat=true` selects `relay+wss` only as the
 compatibility path.
+
+## WSS Certificate Contract
+
+WSS uses TLS between the managed entry and exit. The entry configuration must
+set `relay.wss_secure=true`, a matching `relay.wss_server_name`, and optionally
+`relay.wss_ca_file` for a private CA. The exit configuration must use the same
+`relay.wss_path` and set `relay.wss_cert_file` plus `relay.wss_key_file`.
+The panel validates these role-specific fields before saving; the exit-only
+certificate paths are never placed in an entry configuration.
 
 Reserve extension slots for future transports, but do not expose them in the
 first implementation:
@@ -104,12 +117,29 @@ Overseas exit node responsibilities:
 
 - Receive the managed relay tunnel from the domestic entry.
 - Apply exit-side routing and NAT.
+- Never receive the domestic entry's WireGuard private key or user peer
+  credentials or any runtime user list; the exit runtime only needs relay
+  CIDR/TUN/NAT configuration.
 - Report runtime health and tunnel status back through the normal V2bX panel
   communication path.
+
+Runtime health is reported through `POST /api/v2/node/runtime-health` for REST
+nodes or the existing gRPC node-log channel for gRPC nodes. The payload is
+`{"healthy":true|false,"error":"..."}`. A GOST process exit marks the node
+unhealthy, records the error and checked timestamp in the panel, and is retried
+by V2bX using `GostRestartDelaySeconds`. The admin node list exposes the last
+reported runtime state separately from ordinary node reachability.
 
 First-version traffic accounting uses the domestic entry WireGuard peer as the
 source of truth. Exit-side counters can be added later as reconciliation or
 fraud-detection evidence, but they are not the first billing source.
+
+Both managed Linux nodes require `iproute2`, `iptables`, and GOST; the entry
+also requires WireGuard kernel support and `wireguard-tools`. V2bX enables IPv4
+forwarding and manages only the relay-specific forwarding rules: WireGuard to
+TUN and established return traffic on the entry, then TUN to egress and
+established return traffic on the exit. `relay.exit_nat=false` omits only
+MASQUERADE and requires upstream routing for the WireGuard CIDR.
 
 ## Subscription Output
 
@@ -124,6 +154,16 @@ The subscription output should include the user peer private key, preshared key,
 assigned peer IP, DNS, MTU, endpoint, and allowed IPs according to each client's
 accepted format. Client-specific formatter behavior must be tested before the
 feature is marked implemented.
+
+When the selected subscription contains only WireGuard profiles, V2Ray-link
+user agents including Shadowrocket, Loon, and v2rayN are automatically served
+the native `.conf` profile instead of an empty V2Ray link list. Mixed-protocol
+subscriptions retain their requested format; operators should place WireGuard
+in a dedicated subscription group or request `type=wireguard` for clients that
+need the native profile.
+
+The user subscription page exposes the same `WireGuard (.conf)` URL and saves
+its preview with the `.conf` extension for direct native-client import.
 
 ## Implementation Phases
 
@@ -140,13 +180,20 @@ feature is marked implemented.
    - Done for the first admin UI slice: the node protocol visual form can produce
      WireGuard CIDR, server key material, MTU, DNS, entry/exit GOST relay role,
      QUIC/WSS tunnel selection, one-click WSS compatibility mode, TUN addresses,
-     routing table/priority, and exit NAT hints.
-   - Still pending: hardened admin API validation, safer server key management,
-     entry/exit node selection workflow, route policy, and migration behavior.
+     routing table/priority, exit NAT hints, and role-specific WSS SNI/CA or
+     certificate/private-key paths.
+   - Done: API validation, keypair generation, relay default normalization
+     (`relay.backend` defaults to `gost`),
+     entry/exit key separation, exit peer/subscription exclusion, peer
+     allocation migration, secure WSS certificate contract, and production
+     peer-schema initialization.
+   - Still pending: a guided entry/exit node selection workflow and real
+     operator migration/rollback evidence.
 
 3. Subscription output.
-   - Done for the first slice: native WireGuard `.conf` output and sing-box
-     WireGuard outbound output with unit coverage.
+   - Done for the first slice: native WireGuard `.conf` output, automatic
+     `.conf` fallback for link-only user agents with WireGuard-only groups, and
+     sing-box 1.13 WireGuard endpoint output with unit coverage.
    - Still pending: verified Shadowrocket, Loon, and v2rayN client-specific
      import behavior.
 
@@ -159,9 +206,13 @@ feature is marked implemented.
    - Current V2bX runtime slice adds GOST TUN relay command planning, entry
      WireGuard-CIDR policy routing, `relay+quic`/`relay+wss` selection, and exit
      iptables NAT command application.
+   - Done: per-peer/node `tc` shaping, dynamic-limit convergence, startup
+     retry for GOST-created TUN devices, relay/limit contract verification, and
+     RC/tag-gated GitHub Actions QUIC/WSS network-namespace route acceptance jobs.
+   - Done: runtime health reporting and GOST process supervision through the
+     normal REST/gRPC node communication paths.
    - Still pending: real domestic-entry and overseas-exit integration evidence,
-     speed-limit enforcement, runtime health reporting, and GitHub Actions
-     relay-path verification.
+     restart-recovery evidence, and real WSS compatibility evidence.
 
 5. Integration testing.
    - Cover panel API validation, CIDR exhaustion, duplicate peer allocation,
