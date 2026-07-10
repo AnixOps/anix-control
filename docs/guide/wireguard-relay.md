@@ -4,9 +4,10 @@ Date: 2026-07-10
 
 Status: Partial/P0. The panel peer-custody/subscription-output slice, admin
 visual/keypair workflow, hardened protocol validation, production peer schema
-hook, V2bX entry/exit runtime slices, and a release-gated GitHub Actions QUIC
-network-namespace route acceptance job exist. A successful acceptance artifact,
-real WSS routing evidence, and real-client import evidence are still incomplete.
+hook, V2bX entry/exit runtime slices, and release-gated GitHub Actions QUIC/WSS
+network-namespace route acceptance jobs exist. `v2.5.0-rc.6` passed both
+acceptance paths. Real cross-region routing and real-client import evidence are
+still incomplete.
 
 The first runtime release is IPv4-only for the managed relay path. IPv6 peer
 CIDRs, relay TUN CIDRs, and IPv6 default routes are rejected until the runtime
@@ -212,7 +213,7 @@ its preview with the `.conf` extension for direct native-client import.
    - Done: runtime health reporting and GOST process supervision through the
      normal REST/gRPC node communication paths.
    - Still pending: real domestic-entry and overseas-exit integration evidence,
-     restart-recovery evidence, and real WSS compatibility evidence.
+     production restart-recovery evidence, and real WSS compatibility evidence.
 
 5. Integration testing.
    - Cover panel API validation, CIDR exhaustion, duplicate peer allocation,

@@ -79,7 +79,12 @@
 
 ---
 
-## 2. 快速部署（Docker Compose）
+## 2. 开发或受控 Docker Compose 部署
+
+This source-checkout Docker Compose path is for development or an operator-owned
+container workflow. It is not the default stable release installation path:
+production hosts should use the tag-pinned release installer in section 2.1 or
+an image digest supplied by the GitHub Release metadata.
 
 ```bash
 # 1) 克隆仓库
@@ -113,25 +118,20 @@ docker compose logs -f v2board
 
 ### 2.1 一键安装脚本
 
-本仓库提供与 `flux-panel` 类似的菜单式一键安装脚本，可直接通过 `raw.githubusercontent.com` 执行：
+生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像：
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/AnixOps/v2board_AnixOps/go_dev/install.sh)
+export VERSION=v2.5.0
+curl -fsSL \
+  "https://raw.githubusercontent.com/AnixOps/v2board_AnixOps/${VERSION}/scripts/install.sh" \
+  -o /tmp/v2board-install.sh
+sudo bash /tmp/v2board-install.sh install --version "${VERSION}" --admin-email "admin@example.com"
+rm -f /tmp/v2board-install.sh
 ```
 
-如果你已经在仓库根目录，也可以用兼容上游命名的本地包装器：
+安装器会验证 Release 中的 SHA-256，保留已有配置和数据库，更新失败时恢复上一个二进制/前端快照。完整步骤、反向代理、升级与回滚说明见 [`guide/release-installation.md`](guide/release-installation.md)。
 
-```bash
-bash ./panel_install.sh
-```
-
-安装器会完成以下动作：
-
-1. 下载或更新仓库源码归档。
-2. 生成 `config/config.yaml` 与 `.env`。
-3. 构建带 `ansible-playbook` 的应用镜像。
-4. 启动 Docker Compose。
-5. 直接在 `config/config.yaml` 写入统一的双运行时配置模板，`.env` 只保留覆盖项与部署差异。
+历史源码/Docker 安装器仍保留给受控恢复场景；必须显式设置 `V2BOARD_LEGACY_SOURCE_INSTALL=1`，不是正式发布路径。
 
 ### 2.2 Docker 内置 ansible-playbook
 

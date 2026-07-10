@@ -33,6 +33,8 @@ complete.
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 - Deployment guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - Upgrade runbook: [`docs/UPGRADE.md`](docs/UPGRADE.md)
+- Native release install: [`docs/guide/release-installation.md`](docs/guide/release-installation.md)
+- Legacy migration plan: [`docs/guide/legacy-migration.md`](docs/guide/legacy-migration.md)
 - Manual intervention requirements:
   [`docs/manual-intervention.md`](docs/manual-intervention.md)
 - Audit registers:
@@ -60,6 +62,24 @@ Generated local outputs should stay ignored and out of the source tree. Use:
 bash config/deploy/clean_local_build_artifacts.sh --dry-run
 bash config/deploy/clean_local_build_artifacts.sh --dry-run --include-deploy-backups
 ```
+
+## Release Install
+
+Production installation downloads checked GitHub Release assets and does not
+clone the repository or build on the target host. Pin the production tag:
+
+```bash
+export VERSION=v2.5.0
+curl -fsSL \
+  "https://raw.githubusercontent.com/AnixOps/v2board_AnixOps/${VERSION}/scripts/install.sh" \
+  -o /tmp/v2board-install.sh
+sudo bash /tmp/v2board-install.sh install --version "${VERSION}" --admin-email "admin@example.com"
+rm -f /tmp/v2board-install.sh
+```
+
+See the [release installation guide](docs/guide/release-installation.md) for
+reverse proxy, update, rollback, and security steps. Existing panel or foreign
+panel migrations must follow the [legacy migration plan](docs/guide/legacy-migration.md).
 
 The `--include-deploy-backups` mode is only for ignored local deploy archive
 leftovers in the checkout, such as stale frontend tarballs and internal zip
