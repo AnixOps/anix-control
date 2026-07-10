@@ -369,6 +369,8 @@ func (s *GRPCIntegrationSuite) SetupSuite() {
 		&model.Node{},
 		&model.NodeProtocol{},
 		&model.AuthorizedKey{},
+		&model.TrafficLog{},
+		&model.OnlineLog{},
 	)
 
 	// 启动 gRPC 服务器
@@ -412,6 +414,8 @@ func (s *GRPCIntegrationSuite) SetupTest() {
 	db.Exec("DELETE FROM v2_node")
 	db.Exec("DELETE FROM v2_node_protocol")
 	db.Exec("DELETE FROM v2_authorized_key")
+	db.Exec("DELETE FROM v2_server_log")
+	db.Exec("DELETE FROM v2_online_log")
 }
 
 // TestNodeRegistrationFlow 测试完整的节点注册流程
@@ -989,6 +993,8 @@ func (s *GRPCStreamSuite) SetupSuite() {
 		&model.Node{},
 		&model.NodeProtocol{},
 		&model.AuthorizedKey{},
+		&model.TrafficLog{},
+		&model.OnlineLog{},
 	)
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1027,6 +1033,8 @@ func (s *GRPCStreamSuite) SetupTest() {
 	db.Exec("DELETE FROM v2_node")
 	db.Exec("DELETE FROM v2_node_protocol")
 	db.Exec("DELETE FROM v2_authorized_key")
+	db.Exec("DELETE FROM v2_server_log")
+	db.Exec("DELETE FROM v2_online_log")
 }
 
 // TestHealthWatch 测试健康检查流
