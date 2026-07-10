@@ -211,7 +211,7 @@ func (s *NodeService) DeleteNode(id uint) error {
 			return err
 		}
 		if len(protocolIDs) > 0 {
-			if err := tx.Where("node_protocol_id IN ?", protocolIDs).Delete(&model.WireGuardPeer{}).Error; err != nil {
+			if err := deleteWireGuardPeers(tx, "node_protocol_id IN ?", protocolIDs); err != nil {
 				return err
 			}
 		}
@@ -593,7 +593,7 @@ func (s *NodeService) UpdateProtocol(id uint, updates map[string]any) error {
 // DeleteProtocol 删除协议
 func (s *NodeService) DeleteProtocol(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("node_protocol_id = ?", id).Delete(&model.WireGuardPeer{}).Error; err != nil {
+		if err := deleteWireGuardPeers(tx, "node_protocol_id = ?", id); err != nil {
 			return err
 		}
 		return tx.Delete(&model.NodeProtocol{}, id).Error

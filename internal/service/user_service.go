@@ -234,7 +234,7 @@ func (s *UserService) Delete(id uint) error {
 		return ErrUserNotFound
 	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("user_id = ?", id).Delete(&model.WireGuardPeer{}).Error; err != nil {
+		if err := deleteWireGuardPeers(tx, "user_id = ?", id); err != nil {
 			return err
 		}
 		res := tx.Delete(&model.User{}, id)

@@ -206,14 +206,11 @@ func isWireGuardExitProtocol(protocol *model.NodeProtocol) bool {
 	return IsWireGuardExitProtocol(protocol)
 }
 
-func (s *SubscriptionService) allocateWireGuardPeerIP(protocolID uint, cidr string) (string, error) {
-	prefix, err := netip.ParsePrefix(strings.TrimSpace(cidr))
-	if err != nil {
-		return "", fmt.Errorf("invalid wireguard cidr: %w", err)
+func deleteWireGuardPeers(tx *gorm.DB, query string, args ...any) error {
+	if !tx.Migrator().HasTable(&model.WireGuardPeer{}) {
+		return nil
 	}
-	wireGuardPeerMu.Lock()
-	defer wireGuardPeerMu.Unlock()
-	return s.allocateWireGuardPeerIPLocked(protocolID, prefix)
+	return tx.Where(query, args...).Delete(&model.WireGuardPeer{}).Error
 }
 
 func (s *SubscriptionService) allocateWireGuardPeerIPLocked(protocolID uint, prefix netip.Prefix) (string, error) {
