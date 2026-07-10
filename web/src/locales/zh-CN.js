@@ -2434,10 +2434,10 @@ export default {
       placeholders: {
         host: 'smtp.example.com',
         port: '465',
-        username: 'your@email.com',
+        username: "your{'@'}email.com",
         password: '请输入 SMTP 密码',
         fromName: 'AnixOps 工作室',
-        fromAddress: 'noreply@example.com'
+        fromAddress: "noreply{'@'}example.com"
       }
     },
     logs: {
@@ -2478,7 +2478,7 @@ export default {
         recipient: '收件人地址'
       },
       placeholders: {
-        recipient: 'test@example.com'
+        recipient: "test{'@'}example.com"
       },
       actions: {
         send: '发送'
