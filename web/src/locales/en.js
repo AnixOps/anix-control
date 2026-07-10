@@ -2426,10 +2426,10 @@ export default {
       placeholders: {
         host: 'smtp.example.com',
         port: '465',
-        username: 'your@email.com',
+        username: "your{'@'}email.com",
         password: 'Enter SMTP password',
         fromName: 'AnixOps Studio',
-        fromAddress: 'noreply@example.com'
+        fromAddress: "noreply{'@'}example.com"
       }
     },
     logs: {
@@ -2470,7 +2470,7 @@ export default {
         recipient: 'Recipient Email'
       },
       placeholders: {
-        recipient: 'test@example.com'
+        recipient: "test{'@'}example.com"
       },
       actions: {
         send: 'Send'

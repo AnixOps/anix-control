@@ -1034,6 +1034,11 @@ const resetWireGuardForm = () => {
   Object.assign(wireGuardForm, defaultWireGuardForm())
 }
 
+const readNodeApiError = (error) => {
+  const response = error?.response?.data
+  return response?.error || response?.message || error?.message || String(error)
+}
+
 const createWireGuardKeypair = async () => {
   try {
     const response = await generateWireGuardKeypair()
@@ -1041,7 +1046,7 @@ const createWireGuardKeypair = async () => {
     wireGuardForm.serverPrivateKey = payload?.private_key || ''
     wireGuardForm.serverPublicKey = payload?.public_key || ''
   } catch (error) {
-    alert(t('admin.nodes.messages.generateFailed', { message: error.message || error }))
+    alert(t('admin.nodes.messages.generateFailed', { message: readNodeApiError(error) }))
   }
 }
 
@@ -1599,7 +1604,7 @@ const saveNode = async () => {
     loadNodes()
     loadStats()
   } catch (e) {
-    alert(t('admin.nodes.messages.saveFailed', { message: e.message || e }))
+    alert(t('admin.nodes.messages.saveFailed', { message: readNodeApiError(e) }))
   } finally {
     saving.value = false
   }
@@ -1612,7 +1617,7 @@ const confirmDelete = async (node) => {
     loadNodes()
     loadStats()
   } catch (e) {
-    alert(t('admin.nodes.messages.deleteFailed', { message: e.message || e }))
+    alert(t('admin.nodes.messages.deleteFailed', { message: readNodeApiError(e) }))
   }
 }
 
@@ -1847,7 +1852,7 @@ const saveProtocol = async () => {
     const res = await getNodeProtocols(selectedNode.value.id)
     protocols.value = readNodeList(res)
   } catch (e) {
-    alert(t('admin.nodes.messages.saveFailed', { message: e.message || e }))
+    alert(t('admin.nodes.messages.saveFailed', { message: readNodeApiError(e) }))
   } finally {
     savingProtocol.value = false
   }
@@ -1860,7 +1865,7 @@ const deleteProtocol = async (protocol) => {
     const res = await getNodeProtocols(selectedNode.value.id)
     protocols.value = readNodeList(res)
   } catch (e) {
-    alert(t('admin.nodes.messages.deleteFailed', { message: e.message || e }))
+    alert(t('admin.nodes.messages.deleteFailed', { message: readNodeApiError(e) }))
   }
 }
 
