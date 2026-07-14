@@ -240,6 +240,26 @@ func TestValidateWireGuardProtocolRejectsUnsafeRuntimeSettings(t *testing.T) {
 	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
 }
 
+func TestValidateWireGuardNetworkPolicy(t *testing.T) {
+	privateKey, publicKey, err := generateWireGuardKeypair()
+	require.NoError(t, err)
+	settings := fmt.Sprintf(`{"cidr":"10.77.0.0/24","server_address":"10.77.0.1/24","server_private_key":%q,"server_public_key":%q,"tunnel_type":"wss","relay":{"backend":"gost","mode":"relay+wss","role":"entry","wss_compat":true,"wss_secure":true,"wss_server_name":"exit.example.com","server":"104.251.233.29","server_port":443,"entry_tun_address":"172.31.77.2/24","network_policy":{"version":1,"strategy":"failover","paths":[{"name":"cn2","interface":"eth1","source":"10.8.0.112","gateway":"10.8.0.1","priority":10},{"name":"9929","interface":"eth0","source":"10.7.0.112","gateway":"10.7.0.1","priority":20}],"health_check":{"interval_seconds":10,"timeout_seconds":3,"failure_threshold":3,"recovery_threshold":2,"failback_delay_seconds":300}}}}`, privateKey, publicKey)
+	protocol := &model.NodeProtocol{Type: model.ProtocolWireGuard, Port: 51820, Enable: 1, Settings: &settings}
+	require.NoError(t, ValidateNodeProtocol(protocol))
+
+	domainServer := strings.Replace(settings, `"server":"104.251.233.29"`, `"server":"exit.example.com"`, 1)
+	protocol.Settings = &domainServer
+	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
+
+	duplicatePath := strings.Replace(settings, `"name":"9929"`, `"name":"cn2"`, 1)
+	protocol.Settings = &duplicatePath
+	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
+
+	mixedFamily := strings.Replace(settings, `"gateway":"10.8.0.1"`, `"gateway":"2001:db8::1"`, 1)
+	protocol.Settings = &mixedFamily
+	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
+}
+
 func TestValidateWireGuardExitCanOmitEntryKeyMaterial(t *testing.T) {
 	settings := `{"cidr":"10.77.0.0/24","mtu":1280,"relay":{"backend":"gost","role":"exit","server_port":8443,"entry_tun_address":"172.31.77.2/24","exit_tun_address":"172.31.77.1/24"}}`
 	protocol := &model.NodeProtocol{Type: model.ProtocolWireGuard, Enable: 1, Settings: &settings}

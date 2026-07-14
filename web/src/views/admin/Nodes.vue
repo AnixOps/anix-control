@@ -782,6 +782,71 @@
                   <input v-model.number="wireGuardForm.routingPriority" type="number" min="0" />
                 </div>
               </div>
+              <template v-if="wireGuardForm.role === 'entry' && (wireGuardForm.wssCompat || wireGuardForm.tunnelType === 'wss')">
+                <div class="section-title network-policy-title">
+                  <span>{{ t('admin.nodes.protocolForm.wireguard.sections.networkPolicy') }}</span>
+                  <label class="checkbox-label">
+                    <input v-model="wireGuardForm.networkPolicyEnabled" type="checkbox" />
+                    <span>{{ t('admin.nodes.protocolForm.wireguard.fields.networkPolicyEnabled') }}</span>
+                  </label>
+                </div>
+                <p class="field-hint">{{ t('admin.nodes.protocolForm.wireguard.hints.networkPolicy') }}</p>
+                <template v-if="wireGuardForm.networkPolicyEnabled">
+                  <div v-for="(path, index) in wireGuardForm.networkPaths" :key="index" class="network-path-card">
+                    <div class="network-path-header">
+                      <strong>{{ t('admin.nodes.protocolForm.wireguard.fields.networkPath') }} {{ index + 1 }}</strong>
+                      <button type="button" class="btn btn-secondary btn-sm" @click="removeWireGuardNetworkPath(index)">
+                        {{ t('common.delete') }}
+                      </button>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label>{{ t('admin.nodes.protocolForm.wireguard.fields.pathName') }}</label>
+                        <input v-model.trim="path.name" type="text" placeholder="CN2" />
+                      </div>
+                      <div class="form-group">
+                        <label>{{ t('admin.nodes.protocolForm.wireguard.fields.pathInterface') }}</label>
+                        <input v-model.trim="path.interface" type="text" placeholder="eth1" />
+                      </div>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label>{{ t('admin.nodes.protocolForm.wireguard.fields.pathSource') }}</label>
+                        <input v-model.trim="path.source" type="text" placeholder="10.8.0.112" />
+                      </div>
+                      <div class="form-group">
+                        <label>{{ t('admin.nodes.protocolForm.wireguard.fields.pathGateway') }}</label>
+                        <input v-model.trim="path.gateway" type="text" placeholder="10.8.0.1" />
+                      </div>
+                      <div class="form-group">
+                        <label>{{ t('admin.nodes.protocolForm.wireguard.fields.pathPriority') }}</label>
+                        <input v-model.number="path.priority" type="number" min="0" />
+                      </div>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm" @click="addWireGuardNetworkPath">
+                    {{ t('admin.nodes.protocolForm.wireguard.actions.addNetworkPath') }}
+                  </button>
+                  <div class="form-row network-health-row">
+                    <div class="form-group">
+                      <label>{{ t('admin.nodes.protocolForm.wireguard.fields.healthInterval') }}</label>
+                      <input v-model.number="wireGuardForm.healthInterval" type="number" min="1" />
+                    </div>
+                    <div class="form-group">
+                      <label>{{ t('admin.nodes.protocolForm.wireguard.fields.healthTimeout') }}</label>
+                      <input v-model.number="wireGuardForm.healthTimeout" type="number" min="1" />
+                    </div>
+                    <div class="form-group">
+                      <label>{{ t('admin.nodes.protocolForm.wireguard.fields.failureThreshold') }}</label>
+                      <input v-model.number="wireGuardForm.failureThreshold" type="number" min="1" />
+                    </div>
+                    <div class="form-group">
+                      <label>{{ t('admin.nodes.protocolForm.wireguard.fields.failbackDelay') }}</label>
+                      <input v-model.number="wireGuardForm.failbackDelay" type="number" min="0" />
+                    </div>
+                  </div>
+                </template>
+              </template>
             </div>
 
             <!-- JSON sub-editors for advanced fields -->
@@ -990,7 +1055,14 @@ const defaultWireGuardForm = () => ({
   outboundIface: '',
   exitNat: true,
   routingTable: 0,
-  routingPriority: 0
+  routingPriority: 0,
+  networkPolicyEnabled: false,
+  networkPaths: [],
+  healthInterval: 10,
+  healthTimeout: 3,
+  failureThreshold: 3,
+  recoveryThreshold: 2,
+  failbackDelay: 300
 })
 const wireGuardForm = reactive(defaultWireGuardForm())
 const protocolTemplates = ref([])
@@ -1032,6 +1104,14 @@ const asNumber = (value, fallback) => {
 
 const resetWireGuardForm = () => {
   Object.assign(wireGuardForm, defaultWireGuardForm())
+}
+
+const addWireGuardNetworkPath = () => {
+  wireGuardForm.networkPaths.push({ name: '', interface: '', source: '', gateway: '', priority: 100 })
+}
+
+const removeWireGuardNetworkPath = (index) => {
+  wireGuardForm.networkPaths.splice(index, 1)
 }
 
 const readNodeApiError = (error) => {
@@ -1084,13 +1164,37 @@ const buildWireGuardSettings = () => {
       exit_tun_address: wireGuardForm.exitTunAddress || '172.31.66.1/24',
       outbound_iface: wireGuardForm.outboundIface || '',
       routing_table: asNumber(wireGuardForm.routingTable, 0),
-      routing_priority: asNumber(wireGuardForm.routingPriority, 0)
+      routing_priority: asNumber(wireGuardForm.routingPriority, 0),
+      ...(wireGuardForm.networkPolicyEnabled && tunnelType === 'wss' ? {
+        network_policy: {
+          version: 1,
+          strategy: 'failover',
+          paths: wireGuardForm.networkPaths.map(path => ({
+            name: path.name || '',
+            interface: path.interface || '',
+            source: path.source || '',
+            gateway: path.gateway || '',
+            priority: asNumber(path.priority, 100),
+            routing_table: asNumber(path.routing_table, 0),
+            rule_priority: asNumber(path.rule_priority, 0)
+          })),
+          health_check: {
+            interval_seconds: asNumber(wireGuardForm.healthInterval, 10),
+            timeout_seconds: asNumber(wireGuardForm.healthTimeout, 3),
+            failure_threshold: asNumber(wireGuardForm.failureThreshold, 3),
+            recovery_threshold: asNumber(wireGuardForm.recoveryThreshold, 2),
+            failback_delay_seconds: asNumber(wireGuardForm.failbackDelay, 300)
+          }
+        }
+      } : {})
     }
   }
 }
 
 const hydrateWireGuardForm = (settings = {}) => {
   const relay = settings.relay && typeof settings.relay === 'object' ? settings.relay : {}
+  const networkPolicy = relay.network_policy && typeof relay.network_policy === 'object' ? relay.network_policy : {}
+  const healthCheck = networkPolicy.health_check && typeof networkPolicy.health_check === 'object' ? networkPolicy.health_check : {}
   const tunnelType = relay.wss_compat || settings.tunnel_type === 'wss' || String(relay.mode || '').includes('wss') ? 'wss' : 'quic'
   Object.assign(wireGuardForm, {
     cidr: settings.cidr || '10.66.0.0/24',
@@ -1118,7 +1222,17 @@ const hydrateWireGuardForm = (settings = {}) => {
     outboundIface: relay.outbound_iface || '',
     exitNat: relay.exit_nat !== false,
     routingTable: asNumber(relay.routing_table, 0),
-    routingPriority: asNumber(relay.routing_priority, 0)
+    routingPriority: asNumber(relay.routing_priority, 0),
+    networkPolicyEnabled: Array.isArray(networkPolicy.paths) && networkPolicy.paths.length > 0,
+    networkPaths: Array.isArray(networkPolicy.paths) ? networkPolicy.paths.map(path => ({
+      name: path.name || '', interface: path.interface || '', source: path.source || '', gateway: path.gateway || '',
+      priority: asNumber(path.priority, 100), routing_table: asNumber(path.routing_table, 0), rule_priority: asNumber(path.rule_priority, 0)
+    })) : [],
+    healthInterval: asNumber(healthCheck.interval_seconds, 10),
+    healthTimeout: asNumber(healthCheck.timeout_seconds, 3),
+    failureThreshold: asNumber(healthCheck.failure_threshold, 3),
+    recoveryThreshold: asNumber(healthCheck.recovery_threshold, 2),
+    failbackDelay: asNumber(healthCheck.failback_delay_seconds, 300)
   })
 }
 
@@ -2121,6 +2235,36 @@ onMounted(async () => {
   color: var(--text-color);
   font-size: 14px;
   font-weight: 600;
+}
+
+.network-policy-title,
+.network-path-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.network-policy-title .checkbox-label {
+  margin: 0;
+  font-size: 13px;
+  text-transform: none;
+}
+
+.network-path-card {
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-color);
+}
+
+.network-path-header {
+  margin-bottom: 12px;
+}
+
+.network-health-row {
+  margin-top: 14px;
 }
 
 .node-tags {

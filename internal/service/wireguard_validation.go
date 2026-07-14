@@ -251,6 +251,9 @@ func validateWireGuardRelay(settings map[string]any, enabled bool, tunnelType st
 		if priority := intSetting(relay, "routing_priority", 0); priority < 0 || priority >= 32766 {
 			return fmt.Errorf("WireGuard relay.routing_priority 必须为 0 或 1-32765: %d", priority)
 		}
+		if err := validateWireGuardNetworkPolicy(relay, role, tunnelType); err != nil {
+			return err
+		}
 		serverPort := intSetting(relay, "server_port", 0)
 		if serverPort < 0 || serverPort > 65535 || (enabled && serverPort < 1) {
 			return fmt.Errorf("WireGuard relay.server_port 必须在 1-65535 之间: %d", serverPort)
@@ -277,6 +280,90 @@ func validateWireGuardRelay(settings map[string]any, enabled bool, tunnelType st
 	}
 	if backend != "gost" {
 		return fmt.Errorf("WireGuard relay.backend 不支持: %q", backend)
+	}
+	return nil
+}
+
+func validateWireGuardNetworkPolicy(relay map[string]any, role, tunnelType string) error {
+	raw, exists := relay["network_policy"]
+	if !exists || raw == nil {
+		return nil
+	}
+	policy, ok := raw.(map[string]any)
+	if !ok {
+		return errors.New("WireGuard relay.network_policy 必须是对象")
+	}
+	if role != "entry" {
+		return errors.New("WireGuard relay.network_policy 仅支持 entry 节点")
+	}
+	if tunnelType != "wss" {
+		return errors.New("WireGuard relay.network_policy v1 仅支持可进行 TCP 健康探测的 WSS 中转")
+	}
+	version := intSetting(policy, "version", 1)
+	if version != 1 {
+		return fmt.Errorf("WireGuard relay.network_policy.version 不支持: %d", version)
+	}
+	strategy := strings.ToLower(strings.TrimSpace(stringSetting(policy, "strategy", "failover")))
+	if strategy != "failover" {
+		return fmt.Errorf("WireGuard relay.network_policy.strategy 不支持: %q", strategy)
+	}
+	server := strings.TrimSpace(stringSetting(relay, "server", ""))
+	if net.ParseIP(server) == nil {
+		return errors.New("启用 network_policy 时 relay.server 必须是 IPv4 或 IPv6 地址，不能使用域名")
+	}
+	paths, ok := policy["paths"].([]any)
+	if !ok || len(paths) == 0 {
+		return errors.New("WireGuard relay.network_policy.paths 至少需要一条路径")
+	}
+	seen := make(map[string]struct{}, len(paths))
+	for i, rawPath := range paths {
+		path, ok := rawPath.(map[string]any)
+		if !ok {
+			return fmt.Errorf("WireGuard relay.network_policy.paths[%d] 必须是对象", i)
+		}
+		name := strings.TrimSpace(stringSetting(path, "name", ""))
+		iface := strings.TrimSpace(stringSetting(path, "interface", ""))
+		source := net.ParseIP(strings.TrimSpace(stringSetting(path, "source", "")))
+		gateway := net.ParseIP(strings.TrimSpace(stringSetting(path, "gateway", "")))
+		if name == "" || strings.ContainsAny(name, "\r\n") {
+			return fmt.Errorf("WireGuard relay.network_policy.paths[%d].name 无效", i)
+		}
+		if _, exists := seen[name]; exists {
+			return fmt.Errorf("WireGuard relay.network_policy 路径名称重复: %q", name)
+		}
+		seen[name] = struct{}{}
+		if iface == "" || len(iface) > 15 || strings.ContainsAny(iface, " \t\r\n/\\") {
+			return fmt.Errorf("WireGuard relay.network_policy.paths[%d].interface 无效", i)
+		}
+		if source == nil || gateway == nil || (source.To4() == nil) != (gateway.To4() == nil) {
+			return fmt.Errorf("WireGuard relay.network_policy.paths[%d] 的 source/gateway 必须是同地址族 IP", i)
+		}
+		if priority := intSetting(path, "priority", 100); priority < 0 {
+			return fmt.Errorf("WireGuard relay.network_policy.paths[%d].priority 不能小于 0", i)
+		}
+		if table := intSetting(path, "routing_table", 0); table < 0 {
+			return fmt.Errorf("WireGuard relay.network_policy.paths[%d].routing_table 不能小于 0", i)
+		}
+		if priority := intSetting(path, "rule_priority", 0); priority < 0 || priority >= 32766 {
+			return fmt.Errorf("WireGuard relay.network_policy.paths[%d].rule_priority 必须为 0 或 1-32765", i)
+		}
+	}
+	for key, fallback := range map[string]int{
+		"interval_seconds": 10, "timeout_seconds": 3,
+		"failure_threshold": 3, "recovery_threshold": 2,
+		"failback_delay_seconds": 300,
+	} {
+		health, _ := policy["health_check"].(map[string]any)
+		value := intSetting(health, key, fallback)
+		if value < 1 && key != "failback_delay_seconds" || value < 0 {
+			return fmt.Errorf("WireGuard relay.network_policy.health_check.%s 无效: %d", key, value)
+		}
+	}
+	for _, key := range []string{"active_table", "active_priority"} {
+		value := intSetting(policy, key, 0)
+		if value < 0 || (key == "active_priority" && value >= 32766) {
+			return fmt.Errorf("WireGuard relay.network_policy.%s 无效: %d", key, value)
+		}
 	}
 	return nil
 }
