@@ -585,9 +585,10 @@ func TestLoonFormatter_Format(t *testing.T) {
 
 	output, err := f.Format(nodes, ctx)
 	require.NoError(t, err)
-	decoded, decodeErr := base64.StdEncoding.DecodeString(string(output))
-	require.NoError(t, decodeErr)
-	assert.Contains(t, string(decoded), "vmess://")
+	assert.Contains(t, string(output), `Loon Node = vmess,example.com,443,aes-128-gcm,"test-uuid"`)
+	assert.Contains(t, string(output), "transport=tcp")
+	assert.Contains(t, string(output), "over-tls=true")
+	assert.NotContains(t, string(output), "vmess://")
 }
 
 // ========== Quantumult X Formatter Tests ==========

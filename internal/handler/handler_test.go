@@ -2903,6 +2903,7 @@ func (s *SubscribeHandlerTestSuite) TestDetectFormatFromUserAgent() {
 		{"Egern/1.0", "egern"},
 		{"Surge/1.0", "surge"},
 		{"Loon/1.0", "loon"},
+		{"Loon/997 CFNetwork/1496.0.7 Darwin/23.5.0", "loon"},
 		{"Shadowrocket/1.0", "shadowrocket"},
 		{"Quantumult X/1.0", "quantumultx"},
 		{"V2RayNG/1.0", "v2ray"},
