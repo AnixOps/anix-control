@@ -1,11 +1,62 @@
 package parser
 
 import (
+	"context"
+	"errors"
+	"net"
 	"testing"
 
 	"github.com/anixops/v2board/internal/model"
 	"github.com/stretchr/testify/require"
 )
+
+func TestLoonFormatterResolvesIPv6OnlyWireGuardEndpoint(t *testing.T) {
+	f := &LoonFormatter{lookupIP: func(_ context.Context, network, host string) ([]net.IP, error) {
+		require.Equal(t, "entry.example.com", host)
+		switch network {
+		case "ip4":
+			return nil, &net.DNSError{Err: "no such host", Name: host, IsNotFound: true}
+		case "ip6":
+			return []net.IP{net.ParseIP("2001:db8::20"), net.ParseIP("2001:db8::10")}, nil
+		default:
+			return nil, errors.New("unexpected network")
+		}
+	}}
+	node := wireGuardTestNode()
+	node.Server = "entry.example.com"
+
+	output, err := f.Format([]*model.ParsedNode{node}, nil)
+	require.NoError(t, err)
+	require.Contains(t, string(output), "endpoint=[2001:db8::10]:51820")
+}
+
+func TestLoonFormatterKeepsDualStackWireGuardEndpointHostname(t *testing.T) {
+	f := &LoonFormatter{lookupIP: func(_ context.Context, network, host string) ([]net.IP, error) {
+		require.Equal(t, "entry.example.com", host)
+		require.Equal(t, "ip4", network)
+		return []net.IP{net.ParseIP("192.0.2.10")}, nil
+	}}
+	node := wireGuardTestNode()
+	node.Server = "entry.example.com"
+
+	output, err := f.Format([]*model.ParsedNode{node}, nil)
+	require.NoError(t, err)
+	require.Contains(t, string(output), "endpoint=entry.example.com:51820")
+}
+
+func TestLoonFormatterKeepsWireGuardHostnameOnResolverFailure(t *testing.T) {
+	f := &LoonFormatter{lookupIP: func(_ context.Context, network, host string) ([]net.IP, error) {
+		require.Equal(t, "entry.example.com", host)
+		require.Equal(t, "ip4", network)
+		return nil, errors.New("resolver unavailable")
+	}}
+	node := wireGuardTestNode()
+	node.Server = "entry.example.com"
+
+	output, err := f.Format([]*model.ParsedNode{node}, nil)
+	require.NoError(t, err)
+	require.Contains(t, string(output), "endpoint=entry.example.com:51820")
+}
 
 func TestLoonFormatterWireGuardIPv6Endpoint(t *testing.T) {
 	f := &LoonFormatter{}
