@@ -211,6 +211,7 @@ func (h *SubscribeHandler) detectFormatFromUserAgent(ua string) string {
 	ua = strings.ToLower(ua)
 
 	patterns := map[string]string{
+		`wireguard`:    "wireguard",
 		`clash`:        "clash",
 		`stash`:        "stash",
 		`egern`:        "egern",

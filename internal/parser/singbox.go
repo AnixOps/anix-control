@@ -269,7 +269,7 @@ func (f *SingBoxFormatter) buildWireGuardEndpoint(node *model.ParsedNode) map[st
 		mtu = 1280
 	}
 	peer := map[string]any{
-		"address":                       node.Server,
+		"address":                       wireGuardHost(node.Server),
 		"port":                          node.Port,
 		"public_key":                    node.PublicKey,
 		"allowed_ips":                   allowedIPs,

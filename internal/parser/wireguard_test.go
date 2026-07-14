@@ -1,13 +1,76 @@
 package parser
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/anixops/v2board/internal/model"
 	"github.com/stretchr/testify/require"
 )
+
+func TestV2RayFormatter_IncludesWireGuardURI(t *testing.T) {
+	f := &V2RayFormatter{}
+	output, err := f.Format([]*model.ParsedNode{wireGuardTestNode()}, nil)
+	require.NoError(t, err)
+
+	decoded, err := base64.StdEncoding.DecodeString(string(output))
+	require.NoError(t, err)
+	content := string(decoded)
+	require.Contains(t, content, "wireguard://client-private@wg.example.com:51820")
+	require.Contains(t, content, "publickey=server-public")
+	require.Contains(t, content, "presharedkey=psk")
+	require.Contains(t, content, "address=10.66.0.2")
+}
+
+func TestV2RayFormatter_WireGuardURIEscapesRemarkAndIPv6Endpoint(t *testing.T) {
+	f := &V2RayFormatter{}
+	node := wireGuardTestNode()
+	node.Name = "WireGuard HK 1"
+	node.Server = "[2001:db8::1]"
+
+	output, err := f.Format([]*model.ParsedNode{node}, nil)
+	require.NoError(t, err)
+	decoded, err := base64.StdEncoding.DecodeString(string(output))
+	require.NoError(t, err)
+
+	content := string(decoded)
+	require.Contains(t, content, "wireguard://client-private@[2001:db8::1]:51820?")
+	require.Contains(t, content, "#WireGuard%20HK%201")
+	_, err = url.Parse(strings.TrimSpace(content))
+	require.NoError(t, err)
+}
+
+func TestWireGuardFormatter_NormalizesBracketedIPv6Endpoint(t *testing.T) {
+	f := &WireGuardFormatter{}
+	node := wireGuardTestNode()
+	node.Server = "[2001:db8::1]"
+
+	output, err := f.Format([]*model.ParsedNode{node}, nil)
+	require.NoError(t, err)
+	require.Contains(t, string(output), "Endpoint = [2001:db8::1]:51820")
+	require.NotContains(t, string(output), "[[2001:db8::1]]")
+}
+
+func TestClashFormatter_IncludesWireGuardProxy(t *testing.T) {
+	f := &ClashFormatter{}
+	node := wireGuardTestNode()
+	node.Server = "[2001:db8::1]"
+	output, err := f.Format([]*model.ParsedNode{node}, nil)
+	require.NoError(t, err)
+
+	content := string(output)
+	require.Contains(t, content, "type: wireguard")
+	require.Contains(t, content, "server: 2001:db8::1")
+	require.NotContains(t, content, "server: '[2001:db8::1]'")
+	require.Contains(t, content, "private-key: client-private")
+	require.Contains(t, content, "public-key: server-public")
+	require.Contains(t, content, "pre-shared-key: psk")
+	require.Contains(t, content, "allowed-ips:")
+	require.NotContains(t, content, "persistent-keepalive")
+}
 
 func TestWireGuardFormatter_Format(t *testing.T) {
 	f := &WireGuardFormatter{}
@@ -53,7 +116,9 @@ func TestWireGuardFormatterEmitsOneImportableProfile(t *testing.T) {
 
 func TestSingBoxFormatter_BuildWireGuardEndpoint(t *testing.T) {
 	f := &SingBoxFormatter{}
-	output, err := f.Format([]*model.ParsedNode{wireGuardTestNode()}, nil)
+	node := wireGuardTestNode()
+	node.Server = "[2001:db8::1]"
+	output, err := f.Format([]*model.ParsedNode{node}, nil)
 	require.NoError(t, err)
 
 	var config map[string]any
@@ -74,7 +139,7 @@ func TestSingBoxFormatter_BuildWireGuardEndpoint(t *testing.T) {
 	peers := wireguard["peers"].([]any)
 	require.Len(t, peers, 1)
 	peer := peers[0].(map[string]any)
-	require.Equal(t, "wg.example.com", peer["address"])
+	require.Equal(t, "2001:db8::1", peer["address"])
 	require.Equal(t, float64(51820), peer["port"])
 	require.Equal(t, "server-public", peer["public_key"])
 	require.Equal(t, "psk", peer["pre_shared_key"])
