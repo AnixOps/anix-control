@@ -56,7 +56,9 @@ func run(args []string, output io.Writer) error {
 	if err := database.Init(&cfg.Database); err != nil {
 		return err
 	}
-	defer database.Close() //nolint:errcheck -- the command has already completed its database work.
+	defer func() {
+		_ = database.Close()
+	}()
 
 	db := database.Get()
 	query := db.Model(&model.WireGuardPeer{})
@@ -68,8 +70,8 @@ func run(args []string, output io.Writer) error {
 		return err
 	}
 	if opts.dryRun {
-		fmt.Fprintf(output, "dry-run: %d WireGuard peer keys would be rotated\n", count)
-		return nil
+		_, err := fmt.Fprintf(output, "dry-run: %d WireGuard peer keys would be rotated\n", count)
+		return err
 	}
 	if count == 0 {
 		return errors.New("no WireGuard peers matched the rotation scope")
@@ -79,8 +81,8 @@ func run(args []string, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(output, "rotated_peers=%d protocol_ids=%v\n", result.RotatedPeerCount, result.ProtocolIDs)
-	return nil
+	_, err = fmt.Fprintf(output, "rotated_peers=%d protocol_ids=%v\n", result.RotatedPeerCount, result.ProtocolIDs)
+	return err
 }
 
 func parseOptions(args []string) (options, error) {
