@@ -2310,7 +2310,8 @@ export default {
         wireguard: {
           sections: {
             access: 'WireGuard 接入',
-            relay: '双机中转'
+            relay: '双机中转',
+            networkPolicy: '入口网络路径（可选）'
           },
           fields: {
             cidr: 'Peer CIDR',
@@ -2338,17 +2339,30 @@ export default {
             outboundIface: '出口网卡',
             exitNat: '启用出口 NAT',
             routingTable: '路由表',
-            routingPriority: '路由优先级'
+            routingPriority: '路由优先级',
+            networkPolicyEnabled: '启用多线路故障转移',
+            networkPath: '网络路径',
+            pathName: '路径名称',
+            pathInterface: '网卡',
+            pathSource: '源 IP',
+            pathGateway: '网关',
+            pathPriority: '优先级（越小越优先）',
+            healthInterval: '探测间隔（秒）',
+            healthTimeout: '探测超时（秒）',
+            failureThreshold: '失败阈值',
+            failbackDelay: '主线恢复等待（秒）'
           },
           actions: {
-            generateKeypair: '生成密钥对'
+            generateKeypair: '生成密钥对',
+            addNetworkPath: '添加网络路径'
           },
           values: {
             entry: '国内入口',
             exit: '海外出口'
           },
           hints: {
-			wssCompat: '默认使用 QUIC。WSS 会校验出口证书，只作为 UDP 中转受阻或不稳定时的兼容模式。'
+			wssCompat: '默认使用 QUIC。WSS 会校验出口证书，只作为 UDP 中转受阻或不稳定时的兼容模式。',
+            networkPolicy: '仅接管到出口中转 IP 的连接，并为每个源 IP 建立独立回程路由。普通节点无需启用；出口主机必须填写 IP 地址。'
           }
         },
         enable: '启用协议（节点端运行）',

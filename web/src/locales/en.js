@@ -2302,7 +2302,8 @@ export default {
         wireguard: {
           sections: {
             access: 'WireGuard access',
-            relay: 'Dual-node relay'
+            relay: 'Dual-node relay',
+            networkPolicy: 'Entry network paths (optional)'
           },
           fields: {
             cidr: 'Peer CIDR',
@@ -2330,17 +2331,30 @@ export default {
             outboundIface: 'Exit outbound interface',
             exitNat: 'Enable exit NAT',
             routingTable: 'Routing table',
-            routingPriority: 'Routing priority'
+            routingPriority: 'Routing priority',
+            networkPolicyEnabled: 'Enable multi-path failover',
+            networkPath: 'Network path',
+            pathName: 'Path name',
+            pathInterface: 'Interface',
+            pathSource: 'Source IP',
+            pathGateway: 'Gateway',
+            pathPriority: 'Priority (lower first)',
+            healthInterval: 'Probe interval (seconds)',
+            healthTimeout: 'Probe timeout (seconds)',
+            failureThreshold: 'Failure threshold',
+            failbackDelay: 'Primary failback delay (seconds)'
           },
           actions: {
-            generateKeypair: 'Generate keypair'
+            generateKeypair: 'Generate keypair',
+            addNetworkPath: 'Add network path'
           },
           values: {
             entry: 'Domestic entry',
             exit: 'Overseas exit'
           },
           hints: {
-			wssCompat: 'QUIC is the default. WSS verifies the exit certificate and is only for compatibility when UDP relay traffic is blocked or unstable.'
+			wssCompat: 'QUIC is the default. WSS verifies the exit certificate and is only for compatibility when UDP relay traffic is blocked or unstable.',
+            networkPolicy: 'Only relay-destination traffic is steered, with a separate return route for every source IP. Leave disabled on ordinary nodes; the relay host must be an IP address.'
           }
         },
         enable: 'Enable protocol (run on node)',
