@@ -212,7 +212,7 @@ func (s *SubscriptionService) GetUserSubscription(req *model.SubscriptionRequest
 // portable container for a WireGuard .conf alongside arbitrary V2Ray links.
 func preferNativeWireGuardFormat(format model.SubscriptionFormat, nodes []*model.ParsedNode) model.SubscriptionFormat {
 	switch format {
-	case model.FormatV2Ray, model.FormatShadowrocket, model.FormatLoon:
+	case model.FormatV2Ray, model.FormatShadowrocket:
 	default:
 		return format
 	}

@@ -210,9 +210,10 @@ func TestWireGuardExitDoesNotAllocatePeerCredentials(t *testing.T) {
 
 func TestPreferNativeWireGuardFormatForLinkOnlyClients(t *testing.T) {
 	onlyWireGuard := []*model.ParsedNode{{Type: string(model.ProtocolWireGuard)}}
-	for _, format := range []model.SubscriptionFormat{model.FormatV2Ray, model.FormatShadowrocket, model.FormatLoon} {
+	for _, format := range []model.SubscriptionFormat{model.FormatV2Ray, model.FormatShadowrocket} {
 		require.Equal(t, model.FormatWireGuard, preferNativeWireGuardFormat(format, onlyWireGuard))
 	}
+	require.Equal(t, model.FormatLoon, preferNativeWireGuardFormat(model.FormatLoon, onlyWireGuard))
 
 	mixed := []*model.ParsedNode{{Type: string(model.ProtocolWireGuard)}, {Type: string(model.ProtocolVLESS)}}
 	require.Equal(t, model.FormatShadowrocket, preferNativeWireGuardFormat(model.FormatShadowrocket, mixed))

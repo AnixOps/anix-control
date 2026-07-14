@@ -1606,27 +1606,3 @@ func (f *EgernFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRe
 	}
 	return f.clash.Format(nodes, ctx)
 }
-
-// LoonFormatter Loon 格式化器（兼容 Shadowrocket/V2Ray 订阅）
-type LoonFormatter struct {
-	shadowrocket *ShadowrocketFormatter
-}
-
-func (f *LoonFormatter) Name() string {
-	return "loon"
-}
-
-func (f *LoonFormatter) ContentType() string {
-	return "text/plain; charset=utf-8"
-}
-
-func (f *LoonFormatter) FileExtension() string {
-	return "txt"
-}
-
-func (f *LoonFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRenderContext) ([]byte, error) {
-	if f.shadowrocket == nil {
-		f.shadowrocket = &ShadowrocketFormatter{}
-	}
-	return f.shadowrocket.Format(nodes, ctx)
-}
