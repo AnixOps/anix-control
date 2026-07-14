@@ -29,7 +29,9 @@ go run ./cmd/wgrotate \
 systemctl start v2board.service
 ```
 
-After restart, wait for V2bX user synchronization and verify that the entry
-node has the same peer public keys as the panel database. Do not print private
-or preshared keys during verification. Roll back by restoring the pre-rotation
-database backup and restarting both the panel and the affected entry node.
+After the panel restarts, restart every affected WireGuard entry V2bX service
+to force a full peer rebuild; an incremental user sync may not detect a change
+that modifies only peer credentials. Verify that each entry node has the same
+peer public-key set as the panel database. Do not print private or preshared
+keys during verification. Roll back by restoring the pre-rotation database
+backup and restarting both the panel and the affected entry nodes.
