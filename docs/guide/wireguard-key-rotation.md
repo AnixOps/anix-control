@@ -6,6 +6,10 @@ rotation replaces the client private key, public key, and preshared key in one
 database transaction. Every previously downloaded WireGuard profile becomes
 invalid and users must refresh their subscriptions.
 
+The command exits non-zero if database initialization, rotation, or result
+output fails. Automation must treat any non-zero exit as an incomplete
+operation and must not continue to node verification.
+
 Back up the panel database before a production rotation. Preview the affected
 rows first:
 
