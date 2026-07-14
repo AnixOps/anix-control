@@ -248,8 +248,8 @@ func validateWireGuardRelay(settings map[string]any, enabled bool, tunnelType st
 		if table := intSetting(relay, "routing_table", 0); table < 0 || table > 4294967295 {
 			return fmt.Errorf("WireGuard relay.routing_table 无效: %d", table)
 		}
-		if priority := intSetting(relay, "routing_priority", 0); priority < 0 || priority > 4294967295 {
-			return fmt.Errorf("WireGuard relay.routing_priority 无效: %d", priority)
+		if priority := intSetting(relay, "routing_priority", 0); priority < 0 || priority >= 32766 {
+			return fmt.Errorf("WireGuard relay.routing_priority 必须为 0 或 1-32765: %d", priority)
 		}
 		serverPort := intSetting(relay, "server_port", 0)
 		if serverPort < 0 || serverPort > 65535 || (enabled && serverPort < 1) {

@@ -49,6 +49,8 @@ func (f *V2RayFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRe
 			link, err = f.formatTUIC(node, ctx)
 		case "anytls":
 			link, err = f.formatAnyTLS(node, ctx)
+		case "wireguard":
+			link, err = f.formatWireGuard(node)
 		}
 
 		if err == nil && link != "" {
@@ -59,6 +61,36 @@ func (f *V2RayFormatter) Format(nodes []*model.ParsedNode, ctx *model.TemplateRe
 	content := strings.Join(links, "\n")
 	encoded := base64.StdEncoding.EncodeToString([]byte(content))
 	return []byte(encoded), nil
+}
+
+func (f *V2RayFormatter) formatWireGuard(node *model.ParsedNode) (string, error) {
+	if node.PrivateKey == "" || node.PublicKey == "" || node.PeerIP == "" || node.Server == "" || node.Port <= 0 {
+		return "", nil
+	}
+
+	query := url.Values{}
+	query.Set("publickey", node.PublicKey)
+	query.Set("address", wireGuardAddress(node.PeerIP))
+	if node.PresharedKey != "" {
+		query.Set("presharedkey", node.PresharedKey)
+	}
+	if node.MTU > 0 {
+		query.Set("mtu", fmt.Sprintf("%d", node.MTU))
+	}
+
+	remark := ""
+	if node.Name != "" {
+		// QueryEscape uses '+' for spaces, which is valid in a query but is
+		// commonly rendered literally by URI fragment parsers. Encode the
+		// remark as a URI fragment so names round-trip without ambiguity.
+		remark = "#" + url.PathEscape(node.Name)
+	}
+	return fmt.Sprintf("wireguard://%s@%s?%s%s",
+		url.QueryEscape(node.PrivateKey),
+		wireGuardEndpoint(node.Server, node.Port),
+		query.Encode(),
+		remark,
+	), nil
 }
 
 // formatVMess 格式化 VMess 链接
@@ -637,11 +669,33 @@ func (f *ClashFormatter) buildProxy(node *model.ParsedNode, ctx *model.TemplateR
 		f.buildTUIC(proxy, node, ctx)
 	case "anytls":
 		f.buildAnyTLS(proxy, node, ctx)
+	case "wireguard":
+		f.buildWireGuard(proxy, node)
 	default:
 		return nil
 	}
 
 	return proxy
+}
+
+func (f *ClashFormatter) buildWireGuard(proxy map[string]any, node *model.ParsedNode) {
+	proxy["server"] = wireGuardHost(node.Server)
+	proxy["private-key"] = node.PrivateKey
+	proxy["public-key"] = node.PublicKey
+	proxy["ip"] = strings.Split(node.PeerIP, "/")[0]
+	proxy["udp"] = true
+	if node.PresharedKey != "" {
+		proxy["pre-shared-key"] = node.PresharedKey
+	}
+	if node.MTU > 0 {
+		proxy["mtu"] = node.MTU
+	}
+	if len(node.DNS) > 0 {
+		proxy["dns"] = node.DNS
+	}
+	if len(node.AllowedIPs) > 0 {
+		proxy["allowed-ips"] = node.AllowedIPs
+	}
 }
 
 func (f *ClashFormatter) buildVMess(proxy map[string]any, node *model.ParsedNode, ctx *model.TemplateRenderContext) {

@@ -69,10 +69,23 @@ func (f *WireGuardFormatter) formatNode(node *model.ParsedNode) string {
 	}
 	lines = append(lines,
 		fmt.Sprintf("AllowedIPs = %s", strings.Join(allowedIPs, ", ")),
-		fmt.Sprintf("Endpoint = %s", net.JoinHostPort(node.Server, fmt.Sprintf("%d", node.Port))),
+		fmt.Sprintf("Endpoint = %s", wireGuardEndpoint(node.Server, node.Port)),
 		"PersistentKeepalive = 25",
 	)
 	return strings.Join(lines, "\n")
+}
+
+func wireGuardEndpoint(server string, port int) string {
+	host := wireGuardHost(server)
+	return net.JoinHostPort(host, fmt.Sprintf("%d", port))
+}
+
+func wireGuardHost(server string) string {
+	host := strings.TrimSpace(server)
+	if len(host) >= 2 && strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = host[1 : len(host)-1]
+	}
+	return host
 }
 
 func wireGuardAddress(peerIP string) string {

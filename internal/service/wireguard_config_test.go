@@ -226,6 +226,14 @@ func TestValidateWireGuardProtocolRejectsUnsafeRuntimeSettings(t *testing.T) {
 	protocol := &model.NodeProtocol{Type: model.ProtocolWireGuard, Port: 51820, Enable: 1, Settings: &settings}
 	require.NoError(t, ValidateNodeProtocol(protocol))
 
+	validPriority := strings.Replace(settings, `"role":"entry"`, `"role":"entry","routing_priority":32765`, 1)
+	protocol.Settings = &validPriority
+	require.NoError(t, ValidateNodeProtocol(protocol))
+
+	mainTablePriority := strings.Replace(settings, `"role":"entry"`, `"role":"entry","routing_priority":32766`, 1)
+	protocol.Settings = &mainTablePriority
+	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
+
 	bad := `{"cidr":"10.77.0.0/33","server_address":"10.77.0.1/24"}`
 	protocol.Settings = &bad
 	require.ErrorIs(t, ValidateNodeProtocol(protocol), ErrInvalidNodeProtocol)
