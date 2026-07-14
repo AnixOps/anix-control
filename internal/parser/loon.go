@@ -1,9 +1,13 @@
 package parser
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/anixops/v2board/internal/model"
 )
@@ -11,7 +15,9 @@ import (
 // LoonFormatter emits Loon's native node-subscription syntax. It is deliberately
 // independent from the V2Ray, Shadowrocket, Clash, and Sing-box formatters so a
 // Loon compatibility change cannot alter another client's subscription.
-type LoonFormatter struct{}
+type LoonFormatter struct {
+	lookupIP func(context.Context, string, string) ([]net.IP, error)
+}
 
 func (f *LoonFormatter) Name() string { return "loon" }
 
@@ -175,10 +181,52 @@ func (f *LoonFormatter) formatWireGuard(node *model.ParsedNode) string {
 	}
 	peer = append(peer,
 		"allowed-ips="+loonQuote(strings.Join(allowedIPs, ",")),
-		"endpoint="+wireGuardEndpoint(node.Server, node.Port),
+		"endpoint="+f.wireGuardEndpoint(node.Server, node.Port),
 	)
 	parts = append(parts, "keeyalive=25", "peers=[{"+strings.Join(peer, ",")+"}]", "udp=true")
 	return loonLine(node.Name, parts)
+}
+
+// wireGuardEndpoint avoids a Loon bootstrap failure for IPv6-only endpoints.
+// Some Loon DNS configurations issue only an A query while opening the UDP
+// transport, so an IPv6-only hostname never reaches the WireGuard handshake.
+// Keep hostnames that have IPv4 and fall back to the original hostname on any
+// resolver failure; only a confirmed IPv6-only result is rendered as a
+// bracketed IPv6 literal.
+func (f *LoonFormatter) wireGuardEndpoint(server string, port int) string {
+	host := wireGuardHost(server)
+	if net.ParseIP(host) != nil {
+		return net.JoinHostPort(host, fmt.Sprint(port))
+	}
+
+	lookupIP := f.lookupIP
+	if lookupIP == nil {
+		lookupIP = net.DefaultResolver.LookupIP
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	ipv4, err := lookupIP(ctx, "ip4", host)
+	if err == nil && len(ipv4) > 0 {
+		return net.JoinHostPort(host, fmt.Sprint(port))
+	}
+	if err != nil && !loonDNSNotFound(err) {
+		return net.JoinHostPort(host, fmt.Sprint(port))
+	}
+
+	ipv6, err := lookupIP(ctx, "ip6", host)
+	if err != nil || len(ipv6) == 0 {
+		return net.JoinHostPort(host, fmt.Sprint(port))
+	}
+	sort.Slice(ipv6, func(i, j int) bool {
+		return ipv6[i].String() < ipv6[j].String()
+	})
+	return net.JoinHostPort(ipv6[0].String(), fmt.Sprint(port))
+}
+
+func loonDNSNotFound(err error) bool {
+	var dnsErr *net.DNSError
+	return errors.As(err, &dnsErr) && dnsErr.IsNotFound
 }
 
 func (f *LoonFormatter) formatHysteria2(node *model.ParsedNode, ctx *model.TemplateRenderContext) string {
