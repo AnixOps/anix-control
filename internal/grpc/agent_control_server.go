@@ -23,8 +23,8 @@ import (
 )
 
 const (
-	AgentProtocolVersion          = "anix.agent.v1"
-	defaultAgentHeartbeatInterval = 20 * time.Second
+	AgentProtocolVersion                 = "anix.agent.v1"
+	defaultAgentHeartbeatIntervalSeconds = uint32(20)
 )
 
 type agentOperationKey struct {
@@ -480,9 +480,9 @@ func GetAgentControlManager() *AgentControlManager {
 // AgentControlGRPCServer implements the Agent-first control stream.
 type AgentControlGRPCServer struct {
 	agentv1pb.UnimplementedAgentControlServiceServer
-	manager           *AgentControlManager
-	nodeService       *service.NodeService
-	heartbeatInterval time.Duration
+	manager                  *AgentControlManager
+	nodeService              *service.NodeService
+	heartbeatIntervalSeconds uint32
 }
 
 func NewAgentControlGRPCServer(manager *AgentControlManager) *AgentControlGRPCServer {
@@ -490,9 +490,9 @@ func NewAgentControlGRPCServer(manager *AgentControlManager) *AgentControlGRPCSe
 		manager = GetAgentControlManager()
 	}
 	return &AgentControlGRPCServer{
-		manager:           manager,
-		nodeService:       service.NewNodeService(),
-		heartbeatInterval: defaultAgentHeartbeatInterval,
+		manager:                  manager,
+		nodeService:              service.NewNodeService(),
+		heartbeatIntervalSeconds: defaultAgentHeartbeatIntervalSeconds,
 	}
 }
 
@@ -562,7 +562,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 			HelloAck: &agentv1pb.HelloAck{
 				SessionId:                connection.SessionID,
 				ServerTimeUnixMs:         time.Now().UnixMilli(),
-				HeartbeatIntervalSeconds: uint32(s.heartbeatInterval / time.Second),
+				HeartbeatIntervalSeconds: s.heartbeatIntervalSeconds,
 				DesiredRevision:          desiredRevision,
 			},
 		},
