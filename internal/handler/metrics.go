@@ -7,7 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/anixops/v2board/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/branding"
+	"github.com/AnixOps/anix-control/v3/internal/database"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -67,7 +68,7 @@ func (h *MetricsHandler) GetMetrics(c *gin.Context) {
 	// 构建指标
 	metrics := `# HELP v2board_info Application information
 # TYPE v2board_info gauge
-v2board_info{version="2.0.2-test.1",go_version="` + runtime.Version() + `"} 1
+v2board_info{version="` + branding.DefaultVersion + `",go_version="` + runtime.Version() + `"} 1
 
 # HELP v2board_uptime_seconds Application uptime in seconds
 # TYPE v2board_uptime_seconds gauge

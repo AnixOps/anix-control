@@ -122,7 +122,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Manifest output path. Defaults to RELEASE_MANIFEST.json inside --release-dir.",
     )
-    parser.add_argument("--project", default="v2board_AnixOps", help="Project name recorded in the manifest.")
+    parser.add_argument("--project", default="anix-control", help="Project name recorded in the manifest.")
     parser.add_argument(
         "--build-source",
         default="github-actions",

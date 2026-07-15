@@ -10,9 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/model"
-	"github.com/anixops/v2board/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/branding"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -226,7 +227,7 @@ func (h *TelegramHandler) UpdateBot(c *gin.Context) {
 			return
 		}
 		bot = &model.TelegramBot{
-			Name:        "V2Board Bot",
+			Name:        branding.ControlName + " Bot",
 			Enabled:     true,
 			AllowBind:   true,
 			AllowSub:    true,
@@ -274,7 +275,7 @@ func (h *TelegramHandler) UpdateBot(c *gin.Context) {
 	}
 
 	if bot.Name == "" {
-		bot.Name = "V2Board Bot"
+		bot.Name = branding.ControlName + " Bot"
 	}
 
 	if err := h.botService.UpdateBot(bot); err != nil {

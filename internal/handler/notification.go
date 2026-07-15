@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/model"
-	"github.com/anixops/v2board/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/branding"
+	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -117,7 +118,7 @@ func (h *NotificationHandler) loadEmailConfig() (*model.EmailConfig, error) {
 		Username:    "",
 		Password:    "",
 		FromAddress: "",
-		FromName:    "V2Board",
+		FromName:    branding.ControlName,
 		Encryption:  "tls",
 	}
 
@@ -565,7 +566,7 @@ func (h *NotificationHandler) SendTestNotification(c *gin.Context) {
 	}
 	content := req.Content
 	if content == "" {
-		content = "This is a test notification from V2Board."
+		content = "This is a test notification from " + branding.ControlName + "."
 	}
 
 	var err error
@@ -704,7 +705,7 @@ func (h *NotificationHandler) UpdateEmailConfig(c *gin.Context) {
 		cfg.FromName = existing.FromName
 	}
 	if cfg.FromName == "" {
-		cfg.FromName = "V2Board"
+		cfg.FromName = branding.ControlName
 	}
 
 	if passwordRaw, ok := req["password"]; ok {

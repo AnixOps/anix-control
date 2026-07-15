@@ -9,7 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anixops/v2board/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/branding"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
@@ -79,7 +80,7 @@ func (s *MFAService) IsUserMFAEnabled(userID uint) (bool, error) {
 // SetupTOTP 设置TOTP
 func (s *MFAService) SetupTOTP(userID uint, email string) (*TOTPSetup, error) {
 	// 生成密钥
-	issuer := "V2Board"
+	issuer := branding.ControlName
 	if s.config != nil && s.config.TOTPIssuer != "" {
 		issuer = s.config.TOTPIssuer
 	}
@@ -406,7 +407,7 @@ type TOTPSetup struct {
 
 // GenerateQRCodeURL 生成二维码URL (用于Google Chart API等)
 func (s *MFAService) GenerateQRCodeURL(secret, email string) string {
-	issuer := "V2Board"
+	issuer := branding.ControlName
 	if s.config != nil && s.config.TOTPIssuer != "" {
 		issuer = s.config.TOTPIssuer
 	}

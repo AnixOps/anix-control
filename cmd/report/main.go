@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/AnixOps/anix-control/v3/internal/branding"
 	"golang.org/x/net/proxy"
 )
 
@@ -84,7 +85,7 @@ const (
 func main() {
 	report = TestReport{
 		GeneratedAt:   time.Now(),
-		ServerVersion: "v2.0.2-test.1",
+		ServerVersion: "v" + branding.DefaultVersion,
 		GoVersion:     runtime.Version(),
 		Platform:      fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 		Results:       make([]TestResult, 0),
@@ -93,7 +94,7 @@ func main() {
 	}
 
 	fmt.Println("========================================")
-	fmt.Println("   V2Board 完整测试报告生成器")
+	fmt.Println("   AnixOps Control 完整测试报告生成器")
 	fmt.Println("========================================")
 	fmt.Println()
 
@@ -528,7 +529,7 @@ func generateHTMLReport() error {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V2Board 测试报告</title>
+    <title>AnixOps Control 测试报告</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #333; }
@@ -563,7 +564,7 @@ func generateHTMLReport() error {
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧪 V2Board 测试报告</h1>
+            <h1>AnixOps Control 测试报告</h1>
             <div class="meta">
                 <p>生成时间: {{.GeneratedAt.Format "2006-01-02 15:04:05"}}</p>
                 <p>服务器版本: {{.ServerVersion}} | Go 版本: {{.GoVersion}} | 平台: {{.Platform}}</p>
@@ -704,7 +705,7 @@ func generateHTMLReport() error {
         </div>
 
         <div class="footer">
-            <p>V2Board AnixOps 测试报告 | 生成于 {{.GeneratedAt.Format "2006-01-02 15:04:05"}}</p>
+            <p>AnixOps Control 测试报告 | 生成于 {{.GeneratedAt.Format "2006-01-02 15:04:05"}}</p>
         </div>
     </div>
 </body>

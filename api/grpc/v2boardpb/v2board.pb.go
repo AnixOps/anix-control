@@ -79,7 +79,7 @@ func (x UserChangeNotification_ChangeType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use UserChangeNotification_ChangeType.Descriptor instead.
 func (UserChangeNotification_ChangeType) EnumDescriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{12, 0}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{14, 0}
 }
 
 type ConfigChangeNotification_ChangeType int32
@@ -131,7 +131,7 @@ func (x ConfigChangeNotification_ChangeType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ConfigChangeNotification_ChangeType.Descriptor instead.
 func (ConfigChangeNotification_ChangeType) EnumDescriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{20, 0}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{22, 0}
 }
 
 type HealthCheckResponse_ServingStatus int32
@@ -180,7 +180,7 @@ func (x HealthCheckResponse_ServingStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use HealthCheckResponse_ServingStatus.Descriptor instead.
 func (HealthCheckResponse_ServingStatus) EnumDescriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{22, 0}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{24, 0}
 }
 
 // 空响应
@@ -860,6 +860,144 @@ func (x *NodeStatusRequest) GetDownload() int64 {
 	return 0
 }
 
+// 节点运行日志
+type NodeLogEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Level         string                 `protobuf:"bytes,1,opt,name=level,proto3" json:"level,omitempty"`                             // debug/info/warning/error
+	Source        string                 `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`                           // 模块/组件名称
+	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`                         // 日志正文
+	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                    // Unix 时间戳（秒，或毫秒也兼容）
+	FieldsJson    string                 `protobuf:"bytes,5,opt,name=fields_json,json=fieldsJson,proto3" json:"fields_json,omitempty"` // 结构化附加字段（JSON字符串）
+	TraceId       string                 `protobuf:"bytes,6,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`          // 关联追踪ID
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NodeLogEntry) Reset() {
+	*x = NodeLogEntry{}
+	mi := &file_api_grpc_v2board_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeLogEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeLogEntry) ProtoMessage() {}
+
+func (x *NodeLogEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_v2board_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeLogEntry.ProtoReflect.Descriptor instead.
+func (*NodeLogEntry) Descriptor() ([]byte, []int) {
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *NodeLogEntry) GetLevel() string {
+	if x != nil {
+		return x.Level
+	}
+	return ""
+}
+
+func (x *NodeLogEntry) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *NodeLogEntry) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *NodeLogEntry) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+func (x *NodeLogEntry) GetFieldsJson() string {
+	if x != nil {
+		return x.FieldsJson
+	}
+	return ""
+}
+
+func (x *NodeLogEntry) GetTraceId() string {
+	if x != nil {
+		return x.TraceId
+	}
+	return ""
+}
+
+// 批量节点运行日志上报
+type NodeLogBatchRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        uint32                 `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Logs          []*NodeLogEntry        `protobuf:"bytes,2,rep,name=logs,proto3" json:"logs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NodeLogBatchRequest) Reset() {
+	*x = NodeLogBatchRequest{}
+	mi := &file_api_grpc_v2board_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeLogBatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeLogBatchRequest) ProtoMessage() {}
+
+func (x *NodeLogBatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_v2board_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeLogBatchRequest.ProtoReflect.Descriptor instead.
+func (*NodeLogBatchRequest) Descriptor() ([]byte, []int) {
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *NodeLogBatchRequest) GetNodeId() uint32 {
+	if x != nil {
+		return x.NodeId
+	}
+	return 0
+}
+
+func (x *NodeLogBatchRequest) GetLogs() []*NodeLogEntry {
+	if x != nil {
+		return x.Logs
+	}
+	return nil
+}
+
 // 用户列表请求
 type UserListRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -872,7 +1010,7 @@ type UserListRequest struct {
 
 func (x *UserListRequest) Reset() {
 	*x = UserListRequest{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[9]
+	mi := &file_api_grpc_v2board_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -884,7 +1022,7 @@ func (x *UserListRequest) String() string {
 func (*UserListRequest) ProtoMessage() {}
 
 func (x *UserListRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[9]
+	mi := &file_api_grpc_v2board_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -897,7 +1035,7 @@ func (x *UserListRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserListRequest.ProtoReflect.Descriptor instead.
 func (*UserListRequest) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{9}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *UserListRequest) GetNodeId() uint32 {
@@ -939,7 +1077,7 @@ type UserInfo struct {
 
 func (x *UserInfo) Reset() {
 	*x = UserInfo{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[10]
+	mi := &file_api_grpc_v2board_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -951,7 +1089,7 @@ func (x *UserInfo) String() string {
 func (*UserInfo) ProtoMessage() {}
 
 func (x *UserInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[10]
+	mi := &file_api_grpc_v2board_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -964,7 +1102,7 @@ func (x *UserInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserInfo.ProtoReflect.Descriptor instead.
 func (*UserInfo) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{10}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *UserInfo) GetId() uint32 {
@@ -1042,7 +1180,7 @@ type UserListResponse struct {
 
 func (x *UserListResponse) Reset() {
 	*x = UserListResponse{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[11]
+	mi := &file_api_grpc_v2board_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1054,7 +1192,7 @@ func (x *UserListResponse) String() string {
 func (*UserListResponse) ProtoMessage() {}
 
 func (x *UserListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[11]
+	mi := &file_api_grpc_v2board_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1067,7 +1205,7 @@ func (x *UserListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserListResponse.ProtoReflect.Descriptor instead.
 func (*UserListResponse) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{11}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *UserListResponse) GetUsers() []*UserInfo {
@@ -1103,7 +1241,7 @@ type UserChangeNotification struct {
 
 func (x *UserChangeNotification) Reset() {
 	*x = UserChangeNotification{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[12]
+	mi := &file_api_grpc_v2board_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1115,7 +1253,7 @@ func (x *UserChangeNotification) String() string {
 func (*UserChangeNotification) ProtoMessage() {}
 
 func (x *UserChangeNotification) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[12]
+	mi := &file_api_grpc_v2board_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1128,7 +1266,7 @@ func (x *UserChangeNotification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserChangeNotification.ProtoReflect.Descriptor instead.
 func (*UserChangeNotification) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{12}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *UserChangeNotification) GetType() UserChangeNotification_ChangeType {
@@ -1163,7 +1301,7 @@ type TrafficReportRequest struct {
 
 func (x *TrafficReportRequest) Reset() {
 	*x = TrafficReportRequest{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[13]
+	mi := &file_api_grpc_v2board_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1175,7 +1313,7 @@ func (x *TrafficReportRequest) String() string {
 func (*TrafficReportRequest) ProtoMessage() {}
 
 func (x *TrafficReportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[13]
+	mi := &file_api_grpc_v2board_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1188,7 +1326,7 @@ func (x *TrafficReportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficReportRequest.ProtoReflect.Descriptor instead.
 func (*TrafficReportRequest) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{13}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *TrafficReportRequest) GetNodeId() uint32 {
@@ -1216,7 +1354,7 @@ type TrafficData struct {
 
 func (x *TrafficData) Reset() {
 	*x = TrafficData{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[14]
+	mi := &file_api_grpc_v2board_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1228,7 +1366,7 @@ func (x *TrafficData) String() string {
 func (*TrafficData) ProtoMessage() {}
 
 func (x *TrafficData) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[14]
+	mi := &file_api_grpc_v2board_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1241,7 +1379,7 @@ func (x *TrafficData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficData.ProtoReflect.Descriptor instead.
 func (*TrafficData) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{14}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *TrafficData) GetUpload() int64 {
@@ -1270,7 +1408,7 @@ type TrafficReportResponse struct {
 
 func (x *TrafficReportResponse) Reset() {
 	*x = TrafficReportResponse{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[15]
+	mi := &file_api_grpc_v2board_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1282,7 +1420,7 @@ func (x *TrafficReportResponse) String() string {
 func (*TrafficReportResponse) ProtoMessage() {}
 
 func (x *TrafficReportResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[15]
+	mi := &file_api_grpc_v2board_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1295,7 +1433,7 @@ func (x *TrafficReportResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrafficReportResponse.ProtoReflect.Descriptor instead.
 func (*TrafficReportResponse) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{15}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *TrafficReportResponse) GetSuccess() bool {
@@ -1330,7 +1468,7 @@ type OnlineReportRequest struct {
 
 func (x *OnlineReportRequest) Reset() {
 	*x = OnlineReportRequest{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[16]
+	mi := &file_api_grpc_v2board_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1342,7 +1480,7 @@ func (x *OnlineReportRequest) String() string {
 func (*OnlineReportRequest) ProtoMessage() {}
 
 func (x *OnlineReportRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[16]
+	mi := &file_api_grpc_v2board_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1355,7 +1493,7 @@ func (x *OnlineReportRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnlineReportRequest.ProtoReflect.Descriptor instead.
 func (*OnlineReportRequest) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{16}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *OnlineReportRequest) GetNodeId() uint32 {
@@ -1383,7 +1521,7 @@ type OnlineData struct {
 
 func (x *OnlineData) Reset() {
 	*x = OnlineData{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[17]
+	mi := &file_api_grpc_v2board_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1395,7 +1533,7 @@ func (x *OnlineData) String() string {
 func (*OnlineData) ProtoMessage() {}
 
 func (x *OnlineData) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[17]
+	mi := &file_api_grpc_v2board_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1408,7 +1546,7 @@ func (x *OnlineData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnlineData.ProtoReflect.Descriptor instead.
 func (*OnlineData) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{17}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *OnlineData) GetIps() []string {
@@ -1436,7 +1574,7 @@ type ConfigSyncRequest struct {
 
 func (x *ConfigSyncRequest) Reset() {
 	*x = ConfigSyncRequest{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[18]
+	mi := &file_api_grpc_v2board_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1448,7 +1586,7 @@ func (x *ConfigSyncRequest) String() string {
 func (*ConfigSyncRequest) ProtoMessage() {}
 
 func (x *ConfigSyncRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[18]
+	mi := &file_api_grpc_v2board_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1461,7 +1599,7 @@ func (x *ConfigSyncRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigSyncRequest.ProtoReflect.Descriptor instead.
 func (*ConfigSyncRequest) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{18}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ConfigSyncRequest) GetNodeId() uint32 {
@@ -1491,7 +1629,7 @@ type ConfigSyncResponse struct {
 
 func (x *ConfigSyncResponse) Reset() {
 	*x = ConfigSyncResponse{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[19]
+	mi := &file_api_grpc_v2board_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1503,7 +1641,7 @@ func (x *ConfigSyncResponse) String() string {
 func (*ConfigSyncResponse) ProtoMessage() {}
 
 func (x *ConfigSyncResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[19]
+	mi := &file_api_grpc_v2board_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1516,7 +1654,7 @@ func (x *ConfigSyncResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigSyncResponse.ProtoReflect.Descriptor instead.
 func (*ConfigSyncResponse) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{19}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ConfigSyncResponse) GetHasChanges() bool {
@@ -1560,7 +1698,7 @@ type ConfigChangeNotification struct {
 
 func (x *ConfigChangeNotification) Reset() {
 	*x = ConfigChangeNotification{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[20]
+	mi := &file_api_grpc_v2board_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1572,7 +1710,7 @@ func (x *ConfigChangeNotification) String() string {
 func (*ConfigChangeNotification) ProtoMessage() {}
 
 func (x *ConfigChangeNotification) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[20]
+	mi := &file_api_grpc_v2board_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1585,7 +1723,7 @@ func (x *ConfigChangeNotification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigChangeNotification.ProtoReflect.Descriptor instead.
 func (*ConfigChangeNotification) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{20}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ConfigChangeNotification) GetType() ConfigChangeNotification_ChangeType {
@@ -1627,7 +1765,7 @@ type HealthCheckRequest struct {
 
 func (x *HealthCheckRequest) Reset() {
 	*x = HealthCheckRequest{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[21]
+	mi := &file_api_grpc_v2board_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1639,7 +1777,7 @@ func (x *HealthCheckRequest) String() string {
 func (*HealthCheckRequest) ProtoMessage() {}
 
 func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[21]
+	mi := &file_api_grpc_v2board_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1652,7 +1790,7 @@ func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckRequest.ProtoReflect.Descriptor instead.
 func (*HealthCheckRequest) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{21}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *HealthCheckRequest) GetNodeId() uint32 {
@@ -1681,7 +1819,7 @@ type HealthCheckResponse struct {
 
 func (x *HealthCheckResponse) Reset() {
 	*x = HealthCheckResponse{}
-	mi := &file_api_grpc_v2board_proto_msgTypes[22]
+	mi := &file_api_grpc_v2board_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1693,7 +1831,7 @@ func (x *HealthCheckResponse) String() string {
 func (*HealthCheckResponse) ProtoMessage() {}
 
 func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_grpc_v2board_proto_msgTypes[22]
+	mi := &file_api_grpc_v2board_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1706,7 +1844,7 @@ func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckResponse.ProtoReflect.Descriptor instead.
 func (*HealthCheckResponse) Descriptor() ([]byte, []int) {
-	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{22}
+	return file_api_grpc_v2board_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *HealthCheckResponse) GetStatus() HealthCheckResponse_ServingStatus {
@@ -1803,7 +1941,18 @@ const file_api_grpc_v2board_proto_rawDesc = "" +
 	"\x06uptime\x18\x05 \x01(\x03R\x06uptime\x12!\n" +
 	"\fonline_users\x18\x06 \x01(\x05R\vonlineUsers\x12\x16\n" +
 	"\x06upload\x18\a \x01(\x03R\x06upload\x12\x1a\n" +
-	"\bdownload\x18\b \x01(\x03R\bdownload\"[\n" +
+	"\bdownload\x18\b \x01(\x03R\bdownload\"\xb0\x01\n" +
+	"\fNodeLogEntry\x12\x14\n" +
+	"\x05level\x18\x01 \x01(\tR\x05level\x12\x16\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\x12\x1c\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x1f\n" +
+	"\vfields_json\x18\x05 \x01(\tR\n" +
+	"fieldsJson\x12\x19\n" +
+	"\btrace_id\x18\x06 \x01(\tR\atraceId\"Y\n" +
+	"\x13NodeLogBatchRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\rR\x06nodeId\x12)\n" +
+	"\x04logs\x18\x02 \x03(\v2\x15.v2board.NodeLogEntryR\x04logs\"[\n" +
 	"\x0fUserListRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\rR\x06nodeId\x12\x12\n" +
 	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x1b\n" +
@@ -1905,7 +2054,10 @@ const file_api_grpc_v2board_proto_rawDesc = "" +
 	"\bRegister\x12\x1c.v2board.NodeRegisterRequest\x1a\x1d.v2board.NodeRegisterResponse\x12D\n" +
 	"\tGetConfig\x12\x1a.v2board.NodeConfigRequest\x1a\x1b.v2board.NodeConfigResponse\x12C\n" +
 	"\fReportStatus\x12\x1a.v2board.NodeStatusRequest\x1a\x17.v2board.StatusResponse\x12K\n" +
-	"\fStatusStream\x12\x1a.v2board.NodeStatusRequest\x1a\x1b.v2board.NodeConfigResponse(\x010\x012\x9b\x01\n" +
+	"\fStatusStream\x12\x1a.v2board.NodeStatusRequest\x1a\x1b.v2board.NodeConfigResponse(\x010\x012U\n" +
+	"\x0eNodeLogService\x12C\n" +
+	"\n" +
+	"ReportLogs\x12\x1c.v2board.NodeLogBatchRequest\x1a\x17.v2board.StatusResponse2\x9b\x01\n" +
 	"\vUserService\x12?\n" +
 	"\bGetUsers\x12\x18.v2board.UserListRequest\x1a\x19.v2board.UserListResponse\x12K\n" +
 	"\vUserChanges\x12\x1f.v2board.UserChangeNotification\x1a\x17.v2board.StatusResponse(\x010\x012\xc6\x02\n" +
@@ -1921,7 +2073,7 @@ const file_api_grpc_v2board_proto_rawDesc = "" +
 	"\bFullSync\x12\x1a.v2board.ConfigSyncRequest\x1a\x1b.v2board.ConfigSyncResponse2\x9b\x01\n" +
 	"\rHealthService\x12B\n" +
 	"\x05Check\x12\x1b.v2board.HealthCheckRequest\x1a\x1c.v2board.HealthCheckResponse\x12F\n" +
-	"\x05Watch\x12\x1b.v2board.HealthCheckRequest\x1a\x1c.v2board.HealthCheckResponse(\x010\x01B/Z-github.com/anixops/v2board/api/grpc/v2boardpbb\x06proto3"
+	"\x05Watch\x12\x1b.v2board.HealthCheckRequest\x1a\x1c.v2board.HealthCheckResponse(\x010\x01B7Z5github.com/AnixOps/anix-control/v3/api/grpc/v2boardpbb\x06proto3"
 
 var (
 	file_api_grpc_v2board_proto_rawDescOnce sync.Once
@@ -1936,7 +2088,7 @@ func file_api_grpc_v2board_proto_rawDescGZIP() []byte {
 }
 
 var file_api_grpc_v2board_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_api_grpc_v2board_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_api_grpc_v2board_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_api_grpc_v2board_proto_goTypes = []any{
 	(UserChangeNotification_ChangeType)(0),   // 0: v2board.UserChangeNotification.ChangeType
 	(ConfigChangeNotification_ChangeType)(0), // 1: v2board.ConfigChangeNotification.ChangeType
@@ -1950,82 +2102,87 @@ var file_api_grpc_v2board_proto_goTypes = []any{
 	(*BaseConfig)(nil),                       // 9: v2board.BaseConfig
 	(*Route)(nil),                            // 10: v2board.Route
 	(*NodeStatusRequest)(nil),                // 11: v2board.NodeStatusRequest
-	(*UserListRequest)(nil),                  // 12: v2board.UserListRequest
-	(*UserInfo)(nil),                         // 13: v2board.UserInfo
-	(*UserListResponse)(nil),                 // 14: v2board.UserListResponse
-	(*UserChangeNotification)(nil),           // 15: v2board.UserChangeNotification
-	(*TrafficReportRequest)(nil),             // 16: v2board.TrafficReportRequest
-	(*TrafficData)(nil),                      // 17: v2board.TrafficData
-	(*TrafficReportResponse)(nil),            // 18: v2board.TrafficReportResponse
-	(*OnlineReportRequest)(nil),              // 19: v2board.OnlineReportRequest
-	(*OnlineData)(nil),                       // 20: v2board.OnlineData
-	(*ConfigSyncRequest)(nil),                // 21: v2board.ConfigSyncRequest
-	(*ConfigSyncResponse)(nil),               // 22: v2board.ConfigSyncResponse
-	(*ConfigChangeNotification)(nil),         // 23: v2board.ConfigChangeNotification
-	(*HealthCheckRequest)(nil),               // 24: v2board.HealthCheckRequest
-	(*HealthCheckResponse)(nil),              // 25: v2board.HealthCheckResponse
-	nil,                                      // 26: v2board.NodeConfigResponse.TlsSettingsEntry
-	nil,                                      // 27: v2board.NodeConfigResponse.NetworkSettingsEntry
-	nil,                                      // 28: v2board.NodeConfigResponse.ExtraEntry
-	nil,                                      // 29: v2board.UserInfo.ExtraEntry
-	nil,                                      // 30: v2board.TrafficReportRequest.TrafficsEntry
-	nil,                                      // 31: v2board.TrafficReportResponse.BalancesEntry
-	nil,                                      // 32: v2board.OnlineReportRequest.OnlineEntry
+	(*NodeLogEntry)(nil),                     // 12: v2board.NodeLogEntry
+	(*NodeLogBatchRequest)(nil),              // 13: v2board.NodeLogBatchRequest
+	(*UserListRequest)(nil),                  // 14: v2board.UserListRequest
+	(*UserInfo)(nil),                         // 15: v2board.UserInfo
+	(*UserListResponse)(nil),                 // 16: v2board.UserListResponse
+	(*UserChangeNotification)(nil),           // 17: v2board.UserChangeNotification
+	(*TrafficReportRequest)(nil),             // 18: v2board.TrafficReportRequest
+	(*TrafficData)(nil),                      // 19: v2board.TrafficData
+	(*TrafficReportResponse)(nil),            // 20: v2board.TrafficReportResponse
+	(*OnlineReportRequest)(nil),              // 21: v2board.OnlineReportRequest
+	(*OnlineData)(nil),                       // 22: v2board.OnlineData
+	(*ConfigSyncRequest)(nil),                // 23: v2board.ConfigSyncRequest
+	(*ConfigSyncResponse)(nil),               // 24: v2board.ConfigSyncResponse
+	(*ConfigChangeNotification)(nil),         // 25: v2board.ConfigChangeNotification
+	(*HealthCheckRequest)(nil),               // 26: v2board.HealthCheckRequest
+	(*HealthCheckResponse)(nil),              // 27: v2board.HealthCheckResponse
+	nil,                                      // 28: v2board.NodeConfigResponse.TlsSettingsEntry
+	nil,                                      // 29: v2board.NodeConfigResponse.NetworkSettingsEntry
+	nil,                                      // 30: v2board.NodeConfigResponse.ExtraEntry
+	nil,                                      // 31: v2board.UserInfo.ExtraEntry
+	nil,                                      // 32: v2board.TrafficReportRequest.TrafficsEntry
+	nil,                                      // 33: v2board.TrafficReportResponse.BalancesEntry
+	nil,                                      // 34: v2board.OnlineReportRequest.OnlineEntry
 }
 var file_api_grpc_v2board_proto_depIdxs = []int32{
-	26, // 0: v2board.NodeConfigResponse.tls_settings:type_name -> v2board.NodeConfigResponse.TlsSettingsEntry
-	27, // 1: v2board.NodeConfigResponse.network_settings:type_name -> v2board.NodeConfigResponse.NetworkSettingsEntry
+	28, // 0: v2board.NodeConfigResponse.tls_settings:type_name -> v2board.NodeConfigResponse.TlsSettingsEntry
+	29, // 1: v2board.NodeConfigResponse.network_settings:type_name -> v2board.NodeConfigResponse.NetworkSettingsEntry
 	9,  // 2: v2board.NodeConfigResponse.base_config:type_name -> v2board.BaseConfig
 	10, // 3: v2board.NodeConfigResponse.routes:type_name -> v2board.Route
-	28, // 4: v2board.NodeConfigResponse.extra:type_name -> v2board.NodeConfigResponse.ExtraEntry
-	29, // 5: v2board.UserInfo.extra:type_name -> v2board.UserInfo.ExtraEntry
-	13, // 6: v2board.UserListResponse.users:type_name -> v2board.UserInfo
-	0,  // 7: v2board.UserChangeNotification.type:type_name -> v2board.UserChangeNotification.ChangeType
-	13, // 8: v2board.UserChangeNotification.user:type_name -> v2board.UserInfo
-	30, // 9: v2board.TrafficReportRequest.traffics:type_name -> v2board.TrafficReportRequest.TrafficsEntry
-	31, // 10: v2board.TrafficReportResponse.balances:type_name -> v2board.TrafficReportResponse.BalancesEntry
-	32, // 11: v2board.OnlineReportRequest.online:type_name -> v2board.OnlineReportRequest.OnlineEntry
-	8,  // 12: v2board.ConfigSyncResponse.config:type_name -> v2board.NodeConfigResponse
-	13, // 13: v2board.ConfigSyncResponse.users:type_name -> v2board.UserInfo
-	1,  // 14: v2board.ConfigChangeNotification.type:type_name -> v2board.ConfigChangeNotification.ChangeType
-	2,  // 15: v2board.HealthCheckResponse.status:type_name -> v2board.HealthCheckResponse.ServingStatus
-	17, // 16: v2board.TrafficReportRequest.TrafficsEntry.value:type_name -> v2board.TrafficData
-	20, // 17: v2board.OnlineReportRequest.OnlineEntry.value:type_name -> v2board.OnlineData
-	5,  // 18: v2board.NodeService.Register:input_type -> v2board.NodeRegisterRequest
-	7,  // 19: v2board.NodeService.GetConfig:input_type -> v2board.NodeConfigRequest
-	11, // 20: v2board.NodeService.ReportStatus:input_type -> v2board.NodeStatusRequest
-	11, // 21: v2board.NodeService.StatusStream:input_type -> v2board.NodeStatusRequest
-	12, // 22: v2board.UserService.GetUsers:input_type -> v2board.UserListRequest
-	15, // 23: v2board.UserService.UserChanges:input_type -> v2board.UserChangeNotification
-	16, // 24: v2board.TrafficService.ReportTraffic:input_type -> v2board.TrafficReportRequest
-	19, // 25: v2board.TrafficService.ReportOnline:input_type -> v2board.OnlineReportRequest
-	16, // 26: v2board.TrafficService.TrafficStream:input_type -> v2board.TrafficReportRequest
-	19, // 27: v2board.TrafficService.OnlineStream:input_type -> v2board.OnlineReportRequest
-	21, // 28: v2board.ConfigSyncService.SyncConfig:input_type -> v2board.ConfigSyncRequest
-	23, // 29: v2board.ConfigSyncService.ConfigChanges:input_type -> v2board.ConfigChangeNotification
-	21, // 30: v2board.ConfigSyncService.FullSync:input_type -> v2board.ConfigSyncRequest
-	24, // 31: v2board.HealthService.Check:input_type -> v2board.HealthCheckRequest
-	24, // 32: v2board.HealthService.Watch:input_type -> v2board.HealthCheckRequest
-	6,  // 33: v2board.NodeService.Register:output_type -> v2board.NodeRegisterResponse
-	8,  // 34: v2board.NodeService.GetConfig:output_type -> v2board.NodeConfigResponse
-	4,  // 35: v2board.NodeService.ReportStatus:output_type -> v2board.StatusResponse
-	8,  // 36: v2board.NodeService.StatusStream:output_type -> v2board.NodeConfigResponse
-	14, // 37: v2board.UserService.GetUsers:output_type -> v2board.UserListResponse
-	4,  // 38: v2board.UserService.UserChanges:output_type -> v2board.StatusResponse
-	18, // 39: v2board.TrafficService.ReportTraffic:output_type -> v2board.TrafficReportResponse
-	4,  // 40: v2board.TrafficService.ReportOnline:output_type -> v2board.StatusResponse
-	18, // 41: v2board.TrafficService.TrafficStream:output_type -> v2board.TrafficReportResponse
-	4,  // 42: v2board.TrafficService.OnlineStream:output_type -> v2board.StatusResponse
-	22, // 43: v2board.ConfigSyncService.SyncConfig:output_type -> v2board.ConfigSyncResponse
-	4,  // 44: v2board.ConfigSyncService.ConfigChanges:output_type -> v2board.StatusResponse
-	22, // 45: v2board.ConfigSyncService.FullSync:output_type -> v2board.ConfigSyncResponse
-	25, // 46: v2board.HealthService.Check:output_type -> v2board.HealthCheckResponse
-	25, // 47: v2board.HealthService.Watch:output_type -> v2board.HealthCheckResponse
-	33, // [33:48] is the sub-list for method output_type
-	18, // [18:33] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	30, // 4: v2board.NodeConfigResponse.extra:type_name -> v2board.NodeConfigResponse.ExtraEntry
+	12, // 5: v2board.NodeLogBatchRequest.logs:type_name -> v2board.NodeLogEntry
+	31, // 6: v2board.UserInfo.extra:type_name -> v2board.UserInfo.ExtraEntry
+	15, // 7: v2board.UserListResponse.users:type_name -> v2board.UserInfo
+	0,  // 8: v2board.UserChangeNotification.type:type_name -> v2board.UserChangeNotification.ChangeType
+	15, // 9: v2board.UserChangeNotification.user:type_name -> v2board.UserInfo
+	32, // 10: v2board.TrafficReportRequest.traffics:type_name -> v2board.TrafficReportRequest.TrafficsEntry
+	33, // 11: v2board.TrafficReportResponse.balances:type_name -> v2board.TrafficReportResponse.BalancesEntry
+	34, // 12: v2board.OnlineReportRequest.online:type_name -> v2board.OnlineReportRequest.OnlineEntry
+	8,  // 13: v2board.ConfigSyncResponse.config:type_name -> v2board.NodeConfigResponse
+	15, // 14: v2board.ConfigSyncResponse.users:type_name -> v2board.UserInfo
+	1,  // 15: v2board.ConfigChangeNotification.type:type_name -> v2board.ConfigChangeNotification.ChangeType
+	2,  // 16: v2board.HealthCheckResponse.status:type_name -> v2board.HealthCheckResponse.ServingStatus
+	19, // 17: v2board.TrafficReportRequest.TrafficsEntry.value:type_name -> v2board.TrafficData
+	22, // 18: v2board.OnlineReportRequest.OnlineEntry.value:type_name -> v2board.OnlineData
+	5,  // 19: v2board.NodeService.Register:input_type -> v2board.NodeRegisterRequest
+	7,  // 20: v2board.NodeService.GetConfig:input_type -> v2board.NodeConfigRequest
+	11, // 21: v2board.NodeService.ReportStatus:input_type -> v2board.NodeStatusRequest
+	11, // 22: v2board.NodeService.StatusStream:input_type -> v2board.NodeStatusRequest
+	13, // 23: v2board.NodeLogService.ReportLogs:input_type -> v2board.NodeLogBatchRequest
+	14, // 24: v2board.UserService.GetUsers:input_type -> v2board.UserListRequest
+	17, // 25: v2board.UserService.UserChanges:input_type -> v2board.UserChangeNotification
+	18, // 26: v2board.TrafficService.ReportTraffic:input_type -> v2board.TrafficReportRequest
+	21, // 27: v2board.TrafficService.ReportOnline:input_type -> v2board.OnlineReportRequest
+	18, // 28: v2board.TrafficService.TrafficStream:input_type -> v2board.TrafficReportRequest
+	21, // 29: v2board.TrafficService.OnlineStream:input_type -> v2board.OnlineReportRequest
+	23, // 30: v2board.ConfigSyncService.SyncConfig:input_type -> v2board.ConfigSyncRequest
+	25, // 31: v2board.ConfigSyncService.ConfigChanges:input_type -> v2board.ConfigChangeNotification
+	23, // 32: v2board.ConfigSyncService.FullSync:input_type -> v2board.ConfigSyncRequest
+	26, // 33: v2board.HealthService.Check:input_type -> v2board.HealthCheckRequest
+	26, // 34: v2board.HealthService.Watch:input_type -> v2board.HealthCheckRequest
+	6,  // 35: v2board.NodeService.Register:output_type -> v2board.NodeRegisterResponse
+	8,  // 36: v2board.NodeService.GetConfig:output_type -> v2board.NodeConfigResponse
+	4,  // 37: v2board.NodeService.ReportStatus:output_type -> v2board.StatusResponse
+	8,  // 38: v2board.NodeService.StatusStream:output_type -> v2board.NodeConfigResponse
+	4,  // 39: v2board.NodeLogService.ReportLogs:output_type -> v2board.StatusResponse
+	16, // 40: v2board.UserService.GetUsers:output_type -> v2board.UserListResponse
+	4,  // 41: v2board.UserService.UserChanges:output_type -> v2board.StatusResponse
+	20, // 42: v2board.TrafficService.ReportTraffic:output_type -> v2board.TrafficReportResponse
+	4,  // 43: v2board.TrafficService.ReportOnline:output_type -> v2board.StatusResponse
+	20, // 44: v2board.TrafficService.TrafficStream:output_type -> v2board.TrafficReportResponse
+	4,  // 45: v2board.TrafficService.OnlineStream:output_type -> v2board.StatusResponse
+	24, // 46: v2board.ConfigSyncService.SyncConfig:output_type -> v2board.ConfigSyncResponse
+	4,  // 47: v2board.ConfigSyncService.ConfigChanges:output_type -> v2board.StatusResponse
+	24, // 48: v2board.ConfigSyncService.FullSync:output_type -> v2board.ConfigSyncResponse
+	27, // 49: v2board.HealthService.Check:output_type -> v2board.HealthCheckResponse
+	27, // 50: v2board.HealthService.Watch:output_type -> v2board.HealthCheckResponse
+	35, // [35:51] is the sub-list for method output_type
+	19, // [19:35] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_api_grpc_v2board_proto_init() }
@@ -2039,9 +2196,9 @@ func file_api_grpc_v2board_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_grpc_v2board_proto_rawDesc), len(file_api_grpc_v2board_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   30,
+			NumMessages:   32,
 			NumExtensions: 0,
-			NumServices:   5,
+			NumServices:   6,
 		},
 		GoTypes:           file_api_grpc_v2board_proto_goTypes,
 		DependencyIndexes: file_api_grpc_v2board_proto_depIdxs,

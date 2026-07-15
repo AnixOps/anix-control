@@ -20,7 +20,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                          V2Board AnixOps                             │
+│                          AnixOps Control                             │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │  ┌─────────────────┐         ┌─────────────────────────────────┐    │
@@ -271,7 +271,7 @@ GET /s/{user_token}
 Content-Type: text/plain; charset=utf-8
 Subscription-Userinfo: upload=0; download=5368709120; total=107374182400; expire=1735689600
 Profile-Update-Interval: 24
-Profile-Title: V2Board Subscription
+Profile-Title: AnixOps Control Subscription
 ```
 
 **示例:**

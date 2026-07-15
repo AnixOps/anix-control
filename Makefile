@@ -3,7 +3,7 @@
 .PHONY: test-quick test-clean test-summary test-grpc test-cmd
 
 # 鐗堟湰淇℃伅
-VERSION := 2.0.2-test.1
+VERSION := 3.0.0-alpha.1
 BUILD_TIME := $(shell date +%Y-%m-%d_%H:%M:%S)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME) -X main.commit=$(GIT_COMMIT)
@@ -32,13 +32,15 @@ build-web:
 build-server:
 	@echo "Building server..."
 	mkdir -p build
-	GOWORK=off CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o build/v2board ./cmd/server
+	GOWORK=off CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o build/anix-control ./cmd/server
+	cp build/anix-control build/v2board
 
 # 缂栬瘧 Linux 鐗堟湰
 build-linux:
 	@echo "Building for Linux..."
 	mkdir -p build
-	GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o build/v2board-linux ./cmd/server
+	GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o build/anix-control-linux ./cmd/server
+	cp build/anix-control-linux build/v2board-linux
 
 # 杩愯寮€鍙戞湇鍔″櫒
 run:
@@ -46,7 +48,7 @@ run:
 
 # 娓呯悊
 clean:
-	rm -f v2board v2board-linux build/v2board build/v2board-linux $(COVERAGE_FILE) $(COVERAGE_HTML)
+	rm -f anix-control anix-control-linux v2board v2board-linux build/anix-control build/anix-control-linux build/v2board build/v2board-linux $(COVERAGE_FILE) $(COVERAGE_HTML)
 	rm -rf coverage/
 	go clean -testcache
 
@@ -181,20 +183,22 @@ deploy:
 # 鏋勫缓 Docker 闀滃儚
 docker-build:
 	@echo "Building Docker image..."
-	docker build -t v2board:latest .
+	docker build -t anix-control:latest -t v2board:latest .
 
 # 杩愯 Docker 瀹瑰櫒
 docker-run:
 	@echo "Running Docker container..."
-	docker run -d --name v2board \
+	docker run -d --name anix-control \
 		-p 8080:8080 \
 		-p 50051:50051 \
 		-v $(PWD)/config/data:/app/config/data \
 		-v $(PWD)/web/public:/app/web/public \
-		v2board:latest
+		anix-control:latest
 
 # 鍋滄 Docker 瀹瑰櫒
 docker-stop:
+	docker stop anix-control || true
+	docker rm anix-control || true
 	docker stop v2board || true
 	docker rm v2board || true
 
@@ -205,7 +209,7 @@ docker-stop:
 # 鐢熸垚 gRPC 浠ｇ爜
 grpc-gen:
 	@echo "Generating gRPC code..."
-	protoc --go_out=. --go-grpc_out=. api/grpc/v2board.proto
+	bash api/grpc/gen.sh
 
 # 鐢熸垚 Swagger 鏂囨。
 swagger:
@@ -238,7 +242,7 @@ install-deps:
 # ==========================================
 
 help:
-	@echo "V2Board Makefile 甯姪"
+	@echo "AnixOps Control Makefile 甯姪"
 	@echo ""
 	@echo "缂栬瘧鍛戒护:"
 	@echo "  make build          - 缂栬瘧鍓嶅悗绔?

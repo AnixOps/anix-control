@@ -10,7 +10,7 @@ import (
 	"net/netip"
 	"strings"
 
-	"github.com/anixops/v2board/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 )
 
 const defaultWireGuardServerAddress = "10.66.0.1/24"

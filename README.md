@@ -1,6 +1,6 @@
-# v2board_AnixOps
+# AnixOps Control
 
-`v2board_AnixOps` is the panel-side service for AnixOps. It combines a Go
+`anix-control` is the control-plane service for AnixOps. It combines a Go
 backend, Vue 3 admin/user frontend, node communication APIs, subscription
 generation, payment/order management, traffic statistics, and the in-progress
 minimal forwarding module.
@@ -12,17 +12,24 @@ truth for implemented, partial, planned, compatibility, and deferred features.
 ## Current Status
 
 - Main branch: `go_dev`.
-- Backend: Go module `github.com/anixops/v2board`, toolchain pinned to Go
-  `1.26.5` in CI.
+- Backend: Go module `github.com/AnixOps/anix-control/v3`; the toolchain is
+  pinned to Go `1.26.5` in CI.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.
 - Default database: SQLite, with PostgreSQL migration/dry-run tooling.
-- Current version line: frontend package `2.3.1`; release maturity work is
-  still in progress.
+- Current preview: `v3.0.0-alpha.1`.
+- Agent-first status: the `anix.agent.v1` bidirectional gRPC control stream is
+  an opt-in foundation in this alpha, not yet the only production task path.
 
 Do not infer production completeness from a route or UI existing. Check
 [`docs/features.md`](docs/features.md), [`TODO.md`](TODO.md), and
 [`docs/audit/test-gap.md`](docs/audit/test-gap.md) before marking a feature
 complete.
+
+The v3 alpha keeps REST/UniProxy, the legacy panel-node gRPC services, and the
+existing WebSocket paths available while the new Agent control stream is
+validated. Production task sources have not all moved to the new stream, so
+operators should keep a tested fallback configured and should not treat this
+preview as a completed all-purpose Agent rollout.
 
 ## Documentation
 
@@ -31,6 +38,7 @@ complete.
 - Roadmap: [`ROADMAP.md`](ROADMAP.md)
 - Concrete backlog: [`TODO.md`](TODO.md)
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
+- Brand and artifact migration: [`docs/BRAND_MIGRATION.md`](docs/BRAND_MIGRATION.md)
 - Deployment guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - Upgrade runbook: [`docs/UPGRADE.md`](docs/UPGRADE.md)
 - Native release install: [`docs/guide/release-installation.md`](docs/guide/release-installation.md)
@@ -69,12 +77,12 @@ Production installation downloads checked GitHub Release assets and does not
 clone the repository or build on the target host. Pin the production tag:
 
 ```bash
-export VERSION=v2.5.0
+export VERSION=v3.0.0-alpha.1
 curl -fsSL \
-  "https://raw.githubusercontent.com/AnixOps/v2board_AnixOps/${VERSION}/scripts/install.sh" \
-  -o /tmp/v2board-install.sh
-sudo bash /tmp/v2board-install.sh install --version "${VERSION}" --admin-email "admin@example.com"
-rm -f /tmp/v2board-install.sh
+  "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
+  -o /tmp/anix-control-install.sh
+sudo bash /tmp/anix-control-install.sh install --version "${VERSION}" --admin-email "admin@example.com"
+rm -f /tmp/anix-control-install.sh
 ```
 
 See the [release installation guide](docs/guide/release-installation.md) for
@@ -94,6 +102,8 @@ developing; release builds are not.
 ```bash
 go test ./...
 go test -race ./...
+bash api/grpc/gen.sh
+git diff --exit-code -- api/grpc/v2boardpb api/grpc/agent/v1
 bash config/deploy/clean_local_build_artifacts.sh --dry-run
 ```
 
@@ -120,11 +130,13 @@ All release artifacts must be built by GitHub Actions. Do not build release
 binaries, frontend archives, Docker metadata, checksums, SBOMs, or release
 manifests on a production host.
 
-Release jobs are guarded by strict tag gating and CI policy checks. Tag builds
+Release jobs accept stable, alpha, beta, and release-candidate tags such as
+`v3.0.0`, `v3.0.0-alpha.1`, `v3.0.0-beta.1`, and `v3.0.0-rc.1`. Tag builds
 produce:
 
-- multi-platform backend artifacts
-- frontend archives
+- multi-platform `anix-control-*` backend artifacts, plus temporary
+  `v2board-*` compatibility aliases
+- `anix-control-frontend.*` archives, plus temporary legacy aliases
 - checksum file
 - SPDX SBOM
 - migration dry-run evidence
@@ -162,6 +174,10 @@ Some routes intentionally keep legacy or external protocol behavior:
 - Telegram webhooks
 - payment callbacks/webhooks
 - forwarding agent and internal traffic upload endpoints
+
+The `v2_*` database tables, `v2board` protobuf wire namespace, and historical
+SQLite path are intentionally retained during the migration. The Go module has
+moved to `github.com/AnixOps/anix-control/v3`.
 
 Do not change these response shapes without checking
 [`docs/features.md`](docs/features.md) and adding compatibility tests.

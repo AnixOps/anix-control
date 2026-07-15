@@ -11,7 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	pb "github.com/anixops/v2board/api/grpc/v2boardpb"
+	agentv1pb "github.com/AnixOps/anix-control/v3/api/grpc/agent/v1"
+	pb "github.com/AnixOps/anix-control/v3/api/grpc/v2boardpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -69,6 +70,10 @@ func NewServer(cfg *ServerConfig) *Server {
 
 // Start 启动服务器
 func (s *Server) Start() error {
+	if (s.config.TLSCertFile == "") != (s.config.TLSKeyFile == "") {
+		return fmt.Errorf("gRPC TLS cert and key must be configured together")
+	}
+
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -133,6 +138,7 @@ func (s *Server) Start() error {
 	pb.RegisterUserServiceServer(s.grpcServer, NewUserGRPCServer())
 	pb.RegisterTrafficServiceServer(s.grpcServer, NewTrafficGRPCServer())
 	pb.RegisterHealthServiceServer(s.grpcServer, NewHealthGRPCServer())
+	agentv1pb.RegisterAgentControlServiceServer(s.grpcServer, NewAgentControlGRPCServer(nil))
 
 	// 启动服务器
 	go func() {
@@ -173,6 +179,11 @@ func (s *Server) GracefulShutdown(ctx context.Context) error {
 // GetConnectionManager 获取连接管理器
 func (s *Server) GetConnectionManager() *NodeConnectionManager {
 	return GetConnectionManager()
+}
+
+// GetAgentControlManager returns the Agent-first desired/observed connection manager.
+func (s *Server) GetAgentControlManager() *AgentControlManager {
+	return GetAgentControlManager()
 }
 
 // Run 运行服务器（阻塞）

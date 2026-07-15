@@ -15,9 +15,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/model"
-	"github.com/anixops/v2board/internal/parser"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/parser"
 	"gorm.io/gorm"
 )
 

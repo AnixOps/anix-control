@@ -20,8 +20,8 @@ database:
   driver: "postgres"
   host: "127.0.0.1"
   port: 5432
-  database: "v2board"
-  username: "v2board"
+  database: "anix_control"
+  username: "anix_control"
   password: "replace-with-secret"
 ```
 
@@ -30,21 +30,24 @@ database:
 Stop writes before the final backup. On systemd deployments:
 
 ```bash
-sudo systemctl stop v2board.service
+sudo systemctl stop anix-control.service
 ```
+
+For an in-place legacy installation that still uses `v2board.service`, substitute
+that unit name throughout this runbook.
 
 Create a consistent SQLite backup:
 
 ```bash
-cd /home/dev/anixops/v2board_AnixOps
-mkdir -p /root/v2board-migration
-sqlite3 config/data/v2board.db ".backup '/root/v2board-migration/v2board.sqlite.$(date +%Y%m%d%H%M%S).db'"
+cd /home/dev/anixops/anix-control
+mkdir -p /root/anix-control-migration
+sqlite3 config/data/v2board.db ".backup '/root/anix-control-migration/anix-control.sqlite.$(date +%Y%m%d%H%M%S).db'"
 ```
 
 If the PostgreSQL target already contains data, back it up before using `-reset`:
 
 ```bash
-pg_dump --format=custom --file=/root/v2board-migration/v2board.pg.$(date +%Y%m%d%H%M%S).dump "$POSTGRES_DSN"
+pg_dump --format=custom --file=/root/anix-control-migration/anix-control.pg.$(date +%Y%m%d%H%M%S).dump "$POSTGRES_DSN"
 ```
 
 ## Dry Run
@@ -52,8 +55,8 @@ pg_dump --format=custom --file=/root/v2board-migration/v2board.pg.$(date +%Y%m%d
 The dry run opens both databases, lists SQLite tables, prints important row counts, and exits before schema migration, truncation, or import:
 
 ```bash
-cd /home/dev/anixops/v2board_AnixOps
-POSTGRES_DSN='host=127.0.0.1 user=v2board password=replace dbname=v2board port=5432 sslmode=disable TimeZone=Asia/Shanghai'
+cd /home/dev/anixops/anix-control
+POSTGRES_DSN='host=127.0.0.1 user=anix_control password=replace dbname=anix_control port=5432 sslmode=disable TimeZone=Asia/Shanghai'
 
 PATH=/usr/local/go/bin:$PATH go run ./cmd/sqlite2postgres \
   -source config/data/v2board.db \
@@ -85,7 +88,7 @@ Record the displayed counts for these tables when present:
 Run the import only after the dry run and backups are complete. `-reset` is required by design; without it the tool refuses to import.
 
 ```bash
-cd /home/dev/anixops/v2board_AnixOps
+cd /home/dev/anixops/anix-control
 PATH=/usr/local/go/bin:$PATH go run ./cmd/sqlite2postgres \
   -source config/data/v2board.db \
   -target-dsn "$POSTGRES_DSN" \
@@ -107,8 +110,8 @@ What the import does:
 Edit the active production config so `database.driver` is `postgres`, then restart:
 
 ```bash
-sudo systemctl start v2board.service
-sudo journalctl -u v2board.service -n 80 --no-pager
+sudo systemctl start anix-control.service
+sudo journalctl -u anix-control.service -n 80 --no-pager
 ```
 
 Verify:
@@ -138,7 +141,7 @@ If the import failed before switching the panel:
 2. Start the service again:
 
 ```bash
-sudo systemctl start v2board.service
+sudo systemctl start anix-control.service
 ```
 
 If the panel was switched to PostgreSQL and needs rollback:
@@ -149,15 +152,15 @@ If the panel was switched to PostgreSQL and needs rollback:
 4. Start the service.
 
 ```bash
-sudo systemctl stop v2board.service
-sqlite3 config/data/v2board.db ".restore '/root/v2board-migration/v2board.sqlite.YYYYMMDDHHMMSS.db'"
-sudo systemctl start v2board.service
+sudo systemctl stop anix-control.service
+sqlite3 config/data/v2board.db ".restore '/root/anix-control-migration/anix-control.sqlite.YYYYMMDDHHMMSS.db'"
+sudo systemctl start anix-control.service
 ```
 
 If PostgreSQL already had production data before migration and `-reset` was used, restore the PostgreSQL backup before retrying:
 
 ```bash
-pg_restore --clean --if-exists --dbname "$POSTGRES_DSN" /root/v2board-migration/v2board.pg.YYYYMMDDHHMMSS.dump
+pg_restore --clean --if-exists --dbname "$POSTGRES_DSN" /root/anix-control-migration/anix-control.pg.YYYYMMDDHHMMSS.dump
 ```
 
 ## Evidence To Keep

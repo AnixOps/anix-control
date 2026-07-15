@@ -1,6 +1,6 @@
 # Runtime Modes
 
-This page is the runtime reference for the forward split in `v2board_AnixOps`.
+This page is the runtime reference for the forward split in `anix-control`.
 
 ## Core Rule
 

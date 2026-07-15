@@ -1,21 +1,29 @@
 #!/usr/bin/env bash
-# Install or upgrade a GitHub Actions-built v2board release without cloning
+# Install or upgrade a GitHub Actions-built AnixOps Control release without cloning
 # the repository or compiling on the target host.
 
 set -Eeuo pipefail
 
 REPO_OWNER="${REPO_OWNER:-AnixOps}"
-REPO_NAME="${REPO_NAME:-v2board_AnixOps}"
+REPO_NAME="${REPO_NAME:-anix-control}"
 API_BASE="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}"
 RELEASE_BASE="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download"
 RAW_BASE="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}"
 
-SERVICE_NAME="${SERVICE_NAME:-v2board}"
-APP_USER="${APP_USER:-v2board}"
-INSTALL_DIR="${INSTALL_DIR:-/opt/v2board}"
+SERVICE_NAME_EXPLICIT=0
+APP_USER_EXPLICIT=0
+INSTALL_DIR_EXPLICIT=0
+[[ -n "${SERVICE_NAME+x}" ]] && SERVICE_NAME_EXPLICIT=1
+[[ -n "${APP_USER+x}" ]] && APP_USER_EXPLICIT=1
+[[ -n "${INSTALL_DIR+x}" ]] && INSTALL_DIR_EXPLICIT=1
+
+SERVICE_NAME="${SERVICE_NAME:-anix-control}"
+APP_USER="${APP_USER:-anixops}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/anixops/control}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/health}"
 
 BINARY_PATH=""
+LEGACY_BINARY_PATH=""
 CONFIG_FILE=""
 FRONTEND_DIR=""
 BACKUP_ROOT=""
@@ -25,7 +33,7 @@ BACKUP_DIR=""
 WAS_ACTIVE=0
 SKIP_START=0
 COMMAND="install"
-VERSION="${V2BOARD_VERSION:-}"
+VERSION="${ANIX_CONTROL_VERSION:-${V2BOARD_VERSION:-}}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 
@@ -46,10 +54,10 @@ Usage:
   install.sh [install|update|rollback] [options]
 
 Options:
-  --version <tag>          Release tag, for example v2.5.0. Defaults to GitHub's latest stable release.
+  --version <tag>          Release tag, for example v3.0.0-alpha.1. Defaults to GitHub's latest stable release.
   --admin-email <email>    Bootstrap admin email on a fresh installation.
   --admin-password <text>  Bootstrap admin password on a fresh installation.
-  --install-dir <path>     Installation root. Default: /opt/v2board.
+  --install-dir <path>     Installation root. Default: /opt/anixops/control.
   --health-url <url>       Health endpoint to verify after start.
   --skip-start             Install files and systemd unit without starting the service.
   -h, --help               Show this help.
@@ -61,6 +69,25 @@ EOF
 
 need_root() {
   [[ "${EUID}" -eq 0 ]] || die "Run this installer as root (for example: sudo bash install.sh ...)."
+}
+
+detect_legacy_layout() {
+  if [[ "${SERVICE_NAME_EXPLICIT}" -eq 1 || "${APP_USER_EXPLICIT}" -eq 1 || "${INSTALL_DIR_EXPLICIT}" -eq 1 ]]; then
+    return
+  fi
+
+  if [[ -f /opt/v2board/config/config.yaml || -x /opt/v2board/bin/v2board ]]; then
+    SERVICE_NAME="v2board"
+    APP_USER="v2board"
+    INSTALL_DIR="/opt/v2board"
+    warn "Detected the supported /opt/v2board layout; upgrading it in place with the AnixOps Control binary."
+    return
+  fi
+
+  if systemctl list-unit-files v2board.service --no-legend 2>/dev/null | grep -q '^v2board\.service' ||
+     [[ -x /usr/local/v2board/v2board || -f /etc/v2board/config.yaml || -d /var/lib/v2board ]]; then
+    die "Detected a legacy v2board service/layout that cannot be migrated safely by the default installer. Stop and back up the old service, then rerun with explicit SERVICE_NAME, APP_USER and INSTALL_DIR values for its layout."
+  fi
 }
 
 validate_install_dir() {
@@ -93,7 +120,7 @@ install_base_tools() {
 }
 
 validate_version() {
-  [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || \
+  [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]] || \
     die "Invalid release tag: ${VERSION}"
 }
 
@@ -101,7 +128,7 @@ latest_release() {
   local tag
   tag="$(curl -fsSL --retry 3 --connect-timeout 10 \
     -H 'Accept: application/vnd.github+json' \
-    -H 'User-Agent: v2board-anixops-installer' \
+    -H 'User-Agent: anix-control-installer' \
     "${API_BASE}/releases/latest" \
     | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' \
     | head -n 1)"
@@ -111,8 +138,8 @@ latest_release() {
 
 asset_name() {
   case "$(uname -m)" in
-    x86_64|amd64) printf 'v2board-linux-amd64.tar.gz\n' ;;
-    aarch64|arm64) printf 'v2board-linux-arm64.tar.gz\n' ;;
+    x86_64|amd64) printf 'anix-control-linux-amd64.tar.gz\n' ;;
+    aarch64|arm64) printf 'anix-control-linux-arm64.tar.gz\n' ;;
     *) die "Unsupported architecture: $(uname -m). Supported release installers are linux amd64 and arm64." ;;
   esac
 }
@@ -219,10 +246,14 @@ ensure_layout_and_config() {
 }
 
 backup_current_release() {
-  [[ -x "${BINARY_PATH}" || -d "${FRONTEND_DIR}" ]] || return
+  [[ -x "${BINARY_PATH}" || -x "${LEGACY_BINARY_PATH}" || -d "${FRONTEND_DIR}" ]] || return
   BACKUP_DIR="${BACKUP_ROOT}/$(date -u +%Y%m%dT%H%M%SZ)-${VERSION}"
   install -d -m 0700 -o root -g root "${BACKUP_DIR}"
-  [[ -x "${BINARY_PATH}" ]] && cp -a "${BINARY_PATH}" "${BACKUP_DIR}/v2board"
+  if [[ -x "${BINARY_PATH}" ]]; then
+    cp -a "${BINARY_PATH}" "${BACKUP_DIR}/anix-control"
+  elif [[ -x "${LEGACY_BINARY_PATH}" ]]; then
+    cp -aL "${LEGACY_BINARY_PATH}" "${BACKUP_DIR}/anix-control"
+  fi
   [[ -d "${FRONTEND_DIR}" ]] && cp -a "${FRONTEND_DIR}" "${BACKUP_DIR}/frontend"
   [[ -f "${VERSION_FILE}" ]] && cp -a "${VERSION_FILE}" "${BACKUP_DIR}/release-version"
   info "Backed up the previous release to ${BACKUP_DIR}"
@@ -243,10 +274,12 @@ install_release_files() {
   install -d "${stage}/bin" "${stage}/web/public"
   tar -xzf "${TMP_DIR}/${binary_archive}" -C "${stage}/bin"
   [[ -f "${stage}/bin/${binary_name}" ]] || die "Release archive does not contain ${binary_name}"
-  tar -xzf "${TMP_DIR}/v2board-frontend.tar.gz" -C "${stage}/web/public"
+  tar -xzf "${TMP_DIR}/anix-control-frontend.tar.gz" -C "${stage}/web/public"
 
   install -m 0755 "${stage}/bin/${binary_name}" "${BINARY_PATH}.new"
   mv -f "${BINARY_PATH}.new" "${BINARY_PATH}"
+  rm -f "${LEGACY_BINARY_PATH}"
+  ln -s "$(basename "${BINARY_PATH}")" "${LEGACY_BINARY_PATH}"
   rm -rf "${FRONTEND_DIR}.new"
   mv "${stage}/web/public" "${FRONTEND_DIR}.new"
   rm -rf "${FRONTEND_DIR}"
@@ -259,7 +292,7 @@ install_release_files() {
 write_systemd_unit() {
   cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
-Description=V2Board AnixOps Panel
+Description=AnixOps Control
 After=network-online.target
 Wants=network-online.target
 
@@ -288,7 +321,11 @@ EOF
 restore_backup() {
   [[ -n "${BACKUP_DIR}" && -d "${BACKUP_DIR}" ]] || return
   warn "Restoring the previous release from ${BACKUP_DIR}"
-  [[ -f "${BACKUP_DIR}/v2board" ]] && install -m 0755 "${BACKUP_DIR}/v2board" "${BINARY_PATH}"
+  if [[ -f "${BACKUP_DIR}/anix-control" ]]; then
+    install -m 0755 "${BACKUP_DIR}/anix-control" "${BINARY_PATH}"
+    rm -f "${LEGACY_BINARY_PATH}"
+    ln -s "$(basename "${BINARY_PATH}")" "${LEGACY_BINARY_PATH}"
+  fi
   if [[ -d "${BACKUP_DIR}/frontend" ]]; then
     rm -rf "${FRONTEND_DIR}"
     cp -a "${BACKUP_DIR}/frontend" "${FRONTEND_DIR}"
@@ -301,7 +338,7 @@ start_and_verify() {
   local attempt
   systemctl restart "${SERVICE_NAME}"
   for attempt in $(seq 1 30); do
-    if curl -fsS "${HEALTH_URL}" >/dev/null 2>&1; then
+    if systemctl is-active --quiet "${SERVICE_NAME}" && curl -fsS "${HEALTH_URL}" >/dev/null 2>&1; then
       info "Service is healthy: ${HEALTH_URL}"
       return 0
     fi
@@ -324,6 +361,7 @@ parse_args() {
       --admin-password) ADMIN_PASSWORD="${2:-}"; shift 2 ;;
       --install-dir)
         INSTALL_DIR="${2:-}"
+        INSTALL_DIR_EXPLICIT=1
         shift 2
         ;;
       --health-url) HEALTH_URL="${2:-}"; shift 2 ;;
@@ -337,12 +375,14 @@ parse_args() {
 main() {
   parse_args "$@"
   need_root
+  detect_legacy_layout
   validate_install_dir
   install_base_tools
   [[ -n "${VERSION}" ]] || VERSION="$(latest_release)"
   validate_version
 
-  BINARY_PATH="${INSTALL_DIR}/bin/v2board"
+  BINARY_PATH="${INSTALL_DIR}/bin/anix-control"
+  LEGACY_BINARY_PATH="${INSTALL_DIR}/bin/v2board"
   CONFIG_FILE="${INSTALL_DIR}/config/config.yaml"
   FRONTEND_DIR="${INSTALL_DIR}/web/public"
   BACKUP_ROOT="${INSTALL_DIR}/backups"
@@ -356,9 +396,9 @@ main() {
   binary_archive="$(asset_name)"
   download_asset "SHA256SUMS.txt"
   download_asset "${binary_archive}"
-  download_asset "v2board-frontend.tar.gz"
+  download_asset "anix-control-frontend.tar.gz"
   verify_asset "${binary_archive}"
-  verify_asset "v2board-frontend.tar.gz"
+  verify_asset "anix-control-frontend.tar.gz"
 
   stop_running_service
   backup_current_release

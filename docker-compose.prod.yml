@@ -1,4 +1,4 @@
-﻿# V2Board AnixOps - 鐢熶骇鐜閮ㄧ讲
+﻿# AnixOps Control - 鐢熶骇鐜閮ㄧ讲
 # 浣跨敤 PostgreSQL + Redis
 
 services:
@@ -7,13 +7,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ${DOCKER_IMAGE:-v2board:latest}
-    container_name: v2board-api
+    image: ${DOCKER_IMAGE:-anix-control:latest}
+    container_name: anix-control
     restart: unless-stopped
     ports:
       - "${PANEL_API_PORT:-8080}:8080"         # HTTP API
       - "${PANEL_FRONTEND_PORT:-3000}:3000"    # Frontend/UI
-      - "${PANEL_GRPC_PORT:-50051}:50051"      # gRPC
+      - "${PANEL_GRPC_BIND:-127.0.0.1}:${PANEL_GRPC_PORT:-50051}:50051" # gRPC; Nginx reaches api:50051 internally
     volumes:
       - ./config:/app/config:ro
       - ./config/deploy/ssh:/home/v2board/.ssh:ro
@@ -41,7 +41,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - v2board-network
+      - anix-control-network
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 30s
@@ -57,7 +57,7 @@ services:
   # ========== PostgreSQL 鏁版嵁搴?==========
   db:
     image: postgres:16-alpine
-    container_name: v2board-db
+    container_name: anix-control-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:-v2board}
@@ -69,7 +69,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./config/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
-      - v2board-network
+      - anix-control-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-v2board} -d ${DB_NAME:-v2board}"]
       interval: 10s
@@ -84,7 +84,7 @@ services:
   # ========== Redis 缂撳瓨 ==========
   redis:
     image: redis:7-alpine
-    container_name: v2board-redis
+    container_name: anix-control-redis
     restart: unless-stopped
     command: >
       redis-server
@@ -95,7 +95,7 @@ services:
     volumes:
       - redis-data:/data
     networks:
-      - v2board-network
+      - anix-control-network
     healthcheck:
       test:
         [
@@ -114,7 +114,7 @@ services:
   # ========== Nginx 鍙嶅悜浠ｇ悊 ==========
   nginx:
     image: nginx:alpine
-    container_name: v2board-nginx
+    container_name: anix-control-nginx
     restart: unless-stopped
     profiles:
       - proxy
@@ -129,7 +129,7 @@ services:
     depends_on:
       - api
     networks:
-      - v2board-network
+      - anix-control-network
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
@@ -144,7 +144,7 @@ services:
   # ========== Prometheus 鐩戞帶 (鍙€? ==========
   prometheus:
     image: prom/prometheus:latest
-    container_name: v2board-prometheus
+    container_name: anix-control-prometheus
     restart: unless-stopped
     profiles:
       - prometheus
@@ -158,12 +158,12 @@ services:
       - '--storage.tsdb.path=/prometheus'
       - '--web.enable-lifecycle'
     networks:
-      - v2board-network
+      - anix-control-network
 
   # ========== Grafana 浠〃鐩?(鍙€? ==========
   grafana:
     image: grafana/grafana:latest
-    container_name: v2board-grafana
+    container_name: anix-control-grafana
     restart: unless-stopped
     profiles:
       - grafana
@@ -179,10 +179,10 @@ services:
     depends_on:
       - prometheus
     networks:
-      - v2board-network
+      - anix-control-network
 
 networks:
-  v2board-network:
+  anix-control-network:
     driver: bridge
 
 volumes:

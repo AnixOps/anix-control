@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anixops/v2board/internal/service"
-	"github.com/anixops/v2board/internal/utils"
+	"github.com/AnixOps/anix-control/v3/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"

@@ -3,9 +3,9 @@ package router
 import (
 	"time"
 
-	"github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/handler"
-	"github.com/anixops/v2board/internal/middleware"
+	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/handler"
+	"github.com/AnixOps/anix-control/v3/internal/middleware"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -211,6 +211,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.PUT("/nodes/:id", nodeHandler.UpdateNode)
 			admin.DELETE("/nodes/:id", nodeHandler.DeleteNode)
 			admin.POST("/nodes/:id/sync", nodeHandler.SyncProtocol)
+			admin.GET("/nodes/:id/agent-control", nodeHandler.GetAgentControlStatus)
+			admin.POST("/nodes/:id/agent-control/operations", nodeHandler.DispatchAgentControlOperation)
 
 			// 节点高级配置 (RawConfig - 直接JSON编辑)
 			admin.GET("/nodes/:id/raw-config", nodeHandler.GetNodeRawConfig)

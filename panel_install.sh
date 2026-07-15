@@ -8,7 +8,7 @@ if [[ -f "${SCRIPT_DIR}/install.sh" ]]; then
 fi
 
 REPO_OWNER="${REPO_OWNER:-AnixOps}"
-REPO_NAME="${REPO_NAME:-v2board_AnixOps}"
+REPO_NAME="${REPO_NAME:-anix-control}"
 INSTALL_REF="${INSTALL_REF:-go_dev}"
 RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${INSTALL_REF}/scripts/install.sh"
 

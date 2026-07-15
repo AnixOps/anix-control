@@ -9,10 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/model"
-	"github.com/anixops/v2board/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/branding"
+	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -121,7 +122,7 @@ func (h *SubscribeHandler) GetSubscription(c *gin.Context) {
 	c.Header("Content-Disposition", "attachment; filename="+resp.Filename)
 	c.Header("Subscription-Userinfo", h.buildUserInfo(resp))
 	c.Header("Profile-Update-Interval", "24") // 24 小时更新间隔
-	c.Header("Profile-Title", "V2Board Subscription")
+	c.Header("Profile-Title", branding.ControlName+" Subscription")
 
 	// 返回订阅内容
 	c.String(http.StatusOK, resp.Content)

@@ -9,13 +9,18 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/model"
-	"github.com/anixops/v2board/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 )
 
 const rotationConfirmation = "ROTATE-ALL-WIREGUARD-PEERS"
+
+const (
+	primaryControlConfigPath = "/opt/anixops/control/config/config.yaml"
+	legacyControlConfigPath  = "/etc/v2board/config.yaml"
+)
 
 type options struct {
 	configPath string
@@ -89,7 +94,7 @@ func parseOptions(args []string) (options, error) {
 	var opts options
 	flags := flag.NewFlagSet("wgrotate", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	flags.StringVar(&opts.configPath, "config", "/etc/v2board/config.yaml", "panel configuration file")
+	flags.StringVar(&opts.configPath, "config", defaultControlConfigPath(), "AnixOps Control configuration file")
 	flags.UintVar(&opts.protocolID, "protocol-id", 0, "rotate only one node protocol; zero rotates all")
 	flags.BoolVar(&opts.dryRun, "dry-run", true, "count matching peers without changing keys")
 	flags.StringVar(&opts.confirm, "confirm", "", "required confirmation for a destructive rotation")
@@ -100,4 +105,14 @@ func parseOptions(args []string) (options, error) {
 		return options{}, errors.New("unexpected positional arguments")
 	}
 	return opts, nil
+}
+
+func defaultControlConfigPath() string {
+	if _, err := os.Stat(primaryControlConfigPath); err == nil {
+		return primaryControlConfigPath
+	}
+	if _, err := os.Stat(legacyControlConfigPath); err == nil {
+		return legacyControlConfigPath
+	}
+	return primaryControlConfigPath
 }

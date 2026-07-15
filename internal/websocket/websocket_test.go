@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anixops/v2board/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/config"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"

@@ -242,6 +242,114 @@ var NodeService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	NodeLogService_ReportLogs_FullMethodName = "/v2board.NodeLogService/ReportLogs"
+)
+
+// NodeLogServiceClient is the client API for NodeLogService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// 节点日志服务
+type NodeLogServiceClient interface {
+	// 批量上报节点运行日志
+	ReportLogs(ctx context.Context, in *NodeLogBatchRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+}
+
+type nodeLogServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewNodeLogServiceClient(cc grpc.ClientConnInterface) NodeLogServiceClient {
+	return &nodeLogServiceClient{cc}
+}
+
+func (c *nodeLogServiceClient) ReportLogs(ctx context.Context, in *NodeLogBatchRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, NodeLogService_ReportLogs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// NodeLogServiceServer is the server API for NodeLogService service.
+// All implementations must embed UnimplementedNodeLogServiceServer
+// for forward compatibility.
+//
+// 节点日志服务
+type NodeLogServiceServer interface {
+	// 批量上报节点运行日志
+	ReportLogs(context.Context, *NodeLogBatchRequest) (*StatusResponse, error)
+	mustEmbedUnimplementedNodeLogServiceServer()
+}
+
+// UnimplementedNodeLogServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedNodeLogServiceServer struct{}
+
+func (UnimplementedNodeLogServiceServer) ReportLogs(context.Context, *NodeLogBatchRequest) (*StatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportLogs not implemented")
+}
+func (UnimplementedNodeLogServiceServer) mustEmbedUnimplementedNodeLogServiceServer() {}
+func (UnimplementedNodeLogServiceServer) testEmbeddedByValue()                        {}
+
+// UnsafeNodeLogServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to NodeLogServiceServer will
+// result in compilation errors.
+type UnsafeNodeLogServiceServer interface {
+	mustEmbedUnimplementedNodeLogServiceServer()
+}
+
+func RegisterNodeLogServiceServer(s grpc.ServiceRegistrar, srv NodeLogServiceServer) {
+	// If the following call panics, it indicates UnimplementedNodeLogServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&NodeLogService_ServiceDesc, srv)
+}
+
+func _NodeLogService_ReportLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NodeLogBatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NodeLogServiceServer).ReportLogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NodeLogService_ReportLogs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NodeLogServiceServer).ReportLogs(ctx, req.(*NodeLogBatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// NodeLogService_ServiceDesc is the grpc.ServiceDesc for NodeLogService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var NodeLogService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "v2board.NodeLogService",
+	HandlerType: (*NodeLogServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ReportLogs",
+			Handler:    _NodeLogService_ReportLogs_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "api/grpc/v2board.proto",
+}
+
+const (
 	UserService_GetUsers_FullMethodName    = "/v2board.UserService/GetUsers"
 	UserService_UserChanges_FullMethodName = "/v2board.UserService/UserChanges"
 )

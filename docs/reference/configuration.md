@@ -1,6 +1,6 @@
 # Configuration
 
-This page defines the unified configuration scheme for `v2board_AnixOps`.
+This page defines the unified configuration scheme for `anix-control`.
 
 ## Source Of Truth
 

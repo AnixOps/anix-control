@@ -18,28 +18,29 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/anixops/v2board/docs" // swagger docs
-	"github.com/anixops/v2board/internal/cache"
-	"github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/database"
-	grpcserver "github.com/anixops/v2board/internal/grpc"
-	"github.com/anixops/v2board/internal/handler"
-	"github.com/anixops/v2board/internal/model"
-	_ "github.com/anixops/v2board/internal/payment/gateways" // register payment gateway plugins
-	"github.com/anixops/v2board/internal/router"
-	"github.com/anixops/v2board/internal/service"
+	_ "github.com/AnixOps/anix-control/v3/docs" // swagger docs
+	"github.com/AnixOps/anix-control/v3/internal/branding"
+	"github.com/AnixOps/anix-control/v3/internal/cache"
+	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	grpcserver "github.com/AnixOps/anix-control/v3/internal/grpc"
+	"github.com/AnixOps/anix-control/v3/internal/handler"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	_ "github.com/AnixOps/anix-control/v3/internal/payment/gateways" // register payment gateway plugins
+	"github.com/AnixOps/anix-control/v3/internal/router"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
-// @title V2Board AnixOps API
-// @version 2.3.1
-// @description V2Board 高性能代理面板管理系统 API 文档
+// @title AnixOps Control API
+// @version 3.0.0-alpha.1
+// @description AnixOps Control 统一控制面 API 文档
 // @description 支持用户管理、节点管理、订阅系统、支付网关、流量转发等功能
-// @termsOfService https://github.com/anixops/v2board
+// @termsOfService https://github.com/AnixOps/anix-control
 
 // @contact.name API Support
-// @contact.url https://github.com/anixops/v2board/issues
-// @contact.email support@example.com
+// @contact.url https://github.com/AnixOps/anix-control/issues
+// @contact.email support@anixops.com
 
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT
@@ -70,7 +71,7 @@ const shutdownTimeout = 30 * time.Second
 
 var (
 	configPath string
-	version    = "2.3.1"
+	version    = branding.DefaultVersion
 	buildTime  = "unknown"
 	buildCode  = ""
 	commit     = "unknown"
@@ -271,7 +272,7 @@ func main() {
 
 	// 打印版本信息
 	syncBuildInfo()
-	fmt.Printf("V2Board Go Backend v%s (build: %s)\n", version, buildTime)
+	fmt.Printf("%s v%s (build: %s)\n", branding.ControlName, version, buildTime)
 
 	// 加载配置
 	cfg, err := config.Load(resolvedConfigPath)
@@ -532,7 +533,7 @@ func main() {
 		}
 	}()
 
-	// Start the node-facing gRPC server (V2bX nodes connect here) when enabled.
+	// Start the node-facing gRPC server (AnixOps Agent nodes connect here) when enabled.
 	var grpcSrv *grpcserver.Server
 	if cfg.GRPC.Enable {
 		grpcCfg := grpcserver.DefaultServerConfig()
@@ -737,7 +738,7 @@ func createDefaultIndex(path string) error {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V2Board</title>
+    <title>AnixOps Control</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -778,8 +779,8 @@ func createDefaultIndex(path string) error {
 </head>
 <body>
     <div class="container">
-        <h1>🚀 V2Board</h1>
-        <p>Go Backend v2.0.2-test.1</p>
+        <h1>AnixOps Control</h1>
+        <p>Control plane service</p>
         <div class="status">
             <span class="dot"></span>
             服务运行中

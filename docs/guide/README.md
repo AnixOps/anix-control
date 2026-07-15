@@ -1,4 +1,4 @@
-# V2Board AnixOps Guide
+# AnixOps Control Guide
 
 This folder is the deep-dive layer of the documentation tree.
 

@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anixops/v2board/internal/cache"
-	"github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/model"
-	"github.com/anixops/v2board/internal/tests/testutil"
+	"github.com/AnixOps/anix-control/v3/internal/cache"
+	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/tests/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -6637,7 +6637,7 @@ func (s *InitServiceTestSuite) TestInitAdmin_DefaultCredentials() {
 	var admin model.User
 	err := database.Get().Where("is_admin = ?", 1).First(&admin).Error
 	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), "admin@v2board.com", admin.Email)
+	assert.Equal(s.T(), "admin@anixops.local", admin.Email)
 	assert.Error(s.T(), bcrypt.CompareHashAndPassword([]byte(admin.Password), []byte("password")))
 }
 

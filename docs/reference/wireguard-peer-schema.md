@@ -40,13 +40,14 @@ Operational notes:
 
 - Back up the panel database before applying the migration.
 - Keep `private_key` and `preshared_key` treated as secrets in exports and logs.
-- UniProxy HTTP and gRPC user-list responses expose only the runtime fields V2bX
-  needs for entry termination: `wireguard_peer_ip`, `wireguard_public_key`, and
-  `wireguard_preshared_key`. The user private key remains subscription-only.
+- UniProxy HTTP and gRPC user-list responses expose only the runtime fields
+  AnixOps Agent needs for entry termination: `wireguard_peer_ip`,
+  `wireguard_public_key`, and `wireguard_preshared_key`. The user private key
+  remains subscription-only.
 - Node config responses expose relay runtime contract fields under `relay`,
   including `role`, `server`, `server_port`, `tun_port`, `entry_tun_address`,
   `exit_tun_address`, `outbound_iface`, `routing_table`, and
-  `routing_priority`. V2bX uses these to plan GOST TUN entry/exit runtime,
+  `routing_priority`. AnixOps Agent uses these to plan GOST TUN entry/exit runtime,
   source-based routing, and exit NAT command application.
 - The first relay runtime is intentionally IPv4-only: peer CIDRs, relay TUN
   CIDRs, and default AllowedIPs must use IPv4 until an IPv6 route/NAT path is

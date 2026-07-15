@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anixops/v2board/internal/cache"
-	"github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/model"
-	"github.com/anixops/v2board/internal/service"
-	"github.com/anixops/v2board/internal/tests/testutil"
+	"github.com/AnixOps/anix-control/v3/internal/cache"
+	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/tests/testutil"
 	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/assert"
@@ -7546,7 +7546,8 @@ func (s *ProtocolHandlerTestSuite) TestSyncProtocol_Success() {
 	resp := decodePanelTestResponse(s.T(), w)
 	assert.Equal(s.T(), float64(0), resp["code"])
 	data := resp["data"].(map[string]any)
-	assert.Equal(s.T(), "同步成功", data["message"])
+	assert.Equal(s.T(), "节点未连接 Agent Control，将保留旧版周期拉取同步", data["message"])
+	assert.Equal(s.T(), "legacy-poll", data["transport"])
 	assert.NotContains(s.T(), resp, "error")
 }
 

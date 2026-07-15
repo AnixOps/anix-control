@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/anixops/v2board/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 )
 
 // buildSystemConfigs converts old v2_settings rows into model.SystemConfig.

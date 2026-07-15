@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/anixops/v2board/internal/model"
-	"github.com/anixops/v2board/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -16,6 +16,7 @@ import (
 type NodeHandler struct {
 	nodeService    *service.NodeService
 	nodeLogService *service.NodeLogService
+	agentControl   nodeAgentControl
 }
 
 // NewNodeHandler 创建节点处理器
@@ -23,6 +24,7 @@ func NewNodeHandler() *NodeHandler {
 	return &NodeHandler{
 		nodeService:    service.NewNodeService(),
 		nodeLogService: service.NewNodeLogService(),
+		agentControl:   defaultNodeAgentControl(),
 	}
 }
 
@@ -224,7 +226,7 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 
 // GetNodeCredentials godoc
 // @Summary 获取节点凭证
-// @Description 管理员获取指定节点的 api_key / secret, 用于节点端 (V2bX) 对接配置。
+// @Description 管理员获取指定节点的 api_key / secret, 用于 AnixOps Agent 对接配置。
 // @Description Node.APIKey/Secret 在普通序列化里是隐藏字段 (json:"-"), 此接口显式返回,
 // @Description 仅限管理员, 供 Ansible 等部署工具自动拉取节点凭证。
 // @Tags 管理端-节点
@@ -809,12 +811,45 @@ func (h *NodeHandler) SyncProtocol(c *gin.Context) {
 		return
 	}
 
+	if _, err := h.nodeService.GetNode(uint(nodeID)); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
+		return
+	}
+
+	if h.agentControl != nil {
+		if _, connected := h.agentControl.Connection(uint32(nodeID)); connected {
+			ack, operation, dispatchErr := h.dispatchAgentControlOperation(
+				c.Request.Context(),
+				uint32(nodeID),
+				"",
+				"node.reload",
+				nil,
+				defaultAgentControlOperationTimeout,
+			)
+			if dispatchErr != nil {
+				c.JSON(http.StatusBadGateway, gin.H{"message": "Agent Control 同步下发失败", "error": dispatchErr.Error()})
+				return
+			}
+			panelSuccess(c, gin.H{
+				"message":      "同步操作已由 AnixOps Agent 接收",
+				"transport":    "agent-control-grpc",
+				"operation_id": operation.OperationId,
+				"revision":     operation.Revision,
+				"ack":          ack,
+			})
+			return
+		}
+	}
+
 	if err := h.nodeService.SyncProtocolToNode(uint(nodeID)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "同步失败"})
 		return
 	}
 
-	panelSuccess(c, gin.H{"message": "同步成功"})
+	panelSuccess(c, gin.H{
+		"message":   "节点未连接 Agent Control，将保留旧版周期拉取同步",
+		"transport": "legacy-poll",
+	})
 }
 
 // ========== 授权密钥管理 ==========

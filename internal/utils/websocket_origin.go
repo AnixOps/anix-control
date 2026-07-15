@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/anixops/v2board/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/config"
 )
 
 // CheckWebSocketOrigin applies the server CORS origin allowlist to WebSocket

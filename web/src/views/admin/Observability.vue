@@ -184,7 +184,7 @@ function formatRtt(value) {
 }
 
 // Topology node fill: offline is grey; online color encodes the node kind
-// (relay/exit = forward infra, node = V2bX proxy node).
+// (relay/exit = forward infra, node = AnixOps Agent proxy node).
 function nodeFill(n) {
   if (!n.online) return '#86909c'
   if (n.kind === 'relay') return '#3491fa'

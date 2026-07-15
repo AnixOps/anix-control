@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/gost"
-	"github.com/anixops/v2board/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/gost"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )

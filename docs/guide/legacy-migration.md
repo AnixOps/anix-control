@@ -113,8 +113,8 @@ passed a full billing cycle or the rollback window approved by the operator.
 
 Move nodes one at a time, not all at once:
 
-1. Keep the old node online while installing the matching `V2bX_AnixOps`
-   release on a canary host or a drained node.
+1. Keep the old node online while installing the matching AnixOps Agent release
+   on a canary host or a drained node.
 2. Create a new node API key in the new panel; do not reuse an old secret by
    copying it through chat or shell history.
 3. Verify HTTP or gRPC configuration pull, user sync, traffic reporting, and
@@ -125,7 +125,7 @@ Move nodes one at a time, not all at once:
    agreed observation period.
 
 The corresponding node procedure is documented in
-[`V2bX_AnixOps migration guide`](https://github.com/AnixOps/V2bX_AnixOps/blob/v2.5.0/docs/MIGRATION.md).
+[`AnixOps Agent migration guide`](https://github.com/AnixOps/anix-agent/blob/v3.0.0-alpha.1/docs/ANIX_AGENT_MIGRATION.md).
 
 ## Cutover Acceptance Checklist
 

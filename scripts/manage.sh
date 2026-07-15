@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# V2Board AnixOps 面板可视化管理脚本
+# AnixOps Control 可视化管理脚本
 # 用法: ./scripts/manage.sh
 #
 # 支持的功能: 启动、停止、重启、状态查看、日志查看、构建、健康检查等
@@ -14,12 +14,12 @@ PANEL_PORT="${PANEL_PORT:-8080}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 PANEL_URL="http://127.0.0.1:${PANEL_PORT}"
 
-BINARY_NAME="v2board"
+BINARY_NAME="anix-control"
 if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then
-    BINARY_NAME="v2board.exe"
+    BINARY_NAME="anix-control.exe"
 fi
 
-PID_FILE="${V2BOARD_DIR}/.v2board.pid"
+PID_FILE="${V2BOARD_DIR}/.anix-control.pid"
 LOG_FILE="${V2BOARD_DIR}/logs/panel.log"
 BUILD_DIR="${V2BOARD_DIR}/build"
 BINARY_PATH="${BUILD_DIR}/${BINARY_NAME}"
@@ -174,7 +174,7 @@ action_build() {
 
     mkdir -p "$BUILD_DIR" "$(dirname "$LOG_FILE")"
 
-    info "构建 V2Board 面板..."
+    info "构建 AnixOps Control..."
     local output
     if output=$(go build -o "$BINARY_PATH" -trimpath ./cmd/server 2>&1); then
         ok "构建成功: ${BINARY_PATH}"
@@ -391,7 +391,7 @@ main_menu() {
             status_line="${RED}已停止${NC}"
         fi
 
-        local title="V2Board AnixOps 面板管理
+        local title="AnixOps Control 管理
 状态: ${status_line}  端口: ${PANEL_PORT}"
 
         local choice

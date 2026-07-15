@@ -848,7 +848,7 @@ definitions:
         description: 加密配置 JSON
         type: string
       flow:
-        description: VLESS 特有配置 (对应 V2bX flow, encryption, encryption_settings)
+        description: VLESS 特有配置 (对应 AnixOps Agent flow, encryption, encryption_settings)
         type: string
       group:
         allOf:
@@ -872,7 +872,7 @@ definitions:
         description: 回落目标 (dest)
         type: string
       reality_public_key:
-        description: Reality 配置 (当 TLS=2 时使用, 对应 V2bX tls_settings)
+        description: Reality 配置 (当 TLS=2 时使用, 对应 AnixOps Agent tls_settings)
         type: string
       reality_short_id:
         description: Short ID (对应 sid)
@@ -881,7 +881,7 @@ definitions:
         description: SpiderX (对应 spx)
         type: string
       server:
-        description: 服务器基础配置 (对应 V2bX CommonNode)
+        description: 服务器基础配置 (对应 AnixOps Agent CommonNode)
         type: string
       server_name:
         description: SNI 服务器名称
@@ -890,7 +890,7 @@ definitions:
         description: 排序
         type: integer
       ss_cipher:
-        description: Shadowsocks 配置 (对应 V2bX cipher, server_key)
+        description: Shadowsocks 配置 (对应 AnixOps Agent cipher, server_key)
         type: string
       ss_server_key:
         description: SS2022 服务器密钥
@@ -905,14 +905,14 @@ definitions:
           以及自定义变量: {{.Custom.xxx}}
         type: string
       tls:
-        description: TLS 配置 (对应 V2bX tls 字段)
+        description: TLS 配置 (对应 AnixOps Agent tls 字段)
         type: integer
       tls_fingerprint:
         description: TLS 指纹 (chrome, firefox, safari, ios, android, edge, 360, qq,
           random)
         type: string
       transport:
-        description: 传输层配置 (对应 V2bX network, network_settings)
+        description: 传输层配置 (对应 AnixOps Agent network, network_settings)
         type: string
       transport_settings:
         description: 传输层配置 JSON
@@ -1006,18 +1006,18 @@ definitions:
 host: localhost:8080
 info:
   contact:
-    email: support@example.com
+    email: support@anixops.com
     name: API Support
-    url: https://github.com/anixops/v2board/issues
+    url: https://github.com/AnixOps/anix-control/issues
   description: |-
-    V2Board 高性能代理面板管理系统 API 文档
+    AnixOps Control 统一控制面 API 文档
     支持用户管理、节点管理、订阅系统、支付网关、流量转发等功能
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
-  termsOfService: https://github.com/anixops/v2board
-  title: V2Board AnixOps API
-  version: 2.0.2-test.1
+  termsOfService: https://github.com/AnixOps/anix-control
+  title: AnixOps Control API
+  version: 3.0.0-alpha.1
 paths:
   /admin/agent/execute:
     post:

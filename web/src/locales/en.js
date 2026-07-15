@@ -5,9 +5,10 @@ import adminSupportPages from './modules/en/adminSupportPages'
 import adminDashboard from './modules/en/adminDashboard'
 import adminMonitor from './modules/en/adminMonitor'
 import adminTrafficHourly from './modules/en/adminTrafficHourly'
+import { AGENT_NAME, CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
-  'V2Board 管理端': 'AnixOps Studio Console',
+  'V2Board 管理端': `${CONTROL_NAME} Console`,
   '管理端': 'Studio Console',
   '概览': 'Overview',
   '仪表盘': 'Dashboard',
@@ -253,18 +254,18 @@ export default {
   },
   app: {
     meta: {
-      defaultDescription: 'AnixOps Studio centralizes subscription delivery, billing, node orchestration, NodeX runtime, and local Ansible forwarding operations.',
-      loginDescription: 'Sign in to AnixOps Studio to manage subscriptions, billing, nodes, and forwarding runtimes.',
-      userDescription: 'AnixOps Studio user portal for subscriptions, tickets, plans, and billing records.',
-      adminDescription: 'AnixOps Studio administration console for users, billing, nodes, notifications, and system operations.',
-      forwardDescription: 'AnixOps Studio forwarding workspace for Local Runtime, Ansible Machines, NodeX topology, tunnels, and runtime diagnostics.'
+      defaultDescription: `${CONTROL_NAME} centralizes subscription delivery, billing, node orchestration, agent runtime, and forwarding operations.`,
+      loginDescription: `Sign in to ${CONTROL_NAME} to manage subscriptions, billing, nodes, and forwarding runtimes.`,
+      userDescription: `${CONTROL_NAME} user portal for subscriptions, tickets, plans, and billing records.`,
+      adminDescription: `${CONTROL_NAME} administration console for users, billing, nodes, notifications, and system operations.`,
+      forwardDescription: `${CONTROL_NAME} forwarding workspace for Local Runtime, Ansible Machines, topology, tunnels, and runtime diagnostics.`
     }
   },
   layout: {
     admin: {
-      brand: 'AnixOps Studio',
+      brand: CONTROL_NAME,
       badge: 'Studio Console',
-      mobileTitle: 'AnixOps Studio Console',
+      mobileTitle: `${CONTROL_NAME} Console`,
       subtitle: 'Subscription delivery, node orchestration, forwarding tools, and studio operations are centralized here.',
       adminUser: 'Administrator',
       sections: {
@@ -300,7 +301,7 @@ export default {
       }
     },
     user: {
-      brand: 'AnixOps Studio',
+      brand: CONTROL_NAME,
       nav: {
         dashboard: 'Dashboard',
         subscribe: 'Subscriptions',
@@ -461,12 +462,12 @@ export default {
     }
   },
   login: {
-    brandSubtitle: 'AnixOps Studio',
+    brandSubtitle: CONTROL_NAME,
     brandDescription: 'A delivery-focused control plane for subscriptions, nodes, and forwarding operations.',
     signInTitle: 'Welcome back',
     registerTitle: 'Create an account',
     signInSubtitle: 'Sign in to continue managing studio services.',
-    registerSubtitle: 'Create an AnixOps Studio account to start provisioning services.',
+    registerSubtitle: `Create an ${CONTROL_NAME} account to start provisioning services.`,
     emailPlaceholder: 'Enter your email address',
     passwordPlaceholder: 'Enter your password',
     registerPasswordPlaceholder: 'Enter a password (minimum 6 characters)',
@@ -2143,6 +2144,8 @@ export default {
       actions: {
         manageProtocols: 'Manage protocols',
         protocols: 'Protocols',
+        syncReload: 'Sync / Reload',
+        syncing: 'Syncing...',
         logs: 'Logs',
         deployParents: 'Deploy Parents',
         edit: 'Edit',
@@ -2186,11 +2189,11 @@ export default {
       },
       authKeyModal: {
         title: 'Node Auth Key',
-        hint: 'Configure this key in V2bX config.json. The node will auto-register on startup. The same key can register unlimited nodes.',
+        hint: `Configure this key in ${AGENT_NAME} config.json. The node will auto-register on startup. The same key can register unlimited nodes.`,
         noKey: 'No auth key generated yet. Please create an auth key first.',
         copy: 'Copy Key',
         copyConfig: 'Copy Config',
-        configHint: 'Paste this config into V2bX config.json, replace <auth_key> with the key value above.',
+        configHint: `Paste this config into ${AGENT_NAME} config.json, then replace <auth_key> with the key above.`,
         registeredCount: 'Registered Nodes',
         copied: 'Copied'
       },
@@ -2387,6 +2390,8 @@ export default {
       messages: {
         requiredFields: 'Please fill in the required fields',
         saveFailed: 'Save failed: {message}',
+        syncSuccess: 'Node "{name}" accepted the sync operation',
+        syncFailed: 'Sync failed: {message}',
         deleteNodeConfirm: 'Delete node "{name}"?',
         deleteFailed: 'Delete failed: {message}',
         deleteProtocolConfirm: 'Delete this protocol?',
@@ -2442,7 +2447,7 @@ export default {
         port: '465',
         username: "your{'@'}email.com",
         password: 'Enter SMTP password',
-        fromName: 'AnixOps Studio',
+        fromName: CONTROL_NAME,
         fromAddress: "noreply{'@'}example.com"
       }
     },

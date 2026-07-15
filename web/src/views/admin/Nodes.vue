@@ -108,6 +108,15 @@
                 {{ t('admin.nodes.actions.protocols') }}
               </button>
               <button
+                class="btn btn-sm btn-secondary sync-node-btn"
+                :disabled="syncingNodeIds.has(node.id)"
+                :title="t('admin.nodes.actions.syncReload')"
+                :aria-label="t('admin.nodes.actions.syncReload')"
+                @click="syncNode(node)"
+              >
+                {{ syncingNodeIds.has(node.id) ? t('admin.nodes.actions.syncing') : t('admin.nodes.actions.syncReload') }}
+              </button>
+              <button
                 class="btn btn-sm btn-secondary"
                 :title="t('admin.nodes.actions.logs')"
                 :aria-label="t('admin.nodes.actions.logs')"
@@ -911,11 +920,13 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import {
   getNodes, getNodeStats, getNodeLogs, createNode, updateNode, deleteNode,
   getNodeCredentials,
+  syncNodeProtocol,
   getNodeProtocols, createNodeProtocol, updateNodeProtocol, deleteNodeProtocol,
   getProtocolTemplates, generateWireGuardKeypair,
   getAuthKeys
 } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { AGENT_NAME } from '@/constants/brand'
 
 const { t, formatDateTime } = useAppI18n()
 
@@ -923,6 +934,7 @@ const { t, formatDateTime } = useAppI18n()
 const loading = ref(false)
 const saving = ref(false)
 const savingProtocol = ref(false)
+const syncingNodeIds = reactive(new Set())
 
 const nodes = ref([])
 const stats = reactive({ total: 0, online: 0, offline: 0, pending: 0 })
@@ -984,11 +996,13 @@ const deployError = ref('')
 const deployRows = ref([])
 const deploySettings = reactive({
   panelApiHost: typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:18080',
-  grpcHost: typeof window !== 'undefined' ? `${window.location.hostname}:50051` : '127.0.0.1:50051',
+  grpcHost: typeof window !== 'undefined'
+    ? `${window.location.hostname}:${window.location.protocol === 'https:' ? '443' : '50051'}`
+    : '127.0.0.1:50051',
   grpcUseTLS: typeof window !== 'undefined' ? window.location.protocol === 'https:' : false,
   grpcServerName: typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1',
-  amd64BinaryPath: '/home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_amd64',
-  arm64BinaryPath: '/home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_arm64',
+  amd64BinaryPath: '/home/dev/anixops/anix-agent/build/inventory/anix-agent_linux_amd64',
+  arm64BinaryPath: '/home/dev/anixops/anix-agent/build/inventory/anix-agent_linux_arm64',
   coreType: 'xray'
 })
 
@@ -1509,8 +1523,8 @@ const deployInventoryPreview = computed(() => {
       ? `ansible_ssh_pass=${authValue}`
       : `ansible_ssh_private_key_file=${authValue}`
     const binaryPath = row.arch === 'arm64'
-      ? (deploySettings.arm64BinaryPath || '/home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_arm64')
-      : (deploySettings.amd64BinaryPath || '/home/dev/anixops/V2bX_AnixOps/build/inventory/V2bX_linux_amd64')
+      ? (deploySettings.arm64BinaryPath || '/home/dev/anixops/anix-agent/build/inventory/anix-agent_linux_arm64')
+      : (deploySettings.amd64BinaryPath || '/home/dev/anixops/anix-agent/build/inventory/anix-agent_linux_amd64')
     lines.push(
       `${row.alias} ansible_host=${row.host} ansible_port=${row.sshPort || 22} ansible_user=${row.sshUser || 'root'} ${authField} node_id=${row.nodeId} api_key=${row.apiKey || '<API_KEY>'} v2bx_arch=${row.arch} v2bx_binary_local=${binaryPath}`
     )
@@ -1536,7 +1550,7 @@ const deployGroupVarsPreview = computed(() => {
     `v2bx_binary_arm64_local: "${deploySettings.arm64BinaryPath}"`,
     '',
     'push_geodata: false',
-    'v2bx_geodata_dir: "/home/dev/anixops/V2bX_AnixOps/example"',
+    'v2bx_geodata_dir: "/home/dev/anixops/anix-agent/example"',
     '',
     `core_type: "${deploySettings.coreType}"`,
     'v2bx_log_level: "info"',
@@ -1555,7 +1569,7 @@ const deployCommandsPreview = computed(() => {
   return [
     'cd config/deploy/ansible/nodes',
     'export ANSIBLE_CONFIG=../ansible.cfg',
-    '# Download and verify matching V2bX artifacts from GitHub Actions into the configured paths',
+    `# Download and verify matching ${AGENT_NAME} artifacts from GitHub Actions into the configured paths`,
     `# AMD64 artifact: ${deploySettings.amd64BinaryPath}`,
     `# ARM64 artifact: ${deploySettings.arm64BinaryPath}`,
     '# No local build is performed by this deployment flow',
@@ -1605,19 +1619,47 @@ const copyDeployText = async (text) => {
 
 const configSnippet = computed(() => {
   const host = window.location.origin
-  return `# V2bX config example
-{
-  "Nodes": [
-    {
-      "Type": "v2board",
-      "ApiHost": "${host}",
-      "AuthKey": "${authKey.value || '<your-auth-key>'}",
-      "NodeID": 0,
-      "AutoRegister": true,
-      "Rate": 1.0
-    }
-  ]
-}`
+  const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1'])
+  const agentControlEnabled = deploySettings.grpcUseTLS || loopbackHosts.has(window.location.hostname)
+  const config = {
+    Log: {
+      Level: 'info',
+      Output: ''
+    },
+    Cores: [
+      {
+        Type: deploySettings.coreType || 'xray',
+        Log: {
+          Level: 'info'
+        }
+      }
+    ],
+    Nodes: [
+      {
+        Core: deploySettings.coreType || 'xray',
+        ApiHost: host,
+        Transport: 'http',
+        GRPCHost: deploySettings.grpcHost,
+        GRPCUseTLS: Boolean(deploySettings.grpcUseTLS),
+        ...(deploySettings.grpcUseTLS && deploySettings.grpcServerName
+          ? { GRPCServerName: deploySettings.grpcServerName }
+          : {}),
+        GRPCKeepalive: 30,
+        AgentControlEnabled: agentControlEnabled,
+        AgentControlAllowInsecure: false,
+        AuthKey: authKey.value || '<your-auth-key>',
+        NodeID: 0,
+        AutoRegister: true,
+        Timeout: 30,
+        ListenIP: '0.0.0.0',
+        SendIP: '0.0.0.0',
+        CertConfig: {
+          CertMode: 'none'
+        }
+      }
+    ]
+  }
+  return `# ${AGENT_NAME} config example\n${JSON.stringify(config, null, 2)}`
 })
 
 const openDeployModal = async () => {
@@ -1732,6 +1774,19 @@ const confirmDelete = async (node) => {
     loadStats()
   } catch (e) {
     alert(t('admin.nodes.messages.deleteFailed', { message: readNodeApiError(e) }))
+  }
+}
+
+const syncNode = async (node) => {
+  if (syncingNodeIds.has(node.id)) return
+  syncingNodeIds.add(node.id)
+  try {
+    await syncNodeProtocol(node.id)
+    alert(t('admin.nodes.messages.syncSuccess', { name: node.name }))
+  } catch (e) {
+    alert(t('admin.nodes.messages.syncFailed', { message: readNodeApiError(e) }))
+  } finally {
+    syncingNodeIds.delete(node.id)
   }
 }
 
@@ -2310,6 +2365,11 @@ onMounted(async () => {
 .actions {
   display: flex;
   gap: 8px;
+}
+
+.sync-node-btn {
+  min-width: 92px;
+  white-space: nowrap;
 }
 
 /* Buttons */

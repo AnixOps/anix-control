@@ -1,6 +1,6 @@
 # Quickstart
 
-This page is the shortest path to getting `v2board_AnixOps` running with the unified config model.
+This page is the shortest path to getting `anix-control` running with the unified config model.
 
 ## What The Backend Actually Reads
 
@@ -67,7 +67,7 @@ forward_runtime:
 
 ```powershell
 docker compose up -d
-docker compose logs -f v2board
+docker compose logs -f anix-control
 ```
 
 6. Open:
@@ -119,8 +119,8 @@ forward_runtime:
 
 Current verified single-UI port split:
 
-- `v2board` API: `8080`
-- `v2board` UI: `3000`
+- AnixOps Control API: `8080`
+- AnixOps Control UI: `3000`
 - NodeX control-plane: `18081`
 - relay gost API: `18080`
 

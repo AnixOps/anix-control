@@ -6,9 +6,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -38,7 +38,7 @@ func InitAdmin(cfg *config.Config) {
 	password := cfg.Admin.Password
 
 	if email == "" {
-		email = "admin@v2board.com"
+		email = "admin@anixops.local"
 	}
 
 	if password == "" {
