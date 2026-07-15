@@ -36,6 +36,18 @@ require_text() {
   fail "missing ${description}: ${needle}"
 }
 
+reject_text() {
+  local needle="$1"
+  local description="$2"
+
+  if grep -Fq -- "${needle}" "${WORKFLOW_PATH}"; then
+    fail "forbidden ${description}: ${needle}"
+    return 1
+  fi
+
+  echo "ok: ${description} is absent"
+}
+
 release_binary_pairs() {
   awk '
     /^  release-binaries:/ { in_job = 1; next }
@@ -112,8 +124,12 @@ check_release_workflow() {
   require_text "name: frontend-dist" "frontend artifact download/upload contract" || failed=1
   require_text "anix-control-frontend.tar.gz" "primary frontend tar archive" || failed=1
   require_text "anix-control-frontend.zip" "primary frontend zip archive" || failed=1
-  require_text "v2board-frontend.tar.gz" "legacy frontend tar alias" || failed=1
-  require_text "v2board-frontend.zip" "legacy frontend zip alias" || failed=1
+  reject_text "v2board-frontend.tar.gz" "legacy frontend release alias" || failed=1
+  reject_text "v2board-frontend.zip" "legacy frontend release alias" || failed=1
+  reject_text "v2board-source.sbom.spdx.json" "legacy source SBOM release alias" || failed=1
+  reject_text "v2board-linux-amd64.tar.gz" "legacy Linux release alias" || failed=1
+  reject_text "v2board-windows-amd64.exe.zip" "legacy Windows release alias" || failed=1
+  reject_text '${{ env.DOCKER_NAMESPACE }}/v2board' "legacy Docker image tag" || failed=1
   require_text "docker-image.txt" "Docker image metadata artifact" || failed=1
   require_text "digest=\${{ steps.build.outputs.digest }}" "Docker digest metadata" || failed=1
   require_text "Upload migration dry-run report" "migration dry-run report upload step" || failed=1
@@ -123,7 +139,6 @@ check_release_workflow() {
   require_text "anchore/sbom-action" "SBOM generation action" || failed=1
   require_text "spdx-json" "SPDX JSON SBOM format" || failed=1
   require_text "anix-control-source.sbom.spdx.json" "primary source SBOM release asset" || failed=1
-  require_text "v2board-source.sbom.spdx.json" "legacy source SBOM alias" || failed=1
   require_text "OPERATOR_DEPLOYMENT.md" "operator deployment runbook" || failed=1
   require_text "UPGRADE.md" "upgrade and rollback runbook release asset" || failed=1
   require_text "No Local Release Builds" "operator no-local-build release warning" || failed=1
@@ -143,8 +158,6 @@ check_release_workflow() {
   require_text "--require RELEASE_NOTES.md" "release notes verification requirement" || failed=1
   require_text "--require anix-control-linux-amd64.tar.gz" "primary linux amd64 release artifact verification requirement" || failed=1
   require_text "--require anix-control-windows-arm64.exe.zip" "primary windows arm64 release artifact verification requirement" || failed=1
-  require_text "--require v2board-linux-amd64.tar.gz" "legacy linux amd64 release alias verification requirement" || failed=1
-  require_text "--require v2board-windows-arm64.exe.zip" "legacy windows arm64 release alias verification requirement" || failed=1
   require_text "softprops/action-gh-release" "GitHub release creation action" || failed=1
   require_text "generate_release_notes: true" "generated release notes" || failed=1
   require_text "files: release/*" "release asset upload glob" || failed=1
@@ -228,9 +241,6 @@ jobs:
           cp docs/UPGRADE.md release/UPGRADE.md
           tar -czvf release/anix-control-frontend.tar.gz -C web/public .
           zip -r release/anix-control-frontend.zip web/public
-          cp release/anix-control-frontend.tar.gz release/v2board-frontend.tar.gz
-          cp release/anix-control-frontend.zip release/v2board-frontend.zip
-          cp release/anix-control-source.sbom.spdx.json release/v2board-source.sbom.spdx.json
       - name: Generate release notes file
         run: |
           python3 config/scripts/generate_release_notes.py \
@@ -253,9 +263,7 @@ jobs:
             --require UPGRADE.md \
             --require RELEASE_NOTES.md \
             --require anix-control-linux-amd64.tar.gz \
-            --require anix-control-windows-arm64.exe.zip \
-            --require v2board-linux-amd64.tar.gz \
-            --require v2board-windows-arm64.exe.zip
+            --require anix-control-windows-arm64.exe.zip
       - uses: softprops/action-gh-release@v3
         with:
           files: release/*

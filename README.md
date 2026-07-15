@@ -134,9 +134,8 @@ Release jobs accept stable, alpha, beta, and release-candidate tags such as
 `v3.0.0`, `v3.0.0-alpha.1`, `v3.0.0-beta.1`, and `v3.0.0-rc.1`. Tag builds
 produce:
 
-- multi-platform `anix-control-*` backend artifacts, plus temporary
-  `v2board-*` compatibility aliases
-- `anix-control-frontend.*` archives, plus temporary legacy aliases
+- multi-platform `anix-control-*` backend artifacts
+- `anix-control-frontend.*` archives
 - checksum file
 - SPDX SBOM
 - migration dry-run evidence

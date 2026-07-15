@@ -672,19 +672,11 @@ jobs:
             -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
             -o anix-control ./cmd/server
 
-          cp anix-control v2board
-
       - name: Upload backend artifacts
         uses: actions/upload-artifact@v7
         with:
           name: anix-control-binary
           path: anix-control
-
-      - name: Upload legacy backend artifact alias
-        uses: actions/upload-artifact@v7
-        with:
-          name: v2board-binary
-          path: v2board
 
   release-binaries:
     name: Build Release Binary (${{ matrix.goos }}-${{ matrix.goarch }})
@@ -731,21 +723,16 @@ jobs:
           BUILD_CODE="${GITHUB_RUN_NUMBER:-0}"
           COMMIT="${GITHUB_SHA::12}"
           PRIMARY_BIN_NAME="anix-control-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
-          LEGACY_BIN_NAME="v2board-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
 
           CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
             go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
             -o "${PRIMARY_BIN_NAME}" ./cmd/server
 
-          cp "${PRIMARY_BIN_NAME}" "${LEGACY_BIN_NAME}"
-
           mkdir -p dist
           if [[ "${{ matrix.goos }}" == "windows" ]]; then
             zip -j "dist/${PRIMARY_BIN_NAME}.zip" "${PRIMARY_BIN_NAME}"
-            zip -j "dist/${LEGACY_BIN_NAME}.zip" "${LEGACY_BIN_NAME}"
           else
             tar -czf "dist/${PRIMARY_BIN_NAME}.tar.gz" "${PRIMARY_BIN_NAME}"
-            tar -czf "dist/${LEGACY_BIN_NAME}.tar.gz" "${LEGACY_BIN_NAME}"
           fi
 
       - name: Upload release binary artifact
@@ -801,7 +788,6 @@ jobs:
         with:
           images: |
             ${{ env.DOCKER_NAMESPACE }}/anix-control
-            ${{ env.DOCKER_NAMESPACE }}/v2board
           tags: |
             type=raw,value=${{ github.ref_name }}
 
@@ -837,7 +823,6 @@ jobs:
           {
             echo "published=${{ steps.registry.outputs.can_push }}"
             echo "primary_image=${DOCKER_NAMESPACE}/anix-control:${GITHUB_REF_NAME}"
-            echo "legacy_image=${DOCKER_NAMESPACE}/v2board:${GITHUB_REF_NAME}"
             echo "digest=${{ steps.build.outputs.digest }}"
             echo "tags:"
             echo "${{ steps.meta.outputs.tags }}"
@@ -912,7 +897,6 @@ jobs:
 
           - Multi-platform binaries are attached to this GitHub Release.
           - Primary frontend archives are `anix-control-frontend.tar.gz` and `anix-control-frontend.zip`.
-          - Historical `v2board-*` aliases contain the same release payload during the migration window.
           - Docker image metadata is attached in `docker-image.txt`.
           - Migration dry-run evidence is attached in `migration-dry-run.txt`.
           - Source dependency SBOM is attached in `anix-control-source.sbom.spdx.json`.
@@ -964,9 +948,6 @@ jobs:
         run: |
           tar -czvf release/anix-control-frontend.tar.gz -C web/public .
           zip -r release/anix-control-frontend.zip web/public
-          cp release/anix-control-frontend.tar.gz release/v2board-frontend.tar.gz
-          cp release/anix-control-frontend.zip release/v2board-frontend.zip
-          cp release/anix-control-source.sbom.spdx.json release/v2board-source.sbom.spdx.json
 
       - name: Generate release notes file
         shell: bash
@@ -1014,16 +995,7 @@ jobs:
             --require anix-control-windows-amd64.exe.zip \
             --require anix-control-windows-arm64.exe.zip \
             --require anix-control-darwin-amd64.tar.gz \
-            --require anix-control-darwin-arm64.tar.gz \
-            --require v2board-source.sbom.spdx.json \
-            --require v2board-frontend.tar.gz \
-            --require v2board-frontend.zip \
-            --require v2board-linux-amd64.tar.gz \
-            --require v2board-linux-arm64.tar.gz \
-            --require v2board-windows-amd64.exe.zip \
-            --require v2board-windows-arm64.exe.zip \
-            --require v2board-darwin-amd64.tar.gz \
-            --require v2board-darwin-arm64.tar.gz
+            --require anix-control-darwin-arm64.tar.gz
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3

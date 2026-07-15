@@ -34,12 +34,11 @@ Renaming those values in place would invalidate tokens, disconnect old nodes,
 or make an existing database appear empty. They will only move behind explicit
 migrations with dual-read or dual-registration support.
 
-## Release Aliases
+## Release Naming
 
-GitHub Releases publish `anix-control-*` as the primary artifacts. During the
-migration window, byte-equivalent `v2board-*` archives and the legacy Docker
-image tag are also published. New automation must consume the primary names;
-legacy aliases exist only to keep existing upgrade jobs working.
+GitHub Releases publish only `anix-control-*` artifacts and the
+`anixops/anix-control` Docker image. Existing installations upgrade in place
+through the AnixOps installer, which preserves their configuration and data.
 
 The new Go module is `github.com/AnixOps/anix-control/v3`. Stable and
 prerelease tags are accepted in these forms:
