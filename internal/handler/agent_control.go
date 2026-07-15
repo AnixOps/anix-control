@@ -52,7 +52,7 @@ func (h *NodeHandler) dispatchAgentControlOperation(
 	timeout time.Duration,
 ) (*agentv1pb.OperationAck, *agentv1pb.DesiredOperation, error) {
 	if h.agentControl == nil {
-		return nil, nil, errors.New("Agent Control manager is unavailable")
+		return nil, nil, errors.New("agent control manager is unavailable")
 	}
 	kind = strings.TrimSpace(kind)
 	if _, allowed := allowedAgentControlOperations[kind]; !allowed {
