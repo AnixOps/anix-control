@@ -33,14 +33,12 @@ build-server:
 	@echo "Building server..."
 	mkdir -p build
 	GOWORK=off CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o build/anix-control ./cmd/server
-	cp build/anix-control build/v2board
 
 # 缂栬瘧 Linux 鐗堟湰
 build-linux:
 	@echo "Building for Linux..."
 	mkdir -p build
 	GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o build/anix-control-linux ./cmd/server
-	cp build/anix-control-linux build/v2board-linux
 
 # 杩愯寮€鍙戞湇鍔″櫒
 run:
@@ -48,7 +46,7 @@ run:
 
 # 娓呯悊
 clean:
-	rm -f anix-control anix-control-linux v2board v2board-linux build/anix-control build/anix-control-linux build/v2board build/v2board-linux $(COVERAGE_FILE) $(COVERAGE_HTML)
+	rm -f anix-control anix-control-linux build/anix-control build/anix-control-linux $(COVERAGE_FILE) $(COVERAGE_HTML)
 	rm -rf coverage/
 	go clean -testcache
 
@@ -183,7 +181,7 @@ deploy:
 # 鏋勫缓 Docker 闀滃儚
 docker-build:
 	@echo "Building Docker image..."
-	docker build -t anix-control:latest -t v2board:latest .
+	docker build -t anix-control:latest .
 
 # 杩愯 Docker 瀹瑰櫒
 docker-run:
@@ -199,8 +197,6 @@ docker-run:
 docker-stop:
 	docker stop anix-control || true
 	docker rm anix-control || true
-	docker stop v2board || true
-	docker rm v2board || true
 
 # ==========================================
 # gRPC 鐩稿叧

@@ -211,15 +211,6 @@ def run_self_test() -> None:
         "anix-control-windows-arm64.exe.zip",
         "anix-control-darwin-amd64.tar.gz",
         "anix-control-darwin-arm64.tar.gz",
-        "v2board-source.sbom.spdx.json",
-        "v2board-frontend.tar.gz",
-        "v2board-frontend.zip",
-        "v2board-linux-amd64.tar.gz",
-        "v2board-linux-arm64.tar.gz",
-        "v2board-windows-amd64.exe.zip",
-        "v2board-windows-arm64.exe.zip",
-        "v2board-darwin-amd64.tar.gz",
-        "v2board-darwin-arm64.tar.gz",
     ]
 
     with tempfile.TemporaryDirectory() as tmp:

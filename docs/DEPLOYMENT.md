@@ -232,7 +232,7 @@ npm run dev
 
 - systemd 服务名默认是 `anix-control.service`，旧部署可用 `SERVICE_NAME=v2board` 原位升级。
 - GitHub Release 中的匹配平台二进制是唯一发行二进制来源。
-- GitHub Release 中的 `anix-control-frontend.tar.gz` 或 `anix-control-frontend.zip` 是主发行前端来源；同内容 `v2board-*` 文件仅用于迁移兼容。
+- GitHub Release 中的 `anix-control-frontend.tar.gz` 或 `anix-control-frontend.zip` 是唯一发行前端来源。
 - 部署前必须校验 `SHA256SUMS.txt`，再停止服务、替换二进制和前端静态文件、启动服务并验证 `/health`。
 
 `config/deploy/deploy_panel.sh` 会执行本地源码构建，默认拒绝运行。旧入口 `config/scripts/deploy.sh` 只是兼容包装器，也默认拒绝运行；`config/scripts/pre-deploy.sh` 的本地构建检查同样默认拒绝。它们只保留给开发或紧急人工操作，不能作为发行版本构建路径。如确需使用，必须显式设置 `ALLOW_LOCAL_BUILD=1`，并在变更记录中说明原因。CI 会运行 `config/deploy/check_release_build_policy.sh`，阻止未声明 GitHub Actions-only 策略和 `ALLOW_LOCAL_BUILD` guard 的本地部署 build 命令进入部署脚本。
