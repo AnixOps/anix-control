@@ -129,7 +129,7 @@ def run_self_test() -> None:
     notes = build_release_notes(
         tag="v2.4.0",
         commit="1234567890abcdef",
-        run_url="https://github.com/AnixOps/v2board_AnixOps/actions/runs/1",
+        run_url="https://github.com/AnixOps/anix-control/actions/runs/1",
         changelog_section=section,
     )
     assert notes.startswith("# Release v2.4.0\n")

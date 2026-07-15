@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/anixops/v2board/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 	"github.com/gin-gonic/gin"
 )
 

@@ -12,7 +12,7 @@ usage() {
 Usage: config/scripts/check_release_workflow.sh [--self-test|--help]
 
 Statically checks that the release workflow still provides the required release
-contract: release and release-candidate tag gating, blocking quality/security/race/test prerequisites,
+contract: stable/alpha/beta/release-candidate tag gating, blocking quality/security/race/test prerequisites,
 multi-platform binaries, Docker metadata, frontend archives, checksums, SBOM,
 operator deployment and upgrade runbooks, deterministic release notes,
 machine-readable release manifest, and generated GitHub release notes.
@@ -80,7 +80,7 @@ check_release_workflow() {
   [[ -f "${WORKFLOW_PATH}" ]] || fail "workflow file not found: ${WORKFLOW_PATH}" || return 1
 
   require_text "tags: [ 'v*.*.*' ]" "tag trigger pattern" || failed=1
-  require_text '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$' "release and release-candidate tag gate" || failed=1
+  require_text '^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$' "stable and prerelease tag gate" || failed=1
   require_text "needs.tag-gate.outputs.is_release_tag == 'true'" "release-only job gate" || failed=1
 
   for dependency in \
@@ -110,8 +110,10 @@ check_release_workflow() {
 
   require_text "release-binary-\${{ matrix.goos }}-\${{ matrix.goarch }}" "per-platform release binary artifact upload" || failed=1
   require_text "name: frontend-dist" "frontend artifact download/upload contract" || failed=1
-  require_text "v2board-frontend.tar.gz" "frontend tar archive" || failed=1
-  require_text "v2board-frontend.zip" "frontend zip archive" || failed=1
+  require_text "anix-control-frontend.tar.gz" "primary frontend tar archive" || failed=1
+  require_text "anix-control-frontend.zip" "primary frontend zip archive" || failed=1
+  require_text "v2board-frontend.tar.gz" "legacy frontend tar alias" || failed=1
+  require_text "v2board-frontend.zip" "legacy frontend zip alias" || failed=1
   require_text "docker-image.txt" "Docker image metadata artifact" || failed=1
   require_text "digest=\${{ steps.build.outputs.digest }}" "Docker digest metadata" || failed=1
   require_text "Upload migration dry-run report" "migration dry-run report upload step" || failed=1
@@ -120,7 +122,8 @@ check_release_workflow() {
   require_text "migration-dry-run.txt" "migration dry-run report release asset" || failed=1
   require_text "anchore/sbom-action" "SBOM generation action" || failed=1
   require_text "spdx-json" "SPDX JSON SBOM format" || failed=1
-  require_text "v2board-source.sbom.spdx.json" "source SBOM release asset" || failed=1
+  require_text "anix-control-source.sbom.spdx.json" "primary source SBOM release asset" || failed=1
+  require_text "v2board-source.sbom.spdx.json" "legacy source SBOM alias" || failed=1
   require_text "OPERATOR_DEPLOYMENT.md" "operator deployment runbook" || failed=1
   require_text "UPGRADE.md" "upgrade and rollback runbook release asset" || failed=1
   require_text "No Local Release Builds" "operator no-local-build release warning" || failed=1
@@ -138,8 +141,10 @@ check_release_workflow() {
   require_text "--require OPERATOR_DEPLOYMENT.md" "operator runbook verification requirement" || failed=1
   require_text "--require UPGRADE.md" "upgrade runbook verification requirement" || failed=1
   require_text "--require RELEASE_NOTES.md" "release notes verification requirement" || failed=1
-  require_text "--require v2board-linux-amd64.tar.gz" "linux amd64 release artifact verification requirement" || failed=1
-  require_text "--require v2board-windows-arm64.exe.zip" "windows arm64 release artifact verification requirement" || failed=1
+  require_text "--require anix-control-linux-amd64.tar.gz" "primary linux amd64 release artifact verification requirement" || failed=1
+  require_text "--require anix-control-windows-arm64.exe.zip" "primary windows arm64 release artifact verification requirement" || failed=1
+  require_text "--require v2board-linux-amd64.tar.gz" "legacy linux amd64 release alias verification requirement" || failed=1
+  require_text "--require v2board-windows-arm64.exe.zip" "legacy windows arm64 release alias verification requirement" || failed=1
   require_text "softprops/action-gh-release" "GitHub release creation action" || failed=1
   require_text "generate_release_notes: true" "generated release notes" || failed=1
   require_text "files: release/*" "release asset upload glob" || failed=1
@@ -164,7 +169,7 @@ jobs:
   tag-gate:
     steps:
       - run: |
-          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]
+          [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]
 
   release-binaries:
     needs: [go-quality, go-lint, go-security, go-race, backend-test, postgres-stats-test, migration-dry-run-test, forward-runtime-test, grpc-test, cmd-test, tag-gate]
@@ -209,7 +214,7 @@ jobs:
       - uses: anchore/sbom-action@v0.24.0
         with:
           format: spdx-json
-          output-file: release/v2board-source.sbom.spdx.json
+          output-file: release/anix-control-source.sbom.spdx.json
       - uses: actions/download-artifact@v8
         with:
           name: frontend-dist
@@ -221,8 +226,11 @@ jobs:
           cp migration-dry-run.txt release/migration-dry-run.txt
           echo "No Local Release Builds" > release/OPERATOR_DEPLOYMENT.md
           cp docs/UPGRADE.md release/UPGRADE.md
-          tar -czvf release/v2board-frontend.tar.gz -C web/public .
-          zip -r release/v2board-frontend.zip web/public
+          tar -czvf release/anix-control-frontend.tar.gz -C web/public .
+          zip -r release/anix-control-frontend.zip web/public
+          cp release/anix-control-frontend.tar.gz release/v2board-frontend.tar.gz
+          cp release/anix-control-frontend.zip release/v2board-frontend.zip
+          cp release/anix-control-source.sbom.spdx.json release/v2board-source.sbom.spdx.json
       - name: Generate release notes file
         run: |
           python3 config/scripts/generate_release_notes.py \
@@ -244,6 +252,8 @@ jobs:
             --require OPERATOR_DEPLOYMENT.md \
             --require UPGRADE.md \
             --require RELEASE_NOTES.md \
+            --require anix-control-linux-amd64.tar.gz \
+            --require anix-control-windows-arm64.exe.zip \
             --require v2board-linux-amd64.tar.gz \
             --require v2board-windows-arm64.exe.zip
       - uses: softprops/action-gh-release@v3

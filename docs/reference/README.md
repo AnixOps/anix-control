@@ -1,6 +1,6 @@
-# V2Board Reference
+# AnixOps Control Reference
 
-This section is the operator/developer reference index for `v2board_AnixOps`.
+This section is the operator/developer reference index for `anix-control`.
 
 ## Core References
 

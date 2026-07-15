@@ -5,9 +5,10 @@ import adminSupportPages from './modules/zh-CN/adminSupportPages'
 import adminDashboard from './modules/zh-CN/adminDashboard'
 import adminMonitor from './modules/zh-CN/adminMonitor'
 import adminTrafficHourly from './modules/zh-CN/adminTrafficHourly'
+import { AGENT_NAME, CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
-  'V2Board Admin': 'AnixOps 工作室管理台',
+  'V2Board Admin': `${CONTROL_NAME} 管理台`,
   'Admin': '工作室管理台',
   'Overview': '概览',
   'Dashboard': '仪表盘',
@@ -262,17 +263,17 @@ export default {
   },
   app: {
     meta: {
-      defaultDescription: 'AnixOps 工作室统一管理订阅交付、支付账单、节点编排、NodeX 运行时与本地 Ansible 转发运维。',
-      loginDescription: '登录 AnixOps 工作室，继续管理订阅、账单、节点与转发运行时。',
-      userDescription: 'AnixOps 工作室用户中心，查看订阅、工单、套餐与账单记录。',
-      adminDescription: 'AnixOps 工作室管理后台，用于用户、账单、节点、通知与系统运维。',
-      forwardDescription: 'AnixOps 工作室转发运维工作台，覆盖 Local Runtime、Ansible Machines、NodeX 拓扑、隧道与运行时诊断。'
+      defaultDescription: `${CONTROL_NAME} 统一管理订阅交付、支付账单、节点编排、Agent 运行时与转发运维。`,
+      loginDescription: `登录 ${CONTROL_NAME}，继续管理订阅、账单、节点与转发运行时。`,
+      userDescription: `${CONTROL_NAME} 用户中心，查看订阅、工单、套餐与账单记录。`,
+      adminDescription: `${CONTROL_NAME} 管理后台，用于用户、账单、节点、通知与系统运维。`,
+      forwardDescription: `${CONTROL_NAME} 转发运维工作台，覆盖 Local Runtime、Ansible Machines、拓扑、隧道与运行时诊断。`
     }
   },
   layout: {
     admin: {
-      brand: 'AnixOps 工作室',
-      mobileTitle: 'AnixOps 工作室管理台',
+      brand: CONTROL_NAME,
+      mobileTitle: `${CONTROL_NAME} 管理台`,
       badge: '工作室管理台',
       subtitle: '订阅交付、节点编排、转发套件与运维入口统一收敛在此导航。',
       adminUser: '管理员',
@@ -309,7 +310,7 @@ export default {
       }
     },
     user: {
-      brand: 'AnixOps 工作室',
+      brand: CONTROL_NAME,
       nav: {
         dashboard: '仪表盘',
         subscribe: '订阅',
@@ -470,12 +471,12 @@ export default {
     }
   },
   login: {
-    brandSubtitle: 'AnixOps Studio',
+    brandSubtitle: CONTROL_NAME,
     brandDescription: '面向工作室交付的订阅、节点与转发运维控制台。',
     signInTitle: '欢迎回来',
     registerTitle: '创建账户',
-    signInSubtitle: '登录 AnixOps 工作室，继续管理服务。',
-    registerSubtitle: '创建 AnixOps 工作室账户，开始使用交付与运维能力。',
+    signInSubtitle: `登录 ${CONTROL_NAME}，继续管理服务。`,
+    registerSubtitle: `创建 ${CONTROL_NAME} 账户，开始使用交付与运维能力。`,
     emailPlaceholder: '请输入邮箱地址',
     passwordPlaceholder: '请输入密码',
     registerPasswordPlaceholder: '请输入密码（至少 6 位）',
@@ -2151,6 +2152,8 @@ export default {
       actions: {
         manageProtocols: '管理协议',
         protocols: '协议',
+        syncReload: '\u540c\u6b65 / Reload',
+        syncing: '\u540c\u6b65\u4e2d...',
         logs: '日志',
         deployParents: '部署父节点',
         edit: '编辑',
@@ -2194,11 +2197,11 @@ export default {
       },
       authKeyModal: {
         title: '节点授权密钥',
-        hint: '将此密钥配置到 V2bX 的 config.json 中，节点启动后会自动注册到面板。同一密钥可用于多台节点注册。',
+        hint: `将此密钥配置到 ${AGENT_NAME} 的 config.json 中，节点启动后会自动注册到控制面。同一密钥可用于多台节点注册。`,
         noKey: '尚未生成授权密钥，请先创建授权密钥。',
         copy: '复制密钥',
         copyConfig: '复制配置',
-        configHint: '将此配置粘贴到 V2bX 的 config.json 中，替换 <auth_key> 为上方密钥值。',
+        configHint: `将此配置粘贴到 ${AGENT_NAME} 的 config.json 中，并将 <auth_key> 替换为上方密钥值。`,
         registeredCount: '已注册节点数',
         copied: '已复制'
       },
@@ -2395,6 +2398,8 @@ export default {
       messages: {
         requiredFields: '请填写必填字段',
         saveFailed: '保存失败: {message}',
+        syncSuccess: '\u8282\u70b9 "{name}" \u5df2\u63a5\u6536\u540c\u6b65\u64cd\u4f5c',
+        syncFailed: '\u540c\u6b65\u5931\u8d25: {message}',
         deleteNodeConfirm: '确定要删除节点 "{name}" 吗？',
         deleteFailed: '删除失败: {message}',
         deleteProtocolConfirm: '确定要删除此协议吗？',
@@ -2450,7 +2455,7 @@ export default {
         port: '465',
         username: "your{'@'}email.com",
         password: '请输入 SMTP 密码',
-        fromName: 'AnixOps 工作室',
+        fromName: CONTROL_NAME,
         fromAddress: "noreply{'@'}example.com"
       }
     },

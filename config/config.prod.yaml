@@ -1,4 +1,4 @@
-# V2Board Go Backend Configuration - Production
+# AnixOps Control Configuration - Production
 # 鐢熶骇鐜閰嶇疆鏂囦欢
 
 # 鐜鏍囪瘑: development (寮€鍙?, production (鐢熶骇)
@@ -32,8 +32,8 @@ server:
 # 鏂瑰紡浜? Go 鍘熺敓 TLS - 璁剧疆 enable: true 骞堕厤缃瘉涔﹁矾寰?
 tls:
   enable: false                               # 浣跨敤 Nginx 鍙嶄唬鏃惰涓?false
-  cert_file: "/etc/ssl/certs/v2board.crt"     # SSL 璇佷功璺緞 (浠?enable: true 鏃堕渶瑕?
-  key_file: "/etc/ssl/private/v2board.key"    # SSL 绉侀挜璺緞 (浠?enable: true 鏃堕渶瑕?
+  cert_file: "/etc/ssl/certs/anix-control.crt"     # SSL 璇佷功璺緞 (浠?enable: true 鏃堕渶瑕?
+  key_file: "/etc/ssl/private/anix-control.key"    # SSL 绉侀挜璺緞 (浠?enable: true 鏃堕渶瑕?
   domain: "your-domain.com"                   # 鎮ㄧ殑鍩熷悕 (鐢ㄤ簬鐢熸垚璁㈤槄閾炬帴绛?
 
 # 鍓嶇鏈嶅姟鍣ㄩ厤缃?
@@ -47,9 +47,9 @@ database:
   driver: "postgres"
   host: "127.0.0.1"
   port: 5432
-  username: "v2board"
+  username: "anix_control"
   password: "your-secure-password"
-  database: "v2board"
+  database: "anix_control"
   log_level: "error"          # 鐢熶骇鐜鍙褰曢敊璇?
   max_idle_conns: 10
   max_open_conns: 100
@@ -66,7 +66,7 @@ cache:
 log:
   level: "warn"               # 鐢熶骇鐜鍑忓皯鏃ュ織
   output: "file"
-  file_path: "/var/log/v2board/v2board.log"
+  file_path: "/var/log/anix-control/anix-control.log"
   max_size: 100
   max_backups: 30
   max_age: 30
@@ -93,8 +93,8 @@ auth:
     blocked_email_domains: []
 
 app:
-  name: "V2Board"
-  version: "2.0.2-test.1"
+  name: "AnixOps Control"
+  version: "3.0.0-alpha.1"
   api_token: "your-secure-api-token-for-nodes"
   traffic_log_enable: true
   subscribe_path: "s"
@@ -142,12 +142,18 @@ forward_runtime:
       ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
     timeout_seconds: 120
 
-# Node-facing gRPC server (V2bX nodes connect here when Transport=grpc).
+# Node-facing gRPC server. Legacy unary Transport=grpc and the opt-in
+# anix.agent.v1 Agent control stream share this listener.
+# Do not expose plaintext port 50051 to the public Internet. Configure the TLS
+# files below or put the service behind an HTTP/2-capable L4/gRPC proxy and a
+# restrictive firewall.
 grpc:
   enabled: false
   host: "0.0.0.0"
   port: 50051
   api_token: ""
+  tls_cert_file: "config/tls/control.crt"
+  tls_key_file: "config/tls/control.key"
 
 # 榛樿绠＄悊鍛橀厤缃?
 admin:

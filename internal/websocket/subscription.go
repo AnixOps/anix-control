@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anixops/v2board/internal/service"
-	"github.com/anixops/v2board/internal/utils"
+	"github.com/AnixOps/anix-control/v3/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/utils"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 )

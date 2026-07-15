@@ -1,11 +1,15 @@
-# V2bX 本机节点完整接入链路文档
+# Legacy V2bX 本机节点接入链路（2.x 归档）
+
+> 本文保留旧 V2bX/UniProxy 调试步骤用于兼容排障。v3 新部署使用
+> [AnixOps Agent](https://github.com/AnixOps/anix-agent) 与
+> [AnixOps Control](https://github.com/AnixOps/anix-control)，不要照搬本文的旧二进制名和路径。
 
 ## 仓库信息
 
 | 项目 | 仓库地址 | 分支 |
 |------|----------|------|
-| 面板 (v2board) | https://github.com/AnixOps/v2board_AnixOps | `go_dev` |
-| 节点 (V2bX) | https://github.com/AnixOps/V2bX_AnixOps | `main` |
+| AnixOps Control | https://github.com/AnixOps/anix-control | `go_dev` |
+| AnixOps Agent（旧 V2bX 兼容） | https://github.com/AnixOps/anix-agent | `dev_new` |
 | 测速工具 | https://github.com/AnixOps/AnixOps-speedtest | `main` |
 | Ansible IaC | https://github.com/AnixOps/AnixOps-ansible | `main` |
 
@@ -520,7 +524,7 @@ proxies:
 
 | 项目 | 仓库地址 | 分支 |
 |------|----------|------|
-| 面板 (v2board) | https://github.com/AnixOps/v2board_AnixOps | `go_dev` |
+| AnixOps Control | https://github.com/AnixOps/anix-control | `go_dev` |
 | Ansible IaC | https://github.com/AnixOps/AnixOps-ansible | `main` |
 
 **AnixOps-ansible** 是独立的 GitOps IaC 仓库，用于全球分布式服务器集群的基础设施管理（基础配置、监控、网络、安全）。面板内置的 Ansible playbooks 是轻量级运行时路径，专门处理 nftables 转发规则的动态创建/删除。

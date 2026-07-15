@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	appconfig "github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/handler"
+	appconfig "github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/handler"
 	"github.com/gin-gonic/gin"
 )
 
@@ -123,8 +123,8 @@ func TestCreateDefaultIndexWritesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read index.html: %v", err)
 	}
-	if !strings.Contains(string(content), "V2Board") {
-		t.Fatalf("index.html does not contain V2Board marker")
+	if !strings.Contains(string(content), "AnixOps Control") {
+		t.Fatalf("index.html does not contain AnixOps Control marker")
 	}
 
 	info, err := os.Stat(filepath.Join(dir, "index.html"))
@@ -172,7 +172,7 @@ func TestMainBuildInfoLdflagsPopulateHandlerBuildInfo(t *testing.T) {
 		"./cmd/server",
 		"-run", "^TestMainBuildInfoLdflagsPopulateHandlerBuildInfo$",
 		"-count=1",
-		"-ldflags", "-X github.com/anixops/v2board/cmd/server.version=9.8.7 -X github.com/anixops/v2board/cmd/server.buildTime=2026-07-08T00:00:00Z -X github.com/anixops/v2board/cmd/server.buildCode=456 -X github.com/anixops/v2board/cmd/server.commit=abcdef123456",
+		"-ldflags", "-X github.com/AnixOps/anix-control/v3/cmd/server.version=9.8.7 -X github.com/AnixOps/anix-control/v3/cmd/server.buildTime=2026-07-08T00:00:00Z -X github.com/AnixOps/anix-control/v3/cmd/server.buildCode=456 -X github.com/AnixOps/anix-control/v3/cmd/server.commit=abcdef123456",
 	)
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), "V2BOARD_BUILDINFO_LDFLAGS_CHILD=1")

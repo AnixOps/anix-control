@@ -4,8 +4,8 @@
 
 | 项目 | 仓库地址 | 分支 |
 |------|----------|------|
-| 面板 (v2board) | https://github.com/AnixOps/v2board_AnixOps | `go_dev` |
-| 节点 (V2bX) | https://github.com/AnixOps/V2bX_AnixOps | `main` |
+| AnixOps Control | https://github.com/AnixOps/anix-control | `go_dev` |
+| AnixOps Agent | https://github.com/AnixOps/anix-agent | `dev_new` |
 | Ansible IaC | https://github.com/AnixOps/AnixOps-ansible | `main` |
 | 测速工具 | https://github.com/AnixOps/AnixOps-speedtest | `main` |
 
@@ -116,7 +116,7 @@ ansible-playbook forward_apply_nftables.yml
 ### Step 1: 确认面板配置
 
 ```bash
-cd C:\Users\z7299\Documents\GitHub\v2board_AnixOps
+cd C:\Users\z7299\Documents\GitHub\anix-control
 ```
 
 检查 `config/config.yaml` 中的 `forward_runtime` 配置：
@@ -207,7 +207,7 @@ relay-01 | SUCCESS => {
 ### Step 6: 启动面板
 
 ```bash
-cd C:\Users\z7299\Documents\GitHub\v2board_AnixOps
+cd C:\Users\z7299\Documents\GitHub\anix-control
 
 go build -o build/v2board.exe -trimpath ./cmd/server
 ./build/v2board.exe -config config/config.yaml

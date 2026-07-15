@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { resolveDocumentTitle, resolveRouteMetaDescription, resolveRoutePageTitle } from '@/utils/pageMeta'
+import { CONTROL_NAME } from '@/constants/brand'
 
 const messages = {
   'pageTitles.auth.login': 'Sign In',
@@ -40,7 +41,7 @@ describe('pageMeta helpers', () => {
   })
 
   it('builds a document title that includes the app name when needed', () => {
-    expect(resolveDocumentTitle(t, '/login', 'AnixOps Studio')).toBe('Sign In | AnixOps Studio')
-    expect(resolveDocumentTitle(t, '/unknown', 'AnixOps Studio')).toBe('AnixOps Studio')
+    expect(resolveDocumentTitle(t, '/login', CONTROL_NAME)).toBe(`Sign In | ${CONTROL_NAME}`)
+    expect(resolveDocumentTitle(t, '/unknown', CONTROL_NAME)).toBe(CONTROL_NAME)
   })
 })

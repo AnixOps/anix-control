@@ -1,10 +1,10 @@
-# V2Board Intro
+# AnixOps Control Intro
 
-Use this section first when you need to understand what `v2board_AnixOps` owns and how it should be started.
+Use this section first when you need to understand what `anix-control` owns and how it should be started.
 
 ## Repository Role
 
-`v2board_AnixOps` is the public-facing control plane in the three-repository stack:
+`anix-control` is the public-facing control plane in the AnixOps stack:
 
 - browser/admin UI
 - panel API
@@ -15,13 +15,13 @@ Use this section first when you need to understand what `v2board_AnixOps` owns a
 It is not the private execution plane.
 
 Execution ownership:
-- `NodeX`: internal-only runtime execution, doctor/version tooling, operator workflows
-- `v2board_AnixOps`: persistent control-plane state and admin UI
-- `V2bX_AnixOps`: proxy-node runtime and traffic reporting
+- `anix-control`: persistent control-plane state, API, and admin UI
+- `anix-agent`: proxy protocols, forwarding execution, diagnostics, and traffic reporting
+- `NodeX` and the clean forward agent: compatibility runtimes being absorbed into AnixOps Agent
 
 ## Startup Paths
 
-There are two normal ways to start `v2board`:
+There are two normal ways to start `anix-control`:
 
 1. Docker Compose
 2. local backend + local frontend

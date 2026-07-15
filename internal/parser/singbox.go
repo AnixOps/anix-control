@@ -5,7 +5,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/anixops/v2board/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 )
 
 // SingBoxFormatter Sing-box JSON 格式化器

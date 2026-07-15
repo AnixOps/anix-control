@@ -1,7 +1,7 @@
 {
-  "name": "v2board-web",
+  "name": "anix-control-web",
   "private": true,
-  "version": "2.3.1",
+  "version": "3.0.0-alpha.1",
   "type": "module",
   "scripts": {
     "dev": "vite",

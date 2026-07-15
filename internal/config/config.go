@@ -2,8 +2,10 @@ package config
 
 import (
 	"os"
+	"strings"
 	"sync"
 
+	"github.com/AnixOps/anix-control/v3/internal/branding"
 	"gopkg.in/yaml.v3"
 )
 
@@ -29,7 +31,7 @@ type Config struct {
 	GRPC           GRPCConfig           `yaml:"grpc"`
 }
 
-// GRPCConfig controls the node-facing gRPC server (V2bX nodes connect here).
+// GRPCConfig controls the node-facing gRPC server (AnixOps Agent nodes connect here).
 type GRPCConfig struct {
 	Enable      bool   `yaml:"enabled"`
 	Host        string `yaml:"host"`
@@ -232,6 +234,9 @@ func Load(path string) (*Config, error) {
 
 		cfg = &Config{}
 		err = yaml.Unmarshal(data, cfg)
+		if err == nil {
+			normalizeBrandDefaults(cfg)
+		}
 	})
 
 	return cfg, err
@@ -244,5 +249,15 @@ func Get() *Config {
 
 // Set replaces the loaded config, mainly for tests.
 func Set(c *Config) {
+	normalizeBrandDefaults(c)
 	cfg = c
+}
+
+func normalizeBrandDefaults(c *Config) {
+	if c == nil {
+		return
+	}
+	if strings.TrimSpace(c.App.Name) == "" {
+		c.App.Name = branding.ControlName
+	}
 }

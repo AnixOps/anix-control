@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/anixops/v2board/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 	"gorm.io/gorm"
 )
 

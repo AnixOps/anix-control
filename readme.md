@@ -1,6 +1,6 @@
-# V2Board AnixOps
+# AnixOps Control
 
-`v2board_AnixOps` is the public control-plane repository in the AnixOps stack.
+`anix-control` is the public control-plane repository in the AnixOps stack.
 
 It owns:
 - public web UI and panel API
@@ -11,9 +11,9 @@ It owns:
 It does not own the private execution plane.
 
 Boundary:
-- `v2board_AnixOps`: public control plane, persistence, admin UI
-- `V2bX_AnixOps`: proxy-node runtime
-- `NodeX`: internal-only forward runtime, doctor/version tooling, operator workflows
+- `anix-control`: public control plane, persistence, and admin UI
+- `anix-agent`: proxy-node and forwarding runtime
+- `NodeX` and legacy clean-agent paths: compatibility runtimes being consolidated into AnixOps Agent
 
 ## Start Here
 
@@ -48,8 +48,8 @@ Current verified deployment truth:
 
 - the currently proven dual-runtime path is `binary + SQLite + systemd`
 - the verified single-UI runtime split is:
-  - `v2board` UI on `3000`
-  - `v2board` API on `8080`
+  - AnixOps Control UI on `3000`
+  - AnixOps Control API on `8080`
   - NodeX control-plane on `18081`
   - relay gost API on `18080`
 - Docker deployment docs remain important, but the full real-machine proof recorded today is not the Docker path yet

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anixops/v2board/internal/cache"
-	"github.com/anixops/v2board/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/cache"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

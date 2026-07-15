@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/anixops/v2board/internal/tests/integration/binary"
-	"github.com/anixops/v2board/internal/tests/integration/clients"
-	"github.com/anixops/v2board/internal/tests/integration/config"
-	"github.com/anixops/v2board/internal/tests/integration/runner"
+	"github.com/AnixOps/anix-control/v3/internal/tests/integration/binary"
+	"github.com/AnixOps/anix-control/v3/internal/tests/integration/clients"
+	"github.com/AnixOps/anix-control/v3/internal/tests/integration/config"
+	"github.com/AnixOps/anix-control/v3/internal/tests/integration/runner"
 )
 
 func main() {

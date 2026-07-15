@@ -1,8 +1,8 @@
 # Feature Status Register
 
-Date: 2026-07-10
+Date: 2026-07-16
 
-This document is the current feature status index for `v2board_AnixOps`.
+This document is the current feature status index for `anix-control`.
 Use it together with `TODO.md`, `CHANGELOG.md`, and `docs/audit/test-gap.md`.
 `docs/FEATURE_ROADMAP.md` contains older planning notes and design material; when the
 two documents disagree, this file is the status source of truth.
@@ -55,7 +55,7 @@ two documents disagree, this file is the status source of truth.
 | Admin | User management | Implemented | CRUD, ban/unban, traffic reset, subscribe reset with unified success/user-error envelopes | Continue authorization regression tests for new admin actions. |
 | Admin | Plan management | Implemented | CRUD and assign with unified success/user-error envelopes | None known. |
 | Admin | Order management | Implemented | list/detail/status/paid/cancel with unified success/user-error envelopes and localized admin error prompts | Payment provider callbacks remain separate. |
-| Admin | Node management and protocol configuration | Implemented | CRUD, credentials, raw config, protocol templates, auth keys | Keep V2bX compatibility tests current. |
+| Admin | Node management and protocol configuration | Implemented | CRUD, credentials, raw config, protocol templates, auth keys | Keep AnixOps Agent and legacy V2bX compatibility tests current. |
 | Admin | Subscription groups, templates, preview, user/plan binding | Implemented | `/api/v2/admin/subscription/*`, unified group/template CRUD, protocol-binding, preview, and user/plan binding success/user-error envelopes | Keep public subscription compatibility separate. |
 | Admin | Ticket management | Implemented | list/reply/close | None known. |
 | Admin | Coupon management | Implemented | list/create/delete | Add update API only if product requires it. |
@@ -70,10 +70,10 @@ two documents disagree, this file is the status source of truth.
 | Admin | WebSocket monitor | Implemented | `/api/v2/admin/ws/monitor` | Continue origin/deadline/race coverage. |
 | Admin | Agent diagnostics and command dispatch | Implemented | `/api/v2/admin/agent/*`, agent WebSocket | Keep command allowlists and audit coverage strict. |
 | Node | Node registration and heartbeat | Implemented | `/api/v2/node/register`, `/api/v2/node/heartbeat` | Preserve node-client compatibility responses. |
-| Node | UniProxy config, user list, traffic, online state | Implemented | `/api/v2/server/UniProxy/*` | Preserve V2bX compatibility and API key auth. |
+| Node | UniProxy config, user list, traffic, online state | Implemented | `/api/v2/server/UniProxy/*` | Preserve AnixOps Agent and legacy V2bX compatibility plus API key auth. |
 | Node | UniProxy v1 compatibility | Compatibility | `/api/v1/server/UniProxy/*` | Do not remove without a migration window. |
 | Node | Agent pull/WebSocket model for NAT-side nodes | Implemented | `/api/v2/agent/*`, `/api/v2/node/ws` | Keep lifecycle and command safety tests current. |
-| Node | gRPC panel-node services | Partial | `api/grpc`, `internal/grpc` | Needs production startup/config documentation and broader integration evidence. |
+| Node | Agent-first gRPC control stream | Preview/Partial | `anix.agent.v1`, bidirectional hello/heartbeat/desired-operation/ACK/observed-state stream with opt-in Agent config | The alpha foundation is not yet wired to every production task source; REST/UniProxy, legacy gRPC, and WebSocket paths remain fallbacks while rollout and restart/replay evidence mature. |
 | Subscription | Public subscription route | Implemented | `/{subscribe_path}/:token`, default `/s/:token` | Keep UA format detection tests current. |
 | Subscription | Legacy V2Board subscribe route | Compatibility | `/api/v1/client/subscribe?token=` | Preserve for old clients. |
 | Subscription | Multi-format subscription output | Implemented | V2Ray, Clash/Stash, Surge, Shadowrocket, Sing-box paths | Continue parser/formatter compatibility tests. |
@@ -97,7 +97,7 @@ two documents disagree, this file is the status source of truth.
 | Operations | Deployment, upgrade, and production docs | Implemented | GitHub Actions release artifacts, guarded local `config/deploy/deploy_panel.sh`, guarded legacy `config/scripts/deploy.sh` and `config/scripts/pre-deploy.sh`, guarded V2bX Ansible rollout helper, CI release-build policy check, safe local artifact cleanup helper with opt-in deploy archive cleanup, `docs/DEPLOYMENT.md`, `docs/UPGRADE.md` | Keep local build guard, cleanup helper, artifact deployment docs, and upgrade rollback docs aligned. |
 | Operations | SQLite to PostgreSQL migration docs and tooling | Implemented | migration commands/docs | Keep dry-run evidence for schema changes. |
 | Operations | CI baseline | Implemented | GitHub Actions on Go 1.26.5 with current action runtimes for gofmt, vet, test, race, lint, gosec, govulncheck, Docker smoke, release-build policy, documentation sync, and release workflow policy checks | Watch runtime of full race testing. |
-| Operations | Release workflow with artifacts, checksums, SBOM | Partial | GitHub Actions release workflow is the required release build source; CI now guards release and RC tag gating, release prerequisites, multi-platform binaries, Docker metadata, migration dry-run evidence, frontend archives, self-tested release manifest, deterministic `RELEASE_NOTES.md`, checksum/manifest consistency verification, SBOM, operator deployment and upgrade runbooks, and GitHub-generated release notes | `v2.5.0-rc.6` completed successfully; the stable tag must still be published and retained as the release evidence. |
+| Operations | Release workflow with artifacts, checksums, SBOM | Partial | GitHub Actions is the required release build source; CI accepts stable/alpha/beta/RC tags and publishes primary `anix-control-*` assets plus temporary `v2board-*` compatibility aliases, Docker metadata, migration evidence, manifests, checksums, SBOM, and runbooks | Publish and retain the first AnixOps Control release as migration evidence. |
 | Operations | Automated production deployment | Deferred | Operator-controlled manual deployment | Keep credentials and production rollout manual unless explicitly approved. |
 
 ## Not Implemented Or Not Complete
@@ -114,7 +114,7 @@ These items must not be described as production-complete until the listed gaps a
 | PayPal live order creation | Partial | Webhook verification exists; order creation currently uses a mocked approval URL. |
 | Full Flux Panel clone parity | Partial | Compatibility API and major UI surfaces exist, but relation-backed counters, runtime enforcement, and several parity gaps remain. |
 | Runtime-side speed-limit enforcement | Partial | Management APIs/UI exist; enforcement still needs proof in runtime paths. |
-| gRPC production node transport | Partial | Protobuf/server/client code exists; production startup, config, and integration rollout are not complete. |
+| Agent-first gRPC production control plane | Preview/Partial | The bidirectional stream and bounded built-in operations exist, but it is opt-in, not every production task source dispatches through it, and full restart/replay durability still needs rollout evidence. |
 | P0 WireGuard dual-node relay | Partial/P0 | Panel peer custody, native/sing-box endpoint subscription output, UniProxy/gRPC peer runtime fields, relay TUN contract fields, secure WSS certificate contract, admin visual/keypair workflow, hardened IPv4-only protocol validation, V2bX entry interface, traffic delta parsing, peer online-state reporting, GOST TUN command planning, entry policy routing, exit NAT, tc shaping, dynamic-limit sync, process supervision, runtime health reporting, and release-gated GitHub Actions QUIC/WSS namespace route acceptance jobs exist. `v2.5.0-rc.6` accepted both transports; real client compatibility and cross-region evidence remain. |
 | Automatic node deployment | Planned | Agent/Ansible surfaces exist, but one-click safe production provisioning is not complete. |
 | Complex forwarding failover/load orchestration | Deferred | Deliberately postponed to keep forwarding minimal and auditable. |

@@ -51,8 +51,8 @@ jwt:
   expire: 86400
 
 app:
-  name: "V2Board"
-  version: "2.0.2-test.1"
+  name: "AnixOps Control"
+  version: "3.0.0-alpha.1"
   api_token: "replace-with-node-api-token"
   traffic_log_enable: true
   subscribe_path: "s"
@@ -109,7 +109,7 @@ Then:
 
 ```powershell
 docker compose up -d
-docker compose logs -f v2board
+docker compose logs -f anix-control
 ```
 
 ## 5. What Happens On Startup

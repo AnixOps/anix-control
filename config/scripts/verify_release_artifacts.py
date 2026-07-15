@@ -164,7 +164,7 @@ def write_fixture_manifest(release_dir: Path) -> None:
         if path.is_file() and path.name not in {MANIFEST_NAME, CHECKSUM_NAME}:
             artifacts.append({"name": path.name, "size": path.stat().st_size, "sha256": sha256_file(path)})
     manifest = {
-        "project": "v2board_AnixOps",
+        "project": "anix-control",
         "tag": "v2.4.0",
         "commit": "abc123",
         "run_id": "100",
@@ -202,6 +202,15 @@ def run_self_test() -> None:
         "SHA256SUMS.txt",
         "docker-image.txt",
         "migration-dry-run.txt",
+        "anix-control-source.sbom.spdx.json",
+        "anix-control-frontend.tar.gz",
+        "anix-control-frontend.zip",
+        "anix-control-linux-amd64.tar.gz",
+        "anix-control-linux-arm64.tar.gz",
+        "anix-control-windows-amd64.exe.zip",
+        "anix-control-windows-arm64.exe.zip",
+        "anix-control-darwin-amd64.tar.gz",
+        "anix-control-darwin-arm64.tar.gz",
         "v2board-source.sbom.spdx.json",
         "v2board-frontend.tar.gz",
         "v2board-frontend.zip",
@@ -227,7 +236,7 @@ def run_self_test() -> None:
             manifest_path=release_dir / MANIFEST_NAME,
             checksum_path=release_dir / CHECKSUM_NAME,
             required=required,
-            required_globs=["v2board-linux-*.tar.gz", "v2board-windows-*.zip"],
+            required_globs=["anix-control-linux-*.tar.gz", "anix-control-windows-*.zip"],
         )
 
         corrupt_dir = Path(tmp) / "corrupt"

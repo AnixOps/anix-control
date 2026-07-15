@@ -3,7 +3,7 @@
 # The historical source/Docker installer remains available only through an
 # explicit opt-in. The default path downloads the release installer directly
 # from GitHub and never clones or builds the repository on the target host.
-if [[ "${V2BOARD_LEGACY_SOURCE_INSTALL:-0}" != "1" ]]; then
+if [[ "${ANIX_CONTROL_LEGACY_SOURCE_INSTALL:-${V2BOARD_LEGACY_SOURCE_INSTALL:-0}}" != "1" ]]; then
   set -euo pipefail
   script_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd || true)"
   if [[ -n "${script_dir}" && -f "${script_dir}/scripts/install.sh" ]]; then
@@ -15,7 +15,7 @@ if [[ "${V2BOARD_LEGACY_SOURCE_INSTALL:-0}" != "1" ]]; then
     exit 1
   }
   install_ref="${INSTALL_REF:-go_dev}"
-  installer_url="https://raw.githubusercontent.com/AnixOps/v2board_AnixOps/${install_ref}/scripts/install.sh"
+  installer_url="https://raw.githubusercontent.com/AnixOps/anix-control/${install_ref}/scripts/install.sh"
   installer_file="$(mktemp)"
   trap 'rm -f "${installer_file}"' EXIT
   curl -fsSL "${installer_url}" -o "${installer_file}"
@@ -25,8 +25,8 @@ fi
 
 set -euo pipefail
 
-APP_NAME="v2board-anixops"
-REPO_SLUG="${REPO_SLUG:-anixops/v2board_AnixOps}"
+APP_NAME="anix-control"
+REPO_SLUG="${REPO_SLUG:-AnixOps/anix-control}"
 REPO_REF="${REPO_REF:-go_dev}"
 GIT_URL="https://github.com/${REPO_SLUG}.git"
 ARCHIVE_URL="https://codeload.github.com/${REPO_SLUG}/tar.gz/refs/heads/${REPO_REF}"
@@ -75,7 +75,7 @@ ui_header() {
     clear || true
   fi
   printf '========================================\n'
-  printf '  V2Board AnixOps Installer / Manager\n'
+  printf '  AnixOps Control Installer / Manager\n'
   printf '========================================\n'
   printf 'Repo: %s\n' "$REPO_SLUG"
   printf 'Ref:  %s\n\n' "$REPO_REF"
@@ -383,10 +383,11 @@ VERSION=latest
 PANEL_FRONTEND_PORT=${frontend_port}
 PANEL_API_PORT=${api_port}
 PANEL_GRPC_PORT=${grpc_port}
+PANEL_GRPC_BIND=127.0.0.1
 GRAFANA_PORT=3001
 NGINX_HTTP_PORT=80
 NGINX_HTTPS_PORT=443
-DOCKER_IMAGE=v2board:latest
+DOCKER_IMAGE=anix-control:latest
 EOF
 }
 
@@ -410,6 +411,7 @@ VERSION=latest
 PANEL_FRONTEND_PORT=${frontend_port}
 PANEL_API_PORT=${api_port}
 PANEL_GRPC_PORT=${grpc_port}
+PANEL_GRPC_BIND=127.0.0.1
 GRAFANA_PORT=3001
 NGINX_HTTP_PORT=${http_port}
 NGINX_HTTPS_PORT=${https_port}
@@ -419,7 +421,7 @@ DB_NAME=${db_name}
 REDIS_PASSWORD=${redis_password}
 JWT_SECRET=${jwt_secret}
 API_TOKEN=
-DOCKER_IMAGE=v2board:latest
+DOCKER_IMAGE=anix-control:latest
 GRAFANA_ADMIN=admin
 GRAFANA_PASSWORD=$(random_secret)
 DOMAIN=panel.example.com
@@ -460,7 +462,7 @@ cache:
 log:
   level: "info"
   output: "stdout"
-  file_path: "./logs/v2board.log"
+  file_path: "./logs/anix-control.log"
   max_size: 100
   max_backups: 30
   max_age: 7
@@ -470,11 +472,19 @@ jwt:
   expire: 86400
 
 app:
-  name: "V2Board"
-  version: "2.0.2-test.1"
+  name: "AnixOps Control"
+  version: "3.0.0-alpha.1"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
+
+grpc:
+  enabled: true
+  host: "0.0.0.0"
+  port: 50051
+  api_token: ""
+  tls_cert_file: ""
+  tls_key_file: ""
 
 forward_runtime:
   backend: "${runtime_backend}"
@@ -555,7 +565,7 @@ cache:
 log:
   level: "info"
   output: "stdout"
-  file_path: "./logs/v2board.log"
+  file_path: "./logs/anix-control.log"
   max_size: 100
   max_backups: 30
   max_age: 7
@@ -565,11 +575,19 @@ jwt:
   expire: 86400
 
 app:
-  name: "V2Board"
-  version: "2.0.2-test.1"
+  name: "AnixOps Control"
+  version: "3.0.0-alpha.1"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
+
+grpc:
+  enabled: true
+  host: "0.0.0.0"
+  port: 50051
+  api_token: ""
+  tls_cert_file: ""
+  tls_key_file: ""
 
 forward_runtime:
   backend: "${runtime_backend}"
@@ -610,6 +628,7 @@ install_panel() {
   local admin_email
   local admin_password
   local generated_password=""
+  local existing_config=0
   local frontend_port
   local api_port
   local grpc_port
@@ -632,6 +651,10 @@ install_panel() {
   detect_docker
 
   install_dir="$(ui_input "Install" "Installation directory" "$(default_install_dir)")"
+  if [ -f "$install_dir/config/config.yaml" ]; then
+    existing_config=1
+    log_info "Existing configuration detected; admin credentials and config.yaml will be preserved"
+  fi
   mode_choice="$(ui_menu "Install" "Select deployment mode" "1" "Quick deploy (SQLite + memory cache)" "2" "Production deploy (PostgreSQL + Redis)")"
   case "$mode_choice" in
     2) deploy_mode="production" ;;
@@ -639,11 +662,13 @@ install_panel() {
   esac
 
   timezone="$(ui_input "Install" "Timezone" "Asia/Shanghai")"
-  admin_email="$(ui_input "Install" "Admin email" "admin@panel.local")"
-  admin_password="$(ui_password "Install" "Admin password (leave blank to auto-generate)")"
-  if [ -z "$admin_password" ]; then
-    admin_password="$(random_secret)"
-    generated_password="$admin_password"
+  if [ "$existing_config" -eq 0 ]; then
+    admin_email="$(ui_input "Install" "Admin email" "admin@anixops.local")"
+    admin_password="$(ui_password "Install" "Admin password (leave blank to auto-generate)")"
+    if [ -z "$admin_password" ]; then
+      admin_password="$(random_secret)"
+      generated_password="$admin_password"
+    fi
   fi
 
   if [ "$(ui_menu "Install" "Default forward runtime backend" "1" "gost" "2" "iptables_ansible")" = "2" ]; then
@@ -689,10 +714,14 @@ install_panel() {
 
   if [ "$deploy_mode" = "production" ]; then
     write_prod_env "$install_dir" "$timezone" "$frontend_port" "$api_port" "$grpc_port" "$http_port" "$https_port" "$db_user" "$db_password" "$db_name" "$redis_password" "$jwt_secret" "$runtime_backend"
-    write_prod_config "$install_dir" "$admin_email" "$admin_password" "$jwt_secret" "$db_user" "$db_password" "$db_name" "$redis_password" "$runtime_backend"
+    if [ "$existing_config" -eq 0 ]; then
+      write_prod_config "$install_dir" "$admin_email" "$admin_password" "$jwt_secret" "$db_user" "$db_password" "$db_name" "$redis_password" "$runtime_backend"
+    fi
   else
     write_quick_env "$install_dir" "$timezone" "$frontend_port" "$api_port" "$grpc_port" "$runtime_backend"
-    write_quick_config "$install_dir" "$admin_email" "$admin_password" "$jwt_secret" "$runtime_backend"
+    if [ "$existing_config" -eq 0 ]; then
+      write_quick_config "$install_dir" "$admin_email" "$admin_password" "$jwt_secret" "$runtime_backend"
+    fi
   fi
 
   seed_inventory "$install_dir" "$seed_host" "$seed_user" "$seed_port" "$seed_key"
@@ -707,7 +736,8 @@ install_panel() {
   printf 'Install dir: %s\n' "$install_dir"
   printf 'Frontend:    http://SERVER_IP:%s\n' "$frontend_port"
   printf 'API:         http://SERVER_IP:%s\n' "$api_port"
-  printf 'gRPC:        SERVER_IP:%s\n' "$grpc_port"
+  printf 'gRPC local:  127.0.0.1:%s\n' "$grpc_port"
+  printf 'Security:    Use the TLS proxy or configure gRPC TLS before changing PANEL_GRPC_BIND for remote access.\n'
   if [ "$proxy_enabled" = "1" ]; then
     printf 'Proxy HTTP:   http://SERVER_IP:%s\n' "$http_port"
     printf 'Proxy HTTPS:  https://SERVER_IP:%s\n' "$https_port"
@@ -719,10 +749,14 @@ install_panel() {
     printf 'Grafana:      http://SERVER_IP:%s\n' "${GRAFANA_PORT:-3001}"
   fi
   printf '\n'
-  printf 'Admin email:    %s\n' "$admin_email"
-  printf 'Admin password: %s\n' "$admin_password"
-  if [ -n "$generated_password" ]; then
-    printf '\nA random admin password was generated because you left it blank.\n'
+  if [ "$existing_config" -eq 0 ]; then
+    printf 'Admin email:    %s\n' "$admin_email"
+    printf 'Admin password: %s\n' "$admin_password"
+    if [ -n "$generated_password" ]; then
+      printf '\nA random admin password was generated because you left it blank.\n'
+    fi
+  else
+    printf 'Admin:          preserved from existing config/database\n'
   fi
   printf '\n'
   printf 'Ansible inventory: %s\n' "$install_dir/config/deploy/ansible/inventory.ini"
@@ -812,7 +846,7 @@ uninstall_panel() {
 
 main_menu() {
   ui_menu \
-    "V2Board AnixOps" \
+    "AnixOps Control" \
     "Select an action" \
     "1" "Install or redeploy" \
     "2" "Update" \

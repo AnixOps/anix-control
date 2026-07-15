@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anixops/v2board/internal/model"
-	"github.com/anixops/v2board/internal/payment"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/payment"
 )
 
 // epayGateway 实现 EPay 通用支付的回调验签（MD5 签名约定）。

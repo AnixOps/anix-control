@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anixops/v2board/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/config"
 	"github.com/stretchr/testify/assert"
 )
 

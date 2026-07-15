@@ -4,9 +4,9 @@ import (
 	"errors"
 	"log"
 
-	"github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

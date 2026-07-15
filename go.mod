@@ -1,4 +1,4 @@
-module github.com/anixops/v2board
+module github.com/AnixOps/anix-control/v3
 
 go 1.25.0
 

@@ -5,7 +5,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/anixops/v2board/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 )
 
 // WireGuardFormatter emits native WireGuard configuration blocks. The format is

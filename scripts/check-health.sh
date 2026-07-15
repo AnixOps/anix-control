@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# V2bX 本地开发环境健康检查
+# AnixOps Control / Agent 本地开发环境健康检查
 # 用法: ./scripts/check-health.sh
 set -euo pipefail
 
 V2BOARD_DIR="${V2BOARD_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 
-# Auto-detect sibling repos relative to v2board_AnixOps parent dir
+# Auto-detect sibling repos relative to the anix-control parent directory.
 V2BOARD_PARENT="$(cd "${V2BOARD_DIR}" && dirname "$(pwd)")"
-V2BX_DIR="${V2BX_DIR:-${V2BOARD_PARENT}/V2bX_AnixOps}"
+V2BX_DIR="${ANIX_AGENT_DIR:-${V2BX_DIR:-${V2BOARD_PARENT}/anix-agent}}"
 SPEEDTEST_DIR="${SPEEDTEST_DIR:-${V2BOARD_PARENT}/AnixOps-speedtest}"
 
 # Export for Python heredocs
@@ -27,12 +27,12 @@ fail() { FAIL=$((FAIL+1)); echo "  [FAIL] $*"; }
 warn() { WARN=$((WARN+1)); echo "  [WARN] $*"; }
 
 echo "========================================="
-echo "  V2bX 本地环境健康检查"
+echo "  AnixOps 本地环境健康检查"
 echo "========================================="
 echo ""
 
 # 1. 面板健康检查
-echo "面板 (v2board)"
+echo "AnixOps Control"
 if curl -sf "${PANEL_URL}/health" > /dev/null 2>&1; then
     RESP=$(curl -s "${PANEL_URL}/health")
     pass "面板运行 ${PANEL_URL} - ${RESP}"
@@ -41,13 +41,13 @@ else
 fi
 echo ""
 
-# 2. V2bX 监听
-echo "V2bX 节点"
+# 2. AnixOps Agent 监听
+echo "AnixOps Agent"
 if command -v netstat > /dev/null 2>&1; then
     if netstat -ano 2>/dev/null | grep -q ":${V2BX_PORT}.*LISTEN"; then
-        pass "V2bX 监听 0.0.0.0:${V2BX_PORT}"
+        pass "AnixOps Agent 监听 0.0.0.0:${V2BX_PORT}"
     else
-        fail "V2bX 未监听 :${V2BX_PORT}"
+        fail "AnixOps Agent 未监听 :${V2BX_PORT}"
     fi
 fi
 
@@ -56,10 +56,10 @@ if [ -f "${V2BX_DIR}/logs/v2bx.log" ]; then
         USERS=$(grep "Added.*new users" "${V2BX_DIR}/logs/v2bx.log" | tail -1)
         pass "用户加载: ${USERS}"
     elif grep -q "No users found" "${V2BX_DIR}/logs/v2bx.log" 2>/dev/null; then
-        warn "V2bX 无用户 (数据链路未配置)"
+        warn "AnixOps Agent 无用户 (数据链路未配置)"
     fi
 else
-    warn "无 V2bX 日志文件"
+    warn "无 AnixOps Agent 日志文件"
 fi
 echo ""
 
@@ -164,9 +164,9 @@ print(d['forward_runtime']['backend'])
 fi
 
 if [ -f "${V2BX_DIR}/config.local.json" ]; then
-    pass "V2bX config.local.json 存在"
+    pass "AnixOps Agent config.local.json 存在"
 else
-    fail "V2bX config.local.json 缺失"
+    fail "AnixOps Agent config.local.json 缺失"
 fi
 
 if [ -f "${V2BOARD_DIR}/config/deploy/ansible/inventory.ini" ]; then

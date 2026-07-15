@@ -1,6 +1,6 @@
-# V2Board Docs
+# AnixOps Control Docs
 
-This is the main documentation landing page for `v2board_AnixOps`.
+This is the main documentation landing page for `AnixOps/anix-control`.
 
 Use this tree like NodeX:
 
@@ -14,6 +14,7 @@ Use this tree like NodeX:
 ## Fast Paths
 
 - Feature status register: [`features.md`](features.md)
+- Brand and compatibility migration: [`BRAND_MIGRATION.md`](BRAND_MIGRATION.md)
 - Upgrade runbook: [`UPGRADE.md`](UPGRADE.md)
 - Native release install: [`guide/release-installation.md`](guide/release-installation.md)
 - Legacy panel migration: [`guide/legacy-migration.md`](guide/legacy-migration.md)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/anixops/v2board/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/config"
 )
 
 type RegistrationPolicy struct {

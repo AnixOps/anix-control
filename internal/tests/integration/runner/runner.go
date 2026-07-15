@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/anixops/v2board/internal/tests/integration/clients"
-	"github.com/anixops/v2board/internal/tests/integration/config"
+	"github.com/AnixOps/anix-control/v3/internal/tests/integration/clients"
+	"github.com/AnixOps/anix-control/v3/internal/tests/integration/config"
 )
 
 // TestResult 娴嬭瘯缁撴灉

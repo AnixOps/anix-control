@@ -8,9 +8,10 @@ import (
 	"log/slog"
 	"time"
 
-	pb "github.com/anixops/v2board/api/grpc/v2boardpb"
-	"github.com/anixops/v2board/internal/model"
-	"github.com/anixops/v2board/internal/service"
+	pb "github.com/AnixOps/anix-control/v3/api/grpc/v2boardpb"
+	"github.com/AnixOps/anix-control/v3/internal/branding"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -535,7 +536,7 @@ func NewHealthGRPCServer() *HealthGRPCServer {
 func (s *HealthGRPCServer) Check(ctx context.Context, req *pb.HealthCheckRequest) (*pb.HealthCheckResponse, error) {
 	return &pb.HealthCheckResponse{
 		Status:        pb.HealthCheckResponse_SERVING,
-		ServerVersion: "2.0.2-test.1",
+		ServerVersion: branding.DefaultVersion,
 		Timestamp:     time.Now().Unix(),
 	}, nil
 }
@@ -550,7 +551,7 @@ func (s *HealthGRPCServer) Watch(stream pb.HealthService_WatchServer) error {
 
 		resp := &pb.HealthCheckResponse{
 			Status:        pb.HealthCheckResponse_SERVING,
-			ServerVersion: "2.0.2-test.1",
+			ServerVersion: branding.DefaultVersion,
 			Timestamp:     time.Now().Unix(),
 		}
 

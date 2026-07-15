@@ -9,11 +9,11 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "https://github.com/anixops/v2board",
+        "termsOfService": "https://github.com/AnixOps/anix-control",
         "contact": {
             "name": "API Support",
-            "url": "https://github.com/anixops/v2board/issues",
-            "email": "support@example.com"
+            "url": "https://github.com/AnixOps/anix-control/issues",
+            "email": "support@anixops.com"
         },
         "license": {
             "name": "MIT",
@@ -7963,7 +7963,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "flow": {
-                    "description": "VLESS 特有配置 (对应 V2bX flow, encryption, encryption_settings)",
+                    "description": "VLESS 特有配置 (对应 AnixOps Agent flow, encryption, encryption_settings)",
                     "type": "string"
                 },
                 "group": {
@@ -7998,7 +7998,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "reality_public_key": {
-                    "description": "Reality 配置 (当 TLS=2 时使用, 对应 V2bX tls_settings)",
+                    "description": "Reality 配置 (当 TLS=2 时使用, 对应 AnixOps Agent tls_settings)",
                     "type": "string"
                 },
                 "reality_short_id": {
@@ -8010,7 +8010,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "server": {
-                    "description": "服务器基础配置 (对应 V2bX CommonNode)",
+                    "description": "服务器基础配置 (对应 AnixOps Agent CommonNode)",
                     "type": "string"
                 },
                 "server_name": {
@@ -8022,7 +8022,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "ss_cipher": {
-                    "description": "Shadowsocks 配置 (对应 V2bX cipher, server_key)",
+                    "description": "Shadowsocks 配置 (对应 AnixOps Agent cipher, server_key)",
                     "type": "string"
                 },
                 "ss_server_key": {
@@ -8038,7 +8038,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "tls": {
-                    "description": "TLS 配置 (对应 V2bX tls 字段)",
+                    "description": "TLS 配置 (对应 AnixOps Agent tls 字段)",
                     "type": "integer"
                 },
                 "tls_fingerprint": {
@@ -8046,7 +8046,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "transport": {
-                    "description": "传输层配置 (对应 V2bX network, network_settings)",
+                    "description": "传输层配置 (对应 AnixOps Agent network, network_settings)",
                     "type": "string"
                 },
                 "transport_settings": {
@@ -8216,12 +8216,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "2.0.2-test.1",
+	Version:          "3.0.0-alpha.1",
 	Host:             "localhost:8080",
 	BasePath:         "/api/v2",
 	Schemes:          []string{"http", "https"},
-	Title:            "V2Board AnixOps API",
-	Description:      "V2Board 高性能代理面板管理系统 API 文档\n支持用户管理、节点管理、订阅系统、支付网关、流量转发等功能",
+	Title:            "AnixOps Control API",
+	Description:      "AnixOps Control 统一控制面 API 文档\n支持用户管理、节点管理、订阅系统、支付网关、流量转发等功能",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

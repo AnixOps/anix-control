@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/AnixOps/anix-control/v3/internal/branding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -120,6 +121,18 @@ auth:
 	assert.Equal(t, 4, loadedCfg.Auth.RegisterRateLimit.MaxAttempts)
 	assert.Equal(t, 1800, loadedCfg.Auth.RegisterRateLimit.WindowSeconds)
 	assert.Equal(t, 3600, loadedCfg.Auth.RegisterRateLimit.LockoutSeconds)
+}
+
+func TestLoadUsesAnixOpsControlAsDefaultAppName(t *testing.T) {
+	resetConfig()
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("env: development\n"), 0o644))
+
+	loadedCfg, err := Load(configPath)
+	require.NoError(t, err)
+	require.NotNil(t, loadedCfg)
+	assert.Equal(t, branding.ControlName, loadedCfg.App.Name)
 }
 
 func TestLoadForwardRuntimeConfig(t *testing.T) {
@@ -243,8 +256,8 @@ func TestConfigDefaults(t *testing.T) {
 			Expire: 86400,
 		},
 		App: AppConfig{
-			Name:    "V2Board",
-			Version: "2.0.2-test.1",
+			Name:    branding.ControlName,
+			Version: branding.DefaultVersion,
 		},
 		TLS: TLSConfig{
 			Enable: true,

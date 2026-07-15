@@ -27,7 +27,7 @@ func (SubscriptionGroup) TableName() string {
 
 // SubscriptionTemplate 订阅模板 (JSON 配置模板)
 // 每个模板定义一种节点配置，通过函数变量赋值后下发给用户
-// 符合 V2bX/Xray 协议配置规范
+// 符合 AnixOps Agent/Xray 协议配置规范
 type SubscriptionTemplate struct {
 	ID      uint    `gorm:"primaryKey" json:"id"`
 	GroupID uint    `gorm:"index" json:"group_id"`   // 所属分组
@@ -42,32 +42,32 @@ type SubscriptionTemplate struct {
 	// 以及自定义变量: {{.Custom.xxx}}
 	TemplateJSON string `gorm:"type:text" json:"template_json"`
 
-	// 服务器基础配置 (对应 V2bX CommonNode)
+	// 服务器基础配置 (对应 AnixOps Agent CommonNode)
 	Server     string  `gorm:"size:255" json:"server"`      // 服务器地址 (host)
 	Port       int     `json:"port"`                        // 端口 (server_port)
 	ServerName *string `gorm:"size:255" json:"server_name"` // SNI 服务器名称
 
-	// TLS 配置 (对应 V2bX tls 字段)
+	// TLS 配置 (对应 AnixOps Agent tls 字段)
 	TLS            int     `gorm:"default:0" json:"tls"`           // 0=无, 1=TLS, 2=Reality
 	TLSFingerprint *string `gorm:"size:50" json:"tls_fingerprint"` // TLS 指纹 (chrome, firefox, safari, ios, android, edge, 360, qq, random)
 	ALPN           *string `gorm:"size:100" json:"alpn"`           // ALPN (h2,http/1.1)
 
-	// Reality 配置 (当 TLS=2 时使用, 对应 V2bX tls_settings)
+	// Reality 配置 (当 TLS=2 时使用, 对应 AnixOps Agent tls_settings)
 	RealityPublicKey *string `gorm:"size:100" json:"reality_public_key"` // X25519 公钥 (对应 pbk)
 	RealityShortID   *string `gorm:"size:50" json:"reality_short_id"`    // Short ID (对应 sid)
 	RealitySpiderX   *string `gorm:"size:255" json:"reality_spider_x"`   // SpiderX (对应 spx)
 	RealityDest      *string `gorm:"size:255" json:"reality_dest"`       // 回落目标 (dest)
 
-	// 传输层配置 (对应 V2bX network, network_settings)
+	// 传输层配置 (对应 AnixOps Agent network, network_settings)
 	Transport         string  `gorm:"size:20;default:tcp" json:"transport"`          // 传输协议: tcp, ws, grpc, httpupgrade, xhttp
 	TransportSettings *string `gorm:"type:text" json:"transport_settings,omitempty"` // 传输层配置 JSON
 
-	// VLESS 特有配置 (对应 V2bX flow, encryption, encryption_settings)
+	// VLESS 特有配置 (对应 AnixOps Agent flow, encryption, encryption_settings)
 	Flow               *string `gorm:"size:50" json:"flow"`                  // 流控: xtls-rprx-vision
 	Encryption         *string `gorm:"size:50" json:"encryption"`            // 加密: 空 或 mlkem768x25519plus
 	EncryptionSettings *string `gorm:"type:text" json:"encryption_settings"` // 加密配置 JSON
 
-	// Shadowsocks 配置 (对应 V2bX cipher, server_key)
+	// Shadowsocks 配置 (对应 AnixOps Agent cipher, server_key)
 	SSCipher    *string `gorm:"size:50" json:"ss_cipher"`      // SS 加密方式
 	SSServerKey *string `gorm:"size:100" json:"ss_server_key"` // SS2022 服务器密钥
 
@@ -146,7 +146,7 @@ type TemplateRenderContext struct {
 }
 
 // ParsedNode 解析后的统一节点格式
-// 符合 V2bX/Xray 协议配置规范
+// 符合 AnixOps Agent/Xray 协议配置规范
 type ParsedNode struct {
 	ID     string `json:"id"`     // 唯一标识 (hash)
 	Name   string `json:"name"`   // 节点名称

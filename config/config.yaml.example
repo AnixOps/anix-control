@@ -12,7 +12,7 @@ server:
   read_timeout: 30
   write_timeout: 30
   # Leave empty to disable trusting forwarded client IP headers.
-  # Populate this only with the reverse proxies/load balancers that sit in front of V2Board.
+  # Populate this only with the reverse proxies/load balancers that sit in front of AnixOps Control.
   trusted_proxies: []
   # HTTP CORS and WebSocket Origin allowlist. Empty HTTP CORS echoes any Origin;
   # empty WebSocket origins keep upgrades same-host only while still allowing
@@ -78,8 +78,8 @@ auth:
     blocked_email_domains: []
 
 app:
-  name: "V2Board"
-  version: "2.0.2-test.1"
+  name: "AnixOps Control"
+  version: "3.0.0-alpha.1"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
@@ -176,20 +176,20 @@ forward_runtime:
     concurrency: 16             # max targets probed in parallel
     retention_days: 7           # buckets older than this are purged hourly
 
-# Node-facing gRPC server. V2bX nodes connect here when Transport=grpc.
+# Node-facing gRPC server. The development template binds loopback only.
 # Per-node x-api-key/x-node-id auth is always enforced regardless of api_token.
 # api_token (optional) is a fallback for callers with no node key (e.g. legacy/admin).
-# tls_cert_file/tls_key_file (optional) enable TLS; leave both empty for plaintext.
+# Before accepting remote Agents, configure TLS and change host deliberately.
 grpc:
-  enabled: false
-  host: "0.0.0.0"
+  enabled: true
+  host: "127.0.0.1"
   port: 50051
   api_token: ""
   tls_cert_file: ""
   tls_key_file: ""
 
 admin:
-  email: "v2board@anixops.com"
+  email: "control@anixops.com"
   # Leave empty to generate and print a one-time random bootstrap password.
   password: ""
 

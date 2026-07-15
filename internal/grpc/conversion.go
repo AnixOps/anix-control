@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math"
 
-	pb "github.com/anixops/v2board/api/grpc/v2boardpb"
-	"github.com/anixops/v2board/internal/model"
+	pb "github.com/AnixOps/anix-control/v3/api/grpc/v2boardpb"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 )
 
 const (

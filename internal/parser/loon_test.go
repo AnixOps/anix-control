@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/anixops/v2board/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 	"github.com/stretchr/testify/require"
 )
 

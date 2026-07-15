@@ -1,9 +1,9 @@
 package grpc
 
 import (
-	pb "github.com/anixops/v2board/api/grpc/v2boardpb"
-	"github.com/anixops/v2board/internal/model"
-	"github.com/anixops/v2board/internal/service"
+	pb "github.com/AnixOps/anix-control/v3/api/grpc/v2boardpb"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 )
 
 // fillNodeConfigResponse 用共享的 service.BuildNodeProtocolConfig 填充 gRPC 的

@@ -6,6 +6,8 @@
 *.dylib
 v2board
 v2board-*
+anix-control
+anix-control-*
 
 # Test binary
 *.test

@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

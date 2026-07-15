@@ -1,4 +1,4 @@
-﻿# V2Board AnixOps 部署指南
+﻿# AnixOps Control 部署指南
 
 本文档覆盖本项目的常见部署方式：本地开发、Docker Compose、生产环境部署与运维。
 
@@ -23,8 +23,8 @@
 当前已经实机验证通过的路径是：
 
 - `binary + SQLite + systemd`
-- `v2board` UI: `3000`
-- `v2board` API: `8080`
+- AnixOps Control UI: `3000`
+- AnixOps Control API: `8080`
 - NodeX control-plane: `18081`
 - relay gost API: `18080`
 - 已验证运行时：
@@ -36,6 +36,11 @@
 
 - 它是当前文档里最权威的“已跑通”版本
 - Docker 部署仍然会继续补齐，但不应被误读成当前已经完成同等级实机验证的 forward-runtime 基线
+
+AnixOps Agent 的默认控制通道使用 gRPC `50051`。开发环境可以只在
+loopback 或受控私网使用明文；公网部署必须配置 `grpc.tls_cert_file` 和
+`grpc.tls_key_file`，或放在支持 HTTP/2 gRPC 的四层/反向代理之后，并通过
+防火墙限制来源。旧配置中的 `grpc.enabled: false` 不会被升级程序自动改写。
 
 ## 目录
 
@@ -88,8 +93,8 @@ an image digest supplied by the GitHub Release metadata.
 
 ```bash
 # 1) 克隆仓库
-git clone https://github.com/AnixOps/v2board_AnixOps.git
-cd v2board_AnixOps
+git clone https://github.com/AnixOps/anix-control.git
+cd anix-control
 
 # 2) 准备配置
 cp .env.example .env
@@ -109,7 +114,7 @@ docker compose up -d
 
 # 6) 查看状态与日志
 docker compose ps
-docker compose logs -f v2board
+docker compose logs -f anix-control
 ```
 
 默认访问地址：`http://localhost:8080`
@@ -121,17 +126,17 @@ docker compose logs -f v2board
 生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像：
 
 ```bash
-export VERSION=v2.5.0
+export VERSION=v3.0.0-alpha.1
 curl -fsSL \
-  "https://raw.githubusercontent.com/AnixOps/v2board_AnixOps/${VERSION}/scripts/install.sh" \
-  -o /tmp/v2board-install.sh
-sudo bash /tmp/v2board-install.sh install --version "${VERSION}" --admin-email "admin@example.com"
-rm -f /tmp/v2board-install.sh
+  "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
+  -o /tmp/anix-control-install.sh
+sudo bash /tmp/anix-control-install.sh install --version "${VERSION}" --admin-email "admin@example.com"
+rm -f /tmp/anix-control-install.sh
 ```
 
 安装器会验证 Release 中的 SHA-256，保留已有配置和数据库，更新失败时恢复上一个二进制/前端快照。完整步骤、反向代理、升级与回滚说明见 [`guide/release-installation.md`](guide/release-installation.md)。
 
-历史源码/Docker 安装器仍保留给受控恢复场景；必须显式设置 `V2BOARD_LEGACY_SOURCE_INSTALL=1`，不是正式发布路径。
+历史源码/Docker 安装器仍保留给受控恢复场景；必须显式设置 `ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1`，不是正式发布路径。
 
 ### 2.2 Docker 内置 ansible-playbook
 
@@ -170,12 +175,12 @@ rm -f /tmp/v2board-install.sh
 
 说明：
 
-- `nftables_ansible` 是当前推荐的本地无状态后端；`iptables_ansible` 仅保留给旧 relay 环境的兼容入口。两者都由 `v2board` 内置的 panel-host executor 执行。
+- `nftables_ansible` 是当前推荐的本地无状态后端；`iptables_ansible` 仅保留给旧 relay 环境的兼容入口。两者都由 AnixOps Control 内置的 panel-host executor 执行。
 - 本地 Ansible 路径不等同于 `NodeX`，也不属于 `flux-panel` 原始 `/forward` 页面契约。
 - 示例 inventory 模板位于 `config/deploy/ansible/inventory.ini.example`，安装脚本会复制为 `inventory.ini`。
 - SSH 密钥目录为 `config/deploy/ssh/`，会被挂载到容器内的 `/home/v2board/.ssh`。
 - Docker 启动时会先读取 `config/config.yaml.forward_runtime`，并把这些值同步到系统配置表；环境变量不影响 runtime 行为。
-- 如果 NodeX 与 `v2board` 不在同一个网络命名空间，`forward_runtime.nodex.base_url` 不能写成容器内的 `127.0.0.1`，应写成可达的宿主机地址或 Compose service 名。
+- 如果 NodeX 与 AnixOps Control 不在同一个网络命名空间，`forward_runtime.nodex.base_url` 不能写成容器内的 `127.0.0.1`，应写成可达的宿主机地址或 Compose service 名。
 - 如果没有 SSH 私钥，调整 `config/deploy/ansible/inventory.ini` 或所选本地 ansible block 下的 `extra_vars` 来提供目标主机的账户信息。
 - 容器启动时会基于 `config/config.yaml.forward_runtime` 写入 runtime 配置；非 root 用户可以直接在 YAML 中设置 `forward_runtime.nftables_ansible.become=true`，sudo 凭据则放在 inventory 或其他 ansible 变量里。若使用 legacy path，则对应改 `forward_runtime.iptables_ansible.become=true`。
 - 后端切换、运行时任务观测和部署引导应停留在系统/部署文档范围内，不应并入 Flux 克隆的 `/admin/forward` 页面。
@@ -218,16 +223,16 @@ npm run dev
 ### 架构建议
 
 - 反向代理：Nginx 或 Caddy（统一 TLS 终止）
-- 应用服务：`v2board`（Go 二进制）
+- 应用服务：`anix-control`（Go 二进制）
 - 数据库：PostgreSQL（优先）
 - 缓存：Redis（多实例/高并发场景）
 - 监控：Prometheus（可选），内置 Grafana（可选）
 
 ### systemd 二进制更新
 
-- systemd 服务名默认是 `v2board.service`，可用 `SERVICE_NAME=xxx.service` 覆盖。
+- systemd 服务名默认是 `anix-control.service`，旧部署可用 `SERVICE_NAME=v2board` 原位升级。
 - GitHub Release 中的匹配平台二进制是唯一发行二进制来源。
-- GitHub Release 中的 `v2board-frontend.tar.gz` 或 `v2board-frontend.zip` 是唯一发行前端来源。
+- GitHub Release 中的 `anix-control-frontend.tar.gz` 或 `anix-control-frontend.zip` 是主发行前端来源；同内容 `v2board-*` 文件仅用于迁移兼容。
 - 部署前必须校验 `SHA256SUMS.txt`，再停止服务、替换二进制和前端静态文件、启动服务并验证 `/health`。
 
 `config/deploy/deploy_panel.sh` 会执行本地源码构建，默认拒绝运行。旧入口 `config/scripts/deploy.sh` 只是兼容包装器，也默认拒绝运行；`config/scripts/pre-deploy.sh` 的本地构建检查同样默认拒绝。它们只保留给开发或紧急人工操作，不能作为发行版本构建路径。如确需使用，必须显式设置 `ALLOW_LOCAL_BUILD=1`，并在变更记录中说明原因。CI 会运行 `config/deploy/check_release_build_policy.sh`，阻止未声明 GitHub Actions-only 策略和 `ALLOW_LOCAL_BUILD` guard 的本地部署 build 命令进入部署脚本。
@@ -303,7 +308,7 @@ docker compose -f docker-compose.prod.yml --profile prometheus --profile grafana
 | 配置项 | 说明 |
 |--------|------|
 | `forward.runtime.nodex.base_url` | NodeX 控制面基础地址（如 `https://nodex.example.com`）。当前 `/admin/forward` 运行时与 legacy rule sync 的 NodeX 调用都要求显式配置该值。 |
-| `forward.runtime.nodex.token` | NodeX 控制面认证令牌。当前 `panel_forward` 运行时要求显式配置该值，请不要把它和 relay `ForwardNode.api_token` 混用。前者用于 `v2board -> NodeX`，后者用于 `NodeX -> relay gost API`。 |
+| `forward.runtime.nodex.token` | NodeX 控制面认证令牌。当前 `panel_forward` 运行时要求显式配置该值，请不要把它和 relay `ForwardNode.api_token` 混用。前者用于 `AnixOps Control -> NodeX`，后者用于 `NodeX -> relay gost API`。 |
 | `forward.runtime.nodex.timeout_seconds` | 可选；请求超时时间（秒，默认 15）。通过 `config/config.yaml.forward_runtime` 设置即可。 |
 
 > 当前 `panel_forward`（`/admin/forward` 创建、更新、暂停、删除、诊断等）与 `legacy_rule` 同步都会走 NodeX control-plane 的 `/api/v2/internal/forward/runtime/execute`。因此 `forward.runtime.nodex.base_url` 现在必须显式指向 NodeX 控制面；客户端不会再隐式猜测 ingress/relay 节点的 `host:apiPort` 作为外层控制面地址，缺失该值会直接报错。
@@ -423,13 +428,13 @@ cp config/data/v2board.db config/data/v2board.db.backup
 PostgreSQL：
 
 ```bash
-docker exec v2board-db pg_dump -U v2board v2board > backup.sql
+docker exec anix-control-db pg_dump -U v2board v2board > backup.sql
 ```
 
 ### 恢复（PostgreSQL）
 
 ```bash
-docker exec -i v2board-db psql -U v2board v2board < backup.sql
+docker exec -i anix-control-db psql -U v2board v2board < backup.sql
 ```
 
 建议使用 `crontab` 做每日自动备份，并设置保留策略。

@@ -6,9 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/model"
-	"github.com/anixops/v2board/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/branding"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -61,7 +62,7 @@ func defaultMFAAdminConfig() mfaAdminConfig {
 		EnforceForAdmin:  false,
 		Methods:          defaultMFAMethods(),
 		AllowedMethods:   []string{"totp", "email"},
-		TOTPIssuer:       "V2Board",
+		TOTPIssuer:       branding.ControlName,
 		BackupCodesCount: 10,
 		BackupCodeCount:  10,
 		MaxAttempts:      5,
@@ -197,7 +198,7 @@ func normalizeMFAConfig(cfg mfaAdminConfig) mfaAdminConfig {
 	}
 
 	if strings.TrimSpace(cfg.TOTPIssuer) == "" {
-		cfg.TOTPIssuer = "V2Board"
+		cfg.TOTPIssuer = branding.ControlName
 	}
 	if cfg.BackupCodesCount <= 0 {
 		cfg.BackupCodesCount = 10

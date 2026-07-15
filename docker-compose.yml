@@ -1,14 +1,15 @@
-# V2Board Go Backend - Docker Compose
+# AnixOps Control - Docker Compose
 # 零依赖部署：SQLite + 内存缓存
 
 services:
-  v2board:
+  anix-control:
     build: .
-    container_name: v2board
+    image: ${DOCKER_IMAGE:-anix-control:latest}
+    container_name: anix-control
     ports:
       - "${PANEL_API_PORT:-8080}:8080"        # HTTP API
       - "${PANEL_FRONTEND_PORT:-3000}:3000"   # Frontend/UI
-      - "${PANEL_GRPC_PORT:-50051}:50051"     # gRPC
+      - "${PANEL_GRPC_BIND:-127.0.0.1}:${PANEL_GRPC_PORT:-50051}:50051" # gRPC; expose publicly only with TLS
     volumes:
       - ./config:/app/config
       - ./config/data:/app/config/data
@@ -29,13 +30,12 @@ services:
       retries: 3
       start_period: 10s
 
----
 # 生产环境部署：PostgreSQL + Redis
 
 # services:
 #   api:
 #     build: .
-#     container_name: v2board-api
+#     container_name: anix-control
 #     restart: unless-stopped
 #     ports:
 #       - "8080:8080"
@@ -52,7 +52,7 @@ services:
 #       redis:
 #         condition: service_healthy
 #     networks:
-#       - v2board-network
+#       - anix-control-network
 #     healthcheck:
 #       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
 #       interval: 30s
@@ -62,7 +62,7 @@ services:
 #
 #   db:
 #     image: postgres:16-alpine
-#     container_name: v2board-db
+#     container_name: anix-control-db
 #     restart: unless-stopped
 #     environment:
 #       POSTGRES_USER: v2board
@@ -72,7 +72,7 @@ services:
 #     volumes:
 #       - postgres-data:/var/lib/postgresql/data
 #     networks:
-#       - v2board-network
+#       - anix-control-network
 #     healthcheck:
 #       test: ["CMD-SHELL", "pg_isready -U v2board"]
 #       interval: 10s
@@ -81,13 +81,13 @@ services:
 #
 #   redis:
 #     image: redis:7-alpine
-#     container_name: v2board-redis
+#     container_name: anix-control-redis
 #     restart: unless-stopped
 #     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_secret}
 #     volumes:
 #       - redis-data:/data
 #     networks:
-#       - v2board-network
+#       - anix-control-network
 #     healthcheck:
 #       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_secret}", "ping"]
 #       interval: 10s
@@ -96,7 +96,7 @@ services:
 #
 #   nginx:
 #     image: nginx:alpine
-#     container_name: v2board-nginx
+#     container_name: anix-control-nginx
 #     restart: unless-stopped
 #     ports:
 #       - "80:80"
@@ -108,10 +108,10 @@ services:
 #     depends_on:
 #       - api
 #     networks:
-#       - v2board-network
+#       - anix-control-network
 #
 # networks:
-#   v2board-network:
+#   anix-control-network:
 #     driver: bridge
 #
 # volumes:

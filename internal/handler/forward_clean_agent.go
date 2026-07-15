@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/anixops/v2board/internal/config"
-	"github.com/anixops/v2board/internal/database"
-	"github.com/anixops/v2board/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v3/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -246,7 +246,7 @@ chmod 0600 "${CONFIG_FILE}"
 
 cat > "${SERVICE_FILE}" <<EOF
 [Unit]
-Description=V2Board Clean Forward Agent
+Description=AnixOps Agent Forward Compatibility Worker
 After=network-online.target
 Wants=network-online.target
 

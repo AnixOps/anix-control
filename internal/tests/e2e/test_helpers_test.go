@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/anixops/v2board/internal/database"
+	"github.com/AnixOps/anix-control/v3/internal/database"
 	"github.com/stretchr/testify/require"
 )
 

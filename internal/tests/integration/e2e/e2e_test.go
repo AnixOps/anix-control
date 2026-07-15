@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anixops/v2board/internal/tests/integration/echo"
+	"github.com/AnixOps/anix-control/v3/internal/tests/integration/echo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/proxy"

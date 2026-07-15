@@ -29,7 +29,7 @@ ARG BUILD_CODE
 ARG COMMIT=unknown
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
-    -o v2board ./cmd/server
+    -o anix-control ./cmd/server
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -47,13 +47,13 @@ RUN apt-get update && \
         tzdata && \
     rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
+# Keep the historical runtime user/home path during the compatibility window.
 RUN useradd --create-home --uid 1000 --shell /bin/bash v2board
 
 WORKDIR /app
 
 # Copy binary and config
-COPY --from=builder /app/v2board .
+COPY --from=builder /app/anix-control .
 COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/config/config.yaml.example ./config/config.yaml.example
 COPY --from=builder /app/config/deploy ./config/deploy
@@ -63,6 +63,7 @@ COPY --from=builder /app/web/public ./web/public
 
 # Create necessary directories
 RUN mkdir -p /app/config/data /app/web/public /app/logs /home/v2board/.ssh && \
+    ln -s /app/anix-control /app/v2board && \
     chown -R v2board:v2board /app /home/v2board && \
     chmod 700 /home/v2board/.ssh
 
@@ -83,4 +84,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -fsS http://localhost:8080/health >/dev/null || exit 1
 
 # Default command
-CMD ["./v2board", "-config", "config/config.yaml"]
+CMD ["./anix-control", "-config", "config/config.yaml"]

@@ -23,7 +23,7 @@ func main() {
 	ctx := context.Background()
 
 	fmt.Println("========================================")
-	fmt.Println("    V2Board 完整 E2E 验证测试")
+	fmt.Println("    AnixOps Control 完整 E2E 验证测试")
 	fmt.Println("========================================")
 	fmt.Println()
 
@@ -41,7 +41,7 @@ func main() {
 	httpClient := &http.Client{Timeout: 10 * time.Second}
 
 	// 1. 检查服务器
-	fmt.Println("[1/7] 检查 V2Board 服务器...")
+	fmt.Println("[1/7] 检查 AnixOps Control 服务器...")
 	healthURL := buildVerifyURL(panelBaseURL, "health")
 	resp, err := getVerifyURL(ctx, httpClient, healthURL)
 	if err != nil {
@@ -52,7 +52,7 @@ func main() {
 		fmt.Printf("❌ 健康检查响应读取失败: %v\n", err)
 		return
 	}
-	fmt.Println("✅ V2Board 服务器运行正常")
+	fmt.Println("AnixOps Control 服务器运行正常")
 	fmt.Println()
 
 	// 2. 获取订阅
@@ -221,7 +221,7 @@ func main() {
 		Timeout:   10 * time.Second,
 	}
 
-	// 通过代理访问本地 V2Board 服务器
+	// 通过代理访问本地 AnixOps Control 服务器
 	testURL := buildVerifyURL(panelBaseURL, "health")
 	start := time.Now()
 	resp, err = getVerifyURL(ctx, proxyHTTPClient, testURL)
@@ -303,7 +303,7 @@ func main() {
 	fmt.Println("========================================")
 	fmt.Println("           测试结果汇总")
 	fmt.Println("========================================")
-	fmt.Println("✅ V2Board 服务器运行正常")
+	fmt.Println("AnixOps Control 服务器运行正常")
 	fmt.Println("✅ 订阅 API 工作正常")
 	fmt.Println("✅ Xray 服务端启动成功")
 	fmt.Println("✅ Xray 客户端启动成功")

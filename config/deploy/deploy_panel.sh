@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build and deploy the v2board panel binary from the local source tree.
+# Build and deploy the AnixOps Control binary from the local source tree.
 #
 # Usage: ./config/deploy/deploy_panel.sh
 #
@@ -15,11 +15,11 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SERVICE_NAME="${SERVICE_NAME:-v2board.service}"
+SERVICE_NAME="${SERVICE_NAME:-}"
 INSTALL_PATH="${INSTALL_PATH:-}"
 CONFIG_PATH="${CONFIG_PATH:-}"
 WORKING_DIR="${WORKING_DIR:-}"
-BUILD_OUTPUT="${REPO_ROOT}/v2board"
+BUILD_OUTPUT="${REPO_ROOT}/anix-control"
 REPO_UID="$(stat -c %u "${REPO_ROOT}")"
 REPO_GID="$(stat -c %g "${REPO_ROOT}")"
 DEPLOY_STOPPED=0
@@ -143,6 +143,14 @@ ensure_node_version_supported() {
 detect_systemd_paths() {
   local exec_start detected_install detected_config detected_workdir
 
+  if [[ -z "${SERVICE_NAME}" ]]; then
+    SERVICE_NAME="anix-control.service"
+    if [[ "$("${SUDO[@]}" systemctl show anix-control.service -p LoadState --value 2>/dev/null || true)" != "loaded" ]] &&
+       [[ "$("${SUDO[@]}" systemctl show v2board.service -p LoadState --value 2>/dev/null || true)" == "loaded" ]]; then
+      SERVICE_NAME="v2board.service"
+    fi
+  fi
+
   exec_start=$("${SUDO[@]}" systemctl show "${SERVICE_NAME}" -p ExecStart --value 2>/dev/null || true)
   detected_install=$(sed -n 's/.*path=\([^ ;}]*\).*/\1/p' <<<"${exec_start}" | head -n1)
   detected_config=$(sed -n 's/.*-config[= ]\([^ ;}]*\).*/\1/p' <<<"${exec_start}" | head -n1)
@@ -158,8 +166,8 @@ detect_systemd_paths() {
     WORKING_DIR="${detected_workdir}"
   fi
 
-  INSTALL_PATH="${INSTALL_PATH:-/usr/local/v2board/v2board}"
-  CONFIG_PATH="${CONFIG_PATH:-/etc/v2board/config.yaml}"
+  INSTALL_PATH="${INSTALL_PATH:-/opt/anixops/control/bin/anix-control}"
+  CONFIG_PATH="${CONFIG_PATH:-/opt/anixops/control/config/config.yaml}"
   WORKING_DIR="${WORKING_DIR:-$(dirname "${CONFIG_PATH}")}"
 }
 
@@ -455,7 +463,7 @@ echo "    working directory: ${WORKING_DIR}"
 
 echo "==> Building panel binary from ${REPO_ROOT}"
 cd "${REPO_ROOT}"
-VERSION="${VERSION:-$(sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' cmd/server/main.go | head -n1)}"
+VERSION="${VERSION:-$(sed -n 's/^[[:space:]]*DefaultVersion[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' internal/branding/branding.go | head -n1)}"
 VERSION="${VERSION:-dev}"
 BUILD_TIME=$(date +%Y%m%d%H%M%S)
 BUILD_CODE="${BUILD_TIME}"
@@ -494,6 +502,7 @@ append_frontend_dir "${FRONTEND_STATIC_DIR}"
 append_frontend_dir "${WORKING_DIR}/web/public"
 append_frontend_dir "$(dirname "${CONFIG_PATH}")/web/public"
 append_frontend_dir "$(dirname "${INSTALL_PATH}")/web/public"
+append_frontend_dir "/opt/anixops/control/web/public"
 append_frontend_dir "/var/lib/v2board/web/public"
 append_frontend_dir "/var/lib/v2board/frontend"
 append_frontend_dir "/opt/v2board/web/public"

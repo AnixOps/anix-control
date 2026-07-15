@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"github.com/anixops/v2board/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/model"
 )
 
 // Parser 订阅解析器接口
