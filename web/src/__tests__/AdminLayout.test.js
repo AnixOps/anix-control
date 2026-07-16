@@ -59,6 +59,7 @@ const adminMenuPaths = [
 describe('AdminLayout.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    useUserStore().getUserInfo = vi.fn()
     mockRoute.path = '/admin/dashboard'
     mockAdminExtensionMenus.value = []
     mockPush.mockReset()

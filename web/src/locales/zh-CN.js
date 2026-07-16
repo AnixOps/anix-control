@@ -1028,7 +1028,7 @@ export default {
       exportModal: {
         eyebrow: 'Export',
         title: '\u5bfc\u51fa\u8f6c\u53d1\u6570\u636e',
-        subtitle: '格式：兼容 relay-panel 的 JSON：[{ "dest": ["host:port"], "listen_port": 10086, "name": "规则" }]',
+        subtitle: '格式：兼容 relay-panel 的 JSON：{\'[{ "dest": ["host:port"], "listen_port": 10086, "name": "规则" }\'}]',
         tunnelLabel: '\u9009\u62e9\u5bfc\u51fa\u96a7\u9053',
         tunnelPlaceholder: '\u8bf7\u9009\u62e9\u96a7\u9053',
         generating: '\u751f\u6210\u4e2d...',
@@ -1041,11 +1041,11 @@ export default {
         eyebrow: 'Import',
         title: '\u5bfc\u5165\u8f6c\u53d1\u6570\u636e',
         subtitle: '支持 relay-panel JSON 和旧格式 remoteAddr|name|inPort，inPort 可留空。',
-        subtitleSecondary: 'JSON 示例：[{ "dest": ["3.3.3.3:3", "4.4.4.4:4"], "listen_port": 10086, "name": "业务入口" }]',
+        subtitleSecondary: 'JSON 示例：{\'[{ "dest": ["3.3.3.3:3", "4.4.4.4:4"], "listen_port": 10086, "name": "业务入口" }\'}]',
         tunnelLabel: '\u9009\u62e9\u5bfc\u5165\u96a7\u9053',
         tunnelPlaceholder: '\u8bf7\u9009\u62e9\u96a7\u9053',
         dataLabel: '\u5bfc\u5165\u6570\u636e',
-        placeholder: '[{"dest":["example.com:8080"],"listen_port":10086,"name":"业务入口"}]',
+        placeholder: '{\'[{"dest":["example.com:8080"],"listen_port":10086,"name":"业务入口"}]\'}',
         resultTitle: '\u5bfc\u5165\u7ed3\u679c',
         resultSummary: '\u6210\u529f\uff1a{success} / \u603b\u8ba1\uff1a{total}',
         statusSuccess: '\u6210\u529f',
@@ -1522,7 +1522,7 @@ export default {
         healthCheck: '启用健康检查',
         checkInterval: '检查间隔 (秒)',
         weightsJson: '节点权重 (JSON)',
-        weightsPlaceholder: '{"1": 10, "2": 5}'
+        weightsPlaceholder: '{\'{"1": 10, "2": 5}\'}'
       },
       strategy: {
         roundRobin: '轮询',

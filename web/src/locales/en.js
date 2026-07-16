@@ -1019,7 +1019,7 @@ export default {
       exportModal: {
         eyebrow: 'Export',
         title: 'Export Forward Data',
-        subtitle: 'Format: relay-panel compatible JSON: [{ "dest": ["host:port"], "listen_port": 10086, "name": "Rule" }]',
+        subtitle: 'Format: relay-panel compatible JSON: {\'[{ "dest": ["host:port"], "listen_port": 10086, "name": "Rule" }\'}]',
         tunnelLabel: 'Select Export Tunnel',
         tunnelPlaceholder: 'Please select a tunnel',
         generating: 'Generating...',
@@ -1032,11 +1032,11 @@ export default {
         eyebrow: 'Import',
         title: 'Import Forward Data',
         subtitle: 'Supports relay-panel JSON and legacy remoteAddr|name|inPort lines. inPort may be blank.',
-        subtitleSecondary: 'JSON example: [{ "dest": ["3.3.3.3:3", "4.4.4.4:4"], "listen_port": 10086, "name": "Business Entry" }]',
+        subtitleSecondary: 'JSON example: {\'[{ "dest": ["3.3.3.3:3", "4.4.4.4:4"], "listen_port": 10086, "name": "Business Entry" }\'}]',
         tunnelLabel: 'Select Import Tunnel',
         tunnelPlaceholder: 'Please select a tunnel',
         dataLabel: 'Import Data',
-        placeholder: '[{"dest":["example.com:8080"],"listen_port":10086,"name":"Business Entry"}]',
+        placeholder: '{\'[{"dest":["example.com:8080"],"listen_port":10086,"name":"Business Entry"}]\'}',
         resultTitle: 'Import Results',
         resultSummary: 'Success: {success} / Total: {total}',
         statusSuccess: 'Success',
@@ -1514,7 +1514,7 @@ export default {
         healthCheck: 'Enable health check',
         checkInterval: 'Check Interval (seconds)',
         weightsJson: 'Node Weights (JSON)',
-        weightsPlaceholder: '{"1": 10, "2": 5}'
+        weightsPlaceholder: '{\'{"1": 10, "2": 5}\'}'
       },
       strategy: {
         roundRobin: 'Round Robin',

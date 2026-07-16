@@ -67,6 +67,10 @@
 
 ### Fixed
 
+- Silenced misleading frontend test-run stderr by mocking AdminLayout profile
+  refreshes in its unit tests and escaping JSON examples in locale messages so
+  vue-i18n no longer reports placeholder compilation errors during successful
+  runs.
 - Serialized Control package operations per installation, added target-level
   dependency/conflict transaction locks and lifecycle-generation idempotency,
   and made lease loss cancel the executor while automatic rollback remains
