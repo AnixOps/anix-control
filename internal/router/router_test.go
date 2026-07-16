@@ -1,15 +1,20 @@
 package router
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/AnixOps/anix-control/v3/internal/cache"
 	"github.com/AnixOps/anix-control/v3/internal/config"
 	"github.com/AnixOps/anix-control/v3/internal/database"
 	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/service"
+	"github.com/AnixOps/anix-control/v3/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,6 +73,87 @@ func TestSetup_HealthEndpoint(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "ok")
+}
+
+func TestSetup_V3KernelAccessGroupsRequireAdminAndPersistScope(t *testing.T) {
+	r, cfg := setupTestRouter(t)
+	defer teardownTestRouter(t)
+	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+
+	payload, err := json.Marshal(gin.H{"scope_id": "forward", "name": "canary", "enabled": true})
+	require.NoError(t, err)
+	request := httptest.NewRequest(http.MethodPost, "/api/v3/access-groups", bytes.NewReader(payload))
+	request.Header.Set("Content-Type", "application/json")
+	unauthenticated := httptest.NewRecorder()
+	r.ServeHTTP(unauthenticated, request)
+	assert.Equal(t, http.StatusUnauthorized, unauthenticated.Code)
+
+	token, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
+	require.NoError(t, err)
+	request = httptest.NewRequest(http.MethodPost, "/api/v3/access-groups", bytes.NewReader(payload))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+token)
+	created := httptest.NewRecorder()
+	r.ServeHTTP(created, request)
+	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
+
+	listRequest := httptest.NewRequest(http.MethodGet, "/api/v3/access-groups?scope_id=forward", nil)
+	listRequest.Header.Set("Authorization", "Bearer "+token)
+	listed := httptest.NewRecorder()
+	r.ServeHTTP(listed, listRequest)
+	require.Equal(t, http.StatusOK, listed.Code, listed.Body.String())
+	assert.Contains(t, listed.Body.String(), "canary")
+}
+
+func TestSetup_V3KernelOperationIsIdempotent(t *testing.T) {
+	r, cfg := setupTestRouter(t)
+	defer teardownTestRouter(t)
+	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+	manifestJSON, err := service.CanonicalPluginManifest(service.PluginManifest{
+		ID: "subscription", Name: "Subscription", Version: "1.0.0", APIVersion: "v1", Publisher: "AnixOps",
+		Targets: []string{"control"}, ArtifactSHA256: strings.Repeat("a", 64),
+	})
+	require.NoError(t, err)
+	require.NoError(t, database.GetDB().Create(&model.PluginRelease{
+		PluginID: "subscription", Version: "1.0.0", APIVersion: "v1", ManifestJSON: string(manifestJSON),
+		ArtifactSHA256: strings.Repeat("a", 64), Signature: "test",
+	}).Error)
+	token, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
+	require.NoError(t, err)
+	payload, err := json.Marshal(gin.H{
+		"operation_id": "73c38025-6e13-4af8-a3bc-f3204bbf7cee", "idempotency_key": "router-operation-1",
+		"plugin_id": "subscription", "target_version": "1.0.0", "kind": "plugin.health",
+		"revision": 1, "config": gin.H{}, "deadline_at": time.Now().Add(time.Minute).UTC(),
+	})
+	require.NoError(t, err)
+	for attempt, expectedStatus := range []int{http.StatusAccepted, http.StatusOK} {
+		request := httptest.NewRequest(http.MethodPost, "/api/v3/operations", bytes.NewReader(payload))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Authorization", "Bearer "+token)
+		recorder := httptest.NewRecorder()
+		r.ServeHTTP(recorder, request)
+		require.Equalf(t, expectedStatus, recorder.Code, "attempt %d: %s", attempt, recorder.Body.String())
+	}
+}
+
+func TestSetup_V3ExtensionsRequiresAdminAndReturnsEmptyCatalog(t *testing.T) {
+	r, cfg := setupTestRouter(t)
+	defer teardownTestRouter(t)
+	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v3/extensions", nil)
+	unauthenticated := httptest.NewRecorder()
+	r.ServeHTTP(unauthenticated, request)
+	require.Equal(t, http.StatusUnauthorized, unauthenticated.Code)
+
+	token, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
+	require.NoError(t, err)
+	request = httptest.NewRequest(http.MethodGet, "/api/v3/extensions", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	recorder := httptest.NewRecorder()
+	r.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.JSONEq(t, `{"data":[]}`, recorder.Body.String())
 }
 
 func TestSetup_MetricsEndpoint(t *testing.T) {

@@ -36,6 +36,7 @@ type agentOperationKey struct {
 // without depending on the gRPC stream implementation.
 type DesiredOperationDispatcher interface {
 	DispatchOperation(context.Context, uint32, *agentv1pb.DesiredOperation) (*agentv1pb.OperationAck, error)
+	CancelOperation(context.Context, uint32, string, uint64) error
 }
 
 // ObservedStateHandler adapts terminal Agent state back into durable job state.
@@ -316,6 +317,60 @@ func (m *AgentControlManager) DispatchOperation(ctx context.Context, nodeID uint
 	}
 }
 
+// CancelOperation sends an out-of-band cancellation for an operation already
+// present in desired state. It intentionally does not allocate another
+// revision or desired record; the Agent reports the original operation's
+// terminal observation after cancelling its execution context.
+func (m *AgentControlManager) CancelOperation(ctx context.Context, nodeID uint32, operationID string, revision uint64) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if strings.TrimSpace(operationID) == "" || revision == 0 {
+		return fmt.Errorf("operation cancellation identity is required")
+	}
+	m.mu.RLock()
+	connection := m.connections[nodeID]
+	m.mu.RUnlock()
+	if connection == nil {
+		return fmt.Errorf("agent node %d is not connected", nodeID)
+	}
+	connection.sendMu.Lock()
+	defer connection.sendMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	current := m.connections[nodeID]
+	desired := m.desired[nodeID][operationID]
+	supported := connectionSupportsOperation(connection, "operation.cancel")
+	if current == connection && supported && desired == nil {
+		if m.desired[nodeID] == nil {
+			m.desired[nodeID] = make(map[string]*agentv1pb.DesiredOperation)
+		}
+		desired = &agentv1pb.DesiredOperation{OperationId: operationID, Kind: "operation.cancel", Revision: revision}
+		m.desired[nodeID][operationID] = desired
+		if revision > m.desiredRevision[nodeID] {
+			m.desiredRevision[nodeID] = revision
+		}
+	}
+	m.mu.Unlock()
+	if current != connection {
+		return fmt.Errorf("agent node %d connection changed during cancellation", nodeID)
+	}
+	if !supported {
+		return fmt.Errorf("agent node %d does not advertise capability %q", nodeID, "operation.cancel")
+	}
+	if desired == nil || desired.Revision != revision {
+		return fmt.Errorf("operation %q is not active at revision %d", operationID, revision)
+	}
+	return connection.stream.Send(&agentv1pb.ControlToAgent{
+		RequestId: newAgentControlID("cancel"), NodeId: nodeID, Revision: revision, SentAtUnixMs: time.Now().UnixMilli(),
+		Payload: &agentv1pb.ControlToAgent_DesiredOperation{DesiredOperation: &agentv1pb.DesiredOperation{
+			OperationId: operationID, Kind: "operation.cancel", Revision: revision,
+		}},
+	})
+}
+
 func (m *AgentControlManager) removePending(key agentOperationKey, waiter chan *agentv1pb.OperationAck) {
 	m.mu.Lock()
 	if current := m.pending[key]; current == waiter {
@@ -445,16 +500,25 @@ func (m *AgentControlManager) replayDesiredLocked(connection *AgentControlConnec
 		return operations[i].Revision < operations[j].Revision
 	})
 	for _, operation := range operations {
+		replayed, err := rebindKernelDesiredSession(operation, connection.SessionID)
+		if err != nil {
+			return err
+		}
+		m.mu.Lock()
+		if current := m.desired[connection.NodeID][operation.OperationId]; current != nil {
+			current.PayloadJson = append(current.PayloadJson[:0], replayed.PayloadJson...)
+		}
+		m.mu.Unlock()
 		if err := connection.stream.Send(&agentv1pb.ControlToAgent{
 			RequestId:    newAgentControlID("replay"),
 			NodeId:       connection.NodeID,
-			Revision:     operation.Revision,
+			Revision:     replayed.Revision,
 			SentAtUnixMs: time.Now().UnixMilli(),
 			Payload: &agentv1pb.ControlToAgent_DesiredOperation{
-				DesiredOperation: operation,
+				DesiredOperation: replayed,
 			},
 		}); err != nil {
-			return fmt.Errorf("replay desired operation %q: %w", operation.OperationId, err)
+			return fmt.Errorf("replay desired operation %q: %w", replayed.OperationId, err)
 		}
 	}
 	return nil

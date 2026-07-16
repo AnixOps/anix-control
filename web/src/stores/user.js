@@ -43,6 +43,19 @@ function normalizeUserInfo(value) {
   return user
 }
 
+function normalizePermissionList(value) {
+  if (Array.isArray(value)) {
+    return [...new Set(value.filter(item => typeof item === 'string').map(item => item.trim()).filter(Boolean))]
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value)
+      .filter(([, enabled]) => enabled === true || enabled === 1 || enabled === '1')
+      .map(([permission]) => permission.trim())
+      .filter(Boolean)
+  }
+  return null
+}
+
 export const useUserStore = defineStore('user', () => {
   const token = ref(normalizeToken(localStorage.getItem('token') || ''))
   const userInfo = ref(normalizeUserInfo(readStoredUserInfo()))
@@ -54,6 +67,19 @@ export const useUserStore = defineStore('user', () => {
 
   const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => normalizeAdminFlag(userInfo.value.is_admin))
+  const permissions = computed(() => normalizePermissionList(userInfo.value.permissions))
+
+  function hasPermission(permission) {
+    const required = typeof permission === 'string' ? permission.trim() : ''
+    if (!required) {
+      return true
+    }
+    const granted = permissions.value
+    if (granted === null) {
+      return isAdmin.value
+    }
+    return granted.includes(required)
+  }
 
   function login(newToken, user) {
     token.value = normalizeToken(newToken)
@@ -91,6 +117,8 @@ export const useUserStore = defineStore('user', () => {
     userInfo,
     isLoggedIn,
     isAdmin,
+    permissions,
+    hasPermission,
     login,
     logout,
     getUserInfo

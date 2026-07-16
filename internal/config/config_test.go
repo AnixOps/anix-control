@@ -123,6 +123,28 @@ auth:
 	assert.Equal(t, 3600, loadedCfg.Auth.RegisterRateLimit.LockoutSeconds)
 }
 
+func TestLoadPluginDispatchConfig(t *testing.T) {
+	resetConfig()
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	content := `
+plugins:
+  official_public_key: "ZmFrZS1wdWJsaWMta2V5"
+  control_execution_enabled: true
+  control_poll_interval: "3s"
+  dispatch_enabled: true
+  dispatch_poll_interval: 7s
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
+
+	loaded, err := Load(configPath)
+	require.NoError(t, err)
+	require.True(t, loaded.Plugins.DispatchEnabled)
+	require.True(t, loaded.Plugins.ControlExecutionEnabled)
+	assert.Equal(t, "3s", loaded.Plugins.ControlPollInterval)
+	assert.Equal(t, "7s", loaded.Plugins.DispatchPollInterval)
+	assert.Equal(t, "ZmFrZS1wdWJsaWMta2V5", loaded.Plugins.OfficialPublicKey)
+}
+
 func TestLoadUsesAnixOpsControlAsDefaultAppName(t *testing.T) {
 	resetConfig()
 

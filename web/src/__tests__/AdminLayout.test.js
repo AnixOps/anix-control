@@ -8,6 +8,7 @@ import AdminLayout from '@/layouts/AdminLayout.vue'
 const mockPush = vi.fn()
 const mockRoute = reactive({ path: '/admin/dashboard' })
 const mockGetSystemInfo = vi.hoisted(() => vi.fn())
+const mockAdminExtensionMenus = vi.hoisted(() => ({ value: [] }))
 
 vi.mock('vue-router', () => ({
   routeLocationKey: Symbol('route location'),
@@ -17,6 +18,10 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/api/admin', () => ({
   getSystemInfo: (...args) => mockGetSystemInfo(...args),
+}))
+
+vi.mock('@/extensions/runtime', () => ({
+  adminExtensionMenus: mockAdminExtensionMenus,
 }))
 
 const adminMenuPaths = [
@@ -48,12 +53,14 @@ const adminMenuPaths = [
   '/admin/knowledge',
   '/admin/mfa',
   '/admin/system',
+  '/admin/control',
 ]
 
 describe('AdminLayout.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mockRoute.path = '/admin/dashboard'
+    mockAdminExtensionMenus.value = []
     mockPush.mockReset()
     mockGetSystemInfo.mockReset()
     mockGetSystemInfo.mockResolvedValue({ data: { version: '2.0.0' } })
@@ -164,6 +171,73 @@ describe('AdminLayout.vue', () => {
     expect(links).toEqual(expect.arrayContaining(adminMenuPaths))
   })
 
+  it('projects enabled extension menus and titles without changing core navigation', () => {
+    const userStore = useUserStore()
+    userStore.login('admin-token', { id: 1, is_admin: true, permissions: ['example.view'] })
+    mockAdminExtensionMenus.value = [{
+      pluginID: 'example',
+      id: 'example.main',
+      parent: 'services',
+      label: 'Example Service',
+      icon: 'EX',
+      to: '/admin/extensions/example',
+      permission: 'example.view',
+      order: 100,
+    }]
+    mockRoute.path = '/admin/extensions/example'
+
+    const wrapper = mount(AdminLayout, {
+      global: {
+        stubs: {
+          'router-link': {
+            props: ['to'],
+            template: '<a class="menu-link" :data-to="to"><slot /></a>',
+          },
+          'router-view': true,
+        },
+      },
+    })
+
+    const links = wrapper.findAll('a.menu-link').map(link => link.attributes('data-to'))
+    expect(links).toContain('/admin/extensions/example')
+    expect(links).toContain('/admin/dashboard')
+    expect(wrapper.find('.topbar-title').text()).toContain('Example Service')
+    expect(wrapper.text()).toContain('Extensions')
+  })
+
+  it('hides extension menus when the admin lacks the plugin permission', () => {
+    const userStore = useUserStore()
+    userStore.login('admin-token', { id: 1, is_admin: true, permissions: ['other.view'] })
+    mockAdminExtensionMenus.value = [{
+      pluginID: 'example',
+      id: 'example.main',
+      parent: 'services',
+      label: 'Example Service',
+      icon: 'EX',
+      to: '/admin/extensions/example',
+      permission: 'example.view',
+      order: 100,
+    }]
+    mockRoute.path = '/admin/extensions/example'
+
+    const wrapper = mount(AdminLayout, {
+      global: {
+        stubs: {
+          'router-link': {
+            props: ['to'],
+            template: '<a class="menu-link" :data-to="to"><slot /></a>',
+          },
+          'router-view': true,
+        },
+      },
+    })
+
+    const links = wrapper.findAll('a.menu-link').map(link => link.attributes('data-to'))
+    expect(links).not.toContain('/admin/extensions/example')
+    expect(wrapper.text()).not.toContain('Extensions')
+    expect(wrapper.find('.topbar-title').text()).not.toContain('Example Service')
+  })
+
   it('updates page title on route changes for key admin pages', async () => {
     const wrapper = mount(AdminLayout, {
       global: {
@@ -197,6 +271,10 @@ describe('AdminLayout.vue', () => {
     mockRoute.path = '/admin/forward/nodes'
     await nextTick()
     expect(wrapper.find('.topbar-title').text()).toContain('NodeX Topology')
+
+    mockRoute.path = '/admin/control'
+    await nextTick()
+    expect(wrapper.find('.topbar-title').text()).toContain('Control Kernel')
   })
 
   it('shows NodeX title for the dedicated runtime route', async () => {

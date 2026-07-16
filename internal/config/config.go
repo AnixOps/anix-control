@@ -28,7 +28,19 @@ type Config struct {
 	Admin          AdminConfig          `yaml:"admin"`
 	TLS            TLSConfig            `yaml:"tls"`
 	ForwardRuntime ForwardRuntimeConfig `yaml:"forward_runtime"`
+	Plugins        PluginConfig         `yaml:"plugins"`
 	GRPC           GRPCConfig           `yaml:"grpc"`
+}
+
+// PluginConfig controls the official plugin trust root and the opt-in durable
+// lifecycle dispatcher. Third-party plugin execution is intentionally
+// unsupported by the control kernel.
+type PluginConfig struct {
+	OfficialPublicKey       string `yaml:"official_public_key"`
+	ControlExecutionEnabled bool   `yaml:"control_execution_enabled"`
+	ControlPollInterval     string `yaml:"control_poll_interval"`
+	DispatchEnabled         bool   `yaml:"dispatch_enabled"`
+	DispatchPollInterval    string `yaml:"dispatch_poll_interval"`
 }
 
 // GRPCConfig controls the node-facing gRPC server (AnixOps Agent nodes connect here).

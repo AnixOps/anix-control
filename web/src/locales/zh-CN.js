@@ -252,6 +252,7 @@ export default {
       forwardLocal: '本地运行时',
       forwardNodeX: 'NodeX 运行时',
       forwardAgents: 'NodeX Agents',
+      control: '控制内核',
       payment: '支付网关管理',
       telegram: 'Telegram Bot 管理',
       mfa: 'MFA 设置',
@@ -286,6 +287,7 @@ export default {
         finance: '财务',
         notifications: '通知',
         content: '内容管理',
+        extensions: '扩展',
         system: '系统'
       },
       nav: {
@@ -305,6 +307,7 @@ export default {
         notifications: '通知管理',
         knowledge: '知识库',
         mfa: 'MFA 设置',
+        control: '控制内核',
         system: '系统管理',
         nodeXAgentsLegacy: 'NodeX Agents Legacy'
       }
@@ -2993,6 +2996,18 @@ export default {
       resetSubscribeSuccess: '订阅链接已重置',
       resetSubscribeFailed: '重置订阅失败'
     }
+  },
+  control: {
+    actions: { refresh: '刷新', refreshing: '刷新中...' },
+    tabs: { plugins: '插件', scopes: '作用域', topologies: '拓扑', operations: '操作' },
+    table: {
+      plugin: '插件', publisher: '发布者', installation: '安装目标', desiredVersion: '期望版本', observedVersion: '实际版本', state: '状态',
+      scope: '作用域', owner: '所有者', description: '说明', topology: '拓扑', activeRevision: '激活 revision',
+      operation: '操作', revision: 'revision', deadline: '截止时间'
+    },
+    states: { catalogued: '已登记', loading: '正在加载控制状态...' },
+    empty: { plugins: '暂无插件', scopes: '暂无服务作用域', topologies: '暂无拓扑', operations: '暂无操作' },
+    errors: { load: '无法加载控制状态' }
   },
   legacy
 }

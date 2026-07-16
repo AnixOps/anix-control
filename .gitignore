@@ -71,6 +71,8 @@ test-reports/
 web/coverage/
 web/bundle-reports/
 web/bundle-reports-check/
+web/playwright-report/
+web/test-results/
 
 # Secrets and local state (never commit)
 .authkey

@@ -84,6 +84,21 @@ app:
   traffic_log_enable: true
   subscribe_path: "s"
 
+# Base64-encoded Ed25519 public key used to verify official AnixOps plugin
+# manifests before a release can be registered through /api/v3.
+plugins:
+  official_public_key: ""
+  # Disabled until the 3.1 package-runtime promotion evidence passes. This
+  # enables Control package API execution and the durable Control lifecycle
+  # worker; signed catalog and WebUI inspection remain available while off.
+  control_execution_enabled: false
+  control_poll_interval: "5s"
+  # Disabled by default. Enabling this starts durable Control -> Agent plugin
+  # lifecycle delivery and requires grpc.enabled plus an explicit Agent
+  # Supervisor opt-in on each target node.
+  dispatch_enabled: false
+  dispatch_poll_interval: "5s"
+
 # Canonical forward runtime config for Windows/Linux/local binary/Docker.
 # Startup order:
 # 1. read forward_runtime from config.yaml

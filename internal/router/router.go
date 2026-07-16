@@ -626,4 +626,63 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			internalAPI.POST("/auth-keys", nodeHandlerForInternal.InternalGenerateAuthKey)
 		}
 	}
+
+	// API v3 is the control-kernel surface. Legacy business APIs remain under
+	// /api/v2 while services are migrated behind plugin compatibility adapters.
+	v3 := r.Group("/api/v3")
+	v3.Use(adminLimiter.Middleware())
+	v3.Use(middleware.JWTAuth())
+	v3.Use(middleware.AdminAuth())
+	v3.Use(middleware.AuditLog())
+	{
+		kernel := handler.NewKernelHandler()
+		v3.GET("/extensions", kernel.ListExtensions)
+		v3.GET("/extensions/:plugin_id/:version/webui/:sha256/:filename", kernel.ServePluginWebUIAsset)
+		v3.GET("/plugins", kernel.ListPlugins)
+		v3.Any("/plugins/:plugin_id/*route", kernel.PluginRouteGateway)
+		v3.GET("/plugin-releases", kernel.ListPluginReleases)
+		v3.POST("/plugin-releases", kernel.RegisterPluginRelease)
+		v3.GET("/plugin-releases/:id/artifact", kernel.GetPluginReleaseArtifact)
+		v3.POST("/plugin-releases/:id/artifact", kernel.UploadPluginReleaseArtifact)
+		v3.GET("/plugin-installations", kernel.ListPluginInstallations)
+		v3.PUT("/plugin-installations", kernel.UpsertPluginInstallation)
+		v3.POST("/plugin-installations/:id/actions", kernel.PluginInstallationAction)
+		v3.GET("/plugin-installations/:id/config", kernel.GetPluginInstallationConfiguration)
+		v3.PUT("/plugin-installations/:id/config", kernel.UpdatePluginInstallationConfiguration)
+
+		v3.GET("/service-scopes", kernel.ListServiceScopes)
+		v3.GET("/access-groups", kernel.ListAccessGroups)
+		v3.POST("/access-groups", kernel.CreateAccessGroup)
+		v3.PUT("/access-groups/:id", kernel.UpdateAccessGroup)
+		v3.DELETE("/access-groups/:id", kernel.DeleteAccessGroup)
+		v3.POST("/access-groups/:id/users", kernel.AddGroupUser)
+		v3.DELETE("/access-groups/:id/users/:user_id", kernel.RemoveGroupUser)
+		v3.POST("/access-groups/:id/plans", kernel.AddGroupPlan)
+		v3.DELETE("/access-groups/:id/plans/:plan_id", kernel.RemoveGroupPlan)
+		v3.GET("/access-groups/resolve", kernel.ResolveAccess)
+		v3.GET("/resource-grants", kernel.ListResourceGrants)
+		v3.POST("/resource-grants", kernel.CreateResourceGrant)
+		v3.DELETE("/resource-grants/:id", kernel.DeleteResourceGrant)
+		v3.GET("/quota-policies", kernel.ListQuotaPolicies)
+		v3.PUT("/quota-policies", kernel.UpsertQuotaPolicy)
+		v3.DELETE("/quota-policies/:id", kernel.DeleteQuotaPolicy)
+
+		v3.GET("/nodes/:id/plugins", kernel.ListAssignments)
+		v3.GET("/nodes/:id/assignments", kernel.ListAssignments)
+		v3.PUT("/nodes/:id/assignments", kernel.UpsertAssignment)
+		v3.DELETE("/nodes/:id/assignments/:assignment_id", kernel.DeleteAssignment)
+
+		v3.GET("/topologies", kernel.ListTopologies)
+		v3.POST("/topologies", kernel.CreateTopology)
+		v3.POST("/topologies/validate", kernel.ValidateTopology)
+		v3.GET("/topologies/:id/revisions", kernel.ListTopologyRevisions)
+		v3.POST("/topologies/:id/revisions", kernel.CreateTopologyRevision)
+		v3.GET("/topologies/:id/revisions/:revision_id", kernel.GetTopologyRevision)
+		v3.GET("/deployments", kernel.ListDeployments)
+		v3.POST("/deployments", kernel.PlanDeployment)
+		v3.GET("/operations", kernel.ListOperations)
+		v3.POST("/operations", kernel.CreateOperation)
+		v3.POST("/operations/:id/cancel", kernel.CancelOperation)
+		v3.GET("/observed-states", kernel.ListObservedStates)
+	}
 }

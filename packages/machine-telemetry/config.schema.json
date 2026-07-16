@@ -1,0 +1,18 @@
+{
+  "$id": "urn:anixops:plugin:machine-telemetry:config:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "interval_seconds": {
+      "default": 30,
+      "maximum": 3600,
+      "minimum": 5,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "interval_seconds"
+  ],
+  "title": "Machine Telemetry Configuration",
+  "type": "object"
+}

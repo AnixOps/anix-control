@@ -13,6 +13,19 @@ operation `revision`; every observed state also carries the active
 `session_id`. Control rejects messages from a replaced session or messages
 whose revision does not match the retained desired operation.
 
+Plugin lifecycle operations use a strict JSON envelope inside
+`DesiredOperation.payload_json`. Schema `anixops.operation/v1` carries
+`operation_id`, `idempotency_key`, `session_id`, `revision`, `plugin_id`,
+`target_version`, `config_hash`, and `config`. Duplicated IDs and revisions
+must match the protobuf fields. The config hash is SHA-256 over the exact JSON
+bytes; configuration may contain Secret IDs or `*_ref`, never secret values.
+
+An Agent advertises `plugin.inspect/configure/enable/disable/update/rollback/health`
+only with explicit `PluginSupervisorEnabled`. The Supervisor accepts official
+Ed25519-signed Agent artifacts, journals operations durably, and controls
+independent plugin processes over Unix socket gRPC. Legacy configurations do
+not advertise or execute plugin operations.
+
 The Agent sends its latest observed revision in the `Hello` envelope. Control
 reconciles its revision counter to at least that value before replying, sends
 `HelloAck` before publishing the connection, then replays retained operations
@@ -22,11 +35,14 @@ when accepting an operation and immediately before execution; an operation
 that became stale in the queue is reported as `SUPERSEDED` without invoking
 the runtime handler.
 
-Control retains unobserved operations in memory and replays them after a stream
-reconnect. Delivery is at least once, so operation handlers must be idempotent.
-A future durable worker adapter must persist desired operations across Control
-process restarts, and the Agent's bounded completion cache is not durable
-across Agent process restarts.
+Control retains stream-level unobserved operations in memory and replays them
+after reconnect. Delivery is at least once, so handlers must be idempotent. The
+Control Kernel persists canonical operation config and the Supervisor persists
+its local journal. When `plugins.dispatch_enabled` is explicitly enabled,
+Control claims pending lifecycle operations, injects the live session into the
+envelope, waits for receipt ACKs, and writes observed state back to the durable
+operation row. The Agent client's bounded completion cache remains an
+in-memory optimization.
 
 Control integration points:
 
@@ -37,8 +53,9 @@ Control integration points:
 - `AddObservedStateHandler` is the adapter surface for durable state write-back.
 
 Durable `ForwardRuntimeJob` workers can be connected through the dispatcher and
-observed-state adapters, but that write-through is not enabled yet. The current
-Agent does not advertise or execute a `forward.task` capability, so legacy
+observed-state adapters, but the current bridge only dispatches implemented
+`plugin.*` lifecycle capabilities. The current Agent does not advertise or
+execute a `forward.task` capability, so legacy
 `clean_agent` jobs must keep their existing polling/result path until a real
 local forward executor is implemented. REST, the existing v2board gRPC
 services, and the legacy WebSocket sync channel remain compatibility/fallback

@@ -8,6 +8,7 @@ const messages = {
   'pageTitles.admin.monitor': 'Monitor',
   'pageTitles.admin.trafficHourly': 'Hourly Traffic',
   'pageTitles.admin.forwardNodeX': 'NodeX Runtime',
+  'pageTitles.admin.control': 'Control Kernel',
   'app.meta.defaultDescription': 'Default app description',
   'app.meta.loginDescription': 'Login page description',
   'app.meta.userDescription': 'User workspace description',
@@ -26,6 +27,7 @@ describe('pageMeta helpers', () => {
     expect(resolveRoutePageTitle(t, '/admin/monitor', 'Fallback')).toBe('Monitor')
     expect(resolveRoutePageTitle(t, '/admin/traffic-hourly', 'Fallback')).toBe('Hourly Traffic')
     expect(resolveRoutePageTitle(t, '/admin/forward/nodex', 'Fallback')).toBe('NodeX Runtime')
+    expect(resolveRoutePageTitle(t, '/admin/control', 'Fallback')).toBe('Control Kernel')
   })
 
   it('falls back when a route is not mapped', () => {
