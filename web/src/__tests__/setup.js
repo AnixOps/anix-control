@@ -1,5 +1,5 @@
 import { config } from '@vue/test-utils'
-import { beforeAll, beforeEach, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, vi } from 'vitest'
 config.global.plugins = []
 config.global.mocks = {
   $router: {
@@ -57,4 +57,9 @@ beforeEach(async () => {
   sessionStorage.clear()
   localStorage.setItem('app.locale', 'en')
   await i18nModule.setLocale('en')
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
 })

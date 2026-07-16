@@ -628,7 +628,9 @@ func TestAgentControlStreamRejectsDisabledNode(t *testing.T) {
 	defer cancel()
 	stream, err := agentv1pb.NewAgentControlServiceClient(environment.conn).ControlStream(ctx)
 	require.NoError(t, err)
-	require.NoError(t, stream.Send(validAgentHello(uint32(environment.node.ID))))
+	// The server rejects disabled nodes before reading the first application
+	// message. A client Send may therefore race with the final status and return
+	// io.EOF; Recv is the authoritative way to observe the gRPC status.
 	_, err = stream.Recv()
 	require.Error(t, err)
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -656,7 +658,6 @@ func TestAgentControlStreamRejectsMissingAndWrongNodeCredentials(t *testing.T) {
 			defer cancel()
 			stream, err := agentv1pb.NewAgentControlServiceClient(environment.conn).ControlStream(ctx)
 			require.NoError(t, err)
-			require.NoError(t, stream.Send(validAgentHello(uint32(environment.node.ID))))
 			_, err = stream.Recv()
 			require.Error(t, err)
 			assert.Equal(t, codes.Unauthenticated, status.Code(err))
