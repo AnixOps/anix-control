@@ -143,10 +143,13 @@ check_release_workflow() {
   require_text "Run destructive restore rehearsal on disposable PostgreSQL" "PostgreSQL restore rehearsal execution step" || failed=1
   require_text "scripts/postgres_restore_rehearsal.sh" "PostgreSQL restore rehearsal script invocation" || failed=1
   require_text "name: postgres-restore-rehearsal" "PostgreSQL restore rehearsal evidence artifact" || failed=1
-  require_text "Machine Telemetry Package Release Contract" "official plugin package release job" || failed=1
-  require_text "packages/machine-telemetry/tests/release_gate.sh" "official plugin package release gate invocation" || failed=1
+  require_text "Plugin Package Release Contracts" "official plugin package release job" || failed=1
+  require_text "packages/machine-telemetry/tests/release_gate.sh" "machine telemetry package release gate invocation" || failed=1
+  require_text "packages/nftables-forward/tests/release_gate.sh" "nftables forward package release gate invocation" || failed=1
+  require_text "packages/nftables-forward/tests/webui_smoke.mjs" "nftables forward WebUI smoke gate" || failed=1
   require_text "set -o pipefail" "official plugin package gate failure propagation" || failed=1
-  require_text "name: machine-telemetry-package-contract-report" "official plugin package contract artifact" || failed=1
+  require_text "name: plugin-package-contract-reports" "official plugin package contract artifact" || failed=1
+  require_text "nftables-forward-package-contract.txt" "nftables forward package contract report" || failed=1
   require_text "Publish Signed Machine Telemetry Package" "signed official plugin package publish job" || failed=1
   require_text "ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY" "production plugin signing secret" || failed=1
   require_text "scripts/sign_plugin_release.sh" "production plugin signing script" || failed=1
@@ -253,15 +256,17 @@ jobs:
           name: postgres-restore-rehearsal
 
   plugin-package-release-test:
-    name: Machine Telemetry Package Release Contract
+    name: Plugin Package Release Contracts
     steps:
       - name: Run reproducible unsigned and signed package contract
         run: |
           set -o pipefail
           bash packages/machine-telemetry/tests/release_gate.sh | tee package-contract.txt
+          bash packages/nftables-forward/tests/release_gate.sh | tee nftables-forward-package-contract.txt
+          node packages/nftables-forward/tests/webui_smoke.mjs
       - uses: actions/upload-artifact@v7
         with:
-          name: machine-telemetry-package-contract-report
+          name: plugin-package-contract-reports
 
   plugin-package-publish:
     name: Publish Signed Machine Telemetry Package
@@ -377,7 +382,7 @@ EOF
   fi
 
   cp "${fixture}" "${fixture}.missing-plugin-package-gate"
-  sed -i '/plugin-package-release-test/d;/Machine Telemetry Package Release Contract/d;/packages\/machine-telemetry\/tests\/release_gate.sh/d;/machine-telemetry-package-contract-report/d' "${fixture}.missing-plugin-package-gate"
+  sed -i '/plugin-package-release-test/d;/Plugin Package Release Contracts/d;/packages\/machine-telemetry\/tests\/release_gate.sh/d;/packages\/nftables-forward\/tests\/release_gate.sh/d;/packages\/nftables-forward\/tests\/webui_smoke.mjs/d;/plugin-package-contract-reports/d;/nftables-forward-package-contract.txt/d' "${fixture}.missing-plugin-package-gate"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-plugin-package-gate" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing plugin package gate should fail" >&2
     return 1

@@ -1,0 +1,46 @@
+{
+  "$id": "urn:anixops:plugin:nftables-forward:config:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "chain_priority": {
+      "default": 0,
+      "maximum": 1000,
+      "minimum": -1000,
+      "type": "integer"
+    },
+    "family": {
+      "default": "inet",
+      "enum": [
+        "inet",
+        "ip",
+        "ip6"
+      ],
+      "type": "string"
+    },
+    "rollback_snapshot": {
+      "default": true,
+      "type": "boolean"
+    },
+    "table_name": {
+      "default": "anixops_forward",
+      "maxLength": 48,
+      "minLength": 3,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "type": "string"
+    },
+    "udp_enabled": {
+      "default": true,
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "chain_priority",
+    "family",
+    "rollback_snapshot",
+    "table_name",
+    "udp_enabled"
+  ],
+  "title": "nftables Forward Configuration",
+  "type": "object"
+}

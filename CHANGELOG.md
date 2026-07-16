@@ -43,6 +43,11 @@
   `machine-telemetry` package, requiring the
   `ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY` GitHub secret and publishing package,
   manifest, signature, public-key, and checksum evidence.
+- Added the `nftables-forward` reference package source with deterministic
+  package builds, dependency-free WebUI smoke coverage, public-key-only
+  signature verification, tamper rejection, and CI release-contract evidence;
+  real Agent runtime and network-namespace traffic evidence remain 3.2
+  blockers before production data-plane canary.
 - Introduced the AnixOps Control / AnixOps Agent product identity, primary `anix-control` binaries, frontend archives and Docker images, stable/alpha/beta/RC release tag support, and a documented compatibility window with legacy `v2board-*` release aliases.
 - Added a tag-pinned native release installer that downloads and verifies GitHub Actions-built panel/frontend assets without cloning or building on the target host, preserves configuration/data, and restores the previous application snapshot after a failed health check.
 - Added detailed release installation and legacy migration guides covering fresh install, update, rollback, SQLite-to-PostgreSQL boundaries, foreign-panel migration limits, coordinated node rollout, and retained evidence.

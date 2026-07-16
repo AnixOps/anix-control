@@ -52,11 +52,13 @@ jobs:
       - name: Validate PostgreSQL restore rehearsal syntax
         run: bash -n scripts/postgres_restore_rehearsal.sh
 
-      - name: Validate Machine Telemetry package release scripts
+      - name: Validate plugin package release scripts
         run: |
           bash -n packages/machine-telemetry/tests/release_gate.sh
+          bash -n packages/nftables-forward/tests/release_gate.sh
           bash -n scripts/sign_plugin_release.sh
           python3 -m py_compile packages/machine-telemetry/build.py packages/machine-telemetry/verify_signature.py
+          python3 -m py_compile packages/nftables-forward/build.py packages/nftables-forward/verify_signature.py
 
       - name: Validate release build policy script syntax
         run: bash -n config/deploy/check_release_build_policy.sh
@@ -546,7 +548,7 @@ jobs:
           path: postgres-restore-rehearsal/
 
   plugin-package-release-test:
-    name: Machine Telemetry Package Release Contract
+    name: Plugin Package Release Contracts
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -568,17 +570,27 @@ jobs:
       - name: Run Machine Telemetry WebUI smoke test
         run: node packages/machine-telemetry/tests/webui_smoke.mjs
 
+      - name: Run nftables Forward package unit tests
+        run: python3 -m unittest discover -s packages/nftables-forward/tests -p 'test_*.py' -v
+
+      - name: Run nftables Forward WebUI smoke test
+        run: node packages/nftables-forward/tests/webui_smoke.mjs
+
       - name: Run reproducible unsigned and signed package contract
         run: |
           set -o pipefail
           bash packages/machine-telemetry/tests/release_gate.sh \
             | tee machine-telemetry-package-contract.txt
+          bash packages/nftables-forward/tests/release_gate.sh \
+            | tee nftables-forward-package-contract.txt
 
       - name: Upload package contract report
         uses: actions/upload-artifact@v7
         with:
-          name: machine-telemetry-package-contract-report
-          path: machine-telemetry-package-contract.txt
+          name: plugin-package-contract-reports
+          path: |
+            machine-telemetry-package-contract.txt
+            nftables-forward-package-contract.txt
 
   plugin-package-publish:
     name: Publish Signed Machine Telemetry Package
