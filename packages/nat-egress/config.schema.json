@@ -1,0 +1,53 @@
+{
+  "$id": "urn:anixops:plugin:nat-egress:config:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "default_mark": {
+      "default": 100,
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "egress_interface": {
+      "default": "eth0",
+      "minLength": 1,
+      "type": "string"
+    },
+    "health_check_interval_seconds": {
+      "default": 15,
+      "maximum": 300,
+      "minimum": 5,
+      "type": "integer"
+    },
+    "health_check_target": {
+      "default": "1.1.1.1:443",
+      "type": "string"
+    },
+    "ipv4_masquerade": {
+      "default": true,
+      "type": "boolean"
+    },
+    "ipv6_masquerade": {
+      "default": false,
+      "type": "boolean"
+    },
+    "policy_table": {
+      "default": 100,
+      "maximum": 252,
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "default_mark",
+    "egress_interface",
+    "health_check_interval_seconds",
+    "health_check_target",
+    "ipv4_masquerade",
+    "ipv6_masquerade",
+    "policy_table"
+  ],
+  "title": "NAT Egress Configuration",
+  "type": "object"
+}

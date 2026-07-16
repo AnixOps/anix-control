@@ -56,9 +56,13 @@ jobs:
         run: |
           bash -n packages/machine-telemetry/tests/release_gate.sh
           bash -n packages/nftables-forward/tests/release_gate.sh
+          bash -n packages/gost-mesh/tests/release_gate.sh
+          bash -n packages/nat-egress/tests/release_gate.sh
           bash -n scripts/sign_plugin_release.sh
           python3 -m py_compile packages/machine-telemetry/build.py packages/machine-telemetry/verify_signature.py
           python3 -m py_compile packages/nftables-forward/build.py packages/nftables-forward/verify_signature.py
+          python3 -m py_compile packages/gost-mesh/build.py packages/gost-mesh/verify_signature.py
+          python3 -m py_compile packages/nat-egress/build.py packages/nat-egress/verify_signature.py
 
       - name: Validate release build policy script syntax
         run: bash -n config/deploy/check_release_build_policy.sh
@@ -576,6 +580,18 @@ jobs:
       - name: Run nftables Forward WebUI smoke test
         run: node packages/nftables-forward/tests/webui_smoke.mjs
 
+      - name: Run GOST Mesh package unit tests
+        run: python3 -m unittest discover -s packages/gost-mesh/tests -p 'test_*.py' -v
+
+      - name: Run GOST Mesh WebUI smoke test
+        run: node packages/gost-mesh/tests/webui_smoke.mjs
+
+      - name: Run NAT Egress package unit tests
+        run: python3 -m unittest discover -s packages/nat-egress/tests -p 'test_*.py' -v
+
+      - name: Run NAT Egress WebUI smoke test
+        run: node packages/nat-egress/tests/webui_smoke.mjs
+
       - name: Run reproducible unsigned and signed package contract
         run: |
           set -o pipefail
@@ -583,6 +599,10 @@ jobs:
             | tee machine-telemetry-package-contract.txt
           bash packages/nftables-forward/tests/release_gate.sh \
             | tee nftables-forward-package-contract.txt
+          bash packages/gost-mesh/tests/release_gate.sh \
+            | tee gost-mesh-package-contract.txt
+          bash packages/nat-egress/tests/release_gate.sh \
+            | tee nat-egress-package-contract.txt
 
       - name: Upload package contract report
         uses: actions/upload-artifact@v7
@@ -591,6 +611,8 @@ jobs:
           path: |
             machine-telemetry-package-contract.txt
             nftables-forward-package-contract.txt
+            gost-mesh-package-contract.txt
+            nat-egress-package-contract.txt
 
   plugin-package-publish:
     name: Publish Signed Official Plugin Packages

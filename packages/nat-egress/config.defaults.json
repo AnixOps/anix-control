@@ -1,0 +1,9 @@
+{
+  "default_mark": 100,
+  "egress_interface": "eth0",
+  "health_check_interval_seconds": 15,
+  "health_check_target": "1.1.1.1:443",
+  "ipv4_masquerade": true,
+  "ipv6_masquerade": false,
+  "policy_table": 100
+}

@@ -1,0 +1,64 @@
+{
+  "id": "gost-mesh",
+  "name": "GOST Mesh",
+  "version": "1.0.0",
+  "api_version": "v1",
+  "publisher": "AnixOps",
+  "targets": [
+    "control",
+    "agent"
+  ],
+  "architectures": [],
+  "artifact_sha256": "__ARTIFACT_SHA256__",
+  "capabilities": [
+    "forward.gost.mesh",
+    "forward.tunnel.wss",
+    "forward.tunnel.tuic",
+    "forward.tunnel.quic"
+  ],
+  "dependencies": [],
+  "conflicts": [],
+  "permissions": [
+    "gost-mesh.view",
+    "gost-mesh.api"
+  ],
+  "config_schema": {},
+  "secret_fields": [
+    "tls_cert_secret",
+    "tls_key_secret"
+  ],
+  "entrypoints": {},
+  "migration_version": 1,
+  "control_routes": [
+    "/api/v3/plugins/gost-mesh/status"
+  ],
+  "frontend_sha256": "__WEBUI_SHA256__",
+  "webui": {
+    "bundle": {
+      "path": "webui/index.mjs",
+      "sha256": "__WEBUI_SHA256__"
+    },
+    "permissions": [
+      "gost-mesh.view"
+    ],
+    "menus": [
+      {
+        "id": "gost-mesh.main",
+        "parent": "operations",
+        "label": "GOST Mesh",
+        "icon": "swap",
+        "route": "/admin/extensions/gost-mesh",
+        "permission": "gost-mesh.view",
+        "order": 120
+      }
+    ],
+    "routes": [
+      {
+        "id": "gost-mesh.main",
+        "path": "/admin/extensions/gost-mesh",
+        "export": "default",
+        "permission": "gost-mesh.view"
+      }
+    ]
+  }
+}

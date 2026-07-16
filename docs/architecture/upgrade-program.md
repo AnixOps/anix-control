@@ -204,6 +204,9 @@ and operator approval. Agent processes must not proxy the bulk traffic.
 ## Phase 5: 3.3 Tunnel Mesh And NAT
 
 Deliver signed `gost-mesh` and `nat-egress` packages for WSS, TUIC, and QUIC.
+The package sources, WebUI modules, status-route contracts, deterministic
+builds, public-key verification, and tamper rejection are now present in package
+contract CI. Production signing remains blocked until real Agent runtimes exist.
 Test certificates, MTU, IPv4/IPv6, UDP loss, reconnect, route-loop prevention,
 accounting isolation, exit failure, and multi-node rollback before canary.
 

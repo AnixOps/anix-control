@@ -147,9 +147,15 @@ check_release_workflow() {
   require_text "packages/machine-telemetry/tests/release_gate.sh" "machine telemetry package release gate invocation" || failed=1
   require_text "packages/nftables-forward/tests/release_gate.sh" "nftables forward package release gate invocation" || failed=1
   require_text "packages/nftables-forward/tests/webui_smoke.mjs" "nftables forward WebUI smoke gate" || failed=1
+  require_text "packages/gost-mesh/tests/release_gate.sh" "gost mesh package release gate invocation" || failed=1
+  require_text "packages/gost-mesh/tests/webui_smoke.mjs" "gost mesh WebUI smoke gate" || failed=1
+  require_text "packages/nat-egress/tests/release_gate.sh" "nat egress package release gate invocation" || failed=1
+  require_text "packages/nat-egress/tests/webui_smoke.mjs" "nat egress WebUI smoke gate" || failed=1
   require_text "set -o pipefail" "official plugin package gate failure propagation" || failed=1
   require_text "name: plugin-package-contract-reports" "official plugin package contract artifact" || failed=1
   require_text "nftables-forward-package-contract.txt" "nftables forward package contract report" || failed=1
+  require_text "gost-mesh-package-contract.txt" "gost mesh package contract report" || failed=1
+  require_text "nat-egress-package-contract.txt" "nat egress package contract report" || failed=1
   require_text "Publish Signed Official Plugin Packages" "signed official plugin package publish job" || failed=1
   require_text "ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY" "production plugin signing secret" || failed=1
   require_text "scripts/sign_plugin_release.sh" "production plugin signing script" || failed=1
@@ -267,7 +273,11 @@ jobs:
           set -o pipefail
           bash packages/machine-telemetry/tests/release_gate.sh | tee package-contract.txt
           bash packages/nftables-forward/tests/release_gate.sh | tee nftables-forward-package-contract.txt
+          bash packages/gost-mesh/tests/release_gate.sh | tee gost-mesh-package-contract.txt
+          bash packages/nat-egress/tests/release_gate.sh | tee nat-egress-package-contract.txt
           node packages/nftables-forward/tests/webui_smoke.mjs
+          node packages/gost-mesh/tests/webui_smoke.mjs
+          node packages/nat-egress/tests/webui_smoke.mjs
       - uses: actions/upload-artifact@v7
         with:
           name: plugin-package-contract-reports

@@ -1,0 +1,62 @@
+{
+  "$id": "urn:anixops:plugin:gost-mesh:config:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "protocol_profile": {
+      "default": "wss-tuic",
+      "enum": [
+        "wss",
+        "tuic",
+        "quic",
+        "wss-tuic",
+        "wss-tuic-quic"
+      ],
+      "type": "string"
+    },
+    "health_interval_seconds": {
+      "default": 15,
+      "maximum": 300,
+      "minimum": 5,
+      "type": "integer"
+    },
+    "listen_address": {
+      "default": "0.0.0.0",
+      "type": "string"
+    },
+    "listen_port": {
+      "default": 443,
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "tls_cert_secret": {
+      "default": "",
+      "type": "string"
+    },
+    "tls_key_secret": {
+      "default": "",
+      "type": "string"
+    },
+    "upstream_policy": {
+      "default": "least-latency",
+      "enum": [
+        "least-latency",
+        "round-robin",
+        "pinned"
+      ],
+      "type": "string"
+    }
+  },
+  "required": [
+    "health_interval_seconds",
+    "listen_address",
+    "listen_port",
+    "protocol_profile",
+    "tls_cert_secret",
+    "tls_key_secret",
+    "upstream_policy"
+  ],
+  "title": "GOST Mesh Configuration",
+  "type": "object"
+}

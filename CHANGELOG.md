@@ -53,6 +53,11 @@
   `nftables-forward` package alongside `machine-telemetry`, pinning the Agent
   runtime source and publishing package, manifest, signature, public-key, and
   checksum evidence.
+- Added 3.3 `gost-mesh` and `nat-egress` reference package sources with
+  deterministic package builds, dependency-free WebUI modules, namespaced
+  status routes, public-key-only signature verification, tamper rejection, and
+  CI release-contract evidence. Production signing remains blocked until real
+  Agent runtimes and namespace traffic evidence exist.
 - Introduced the AnixOps Control / AnixOps Agent product identity, primary `anix-control` binaries, frontend archives and Docker images, stable/alpha/beta/RC release tag support, and a documented compatibility window with legacy `v2board-*` release aliases.
 - Added a tag-pinned native release installer that downloads and verifies GitHub Actions-built panel/frontend assets without cloning or building on the target host, preserves configuration/data, and restores the previous application snapshot after a failed health check.
 - Added detailed release installation and legacy migration guides covering fresh install, update, rollback, SQLite-to-PostgreSQL boundaries, foreign-panel migration limits, coordinated node rollout, and retained evidence.
