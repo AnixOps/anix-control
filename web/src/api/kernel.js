@@ -1,0 +1,66 @@
+import request from '@/utils/request'
+
+const KERNEL_API_BASE_URL = '/api/v3'
+
+function v3(config) {
+  return request({ ...config, baseURL: KERNEL_API_BASE_URL })
+}
+
+function unwrap(response) {
+  return response?.data ?? response
+}
+
+export async function getKernelPlugins() {
+  return unwrap(await v3({ url: '/plugins', method: 'get' }))
+}
+
+export async function getKernelPluginReleases(pluginID) {
+  if (pluginID) {
+    return unwrap(await v3({ url: '/plugin-releases', method: 'get', params: { plugin_id: pluginID } }))
+  }
+  return unwrap(await v3({ url: '/plugin-releases', method: 'get' }))
+}
+
+export async function getKernelPluginReleaseArtifact(releaseID) {
+  return unwrap(await v3({ url: `/plugin-releases/${releaseID}/artifact`, method: 'get' }))
+}
+
+export async function uploadKernelPluginReleaseArtifact(releaseID, artifactBase64) {
+  return unwrap(await v3({
+    url: `/plugin-releases/${releaseID}/artifact`,
+    method: 'post',
+    data: { artifact_base64: artifactBase64 }
+  }))
+}
+
+export async function getKernelInstallations() {
+  return unwrap(await v3({ url: '/plugin-installations', method: 'get' }))
+}
+
+export async function getKernelInstallationConfig(installationID) {
+  return unwrap(await v3({ url: `/plugin-installations/${installationID}/config`, method: 'get' }))
+}
+
+export async function updateKernelInstallationConfig(installationID, config, expectedRevision) {
+  const data = { config }
+  if (expectedRevision !== undefined && expectedRevision !== null) {
+    data.expected_revision = expectedRevision
+  }
+  return unwrap(await v3({ url: `/plugin-installations/${installationID}/config`, method: 'put', data }))
+}
+
+export async function getKernelScopes() {
+  return unwrap(await v3({ url: '/service-scopes', method: 'get' }))
+}
+
+export async function getKernelTopologies() {
+  return unwrap(await v3({ url: '/topologies', method: 'get' }))
+}
+
+export async function getKernelOperations() {
+  return unwrap(await v3({ url: '/operations', method: 'get' }))
+}
+
+export async function getKernelExtensions() {
+  return unwrap(await v3({ url: '/extensions', method: 'get' }))
+}

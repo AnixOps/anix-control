@@ -196,7 +196,7 @@ func migrateSchema(db *gorm.DB) error {
 }
 
 func allModels() []any {
-	return []any{
+	models := []any{
 		&model.User{}, &model.Plan{}, &model.Order{}, &model.Payment{}, &model.PaymentLog{},
 		&model.ServerVMess{}, &model.ServerVLESS{}, &model.ServerTrojan{}, &model.ServerShadowsocks{},
 		&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.NodeGroup{}, &model.AuthorizedKey{},
@@ -212,6 +212,7 @@ func allModels() []any {
 		&model.CommissionWithdraw{}, &model.InviteConfig{}, &model.LoadBalancer{}, &model.SystemConfig{}, &model.BackupRecord{},
 		&model.BackupConfig{}, &model.OperationLog{}, &model.AuditLog{},
 	}
+	return append(models, model.KernelModels()...)
 }
 
 func sqliteTables(db *gorm.DB) ([]string, error) {

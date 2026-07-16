@@ -1,0 +1,81 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as kernelApi from '@/api/kernel'
+
+const mockRequest = vi.hoisted(() => vi.fn())
+
+vi.mock('@/utils/request', () => ({ default: mockRequest }))
+
+describe('kernel API', () => {
+  beforeEach(() => {
+    mockRequest.mockReset()
+    mockRequest.mockResolvedValue({ data: [] })
+  })
+
+  it('sends every request through the v3 API root', async () => {
+    const calls = [
+      [kernelApi.getKernelPlugins, '/plugins'],
+      [kernelApi.getKernelPluginReleases, '/plugin-releases'],
+      [kernelApi.getKernelInstallations, '/plugin-installations'],
+      [() => kernelApi.getKernelPluginReleaseArtifact(9), '/plugin-releases/9/artifact'],
+      [() => kernelApi.getKernelInstallationConfig(7), '/plugin-installations/7/config'],
+      [kernelApi.getKernelScopes, '/service-scopes'],
+      [kernelApi.getKernelTopologies, '/topologies'],
+      [kernelApi.getKernelOperations, '/operations'],
+      [kernelApi.getKernelExtensions, '/extensions']
+    ]
+
+    for (const [call, url] of calls) {
+      await call()
+      expect(mockRequest).toHaveBeenLastCalledWith({
+        baseURL: '/api/v3',
+        url,
+        method: 'get'
+      })
+    }
+  })
+
+  it('unwraps the v3 data envelope and tolerates direct payloads', async () => {
+    const rows = [{ id: 'machine-telemetry' }]
+    mockRequest.mockResolvedValueOnce({ data: rows })
+    await expect(kernelApi.getKernelPlugins()).resolves.toEqual(rows)
+
+    mockRequest.mockResolvedValueOnce(rows)
+    await expect(kernelApi.getKernelPlugins()).resolves.toEqual(rows)
+  })
+
+  it('writes an installation config with an optional optimistic revision', async () => {
+    await kernelApi.updateKernelInstallationConfig(7, { port: 443 }, 2)
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3',
+      url: '/plugin-installations/7/config',
+      method: 'put',
+      data: { config: { port: 443 }, expected_revision: 2 }
+    })
+
+    await kernelApi.updateKernelInstallationConfig(7, { port: 8443 })
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3',
+      url: '/plugin-installations/7/config',
+      method: 'put',
+      data: { config: { port: 8443 } }
+    })
+  })
+
+  it('uploads release artifacts through the v3 package repository endpoint', async () => {
+    await kernelApi.getKernelPluginReleases('machine-telemetry')
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3',
+      url: '/plugin-releases',
+      method: 'get',
+      params: { plugin_id: 'machine-telemetry' }
+    })
+
+    await kernelApi.uploadKernelPluginReleaseArtifact(9, 'YXJ0aWZhY3Q=')
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3',
+      url: '/plugin-releases/9/artifact',
+      method: 'post',
+      data: { artifact_base64: 'YXJ0aWZhY3Q=' }
+    })
+  })
+})

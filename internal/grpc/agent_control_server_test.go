@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"net"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"github.com/AnixOps/anix-control/v3/internal/cache"
 	"github.com/AnixOps/anix-control/v3/internal/database"
 	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v3/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -313,6 +315,63 @@ func TestAgentControlStreamReplaysUnobservedOperationAfterReconnect(t *testing.T
 	}, time.Second, 10*time.Millisecond)
 }
 
+func TestAgentControlCancellationCanBeRehydratedAfterControlRestart(t *testing.T) {
+	environment := newAgentControlTestEnvironment(t)
+	ctx, cancel := context.WithTimeout(environment.authContext(context.Background()), 5*time.Second)
+	defer cancel()
+	stream, err := agentv1pb.NewAgentControlServiceClient(environment.conn).ControlStream(ctx)
+	require.NoError(t, err)
+	hello := validAgentHello(uint32(environment.node.ID))
+	hello.GetHello().Capabilities = append(hello.GetHello().Capabilities, &agentv1pb.Capability{Name: "operation.cancel", Version: "v1"})
+	require.NoError(t, stream.Send(hello))
+	helloAckMessage, err := stream.Recv()
+	require.NoError(t, err)
+	helloAck := helloAckMessage.GetHelloAck()
+	require.NotNil(t, helloAck)
+
+	require.NoError(t, environment.manager.CancelOperation(ctx, uint32(environment.node.ID), "operation-from-old-control", 7))
+	cancelMessage, err := stream.Recv()
+	require.NoError(t, err)
+	cancelOperation := cancelMessage.GetDesiredOperation()
+	require.NotNil(t, cancelOperation)
+	require.Equal(t, "operation-from-old-control", cancelOperation.OperationId)
+	require.Equal(t, "operation.cancel", cancelOperation.Kind)
+	require.Equal(t, uint64(7), cancelOperation.Revision)
+
+	require.NoError(t, stream.Send(&agentv1pb.AgentToControl{
+		RequestId: "cancel-ack", NodeId: uint32(environment.node.ID), Revision: 7, SentAtUnixMs: time.Now().UnixMilli(),
+		Payload: &agentv1pb.AgentToControl_OperationAck{OperationAck: &agentv1pb.OperationAck{
+			OperationId: cancelOperation.OperationId, Accepted: true, SessionId: helloAck.SessionId, Revision: 7,
+		}},
+	}))
+	require.NoError(t, stream.Send(&agentv1pb.AgentToControl{
+		RequestId: "cancel-observed", NodeId: uint32(environment.node.ID), Revision: 7, SentAtUnixMs: time.Now().UnixMilli(),
+		Payload: &agentv1pb.AgentToControl_ObservedState{ObservedState: &agentv1pb.ObservedState{
+			OperationId: cancelOperation.OperationId, Revision: 7,
+			Phase: agentv1pb.ObservedPhase_OBSERVED_PHASE_SUPERSEDED, Message: "operation cancelled", SessionId: helloAck.SessionId,
+		}},
+	}))
+	require.Eventually(t, func() bool {
+		environment.manager.mu.RLock()
+		defer environment.manager.mu.RUnlock()
+		return environment.manager.desired[uint32(environment.node.ID)][cancelOperation.OperationId] == nil
+	}, time.Second, 10*time.Millisecond)
+}
+
+func TestAgentControlCancellationRequiresAdvertisedCapability(t *testing.T) {
+	environment := newAgentControlTestEnvironment(t)
+	ctx, cancel := context.WithTimeout(environment.authContext(context.Background()), 5*time.Second)
+	defer cancel()
+	stream, err := agentv1pb.NewAgentControlServiceClient(environment.conn).ControlStream(ctx)
+	require.NoError(t, err)
+	require.NoError(t, stream.Send(validAgentHello(uint32(environment.node.ID))))
+	_, err = stream.Recv()
+	require.NoError(t, err)
+
+	err = environment.manager.CancelOperation(ctx, uint32(environment.node.ID), "unsupported-cancel", 1)
+	require.ErrorContains(t, err, "does not advertise capability")
+}
+
 func TestAgentControlHelloReconcilesObservedRevisionBeforeDispatch(t *testing.T) {
 	environment := newAgentControlTestEnvironment(t)
 	ctx, cancel := context.WithTimeout(environment.authContext(context.Background()), 5*time.Second)
@@ -450,6 +509,45 @@ func TestAgentControlRegisterAndReplaySerializesConcurrentDispatch(t *testing.T)
 	assert.Equal(t, "replay-1", stream.sent[0].GetDesiredOperation().OperationId)
 	assert.Equal(t, "live-2", stream.sent[1].GetDesiredOperation().OperationId)
 	stream.mu.Unlock()
+}
+
+func TestAgentControlReplayRebindsPluginEnvelopeToNewSession(t *testing.T) {
+	manager := NewAgentControlManager()
+	nodeID := uint32(8)
+	config := json.RawMessage(`{"interval_seconds":30}`)
+	digest := sha256.Sum256(config)
+	payload, err := json.Marshal(kernelOperationEnvelopePayload{
+		Version: service.KernelOperationEnvelopeVersion, OperationID: "plugin-replay", IdempotencyKey: "plugin-replay-key",
+		SessionID: "replaced-session", Revision: 4, PluginID: "machine-telemetry", TargetVersion: "1.0.0",
+		ConfigHash: hex.EncodeToString(digest[:]), Config: config,
+	})
+	require.NoError(t, err)
+	manager.desiredRevision[nodeID] = 4
+	manager.desired[nodeID] = map[string]*agentv1pb.DesiredOperation{
+		"plugin-replay": {OperationId: "plugin-replay", Kind: "plugin.enable", Revision: 4, PayloadJson: payload},
+	}
+	stream := &blockingAgentControlStream{firstSend: make(chan struct{}), releaseSend: make(chan struct{})}
+	connection := &AgentControlConnection{
+		NodeID: nodeID, SessionID: "current-session", Capabilities: []*agentv1pb.Capability{{Name: "plugin.enable"}}, stream: stream,
+	}
+
+	require.NoError(t, manager.registerAndReplay(connection))
+	stream.mu.Lock()
+	require.Len(t, stream.sent, 1)
+	replayed := stream.sent[0].GetDesiredOperation()
+	stream.mu.Unlock()
+	require.NotNil(t, replayed)
+	var envelope kernelOperationEnvelopePayload
+	require.NoError(t, json.Unmarshal(replayed.PayloadJson, &envelope))
+	require.Equal(t, connection.SessionID, envelope.SessionID)
+	require.Equal(t, "plugin-replay", envelope.OperationID)
+
+	manager.mu.RLock()
+	stored := manager.desired[nodeID]["plugin-replay"]
+	manager.mu.RUnlock()
+	require.NotNil(t, stored)
+	require.NoError(t, json.Unmarshal(stored.PayloadJson, &envelope))
+	require.Equal(t, connection.SessionID, envelope.SessionID)
 }
 
 func TestAgentControlManagerRejectsReplacedSessionReports(t *testing.T) {

@@ -15,19 +15,43 @@ import (
 )
 
 const (
-	auditLogPrefix     = "/api/v2/admin/"
-	maxBodyCaptureSize = 4096 // bytes to capture from request body
-	maxBodyLogLength   = 512  // bytes to include in slog output
-	maxBodyDBLength    = 4096 // bytes to persist in database
+	auditLogPrefixV2 = "/api/v2/admin/"
+	auditLogPrefixV3 = "/api/v3/"
+	maxBodyLogLength = 512  // bytes to include in slog output
+	maxBodyDBLength  = 4096 // bytes to persist in database
 )
+
+// auditBodyCapture copies at most limit bytes while the downstream handler
+// consumes the original request stream. Unlike reading a limited prefix and
+// replacing Body, it never truncates the payload seen by a JSON handler.
+type auditBodyCapture struct {
+	io.ReadCloser
+	buf   bytes.Buffer
+	limit int
+}
+
+func (r *auditBodyCapture) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	remaining := r.limit - r.buf.Len()
+	if n > 0 && remaining > 0 {
+		captured := n
+		if captured > remaining {
+			captured = remaining
+		}
+		_, _ = r.buf.Write(p[:captured])
+	}
+	return n, err
+}
 
 // AuditLog returns a gin middleware that records all admin API operations
 // to both structured slog output and the v2_audit_log database table.
 // It only applies to requests whose path starts with /api/v2/admin/.
 func AuditLog() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Only audit admin API paths
-		if !strings.HasPrefix(c.Request.URL.Path, auditLogPrefix) {
+		// The v3 control kernel is administrator-only at the router boundary.
+		// Keep v2's narrower admin prefix so public and user APIs remain out of
+		// the audit stream.
+		if !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV2) && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV3) {
 			c.Next()
 			return
 		}
@@ -45,15 +69,14 @@ func AuditLog() gin.HandlerFunc {
 			return
 		}
 
-		// Capture request body and restore it for downstream handlers
-		var reqBody string
-		if c.Request.Body != nil && c.Request.ContentLength > 0 {
-			bodyBytes, err := io.ReadAll(io.LimitReader(c.Request.Body, maxBodyCaptureSize))
-			if err == nil && len(bodyBytes) > 0 {
-				reqBody = string(bodyBytes)
-				// Restore the body so downstream handlers can read it
-				c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-			}
+		// Kernel payloads can contain large declarative configurations. Preserve
+		// their body exactly and never persist their contents in audit records;
+		// secrets must only be referenced by ID in v3 contracts.
+		isV3 := strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV3)
+		var capture *auditBodyCapture
+		if !isV3 && c.Request.Body != nil && c.Request.ContentLength != 0 {
+			capture = &auditBodyCapture{ReadCloser: c.Request.Body, limit: maxBodyDBLength}
+			c.Request.Body = capture
 		}
 
 		// Extract user info from JWT context (set by JWTAuth middleware)
@@ -76,6 +99,11 @@ func AuditLog() gin.HandlerFunc {
 
 		// Let the actual handler run
 		c.Next()
+
+		var reqBody string
+		if capture != nil {
+			reqBody = capture.buf.String()
+		}
 
 		duration := time.Since(startTime).Milliseconds()
 		statusCode := c.Writer.Status()
@@ -152,8 +180,12 @@ func persistAuditLog(userID *uint, email, method, path, module, action, ip, user
 
 // extractModuleAndAction derives a human-readable module and action from the URL path and HTTP method.
 func extractModuleAndAction(path, method string) (module, action string) {
-	// Strip the /api/v2/admin/ prefix
-	trimmed := strings.TrimPrefix(path, auditLogPrefix)
+	// Strip the relevant administrator API prefix.
+	prefix := auditLogPrefixV2
+	if strings.HasPrefix(path, auditLogPrefixV3) {
+		prefix = auditLogPrefixV3
+	}
+	trimmed := strings.TrimPrefix(path, prefix)
 	if trimmed == "" {
 		return "admin", strings.ToLower(method)
 	}

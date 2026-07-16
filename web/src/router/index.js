@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { ensureAdminExtensions, resetAdminExtensions } from '@/extensions/runtime'
 
 // Layouts
 import UserLayout from '@/layouts/UserLayout.vue'
@@ -40,6 +41,7 @@ const AdminNotifications = () => import('@/views/admin/Notifications.vue')
 const AdminInvite = () => import('@/views/admin/Invite.vue')
 const AdminSystem = () => import('@/views/admin/System.vue')
 const AdminAgent = () => import('@/views/admin/Agent.vue')
+const AdminControl = () => import('@/views/admin/Control.vue')
 
 const routes = [
   {
@@ -86,6 +88,7 @@ const routes = [
   // Admin Routes
   {
     path: '/admin',
+    name: 'admin',
     component: AdminLayout,
     meta: { requiresAuth: true, requiresAdmin: true },
     children: [
@@ -228,6 +231,10 @@ const routes = [
       {
         path: 'agent',
         component: AdminAgent
+      },
+      {
+        path: 'control',
+        component: AdminControl
       }
     ]
   }
@@ -239,12 +246,15 @@ const router = createRouter({
 })
 
 // Navigation Guards
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
+  const isAdminTarget = to.path === '/admin' || to.path.startsWith('/admin/')
 
-  if (to.meta.requiresAuth && !userStore.isLoggedIn) {
+  if ((to.meta.requiresAuth || isAdminTarget) && !userStore.isLoggedIn) {
+    resetAdminExtensions()
     next('/login')
-  } else if (to.meta.requiresAdmin && !userStore.isAdmin) {
+  } else if ((to.meta.requiresAdmin || isAdminTarget) && !userStore.isAdmin) {
+    resetAdminExtensions()
     next('/user/dashboard') // Redirect non-admins to user dashboard
   } else if (to.meta.guest && userStore.isLoggedIn) {
     if (userStore.isAdmin) {
@@ -253,6 +263,35 @@ router.beforeEach((to, from, next) => {
       next('/user/dashboard')
     }
   } else {
+    if (to.path.startsWith('/admin/') && userStore.isAdmin) {
+      const isUnmatchedExtension = to.path.startsWith('/admin/extensions/') && !to.matched.some(record => record.meta.extension)
+      if (isUnmatchedExtension) {
+        await ensureAdminExtensions(router)
+        const resolved = router.resolve(to.fullPath)
+        if (resolved.matched.some(record => record.meta.extension)) {
+          const extensionPermission = resolved.meta.extensionPermission
+          if (!userStore.hasPermission(extensionPermission)) {
+            next('/admin/control')
+          } else {
+            next({ path: to.path, query: to.query, hash: to.hash, replace: true })
+          }
+        } else {
+          next('/admin/control')
+        }
+        return
+      }
+      if (to.meta.extension && !userStore.hasPermission(to.meta.extensionPermission)) {
+        next('/admin/control')
+        return
+      }
+      if (to.meta.extension) {
+        next()
+        return
+      }
+      void ensureAdminExtensions(router).catch(() => {
+        // Optional extension discovery must never block core admin routes.
+      })
+    }
     next()
   }
 })

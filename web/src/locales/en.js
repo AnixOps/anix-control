@@ -243,6 +243,7 @@ export default {
       forwardLocal: 'Local Runtime',
       forwardNodeX: 'NodeX Runtime',
       forwardAgents: 'NodeX Agents',
+      control: 'Control Kernel',
       payment: 'Payment Gateways',
       telegram: 'Telegram Bot',
       mfa: 'MFA',
@@ -277,6 +278,7 @@ export default {
         finance: 'Finance',
         notifications: 'Notifications',
         content: 'Content',
+        extensions: 'Extensions',
         system: 'System'
       },
       nav: {
@@ -296,6 +298,7 @@ export default {
         notifications: 'Notifications',
         knowledge: 'Knowledge Base',
         mfa: 'MFA',
+        control: 'Control Kernel',
         system: 'System',
         nodeXAgentsLegacy: 'NodeX Agents Legacy'
       }
@@ -2985,6 +2988,18 @@ export default {
       resetSubscribeSuccess: 'Subscription link reset',
       resetSubscribeFailed: 'Failed to reset subscription'
     }
+  },
+  control: {
+    actions: { refresh: 'Refresh', refreshing: 'Refreshing...' },
+    tabs: { plugins: 'Plugins', scopes: 'Scopes', topologies: 'Topologies', operations: 'Operations' },
+    table: {
+      plugin: 'Plugin', publisher: 'Publisher', installation: 'Installation', desiredVersion: 'Desired version', observedVersion: 'Observed version', state: 'State',
+      scope: 'Scope', owner: 'Owner', description: 'Description', topology: 'Topology', activeRevision: 'Active revision',
+      operation: 'Operation', revision: 'Revision', deadline: 'Deadline'
+    },
+    states: { catalogued: 'Catalogued', loading: 'Loading control state...' },
+    empty: { plugins: 'No plugins', scopes: 'No service scopes', topologies: 'No topologies', operations: 'No operations' },
+    errors: { load: 'Unable to load control state' }
   },
   legacy
 }

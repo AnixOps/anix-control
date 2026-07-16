@@ -99,6 +99,7 @@ import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
 import { getSystemInfo } from '@/api/admin'
+import { adminExtensionMenus } from '@/extensions/runtime'
 
 const router = useRouter()
 const route = useRoute()
@@ -114,7 +115,8 @@ const systemCommit = ref('')
 const frontendBuildCode = import.meta.env.VITE_APP_BUILD_CODE || ''
 const frontendBuildTime = import.meta.env.VITE_APP_BUILD_TIME || ''
 
-const navSections = computed(() => ([
+const navSections = computed(() => {
+  const sections = [
   {
     title: t('layout.admin.sections.overview'),
     items: [
@@ -169,12 +171,25 @@ const navSections = computed(() => ([
     title: t('layout.admin.sections.system'),
     items: [
       { to: '/admin/mfa', icon: 'MF', label: t('layout.admin.nav.mfa') },
+      { to: '/admin/control', icon: 'CT', label: t('layout.admin.nav.control') },
       { to: '/admin/system', icon: 'SY', label: t('layout.admin.nav.system') }
     ]
   }
-]))
+  ]
+  const visibleExtensionMenus = adminExtensionMenus.value.filter(item => userStore.hasPermission(item.permission))
+  if (visibleExtensionMenus.length > 0) {
+    sections.splice(sections.length - 1, 0, {
+      title: t('layout.admin.sections.extensions'),
+      items: visibleExtensionMenus
+    })
+  }
+  return sections
+})
 
-const pageTitle = computed(() => resolveRoutePageTitle(t, route.path, t('pageTitles.admin.fallback')))
+const pageTitle = computed(() => {
+  const extensionMenu = adminExtensionMenus.value.find(item => item.to === route.path && userStore.hasPermission(item.permission))
+  return extensionMenu?.label || resolveRoutePageTitle(t, route.path, t('pageTitles.admin.fallback'))
+})
 const systemVersionDisplay = computed(() => {
   if (!systemVersion.value) {
     return ''

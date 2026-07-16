@@ -26,6 +26,7 @@ const PAGE_TITLE_KEYS = {
   '/admin/forward/nodex': 'pageTitles.admin.forwardNodeX',
   '/admin/forward/agents': 'pageTitles.admin.forwardAgents',
   '/admin/agent': 'pageTitles.admin.forwardAgents',
+  '/admin/control': 'pageTitles.admin.control',
   '/admin/payment': 'pageTitles.admin.payment',
   '/admin/telegram': 'pageTitles.admin.telegram',
   '/admin/mfa': 'pageTitles.admin.mfa',

@@ -27,9 +27,11 @@ import (
 	"github.com/AnixOps/anix-control/v3/internal/handler"
 	"github.com/AnixOps/anix-control/v3/internal/model"
 	_ "github.com/AnixOps/anix-control/v3/internal/payment/gateways" // register payment gateway plugins
+	"github.com/AnixOps/anix-control/v3/internal/plugincontrol"
 	"github.com/AnixOps/anix-control/v3/internal/router"
 	"github.com/AnixOps/anix-control/v3/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // @title AnixOps Control API
@@ -414,6 +416,9 @@ func main() {
 	if err := service.EnsureNodeRuntimeHealthSchema(database.Get()); err != nil {
 		log.Fatalf("Failed to ensure node runtime health schema: %v", err)
 	}
+	if err := service.EnsureKernelSchema(database.Get()); err != nil {
+		log.Fatalf("Failed to ensure control kernel schema: %v", err)
+	}
 
 	// 初始化管理员账号
 	service.InitAdmin(cfg)
@@ -455,6 +460,36 @@ func main() {
 	cache.InitMemory()
 	defer cache.CloseMemory()
 	log.Println("Cache initialized: memory")
+
+	var controlPluginCancel context.CancelFunc
+	if cfg.Plugins.ControlExecutionEnabled {
+		registry, err := plugincontrol.DefaultRegistry(database.Get())
+		if err != nil {
+			log.Fatalf("Failed to initialize Control plugin executors: %v", err)
+		}
+		worker, err := plugincontrol.NewOperationWorker(database.Get(), registry)
+		if err != nil {
+			log.Fatalf("Failed to initialize Control plugin lifecycle worker: %v", err)
+		}
+		interval := 5 * time.Second
+		if raw := strings.TrimSpace(cfg.Plugins.ControlPollInterval); raw != "" {
+			parsed, err := time.ParseDuration(raw)
+			if err != nil || parsed <= 0 {
+				log.Fatalf("Invalid plugins.control_poll_interval %q", raw)
+			}
+			interval = parsed
+		}
+		queued, err := worker.QueueReconciliation(uuid.NewString())
+		if err != nil {
+			log.Printf("Control plugin restart reconciliation queued with errors: %v", err)
+		}
+		workerCtx, cancelWorker := context.WithCancel(context.Background())
+		controlPluginCancel = cancelWorker
+		worker.Start(workerCtx, interval, func(err error) {
+			log.Printf("Control plugin lifecycle worker error: %v", err)
+		})
+		log.Printf("Control plugin execution enabled (poll interval %s, reconciliation operations %d)", interval, queued)
+	}
 
 	// 设置Gin模式
 	go func() {
@@ -535,6 +570,7 @@ func main() {
 
 	// Start the node-facing gRPC server (AnixOps Agent nodes connect here) when enabled.
 	var grpcSrv *grpcserver.Server
+	var kernelDispatchCancel context.CancelFunc
 	if cfg.GRPC.Enable {
 		grpcCfg := grpcserver.DefaultServerConfig()
 		if cfg.GRPC.Host != "" {
@@ -551,6 +587,29 @@ func main() {
 			log.Fatalf("Failed to start gRPC server: %v", err)
 		}
 		log.Printf("gRPC server listening on %s:%d", grpcCfg.Host, grpcCfg.Port)
+	}
+	if cfg.Plugins.DispatchEnabled {
+		if grpcSrv == nil {
+			log.Fatal("Plugin operation dispatch requires grpc.enabled=true")
+		}
+		interval := 5 * time.Second
+		if raw := strings.TrimSpace(cfg.Plugins.DispatchPollInterval); raw != "" {
+			parsed, err := time.ParseDuration(raw)
+			if err != nil || parsed <= 0 {
+				log.Fatalf("Invalid plugins.dispatch_poll_interval %q", raw)
+			}
+			interval = parsed
+		}
+		bridge, err := grpcserver.NewKernelOperationBridge(database.Get(), grpcSrv.GetAgentControlManager())
+		if err != nil {
+			log.Fatalf("Failed to initialize plugin operation dispatcher: %v", err)
+		}
+		dispatchCtx, cancelDispatch := context.WithCancel(context.Background())
+		kernelDispatchCancel = cancelDispatch
+		bridge.Start(dispatchCtx, interval, func(err error) {
+			log.Printf("Plugin operation dispatcher error: %v", err)
+		})
+		log.Printf("Plugin operation dispatcher enabled (poll interval %s)", interval)
 	}
 
 	// Wait for shutdown signal, then gracefully stop all servers.
@@ -603,6 +662,12 @@ func main() {
 	// and waits for existing ones to finish.
 	if grpcSrv != nil {
 		grpcSrv.Stop()
+	}
+	if kernelDispatchCancel != nil {
+		kernelDispatchCancel()
+	}
+	if controlPluginCancel != nil {
+		controlPluginCancel()
 	}
 
 	// Give goroutines time to finish returning from ListenAndServe.

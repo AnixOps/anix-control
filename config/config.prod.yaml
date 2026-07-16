@@ -99,6 +99,14 @@ app:
   traffic_log_enable: true
   subscribe_path: "s"
 
+# Base64-encoded Ed25519 trust root for signed official plugin manifests.
+plugins:
+  official_public_key: ""
+  control_execution_enabled: false
+  control_poll_interval: "5s"
+  dispatch_enabled: false
+  dispatch_poll_interval: "5s"
+
 forward_runtime:
   backend: "gost"
   jobs:
