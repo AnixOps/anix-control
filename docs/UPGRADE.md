@@ -26,6 +26,19 @@ Do not use it for:
 
 Those operations require their own operator approval and rollback plan.
 
+## Fixed Legacy Native Layout
+
+For the specific legacy layout discovered on the old native host
+(`/usr/local/v2board/v2board`, `/etc/v2board/config.yaml`, and
+`/var/lib/v2board/frontend`), the repository includes
+[`scripts/upgrade_legacy_panel_v2.5.0.sh`](../scripts/upgrade_legacy_panel_v2.5.0.sh).
+It is an opt-in, root-only helper for a PostgreSQL database named `v2board`; it
+backs up the database and runtime files, verifies release checksums, performs
+an `/health` check, and writes a rollback script. Do not use it for Docker,
+SQLite, foreign V2Board/XBoard schemas, or installations with different paths.
+Run the general artifact and migration checks in this document first, and set
+`VERSION` explicitly when upgrading to a different release tag.
+
 ## Pre-Upgrade Checklist
 
 Before touching production:

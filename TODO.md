@@ -4,6 +4,49 @@ Date: 2026-07-10
 
 This list is intentionally concrete. Do not mark an item done without code, tests, and verification evidence where applicable.
 
+## P0: 3.1 Plugin Platform Foundation
+
+- [x] Freeze the `3.1.0` through `4.0.0` version gates and make `3.5.0` the
+  business-plugin migration release before the plugin-only 4.0 cutover.
+- [x] Add a byte-identical Control/Agent canonical manifest fixture and align
+  manifest API versions, safe IDs, architectures, dependencies, conflicts,
+  entrypoints, WebUI metadata and config schema validation.
+- [x] Add a byte-identical operation-envelope golden fixture so Control
+  dispatcher payloads and Agent decoder payloads stay wire-compatible.
+- [x] Add shared negative manifest fixtures so Control and Agent reject every
+  invalid contract case identically.
+- [x] Persist the complete versioned operation envelope and canonical config,
+  then connect durable dispatch, active-session binding, ACK and observed-state
+  write-back.
+- [x] Add the official signed package state machine and immutable artifact
+  repository with key ID/fingerprint and rotation support.
+- [x] Expose only verified, enabled and version-matched WebUI extensions through
+  the kernel catalog.
+- [x] Add revisioned per-installation configuration documents with signed
+  release JSON Schema validation and optimistic concurrency.
+- [x] Dynamically register namespaced plugin menus and routes without allowing
+  remote URLs, route replacement, or failure of a plugin to break kernel pages.
+- [x] Implement same-origin content-addressed WebUI bundle storage and digest
+  verification.
+- [x] Add install/disable/update/rollback browser tests for the package-driven
+  WebUI lifecycle.
+- [x] Add a fail-closed backend plugin API gateway admission skeleton for
+  `/api/v3/plugins/<plugin-id>/...`, including signed manifest route
+  validation, verified installation checks, and `plugin_api` resource grants.
+- [x] Connect the backend plugin API gateway to the version-exact read-only
+  `machine-telemetry` Control executor behind `plugins.control_execution_enabled`;
+  keep the gateway fail-closed/501 when the flag or executor is unavailable.
+- [ ] Deliver `machine-telemetry` as the first complete Control + Agent + WebUI
+  reference package. The deterministic artifact, Agent process, Supervisor
+  lifecycle, Control read-only route, browser E2E, cross-repository process E2E,
+  and CI public-key verification contract exist; telemetry transport, live
+  staging catalog coverage, and production secret-backed signing/upload remain.
+- [x] Harden Control lifecycle ordering, lease fencing, cancellation monotonicity,
+  target-level installation locking, and lifecycle-generation idempotency.
+- [ ] Keep Supervisor and dynamic plugin execution feature-gated until
+  dependency-aware graph execution/rollback, real topology fan-out, staging
+  restore smoke, and production package signing/upload gates pass.
+
 ## P0: Audit Deliverables
 
 - [x] Create `docs/audit/security-risk.md`.
