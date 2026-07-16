@@ -51,9 +51,15 @@ This list is intentionally concrete. Do not mark an item done without code, test
   traffic takeover.
 - [x] Add privileged `nftables-forward` network-namespace TCP/UDP acceptance and
   nftables snapshot rollback evidence in the pinned Agent repo.
+- [x] Add 3.3 `gost-mesh` and `nat-egress` package/WebUI sources with
+  deterministic release contracts, public-key verification, and tamper
+  rejection while keeping production signing blocked until real runtimes exist.
 - [ ] Keep Supervisor and dynamic plugin execution feature-gated until staging
   restore smoke, rollout records, legacy fallback rehearsal, and operator
   canary approval pass.
+- [ ] Implement real Agent runtimes and namespace traffic evidence for
+  `gost-mesh` WSS/TUIC/QUIC and `nat-egress` policy-routing/NAT before 3.3
+  canary.
 
 ## P0: Audit Deliverables
 

@@ -1,0 +1,9 @@
+{
+  "health_interval_seconds": 15,
+  "listen_address": "0.0.0.0",
+  "listen_port": 443,
+  "protocol_profile": "wss-tuic",
+  "tls_cert_secret": "",
+  "tls_key_secret": "",
+  "upstream_policy": "least-latency"
+}

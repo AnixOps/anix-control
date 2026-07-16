@@ -136,9 +136,14 @@ recovery, and a staged 1/5/25/100 percent rollout with a legacy fallback.
 ### 3.3.0 - Tunnel Mesh And NAT Egress
 
 Deliver `gost-mesh` and `nat-egress` packages for WSS, TUIC, and QUIC paths from
-standard domestic entries to overseas NAT exits.
+standard domestic entries to overseas NAT exits. The reproducible package
+sources, dependency-free WebUI modules, namespaced status routes, public-key
+verification, tamper rejection, and CI release contracts now exist. They are not
+wired into production release signing until real Agent runtimes and namespace
+traffic evidence exist.
 
-Exit evidence: certificate, MTU, UDP/QUIC, route-loop, reconnect, accounting,
+Exit evidence still required: Agent `gost-mesh` and `nat-egress` runtime
+processes, certificate, MTU, UDP/QUIC, route-loop, reconnect, accounting,
 exit-failure and multi-node rollback tests plus sustained canary evidence.
 
 ### 3.4.0 - WireGuard And Protocol Composition
