@@ -41,11 +41,14 @@ Already present in the current branch:
 - production release-tag package signing/upload workflow that requires the
   `ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY` GitHub secret and publishes signature,
   public-key, package, manifest, and checksum evidence.
+- deterministic `nftables-forward` package source with WebUI smoke coverage,
+  public-key verification, tamper rejection, and CI release-contract evidence.
 
 The following remain release blockers: staging rehearsal that starts the
 restored Control service and checks login/subscription/catalog behavior,
-network-namespace nftables-forward evidence, canary rollout records, and a
-manual approval to enable topology execution outside isolated test nodes.
+real `nftables-forward` Agent runtime, network-namespace TCP/UDP evidence,
+canary rollout records, and a manual approval to enable topology execution
+outside isolated test nodes.
 
 ## Release Invariants
 
@@ -187,10 +190,11 @@ proxy or forwarding traffic.
 Implement immutable topology revisions, DAG validation, capability/port/MTU/
 route/secret checks, deployment fan-out, canary groups, atomic nftables
 snapshots, and rollback. The Control fan-out and rollback executor is now
-present behind `plugins.topology_execution_enabled`; the remaining 3.2 work is
-the signed `nftables-forward` package, namespace traffic evidence, rollout
-records, and legacy fallback rehearsal. Agent processes must not proxy the
-bulk traffic.
+present behind `plugins.topology_execution_enabled`; the deterministic
+`nftables-forward` package release contract is present in CI. The remaining
+3.2 work is the real Agent runtime, namespace TCP/UDP traffic evidence,
+rollout records, and legacy fallback rehearsal. Agent processes must not proxy
+the bulk traffic.
 
 ## Phase 5: 3.3 Tunnel Mesh And NAT
 

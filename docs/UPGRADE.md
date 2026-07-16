@@ -142,9 +142,9 @@ Enablement order matters. `topology_execution_enabled=true` is refused unless
 `dispatch_enabled=true`, and neither flag should be enabled before package
 artifacts, signatures, database migration evidence, and canary rollback
 commands are recorded. Enabling topology execution does not by itself approve
-business traffic migration; dedicated forwarding still requires the
-`nftables-forward` package, network-namespace TCP/UDP evidence, and a recorded
-rollout plan.
+business traffic migration; dedicated forwarding still requires the real
+`nftables-forward` Agent runtime, network-namespace TCP/UDP evidence, and a
+recorded rollout plan.
 
 ## Systemd Binary Upgrade
 

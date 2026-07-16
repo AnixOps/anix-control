@@ -1,0 +1,7 @@
+{
+  "chain_priority": 0,
+  "family": "inet",
+  "rollback_snapshot": true,
+  "table_name": "anixops_forward",
+  "udp_enabled": true
+}

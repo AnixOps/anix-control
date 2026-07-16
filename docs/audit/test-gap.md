@@ -15,11 +15,15 @@
   staging coverage remains a gap.
 - The package release gate proves reproducible unsigned output, ephemeral
   Ed25519 signing, public-key-only verification, artifact binding, and tamper
-  rejection. Secret-backed production signing/upload and release-manifest
-  package publication remain untested.
-- The dependency resolver now has deterministic recursive DB preflight and
-  race coverage. It does not yet execute a dependency graph or roll back a
-  partially applied graph.
+  rejection for `machine-telemetry` and the new `nftables-forward` reference
+  package. Secret-backed production signing/upload currently publishes only
+  `machine-telemetry`; `nftables-forward` still needs a real Agent binary,
+  network-namespace TCP/UDP evidence, and release-manifest publication before
+  it can become a 3.2 data-plane candidate.
+- The dependency resolver now has deterministic recursive DB preflight,
+  dependency-aware Control execution, reverse rollback, and race coverage.
+  Staging still needs a live restored Control canary before enabling plugin
+  execution outside isolated test nodes.
 
 ## 2026-07-08 CI Baseline
 
