@@ -1161,10 +1161,13 @@ func extractBundleFromZip(artifact []byte, bundlePath string) ([]byte, bool, err
 		if err != nil {
 			return nil, true, err
 		}
-		defer opened.Close()
 		bundle, err := io.ReadAll(io.LimitReader(opened, maxPluginWebUIBundleBytes+1))
+		closeErr := opened.Close()
 		if err != nil {
 			return nil, true, err
+		}
+		if closeErr != nil {
+			return nil, true, closeErr
 		}
 		if len(bundle) > maxPluginWebUIBundleBytes {
 			return nil, true, fmt.Errorf("webui bundle exceeds %d bytes", maxPluginWebUIBundleBytes)
@@ -1179,8 +1182,15 @@ func extractBundleFromTarGzip(artifact []byte, bundlePath string) ([]byte, bool,
 	if err != nil {
 		return nil, false, nil
 	}
-	defer gzipReader.Close()
-	return extractBundleFromTar(gzipReader, bundlePath)
+	bundle, found, extractErr := extractBundleFromTar(gzipReader, bundlePath)
+	closeErr := gzipReader.Close()
+	if extractErr != nil {
+		return nil, found, extractErr
+	}
+	if closeErr != nil {
+		return nil, found, closeErr
+	}
+	return bundle, found, nil
 }
 
 func extractBundleFromTar(reader io.Reader, bundlePath string) ([]byte, bool, error) {
@@ -1197,7 +1207,8 @@ func extractBundleFromTar(reader io.Reader, bundlePath string) ([]byte, bool, er
 		if name != bundlePath {
 			continue
 		}
-		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+		const legacyRegularFileType byte = 0
+		if header.Typeflag != tar.TypeReg && header.Typeflag != legacyRegularFileType {
 			return nil, true, fmt.Errorf("webui bundle %q is not a regular file", bundlePath)
 		}
 		if header.Size > maxPluginWebUIBundleBytes {
@@ -1294,6 +1305,18 @@ func CanonicalKernelOperationConfig(raw string) (string, error) {
 	return string(canonical), nil
 }
 
+// HashKernelOperationConfig returns the deterministic SHA-256 digest used in
+// operation envelopes and persisted plugin configuration rows. The input is
+// canonicalized first so semantically identical JSON documents share a hash.
+func HashKernelOperationConfig(raw string) (string, error) {
+	canonical, err := CanonicalKernelOperationConfig(raw)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256([]byte(canonical))
+	return hex.EncodeToString(digest[:]), nil
+}
+
 // GetPluginConfiguration returns the persisted document for one installation.
 // An installation with no document has the deterministic empty-object default.
 func GetPluginConfiguration(db *gorm.DB, installationID uint) (*model.PluginConfiguration, error) {
@@ -1317,10 +1340,13 @@ func GetPluginConfiguration(db *gorm.DB, installationID uint) (*model.PluginConf
 	if err != nil {
 		return nil, err
 	}
-	digest := sha256.Sum256([]byte(canonical))
+	configHash, err := HashKernelOperationConfig(canonical)
+	if err != nil {
+		return nil, err
+	}
 	return &model.PluginConfiguration{
 		InstallationID: installationID, Revision: 0, ConfigJSON: canonical,
-		ConfigHash: hex.EncodeToString(digest[:]),
+		ConfigHash: configHash,
 	}, nil
 }
 
@@ -1378,10 +1404,13 @@ func UpdatePluginConfiguration(db *gorm.DB, publicKey ed25519.PublicKey, install
 		if expectedRevision != nil && configuration.Revision != *expectedRevision {
 			return fmt.Errorf("%w: expected %d, current %d", ErrPluginConfigurationConflict, *expectedRevision, configuration.Revision)
 		}
-		digest := sha256.Sum256([]byte(canonical))
+		configHash, err := HashKernelOperationConfig(canonical)
+		if err != nil {
+			return err
+		}
 		configuration.Revision++
 		configuration.ConfigJSON = canonical
-		configuration.ConfigHash = hex.EncodeToString(digest[:])
+		configuration.ConfigHash = configHash
 		configuration.UpdatedBy = actorID
 		if found {
 			if err := tx.Save(&configuration).Error; err != nil {
@@ -1461,8 +1490,10 @@ func CreateKernelOperation(db *gorm.DB, operation model.KernelOperation) (*model
 		return nil, false, err
 	}
 	operation.ConfigJSON = canonicalConfig
-	digest := sha256.Sum256([]byte(operation.ConfigJSON))
-	computedHash := hex.EncodeToString(digest[:])
+	computedHash, err := HashKernelOperationConfig(operation.ConfigJSON)
+	if err != nil {
+		return nil, false, err
+	}
 	if operation.ConfigHash != "" && !strings.EqualFold(operation.ConfigHash, computedHash) {
 		return nil, false, errors.New("config_hash does not match canonical config")
 	}
@@ -1475,6 +1506,23 @@ func CreateKernelOperation(db *gorm.DB, operation model.KernelOperation) (*model
 	}
 	if operation.State != "pending" {
 		return nil, false, errors.New("new operations must start pending")
+	}
+	if operation.TopologyDeploymentID != nil {
+		if operation.NodeID == nil || operation.TopologyStepID == nil || operation.TopologyRevision <= 0 || !IsAgentPluginOperation(operation.Kind) {
+			return nil, false, errors.New("topology operations must be revisioned Agent plugin operations")
+		}
+	} else if operation.TopologyStepID != nil || operation.TopologyRevision != 0 {
+		return nil, false, errors.New("topology operation fields require topology_deployment_id")
+	}
+	if strings.TrimSpace(operation.LifecyclePlanID) != "" {
+		if operation.NodeID != nil || operation.LifecyclePlanStepID == 0 || operation.LifecyclePlanSequence <= 0 {
+			return nil, false, errors.New("lifecycle plan operations must be ordered Control operations")
+		}
+		if operation.LifecyclePlanPhase != "apply" && operation.LifecyclePlanPhase != "rollback" {
+			return nil, false, errors.New("lifecycle plan operation phase must be apply or rollback")
+		}
+	} else if operation.LifecyclePlanStepID != 0 || operation.LifecyclePlanPhase != "" || operation.LifecyclePlanSequence != 0 {
+		return nil, false, errors.New("lifecycle plan operation fields require lifecycle_plan_id")
 	}
 
 	var result *model.KernelOperation
@@ -1710,7 +1758,10 @@ func safeExtensionMetadataText(value string, maxLength int) bool {
 		return false
 	}
 	for i := range value {
-		if value[i] < 0x20 || value[i] == 0x7f {
+		if value[i] < 0x20 {
+			return false
+		}
+		if value[i] == 0x7f {
 			return false
 		}
 	}
@@ -1724,16 +1775,20 @@ func safeJavaScriptExport(value string) bool {
 	for i := range value {
 		character := value[i]
 		if i == 0 {
-			if !((character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') || character == '_' || character == '$') {
-				return false
+			if asciiAlpha(character) || character == '_' || character == '$' {
+				continue
 			}
-			continue
+			return false
 		}
 		if !asciiAlphaNumeric(character) && character != '_' && character != '$' {
 			return false
 		}
 	}
 	return true
+}
+
+func asciiAlpha(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'
 }
 
 func validateManifestPermissions(pluginID string, permissions []string) error {
@@ -1906,7 +1961,10 @@ func containsPluginString(values []string, needle string) bool {
 }
 
 func sameKernelOperation(existing, requested model.KernelOperation) bool {
-	if existing.ID != requested.ID || existing.EnvelopeVersion != requested.EnvelopeVersion || existing.PluginID != requested.PluginID || existing.TargetVersion != requested.TargetVersion || existing.Kind != requested.Kind || existing.Revision != requested.Revision || existing.ConfigHash != requested.ConfigHash || existing.ConfigJSON != requested.ConfigJSON {
+	if existing.ID != requested.ID || existing.EnvelopeVersion != requested.EnvelopeVersion || existing.PluginID != requested.PluginID || existing.TargetVersion != requested.TargetVersion || existing.Kind != requested.Kind || existing.Revision != requested.Revision || existing.ConfigHash != requested.ConfigHash || existing.ConfigJSON != requested.ConfigJSON || existing.LifecyclePlanID != requested.LifecyclePlanID || existing.LifecyclePlanStepID != requested.LifecyclePlanStepID || existing.LifecyclePlanPhase != requested.LifecyclePlanPhase || existing.LifecyclePlanSequence != requested.LifecyclePlanSequence || existing.TopologyRevision != requested.TopologyRevision {
+		return false
+	}
+	if !sameOptionalKernelOperationID(existing.TopologyDeploymentID, requested.TopologyDeploymentID) || !sameOptionalKernelOperationID(existing.TopologyStepID, requested.TopologyStepID) {
 		return false
 	}
 	if existing.NodeID == nil || requested.NodeID == nil {
@@ -1920,6 +1978,13 @@ func sameKernelOperation(existing, requested model.KernelOperation) bool {
 		return existing.DeadlineAt == nil && requested.DeadlineAt == nil
 	}
 	return existing.DeadlineAt.Equal(*requested.DeadlineAt)
+}
+
+func sameOptionalKernelOperationID(left, right *uint) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 // ExpireKernelOperations marks undispatched or in-flight work that has passed
@@ -1956,6 +2021,9 @@ func CancelKernelOperation(db *gorm.DB, operationID string, at time.Time) (*mode
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&operation, "id = ?", operationID).Error; err != nil {
 			return err
 		}
+		if strings.TrimSpace(operation.LifecyclePlanID) != "" {
+			return cancelPluginLifecyclePlan(tx, &operation, at)
+		}
 		switch operation.State {
 		case "pending":
 			operation.State, operation.CancelAt, operation.LastError = "cancelled", &at, "operation cancelled before dispatch"
@@ -1972,6 +2040,44 @@ func CancelKernelOperation(db *gorm.DB, operationID string, at time.Time) (*mode
 		return nil, err
 	}
 	return &operation, nil
+}
+
+// cancelPluginLifecyclePlan turns cancellation of any visible plan operation
+// into cancellation of the entire closure. The worker then observes
+// cancel_requested and schedules reverse rollback for already-applied steps.
+// This keeps a root operation useful as the public cancellation handle while
+// preventing later dependency steps from continuing after a user abort.
+func cancelPluginLifecyclePlan(tx *gorm.DB, operation *model.KernelOperation, at time.Time) error {
+	if operation == nil {
+		return errors.New("operation is required")
+	}
+	var plan model.PluginLifecyclePlan
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&plan, "id = ?", operation.LifecyclePlanID).Error; err != nil {
+		return err
+	}
+	switch plan.State {
+	case "succeeded", "failed", "cancelled", "superseded":
+		return fmt.Errorf("%w: lifecycle plan is %s", ErrKernelOperationNotPending, plan.State)
+	case "rolling_back":
+		return fmt.Errorf("%w: lifecycle plan is already rolling back", ErrKernelOperationNotPending)
+	}
+	if err := tx.Model(&model.KernelOperation{}).
+		Where("lifecycle_plan_id = ? AND lifecycle_plan_phase = ? AND state = ?", plan.ID, "apply", "pending").
+		Updates(map[string]any{"state": "cancelled", "cancel_at": at, "last_error": "dependency lifecycle plan cancelled before dispatch"}).Error; err != nil {
+		return err
+	}
+	if err := tx.Model(&model.KernelOperation{}).
+		Where("lifecycle_plan_id = ? AND lifecycle_plan_phase = ? AND state IN ?", plan.ID, "apply", []string{"dispatching", "running"}).
+		Updates(map[string]any{"state": "cancel_requested", "cancel_at": at, "last_error": "dependency lifecycle plan cancellation requested"}).Error; err != nil {
+		return err
+	}
+	plan.State = "cancel_requested"
+	plan.Outcome = "cancelled"
+	plan.LastError = "dependency lifecycle plan cancelled"
+	if err := tx.Save(&plan).Error; err != nil {
+		return err
+	}
+	return tx.First(operation, "id = ?", operation.ID).Error
 }
 
 type TopologyValidationIssue struct {

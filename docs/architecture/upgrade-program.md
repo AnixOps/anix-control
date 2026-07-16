@@ -14,7 +14,7 @@ legacy `/api/v2` APIs, subscription behavior, UniProxy synchronization, and
 forwarding workers stay on the production path while the package manager is
 introduced behind feature flags.
 
-Current status: **3.1 preview, blocked for general release**.
+Current status: **3.2 preview, blocked for data-plane production release**.
 
 Already present in the current branch:
 
@@ -34,13 +34,18 @@ Already present in the current branch:
   bundle loading;
 - deterministic package build, public-key-only signature verification, and
   tamper-rejection evidence in CI.
+- dependency-aware Control lifecycle plans with dependency-first execution,
+  cancellation/deadline reconciliation, restart recovery, and reverse rollback;
+- feature-gated topology deployment fan-out with durable per-node steps,
+  failure fencing, reverse rollback, and observed-state write-back;
+- production release-tag package signing/upload workflow that requires the
+  `ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY` GitHub secret and publishes signature,
+  public-key, package, manifest, and checksum evidence.
 
-The following remain release blockers: executing a resolved dependency graph
-with dependency-aware rollback, completing topology deployment fan-out and
-observed-state integration with real topology executors, a production
-secret-backed package signing/upload job (the current CI gate signs only an
-ephemeral test key), and a staging rehearsal that starts the restored Control
-service and checks login/subscription/catalog behavior.
+The following remain release blockers: staging rehearsal that starts the
+restored Control service and checks login/subscription/catalog behavior,
+network-namespace nftables-forward evidence, canary rollout records, and a
+manual approval to enable topology execution outside isolated test nodes.
 
 ## Release Invariants
 
@@ -48,6 +53,8 @@ These invariants apply to every phase:
 
 1. `plugins.control_execution_enabled` and `plugins.dispatch_enabled` remain
    false by default until the phase canary is explicitly approved.
+   `plugins.topology_execution_enabled` also remains false by default and is
+   refused at startup unless Agent dispatch is enabled.
 2. No phase changes production data-plane traffic before its package has a
    tested legacy fallback and an operator rollback command.
 3. Every operation has one durable identity, one idempotency key, a revision,
@@ -142,24 +149,29 @@ boundaries, not only in isolated unit tests.
    same-origin digest loading, route collision isolation, disabled entries,
    tampered bundles, and kernel-page recovery. A later staging test must use a
    running Control catalog instead of the HTTP fixture.
-4. **Dependency resolver (preflight complete)**: recursive loading, stable
-   dependency-first order, cycle/missing/conflict detection, and trust-root
-   re-verification are implemented. Dependency-aware execution and graph
-   rollback remain to be delivered.
-5. **Topology observed state (write contract complete)**: monotonic,
-   revision-fenced node/deployment write-back and bridge mapping are tested.
-   Real topology executors, fan-out, and rollback integration remain pending.
-6. **Release pipeline (contract evidence complete)**: deterministic package
-   builds, unsigned verification, ephemeral Ed25519 signing, public-key-only
-   verification, and tamper rejection run in CI. Production secret-backed
-   signing, upload, and release-manifest package binding remain pending.
+4. **Dependency execution (implementation complete, feature gated)**:
+   recursive loading, stable dependency-first order, cycle/missing/conflict
+   detection, trust-root re-verification, dependency-aware Control execution,
+   cancellation, restart reconciliation, and reverse rollback are implemented
+   and covered by focused tests.
+5. **Topology deployment (implementation complete, feature gated)**:
+   monotonic revision-fenced observed-state write-back, bridge mapping,
+   deployment planning, DAG-ordered per-node operation fan-out, failure
+   fencing, and reverse rollback are implemented. The executor does not run
+   unless `plugins.dispatch_enabled` and `plugins.topology_execution_enabled`
+   are both explicitly enabled.
+6. **Release pipeline (production signing path complete)**: deterministic
+   package builds, unsigned verification, Ed25519 signing, public-key-only
+   verification, tamper rejection, release-tag signing with
+   `ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY`, package checksum evidence, and
+   signed package upload are wired into CI.
 
 ### 3.1 release gate
 
-The completed evidence items and all Phase 1 tests must pass in CI. The
-remaining execution, topology, production-signing, and staging items must be
-closed before `machine-telemetry` can leave an isolated development canary;
-3.1 is still not production-complete.
+The completed evidence items and all Phase 1 tests must pass in CI. Staging
+service rehearsal and canary records must still be closed before
+`machine-telemetry` can leave an isolated development canary; 3.1 is still not
+production-complete.
 
 ## Phase 3: 3.1 Machine-Telemetry Canary
 
@@ -174,9 +186,11 @@ proxy or forwarding traffic.
 
 Implement immutable topology revisions, DAG validation, capability/port/MTU/
 route/secret checks, deployment fan-out, canary groups, atomic nftables
-snapshots, and rollback. Deliver `nftables-forward` for domestic dedicated-line
-TCP and UDP only. Verify it in network namespaces with a 1/5/25/100 percent
-rollout and a legacy fallback. Agent processes must not proxy the bulk traffic.
+snapshots, and rollback. The Control fan-out and rollback executor is now
+present behind `plugins.topology_execution_enabled`; the remaining 3.2 work is
+the signed `nftables-forward` package, namespace traffic evidence, rollout
+records, and legacy fallback rehearsal. Agent processes must not proxy the
+bulk traffic.
 
 ## Phase 5: 3.3 Tunnel Mesh And NAT
 

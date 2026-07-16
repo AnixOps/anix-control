@@ -108,7 +108,8 @@ func ApplyTopologyObservedStateTx(tx *gorm.DB, update TopologyObservedStateUpdat
 		if update.DesiredRevision < current.DesiredRevision || update.ObservedRevision < current.ObservedRevision {
 			return &current, false, nil
 		}
-		if update.ObservedRevision == current.ObservedRevision && (topologyObservedTerminal(current.State) || update.ObservedAt.Before(current.UpdatedAt)) {
+		allowControlledRollback := deployment.State == "rollback_requested" && update.State == "rolled_back" && (current.State == "succeeded" || current.State == "healthy")
+		if update.ObservedRevision == current.ObservedRevision && (!allowControlledRollback && (topologyObservedTerminal(current.State) || update.ObservedAt.Before(current.UpdatedAt))) {
 			return &current, false, nil
 		}
 	}
@@ -159,6 +160,7 @@ func aggregateTopologyDeploymentState(tx *gorm.DB, deployment *model.TopologyDep
 		return err
 	}
 	allSucceeded := expectedNodes > 0 && int64(len(rows)) == expectedNodes
+	allRolledBack := expectedNodes > 0 && int64(len(rows)) == expectedNodes
 	hasFailure := false
 	hasRollback := false
 	hasCancellation := false
@@ -177,16 +179,22 @@ func aggregateTopologyDeploymentState(tx *gorm.DB, deployment *model.TopologyDep
 		default:
 			allSucceeded = false
 		}
+		if row.State != "rolled_back" {
+			allRolledBack = false
+		}
 	}
 	state := "applying"
 	if hasFailure {
 		state = "failed"
-	} else if hasRollback {
+	} else if hasRollback && allRolledBack {
 		state = "rolled_back"
 	} else if hasCancellation {
 		state = "cancelled"
 	} else if allSucceeded {
 		state = "succeeded"
+	}
+	if deployment.State == "rollback_requested" && state == "applying" {
+		state = "rollback_requested"
 	}
 	updates := map[string]any{"state": state, "completed_at": nil}
 	if state != "applying" {

@@ -12,8 +12,10 @@ revisions, deployments, and idempotent operations. Control-target lifecycle
 operations may be executed by the opt-in in-process Control executor; Agent
 target operations are dispatched only when the Agent bridge flag is enabled.
 The kernel still does not switch forwarding traffic. A deployment created
-through `/api/v3/deployments` has the `planned` state until the topology
-executor phase supplies a real deployment implementation.
+through `/api/v3/deployments` stays inert until an operator calls apply and the
+feature-gated topology executor is running. `plugins.topology_execution_enabled`
+defaults to false and startup refuses it unless `plugins.dispatch_enabled` is
+also true.
 
 ## Trust Root
 
@@ -107,17 +109,16 @@ schemas, backend control-route violations, global permission namespace
 violations, and WebUI namespace/bundle/permission violations. Both repositories
 must reject every case before a manifest can be admitted or installed.
 
-When an installation is enabled, all same-target dependencies must already be
-enabled, the target release must have a verified artifact, and no declared or
-reverse conflict may be enabled. Disabling an installed package is rejected
-while another enabled package on the same target depends on it. Target-level
-transaction locks serialize these checks across concurrent Control workers.
-The resolver now recursively loads each dependency's desired release, verifies
-registered trust roots, detects missing/cyclic/conflicting graphs, and returns
-a stable dependency-first order. It is still a preflight only: graph execution
-and dependency-aware rollback are later promotion deliverables. These checks
-only create package-manager intent; the dispatcher flags remain off by
-default.
+When a Control installation is enabled, updated, or rolled back, the kernel
+compiles the same-target dependency closure into a durable lifecycle plan.
+Dependencies execute first, the root operation remains the user-visible
+operation, and failed, timed-out, cancelled, or superseded apply work stops
+later expansion. Changed steps are compensated in reverse order by restoring
+the previous installation snapshot or disabling newly introduced packages.
+Disabling an installed package is rejected while another enabled package on
+the same target depends on it. Target-level transaction locks serialize these
+checks across concurrent Control workers. These checks and plans only create
+package-manager intent; the dispatcher flags remain off by default.
 
 ## Package Configuration
 
@@ -148,8 +149,12 @@ enabled node/plugin assignments. Topology JSON may reference secrets by ID or
 Observed-state write-back is revision-fenced and monotonic: an Agent result is
 accepted only for the exact deployment revision and known node, stale desired
 or observed revisions are ignored, and a deployment reaches a terminal state
-only after every distinct assigned node has reported. Topology execution and
-fan-out are not yet enabled by the 3.1 dispatcher.
+only after every distinct assigned node has reported. The feature-gated
+executor compiles deployment steps by DAG order, dispatches per-node
+`plugin.configure`/`plugin.enable` or disable operations, fences later steps on
+failure, and rolls back changed steps in reverse DAG order. This executor is
+off by default and must not be used as production traffic evidence until the
+corresponding protocol package and network tests exist.
 
 ## Operations
 
@@ -176,6 +181,7 @@ claims pending lifecycle operations, obtains the active Agent stream session,
 constructs the versioned envelope from canonical persisted config, and records
 ACK plus observed state back to the same operation row. It only dispatches the
 currently implemented lifecycle capabilities
-`plugin.inspect/configure/enable/disable/update/rollback/health`; install and
-topology operations remain planned until their executors exist. The flag is
-disabled by default, so a 3.1 upgrade cannot alter legacy traffic behavior.
+`plugin.inspect/configure/enable/disable/update/rollback/health`; Control
+dependency plans and topology deployment plans create those primitive
+operations instead of bypassing the durable dispatcher. The flag is disabled by
+default, so a 3.x upgrade cannot alter legacy traffic behavior.

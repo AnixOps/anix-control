@@ -36,11 +36,13 @@ type Config struct {
 // lifecycle dispatcher. Third-party plugin execution is intentionally
 // unsupported by the control kernel.
 type PluginConfig struct {
-	OfficialPublicKey       string `yaml:"official_public_key"`
-	ControlExecutionEnabled bool   `yaml:"control_execution_enabled"`
-	ControlPollInterval     string `yaml:"control_poll_interval"`
-	DispatchEnabled         bool   `yaml:"dispatch_enabled"`
-	DispatchPollInterval    string `yaml:"dispatch_poll_interval"`
+	OfficialPublicKey        string `yaml:"official_public_key"`
+	ControlExecutionEnabled  bool   `yaml:"control_execution_enabled"`
+	ControlPollInterval      string `yaml:"control_poll_interval"`
+	DispatchEnabled          bool   `yaml:"dispatch_enabled"`
+	DispatchPollInterval     string `yaml:"dispatch_poll_interval"`
+	TopologyExecutionEnabled bool   `yaml:"topology_execution_enabled"`
+	TopologyPollInterval     string `yaml:"topology_poll_interval"`
 }
 
 // GRPCConfig controls the node-facing gRPC server (AnixOps Agent nodes connect here).

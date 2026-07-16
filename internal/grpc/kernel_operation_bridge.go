@@ -18,6 +18,32 @@ import (
 
 const kernelOperationDispatchRetryAfter = 30 * time.Second
 
+const (
+	maxKernelAgentNodeID      = uint64(^uint32(0))
+	maxKernelObservedRevision = uint64(1<<63 - 1)
+)
+
+func kernelAgentNodeID(nodeID uint) (uint32, error) {
+	if uint64(nodeID) > maxKernelAgentNodeID {
+		return 0, fmt.Errorf("node id %d exceeds Agent uint32 range", nodeID)
+	}
+	return uint32(nodeID), nil // #nosec G115 -- the value is bounded above.
+}
+
+func kernelAgentRevision(revision int64) (uint64, error) {
+	if revision <= 0 {
+		return 0, fmt.Errorf("revision %d is not positive", revision)
+	}
+	return uint64(revision), nil // #nosec G115 -- non-positive values are rejected above.
+}
+
+func kernelObservedRevision(revision uint64) (int64, bool) {
+	if revision > maxKernelObservedRevision {
+		return 0, false
+	}
+	return int64(revision), true // #nosec G115 -- the value is bounded above.
+}
+
 // kernelOperationStream is deliberately narrower than AgentControlManager so
 // durable-operation behavior can be exercised without a live gRPC listener.
 type kernelOperationStream interface {
@@ -120,10 +146,20 @@ func (b *KernelOperationBridge) dispatchCancellations(ctx context.Context) error
 		if operation.NodeID == nil {
 			continue
 		}
-		if _, connected := b.stream.Connection(uint32(*operation.NodeID)); !connected {
+		nodeID, err := kernelAgentNodeID(*operation.NodeID)
+		if err != nil {
+			_ = b.recordDispatchError(operation.ID, err.Error())
 			continue
 		}
-		if err := b.stream.CancelOperation(ctx, uint32(*operation.NodeID), operation.ID, uint64(operation.Revision)); err != nil {
+		revision, err := kernelAgentRevision(operation.Revision)
+		if err != nil {
+			_ = b.recordDispatchError(operation.ID, err.Error())
+			continue
+		}
+		if _, connected := b.stream.Connection(nodeID); !connected {
+			continue
+		}
+		if err := b.stream.CancelOperation(ctx, nodeID, operation.ID, revision); err != nil {
 			if err := b.db.Model(&model.KernelOperation{}).Where("id = ?", operation.ID).
 				Update("last_error", "cancellation delivery failed: "+err.Error()).Error; err != nil {
 				return err
@@ -176,7 +212,11 @@ func (b *KernelOperationBridge) dispatchOne(ctx context.Context, operation model
 	if !service.IsAgentPluginOperation(operation.Kind) {
 		return false, b.failOperation(operation.ID, "operation kind is not dispatchable to the Agent Supervisor")
 	}
-	snapshot, connected := b.stream.Connection(uint32(*operation.NodeID))
+	nodeID, err := kernelAgentNodeID(*operation.NodeID)
+	if err != nil {
+		return false, b.failOperation(operation.ID, err.Error())
+	}
+	snapshot, connected := b.stream.Connection(nodeID)
 	if !connected || strings.TrimSpace(snapshot.SessionID) == "" {
 		return false, nil
 	}
@@ -201,7 +241,7 @@ func (b *KernelOperationBridge) dispatchOne(ctx context.Context, operation model
 	}
 	deadlineCtx, cancel := context.WithDeadline(ctx, *operation.DeadlineAt)
 	defer cancel()
-	ack, err := b.stream.DispatchOperation(deadlineCtx, uint32(*operation.NodeID), desired)
+	ack, err := b.stream.DispatchOperation(deadlineCtx, nodeID, desired)
 	if err != nil {
 		// Retain dispatching state: a reconnect replays the in-memory desired
 		// operation, while a later worker run recovers an interrupted process.
@@ -230,10 +270,14 @@ func kernelOperationDesired(operation model.KernelOperation) (*agentv1pb.Desired
 	if canonical != operation.ConfigJSON {
 		return nil, errors.New("stored operation config is not canonical")
 	}
+	revision, err := kernelAgentRevision(operation.Revision)
+	if err != nil {
+		return nil, err
+	}
 	envelope, err := json.Marshal(kernelOperationEnvelopePayload{
 		Version: service.KernelOperationEnvelopeVersion, OperationID: operation.ID,
 		IdempotencyKey: operation.IdempotencyKey, SessionID: operation.SessionID,
-		Revision: uint64(operation.Revision), PluginID: operation.PluginID,
+		Revision: revision, PluginID: operation.PluginID,
 		TargetVersion: operation.TargetVersion, ConfigHash: operation.ConfigHash,
 		Config: json.RawMessage(operation.ConfigJSON),
 	})
@@ -241,7 +285,7 @@ func kernelOperationDesired(operation model.KernelOperation) (*agentv1pb.Desired
 		return nil, fmt.Errorf("encode operation envelope: %w", err)
 	}
 	return &agentv1pb.DesiredOperation{
-		OperationId: operation.ID, Kind: operation.Kind, Revision: uint64(operation.Revision),
+		OperationId: operation.ID, Kind: operation.Kind, Revision: revision,
 		PayloadJson: envelope, DeadlineUnixMs: operation.DeadlineAt.UnixMilli(),
 	}, nil
 }
@@ -263,11 +307,15 @@ func (b *KernelOperationBridge) recordObserved(nodeID uint32, observed *agentv1p
 	if observed == nil || strings.TrimSpace(observed.OperationId) == "" {
 		return
 	}
+	observedRevision, validRevision := kernelObservedRevision(observed.Revision)
+	if !validRevision {
+		return
+	}
 	observedAt := b.now()
 	if err := b.db.Transaction(func(tx *gorm.DB) error {
 		var operation model.KernelOperation
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(
-			&operation, "id = ? AND node_id = ? AND revision = ?", observed.OperationId, nodeID, int64(observed.Revision),
+			&operation, "id = ? AND node_id = ? AND revision = ?", observed.OperationId, nodeID, observedRevision,
 		).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil
@@ -312,11 +360,22 @@ func (b *KernelOperationBridge) recordObserved(nodeID uint32, observed *agentv1p
 		if err := tx.First(&current, "node_id = ?", nodeID).Error; err != nil {
 			return err
 		}
-		if int64(observed.Revision) > current.ObservedRevision {
-			if err := tx.Model(&current).Update("observed_revision", int64(observed.Revision)).Error; err != nil {
+		if observedRevision > current.ObservedRevision {
+			if err := tx.Model(&current).Update("observed_revision", observedRevision).Error; err != nil {
 				return err
 			}
 		}
+		// Topology deployment steps use ordinary Agent plugin operations so the
+		// package receives exactly its signed config document. The deployment
+		// executor owns topology aggregation after this operation row becomes
+		// terminal; writing a topology success here would incorrectly mark a
+		// node complete while another vertex on that node is still applying.
+		if operation.TopologyDeploymentID != nil {
+			return nil
+		}
+		// Keep the pre-executor topology.* envelope compatibility path for
+		// persisted 3.1 preview rows. New deployments never place topology
+		// metadata inside plugin config JSON.
 		var topologyRef struct {
 			DeploymentID    uint  `json:"deployment_id"`
 			DesiredRevision int64 `json:"desired_revision"`
@@ -337,7 +396,7 @@ func (b *KernelOperationBridge) recordObserved(nodeID uint32, observed *agentv1p
 			}
 			if _, _, err := service.ApplyTopologyObservedStateTx(tx, service.TopologyObservedStateUpdate{
 				DeploymentID: topologyRef.DeploymentID, NodeID: uint(nodeID),
-				DesiredRevision: desiredRevision, ObservedRevision: int64(observed.Revision),
+				DesiredRevision: desiredRevision, ObservedRevision: observedRevision,
 				State: topologyState, HealthJSON: string(observed.StateJson), LastError: message,
 				ObservedAt: observedAt,
 			}); err != nil {

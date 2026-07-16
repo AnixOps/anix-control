@@ -21,7 +21,11 @@ func requireInMemoryDatabase(t testing.TB) {
 	require.NoError(t, database.Init(&config.DatabaseConfig{
 		Driver:   "sqlite",
 		Database: ":memory:",
+		LogLevel: "silent",
 	}))
+	sqlDB, err := database.Get().DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
 }
 
 func requireAutoMigrate(t testing.TB, models ...any) {

@@ -79,6 +79,16 @@ download:
 - `migration-dry-run.txt`
 - `v2board-source.sbom.spdx.json`
 
+Plugin-platform releases may also attach signed official package artifacts.
+For the `machine-telemetry` reference package, keep these files together:
+
+- `machine-telemetry-*.tar`
+- `machine-telemetry-manifest.json`
+- `machine-telemetry-manifest.sig`
+- `machine-telemetry-public.pem`
+- `machine-telemetry-public.raw`
+- `machine-telemetry-SHA256SUMS.txt`
+
 Verify checksums before replacing any production file:
 
 ```bash
@@ -93,6 +103,48 @@ Open `RELEASE_MANIFEST.json` and confirm:
 - every artifact you will deploy appears with the expected size and SHA-256
 
 If the manifest or checksum verification fails, stop the upgrade.
+
+For signed plugin packages, first verify package checksums:
+
+```bash
+sha256sum -c machine-telemetry-SHA256SUMS.txt
+```
+
+Then verify the manifest signature with the public key published by the same
+GitHub Release, or with the pinned AnixOps trust root already approved in your
+environment:
+
+```bash
+python3 packages/machine-telemetry/verify_signature.py \
+  --manifest machine-telemetry-manifest.json \
+  --artifact machine-telemetry-1.0.0.tar \
+  --signature machine-telemetry-manifest.sig \
+  --public-key machine-telemetry-public.pem
+```
+
+If the package hash, manifest signature, or trust-root fingerprint does not
+match the release record, stop before enabling any plugin flag.
+
+## Plugin Platform Flags
+
+The package platform remains opt-in during the 3.x migration. These defaults
+must stay false in production until the release notes explicitly approve the
+phase:
+
+```yaml
+plugins:
+  control_execution_enabled: false
+  dispatch_enabled: false
+  topology_execution_enabled: false
+```
+
+Enablement order matters. `topology_execution_enabled=true` is refused unless
+`dispatch_enabled=true`, and neither flag should be enabled before package
+artifacts, signatures, database migration evidence, and canary rollback
+commands are recorded. Enabling topology execution does not by itself approve
+business traffic migration; dedicated forwarding still requires the
+`nftables-forward` package, network-namespace TCP/UDP evidence, and a recorded
+rollout plan.
 
 ## Systemd Binary Upgrade
 

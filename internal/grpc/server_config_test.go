@@ -29,3 +29,13 @@ func TestServerRejectsPartialTLSConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestRunReturnsStartError(t *testing.T) {
+	config := DefaultServerConfig()
+	config.Host = "127.0.0.1"
+	config.Port = 0
+	config.TLSCertFile = "control.crt"
+
+	err := Run(config)
+	require.ErrorContains(t, err, "cert and key must be configured together")
+}

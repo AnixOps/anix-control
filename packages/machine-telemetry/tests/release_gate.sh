@@ -8,6 +8,7 @@ readonly ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 readonly PACKAGE_ROOT="${ROOT_DIR}/packages/machine-telemetry"
 readonly BUILDER="${PACKAGE_ROOT}/build.py"
 readonly VERIFIER="${PACKAGE_ROOT}/verify_signature.py"
+readonly SIGNING_SCRIPT="${ROOT_DIR}/scripts/sign_plugin_release.sh"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 OPENSSL_BIN="${OPENSSL_BIN:-openssl}"
 
@@ -60,6 +61,7 @@ main() {
   done
   [[ -f "${BUILDER}" ]] || fail "package builder is missing"
   [[ -f "${VERIFIER}" ]] || fail "public-key verifier is missing"
+  [[ -x "${SIGNING_SCRIPT}" ]] || fail "plugin signing script is missing or not executable"
 
   local work agent first second private_key public_key signature signature_b64 raw_key
   work="$(mktemp -d)"
@@ -94,21 +96,20 @@ main() {
   "${PYTHON_BIN}" "${BUILDER}" verify --output-dir "${second}"
 
   "${OPENSSL_BIN}" genpkey -algorithm ED25519 -out "${private_key}" >/dev/null 2>&1
+  chmod 0600 "${private_key}"
   "${OPENSSL_BIN}" pkey -in "${private_key}" -pubout -out "${public_key}" >/dev/null 2>&1
-  "${OPENSSL_BIN}" pkeyutl -sign -inkey "${private_key}" -rawin \
-    -in "${first}/manifest.json" -out "${signature}"
-  "${PYTHON_BIN}" - "${signature}" "${signature_b64}" <<'PY'
-import base64
-import pathlib
-import sys
-
-pathlib.Path(sys.argv[2]).write_bytes(base64.b64encode(pathlib.Path(sys.argv[1]).read_bytes()) + b"\n")
-PY
+  "${SIGNING_SCRIPT}" \
+    --manifest "${first}/manifest.json" \
+    --artifact "${first}/machine-telemetry-1.0.0.tar" \
+    --private-key "${private_key}" \
+    --signature "${signature_b64}" \
+    --public-key "${public_key}"
+  cp "${signature_b64}" "${signature}"
 
   "${PYTHON_BIN}" "${VERIFIER}" \
     --manifest "${first}/manifest.json" \
     --artifact "${first}/machine-telemetry-1.0.0.tar" \
-    --signature "${signature_b64}" \
+    --signature "${signature}" \
     --public-key "${public_key}" \
     --openssl "${OPENSSL_BIN}"
   "${OPENSSL_BIN}" pkey -pubin -in "${public_key}" -outform DER 2>/dev/null \
@@ -116,7 +117,7 @@ PY
   "${PYTHON_BIN}" "${VERIFIER}" \
     --manifest "${first}/manifest.json" \
     --artifact "${first}/machine-telemetry-1.0.0.tar" \
-    --signature "${signature_b64}" \
+    --signature "${signature}" \
     --public-key "${raw_key}" \
     --openssl "${OPENSSL_BIN}"
 
@@ -136,7 +137,7 @@ PY
     --signature "${work}/missing.sig" \
     --public-key "${public_key}" \
     --openssl "${OPENSSL_BIN}"
-  cp "${signature_b64}" "${work}/signature-tampered.sig"
+  cp "${signature}" "${work}/signature-tampered.sig"
   printf 'A' >>"${work}/signature-tampered.sig"
   expect_failure "tampered signature" \
     "${PYTHON_BIN}" "${VERIFIER}" \
@@ -151,7 +152,7 @@ PY
     "${PYTHON_BIN}" "${VERIFIER}" \
     --manifest "${first}/manifest.json" \
     --artifact "${work}/artifact-tampered.tar" \
-    --signature "${signature_b64}" \
+    --signature "${signature}" \
     --public-key "${public_key}" \
     --openssl "${OPENSSL_BIN}"
 

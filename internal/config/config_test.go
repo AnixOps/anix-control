@@ -133,6 +133,8 @@ plugins:
   control_poll_interval: "3s"
   dispatch_enabled: true
   dispatch_poll_interval: 7s
+  topology_execution_enabled: true
+  topology_poll_interval: 11s
 `
 	require.NoError(t, os.WriteFile(configPath, []byte(content), 0o644))
 
@@ -140,8 +142,10 @@ plugins:
 	require.NoError(t, err)
 	require.True(t, loaded.Plugins.DispatchEnabled)
 	require.True(t, loaded.Plugins.ControlExecutionEnabled)
+	require.True(t, loaded.Plugins.TopologyExecutionEnabled)
 	assert.Equal(t, "3s", loaded.Plugins.ControlPollInterval)
 	assert.Equal(t, "7s", loaded.Plugins.DispatchPollInterval)
+	assert.Equal(t, "11s", loaded.Plugins.TopologyPollInterval)
 	assert.Equal(t, "ZmFrZS1wdWJsaWMta2V5", loaded.Plugins.OfficialPublicKey)
 }
 

@@ -32,9 +32,17 @@
 - Added deterministic `machine-telemetry` package release-contract checks with
   ephemeral Ed25519 signing, public-key-only verification, artifact binding,
   and tamper rejection; no private key is stored or uploaded.
-- Added stable recursive dependency graph preflight and monotonic topology
-  observed-state write-back fencing. Dependency-aware graph execution and real
-  topology fan-out remain future promotion work.
+- Added dependency-aware Control lifecycle plans with dependency-first
+  execution, cancellation/restart recovery, reverse rollback, and focused
+  durability coverage.
+- Added feature-gated topology deployment fan-out with durable per-node steps,
+  observed-state reconciliation, failure fencing, and reverse rollback. The
+  executor remains disabled by default and requires Agent dispatch before it can
+  run.
+- Added production release-tag signing and upload wiring for the official
+  `machine-telemetry` package, requiring the
+  `ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY` GitHub secret and publishing package,
+  manifest, signature, public-key, and checksum evidence.
 - Introduced the AnixOps Control / AnixOps Agent product identity, primary `anix-control` binaries, frontend archives and Docker images, stable/alpha/beta/RC release tag support, and a documented compatibility window with legacy `v2board-*` release aliases.
 - Added a tag-pinned native release installer that downloads and verifies GitHub Actions-built panel/frontend assets without cloning or building on the target host, preserves configuration/data, and restores the previous application snapshot after a failed health check.
 - Added detailed release installation and legacy migration guides covering fresh install, update, rollback, SQLite-to-PostgreSQL boundaries, foreign-panel migration limits, coordinated node rollout, and retained evidence.
