@@ -45,12 +45,14 @@ Already present in the current branch:
 - deterministic `nftables-forward` package source with WebUI smoke coverage,
   real Agent runtime packaging, public-key verification, tamper rejection, and
   CI release-contract evidence.
+- privileged `nftables-forward` namespace acceptance in the pinned Agent repo
+  proving TCP DNAT, UDP DNAT, plugin-created table deletion on rollback, and
+  pre-existing nftables table snapshot restoration.
 
 The following remain release blockers: staging rehearsal that starts the
 restored Control service and checks login/subscription/catalog behavior,
-network-namespace TCP/UDP evidence, atomic nftables snapshot/rollback proof,
-canary rollout records, and a manual approval to enable topology execution
-outside isolated test nodes.
+canary rollout records, legacy fallback rehearsal, and a manual approval to
+enable topology execution outside isolated test nodes.
 
 ## Release Invariants
 
@@ -194,9 +196,10 @@ route/secret checks, deployment fan-out, canary groups, atomic nftables
 snapshots, and rollback. The Control fan-out and rollback executor is now
 present behind `plugins.topology_execution_enabled`; the deterministic
 `nftables-forward` package release contract and real Agent runtime are present
-in CI/release packaging. The remaining 3.2 work is namespace TCP/UDP traffic
-evidence, nftables snapshot/rollback proof, rollout records, and legacy
-fallback rehearsal. Agent processes must not proxy the bulk traffic.
+in CI/release packaging. The pinned Agent namespace acceptance script now
+proves namespace TCP/UDP traffic and nftables snapshot rollback. The remaining
+3.2 work is staging restore smoke, rollout records, legacy fallback rehearsal,
+and operator approval. Agent processes must not proxy the bulk traffic.
 
 ## Phase 5: 3.3 Tunnel Mesh And NAT
 

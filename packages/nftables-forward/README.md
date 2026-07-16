@@ -6,8 +6,10 @@ metadata, configuration, and a dependency-free WebUI module. The Agent
 executable is an explicit build input and is never replaced with a placeholder.
 The Control release workflow builds that executable from the pinned
 `AnixOps/anix-agent` source and publishes a signed package on release tags.
-Production forwarding still requires network-namespace TCP/UDP evidence,
-atomic nftables snapshot/rollback proof, and canary rollout approval.
+The pinned Agent repo includes privileged namespace acceptance for TCP DNAT,
+UDP DNAT, plugin-created table rollback, and pre-existing nftables table
+snapshot restoration. Production forwarding still requires staging restore
+smoke, canary rollout records, legacy fallback rehearsal, and operator approval.
 
 ## Source Layout
 
@@ -111,6 +113,18 @@ python3 packages/nftables-forward/build.py self-test
 node packages/nftables-forward/tests/webui_smoke.mjs
 
 bash packages/nftables-forward/tests/release_gate.sh
+```
+
+The runtime data-plane acceptance lives with the Agent source because it needs
+to execute the real Linux plugin binary in privileged network namespaces:
+
+```bash
+GOEXPERIMENT=jsonv2 GOWORK=off \
+  go -C /path/to/anix-agent build -o /tmp/nftables-forward-agent \
+  ./cmd/nftables-forward
+
+sudo bash /path/to/anix-agent/plugin/nftablesforward/namespace_acceptance.sh \
+  --agent-binary /tmp/nftables-forward-agent
 ```
 
 The test suite builds twice and compares every output byte, verifies archive

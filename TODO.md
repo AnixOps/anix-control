@@ -49,10 +49,11 @@ This list is intentionally concrete. Do not mark an item done without code, test
   runtime binary packaging, release-tag signing/upload path, WebUI smoke,
   public-key verification, and tamper rejection without claiming production
   traffic takeover.
+- [x] Add privileged `nftables-forward` network-namespace TCP/UDP acceptance and
+  nftables snapshot rollback evidence in the pinned Agent repo.
 - [ ] Keep Supervisor and dynamic plugin execution feature-gated until staging
-  restore smoke, `nftables-forward` network-namespace TCP/UDP evidence,
-  nftables snapshot/rollback proof, rollout records, and operator canary
-  approval pass.
+  restore smoke, rollout records, legacy fallback rehearsal, and operator
+  canary approval pass.
 
 ## P0: Audit Deliverables
 

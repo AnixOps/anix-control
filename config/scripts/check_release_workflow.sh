@@ -162,7 +162,7 @@ check_release_workflow() {
   require_text "--require machine-telemetry-1.0.0.tar" "signed plugin package verification requirement" || failed=1
   require_text "--require nftables-forward-1.0.0.tar" "signed nftables forward package verification requirement" || failed=1
   require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
-  require_text "ref: d955b6c5cc5e4de31cb45d6a7c7cec573b08781c" "pinned Agent fixture commit" || failed=1
+  require_text "ref: 5f7eaf27970cbb3ec9bdc9bda9d070b59c6cf345" "pinned Agent fixture commit" || failed=1
   require_text "ANIXOPS_CROSS_REPO_E2E: '1'" "cross-repository Agent process E2E opt-in" || failed=1
   require_text "TestKernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
   require_text "cross-repository-agent-e2e" "release dependency on cross-repository Agent process E2E" || failed=1
@@ -292,7 +292,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: d955b6c5cc5e4de31cb45d6a7c7cec573b08781c
+          ref: 5f7eaf27970cbb3ec9bdc9bda9d070b59c6cf345
           path: V2bX_AnixOps
       - env:
           ANIXOPS_CROSS_REPO_E2E: '1'
