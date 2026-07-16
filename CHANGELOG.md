@@ -77,6 +77,9 @@
 
 ### Fixed
 
+- Stabilized plugin runtime test gates by observing pre-handler gRPC stream
+  rejection through the authoritative receive status, and by restoring Vitest
+  mocked globals and timers after every frontend test.
 - Silenced misleading frontend test-run stderr by mocking AdminLayout profile
   refreshes in its unit tests and escaping JSON examples in locale messages so
   vue-i18n no longer reports placeholder compilation errors during successful
