@@ -4,8 +4,10 @@ This directory is the reproducible package source for the dedicated-line
 `nftables-forward` Control + Agent + WebUI package. It contains package
 metadata, configuration, and a dependency-free WebUI module. The Agent
 executable is an explicit build input and is never replaced with a placeholder.
-The current contract proves packaging and signing only; production forwarding
-still requires the real Agent runtime and network-namespace TCP/UDP evidence.
+The Control release workflow builds that executable from the pinned
+`AnixOps/anix-agent` source and publishes a signed package on release tags.
+Production forwarding still requires network-namespace TCP/UDP evidence,
+atomic nftables snapshot/rollback proof, and canary rollout approval.
 
 ## Source Layout
 
@@ -41,7 +43,8 @@ targets and maps `agent-linux-amd64` to
 ## Build
 
 The input binary must be a non-empty regular executable file. The package
-builder does not compile or download it.
+builder does not compile or download it; CI passes the pinned Agent
+`cmd/nftables-forward` binary into this builder.
 
 ```bash
 python3 packages/nftables-forward/build.py build \

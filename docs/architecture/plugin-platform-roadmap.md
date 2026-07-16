@@ -107,9 +107,11 @@ Agent restart/replay tests; frontend plugin failure isolation; PostgreSQL
 migration and restore rehearsal; the real Control-to-Agent process gate;
 deterministic package release contracts for `machine-telemetry` and
 `nftables-forward`; dependency-aware graph execution with rollback;
-feature-gated topology fan-out; and production signing/upload workflow checks.
-Supervisor and dynamic packages remain feature-gated until staging validation
-and canary records approve expansion beyond isolated test nodes.
+feature-gated topology fan-out; real `nftables-forward` Agent runtime source;
+and production signing/upload workflow checks for both official reference
+packages. Supervisor and dynamic packages remain feature-gated until staging
+validation, network-namespace traffic evidence, and canary records approve
+expansion beyond isolated test nodes.
 
 ### 3.2.0 - Declarative Runtime And Dedicated Forwarding
 
@@ -117,9 +119,10 @@ Deliver `topology.plan/apply/status/diagnose/rollback`, deployment fan-out,
 canary groups, and the signed `nftables-forward` package. The Control executor
 for plan/apply/status/rollback exists behind
 `plugins.topology_execution_enabled` and also requires
-`plugins.dispatch_enabled`; the package release contract now exists, but the
-remaining gate is a real `nftables-forward` Agent runtime plus namespace
-traffic evidence. The first production data-plane candidate is domestic
+`plugins.dispatch_enabled`; the package release contract, real Agent runtime,
+and release-tag signing/upload path now exist. The remaining gates are
+network-namespace traffic evidence, nftables snapshot/rollback proof, and
+canary rollout records. The first production data-plane candidate is domestic
 dedicated-line TCP and UDP forwarding; Agent does not carry business traffic.
 
 Exit evidence: network-namespace TCP/UDP tests, IPv4/IPv6 validation, atomic
