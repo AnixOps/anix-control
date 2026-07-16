@@ -103,8 +103,11 @@ check_release_workflow() {
     backend-test \
     postgres-stats-test \
     migration-dry-run-test \
+    postgres-restore-rehearsal \
+    plugin-package-release-test \
     forward-runtime-test \
     grpc-test \
+    cross-repository-agent-e2e \
     cmd-test \
     tag-gate; do
     require_release_job_dependency "${dependency}" || failed=1
@@ -136,6 +139,18 @@ check_release_workflow() {
   require_text "Download migration dry-run report" "migration dry-run report download step" || failed=1
   require_text "migration-dry-run-report" "migration dry-run report artifact" || failed=1
   require_text "migration-dry-run.txt" "migration dry-run report release asset" || failed=1
+  require_text "Run destructive restore rehearsal on disposable PostgreSQL" "PostgreSQL restore rehearsal execution step" || failed=1
+  require_text "scripts/postgres_restore_rehearsal.sh" "PostgreSQL restore rehearsal script invocation" || failed=1
+  require_text "name: postgres-restore-rehearsal" "PostgreSQL restore rehearsal evidence artifact" || failed=1
+  require_text "Machine Telemetry Package Release Contract" "official plugin package release job" || failed=1
+  require_text "packages/machine-telemetry/tests/release_gate.sh" "official plugin package release gate invocation" || failed=1
+  require_text "set -o pipefail" "official plugin package gate failure propagation" || failed=1
+  require_text "name: machine-telemetry-package-contract-report" "official plugin package contract artifact" || failed=1
+  require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
+  require_text "ref: d1fc684000f85450db42d4cf63cc691669ebeb80" "pinned Agent fixture commit" || failed=1
+  require_text "ANIXOPS_CROSS_REPO_E2E: '1'" "cross-repository Agent process E2E opt-in" || failed=1
+  require_text "TestKernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
+  require_text "cross-repository-agent-e2e" "release dependency on cross-repository Agent process E2E" || failed=1
   require_text "anchore/sbom-action" "SBOM generation action" || failed=1
   require_text "spdx-json" "SPDX JSON SBOM format" || failed=1
   require_text "anix-control-source.sbom.spdx.json" "primary source SBOM release asset" || failed=1
@@ -185,7 +200,7 @@ jobs:
           [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]
 
   release-binaries:
-    needs: [go-quality, go-lint, go-security, go-race, backend-test, postgres-stats-test, migration-dry-run-test, forward-runtime-test, grpc-test, cmd-test, tag-gate]
+    needs: [go-quality, go-lint, go-security, go-race, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, forward-runtime-test, grpc-test, cross-repository-agent-e2e, cmd-test, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     strategy:
       matrix:
@@ -220,6 +235,38 @@ jobs:
         with:
           name: migration-dry-run-report
           path: migration-dry-run.txt
+
+  postgres-restore-rehearsal:
+    steps:
+      - name: Run destructive restore rehearsal on disposable PostgreSQL
+        run: bash scripts/postgres_restore_rehearsal.sh --unavailable fail
+      - uses: actions/upload-artifact@v7
+        with:
+          name: postgres-restore-rehearsal
+
+  plugin-package-release-test:
+    name: Machine Telemetry Package Release Contract
+    steps:
+      - name: Run reproducible unsigned and signed package contract
+        run: |
+          set -o pipefail
+          bash packages/machine-telemetry/tests/release_gate.sh | tee package-contract.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: machine-telemetry-package-contract-report
+
+  cross-repository-agent-e2e:
+    name: Control to Agent Process E2E
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: AnixOps/anix-agent
+          ref: d1fc684000f85450db42d4cf63cc691669ebeb80
+          path: V2bX_AnixOps
+      - env:
+          ANIXOPS_CROSS_REPO_E2E: '1'
+        run: |
+          go test -v -count=1 ./internal/grpc -run '^TestKernelOperationBridgeCrossRepositoryAgentProcess$'
 
   release:
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
@@ -300,6 +347,13 @@ EOF
   sed -i '/migration-dry-run-report/d' "${fixture}.missing-migration-report"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-migration-report" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing migration report should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-plugin-package-gate"
+  sed -i '/plugin-package-release-test/d;/Machine Telemetry Package Release Contract/d;/packages\/machine-telemetry\/tests\/release_gate.sh/d;/machine-telemetry-package-contract-report/d' "${fixture}.missing-plugin-package-gate"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-plugin-package-gate" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing plugin package gate should fail" >&2
     return 1
   fi
 
