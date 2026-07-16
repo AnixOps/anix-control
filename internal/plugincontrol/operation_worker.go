@@ -64,10 +64,16 @@ func (w *OperationWorker) RunOnce(ctx context.Context) (int, error) {
 		}).Error; err != nil {
 		return 0, err
 	}
+	if err := w.reconcileLifecyclePlans(); err != nil {
+		return 0, err
+	}
 
 	var operations []model.KernelOperation
 	if err := w.db.Where("node_id IS NULL AND state = ? AND kind IN ?", "pending", controlOperationKinds).
-		Order("created_at, id").Find(&operations).Error; err != nil {
+		// Dependency plans carry an explicit, durable sequence. Sorting them
+		// before legacy work lets one sweep advance both apply and reverse
+		// rollback vertices without relying on UUID creation order.
+		Order("CASE WHEN lifecycle_plan_id = '' THEN 1 ELSE 0 END, lifecycle_plan_id, lifecycle_plan_sequence, created_at, id").Find(&operations).Error; err != nil {
 		return 0, err
 	}
 	processed := 0
@@ -174,7 +180,7 @@ func (w *OperationWorker) executeOne(ctx context.Context, operation model.Kernel
 	if operation.DeadlineAt == nil {
 		return true, w.recordFailure(operation, &installation, errors.New("operation deadline is missing"), false)
 	}
-	if !installationWantsOperation(installation, operation) {
+	if operation.LifecyclePlanPhase != lifecyclePlanPhaseRollback && !installationWantsOperation(installation, operation) {
 		return true, w.recordSuperseded(operation, "installation desired state changed before execution")
 	}
 	operationCtx, cancelOperation := context.WithCancel(ctx)
@@ -199,7 +205,7 @@ func (w *OperationWorker) executeOne(ctx context.Context, operation model.Kernel
 	})
 	cancelExecution()
 	rollbackSucceeded := false
-	if executeErr != nil && (operation.Kind == "plugin.update" || operation.Kind == "plugin.rollback") && installation.Enabled && installation.ObservedVersion != "" && installation.ObservedVersion != operation.TargetVersion {
+	if executeErr != nil && operation.LifecyclePlanID == "" && (operation.Kind == "plugin.update" || operation.Kind == "plugin.rollback") && installation.Enabled && installation.ObservedVersion != "" && installation.ObservedVersion != operation.TargetVersion {
 		rollbackCtx, cancelRollback := context.WithTimeout(operationCtx, 2*time.Minute)
 		_, rollbackErr := w.registry.ExecuteLifecycle(rollbackCtx, installation.PluginID, installation.ObservedVersion, LifecycleRequest{
 			OperationID: operation.ID + ":automatic-rollback", Kind: "plugin.enable", Target: installation.ObservedVersion,
@@ -214,6 +220,16 @@ func (w *OperationWorker) executeOne(ctx context.Context, operation model.Kernel
 	stopLease()
 	select {
 	case leaseErr := <-leaseErrors:
+		// Cancellation changes the operation state beneath the lease owner.
+		// Persist it as a terminal result so a dependency plan can begin its
+		// durable reverse rollback. A true ownership loss remains untouched.
+		cancelRequested, cancelErr := w.operationCancellationRequested(operation.ID)
+		if cancelErr != nil {
+			return true, cancelErr
+		}
+		if cancelRequested {
+			return true, w.recordFailure(operation, &installation, context.Canceled, false)
+		}
 		return true, leaseErr
 	default:
 	}
@@ -251,6 +267,10 @@ func (w *OperationWorker) claimOperation(operation *model.KernelOperation, claim
 		if earliest.ID != operation.ID || earliest.State != "pending" {
 			return nil
 		}
+		allowed, err := lifecyclePlanAllowsClaim(tx, *operation, claimedAt)
+		if err != nil || !allowed {
+			return err
+		}
 		leaseExpiresAt := claimedAt.Add(w.leaseDuration)
 		claim := tx.Model(&model.KernelOperation{}).Where("id = ? AND state = ?", operation.ID, "pending").Updates(map[string]any{
 			"state": "running", "dispatched_at": claimedAt, "acknowledged_at": claimedAt, "last_error": "",
@@ -269,6 +289,14 @@ func (w *OperationWorker) claimOperation(operation *model.KernelOperation, claim
 		return nil
 	})
 	return claimed, err
+}
+
+func (w *OperationWorker) operationCancellationRequested(operationID string) (bool, error) {
+	var operation model.KernelOperation
+	if err := w.db.Select("state").First(&operation, "id = ?", operationID).Error; err != nil {
+		return false, err
+	}
+	return operation.State == "cancel_requested", nil
 }
 
 func (w *OperationWorker) renewLease(ctx context.Context, cancel context.CancelFunc, operationID string, done <-chan struct{}, stopped chan<- struct{}, leaseErrors chan<- error) {
@@ -317,6 +345,9 @@ func (w *OperationWorker) recordSuccess(operation model.KernelOperation, install
 			return err
 		}
 		if currentOperation.State == "cancel_requested" {
+			if operation.LifecyclePlanID != "" {
+				return w.recordLifecyclePlanFailure(tx, operation, nil, context.Canceled, now)
+			}
 			return tx.Model(&currentOperation).Updates(map[string]any{
 				"state": "cancelled", "result_json": string(result), "observed_at": now,
 				"last_error": "operation completed after cancellation was requested", "claimed_by": "", "lease_expires_at": nil,
@@ -329,7 +360,10 @@ func (w *OperationWorker) recordSuccess(operation model.KernelOperation, install
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&installation, installationID).Error; err != nil {
 			return err
 		}
-		if !installationWantsOperation(installation, operation) {
+		if operation.LifecyclePlanPhase != lifecyclePlanPhaseRollback && !installationWantsOperation(installation, operation) {
+			if operation.LifecyclePlanID != "" {
+				return w.recordLifecyclePlanSuperseded(tx, operation, now, "installation desired state changed during execution")
+			}
 			return tx.Model(&currentOperation).Updates(map[string]any{
 				"state": "superseded", "result_json": string(result), "observed_at": now,
 				"last_error": "installation desired state changed during execution", "claimed_by": "", "lease_expires_at": nil,
@@ -341,7 +375,10 @@ func (w *OperationWorker) recordSuccess(operation model.KernelOperation, install
 		}).Error; err != nil {
 			return err
 		}
-		return applyInstallationSuccess(tx, &installation, operation, now)
+		if err := applyInstallationSuccess(tx, &installation, operation, now); err != nil {
+			return err
+		}
+		return w.recordLifecyclePlanSuccess(tx, operation, now)
 	})
 }
 
@@ -383,6 +420,9 @@ func (w *OperationWorker) recordFailure(operation model.KernelOperation, install
 	}
 	now := w.now()
 	return w.db.Transaction(func(tx *gorm.DB) error {
+		if operation.LifecyclePlanID != "" {
+			return w.recordLifecyclePlanFailure(tx, operation, installation, operationErr, now)
+		}
 		var currentOperation model.KernelOperation
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&currentOperation, "id = ?", operation.ID).Error; err != nil {
 			return err
@@ -432,6 +472,11 @@ func (w *OperationWorker) recordFailure(operation model.KernelOperation, install
 
 func (w *OperationWorker) recordSuperseded(operation model.KernelOperation, message string) error {
 	now := w.now()
+	if operation.LifecyclePlanID != "" {
+		return w.db.Transaction(func(tx *gorm.DB) error {
+			return w.recordLifecyclePlanSuperseded(tx, operation, now, message)
+		})
+	}
 	return w.db.Model(&model.KernelOperation{}).
 		Where("id = ? AND state = ? AND claimed_by = ?", operation.ID, "running", w.workerID).
 		Updates(map[string]any{

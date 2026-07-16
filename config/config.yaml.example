@@ -98,6 +98,10 @@ plugins:
   # Supervisor opt-in on each target node.
   dispatch_enabled: false
   dispatch_poll_interval: "5s"
+  # Declarative topology execution remains opt-in and also requires
+  # dispatch_enabled so planned revisions cannot alter legacy traffic.
+  topology_execution_enabled: false
+  topology_poll_interval: "5s"
 
 # Canonical forward runtime config for Windows/Linux/local binary/Docker.
 # Startup order:

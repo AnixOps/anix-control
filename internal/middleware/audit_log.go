@@ -12,6 +12,7 @@ import (
 	"github.com/AnixOps/anix-control/v3/internal/database"
 	"github.com/AnixOps/anix-control/v3/internal/model"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 const (
@@ -145,19 +146,18 @@ func AuditLog() gin.HandlerFunc {
 			slog.Info("admin audit log", logAttrs...)
 		}
 
-		// Persist to database (non-blocking, fire-and-forget)
-		go persistAuditLog(uidPtr, emailStr(email), method, c.Request.URL.Path, module, action, clientIP, userAgent, requestID, reqBody, statusCode, duration, errMsg)
+		// Capture the current database handle before starting the goroutine. This
+		// prevents asynchronous audit persistence from racing with test or shutdown
+		// code that replaces the process-wide database handle.
+		if db := database.GetDB(); db != nil {
+			go persistAuditLog(db, uidPtr, emailStr(email), method, c.Request.URL.Path, module, action, clientIP, userAgent, requestID, reqBody, statusCode, duration, errMsg)
+		}
 	}
 }
 
 // persistAuditLog writes an audit record to the database.
 // Runs in a goroutine so it never blocks the request flow.
-func persistAuditLog(userID *uint, email, method, path, module, action, ip, userAgent, requestID, reqBody string, statusCode int, durationMs int64, errMsg string) {
-	db := database.GetDB()
-	if db == nil {
-		return
-	}
-
+func persistAuditLog(db *gorm.DB, userID *uint, email, method, path, module, action, ip, userAgent, requestID, reqBody string, statusCode int, durationMs int64, errMsg string) {
 	entry := model.AuditLog{
 		UserID:       userID,
 		Email:        email,

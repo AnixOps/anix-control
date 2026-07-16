@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -477,13 +478,32 @@ func (h *KernelHandler) UpsertPluginInstallation(c *gin.Context) {
 		if err := tx.Where("plugin_id = ? AND target = ?", req.PluginID, req.Target).First(&row).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		if err := service.ValidatePluginInstallationPlan(tx, release, req.Target, req.Enabled, row.ID); err != nil {
-			return err
-		}
 		wasEnabled := row.Enabled
 		oldDesiredVersion, oldObservedVersion := row.DesiredVersion, row.ObservedVersion
 		oldState := row.State
 		isNew := row.ID == 0
+		var previous *model.PluginInstallation
+		if !isNew {
+			copy := row
+			previous = &copy
+		}
+		kind := ""
+		if controlExecutionEnabled && req.Target == "control" {
+			switch {
+			case req.Enabled && (isNew || !wasEnabled):
+				kind = "plugin.enable"
+			case req.Enabled && oldDesiredVersion != req.DesiredVersion:
+				kind = "plugin.update"
+			case !req.Enabled && wasEnabled:
+				kind = "plugin.disable"
+			}
+		}
+		dependencyPlan := kind == "plugin.enable" || kind == "plugin.update"
+		if !dependencyPlan {
+			if err := service.ValidatePluginInstallationPlan(tx, release, req.Target, req.Enabled, row.ID); err != nil {
+				return err
+			}
+		}
 		row.PluginID, row.Target, row.DesiredVersion, row.Enabled = req.PluginID, req.Target, req.DesiredVersion, req.Enabled
 		if isNew || wasEnabled != req.Enabled || oldDesiredVersion != req.DesiredVersion {
 			row.LifecycleGeneration++
@@ -515,17 +535,20 @@ func (h *KernelHandler) UpsertPluginInstallation(c *gin.Context) {
 		if !controlExecutionEnabled || row.Target != "control" {
 			return nil
 		}
-		kind := ""
-		switch {
-		case row.Enabled && (isNew || !wasEnabled):
-			kind = "plugin.enable"
-		case row.Enabled && oldDesiredVersion != row.DesiredVersion:
-			kind = "plugin.update"
-		case !row.Enabled && wasEnabled:
-			kind = "plugin.disable"
-		}
 		if kind == "" {
 			return nil
+		}
+		if dependencyPlan {
+			operation, enqueueErr := plugincontrol.QueueDependencyLifecyclePlan(tx, plugincontrol.DependencyLifecyclePlanRequest{
+				RootInstallation: row, PreviousRootInstallation: previous, RootRelease: release,
+				RootKind: kind, IdempotencyKey: controlOperationIdempotencyKey(
+					strconv.FormatUint(uint64(row.ID), 10), kind, row.DesiredVersion,
+					strconv.FormatInt(row.LifecycleGeneration, 10), strconv.FormatInt(row.ConfigRevision, 10), strconv.FormatBool(row.Enabled),
+				),
+				DeadlineAt: time.Now().Add(5 * time.Minute),
+			})
+			queuedOperation = operation
+			return enqueueErr
 		}
 		operation, enqueueErr := enqueueControlPluginOperation(tx, row, kind, row.DesiredVersion)
 		queuedOperation = operation
@@ -595,6 +618,7 @@ func (h *KernelHandler) PluginInstallationAction(c *gin.Context) {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&installation, installationID).Error; err != nil {
 			return err
 		}
+		previousInstallation := installation
 		kind := "plugin." + req.Action
 		if req.Action == "restart" {
 			kind = "plugin.enable"
@@ -602,6 +626,19 @@ func (h *KernelHandler) PluginInstallationAction(c *gin.Context) {
 		stableKey := controlOperationIdempotencyKey("action", strconv.FormatUint(uint64(installation.ID), 10), req.IdempotencyKey)
 		var existing model.KernelOperation
 		if err := tx.First(&existing, "idempotency_key = ?", stableKey).Error; err == nil {
+			if existing.Kind != kind || (req.Action == "update" && existing.TargetVersion != req.TargetVersion) {
+				return errors.New("idempotency_key is already bound to a different plugin action")
+			}
+			operation = &existing
+			return nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		var existingPlan model.PluginLifecyclePlan
+		if err := tx.First(&existingPlan, "idempotency_key = ?", stableKey).Error; err == nil {
+			if err := tx.First(&existing, "id = ?", existingPlan.RootOperationID).Error; err != nil {
+				return fmt.Errorf("load idempotent lifecycle root operation: %w", err)
+			}
 			if existing.Kind != kind || (req.Action == "update" && existing.TargetVersion != req.TargetVersion) {
 				return errors.New("idempotency_key is already bound to a different plugin action")
 			}
@@ -657,14 +694,25 @@ func (h *KernelHandler) PluginInstallationAction(c *gin.Context) {
 		if req.Action == "health" || req.Action == "inspect" || req.Action == "restart" {
 			enabledPlan = true
 		}
-		if err := service.ValidatePluginInstallationPlan(tx, release, "control", enabledPlan, installation.ID); err != nil {
-			return err
+		dependencyPlan := mutated && (req.Action == "enable" || req.Action == "update" || req.Action == "rollback")
+		if !dependencyPlan {
+			if err := service.ValidatePluginInstallationPlan(tx, release, "control", enabledPlan, installation.ID); err != nil {
+				return err
+			}
 		}
 		if mutated {
 			installation.LifecycleGeneration++
 			if err := tx.Save(&installation).Error; err != nil {
 				return err
 			}
+		}
+		if dependencyPlan {
+			queued, err := plugincontrol.QueueDependencyLifecyclePlan(tx, plugincontrol.DependencyLifecyclePlanRequest{
+				RootInstallation: installation, PreviousRootInstallation: &previousInstallation, RootRelease: release,
+				RootKind: kind, IdempotencyKey: stableKey, DeadlineAt: time.Now().Add(5 * time.Minute),
+			})
+			operation = queued
+			return err
 		}
 		queued, err := enqueueControlPluginOperationWithKey(tx, installation, kind, targetVersion, stableKey)
 		operation = queued
@@ -964,7 +1012,9 @@ func (h *KernelHandler) CreateResourceGrant(c *gin.Context) {
 
 func jsonObjectOrArray(value string) bool {
 	value = strings.TrimSpace(value)
-	if !((strings.HasPrefix(value, "{") && strings.HasSuffix(value, "}")) || (strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]"))) {
+	isObject := strings.HasPrefix(value, "{") && strings.HasSuffix(value, "}")
+	isArray := strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]")
+	if !isObject && !isArray {
 		return false
 	}
 	return json.Valid([]byte(value))
@@ -1300,25 +1350,93 @@ func (h *KernelHandler) ListDeployments(c *gin.Context) {
 }
 func (h *KernelHandler) PlanDeployment(c *gin.Context) {
 	var req struct {
-		TopologyID   uint   `json:"topology_id" binding:"required"`
-		RevisionID   uint   `json:"revision_id" binding:"required"`
-		RolloutGroup string `json:"rollout_group"`
+		TopologyID    uint   `json:"topology_id" binding:"required"`
+		RevisionID    uint   `json:"revision_id" binding:"required"`
+		RolloutGroup  string `json:"rollout_group"`
+		FailurePolicy string `json:"failure_policy"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		kernelError(c, 400, "invalid_request", err.Error())
 		return
 	}
-	var revision model.TopologyRevision
-	if err := h.db.First(&revision, "id = ? AND topology_id = ?", req.RevisionID, req.TopologyID).Error; err != nil {
-		kernelError(c, 400, "invalid_revision", "revision does not belong to topology")
-		return
-	}
-	row := model.TopologyDeployment{TopologyID: req.TopologyID, RevisionID: req.RevisionID, RolloutGroup: req.RolloutGroup, State: "planned", FailurePolicy: "stop_and_rollback", CreatedBy: kernelActorID(c)}
-	if err := h.db.Create(&row).Error; err != nil {
-		kernelDBError(c, err)
+	row, _, err := service.PlanTopologyDeployment(h.db, service.TopologyDeploymentPlanInput{
+		TopologyID: req.TopologyID, RevisionID: req.RevisionID, RolloutGroup: req.RolloutGroup,
+		FailurePolicy: req.FailurePolicy, ActorID: kernelActorID(c),
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTopologyDeploymentBusy):
+			kernelError(c, http.StatusConflict, "topology_deployment_busy", err.Error())
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			kernelError(c, http.StatusNotFound, "not_found", "topology or revision not found")
+		default:
+			kernelError(c, http.StatusUnprocessableEntity, "topology_plan_invalid", err.Error())
+		}
 		return
 	}
 	kernelData(c, 202, row)
+}
+
+func topologyExecutionEnabled() bool {
+	cfg := config.Get()
+	return cfg != nil && cfg.Plugins.TopologyExecutionEnabled
+}
+
+func (h *KernelHandler) GetDeploymentStatus(c *gin.Context) {
+	deploymentID, ok := parseKernelID(c, "id")
+	if !ok {
+		return
+	}
+	status, err := service.GetTopologyDeploymentStatus(h.db, deploymentID)
+	if err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, status)
+}
+
+func (h *KernelHandler) ApplyDeployment(c *gin.Context) {
+	if !topologyExecutionEnabled() {
+		kernelError(c, http.StatusConflict, "topology_execution_disabled", "topology execution is disabled")
+		return
+	}
+	deploymentID, ok := parseKernelID(c, "id")
+	if !ok {
+		return
+	}
+	row, err := service.RequestTopologyDeploymentApply(h.db, deploymentID, time.Now())
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTopologyDeploymentNotPlanned), errors.Is(err, service.ErrTopologyDeploymentTerminal):
+			kernelError(c, http.StatusConflict, "topology_deployment_not_applicable", err.Error())
+		default:
+			kernelDBError(c, err)
+		}
+		return
+	}
+	kernelData(c, http.StatusAccepted, row)
+}
+
+func (h *KernelHandler) RollbackDeployment(c *gin.Context) {
+	if !topologyExecutionEnabled() {
+		kernelError(c, http.StatusConflict, "topology_execution_disabled", "topology execution is disabled")
+		return
+	}
+	deploymentID, ok := parseKernelID(c, "id")
+	if !ok {
+		return
+	}
+	row, err := service.RequestTopologyDeploymentRollback(h.db, deploymentID, time.Now())
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrTopologyDeploymentTerminal):
+			kernelError(c, http.StatusConflict, "topology_deployment_not_rollbackable", err.Error())
+		default:
+			kernelDBError(c, err)
+		}
+		return
+	}
+	kernelData(c, http.StatusAccepted, row)
 }
 
 func (h *KernelHandler) ListOperations(c *gin.Context) {

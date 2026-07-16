@@ -39,13 +39,15 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [ ] Deliver `machine-telemetry` as the first complete Control + Agent + WebUI
   reference package. The deterministic artifact, Agent process, Supervisor
   lifecycle, Control read-only route, browser E2E, cross-repository process E2E,
-  and CI public-key verification contract exist; telemetry transport, live
-  staging catalog coverage, and production secret-backed signing/upload remain.
+  CI public-key verification contract, and release-tag signing/upload workflow
+  exist; telemetry transport and live staging catalog coverage remain.
 - [x] Harden Control lifecycle ordering, lease fencing, cancellation monotonicity,
   target-level installation locking, and lifecycle-generation idempotency.
-- [ ] Keep Supervisor and dynamic plugin execution feature-gated until
-  dependency-aware graph execution/rollback, real topology fan-out, staging
-  restore smoke, and production package signing/upload gates pass.
+- [x] Add dependency-aware graph execution/rollback and feature-gated topology
+  fan-out with focused rollback/restart/cancellation tests.
+- [ ] Keep Supervisor and dynamic plugin execution feature-gated until staging
+  restore smoke, `nftables-forward` network-namespace evidence, rollout records,
+  and operator canary approval pass.
 
 ## P0: Audit Deliverables
 

@@ -106,6 +106,10 @@ plugins:
   control_poll_interval: "5s"
   dispatch_enabled: false
   dispatch_poll_interval: "5s"
+  # Topology fan-out creates Agent plugin operations only when explicitly
+  # enabled together with dispatch_enabled. Keep false until canary evidence.
+  topology_execution_enabled: false
+  topology_poll_interval: "5s"
 
 forward_runtime:
   backend: "gost"

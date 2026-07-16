@@ -353,7 +353,7 @@ func TestKernelMachineTelemetryPluginRouteExecutesAfterKernelAdmission(t *testin
 	require.NoError(t, err)
 	processed, err := worker.RunOnce(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, 1, processed)
+	require.Equal(t, 2, processed)
 	var installation model.PluginInstallation
 	require.NoError(t, db.First(&installation, "plugin_id = ? AND target = ?", manifest.ID, "control").Error)
 	require.Equal(t, "healthy", installation.State)
@@ -462,6 +462,67 @@ func TestKernelCreateTopologyRequiresExistingScope(t *testing.T) {
 	var count int64
 	require.NoError(t, db.Model(&model.Topology{}).Count(&count).Error)
 	require.Zero(t, count)
+}
+
+func TestKernelTopologyDeploymentPlanStatusAndExecutionGate(t *testing.T) {
+	db := newKernelHandlerTestDB(t, &model.Node{})
+	previousConfig := config.Get()
+	config.Set(nil)
+	t.Cleanup(func() { config.Set(previousConfig) })
+	node := model.Node{Name: "topology-handler-node", Host: "127.0.0.1", APIKey: "topology-handler-key"}
+	require.NoError(t, db.Create(&node).Error)
+	pluginID := "topology-handler-runtime"
+	require.NoError(t, db.Create(&model.Plugin{ID: pluginID, Name: pluginID, Publisher: "AnixOps", Official: true}).Error)
+	manifest := service.PluginManifest{
+		ID: pluginID, Name: pluginID, Version: "1.0.0", APIVersion: "v1", Publisher: "AnixOps",
+		Targets: []string{"agent"}, ArtifactSHA256: strings.Repeat("a", 64),
+	}
+	canonical, err := service.CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&model.PluginRelease{
+		PluginID: pluginID, Version: manifest.Version, APIVersion: manifest.APIVersion,
+		ManifestJSON: string(canonical), ArtifactSHA256: manifest.ArtifactSHA256, Signature: "test",
+	}).Error)
+	topology := model.Topology{Name: "topology-handler", ServiceScope: "forward"}
+	require.NoError(t, db.Create(&topology).Error)
+	revision := model.TopologyRevision{TopologyID: topology.ID, Revision: 1, State: "draft", ContentHash: strings.Repeat("b", 64), CreatedBy: 1}
+	require.NoError(t, db.Create(&revision).Error)
+	require.NoError(t, db.Create(&model.NodeServiceAssignment{
+		NodeID: node.ID, ServiceScope: "forward", PluginID: pluginID, Role: "entry", DesiredVersion: "1.0.0", Enabled: true,
+	}).Error)
+	require.NoError(t, db.Create(&model.TopologyVertex{
+		RevisionID: revision.ID, Key: "entry", Kind: "plugin", NodeID: &node.ID, PluginID: pluginID, Role: "entry", ConfigJSON: `{}`,
+	}).Error)
+
+	handler := &KernelHandler{db: db}
+	planBody := `{"topology_id":` + strconv.FormatUint(uint64(topology.ID), 10) + `,"revision_id":` + strconv.FormatUint(uint64(revision.ID), 10) + `}`
+	recorder := performKernelHandlerRequest(t, http.MethodPost, "/deployments", planBody, "/deployments", handler.PlanDeployment)
+	require.Equal(t, http.StatusAccepted, recorder.Code, recorder.Body.String())
+	var deployment model.TopologyDeployment
+	require.NoError(t, db.First(&deployment, "topology_id = ?", topology.ID).Error)
+	var steps []model.TopologyDeploymentStep
+	require.NoError(t, db.Where("deployment_id = ?", deployment.ID).Find(&steps).Error)
+	require.Len(t, steps, 1)
+
+	path := "/deployments/" + strconv.FormatUint(uint64(deployment.ID), 10)
+	recorder = performKernelHandlerRequest(t, http.MethodGet, path, "", "/deployments/:id", handler.GetDeploymentStatus)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), `"steps"`)
+
+	recorder = performKernelHandlerRequest(t, http.MethodPost, path+"/apply", "", "/deployments/:id/apply", handler.ApplyDeployment)
+	require.Equal(t, http.StatusConflict, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "topology_execution_disabled")
+
+	config.Set(&config.Config{Plugins: config.PluginConfig{TopologyExecutionEnabled: true}})
+	recorder = performKernelHandlerRequest(t, http.MethodPost, path+"/apply", "", "/deployments/:id/apply", handler.ApplyDeployment)
+	require.Equal(t, http.StatusAccepted, recorder.Code, recorder.Body.String())
+	require.NoError(t, db.First(&deployment, deployment.ID).Error)
+	require.Equal(t, "applying", deployment.State)
+
+	recorder = performKernelHandlerRequest(t, http.MethodPost, path+"/rollback", "", "/deployments/:id/rollback", handler.RollbackDeployment)
+	require.Equal(t, http.StatusAccepted, recorder.Code, recorder.Body.String())
+	require.NoError(t, db.First(&deployment, deployment.ID).Error)
+	require.Equal(t, "rollback_requested", deployment.State)
 }
 
 func TestKernelAssignmentPreservesDisabledStateWhenEnabledIsOmitted(t *testing.T) {

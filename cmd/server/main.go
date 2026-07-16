@@ -571,6 +571,7 @@ func main() {
 	// Start the node-facing gRPC server (AnixOps Agent nodes connect here) when enabled.
 	var grpcSrv *grpcserver.Server
 	var kernelDispatchCancel context.CancelFunc
+	var topologyExecutionCancel context.CancelFunc
 	if cfg.GRPC.Enable {
 		grpcCfg := grpcserver.DefaultServerConfig()
 		if cfg.GRPC.Host != "" {
@@ -610,6 +611,29 @@ func main() {
 			log.Printf("Plugin operation dispatcher error: %v", err)
 		})
 		log.Printf("Plugin operation dispatcher enabled (poll interval %s)", interval)
+	}
+	if cfg.Plugins.TopologyExecutionEnabled {
+		if !cfg.Plugins.DispatchEnabled {
+			log.Fatal("Topology execution requires plugins.dispatch_enabled=true")
+		}
+		interval := 5 * time.Second
+		if raw := strings.TrimSpace(cfg.Plugins.TopologyPollInterval); raw != "" {
+			parsed, err := time.ParseDuration(raw)
+			if err != nil || parsed <= 0 {
+				log.Fatalf("Invalid plugins.topology_poll_interval %q", raw)
+			}
+			interval = parsed
+		}
+		executor, err := service.NewTopologyDeploymentExecutor(database.Get())
+		if err != nil {
+			log.Fatalf("Failed to initialize topology deployment executor: %v", err)
+		}
+		topologyCtx, cancelTopology := context.WithCancel(context.Background())
+		topologyExecutionCancel = cancelTopology
+		executor.Start(topologyCtx, interval, func(err error) {
+			log.Printf("Topology deployment executor error: %v", err)
+		})
+		log.Printf("Topology deployment execution enabled (poll interval %s)", interval)
 	}
 
 	// Wait for shutdown signal, then gracefully stop all servers.
@@ -665,6 +689,9 @@ func main() {
 	}
 	if kernelDispatchCancel != nil {
 		kernelDispatchCancel()
+	}
+	if topologyExecutionCancel != nil {
+		topologyExecutionCancel()
 	}
 	if controlPluginCancel != nil {
 		controlPluginCancel()
