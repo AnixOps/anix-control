@@ -4,6 +4,37 @@
 
 ### Added
 
+- Added the authoritative 3.1-to-4.0 plugin-platform roadmap, defining signed
+  service/WebUI packages, microkernel ownership, reproducible release gates,
+  the 3.5 business-plugin migration, and the plugin-only 4.0 cutover criteria.
+- Added signed WebUI extension metadata and catalog validation, dynamic
+  namespaced admin route/menu registration with local-module identity checks,
+  revisioned installation configuration guarded by release JSON Schema, and an
+  opt-in durable Control-to-Agent lifecycle dispatcher with ACK/observed-state
+  persistence.
+- Added byte-identical Control/Agent manifest golden fixtures, Agent-side WebUI
+  manifest decoding, Control-side dependency/conflict installation checks, and
+  a bundled `machine-telemetry` reference WebUI module.
+- Added signed `control_routes` validation and a fail-closed `/api/v3/plugins`
+  backend gateway with verified installation checks, `plugin_api` access-group
+  grants, and the opt-in version-exact `machine-telemetry` Control executor.
+- Added the executable major-upgrade program with 3.1 promotion blockers,
+  reproducible Control/Agent/package/browser/PostgreSQL gates, canary rules, and
+  3.2-to-4.0 rollback boundaries.
+- Added a repeatable destructive PostgreSQL restore rehearsal with schema/row
+  evidence and a blocking PostgreSQL 16 CI job.
+- Added a real cross-repository Control database/KernelOperationBridge to Agent
+  process E2E gate, plus the Agent-side Supervisor and signed
+  `machine-telemetry` process E2E.
+- Added Chromium Playwright WebUI failure-isolation coverage and a CI browser
+  gate for same-origin digest checks, route collision rejection, disabled
+  plugins, and tampered bundles.
+- Added deterministic `machine-telemetry` package release-contract checks with
+  ephemeral Ed25519 signing, public-key-only verification, artifact binding,
+  and tamper rejection; no private key is stored or uploaded.
+- Added stable recursive dependency graph preflight and monotonic topology
+  observed-state write-back fencing. Dependency-aware graph execution and real
+  topology fan-out remain future promotion work.
 - Introduced the AnixOps Control / AnixOps Agent product identity, primary `anix-control` binaries, frontend archives and Docker images, stable/alpha/beta/RC release tag support, and a documented compatibility window with legacy `v2board-*` release aliases.
 - Added a tag-pinned native release installer that downloads and verifies GitHub Actions-built panel/frontend assets without cloning or building on the target host, preserves configuration/data, and restores the previous application snapshot after a failed health check.
 - Added detailed release installation and legacy migration guides covering fresh install, update, rollback, SQLite-to-PostgreSQL boundaries, foreign-panel migration limits, coordinated node rollout, and retained evidence.
@@ -22,6 +53,11 @@
 - Added `docs/features.md` as the current feature status register for implemented, partial, planned, deferred, and compatibility surfaces, with an update rule for every feature-status-changing commit.
 
 ### Fixed
+
+- Serialized Control package operations per installation, added target-level
+  dependency/conflict transaction locks and lifecycle-generation idempotency,
+  and made lease loss cancel the executor while automatic rollback remains
+  bounded and lease-supervised.
 
 - Enforced global MFA `enforce_for_all` and `enforce_for_admin` login enrollment policies by returning no-token enrollment-required responses for covered users who have not enabled MFA, with handler coverage for all-users, admin-only, and regular-user bypass prevention paths plus a Login page enrollment-required prompt.
 - Enforced user-enabled TOTP/backup MFA during login before issuing JWTs, counting invalid MFA codes in the login rate limiter and adding backend handler coverage plus a frontend two-step MFA challenge flow.

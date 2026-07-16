@@ -1,5 +1,26 @@
 # Test And CI Gap Register
 
+## 2026-07-17 Plugin Platform Evidence
+
+- PostgreSQL restore rehearsal now runs end to end against a disposable
+  PostgreSQL service, comparing normalized schema and deterministic snapshots
+  before and after `pg_dump`/`pg_restore`; CI uploads the report and dump TOC.
+- The cross-repository gate builds and launches the Agent fixture process, then
+  drives a durable Control operation through `KernelOperationBridge` and checks
+  ACK, envelope identity, and terminal observed state. The Agent repository's
+  separate E2E covers Supervisor plus the signed plugin process.
+- Chromium Playwright tests cover signed-catalog WebUI loading, same-origin
+  digest binding, route collision isolation, disabled entries, and tampered
+  bundle recovery. They currently use a catalog HTTP fixture; live Control
+  staging coverage remains a gap.
+- The package release gate proves reproducible unsigned output, ephemeral
+  Ed25519 signing, public-key-only verification, artifact binding, and tamper
+  rejection. Secret-backed production signing/upload and release-manifest
+  package publication remain untested.
+- The dependency resolver now has deterministic recursive DB preflight and
+  race coverage. It does not yet execute a dependency graph or roll back a
+  partially applied graph.
+
 ## 2026-07-08 CI Baseline
 
 New CI coverage added:

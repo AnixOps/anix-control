@@ -142,6 +142,25 @@ TUN and established return traffic on the entry, then TUN to egress and
 established return traffic on the exit. `relay.exit_nat=false` omits only
 MASQUERADE and requires upstream routing for the WireGuard CIDR.
 
+## Manual Two-Host Bootstrap Helper
+
+The repository contains [`scripts/deploy_wireguard_gost_quic.sh`](../../scripts/deploy_wireguard_gost_quic.sh)
+as an operator-specific bootstrap helper for a Debian-based entry/exit pair.
+It is not the panel's dynamic V2bX runtime workflow and must not be treated as
+production-complete relay automation. The helper currently uses fixed lab
+values (`51820` for WireGuard, `443` for GOST QUIC, and `10.77.0.0/24` /
+`10.78.0.0/30` for tunnel networks), requires an already-active `V2bX` service
+on the exit host, and writes the first client profile to
+`/root/wg-client-1.conf` on the entry host.
+
+Before running it, create `/home/dev/anixops/.private/wireguard-rollout/credentials.env`
+with mode `0600` and set `ENTRY_HOST`, `ENTRY_PORT`, `ENTRY_USER`,
+`ENTRY_PASSWORD`, `EXIT_HOST`, `EXIT_PORT`, `EXIT_USER`, and `EXIT_PASSWORD`.
+The helper creates remote backups before replacing WireGuard, GOST, and
+systemd files, but operators must still capture an external backup and verify
+the route from a real client. Use the panel/V2bX contract above for managed
+deployments, WSS compatibility, role-specific configuration, and rollback.
+
 ## Subscription Output
 
 The subscription layer must output WireGuard configuration for common clients

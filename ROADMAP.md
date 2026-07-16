@@ -5,6 +5,29 @@ Date: 2026-07-08
 This roadmap is ordered by stability and release risk. Items move to done only after code, tests, and CI evidence exist.
 The P0 WireGuard protocol support phase takes priority over ordinary P1/P2 cleanup once implementation starts.
 
+## Primary 3.1 To 4.0 Plugin Transformation
+
+Status: in progress
+
+The version-gated microkernel migration is now the primary product roadmap.
+See [`docs/architecture/plugin-platform-roadmap.md`](docs/architecture/plugin-platform-roadmap.md)
+for the package model, WebUI extension contract, exit evidence, and rollback
+requirements. The executable gate checklist and exact verification commands are
+in [`docs/architecture/upgrade-program.md`](docs/architecture/upgrade-program.md).
+
+- `3.1.0`: signed package lifecycle, durable Control/Agent operations, and the
+  pluggable WebUI foundation.
+- `3.2.0`: declarative topology execution and `nftables-forward` canary.
+- `3.3.0`: `gost-mesh` plus `nat-egress`.
+- `3.4.0`: WireGuard and protocol-runtime composition.
+- `3.5.0`: business-domain plugin migration and `/api/v2` adapter ownership.
+- `4.0.0`: remove the original coupled business/runtime mode and boot as a
+  plugin-only platform.
+
+The older workstreams below remain relevant compatibility and quality work,
+but they do not redefine these release gates. Existing coupled runtime work is
+a fallback until the corresponding plugin has equivalent tested behavior.
+
 ## Phase 1: Audit And Baseline
 
 Status: in progress
