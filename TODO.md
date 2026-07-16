@@ -45,12 +45,14 @@ This list is intentionally concrete. Do not mark an item done without code, test
   target-level installation locking, and lifecycle-generation idempotency.
 - [x] Add dependency-aware graph execution/rollback and feature-gated topology
   fan-out with focused rollback/restart/cancellation tests.
-- [x] Add the deterministic `nftables-forward` package source and CI release
-  contract for reproducible builds, WebUI smoke, public-key verification, and
-  tamper rejection without claiming production traffic takeover.
+- [x] Add the deterministic `nftables-forward` package source, real Agent
+  runtime binary packaging, release-tag signing/upload path, WebUI smoke,
+  public-key verification, and tamper rejection without claiming production
+  traffic takeover.
 - [ ] Keep Supervisor and dynamic plugin execution feature-gated until staging
-  restore smoke, `nftables-forward` network-namespace evidence, rollout records,
-  and operator canary approval pass.
+  restore smoke, `nftables-forward` network-namespace TCP/UDP evidence,
+  nftables snapshot/rollback proof, rollout records, and operator canary
+  approval pass.
 
 ## P0: Audit Deliverables
 

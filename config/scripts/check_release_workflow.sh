@@ -150,15 +150,19 @@ check_release_workflow() {
   require_text "set -o pipefail" "official plugin package gate failure propagation" || failed=1
   require_text "name: plugin-package-contract-reports" "official plugin package contract artifact" || failed=1
   require_text "nftables-forward-package-contract.txt" "nftables forward package contract report" || failed=1
-  require_text "Publish Signed Machine Telemetry Package" "signed official plugin package publish job" || failed=1
+  require_text "Publish Signed Official Plugin Packages" "signed official plugin package publish job" || failed=1
   require_text "ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY" "production plugin signing secret" || failed=1
   require_text "scripts/sign_plugin_release.sh" "production plugin signing script" || failed=1
   require_text "machine-telemetry-signed-release" "signed plugin release artifact" || failed=1
+  require_text "nftables-forward-signed-release" "signed nftables forward plugin release artifact" || failed=1
   require_text "anixops-machine-telemetry-1.0.0.SHA256SUMS.txt" "signed plugin checksum evidence" || failed=1
+  require_text "anixops-nftables-forward-1.0.0.SHA256SUMS.txt" "signed nftables forward checksum evidence" || failed=1
   require_text "Download signed Machine Telemetry package" "signed plugin release download" || failed=1
+  require_text "Download signed nftables Forward package" "signed nftables forward release download" || failed=1
   require_text "--require machine-telemetry-1.0.0.tar" "signed plugin package verification requirement" || failed=1
+  require_text "--require nftables-forward-1.0.0.tar" "signed nftables forward package verification requirement" || failed=1
   require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
-  require_text "ref: d1fc684000f85450db42d4cf63cc691669ebeb80" "pinned Agent fixture commit" || failed=1
+  require_text "ref: d955b6c5cc5e4de31cb45d6a7c7cec573b08781c" "pinned Agent fixture commit" || failed=1
   require_text "ANIXOPS_CROSS_REPO_E2E: '1'" "cross-repository Agent process E2E opt-in" || failed=1
   require_text "TestKernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
   require_text "cross-repository-agent-e2e" "release dependency on cross-repository Agent process E2E" || failed=1
@@ -269,7 +273,7 @@ jobs:
           name: plugin-package-contract-reports
 
   plugin-package-publish:
-    name: Publish Signed Machine Telemetry Package
+    name: Publish Signed Official Plugin Packages
     needs: [tag-gate, plugin-package-release-test, cross-repository-agent-e2e]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     steps:
@@ -278,7 +282,9 @@ jobs:
         run: |
           scripts/sign_plugin_release.sh
           echo "machine-telemetry-signed-release"
+          echo "nftables-forward-signed-release"
           echo "anixops-machine-telemetry-1.0.0.SHA256SUMS.txt"
+          echo "anixops-nftables-forward-1.0.0.SHA256SUMS.txt"
 
   cross-repository-agent-e2e:
     name: Control to Agent Process E2E
@@ -286,7 +292,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: d1fc684000f85450db42d4cf63cc691669ebeb80
+          ref: d955b6c5cc5e4de31cb45d6a7c7cec573b08781c
           path: V2bX_AnixOps
       - env:
           ANIXOPS_CROSS_REPO_E2E: '1'
@@ -312,6 +318,10 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: machine-telemetry-signed-release
+      - name: Download signed nftables Forward package
+        uses: actions/download-artifact@v8
+        with:
+          name: nftables-forward-signed-release
       - run: |
           cp migration-dry-run.txt release/migration-dry-run.txt
           echo "No Local Release Builds" > release/OPERATOR_DEPLOYMENT.md
@@ -341,7 +351,8 @@ jobs:
             --require RELEASE_NOTES.md \
             --require anix-control-linux-amd64.tar.gz \
             --require anix-control-windows-arm64.exe.zip \
-            --require machine-telemetry-1.0.0.tar
+            --require machine-telemetry-1.0.0.tar \
+            --require nftables-forward-1.0.0.tar
       - uses: softprops/action-gh-release@v3
         with:
           files: release/*
@@ -389,7 +400,7 @@ EOF
   fi
 
   cp "${fixture}" "${fixture}.missing-signed-plugin-publish"
-  sed -i '/plugin-package-publish:/,/cross-repository-agent-e2e/d;/Publish Signed Machine Telemetry Package/d;/ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY/d;/scripts\/sign_plugin_release.sh/d;/machine-telemetry-signed-release/d;/anixops-machine-telemetry-1.0.0.SHA256SUMS.txt/d' "${fixture}.missing-signed-plugin-publish"
+  sed -i '/plugin-package-publish:/,/cross-repository-agent-e2e/d;/Publish Signed Official Plugin Packages/d;/ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY/d;/scripts\/sign_plugin_release.sh/d;/machine-telemetry-signed-release/d;/nftables-forward-signed-release/d;/anixops-machine-telemetry-1.0.0.SHA256SUMS.txt/d;/anixops-nftables-forward-1.0.0.SHA256SUMS.txt/d' "${fixture}.missing-signed-plugin-publish"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-signed-plugin-publish" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing signed plugin publish gate should fail" >&2
     return 1
