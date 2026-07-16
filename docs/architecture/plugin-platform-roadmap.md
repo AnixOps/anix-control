@@ -108,10 +108,11 @@ migration and restore rehearsal; the real Control-to-Agent process gate;
 deterministic package release contracts for `machine-telemetry` and
 `nftables-forward`; dependency-aware graph execution with rollback;
 feature-gated topology fan-out; real `nftables-forward` Agent runtime source;
-and production signing/upload workflow checks for both official reference
-packages. Supervisor and dynamic packages remain feature-gated until staging
-validation, network-namespace traffic evidence, and canary records approve
-expansion beyond isolated test nodes.
+reproducible nftables-forward namespace TCP/UDP and snapshot-rollback
+acceptance; and production signing/upload workflow checks for both official
+reference packages. Supervisor and dynamic packages remain feature-gated until
+staging validation and canary records approve expansion beyond isolated test
+nodes.
 
 ### 3.2.0 - Declarative Runtime And Dedicated Forwarding
 
@@ -120,13 +121,16 @@ canary groups, and the signed `nftables-forward` package. The Control executor
 for plan/apply/status/rollback exists behind
 `plugins.topology_execution_enabled` and also requires
 `plugins.dispatch_enabled`; the package release contract, real Agent runtime,
-and release-tag signing/upload path now exist. The remaining gates are
-network-namespace traffic evidence, nftables snapshot/rollback proof, and
-canary rollout records. The first production data-plane candidate is domestic
+release-tag signing/upload path, and privileged namespace acceptance script now
+exist. The remaining gates are staging restore smoke, canary rollout records,
+legacy fallback rehearsal, and operator approval to enable execution outside
+isolated test nodes. The first production data-plane candidate is domestic
 dedicated-line TCP and UDP forwarding; Agent does not carry business traffic.
 
-Exit evidence: network-namespace TCP/UDP tests, IPv4/IPv6 validation, atomic
-nftables snapshots, partial-node failure rollback, Control/Agent double restart
+Exit evidence: `plugin/nftablesforward/namespace_acceptance.sh` in the pinned
+Agent repo proves namespace TCP/UDP DNAT, plugin-created table deletion, and
+pre-existing table snapshot restoration. Remaining exit evidence is IPv4/IPv6
+validation breadth, partial-node failure rollback, Control/Agent double restart
 recovery, and a staged 1/5/25/100 percent rollout with a legacy fallback.
 
 ### 3.3.0 - Tunnel Mesh And NAT Egress

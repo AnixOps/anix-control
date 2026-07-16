@@ -45,9 +45,10 @@
   manifest, signature, public-key, and checksum evidence.
 - Added the `nftables-forward` reference package source with deterministic
   package builds, dependency-free WebUI smoke coverage, public-key-only
-  signature verification, tamper rejection, and CI release-contract evidence;
-  real Agent runtime and network-namespace traffic evidence remain 3.2
-  blockers before production data-plane canary.
+  signature verification, tamper rejection, and CI release-contract evidence.
+- Added privileged Agent-side `nftables-forward` namespace acceptance proving
+  TCP DNAT, UDP DNAT, plugin-created table rollback, and pre-existing nftables
+  table snapshot restoration before production data-plane canary.
 - Added release-tag signing and artifact verification wiring for the official
   `nftables-forward` package alongside `machine-telemetry`, pinning the Agent
   runtime source and publishing package, manifest, signature, public-key, and
