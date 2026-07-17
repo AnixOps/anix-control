@@ -124,7 +124,7 @@ separate development SQLite database. An already running system
 go test ./...
 go test -race ./...
 bash api/grpc/gen.sh
-git diff --exit-code -- api/grpc/v2boardpb api/grpc/agent/v1
+git diff --exit-code -- api/grpc/v2boardpb
 bash config/deploy/clean_local_build_artifacts.sh --dry-run
 ```
 

@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	agentv1pb "github.com/AnixOps/anix-control/v4/api/grpc/agent/v1"
+	agentv1pb "github.com/AnixOps/anix-agent/sdk/api/grpc/agent/v1"
 	pb "github.com/AnixOps/anix-control/v4/api/grpc/v2boardpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
