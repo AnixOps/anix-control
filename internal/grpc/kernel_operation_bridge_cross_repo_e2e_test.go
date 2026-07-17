@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	agentv1pb "github.com/AnixOps/anix-control/v4/api/grpc/agent/v1"
+	agentv1pb "github.com/AnixOps/anix-agent/sdk/api/grpc/agent/v1"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
@@ -196,15 +196,57 @@ func siblingAgentRoot(t *testing.T) string {
 	return candidates[0]
 }
 
+func crossRepositoryAgentGo() string {
+	if configured := strings.TrimSpace(os.Getenv("ANIXOPS_AGENT_GO")); configured != "" {
+		return configured
+	}
+	return "go"
+}
+
+func crossRepositoryAgentBuildEnv() []string {
+	env := append([]string(nil), os.Environ()...)
+	if strings.TrimSpace(os.Getenv("GOWORK")) == "" {
+		env = append(env, "GOWORK=off")
+	}
+	return append(env, "GOEXPERIMENT=jsonv2")
+}
+
 func buildCrossRepositoryAgentFixture(t *testing.T, agentRoot string) string {
 	t.Helper()
 	binaryPath := filepath.Join(t.TempDir(), "agent-control-fixture")
-	command := exec.Command("go", "build", "-o", binaryPath, "./cmd/agent-control-fixture")
+	command := exec.Command(crossRepositoryAgentGo(), "build", "-o", binaryPath, "./cmd/agent-control-fixture")
 	command.Dir = agentRoot
-	command.Env = append(os.Environ(), "GOWORK=off", "GOEXPERIMENT=jsonv2")
+	command.Env = crossRepositoryAgentBuildEnv()
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, string(output))
 	return binaryPath
+}
+
+func TestCrossRepositoryAgentBuildConfiguration(t *testing.T) {
+	t.Setenv("ANIXOPS_AGENT_GO", "")
+	require.Equal(t, "go", crossRepositoryAgentGo())
+	t.Setenv("ANIXOPS_AGENT_GO", "/opt/anix-agent-go/bin/go")
+	require.Equal(t, "/opt/anix-agent-go/bin/go", crossRepositoryAgentGo())
+
+	t.Setenv("GOWORK", "")
+	env := crossRepositoryAgentBuildEnv()
+	require.Equal(t, "off", crossRepositoryBuildEnvironmentValue(env, "GOWORK"))
+	require.Equal(t, "jsonv2", crossRepositoryBuildEnvironmentValue(env, "GOEXPERIMENT"))
+
+	t.Setenv("GOWORK", "/tmp/anixops-sync.go.work")
+	env = crossRepositoryAgentBuildEnv()
+	require.Equal(t, "/tmp/anixops-sync.go.work", crossRepositoryBuildEnvironmentValue(env, "GOWORK"))
+}
+
+func crossRepositoryBuildEnvironmentValue(environment []string, key string) string {
+	prefix := key + "="
+	value := ""
+	for _, entry := range environment {
+		if strings.HasPrefix(entry, prefix) {
+			value = strings.TrimPrefix(entry, prefix)
+		}
+	}
+	return value
 }
 
 func waitForCrossRepoFile(t *testing.T, path string, timeout time.Duration, output interface{ String() string }) {
