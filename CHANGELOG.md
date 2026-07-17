@@ -9,6 +9,12 @@
   resolve assignment, operation, revision, health, cleanup, and rollback state
   instead of failing with an unimplemented plugin route.
 
+### Fixed
+
+- Fixed release-note generation to select the immutable changelog section for
+  the current tag, including dated headings, instead of requiring an
+  `Unreleased` section that no longer exists in a prepared release commit.
+
 ## 3.1.0-alpha.1 - 2026-07-17
 
 ### Added
