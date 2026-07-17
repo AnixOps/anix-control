@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createAdminExtensionRuntime, loadVerifiedBundleModule } from '@/extensions/runtime'
+import { useUserStore } from '@/stores/user'
 
 const HASH = 'a'.repeat(64)
 const MACHINE_TELEMETRY_HASH = 'b'.repeat(64)
@@ -70,6 +72,7 @@ function createRuntime(fetchExtensions, resolveModule = () => async () => localM
     fetchExtensions,
     resolveModule,
     refreshIntervalMs: 0,
+    hasPermission: () => true,
     ...extra,
   })
 }
@@ -128,6 +131,36 @@ describe('admin extension runtime', () => {
       extensionPluginID: 'example',
       extensionPermission: 'example.view',
     })
+  })
+
+  it('accepts a signed WebUI plugin ID with dotted namespace segments', async () => {
+    const router = createTestRouter()
+    const pluginID = 'ops.telemetry'
+    const entry = catalogEntry({
+      plugin_id: pluginID,
+      plugin_name: 'Ops Telemetry',
+      permissions: [`${pluginID}.view`],
+      menus: [{
+        id: `${pluginID}.main`, parent: 'services', label: 'Ops Telemetry', icon: 'activity',
+        route: `/admin/extensions/${pluginID}`, permission: `${pluginID}.view`, order: 100,
+      }],
+      routes: [{
+        id: `${pluginID}.main`, path: `/admin/extensions/${pluginID}`, export: 'default', permission: `${pluginID}.view`,
+      }],
+    })
+    const runtime = createRuntime(async () => [entry], () => async () => localModule({
+      anixopsExtension: {
+        pluginId: pluginID,
+        version: entry.version,
+        bundle: { path: entry.bundle.path, sha256: entry.bundle.sha256 },
+      },
+    }))
+
+    const result = await runtime.refresh(router)
+
+    expect(result.errors).toEqual([])
+    expect(result.pluginIDs).toEqual([pluginID])
+    expect(router.getRoutes().map(route => route.path)).toContain(`/admin/extensions/${pluginID}`)
   })
 
   it('loads the bundled machine-telemetry reference module from the controlled registry', async () => {
@@ -200,6 +233,108 @@ describe('admin extension runtime', () => {
     expect(result.errors).toEqual([])
     expect(result.pluginIDs).toEqual(['example'])
     expect(router.getRoutes().map(route => route.path)).toContain('/admin/extensions/example')
+  })
+
+  it('skips an unauthorized remote extension before fetching its top-level bundle', async () => {
+    const router = createTestRouter()
+    const fetchMock = vi.fn()
+    const resolveModule = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    setActivePinia(createPinia())
+    useUserStore().login('admin-token', {
+      id: 1,
+      is_admin: true,
+      permissions: ['other.view'],
+    })
+    const runtime = createAdminExtensionRuntime({
+      fetchExtensions: async () => [catalogEntry({
+        bundle: {
+          path: 'webui/index.mjs',
+          sha256: HASH,
+          url: `/api/v3/extensions/example/1.2.3/webui/${HASH}/index.mjs`,
+        },
+      })],
+      resolveModule,
+      refreshIntervalMs: 0,
+    })
+
+    const result = await runtime.refresh(router)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(resolveModule).not.toHaveBeenCalled()
+    expect(result.errors).toEqual([])
+    expect(result.skipped).toEqual([{
+      status: 'skipped',
+      code: 'forbidden',
+      message: 'extension has no routes allowed by the current permission grants',
+      plugin_id: 'example',
+    }])
+    expect(result.pluginIDs).toEqual([])
+    expect(router.getRoutes().map(route => route.path)).not.toContain('/admin/extensions/example')
+  })
+
+  it('loads one bundle but registers only the route and menu allowed by the current grants', async () => {
+    const router = createTestRouter()
+    const hasPermission = vi.fn(permission => permission === 'example.view')
+    const moduleLoader = vi.fn(async () => localModule({ settings: ExtensionPage }))
+    const resolveModule = vi.fn(() => moduleLoader)
+    const runtime = createRuntime(
+      async () => [catalogEntry({
+        permissions: ['example.view', 'example.manage'],
+        routes: [
+          {
+            id: 'example.main',
+            path: '/admin/extensions/example',
+            export: 'default',
+            permission: 'example.view',
+          },
+          {
+            id: 'example.settings',
+            path: '/admin/extensions/example/settings',
+            export: 'settings',
+            permission: 'example.manage',
+          },
+        ],
+        menus: [
+          {
+            id: 'example.main',
+            parent: 'services',
+            label: 'Example',
+            icon: 'box',
+            route: '/admin/extensions/example',
+            permission: 'example.view',
+            order: 100,
+          },
+          {
+            id: 'example.settings',
+            parent: 'system',
+            label: 'Example settings',
+            icon: 'settings',
+            route: '/admin/extensions/example/settings',
+            permission: 'example.manage',
+            order: 101,
+          },
+        ],
+      })],
+      resolveModule,
+      { hasPermission },
+    )
+
+    const result = await runtime.refresh(router)
+
+    expect(hasPermission).toHaveBeenCalledWith('example.view')
+    expect(hasPermission).toHaveBeenCalledWith('example.manage')
+    expect(moduleLoader).toHaveBeenCalledTimes(1)
+    expect(result.errors).toEqual([])
+    expect(result.skipped).toEqual([])
+    expect(result.pluginIDs).toEqual(['example'])
+    expect(result.menus).toEqual([expect.objectContaining({
+      id: 'example.main',
+      to: '/admin/extensions/example',
+      permission: 'example.view',
+    })])
+    expect(router.getRoutes().map(route => route.path)).toContain('/admin/extensions/example')
+    expect(router.getRoutes().map(route => route.path)).not.toContain('/admin/extensions/example/settings')
   })
 
   it('materializes an import-free WebUI factory with a plugin-scoped host API', async () => {

@@ -189,6 +189,16 @@ function resolveAuthPayload(res, fallbackMessage, options = {}) {
   return payload
 }
 
+function resolvePermissionFields(payload) {
+  const fields = {}
+  for (const field of ['permission_mode', 'permissions', 'restricted_plugins']) {
+    if (Object.prototype.hasOwnProperty.call(payload || {}, field)) {
+      fields[field] = payload[field]
+    }
+  }
+  return fields
+}
+
 function resolveAuthErrorMessage(err, fallbackMessage) {
   return err?.response?.data?.msg || err?.response?.data?.message || err?.message || fallbackMessage
 }
@@ -219,11 +229,13 @@ async function handleRegister() {
       ...(inviteCode.value ? { invite_code: inviteCode.value } : {})
     })
 
-    const { token, is_admin, user_id, email: userEmail } = resolveAuthPayload(res, t('login.errors.registerFailed'))
+    const payload = resolveAuthPayload(res, t('login.errors.registerFailed'))
+    const { token, is_admin, user_id, email: userEmail } = payload
     userStore.login(token, {
       id: user_id,
       email: userEmail,
-      is_admin
+      is_admin,
+      ...resolvePermissionFields(payload)
     })
 
     successMsg.value = t('login.success.registerCompleted')
@@ -276,7 +288,8 @@ async function handleLogin() {
     userStore.login(token, {
       id: user_id,
       email: userEmail,
-      is_admin
+      is_admin,
+      ...resolvePermissionFields(payload)
     })
 
     resetMFAChallenge()

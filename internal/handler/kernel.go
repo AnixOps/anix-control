@@ -152,7 +152,12 @@ func (h *KernelHandler) ListExtensions(c *gin.Context) {
 		}
 		publicKey = parsed
 	}
-	extensions, err := service.ListEnabledWebUIExtensions(h.db, publicKey)
+	extensions, err := service.ListEnabledWebUIExtensionsForActor(
+		h.db,
+		publicKey,
+		kernelActorID(c),
+		kernelActorIsAdmin(c),
+	)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrPluginTrustRootRequired):
@@ -342,16 +347,48 @@ func (h *KernelHandler) ServePluginWebUIAsset(c *gin.Context) {
 	version := strings.TrimSpace(c.Param("version"))
 	bundleSHA256 := strings.ToLower(strings.TrimSpace(c.Param("sha256")))
 	filename := strings.TrimSpace(c.Param("filename"))
-	asset, err := service.GetPluginWebUIAsset(h.db, pluginID, version, bundleSHA256)
+	cfg := config.Get()
+	if cfg == nil || strings.TrimSpace(cfg.Plugins.OfficialPublicKey) == "" {
+		kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_unconfigured", "official plugin public key is not configured")
+		return
+	}
+	publicKey, err := service.ParseOfficialPluginPublicKey(cfg.Plugins.OfficialPublicKey)
 	if err != nil {
-		kernelDBError(c, err)
+		kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_invalid", err.Error())
+		return
+	}
+	asset, err := service.ResolveActivePluginWebUIAsset(
+		h.db,
+		publicKey,
+		kernelActorID(c),
+		kernelActorIsAdmin(c),
+		pluginID,
+		version,
+		bundleSHA256,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrPluginRouteForbidden):
+			kernelError(c, http.StatusForbidden, "extension_asset_forbidden", err.Error())
+		case errors.Is(err, service.ErrPluginTrustRootRequired):
+			kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_unconfigured", err.Error())
+		case errors.Is(err, service.ErrExtensionCatalogIntegrity):
+			kernelError(c, http.StatusConflict, "extension_asset_integrity_failed", err.Error())
+		case errors.Is(err, service.ErrPluginArtifactRequired):
+			kernelError(c, http.StatusConflict, "plugin_artifact_missing", err.Error())
+		default:
+			kernelDBError(c, err)
+		}
 		return
 	}
 	if filename == "" || filename != path.Base(asset.BundlePath) {
 		kernelError(c, http.StatusNotFound, "not_found", "webui asset not found")
 		return
 	}
-	c.Header("Cache-Control", "private, max-age=31536000, immutable")
+	// Authorization and installation state are rechecked for every fetch. Do
+	// not let a browser reuse an immutable response after access is revoked or
+	// the installation is disabled.
+	c.Header("Cache-Control", "private, no-store")
 	c.Header("ETag", `"`+asset.BundleSHA256+`"`)
 	c.Data(http.StatusOK, asset.ContentType, asset.Data)
 }
@@ -1053,6 +1090,12 @@ func (h *KernelHandler) CreateResourceGrant(c *gin.Context) {
 	if !jsonObjectOrArray(row.Permissions) {
 		kernelError(c, 400, "invalid_permissions", "permissions must be a JSON object or array")
 		return
+	}
+	if row.ResourceType == service.PluginAPIGrantResourceType {
+		if err := service.ValidatePluginAPIGrantPermissions(row.ResourceID, row.Permissions); err != nil {
+			kernelError(c, http.StatusBadRequest, "invalid_permissions", err.Error())
+			return
+		}
 	}
 	exists, err := h.accessGroupExists(row.GroupID)
 	if err != nil {

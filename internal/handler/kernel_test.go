@@ -136,6 +136,31 @@ func TestKernelListExtensionsReturnsEmptyCatalogWithoutTrustRoot(t *testing.T) {
 	require.JSONEq(t, `{"data":[]}`, recorder.Body.String())
 }
 
+func TestKernelCreateResourceGrantValidatesPluginNamespace(t *testing.T) {
+	db := newKernelHandlerTestDB(t)
+	group := model.AccessGroup{ScopeID: "grant-ui", Name: "operators", Enabled: true}
+	require.NoError(t, db.Create(&group).Error)
+	handler := (&KernelHandler{db: db}).CreateResourceGrant
+
+	valid := fmt.Sprintf(`{"group_id":%d,"resource_type":"%s","resource_id":"grant-ui","permissions":"[\"grant-ui.view\"]"}`, group.ID, service.PluginAPIGrantResourceType)
+	recorder := performKernelHandlerRequest(t, http.MethodPost, "/resource-grants", valid, "/resource-grants", handler)
+	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+
+	crossNamespace := fmt.Sprintf(`{"group_id":%d,"resource_type":"%s","resource_id":"grant-ui-2","permissions":"[\"grant-ui.view\",\"other-ui.escape\"]"}`, group.ID, service.PluginAPIGrantResourceType)
+	recorder = performKernelHandlerRequest(t, http.MethodPost, "/resource-grants", crossNamespace, "/resource-grants", handler)
+	require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "invalid_permissions")
+
+	emptyEffective := fmt.Sprintf(`{"group_id":%d,"resource_type":"%s","resource_id":"grant-ui-3","permissions":"{\"grant-ui-3.view\":false}"}`, group.ID, service.PluginAPIGrantResourceType)
+	recorder = performKernelHandlerRequest(t, http.MethodPost, "/resource-grants", emptyEffective, "/resource-grants", handler)
+	require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "invalid_permissions")
+
+	var grants []model.ResourceGrant
+	require.NoError(t, db.Where("resource_type = ?", service.PluginAPIGrantResourceType).Find(&grants).Error)
+	require.Len(t, grants, 1)
+}
+
 func TestKernelUpdatePluginInstallationConfigurationUsesSignedSchema(t *testing.T) {
 	db := newKernelHandlerTestDB(t)
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
@@ -314,17 +339,62 @@ func TestKernelServesVerifiedWebUIAsset(t *testing.T) {
 	require.NoError(t, err)
 	_, err = service.StorePluginArtifact(db, release.ID, artifact)
 	require.NoError(t, err)
+	installation := model.PluginInstallation{
+		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
+		ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
+	}
+	require.NoError(t, db.Create(&installation).Error)
 
 	assetURL := service.PluginWebUIAssetURL(manifest.ID, manifest.Version, manifest.WebUI.Bundle.SHA256, manifest.WebUI.Bundle.Path)
-	recorder := performKernelHandlerRequest(
+	setupAdmin := func(c *gin.Context) {
+		c.Set("user_id", uint(7))
+		c.Set("is_admin", true)
+	}
+	recorder := performKernelHandlerRequestWithSetup(
 		t, http.MethodGet, assetURL, "",
 		"/api/v3/extensions/:plugin_id/:version/webui/:sha256/:filename",
 		(&KernelHandler{db: db}).ServePluginWebUIAsset,
+		setupAdmin,
 	)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	require.Equal(t, source, recorder.Body.String())
 	require.Equal(t, `"`+manifest.WebUI.Bundle.SHA256+`"`, recorder.Header().Get("ETag"))
+	require.Equal(t, "private, no-store", recorder.Header().Get("Cache-Control"))
 	require.Contains(t, recorder.Header().Get("Content-Type"), "text/javascript")
+
+	require.NoError(t, db.Model(&installation).Update("enabled", false).Error)
+	recorder = performKernelHandlerRequestWithSetup(
+		t, http.MethodGet, assetURL, "",
+		"/api/v3/extensions/:plugin_id/:version/webui/:sha256/:filename",
+		(&KernelHandler{db: db}).ServePluginWebUIAsset,
+		setupAdmin,
+	)
+	require.Equal(t, http.StatusNotFound, recorder.Code, recorder.Body.String())
+
+	require.NoError(t, db.Model(&installation).Updates(map[string]any{"enabled": true, "state": "healthy"}).Error)
+	group := model.AccessGroup{ScopeID: manifest.ID, Name: "asset-viewers", Enabled: true}
+	require.NoError(t, db.Create(&group).Error)
+	require.NoError(t, db.Create(&model.ResourceGrant{
+		GroupID: group.ID, ResourceType: service.PluginAPIGrantResourceType, ResourceID: manifest.ID,
+		Permissions: `["handler-ui.view"]`,
+	}).Error)
+	recorder = performKernelHandlerRequestWithSetup(
+		t, http.MethodGet, assetURL, "",
+		"/api/v3/extensions/:plugin_id/:version/webui/:sha256/:filename",
+		(&KernelHandler{db: db}).ServePluginWebUIAsset,
+		setupAdmin,
+	)
+	require.Equal(t, http.StatusForbidden, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "extension_asset_forbidden")
+
+	require.NoError(t, db.Create(&model.AccessGroupUser{GroupID: group.ID, UserID: 7}).Error)
+	recorder = performKernelHandlerRequestWithSetup(
+		t, http.MethodGet, assetURL, "",
+		"/api/v3/extensions/:plugin_id/:version/webui/:sha256/:filename",
+		(&KernelHandler{db: db}).ServePluginWebUIAsset,
+		setupAdmin,
+	)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 }
 
 func TestKernelPluginRouteGatewayAuthorizesInstalledSignedRoutes(t *testing.T) {

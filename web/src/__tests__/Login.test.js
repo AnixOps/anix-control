@@ -70,6 +70,9 @@ describe('Login.vue', () => {
         is_admin: false,
         user_id: 7,
         email: 'invite-user@example.com',
+        permission_mode: 'authoritative',
+        permissions: ['subscription.view'],
+        restricted_plugins: ['forward'],
       },
     })
 
@@ -94,6 +97,11 @@ describe('Login.vue', () => {
       password: 'password123',
       invite_code: 'INVITE123',
     })
+    expect(useUserStore().userInfo).toMatchObject({
+      permission_mode: 'authoritative',
+      permissions: ['subscription.view'],
+      restricted_plugins: ['forward'],
+    })
   })
 
   it('logs in from a panel envelope payload', async () => {
@@ -106,6 +114,9 @@ describe('Login.vue', () => {
         is_admin: true,
         user_id: 9,
         email: 'admin@example.com',
+        permission_mode: 'mixed',
+        permissions: ['forward.view'],
+        restricted_plugins: ['forward'],
       },
     })
 
@@ -130,6 +141,9 @@ describe('Login.vue', () => {
       id: 9,
       email: 'admin@example.com',
       is_admin: true,
+      permission_mode: 'mixed',
+      permissions: ['forward.view'],
+      restricted_plugins: ['forward'],
     })
   })
 

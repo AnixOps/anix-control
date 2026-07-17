@@ -13,6 +13,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/router"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/tests/testutil"
 	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"github.com/gin-gonic/gin"
@@ -272,6 +273,8 @@ func (s *SmokeTestSuite) TestUserProfile() {
 	data, ok := resp["data"].(map[string]any)
 	require.True(s.T(), ok, "profile response should have data field, got: %v", resp)
 	assert.Equal(s.T(), "profile@smoke.test", data["email"])
+	assert.Equal(s.T(), service.PluginPermissionModeAuthoritative, data["permission_mode"])
+	assert.Empty(s.T(), data["permissions"])
 }
 
 // ============================================================

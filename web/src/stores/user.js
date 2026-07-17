@@ -33,6 +33,30 @@ function normalizeAdminFlag(value) {
   return value === true || value === 1 || value === '1'
 }
 
+function normalizePermissionMode(value) {
+  return value === 'legacy' || value === 'mixed' || value === 'authoritative' ? value : ''
+}
+
+function isPluginID(value) {
+  return /^[a-z0-9](?:[a-z0-9._-]{0,118}[a-z0-9])?$/.test(value) && !value.includes('..')
+}
+
+function normalizeRestrictedPlugins(value) {
+  if (Array.isArray(value)) {
+    return [...new Set(value
+      .filter(item => typeof item === 'string')
+      .map(item => item.trim())
+      .filter(isPluginID))]
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value)
+      .filter(([, enabled]) => enabled === true || enabled === 1 || enabled === '1')
+      .map(([pluginID]) => pluginID.trim())
+      .filter(isPluginID)
+  }
+  return null
+}
+
 function normalizeUserInfo(value) {
   const user = value && typeof value === 'object' ? { ...value } : {}
   if ('is_admin' in user) {
@@ -40,6 +64,17 @@ function normalizeUserInfo(value) {
   } else if ('isAdmin' in user) {
     user.is_admin = normalizeAdminFlag(user.isAdmin)
   }
+  const declaredPermissionMode = normalizePermissionMode(user.permission_mode ?? user.permissionMode)
+  if (declaredPermissionMode) {
+    user.permission_mode = declaredPermissionMode
+  } else {
+    delete user.permission_mode
+  }
+  if (Object.prototype.hasOwnProperty.call(user, 'restricted_plugins') || Object.prototype.hasOwnProperty.call(user, 'restrictedPlugins')) {
+    user.restricted_plugins = normalizeRestrictedPlugins(user.restricted_plugins ?? user.restrictedPlugins)
+  }
+  delete user.permissionMode
+  delete user.restrictedPlugins
   return user
 }
 
@@ -56,6 +91,18 @@ function normalizePermissionList(value) {
   return null
 }
 
+function hasOwnPermissions(value) {
+  return Object.prototype.hasOwnProperty.call(value, 'permissions')
+}
+
+function hasOwnPermissionMode(value) {
+  return Object.prototype.hasOwnProperty.call(value, 'permission_mode')
+}
+
+function hasOwnRestrictedPlugins(value) {
+  return Object.prototype.hasOwnProperty.call(value, 'restricted_plugins')
+}
+
 export const useUserStore = defineStore('user', () => {
   const token = ref(normalizeToken(localStorage.getItem('token') || ''))
   const userInfo = ref(normalizeUserInfo(readStoredUserInfo()))
@@ -68,17 +115,44 @@ export const useUserStore = defineStore('user', () => {
   const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => normalizeAdminFlag(userInfo.value.is_admin))
   const permissions = computed(() => normalizePermissionList(userInfo.value.permissions))
+  const restrictedPlugins = computed(() => normalizeRestrictedPlugins(userInfo.value.restricted_plugins))
+  const permissionMode = computed(() => {
+    const declared = normalizePermissionMode(userInfo.value.permission_mode)
+    if (declared) {
+      return declared
+    }
+    if (permissions.value !== null) {
+      return 'authoritative'
+    }
+    return 'missing'
+  })
 
   function hasPermission(permission) {
     const required = typeof permission === 'string' ? permission.trim() : ''
     if (!required) {
       return true
     }
+    const mode = permissionMode.value
+    if (mode === 'legacy' && isAdmin.value) {
+      return true
+    }
+    const restricted = restrictedPlugins.value?.some(pluginID => required.startsWith(`${pluginID}.`)) === true
+    if (
+      mode === 'mixed' &&
+      isAdmin.value &&
+      restrictedPlugins.value !== null &&
+      !restricted
+    ) {
+      return true
+    }
     const granted = permissions.value
     if (granted === null) {
-      return isAdmin.value
+      return false
     }
-    return granted.includes(required)
+    if (granted.includes(required)) {
+      return true
+    }
+    return granted.some(permission => permission.endsWith('.*') && required.startsWith(permission.slice(0, -1)))
   }
 
   function login(newToken, user) {
@@ -104,7 +178,20 @@ export const useUserStore = defineStore('user', () => {
     try {
       const res = await getProfile()
       if (res.data) {
-        userInfo.value = normalizeUserInfo(res.data)
+        const profile = normalizeUserInfo(res.data)
+        const profileHasPermissionMetadata = hasOwnPermissions(profile) || hasOwnPermissionMode(profile) || hasOwnRestrictedPlugins(profile)
+        if (!profileHasPermissionMetadata) {
+          if (hasOwnPermissions(userInfo.value)) {
+            profile.permissions = userInfo.value.permissions
+          }
+          if (hasOwnPermissionMode(userInfo.value)) {
+            profile.permission_mode = userInfo.value.permission_mode
+          }
+          if (hasOwnRestrictedPlugins(userInfo.value)) {
+            profile.restricted_plugins = userInfo.value.restricted_plugins
+          }
+        }
+        userInfo.value = profile
         localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
       }
     } catch (e) {
@@ -118,6 +205,8 @@ export const useUserStore = defineStore('user', () => {
     isLoggedIn,
     isAdmin,
     permissions,
+    restrictedPlugins,
+    permissionMode,
     hasPermission,
     login,
     logout,

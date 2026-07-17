@@ -197,10 +197,19 @@ test('installs a signed WebUI bundle and isolates invalid plugin routes from cor
     label: 'Should Never Render',
     installationID: 2,
   })
+  const forbiddenID = 'forbidden-fixture'
+  const forbiddenSource = extensionSource(forbiddenID, '1.0.0', 'Forbidden Extension')
+  const forbidden = extensionEntry({
+    pluginID: forbiddenID,
+    source: forbiddenSource,
+    label: 'Forbidden Extension',
+    installationID: 3,
+  })
 
-  const assetRequests = await installAPIFixtures(page, [valid, invalidCollision], {
+  const assetRequests = await installAPIFixtures(page, [valid, invalidCollision, forbidden], {
     [pluginID]: source,
     'route-collision': collisionSource,
+    [forbiddenID]: forbiddenSource,
   })
   await seedAdmin(page, ['browser-fixture.view'])
 
@@ -208,6 +217,7 @@ test('installs a signed WebUI bundle and isolates invalid plugin routes from cor
   await expect(page.locator('.page-toolbar h1')).toHaveText('Dashboard')
   await expect(page.locator('a[href="/admin/extensions/browser-fixture"]')).toBeVisible()
   await expect(page.locator('a[href="/admin/extensions/route-collision"]')).toHaveCount(0)
+  await expect(page.locator('a[href="/admin/extensions/forbidden-fixture"]')).toHaveCount(0)
 
   await page.locator('a[href="/admin/extensions/browser-fixture"]').click()
   await expect(page).toHaveURL(/\/admin\/extensions\/browser-fixture$/)
@@ -243,7 +253,7 @@ test('disabled and tampered plugins fail closed without contaminating core admin
     [disabledID]: disabledSource,
     [tamperedID]: tamperedSource,
   })
-  await seedAdmin(page, [])
+  await seedAdmin(page, ['tampered-fixture.view'])
 
   await page.goto('/admin/dashboard')
   await expect(page.locator('.page-toolbar h1')).toHaveText('Dashboard')
