@@ -5,17 +5,20 @@ definitions:
       node_id:
         type: integer
       resources:
-        additionalProperties: true
+        additionalProperties: {}
         type: object
       status:
+        maxLength: 32
         type: string
+    required:
+    - node_id
     type: object
   handler.AgentMonitorRequest:
     properties:
       node_id:
         type: integer
       system:
-        additionalProperties: true
+        additionalProperties: {}
         type: object
     required:
     - node_id
@@ -29,12 +32,17 @@ definitions:
       node_id:
         type: integer
       system:
-        additionalProperties: true
+        additionalProperties: {}
         type: object
       token:
+        minLength: 1
         type: string
       version:
+        maxLength: 64
         type: string
+    required:
+    - node_id
+    - token
     type: object
   handler.AgentTaskResult:
     properties:
@@ -111,6 +119,8 @@ definitions:
       isp:
         type: string
       max_conn:
+        type: integer
+      metrics_port:
         type: integer
       name:
         type: string
@@ -197,7 +207,7 @@ definitions:
       node_id:
         type: integer
       params:
-        additionalProperties: true
+        additionalProperties: {}
         type: object
       timeout:
         type: integer
@@ -210,21 +220,17 @@ definitions:
     type: object
   handler.ExecuteCommandRequest:
     properties:
-      args:
-        items:
-          type: string
-        type: array
-      command:
+      action:
         type: string
-      env:
-        additionalProperties: true
-        type: object
       node_id:
         type: integer
+      params:
+        additionalProperties: {}
+        type: object
       timeout:
         type: integer
     required:
-    - command
+    - action
     - node_id
     type: object
   handler.NotifySettingsRequest:
@@ -239,17 +245,23 @@ definitions:
   handler.SendNotificationRequest:
     properties:
       content:
+        maxLength: 4096
         type: string
       message:
+        maxLength: 4096
         type: string
       telegram_id:
         type: integer
       title:
+        maxLength: 255
         type: string
+    required:
+    - telegram_id
     type: object
   handler.SetWebhookRequest:
     properties:
       url:
+        maxLength: 512
         type: string
     type: object
   handler.TestGostConnectionRequest:
@@ -281,12 +293,16 @@ definitions:
       allow_ticket:
         type: boolean
       name:
+        maxLength: 255
         type: string
       token:
+        minLength: 1
         type: string
       welcome_message:
+        maxLength: 1024
         type: string
       welcome_msg:
+        maxLength: 1024
         type: string
     type: object
   handler.UpdateGatewayRequest:
@@ -333,6 +349,8 @@ definitions:
         type: string
       max_conn:
         type: integer
+      metrics_port:
+        type: integer
       name:
         type: string
       port:
@@ -374,15 +392,23 @@ definitions:
     type: object
   model.AdminCreateUserRequest:
     properties:
+      device_limit:
+        type: integer
       email:
         type: string
       flowResetTime:
+        type: integer
+      group_id:
         type: integer
       is_admin:
         type: integer
       password:
         minLength: 6
         type: string
+      speed_limit:
+        type: integer
+      transfer_enable:
+        type: integer
     required:
     - email
     - password
@@ -500,6 +526,10 @@ definitions:
     properties:
       email:
         type: string
+      mfa_code:
+        type: string
+      mfa_method:
+        type: string
       password:
         type: string
     required:
@@ -533,11 +563,26 @@ definitions:
       memory_usage:
         description: 内存使用率
         type: number
+      monthly_download:
+        description: 本月已用下载流量
+        type: integer
+      monthly_limit:
+        description: 月流量限额 (仅本节点自身, 不含子节点单独限额; 子节点流量会同时累加到父节点)
+        type: integer
+      monthly_reset_day:
+        description: 每月流量重置日 (1-28)
+        type: integer
+      monthly_upload:
+        description: 本月已用上传流量
+        type: integer
       name:
         description: 节点名称
         type: string
       online_users:
         description: 在线用户数
+        type: integer
+      parent_id:
+        description: '父子节点 (中转链路: 落地节点为根, 转发节点为子, 支持多级)'
         type: integer
       port:
         description: API通信端口
@@ -553,6 +598,13 @@ definitions:
       raw_config:
         description: 高级配置 (直接JSON编辑)
         type: string
+      runtime_checked_at:
+        type: integer
+      runtime_error:
+        type: string
+      runtime_healthy:
+        description: 运行时健康状态 (由支持运行时自愈的节点上报)
+        type: boolean
       server_ip:
         description: 服务器信息 (由节点上报)
         type: string
@@ -701,6 +753,13 @@ definitions:
     required:
     - auth_key
     type: object
+  model.NodeRuntimeHealthRequest:
+    properties:
+      error:
+        type: string
+      healthy:
+        type: boolean
+    type: object
   model.NodeStatus:
     enum:
     - 0
@@ -781,6 +840,7 @@ definitions:
     - hysteria2
     - tuic
     - anytls
+    - wireguard
     type: string
     x-enum-varnames:
     - ProtocolVMess
@@ -790,9 +850,12 @@ definitions:
     - ProtocolHysteria2
     - ProtocolTUIC
     - ProtocolAnyTLS
+    - ProtocolWireGuard
   model.RegisterRequest:
     properties:
       email:
+        type: string
+      invite_code:
         type: string
       password:
         minLength: 6
@@ -1017,7 +1080,7 @@ info:
     url: https://opensource.org/licenses/MIT
   termsOfService: https://github.com/AnixOps/anix-control
   title: AnixOps Control API
-  version: 4.0.0-alpha.1
+  version: 4.0.0-alpha.2
 paths:
   /admin/agent/execute:
     post:
@@ -1086,6 +1149,31 @@ paths:
       tags:
       - 管理端 Agent
   /admin/agent/tasks:
+    get:
+      description: Query recent whitelisted diagnostic tasks, optionally filtered
+        by node_id
+      parameters:
+      - description: Node ID
+        in: query
+        name: node_id
+        type: integer
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List diagnostic task history
+      tags:
+      - 管理端 Agent
     post:
       consumes:
       - application/json
@@ -2376,6 +2464,99 @@ paths:
       summary: 更新节点
       tags:
       - 管理端-节点
+  /admin/nodes/{id}/credentials:
+    get:
+      consumes:
+      - application/json
+      description: |-
+        管理员获取指定节点的 api_key / secret, 用于 AnixOps Agent 对接配置。
+        Node.APIKey/Secret 在普通序列化里是隐藏字段 (json:"-"), 此接口显式返回,
+        仅限管理员, 供 Ansible 等部署工具自动拉取节点凭证。
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取节点凭证
+      tags:
+      - 管理端-节点
+  /admin/nodes/{id}/logs:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取指定节点通过 gRPC 上报的运行日志
+      parameters:
+      - description: 节点ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      - description: 日志级别
+        in: query
+        name: level
+        type: string
+      - description: 日志来源
+        in: query
+        name: source
+        type: string
+      - description: 关键词
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取节点运行日志
+      tags:
+      - 管理端-节点
   /admin/nodes/{id}/protocols:
     get:
       consumes:
@@ -2555,24 +2736,6 @@ paths:
       security:
       - BearerAuth: []
       summary: 同步协议到节点
-      tags:
-      - 管理端-节点
-  /admin/nodes/protocol-templates:
-    get:
-      consumes:
-      - application/json
-      description: 管理员获取可用的协议模板列表
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: 获取协议模板
       tags:
       - 管理端-节点
   /admin/nodes/protocols/{protocol_id}:
@@ -3630,6 +3793,66 @@ paths:
       summary: 分配套餐给用户
       tags:
       - 管理端-套餐
+  /admin/protocol-templates:
+    get:
+      consumes:
+      - application/json
+      description: 管理员获取可用的协议模板列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 获取协议模板
+      tags:
+      - 管理端-节点
+  /admin/system/audit-logs:
+    get:
+      consumes:
+      - application/json
+      description: Admin query for system operation audit logs with optional filters.
+      parameters:
+      - description: Filter by target type
+        in: query
+        name: target_type
+        type: string
+      - description: Filter by action
+        in: query
+        name: action
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get system audit logs
+      tags:
+      - Admin System
   /admin/system/backup:
     post:
       consumes:
@@ -4409,6 +4632,40 @@ paths:
       summary: 封禁用户
       tags:
       - 管理端-用户
+  /admin/users/{id}/reset-subscribe:
+    post:
+      consumes:
+      - application/json
+      description: 管理员为用户重新生成订阅 token, 旧订阅链接立即失效 (UUID 不变)
+      parameters:
+      - description: 用户ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 重置用户订阅
+      tags:
+      - 管理端-用户
   /admin/users/{id}/reset-traffic:
     post:
       consumes:
@@ -4500,6 +4757,19 @@ paths:
       summary: 获取用户统计
       tags:
       - 管理端-用户
+  /admin/ws/monitor:
+    get:
+      description: 实时推送节点监控数据
+      produces:
+      - application/json
+      responses:
+        "101":
+          description: Switching Protocols
+      security:
+      - BearerAuth: []
+      summary: WebSocket 实时监控
+      tags:
+      - 管理端-WebSocket
   /api/v2/agent/heartbeat:
     post:
       consumes:
@@ -4636,6 +4906,42 @@ paths:
       summary: 鑾峰彇杞彂瑙勫垯
       tags:
       - Agent
+  /internal/auth-keys:
+    post:
+      consumes:
+      - application/json
+      description: 使用API Token认证生成节点自动注册的授权密钥（供Ansible等自动化工具使用）
+      parameters:
+      - description: 密钥请求 {name, expire_days, node_name}
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - ApiTokenAuth: []
+      summary: 内部生成授权密钥
+      tags:
+      - 内部API
   /login:
     post:
       consumes:
@@ -4743,6 +5049,51 @@ paths:
             additionalProperties: true
             type: object
       summary: 节点自动注册
+      tags:
+      - 节点通信
+  /node/runtime-health:
+    post:
+      consumes:
+      - application/json
+      description: 节点上报 WireGuard/GOST 等托管运行时的进程健康状态，不覆盖普通心跳状态
+      parameters:
+      - description: 运行时健康状态
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.NodeRuntimeHealthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 上报节点运行时健康状态
       tags:
       - 节点通信
   /payment/callback/{type}:

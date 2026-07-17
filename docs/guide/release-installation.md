@@ -19,7 +19,7 @@ runbooks instead of mixing deployment models on the same host.
    The fresh development template binds gRPC to `127.0.0.1:50051`; remote
    Agents require an explicit TLS/proxy setup and a deliberate bind-address change.
 3. Decide the exact version to install. Pinning a tag makes the operation
-   reproducible; the signed-package WebUI preview is `v4.0.0-alpha.1`.
+   reproducible; the signed-package WebUI preview is `v4.0.0-alpha.2`.
 4. Back up any existing panel before running `update` or `rollback`.
 
 ## Fresh Install
@@ -28,7 +28,7 @@ Download the installer from the exact release tag. This fetches one script, not
 the repository checkout:
 
 ```bash
-export VERSION=v4.0.0-alpha.1
+export VERSION=v4.0.0-alpha.2
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -134,7 +134,7 @@ The alpha entry point is manual import by design. It does not silently fetch
 untrusted third-party packages or put API keys in package URLs; Agent downloads
 use `X-API-Key` and same-origin, digest-addressed paths.
 
-`v4.0.0-alpha.1` is a canary release. Keep production traffic on the tested
+`v4.0.0-alpha.2` is a canary release. Keep production traffic on the tested
 legacy path while the signed package/WebUI path is observed. Do not publish a
 stable 4.0 release until the package lifecycle, node health, rollback, and
 compatibility checks have passed continuously for 72 hours and the operator
@@ -150,7 +150,7 @@ that snapshot.
 Upgrade to an explicit release:
 
 ```bash
-export TARGET=v4.0.0-alpha.1
+export TARGET=v4.0.0-alpha.2
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${TARGET}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/smtp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
@@ -24,6 +25,8 @@ type NotificationService struct {
 	cfg         *config.Config
 	emailConfig *model.EmailConfig
 	httpClient  *http.Client
+	asyncMu     sync.Mutex
+	asyncWG     sync.WaitGroup
 }
 
 // NewNotificationService 创建服务
@@ -84,6 +87,32 @@ func (s *NotificationService) Send(userID *uint, notifyType, event, title, conte
 	return err
 }
 
+// Drain waits for all asynchronous notifications registered before the call.
+// The registration mutex prevents WaitGroup.Add from racing with Wait.
+func (s *NotificationService) Drain() {
+	s.asyncMu.Lock()
+	defer s.asyncMu.Unlock()
+
+	s.asyncWG.Wait()
+}
+
+func (s *NotificationService) runAsync(run func() error) <-chan error {
+	done := make(chan error, 1)
+
+	s.asyncMu.Lock()
+	s.asyncWG.Add(1)
+	s.asyncMu.Unlock()
+
+	go func() {
+		defer s.asyncWG.Done()
+		defer close(done)
+
+		done <- run()
+	}()
+
+	return done
+}
+
 func (s *NotificationService) sendAsync(userID *uint, notifyType, event, title, content string, data map[string]any) <-chan error {
 	var copiedUserID *uint
 	if userID != nil {
@@ -91,8 +120,7 @@ func (s *NotificationService) sendAsync(userID *uint, notifyType, event, title, 
 		copiedUserID = &id
 	}
 
-	done := make(chan error, 1)
-	go func() {
+	return s.runAsync(func() error {
 		err := s.Send(copiedUserID, notifyType, event, title, content, data)
 		if err != nil {
 			attrs := []any{
@@ -105,11 +133,8 @@ func (s *NotificationService) sendAsync(userID *uint, notifyType, event, title, 
 			}
 			slog.Warn("notification send failed", attrs...)
 		}
-		done <- err
-		close(done)
-	}()
-
-	return done
+		return err
+	})
 }
 
 // SendEmail 发送邮件

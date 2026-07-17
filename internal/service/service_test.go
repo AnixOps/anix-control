@@ -2703,10 +2703,23 @@ func (s *NotificationServiceTestSuite) SetupSuite() {
 }
 
 func (s *NotificationServiceTestSuite) TearDownSuite() {
+	if s.svc != nil {
+		s.svc.Drain()
+	}
 	s.ServiceTestSuite.TearDownSuite()
 }
 
+func (s *NotificationServiceTestSuite) TearDownTest() {
+	if s.svc != nil {
+		s.svc.Drain()
+	}
+	s.ServiceTestSuite.TearDownTest()
+}
+
 func (s *NotificationServiceTestSuite) SetupTest() {
+	if s.svc != nil {
+		s.svc.Drain()
+	}
 	s.ServiceTestSuite.SetupTest()
 	s.svc = NewNotificationService(database.Get(), s.cfg)
 
@@ -2863,6 +2876,97 @@ func (s *NotificationServiceTestSuite) TestSendAsyncCopiesUserID() {
 		assert.Equal(s.T(), originalID, *log.UserID)
 	}
 	assert.Equal(s.T(), 1, log.Status)
+}
+
+func (s *NotificationServiceTestSuite) TestDrainWaitsForTrackedAsyncWork() {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := s.svc.runAsync(func() error {
+		close(started)
+		<-release
+		return nil
+	})
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		s.T().Fatal("timed out waiting for async work to start")
+	}
+
+	drained := make(chan struct{})
+	go func() {
+		s.svc.Drain()
+		close(drained)
+	}()
+
+	select {
+	case <-drained:
+		s.T().Fatal("Drain returned while async work was still running")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release)
+
+	select {
+	case <-drained:
+	case <-time.After(2 * time.Second):
+		s.T().Fatal("timed out waiting for Drain")
+	}
+
+	select {
+	case err := <-done:
+		assert.NoError(s.T(), err)
+	case <-time.After(2 * time.Second):
+		s.T().Fatal("timed out waiting for tracked async work")
+	}
+}
+
+func (s *NotificationServiceTestSuite) TestDrainCanRunConcurrentWithAsyncRegistration() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	for range 64 {
+		start := make(chan struct{})
+		release := make(chan struct{})
+		registered := make(chan (<-chan error), 1)
+		drained := make(chan struct{})
+
+		go func() {
+			<-start
+			registered <- s.svc.runAsync(func() error {
+				<-release
+				return nil
+			})
+		}()
+		go func() {
+			<-start
+			s.svc.Drain()
+			close(drained)
+		}()
+		close(start)
+
+		var done <-chan error
+		select {
+		case done = <-registered:
+		case <-ctx.Done():
+			s.T().Fatal("timed out registering async work during Drain")
+		}
+		close(release)
+
+		select {
+		case err := <-done:
+			assert.NoError(s.T(), err)
+		case <-ctx.Done():
+			s.T().Fatal("timed out waiting for concurrently registered async work")
+		}
+		select {
+		case <-drained:
+		case <-ctx.Done():
+			s.T().Fatal("timed out waiting for concurrent Drain")
+		}
+	}
+
+	s.svc.Drain()
 }
 
 func TestNotificationService(t *testing.T) {

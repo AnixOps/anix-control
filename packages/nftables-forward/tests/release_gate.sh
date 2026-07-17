@@ -19,12 +19,15 @@ fail() {
 
 usage() {
   cat <<'EOF'
-Usage: packages/nftables-forward/tests/release_gate.sh [--help]
+Usage: packages/nftables-forward/tests/release_gate.sh \
+  --agent-binary PATH [--help]
 
-Builds the package twice, verifies both unsigned outputs, signs one exact
-manifest with a temporary Ed25519 key, verifies it with the public-key-only
-verifier, and proves tampered/unsigned signatures are rejected. The temporary
-private key is deleted before exit and is never an output artifact.
+Builds the package twice from a real nftables-forward Agent executable,
+verifies its declared package version and both unsigned outputs, signs one
+exact manifest with a temporary Ed25519 key, verifies it with the
+public-key-only verifier, and proves tampered/unsigned signatures are rejected.
+The temporary private key is deleted before exit and is never an output
+artifact.
 EOF
 }
 
@@ -41,17 +44,26 @@ expect_failure() {
 }
 
 main() {
-  case "${1:-}" in
-    "") ;;
-    -h|--help)
-      usage
-      return 0
-      ;;
-    *)
-      usage >&2
-      return 2
-      ;;
-  esac
+  local agent=""
+  while (($#)); do
+    case "$1" in
+      --agent-binary)
+        (($# >= 2)) || fail "--agent-binary requires a path"
+        agent="$2"
+        shift 2
+        ;;
+      -h|--help)
+        usage
+        return 0
+        ;;
+      *)
+        usage >&2
+        fail "unsupported argument: $1"
+        ;;
+    esac
+  done
+
+  [[ -n "${agent}" && -x "${agent}" && ! -L "${agent}" ]] || fail "a real executable --agent-binary is required"
 
   require_command "${PYTHON_BIN}"
   require_command "${OPENSSL_BIN}"
@@ -63,10 +75,13 @@ main() {
   [[ -f "${VERIFIER}" ]] || fail "public-key verifier is missing"
   [[ -x "${SIGNING_SCRIPT}" ]] || fail "plugin signing script is missing or not executable"
 
-  local work agent first second private_key public_key signature signature_b64 raw_key
+  local agent_version
+  agent_version="$("${agent}" --version 2>&1)" || fail "nftables-forward Agent version check failed"
+  [[ "${agent_version}" == "nftables-forward 1.0.0" ]] || fail "Agent binary is not nftables-forward 1.0.0: ${agent_version}"
+
+  local work first second private_key public_key signature signature_b64 raw_key
   work="$(mktemp -d)"
   trap "rm -rf '${work}'" EXIT
-  agent="${work}/nftables-forward-agent"
   first="${work}/first"
   second="${work}/second"
   private_key="${work}/signing-private.pem"
@@ -74,9 +89,6 @@ main() {
   signature="${work}/manifest.sig.bin"
   signature_b64="${work}/manifest.sig"
   raw_key="${work}/signing-public.b64"
-
-  printf '#!/bin/sh\nprintf "nftables-forward-ci-fixture\\n"\n' >"${agent}"
-  chmod 0755 "${agent}"
 
   "${PYTHON_BIN}" "${BUILDER}" build \
     --agent-binary "${agent}" \
@@ -168,7 +180,7 @@ main() {
     printf 'status=PASS\n'
     printf 'plugin_id=nftables-forward\n'
     printf 'version=1.0.0\n'
-    printf 'agent_input=temporary-ci-fixture\n'
+    printf 'agent_input=real-version-verified\n'
     printf 'unsigned_reproducible=true\n'
     printf 'public_key_formats=pem,raw-base64\n'
     printf 'tamper_rejection=true\n'

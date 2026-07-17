@@ -93,6 +93,7 @@ check_release_workflow() {
 
   require_text "tags: [ 'v*.*.*' ]" "tag trigger pattern" || failed=1
   require_text '^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$' "stable and prerelease tag gate" || failed=1
+  require_text "python3 config/scripts/check_release_version.py --tag" "release tag/source version consistency gate" || failed=1
   require_text "needs.tag-gate.outputs.is_release_tag == 'true'" "release-only job gate" || failed=1
 
   for dependency in \
@@ -148,6 +149,8 @@ check_release_workflow() {
   require_text "Plugin Package Release Contracts" "official plugin package release job" || failed=1
   require_text "packages/machine-telemetry/tests/release_gate.sh" "machine telemetry package release gate invocation" || failed=1
   require_text "packages/nftables-forward/tests/release_gate.sh" "nftables forward package release gate invocation" || failed=1
+  require_text "--agent-binary package-build/nftables-forward-agent" "real nftables forward Agent package input" || failed=1
+  require_text '[[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.0.0" ]]' "nftables forward binary version gate" || failed=1
   require_text "packages/nftables-forward/tests/webui_smoke.mjs" "nftables forward WebUI smoke gate" || failed=1
   require_text "packages/gost-mesh/tests/release_gate.sh" "gost mesh package release gate invocation" || failed=1
   require_text "--agent-binary package-build/gost-mesh-agent" "real GOST mesh Agent package input" || failed=1
@@ -201,7 +204,7 @@ check_release_workflow() {
   require_text 'The signed `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress` packages' "release notes include GOST mesh and NAT egress" || failed=1
   require_text "canary-only until Secret ID" "GOST mesh stable-release limitation" || failed=1
   require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
-  require_text "ref: 882024acfb1f125becec8138c3ade0173072ef71" "pinned Agent fixture commit" || failed=1
+  require_text "ref: 555be48faebf80e6c9d61cea10705583cf7c32f1" "pinned Agent fixture commit" || failed=1
   require_text "ANIXOPS_CROSS_REPO_E2E: '1'" "cross-repository Agent process E2E opt-in" || failed=1
   require_text "KernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
   require_text "AgentPluginPackageCrossRepositoryE2E" "signed Agent package cross-repository E2E test" || failed=1
@@ -258,6 +261,7 @@ jobs:
     steps:
       - run: |
           [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]
+          python3 config/scripts/check_release_version.py --tag "${GITHUB_REF_NAME}"
 
   release-binaries:
     needs: [go-quality, go-lint, go-security, go-race, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, plugin-package-publish, forward-runtime-test, grpc-test, cross-repository-agent-e2e, cmd-test, tag-gate]
@@ -307,11 +311,17 @@ jobs:
   plugin-package-release-test:
     name: Plugin Package Release Contracts
     steps:
+      - name: Build and verify real package inputs
+        run: |
+          go -C V2bX_AnixOps build -o package-build/nftables-forward-agent ./cmd/nftables-forward
+          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.0.0" ]]
       - name: Run reproducible unsigned and signed package contract
         run: |
           set -o pipefail
           bash packages/machine-telemetry/tests/release_gate.sh | tee package-contract.txt
-          bash packages/nftables-forward/tests/release_gate.sh | tee nftables-forward-package-contract.txt
+          bash packages/nftables-forward/tests/release_gate.sh \
+            --agent-binary package-build/nftables-forward-agent \
+            | tee nftables-forward-package-contract.txt
           bash packages/gost-mesh/tests/release_gate.sh \
             --agent-binary package-build/gost-mesh-agent \
             --gost package-build/gost \
@@ -354,7 +364,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 882024acfb1f125becec8138c3ade0173072ef71
+          ref: 555be48faebf80e6c9d61cea10705583cf7c32f1
           path: V2bX_AnixOps
       - env:
           ANIXOPS_CROSS_REPO_E2E: '1'
@@ -480,6 +490,13 @@ EOF
   sed -i '/plugin-package-release-test/d;/Plugin Package Release Contracts/d;/packages\/machine-telemetry\/tests\/release_gate.sh/d;/packages\/nftables-forward\/tests\/release_gate.sh/d;/packages\/nftables-forward\/tests\/webui_smoke.mjs/d;/plugin-package-contract-reports/d;/nftables-forward-package-contract.txt/d' "${fixture}.missing-plugin-package-gate"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-plugin-package-gate" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing plugin package gate should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-nftables-version-gate"
+  sed -i '/nftables-forward-agent --version/d' "${fixture}.missing-nftables-version-gate"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-nftables-version-gate" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing nftables forward binary version gate should fail" >&2
     return 1
   fi
 

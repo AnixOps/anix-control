@@ -128,12 +128,16 @@ match the release record, stop before enabling any plugin flag.
 
 ## Plugin Platform Flags
 
-`v4.0.0-alpha.1` is the first operational signed-package/WebUI preview. A
-fresh alpha configuration enables the Control package executor and Agent
-dispatch, while topology execution remains disabled. An upgrade preserves the
-existing configuration, so an existing installation is not silently switched
-to the new path. Enable the alpha flags only after importing the official
-release assets, recording checksums/signatures, and selecting a canary node:
+`v4.0.0-alpha.2` is the current operational signed-package/WebUI canary. It
+supersedes `alpha.1` with bounded SQLite payment-transaction retry, tracked
+notification shutdown in the regression suite, and a release gate that checks
+the real `nftables-forward` binary version against its signed manifest. Start
+the 72-hour observation window again after installing `alpha.2`. A fresh alpha
+configuration enables the Control package executor and Agent dispatch, while
+topology execution remains disabled. An upgrade preserves the existing
+configuration, so an existing installation is not silently switched to the new
+path. Enable the alpha flags only after importing the official release assets,
+recording checksums/signatures, and selecting a canary node:
 
 ```yaml
 plugins:

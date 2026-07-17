@@ -334,7 +334,7 @@ func (s *PaymentGatewayService) MarkOrderPaidWithAmount(tradeNo string, gatewayT
 }
 
 func (s *PaymentGatewayService) markOrderPaid(tradeNo string, gatewayTradeNo string, notifyData string, paidAmount *float64) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	return WithRetryableTransaction(s.db, func(tx *gorm.DB) error {
 		// 查询支付记录
 		var record model.PaymentRecord
 		if err := tx.Where("trade_no = ?", tradeNo).First(&record).Error; err != nil {
