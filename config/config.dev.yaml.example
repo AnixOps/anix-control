@@ -58,7 +58,7 @@ auth:
 
 app:
   name: "AnixOps Control Dev"
-  version: "3.0.0-alpha.1"
+  version: "3.1.0-alpha.1"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"

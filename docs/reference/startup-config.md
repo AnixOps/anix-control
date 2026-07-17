@@ -52,7 +52,7 @@ jwt:
 
 app:
   name: "AnixOps Control"
-  version: "3.0.0-alpha.1"
+  version: "3.1.0-alpha.1"
   api_token: "replace-with-node-api-token"
   traffic_log_enable: true
   subscribe_path: "s"
