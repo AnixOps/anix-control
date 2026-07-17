@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -22,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/gorm/logger"
 )
 
 func newKernelTestDB(t *testing.T) *gorm.DB {
@@ -909,6 +911,28 @@ func TestUpdatePluginConfigurationVerifiesReleaseSchemaAndRevision(t *testing.T)
 	var storedInstallation model.PluginInstallation
 	require.NoError(t, db.First(&storedInstallation, installation.ID).Error)
 	require.Equal(t, int64(1), storedInstallation.ConfigRevision)
+}
+
+func TestGetPluginConfigurationReturnsQuietDefaultWhenDocumentIsMissing(t *testing.T) {
+	var databaseLogs bytes.Buffer
+	testLogger := logger.New(log.New(&databaseLogs, "", 0), logger.Config{LogLevel: logger.Warn})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: testLogger})
+	require.NoError(t, err)
+	require.NoError(t, EnsureKernelSchema(db))
+
+	installation := model.PluginInstallation{
+		PluginID: "machine-telemetry", Target: "agent", DesiredVersion: "1.1.0", State: "pending",
+	}
+	require.NoError(t, db.Create(&installation).Error)
+	databaseLogs.Reset()
+
+	configuration, err := GetPluginConfiguration(db, installation.ID)
+	require.NoError(t, err)
+	require.Equal(t, installation.ID, configuration.InstallationID)
+	require.Equal(t, int64(0), configuration.Revision)
+	require.JSONEq(t, `{}`, configuration.ConfigJSON)
+	require.Len(t, configuration.ConfigHash, sha256.Size*2)
+	require.NotContains(t, databaseLogs.String(), "record not found")
 }
 
 func TestUpdatePluginConfigurationRunsVersionBoundSemanticValidatorInsideSave(t *testing.T) {

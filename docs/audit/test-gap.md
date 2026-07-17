@@ -30,6 +30,13 @@
   dependency-aware Control execution, reverse rollback, and race coverage.
   Staging still needs a live restored Control canary before enabling plugin
   execution outside isolated test nodes.
+- Fresh kernel databases now seed a dedicated `monitoring` service scope owned
+  by `machine-telemetry`, with an idempotent schema test so telemetry cannot
+  silently fall back to subscription or forwarding authorization state.
+- Reads of an installation with no saved configuration now return the canonical
+  empty document without emitting GORM's expected `record not found` warning;
+  a logger-backed regression test keeps real database failures visible while
+  removing this misleading startup noise.
 
 ## 2026-07-08 CI Baseline
 
