@@ -55,7 +55,7 @@ func (s *NodeService) RecordPluginTelemetry(nodeID uint, heartbeatMetrics map[st
 	}
 	sort.Strings(pluginIDs)
 	accepted := 0
-	var result error = authorizationErr
+	result := authorizationErr
 	for _, pluginID := range pluginIDs {
 		metrics := grouped[pluginID]
 		if persistErr := s.persistPluginTelemetryState(nodeID, pluginID, metrics, receivedAt); persistErr != nil {
