@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/AnixOps/anix-control/v3/api/grpc/v2boardpb"
-	"github.com/AnixOps/anix-control/v3/internal/database"
-	"github.com/AnixOps/anix-control/v3/internal/model"
+	pb "github.com/AnixOps/anix-control/v4/api/grpc/v2boardpb"
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"

@@ -3,9 +3,9 @@ package router
 import (
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/config"
-	"github.com/AnixOps/anix-control/v3/internal/handler"
-	"github.com/AnixOps/anix-control/v3/internal/middleware"
+	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/handler"
+	"github.com/AnixOps/anix-control/v4/internal/middleware"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"

@@ -4,7 +4,7 @@
 
 如果你只需要最短启动路径，先看：
 
-- [`../readme.md`](../readme.md)
+- [`control-boundary.md`](control-boundary.md)
 - [`README.md`](README.md)
 - [`reference/quickstart.md`](reference/quickstart.md)
 - [`reference/startup-config.md`](reference/startup-config.md)

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v3/internal/config"
-	"github.com/AnixOps/anix-control/v3/internal/middleware"
+	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

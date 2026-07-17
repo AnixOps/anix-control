@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/golang-jwt/jwt/v5"
 )
 

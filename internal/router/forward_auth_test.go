@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v3/internal/utils"
+	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 )
 
 // buildPlans converts old v2_plan rows into model.Plan. Old IDs are

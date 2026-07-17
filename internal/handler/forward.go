@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/database"
-	"github.com/AnixOps/anix-control/v3/internal/gost"
-	"github.com/AnixOps/anix-control/v3/internal/model"
-	"github.com/AnixOps/anix-control/v3/internal/service"
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/gost"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 )
 

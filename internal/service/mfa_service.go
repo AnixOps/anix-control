@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/branding"
-	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/branding"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"

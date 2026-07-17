@@ -391,7 +391,7 @@ jobs:
       - name: Run tests with coverage
         shell: bash
         run: |
-          mapfile -t packages < <(go list ./internal/... | grep -v '^github.com/AnixOps/anix-control/v3/internal/tests/integration' | grep -v '^github.com/AnixOps/anix-control/v3/internal/tests/e2e')
+          mapfile -t packages < <(go list ./internal/... | grep -v '^github.com/AnixOps/anix-control/v4/internal/tests/integration' | grep -v '^github.com/AnixOps/anix-control/v4/internal/tests/e2e')
           go test -p=1 -count=1 -v -coverprofile=coverage.out -covermode=atomic "${packages[@]}"
 
       - name: Generate coverage report

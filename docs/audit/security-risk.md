@@ -1296,28 +1296,28 @@ Verification:
 PATH=/usr/local/go/bin:$PATH go test ./cmd/server ./cmd/verify ./internal/model ./internal/gost -count=1
 PATH=/usr/local/go/bin:/home/dev/go/bin:$PATH gosec -include=G104 -quiet ./cmd/server ./cmd/verify ./internal/model ./internal/gost
 PATH=/usr/local/go/bin:/home/dev/go/bin:$PATH gosec -include=G104 -quiet \
-  github.com/AnixOps/anix-control/v3/api/grpc/v2boardpb \
-  github.com/AnixOps/anix-control/v3/cmd/migrate \
-  github.com/AnixOps/anix-control/v3/cmd/server \
-  github.com/AnixOps/anix-control/v3/cmd/sqlite2postgres \
-  github.com/AnixOps/anix-control/v3/cmd/subtest \
-  github.com/AnixOps/anix-control/v3/cmd/verify \
-  github.com/AnixOps/anix-control/v3/docs \
-  github.com/AnixOps/anix-control/v3/internal/cache \
-  github.com/AnixOps/anix-control/v3/internal/config \
-  github.com/AnixOps/anix-control/v3/internal/database \
-  github.com/AnixOps/anix-control/v3/internal/gost \
-  github.com/AnixOps/anix-control/v3/internal/grpc \
-  github.com/AnixOps/anix-control/v3/internal/handler \
-  github.com/AnixOps/anix-control/v3/internal/middleware \
-  github.com/AnixOps/anix-control/v3/internal/model \
-  github.com/AnixOps/anix-control/v3/internal/parser \
-  github.com/AnixOps/anix-control/v3/internal/payment \
-  github.com/AnixOps/anix-control/v3/internal/payment/gateways \
-  github.com/AnixOps/anix-control/v3/internal/router \
-  github.com/AnixOps/anix-control/v3/internal/service \
-  github.com/AnixOps/anix-control/v3/internal/utils \
-  github.com/AnixOps/anix-control/v3/internal/websocket
+  github.com/AnixOps/anix-control/v4/api/grpc/v2boardpb \
+  github.com/AnixOps/anix-control/v4/cmd/migrate \
+  github.com/AnixOps/anix-control/v4/cmd/server \
+  github.com/AnixOps/anix-control/v4/cmd/sqlite2postgres \
+  github.com/AnixOps/anix-control/v4/cmd/subtest \
+  github.com/AnixOps/anix-control/v4/cmd/verify \
+  github.com/AnixOps/anix-control/v4/docs \
+  github.com/AnixOps/anix-control/v4/internal/cache \
+  github.com/AnixOps/anix-control/v4/internal/config \
+  github.com/AnixOps/anix-control/v4/internal/database \
+  github.com/AnixOps/anix-control/v4/internal/gost \
+  github.com/AnixOps/anix-control/v4/internal/grpc \
+  github.com/AnixOps/anix-control/v4/internal/handler \
+  github.com/AnixOps/anix-control/v4/internal/middleware \
+  github.com/AnixOps/anix-control/v4/internal/model \
+  github.com/AnixOps/anix-control/v4/internal/parser \
+  github.com/AnixOps/anix-control/v4/internal/payment \
+  github.com/AnixOps/anix-control/v4/internal/payment/gateways \
+  github.com/AnixOps/anix-control/v4/internal/router \
+  github.com/AnixOps/anix-control/v4/internal/service \
+  github.com/AnixOps/anix-control/v4/internal/utils \
+  github.com/AnixOps/anix-control/v4/internal/websocket
 ```
 
 Result:

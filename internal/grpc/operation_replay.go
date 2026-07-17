@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	agentv1pb "github.com/AnixOps/anix-control/v3/api/grpc/agent/v1"
-	"github.com/AnixOps/anix-control/v3/internal/service"
+	agentv1pb "github.com/AnixOps/anix-control/v4/api/grpc/agent/v1"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"google.golang.org/protobuf/proto"
 )
 

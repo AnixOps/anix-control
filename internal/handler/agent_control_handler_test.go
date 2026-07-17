@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	agentv1pb "github.com/AnixOps/anix-control/v3/api/grpc/agent/v1"
-	controlgrpc "github.com/AnixOps/anix-control/v3/internal/grpc"
-	"github.com/AnixOps/anix-control/v3/internal/model"
+	agentv1pb "github.com/AnixOps/anix-control/v4/api/grpc/agent/v1"
+	controlgrpc "github.com/AnixOps/anix-control/v4/internal/grpc"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

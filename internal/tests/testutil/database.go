@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

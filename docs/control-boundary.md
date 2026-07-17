@@ -17,32 +17,32 @@ Boundary:
 
 ## Start Here
 
-- [`docs/README.md`](docs/README.md): top-level docs entrypoint
-- [`docs/intro/README.md`](docs/intro/README.md): repository role and deployment boundary
-- [`docs/reference/README.md`](docs/reference/README.md): startup, config, repository layout, and runtime references
-- [`docs/guide/README.md`](docs/guide/README.md): Flux-clone and implementation deep dives
+- [`docs/README.md`](README.md): top-level docs entrypoint
+- [`docs/intro/README.md`](intro/README.md): repository role and deployment boundary
+- [`docs/reference/README.md`](reference/README.md): startup, config, repository layout, and runtime references
+- [`docs/guide/README.md`](guide/README.md): Flux-clone and implementation deep dives
 
 ## Exact Startup Truth
 
 Before you try to start the panel, keep these rules straight:
 
-- the backend always loads [`config/config.yaml`](config/config.yaml) through `-config`
-- local `go run` does not auto-load [`.env`](.env)
+- the backend always loads [`config/config.yaml`](../config/config.yaml) through `-config`
+- local `go run` does not auto-load [`.env`](../.env)
 - `config/config.yaml.forward_runtime` is the canonical runtime entry
 - `InitForwardRuntimeSystemConfig` normalizes the YAML contents and writes them into `v2_system_config`
-- current app bootstrap still expects `jwt.secret`, `app.api_token`, `admin.*`, and database/cache values in [`config/config.yaml`](config/config.yaml)
+- current app bootstrap still expects `jwt.secret`, `app.api_token`, `admin.*`, and database/cache values in [`config/config.yaml`](../config/config.yaml)
 
-If you use [`install.sh`](install.sh) or [`panel_install.sh`](panel_install.sh), those scripts generate [`config/config.yaml`](config/config.yaml) for you. If you skip the installer, fill it manually.
+If you use [`install.sh`](../install.sh) or [`panel_install.sh`](../panel_install.sh), those scripts generate [`config/config.yaml`](../config/config.yaml) for you. If you skip the installer, fill it manually.
 
 ## Fixed Entry Points
 
-- Docker: [`docs/reference/quickstart.md`](docs/reference/quickstart.md)
-- Local dev: [`docs/reference/startup-config.md`](docs/reference/startup-config.md)
-- Runtime config migration: [`docs/reference/forward-runtime-migration.md`](docs/reference/forward-runtime-migration.md)
-- NodeX mode and runtime semantics: [`docs/reference/runtime.md`](docs/reference/runtime.md)
-- Verified relay proof and manual smoke: [`docs/guide/forward-tunnel-smoke-test.md`](docs/guide/forward-tunnel-smoke-test.md)
-- Relay onboarding and acceptance: [`docs/guide/forward-relay-onboarding.md`](docs/guide/forward-relay-onboarding.md)
-- Config examples: [`config/examples/README.md`](config/examples/README.md)
+- Docker: [`docs/reference/quickstart.md`](reference/quickstart.md)
+- Local dev: [`docs/reference/startup-config.md`](reference/startup-config.md)
+- Runtime config migration: [`docs/reference/forward-runtime-migration.md`](reference/forward-runtime-migration.md)
+- NodeX mode and runtime semantics: [`docs/reference/runtime.md`](reference/runtime.md)
+- Verified relay proof and manual smoke: [`docs/guide/forward-tunnel-smoke-test.md`](guide/forward-tunnel-smoke-test.md)
+- Relay onboarding and acceptance: [`docs/guide/forward-relay-onboarding.md`](guide/forward-relay-onboarding.md)
+- Config examples: [`config/examples/README.md`](../config/examples/README.md)
 
 Current verified deployment truth:
 
@@ -71,12 +71,12 @@ Keep the resource split explicit:
 
 ## Repository Index
 
-- [`AGENTS.md`](AGENTS.md): contributor and agent guardrails
-- [`docs/README.md`](docs/README.md): documentation landing page
-- [`docs/reference/repository-layout.md`](docs/reference/repository-layout.md): root ownership and root hygiene rules
-- [`docs/reference/configuration.md`](docs/reference/configuration.md): config source-of-truth and key mapping
-- [`config/examples/README.md`](config/examples/README.md): sample YAML inputs and helper commands
-- [`config/deploy/ansible/README.md`](config/deploy/ansible/README.md): ansible runtime assets
+- [`AGENTS.md`](../AGENTS.md): contributor and agent guardrails
+- [`docs/README.md`](README.md): documentation landing page
+- [`docs/reference/repository-layout.md`](reference/repository-layout.md): root ownership and root hygiene rules
+- [`docs/reference/configuration.md`](reference/configuration.md): config source-of-truth and key mapping
+- [`config/examples/README.md`](../config/examples/README.md): sample YAML inputs and helper commands
+- [`config/deploy/ansible/README.md`](../config/deploy/ansible/README.md): ansible runtime assets
 
 ## Root Hygiene
 

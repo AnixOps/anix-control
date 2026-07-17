@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 )
 
 // forwardRuntimeNodeRole 表示某个后端执行时需要解析的节点角色。

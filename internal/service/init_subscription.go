@@ -3,8 +3,8 @@ package service
 import (
 	"log"
 
-	"github.com/AnixOps/anix-control/v3/internal/database"
-	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 )
 
 // InitSubscriptionDefaults 初始化默认订阅分组和模板

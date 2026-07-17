@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/glebarez/sqlite" // 绾疓o瀹炵幇鐨凷QLite椹卞姩锛屾棤闇€CGO
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

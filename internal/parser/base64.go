@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 )
 
 // Base64Parser Base64 编码的 V2Ray 订阅解析器

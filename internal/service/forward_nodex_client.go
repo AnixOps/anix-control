@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
 )
 

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v3/internal/branding"
+	"github.com/AnixOps/anix-control/v4/internal/branding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

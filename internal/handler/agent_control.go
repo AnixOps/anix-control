@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	agentv1pb "github.com/AnixOps/anix-control/v3/api/grpc/agent/v1"
-	controlgrpc "github.com/AnixOps/anix-control/v3/internal/grpc"
+	agentv1pb "github.com/AnixOps/anix-control/v4/api/grpc/agent/v1"
+	controlgrpc "github.com/AnixOps/anix-control/v4/internal/grpc"
 	"github.com/gin-gonic/gin"
 )
 

@@ -16,7 +16,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/branding"
+	"github.com/AnixOps/anix-control/v4/internal/branding"
 	"golang.org/x/net/proxy"
 )
 

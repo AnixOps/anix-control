@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/AnixOps/anix-control/v3/api/grpc/v2boardpb"
-	"github.com/AnixOps/anix-control/v3/internal/service"
+	pb "github.com/AnixOps/anix-control/v4/api/grpc/v2boardpb"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

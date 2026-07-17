@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	appconfig "github.com/AnixOps/anix-control/v3/internal/config"
-	"github.com/AnixOps/anix-control/v3/internal/handler"
+	appconfig "github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/gin-gonic/gin"
 )
 
@@ -172,7 +172,7 @@ func TestMainBuildInfoLdflagsPopulateHandlerBuildInfo(t *testing.T) {
 		"./cmd/server",
 		"-run", "^TestMainBuildInfoLdflagsPopulateHandlerBuildInfo$",
 		"-count=1",
-		"-ldflags", "-X github.com/AnixOps/anix-control/v3/cmd/server.version=9.8.7 -X github.com/AnixOps/anix-control/v3/cmd/server.buildTime=2026-07-08T00:00:00Z -X github.com/AnixOps/anix-control/v3/cmd/server.buildCode=456 -X github.com/AnixOps/anix-control/v3/cmd/server.commit=abcdef123456",
+		"-ldflags", "-X github.com/AnixOps/anix-control/v4/cmd/server.version=9.8.7 -X github.com/AnixOps/anix-control/v4/cmd/server.buildTime=2026-07-08T00:00:00Z -X github.com/AnixOps/anix-control/v4/cmd/server.buildCode=456 -X github.com/AnixOps/anix-control/v4/cmd/server.commit=abcdef123456",
 	)
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), "V2BOARD_BUILDINFO_LDFLAGS_CHILD=1")

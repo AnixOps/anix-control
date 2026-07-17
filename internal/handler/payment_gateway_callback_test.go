@@ -6,14 +6,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v3/internal/model"
-	"github.com/AnixOps/anix-control/v3/internal/payment"
-	"github.com/AnixOps/anix-control/v3/internal/service"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/payment"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
-	_ "github.com/AnixOps/anix-control/v3/internal/payment/gateways"
+	_ "github.com/AnixOps/anix-control/v4/internal/payment/gateways"
 )
 
 type PaymentGatewayCallbackTestSuite struct {
