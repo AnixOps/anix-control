@@ -24,13 +24,14 @@ in [`docs/architecture/upgrade-program.md`](docs/architecture/upgrade-program.md
 - `4.0.0`: remove the original coupled business/runtime mode and boot as a
   plugin-only platform.
 
-The `v4.0.0-alpha.4` 3.1 evidence slice adds the signed `machine-telemetry`
-1.1.0 Control/Agent/WebUI reference package, real host metric collection,
-capability-checked heartbeat persistence, canary-aware topology planning,
-deadline-safe Agent lifecycle fencing, and a cross-repository process E2E. The
-earlier actor-scoped WebUI authorization slice remains covered. Live staging
-catalog evidence, a fresh 72-hour canary, and explicit stable-release
-authorization remain required; the overall transformation stays in progress.
+The `v4.0.0-alpha.5` slice advances the 3.2 gate with read-only topology
+diagnosis and plan previews, a revision/canary deployment WebUI, deployment
+operation timelines, and the signed crash-safe `nftables-forward` 1.1.0
+package. Its Agent runtime uses a durable ownership journal and signed cleanup
+entrypoint, including isolated `SIGKILL`/restart recovery evidence. Topology
+execution remains off by default. Live staging restore, kernel-observed health,
+legacy fallback rehearsal, rollout records, a fresh 72-hour canary, and
+explicit stable-release authorization remain required.
 
 The older workstreams below remain relevant compatibility and quality work,
 but they do not redefine these release gates. Existing coupled runtime work is

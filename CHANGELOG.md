@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+## 4.0.0-alpha.5 - 2026-07-17
+
+### Added
+
+- Added read-only topology deployment preview and diagnosis with structured
+  DAG, rollout dependency, node assignment, signed Agent release, artifact,
+  dependency, config-schema, nftables runtime, port, address-family, MTU, and
+  secret-reference checks. Deployment status now includes safe operation
+  linkage and an event timeline without returning config or result payloads.
+- Added the admin topology workflow for topology creation, immutable revision
+  editing, server-side diagnosis, config-hash preview, canary rollout-group
+  planning, apply/status polling, and guarded rollback. Unsaved revisions are
+  fenced from preview and deployment actions.
+- Added the signed `nftables-forward` 1.1.0 package contract with one canonical
+  Control/Agent configuration schema, safe observation-only defaults, and
+  `plugin.runtime-state` plus `plugin.cleanup` capabilities. The 1.0.0 Control
+  executor remains registered for rollback compatibility.
+
+### Fixed
+
+- Replaced the incompatible 1.0 package configuration fields with the exact
+  Agent runtime contract and added fail-closed Control semantic admission, so
+  invalid nftables plans are rejected before dispatch.
+- Pinned official package builds and cross-repository tests to Agent commit
+  `2f257730c20743bbad4acaa3e8b1793e4e32f5f0`, which journals the original
+  nftables table, recovers after `SIGKILL` or Agent restart, and restores or
+  removes owned state through the signed cleanup entrypoint.
+
+### Known Gaps
+
+- Topology execution remains disabled by default and this release is limited
+  to isolated canary use. Live staging restore evidence, legacy fallback
+  rehearsal, kernel-observed ruleset health, rollout records, and a fresh
+  72-hour canary are still required before production traffic cutover or a
+  stable 4.0 release.
+
 ## 4.0.0-alpha.4 - 2026-07-17
 
 ### Added

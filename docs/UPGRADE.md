@@ -84,8 +84,8 @@ download:
 Plugin-platform releases may also attach signed official package artifacts.
 The current workflow publishes `machine-telemetry`, `nftables-forward`,
 `gost-mesh`, and `nat-egress`. For each package ID, keep these files together.
-Substitute the exact signed package version; `machine-telemetry` is `1.1.0` in
-alpha.4 while the other official packages remain on their published versions:
+Substitute the exact signed package version. In alpha.5, `machine-telemetry`
+and `nftables-forward` are `1.1.0`; `gost-mesh` and `nat-egress` remain `1.0.0`:
 
 - `<plugin-id>-<plugin-version>.tar`
 - `anixops-<plugin-id>-<plugin-version>.manifest.json`
@@ -132,12 +132,12 @@ match the release record, stop before enabling any plugin flag.
 
 ## Plugin Platform Flags
 
-`v4.0.0-alpha.4` is the current operational signed-package/WebUI canary. It
-supersedes `alpha.3` with the complete signed `machine-telemetry` 1.1.0
-Control/Agent/WebUI path, signed capability admission, real host metrics,
-heartbeat persistence, canary-aware topology planning, and deadline-safe Agent
-Supervisor lifecycle handling. Start the 72-hour observation window again
-after installing `alpha.4`. A fresh alpha configuration enables the Control
+`v4.0.0-alpha.5` is the current operational signed-package/WebUI canary. It
+adds the crash-safe signed `nftables-forward` 1.1.0 runtime, read-only topology
+diagnosis and plan previews, deployment timelines, and the revision/canary
+management UI to the complete `machine-telemetry` path from alpha.4. Start the
+72-hour observation window again
+after installing `alpha.5`. A fresh alpha configuration enables the Control
 package executor and Agent dispatch, while topology execution remains
 disabled. An upgrade preserves the existing configuration, so an existing
 installation is not silently switched to the new path. Enable the alpha flags
