@@ -32,6 +32,26 @@ func newKernelTestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
+func TestEnsureKernelSchemaSeedsOfficialServiceScopes(t *testing.T) {
+	db := newKernelTestDB(t)
+	require.NoError(t, EnsureKernelSchema(db))
+
+	var scopes []model.ServiceScope
+	require.NoError(t, db.Order("id").Find(&scopes).Error)
+	require.Len(t, scopes, 4)
+
+	owners := make(map[string]string, len(scopes))
+	for _, scope := range scopes {
+		owners[scope.ID] = scope.PluginID
+	}
+	require.Equal(t, map[string]string{
+		"forward":      "forward",
+		"monitoring":   "machine-telemetry",
+		"proxy":        "protocol-runtime",
+		"subscription": "subscription",
+	}, owners)
+}
+
 func seedKernelTestRelease(t *testing.T, db *gorm.DB, pluginID, version, target string) {
 	t.Helper()
 	manifest := PluginManifest{
