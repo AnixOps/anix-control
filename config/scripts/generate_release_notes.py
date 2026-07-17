@@ -158,15 +158,15 @@ def run_self_test() -> None:
 
 - A later development change.
 
-## 3.1.0-alpha.1 - 2026-07-17
+## 4.0.0-alpha.1 - 2026-07-17
 
 - The immutable tagged change.
 
-## 3.0.0
+## 3.1.0-alpha.1
 
 - An older release.
 """
-    tagged_section = select_changelog_section(tagged_changelog, DEFAULT_SECTION, "v3.1.0-alpha.1")
+    tagged_section = select_changelog_section(tagged_changelog, DEFAULT_SECTION, "v4.0.0-alpha.1")
     assert "immutable tagged change" in tagged_section
     assert "later development change" not in tagged_section
     assert "older release" not in tagged_section

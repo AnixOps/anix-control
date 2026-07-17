@@ -128,24 +128,28 @@ match the release record, stop before enabling any plugin flag.
 
 ## Plugin Platform Flags
 
-The package platform remains opt-in during the 3.x migration. These defaults
-must stay false in production until the release notes explicitly approve the
-phase:
+`v4.0.0-alpha.1` is the first operational signed-package/WebUI preview. A
+fresh alpha configuration enables the Control package executor and Agent
+dispatch, while topology execution remains disabled. An upgrade preserves the
+existing configuration, so an existing installation is not silently switched
+to the new path. Enable the alpha flags only after importing the official
+release assets, recording checksums/signatures, and selecting a canary node:
 
 ```yaml
 plugins:
-  control_execution_enabled: false
-  dispatch_enabled: false
+  control_execution_enabled: true
+  dispatch_enabled: true
   topology_execution_enabled: false
 ```
 
 Enablement order matters. `topology_execution_enabled=true` is refused unless
-`dispatch_enabled=true`, and neither flag should be enabled before package
-artifacts, signatures, database migration evidence, and canary rollback
-commands are recorded. Enabling topology execution does not by itself approve
-business traffic migration; dedicated forwarding still requires the real
-`nftables-forward` Agent runtime, network-namespace TCP/UDP evidence, and a
-recorded rollout plan.
+`dispatch_enabled=true`. Package artifacts, signatures, database migration
+evidence, canary rollback commands, and a 72-hour observation record are still
+required before any stable rollout. Enabling topology execution does not by
+itself approve business traffic migration; dedicated forwarding still requires
+the real `nftables-forward` Agent runtime, network-namespace TCP/UDP evidence,
+and a recorded rollout plan. Stable 4.0 publication additionally requires
+explicit operator authorization.
 
 `gost-mesh` v1 is canary-only. Its signed package embeds the exact GOST v3.2.6
 runtime and supports QUIC and WSS, not TUIC. Both transports require mutual

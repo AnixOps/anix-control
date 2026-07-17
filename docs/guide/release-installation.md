@@ -134,6 +134,12 @@ The alpha entry point is manual import by design. It does not silently fetch
 untrusted third-party packages or put API keys in package URLs; Agent downloads
 use `X-API-Key` and same-origin, digest-addressed paths.
 
+`v4.0.0-alpha.1` is a canary release. Keep production traffic on the tested
+legacy path while the signed package/WebUI path is observed. Do not publish a
+stable 4.0 release until the package lifecycle, node health, rollback, and
+compatibility checks have passed continuously for 72 hours and the operator
+has explicitly authorized the stable release.
+
 ## Upgrade And Rollback
 
 The installer never overwrites an existing `config/config.yaml` or SQLite data
