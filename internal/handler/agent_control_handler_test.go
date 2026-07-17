@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	agentv1pb "github.com/AnixOps/anix-control/v4/api/grpc/agent/v1"
+	agentv1pb "github.com/AnixOps/anix-agent/sdk/api/grpc/agent/v1"
 	controlgrpc "github.com/AnixOps/anix-control/v4/internal/grpc"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/gin-gonic/gin"

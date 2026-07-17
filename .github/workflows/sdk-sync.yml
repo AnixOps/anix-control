@@ -1,0 +1,69 @@
+name: SDK Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      agent_ref:
+        description: Agent commit, branch, or tag paired with this Control ref
+        required: true
+        default: dev_new
+
+permissions:
+  contents: read
+
+jobs:
+  sdk-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: anix-control
+
+      - uses: actions/checkout@v7
+        with:
+          repository: AnixOps/anix-agent
+          ref: ${{ inputs.agent_ref }}
+          path: anix-agent
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.0"
+
+      - name: Capture Agent Go binary
+        run: |
+          agent_go="$(readlink -f "$(command -v go)")"
+          echo "ANIXOPS_AGENT_GO=${agent_go}" >> "$GITHUB_ENV"
+
+      - name: Initialize workspace
+        run: |
+          go work init ./anix-control ./anix-agent ./anix-agent/sdk
+          sdk_module="github.com/AnixOps/anix-agent/sdk"
+          for module_file in anix-agent/go.mod anix-control/go.mod; do
+            sdk_version="$(awk -v module="${sdk_module}" '$1 == module { print $2; exit }' "${module_file}")"
+            if [[ -n "${sdk_version}" ]]; then
+              go work edit "-replace=${sdk_module}@${sdk_version}=./anix-agent/sdk"
+            fi
+          done
+
+      - name: Test SDK and Agent
+        run: |
+          cd anix-agent/sdk
+          GOWORK="$GITHUB_WORKSPACE/go.work" go test ./... -count=1
+          cd ..
+          GOEXPERIMENT=jsonv2 GOWORK="$GITHUB_WORKSPACE/go.work" go test ./api/agent ./node -count=1
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.5"
+
+      - name: Run real cross-repository E2E
+        working-directory: anix-control
+        env:
+          ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/anix-agent
+          ANIXOPS_AGENT_GO: ${{ env.ANIXOPS_AGENT_GO }}
+          ANIXOPS_CROSS_REPO_E2E: "1"
+          GOWORK: ${{ github.workspace }}/go.work
+        run: >-
+          go test ./internal/grpc
+          -run '^(TestKernelOperationBridgeCrossRepositoryAgentProcess|TestAgentPluginPackageCrossRepositoryE2E)$'
+          -count=1 -timeout 10m

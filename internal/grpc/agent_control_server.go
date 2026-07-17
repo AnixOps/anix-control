@@ -14,7 +14,8 @@ import (
 	"sync"
 	"time"
 
-	agentv1pb "github.com/AnixOps/anix-control/v4/api/grpc/agent/v1"
+	agentcontrol "github.com/AnixOps/anix-agent/sdk/agentcontrol"
+	agentv1pb "github.com/AnixOps/anix-agent/sdk/api/grpc/agent/v1"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"google.golang.org/grpc/codes"
@@ -24,7 +25,7 @@ import (
 )
 
 const (
-	AgentProtocolVersion                 = "anix.agent.v1"
+	AgentProtocolVersion                 = agentcontrol.ProtocolV1
 	defaultAgentHeartbeatIntervalSeconds = uint32(20)
 )
 
@@ -621,13 +622,8 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 	if strings.TrimSpace(hello.AgentVersion) == "" {
 		return status.Error(codes.InvalidArgument, "hello agent_version is required")
 	}
-	if len(hello.Capabilities) == 0 {
-		return status.Error(codes.InvalidArgument, "hello capabilities are required")
-	}
-	for _, capability := range hello.Capabilities {
-		if capability == nil || strings.TrimSpace(capability.Name) == "" {
-			return status.Error(codes.InvalidArgument, "capability name is required")
-		}
+	if err := agentcontrol.ValidateCapabilities(hello.Capabilities); err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
 	now := time.Now()
@@ -870,12 +866,7 @@ func cloneCapabilities(capabilities []*agentv1pb.Capability) []*agentv1pb.Capabi
 }
 
 func connectionSupportsOperation(connection *AgentControlConnection, kind string) bool {
-	for _, capability := range connection.Capabilities {
-		if capability != nil && capability.Name == kind {
-			return true
-		}
-	}
-	return false
+	return agentcontrol.HasCapability(connection.Capabilities, kind)
 }
 
 func newAgentControlID(prefix string) string {
