@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -123,6 +124,44 @@ func TestKernelCreateAccessGroupPreservesExplicitDisabledState(t *testing.T) {
 	var group model.AccessGroup
 	require.NoError(t, db.First(&group, "scope_id = ? AND name = ?", "forward", "disabled").Error)
 	require.False(t, group.Enabled)
+}
+
+func TestKernelGetAccessGroupDetailReturnsOnlyMembershipIdentityAndPolicies(t *testing.T) {
+	db := newKernelHandlerTestDB(t, &model.User{}, &model.Plan{})
+	group := model.AccessGroup{ScopeID: "forward", Name: "canary-operators", Description: "Canary access", Enabled: true}
+	require.NoError(t, db.Create(&group).Error)
+	user := model.User{Email: "operator@example.com", Password: "not-returned", Token: "user-token", UUID: "user-uuid"}
+	plan := model.Plan{Name: "Canary plan"}
+	require.NoError(t, db.Create(&user).Error)
+	require.NoError(t, db.Create(&plan).Error)
+	require.NoError(t, db.Create(&model.AccessGroupUser{GroupID: group.ID, UserID: user.ID}).Error)
+	require.NoError(t, db.Create(&model.AccessGroupPlan{GroupID: group.ID, PlanID: plan.ID}).Error)
+	require.NoError(t, db.Create(&model.ResourceGrant{
+		GroupID: group.ID, ResourceType: service.PluginAPIGrantResourceType, ResourceID: "machine-telemetry",
+		Permissions: `["machine-telemetry.api"]`,
+	}).Error)
+	require.NoError(t, db.Create(&model.QuotaPolicy{GroupID: group.ID, Key: "machine-telemetry.rate", PolicyJSON: `{"requests_per_minute":60}`}).Error)
+
+	path := "/access-groups/" + strconv.FormatUint(uint64(group.ID), 10)
+	recorder := performKernelHandlerRequest(t, http.MethodGet, path, "", "/access-groups/:id", (&KernelHandler{db: db}).GetAccessGroupDetail)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+
+	var payload struct {
+		Data accessGroupDetailResponse `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &payload))
+	require.Equal(t, group.ID, payload.Data.Group.ID)
+	require.Equal(t, []accessGroupUserSummary{{ID: user.ID, Email: user.Email}}, payload.Data.Users)
+	require.Equal(t, []accessGroupPlanSummary{{ID: plan.ID, Name: plan.Name}}, payload.Data.Plans)
+	require.Len(t, payload.Data.ResourceGrants, 1)
+	require.Equal(t, group.ID, payload.Data.ResourceGrants[0].GroupID)
+	require.Len(t, payload.Data.QuotaPolicies, 1)
+	require.Equal(t, "machine-telemetry.rate", payload.Data.QuotaPolicies[0].Key)
+	require.NotContains(t, recorder.Body.String(), user.Password)
+	require.NotContains(t, recorder.Body.String(), user.Token)
+
+	notFound := performKernelHandlerRequest(t, http.MethodGet, "/access-groups/999", "", "/access-groups/:id", (&KernelHandler{db: db}).GetAccessGroupDetail)
+	require.Equal(t, http.StatusNotFound, notFound.Code, notFound.Body.String())
 }
 
 func TestKernelListExtensionsReturnsEmptyCatalogWithoutTrustRoot(t *testing.T) {

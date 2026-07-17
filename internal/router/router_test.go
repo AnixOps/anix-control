@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -103,6 +104,42 @@ func TestSetup_V3KernelAccessGroupsRequireAdminAndPersistScope(t *testing.T) {
 	r.ServeHTTP(listed, listRequest)
 	require.Equal(t, http.StatusOK, listed.Code, listed.Body.String())
 	assert.Contains(t, listed.Body.String(), "canary")
+}
+
+func TestSetup_V3KernelAccessGroupDetailUsesStaticResolveRouteAndProtectedDetailRoute(t *testing.T) {
+	r, cfg := setupTestRouter(t)
+	defer teardownTestRouter(t)
+	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+	require.NoError(t, database.GetDB().AutoMigrate(&model.User{}, &model.Plan{}))
+
+	group := model.AccessGroup{ScopeID: "forward", Name: "detail", Enabled: true}
+	user := model.User{Email: "detail@example.com", Token: "detail-token", UUID: "detail-uuid"}
+	plan := model.Plan{Name: "Detail plan"}
+	require.NoError(t, database.GetDB().Create(&group).Error)
+	require.NoError(t, database.GetDB().Create(&user).Error)
+	require.NoError(t, database.GetDB().Create(&plan).Error)
+	require.NoError(t, database.GetDB().Create(&model.AccessGroupUser{GroupID: group.ID, UserID: user.ID}).Error)
+	require.NoError(t, database.GetDB().Create(&model.AccessGroupPlan{GroupID: group.ID, PlanID: plan.ID}).Error)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v3/access-groups/"+strconv.FormatUint(uint64(group.ID), 10), nil)
+	unauthenticated := httptest.NewRecorder()
+	r.ServeHTTP(unauthenticated, request)
+	require.Equal(t, http.StatusUnauthorized, unauthenticated.Code)
+
+	token, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
+	require.NoError(t, err)
+	request.Header.Set("Authorization", "Bearer "+token)
+	detail := httptest.NewRecorder()
+	r.ServeHTTP(detail, request)
+	require.Equal(t, http.StatusOK, detail.Code, detail.Body.String())
+	require.Contains(t, detail.Body.String(), "detail@example.com")
+	require.Contains(t, detail.Body.String(), "Detail plan")
+
+	resolveRequest := httptest.NewRequest(http.MethodGet, "/api/v3/access-groups/resolve?user_id=1&scope_id=forward", nil)
+	resolveRequest.Header.Set("Authorization", "Bearer "+token)
+	resolved := httptest.NewRecorder()
+	r.ServeHTTP(resolved, resolveRequest)
+	require.Equal(t, http.StatusOK, resolved.Code, resolved.Body.String())
 }
 
 func TestSetup_V3KernelOperationIsIdempotent(t *testing.T) {

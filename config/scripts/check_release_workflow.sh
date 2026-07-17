@@ -86,6 +86,102 @@ require_release_job_dependency() {
   fail "release binary job must depend on ${dependency}"
 }
 
+job_block() {
+  local job_name="$1"
+
+  awk -v header="  ${job_name}:" '
+    $0 == header { in_job = 1; next }
+    in_job && /^  [[:alnum:]_-]+:$/ { exit }
+    in_job { print }
+  ' "${WORKFLOW_PATH}"
+}
+
+require_job_dependency() {
+  local job_name="$1"
+  local dependency="$2"
+  local block
+  local needs_line
+
+  block="$(job_block "${job_name}")"
+  needs_line="$(grep -E '^[[:space:]]*needs:[[:space:]]*\[' <<<"${block}" || true)"
+  if [[ -n "${needs_line}" && "${needs_line}" == *"${dependency}"* ]]; then
+    echo "ok: ${job_name} job depends on ${dependency}"
+    return 0
+  fi
+
+  fail "${job_name} job must depend on ${dependency}"
+}
+
+frontend_build_block() {
+  awk '
+    /^  frontend-build:/ { in_job = 1; next }
+    in_job && /^  [A-Za-z0-9_-]+:/ { exit }
+    in_job { print }
+  ' "${WORKFLOW_PATH}"
+}
+
+require_live_control_webui_gate() {
+  local block
+  block="$(frontend_build_block)"
+  if [[ -z "${block}" ]]; then
+    fail "frontend-build job is missing"
+    return 1
+  fi
+
+  local required
+  for required in \
+    "actions/checkout@v7" \
+    "actions/setup-go@v6" \
+    "actions/setup-python@v6" \
+    "actions/setup-node@v6" \
+    "npm ci" \
+    "npx playwright install --with-deps chromium" \
+    "npx playwright test --config playwright.live-control.config.js"; do
+    if ! grep -Fq -- "${required}" <<<"${block}"; then
+      fail "frontend-build live Control WebUI gate is missing: ${required}"
+      return 1
+    fi
+  done
+
+  echo "ok: live Control signed WebUI E2E gate dependencies"
+}
+
+require_release_stage_tag_gate() {
+  local tag_gate_block
+  local normalized
+
+  tag_gate_block="$(awk '
+    /^  tag-gate:$/ { in_job = 1 }
+    in_job && /^  [[:alnum:]_-]+:$/ && $0 != "  tag-gate:" { exit }
+    in_job { print }
+  ' "${WORKFLOW_PATH}")"
+  normalized="$(printf '%s\n' "${tag_gate_block}" | tr '\n' ' ' | sed 's/\\//g' | tr -s ' ')"
+
+  if ! grep -Fq 'python3 config/scripts/check_release_stage.py' <<<"${normalized}"; then
+    fail "missing product release-stage scope gate"
+    return 1
+  fi
+  if ! grep -Fq -- '--tag "${GITHUB_REF_NAME}"' <<<"${normalized}" \
+    || ! grep -Fq -- '--github-output "${stage_output}"' <<<"${normalized}" \
+    || ! grep -Fq 'cat "${stage_output}" >> "$GITHUB_OUTPUT"' <<<"${normalized}"; then
+    fail "missing release-stage GitHub output relay"
+    return 1
+  fi
+  if ! grep -Fq 'release_eligible: ${{ steps.check.outputs.release_eligible }}' <<<"${tag_gate_block}" \
+    || ! grep -Fq 'grep -Fxq "release_eligible=true" "${stage_output}"' <<<"${tag_gate_block}" \
+    || ! grep -Fq 'grep -Fxq "release_eligible=false" "${stage_output}"' <<<"${tag_gate_block}" \
+    || ! grep -Fq 'grep -Fxq "release_stage_classification=historical-preview" "${stage_output}"' <<<"${tag_gate_block}"; then
+    fail "missing publishable versus audit-only release-stage decision"
+    return 1
+  fi
+  if ! grep -Fq 'Historical preview tag audited; release-only jobs are disabled' <<<"${tag_gate_block}"; then
+    fail "missing historical preview audit-only release gate"
+    return 1
+  fi
+
+  echo "ok: product release-stage scope gate distinguishes publishable and audit-only tags"
+}
+
 check_release_workflow() {
   local failed=0
 
@@ -94,7 +190,10 @@ check_release_workflow() {
   require_text "tags: [ 'v*.*.*' ]" "tag trigger pattern" || failed=1
   require_text '^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$' "stable and prerelease tag gate" || failed=1
   require_text "python3 config/scripts/check_release_version.py --tag" "release tag/source version consistency gate" || failed=1
+  require_release_stage_tag_gate || failed=1
+  require_text "python3 config/scripts/check_release_stage.py --self-test" "release-stage contract self-test" || failed=1
   require_text "needs.tag-gate.outputs.is_release_tag == 'true'" "release-only job gate" || failed=1
+  require_job_dependency docker plugin-package-publish || failed=1
 
   for dependency in \
     go-quality \
@@ -127,6 +226,7 @@ check_release_workflow() {
 
   require_text "release-binary-\${{ matrix.goos }}-\${{ matrix.goarch }}" "per-platform release binary artifact upload" || failed=1
   require_text "name: frontend-dist" "frontend artifact download/upload contract" || failed=1
+  require_live_control_webui_gate || failed=1
   require_text "anix-control-frontend.tar.gz" "primary frontend tar archive" || failed=1
   require_text "anix-control-frontend.zip" "primary frontend zip archive" || failed=1
   reject_text "v2board-frontend.tar.gz" "legacy frontend release alias" || failed=1
@@ -166,14 +266,17 @@ check_release_workflow() {
   require_text "Publish Signed Official Plugin Packages" "signed official plugin package publish job" || failed=1
   require_text "ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY" "production plugin signing secret" || failed=1
   require_text "scripts/sign_plugin_release.sh" "production plugin signing script" || failed=1
-  require_text "machine-telemetry-signed-release" "signed plugin release artifact" || failed=1
-  require_text "nftables-forward-signed-release" "signed nftables forward plugin release artifact" || failed=1
-  require_text "gost-mesh-signed-release" "signed GOST mesh plugin release artifact" || failed=1
-  require_text "nat-egress-signed-release" "signed NAT egress plugin release artifact" || failed=1
-  require_text "anixops-machine-telemetry-1.1.0.SHA256SUMS.txt" "signed plugin checksum evidence" || failed=1
-  require_text "anixops-nftables-forward-1.2.0.SHA256SUMS.txt" "signed nftables forward checksum evidence" || failed=1
-  require_text "anixops-gost-mesh-1.0.0.SHA256SUMS.txt" "signed GOST mesh checksum evidence" || failed=1
-  require_text "anixops-nat-egress-1.0.0.SHA256SUMS.txt" "signed NAT egress checksum evidence" || failed=1
+  require_text "release_package_ids: \${{ steps.check.outputs.release_package_ids }}" "tag-gate package id output" || failed=1
+  require_text "release_package_scope: \${{ steps.check.outputs.release_package_scope }}" "tag-gate package scope output" || failed=1
+  require_text "RELEASE_PACKAGE_IDS: \${{ needs.tag-gate.outputs.release_package_ids }}" "stage-selected package publish input" || failed=1
+  require_text "has_package()" "stage-selected package build guard" || failed=1
+  require_text "Upload declared signed package releases" "stage-selected signed package upload" || failed=1
+  require_text "name: signed-plugin-releases" "single declared package artifact" || failed=1
+  require_text "Download declared signed plugin packages" "stage-selected package release download" || failed=1
+  reject_text "machine-telemetry-signed-release" "legacy unconditional telemetry artifact" || failed=1
+  reject_text "nftables-forward-signed-release" "legacy unconditional nftables artifact" || failed=1
+  reject_text "gost-mesh-signed-release" "legacy unconditional GOST artifact" || failed=1
+  reject_text "nat-egress-signed-release" "legacy unconditional NAT artifact" || failed=1
   require_text "GOST_VERSION: '3.2.6'" "pinned GOST runtime version" || failed=1
   require_text "b39037b0380ea001fb3c0c28441c2e10bfc694f90682739a65b53e55dce5238b" "pinned GOST archive checksum" || failed=1
   require_text "a2aea24efb4597b5f57b35b8e1bbcc59f439b80723854d4371f6828b46682ffb" "pinned GOST binary checksum" || failed=1
@@ -181,27 +284,10 @@ check_release_workflow() {
   require_text "packages/gost-mesh/build.py build" "deterministic GOST mesh package build" || failed=1
   require_text "./cmd/nat-egress" "NAT egress Agent release binary build" || failed=1
   require_text "packages/nat-egress/build.py build" "deterministic NAT egress package build" || failed=1
-  require_text "Download signed Machine Telemetry package" "signed plugin release download" || failed=1
-  require_text "Download signed nftables Forward package" "signed nftables forward release download" || failed=1
-  require_text "Download signed GOST Mesh package" "signed GOST mesh release download" || failed=1
-  require_text "Download signed NAT Egress package" "signed NAT egress release download" || failed=1
-  require_text "--require machine-telemetry-1.1.0.tar" "signed plugin package verification requirement" || failed=1
-  require_text "--require nftables-forward-1.2.0.tar" "signed nftables forward package verification requirement" || failed=1
-  require_text "--require gost-mesh-1.0.0.tar" "signed GOST mesh package verification requirement" || failed=1
-  require_text "--require anixops-gost-mesh-1.0.0.manifest.json" "signed GOST mesh manifest verification requirement" || failed=1
-  require_text "--require anixops-gost-mesh-1.0.0.sig" "signed GOST mesh signature verification requirement" || failed=1
-  require_text "--require anixops-gost-mesh-1.0.0.public-key.pem" "signed GOST mesh PEM key verification requirement" || failed=1
-  require_text "--require anixops-gost-mesh-1.0.0.public-key.raw" "signed GOST mesh raw key verification requirement" || failed=1
-  require_text "--require anixops-gost-mesh-1.0.0.SHA256SUMS.txt" "signed GOST mesh checksum verification requirement" || failed=1
-  require_text "--require nat-egress-1.0.0.tar" "signed NAT egress package verification requirement" || failed=1
-  require_text "--require anixops-nat-egress-1.0.0.manifest.json" "signed NAT egress manifest verification requirement" || failed=1
-  require_text "--require anixops-nat-egress-1.0.0.sig" "signed NAT egress signature verification requirement" || failed=1
-  require_text "--require anixops-nat-egress-1.0.0.public-key.pem" "signed NAT egress PEM key verification requirement" || failed=1
-  require_text "--require anixops-nat-egress-1.0.0.public-key.raw" "signed NAT egress raw key verification requirement" || failed=1
-  require_text "--require anixops-nat-egress-1.0.0.SHA256SUMS.txt" "signed NAT egress checksum verification requirement" || failed=1
-  # Markdown backticks must remain literal.
-  # shellcheck disable=SC2016
-  require_text 'The signed `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress` packages' "release notes include GOST mesh and NAT egress" || failed=1
+  require_text "package_requirements=()" "stage-selected package verification accumulator" || failed=1
+  require_text "require_package_assets()" "stage-selected package artifact verification" || failed=1
+  require_text "release workflow has no artifact verifier for declared package" "fail-closed package verifier coverage" || failed=1
+  require_text "The signed official package IDs for this product stage" "stage-scoped release notes" || failed=1
   require_text "canary-only until Secret ID" "GOST mesh stable-release limitation" || failed=1
   require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
   require_text "ref: 45eefa510d43ed061a4b7958dd31031e2be444ad" "pinned Agent fixture commit" || failed=1
@@ -260,10 +346,42 @@ env:
 
 jobs:
   tag-gate:
+    outputs:
+      release_eligible: ${{ steps.check.outputs.release_eligible }}
+      release_package_ids: ${{ steps.check.outputs.release_package_ids }}
+      release_package_scope: ${{ steps.check.outputs.release_package_scope }}
     steps:
       - run: |
           [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]
-          python3 config/scripts/check_release_version.py --tag "${GITHUB_REF_NAME}"
+          stage_output="$(mktemp)"
+          python3 config/scripts/check_release_stage.py \
+            --tag "${GITHUB_REF_NAME}" \
+            --github-output "${stage_output}"
+          cat "${stage_output}" >> "$GITHUB_OUTPUT"
+          if grep -Fxq "release_eligible=true" "${stage_output}"; then
+            python3 config/scripts/check_release_version.py --tag "${GITHUB_REF_NAME}"
+            echo "is_release_tag=true" >> "$GITHUB_OUTPUT"
+          else
+            grep -Fxq "release_eligible=false" "${stage_output}"
+            grep -Fxq "release_stage_classification=historical-preview" "${stage_output}"
+            echo "is_release_tag=false" >> "$GITHUB_OUTPUT"
+            echo "Historical preview tag audited; release-only jobs are disabled: ${GITHUB_REF_NAME}"
+          fi
+
+  deploy-script-test:
+    steps:
+      - run: python3 config/scripts/check_release_stage.py --self-test
+
+  frontend-build:
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+      - uses: actions/setup-python@v6
+      - uses: actions/setup-node@v6
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run live Control signed WebUI E2E gate
+        run: npx playwright test --config playwright.live-control.config.js
 
   release-binaries:
     needs: [go-quality, go-lint, go-security, go-race, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, plugin-package-publish, forward-runtime-test, grpc-test, cross-repository-agent-e2e, cmd-test, tag-gate]
@@ -289,6 +407,7 @@ jobs:
           name: release-binary-${{ matrix.goos }}-${{ matrix.goarch }}
 
   docker:
+    needs: [backend-build, frontend-build, plugin-package-publish, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     steps:
       - run: |
@@ -340,25 +459,25 @@ jobs:
     name: Publish Signed Official Plugin Packages
     needs: [tag-gate, plugin-package-release-test, cross-repository-agent-e2e]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    env:
+      RELEASE_PACKAGE_IDS: ${{ needs.tag-gate.outputs.release_package_ids }}
+      RELEASE_PACKAGE_SCOPE: ${{ needs.tag-gate.outputs.release_package_scope }}
     steps:
       - env:
           ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
         run: |
           scripts/sign_plugin_release.sh
+          has_package() { [[ ",${RELEASE_PACKAGE_IDS}," == *",$1,"* ]]; }
           go -C V2bX_AnixOps build -o package-build/gost-mesh-agent ./cmd/gost-mesh
           python3 packages/gost-mesh/build.py build \
             --agent-binary package-build/gost-mesh-agent \
             --gost package-build/gost
           go -C V2bX_AnixOps build ./cmd/nat-egress
           python3 packages/nat-egress/build.py build
-          echo "machine-telemetry-signed-release"
-          echo "nftables-forward-signed-release"
-          echo "gost-mesh-signed-release"
-          echo "nat-egress-signed-release"
-          echo "anixops-machine-telemetry-1.1.0.SHA256SUMS.txt"
-          echo "anixops-nftables-forward-1.2.0.SHA256SUMS.txt"
-          echo "anixops-gost-mesh-1.0.0.SHA256SUMS.txt"
-          echo "anixops-nat-egress-1.0.0.SHA256SUMS.txt"
+      - name: Upload declared signed package releases
+        uses: actions/upload-artifact@v7
+        with:
+          name: signed-plugin-releases
 
   cross-repository-agent-e2e:
     name: Control to Agent Process E2E
@@ -376,6 +495,9 @@ jobs:
   release:
     needs: [frontend-build, release-binaries, docker, plugin-package-publish, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    env:
+      RELEASE_PACKAGE_IDS: ${{ needs.tag-gate.outputs.release_package_ids }}
+      RELEASE_PACKAGE_SCOPE: ${{ needs.tag-gate.outputs.release_package_scope }}
     steps:
       - uses: anchore/sbom-action@v0.24.0
         with:
@@ -388,26 +510,15 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: migration-dry-run-report
-      - name: Download signed Machine Telemetry package
+      - name: Download declared signed plugin packages
         uses: actions/download-artifact@v8
         with:
-          name: machine-telemetry-signed-release
-      - name: Download signed nftables Forward package
-        uses: actions/download-artifact@v8
-        with:
-          name: nftables-forward-signed-release
-      - name: Download signed GOST Mesh package
-        uses: actions/download-artifact@v8
-        with:
-          name: gost-mesh-signed-release
-      - name: Download signed NAT Egress package
-        uses: actions/download-artifact@v8
-        with:
-          name: nat-egress-signed-release
+          name: signed-plugin-releases
       - run: |
           cp migration-dry-run.txt release/migration-dry-run.txt
           echo "No Local Release Builds" > release/OPERATOR_DEPLOYMENT.md
-          echo 'The signed `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress` packages are attached; gost-mesh is canary-only until Secret ID materialization is complete.' >> release/OPERATOR_DEPLOYMENT.md
+          echo 'The signed official package IDs for this product stage are attached.' >> release/OPERATOR_DEPLOYMENT.md
+          echo 'gost-mesh is canary-only until Secret ID materialization is complete.' >> release/OPERATOR_DEPLOYMENT.md
           cp docs/UPGRADE.md release/UPGRADE.md
           cp packages/machine-telemetry/verify_signature.py release/verify-machine-telemetry-signature.py
           tar -czvf release/anix-control-frontend.tar.gz -C web/public .
@@ -417,7 +528,8 @@ jobs:
           python3 config/scripts/generate_release_notes.py \
             --changelog CHANGELOG.md \
             --output release/RELEASE_NOTES.md
-          echo 'The signed `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress` packages are attached; gost-mesh is canary-only until Secret ID materialization is complete.' >> release/RELEASE_NOTES.md
+          echo 'The signed official package IDs for this product stage are attached.' >> release/RELEASE_NOTES.md
+          echo 'gost-mesh is canary-only until Secret ID materialization is complete.' >> release/RELEASE_NOTES.md
       - name: Generate release manifest
         run: |
           python3 config/scripts/generate_release_manifest.py \
@@ -430,6 +542,9 @@ jobs:
           (cd release && sha256sum * > SHA256SUMS.txt)
       - name: Verify release artifacts
         run: |
+          package_requirements=()
+          require_package_assets() { :; }
+          echo "release workflow has no artifact verifier for declared package"
           python3 config/scripts/verify_release_artifacts.py \
             --require OPERATOR_DEPLOYMENT.md \
             --require UPGRADE.md \
@@ -437,20 +552,7 @@ jobs:
             --require RELEASE_NOTES.md \
             --require anix-control-linux-amd64.tar.gz \
             --require anix-control-windows-arm64.exe.zip \
-            --require machine-telemetry-1.1.0.tar \
-            --require nftables-forward-1.2.0.tar \
-            --require gost-mesh-1.0.0.tar \
-            --require anixops-gost-mesh-1.0.0.manifest.json \
-            --require anixops-gost-mesh-1.0.0.sig \
-            --require anixops-gost-mesh-1.0.0.public-key.pem \
-            --require anixops-gost-mesh-1.0.0.public-key.raw \
-            --require anixops-gost-mesh-1.0.0.SHA256SUMS.txt \
-            --require nat-egress-1.0.0.tar \
-            --require anixops-nat-egress-1.0.0.manifest.json \
-            --require anixops-nat-egress-1.0.0.sig \
-            --require anixops-nat-egress-1.0.0.public-key.pem \
-            --require anixops-nat-egress-1.0.0.public-key.raw \
-            --require anixops-nat-egress-1.0.0.SHA256SUMS.txt
+            "${package_requirements[@]}"
       - uses: softprops/action-gh-release@v3
         with:
           files: release/*
@@ -462,10 +564,24 @@ EOF
     return 1
   fi
 
+  cp "${fixture}" "${fixture}.missing-docker-package-dependency"
+  sed -i 's/needs: \[backend-build, frontend-build, plugin-package-publish, tag-gate\]/needs: [backend-build, frontend-build, tag-gate]/' "${fixture}.missing-docker-package-dependency"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-docker-package-dependency" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: Docker release push without signed package publish dependency should fail" >&2
+    return 1
+  fi
+
   cp "${fixture}" "${fixture}.missing-platform"
   sed -i '/goos: darwin/{N;N;d;}' "${fixture}.missing-platform"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-platform" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing release platform should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-stage-contract"
+  sed -i '/check_release_stage.py/d' "${fixture}.missing-stage-contract"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-stage-contract" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing release-stage contract gate should fail" >&2
     return 1
   fi
 
@@ -494,6 +610,13 @@ EOF
   sed -i '/plugin-package-release-test/d;/Plugin Package Release Contracts/d;/packages\/machine-telemetry\/tests\/release_gate.sh/d;/packages\/nftables-forward\/tests\/release_gate.sh/d;/packages\/nftables-forward\/tests\/webui_smoke.mjs/d;/plugin-package-contract-reports/d;/nftables-forward-package-contract.txt/d' "${fixture}.missing-plugin-package-gate"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-plugin-package-gate" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing plugin package gate should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-live-control-webui-gate"
+  sed -i '/playwright.live-control.config.js/d' "${fixture}.missing-live-control-webui-gate"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-live-control-webui-gate" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing live Control WebUI gate should fail" >&2
     return 1
   fi
 

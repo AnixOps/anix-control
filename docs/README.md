@@ -16,6 +16,7 @@ Use this tree like NodeX:
 - Feature status register: [`features.md`](features.md)
 - Plugin platform roadmap: [`architecture/plugin-platform-roadmap.md`](architecture/plugin-platform-roadmap.md)
 - Major upgrade execution program: [`architecture/upgrade-program.md`](architecture/upgrade-program.md)
+- Product version line and delivery status: [`architecture/release-line-status.md`](architecture/release-line-status.md)
 - Plugin kernel contract: [`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-contract.md)
 - Brand and compatibility migration: [`BRAND_MIGRATION.md`](BRAND_MIGRATION.md)
 - Upgrade runbook: [`UPGRADE.md`](UPGRADE.md)

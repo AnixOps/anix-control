@@ -81,12 +81,13 @@ download:
 - `migration-dry-run.txt`
 - `anix-control-source.sbom.spdx.json`
 
-Plugin-platform releases may also attach signed official package artifacts.
-The current workflow publishes `machine-telemetry`, `nftables-forward`,
-`gost-mesh`, and `nat-egress`. For each package ID, keep these files together.
-Substitute the exact signed package version. In alpha.6, `machine-telemetry`
-is `1.1.0` and `nftables-forward` is `1.2.0`; `gost-mesh` and `nat-egress`
-remain `1.0.0`:
+Plugin-platform releases may also attach signed official package artifacts. The
+asset set is defined by the target product stage, not by every package source
+present in the repository. Formal 3.1 releases attach only
+`machine-telemetry`; `nftables-forward`, `gost-mesh`, and `nat-egress` begin
+at their later stages. Historical `v4.0.0-alpha.*` assets retain their original
+package sets only as frozen preview evidence. For each attached package ID,
+keep these files together:
 
 - `<plugin-id>-<plugin-version>.tar`
 - `anixops-<plugin-id>-<plugin-version>.manifest.json`
@@ -133,16 +134,21 @@ match the release record, stop before enabling any plugin flag.
 
 ## Plugin Platform Flags
 
-`v4.0.0-alpha.7` is the current operational signed-package/WebUI canary. It
-adds the signed `nftables-forward` 1.2.0 runtime observation contract: live
-ruleset SHA-256 and per-rule counters are persisted from Agent heartbeats and
-are required by topology promotion for that package. Start the 72-hour
-observation window again after installing `alpha.7`. A fresh alpha configuration enables the Control
-package executor and Agent dispatch, while topology execution remains
-disabled. An upgrade preserves the existing configuration, so an existing
-installation is not silently switched to the new path. Enable the alpha flags
-only after importing the official release assets, recording
-checksums/signatures, and selecting a canary node:
+`v4.0.0-alpha.7` is a historical signed-package/WebUI canary artifact, not a
+formal 4.0 release. This section applies only when operating that exact frozen
+artifact. The formal product line resumes at `v3.1.0-alpha.2` and must pass the
+3.1 through 3.5 gates before a plugin-only 4.0 cutover. See
+[`architecture/release-line-status.md`](architecture/release-line-status.md).
+
+The historical artifact adds the signed `nftables-forward` 1.2.0 runtime
+observation contract: live ruleset SHA-256 and per-rule counters are persisted
+from Agent heartbeats and are required by topology promotion for that package.
+Start the 72-hour observation window again after installing `alpha.7`. A fresh
+alpha configuration enables the Control package executor and Agent dispatch,
+while topology execution remains disabled. An upgrade preserves the existing
+configuration, so an existing installation is not silently switched to the new
+path. Enable the alpha flags only after importing the official release assets,
+recording checksums/signatures, and selecting a canary node:
 
 ```yaml
 plugins:

@@ -17,6 +17,15 @@ grpc_host: "grpc.example.com:50051"
 grpc_use_tls: true
 grpc_server_name: "grpc.example.com"       # TLS SNI, 不填默认取 grpc_host 的主机名
 
+# ---- 官方签名插件 Supervisor 灰度（默认关闭）---------------------------------
+# 仅在 TLS gRPC 或实际回环 gRPC 主机上启用；不要为外部明文 gRPC 开启。
+agent_control_enabled: false
+agent_control_allow_insecure: false
+plugin_supervisor_enabled: false
+# plugin_root: "/var/lib/anixops/plugins"
+# plugin_socket_dir: "/run/anixops/plugins"
+# plugin_official_public_key: "<BASE64_ED25519_PUBLIC_KEY>"
+
 # ---- 拉取节点 ApiKey 用的面板管理端地址 -------------------------------------
 # playbook 会调 GET {{panel_api_base}}/api/v2/admin/nodes/{{node_id}}/credentials
 # 自动取每个节点的 api_key(需要 admin_token, 见下)。

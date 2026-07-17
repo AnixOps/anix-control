@@ -33,6 +33,10 @@ function mountNodes() {
   })
 }
 
+function parseAgentConfigSnippet(snippet) {
+  return JSON.parse(String(snippet).slice(String(snippet).indexOf('\n') + 1))
+}
+
 describe('Nodes.vue', () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -173,6 +177,123 @@ describe('Nodes.vue', () => {
 
     await wrapper.vm.openDeployModal()
     expect(wrapper.vm.deployRows[0].apiKey).toBe('node-api-key')
+  })
+
+  it('keeps the Plugin Supervisor canary off by default and emits its complete Agent config only after explicit opt-in', async () => {
+    const wrapper = mountNodes()
+    await flushPromises()
+
+    let config = parseAgentConfigSnippet(wrapper.vm.configSnippet)
+    expect(config.Nodes[0]).not.toHaveProperty('PluginSupervisorEnabled')
+    expect(config.Nodes[0]).not.toHaveProperty('PluginRoot')
+    expect(config.Nodes[0]).not.toHaveProperty('PluginSocketDir')
+    expect(config.Nodes[0]).not.toHaveProperty('PluginOfficialPublicKey')
+
+    await wrapper.vm.openDeployModal()
+    await wrapper.vm.$nextTick()
+
+    const toggle = wrapper.get('[data-testid="plugin-supervisor-enabled"]')
+    expect(toggle.element.checked).toBe(false)
+    await toggle.setValue(true)
+
+    expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(false)
+    expect(wrapper.get('[data-testid="plugin-root"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="plugin-socket-dir"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="plugin-official-public-key"]').exists()).toBe(true)
+
+    Object.assign(wrapper.vm.deploySettings, {
+      grpcUseTLS: true,
+      pluginRoot: '/var/lib/anixops/plugins',
+      pluginSocketDir: '/run/anixops/plugins',
+      pluginOfficialPublicKey: 'IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M='
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(true)
+    config = parseAgentConfigSnippet(wrapper.vm.configSnippet)
+    expect(config.Nodes[0]).toMatchObject({
+      AgentControlEnabled: true,
+      PluginSupervisorEnabled: true,
+      PluginRoot: '/var/lib/anixops/plugins',
+      PluginSocketDir: '/run/anixops/plugins',
+      PluginOfficialPublicKey: 'IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M='
+    })
+  })
+
+  it('refuses a plaintext external gRPC endpoint even when the admin page itself is on loopback', async () => {
+    const wrapper = mountNodes()
+    await flushPromises()
+
+    Object.assign(wrapper.vm.deploySettings, {
+      panelApiHost: 'https://panel.example.test',
+      grpcHost: 'control.example.test:50051',
+      grpcUseTLS: false,
+      pluginSupervisorEnabled: true,
+      pluginRoot: '/var/lib/anixops/plugins',
+      pluginSocketDir: '/run/anixops/plugins',
+      pluginOfficialPublicKey: 'IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M='
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.vm.agentControlEnabled).toBe(false)
+    expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(false)
+    const config = parseAgentConfigSnippet(wrapper.vm.configSnippet)
+    expect(config.Nodes[0]).toMatchObject({
+      ApiHost: 'https://panel.example.test',
+      AgentControlEnabled: false,
+      GRPCUseTLS: false
+    })
+    expect(config.Nodes[0]).not.toHaveProperty('PluginSupervisorEnabled')
+  })
+
+  it('requires a syntactically valid Ed25519 trust root before emitting Supervisor config', async () => {
+    const wrapper = mountNodes()
+    await flushPromises()
+
+    Object.assign(wrapper.vm.deploySettings, {
+      grpcHost: '[::1]:50051',
+      grpcUseTLS: false,
+      pluginSupervisorEnabled: true,
+      pluginRoot: '/var/lib/anixops/plugins',
+      pluginSocketDir: '/run/anixops/plugins',
+      pluginOfficialPublicKey: 'not-a-public-key'
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.vm.agentControlEnabled).toBe(true)
+    expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(false)
+    expect(wrapper.vm.pluginSupervisorCanaryError).toContain('Ed25519')
+    expect(parseAgentConfigSnippet(wrapper.vm.configSnippet).Nodes[0]).not.toHaveProperty('PluginSupervisorEnabled')
+
+    wrapper.vm.deploySettings.pluginOfficialPublicKey = 'IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(false)
+    expect(parseAgentConfigSnippet(wrapper.vm.configSnippet).Nodes[0]).not.toHaveProperty('PluginSupervisorEnabled')
+  })
+
+  it('carries a ready Plugin Supervisor canary through the Ansible group-vars preview', async () => {
+    const wrapper = mountNodes()
+    await flushPromises()
+
+    Object.assign(wrapper.vm.deploySettings, {
+      panelApiHost: 'https://panel.example.test',
+      grpcHost: 'grpc.example.test:443',
+      grpcUseTLS: true,
+      grpcServerName: 'grpc.example.test',
+      pluginSupervisorEnabled: true,
+      pluginRoot: '/var/lib/anixops/plugins',
+      pluginSocketDir: '/run/anixops/plugins',
+      pluginOfficialPublicKey: 'IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M='
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(true)
+    expect(wrapper.vm.deployGroupVarsPreview).toContain('agent_control_enabled: true')
+    expect(wrapper.vm.deployGroupVarsPreview).toContain('agent_control_allow_insecure: false')
+    expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_supervisor_enabled: true')
+    expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_root: "/var/lib/anixops/plugins"')
+    expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_socket_dir: "/run/anixops/plugins"')
+    expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="')
   })
 
   it('builds WireGuard relay JSON from the visual protocol form', async () => {

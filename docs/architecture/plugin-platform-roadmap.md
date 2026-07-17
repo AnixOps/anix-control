@@ -10,6 +10,9 @@ route, table, or mock page exists; its exit evidence must pass.
 The operational checklist, current blockers, reproducible commands, canary
 rules, and rollback stop conditions are maintained in
 [`upgrade-program.md`](upgrade-program.md).
+The authoritative explanation of why historical `v4.0.0-alpha.*` previews
+precede the formal `3.1` through `4.0` product line is in
+[`release-line-status.md`](release-line-status.md).
 
 ## End State
 
@@ -96,6 +99,13 @@ management, recovery, audit, or rollback pages.
 
 ## Version Gates
 
+The machine-enforced package scope is declared in
+[`../../config/scripts/release-stage-contract.json`](../../config/scripts/release-stage-contract.json).
+Product tags are independent from the Go module import major: the Control
+module can remain `/v4` while product releases progress through the 3.x gates.
+The existing `v4.0.0-alpha.*` tags are immutable historical previews, not an
+early approval of the 4.0 product gate.
+
 ### 3.1.0 - Package And WebUI Foundation
 
 Deliver:
@@ -109,18 +119,16 @@ Deliver:
 - `machine-telemetry` as the reference end-to-end package;
 - production `/api/v2` and all data-plane behavior unchanged.
 
-Exit evidence now includes cross-repository golden fixtures; tamper and
-permission tests; install/enable/disable/update/rollback tests; Control and
-Agent restart/replay tests; frontend plugin failure isolation; PostgreSQL
-migration and restore rehearsal; the real Control-to-Agent process gate;
-deterministic package release contracts for `machine-telemetry` and
-`nftables-forward`; dependency-aware graph execution with rollback;
-feature-gated topology fan-out; real `nftables-forward` Agent runtime source;
-reproducible nftables-forward namespace TCP/UDP and snapshot-rollback
-acceptance; and production signing/upload workflow checks for the two official
-3.1 reference packages. Supervisor and dynamic packages remain feature-gated
-until staging validation and canary records approve expansion beyond isolated
-test nodes.
+Exit evidence includes cross-repository golden fixtures; tamper and permission
+tests; install/enable/disable/update/rollback tests; Control and Agent
+restart/replay tests; frontend plugin failure isolation; PostgreSQL migration
+and restore rehearsal; the real Control-to-Agent process gate; and the signed
+`machine-telemetry` package plus its WebUI. `nftables-forward`, `gost-mesh`,
+`nat-egress`, WireGuard, and protocol-runtime are explicitly not 3.1 package
+prerequisites even if their source exists on the development branch. They begin
+at their later product gates and must not be attached to or claimed by a 3.1
+release. Supervisor and dynamic packages remain feature-gated until staging
+validation and canary records approve expansion beyond isolated test nodes.
 
 ### 3.2.0 - Declarative Runtime And Dedicated Forwarding
 

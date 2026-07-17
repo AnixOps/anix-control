@@ -104,6 +104,70 @@ export async function getKernelScopes() {
   return unwrap(await v3({ url: '/service-scopes', method: 'get' }))
 }
 
+export async function getKernelAccessGroups(scopeID) {
+  const config = { url: '/access-groups', method: 'get' }
+  if (scopeID) {
+    config.params = { scope_id: scopeID }
+  }
+  return unwrap(await v3(config))
+}
+
+export async function getKernelAccessGroupDetail(groupID) {
+  return unwrap(await v3({ url: `/access-groups/${groupID}`, method: 'get' }))
+}
+
+export async function createKernelAccessGroup(group) {
+  return unwrap(await v3({ url: '/access-groups', method: 'post', data: group }))
+}
+
+export async function updateKernelAccessGroup(groupID, group) {
+  return unwrap(await v3({ url: `/access-groups/${groupID}`, method: 'put', data: group }))
+}
+
+export async function deleteKernelAccessGroup(groupID) {
+  return unwrap(await v3({ url: `/access-groups/${groupID}`, method: 'delete' }))
+}
+
+export async function addKernelAccessGroupUser(groupID, userID) {
+  return unwrap(await v3({ url: `/access-groups/${groupID}/users`, method: 'post', data: { user_id: userID } }))
+}
+
+export async function removeKernelAccessGroupUser(groupID, userID) {
+  return unwrap(await v3({ url: `/access-groups/${groupID}/users/${userID}`, method: 'delete' }))
+}
+
+export async function addKernelAccessGroupPlan(groupID, planID) {
+  return unwrap(await v3({ url: `/access-groups/${groupID}/plans`, method: 'post', data: { plan_id: planID } }))
+}
+
+export async function removeKernelAccessGroupPlan(groupID, planID) {
+  return unwrap(await v3({ url: `/access-groups/${groupID}/plans/${planID}`, method: 'delete' }))
+}
+
+export async function createKernelResourceGrant(grant) {
+  return unwrap(await v3({ url: '/resource-grants', method: 'post', data: grant }))
+}
+
+export async function deleteKernelResourceGrant(grantID) {
+  return unwrap(await v3({ url: `/resource-grants/${grantID}`, method: 'delete' }))
+}
+
+export async function upsertKernelQuotaPolicy(policy) {
+  return unwrap(await v3({ url: '/quota-policies', method: 'put', data: policy }))
+}
+
+export async function deleteKernelQuotaPolicy(policyID) {
+  return unwrap(await v3({ url: `/quota-policies/${policyID}`, method: 'delete' }))
+}
+
+export async function resolveKernelAccess({ userID, scopeID, planID }) {
+  const params = { user_id: userID, scope_id: scopeID }
+  if (planID) {
+    params.plan_id = planID
+  }
+  return unwrap(await v3({ url: '/access-groups/resolve', method: 'get', params }))
+}
+
 export async function getKernelTopologies() {
   return unwrap(await v3({ url: '/topologies', method: 'get' }))
 }

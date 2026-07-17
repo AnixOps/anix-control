@@ -460,6 +460,10 @@ export function createAdminExtensionRuntime(options = {}) {
   const fetchExtensions = options.fetchExtensions || getKernelExtensions
   const resolveModule = options.resolveModule || getLocalExtensionModuleLoader
   const loadBundleModule = options.loadBundleModule || loadVerifiedBundleModule
+  // Production extensions must originate from the verified package asset URL.
+  // Tests may opt into a controlled local module loader to exercise catalog
+  // validation without issuing browser fetches.
+  const allowLocalModules = options.allowLocalModules === true
   const hasPermission = typeof options.hasPermission === 'function' ? options.hasPermission : currentUserHasPermission
   const now = options.now || Date.now
   const refreshInterval = options.refreshIntervalMs ?? REFRESH_INTERVAL_MS
@@ -511,6 +515,9 @@ export function createAdminExtensionRuntime(options = {}) {
       if (extension.bundle.url) {
         module = await loadBundleModule(extension)
       } else {
+        if (!allowLocalModules) {
+          throw new Error('extension bundle URL is required for a package WebUI')
+        }
         const loader = resolveModule(extension.pluginID)
         if (typeof loader !== 'function') {
           throw new Error('plugin is not present in the local extension registry')

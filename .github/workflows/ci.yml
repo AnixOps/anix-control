@@ -21,6 +21,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       is_release_tag: ${{ steps.check.outputs.is_release_tag }}
+      product_stage: ${{ steps.check.outputs.product_stage }}
+      release_stage_classification: ${{ steps.check.outputs.release_stage_classification }}
+      release_eligible: ${{ steps.check.outputs.release_eligible }}
+      release_package_ids: ${{ steps.check.outputs.release_package_ids }}
+      release_package_scope: ${{ steps.check.outputs.release_package_scope }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -31,9 +36,22 @@ jobs:
         run: |
           set -Eeuo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]; then
-            python3 config/scripts/check_release_version.py --tag "${GITHUB_REF_NAME}"
-            echo "is_release_tag=true" >> "$GITHUB_OUTPUT"
-            echo "Release tag accepted: ${GITHUB_REF_NAME}"
+            stage_output="$(mktemp)"
+            trap 'rm -f "${stage_output}"' EXIT
+            python3 config/scripts/check_release_stage.py \
+              --tag "${GITHUB_REF_NAME}" \
+              --github-output "${stage_output}"
+            cat "${stage_output}" >> "$GITHUB_OUTPUT"
+            if grep -Fxq "release_eligible=true" "${stage_output}"; then
+              python3 config/scripts/check_release_version.py --tag "${GITHUB_REF_NAME}"
+              echo "is_release_tag=true" >> "$GITHUB_OUTPUT"
+              echo "Publishable release tag accepted: ${GITHUB_REF_NAME}"
+            else
+              grep -Fxq "release_eligible=false" "${stage_output}"
+              grep -Fxq "release_stage_classification=historical-preview" "${stage_output}"
+              echo "is_release_tag=false" >> "$GITHUB_OUTPUT"
+              echo "Historical preview tag audited; release-only jobs are disabled: ${GITHUB_REF_NAME}"
+            fi
           else
             echo "is_release_tag=false" >> "$GITHUB_OUTPUT"
             echo "Not a stable, alpha, beta, or release-candidate tag; skip release-only jobs."
@@ -84,6 +102,9 @@ jobs:
       - name: Validate release version script syntax
         run: python3 -m py_compile config/scripts/check_release_version.py
 
+      - name: Validate release stage contract script syntax
+        run: python3 -m py_compile config/scripts/check_release_stage.py
+
       - name: Validate release artifact verification script syntax
         run: python3 -m py_compile config/scripts/verify_release_artifacts.py
 
@@ -110,6 +131,9 @@ jobs:
 
       - name: Run release version self-test
         run: python3 config/scripts/check_release_version.py --self-test
+
+      - name: Run release stage contract self-test
+        run: python3 config/scripts/check_release_stage.py --self-test
 
       - name: Run release artifact verification self-test
         run: python3 config/scripts/verify_release_artifacts.py --self-test
@@ -676,6 +700,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [tag-gate, plugin-package-release-test, cross-repository-agent-e2e]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    env:
+      RELEASE_PACKAGE_IDS: ${{ needs.tag-gate.outputs.release_package_ids }}
+      RELEASE_PACKAGE_SCOPE: ${{ needs.tag-gate.outputs.release_package_scope }}
     steps:
       - name: Checkout Control
         uses: actions/checkout@v7
@@ -698,31 +725,47 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Build the release Agent plugin binary
+      - name: Build declared release Agent plugin binaries
         env:
           GOEXPERIMENT: jsonv2
           GOWORK: 'off'
+        shell: bash
         run: |
+          set -Eeuo pipefail
+          [[ -n "${RELEASE_PACKAGE_IDS}" ]] || {
+            echo "tag-gate did not declare a signed package scope" >&2
+            exit 1
+          }
+          has_package() {
+            [[ ",${RELEASE_PACKAGE_IDS}," == *",$1,"* ]]
+          }
           mkdir -p package-build
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go -C V2bX_AnixOps build -o "${GITHUB_WORKSPACE}/package-build/machine-telemetry-agent" ./cmd/machine-telemetry
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go -C V2bX_AnixOps build -o "${GITHUB_WORKSPACE}/package-build/nftables-forward-agent" ./cmd/nftables-forward
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go -C V2bX_AnixOps build -trimpath -o "${GITHUB_WORKSPACE}/package-build/gost-mesh-agent" ./cmd/gost-mesh
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go -C V2bX_AnixOps build -o "${GITHUB_WORKSPACE}/package-build/nat-egress-agent" ./cmd/nat-egress
-          chmod 0755 package-build/machine-telemetry-agent
-          chmod 0755 package-build/nftables-forward-agent
-          chmod 0755 package-build/gost-mesh-agent
-          chmod 0755 package-build/nat-egress-agent
+          if has_package machine-telemetry; then
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+              go -C V2bX_AnixOps build -o "${GITHUB_WORKSPACE}/package-build/machine-telemetry-agent" ./cmd/machine-telemetry
+            chmod 0755 package-build/machine-telemetry-agent
+            [[ "$(package-build/machine-telemetry-agent --version)" == "machine-telemetry 1.1.0" ]]
+          fi
+          if has_package nftables-forward; then
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+              go -C V2bX_AnixOps build -o "${GITHUB_WORKSPACE}/package-build/nftables-forward-agent" ./cmd/nftables-forward
+            chmod 0755 package-build/nftables-forward-agent
+            [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.2.0" ]]
+          fi
+          if has_package gost-mesh; then
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+              go -C V2bX_AnixOps build -trimpath -o "${GITHUB_WORKSPACE}/package-build/gost-mesh-agent" ./cmd/gost-mesh
+            chmod 0755 package-build/gost-mesh-agent
+          fi
+          if has_package nat-egress; then
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+              go -C V2bX_AnixOps build -o "${GITHUB_WORKSPACE}/package-build/nat-egress-agent" ./cmd/nat-egress
+            chmod 0755 package-build/nat-egress-agent
+            [[ "$(package-build/nat-egress-agent --version)" == "nat-egress 1.0.0" ]]
+          fi
 
-          [[ "$(package-build/machine-telemetry-agent --version)" == "machine-telemetry 1.1.0" ]]
-          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.2.0" ]]
-          [[ "$(package-build/gost-mesh-agent --version)" =~ ^gost-mesh[[:space:]]+1\.0\.0[[:space:]]+\(gost[[:space:]]+v3\.2\.6\)$ ]]
-          [[ "$(package-build/nat-egress-agent --version)" == "nat-egress 1.0.0" ]]
-
-      - name: Download and verify pinned GOST runtime
+      - name: Download pinned GOST runtime when declared
+        if: ${{ contains(needs.tag-gate.outputs.release_package_scope, ',gost-mesh,') }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -735,23 +778,37 @@ jobs:
           echo "${GOST_LINUX_AMD64_BINARY_SHA256}  package-build/gost" | sha256sum --check --strict
           package-build/gost -V
 
-      - name: Build deterministic package
+      - name: Build declared deterministic packages
+        shell: bash
         run: |
-          python3 packages/machine-telemetry/build.py build \
-            --agent-binary package-build/machine-telemetry-agent \
-            --goos linux --goarch amd64 --output-dir package-build/machine-telemetry-dist
-          python3 packages/nftables-forward/build.py build \
-            --agent-binary package-build/nftables-forward-agent \
-            --goos linux --goarch amd64 --output-dir package-build/nftables-forward-dist
-          python3 packages/gost-mesh/build.py build \
-            --agent-binary package-build/gost-mesh-agent \
-            --gost package-build/gost \
-            --goos linux --goarch amd64 --output-dir package-build/gost-mesh-dist
-          python3 packages/nat-egress/build.py build \
-            --agent-binary package-build/nat-egress-agent \
-            --goos linux --goarch amd64 --output-dir package-build/nat-egress-dist
+          set -Eeuo pipefail
+          has_package() {
+            [[ ",${RELEASE_PACKAGE_IDS}," == *",$1,"* ]]
+          }
+          if has_package machine-telemetry; then
+            python3 packages/machine-telemetry/build.py build \
+              --agent-binary package-build/machine-telemetry-agent \
+              --goos linux --goarch amd64 --output-dir package-build/machine-telemetry-dist
+          fi
+          if has_package nftables-forward; then
+            python3 packages/nftables-forward/build.py build \
+              --agent-binary package-build/nftables-forward-agent \
+              --goos linux --goarch amd64 --output-dir package-build/nftables-forward-dist
+          fi
+          if has_package gost-mesh; then
+            [[ "$(package-build/gost-mesh-agent --version)" =~ ^gost-mesh[[:space:]]+1\.0\.0[[:space:]]+\(gost[[:space:]]+v3\.2\.6\)$ ]]
+            python3 packages/gost-mesh/build.py build \
+              --agent-binary package-build/gost-mesh-agent \
+              --gost package-build/gost \
+              --goos linux --goarch amd64 --output-dir package-build/gost-mesh-dist
+          fi
+          if has_package nat-egress; then
+            python3 packages/nat-egress/build.py build \
+              --agent-binary package-build/nat-egress-agent \
+              --goos linux --goarch amd64 --output-dir package-build/nat-egress-dist
+          fi
 
-      - name: Sign and verify the exact release manifest
+      - name: Sign declared package releases
         env:
           ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
         shell: bash
@@ -765,89 +822,58 @@ jobs:
           trap 'rm -f "${key_file}"' EXIT
           printf '%s\n' "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" >"${key_file}"
           chmod 0600 "${key_file}"
-          release_dir="release-machine-telemetry"
+          release_dir="release-packages"
           mkdir -p "${release_dir}"
-          bash scripts/sign_plugin_release.sh \
-            --manifest package-build/machine-telemetry-dist/manifest.json \
-            --artifact package-build/machine-telemetry-dist/machine-telemetry-1.1.0.tar \
-            --private-key "${key_file}" \
-            --signature "${release_dir}/anixops-machine-telemetry-1.1.0.sig" \
-            --public-key "${release_dir}/anixops-machine-telemetry-1.1.0.public-key.pem"
-          cp package-build/machine-telemetry-dist/machine-telemetry-1.1.0.tar "${release_dir}/"
-          cp package-build/machine-telemetry-dist/manifest.json "${release_dir}/anixops-machine-telemetry-1.1.0.manifest.json"
-          openssl pkey -pubin -in "${release_dir}/anixops-machine-telemetry-1.1.0.public-key.pem" -outform DER \
-            | tail -c 32 | base64 | tr -d '\n' >"${release_dir}/anixops-machine-telemetry-1.1.0.public-key.raw"
-          printf '\n' >>"${release_dir}/anixops-machine-telemetry-1.1.0.public-key.raw"
-          (cd "${release_dir}" && sha256sum * > anixops-machine-telemetry-1.1.0.SHA256SUMS.txt)
+          has_package() {
+            [[ ",${RELEASE_PACKAGE_IDS}," == *",$1,"* ]]
+          }
+          sign_package() {
+            local package_id="$1"
+            local version="$2"
+            local dist_dir="$3"
+            local artifact="$4"
+            local prefix="anixops-${package_id}-${version}"
+            local artifact_name
+            artifact_name="$(basename "${artifact}")"
+            bash scripts/sign_plugin_release.sh \
+              --manifest "${dist_dir}/manifest.json" \
+              --artifact "${artifact}" \
+              --private-key "${key_file}" \
+              --signature "${release_dir}/${prefix}.sig" \
+              --public-key "${release_dir}/${prefix}.public-key.pem"
+            cp "${artifact}" "${release_dir}/${artifact_name}"
+            cp "${dist_dir}/manifest.json" "${release_dir}/${prefix}.manifest.json"
+            openssl pkey -pubin -in "${release_dir}/${prefix}.public-key.pem" -outform DER \
+              | tail -c 32 | base64 | tr -d '\n' >"${release_dir}/${prefix}.public-key.raw"
+            printf '\n' >>"${release_dir}/${prefix}.public-key.raw"
+            (
+              cd "${release_dir}"
+              sha256sum "${artifact_name}" "${prefix}.manifest.json" "${prefix}.sig" \
+                "${prefix}.public-key.pem" "${prefix}.public-key.raw" >"${prefix}.SHA256SUMS.txt"
+            )
+          }
+          if has_package machine-telemetry; then
+            sign_package machine-telemetry 1.1.0 package-build/machine-telemetry-dist \
+              package-build/machine-telemetry-dist/machine-telemetry-1.1.0.tar
+          fi
+          if has_package nftables-forward; then
+            sign_package nftables-forward 1.2.0 package-build/nftables-forward-dist \
+              package-build/nftables-forward-dist/nftables-forward-1.2.0.tar
+          fi
+          if has_package gost-mesh; then
+            sign_package gost-mesh 1.0.0 package-build/gost-mesh-dist \
+              package-build/gost-mesh-dist/gost-mesh-1.0.0.tar
+          fi
+          if has_package nat-egress; then
+            sign_package nat-egress 1.0.0 package-build/nat-egress-dist \
+              package-build/nat-egress-dist/nat-egress-1.0.0.tar
+          fi
 
-          release_dir="release-nftables-forward"
-          mkdir -p "${release_dir}"
-          bash scripts/sign_plugin_release.sh \
-            --manifest package-build/nftables-forward-dist/manifest.json \
-            --artifact package-build/nftables-forward-dist/nftables-forward-1.2.0.tar \
-            --private-key "${key_file}" \
-            --signature "${release_dir}/anixops-nftables-forward-1.2.0.sig" \
-            --public-key "${release_dir}/anixops-nftables-forward-1.2.0.public-key.pem"
-          cp package-build/nftables-forward-dist/nftables-forward-1.2.0.tar "${release_dir}/"
-          cp package-build/nftables-forward-dist/manifest.json "${release_dir}/anixops-nftables-forward-1.2.0.manifest.json"
-          openssl pkey -pubin -in "${release_dir}/anixops-nftables-forward-1.2.0.public-key.pem" -outform DER \
-            | tail -c 32 | base64 | tr -d '\n' >"${release_dir}/anixops-nftables-forward-1.2.0.public-key.raw"
-          printf '\n' >>"${release_dir}/anixops-nftables-forward-1.2.0.public-key.raw"
-          (cd "${release_dir}" && sha256sum * > anixops-nftables-forward-1.2.0.SHA256SUMS.txt)
-
-          release_dir="release-gost-mesh"
-          mkdir -p "${release_dir}"
-          bash scripts/sign_plugin_release.sh \
-            --manifest package-build/gost-mesh-dist/manifest.json \
-            --artifact package-build/gost-mesh-dist/gost-mesh-1.0.0.tar \
-            --private-key "${key_file}" \
-            --signature "${release_dir}/anixops-gost-mesh-1.0.0.sig" \
-            --public-key "${release_dir}/anixops-gost-mesh-1.0.0.public-key.pem"
-          cp package-build/gost-mesh-dist/gost-mesh-1.0.0.tar "${release_dir}/"
-          cp package-build/gost-mesh-dist/manifest.json "${release_dir}/anixops-gost-mesh-1.0.0.manifest.json"
-          openssl pkey -pubin -in "${release_dir}/anixops-gost-mesh-1.0.0.public-key.pem" -outform DER \
-            | tail -c 32 | base64 | tr -d '\n' >"${release_dir}/anixops-gost-mesh-1.0.0.public-key.raw"
-          printf '\n' >>"${release_dir}/anixops-gost-mesh-1.0.0.public-key.raw"
-          (cd "${release_dir}" && sha256sum * > anixops-gost-mesh-1.0.0.SHA256SUMS.txt)
-
-          release_dir="release-nat-egress"
-          mkdir -p "${release_dir}"
-          bash scripts/sign_plugin_release.sh \
-            --manifest package-build/nat-egress-dist/manifest.json \
-            --artifact package-build/nat-egress-dist/nat-egress-1.0.0.tar \
-            --private-key "${key_file}" \
-            --signature "${release_dir}/anixops-nat-egress-1.0.0.sig" \
-            --public-key "${release_dir}/anixops-nat-egress-1.0.0.public-key.pem"
-          cp package-build/nat-egress-dist/nat-egress-1.0.0.tar "${release_dir}/"
-          cp package-build/nat-egress-dist/manifest.json "${release_dir}/anixops-nat-egress-1.0.0.manifest.json"
-          openssl pkey -pubin -in "${release_dir}/anixops-nat-egress-1.0.0.public-key.pem" -outform DER \
-            | tail -c 32 | base64 | tr -d '\n' >"${release_dir}/anixops-nat-egress-1.0.0.public-key.raw"
-          printf '\n' >>"${release_dir}/anixops-nat-egress-1.0.0.public-key.raw"
-          (cd "${release_dir}" && sha256sum * > anixops-nat-egress-1.0.0.SHA256SUMS.txt)
-
-      - name: Upload signed package release artifact
+      - name: Upload declared signed package releases
         uses: actions/upload-artifact@v7
         with:
-          name: machine-telemetry-signed-release
-          path: release-machine-telemetry/
-
-      - name: Upload signed nftables Forward package release artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: nftables-forward-signed-release
-          path: release-nftables-forward/
-
-      - name: Upload signed GOST Mesh package release artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: gost-mesh-signed-release
-          path: release-gost-mesh/
-
-      - name: Upload signed NAT Egress package release artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: nat-egress-signed-release
-          path: release-nat-egress/
+          name: signed-plugin-releases
+          path: release-packages/
 
   forward-runtime-test:
     name: Forward Runtime Regression
@@ -995,6 +1021,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # The live Control WebUI gate builds a temporary Control binary and a
+      # deterministic official plugin package before Chromium opens the UI.
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -1021,6 +1060,10 @@ jobs:
       - name: Run frontend browser E2E gate
         working-directory: web
         run: npm run test:e2e
+
+      - name: Run live Control signed WebUI E2E gate
+        working-directory: web
+        run: npx playwright test --config playwright.live-control.config.js
 
       - name: Build frontend
         working-directory: web
@@ -1143,7 +1186,7 @@ jobs:
   docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
-    needs: [backend-build, frontend-build, tag-gate]
+    needs: [backend-build, frontend-build, plugin-package-publish, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     env:
       DOCKER_NAMESPACE: ${{ secrets.DOCKER_USERNAME || 'anixops' }}
@@ -1238,6 +1281,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [frontend-build, release-binaries, docker, plugin-package-publish, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    env:
+      RELEASE_PACKAGE_IDS: ${{ needs.tag-gate.outputs.release_package_ids }}
+      RELEASE_PACKAGE_SCOPE: ${{ needs.tag-gate.outputs.release_package_scope }}
     permissions:
       actions: read
       contents: write
@@ -1282,28 +1328,10 @@ jobs:
           name: migration-dry-run-report
           path: release/
 
-      - name: Download signed Machine Telemetry package
+      - name: Download declared signed plugin packages
         uses: actions/download-artifact@v8
         with:
-          name: machine-telemetry-signed-release
-          path: release/
-
-      - name: Download signed nftables Forward package
-        uses: actions/download-artifact@v8
-        with:
-          name: nftables-forward-signed-release
-          path: release/
-
-      - name: Download signed GOST Mesh package
-        uses: actions/download-artifact@v8
-        with:
-          name: gost-mesh-signed-release
-          path: release/
-
-      - name: Download signed NAT Egress package
-        uses: actions/download-artifact@v8
-        with:
-          name: nat-egress-signed-release
+          name: signed-plugin-releases
           path: release/
 
       - name: Create operator deployment runbook
@@ -1324,8 +1352,7 @@ jobs:
           - Migration dry-run evidence is attached in `migration-dry-run.txt`.
           - Source dependency SBOM is attached in `anix-control-source.sbom.spdx.json`.
           - Machine-readable release metadata is attached in `RELEASE_MANIFEST.json`.
-          - The signed `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress` packages, manifests, signatures, and public keys are attached.
-          - `gost-mesh` packages embed the checksum-pinned GOST v3.2.6 runtime. They are canary-only until Secret ID materialization and the remaining rollout evidence are complete.
+          - Signed official package IDs for this product stage: {{RELEASE_PACKAGE_IDS}}. Their manifests, signatures, public keys, and package checksums are attached.
           - SHA256 checksums are attached in `SHA256SUMS.txt`.
           - Upgrade and rollback instructions are attached in `UPGRADE.md`.
           - The release-bound Machine Telemetry signature verifier is attached in `verify-machine-telemetry-signature.py`.
@@ -1368,6 +1395,15 @@ jobs:
           if the release required a data migration and the approved rollback plan says so.
           EOF
           sed -i "s/{{RELEASE_TAG}}/${GITHUB_REF_NAME}/g" release/OPERATOR_DEPLOYMENT.md
+          sed -i "s/{{RELEASE_PACKAGE_IDS}}/${RELEASE_PACKAGE_IDS}/g" release/OPERATOR_DEPLOYMENT.md
+          if [[ "${RELEASE_PACKAGE_SCOPE}" == *",gost-mesh,"* ]]; then
+            cat >> release/OPERATOR_DEPLOYMENT.md <<'EOF'
+
+          `gost-mesh` embeds the checksum-pinned GOST v3.2.6 runtime and remains
+          canary-only until Secret ID materialization and the remaining rollout
+          evidence are complete.
+          EOF
+          fi
           cp docs/UPGRADE.md release/UPGRADE.md
           cp packages/machine-telemetry/verify_signature.py release/verify-machine-telemetry-signature.py
 
@@ -1389,8 +1425,14 @@ jobs:
 
           ## Signed Official Plugin Packages
 
-          The signed `machine-telemetry`, `nftables-forward`, and `nat-egress` packages are attached with manifests, signatures, public keys, and package checksums. The signed `gost-mesh` package is also attached and is canary-only until Secret ID to private-file materialization and the remaining production rollout evidence are complete.
+          The signed official package IDs for this product stage are: `${RELEASE_PACKAGE_IDS}`. Each attached package includes its manifest, signature, public keys, and package checksums.
           EOF
+          if [[ "${RELEASE_PACKAGE_SCOPE}" == *",gost-mesh,"* ]]; then
+            cat >> release/RELEASE_NOTES.md <<'EOF'
+
+          `gost-mesh` is canary-only until Secret ID to private-file materialization and the remaining production rollout evidence are complete.
+          EOF
+          fi
 
       - name: Generate release manifest
         shell: bash
@@ -1409,6 +1451,37 @@ jobs:
       - name: Verify release artifacts
         shell: bash
         run: |
+          set -Eeuo pipefail
+          [[ -n "${RELEASE_PACKAGE_IDS}" ]] || {
+            echo "tag-gate did not declare a signed package scope" >&2
+            exit 1
+          }
+          package_requirements=()
+          require_package_assets() {
+            local package_id="$1"
+            local version="$2"
+            package_requirements+=(
+              --require "${package_id}-${version}.tar"
+              --require "anixops-${package_id}-${version}.manifest.json"
+              --require "anixops-${package_id}-${version}.sig"
+              --require "anixops-${package_id}-${version}.public-key.pem"
+              --require "anixops-${package_id}-${version}.public-key.raw"
+              --require "anixops-${package_id}-${version}.SHA256SUMS.txt"
+            )
+          }
+          IFS=',' read -r -a declared_packages <<<"${RELEASE_PACKAGE_IDS}"
+          for package_id in "${declared_packages[@]}"; do
+            case "${package_id}" in
+              machine-telemetry) require_package_assets machine-telemetry 1.1.0 ;;
+              nftables-forward) require_package_assets nftables-forward 1.2.0 ;;
+              gost-mesh) require_package_assets gost-mesh 1.0.0 ;;
+              nat-egress) require_package_assets nat-egress 1.0.0 ;;
+              *)
+                echo "release workflow has no artifact verifier for declared package: ${package_id}" >&2
+                exit 1
+                ;;
+            esac
+          done
           python3 config/scripts/verify_release_artifacts.py \
             --release-dir release \
             --manifest release/RELEASE_MANIFEST.json \
@@ -1430,30 +1503,7 @@ jobs:
             --require anix-control-windows-arm64.exe.zip \
             --require anix-control-darwin-amd64.tar.gz \
             --require anix-control-darwin-arm64.tar.gz \
-            --require machine-telemetry-1.1.0.tar \
-            --require anixops-machine-telemetry-1.1.0.manifest.json \
-            --require anixops-machine-telemetry-1.1.0.sig \
-            --require anixops-machine-telemetry-1.1.0.public-key.pem \
-            --require anixops-machine-telemetry-1.1.0.public-key.raw \
-            --require anixops-machine-telemetry-1.1.0.SHA256SUMS.txt \
-            --require nftables-forward-1.2.0.tar \
-            --require anixops-nftables-forward-1.2.0.manifest.json \
-            --require anixops-nftables-forward-1.2.0.sig \
-            --require anixops-nftables-forward-1.2.0.public-key.pem \
-            --require anixops-nftables-forward-1.2.0.public-key.raw \
-            --require anixops-nftables-forward-1.2.0.SHA256SUMS.txt \
-            --require gost-mesh-1.0.0.tar \
-            --require anixops-gost-mesh-1.0.0.manifest.json \
-            --require anixops-gost-mesh-1.0.0.sig \
-            --require anixops-gost-mesh-1.0.0.public-key.pem \
-            --require anixops-gost-mesh-1.0.0.public-key.raw \
-            --require anixops-gost-mesh-1.0.0.SHA256SUMS.txt \
-            --require nat-egress-1.0.0.tar \
-            --require anixops-nat-egress-1.0.0.manifest.json \
-            --require anixops-nat-egress-1.0.0.sig \
-            --require anixops-nat-egress-1.0.0.public-key.pem \
-            --require anixops-nat-egress-1.0.0.public-key.raw \
-            --require anixops-nat-egress-1.0.0.SHA256SUMS.txt
+            "${package_requirements[@]}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3

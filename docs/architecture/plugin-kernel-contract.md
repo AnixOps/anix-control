@@ -52,7 +52,9 @@ immutable same-origin asset. The extension catalog exposes only the verified
 content-addressed URL:
 `/api/v3/extensions/<plugin>/<version>/webui/<sha256>/<filename>`. Browser
 runtime code fetches that same-origin asset, computes SHA-256 again, and only
-then imports the module.
+then imports the module. The production runtime rejects a catalog entry without
+that verified URL; a compiled local-module loader exists only as an explicit
+test harness option and is never a package WebUI fallback.
 
 Extension routes and menus carry the signed permission declared by the package.
 The admin frontend filters menus and blocks extension route navigation unless
@@ -140,6 +142,14 @@ consume subscription or forwarding authorization and quota state. Startup does
 not migrate existing subscription groups. `access_group_user` and
 `access_group_plan` are combined as an allow-union within one scope. Resource
 grants and quota policies are never evaluated across scopes.
+
+Administrators manage this model from `/admin/access-groups`, backed by the
+Kernel `/api/v3/access-groups` surface. A selected group is read through
+`GET /api/v3/access-groups/:id`, which returns only member ID/email and plan
+ID/name summaries alongside its grants and quota policies; it never returns
+user credentials or profile state. The WebUI calls the server-side
+`/api/v3/access-groups/resolve` endpoint for the effective-access preview so
+the browser does not duplicate or widen the allow-union calculation.
 
 ## Topologies
 

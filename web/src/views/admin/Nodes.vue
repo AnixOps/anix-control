@@ -252,7 +252,10 @@
           <div class="auth-key-config">
             <label>{{ t('admin.nodes.authKeyModal.configHint') }}</label>
             <pre class="config-block">{{ configSnippet }}</pre>
-            <button class="btn btn-sm" @click="copyConfig">{{ t('admin.nodes.authKeyModal.copyConfig') }}</button>
+            <button class="btn btn-sm" :disabled="!pluginSupervisorCanaryReady" @click="copyConfig">{{ t('admin.nodes.authKeyModal.copyConfig') }}</button>
+            <p v-if="deploySettings.pluginSupervisorEnabled && !pluginSupervisorCanaryReady" class="field-hint">
+              {{ pluginSupervisorCanaryError }}
+            </p>
           </div>
         </div>
         <div class="modal-footer">
@@ -311,6 +314,39 @@
                 <span>{{ t('admin.nodes.deployModal.fields.grpcUseTLS') }}</span>
               </label>
             </div>
+            <div class="form-group deploy-plugin-supervisor-toggle">
+              <label class="checkbox-label">
+                <input
+                  v-model="deploySettings.pluginSupervisorEnabled"
+                  data-testid="plugin-supervisor-enabled"
+                  type="checkbox"
+                />
+                <span>{{ t('admin.nodes.deployModal.fields.pluginSupervisorEnabled') }}</span>
+              </label>
+              <p class="field-hint">{{ t('admin.nodes.deployModal.pluginSupervisorHint') }}</p>
+            </div>
+            <template v-if="deploySettings.pluginSupervisorEnabled">
+              <div class="form-group">
+                <label>{{ t('admin.nodes.deployModal.fields.pluginRoot') }}</label>
+                <input v-model.trim="deploySettings.pluginRoot" data-testid="plugin-root" type="text" />
+              </div>
+              <div class="form-group">
+                <label>{{ t('admin.nodes.deployModal.fields.pluginSocketDir') }}</label>
+                <input v-model.trim="deploySettings.pluginSocketDir" data-testid="plugin-socket-dir" type="text" />
+              </div>
+              <div class="form-group deploy-plugin-public-key">
+                <label>{{ t('admin.nodes.deployModal.fields.pluginOfficialPublicKey') }}</label>
+                <input
+                  v-model.trim="deploySettings.pluginOfficialPublicKey"
+                  data-testid="plugin-official-public-key"
+                  type="text"
+                  autocomplete="off"
+                />
+              </div>
+              <div v-if="!pluginSupervisorCanaryReady" class="form-error deploy-plugin-supervisor-error">
+                {{ pluginSupervisorCanaryError }}
+              </div>
+            </template>
           </div>
 
           <div v-if="deployError" class="form-error">{{ deployError }}</div>
@@ -1003,7 +1039,69 @@ const deploySettings = reactive({
   grpcServerName: typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1',
   amd64BinaryPath: '/home/dev/anixops/anix-agent/build/inventory/anix-agent_linux_amd64',
   arm64BinaryPath: '/home/dev/anixops/anix-agent/build/inventory/anix-agent_linux_arm64',
-  coreType: 'xray'
+  coreType: 'xray',
+  pluginSupervisorEnabled: false,
+  pluginRoot: '/var/lib/anixops/plugins',
+  pluginSocketDir: '/run/anixops/plugins',
+  pluginOfficialPublicKey: ''
+})
+
+function isLoopbackGRPCHost(value) {
+  const endpoint = String(value || '').trim().toLowerCase()
+  if (!endpoint || endpoint.includes('://') || endpoint.includes('/') || endpoint.includes('?') || endpoint.includes('#')) {
+    return false
+  }
+
+  let host = endpoint
+  if (endpoint.startsWith('[')) {
+    const closingBracket = endpoint.indexOf(']')
+    if (closingBracket <= 1 || !/^\](?::\d{1,5})?$/.test(endpoint.slice(closingBracket))) {
+      return false
+    }
+    host = endpoint.slice(1, closingBracket)
+  } else {
+    const firstColon = endpoint.indexOf(':')
+    const lastColon = endpoint.lastIndexOf(':')
+    if (firstColon === lastColon && firstColon > 0) {
+      const port = endpoint.slice(lastColon + 1)
+      if (!/^\d{1,5}$/.test(port)) return false
+      host = endpoint.slice(0, lastColon)
+    }
+  }
+
+  if (host === 'localhost' || host === '::1') return true
+  const octets = host.split('.')
+  return octets.length === 4 && octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) >= 0 && Number(octet) <= 255) && Number(octets[0]) === 127
+}
+
+function isEd25519PublicKey(value) {
+  const encoded = String(value || '').trim()
+  if (!encoded || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded) || typeof globalThis.atob !== 'function') return false
+  try {
+    return globalThis.atob(encoded).length === 32
+  } catch {
+    return false
+  }
+}
+
+const agentControlEnabled = computed(() => deploySettings.grpcUseTLS || isLoopbackGRPCHost(deploySettings.grpcHost))
+
+const pluginSupervisorCanaryReady = computed(() => {
+  if (!deploySettings.pluginSupervisorEnabled) return true
+  return agentControlEnabled.value && [
+    deploySettings.pluginRoot,
+    deploySettings.pluginSocketDir
+  ].every((value) => String(value || '').trim() !== '') && isEd25519PublicKey(deploySettings.pluginOfficialPublicKey)
+})
+
+const pluginSupervisorCanaryError = computed(() => {
+  if (!agentControlEnabled.value) {
+    return t('admin.nodes.deployModal.pluginSupervisorControlRequired')
+  }
+  if (String(deploySettings.pluginOfficialPublicKey || '').trim() && !isEd25519PublicKey(deploySettings.pluginOfficialPublicKey)) {
+    return t('admin.nodes.deployModal.pluginSupervisorKeyInvalid')
+  }
+  return t('admin.nodes.deployModal.pluginSupervisorKeyRequired')
 })
 
 const showLogModal = ref(false)
@@ -1537,10 +1635,20 @@ const deployGroupVarsPreview = computed(() => {
     '---',
     `panel_api_host: "${deploySettings.panelApiHost}"`,
     `grpc_host: "${deploySettings.grpcHost}"`,
-    `grpc_use_tls: ${deploySettings.grpcUseTLS ? 'true' : 'false'}`
+    `grpc_use_tls: ${deploySettings.grpcUseTLS ? 'true' : 'false'}`,
+    `agent_control_enabled: ${agentControlEnabled.value ? 'true' : 'false'}`,
+    'agent_control_allow_insecure: false',
+    `plugin_supervisor_enabled: ${pluginSupervisorCanaryReady.value ? 'true' : 'false'}`
   ]
   if (deploySettings.grpcUseTLS && deploySettings.grpcServerName) {
     lines.push(`grpc_server_name: "${deploySettings.grpcServerName}"`)
+  }
+  if (pluginSupervisorCanaryReady.value) {
+    lines.push(
+      `plugin_root: ${JSON.stringify(deploySettings.pluginRoot)}`,
+      `plugin_socket_dir: ${JSON.stringify(deploySettings.pluginSocketDir)}`,
+      `plugin_official_public_key: ${JSON.stringify(deploySettings.pluginOfficialPublicKey)}`
+    )
   }
   lines.push(
     '',
@@ -1600,6 +1708,7 @@ const copyAuthKey = async () => {
 }
 
 const copyConfig = async () => {
+  if (!pluginSupervisorCanaryReady.value) return
   try {
     await navigator.clipboard.writeText(configSnippet.value)
     alert(t('admin.nodes.messages.copied'))
@@ -1618,9 +1727,7 @@ const copyDeployText = async (text) => {
 }
 
 const configSnippet = computed(() => {
-  const host = window.location.origin
-  const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1'])
-  const agentControlEnabled = deploySettings.grpcUseTLS || loopbackHosts.has(window.location.hostname)
+  const host = String(deploySettings.panelApiHost || '').trim() || (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:18080')
   const config = {
     Log: {
       Level: 'info',
@@ -1645,8 +1752,16 @@ const configSnippet = computed(() => {
           ? { GRPCServerName: deploySettings.grpcServerName }
           : {}),
         GRPCKeepalive: 30,
-        AgentControlEnabled: agentControlEnabled,
+        AgentControlEnabled: agentControlEnabled.value,
         AgentControlAllowInsecure: false,
+        ...(deploySettings.pluginSupervisorEnabled && pluginSupervisorCanaryReady.value
+          ? {
+              PluginSupervisorEnabled: true,
+              PluginRoot: deploySettings.pluginRoot,
+              PluginSocketDir: deploySettings.pluginSocketDir,
+              PluginOfficialPublicKey: deploySettings.pluginOfficialPublicKey
+            }
+          : {}),
         AuthKey: authKey.value || '<your-auth-key>',
         NodeID: 0,
         AutoRegister: true,

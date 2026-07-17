@@ -11,8 +11,13 @@
   separate E2E covers Supervisor plus the signed plugin process.
 - Chromium Playwright tests cover signed-catalog WebUI loading, same-origin
   digest binding, route collision isolation, disabled entries, and tampered
-  bundle recovery. They currently use a catalog HTTP fixture; live Control
-  staging coverage remains a gap.
+  bundle recovery. The separate live-Control gate now builds an isolated
+  frontend and Control process, generates an ephemeral Ed25519 trust root and
+  signed `machine-telemetry` package, registers/uploads/enables it through
+  real `/api/v3`, and verifies the actual catalog, asset, menu, route, worker
+  completion, disable revocation, and reload behavior. It is an isolated CI
+  boundary rather than staging/canary evidence, so production-like staging
+  coverage remains a gap.
 - Package release gates prove reproducible unsigned output, ephemeral Ed25519
   signing, public-key-only verification, artifact binding, and tamper rejection
   for `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress`.

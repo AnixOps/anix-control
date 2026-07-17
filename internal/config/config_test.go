@@ -165,7 +165,7 @@ func TestOfficialPluginAlphaProfiles(t *testing.T) {
 		grpcEnabled      bool
 	}{
 		{name: "development", path: "config.dev.yaml.example", executionEnabled: true, dispatchEnabled: true, grpcEnabled: true},
-		{name: "release installer", path: "config.yaml.example", executionEnabled: true, dispatchEnabled: true, grpcEnabled: true},
+		{name: "release installer fail closed", path: "config.yaml.example", executionEnabled: false, dispatchEnabled: false, grpcEnabled: true},
 		{name: "production fail closed", path: "config.prod.yaml", executionEnabled: false, dispatchEnabled: false, grpcEnabled: false},
 	}
 

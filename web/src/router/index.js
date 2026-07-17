@@ -42,6 +42,7 @@ const AdminInvite = () => import('@/views/admin/Invite.vue')
 const AdminSystem = () => import('@/views/admin/System.vue')
 const AdminAgent = () => import('@/views/admin/Agent.vue')
 const AdminControl = () => import('@/views/admin/Control.vue')
+const AdminAccessGroups = () => import('@/views/admin/AccessGroups.vue')
 
 const routes = [
   {
@@ -235,6 +236,10 @@ const routes = [
       {
         path: 'control',
         component: AdminControl
+      },
+      {
+        path: 'access-groups',
+        component: AdminAccessGroups
       }
     ]
   }

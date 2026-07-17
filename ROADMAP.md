@@ -14,6 +14,16 @@ See [`docs/architecture/plugin-platform-roadmap.md`](docs/architecture/plugin-pl
 for the package model, WebUI extension contract, exit evidence, and rollback
 requirements. The executable gate checklist and exact verification commands are
 in [`docs/architecture/upgrade-program.md`](docs/architecture/upgrade-program.md).
+The version-line decision, completed foundation work, exclusions, and release
+stop rules are recorded in
+[`docs/architecture/release-line-status.md`](docs/architecture/release-line-status.md).
+
+Product stage tags are governed by
+[`config/scripts/release-stage-contract.json`](config/scripts/release-stage-contract.json),
+not by the Go module import suffix. The Control module remains `/v4` while the
+product deliberately ships the `3.1` through `3.5` gates. Historical
+`v4.0.0-alpha.1` through `v4.0.0-alpha.7` tags remain immutable preview
+evidence; they are not product `4.0.0` approval.
 
 - `3.1.0`: signed package lifecycle, durable Control/Agent operations, and the
   pluggable WebUI foundation.
@@ -24,7 +34,7 @@ in [`docs/architecture/upgrade-program.md`](docs/architecture/upgrade-program.md
 - `4.0.0`: remove the original coupled business/runtime mode and boot as a
   plugin-only platform.
 
-The `v4.0.0-alpha.7` slice advances the 3.2 gate with a signed crash-safe
+The historical `v4.0.0-alpha.7` preview carries future 3.2 evidence with a signed crash-safe
 `nftables-forward` 1.2.0 package, its package WebUI, and a kernel-observed
 promotion contract. The Agent semantically verifies live nftables JSON, emits
 a stable ruleset SHA-256 plus per-rule counters through a private observation

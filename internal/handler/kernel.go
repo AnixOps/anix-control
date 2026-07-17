@@ -33,6 +33,28 @@ type KernelHandler struct {
 	controlPluginExecutors *plugincontrol.Registry
 }
 
+// accessGroupDetailResponse keeps the access-control management view on a
+// single authoritative Kernel read. Memberships intentionally expose only the
+// small admin-facing identity projection; credentials and user profile data do
+// not belong to the access-group contract.
+type accessGroupDetailResponse struct {
+	Group          model.AccessGroup        `json:"group"`
+	Users          []accessGroupUserSummary `json:"users"`
+	Plans          []accessGroupPlanSummary `json:"plans"`
+	ResourceGrants []model.ResourceGrant    `json:"resource_grants"`
+	QuotaPolicies  []model.QuotaPolicy      `json:"quota_policies"`
+}
+
+type accessGroupUserSummary struct {
+	ID    uint   `json:"id"`
+	Email string `json:"email"`
+}
+
+type accessGroupPlanSummary struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+}
+
 func NewKernelHandler() *KernelHandler {
 	db := database.Get()
 	registry, err := plugincontrol.DefaultRegistry(db)
@@ -858,6 +880,82 @@ func (h *KernelHandler) ListAccessGroups(c *gin.Context) {
 		return
 	}
 	kernelData(c, http.StatusOK, rows)
+}
+
+// GetAccessGroupDetail returns the associated identities and policy records
+// needed to safely administer one access group. The underlying models stay
+// normalized so the allow-union resolver remains the single authorization
+// implementation rather than a client-side reconstruction.
+func (h *KernelHandler) GetAccessGroupDetail(c *gin.Context) {
+	id, ok := parseKernelID(c, "id")
+	if !ok {
+		return
+	}
+
+	var group model.AccessGroup
+	if err := h.db.First(&group, id).Error; err != nil {
+		kernelDBError(c, err)
+		return
+	}
+
+	response := accessGroupDetailResponse{
+		Group:          group,
+		Users:          []accessGroupUserSummary{},
+		Plans:          []accessGroupPlanSummary{},
+		ResourceGrants: []model.ResourceGrant{},
+		QuotaPolicies:  []model.QuotaPolicy{},
+	}
+
+	var userMemberships []model.AccessGroupUser
+	if err := h.db.Where("group_id = ?", id).Order("user_id").Find(&userMemberships).Error; err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	if len(userMemberships) > 0 {
+		userIDs := make([]uint, 0, len(userMemberships))
+		for _, membership := range userMemberships {
+			userIDs = append(userIDs, membership.UserID)
+		}
+		var users []model.User
+		if err := h.db.Select("id", "email").Where("id IN ?", userIDs).Order("id").Find(&users).Error; err != nil {
+			kernelDBError(c, err)
+			return
+		}
+		for _, user := range users {
+			response.Users = append(response.Users, accessGroupUserSummary{ID: user.ID, Email: user.Email})
+		}
+	}
+
+	var planMemberships []model.AccessGroupPlan
+	if err := h.db.Where("group_id = ?", id).Order("plan_id").Find(&planMemberships).Error; err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	if len(planMemberships) > 0 {
+		planIDs := make([]uint, 0, len(planMemberships))
+		for _, membership := range planMemberships {
+			planIDs = append(planIDs, membership.PlanID)
+		}
+		var plans []model.Plan
+		if err := h.db.Select("id", "name").Where("id IN ?", planIDs).Order("id").Find(&plans).Error; err != nil {
+			kernelDBError(c, err)
+			return
+		}
+		for _, plan := range plans {
+			response.Plans = append(response.Plans, accessGroupPlanSummary{ID: plan.ID, Name: plan.Name})
+		}
+	}
+
+	if err := h.db.Where("group_id = ?", id).Order("resource_type, resource_id, id").Find(&response.ResourceGrants).Error; err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	if err := h.db.Where("group_id = ?", id).Order("key, id").Find(&response.QuotaPolicies).Error; err != nil {
+		kernelDBError(c, err)
+		return
+	}
+
+	kernelData(c, http.StatusOK, response)
 }
 
 func (h *KernelHandler) CreateAccessGroup(c *gin.Context) {

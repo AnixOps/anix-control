@@ -197,6 +197,7 @@ const navSections = computed(() => {
     items: [
       { to: '/admin/mfa', icon: 'MF', label: t('layout.admin.nav.mfa') },
       { to: '/admin/control', icon: 'CT', label: t('layout.admin.nav.control') },
+      { to: '/admin/access-groups', icon: 'AG', label: t('layout.admin.nav.accessGroups') },
       { to: '/admin/system', icon: 'SY', label: t('layout.admin.nav.system') }
     ]
   }

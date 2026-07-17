@@ -28,6 +28,14 @@
       "GRPCServerName": "{{ grpc_server_name | default(grpc_host.split(':')[0]) }}",
 {% endif %}
       "GRPCKeepalive": {{ grpc_keepalive | default(30) }},
+      "AgentControlEnabled": {{ agent_control_enabled | default(false) | bool | lower }},
+      "AgentControlAllowInsecure": {{ agent_control_allow_insecure | default(false) | bool | lower }},
+{% if plugin_supervisor_enabled | default(false) | bool %}
+      "PluginSupervisorEnabled": true,
+      "PluginRoot": "{{ plugin_root }}",
+      "PluginSocketDir": "{{ plugin_socket_dir }}",
+      "PluginOfficialPublicKey": "{{ plugin_official_public_key }}",
+{% endif %}
       "ApiKey": "{{ node_api_key }}",
       "NodeID": {{ node_id }},
       "Timeout": {{ node_timeout | default(30) }},

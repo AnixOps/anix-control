@@ -253,6 +253,7 @@ export default {
       forwardNodeX: 'NodeX 运行时',
       forwardAgents: 'NodeX Agents',
       control: '控制内核',
+      accessGroups: '访问组',
       payment: '支付网关管理',
       telegram: 'Telegram Bot 管理',
       mfa: 'MFA 设置',
@@ -311,6 +312,7 @@ export default {
         knowledge: '知识库',
         mfa: 'MFA 设置',
         control: '控制内核',
+        accessGroups: '访问组',
         system: '系统管理',
         nodeXAgentsLegacy: 'NodeX Agents Legacy'
       }
@@ -2231,8 +2233,16 @@ export default {
           amd64BinaryPath: 'AMD64 二进制路径',
           arm64BinaryPath: 'ARM64 二进制路径',
           coreType: '核心类型',
-          grpcUseTLS: 'gRPC 使用 TLS'
+          grpcUseTLS: 'gRPC 使用 TLS',
+          pluginSupervisorEnabled: '启用插件 Supervisor 灰度',
+          pluginRoot: '插件状态目录',
+          pluginSocketDir: '插件 Socket 目录',
+          pluginOfficialPublicKey: '官方插件公钥'
         },
+        pluginSupervisorHint: '保留现有数据面，只让该 Agent 接受官方签名软件包生命周期操作。',
+        pluginSupervisorControlRequired: '插件 Supervisor 灰度需要配置的 gRPC 端点使用 TLS，或实际使用回环 gRPC 主机。',
+        pluginSupervisorKeyRequired: '复制插件 Supervisor 灰度配置前，请填写官方插件公钥。',
+        pluginSupervisorKeyInvalid: '官方插件公钥必须是 Base64 编码的 Ed25519 公钥。',
         table: {
           alias: '别名',
           node: '父节点',
@@ -3055,6 +3065,24 @@ export default {
       topologyLoad: '无法加载拓扑修订', topologyValidate: '无法校验拓扑', topologySave: '无法保存拓扑修订', topologyPlan: '无法规划拓扑部署',
       topologyPreview: '无法预览拓扑部署', topologyStatus: '无法加载部署状态', topologyApply: '无法应用拓扑部署', topologyRollback: '无法回滚拓扑部署', topologyCreate: '无法创建拓扑'
     }
+  },
+  accessGroups: {
+    subtitle: '管理独立服务作用域的成员关系、资源授权和插件私有配额策略。',
+    actions: { refresh: '刷新', refreshing: '刷新中...', newGroup: '新建访问组', open: '打开', enable: '启用', disable: '禁用', add: '添加', addGrant: '添加授权', saveQuota: '保存配额', resolve: '解析有效授权', resolving: '解析中...', saving: '保存中...' },
+    filters: { title: '访问组筛选', scope: '服务作用域', allScopes: '全部服务作用域' },
+    table: { group: '访问组', scope: '作用域', state: '状态', actions: '操作' },
+    states: { enabled: '已启用', disabled: '已禁用' },
+    groups: { title: '访问组', count: '{count} 个访问组', empty: '该作用域暂无访问组', noDescription: '暂无说明', directUnion: '直接成员和套餐成员按允许并集计算。' },
+    detail: { loading: '正在加载访问组详情...', empty: '选择一个访问组以管理其成员和策略。' },
+    members: { title: '用户成员', userID: '用户 ID', empty: '暂无直接用户成员' },
+    plans: { title: '套餐成员', planID: '套餐 ID', empty: '暂无套餐成员' },
+    grants: { title: '资源授权', resourceType: '资源类型', resourceID: '资源 ID', permissions: '权限 JSON', empty: '暂无资源授权' },
+    quotas: { title: '配额策略', key: '策略键', policy: '策略 JSON', empty: '暂无配额策略' },
+    resolver: { title: '有效授权预览', description: '预览一个用户、可选套餐和服务作用域在服务端的允许并集结果。', userID: '用户 ID', planID: '套餐 ID（可选）', scope: '服务作用域', result: '命中 {count} 个已启用访问组', none: '没有命中已启用访问组', policySummary: '当前生效 {grants} 条授权和 {quotas} 条配额策略。' },
+    editor: { createTitle: '新建访问组', editTitle: '编辑访问组', name: '组名称', description: '说明', enabled: '启用该访问组' },
+    messages: { groupCreated: '已创建访问组 {name}', groupSaved: '已保存访问组 {name}', groupEnabled: '已启用访问组 {name}', groupDisabled: '已禁用访问组 {name}', groupDeleted: '已删除访问组 {name}', memberAdded: '已添加用户 #{id}', memberRemoved: '已移除用户 #{id}', planAdded: '已添加套餐 #{id}', planRemoved: '已移除套餐 #{id}', grantAdded: '已添加资源授权', grantRemoved: '已移除资源授权', quotaSaved: '已保存配额策略', quotaRemoved: '已移除配额策略' },
+    confirm: { deleteGroup: '删除访问组 {name}？其成员、授权和配额策略将一并删除。', removeMember: '确认从该访问组移除用户 #{id}？', removePlan: '确认从该访问组移除套餐 #{id}？', removeGrant: '确认移除资源授权 #{id}？', removeQuota: '确认移除配额策略 {key}？' },
+    errors: { load: '无法加载访问控制数据', loadGroups: '无法加载访问组', loadDetail: '无法加载访问组详情', groupRequired: '必须填写服务作用域和组名称', saveGroup: '无法保存访问组', deleteGroup: '无法删除访问组', member: '无法更新用户成员关系', plan: '无法更新套餐成员关系', grant: '无法更新资源授权', quota: '无法更新配额策略', resolve: '无法解析有效授权', invalidID: '{label} 必须为正整数', invalidJSON: '{label} 必须为有效 JSON', scopeRequired: '必须选择服务作用域' }
   },
   legacy
 }

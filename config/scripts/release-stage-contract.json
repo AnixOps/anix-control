@@ -1,0 +1,502 @@
+{
+  "schema_version": 1,
+  "product": {
+    "name": "AnixOps Control",
+    "go_module_path": "github.com/AnixOps/anix-control/v4",
+    "go_module_major": 4,
+    "versioning_rule": "Product release tags define delivery stages independently from the Go module import major. A v3.x product release is valid while the module path remains /v4."
+  },
+  "legacy_preview_tags": [
+    "v4.0.0-alpha.1",
+    "v4.0.0-alpha.2",
+    "v4.0.0-alpha.3",
+    "v4.0.0-alpha.4",
+    "v4.0.0-alpha.5",
+    "v4.0.0-alpha.6",
+    "v4.0.0-alpha.7"
+  ],
+  "legacy_preview_package_ids": [
+    "machine-telemetry",
+    "nftables-forward",
+    "gost-mesh",
+    "nat-egress"
+  ],
+  "configuration_contract": {
+    "safe_default_templates": [
+      {
+        "path": "config/config.yaml.example",
+        "plugins": {
+          "control_execution_enabled": false,
+          "dispatch_enabled": false,
+          "topology_execution_enabled": false
+        }
+      },
+      {
+        "path": "config/config.prod.yaml",
+        "plugins": {
+          "control_execution_enabled": false,
+          "dispatch_enabled": false,
+          "topology_execution_enabled": false
+        }
+      }
+    ],
+    "explicit_canary_templates": [
+      {
+        "path": "config/config.dev.yaml.example",
+        "plugins": {
+          "control_execution_enabled": true,
+          "dispatch_enabled": true,
+          "topology_execution_enabled": false
+        }
+      }
+    ]
+  },
+  "stages": [
+    {
+      "id": "3.1",
+      "product_version": "3.1.0",
+      "summary": "Signed package lifecycle and modular WebUI foundation.",
+      "required_packages": [
+        {
+          "id": "machine-telemetry",
+          "manifest": "packages/machine-telemetry/manifest.template.json",
+          "minimum_version": "1.1.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        }
+      ],
+      "out_of_scope_package_ids": [
+        "nftables-forward",
+        "gost-mesh",
+        "nat-egress",
+        "wireguard",
+        "protocol-runtime"
+      ],
+      "exit_evidence": [
+        "signed manifest and immutable WebUI bundle verification",
+        "durable lifecycle dispatch and observed-state replay",
+        "machine-telemetry Control-to-Agent reference package acceptance",
+        "legacy API and data-plane fallback remain unchanged"
+      ]
+    },
+    {
+      "id": "3.2",
+      "product_version": "3.2.0",
+      "summary": "Declarative topology and dedicated-line nftables forwarding canary.",
+      "required_packages": [
+        {
+          "id": "machine-telemetry",
+          "manifest": "packages/machine-telemetry/manifest.template.json",
+          "minimum_version": "1.1.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "nftables-forward",
+          "manifest": "packages/nftables-forward/manifest.template.json",
+          "minimum_version": "1.2.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        }
+      ],
+      "out_of_scope_package_ids": [
+        "gost-mesh",
+        "nat-egress",
+        "wireguard",
+        "protocol-runtime"
+      ],
+      "exit_evidence": [
+        "topology plan/apply/rollback and canary deployment records",
+        "nftables TCP and UDP namespace acceptance with snapshot rollback",
+        "legacy forwarding fallback rehearsal"
+      ]
+    },
+    {
+      "id": "3.3",
+      "product_version": "3.3.0",
+      "summary": "GOST mesh and NAT egress tunnel composition.",
+      "required_packages": [
+        {
+          "id": "machine-telemetry",
+          "manifest": "packages/machine-telemetry/manifest.template.json",
+          "minimum_version": "1.1.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "nftables-forward",
+          "manifest": "packages/nftables-forward/manifest.template.json",
+          "minimum_version": "1.2.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "gost-mesh",
+          "manifest": "packages/gost-mesh/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "nat-egress",
+          "manifest": "packages/nat-egress/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        }
+      ],
+      "out_of_scope_package_ids": [
+        "wireguard",
+        "protocol-runtime"
+      ],
+      "exit_evidence": [
+        "mutual-TLS WSS and QUIC tunnel acceptance",
+        "policy-routed NAT egress and composed rollback evidence",
+        "Secret ID materialization, accounting isolation, and sustained canary"
+      ]
+    },
+    {
+      "id": "3.4",
+      "product_version": "3.4.0",
+      "summary": "WireGuard and protocol-runtime composition.",
+      "required_packages": [
+        {
+          "id": "machine-telemetry",
+          "manifest": "packages/machine-telemetry/manifest.template.json",
+          "minimum_version": "1.1.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "nftables-forward",
+          "manifest": "packages/nftables-forward/manifest.template.json",
+          "minimum_version": "1.2.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "gost-mesh",
+          "manifest": "packages/gost-mesh/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "nat-egress",
+          "manifest": "packages/nat-egress/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "wireguard",
+          "manifest": "packages/wireguard/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "protocol-runtime",
+          "manifest": "packages/protocol-runtime/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        }
+      ],
+      "out_of_scope_package_ids": [],
+      "exit_evidence": [
+        "WireGuard peer lifecycle and key rotation",
+        "WireGuard to GOST/NAT and protocol-runtime/NAT composed topology acceptance",
+        "client import, accounting, interruption, and rollback evidence"
+      ]
+    },
+    {
+      "id": "3.5",
+      "product_version": "3.5.0",
+      "summary": "Business-domain package ownership and API v2 adapter migration.",
+      "required_packages": [
+        {
+          "id": "subscription",
+          "manifest": "packages/subscription/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "proxy-node",
+          "manifest": "packages/proxy-node/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "plan",
+          "manifest": "packages/plan/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "order",
+          "manifest": "packages/order/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "payment",
+          "manifest": "packages/payment/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "forward",
+          "manifest": "packages/forward/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "ticket",
+          "manifest": "packages/ticket/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "notification",
+          "manifest": "packages/notification/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "knowledge",
+          "manifest": "packages/knowledge/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        }
+      ],
+      "out_of_scope_package_ids": [],
+      "exit_evidence": [
+        "shadow-read or dual-write reconciliation for each ownership switch",
+        "subscription bytes, traffic counters, payment idempotency, and data-retention checks",
+        "API v2 routes are adapters rather than direct coupled business handlers"
+      ]
+    },
+    {
+      "id": "4.0",
+      "product_version": "4.0.0",
+      "summary": "Plugin-only platform with the coupled business/runtime mode removed.",
+      "required_packages": [
+        {
+          "id": "subscription",
+          "manifest": "packages/subscription/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "proxy-node",
+          "manifest": "packages/proxy-node/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "plan",
+          "manifest": "packages/plan/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "order",
+          "manifest": "packages/order/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "payment",
+          "manifest": "packages/payment/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "forward",
+          "manifest": "packages/forward/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "ticket",
+          "manifest": "packages/ticket/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "notification",
+          "manifest": "packages/notification/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "knowledge",
+          "manifest": "packages/knowledge/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "machine-telemetry",
+          "manifest": "packages/machine-telemetry/manifest.template.json",
+          "minimum_version": "1.1.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "nftables-forward",
+          "manifest": "packages/nftables-forward/manifest.template.json",
+          "minimum_version": "1.2.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "gost-mesh",
+          "manifest": "packages/gost-mesh/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "nat-egress",
+          "manifest": "packages/nat-egress/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "wireguard",
+          "manifest": "packages/wireguard/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        },
+        {
+          "id": "protocol-runtime",
+          "manifest": "packages/protocol-runtime/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control",
+            "agent"
+          ],
+          "requires_webui": true
+        }
+      ],
+      "out_of_scope_package_ids": [],
+      "exit_evidence": [
+        "clean database bootstrap and final 3.5 upgrade/restore rehearsal",
+        "install, disable, uninstall, and reinstall every default package",
+        "no production request reaches coupled legacy handlers or workers",
+        "full destructive-migration rollback approval"
+      ]
+    }
+  ]
+}

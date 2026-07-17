@@ -19,7 +19,9 @@ runbooks instead of mixing deployment models on the same host.
    The fresh development template binds gRPC to `127.0.0.1:50051`; remote
    Agents require an explicit TLS/proxy setup and a deliberate bind-address change.
 3. Decide the exact version to install. Pinning a tag makes the operation
-   reproducible; the signed-package WebUI preview is `v4.0.0-alpha.7`.
+   reproducible; `v4.0.0-alpha.7` is a historical signed-package WebUI preview,
+   not formal 4.0 approval. The formal product line is documented in
+   [`../architecture/release-line-status.md`](../architecture/release-line-status.md).
 4. Back up any existing panel before running `update` or `rollback`.
 
 ## Fresh Install
@@ -48,11 +50,13 @@ The installer will:
 6. Install and enable `anix-control.service`.
 7. Start the service and require `http://127.0.0.1:8080/health` to succeed.
 
-The fresh alpha configuration pins the official AnixOps Ed25519 public key and
-enables package execution plus durable Agent dispatch. Its gRPC listener stays
-on `127.0.0.1:50051`, so it is directly usable for same-host acceptance without
-opening a plaintext remote credential path. Existing configuration files are
-preserved during upgrades and are never silently switched to the plugin path.
+The normal configuration template keeps package execution, Agent dispatch, and
+topology execution disabled. It can inspect signed package metadata without
+switching traffic or starting package workers. Use the explicit development or
+operator-approved canary profile to enable a signed package lifecycle after
+the trust root, Agent Supervisor, rollback plan, and secure gRPC path are
+ready. Existing configuration files are preserved during upgrades and are
+never silently switched to the plugin path.
 
 The generated initial password is stored at
 `/opt/anixops/control/.bootstrap-admin-password` with restricted permissions. Store it
@@ -104,14 +108,15 @@ official public key.
 
 ## Import The Signed Official Packages
 
-The alpha package center is intentionally operator-driven. Download the four
-package triples from the same Control GitHub Release: the `.tar`,
-`.manifest.json`, and `.sig` for `machine-telemetry`, `nftables-forward`,
-`nat-egress`, and `gost-mesh`. In the admin UI open **Control > Plugins > Import
-release**, paste or upload the manifest and signature, choose the matching tar
-artifact, and submit each release. The UI verifies the signed manifest and
-artifact digest before it becomes installable; do not mix assets from different
-tags.
+The package center is intentionally operator-driven. Download only the signed
+package IDs declared by the selected product-stage release: formal 3.1 attaches
+`machine-telemetry` only, while later forwarding packages begin at their own
+stages. Historical `v4.0.0-alpha.*` releases retain their original preview
+assets and must not be treated as the 3.1 asset set. In the admin UI open
+**Control > Plugins > Import release**, paste or upload the manifest and
+signature, choose the matching tar artifact, and submit each release. The UI
+verifies the signed manifest and artifact digest before it becomes installable;
+do not mix assets from different tags.
 
 After importing a release:
 
@@ -144,11 +149,11 @@ disable/re-enable, update, rollback, grant revocation, and malformed-extension
 isolation during the canary. Do not enable topology execution on production
 nodes merely because preview succeeds.
 
-`v4.0.0-alpha.7` is a canary release. Keep production traffic on the tested
-legacy path while the signed package/WebUI path is observed. Do not publish a
-stable 4.0 release until the package lifecycle, node health, rollback, and
-compatibility checks have passed continuously for 72 hours and the operator
-has explicitly authorized the stable release.
+`v4.0.0-alpha.7` is a historical canary artifact. Keep production traffic on
+the tested legacy path while the signed package/WebUI path is observed. Do not
+use it to claim a stable 4.0 release; the formal 3.1 through 3.5 gates, their
+package scope, and the eventual plugin-only 4.0 cutover are defined in
+[`../architecture/release-line-status.md`](../architecture/release-line-status.md).
 
 ## Upgrade And Rollback
 

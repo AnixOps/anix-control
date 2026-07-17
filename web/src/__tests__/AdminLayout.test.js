@@ -54,6 +54,7 @@ const adminMenuPaths = [
   '/admin/mfa',
   '/admin/system',
   '/admin/control',
+  '/admin/access-groups',
 ]
 
 describe('AdminLayout.vue', () => {

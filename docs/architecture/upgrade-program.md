@@ -14,8 +14,12 @@ legacy `/api/v2` APIs, subscription behavior, UniProxy synchronization, and
 forwarding workers stay on the production path while the package manager is
 introduced behind feature flags.
 
-Current status: **3.3 preview, canary-only and blocked for data-plane production
-release**.
+Current status: **the `v3.1.0-alpha.2` foundation candidate is under
+verification; it is canary-only and blocked for production data-plane
+release**. Historical `v4.0.0-alpha.*` tags are not a substitute for the
+formal 3.1 through 4.0 gates. See
+[`release-line-status.md`](release-line-status.md) for the version decision and
+current implementation boundary.
 
 Already present in the current branch:
 
@@ -172,10 +176,13 @@ boundaries, not only in isolated unit tests.
    gRPC server and durable bridge, and asserts terminal state plus envelope
    identity. The Agent repository separately covers Supervisor plus the
    signed `machine-telemetry` process chain.
-3. **Browser E2E (evidence complete, catalog fixture)**: Playwright covers
-   same-origin digest loading, route collision isolation, disabled entries,
-   tampered bundles, and kernel-page recovery. A later staging test must use a
-   running Control catalog instead of the HTTP fixture.
+3. **Browser E2E (evidence complete, fixture plus isolated live Control)**:
+   Playwright covers same-origin digest loading, route collision isolation,
+   disabled entries, tampered bundles, and kernel-page recovery. The CI
+   live-Control gate additionally boots a real temporary Control/frontend,
+   registers and enables an ephemeral signed `machine-telemetry` package, and
+   verifies catalog/asset/menu/route creation plus worker-completed disable
+   revocation. A production-like staging canary is still required.
 4. **Dependency execution (implementation complete, feature gated)**:
    recursive loading, stable dependency-first order, cycle/missing/conflict
    detection, trust-root re-verification, dependency-aware Control execution,

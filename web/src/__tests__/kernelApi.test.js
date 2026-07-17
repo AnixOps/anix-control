@@ -20,6 +20,8 @@ describe('kernel API', () => {
       [() => kernelApi.getKernelPluginReleaseArtifact(9), '/plugin-releases/9/artifact'],
       [() => kernelApi.getKernelInstallationConfig(7), '/plugin-installations/7/config'],
       [kernelApi.getKernelScopes, '/service-scopes'],
+      [kernelApi.getKernelAccessGroups, '/access-groups'],
+      [() => kernelApi.getKernelAccessGroupDetail(7), '/access-groups/7'],
       [kernelApi.getKernelTopologies, '/topologies'],
       [() => kernelApi.getKernelTopologyRevisions(3), '/topologies/3/revisions'],
       [() => kernelApi.getKernelTopologyRevision(3, 7), '/topologies/3/revisions/7'],
@@ -143,6 +145,47 @@ describe('kernel API', () => {
       url: '/nodes/11/assignments/7',
       method: 'delete'
     })
+  })
+
+  it('manages service-scope access groups, memberships, grants, quotas, and effective access through the kernel routes', async () => {
+    await kernelApi.getKernelAccessGroups('forward')
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3', url: '/access-groups', method: 'get', params: { scope_id: 'forward' }
+    })
+
+    const group = { scope_id: 'forward', name: 'canary', description: 'Canary access', enabled: true }
+    await kernelApi.createKernelAccessGroup(group)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups', method: 'post', data: group })
+    await kernelApi.updateKernelAccessGroup(7, { name: 'canary', description: '', enabled: false })
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups/7', method: 'put', data: { name: 'canary', description: '', enabled: false } })
+
+    await kernelApi.addKernelAccessGroupUser(7, 11)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups/7/users', method: 'post', data: { user_id: 11 } })
+    await kernelApi.removeKernelAccessGroupUser(7, 11)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups/7/users/11', method: 'delete' })
+    await kernelApi.addKernelAccessGroupPlan(7, 4)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups/7/plans', method: 'post', data: { plan_id: 4 } })
+    await kernelApi.removeKernelAccessGroupPlan(7, 4)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups/7/plans/4', method: 'delete' })
+
+    const grant = { group_id: 7, resource_type: 'plugin_api', resource_id: 'machine-telemetry', permissions: '["machine-telemetry.api"]' }
+    await kernelApi.createKernelResourceGrant(grant)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/resource-grants', method: 'post', data: grant })
+    await kernelApi.deleteKernelResourceGrant(12)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/resource-grants/12', method: 'delete' })
+
+    const policy = { group_id: 7, key: 'machine-telemetry.rate', policy: '{"requests_per_minute":60}' }
+    await kernelApi.upsertKernelQuotaPolicy(policy)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/quota-policies', method: 'put', data: policy })
+    await kernelApi.deleteKernelQuotaPolicy(13)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/quota-policies/13', method: 'delete' })
+
+    await kernelApi.resolveKernelAccess({ userID: 11, planID: 4, scopeID: 'forward' })
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3', url: '/access-groups/resolve', method: 'get', params: { user_id: 11, plan_id: 4, scope_id: 'forward' }
+    })
+    await kernelApi.deleteKernelAccessGroup(7)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/access-groups/7', method: 'delete' })
   })
 
   it('cancels operations through the kernel endpoint', async () => {

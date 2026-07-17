@@ -89,14 +89,15 @@ app:
 plugins:
   # Official AnixOps Ed25519 release trust root (raw public key, base64).
   official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
-  # The alpha profile enables the signed package API and durable lifecycle
-  # worker. Existing installations keep their legacy data plane unless an
-  # Agent explicitly opts into AgentControlEnabled and its Supervisor.
-  control_execution_enabled: true
+  # Normal product installs keep package execution disabled until a documented
+  # canary explicitly enables it. Signed catalog and WebUI inspection remain
+  # available while this worker is off.
+  control_execution_enabled: false
   control_poll_interval: "5s"
-  # The matching development gRPC listener makes the package path usable after
-  # an Agent is configured. Production deployments must set TLS/proxy details.
-  dispatch_enabled: true
+  # Keep Control-to-Agent lifecycle delivery disabled in the normal template.
+  # Use config.dev.yaml.example or an operator-approved canary profile to turn
+  # it on after the Agent Supervisor and rollback plan are ready.
+  dispatch_enabled: false
   dispatch_poll_interval: "5s"
   # Declarative topology execution remains opt-in and also requires
   # dispatch_enabled so planned revisions cannot alter legacy traffic.

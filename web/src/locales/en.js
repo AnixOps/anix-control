@@ -244,6 +244,7 @@ export default {
       forwardNodeX: 'NodeX Runtime',
       forwardAgents: 'NodeX Agents',
       control: 'Control Kernel',
+      accessGroups: 'Access Groups',
       payment: 'Payment Gateways',
       telegram: 'Telegram Bot',
       mfa: 'MFA',
@@ -302,6 +303,7 @@ export default {
         knowledge: 'Knowledge Base',
         mfa: 'MFA',
         control: 'Control Kernel',
+        accessGroups: 'Access Groups',
         system: 'System',
         nodeXAgentsLegacy: 'NodeX Agents Legacy'
       }
@@ -2223,8 +2225,16 @@ export default {
           amd64BinaryPath: 'AMD64 binary path',
           arm64BinaryPath: 'ARM64 binary path',
           coreType: 'Core type',
-          grpcUseTLS: 'Use TLS for gRPC'
+          grpcUseTLS: 'Use TLS for gRPC',
+          pluginSupervisorEnabled: 'Enable Plugin Supervisor canary',
+          pluginRoot: 'Plugin state directory',
+          pluginSocketDir: 'Plugin socket directory',
+          pluginOfficialPublicKey: 'Official plugin public key'
         },
+        pluginSupervisorHint: 'Keeps the existing data plane unchanged and only enables signed package lifecycle operations on this Agent.',
+        pluginSupervisorControlRequired: 'The Plugin Supervisor canary requires TLS for its configured gRPC endpoint or an actual loopback gRPC host.',
+        pluginSupervisorKeyRequired: 'Enter the official plugin public key before copying a Plugin Supervisor canary configuration.',
+        pluginSupervisorKeyInvalid: 'The official plugin public key must be a Base64-encoded Ed25519 public key.',
         table: {
           alias: 'Alias',
           node: 'Parent node',
@@ -3047,6 +3057,24 @@ export default {
       topologyLoad: 'Unable to load topology revisions', topologyValidate: 'Unable to validate topology', topologySave: 'Unable to save topology revision', topologyPlan: 'Unable to plan topology deployment',
       topologyPreview: 'Unable to preview topology deployment', topologyStatus: 'Unable to load deployment status', topologyApply: 'Unable to apply topology deployment', topologyRollback: 'Unable to roll back topology deployment', topologyCreate: 'Unable to create topology'
     }
+  },
+  accessGroups: {
+    subtitle: 'Manage independent service-scope memberships, resource grants, and plugin-owned quota policies.',
+    actions: { refresh: 'Refresh', refreshing: 'Refreshing...', newGroup: 'New group', open: 'Open', enable: 'Enable', disable: 'Disable', add: 'Add', addGrant: 'Add grant', saveQuota: 'Save quota', resolve: 'Resolve access', resolving: 'Resolving...', saving: 'Saving...' },
+    filters: { title: 'Access group filters', scope: 'Service scope', allScopes: 'All service scopes' },
+    table: { group: 'Access group', scope: 'Scope', state: 'State', actions: 'Actions' },
+    states: { enabled: 'Enabled', disabled: 'Disabled' },
+    groups: { title: 'Access groups', count: '{count} groups', empty: 'No access groups in this scope', noDescription: 'No description', directUnion: 'Direct and plan membership are combined as an allow-union.' },
+    detail: { loading: 'Loading access group details...', empty: 'Select an access group to manage its memberships and policies.' },
+    members: { title: 'User members', userID: 'User ID', empty: 'No direct user members' },
+    plans: { title: 'Plan memberships', planID: 'Plan ID', empty: 'No plan memberships' },
+    grants: { title: 'Resource grants', resourceType: 'Resource type', resourceID: 'Resource ID', permissions: 'Permissions JSON', empty: 'No resource grants' },
+    quotas: { title: 'Quota policies', key: 'Policy key', policy: 'Policy JSON', empty: 'No quota policies' },
+    resolver: { title: 'Effective access preview', description: 'Preview the server-side allow-union for one user, optional plan, and service scope.', userID: 'User ID', planID: 'Plan ID (optional)', scope: 'Service scope', result: '{count} enabled groups apply', none: 'No enabled groups apply', policySummary: '{grants} grants and {quotas} quota policies are effective.' },
+    editor: { createTitle: 'Create access group', editTitle: 'Edit access group', name: 'Group name', description: 'Description', enabled: 'Group is enabled' },
+    messages: { groupCreated: 'Created access group {name}', groupSaved: 'Saved access group {name}', groupEnabled: 'Enabled access group {name}', groupDisabled: 'Disabled access group {name}', groupDeleted: 'Deleted access group {name}', memberAdded: 'Added user #{id}', memberRemoved: 'Removed user #{id}', planAdded: 'Added plan #{id}', planRemoved: 'Removed plan #{id}', grantAdded: 'Added resource grant', grantRemoved: 'Removed resource grant', quotaSaved: 'Saved quota policy', quotaRemoved: 'Removed quota policy' },
+    confirm: { deleteGroup: 'Delete access group {name}? Its memberships, grants, and quota policies will be removed.', removeMember: 'Remove user #{id} from this access group?', removePlan: 'Remove plan #{id} from this access group?', removeGrant: 'Remove resource grant #{id}?', removeQuota: 'Remove quota policy {key}?' },
+    errors: { load: 'Unable to load access control data', loadGroups: 'Unable to load access groups', loadDetail: 'Unable to load access group details', groupRequired: 'A service scope and group name are required', saveGroup: 'Unable to save access group', deleteGroup: 'Unable to delete access group', member: 'Unable to update user membership', plan: 'Unable to update plan membership', grant: 'Unable to update resource grant', quota: 'Unable to update quota policy', resolve: 'Unable to resolve effective access', invalidID: '{label} must be a positive integer', invalidJSON: '{label} must be valid JSON', scopeRequired: 'A service scope is required' }
   },
   legacy
 }

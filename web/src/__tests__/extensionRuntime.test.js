@@ -78,6 +78,7 @@ function createRuntime(fetchExtensions, resolveModule = () => async () => localM
     resolveModule,
     refreshIntervalMs: 0,
     hasPermission: () => true,
+    allowLocalModules: true,
     ...extra,
   })
 }
@@ -262,6 +263,27 @@ describe('admin extension runtime', () => {
     expect(result.errors).toEqual([])
     expect(result.pluginIDs).toEqual(['example'])
     expect(router.getRoutes().map(route => route.path)).toContain('/admin/extensions/example')
+  })
+
+  it('requires a verified package asset URL in the production runtime', async () => {
+    const router = createTestRouter()
+    const resolveModule = vi.fn(() => async () => localModule())
+    const runtime = createAdminExtensionRuntime({
+      fetchExtensions: async () => [catalogEntry()],
+      resolveModule,
+      refreshIntervalMs: 0,
+      hasPermission: () => true,
+    })
+
+    const result = await runtime.refresh(router)
+
+    expect(resolveModule).not.toHaveBeenCalled()
+    expect(result.pluginIDs).toEqual([])
+    expect(result.errors).toEqual([expect.objectContaining({
+      code: 'invalid_extension',
+      plugin_id: 'example',
+      message: 'extension bundle URL is required for a package WebUI',
+    })])
   })
 
   it('skips an unauthorized remote extension before fetching its top-level bundle', async () => {

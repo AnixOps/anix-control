@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Added
+
+- Established the formal product-stage contract from `3.1` through `4.0`,
+  separate from the Go module `/v4` import path. The next candidate is
+  `v3.1.0-alpha.2`; its signed package scope is only `machine-telemetry`.
+- Added an operational `/admin/access-groups` surface, server-side
+  effective-access preview, and an identity-only group detail response.
+- Added a real Control-to-Chromium signed WebUI E2E gate that proves package
+  registration, artifact upload, enable, catalog/asset/menu/route loading, and
+  durable disable revocation.
+- Added a default-off Agent Supervisor canary to the node deployment flow,
+  including secure gRPC endpoint checks, canonical Ed25519 public-key checks,
+  and Ansible group-variable/template propagation.
+
+### Fixed
+
+- Made historical `v4.0.0-alpha.*` tags audit-only in release automation and
+  made unconfigured product stages fail closed. Docker publication now waits
+  for signed package publication.
+- Removed the production WebUI runtime's compiled local-module fallback; a
+  package WebUI must use its verified Control-served bundle URL.
+
 ## 4.0.0-alpha.7 - 2026-07-18
 
 ### Fixed

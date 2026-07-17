@@ -62,6 +62,7 @@ describe('admin routes', () => {
       '/admin/system',
       '/admin/agent',
       '/admin/control',
+      '/admin/access-groups',
     ]
 
     const routePaths = router.getRoutes().map(route => route.path)

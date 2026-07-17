@@ -20,6 +20,10 @@ truth for implemented, partial, planned, compatibility, and deferred features.
   crash-safe `nftables-forward` 1.2.0 packages, topology preflight, revision/
   canary deployment WebUI, and kernel-observed nftables evidence are usable
   for isolated alpha validation).
+- Product delivery line: `v4.0.0-alpha.*` is immutable historical preview
+  evidence, not a formal 4.0 approval. The formal product stages resume at the
+  untagged `v3.1.0-alpha.2` candidate and advance through 3.5 before 4.0. See
+  [`docs/architecture/release-line-status.md`](docs/architecture/release-line-status.md).
 - Agent-first status: the `anix.agent.v1` bidirectional gRPC control stream is
   an opt-in foundation in this alpha, not yet the only production task path.
 
