@@ -1,5 +1,5 @@
 const PLUGIN_ID = 'machine-telemetry'
-const PLUGIN_VERSION = '1.0.0'
+const PLUGIN_VERSION = '1.1.0'
 const BUNDLE_PATH = 'webui/index.mjs'
 const STATUS_PATH = '/api/v3/plugins/machine-telemetry/status?limit=200'
 
@@ -44,6 +44,12 @@ function uptime(value) {
 function stateLabel(node) {
   if (node?.status === 'disabled' || node?.status === 3) {
     return 'Disabled'
+  }
+  if (node?.telemetry_available === false) {
+    return 'No data'
+  }
+  if (node?.telemetry_stale) {
+    return 'Stale'
   }
   if (!node?.online) {
     return 'Offline'
@@ -105,6 +111,8 @@ export default function create(host) {
           ['Online', value.summary.online ?? 0],
           ['Offline', value.summary.offline ?? 0],
           ['Unhealthy', value.summary.unhealthy ?? 0],
+          ['Stale', value.summary.stale ?? 0],
+          ['Missing', value.summary.missing ?? 0],
         ]
         return h('section', { class: 'control-page machine-telemetry-extension' }, [
           h('div', { class: 'page-header' }, [

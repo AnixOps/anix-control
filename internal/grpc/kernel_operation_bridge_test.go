@@ -199,6 +199,7 @@ func TestKernelObservedStateMapsEveryPhase(t *testing.T) {
 		{agentv1pb.ObservedPhase_OBSERVED_PHASE_APPLYING, "applying", "running", "applying"},
 		{agentv1pb.ObservedPhase_OBSERVED_PHASE_SUCCEEDED, "ignored", "succeeded", ""},
 		{agentv1pb.ObservedPhase_OBSERVED_PHASE_SUPERSEDED, "newer revision", "superseded", "newer revision"},
+		{agentv1pb.ObservedPhase_OBSERVED_PHASE_FAILED, agentOperationDeadlineText, "timed_out", agentOperationDeadlineText},
 		{agentv1pb.ObservedPhase_OBSERVED_PHASE_FAILED, "", "failed", "Agent reported operation failure"},
 		{agentv1pb.ObservedPhase_OBSERVED_PHASE_UNSPECIFIED, "waiting", "running", "waiting"},
 	}
@@ -207,6 +208,32 @@ func TestKernelObservedStateMapsEveryPhase(t *testing.T) {
 		require.Equal(t, test.state, state)
 		require.Equal(t, test.error, message)
 	}
+}
+
+func TestKernelOperationBridgePersistsAgentDeadlineAsTimedOut(t *testing.T) {
+	db := newKernelOperationBridgeDB(t)
+	node := model.Node{Name: "deadline-node", Host: "127.0.0.11"}
+	require.NoError(t, db.Create(&node).Error)
+	seedAgentPluginRelease(t, db, "wireguard")
+	deadline := time.Now().Add(time.Minute)
+	operation, _, err := service.CreateKernelOperation(db, model.KernelOperation{
+		ID: uuid.NewString(), IdempotencyKey: "agent-deadline-operation", NodeID: &node.ID,
+		PluginID: "wireguard", TargetVersion: "1.0.0", Kind: "plugin.health", ConfigJSON: `{}`, DeadlineAt: &deadline,
+	})
+	require.NoError(t, err)
+	stream := &kernelOperationStreamStub{connected: true, snapshot: AgentControlSnapshot{NodeID: uint32(node.ID), SessionID: "deadline-session"}}
+	bridge, err := NewKernelOperationBridge(db, stream)
+	require.NoError(t, err)
+	_, err = bridge.RunOnce(context.Background())
+	require.NoError(t, err)
+	stream.observe(uint32(node.ID), &agentv1pb.ObservedState{
+		OperationId: operation.ID, Revision: uint64(operation.Revision),
+		Phase: agentv1pb.ObservedPhase_OBSERVED_PHASE_FAILED, Message: agentOperationDeadlineText,
+	})
+	var stored model.KernelOperation
+	require.NoError(t, db.First(&stored, "id = ?", operation.ID).Error)
+	require.Equal(t, "timed_out", stored.State)
+	require.Equal(t, agentOperationDeadlineText, stored.LastError)
 }
 
 func TestTerminalKernelOperationStateIncludesLegacyCompleted(t *testing.T) {

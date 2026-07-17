@@ -3,6 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { createAdminExtensionRuntime, loadVerifiedBundleModule } from '@/extensions/runtime'
+import {
+  WEBUI_MENU_FALLBACK_PARENT,
+  WEBUI_MENU_PARENTS,
+  normalizeWebUIMenuParent
+} from '@/extensions/menuRegistry'
 import { useUserStore } from '@/stores/user'
 
 const HASH = 'a'.repeat(64)
@@ -104,6 +109,30 @@ describe('admin extension runtime', () => {
     localStorage.clear()
   })
 
+  it('uses the frozen parent registry and isolates unknown package parents', async () => {
+    expect(WEBUI_MENU_PARENTS).toEqual(['services', 'operations', 'system'])
+    expect(normalizeWebUIMenuParent('OPERATIONS')).toBe('operations')
+    expect(normalizeWebUIMenuParent('legacy-forward')).toBe(WEBUI_MENU_FALLBACK_PARENT)
+
+    const router = createTestRouter()
+    const runtime = createRuntime(async () => [catalogEntry({
+      menus: [{
+        id: 'example.main',
+        parent: 'legacy-forward',
+        label: 'Example',
+        icon: 'box',
+        route: '/admin/extensions/example',
+        permission: 'example.view',
+        order: 100,
+      }],
+    })])
+
+    const result = await runtime.refresh(router)
+
+    expect(result.errors).toEqual([])
+    expect(result.menus).toEqual([expect.objectContaining({ parent: WEBUI_MENU_FALLBACK_PARENT })])
+  })
+
   it('registers only a signed-catalog entry backed by a matching local module', async () => {
     const router = createTestRouter()
     const resolveModule = vi.fn(() => async () => localModule())
@@ -169,7 +198,7 @@ describe('admin extension runtime', () => {
       async () => [catalogEntry({
         plugin_id: 'machine-telemetry',
         plugin_name: 'Machine Telemetry',
-        version: '1.0.0',
+        version: '1.1.0',
         bundle: { path: 'webui/index.mjs', sha256: MACHINE_TELEMETRY_HASH },
         permissions: ['machine-telemetry.view'],
         menus: [{

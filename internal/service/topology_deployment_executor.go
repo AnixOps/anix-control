@@ -331,13 +331,24 @@ func GetTopologyDeploymentStatus(db *gorm.DB, deploymentID uint) (*TopologyDeplo
 }
 
 func compileTopologyDeploymentSteps(tx *gorm.DB, topology model.Topology, revision model.TopologyRevision, vertices []model.TopologyVertex, edges []model.TopologyEdge, rolloutGroup string) ([]model.TopologyDeploymentStep, error) {
-	issues := ValidateTopology(TopologyRevisionInput{Vertices: vertices, Edges: edges})
-	if len(issues) > 0 {
-		return nil, fmt.Errorf("topology validation failed: %s", issues[0].Message)
-	}
-	order, err := topologyVertexApplyOrder(vertices, edges)
-	if err != nil {
-		return nil, err
+	// A canary may intentionally remove every vertex in its rollout group. In
+	// that case the new revision has no graph to validate or order; the active
+	// revision below supplies the durable removal steps. Full deployments still
+	// require a non-empty, valid topology, and any non-empty canary graph is
+	// validated normally.
+	var order []string
+	if len(vertices) == 0 && len(edges) == 0 && rolloutGroup != "" {
+		order = []string{}
+	} else {
+		issues := ValidateTopology(TopologyRevisionInput{Vertices: vertices, Edges: edges})
+		if len(issues) > 0 {
+			return nil, fmt.Errorf("topology validation failed: %s", issues[0].Message)
+		}
+		var err error
+		order, err = topologyVertexApplyOrder(vertices, edges)
+		if err != nil {
+			return nil, err
+		}
 	}
 	verticesByKey := make(map[string]model.TopologyVertex, len(vertices))
 	for _, vertex := range vertices {
@@ -396,10 +407,6 @@ func compileTopologyDeploymentSteps(tx *gorm.DB, topology model.Topology, revisi
 		seenNodePlugin[nodePlugin] = vertex.Key
 		selected[vertex.Key] = true
 	}
-	if len(selected) == 0 {
-		return nil, errors.New("topology revision has no deployable plugin vertices for rollout group")
-	}
-
 	previous := make(map[string]model.TopologyVertex)
 	if topology.ActiveRevisionID != nil {
 		var previousVertices []model.TopologyVertex
@@ -423,6 +430,16 @@ func compileTopologyDeploymentSteps(tx *gorm.DB, topology model.Topology, revisi
 			}
 			previous[key] = vertex
 		}
+	}
+	if rolloutGroup != "" {
+		for _, edge := range edges {
+			if selected[edge.TargetKey] && !selected[edge.SourceKey] {
+				return nil, fmt.Errorf("rollout group %q selects vertex %q but not its dependency %q", rolloutGroup, edge.TargetKey, edge.SourceKey)
+			}
+		}
+	}
+	if len(selected) == 0 && len(previous) == 0 {
+		return nil, errors.New("topology revision has no deployable plugin vertices for rollout group")
 	}
 
 	steps := make([]model.TopologyDeploymentStep, 0, len(selected)+len(previous))
@@ -855,7 +872,7 @@ func (e *TopologyDeploymentExecutor) reconcileRollback(tx *gorm.DB, topology *mo
 	}
 	now := e.now()
 	if topologyAnyStepState(steps, topologyStepStateRollbackFailed) {
-		nodes, err := topologyTerminalObservedNodes(tx, deployment.RevisionID)
+		nodes, err := topologyTerminalObservedNodes(tx, deployment)
 		if err != nil {
 			return changed, false, err
 		}
@@ -1028,18 +1045,23 @@ func (e *TopologyDeploymentExecutor) ensureTopologyStepOperation(tx *gorm.DB, de
 }
 
 func completeTopologyDeploymentApply(tx *gorm.DB, topology *model.Topology, deployment *model.TopologyDeployment, revision model.TopologyRevision, steps []model.TopologyDeploymentStep, at time.Time) error {
-	nodes, err := topologyTerminalObservedNodes(tx, deployment.RevisionID)
+	nodes, err := topologyTerminalObservedNodes(tx, deployment)
 	if err != nil {
 		return err
 	}
 	if err := writeTopologyTerminalObservedStates(tx, *deployment, revision, nodes, "succeeded", "", at); err != nil {
 		return err
 	}
-	if err := tx.Model(topology).Update("active_revision_id", revision.ID).Error; err != nil {
-		return err
-	}
-	if err := tx.Model(&model.TopologyRevision{}).Where("id = ?", revision.ID).Update("state", "active").Error; err != nil {
-		return err
+	// A rollout-group deployment is a canary attempt against this revision,
+	// not publication of the whole revision.  Keep the current active pointer
+	// and revision state until a subsequent full rollout succeeds.
+	if strings.TrimSpace(deployment.RolloutGroup) == "" {
+		if err := tx.Model(topology).Update("active_revision_id", revision.ID).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.TopologyRevision{}).Where("id = ?", revision.ID).Update("state", "active").Error; err != nil {
+			return err
+		}
 	}
 	if err := tx.Model(deployment).Updates(map[string]any{
 		"state": topologyDeploymentStateSucceeded, "completed_at": at, "last_error": "",
@@ -1051,15 +1073,20 @@ func completeTopologyDeploymentApply(tx *gorm.DB, topology *model.Topology, depl
 }
 
 func completeTopologyDeploymentRollback(tx *gorm.DB, topology *model.Topology, deployment *model.TopologyDeployment, revision model.TopologyRevision, _ []model.TopologyDeploymentStep, at time.Time) error {
-	nodes, err := topologyTerminalObservedNodes(tx, deployment.RevisionID)
+	nodes, err := topologyTerminalObservedNodes(tx, deployment)
 	if err != nil {
 		return err
 	}
 	if err := writeTopologyTerminalObservedStates(tx, *deployment, revision, nodes, "rolled_back", deployment.LastError, at); err != nil {
 		return err
 	}
-	if err := tx.Model(topology).Update("active_revision_id", deployment.PreviousRevisionID).Error; err != nil {
-		return err
+	// Canary rollback is scoped to its selected steps and must not publish or
+	// repoint the immutable revision.  A full rollout still restores the
+	// previous active revision as before.
+	if strings.TrimSpace(deployment.RolloutGroup) == "" {
+		if err := tx.Model(topology).Update("active_revision_id", deployment.PreviousRevisionID).Error; err != nil {
+			return err
+		}
 	}
 	if err := tx.Model(deployment).Updates(map[string]any{
 		"state": topologyDeploymentStateRolledBack, "completed_at": at, "rollback_completed_at": at,
@@ -1070,13 +1097,8 @@ func completeTopologyDeploymentRollback(tx *gorm.DB, topology *model.Topology, d
 	return nil
 }
 
-func topologyTerminalObservedNodes(tx *gorm.DB, revisionID uint) ([]uint, error) {
-	var nodes []uint
-	if err := tx.Model(&model.TopologyVertex{}).Where("revision_id = ? AND node_id IS NOT NULL", revisionID).
-		Distinct("node_id").Order("node_id").Pluck("node_id", &nodes).Error; err != nil {
-		return nil, err
-	}
-	return nodes, nil
+func topologyTerminalObservedNodes(tx *gorm.DB, deployment *model.TopologyDeployment) ([]uint, error) {
+	return topologyDeploymentNodeIDs(tx, deployment)
 }
 
 func writeTopologyTerminalObservedStates(tx *gorm.DB, deployment model.TopologyDeployment, revision model.TopologyRevision, nodes []uint, state, lastError string, at time.Time) error {

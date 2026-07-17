@@ -489,7 +489,7 @@ func TestKernelMachineTelemetryPluginRouteExecutesAfterKernelAdmission(t *testin
 	require.NoError(t, err)
 	installRecorder := performKernelHandlerRequest(
 		t, http.MethodPut, "/plugin-installations",
-		`{"plugin_id":"machine-telemetry","target":"control","desired_version":"1.0.0","enabled":true}`,
+		`{"plugin_id":"machine-telemetry","target":"control","desired_version":"1.1.0","enabled":true}`,
 		"/plugin-installations", (&KernelHandler{db: db, controlPluginExecutors: registry}).UpsertPluginInstallation,
 	)
 	require.Equal(t, http.StatusOK, installRecorder.Code, installRecorder.Body.String())

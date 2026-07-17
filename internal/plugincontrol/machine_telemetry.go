@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,44 +15,58 @@ import (
 )
 
 const (
-	MachineTelemetryPluginID     = "machine-telemetry"
-	MachineTelemetryVersion      = "1.0.0"
-	MachineTelemetryStatusRoute  = "/api/v3/plugins/machine-telemetry/status"
-	machineTelemetryDefaultLimit = 100
-	machineTelemetryMaximumLimit = 500
-	machineTelemetryStaleAfter   = 5 * time.Minute
+	MachineTelemetryPluginID      = "machine-telemetry"
+	MachineTelemetryVersion       = "1.1.0"
+	MachineTelemetryLegacyVersion = "1.0.0"
+	MachineTelemetryStatusRoute   = "/api/v3/plugins/machine-telemetry/status"
+	machineTelemetryDefaultLimit  = 100
+	machineTelemetryMaximumLimit  = 500
+	machineTelemetryStaleAfter    = 5 * time.Minute
 )
 
 // MachineTelemetryExecutor is the first complete Control-side reference
 // package. It is intentionally read-only: metrics come from the existing node
 // heartbeat table, so enabling it cannot alter proxy or forwarding traffic.
 type MachineTelemetryExecutor struct {
-	db  *gorm.DB
-	now func() time.Time
+	db      *gorm.DB
+	now     func() time.Time
+	version string
 }
 
 func NewMachineTelemetryExecutor(db *gorm.DB) *MachineTelemetryExecutor {
-	return &MachineTelemetryExecutor{db: db, now: time.Now}
+	return NewMachineTelemetryExecutorVersion(db, MachineTelemetryVersion)
+}
+
+func NewMachineTelemetryExecutorVersion(db *gorm.DB, version string) *MachineTelemetryExecutor {
+	if strings.TrimSpace(version) == "" {
+		version = MachineTelemetryVersion
+	}
+	return &MachineTelemetryExecutor{db: db, now: time.Now, version: version}
 }
 
 func (e *MachineTelemetryExecutor) PluginID() string { return MachineTelemetryPluginID }
-func (e *MachineTelemetryExecutor) Version() string  { return MachineTelemetryVersion }
+func (e *MachineTelemetryExecutor) Version() string  { return e.version }
 
 type MachineTelemetryNode struct {
-	ID             uint             `json:"id"`
-	Name           string           `json:"name"`
-	Host           string           `json:"host"`
-	Status         model.NodeStatus `json:"status"`
-	Online         bool             `json:"online"`
-	RuntimeHealthy bool             `json:"runtime_healthy"`
-	RuntimeError   string           `json:"runtime_error,omitempty"`
-	CPUUsage       float64          `json:"cpu_usage"`
-	MemoryUsage    float64          `json:"memory_usage"`
-	DiskUsage      float64          `json:"disk_usage"`
-	Uptime         int64            `json:"uptime"`
-	OnlineUsers    int              `json:"online_users"`
-	LastCheckAt    *int64           `json:"last_check_at,omitempty"`
-	UpdatedAt      time.Time        `json:"updated_at"`
+	ID                  uint             `json:"id"`
+	Name                string           `json:"name"`
+	Host                string           `json:"host"`
+	Status              model.NodeStatus `json:"status"`
+	Online              bool             `json:"online"`
+	RuntimeHealthy      bool             `json:"runtime_healthy"`
+	RuntimeError        string           `json:"runtime_error,omitempty"`
+	CPUUsage            float64          `json:"cpu_usage"`
+	MemoryUsage         float64          `json:"memory_usage"`
+	DiskUsage           float64          `json:"disk_usage"`
+	Uptime              int64            `json:"uptime"`
+	OnlineUsers         int              `json:"online_users"`
+	LastCheckAt         *int64           `json:"last_check_at,omitempty"`
+	UpdatedAt           time.Time        `json:"updated_at"`
+	TelemetryAvailable  bool             `json:"telemetry_available"`
+	TelemetryStale      bool             `json:"telemetry_stale"`
+	TelemetrySource     string           `json:"telemetry_source"`
+	TelemetryObservedAt *time.Time       `json:"telemetry_observed_at,omitempty"`
+	TelemetryError      string           `json:"telemetry_error,omitempty"`
 }
 
 type MachineTelemetrySummary struct {
@@ -60,6 +75,8 @@ type MachineTelemetrySummary struct {
 	Offline   int `json:"offline"`
 	Disabled  int `json:"disabled"`
 	Unhealthy int `json:"unhealthy"`
+	Stale     int `json:"stale"`
+	Missing   int `json:"missing"`
 }
 
 type MachineTelemetryStatus struct {
@@ -88,12 +105,26 @@ func (e *MachineTelemetryExecutor) HandleRoute(_ context.Context, request RouteR
 	if err := e.db.Order("id ASC").Limit(limit).Find(&rows).Error; err != nil {
 		return RouteResponse{}, err
 	}
+	states := make(map[uint]model.PluginTelemetryState)
+	if len(rows) > 0 && e.db.Migrator().HasTable(&model.PluginTelemetryState{}) {
+		nodeIDs := make([]uint, 0, len(rows))
+		for _, node := range rows {
+			nodeIDs = append(nodeIDs, node.ID)
+		}
+		var observed []model.PluginTelemetryState
+		if err := e.db.Where("plugin_id = ? AND node_id IN ?", MachineTelemetryPluginID, nodeIDs).Find(&observed).Error; err != nil {
+			return RouteResponse{}, err
+		}
+		for _, state := range observed {
+			states[state.NodeID] = state
+		}
+	}
 	now := time.Now()
 	if e.now != nil {
 		now = e.now()
 	}
 	status := MachineTelemetryStatus{
-		PluginID: MachineTelemetryPluginID, Version: MachineTelemetryVersion,
+		PluginID: MachineTelemetryPluginID, Version: e.Version(),
 		GeneratedAt: now, Nodes: make([]MachineTelemetryNode, 0, len(rows)),
 	}
 	for _, node := range rows {
@@ -103,7 +134,22 @@ func (e *MachineTelemetryExecutor) HandleRoute(_ context.Context, request RouteR
 			Online: online, RuntimeHealthy: node.RuntimeHealthy, RuntimeError: node.RuntimeError,
 			CPUUsage: node.CPUUsage, MemoryUsage: node.MemoryUsage, DiskUsage: node.DiskUsage,
 			Uptime: node.Uptime, OnlineUsers: node.OnlineUsers, LastCheckAt: node.LastCheckAt,
-			UpdatedAt: node.UpdatedAt,
+			UpdatedAt: node.UpdatedAt, TelemetrySource: "legacy",
+		}
+		if observed, exists := states[node.ID]; exists {
+			item.TelemetryObservedAt = &observed.ObservedAt
+			item.TelemetryStale = telemetryObservedStateStale(observed, now)
+			metrics, decodeErr := decodeMachineTelemetryMetrics(observed.MetricsJSON)
+			if decodeErr != nil {
+				item.TelemetryError = decodeErr.Error()
+			} else {
+				item.TelemetryAvailable = true
+				item.TelemetrySource = "plugin"
+				item.CPUUsage = metrics.CPUUsage
+				item.MemoryUsage = metrics.MemoryUsage
+				item.DiskUsage = metrics.DiskUsage
+				item.Uptime = metrics.Uptime
+			}
 		}
 		status.Nodes = append(status.Nodes, item)
 		status.Summary.Total++
@@ -118,8 +164,53 @@ func (e *MachineTelemetryExecutor) HandleRoute(_ context.Context, request RouteR
 		if !node.RuntimeHealthy {
 			status.Summary.Unhealthy++
 		}
+		if !item.TelemetryAvailable {
+			status.Summary.Missing++
+		} else if item.TelemetryStale {
+			status.Summary.Stale++
+		}
 	}
 	return RouteResponse{Status: http.StatusOK, Data: status}, nil
+}
+
+type decodedMachineTelemetry struct {
+	CPUUsage    float64
+	MemoryUsage float64
+	DiskUsage   float64
+	Uptime      int64
+}
+
+func decodeMachineTelemetryMetrics(raw string) (decodedMachineTelemetry, error) {
+	metrics := make(map[string]float64)
+	if err := json.Unmarshal([]byte(raw), &metrics); err != nil {
+		return decodedMachineTelemetry{}, errors.New("stored telemetry metrics are invalid")
+	}
+	percentages := make(map[string]float64, 3)
+	for _, key := range []string{"cpu_usage_percent", "memory_usage_percent", "disk_usage_percent"} {
+		value, exists := metrics[key]
+		if !exists {
+			return decodedMachineTelemetry{}, errors.New("stored telemetry metric " + key + " is missing")
+		}
+		if value < 0 || value > 100 {
+			return decodedMachineTelemetry{}, errors.New("stored telemetry metric " + key + " is out of range")
+		}
+		percentages[key] = value
+	}
+	uptime, exists := metrics["uptime_seconds"]
+	if !exists || uptime < 0 || uptime > float64(math.MaxInt64) || math.Trunc(uptime) != uptime {
+		return decodedMachineTelemetry{}, errors.New("stored telemetry uptime is invalid")
+	}
+	return decodedMachineTelemetry{
+		CPUUsage: percentages["cpu_usage_percent"], MemoryUsage: percentages["memory_usage_percent"],
+		DiskUsage: percentages["disk_usage_percent"], Uptime: int64(uptime),
+	}, nil
+}
+
+func telemetryObservedStateStale(state model.PluginTelemetryState, now time.Time) bool {
+	if state.ObservedAt.IsZero() || state.ObservedAt.After(now.Add(time.Minute)) {
+		return true
+	}
+	return now.Sub(state.ObservedAt) >= machineTelemetryStaleAfter
 }
 
 func (e *MachineTelemetryExecutor) ExecuteLifecycle(ctx context.Context, request LifecycleRequest) (json.RawMessage, error) {

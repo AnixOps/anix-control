@@ -18,6 +18,8 @@ import (
 
 const kernelOperationDispatchRetryAfter = 30 * time.Second
 
+const agentOperationDeadlineText = "operation deadline exceeded"
+
 const (
 	maxKernelAgentNodeID      = uint64(^uint32(0))
 	maxKernelObservedRevision = uint64(1<<63 - 1)
@@ -527,6 +529,9 @@ func kernelObservedState(observed *agentv1pb.ObservedState) (string, string) {
 	case agentv1pb.ObservedPhase_OBSERVED_PHASE_SUPERSEDED:
 		return "superseded", message
 	case agentv1pb.ObservedPhase_OBSERVED_PHASE_FAILED:
+		if message == agentOperationDeadlineText {
+			return "timed_out", message
+		}
 		if message == "" {
 			message = "Agent reported operation failure"
 		}

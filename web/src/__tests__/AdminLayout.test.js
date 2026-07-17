@@ -203,7 +203,44 @@ describe('AdminLayout.vue', () => {
     expect(links).toContain('/admin/extensions/example')
     expect(links).toContain('/admin/dashboard')
     expect(wrapper.find('.topbar-title').text()).toContain('Example Service')
-    expect(wrapper.text()).toContain('Extensions')
+    expect(wrapper.find('section[data-extension-parent="services"] .nav-section-title').text()).toBe('Extensions / Services')
+  })
+
+  it('groups extension menus by registered parent, sorts each group, and isolates unknown parents', () => {
+    const userStore = useUserStore()
+    userStore.login('admin-token', {
+      id: 1,
+      is_admin: true,
+      permissions: ['service-a.view', 'service-b.view', 'operation.view', 'system.view', 'legacy.view']
+    })
+    mockAdminExtensionMenus.value = [
+      { pluginID: 'service-a', id: 'service-a.main', parent: 'services', label: 'Service A', icon: 'A', to: '/admin/extensions/service-a', permission: 'service-a.view', order: 20 },
+      { pluginID: 'service-b', id: 'service-b.main', parent: 'services', label: 'Service B', icon: 'B', to: '/admin/extensions/service-b', permission: 'service-b.view', order: 10 },
+      { pluginID: 'operation', id: 'operation.main', parent: 'operations', label: 'Operation', icon: 'OP', to: '/admin/extensions/operation', permission: 'operation.view', order: 30 },
+      { pluginID: 'system', id: 'system.main', parent: 'system', label: 'System Extension', icon: 'SY', to: '/admin/extensions/system', permission: 'system.view', order: 40 },
+      { pluginID: 'legacy', id: 'legacy.main', parent: 'legacy-parent', label: 'Legacy Extension', icon: 'LE', to: '/admin/extensions/legacy', permission: 'legacy.view', order: 50 },
+    ]
+
+    const wrapper = mount(AdminLayout, {
+      global: {
+        stubs: {
+          'router-link': {
+            props: ['to'],
+            template: '<a class="menu-link" :data-to="to"><slot /></a>',
+          },
+          'router-view': true,
+        },
+      },
+    })
+
+    const extensionSections = wrapper.findAll('section[data-extension-parent]')
+    expect(extensionSections.map(section => section.attributes('data-extension-parent'))).toEqual([
+      'services', 'operations', 'system', 'extensions'
+    ])
+    expect(extensionSections[0].findAll('a.menu-link').map(link => link.attributes('data-to'))).toEqual([
+      '/admin/extensions/service-b', '/admin/extensions/service-a'
+    ])
+    expect(extensionSections[3].find('a.menu-link').attributes('data-to')).toBe('/admin/extensions/legacy')
   })
 
   it('hides extension menus when the admin lacks the plugin permission', () => {
@@ -235,7 +272,7 @@ describe('AdminLayout.vue', () => {
 
     const links = wrapper.findAll('a.menu-link').map(link => link.attributes('data-to'))
     expect(links).not.toContain('/admin/extensions/example')
-    expect(wrapper.text()).not.toContain('Extensions')
+    expect(wrapper.find('section[data-extension-parent]').exists()).toBe(false)
     expect(wrapper.find('.topbar-title').text()).not.toContain('Example Service')
   })
 

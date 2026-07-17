@@ -2,12 +2,16 @@ package grpc
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -63,7 +67,7 @@ func newAgentControlTestEnvironment(t *testing.T) *agentControlTestEnvironment {
 	t.Helper()
 	cache.InitMemory()
 	requireInMemoryDatabase(t)
-	requireAutoMigrate(t, &model.Node{})
+	requireAutoMigrate(t, &model.Node{}, &model.NodeServiceAssignment{}, &model.PluginTelemetryState{}, &model.Plugin{}, &model.PluginRelease{}, &model.PluginTrustRoot{})
 
 	apiKey := "agent-control-test-key"
 	hash := sha256.Sum256([]byte(apiKey))
@@ -74,6 +78,17 @@ func newAgentControlTestEnvironment(t *testing.T) *agentControlTestEnvironment {
 		Status:     model.NodeStatusOnline,
 	}
 	require.NoError(t, database.GetDB().Create(&node).Error)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	manifest := service.PluginManifest{
+		ID: "machine-telemetry", Name: "Machine Telemetry", Version: "1.1.0", APIVersion: "v1", Publisher: "AnixOps",
+		Targets: []string{"agent"}, ArtifactSHA256: strings.Repeat("a", 64), Capabilities: []string{"telemetry.read"},
+	}
+	canonical, err := service.CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	signature := base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical))
+	_, err = service.RegisterPluginRelease(database.GetDB(), string(canonical), signature, publicKey)
+	require.NoError(t, err)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -243,6 +258,52 @@ func TestAgentControlStreamDispatchAckObservedAndHeartbeat(t *testing.T) {
 	var refreshed model.Node
 	require.NoError(t, database.GetDB().First(&refreshed, environment.node.ID).Error)
 	require.NotNil(t, refreshed.LastCheckAt)
+}
+
+func TestAgentControlHeartbeatPersistsAssignedPluginTelemetry(t *testing.T) {
+	environment := newAgentControlTestEnvironment(t)
+	require.NoError(t, database.GetDB().Create(&model.NodeServiceAssignment{
+		NodeID: environment.node.ID, ServiceScope: "monitoring", PluginID: "machine-telemetry", Role: "collector", DesiredVersion: "1.1.0", Enabled: true,
+	}).Error)
+	ctx, cancel := context.WithTimeout(environment.authContext(context.Background()), 5*time.Second)
+	defer cancel()
+	stream, err := agentv1pb.NewAgentControlServiceClient(environment.conn).ControlStream(ctx)
+	require.NoError(t, err)
+	require.NoError(t, stream.Send(validAgentHello(uint32(environment.node.ID))))
+	helloAckMessage, err := stream.Recv()
+	require.NoError(t, err)
+	helloAck := helloAckMessage.GetHelloAck()
+	require.NotNil(t, helloAck)
+
+	require.NoError(t, stream.Send(&agentv1pb.AgentToControl{
+		RequestId: "telemetry-heartbeat", NodeId: uint32(environment.node.ID), SentAtUnixMs: time.Now().UnixMilli(),
+		Payload: &agentv1pb.AgentToControl_Heartbeat{Heartbeat: &agentv1pb.Heartbeat{
+			SessionId: helloAck.SessionId,
+			Metrics: map[string]float64{
+				"go_goroutines": 4,
+				"plugin.machine-telemetry.cpu_usage_percent":          18.5,
+				"plugin.machine-telemetry.memory_usage_percent":       35,
+				"plugin.machine-telemetry.disk_usage_percent":         42,
+				"plugin.machine-telemetry.uptime_seconds":             600,
+				"plugin.machine-telemetry.sample_age_seconds":         1,
+				"plugin.unassigned.telemetry_should_not_be_persisted": 99,
+			},
+		}},
+	}))
+	ack, err := stream.Recv()
+	require.NoError(t, err)
+	require.NotNil(t, ack.GetHeartbeatAck())
+
+	var state model.PluginTelemetryState
+	require.NoError(t, database.GetDB().First(&state, "node_id = ? AND plugin_id = ?", environment.node.ID, "machine-telemetry").Error)
+	require.Contains(t, state.MetricsJSON, `"cpu_usage_percent":18.5`)
+	var count int64
+	require.NoError(t, database.GetDB().Model(&model.PluginTelemetryState{}).Where("plugin_id = ?", "unassigned").Count(&count).Error)
+	require.Zero(t, count)
+	var node model.Node
+	require.NoError(t, database.GetDB().First(&node, environment.node.ID).Error)
+	require.Equal(t, 18.5, node.CPUUsage)
+	require.Equal(t, int64(600), node.Uptime)
 }
 
 func TestAgentControlStreamReplaysUnobservedOperationAfterReconnect(t *testing.T) {

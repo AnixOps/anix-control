@@ -617,6 +617,31 @@ func TestListEnabledWebUIExtensionsRequiresVerifiedVersionBoundInstallation(t *t
 	require.ErrorIs(t, err, ErrExtensionCatalogIntegrity)
 }
 
+func TestListEnabledWebUIExtensionsNormalizesUnknownMenuParent(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	manifest := kernelTestWebUIManifest("legacy-menu-ui")
+	manifest.WebUI.Menus[0].Parent = "legacy-forward"
+	artifact := kernelTestWebUIPackage(t, &manifest, `export const anixopsExtension = {}; export default {};`)
+	canonical, err := CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	_, err = StorePluginArtifact(db, release.ID, artifact)
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&model.PluginInstallation{
+		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
+		ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
+	}).Error)
+
+	extensions, err := ListEnabledWebUIExtensions(db, publicKey)
+	require.NoError(t, err)
+	require.Len(t, extensions, 1)
+	require.Len(t, extensions[0].Menus, 1)
+	require.Equal(t, PluginWebUIMenuParentExtensions, extensions[0].Menus[0].Parent)
+}
+
 func TestListEnabledWebUIExtensionsFiltersCatalogToActorWebUIPermissions(t *testing.T) {
 	db := newKernelTestDB(t)
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)

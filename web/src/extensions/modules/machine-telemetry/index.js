@@ -1,6 +1,6 @@
 export const anixopsExtension = Object.freeze({
   pluginId: 'machine-telemetry',
-  version: '1.0.0',
+  version: '1.1.0',
   webuiApiVersion: 'anixops.webui/v1',
   bundle: { path: 'webui/index.mjs' },
 })
@@ -15,6 +15,13 @@ export default function createMachineTelemetryExtension(host) {
       const error = ref('')
       const status = ref(null)
       const nodes = computed(() => status.value?.nodes || [])
+
+      function stateLabel(node) {
+        if (node?.telemetry_available === false) return 'No data'
+        if (node.telemetry_stale) return 'Stale'
+        if (!node.online) return 'Offline'
+        return node.runtime_healthy === false ? 'Unhealthy' : 'Online'
+      }
 
       async function refresh() {
         loading.value = true
@@ -41,6 +48,8 @@ export default function createMachineTelemetryExtension(host) {
           ['Online', status.value.summary?.online ?? 0],
           ['Offline', status.value.summary?.offline ?? 0],
           ['Unhealthy', status.value.summary?.unhealthy ?? 0],
+          ['Stale', status.value.summary?.stale ?? 0],
+          ['Missing', status.value.summary?.missing ?? 0],
         ].map(([label, value]) => h('div', { class: 'stat-item', key: label }, [
           h('span', { class: 'stat-label' }, label),
           h('strong', { class: 'stat-value' }, String(value)),
@@ -53,7 +62,7 @@ export default function createMachineTelemetryExtension(host) {
             h('tbody', nodes.value.length > 0
               ? nodes.value.map(node => h('tr', { key: node.id }, [
                 h('td', [h('strong', node.name), h('div', { class: 'description-cell' }, node.host)]),
-                h('td', node.online ? (node.runtime_healthy ? 'Online' : 'Unhealthy') : 'Offline'),
+                h('td', stateLabel(node)),
                 h('td', `${Number(node.cpu_usage || 0).toFixed(1)}%`),
                 h('td', `${Number(node.memory_usage || 0).toFixed(1)}%`),
                 h('td', `${Number(node.disk_usage || 0).toFixed(1)}%`),

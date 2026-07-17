@@ -446,6 +446,21 @@ type NodeOperationRevision struct {
 
 func (NodeOperationRevision) TableName() string { return "v3_kernel_node_operation_revision" }
 
+// PluginTelemetryState stores the latest scalar snapshot received from one
+// enabled Agent plugin. Metrics are namespaced by plugin at the transport
+// boundary and persisted as JSON so the kernel does not need to know every
+// plugin-specific field in advance.
+type PluginTelemetryState struct {
+	NodeID      uint      `gorm:"primaryKey" json:"node_id"`
+	PluginID    string    `gorm:"primaryKey;size:120" json:"plugin_id"`
+	MetricsJSON string    `gorm:"type:text;not null" json:"metrics"`
+	ObservedAt  time.Time `gorm:"not null;index" json:"observed_at"`
+	ReceivedAt  time.Time `gorm:"not null;index" json:"received_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (PluginTelemetryState) TableName() string { return "v3_kernel_plugin_telemetry_state" }
+
 func KernelModels() []any {
 	return []any{
 		&ServiceScope{}, &AccessGroup{}, &AccessGroupUser{}, &AccessGroupPlan{},
@@ -455,6 +470,6 @@ func KernelModels() []any {
 		&TopologyRevision{}, &TopologyVertex{}, &TopologyEdge{},
 		&TopologyDeployment{}, &TopologyDeploymentStep{}, &TopologyObservedState{}, &KernelOperation{},
 		&PluginLifecyclePlan{}, &PluginLifecyclePlanStep{},
-		&NodeOperationRevision{},
+		&NodeOperationRevision{}, &PluginTelemetryState{},
 	}
 }

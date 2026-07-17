@@ -20,7 +20,7 @@ from typing import Any
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 PLUGIN_ID = "machine-telemetry"
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "1.1.0"
 ARTIFACT_NAME = f"{PLUGIN_ID}-{PLUGIN_VERSION}.tar"
 MANIFEST_NAME = "manifest.json"
 REPORT_NAME = "build-report.json"

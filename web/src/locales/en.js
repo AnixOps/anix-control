@@ -279,6 +279,9 @@ export default {
         notifications: 'Notifications',
         content: 'Content',
         extensions: 'Extensions',
+        extensionServices: 'Extensions / Services',
+        extensionOperations: 'Extensions / Operations',
+        extensionSystem: 'Extensions / System',
         system: 'System'
       },
       nav: {

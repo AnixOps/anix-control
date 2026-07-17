@@ -209,6 +209,29 @@ type PluginWebUIMenu struct {
 	Order      int    `json:"order"`
 }
 
+// WebUI menu parents are a stable shell contract. Unknown, but otherwise
+// valid, package metadata is kept visible in the explicit extensions bucket
+// instead of creating an unregistered top-level navigation section.
+const (
+	PluginWebUIMenuParentServices   = "services"
+	PluginWebUIMenuParentOperations = "operations"
+	PluginWebUIMenuParentSystem     = "system"
+	PluginWebUIMenuParentExtensions = "extensions"
+)
+
+func normalizePluginWebUIMenuParent(parent string) string {
+	switch strings.ToLower(strings.TrimSpace(parent)) {
+	case PluginWebUIMenuParentServices:
+		return PluginWebUIMenuParentServices
+	case PluginWebUIMenuParentOperations:
+		return PluginWebUIMenuParentOperations
+	case PluginWebUIMenuParentSystem:
+		return PluginWebUIMenuParentSystem
+	default:
+		return PluginWebUIMenuParentExtensions
+	}
+}
+
 type PluginWebUIRoute struct {
 	ID         string `json:"id"`
 	Path       string `json:"path"`
@@ -915,6 +938,7 @@ func filterPluginWebUIForActor(pluginID string, webUI PluginWebUI, access ActorP
 		if _, ok := routePaths[menu.Route]; !ok || !access.Allows(pluginID, menu.Permission) {
 			continue
 		}
+		menu.Parent = normalizePluginWebUIMenuParent(menu.Parent)
 		menus = append(menus, menu)
 	}
 	return permissions, menus, routes

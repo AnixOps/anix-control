@@ -5,7 +5,7 @@ import create, { anixopsExtension } from '../webui/index.mjs'
 assert.deepEqual(anixopsExtension, {
   webuiApiVersion: 'anixops.webui/v1',
   pluginId: 'machine-telemetry',
-  version: '1.0.0',
+  version: '1.1.0',
   bundle: { path: 'webui/index.mjs' },
 })
 
@@ -29,7 +29,7 @@ const component = create({
     requests.push([path, options])
     return {
       plugin_id: 'machine-telemetry',
-      version: '1.0.0',
+      version: '1.1.0',
       summary: { total: 1, online: 1, offline: 0, unhealthy: 0 },
       nodes: [{
         id: 7,

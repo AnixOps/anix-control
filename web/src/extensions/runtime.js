@@ -2,6 +2,15 @@ import { computed, defineComponent, h, onErrorCaptured, onMounted, readonly, ref
 import { getKernelExtensions } from '@/api/kernel'
 import { useUserStore } from '@/stores/user'
 import { getLocalExtensionModuleLoader } from './registry'
+import { isWebUIMenuParentToken, normalizeWebUIMenuParent } from './menuRegistry'
+
+export {
+  WEBUI_MENU_FALLBACK_PARENT,
+  WEBUI_MENU_PARENT_REGISTRY,
+  WEBUI_MENU_PARENTS,
+  isWebUIMenuParentToken,
+  normalizeWebUIMenuParent
+} from './menuRegistry'
 
 const ADMIN_ROUTE_NAME = 'admin'
 const ENVELOPE_VERSION = 'v1'
@@ -11,7 +20,6 @@ const VERSION_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._+-]{0,118}[A-Za-z0-9])?$/
 const EXPORT_PATTERN = /^(?:default|[A-Za-z_$][A-Za-z0-9_$]*)$/
 const SHA256_PATTERN = /^[a-fA-F0-9]{64}$/
 const PERMISSION_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,119}$/
-const MENU_PARENTS = new Set(['services', 'operations', 'system'])
 const EXTENSION_STATES = new Set(['enabled', 'healthy'])
 const WEBUI_API_VERSION = 'anixops.webui/v1'
 
@@ -198,7 +206,8 @@ function normalizeExtension(raw) {
     if (!menu || typeof menu !== 'object' || !isNamespacedID(pluginID, menu.id) || menuIDs.has(menu.id)) {
       throw new Error('menu id is invalid or duplicated')
     }
-    if (!MENU_PARENTS.has(menu.parent) || !routePaths.has(menu.route) || !permissions.has(menu.permission)) {
+    const rawParent = menu.parent === undefined ? '' : menu.parent
+    if (!isWebUIMenuParentToken(rawParent) || !routePaths.has(menu.route) || !permissions.has(menu.permission)) {
       throw new Error('menu target or permission is invalid')
     }
     const order = menu.order ?? 1000
@@ -208,7 +217,7 @@ function normalizeExtension(raw) {
     menuIDs.add(menu.id)
     return {
       id: menu.id,
-      parent: menu.parent,
+      parent: normalizeWebUIMenuParent(rawParent),
       label: requireString(menu.label, 'menu label', 80),
       icon: ICON_LABELS[menu.icon] || 'EX',
       route: menu.route,

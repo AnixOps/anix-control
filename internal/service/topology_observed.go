@@ -87,13 +87,15 @@ func ApplyTopologyObservedStateTx(tx *gorm.DB, update TopologyObservedStateUpdat
 	if update.DesiredRevision != revision.Revision {
 		return nil, false, fmt.Errorf("desired revision %d does not match deployment revision %d", update.DesiredRevision, revision.Revision)
 	}
-	var vertexCount int64
-	if err := tx.Model(&model.TopologyVertex{}).
-		Where("revision_id = ? AND node_id = ?", deployment.RevisionID, update.NodeID).
-		Count(&vertexCount).Error; err != nil {
+	// A deployment may intentionally contain only one rollout group from a
+	// larger immutable revision. New deployments therefore use durable steps;
+	// only legacy full deployments without a rollout group may fall back to the
+	// immutable revision membership.
+	deploymentNodes, err := topologyDeploymentNodeIDs(tx, &deployment)
+	if err != nil {
 		return nil, false, err
 	}
-	if vertexCount == 0 {
+	if !containsTopologyNode(deploymentNodes, update.NodeID) {
 		return nil, false, fmt.Errorf("node %d is not part of topology deployment %d", update.NodeID, update.DeploymentID)
 	}
 
@@ -153,12 +155,11 @@ func aggregateTopologyDeploymentState(tx *gorm.DB, deployment *model.TopologyDep
 	if len(rows) == 0 {
 		return nil
 	}
-	var expectedNodes int64
-	if err := tx.Model(&model.TopologyVertex{}).
-		Where("revision_id = ? AND node_id IS NOT NULL", deployment.RevisionID).
-		Distinct("node_id").Count(&expectedNodes).Error; err != nil {
+	expectedNodeIDs, err := topologyDeploymentNodeIDs(tx, deployment)
+	if err != nil {
 		return err
 	}
+	expectedNodes := int64(len(expectedNodeIDs))
 	allSucceeded := expectedNodes > 0 && int64(len(rows)) == expectedNodes
 	allRolledBack := expectedNodes > 0 && int64(len(rows)) == expectedNodes
 	hasFailure := false
@@ -201,4 +202,37 @@ func aggregateTopologyDeploymentState(tx *gorm.DB, deployment *model.TopologyDep
 		updates["completed_at"] = at
 	}
 	return tx.Model(deployment).Updates(updates).Error
+}
+
+func topologyDeploymentNodeIDs(tx *gorm.DB, deployment *model.TopologyDeployment) ([]uint, error) {
+	if tx == nil || deployment == nil || deployment.ID == 0 {
+		return nil, errors.New("topology deployment is required")
+	}
+	var nodes []uint
+	if err := tx.Model(&model.TopologyDeploymentStep{}).
+		Where("deployment_id = ? AND node_id IS NOT NULL", deployment.ID).
+		Distinct("node_id").Order("node_id").Pluck("node_id", &nodes).Error; err != nil {
+		return nil, err
+	}
+	if len(nodes) > 0 {
+		return nodes, nil
+	}
+	if strings.TrimSpace(deployment.RolloutGroup) != "" {
+		return nil, fmt.Errorf("canary topology deployment %d has no durable steps", deployment.ID)
+	}
+	if err := tx.Model(&model.TopologyVertex{}).
+		Where("revision_id = ? AND node_id IS NOT NULL", deployment.RevisionID).
+		Distinct("node_id").Order("node_id").Pluck("node_id", &nodes).Error; err != nil {
+		return nil, err
+	}
+	return nodes, nil
+}
+
+func containsTopologyNode(nodes []uint, nodeID uint) bool {
+	for _, candidate := range nodes {
+		if candidate == nodeID {
+			return true
+		}
+	}
+	return false
 }
