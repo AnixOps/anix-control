@@ -28,7 +28,7 @@ Download the installer from the exact release tag. This fetches one script, not
 the repository checkout:
 
 ```bash
-export VERSION=v3.0.0-alpha.1
+export VERSION=v3.1.0-alpha.1
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -100,7 +100,7 @@ that snapshot.
 Upgrade to an explicit release:
 
 ```bash
-export TARGET=v3.0.0-alpha.1
+export TARGET=v3.1.0-alpha.1
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${TARGET}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh

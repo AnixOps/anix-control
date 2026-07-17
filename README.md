@@ -16,7 +16,7 @@ truth for implemented, partial, planned, compatibility, and deferred features.
   pinned to Go `1.26.5` in CI.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.
 - Default database: SQLite, with PostgreSQL migration/dry-run tooling.
-- Current preview: `v3.0.0-alpha.1`.
+- Current preview: `v3.1.0-alpha.1`.
 - Agent-first status: the `anix.agent.v1` bidirectional gRPC control stream is
   an opt-in foundation in this alpha, not yet the only production task path.
 
@@ -77,7 +77,7 @@ Production installation downloads checked GitHub Release assets and does not
 clone the repository or build on the target host. Pin the production tag:
 
 ```bash
-export VERSION=v3.0.0-alpha.1
+export VERSION=v3.1.0-alpha.1
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh

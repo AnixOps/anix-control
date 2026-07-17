@@ -65,7 +65,7 @@ account and directory explicitly:
 
 ```bash
 sudo SERVICE_NAME=v2board APP_USER=v2board INSTALL_DIR=/opt/v2board \
-  bash /tmp/anix-control-install.sh update --version v3.0.0-alpha.1
+  bash /tmp/anix-control-install.sh update --version v3.1.0-alpha.1
 ```
 
 The existing configuration and database are preserved. Back them up before the
