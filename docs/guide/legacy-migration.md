@@ -125,7 +125,7 @@ Move nodes one at a time, not all at once:
    agreed observation period.
 
 The corresponding node procedure is documented in
-[`AnixOps Agent migration guide`](https://github.com/AnixOps/anix-agent/blob/v3.1.0-alpha.1/docs/ANIX_AGENT_MIGRATION.md).
+[`AnixOps Agent migration guide`](https://github.com/AnixOps/anix-agent/blob/v4.0.0-alpha.1/docs/ANIX_AGENT_MIGRATION.md).
 
 ## Cutover Acceptance Checklist
 

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 4.0.0-alpha.1 - 2026-07-17
+
 ### Added
 
 - Added version-bound Control status executors for the signed
@@ -17,10 +19,21 @@
   revision-ordered `install -> update(config) -> enable` chain, aggregate
   multiple roles fail-closed, and replay safely after Control reconnects or
   restarts without exposing package bytes to unassigned nodes.
+- Added the node-plugin assignment matrix to the admin WebUI, including
+  role-aware configuration, enable/disable/delete lifecycle actions, and
+  operation/observed-state refresh for canary rollout.
+- Added a real cross-repository signed Agent package process gate covering
+  package download authorization, install/update/enable, immutable bundle
+  files, socket health, disable cleanup, and terminal operation replay.
+- Migrated the Control Go module to `github.com/AnixOps/anix-control/v4` while
+  preserving the `/api/v2`, `v2_*`, and `v2board` compatibility namespaces.
+
 ### Fixed
 
 - Fixed the nftables forward status topology formatter so the production lint
   gate accepts its whitespace and slash trimming logic.
+- Hardened authenticated Agent node ID conversion and updated the signed-package
+  process fixture to use current gRPC APIs with checked resource cleanup.
 - Fixed release-note generation to select the immutable changelog section for
   the current tag, including dated headings, instead of requiring an
   `Unreleased` section that no longer exists in a prepared release commit.

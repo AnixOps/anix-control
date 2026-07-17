@@ -12,13 +12,16 @@ image, container, and release assets. The node runtime uses `anix-agent`.
 The development template enables the Agent gRPC control channel on loopback
 port `50051`. Production keeps it disabled until TLS or a restricted
 HTTP/2-capable proxy is configured. Existing configuration files are preserved
-and are not force-enabled. In `v3.0.0-alpha.1`, `anix.agent.v1` is an
-Agent-first foundation/preview: it is opt-in and does not yet replace every
-REST/UniProxy, legacy gRPC, or WebSocket task path.
+and are not force-enabled. In `v4.0.0-alpha.1`, `anix.agent.v1` and the
+official signed package/WebUI path are an operational alpha preview: they are
+available for canary use but do not yet replace every REST/UniProxy, legacy
+gRPC, or WebSocket task path. Stable publication requires a passing 72-hour
+canary and explicit operator authorization.
 
 ## Compatibility Window
 
-The v3 migration deliberately keeps these compatibility identifiers unchanged:
+The v3 migration deliberately keeps these compatibility identifiers unchanged;
+the v4 release continues to preserve them:
 
 - HTTP API versions and compatibility routes: `/api/v1`, `/api/v2`, and UniProxy
 - protobuf package/service namespace and generated directory: `v2board`
@@ -43,10 +46,10 @@ through the AnixOps installer, which preserves their configuration and data.
 The new Go module is `github.com/AnixOps/anix-control/v4`. Stable and
 prerelease tags are accepted in these forms:
 
-- `v3.0.0`
-- `v3.0.0-alpha.1`
-- `v3.0.0-beta.1`
-- `v3.0.0-rc.1`
+- `v4.0.0`
+- `v4.0.0-alpha.1`
+- `v4.0.0-beta.1`
+- `v4.0.0-rc.1`
 
 ## Native Install Paths
 
@@ -65,7 +68,7 @@ account and directory explicitly:
 
 ```bash
 sudo SERVICE_NAME=v2board APP_USER=v2board INSTALL_DIR=/opt/v2board \
-  bash /tmp/anix-control-install.sh update --version v3.1.0-alpha.1
+  bash /tmp/anix-control-install.sh update --version v4.0.0-alpha.1
 ```
 
 The existing configuration and database are preserved. Back them up before the

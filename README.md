@@ -16,7 +16,8 @@ truth for implemented, partial, planned, compatibility, and deferred features.
   pinned to Go `1.26.5` in CI.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.
 - Default database: SQLite, with PostgreSQL migration/dry-run tooling.
-- Current preview: `v3.1.0-alpha.1`.
+- Current preview: `v4.0.0-alpha.1` (official signed packages and WebUI plugin
+  management are usable in this alpha).
 - Agent-first status: the `anix.agent.v1` bidirectional gRPC control stream is
   an opt-in foundation in this alpha, not yet the only production task path.
 
@@ -25,11 +26,12 @@ Do not infer production completeness from a route or UI existing. Check
 [`docs/audit/test-gap.md`](docs/audit/test-gap.md) before marking a feature
 complete.
 
-The v3 alpha keeps REST/UniProxy, the legacy panel-node gRPC services, and the
+The v4 alpha keeps REST/UniProxy, the legacy panel-node gRPC services, and the
 existing WebSocket paths available while the new Agent control stream is
 validated. Production task sources have not all moved to the new stream, so
-operators should keep a tested fallback configured and should not treat this
-preview as a completed all-purpose Agent rollout.
+operators should keep a tested fallback configured. This is an alpha canary,
+not a stable all-purpose Agent rollout: stable publication requires a passing
+72-hour canary and explicit operator authorization.
 
 ## Documentation
 
@@ -77,7 +79,7 @@ Production installation downloads checked GitHub Release assets and does not
 clone the repository or build on the target host. Pin the production tag:
 
 ```bash
-export VERSION=v3.1.0-alpha.1
+export VERSION=v4.0.0-alpha.1
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -144,7 +146,7 @@ binaries, frontend archives, Docker metadata, checksums, SBOMs, or release
 manifests on a production host.
 
 Release jobs accept stable, alpha, beta, and release-candidate tags such as
-`v3.0.0`, `v3.0.0-alpha.1`, `v3.0.0-beta.1`, and `v3.0.0-rc.1`. Tag builds
+`v4.0.0`, `v4.0.0-alpha.1`, `v4.0.0-beta.1`, and `v4.0.0-rc.1`. Tag builds
 produce:
 
 - multi-platform `anix-control-*` backend artifacts
