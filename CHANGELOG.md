@@ -31,6 +31,11 @@
   removes owned state through the signed cleanup entrypoint.
 - Cleared the deployment preflight static-analysis gate without changing
   runtime behavior.
+- Fixed the frontend API proxy target for Control instances bound to a specific
+  IPv4 or IPv6 address, while retaining loopback proxying for wildcard binds.
+- Moved the required Agent gRPC bind ahead of plugin workers and HTTP listeners
+  so an occupied node-control port fails startup before a partial Control
+  instance becomes reachable.
 
 ### Known Gaps
 
