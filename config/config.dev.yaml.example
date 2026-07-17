@@ -1,0 +1,134 @@
+env: "development"
+
+server:
+  host: "127.0.0.1"
+  port: 19080
+  mode: "debug"
+  read_timeout: 30
+  write_timeout: 30
+  trusted_proxies: []
+  cors:
+    allowed_origins: []
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+    allowed_headers: ["Content-Type", "Authorization", "X-API-Key"]
+    allow_credentials: false
+    max_age: 86400
+
+frontend:
+  enable: true
+  port: 19000
+  path: "web/public"
+
+database:
+  driver: "sqlite"
+  database: "config/data/v2board.dev.db"
+  log_level: "warn"
+
+cache:
+  driver: "memory"
+
+log:
+  level: "info"
+  output: "stdout"
+  file_path: "./logs/v2board.dev.log"
+  max_size: 100
+  max_backups: 3
+  max_age: 7
+
+jwt:
+  secret: "anixops-local-development-only-change-before-sharing"
+  expire: 86400
+
+auth:
+  login_rate_limit:
+    enabled: true
+    max_attempts: 20
+    window_seconds: 300
+    lockout_seconds: 60
+  register_rate_limit:
+    enabled: true
+    max_attempts: 20
+    window_seconds: 3600
+    lockout_seconds: 60
+  registration:
+    enabled: true
+    require_invite: false
+    allowed_email_domains: []
+    blocked_email_domains: []
+
+app:
+  name: "AnixOps Control Dev"
+  version: "3.0.0-alpha.1"
+  api_token: ""
+  traffic_log_enable: true
+  subscribe_path: "s"
+
+plugins:
+  official_public_key: ""
+  control_execution_enabled: false
+  control_poll_interval: "5s"
+  dispatch_enabled: false
+  dispatch_poll_interval: "5s"
+  topology_execution_enabled: false
+  topology_poll_interval: "5s"
+
+forward_runtime:
+  backend: "gost"
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: "local-development-only"
+    timeout_seconds: 3
+  clean_agent:
+    public_url: ""
+    heartbeat_interval_seconds: 10
+    action_timeout_seconds: 120
+    token_expire_seconds: 0
+    legacy_bridge_enabled: false
+  nftables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply_nftables.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove_nftables.yml"
+    become: false
+    extra_vars: {}
+    command: ""
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
+  jobs:
+    poll_interval: "5s"
+    idle_poll_interval: "30s"
+    error_log_interval: "1m"
+    batch_size: 10
+    timeout_seconds: 120
+  gost_stats:
+    poll_interval: "30s"
+    idle_poll_interval: "2m"
+    error_log_interval: "5m"
+  latency:
+    poll_interval: "60s"
+    idle_poll_interval: "60s"
+    error_log_interval: "5m"
+    dials: 3
+    dial_timeout: "2s"
+    concurrency: 4
+    retention_days: 1
+
+grpc:
+  enabled: true
+  host: "127.0.0.1"
+  port: 50052
+  api_token: ""
+  tls_cert_file: ""
+  tls_key_file: ""
+
+admin:
+  email: "control-dev@anixops.local"
+  password: ""
+
+tls:
+  enable: false
+  cert_file: ""
+  key_file: ""
+  domain: ""

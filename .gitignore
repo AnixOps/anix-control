@@ -43,6 +43,7 @@ full_internal_test.log
 # Local config
 config/config.yaml
 !config/config.yaml.example
+config/config.dev.yaml
 config/deploy/ssh/*
 !config/deploy/ssh/.gitignore
 config/deploy/ansible/inventory.ini

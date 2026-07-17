@@ -1273,7 +1273,7 @@ func TestServerStart(t *testing.T) {
 
 	cfg := &ServerConfig{
 		Host:             "127.0.0.1",
-		Port:             50052,
+		Port:             0,
 		KeepaliveTime:    30 * time.Second,
 		KeepaliveTimeout: 10 * time.Second,
 	}
@@ -1299,7 +1299,7 @@ func TestServerStop(t *testing.T) {
 
 	server := NewServer(&ServerConfig{
 		Host: "127.0.0.1",
-		Port: 50053,
+		Port: 0,
 	})
 
 	err := server.Start()
