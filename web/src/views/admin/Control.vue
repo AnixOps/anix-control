@@ -1615,9 +1615,17 @@ async function pollOperations() {
   if (pollRequestRunning) return
   pollRequestRunning = true
   try {
-    const [operationRows, installationRows] = await Promise.all([getKernelOperations(), getKernelInstallations()])
+    const [operationRows, installationRows, deploymentRows] = await Promise.all([getKernelOperations(), getKernelInstallations(), getKernelDeployments()])
     operations.value = Array.isArray(operationRows) ? operationRows : []
     installations.value = Array.isArray(installationRows) ? installationRows : []
+    deployments.value = Array.isArray(deploymentRows) ? deploymentRows : deployments.value
+    if (topologyEditor.open && topologyEditor.deploymentID) {
+      try {
+        await refreshDeploymentStatus(topologyEditor.deploymentID)
+      } catch (cause) {
+        error.value = errorMessage(cause, 'control.errors.topologyStatus')
+      }
+    }
     for (const operationID of [...trackedOperationIDs]) {
       const operation = operations.value.find(item => item.id === operationID)
       if (operation && TERMINAL_OPERATION_STATES.has(operation.state)) trackedOperationIDs.delete(operationID)
