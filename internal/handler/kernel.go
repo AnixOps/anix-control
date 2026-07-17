@@ -1620,6 +1620,79 @@ func (h *KernelHandler) PlanDeployment(c *gin.Context) {
 	kernelData(c, 202, row)
 }
 
+// PreviewTopologyDeployment runs the read-only topology preflight. It returns
+// HTTP 200 with valid=false and structured issues for an invalid graph so the
+// editor can render all problems in one request; only missing database rows
+// are transport errors.
+func (h *KernelHandler) PreviewTopologyDeployment(c *gin.Context) {
+	topologyID, ok := parseKernelID(c, "id")
+	if !ok {
+		return
+	}
+	revisionID, ok := parseKernelID(c, "revision_id")
+	if !ok {
+		return
+	}
+	var req struct {
+		RolloutGroup  string `json:"rollout_group"`
+		FailurePolicy string `json:"failure_policy"`
+	}
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+			kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+			return
+		}
+	}
+	if req.RolloutGroup == "" {
+		req.RolloutGroup = c.Query("rollout_group")
+	}
+	if req.FailurePolicy == "" {
+		req.FailurePolicy = c.Query("failure_policy")
+	}
+	preview, err := service.PreviewTopologyDeployment(h.db, service.TopologyDeploymentPreviewInput{
+		TopologyID: topologyID, RevisionID: revisionID, RolloutGroup: req.RolloutGroup, FailurePolicy: req.FailurePolicy,
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			kernelError(c, http.StatusNotFound, "not_found", "topology or revision not found")
+			return
+		}
+		kernelDBError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, preview)
+}
+
+// DiagnoseTopologyDeployment is a semantic alias retained for clients that
+// use the contract's diagnose naming. Both endpoints are strictly read-only.
+func (h *KernelHandler) DiagnoseTopologyDeployment(c *gin.Context) {
+	h.PreviewTopologyDeployment(c)
+}
+
+// PreviewDeployment is the body-addressed variant used by automation that has
+// not yet selected a nested topology route.
+func (h *KernelHandler) PreviewDeployment(c *gin.Context) {
+	var req service.TopologyDeploymentPreviewInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	preview, err := service.PreviewTopologyDeployment(h.db, req)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			kernelError(c, http.StatusNotFound, "not_found", "topology or revision not found")
+			return
+		}
+		if strings.Contains(err.Error(), "required") {
+			kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+			return
+		}
+		kernelDBError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, preview)
+}
+
 func topologyExecutionEnabled() bool {
 	cfg := config.Get()
 	return cfg != nil && cfg.Plugins.TopologyExecutionEnabled
