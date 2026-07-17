@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,18 @@ import (
 type AuthHandler struct {
 	authService *service.AuthService
 	cfg         *config.Config
+}
+
+func resolveAuthPluginAccess(user *model.User) *service.ActorPluginAccess {
+	access, err := service.ResolveActorPluginAccess(database.GetDB(), user.ID, user.IsAdmin == 1)
+	if err != nil {
+		// Authentication has already committed at this point. Return a valid
+		// session with empty, authoritative permissions instead of making the
+		// user retry a request that may have consumed an invite or MFA factor.
+		log.Printf("auth plugin permissions unavailable for user %d: %v", user.ID, err)
+		return service.NewFailClosedActorPluginAccess()
+	}
+	return access
 }
 
 func NewAuthHandler(cfg *config.Config) *AuthHandler {
@@ -85,12 +98,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
+	pluginAccess := resolveAuthPluginAccess(user)
 
 	panelSuccess(c, gin.H{
-		"token":    token,
-		"is_admin": user.IsAdmin == 1,
-		"user_id":  user.ID,
-		"email":    user.Email,
+		"token":              token,
+		"is_admin":           user.IsAdmin == 1,
+		"user_id":            user.ID,
+		"email":              user.Email,
+		"permission_mode":    pluginAccess.PermissionMode(),
+		"permissions":        pluginAccess.ProfilePermissions(),
+		"restricted_plugins": pluginAccess.ProfileRestrictedPluginList(),
 	})
 }
 
@@ -145,12 +162,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 	service.GetLoginRateLimiter().RecordSuccess(loginRateLimitKey)
+	pluginAccess := resolveAuthPluginAccess(user)
 
 	panelSuccess(c, gin.H{
-		"token":    token,
-		"is_admin": user.IsAdmin == 1,
-		"user_id":  user.ID,
-		"email":    user.Email,
+		"token":              token,
+		"is_admin":           user.IsAdmin == 1,
+		"user_id":            user.ID,
+		"email":              user.Email,
+		"permission_mode":    pluginAccess.PermissionMode(),
+		"permissions":        pluginAccess.ProfilePermissions(),
+		"restricted_plugins": pluginAccess.ProfileRestrictedPluginList(),
 	})
 }
 

@@ -142,6 +142,9 @@ func initTestDB() *gorm.DB {
 	); err != nil {
 		panic("failed to migrate handler test database: " + err.Error())
 	}
+	if err := service.EnsureKernelSchema(testDB); err != nil {
+		panic("failed to migrate kernel handler test database: " + err.Error())
+	}
 
 	return testDB
 }
@@ -228,6 +231,16 @@ func (s *AuthHandlerTestSuite) createLoginUser(email, password string, isAdmin i
 	return user
 }
 
+func (s *AuthHandlerTestSuite) createRestrictedPluginGrant(pluginID string) {
+	s.T().Helper()
+	group := model.AccessGroup{ScopeID: pluginID, Name: pluginID + "-restricted", Enabled: true}
+	s.Require().NoError(s.db.Create(&group).Error)
+	s.Require().NoError(s.db.Create(&model.ResourceGrant{
+		GroupID: group.ID, ResourceType: service.PluginAPIGrantResourceType, ResourceID: pluginID,
+		Permissions: `["` + pluginID + `.view"]`,
+	}).Error)
+}
+
 func (s *AuthHandlerTestSuite) setMFAAdminConfig(cfg map[string]any) {
 	s.T().Helper()
 
@@ -256,6 +269,7 @@ func (s *AuthHandlerTestSuite) createMFAEnabledLoginUser(email, password string)
 }
 
 func (s *AuthHandlerTestSuite) TestRegisterHandler() {
+	s.createRestrictedPluginGrant("register-security")
 	handler := NewAuthHandler(s.cfg)
 	s.router.POST("/register", handler.Register)
 
@@ -282,6 +296,9 @@ func (s *AuthHandlerTestSuite) TestRegisterHandler() {
 	assert.Equal(s.T(), "handler@example.com", data["email"])
 	assert.Equal(s.T(), false, data["is_admin"])
 	assert.Equal(s.T(), float64(1), data["user_id"])
+	assert.Equal(s.T(), service.PluginPermissionModeAuthoritative, data["permission_mode"])
+	assert.Empty(s.T(), data["permissions"])
+	assert.Empty(s.T(), data["restricted_plugins"])
 }
 
 func (s *AuthHandlerTestSuite) TestRegisterHandler_Disabled() {
@@ -435,6 +452,7 @@ func (s *AuthHandlerTestSuite) TestRegisterHandler_DuplicateEmail() {
 }
 
 func (s *AuthHandlerTestSuite) TestLoginHandler() {
+	s.createRestrictedPluginGrant("login-security")
 	// 先注册用户
 	regHandler := NewAuthHandler(s.cfg)
 	s.router.POST("/register", regHandler.Register)
@@ -476,6 +494,9 @@ func (s *AuthHandlerTestSuite) TestLoginHandler() {
 	assert.Equal(s.T(), "login@example.com", data["email"])
 	assert.Equal(s.T(), false, data["is_admin"])
 	assert.Equal(s.T(), float64(1), data["user_id"])
+	assert.Equal(s.T(), service.PluginPermissionModeAuthoritative, data["permission_mode"])
+	assert.Empty(s.T(), data["permissions"])
+	assert.Empty(s.T(), data["restricted_plugins"])
 }
 
 func (s *AuthHandlerTestSuite) TestLoginHandler_InvalidBody() {
@@ -674,6 +695,7 @@ func (s *AuthHandlerTestSuite) TestLoginHandler_GlobalMFAEnforceForAdminAllowsRe
 }
 
 func (s *AuthHandlerTestSuite) TestLoginHandler_MFASuccessIssuesTokenAndRecordsAttempt() {
+	s.createRestrictedPluginGrant("mfa-security")
 	handler := NewAuthHandler(s.cfg)
 	s.router.POST("/login", handler.Login)
 	user, secret := s.createMFAEnabledLoginUser("mfa-success@example.com", "password123")
@@ -703,6 +725,9 @@ func (s *AuthHandlerTestSuite) TestLoginHandler_MFASuccessIssuesTokenAndRecordsA
 	assert.NotEmpty(s.T(), data["token"])
 	assert.Equal(s.T(), "mfa-success@example.com", data["email"])
 	assert.Equal(s.T(), float64(user.ID), data["user_id"])
+	assert.Equal(s.T(), service.PluginPermissionModeAuthoritative, data["permission_mode"])
+	assert.Empty(s.T(), data["permissions"])
+	assert.Empty(s.T(), data["restricted_plugins"])
 	assert.Empty(s.T(), data["mfa_required"])
 
 	var attempt model.MFALoginAttempt
@@ -1026,6 +1051,12 @@ func (s *UserHandlerTestSuite) TestGetSubscription_WithRefresh() {
 
 func (s *UserHandlerTestSuite) TestGetProfile_Success() {
 	handler := NewUserHandler()
+	group := model.AccessGroup{ScopeID: "profile-security", Name: "restricted", Enabled: true}
+	s.Require().NoError(s.db.Create(&group).Error)
+	s.Require().NoError(s.db.Create(&model.ResourceGrant{
+		GroupID: group.ID, ResourceType: service.PluginAPIGrantResourceType, ResourceID: "profile-security",
+		Permissions: `["profile-security.view"]`,
+	}).Error)
 	s.router.GET("/profile", func(c *gin.Context) {
 		c.Set("user_id", s.testUser.ID)
 		c.Next()
@@ -1047,6 +1078,51 @@ func (s *UserHandlerTestSuite) TestGetProfile_Success() {
 	assert.Equal(s.T(), s.testUser.UUID, data["uuid"])
 	assert.Equal(s.T(), s.testUser.Token, data["token"])
 	assert.Equal(s.T(), false, data["is_admin"])
+	assert.Equal(s.T(), service.PluginPermissionModeAuthoritative, data["permission_mode"])
+	assert.Empty(s.T(), data["permissions"])
+	assert.Empty(s.T(), data["restricted_plugins"])
+}
+
+func (s *UserHandlerTestSuite) TestGetProfile_PluginPermissionModeAndGrants() {
+	handler := NewUserHandler()
+	s.router.GET("/profile", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.GetProfile)
+	s.Require().NoError(s.db.Model(s.testUser).Update("is_admin", 1).Error)
+
+	requestProfile := func() map[string]any {
+		req, _ := http.NewRequest(http.MethodGet, "/profile", nil)
+		w := httptest.NewRecorder()
+		s.router.ServeHTTP(w, req)
+		s.Require().Equal(http.StatusOK, w.Code)
+		resp := decodePanelTestResponse(s.T(), w)
+		s.Require().Equal(float64(0), resp["code"])
+		return resp["data"].(map[string]any)
+	}
+
+	data := requestProfile()
+	assert.Equal(s.T(), service.PluginPermissionModeLegacy, data["permission_mode"])
+	assert.Nil(s.T(), data["permissions"])
+	assert.Empty(s.T(), data["restricted_plugins"])
+
+	group := model.AccessGroup{ScopeID: "profile-ui", Name: "profile-viewers", Enabled: true}
+	s.Require().NoError(s.db.Create(&group).Error)
+	s.Require().NoError(s.db.Create(&model.ResourceGrant{
+		GroupID: group.ID, ResourceType: service.PluginAPIGrantResourceType, ResourceID: "profile-ui",
+		Permissions: `["profile-ui.write","profile-ui.view","profile-ui.view"]`,
+	}).Error)
+
+	data = requestProfile()
+	assert.Equal(s.T(), service.PluginPermissionModeMixed, data["permission_mode"])
+	assert.Empty(s.T(), data["permissions"], "an unassigned admin must fail closed after the first plugin_api grant")
+	assert.Equal(s.T(), []any{"profile-ui"}, data["restricted_plugins"])
+
+	s.Require().NoError(s.db.Create(&model.AccessGroupUser{GroupID: group.ID, UserID: s.testUser.ID}).Error)
+	data = requestProfile()
+	assert.Equal(s.T(), service.PluginPermissionModeMixed, data["permission_mode"])
+	assert.Equal(s.T(), []any{"profile-ui.view", "profile-ui.write"}, data["permissions"])
+	assert.Equal(s.T(), []any{"profile-ui"}, data["restricted_plugins"])
 }
 
 func (s *UserHandlerTestSuite) TestGetProfile_Unauthorized() {

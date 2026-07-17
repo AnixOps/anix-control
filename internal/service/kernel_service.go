@@ -783,8 +783,23 @@ type WebUIExtensionBundle struct {
 // Stored release signatures are rechecked so catalog reads fail closed if
 // metadata is corrupted after admission.
 func ListEnabledWebUIExtensions(db *gorm.DB, publicKey ed25519.PublicKey) ([]WebUIExtension, error) {
+	return listEnabledWebUIExtensions(db, publicKey, 0, true, false)
+}
+
+// ListEnabledWebUIExtensionsForActor applies the same authoritative plugin
+// permissions as the control route gateway. Restricted actors only receive
+// routes, menus and declared permissions that they can actually use.
+func ListEnabledWebUIExtensionsForActor(db *gorm.DB, publicKey ed25519.PublicKey, actorID uint, legacyAdmin bool) ([]WebUIExtension, error) {
+	return listEnabledWebUIExtensions(db, publicKey, actorID, legacyAdmin, true)
+}
+
+func listEnabledWebUIExtensions(db *gorm.DB, publicKey ed25519.PublicKey, actorID uint, legacyAdmin, quarantineInvalid bool) ([]WebUIExtension, error) {
 	if db == nil {
 		return nil, errors.New("database is not initialized")
+	}
+	access, err := ResolveActorPluginAccess(db, actorID, legacyAdmin)
+	if err != nil {
+		return nil, err
 	}
 	var installations []model.PluginInstallation
 	if err := db.Where("target = ? AND enabled = ? AND state IN ?", "control", true, []string{"enabled", "healthy"}).
@@ -793,7 +808,13 @@ func ListEnabledWebUIExtensions(db *gorm.DB, publicKey ed25519.PublicKey) ([]Web
 	}
 	extensions := make([]WebUIExtension, 0, len(installations))
 	for _, installation := range installations {
+		if !access.HasAnyPermission(installation.PluginID) {
+			continue
+		}
 		if strings.TrimSpace(installation.DesiredVersion) == "" || installation.ObservedVersion != installation.DesiredVersion {
+			if quarantineInvalid {
+				continue
+			}
 			return nil, fmt.Errorf("%w: plugin %s observed version does not match desired version", ErrExtensionCatalogIntegrity, installation.PluginID)
 		}
 		if len(publicKey) != ed25519.PublicKeySize {
@@ -802,29 +823,54 @@ func ListEnabledWebUIExtensions(db *gorm.DB, publicKey ed25519.PublicKey) ([]Web
 		var plugin model.Plugin
 		if err := db.First(&plugin, "id = ? AND official = ? AND publisher = ?", installation.PluginID, true, "AnixOps").Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
+				if quarantineInvalid {
+					continue
+				}
 				return nil, fmt.Errorf("%w: plugin %s is not an official catalog entry", ErrExtensionCatalogIntegrity, installation.PluginID)
+			}
+			if quarantineInvalid {
+				continue
 			}
 			return nil, err
 		}
 		var release model.PluginRelease
 		if err := db.First(&release, "plugin_id = ? AND version = ?", installation.PluginID, installation.ObservedVersion).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
+				if quarantineInvalid {
+					continue
+				}
 				return nil, fmt.Errorf("%w: plugin %s release %s is missing", ErrExtensionCatalogIntegrity, installation.PluginID, installation.ObservedVersion)
+			}
+			if quarantineInvalid {
+				continue
 			}
 			return nil, err
 		}
 		manifest, err := VerifyStoredPluginRelease(db, release, publicKey)
 		if err != nil {
+			if quarantineInvalid {
+				continue
+			}
 			return nil, fmt.Errorf("%w: plugin %s release signature: %v", ErrExtensionCatalogIntegrity, installation.PluginID, err)
 		}
 		if manifest.ID != release.PluginID || manifest.Version != release.Version || manifest.APIVersion != release.APIVersion || !strings.EqualFold(manifest.ArtifactSHA256, release.ArtifactSHA256) || !manifestSupportsTarget(*manifest, "control") {
+			if quarantineInvalid {
+				continue
+			}
 			return nil, fmt.Errorf("%w: plugin %s release metadata is not version-bound", ErrExtensionCatalogIntegrity, installation.PluginID)
 		}
 		if manifest.WebUI == nil {
 			continue
 		}
+		permissions, menus, routes := filterPluginWebUIForActor(installation.PluginID, *manifest.WebUI, *access)
+		if len(routes) == 0 {
+			continue
+		}
 		asset, err := LoadVerifiedPluginWebUIAsset(db, release, *manifest)
 		if err != nil {
+			if quarantineInvalid {
+				continue
+			}
 			return nil, fmt.Errorf("%w: plugin %s webui asset: %v", ErrExtensionCatalogIntegrity, installation.PluginID, err)
 		}
 		extensions = append(extensions, WebUIExtension{
@@ -836,13 +882,42 @@ func ListEnabledWebUIExtensions(db *gorm.DB, publicKey ed25519.PublicKey) ([]Web
 				SHA256: asset.BundleSHA256,
 				URL:    PluginWebUIAssetURL(asset.PluginID, asset.Version, asset.BundleSHA256, asset.BundlePath),
 			},
-			Permissions:  append([]string{}, manifest.WebUI.Permissions...),
-			Menus:        append([]PluginWebUIMenu{}, manifest.WebUI.Menus...),
-			Routes:       append([]PluginWebUIRoute{}, manifest.WebUI.Routes...),
+			Permissions:  permissions,
+			Menus:        menus,
+			Routes:       routes,
 			ConfigSchema: append(json.RawMessage(nil), manifest.ConfigSchema...),
 		})
 	}
 	return extensions, nil
+}
+
+func filterPluginWebUIForActor(pluginID string, webUI PluginWebUI, access ActorPluginAccess) ([]string, []PluginWebUIMenu, []PluginWebUIRoute) {
+	permissions := make([]string, 0, len(webUI.Permissions))
+	for _, permission := range webUI.Permissions {
+		if access.Allows(pluginID, permission) {
+			permissions = append(permissions, permission)
+		}
+	}
+	sort.Strings(permissions)
+
+	routes := make([]PluginWebUIRoute, 0, len(webUI.Routes))
+	routePaths := make(map[string]struct{}, len(webUI.Routes))
+	for _, route := range webUI.Routes {
+		if !access.Allows(pluginID, route.Permission) {
+			continue
+		}
+		routes = append(routes, route)
+		routePaths[route.Path] = struct{}{}
+	}
+
+	menus := make([]PluginWebUIMenu, 0, len(webUI.Menus))
+	for _, menu := range webUI.Menus {
+		if _, ok := routePaths[menu.Route]; !ok || !access.Allows(pluginID, menu.Permission) {
+			continue
+		}
+		menus = append(menus, menu)
+	}
+	return permissions, menus, routes
 }
 
 // VerifyPluginArtifact checks the bytes fetched from the signed repository
@@ -1039,6 +1114,75 @@ func GetPluginWebUIAsset(db *gorm.DB, pluginID, version, bundleSHA256 string) (*
 		return nil, err
 	}
 	return &asset, nil
+}
+
+// ResolveActivePluginWebUIAsset binds an immutable asset URL to the currently
+// active control installation and to the requesting actor. Stored signatures,
+// release metadata, artifact bytes and the extracted bundle are revalidated on
+// every request so disabling or replacing an installation invalidates old URLs.
+func ResolveActivePluginWebUIAsset(db *gorm.DB, publicKey ed25519.PublicKey, actorID uint, legacyAdmin bool, pluginID, version, bundleSHA256 string) (*model.PluginWebUIAsset, error) {
+	if db == nil {
+		return nil, errors.New("database is not initialized")
+	}
+	pluginID = strings.TrimSpace(pluginID)
+	version = strings.TrimSpace(version)
+	bundleSHA256 = strings.ToLower(strings.TrimSpace(bundleSHA256))
+	if !safePluginSegment(pluginID) || !safePluginSegment(version) || len(bundleSHA256) != sha256.Size*2 {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	access, err := ResolveActorPluginAccess(db, actorID, legacyAdmin)
+	if err != nil {
+		return nil, err
+	}
+	if !access.HasAnyPermission(pluginID) {
+		return nil, ErrPluginRouteForbidden
+	}
+
+	var installation model.PluginInstallation
+	if err := db.First(&installation, "plugin_id = ? AND target = ? AND enabled = ? AND state IN ?", pluginID, "control", true, []string{"enabled", "healthy"}).Error; err != nil {
+		return nil, err
+	}
+	if installation.DesiredVersion == "" || installation.ObservedVersion != installation.DesiredVersion || version != installation.ObservedVersion {
+		return nil, gorm.ErrRecordNotFound
+	}
+	if len(publicKey) != ed25519.PublicKeySize {
+		return nil, ErrPluginTrustRootRequired
+	}
+
+	var plugin model.Plugin
+	if err := db.First(&plugin, "id = ? AND official = ? AND publisher = ?", pluginID, true, "AnixOps").Error; err != nil {
+		return nil, err
+	}
+	var release model.PluginRelease
+	if err := db.First(&release, "plugin_id = ? AND version = ?", pluginID, version).Error; err != nil {
+		return nil, err
+	}
+	manifest, err := VerifyStoredPluginRelease(db, release, publicKey)
+	if err != nil {
+		return nil, fmt.Errorf("%w: plugin %s release signature: %v", ErrExtensionCatalogIntegrity, pluginID, err)
+	}
+	if manifest.ID != pluginID || manifest.Version != version || manifest.APIVersion != release.APIVersion || !strings.EqualFold(manifest.ArtifactSHA256, release.ArtifactSHA256) || !manifestSupportsTarget(*manifest, "control") {
+		return nil, fmt.Errorf("%w: plugin %s release metadata is not version-bound", ErrExtensionCatalogIntegrity, pluginID)
+	}
+	if manifest.WebUI == nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+	_, _, routes := filterPluginWebUIForActor(pluginID, *manifest.WebUI, *access)
+	if len(routes) == 0 {
+		return nil, ErrPluginRouteForbidden
+	}
+	if err := requireVerifiedPluginArtifact(db, release); err != nil {
+		return nil, err
+	}
+	asset, err := LoadVerifiedPluginWebUIAsset(db, release, *manifest)
+	if err != nil {
+		return nil, fmt.Errorf("%w: plugin %s webui asset: %v", ErrExtensionCatalogIntegrity, pluginID, err)
+	}
+	if !strings.EqualFold(asset.BundleSHA256, bundleSHA256) {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return asset, nil
 }
 
 func LoadVerifiedPluginWebUIAsset(db *gorm.DB, release model.PluginRelease, manifest PluginManifest) (*model.PluginWebUIAsset, error) {
@@ -1945,69 +2089,11 @@ func matchPluginControlRoute(routes []string, requestPath string) (string, bool)
 }
 
 func userHasPluginAPIPermission(db *gorm.DB, actorID uint, pluginID, permission string, legacyAdmin bool) (bool, error) {
-	var grantCount int64
-	if err := db.Model(&model.ResourceGrant{}).
-		Where("resource_type = ? AND resource_id = ?", PluginAPIGrantResourceType, pluginID).
-		Count(&grantCount).Error; err != nil {
+	access, err := ResolveActorPluginAccess(db, actorID, legacyAdmin)
+	if err != nil {
 		return false, err
 	}
-	if grantCount == 0 && legacyAdmin {
-		return true, nil
-	}
-	if actorID == 0 {
-		return false, nil
-	}
-	var grants []model.ResourceGrant
-	if err := db.Model(&model.ResourceGrant{}).
-		Joins("JOIN v3_kernel_access_group ON v3_kernel_access_group.id = v3_kernel_resource_grant.group_id AND v3_kernel_access_group.enabled = ?", true).
-		Joins("JOIN v3_kernel_access_group_user ON v3_kernel_access_group_user.group_id = v3_kernel_access_group.id AND v3_kernel_access_group_user.user_id = ?", actorID).
-		Where("v3_kernel_resource_grant.resource_type = ? AND v3_kernel_resource_grant.resource_id = ?", PluginAPIGrantResourceType, pluginID).
-		Find(&grants).Error; err != nil {
-		return false, err
-	}
-	for _, grant := range grants {
-		if resourceGrantHasPermission(grant.Permissions, permission) {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func resourceGrantHasPermission(raw string, permission string) bool {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return false
-	}
-	var list []string
-	if err := json.Unmarshal([]byte(raw), &list); err == nil {
-		for _, item := range list {
-			if item == permission || item == "*" {
-				return true
-			}
-		}
-		return false
-	}
-	var object map[string]any
-	if err := json.Unmarshal([]byte(raw), &object); err != nil {
-		return false
-	}
-	for key, value := range object {
-		if key != permission && key != "*" {
-			continue
-		}
-		switch typed := value.(type) {
-		case bool:
-			return typed
-		case string:
-			normalized := strings.ToLower(strings.TrimSpace(typed))
-			return normalized == "true" || normalized == "1" || normalized == "yes"
-		case float64:
-			return typed != 0
-		default:
-			return value != nil
-		}
-	}
-	return false
+	return access.Allows(pluginID, permission), nil
 }
 
 func containsPluginString(values []string, needle string) bool {

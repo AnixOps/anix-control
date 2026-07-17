@@ -264,6 +264,12 @@ router.beforeEach(async (to, from, next) => {
     }
   } else {
     if (to.path.startsWith('/admin/') && userStore.isAdmin) {
+      // Login responses from older panels may not carry the kernel grants.
+      // Resolve the authoritative profile before discovering any extension so
+      // the first admin render cannot silently omit authorized plugin UI.
+      if (userStore.permissionMode === 'missing') {
+        await userStore.getUserInfo()
+      }
       const isUnmatchedExtension = to.path.startsWith('/admin/extensions/') && !to.matched.some(record => record.meta.extension)
       if (isUnmatchedExtension) {
         await ensureAdminExtensions(router)

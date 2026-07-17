@@ -171,6 +171,108 @@ func TestResolveEffectiveAccessUnionsMembershipWithinScope(t *testing.T) {
 	}
 }
 
+func TestResolveActorPluginAccessUsesPerPluginLegacyFallback(t *testing.T) {
+	db := newKernelTestDB(t)
+
+	legacyAdmin, err := ResolveActorPluginAccess(db, 7, true)
+	require.NoError(t, err)
+	require.True(t, legacyAdmin.Unrestricted)
+	require.Equal(t, PluginPermissionModeLegacy, legacyAdmin.PermissionMode())
+	require.Nil(t, legacyAdmin.ProfilePermissions())
+	require.Empty(t, legacyAdmin.RestrictedPluginList())
+	require.True(t, legacyAdmin.Allows("example-ui", "example-ui.view"))
+
+	regularActor, err := ResolveActorPluginAccess(db, 8, false)
+	require.NoError(t, err)
+	require.False(t, regularActor.Unrestricted)
+	require.Equal(t, PluginPermissionModeAuthoritative, regularActor.PermissionMode())
+	require.Empty(t, regularActor.ProfilePermissions())
+
+	operators := model.AccessGroup{ScopeID: "example-ui", Name: "operators", Enabled: true}
+	viewers := model.AccessGroup{ScopeID: "example-ui", Name: "viewers", Enabled: true}
+	dirty := model.AccessGroup{ScopeID: "dirty-ui", Name: "dirty", Enabled: true}
+	require.NoError(t, db.Create(&operators).Error)
+	require.NoError(t, db.Create(&viewers).Error)
+	require.NoError(t, db.Create(&dirty).Error)
+	require.NoError(t, db.Create(&model.ResourceGrant{
+		GroupID: operators.ID, ResourceType: PluginAPIGrantResourceType, ResourceID: "example-ui",
+		Permissions: `{"example-ui.manage":true,"example-ui.disabled":false,"example-ui.view":"1","other-ui.escape":true}`,
+	}).Error)
+	require.NoError(t, db.Create(&model.ResourceGrant{
+		GroupID: viewers.ID, ResourceType: PluginAPIGrantResourceType, ResourceID: "example-ui",
+		Permissions: `["example-ui.view","example-ui.audit","example-ui.view"]`,
+	}).Error)
+	require.NoError(t, db.Create(&model.ResourceGrant{
+		GroupID: operators.ID, ResourceType: PluginAPIGrantResourceType, ResourceID: "other-ui",
+		Permissions: `["*"]`,
+	}).Error)
+	require.NoError(t, db.Create(&model.ResourceGrant{
+		GroupID: dirty.ID, ResourceType: PluginAPIGrantResourceType, ResourceID: "dirty-ui",
+		Permissions: `["other-ui.escape"]`,
+	}).Error)
+	require.NoError(t, db.Create(&model.ResourceGrant{
+		GroupID: dirty.ID, ResourceType: PluginAPIGrantResourceType, ResourceID: "empty-ui",
+		Permissions: `{"empty-ui.view":false}`,
+	}).Error)
+
+	unassignedAdmin, err := ResolveActorPluginAccess(db, 7, true)
+	require.NoError(t, err)
+	require.False(t, unassignedAdmin.Unrestricted)
+	require.Equal(t, PluginPermissionModeMixed, unassignedAdmin.PermissionMode())
+	require.Equal(t, []string{"example-ui", "other-ui"}, unassignedAdmin.RestrictedPluginList())
+	require.Empty(t, unassignedAdmin.ProfilePermissions())
+	require.False(t, unassignedAdmin.Allows("example-ui", "example-ui.view"))
+	require.True(t, unassignedAdmin.Allows("legacy-ui", "legacy-ui.view"), "legacy admins retain fallback for plugins without grants")
+	require.True(t, unassignedAdmin.Allows("dirty-ui", "dirty-ui.view"), "cross-plugin-only grants must not lock a plugin")
+	require.True(t, unassignedAdmin.Allows("empty-ui", "empty-ui.view"), "grants with no enabled permissions must not lock a plugin")
+
+	regularWithGrants, err := ResolveActorPluginAccess(db, 8, false)
+	require.NoError(t, err)
+	require.Empty(t, regularWithGrants.ProfileRestrictedPluginList(), "non-admin profiles must not enumerate configured plugin grants")
+
+	require.NoError(t, db.Create(&model.AccessGroupUser{GroupID: operators.ID, UserID: 7}).Error)
+	require.NoError(t, db.Create(&model.AccessGroupUser{GroupID: viewers.ID, UserID: 7}).Error)
+	assignedAdmin, err := ResolveActorPluginAccess(db, 7, true)
+	require.NoError(t, err)
+	require.Equal(t, PluginPermissionModeMixed, assignedAdmin.PermissionMode())
+	require.Equal(t, []string{"example-ui.audit", "example-ui.manage", "example-ui.view", "other-ui.*"}, assignedAdmin.ProfilePermissions())
+	require.True(t, assignedAdmin.Allows("example-ui", "example-ui.manage"))
+	require.False(t, assignedAdmin.Allows("example-ui", "other-ui.manage"), "a grant cannot escape its resource_id plugin")
+	require.False(t, assignedAdmin.Allows("example-ui", "other-ui.escape"), "cross-plugin permission strings must be discarded")
+	require.NotContains(t, assignedAdmin.ProfilePermissions(), "other-ui.escape")
+	require.True(t, assignedAdmin.Allows("other-ui", "other-ui.anything"))
+
+	require.NoError(t, db.Model(&model.AccessGroup{}).Where("id IN ?", []uint{operators.ID, viewers.ID}).Update("enabled", false).Error)
+	disabledGrantAdmin, err := ResolveActorPluginAccess(db, 9, true)
+	require.NoError(t, err)
+	require.False(t, disabledGrantAdmin.Unrestricted, "stored grants keep per-plugin restriction mode active even when their groups are disabled")
+	require.Equal(t, PluginPermissionModeMixed, disabledGrantAdmin.PermissionMode())
+	require.Empty(t, disabledGrantAdmin.ProfilePermissions())
+}
+
+func TestResolveActorPluginAccessWithoutKernelSchemaPreservesV2Profile(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+
+	regular, err := ResolveActorPluginAccess(db, 8, false)
+	require.NoError(t, err)
+	require.Equal(t, PluginPermissionModeAuthoritative, regular.PermissionMode())
+	require.Empty(t, regular.ProfilePermissions())
+	require.False(t, regular.Allows("machine-telemetry", "machine-telemetry.view"))
+
+	admin, err := ResolveActorPluginAccess(db, 7, true)
+	require.NoError(t, err)
+	require.Equal(t, PluginPermissionModeLegacy, admin.PermissionMode())
+	require.Nil(t, admin.ProfilePermissions())
+	require.True(t, admin.Allows("machine-telemetry", "machine-telemetry.view"))
+
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	require.NoError(t, sqlDB.Close())
+	_, err = ResolveActorPluginAccess(db, 7, true)
+	require.Error(t, err, "closed database errors must not be mistaken for an unmigrated Kernel schema")
+}
+
 func TestVerifyPluginReleaseRejectsTampering(t *testing.T) {
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -513,6 +615,86 @@ func TestListEnabledWebUIExtensionsRequiresVerifiedVersionBoundInstallation(t *t
 	require.NoError(t, db.Model(release).Update("signature", "tampered").Error)
 	_, err = ListEnabledWebUIExtensions(db, publicKey)
 	require.ErrorIs(t, err, ErrExtensionCatalogIntegrity)
+}
+
+func TestListEnabledWebUIExtensionsFiltersCatalogToActorWebUIPermissions(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	manifest := kernelTestWebUIManifest("filtered-ui")
+	manifest.Permissions = append(manifest.Permissions, "filtered-ui.manage")
+	manifest.WebUI.Permissions = append(manifest.WebUI.Permissions, "filtered-ui.manage")
+	manifest.WebUI.Routes = append(manifest.WebUI.Routes, PluginWebUIRoute{
+		ID: "filtered-ui.manage", Path: "/admin/extensions/filtered-ui/manage", Export: "Manage", Permission: "filtered-ui.manage",
+	})
+	manifest.WebUI.Menus = append(manifest.WebUI.Menus, PluginWebUIMenu{
+		ID: "filtered-ui.manage", Parent: "services", Label: "Manage", Icon: "box",
+		Route: "/admin/extensions/filtered-ui/manage", Permission: "filtered-ui.manage", Order: 101,
+	})
+	artifact := kernelTestWebUIPackage(t, &manifest, `export const anixopsExtension = {}; export default {};`)
+	canonical, err := CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	_, err = StorePluginArtifact(db, release.ID, artifact)
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&model.PluginInstallation{
+		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
+		ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
+	}).Error)
+
+	group := model.AccessGroup{ScopeID: manifest.ID, Name: "viewers", Enabled: true}
+	require.NoError(t, db.Create(&group).Error)
+	require.NoError(t, db.Create(&model.ResourceGrant{
+		GroupID: group.ID, ResourceType: PluginAPIGrantResourceType, ResourceID: manifest.ID,
+		Permissions: `["filtered-ui.view"]`,
+	}).Error)
+	require.NoError(t, db.Create(&model.AccessGroupUser{GroupID: group.ID, UserID: 7}).Error)
+
+	extensions, err := ListEnabledWebUIExtensionsForActor(db, publicKey, 7, true)
+	require.NoError(t, err)
+	require.Len(t, extensions, 1)
+	require.Equal(t, []string{"filtered-ui.view"}, extensions[0].Permissions)
+	require.Len(t, extensions[0].Routes, 1)
+	require.Equal(t, "filtered-ui.main", extensions[0].Routes[0].ID)
+	require.Len(t, extensions[0].Menus, 1)
+	require.Equal(t, "filtered-ui.main", extensions[0].Menus[0].ID)
+
+	extensions, err = ListEnabledWebUIExtensionsForActor(db, publicKey, 8, true)
+	require.NoError(t, err)
+	require.Empty(t, extensions, "once grants exist an unassigned administrator must fail closed")
+}
+
+func TestListEnabledWebUIExtensionsForActorQuarantinesInvalidPlugin(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	for _, pluginID := range []string{"catalog-broken", "catalog-valid"} {
+		manifest := kernelTestWebUIManifest(pluginID)
+		artifact := kernelTestWebUIPackage(t, &manifest, `export const anixopsExtension = {}; export default {};`)
+		canonical, err := CanonicalPluginManifest(manifest)
+		require.NoError(t, err)
+		release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+		require.NoError(t, err)
+		_, err = StorePluginArtifact(db, release.ID, artifact)
+		require.NoError(t, err)
+		require.NoError(t, db.Create(&model.PluginInstallation{
+			PluginID: pluginID, Target: "control", DesiredVersion: manifest.Version,
+			ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
+		}).Error)
+		if pluginID == "catalog-broken" {
+			require.NoError(t, db.Model(release).Update("signature", "tampered").Error)
+		}
+	}
+
+	extensions, err := ListEnabledWebUIExtensionsForActor(db, publicKey, 7, true)
+	require.NoError(t, err)
+	require.Len(t, extensions, 1)
+	require.Equal(t, "catalog-valid", extensions[0].PluginID)
+
+	_, err = ListEnabledWebUIExtensions(db, publicKey)
+	require.ErrorIs(t, err, ErrExtensionCatalogIntegrity, "strict diagnostics must still report quarantined catalog corruption")
 }
 
 func TestListEnabledWebUIExtensionsRequiresTrustRootOnlyForActiveCandidates(t *testing.T) {

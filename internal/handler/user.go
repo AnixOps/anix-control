@@ -111,13 +111,22 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 		panelError(c, "获取用户信息失败")
 		return
 	}
+	pluginAccess, err := service.ResolveActorPluginAccess(database.Get(), uid, user.IsAdmin == 1)
+	if err != nil {
+		log.Printf("user plugin permissions failed: %v", err)
+		panelError(c, "获取用户权限失败")
+		return
+	}
 
 	panelSuccess(c, gin.H{
-		"id":       user.ID,
-		"email":    user.Email,
-		"uuid":     user.UUID,
-		"token":    user.Token,
-		"is_admin": user.IsAdmin == 1,
+		"id":                 user.ID,
+		"email":              user.Email,
+		"uuid":               user.UUID,
+		"token":              user.Token,
+		"is_admin":           user.IsAdmin == 1,
+		"permission_mode":    pluginAccess.PermissionMode(),
+		"permissions":        pluginAccess.ProfilePermissions(),
+		"restricted_plugins": pluginAccess.ProfileRestrictedPluginList(),
 	})
 }
 

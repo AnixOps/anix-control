@@ -1,11 +1,12 @@
 import { computed, defineComponent, h, onErrorCaptured, onMounted, readonly, ref, shallowRef } from 'vue'
 import { getKernelExtensions } from '@/api/kernel'
+import { useUserStore } from '@/stores/user'
 import { getLocalExtensionModuleLoader } from './registry'
 
 const ADMIN_ROUTE_NAME = 'admin'
 const ENVELOPE_VERSION = 'v1'
 const REFRESH_INTERVAL_MS = 30_000
-const PLUGIN_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/
+const PLUGIN_ID_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,118}[a-z0-9])?$/
 const VERSION_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._+-]{0,118}[A-Za-z0-9])?$/
 const EXPORT_PATTERN = /^(?:default|[A-Za-z_$][A-Za-z0-9_$]*)$/
 const SHA256_PATTERN = /^[a-fA-F0-9]{64}$/
@@ -27,6 +28,10 @@ const ICON_LABELS = Object.freeze({
 
 function runtimeError(code, message, pluginID = '') {
   return { code, message, plugin_id: pluginID }
+}
+
+function runtimeSkip(code, message, pluginID) {
+  return { ...runtimeError(code, message, pluginID), status: 'skipped' }
 }
 
 function requireString(value, field, maxLength = 160) {
@@ -112,8 +117,8 @@ function normalizeExtension(raw) {
     throw new Error('extension entry must be an object')
   }
 
-  const pluginID = requireString(raw.plugin_id, 'plugin_id', 64)
-  if (!PLUGIN_ID_PATTERN.test(pluginID)) {
+  const pluginID = requireString(raw.plugin_id, 'plugin_id', 120)
+  if (!PLUGIN_ID_PATTERN.test(pluginID) || pluginID.includes('..')) {
     throw new Error('plugin_id is not a controlled module ID')
   }
   if (raw.publisher !== 'AnixOps') {
@@ -223,8 +228,36 @@ function normalizeExtension(raw) {
       sha256: bundleSHA256,
       url: bundleURL
     },
+    permissions: [...permissions],
     routes,
     menus
+  }
+}
+
+function filterAuthorizedExtension(extension, hasPermission) {
+  const grants = new Map(extension.permissions.map(permission => {
+    try {
+      return [permission, hasPermission(permission) === true]
+    } catch {
+      return [permission, false]
+    }
+  }))
+  const routes = extension.routes.filter(route => grants.get(route.permission) === true)
+  const routePaths = new Set(routes.map(route => route.path))
+
+  return {
+    ...extension,
+    permissions: extension.permissions.filter(permission => grants.get(permission) === true),
+    routes,
+    menus: extension.menus.filter(menu => grants.get(menu.permission) === true && routePaths.has(menu.route))
+  }
+}
+
+function currentUserHasPermission(permission) {
+  try {
+    return useUserStore().hasPermission(permission) === true
+  } catch {
+    return false
   }
 }
 
@@ -404,10 +437,11 @@ function extensionRouteHost(component) {
   })
 }
 
-function snapshot(menus, errors, plugins, extensions) {
+function snapshot(menus, errors, skipped, plugins, extensions) {
   return {
     menus: [...menus.value],
     errors: [...errors.value],
+    skipped: [...skipped.value],
     pluginIDs: [...plugins.value],
     extensions: [...extensions.value]
   }
@@ -417,10 +451,12 @@ export function createAdminExtensionRuntime(options = {}) {
   const fetchExtensions = options.fetchExtensions || getKernelExtensions
   const resolveModule = options.resolveModule || getLocalExtensionModuleLoader
   const loadBundleModule = options.loadBundleModule || loadVerifiedBundleModule
+  const hasPermission = typeof options.hasPermission === 'function' ? options.hasPermission : currentUserHasPermission
   const now = options.now || Date.now
   const refreshInterval = options.refreshIntervalMs ?? REFRESH_INTERVAL_MS
   const menus = shallowRef([])
   const errors = shallowRef([])
+  const skipped = shallowRef([])
   const plugins = shallowRef([])
   const extensions = shallowRef([])
   const routeRemovers = new Map()
@@ -440,6 +476,7 @@ export function createAdminExtensionRuntime(options = {}) {
     }
     routeRemovers.clear()
     menus.value = []
+    skipped.value = []
     plugins.value = []
     extensions.value = []
   }
@@ -450,6 +487,16 @@ export function createAdminExtensionRuntime(options = {}) {
       extension = normalizeExtension(raw)
       if (duplicateIDs.has(extension.pluginID)) {
         throw new Error('plugin_id is duplicated in the extension catalog')
+      }
+      extension = filterAuthorizedExtension(extension, hasPermission)
+      if (extension.routes.length === 0) {
+        return {
+          skipped: runtimeSkip(
+            'forbidden',
+            'extension has no routes allowed by the current permission grants',
+            extension.pluginID
+          )
+        }
       }
       let module
       if (extension.bundle.url) {
@@ -487,7 +534,7 @@ export function createAdminExtensionRuntime(options = {}) {
         errors.value = [runtimeError('catalog_unavailable', error instanceof Error ? error.message : 'extension catalog is unavailable')]
         initialized = true
       }
-      return snapshot(menus, errors, plugins, extensions)
+      return snapshot(menus, errors, skipped, plugins, extensions)
     }
 
     const counts = new Map()
@@ -499,11 +546,12 @@ export function createAdminExtensionRuntime(options = {}) {
     const duplicateIDs = new Set([...counts].filter(([, count]) => count > 1).map(([id]) => id))
     const prepared = await Promise.all(catalog.map(item => prepareExtension(item, duplicateIDs)))
     if (refreshGeneration !== generation) {
-      return snapshot(menus, errors, plugins, extensions)
+      return snapshot(menus, errors, skipped, plugins, extensions)
     }
 
     removeExtensionRoutes()
     const nextErrors = prepared.flatMap(item => item.error ? [item.error] : [])
+    const nextSkipped = prepared.flatMap(item => item.skipped ? [item.skipped] : [])
     const occupiedPaths = new Set(
       typeof router?.getRoutes === 'function'
         ? router.getRoutes().map(route => route.path)
@@ -581,10 +629,11 @@ export function createAdminExtensionRuntime(options = {}) {
     nextMenus.sort((left, right) => left.order - right.order || left.label.localeCompare(right.label) || left.id.localeCompare(right.id))
     menus.value = nextMenus
     errors.value = nextErrors
+    skipped.value = nextSkipped
     plugins.value = nextPlugins.sort()
     extensions.value = nextExtensions.sort((left, right) => left.pluginID.localeCompare(right.pluginID))
     initialized = true
-    return snapshot(menus, errors, plugins, extensions)
+    return snapshot(menus, errors, skipped, plugins, extensions)
   }
 
   function refresh(router) {
@@ -602,7 +651,7 @@ export function createAdminExtensionRuntime(options = {}) {
 
   function ensure(router) {
     if (initialized && now() - lastAttempt < refreshInterval) {
-      return Promise.resolve(snapshot(menus, errors, plugins, extensions))
+      return Promise.resolve(snapshot(menus, errors, skipped, plugins, extensions))
     }
     return refresh(router)
   }
@@ -619,6 +668,7 @@ export function createAdminExtensionRuntime(options = {}) {
   return {
     menus: readonly(menus),
     errors: readonly(errors),
+    skipped: readonly(skipped),
     plugins: readonly(plugins),
     extensions: readonly(extensions),
     ensure,
@@ -631,6 +681,7 @@ const adminExtensionRuntime = createAdminExtensionRuntime()
 
 export const adminExtensionMenus = adminExtensionRuntime.menus
 export const adminExtensionErrors = adminExtensionRuntime.errors
+export const adminExtensionSkipped = adminExtensionRuntime.skipped
 export const adminExtensionPluginIDs = adminExtensionRuntime.plugins
 export const adminExtensions = adminExtensionRuntime.extensions
 
