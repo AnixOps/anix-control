@@ -1,7 +1,11 @@
 {
-  "chain_priority": 0,
+  "apply": false,
+  "chain": "prerouting",
   "family": "inet",
-  "rollback_snapshot": true,
-  "table_name": "anixops_forward",
-  "udp_enabled": true
+  "nft_binary": "nft",
+  "plan_path": "",
+  "priority": -100,
+  "rollback_on_exit": true,
+  "rules": [],
+  "table": "anixops_forward"
 }

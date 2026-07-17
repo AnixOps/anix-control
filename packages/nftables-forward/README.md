@@ -42,6 +42,16 @@ The generated signed-manifest input declares both `control` and `agent`
 targets and maps `agent-linux-amd64` to
 `agent/linux-amd64/plugin`. Other GOOS/GOARCH pairs use the same naming rule.
 
+Version 1.1 uses the same configuration document end to end in the Control
+form, topology preview, Agent Supervisor, and plugin runtime. The safe default
+is `apply=false` with an empty `rules` array, so installing and enabling the
+package does not claim traffic. An operator must add explicit TCP or UDP rules
+and set `apply=true` before nftables changes are admitted. `rollback_on_exit`
+is fixed to `true`; the Agent supplies a private `--anixops-state` path where
+the runtime journals the pre-existing table snapshot before applying a plan.
+The `plugin.runtime-state` and `plugin.cleanup` capabilities let Supervisor
+recover that journal after a process or Agent crash.
+
 ## Build
 
 The input binary must be a non-empty regular executable file. The package
@@ -58,7 +68,7 @@ python3 packages/nftables-forward/build.py build \
 
 The output directory contains:
 
-- `nftables-forward-1.0.0.tar`: deterministic combined package artifact;
+- `nftables-forward-1.1.0.tar`: deterministic combined package artifact;
 - `manifest.json`: canonical manifest bytes to sign with the official Ed25519
   release key;
 - `build-report.json`: input and output digests without timestamps or host
@@ -92,7 +102,7 @@ Base64 value used by `plugins.official_public_key`:
 ```bash
 python3 packages/nftables-forward/verify_signature.py \
   --manifest /tmp/nftables-forward-dist/manifest.json \
-  --artifact /tmp/nftables-forward-dist/nftables-forward-1.0.0.tar \
+  --artifact /tmp/nftables-forward-dist/nftables-forward-1.1.0.tar \
   --signature /path/to/manifest.sig \
   --public-key /path/to/official-public-key.pem
 ```

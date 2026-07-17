@@ -1,13 +1,18 @@
 {
-  "$id": "urn:anixops:plugin:nftables-forward:config:v1",
+  "$id": "urn:anixops:plugin:nftables-forward:config:v2",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "chain_priority": {
-      "default": 0,
-      "maximum": 1000,
-      "minimum": -1000,
-      "type": "integer"
+    "apply": {
+      "default": false,
+      "type": "boolean"
+    },
+    "chain": {
+      "default": "prerouting",
+      "maxLength": 63,
+      "minLength": 1,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "type": "string"
     },
     "family": {
       "default": "inet",
@@ -18,28 +23,106 @@
       ],
       "type": "string"
     },
-    "rollback_snapshot": {
-      "default": true,
-      "type": "boolean"
-    },
-    "table_name": {
-      "default": "anixops_forward",
-      "maxLength": 48,
-      "minLength": 3,
-      "pattern": "^[a-z][a-z0-9_]*$",
+    "nft_binary": {
+      "default": "nft",
+      "maxLength": 4096,
+      "minLength": 1,
+      "pattern": "^[^\\u0000\\r\\n]+$",
       "type": "string"
     },
-    "udp_enabled": {
+    "plan_path": {
+      "default": "",
+      "maxLength": 4096,
+      "pattern": "^$|^/",
+      "type": "string"
+    },
+    "priority": {
+      "default": -100,
+      "maximum": 500,
+      "minimum": -500,
+      "type": "integer"
+    },
+    "rollback_on_exit": {
+      "const": true,
       "default": true,
       "type": "boolean"
+    },
+    "rules": {
+      "default": [],
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "default": "",
+            "maxLength": 96,
+            "pattern": "^[A-Za-z0-9 ._:/@+-]*$",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[a-z0-9][a-z0-9_.-]*$",
+            "type": "string"
+          },
+          "listen_address": {
+            "maxLength": 45,
+            "minLength": 2,
+            "type": "string"
+          },
+          "listen_port": {
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "protocol": {
+            "enum": [
+              "tcp",
+              "udp"
+            ],
+            "type": "string"
+          },
+          "target_address": {
+            "maxLength": 45,
+            "minLength": 2,
+            "type": "string"
+          },
+          "target_port": {
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "protocol",
+          "listen_address",
+          "listen_port",
+          "target_address",
+          "target_port"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1024,
+      "type": "array"
+    },
+    "table": {
+      "default": "anixops_forward",
+      "maxLength": 63,
+      "minLength": 1,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "type": "string"
     }
   },
   "required": [
-    "chain_priority",
+    "apply",
+    "nft_binary",
+    "plan_path",
     "family",
-    "rollback_snapshot",
-    "table_name",
-    "udp_enabled"
+    "table",
+    "chain",
+    "priority",
+    "rollback_on_exit",
+    "rules"
   ],
   "title": "nftables Forward Configuration",
   "type": "object"

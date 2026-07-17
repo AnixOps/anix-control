@@ -104,6 +104,7 @@ func DefaultRegistry(db *gorm.DB) (*Registry, error) {
 		NewMachineTelemetryExecutor(db),
 		NewMachineTelemetryExecutorVersion(db, MachineTelemetryLegacyVersion),
 		NewNftablesForwardExecutor(db),
+		NewNftablesForwardExecutorVersion(db, NftablesForwardLegacyVersion),
 		NewGostMeshExecutor(db),
 		NewNatEgressExecutor(db),
 	)
