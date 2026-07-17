@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+## 4.0.0-alpha.4 - 2026-07-17
+
+### Added
+
+- Added the signed `machine-telemetry` 1.1.0 reference package end to end:
+  Agent-local Unix RPC snapshots, gopsutil-backed CPU/memory/disk/network/
+  process/uptime metrics, namespaced heartbeat transport, Control persistence,
+  read-only API state, and the matching WebUI status view.
+- Added signed-release capability admission for telemetry. Control accepts
+  metrics only from an enabled assignment whose exact Agent release verifies
+  against an active AnixOps trust root and declares `telemetry.read`.
+- Added canary-aware topology planning, dependency checks, scoped rollback,
+  and pure-removal revisions, including protection of the active revision until
+  a full rollout completes.
+
+### Fixed
+
+- Added lifecycle admission fencing for the Agent Supervisor so close waits for
+  active operations, rejects new work while closing, and can be retried after a
+  deadline without losing cleanup state.
+- Propagated operation deadlines and cancellation through queue, handler, and
+  plugin locks; canonicalized Agent timeout observations and mapped them to
+  Control `timed_out` state.
+- Added cross-repository process E2E coverage from the signed Agent package
+  through telemetry persistence and the Control plugin API/WebUI executor,
+  pinned to Agent commit `676b5ad1c339a157075ae46028eee06540ffc26b`.
+- Corrected the attached upgrade runbook to use the actual `anix-control-*`
+  release assets and default systemd layout, and attached the exact signature
+  verifier used by the Machine Telemetry package instructions.
+
+### Known Gaps
+
+- This remains an opt-in alpha. Production traffic stays on the legacy path;
+  topology data-plane cutover, Secret-ID materialization, live staging evidence,
+  and the 72-hour canary are still required before stable 4.0 authorization.
+
 ## 4.0.0-alpha.3 - 2026-07-17
 
 ### Added

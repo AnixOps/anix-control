@@ -6,14 +6,14 @@
 
 set -Eeuo pipefail
 
-readonly VERSION="${VERSION:-v2.5.0}"
+readonly VERSION="${VERSION:-v4.0.0-alpha.4}"
 readonly SERVICE_NAME="v2board"
 readonly APP_BIN="/usr/local/v2board/v2board"
 readonly CONFIG_FILE="/etc/v2board/config.yaml"
 readonly UNIT_FILE="/etc/systemd/system/v2board.service"
 readonly FRONTEND_DIR="/var/lib/v2board/frontend"
 readonly HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:18080/health}"
-readonly RELEASE_URL="https://github.com/AnixOps/v2board_AnixOps/releases/download/${VERSION}"
+readonly RELEASE_URL="https://github.com/AnixOps/anix-control/releases/download/${VERSION}"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 readonly TIMESTAMP
 readonly BACKUP_DIR="/root/v2board-backup-${TIMESTAMP}"
@@ -56,7 +56,7 @@ require_command() {
 }
 
 validate_version() {
-  [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || \
+  [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]] || \
     die "Invalid VERSION: ${VERSION}"
 }
 
@@ -114,27 +114,27 @@ main() {
   info "Downloading GitHub Release assets for ${VERSION}."
   cd "${WORK_DIR}"
   curl -fL --retry 3 --retry-delay 2 -o SHA256SUMS.txt "${RELEASE_URL}/SHA256SUMS.txt"
-  curl -fL --retry 3 --retry-delay 2 -o v2board-linux-amd64.tar.gz \
-    "${RELEASE_URL}/v2board-linux-amd64.tar.gz"
-  curl -fL --retry 3 --retry-delay 2 -o v2board-frontend.tar.gz \
-    "${RELEASE_URL}/v2board-frontend.tar.gz"
-  awk '$2 == "v2board-linux-amd64.tar.gz" || $2 == "v2board-frontend.tar.gz"' \
+  curl -fL --retry 3 --retry-delay 2 -o anix-control-linux-amd64.tar.gz \
+    "${RELEASE_URL}/anix-control-linux-amd64.tar.gz"
+  curl -fL --retry 3 --retry-delay 2 -o anix-control-frontend.tar.gz \
+    "${RELEASE_URL}/anix-control-frontend.tar.gz"
+  awk '$2 == "anix-control-linux-amd64.tar.gz" || $2 == "anix-control-frontend.tar.gz"' \
     SHA256SUMS.txt > artifact-checksums.txt
   [[ "$(wc -l < artifact-checksums.txt)" -eq 2 ]] || \
     die "SHA256SUMS.txt does not contain both required release artifacts."
   sha256sum -c artifact-checksums.txt
 
   mkdir -p "${WORK_DIR}/frontend"
-  tar -xzf v2board-linux-amd64.tar.gz
-  tar -xzf v2board-frontend.tar.gz -C "${WORK_DIR}/frontend"
-  test -x "${WORK_DIR}/v2board-linux-amd64" || die "Release archive has no linux amd64 binary."
+  tar -xzf anix-control-linux-amd64.tar.gz
+  tar -xzf anix-control-frontend.tar.gz -C "${WORK_DIR}/frontend"
+  test -x "${WORK_DIR}/anix-control-linux-amd64" || die "Release archive has no linux amd64 binary."
   test -f "${WORK_DIR}/frontend/index.html" || die "Release archive has no frontend index.html."
 
   info "Stopping ${SERVICE_NAME} and replacing release files."
   systemctl stop "${SERVICE_NAME}"
   service_stopped=1
   files_replaced=1
-  install -m 0755 "${WORK_DIR}/v2board-linux-amd64" "${APP_BIN}.new"
+  install -m 0755 "${WORK_DIR}/anix-control-linux-amd64" "${APP_BIN}.new"
   mv -f "${APP_BIN}.new" "${APP_BIN}"
   mv "${FRONTEND_DIR}" "${OLD_FRONTEND_DIR}"
   mv "${WORK_DIR}/frontend" "${FRONTEND_DIR}"

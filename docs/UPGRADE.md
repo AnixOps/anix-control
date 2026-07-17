@@ -1,6 +1,6 @@
 # Upgrade Runbook
 
-This runbook covers operator upgrades for `v2board_AnixOps` releases. Release
+This runbook covers operator upgrades for AnixOps Control releases. Release
 artifacts must come from GitHub Actions. Do not build binaries, frontend assets,
 Docker metadata, checksums, SBOMs, or release manifests on the production host.
 
@@ -70,25 +70,29 @@ Evidence to keep:
 Download artifacts from the GitHub Release for the target tag. At minimum,
 download:
 
-- the matching `v2board-*` backend artifact for the host OS/architecture
-- `v2board-frontend.tar.gz` or `v2board-frontend.zip`
+- the matching `anix-control-<os>-<arch>.tar.gz` backend artifact (or the
+  matching Windows `.exe.zip`)
+- `anix-control-frontend.tar.gz` or `anix-control-frontend.zip`
 - `SHA256SUMS.txt`
 - `RELEASE_MANIFEST.json`
 - `OPERATOR_DEPLOYMENT.md`
 - `RELEASE_NOTES.md`
+- `verify-machine-telemetry-signature.py`
 - `migration-dry-run.txt`
-- `v2board-source.sbom.spdx.json`
+- `anix-control-source.sbom.spdx.json`
 
 Plugin-platform releases may also attach signed official package artifacts.
 The current workflow publishes `machine-telemetry`, `nftables-forward`,
-`gost-mesh`, and `nat-egress`. For each package ID, keep these files together:
+`gost-mesh`, and `nat-egress`. For each package ID, keep these files together.
+Substitute the exact signed package version; `machine-telemetry` is `1.1.0` in
+alpha.4 while the other official packages remain on their published versions:
 
-- `<plugin-id>-1.0.0.tar`
-- `anixops-<plugin-id>-1.0.0.manifest.json`
-- `anixops-<plugin-id>-1.0.0.sig`
-- `anixops-<plugin-id>-1.0.0.public-key.pem`
-- `anixops-<plugin-id>-1.0.0.public-key.raw`
-- `anixops-<plugin-id>-1.0.0.SHA256SUMS.txt`
+- `<plugin-id>-<plugin-version>.tar`
+- `anixops-<plugin-id>-<plugin-version>.manifest.json`
+- `anixops-<plugin-id>-<plugin-version>.sig`
+- `anixops-<plugin-id>-<plugin-version>.public-key.pem`
+- `anixops-<plugin-id>-<plugin-version>.public-key.raw`
+- `anixops-<plugin-id>-<plugin-version>.SHA256SUMS.txt`
 
 Verify checksums before replacing any production file:
 
@@ -108,7 +112,7 @@ If the manifest or checksum verification fails, stop the upgrade.
 For signed plugin packages, first verify package checksums:
 
 ```bash
-sha256sum -c anixops-machine-telemetry-1.0.0.SHA256SUMS.txt
+sha256sum -c anixops-machine-telemetry-1.1.0.SHA256SUMS.txt
 ```
 
 Then verify the manifest signature with the public key published by the same
@@ -116,11 +120,11 @@ GitHub Release, or with the pinned AnixOps trust root already approved in your
 environment:
 
 ```bash
-python3 packages/machine-telemetry/verify_signature.py \
-  --manifest anixops-machine-telemetry-1.0.0.manifest.json \
-  --artifact machine-telemetry-1.0.0.tar \
-  --signature anixops-machine-telemetry-1.0.0.sig \
-  --public-key anixops-machine-telemetry-1.0.0.public-key.pem
+python3 verify-machine-telemetry-signature.py \
+  --manifest anixops-machine-telemetry-1.1.0.manifest.json \
+  --artifact machine-telemetry-1.1.0.tar \
+  --signature anixops-machine-telemetry-1.1.0.sig \
+  --public-key anixops-machine-telemetry-1.1.0.public-key.pem
 ```
 
 If the package hash, manifest signature, or trust-root fingerprint does not
@@ -128,18 +132,17 @@ match the release record, stop before enabling any plugin flag.
 
 ## Plugin Platform Flags
 
-`v4.0.0-alpha.3` is the current operational signed-package/WebUI canary. It
-supersedes `alpha.2` by filtering the extension catalog and active assets by
-actor grants, rejecting unauthorized routes before any bundle fetch, revoking
-disabled or version-mismatched assets with `private, no-store`, and isolating
-an invalid plugin from other extensions. Login, registration, and profile
-responses carry the permission mode used by the WebUI. Start the 72-hour
-observation window again after installing `alpha.3`. A fresh alpha
-configuration enables the Control package executor and Agent dispatch, while
-topology execution remains disabled. An upgrade preserves the existing
-configuration, so an existing installation is not silently switched to the new
-path. Enable the alpha flags only after importing the official release assets,
-recording checksums/signatures, and selecting a canary node:
+`v4.0.0-alpha.4` is the current operational signed-package/WebUI canary. It
+supersedes `alpha.3` with the complete signed `machine-telemetry` 1.1.0
+Control/Agent/WebUI path, signed capability admission, real host metrics,
+heartbeat persistence, canary-aware topology planning, and deadline-safe Agent
+Supervisor lifecycle handling. Start the 72-hour observation window again
+after installing `alpha.4`. A fresh alpha configuration enables the Control
+package executor and Agent dispatch, while topology execution remains
+disabled. An upgrade preserves the existing configuration, so an existing
+installation is not silently switched to the new path. Enable the alpha flags
+only after importing the official release assets, recording
+checksums/signatures, and selecting a canary node:
 
 ```yaml
 plugins:
@@ -183,45 +186,46 @@ renewal, deletion, and audit are not complete, so a stable or production
 
 ## Systemd Binary Upgrade
 
-The exact service name and paths are operator-owned. The example below assumes:
+The exact service name and paths are operator-owned. The example below uses the
+current installer defaults:
 
-- service: `v2board.service`
-- binary path: `/opt/v2board/v2board`
-- frontend path: `/opt/v2board/public`
-- config path: `/opt/v2board/config/config.yaml`
+- service: `anix-control.service`
+- binary path: `/opt/anixops/control/bin/anix-control`
+- frontend path: `/opt/anixops/control/web/public`
+- config path: `/opt/anixops/control/config/config.yaml`
 
 Prepare backups:
 
 ```bash
-sudo install -d -m 0750 /opt/v2board/backups
-sudo cp -a /opt/v2board/v2board /opt/v2board/backups/v2board.$(date +%Y%m%d%H%M%S)
-sudo cp -a /opt/v2board/public /opt/v2board/backups/public.$(date +%Y%m%d%H%M%S)
-sudo cp -a /opt/v2board/config/config.yaml /opt/v2board/backups/config.$(date +%Y%m%d%H%M%S).yaml
+sudo install -d -m 0750 /opt/anixops/control/backups
+sudo cp -a /opt/anixops/control/bin/anix-control /opt/anixops/control/backups/anix-control.$(date +%Y%m%d%H%M%S)
+sudo cp -a /opt/anixops/control/web/public /opt/anixops/control/backups/public.$(date +%Y%m%d%H%M%S)
+sudo cp -a /opt/anixops/control/config/config.yaml /opt/anixops/control/backups/config.$(date +%Y%m%d%H%M%S).yaml
 ```
 
 Stop, replace, and start:
 
 ```bash
-tar -xzf ./v2board-linux-amd64.tar.gz
+tar -xzf ./anix-control-linux-amd64.tar.gz
 
-sudo systemctl stop v2board.service
+sudo systemctl stop anix-control.service
 
-sudo install -m 0755 ./v2board-linux-amd64 /opt/v2board/v2board
-sudo rm -rf /opt/v2board/public.new
-sudo mkdir -p /opt/v2board/public.new
-sudo tar -xzf ./v2board-frontend.tar.gz -C /opt/v2board/public.new
-sudo rm -rf /opt/v2board/public
-sudo mv /opt/v2board/public.new /opt/v2board/public
+sudo install -m 0755 ./anix-control-linux-amd64 /opt/anixops/control/bin/anix-control
+sudo rm -rf /opt/anixops/control/web/public.new
+sudo mkdir -p /opt/anixops/control/web/public.new
+sudo tar -xzf ./anix-control-frontend.tar.gz -C /opt/anixops/control/web/public.new
+sudo rm -rf /opt/anixops/control/web/public
+sudo mv /opt/anixops/control/web/public.new /opt/anixops/control/web/public
 
-sudo systemctl start v2board.service
-sudo systemctl status v2board.service --no-pager
+sudo systemctl start anix-control.service
+sudo systemctl status anix-control.service --no-pager
 ```
 
 Verify:
 
 ```bash
 curl -fsS http://127.0.0.1:8080/health
-sudo journalctl -u v2board.service -n 120 --no-pager
+sudo journalctl -u anix-control.service -n 120 --no-pager
 ```
 
 Then check:
@@ -290,12 +294,12 @@ Rollback should restore the exact previous artifact and config set.
 For systemd binary deployments:
 
 ```bash
-sudo systemctl stop v2board.service
-sudo cp -a /opt/v2board/backups/v2board.YYYYMMDDHHMMSS /opt/v2board/v2board
-sudo rm -rf /opt/v2board/public
-sudo cp -a /opt/v2board/backups/public.YYYYMMDDHHMMSS /opt/v2board/public
-sudo cp -a /opt/v2board/backups/config.YYYYMMDDHHMMSS.yaml /opt/v2board/config/config.yaml
-sudo systemctl start v2board.service
+sudo systemctl stop anix-control.service
+sudo cp -a /opt/anixops/control/backups/anix-control.YYYYMMDDHHMMSS /opt/anixops/control/bin/anix-control
+sudo rm -rf /opt/anixops/control/web/public
+sudo cp -a /opt/anixops/control/backups/public.YYYYMMDDHHMMSS /opt/anixops/control/web/public
+sudo cp -a /opt/anixops/control/backups/config.YYYYMMDDHHMMSS.yaml /opt/anixops/control/config/config.yaml
+sudo systemctl start anix-control.service
 curl -fsS http://127.0.0.1:8080/health
 ```
 

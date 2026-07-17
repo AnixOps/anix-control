@@ -3,7 +3,7 @@
 .PHONY: test-quick test-clean test-summary test-grpc test-cmd test-all test-coverage-all
 
 # 鐗堟湰淇℃伅
-VERSION := 4.0.0-alpha.3
+VERSION := 4.0.0-alpha.4
 BUILD_TIME := $(shell date +%Y-%m-%d_%H:%M:%S)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME) -X main.commit=$(GIT_COMMIT)
