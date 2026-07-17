@@ -110,6 +110,79 @@
       </table>
     </div>
 
+    <section
+      v-show="tab === 'assignments'"
+      id="control-panel-assignments"
+      class="assignments-panel"
+      role="tabpanel"
+      aria-labelledby="control-tab-assignments"
+      tabindex="0"
+    >
+      <div class="assignments-toolbar">
+        <div class="assignment-node-picker">
+          <label for="assignment-node-filter">{{ t('control.assignments.node') }}</label>
+          <select id="assignment-node-filter" v-model.number="selectedNodeID" :disabled="nodes.length === 0 || assignmentsLoading" @change="loadAssignments()">
+            <option v-if="nodes.length === 0" :value="0">{{ t('control.assignments.noNodes') }}</option>
+            <option v-for="node in nodes" :key="node.id" :value="node.id">{{ node.name || node.host || `#${node.id}` }} (#{{ node.id }})</option>
+          </select>
+        </div>
+        <div class="assignments-toolbar-actions">
+          <button class="btn btn-sm" type="button" :disabled="!selectedNodeID || assignmentsLoading" @click="loadAssignments()">
+            {{ assignmentsLoading ? t('control.actions.refreshing') : t('control.actions.refresh') }}
+          </button>
+          <button id="new-assignment" class="btn btn-primary btn-sm" type="button" :disabled="!selectedNodeID || agentPluginOptions.length === 0 || scopes.length === 0" @click="openAssignmentEditor()">
+            {{ t('control.actions.newAssignment') }}
+          </button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="data-table assignments-table">
+          <thead>
+            <tr>
+              <th>{{ t('control.table.plugin') }}</th>
+              <th>{{ t('control.table.scope') }}</th>
+              <th>{{ t('control.table.role') }}</th>
+              <th>{{ t('control.table.version') }}</th>
+              <th>{{ t('control.table.configRevision') }}</th>
+              <th>{{ t('control.table.rolloutGroup') }}</th>
+              <th>{{ t('control.table.state') }}</th>
+              <th>{{ t('control.table.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="assignmentsLoading" class="state-row"><td colspan="8">{{ t('control.assignments.loading') }}</td></tr>
+            <tr v-for="assignment in assignments" v-else :key="assignment.id">
+              <td>
+                <span class="primary-cell">{{ pluginName(assignment.plugin_id) }}</span>
+                <code class="secondary-cell">{{ assignment.plugin_id }}</code>
+              </td>
+              <td><code>{{ assignment.service_scope }}</code></td>
+              <td><code>{{ assignment.role }}</code></td>
+              <td><code>{{ assignment.desired_version || '-' }}</code></td>
+              <td>{{ assignment.desired_config_revision ?? 0 }}</td>
+              <td>{{ assignment.rollout_group || '-' }}</td>
+              <td><span :class="['status-badge', assignment.enabled ? 'status-active' : 'status-error']">{{ assignment.enabled ? t('control.states.enabled') : t('control.states.disabled') }}</span></td>
+              <td>
+                <div class="row-actions">
+                  <button class="btn btn-sm" type="button" :disabled="isAssignmentBusy(assignment)" @click="openAssignmentEditor(assignment)">{{ t('common.actions.edit') }}</button>
+                  <button
+                    :class="['btn', 'btn-sm', assignment.enabled ? 'btn-danger' : 'btn-primary']"
+                    type="button"
+                    :disabled="isAssignmentBusy(assignment)"
+                    @click="toggleAssignment(assignment)"
+                  >{{ assignment.enabled ? t('control.actions.disable') : t('control.actions.enable') }}</button>
+                  <button class="btn btn-sm btn-danger" type="button" :disabled="isAssignmentBusy(assignment)" @click="removeAssignment(assignment)">{{ t('common.actions.delete') }}</button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="!assignmentsLoading && selectedNodeID && assignments.length === 0"><td colspan="8" class="empty-row">{{ t('control.empty.assignments') }}</td></tr>
+            <tr v-if="!assignmentsLoading && !selectedNodeID"><td colspan="8" class="empty-row">{{ t('control.assignments.noNodes') }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <div
       v-show="tab === 'scopes'"
       id="control-panel-scopes"
@@ -176,6 +249,69 @@
           <tr v-if="loaded && operations.length === 0"><td colspan="6" class="empty-row">{{ t('control.empty.operations') }}</td></tr>
         </tbody>
       </table>
+    </div>
+
+    <div v-if="assignmentEditor.open" class="modal-overlay" @click.self="closeAssignmentEditor">
+      <section class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="assignment-editor-title">
+        <div class="modal-header">
+          <h3 id="assignment-editor-title">{{ assignmentEditor.mode === 'edit' ? t('control.assignments.editTitle') : t('control.assignments.createTitle') }}</h3>
+          <button class="btn btn-ghost close-btn" type="button" :aria-label="t('common.actions.close')" @click="closeAssignmentEditor">x</button>
+        </div>
+        <div class="modal-body assignment-form-grid">
+          <div class="form-group">
+            <label for="assignment-node">{{ t('control.assignments.node') }}</label>
+            <select id="assignment-node" v-model.number="assignmentEditor.nodeID" :disabled="assignmentEditor.mode === 'edit'">
+              <option v-for="node in nodes" :key="node.id" :value="node.id">{{ node.name || node.host || `#${node.id}` }} (#{{ node.id }})</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="assignment-plugin">{{ t('control.assignments.agentPlugin') }}</label>
+            <select id="assignment-plugin" v-model="assignmentEditor.pluginID" :disabled="assignmentEditor.mode === 'edit'" @change="selectAssignmentPluginDefaults">
+              <option v-for="option in agentPluginOptions" :key="option.pluginID" :value="option.pluginID">{{ option.name }} ({{ option.pluginID }})</option>
+              <option v-if="assignmentEditor.pluginID && !agentPluginOptions.some(option => option.pluginID === assignmentEditor.pluginID)" :value="assignmentEditor.pluginID">{{ pluginName(assignmentEditor.pluginID) }} ({{ assignmentEditor.pluginID }})</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="assignment-scope">{{ t('control.table.scope') }}</label>
+            <select id="assignment-scope" v-model="assignmentEditor.serviceScope" :disabled="assignmentEditor.mode === 'edit'">
+              <option v-for="scope in scopes" :key="scope.id" :value="scope.id">{{ scope.name || scope.id }} ({{ scope.id }})</option>
+              <option v-if="assignmentEditor.serviceScope && !scopes.some(scope => scope.id === assignmentEditor.serviceScope)" :value="assignmentEditor.serviceScope">{{ assignmentEditor.serviceScope }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="assignment-role">{{ t('control.table.role') }}</label>
+            <input id="assignment-role" v-model.trim="assignmentEditor.role" type="text" list="assignment-role-options" :disabled="assignmentEditor.mode === 'edit'" autocomplete="off" />
+            <datalist id="assignment-role-options">
+              <option v-for="role in assignmentRoleSuggestions" :key="role" :value="role"></option>
+            </datalist>
+          </div>
+          <div class="form-group">
+            <label for="assignment-version">{{ t('control.install.version') }}</label>
+            <select id="assignment-version" v-model="assignmentEditor.desiredVersion">
+              <option v-for="release in assignmentReleaseOptions" :key="release.id" :value="release.version">{{ release.version }}</option>
+              <option v-if="assignmentEditor.desiredVersion && !assignmentReleaseOptions.some(release => release.version === assignmentEditor.desiredVersion)" :value="assignmentEditor.desiredVersion">{{ assignmentEditor.desiredVersion }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="assignment-config-revision">{{ t('control.table.configRevision') }}</label>
+            <input id="assignment-config-revision" v-model.number="assignmentEditor.desiredConfigRevision" type="number" min="0" step="1" />
+          </div>
+          <div class="form-group assignment-rollout-field">
+            <label for="assignment-rollout-group">{{ t('control.table.rolloutGroup') }}</label>
+            <input id="assignment-rollout-group" v-model.trim="assignmentEditor.rolloutGroup" type="text" autocomplete="off" />
+          </div>
+          <label class="enable-after-install assignment-enabled-field">
+            <input v-model="assignmentEditor.enabled" type="checkbox" />
+            <span>{{ t('control.assignments.enabled') }}</span>
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" type="button" :disabled="assignmentEditor.saving" @click="closeAssignmentEditor">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" type="button" :disabled="assignmentEditor.saving || !assignmentEditorValid" @click="saveAssignment">
+            {{ assignmentEditor.saving ? t('control.actions.saving') : t('common.actions.save') }}
+          </button>
+        </div>
+      </section>
     </div>
 
     <div v-if="installationEditor.open" class="modal-overlay" @click.self="closeInstallationEditor">
@@ -279,10 +415,13 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppI18n } from '@/composables/useAppI18n'
 import PluginConfigForm from '@/components/admin/PluginConfigForm.vue'
+import { getNodes } from '@/api/admin'
 import {
   cancelKernelOperation,
+  deleteKernelNodeAssignment,
   getKernelInstallationConfig,
   getKernelInstallations,
+  getKernelNodeAssignments,
   getKernelOperations,
   getKernelPluginReleases,
   getKernelPlugins,
@@ -292,6 +431,7 @@ import {
   runKernelInstallationAction,
   updateKernelInstallationConfig,
   uploadKernelPluginReleaseArtifact,
+  upsertKernelNodeAssignment,
   upsertKernelInstallation
 } from '@/api/kernel'
 import { adminExtensionErrors, adminExtensions, refreshAdminExtensions } from '@/extensions/runtime'
@@ -299,6 +439,12 @@ import { adminExtensionErrors, adminExtensions, refreshAdminExtensions } from '@
 const TERMINAL_OPERATION_STATES = new Set(['succeeded', 'completed', 'failed', 'superseded', 'cancelled', 'timed_out', 'expired', 'rolled_back'])
 const CANCELLABLE_OPERATION_STATES = new Set(['pending', 'dispatching', 'running'])
 const POLL_INTERVAL_MS = 2000
+const OFFICIAL_PLUGIN_ROLES = Object.freeze({
+  'machine-telemetry': ['telemetry'],
+  'nftables-forward': ['cn_dedicated_nftables', 'entry'],
+  'nat-egress': ['nat_egress', 'overseas_exit'],
+  'gost-mesh': ['relay', 'tunnel_entry', 'tunnel_exit', 'cn_standard_tunnel_entry']
+})
 
 const { t, formatDateTime } = useAppI18n()
 const router = useRouter()
@@ -313,6 +459,11 @@ const installations = ref([])
 const scopes = ref([])
 const topologies = ref([])
 const operations = ref([])
+const nodes = ref([])
+const selectedNodeID = ref(0)
+const assignments = ref([])
+const assignmentsLoading = ref(false)
+const assignmentBusy = ref({})
 const rowBusy = ref({})
 const operationBusy = ref('')
 const trackedOperationIDs = new Set()
@@ -324,9 +475,24 @@ let disposed = false
 const installationEditor = reactive({ open: false, mode: 'install', plugin: null, row: null, target: 'control', targets: [], version: '', enabled: true, saving: false })
 const configEditor = reactive({ open: false, row: null, schema: {}, value: {}, revision: 0, valid: true, loading: false, saving: false })
 const releaseImport = reactive({ open: false, manifest: '', signature: '', artifactBase64: '', artifactName: '', saving: false })
+const assignmentEditor = reactive({
+  open: false,
+  mode: 'create',
+  assignmentID: 0,
+  nodeID: 0,
+  pluginID: '',
+  serviceScope: '',
+  role: '',
+  desiredVersion: '',
+  desiredConfigRevision: 0,
+  rolloutGroup: '',
+  enabled: true,
+  saving: false
+})
 
 const tabs = computed(() => [
   { key: 'plugins', label: t('control.tabs.plugins') },
+  { key: 'assignments', label: t('control.tabs.assignments') },
   { key: 'scopes', label: t('control.tabs.scopes') },
   { key: 'topologies', label: t('control.tabs.topologies') },
   { key: 'operations', label: t('control.tabs.operations') }
@@ -355,6 +521,25 @@ const pluginRows = computed(() => plugins.value.flatMap(plugin => {
 }))
 
 const editorReleases = computed(() => releasesForPlugin(installationEditor.plugin?.id).filter(release => releaseTargets(release).includes(installationEditor.target)))
+const agentPluginOptions = computed(() => installations.value
+  .filter(installation => installation.target === 'agent')
+  .map(installation => ({
+    pluginID: installation.plugin_id,
+    name: pluginName(installation.plugin_id),
+    installation
+  }))
+  .sort((left, right) => left.name.localeCompare(right.name)))
+const assignmentReleaseOptions = computed(() => releasesForPlugin(assignmentEditor.pluginID).filter(release => releaseTargets(release).includes('agent')))
+const assignmentRoleSuggestions = computed(() => OFFICIAL_PLUGIN_ROLES[assignmentEditor.pluginID] || [])
+const assignmentEditorValid = computed(() => Boolean(
+  assignmentEditor.nodeID &&
+  assignmentEditor.pluginID &&
+  assignmentEditor.serviceScope &&
+  assignmentEditor.role &&
+  assignmentEditor.desiredVersion &&
+  Number.isInteger(Number(assignmentEditor.desiredConfigRevision)) &&
+  Number(assignmentEditor.desiredConfigRevision) >= 0
+))
 
 function parseManifest(release) {
   try {
@@ -371,6 +556,26 @@ function releaseTargets(release) {
 
 function releasesForPlugin(pluginID) {
   return releases.value.filter(release => release.plugin_id === pluginID)
+}
+
+function pluginName(pluginID) {
+  return plugins.value.find(plugin => plugin.id === pluginID)?.name || pluginID
+}
+
+function extractNodes(response) {
+  if (response?.code !== undefined && response.code !== 0) throw new Error(response.msg || t('control.errors.nodesLoad'))
+  const payload = response?.code !== undefined ? response.data : response?.data?.data ?? response?.data ?? response
+  const rows = Array.isArray(payload) ? payload : payload?.list
+  return Array.isArray(rows) ? rows.map(node => ({ ...node, id: Number(node.id) })).filter(node => node.id > 0) : []
+}
+
+function agentInstallationFor(pluginID) {
+  return installations.value.find(installation => installation.plugin_id === pluginID && installation.target === 'agent')
+}
+
+function defaultScopeFor(pluginID) {
+  const preferredScope = pluginID === 'machine-telemetry' ? ['monitoring', 'system'] : ['forward']
+  return preferredScope.find(scopeID => scopes.value.some(scope => scope.id === scopeID)) || scopes.value[0]?.id || ''
 }
 
 function schemaFor(row) {
@@ -405,15 +610,16 @@ function moveTab(event, index) {
 }
 
 function errorMessage(cause, fallbackKey) {
-  return cause?.response?.data?.error?.message || cause?.message || t(fallbackKey)
+  const response = cause?.response?.data
+  return response?.error?.message || (typeof response?.error === 'string' ? response.error : '') || response?.message || response?.msg || cause?.message || t(fallbackKey)
 }
 
 async function load(options = {}) {
   if (!options.silent) loading.value = true
   if (!options.silent) error.value = ''
   try {
-    const [pluginRowsValue, releaseRows, installationRows, scopeRows, topologyRows, operationRows] = await Promise.all([
-      getKernelPlugins(), getKernelPluginReleases(), getKernelInstallations(), getKernelScopes(), getKernelTopologies(), getKernelOperations()
+    const [pluginRowsValue, releaseRows, installationRows, scopeRows, topologyRows, operationRows, nodeRows] = await Promise.all([
+      getKernelPlugins(), getKernelPluginReleases(), getKernelInstallations(), getKernelScopes(), getKernelTopologies(), getKernelOperations(), getNodes({ page: 1, page_size: 200 })
     ])
     plugins.value = Array.isArray(pluginRowsValue) ? pluginRowsValue : []
     releases.value = Array.isArray(releaseRows) ? releaseRows : []
@@ -421,12 +627,167 @@ async function load(options = {}) {
     scopes.value = Array.isArray(scopeRows) ? scopeRows : []
     topologies.value = Array.isArray(topologyRows) ? topologyRows : []
     operations.value = Array.isArray(operationRows) ? operationRows : []
+    nodes.value = extractNodes(nodeRows)
+    if (!nodes.value.some(node => node.id === Number(selectedNodeID.value))) selectedNodeID.value = nodes.value[0]?.id || 0
+    if (selectedNodeID.value) {
+      assignmentsLoading.value = true
+      const assignmentRows = await getKernelNodeAssignments(selectedNodeID.value)
+      assignments.value = Array.isArray(assignmentRows) ? assignmentRows : []
+    } else {
+      assignments.value = []
+    }
     loaded.value = true
     updatePolling()
   } catch (cause) {
     error.value = errorMessage(cause, 'control.errors.load')
   } finally {
+    assignmentsLoading.value = false
     if (!options.silent) loading.value = false
+  }
+}
+
+async function loadAssignments() {
+  error.value = ''
+  notice.value = ''
+  if (!selectedNodeID.value) {
+    assignments.value = []
+    return
+  }
+  assignmentsLoading.value = true
+  try {
+    const rows = await getKernelNodeAssignments(selectedNodeID.value)
+    assignments.value = Array.isArray(rows) ? rows : []
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.assignmentsLoad')
+  } finally {
+    assignmentsLoading.value = false
+  }
+}
+
+function selectAssignmentPluginDefaults() {
+  const installation = agentInstallationFor(assignmentEditor.pluginID)
+  const compatibleReleases = releasesForPlugin(assignmentEditor.pluginID).filter(release => releaseTargets(release).includes('agent'))
+  assignmentEditor.desiredVersion = installation?.desired_version || compatibleReleases[0]?.version || ''
+  assignmentEditor.desiredConfigRevision = Number(installation?.config_revision ?? 0)
+  assignmentEditor.serviceScope = defaultScopeFor(assignmentEditor.pluginID)
+  assignmentEditor.role = assignmentRoleSuggestions.value[0] || ''
+}
+
+function openAssignmentEditor(assignment = null) {
+  if (assignment) {
+    Object.assign(assignmentEditor, {
+      open: true,
+      mode: 'edit',
+      assignmentID: assignment.id,
+      nodeID: Number(assignment.node_id || selectedNodeID.value),
+      pluginID: assignment.plugin_id,
+      serviceScope: assignment.service_scope,
+      role: assignment.role,
+      desiredVersion: assignment.desired_version || '',
+      desiredConfigRevision: Number(assignment.desired_config_revision ?? 0),
+      rolloutGroup: assignment.rollout_group || '',
+      enabled: Boolean(assignment.enabled),
+      saving: false
+    })
+    return
+  }
+
+  const firstPlugin = agentPluginOptions.value[0]?.pluginID || ''
+  Object.assign(assignmentEditor, {
+    open: true,
+    mode: 'create',
+    assignmentID: 0,
+    nodeID: Number(selectedNodeID.value),
+    pluginID: firstPlugin,
+    serviceScope: '',
+    role: '',
+    desiredVersion: '',
+    desiredConfigRevision: 0,
+    rolloutGroup: '',
+    enabled: true,
+    saving: false
+  })
+  selectAssignmentPluginDefaults()
+}
+
+function closeAssignmentEditor() {
+  if (!assignmentEditor.saving) assignmentEditor.open = false
+}
+
+function assignmentPayload(source, overrides = {}) {
+  return {
+    service_scope: source.service_scope,
+    plugin_id: source.plugin_id,
+    role: source.role,
+    desired_version: source.desired_version || '',
+    desired_config_revision: Math.max(0, Number(source.desired_config_revision ?? 0)),
+    enabled: Boolean(source.enabled),
+    rollout_group: source.rollout_group || '',
+    ...overrides
+  }
+}
+
+async function saveAssignment() {
+  if (!assignmentEditorValid.value) return
+  assignmentEditor.saving = true
+  error.value = ''
+  notice.value = ''
+  const nodeID = Number(assignmentEditor.nodeID)
+  try {
+    await upsertKernelNodeAssignment(nodeID, assignmentPayload({
+      service_scope: assignmentEditor.serviceScope,
+      plugin_id: assignmentEditor.pluginID,
+      role: assignmentEditor.role,
+      desired_version: assignmentEditor.desiredVersion,
+      desired_config_revision: assignmentEditor.desiredConfigRevision,
+      enabled: assignmentEditor.enabled,
+      rollout_group: assignmentEditor.rolloutGroup
+    }))
+    selectedNodeID.value = nodeID
+    assignmentEditor.open = false
+    await afterMutation(t('control.messages.assignmentSaved', { plugin: pluginName(assignmentEditor.pluginID) }))
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.assignmentSave')
+  } finally {
+    assignmentEditor.saving = false
+  }
+}
+
+function isAssignmentBusy(assignment) {
+  return Boolean(assignmentBusy.value[assignment.id])
+}
+
+function setAssignmentBusy(assignment, action = '') {
+  assignmentBusy.value = { ...assignmentBusy.value, [assignment.id]: action }
+  if (!action) delete assignmentBusy.value[assignment.id]
+}
+
+async function toggleAssignment(assignment) {
+  setAssignmentBusy(assignment, 'toggle')
+  error.value = ''
+  notice.value = ''
+  try {
+    await upsertKernelNodeAssignment(selectedNodeID.value, assignmentPayload(assignment, { enabled: !assignment.enabled }))
+    await afterMutation(t('control.messages.assignmentStateSaved', { plugin: pluginName(assignment.plugin_id) }))
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.assignmentSave')
+  } finally {
+    setAssignmentBusy(assignment)
+  }
+}
+
+async function removeAssignment(assignment) {
+  if (!confirm(t('control.assignments.deleteConfirm', { plugin: pluginName(assignment.plugin_id), role: assignment.role }))) return
+  setAssignmentBusy(assignment, 'delete')
+  error.value = ''
+  notice.value = ''
+  try {
+    await deleteKernelNodeAssignment(selectedNodeID.value, assignment.id)
+    await afterMutation(t('control.messages.assignmentDeleted', { plugin: pluginName(assignment.plugin_id) }))
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.assignmentDelete')
+  } finally {
+    setAssignmentBusy(assignment)
   }
 }
 
@@ -730,6 +1091,13 @@ onBeforeUnmount(() => {
 .extension-error-band ul { margin: 8px 0 0; padding-left: 20px; }
 .extension-error-band li + li { margin-top: 4px; }
 .plugins-table { min-width: 1080px; }
+.assignments-panel { display: grid; gap: 12px; min-width: 0; }
+.assignments-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.assignment-node-picker { display: grid; gap: 5px; min-width: min(320px, 100%); }
+.assignment-node-picker label { color: var(--text-secondary); font-size: 12px; font-weight: 700; }
+.assignment-node-picker select { min-height: 38px; }
+.assignments-toolbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.assignments-table { min-width: 1040px; }
 .scopes-table { min-width: 620px; }
 .topologies-table { min-width: 680px; }
 .operations-table { min-width: 920px; }
@@ -749,6 +1117,10 @@ onBeforeUnmount(() => {
 .modal-plugin-name { margin: 0 0 18px; font-size: 16px; font-weight: 700; }
 .enable-after-install { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; }
 .enable-after-install input { width: 18px; height: 18px; margin: 0; }
+.assignment-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.assignment-form-grid .form-group { min-width: 0; margin: 0; }
+.assignment-rollout-field { grid-column: 1 / 2; }
+.assignment-enabled-field { align-self: end; min-height: 42px; }
 .revision-label { margin-right: auto; color: var(--text-secondary); font-size: 12px; }
 .json-textarea { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 500; }
 .field-help { margin: 6px 0 0; color: var(--text-secondary); font-size: 12px; }
@@ -757,6 +1129,10 @@ onBeforeUnmount(() => {
   .page-header h1 { font-size: 20px; }
   .header-actions { width: 100%; }
   .header-actions .btn { flex: 1; }
+  .assignments-toolbar, .assignment-node-picker, .assignments-toolbar-actions { width: 100%; }
+  .assignments-toolbar-actions .btn { flex: 1; }
+  .assignment-form-grid { grid-template-columns: 1fr; }
+  .assignment-rollout-field { grid-column: auto; }
   .tab { padding-inline: 10px; }
   .modal-overlay { padding: 10px; }
 }
