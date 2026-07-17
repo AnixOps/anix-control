@@ -45,11 +45,12 @@ This list is intentionally concrete. Do not mark an item done without code, test
 - [x] Connect the backend plugin API gateway to the version-exact read-only
   `machine-telemetry` Control executor behind `plugins.control_execution_enabled`;
   keep the gateway fail-closed/501 when the flag or executor is unavailable.
-- [ ] Deliver `machine-telemetry` as the first complete Control + Agent + WebUI
-  reference package. The deterministic artifact, Agent process, Supervisor
-  lifecycle, Control read-only route, browser E2E, cross-repository process E2E,
-  CI public-key verification contract, and release-tag signing/upload workflow
-  exist; telemetry transport and live staging catalog coverage remain.
+- [x] Deliver `machine-telemetry` as the first complete Control + Agent + WebUI
+  reference package. The deterministic artifact, signed capability admission,
+  Agent-local telemetry RPC, real host metrics, Supervisor lifecycle,
+  heartbeat persistence, Control read-only route, browser E2E, and
+  cross-repository process E2E are covered; live staging catalog and sustained
+  canary evidence remain.
 - [x] Harden Control lifecycle ordering, lease fencing, cancellation monotonicity,
   target-level installation locking, and lifecycle-generation idempotency.
 - [x] Add dependency-aware graph execution/rollback and feature-gated topology

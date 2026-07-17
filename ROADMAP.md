@@ -24,13 +24,13 @@ in [`docs/architecture/upgrade-program.md`](docs/architecture/upgrade-program.md
 - `4.0.0`: remove the original coupled business/runtime mode and boot as a
   plugin-only platform.
 
-The `v4.0.0-alpha.3` 3.1 evidence slice adds actor-scoped catalog and active
-bundle authorization, frontend rejection of unauthorized routes before any
-bundle fetch, revocable `private, no-store` assets, per-plugin invalid-release
-quarantine, and login/registration/profile permission metadata. This closes
-the local authorization and failure-isolation slice, but live staging catalog
-evidence, a fresh 72-hour canary, and explicit stable-release authorization
-remain required; the overall transformation stays in progress.
+The `v4.0.0-alpha.4` 3.1 evidence slice adds the signed `machine-telemetry`
+1.1.0 Control/Agent/WebUI reference package, real host metric collection,
+capability-checked heartbeat persistence, canary-aware topology planning,
+deadline-safe Agent lifecycle fencing, and a cross-repository process E2E. The
+earlier actor-scoped WebUI authorization slice remains covered. Live staging
+catalog evidence, a fresh 72-hour canary, and explicit stable-release
+authorization remain required; the overall transformation stays in progress.
 
 The older workstreams below remain relevant compatibility and quality work,
 but they do not redefine these release gates. Existing coupled runtime work is

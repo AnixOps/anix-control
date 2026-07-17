@@ -197,6 +197,7 @@ def run_self_test() -> None:
     required = [
         "OPERATOR_DEPLOYMENT.md",
         "UPGRADE.md",
+        "verify-machine-telemetry-signature.py",
         "RELEASE_NOTES.md",
         "RELEASE_MANIFEST.json",
         "SHA256SUMS.txt",

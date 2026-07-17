@@ -170,7 +170,7 @@ check_release_workflow() {
   require_text "nftables-forward-signed-release" "signed nftables forward plugin release artifact" || failed=1
   require_text "gost-mesh-signed-release" "signed GOST mesh plugin release artifact" || failed=1
   require_text "nat-egress-signed-release" "signed NAT egress plugin release artifact" || failed=1
-  require_text "anixops-machine-telemetry-1.0.0.SHA256SUMS.txt" "signed plugin checksum evidence" || failed=1
+  require_text "anixops-machine-telemetry-1.1.0.SHA256SUMS.txt" "signed plugin checksum evidence" || failed=1
   require_text "anixops-nftables-forward-1.0.0.SHA256SUMS.txt" "signed nftables forward checksum evidence" || failed=1
   require_text "anixops-gost-mesh-1.0.0.SHA256SUMS.txt" "signed GOST mesh checksum evidence" || failed=1
   require_text "anixops-nat-egress-1.0.0.SHA256SUMS.txt" "signed NAT egress checksum evidence" || failed=1
@@ -185,7 +185,7 @@ check_release_workflow() {
   require_text "Download signed nftables Forward package" "signed nftables forward release download" || failed=1
   require_text "Download signed GOST Mesh package" "signed GOST mesh release download" || failed=1
   require_text "Download signed NAT Egress package" "signed NAT egress release download" || failed=1
-  require_text "--require machine-telemetry-1.0.0.tar" "signed plugin package verification requirement" || failed=1
+  require_text "--require machine-telemetry-1.1.0.tar" "signed plugin package verification requirement" || failed=1
   require_text "--require nftables-forward-1.0.0.tar" "signed nftables forward package verification requirement" || failed=1
   require_text "--require gost-mesh-1.0.0.tar" "signed GOST mesh package verification requirement" || failed=1
   require_text "--require anixops-gost-mesh-1.0.0.manifest.json" "signed GOST mesh manifest verification requirement" || failed=1
@@ -204,7 +204,7 @@ check_release_workflow() {
   require_text 'The signed `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress` packages' "release notes include GOST mesh and NAT egress" || failed=1
   require_text "canary-only until Secret ID" "GOST mesh stable-release limitation" || failed=1
   require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
-  require_text "ref: a8e6331e4c81274460e409720f8680649b7c2d17" "pinned Agent fixture commit" || failed=1
+  require_text "ref: 676b5ad1c339a157075ae46028eee06540ffc26b" "pinned Agent fixture commit" || failed=1
   require_text "ANIXOPS_CROSS_REPO_E2E: '1'" "cross-repository Agent process E2E opt-in" || failed=1
   require_text "KernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
   require_text "AgentPluginPackageCrossRepositoryE2E" "signed Agent package cross-repository E2E test" || failed=1
@@ -214,6 +214,7 @@ check_release_workflow() {
   require_text "anix-control-source.sbom.spdx.json" "primary source SBOM release asset" || failed=1
   require_text "OPERATOR_DEPLOYMENT.md" "operator deployment runbook" || failed=1
   require_text "UPGRADE.md" "upgrade and rollback runbook release asset" || failed=1
+  require_text "release/verify-machine-telemetry-signature.py" "release-bound Machine Telemetry signature verifier" || failed=1
   require_text "No Local Release Builds" "operator no-local-build release warning" || failed=1
   require_text "Generate release notes file" "release notes generation step" || failed=1
   require_text "config/scripts/generate_release_notes.py" "release notes generator script" || failed=1
@@ -228,6 +229,7 @@ check_release_workflow() {
   require_text "config/scripts/verify_release_artifacts.py" "release artifact verification script" || failed=1
   require_text "--require OPERATOR_DEPLOYMENT.md" "operator runbook verification requirement" || failed=1
   require_text "--require UPGRADE.md" "upgrade runbook verification requirement" || failed=1
+  require_text "--require verify-machine-telemetry-signature.py" "signature verifier verification requirement" || failed=1
   require_text "--require RELEASE_NOTES.md" "release notes verification requirement" || failed=1
   require_text "--require anix-control-linux-amd64.tar.gz" "primary linux amd64 release artifact verification requirement" || failed=1
   require_text "--require anix-control-windows-arm64.exe.zip" "primary windows arm64 release artifact verification requirement" || failed=1
@@ -353,7 +355,7 @@ jobs:
           echo "nftables-forward-signed-release"
           echo "gost-mesh-signed-release"
           echo "nat-egress-signed-release"
-          echo "anixops-machine-telemetry-1.0.0.SHA256SUMS.txt"
+          echo "anixops-machine-telemetry-1.1.0.SHA256SUMS.txt"
           echo "anixops-nftables-forward-1.0.0.SHA256SUMS.txt"
           echo "anixops-gost-mesh-1.0.0.SHA256SUMS.txt"
           echo "anixops-nat-egress-1.0.0.SHA256SUMS.txt"
@@ -364,7 +366,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: a8e6331e4c81274460e409720f8680649b7c2d17
+          ref: 676b5ad1c339a157075ae46028eee06540ffc26b
           path: V2bX_AnixOps
       - env:
           ANIXOPS_CROSS_REPO_E2E: '1'
@@ -407,6 +409,7 @@ jobs:
           echo "No Local Release Builds" > release/OPERATOR_DEPLOYMENT.md
           echo 'The signed `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress` packages are attached; gost-mesh is canary-only until Secret ID materialization is complete.' >> release/OPERATOR_DEPLOYMENT.md
           cp docs/UPGRADE.md release/UPGRADE.md
+          cp packages/machine-telemetry/verify_signature.py release/verify-machine-telemetry-signature.py
           tar -czvf release/anix-control-frontend.tar.gz -C web/public .
           zip -r release/anix-control-frontend.zip web/public
       - name: Generate release notes file
@@ -430,10 +433,11 @@ jobs:
           python3 config/scripts/verify_release_artifacts.py \
             --require OPERATOR_DEPLOYMENT.md \
             --require UPGRADE.md \
+            --require verify-machine-telemetry-signature.py \
             --require RELEASE_NOTES.md \
             --require anix-control-linux-amd64.tar.gz \
             --require anix-control-windows-arm64.exe.zip \
-            --require machine-telemetry-1.0.0.tar \
+            --require machine-telemetry-1.1.0.tar \
             --require nftables-forward-1.0.0.tar \
             --require gost-mesh-1.0.0.tar \
             --require anixops-gost-mesh-1.0.0.manifest.json \
@@ -501,7 +505,7 @@ EOF
   fi
 
   cp "${fixture}" "${fixture}.missing-signed-plugin-publish"
-  sed -i '/plugin-package-publish:/,/cross-repository-agent-e2e/d;/Publish Signed Official Plugin Packages/d;/ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY/d;/scripts\/sign_plugin_release.sh/d;/machine-telemetry-signed-release/d;/nftables-forward-signed-release/d;/anixops-machine-telemetry-1.0.0.SHA256SUMS.txt/d;/anixops-nftables-forward-1.0.0.SHA256SUMS.txt/d' "${fixture}.missing-signed-plugin-publish"
+  sed -i '/plugin-package-publish:/,/cross-repository-agent-e2e/d;/Publish Signed Official Plugin Packages/d;/ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY/d;/scripts\/sign_plugin_release.sh/d;/machine-telemetry-signed-release/d;/nftables-forward-signed-release/d;/anixops-machine-telemetry-1.1.0.SHA256SUMS.txt/d;/anixops-nftables-forward-1.0.0.SHA256SUMS.txt/d' "${fixture}.missing-signed-plugin-publish"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-signed-plugin-publish" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing signed plugin publish gate should fail" >&2
     return 1

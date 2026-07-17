@@ -35,7 +35,7 @@ import (
 )
 
 // @title AnixOps Control API
-// @version 4.0.0-alpha.3
+// @version 4.0.0-alpha.4
 // @description AnixOps Control 统一控制面 API 文档
 // @description 支持用户管理、节点管理、订阅系统、支付网关、流量转发等功能
 // @termsOfService https://github.com/AnixOps/anix-control
