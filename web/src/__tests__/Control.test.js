@@ -4,9 +4,11 @@ import { nextTick } from 'vue'
 import Control from '@/views/admin/Control.vue'
 
 const kernelApi = vi.hoisted(() => ({
+  deleteKernelNodeAssignment: vi.fn(),
   getKernelPlugins: vi.fn(),
   getKernelPluginReleases: vi.fn(),
   getKernelInstallations: vi.fn(),
+  getKernelNodeAssignments: vi.fn(),
   getKernelScopes: vi.fn(),
   getKernelTopologies: vi.fn(),
   getKernelOperations: vi.fn(),
@@ -17,7 +19,10 @@ const kernelApi = vi.hoisted(() => ({
   registerKernelPluginRelease: vi.fn(),
   uploadKernelPluginReleaseArtifact: vi.fn(),
   cancelKernelOperation: vi.fn(),
+  upsertKernelNodeAssignment: vi.fn(),
 }))
+
+const adminApi = vi.hoisted(() => ({ getNodes: vi.fn() }))
 
 const extensionRuntime = vi.hoisted(() => ({
   errors: [],
@@ -26,6 +31,7 @@ const extensionRuntime = vi.hoisted(() => ({
 }))
 
 vi.mock('@/api/kernel', () => kernelApi)
+vi.mock('@/api/admin', () => adminApi)
 vi.mock('@/extensions/runtime', () => ({
   adminExtensionErrors: extensionRuntime.errors,
   adminExtensions: extensionRuntime.extensions,
@@ -52,6 +58,7 @@ function resolveEmptyState() {
   kernelApi.getKernelScopes.mockResolvedValue([])
   kernelApi.getKernelTopologies.mockResolvedValue([])
   kernelApi.getKernelOperations.mockResolvedValue([])
+  kernelApi.getKernelNodeAssignments.mockResolvedValue([])
   kernelApi.getKernelInstallationConfig.mockResolvedValue({ installation_id: 1, revision: 0, config: '{}' })
   kernelApi.updateKernelInstallationConfig.mockResolvedValue({ installation_id: 1, revision: 1, config: '{}' })
   kernelApi.upsertKernelInstallation.mockResolvedValue({ id: 1 })
@@ -59,6 +66,9 @@ function resolveEmptyState() {
   kernelApi.registerKernelPluginRelease.mockResolvedValue({ id: 9, plugin_id: 'protocol-runtime', version: '1.1.0' })
   kernelApi.uploadKernelPluginReleaseArtifact.mockResolvedValue({ release_id: 9 })
   kernelApi.cancelKernelOperation.mockResolvedValue({ id: 'op-1', state: 'cancel_requested' })
+  kernelApi.upsertKernelNodeAssignment.mockResolvedValue({ id: 1 })
+  kernelApi.deleteKernelNodeAssignment.mockResolvedValue(undefined)
+  adminApi.getNodes.mockResolvedValue({ code: 0, data: { list: [] } })
   extensionRuntime.errors.splice(0)
   extensionRuntime.extensions.value = []
 }
@@ -70,6 +80,25 @@ function resolvePluginState(installations = []) {
     { id: 1, plugin_id: 'protocol-runtime', version: '1.0.0', manifest: MANIFEST_V1 },
   ])
   kernelApi.getKernelInstallations.mockResolvedValue(installations)
+}
+
+function resolveAssignmentState(assignments = []) {
+  const manifest = JSON.stringify({ id: 'gost-mesh', version: '1.0.0', targets: ['agent'], config_schema: { type: 'object' } })
+  kernelApi.getKernelPlugins.mockResolvedValue([{ id: 'gost-mesh', name: 'GOST Mesh', publisher: 'AnixOps' }])
+  kernelApi.getKernelPluginReleases.mockResolvedValue([{ id: 3, plugin_id: 'gost-mesh', version: '1.0.0', manifest }])
+  kernelApi.getKernelInstallations.mockResolvedValue([{
+    id: 5,
+    plugin_id: 'gost-mesh',
+    target: 'agent',
+    desired_version: '1.0.0',
+    observed_version: '1.0.0',
+    config_revision: 6,
+    state: 'healthy',
+    enabled: true,
+  }])
+  kernelApi.getKernelScopes.mockResolvedValue([{ id: 'forward', name: 'Forward', plugin_id: 'gost-mesh' }])
+  kernelApi.getKernelNodeAssignments.mockResolvedValue(assignments)
+  adminApi.getNodes.mockResolvedValue({ code: 0, data: { list: [{ id: 11, name: 'Shanghai entry', host: '10.0.0.11' }] } })
 }
 
 describe('Control', () => {
@@ -92,12 +121,105 @@ describe('Control', () => {
 
     expect(kernelApi.getKernelPlugins).toHaveBeenCalledTimes(1)
     expect(kernelApi.getKernelPluginReleases).toHaveBeenCalledTimes(1)
+    expect(adminApi.getNodes).toHaveBeenCalledWith({ page: 1, page_size: 200 })
     expect(wrapper.findAll('#control-panel-plugins tbody tr')).toHaveLength(2)
     expect(wrapper.find('#control-panel-plugins').text()).toContain('control')
     expect(wrapper.find('#control-panel-plugins').text()).toContain('agent')
     expect(wrapper.find('#control-panel-plugins').text()).toContain('1.0.0')
     expect(wrapper.find('#control-panel-plugins').text()).toContain('1.1.0')
     expect(wrapper.attributes('aria-busy')).toBe('false')
+    wrapper.unmount()
+  })
+
+  it('creates an Agent assignment with installation version and config revision defaults', async () => {
+    resolveAssignmentState()
+    const wrapper = mount(Control)
+    await flushPromises()
+
+    await wrapper.get('#control-tab-assignments').trigger('click')
+    expect(kernelApi.getKernelNodeAssignments).toHaveBeenCalledWith(11)
+    await wrapper.get('#new-assignment').trigger('click')
+    expect(wrapper.get('#assignment-node').element.value).toBe('11')
+    expect(wrapper.get('#assignment-plugin').element.value).toBe('gost-mesh')
+    expect(wrapper.get('#assignment-scope').element.value).toBe('forward')
+    expect(wrapper.get('#assignment-role').element.value).toBe('relay')
+    expect(wrapper.get('#assignment-version').element.value).toBe('1.0.0')
+    expect(wrapper.get('#assignment-config-revision').element.value).toBe('6')
+
+    await wrapper.get('#assignment-rollout-group').setValue('canary-a')
+    await wrapper.get('[aria-labelledby="assignment-editor-title"] .modal-footer .btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(kernelApi.upsertKernelNodeAssignment).toHaveBeenCalledWith(11, {
+      service_scope: 'forward',
+      plugin_id: 'gost-mesh',
+      role: 'relay',
+      desired_version: '1.0.0',
+      desired_config_revision: 6,
+      enabled: true,
+      rollout_group: 'canary-a',
+    })
+    expect(kernelApi.getKernelOperations.mock.calls.length).toBeGreaterThan(1)
+    expect(extensionRuntime.refreshAdminExtensions).toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('edits, toggles, and deletes an assignment without changing its identity fields', async () => {
+    const assignment = {
+      id: 7,
+      node_id: 11,
+      service_scope: 'forward',
+      plugin_id: 'gost-mesh',
+      role: 'relay',
+      desired_version: '1.0.0',
+      desired_config_revision: 6,
+      rollout_group: 'canary-a',
+      enabled: false,
+    }
+    resolveAssignmentState([assignment])
+    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true)
+    const wrapper = mount(Control)
+    await flushPromises()
+    await wrapper.get('#control-tab-assignments').trigger('click')
+
+    await wrapper.findAll('#control-panel-assignments button').find(button => button.text() === 'Edit').trigger('click')
+    expect(wrapper.get('#assignment-node').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('#assignment-plugin').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('#assignment-scope').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('#assignment-role').attributes('disabled')).toBeDefined()
+    await wrapper.get('#assignment-config-revision').setValue('8')
+    await wrapper.get('#assignment-rollout-group').setValue('canary-b')
+    await wrapper.get('[aria-labelledby="assignment-editor-title"] .modal-footer .btn-primary').trigger('click')
+    await flushPromises()
+    expect(kernelApi.upsertKernelNodeAssignment).toHaveBeenLastCalledWith(11, expect.objectContaining({
+      service_scope: 'forward', plugin_id: 'gost-mesh', role: 'relay', desired_config_revision: 8, rollout_group: 'canary-b', enabled: false,
+    }))
+
+    await wrapper.findAll('#control-panel-assignments button').find(button => button.text() === 'Enable').trigger('click')
+    await flushPromises()
+    expect(kernelApi.upsertKernelNodeAssignment).toHaveBeenLastCalledWith(11, expect.objectContaining({
+      service_scope: 'forward', plugin_id: 'gost-mesh', role: 'relay', desired_version: '1.0.0', desired_config_revision: 6, rollout_group: 'canary-a', enabled: true,
+    }))
+
+    await wrapper.findAll('#control-panel-assignments button').find(button => button.text() === 'Delete').trigger('click')
+    await flushPromises()
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(kernelApi.deleteKernelNodeAssignment).toHaveBeenCalledWith(11, 7)
+    wrapper.unmount()
+    confirmSpy.mockRestore()
+  })
+
+  it('shows assignment lifecycle errors returned by the kernel', async () => {
+    resolveAssignmentState()
+    kernelApi.upsertKernelNodeAssignment.mockRejectedValue({ response: { data: { error: { message: 'agent package artifact is missing' } } } })
+    const wrapper = mount(Control)
+    await flushPromises()
+    await wrapper.get('#control-tab-assignments').trigger('click')
+    await wrapper.get('#new-assignment').trigger('click')
+    await wrapper.get('[aria-labelledby="assignment-editor-title"] .modal-footer .btn-primary').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('.error-message').text()).toBe('agent package artifact is missing')
     wrapper.unmount()
   })
 
@@ -199,9 +321,9 @@ describe('Control', () => {
     expect(pluginTab.attributes('aria-controls')).toBe('control-panel-plugins')
     expect(wrapper.get('#control-panel-plugins').attributes('aria-labelledby')).toBe('control-tab-plugins')
     await pluginTab.trigger('keydown', { key: 'ArrowRight' })
-    expect(wrapper.get('#control-tab-scopes').attributes('aria-selected')).toBe('true')
-    expect(wrapper.get('#control-panel-scopes').isVisible()).toBe(true)
-    await wrapper.get('#control-tab-scopes').trigger('keydown', { key: 'End' })
+    expect(wrapper.get('#control-tab-assignments').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('#control-panel-assignments').isVisible()).toBe(true)
+    await wrapper.get('#control-tab-assignments').trigger('keydown', { key: 'End' })
     expect(wrapper.get('#control-tab-operations').attributes('aria-selected')).toBe('true')
     wrapper.unmount()
   })

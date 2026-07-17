@@ -2994,18 +2994,22 @@ export default {
     actions: {
       refresh: 'Refresh', refreshing: 'Refreshing...', importRelease: 'Import release', importing: 'Importing...', install: 'Install',
       configure: 'Configure', enable: 'Enable', disable: 'Disable', upgrade: 'Upgrade', update: 'Upgrade', rollback: 'Rollback', cancel: 'Cancel operation',
-      saving: 'Saving...'
+      saving: 'Saving...', newAssignment: 'New assignment'
     },
-    tabs: { plugins: 'Plugins', scopes: 'Scopes', topologies: 'Topologies', operations: 'Operations' },
+    tabs: { plugins: 'Plugins', assignments: 'Assignments', scopes: 'Scopes', topologies: 'Topologies', operations: 'Operations' },
     table: {
       plugin: 'Plugin', publisher: 'Publisher', release: 'Release', installation: 'Installation', desiredVersion: 'Desired version', observedVersion: 'Observed version', version: 'Version', state: 'State', actions: 'Actions',
       scope: 'Scope', owner: 'Owner', description: 'Description', topology: 'Topology', activeRevision: 'Active revision',
-      operation: 'Operation', revision: 'Revision', deadline: 'Deadline'
+      operation: 'Operation', revision: 'Revision', deadline: 'Deadline', role: 'Role', configRevision: 'Config revision', rolloutGroup: 'Rollout group'
     },
     labels: { releases: '{count} releases', desired: 'Desired', observed: 'Observed' },
-    states: { catalogued: 'Catalogued', loading: 'Loading control state...', polling: 'Polling operation state' },
-    empty: { plugins: 'No plugins', scopes: 'No service scopes', topologies: 'No topologies', operations: 'No operations' },
+    states: { catalogued: 'Catalogued', enabled: 'Enabled', disabled: 'Disabled', loading: 'Loading control state...', polling: 'Polling operation state' },
+    empty: { plugins: 'No plugins', assignments: 'No assignments for this node', scopes: 'No service scopes', topologies: 'No topologies', operations: 'No operations' },
     extensions: { errorsTitle: 'WebUI extension loading failed' },
+    assignments: {
+      node: 'Node', noNodes: 'No nodes available', agentPlugin: 'Agent plugin', loading: 'Loading assignments...', enabled: 'Assignment enabled',
+      createTitle: 'Create node assignment', editTitle: 'Edit node assignment', deleteConfirm: 'Delete {plugin} / {role} from this node?'
+    },
     install: { title: 'Install official plugin', target: 'Runtime target', version: 'Release version', enableAfterInstall: 'Enable immediately after installation' },
     update: { title: 'Upgrade official plugin' },
     config: {
@@ -3019,11 +3023,13 @@ export default {
     },
     messages: {
       actionQueued: '{action} was submitted for {plugin}', installed: 'Installation intent was saved for {plugin}', configSaved: 'Configuration was saved for {plugin}',
-      releaseImported: '{plugin} {version} was imported', cancelRequested: 'Operation cancellation was requested'
+      releaseImported: '{plugin} {version} was imported', cancelRequested: 'Operation cancellation was requested',
+      assignmentSaved: '{plugin} assignment was saved', assignmentStateSaved: '{plugin} assignment state was saved', assignmentDeleted: '{plugin} assignment was deleted'
     },
     errors: {
       load: 'Unable to load control state', action: 'Plugin operation failed', install: 'Plugin installation failed', configLoad: 'Unable to load plugin configuration',
-      configSave: 'Unable to save plugin configuration', releaseImport: 'Release import failed', cancel: 'Unable to cancel operation', poll: 'Unable to refresh operation state'
+      configSave: 'Unable to save plugin configuration', releaseImport: 'Release import failed', cancel: 'Unable to cancel operation', poll: 'Unable to refresh operation state',
+      nodesLoad: 'Unable to load nodes', assignmentsLoad: 'Unable to load node assignments', assignmentSave: 'Unable to save node assignment', assignmentDelete: 'Unable to delete node assignment'
     }
   },
   legacy

@@ -16,6 +16,7 @@ describe('kernel API', () => {
       [kernelApi.getKernelPlugins, '/plugins'],
       [kernelApi.getKernelPluginReleases, '/plugin-releases'],
       [kernelApi.getKernelInstallations, '/plugin-installations'],
+      [() => kernelApi.getKernelNodeAssignments(11), '/nodes/11/assignments'],
       [() => kernelApi.getKernelPluginReleaseArtifact(9), '/plugin-releases/9/artifact'],
       [() => kernelApi.getKernelInstallationConfig(7), '/plugin-installations/7/config'],
       [kernelApi.getKernelScopes, '/service-scopes'],
@@ -112,6 +113,32 @@ describe('kernel API', () => {
       url: '/plugin-installations/7/actions',
       method: 'post',
       data: { action: 'rollback', idempotency_key: 'request-2' }
+    })
+  })
+
+  it('manages node service assignments through the kernel routes', async () => {
+    const assignment = {
+      service_scope: 'forward',
+      plugin_id: 'gost-mesh',
+      role: 'relay',
+      desired_version: '1.0.0',
+      desired_config_revision: 4,
+      enabled: true,
+      rollout_group: 'canary'
+    }
+    await kernelApi.upsertKernelNodeAssignment(11, assignment)
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3',
+      url: '/nodes/11/assignments',
+      method: 'put',
+      data: assignment
+    })
+
+    await kernelApi.deleteKernelNodeAssignment(11, 7)
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3',
+      url: '/nodes/11/assignments/7',
+      method: 'delete'
     })
   })
 

@@ -46,6 +46,25 @@ export async function getKernelInstallations() {
   return unwrap(await v3({ url: '/plugin-installations', method: 'get' }))
 }
 
+export async function getKernelNodeAssignments(nodeID) {
+  return unwrap(await v3({ url: `/nodes/${nodeID}/assignments`, method: 'get' }))
+}
+
+export async function upsertKernelNodeAssignment(nodeID, assignment) {
+  return unwrap(await v3({
+    url: `/nodes/${nodeID}/assignments`,
+    method: 'put',
+    data: assignment
+  }))
+}
+
+export async function deleteKernelNodeAssignment(nodeID, assignmentID) {
+  return unwrap(await v3({
+    url: `/nodes/${nodeID}/assignments/${assignmentID}`,
+    method: 'delete'
+  }))
+}
+
 export async function upsertKernelInstallation(installation) {
   return unwrap(await v3({
     url: '/plugin-installations',
