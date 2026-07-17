@@ -1,12 +1,13 @@
-.PHONY: build run clean test test-unit test-e2e test-coverage test-coverage-html test-integration test-frontend
+.PHONY: build run dev-config clean test test-unit test-e2e test-coverage test-coverage-html test-integration test-frontend
 .PHONY: pre-deploy deploy docker-build docker-run lint vet fmt bench grpc-gen swagger
-.PHONY: test-quick test-clean test-summary test-grpc test-cmd
+.PHONY: test-quick test-clean test-summary test-grpc test-cmd test-all test-coverage-all
 
 # 鐗堟湰淇℃伅
 VERSION := 3.0.0-alpha.1
 BUILD_TIME := $(shell date +%Y-%m-%d_%H:%M:%S)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME) -X main.commit=$(GIT_COMMIT)
+RUN_CONFIG ?= config/config.dev.yaml
 
 # Go 娴嬭瘯鍙傛暟
 GO_TEST_FLAGS := -v -race -timeout 5m
@@ -41,8 +42,15 @@ build-linux:
 	GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o build/anix-control-linux ./cmd/server
 
 # 杩愯寮€鍙戞湇鍔″櫒
-run:
-	go run ./cmd/server -config config/config.yaml
+run: dev-config
+	GOWORK=off go run ./cmd/server -config $(RUN_CONFIG)
+
+dev-config:
+	@if [ "$(RUN_CONFIG)" = "config/config.dev.yaml" ] && [ ! -f "$(RUN_CONFIG)" ]; then \
+		cp config/config.dev.yaml.example "$(RUN_CONFIG)"; \
+		echo "Created $(RUN_CONFIG) from the isolated development template"; \
+	fi
+	@test -f "$(RUN_CONFIG)" || { echo "Run config not found: $(RUN_CONFIG)" >&2; exit 1; }
 
 # 娓呯悊
 clean:
@@ -135,7 +143,7 @@ test-frontend:
 	cd web && npm run test
 
 # 杩愯鎵€鏈夋祴璇曞苟妫€鏌ヨ鐩栫巼
-test-all: test-coverage-check
+test-coverage-all: test-coverage-check
 	@echo "鉁?All tests passed with sufficient coverage!"
 
 # ==========================================

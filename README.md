@@ -99,6 +99,19 @@ archives. It keeps database backups, config, certificates, and
 Prefer the same checks GitHub Actions runs. Focused local checks are fine while
 developing; release builds are not.
 
+Start an isolated local development instance with:
+
+```bash
+make run
+```
+
+On first use this creates the ignored `config/config.dev.yaml` from
+`config/config.dev.yaml.example`. It listens on `127.0.0.1:19080` for the API,
+`127.0.0.1:19000` for the frontend, and `127.0.0.1:50052` for gRPC, and uses a
+separate development SQLite database. An already running system
+`anix-control` service and its production-style ports are not changed. Set
+`RUN_CONFIG=/path/to/config.yaml` to run with another explicit configuration.
+
 ```bash
 go test ./...
 go test -race ./...
