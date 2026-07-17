@@ -19,6 +19,8 @@
 - Blocked release tags whose version does not match the Control runtime,
   frontend package/lockfile, configuration templates, generated Swagger,
   changelog, and current-preview documentation.
+- Required both installer configuration templates to expose the exact release
+  version, with negative tests for mismatched or format-escaped version fields.
 
 ## 4.0.0-alpha.1 - 2026-07-17
 
