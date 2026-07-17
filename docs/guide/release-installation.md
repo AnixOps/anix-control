@@ -19,7 +19,7 @@ runbooks instead of mixing deployment models on the same host.
    The fresh development template binds gRPC to `127.0.0.1:50051`; remote
    Agents require an explicit TLS/proxy setup and a deliberate bind-address change.
 3. Decide the exact version to install. Pinning a tag makes the operation
-   reproducible; the first branded preview is `v3.0.0-alpha.1`.
+   reproducible; the signed-package WebUI preview is `v4.0.0-alpha.1`.
 4. Back up any existing panel before running `update` or `rollback`.
 
 ## Fresh Install
@@ -28,7 +28,7 @@ Download the installer from the exact release tag. This fetches one script, not
 the repository checkout:
 
 ```bash
-export VERSION=v3.1.0-alpha.1
+export VERSION=v4.0.0-alpha.1
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -47,6 +47,12 @@ The installer will:
 5. Generate the JWT secret, node API token, and first administrator password.
 6. Install and enable `anix-control.service`.
 7. Start the service and require `http://127.0.0.1:8080/health` to succeed.
+
+The fresh alpha configuration pins the official AnixOps Ed25519 public key and
+enables package execution plus durable Agent dispatch. Its gRPC listener stays
+on `127.0.0.1:50051`, so it is directly usable for same-host acceptance without
+opening a plaintext remote credential path. Existing configuration files are
+preserved during upgrades and are never silently switched to the plugin path.
 
 The generated initial password is stored at
 `/opt/anixops/control/.bootstrap-admin-password` with restricted permissions. Store it
@@ -90,6 +96,12 @@ sudo systemctl restart anix-control
 sudo systemctl status anix-control --no-pager
 ```
 
+For a remote Agent, terminate TLS either in Control or in an HTTP/2-capable
+gRPC proxy before changing the listener bind. Configure the Agent with
+`Transport: "http"` to preserve the legacy data-plane fallback, and explicitly
+enable both `AgentControlEnabled` and `PluginSupervisorEnabled` with the same
+official public key.
+
 ## Upgrade And Rollback
 
 The installer never overwrites an existing `config/config.yaml` or SQLite data
@@ -100,7 +112,7 @@ that snapshot.
 Upgrade to an explicit release:
 
 ```bash
-export TARGET=v3.1.0-alpha.1
+export TARGET=v4.0.0-alpha.1
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${TARGET}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh

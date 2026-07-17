@@ -94,14 +94,18 @@ auth:
 
 app:
   name: "AnixOps Control"
-  version: "3.1.0-alpha.1"
-  api_token: "your-secure-api-token-for-nodes"
+  version: "4.0.0-alpha.1"
+  # The installer must replace this with a generated value. Never ship a
+  # reusable node credential in the production template.
+  api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
 
 # Base64-encoded Ed25519 trust root for signed official plugin manifests.
 plugins:
-  official_public_key: ""
+  # Official AnixOps Ed25519 release trust root (raw public key, base64).
+  # Trust is pinned even while execution remains fail-closed below.
+  official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
   control_execution_enabled: false
   control_poll_interval: "5s"
   dispatch_enabled: false
@@ -133,7 +137,8 @@ forward_runtime:
     retention_days: 7
   nodex:
     base_url: "http://127.0.0.1:18081"
-    token: "replace-with-shared-token"
+    # Configure a secret out-of-band before selecting the NodeX backend.
+    token: ""
     timeout_seconds: 15
   clean_agent:
     public_url: ""

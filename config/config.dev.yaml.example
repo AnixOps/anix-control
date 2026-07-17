@@ -58,16 +58,20 @@ auth:
 
 app:
   name: "AnixOps Control Dev"
-  version: "3.1.0-alpha.1"
+  version: "4.0.0-alpha.1"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
 
 plugins:
-  official_public_key: ""
-  control_execution_enabled: false
+  # Official AnixOps Ed25519 release trust root (raw public key, base64).
+  official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
+  # The development profile exercises the complete signed-package control path.
+  control_execution_enabled: true
   control_poll_interval: "5s"
-  dispatch_enabled: false
+  # Dispatch is enabled against the local gRPC listener for reproducible alpha
+  # acceptance. Agents still keep the legacy HTTP data plane as fallback.
+  dispatch_enabled: true
   dispatch_poll_interval: "5s"
   topology_execution_enabled: false
   topology_poll_interval: "5s"
