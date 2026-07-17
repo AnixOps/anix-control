@@ -19,7 +19,7 @@ runbooks instead of mixing deployment models on the same host.
    The fresh development template binds gRPC to `127.0.0.1:50051`; remote
    Agents require an explicit TLS/proxy setup and a deliberate bind-address change.
 3. Decide the exact version to install. Pinning a tag makes the operation
-   reproducible; the signed-package WebUI preview is `v4.0.0-alpha.2`.
+   reproducible; the signed-package WebUI preview is `v4.0.0-alpha.3`.
 4. Back up any existing panel before running `update` or `rollback`.
 
 ## Fresh Install
@@ -28,7 +28,7 @@ Download the installer from the exact release tag. This fetches one script, not
 the repository checkout:
 
 ```bash
-export VERSION=v4.0.0-alpha.2
+export VERSION=v4.0.0-alpha.3
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -134,7 +134,15 @@ The alpha entry point is manual import by design. It does not silently fetch
 untrusted third-party packages or put API keys in package URLs; Agent downloads
 use `X-API-Key` and same-origin, digest-addressed paths.
 
-`v4.0.0-alpha.2` is a canary release. Keep production traffic on the tested
+In `v4.0.0-alpha.3`, the catalog and bundle endpoint expose only routes and
+assets authorized for the current actor. The browser rejects unauthorized
+routes before fetching their bundle. Disable, update, rollback, or grant
+revocation removes access to the old active asset and responses use
+`private, no-store`; one invalid plugin is quarantined without hiding other
+valid extensions. Verify these transitions with separate admin and regular-user
+accounts during the canary.
+
+`v4.0.0-alpha.3` is a canary release. Keep production traffic on the tested
 legacy path while the signed package/WebUI path is observed. Do not publish a
 stable 4.0 release until the package lifecycle, node health, rollback, and
 compatibility checks have passed continuously for 72 hours and the operator
@@ -150,7 +158,7 @@ that snapshot.
 Upgrade to an explicit release:
 
 ```bash
-export TARGET=v4.0.0-alpha.2
+export TARGET=v4.0.0-alpha.3
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${TARGET}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
