@@ -1354,6 +1354,16 @@ func GetPluginConfiguration(db *gorm.DB, installationID uint) (*model.PluginConf
 // signed release schema and atomically advances its installation revision.
 // expectedRevision enables optimistic concurrency for independent WebUI pages.
 func UpdatePluginConfiguration(db *gorm.DB, publicKey ed25519.PublicKey, installationID uint, rawConfig string, expectedRevision *int64, actorID uint) (*model.PluginConfiguration, error) {
+	return UpdatePluginConfigurationWithValidator(db, publicKey, installationID, rawConfig, expectedRevision, actorID, nil)
+}
+
+// PluginConfigurationSemanticValidator supplies optional, version-bound
+// package semantics that cannot be expressed safely in JSON Schema.
+type PluginConfigurationSemanticValidator func(pluginID, version string, canonicalConfig json.RawMessage) error
+
+// UpdatePluginConfigurationWithValidator runs semantic validation in the same
+// transaction and against the same signed release version that is persisted.
+func UpdatePluginConfigurationWithValidator(db *gorm.DB, publicKey ed25519.PublicKey, installationID uint, rawConfig string, expectedRevision *int64, actorID uint, validator PluginConfigurationSemanticValidator) (*model.PluginConfiguration, error) {
 	if db == nil {
 		return nil, errors.New("database is not initialized")
 	}
@@ -1390,6 +1400,11 @@ func UpdatePluginConfiguration(db *gorm.DB, publicKey ed25519.PublicKey, install
 		}
 		if err := validatePluginConfigurationSchema(*manifest, canonical); err != nil {
 			return err
+		}
+		if validator != nil {
+			if err := validator(manifest.ID, manifest.Version, json.RawMessage(canonical)); err != nil {
+				return fmt.Errorf("plugin configuration semantic validation failed: %w", err)
+			}
 		}
 
 		var configuration model.PluginConfiguration

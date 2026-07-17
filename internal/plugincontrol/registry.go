@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 	"sync"
@@ -15,10 +16,11 @@ import (
 )
 
 var (
-	ErrExecutorNotFound   = errors.New("control plugin executor is not installed")
-	ErrRouteNotFound      = errors.New("control plugin route is not implemented by the executor")
-	ErrMethodNotAllowed   = errors.New("control plugin route does not allow this method")
-	ErrInvalidPluginInput = errors.New("control plugin request is invalid")
+	ErrExecutorNotFound               = errors.New("control plugin executor is not installed")
+	ErrConfigurationValidatorNotFound = errors.New("control plugin configuration validator is not installed for this version")
+	ErrRouteNotFound                  = errors.New("control plugin route is not implemented by the executor")
+	ErrMethodNotAllowed               = errors.New("control plugin route does not allow this method")
+	ErrInvalidPluginInput             = errors.New("control plugin request is invalid")
 )
 
 // RouteRequest deliberately contains only request data that a package API is
@@ -59,6 +61,12 @@ type Executor interface {
 	ExecuteLifecycle(context.Context, LifecycleRequest) (json.RawMessage, error)
 }
 
+// ConfigurationValidator is optional. Registries only invoke it for the exact
+// executor version selected by the signed installation release.
+type ConfigurationValidator interface {
+	ValidateConfiguration(context.Context, json.RawMessage) error
+}
+
 type Registry struct {
 	mu        sync.RWMutex
 	executors map[string]Executor
@@ -92,7 +100,7 @@ func DefaultRegistry(db *gorm.DB) (*Registry, error) {
 	if defaultRegistry != nil && defaultRegistryDB == db {
 		return defaultRegistry, nil
 	}
-	registry, err := NewRegistry(NewMachineTelemetryExecutor(db))
+	registry, err := NewRegistry(NewMachineTelemetryExecutor(db), NewGostMeshExecutor(db))
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +149,44 @@ func (r *Registry) ExecuteLifecycle(ctx context.Context, pluginID, version strin
 		return nil, ErrExecutorNotFound
 	}
 	return executor.ExecuteLifecycle(ctx, request)
+}
+
+// ValidateConfiguration applies package-specific semantics after the kernel
+// has verified the signed JSON Schema. Plugins without a registered validator
+// remain schema-only. Once a plugin opts in, unknown versions fail closed so a
+// validator for one release can never be reused for another release.
+func (r *Registry) ValidateConfiguration(ctx context.Context, pluginID, version string, config json.RawMessage) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	executor, ok := r.Lookup(pluginID, version)
+	if ok {
+		validator, validates := executor.(ConfigurationValidator)
+		if !validates {
+			return nil
+		}
+		return validator.ValidateConfiguration(ctx, config)
+	}
+	if r.hasConfigurationValidator(pluginID) {
+		return fmt.Errorf("%w: %s@%s", ErrConfigurationValidatorNotFound, pluginID, version)
+	}
+	return nil
+}
+
+func (r *Registry) hasConfigurationValidator(pluginID string) bool {
+	if r == nil {
+		return false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, executor := range r.executors {
+		if executor.PluginID() == pluginID {
+			if _, ok := executor.(ConfigurationValidator); ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func executorKey(pluginID, version string) string { return pluginID + "@" + version }

@@ -409,13 +409,23 @@ func (h *KernelHandler) UpdatePluginInstallationConfiguration(c *gin.Context) {
 		kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_invalid", err.Error())
 		return
 	}
-	configuration, err := service.UpdatePluginConfiguration(h.db, publicKey, installationID, string(req.Config), req.ExpectedRevision, kernelActorID(c))
+	var semanticValidator service.PluginConfigurationSemanticValidator
+	if h.controlPluginExecutors != nil {
+		semanticValidator = func(pluginID, version string, canonicalConfig json.RawMessage) error {
+			return h.controlPluginExecutors.ValidateConfiguration(c.Request.Context(), pluginID, version, canonicalConfig)
+		}
+	}
+	configuration, err := service.UpdatePluginConfigurationWithValidator(
+		h.db, publicKey, installationID, string(req.Config), req.ExpectedRevision, kernelActorID(c), semanticValidator,
+	)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrPluginConfigurationConflict):
 			kernelError(c, http.StatusConflict, "configuration_revision_conflict", err.Error())
 		case errors.Is(err, service.ErrPluginTrustRootRequired):
 			kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_unconfigured", err.Error())
+		case errors.Is(err, plugincontrol.ErrConfigurationValidatorNotFound):
+			kernelError(c, http.StatusServiceUnavailable, "plugin_configuration_validator_unavailable", err.Error())
 		case errors.Is(err, gorm.ErrRecordNotFound):
 			kernelError(c, http.StatusNotFound, "not_found", "plugin installation not found")
 		default:
