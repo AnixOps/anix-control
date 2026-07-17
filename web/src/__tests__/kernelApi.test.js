@@ -62,6 +62,14 @@ describe('kernel API', () => {
   })
 
   it('uploads release artifacts through the v3 package repository endpoint', async () => {
+    await kernelApi.registerKernelPluginRelease('{"id":"machine-telemetry"}', 'signature')
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3',
+      url: '/plugin-releases',
+      method: 'post',
+      data: { manifest: '{"id":"machine-telemetry"}', signature: 'signature' }
+    })
+
     await kernelApi.getKernelPluginReleases('machine-telemetry')
     expect(mockRequest).toHaveBeenLastCalledWith({
       baseURL: '/api/v3',
@@ -75,7 +83,44 @@ describe('kernel API', () => {
       baseURL: '/api/v3',
       url: '/plugin-releases/9/artifact',
       method: 'post',
-      data: { artifact_base64: 'YXJ0aWZhY3Q=' }
+      data: { artifact_base64: 'YXJ0aWZhY3Q=' },
+      timeout: 120_000
+    })
+  })
+
+  it('upserts installations and dispatches idempotent lifecycle actions', async () => {
+    const installation = { plugin_id: 'machine-telemetry', target: 'control', desired_version: '1.0.0', enabled: true }
+    await kernelApi.upsertKernelInstallation(installation)
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3',
+      url: '/plugin-installations',
+      method: 'put',
+      data: installation
+    })
+
+    await kernelApi.runKernelInstallationAction(7, 'update', { targetVersion: '1.1.0', idempotencyKey: 'request-1' })
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3',
+      url: '/plugin-installations/7/actions',
+      method: 'post',
+      data: { action: 'update', target_version: '1.1.0', idempotency_key: 'request-1' }
+    })
+
+    await kernelApi.runKernelInstallationAction(7, 'rollback', { idempotencyKey: 'request-2' })
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3',
+      url: '/plugin-installations/7/actions',
+      method: 'post',
+      data: { action: 'rollback', idempotency_key: 'request-2' }
+    })
+  })
+
+  it('cancels operations through the kernel endpoint', async () => {
+    await kernelApi.cancelKernelOperation('operation-1')
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3',
+      url: '/operations/operation-1/cancel',
+      method: 'post'
     })
   })
 })

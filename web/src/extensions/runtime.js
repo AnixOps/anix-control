@@ -132,6 +132,10 @@ function normalizeExtension(raw) {
   if (!Number.isSafeInteger(raw.installation_id) || raw.installation_id <= 0) {
     throw new Error('installation_id is invalid')
   }
+  const configSchema = raw.config_schema ?? {}
+  if (!configSchema || typeof configSchema !== 'object' || Array.isArray(configSchema)) {
+    throw new Error('config_schema must be an object')
+  }
   if (!raw.bundle || !isSafeBundlePath(raw.bundle.path) || !SHA256_PATTERN.test(raw.bundle.sha256 || '')) {
     throw new Error('bundle identity is invalid')
   }
@@ -212,6 +216,8 @@ function normalizeExtension(raw) {
     pluginID,
     pluginName: requireString(raw.plugin_name, 'plugin_name', 160),
     version,
+    installationID: raw.installation_id,
+    configSchema,
     bundle: {
       path: raw.bundle.path,
       sha256: bundleSHA256,
@@ -398,11 +404,12 @@ function extensionRouteHost(component) {
   })
 }
 
-function snapshot(menus, errors, plugins) {
+function snapshot(menus, errors, plugins, extensions) {
   return {
     menus: [...menus.value],
     errors: [...errors.value],
-    pluginIDs: [...plugins.value]
+    pluginIDs: [...plugins.value],
+    extensions: [...extensions.value]
   }
 }
 
@@ -415,6 +422,7 @@ export function createAdminExtensionRuntime(options = {}) {
   const menus = shallowRef([])
   const errors = shallowRef([])
   const plugins = shallowRef([])
+  const extensions = shallowRef([])
   const routeRemovers = new Map()
   let initialized = false
   let lastAttempt = 0
@@ -433,6 +441,7 @@ export function createAdminExtensionRuntime(options = {}) {
     routeRemovers.clear()
     menus.value = []
     plugins.value = []
+    extensions.value = []
   }
 
   async function prepareExtension(raw, duplicateIDs) {
@@ -478,7 +487,7 @@ export function createAdminExtensionRuntime(options = {}) {
         errors.value = [runtimeError('catalog_unavailable', error instanceof Error ? error.message : 'extension catalog is unavailable')]
         initialized = true
       }
-      return snapshot(menus, errors, plugins)
+      return snapshot(menus, errors, plugins, extensions)
     }
 
     const counts = new Map()
@@ -490,7 +499,7 @@ export function createAdminExtensionRuntime(options = {}) {
     const duplicateIDs = new Set([...counts].filter(([, count]) => count > 1).map(([id]) => id))
     const prepared = await Promise.all(catalog.map(item => prepareExtension(item, duplicateIDs)))
     if (refreshGeneration !== generation) {
-      return snapshot(menus, errors, plugins)
+      return snapshot(menus, errors, plugins, extensions)
     }
 
     removeExtensionRoutes()
@@ -502,6 +511,7 @@ export function createAdminExtensionRuntime(options = {}) {
     )
     const nextMenus = []
     const nextPlugins = []
+    const nextExtensions = []
 
     for (const candidate of prepared.filter(item => item.extension && item.module)) {
       const { extension, module } = candidate
@@ -539,6 +549,13 @@ export function createAdminExtensionRuntime(options = {}) {
           }
         })
         nextPlugins.push(extension.pluginID)
+        nextExtensions.push(Object.freeze({
+          pluginID: extension.pluginID,
+          pluginName: extension.pluginName,
+          version: extension.version,
+          installationID: extension.installationID,
+          configSchema: extension.configSchema
+        }))
         nextMenus.push(...extension.menus.map(menu => ({
           pluginID: extension.pluginID,
           id: menu.id,
@@ -565,8 +582,9 @@ export function createAdminExtensionRuntime(options = {}) {
     menus.value = nextMenus
     errors.value = nextErrors
     plugins.value = nextPlugins.sort()
+    extensions.value = nextExtensions.sort((left, right) => left.pluginID.localeCompare(right.pluginID))
     initialized = true
-    return snapshot(menus, errors, plugins)
+    return snapshot(menus, errors, plugins, extensions)
   }
 
   function refresh(router) {
@@ -584,7 +602,7 @@ export function createAdminExtensionRuntime(options = {}) {
 
   function ensure(router) {
     if (initialized && now() - lastAttempt < refreshInterval) {
-      return Promise.resolve(snapshot(menus, errors, plugins))
+      return Promise.resolve(snapshot(menus, errors, plugins, extensions))
     }
     return refresh(router)
   }
@@ -602,6 +620,7 @@ export function createAdminExtensionRuntime(options = {}) {
     menus: readonly(menus),
     errors: readonly(errors),
     plugins: readonly(plugins),
+    extensions: readonly(extensions),
     ensure,
     refresh,
     reset
@@ -613,6 +632,7 @@ const adminExtensionRuntime = createAdminExtensionRuntime()
 export const adminExtensionMenus = adminExtensionRuntime.menus
 export const adminExtensionErrors = adminExtensionRuntime.errors
 export const adminExtensionPluginIDs = adminExtensionRuntime.plugins
+export const adminExtensions = adminExtensionRuntime.extensions
 
 export function ensureAdminExtensions(router) {
   return adminExtensionRuntime.ensure(router)

@@ -8,6 +8,10 @@
   `nftables-forward` and `nat-egress` WebUI packages, so real installed bundles
   resolve assignment, operation, revision, health, cleanup, and rollback state
   instead of failing with an unimplemented plugin route.
+- Added an operational official-package center for release manifest/artifact
+  import, installation intent, enable/disable/update/rollback actions,
+  revisioned Schema or JSON configuration, operation polling/cancellation, and
+  signed WebUI extension refresh with visible terminal errors.
 
 ### Fixed
 

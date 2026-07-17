@@ -21,6 +21,14 @@ export async function getKernelPluginReleases(pluginID) {
   return unwrap(await v3({ url: '/plugin-releases', method: 'get' }))
 }
 
+export async function registerKernelPluginRelease(manifest, signature) {
+  return unwrap(await v3({
+    url: '/plugin-releases',
+    method: 'post',
+    data: { manifest, signature }
+  }))
+}
+
 export async function getKernelPluginReleaseArtifact(releaseID) {
   return unwrap(await v3({ url: `/plugin-releases/${releaseID}/artifact`, method: 'get' }))
 }
@@ -29,12 +37,36 @@ export async function uploadKernelPluginReleaseArtifact(releaseID, artifactBase6
   return unwrap(await v3({
     url: `/plugin-releases/${releaseID}/artifact`,
     method: 'post',
-    data: { artifact_base64: artifactBase64 }
+    data: { artifact_base64: artifactBase64 },
+    timeout: 120_000
   }))
 }
 
 export async function getKernelInstallations() {
   return unwrap(await v3({ url: '/plugin-installations', method: 'get' }))
+}
+
+export async function upsertKernelInstallation(installation) {
+  return unwrap(await v3({
+    url: '/plugin-installations',
+    method: 'put',
+    data: installation
+  }))
+}
+
+export async function runKernelInstallationAction(installationID, action, options = {}) {
+  const data = {
+    action,
+    idempotency_key: options.idempotencyKey
+  }
+  if (options.targetVersion) {
+    data.target_version = options.targetVersion
+  }
+  return unwrap(await v3({
+    url: `/plugin-installations/${installationID}/actions`,
+    method: 'post',
+    data
+  }))
 }
 
 export async function getKernelInstallationConfig(installationID) {
@@ -59,6 +91,10 @@ export async function getKernelTopologies() {
 
 export async function getKernelOperations() {
   return unwrap(await v3({ url: '/operations', method: 'get' }))
+}
+
+export async function cancelKernelOperation(operationID) {
+  return unwrap(await v3({ url: `/operations/${operationID}/cancel`, method: 'post' }))
 }
 
 export async function getKernelExtensions() {

@@ -111,6 +111,12 @@ describe('admin extension runtime', () => {
     expect(resolveModule).toHaveBeenCalledWith('example')
     expect(result.errors).toEqual([])
     expect(result.pluginIDs).toEqual(['example'])
+    expect(result.extensions).toEqual([expect.objectContaining({
+      pluginID: 'example',
+      installationID: 1,
+      configSchema: { type: 'object' },
+    })])
+    expect(runtime.extensions.value).toEqual(result.extensions)
     expect(runtime.menus.value).toEqual([expect.objectContaining({
       label: 'Example',
       icon: 'EX',
