@@ -21,11 +21,19 @@ def require_pattern(path: Path, pattern: str, expected: str, label: str) -> None
         raise ValueError(f"{label} version mismatch: expected {expected}, found {actual}")
 
 
-def require_all_patterns(path: Path, pattern: str, expected: str, label: str) -> None:
+def require_all_patterns(
+    path: Path,
+    pattern: str,
+    expected: str,
+    label: str,
+    expected_count: int | None = None,
+) -> None:
     content = path.read_text(encoding="utf-8")
     matches = re.findall(pattern, content, re.MULTILINE)
     if not matches:
         raise ValueError(f"{label} version is missing")
+    if expected_count is not None and len(matches) != expected_count:
+        raise ValueError(f"{label} version field count mismatch: expected {expected_count}, found {len(matches)}")
     mismatches = [actual for actual in matches if actual != expected]
     if mismatches:
         raise ValueError(f"{label} version mismatch: expected {expected}, found {mismatches[0]}")
@@ -87,6 +95,7 @@ def check_release_version(repo_root: Path, tag: str) -> str:
         r'^\s{2}version:\s*"([^"]+)"',
         version,
         "installer configuration",
+        expected_count=2,
     )
     require_pattern(
         repo_root / "docs/docs.go",
@@ -142,17 +151,36 @@ def self_test() -> None:
     version = "4.0.0-alpha.2"
     with tempfile.TemporaryDirectory(prefix="anix-release-version-") as tmp:
         root = Path(tmp)
+
+        def expect_failure(fragment: str) -> None:
+            try:
+                check_release_version(root, f"v{version}")
+            except ValueError as error:
+                assert fragment in str(error)
+            else:
+                raise AssertionError(f"version mismatch was accepted: {fragment}")
+
         write_fixture(root, version)
         assert check_release_version(root, f"v{version}") == version
 
         package = root / "web/package.json"
         package.write_text(json.dumps({"version": "4.0.0-alpha.3"}), encoding="utf-8")
-        try:
-            check_release_version(root, f"v{version}")
-        except ValueError as error:
-            assert "frontend package version mismatch" in str(error)
-        else:
-            raise AssertionError("mismatched frontend version was accepted")
+        expect_failure("frontend package version mismatch")
+
+        write_fixture(root, version)
+        installer = root / "install.sh"
+        installer.write_text(
+            f'  version: "{version}"\n  version: "4.0.0-alpha.3"\n',
+            encoding="utf-8",
+        )
+        expect_failure("installer configuration version mismatch")
+
+        write_fixture(root, version)
+        installer.write_text(
+            f'  version: "{version}"\n  version: {version}\n',
+            encoding="utf-8",
+        )
+        expect_failure("installer configuration version field count mismatch")
 
         try:
             check_release_version(root, "v4")
