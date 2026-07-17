@@ -204,7 +204,7 @@ check_release_workflow() {
   require_text 'The signed `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress` packages' "release notes include GOST mesh and NAT egress" || failed=1
   require_text "canary-only until Secret ID" "GOST mesh stable-release limitation" || failed=1
   require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
-  require_text "ref: 555be48faebf80e6c9d61cea10705583cf7c32f1" "pinned Agent fixture commit" || failed=1
+  require_text "ref: a8e6331e4c81274460e409720f8680649b7c2d17" "pinned Agent fixture commit" || failed=1
   require_text "ANIXOPS_CROSS_REPO_E2E: '1'" "cross-repository Agent process E2E opt-in" || failed=1
   require_text "KernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
   require_text "AgentPluginPackageCrossRepositoryE2E" "signed Agent package cross-repository E2E test" || failed=1
@@ -364,7 +364,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 555be48faebf80e6c9d61cea10705583cf7c32f1
+          ref: a8e6331e4c81274460e409720f8680649b7c2d17
           path: V2bX_AnixOps
       - env:
           ANIXOPS_CROSS_REPO_E2E: '1'
