@@ -34,6 +34,8 @@
   gate accepts its whitespace and slash trimming logic.
 - Hardened authenticated Agent node ID conversion and updated the signed-package
   process fixture to use current gRPC APIs with checked resource cleanup.
+- Pinned package builds and cross-repository process gates to the verified Agent
+  v4 commit `882024acfb1f125becec8138c3ade0173072ef71`.
 - Fixed release-note generation to select the immutable changelog section for
   the current tag, including dated headings, instead of requiring an
   `Unreleased` section that no longer exists in a prepared release commit.
