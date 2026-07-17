@@ -1003,6 +1003,9 @@ async function loadTopologyRevisionDetail() {
     topologyEditor.baselineJSON = topologyEditor.json
     topologyEditor.baselineMessage = topologyEditor.message
     topologyEditor.validation = null
+    topologyEditor.preview = null
+    topologyEditor.deploymentID = 0
+    topologyEditor.deploymentStatus = null
   } catch (cause) {
     error.value = errorMessage(cause, 'control.errors.topologyLoad')
   } finally {
@@ -1076,6 +1079,9 @@ async function saveTopologyRevision() {
     topologyEditor.message = revision?.message || input.message
     topologyEditor.baselineJSON = topologyEditor.json
     topologyEditor.baselineMessage = topologyEditor.message
+    topologyEditor.preview = null
+    topologyEditor.deploymentID = 0
+    topologyEditor.deploymentStatus = null
     await loadTopologies()
     notice.value = t('control.messages.topologyRevisionSaved', { revision: revision?.revision || '-' })
     return true
