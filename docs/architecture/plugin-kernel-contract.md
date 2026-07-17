@@ -134,10 +134,12 @@ implicit command to every node. Node assignment expansion and per-node
 ## Scoped Authorization
 
 `service_scope` owns an independent authorization namespace. The startup
-catalog creates `subscription`, `proxy`, and `forward`; it does not migrate
-existing subscription groups. `access_group_user` and `access_group_plan` are
-combined as an allow-union within one scope. Resource grants and quota policies
-are never evaluated across scopes.
+catalog creates `subscription`, `proxy`, `forward`, and `monitoring`; the
+`monitoring` scope is owned by `machine-telemetry` so machine health does not
+consume subscription or forwarding authorization and quota state. Startup does
+not migrate existing subscription groups. `access_group_user` and
+`access_group_plan` are combined as an allow-union within one scope. Resource
+grants and quota policies are never evaluated across scopes.
 
 ## Topologies
 
@@ -152,8 +154,31 @@ or observed revisions are ignored, and a deployment reaches a terminal state
 only after every distinct assigned node has reported. The feature-gated
 executor compiles deployment steps by DAG order, dispatches per-node
 `plugin.configure`/`plugin.enable` or disable operations, fences later steps on
-failure, and rolls back changed steps in reverse DAG order. This executor is
-off by default and must not be used as production traffic evidence until the
+failure, and rolls back changed steps in reverse DAG order. A succeeded task is
+not sufficient to promote a revision: the executor reads a bounded projection
+of the terminal Agent operation result and requires the exact plugin ID,
+version, configuration hash, desired revision, observed revision, enabled
+state, and health (`healthy` for enabled vertices or `disabled` for removals).
+Raw Agent JSON, raw errors, and unknown fields are never copied into topology
+health records.
+
+Packages that declare the signed `kernel.observed-state` capability add a
+second gate. The Agent heartbeat must persist a fresh structured observation
+after the terminal operation, with exact version/config hash/revisions,
+`healthy` state, a valid live ruleset SHA-256, and, for `nftables-forward`, the
+same rule-ID counter set as the desired topology config. The deployment stores
+a durable 90-second observation deadline so a Control restart resumes waiting;
+missing evidence only rolls back after that deadline, while mismatched or
+unhealthy evidence fails closed immediately. Rollback restore/disable steps use
+the same fixed terminal-state gate before a deployment becomes `rolled_back`.
+The Supervisor verifies the local package health socket on every heartbeat;
+when it cannot safely read a current private observation it sends an
+Supervisor-owned `unhealthy` record rather than replaying old health evidence.
+Control treats observations stale after two minutes of trusted receipt time.
+Public deployment, observed-state, and operation endpoints expose only fixed
+state and generic error summaries, never the configuration, runtime payload,
+session identity, or raw plugin error.
+This executor is off by default and must not be used as production traffic evidence until the
 corresponding protocol package and network tests exist.
 
 ## Operations

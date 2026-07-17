@@ -479,10 +479,14 @@ func (b *KernelOperationBridge) recordObserved(nodeID uint32, observed *agentv1p
 			case agentv1pb.ObservedPhase_OBSERVED_PHASE_SUPERSEDED:
 				topologyState = "rolled_back"
 			}
+			topologyError := ""
+			if topologyState == "failed" {
+				topologyError = "legacy Agent topology operation failed"
+			}
 			if _, _, err := service.ApplyTopologyObservedStateTx(tx, service.TopologyObservedStateUpdate{
 				DeploymentID: topologyRef.DeploymentID, NodeID: uint(nodeID),
 				DesiredRevision: desiredRevision, ObservedRevision: observedRevision,
-				State: topologyState, HealthJSON: string(observed.StateJson), LastError: message,
+				State: topologyState, HealthJSON: service.LegacyTopologyObservedHealthJSON(), LastError: topologyError,
 				ObservedAt: observedAt,
 			}); err != nil {
 				return err

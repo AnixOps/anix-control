@@ -27,6 +27,7 @@ func newGostMeshTestDB(t *testing.T) *gorm.DB {
 		&model.NodeServiceAssignment{},
 		&model.KernelOperation{},
 		&model.NodeOperationRevision{},
+		&model.NodePluginObservedState{},
 	))
 	return db
 }

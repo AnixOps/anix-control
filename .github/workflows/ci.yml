@@ -576,7 +576,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 72bbdff19f03768fd8bd9c720e236f93e898043f
+          ref: 3690f9cf221f4580ce2657e3eb99e52e937a16aa
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -611,7 +611,7 @@ jobs:
               -o "${GITHUB_WORKSPACE}/package-build/gost-mesh-agent" ./cmd/gost-mesh
           chmod 0755 package-build/nftables-forward-agent
           chmod 0755 package-build/gost-mesh-agent
-          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.1.0" ]]
+          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.2.0" ]]
 
           gost_archive="${RUNNER_TEMP}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
           curl --fail --location --retry 3 --output "${gost_archive}" \
@@ -684,7 +684,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 72bbdff19f03768fd8bd9c720e236f93e898043f
+          ref: 3690f9cf221f4580ce2657e3eb99e52e937a16aa
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -718,7 +718,7 @@ jobs:
           chmod 0755 package-build/nat-egress-agent
 
           [[ "$(package-build/machine-telemetry-agent --version)" == "machine-telemetry 1.1.0" ]]
-          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.1.0" ]]
+          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.2.0" ]]
           [[ "$(package-build/gost-mesh-agent --version)" =~ ^gost-mesh[[:space:]]+1\.0\.0[[:space:]]+\(gost[[:space:]]+v3\.2\.6\)$ ]]
           [[ "$(package-build/nat-egress-agent --version)" == "nat-egress 1.0.0" ]]
 
@@ -784,16 +784,16 @@ jobs:
           mkdir -p "${release_dir}"
           bash scripts/sign_plugin_release.sh \
             --manifest package-build/nftables-forward-dist/manifest.json \
-            --artifact package-build/nftables-forward-dist/nftables-forward-1.1.0.tar \
+            --artifact package-build/nftables-forward-dist/nftables-forward-1.2.0.tar \
             --private-key "${key_file}" \
-            --signature "${release_dir}/anixops-nftables-forward-1.1.0.sig" \
-            --public-key "${release_dir}/anixops-nftables-forward-1.1.0.public-key.pem"
-          cp package-build/nftables-forward-dist/nftables-forward-1.1.0.tar "${release_dir}/"
-          cp package-build/nftables-forward-dist/manifest.json "${release_dir}/anixops-nftables-forward-1.1.0.manifest.json"
-          openssl pkey -pubin -in "${release_dir}/anixops-nftables-forward-1.1.0.public-key.pem" -outform DER \
-            | tail -c 32 | base64 | tr -d '\n' >"${release_dir}/anixops-nftables-forward-1.1.0.public-key.raw"
-          printf '\n' >>"${release_dir}/anixops-nftables-forward-1.1.0.public-key.raw"
-          (cd "${release_dir}" && sha256sum * > anixops-nftables-forward-1.1.0.SHA256SUMS.txt)
+            --signature "${release_dir}/anixops-nftables-forward-1.2.0.sig" \
+            --public-key "${release_dir}/anixops-nftables-forward-1.2.0.public-key.pem"
+          cp package-build/nftables-forward-dist/nftables-forward-1.2.0.tar "${release_dir}/"
+          cp package-build/nftables-forward-dist/manifest.json "${release_dir}/anixops-nftables-forward-1.2.0.manifest.json"
+          openssl pkey -pubin -in "${release_dir}/anixops-nftables-forward-1.2.0.public-key.pem" -outform DER \
+            | tail -c 32 | base64 | tr -d '\n' >"${release_dir}/anixops-nftables-forward-1.2.0.public-key.raw"
+          printf '\n' >>"${release_dir}/anixops-nftables-forward-1.2.0.public-key.raw"
+          (cd "${release_dir}" && sha256sum * > anixops-nftables-forward-1.2.0.SHA256SUMS.txt)
 
           release_dir="release-gost-mesh"
           mkdir -p "${release_dir}"
@@ -916,7 +916,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 72bbdff19f03768fd8bd9c720e236f93e898043f
+          ref: 3690f9cf221f4580ce2657e3eb99e52e937a16aa
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -1436,12 +1436,12 @@ jobs:
             --require anixops-machine-telemetry-1.1.0.public-key.pem \
             --require anixops-machine-telemetry-1.1.0.public-key.raw \
             --require anixops-machine-telemetry-1.1.0.SHA256SUMS.txt \
-            --require nftables-forward-1.1.0.tar \
-            --require anixops-nftables-forward-1.1.0.manifest.json \
-            --require anixops-nftables-forward-1.1.0.sig \
-            --require anixops-nftables-forward-1.1.0.public-key.pem \
-            --require anixops-nftables-forward-1.1.0.public-key.raw \
-            --require anixops-nftables-forward-1.1.0.SHA256SUMS.txt \
+            --require nftables-forward-1.2.0.tar \
+            --require anixops-nftables-forward-1.2.0.manifest.json \
+            --require anixops-nftables-forward-1.2.0.sig \
+            --require anixops-nftables-forward-1.2.0.public-key.pem \
+            --require anixops-nftables-forward-1.2.0.public-key.raw \
+            --require anixops-nftables-forward-1.2.0.SHA256SUMS.txt \
             --require gost-mesh-1.0.0.tar \
             --require anixops-gost-mesh-1.0.0.manifest.json \
             --require anixops-gost-mesh-1.0.0.sig \

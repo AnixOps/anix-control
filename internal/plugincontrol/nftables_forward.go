@@ -16,10 +16,11 @@ import (
 )
 
 const (
-	NftablesForwardPluginID      = "nftables-forward"
-	NftablesForwardVersion       = "1.1.0"
-	NftablesForwardLegacyVersion = "1.0.0"
-	NftablesForwardStatusRoute   = "/api/v3/plugins/nftables-forward/status"
+	NftablesForwardPluginID          = "nftables-forward"
+	NftablesForwardVersion           = "1.2.0"
+	NftablesForwardLegacyVersion     = "1.0.0"
+	NftablesForwardStatusRoute       = "/api/v3/plugins/nftables-forward/status"
+	nftablesForwardRuntimeStaleAfter = 2 * time.Minute
 )
 
 type NftablesForwardExecutor struct {
@@ -42,7 +43,7 @@ func NewNftablesForwardExecutorVersion(db *gorm.DB, version string) *NftablesFor
 func (e *NftablesForwardExecutor) PluginID() string { return NftablesForwardPluginID }
 func (e *NftablesForwardExecutor) Version() string  { return e.version }
 
-// ValidateConfiguration is the Control-side semantic gate for the 1.1 package.
+// ValidateConfiguration is the Control-side semantic gate for the 1.2 package.
 // JSON Schema checks shape; this method checks the nftables/runtime invariants
 // that must hold before an Agent operation is admitted.
 func (e *NftablesForwardExecutor) ValidateConfiguration(ctx context.Context, raw json.RawMessage) error {
@@ -188,25 +189,32 @@ type NftablesForwardSummary struct {
 	Rules            int `json:"rules"`
 	Ready            int `json:"ready"`
 	Reconciling      int `json:"reconciling"`
+	Degraded         int `json:"degraded"`
 	RollbackRequired int `json:"rollback_required"`
 }
 
 type NftablesForwardRuleStatus struct {
-	ID               string `json:"id"`
-	Name             string `json:"name"`
-	NodeID           uint   `json:"node_id"`
-	NodeName         string `json:"node_name"`
-	Topology         string `json:"topology,omitempty"`
-	Protocol         string `json:"protocol"`
-	Listen           string `json:"listen,omitempty"`
-	Target           string `json:"target,omitempty"`
-	DesiredRevision  int64  `json:"desired_revision"`
-	ObservedRevision int64  `json:"observed_revision"`
-	Enabled          bool   `json:"enabled"`
-	Ready            bool   `json:"ready"`
-	Reconciling      bool   `json:"reconciling"`
-	RollbackRequired bool   `json:"rollback_required"`
-	LastError        string `json:"last_error,omitempty"`
+	ID               string     `json:"id"`
+	Name             string     `json:"name"`
+	NodeID           uint       `json:"node_id"`
+	NodeName         string     `json:"node_name"`
+	Topology         string     `json:"topology,omitempty"`
+	Protocol         string     `json:"protocol"`
+	Listen           string     `json:"listen,omitempty"`
+	Target           string     `json:"target,omitempty"`
+	DesiredRevision  int64      `json:"desired_revision"`
+	ObservedRevision int64      `json:"observed_revision"`
+	Enabled          bool       `json:"enabled"`
+	Ready            bool       `json:"ready"`
+	Reconciling      bool       `json:"reconciling"`
+	Degraded         bool       `json:"degraded"`
+	RollbackRequired bool       `json:"rollback_required"`
+	RuntimeHealth    string     `json:"runtime_health,omitempty"`
+	RulesetSHA256    string     `json:"ruleset_sha256,omitempty"`
+	Packets          uint64     `json:"packets"`
+	Bytes            uint64     `json:"bytes"`
+	ObservedAt       *time.Time `json:"observed_at,omitempty"`
+	LastError        string     `json:"last_error,omitempty"`
 }
 
 type NftablesForwardStatus struct {
@@ -266,6 +274,10 @@ func (e *NftablesForwardExecutor) status(limit int) (NftablesForwardStatus, erro
 	if err != nil {
 		return NftablesForwardStatus{}, err
 	}
+	runtimeStates, err := loadNftablesForwardRuntimeStates(e.db, assignments)
+	if err != nil {
+		return NftablesForwardStatus{}, err
+	}
 	now := time.Now()
 	if e.now != nil {
 		now = e.now()
@@ -278,14 +290,15 @@ func (e *NftablesForwardExecutor) status(limit int) (NftablesForwardStatus, erro
 		node := nodes[assignment.NodeID]
 		operation := operations[assignment.NodeID]
 		observed := decodeObservedPluginResult(operation.ResultJSON)
+		runtimeState := runtimeStates[assignment.NodeID]
 		var config nftablesForwardConfig
 		_ = json.Unmarshal([]byte(operation.ConfigJSON), &config)
 		if len(config.Rules) == 0 {
-			status.Rules = append(status.Rules, nftablesForwardRuleRow(assignment, node, cursors[assignment.NodeID], operation, observed, config, nil))
+			status.Rules = append(status.Rules, nftablesForwardRuleRow(assignment, node, cursors[assignment.NodeID], operation, observed, runtimeState, config, nil, now))
 			continue
 		}
 		for index := range config.Rules {
-			status.Rules = append(status.Rules, nftablesForwardRuleRow(assignment, node, cursors[assignment.NodeID], operation, observed, config, &config.Rules[index]))
+			status.Rules = append(status.Rules, nftablesForwardRuleRow(assignment, node, cursors[assignment.NodeID], operation, observed, runtimeState, config, &config.Rules[index], now))
 		}
 	}
 	for _, rule := range status.Rules {
@@ -296,6 +309,9 @@ func (e *NftablesForwardExecutor) status(limit int) (NftablesForwardStatus, erro
 		if rule.Reconciling {
 			status.Summary.Reconciling++
 		}
+		if rule.Degraded {
+			status.Summary.Degraded++
+		}
 		if rule.RollbackRequired {
 			status.Summary.RollbackRequired++
 		}
@@ -303,7 +319,7 @@ func (e *NftablesForwardExecutor) status(limit int) (NftablesForwardStatus, erro
 	return status, nil
 }
 
-func nftablesForwardRuleRow(assignment model.NodeServiceAssignment, node model.Node, cursor model.NodeOperationRevision, operation model.KernelOperation, observed observedPluginResult, config nftablesForwardConfig, rule *nftablesForwardRule) NftablesForwardRuleStatus {
+func nftablesForwardRuleRow(assignment model.NodeServiceAssignment, node model.Node, cursor model.NodeOperationRevision, operation model.KernelOperation, observed observedPluginResult, runtime *model.NodePluginObservedState, config nftablesForwardConfig, rule *nftablesForwardRule, now time.Time) NftablesForwardRuleStatus {
 	row := NftablesForwardRuleStatus{
 		ID: fmt.Sprintf("assignment-%d", assignment.ID), Name: node.Name + " / " + assignment.Role,
 		NodeID: assignment.NodeID, NodeName: node.Name, Topology: assignment.Role, Protocol: "tcp+udp",
@@ -321,15 +337,88 @@ func nftablesForwardRuleRow(assignment model.NodeServiceAssignment, node model.N
 	} else if config.Table != "" || config.Family != "" {
 		row.Topology = strings.TrimSpace(strings.Trim(strings.Join([]string{assignment.Role, config.Family, config.Table}, " / "), "/"))
 	}
+	if runtime != nil {
+		row.RuntimeHealth = runtime.Health
+		row.RulesetSHA256 = runtime.RulesetSHA256
+		observedAt := runtime.ObservedAt
+		row.ObservedAt = &observedAt
+		row.ObservedRevision = maxInt64(row.ObservedRevision, runtime.ObservedRevision)
+		if rule != nil {
+			row.Packets, row.Bytes = nftablesForwardCounter(runtime.CountersJSON, rule.ID)
+		}
+	}
 	observedVersion := observed.ObservedVersion
 	if observedVersion == "" && operation.State == "succeeded" {
 		observedVersion = operation.TargetVersion
 	}
 	row.RollbackRequired = operation.State == "failed" && (operation.Kind == "plugin.update" || operation.Kind == "plugin.rollback")
-	row.Reconciling = assignment.Enabled && (operationInFlight(operation.State) || (!row.RollbackRequired && row.ObservedRevision < row.DesiredRevision))
-	health := firstNonEmpty(observed.Health, boolHealth(node.RuntimeHealthy))
-	row.LastError = firstNonEmpty(observed.LastError, operation.LastError, node.RuntimeError)
-	row.Ready = assignment.Enabled && !row.RollbackRequired && !row.Reconciling && health == "healthy" &&
+	runtimeStale := nftablesForwardRuntimeObservationStale(runtime, now)
+	requiresRuntimeObservation := assignment.DesiredVersion == NftablesForwardVersion
+	runtimeReady := !requiresRuntimeObservation || (runtime != nil && !runtimeStale && runtime.Version == assignment.DesiredVersion && runtime.Health == "healthy")
+	row.Degraded = assignment.Enabled && runtime != nil && (runtime.Health != "healthy" || runtimeStale)
+	row.Reconciling = assignment.Enabled && (operationInFlight(operation.State) || (!row.RollbackRequired && row.ObservedRevision < row.DesiredRevision) || (requiresRuntimeObservation && runtime == nil))
+	health := firstNonEmpty(row.RuntimeHealth, observed.Health, boolHealth(node.RuntimeHealthy))
+	if row.RollbackRequired {
+		row.LastError = "operation requires rollback"
+	} else if runtimeStale {
+		row.LastError = "runtime observation is stale"
+	} else if row.Degraded {
+		row.LastError = "runtime observation is unhealthy"
+	} else if row.Reconciling {
+		row.LastError = "awaiting desired runtime state"
+	}
+	row.Ready = assignment.Enabled && !row.RollbackRequired && !row.Reconciling && !row.Degraded && runtimeReady && health == "healthy" &&
 		observedVersion == assignment.DesiredVersion && row.ObservedRevision >= row.DesiredRevision
 	return row
+}
+
+func nftablesForwardRuntimeObservationStale(runtime *model.NodePluginObservedState, now time.Time) bool {
+	if runtime == nil || now.IsZero() || runtime.ReceivedAt.IsZero() {
+		return runtime != nil
+	}
+	if runtime.ReceivedAt.After(now.Add(time.Minute)) {
+		return true
+	}
+	return now.Sub(runtime.ReceivedAt) >= nftablesForwardRuntimeStaleAfter
+}
+
+func loadNftablesForwardRuntimeStates(db *gorm.DB, assignments []model.NodeServiceAssignment) (map[uint]*model.NodePluginObservedState, error) {
+	states := make(map[uint]*model.NodePluginObservedState)
+	if db == nil || len(assignments) == 0 || !db.Migrator().HasTable(&model.NodePluginObservedState{}) {
+		return states, nil
+	}
+	nodeIDs := make([]uint, 0, len(assignments))
+	seen := make(map[uint]struct{}, len(assignments))
+	for _, assignment := range assignments {
+		if _, exists := seen[assignment.NodeID]; !exists {
+			seen[assignment.NodeID] = struct{}{}
+			nodeIDs = append(nodeIDs, assignment.NodeID)
+		}
+	}
+	var rows []model.NodePluginObservedState
+	if err := db.Where("plugin_id = ? AND node_id IN ?", NftablesForwardPluginID, nodeIDs).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for index := range rows {
+		row := rows[index]
+		states[row.NodeID] = &row
+	}
+	return states, nil
+}
+
+func nftablesForwardCounter(countersJSON, ruleID string) (uint64, uint64) {
+	var counters []struct {
+		RuleID  string `json:"rule_id"`
+		Packets uint64 `json:"packets"`
+		Bytes   uint64 `json:"bytes"`
+	}
+	if json.Unmarshal([]byte(countersJSON), &counters) != nil {
+		return 0, 0
+	}
+	for _, counter := range counters {
+		if counter.RuleID == ruleID {
+			return counter.Packets, counter.Bytes
+		}
+	}
+	return 0, 0
 }

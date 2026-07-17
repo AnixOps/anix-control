@@ -473,7 +473,7 @@ jwt:
 
 app:
   name: "AnixOps Control"
-  version: "4.0.0-alpha.5"
+  version: "4.0.0-alpha.6"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
@@ -576,7 +576,7 @@ jwt:
 
 app:
   name: "AnixOps Control"
-  version: "4.0.0-alpha.5"
+  version: "4.0.0-alpha.6"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"

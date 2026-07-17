@@ -150,7 +150,7 @@ check_release_workflow() {
   require_text "packages/machine-telemetry/tests/release_gate.sh" "machine telemetry package release gate invocation" || failed=1
   require_text "packages/nftables-forward/tests/release_gate.sh" "nftables forward package release gate invocation" || failed=1
   require_text "--agent-binary package-build/nftables-forward-agent" "real nftables forward Agent package input" || failed=1
-  require_text '[[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.1.0" ]]' "nftables forward binary version gate" || failed=1
+  require_text '[[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.2.0" ]]' "nftables forward binary version gate" || failed=1
   require_text "packages/nftables-forward/tests/webui_smoke.mjs" "nftables forward WebUI smoke gate" || failed=1
   require_text "packages/gost-mesh/tests/release_gate.sh" "gost mesh package release gate invocation" || failed=1
   require_text "--agent-binary package-build/gost-mesh-agent" "real GOST mesh Agent package input" || failed=1
@@ -171,7 +171,7 @@ check_release_workflow() {
   require_text "gost-mesh-signed-release" "signed GOST mesh plugin release artifact" || failed=1
   require_text "nat-egress-signed-release" "signed NAT egress plugin release artifact" || failed=1
   require_text "anixops-machine-telemetry-1.1.0.SHA256SUMS.txt" "signed plugin checksum evidence" || failed=1
-  require_text "anixops-nftables-forward-1.1.0.SHA256SUMS.txt" "signed nftables forward checksum evidence" || failed=1
+  require_text "anixops-nftables-forward-1.2.0.SHA256SUMS.txt" "signed nftables forward checksum evidence" || failed=1
   require_text "anixops-gost-mesh-1.0.0.SHA256SUMS.txt" "signed GOST mesh checksum evidence" || failed=1
   require_text "anixops-nat-egress-1.0.0.SHA256SUMS.txt" "signed NAT egress checksum evidence" || failed=1
   require_text "GOST_VERSION: '3.2.6'" "pinned GOST runtime version" || failed=1
@@ -186,7 +186,7 @@ check_release_workflow() {
   require_text "Download signed GOST Mesh package" "signed GOST mesh release download" || failed=1
   require_text "Download signed NAT Egress package" "signed NAT egress release download" || failed=1
   require_text "--require machine-telemetry-1.1.0.tar" "signed plugin package verification requirement" || failed=1
-  require_text "--require nftables-forward-1.1.0.tar" "signed nftables forward package verification requirement" || failed=1
+  require_text "--require nftables-forward-1.2.0.tar" "signed nftables forward package verification requirement" || failed=1
   require_text "--require gost-mesh-1.0.0.tar" "signed GOST mesh package verification requirement" || failed=1
   require_text "--require anixops-gost-mesh-1.0.0.manifest.json" "signed GOST mesh manifest verification requirement" || failed=1
   require_text "--require anixops-gost-mesh-1.0.0.sig" "signed GOST mesh signature verification requirement" || failed=1
@@ -204,7 +204,7 @@ check_release_workflow() {
   require_text 'The signed `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress` packages' "release notes include GOST mesh and NAT egress" || failed=1
   require_text "canary-only until Secret ID" "GOST mesh stable-release limitation" || failed=1
   require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
-  require_text "ref: 72bbdff19f03768fd8bd9c720e236f93e898043f" "pinned Agent fixture commit" || failed=1
+  require_text "ref: 3690f9cf221f4580ce2657e3eb99e52e937a16aa" "pinned Agent fixture commit" || failed=1
   require_text "ANIXOPS_CROSS_REPO_E2E: '1'" "cross-repository Agent process E2E opt-in" || failed=1
   require_text "KernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
   require_text "AgentPluginPackageCrossRepositoryE2E" "signed Agent package cross-repository E2E test" || failed=1
@@ -316,7 +316,7 @@ jobs:
       - name: Build and verify real package inputs
         run: |
           go -C V2bX_AnixOps build -o package-build/nftables-forward-agent ./cmd/nftables-forward
-          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.1.0" ]]
+          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.2.0" ]]
       - name: Run reproducible unsigned and signed package contract
         run: |
           set -o pipefail
@@ -356,7 +356,7 @@ jobs:
           echo "gost-mesh-signed-release"
           echo "nat-egress-signed-release"
           echo "anixops-machine-telemetry-1.1.0.SHA256SUMS.txt"
-          echo "anixops-nftables-forward-1.1.0.SHA256SUMS.txt"
+          echo "anixops-nftables-forward-1.2.0.SHA256SUMS.txt"
           echo "anixops-gost-mesh-1.0.0.SHA256SUMS.txt"
           echo "anixops-nat-egress-1.0.0.SHA256SUMS.txt"
 
@@ -366,7 +366,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 72bbdff19f03768fd8bd9c720e236f93e898043f
+          ref: 3690f9cf221f4580ce2657e3eb99e52e937a16aa
           path: V2bX_AnixOps
       - env:
           ANIXOPS_CROSS_REPO_E2E: '1'
@@ -438,7 +438,7 @@ jobs:
             --require anix-control-linux-amd64.tar.gz \
             --require anix-control-windows-arm64.exe.zip \
             --require machine-telemetry-1.1.0.tar \
-            --require nftables-forward-1.1.0.tar \
+            --require nftables-forward-1.2.0.tar \
             --require gost-mesh-1.0.0.tar \
             --require anixops-gost-mesh-1.0.0.manifest.json \
             --require anixops-gost-mesh-1.0.0.sig \
@@ -505,7 +505,7 @@ EOF
   fi
 
   cp "${fixture}" "${fixture}.missing-signed-plugin-publish"
-  sed -i '/plugin-package-publish:/,/cross-repository-agent-e2e/d;/Publish Signed Official Plugin Packages/d;/ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY/d;/scripts\/sign_plugin_release.sh/d;/machine-telemetry-signed-release/d;/nftables-forward-signed-release/d;/anixops-machine-telemetry-1.1.0.SHA256SUMS.txt/d;/anixops-nftables-forward-1.1.0.SHA256SUMS.txt/d' "${fixture}.missing-signed-plugin-publish"
+  sed -i '/plugin-package-publish:/,/cross-repository-agent-e2e/d;/Publish Signed Official Plugin Packages/d;/ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY/d;/scripts\/sign_plugin_release.sh/d;/machine-telemetry-signed-release/d;/nftables-forward-signed-release/d;/anixops-machine-telemetry-1.1.0.SHA256SUMS.txt/d;/anixops-nftables-forward-1.2.0.SHA256SUMS.txt/d' "${fixture}.missing-signed-plugin-publish"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-signed-plugin-publish" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing signed plugin publish gate should fail" >&2
     return 1

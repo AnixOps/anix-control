@@ -52,7 +52,7 @@ jwt:
 
 app:
   name: "AnixOps Control"
-  version: "4.0.0-alpha.5"
+  version: "4.0.0-alpha.6"
   api_token: "replace-with-node-api-token"
   traffic_log_enable: true
   subscribe_path: "s"
@@ -87,7 +87,7 @@ forward_runtime:
     timeout_seconds: 15
 ```
 
-This is the `4.0.0-alpha.5` signed-package profile. The pinned value is the raw
+This is the `4.0.0-alpha.6` signed-package profile. The pinned value is the raw
 32-byte AnixOps Ed25519 release public key encoded as Base64. It is public trust
 material, not a private signing key. The loopback gRPC bind makes local
 Control/Agent acceptance reproducible while preventing an unauthenticated

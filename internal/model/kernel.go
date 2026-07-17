@@ -274,20 +274,23 @@ type TopologyEdge struct {
 func (TopologyEdge) TableName() string { return "v3_kernel_topology_edge" }
 
 type TopologyDeployment struct {
-	ID                  uint       `gorm:"primaryKey" json:"id"`
-	TopologyID          uint       `gorm:"not null;index" json:"topology_id"`
-	RevisionID          uint       `gorm:"not null;index" json:"revision_id"`
-	PreviousRevisionID  *uint      `json:"previous_revision_id"`
-	RolloutGroup        string     `gorm:"size:80" json:"rollout_group"`
-	State               string     `gorm:"size:32;not null;index" json:"state"`
-	FailurePolicy       string     `gorm:"size:32;not null" json:"failure_policy"`
-	LastError           string     `gorm:"type:text" json:"last_error"`
-	RollbackStartedAt   *time.Time `json:"rollback_started_at"`
-	RollbackCompletedAt *time.Time `json:"rollback_completed_at"`
-	CreatedBy           uint       `gorm:"not null" json:"created_by"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
-	CompletedAt         *time.Time `json:"completed_at"`
+	ID                 uint   `gorm:"primaryKey" json:"id"`
+	TopologyID         uint   `gorm:"not null;index" json:"topology_id"`
+	RevisionID         uint   `gorm:"not null;index" json:"revision_id"`
+	PreviousRevisionID *uint  `json:"previous_revision_id"`
+	RolloutGroup       string `gorm:"size:80" json:"rollout_group"`
+	State              string `gorm:"size:32;not null;index" json:"state"`
+	FailurePolicy      string `gorm:"size:32;not null" json:"failure_policy"`
+	LastError          string `gorm:"type:text" json:"last_error"`
+	// HealthGateDeadlineAt is a durable grace window for a terminal Agent
+	// operation to be followed by its independent runtime observation.
+	HealthGateDeadlineAt *time.Time `json:"health_gate_deadline_at"`
+	RollbackStartedAt    *time.Time `json:"rollback_started_at"`
+	RollbackCompletedAt  *time.Time `json:"rollback_completed_at"`
+	CreatedBy            uint       `gorm:"not null" json:"created_by"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+	CompletedAt          *time.Time `json:"completed_at"`
 }
 
 func (TopologyDeployment) TableName() string { return "v3_kernel_topology_deployment" }
@@ -461,6 +464,27 @@ type PluginTelemetryState struct {
 
 func (PluginTelemetryState) TableName() string { return "v3_kernel_plugin_telemetry_state" }
 
+// NodePluginObservedState is a bounded, non-secret snapshot emitted by an
+// Agent plugin. It is intentionally separate from generic telemetry because
+// topology promotion needs a cryptographically bound config/ruleset view,
+// rather than a plugin-defined metric bag.
+type NodePluginObservedState struct {
+	NodeID           uint      `gorm:"primaryKey" json:"node_id"`
+	PluginID         string    `gorm:"primaryKey;size:120" json:"plugin_id"`
+	Version          string    `gorm:"size:64;not null" json:"version"`
+	DesiredRevision  int64     `gorm:"not null" json:"desired_revision"`
+	ObservedRevision int64     `gorm:"not null" json:"observed_revision"`
+	ConfigHash       string    `gorm:"size:64;not null" json:"config_hash"`
+	Health           string    `gorm:"size:32;not null;index" json:"health"`
+	RulesetSHA256    string    `gorm:"size:64;not null" json:"ruleset_sha256"`
+	CountersJSON     string    `gorm:"type:text;not null;default:[]" json:"rule_counters"`
+	ObservedAt       time.Time `gorm:"not null;index" json:"observed_at"`
+	ReceivedAt       time.Time `gorm:"not null;index" json:"received_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+func (NodePluginObservedState) TableName() string { return "v3_kernel_node_plugin_observed_state" }
+
 func KernelModels() []any {
 	return []any{
 		&ServiceScope{}, &AccessGroup{}, &AccessGroupUser{}, &AccessGroupPlan{},
@@ -470,6 +494,6 @@ func KernelModels() []any {
 		&TopologyRevision{}, &TopologyVertex{}, &TopologyEdge{},
 		&TopologyDeployment{}, &TopologyDeploymentStep{}, &TopologyObservedState{}, &KernelOperation{},
 		&PluginLifecyclePlan{}, &PluginLifecyclePlanStep{},
-		&NodeOperationRevision{}, &PluginTelemetryState{},
+		&NodeOperationRevision{}, &PluginTelemetryState{}, &NodePluginObservedState{},
 	}
 }

@@ -64,6 +64,7 @@ class NftablesForwardPackageTest(unittest.TestCase):
                     "forward.dedicated.tcp",
                     "forward.dedicated.udp",
                     "plugin.runtime-state",
+                    "kernel.observed-state",
                     "plugin.cleanup",
                 ],
                 manifest["capabilities"],
