@@ -1500,10 +1500,17 @@ func GetPluginConfiguration(db *gorm.DB, installationID uint) (*model.PluginConf
 		return nil, err
 	}
 	var configuration model.PluginConfiguration
-	if err := db.First(&configuration, "installation_id = ?", installationID).Error; err == nil {
+	result := db.Limit(1).Find(&configuration, "installation_id = ?", installationID)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected > 0 {
 		return &configuration, nil
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
+	}
+	if result.RowsAffected < 0 {
+		// GORM should never report a negative row count, but fail closed instead
+		// of silently manufacturing a default if a driver violates the contract.
+		return nil, errors.New("plugin configuration query returned an invalid row count")
 	}
 	canonical, err := CanonicalKernelOperationConfig(`{}`)
 	if err != nil {
