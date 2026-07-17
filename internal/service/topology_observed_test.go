@@ -90,8 +90,7 @@ func TestApplyTopologyObservedStateWaitsForEveryDeploymentNode(t *testing.T) {
 		PluginID: "nftables-forward", Role: "cn_dedicated_nftables", ConfigJSON: `{}`,
 	}
 	require.NoError(t, db.Create(&secondVertex).Error)
-	var secondStep model.TopologyDeploymentStep
-	secondStep = model.TopologyDeploymentStep{
+	secondStep := model.TopologyDeploymentStep{
 		DeploymentID: deployment.ID, VertexID: secondVertex.ID, VertexKey: secondVertex.Key,
 		NodeID: secondNode.ID, PluginID: secondVertex.PluginID, Role: secondVertex.Role,
 		TargetVersion: "1.0.0", ApplyOrder: 2, ApplyAction: "configure_enable",
