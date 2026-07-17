@@ -1055,7 +1055,7 @@ When planning future clone work, prioritize the remaining gaps in this order:
 4. Finish exact `user.tsx` / `limit.tsx` layout parity.
 
 - When forward, tunnel, or user-tunnel behavior changes, also update `docs/guide/flux-panel-clone.md`, `docs/guide/flux-forward-contract.md`, `docs/guide/flux-panel-workstream.md`, `docs/guide/api-reference.md`, and `docs/FEATURE_ROADMAP.md`.
-- If user-facing scope or onboarding entry points change, refresh the `Flux-panel` section in `readme.md`.
+- If user-facing scope or onboarding entry points change, refresh the `Flux-panel` section in `docs/control-boundary.md`.
 - Do not mark work as a full clone while runtime side effects, diagnose paths, or quota/expire/reset-flow gaps are still undocumented.
 
 ## Proprietary Forward Runtime Guardrails (2026-04-06)
@@ -1105,7 +1105,7 @@ When planning future clone work, prioritize the remaining gaps in this order:
   - `docs/guide/nodex-internal-extension.md`
   - `docs/guide/forward-tunnel-runtime-ops.md`
   - `docs/guide/forward-tunnel-smoke-test.md`
-  - `readme.md` when onboarding entry points materially change
+  - `docs/control-boundary.md` when onboarding entry points materially change
 - Prefer copyable commands, explicit mode-specific prerequisites, and smoke-test checklists over vague prose.
 - Do not add dead UI actions. If install/doctor/version/upgrade buttons or copy actions are proposed in admin pages, first ensure the backend automation or documented command flow actually exists.
 - Keep the repository root NodeX-like:
@@ -1117,7 +1117,7 @@ When planning future clone work, prioritize the remaining gaps in this order:
   - `docs/reference/` for startup, configuration, runtime, and layout
   - `docs/guide/` for implementation deep dives
 - Treat these files as the operator entrypoints and update them together when startup behavior changes:
-  - `readme.md`
+  - `docs/control-boundary.md`
   - `docs/README.md`
   - `docs/reference/quickstart.md`
   - `docs/reference/startup-config.md`

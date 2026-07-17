@@ -1,4 +1,4 @@
-module github.com/AnixOps/anix-control/v3
+module github.com/AnixOps/anix-control/v4
 
 go 1.25.0
 

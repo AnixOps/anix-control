@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/config"
-	"github.com/AnixOps/anix-control/v3/internal/model"
-	"github.com/AnixOps/anix-control/v3/internal/service"
+	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"

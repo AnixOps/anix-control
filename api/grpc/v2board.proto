@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package v2board;
 
-option go_package = "github.com/AnixOps/anix-control/v3/api/grpc/v2boardpb";
+option go_package = "github.com/AnixOps/anix-control/v4/api/grpc/v2boardpb";
 
 // ==================== 通用消息 ====================
 

@@ -1,7 +1,7 @@
 param()
 
 $ErrorActionPreference = "Stop"
-$ModulePath = "github.com/AnixOps/anix-control/v3"
+$ModulePath = "github.com/AnixOps/anix-control/v4"
 $ProtoFiles = @(
     "api/grpc/v2board.proto",
     "api/grpc/agent/v1/agent.proto"

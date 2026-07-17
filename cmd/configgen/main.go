@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/AnixOps/anix-control/v3/internal/tests/integration/config"
+	"github.com/AnixOps/anix-control/v4/internal/tests/integration/config"
 )
 
 func main() {

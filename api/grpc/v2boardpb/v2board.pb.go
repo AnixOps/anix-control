@@ -2073,7 +2073,7 @@ const file_api_grpc_v2board_proto_rawDesc = "" +
 	"\bFullSync\x12\x1a.v2board.ConfigSyncRequest\x1a\x1b.v2board.ConfigSyncResponse2\x9b\x01\n" +
 	"\rHealthService\x12B\n" +
 	"\x05Check\x12\x1b.v2board.HealthCheckRequest\x1a\x1c.v2board.HealthCheckResponse\x12F\n" +
-	"\x05Watch\x12\x1b.v2board.HealthCheckRequest\x1a\x1c.v2board.HealthCheckResponse(\x010\x01B7Z5github.com/AnixOps/anix-control/v3/api/grpc/v2boardpbb\x06proto3"
+	"\x05Watch\x12\x1b.v2board.HealthCheckRequest\x1a\x1c.v2board.HealthCheckResponse(\x010\x01B7Z5github.com/AnixOps/anix-control/v4/api/grpc/v2boardpbb\x06proto3"
 
 var (
 	file_api_grpc_v2board_proto_rawDescOnce sync.Once

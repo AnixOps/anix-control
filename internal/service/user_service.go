@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/database"
-	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

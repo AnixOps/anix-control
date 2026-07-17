@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/database"
-	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 )
 
 // BuildNodeProtocolConfig 从 Node + NodeProtocol 构建下发给节点的完整协议配置。

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v3/internal/payment"
+	"github.com/AnixOps/anix-control/v4/internal/payment"
 )
 
 const epayTestConfig = `{"api_url":"https://pay.example.com","pid":"1001","key":"testkey123"}`

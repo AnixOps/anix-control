@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/AnixOps/anix-control/v3/internal/branding"
+	"github.com/AnixOps/anix-control/v4/internal/branding"
 	"gopkg.in/yaml.v3"
 )
 

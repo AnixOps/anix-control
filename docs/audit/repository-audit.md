@@ -2,11 +2,11 @@
 
 Date: 2026-07-08
 
-This is the current audit baseline for `github.com/AnixOps/anix-control/v3`. It is a working document: items marked as gaps remain open until backed by code, tests, CI evidence, or operational runbooks.
+This is the current audit baseline for `github.com/AnixOps/anix-control/v4`. It is a working document: items marked as gaps remain open until backed by code, tests, CI evidence, or operational runbooks.
 
 ## Current Shape
 
-- Go module: `github.com/AnixOps/anix-control/v3`
+- Go module: `github.com/AnixOps/anix-control/v4`
 - Go version in `go.mod`: `1.25.0`
 - CI Go version: `1.25`
 - Current package count from `go list ./...`: 39

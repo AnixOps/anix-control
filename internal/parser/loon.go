@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 )
 
 // LoonFormatter emits Loon's native node-subscription syntax. It is deliberately

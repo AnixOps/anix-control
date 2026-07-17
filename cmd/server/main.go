@@ -18,18 +18,18 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/AnixOps/anix-control/v3/docs" // swagger docs
-	"github.com/AnixOps/anix-control/v3/internal/branding"
-	"github.com/AnixOps/anix-control/v3/internal/cache"
-	"github.com/AnixOps/anix-control/v3/internal/config"
-	"github.com/AnixOps/anix-control/v3/internal/database"
-	grpcserver "github.com/AnixOps/anix-control/v3/internal/grpc"
-	"github.com/AnixOps/anix-control/v3/internal/handler"
-	"github.com/AnixOps/anix-control/v3/internal/model"
-	_ "github.com/AnixOps/anix-control/v3/internal/payment/gateways" // register payment gateway plugins
-	"github.com/AnixOps/anix-control/v3/internal/plugincontrol"
-	"github.com/AnixOps/anix-control/v3/internal/router"
-	"github.com/AnixOps/anix-control/v3/internal/service"
+	_ "github.com/AnixOps/anix-control/v4/docs" // swagger docs
+	"github.com/AnixOps/anix-control/v4/internal/branding"
+	"github.com/AnixOps/anix-control/v4/internal/cache"
+	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	grpcserver "github.com/AnixOps/anix-control/v4/internal/grpc"
+	"github.com/AnixOps/anix-control/v4/internal/handler"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	_ "github.com/AnixOps/anix-control/v4/internal/payment/gateways" // register payment gateway plugins
+	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
+	"github.com/AnixOps/anix-control/v4/internal/router"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

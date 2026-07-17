@@ -29,7 +29,7 @@ It should not become a dumping ground for:
 | `web/` | Vue frontend |
 | `deploy/` | deployment-specific assets |
 | `scripts/` | automation and helper scripts |
-| `readme.md` | short root entrypoint only |
+| `README.md` | canonical repository entrypoint |
 | `AGENTS.md` | contributor/agent rules |
 | `docker-compose.yml` / `Dockerfile` | container startup |
 
@@ -57,6 +57,7 @@ If you create new tooling that emits artifacts, do not write them into the root 
 
 ## Related Docs
 
+- [../control-boundary.md](../control-boundary.md)
 - [startup-config.md](startup-config.md)
 - [../intro/README.md](../intro/README.md)
 - [../guide/README.md](../guide/README.md)

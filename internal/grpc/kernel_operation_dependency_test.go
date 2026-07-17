@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AnixOps/anix-control/v3/internal/model"
-	"github.com/AnixOps/anix-control/v3/internal/service"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/stretchr/testify/require"
 )
 
