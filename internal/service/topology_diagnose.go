@@ -370,14 +370,14 @@ func diagnoseTopologyRelease(db *gorm.DB, pluginID, version string) releaseResul
 		return releaseResultCompat{err: fmt.Errorf("desired Agent release is not registered: %w", err)}
 	}
 	if err := ValidatePluginReleaseTarget(release, "agent"); err != nil {
-		return releaseResultCompat{err: fmt.Errorf("Agent release is not compatible: %w", err)}
+		return releaseResultCompat{err: fmt.Errorf("agent release is not compatible: %w", err)}
 	}
 	manifest, err := VerifyStoredPluginRelease(db, release, nil)
 	if err != nil {
-		return releaseResultCompat{err: fmt.Errorf("Agent release signature is invalid: %w", err)}
+		return releaseResultCompat{err: fmt.Errorf("agent release signature is invalid: %w", err)}
 	}
 	if err := requireVerifiedPluginArtifact(db, release); err != nil {
-		return releaseResultCompat{err: fmt.Errorf("Agent artifact is not verified: %w", err)}
+		return releaseResultCompat{err: fmt.Errorf("agent artifact is not verified: %w", err)}
 	}
 	plan, err := ResolvePluginDependencyExecutionPlan(db, release, "agent")
 	if err != nil {
