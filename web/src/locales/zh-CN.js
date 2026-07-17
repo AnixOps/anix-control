@@ -2998,16 +2998,41 @@ export default {
     }
   },
   control: {
-    actions: { refresh: '刷新', refreshing: '刷新中...' },
+    subtitle: '管理官方签名软件包、Control WebUI 扩展与生命周期操作。',
+    actions: {
+      refresh: '刷新', refreshing: '刷新中...', importRelease: '导入发行版', importing: '导入中...', install: '安装',
+      configure: '配置', enable: '启用', disable: '禁用', upgrade: '升级', update: '升级', rollback: '回滚', cancel: '取消操作',
+      saving: '保存中...'
+    },
     tabs: { plugins: '插件', scopes: '作用域', topologies: '拓扑', operations: '操作' },
     table: {
-      plugin: '插件', publisher: '发布者', installation: '安装目标', desiredVersion: '期望版本', observedVersion: '实际版本', state: '状态',
+      plugin: '插件', publisher: '发布者', release: '发行版', installation: '安装目标', desiredVersion: '期望版本', observedVersion: '实际版本', version: '版本', state: '状态', actions: '操作',
       scope: '作用域', owner: '所有者', description: '说明', topology: '拓扑', activeRevision: '激活 revision',
       operation: '操作', revision: 'revision', deadline: '截止时间'
     },
-    states: { catalogued: '已登记', loading: '正在加载控制状态...' },
+    labels: { releases: '{count} 个发行版', desired: '期望', observed: '实际' },
+    states: { catalogued: '已登记', loading: '正在加载控制状态...', polling: '正在轮询操作状态' },
     empty: { plugins: '暂无插件', scopes: '暂无服务作用域', topologies: '暂无拓扑', operations: '暂无操作' },
-    errors: { load: '无法加载控制状态' }
+    extensions: { errorsTitle: 'WebUI 扩展加载失败' },
+    install: { title: '安装官方插件', target: '运行目标', version: '发行版本', enableAfterInstall: '安装后立即启用' },
+    update: { title: '升级官方插件' },
+    config: {
+      title: '插件配置', loading: '正在加载配置...', revision: '配置 revision：{revision}', mode: '配置编辑模式', formMode: '表单', jsonMode: 'JSON',
+      selectValue: '请选择', addItem: '添加项目', removeItem: '移除项目', emptyArray: '暂无项目', item: '项目', invalidJSON: 'JSON 无效',
+      schemaError: '{path} 的值不符合 Schema', requiredError: '{path} 为必填项'
+    },
+    releaseImport: {
+      title: '导入官方签名发行版', manifest: 'Manifest JSON', signature: '签名', artifact: '软件包制品',
+      artifactOptional: '可选；未上传制品的发行版不能安装。'
+    },
+    messages: {
+      actionQueued: '{plugin} 的“{action}”操作已提交', installed: '{plugin} 安装意图已保存', configSaved: '{plugin} 配置已保存',
+      releaseImported: '{plugin} {version} 已导入', cancelRequested: '已请求取消操作'
+    },
+    errors: {
+      load: '无法加载控制状态', action: '插件操作失败', install: '插件安装失败', configLoad: '无法加载插件配置',
+      configSave: '无法保存插件配置', releaseImport: '发行版导入失败', cancel: '无法取消操作', poll: '无法刷新操作状态'
+    }
   },
   legacy
 }

@@ -2990,16 +2990,41 @@ export default {
     }
   },
   control: {
-    actions: { refresh: 'Refresh', refreshing: 'Refreshing...' },
+    subtitle: 'Manage official signed packages, Control WebUI extensions, and lifecycle operations.',
+    actions: {
+      refresh: 'Refresh', refreshing: 'Refreshing...', importRelease: 'Import release', importing: 'Importing...', install: 'Install',
+      configure: 'Configure', enable: 'Enable', disable: 'Disable', upgrade: 'Upgrade', update: 'Upgrade', rollback: 'Rollback', cancel: 'Cancel operation',
+      saving: 'Saving...'
+    },
     tabs: { plugins: 'Plugins', scopes: 'Scopes', topologies: 'Topologies', operations: 'Operations' },
     table: {
-      plugin: 'Plugin', publisher: 'Publisher', installation: 'Installation', desiredVersion: 'Desired version', observedVersion: 'Observed version', state: 'State',
+      plugin: 'Plugin', publisher: 'Publisher', release: 'Release', installation: 'Installation', desiredVersion: 'Desired version', observedVersion: 'Observed version', version: 'Version', state: 'State', actions: 'Actions',
       scope: 'Scope', owner: 'Owner', description: 'Description', topology: 'Topology', activeRevision: 'Active revision',
       operation: 'Operation', revision: 'Revision', deadline: 'Deadline'
     },
-    states: { catalogued: 'Catalogued', loading: 'Loading control state...' },
+    labels: { releases: '{count} releases', desired: 'Desired', observed: 'Observed' },
+    states: { catalogued: 'Catalogued', loading: 'Loading control state...', polling: 'Polling operation state' },
     empty: { plugins: 'No plugins', scopes: 'No service scopes', topologies: 'No topologies', operations: 'No operations' },
-    errors: { load: 'Unable to load control state' }
+    extensions: { errorsTitle: 'WebUI extension loading failed' },
+    install: { title: 'Install official plugin', target: 'Runtime target', version: 'Release version', enableAfterInstall: 'Enable immediately after installation' },
+    update: { title: 'Upgrade official plugin' },
+    config: {
+      title: 'Plugin configuration', loading: 'Loading configuration...', revision: 'Configuration revision: {revision}', mode: 'Configuration editor mode', formMode: 'Form', jsonMode: 'JSON',
+      selectValue: 'Select a value', addItem: 'Add item', removeItem: 'Remove item', emptyArray: 'No items', item: 'Item', invalidJSON: 'Invalid JSON',
+      schemaError: '{path} does not satisfy the schema', requiredError: '{path} is required'
+    },
+    releaseImport: {
+      title: 'Import official signed release', manifest: 'Manifest JSON', signature: 'Signature', artifact: 'Package artifact',
+      artifactOptional: 'Optional; a release without an uploaded artifact cannot be installed.'
+    },
+    messages: {
+      actionQueued: '{action} was submitted for {plugin}', installed: 'Installation intent was saved for {plugin}', configSaved: 'Configuration was saved for {plugin}',
+      releaseImported: '{plugin} {version} was imported', cancelRequested: 'Operation cancellation was requested'
+    },
+    errors: {
+      load: 'Unable to load control state', action: 'Plugin operation failed', install: 'Plugin installation failed', configLoad: 'Unable to load plugin configuration',
+      configSave: 'Unable to save plugin configuration', releaseImport: 'Release import failed', cancel: 'Unable to cancel operation', poll: 'Unable to refresh operation state'
+    }
   },
   legacy
 }

@@ -1,10 +1,16 @@
 <template>
   <div class="control-page" :aria-busy="loading ? 'true' : 'false'">
     <div class="page-header">
-      <h1>{{ t('pageTitles.admin.control') }}</h1>
-      <button class="btn btn-sm" type="button" :disabled="loading" @click="load">
-        {{ loading ? t('control.actions.refreshing') : t('control.actions.refresh') }}
-      </button>
+      <div>
+        <h1>{{ t('pageTitles.admin.control') }}</h1>
+        <p class="page-subtitle">{{ t('control.subtitle') }}</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary btn-sm" type="button" @click="openReleaseImport">{{ t('control.actions.importRelease') }}</button>
+        <button class="btn btn-sm" type="button" :disabled="loading" @click="load()">
+          {{ loading ? t('control.actions.refreshing') : t('control.actions.refresh') }}
+        </button>
+      </div>
     </div>
 
     <div class="tabs" role="tablist" :aria-label="t('pageTitles.admin.control')">
@@ -23,10 +29,22 @@
         @keydown="moveTab($event, index)"
       >
         {{ item.label }}
+        <span v-if="item.key === 'operations' && polling" class="polling-dot" :title="t('control.states.polling')"></span>
       </button>
     </div>
 
     <p v-if="error" class="error-message" role="alert">{{ error }}</p>
+    <p v-if="notice" class="notice-message" role="status">{{ notice }}</p>
+
+    <section v-if="adminExtensionErrors.length" class="extension-error-band" role="alert">
+      <strong>{{ t('control.extensions.errorsTitle') }}</strong>
+      <ul>
+        <li v-for="(extensionError, index) in adminExtensionErrors" :key="`${extensionError.plugin_id || 'catalog'}-${index}`">
+          <code v-if="extensionError.plugin_id">{{ extensionError.plugin_id }}</code>
+          {{ extensionError.message }}
+        </li>
+      </ul>
+    </section>
 
     <div
       v-show="tab === 'plugins'"
@@ -40,11 +58,11 @@
         <thead>
           <tr>
             <th>{{ t('control.table.plugin') }}</th>
-            <th>{{ t('control.table.publisher') }}</th>
+            <th>{{ t('control.table.release') }}</th>
             <th>{{ t('control.table.installation') }}</th>
-            <th>{{ t('control.table.desiredVersion') }}</th>
-            <th>{{ t('control.table.observedVersion') }}</th>
+            <th>{{ t('control.table.version') }}</th>
             <th>{{ t('control.table.state') }}</th>
+            <th>{{ t('control.table.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -53,12 +71,39 @@
             <td>
               <span class="primary-cell">{{ row.plugin.name || row.plugin.id }}</span>
               <code class="secondary-cell">{{ row.plugin.id }}</code>
+              <span v-if="row.plugin.description" class="plugin-description">{{ row.plugin.description }}</span>
             </td>
-            <td>{{ row.plugin.publisher || '-' }}</td>
-            <td>{{ row.installation?.target || '-' }}</td>
-            <td>{{ row.installation?.desired_version || '-' }}</td>
-            <td>{{ row.installation?.observed_version || '-' }}</td>
-            <td><span :class="['status-badge', stateClass(row.installation?.state)]">{{ row.installation?.state || t('control.states.catalogued') }}</span></td>
+            <td>
+              <span>{{ row.latestRelease?.version || '-' }}</span>
+              <span class="secondary-cell">{{ t('control.labels.releases', { count: row.releases.length }) }}</span>
+            </td>
+            <td><code>{{ row.target || '-' }}</code></td>
+            <td>
+              <span class="version-line"><span>{{ t('control.labels.desired') }}</span><code>{{ row.installation?.desired_version || '-' }}</code></span>
+              <span class="version-line"><span>{{ t('control.labels.observed') }}</span><code>{{ row.installation?.observed_version || '-' }}</code></span>
+            </td>
+            <td>
+              <span :class="['status-badge', stateClass(row.installation?.state)]">{{ row.installation?.state || t('control.states.catalogued') }}</span>
+              <span v-if="row.installation?.last_error" class="row-error">{{ row.installation.last_error }}</span>
+            </td>
+            <td>
+              <div class="row-actions">
+                <button
+                  v-if="!row.installation"
+                  class="btn btn-primary btn-sm"
+                  type="button"
+                  :disabled="row.releases.length === 0 || isBusy(row)"
+                  @click="openInstall(row)"
+                >{{ t('control.actions.install') }}</button>
+                <template v-else>
+                  <button class="btn btn-sm" type="button" :disabled="isBusy(row)" @click="openConfig(row)">{{ t('control.actions.configure') }}</button>
+                  <button v-if="!row.installation.enabled" class="btn btn-primary btn-sm" type="button" :disabled="isBusy(row)" @click="runLifecycle(row, 'enable')">{{ t('control.actions.enable') }}</button>
+                  <button v-else class="btn btn-sm btn-danger" type="button" :disabled="isBusy(row)" @click="runLifecycle(row, 'disable')">{{ t('control.actions.disable') }}</button>
+                  <button v-if="row.upgradeRelease" class="btn btn-sm" type="button" :disabled="isBusy(row)" @click="openUpgrade(row)">{{ t('control.actions.upgrade') }}</button>
+                  <button v-if="row.installation.previous_version" class="btn btn-sm" type="button" :disabled="isBusy(row)" @click="runLifecycle(row, 'rollback')">{{ t('control.actions.rollback') }}</button>
+                </template>
+              </div>
+            </td>
           </tr>
           <tr v-if="loaded && pluginRows.length === 0"><td colspan="6" class="empty-row">{{ t('control.empty.plugins') }}</td></tr>
         </tbody>
@@ -116,35 +161,169 @@
       tabindex="0"
     >
       <table class="data-table operations-table">
-        <thead><tr><th>{{ t('control.table.operation') }}</th><th>{{ t('control.table.plugin') }}</th><th>{{ t('control.table.revision') }}</th><th>{{ t('control.table.deadline') }}</th><th>{{ t('control.table.state') }}</th></tr></thead>
+        <thead><tr><th>{{ t('control.table.operation') }}</th><th>{{ t('control.table.plugin') }}</th><th>{{ t('control.table.revision') }}</th><th>{{ t('control.table.deadline') }}</th><th>{{ t('control.table.state') }}</th><th>{{ t('control.table.actions') }}</th></tr></thead>
         <tbody>
-          <tr v-if="loading && !loaded" class="state-row"><td colspan="5">{{ t('control.states.loading') }}</td></tr>
+          <tr v-if="loading && !loaded" class="state-row"><td colspan="6">{{ t('control.states.loading') }}</td></tr>
           <tr v-for="operation in operations" v-else :key="operation.id">
-            <td><code class="identifier">{{ operation.kind || '-' }}</code></td><td class="identifier">{{ operation.plugin_id || '-' }}</td><td>{{ operation.revision ?? '-' }}</td><td>{{ formatDate(operation.deadline_at) }}</td>
-            <td><span :class="['status-badge', stateClass(operation.state)]">{{ operation.state || '-' }}</span></td>
+            <td><code class="identifier">{{ operation.kind || '-' }}</code><code class="secondary-cell operation-id">{{ operation.id }}</code></td>
+            <td class="identifier">{{ operation.plugin_id || '-' }}</td><td>{{ operation.revision ?? '-' }}</td><td>{{ formatDate(operation.deadline_at) }}</td>
+            <td>
+              <span :class="['status-badge', stateClass(operation.state)]">{{ operation.state || '-' }}</span>
+              <span v-if="operation.last_error" class="row-error">{{ operation.last_error }}</span>
+            </td>
+            <td><button v-if="isCancellable(operation)" class="btn btn-sm btn-danger" type="button" :disabled="operationBusy === operation.id" @click="cancelOperation(operation)">{{ t('control.actions.cancel') }}</button></td>
           </tr>
-          <tr v-if="loaded && operations.length === 0"><td colspan="5" class="empty-row">{{ t('control.empty.operations') }}</td></tr>
+          <tr v-if="loaded && operations.length === 0"><td colspan="6" class="empty-row">{{ t('control.empty.operations') }}</td></tr>
         </tbody>
       </table>
+    </div>
+
+    <div v-if="installationEditor.open" class="modal-overlay" @click.self="closeInstallationEditor">
+      <section class="modal" role="dialog" aria-modal="true" :aria-labelledby="'plugin-installation-title'">
+        <div class="modal-header">
+          <h3 id="plugin-installation-title">{{ installationEditor.mode === 'install' ? t('control.install.title') : t('control.update.title') }}</h3>
+          <button class="btn btn-ghost close-btn" type="button" :aria-label="t('common.actions.close')" @click="closeInstallationEditor">x</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-plugin-name">{{ installationEditor.plugin?.name || installationEditor.plugin?.id }}</p>
+          <div class="form-group">
+            <label for="plugin-install-target">{{ t('control.install.target') }}</label>
+            <select id="plugin-install-target" v-model="installationEditor.target" :disabled="installationEditor.mode === 'update'" @change="selectDefaultEditorVersion">
+              <option v-for="target in installationEditor.targets" :key="target" :value="target">{{ target }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="plugin-install-version">{{ t('control.install.version') }}</label>
+            <select id="plugin-install-version" v-model="installationEditor.version">
+              <option v-for="release in editorReleases" :key="release.id" :value="release.version">{{ release.version }}</option>
+            </select>
+          </div>
+          <label v-if="installationEditor.mode === 'install'" class="enable-after-install">
+            <input v-model="installationEditor.enabled" type="checkbox" />
+            <span>{{ t('control.install.enableAfterInstall') }}</span>
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" type="button" :disabled="installationEditor.saving" @click="closeInstallationEditor">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" type="button" :disabled="installationEditor.saving || !installationEditor.version || !installationEditor.target" @click="saveInstallation">
+            {{ installationEditor.saving ? t('control.actions.saving') : installationEditor.mode === 'install' ? t('control.actions.install') : t('control.actions.upgrade') }}
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="configEditor.open" class="modal-overlay" @click.self="closeConfigEditor">
+      <section class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="plugin-config-title">
+        <div class="modal-header">
+          <div>
+            <h3 id="plugin-config-title">{{ t('control.config.title') }}</h3>
+            <p class="modal-meta">{{ configEditor.row?.plugin.name || configEditor.row?.plugin.id }} / {{ configEditor.row?.target }}</p>
+          </div>
+          <button class="btn btn-ghost close-btn" type="button" :aria-label="t('common.actions.close')" @click="closeConfigEditor">x</button>
+        </div>
+        <div class="modal-body">
+          <p v-if="configEditor.loading" class="state-message">{{ t('control.config.loading') }}</p>
+          <PluginConfigForm
+            v-else
+            v-model="configEditor.value"
+            :schema="configEditor.schema"
+            @validity="configEditor.valid = $event"
+          />
+        </div>
+        <div class="modal-footer">
+          <span class="revision-label">{{ t('control.config.revision', { revision: configEditor.revision }) }}</span>
+          <button class="btn" type="button" :disabled="configEditor.saving" @click="closeConfigEditor">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" type="button" :disabled="configEditor.loading || configEditor.saving || !configEditor.valid" @click="saveConfig">
+            {{ configEditor.saving ? t('control.actions.saving') : t('common.actions.save') }}
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="releaseImport.open" class="modal-overlay" @click.self="closeReleaseImport">
+      <section class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="plugin-release-title">
+        <div class="modal-header">
+          <h3 id="plugin-release-title">{{ t('control.releaseImport.title') }}</h3>
+          <button class="btn btn-ghost close-btn" type="button" :aria-label="t('common.actions.close')" @click="closeReleaseImport">x</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="plugin-release-manifest">{{ t('control.releaseImport.manifest') }}</label>
+            <input type="file" accept="application/json,.json" @change="readManifestFile" />
+            <textarea id="plugin-release-manifest" v-model="releaseImport.manifest" rows="10" spellcheck="false" class="json-textarea"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="plugin-release-signature">{{ t('control.releaseImport.signature') }}</label>
+            <input type="file" accept="text/plain,.sig" @change="readSignatureFile" />
+            <textarea id="plugin-release-signature" v-model="releaseImport.signature" rows="3" spellcheck="false"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="plugin-release-artifact">{{ t('control.releaseImport.artifact') }}</label>
+            <input id="plugin-release-artifact" type="file" @change="readArtifactFile" />
+            <p class="field-help">{{ releaseImport.artifactName || t('control.releaseImport.artifactOptional') }}</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" type="button" :disabled="releaseImport.saving" @click="closeReleaseImport">{{ t('common.actions.cancel') }}</button>
+          <button class="btn btn-primary" type="button" :disabled="releaseImport.saving || !releaseImport.manifest.trim() || !releaseImport.signature.trim()" @click="importRelease">
+            {{ releaseImport.saving ? t('control.actions.importing') : t('control.actions.importRelease') }}
+          </button>
+        </div>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { getKernelInstallations, getKernelOperations, getKernelPlugins, getKernelScopes, getKernelTopologies } from '@/api/kernel'
+import PluginConfigForm from '@/components/admin/PluginConfigForm.vue'
+import {
+  cancelKernelOperation,
+  getKernelInstallationConfig,
+  getKernelInstallations,
+  getKernelOperations,
+  getKernelPluginReleases,
+  getKernelPlugins,
+  getKernelScopes,
+  getKernelTopologies,
+  registerKernelPluginRelease,
+  runKernelInstallationAction,
+  updateKernelInstallationConfig,
+  uploadKernelPluginReleaseArtifact,
+  upsertKernelInstallation
+} from '@/api/kernel'
+import { adminExtensionErrors, adminExtensions, refreshAdminExtensions } from '@/extensions/runtime'
+
+const TERMINAL_OPERATION_STATES = new Set(['succeeded', 'completed', 'failed', 'superseded', 'cancelled', 'timed_out', 'expired', 'rolled_back'])
+const CANCELLABLE_OPERATION_STATES = new Set(['pending', 'dispatching', 'running'])
+const POLL_INTERVAL_MS = 2000
 
 const { t, formatDateTime } = useAppI18n()
+const router = useRouter()
 const tab = ref('plugins')
 const loading = ref(false)
 const loaded = ref(false)
 const error = ref('')
+const notice = ref('')
 const plugins = ref([])
+const releases = ref([])
 const installations = ref([])
 const scopes = ref([])
 const topologies = ref([])
 const operations = ref([])
+const rowBusy = ref({})
+const operationBusy = ref('')
+const trackedOperationIDs = new Set()
+const polling = ref(false)
+let pollTimer = null
+let pollRequestRunning = false
+let disposed = false
+
+const installationEditor = reactive({ open: false, mode: 'install', plugin: null, row: null, target: 'control', targets: [], version: '', enabled: true, saving: false })
+const configEditor = reactive({ open: false, row: null, schema: {}, value: {}, revision: 0, valid: true, loading: false, saving: false })
+const releaseImport = reactive({ open: false, manifest: '', signature: '', artifactBase64: '', artifactName: '', saving: false })
 
 const tabs = computed(() => [
   { key: 'plugins', label: t('control.tabs.plugins') },
@@ -153,21 +332,58 @@ const tabs = computed(() => [
   { key: 'operations', label: t('control.tabs.operations') }
 ])
 
-const pluginRows = computed(() => plugins.value.flatMap((plugin) => {
-  const matches = installations.value.filter(item => item.plugin_id === plugin.id)
-  if (matches.length === 0) {
-    return [{ key: `${plugin.id}:catalogue`, plugin, installation: null }]
-  }
-  return matches.map(installation => ({
-    key: `${plugin.id}:${installation.id || installation.target}`,
-    plugin,
-    installation
-  }))
+const pluginRows = computed(() => plugins.value.flatMap(plugin => {
+  const pluginReleases = releasesForPlugin(plugin.id)
+  const targetSet = new Set(pluginReleases.flatMap(releaseTargets))
+  const matchingInstallations = installations.value.filter(item => item.plugin_id === plugin.id)
+  for (const installation of matchingInstallations) targetSet.add(installation.target)
+  if (targetSet.size === 0) targetSet.add('')
+  return [...targetSet].sort().map(target => {
+    const targetReleases = pluginReleases.filter(release => !target || releaseTargets(release).includes(target))
+    const installation = matchingInstallations.find(item => item.target === target) || null
+    const latestRelease = targetReleases[0] || null
+    return {
+      key: `${plugin.id}:${target || 'catalogue'}`,
+      plugin,
+      target,
+      releases: targetReleases,
+      latestRelease,
+      installation,
+      upgradeRelease: installation && latestRelease?.version !== installation.desired_version ? latestRelease : null
+    }
+  })
 }))
 
+const editorReleases = computed(() => releasesForPlugin(installationEditor.plugin?.id).filter(release => releaseTargets(release).includes(installationEditor.target)))
+
+function parseManifest(release) {
+  try {
+    return typeof release?.manifest === 'string' ? JSON.parse(release.manifest) : release?.manifest || {}
+  } catch {
+    return {}
+  }
+}
+
+function releaseTargets(release) {
+  const targets = parseManifest(release).targets
+  return Array.isArray(targets) ? targets.filter(target => target === 'control' || target === 'agent') : []
+}
+
+function releasesForPlugin(pluginID) {
+  return releases.value.filter(release => release.plugin_id === pluginID)
+}
+
+function schemaFor(row) {
+  const runtimeExtension = adminExtensions.value.find(extension => extension.installationID === row.installation?.id)
+  if (runtimeExtension?.configSchema) return runtimeExtension.configSchema
+  const release = row.releases.find(item => item.version === row.installation?.desired_version)
+  const schema = parseManifest(release).config_schema
+  return schema && typeof schema === 'object' && !Array.isArray(schema) ? schema : {}
+}
+
 function stateClass(state) {
-  if (state === 'healthy' || state === 'enabled' || state === 'completed') return 'status-active'
-  if (state === 'failed' || state === 'disabled' || state === 'cancel_requested') return 'status-error'
+  if (state === 'healthy' || state === 'enabled' || state === 'succeeded' || state === 'completed') return 'status-active'
+  if (state === 'failed' || state === 'superseded' || state === 'disabled' || state === 'cancel_requested' || state === 'cancelled' || state === 'timed_out') return 'status-error'
   return 'status-pending'
 }
 
@@ -183,60 +399,365 @@ function moveTab(event, index) {
   else if (event.key === 'Home') nextIndex = 0
   else if (event.key === 'End') nextIndex = tabs.value.length - 1
   else return
-
   event.preventDefault()
   tab.value = tabs.value[nextIndex].key
   document.getElementById(`control-tab-${tab.value}`)?.focus()
 }
 
-async function load() {
-  loading.value = true
-  error.value = ''
+function errorMessage(cause, fallbackKey) {
+  return cause?.response?.data?.error?.message || cause?.message || t(fallbackKey)
+}
+
+async function load(options = {}) {
+  if (!options.silent) loading.value = true
+  if (!options.silent) error.value = ''
   try {
-    const [pluginRowsValue, installationRows, scopeRows, topologyRows, operationRows] = await Promise.all([
-      getKernelPlugins(), getKernelInstallations(), getKernelScopes(), getKernelTopologies(), getKernelOperations()
+    const [pluginRowsValue, releaseRows, installationRows, scopeRows, topologyRows, operationRows] = await Promise.all([
+      getKernelPlugins(), getKernelPluginReleases(), getKernelInstallations(), getKernelScopes(), getKernelTopologies(), getKernelOperations()
     ])
     plugins.value = Array.isArray(pluginRowsValue) ? pluginRowsValue : []
+    releases.value = Array.isArray(releaseRows) ? releaseRows : []
     installations.value = Array.isArray(installationRows) ? installationRows : []
     scopes.value = Array.isArray(scopeRows) ? scopeRows : []
     topologies.value = Array.isArray(topologyRows) ? topologyRows : []
     operations.value = Array.isArray(operationRows) ? operationRows : []
     loaded.value = true
+    updatePolling()
   } catch (cause) {
-    error.value = cause?.response?.data?.error?.message || cause?.message || t('control.errors.load')
+    error.value = errorMessage(cause, 'control.errors.load')
   } finally {
-    loading.value = false
+    if (!options.silent) loading.value = false
   }
 }
 
-onMounted(load)
+function isBusy(row) {
+  return Boolean(rowBusy.value[row.key])
+}
+
+function setRowBusy(row, action = '') {
+  rowBusy.value = { ...rowBusy.value, [row.key]: action }
+  if (!action) delete rowBusy.value[row.key]
+}
+
+function idempotencyKey(action, installationID) {
+  const random = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return `webui:${installationID}:${action}:${random}`
+}
+
+function trackOperation(result) {
+  const operationID = result?.operation?.id
+  if (operationID) trackedOperationIDs.add(operationID)
+}
+
+async function refreshExtensions() {
+  if (!router) return
+  await refreshAdminExtensions(router)
+}
+
+async function afterMutation(message) {
+  notice.value = message
+  await load({ silent: true })
+  await refreshExtensions()
+  updatePolling()
+}
+
+async function runLifecycle(row, action, targetVersion = '') {
+  setRowBusy(row, action)
+  error.value = ''
+  notice.value = ''
+  try {
+    if (row.target === 'control') {
+      const result = await runKernelInstallationAction(row.installation.id, action, {
+        targetVersion,
+        idempotencyKey: idempotencyKey(action, row.installation.id)
+      })
+      trackOperation(result)
+    } else {
+      const enabled = action === 'disable' ? false : true
+      const desiredVersion = action === 'rollback' ? row.installation.previous_version : targetVersion || row.installation.desired_version
+      await upsertKernelInstallation({ plugin_id: row.plugin.id, target: row.target, desired_version: desiredVersion, enabled })
+    }
+    await afterMutation(t('control.messages.actionQueued', { action: t(`control.actions.${action}`), plugin: row.plugin.name || row.plugin.id }))
+    return true
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.action')
+    return false
+  } finally {
+    setRowBusy(row)
+  }
+}
+
+function openInstall(row) {
+  const targets = [...new Set(releasesForPlugin(row.plugin.id).flatMap(releaseTargets))]
+  Object.assign(installationEditor, {
+    open: true,
+    mode: 'install',
+    plugin: row.plugin,
+    row,
+    target: row.target || targets[0] || 'control',
+    targets,
+    version: row.latestRelease?.version || '',
+    enabled: true,
+    saving: false
+  })
+  selectDefaultEditorVersion()
+}
+
+function openUpgrade(row) {
+  Object.assign(installationEditor, {
+    open: true,
+    mode: 'update',
+    plugin: row.plugin,
+    row,
+    target: row.target,
+    targets: [row.target],
+    version: row.upgradeRelease?.version || '',
+    enabled: true,
+    saving: false
+  })
+}
+
+function selectDefaultEditorVersion() {
+  const candidates = releasesForPlugin(installationEditor.plugin?.id).filter(release => releaseTargets(release).includes(installationEditor.target))
+  if (!candidates.some(release => release.version === installationEditor.version)) installationEditor.version = candidates[0]?.version || ''
+}
+
+function closeInstallationEditor() {
+  if (!installationEditor.saving) installationEditor.open = false
+}
+
+async function saveInstallation() {
+  installationEditor.saving = true
+  error.value = ''
+  notice.value = ''
+  try {
+    if (installationEditor.mode === 'update' && installationEditor.row?.installation) {
+      const succeeded = await runLifecycle(installationEditor.row, 'update', installationEditor.version)
+      if (!succeeded) return
+    } else {
+      await upsertKernelInstallation({
+        plugin_id: installationEditor.plugin.id,
+        target: installationEditor.target,
+        desired_version: installationEditor.version,
+        enabled: installationEditor.enabled
+      })
+      await afterMutation(t('control.messages.installed', { plugin: installationEditor.plugin.name || installationEditor.plugin.id }))
+    }
+    installationEditor.open = false
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.install')
+  } finally {
+    installationEditor.saving = false
+  }
+}
+
+async function openConfig(row) {
+  Object.assign(configEditor, { open: true, row, schema: schemaFor(row), value: {}, revision: row.installation.config_revision || 0, valid: true, loading: true, saving: false })
+  error.value = ''
+  try {
+    const configuration = await getKernelInstallationConfig(row.installation.id)
+    const rawConfig = configuration?.config ?? {}
+    configEditor.value = typeof rawConfig === 'string' ? JSON.parse(rawConfig || '{}') : rawConfig
+    configEditor.revision = configuration?.revision ?? row.installation.config_revision ?? 0
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.configLoad')
+    configEditor.open = false
+  } finally {
+    configEditor.loading = false
+  }
+}
+
+function closeConfigEditor() {
+  if (!configEditor.saving) configEditor.open = false
+}
+
+async function saveConfig() {
+  configEditor.saving = true
+  error.value = ''
+  notice.value = ''
+  try {
+    const configuration = await updateKernelInstallationConfig(configEditor.row.installation.id, configEditor.value, configEditor.revision)
+    configEditor.revision = configuration?.revision ?? configEditor.revision
+    await afterMutation(t('control.messages.configSaved', { plugin: configEditor.row.plugin.name || configEditor.row.plugin.id }))
+    configEditor.open = false
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.configSave')
+  } finally {
+    configEditor.saving = false
+  }
+}
+
+function openReleaseImport() {
+  Object.assign(releaseImport, { open: true, manifest: '', signature: '', artifactBase64: '', artifactName: '', saving: false })
+}
+
+function closeReleaseImport() {
+  if (!releaseImport.saving) releaseImport.open = false
+}
+
+async function readTextFile(event, field) {
+  const file = event.target.files?.[0]
+  if (file) releaseImport[field] = await file.text()
+}
+
+function readManifestFile(event) { return readTextFile(event, 'manifest') }
+function readSignatureFile(event) { return readTextFile(event, 'signature') }
+
+async function readArtifactFile(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  releaseImport.artifactName = `${file.name} (${file.size} B)`
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize))
+  }
+  releaseImport.artifactBase64 = btoa(binary)
+}
+
+async function importRelease() {
+  releaseImport.saving = true
+  error.value = ''
+  notice.value = ''
+  try {
+    JSON.parse(releaseImport.manifest)
+    const release = await registerKernelPluginRelease(releaseImport.manifest, releaseImport.signature.trim())
+    if (releaseImport.artifactBase64) await uploadKernelPluginReleaseArtifact(release.id, releaseImport.artifactBase64)
+    await afterMutation(t('control.messages.releaseImported', { plugin: release.plugin_id, version: release.version }))
+    releaseImport.open = false
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.releaseImport')
+  } finally {
+    releaseImport.saving = false
+  }
+}
+
+function isCancellable(operation) {
+  return CANCELLABLE_OPERATION_STATES.has(operation.state)
+}
+
+async function cancelOperation(operation) {
+  operationBusy.value = operation.id
+  error.value = ''
+  notice.value = ''
+  try {
+    await cancelKernelOperation(operation.id)
+    trackedOperationIDs.add(operation.id)
+    await afterMutation(t('control.messages.cancelRequested'))
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.cancel')
+  } finally {
+    operationBusy.value = ''
+  }
+}
+
+function hasActiveOperations() {
+  for (const operationID of trackedOperationIDs) {
+    const operation = operations.value.find(item => item.id === operationID)
+    if (!operation || !TERMINAL_OPERATION_STATES.has(operation.state)) return true
+  }
+  return operations.value.some(operation => {
+    const pluginLifecycle = typeof operation.kind === 'string' && operation.kind.startsWith('plugin.')
+    const tracked = trackedOperationIDs.has(operation.id)
+    return (pluginLifecycle || tracked) && !TERMINAL_OPERATION_STATES.has(operation.state)
+  })
+}
+
+function updatePolling() {
+  if (disposed) {
+    polling.value = false
+    if (pollTimer) clearInterval(pollTimer)
+    pollTimer = null
+    return
+  }
+  const shouldPoll = hasActiveOperations()
+  polling.value = shouldPoll
+  if (shouldPoll && !pollTimer) {
+    pollTimer = setInterval(pollOperations, POLL_INTERVAL_MS)
+  } else if (!shouldPoll && pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+    void refreshExtensions()
+  }
+}
+
+async function pollOperations() {
+  if (pollRequestRunning) return
+  pollRequestRunning = true
+  try {
+    const [operationRows, installationRows] = await Promise.all([getKernelOperations(), getKernelInstallations()])
+    operations.value = Array.isArray(operationRows) ? operationRows : []
+    installations.value = Array.isArray(installationRows) ? installationRows : []
+    for (const operationID of [...trackedOperationIDs]) {
+      const operation = operations.value.find(item => item.id === operationID)
+      if (operation && TERMINAL_OPERATION_STATES.has(operation.state)) trackedOperationIDs.delete(operationID)
+    }
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.poll')
+  } finally {
+    pollRequestRunning = false
+  }
+  updatePolling()
+}
+
+onMounted(() => {
+  disposed = false
+  load()
+})
+onBeforeUnmount(() => {
+  disposed = true
+  if (pollTimer) clearInterval(pollTimer)
+  pollTimer = null
+})
 </script>
 
 <style scoped>
 .control-page { display: grid; gap: 16px; min-width: 0; }
-.page-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .page-header h1 { margin: 0; font-size: 24px; line-height: 1.25; }
+.page-subtitle, .modal-meta { margin: 5px 0 0; color: var(--text-secondary); font-size: 13px; }
+.header-actions, .row-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-color, #d7dde7); overflow-x: auto; }
-.tab { min-height: 40px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 9px 12px; color: var(--text-secondary, #596579); cursor: pointer; white-space: nowrap; }
+.tab { position: relative; min-height: 40px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding: 9px 12px; color: var(--text-secondary, #596579); cursor: pointer; white-space: nowrap; }
 .tab:hover { background: var(--surface-hover); }
 .tab.active { border-bottom-color: var(--primary-color, #2563eb); color: var(--text-color, #172033); font-weight: 600; }
-.error-message { margin: 0; color: var(--error-color, #b42318); overflow-wrap: anywhere; }
-.plugins-table { min-width: 820px; }
+.polling-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warning-color); }
+.error-message, .notice-message { margin: 0; overflow-wrap: anywhere; }
+.error-message { color: var(--error-color, #b42318); }
+.notice-message { color: var(--success-color); }
+.extension-error-band { padding: 12px 14px; border-left: 3px solid var(--error-color); background: rgba(220, 38, 38, 0.06); }
+.extension-error-band ul { margin: 8px 0 0; padding-left: 20px; }
+.extension-error-band li + li { margin-top: 4px; }
+.plugins-table { min-width: 1080px; }
 .scopes-table { min-width: 620px; }
 .topologies-table { min-width: 680px; }
-.operations-table { min-width: 760px; }
-.primary-cell, .secondary-cell { display: block; }
+.operations-table { min-width: 920px; }
+.primary-cell, .secondary-cell, .plugin-description, .row-error, .version-line { display: block; }
 .secondary-cell { width: fit-content; margin-top: 3px; color: var(--text-secondary); font-size: 11px; }
+.plugin-description { max-width: 260px; margin-top: 5px; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
+.version-line { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.version-line + .version-line { margin-top: 4px; }
+.version-line span { color: var(--text-secondary); }
+.row-error { max-width: 280px; margin-top: 6px; color: var(--error-color); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
 .description-cell { min-width: 220px; max-width: 520px; overflow-wrap: anywhere; }
-.identifier { overflow-wrap: anywhere; }
-.state-row td { color: var(--text-secondary); text-align: center; }
+.identifier, .operation-id { overflow-wrap: anywhere; }
+.state-row td, .state-message { color: var(--text-secondary); text-align: center; }
 .status-active { background: rgba(22, 163, 74, 0.1); color: var(--success-color); }
 .status-error { background: rgba(220, 38, 38, 0.1); color: var(--error-color); }
 .status-pending { background: rgba(217, 119, 6, 0.1); color: var(--warning-color); }
+.modal-plugin-name { margin: 0 0 18px; font-size: 16px; font-weight: 700; }
+.enable-after-install { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; }
+.enable-after-install input { width: 18px; height: 18px; margin: 0; }
+.revision-label { margin-right: auto; color: var(--text-secondary); font-size: 12px; }
+.json-textarea { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 500; }
+.field-help { margin: 6px 0 0; color: var(--text-secondary); font-size: 12px; }
 @media (max-width: 640px) {
   .control-page { gap: 12px; }
-  .page-header { align-items: flex-start; }
   .page-header h1 { font-size: 20px; }
+  .header-actions { width: 100%; }
+  .header-actions .btn { flex: 1; }
   .tab { padding-inline: 10px; }
+  .modal-overlay { padding: 10px; }
 }
 </style>
