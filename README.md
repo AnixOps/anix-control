@@ -16,7 +16,7 @@ truth for implemented, partial, planned, compatibility, and deferred features.
   pinned to Go `1.26.5` in CI.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.
 - Default database: SQLite, with PostgreSQL migration/dry-run tooling.
-- Current preview: `v4.0.0-alpha.6` (the signed `machine-telemetry` 1.1.0 and
+- Current preview: `v4.0.0-alpha.7` (the signed `machine-telemetry` 1.1.0 and
   crash-safe `nftables-forward` 1.2.0 packages, topology preflight, revision/
   canary deployment WebUI, and kernel-observed nftables evidence are usable
   for isolated alpha validation).
@@ -81,7 +81,7 @@ Production installation downloads checked GitHub Release assets and does not
 clone the repository or build on the target host. Pin the production tag:
 
 ```bash
-export VERSION=v4.0.0-alpha.6
+export VERSION=v4.0.0-alpha.7
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -148,7 +148,7 @@ binaries, frontend archives, Docker metadata, checksums, SBOMs, or release
 manifests on a production host.
 
 Release jobs accept stable, alpha, beta, and release-candidate tags such as
-`v4.0.0`, `v4.0.0-alpha.6`, `v4.0.0-beta.1`, and `v4.0.0-rc.1`. Tag builds
+`v4.0.0`, `v4.0.0-alpha.7`, `v4.0.0-beta.1`, and `v4.0.0-rc.1`. Tag builds
 produce:
 
 - multi-platform `anix-control-*` backend artifacts

@@ -576,7 +576,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 3690f9cf221f4580ce2657e3eb99e52e937a16aa
+          ref: 45eefa510d43ed061a4b7958dd31031e2be444ad
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -684,7 +684,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 3690f9cf221f4580ce2657e3eb99e52e937a16aa
+          ref: 45eefa510d43ed061a4b7958dd31031e2be444ad
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -916,7 +916,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 3690f9cf221f4580ce2657e3eb99e52e937a16aa
+          ref: 45eefa510d43ed061a4b7958dd31031e2be444ad
           path: V2bX_AnixOps
 
       - name: Setup Go

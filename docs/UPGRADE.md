@@ -133,11 +133,11 @@ match the release record, stop before enabling any plugin flag.
 
 ## Plugin Platform Flags
 
-`v4.0.0-alpha.6` is the current operational signed-package/WebUI canary. It
+`v4.0.0-alpha.7` is the current operational signed-package/WebUI canary. It
 adds the signed `nftables-forward` 1.2.0 runtime observation contract: live
 ruleset SHA-256 and per-rule counters are persisted from Agent heartbeats and
 are required by topology promotion for that package. Start the 72-hour
-observation window again after installing `alpha.6`. A fresh alpha configuration enables the Control
+observation window again after installing `alpha.7`. A fresh alpha configuration enables the Control
 package executor and Agent dispatch, while topology execution remains
 disabled. An upgrade preserves the existing configuration, so an existing
 installation is not silently switched to the new path. Enable the alpha flags

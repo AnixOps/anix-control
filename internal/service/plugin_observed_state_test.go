@@ -126,3 +126,12 @@ func TestRecordNodePluginObservedStatesAllowsUnhealthyWithoutRulesetAndNeverRegr
 	require.Empty(t, state.RulesetSHA256)
 	require.JSONEq(t, `[]`, state.CountersJSON)
 }
+
+func TestNodePluginObservedRevisionBounds(t *testing.T) {
+	revision, ok := nodePluginObservedRevision(maxNodePluginObservedRevision)
+	require.True(t, ok)
+	require.Equal(t, int64(1<<63-1), revision)
+
+	_, ok = nodePluginObservedRevision(maxNodePluginObservedRevision + 1)
+	require.False(t, ok)
+}

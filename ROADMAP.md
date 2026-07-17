@@ -24,14 +24,15 @@ in [`docs/architecture/upgrade-program.md`](docs/architecture/upgrade-program.md
 - `4.0.0`: remove the original coupled business/runtime mode and boot as a
   plugin-only platform.
 
-The `v4.0.0-alpha.6` slice advances the 3.2 gate with a signed crash-safe
+The `v4.0.0-alpha.7` slice advances the 3.2 gate with a signed crash-safe
 `nftables-forward` 1.2.0 package, its package WebUI, and a kernel-observed
 promotion contract. The Agent semantically verifies live nftables JSON, emits
 a stable ruleset SHA-256 plus per-rule counters through a private observation
 file, and the Control kernel persists only bounded evidence from authenticated
-heartbeats. Topology promotion and rollback bind that evidence to exact
-version/config-hash/revision state and use a durable grace deadline. Topology
-execution remains off by default. Live staging restore, legacy fallback
+heartbeats. Revision conversions are bounded to the signed database range
+before promotion or rollback comparisons. Topology promotion and rollback bind
+that evidence to exact version/config-hash/revision state and use a durable
+grace deadline. Topology execution remains off by default. Live staging restore, legacy fallback
 rehearsal, rollout records, a fresh 72-hour canary, and explicit stable-release
 authorization remain required.
 

@@ -148,7 +148,7 @@ def write_fixture(root: Path, version: str) -> None:
 
 
 def self_test() -> None:
-    version = "4.0.0-alpha.6"
+    version = "4.0.0-alpha.7"
     with tempfile.TemporaryDirectory(prefix="anix-release-version-") as tmp:
         root = Path(tmp)
 
@@ -164,13 +164,13 @@ def self_test() -> None:
         assert check_release_version(root, f"v{version}") == version
 
         package = root / "web/package.json"
-        package.write_text(json.dumps({"version": "4.0.0-alpha.7"}), encoding="utf-8")
+        package.write_text(json.dumps({"version": "4.0.0-alpha.8"}), encoding="utf-8")
         expect_failure("frontend package version mismatch")
 
         write_fixture(root, version)
         installer = root / "install.sh"
         installer.write_text(
-            f'  version: "{version}"\n  version: "4.0.0-alpha.7"\n',
+            f'  version: "{version}"\n  version: "4.0.0-alpha.8"\n',
             encoding="utf-8",
         )
         expect_failure("installer configuration version mismatch")
