@@ -1,0 +1,63 @@
+{
+  "id": "nftables-forward",
+  "name": "nftables Forward",
+  "version": "1.2.0",
+  "api_version": "v1",
+  "publisher": "AnixOps",
+  "targets": [
+    "control",
+    "agent"
+  ],
+  "architectures": [],
+  "artifact_sha256": "__ARTIFACT_SHA256__",
+  "capabilities": [
+    "forward.nftables.apply",
+    "forward.dedicated.tcp",
+    "forward.dedicated.udp",
+    "plugin.runtime-state",
+    "kernel.observed-state",
+    "plugin.cleanup"
+  ],
+  "dependencies": [],
+  "conflicts": [],
+  "permissions": [
+    "nftables-forward.view",
+    "nftables-forward.api"
+  ],
+  "config_schema": {},
+  "secret_fields": [],
+  "entrypoints": {},
+  "migration_version": 3,
+  "control_routes": [
+    "/api/v3/plugins/nftables-forward/status"
+  ],
+  "frontend_sha256": "__WEBUI_SHA256__",
+  "webui": {
+    "bundle": {
+      "path": "webui/index.mjs",
+      "sha256": "__WEBUI_SHA256__"
+    },
+    "permissions": [
+      "nftables-forward.view"
+    ],
+    "menus": [
+      {
+        "id": "nftables-forward.main",
+        "parent": "operations",
+        "label": "nftables Forward",
+        "icon": "network",
+        "route": "/admin/extensions/nftables-forward",
+        "permission": "nftables-forward.view",
+        "order": 110
+      }
+    ],
+    "routes": [
+      {
+        "id": "nftables-forward.main",
+        "path": "/admin/extensions/nftables-forward",
+        "export": "default",
+        "permission": "nftables-forward.view"
+      }
+    ]
+  }
+}

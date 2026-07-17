@@ -1,0 +1,192 @@
+﻿# AnixOps Control - 鐢熶骇鐜閮ㄧ讲
+# 浣跨敤 PostgreSQL + Redis
+
+services:
+  # ========== API 鏈嶅姟 ==========
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${DOCKER_IMAGE:-anix-control:latest}
+    container_name: anix-control
+    restart: unless-stopped
+    ports:
+      - "${PANEL_API_PORT:-8080}:8080"         # HTTP API
+      - "${PANEL_FRONTEND_PORT:-3000}:3000"    # Frontend/UI
+      - "${PANEL_GRPC_BIND:-127.0.0.1}:${PANEL_GRPC_PORT:-50051}:50051" # gRPC; Nginx reaches api:50051 internally
+    volumes:
+      - ./config:/app/config:ro
+      - ./config/deploy/ssh:/home/v2board/.ssh:ro
+      - ./web/public:/app/web/public
+      - ./logs:/app/logs
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - GIN_MODE=${GIN_MODE:-release}
+      - HOME=/home/v2board
+      - ANSIBLE_CONFIG=/app/config/deploy/ansible/ansible.cfg
+      - ANSIBLE_HOST_KEY_CHECKING=${ANSIBLE_HOST_KEY_CHECKING:-False}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-v2board}
+      - DB_PASSWORD=${DB_PASSWORD:?Database password required}
+      - DB_NAME=${DB_NAME:-v2board}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - JWT_SECRET=${JWT_SECRET:?JWT secret required}
+      - API_TOKEN=${API_TOKEN:?API token required}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - anix-control-network
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ========== PostgreSQL 鏁版嵁搴?==========
+  db:
+    image: postgres:16-alpine
+    container_name: anix-control-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-v2board}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Database password required}
+      POSTGRES_DB: ${DB_NAME:-v2board}
+      TZ: ${TZ:-Asia/Shanghai}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./config/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - anix-control-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-v2board} -d ${DB_NAME:-v2board}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ========== Redis 缂撳瓨 ==========
+  redis:
+    image: redis:7-alpine
+    container_name: anix-control-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    volumes:
+      - redis-data:/data
+    networks:
+      - anix-control-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "if [ -n \"$REDIS_PASSWORD\" ]; then redis-cli -a \"$REDIS_PASSWORD\" ping; else redis-cli ping; fi",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  # ========== Nginx 鍙嶅悜浠ｇ悊 ==========
+  nginx:
+    image: nginx:alpine
+    container_name: anix-control-nginx
+    restart: unless-stopped
+    profiles:
+      - proxy
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./config/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/docker/nginx/ssl:/etc/nginx/ssl:ro
+      - ./web/public:/usr/share/nginx/html:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - api
+    networks:
+      - anix-control-network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ========== Prometheus 鐩戞帶 (鍙€? ==========
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: anix-control-prometheus
+    restart: unless-stopped
+    profiles:
+      - prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - anix-control-network
+
+  # ========== Grafana 浠〃鐩?(鍙€? ==========
+  grafana:
+    image: grafana/grafana:latest
+    container_name: anix-control-grafana
+    restart: unless-stopped
+    profiles:
+      - grafana
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=redis-datasource
+    depends_on:
+      - prometheus
+    networks:
+      - anix-control-network
+
+networks:
+  anix-control-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:

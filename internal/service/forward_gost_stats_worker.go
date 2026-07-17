@@ -1,0 +1,188 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/gost"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+)
+
+const (
+	defaultForwardGostStatsPollInterval     = 30 * time.Second
+	defaultForwardGostStatsIdlePollInterval = 2 * time.Minute
+	defaultForwardGostStatsErrorLogInterval = 5 * time.Minute
+)
+
+type ForwardGostStatsWorker struct {
+	db           *gorm.DB
+	interval     time.Duration
+	idleInterval time.Duration
+	errorLogger  *forwardBackgroundErrorLogger
+}
+
+func NewForwardGostStatsWorker(db *gorm.DB) *ForwardGostStatsWorker {
+	if db == nil {
+		db = database.Get()
+	}
+	settings := loadForwardGostStatsWorkerSettings()
+	return &ForwardGostStatsWorker{
+		db:           db,
+		interval:     settings.PollInterval,
+		idleInterval: settings.IdlePollInterval,
+		errorLogger:  newForwardBackgroundErrorLogger(settings.ErrorLogInterval),
+	}
+}
+
+func (w *ForwardGostStatsWorker) Start(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	nextDelay := time.Duration(0)
+	for {
+		if !waitForwardBackgroundCycle(ctx, nextDelay) {
+			return
+		}
+
+		activeForwards, err := w.runOnce(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			w.errorLogger.Logf("cycle", "forward gost stats poll failed: %v", err)
+			nextDelay = w.interval
+			continue
+		}
+		w.errorLogger.Clear("cycle")
+
+		if activeForwards == 0 {
+			nextDelay = w.idleInterval
+			continue
+		}
+		nextDelay = w.interval
+	}
+}
+
+func (w *ForwardGostStatsWorker) RunOnce(ctx context.Context) error {
+	_, err := w.runOnce(ctx)
+	return err
+}
+
+func (w *ForwardGostStatsWorker) runOnce(ctx context.Context) (int, error) {
+	var forwards []model.Forward
+	if err := w.queryDB().
+		Preload("Tunnel").
+		Where("runtime_backend = ? AND status = ?", model.ForwardRuntimeBackendGost, model.ForwardStatusActive).
+		Order("id ASC").
+		Find(&forwards).Error; err != nil {
+		return 0, err
+	}
+	if len(forwards) == 0 {
+		return 0, nil
+	}
+
+	panelService := NewPanelForwardService(w.db)
+	manager := gost.NewManager(w.db)
+
+	for i := range forwards {
+		uploadTotal, downloadTotal, found, err := w.collectForwardTrafficTotals(ctx, manager, &forwards[i])
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return len(forwards), err
+			}
+			w.errorLogger.Logf("collect:"+strconvFormatUint(forwards[i].ID), "forward gost stats collect failed for forward %d: %v", forwards[i].ID, err)
+			continue
+		}
+		w.errorLogger.Clear("collect:" + strconvFormatUint(forwards[i].ID))
+		if !found {
+			continue
+		}
+		if err := panelService.ApplyForwardTrafficSnapshots([]PanelForwardTrafficSnapshot{{
+			ForwardID:     forwards[i].ID,
+			Backend:       model.ForwardRuntimeBackendGost,
+			UploadTotal:   uploadTotal,
+			DownloadTotal: downloadTotal,
+		}}); err != nil {
+			w.errorLogger.Logf("apply:"+strconvFormatUint(forwards[i].ID), "forward gost stats apply failed for forward %d: %v", forwards[i].ID, err)
+			continue
+		}
+		w.errorLogger.Clear("apply:" + strconvFormatUint(forwards[i].ID))
+	}
+
+	return len(forwards), nil
+}
+
+func (w *ForwardGostStatsWorker) queryDB() *gorm.DB {
+	if w.db == nil {
+		return nil
+	}
+	return w.db.Session(&gorm.Session{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
+}
+
+func (w *ForwardGostStatsWorker) collectForwardTrafficTotals(ctx context.Context, manager *gost.Manager, forward *model.Forward) (int64, int64, bool, error) {
+	if forward == nil || forward.Tunnel == nil || forward.Tunnel.InNodeID == 0 {
+		return 0, 0, false, nil
+	}
+
+	client, err := manager.GetClient(forward.Tunnel.InNodeID)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	if !client.HasMetricsEndpoint() {
+		// 节点尚未配置 metrics_port，无法采集，跳过而不报错
+		return 0, 0, false, nil
+	}
+
+	serviceNames := panelForwardGostServiceNames(forward.ID, forward.Tunnel.Protocol)
+	totalsByService, err := client.GetServiceTrafficTotals(ctx, serviceNames)
+	if err != nil {
+		return 0, 0, false, err
+	}
+
+	var (
+		found         bool
+		uploadTotal   int64
+		downloadTotal int64
+	)
+	for _, serviceName := range serviceNames {
+		totals := totalsByService[serviceName]
+		if totals == nil {
+			continue
+		}
+		if totals.InBytes == 0 && totals.OutBytes == 0 {
+			continue
+		}
+		found = true
+		uploadTotal += totals.InBytes
+		downloadTotal += totals.OutBytes
+	}
+
+	return uploadTotal, downloadTotal, found, nil
+}
+
+func panelForwardGostServiceNames(forwardID uint, protocol string) []string {
+	switch strings.ToLower(strings.TrimSpace(protocol)) {
+	case "udp":
+		return []string{"panel-forward-" + strconvFormatUint(forwardID) + "-udp"}
+	case "both":
+		return []string{
+			"panel-forward-" + strconvFormatUint(forwardID),
+			"panel-forward-" + strconvFormatUint(forwardID) + "-udp",
+		}
+	default:
+		return []string{"panel-forward-" + strconvFormatUint(forwardID)}
+	}
+}
+
+func strconvFormatUint(value uint) string {
+	return strconv.FormatUint(uint64(value), 10)
+}

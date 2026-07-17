@@ -1,0 +1,32 @@
+[Unit]
+Description=V2Board Panel Service
+After=network.target
+
+[Service]
+Type=simple
+User=v2board
+Group=v2board
+WorkingDirectory=/opt/v2board
+ExecStart=/opt/v2board/v2board -config /opt/v2board/config/config.yaml
+Restart=on-failure
+RestartSec=5s
+
+# 环境变量
+Environment=TZ=Asia/Shanghai
+
+# 安全设置
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/v2board/data
+
+# 资源限制
+LimitNOFILE=65535
+LimitNPROC=4096
+
+# 健康检查
+ExecHealthCheck=/usr/bin/curl -sf http://localhost:8080/health
+RestartPreventExitStatus=1
+
+[Install]
+WantedBy=multi-user.target

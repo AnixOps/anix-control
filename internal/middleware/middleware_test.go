@@ -1,0 +1,1048 @@
+package middleware
+
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/AnixOps/anix-control/v4/internal/cache"
+	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/utils"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func init() {
+	gin.SetMode(gin.TestMode)
+}
+
+func setupTestDB(t *testing.T) func() {
+	cache.InitMemory()
+	err := database.Init(&config.DatabaseConfig{
+		Driver:   "sqlite",
+		Database: ":memory:",
+	})
+	require.NoError(t, err)
+	require.NoError(t, database.GetDB().AutoMigrate(&model.Node{}))
+	return func() {
+		require.NoError(t, database.Close())
+	}
+}
+
+func TestNodeAuth_MissingAPIKey(t *testing.T) {
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestNodeAuth_ValidAPIKey(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	nodeAPIKey := "test-node-api-key"
+	node := &model.Node{
+		Name:       "Node Auth Token",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: sha256Hash(nodeAPIKey),
+		Status:     model.NodeStatusOnline,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
+	req.Header.Set("X-API-Key", nodeAPIKey)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestNodeAuth_LegacyTokenQuery(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	nodeAPIKey := "legacy-token-query-key"
+	node := &model.Node{
+		Name:       "Legacy Token Node",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: sha256Hash(nodeAPIKey),
+		Status:     model.NodeStatusOnline,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID))+"&token="+nodeAPIKey, nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestNodeAuth_UpdatesHeartbeat 验证认证通过后会刷新 last_check_at,
+// 修复节点带 node_type 轮询时心跳不更新导致面板误判离线的问题
+func TestNodeAuth_UpdatesHeartbeat(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	nodeAPIKey := "heartbeat-node-key"
+	stale := time.Now().Unix() - 9999 // 远早于在线阈值
+	node := &model.Node{
+		Name:        "Heartbeat Node",
+		Host:        "127.0.0.1",
+		Port:        443,
+		APIKeyHash:  sha256Hash(nodeAPIKey),
+		Status:      model.NodeStatusOnline,
+		LastCheckAt: &stale,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	// 模拟节点带 node_type 的轮询请求
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID))+"&node_type=vmess", nil)
+	req.Header.Set("X-API-Key", nodeAPIKey)
+	w := httptest.NewRecorder()
+
+	before := time.Now().Unix()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// last_check_at 应被刷新到当前时间附近
+	var updated model.Node
+	require.NoError(t, database.GetDB().First(&updated, node.ID).Error)
+	require.NotNil(t, updated.LastCheckAt)
+	assert.GreaterOrEqual(t, *updated.LastCheckAt, before)
+	assert.Equal(t, model.NodeStatusOnline, updated.Status)
+	assert.True(t, updated.IsOnline(), "节点应被判定为在线")
+}
+
+func TestNodeAuth_InvalidAPIKey(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	node := &model.Node{
+		Name:       "Node Invalid Token",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: sha256Hash("correct-token"),
+		Status:     model.NodeStatusOnline,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
+	req.Header.Set("X-API-Key", "wrong-api-key")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestNodeAuth_NoConfig(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	config.Set(nil)
+
+	nodeAPIKey := "no-config-node-api-key"
+	node := &model.Node{
+		Name:       "Node No Config",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: sha256Hash(nodeAPIKey),
+		Status:     model.NodeStatusOnline,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
+	req.Header.Set("X-API-Key", nodeAPIKey)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+func TestNodeAuth_GlobalTokenHeaderOnlyRejected(t *testing.T) {
+	config.Set(&config.Config{
+		App: config.AppConfig{
+			APIToken: "global-api-token",
+		},
+	})
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-API-Key", "global-api-token")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+func TestNodeAuth_NodeScopedAPIKey_WithGlobalTokenSet(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	config.Set(&config.Config{
+		App: config.AppConfig{
+			APIToken: "global-api-token",
+		},
+	})
+
+	nodeAPIKey := "node-api-key-001"
+	node := &model.Node{
+		Name:       "Node Scoped Auth",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: sha256Hash(nodeAPIKey),
+		Status:     model.NodeStatusOnline,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		nodeID, _ := c.Get("node_id")
+		c.JSON(http.StatusOK, gin.H{"node_id": nodeID})
+	})
+
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
+	req.Header.Set("X-API-Key", nodeAPIKey)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestNodeAuth_NodeScopedPlainAPIKeyFallback(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	config.Set(&config.Config{
+		App: config.AppConfig{
+			APIToken: "global-api-token",
+		},
+	})
+
+	nodeAPIKey := "legacy-plain-api-key"
+	node := &model.Node{
+		Name:   "Legacy Plain APIKey",
+		Host:   "127.0.0.1",
+		Port:   443,
+		APIKey: nodeAPIKey,
+		Status: model.NodeStatusOnline,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
+	req.Header.Set("X-API-Key", nodeAPIKey)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestNodeAPIKeyAuth_MissingAPIKey(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	router := gin.New()
+	router.Use(NodeAPIKeyAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestNodeAPIKeyAuth_ValidKey(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// 创建测试节点
+	apiKey := "test-api-key-123"
+	keyHash := sha256Hash(apiKey)
+	node := &model.Node{
+		Name:       "Test Node",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: keyHash,
+		Status:     model.NodeStatusOnline,
+	}
+	database.GetDB().Create(node)
+
+	router := gin.New()
+	router.Use(NodeAPIKeyAuth())
+	router.GET("/test", func(c *gin.Context) {
+		nodeID, _ := c.Get("node_id")
+		c.JSON(http.StatusOK, gin.H{"node_id": nodeID})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-API-Key", apiKey)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestNodeAPIKeyAuth_DisabledNode(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	apiKey := "test-api-key-disabled"
+	keyHash := sha256Hash(apiKey)
+	node := &model.Node{
+		Name:       "Disabled Node",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: keyHash,
+		Status:     model.NodeStatusDisabled,
+	}
+	database.GetDB().Create(node)
+
+	router := gin.New()
+	router.Use(NodeAPIKeyAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-API-Key", apiKey)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestNodeAPIKeyAuth_QueryParam(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	apiKey := "test-api-key-query"
+	keyHash := sha256Hash(apiKey)
+	node := &model.Node{
+		Name:       "Test Node",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: keyHash,
+		Status:     model.NodeStatusOnline,
+	}
+	database.GetDB().Create(node)
+
+	router := gin.New()
+	router.Use(NodeAPIKeyAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test?api_key="+apiKey, nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestNodeAPIKeyAuth_PlainAPIKeyFallback(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	apiKey := "legacy-api-key-without-hash"
+	node := &model.Node{
+		Name:   "Legacy Node",
+		Host:   "127.0.0.1",
+		Port:   443,
+		APIKey: apiKey,
+		Status: model.NodeStatusOnline,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAPIKeyAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-API-Key", apiKey)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestJWTAuth_MissingHeader(t *testing.T) {
+	router := gin.New()
+	router.Use(JWTAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestJWTAuth_InvalidToken(t *testing.T) {
+	router := gin.New()
+	router.Use(JWTAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestJWTAuth_ValidToken(t *testing.T) {
+	// 生成有效的 token
+	secret := "test-secret-key"
+	token, err := utils.GenerateToken(1, "test@example.com", false, secret, 3600)
+	assert.NoError(t, err)
+
+	cfg := &config.Config{
+		JWT: config.JWTConfig{
+			Secret: secret,
+		},
+	}
+	config.Set(cfg)
+
+	router := gin.New()
+	router.Use(JWTAuth())
+	router.GET("/test", func(c *gin.Context) {
+		userID, _ := c.Get("user_id")
+		email, _ := c.Get("email")
+		c.JSON(http.StatusOK, gin.H{
+			"user_id": userID,
+			"email":   email,
+		})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestJWTAuth_BearerPrefix(t *testing.T) {
+	secret := "test-secret-key"
+	token, err := utils.GenerateToken(1, "test@example.com", true, secret, 3600)
+	assert.NoError(t, err)
+
+	cfg := &config.Config{
+		JWT: config.JWTConfig{
+			Secret: secret,
+		},
+	}
+	config.Set(cfg)
+
+	router := gin.New()
+	router.Use(JWTAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	// 测试 Bearer 前缀
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// 测试直接 token
+	req = httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", token)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestAdminAuth_NotAdmin(t *testing.T) {
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("is_admin", false)
+		c.Next()
+	})
+	router.Use(AdminAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestAdminAuth_IsAdmin(t *testing.T) {
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("is_admin", true)
+		c.Next()
+	})
+	router.Use(AdminAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestAdminAuth_MissingContext(t *testing.T) {
+	router := gin.New()
+	router.Use(AdminAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestCORS(t *testing.T) {
+	router := gin.New()
+	router.Use(CORS())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	// Request without Origin header — no CORS headers should be set
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, "", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Request with Origin header — origin should be echoed back (default: allow all)
+	req2 := httptest.NewRequest("GET", "/test", nil)
+	req2.Header.Set("Origin", "https://example.com")
+	w2 := httptest.NewRecorder()
+
+	router.ServeHTTP(w2, req2)
+
+	assert.Equal(t, "https://example.com", w2.Header().Get("Access-Control-Allow-Origin"))
+	assert.Contains(t, w2.Header().Get("Access-Control-Allow-Methods"), "GET")
+	assert.Contains(t, w2.Header().Get("Access-Control-Allow-Methods"), "POST")
+	assert.Equal(t, "Origin", w2.Header().Get("Vary"))
+}
+
+func TestCORS_OptionsRequest(t *testing.T) {
+	router := gin.New()
+	router.Use(CORS())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	// Preflight without Origin — should be rejected
+	req := httptest.NewRequest("OPTIONS", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	// Preflight with Origin — should succeed with echoed origin
+	req2 := httptest.NewRequest("OPTIONS", "/test", nil)
+	req2.Header.Set("Origin", "https://example.com")
+	w2 := httptest.NewRecorder()
+
+	router.ServeHTTP(w2, req2)
+
+	assert.Equal(t, http.StatusNoContent, w2.Code)
+	assert.Equal(t, "https://example.com", w2.Header().Get("Access-Control-Allow-Origin"))
+	assert.NotEmpty(t, w2.Header().Get("Access-Control-Max-Age"))
+}
+
+func TestCORS_WithAllowedOrigins(t *testing.T) {
+	// Configure allowed origins
+	config.Set(&config.Config{
+		Server: config.ServerConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins:   []string{"https://app.example.com", "https://admin.example.com"},
+				AllowCredentials: true,
+			},
+		},
+	})
+	defer config.Set(nil)
+
+	router := gin.New()
+	router.Use(CORS())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	// Allowed origin
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, "https://app.example.com", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "true", w.Header().Get("Access-Control-Allow-Credentials"))
+
+	// Disallowed origin
+	req2 := httptest.NewRequest("GET", "/test", nil)
+	req2.Header.Set("Origin", "https://evil.com")
+	w2 := httptest.NewRecorder()
+
+	router.ServeHTTP(w2, req2)
+
+	assert.Equal(t, "", w2.Header().Get("Access-Control-Allow-Origin"))
+
+	// Preflight with allowed origin
+	req3 := httptest.NewRequest("OPTIONS", "/test", nil)
+	req3.Header.Set("Origin", "https://app.example.com")
+	w3 := httptest.NewRecorder()
+
+	router.ServeHTTP(w3, req3)
+
+	assert.Equal(t, http.StatusNoContent, w3.Code)
+	assert.Equal(t, "https://app.example.com", w3.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "true", w3.Header().Get("Access-Control-Allow-Credentials"))
+}
+
+func TestCORS_WildcardOriginNoCredentials(t *testing.T) {
+	// Wildcard origin with credentials should be denied (credentials stripped)
+	config.Set(&config.Config{
+		Server: config.ServerConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins:   []string{"*"},
+				AllowCredentials: true,
+			},
+		},
+	})
+	defer config.Set(nil)
+
+	router := gin.New()
+	router.Use(CORS())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Origin", "https://example.com")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, "https://example.com", w.Header().Get("Access-Control-Allow-Origin"))
+	// Credentials must NOT be set with wildcard origin
+	assert.Equal(t, "", w.Header().Get("Access-Control-Allow-Credentials"))
+}
+
+func TestSha256Hash(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"test", "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"},
+		{"", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+		{"hello world", "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := sha256Hash(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestSignatureAuth_NoSignature(t *testing.T) {
+	router := gin.New()
+	router.Use(SignatureAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// 没有签名头应该跳过验证（向后兼容）
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestSignatureAuth_MissingTimestamp(t *testing.T) {
+	router := gin.New()
+	router.Use(SignatureAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set(SignatureHeader, "some-signature")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestSignatureAuth_InvalidTimestamp(t *testing.T) {
+	router := gin.New()
+	router.Use(SignatureAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set(SignatureHeader, "some-signature")
+	req.Header.Set(TimestampHeader, "invalid-timestamp")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestSignatureAuth_ExpiredRequest(t *testing.T) {
+	router := gin.New()
+	router.Use(SignatureAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	// 使用过期的时间戳 (6分钟前，超过 MaxTimeDiff)
+	expiredTimestamp := time.Now().Add(-6 * time.Minute).Unix()
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set(SignatureHeader, "some-signature")
+	req.Header.Set(TimestampHeader, strconv.FormatInt(expiredTimestamp, 10))
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestSignatureAuth_MissingNode(t *testing.T) {
+	router := gin.New()
+	router.Use(SignatureAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set(SignatureHeader, "some-signature")
+	req.Header.Set(TimestampHeader, strconv.FormatInt(time.Now().Unix(), 10))
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestSignatureAuth_ValidSignature(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	secret := "test-secret"
+	apiKey := "test-api-key"
+	keyHash := sha256Hash(apiKey)
+	node := &model.Node{
+		Name:       "Test Node",
+		Host:       "127.0.0.1",
+		Port:       443,
+		APIKeyHash: keyHash,
+		Secret:     secret,
+		Status:     model.NodeStatusOnline,
+	}
+	database.GetDB().Create(node)
+
+	router := gin.New()
+	router.Use(NodeAPIKeyAuth())
+	router.Use(SignatureAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	method := "GET"
+	path := "/test"
+	body := ""
+	signData := timestamp + method + path + body
+
+	// 计算 HMAC-SHA256
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(signData))
+	signature := hex.EncodeToString(mac.Sum(nil))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-API-Key", apiKey)
+	req.Header.Set(SignatureHeader, signature)
+	req.Header.Set(TimestampHeader, timestamp)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestStrictSignatureAuth_MissingSignature(t *testing.T) {
+	router := gin.New()
+	router.Use(StrictSignatureAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestCalculateHMAC(t *testing.T) {
+	secret := "test-secret"
+	data := "test-data"
+
+	result := calculateHMAC(data, secret)
+	assert.NotEmpty(t, result)
+	assert.Len(t, result, 64) // SHA256 produces 64 hex characters
+
+	// Verify the result is deterministic
+	result2 := calculateHMAC(data, secret)
+	assert.Equal(t, result, result2)
+}
+
+func TestNonceCache(t *testing.T) {
+	// Clear the nonce cache
+	nonceCache = make(map[string]int64)
+
+	nonce := "test-nonce-123"
+
+	// Initially not used
+	assert.False(t, isNonceUsed(nonce))
+
+	// Mark as used
+	markNonceUsed(nonce)
+	assert.True(t, isNonceUsed(nonce))
+
+	// Clear cache
+	nonceCache = make(map[string]int64)
+	assert.False(t, isNonceUsed(nonce))
+}
+
+func TestNonceExpiration(t *testing.T) {
+	nonceCache = make(map[string]int64)
+
+	nonce := "expiring-nonce"
+	// Set expired nonce
+	nonceCache[nonce] = time.Now().Add(-10 * time.Second).Unix()
+
+	// Expired nonce should be considered not used
+	assert.False(t, isNonceUsed(nonce))
+	_, exists := nonceCache[nonce]
+	assert.False(t, exists) // Should be deleted
+}
+
+func TestSecureLogger(t *testing.T) {
+	router := gin.New()
+	router.Use(SecureLogger())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestSecureLogger_WithUserContext(t *testing.T) {
+	router := gin.New()
+	router.Use(SecureLogger())
+	router.GET("/test", func(c *gin.Context) {
+		c.Set("user_id", uint(1))
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestNodeSecureLogger(t *testing.T) {
+	router := gin.New()
+	router.Use(NodeSecureLogger())
+	router.GET("/test", func(c *gin.Context) {
+		c.Set("node_id", uint(1))
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestNodeSecureLogger_WithSignature(t *testing.T) {
+	router := gin.New()
+	router.Use(NodeSecureLogger())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set(SignatureHeader, "test-signature")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestAuditLog(t *testing.T) {
+	entry := &AuditLogEntry{
+		Timestamp:  time.Now(),
+		Action:     "test_action",
+		UserID:     1,
+		NodeID:     2,
+		IP:         "192.168.1.1",
+		UserAgent:  "test-agent",
+		Path:       "/test",
+		Method:     "GET",
+		StatusCode: 200,
+		Latency:    time.Millisecond * 100,
+		Extra:      map[string]any{"key": "value"},
+	}
+
+	// WriteAuditLog should not panic
+	WriteAuditLog(entry)
+
+	// Check IP is redacted
+	assert.NotEqual(t, "192.168.1.1", entry.IP)
+}
+
+func TestLogger(t *testing.T) {
+	router := gin.New()
+	router.Use(Logger())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestRecovery(t *testing.T) {
+	router := gin.New()
+	router.Use(Recovery())
+	router.GET("/test", func(c *gin.Context) {
+		panic("test panic")
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	// Recovery should prevent crash and return 500
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}

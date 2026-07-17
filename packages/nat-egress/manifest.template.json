@@ -1,0 +1,64 @@
+{
+  "id": "nat-egress",
+  "name": "NAT Egress",
+  "version": "1.0.0",
+  "api_version": "v1",
+  "publisher": "AnixOps",
+  "targets": [
+    "control",
+    "agent"
+  ],
+  "architectures": [],
+  "artifact_sha256": "__ARTIFACT_SHA256__",
+  "capabilities": [
+    "forward.nat.egress",
+    "forward.route.policy",
+    "forward.egress.health",
+    "forward.mark.consume",
+    "plugin.runtime-state",
+    "plugin.cleanup"
+  ],
+  "dependencies": [],
+  "conflicts": [],
+  "permissions": [
+    "nat-egress.view",
+    "nat-egress.api",
+    "nat-egress.network-admin"
+  ],
+  "config_schema": {},
+  "secret_fields": [],
+  "entrypoints": {},
+  "migration_version": 1,
+  "control_routes": [
+    "/api/v3/plugins/nat-egress/status"
+  ],
+  "frontend_sha256": "__WEBUI_SHA256__",
+  "webui": {
+    "bundle": {
+      "path": "webui/index.mjs",
+      "sha256": "__WEBUI_SHA256__"
+    },
+    "permissions": [
+      "nat-egress.view"
+    ],
+    "menus": [
+      {
+        "id": "nat-egress.main",
+        "parent": "operations",
+        "label": "NAT Egress",
+        "icon": "cloud",
+        "route": "/admin/extensions/nat-egress",
+        "permission": "nat-egress.view",
+        "order": 130
+      }
+    ],
+    "routes": [
+      {
+        "id": "nat-egress.main",
+        "path": "/admin/extensions/nat-egress",
+        "export": "default",
+        "permission": "nat-egress.view"
+      }
+    ]
+  }
+}

@@ -1,0 +1,746 @@
+package handler
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/AnixOps/anix-control/v4/internal/cache"
+	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/utils"
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
+	"gorm.io/gorm"
+)
+
+// AgentHandlerTestSuite Agent Handler 测试套件
+type AgentHandlerTestSuite struct {
+	suite.Suite
+	router    *gin.Engine
+	db        *gorm.DB
+	testNode  *model.ForwardNode
+	testNode2 *model.ForwardNode
+}
+
+func TestAgentWebSocketUpgraderOriginPolicy(t *testing.T) {
+	config.Set(nil)
+	defer config.Set(nil)
+
+	handler := &AgentHandler{
+		wsUpgrader: websocket.Upgrader{
+			CheckOrigin: utils.CheckWebSocketOrigin,
+		},
+	}
+
+	req := httptest.NewRequest("GET", "http://panel.example.com/api/v2/agent/ws", nil)
+	req.Header.Set("Origin", "https://evil.example.net")
+	assert.False(t, handler.wsUpgrader.CheckOrigin(req))
+
+	req = httptest.NewRequest("GET", "http://panel.example.com/api/v2/agent/ws", nil)
+	req.Header.Set("Origin", "https://panel.example.com")
+	assert.True(t, handler.wsUpgrader.CheckOrigin(req))
+
+	config.Set(&config.Config{
+		Server: config.ServerConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins: []string{"https://agent-admin.example.com"},
+			},
+		},
+	})
+	req = httptest.NewRequest("GET", "http://panel.example.com/api/v2/agent/ws", nil)
+	req.Header.Set("Origin", "https://agent-admin.example.com")
+	assert.True(t, handler.wsUpgrader.CheckOrigin(req))
+}
+
+func (s *AgentHandlerTestSuite) SetupSuite() {
+	gin.SetMode(gin.TestMode)
+
+	// 初始化缓存
+	cache.InitMemory()
+
+	// 初始化数据库
+	s.Require().NoError(database.Init(&config.DatabaseConfig{
+		Driver:   "sqlite",
+		Database: ":memory:",
+	}))
+	s.db = database.Get()
+
+	// 自动迁移
+	s.Require().NoError(s.db.AutoMigrate(
+		&model.ForwardNode{},
+		&model.ForwardRule{},
+		&model.ForwardRuntimeJob{},
+		&model.ForwardAgentBridgeTask{},
+		&model.AgentDiagnosticTask{},
+	))
+}
+
+func (s *AgentHandlerTestSuite) TearDownSuite() {
+	s.Require().NoError(database.Close())
+}
+
+func (s *AgentHandlerTestSuite) SetupTest() {
+	// 清理数据
+	s.db.Exec("DELETE FROM v2_forward_node")
+	s.db.Exec("DELETE FROM v2_forward_rule")
+	s.db.Exec("DELETE FROM v2_agent_diagnostic_task")
+	s.db.Exec("DELETE FROM v2_forward_agent_bridge_task")
+
+	// 创建测试节点
+	s.testNode = &model.ForwardNode{
+		Name:     "Test Relay Node",
+		Type:     model.ForwardNodeTypeRelay,
+		Host:     "192.168.1.100",
+		Port:     443,
+		APIPort:  18080,
+		APIToken: "test-api-token-123",
+		Status:   model.ForwardNodeStatusOffline,
+		Enabled:  true,
+	}
+	s.db.Create(s.testNode)
+
+	s.testNode2 = &model.ForwardNode{
+		Name:     "Test Exit Node",
+		Type:     model.ForwardNodeTypeExit,
+		Host:     "192.168.1.200",
+		Port:     443,
+		APIPort:  18080,
+		APIToken: "test-api-token-456",
+		Status:   model.ForwardNodeStatusOffline,
+		Enabled:  true,
+	}
+	s.db.Create(s.testNode2)
+
+	s.router = gin.New()
+}
+
+func (s *AgentHandlerTestSuite) newAckingAgentHandler() (*AgentHandler, <-chan error, func()) {
+	handler := NewAgentHandler()
+	handler.ackTimeout = 500 * time.Millisecond
+	handler.maxRetries = 0
+
+	serverConn, clientConn, cleanup := newTestWebSocketPair(s.T())
+	agentConn := &AgentConnection{
+		NodeID:   s.testNode.ID,
+		WsConn:   serverConn,
+		LastSeen: time.Now(),
+	}
+	handler.connections.Store(s.testNode.ID, agentConn)
+
+	ackDone := make(chan error, 1)
+	go func() {
+		if err := clientConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			ackDone <- err
+			return
+		}
+		var outbound wsOutboundEnvelope
+		if err := clientConn.ReadJSON(&outbound); err != nil {
+			ackDone <- err
+			return
+		}
+		if outbound.Type != "task.assign" {
+			ackDone <- fmt.Errorf("unexpected outbound type %q", outbound.Type)
+			return
+		}
+		if !outbound.RequireAck {
+			ackDone <- fmt.Errorf("outbound task assignment does not require ack")
+			return
+		}
+
+		ackPayload, err := json.Marshal(wsAckPayload{
+			MessageID: outbound.ID,
+			Success:   true,
+			Timestamp: time.Now().Unix(),
+		})
+		if err != nil {
+			ackDone <- err
+			return
+		}
+		rawAck, err := json.Marshal(wsInboundEnvelope{
+			ID:        "ack-for-" + outbound.ID,
+			Type:      "ack",
+			NodeID:    s.testNode.ID,
+			Timestamp: time.Now().Unix(),
+			Payload:   ackPayload,
+		})
+		if err != nil {
+			ackDone <- err
+			return
+		}
+
+		handler.handleWebSocketMessage(agentConn, rawAck)
+		ackDone <- nil
+	}()
+
+	return handler, ackDone, cleanup
+}
+
+// ========== AgentRegister 测试 ==========
+
+func (s *AgentHandlerTestSuite) TestAgentRegister_Success() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/register", handler.AgentRegister)
+
+	body := AgentRegisterRequest{
+		NodeID:  s.testNode.ID,
+		Token:   "test-api-token-123",
+		Version: "1.0.0",
+		System: map[string]any{
+			"os":   "linux",
+			"arch": "amd64",
+		},
+		Capabilities: []string{"command", "file", "gost"},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/v2/agent/register", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	// 检查节点状态是否更新为在线
+	var node model.ForwardNode
+	s.db.First(&node, s.testNode.ID)
+	assert.Equal(s.T(), model.ForwardNodeStatusOnline, node.Status)
+}
+
+func (s *AgentHandlerTestSuite) TestAgentRegister_NodeNotFound() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/register", handler.AgentRegister)
+
+	body := AgentRegisterRequest{
+		NodeID:  9999,
+		Token:   "invalid-token",
+		Version: "1.0.0",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/v2/agent/register", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+}
+
+func (s *AgentHandlerTestSuite) TestAgentRegister_InvalidToken() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/register", handler.AgentRegister)
+
+	body := AgentRegisterRequest{
+		NodeID:  s.testNode.ID,
+		Token:   "wrong-token",
+		Version: "1.0.0",
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/v2/agent/register", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusUnauthorized, w.Code)
+}
+
+func (s *AgentHandlerTestSuite) TestAgentRegister_InvalidBody() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/register", handler.AgentRegister)
+
+	req, _ := http.NewRequest("POST", "/api/v2/agent/register", bytes.NewReader([]byte("invalid json")))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+// ========== AgentHeartbeat 测试 ==========
+
+func (s *AgentHandlerTestSuite) TestAgentHeartbeat_Success() {
+	handler := NewAgentHandler()
+
+	// 先注册
+	s.router.POST("/api/v2/agent/register", handler.AgentRegister)
+	regBody := AgentRegisterRequest{
+		NodeID:  s.testNode.ID,
+		Token:   "test-api-token-123",
+		Version: "1.0.0",
+	}
+	jsonRegBody, _ := json.Marshal(regBody)
+	req, _ := http.NewRequest("POST", "/api/v2/agent/register", bytes.NewReader(jsonRegBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	// 发送心跳
+	s.router.POST("/api/v2/agent/heartbeat", handler.AgentHeartbeat)
+	hbBody := AgentHeartbeatRequest{
+		NodeID: s.testNode.ID,
+		Status: "running",
+		Resources: map[string]any{
+			"cpu": 0.5,
+			"mem": 0.6,
+		},
+	}
+	jsonHbBody, _ := json.Marshal(hbBody)
+
+	req, _ = http.NewRequest("POST", "/api/v2/agent/heartbeat", bytes.NewReader(jsonHbBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w = httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AgentHandlerTestSuite) TestAgentHeartbeat_InvalidBody() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/heartbeat", handler.AgentHeartbeat)
+
+	req, _ := http.NewRequest("POST", "/api/v2/agent/heartbeat", bytes.NewReader([]byte("invalid")))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+// ========== AgentGetTasks 测试 ==========
+
+func (s *AgentHandlerTestSuite) TestAgentGetTasks() {
+	handler := NewAgentHandler()
+	s.router.GET("/api/v2/agent/tasks", handler.AgentGetTasks)
+
+	req, _ := http.NewRequest("GET", "/api/v2/agent/tasks?node_id=1", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]any
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
+	tasks := resp["tasks"].([]any)
+	assert.Equal(s.T(), 0, len(tasks)) // 目前返回空任务列表
+}
+
+// ========== AgentReportResult 测试 ==========
+
+func (s *AgentHandlerTestSuite) TestAgentReportResult_Success() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/result", handler.AgentReportResult)
+
+	body := AgentTaskResult{
+		TaskID:    "task-123",
+		Success:   true,
+		Output:    "command output",
+		Duration:  100,
+		Timestamp: time.Now(),
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/v2/agent/result", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AgentHandlerTestSuite) TestAgentReportResult_InvalidBody() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/result", handler.AgentReportResult)
+
+	req, _ := http.NewRequest("POST", "/api/v2/agent/result", bytes.NewReader([]byte("invalid")))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+// ========== AgentMonitor 测试 ==========
+
+func (s *AgentHandlerTestSuite) TestAgentMonitor_Success() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/monitor", handler.AgentMonitor)
+
+	body := AgentMonitorRequest{
+		NodeID: s.testNode.ID,
+		System: map[string]any{
+			"cpu_percent": 45.5,
+			"mem_percent": 60.0,
+		},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/v2/agent/monitor", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+}
+
+func (s *AgentHandlerTestSuite) TestGetMonitor_Success() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/monitor", handler.AgentMonitor)
+	s.router.GET("/admin/agent/monitor", handler.GetMonitor)
+
+	body := AgentMonitorRequest{
+		NodeID: s.testNode.ID,
+		System: map[string]any{
+			"cpu_percent": 38.2,
+		},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/api/v2/agent/monitor", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	req, _ = http.NewRequest("GET", "/admin/agent/monitor?node_id="+strconv.Itoa(int(s.testNode.ID)), nil)
+	w = httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *AgentHandlerTestSuite) TestGetMonitor_NotFound() {
+	handler := NewAgentHandler()
+	s.router.GET("/admin/agent/monitor", handler.GetMonitor)
+
+	req, _ := http.NewRequest("GET", "/admin/agent/monitor?node_id=9999", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+}
+
+func (s *AgentHandlerTestSuite) TestGetTaskResult_Success() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/result", handler.AgentReportResult)
+	s.router.GET("/admin/agent/tasks/:task_id", handler.GetTaskResult)
+
+	resultBody := AgentTaskResult{
+		TaskID:    "task-xyz-1",
+		NodeID:    s.testNode.ID,
+		Success:   true,
+		Output:    "ok",
+		Duration:  66,
+		Timestamp: time.Now(),
+	}
+	jsonBody, _ := json.Marshal(resultBody)
+	req, _ := http.NewRequest("POST", "/api/v2/agent/result", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	req, _ = http.NewRequest("GET", "/admin/agent/tasks/task-xyz-1", nil)
+	w = httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "task-xyz-1", data["task_id"])
+	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *AgentHandlerTestSuite) TestGetTaskResult_NotFound() {
+	handler := NewAgentHandler()
+	s.router.GET("/admin/agent/tasks/:task_id", handler.GetTaskResult)
+
+	req, _ := http.NewRequest("GET", "/admin/agent/tasks/not-exists", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+}
+
+// ========== AgentGetForwardRules 测试 ==========
+
+func (s *AgentHandlerTestSuite) TestAgentGetForwardRules() {
+	// 创建转发规则
+	rule := &model.ForwardRule{
+		Name:        "Test Rule",
+		Enabled:     true,
+		RelayNodeID: s.testNode.ID,
+		ListenPort:  8080,
+		Protocol:    "tcp",
+		ExitNodeID:  s.testNode2.ID,
+		TargetHost:  "10.0.0.1",
+		TargetPort:  80,
+	}
+	s.db.Create(rule)
+
+	handler := NewAgentHandler()
+	s.router.GET("/api/v2/forward/agent/rules", handler.AgentGetForwardRules)
+
+	req, _ := http.NewRequest("GET", "/api/v2/forward/agent/rules?node_id=1", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	var resp map[string]any
+	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
+	data := resp["data"].([]any)
+	assert.GreaterOrEqual(s.T(), len(data), 0)
+}
+
+// ========== ListAgents 测试 ==========
+
+func (s *AgentHandlerTestSuite) TestListAgents_Empty() {
+	handler := NewAgentHandler()
+	s.router.GET("/admin/agent/list", handler.ListAgents)
+
+	req, _ := http.NewRequest("GET", "/admin/agent/list", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	agents, ok := data["agents"].([]any)
+	if assert.True(s.T(), ok) {
+		assert.Empty(s.T(), agents)
+	}
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *AgentHandlerTestSuite) TestListAgents_AfterRegister() {
+	handler := NewAgentHandler()
+	s.router.POST("/api/v2/agent/register", handler.AgentRegister)
+	s.router.GET("/admin/agent/list", handler.ListAgents)
+
+	// 注册 agent
+	regBody := AgentRegisterRequest{
+		NodeID:       s.testNode.ID,
+		Token:        "test-api-token-123",
+		Version:      "1.0.0",
+		Capabilities: []string{"command"},
+	}
+	jsonBody, _ := json.Marshal(regBody)
+	req, _ := http.NewRequest("POST", "/api/v2/agent/register", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	// 获取列表
+	req, _ = http.NewRequest("GET", "/admin/agent/list", nil)
+	w = httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	agents := data["agents"].([]any)
+	assert.Equal(s.T(), 1, len(agents))
+
+	agent := agents[0].(map[string]any)
+	assert.Equal(s.T(), float64(s.testNode.ID), agent["node_id"])
+	assert.Equal(s.T(), "1.0.0", agent["version"])
+	assert.NotContains(s.T(), resp, "error")
+}
+
+func (s *AgentHandlerTestSuite) TestListDiagnosticTasks_Empty() {
+	handler := NewAgentHandler()
+	s.router.GET("/admin/agent/tasks", handler.ListDiagnosticTasks)
+
+	req, _ := http.NewRequest("GET", "/admin/agent/tasks?limit=50", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].([]any)
+	assert.Empty(s.T(), data)
+	assert.NotContains(s.T(), resp, "error")
+}
+
+// ========== CreateTask 测试 ==========
+
+func (s *AgentHandlerTestSuite) TestCreateTask_NodeOffline() {
+	handler := NewAgentHandler()
+	s.router.POST("/admin/agent/tasks", handler.CreateTask)
+
+	body := CreateTaskRequest{
+		NodeID:  9999, // 不存在的节点
+		Type:    "command",
+		Action:  "ls -la",
+		Timeout: 30,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/agent/tasks", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code) // 节点不在线
+}
+
+func (s *AgentHandlerTestSuite) TestCreateTask_Success() {
+	handler, ackDone, cleanup := s.newAckingAgentHandler()
+	defer cleanup()
+	s.router.POST("/admin/agent/tasks", handler.CreateTask)
+
+	body := CreateTaskRequest{
+		NodeID:  s.testNode.ID,
+		Type:    "diagnostic",
+		Action:  "service_status",
+		Params:  map[string]any{"service": "gost"},
+		Timeout: 30,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/agent/tasks", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "task sent", data["message"])
+	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
+	assert.True(s.T(), data["success"].(bool))
+	assert.True(s.T(), data["ack_received"].(bool))
+	assert.NotEmpty(s.T(), data["task_id"])
+	assert.NotContains(s.T(), resp, "error")
+
+	s.Require().NoError(<-ackDone)
+}
+
+func (s *AgentHandlerTestSuite) TestCreateTask_InvalidBody() {
+	handler := NewAgentHandler()
+	s.router.POST("/admin/agent/tasks", handler.CreateTask)
+
+	req, _ := http.NewRequest("POST", "/admin/agent/tasks", bytes.NewReader([]byte("invalid")))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+// ========== ExecuteCommand 测试 ==========
+
+func (s *AgentHandlerTestSuite) TestExecuteCommand_InvalidBody() {
+	handler := NewAgentHandler()
+	s.router.POST("/admin/agent/execute", handler.ExecuteCommand)
+
+	req, _ := http.NewRequest("POST", "/admin/agent/execute", bytes.NewReader([]byte("invalid")))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+func (s *AgentHandlerTestSuite) TestExecuteCommand_Success() {
+	handler, ackDone, cleanup := s.newAckingAgentHandler()
+	defer cleanup()
+	s.router.POST("/admin/agent/execute", handler.ExecuteCommand)
+
+	body := ExecuteCommandRequest{
+		NodeID:  s.testNode.ID,
+		Action:  "service_status",
+		Params:  map[string]any{"service": "gost"},
+		Timeout: 30,
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/agent/execute", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	resp := decodePanelTestResponse(s.T(), w)
+	assert.Equal(s.T(), float64(0), resp["code"])
+	assert.NotEmpty(s.T(), resp["msg"])
+	assert.NotZero(s.T(), resp["ts"])
+	data := resp["data"].(map[string]any)
+	assert.Equal(s.T(), "task sent", data["message"])
+	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
+	assert.True(s.T(), data["success"].(bool))
+	assert.True(s.T(), data["ack_received"].(bool))
+	assert.NotEmpty(s.T(), data["task_id"])
+	assert.NotContains(s.T(), resp, "error")
+
+	s.Require().NoError(<-ackDone)
+}
+
+func (s *AgentHandlerTestSuite) TestExecuteCommand_MissingFields() {
+	handler := NewAgentHandler()
+	s.router.POST("/admin/agent/execute", handler.ExecuteCommand)
+
+	body := map[string]any{
+		"command": "ls",
+		// 缺少 node_id
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req, _ := http.NewRequest("POST", "/admin/agent/execute", bytes.NewReader(jsonBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
+}
+
+func TestAgentHandler(t *testing.T) {
+	suite.Run(t, new(AgentHandlerTestSuite))
+}

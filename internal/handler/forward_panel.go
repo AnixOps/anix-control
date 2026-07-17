@@ -1,0 +1,434 @@
+package handler
+
+import (
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/gin-gonic/gin"
+)
+
+type panelForwardIDRequest struct {
+	ID uint `json:"id" binding:"required"`
+}
+
+type panelForwardDiagnoseRequest struct {
+	ForwardID uint `json:"forwardId" binding:"required"`
+}
+
+type panelTunnelDiagnoseRequest struct {
+	TunnelID uint `json:"tunnelId" binding:"required"`
+}
+
+type panelForwardOrderRequest struct {
+	Forwards []service.PanelForwardOrderUpdate `json:"forwards" binding:"required"`
+}
+
+type panelUserTunnelIDRequest struct {
+	ID uint `json:"id" binding:"required"`
+}
+
+func (h *ForwardHandler) ListPanelForwards(c *gin.Context) {
+	items, err := h.panelService.ListForwards(c.GetUint("user_id"), c.GetBool("is_admin"))
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, items)
+}
+
+func (h *ForwardHandler) ListPanelRuntimeJobs(c *gin.Context) {
+	limit := 50
+	if raw := c.DefaultQuery("limit", "50"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+
+	var status *int
+	if raw := c.Query("status"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			status = &parsed
+		}
+	}
+
+	var forwardID *uint
+	if raw := c.Query("forward_id"); raw != "" {
+		if parsed, err := strconv.ParseUint(raw, 10, 32); err == nil {
+			id := uint(parsed)
+			forwardID = &id
+		}
+	}
+
+	jobs, err := h.panelService.ListRuntimeJobs(service.PanelRuntimeJobFilter{
+		Backend:   c.Query("backend"),
+		Status:    status,
+		ForwardID: forwardID,
+		Limit:     limit,
+	})
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, gin.H{
+		"list":  jobs,
+		"total": len(jobs),
+	})
+}
+
+func (h *ForwardHandler) GetPanelRuntimeStatus(c *gin.Context) {
+	status, err := h.panelService.GetRuntimeStatus(c.Request.Context())
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, status)
+}
+
+func (h *ForwardHandler) GetNodeXRuntimeStatus(c *gin.Context) {
+	status, err := h.panelService.GetNodeXOperatorStatus(c.Request.Context())
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, status)
+}
+
+func (h *ForwardHandler) GetLocalRuntimeStatus(c *gin.Context) {
+	status, err := h.panelService.GetLocalOperatorStatus(c.Request.Context())
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, status)
+}
+
+func (h *ForwardHandler) DiagnosePanelRuntime(c *gin.Context) {
+	summary, err := h.panelService.DiagnoseRuntime(c.Request.Context())
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, summary)
+}
+
+func (h *ForwardHandler) DiagnoseNodeXRuntime(c *gin.Context) {
+	summary, err := h.panelService.DiagnoseNodeXOperator(c.Request.Context())
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, summary)
+}
+
+func (h *ForwardHandler) DiagnoseLocalRuntime(c *gin.Context) {
+	summary, err := h.panelService.DiagnoseLocalOperator(c.Request.Context())
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, summary)
+}
+
+func (h *ForwardHandler) ListPanelTunnels(c *gin.Context) {
+	items, err := h.panelService.ListTunnels(c.GetUint("user_id"), c.GetBool("is_admin"))
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, items)
+}
+
+func (h *ForwardHandler) ListPanelAdminTunnels(c *gin.Context) {
+	items, err := h.panelService.ListAdminTunnels()
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, items)
+}
+
+func (h *ForwardHandler) CreatePanelTunnel(c *gin.Context) {
+	var req service.PanelTunnelInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	item, err := h.panelService.CreateTunnel(req)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, item)
+}
+
+func (h *ForwardHandler) UpdatePanelTunnel(c *gin.Context) {
+	var req service.PanelTunnelUpdateInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	item, err := h.panelService.UpdateTunnel(req)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, item)
+}
+
+func (h *ForwardHandler) DeletePanelTunnel(c *gin.Context) {
+	var req panelForwardIDRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	if err := h.panelService.DeleteTunnel(req.ID); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, true)
+}
+
+func (h *ForwardHandler) DiagnosePanelTunnel(c *gin.Context) {
+	var req panelTunnelDiagnoseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	report, err := h.panelService.DiagnoseTunnel(req.TunnelID)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, report)
+}
+
+func (h *ForwardHandler) CreatePanelForward(c *gin.Context) {
+	var req service.PanelForwardInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	item, err := h.panelService.CreateForward(c.GetUint("user_id"), c.GetBool("is_admin"), req)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, item)
+}
+
+func (h *ForwardHandler) UpdatePanelForward(c *gin.Context) {
+	var req service.PanelForwardUpdateInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	item, err := h.panelService.UpdateForward(c.GetUint("user_id"), c.GetBool("is_admin"), req)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, item)
+}
+
+func (h *ForwardHandler) DeletePanelForward(c *gin.Context) {
+	var req panelForwardIDRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	if err := h.panelService.DeleteForward(c.GetUint("user_id"), c.GetBool("is_admin"), req.ID, false); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, true)
+}
+
+func (h *ForwardHandler) ForceDeletePanelForward(c *gin.Context) {
+	var req panelForwardIDRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	if err := h.panelService.DeleteForward(c.GetUint("user_id"), c.GetBool("is_admin"), req.ID, true); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, true)
+}
+
+func (h *ForwardHandler) PausePanelForward(c *gin.Context) {
+	var req panelForwardIDRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	if err := h.panelService.SetForwardStatus(c.GetUint("user_id"), c.GetBool("is_admin"), req.ID, 0); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, true)
+}
+
+func (h *ForwardHandler) ResumePanelForward(c *gin.Context) {
+	var req panelForwardIDRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	if err := h.panelService.SetForwardStatus(c.GetUint("user_id"), c.GetBool("is_admin"), req.ID, 1); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, true)
+}
+
+func (h *ForwardHandler) DiagnosePanelForward(c *gin.Context) {
+	var req panelForwardDiagnoseRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	report, err := h.panelService.DiagnoseForward(c.GetUint("user_id"), c.GetBool("is_admin"), req.ForwardID)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, report)
+}
+
+type syncForwardsToBackendRequest struct {
+	Backend string `json:"backend" binding:"required"`
+}
+
+func (h *ForwardHandler) SyncForwardsToBackend(c *gin.Context) {
+	var req syncForwardsToBackendRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	// Validate backend
+	valid := false
+	for _, b := range []string{"gost", "nftables_ansible", "iptables_ansible", "clean_agent"} {
+		if req.Backend == b {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		panelError(c, "不支持的运行时后端")
+		return
+	}
+
+	synced, failed, err := h.panelService.RuntimeService().SyncForwardsToBackend(req.Backend)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, gin.H{
+		"synced": synced,
+		"failed": failed,
+	})
+}
+
+func (h *ForwardHandler) UpdatePanelForwardOrder(c *gin.Context) {
+	var req panelForwardOrderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	if err := h.panelService.UpdateOrder(c.GetUint("user_id"), c.GetBool("is_admin"), req.Forwards); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, true)
+}
+
+func (h *ForwardHandler) AssignPanelUserTunnel(c *gin.Context) {
+	var req service.PanelUserTunnelInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	if err := h.panelService.AssignUserTunnel(req); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, "用户隧道权限分配成功")
+}
+
+func (h *ForwardHandler) ListPanelUserTunnels(c *gin.Context) {
+	var req service.PanelUserTunnelQueryInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	items, err := h.panelService.ListUserTunnels(req)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, items)
+}
+
+func (h *ForwardHandler) RemovePanelUserTunnel(c *gin.Context) {
+	var req panelUserTunnelIDRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	if err := h.panelService.RemoveUserTunnel(req.ID); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, "用户隧道权限删除成功")
+}
+
+func (h *ForwardHandler) UpdatePanelUserTunnel(c *gin.Context) {
+	var req service.PanelUserTunnelUpdateInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误")
+		return
+	}
+
+	if err := h.panelService.UpdateUserTunnel(req); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+	panelSuccess(c, "用户隧道权限更新成功")
+}
+
+func panelSuccess(c *gin.Context, data any) {
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"msg":  "操作成功",
+		"ts":   time.Now().UnixMilli(),
+		"data": data,
+	})
+}
+
+func panelError(c *gin.Context, msg string) {
+	c.JSON(http.StatusOK, gin.H{
+		"code": -1,
+		"msg":  msg,
+		"ts":   time.Now().UnixMilli(),
+		"data": nil,
+	})
+}

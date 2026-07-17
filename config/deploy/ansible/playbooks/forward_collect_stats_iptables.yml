@@ -1,0 +1,20 @@
+- name: Collect V2Board forward traffic stats (iptables)
+  hosts: all
+  gather_facts: false
+  become: true
+  vars:
+    forward_protocols: "{{ ['tcp', 'udp'] if tunnel.protocol == 'both' else (['udp'] if tunnel.protocol == 'udp' else ['tcp']) }}"
+  tasks:
+    - name: Read chain counters and print STATS_JSON
+      ansible.builtin.shell: |
+        set -euo pipefail
+        CHAIN="V2B_FWD_{{ forward.id }}_{{ item | upper }}"
+        PROTO="{{ item }}"
+
+        BYTES=$(iptables -t nat -L "$CHAIN" -v -x -n 2>/dev/null | awk 'NR>2 {sum+=$2} END {print sum+0}')
+
+        echo "STATS_JSON {\"protocol\":\"${PROTO}\",\"bytes\":${BYTES:-0}}"
+      args:
+        executable: /bin/bash
+      loop: "{{ forward_protocols }}"
+      changed_when: false

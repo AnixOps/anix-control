@@ -1,0 +1,38 @@
+- name: Collect V2Board forward traffic stats (nftables)
+  hosts: all
+  gather_facts: false
+  become: true
+  vars:
+    forward_protocols: "{{ ['tcp', 'udp'] if tunnel.protocol == 'both' else (['udp'] if tunnel.protocol == 'udp' else ['tcp']) }}"
+  tasks:
+    - name: Read chain counters and print STATS_JSON
+      ansible.builtin.shell: |
+        set -euo pipefail
+        TABLE="v2b_forward"
+        CHAIN="v2b_fwd_{{ forward.id }}_{{ item }}"
+        PROTO="{{ item }}"
+
+        BYTES=$(nft -j list chain ip "$TABLE" "$CHAIN" 2>/dev/null | python3 -c '
+        import json, sys
+        try:
+            data = json.load(sys.stdin)
+        except Exception:
+            print(0)
+            sys.exit(0)
+        total = 0
+        for obj in data.get("nftables", []):
+            rule = obj.get("rule")
+            if not rule:
+                continue
+            for expr in rule.get("expr", []):
+                counter = expr.get("counter")
+                if counter:
+                    total += int(counter.get("bytes", 0))
+        print(total)
+        ' 2>/dev/null || echo 0)
+
+        echo "STATS_JSON {\"protocol\":\"${PROTO}\",\"bytes\":${BYTES:-0}}"
+      args:
+        executable: /bin/bash
+      loop: "{{ forward_protocols }}"
+      changed_when: false

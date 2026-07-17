@@ -1,0 +1,142 @@
+package handler
+
+import (
+	"log"
+	"strconv"
+	"time"
+
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/gin-gonic/gin"
+)
+
+// AdminCouponHandler 优惠券处理器
+type AdminCouponHandler struct{}
+
+// NewAdminCouponHandler 创建优惠券处理器
+func NewAdminCouponHandler() *AdminCouponHandler {
+	return &AdminCouponHandler{}
+}
+
+// GetCoupons 获取优惠券列表
+func (h *AdminCouponHandler) GetCoupons(c *gin.Context) {
+	var coupons []model.Coupon
+	if err := database.GetDB().Order("created_at DESC").Find(&coupons).Error; err != nil {
+		log.Printf("admin coupon list failed: %v", err)
+		panelError(c, "获取优惠券列表失败")
+		return
+	}
+
+	// 转换为响应格式
+	result := make([]gin.H, 0, len(coupons))
+	for _, coupon := range coupons {
+		limitUse := -1
+		if coupon.LimitUse != nil {
+			limitUse = *coupon.LimitUse
+		}
+
+		result = append(result, gin.H{
+			"id":         coupon.ID,
+			"code":       coupon.Code,
+			"name":       coupon.Name,
+			"type":       coupon.Type,
+			"value":      coupon.Value,
+			"limit_use":  limitUse,
+			"use_count":  coupon.UseCount,
+			"started_at": coupon.StartedAt,
+			"ended_at":   coupon.EndedAt,
+			"created_at": coupon.CreatedAt.Unix(),
+		})
+	}
+
+	panelSuccess(c, result)
+}
+
+// CreateCoupon 创建优惠券
+func (h *AdminCouponHandler) CreateCoupon(c *gin.Context) {
+	var req struct {
+		Code      string `json:"code" binding:"required,min=1,max=64"`
+		Name      string `json:"name" binding:"required,min=1,max=255"`
+		Type      int    `json:"type" binding:"required,oneof=1 2"`
+		Value     int    `json:"value" binding:"required,gte=0"`
+		LimitUse  int    `json:"limit_use" binding:"gte=0"`
+		StartedAt int64  `json:"started_at" binding:"gte=0"`
+		EndedAt   int64  `json:"ended_at" binding:"gte=0"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, "参数错误: "+err.Error())
+		return
+	}
+
+	// 检查优惠码是否已存在
+	var count int64
+	if err := database.GetDB().Model(&model.Coupon{}).Where("code = ?", req.Code).Count(&count).Error; err != nil {
+		log.Printf("admin coupon duplicate check failed: %v", err)
+		panelError(c, "检查优惠码失败")
+		return
+	}
+	if count > 0 {
+		panelError(c, "优惠码已存在")
+		return
+	}
+
+	// 设置默认值
+	if req.Type == 0 {
+		req.Type = 1 // 默认折扣类型
+	}
+	if req.StartedAt == 0 {
+		req.StartedAt = time.Now().Unix()
+	}
+	if req.EndedAt == 0 {
+		req.EndedAt = time.Now().Add(30 * 24 * time.Hour).Unix()
+	}
+
+	limitUse := req.LimitUse
+	coupon := model.Coupon{
+		Code:      req.Code,
+		Name:      req.Name,
+		Type:      req.Type,
+		Value:     req.Value,
+		LimitUse:  &limitUse,
+		UseCount:  0,
+		StartedAt: req.StartedAt,
+		EndedAt:   req.EndedAt,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := database.GetDB().Create(&coupon).Error; err != nil {
+		log.Printf("admin coupon create failed: %v", err)
+		panelError(c, "创建失败")
+		return
+	}
+
+	panelSuccess(c, gin.H{
+		"message": "创建成功",
+		"data":    coupon,
+	})
+}
+
+// DeleteCoupon 删除优惠券
+func (h *AdminCouponHandler) DeleteCoupon(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		panelError(c, "无效的优惠券ID")
+		return
+	}
+
+	var coupon model.Coupon
+	if err := database.GetDB().First(&coupon, id).Error; err != nil {
+		panelError(c, "优惠券不存在")
+		return
+	}
+
+	if err := database.GetDB().Delete(&coupon).Error; err != nil {
+		log.Printf("admin coupon delete failed: %v", err)
+		panelError(c, "删除失败")
+		return
+	}
+
+	panelSuccess(c, gin.H{"message": "删除成功"})
+}

@@ -1,0 +1,71 @@
+- name: Apply V2Board forward iptables rules
+  hosts: all
+  gather_facts: false
+  become: true
+  vars:
+    forward_protocols: "{{ ['tcp', 'udp'] if tunnel.protocol == 'both' else (['udp'] if tunnel.protocol == 'udp' else ['tcp']) }}"
+    forward_interface: "{{ (forward.interfaceName | default('') | trim) or (tunnel.interfaceName | default('') | trim) }}"
+    strategy_normalized: "{{ forward.strategy | default('fifo') | lower }}"
+  pre_tasks:
+    - name: Fail when no forward targets exist
+      ansible.builtin.fail:
+        msg: "forward {{ forward.id }} has no remote targets"
+      when: (targets | default([])) | length == 0
+
+    - name: Persist IPv4 forwarding
+      ansible.builtin.lineinfile:
+        path: /etc/sysctl.conf
+        regexp: '^net.ipv4.ip_forward='
+        line: net.ipv4.ip_forward=1
+        create: true
+
+    - name: Enable IPv4 forwarding immediately
+      ansible.builtin.command: sysctl -w net.ipv4.ip_forward=1
+      changed_when: false
+
+  tasks:
+    - name: Apply NAT chain for each protocol
+      ansible.builtin.shell: |
+        set -euo pipefail
+        CHAIN="V2B_FWD_{{ forward.id }}_{{ item | upper }}"
+        PORT="{{ forward.inPort }}"
+        PROTO="{{ item }}"
+        IFACE="{{ forward_interface }}"
+
+        iptables -t nat -N "$CHAIN" 2>/dev/null || true
+        iptables -t nat -F "$CHAIN"
+
+        {% if strategy_normalized == 'round' and (targets | length) > 1 %}
+        {% for target in targets[:-1] %}
+        iptables -t nat -A "$CHAIN" -p "$PROTO" -m statistic --mode nth --every {{ (targets | length) - loop.index0 }} --packet 0 -j DNAT --to-destination "{{ target.addr }}"
+        {% endfor %}
+        iptables -t nat -A "$CHAIN" -p "$PROTO" -j DNAT --to-destination "{{ targets[-1].addr }}"
+        {% elif strategy_normalized == 'rand' and (targets | length) > 1 %}
+        {% for target in targets[:-1] %}
+        iptables -t nat -A "$CHAIN" -p "$PROTO" -m statistic --mode random --probability {{ '%.5f' | format(1.0 / ((targets | length) - loop.index0)) }} -j DNAT --to-destination "{{ target.addr }}"
+        {% endfor %}
+        iptables -t nat -A "$CHAIN" -p "$PROTO" -j DNAT --to-destination "{{ targets[-1].addr }}"
+        {% else %}
+        iptables -t nat -A "$CHAIN" -p "$PROTO" -j DNAT --to-destination "{{ targets[0].addr }}"
+        {% endif %}
+
+        PREROUTING_ARGS=(-p "$PROTO" --dport "$PORT")
+        if [ -n "$IFACE" ]; then
+          PREROUTING_ARGS+=(-i "$IFACE")
+        fi
+
+        if ! iptables -t nat -C PREROUTING "${PREROUTING_ARGS[@]}" -j "$CHAIN" 2>/dev/null; then
+          iptables -t nat -A PREROUTING "${PREROUTING_ARGS[@]}" -j "$CHAIN"
+        fi
+
+        {% for target in targets %}
+        TARGET_ADDR="{{ target.addr }}"
+        TARGET_HOST="${TARGET_ADDR%%:*}"
+        TARGET_PORT="${TARGET_ADDR##*:}"
+        if ! iptables -t nat -C POSTROUTING -p "$PROTO" -d "$TARGET_HOST" --dport "$TARGET_PORT" -j MASQUERADE 2>/dev/null; then
+          iptables -t nat -A POSTROUTING -p "$PROTO" -d "$TARGET_HOST" --dport "$TARGET_PORT" -j MASQUERADE
+        fi
+        {% endfor %}
+      args:
+        executable: /bin/bash
+      loop: "{{ forward_protocols }}"

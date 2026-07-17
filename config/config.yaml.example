@@ -1,0 +1,220 @@
+env: "development"
+
+# Bootstrap rules:
+# - the backend always reads this file on startup
+# - local go run does not auto-load .env
+# - runtime backend selection comes only from forward_runtime below
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "release"
+  read_timeout: 30
+  write_timeout: 30
+  # Leave empty to disable trusting forwarded client IP headers.
+  # Populate this only with the reverse proxies/load balancers that sit in front of AnixOps Control.
+  trusted_proxies: []
+  # HTTP CORS and WebSocket Origin allowlist. Empty HTTP CORS echoes any Origin;
+  # empty WebSocket origins keep upgrades same-host only while still allowing
+  # non-browser clients with no Origin header.
+  cors:
+    allowed_origins: []
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+    allowed_headers: ["Content-Type", "Authorization", "X-API-Key"]
+    allow_credentials: false
+    max_age: 86400
+
+frontend:
+  enable: true
+  port: 3000
+  path: "web/public"
+
+database:
+  driver: "sqlite"
+  database: "config/data/v2board.db"
+  log_level: "info"
+  # host: "127.0.0.1"
+  # port: 5432
+  # username: "postgres"
+  # password: ""
+  # max_idle_conns: 10
+  # max_open_conns: 100
+  # conn_max_lifetime: 3600
+
+cache:
+  driver: "memory"
+  # redis_host: "127.0.0.1"
+  # redis_port: 6379
+  # redis_password: ""
+  # redis_db: 0
+
+log:
+  level: "info"
+  output: "stdout"
+  file_path: "./logs/v2board.log"
+  max_size: 100
+  max_backups: 30
+  max_age: 7
+
+jwt:
+  secret: "your-jwt-secret-key-change-in-production"
+  expire: 86400
+
+auth:
+  login_rate_limit:
+    enabled: true
+    max_attempts: 6
+    window_seconds: 300
+    lockout_seconds: 600
+  register_rate_limit:
+    enabled: true
+    max_attempts: 5
+    window_seconds: 3600
+    lockout_seconds: 3600
+  registration:
+    enabled: true
+    require_invite: false
+    allowed_email_domains: []
+    blocked_email_domains: []
+
+app:
+  name: "AnixOps Control"
+  version: "4.0.0-alpha.7"
+  api_token: ""
+  traffic_log_enable: true
+  subscribe_path: "s"
+
+# Base64-encoded Ed25519 public key used to verify official AnixOps plugin
+# manifests before a release can be registered through /api/v3.
+plugins:
+  # Official AnixOps Ed25519 release trust root (raw public key, base64).
+  official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
+  # Normal product installs keep package execution disabled until a documented
+  # canary explicitly enables it. Signed catalog and WebUI inspection remain
+  # available while this worker is off.
+  control_execution_enabled: false
+  control_poll_interval: "5s"
+  # Keep Control-to-Agent lifecycle delivery disabled in the normal template.
+  # Use config.dev.yaml.example or an operator-approved canary profile to turn
+  # it on after the Agent Supervisor and rollback plan are ready.
+  dispatch_enabled: false
+  dispatch_poll_interval: "5s"
+  # Declarative topology execution remains opt-in and also requires
+  # dispatch_enabled so planned revisions cannot alter legacy traffic.
+  topology_execution_enabled: false
+  topology_poll_interval: "5s"
+
+# Canonical forward runtime config for Windows/Linux/local binary/Docker.
+# Startup order:
+# 1. read forward_runtime from config.yaml
+# 2. normalize relative runtime paths
+# 3. persist the runtime snapshot into v2_system_config
+forward_runtime:
+  # Optional compatibility switch:
+  # - true  => backend forced to gost
+  # - false => backend forced to the configured local ansible backend
+  # If omitted, backend below is used directly.
+  # nodex_mode: true
+
+  # Choose one backend:
+  # - gost               => NodeX mode, stateful runtime
+  # - nftables_ansible   => local ansible/nftables mode, stateless runtime
+  # - iptables_ansible   => legacy local ansible/iptables mode
+  # - clean_agent        => clean-room pull agent mode, no Forwardx code dependency
+  backend: "gost"
+
+  # NodeX / gost runtime.
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    token: "replace-with-shared-token"
+    timeout_seconds: 15
+
+  # Clean-room pull agent runtime. The panel queues runtime jobs; v2forward-agent
+  # pulls actions from /api/v2/forward-agent/heartbeat and reports results back.
+  clean_agent:
+    public_url: ""
+    heartbeat_interval_seconds: 10
+    action_timeout_seconds: 120
+    token_expire_seconds: 0
+    # Off by default: v2forward-agent pulls jobs directly from /api/v2/forward-agent/heartbeat.
+    # Enable only when you intentionally use the legacy /api/v2/agent/tasks bridge.
+    legacy_bridge_enabled: false
+
+  # Preferred local ansible execution runtime for modern Debian/Ubuntu hosts.
+  # Relative paths are resolved from config.yaml/project location at startup.
+  nftables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply_nftables.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove_nftables.yml"
+    become: false
+    extra_vars: {}
+    command: ""
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
+
+  # Legacy local ansible execution runtime.
+  # Relative paths are resolved from config.yaml/project location at startup.
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    become: false
+    extra_vars: {}
+    command: ""
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
+
+  # Optional local background worker tuning.
+  # Duration values use Go syntax such as 5s, 30s, 2m.
+  jobs:
+    poll_interval: "5s"
+    idle_poll_interval: "30s"
+    error_log_interval: "1m"
+    batch_size: 10
+    timeout_seconds: 120
+
+  gost_stats:
+    poll_interval: "30s"
+    idle_poll_interval: "2m"
+    error_log_interval: "5m"
+
+  # Latency prober (TCPing) for the observability page. Probes forward targets,
+  # tunnel relay/exit nodes and ForwardNode endpoints, storing pre-aggregated
+  # buckets in v2_forward_latency_bucket.
+  latency:
+    poll_interval: "60s"        # cycle == bucket interval
+    idle_poll_interval: "60s"   # how often to re-check for targets when idle (new nodes appear within this)
+    error_log_interval: "5m"
+    dials: 5                    # TCP dials per probe used to compute min/avg/max/p95/loss
+    dial_timeout: "3s"
+    concurrency: 16             # max targets probed in parallel
+    retention_days: 7           # buckets older than this are purged hourly
+
+# Node-facing gRPC server. The development template binds loopback only.
+# Per-node x-api-key/x-node-id auth is always enforced regardless of api_token.
+# api_token (optional) is a fallback for callers with no node key (e.g. legacy/admin).
+# Before accepting remote Agents, configure TLS and change host deliberately.
+grpc:
+  enabled: true
+  host: "127.0.0.1"
+  port: 50051
+  api_token: ""
+  tls_cert_file: ""
+  tls_key_file: ""
+
+admin:
+  email: "control@anixops.com"
+  # Leave empty to generate and print a one-time random bootstrap password.
+  password: ""
+
+tls:
+  enable: false
+  cert_file: ""
+  key_file: ""
+  domain: ""

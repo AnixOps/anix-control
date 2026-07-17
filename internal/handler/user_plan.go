@@ -1,0 +1,27 @@
+package handler
+
+import (
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/gin-gonic/gin"
+)
+
+// UserPlanHandler 用户端套餐处理器
+type UserPlanHandler struct{}
+
+// NewUserPlanHandler 创建套餐处理器
+func NewUserPlanHandler() *UserPlanHandler {
+	return &UserPlanHandler{}
+}
+
+// GetPlans 获取可购买的套餐列表
+func (h *UserPlanHandler) GetPlans(c *gin.Context) {
+	var plans []model.Plan
+	// 仅显示已上架的套餐 (show=1)
+	if err := database.GetDB().Where("show = ?", 1).Order("sort ASC").Find(&plans).Error; err != nil {
+		panelError(c, "获取套餐列表失败")
+		return
+	}
+
+	panelSuccess(c, plans)
+}

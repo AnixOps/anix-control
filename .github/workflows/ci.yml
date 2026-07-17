@@ -1,0 +1,1515 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ go_dev, production ]
+    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches: [ go_dev, production ]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.26.5'
+  NODE_VERSION: '22'
+  GOST_VERSION: '3.2.6'
+  GOST_LINUX_AMD64_ARCHIVE_SHA256: 'b39037b0380ea001fb3c0c28441c2e10bfc694f90682739a65b53e55dce5238b'
+  GOST_LINUX_AMD64_BINARY_SHA256: 'a2aea24efb4597b5f57b35b8e1bbcc59f439b80723854d4371f6828b46682ffb'
+
+jobs:
+  tag-gate:
+    name: Validate Release Tag
+    runs-on: ubuntu-latest
+    outputs:
+      is_release_tag: ${{ steps.check.outputs.is_release_tag }}
+      product_stage: ${{ steps.check.outputs.product_stage }}
+      release_stage_classification: ${{ steps.check.outputs.release_stage_classification }}
+      release_eligible: ${{ steps.check.outputs.release_eligible }}
+      release_package_ids: ${{ steps.check.outputs.release_package_ids }}
+      release_package_scope: ${{ steps.check.outputs.release_package_scope }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Check if tag matches stable or prerelease version
+        id: check
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]; then
+            stage_output="$(mktemp)"
+            trap 'rm -f "${stage_output}"' EXIT
+            python3 config/scripts/check_release_stage.py \
+              --tag "${GITHUB_REF_NAME}" \
+              --github-output "${stage_output}"
+            cat "${stage_output}" >> "$GITHUB_OUTPUT"
+            if grep -Fxq "release_eligible=true" "${stage_output}"; then
+              python3 config/scripts/check_release_version.py --tag "${GITHUB_REF_NAME}"
+              echo "is_release_tag=true" >> "$GITHUB_OUTPUT"
+              echo "Publishable release tag accepted: ${GITHUB_REF_NAME}"
+            else
+              grep -Fxq "release_eligible=false" "${stage_output}"
+              grep -Fxq "release_stage_classification=historical-preview" "${stage_output}"
+              echo "is_release_tag=false" >> "$GITHUB_OUTPUT"
+              echo "Historical preview tag audited; release-only jobs are disabled: ${GITHUB_REF_NAME}"
+            fi
+          else
+            echo "is_release_tag=false" >> "$GITHUB_OUTPUT"
+            echo "Not a stable, alpha, beta, or release-candidate tag; skip release-only jobs."
+          fi
+
+  deploy-script-test:
+    name: Deployment Script Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Validate panel deploy script syntax
+        run: bash -n config/deploy/deploy_panel.sh
+
+      - name: Validate local build cleanup script syntax
+        run: bash -n config/deploy/clean_local_build_artifacts.sh
+
+      - name: Validate release installer syntax
+        run: |
+          bash -n install.sh
+          bash -n scripts/install.sh
+
+      - name: Validate PostgreSQL restore rehearsal syntax
+        run: bash -n scripts/postgres_restore_rehearsal.sh
+
+      - name: Validate plugin package release scripts
+        run: |
+          bash -n packages/machine-telemetry/tests/release_gate.sh
+          bash -n packages/nftables-forward/tests/release_gate.sh
+          bash -n packages/gost-mesh/tests/release_gate.sh
+          bash -n packages/nat-egress/tests/release_gate.sh
+          bash -n scripts/sign_plugin_release.sh
+          python3 -m py_compile packages/machine-telemetry/build.py packages/machine-telemetry/verify_signature.py
+          python3 -m py_compile packages/nftables-forward/build.py packages/nftables-forward/verify_signature.py
+          python3 -m py_compile packages/gost-mesh/build.py packages/gost-mesh/verify_signature.py
+          python3 -m py_compile packages/nat-egress/build.py packages/nat-egress/verify_signature.py
+
+      - name: Validate release build policy script syntax
+        run: bash -n config/deploy/check_release_build_policy.sh
+
+      - name: Validate release manifest script syntax
+        run: python3 -m py_compile config/scripts/generate_release_manifest.py
+
+      - name: Validate release notes script syntax
+        run: python3 -m py_compile config/scripts/generate_release_notes.py
+
+      - name: Validate release version script syntax
+        run: python3 -m py_compile config/scripts/check_release_version.py
+
+      - name: Validate release stage contract script syntax
+        run: python3 -m py_compile config/scripts/check_release_stage.py
+
+      - name: Validate release artifact verification script syntax
+        run: python3 -m py_compile config/scripts/verify_release_artifacts.py
+
+      - name: Validate legacy deploy script syntax
+        run: bash -n config/scripts/deploy.sh
+
+      - name: Validate legacy pre-deploy script syntax
+        run: bash -n config/scripts/pre-deploy.sh
+
+      - name: Run panel deploy script self-test
+        run: bash config/deploy/deploy_panel.sh --self-test
+
+      - name: Run local build cleanup script self-test
+        run: bash config/deploy/clean_local_build_artifacts.sh --self-test
+
+      - name: Run release build policy self-test
+        run: bash config/deploy/check_release_build_policy.sh --self-test
+
+      - name: Run release manifest self-test
+        run: python3 config/scripts/generate_release_manifest.py --self-test
+
+      - name: Run release notes self-test
+        run: python3 config/scripts/generate_release_notes.py --self-test
+
+      - name: Run release version self-test
+        run: python3 config/scripts/check_release_version.py --self-test
+
+      - name: Run release stage contract self-test
+        run: python3 config/scripts/check_release_stage.py --self-test
+
+      - name: Run release artifact verification self-test
+        run: python3 config/scripts/verify_release_artifacts.py --self-test
+
+      - name: Run PostgreSQL restore rehearsal self-test
+        run: bash scripts/postgres_restore_rehearsal.sh --self-test
+
+      - name: Enforce release build policy
+        run: bash config/deploy/check_release_build_policy.sh
+
+      - name: Run legacy deploy guard self-test
+        run: bash config/scripts/deploy.sh --self-test
+
+      - name: Run legacy pre-deploy guard self-test
+        run: bash config/scripts/pre-deploy.sh --self-test
+
+  docs-sync:
+    name: Documentation Sync Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate documentation sync script syntax
+        run: bash -n config/scripts/check_docs_updated.sh
+
+      - name: Run documentation sync self-test
+        run: bash config/scripts/check_docs_updated.sh --self-test
+
+      - name: Require docs for implementation changes
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            echo "Release tag build; documentation sync was checked when the commit landed."
+            exit 0
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+
+          if [[ -z "${base}" || "${base}" =~ ^0+$ ]]; then
+            if git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+              base="HEAD~1"
+            else
+              echo "No previous commit is available; skipping documentation sync diff."
+              exit 0
+            fi
+          fi
+
+          if [[ "${base}" != "HEAD~1" ]] && ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            git fetch --depth=1 origin "${base}" || true
+          fi
+
+          bash config/scripts/check_docs_updated.sh --base "${base}" --head HEAD
+
+  release-workflow-policy:
+    name: Release Workflow Policy Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Validate release workflow policy script syntax
+        run: bash -n config/scripts/check_release_workflow.sh
+
+      - name: Run release workflow policy self-test
+        run: bash config/scripts/check_release_workflow.sh --self-test
+
+      - name: Enforce release workflow policy
+        run: bash config/scripts/check_release_workflow.sh
+
+  go-quality:
+    name: Go Quality Gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: '29.2'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install pinned protoc Go plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.1
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Check protobuf generated code
+        shell: bash
+        run: |
+          export PATH="$(go env GOPATH)/bin:${PATH}"
+          bash api/grpc/gen.sh
+          git diff --exit-code -- api/grpc/v2boardpb api/grpc/agent/v1
+          test -z "$(git ls-files --others --exclude-standard -- api/grpc/v2boardpb api/grpc/agent/v1)"
+
+      - name: Check go mod tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Check gofmt
+        shell: bash
+        run: |
+          unformatted="$(git ls-files '*.go' | xargs gofmt -l)"
+          if [[ -n "$unformatted" ]]; then
+            echo "::error::Go files are not gofmt-formatted"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run full Go test suite
+        run: go test ./... -count=1 -p=1
+
+  go-race:
+    name: Go Race Detector
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run race tests
+        run: go test -race ./... -count=1 -p=1
+
+  go-benchmark-smoke:
+    name: Go Benchmark Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run critical benchmark smoke tests
+        run: go test -run '^$' -bench=. -benchtime=1x ./internal/service ./internal/handler ./internal/router
+
+  go-lint:
+    name: Go Lint Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+
+      - name: Run golangci-lint gate
+        shell: bash
+        run: |
+          mkdir -p lint-reports
+          set +e
+          golangci-lint run --timeout=8m 2>&1 | tee lint-reports/golangci-lint.txt
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload golangci-lint report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: golangci-lint-report
+          path: lint-reports/golangci-lint.txt
+
+  go-security:
+    name: Go Security Scans
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Run production gosec gate
+        shell: bash
+        run: |
+          mapfile -t production_packages < <(
+            go list -f '{{.Dir}}' ./cmd/server ./api/grpc/v2boardpb ./internal/... \
+              | sed "s#^${PWD}#.#" \
+              | grep -Ev '^\./internal/tests(/|$)' \
+              | sort
+          )
+          gosec -exclude-generated -nosec-require-rules -nosec-require-justification -quiet "${production_packages[@]}"
+
+      - name: Run full repository gosec gate and report
+        run: |
+          mkdir -p security-reports
+          gosec -exclude-generated -fmt=json -out=security-reports/gosec.json ./...
+
+      - name: Upload gosec report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gosec-report
+          path: security-reports/gosec.json
+
+  docker-smoke:
+    name: Docker Build Smoke
+    runs-on: ubuntu-latest
+    needs: [go-quality, go-security]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          tags: anix-control:ci
+          build-args: |
+            VERSION=ci
+            BUILD_TIME=1970-01-01T00:00:00Z
+            BUILD_CODE=${{ github.run_number }}
+            COMMIT=${{ github.sha }}
+
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    needs: [go-quality]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Generate Swagger docs
+        run: |
+          go install github.com/swaggo/swag/cmd/swag@v1.16.6
+          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run tests with coverage
+        shell: bash
+        run: |
+          mapfile -t packages < <(go list ./internal/... | grep -v '^github.com/AnixOps/anix-control/v4/internal/tests/integration' | grep -v '^github.com/AnixOps/anix-control/v4/internal/tests/e2e')
+          go test -p=1 -count=1 -v -coverprofile=coverage.out -covermode=atomic "${packages[@]}"
+
+      - name: Generate coverage report
+        run: |
+          go tool cover -func=coverage.out > coverage.txt
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          cat coverage.txt >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: |
+            coverage.out
+            coverage.txt
+
+  postgres-stats-test:
+    name: PostgreSQL Stats Regression
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: v2board_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d v2board_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run PostgreSQL stats regression tests
+        env:
+          POSTGRES_TEST_DSN: host=127.0.0.1 user=postgres password=postgres dbname=v2board_test port=5432 sslmode=disable TimeZone=UTC
+        run: go test -v ./internal/service -run TestStatsServicePostgres -count=1
+
+  migration-dry-run-test:
+    name: SQLite to PostgreSQL Dry Run
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: v2board_migration_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d v2board_migration_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Create SQLite migration source fixture
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import sqlite3
+
+          db_path = "/tmp/v2board-migration-source.db"
+          conn = sqlite3.connect(db_path)
+          conn.execute("CREATE TABLE v2_user (id INTEGER PRIMARY KEY, email TEXT, token TEXT)")
+          conn.execute("CREATE TABLE v2_plan (id INTEGER PRIMARY KEY, name TEXT)")
+          conn.execute("CREATE TABLE v2_system_config (id INTEGER PRIMARY KEY, key TEXT, value TEXT)")
+          conn.execute("INSERT INTO v2_user (id, email, token) VALUES (1, 'migration@example.com', 'migration-token')")
+          conn.execute("INSERT INTO v2_plan (id, name) VALUES (1, 'Migration Plan')")
+          conn.execute("INSERT INTO v2_system_config (id, key, value) VALUES (1, 'migration.fixture', 'true')")
+          conn.commit()
+          conn.close()
+          print(db_path)
+          PY
+
+      - name: Run SQLite to PostgreSQL migration dry run
+        env:
+          POSTGRES_TEST_DSN: host=127.0.0.1 user=postgres password=postgres dbname=v2board_migration_test port=5432 sslmode=disable TimeZone=UTC
+        shell: bash
+        run: |
+          go run ./cmd/sqlite2postgres \
+            -source /tmp/v2board-migration-source.db \
+            -target-dsn "$POSTGRES_TEST_DSN" \
+            -dry-run | tee migration-dry-run.txt
+          grep -q "dry-run: no PostgreSQL data changed" migration-dry-run.txt
+          grep -q "v2_user" migration-dry-run.txt
+          grep -q "v2_plan" migration-dry-run.txt
+
+      - name: Upload migration dry-run report
+        uses: actions/upload-artifact@v7
+        with:
+          name: migration-dry-run-report
+          path: migration-dry-run.txt
+
+  postgres-restore-rehearsal:
+    name: PostgreSQL Restore Rehearsal
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: v2board_restore_rehearsal
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d v2board_restore_rehearsal"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install PostgreSQL 16 client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+
+      - name: Run destructive restore rehearsal on disposable PostgreSQL
+        env:
+          POSTGRES_REHEARSAL_DSN: host=127.0.0.1 user=postgres password=postgres dbname=v2board_restore_rehearsal port=5432 sslmode=disable TimeZone=UTC
+        run: |
+          bash scripts/postgres_restore_rehearsal.sh \
+            --unavailable fail \
+            --output-dir postgres-restore-rehearsal
+
+      - name: Upload PostgreSQL restore rehearsal evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: postgres-restore-rehearsal
+          path: postgres-restore-rehearsal/
+
+  plugin-package-release-test:
+    name: Plugin Package Release Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Checkout pinned Agent source for official packages
+        uses: actions/checkout@v7
+        with:
+          repository: AnixOps/anix-agent
+          ref: 35f1af4b9887e1c2d811d66b8da38c7b0d86c7d9
+          path: V2bX_AnixOps
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build and verify real package inputs
+        shell: bash
+        env:
+          GOEXPERIMENT: jsonv2
+          GOWORK: 'off'
+        run: |
+          set -Eeuo pipefail
+          mkdir -p package-build
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go -C V2bX_AnixOps build -trimpath \
+              -o "${GITHUB_WORKSPACE}/package-build/nftables-forward-agent" ./cmd/nftables-forward
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go -C V2bX_AnixOps build -trimpath \
+              -o "${GITHUB_WORKSPACE}/package-build/gost-mesh-agent" ./cmd/gost-mesh
+          chmod 0755 package-build/nftables-forward-agent
+          chmod 0755 package-build/gost-mesh-agent
+          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.2.0" ]]
+
+          gost_archive="${RUNNER_TEMP}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
+          curl --fail --location --retry 3 --output "${gost_archive}" \
+            "https://github.com/go-gost/gost/releases/download/v${GOST_VERSION}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
+          echo "${GOST_LINUX_AMD64_ARCHIVE_SHA256}  ${gost_archive}" | sha256sum --check --strict
+          tar -xzf "${gost_archive}" -C "${RUNNER_TEMP}"
+          install -m 0755 "${RUNNER_TEMP}/gost" package-build/gost
+          echo "${GOST_LINUX_AMD64_BINARY_SHA256}  package-build/gost" | sha256sum --check --strict
+          package-build/gost -V
+
+      - name: Run Machine Telemetry package unit tests
+        run: python3 -m unittest discover -s packages/machine-telemetry/tests -p 'test_*.py' -v
+
+      - name: Run Machine Telemetry WebUI smoke test
+        run: node packages/machine-telemetry/tests/webui_smoke.mjs
+
+      - name: Run nftables Forward package unit tests
+        run: python3 -m unittest discover -s packages/nftables-forward/tests -p 'test_*.py' -v
+
+      - name: Run nftables Forward WebUI smoke test
+        run: node packages/nftables-forward/tests/webui_smoke.mjs
+
+      - name: Run GOST Mesh package unit tests
+        run: python3 -m unittest discover -s packages/gost-mesh/tests -p 'test_*.py' -v
+
+      - name: Run GOST Mesh WebUI smoke test
+        run: node packages/gost-mesh/tests/webui_smoke.mjs
+
+      - name: Run NAT Egress package unit tests
+        run: python3 -m unittest discover -s packages/nat-egress/tests -p 'test_*.py' -v
+
+      - name: Run NAT Egress WebUI smoke test
+        run: node packages/nat-egress/tests/webui_smoke.mjs
+
+      - name: Run reproducible unsigned and signed package contract
+        run: |
+          set -o pipefail
+          bash packages/machine-telemetry/tests/release_gate.sh \
+            | tee machine-telemetry-package-contract.txt
+          bash packages/nftables-forward/tests/release_gate.sh \
+            --agent-binary package-build/nftables-forward-agent \
+            | tee nftables-forward-package-contract.txt
+          bash packages/gost-mesh/tests/release_gate.sh \
+            --agent-binary package-build/gost-mesh-agent \
+            --gost package-build/gost \
+            | tee gost-mesh-package-contract.txt
+          bash packages/nat-egress/tests/release_gate.sh \
+            | tee nat-egress-package-contract.txt
+
+      - name: Upload package contract report
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-package-contract-reports
+          path: |
+            machine-telemetry-package-contract.txt
+            nftables-forward-package-contract.txt
+            gost-mesh-package-contract.txt
+            nat-egress-package-contract.txt
+
+  plugin-package-publish:
+    name: Publish Signed Official Plugin Packages
+    runs-on: ubuntu-latest
+    needs: [tag-gate, plugin-package-release-test, cross-repository-agent-e2e]
+    if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    env:
+      RELEASE_PACKAGE_IDS: ${{ needs.tag-gate.outputs.release_package_ids }}
+      RELEASE_PACKAGE_SCOPE: ${{ needs.tag-gate.outputs.release_package_scope }}
+    steps:
+      - name: Checkout Control
+        uses: actions/checkout@v7
+
+      - name: Checkout pinned Agent source
+        uses: actions/checkout@v7
+        with:
+          repository: AnixOps/anix-agent
+          ref: 35f1af4b9887e1c2d811d66b8da38c7b0d86c7d9
+          path: V2bX_AnixOps
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Build declared release Agent plugin binaries
+        env:
+          GOEXPERIMENT: jsonv2
+          GOWORK: 'off'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${RELEASE_PACKAGE_IDS}" ]] || {
+            echo "tag-gate did not declare a signed package scope" >&2
+            exit 1
+          }
+          has_package() {
+            [[ ",${RELEASE_PACKAGE_IDS}," == *",$1,"* ]]
+          }
+          mkdir -p package-build
+          if has_package machine-telemetry; then
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+              go -C V2bX_AnixOps build -o "${GITHUB_WORKSPACE}/package-build/machine-telemetry-agent" ./cmd/machine-telemetry
+            chmod 0755 package-build/machine-telemetry-agent
+            [[ "$(package-build/machine-telemetry-agent --version)" == "machine-telemetry 1.1.0" ]]
+          fi
+          if has_package nftables-forward; then
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+              go -C V2bX_AnixOps build -o "${GITHUB_WORKSPACE}/package-build/nftables-forward-agent" ./cmd/nftables-forward
+            chmod 0755 package-build/nftables-forward-agent
+            [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.2.0" ]]
+          fi
+          if has_package gost-mesh; then
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+              go -C V2bX_AnixOps build -trimpath -o "${GITHUB_WORKSPACE}/package-build/gost-mesh-agent" ./cmd/gost-mesh
+            chmod 0755 package-build/gost-mesh-agent
+          fi
+          if has_package nat-egress; then
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+              go -C V2bX_AnixOps build -o "${GITHUB_WORKSPACE}/package-build/nat-egress-agent" ./cmd/nat-egress
+            chmod 0755 package-build/nat-egress-agent
+            [[ "$(package-build/nat-egress-agent --version)" == "nat-egress 1.0.0" ]]
+          fi
+
+      - name: Download pinned GOST runtime when declared
+        if: ${{ contains(needs.tag-gate.outputs.release_package_scope, ',gost-mesh,') }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gost_archive="${RUNNER_TEMP}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
+          curl --fail --location --retry 3 --output "${gost_archive}" \
+            "https://github.com/go-gost/gost/releases/download/v${GOST_VERSION}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
+          echo "${GOST_LINUX_AMD64_ARCHIVE_SHA256}  ${gost_archive}" | sha256sum --check --strict
+          tar -xzf "${gost_archive}" -C "${RUNNER_TEMP}"
+          install -m 0755 "${RUNNER_TEMP}/gost" package-build/gost
+          echo "${GOST_LINUX_AMD64_BINARY_SHA256}  package-build/gost" | sha256sum --check --strict
+          package-build/gost -V
+
+      - name: Build declared deterministic packages
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          has_package() {
+            [[ ",${RELEASE_PACKAGE_IDS}," == *",$1,"* ]]
+          }
+          if has_package machine-telemetry; then
+            python3 packages/machine-telemetry/build.py build \
+              --agent-binary package-build/machine-telemetry-agent \
+              --goos linux --goarch amd64 --output-dir package-build/machine-telemetry-dist
+          fi
+          if has_package nftables-forward; then
+            python3 packages/nftables-forward/build.py build \
+              --agent-binary package-build/nftables-forward-agent \
+              --goos linux --goarch amd64 --output-dir package-build/nftables-forward-dist
+          fi
+          if has_package gost-mesh; then
+            [[ "$(package-build/gost-mesh-agent --version)" =~ ^gost-mesh[[:space:]]+1\.0\.0[[:space:]]+\(gost[[:space:]]+v3\.2\.6\)$ ]]
+            python3 packages/gost-mesh/build.py build \
+              --agent-binary package-build/gost-mesh-agent \
+              --gost package-build/gost \
+              --goos linux --goarch amd64 --output-dir package-build/gost-mesh-dist
+          fi
+          if has_package nat-egress; then
+            python3 packages/nat-egress/build.py build \
+              --agent-binary package-build/nat-egress-agent \
+              --goos linux --goarch amd64 --output-dir package-build/nat-egress-dist
+          fi
+
+      - name: Sign declared package releases
+        env:
+          ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" ]] || {
+            echo "ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY is required for release tags" >&2
+            exit 1
+          }
+          key_file="$(mktemp)"
+          trap 'rm -f "${key_file}"' EXIT
+          printf '%s\n' "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" >"${key_file}"
+          chmod 0600 "${key_file}"
+          release_dir="release-packages"
+          mkdir -p "${release_dir}"
+          has_package() {
+            [[ ",${RELEASE_PACKAGE_IDS}," == *",$1,"* ]]
+          }
+          sign_package() {
+            local package_id="$1"
+            local version="$2"
+            local dist_dir="$3"
+            local artifact="$4"
+            local prefix="anixops-${package_id}-${version}"
+            local artifact_name
+            artifact_name="$(basename "${artifact}")"
+            bash scripts/sign_plugin_release.sh \
+              --manifest "${dist_dir}/manifest.json" \
+              --artifact "${artifact}" \
+              --private-key "${key_file}" \
+              --signature "${release_dir}/${prefix}.sig" \
+              --public-key "${release_dir}/${prefix}.public-key.pem"
+            cp "${artifact}" "${release_dir}/${artifact_name}"
+            cp "${dist_dir}/manifest.json" "${release_dir}/${prefix}.manifest.json"
+            openssl pkey -pubin -in "${release_dir}/${prefix}.public-key.pem" -outform DER \
+              | tail -c 32 | base64 | tr -d '\n' >"${release_dir}/${prefix}.public-key.raw"
+            printf '\n' >>"${release_dir}/${prefix}.public-key.raw"
+            (
+              cd "${release_dir}"
+              sha256sum "${artifact_name}" "${prefix}.manifest.json" "${prefix}.sig" \
+                "${prefix}.public-key.pem" "${prefix}.public-key.raw" >"${prefix}.SHA256SUMS.txt"
+            )
+          }
+          if has_package machine-telemetry; then
+            sign_package machine-telemetry 1.1.0 package-build/machine-telemetry-dist \
+              package-build/machine-telemetry-dist/machine-telemetry-1.1.0.tar
+          fi
+          if has_package nftables-forward; then
+            sign_package nftables-forward 1.2.0 package-build/nftables-forward-dist \
+              package-build/nftables-forward-dist/nftables-forward-1.2.0.tar
+          fi
+          if has_package gost-mesh; then
+            sign_package gost-mesh 1.0.0 package-build/gost-mesh-dist \
+              package-build/gost-mesh-dist/gost-mesh-1.0.0.tar
+          fi
+          if has_package nat-egress; then
+            sign_package nat-egress 1.0.0 package-build/nat-egress-dist \
+              package-build/nat-egress-dist/nat-egress-1.0.0.tar
+          fi
+
+      - name: Upload declared signed package releases
+        uses: actions/upload-artifact@v7
+        with:
+          name: signed-plugin-releases
+          path: release-packages/
+
+  forward-runtime-test:
+    name: Forward Runtime Regression
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run forward runtime service tests
+        run: |
+          go test -v ./internal/service -run 'TestPanelForwardRuntimeJobExecutor|TestForwardAgentBridgeWorker|TestForwardCleanAgentService|TestNewForwardAgentBridgeWorker_LoadsCleanAgentActionTimeoutFromConfig' -count=1
+
+      - name: Run forward runtime config tests
+        run: |
+          go test -v ./internal/config -run TestLoadForwardRuntimeConfig -count=1
+
+      - name: Run forward runtime server startup tests
+        run: |
+          go test -v ./cmd/server -run TestShouldStartForwardAgentBridgeWorker -count=1
+
+      - name: Run forward agent bridge handler tests
+        run: |
+          go test -v ./internal/handler -run TestAgentBridgeHandler -count=1
+
+  grpc-test:
+    name: gRPC Core Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run gRPC tests
+        run: |
+          go test -v -coverprofile=grpc_coverage.out ./internal/grpc/...
+
+      - name: Check gRPC coverage (80%+)
+        run: |
+          COVERAGE=$(go tool cover -func=grpc_coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "gRPC coverage: ${COVERAGE}%"
+          if [ $(echo "$COVERAGE < 80" | bc -l) -eq 1 ]; then
+            echo "::error::gRPC coverage ${COVERAGE}% is below minimum 80%"
+            exit 1
+          fi
+          echo "gRPC coverage check passed: ${COVERAGE}%"
+
+  cross-repository-agent-e2e:
+    name: Control to Agent Process E2E
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Control
+        uses: actions/checkout@v7
+
+      - name: Checkout pinned Agent fixture source
+        uses: actions/checkout@v7
+        with:
+          repository: AnixOps/anix-agent
+          ref: 35f1af4b9887e1c2d811d66b8da38c7b0d86c7d9
+          path: V2bX_AnixOps
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run real Control to Agent process E2E
+        env:
+          ANIXOPS_CROSS_REPO_E2E: '1'
+          GOWORK: 'off'
+        run: |
+          go test -v -count=1 ./internal/grpc \
+            -run '^Test(KernelOperationBridgeCrossRepositoryAgentProcess|AgentPluginPackageCrossRepositoryE2E)$'
+
+  cmd-test:
+    name: CLI Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run CLI tests
+        run: |
+          go test -v -coverprofile=cmd_coverage.out ./cmd/...
+          COVERAGE=$(go tool cover -func=cmd_coverage.out | grep total | awk '{print $3}')
+          echo "CLI coverage: ${COVERAGE}"
+
+  smoke-test:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: [backend-test, cmd-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run smoke tests
+        run: |
+          go test -v -coverprofile=smoke_coverage.out ./internal/tests/smoke/...
+
+  e2e-test:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [backend-test, cmd-test, smoke-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run E2E tests
+        run: |
+          go test -v -count=1 ./internal/tests/e2e/...
+
+  frontend-build:
+    name: Frontend Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # The live Control WebUI gate builds a temporary Control binary and a
+      # deterministic official plugin package before Chromium opens the UI.
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Audit frontend dependencies
+        working-directory: web
+        run: npm audit --audit-level=moderate
+
+      - name: Run frontend tests
+        working-directory: web
+        run: npm test
+
+      - name: Install Playwright Chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run frontend browser E2E gate
+        working-directory: web
+        run: npm run test:e2e
+
+      - name: Run live Control signed WebUI E2E gate
+        working-directory: web
+        run: npx playwright test --config playwright.live-control.config.js
+
+      - name: Build frontend
+        working-directory: web
+        run: npm run build
+
+      - name: Generate frontend bundle size report
+        working-directory: web
+        run: npm run bundle:report
+
+      - name: Upload frontend artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: web/public/
+
+      - name: Upload frontend bundle size report
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-bundle-size
+          path: web/bundle-reports/
+
+  backend-build:
+    name: Backend Build
+    runs-on: ubuntu-latest
+    needs: [go-quality, go-lint, go-security, go-race, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, forward-runtime-test, grpc-test, cross-repository-agent-e2e, cmd-test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Generate Swagger docs
+        run: |
+          go install github.com/swaggo/swag/cmd/swag@v1.16.6
+          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal
+
+      - name: Build binary
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          BUILD_CODE="${GITHUB_RUN_NUMBER:-0}"
+          COMMIT="${GITHUB_SHA::12}"
+          CGO_ENABLED=0 GOOS=linux go build \
+            -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
+            -o anix-control ./cmd/server
+
+      - name: Upload backend artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: anix-control-binary
+          path: anix-control
+
+  release-binaries:
+    name: Build Release Binary (${{ matrix.goos }}-${{ matrix.goarch }})
+    runs-on: ubuntu-latest
+    needs: [go-quality, go-lint, go-security, go-race, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, plugin-package-publish, forward-runtime-test, grpc-test, cross-repository-agent-e2e, cmd-test, tag-gate]
+    if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ''
+          - goos: linux
+            goarch: arm64
+            ext: ''
+          - goos: windows
+            goarch: amd64
+            ext: '.exe'
+          - goos: windows
+            goarch: arm64
+            ext: '.exe'
+          - goos: darwin
+            goarch: amd64
+            ext: ''
+          - goos: darwin
+            goarch: arm64
+            ext: ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build binary
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          BUILD_CODE="${GITHUB_RUN_NUMBER:-0}"
+          COMMIT="${GITHUB_SHA::12}"
+          PRIMARY_BIN_NAME="anix-control-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
+            -o "${PRIMARY_BIN_NAME}" ./cmd/server
+
+          mkdir -p dist
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            zip -j "dist/${PRIMARY_BIN_NAME}.zip" "${PRIMARY_BIN_NAME}"
+          else
+            tar -czf "dist/${PRIMARY_BIN_NAME}.tar.gz" "${PRIMARY_BIN_NAME}"
+          fi
+
+      - name: Upload release binary artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-binary-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [backend-build, frontend-build, plugin-package-publish, tag-gate]
+    if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    env:
+      DOCKER_NAMESPACE: ${{ secrets.DOCKER_USERNAME || 'anixops' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Download frontend artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: web/public/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Detect Docker Hub credentials
+        id: registry
+        shell: bash
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          if [[ -n "${DOCKER_USERNAME}" && -n "${DOCKER_PASSWORD}" ]]; then
+            echo "can_push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_push=false" >> "$GITHUB_OUTPUT"
+            echo "Docker Hub credentials are not configured; image will be built but not pushed."
+          fi
+
+      - name: Login to Docker Hub
+        if: ${{ steps.registry.outputs.can_push == 'true' }}
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: |
+            ${{ env.DOCKER_NAMESPACE }}/anix-control
+          tags: |
+            type=raw,value=${{ github.ref_name }}
+
+      - name: Compute build metadata
+        id: build_meta
+        shell: bash
+        run: |
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          echo "build_code=${GITHUB_RUN_NUMBER:-0}" >> "$GITHUB_OUTPUT"
+          echo "commit=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: ${{ steps.registry.outputs.can_push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.build_meta.outputs.version }}
+            BUILD_TIME=${{ steps.build_meta.outputs.build_time }}
+            BUILD_CODE=${{ steps.build_meta.outputs.build_code }}
+            COMMIT=${{ steps.build_meta.outputs.commit }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Save docker release metadata
+        shell: bash
+        run: |
+          mkdir -p release
+          {
+            echo "published=${{ steps.registry.outputs.can_push }}"
+            echo "primary_image=${DOCKER_NAMESPACE}/anix-control:${GITHUB_REF_NAME}"
+            echo "digest=${{ steps.build.outputs.digest }}"
+            echo "tags:"
+            echo "${{ steps.meta.outputs.tags }}"
+          } > release/docker-image.txt
+
+      - name: Upload docker metadata artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-metadata
+          path: release/docker-image.txt
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [frontend-build, release-binaries, docker, plugin-package-publish, tag-gate]
+    if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    env:
+      RELEASE_PACKAGE_IDS: ${{ needs.tag-gate.outputs.release_package_ids }}
+      RELEASE_PACKAGE_SCOPE: ${{ needs.tag-gate.outputs.release_package_scope }}
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Prepare release directory
+        run: mkdir -p release
+
+      - name: Generate source SBOM
+        uses: anchore/sbom-action@v0.24.0
+        with:
+          path: .
+          format: spdx-json
+          artifact-name: anix-control-source-sbom
+          output-file: release/anix-control-source.sbom.spdx.json
+          upload-release-assets: false
+
+      - name: Download multi-platform binary artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-binary-*
+          merge-multiple: true
+          path: release/
+
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: web/public/
+
+      - name: Download docker metadata artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: docker-metadata
+          path: release/
+
+      - name: Download migration dry-run report
+        uses: actions/download-artifact@v8
+        with:
+          name: migration-dry-run-report
+          path: release/
+
+      - name: Download declared signed plugin packages
+        uses: actions/download-artifact@v8
+        with:
+          name: signed-plugin-releases
+          path: release/
+
+      - name: Create operator deployment runbook
+        shell: bash
+        run: |
+          cat > release/OPERATOR_DEPLOYMENT.md <<'EOF'
+          # Operator Deployment Runbook for {{RELEASE_TAG}}
+
+          This release workflow intentionally does not deploy to production.
+          Production rollout requires an operator-approved maintenance window,
+          database backup, release artifact selection, and rollback plan.
+
+          ## Release Artifacts
+
+          - Multi-platform binaries are attached to this GitHub Release.
+          - Primary frontend archives are `anix-control-frontend.tar.gz` and `anix-control-frontend.zip`.
+          - Docker image metadata is attached in `docker-image.txt`.
+          - Migration dry-run evidence is attached in `migration-dry-run.txt`.
+          - Source dependency SBOM is attached in `anix-control-source.sbom.spdx.json`.
+          - Machine-readable release metadata is attached in `RELEASE_MANIFEST.json`.
+          - Signed official package IDs for this product stage: {{RELEASE_PACKAGE_IDS}}. Their manifests, signatures, public keys, and package checksums are attached.
+          - SHA256 checksums are attached in `SHA256SUMS.txt`.
+          - Upgrade and rollback instructions are attached in `UPGRADE.md`.
+          - The release-bound Machine Telemetry signature verifier is attached in `verify-machine-telemetry-signature.py`.
+          - Deterministic release notes are attached in `RELEASE_NOTES.md`.
+
+          ## Required Manual Checks
+
+          1. Confirm the target domain, database, service manager, and rollback owner.
+          2. Take and verify a database backup before deploying.
+          3. Confirm any SQLite-to-PostgreSQL migration dry run has passed when applicable.
+          4. Confirm payment, node, and subscription credentials are present on the target host.
+          5. Confirm the health endpoint and external monitoring target for the deployment.
+
+          ## No Local Release Builds
+
+          Do not build release binaries or frontend assets on the production host.
+          `deploy_panel.sh` performs a local source-tree build and is not an approved
+          release deployment path. Release binaries, frontend archives, Docker metadata,
+          release manifest, checksums, and SBOM must come from this GitHub Actions run.
+
+          ## Systemd Binary Artifact Deployment
+
+          1. Download the matching `anix-control-*` binary artifact for the host OS and architecture.
+          2. Download `anix-control-frontend.tar.gz` or `anix-control-frontend.zip`.
+          3. Verify every downloaded artifact against `SHA256SUMS.txt`.
+          4. Stop the service manager or drain traffic.
+          5. Replace the binary and frontend static files.
+          6. Start the service and verify `/health`.
+
+          ## Docker Deployment
+
+          1. Read `docker-image.txt` for the published image tag and digest.
+          2. Pin the digest in the target deployment manifest.
+          3. Apply the deployment through the operator-owned orchestrator.
+          4. Verify `/health`, admin login, subscription generation, and node traffic reporting.
+
+          ## Rollback
+
+          Restore the previous binary/image and frontend assets, then restore the database only
+          if the release required a data migration and the approved rollback plan says so.
+          EOF
+          sed -i "s/{{RELEASE_TAG}}/${GITHUB_REF_NAME}/g" release/OPERATOR_DEPLOYMENT.md
+          sed -i "s/{{RELEASE_PACKAGE_IDS}}/${RELEASE_PACKAGE_IDS}/g" release/OPERATOR_DEPLOYMENT.md
+          if [[ "${RELEASE_PACKAGE_SCOPE}" == *",gost-mesh,"* ]]; then
+            cat >> release/OPERATOR_DEPLOYMENT.md <<'EOF'
+
+          `gost-mesh` embeds the checksum-pinned GOST v3.2.6 runtime and remains
+          canary-only until Secret ID materialization and the remaining rollout
+          evidence are complete.
+          EOF
+          fi
+          cp docs/UPGRADE.md release/UPGRADE.md
+          cp packages/machine-telemetry/verify_signature.py release/verify-machine-telemetry-signature.py
+
+      - name: Create release archives
+        run: |
+          tar -czvf release/anix-control-frontend.tar.gz -C web/public .
+          zip -r release/anix-control-frontend.zip web/public
+
+      - name: Generate release notes file
+        shell: bash
+        run: |
+          python3 config/scripts/generate_release_notes.py \
+            --changelog CHANGELOG.md \
+            --output release/RELEASE_NOTES.md \
+            --tag "${GITHUB_REF_NAME}" \
+            --commit "${GITHUB_SHA}" \
+            --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          cat >> release/RELEASE_NOTES.md <<'EOF'
+
+          ## Signed Official Plugin Packages
+
+          The signed official package IDs for this product stage are: `${RELEASE_PACKAGE_IDS}`. Each attached package includes its manifest, signature, public keys, and package checksums.
+          EOF
+          if [[ "${RELEASE_PACKAGE_SCOPE}" == *",gost-mesh,"* ]]; then
+            cat >> release/RELEASE_NOTES.md <<'EOF'
+
+          `gost-mesh` is canary-only until Secret ID to private-file materialization and the remaining production rollout evidence are complete.
+          EOF
+          fi
+
+      - name: Generate release manifest
+        shell: bash
+        run: |
+          python3 config/scripts/generate_release_manifest.py \
+            --release-dir release \
+            --output release/RELEASE_MANIFEST.json \
+            --project anix-control \
+            --build-source github-actions \
+            --manual-deployment-required true
+
+      - name: Create release checksums
+        run: |
+          (cd release && sha256sum * > SHA256SUMS.txt)
+
+      - name: Verify release artifacts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${RELEASE_PACKAGE_IDS}" ]] || {
+            echo "tag-gate did not declare a signed package scope" >&2
+            exit 1
+          }
+          package_requirements=()
+          require_package_assets() {
+            local package_id="$1"
+            local version="$2"
+            package_requirements+=(
+              --require "${package_id}-${version}.tar"
+              --require "anixops-${package_id}-${version}.manifest.json"
+              --require "anixops-${package_id}-${version}.sig"
+              --require "anixops-${package_id}-${version}.public-key.pem"
+              --require "anixops-${package_id}-${version}.public-key.raw"
+              --require "anixops-${package_id}-${version}.SHA256SUMS.txt"
+            )
+          }
+          IFS=',' read -r -a declared_packages <<<"${RELEASE_PACKAGE_IDS}"
+          for package_id in "${declared_packages[@]}"; do
+            case "${package_id}" in
+              machine-telemetry) require_package_assets machine-telemetry 1.1.0 ;;
+              nftables-forward) require_package_assets nftables-forward 1.2.0 ;;
+              gost-mesh) require_package_assets gost-mesh 1.0.0 ;;
+              nat-egress) require_package_assets nat-egress 1.0.0 ;;
+              *)
+                echo "release workflow has no artifact verifier for declared package: ${package_id}" >&2
+                exit 1
+                ;;
+            esac
+          done
+          python3 config/scripts/verify_release_artifacts.py \
+            --release-dir release \
+            --manifest release/RELEASE_MANIFEST.json \
+            --checksums release/SHA256SUMS.txt \
+            --require OPERATOR_DEPLOYMENT.md \
+            --require UPGRADE.md \
+            --require verify-machine-telemetry-signature.py \
+            --require RELEASE_NOTES.md \
+            --require RELEASE_MANIFEST.json \
+            --require SHA256SUMS.txt \
+            --require docker-image.txt \
+            --require migration-dry-run.txt \
+            --require anix-control-source.sbom.spdx.json \
+            --require anix-control-frontend.tar.gz \
+            --require anix-control-frontend.zip \
+            --require anix-control-linux-amd64.tar.gz \
+            --require anix-control-linux-arm64.tar.gz \
+            --require anix-control-windows-amd64.exe.zip \
+            --require anix-control-windows-arm64.exe.zip \
+            --require anix-control-darwin-amd64.tar.gz \
+            --require anix-control-darwin-arm64.tar.gz \
+            "${package_requirements[@]}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: release/*
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

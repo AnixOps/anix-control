@@ -1,0 +1,29 @@
+# gost relay sample configuration
+# Replace ${API_TOKEN} with the relay API token stored in ForwardNode.api_token.
+
+chains: []
+hops: []
+
+authers:
+  - name: auther-0
+    auths:
+      - username: admin
+        password: ${API_TOKEN}
+
+api:
+  addr: ":18080"
+  pathPrefix: /api
+  accesslog: true
+  auther: auther-0
+  auth:
+    username: admin
+    password: ${API_TOKEN}
+
+log:
+  output: stderr
+  level: info
+  format: text
+
+metrics:
+  addr: :9000
+  path: /metrics

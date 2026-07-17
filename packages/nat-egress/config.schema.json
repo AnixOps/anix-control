@@ -1,0 +1,180 @@
+{
+  "$id": "urn:anixops:plugin:nat-egress:config:v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "anyOf": [
+    {
+      "properties": {
+        "ipv4_masquerade": {
+          "const": true
+        }
+      },
+      "required": [
+        "ipv4_masquerade"
+      ]
+    },
+    {
+      "properties": {
+        "ipv6_masquerade": {
+          "const": true
+        }
+      },
+      "required": [
+        "ipv6_masquerade"
+      ]
+    }
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "health_check_enabled": {
+            "const": true
+          },
+          "health_check_target": {
+            "pattern": "^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2}):"
+          }
+        },
+        "required": [
+          "health_check_enabled",
+          "health_check_target"
+        ]
+      },
+      "then": {
+        "properties": {
+          "ipv4_masquerade": {
+            "const": true
+          },
+          "ipv6_masquerade": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "health_check_enabled": {
+            "const": true
+          },
+          "health_check_target": {
+            "pattern": "^\\["
+          }
+        },
+        "required": [
+          "health_check_enabled",
+          "health_check_target"
+        ]
+      },
+      "then": {
+        "properties": {
+          "ipv4_masquerade": {
+            "const": false
+          },
+          "ipv6_masquerade": {
+            "const": true
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "apply": {
+      "default": false,
+      "type": "boolean"
+    },
+    "rollback_on_exit": {
+      "const": true,
+      "default": true,
+      "type": "boolean"
+    },
+    "table_name": {
+      "default": "anixops_nat_egress",
+      "maxLength": 48,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "type": "string"
+    },
+    "chain_name": {
+      "default": "postrouting",
+      "maxLength": 48,
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "type": "string"
+    },
+    "egress_interface": {
+      "default": "eth0",
+      "maxLength": 15,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:@-]+$",
+      "type": "string"
+    },
+    "default_mark": {
+      "default": 100,
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "policy_table": {
+      "default": 100,
+      "maximum": 252,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "rule_priority": {
+      "default": 10100,
+      "maximum": 32765,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "ipv4_masquerade": {
+      "default": true,
+      "type": "boolean"
+    },
+    "ipv6_masquerade": {
+      "default": false,
+      "type": "boolean"
+    },
+    "health_check_enabled": {
+      "default": true,
+      "type": "boolean"
+    },
+    "health_check_interval_seconds": {
+      "default": 15,
+      "maximum": 300,
+      "minimum": 5,
+      "type": "integer"
+    },
+    "health_check_timeout_seconds": {
+      "default": 3,
+      "maximum": 30,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "health_check_target": {
+      "default": "1.1.1.1:443",
+      "maxLength": 259,
+      "minLength": 3,
+      "pattern": "^(\\[[0-9A-Fa-f:.]+\\]|[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*):([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "apply",
+    "rollback_on_exit",
+    "table_name",
+    "chain_name",
+    "egress_interface",
+    "default_mark",
+    "policy_table",
+    "rule_priority",
+    "ipv4_masquerade",
+    "ipv6_masquerade",
+    "health_check_enabled",
+    "health_check_interval_seconds",
+    "health_check_timeout_seconds",
+    "health_check_target"
+  ],
+  "title": "NAT Egress Configuration",
+  "type": "object"
+}

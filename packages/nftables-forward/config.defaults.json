@@ -1,0 +1,11 @@
+{
+  "apply": false,
+  "chain": "prerouting",
+  "family": "inet",
+  "nft_binary": "nft",
+  "plan_path": "",
+  "priority": -100,
+  "rollback_on_exit": true,
+  "rules": [],
+  "table": "anixops_forward"
+}

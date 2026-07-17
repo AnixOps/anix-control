@@ -1,0 +1,34 @@
+package model
+
+// LoginRequest 登录请求
+type LoginRequest struct {
+	Email     string `json:"email" binding:"required,email"`
+	Password  string `json:"password" binding:"required"`
+	MFACode   string `json:"mfa_code"`
+	MFAMethod string `json:"mfa_method"`
+}
+
+// RegisterRequest 注册请求
+type RegisterRequest struct {
+	Email      string `json:"email" binding:"required,email"`
+	Password   string `json:"password" binding:"required,min=6"`
+	InviteCode string `json:"invite_code"`
+}
+
+// LoginResponse 登录响应
+type LoginResponse struct {
+	Token   string `json:"token"`
+	IsAdmin bool   `json:"is_admin"`
+}
+
+// AdminCreateUserRequest 管理员创建用户请求
+type AdminCreateUserRequest struct {
+	Email          string `json:"email" binding:"required,email"`
+	Password       string `json:"password" binding:"required,min=6"`
+	IsAdmin        int    `json:"is_admin"`
+	FlowResetTime  int64  `json:"flowResetTime"`
+	GroupID        *uint  `json:"group_id"`
+	TransferEnable *int64 `json:"transfer_enable"`
+	SpeedLimit     *int64 `json:"speed_limit"`
+	DeviceLimit    *int   `json:"device_limit"`
+}

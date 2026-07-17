@@ -1,0 +1,510 @@
+package service
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"gorm.io/gorm"
+)
+
+const (
+	forwardRuntimeNodeXBaseURLConfigKey        = "forward.runtime.nodex.base_url"
+	forwardRuntimeNodeXTokenConfigKey          = "forward.runtime.nodex.token"
+	forwardRuntimeNodeXTimeoutSecondsConfigKey = "forward.runtime.nodex.timeout_seconds"
+
+	defaultForwardRuntimeNodeXExecutePath         = "/api/v2/internal/forward/runtime/execute"
+	defaultForwardRuntimeNodeXBridgeTranslatePath = "/api/v2/internal/forward/bridge/translate"
+	defaultForwardRuntimeNodeXTimeout             = 15 * time.Second
+
+	nodeXForwardResourceTypePanelForward = "panel_forward"
+	nodeXForwardResourceTypeLegacyRule   = "legacy_rule"
+)
+
+type forwardRuntimeNodeXExecutor interface {
+	Execute(ctx context.Context, req nodeXForwardExecuteRequest) (*nodeXForwardExecuteResult, error)
+	Translate(ctx context.Context, sourceJobID uint, nodeID uint, payload nodeXForwardExecuteRequest) (*nodeXBridgeAgentTask, error)
+}
+
+// nodeXBridgeTranslateRequest 发送给 NodeX 无状态翻译端点的请求体。
+type nodeXBridgeTranslateRequest struct {
+	SourceJobID uint                       `json:"sourceJobId"`
+	NodeID      uint                       `json:"nodeId"`
+	Payload     nodeXForwardExecuteRequest `json:"payload"`
+}
+
+// nodeXBridgeAgentTask 对应 NodeX 返回的 legacy AgentTask 信封 (data.task)。
+type nodeXBridgeAgentTask struct {
+	TaskID string         `json:"task_id"`
+	NodeID uint           `json:"node_id"`
+	Type   string         `json:"type"`
+	Action string         `json:"action"`
+	Params map[string]any `json:"params"`
+}
+
+type nodeXBridgeTranslateResponse struct {
+	Data    *nodeXBridgeTranslateData `json:"data,omitempty"`
+	Error   string                    `json:"error,omitempty"`
+	Msg     string                    `json:"msg,omitempty"`
+	Message string                    `json:"message,omitempty"`
+}
+
+type nodeXBridgeTranslateData struct {
+	Task *nodeXBridgeAgentTask `json:"task"`
+}
+
+type nodeXForwardHTTPDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+type nodeXForwardRuntimeClient struct {
+	configService *SystemConfigService
+	httpClient    nodeXForwardHTTPDoer
+}
+
+type nodeXForwardRuntimeSettings struct {
+	BaseURL string
+	Token   string
+	Timeout time.Duration
+}
+
+type nodeXForwardExecuteRequest struct {
+	ResourceType   string                             `json:"resourceType"`
+	Backend        string                             `json:"backend"`
+	Action         string                             `json:"action"`
+	PanelForward   *nodeXPanelForwardRequest          `json:"panelForward,omitempty"`
+	AnsibleRuntime *panelForwardAnsibleRuntimePayload `json:"ansibleRuntime,omitempty"`
+	LegacyRule     *nodeXLegacyForwardRuleInput       `json:"legacyRule,omitempty"`
+}
+
+type nodeXForwardExecuteResponse struct {
+	Data    *nodeXForwardExecuteResult `json:"data,omitempty"`
+	Error   string                     `json:"error,omitempty"`
+	Msg     string                     `json:"msg,omitempty"`
+	Message string                     `json:"message,omitempty"`
+	Backend string                     `json:"backend,omitempty"`
+	Status  int                        `json:"status,omitempty"`
+	Result  string                     `json:"result,omitempty"`
+	Async   bool                       `json:"async,omitempty"`
+}
+
+type nodeXForwardExecuteResult struct {
+	Backend string `json:"backend"`
+	Status  int    `json:"status"`
+	Message string `json:"message"`
+	Result  string `json:"result,omitempty"`
+	Async   bool   `json:"async"`
+}
+
+type nodeXPanelForwardRequest struct {
+	Forward     nodeXPanelForwardPayload    `json:"forward"`
+	Tunnel      nodeXPanelTunnelPayload     `json:"tunnel"`
+	IngressNode nodeXForwardNodePayload     `json:"ingressNode"`
+	Limiter     *panelForwardLimiterPayload `json:"limiter,omitempty"`
+}
+
+type nodeXPanelForwardPayload struct {
+	ID            uint   `json:"id"`
+	UserID        uint   `json:"userId"`
+	Name          string `json:"name"`
+	InPort        int    `json:"inPort"`
+	RemoteAddr    string `json:"remoteAddr"`
+	InterfaceName string `json:"interfaceName"`
+	Strategy      string `json:"strategy"`
+	Status        int    `json:"status"`
+}
+
+type panelForwardLimiterPayload struct {
+	SpeedID uint   `json:"speedId"`
+	Name    string `json:"name,omitempty"`
+	Speed   int64  `json:"speed"`
+}
+
+type nodeXPanelTunnelPayload struct {
+	ID            uint   `json:"id"`
+	Name          string `json:"name"`
+	InNodeID      uint   `json:"inNodeId"`
+	Protocol      string `json:"protocol"`
+	TCPListenAddr string `json:"tcpListenAddr"`
+	UDPListenAddr string `json:"udpListenAddr"`
+	InterfaceName string `json:"interfaceName"`
+}
+
+type nodeXLegacyForwardRuleInput struct {
+	Rule      nodeXLegacyForwardRulePayload `json:"rule"`
+	RelayNode nodeXForwardNodePayload       `json:"relayNode"`
+	ExitNode  nodeXForwardNodePayload       `json:"exitNode"`
+}
+
+type nodeXLegacyForwardRulePayload struct {
+	ID         uint   `json:"id"`
+	Name       string `json:"name"`
+	ListenPort int    `json:"listenPort"`
+	Protocol   string `json:"protocol"`
+	TargetHost string `json:"targetHost"`
+	TargetPort int    `json:"targetPort"`
+	Enabled    bool   `json:"enabled"`
+}
+
+type nodeXForwardNodePayload struct {
+	ID       uint   `json:"id"`
+	Name     string `json:"name"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	APIPort  int    `json:"apiPort"`
+	APIToken string `json:"apiToken"`
+}
+
+func newNodeXForwardRuntimeClient(configService *SystemConfigService) *nodeXForwardRuntimeClient {
+	return &nodeXForwardRuntimeClient{configService: configService}
+}
+
+func NewNodeXForwardRuntimeProviderWithHTTPClient(db *gorm.DB, httpClient nodeXForwardHTTPDoer) *nodeXForwardRuntimeProvider {
+	configService := NewSystemConfigService(db)
+	return &nodeXForwardRuntimeProvider{
+		db: db,
+		client: &nodeXForwardRuntimeClient{
+			configService: configService,
+			httpClient:    httpClient,
+		},
+	}
+}
+
+func (c *nodeXForwardRuntimeClient) Execute(ctx context.Context, req nodeXForwardExecuteRequest) (*nodeXForwardExecuteResult, error) {
+	settings, err := c.loadSettings()
+	if err != nil {
+		return nil, err
+	}
+
+	targetNode := resolveNodeXTargetNode(req)
+	requireConfiguredControlPlane := requiresConfiguredNodeXControlPlane(req)
+	baseURL, err := resolveNodeXBaseURL(targetNode, settings, requireConfiguredControlPlane)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(baseURL) == "" {
+		return nil, errors.New("NodeX forward runtime control plane is not configured")
+	}
+
+	token, err := resolveNodeXToken(targetNode, settings, requireConfiguredControlPlane)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal NodeX forward runtime request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		baseURL+defaultForwardRuntimeNodeXExecutePath,
+		bytes.NewReader(data),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create NodeX forward runtime request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+token)
+		httpReq.Header.Set("X-API-Key", token)
+	}
+	if targetNode != nil && targetNode.ID != 0 {
+		httpReq.Header.Set("X-Forward-Node-ID", strconv.FormatUint(uint64(targetNode.ID), 10))
+	}
+
+	httpClient := c.httpClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: settings.Timeout}
+	}
+
+	resp, err := httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("execute NodeX forward runtime request: %w", err)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("read NodeX forward runtime response: %w", err)
+	}
+	if closeErr != nil {
+		return nil, fmt.Errorf("close NodeX forward runtime response: %w", closeErr)
+	}
+
+	var apiResp nodeXForwardExecuteResponse
+	if len(bytes.TrimSpace(body)) > 0 {
+		if err := json.Unmarshal(body, &apiResp); err != nil {
+			return nil, fmt.Errorf("decode NodeX forward runtime response: %w", err)
+		}
+	}
+
+	result := apiResp.toResult(resp.StatusCode, req.Backend)
+	if resp.StatusCode >= http.StatusBadRequest {
+		message := strings.TrimSpace(apiResp.errorMessage())
+		if message == "" {
+			message = strings.TrimSpace(string(body))
+		}
+		if message == "" {
+			message = fmt.Sprintf("NodeX forward runtime returned %s", resp.Status)
+		}
+		if result != nil {
+			return result, fmt.Errorf("%s", message)
+		}
+		return nil, fmt.Errorf("%s", message)
+	}
+
+	if result == nil {
+		return &nodeXForwardExecuteResult{
+			Backend: req.Backend,
+			Status:  model.ForwardRuntimeJobStatusSuccess,
+		}, nil
+	}
+	return result, nil
+}
+
+// Translate 调用 NodeX 无状态翻译端点，将 clean_agent 转发 payload 翻译成 legacy AgentTask。
+// NodeX 不读 DB、不管队列，仅做 payload→task 转换；非 2xx 或 task 为空一律返回 error，
+// 供 bridge worker 判定失败而不误标 success。
+func (c *nodeXForwardRuntimeClient) Translate(ctx context.Context, sourceJobID uint, nodeID uint, payload nodeXForwardExecuteRequest) (*nodeXBridgeAgentTask, error) {
+	settings, err := c.loadSettings()
+	if err != nil {
+		return nil, err
+	}
+	baseURL := strings.TrimRight(strings.TrimSpace(settings.BaseURL), "/")
+	if baseURL == "" {
+		return nil, fmt.Errorf("%s is required for NodeX forward bridge translate", forwardRuntimeNodeXBaseURLConfigKey)
+	}
+	token := strings.TrimSpace(settings.Token)
+	if token == "" {
+		return nil, fmt.Errorf("%s is required for NodeX forward bridge translate", forwardRuntimeNodeXTokenConfigKey)
+	}
+
+	reqBody := nodeXBridgeTranslateRequest{
+		SourceJobID: sourceJobID,
+		NodeID:      nodeID,
+		Payload:     payload,
+	}
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshal NodeX bridge translate request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		baseURL+defaultForwardRuntimeNodeXBridgeTranslatePath,
+		bytes.NewReader(data),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create NodeX bridge translate request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("X-API-Key", token)
+
+	httpClient := c.httpClient
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: settings.Timeout}
+	}
+
+	resp, err := httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("execute NodeX bridge translate request: %w", err)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
+	if err != nil {
+		return nil, fmt.Errorf("read NodeX bridge translate response: %w", err)
+	}
+	if closeErr != nil {
+		return nil, fmt.Errorf("close NodeX bridge translate response: %w", closeErr)
+	}
+
+	var apiResp nodeXBridgeTranslateResponse
+	if len(bytes.TrimSpace(body)) > 0 {
+		if err := json.Unmarshal(body, &apiResp); err != nil {
+			return nil, fmt.Errorf("decode NodeX bridge translate response: %w", err)
+		}
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		message := strings.TrimSpace(apiResp.Error)
+		if message == "" {
+			message = strings.TrimSpace(apiResp.Message)
+		}
+		if message == "" {
+			message = strings.TrimSpace(apiResp.Msg)
+		}
+		if message == "" {
+			message = strings.TrimSpace(string(body))
+		}
+		if message == "" {
+			message = fmt.Sprintf("NodeX bridge translate returned %s", resp.Status)
+		}
+		return nil, fmt.Errorf("%s", message)
+	}
+
+	if apiResp.Data == nil || apiResp.Data.Task == nil || strings.TrimSpace(apiResp.Data.Task.TaskID) == "" {
+		return nil, errors.New("NodeX bridge translate returned an empty task")
+	}
+
+	return apiResp.Data.Task, nil
+}
+
+func (c *nodeXForwardRuntimeClient) loadSettings() (*nodeXForwardRuntimeSettings, error) {
+	settings := &nodeXForwardRuntimeSettings{
+		Timeout: defaultForwardRuntimeNodeXTimeout,
+	}
+	if c.configService == nil {
+		return settings, nil
+	}
+
+	baseURL, err := c.configService.Get(forwardRuntimeNodeXBaseURLConfigKey)
+	if err != nil {
+		return nil, err
+	}
+	settings.BaseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+
+	token, err := c.configService.Get(forwardRuntimeNodeXTokenConfigKey)
+	if err != nil {
+		return nil, err
+	}
+	settings.Token = strings.TrimSpace(token)
+
+	timeoutValue, err := c.configService.Get(forwardRuntimeNodeXTimeoutSecondsConfigKey)
+	if err != nil {
+		return nil, err
+	}
+	timeoutValue = strings.TrimSpace(timeoutValue)
+	if timeoutValue != "" {
+		seconds, err := strconv.Atoi(timeoutValue)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %s value: %w", forwardRuntimeNodeXTimeoutSecondsConfigKey, err)
+		}
+		if seconds <= 0 {
+			return nil, fmt.Errorf("%s must be greater than zero", forwardRuntimeNodeXTimeoutSecondsConfigKey)
+		}
+		settings.Timeout = time.Duration(seconds) * time.Second
+	}
+
+	return settings, nil
+}
+
+func resolveNodeXTargetNode(req nodeXForwardExecuteRequest) *nodeXForwardNodePayload {
+	if req.PanelForward != nil && hasNodeXForwardNode(req.PanelForward.IngressNode) {
+		node := req.PanelForward.IngressNode
+		return &node
+	}
+	if req.LegacyRule != nil && hasNodeXForwardNode(req.LegacyRule.RelayNode) {
+		node := req.LegacyRule.RelayNode
+		return &node
+	}
+	return nil
+}
+
+func requiresConfiguredNodeXControlPlane(req nodeXForwardExecuteRequest) bool {
+	if isForwardRuntimeLocalAnsibleBackend(req.Backend) && req.AnsibleRuntime != nil {
+		return false
+	}
+	return true
+}
+
+func hasNodeXForwardNode(node nodeXForwardNodePayload) bool {
+	return node.ID != 0 ||
+		strings.TrimSpace(node.Host) != "" ||
+		node.APIPort > 0 ||
+		strings.TrimSpace(node.APIToken) != ""
+}
+
+func resolveNodeXBaseURL(node *nodeXForwardNodePayload, settings *nodeXForwardRuntimeSettings, requireConfigured bool) (string, error) {
+	if settings != nil && strings.TrimSpace(settings.BaseURL) != "" {
+		return strings.TrimRight(strings.TrimSpace(settings.BaseURL), "/"), nil
+	}
+	if requireConfigured {
+		return "", fmt.Errorf("%s is required for NodeX forward runtime", forwardRuntimeNodeXBaseURLConfigKey)
+	}
+	return "", nil
+}
+
+func resolveNodeXToken(node *nodeXForwardNodePayload, settings *nodeXForwardRuntimeSettings, requireConfigured bool) (string, error) {
+	if settings != nil && strings.TrimSpace(settings.Token) != "" {
+		return strings.TrimSpace(settings.Token), nil
+	}
+	if requireConfigured {
+		return "", fmt.Errorf("%s is required for NodeX forward runtime", forwardRuntimeNodeXTokenConfigKey)
+	}
+	return "", nil
+}
+
+func (r *nodeXForwardExecuteResponse) toResult(statusCode int, fallbackBackend string) *nodeXForwardExecuteResult {
+	if r == nil {
+		return defaultNodeXForwardExecuteResult(statusCode, fallbackBackend, "")
+	}
+	if r.Data != nil {
+		return r.Data
+	}
+
+	message := strings.TrimSpace(r.Message)
+	if message == "" {
+		message = strings.TrimSpace(r.Msg)
+	}
+
+	if strings.TrimSpace(r.Backend) != "" || r.Status != 0 || strings.TrimSpace(r.Result) != "" || r.Async || message != "" {
+		return &nodeXForwardExecuteResult{
+			Backend: r.Backend,
+			Status:  r.Status,
+			Message: message,
+			Result:  r.Result,
+			Async:   r.Async,
+		}
+	}
+
+	return defaultNodeXForwardExecuteResult(statusCode, fallbackBackend, message)
+}
+
+func (r *nodeXForwardExecuteResponse) errorMessage() string {
+	if r == nil {
+		return ""
+	}
+	if strings.TrimSpace(r.Error) != "" {
+		return r.Error
+	}
+	if strings.TrimSpace(r.Message) != "" {
+		return r.Message
+	}
+	return r.Msg
+}
+
+func defaultNodeXForwardExecuteResult(statusCode int, backend, message string) *nodeXForwardExecuteResult {
+	switch {
+	case statusCode == http.StatusAccepted:
+		if message == "" {
+			message = http.StatusText(statusCode)
+		}
+		return &nodeXForwardExecuteResult{
+			Backend: backend,
+			Status:  model.ForwardRuntimeJobStatusPending,
+			Message: message,
+			Async:   true,
+		}
+	case statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices:
+		return &nodeXForwardExecuteResult{
+			Backend: backend,
+			Status:  model.ForwardRuntimeJobStatusSuccess,
+			Message: message,
+		}
+	default:
+		return nil
+	}
+}

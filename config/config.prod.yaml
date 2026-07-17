@@ -1,0 +1,178 @@
+# AnixOps Control Configuration - Production
+# 鐢熶骇鐜閰嶇疆鏂囦欢
+
+# 鐜鏍囪瘑: development (寮€鍙?, production (鐢熶骇)
+env: "production"
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "release"
+  read_timeout: 30
+  write_timeout: 30
+  # 鍙俊浠ｇ悊鍒楄〃 (鐢ㄤ簬鑾峰彇鐪熷疄 IP锛屽鍦?Nginx/Cloudflare 鍚庨潰)
+  # Only trust forwarded client IP headers from these reverse proxies/load balancers.
+  # If the API is exposed directly, keep this list empty.
+  trusted_proxies:
+    - "127.0.0.1"
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+  # HTTP CORS and WebSocket Origin allowlist. Set this to your real panel/admin
+  # origins when browsers connect from a different host.
+  cors:
+    allowed_origins: []
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]
+    allowed_headers: ["Content-Type", "Authorization", "X-API-Key"]
+    allow_credentials: false
+    max_age: 86400
+
+# TLS/HTTPS 閰嶇疆
+# 鏂瑰紡涓€: 浣跨敤 Nginx 鍙嶄唬 (鎺ㄨ崘) - 璁剧疆 enable: false
+# 鏂瑰紡浜? Go 鍘熺敓 TLS - 璁剧疆 enable: true 骞堕厤缃瘉涔﹁矾寰?
+tls:
+  enable: false                               # 浣跨敤 Nginx 鍙嶄唬鏃惰涓?false
+  cert_file: "/etc/ssl/certs/anix-control.crt"     # SSL 璇佷功璺緞 (浠?enable: true 鏃堕渶瑕?
+  key_file: "/etc/ssl/private/anix-control.key"    # SSL 绉侀挜璺緞 (浠?enable: true 鏃堕渶瑕?
+  domain: "your-domain.com"                   # 鎮ㄧ殑鍩熷悕 (鐢ㄤ簬鐢熸垚璁㈤槄閾炬帴绛?
+
+# 鍓嶇鏈嶅姟鍣ㄩ厤缃?
+frontend:
+  enable: true
+  port: 3000         # 淇濇寔 3000 绔彛锛岄€氳繃 Nginx 鍙嶄唬鍒?80/443
+  path: "web/public"
+
+# 鏁版嵁搴撻厤缃?- 鐢熶骇鐜鎺ㄨ崘浣跨敤 PostgreSQL
+database:
+  driver: "postgres"
+  host: "127.0.0.1"
+  port: 5432
+  username: "anix_control"
+  password: "your-secure-password"
+  database: "anix_control"
+  log_level: "error"          # 鐢熶骇鐜鍙褰曢敊璇?
+  max_idle_conns: 10
+  max_open_conns: 100
+  conn_max_lifetime: 3600
+
+# 缂撳瓨閰嶇疆 - 鐢熶骇鐜鎺ㄨ崘浣跨敤 Redis
+cache:
+  driver: "redis"
+  redis_host: "127.0.0.1"
+  redis_port: 6379
+  redis_password: ""
+  redis_db: 0
+
+log:
+  level: "warn"               # 鐢熶骇鐜鍑忓皯鏃ュ織
+  output: "file"
+  file_path: "/var/log/anix-control/anix-control.log"
+  max_size: 100
+  max_backups: 30
+  max_age: 30
+
+jwt:
+  secret: "CHANGE-THIS-TO-A-VERY-LONG-RANDOM-STRING-IN-PRODUCTION"
+  expire: 86400
+
+auth:
+  login_rate_limit:
+    enabled: true
+    max_attempts: 6
+    window_seconds: 300
+    lockout_seconds: 600
+  register_rate_limit:
+    enabled: true
+    max_attempts: 5
+    window_seconds: 3600
+    lockout_seconds: 3600
+  registration:
+    enabled: true
+    require_invite: false
+    allowed_email_domains: []
+    blocked_email_domains: []
+
+app:
+  name: "AnixOps Control"
+  version: "4.0.0-alpha.7"
+  # The installer must replace this with a generated value. Never ship a
+  # reusable node credential in the production template.
+  api_token: ""
+  traffic_log_enable: true
+  subscribe_path: "s"
+
+# Base64-encoded Ed25519 trust root for signed official plugin manifests.
+plugins:
+  # Official AnixOps Ed25519 release trust root (raw public key, base64).
+  # Trust is pinned even while execution remains fail-closed below.
+  official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
+  control_execution_enabled: false
+  control_poll_interval: "5s"
+  dispatch_enabled: false
+  dispatch_poll_interval: "5s"
+  # Topology fan-out creates Agent plugin operations only when explicitly
+  # enabled together with dispatch_enabled. Keep false until canary evidence.
+  topology_execution_enabled: false
+  topology_poll_interval: "5s"
+
+forward_runtime:
+  backend: "gost"
+  jobs:
+    poll_interval: "5s"
+    idle_poll_interval: "30s"
+    error_log_interval: "1m"
+    batch_size: 10
+    timeout_seconds: 120
+  gost_stats:
+    poll_interval: "30s"
+    idle_poll_interval: "2m"
+    error_log_interval: "5m"
+  latency:
+    poll_interval: "60s"
+    idle_poll_interval: "60s"
+    error_log_interval: "5m"
+    dials: 5
+    dial_timeout: "3s"
+    concurrency: 16
+    retention_days: 7
+  nodex:
+    base_url: "http://127.0.0.1:18081"
+    # Configure a secret out-of-band before selecting the NodeX backend.
+    token: ""
+    timeout_seconds: 15
+  clean_agent:
+    public_url: ""
+    heartbeat_interval_seconds: 10
+    action_timeout_seconds: 120
+    token_expire_seconds: 0
+    legacy_bridge_enabled: false
+  iptables_ansible:
+    inventory: "config/deploy/ansible/inventory.ini"
+    apply_playbook: "config/deploy/ansible/playbooks/forward_apply.yml"
+    remove_playbook: "config/deploy/ansible/playbooks/forward_remove.yml"
+    become: false
+    extra_vars: {}
+    command: ""
+    working_dir: "config/deploy/ansible"
+    target_pattern: "{{node.host}}"
+    environment:
+      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
+    timeout_seconds: 120
+
+# Node-facing gRPC server. Legacy unary Transport=grpc and the opt-in
+# anix.agent.v1 Agent control stream share this listener.
+# Do not expose plaintext port 50051 to the public Internet. Configure the TLS
+# files below or put the service behind an HTTP/2-capable L4/gRPC proxy and a
+# restrictive firewall.
+grpc:
+  enabled: false
+  host: "0.0.0.0"
+  port: 50051
+  api_token: ""
+  tls_cert_file: "config/tls/control.crt"
+  tls_key_file: "config/tls/control.key"
+
+# 榛樿绠＄悊鍛橀厤缃?
+admin:
+  email: "admin@your-domain.com"
+  password: ""  # 鐣欑┖灏嗚嚜鍔ㄧ敓鎴?

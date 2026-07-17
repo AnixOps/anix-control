@@ -1,0 +1,716 @@
+package handler
+
+import (
+	"encoding/json"
+	"errors"
+	"io"
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/payment"
+	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+// PaymentGatewayHandler 支付网关处理器
+type PaymentGatewayHandler struct {
+	gatewayService *service.PaymentGatewayService
+}
+
+func normalizeGatewayConfig(raw any) (string, error) {
+	if raw == nil {
+		return "", nil
+	}
+
+	if str, ok := raw.(string); ok {
+		return str, nil
+	}
+
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
+func paymentRecordStatusToText(status int) string {
+	switch status {
+	case model.PaymentStatusPaid:
+		return "paid"
+	case model.PaymentStatusRefunded:
+		return "refunded"
+	case model.PaymentStatusCancelled:
+		return "failed"
+	default:
+		return "pending"
+	}
+}
+
+func paymentRecordStatusFromText(status string) (int, bool) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "pending":
+		return model.PaymentStatusPending, true
+	case "paid":
+		return model.PaymentStatusPaid, true
+	case "failed", "cancelled":
+		return model.PaymentStatusCancelled, true
+	case "refunded":
+		return model.PaymentStatusRefunded, true
+	default:
+		return 0, false
+	}
+}
+
+// NewPaymentGatewayHandler 创建处理器
+func NewPaymentGatewayHandler() *PaymentGatewayHandler {
+	return &PaymentGatewayHandler{
+		gatewayService: service.NewPaymentGatewayService(database.Get()),
+	}
+}
+
+// ListGateways godoc
+// @Summary 获取支付网关列表
+// @Description 管理员获取所有支付网关列表
+// @Tags 管理端-支付
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /admin/payment/gateways [get]
+func (h *PaymentGatewayHandler) ListGateways(c *gin.Context) {
+	gateways, err := h.gatewayService.List()
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	panelSuccess(c, gin.H{
+		"list":  gateways,
+		"total": len(gateways),
+	})
+}
+
+// CreateGateway godoc
+// @Summary 创建支付网关
+// @Description 管理员创建新的支付网关
+// @Tags 管理端-支付
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body CreateGatewayRequest true "网关信息"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /admin/payment/gateways [post]
+func (h *PaymentGatewayHandler) CreateGateway(c *gin.Context) {
+	var req CreateGatewayRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	gateway := &model.PaymentGateway{
+		Name:        req.Name,
+		Type:        req.Type,
+		Enabled:     false,
+		Icon:        req.Icon,
+		FeeRate:     req.FeeRate,
+		FeeFixed:    req.FeeFixed,
+		MinAmount:   req.MinAmount,
+		MaxAmount:   req.MaxAmount,
+		Sort:        req.Sort,
+		Description: req.Description,
+	}
+	config, err := normalizeGatewayConfig(req.Config)
+	if err != nil {
+		panelError(c, "invalid config")
+		return
+	}
+	gateway.Config = config
+
+	if err := h.gatewayService.Create(gateway); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	panelSuccess(c, gateway)
+}
+
+// UpdateGateway godoc
+// @Summary 更新支付网关
+// @Description 管理员更新指定支付网关的信息
+// @Tags 管理端-支付
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "网关ID"
+// @Param request body UpdateGatewayRequest true "网关更新信息"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /admin/payment/gateways/{id} [put]
+func (h *PaymentGatewayHandler) UpdateGateway(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		panelError(c, "invalid id")
+		return
+	}
+
+	gateway, err := h.gatewayService.GetByID(uint(id))
+	if err != nil {
+		panelError(c, "gateway not found")
+		return
+	}
+
+	var req UpdateGatewayRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	if req.Name != "" {
+		gateway.Name = req.Name
+	}
+	if req.Type != "" {
+		gateway.Type = req.Type
+	}
+	if req.Icon != "" {
+		gateway.Icon = req.Icon
+	}
+	if req.Config != nil {
+		config, err := normalizeGatewayConfig(req.Config)
+		if err != nil {
+			panelError(c, "invalid config")
+			return
+		}
+		gateway.Config = config
+	}
+	if req.FeeRate != nil {
+		gateway.FeeRate = *req.FeeRate
+	}
+	if req.FeeFixed != nil {
+		gateway.FeeFixed = *req.FeeFixed
+	}
+	if req.MinAmount != nil {
+		gateway.MinAmount = *req.MinAmount
+	}
+	if req.MaxAmount != nil {
+		gateway.MaxAmount = *req.MaxAmount
+	}
+	if req.Sort != nil {
+		gateway.Sort = *req.Sort
+	}
+	if req.Description != "" {
+		gateway.Description = req.Description
+	}
+
+	if err := h.gatewayService.Update(gateway); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	panelSuccess(c, gateway)
+}
+
+// DeleteGateway godoc
+// @Summary 删除支付网关
+// @Description 管理员删除指定支付网关
+// @Tags 管理端-支付
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "网关ID"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /admin/payment/gateways/{id} [delete]
+func (h *PaymentGatewayHandler) DeleteGateway(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		panelError(c, "invalid id")
+		return
+	}
+
+	if err := h.gatewayService.Delete(uint(id)); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	panelSuccess(c, gin.H{"message": "deleted"})
+}
+
+// ToggleGateway godoc
+// @Summary 切换网关状态
+// @Description 管理员启用或禁用指定支付网关
+// @Tags 管理端-支付
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "网关ID"
+// @Param request body ToggleRequest true "状态请求"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /admin/payment/gateways/{id}/toggle [post]
+func (h *PaymentGatewayHandler) ToggleGateway(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		panelError(c, "invalid id")
+		return
+	}
+
+	var req map[string]any
+	if err := c.ShouldBindJSON(&req); err != nil && err != io.EOF {
+		panelError(c, err.Error())
+		return
+	}
+
+	targetEnabled := false
+	if rawEnabled, ok := req["enabled"]; ok {
+		enabled, ok := rawEnabled.(bool)
+		if !ok {
+			panelError(c, "enabled must be boolean")
+			return
+		}
+		targetEnabled = enabled
+	} else {
+		gateway, err := h.gatewayService.GetByID(uint(id))
+		if err != nil {
+			panelError(c, "gateway not found")
+			return
+		}
+		targetEnabled = !gateway.Enabled
+	}
+
+	if err := h.gatewayService.Toggle(uint(id), targetEnabled); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	panelSuccess(c, gin.H{"enabled": targetEnabled})
+}
+
+// GetPaymentStats godoc
+// @Summary 获取支付统计
+// @Description 管理员获取支付统计数据，支持日期范围筛选
+// @Tags 管理端-支付
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param start query string false "开始日期 (格式: 2006-01-02)"
+// @Param end query string false "结束日期 (格式: 2006-01-02)"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /admin/payment/stats [get]
+func (h *PaymentGatewayHandler) GetPaymentStats(c *gin.Context) {
+	startStr := c.DefaultQuery("start", time.Now().AddDate(0, 0, -30).Format("2006-01-02"))
+	endStr := c.DefaultQuery("end", time.Now().Format("2006-01-02"))
+
+	start, err := time.Parse("2006-01-02", startStr)
+	if err != nil {
+		panelError(c, "invalid start date")
+		return
+	}
+
+	end, err := time.Parse("2006-01-02", endStr)
+	if err != nil {
+		panelError(c, "invalid end date")
+		return
+	}
+
+	stats, err := h.gatewayService.GetStats(start, end)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	var totalOrders int64
+	if err := database.Get().Model(&model.PaymentRecord{}).
+		Where("created_at BETWEEN ? AND ?", start, end).
+		Count(&totalOrders).Error; err != nil {
+		log.Printf("failed to count total orders: %v", err)
+	}
+
+	var successOrders int64
+	if err := database.Get().Model(&model.PaymentRecord{}).
+		Where("status = ? AND paid_at BETWEEN ? AND ?", model.PaymentStatusPaid, start, end).
+		Count(&successOrders).Error; err != nil {
+		log.Printf("failed to count success orders: %v", err)
+	}
+
+	successRate := float64(0)
+	if totalOrders > 0 {
+		successRate = float64(successOrders) * 100 / float64(totalOrders)
+	}
+
+	var byGatewayRows []struct {
+		GatewayType string
+		Amount      float64
+		Count       int64
+	}
+	if err := database.Get().Model(&model.PaymentRecord{}).
+		Select("gateway_type, COALESCE(SUM(actual_amount), 0) AS amount, COUNT(*) AS count").
+		Where("status = ? AND paid_at BETWEEN ? AND ?", model.PaymentStatusPaid, start, end).
+		Group("gateway_type").
+		Scan(&byGatewayRows).Error; err != nil {
+		log.Printf("failed to scan gateway rows: %v", err)
+	}
+
+	byGateway := make(map[string]gin.H, len(byGatewayRows))
+	for _, row := range byGatewayRows {
+		byGateway[row.GatewayType] = gin.H{
+			"amount": row.Amount,
+			"count":  row.Count,
+		}
+	}
+
+	panelSuccess(c, gin.H{
+		"total_amount":   stats.TotalAmount,
+		"total_count":    stats.TotalCount,
+		"pending_amount": stats.PendingAmount,
+		"pending_count":  stats.PendingCount,
+		"total_orders":   totalOrders,
+		"success_orders": successOrders,
+		"success_rate":   successRate,
+		"by_gateway":     byGateway,
+	})
+}
+
+// ListPaymentRecords godoc
+// @Summary 获取支付记录列表
+// @Description 管理员获取支付记录列表，支持分页和状态筛选
+// @Tags 管理端-支付
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
+// @Param status query int false "支付状态"
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /admin/payment/records [get]
+func (h *PaymentGatewayHandler) ListPaymentRecords(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	page, pageSize = ClampPagination(page, pageSize)
+	gatewayType := c.Query("gateway_type")
+
+	var status *int
+	if s := c.Query("status"); s != "" {
+		if numericStatus, err := strconv.Atoi(s); err == nil {
+			status = &numericStatus
+		} else if mappedStatus, ok := paymentRecordStatusFromText(s); ok {
+			status = &mappedStatus
+		}
+	}
+
+	records, total, err := h.gatewayService.ListRecords(page, pageSize, status, gatewayType)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	list := make([]gin.H, 0, len(records))
+	for _, record := range records {
+		list = append(list, gin.H{
+			"id":               record.ID,
+			"trade_no":         record.TradeNo,
+			"gateway_id":       record.GatewayID,
+			"gateway_type":     record.GatewayType,
+			"gateway_trade_no": record.GatewayTradeNo,
+			"user_id":          record.UserID,
+			"amount":           record.Amount,
+			"fee_amount":       record.FeeAmount,
+			"actual_amount":    record.ActualAmount,
+			"currency":         record.Currency,
+			"status":           paymentRecordStatusToText(record.Status),
+			"status_code":      record.Status,
+			"paid_at":          record.PaidAt,
+			"cancelled_at":     record.CancelledAt,
+			"refunded_at":      record.RefundedAt,
+			"client_ip":        record.ClientIP,
+			"created_at":       record.CreatedAt,
+			"updated_at":       record.UpdatedAt,
+		})
+	}
+
+	panelSuccess(c, gin.H{
+		"list":      list,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
+}
+
+// ========== 用户接口 ==========
+
+// GetChannels godoc
+// @Summary 获取支付渠道列表
+// @Description 用户获取可用的支付渠道列表
+// @Tags 用户端
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /user/payment/channels [get]
+func (h *PaymentGatewayHandler) GetChannels(c *gin.Context) {
+	channels, err := h.gatewayService.GetChannels()
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	panelSuccess(c, channels)
+}
+
+// CreatePayment godoc
+// @Summary 创建支付订单
+// @Description 用户创建支付订单
+// @Tags 用户端
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body CreatePaymentRequest true "支付请求"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /user/payment/create [post]
+func (h *PaymentGatewayHandler) CreatePayment(c *gin.Context) {
+	userID := c.GetUint("user_id")
+
+	var req CreatePaymentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	// 获取网关
+	gateway, err := h.gatewayService.GetByID(req.GatewayID)
+	if err != nil {
+		panelError(c, "invalid gateway")
+		return
+	}
+
+	if err := h.gatewayService.ValidateGatewayUsable(gateway); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	// 验证金额
+	if err := h.gatewayService.ValidateAmount(gateway, req.Amount); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	// 计算手续费
+	feeAmount := h.gatewayService.CalculateFee(gateway, req.Amount)
+	actualAmount := req.Amount + feeAmount
+
+	// 创建支付记录
+	record := &model.PaymentRecord{
+		TradeNo:      h.gatewayService.GenerateTradeNo(),
+		GatewayID:    gateway.ID,
+		GatewayType:  gateway.Type,
+		UserID:       userID,
+		Amount:       req.Amount,
+		FeeAmount:    feeAmount,
+		ActualAmount: actualAmount,
+		Currency:     "CNY",
+		Status:       model.PaymentStatusPending,
+		ClientIP:     c.ClientIP(),
+	}
+
+	if req.OrderID != nil {
+		record.OrderID = req.OrderID
+	}
+
+	if err := h.gatewayService.CreateRecord(record); err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	panelSuccess(c, gin.H{
+		"trade_no":      record.TradeNo,
+		"amount":        record.Amount,
+		"fee_amount":    record.FeeAmount,
+		"actual_amount": record.ActualAmount,
+		"pay_url":       "",
+		"qrcode":        "",
+	})
+}
+
+// GetPaymentStatus godoc
+// @Summary 查询支付状态
+// @Description 用户查询支付订单状态
+// @Tags 用户端
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param trade_no path string true "订单号"
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Router /user/payment/status/{trade_no} [get]
+func (h *PaymentGatewayHandler) GetPaymentStatus(c *gin.Context) {
+	tradeNo := c.Param("trade_no")
+
+	record, err := h.gatewayService.GetRecordByTradeNo(tradeNo)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			panelError(c, "支付记录不存在")
+			return
+		}
+		log.Printf("payment gateway status lookup failed: %v", err)
+		panelError(c, "数据库错误")
+		return
+	}
+
+	panelSuccess(c, gin.H{
+		"trade_no":      record.TradeNo,
+		"amount":        record.Amount,
+		"actual_amount": record.ActualAmount,
+		"status":        record.Status,
+		"paid_at":       record.PaidAt,
+	})
+}
+
+// GetUserRecords godoc
+// @Summary 获取用户支付记录
+// @Description 用户获取自己的支付记录列表
+// @Tags 用户端
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
+// @Success 200 {object} map[string]any
+// @Failure 500 {object} map[string]any
+// @Router /user/payment/records [get]
+func (h *PaymentGatewayHandler) GetUserRecords(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	records, total, err := h.gatewayService.GetUserRecords(userID, page, pageSize)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
+	panelSuccess(c, gin.H{
+		"list":      records,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
+}
+
+// ========== 支付回调 ==========
+
+// PaymentCallback godoc
+// @Summary 支付回调
+// @Description 接收第三方支付平台的回调通知
+// @Tags 支付回调
+// @Accept json
+// @Produce plain
+// @Param type path string true "支付类型 (alipay/wechat/epay等)"
+// @Success 200 {string} string "success"
+// @Failure 400 {string} string "fail"
+// @Router /payment/callback/{type} [post]
+func (h *PaymentGatewayHandler) PaymentCallback(c *gin.Context) {
+	gatewayType := c.Param("type")
+
+	body, err := c.GetRawData()
+	if err != nil {
+		c.String(http.StatusBadRequest, "fail")
+		return
+	}
+
+	// 从插件注册表查找网关实现，新增支付方式无需改动此处。
+	gw, ok := payment.Get(gatewayType)
+	if !ok {
+		log.Printf("payment callback: no registered gateway for type=%s", gatewayType)
+		c.String(http.StatusBadRequest, "fail")
+		return
+	}
+
+	// 读取该网关已启用配置（含验签密钥）。
+	config := ""
+	if gateway, err := h.gatewayService.GetByType(gatewayType); err == nil && gateway != nil {
+		config = gateway.Config
+	}
+
+	result, err := gw.VerifyCallback(&payment.CallbackContext{
+		RawBody: body,
+		Headers: c.Request.Header,
+		Query:   c.Request.URL.Query(),
+		Config:  config,
+	})
+	if err != nil {
+		log.Printf("payment callback verification failed for type=%s: %v", gatewayType, err)
+		c.String(http.StatusBadRequest, "fail")
+		return
+	}
+
+	// 仅在确认支付成功时入账，防止伪造回调白嫖。
+	if result.Status == payment.StatusPaid {
+		if err := h.gatewayService.MarkOrderPaidWithAmount(result.TradeNo, result.GatewayTradeNo, result.Raw, result.Amount); err != nil {
+			log.Printf("payment callback: mark paid failed for trade_no=%s: %v", result.TradeNo, err)
+			c.String(http.StatusBadRequest, "fail")
+			return
+		}
+	}
+
+	c.String(http.StatusOK, "success")
+}
+
+// ========== 请求结构体 ==========
+
+// CreateGatewayRequest 创建网关请求
+type CreateGatewayRequest struct {
+	Name        string  `json:"name" binding:"required"`
+	Type        string  `json:"type" binding:"required,oneof=alipay wechat stripe usdt epay"`
+	Icon        string  `json:"icon"`
+	Config      any     `json:"config"`
+	FeeRate     float64 `json:"fee_rate"`
+	FeeFixed    float64 `json:"fee_fixed"`
+	MinAmount   float64 `json:"min_amount"`
+	MaxAmount   float64 `json:"max_amount"`
+	Sort        int     `json:"sort"`
+	Description string  `json:"description"`
+}
+
+// UpdateGatewayRequest 更新网关请求
+type UpdateGatewayRequest struct {
+	Name        string   `json:"name"`
+	Type        string   `json:"type" binding:"omitempty,oneof=alipay wechat stripe usdt epay"`
+	Icon        string   `json:"icon"`
+	Config      any      `json:"config"`
+	FeeRate     *float64 `json:"fee_rate"`
+	FeeFixed    *float64 `json:"fee_fixed"`
+	MinAmount   *float64 `json:"min_amount"`
+	MaxAmount   *float64 `json:"max_amount"`
+	Sort        *int     `json:"sort"`
+	Description string   `json:"description"`
+}
+
+// CreatePaymentRequest 创建支付请求
+type CreatePaymentRequest struct {
+	GatewayID uint    `json:"gateway_id" binding:"required"`
+	Amount    float64 `json:"amount" binding:"required,min=1"`
+	OrderID   *uint   `json:"order_id"`
+}
+
+// ToggleRequest 切换状态请求
+type ToggleRequest struct {
+	Enabled bool `json:"enabled"`
+}

@@ -1,0 +1,103 @@
+# Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+v2board
+v2board-*
+anix-control
+anix-control-*
+
+# Test binary
+*.test
+
+# Coverage
+*.out
+coverage.html
+
+# Python tooling cache
+__pycache__/
+*.pyc
+
+# Dependency
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+.codex_*.log
+tmp_*.log
+full_internal_test.log
+
+# Local config
+config/config.yaml
+!config/config.yaml.example
+config/config.dev.yaml
+config/deploy/ssh/*
+!config/deploy/ssh/.gitignore
+config/deploy/ansible/inventory.ini
+config/deploy/ansible/nodes/inventory.ini
+config/deploy/ansible/nodes/group_vars/all.yml
+
+# Build
+dist/
+build/
+web/public/
+web/public-check/
+web/node_modules/
+
+# Database
+config/data/
+# Environment
+.env
+.env.local
+.panel-install.env
+
+# Build outputs
+config/workspace/bin/
+config/workspace/output/
+test-reports/
+.ui-smoke/
+web/coverage/
+web/bundle-reports/
+web/bundle-reports-check/
+web/playwright-report/
+web/test-results/
+
+# Secrets and local state (never commit)
+.authkey
+.v2board.pid
+
+# Tool/editor local dirs
+.codex/
+.claude/skills/
+
+# Runtime backup artifacts (db/zip dumps)
+internal/handler/backups/
+internal/service/test_backups/
+backups/
+*.db
+*.sql.gz
+
+# Local SSH credentials (never commit)
+ssh.txt
+
+# TLS private keys/certs (never commit)
+config/deploy/nginx/ssl/*.key
+config/deploy/nginx/ssl/*.crt
+
+# Local build artifacts / production binary backups
+/server
+/migrate
+v2board.bak.*

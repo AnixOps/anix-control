@@ -1,0 +1,162 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import System from '@/views/admin/System.vue'
+
+const adminApi = vi.hoisted(() => ({
+  getSystemConfig: vi.fn(),
+  getSubscriptionSettings: vi.fn(),
+  setSystemConfig: vi.fn(),
+  getSystemConfigs: vi.fn(),
+  getSystemAuditLogs: vi.fn(),
+  getBackupConfig: vi.fn(),
+  getBackups: vi.fn(),
+  getBackupStats: vi.fn(),
+  getLoadBalancers: vi.fn(),
+  listForwardRuntimeJobs: vi.fn(),
+  getForwardRuntimeStatus: vi.fn(),
+  runForwardRuntimeDoctor: vi.fn()
+}))
+
+vi.mock('@/api/admin', () => adminApi)
+
+function mountSystem() {
+  return mount(System, {
+    global: {
+      stubs: {
+        'router-link': true
+      }
+    }
+  })
+}
+
+describe('System audit logs', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    adminApi.getSystemConfig.mockResolvedValue({ data: { value: '' } })
+    adminApi.getSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: [] } })
+    adminApi.setSystemConfig.mockResolvedValue({})
+    adminApi.getSystemConfigs.mockResolvedValue({ data: { list: [] } })
+    adminApi.getBackupConfig.mockResolvedValue({ data: {} })
+    adminApi.getBackups.mockResolvedValue({ data: { list: [] } })
+    adminApi.getBackupStats.mockResolvedValue({ data: {} })
+    adminApi.getLoadBalancers.mockResolvedValue({ data: { list: [] } })
+    adminApi.listForwardRuntimeJobs.mockResolvedValue({ data: { list: [] } })
+    adminApi.getForwardRuntimeStatus.mockResolvedValue({ data: { data: null } })
+    adminApi.runForwardRuntimeDoctor.mockResolvedValue({ data: { data: null } })
+    adminApi.getSystemAuditLogs.mockResolvedValue({
+      data: {
+        data: {
+          list: [
+            {
+              id: 1,
+              action: 'update',
+              module: 'system',
+              target_type: 'config',
+              username: 'admin',
+              content: 'updated runtime_backend',
+              ip: '127.0.0.1',
+              status: 'success',
+              created_at: '2026-04-11T08:00:00Z'
+            }
+          ],
+          total: 1,
+          page: 1,
+          page_size: 20
+        }
+      }
+    })
+    vi.spyOn(window, 'alert').mockImplementation(() => {})
+  })
+
+  it('loads audit logs with default page and page_size', async () => {
+    mountSystem()
+    await flushPromises()
+
+    expect(adminApi.getSystemAuditLogs).toHaveBeenCalledWith({
+      page: 1,
+      page_size: 20
+    })
+  })
+
+  it('applies action and target_type filters', async () => {
+    const wrapper = mountSystem()
+    await flushPromises()
+    adminApi.getSystemAuditLogs.mockClear()
+
+    wrapper.vm.auditFilters.action = 'delete'
+    wrapper.vm.auditFilters.target_type = 'node'
+    wrapper.vm.auditFilters.page = 3
+    await wrapper.vm.applyAuditFilters()
+    await flushPromises()
+
+    expect(adminApi.getSystemAuditLogs).toHaveBeenCalledWith({
+      page: 1,
+      page_size: 20,
+      action: 'delete',
+      target_type: 'node'
+    })
+  })
+
+  it('renders audit log row content from API response', async () => {
+    const wrapper = mountSystem()
+    wrapper.vm.activeTab = 'audit'
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('updated runtime_backend')
+    expect(text).toContain('admin')
+    expect(text).toContain('config')
+  })
+
+  it('renders audit log row content from panel envelope response', async () => {
+    adminApi.getSystemAuditLogs.mockResolvedValue({
+      code: 0,
+      msg: '操作成功',
+      data: {
+        list: [
+          {
+            id: 2,
+            action: 'delete',
+            module: 'system',
+            target_type: 'backup_record',
+            username: 'operator',
+            content: 'deleted backup #42',
+            ip: '127.0.0.2',
+            status: 'success',
+            created_at: '2026-04-12T08:00:00Z'
+          }
+        ],
+        total: 1,
+        page: 1,
+        page_size: 20
+      },
+      ts: 1783526400000
+    })
+
+    const wrapper = mountSystem()
+    wrapper.vm.activeTab = 'audit'
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('deleted backup #42')
+    expect(text).toContain('operator')
+    expect(text).toContain('backup_record')
+  })
+
+  it('shows panel envelope errors when audit log loading fails', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    adminApi.getSystemAuditLogs.mockResolvedValue({
+      code: -1,
+      msg: 'database unavailable',
+      data: null,
+      ts: 1783526400000
+    })
+
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    expect(alertSpy).toHaveBeenCalledWith('database unavailable')
+    expect(wrapper.vm.auditLogs).toEqual([])
+    expect(wrapper.vm.auditTotal).toBe(0)
+  })
+})

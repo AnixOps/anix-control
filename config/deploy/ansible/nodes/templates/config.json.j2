@@ -1,0 +1,55 @@
+{
+  "Log": {
+    "Level": "{{ v2bx_log_level | default('info') }}",
+    "Output": ""
+  },
+  "Cores": [
+    {
+      "Type": "{{ core_type | default('sing') }}",
+      "Log": {
+        "Level": "{{ v2bx_log_level | default('info') }}",
+        "Timestamp": true
+      },
+      "NTP": {
+        "Enable": false,
+        "Server": "time.apple.com",
+        "ServerPort": 0
+      }
+    }
+  ],
+  "Nodes": [
+    {
+      "Core": "{{ core_type | default('sing') }}",
+      "ApiHost": "{{ panel_api_host }}",
+      "Transport": "grpc",
+      "GRPCHost": "{{ grpc_host }}",
+      "GRPCUseTLS": {{ grpc_use_tls | default(false) | bool | lower }},
+{% if grpc_use_tls | default(false) | bool %}
+      "GRPCServerName": "{{ grpc_server_name | default(grpc_host.split(':')[0]) }}",
+{% endif %}
+      "GRPCKeepalive": {{ grpc_keepalive | default(30) }},
+      "AgentControlEnabled": {{ agent_control_enabled | default(false) | bool | lower }},
+      "AgentControlAllowInsecure": {{ agent_control_allow_insecure | default(false) | bool | lower }},
+{% if plugin_supervisor_enabled | default(false) | bool %}
+      "PluginSupervisorEnabled": true,
+      "PluginRoot": "{{ plugin_root }}",
+      "PluginSocketDir": "{{ plugin_socket_dir }}",
+      "PluginOfficialPublicKey": "{{ plugin_official_public_key }}",
+{% endif %}
+      "ApiKey": "{{ node_api_key }}",
+      "NodeID": {{ node_id }},
+      "Timeout": {{ node_timeout | default(30) }},
+      "ListenIP": "{{ listen_ip | default('0.0.0.0') }}",
+      "SendIP": "{{ send_ip | default('0.0.0.0') }}",
+      "DeviceOnlineMinTraffic": {{ device_online_min_traffic | default(200) }},
+      "MinReportTraffic": {{ min_report_traffic | default(0) }},
+      "TCPFastOpen": {{ tcp_fast_open | default(false) | bool | lower }},
+      "SniffEnabled": {{ sniff_enabled | default(true) | bool | lower }},
+      "CertConfig": {
+        "CertMode": "{{ cert_mode | default('none') }}",
+        "RejectUnknownSni": false,
+        "CertDomain": "{{ cert_domain | default('example.com') }}"
+      }
+    }
+  ]
+}

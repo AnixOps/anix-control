@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build:*)",
+      "Bash(go test:*)",
+      "Bash(go vet:*)",
+      "Bash(go mod:*)",
+      "Bash(go run:*)",
+      "Bash(sqlite3 data/*.db*)",
+      "Bash(curl -s http://localhost:8080/*)",
+      "Bash(rm -f *.exe)",
+      "Bash(mkdir -p:*)"
+    ]
+  }
+}

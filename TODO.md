@@ -1,0 +1,327 @@
+# TODO
+
+Date: 2026-07-17
+
+This list is intentionally concrete. Do not mark an item done without code, tests, and verification evidence where applicable.
+
+## P0: 3.1 Plugin Platform Foundation
+
+- [x] Freeze the `3.1.0` through `4.0.0` version gates and make `3.5.0` the
+  business-plugin migration release before the plugin-only 4.0 cutover.
+- [x] Add a byte-identical Control/Agent canonical manifest fixture and align
+  manifest API versions, safe IDs, architectures, dependencies, conflicts,
+  entrypoints, WebUI metadata and config schema validation.
+- [x] Add a byte-identical operation-envelope golden fixture so Control
+  dispatcher payloads and Agent decoder payloads stay wire-compatible.
+- [x] Add shared negative manifest fixtures so Control and Agent reject every
+  invalid contract case identically.
+- [x] Persist the complete versioned operation envelope and canonical config,
+  then connect durable dispatch, active-session binding, ACK and observed-state
+  write-back.
+- [x] Add the official signed package state machine and immutable artifact
+  repository with key ID/fingerprint and rotation support.
+- [x] Expose only verified, enabled and version-matched WebUI extensions through
+  the kernel catalog.
+- [x] Add revisioned per-installation configuration documents with signed
+  release JSON Schema validation and optimistic concurrency.
+- [x] Dynamically register namespaced plugin menus and routes without allowing
+  remote URLs, route replacement, or failure of a plugin to break kernel pages.
+- [x] Implement same-origin content-addressed WebUI bundle storage and digest
+  verification.
+- [x] Add install/disable/update/rollback browser tests for the package-driven
+  WebUI lifecycle.
+- [x] Enforce actor-scoped signed WebUI catalog, route, menu, permission, and
+  active bundle access from `plugin_api` grants, including zero bundle fetches
+  for unauthorized routes and fail-closed regular-user behavior.
+- [x] Publish login, registration, and profile permission-mode metadata for
+  frontend authorization, while retaining per-plugin legacy-admin fallback
+  only for plugins without an authoritative grant.
+- [x] Revoke stale WebUI assets on disable/update/rollback or permission change
+  with active version matching and `private, no-store`, and quarantine one
+  invalid plugin without breaking valid extensions or kernel pages.
+- [x] Add a fail-closed backend plugin API gateway admission skeleton for
+  `/api/v3/plugins/<plugin-id>/...`, including signed manifest route
+  validation, verified installation checks, and `plugin_api` resource grants.
+- [x] Connect the backend plugin API gateway to the version-exact read-only
+  `machine-telemetry` Control executor behind `plugins.control_execution_enabled`;
+  keep the gateway fail-closed/501 when the flag or executor is unavailable.
+- [x] Deliver `machine-telemetry` as the first complete Control + Agent + WebUI
+  reference package. The deterministic artifact, signed capability admission,
+  Agent-local telemetry RPC, real host metrics, Supervisor lifecycle,
+  heartbeat persistence, Control read-only route, browser E2E, and
+  cross-repository process E2E are covered; live staging catalog and sustained
+  canary evidence remain.
+- [x] Harden Control lifecycle ordering, lease fencing, cancellation monotonicity,
+  target-level installation locking, and lifecycle-generation idempotency.
+- [x] Add dependency-aware graph execution/rollback and feature-gated topology
+  fan-out with focused rollback/restart/cancellation tests.
+- [x] Add the deterministic `nftables-forward` package source, real Agent
+  runtime binary packaging, release-tag signing/upload path, WebUI smoke,
+  public-key verification, and tamper rejection without claiming production
+  traffic takeover.
+- [x] Add privileged `nftables-forward` network-namespace TCP/UDP acceptance and
+  nftables snapshot rollback evidence in the pinned Agent repo.
+- [x] Align `nftables-forward` 1.2.0 Control schema/defaults with the strict
+  Agent runtime, retain the 1.0.0 Control executor for rollback, and add
+  crash-safe ownership recovery plus signed cleanup after process/Agent death.
+- [x] Add read-only topology preview/diagnosis, config-hash step plans,
+  operation timelines, and an immutable revision/canary apply/rollback WebUI.
+- [x] Persist live nftables ruleset hashes/counters from signed Agent runtime
+  observations and require exact version/config-hash/revision/rule-set evidence
+  before an `nftables-forward` deployment is promoted; retain a durable grace
+  window and fail closed on mismatch or expiry.
+- [x] Add 3.3 `gost-mesh` and `nat-egress` package/WebUI sources with
+  deterministic release contracts, public-key verification, and tamper
+  rejection. The `nat-egress` contract now binds a real runtime; `gost-mesh`
+  remains package-contract-only.
+- [x] Implement the real `nat-egress` Agent runtime with nftables masquerade,
+  fwmark policy routing, marked health probes, crash-safe ownership recovery,
+  and privileged namespace traffic/rollback acceptance.
+- [x] Pin the committed `nat-egress` Agent revision and verify the production
+  release-tag signing/publish policy and package gates.
+- [ ] Keep Supervisor and dynamic plugin execution feature-gated until staging
+  restore smoke, rollout records, legacy fallback rehearsal, and operator
+  canary approval pass.
+- [ ] Implement the real Agent runtime and namespace traffic evidence for
+  `gost-mesh` WSS/TUIC/QUIC before the 3.3 canary.
+
+## P0: Audit Deliverables
+
+- [x] Create `docs/audit/security-risk.md`.
+- [x] Create `docs/audit/test-gap.md`.
+- [x] Create `docs/audit/repository-audit.md`.
+- [x] Create `docs/audit/concurrency-risk.md`.
+- [x] Create `docs/audit/performance-risk.md`.
+- [x] Create `ROADMAP.md`.
+- [x] Create `TODO.md`.
+- [x] Create root `README.md` as the repository entrypoint for status, docs, checks, and release policy.
+- [x] Create `docs/UPGRADE.md` as the GitHub Actions artifact upgrade and rollback runbook.
+- [x] Create `docs/manual-intervention.md`.
+- [x] Create `docs/features.md` as the implemented/planned feature status register.
+- [ ] Keep all audit files current as fixes land.
+- [ ] Keep `docs/features.md` current as new features or feature-status changes land.
+- [x] Add a CI documentation sync gate so implementation, CI, deployment, and config changes must include maintained status documentation.
+
+## P0: CI Baseline
+
+- [x] Add `go mod tidy` diff check.
+- [x] Add gofmt check.
+- [x] Add `go vet ./...`.
+- [x] Add full `go test ./... -count=1 -p=1`.
+- [x] Add `go test -race ./... -count=1 -p=1`.
+- [x] Add benchmark smoke job.
+- [x] Add blocking `govulncheck`.
+- [x] Add generated-file-excluded `gosec` report artifact.
+- [x] Add non-blocking `golangci-lint` report.
+- [x] Add `.golangci.yml` to exclude frontend dependency trees from Go linting.
+- [x] Add Docker build smoke.
+- [x] Add migration dry-run gate for release workflow.
+- [x] Make production `gosec` findings blocking after triage.
+- [x] Make generated-file-excluded full-repository `gosec` findings blocking after triage.
+- [x] Make `golangci-lint` blocking after baseline cleanup.
+- [x] Add SBOM generation to release workflow.
+- [x] Add a release workflow policy CI check for tag gating, required release prerequisites, multi-platform artifacts, checksums, SBOM, Docker metadata, operator runbook, and release notes.
+- [x] Attach migration dry-run output to release artifacts and include it in release checksum coverage.
+- [x] Add a machine-readable release manifest with CI run metadata and artifact hashes, and guard it in the release workflow policy check.
+- [x] Add a CI-tested release manifest generator script instead of keeping manifest generation as inline workflow code.
+- [x] Add a CI-tested release artifact verifier that blocks tag publishing when required assets, manifest entries, or checksums are inconsistent.
+- [x] Attach `UPGRADE.md` to GitHub Release assets and guard it in release workflow policy/artifact verification.
+- [x] Attach deterministic `RELEASE_NOTES.md` generated from `CHANGELOG.md` to GitHub Release assets and guard it in release workflow policy/artifact verification.
+
+## P0: WireGuard Dual-Node Entry/Exit Support
+
+- [x] Document the first-stage plan for WireGuard access through a domestic entry node and overseas exit node.
+- [x] Implement first panel peer-custody slice: `wireguard` protocol template, `v2_wireguard_peer`, automatic IPv4 peer allocation, X25519 keypair generation, preshared key generation, MTU/DNS/default allowed IPs, native WireGuard `.conf` output, and sing-box 1.13-compatible WireGuard endpoint output.
+- [x] Add panel-to-V2bX runtime user contract fields for WireGuard peer IP, public key, and preshared key over UniProxy HTTP and gRPC.
+- [x] Track V2bX v2.3.3 initial WireGuard peer online-state reporting from recent `wg show <iface> dump` handshakes.
+- [x] Add relay runtime contract fields for V2bX entry/exit GOST TUN role, TUN addresses, TUN port, routing table, routing priority, and exit NAT egress hints.
+- [x] Add the first admin visual protocol form for WireGuard CIDR, server key material, MTU, DNS, entry/exit GOST relay role, QUIC/WSS tunnel selection, one-click WSS compatibility switching, role-specific WSS SNI/CA or certificate/key paths, TUN addresses, routing table/priority, and exit NAT hints.
+- [x] Implement WireGuard API validation, keypair generation, relay default normalization, IPv4-only runtime guards, and production peer-schema initialization.
+- [ ] Add guided entry/exit node selection plus operator migration and rollback evidence.
+- [ ] Verify and, where needed, specialize subscription output for Shadowrocket, Loon, and v2rayN beyond the native `.conf`/sing-box outputs now covered by tests.
+- [ ] Verify V2bX runtime application for both domestic entry termination and overseas exit NAT configuration on real entry/exit machines.
+- [ ] Add integration, compatibility, traffic-accounting, limit, and migration tests.
+- [x] Add GitHub Actions verification for WireGuard relay and peer-limit contracts, including release-gated QUIC/WSS network-namespace route acceptance jobs.
+
+Current scope: panel peer custody, native WireGuard subscription output, sing-box WireGuard endpoint output, runtime peer fields for V2bX, relay TUN contract fields, secure WSS certificate contract, admin WireGuard visual protocol form, API validation and schema initialization, V2bX entry interface/traffic/online-state runtime slices, GOST entry/exit runtime supervision, tc speed-limit convergence, and release-gated GitHub Actions QUIC/WSS network-namespace acceptance jobs are implemented. `v2.5.0-rc.6` passed the Actions acceptance paths; real-client compatibility, guided node selection, and operator migration evidence remain pending.
+Target path: WireGuard access -> domestic entry termination -> GOST relay+QUIC -> overseas exit NAT. WSS is a one-click compatibility mode, not the default tunnel mode.
+
+## P1: Security And Error Handling
+
+- [x] Replace fixed bootstrap admin password when `admin.password` is empty.
+- [x] Replace load balancer `math/rand` selection.
+- [x] Fix node cache invalidation key conversion.
+- [x] Fix remaining service-package production `G104` unchecked error findings.
+- [x] Fix remaining production `G104` unchecked error findings outside `internal/service` after full-repository triage.
+- [x] Review `G402`, `G204`, `G304`, `G703`, and `G401` findings by runtime risk.
+- [x] Review WebSocket auth, origin, deadlines, ping/pong, and cleanup.
+- [x] Make token generation return and handle entropy errors in forwarding paths.
+- [x] Remove SMTP `InsecureSkipVerify` from notification delivery.
+- [x] Return explicit errors for corrupt MFA backup-code JSON.
+- [x] Enforce user-enabled TOTP/backup MFA during login before issuing JWTs.
+- [x] Enforce global MFA enrollment policy for users/admins covered by `enforce_for_all` or `enforce_for_admin`.
+- [x] Handle stats cache write/delete errors explicitly.
+- [x] Return explicit errors for node online cache updates and malformed legacy server config JSON.
+- [x] Harden local backup restore path validation, archive size limits, and backup directory permissions.
+- [x] Restrict local forward runtime command execution to reviewed `ansible-playbook` executables.
+- [x] Triage remaining service-package gosec findings and reduce `gosec ./internal/service` to zero issues.
+- [x] Clear handler/websocket gosec findings for WebSocket writes, metrics integer formatting, and UniProxy ETag hashing.
+- [x] Clear gRPC package gosec findings for protobuf integer narrowing and unchecked heartbeat updates.
+- [x] Clear `cmd/verify` gosec findings for local E2E verification.
+- [x] Clear `cmd/subtest` gosec findings for subscription test tooling.
+- [x] Clear `cmd/configgen` gosec findings for generated integration client configs.
+- [x] Clear `cmd/report` gosec findings for local report generation.
+- [x] Clear integration mock server gosec findings.
+- [x] Clear integration echo server gosec findings.
+- [x] Clear integration local environment gosec findings.
+- [x] Clear shared testutil database gosec findings.
+- [x] Clear integration runner gosec findings.
+- [x] Clear integration binary manager gosec findings.
+- [x] Clear integration clients gosec findings.
+- [x] Clear `cmd/migrate` dump parser gosec findings.
+- [x] Clear all non-generated full-repository gosec findings.
+- [x] Suppress generated protobuf `G103` findings in full-repository gosec reports.
+- [x] Clear `cmd/sqlite2postgres` golangci-lint findings.
+- [x] Clear `cmd/integration-test` golangci-lint findings.
+- [x] Clear `cmd/report` golangci-lint findings.
+- [x] Clear `cmd/verify` golangci-lint findings.
+- [x] Clear integration echo server golangci-lint findings.
+- [x] Clear integration local environment golangci-lint findings.
+- [x] Clear integration mock server golangci-lint findings.
+- [x] Clear integration binary manager golangci-lint findings.
+- [x] Clear integration runner golangci-lint findings.
+- [x] Clear WebSocket origin utils golangci-lint findings.
+- [x] Clear database package golangci-lint findings.
+- [x] Clear integration setup script golangci-lint findings.
+- [x] Clear middleware package golangci-lint findings.
+- [x] Clear integration clients golangci-lint findings.
+- [x] Clear `cmd/migrate` and `cmd/server` database close golangci-lint findings.
+- [x] Clear router, smoke, and root integration test golangci-lint findings.
+- [x] Clear websocket package golangci-lint findings.
+- [x] Clear GOST package golangci-lint findings.
+- [x] Clear cache package golangci-lint findings.
+- [x] Clear gRPC package golangci-lint findings.
+- [x] Clear E2E test package golangci-lint findings.
+- [x] Clear integration E2E test package golangci-lint findings.
+- [x] Clear handler package golangci-lint findings.
+- [x] Clear service small-file golangci-lint findings outside the consolidated `service_test.go` suite.
+- [x] Clear remaining `internal/service/service_test.go` errcheck findings.
+- [x] Harden EPay callback signature and amount verification.
+- [x] Ensure plugin payment callback signature tests cover every registered gateway.
+- [x] Ensure implemented payment callback/webhook handlers cover valid and rejected signatures for EPay, Stripe, PayPal, and X402.
+- [x] Block Alipay, WeChat, and USDT payment gateways from being enabled or used until callback implementations and tests exist.
+- [ ] Add callback implementations and tests before enabling Alipay, WeChat, or USDT payment callbacks.
+
+## P1: Concurrency And Lifecycle
+
+- [x] Fix integration echo server race around shutdown/server capture.
+- [x] Isolate service test SQLite databases.
+- [x] Audit memory cache init/close lifecycle.
+- [x] Make forward node health checks context-aware.
+- [x] Add cancellation/drain tests for background workers.
+- [x] Add gRPC stream cancellation cleanup tests.
+
+## P1: Traffic And Stats
+
+- [x] Fix negative traffic write rejection in core service paths.
+- [x] Normalize invalid traffic rate handling in stats paths.
+- [x] Add PostgreSQL stats regression coverage.
+- [x] Document traffic log indexes and retention policy.
+- [x] Add realistic stats/ranking benchmarks.
+- [x] Add upper-bound request limit tests for ranking APIs.
+
+## P2: Forwarding
+
+- [x] Make panel forward pause/resume idempotent while runtime jobs are active.
+- [x] Add partial unique guard for pending/running runtime jobs.
+- [x] Add repair step for historical duplicate runtime jobs.
+- [x] Add `docs/forwarding/design.md`.
+- [x] Add `docs/forwarding/api.md`.
+- [x] Add `docs/forwarding/security.md`.
+- [x] Add `docs/forwarding/compatibility.md`.
+- [x] Add more executor cancellation and retry tests.
+- [x] Benchmark runtime job claiming/listing.
+
+## P2: Compatibility And Operations
+
+- [x] Add legacy subscription route `/api/v1/client/subscribe?token=`.
+- [x] Add deployment script syntax and self-test CI checks.
+- [x] Document production deploy command and environment prerequisites.
+- [x] Document SQLite-to-PostgreSQL migration dry run and rollback.
+- [x] Replace placeholder release deploy job with explicit manual/operator flow.
+- [x] Enforce GitHub Actions-only release build policy and guard local source-tree deploy builds, including legacy deploy/pre-deploy entrypoints.
+- [x] Pin GitHub Actions Go setup to `1.26.5` and expand gRPC coverage-gate tests.
+- [x] Refresh GitHub Actions dependencies away from Node.js 20 action runtimes.
+- [x] Generate the integration workflow coverage artifact instead of uploading a missing `coverage.out`.
+- [x] Add a CI-tested helper for cleaning local source-tree build artifacts without removing config, databases, certificates, backups, or `web/node_modules`.
+- [x] Add a CI release-build policy check so panel and V2bX deployment scripts cannot add unguarded local build commands.
+- [x] Add a documentation sync CI check so source, frontend, deployment, workflow, and config changes cannot land without updated status docs or changelog evidence.
+- [x] Add a release workflow policy CI check so release artifact, checksum, SBOM, Docker metadata, and runbook requirements cannot be removed silently.
+- [x] Include migration dry-run evidence in GitHub Release assets for tag builds.
+- [x] Include a machine-readable release manifest in GitHub Release assets for tag builds.
+- [x] Cover release manifest generation with a script self-test in GitHub Actions.
+- [x] Cover release notes generation with a script self-test in GitHub Actions.
+- [x] Verify release artifact, manifest, and checksum consistency before creating GitHub Releases.
+
+## P3: API And UI Consistency
+
+- [ ] Normalize API error envelopes module by module.
+- [ ] Add handler tests before changing response shapes.
+- [x] Normalize Ansible Machines response envelopes with handler and frontend compatibility tests.
+- [x] Normalize Forward Node management response envelopes with handler and frontend compatibility tests.
+- [x] Normalize Forward Rule management response envelopes with handler and frontend compatibility tests.
+- [x] Normalize Forward stats, user-rule, and connection-test response envelopes with handler and frontend compatibility tests.
+- [x] Cover Forward observability response envelopes with handler and frontend API compatibility tests.
+- [x] Cover Forward internal traffic report/snapshot response envelopes with handler tests.
+- [x] Normalize admin traffic hourly/user-ranking response envelopes with handler and TrafficHourly frontend compatibility tests.
+- [x] Normalize admin dashboard success/database-error response envelopes with handler, service error propagation, and Dashboard frontend compatibility tests.
+- [x] Normalize admin user stats success/database-error response envelopes with handler, service error propagation, and Users frontend compatibility tests.
+- [x] Normalize admin order stats success/database-error response envelopes with handler, service error propagation, and Orders frontend compatibility tests.
+- [x] Normalize admin node stats response envelope with handler and Nodes frontend compatibility tests.
+- [x] Normalize admin system info response envelope with handler and AdminLayout frontend compatibility tests.
+- [x] Normalize admin invite stats response envelope with handler and Invite frontend compatibility tests.
+- [x] Normalize admin payment stats response envelope with handler and Payment frontend compatibility tests.
+- [x] Normalize admin subscription stats response envelope with handler and Subscriptions frontend compatibility tests.
+- [x] Normalize admin system backup stats success/user-error response envelopes with handler and System frontend `code=-1` compatibility tests.
+- [x] Normalize admin load balancer stats success/user-error response envelopes with handler and admin API mapping tests.
+- [x] Normalize admin system backup config success/user-error response envelopes with handler, sensitive-field, and System frontend `code=-1` compatibility tests.
+- [x] Normalize admin system backup list/create/delete/restore success/user-error response envelopes with handler, audit, and System frontend `code=-1` compatibility tests.
+- [x] Normalize admin invite config response envelope with handler and Invite frontend compatibility tests.
+- [x] Normalize user invite info/code/commission/withdrawal and admin invite config update/withdrawal response envelopes with handler, Invite frontend, and admin API compatibility tests.
+- [x] Normalize admin subscription settings response envelope with handler, System, Users, and admin API compatibility tests.
+- [x] Normalize admin payment gateway list response envelope with handler and Payment frontend compatibility tests.
+- [x] Normalize admin payment gateway CRUD/toggle and payment-record list success/user-error response envelopes with handler and Payment frontend compatibility tests.
+- [x] Normalize user payment channels/create/status/records success/user-error response envelopes with handler tests while preserving callback compatibility.
+- [x] Normalize legacy X402 and fiat payment create/check success and user-error response envelopes with handler tests while preserving callback/webhook compatibility.
+- [x] Normalize user/admin MFA success and user-error response envelopes with handler and Admin MFA frontend compatibility tests.
+- [x] Normalize user/admin notification success and user-error response envelopes with handler and Admin Notifications frontend compatibility tests.
+- [x] Normalize admin/user Telegram panel API success and user-error response envelopes with handler and Admin Telegram frontend compatibility tests while preserving webhook compatibility.
+- [x] Normalize admin subscription group CRUD success/user-error response envelopes with handler, service delete-not-found, and Subscriptions frontend `code=-1` tests while preserving public subscription download compatibility.
+- [x] Normalize admin subscription template CRUD success/user-error response envelopes with handler, service not-found, and Subscriptions frontend `code=-1` tests while preserving public subscription download compatibility.
+- [x] Normalize admin subscription protocol binding/read success-user-error response envelopes with handler, service missing-protocol, and Subscriptions frontend `code=-1` tests while preserving public subscription download compatibility.
+- [x] Normalize admin subscription preview success/user-error response envelopes with handler and Subscriptions frontend `code=-1` tests while accepting `group_ids` and authenticated context fallback.
+- [x] Normalize admin subscription user/plan group binding success-user-error response envelopes with handler and service missing-reference/missing-relation tests while preserving public subscription download compatibility.
+- [x] Normalize admin node management CRUD/protocol/log/raw-config/auth-key response envelopes with handler, Nodes frontend, and admin API compatibility tests while preserving node registration/heartbeat compatibility.
+- [x] Normalize admin Agent list/task-result/task-history/monitor/task-create/execute response envelopes with handler, Agent frontend, WebSocket ack, and admin API compatibility tests while preserving runtime Agent protocol responses.
+- [x] Normalize admin user management CRUD/ban/unban/reset success/user-error response envelopes with handler, service not-found, Users frontend `code=-1`, and admin API compatibility tests while preserving `/user/reset` compatibility.
+- [x] Normalize admin plan management list/detail/create/update/delete/assign success/user-error response envelopes with handler, service not-found, Plans frontend `code=-1`, and admin API compatibility tests.
+- [x] Normalize admin order management list/detail/status/paid/cancel success/user-error response envelopes with handler, service not-found, localized Orders frontend `code=-1`, and admin API compatibility tests.
+- [x] Normalize user register success/user-error and order-save success/user-error response envelopes with handler coverage.
+- [x] Normalize user login success/user-error response envelope with handler and Login frontend compatibility tests.
+- [x] Normalize user order list/detail success and user-error response envelopes with handler and Orders frontend compatibility tests.
+- [x] Normalize user subscription info success and user-error response envelope with handler and Subscribe frontend compatibility tests.
+- [x] Normalize user profile success and user-error response envelope with handler and user store compatibility tests.
+- [x] Normalize user dashboard success and user-error response envelope with handler and user API mapping tests.
+- [x] Normalize user plan list success/error response envelopes with handler and Plans frontend compatibility tests.
+- [x] Normalize user coupon-check success and business-error response envelopes with handler and Plans frontend compatibility tests.
+- [x] Normalize user knowledge list/detail success and user-error response envelopes with handler and Knowledge frontend compatibility tests.
+- [x] Normalize user ticket list/create/detail/reply/close success and user-error response envelopes with handler and Tickets frontend compatibility tests.
+- [x] Normalize public payment methods/status response envelopes with handler tests, including missing payment records.
+- [x] Normalize admin ticket list/reply/close success and user-error response envelopes with handler and Tickets frontend compatibility tests.
+- [x] Normalize admin coupon list/create/delete success and user-error response envelopes with handler and Coupons frontend compatibility tests.
+- [x] Normalize admin knowledge list/create/update/delete success and user-error response envelopes with handler and Knowledge frontend compatibility tests.
+- [x] Normalize admin system audit-log success/error response envelopes with handler and System frontend compatibility tests.
+- [x] Normalize admin system config CRUD success and user-error response envelopes with handler, sensitive-field, and System frontend compatibility tests.
+- [x] Normalize admin load balancer CRUD and health-check success/user-error response envelopes with handler and System frontend `code=-1` compatibility tests.
+- [ ] Keep frontend build/test/audit green for admin and user workflows.
+- [x] Track frontend bundle size for heavy admin pages.

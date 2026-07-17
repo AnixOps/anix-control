@@ -1,0 +1,16 @@
+{
+  "apply": false,
+  "rollback_on_exit": true,
+  "table_name": "anixops_nat_egress",
+  "chain_name": "postrouting",
+  "egress_interface": "eth0",
+  "default_mark": 100,
+  "policy_table": 100,
+  "rule_priority": 10100,
+  "ipv4_masquerade": true,
+  "ipv6_masquerade": false,
+  "health_check_enabled": true,
+  "health_check_interval_seconds": 15,
+  "health_check_timeout_seconds": 3,
+  "health_check_target": "1.1.1.1:443"
+}

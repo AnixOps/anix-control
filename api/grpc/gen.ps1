@@ -1,0 +1,30 @@
+param()
+
+$ErrorActionPreference = "Stop"
+$ModulePath = "github.com/AnixOps/anix-control/v4"
+$ProtoFiles = @(
+    "api/grpc/v2board.proto",
+    "api/grpc/agent/v1/agent.proto"
+)
+
+foreach ($CommandName in @("protoc", "protoc-gen-go", "protoc-gen-go-grpc")) {
+    if (-not (Get-Command $CommandName -ErrorAction SilentlyContinue)) {
+        throw "$CommandName not found"
+    }
+}
+
+$RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+Push-Location $RepoRoot
+try {
+    protoc `
+        --go_out=. `
+        "--go_opt=module=$ModulePath" `
+        --go-grpc_out=. `
+        "--go-grpc_opt=module=$ModulePath" `
+        $ProtoFiles
+
+    Write-Host "Generated legacy and AnixOps Agent gRPC bindings."
+}
+finally {
+    Pop-Location
+}

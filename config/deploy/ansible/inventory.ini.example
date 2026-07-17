@@ -1,0 +1,6 @@
+[forward_nodes]
+# Replace the sample host below with your real ingress relay host.
+# Keep the inventory hostname aligned with forward node host when you rely on
+# the default ansible limit pattern {{node.host}}.
+#
+# 203.0.113.10 ansible_host=203.0.113.10 ansible_user=root ansible_port=22 ansible_ssh_private_key_file=/home/v2board/.ssh/id_ed25519

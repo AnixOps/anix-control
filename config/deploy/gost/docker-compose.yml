@@ -1,0 +1,34 @@
+# gost 转发节点 Docker Compose 配置
+# 使用方法:
+#   1. 复制 .env.example 到 .env 并修改配置
+#   2. docker-compose up -d
+
+version: '3.8'
+
+services:
+  gost:
+    build: .
+    container_name: gost-forward
+    restart: unless-stopped
+    ports:
+      - "18080:18080"  # API 端口
+      - "9000:9000"    # Prometheus 监控端口
+      # 转发端口需要根据规则动态添加
+      # - "10000-10100:10000-10100"  # 示例：转发端口范围
+    volumes:
+      - ./gost.yml:/app/gost.yml:ro
+      - ./certs:/app/certs:ro  # TLS 证书目录
+    environment:
+      - TZ=Asia/Shanghai
+      - API_TOKEN=${API_TOKEN:-your-api-token}
+    networks:
+      - forward-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  forward-net:
+    driver: bridge

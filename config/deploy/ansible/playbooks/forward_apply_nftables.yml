@@ -1,0 +1,83 @@
+- name: Apply V2Board forward nftables rules
+  hosts: all
+  gather_facts: false
+  become: true
+  vars:
+    forward_protocols: "{{ ['tcp', 'udp'] if tunnel.protocol == 'both' else (['udp'] if tunnel.protocol == 'udp' else ['tcp']) }}"
+    forward_interface: "{{ (forward.interfaceName | default('') | trim) or (tunnel.interfaceName | default('') | trim) }}"
+    strategy_normalized: "{{ forward.strategy | default('fifo') | lower }}"
+  pre_tasks:
+    - name: Fail when no forward targets exist
+      ansible.builtin.fail:
+        msg: "forward {{ forward.id }} has no remote targets"
+      when: (targets | default([])) | length == 0
+
+    - name: Persist IPv4 forwarding
+      ansible.builtin.lineinfile:
+        path: /etc/sysctl.conf
+        regexp: '^net.ipv4.ip_forward='
+        line: net.ipv4.ip_forward=1
+        create: true
+
+    - name: Enable IPv4 forwarding immediately
+      ansible.builtin.command: sysctl -w net.ipv4.ip_forward=1
+      changed_when: false
+
+  tasks:
+    - name: Apply NAT chain for each protocol with nftables
+      ansible.builtin.shell: |
+        set -euo pipefail
+        TABLE="v2b_forward"
+        CHAIN="v2b_fwd_{{ forward.id }}_{{ item }}"
+        PORT="{{ forward.inPort }}"
+        PROTO="{{ item }}"
+        IFACE="{{ forward_interface }}"
+        PREROUTING_COMMENT="v2b-forward-{{ forward.id }}-${PROTO}-prerouting"
+
+        nft list table ip "$TABLE" >/dev/null 2>&1 || nft add table ip "$TABLE"
+        nft list chain ip "$TABLE" prerouting >/dev/null 2>&1 || nft 'add chain ip '"$TABLE"' prerouting { type nat hook prerouting priority dstnat; policy accept; }'
+        nft list chain ip "$TABLE" postrouting >/dev/null 2>&1 || nft 'add chain ip '"$TABLE"' postrouting { type nat hook postrouting priority srcnat; policy accept; }'
+        nft list chain ip "$TABLE" "$CHAIN" >/dev/null 2>&1 || nft add chain ip "$TABLE" "$CHAIN"
+        nft flush chain ip "$TABLE" "$CHAIN"
+
+        if [ "{{ strategy_normalized }}" = "round" ] && [ "{{ targets | length }}" -gt 1 ]; then
+          MAP_ENTRIES=""
+          {% for target in targets %}
+          MAP_ENTRIES="${MAP_ENTRIES}{% if not loop.first %}, {% endif %}{{ loop.index0 }} : dnat to {{ target.addr }}"
+          {% endfor %}
+          nft add rule ip "$TABLE" "$CHAIN" meta l4proto "$PROTO" counter numgen inc mod {{ targets | length }} vmap "{ ${MAP_ENTRIES} }"
+        elif [ "{{ strategy_normalized }}" = "rand" ] && [ "{{ targets | length }}" -gt 1 ]; then
+          MAP_ENTRIES=""
+          {% for target in targets %}
+          MAP_ENTRIES="${MAP_ENTRIES}{% if not loop.first %}, {% endif %}{{ loop.index0 }} : dnat to {{ target.addr }}"
+          {% endfor %}
+          nft add rule ip "$TABLE" "$CHAIN" meta l4proto "$PROTO" counter numgen random mod {{ targets | length }} vmap "{ ${MAP_ENTRIES} }"
+        else
+          nft add rule ip "$TABLE" "$CHAIN" meta l4proto "$PROTO" counter dnat to "{{ targets[0].addr }}"
+        fi
+
+        while read -r HANDLE; do
+          [ -n "${HANDLE:-}" ] && nft delete rule ip "$TABLE" prerouting handle "$HANDLE"
+        done < <(nft -a list chain ip "$TABLE" prerouting 2>/dev/null | awk '/comment "'"${PREROUTING_COMMENT}"'"/ {print $NF}')
+
+        if [ -n "$IFACE" ]; then
+          nft add rule ip "$TABLE" prerouting iifname "$IFACE" meta l4proto "$PROTO" th dport "$PORT" jump "$CHAIN" comment "$PREROUTING_COMMENT"
+        else
+          nft add rule ip "$TABLE" prerouting meta l4proto "$PROTO" th dport "$PORT" jump "$CHAIN" comment "$PREROUTING_COMMENT"
+        fi
+
+        {% for target in targets %}
+        TARGET_ADDR="{{ target.addr }}"
+        TARGET_HOST="${TARGET_ADDR%%:*}"
+        TARGET_PORT="${TARGET_ADDR##*:}"
+        POSTROUTING_COMMENT="v2b-forward-{{ forward.id }}-${PROTO}-postrouting-{{ loop.index }}"
+
+        while read -r HANDLE; do
+          [ -n "${HANDLE:-}" ] && nft delete rule ip "$TABLE" postrouting handle "$HANDLE"
+        done < <(nft -a list chain ip "$TABLE" postrouting 2>/dev/null | awk '/comment "'"${POSTROUTING_COMMENT}"'"/ {print $NF}')
+
+        nft add rule ip "$TABLE" postrouting meta l4proto "$PROTO" ip daddr "$TARGET_HOST" th dport "$TARGET_PORT" masquerade comment "$POSTROUTING_COMMENT"
+        {% endfor %}
+      args:
+        executable: /bin/bash
+      loop: "{{ forward_protocols }}"
