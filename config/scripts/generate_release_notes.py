@@ -55,6 +55,32 @@ def extract_changelog_section(changelog: str, section: str = DEFAULT_SECTION) ->
     return "\n".join(selected)
 
 
+def tagged_changelog_section_name(changelog: str, tag: str) -> str:
+    version = tag.strip()
+    if version.startswith("v"):
+        version = version[1:]
+    if not version:
+        raise ReleaseNotesError("release tag is empty")
+
+    prefix = f"{version} - "
+    for line in changelog.splitlines():
+        if not line.startswith("## "):
+            continue
+        heading = line[3:].strip()
+        if heading == version or heading.startswith(prefix):
+            return heading
+    raise ReleaseNotesError(f"CHANGELOG release section not found for tag: {tag}")
+
+
+def select_changelog_section(changelog: str, section: str, tag: str) -> str:
+    # Tagged builds publish their immutable version section even when a later
+    # Unreleased section exists. Non-tagged/manual runs retain the old default.
+    if section == DEFAULT_SECTION and tag.strip():
+        tagged_section = tagged_changelog_section_name(changelog, tag)
+        return extract_changelog_section(changelog, tagged_section)
+    return extract_changelog_section(changelog, section)
+
+
 def build_release_notes(
     *,
     tag: str,
@@ -126,6 +152,26 @@ def run_self_test() -> None:
     assert "deterministic release notes" in section
     assert "Older released change" not in section
 
+    tagged_changelog = """# Changelog
+
+## Unreleased
+
+- A later development change.
+
+## 3.1.0-alpha.1 - 2026-07-17
+
+- The immutable tagged change.
+
+## 3.0.0
+
+- An older release.
+"""
+    tagged_section = select_changelog_section(tagged_changelog, DEFAULT_SECTION, "v3.1.0-alpha.1")
+    assert "immutable tagged change" in tagged_section
+    assert "later development change" not in tagged_section
+    assert "older release" not in tagged_section
+    assert select_changelog_section(changelog, DEFAULT_SECTION, "") == section
+
     notes = build_release_notes(
         tag="v2.4.0",
         commit="1234567890abcdef",
@@ -144,6 +190,10 @@ def run_self_test() -> None:
 
     expect_failure("missing section", lambda: extract_changelog_section("# Changelog\n"))
     expect_failure("empty section", lambda: extract_changelog_section("# Changelog\n\n## Unreleased\n\n## v1.0.0\n"))
+    expect_failure(
+        "missing tagged section",
+        lambda: select_changelog_section(tagged_changelog, DEFAULT_SECTION, "v9.9.9"),
+    )
 
     print("release notes self-test passed")
 
@@ -170,7 +220,11 @@ def main() -> int:
     if not changelog_path.is_file():
         raise SystemExit(f"changelog not found: {changelog_path}")
 
-    section = extract_changelog_section(changelog_path.read_text(encoding="utf-8"), args.section)
+    section = select_changelog_section(
+        changelog_path.read_text(encoding="utf-8"),
+        args.section,
+        args.tag,
+    )
     notes = build_release_notes(
         tag=args.tag,
         commit=args.commit,
