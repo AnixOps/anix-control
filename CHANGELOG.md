@@ -29,6 +29,8 @@
   `2f257730c20743bbad4acaa3e8b1793e4e32f5f0`, which journals the original
   nftables table, recovers after `SIGKILL` or Agent restart, and restores or
   removes owned state through the signed cleanup entrypoint.
+- Cleared the deployment preflight static-analysis gate without changing
+  runtime behavior.
 
 ### Known Gaps
 
