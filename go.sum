@@ -1,5 +1,5 @@
-github.com/AnixOps/anix-agent/sdk v1.0.0-rc.1 h1:A+JBhdNMYgYzOmFsmYrIoI8tDK3eVsRH+N4NvhkYhUk=
-github.com/AnixOps/anix-agent/sdk v1.0.0-rc.1/go.mod h1:sLPBU1kBX4WP/KuUUhxRqbCcUW9tHoQZ/yR5KIKOOVU=
+github.com/AnixOps/anix-agent/sdk v1.0.0 h1:KImAAk2Ntv35WhfY7gMGbueDo4hyC7N2jXZRLSeBf5I=
+github.com/AnixOps/anix-agent/sdk v1.0.0/go.mod h1:sLPBU1kBX4WP/KuUUhxRqbCcUW9tHoQZ/yR5KIKOOVU=
 github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
 github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
 github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc h1:biVzkmvwrH8WK8raXaxBx6fRVTlJILwEwQGL1I/ByEI=
