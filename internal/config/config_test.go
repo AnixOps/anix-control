@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"sync"
@@ -147,6 +148,55 @@ plugins:
 	assert.Equal(t, "7s", loaded.Plugins.DispatchPollInterval)
 	assert.Equal(t, "11s", loaded.Plugins.TopologyPollInterval)
 	assert.Equal(t, "ZmFrZS1wdWJsaWMta2V5", loaded.Plugins.OfficialPublicKey)
+}
+
+func TestOfficialPluginAlphaProfiles(t *testing.T) {
+	const officialPublicKey = "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
+
+	decoded, err := base64.StdEncoding.DecodeString(officialPublicKey)
+	require.NoError(t, err)
+	require.Len(t, decoded, 32, "official Ed25519 public key must contain 32 raw bytes")
+
+	profiles := []struct {
+		name             string
+		path             string
+		executionEnabled bool
+		dispatchEnabled  bool
+		grpcEnabled      bool
+	}{
+		{name: "development", path: "config.dev.yaml.example", executionEnabled: true, dispatchEnabled: true, grpcEnabled: true},
+		{name: "release installer", path: "config.yaml.example", executionEnabled: true, dispatchEnabled: true, grpcEnabled: true},
+		{name: "production fail closed", path: "config.prod.yaml", executionEnabled: false, dispatchEnabled: false, grpcEnabled: false},
+	}
+
+	for _, profile := range profiles {
+		t.Run(profile.name, func(t *testing.T) {
+			resetConfig()
+			t.Cleanup(resetConfig)
+
+			loaded, loadErr := Load(filepath.Join("..", "..", "config", profile.path))
+			require.NoError(t, loadErr)
+			require.Equal(t, officialPublicKey, loaded.Plugins.OfficialPublicKey)
+			assert.Equal(t, profile.executionEnabled, loaded.Plugins.ControlExecutionEnabled)
+			assert.Equal(t, profile.dispatchEnabled, loaded.Plugins.DispatchEnabled)
+			assert.Equal(t, profile.grpcEnabled, loaded.GRPC.Enable)
+			assert.False(t, loaded.Plugins.TopologyExecutionEnabled)
+			if profile.grpcEnabled {
+				assert.Equal(t, "127.0.0.1", loaded.GRPC.Host)
+			}
+		})
+	}
+}
+
+func TestProductionPluginProfileContainsNoDefaultRemoteCredential(t *testing.T) {
+	resetConfig()
+	t.Cleanup(resetConfig)
+
+	loaded, err := Load(filepath.Join("..", "..", "config", "config.prod.yaml"))
+	require.NoError(t, err)
+	assert.Empty(t, loaded.App.APIToken)
+	assert.Empty(t, loaded.GRPC.APIToken)
+	assert.Empty(t, loaded.ForwardRuntime.NodeX.Token)
 }
 
 func TestLoadUsesAnixOpsControlAsDefaultAppName(t *testing.T) {

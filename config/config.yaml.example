@@ -79,7 +79,7 @@ auth:
 
 app:
   name: "AnixOps Control"
-  version: "3.1.0-alpha.1"
+  version: "4.0.0-alpha.1"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
@@ -87,16 +87,16 @@ app:
 # Base64-encoded Ed25519 public key used to verify official AnixOps plugin
 # manifests before a release can be registered through /api/v3.
 plugins:
-  official_public_key: ""
-  # Disabled until the 3.1 package-runtime promotion evidence passes. This
-  # enables Control package API execution and the durable Control lifecycle
-  # worker; signed catalog and WebUI inspection remain available while off.
-  control_execution_enabled: false
+  # Official AnixOps Ed25519 release trust root (raw public key, base64).
+  official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
+  # The alpha profile enables the signed package API and durable lifecycle
+  # worker. Existing installations keep their legacy data plane unless an
+  # Agent explicitly opts into AgentControlEnabled and its Supervisor.
+  control_execution_enabled: true
   control_poll_interval: "5s"
-  # Disabled by default. Enabling this starts durable Control -> Agent plugin
-  # lifecycle delivery and requires grpc.enabled plus an explicit Agent
-  # Supervisor opt-in on each target node.
-  dispatch_enabled: false
+  # The matching development gRPC listener makes the package path usable after
+  # an Agent is configured. Production deployments must set TLS/proxy details.
+  dispatch_enabled: true
   dispatch_poll_interval: "5s"
   # Declarative topology execution remains opt-in and also requires
   # dispatch_enabled so planned revisions cannot alter legacy traffic.

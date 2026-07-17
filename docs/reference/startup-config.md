@@ -52,10 +52,27 @@ jwt:
 
 app:
   name: "AnixOps Control"
-  version: "3.1.0-alpha.1"
+  version: "4.0.0-alpha.1"
   api_token: "replace-with-node-api-token"
   traffic_log_enable: true
   subscribe_path: "s"
+
+plugins:
+  official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
+  control_execution_enabled: true
+  control_poll_interval: "5s"
+  dispatch_enabled: true
+  dispatch_poll_interval: "5s"
+  topology_execution_enabled: false
+  topology_poll_interval: "5s"
+
+grpc:
+  enabled: true
+  host: "127.0.0.1"
+  port: 50051
+  api_token: ""
+  tls_cert_file: ""
+  tls_key_file: ""
 
 admin:
   email: "admin@example.com"
@@ -69,6 +86,18 @@ forward_runtime:
     token: "replace-with-shared-token"
     timeout_seconds: 15
 ```
+
+This is the `4.0.0-alpha.1` signed-package profile. The pinned value is the raw
+32-byte AnixOps Ed25519 release public key encoded as Base64. It is public trust
+material, not a private signing key. The loopback gRPC bind makes local
+Control/Agent acceptance reproducible while preventing an unauthenticated
+network listener from appearing during installation.
+
+An Agent keeps `Transport: "http"` for the existing configuration, user, and
+traffic data plane, then independently opts into package operations with
+`AgentControlEnabled` and `PluginSupervisorEnabled`. Do not enable a remote
+Agent by changing `grpc.host` alone: configure server TLS or an HTTP/2 gRPC
+proxy and firewall first.
 
 ## 3. Local Binary Startup
 
@@ -123,6 +152,11 @@ The runtime flow is now:
 5. run `InitForwardRuntimeSystemConfig`
 6. persist the parsed runtime snapshot into `v2_system_config`
 
+When the alpha plugin profile is enabled, startup also exposes the signed
+package APIs, starts the durable Control lifecycle worker, and dispatches ready
+operations to authenticated Agent control streams. Topology execution remains
+off until a separate canary decision.
+
 That is why local startup and Docker startup now share the same primary config structure.
 
 ## 6. Runtime Tuning
@@ -147,6 +181,13 @@ After startup, verify:
 6. `/admin/forward/nodes` for NodeX relay/exit topology
 7. `GET /api/v2/admin/forward/runtime/status` works in NodeX mode
 8. `GET /api/v2/admin/forward/runtime/doctor` works when NodeX is reachable
+9. `/admin/control` loads the official package catalog and installation state
+10. an Agent using the same official public key reports an active control stream
+
+For a production-template rehearsal, verify the opposite before adding secrets:
+`control_execution_enabled`, `dispatch_enabled`, `topology_execution_enabled`,
+and `grpc.enabled` must all remain `false`. The production template contains no
+default node API token, gRPC fallback token, or NodeX shared token.
 
 ## 8. Related Docs
 
