@@ -6,7 +6,7 @@
 
 set -Eeuo pipefail
 
-readonly VERSION="${VERSION:-v4.0.0-alpha.4}"
+readonly VERSION="${VERSION:-v4.0.0-alpha.5}"
 readonly SERVICE_NAME="v2board"
 readonly APP_BIN="/usr/local/v2board/v2board"
 readonly CONFIG_FILE="/etc/v2board/config.yaml"

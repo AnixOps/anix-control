@@ -16,9 +16,9 @@ truth for implemented, partial, planned, compatibility, and deferred features.
   pinned to Go `1.26.5` in CI.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.
 - Default database: SQLite, with PostgreSQL migration/dry-run tooling.
-- Current preview: `v4.0.0-alpha.4` (the signed `machine-telemetry` 1.1.0
-  Control/Agent/WebUI reference package and actor-scoped plugin management are
-  usable in this alpha).
+- Current preview: `v4.0.0-alpha.5` (the signed `machine-telemetry` 1.1.0 and
+  crash-safe `nftables-forward` 1.1.0 packages, topology preflight, and the
+  revision/canary deployment WebUI are usable for isolated alpha validation).
 - Agent-first status: the `anix.agent.v1` bidirectional gRPC control stream is
   an opt-in foundation in this alpha, not yet the only production task path.
 
@@ -80,7 +80,7 @@ Production installation downloads checked GitHub Release assets and does not
 clone the repository or build on the target host. Pin the production tag:
 
 ```bash
-export VERSION=v4.0.0-alpha.4
+export VERSION=v4.0.0-alpha.5
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -147,7 +147,7 @@ binaries, frontend archives, Docker metadata, checksums, SBOMs, or release
 manifests on a production host.
 
 Release jobs accept stable, alpha, beta, and release-candidate tags such as
-`v4.0.0`, `v4.0.0-alpha.4`, `v4.0.0-beta.1`, and `v4.0.0-rc.1`. Tag builds
+`v4.0.0`, `v4.0.0-alpha.5`, `v4.0.0-beta.1`, and `v4.0.0-rc.1`. Tag builds
 produce:
 
 - multi-platform `anix-control-*` backend artifacts

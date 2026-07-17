@@ -19,7 +19,7 @@ runbooks instead of mixing deployment models on the same host.
    The fresh development template binds gRPC to `127.0.0.1:50051`; remote
    Agents require an explicit TLS/proxy setup and a deliberate bind-address change.
 3. Decide the exact version to install. Pinning a tag makes the operation
-   reproducible; the signed-package WebUI preview is `v4.0.0-alpha.4`.
+   reproducible; the signed-package WebUI preview is `v4.0.0-alpha.5`.
 4. Back up any existing panel before running `update` or `rollback`.
 
 ## Fresh Install
@@ -28,7 +28,7 @@ Download the installer from the exact release tag. This fetches one script, not
 the repository checkout:
 
 ```bash
-export VERSION=v4.0.0-alpha.4
+export VERSION=v4.0.0-alpha.5
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -134,15 +134,16 @@ The alpha entry point is manual import by design. It does not silently fetch
 untrusted third-party packages or put API keys in package URLs; Agent downloads
 use `X-API-Key` and same-origin, digest-addressed paths.
 
-In `v4.0.0-alpha.4`, the signed `machine-telemetry` 1.1.0 package exercises the
-complete package path: Agent install and Unix-socket runtime, real host metric
-collection, namespaced heartbeat transport, signed `telemetry.read` admission,
-Control persistence, and the plugin WebUI. The actor-scoped catalog and bundle
-authorization from alpha.3 remains enforced. Verify install, metric freshness,
+In `v4.0.0-alpha.5`, `machine-telemetry` 1.1.0 still exercises the complete
+metrics package path. The signed `nftables-forward` 1.1.0 package adds one
+Control/Agent configuration contract, topology preview/diagnosis, and a
+crash-safe ownership journal with signed cleanup. Verify install, observation
+mode, explicit rule configuration, namespace traffic, process-kill recovery,
 disable/re-enable, update, rollback, grant revocation, and malformed-extension
-isolation with separate admin and regular-user accounts during the canary.
+isolation during the canary. Do not enable topology execution on production
+nodes merely because preview succeeds.
 
-`v4.0.0-alpha.4` is a canary release. Keep production traffic on the tested
+`v4.0.0-alpha.5` is a canary release. Keep production traffic on the tested
 legacy path while the signed package/WebUI path is observed. Do not publish a
 stable 4.0 release until the package lifecycle, node health, rollback, and
 compatibility checks have passed continuously for 72 hours and the operator
@@ -158,7 +159,7 @@ that snapshot.
 Upgrade to an explicit release:
 
 ```bash
-export TARGET=v4.0.0-alpha.4
+export TARGET=v4.0.0-alpha.5
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${TARGET}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
