@@ -679,11 +679,13 @@ func gostMeshIPv4Broadcast(prefix netip.Prefix, address netip.Addr) bool {
 	}
 	network := prefix.Masked().Addr().As4()
 	candidate := address.As4()
-	hostBits := uint(32 - prefix.Bits())
-	networkValue := uint32(network[0])<<24 | uint32(network[1])<<16 | uint32(network[2])<<8 | uint32(network[3])
-	broadcast := networkValue | uint32((uint64(1)<<hostBits)-1)
-	value := uint32(candidate[0])<<24 | uint32(candidate[1])<<16 | uint32(candidate[2])<<8 | uint32(candidate[3])
-	return value == broadcast
+	mask := net.CIDRMask(prefix.Bits(), 32)
+	for index := range network {
+		if candidate[index] != network[index]|^mask[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func gostMeshPrefixesOverlap(left, right []netip.Prefix) bool {

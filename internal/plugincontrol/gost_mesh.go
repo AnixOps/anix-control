@@ -257,9 +257,10 @@ func gostMeshStatusRow(assignment model.NodeServiceAssignment, node model.Node, 
 			row.Upstream = formatEndpoint(tunnel.Remote.Host, tunnel.Remote.Port)
 		}
 	}
-	if row.Role == "entry" {
+	switch row.Role {
+	case "entry":
 		row.EntryNode = node.Name
-	} else if row.Role == "exit" {
+	case "exit":
 		row.ExitNode = node.Name
 	}
 	row.CleanupPending = observed.CleanupPending
