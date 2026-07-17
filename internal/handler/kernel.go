@@ -415,8 +415,18 @@ func (h *KernelHandler) UpdatePluginInstallationConfiguration(c *gin.Context) {
 			return h.controlPluginExecutors.ValidateConfiguration(c.Request.Context(), pluginID, version, canonicalConfig)
 		}
 	}
-	configuration, err := service.UpdatePluginConfigurationWithValidator(
+	var queuedAgentOperations []*model.KernelOperation
+	dispatchEnabled := cfg.Plugins.DispatchEnabled
+	configuration, err := service.UpdatePluginConfigurationWithValidatorAndHook(
 		h.db, publicKey, installationID, string(req.Config), req.ExpectedRevision, kernelActorID(c), semanticValidator,
+		func(tx *gorm.DB, installation model.PluginInstallation, configuration model.PluginConfiguration) error {
+			if installation.Target != "agent" {
+				return nil
+			}
+			operations, err := service.SyncAgentInstallationAssignments(tx, installation, configuration.Revision, dispatchEnabled, time.Now())
+			queuedAgentOperations = operations
+			return err
+		},
 	)
 	if err != nil {
 		switch {
@@ -433,15 +443,21 @@ func (h *KernelHandler) UpdatePluginInstallationConfiguration(c *gin.Context) {
 		}
 		return
 	}
-	var queuedOperation *model.KernelOperation
-	if cfg.Plugins.ControlExecutionEnabled {
-		var installation model.PluginInstallation
-		if err := h.db.First(&installation, installationID).Error; err != nil {
+	var updatedInstallation model.PluginInstallation
+	if err := h.db.First(&updatedInstallation, installationID).Error; err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	if updatedInstallation.Target == "agent" {
+		if err := service.RefreshAgentPluginInstallationObservedState(h.db, updatedInstallation.PluginID); err != nil {
 			kernelDBError(c, err)
 			return
 		}
-		if installation.Target == "control" && installation.Enabled {
-			queuedOperation, err = enqueueControlPluginOperation(h.db, installation, "plugin.configure", installation.DesiredVersion)
+	}
+	var queuedOperation *model.KernelOperation
+	if cfg.Plugins.ControlExecutionEnabled {
+		if updatedInstallation.Target == "control" && updatedInstallation.Enabled {
+			queuedOperation, err = enqueueControlPluginOperation(h.db, updatedInstallation, "plugin.configure", updatedInstallation.DesiredVersion)
 			if err != nil {
 				kernelError(c, http.StatusConflict, "plugin_operation_rejected", err.Error())
 				return
@@ -450,6 +466,13 @@ func (h *KernelHandler) UpdatePluginInstallationConfiguration(c *gin.Context) {
 	}
 	if queuedOperation != nil {
 		c.Header("X-AnixOps-Operation-ID", queuedOperation.ID)
+	} else if len(queuedAgentOperations) > 0 {
+		ids := make([]string, 0, len(queuedAgentOperations))
+		for _, operation := range queuedAgentOperations {
+			ids = append(ids, operation.ID)
+		}
+		c.Header("X-AnixOps-Operation-ID", ids[0])
+		c.Header("X-AnixOps-Operation-Chain", strings.Join(ids, ","))
 	}
 	kernelData(c, http.StatusOK, configuration)
 }
@@ -471,9 +494,14 @@ func (h *KernelHandler) UpsertPluginInstallation(c *gin.Context) {
 	}
 	var row model.PluginInstallation
 	var queuedOperation *model.KernelOperation
+	var queuedAgentOperations []*model.KernelOperation
 	cfg := config.Get()
 	controlExecutionEnabled := cfg != nil && cfg.Plugins.ControlExecutionEnabled
-	err := h.db.Transaction(func(tx *gorm.DB) error {
+	dispatchEnabled := cfg != nil && cfg.Plugins.DispatchEnabled
+	err := service.WithAgentLifecycleTransaction(h.db, func(tx *gorm.DB) error {
+		row = model.PluginInstallation{}
+		queuedOperation = nil
+		queuedAgentOperations = nil
 		if err := service.LockPluginInstallationTarget(tx, req.Target); err != nil {
 			return err
 		}
@@ -542,6 +570,15 @@ func (h *KernelHandler) UpsertPluginInstallation(c *gin.Context) {
 		if err := tx.Save(&row).Error; err != nil {
 			return err
 		}
+		if row.Target == "agent" {
+			configuration, err := service.GetPluginConfiguration(tx, row.ID)
+			if err != nil {
+				return err
+			}
+			operations, err := service.SyncAgentInstallationAssignments(tx, row, configuration.Revision, dispatchEnabled, time.Now())
+			queuedAgentOperations = operations
+			return err
+		}
 		if !controlExecutionEnabled || row.Target != "control" {
 			return nil
 		}
@@ -581,8 +618,21 @@ func (h *KernelHandler) UpsertPluginInstallation(c *gin.Context) {
 		}
 		return
 	}
+	if row.Target == "agent" {
+		if err := service.RefreshAgentPluginInstallationObservedState(h.db, row.PluginID); err != nil {
+			kernelDBError(c, err)
+			return
+		}
+	}
 	if queuedOperation != nil {
 		c.Header("X-AnixOps-Operation-ID", queuedOperation.ID)
+	} else if len(queuedAgentOperations) > 0 {
+		ids := make([]string, 0, len(queuedAgentOperations))
+		for _, operation := range queuedAgentOperations {
+			ids = append(ids, operation.ID)
+		}
+		c.Header("X-AnixOps-Operation-ID", ids[0])
+		c.Header("X-AnixOps-Operation-Chain", strings.Join(ids, ","))
 	}
 	kernelData(c, http.StatusOK, row)
 }
@@ -1159,7 +1209,7 @@ func (h *KernelHandler) UpsertAssignment(c *gin.Context) {
 		PluginID              string `json:"plugin_id"`
 		Role                  string `json:"role"`
 		DesiredVersion        string `json:"desired_version"`
-		DesiredConfigRevision int64  `json:"desired_config_revision"`
+		DesiredConfigRevision *int64 `json:"desired_config_revision"`
 		Enabled               *bool  `json:"enabled"`
 		RolloutGroup          string `json:"rollout_group"`
 	}
@@ -1171,59 +1221,141 @@ func (h *KernelHandler) UpsertAssignment(c *gin.Context) {
 	req.PluginID = strings.TrimSpace(req.PluginID)
 	req.Role = strings.TrimSpace(req.Role)
 	req.DesiredVersion = strings.TrimSpace(req.DesiredVersion)
-	if req.DesiredConfigRevision < 0 {
+	if req.DesiredConfigRevision != nil && *req.DesiredConfigRevision < 0 {
 		kernelError(c, http.StatusBadRequest, "invalid_revision", "desired_config_revision cannot be negative")
 		return
 	}
-	var nodeCount, scopeCount, pluginCount int64
-	if err := h.db.Model(&model.Node{}).Where("id = ?", nodeID).Count(&nodeCount).Error; err != nil {
-		kernelDBError(c, err)
-		return
-	}
-	if err := h.db.Model(&model.ServiceScope{}).Where("id = ?", req.ServiceScope).Count(&scopeCount).Error; err != nil {
-		kernelDBError(c, err)
-		return
-	}
-	if err := h.db.Model(&model.Plugin{}).Where("id = ? AND official = ?", req.PluginID, true).Count(&pluginCount).Error; err != nil {
-		kernelDBError(c, err)
-		return
-	}
-	if nodeCount == 0 || scopeCount == 0 || pluginCount == 0 {
-		kernelError(c, 400, "invalid_reference", "node, scope or official plugin does not exist")
-		return
-	}
-	if req.DesiredVersion != "" {
-		var release model.PluginRelease
-		if err := h.db.First(&release, "plugin_id = ? AND version = ?", req.PluginID, req.DesiredVersion).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				kernelError(c, http.StatusBadRequest, "release_not_found", "verified agent plugin release not found")
-			} else {
-				kernelDBError(c, err)
-			}
-			return
-		}
-		if err := service.ValidatePluginReleaseTarget(release, "agent"); err != nil {
-			kernelError(c, http.StatusConflict, "release_invalid", err.Error())
-			return
-		}
-	}
 	var row model.NodeServiceAssignment
-	err := h.db.Where("node_id = ? AND service_scope = ? AND plugin_id = ? AND role = ?", nodeID, req.ServiceScope, req.PluginID, req.Role).First(&row).Error
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	var queued []*model.KernelOperation
+	cfg := config.Get()
+	dispatchEnabled := cfg != nil && cfg.Plugins.DispatchEnabled
+	err := service.WithAgentLifecycleTransaction(h.db, func(tx *gorm.DB) error {
+		row = model.NodeServiceAssignment{}
+		queued = nil
+		var nodeCount, scopeCount, pluginCount int64
+		if err := tx.Model(&model.Node{}).Where("id = ?", nodeID).Count(&nodeCount).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.ServiceScope{}).Where("id = ?", req.ServiceScope).Count(&scopeCount).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.Plugin{}).Where("id = ? AND official = ?", req.PluginID, true).Count(&pluginCount).Error; err != nil {
+			return err
+		}
+		if nodeCount == 0 || scopeCount == 0 || pluginCount == 0 {
+			return errors.New("invalid_reference")
+		}
+		if req.DesiredVersion != "" {
+			var release model.PluginRelease
+			if err := tx.First(&release, "plugin_id = ? AND version = ?", req.PluginID, req.DesiredVersion).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return errors.New("release_not_found")
+				}
+				return err
+			}
+			if err := service.ValidatePluginReleaseTarget(release, "agent"); err != nil {
+				return fmt.Errorf("release_invalid: %w", err)
+			}
+		}
+		if err := service.LockPluginInstallationTarget(tx, "agent"); err != nil {
+			return err
+		}
+		if _, err := service.LockNodePluginLifecycleTx(tx, nodeID, req.PluginID); err != nil {
+			return err
+		}
+
+		find := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where(
+			"node_id = ? AND service_scope = ? AND plugin_id = ? AND role = ?", nodeID, req.ServiceScope, req.PluginID, req.Role,
+		).First(&row)
+		if find.Error != nil && !errors.Is(find.Error, gorm.ErrRecordNotFound) {
+			return find.Error
+		}
+		isNew := row.ID == 0
+		oldVersion, oldConfigRevision, oldEnabled, oldDeletePending := row.DesiredVersion, row.DesiredConfigRevision, row.Enabled, row.DeletePending
+		row.NodeID, row.ServiceScope, row.PluginID, row.Role = nodeID, req.ServiceScope, req.PluginID, req.Role
+		row.DesiredVersion, row.RolloutGroup = req.DesiredVersion, strings.TrimSpace(req.RolloutGroup)
+		row.DeletePending = false
+		if req.DesiredConfigRevision != nil {
+			row.DesiredConfigRevision = *req.DesiredConfigRevision
+		} else if isNew && req.DesiredVersion != "" {
+			var installation model.PluginInstallation
+			if err := tx.First(&installation, "plugin_id = ? AND target = ?", req.PluginID, "agent").Error; err == nil && installation.DesiredVersion == req.DesiredVersion {
+				configuration, configErr := service.GetPluginConfiguration(tx, installation.ID)
+				if configErr != nil {
+					return configErr
+				}
+				row.DesiredConfigRevision = configuration.Revision
+			} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+		}
+		if req.Enabled != nil {
+			row.Enabled = *req.Enabled
+		} else if isNew {
+			row.Enabled = true
+		}
+		if row.DesiredVersion == "" {
+			row.Enabled = false
+		}
+		if isNew || oldVersion != row.DesiredVersion || oldConfigRevision != row.DesiredConfigRevision || oldEnabled != row.Enabled || oldDeletePending {
+			row.LifecycleGeneration++
+			if row.LifecycleGeneration <= 0 {
+				row.LifecycleGeneration = 1
+			}
+		}
+		if err := tx.Save(&row).Error; err != nil {
+			return err
+		}
+		lifecycle, _, err := service.SyncNodePluginLifecycle(tx, row.NodeID, row.PluginID, true, time.Now())
+		if err != nil {
+			return err
+		}
+		if !dispatchEnabled {
+			return nil
+		}
+		chain, err := service.QueueNodePluginLifecycle(tx, lifecycle, time.Now())
+		if err != nil {
+			return err
+		}
+		for _, operation := range []*model.KernelOperation{chain.Install, chain.Update, chain.Enable, chain.Disable} {
+			if operation != nil {
+				queued = append(queued, operation)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		switch {
+		case err.Error() == "invalid_reference":
+			kernelError(c, http.StatusBadRequest, "invalid_reference", "node, scope or official plugin does not exist")
+		case err.Error() == "release_not_found":
+			kernelError(c, http.StatusBadRequest, "release_not_found", "verified agent plugin release not found")
+		case strings.HasPrefix(err.Error(), "release_invalid:"):
+			kernelError(c, http.StatusConflict, "release_invalid", strings.TrimSpace(strings.TrimPrefix(err.Error(), "release_invalid:")))
+		case errors.Is(err, service.ErrPluginArtifactRequired), errors.Is(err, gorm.ErrRecordNotFound):
+			kernelError(c, http.StatusConflict, "plugin_artifact_missing", err.Error())
+		case errors.Is(err, service.ErrAgentPluginReconcileNotReady):
+			kernelError(c, http.StatusConflict, "agent_plugin_reconcile_not_ready", err.Error())
+		case errors.Is(err, service.ErrAgentPluginAssignmentConflict):
+			kernelError(c, http.StatusConflict, "agent_plugin_assignment_conflict", err.Error())
+		case errors.Is(err, service.ErrAgentPluginReleaseIntegrity):
+			kernelError(c, http.StatusConflict, "plugin_release_integrity_failed", err.Error())
+		default:
+			kernelDBError(c, err)
+		}
+		return
+	}
+	if err := service.RefreshAgentPluginInstallationObservedState(h.db, req.PluginID); err != nil {
 		kernelDBError(c, err)
 		return
 	}
-	isNew := row.ID == 0
-	row.NodeID, row.ServiceScope, row.PluginID, row.Role = nodeID, req.ServiceScope, req.PluginID, req.Role
-	row.DesiredVersion, row.DesiredConfigRevision, row.RolloutGroup = req.DesiredVersion, req.DesiredConfigRevision, req.RolloutGroup
-	if req.Enabled != nil {
-		row.Enabled = *req.Enabled
-	} else if isNew {
-		row.Enabled = true
-	}
-	if err := h.db.Save(&row).Error; err != nil {
-		kernelDBError(c, err)
-		return
+	if len(queued) > 0 {
+		ids := make([]string, 0, len(queued))
+		for _, operation := range queued {
+			ids = append(ids, operation.ID)
+		}
+		c.Header("X-AnixOps-Operation-ID", ids[0])
+		c.Header("X-AnixOps-Operation-Chain", strings.Join(ids, ","))
 	}
 	kernelData(c, 200, row)
 }
@@ -1237,16 +1369,74 @@ func (h *KernelHandler) DeleteAssignment(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result := h.db.Where("id = ? AND node_id = ?", id, nodeID).Delete(&model.NodeServiceAssignment{})
-	if result.Error != nil {
-		kernelDBError(c, result.Error)
+	var assignment model.NodeServiceAssignment
+	var queued []*model.KernelOperation
+	cfg := config.Get()
+	dispatchEnabled := cfg != nil && cfg.Plugins.DispatchEnabled
+	err := service.WithAgentLifecycleTransaction(h.db, func(tx *gorm.DB) error {
+		assignment = model.NodeServiceAssignment{}
+		queued = nil
+		var identity struct {
+			NodeID   uint
+			PluginID string
+		}
+		if err := tx.Model(&model.NodeServiceAssignment{}).Select("node_id, plugin_id").
+			First(&identity, "id = ? AND node_id = ?", id, nodeID).Error; err != nil {
+			return err
+		}
+		if err := service.LockPluginInstallationTarget(tx, "agent"); err != nil {
+			return err
+		}
+		if _, err := service.LockNodePluginLifecycleTx(tx, identity.NodeID, identity.PluginID); err != nil {
+			return err
+		}
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&assignment, "id = ? AND node_id = ?", id, nodeID).Error; err != nil {
+			return err
+		}
+		assignment.Enabled = false
+		assignment.DeletePending = true
+		if err := tx.Save(&assignment).Error; err != nil {
+			return err
+		}
+		lifecycle, _, err := service.SyncNodePluginLifecycle(tx, assignment.NodeID, assignment.PluginID, false, time.Now())
+		if err != nil {
+			return err
+		}
+		if !dispatchEnabled {
+			return service.PurgeCompletedAssignmentDeletes(tx, lifecycle, nil)
+		}
+		chain, err := service.QueueNodePluginLifecycle(tx, lifecycle, time.Now())
+		if err != nil {
+			return err
+		}
+		for _, operation := range []*model.KernelOperation{chain.Install, chain.Update, chain.Enable, chain.Disable} {
+			if operation != nil {
+				queued = append(queued, operation)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			kernelError(c, http.StatusNotFound, "not_found", "assignment not found")
+			return
+		}
+		kernelError(c, http.StatusConflict, "assignment_delete_rejected", err.Error())
 		return
 	}
-	if result.RowsAffected == 0 {
-		kernelError(c, 404, "not_found", "assignment not found")
+	if err := service.RefreshAgentPluginInstallationObservedState(h.db, assignment.PluginID); err != nil {
+		kernelDBError(c, err)
 		return
 	}
-	c.Status(204)
+	if len(queued) > 0 {
+		ids := make([]string, 0, len(queued))
+		for _, operation := range queued {
+			ids = append(ids, operation.ID)
+		}
+		c.Header("X-AnixOps-Operation-ID", ids[0])
+		c.Header("X-AnixOps-Operation-Chain", strings.Join(ids, ","))
+	}
+	kernelData(c, http.StatusAccepted, assignment)
 }
 
 func (h *KernelHandler) ListTopologies(c *gin.Context) {

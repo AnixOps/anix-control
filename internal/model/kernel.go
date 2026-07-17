@@ -191,12 +191,37 @@ type NodeServiceAssignment struct {
 	DesiredVersion        string    `gorm:"size:64" json:"desired_version"`
 	DesiredConfigRevision int64     `gorm:"not null;default:0" json:"desired_config_revision"`
 	Enabled               bool      `gorm:"not null" json:"enabled"`
+	LifecycleGeneration   int64     `gorm:"not null;default:0" json:"lifecycle_generation"`
+	DeletePending         bool      `gorm:"not null;default:false;index" json:"delete_pending"`
 	RolloutGroup          string    `gorm:"size:80;index" json:"rollout_group"`
 	CreatedAt             time.Time `json:"created_at"`
 	UpdatedAt             time.Time `json:"updated_at"`
 }
 
 func (NodeServiceAssignment) TableName() string { return "v3_kernel_node_service_assignment" }
+
+// NodePluginLifecycle is the aggregate desired/observed boundary for all
+// roles of one plugin on one physical node. The row is also the transaction
+// lock that serializes assignment, configuration, retry and deletion intent.
+type NodePluginLifecycle struct {
+	NodeID                uint       `gorm:"primaryKey" json:"node_id"`
+	PluginID              string     `gorm:"primaryKey;size:120" json:"plugin_id"`
+	DesiredGeneration     int64      `gorm:"not null;default:0" json:"desired_generation"`
+	RetryEpoch            int        `gorm:"not null;default:0" json:"retry_epoch"`
+	RetryAfter            *time.Time `gorm:"index" json:"retry_after"`
+	RetryExhausted        bool       `gorm:"not null;default:false" json:"retry_exhausted"`
+	DesiredVersion        string     `gorm:"size:64" json:"desired_version"`
+	DesiredConfigRevision int64      `gorm:"not null;default:0" json:"desired_config_revision"`
+	DesiredEnabled        bool       `gorm:"not null;default:false" json:"desired_enabled"`
+	ActiveVersion         string     `gorm:"size:64" json:"active_version"`
+	ActiveEnabled         bool       `gorm:"not null;default:false" json:"active_enabled"`
+	ActiveRevision        int64      `gorm:"not null;default:0" json:"active_revision"`
+	LastError             string     `gorm:"type:text" json:"last_error"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
+}
+
+func (NodePluginLifecycle) TableName() string { return "v3_kernel_node_plugin_lifecycle" }
 
 type Topology struct {
 	ID               uint      `gorm:"primaryKey" json:"id"`
@@ -336,6 +361,7 @@ type KernelOperation struct {
 	Revision             int64  `gorm:"not null" json:"revision"`
 	ConfigJSON           string `gorm:"type:text;not null;default:{}" json:"config"`
 	ConfigHash           string `gorm:"size:64" json:"config_hash"`
+	DependsOnOperationID string `gorm:"size:64;index" json:"depends_on_operation_id,omitempty"`
 	// LifecyclePlanID and the following fields group Control-target package
 	// operations that must be executed as one dependency-aware lifecycle plan.
 	// They are intentionally empty for legacy and Agent operations.
@@ -425,7 +451,7 @@ func KernelModels() []any {
 		&ServiceScope{}, &AccessGroup{}, &AccessGroupUser{}, &AccessGroupPlan{},
 		&ResourceGrant{}, &QuotaPolicy{}, &Plugin{}, &PluginRelease{},
 		&PluginTrustRoot{}, &PluginArtifact{}, &PluginWebUIAsset{}, &PluginInstallation{},
-		&PluginTargetLock{}, &PluginConfiguration{}, &NodeServiceAssignment{}, &Topology{},
+		&PluginTargetLock{}, &PluginConfiguration{}, &NodeServiceAssignment{}, &NodePluginLifecycle{}, &Topology{},
 		&TopologyRevision{}, &TopologyVertex{}, &TopologyEdge{},
 		&TopologyDeployment{}, &TopologyDeploymentStep{}, &TopologyObservedState{}, &KernelOperation{},
 		&PluginLifecyclePlan{}, &PluginLifecyclePlanStep{},

@@ -210,6 +210,21 @@ func (m *AgentControlManager) ObservedState(nodeID uint32) (*agentv1pb.ObservedS
 // DispatchOperation pushes a desired operation and waits only for receipt ACK.
 // Runtime completion is reported separately through ObservedState.
 func (m *AgentControlManager) DispatchOperation(ctx context.Context, nodeID uint32, operation *agentv1pb.DesiredOperation) (*agentv1pb.OperationAck, error) {
+	return m.dispatchOperation(ctx, nodeID, operation, false)
+}
+
+// dispatchRecoveredOperation rehydrates one operation that the durable Kernel
+// had already dispatched before Control restarted. Recovery is deliberately a
+// separate entry point: ordinary callers may never reuse the Agent's observed
+// revision cursor for a different operation identity.
+func (m *AgentControlManager) dispatchRecoveredOperation(ctx context.Context, nodeID uint32, operation *agentv1pb.DesiredOperation) (*agentv1pb.OperationAck, error) {
+	if operation == nil || operation.Revision == 0 {
+		return nil, fmt.Errorf("recovered desired operation requires an explicit revision")
+	}
+	return m.dispatchOperation(ctx, nodeID, operation, true)
+}
+
+func (m *AgentControlManager) dispatchOperation(ctx context.Context, nodeID uint32, operation *agentv1pb.DesiredOperation, recovered bool) (*agentv1pb.OperationAck, error) {
 	if operation == nil {
 		return nil, fmt.Errorf("desired operation is nil")
 	}
@@ -263,25 +278,41 @@ func (m *AgentControlManager) DispatchOperation(ctx context.Context, nodeID uint
 			connection.sendMu.Unlock()
 			return nil, fmt.Errorf("operation %q is already pending", cloned.OperationId)
 		}
-		if existing := m.desired[nodeID][cloned.OperationId]; existing != nil {
+		existing := m.desired[nodeID][cloned.OperationId]
+		if existing != nil && (!recovered || !proto.Equal(existing, cloned)) {
 			m.mu.Unlock()
 			connection.sendMu.Unlock()
+			if recovered {
+				return nil, fmt.Errorf("recovered operation %q does not match retained desired state", cloned.OperationId)
+			}
 			return nil, fmt.Errorf("operation %q is already desired", cloned.OperationId)
 		}
 		if cloned.Revision == 0 {
 			cloned.Revision = m.desiredRevision[nodeID] + 1
-		} else if cloned.Revision <= m.desiredRevision[nodeID] {
+		} else if existing == nil && recovered && cloned.Revision == m.desiredRevision[nodeID] {
+			for operationID, desired := range m.desired[nodeID] {
+				if operationID != cloned.OperationId && desired != nil && desired.Revision == cloned.Revision {
+					m.mu.Unlock()
+					connection.sendMu.Unlock()
+					return nil, fmt.Errorf("revision %d is already desired by operation %q", cloned.Revision, operationID)
+				}
+			}
+		} else if existing == nil && cloned.Revision <= m.desiredRevision[nodeID] {
 			m.mu.Unlock()
 			connection.sendMu.Unlock()
 			return nil, fmt.Errorf("revision %d is not newer than %d", cloned.Revision, m.desiredRevision[nodeID])
 		}
-		m.desiredRevision[nodeID] = cloned.Revision
+		if cloned.Revision > m.desiredRevision[nodeID] {
+			m.desiredRevision[nodeID] = cloned.Revision
+		}
 		if m.desired[nodeID] == nil {
 			m.desired[nodeID] = make(map[string]*agentv1pb.DesiredOperation)
 		}
 		m.desired[nodeID][cloned.OperationId] = proto.Clone(cloned).(*agentv1pb.DesiredOperation)
 		connection.stateMu.Lock()
-		connection.DesiredRev = cloned.Revision
+		if cloned.Revision > connection.DesiredRev {
+			connection.DesiredRev = cloned.Revision
+		}
 		connection.stateMu.Unlock()
 		m.pending[key] = waiter
 		m.mu.Unlock()

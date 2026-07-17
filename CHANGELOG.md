@@ -12,6 +12,11 @@
   import, installation intent, enable/disable/update/rollback actions,
   revisioned Schema or JSON configuration, operation polling/cancellation, and
   signed WebUI extension refresh with visible terminal errors.
+- Added authenticated node-facing official package downloads and assignment
+  reconciliation. Enabled Agent assignments now produce a durable,
+  revision-ordered `install -> update(config) -> enable` chain, aggregate
+  multiple roles fail-closed, and replay safely after Control reconnects or
+  restarts without exposing package bytes to unassigned nodes.
 ### Fixed
 
 - Fixed the nftables forward status topology formatter so the production lint
