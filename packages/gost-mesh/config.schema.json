@@ -2,61 +2,511 @@
   "$id": "urn:anixops:plugin:gost-mesh:config:v1",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "apply": {
+            "const": true
+          }
+        },
+        "required": [
+          "apply"
+        ]
+      },
+      "then": {
+        "properties": {
+          "tunnels": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
   "properties": {
-    "protocol_profile": {
-      "default": "wss-tuic",
-      "enum": [
-        "wss",
-        "tuic",
-        "quic",
-        "wss-tuic",
-        "wss-tuic-quic"
-      ],
+    "api_version": {
+      "const": "anixops.gost-mesh/v1",
+      "default": "anixops.gost-mesh/v1",
       "type": "string"
     },
-    "health_interval_seconds": {
-      "default": 15,
-      "maximum": 300,
-      "minimum": 5,
-      "type": "integer"
+    "apply": {
+      "default": false,
+      "type": "boolean"
     },
-    "listen_address": {
-      "default": "0.0.0.0",
-      "type": "string"
+    "rollback_on_exit": {
+      "const": true,
+      "default": true,
+      "type": "boolean"
     },
-    "listen_port": {
-      "default": 443,
-      "maximum": 65535,
-      "minimum": 1,
-      "type": "integer"
-    },
-    "tls_cert_secret": {
-      "default": "",
-      "type": "string"
-    },
-    "tls_key_secret": {
-      "default": "",
-      "type": "string"
-    },
-    "upstream_policy": {
-      "default": "least-latency",
-      "enum": [
-        "least-latency",
-        "round-robin",
-        "pinned"
-      ],
-      "type": "string"
+    "tunnels": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/tunnel"
+      },
+      "maxItems": 128,
+      "type": "array",
+      "uniqueItems": true
     }
   },
   "required": [
-    "health_interval_seconds",
-    "listen_address",
-    "listen_port",
-    "protocol_profile",
-    "tls_cert_secret",
-    "tls_key_secret",
-    "upstream_policy"
+    "api_version",
+    "apply",
+    "rollback_on_exit",
+    "tunnels"
   ],
+  "$defs": {
+    "health": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "minLength": 3
+              },
+              "source_address": {
+                "minLength": 7
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "const": ""
+            },
+            {
+              "pattern": "^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*):([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$"
+            }
+          ],
+          "maxLength": 259,
+          "type": "string"
+        },
+        "source_address": {
+          "anyOf": [
+            {
+              "const": ""
+            },
+            {
+              "pattern": "^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$"
+            }
+          ],
+          "maxLength": 15,
+          "type": "string"
+        },
+        "interval_seconds": {
+          "maximum": 300,
+          "minimum": 5,
+          "type": "integer"
+        },
+        "timeout_seconds": {
+          "maximum": 30,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "failure_threshold": {
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "restart_delay_seconds": {
+          "maximum": 300,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "restart_limit": {
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "enabled",
+        "target",
+        "source_address",
+        "interval_seconds",
+        "timeout_seconds",
+        "failure_threshold",
+        "restart_delay_seconds",
+        "restart_limit"
+      ],
+      "type": "object"
+    },
+    "listen": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "pattern": "^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$",
+          "type": "string"
+        },
+        "port": {
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "port"
+      ],
+      "type": "object"
+    },
+    "remote": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "maxLength": 253,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$",
+          "type": "string"
+        },
+        "port": {
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "host",
+        "port"
+      ],
+      "type": "object"
+    },
+    "routing": {
+      "additionalProperties": false,
+      "properties": {
+        "source_cidrs": {
+          "items": {
+            "$ref": "#/$defs/ipv4_cidr"
+          },
+          "maxItems": 128,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "route_cidrs": {
+          "items": {
+            "$ref": "#/$defs/ipv4_cidr"
+          },
+          "maxItems": 128,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "table": {
+          "maximum": 252,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "priority": {
+          "maximum": 32765,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_cidrs",
+        "route_cidrs"
+      ],
+      "type": "object"
+    },
+    "tls": {
+      "additionalProperties": false,
+      "properties": {
+        "server_name": {
+          "maxLength": 253,
+          "pattern": "^(|[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*)$",
+          "type": "string"
+        },
+        "ca_file": {
+          "maxLength": 4096,
+          "pattern": "^(|/[^\\x00\\r\\n]+)$",
+          "type": "string"
+        },
+        "cert_file": {
+          "maxLength": 4096,
+          "pattern": "^(|/[^\\x00\\r\\n]+)$",
+          "type": "string"
+        },
+        "key_file": {
+          "maxLength": 4096,
+          "pattern": "^(|/[^\\x00\\r\\n]+)$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "server_name",
+        "ca_file",
+        "cert_file",
+        "key_file"
+      ],
+      "type": "object"
+    },
+    "tun": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 15,
+          "minLength": 1,
+          "not": {
+            "enum": [
+              ".",
+              ".."
+            ]
+          },
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "type": "string"
+        },
+        "address": {
+          "$ref": "#/$defs/ipv4_cidr"
+        },
+        "peer_address": {
+          "pattern": "^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$",
+          "type": "string"
+        },
+        "port": {
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "mtu": {
+          "maximum": 9000,
+          "minimum": 576,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "peer_address",
+        "port",
+        "mtu"
+      ],
+      "type": "object"
+    },
+    "ipv4_cidr": {
+      "pattern": "^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})/(3[0-2]|[12]?[0-9])$",
+      "type": "string"
+    },
+    "tunnel": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "role": {
+                "const": "entry"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "listen"
+              ]
+            },
+            "properties": {
+              "routing": {
+                "properties": {
+                  "priority": {
+                    "minimum": 1
+                  },
+                  "route_cidrs": {
+                    "maxItems": 0
+                  },
+                  "source_cidrs": {
+                    "minItems": 1
+                  },
+                  "table": {
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "table",
+                  "priority"
+                ]
+              },
+              "tls": {
+                "properties": {
+                  "ca_file": {
+                    "minLength": 1,
+                    "pattern": "^/"
+                  },
+                  "cert_file": {
+                    "minLength": 1,
+                    "pattern": "^/"
+                  },
+                  "key_file": {
+                    "minLength": 1,
+                    "pattern": "^/"
+                  },
+                  "server_name": {
+                    "allOf": [
+                      {
+                        "not": {
+                          "pattern": "^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})$"
+                        }
+                      }
+                    ],
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$"
+                  }
+                }
+              }
+            },
+            "required": [
+              "remote"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "remote"
+              ]
+            },
+            "properties": {
+              "routing": {
+                "properties": {
+                  "priority": {
+                    "const": 0
+                  },
+                  "route_cidrs": {
+                    "minItems": 1
+                  },
+                  "source_cidrs": {
+                    "maxItems": 0
+                  },
+                  "table": {
+                    "const": 0
+                  }
+                }
+              },
+              "tls": {
+                "properties": {
+                  "ca_file": {
+                    "minLength": 1,
+                    "pattern": "^/"
+                  },
+                  "cert_file": {
+                    "minLength": 1,
+                    "pattern": "^/"
+                  },
+                  "key_file": {
+                    "minLength": 1,
+                    "pattern": "^/"
+                  },
+                  "server_name": {
+                    "maxLength": 0
+                  }
+                }
+              }
+            },
+            "required": [
+              "listen"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "transport": {
+                "const": "wss"
+              }
+            },
+            "required": [
+              "transport"
+            ]
+          },
+          "then": {
+            "properties": {
+              "wss_path": {
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^/([^/\\x00\\r\\n?#][^\\x00\\r\\n?#]*)?$"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "wss_path": {
+                "const": ""
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "entry",
+            "exit"
+          ],
+          "type": "string"
+        },
+        "transport": {
+          "enum": [
+            "quic",
+            "wss"
+          ],
+          "type": "string"
+        },
+        "listen": {
+          "$ref": "#/$defs/listen"
+        },
+        "remote": {
+          "$ref": "#/$defs/remote"
+        },
+        "tun": {
+          "$ref": "#/$defs/tun"
+        },
+        "routing": {
+          "$ref": "#/$defs/routing"
+        },
+        "tls": {
+          "$ref": "#/$defs/tls"
+        },
+        "wss_path": {
+          "type": "string"
+        },
+        "health": {
+          "$ref": "#/$defs/health"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "transport",
+        "tun",
+        "routing",
+        "tls",
+        "wss_path",
+        "health"
+      ],
+      "type": "object"
+    }
+  },
   "title": "GOST Mesh Configuration",
   "type": "object"
 }

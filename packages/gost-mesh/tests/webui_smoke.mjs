@@ -30,16 +30,25 @@ const component = create({
     return {
       plugin_id: 'gost-mesh',
       version: '1.0.0',
-      summary: { tunnels: 1, ready: 1, reconciling: 0, rollback_required: 0 },
+      summary: { tunnels: 2, ready: 1, reconciling: 0, cleanup_pending: 1, rollback_required: 0 },
       tunnels: [{
         id: 'gost-wss-one',
         name: 'cn-standard-wss',
         entry_node: 'cn-standard-entry',
         exit_node: 'hk-nat-one',
-        protocol: 'wss',
+        transport: 'wss',
         listen: '0.0.0.0:443',
         upstream: 'hk-nat-one:8443',
         ready: true,
+      }, {
+        id: 'gost-quic-cleanup',
+        name: 'hk-quic-cleanup',
+        entry_node: 'cn-standard-entry',
+        exit_node: 'hk-nat-two',
+        transport: 'quic',
+        listen: '0.0.0.0:443',
+        upstream: 'hk-nat-two:443',
+        cleanup_pending: true,
       }],
     }
   },
@@ -60,6 +69,10 @@ assert.match(rendered, /cn-standard-wss/)
 assert.match(rendered, /cn-standard-entry/)
 assert.match(rendered, /hk-nat-one/)
 assert.match(rendered, /wss/)
+assert.match(rendered, /quic/)
 assert.match(rendered, /Ready/)
+assert.match(rendered, /Cleanup required/)
+assert.match(rendered, /Signed GOST v3\.2\.6 WSS\/QUIC runtime status/)
+assert.doesNotMatch(rendered, /TUIC/)
 
 console.log('gost-mesh WebUI smoke test passed')
