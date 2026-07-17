@@ -627,7 +627,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 5f7eaf27970cbb3ec9bdc9bda9d070b59c6cf345
+          ref: 95cc201fc5013c35a3998eda4c4269ecd22e481c
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -651,8 +651,11 @@ jobs:
             go -C V2bX_AnixOps build -o "${GITHUB_WORKSPACE}/package-build/machine-telemetry-agent" ./cmd/machine-telemetry
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
             go -C V2bX_AnixOps build -o "${GITHUB_WORKSPACE}/package-build/nftables-forward-agent" ./cmd/nftables-forward
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go -C V2bX_AnixOps build -o "${GITHUB_WORKSPACE}/package-build/nat-egress-agent" ./cmd/nat-egress
           chmod 0755 package-build/machine-telemetry-agent
           chmod 0755 package-build/nftables-forward-agent
+          chmod 0755 package-build/nat-egress-agent
 
       - name: Build deterministic package
         run: |
@@ -662,6 +665,9 @@ jobs:
           python3 packages/nftables-forward/build.py build \
             --agent-binary package-build/nftables-forward-agent \
             --goos linux --goarch amd64 --output-dir package-build/nftables-forward-dist
+          python3 packages/nat-egress/build.py build \
+            --agent-binary package-build/nat-egress-agent \
+            --goos linux --goarch amd64 --output-dir package-build/nat-egress-dist
 
       - name: Sign and verify the exact release manifest
         env:
@@ -707,6 +713,21 @@ jobs:
           printf '\n' >>"${release_dir}/anixops-nftables-forward-1.0.0.public-key.raw"
           (cd "${release_dir}" && sha256sum * > anixops-nftables-forward-1.0.0.SHA256SUMS.txt)
 
+          release_dir="release-nat-egress"
+          mkdir -p "${release_dir}"
+          bash scripts/sign_plugin_release.sh \
+            --manifest package-build/nat-egress-dist/manifest.json \
+            --artifact package-build/nat-egress-dist/nat-egress-1.0.0.tar \
+            --private-key "${key_file}" \
+            --signature "${release_dir}/anixops-nat-egress-1.0.0.sig" \
+            --public-key "${release_dir}/anixops-nat-egress-1.0.0.public-key.pem"
+          cp package-build/nat-egress-dist/nat-egress-1.0.0.tar "${release_dir}/"
+          cp package-build/nat-egress-dist/manifest.json "${release_dir}/anixops-nat-egress-1.0.0.manifest.json"
+          openssl pkey -pubin -in "${release_dir}/anixops-nat-egress-1.0.0.public-key.pem" -outform DER \
+            | tail -c 32 | base64 | tr -d '\n' >"${release_dir}/anixops-nat-egress-1.0.0.public-key.raw"
+          printf '\n' >>"${release_dir}/anixops-nat-egress-1.0.0.public-key.raw"
+          (cd "${release_dir}" && sha256sum * > anixops-nat-egress-1.0.0.SHA256SUMS.txt)
+
       - name: Upload signed package release artifact
         uses: actions/upload-artifact@v7
         with:
@@ -718,6 +739,12 @@ jobs:
         with:
           name: nftables-forward-signed-release
           path: release-nftables-forward/
+
+      - name: Upload signed NAT Egress package release artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nat-egress-signed-release
+          path: release-nat-egress/
 
   forward-runtime-test:
     name: Forward Runtime Regression
@@ -786,7 +813,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 5f7eaf27970cbb3ec9bdc9bda9d070b59c6cf345
+          ref: 95cc201fc5013c35a3998eda4c4269ecd22e481c
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -1164,6 +1191,12 @@ jobs:
           name: nftables-forward-signed-release
           path: release/
 
+      - name: Download signed NAT Egress package
+        uses: actions/download-artifact@v8
+        with:
+          name: nat-egress-signed-release
+          path: release/
+
       - name: Create operator deployment runbook
         shell: bash
         run: |
@@ -1182,7 +1215,7 @@ jobs:
           - Migration dry-run evidence is attached in `migration-dry-run.txt`.
           - Source dependency SBOM is attached in `anix-control-source.sbom.spdx.json`.
           - Machine-readable release metadata is attached in `RELEASE_MANIFEST.json`.
-          - The signed `machine-telemetry` and `nftables-forward` packages, manifests, signatures, and public keys are attached.
+          - The signed `machine-telemetry`, `nftables-forward`, and `nat-egress` packages, manifests, signatures, and public keys are attached.
           - SHA256 checksums are attached in `SHA256SUMS.txt`.
           - Upgrade and rollback instructions are attached in `UPGRADE.md`.
           - Deterministic release notes are attached in `RELEASE_NOTES.md`.
@@ -1240,6 +1273,12 @@ jobs:
             --tag "${GITHUB_REF_NAME}" \
             --commit "${GITHUB_SHA}" \
             --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          cat >> release/RELEASE_NOTES.md <<'EOF'
+
+          ## Signed Official Plugin Packages
+
+          The signed `machine-telemetry`, `nftables-forward`, and `nat-egress` packages are attached with manifests, signatures, public keys, and package checksums.
+          EOF
 
       - name: Generate release manifest
         shell: bash
@@ -1289,7 +1328,13 @@ jobs:
             --require anixops-nftables-forward-1.0.0.sig \
             --require anixops-nftables-forward-1.0.0.public-key.pem \
             --require anixops-nftables-forward-1.0.0.public-key.raw \
-            --require anixops-nftables-forward-1.0.0.SHA256SUMS.txt
+            --require anixops-nftables-forward-1.0.0.SHA256SUMS.txt \
+            --require nat-egress-1.0.0.tar \
+            --require anixops-nat-egress-1.0.0.manifest.json \
+            --require anixops-nat-egress-1.0.0.sig \
+            --require anixops-nat-egress-1.0.0.public-key.pem \
+            --require anixops-nat-egress-1.0.0.public-key.raw \
+            --require anixops-nat-egress-1.0.0.SHA256SUMS.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3

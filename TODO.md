@@ -53,13 +53,18 @@ This list is intentionally concrete. Do not mark an item done without code, test
   nftables snapshot rollback evidence in the pinned Agent repo.
 - [x] Add 3.3 `gost-mesh` and `nat-egress` package/WebUI sources with
   deterministic release contracts, public-key verification, and tamper
-  rejection while keeping production signing blocked until real runtimes exist.
+  rejection. The `nat-egress` contract now binds a real runtime; `gost-mesh`
+  remains package-contract-only.
+- [x] Implement the real `nat-egress` Agent runtime with nftables masquerade,
+  fwmark policy routing, marked health probes, crash-safe ownership recovery,
+  and privileged namespace traffic/rollback acceptance.
+- [x] Pin the committed `nat-egress` Agent revision and verify the production
+  release-tag signing/publish policy and package gates.
 - [ ] Keep Supervisor and dynamic plugin execution feature-gated until staging
   restore smoke, rollout records, legacy fallback rehearsal, and operator
   canary approval pass.
-- [ ] Implement real Agent runtimes and namespace traffic evidence for
-  `gost-mesh` WSS/TUIC/QUIC and `nat-egress` policy-routing/NAT before 3.3
-  canary.
+- [ ] Implement the real Agent runtime and namespace traffic evidence for
+  `gost-mesh` WSS/TUIC/QUIC before the 3.3 canary.
 
 ## P0: Audit Deliverables
 

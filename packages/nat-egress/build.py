@@ -62,6 +62,53 @@ WEBUI_ROUTE_FIELDS = ("id", "path", "export", "permission")
 SAFE_GO_TOKEN = re.compile(r"^[a-z0-9][a-z0-9_]{0,31}$")
 STATIC_IMPORT = re.compile(r"(?m)^\s*import(?:\s|\{|'|\")")
 DYNAMIC_IMPORT = re.compile(r"\bimport\s*\(")
+RUNTIME_CONFIG_FIELDS = (
+    "apply",
+    "rollback_on_exit",
+    "table_name",
+    "chain_name",
+    "egress_interface",
+    "default_mark",
+    "policy_table",
+    "rule_priority",
+    "ipv4_masquerade",
+    "ipv6_masquerade",
+    "health_check_enabled",
+    "health_check_interval_seconds",
+    "health_check_timeout_seconds",
+    "health_check_target",
+)
+RUNTIME_DEFAULTS = {
+    "apply": False,
+    "rollback_on_exit": True,
+    "table_name": "anixops_nat_egress",
+    "chain_name": "postrouting",
+    "egress_interface": "eth0",
+    "default_mark": 100,
+    "policy_table": 100,
+    "rule_priority": 10100,
+    "ipv4_masquerade": True,
+    "ipv6_masquerade": False,
+    "health_check_enabled": True,
+    "health_check_interval_seconds": 15,
+    "health_check_timeout_seconds": 3,
+    "health_check_target": "1.1.1.1:443",
+}
+EXPECTED_CAPABILITIES = [
+    "forward.nat.egress",
+    "forward.route.policy",
+    "forward.egress.health",
+    "forward.mark.consume",
+    "plugin.runtime-state",
+    "plugin.cleanup",
+]
+EXPECTED_PERMISSIONS = [
+    "nat-egress.view",
+    "nat-egress.api",
+    "nat-egress.network-admin",
+]
+EXPECTED_WEBUI_PERMISSIONS = ["nat-egress.view"]
+EXPECTED_CONTROL_ROUTES = ["/api/v3/plugins/nat-egress/status"]
 
 
 class PackageError(RuntimeError):
@@ -200,22 +247,31 @@ def validate_webui_source(source: bytes) -> None:
 def validate_config_source(schema: Any, defaults: Any) -> None:
     if not isinstance(schema, dict) or schema.get("type") != "object":
         raise PackageError("configuration schema must be a JSON object schema")
+    if schema.get("additionalProperties") is not False:
+        raise PackageError("configuration schema must reject additional properties")
     if not isinstance(defaults, dict):
         raise PackageError("configuration defaults must be a JSON object")
+    if defaults != RUNTIME_DEFAULTS:
+        raise PackageError("configuration defaults do not match the Agent runtime contract")
     properties = schema.get("properties")
     if not isinstance(properties, dict):
         raise PackageError("configuration schema properties must be an object")
+    if set(properties) != set(RUNTIME_CONFIG_FIELDS):
+        raise PackageError("configuration schema properties do not match the Agent runtime contract")
+    if properties.get("rollback_on_exit", {}).get("const") is not True:
+        raise PackageError("rollback_on_exit must remain fixed to true for the v1 runtime")
+    if not isinstance(schema.get("allOf"), list) or len(schema["allOf"]) != 2:
+        raise PackageError("configuration schema must enforce health target address-family binding")
     for name, definition in properties.items():
         if not isinstance(name, str) or not isinstance(definition, dict):
             raise PackageError(f"configuration schema property {name!r} is invalid")
-    unknown = sorted(set(defaults) - set(properties))
-    if unknown:
-        raise PackageError(f"configuration defaults contain unknown keys: {unknown}")
     required = schema.get("required", [])
-    if not isinstance(required, list) or any(key not in defaults for key in required):
-        raise PackageError("configuration defaults do not cover required properties")
+    if required != list(RUNTIME_CONFIG_FIELDS):
+        raise PackageError("configuration schema must require every Agent runtime field")
     for name, value in defaults.items():
         definition = properties[name]
+        if definition.get("default") != value:
+            raise PackageError(f"{name} schema default does not match the Agent runtime default")
         expected_type = definition.get("type")
         if expected_type == "string":
             if not isinstance(value, str):
@@ -255,6 +311,15 @@ def validate_manifest_contract(manifest: dict[str, Any], architecture: str | Non
         raise PackageError("generated manifest publisher or API version is invalid")
     if manifest.get("targets") != ["control", "agent"]:
         raise PackageError("generated manifest must contain control and agent targets")
+    if manifest.get("capabilities") != EXPECTED_CAPABILITIES:
+        raise PackageError("generated manifest capabilities do not match the NAT egress runtime")
+    if manifest.get("permissions") != EXPECTED_PERMISSIONS:
+        raise PackageError("generated manifest permissions do not match the NAT egress runtime")
+    if manifest.get("control_routes") != EXPECTED_CONTROL_ROUTES:
+        raise PackageError("generated manifest control routes are invalid")
+    webui = manifest.get("webui")
+    if not isinstance(webui, dict) or webui.get("permissions") != EXPECTED_WEBUI_PERMISSIONS:
+        raise PackageError("generated manifest WebUI permissions must remain view-only")
     architectures = manifest.get("architectures")
     if not isinstance(architectures, list) or len(architectures) != 1 or not isinstance(architectures[0], str):
         raise PackageError("generated manifest must contain one architecture")

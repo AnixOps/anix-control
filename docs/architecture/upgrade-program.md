@@ -48,6 +48,13 @@ Already present in the current branch:
 - privileged `nftables-forward` namespace acceptance in the pinned Agent repo
   proving TCP DNAT, UDP DNAT, plugin-created table deletion on rollback, and
   pre-existing nftables table snapshot restoration.
+- the real `nat-egress` Agent runtime with nftables masquerade, fwmark policy
+  routing, interface-bound marked health probes, crash-safe ownership
+  journaling, and privileged namespace traffic/rollback acceptance. Its
+  production release signing, artifact verification, and immutable Agent
+  revision pin are wired and locally gate-verified.
+- Supervisor `plugin.runtime-state` and `plugin.cleanup` contracts with durable
+  `cleanup_pending` recovery across crashes and Agent restarts.
 
 The following remain release blockers: staging rehearsal that starts the
 restored Control service and checks login/subscription/catalog behavior,
@@ -69,6 +76,9 @@ These invariants apply to every phase:
 4. Disabled packages retain data. Deletion is a separate audited purge action.
 5. A failed health check, lease loss, reconciliation error, or rollback error
    stops rollout expansion.
+6. A stateful plugin update may restart the old version only after the target
+   version's signed cleanup succeeds. Cleanup failure leaves the plugin
+   disabled with `cleanup_pending` and blocks rollout until recovery succeeds.
 
 ## Phase 0: Baseline And Freeze
 
@@ -206,9 +216,15 @@ and operator approval. Agent processes must not proxy the bulk traffic.
 Deliver signed `gost-mesh` and `nat-egress` packages for WSS, TUIC, and QUIC.
 The package sources, WebUI modules, status-route contracts, deterministic
 builds, public-key verification, and tamper rejection are now present in package
-contract CI. Production signing remains blocked until real Agent runtimes exist.
-Test certificates, MTU, IPv4/IPv6, UDP loss, reconnect, route-loop prevention,
-accounting isolation, exit failure, and multi-node rollback before canary.
+contract CI. `nat-egress` now has a real Agent runtime and privileged namespace
+evidence for policy-routed marked forwarding, wrong-mark isolation, masquerade,
+and rollback, with crash recovery provided by its private ownership journal and
+signed cleanup entrypoint. Production release signing, artifact verification,
+and the immutable Agent revision pin are wired and locally gate-verified.
+`gost-mesh` remains package-contract-only; implement and test its certificates,
+MTU, UDP/QUIC loss, reconnect and route-loop behavior.
+Both plugins still require accounting isolation, exit-failure, multi-node
+rollback and sustained canary evidence before production rollout.
 
 ## Phase 6: 3.4 WireGuard And Protocol Composition
 

@@ -68,7 +68,7 @@ export default function create(host) {
         return h('section', { class: 'control-page nat-egress-extension' }, [
           h('header', [
             h('h1', 'NAT Egress'),
-            h('p', 'NAT, policy routing, and overseas egress health package status. Runtime execution remains feature-gated until canary approval.'),
+            h('p', 'Signed Agent runtime status for nftables masquerade, policy routing, stable cleanup state, and marked egress health. Production signing remains gated by the pinned Agent revision and namespace evidence.'),
           ]),
           h('dl', { class: 'metric-grid' }, summary.flatMap(([label, metric]) => [
             h('dt', label),

@@ -94,6 +94,61 @@ main() {
   done
   "${PYTHON_BIN}" "${BUILDER}" verify --output-dir "${first}"
   "${PYTHON_BIN}" "${BUILDER}" verify --output-dir "${second}"
+  "${PYTHON_BIN}" - "${first}/manifest.json" "${first}/nat-egress-1.0.0.tar" <<'PY'
+import json
+import sys
+import tarfile
+
+manifest_path, artifact_path = sys.argv[1:]
+expected_defaults = {
+    "apply": False,
+    "rollback_on_exit": True,
+    "table_name": "anixops_nat_egress",
+    "chain_name": "postrouting",
+    "egress_interface": "eth0",
+    "default_mark": 100,
+    "policy_table": 100,
+    "rule_priority": 10100,
+    "ipv4_masquerade": True,
+    "ipv6_masquerade": False,
+    "health_check_enabled": True,
+    "health_check_interval_seconds": 15,
+    "health_check_timeout_seconds": 3,
+    "health_check_target": "1.1.1.1:443",
+}
+expected_fields = list(expected_defaults)
+with open(manifest_path, "rb") as handle:
+    manifest = json.load(handle)
+with tarfile.open(artifact_path, mode="r:") as archive:
+    defaults_handle = archive.extractfile("config.defaults.json")
+    schema_handle = archive.extractfile("config.schema.json")
+    if defaults_handle is None or schema_handle is None:
+        raise SystemExit("runtime configuration is missing from the package")
+    defaults = json.load(defaults_handle)
+    schema = json.load(schema_handle)
+
+if defaults != expected_defaults:
+    raise SystemExit("runtime defaults do not match the Agent contract")
+if schema.get("additionalProperties") is not False:
+    raise SystemExit("runtime schema permits unknown fields")
+if schema.get("required") != expected_fields or set(schema.get("properties", {})) != set(expected_fields):
+    raise SystemExit("runtime schema does not require the exact Agent field set")
+if manifest.get("config_schema") != schema:
+    raise SystemExit("manifest schema is not bound to the packaged schema")
+if manifest.get("permissions") != ["nat-egress.view", "nat-egress.api", "nat-egress.network-admin"]:
+    raise SystemExit("manifest network-admin permission is missing")
+if manifest.get("capabilities") != [
+    "forward.nat.egress",
+    "forward.route.policy",
+    "forward.egress.health",
+    "forward.mark.consume",
+    "plugin.runtime-state",
+    "plugin.cleanup",
+]:
+    raise SystemExit("manifest lifecycle or mark-consumer capabilities are missing")
+if manifest.get("webui", {}).get("permissions") != ["nat-egress.view"]:
+    raise SystemExit("WebUI permissions are not view-only")
+PY
 
   "${OPENSSL_BIN}" genpkey -algorithm ED25519 -out "${private_key}" >/dev/null 2>&1
   chmod 0600 "${private_key}"
@@ -169,6 +224,7 @@ main() {
     printf 'plugin_id=nat-egress\n'
     printf 'version=1.0.0\n'
     printf 'agent_input=temporary-ci-fixture\n'
+    printf 'runtime_contract=true\n'
     printf 'unsigned_reproducible=true\n'
     printf 'public_key_formats=pem,raw-base64\n'
     printf 'tamper_rejection=true\n'

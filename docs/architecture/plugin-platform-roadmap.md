@@ -68,6 +68,14 @@ Every transition records package/version, desired and observed revision,
 operation ID, actor, result, deadline, and rollback target. Repeated delivery
 must result in one side effect.
 
+Plugins that declare `plugin.runtime-state` and `plugin.cleanup` receive a
+stable private ownership journal and a signed cleanup invocation. The
+Supervisor persists `cleanup_pending` and the owning plugin version whenever
+cleanup cannot be confirmed; an unexpected exit records that intent before its
+cleanup attempt. If target-version cleanup fails during update, the transition
+fails closed and does not start the old version over potentially stale network
+state; automatic rollback starts the old version only after cleanup succeeds.
+
 ## Kernel And Extension Contracts
 
 The non-removable kernel provides only:
@@ -138,13 +146,20 @@ recovery, and a staged 1/5/25/100 percent rollout with a legacy fallback.
 Deliver `gost-mesh` and `nat-egress` packages for WSS, TUIC, and QUIC paths from
 standard domestic entries to overseas NAT exits. The reproducible package
 sources, dependency-free WebUI modules, namespaced status routes, public-key
-verification, tamper rejection, and CI release contracts now exist. They are not
-wired into production release signing until real Agent runtimes and namespace
-traffic evidence exist.
+verification, tamper rejection, and CI release contracts now exist. The real
+`nat-egress` Agent runtime additionally implements nftables IPv4/IPv6
+masquerade, fwmark policy routing, marked interface-bound health probes,
+crash-safe ownership journaling, and signed cleanup. Its privileged namespace
+acceptance proves marked forwarded traffic reaches the policy table and is
+masqueraded, wrong-mark traffic is isolated, and created or pre-existing state
+is removed or restored correctly. Production release signing, artifact
+verification, and the immutable Agent revision pin are wired and locally
+gate-verified.
 
-Exit evidence still required: Agent `gost-mesh` and `nat-egress` runtime
-processes, certificate, MTU, UDP/QUIC, route-loop, reconnect, accounting,
-exit-failure and multi-node rollback tests plus sustained canary evidence.
+Exit evidence still required: the real Agent `gost-mesh` runtime and its WSS,
+TUIC, QUIC, certificate, MTU, UDP-loss and reconnect tests; plus `nat-egress`
+multi-node failure rollback, sustained canary, accounting and operational
+IPv4/IPv6 rollout evidence.
 
 ### 3.4.0 - WireGuard And Protocol Composition
 
