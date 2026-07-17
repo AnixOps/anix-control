@@ -37,7 +37,7 @@ func WithAgentLifecycleTransaction(db *gorm.DB, mutation func(*gorm.DB) error) e
 	}
 	for attempt := 0; ; attempt++ {
 		err := db.Transaction(mutation)
-		if err == nil || db.Dialector.Name() != "sqlite" || !isSQLiteBusyError(err) || attempt+1 >= maxSQLiteLifecycleTransactionAttempts {
+		if err == nil || db.Name() != "sqlite" || !isSQLiteBusyError(err) || attempt+1 >= maxSQLiteLifecycleTransactionAttempts {
 			return err
 		}
 		time.Sleep(time.Duration(5*(1<<attempt)) * time.Millisecond)
@@ -56,15 +56,12 @@ func isSQLiteBusyError(err error) bool {
 // SyncNodePluginLifecycle serializes every role of one node/plugin pair,
 // computes aggregate desired state and optionally rearms an exhausted chain
 // after an explicit administrator mutation.
-func SyncNodePluginLifecycle(tx *gorm.DB, nodeID uint, pluginID string, explicitRetry bool, now time.Time) (*model.NodePluginLifecycle, bool, error) {
+func SyncNodePluginLifecycle(tx *gorm.DB, nodeID uint, pluginID string, explicitRetry bool, _ time.Time) (*model.NodePluginLifecycle, bool, error) {
 	if tx == nil {
 		return nil, false, errors.New("database is not initialized")
 	}
 	if nodeID == 0 || !safePluginSegment(pluginID) {
 		return nil, false, errors.New("node plugin lifecycle identity is invalid")
-	}
-	if now.IsZero() {
-		now = time.Now()
 	}
 	lifecycle, err := lockNodePluginLifecycle(tx, nodeID, pluginID)
 	if err != nil {

@@ -295,7 +295,9 @@ func assertCrossRepositoryWrongNodeRejected(t *testing.T, origin, apiKey, instal
 	request.Header.Set("X-API-Key", apiKey)
 	response, err := http.DefaultClient.Do(request)
 	require.NoError(t, err)
-	defer response.Body.Close()
+	defer func() {
+		require.NoError(t, response.Body.Close())
+	}()
 	_, err = io.Copy(io.Discard, response.Body)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusForbidden, response.StatusCode)
@@ -377,10 +379,12 @@ func assertCrossRepositoryPluginHealth(t *testing.T, socketPath string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	connection, err := googlegrpc.DialContext(ctx, "unix://"+socketPath,
-		googlegrpc.WithTransportCredentials(insecure.NewCredentials()), googlegrpc.WithBlock())
+	connection, err := googlegrpc.NewClient("unix://"+socketPath,
+		googlegrpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
-	defer connection.Close()
+	defer func() {
+		require.NoError(t, connection.Close())
+	}()
 	response, err := healthpb.NewHealthClient(connection).Check(ctx, &healthpb.HealthCheckRequest{Service: "machine-telemetry"})
 	require.NoError(t, err)
 	require.Equal(t, healthpb.HealthCheckResponse_SERVING, response.Status)

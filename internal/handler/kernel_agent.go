@@ -94,9 +94,19 @@ func kernelAgentNodeID(c *gin.Context) (uint, bool) {
 	case uint32:
 		return uint(nodeID), nodeID != 0
 	case int:
-		return uint(nodeID), nodeID > 0
+		if nodeID <= 0 {
+			return 0, false
+		}
+		return uint(nodeID), true
 	case int64:
-		return uint(nodeID), nodeID > 0
+		if nodeID <= 0 {
+			return 0, false
+		}
+		unsignedNodeID := uint64(nodeID)
+		if unsignedNodeID > uint64(^uint(0)) {
+			return 0, false
+		}
+		return uint(unsignedNodeID), true
 	default:
 		return 0, false
 	}
