@@ -31,6 +31,8 @@
 - Corrected the attached upgrade runbook to use the actual `anix-control-*`
   release assets and default systemd layout, and attached the exact signature
   verifier used by the Machine Telemetry package instructions.
+- Cleared the blocking static-analysis gate for telemetry error aggregation and
+  topology observed-state test setup without changing runtime behavior.
 
 ### Known Gaps
 
