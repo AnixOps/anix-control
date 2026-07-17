@@ -4,22 +4,35 @@ import { nextTick } from 'vue'
 import Control from '@/views/admin/Control.vue'
 
 const kernelApi = vi.hoisted(() => ({
+  applyKernelDeployment: vi.fn(),
+  createKernelTopology: vi.fn(),
+  createKernelTopologyRevision: vi.fn(),
+  diagnoseKernelTopology: vi.fn(),
+  diagnoseKernelTopologyDeployment: vi.fn(),
   deleteKernelNodeAssignment: vi.fn(),
+  getKernelDeploymentStatus: vi.fn(),
+  getKernelDeployments: vi.fn(),
   getKernelPlugins: vi.fn(),
   getKernelPluginReleases: vi.fn(),
   getKernelInstallations: vi.fn(),
   getKernelNodeAssignments: vi.fn(),
   getKernelScopes: vi.fn(),
+  getKernelTopologyRevision: vi.fn(),
+  getKernelTopologyRevisions: vi.fn(),
   getKernelTopologies: vi.fn(),
   getKernelOperations: vi.fn(),
+  planKernelDeployment: vi.fn(),
+  previewKernelTopologyDeployment: vi.fn(),
   getKernelInstallationConfig: vi.fn(),
   updateKernelInstallationConfig: vi.fn(),
   upsertKernelInstallation: vi.fn(),
   runKernelInstallationAction: vi.fn(),
   registerKernelPluginRelease: vi.fn(),
+  rollbackKernelDeployment: vi.fn(),
   uploadKernelPluginReleaseArtifact: vi.fn(),
   cancelKernelOperation: vi.fn(),
   upsertKernelNodeAssignment: vi.fn(),
+  validateKernelTopology: vi.fn(),
 }))
 
 const adminApi = vi.hoisted(() => ({ getNodes: vi.fn() }))
@@ -57,6 +70,19 @@ function resolveEmptyState() {
   kernelApi.getKernelInstallations.mockResolvedValue([])
   kernelApi.getKernelScopes.mockResolvedValue([])
   kernelApi.getKernelTopologies.mockResolvedValue([])
+  kernelApi.createKernelTopology.mockResolvedValue({ id: 1, name: 'New topology', service_scope: 'forward' })
+  kernelApi.getKernelDeployments.mockResolvedValue([])
+  kernelApi.getKernelTopologyRevisions.mockResolvedValue([])
+  kernelApi.getKernelTopologyRevision.mockResolvedValue({ revision: {}, vertices: [], edges: [] })
+  kernelApi.diagnoseKernelTopology.mockResolvedValue({ valid: true, issues: [] })
+  kernelApi.diagnoseKernelTopologyDeployment.mockResolvedValue({ valid: true, issues: [], checks: [], steps: [] })
+  kernelApi.validateKernelTopology.mockResolvedValue({ valid: true, issues: [] })
+  kernelApi.previewKernelTopologyDeployment.mockResolvedValue({ valid: true, issues: [], checks: [], steps: [] })
+  kernelApi.createKernelTopologyRevision.mockResolvedValue({ id: 1, revision: 1, message: 'saved' })
+  kernelApi.planKernelDeployment.mockResolvedValue({ id: 1, topology_id: 1, revision_id: 1, state: 'planned' })
+  kernelApi.getKernelDeploymentStatus.mockResolvedValue({ deployment: { id: 1, state: 'planned' }, steps: [] })
+  kernelApi.applyKernelDeployment.mockResolvedValue({ id: 1, state: 'applying' })
+  kernelApi.rollbackKernelDeployment.mockResolvedValue({ id: 1, state: 'rollback_requested' })
   kernelApi.getKernelOperations.mockResolvedValue([])
   kernelApi.getKernelNodeAssignments.mockResolvedValue([])
   kernelApi.getKernelInstallationConfig.mockResolvedValue({ installation_id: 1, revision: 0, config: '{}' })
@@ -325,6 +351,100 @@ describe('Control', () => {
     expect(wrapper.get('#control-panel-assignments').isVisible()).toBe(true)
     await wrapper.get('#control-tab-assignments').trigger('keydown', { key: 'End' })
     expect(wrapper.get('#control-tab-operations').attributes('aria-selected')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('edits, validates, saves, plans, and applies a topology revision', async () => {
+    kernelApi.getKernelTopologies.mockResolvedValue([{ id: 3, name: 'CN dedicated', service_scope: 'forward', active_revision_id: 10 }])
+    kernelApi.getKernelDeployments.mockResolvedValue([])
+    kernelApi.getKernelTopologyRevisions.mockResolvedValue([{ id: 10, topology_id: 3, revision: 1, message: 'initial' }])
+    kernelApi.getKernelTopologyRevision.mockResolvedValue({
+      revision: { id: 10, message: 'initial' },
+      vertices: [{ key: 'entry', kind: 'plugin', node_id: 11, plugin_id: 'nftables-forward', role: 'cn_dedicated_nftables', config: '{}' }],
+      edges: []
+    })
+    kernelApi.diagnoseKernelTopology.mockResolvedValue({ valid: true, issues: [] })
+    kernelApi.createKernelTopologyRevision.mockResolvedValue({ id: 11, topology_id: 3, revision: 2, message: 'canary' })
+    kernelApi.planKernelDeployment.mockResolvedValue({ id: 22, topology_id: 3, revision_id: 11, state: 'planned', rollout_group: 'canary-a' })
+    kernelApi.getKernelDeploymentStatus.mockResolvedValue({ deployment: { id: 22, topology_id: 3, revision_id: 11, state: 'planned' }, steps: [] })
+    kernelApi.previewKernelTopologyDeployment.mockResolvedValue({
+      valid: true,
+      issues: [],
+      checks: [{ name: 'dag', status: 'passed' }],
+      steps: [{ order: 1, vertex_key: 'entry', apply_action: 'configure_enable', rollback_mode: 'disable', config_hash: '1234567890abcdef' }]
+    })
+
+    const wrapper = mount(Control)
+    await flushPromises()
+    await wrapper.get('#control-tab-topologies').trigger('click')
+    await wrapper.get('#edit-topology').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('#topology-editor-json').element.value).toContain('entry')
+    await wrapper.get('#topology-revision-message').setValue('canary')
+    await wrapper.get('#topology-rollout-group').setValue('canary-a')
+    await wrapper.get('#topology-editor-json').setValue(JSON.stringify({
+      vertices: [{ key: 'entry', kind: 'plugin', node_id: 11, plugin_id: 'nftables-forward', role: 'cn_dedicated_nftables', config: {} }],
+      edges: []
+    }))
+    expect(wrapper.get('#topology-plan').attributes('disabled')).toBeDefined()
+    await wrapper.get('#topology-diagnose').trigger('click')
+    await flushPromises()
+    expect(kernelApi.validateKernelTopology).toHaveBeenCalledWith(expect.objectContaining({ message: 'canary', vertices: [expect.objectContaining({ config: '{}' })] }))
+    expect(kernelApi.diagnoseKernelTopology).toHaveBeenCalledWith(3, 10, expect.objectContaining({ rolloutGroup: 'canary-a', failurePolicy: 'stop_and_rollback' }))
+    expect(wrapper.text()).toContain('Topology is valid')
+
+    await wrapper.get('#topology-save-revision').trigger('click')
+    await flushPromises()
+    expect(kernelApi.createKernelTopologyRevision).toHaveBeenCalledWith(3, expect.objectContaining({ message: 'canary' }))
+    await wrapper.get('#topology-plan').trigger('click')
+    await flushPromises()
+    expect(kernelApi.planKernelDeployment).toHaveBeenCalledWith({
+      topology_id: 3, revision_id: 11, rollout_group: 'canary-a', failure_policy: 'stop_and_rollback'
+    })
+    expect(wrapper.text()).toContain('1234567890ab')
+    expect(wrapper.get('#topology-apply').attributes('disabled')).toBeUndefined()
+    await wrapper.get('#topology-apply').trigger('click')
+    await flushPromises()
+    expect(kernelApi.applyKernelDeployment).toHaveBeenCalledWith(22)
+    wrapper.unmount()
+  })
+
+  it('opens deployment status and requests a guarded rollback', async () => {
+    kernelApi.getKernelTopologies.mockResolvedValue([{ id: 4, name: 'Mesh', service_scope: 'forward', active_revision_id: 30 }])
+    kernelApi.getKernelDeployments.mockResolvedValue([{ id: 44, topology_id: 4, revision_id: 30, state: 'applying', rollout_group: 'canary' }])
+    kernelApi.getKernelTopologyRevisions.mockResolvedValue([])
+    kernelApi.getKernelDeploymentStatus.mockResolvedValue({ deployment: { id: 44, topology_id: 4, state: 'applying' }, steps: [{ id: 1 }] })
+    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true)
+    const wrapper = mount(Control)
+    await flushPromises()
+    await wrapper.get('#control-tab-topologies').trigger('click')
+    await wrapper.findAll('#control-panel-topologies button').find(button => button.text() === 'View status').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('#topology-editor-title').text()).toContain('Topology revision editor')
+    await wrapper.get('#topology-rollback').trigger('click')
+    await flushPromises()
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(kernelApi.rollbackKernelDeployment).toHaveBeenCalledWith(44)
+    confirmSpy.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('creates a topology from the Control WebUI and opens its revision editor', async () => {
+    kernelApi.getKernelScopes.mockResolvedValue([{ id: 'forward', name: 'Forward' }])
+    kernelApi.getKernelTopologies.mockResolvedValue([])
+    kernelApi.getKernelDeployments.mockResolvedValue([])
+    kernelApi.createKernelTopology.mockResolvedValue({ id: 5, name: 'New topology', service_scope: 'forward' })
+    kernelApi.getKernelTopologyRevisions.mockResolvedValue([])
+    const wrapper = mount(Control)
+    await flushPromises()
+    await wrapper.get('#control-tab-topologies').trigger('click')
+    await wrapper.get('#new-topology').trigger('click')
+    await wrapper.get('#new-topology-name').setValue('New topology')
+    await wrapper.get('#create-topology').trigger('click')
+    await flushPromises()
+    expect(kernelApi.createKernelTopology).toHaveBeenCalledWith({ name: 'New topology', service_scope: 'forward', description: '' })
+    expect(wrapper.get('#topology-editor-title').exists()).toBe(true)
     wrapper.unmount()
   })
 

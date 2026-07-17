@@ -108,6 +108,78 @@ export async function getKernelTopologies() {
   return unwrap(await v3({ url: '/topologies', method: 'get' }))
 }
 
+export async function createKernelTopology(input) {
+  return unwrap(await v3({ url: '/topologies', method: 'post', data: input }))
+}
+
+export async function getKernelTopologyRevisions(topologyID) {
+  return unwrap(await v3({ url: `/topologies/${topologyID}/revisions`, method: 'get' }))
+}
+
+export async function getKernelTopologyRevision(topologyID, revisionID) {
+  return unwrap(await v3({ url: `/topologies/${topologyID}/revisions/${revisionID}`, method: 'get' }))
+}
+
+export async function validateKernelTopology(input) {
+  return unwrap(await v3({ url: '/topologies/validate', method: 'post', data: input }))
+}
+
+export async function createKernelTopologyRevision(topologyID, input) {
+  return unwrap(await v3({ url: `/topologies/${topologyID}/revisions`, method: 'post', data: input }))
+}
+
+export async function getKernelDeployments() {
+  return unwrap(await v3({ url: '/deployments', method: 'get' }))
+}
+
+export async function planKernelDeployment(input) {
+  return unwrap(await v3({ url: '/deployments', method: 'post', data: input }))
+}
+
+export async function getKernelDeploymentStatus(deploymentID) {
+  return unwrap(await v3({ url: `/deployments/${deploymentID}`, method: 'get' }))
+}
+
+export async function applyKernelDeployment(deploymentID) {
+  return unwrap(await v3({ url: `/deployments/${deploymentID}/apply`, method: 'post' }))
+}
+
+export async function rollbackKernelDeployment(deploymentID) {
+  return unwrap(await v3({ url: `/deployments/${deploymentID}/rollback`, method: 'post' }))
+}
+
+export async function previewKernelTopologyDeployment(topologyID, revisionID, options = {}) {
+  return unwrap(await v3({
+    url: `/topologies/${topologyID}/revisions/${revisionID}/preview`,
+    method: 'post',
+    data: {
+      rollout_group: options.rolloutGroup || '',
+      failure_policy: options.failurePolicy || 'stop_and_rollback'
+    }
+  }))
+}
+
+export async function diagnoseKernelTopologyDeployment(topologyID, revisionID, options = {}) {
+  return unwrap(await v3({
+    url: `/topologies/${topologyID}/revisions/${revisionID}/diagnose`,
+    method: 'post',
+    data: {
+      rollout_group: options.rolloutGroup || '',
+      failure_policy: options.failurePolicy || 'stop_and_rollback'
+    }
+  }))
+}
+
+// For compatibility with early alpha clients, an object-only call remains a
+// graph validator. The normal two-ID form is the server-side read-only
+// diagnose endpoint, including assignments, releases and rollout checks.
+export async function diagnoseKernelTopology(topologyID, revisionID, options = {}) {
+  if (topologyID && typeof topologyID === 'object' && revisionID === undefined) {
+    return validateKernelTopology(topologyID)
+  }
+  return diagnoseKernelTopologyDeployment(topologyID, revisionID, options)
+}
+
 export async function getKernelOperations() {
   return unwrap(await v3({ url: '/operations', method: 'get' }))
 }

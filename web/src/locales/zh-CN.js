@@ -3010,12 +3010,21 @@ export default {
     tabs: { plugins: '插件', assignments: '节点角色', scopes: '作用域', topologies: '拓扑', operations: '操作' },
     table: {
       plugin: '插件', publisher: '发布者', release: '发行版', installation: '安装目标', desiredVersion: '期望版本', observedVersion: '实际版本', version: '版本', state: '状态', actions: '操作',
-      scope: '作用域', owner: '所有者', description: '说明', topology: '拓扑', activeRevision: '激活 revision',
+      scope: '作用域', owner: '所有者', description: '说明', topology: '拓扑', activeRevision: '激活 revision', deployment: '部署',
       operation: '操作', revision: 'revision', deadline: '截止时间', role: '服务角色', configRevision: '配置 revision', rolloutGroup: '灰度组'
     },
     labels: { releases: '{count} 个发行版', desired: '期望', observed: '实际' },
     states: { catalogued: '已登记', enabled: '已启用', disabled: '已禁用', loading: '正在加载控制状态...', polling: '正在轮询操作状态' },
     empty: { plugins: '暂无插件', assignments: '该节点暂无服务角色', scopes: '暂无服务作用域', topologies: '暂无拓扑', operations: '暂无操作' },
+    topology: {
+      select: '拓扑', new: '新建拓扑', newTitle: '新建拓扑', create: '创建拓扑', name: '名称', edit: '编辑修订', status: '查看状态', noDeployment: '暂无部署', editorTitle: '拓扑修订编辑器', revision: '修订',
+      noRevisions: '暂无修订', failurePolicy: '失败策略', stopAndRollback: '停止并回滚', message: '修订说明', graphJSON: '拓扑图 JSON',
+      graphHelp: '使用 vertices 和 edges 描述拓扑。秘密必须通过 secret_id 引用，禁止直接写入秘密值。', diagnose: '校验 / 诊断', validating: '校验中...',
+      unsavedChanges: '当前修订存在未保存修改。请先保存新的不可变修订，再进行预览或规划。',
+      valid: '拓扑校验通过', invalid: '拓扑存在校验问题', invalidJSON: '拓扑 JSON 无效', saveRevision: '保存修订', plan: '规划部署',
+      apply: '应用部署', rollback: '回滚部署', deployment: '部署', steps: '{count} 个部署步骤', rollbackConfirm: '确认请求回滚此部署吗？',
+      preview: '只读部署预览', previewAction: '预览', previewSteps: '{count} 个计划步骤'
+    },
     extensions: { errorsTitle: 'WebUI 扩展加载失败' },
     assignments: {
       node: '节点', noNodes: '暂无可用节点', agentPlugin: 'Agent 插件', loading: '正在加载节点角色...', enabled: '启用该节点角色',
@@ -3035,12 +3044,16 @@ export default {
     messages: {
       actionQueued: '{plugin} 的“{action}”操作已提交', installed: '{plugin} 安装意图已保存', configSaved: '{plugin} 配置已保存',
       releaseImported: '{plugin} {version} 已导入', cancelRequested: '已请求取消操作',
-      assignmentSaved: '{plugin} 节点角色已保存', assignmentStateSaved: '{plugin} 节点角色状态已保存', assignmentDeleted: '{plugin} 节点角色已删除'
+      assignmentSaved: '{plugin} 节点角色已保存', assignmentStateSaved: '{plugin} 节点角色状态已保存', assignmentDeleted: '{plugin} 节点角色已删除',
+      topologyValidated: '拓扑校验通过', topologyRevisionSaved: '拓扑修订 {revision} 已保存', topologyPlanned: '部署 #{id} 已规划',
+      topologyApplyRequested: '已请求应用拓扑部署', topologyRollbackRequested: '已请求回滚拓扑部署', topologyCreated: '拓扑 {name} 已创建'
     },
     errors: {
       load: '无法加载控制状态', action: '插件操作失败', install: '插件安装失败', configLoad: '无法加载插件配置',
       configSave: '无法保存插件配置', releaseImport: '发行版导入失败', cancel: '无法取消操作', poll: '无法刷新操作状态',
-      nodesLoad: '无法加载节点', assignmentsLoad: '无法加载节点角色', assignmentSave: '无法保存节点角色', assignmentDelete: '无法删除节点角色'
+      nodesLoad: '无法加载节点', assignmentsLoad: '无法加载节点角色', assignmentSave: '无法保存节点角色', assignmentDelete: '无法删除节点角色',
+      topologyLoad: '无法加载拓扑修订', topologyValidate: '无法校验拓扑', topologySave: '无法保存拓扑修订', topologyPlan: '无法规划拓扑部署',
+      topologyPreview: '无法预览拓扑部署', topologyStatus: '无法加载部署状态', topologyApply: '无法应用拓扑部署', topologyRollback: '无法回滚拓扑部署', topologyCreate: '无法创建拓扑'
     }
   },
   legacy
