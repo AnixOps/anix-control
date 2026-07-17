@@ -30,6 +30,7 @@ var defaultServiceScopes = []model.ServiceScope{
 	{ID: "subscription", Name: "Subscription", PluginID: "subscription"},
 	{ID: "proxy", Name: "Proxy", PluginID: "protocol-runtime"},
 	{ID: "forward", Name: "Forward", PluginID: "forward"},
+	{ID: "monitoring", Name: "Monitoring", PluginID: "machine-telemetry"},
 }
 
 var officialPluginCatalog = []model.Plugin{
