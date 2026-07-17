@@ -133,6 +133,8 @@ check_release_workflow() {
   reject_text "v2board-source.sbom.spdx.json" "legacy source SBOM release alias" || failed=1
   reject_text "v2board-linux-amd64.tar.gz" "legacy Linux release alias" || failed=1
   reject_text "v2board-windows-amd64.exe.zip" "legacy Windows release alias" || failed=1
+  # GitHub expression must remain literal.
+  # shellcheck disable=SC2016
   reject_text '${{ env.DOCKER_NAMESPACE }}/v2board' "legacy Docker image tag" || failed=1
   require_text "docker-image.txt" "Docker image metadata artifact" || failed=1
   require_text "digest=\${{ steps.build.outputs.digest }}" "Docker digest metadata" || failed=1
@@ -148,6 +150,8 @@ check_release_workflow() {
   require_text "packages/nftables-forward/tests/release_gate.sh" "nftables forward package release gate invocation" || failed=1
   require_text "packages/nftables-forward/tests/webui_smoke.mjs" "nftables forward WebUI smoke gate" || failed=1
   require_text "packages/gost-mesh/tests/release_gate.sh" "gost mesh package release gate invocation" || failed=1
+  require_text "--agent-binary package-build/gost-mesh-agent" "real GOST mesh Agent package input" || failed=1
+  require_text "--gost package-build/gost" "pinned GOST runtime package input" || failed=1
   require_text "packages/gost-mesh/tests/webui_smoke.mjs" "gost mesh WebUI smoke gate" || failed=1
   require_text "packages/nat-egress/tests/release_gate.sh" "nat egress package release gate invocation" || failed=1
   require_text "packages/nat-egress/tests/webui_smoke.mjs" "nat egress WebUI smoke gate" || failed=1
@@ -161,26 +165,43 @@ check_release_workflow() {
   require_text "scripts/sign_plugin_release.sh" "production plugin signing script" || failed=1
   require_text "machine-telemetry-signed-release" "signed plugin release artifact" || failed=1
   require_text "nftables-forward-signed-release" "signed nftables forward plugin release artifact" || failed=1
+  require_text "gost-mesh-signed-release" "signed GOST mesh plugin release artifact" || failed=1
   require_text "nat-egress-signed-release" "signed NAT egress plugin release artifact" || failed=1
   require_text "anixops-machine-telemetry-1.0.0.SHA256SUMS.txt" "signed plugin checksum evidence" || failed=1
   require_text "anixops-nftables-forward-1.0.0.SHA256SUMS.txt" "signed nftables forward checksum evidence" || failed=1
+  require_text "anixops-gost-mesh-1.0.0.SHA256SUMS.txt" "signed GOST mesh checksum evidence" || failed=1
   require_text "anixops-nat-egress-1.0.0.SHA256SUMS.txt" "signed NAT egress checksum evidence" || failed=1
+  require_text "GOST_VERSION: '3.2.6'" "pinned GOST runtime version" || failed=1
+  require_text "b39037b0380ea001fb3c0c28441c2e10bfc694f90682739a65b53e55dce5238b" "pinned GOST archive checksum" || failed=1
+  require_text "a2aea24efb4597b5f57b35b8e1bbcc59f439b80723854d4371f6828b46682ffb" "pinned GOST binary checksum" || failed=1
+  require_text "./cmd/gost-mesh" "GOST mesh Agent release binary build" || failed=1
+  require_text "packages/gost-mesh/build.py build" "deterministic GOST mesh package build" || failed=1
   require_text "./cmd/nat-egress" "NAT egress Agent release binary build" || failed=1
   require_text "packages/nat-egress/build.py build" "deterministic NAT egress package build" || failed=1
   require_text "Download signed Machine Telemetry package" "signed plugin release download" || failed=1
   require_text "Download signed nftables Forward package" "signed nftables forward release download" || failed=1
+  require_text "Download signed GOST Mesh package" "signed GOST mesh release download" || failed=1
   require_text "Download signed NAT Egress package" "signed NAT egress release download" || failed=1
   require_text "--require machine-telemetry-1.0.0.tar" "signed plugin package verification requirement" || failed=1
   require_text "--require nftables-forward-1.0.0.tar" "signed nftables forward package verification requirement" || failed=1
+  require_text "--require gost-mesh-1.0.0.tar" "signed GOST mesh package verification requirement" || failed=1
+  require_text "--require anixops-gost-mesh-1.0.0.manifest.json" "signed GOST mesh manifest verification requirement" || failed=1
+  require_text "--require anixops-gost-mesh-1.0.0.sig" "signed GOST mesh signature verification requirement" || failed=1
+  require_text "--require anixops-gost-mesh-1.0.0.public-key.pem" "signed GOST mesh PEM key verification requirement" || failed=1
+  require_text "--require anixops-gost-mesh-1.0.0.public-key.raw" "signed GOST mesh raw key verification requirement" || failed=1
+  require_text "--require anixops-gost-mesh-1.0.0.SHA256SUMS.txt" "signed GOST mesh checksum verification requirement" || failed=1
   require_text "--require nat-egress-1.0.0.tar" "signed NAT egress package verification requirement" || failed=1
   require_text "--require anixops-nat-egress-1.0.0.manifest.json" "signed NAT egress manifest verification requirement" || failed=1
   require_text "--require anixops-nat-egress-1.0.0.sig" "signed NAT egress signature verification requirement" || failed=1
   require_text "--require anixops-nat-egress-1.0.0.public-key.pem" "signed NAT egress PEM key verification requirement" || failed=1
   require_text "--require anixops-nat-egress-1.0.0.public-key.raw" "signed NAT egress raw key verification requirement" || failed=1
   require_text "--require anixops-nat-egress-1.0.0.SHA256SUMS.txt" "signed NAT egress checksum verification requirement" || failed=1
-  require_text 'The signed `machine-telemetry`, `nftables-forward`, and `nat-egress` packages' "release notes include NAT egress" || failed=1
+  # Markdown backticks must remain literal.
+  # shellcheck disable=SC2016
+  require_text 'The signed `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress` packages' "release notes include GOST mesh and NAT egress" || failed=1
+  require_text "canary-only until Secret ID" "GOST mesh stable-release limitation" || failed=1
   require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
-  require_text "ref: 95cc201fc5013c35a3998eda4c4269ecd22e481c" "pinned Agent fixture commit" || failed=1
+  require_text "ref: 81a951c628507da84fb5b52bd04bb5c9b19f62d2" "pinned Agent fixture commit" || failed=1
   require_text "ANIXOPS_CROSS_REPO_E2E: '1'" "cross-repository Agent process E2E opt-in" || failed=1
   require_text "TestKernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
   require_text "cross-repository-agent-e2e" "release dependency on cross-repository Agent process E2E" || failed=1
@@ -225,6 +246,11 @@ run_self_test() {
 on:
   push:
     tags: [ 'v*.*.*' ]
+
+env:
+  GOST_VERSION: '3.2.6'
+  GOST_LINUX_AMD64_ARCHIVE_SHA256: 'b39037b0380ea001fb3c0c28441c2e10bfc694f90682739a65b53e55dce5238b'
+  GOST_LINUX_AMD64_BINARY_SHA256: 'a2aea24efb4597b5f57b35b8e1bbcc59f439b80723854d4371f6828b46682ffb'
 
 jobs:
   tag-gate:
@@ -285,7 +311,10 @@ jobs:
           set -o pipefail
           bash packages/machine-telemetry/tests/release_gate.sh | tee package-contract.txt
           bash packages/nftables-forward/tests/release_gate.sh | tee nftables-forward-package-contract.txt
-          bash packages/gost-mesh/tests/release_gate.sh | tee gost-mesh-package-contract.txt
+          bash packages/gost-mesh/tests/release_gate.sh \
+            --agent-binary package-build/gost-mesh-agent \
+            --gost package-build/gost \
+            | tee gost-mesh-package-contract.txt
           bash packages/nat-egress/tests/release_gate.sh | tee nat-egress-package-contract.txt
           node packages/nftables-forward/tests/webui_smoke.mjs
           node packages/gost-mesh/tests/webui_smoke.mjs
@@ -303,13 +332,19 @@ jobs:
           ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
         run: |
           scripts/sign_plugin_release.sh
+          go -C V2bX_AnixOps build -o package-build/gost-mesh-agent ./cmd/gost-mesh
+          python3 packages/gost-mesh/build.py build \
+            --agent-binary package-build/gost-mesh-agent \
+            --gost package-build/gost
           go -C V2bX_AnixOps build ./cmd/nat-egress
           python3 packages/nat-egress/build.py build
           echo "machine-telemetry-signed-release"
           echo "nftables-forward-signed-release"
+          echo "gost-mesh-signed-release"
           echo "nat-egress-signed-release"
           echo "anixops-machine-telemetry-1.0.0.SHA256SUMS.txt"
           echo "anixops-nftables-forward-1.0.0.SHA256SUMS.txt"
+          echo "anixops-gost-mesh-1.0.0.SHA256SUMS.txt"
           echo "anixops-nat-egress-1.0.0.SHA256SUMS.txt"
 
   cross-repository-agent-e2e:
@@ -318,7 +353,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 95cc201fc5013c35a3998eda4c4269ecd22e481c
+          ref: 81a951c628507da84fb5b52bd04bb5c9b19f62d2
           path: V2bX_AnixOps
       - env:
           ANIXOPS_CROSS_REPO_E2E: '1'
@@ -348,6 +383,10 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: nftables-forward-signed-release
+      - name: Download signed GOST Mesh package
+        uses: actions/download-artifact@v8
+        with:
+          name: gost-mesh-signed-release
       - name: Download signed NAT Egress package
         uses: actions/download-artifact@v8
         with:
@@ -355,7 +394,7 @@ jobs:
       - run: |
           cp migration-dry-run.txt release/migration-dry-run.txt
           echo "No Local Release Builds" > release/OPERATOR_DEPLOYMENT.md
-          echo 'The signed `machine-telemetry`, `nftables-forward`, and `nat-egress` packages are attached.' >> release/OPERATOR_DEPLOYMENT.md
+          echo 'The signed `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress` packages are attached; gost-mesh is canary-only until Secret ID materialization is complete.' >> release/OPERATOR_DEPLOYMENT.md
           cp docs/UPGRADE.md release/UPGRADE.md
           tar -czvf release/anix-control-frontend.tar.gz -C web/public .
           zip -r release/anix-control-frontend.zip web/public
@@ -364,7 +403,7 @@ jobs:
           python3 config/scripts/generate_release_notes.py \
             --changelog CHANGELOG.md \
             --output release/RELEASE_NOTES.md
-          echo 'The signed `machine-telemetry`, `nftables-forward`, and `nat-egress` packages are attached.' >> release/RELEASE_NOTES.md
+          echo 'The signed `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress` packages are attached; gost-mesh is canary-only until Secret ID materialization is complete.' >> release/RELEASE_NOTES.md
       - name: Generate release manifest
         run: |
           python3 config/scripts/generate_release_manifest.py \
@@ -385,6 +424,12 @@ jobs:
             --require anix-control-windows-arm64.exe.zip \
             --require machine-telemetry-1.0.0.tar \
             --require nftables-forward-1.0.0.tar \
+            --require gost-mesh-1.0.0.tar \
+            --require anixops-gost-mesh-1.0.0.manifest.json \
+            --require anixops-gost-mesh-1.0.0.sig \
+            --require anixops-gost-mesh-1.0.0.public-key.pem \
+            --require anixops-gost-mesh-1.0.0.public-key.raw \
+            --require anixops-gost-mesh-1.0.0.SHA256SUMS.txt \
             --require nat-egress-1.0.0.tar \
             --require anixops-nat-egress-1.0.0.manifest.json \
             --require anixops-nat-egress-1.0.0.sig \
@@ -445,9 +490,18 @@ EOF
   fi
 
   cp "${fixture}" "${fixture}.missing-nat-egress-signed-publish"
+  # Markdown backticks must remain literal.
+  # shellcheck disable=SC2016
   sed -i '/cmd\/nat-egress/d;/packages\/nat-egress\/build.py build/d;/nat-egress-signed-release/d;/anixops-nat-egress-1.0.0/d;/--require nat-egress-1.0.0.tar/d;/The signed `machine-telemetry`, `nftables-forward`, and `nat-egress` packages/d' "${fixture}.missing-nat-egress-signed-publish"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-nat-egress-signed-publish" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing signed NAT egress publish chain should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-gost-mesh-signed-publish"
+  sed -i '/cmd\/gost-mesh/d;/packages\/gost-mesh\/build.py build/d;/gost-mesh-signed-release/d;/anixops-gost-mesh-1.0.0/d;/--require gost-mesh-1.0.0.tar/d;/--agent-binary package-build\/gost-mesh-agent/d;/--gost package-build\/gost/d;/canary-only until Secret ID/d' "${fixture}.missing-gost-mesh-signed-publish"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-gost-mesh-signed-publish" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing signed GOST mesh publish chain should fail" >&2
     return 1
   fi
 

@@ -62,8 +62,18 @@
   ownership checks, crash-safe state journaling, and privileged namespace
   acceptance for marked forwarding, wrong-mark isolation, NAT, and rollback.
   Production release signing, artifact verification, and the immutable Agent
-  revision pin are wired and locally gate-verified; the `gost-mesh` Agent
-  runtime and production canary evidence remain pending.
+  revision pin are wired and locally gate-verified.
+- Added the real `gost-mesh` Agent runtime and signed auxiliary-runtime
+  packaging for checksum-pinned GOST v3.2.6. The aggregate `tunnels[]` runtime
+  supports QUIC and WSS with mandatory mutual TLS, source-policy routing,
+  source-bound health probes, bounded restart, ownership journaling, and
+  crash-safe cleanup. Privileged namespace acceptance proves TCP and UDP data
+  paths, transport selection, wrong-SNI and untrusted-client rejection, health,
+  and cleanup. TUIC is not advertised because the pinned GOST runtime does not
+  implement it. Release signing and upload now require the real Agent binary
+  and the archive- and binary-digest-pinned GOST executable. The package remains
+  canary-only until Control Secret ID materialization and sustained rollout
+  evidence are complete.
 - Added Supervisor `plugin.runtime-state` and `plugin.cleanup` lifecycle
   contracts. Cleanup intent and version are persisted as `cleanup_pending`;
   failed target-version cleanup leaves the plugin disabled and blocks old-

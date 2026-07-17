@@ -13,13 +13,19 @@
   digest binding, route collision isolation, disabled entries, and tampered
   bundle recovery. They currently use a catalog HTTP fixture; live Control
   staging coverage remains a gap.
-- The package release gate proves reproducible unsigned output, ephemeral
-  Ed25519 signing, public-key-only verification, artifact binding, and tamper
-  rejection for `machine-telemetry` and the new `nftables-forward` reference
-  package. Secret-backed production signing/upload currently publishes only
-  `machine-telemetry`; `nftables-forward` still needs a real Agent binary,
-  network-namespace TCP/UDP evidence, and release-manifest publication before
-  it can become a 3.2 data-plane candidate.
+- Package release gates prove reproducible unsigned output, ephemeral Ed25519
+  signing, public-key-only verification, artifact binding, and tamper rejection
+  for `machine-telemetry`, `nftables-forward`, `gost-mesh`, and `nat-egress`.
+  The `gost-mesh` gate builds a real pinned Agent entrypoint and requires the
+  exact GOST v3.2.6 executable after verifying both its release-archive SHA-256
+  and extracted-binary SHA-256. Tag publication signs and attaches all four
+  packages with manifests, public keys, and package checksums.
+- Privileged Agent namespace acceptance now covers `gost-mesh` QUIC and WSS
+  TCP/UDP traffic, mutual-TLS positive and negative cases, source-bound health,
+  transport counters, and cleanup. Remaining 3.3 evidence is Control Secret ID
+  materialization, MTU and sustained loss/reconnect behavior, composed
+  `gost-mesh` to `nat-egress` failure rollback, accounting, multi-node rollback,
+  and sustained canary records.
 - The dependency resolver now has deterministic recursive DB preflight,
   dependency-aware Control execution, reverse rollback, and race coverage.
   Staging still needs a live restored Control canary before enabling plugin
