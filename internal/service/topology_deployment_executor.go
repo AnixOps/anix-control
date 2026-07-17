@@ -65,6 +65,8 @@ type TopologyDeploymentStatus struct {
 	Deployment model.TopologyDeployment       `json:"deployment"`
 	Steps      []model.TopologyDeploymentStep `json:"steps"`
 	Observed   []model.TopologyObservedState  `json:"observed_states"`
+	Operations []TopologyDeploymentOperation  `json:"operations"`
+	Events     []TopologyDeploymentEvent      `json:"events"`
 }
 
 // TopologyDeploymentExecutor turns a previously planned revision into durable
@@ -326,6 +328,11 @@ func GetTopologyDeploymentStatus(db *gorm.DB, deploymentID uint) (*TopologyDeplo
 	}
 	if err := db.Where("deployment_id = ?", deploymentID).Order("node_id").Find(&status.Observed).Error; err != nil {
 		return nil, err
+	}
+	var timelineErr error
+	status.Operations, status.Events, timelineErr = loadTopologyDeploymentTimeline(db, status.Deployment, status.Steps, status.Observed)
+	if timelineErr != nil {
+		return nil, timelineErr
 	}
 	return status, nil
 }
