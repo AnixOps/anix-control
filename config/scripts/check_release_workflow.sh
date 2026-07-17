@@ -290,7 +290,7 @@ check_release_workflow() {
   require_text "The signed official package IDs for this product stage" "stage-scoped release notes" || failed=1
   require_text "canary-only until Secret ID" "GOST mesh stable-release limitation" || failed=1
   require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
-  require_text "ref: 45eefa510d43ed061a4b7958dd31031e2be444ad" "pinned Agent fixture commit" || failed=1
+  require_text "ref: 35f1af4b9887e1c2d811d66b8da38c7b0d86c7d9" "pinned Agent fixture commit" || failed=1
   require_text "ANIXOPS_CROSS_REPO_E2E: '1'" "cross-repository Agent process E2E opt-in" || failed=1
   require_text "KernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
   require_text "AgentPluginPackageCrossRepositoryE2E" "signed Agent package cross-repository E2E test" || failed=1
@@ -485,7 +485,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 45eefa510d43ed061a4b7958dd31031e2be444ad
+          ref: 35f1af4b9887e1c2d811d66b8da38c7b0d86c7d9
           path: V2bX_AnixOps
       - env:
           ANIXOPS_CROSS_REPO_E2E: '1'
