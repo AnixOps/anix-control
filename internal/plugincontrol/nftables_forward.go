@@ -166,7 +166,7 @@ func nftablesForwardRuleRow(assignment model.NodeServiceAssignment, node model.N
 		row.Listen = formatEndpoint(rule.ListenAddress, rule.ListenPort)
 		row.Target = formatEndpoint(rule.TargetAddress, rule.TargetPort)
 	} else if config.Table != "" || config.Family != "" {
-		row.Topology = strings.Trim(strings.Join([]string{assignment.Role, config.Family, config.Table}, " / "), " / ")
+		row.Topology = strings.TrimSpace(strings.Trim(strings.Join([]string{assignment.Role, config.Family, config.Table}, " / "), "/"))
 	}
 	observedVersion := observed.ObservedVersion
 	if observedVersion == "" && operation.State == "succeeded" {

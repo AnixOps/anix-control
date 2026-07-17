@@ -12,9 +12,10 @@
   import, installation intent, enable/disable/update/rollback actions,
   revisioned Schema or JSON configuration, operation polling/cancellation, and
   signed WebUI extension refresh with visible terminal errors.
-
 ### Fixed
 
+- Fixed the nftables forward status topology formatter so the production lint
+  gate accepts its whitespace and slash trimming logic.
 - Fixed release-note generation to select the immutable changelog section for
   the current tag, including dated headings, instead of requiring an
   `Unreleased` section that no longer exists in a prepared release commit.
