@@ -14,7 +14,8 @@ legacy `/api/v2` APIs, subscription behavior, UniProxy synchronization, and
 forwarding workers stay on the production path while the package manager is
 introduced behind feature flags.
 
-Current status: **3.2 preview, blocked for data-plane production release**.
+Current status: **3.3 preview, canary-only and blocked for data-plane production
+release**.
 
 Already present in the current branch:
 
@@ -40,8 +41,8 @@ Already present in the current branch:
   failure fencing, reverse rollback, and observed-state write-back;
 - production release-tag package signing/upload workflow that requires the
   `ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY` GitHub secret and publishes signature,
-  public-key, package, manifest, and checksum evidence for `machine-telemetry`
-  and `nftables-forward`.
+  public-key, package, manifest, and checksum evidence for `machine-telemetry`,
+  `nftables-forward`, `gost-mesh`, and `nat-egress`.
 - deterministic `nftables-forward` package source with WebUI smoke coverage,
   real Agent runtime packaging, public-key verification, tamper rejection, and
   CI release-contract evidence.
@@ -53,13 +54,22 @@ Already present in the current branch:
   journaling, and privileged namespace traffic/rollback acceptance. Its
   production release signing, artifact verification, and immutable Agent
   revision pin are wired and locally gate-verified.
+- the real `gost-mesh` Agent runtime with aggregate `tunnels[]`, signed GOST
+  v3.2.6 auxiliary-runtime packaging, QUIC/WSS mutual TLS, entry source-policy
+  routing, source-bound health probes, bounded restart, ownership journaling,
+  and privileged namespace TCP/UDP, TLS-negative, health, and cleanup evidence.
+  TUIC is intentionally excluded from v1 because GOST v3.2.6 does not implement
+  it.
 - Supervisor `plugin.runtime-state` and `plugin.cleanup` contracts with durable
   `cleanup_pending` recovery across crashes and Agent restarts.
 
 The following remain release blockers: staging rehearsal that starts the
 restored Control service and checks login/subscription/catalog behavior,
 canary rollout records, legacy fallback rehearsal, and a manual approval to
-enable topology execution outside isolated test nodes.
+enable topology execution outside isolated test nodes. For `gost-mesh`, Control
+Secret ID to Agent private-file materialization, renewal, deletion, and audit
+are also blocking. Current TLS path fields refer to files already present on
+the Agent and are acceptable only for an isolated canary.
 
 ## Release Invariants
 
@@ -213,18 +223,30 @@ and operator approval. Agent processes must not proxy the bulk traffic.
 
 ## Phase 5: 3.3 Tunnel Mesh And NAT
 
-Deliver signed `gost-mesh` and `nat-egress` packages for WSS, TUIC, and QUIC.
-The package sources, WebUI modules, status-route contracts, deterministic
-builds, public-key verification, and tamper rejection are now present in package
-contract CI. `nat-egress` now has a real Agent runtime and privileged namespace
-evidence for policy-routed marked forwarding, wrong-mark isolation, masquerade,
-and rollback, with crash recovery provided by its private ownership journal and
-signed cleanup entrypoint. Production release signing, artifact verification,
-and the immutable Agent revision pin are wired and locally gate-verified.
-`gost-mesh` remains package-contract-only; implement and test its certificates,
-MTU, UDP/QUIC loss, reconnect and route-loop behavior.
-Both plugins still require accounting isolation, exit-failure, multi-node
-rollback and sustained canary evidence before production rollout.
+Deliver signed `gost-mesh` and `nat-egress` packages for WSS and QUIC. TUIC is
+deferred to an independent runtime or `protocol-runtime`; it must not be
+advertised by `gost-mesh` v1 because the pinned GOST v3.2.6 executable does not
+implement it.
+
+Both packages now have real Agent runtimes, deterministic package builds,
+public-key verification, tamper rejection, crash-safe ownership journals, and
+signed cleanup. `gost-mesh` manages aggregate `tunnels[]`, entry source-policy
+routing, source-bound health probes, and bounded GOST child-process restart.
+QUIC and WSS require mutual TLS. Namespace acceptance proves TCP/UDP traffic,
+the expected UDP/TCP transport, wrong-SNI and untrusted-client rejection,
+health, and cleanup. `nat-egress` proves policy-routed marked forwarding,
+wrong-mark isolation, masquerade, and rollback. Release package gates require
+real Agent binaries and verify both the GOST v3.2.6 archive checksum and the
+extracted binary checksum.
+
+Before any apply, operators must set `net.ipv4.ip_forward=1` and disable strict
+reverse-path filtering for the participating namespaces/interfaces
+(`net.ipv4.conf.*.rp_filter=0`). The plugin validates and fails closed; it does
+not modify host-wide sysctls. Current TLS fields are Agent-local file paths.
+Control Secret ID materialization, renewal, deletion, and audit remain a hard
+stable-release gate. Both plugins also require composed exit-failure rollback,
+MTU/loss/reconnect evidence, accounting isolation, multi-node rollback, and a
+sustained canary before production rollout.
 
 ## Phase 6: 3.4 WireGuard And Protocol Composition
 

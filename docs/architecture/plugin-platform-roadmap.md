@@ -117,10 +117,10 @@ deterministic package release contracts for `machine-telemetry` and
 `nftables-forward`; dependency-aware graph execution with rollback;
 feature-gated topology fan-out; real `nftables-forward` Agent runtime source;
 reproducible nftables-forward namespace TCP/UDP and snapshot-rollback
-acceptance; and production signing/upload workflow checks for both official
-reference packages. Supervisor and dynamic packages remain feature-gated until
-staging validation and canary records approve expansion beyond isolated test
-nodes.
+acceptance; and production signing/upload workflow checks for the two official
+3.1 reference packages. Supervisor and dynamic packages remain feature-gated
+until staging validation and canary records approve expansion beyond isolated
+test nodes.
 
 ### 3.2.0 - Declarative Runtime And Dedicated Forwarding
 
@@ -143,23 +143,38 @@ recovery, and a staged 1/5/25/100 percent rollout with a legacy fallback.
 
 ### 3.3.0 - Tunnel Mesh And NAT Egress
 
-Deliver `gost-mesh` and `nat-egress` packages for WSS, TUIC, and QUIC paths from
-standard domestic entries to overseas NAT exits. The reproducible package
-sources, dependency-free WebUI modules, namespaced status routes, public-key
-verification, tamper rejection, and CI release contracts now exist. The real
-`nat-egress` Agent runtime additionally implements nftables IPv4/IPv6
-masquerade, fwmark policy routing, marked interface-bound health probes,
-crash-safe ownership journaling, and signed cleanup. Its privileged namespace
-acceptance proves marked forwarded traffic reaches the policy table and is
-masqueraded, wrong-mark traffic is isolated, and created or pre-existing state
-is removed or restored correctly. Production release signing, artifact
-verification, and the immutable Agent revision pin are wired and locally
-gate-verified.
+Deliver `gost-mesh` and `nat-egress` packages for WSS and QUIC paths from
+standard domestic entries to overseas NAT exits. TUIC is not part of
+`gost-mesh` v1 because the checksum-pinned GOST v3.2.6 runtime does not
+implement TUIC; that transport belongs in a later independent runtime or
+`protocol-runtime` package.
 
-Exit evidence still required: the real Agent `gost-mesh` runtime and its WSS,
-TUIC, QUIC, certificate, MTU, UDP-loss and reconnect tests; plus `nat-egress`
-multi-node failure rollback, sustained canary, accounting and operational
-IPv4/IPv6 rollout evidence.
+The real `gost-mesh` Agent runtime now manages an aggregate `tunnels[]`
+configuration, signed auxiliary GOST processes, TUN ownership, entry
+source-policy rules, source-bound health probes, bounded restart, and
+crash-safe cleanup. WSS and QUIC both require mutual TLS: entries verify the
+exit CA/server name and present a client certificate, while exits require a
+client CA. Privileged namespace acceptance proves TCP and UDP traffic, QUIC on
+UDP, WSS on TCP, wrong-SNI and untrusted-client rejection, health, and cleanup.
+Linux hosts must already have `net.ipv4.ip_forward=1` and all relevant
+`net.ipv4.conf.*.rp_filter=0`; the plugin validates these prerequisites and
+does not mutate host-wide sysctls.
+
+The real `nat-egress` Agent runtime implements nftables IPv4/IPv6 masquerade,
+fwmark policy routing, marked interface-bound health probes, crash-safe
+ownership journaling, and signed cleanup. Its privileged namespace acceptance
+proves marked forwarded traffic reaches the policy table and is masqueraded,
+wrong-mark traffic is isolated, and created or pre-existing state is removed
+or restored correctly. Deterministic package gates and release signing require
+the real Agent entrypoints and the archive- and binary-digest-pinned GOST
+runtime.
+
+Exit evidence still required: Control Secret ID to Agent private-file
+materialization, renewal, deletion, and audit; composed `gost-mesh` to
+`nat-egress` failure rollback; MTU and sustained loss/reconnect evidence;
+per-scope accounting; multi-node rollback; and a sustained canary. Until these
+gates close, 3.3 execution is canary-only and must not be called production
+ready.
 
 ### 3.4.0 - WireGuard And Protocol Composition
 

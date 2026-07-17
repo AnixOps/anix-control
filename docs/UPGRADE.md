@@ -80,14 +80,15 @@ download:
 - `v2board-source.sbom.spdx.json`
 
 Plugin-platform releases may also attach signed official package artifacts.
-For the `machine-telemetry` reference package, keep these files together:
+The current workflow publishes `machine-telemetry`, `nftables-forward`,
+`gost-mesh`, and `nat-egress`. For each package ID, keep these files together:
 
-- `machine-telemetry-*.tar`
-- `machine-telemetry-manifest.json`
-- `machine-telemetry-manifest.sig`
-- `machine-telemetry-public.pem`
-- `machine-telemetry-public.raw`
-- `machine-telemetry-SHA256SUMS.txt`
+- `<plugin-id>-1.0.0.tar`
+- `anixops-<plugin-id>-1.0.0.manifest.json`
+- `anixops-<plugin-id>-1.0.0.sig`
+- `anixops-<plugin-id>-1.0.0.public-key.pem`
+- `anixops-<plugin-id>-1.0.0.public-key.raw`
+- `anixops-<plugin-id>-1.0.0.SHA256SUMS.txt`
 
 Verify checksums before replacing any production file:
 
@@ -107,7 +108,7 @@ If the manifest or checksum verification fails, stop the upgrade.
 For signed plugin packages, first verify package checksums:
 
 ```bash
-sha256sum -c machine-telemetry-SHA256SUMS.txt
+sha256sum -c anixops-machine-telemetry-1.0.0.SHA256SUMS.txt
 ```
 
 Then verify the manifest signature with the public key published by the same
@@ -116,10 +117,10 @@ environment:
 
 ```bash
 python3 packages/machine-telemetry/verify_signature.py \
-  --manifest machine-telemetry-manifest.json \
+  --manifest anixops-machine-telemetry-1.0.0.manifest.json \
   --artifact machine-telemetry-1.0.0.tar \
-  --signature machine-telemetry-manifest.sig \
-  --public-key machine-telemetry-public.pem
+  --signature anixops-machine-telemetry-1.0.0.sig \
+  --public-key anixops-machine-telemetry-1.0.0.public-key.pem
 ```
 
 If the package hash, manifest signature, or trust-root fingerprint does not
@@ -145,6 +146,30 @@ commands are recorded. Enabling topology execution does not by itself approve
 business traffic migration; dedicated forwarding still requires the real
 `nftables-forward` Agent runtime, network-namespace TCP/UDP evidence, and a
 recorded rollout plan.
+
+`gost-mesh` v1 is canary-only. Its signed package embeds the exact GOST v3.2.6
+runtime and supports QUIC and WSS, not TUIC. Both transports require mutual
+TLS. An entry must verify the exit CA/server name and present a client
+certificate; an exit must present its server certificate and trust only the
+configured client CA. Enabled health probes require a source address covered by
+the entry source-policy CIDRs so the probe follows the same route as business
+traffic.
+
+Before applying a `gost-mesh` configuration, verify the participating Linux
+host has forwarding enabled and strict reverse-path filtering disabled:
+
+```bash
+sysctl net.ipv4.ip_forward
+sysctl -a 2>/dev/null | grep '^net.ipv4.conf.*.rp_filter ='
+```
+
+The required values are `net.ipv4.ip_forward=1` and
+`net.ipv4.conf.*.rp_filter=0` for all participating scopes/interfaces. The
+plugin validates these prerequisites and fails closed; it does not change
+host-wide sysctls. Current TLS configuration refers to private files already
+materialized on the Agent. Control Secret ID to private-file materialization,
+renewal, deletion, and audit are not complete, so a stable or production
+`gost-mesh` rollout is prohibited even when package signature checks pass.
 
 ## Systemd Binary Upgrade
 
