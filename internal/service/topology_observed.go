@@ -30,6 +30,13 @@ var allowedTopologyObservedStates = map[string]bool{
 	"failed": true, "stale": true, "rolled_back": true, "cancelled": true,
 }
 
+// LegacyTopologyObservedHealthJSON is used only by the pre-executor
+// compatibility bridge. Its Agent StateJson is intentionally discarded: that
+// schema was never a public contract and may contain plugin-defined details.
+func LegacyTopologyObservedHealthJSON() string {
+	return `{"source":"legacy_agent_operation"}`
+}
+
 // ApplyTopologyObservedState writes one node observation with monotonic
 // desired/observed revisions. A stale or out-of-order observation returns the
 // current row with changed=false and never regresses deployment state.

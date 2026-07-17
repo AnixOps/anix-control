@@ -37,6 +37,17 @@
   empty document without emitting GORM's expected `record not found` warning;
   a logger-backed regression test keeps real database failures visible while
   removing this misleading startup noise.
+- Topology promotion now consumes a fixed terminal Agent state projection
+  instead of manufacturing `health={}` after task completion. For packages
+  with `kernel.observed-state`, the Agent Supervisor rechecks the package's
+  local health socket on every heartbeat and emits a bounded unhealthy state
+  when the runtime is no longer serving. Focused service and gRPC tests prove
+  per-entry heartbeat isolation, exact signed plugin/version/config/revision
+  authorization, freshness after the terminal operation, nftables rule-counter
+  matching, durable 90-second waiting across restarts, restore-config rollback,
+  and fail-closed stale or unhealthy evidence. Public topology and operation
+  responses use fixed summaries rather than raw configuration, runtime errors,
+  or Agent result JSON.
 
 ## 2026-07-08 CI Baseline
 

@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+## 4.0.0-alpha.6 - 2026-07-18
+
+### Added
+
+- Added the signed `nftables-forward` 1.2.0 package contract and WebUI runtime
+  status fields for live ruleset SHA-256, per-rule packets, bytes, and
+  unhealthy/reconciling state.
+- Added a bounded `PluginObservedState` heartbeat contract. The Agent
+  Supervisor accepts only private observation files from enabled official
+  packages declaring `kernel.observed-state`, then injects its own version,
+  config hash, and revisions.
+- Added Control persistence for authorized runtime observations with exact
+  signed-release capability checks, timestamp bounds, monotonic ordering, and
+  bounded/de-duplicated rule counters.
+- Added topology health gates that bind terminal Agent state and runtime
+  evidence to exact version, config hash, revision, health, and nftables rule
+  IDs. Missing evidence gets a durable 90-second wait window; mismatches fail
+  closed and rollback uses the same terminal-state checks.
+- The Supervisor now checks the runtime health socket on every heartbeat and
+  emits a Supervisor-owned unhealthy observation instead of retaining stale
+  plugin evidence. Control treats observations older than two minutes as
+  degraded in the nftables package WebUI.
+
+### Fixed
+
+- Stopped raw Agent operation JSON, runtime errors, and unknown plugin fields
+  from being copied into public topology observed-state responses. Public
+  `/api/v3/operations` responses now use a fixed non-secret projection.
+- Made the Agent client preserve an unhealthy observation without a live
+  fingerprint while rejecting invalid non-healthy counter payloads.
+- Isolated malformed heartbeat observation entries so a bad or unauthorized
+  plugin record cannot suppress later valid records, and made rollback validate
+  the restored nftables configuration rather than the replacement config.
+
+### Known Gaps
+
+- This remains an isolated alpha canary. Production traffic takeover still
+  requires staging restore evidence, a legacy fallback rehearsal, rollout
+  records, and a successful 72-hour canary before explicit stable-release
+  authorization.
+
 ## 4.0.0-alpha.5 - 2026-07-17
 
 ### Added

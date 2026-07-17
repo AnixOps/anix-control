@@ -33,6 +33,12 @@ func TestNftablesForwardStatusExecutorReportsRealAssignments(t *testing.T) {
 		ResultJSON: `{"observed_version":"` + NftablesForwardVersion + `","observed_revision":4,"health":"healthy"}`,
 		CreatedAt:  now.Add(-time.Minute), UpdatedAt: now.Add(-time.Minute),
 	})
+	require.NoError(t, db.Create(&model.NodePluginObservedState{
+		NodeID: node.ID, PluginID: NftablesForwardPluginID, Version: NftablesForwardVersion,
+		DesiredRevision: 4, ObservedRevision: 4, ConfigHash: "nft-status-config", Health: "healthy",
+		RulesetSHA256: "nft-status-ruleset", CountersJSON: `[{"rule_id":"dedicated-443","packets":12,"bytes":2048},{"rule_id":"dedicated-dns","packets":4,"bytes":128}]`,
+		ObservedAt: now, ReceivedAt: now,
+	}).Error)
 
 	executor := NewNftablesForwardExecutor(db)
 	executor.now = func() time.Time { return now }
@@ -49,6 +55,25 @@ func TestNftablesForwardStatusExecutorReportsRealAssignments(t *testing.T) {
 	require.Equal(t, "0.0.0.0:443", status.Rules[0].Listen)
 	require.Equal(t, "198.51.100.20:443", status.Rules[0].Target)
 	require.True(t, status.Rules[0].Ready)
+	require.Equal(t, uint64(12), status.Rules[0].Packets)
+	require.Equal(t, uint64(2048), status.Rules[0].Bytes)
+
+	// A previously healthy heartbeat must not leave the WebUI in Ready forever
+	// when the Agent has stopped reporting runtime evidence.
+	require.NoError(t, db.Model(&model.NodePluginObservedState{}).
+		Where("node_id = ? AND plugin_id = ?", node.ID, NftablesForwardPluginID).
+		Update("received_at", now.Add(-nftablesForwardRuntimeStaleAfter)).Error)
+	response, err = executor.HandleRoute(context.Background(), RouteRequest{
+		Method: http.MethodGet, Path: NftablesForwardStatusRoute, Query: url.Values{"limit": []string{"10"}},
+	})
+	require.NoError(t, err)
+	status = response.Data.(NftablesForwardStatus)
+	require.Equal(t, NftablesForwardSummary{Rules: 2, Degraded: 2}, status.Summary)
+	for _, rule := range status.Rules {
+		require.False(t, rule.Ready)
+		require.True(t, rule.Degraded)
+		require.Equal(t, "runtime observation is stale", rule.LastError)
+	}
 }
 
 func TestNatEgressStatusExecutorReportsRollbackAndCleanup(t *testing.T) {

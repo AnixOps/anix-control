@@ -12,7 +12,7 @@ image, container, and release assets. The node runtime uses `anix-agent`.
 The development template enables the Agent gRPC control channel on loopback
 port `50051`. Production keeps it disabled until TLS or a restricted
 HTTP/2-capable proxy is configured. Existing configuration files are preserved
-and are not force-enabled. In `v4.0.0-alpha.5`, `anix.agent.v1` and the
+and are not force-enabled. In `v4.0.0-alpha.6`, `anix.agent.v1` and the
 official signed package/WebUI path are an operational alpha preview: they are
 available for canary use but do not yet replace every REST/UniProxy, legacy
 gRPC, or WebSocket task path. Stable publication requires a passing 72-hour
@@ -49,7 +49,7 @@ prerelease tags are accepted in these forms:
 - `v4.0.0`
 - `v4.0.0-alpha.1`
 - `v4.0.0-alpha.4`
-- `v4.0.0-alpha.5`
+- `v4.0.0-alpha.6`
 - `v4.0.0-beta.1`
 - `v4.0.0-rc.1`
 
@@ -70,7 +70,7 @@ account and directory explicitly:
 
 ```bash
 sudo SERVICE_NAME=v2board APP_USER=v2board INSTALL_DIR=/opt/v2board \
-  bash /tmp/anix-control-install.sh update --version v4.0.0-alpha.5
+  bash /tmp/anix-control-install.sh update --version v4.0.0-alpha.6
 ```
 
 The existing configuration and database are preserved. Back them up before the

@@ -1,5 +1,5 @@
 const PLUGIN_ID = 'nftables-forward'
-const PLUGIN_VERSION = '1.1.0'
+const PLUGIN_VERSION = '1.2.0'
 const BUNDLE_PATH = 'webui/index.mjs'
 const STATUS_PATH = '/api/v3/plugins/nftables-forward/status?limit=200'
 
@@ -23,13 +23,25 @@ function count(value) {
 }
 
 function stateLabel(rule) {
+  if (rule?.enabled === false) {
+    return 'Disabled'
+  }
   if (rule?.rollback_required) {
     return 'Rollback required'
+  }
+  if (rule?.degraded) {
+    return 'Unhealthy'
   }
   if (rule?.observed_revision !== rule?.desired_revision) {
     return 'Reconciling'
   }
-  return rule?.enabled === false ? 'Disabled' : 'Ready'
+  return 'Ready'
+}
+
+function traffic(rule) {
+  const packets = count(rule?.packets)
+  const bytes = count(rule?.bytes)
+  return `${packets} packets / ${bytes} B`
 }
 
 export default function create(host) {
@@ -85,6 +97,7 @@ export default function create(host) {
           ['Rules', count(value.summary.rules)],
           ['Ready', count(value.summary.ready)],
           ['Reconciling', count(value.summary.reconciling)],
+          ['Unhealthy', count(value.summary.degraded)],
           ['Rollback', count(value.summary.rollback_required)],
         ]
         return h('section', { class: 'control-page nftables-forward-extension' }, [
@@ -102,7 +115,7 @@ export default function create(host) {
           h('div', { class: 'table-container' }, [
             h('table', { class: 'data-table' }, [
               h('thead', [h('tr', [
-                h('th', 'Rule'), h('th', 'Node'), h('th', 'Protocol'), h('th', 'Listen'), h('th', 'Target'), h('th', 'Revision'), h('th', 'State'),
+                h('th', 'Rule'), h('th', 'Node'), h('th', 'Protocol'), h('th', 'Listen'), h('th', 'Target'), h('th', 'Traffic'), h('th', 'Fingerprint'), h('th', 'Revision'), h('th', 'State'),
               ])]),
               h('tbody', value.rules.length > 0
                 ? value.rules.map(rule => h('tr', { key: rule.id || `${rule.node_id}:${rule.listen}` }, [
@@ -111,10 +124,12 @@ export default function create(host) {
                   h('td', rule.protocol || 'tcp+udp'),
                   h('td', rule.listen || ''),
                   h('td', rule.target || ''),
+                  h('td', traffic(rule)),
+                  h('td', rule.ruleset_sha256 ? rule.ruleset_sha256.slice(0, 12) : ''),
                   h('td', `${rule.observed_revision ?? 0}/${rule.desired_revision ?? 0}`),
                   h('td', stateLabel(rule)),
                 ]))
-                : [h('tr', { key: 'empty' }, [h('td', { colspan: 7, class: 'empty-state' }, 'No nftables forwarding rules')])]),
+                : [h('tr', { key: 'empty' }, [h('td', { colspan: 9, class: 'empty-state' }, 'No nftables forwarding rules')])]),
             ]),
           ]),
         ])

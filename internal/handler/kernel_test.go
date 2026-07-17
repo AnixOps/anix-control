@@ -554,7 +554,7 @@ func TestKernelControlPluginRollbackActionQueuesDurableOperation(t *testing.T) {
 	}
 	installation := model.PluginInstallation{
 		PluginID: pluginID, Target: "control", DesiredVersion: "2.0.0", ObservedVersion: "2.0.0",
-		PreviousVersion: "1.0.0", State: "healthy", Enabled: true,
+		PreviousVersion: "1.0.0", State: "healthy", Enabled: true, LastError: "control-error-must-not-leak",
 	}
 	require.NoError(t, db.Create(&installation).Error)
 	path := "/plugin-installations/" + strconv.FormatUint(uint64(installation.ID), 10) + "/actions"
@@ -566,6 +566,8 @@ func TestKernelControlPluginRollbackActionQueuesDurableOperation(t *testing.T) {
 	require.NotEmpty(t, operationID)
 	require.Contains(t, recorder.Body.String(), `"kind":"plugin.rollback"`)
 	require.Contains(t, recorder.Body.String(), `"target_version":"1.0.0"`)
+	require.NotContains(t, recorder.Body.String(), "control-error-must-not-leak")
+	require.Contains(t, recorder.Body.String(), `"last_error":"plugin installation reported an error"`)
 
 	require.NoError(t, db.First(&installation, installation.ID).Error)
 	require.Equal(t, "1.0.0", installation.DesiredVersion)
@@ -669,6 +671,68 @@ func TestKernelTopologyDeploymentPlanStatusAndExecutionGate(t *testing.T) {
 	require.Equal(t, http.StatusAccepted, recorder.Code, recorder.Body.String())
 	require.NoError(t, db.First(&deployment, deployment.ID).Error)
 	require.Equal(t, "rollback_requested", deployment.State)
+}
+
+func TestKernelDeploymentStatusAndObservedStatesDoNotExposeKernelOrAgentSecrets(t *testing.T) {
+	db := newKernelHandlerTestDB(t)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	deployment := model.TopologyDeployment{
+		TopologyID: 41, RevisionID: 42, State: "failed", FailurePolicy: "stop_and_rollback", CreatedBy: 1,
+		LastError: "deployment-error-token-must-not-leak", CreatedAt: now, UpdatedAt: now,
+	}
+	require.NoError(t, db.Create(&deployment).Error)
+	nodeID := uint(7)
+	step := model.TopologyDeploymentStep{
+		DeploymentID: deployment.ID, VertexID: 1, VertexKey: "entry", NodeID: nodeID,
+		PluginID: "test-plugin", Role: "entry", TargetVersion: "1.0.0", ApplyOrder: 1,
+		ApplyAction: "configure_enable", ConfigJSON: `{"token":"topology-config-token-must-not-leak"}`,
+		RollbackMode: "restore", RollbackConfigJSON: `{"secret":"rollback-config-secret-must-not-leak"}`,
+		State: "failed", LastError: "step-error-token-must-not-leak", ConfigureOperationID: "status-secret-operation",
+		CreatedAt: now, UpdatedAt: now,
+	}
+	require.NoError(t, db.Create(&step).Error)
+	require.NoError(t, db.Create(&model.KernelOperation{
+		ID: "status-secret-operation", IdempotencyKey: "status-secret-idempotency", NodeID: &nodeID,
+		PluginID: "test-plugin", TargetVersion: "1.0.0", Kind: "plugin.configure", State: "failed",
+		TopologyDeploymentID: &deployment.ID, TopologyStepID: &step.ID, TopologyRevision: 42,
+		ConfigJSON: `{"token":"operation-config-token-must-not-leak"}`,
+		ResultJSON: `{"agent_secret":"agent-result-secret-must-not-leak"}`,
+		LastError:  "agent-last-error-token-must-not-leak", CreatedAt: now, UpdatedAt: now,
+	}).Error)
+	require.NoError(t, db.Create(&model.TopologyObservedState{
+		DeploymentID: deployment.ID, NodeID: nodeID, DesiredRevision: 42, ObservedRevision: 41,
+		State: "failed", HealthJSON: `{"agent_token":"observed-health-token-must-not-leak"}`,
+		LastError: "observed-last-error-token-must-not-leak", UpdatedAt: now,
+	}).Error)
+
+	handler := &KernelHandler{db: db}
+	statusPath := "/deployments/" + strconv.FormatUint(uint64(deployment.ID), 10)
+	statusRecorder := performKernelHandlerRequest(t, http.MethodGet, statusPath, "", "/deployments/:id", handler.GetDeploymentStatus)
+	require.Equal(t, http.StatusOK, statusRecorder.Code, statusRecorder.Body.String())
+	listRecorder := performKernelHandlerRequest(t, http.MethodGet, "/deployments", "", "/deployments", handler.ListDeployments)
+	require.Equal(t, http.StatusOK, listRecorder.Code, listRecorder.Body.String())
+	observedRecorder := performKernelHandlerRequest(t, http.MethodGet, "/observed-states?deployment_id="+strconv.FormatUint(uint64(deployment.ID), 10), "", "/observed-states", handler.ListObservedStates)
+	require.Equal(t, http.StatusOK, observedRecorder.Code, observedRecorder.Body.String())
+
+	for _, response := range []string{statusRecorder.Body.String(), listRecorder.Body.String(), observedRecorder.Body.String()} {
+		for _, secret := range []string{
+			"deployment-error-token-must-not-leak", "topology-config-token-must-not-leak",
+			"rollback-config-secret-must-not-leak", "step-error-token-must-not-leak",
+			"operation-config-token-must-not-leak", "agent-result-secret-must-not-leak",
+			"agent-last-error-token-must-not-leak", "observed-health-token-must-not-leak",
+			"observed-last-error-token-must-not-leak",
+		} {
+			require.NotContains(t, response, secret)
+		}
+	}
+
+	statusPayload := statusRecorder.Body.String()
+	for _, field := range []string{`"config":`, `"rollback_config":`, `"health":`, `"result":`} {
+		require.NotContains(t, statusPayload, field)
+	}
+	require.Contains(t, statusPayload, `"last_error":"deployment failed"`)
+	require.Contains(t, statusPayload, `"last_error":"plugin configuration failed"`)
+	require.Contains(t, observedRecorder.Body.String(), `"last_error":"observed state failed"`)
 }
 
 func TestKernelAssignmentPreservesDisabledStateWhenEnabledIsOmitted(t *testing.T) {

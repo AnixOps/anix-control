@@ -3,7 +3,9 @@ package grpc
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -103,10 +105,15 @@ func seedAgentPluginRelease(t *testing.T, db *gorm.DB, pluginID string) {
 	}
 	canonical, err := service.CanonicalPluginManifest(manifest)
 	require.NoError(t, err)
-	require.NoError(t, db.Create(&model.PluginRelease{
-		PluginID: pluginID, Version: manifest.Version, APIVersion: manifest.APIVersion,
-		ManifestJSON: string(canonical), ArtifactSHA256: manifest.ArtifactSHA256, Signature: "test",
-	}).Error)
+	seed := sha256.Sum256([]byte("kernel-operation-bridge:" + pluginID))
+	privateKey := ed25519.NewKeyFromSeed(seed[:])
+	_, err = service.RegisterPluginRelease(
+		db,
+		string(canonical),
+		base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)),
+		privateKey.Public().(ed25519.PublicKey),
+	)
+	require.NoError(t, err)
 }
 
 func TestKernelOperationDesiredMatchesAgentEnvelopeGolden(t *testing.T) {
@@ -498,9 +505,15 @@ func TestKernelOperationBridgeAndTopologyExecutorCompletePluginStep(t *testing.T
 	}
 	require.NoError(t, json.Unmarshal(configure.PayloadJson, &envelope))
 	require.JSONEq(t, `{"listen_port":51820}`, string(envelope.Config))
+	configureState, err := json.Marshal(map[string]any{
+		"id": "wireguard", "desired_version": "1.0.0", "observed_version": "1.0.0",
+		"enabled": false, "health": "installed", "desired_revision": configure.Revision,
+		"observed_revision": configure.Revision, "last_error": "",
+	})
+	require.NoError(t, err)
 	stream.observe(uint32(node.ID), &agentv1pb.ObservedState{
 		OperationId: configure.OperationId, Revision: configure.Revision, Phase: agentv1pb.ObservedPhase_OBSERVED_PHASE_SUCCEEDED,
-		StateJson: []byte(`{"health":"ok"}`), SessionId: "topology-agent-session",
+		StateJson: configureState, SessionId: "topology-agent-session",
 	})
 
 	// The bridge persists the operation result but does not prematurely mark
@@ -515,9 +528,15 @@ func TestKernelOperationBridgeAndTopologyExecutorCompletePluginStep(t *testing.T
 	require.Len(t, stream.operations, 2)
 	enable := stream.operations[1]
 	require.Equal(t, "plugin.enable", enable.Kind)
+	enableState, err := json.Marshal(map[string]any{
+		"id": "wireguard", "desired_version": "1.0.0", "observed_version": "1.0.0",
+		"enabled": true, "health": "healthy", "desired_revision": enable.Revision,
+		"observed_revision": enable.Revision, "config_hash": configureOperation.ConfigHash, "last_error": "",
+	})
+	require.NoError(t, err)
 	stream.observe(uint32(node.ID), &agentv1pb.ObservedState{
 		OperationId: enable.OperationId, Revision: enable.Revision, Phase: agentv1pb.ObservedPhase_OBSERVED_PHASE_SUCCEEDED,
-		StateJson: []byte(`{"health":"ok"}`), SessionId: "topology-agent-session",
+		StateJson: enableState, SessionId: "topology-agent-session",
 	})
 	_, err = executor.RunOnce(context.Background())
 	require.NoError(t, err)
@@ -526,6 +545,8 @@ func TestKernelOperationBridgeAndTopologyExecutorCompletePluginStep(t *testing.T
 	require.Equal(t, "succeeded", status.Deployment.State)
 	require.Len(t, status.Observed, 1)
 	require.Equal(t, "succeeded", status.Observed[0].State)
+	require.Contains(t, status.Observed[0].HealthJSON, `"source":"agent_operation"`)
+	require.Contains(t, status.Observed[0].HealthJSON, `"health":"healthy"`)
 }
 
 func TestKernelOperationBridgeLeavesPendingWorkUntilAgentConnects(t *testing.T) {

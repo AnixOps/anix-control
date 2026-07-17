@@ -67,7 +67,7 @@ func newAgentControlTestEnvironment(t *testing.T) *agentControlTestEnvironment {
 	t.Helper()
 	cache.InitMemory()
 	requireInMemoryDatabase(t)
-	requireAutoMigrate(t, &model.Node{}, &model.NodeServiceAssignment{}, &model.PluginTelemetryState{}, &model.Plugin{}, &model.PluginRelease{}, &model.PluginTrustRoot{})
+	requireAutoMigrate(t, &model.Node{}, &model.NodeServiceAssignment{}, &model.PluginTelemetryState{}, &model.NodePluginObservedState{}, &model.Plugin{}, &model.PluginRelease{}, &model.PluginTrustRoot{})
 
 	apiKey := "agent-control-test-key"
 	hash := sha256.Sum256([]byte(apiKey))
@@ -137,6 +137,32 @@ func validAgentHello(nodeID uint32) *agentv1pb.AgentToControl {
 				Capabilities: []*agentv1pb.Capability{{Name: "agent.ping", Version: "v1"}},
 			},
 		},
+	}
+}
+
+func requireNftablesForwardObservedStateAssignment(t *testing.T, environment *agentControlTestEnvironment) service.PluginManifest {
+	t.Helper()
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	manifest := service.PluginManifest{
+		ID: "nftables-forward", Name: "nftables Forward", Version: "1.2.0", APIVersion: "v1", Publisher: "AnixOps",
+		Targets: []string{"agent"}, ArtifactSHA256: strings.Repeat("b", 64), Capabilities: []string{"kernel.observed-state"},
+	}
+	canonical, err := service.CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	_, err = service.RegisterPluginRelease(database.GetDB(), string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	require.NoError(t, database.GetDB().Create(&model.NodeServiceAssignment{
+		NodeID: environment.node.ID, ServiceScope: "forward", PluginID: manifest.ID, Role: "cn_dedicated_nftables", DesiredVersion: manifest.Version, Enabled: true,
+	}).Error)
+	return manifest
+}
+
+func validNftablesForwardRuntimeObservation(manifest service.PluginManifest, observedAt time.Time) *agentv1pb.PluginObservedState {
+	return &agentv1pb.PluginObservedState{
+		PluginId: manifest.ID, Version: manifest.Version, DesiredRevision: 7, ObservedRevision: 7,
+		ConfigHash: strings.Repeat("c", 64), Health: "healthy", RulesetSha256: strings.Repeat("d", 64), ObservedAtUnixMs: observedAt.UnixMilli(),
+		RuleCounters: []*agentv1pb.PluginRuleCounter{{RuleId: "tcp-443", Packets: 4, Bytes: 512}},
 	}
 }
 
@@ -304,6 +330,153 @@ func TestAgentControlHeartbeatPersistsAssignedPluginTelemetry(t *testing.T) {
 	require.NoError(t, database.GetDB().First(&node, environment.node.ID).Error)
 	require.Equal(t, 18.5, node.CPUUsage)
 	require.Equal(t, int64(600), node.Uptime)
+}
+
+func TestAgentControlHeartbeatPersistsSignedPluginRuntimeObservation(t *testing.T) {
+	environment := newAgentControlTestEnvironment(t)
+	manifest := requireNftablesForwardObservedStateAssignment(t, environment)
+
+	ctx, cancel := context.WithTimeout(environment.authContext(context.Background()), 5*time.Second)
+	defer cancel()
+	stream, err := agentv1pb.NewAgentControlServiceClient(environment.conn).ControlStream(ctx)
+	require.NoError(t, err)
+	require.NoError(t, stream.Send(validAgentHello(uint32(environment.node.ID))))
+	helloAckMessage, err := stream.Recv()
+	require.NoError(t, err)
+	helloAck := helloAckMessage.GetHelloAck()
+	require.NotNil(t, helloAck)
+	now := time.Now()
+	require.NoError(t, stream.Send(&agentv1pb.AgentToControl{
+		RequestId: "runtime-observation-heartbeat", NodeId: uint32(environment.node.ID), SentAtUnixMs: now.UnixMilli(),
+		Payload: &agentv1pb.AgentToControl_Heartbeat{Heartbeat: &agentv1pb.Heartbeat{
+			SessionId:          helloAck.SessionId,
+			PluginObservations: []*agentv1pb.PluginObservedState{validNftablesForwardRuntimeObservation(manifest, now)},
+		}},
+	}))
+	ack, err := stream.Recv()
+	require.NoError(t, err)
+	require.NotNil(t, ack.GetHeartbeatAck())
+
+	var state model.NodePluginObservedState
+	require.NoError(t, database.GetDB().First(&state, "node_id = ? AND plugin_id = ?", environment.node.ID, manifest.ID).Error)
+	require.Equal(t, manifest.Version, state.Version)
+	require.Equal(t, strings.Repeat("c", 64), state.ConfigHash)
+	require.Equal(t, "healthy", state.Health)
+	require.JSONEq(t, `[{"rule_id":"tcp-443","packets":4,"bytes":512}]`, state.CountersJSON)
+}
+
+func TestAgentControlHeartbeatPersistsValidRuntimeObservationAlongsideMalformedEntries(t *testing.T) {
+	environment := newAgentControlTestEnvironment(t)
+	manifest := requireNftablesForwardObservedStateAssignment(t, environment)
+	ctx, cancel := context.WithTimeout(environment.authContext(context.Background()), 5*time.Second)
+	defer cancel()
+	stream, err := agentv1pb.NewAgentControlServiceClient(environment.conn).ControlStream(ctx)
+	require.NoError(t, err)
+	require.NoError(t, stream.Send(validAgentHello(uint32(environment.node.ID))))
+	helloAckMessage, err := stream.Recv()
+	require.NoError(t, err)
+	helloAck := helloAckMessage.GetHelloAck()
+	require.NotNil(t, helloAck)
+
+	now := time.Now()
+	badConfig := validNftablesForwardRuntimeObservation(manifest, now)
+	badConfig.ConfigHash = "not-a-sha256"
+	badVersion := validNftablesForwardRuntimeObservation(manifest, now)
+	badVersion.Version = "not-installed"
+	badCounter := validNftablesForwardRuntimeObservation(manifest, now)
+	badCounter.PluginId = "malformed-counter"
+	badCounter.RuleCounters = []*agentv1pb.PluginRuleCounter{nil}
+	require.NoError(t, stream.Send(&agentv1pb.AgentToControl{
+		RequestId: "mixed-runtime-observation-heartbeat", NodeId: uint32(environment.node.ID), SentAtUnixMs: now.UnixMilli(),
+		Payload: &agentv1pb.AgentToControl_Heartbeat{Heartbeat: &agentv1pb.Heartbeat{
+			SessionId: helloAck.SessionId,
+			PluginObservations: []*agentv1pb.PluginObservedState{
+				nil,
+				badConfig,
+				badVersion,
+				badCounter,
+				validNftablesForwardRuntimeObservation(manifest, now),
+			},
+		}},
+	}))
+	ack, err := stream.Recv()
+	require.NoError(t, err)
+	require.NotNil(t, ack.GetHeartbeatAck())
+
+	var state model.NodePluginObservedState
+	require.NoError(t, database.GetDB().First(&state, "node_id = ? AND plugin_id = ?", environment.node.ID, manifest.ID).Error)
+	require.Equal(t, strings.Repeat("c", 64), state.ConfigHash)
+	require.Equal(t, "healthy", state.Health)
+}
+
+func TestAgentControlHeartbeatPersistsValidRuntimeObservationAlongsideCounterOverflow(t *testing.T) {
+	environment := newAgentControlTestEnvironment(t)
+	manifest := requireNftablesForwardObservedStateAssignment(t, environment)
+	ctx, cancel := context.WithTimeout(environment.authContext(context.Background()), 5*time.Second)
+	defer cancel()
+	stream, err := agentv1pb.NewAgentControlServiceClient(environment.conn).ControlStream(ctx)
+	require.NoError(t, err)
+	require.NoError(t, stream.Send(validAgentHello(uint32(environment.node.ID))))
+	helloAckMessage, err := stream.Recv()
+	require.NoError(t, err)
+	helloAck := helloAckMessage.GetHelloAck()
+	require.NotNil(t, helloAck)
+
+	now := time.Now()
+	overflow := validNftablesForwardRuntimeObservation(manifest, now)
+	overflow.PluginId = "overflowed-counter"
+	overflow.RuleCounters = make([]*agentv1pb.PluginRuleCounter, maxAgentHeartbeatRuleCounters+1)
+	require.NoError(t, stream.Send(&agentv1pb.AgentToControl{
+		RequestId: "overflow-runtime-observation-heartbeat", NodeId: uint32(environment.node.ID), SentAtUnixMs: now.UnixMilli(),
+		Payload: &agentv1pb.AgentToControl_Heartbeat{Heartbeat: &agentv1pb.Heartbeat{
+			SessionId: helloAck.SessionId,
+			PluginObservations: []*agentv1pb.PluginObservedState{
+				overflow,
+				validNftablesForwardRuntimeObservation(manifest, now),
+			},
+		}},
+	}))
+	ack, err := stream.Recv()
+	require.NoError(t, err)
+	require.NotNil(t, ack.GetHeartbeatAck())
+
+	var state model.NodePluginObservedState
+	require.NoError(t, database.GetDB().First(&state, "node_id = ? AND plugin_id = ?", environment.node.ID, manifest.ID).Error)
+	require.Equal(t, "healthy", state.Health)
+}
+
+func TestAgentControlHeartbeatRejectsOversizedRuntimeObservationEnvelope(t *testing.T) {
+	environment := newAgentControlTestEnvironment(t)
+	manifest := requireNftablesForwardObservedStateAssignment(t, environment)
+	ctx, cancel := context.WithTimeout(environment.authContext(context.Background()), 5*time.Second)
+	defer cancel()
+	stream, err := agentv1pb.NewAgentControlServiceClient(environment.conn).ControlStream(ctx)
+	require.NoError(t, err)
+	require.NoError(t, stream.Send(validAgentHello(uint32(environment.node.ID))))
+	helloAckMessage, err := stream.Recv()
+	require.NoError(t, err)
+	helloAck := helloAckMessage.GetHelloAck()
+	require.NotNil(t, helloAck)
+
+	now := time.Now()
+	observations := make([]*agentv1pb.PluginObservedState, maxAgentHeartbeatPluginObservations+1)
+	for index := range observations {
+		observations[index] = validNftablesForwardRuntimeObservation(manifest, now)
+	}
+	require.NoError(t, stream.Send(&agentv1pb.AgentToControl{
+		RequestId: "oversized-runtime-observation-heartbeat", NodeId: uint32(environment.node.ID), SentAtUnixMs: now.UnixMilli(),
+		Payload: &agentv1pb.AgentToControl_Heartbeat{Heartbeat: &agentv1pb.Heartbeat{
+			SessionId: helloAck.SessionId, PluginObservations: observations,
+		}},
+	}))
+	ack, err := stream.Recv()
+	require.NoError(t, err)
+	require.NotNil(t, ack.GetHeartbeatAck())
+
+	var count int64
+	require.NoError(t, database.GetDB().Model(&model.NodePluginObservedState{}).
+		Where("node_id = ? AND plugin_id = ?", environment.node.ID, manifest.ID).Count(&count).Error)
+	require.Zero(t, count)
 }
 
 func TestAgentControlStreamReplaysUnobservedOperationAfterReconnect(t *testing.T) {

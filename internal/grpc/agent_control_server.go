@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -705,6 +706,15 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 					slog.Warn("failed to persist agent plugin telemetry", "component", "agent-control", "node_id", nodeID, "accepted_metrics", accepted, "error", err)
 				}
 			}
+			if len(payload.Heartbeat.PluginObservations) > 0 {
+				snapshots, snapshotErr := kernelPluginObservedSnapshots(payload.Heartbeat.PluginObservations)
+				if snapshotErr != nil {
+					slog.Warn("ignored malformed agent plugin observations", "component", "agent-control", "node_id", nodeID, "error", snapshotErr)
+				}
+				if len(snapshots) > 0 {
+					s.recordHeartbeatPluginObservations(uint(nodeID), snapshots, time.Now())
+				}
+			}
 			if err := connection.send(&agentv1pb.ControlToAgent{
 				RequestId:    message.RequestId,
 				NodeId:       nodeID,
@@ -738,6 +748,75 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 			return status.Error(codes.InvalidArgument, "hello may only be sent once")
 		default:
 			return status.Error(codes.InvalidArgument, "control message payload is required")
+		}
+	}
+}
+
+const (
+	maxAgentHeartbeatPluginObservations = 32
+	maxAgentHeartbeatRuleCounters       = 1024
+)
+
+func kernelPluginObservedSnapshots(observations []*agentv1pb.PluginObservedState) ([]service.NodePluginObservedSnapshot, error) {
+	if len(observations) > maxAgentHeartbeatPluginObservations {
+		return nil, fmt.Errorf("plugin observations exceed %d entries", maxAgentHeartbeatPluginObservations)
+	}
+	snapshots := make([]service.NodePluginObservedSnapshot, 0, len(observations))
+	var result error
+	for index, observation := range observations {
+		snapshot, err := kernelPluginObservedSnapshot(observation)
+		if err != nil {
+			result = errors.Join(result, fmt.Errorf("plugin observation at index %d: %w", index, err))
+			continue
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+	return snapshots, result
+}
+
+func kernelPluginObservedSnapshot(observation *agentv1pb.PluginObservedState) (service.NodePluginObservedSnapshot, error) {
+	if observation == nil {
+		return service.NodePluginObservedSnapshot{}, errors.New("plugin observation is nil")
+	}
+	if len(observation.RuleCounters) > maxAgentHeartbeatRuleCounters {
+		return service.NodePluginObservedSnapshot{}, fmt.Errorf("plugin observation %q counters exceed %d entries", observation.PluginId, maxAgentHeartbeatRuleCounters)
+	}
+	counters := make([]service.NodePluginRuleCounter, 0, len(observation.RuleCounters))
+	for _, counter := range observation.RuleCounters {
+		if counter == nil {
+			return service.NodePluginObservedSnapshot{}, fmt.Errorf("plugin observation %q contains a nil counter", observation.PluginId)
+		}
+		counters = append(counters, service.NodePluginRuleCounter{
+			RuleID: counter.RuleId, Packets: counter.Packets, Bytes: counter.Bytes,
+		})
+	}
+	return service.NodePluginObservedSnapshot{
+		PluginID: observation.PluginId, Version: observation.Version,
+		DesiredRevision: observation.DesiredRevision, ObservedRevision: observation.ObservedRevision,
+		ConfigHash: observation.ConfigHash, Health: observation.Health,
+		RulesetSHA256: observation.RulesetSha256, ObservedAt: time.UnixMilli(observation.ObservedAtUnixMs),
+		RuleCounters: counters,
+	}, nil
+}
+
+// recordHeartbeatPluginObservations makes each runtime observation an
+// independent authorization and persistence attempt. A malformed or
+// unauthorized record must not consume a plugin ID and prevent a later valid
+// observation in the same bounded heartbeat from being stored.
+func (s *AgentControlGRPCServer) recordHeartbeatPluginObservations(nodeID uint, snapshots []service.NodePluginObservedSnapshot, receivedAt time.Time) {
+	acceptedPluginIDs := make(map[string]struct{}, len(snapshots))
+	for _, snapshot := range snapshots {
+		pluginID := strings.TrimSpace(snapshot.PluginID)
+		if _, duplicate := acceptedPluginIDs[pluginID]; duplicate {
+			slog.Warn("ignored duplicate accepted agent plugin observation", "component", "agent-control", "node_id", nodeID, "plugin_id", pluginID)
+			continue
+		}
+		accepted, err := s.nodeService.RecordNodePluginObservedStates(nodeID, []service.NodePluginObservedSnapshot{snapshot}, receivedAt)
+		if accepted > 0 {
+			acceptedPluginIDs[pluginID] = struct{}{}
+		}
+		if err != nil {
+			slog.Warn("failed to persist agent plugin observation", "component", "agent-control", "node_id", nodeID, "plugin_id", pluginID, "accepted_observations", accepted, "error", err)
 		}
 	}
 }

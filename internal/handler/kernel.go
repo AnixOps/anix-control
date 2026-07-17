@@ -399,7 +399,11 @@ func (h *KernelHandler) ListPluginInstallations(c *gin.Context) {
 		kernelDBError(c, err)
 		return
 	}
-	kernelData(c, http.StatusOK, rows)
+	response := make([]service.PluginInstallationStatus, 0, len(rows))
+	for _, row := range rows {
+		response = append(response, service.PublicPluginInstallation(row))
+	}
+	kernelData(c, http.StatusOK, response)
 }
 
 func (h *KernelHandler) GetPluginInstallationConfiguration(c *gin.Context) {
@@ -671,7 +675,7 @@ func (h *KernelHandler) UpsertPluginInstallation(c *gin.Context) {
 		c.Header("X-AnixOps-Operation-ID", ids[0])
 		c.Header("X-AnixOps-Operation-Chain", strings.Join(ids, ","))
 	}
-	kernelData(c, http.StatusOK, row)
+	kernelData(c, http.StatusOK, service.PublicPluginInstallation(row))
 }
 
 func (h *KernelHandler) PluginInstallationAction(c *gin.Context) {
@@ -831,7 +835,7 @@ func (h *KernelHandler) PluginInstallationAction(c *gin.Context) {
 		return
 	}
 	c.Header("X-AnixOps-Operation-ID", operation.ID)
-	kernelData(c, http.StatusAccepted, gin.H{"installation": installation, "operation": operation})
+	kernelData(c, http.StatusAccepted, gin.H{"installation": service.PublicPluginInstallation(installation), "operation": service.PublicKernelOperation(*operation)})
 }
 
 func (h *KernelHandler) ListServiceScopes(c *gin.Context) {
@@ -1589,7 +1593,11 @@ func (h *KernelHandler) ListDeployments(c *gin.Context) {
 		kernelDBError(c, err)
 		return
 	}
-	kernelData(c, 200, rows)
+	response := make([]service.TopologyDeploymentView, 0, len(rows))
+	for _, row := range rows {
+		response = append(response, service.PublicTopologyDeployment(row))
+	}
+	kernelData(c, 200, response)
 }
 func (h *KernelHandler) PlanDeployment(c *gin.Context) {
 	var req struct {
@@ -1617,7 +1625,7 @@ func (h *KernelHandler) PlanDeployment(c *gin.Context) {
 		}
 		return
 	}
-	kernelData(c, 202, row)
+	kernelData(c, 202, service.PublicTopologyDeployment(*row))
 }
 
 // PreviewTopologyDeployment runs the read-only topology preflight. It returns
@@ -1708,7 +1716,7 @@ func (h *KernelHandler) GetDeploymentStatus(c *gin.Context) {
 		kernelDBError(c, err)
 		return
 	}
-	kernelData(c, http.StatusOK, status)
+	kernelData(c, http.StatusOK, service.PublicTopologyDeploymentStatus(*status))
 }
 
 func (h *KernelHandler) ApplyDeployment(c *gin.Context) {
@@ -1730,7 +1738,7 @@ func (h *KernelHandler) ApplyDeployment(c *gin.Context) {
 		}
 		return
 	}
-	kernelData(c, http.StatusAccepted, row)
+	kernelData(c, http.StatusAccepted, service.PublicTopologyDeployment(*row))
 }
 
 func (h *KernelHandler) RollbackDeployment(c *gin.Context) {
@@ -1752,7 +1760,7 @@ func (h *KernelHandler) RollbackDeployment(c *gin.Context) {
 		}
 		return
 	}
-	kernelData(c, http.StatusAccepted, row)
+	kernelData(c, http.StatusAccepted, service.PublicTopologyDeployment(*row))
 }
 
 func (h *KernelHandler) ListOperations(c *gin.Context) {
@@ -1765,7 +1773,11 @@ func (h *KernelHandler) ListOperations(c *gin.Context) {
 		kernelDBError(c, err)
 		return
 	}
-	kernelData(c, 200, rows)
+	response := make([]service.KernelOperationStatus, 0, len(rows))
+	for _, row := range rows {
+		response = append(response, service.PublicKernelOperation(row))
+	}
+	kernelData(c, 200, response)
 }
 
 func (h *KernelHandler) CreateOperation(c *gin.Context) {
@@ -1798,7 +1810,7 @@ func (h *KernelHandler) CreateOperation(c *gin.Context) {
 	if reused {
 		status = http.StatusOK
 	}
-	kernelData(c, status, gin.H{"operation": operation, "reused": reused})
+	kernelData(c, status, gin.H{"operation": service.PublicKernelOperation(*operation), "reused": reused})
 }
 
 func (h *KernelHandler) CancelOperation(c *gin.Context) {
@@ -1815,7 +1827,7 @@ func (h *KernelHandler) CancelOperation(c *gin.Context) {
 		kernelDBError(c, err)
 		return
 	}
-	kernelData(c, http.StatusAccepted, operation)
+	kernelData(c, http.StatusAccepted, service.PublicKernelOperation(*operation))
 }
 
 func (h *KernelHandler) ListObservedStates(c *gin.Context) {
@@ -1828,5 +1840,5 @@ func (h *KernelHandler) ListObservedStates(c *gin.Context) {
 		kernelDBError(c, err)
 		return
 	}
-	kernelData(c, 200, rows)
+	kernelData(c, 200, service.PublicTopologyObservedStates(rows))
 }

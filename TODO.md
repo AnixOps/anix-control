@@ -61,13 +61,15 @@ This list is intentionally concrete. Do not mark an item done without code, test
   traffic takeover.
 - [x] Add privileged `nftables-forward` network-namespace TCP/UDP acceptance and
   nftables snapshot rollback evidence in the pinned Agent repo.
-- [x] Align `nftables-forward` 1.1.0 Control schema/defaults with the strict
+- [x] Align `nftables-forward` 1.2.0 Control schema/defaults with the strict
   Agent runtime, retain the 1.0.0 Control executor for rollback, and add
   crash-safe ownership recovery plus signed cleanup after process/Agent death.
 - [x] Add read-only topology preview/diagnosis, config-hash step plans,
   operation timelines, and an immutable revision/canary apply/rollback WebUI.
-- [ ] Persist live nftables ruleset hashes/counters from Agent diagnostics and
-  require matching kernel-observed health before a deployment is promoted.
+- [x] Persist live nftables ruleset hashes/counters from signed Agent runtime
+  observations and require exact version/config-hash/revision/rule-set evidence
+  before an `nftables-forward` deployment is promoted; retain a durable grace
+  window and fail closed on mismatch or expiry.
 - [x] Add 3.3 `gost-mesh` and `nat-egress` package/WebUI sources with
   deterministic release contracts, public-key verification, and tamper
   rejection. The `nat-egress` contract now binds a real runtime; `gost-mesh`

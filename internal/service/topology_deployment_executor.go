@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -15,6 +16,9 @@ import (
 )
 
 const (
+	topologyRuntimeObservationGrace     = 90 * time.Second
+	topologyRuntimeObservationFreshness = 2 * time.Minute
+
 	topologyDeploymentStatePlanned           = "planned"
 	topologyDeploymentStateApplying          = "applying"
 	topologyDeploymentStateRollbackRequested = "rollback_requested"
@@ -295,11 +299,25 @@ func RequestTopologyDeploymentRollback(db *gorm.DB, deploymentID uint, at time.T
 			if err := tx.Model(&deployment).Updates(map[string]any{
 				"state": topologyDeploymentStateRollbackRequested, "completed_at": nil,
 				"rollback_started_at": at, "rollback_completed_at": nil,
+				"health_gate_deadline_at": nil,
 			}).Error; err != nil {
 				return err
 			}
-			deployment.State, deployment.CompletedAt, deployment.RollbackStartedAt = topologyDeploymentStateRollbackRequested, nil, &at
+			// A manual rollback can arrive before the executor has queued any work,
+			// or while some independent branches have not started. They cannot have
+			// side effects to compensate, so mark them durably skipped now instead of
+			// trying to invent rollback operation IDs later.
+			if err := tx.Model(&model.TopologyDeploymentStep{}).
+				Where("deployment_id = ? AND state = ?", deployment.ID, topologyStepStatePlanned).
+				Update("state", topologyStepStateSkipped).Error; err != nil {
+				return err
+			}
+			deployment.State, deployment.CompletedAt, deployment.RollbackStartedAt, deployment.HealthGateDeadlineAt = topologyDeploymentStateRollbackRequested, nil, &at, nil
 		case topologyDeploymentStateRollbackRequested:
+			if err := tx.Model(&deployment).Update("health_gate_deadline_at", nil).Error; err != nil {
+				return err
+			}
+			deployment.HealthGateDeadlineAt = nil
 			return nil
 		default:
 			return ErrTopologyDeploymentTerminal
@@ -612,7 +630,26 @@ func (e *TopologyDeploymentExecutor) reconcileDeployment(ctx context.Context, de
 			}
 			changed = changed || queued
 			if topologyAllStepsState(steps, topologyStepStateSucceeded) {
-				if err := completeTopologyDeploymentApply(tx, &topology, &deployment, revision, steps, e.now()); err != nil {
+				healthByNode, healthErr := topologyPromotionHealthByNode(tx, steps, e.now())
+				if healthErr != nil {
+					if pending, ok := topologyHealthGatePending(healthErr); ok {
+						waiting, waitErr := e.waitForTopologyHealthGate(tx, &deployment, e.now(), pending)
+						if waitErr != nil {
+							return waitErr
+						}
+						if waiting {
+							changed = true
+							return nil
+						}
+						healthErr = fmt.Errorf("kernel-observed health gate timed out: %s", pending.Error())
+					}
+					if err := beginTopologyRollback(tx, &deployment, steps, e.now(), "kernel-observed health gate failed: "+healthErr.Error()); err != nil {
+						return err
+					}
+					changed = true
+					return nil
+				}
+				if err := completeTopologyDeploymentApply(tx, &topology, &deployment, revision, healthByNode, e.now()); err != nil {
 					return err
 				}
 				changed = true
@@ -709,10 +746,13 @@ func topologyStepOperationError(tx *gorm.DB, step model.TopologyDeploymentStep) 
 		return "topology operation was not created"
 	}
 	var operation model.KernelOperation
-	if err := tx.First(&operation, "id = ?", operationID).Error; err != nil || strings.TrimSpace(operation.LastError) == "" {
+	if err := tx.First(&operation, "id = ?", operationID).Error; err != nil || strings.TrimSpace(operation.Kind) == "" || strings.TrimSpace(operation.State) == "" {
 		return "topology operation failed"
 	}
-	return operation.LastError
+	// Operation LastError originates at a plugin process. Persist only a stable
+	// lifecycle summary in topology state; raw diagnostics remain internal to
+	// the operation record and are never copied into public topology responses.
+	return fmt.Sprintf("%s ended in %s", operation.Kind, operation.State)
 }
 
 func topologyCurrentStepOperationID(step model.TopologyDeploymentStep) string {
@@ -883,7 +923,7 @@ func (e *TopologyDeploymentExecutor) reconcileRollback(tx *gorm.DB, topology *mo
 		if err != nil {
 			return changed, false, err
 		}
-		if err := writeTopologyTerminalObservedStates(tx, *deployment, revision, nodes, "failed", deployment.LastError, now); err != nil {
+		if err := writeTopologyTerminalObservedStates(tx, *deployment, revision, nodes, "failed", deployment.LastError, nil, now); err != nil {
 			return changed, false, err
 		}
 		if err := tx.Model(deployment).Updates(map[string]any{
@@ -893,7 +933,24 @@ func (e *TopologyDeploymentExecutor) reconcileRollback(tx *gorm.DB, topology *mo
 		}
 		return true, true, nil
 	}
-	if err := completeTopologyDeploymentRollback(tx, topology, deployment, revision, steps, now); err != nil {
+	healthByNode, healthErr := topologyRollbackHealthByNode(tx, steps, now)
+	if healthErr != nil {
+		if pending, ok := topologyHealthGatePending(healthErr); ok {
+			waiting, waitErr := e.waitForTopologyHealthGate(tx, deployment, now, pending)
+			if waitErr != nil {
+				return changed, false, waitErr
+			}
+			if waiting {
+				return true, false, nil
+			}
+			healthErr = fmt.Errorf("kernel-observed rollback health gate timed out: %s", pending.Error())
+		}
+		if err := failTopologyRollback(tx, deployment, revision, healthErr.Error(), now); err != nil {
+			return changed, false, err
+		}
+		return true, true, nil
+	}
+	if err := completeTopologyDeploymentRollback(tx, topology, deployment, revision, steps, healthByNode, now); err != nil {
 		return changed, false, err
 	}
 	return true, true, nil
@@ -917,7 +974,7 @@ func beginTopologyRollback(tx *gorm.DB, deployment *model.TopologyDeployment, st
 	}
 	if err := tx.Model(deployment).Updates(map[string]any{
 		"state": topologyDeploymentStateRollbackRequested, "last_error": lastError,
-		"completed_at": nil, "rollback_started_at": deployment.RollbackStartedAt,
+		"completed_at": nil, "rollback_started_at": deployment.RollbackStartedAt, "health_gate_deadline_at": nil,
 	}).Error; err != nil {
 		return err
 	}
@@ -1051,12 +1108,12 @@ func (e *TopologyDeploymentExecutor) ensureTopologyStepOperation(tx *gorm.DB, de
 	return op, err
 }
 
-func completeTopologyDeploymentApply(tx *gorm.DB, topology *model.Topology, deployment *model.TopologyDeployment, revision model.TopologyRevision, steps []model.TopologyDeploymentStep, at time.Time) error {
+func completeTopologyDeploymentApply(tx *gorm.DB, topology *model.Topology, deployment *model.TopologyDeployment, revision model.TopologyRevision, healthByNode map[uint]string, at time.Time) error {
 	nodes, err := topologyTerminalObservedNodes(tx, deployment)
 	if err != nil {
 		return err
 	}
-	if err := writeTopologyTerminalObservedStates(tx, *deployment, revision, nodes, "succeeded", "", at); err != nil {
+	if err := writeTopologyTerminalObservedStates(tx, *deployment, revision, nodes, "succeeded", "", healthByNode, at); err != nil {
 		return err
 	}
 	// A rollout-group deployment is a canary attempt against this revision,
@@ -1071,7 +1128,7 @@ func completeTopologyDeploymentApply(tx *gorm.DB, topology *model.Topology, depl
 		}
 	}
 	if err := tx.Model(deployment).Updates(map[string]any{
-		"state": topologyDeploymentStateSucceeded, "completed_at": at, "last_error": "",
+		"state": topologyDeploymentStateSucceeded, "completed_at": at, "last_error": "", "health_gate_deadline_at": nil,
 	}).Error; err != nil {
 		return err
 	}
@@ -1079,12 +1136,12 @@ func completeTopologyDeploymentApply(tx *gorm.DB, topology *model.Topology, depl
 	return nil
 }
 
-func completeTopologyDeploymentRollback(tx *gorm.DB, topology *model.Topology, deployment *model.TopologyDeployment, revision model.TopologyRevision, _ []model.TopologyDeploymentStep, at time.Time) error {
+func completeTopologyDeploymentRollback(tx *gorm.DB, topology *model.Topology, deployment *model.TopologyDeployment, revision model.TopologyRevision, _ []model.TopologyDeploymentStep, healthByNode map[uint]string, at time.Time) error {
 	nodes, err := topologyTerminalObservedNodes(tx, deployment)
 	if err != nil {
 		return err
 	}
-	if err := writeTopologyTerminalObservedStates(tx, *deployment, revision, nodes, "rolled_back", deployment.LastError, at); err != nil {
+	if err := writeTopologyTerminalObservedStates(tx, *deployment, revision, nodes, "rolled_back", deployment.LastError, healthByNode, at); err != nil {
 		return err
 	}
 	// Canary rollback is scoped to its selected steps and must not publish or
@@ -1096,7 +1153,7 @@ func completeTopologyDeploymentRollback(tx *gorm.DB, topology *model.Topology, d
 		}
 	}
 	if err := tx.Model(deployment).Updates(map[string]any{
-		"state": topologyDeploymentStateRolledBack, "completed_at": at, "rollback_completed_at": at,
+		"state": topologyDeploymentStateRolledBack, "completed_at": at, "rollback_completed_at": at, "health_gate_deadline_at": nil,
 	}).Error; err != nil {
 		return err
 	}
@@ -1104,19 +1161,365 @@ func completeTopologyDeploymentRollback(tx *gorm.DB, topology *model.Topology, d
 	return nil
 }
 
+func failTopologyRollback(tx *gorm.DB, deployment *model.TopologyDeployment, revision model.TopologyRevision, reason string, at time.Time) error {
+	nodes, err := topologyTerminalObservedNodes(tx, deployment)
+	if err != nil {
+		return err
+	}
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "kernel-observed rollback health gate failed"
+	}
+	if err := writeTopologyTerminalObservedStates(tx, *deployment, revision, nodes, "failed", reason, nil, at); err != nil {
+		return err
+	}
+	if err := tx.Model(deployment).Updates(map[string]any{
+		"state": topologyDeploymentStateFailed, "completed_at": at, "rollback_completed_at": at,
+		"last_error": reason, "health_gate_deadline_at": nil,
+	}).Error; err != nil {
+		return err
+	}
+	return nil
+}
+
 func topologyTerminalObservedNodes(tx *gorm.DB, deployment *model.TopologyDeployment) ([]uint, error) {
 	return topologyDeploymentNodeIDs(tx, deployment)
 }
 
-func writeTopologyTerminalObservedStates(tx *gorm.DB, deployment model.TopologyDeployment, revision model.TopologyRevision, nodes []uint, state, lastError string, at time.Time) error {
+func writeTopologyTerminalObservedStates(tx *gorm.DB, deployment model.TopologyDeployment, revision model.TopologyRevision, nodes []uint, state, lastError string, healthByNode map[uint]string, at time.Time) error {
 	for _, nodeID := range nodes {
+		healthJSON := `{}`
+		if healthByNode != nil {
+			var ok bool
+			healthJSON, ok = healthByNode[nodeID]
+			if !ok {
+				return fmt.Errorf("topology promotion health is missing for node %d", nodeID)
+			}
+		}
 		if _, _, err := ApplyTopologyObservedStateTx(tx, TopologyObservedStateUpdate{
 			DeploymentID: deployment.ID, NodeID: nodeID, DesiredRevision: revision.Revision,
-			ObservedRevision: revision.Revision, State: state, HealthJSON: `{}`,
+			ObservedRevision: revision.Revision, State: state, HealthJSON: healthJSON,
 			LastError: lastError, ObservedAt: at,
 		}); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+type topologyPromotionNodeHealth struct {
+	Healthy bool                          `json:"healthy"`
+	Source  string                        `json:"source"`
+	Steps   []topologyPromotionStepHealth `json:"steps"`
+}
+
+type topologyPromotionStepHealth struct {
+	VertexKey         string                            `json:"vertex_key"`
+	PluginID          string                            `json:"plugin_id"`
+	Role              string                            `json:"role"`
+	OperationID       string                            `json:"operation_id"`
+	OperationKind     string                            `json:"operation_kind"`
+	OperationRevision int64                             `json:"operation_revision"`
+	State             topologyPromotionAgentPluginState `json:"state"`
+	Runtime           *topologyPromotionRuntimeState    `json:"runtime,omitempty"`
+}
+
+// topologyPromotionAgentPluginState is a fixed public projection of the
+// Supervisor result. Do not retain raw ResultJSON here: plugin errors and
+// future fields can contain implementation or secret-bearing details.
+type topologyPromotionAgentPluginState struct {
+	ID               string  `json:"id"`
+	DesiredVersion   string  `json:"desired_version"`
+	ObservedVersion  string  `json:"observed_version"`
+	Enabled          *bool   `json:"enabled"`
+	Health           string  `json:"health"`
+	DesiredRevision  *uint64 `json:"desired_revision"`
+	ObservedRevision *uint64 `json:"observed_revision"`
+	ConfigHash       string  `json:"config_hash,omitempty"`
+}
+
+type topologyAgentPluginResult struct {
+	topologyPromotionAgentPluginState
+	LastError string `json:"last_error"`
+}
+
+type topologyPromotionRuntimeState struct {
+	RulesetSHA256 string                  `json:"ruleset_sha256"`
+	ObservedAt    time.Time               `json:"observed_at"`
+	RuleCounters  []NodePluginRuleCounter `json:"rule_counters"`
+}
+
+type topologyOperationExpectation struct {
+	OperationID       string
+	Kind              string
+	Health            string
+	Enabled           bool
+	ConfigOperationID string
+}
+
+type topologyHealthGatePendingError struct {
+	reason string
+}
+
+func (e *topologyHealthGatePendingError) Error() string { return e.reason }
+
+func topologyHealthGatePending(err error) (*topologyHealthGatePendingError, bool) {
+	var pending *topologyHealthGatePendingError
+	ok := errors.As(err, &pending)
+	return pending, ok
+}
+
+func (e *TopologyDeploymentExecutor) waitForTopologyHealthGate(tx *gorm.DB, deployment *model.TopologyDeployment, now time.Time, pending *topologyHealthGatePendingError) (bool, error) {
+	if tx == nil || deployment == nil || pending == nil {
+		return false, errors.New("topology health gate is not initialized")
+	}
+	if deployment.HealthGateDeadlineAt == nil {
+		deadline := now.Add(topologyRuntimeObservationGrace)
+		if err := tx.Model(deployment).Update("health_gate_deadline_at", deadline).Error; err != nil {
+			return false, err
+		}
+		deployment.HealthGateDeadlineAt = &deadline
+		return true, nil
+	}
+	return now.Before(*deployment.HealthGateDeadlineAt), nil
+}
+
+func topologyPromotionHealthByNode(tx *gorm.DB, steps []model.TopologyDeploymentStep, now time.Time) (map[uint]string, error) {
+	return topologyStepHealthByNode(tx, steps, false, now)
+}
+
+func topologyRollbackHealthByNode(tx *gorm.DB, steps []model.TopologyDeploymentStep, now time.Time) (map[uint]string, error) {
+	return topologyStepHealthByNode(tx, steps, true, now)
+}
+
+func topologyStepHealthByNode(tx *gorm.DB, steps []model.TopologyDeploymentStep, rollback bool, now time.Time) (map[uint]string, error) {
+	if tx == nil {
+		return nil, errors.New("database is not initialized")
+	}
+	byNode := make(map[uint]*topologyPromotionNodeHealth)
+	for _, step := range steps {
+		if rollback && step.State == topologyStepStateSkipped {
+			if byNode[step.NodeID] == nil {
+				byNode[step.NodeID] = &topologyPromotionNodeHealth{Healthy: true, Source: "not_started"}
+			}
+			continue
+		}
+		expectation, err := topologyStepOperationExpectation(step, rollback)
+		if err != nil {
+			return nil, err
+		}
+		operation, err := topologyLoadStepOperation(tx, step, expectation.OperationID, expectation.Kind)
+		if err != nil {
+			return nil, err
+		}
+		expectedConfigHash := ""
+		if expectation.ConfigOperationID != "" {
+			configOperation, loadErr := topologyLoadStepOperation(tx, step, expectation.ConfigOperationID, "plugin.configure")
+			if loadErr != nil {
+				return nil, loadErr
+			}
+			if !validSHA256Hex(configOperation.ConfigHash) {
+				return nil, fmt.Errorf("topology step %q configure operation config hash is invalid", step.VertexKey)
+			}
+			expectedConfigHash = strings.ToLower(configOperation.ConfigHash)
+		}
+		pluginState, err := topologyPromotionPluginState(operation, step, expectation, expectedConfigHash)
+		if err != nil {
+			return nil, err
+		}
+		var runtime *topologyPromotionRuntimeState
+		requiresRuntimeObservation, err := topologyStepRequiresRuntimeObservation(tx, step)
+		if err != nil {
+			return nil, err
+		}
+		if requiresRuntimeObservation && expectation.Enabled {
+			runtimeConfigJSON := step.ConfigJSON
+			if rollback {
+				runtimeConfigJSON = step.RollbackConfigJSON
+			}
+			runtime, err = topologyRuntimeObservation(tx, step, operation, expectedConfigHash, runtimeConfigJSON, now)
+			if err != nil {
+				return nil, err
+			}
+		}
+		nodeHealth := byNode[step.NodeID]
+		if nodeHealth == nil {
+			nodeHealth = &topologyPromotionNodeHealth{Healthy: true, Source: "agent_operation"}
+			byNode[step.NodeID] = nodeHealth
+		}
+		nodeHealth.Steps = append(nodeHealth.Steps, topologyPromotionStepHealth{
+			VertexKey: step.VertexKey, PluginID: step.PluginID, Role: step.Role,
+			OperationID: operation.ID, OperationKind: operation.Kind, OperationRevision: operation.Revision,
+			State: pluginState, Runtime: runtime,
+		})
+	}
+	encoded := make(map[uint]string, len(byNode))
+	for nodeID, health := range byNode {
+		document, err := json.Marshal(health)
+		if err != nil {
+			return nil, fmt.Errorf("encode topology promotion health for node %d: %w", nodeID, err)
+		}
+		encoded[nodeID] = string(document)
+	}
+	return encoded, nil
+}
+
+func topologyStepOperationExpectation(step model.TopologyDeploymentStep, rollback bool) (topologyOperationExpectation, error) {
+	if !rollback {
+		switch step.ApplyAction {
+		case topologyApplyActionConfigureEnable:
+			return topologyOperationExpectation{OperationID: step.EnableOperationID, Kind: "plugin.enable", Health: "healthy", Enabled: true, ConfigOperationID: step.ConfigureOperationID}, nil
+		case topologyApplyActionDisable:
+			return topologyOperationExpectation{OperationID: step.DisableOperationID, Kind: "plugin.disable", Health: "disabled", Enabled: false}, nil
+		default:
+			return topologyOperationExpectation{}, fmt.Errorf("topology step %q has unsupported apply action %q", step.VertexKey, step.ApplyAction)
+		}
+	}
+	switch step.RollbackMode {
+	case topologyRollbackModeRestore:
+		return topologyOperationExpectation{OperationID: step.RollbackEnableOperationID, Kind: "plugin.enable", Health: "healthy", Enabled: true, ConfigOperationID: step.RollbackConfigureOperationID}, nil
+	case topologyRollbackModeDisable:
+		return topologyOperationExpectation{OperationID: step.RollbackDisableOperationID, Kind: "plugin.disable", Health: "disabled", Enabled: false}, nil
+	default:
+		return topologyOperationExpectation{}, fmt.Errorf("topology step %q has unsupported rollback mode %q", step.VertexKey, step.RollbackMode)
+	}
+}
+
+func topologyLoadStepOperation(tx *gorm.DB, step model.TopologyDeploymentStep, operationID, expectedKind string) (model.KernelOperation, error) {
+	if operationID == "" {
+		return model.KernelOperation{}, fmt.Errorf("topology step %q terminal operation is missing", step.VertexKey)
+	}
+	var operation model.KernelOperation
+	if err := tx.First(&operation, "id = ?", operationID).Error; err != nil {
+		return model.KernelOperation{}, fmt.Errorf("load topology step %q terminal operation: %w", step.VertexKey, err)
+	}
+	if operation.State != "succeeded" || operation.Kind != expectedKind || operation.NodeID == nil || *operation.NodeID != step.NodeID ||
+		operation.PluginID != step.PluginID || operation.TargetVersion != step.TargetVersion || operation.TopologyDeploymentID == nil ||
+		*operation.TopologyDeploymentID != step.DeploymentID || operation.TopologyStepID == nil || *operation.TopologyStepID != step.ID || operation.Revision <= 0 {
+		return model.KernelOperation{}, fmt.Errorf("topology step %q terminal operation identity is invalid", step.VertexKey)
+	}
+	return operation, nil
+}
+
+func topologyPromotionPluginState(operation model.KernelOperation, step model.TopologyDeploymentStep, expectation topologyOperationExpectation, expectedConfigHash string) (topologyPromotionAgentPluginState, error) {
+	rawState := strings.TrimSpace(operation.ResultJSON)
+	if rawState == "" || len(rawState) > 16<<10 || !strings.HasPrefix(rawState, "{") {
+		return topologyPromotionAgentPluginState{}, fmt.Errorf("topology step %q has no valid Agent result", step.VertexKey)
+	}
+	var result topologyAgentPluginResult
+	if err := json.Unmarshal([]byte(rawState), &result); err != nil {
+		return topologyPromotionAgentPluginState{}, fmt.Errorf("decode topology step %q Agent result: %w", step.VertexKey, err)
+	}
+	state := result.topologyPromotionAgentPluginState
+	if state.ID != step.PluginID || state.DesiredVersion != step.TargetVersion || state.ObservedVersion != step.TargetVersion {
+		return topologyPromotionAgentPluginState{}, fmt.Errorf("topology step %q Agent plugin identity or version does not match desired state", step.VertexKey)
+	}
+	if state.Enabled == nil || *state.Enabled != expectation.Enabled || strings.TrimSpace(state.Health) != expectation.Health {
+		return topologyPromotionAgentPluginState{}, fmt.Errorf("topology step %q Agent health does not match desired state", step.VertexKey)
+	}
+	if state.DesiredRevision == nil || state.ObservedRevision == nil || *state.DesiredRevision != uint64(operation.Revision) || *state.ObservedRevision != uint64(operation.Revision) {
+		return topologyPromotionAgentPluginState{}, fmt.Errorf("topology step %q Agent revision does not match terminal operation", step.VertexKey)
+	}
+	if expectedConfigHash != "" && !strings.EqualFold(state.ConfigHash, expectedConfigHash) {
+		return topologyPromotionAgentPluginState{}, fmt.Errorf("topology step %q Agent config hash does not match configured state", step.VertexKey)
+	}
+	if strings.TrimSpace(result.LastError) != "" {
+		return topologyPromotionAgentPluginState{}, fmt.Errorf("topology step %q Agent reports a runtime error", step.VertexKey)
+	}
+	state.ConfigHash = strings.ToLower(strings.TrimSpace(state.ConfigHash))
+	return state, nil
+}
+
+func topologyStepRequiresRuntimeObservation(tx *gorm.DB, step model.TopologyDeploymentStep) (bool, error) {
+	var release model.PluginRelease
+	if err := tx.First(&release, "plugin_id = ? AND version = ?", step.PluginID, step.TargetVersion).Error; err != nil {
+		return false, fmt.Errorf("load topology step %q plugin release: %w", step.VertexKey, err)
+	}
+	var plugin model.Plugin
+	if err := tx.First(&plugin, "id = ? AND official = ? AND publisher = ?", step.PluginID, true, "AnixOps").Error; err != nil {
+		return false, fmt.Errorf("verify topology step %q plugin ownership: %w", step.VertexKey, err)
+	}
+	verified, err := VerifyStoredPluginRelease(tx, release, nil)
+	if err != nil {
+		return false, fmt.Errorf("verify topology step %q plugin release: %w", step.VertexKey, err)
+	}
+	if !manifestSupportsTarget(*verified, "agent") {
+		return false, fmt.Errorf("topology step %q plugin release is not Agent-compatible", step.VertexKey)
+	}
+	if !containsPluginCapability(verified.Capabilities, "kernel.observed-state") {
+		return false, nil
+	}
+	return true, nil
+}
+
+func topologyRuntimeObservation(tx *gorm.DB, step model.TopologyDeploymentStep, operation model.KernelOperation, expectedConfigHash, effectiveConfigJSON string, now time.Time) (*topologyPromotionRuntimeState, error) {
+	var observed model.NodePluginObservedState
+	if err := tx.First(&observed, "node_id = ? AND plugin_id = ?", step.NodeID, step.PluginID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, &topologyHealthGatePendingError{reason: fmt.Sprintf("no runtime observation for topology step %q", step.VertexKey)}
+		}
+		return nil, err
+	}
+	terminalAt := operation.UpdatedAt
+	if operation.ObservedAt != nil {
+		terminalAt = *operation.ObservedAt
+	}
+	if observed.ReceivedAt.Before(terminalAt) || observed.ObservedAt.Before(terminalAt) {
+		return nil, &topologyHealthGatePendingError{reason: fmt.Sprintf("runtime observation for topology step %q predates terminal operation", step.VertexKey)}
+	}
+	if now.Sub(observed.ReceivedAt) > topologyRuntimeObservationFreshness || now.Sub(observed.ObservedAt) > topologyRuntimeObservationFreshness {
+		return nil, &topologyHealthGatePendingError{reason: fmt.Sprintf("runtime observation for topology step %q is stale", step.VertexKey)}
+	}
+	if observed.Version != step.TargetVersion || observed.DesiredRevision != operation.Revision || observed.ObservedRevision != operation.Revision ||
+		!strings.EqualFold(observed.ConfigHash, expectedConfigHash) {
+		return nil, fmt.Errorf("runtime observation for topology step %q does not match terminal desired state", step.VertexKey)
+	}
+	if observed.Health != "healthy" || !validSHA256Hex(observed.RulesetSHA256) {
+		return nil, fmt.Errorf("runtime observation for topology step %q is not healthy", step.VertexKey)
+	}
+	var counters []NodePluginRuleCounter
+	if err := json.Unmarshal([]byte(observed.CountersJSON), &counters); err != nil {
+		return nil, fmt.Errorf("runtime observation for topology step %q counters are invalid", step.VertexKey)
+	}
+	if step.PluginID == "nftables-forward" {
+		if err := topologyNftablesCountersMatch(effectiveConfigJSON, counters); err != nil {
+			return nil, fmt.Errorf("runtime observation for topology step %q: %w", step.VertexKey, err)
+		}
+	}
+	return &topologyPromotionRuntimeState{RulesetSHA256: strings.ToLower(observed.RulesetSHA256), ObservedAt: observed.ObservedAt, RuleCounters: counters}, nil
+}
+
+func topologyNftablesCountersMatch(configJSON string, counters []NodePluginRuleCounter) error {
+	var config struct {
+		Rules []struct {
+			ID string `json:"id"`
+		} `json:"rules"`
+	}
+	if err := json.Unmarshal([]byte(configJSON), &config); err != nil || len(config.Rules) == 0 {
+		return errors.New("nftables rule configuration is invalid")
+	}
+	expected := make(map[string]struct{}, len(config.Rules))
+	for _, rule := range config.Rules {
+		if !safePluginSegment(rule.ID) {
+			return errors.New("nftables rule id is invalid")
+		}
+		if _, duplicate := expected[rule.ID]; duplicate {
+			return errors.New("nftables rule id is duplicated")
+		}
+		expected[rule.ID] = struct{}{}
+	}
+	if len(counters) != len(expected) {
+		return errors.New("nftables counter set does not match configured rules")
+	}
+	seen := make(map[string]struct{}, len(counters))
+	for _, counter := range counters {
+		if _, ok := expected[counter.RuleID]; !ok {
+			return errors.New("nftables counter has an unknown rule")
+		}
+		if _, duplicate := seen[counter.RuleID]; duplicate {
+			return errors.New("nftables counter is duplicated")
+		}
+		seen[counter.RuleID] = struct{}{}
 	}
 	return nil
 }
