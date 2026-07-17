@@ -19,6 +19,9 @@ const (
 	maxNodePluginObservedRuleIDLength = 96
 	maxNodePluginObservedStateAge     = 5 * time.Minute
 	maxNodePluginObservedFutureSkew   = time.Minute
+	// NodePluginObservedState stores revisions in a signed 64-bit database
+	// column, so wire revisions must stay within that representation.
+	maxNodePluginObservedRevision = uint64(1<<63 - 1)
 )
 
 // NodePluginRuleCounter is the kernel-neutral form of one plugin-owned
@@ -103,7 +106,7 @@ func normalizeNodePluginObservedSnapshot(snapshot NodePluginObservedSnapshot, re
 		return NodePluginObservedSnapshot{}, errors.New("plugin observation id or version is invalid")
 	}
 	if snapshot.DesiredRevision == 0 || snapshot.ObservedRevision == 0 || snapshot.ObservedRevision > snapshot.DesiredRevision ||
-		snapshot.DesiredRevision > uint64(^uint64(0)>>1) {
+		snapshot.DesiredRevision > maxNodePluginObservedRevision {
 		return NodePluginObservedSnapshot{}, errors.New("plugin observation revision is invalid")
 	}
 	if !validSHA256Hex(snapshot.ConfigHash) {
@@ -180,13 +183,18 @@ func (s *NodeService) authorizeNodePluginObservedState(nodeID uint, pluginID, ve
 }
 
 func (s *NodeService) persistNodePluginObservedState(nodeID uint, snapshot NodePluginObservedSnapshot, receivedAt time.Time) error {
+	desiredRevision, desiredOK := nodePluginObservedRevision(snapshot.DesiredRevision)
+	observedRevision, observedOK := nodePluginObservedRevision(snapshot.ObservedRevision)
+	if !desiredOK || !observedOK {
+		return errors.New("plugin observation revision is invalid")
+	}
 	counters, err := json.Marshal(snapshot.RuleCounters)
 	if err != nil {
 		return fmt.Errorf("encode plugin observation counters: %w", err)
 	}
 	state := model.NodePluginObservedState{
 		NodeID: nodeID, PluginID: snapshot.PluginID, Version: snapshot.Version,
-		DesiredRevision: int64(snapshot.DesiredRevision), ObservedRevision: int64(snapshot.ObservedRevision),
+		DesiredRevision: desiredRevision, ObservedRevision: observedRevision,
 		ConfigHash: snapshot.ConfigHash, Health: snapshot.Health, RulesetSHA256: snapshot.RulesetSHA256,
 		CountersJSON: string(counters), ObservedAt: snapshot.ObservedAt, ReceivedAt: receivedAt, UpdatedAt: receivedAt,
 	}
@@ -204,4 +212,11 @@ func (s *NodeService) persistNodePluginObservedState(nodeID uint, snapshot NodeP
 		}
 		return nil
 	})
+}
+
+func nodePluginObservedRevision(revision uint64) (int64, bool) {
+	if revision > maxNodePluginObservedRevision {
+		return 0, false
+	}
+	return int64(revision), true // #nosec G115 -- the Agent revision is bounded by the signed database column range above.
 }

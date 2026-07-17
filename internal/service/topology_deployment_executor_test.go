@@ -686,6 +686,21 @@ func TestTopologyRollbackRuntimeEvidenceUsesPreviousNftablesRules(t *testing.T) 
 	require.Contains(t, health, fixture.node.ID)
 }
 
+func TestTopologyOperationRevisionBounds(t *testing.T) {
+	revision, ok := topologyOperationRevision(1)
+	require.True(t, ok)
+	require.Equal(t, uint64(1), revision)
+
+	revision, ok = topologyOperationRevision(int64(1<<63 - 1))
+	require.True(t, ok)
+	require.Equal(t, uint64(1<<63-1), revision)
+
+	_, ok = topologyOperationRevision(0)
+	require.False(t, ok)
+	_, ok = topologyOperationRevision(-1)
+	require.False(t, ok)
+}
+
 func TestTopologyObservedStateCapabilityCannotBeRemovedFromStoredManifest(t *testing.T) {
 	fixture := newObservedTopologyDeploymentFixture(t)
 	_, steps, err := PlanTopologyDeployment(fixture.db, TopologyDeploymentPlanInput{

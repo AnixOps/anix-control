@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 4.0.0-alpha.7 - 2026-07-18
+
+### Fixed
+
+- Hardened G115 conversion boundaries for topology and plugin observations:
+  Agent-reported revisions must fit the signed database range, and non-positive
+  terminal operation revisions are rejected before promotion comparisons.
+
 ## 4.0.0-alpha.6 - 2026-07-18
 
 ### Added

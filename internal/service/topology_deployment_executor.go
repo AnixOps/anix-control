@@ -1417,7 +1417,8 @@ func topologyPromotionPluginState(operation model.KernelOperation, step model.To
 	if state.Enabled == nil || *state.Enabled != expectation.Enabled || strings.TrimSpace(state.Health) != expectation.Health {
 		return topologyPromotionAgentPluginState{}, fmt.Errorf("topology step %q Agent health does not match desired state", step.VertexKey)
 	}
-	if state.DesiredRevision == nil || state.ObservedRevision == nil || *state.DesiredRevision != uint64(operation.Revision) || *state.ObservedRevision != uint64(operation.Revision) {
+	expectedRevision, revisionOK := topologyOperationRevision(operation.Revision)
+	if !revisionOK || state.DesiredRevision == nil || state.ObservedRevision == nil || *state.DesiredRevision != expectedRevision || *state.ObservedRevision != expectedRevision {
 		return topologyPromotionAgentPluginState{}, fmt.Errorf("topology step %q Agent revision does not match terminal operation", step.VertexKey)
 	}
 	if expectedConfigHash != "" && !strings.EqualFold(state.ConfigHash, expectedConfigHash) {
@@ -1428,6 +1429,13 @@ func topologyPromotionPluginState(operation model.KernelOperation, step model.To
 	}
 	state.ConfigHash = strings.ToLower(strings.TrimSpace(state.ConfigHash))
 	return state, nil
+}
+
+func topologyOperationRevision(revision int64) (uint64, bool) {
+	if revision <= 0 {
+		return 0, false
+	}
+	return uint64(revision), true // #nosec G115 -- non-positive database revisions are rejected above.
 }
 
 func topologyStepRequiresRuntimeObservation(tx *gorm.DB, step model.TopologyDeploymentStep) (bool, error) {

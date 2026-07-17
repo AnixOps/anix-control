@@ -67,7 +67,7 @@ Usage:
   install.sh [install|update|rollback|preflight|migrate] [options]
 
 Options:
-  --version <tag>          Release tag, for example v4.0.0-alpha.6. Defaults to GitHub's latest stable release.
+  --version <tag>          Release tag, for example v4.0.0-alpha.7. Defaults to GitHub's latest stable release.
   --admin-email <email>    Bootstrap admin email on a fresh installation.
   --admin-password <text>  Bootstrap admin password on a fresh installation.
   --install-dir <path>     Installation root. Default: /opt/anixops/control.
