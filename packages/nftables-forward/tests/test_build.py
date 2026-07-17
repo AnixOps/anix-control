@@ -59,13 +59,20 @@ class NftablesForwardPackageTest(unittest.TestCase):
                 manifest["entrypoints"],
             )
             self.assertEqual(
-                ["forward.nftables.apply", "forward.dedicated.tcp", "forward.dedicated.udp"],
+                [
+                    "forward.nftables.apply",
+                    "forward.dedicated.tcp",
+                    "forward.dedicated.udp",
+                    "plugin.runtime-state",
+                    "plugin.cleanup",
+                ],
                 manifest["capabilities"],
             )
             self.assertEqual(
-                ["chain_priority", "family", "rollback_snapshot", "table_name", "udp_enabled"],
+                ["apply", "nft_binary", "plan_path", "family", "table", "chain", "priority", "rollback_on_exit", "rules"],
                 manifest["config_schema"]["required"],
             )
+            self.assertEqual([], json.loads((PACKAGE_ROOT / BUILD.DEFAULTS_PATH).read_text())["rules"])
             self.assertEqual(
                 manifest["frontend_sha256"],
                 manifest["webui"]["bundle"]["sha256"],

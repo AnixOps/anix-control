@@ -77,7 +77,7 @@ main() {
 
   local agent_version
   agent_version="$("${agent}" --version 2>&1)" || fail "nftables-forward Agent version check failed"
-  [[ "${agent_version}" == "nftables-forward 1.0.0" ]] || fail "Agent binary is not nftables-forward 1.0.0: ${agent_version}"
+  [[ "${agent_version}" == "nftables-forward 1.1.0" ]] || fail "Agent binary is not nftables-forward 1.1.0: ${agent_version}"
 
   local work first second private_key public_key signature signature_b64 raw_key
   work="$(mktemp -d)"
@@ -101,7 +101,7 @@ main() {
     --goarch amd64 \
     --output-dir "${second}"
 
-  for name in nftables-forward-1.0.0.tar manifest.json build-report.json SHA256SUMS.txt; do
+  for name in nftables-forward-1.1.0.tar manifest.json build-report.json SHA256SUMS.txt; do
     cmp -s "${first}/${name}" "${second}/${name}" || fail "reproducible build mismatch: ${name}"
   done
   "${PYTHON_BIN}" "${BUILDER}" verify --output-dir "${first}"
@@ -112,7 +112,7 @@ main() {
   "${OPENSSL_BIN}" pkey -in "${private_key}" -pubout -out "${public_key}" >/dev/null 2>&1
   "${SIGNING_SCRIPT}" \
     --manifest "${first}/manifest.json" \
-    --artifact "${first}/nftables-forward-1.0.0.tar" \
+    --artifact "${first}/nftables-forward-1.1.0.tar" \
     --private-key "${private_key}" \
     --signature "${signature_b64}" \
     --public-key "${public_key}"
@@ -120,7 +120,7 @@ main() {
 
   "${PYTHON_BIN}" "${VERIFIER}" \
     --manifest "${first}/manifest.json" \
-    --artifact "${first}/nftables-forward-1.0.0.tar" \
+    --artifact "${first}/nftables-forward-1.1.0.tar" \
     --signature "${signature}" \
     --public-key "${public_key}" \
     --openssl "${OPENSSL_BIN}"
@@ -128,7 +128,7 @@ main() {
     | tail -c 32 | base64 | tr -d '\n' >"${raw_key}"
   "${PYTHON_BIN}" "${VERIFIER}" \
     --manifest "${first}/manifest.json" \
-    --artifact "${first}/nftables-forward-1.0.0.tar" \
+    --artifact "${first}/nftables-forward-1.1.0.tar" \
     --signature "${signature}" \
     --public-key "${raw_key}" \
     --openssl "${OPENSSL_BIN}"
@@ -138,14 +138,14 @@ main() {
   expect_failure "tampered manifest signature" \
     "${PYTHON_BIN}" "${VERIFIER}" \
     --manifest "${work}/manifest-tampered.json" \
-    --artifact "${first}/nftables-forward-1.0.0.tar" \
+    --artifact "${first}/nftables-forward-1.1.0.tar" \
     --signature "${signature_b64}" \
     --public-key "${public_key}" \
     --openssl "${OPENSSL_BIN}"
   expect_failure "missing signature" \
     "${PYTHON_BIN}" "${VERIFIER}" \
     --manifest "${first}/manifest.json" \
-    --artifact "${first}/nftables-forward-1.0.0.tar" \
+    --artifact "${first}/nftables-forward-1.1.0.tar" \
     --signature "${work}/missing.sig" \
     --public-key "${public_key}" \
     --openssl "${OPENSSL_BIN}"
@@ -154,11 +154,11 @@ main() {
   expect_failure "tampered signature" \
     "${PYTHON_BIN}" "${VERIFIER}" \
     --manifest "${first}/manifest.json" \
-    --artifact "${first}/nftables-forward-1.0.0.tar" \
+    --artifact "${first}/nftables-forward-1.1.0.tar" \
     --signature "${work}/signature-tampered.sig" \
     --public-key "${public_key}" \
     --openssl "${OPENSSL_BIN}"
-  cp "${first}/nftables-forward-1.0.0.tar" "${work}/artifact-tampered.tar"
+  cp "${first}/nftables-forward-1.1.0.tar" "${work}/artifact-tampered.tar"
   printf 'A' >>"${work}/artifact-tampered.tar"
   expect_failure "tampered artifact binding" \
     "${PYTHON_BIN}" "${VERIFIER}" \
@@ -179,7 +179,7 @@ main() {
   {
     printf 'status=PASS\n'
     printf 'plugin_id=nftables-forward\n'
-    printf 'version=1.0.0\n'
+    printf 'version=1.1.0\n'
     printf 'agent_input=real-version-verified\n'
     printf 'unsigned_reproducible=true\n'
     printf 'public_key_formats=pem,raw-base64\n'

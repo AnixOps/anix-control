@@ -30,7 +30,7 @@ func TestNftablesForwardStatusExecutorReportsRealAssignments(t *testing.T) {
 		ConfigJSON: `{"family":"inet","table":"anixops_forward","rules":[` +
 			`{"id":"dedicated-443","protocol":"tcp+udp","listen_address":"0.0.0.0","listen_port":443,"target_address":"198.51.100.20","target_port":443,"comment":"Shanghai 443"},` +
 			`{"id":"dedicated-dns","protocol":"udp","listen_address":"0.0.0.0","listen_port":53,"target_address":"198.51.100.53","target_port":53}]}`,
-		ResultJSON: `{"observed_version":"1.0.0","observed_revision":4,"health":"healthy"}`,
+		ResultJSON: `{"observed_version":"` + NftablesForwardVersion + `","observed_revision":4,"health":"healthy"}`,
 		CreatedAt:  now.Add(-time.Minute), UpdatedAt: now.Add(-time.Minute),
 	})
 

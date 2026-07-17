@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/netip"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -14,22 +16,173 @@ import (
 )
 
 const (
-	NftablesForwardPluginID    = "nftables-forward"
-	NftablesForwardVersion     = "1.0.0"
-	NftablesForwardStatusRoute = "/api/v3/plugins/nftables-forward/status"
+	NftablesForwardPluginID      = "nftables-forward"
+	NftablesForwardVersion       = "1.1.0"
+	NftablesForwardLegacyVersion = "1.0.0"
+	NftablesForwardStatusRoute   = "/api/v3/plugins/nftables-forward/status"
 )
 
 type NftablesForwardExecutor struct {
-	db  *gorm.DB
-	now func() time.Time
+	db      *gorm.DB
+	now     func() time.Time
+	version string
 }
 
 func NewNftablesForwardExecutor(db *gorm.DB) *NftablesForwardExecutor {
-	return &NftablesForwardExecutor{db: db, now: time.Now}
+	return NewNftablesForwardExecutorVersion(db, NftablesForwardVersion)
+}
+
+func NewNftablesForwardExecutorVersion(db *gorm.DB, version string) *NftablesForwardExecutor {
+	if strings.TrimSpace(version) == "" {
+		version = NftablesForwardVersion
+	}
+	return &NftablesForwardExecutor{db: db, now: time.Now, version: version}
 }
 
 func (e *NftablesForwardExecutor) PluginID() string { return NftablesForwardPluginID }
-func (e *NftablesForwardExecutor) Version() string  { return NftablesForwardVersion }
+func (e *NftablesForwardExecutor) Version() string  { return e.version }
+
+// ValidateConfiguration is the Control-side semantic gate for the 1.1 package.
+// JSON Schema checks shape; this method checks the nftables/runtime invariants
+// that must hold before an Agent operation is admitted.
+func (e *NftablesForwardExecutor) ValidateConfiguration(ctx context.Context, raw json.RawMessage) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if e.Version() != NftablesForwardVersion {
+		return nil
+	}
+	var value map[string]json.RawMessage
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&value); err != nil {
+		return fmt.Errorf("nftables-forward configuration must be an object: %w", err)
+	}
+	if value == nil {
+		return errors.New("nftables-forward configuration must be an object")
+	}
+	var apply bool
+	if data, ok := value["apply"]; ok {
+		if err := json.Unmarshal(data, &apply); err != nil {
+			return errors.New("apply must be a boolean")
+		}
+	}
+	if data, ok := value["rollback_on_exit"]; ok {
+		var rollback bool
+		if err := json.Unmarshal(data, &rollback); err != nil || !rollback {
+			return errors.New("rollback_on_exit must remain enabled")
+		}
+	}
+	family := "inet"
+	for key, target := range map[string]*string{"family": &family} {
+		if data, ok := value[key]; ok {
+			if err := json.Unmarshal(data, target); err != nil {
+				return fmt.Errorf("%s must be a string", key)
+			}
+		}
+	}
+	if family != "inet" && family != "ip" && family != "ip6" {
+		return errors.New("family must be inet, ip, or ip6")
+	}
+	if data, ok := value["nft_binary"]; ok {
+		var binary string
+		if err := json.Unmarshal(data, &binary); err != nil || strings.ContainsAny(binary, "\x00\r\n") {
+			return errors.New("nft_binary is invalid")
+		}
+	}
+	if data, ok := value["plan_path"]; ok {
+		var planPath string
+		if err := json.Unmarshal(data, &planPath); err != nil {
+			return errors.New("plan_path must be a string")
+		}
+		if planPath != "" && (!filepath.IsAbs(planPath) || filepath.Clean(planPath) != planPath) {
+			return errors.New("plan_path must be absolute and canonical")
+		}
+	}
+	for _, key := range []string{"table", "chain"} {
+		if data, ok := value[key]; ok {
+			var identifier string
+			if err := json.Unmarshal(data, &identifier); err != nil || !validNftIdentifier(identifier) {
+				return fmt.Errorf("%s must be a safe nftables identifier", key)
+			}
+		}
+	}
+	if data, ok := value["priority"]; ok {
+		var priority int
+		if err := json.Unmarshal(data, &priority); err != nil || priority < -500 || priority > 500 {
+			return errors.New("priority must be between -500 and 500")
+		}
+	}
+	var rules []nftablesForwardRule
+	if data, ok := value["rules"]; ok {
+		if err := json.Unmarshal(data, &rules); err != nil {
+			return fmt.Errorf("rules must be an array: %w", err)
+		}
+	}
+	if apply && len(rules) == 0 {
+		return errors.New("at least one forwarding rule is required when apply is enabled")
+	}
+	seen := make(map[string]struct{}, len(rules))
+	for index, rule := range rules {
+		if !validNftRuleID(rule.ID) {
+			return fmt.Errorf("rules[%d].id is invalid", index)
+		}
+		if _, exists := seen[rule.ID]; exists {
+			return fmt.Errorf("rule %q is duplicated", rule.ID)
+		}
+		seen[rule.ID] = struct{}{}
+		if rule.Protocol != "tcp" && rule.Protocol != "udp" {
+			return fmt.Errorf("rules[%d].protocol must be tcp or udp", index)
+		}
+		listen, err := netip.ParseAddr(rule.ListenAddress)
+		if err != nil || listen.IsUnspecified() || listen.IsMulticast() {
+			return fmt.Errorf("rules[%d].listen_address must be a unicast IP address", index)
+		}
+		target, err := netip.ParseAddr(rule.TargetAddress)
+		if err != nil || target.IsUnspecified() || target.IsMulticast() {
+			return fmt.Errorf("rules[%d].target_address must be a unicast IP address", index)
+		}
+		if listen.Is4() != target.Is4() {
+			return fmt.Errorf("rules[%d] addresses must use the same IP family", index)
+		}
+		if (family == "ip" && !listen.Is4()) || (family == "ip6" && !listen.Is6()) {
+			return fmt.Errorf("rules[%d] address family does not match %s", index, family)
+		}
+		if rule.ListenPort < 1 || rule.ListenPort > 65535 || rule.TargetPort < 1 || rule.TargetPort > 65535 {
+			return fmt.Errorf("rules[%d] ports must be between 1 and 65535", index)
+		}
+		if len(rule.Comment) > 96 || strings.ContainsAny(rule.Comment, "\x00\r\n\"\\") {
+			return fmt.Errorf("rules[%d].comment is invalid", index)
+		}
+	}
+	return nil
+}
+
+func validNftIdentifier(value string) bool {
+	if value == "" || len(value) > 63 {
+		return false
+	}
+	for index, char := range value {
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || char == '_' || (index > 0 && char >= '0' && char <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func validNftRuleID(value string) bool {
+	if value == "" || len(value) > 80 {
+		return false
+	}
+	for index, char := range value {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '-' || char == '_' || (index > 0 && char == '.') {
+			continue
+		}
+		return false
+	}
+	return true
+}
 
 type NftablesForwardSummary struct {
 	Rules            int `json:"rules"`

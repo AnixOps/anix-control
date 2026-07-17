@@ -20,7 +20,7 @@ from typing import Any
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 PLUGIN_ID = "nftables-forward"
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "1.1.0"
 ARTIFACT_NAME = f"{PLUGIN_ID}-{PLUGIN_VERSION}.tar"
 MANIFEST_NAME = "manifest.json"
 REPORT_NAME = "build-report.json"
@@ -197,6 +197,74 @@ def validate_webui_source(source: bytes) -> None:
         raise PackageError("WebUI bundle must declare anixops.webui/v1")
 
 
+def validate_default_value(path: str, value: Any, definition: dict[str, Any]) -> None:
+    expected_type = definition.get("type")
+    if expected_type == "string":
+        if not isinstance(value, str):
+            raise PackageError(f"{path} default must be a string")
+        enum = definition.get("enum")
+        if isinstance(enum, list) and value not in enum:
+            raise PackageError(f"{path} default is outside its enum")
+        minimum = definition.get("minLength")
+        maximum = definition.get("maxLength")
+        if isinstance(minimum, int) and len(value) < minimum:
+            raise PackageError(f"{path} default is shorter than minLength")
+        if isinstance(maximum, int) and len(value) > maximum:
+            raise PackageError(f"{path} default is longer than maxLength")
+        pattern = definition.get("pattern")
+        if isinstance(pattern, str) and not re.fullmatch(pattern, value):
+            raise PackageError(f"{path} default does not match pattern")
+    elif expected_type == "integer":
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise PackageError(f"{path} default must be an integer")
+        minimum = definition.get("minimum")
+        maximum = definition.get("maximum")
+        if isinstance(minimum, int) and value < minimum:
+            raise PackageError(f"{path} default is below minimum")
+        if isinstance(maximum, int) and value > maximum:
+            raise PackageError(f"{path} default is above maximum")
+    elif expected_type == "boolean":
+        if not isinstance(value, bool):
+            raise PackageError(f"{path} default must be a boolean")
+    elif expected_type == "array":
+        if not isinstance(value, list):
+            raise PackageError(f"{path} default must be an array")
+        minimum = definition.get("minItems")
+        maximum = definition.get("maxItems")
+        if isinstance(minimum, int) and len(value) < minimum:
+            raise PackageError(f"{path} default has fewer than minItems entries")
+        if isinstance(maximum, int) and len(value) > maximum:
+            raise PackageError(f"{path} default exceeds maxItems")
+        item_schema = definition.get("items")
+        if not isinstance(item_schema, dict):
+            raise PackageError(f"{path} array schema must declare object items")
+        for index, item in enumerate(value):
+            validate_default_value(f"{path}[{index}]", item, item_schema)
+    elif expected_type == "object":
+        if not isinstance(value, dict):
+            raise PackageError(f"{path} default must be an object")
+        properties = definition.get("properties")
+        if not isinstance(properties, dict):
+            raise PackageError(f"{path} object schema must declare properties")
+        if definition.get("additionalProperties") is False:
+            unknown = sorted(set(value) - set(properties))
+            if unknown:
+                raise PackageError(f"{path} default contains unknown keys: {unknown}")
+        required = definition.get("required", [])
+        if not isinstance(required, list) or any(key not in value for key in required):
+            raise PackageError(f"{path} default does not cover required properties")
+        for name, child in value.items():
+            child_schema = properties.get(name)
+            if not isinstance(child_schema, dict):
+                raise PackageError(f"{path}.{name} schema is invalid")
+            validate_default_value(f"{path}.{name}", child, child_schema)
+    else:
+        raise PackageError(f"{path} schema type is unsupported by package contract")
+
+    if "const" in definition and value != definition["const"]:
+        raise PackageError(f"{path} default does not match const")
+
+
 def validate_config_source(schema: Any, defaults: Any) -> None:
     if not isinstance(schema, dict) or schema.get("type") != "object":
         raise PackageError("configuration schema must be a JSON object schema")
@@ -215,37 +283,7 @@ def validate_config_source(schema: Any, defaults: Any) -> None:
     if not isinstance(required, list) or any(key not in defaults for key in required):
         raise PackageError("configuration defaults do not cover required properties")
     for name, value in defaults.items():
-        definition = properties[name]
-        expected_type = definition.get("type")
-        if expected_type == "string":
-            if not isinstance(value, str):
-                raise PackageError(f"{name} default must be a string")
-            enum = definition.get("enum")
-            if isinstance(enum, list) and value not in enum:
-                raise PackageError(f"{name} default is outside its enum")
-            minimum = definition.get("minLength")
-            maximum = definition.get("maxLength")
-            if isinstance(minimum, int) and len(value) < minimum:
-                raise PackageError(f"{name} default is shorter than minLength")
-            if isinstance(maximum, int) and len(value) > maximum:
-                raise PackageError(f"{name} default is longer than maxLength")
-            pattern = definition.get("pattern")
-            if isinstance(pattern, str) and not re.fullmatch(pattern, value):
-                raise PackageError(f"{name} default does not match pattern")
-        elif expected_type == "integer":
-            if not isinstance(value, int) or isinstance(value, bool):
-                raise PackageError(f"{name} default must be an integer")
-            minimum = definition.get("minimum")
-            maximum = definition.get("maximum")
-            if isinstance(minimum, int) and value < minimum:
-                raise PackageError(f"{name} default is below minimum")
-            if isinstance(maximum, int) and value > maximum:
-                raise PackageError(f"{name} default is above maximum")
-        elif expected_type == "boolean":
-            if not isinstance(value, bool):
-                raise PackageError(f"{name} default must be a boolean")
-        else:
-            raise PackageError(f"{name} schema type is unsupported by package contract")
+        validate_default_value(name, value, properties[name])
 
 
 def validate_manifest_contract(manifest: dict[str, Any], architecture: str | None = None) -> None:
