@@ -205,25 +205,58 @@
       </table>
     </div>
 
-    <div
+    <section
       v-show="tab === 'topologies'"
       id="control-panel-topologies"
-      class="table-container"
+      class="topology-panel"
       role="tabpanel"
       aria-labelledby="control-tab-topologies"
       tabindex="0"
     >
-      <table class="data-table topologies-table">
-        <thead><tr><th>{{ t('control.table.topology') }}</th><th>{{ t('control.table.scope') }}</th><th>{{ t('control.table.activeRevision') }}</th><th>{{ t('control.table.description') }}</th></tr></thead>
-        <tbody>
-          <tr v-if="loading && !loaded" class="state-row"><td colspan="4">{{ t('control.states.loading') }}</td></tr>
-          <tr v-for="topology in topologies" v-else :key="topology.id">
-            <td>{{ topology.name || '-' }}</td><td>{{ topology.service_scope || '-' }}</td><td>{{ topology.active_revision_id || '-' }}</td><td class="description-cell">{{ topology.description || '-' }}</td>
-          </tr>
-          <tr v-if="loaded && topologies.length === 0"><td colspan="4" class="empty-row">{{ t('control.empty.topologies') }}</td></tr>
-        </tbody>
-      </table>
-    </div>
+      <div class="topology-toolbar">
+        <div class="topology-selection">
+          <label for="topology-selector">{{ t('control.topology.select') }}</label>
+          <select id="topology-selector" v-model.number="selectedTopologyID">
+            <option v-if="topologies.length === 0" :value="0">{{ t('control.empty.topologies') }}</option>
+            <option v-for="topology in topologies" :key="topology.id" :value="topology.id">{{ topology.name || `#${topology.id}` }} (#{{ topology.id }})</option>
+          </select>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-sm" type="button" :disabled="topologyLoading" @click="loadTopologies">
+            {{ topologyLoading ? t('control.actions.refreshing') : t('control.actions.refresh') }}
+          </button>
+          <button id="edit-topology" class="btn btn-primary btn-sm" type="button" :disabled="!selectedTopologyID || topologyLoading" @click="openTopologyEditor()">
+            {{ t('control.topology.edit') }}
+          </button>
+          <button id="new-topology" class="btn btn-sm" type="button" :disabled="scopes.length === 0" @click="openNewTopology">{{ t('control.topology.new') }}</button>
+        </div>
+      </div>
+      <div class="table-container">
+        <table class="data-table topologies-table">
+          <thead><tr><th>{{ t('control.table.topology') }}</th><th>{{ t('control.table.scope') }}</th><th>{{ t('control.table.activeRevision') }}</th><th>{{ t('control.table.deployment') }}</th><th>{{ t('control.table.description') }}</th><th>{{ t('control.table.actions') }}</th></tr></thead>
+          <tbody>
+            <tr v-if="loading && !loaded" class="state-row"><td colspan="6">{{ t('control.states.loading') }}</td></tr>
+            <tr v-for="topology in topologies" v-else :key="topology.id">
+              <td><span class="primary-cell">{{ topology.name || '-' }}</span><code class="secondary-cell">#{{ topology.id }}</code></td>
+              <td><code>{{ topology.service_scope || '-' }}</code></td>
+              <td><code>{{ topology.active_revision_id || '-' }}</code></td>
+              <td>
+                <span v-if="latestDeploymentFor(topology)" :class="['status-badge', stateClass(latestDeploymentFor(topology).state)]">{{ latestDeploymentFor(topology).state }}</span>
+                <span v-else class="secondary-cell">{{ t('control.topology.noDeployment') }}</span>
+              </td>
+              <td class="description-cell">{{ topology.description || '-' }}</td>
+              <td>
+                <div class="row-actions">
+                  <button class="btn btn-sm" type="button" @click="openTopologyEditor(topology)">{{ t('control.topology.edit') }}</button>
+                  <button v-if="latestDeploymentFor(topology)" class="btn btn-sm" type="button" @click="openDeploymentStatus(latestDeploymentFor(topology))">{{ t('control.topology.status') }}</button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="loaded && topologies.length === 0"><td colspan="6" class="empty-row">{{ t('control.empty.topologies') }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <div
       v-show="tab === 'operations'"
@@ -407,6 +440,118 @@
         </div>
       </section>
     </div>
+
+    <div v-if="topologyEditor.open" class="modal-overlay" @click.self="closeTopologyEditor">
+      <section class="modal modal-xl" role="dialog" aria-modal="true" aria-labelledby="topology-editor-title">
+        <div class="modal-header">
+          <div>
+            <h3 id="topology-editor-title">{{ t('control.topology.editorTitle') }}</h3>
+            <p class="modal-meta">{{ topologyEditor.topology?.name || topologyEditor.topology?.id }} / {{ t('control.topology.revision') }} {{ topologyEditor.revisionID || '-' }}</p>
+          </div>
+          <button class="btn btn-ghost close-btn" type="button" :aria-label="t('common.actions.close')" @click="closeTopologyEditor">x</button>
+        </div>
+        <div class="modal-body topology-editor-body">
+          <div class="topology-editor-toolbar">
+            <div class="form-group">
+              <label for="topology-revision-selector">{{ t('control.topology.revision') }}</label>
+              <select id="topology-revision-selector" v-model.number="topologyEditor.revisionID" :disabled="topologyEditor.loading || topologyEditor.saving" @change="loadTopologyRevisionDetail">
+                <option v-if="topologyRevisions.length === 0" :value="0">{{ t('control.topology.noRevisions') }}</option>
+                <option v-for="revision in topologyRevisions" :key="revision.id" :value="revision.id">r{{ revision.revision }} (#{{ revision.id }})</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="topology-rollout-group">{{ t('control.table.rolloutGroup') }}</label>
+              <input id="topology-rollout-group" v-model.trim="topologyEditor.rolloutGroup" type="text" autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label for="topology-failure-policy">{{ t('control.topology.failurePolicy') }}</label>
+              <select id="topology-failure-policy" v-model="topologyEditor.failurePolicy">
+                <option value="stop_and_rollback">{{ t('control.topology.stopAndRollback') }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="topology-revision-message">{{ t('control.topology.message') }}</label>
+            <input id="topology-revision-message" v-model.trim="topologyEditor.message" type="text" maxlength="500" />
+          </div>
+          <div class="form-group">
+            <label for="topology-editor-json">{{ t('control.topology.graphJSON') }}</label>
+            <textarea id="topology-editor-json" v-model="topologyEditor.json" rows="16" spellcheck="false" class="json-textarea"></textarea>
+            <p class="field-help">{{ t('control.topology.graphHelp') }}</p>
+          </div>
+          <p v-if="topologyEditorDirty" class="topology-dirty" role="status">{{ t('control.topology.unsavedChanges') }}</p>
+          <div v-if="topologyEditor.validation" class="topology-validation" :class="topologyEditor.validation.valid ? 'is-valid' : 'is-invalid'" role="status">
+            <strong>{{ topologyEditor.validation.valid ? t('control.topology.valid') : t('control.topology.invalid') }}</strong>
+            <ul v-if="topologyEditor.validation.issues?.length">
+              <li v-for="(issue, index) in topologyEditor.validation.issues" :key="`${issue.code || 'issue'}-${index}`">{{ issue.message || issue.code }}</li>
+            </ul>
+            <div v-if="topologyEditor.validation.checks?.length" class="topology-checks">
+              <span v-for="check in topologyEditor.validation.checks" :key="check.name" :class="['check-pill', check.status === 'passed' ? 'check-passed' : 'check-failed']">{{ check.name }}: {{ check.status }}</span>
+            </div>
+          </div>
+          <div v-if="topologyEditor.preview" class="topology-preview" role="status">
+            <strong>{{ t('control.topology.preview') }}</strong>
+            <span class="secondary-cell">{{ t('control.topology.previewSteps', { count: topologyEditor.preview.steps?.length || 0 }) }}</span>
+            <ol v-if="topologyEditor.preview.steps?.length" class="preview-steps">
+              <li v-for="step in topologyEditor.preview.steps" :key="`${step.order}-${step.vertex_key}`"><code>{{ step.vertex_key }}</code> / {{ step.apply_action }} / {{ step.rollback_mode }}<span v-if="step.config_hash"> / {{ shortHash(step.config_hash) }}</span></li>
+            </ol>
+          </div>
+          <div v-if="topologyEditor.deploymentStatus" class="topology-deployment-status" role="status">
+            <div class="status-line"><strong>{{ t('control.topology.deployment') }}</strong><code>#{{ topologyEditor.deploymentID }}</code><span :class="['status-badge', stateClass(topologyEditor.deploymentStatus.deployment?.state || topologyEditor.deploymentStatus.state)]">{{ topologyEditor.deploymentStatus.deployment?.state || topologyEditor.deploymentStatus.state || '-' }}</span></div>
+            <p v-if="topologyEditor.deploymentStatus.deployment?.last_error" class="row-error">{{ topologyEditor.deploymentStatus.deployment.last_error }}</p>
+            <div v-if="topologyEditor.deploymentStatus.steps?.length" class="secondary-cell">{{ t('control.topology.steps', { count: topologyEditor.deploymentStatus.steps.length }) }}</div>
+            <ul v-if="topologyEditor.deploymentStatus.operations?.length" class="deployment-timeline">
+              <li v-for="operation in topologyEditor.deploymentStatus.operations.slice(-8)" :key="operation.operation_id">
+                <code>{{ operation.kind }}</code> <span :class="['status-badge', stateClass(operation.state)]">{{ operation.state }}</span>
+                <span v-if="operation.last_error" class="row-error">{{ operation.last_error }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" type="button" :disabled="topologyEditor.saving || topologyEditor.loading" @click="closeTopologyEditor">{{ t('common.actions.cancel') }}</button>
+          <button id="topology-diagnose" class="btn" type="button" :disabled="topologyEditor.validating || topologyEditor.loading" @click="diagnoseTopology">
+            {{ topologyEditor.validating ? t('control.topology.validating') : t('control.topology.diagnose') }}
+          </button>
+          <button id="topology-preview" class="btn" type="button" :disabled="topologyEditor.validating || topologyEditor.loading || topologyEditorDirty || !topologyEditor.revisionID" @click="previewTopology">{{ t('control.topology.previewAction') }}</button>
+          <button id="topology-save-revision" class="btn btn-primary" type="button" :disabled="topologyEditor.saving || topologyEditor.loading" @click="saveTopologyRevision">{{ topologyEditor.saving ? t('control.actions.saving') : t('control.topology.saveRevision') }}</button>
+          <button id="topology-plan" class="btn" type="button" :disabled="topologyEditor.saving || topologyEditorDirty || !topologyEditor.revisionID" @click="planTopology">{{ t('control.topology.plan') }}</button>
+          <button id="topology-apply" class="btn btn-primary" type="button" :disabled="topologyEditor.saving || topologyEditorDirty || !topologyEditor.deploymentID || !canApplyDeployment(topologyEditor.deploymentStatus)" @click="applyDeployment">{{ t('control.topology.apply') }}</button>
+          <button id="topology-rollback" class="btn btn-danger" type="button" :disabled="topologyEditor.saving || topologyEditorDirty || !topologyEditor.deploymentID || !canRollbackDeployment(topologyEditor.deploymentStatus)" @click="rollbackDeployment">{{ t('control.topology.rollback') }}</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="newTopologyEditor.open" class="modal-overlay" @click.self="closeNewTopology">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="new-topology-title">
+        <div class="modal-header">
+          <h3 id="new-topology-title">{{ t('control.topology.newTitle') }}</h3>
+          <button class="btn btn-ghost close-btn" type="button" :aria-label="t('common.actions.close')" @click="closeNewTopology">x</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="new-topology-name">{{ t('control.topology.name') }}</label>
+            <input id="new-topology-name" v-model.trim="newTopologyEditor.name" type="text" maxlength="160" />
+          </div>
+          <div class="form-group">
+            <label for="new-topology-scope">{{ t('control.table.scope') }}</label>
+            <select id="new-topology-scope" v-model="newTopologyEditor.serviceScope">
+              <option v-for="scope in scopes" :key="scope.id" :value="scope.id">{{ scope.name || scope.id }} ({{ scope.id }})</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="new-topology-description">{{ t('control.table.description') }}</label>
+            <textarea id="new-topology-description" v-model.trim="newTopologyEditor.description" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" type="button" :disabled="newTopologyEditor.saving" @click="closeNewTopology">{{ t('common.actions.cancel') }}</button>
+          <button id="create-topology" class="btn btn-primary" type="button" :disabled="newTopologyEditor.saving || !newTopologyEditor.name || !newTopologyEditor.serviceScope" @click="createTopology">
+            {{ newTopologyEditor.saving ? t('control.actions.saving') : t('control.topology.create') }}
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -418,7 +563,13 @@ import PluginConfigForm from '@/components/admin/PluginConfigForm.vue'
 import { getNodes } from '@/api/admin'
 import {
   cancelKernelOperation,
+  createKernelTopology,
+  applyKernelDeployment,
+  createKernelTopologyRevision,
+  diagnoseKernelTopology,
   deleteKernelNodeAssignment,
+  getKernelDeploymentStatus,
+  getKernelDeployments,
   getKernelInstallationConfig,
   getKernelInstallations,
   getKernelNodeAssignments,
@@ -426,13 +577,19 @@ import {
   getKernelPluginReleases,
   getKernelPlugins,
   getKernelScopes,
+  getKernelTopologyRevision,
+  getKernelTopologyRevisions,
   getKernelTopologies,
+  planKernelDeployment,
+  previewKernelTopologyDeployment,
   registerKernelPluginRelease,
+  rollbackKernelDeployment,
   runKernelInstallationAction,
   updateKernelInstallationConfig,
   uploadKernelPluginReleaseArtifact,
   upsertKernelNodeAssignment,
-  upsertKernelInstallation
+  upsertKernelInstallation,
+  validateKernelTopology
 } from '@/api/kernel'
 import { adminExtensionErrors, adminExtensions, refreshAdminExtensions } from '@/extensions/runtime'
 
@@ -458,6 +615,7 @@ const releases = ref([])
 const installations = ref([])
 const scopes = ref([])
 const topologies = ref([])
+const deployments = ref([])
 const operations = ref([])
 const nodes = ref([])
 const selectedNodeID = ref(0)
@@ -468,6 +626,28 @@ const rowBusy = ref({})
 const operationBusy = ref('')
 const trackedOperationIDs = new Set()
 const polling = ref(false)
+const selectedTopologyID = ref(0)
+const topologyLoading = ref(false)
+const topologyRevisions = ref([])
+const topologyEditor = reactive({
+  open: false,
+  topology: null,
+  revisionID: 0,
+  message: '',
+  json: '{\n  "vertices": [],\n  "edges": []\n}',
+  baselineJSON: '{\n  "vertices": [],\n  "edges": []\n}',
+  baselineMessage: '',
+  rolloutGroup: '',
+  failurePolicy: 'stop_and_rollback',
+  validation: null,
+  deploymentID: 0,
+  deploymentStatus: null,
+  preview: null,
+  loading: false,
+  validating: false,
+  saving: false
+})
+const newTopologyEditor = reactive({ open: false, name: '', serviceScope: '', description: '', saving: false })
 let pollTimer = null
 let pollRequestRunning = false
 let disposed = false
@@ -541,6 +721,15 @@ const assignmentEditorValid = computed(() => Boolean(
   Number(assignmentEditor.desiredConfigRevision) >= 0
 ))
 
+const topologyDeploymentRows = computed(() => deployments.value.slice().sort((left, right) => {
+  const leftTime = Date.parse(left?.created_at || '') || 0
+  const rightTime = Date.parse(right?.created_at || '') || 0
+  return rightTime - leftTime || Number(right?.id || 0) - Number(left?.id || 0)
+}))
+const topologyEditorDirty = computed(() => topologyEditor.open && (
+  topologyEditor.json !== topologyEditor.baselineJSON || topologyEditor.message.trim() !== topologyEditor.baselineMessage.trim()
+))
+
 function parseManifest(release) {
   try {
     return typeof release?.manifest === 'string' ? JSON.parse(release.manifest) : release?.manifest || {}
@@ -560,6 +749,69 @@ function releasesForPlugin(pluginID) {
 
 function pluginName(pluginID) {
   return plugins.value.find(plugin => plugin.id === pluginID)?.name || pluginID
+}
+
+function shortHash(value) {
+  return typeof value === 'string' && value.length > 12 ? value.slice(0, 12) : value || '-'
+}
+
+function latestDeploymentFor(topology) {
+  return topologyDeploymentRows.value.find(deployment => Number(deployment.topology_id) === Number(topology?.id)) || null
+}
+
+function topologyGraphValue(value) {
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value || '{}')
+    } catch {
+      return {}
+    }
+  }
+  return value && typeof value === 'object' ? value : {}
+}
+
+function topologyInputFromJSON() {
+  let value
+  try {
+    value = JSON.parse(topologyEditor.json || '{}')
+  } catch {
+    throw new Error(t('control.topology.invalidJSON'))
+  }
+  const vertices = Array.isArray(value?.vertices) ? value.vertices.map(vertex => ({
+    key: String(vertex?.key || '').trim(),
+    kind: String(vertex?.kind || '').trim(),
+    node_id: vertex?.node_id === null || vertex?.node_id === undefined || vertex?.node_id === '' ? null : Number(vertex.node_id),
+    plugin_id: String(vertex?.plugin_id || '').trim(),
+    role: String(vertex?.role || '').trim(),
+    config: JSON.stringify(topologyGraphValue(vertex?.config ?? vertex?.config_json))
+  })) : []
+  const edges = Array.isArray(value?.edges) ? value.edges.map(edge => ({
+    source_key: String(edge?.source_key || '').trim(),
+    target_key: String(edge?.target_key || '').trim(),
+    protocol: String(edge?.protocol || '').trim(),
+    secret_id: String(edge?.secret_id || '').trim(),
+    config: JSON.stringify(topologyGraphValue(edge?.config ?? edge?.config_json))
+  })) : []
+  return { message: topologyEditor.message.trim(), vertices, edges }
+}
+
+function topologyJSONFromDetail(detail) {
+  const vertices = Array.isArray(detail?.vertices) ? detail.vertices.map(vertex => ({
+    key: vertex.key,
+    kind: vertex.kind,
+    ...(vertex.node_id ? { node_id: vertex.node_id } : {}),
+    ...(vertex.plugin_id ? { plugin_id: vertex.plugin_id } : {}),
+    ...(vertex.role ? { role: vertex.role } : {}),
+    config: topologyGraphValue(vertex.config)
+  })) : []
+  const edges = Array.isArray(detail?.edges) ? detail.edges.map(edge => ({
+    source_key: edge.source_key,
+    target_key: edge.target_key,
+    protocol: edge.protocol,
+    ...(edge.secret_id ? { secret_id: edge.secret_id } : {}),
+    config: topologyGraphValue(edge.config)
+  })) : []
+  return JSON.stringify({ vertices, edges }, null, 2)
 }
 
 function extractNodes(response) {
@@ -618,15 +870,17 @@ async function load(options = {}) {
   if (!options.silent) loading.value = true
   if (!options.silent) error.value = ''
   try {
-    const [pluginRowsValue, releaseRows, installationRows, scopeRows, topologyRows, operationRows, nodeRows] = await Promise.all([
-      getKernelPlugins(), getKernelPluginReleases(), getKernelInstallations(), getKernelScopes(), getKernelTopologies(), getKernelOperations(), getNodes({ page: 1, page_size: 200 })
+    const [pluginRowsValue, releaseRows, installationRows, scopeRows, topologyRows, deploymentRows, operationRows, nodeRows] = await Promise.all([
+      getKernelPlugins(), getKernelPluginReleases(), getKernelInstallations(), getKernelScopes(), getKernelTopologies(), getKernelDeployments(), getKernelOperations(), getNodes({ page: 1, page_size: 200 })
     ])
     plugins.value = Array.isArray(pluginRowsValue) ? pluginRowsValue : []
     releases.value = Array.isArray(releaseRows) ? releaseRows : []
     installations.value = Array.isArray(installationRows) ? installationRows : []
     scopes.value = Array.isArray(scopeRows) ? scopeRows : []
     topologies.value = Array.isArray(topologyRows) ? topologyRows : []
+    deployments.value = Array.isArray(deploymentRows) ? deploymentRows : []
     operations.value = Array.isArray(operationRows) ? operationRows : []
+    if (!topologies.value.some(topology => Number(topology.id) === Number(selectedTopologyID.value))) selectedTopologyID.value = Number(topologies.value[0]?.id || 0)
     nodes.value = extractNodes(nodeRows)
     if (!nodes.value.some(node => node.id === Number(selectedNodeID.value))) selectedNodeID.value = nodes.value[0]?.id || 0
     if (selectedNodeID.value) {
@@ -643,6 +897,314 @@ async function load(options = {}) {
   } finally {
     assignmentsLoading.value = false
     if (!options.silent) loading.value = false
+  }
+}
+
+async function loadTopologies() {
+  topologyLoading.value = true
+  error.value = ''
+  try {
+    const [topologyRows, deploymentRows] = await Promise.all([getKernelTopologies(), getKernelDeployments()])
+    topologies.value = Array.isArray(topologyRows) ? topologyRows : []
+    deployments.value = Array.isArray(deploymentRows) ? deploymentRows : []
+    if (!topologies.value.some(topology => Number(topology.id) === Number(selectedTopologyID.value))) selectedTopologyID.value = Number(topologies.value[0]?.id || 0)
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.topologyLoad')
+  } finally {
+    topologyLoading.value = false
+  }
+}
+
+function openNewTopology() {
+  Object.assign(newTopologyEditor, {
+    open: true,
+    name: '',
+    serviceScope: scopes.value[0]?.id || '',
+    description: '',
+    saving: false
+  })
+}
+
+function closeNewTopology() {
+  if (!newTopologyEditor.saving) newTopologyEditor.open = false
+}
+
+async function createTopology() {
+  if (!newTopologyEditor.name || !newTopologyEditor.serviceScope) return
+  newTopologyEditor.saving = true
+  error.value = ''
+  notice.value = ''
+  try {
+    const topology = await createKernelTopology({
+      name: newTopologyEditor.name,
+      service_scope: newTopologyEditor.serviceScope,
+      description: newTopologyEditor.description
+    })
+    newTopologyEditor.open = false
+    await loadTopologies()
+    selectedTopologyID.value = Number(topology?.id || selectedTopologyID.value)
+    notice.value = t('control.messages.topologyCreated', { name: topology?.name || newTopologyEditor.name })
+    if (topology?.id) await openTopologyEditor(topology)
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.topologyCreate')
+  } finally {
+    newTopologyEditor.saving = false
+  }
+}
+
+async function openTopologyEditor(topology = null) {
+  const selected = topology || topologies.value.find(row => Number(row.id) === Number(selectedTopologyID.value))
+  if (!selected) return
+  selectedTopologyID.value = Number(selected.id)
+  Object.assign(topologyEditor, {
+    open: true,
+    topology: selected,
+    revisionID: 0,
+    message: '',
+    json: '{\n  "vertices": [],\n  "edges": []\n}',
+    baselineJSON: '{\n  "vertices": [],\n  "edges": []\n}',
+    baselineMessage: '',
+    rolloutGroup: '',
+    failurePolicy: 'stop_and_rollback',
+    validation: null,
+    deploymentID: 0,
+    deploymentStatus: null,
+    preview: null,
+    loading: true,
+    validating: false,
+    saving: false
+  })
+  try {
+    const rows = await getKernelTopologyRevisions(selected.id)
+    topologyRevisions.value = Array.isArray(rows) ? rows : []
+    const active = topologyRevisions.value.find(row => Number(row.id) === Number(selected.active_revision_id))
+    topologyEditor.revisionID = Number(active?.id || topologyRevisions.value[0]?.id || 0)
+    if (topologyEditor.revisionID) await loadTopologyRevisionDetail()
+    const deployment = latestDeploymentFor(selected)
+    if (deployment) {
+      topologyEditor.deploymentID = Number(deployment.id)
+      await refreshDeploymentStatus(deployment.id)
+    }
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.topologyLoad')
+  } finally {
+    topologyEditor.loading = false
+  }
+}
+
+async function loadTopologyRevisionDetail() {
+  if (!topologyEditor.topology?.id || !topologyEditor.revisionID) return
+  topologyEditor.loading = true
+  error.value = ''
+  try {
+    const detail = await getKernelTopologyRevision(topologyEditor.topology.id, topologyEditor.revisionID)
+    topologyEditor.json = topologyJSONFromDetail(detail)
+    topologyEditor.message = detail?.revision?.message || ''
+    topologyEditor.baselineJSON = topologyEditor.json
+    topologyEditor.baselineMessage = topologyEditor.message
+    topologyEditor.validation = null
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.topologyLoad')
+  } finally {
+    topologyEditor.loading = false
+  }
+}
+
+function closeTopologyEditor() {
+  if (!topologyEditor.saving && !topologyEditor.validating) topologyEditor.open = false
+}
+
+async function diagnoseTopology() {
+  topologyEditor.validating = true
+  error.value = ''
+  notice.value = ''
+  try {
+    const input = topologyInputFromJSON()
+    const graphResult = await validateKernelTopology(input)
+    let result = {
+      valid: Boolean(graphResult?.valid),
+      issues: Array.isArray(graphResult?.issues) ? graphResult.issues : [],
+      checks: []
+    }
+    if (topologyEditor.topology?.id && topologyEditor.revisionID) {
+      const serverResult = await diagnoseKernelTopology(topologyEditor.topology.id, topologyEditor.revisionID, {
+        rolloutGroup: topologyEditor.rolloutGroup,
+        failurePolicy: topologyEditor.failurePolicy
+      })
+      result = {
+        ...serverResult,
+        valid: result.valid && Boolean(serverResult?.valid),
+        issues: [...result.issues, ...(Array.isArray(serverResult?.issues) ? serverResult.issues : [])],
+        checks: Array.isArray(serverResult?.checks) ? serverResult.checks : []
+      }
+      topologyEditor.preview = serverResult
+    }
+    topologyEditor.validation = result
+    if (!topologyEditor.validation.valid) throw new Error(t('control.topology.invalid'))
+    notice.value = t('control.messages.topologyValidated')
+    return true
+  } catch (cause) {
+    if (cause?.message === t('control.topology.invalid')) {
+      // Validation issues are already rendered in the modal; do not replace
+      // them with a generic request error.
+      return false
+    }
+    error.value = errorMessage(cause, 'control.errors.topologyValidate')
+    return false
+  } finally {
+    topologyEditor.validating = false
+  }
+}
+
+async function saveTopologyRevision() {
+  if (!topologyEditor.topology?.id) return false
+  topologyEditor.saving = true
+  error.value = ''
+  notice.value = ''
+  try {
+    const input = topologyInputFromJSON()
+    const validation = await validateKernelTopology(input)
+    topologyEditor.validation = {
+      valid: Boolean(validation?.valid),
+      issues: Array.isArray(validation?.issues) ? validation.issues : []
+    }
+    if (!topologyEditor.validation.valid) throw new Error(t('control.topology.invalid'))
+    const revision = await createKernelTopologyRevision(topologyEditor.topology.id, input)
+    const rows = await getKernelTopologyRevisions(topologyEditor.topology.id)
+    topologyRevisions.value = Array.isArray(rows) ? rows : [...topologyRevisions.value, revision]
+    topologyEditor.revisionID = Number(revision?.id || topologyRevisions.value[0]?.id || 0)
+    topologyEditor.message = revision?.message || input.message
+    topologyEditor.baselineJSON = topologyEditor.json
+    topologyEditor.baselineMessage = topologyEditor.message
+    await loadTopologies()
+    notice.value = t('control.messages.topologyRevisionSaved', { revision: revision?.revision || '-' })
+    return true
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.topologySave')
+    return false
+  } finally {
+    topologyEditor.saving = false
+  }
+}
+
+async function previewTopology() {
+  if (!topologyEditor.topology?.id || !topologyEditor.revisionID) return false
+  topologyEditor.validating = true
+  error.value = ''
+  try {
+    const preview = await previewKernelTopologyDeployment(topologyEditor.topology.id, topologyEditor.revisionID, {
+      rolloutGroup: topologyEditor.rolloutGroup,
+      failurePolicy: topologyEditor.failurePolicy
+    })
+    topologyEditor.preview = preview
+    topologyEditor.validation = preview
+    return Boolean(preview?.valid)
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.topologyPreview')
+    return false
+  } finally {
+    topologyEditor.validating = false
+  }
+}
+
+async function planTopology() {
+  if (!topologyEditor.topology?.id || !topologyEditor.revisionID || topologyEditorDirty.value) return false
+  topologyEditor.saving = true
+  error.value = ''
+  notice.value = ''
+  try {
+    const preview = await previewKernelTopologyDeployment(topologyEditor.topology.id, topologyEditor.revisionID, {
+      rolloutGroup: topologyEditor.rolloutGroup,
+      failurePolicy: topologyEditor.failurePolicy
+    })
+    topologyEditor.preview = preview
+    topologyEditor.validation = preview
+    if (!preview?.valid) throw new Error(t('control.topology.invalid'))
+    const result = await planKernelDeployment({
+      topology_id: Number(topologyEditor.topology.id),
+      revision_id: Number(topologyEditor.revisionID),
+      rollout_group: topologyEditor.rolloutGroup.trim(),
+      failure_policy: topologyEditor.failurePolicy
+    })
+    const deployment = result?.deployment || result
+    topologyEditor.deploymentID = Number(deployment?.id || 0)
+    if (!topologyEditor.deploymentID) throw new Error(t('control.errors.topologyPlan'))
+    deployments.value = [deployment, ...deployments.value.filter(row => Number(row.id) !== topologyEditor.deploymentID)]
+    await refreshDeploymentStatus(topologyEditor.deploymentID)
+    notice.value = t('control.messages.topologyPlanned', { id: topologyEditor.deploymentID })
+    return true
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.topologyPlan')
+    return false
+  } finally {
+    topologyEditor.saving = false
+  }
+}
+
+async function refreshDeploymentStatus(deploymentID = topologyEditor.deploymentID) {
+  if (!deploymentID) return null
+  const status = await getKernelDeploymentStatus(deploymentID)
+  topologyEditor.deploymentID = Number(deploymentID)
+  topologyEditor.deploymentStatus = status
+  const deployment = status?.deployment || status
+  if (deployment?.id) deployments.value = [deployment, ...deployments.value.filter(row => Number(row.id) !== Number(deployment.id))]
+  return status
+}
+
+async function openDeploymentStatus(deployment) {
+  const topology = topologies.value.find(row => Number(row.id) === Number(deployment?.topology_id))
+  await openTopologyEditor(topology)
+  if (deployment?.id) {
+    try {
+      await refreshDeploymentStatus(deployment.id)
+    } catch (cause) {
+      error.value = errorMessage(cause, 'control.errors.topologyStatus')
+    }
+  }
+}
+
+function deploymentState(status) {
+  return status?.deployment?.state || status?.state || ''
+}
+
+function canApplyDeployment(status) {
+  return ['planned', 'applying'].includes(deploymentState(status))
+}
+
+function canRollbackDeployment(status) {
+  return !['', 'rollback_requested', 'rollback_configuring', 'rollback_enabling', 'rollback_disabling', 'rolled_back'].includes(deploymentState(status))
+}
+
+async function applyDeployment() {
+  if (!topologyEditor.deploymentID || topologyEditorDirty.value) return
+  topologyEditor.saving = true
+  error.value = ''
+  try {
+    await applyKernelDeployment(topologyEditor.deploymentID)
+    await refreshDeploymentStatus()
+    await loadTopologies()
+    notice.value = t('control.messages.topologyApplyRequested')
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.topologyApply')
+  } finally {
+    topologyEditor.saving = false
+  }
+}
+
+async function rollbackDeployment() {
+  if (!topologyEditor.deploymentID || topologyEditorDirty.value) return
+  if (!confirm(t('control.topology.rollbackConfirm'))) return
+  topologyEditor.saving = true
+  error.value = ''
+  try {
+    await rollbackKernelDeployment(topologyEditor.deploymentID)
+    await refreshDeploymentStatus()
+    await loadTopologies()
+    notice.value = t('control.messages.topologyRollbackRequested')
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.topologyRollback')
+  } finally {
+    topologyEditor.saving = false
   }
 }
 
@@ -1099,8 +1661,35 @@ onBeforeUnmount(() => {
 .assignments-toolbar-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .assignments-table { min-width: 1040px; }
 .scopes-table { min-width: 620px; }
-.topologies-table { min-width: 680px; }
+.topologies-table { min-width: 980px; }
 .operations-table { min-width: 920px; }
+.topology-panel { display: grid; gap: 12px; min-width: 0; }
+.topology-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.topology-selection { display: grid; gap: 5px; min-width: min(360px, 100%); }
+.topology-selection label, .topology-editor-toolbar label { color: var(--text-secondary); font-size: 12px; font-weight: 700; }
+.topology-selection select { min-height: 38px; }
+.topology-editor-body { display: grid; gap: 14px; }
+.topology-editor-toolbar { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.topology-editor-toolbar .form-group { margin: 0; }
+.topology-validation, .topology-deployment-status { padding: 10px 12px; border-left: 3px solid var(--warning-color); background: rgba(217, 119, 6, 0.08); }
+.topology-validation.is-valid { border-left-color: var(--success-color); background: rgba(22, 163, 74, 0.08); }
+.topology-validation.is-invalid { border-left-color: var(--error-color); background: rgba(220, 38, 38, 0.08); }
+.topology-dirty { margin: 0; padding: 9px 12px; border-left: 3px solid var(--warning-color); color: var(--warning-color); background: rgba(217, 119, 6, 0.08); font-size: 12px; }
+.topology-validation ul { margin: 7px 0 0; padding-left: 20px; }
+.topology-validation li + li { margin-top: 4px; }
+.topology-checks { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
+.check-pill { display: inline-flex; padding: 3px 7px; border-radius: 999px; font-size: 11px; }
+.check-passed { color: var(--success-color); background: rgba(22, 163, 74, 0.1); }
+.check-failed { color: var(--error-color); background: rgba(220, 38, 38, 0.1); }
+.topology-preview { padding: 10px 12px; border-left: 3px solid var(--primary-color); background: rgba(37, 99, 235, 0.06); }
+.preview-steps { max-height: 160px; margin: 8px 0 0; padding-left: 21px; overflow: auto; }
+.preview-steps li + li { margin-top: 4px; }
+.deployment-timeline { max-height: 180px; margin: 8px 0 0; padding-left: 20px; overflow: auto; }
+.deployment-timeline li { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.deployment-timeline li + li { margin-top: 6px; }
+.status-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.status-line strong { margin-right: auto; }
+.modal-xl { width: min(980px, 100%); }
 .primary-cell, .secondary-cell, .plugin-description, .row-error, .version-line { display: block; }
 .secondary-cell { width: fit-content; margin-top: 3px; color: var(--text-secondary); font-size: 11px; }
 .plugin-description { max-width: 260px; margin-top: 5px; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
@@ -1133,6 +1722,7 @@ onBeforeUnmount(() => {
   .assignments-toolbar-actions .btn { flex: 1; }
   .assignment-form-grid { grid-template-columns: 1fr; }
   .assignment-rollout-field { grid-column: auto; }
+  .topology-editor-toolbar { grid-template-columns: 1fr; }
   .tab { padding-inline: 10px; }
   .modal-overlay { padding: 10px; }
 }
