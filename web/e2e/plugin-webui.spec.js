@@ -57,6 +57,8 @@ function extensionEntry({
   installationID = 1,
   permission = `${pluginID}.view`,
   label = pluginID,
+  parent = 'services',
+  order = 10,
 }) {
   const actualSHA256 = sha256(source)
   const bundleSHA256 = declaredSHA256 || actualSHA256
@@ -76,12 +78,12 @@ function extensionEntry({
     permissions: [permission],
     menus: [{
       id: `${pluginID}.main`,
-      parent: 'services',
+      parent,
       label,
       icon: 'box',
       route,
       permission,
-      order: 10,
+      order,
     }],
     routes: [{
       id: `${pluginID}.main`,
@@ -228,6 +230,52 @@ test('installs a signed WebUI bundle and isolates invalid plugin routes from cor
   expect(assetRequests).toEqual([
     `/api/v3/extensions/browser-fixture/1.0.0/webui/${valid.bundle.sha256}/index.mjs`,
   ])
+})
+
+test('groups signed extension menus by parent and sorts each parent bucket', async ({ page }) => {
+  const fixtures = [
+    { pluginID: 'service-a', label: 'Service A', parent: 'services', order: 20 },
+    { pluginID: 'service-b', label: 'Service B', parent: 'services', order: 10 },
+    { pluginID: 'operation', label: 'Operation', parent: 'operations', order: 30 },
+    { pluginID: 'system', label: 'System Extension', parent: 'system', order: 40 },
+    { pluginID: 'legacy', label: 'Legacy Extension', parent: 'legacy-parent', order: 50 },
+  ]
+  const catalog = fixtures.map((fixture, index) => {
+    const source = extensionSource(fixture.pluginID, '1.0.0', fixture.label)
+    return {
+      entry: extensionEntry({
+        ...fixture,
+        source,
+        installationID: index + 1,
+        permission: `${fixture.pluginID}.view`,
+      }),
+      source,
+    }
+  })
+
+  await installAPIFixtures(
+    page,
+    catalog.map(item => item.entry),
+    Object.fromEntries(catalog.map(item => [item.entry.plugin_id, item.source]))
+  )
+  await seedAdmin(page, fixtures.map(fixture => `${fixture.pluginID}.view`))
+
+  await page.goto('/admin/dashboard')
+  await expect(page.locator('a[href="/admin/extensions/service-a"]')).toBeVisible()
+
+  const parents = await page.locator('section[data-extension-parent]').evaluateAll(sections => (
+    sections.map(section => section.getAttribute('data-extension-parent'))
+  ))
+  expect(parents).toEqual(['services', 'operations', 'system', 'extensions'])
+
+  const serviceLinks = await page.locator('section[data-extension-parent="services"] a.nav-link').evaluateAll(links => (
+    links.map(link => link.getAttribute('href'))
+  ))
+  expect(serviceLinks).toEqual([
+    '/admin/extensions/service-b',
+    '/admin/extensions/service-a',
+  ])
+  await expect(page.locator('section[data-extension-parent="extensions"] a[href="/admin/extensions/legacy"]')).toBeVisible()
 })
 
 test('disabled and tampered plugins fail closed without contaminating core admin UI', async ({ page }) => {

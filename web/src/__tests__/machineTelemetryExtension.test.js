@@ -6,7 +6,7 @@ import createMachineTelemetryExtension, { anixopsExtension } from '@/extensions/
 function host(request) {
   return {
     pluginID: 'machine-telemetry',
-    version: '1.0.0',
+    version: '1.1.0',
     computed,
     defineComponent,
     h,
@@ -21,7 +21,7 @@ describe('machine-telemetry WebUI package', () => {
   it('binds its import-free factory to the versioned host contract', () => {
     expect(anixopsExtension).toEqual({
       pluginId: 'machine-telemetry',
-      version: '1.0.0',
+      version: '1.1.0',
       webuiApiVersion: 'anixops.webui/v1',
       bundle: { path: 'webui/index.mjs' },
     })

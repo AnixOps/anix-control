@@ -90,7 +90,7 @@ describe('kernel API', () => {
   })
 
   it('upserts installations and dispatches idempotent lifecycle actions', async () => {
-    const installation = { plugin_id: 'machine-telemetry', target: 'control', desired_version: '1.0.0', enabled: true }
+    const installation = { plugin_id: 'machine-telemetry', target: 'control', desired_version: '1.1.0', enabled: true }
     await kernelApi.upsertKernelInstallation(installation)
     expect(mockRequest).toHaveBeenLastCalledWith({
       baseURL: '/api/v3',

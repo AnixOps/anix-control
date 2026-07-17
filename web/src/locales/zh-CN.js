@@ -288,6 +288,9 @@ export default {
         notifications: '通知',
         content: '内容管理',
         extensions: '扩展',
+        extensionServices: '扩展 / 服务',
+        extensionOperations: '扩展 / 运维',
+        extensionSystem: '扩展 / 系统',
         system: '系统'
       },
       nav: {

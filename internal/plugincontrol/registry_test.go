@@ -42,10 +42,24 @@ func TestRegistryRequiresExactPluginVersion(t *testing.T) {
 	require.Error(t, registry.Register(registryTestExecutor{id: "example", version: "1.0.0"}))
 }
 
+func TestDefaultRegistryKeepsLegacyMachineTelemetryExecutorDuringUpgrade(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.PluginTelemetryState{}))
+	registry, err := DefaultRegistry(db)
+	require.NoError(t, err)
+	current, ok := registry.Lookup(MachineTelemetryPluginID, MachineTelemetryVersion)
+	require.True(t, ok)
+	require.Equal(t, MachineTelemetryVersion, current.Version())
+	legacy, ok := registry.Lookup(MachineTelemetryPluginID, MachineTelemetryLegacyVersion)
+	require.True(t, ok)
+	require.Equal(t, MachineTelemetryLegacyVersion, legacy.Version())
+}
+
 func TestMachineTelemetryExecutorReturnsBoundedHeartbeatMetrics(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Node{}))
+	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.PluginTelemetryState{}))
 	now := time.Unix(1_800_000_000, 0).UTC()
 	recent := now.Add(-time.Minute).Unix()
 	stale := now.Add(-10 * time.Minute).Unix()
@@ -58,6 +72,16 @@ func TestMachineTelemetryExecutorReturnsBoundedHeartbeatMetrics(t *testing.T) {
 		require.NoError(t, db.Create(&nodes[index]).Error)
 	}
 	require.NoError(t, db.Model(&nodes[1]).Updates(map[string]any{"runtime_healthy": false, "runtime_error": "process stopped"}).Error)
+	require.NoError(t, db.Create(&model.PluginTelemetryState{
+		NodeID: nodes[0].ID, PluginID: MachineTelemetryPluginID,
+		MetricsJSON: `{"cpu_usage_percent":33.5,"memory_usage_percent":44,"disk_usage_percent":55,"uptime_seconds":120}`,
+		ObservedAt:  now.Add(-time.Minute), ReceivedAt: now.Add(-time.Minute),
+	}).Error)
+	require.NoError(t, db.Create(&model.PluginTelemetryState{
+		NodeID: nodes[1].ID, PluginID: MachineTelemetryPluginID,
+		MetricsJSON: `{"cpu_usage_percent":1,"memory_usage_percent":2,"disk_usage_percent":3,"uptime_seconds":10}`,
+		ObservedAt:  now.Add(-10 * time.Minute), ReceivedAt: now.Add(-10 * time.Minute),
+	}).Error)
 
 	executor := NewMachineTelemetryExecutor(db)
 	executor.now = func() time.Time { return now }
@@ -70,9 +94,12 @@ func TestMachineTelemetryExecutorReturnsBoundedHeartbeatMetrics(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, MachineTelemetryPluginID, status.PluginID)
 	require.Equal(t, MachineTelemetryVersion, status.Version)
-	require.Equal(t, MachineTelemetrySummary{Total: 3, Online: 1, Offline: 1, Disabled: 1, Unhealthy: 1}, status.Summary)
+	require.Equal(t, MachineTelemetrySummary{Total: 3, Online: 1, Offline: 1, Disabled: 1, Unhealthy: 1, Stale: 1, Missing: 1}, status.Summary)
 	require.Len(t, status.Nodes, 3)
-	require.Equal(t, 12.5, status.Nodes[0].CPUUsage)
+	require.Equal(t, 33.5, status.Nodes[0].CPUUsage)
+	require.Equal(t, "plugin", status.Nodes[0].TelemetrySource)
+	require.True(t, status.Nodes[0].TelemetryAvailable)
+	require.True(t, status.Nodes[1].TelemetryStale)
 	require.False(t, status.Nodes[1].RuntimeHealthy)
 	require.Equal(t, "process stopped", status.Nodes[1].RuntimeError)
 

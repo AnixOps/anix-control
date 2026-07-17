@@ -19,9 +19,16 @@ func newObservedTopologyFixture(t *testing.T) (*model.TopologyDeployment, uint, 
 	require.NoError(t, db.Create(&topology).Error)
 	revision := model.TopologyRevision{TopologyID: topology.ID, Revision: 1, State: "published", ContentHash: "hash", CreatedBy: 1}
 	require.NoError(t, db.Create(&revision).Error)
-	require.NoError(t, db.Create(&model.TopologyVertex{RevisionID: revision.ID, Key: "entry", Kind: "plugin", NodeID: &node.ID, PluginID: "nftables-forward", Role: "cn_dedicated_nftables", ConfigJSON: `{}`}).Error)
+	vertex := model.TopologyVertex{RevisionID: revision.ID, Key: "entry", Kind: "plugin", NodeID: &node.ID, PluginID: "nftables-forward", Role: "cn_dedicated_nftables", ConfigJSON: `{}`}
+	require.NoError(t, db.Create(&vertex).Error)
 	deployment := &model.TopologyDeployment{TopologyID: topology.ID, RevisionID: revision.ID, State: "planned", FailurePolicy: "stop_and_rollback", CreatedBy: 1}
 	require.NoError(t, db.Create(deployment).Error)
+	require.NoError(t, db.Create(&model.TopologyDeploymentStep{
+		DeploymentID: deployment.ID, VertexID: vertex.ID, VertexKey: vertex.Key,
+		NodeID: node.ID, PluginID: vertex.PluginID, Role: vertex.Role,
+		TargetVersion: "1.0.0", ApplyOrder: 1, ApplyAction: "configure_enable",
+		ConfigJSON: `{}`, RollbackMode: "disable", RollbackConfigJSON: `{}`, State: "planned",
+	}).Error)
 	return deployment, node.ID, db
 }
 
@@ -78,10 +85,19 @@ func TestApplyTopologyObservedStateWaitsForEveryDeploymentNode(t *testing.T) {
 	deployment, firstNodeID, db := newObservedTopologyFixture(t)
 	secondNode := model.Node{Name: "observed-node-two", Host: "127.0.0.2", APIKey: "observed-node-two-key"}
 	require.NoError(t, db.Create(&secondNode).Error)
-	require.NoError(t, db.Create(&model.TopologyVertex{
+	secondVertex := model.TopologyVertex{
 		RevisionID: deployment.RevisionID, Key: "exit", Kind: "plugin", NodeID: &secondNode.ID,
 		PluginID: "nftables-forward", Role: "cn_dedicated_nftables", ConfigJSON: `{}`,
-	}).Error)
+	}
+	require.NoError(t, db.Create(&secondVertex).Error)
+	var secondStep model.TopologyDeploymentStep
+	secondStep = model.TopologyDeploymentStep{
+		DeploymentID: deployment.ID, VertexID: secondVertex.ID, VertexKey: secondVertex.Key,
+		NodeID: secondNode.ID, PluginID: secondVertex.PluginID, Role: secondVertex.Role,
+		TargetVersion: "1.0.0", ApplyOrder: 2, ApplyAction: "configure_enable",
+		ConfigJSON: `{}`, RollbackMode: "disable", RollbackConfigJSON: `{}`, State: "planned",
+	}
+	require.NoError(t, db.Create(&secondStep).Error)
 
 	_, changed, err := ApplyTopologyObservedState(db, TopologyObservedStateUpdate{
 		DeploymentID: deployment.ID, NodeID: firstNodeID, DesiredRevision: 1,
@@ -101,4 +117,27 @@ func TestApplyTopologyObservedStateWaitsForEveryDeploymentNode(t *testing.T) {
 	require.True(t, changed)
 	require.NoError(t, db.First(&stored, deployment.ID).Error)
 	require.Equal(t, "succeeded", stored.State)
+}
+
+func TestApplyTopologyObservedStateSupportsLegacyFullDeploymentWithoutSteps(t *testing.T) {
+	deployment, nodeID, db := newObservedTopologyFixture(t)
+	require.NoError(t, db.Where("deployment_id = ?", deployment.ID).Delete(&model.TopologyDeploymentStep{}).Error)
+	state, changed, err := ApplyTopologyObservedState(db, TopologyObservedStateUpdate{
+		DeploymentID: deployment.ID, NodeID: nodeID, DesiredRevision: 1,
+		ObservedRevision: 1, State: "succeeded",
+	})
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, "succeeded", state.State)
+}
+
+func TestApplyTopologyObservedStateRejectsCanaryWithoutDurableSteps(t *testing.T) {
+	deployment, nodeID, db := newObservedTopologyFixture(t)
+	require.NoError(t, db.Model(deployment).Update("rollout_group", "canary-a").Error)
+	require.NoError(t, db.Where("deployment_id = ?", deployment.ID).Delete(&model.TopologyDeploymentStep{}).Error)
+	_, _, err := ApplyTopologyObservedState(db, TopologyObservedStateUpdate{
+		DeploymentID: deployment.ID, NodeID: nodeID, DesiredRevision: 1,
+		ObservedRevision: 1, State: "succeeded",
+	})
+	require.ErrorContains(t, err, "has no durable steps")
 }

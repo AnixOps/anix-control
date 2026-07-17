@@ -23,7 +23,12 @@
       </div>
 
       <nav class="sidebar-nav" :aria-label="t('layout.admin.mobileTitle')">
-        <section v-for="section in navSections" :key="section.title" class="nav-section">
+        <section
+          v-for="section in navSections"
+          :key="section.id || section.title"
+          class="nav-section"
+          :data-extension-parent="section.kind === 'extension' ? section.parent : undefined"
+        >
           <div class="nav-section-title">{{ section.title }}</div>
           <template v-if="section.kind === 'forward'">
             <ForwardSuiteNav />
@@ -100,6 +105,11 @@ import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
 import { getSystemInfo } from '@/api/admin'
 import { adminExtensionMenus } from '@/extensions/runtime'
+import {
+  WEBUI_MENU_FALLBACK_PARENT,
+  WEBUI_MENU_PARENT_REGISTRY,
+  normalizeWebUIMenuParent
+} from '@/extensions/menuRegistry'
 
 const router = useRouter()
 const route = useRoute()
@@ -114,6 +124,21 @@ const systemBuildTime = ref('')
 const systemCommit = ref('')
 const frontendBuildCode = import.meta.env.VITE_APP_BUILD_CODE || ''
 const frontendBuildTime = import.meta.env.VITE_APP_BUILD_TIME || ''
+
+const extensionSectionTitleKeys = {
+  services: 'layout.admin.sections.extensionServices',
+  operations: 'layout.admin.sections.extensionOperations',
+  system: 'layout.admin.sections.extensionSystem',
+  [WEBUI_MENU_FALLBACK_PARENT]: 'layout.admin.sections.extensions'
+}
+
+function compareExtensionMenus(left, right) {
+  const leftOrder = Number.isSafeInteger(left.order) ? left.order : 1000
+  const rightOrder = Number.isSafeInteger(right.order) ? right.order : 1000
+  return leftOrder - rightOrder ||
+    String(left.label || '').localeCompare(String(right.label || '')) ||
+    String(left.id || '').localeCompare(String(right.id || ''))
+}
 
 const navSections = computed(() => {
   const sections = [
@@ -176,12 +201,26 @@ const navSections = computed(() => {
     ]
   }
   ]
-  const visibleExtensionMenus = adminExtensionMenus.value.filter(item => userStore.hasPermission(item.permission))
-  if (visibleExtensionMenus.length > 0) {
-    sections.splice(sections.length - 1, 0, {
-      title: t('layout.admin.sections.extensions'),
-      items: visibleExtensionMenus
-    })
+  const extensionMenusByParent = new Map(WEBUI_MENU_PARENT_REGISTRY.map(parent => [parent, []]))
+  for (const item of adminExtensionMenus.value.filter(menu => userStore.hasPermission(menu.permission))) {
+    const parent = normalizeWebUIMenuParent(item.parent)
+    extensionMenusByParent.get(parent).push({ ...item, parent })
+  }
+  const extensionSections = WEBUI_MENU_PARENT_REGISTRY.flatMap(parent => {
+    const items = extensionMenusByParent.get(parent).sort(compareExtensionMenus)
+    if (items.length === 0) {
+      return []
+    }
+    return [{
+      id: `extension:${parent}`,
+      kind: 'extension',
+      parent,
+      title: t(extensionSectionTitleKeys[parent]),
+      items
+    }]
+  })
+  if (extensionSections.length > 0) {
+    sections.splice(sections.length - 1, 0, ...extensionSections)
   }
   return sections
 })

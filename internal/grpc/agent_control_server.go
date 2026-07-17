@@ -690,12 +690,20 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 
 		switch payload := message.Payload.(type) {
 		case *agentv1pb.AgentToControl_Heartbeat:
+			if payload.Heartbeat == nil {
+				return status.Error(codes.InvalidArgument, "heartbeat payload is required")
+			}
 			if payload.Heartbeat.SessionId != connection.SessionID {
 				return status.Error(codes.FailedPrecondition, "heartbeat session_id does not match")
 			}
 			connection.touch(payload.Heartbeat.ObservedRevision)
 			if err := s.nodeService.UpdateLastCheckAt(uint(nodeID)); err != nil {
 				slog.Warn("failed to persist agent heartbeat", "component", "agent-control", "node_id", nodeID, "error", err)
+			}
+			if len(payload.Heartbeat.Metrics) > 0 {
+				if accepted, err := s.nodeService.RecordPluginTelemetry(uint(nodeID), payload.Heartbeat.Metrics, time.Now()); err != nil {
+					slog.Warn("failed to persist agent plugin telemetry", "component", "agent-control", "node_id", nodeID, "accepted_metrics", accepted, "error", err)
+				}
 			}
 			if err := connection.send(&agentv1pb.ControlToAgent{
 				RequestId:    message.RequestId,

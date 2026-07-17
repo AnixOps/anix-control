@@ -33,6 +33,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/middleware"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -67,6 +68,11 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
+	previousConfig := config.Get()
+	config.Set(&config.Config{Plugins: config.PluginConfig{
+		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlExecutionEnabled: true,
+	}})
+	t.Cleanup(func() { config.Set(previousConfig) })
 	manifest := crossRepositoryMachineTelemetryManifest(artifact, entrypoint, webUI)
 	canonicalManifest, err := service.CanonicalPluginManifest(manifest)
 	require.NoError(t, err)
@@ -87,6 +93,10 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	storedArtifact, err := service.StorePluginArtifact(db, release.ID, artifact)
 	require.NoError(t, err)
 	require.Greater(t, storedArtifact.SizeBytes, int64(crossRepoPluginE2EArtifactMinimum))
+	require.NoError(t, db.Create(&model.PluginInstallation{
+		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
+		ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
+	}).Error)
 
 	const (
 		nodeAPIKey      = "cross-repository-package-node-key"
@@ -112,7 +122,13 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	require.NoError(t, err)
 	manager := controlgrpc.NewAgentControlManager()
 	grpcServer := googlegrpc.NewServer(googlegrpc.ChainStreamInterceptor(controlgrpc.StreamAuthInterceptor("", "")))
-	agentv1pb.RegisterAgentControlServiceServer(grpcServer, controlgrpc.NewAgentControlGRPCServer(manager))
+	// The production server advertises a conservative 20-second heartbeat. The
+	// process fixture uses this test-only stream wrapper to reduce the interval
+	// to one second, keeping this release gate deterministic without changing
+	// the production heartbeat contract.
+	agentv1pb.RegisterAgentControlServiceServer(grpcServer, &crossRepositoryFastHeartbeatServer{
+		delegate: controlgrpc.NewAgentControlGRPCServer(manager),
+	})
 	serverErr := serveCrossRepositoryGRPCServer(grpcServer, listener)
 	t.Cleanup(func() { stopCrossRepositoryGRPCServer(t, grpcServer, serverErr) })
 
@@ -143,7 +159,7 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 
 	waitForCrossRepositoryOperationChain(t, db, bridge, resultFile, &fixtureOutput, chain.Install, chain.Update, chain.Enable)
 	pluginDir := filepath.Join(pluginRoot, manifest.ID, manifest.Version)
-	assertCrossRepositoryImmutablePluginPackage(t, pluginDir, artifact, canonicalManifest, signature, configJSON)
+	assertCrossRepositoryImmutablePluginPackage(t, pluginDir, manifest.Version, artifact, canonicalManifest, signature, configJSON)
 	assertCrossRepositoryPluginHealth(t, filepath.Join(socketDir, manifest.ID+".sock"))
 	state := readCrossRepositoryPluginState(t, pluginRoot, manifest.ID)
 	require.Equal(t, manifest.Version, state.DesiredVersion)
@@ -152,6 +168,27 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	require.Equal(t, "healthy", state.Health)
 	require.Equal(t, uint64(chain.Enable.Revision), state.ObservedRevision)
 	require.Empty(t, state.LastError)
+
+	waitForCrossRepositoryPluginTelemetry(t, db, node.ID, 15*time.Second)
+	status := getCrossRepositoryMachineTelemetryStatus(t, httpServer.URL)
+	var telemetryNode *plugincontrol.MachineTelemetryNode
+	for index := range status.Nodes {
+		if status.Nodes[index].ID == node.ID {
+			telemetryNode = &status.Nodes[index]
+			break
+		}
+	}
+	require.NotNil(t, telemetryNode)
+	require.True(t, telemetryNode.TelemetryAvailable)
+	require.Equal(t, "plugin", telemetryNode.TelemetrySource)
+	require.False(t, telemetryNode.TelemetryStale)
+	require.GreaterOrEqual(t, telemetryNode.CPUUsage, float64(0))
+	require.LessOrEqual(t, telemetryNode.CPUUsage, float64(100))
+	require.GreaterOrEqual(t, telemetryNode.MemoryUsage, float64(0))
+	require.LessOrEqual(t, telemetryNode.MemoryUsage, float64(100))
+	require.GreaterOrEqual(t, telemetryNode.DiskUsage, float64(0))
+	require.LessOrEqual(t, telemetryNode.DiskUsage, float64(100))
+	require.GreaterOrEqual(t, telemetryNode.Uptime, int64(0))
 
 	require.NoError(t, db.Model(&model.NodeServiceAssignment{}).Where("id = ?", assignment.ID).
 		Updates(map[string]any{"enabled": false, "lifecycle_generation": assignment.LifecycleGeneration + 1}).Error)
@@ -170,6 +207,26 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	var persistedInstallation model.PluginInstallation
 	require.NoError(t, db.First(&persistedInstallation, installation.ID).Error)
 	require.Equal(t, manifest.Version, persistedInstallation.DesiredVersion)
+}
+
+type crossRepositoryFastHeartbeatServer struct {
+	agentv1pb.UnimplementedAgentControlServiceServer
+	delegate *controlgrpc.AgentControlGRPCServer
+}
+
+func (s *crossRepositoryFastHeartbeatServer) ControlStream(stream agentv1pb.AgentControlService_ControlStreamServer) error {
+	return s.delegate.ControlStream(&crossRepositoryFastHeartbeatStream{AgentControlService_ControlStreamServer: stream})
+}
+
+type crossRepositoryFastHeartbeatStream struct {
+	agentv1pb.AgentControlService_ControlStreamServer
+}
+
+func (s *crossRepositoryFastHeartbeatStream) Send(message *agentv1pb.ControlToAgent) error {
+	if helloAck := message.GetHelloAck(); helloAck != nil {
+		helloAck.HeartbeatIntervalSeconds = 1
+	}
+	return s.AgentControlService_ControlStreamServer.Send(message)
 }
 
 func buildCrossRepositoryMachineTelemetry(t *testing.T, agentRoot string) string {
@@ -215,10 +272,11 @@ func crossRepositoryMachineTelemetryManifest(artifact []byte, entrypoint string,
 	artifactDigest := sha256.Sum256(artifact)
 	webUIDigest := sha256.Sum256(webUI)
 	return service.PluginManifest{
-		ID: "machine-telemetry", Name: "Machine Telemetry", Version: "1.0.0", APIVersion: "v1", Publisher: "AnixOps",
+		ID: "machine-telemetry", Name: "Machine Telemetry", Version: "1.1.0", APIVersion: "v1", Publisher: "AnixOps",
 		Targets: []string{"control", "agent"}, Architectures: []string{runtime.GOOS + "/" + runtime.GOARCH},
 		ArtifactSHA256: hex.EncodeToString(artifactDigest[:]), Capabilities: []string{"telemetry.read"},
-		Permissions:    []string{"machine-telemetry.view"},
+		Permissions:    []string{"machine-telemetry.view", service.PluginAPIPermission("machine-telemetry")},
+		ControlRoutes:  []string{plugincontrol.MachineTelemetryStatusRoute},
 		ConfigSchema:   json.RawMessage(`{"additionalProperties":false,"properties":{"interval_seconds":{"maximum":3600,"minimum":5,"type":"integer"}},"type":"object"}`),
 		Entrypoints:    map[string]string{"agent-" + runtime.GOOS + "-" + runtime.GOARCH: entrypoint},
 		FrontendSHA256: hex.EncodeToString(webUIDigest[:]),
@@ -281,9 +339,31 @@ func newCrossRepositoryPluginHTTPServer(t *testing.T) *httptest.Server {
 	kernel := handler.NewKernelHandler()
 	packages.GET("/:plugin_id/:version/artifact", kernel.ServeAgentPluginArtifact)
 	packages.GET("/:plugin_id/:version/manifest", kernel.ServeAgentPluginManifest)
+	router.GET("/api/v3/plugins/:plugin_id/*route", func(c *gin.Context) {
+		c.Set("user_id", uint(1))
+		c.Set("is_admin", true)
+		kernel.PluginRouteGateway(c)
+	})
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)
 	return server
+}
+
+func getCrossRepositoryMachineTelemetryStatus(t *testing.T, origin string) plugincontrol.MachineTelemetryStatus {
+	t.Helper()
+	client := &http.Client{Timeout: 5 * time.Second}
+	response, err := client.Get(origin + plugincontrol.MachineTelemetryStatusRoute + "?limit=200")
+	require.NoError(t, err)
+	defer func() { require.NoError(t, response.Body.Close()) }()
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, response.StatusCode, string(body))
+	var payload struct {
+		Data plugincontrol.MachineTelemetryStatus `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(body, &payload))
+	require.Equal(t, plugincontrol.MachineTelemetryPluginID, payload.Data.PluginID)
+	return payload.Data
 }
 
 func assertCrossRepositoryWrongNodeRejected(t *testing.T, origin, apiKey, installConfig string) {
@@ -344,7 +424,33 @@ func waitForCrossRepositoryOperationChain(t *testing.T, db *gorm.DB, bridge *con
 	}
 }
 
-func assertCrossRepositoryImmutablePluginPackage(t *testing.T, pluginDir string, artifact, manifest []byte, signature, configJSON string) {
+func waitForCrossRepositoryPluginTelemetry(t *testing.T, db *gorm.DB, nodeID uint, timeout time.Duration) model.PluginTelemetryState {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		var state model.PluginTelemetryState
+		if err := db.Where("node_id = ? AND plugin_id = ?", nodeID, "machine-telemetry").First(&state).Error; err == nil {
+			var metrics map[string]float64
+			decodeErr := json.Unmarshal([]byte(state.MetricsJSON), &metrics)
+			cpu, hasCPU := metrics["cpu_usage_percent"]
+			memory, hasMemory := metrics["memory_usage_percent"]
+			disk, hasDisk := metrics["disk_usage_percent"]
+			uptime, hasUptime := metrics["uptime_seconds"]
+			if decodeErr == nil && hasCPU && hasMemory && hasDisk && hasUptime &&
+				cpu >= 0 && cpu <= 100 && memory >= 0 && memory <= 100 &&
+				disk >= 0 && disk <= 100 && uptime >= 0 {
+				return state
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	var state model.PluginTelemetryState
+	err := db.Where("node_id = ? AND plugin_id = ?", nodeID, "machine-telemetry").First(&state).Error
+	t.Fatalf("timed out waiting for machine-telemetry heartbeat: state=%+v err=%v", state, err)
+	return state
+}
+
+func assertCrossRepositoryImmutablePluginPackage(t *testing.T, pluginDir, version string, artifact, manifest []byte, signature, configJSON string) {
 	t.Helper()
 	checks := []struct {
 		name     string
@@ -370,7 +476,7 @@ func assertCrossRepositoryImmutablePluginPackage(t *testing.T, pluginDir string,
 	require.NoError(t, err)
 	require.True(t, pluginInfo.Mode().IsRegular())
 	require.Equal(t, os.FileMode(0o750), pluginInfo.Mode().Perm())
-	staging, err := filepath.Glob(filepath.Join(filepath.Dir(pluginDir), ".1.0.0.staging-*"))
+	staging, err := filepath.Glob(filepath.Join(filepath.Dir(pluginDir), "."+version+".staging-*"))
 	require.NoError(t, err)
 	require.Empty(t, staging)
 }

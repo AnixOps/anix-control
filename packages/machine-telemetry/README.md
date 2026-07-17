@@ -51,7 +51,7 @@ python3 packages/machine-telemetry/build.py build \
 
 The output directory contains:
 
-- `machine-telemetry-1.0.0.tar`: deterministic combined package artifact;
+- `machine-telemetry-1.1.0.tar`: deterministic combined package artifact;
 - `manifest.json`: canonical manifest bytes to sign with the official Ed25519
   release key;
 - `build-report.json`: input and output digests without timestamps or host
@@ -85,7 +85,7 @@ Base64 value used by `plugins.official_public_key`:
 ```bash
 python3 packages/machine-telemetry/verify_signature.py \
   --manifest /tmp/machine-telemetry-dist/manifest.json \
-  --artifact /tmp/machine-telemetry-dist/machine-telemetry-1.0.0.tar \
+  --artifact /tmp/machine-telemetry-dist/machine-telemetry-1.1.0.tar \
   --signature /path/to/manifest.sig \
   --public-key /path/to/official-public-key.pem
 ```

@@ -102,6 +102,7 @@ func DefaultRegistry(db *gorm.DB) (*Registry, error) {
 	}
 	registry, err := NewRegistry(
 		NewMachineTelemetryExecutor(db),
+		NewMachineTelemetryExecutorVersion(db, MachineTelemetryLegacyVersion),
 		NewNftablesForwardExecutor(db),
 		NewGostMeshExecutor(db),
 		NewNatEgressExecutor(db),
