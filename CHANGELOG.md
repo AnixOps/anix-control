@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added version-bound Control status executors for the signed
+  `nftables-forward` and `nat-egress` WebUI packages, so real installed bundles
+  resolve assignment, operation, revision, health, cleanup, and rollback state
+  instead of failing with an unimplemented plugin route.
+
 ## 3.1.0-alpha.1 - 2026-07-17
 
 ### Added

@@ -100,7 +100,12 @@ func DefaultRegistry(db *gorm.DB) (*Registry, error) {
 	if defaultRegistry != nil && defaultRegistryDB == db {
 		return defaultRegistry, nil
 	}
-	registry, err := NewRegistry(NewMachineTelemetryExecutor(db), NewGostMeshExecutor(db))
+	registry, err := NewRegistry(
+		NewMachineTelemetryExecutor(db),
+		NewNftablesForwardExecutor(db),
+		NewGostMeshExecutor(db),
+		NewNatEgressExecutor(db),
+	)
 	if err != nil {
 		return nil, err
 	}
