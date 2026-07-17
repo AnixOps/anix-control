@@ -27,6 +27,8 @@
   exercises a database before the optional Kernel tables are migrated: regular
   users receive empty authoritative plugin permissions and legacy admins keep
   pre-Kernel behavior, while real database failures still fail closed.
+- Pinned cross-repository package and Agent process evidence to Agent commit
+  `a8e6331e4c81274460e409720f8680649b7c2d17`, the matching alpha.3 source.
 
 ## 4.0.0-alpha.2 - 2026-07-17
 
