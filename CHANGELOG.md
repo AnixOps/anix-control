@@ -93,6 +93,9 @@
   collisions with an existing system `anix-control` service and its database.
 - Made gRPC server lifecycle tests bind ephemeral loopback ports so `make run`
   can stay active while the full test suite runs.
+- Made the PostgreSQL large-traffic regression derive its dashboard expectation
+  from the local-day boundary, avoiding a false failure during the midnight
+  hour without changing production aggregation semantics.
 - Stabilized plugin runtime test gates by observing pre-handler gRPC stream
   rejection through the authoritative receive status, and by restoring Vitest
   mocked globals and timers after every frontend test.
