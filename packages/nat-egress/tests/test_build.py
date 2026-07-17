@@ -47,13 +47,16 @@ class NatEgressPackageTest(unittest.TestCase):
             self.assertEqual(["control", "agent"], manifest["targets"])
             self.assertEqual(["linux/amd64"], manifest["architectures"])
             self.assertEqual(
-                ["forward.nat.egress", "forward.route.policy", "forward.egress.health"],
+                BUILD.EXPECTED_CAPABILITIES,
                 manifest["capabilities"],
             )
+            self.assertEqual(BUILD.EXPECTED_PERMISSIONS, manifest["permissions"])
+            self.assertEqual(BUILD.EXPECTED_WEBUI_PERMISSIONS, manifest["webui"]["permissions"])
             self.assertEqual(
-                ["default_mark", "egress_interface", "health_check_interval_seconds", "health_check_target", "ipv4_masquerade", "ipv6_masquerade", "policy_table"],
+                list(BUILD.RUNTIME_CONFIG_FIELDS),
                 manifest["config_schema"]["required"],
             )
+            self.assertIs(False, manifest["config_schema"]["additionalProperties"])
             self.assertEqual("/api/v3/plugins/nat-egress/status", manifest["control_routes"][0])
             self.assertEqual("webui/index.mjs", manifest["webui"]["bundle"]["path"])
             with tarfile.open(output / BUILD.ARTIFACT_NAME, mode="r:") as archive:
@@ -64,6 +67,66 @@ class NatEgressPackageTest(unittest.TestCase):
                 extracted = archive.extractfile("agent/linux-amd64/plugin")
                 self.assertIsNotNone(extracted)
                 self.assertEqual(agent.path.read_bytes(), extracted.read())
+                defaults_file = archive.extractfile(BUILD.DEFAULTS_PATH)
+                schema_file = archive.extractfile(BUILD.SCHEMA_PATH)
+                self.assertIsNotNone(defaults_file)
+                self.assertIsNotNone(schema_file)
+                self.assertEqual(BUILD.RUNTIME_DEFAULTS, json.load(defaults_file))
+                self.assertEqual(manifest["config_schema"], json.load(schema_file))
+
+    def test_config_schema_matches_agent_validation_boundaries(self) -> None:
+        schema = json.loads((PACKAGE_ROOT / BUILD.SCHEMA_PATH).read_text(encoding="utf-8"))
+        defaults = json.loads((PACKAGE_ROOT / BUILD.DEFAULTS_PATH).read_text(encoding="utf-8"))
+        BUILD.validate_config_source(schema, defaults)
+
+        self.assertEqual(BUILD.RUNTIME_DEFAULTS, defaults)
+        self.assertEqual(list(BUILD.RUNTIME_CONFIG_FIELDS), schema["required"])
+        self.assertEqual(set(BUILD.RUNTIME_CONFIG_FIELDS), set(schema["properties"]))
+        self.assertEqual({"minimum": 1, "maximum": 65535}, {
+            "minimum": schema["properties"]["default_mark"]["minimum"],
+            "maximum": schema["properties"]["default_mark"]["maximum"],
+        })
+        self.assertEqual({"minimum": 1, "maximum": 252}, {
+            "minimum": schema["properties"]["policy_table"]["minimum"],
+            "maximum": schema["properties"]["policy_table"]["maximum"],
+        })
+        self.assertEqual({"minimum": 1, "maximum": 32765}, {
+            "minimum": schema["properties"]["rule_priority"]["minimum"],
+            "maximum": schema["properties"]["rule_priority"]["maximum"],
+        })
+        self.assertEqual({"minimum": 5, "maximum": 300}, {
+            "minimum": schema["properties"]["health_check_interval_seconds"]["minimum"],
+            "maximum": schema["properties"]["health_check_interval_seconds"]["maximum"],
+        })
+        self.assertEqual({"minimum": 1, "maximum": 30}, {
+            "minimum": schema["properties"]["health_check_timeout_seconds"]["minimum"],
+            "maximum": schema["properties"]["health_check_timeout_seconds"]["maximum"],
+        })
+        for name in ("table_name", "chain_name"):
+            self.assertEqual(1, schema["properties"][name]["minLength"])
+            self.assertEqual(48, schema["properties"][name]["maxLength"])
+            self.assertEqual("^[a-z][a-z0-9_]*$", schema["properties"][name]["pattern"])
+        self.assertEqual(15, schema["properties"]["egress_interface"]["maxLength"])
+        self.assertEqual("^[A-Za-z0-9_.:@-]+$", schema["properties"]["egress_interface"]["pattern"])
+        self.assertEqual(259, schema["properties"]["health_check_target"]["maxLength"])
+        self.assertEqual(2, len(schema["anyOf"]))
+        self.assertEqual(2, len(schema["allOf"]))
+        self.assertIs(True, schema["properties"]["rollback_on_exit"]["const"])
+
+        permissive = json.loads(json.dumps(schema))
+        permissive["additionalProperties"] = True
+        with self.assertRaisesRegex(BUILD.PackageError, "additional properties"):
+            BUILD.validate_config_source(permissive, defaults)
+
+        incomplete = dict(defaults)
+        incomplete.pop("apply")
+        with self.assertRaisesRegex(BUILD.PackageError, "Agent runtime contract"):
+            BUILD.validate_config_source(schema, incomplete)
+
+        unsafe_cleanup = json.loads(json.dumps(schema))
+        unsafe_cleanup["properties"]["rollback_on_exit"].pop("const")
+        with self.assertRaisesRegex(BUILD.PackageError, "fixed to true"):
+            BUILD.validate_config_source(unsafe_cleanup, defaults)
 
     def test_webui_is_dependency_free(self) -> None:
         source = (PACKAGE_ROOT / BUILD.WEBUI_PATH).read_bytes()
@@ -73,6 +136,8 @@ class NatEgressPackageTest(unittest.TestCase):
         self.assertNotRegex(text, BUILD.DYNAMIC_IMPORT)
         self.assertIn("webuiApiVersion: 'anixops.webui/v1'", text)
         self.assertIn("const STATUS_PATH = '/api/v3/plugins/nat-egress/status?limit=200'", text)
+        self.assertIn("Signed Agent runtime status", text)
+        self.assertIn("pinned Agent revision and namespace evidence", text)
 
     def test_non_executable_or_symlink_agent_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_root:

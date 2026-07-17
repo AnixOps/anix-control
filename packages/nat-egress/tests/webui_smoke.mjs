@@ -61,5 +61,7 @@ assert.match(rendered, /hk-egress-01/)
 assert.match(rendered, /203\.0\.113\.20/)
 assert.match(rendered, /23ms/)
 assert.match(rendered, /Ready/)
+assert.match(rendered, /Signed Agent runtime status/)
+assert.match(rendered, /pinned Agent revision and namespace evidence/)
 
 console.log('nat-egress WebUI smoke test passed')

@@ -13,13 +13,17 @@
   "capabilities": [
     "forward.nat.egress",
     "forward.route.policy",
-    "forward.egress.health"
+    "forward.egress.health",
+    "forward.mark.consume",
+    "plugin.runtime-state",
+    "plugin.cleanup"
   ],
   "dependencies": [],
   "conflicts": [],
   "permissions": [
     "nat-egress.view",
-    "nat-egress.api"
+    "nat-egress.api",
+    "nat-egress.network-admin"
   ],
   "config_schema": {},
   "secret_fields": [],

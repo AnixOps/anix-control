@@ -56,8 +56,19 @@
 - Added 3.3 `gost-mesh` and `nat-egress` reference package sources with
   deterministic package builds, dependency-free WebUI modules, namespaced
   status routes, public-key-only signature verification, tamper rejection, and
-  CI release-contract evidence. Production signing remains blocked until real
-  Agent runtimes and namespace traffic evidence exist.
+  CI release-contract evidence.
+- Added the real `nat-egress` Agent runtime with nftables masquerade, fwmark
+  policy routing, interface-bound health probes, strict configuration and
+  ownership checks, crash-safe state journaling, and privileged namespace
+  acceptance for marked forwarding, wrong-mark isolation, NAT, and rollback.
+  Production release signing, artifact verification, and the immutable Agent
+  revision pin are wired and locally gate-verified; the `gost-mesh` Agent
+  runtime and production canary evidence remain pending.
+- Added Supervisor `plugin.runtime-state` and `plugin.cleanup` lifecycle
+  contracts. Cleanup intent and version are persisted as `cleanup_pending`;
+  failed target-version cleanup leaves the plugin disabled and blocks old-
+  version restart, while automatic rollback starts the old version only after
+  cleanup succeeds.
 - Introduced the AnixOps Control / AnixOps Agent product identity, primary `anix-control` binaries, frontend archives and Docker images, stable/alpha/beta/RC release tag support, and a documented compatibility window with legacy `v2board-*` release aliases.
 - Added a tag-pinned native release installer that downloads and verifies GitHub Actions-built panel/frontend assets without cloning or building on the target host, preserves configuration/data, and restores the previous application snapshot after a failed health check.
 - Added detailed release installation and legacy migration guides covering fresh install, update, rollback, SQLite-to-PostgreSQL boundaries, foreign-panel migration limits, coordinated node rollout, and retained evidence.
@@ -77,6 +88,11 @@
 
 ### Fixed
 
+- Made `make run` create and use an isolated development configuration with
+  loopback ports `19080` (API), `19000` (frontend), and `50052` (gRPC), avoiding
+  collisions with an existing system `anix-control` service and its database.
+- Made gRPC server lifecycle tests bind ephemeral loopback ports so `make run`
+  can stay active while the full test suite runs.
 - Stabilized plugin runtime test gates by observing pre-handler gRPC stream
   rejection through the authoritative receive status, and by restoring Vitest
   mocked globals and timers after every frontend test.

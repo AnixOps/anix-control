@@ -161,14 +161,26 @@ check_release_workflow() {
   require_text "scripts/sign_plugin_release.sh" "production plugin signing script" || failed=1
   require_text "machine-telemetry-signed-release" "signed plugin release artifact" || failed=1
   require_text "nftables-forward-signed-release" "signed nftables forward plugin release artifact" || failed=1
+  require_text "nat-egress-signed-release" "signed NAT egress plugin release artifact" || failed=1
   require_text "anixops-machine-telemetry-1.0.0.SHA256SUMS.txt" "signed plugin checksum evidence" || failed=1
   require_text "anixops-nftables-forward-1.0.0.SHA256SUMS.txt" "signed nftables forward checksum evidence" || failed=1
+  require_text "anixops-nat-egress-1.0.0.SHA256SUMS.txt" "signed NAT egress checksum evidence" || failed=1
+  require_text "./cmd/nat-egress" "NAT egress Agent release binary build" || failed=1
+  require_text "packages/nat-egress/build.py build" "deterministic NAT egress package build" || failed=1
   require_text "Download signed Machine Telemetry package" "signed plugin release download" || failed=1
   require_text "Download signed nftables Forward package" "signed nftables forward release download" || failed=1
+  require_text "Download signed NAT Egress package" "signed NAT egress release download" || failed=1
   require_text "--require machine-telemetry-1.0.0.tar" "signed plugin package verification requirement" || failed=1
   require_text "--require nftables-forward-1.0.0.tar" "signed nftables forward package verification requirement" || failed=1
+  require_text "--require nat-egress-1.0.0.tar" "signed NAT egress package verification requirement" || failed=1
+  require_text "--require anixops-nat-egress-1.0.0.manifest.json" "signed NAT egress manifest verification requirement" || failed=1
+  require_text "--require anixops-nat-egress-1.0.0.sig" "signed NAT egress signature verification requirement" || failed=1
+  require_text "--require anixops-nat-egress-1.0.0.public-key.pem" "signed NAT egress PEM key verification requirement" || failed=1
+  require_text "--require anixops-nat-egress-1.0.0.public-key.raw" "signed NAT egress raw key verification requirement" || failed=1
+  require_text "--require anixops-nat-egress-1.0.0.SHA256SUMS.txt" "signed NAT egress checksum verification requirement" || failed=1
+  require_text 'The signed `machine-telemetry`, `nftables-forward`, and `nat-egress` packages' "release notes include NAT egress" || failed=1
   require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
-  require_text "ref: 5f7eaf27970cbb3ec9bdc9bda9d070b59c6cf345" "pinned Agent fixture commit" || failed=1
+  require_text "ref: 95cc201fc5013c35a3998eda4c4269ecd22e481c" "pinned Agent fixture commit" || failed=1
   require_text "ANIXOPS_CROSS_REPO_E2E: '1'" "cross-repository Agent process E2E opt-in" || failed=1
   require_text "TestKernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
   require_text "cross-repository-agent-e2e" "release dependency on cross-repository Agent process E2E" || failed=1
@@ -291,10 +303,14 @@ jobs:
           ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
         run: |
           scripts/sign_plugin_release.sh
+          go -C V2bX_AnixOps build ./cmd/nat-egress
+          python3 packages/nat-egress/build.py build
           echo "machine-telemetry-signed-release"
           echo "nftables-forward-signed-release"
+          echo "nat-egress-signed-release"
           echo "anixops-machine-telemetry-1.0.0.SHA256SUMS.txt"
           echo "anixops-nftables-forward-1.0.0.SHA256SUMS.txt"
+          echo "anixops-nat-egress-1.0.0.SHA256SUMS.txt"
 
   cross-repository-agent-e2e:
     name: Control to Agent Process E2E
@@ -302,7 +318,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 5f7eaf27970cbb3ec9bdc9bda9d070b59c6cf345
+          ref: 95cc201fc5013c35a3998eda4c4269ecd22e481c
           path: V2bX_AnixOps
       - env:
           ANIXOPS_CROSS_REPO_E2E: '1'
@@ -332,9 +348,14 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: nftables-forward-signed-release
+      - name: Download signed NAT Egress package
+        uses: actions/download-artifact@v8
+        with:
+          name: nat-egress-signed-release
       - run: |
           cp migration-dry-run.txt release/migration-dry-run.txt
           echo "No Local Release Builds" > release/OPERATOR_DEPLOYMENT.md
+          echo 'The signed `machine-telemetry`, `nftables-forward`, and `nat-egress` packages are attached.' >> release/OPERATOR_DEPLOYMENT.md
           cp docs/UPGRADE.md release/UPGRADE.md
           tar -czvf release/anix-control-frontend.tar.gz -C web/public .
           zip -r release/anix-control-frontend.zip web/public
@@ -343,6 +364,7 @@ jobs:
           python3 config/scripts/generate_release_notes.py \
             --changelog CHANGELOG.md \
             --output release/RELEASE_NOTES.md
+          echo 'The signed `machine-telemetry`, `nftables-forward`, and `nat-egress` packages are attached.' >> release/RELEASE_NOTES.md
       - name: Generate release manifest
         run: |
           python3 config/scripts/generate_release_manifest.py \
@@ -362,7 +384,13 @@ jobs:
             --require anix-control-linux-amd64.tar.gz \
             --require anix-control-windows-arm64.exe.zip \
             --require machine-telemetry-1.0.0.tar \
-            --require nftables-forward-1.0.0.tar
+            --require nftables-forward-1.0.0.tar \
+            --require nat-egress-1.0.0.tar \
+            --require anixops-nat-egress-1.0.0.manifest.json \
+            --require anixops-nat-egress-1.0.0.sig \
+            --require anixops-nat-egress-1.0.0.public-key.pem \
+            --require anixops-nat-egress-1.0.0.public-key.raw \
+            --require anixops-nat-egress-1.0.0.SHA256SUMS.txt
       - uses: softprops/action-gh-release@v3
         with:
           files: release/*
@@ -413,6 +441,13 @@ EOF
   sed -i '/plugin-package-publish:/,/cross-repository-agent-e2e/d;/Publish Signed Official Plugin Packages/d;/ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY/d;/scripts\/sign_plugin_release.sh/d;/machine-telemetry-signed-release/d;/nftables-forward-signed-release/d;/anixops-machine-telemetry-1.0.0.SHA256SUMS.txt/d;/anixops-nftables-forward-1.0.0.SHA256SUMS.txt/d' "${fixture}.missing-signed-plugin-publish"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-signed-plugin-publish" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing signed plugin publish gate should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-nat-egress-signed-publish"
+  sed -i '/cmd\/nat-egress/d;/packages\/nat-egress\/build.py build/d;/nat-egress-signed-release/d;/anixops-nat-egress-1.0.0/d;/--require nat-egress-1.0.0.tar/d;/The signed `machine-telemetry`, `nftables-forward`, and `nat-egress` packages/d' "${fixture}.missing-nat-egress-signed-publish"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-nat-egress-signed-publish" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing signed NAT egress publish chain should fail" >&2
     return 1
   fi
 
