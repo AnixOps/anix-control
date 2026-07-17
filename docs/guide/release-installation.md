@@ -102,6 +102,38 @@ gRPC proxy before changing the listener bind. Configure the Agent with
 enable both `AgentControlEnabled` and `PluginSupervisorEnabled` with the same
 official public key.
 
+## Import The Signed Official Packages
+
+The alpha package center is intentionally operator-driven. Download the four
+package triples from the same Control GitHub Release: the `.tar`,
+`.manifest.json`, and `.sig` for `machine-telemetry`, `nftables-forward`,
+`nat-egress`, and `gost-mesh`. In the admin UI open **Control > Plugins > Import
+release**, paste or upload the manifest and signature, choose the matching tar
+artifact, and submit each release. The UI verifies the signed manifest and
+artifact digest before it becomes installable; do not mix assets from different
+tags.
+
+After importing a release:
+
+1. Open **Control > Plugins**, install the package for the `agent` target, and
+   configure it if its manifest exposes a schema.
+2. Open **Control > Assignments**, select a node, and create the service role.
+   The version and configuration revision default from the enabled Agent
+   installation. Keep the role disabled until the node is connected if this is
+   a first canary.
+3. Enable the role. Control queues `install -> update -> enable` and exposes the
+   operation chain in **Control > Operations**. The Agent reports observed
+   revision, health, and Unix-socket readiness; wait for `succeeded`/`healthy`
+   before adding another node.
+4. For a rollback, stop the role, select the previous signed release, and
+   verify the operation and observed state before re-enabling it. Disabling a
+   package preserves its database records; use a separate purge workflow for
+   destructive removal.
+
+The alpha entry point is manual import by design. It does not silently fetch
+untrusted third-party packages or put API keys in package URLs; Agent downloads
+use `X-API-Key` and same-origin, digest-addressed paths.
+
 ## Upgrade And Rollback
 
 The installer never overwrites an existing `config/config.yaml` or SQLite data

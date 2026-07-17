@@ -909,7 +909,7 @@ jobs:
           GOWORK: 'off'
         run: |
           go test -v -count=1 ./internal/grpc \
-            -run '^TestKernelOperationBridgeCrossRepositoryAgentProcess$'
+            -run '^Test(KernelOperationBridgeCrossRepositoryAgentProcess|AgentPluginPackageCrossRepositoryE2E)$'
 
   cmd-test:
     name: CLI Tests

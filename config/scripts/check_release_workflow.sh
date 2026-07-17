@@ -203,7 +203,8 @@ check_release_workflow() {
   require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
   require_text "ref: 403ddaab96907ed87cbc1417565c7b55a0c92e69" "pinned Agent fixture commit" || failed=1
   require_text "ANIXOPS_CROSS_REPO_E2E: '1'" "cross-repository Agent process E2E opt-in" || failed=1
-  require_text "TestKernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
+  require_text "KernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
+  require_text "AgentPluginPackageCrossRepositoryE2E" "signed Agent package cross-repository E2E test" || failed=1
   require_text "cross-repository-agent-e2e" "release dependency on cross-repository Agent process E2E" || failed=1
   require_text "anchore/sbom-action" "SBOM generation action" || failed=1
   require_text "spdx-json" "SPDX JSON SBOM format" || failed=1
@@ -358,7 +359,7 @@ jobs:
       - env:
           ANIXOPS_CROSS_REPO_E2E: '1'
         run: |
-          go test -v -count=1 ./internal/grpc -run '^TestKernelOperationBridgeCrossRepositoryAgentProcess$'
+          go test -v -count=1 ./internal/grpc -run '^Test(KernelOperationBridgeCrossRepositoryAgentProcess|AgentPluginPackageCrossRepositoryE2E)$'
 
   release:
     needs: [frontend-build, release-binaries, docker, plugin-package-publish, tag-gate]
