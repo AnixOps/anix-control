@@ -128,11 +128,13 @@ match the release record, stop before enabling any plugin flag.
 
 ## Plugin Platform Flags
 
-`v4.0.0-alpha.2` is the current operational signed-package/WebUI canary. It
-supersedes `alpha.1` with bounded SQLite payment-transaction retry, tracked
-notification shutdown in the regression suite, and a release gate that checks
-the real `nftables-forward` binary version against its signed manifest. Start
-the 72-hour observation window again after installing `alpha.2`. A fresh alpha
+`v4.0.0-alpha.3` is the current operational signed-package/WebUI canary. It
+supersedes `alpha.2` by filtering the extension catalog and active assets by
+actor grants, rejecting unauthorized routes before any bundle fetch, revoking
+disabled or version-mismatched assets with `private, no-store`, and isolating
+an invalid plugin from other extensions. Login, registration, and profile
+responses carry the permission mode used by the WebUI. Start the 72-hour
+observation window again after installing `alpha.3`. A fresh alpha
 configuration enables the Control package executor and Agent dispatch, while
 topology execution remains disabled. An upgrade preserves the existing
 configuration, so an existing installation is not silently switched to the new

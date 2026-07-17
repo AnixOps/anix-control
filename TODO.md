@@ -1,6 +1,6 @@
 # TODO
 
-Date: 2026-07-10
+Date: 2026-07-17
 
 This list is intentionally concrete. Do not mark an item done without code, tests, and verification evidence where applicable.
 
@@ -30,6 +30,15 @@ This list is intentionally concrete. Do not mark an item done without code, test
   verification.
 - [x] Add install/disable/update/rollback browser tests for the package-driven
   WebUI lifecycle.
+- [x] Enforce actor-scoped signed WebUI catalog, route, menu, permission, and
+  active bundle access from `plugin_api` grants, including zero bundle fetches
+  for unauthorized routes and fail-closed regular-user behavior.
+- [x] Publish login, registration, and profile permission-mode metadata for
+  frontend authorization, while retaining per-plugin legacy-admin fallback
+  only for plugins without an authoritative grant.
+- [x] Revoke stale WebUI assets on disable/update/rollback or permission change
+  with active version matching and `private, no-store`, and quarantine one
+  invalid plugin without breaking valid extensions or kernel pages.
 - [x] Add a fail-closed backend plugin API gateway admission skeleton for
   `/api/v3/plugins/<plugin-id>/...`, including signed manifest route
   validation, verified installation checks, and `plugin_api` resource grants.

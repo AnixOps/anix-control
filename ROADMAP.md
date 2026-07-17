@@ -1,6 +1,6 @@
 # Roadmap
 
-Date: 2026-07-08
+Date: 2026-07-17
 
 This roadmap is ordered by stability and release risk. Items move to done only after code, tests, and CI evidence exist.
 The P0 WireGuard protocol support phase takes priority over ordinary P1/P2 cleanup once implementation starts.
@@ -23,6 +23,14 @@ in [`docs/architecture/upgrade-program.md`](docs/architecture/upgrade-program.md
 - `3.5.0`: business-domain plugin migration and `/api/v2` adapter ownership.
 - `4.0.0`: remove the original coupled business/runtime mode and boot as a
   plugin-only platform.
+
+The `v4.0.0-alpha.3` 3.1 evidence slice adds actor-scoped catalog and active
+bundle authorization, frontend rejection of unauthorized routes before any
+bundle fetch, revocable `private, no-store` assets, per-plugin invalid-release
+quarantine, and login/registration/profile permission metadata. This closes
+the local authorization and failure-isolation slice, but live staging catalog
+evidence, a fresh 72-hour canary, and explicit stable-release authorization
+remain required; the overall transformation stays in progress.
 
 The older workstreams below remain relevant compatibility and quality work,
 but they do not redefine these release gates. Existing coupled runtime work is

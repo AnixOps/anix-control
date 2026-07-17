@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## 4.0.0-alpha.3 - 2026-07-17
+
+### Added
+
+- Added explicit `permission_mode`, plugin permission, and restricted-plugin
+  metadata to login, registration, and profile responses so the WebUI can
+  enforce the same actor-scoped authorization contract as Control.
+
+### Fixed
+
+- Filtered the signed WebUI catalog, routes, menus, permissions, and bundle
+  assets by the authenticated actor's `plugin_api` grants, with per-plugin
+  legacy-admin compatibility and fail-closed regular-user behavior.
+- Rejected unauthorized plugin routes before importing their modules, ensuring
+  an actor with no matching route permission performs zero bundle fetches.
+- Served plugin assets only for the active, enabled, version-matched verified
+  installation and marked responses `private, no-store`, so disable, update,
+  rollback, or permission revocation takes effect without a stale bundle cache.
+- Quarantined an invalid signed WebUI extension at the plugin boundary so one
+  malformed or tampered release cannot prevent valid authorized extensions or
+  kernel pages from loading.
+- Preserved the `/api/v2/user/profile` compatibility path when legacy tooling
+  exercises a database before the optional Kernel tables are migrated: regular
+  users receive empty authoritative plugin permissions and legacy admins keep
+  pre-Kernel behavior, while real database failures still fail closed.
+
 ## 4.0.0-alpha.2 - 2026-07-17
 
 ### Fixed
