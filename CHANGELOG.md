@@ -98,6 +98,9 @@
 
 ### Fixed
 
+- Kept GOST Mesh status and IPv4 broadcast validation compatible with the
+  repository's static-analysis and integer-safety release gates without
+  changing the accepted configuration contract.
 - Made `make run` create and use an isolated development configuration with
   loopback ports `19080` (API), `19000` (frontend), and `50052` (gRPC), avoiding
   collisions with an existing system `anix-control` service and its database.
