@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -461,6 +463,17 @@ func main() {
 	defer cache.CloseMemory()
 	log.Println("Cache initialized: memory")
 
+	// Bind the required node-facing listener before starting workers or HTTP
+	// servers. A port conflict must fail startup without exposing a partially
+	// initialized Control instance.
+	grpcSrv, grpcAddr, err := startGRPCServer(cfg)
+	if err != nil {
+		log.Fatalf("Failed to start gRPC server: %v", err)
+	}
+	if grpcSrv != nil {
+		log.Printf("gRPC server listening on %s", grpcAddr)
+	}
+
 	var controlPluginCancel context.CancelFunc
 	if cfg.Plugins.ControlExecutionEnabled {
 		registry, err := plugincontrol.DefaultRegistry(database.Get())
@@ -568,27 +581,8 @@ func main() {
 		}
 	}()
 
-	// Start the node-facing gRPC server (AnixOps Agent nodes connect here) when enabled.
-	var grpcSrv *grpcserver.Server
 	var kernelDispatchCancel context.CancelFunc
 	var topologyExecutionCancel context.CancelFunc
-	if cfg.GRPC.Enable {
-		grpcCfg := grpcserver.DefaultServerConfig()
-		if cfg.GRPC.Host != "" {
-			grpcCfg.Host = cfg.GRPC.Host
-		}
-		if cfg.GRPC.Port > 0 {
-			grpcCfg.Port = cfg.GRPC.Port
-		}
-		grpcCfg.APIToken = cfg.GRPC.APIToken
-		grpcCfg.TLSCertFile = cfg.GRPC.TLSCertFile
-		grpcCfg.TLSKeyFile = cfg.GRPC.TLSKeyFile
-		grpcSrv = grpcserver.NewServer(grpcCfg)
-		if err := grpcSrv.Start(); err != nil {
-			log.Fatalf("Failed to start gRPC server: %v", err)
-		}
-		log.Printf("gRPC server listening on %s:%d", grpcCfg.Host, grpcCfg.Port)
-	}
 	if cfg.Plugins.DispatchEnabled {
 		if grpcSrv == nil {
 			log.Fatal("Plugin operation dispatch requires grpc.enabled=true")
@@ -702,6 +696,29 @@ func main() {
 	log.Println("All servers stopped")
 }
 
+func startGRPCServer(cfg *config.Config) (*grpcserver.Server, string, error) {
+	if cfg == nil || !cfg.GRPC.Enable {
+		return nil, "", nil
+	}
+
+	grpcCfg := grpcserver.DefaultServerConfig()
+	if cfg.GRPC.Host != "" {
+		grpcCfg.Host = cfg.GRPC.Host
+	}
+	if cfg.GRPC.Port > 0 {
+		grpcCfg.Port = cfg.GRPC.Port
+	}
+	grpcCfg.APIToken = cfg.GRPC.APIToken
+	grpcCfg.TLSCertFile = cfg.GRPC.TLSCertFile
+	grpcCfg.TLSKeyFile = cfg.GRPC.TLSKeyFile
+
+	server := grpcserver.NewServer(grpcCfg)
+	if err := server.Start(); err != nil {
+		return nil, "", err
+	}
+	return server, fmt.Sprintf("%s:%d", grpcCfg.Host, grpcCfg.Port), nil
+}
+
 // newAPIServer creates the API server with proper timeouts.
 func newAPIServer(cfg *config.Config) *http.Server {
 	r := gin.New()
@@ -763,7 +780,7 @@ func newFrontendServer(cfg *config.Config) *http.Server {
 	r.GET("/health", healthHandler())
 
 	// API 代理 - 将 /api 请求转发到 API 服务器
-	apiTarget := fmt.Sprintf("http://127.0.0.1:%d", cfg.Server.Port)
+	apiTarget := frontendAPIProxyTarget(cfg)
 	r.Any("/api/*path", func(c *gin.Context) {
 		proxyAPI(c, apiTarget)
 	})
@@ -811,6 +828,19 @@ func newFrontendServer(cfg *config.Config) *http.Server {
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  120 * time.Second,
 	}
+}
+
+func frontendAPIProxyTarget(cfg *config.Config) string {
+	host := strings.TrimSpace(cfg.Server.Host)
+	if host == "" {
+		host = "127.0.0.1"
+	} else if ip := net.ParseIP(strings.Trim(host, "[]")); ip != nil && ip.IsUnspecified() {
+		host = "127.0.0.1"
+	}
+	return (&url.URL{
+		Scheme: "http",
+		Host:   net.JoinHostPort(host, strconv.Itoa(cfg.Server.Port)),
+	}).String()
 }
 
 // runFrontendServer starts the frontend server (blocking).

@@ -1,12 +1,15 @@
 package main
 
 import (
+	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	appconfig "github.com/AnixOps/anix-control/v4/internal/config"
@@ -113,6 +116,44 @@ func TestShouldStartForwardAgentBridgeWorkerWhenLegacyBridgeEnabled(t *testing.T
 	}
 }
 
+func TestStartGRPCServerDisabled(t *testing.T) {
+	server, addr, err := startGRPCServer(&appconfig.Config{})
+	if err != nil {
+		t.Fatalf("startGRPCServer() error = %v", err)
+	}
+	if server != nil || addr != "" {
+		t.Fatalf("disabled gRPC returned server=%v addr=%q", server, addr)
+	}
+}
+
+func TestStartGRPCServerRejectsOccupiedPort(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+
+	port := listener.Addr().(*net.TCPAddr).Port
+	cfg := &appconfig.Config{}
+	cfg.GRPC.Enable = true
+	cfg.GRPC.Host = "127.0.0.1"
+	cfg.GRPC.Port = port
+
+	server, addr, err := startGRPCServer(cfg)
+	if err == nil {
+		if server != nil {
+			server.Stop()
+		}
+		t.Fatal("startGRPCServer() accepted an occupied port")
+	}
+	if server != nil || addr != "" {
+		t.Fatalf("failed startup returned server=%v addr=%q", server, addr)
+	}
+	if !errors.Is(err, syscall.EADDRINUSE) {
+		t.Fatalf("startGRPCServer() error = %v, want EADDRINUSE", err)
+	}
+}
+
 func TestCreateDefaultIndexWritesFile(t *testing.T) {
 	dir := t.TempDir()
 	if err := createDefaultIndex(dir); err != nil {
@@ -133,6 +174,31 @@ func TestCreateDefaultIndexWritesFile(t *testing.T) {
 	}
 	if got, want := info.Mode().Perm(), os.FileMode(0o600); got != want {
 		t.Fatalf("index.html permissions = %v, want %v", got, want)
+	}
+}
+
+func TestFrontendAPIProxyTargetFollowsSpecificBindAddress(t *testing.T) {
+	cases := []struct {
+		name string
+		host string
+		want string
+	}{
+		{name: "loopback", host: "127.0.0.1", want: "http://127.0.0.1:19080"},
+		{name: "specific IPv4", host: "10.100.0.130", want: "http://10.100.0.130:19080"},
+		{name: "all IPv4", host: "0.0.0.0", want: "http://127.0.0.1:19080"},
+		{name: "all IPv6", host: "::", want: "http://127.0.0.1:19080"},
+		{name: "specific IPv6", host: "2001:db8::10", want: "http://[2001:db8::10]:19080"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &appconfig.Config{}
+			cfg.Server.Host = tc.host
+			cfg.Server.Port = 19080
+			if got := frontendAPIProxyTarget(cfg); got != tc.want {
+				t.Fatalf("frontendAPIProxyTarget() = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
