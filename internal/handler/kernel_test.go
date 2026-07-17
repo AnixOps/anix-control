@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -154,7 +155,9 @@ func TestKernelUpdatePluginInstallationConfigurationUsesSignedSchema(t *testing.
 	installation := model.PluginInstallation{PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version, State: "disabled"}
 	require.NoError(t, db.Create(&installation).Error)
 
-	handler := (&KernelHandler{db: db}).UpdatePluginInstallationConfiguration
+	registry, err := plugincontrol.NewRegistry(plugincontrol.NewGostMeshExecutor(db))
+	require.NoError(t, err)
+	handler := (&KernelHandler{db: db, controlPluginExecutors: registry}).UpdatePluginInstallationConfiguration
 	path := "/plugin-installations/" + strconv.FormatUint(uint64(installation.ID), 10) + "/config"
 	recorder := performKernelHandlerRequest(t, http.MethodPut, path, `{"config":{"port":443},"expected_revision":0}`, "/plugin-installations/:id/config", handler)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
@@ -163,6 +166,79 @@ func TestKernelUpdatePluginInstallationConfigurationUsesSignedSchema(t *testing.
 	recorder = performKernelHandlerRequest(t, http.MethodPut, path, `{"config":{"port":"443"},"expected_revision":1}`, "/plugin-installations/:id/config", handler)
 	require.Equal(t, http.StatusUnprocessableEntity, recorder.Code, recorder.Body.String())
 	require.Contains(t, recorder.Body.String(), "invalid_plugin_configuration")
+}
+
+func gostMeshHandlerConfiguration(exitTable int) string {
+	return fmt.Sprintf(`{
+		"api_version":"anixops.gost-mesh/v1",
+		"apply":true,
+		"rollback_on_exit":true,
+		"tunnels":[{
+			"id":"mesh-exit-quic",
+			"role":"exit",
+			"transport":"quic",
+			"listen":{"address":"0.0.0.0","port":443},
+			"tun":{"name":"anxquicx","address":"172.31.66.1/30","peer_address":"172.31.66.2","port":18421,"mtu":1280},
+			"routing":{"source_cidrs":[],"route_cidrs":["10.66.0.0/24"],"table":%d,"priority":0},
+			"tls":{"server_name":"","ca_file":"/run/anixops/secrets/mesh-ca.pem","cert_file":"/run/anixops/secrets/mesh-server.pem","key_file":"/run/anixops/secrets/mesh-server-key.pem"},
+			"wss_path":"",
+			"health":{"enabled":false,"target":"","source_address":"","interval_seconds":15,"timeout_seconds":3,"failure_threshold":3,"restart_delay_seconds":3,"restart_limit":10}
+		}]
+	}`, exitTable)
+}
+
+func TestKernelUpdateGostMeshConfigurationEnforcesExactSemanticValidator(t *testing.T) {
+	db := newKernelHandlerTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	previousConfig := config.Get()
+	config.Set(&config.Config{Plugins: config.PluginConfig{OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey)}})
+	t.Cleanup(func() { config.Set(previousConfig) })
+
+	manifest := service.PluginManifest{
+		ID: plugincontrol.GostMeshPluginID, Name: "GOST Mesh", Version: plugincontrol.GostMeshVersion,
+		APIVersion: "v1", Publisher: "AnixOps", Targets: []string{"agent"},
+		ArtifactSHA256: strings.Repeat("b", 64), ConfigSchema: []byte(`{"type":"object"}`),
+	}
+	canonical, err := service.CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	_, err = service.RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	installation := model.PluginInstallation{PluginID: manifest.ID, Target: "agent", DesiredVersion: manifest.Version, State: "disabled"}
+	require.NoError(t, db.Create(&installation).Error)
+	registry, err := plugincontrol.NewRegistry(plugincontrol.NewGostMeshExecutor(db))
+	require.NoError(t, err)
+	handler := (&KernelHandler{db: db, controlPluginExecutors: registry}).UpdatePluginInstallationConfiguration
+	path := "/plugin-installations/" + strconv.FormatUint(uint64(installation.ID), 10) + "/config"
+
+	invalidBody := `{"config":` + gostMeshHandlerConfiguration(100) + `,"expected_revision":0}`
+	recorder := performKernelHandlerRequest(t, http.MethodPut, path, invalidBody, "/plugin-installations/:id/config", handler)
+	require.Equal(t, http.StatusUnprocessableEntity, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "invalid_plugin_configuration")
+	require.Contains(t, recorder.Body.String(), "routing.table")
+	var stored model.PluginInstallation
+	require.NoError(t, db.First(&stored, installation.ID).Error)
+	require.Zero(t, stored.ConfigRevision)
+	var configurationCount int64
+	require.NoError(t, db.Model(&model.PluginConfiguration{}).Where("installation_id = ?", installation.ID).Count(&configurationCount).Error)
+	require.Zero(t, configurationCount)
+
+	validBody := `{"config":` + gostMeshHandlerConfiguration(0) + `,"expected_revision":0}`
+	recorder = performKernelHandlerRequest(t, http.MethodPut, path, validBody, "/plugin-installations/:id/config", handler)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), `"revision":1`)
+
+	manifest.Version = "1.0.1"
+	manifest.ArtifactSHA256 = strings.Repeat("c", 64)
+	canonical, err = service.CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	_, err = service.RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	require.NoError(t, db.Model(&installation).Update("desired_version", manifest.Version).Error)
+	versionBoundBody := `{"config":` + gostMeshHandlerConfiguration(0) + `,"expected_revision":1}`
+	recorder = performKernelHandlerRequest(t, http.MethodPut, path, versionBoundBody, "/plugin-installations/:id/config", handler)
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "plugin_configuration_validator_unavailable")
 }
 
 func TestKernelPluginArtifactUploadAndInstallationGate(t *testing.T) {

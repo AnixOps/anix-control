@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -681,6 +682,51 @@ func TestUpdatePluginConfigurationVerifiesReleaseSchemaAndRevision(t *testing.T)
 	var storedInstallation model.PluginInstallation
 	require.NoError(t, db.First(&storedInstallation, installation.ID).Error)
 	require.Equal(t, int64(1), storedInstallation.ConfigRevision)
+}
+
+func TestUpdatePluginConfigurationRunsVersionBoundSemanticValidatorInsideSave(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	manifest := kernelTestWebUIManifest("config-semantic")
+	manifest.ConfigSchema = json.RawMessage(`{"type":"object","required":["port"],"properties":{"port":{"type":"integer"}}}`)
+	canonical, err := CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	signature := base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical))
+	_, err = RegisterPluginRelease(db, string(canonical), signature, publicKey)
+	require.NoError(t, err)
+	installation := model.PluginInstallation{PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version, State: "disabled"}
+	require.NoError(t, db.Create(&installation).Error)
+
+	semanticErr := errors.New("semantic contract rejected configuration")
+	_, err = UpdatePluginConfigurationWithValidator(
+		db, publicKey, installation.ID, ` { "port" : 443 } `, nil, 7,
+		func(pluginID, version string, canonicalConfig json.RawMessage) error {
+			require.Equal(t, manifest.ID, pluginID)
+			require.Equal(t, manifest.Version, version)
+			require.JSONEq(t, `{"port":443}`, string(canonicalConfig))
+			return semanticErr
+		},
+	)
+	require.ErrorIs(t, err, semanticErr)
+	var count int64
+	require.NoError(t, db.Model(&model.PluginConfiguration{}).Where("installation_id = ?", installation.ID).Count(&count).Error)
+	require.Zero(t, count)
+	var storedInstallation model.PluginInstallation
+	require.NoError(t, db.First(&storedInstallation, installation.ID).Error)
+	require.Zero(t, storedInstallation.ConfigRevision)
+
+	configuration, err := UpdatePluginConfigurationWithValidator(
+		db, publicKey, installation.ID, ` { "port" : 443 } `, nil, 7,
+		func(pluginID, version string, canonicalConfig json.RawMessage) error {
+			require.Equal(t, manifest.ID, pluginID)
+			require.Equal(t, manifest.Version, version)
+			require.Equal(t, `{"port":443}`, string(canonicalConfig))
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), configuration.Revision)
 }
 
 func TestValidateTopologyDetectsCycleConflictAndMissingSecret(t *testing.T) {
