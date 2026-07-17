@@ -8,8 +8,10 @@ import hashlib
 import io
 import json
 import os
+import platform
 import re
 import stat
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -34,6 +36,53 @@ FORMAT_VERSION = "anixops.package/v1"
 BUILD_REPORT_VERSION = "anixops.package-build/v1"
 MAX_ARTIFACT_BYTES = 32 << 20
 MAX_WEBUI_BYTES = 2 << 20
+MAX_GOST_BYTES = 32 << 20
+CONFIG_API_VERSION = "anixops.gost-mesh/v1"
+GOST_VERSION = "3.2.6"
+GOST_RUNTIME_CONTRACT = {
+    "linux/amd64": {
+        "archive_sha256": "b39037b0380ea001fb3c0c28441c2e10bfc694f90682739a65b53e55dce5238b",
+        "binary_sha256": "a2aea24efb4597b5f57b35b8e1bbcc59f439b80723854d4371f6828b46682ffb",
+    },
+    "linux/arm64": {
+        "archive_sha256": "f674c8f4a033dc1dfd4f0d5e9602fbe5b0d0f81307bf3794f44b5b5d6d622eae",
+        "binary_sha256": "343c3e003996ca0437b9cc47dd1500cd0475ba09f5a5f17e50851854e06a1ca7",
+    },
+}
+RUNTIME_CONFIG_FIELDS = ("api_version", "apply", "rollback_on_exit", "tunnels")
+RUNTIME_DEFAULTS = {
+    "api_version": CONFIG_API_VERSION,
+    "apply": False,
+    "rollback_on_exit": True,
+    "tunnels": [],
+}
+TUNNEL_FIELDS = (
+    "id", "role", "transport", "listen", "remote", "tun", "routing", "tls", "wss_path", "health",
+)
+TUN_FIELDS = ("name", "address", "peer_address", "port", "mtu")
+ROUTING_FIELDS = ("source_cidrs", "route_cidrs", "table", "priority")
+TLS_FIELDS = ("server_name", "ca_file", "cert_file", "key_file")
+HEALTH_FIELDS = (
+    "enabled", "target", "source_address", "interval_seconds", "timeout_seconds", "failure_threshold",
+    "restart_delay_seconds", "restart_limit",
+)
+EXPECTED_CAPABILITIES = [
+    "forward.gost.mesh",
+    "forward.tunnel.wss",
+    "forward.tunnel.quic",
+    "forward.tunnel.health",
+    "forward.route.policy",
+    "plugin.runtime-state",
+    "plugin.cleanup",
+]
+EXPECTED_PERMISSIONS = [
+    "gost-mesh.view",
+    "gost-mesh.api",
+    "gost-mesh.network-admin",
+    "gost-mesh.process-exec",
+]
+EXPECTED_WEBUI_PERMISSIONS = ["gost-mesh.view"]
+EXPECTED_CONTROL_ROUTES = ["/api/v3/plugins/gost-mesh/status"]
 MANIFEST_FIELDS = (
     "id",
     "name",
@@ -85,6 +134,25 @@ class AgentInput:
     @property
     def archive_path(self) -> str:
         return f"agent/{self.goos}-{self.goarch}/plugin"
+
+
+@dataclass(frozen=True)
+class GostInput:
+    path: Path
+    goos: str
+    goarch: str
+
+    @property
+    def architecture(self) -> str:
+        return f"{self.goos}/{self.goarch}"
+
+    @property
+    def entrypoint_name(self) -> str:
+        return f"runtime-gost-{self.goos}-{self.goarch}"
+
+    @property
+    def archive_path(self) -> str:
+        return f"runtime/{self.goos}-{self.goarch}/gost"
 
 
 @dataclass(frozen=True)
@@ -159,27 +227,68 @@ def load_json(path: Path, context: str) -> Any:
         raise PackageError(f"invalid {context}: {exc}") from exc
 
 
+def validate_executable_input(path: Path, label: str, maximum: int) -> bytes:
+    if path.is_symlink():
+        raise PackageError(f"{label} must not be a symbolic link")
+    try:
+        file_stat = path.stat()
+    except OSError as exc:
+        raise PackageError(f"read {label} metadata: {exc}") from exc
+    if not stat.S_ISREG(file_stat.st_mode):
+        raise PackageError(f"{label} must be a regular file")
+    if file_stat.st_size <= 0:
+        raise PackageError(f"{label} must not be empty")
+    if file_stat.st_size > maximum:
+        raise PackageError(f"{label} exceeds {maximum} bytes")
+    if file_stat.st_mode & 0o111 == 0:
+        raise PackageError(f"{label} must have an executable mode bit")
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise PackageError(f"read {label}: {exc}") from exc
+
+
 def validate_agent_input(agent: AgentInput) -> bytes:
     if not SAFE_GO_TOKEN.fullmatch(agent.goos):
         raise PackageError(f"invalid GOOS: {agent.goos!r}")
     if not SAFE_GO_TOKEN.fullmatch(agent.goarch):
         raise PackageError(f"invalid GOARCH: {agent.goarch!r}")
-    if agent.path.is_symlink():
-        raise PackageError("Agent binary must not be a symbolic link")
-    try:
-        file_stat = agent.path.stat()
-    except OSError as exc:
-        raise PackageError(f"read Agent binary metadata: {exc}") from exc
-    if not stat.S_ISREG(file_stat.st_mode):
-        raise PackageError("Agent binary must be a regular file")
-    if file_stat.st_size <= 0:
-        raise PackageError("Agent binary must not be empty")
-    if file_stat.st_mode & 0o111 == 0:
-        raise PackageError("Agent binary must have an executable mode bit")
-    try:
-        return agent.path.read_bytes()
-    except OSError as exc:
-        raise PackageError(f"read Agent binary: {exc}") from exc
+    return validate_executable_input(agent.path, "Agent binary", MAX_ARTIFACT_BYTES)
+
+
+def native_architecture() -> str:
+    system = platform.system().strip().lower()
+    machine = platform.machine().strip().lower()
+    aliases = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}
+    return f"{system}/{aliases.get(machine, machine)}"
+
+
+def validate_gost_input(gost: GostInput) -> bytes:
+    if not SAFE_GO_TOKEN.fullmatch(gost.goos):
+        raise PackageError(f"invalid GOST GOOS: {gost.goos!r}")
+    if not SAFE_GO_TOKEN.fullmatch(gost.goarch):
+        raise PackageError(f"invalid GOST GOARCH: {gost.goarch!r}")
+    contract = GOST_RUNTIME_CONTRACT.get(gost.architecture)
+    if contract is None:
+        raise PackageError(f"no pinned GOST {GOST_VERSION} artifact for {gost.architecture}")
+    binary = validate_executable_input(gost.path, "GOST runtime", MAX_GOST_BYTES)
+    actual_sha256 = sha256_bytes(binary)
+    if actual_sha256 != contract["binary_sha256"]:
+        raise PackageError(
+            f"GOST runtime SHA-256 mismatch for {gost.architecture}: "
+            f"expected {contract['binary_sha256']}, got {actual_sha256}"
+        )
+    if gost.architecture == native_architecture():
+        try:
+            result = subprocess.run(
+                [str(gost.path), "-V"], check=False, capture_output=True, text=True, timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise PackageError(f"execute pinned GOST runtime version check: {exc}") from exc
+        version_output = (result.stdout + result.stderr).strip()
+        if result.returncode != 0 or not re.search(rf"\bgost v{re.escape(GOST_VERSION)}\b", version_output):
+            raise PackageError(f"GOST runtime version must be v{GOST_VERSION}")
+    return binary
 
 
 def validate_webui_source(source: bytes) -> None:
@@ -200,52 +309,115 @@ def validate_webui_source(source: bytes) -> None:
 def validate_config_source(schema: Any, defaults: Any) -> None:
     if not isinstance(schema, dict) or schema.get("type") != "object":
         raise PackageError("configuration schema must be a JSON object schema")
+    if schema.get("additionalProperties") is not False:
+        raise PackageError("configuration schema must reject additional properties")
     if not isinstance(defaults, dict):
         raise PackageError("configuration defaults must be a JSON object")
+    if defaults != RUNTIME_DEFAULTS:
+        raise PackageError("configuration defaults do not match the Agent runtime contract")
     properties = schema.get("properties")
-    if not isinstance(properties, dict):
-        raise PackageError("configuration schema properties must be an object")
-    for name, definition in properties.items():
-        if not isinstance(name, str) or not isinstance(definition, dict):
-            raise PackageError(f"configuration schema property {name!r} is invalid")
-    unknown = sorted(set(defaults) - set(properties))
-    if unknown:
-        raise PackageError(f"configuration defaults contain unknown keys: {unknown}")
-    required = schema.get("required", [])
-    if not isinstance(required, list) or any(key not in defaults for key in required):
-        raise PackageError("configuration defaults do not cover required properties")
+    if not isinstance(properties, dict) or set(properties) != set(RUNTIME_CONFIG_FIELDS):
+        raise PackageError("configuration schema properties do not match the Agent runtime contract")
+    if schema.get("required") != list(RUNTIME_CONFIG_FIELDS):
+        raise PackageError("configuration schema must require every Agent runtime field")
+    if properties.get("api_version", {}).get("const") != CONFIG_API_VERSION:
+        raise PackageError("api_version must remain fixed to the v1 Agent contract")
+    if properties.get("rollback_on_exit", {}).get("const") is not True:
+        raise PackageError("rollback_on_exit must remain fixed to true for the v1 runtime")
+    tunnels_schema = properties.get("tunnels", {})
+    if (
+        tunnels_schema.get("default") != []
+        or tunnels_schema.get("maxItems") != 128
+        or tunnels_schema.get("uniqueItems") is not True
+    ):
+        raise PackageError("tunnels schema limits do not match the Agent runtime contract")
+    if not isinstance(schema.get("allOf"), list) or len(schema["allOf"]) != 1:
+        raise PackageError("configuration schema must require tunnels when apply is true")
+
+    definitions = schema.get("$defs")
+    if not isinstance(definitions, dict):
+        raise PackageError("configuration schema definitions are missing")
+    expected_definitions = {"health", "listen", "remote", "routing", "tls", "tun", "ipv4_cidr", "tunnel"}
+    if set(definitions) != expected_definitions:
+        raise PackageError("configuration schema definitions do not match the Agent runtime contract")
+
+    def require_fields(name: str, fields: tuple[str, ...], required: tuple[str, ...] | None = None) -> dict[str, Any]:
+        definition = definitions.get(name)
+        if not isinstance(definition, dict) or definition.get("type") != "object" or definition.get("additionalProperties") is not False:
+            raise PackageError(f"{name} schema must be a strict object")
+        nested = definition.get("properties")
+        if not isinstance(nested, dict) or set(nested) != set(fields):
+            raise PackageError(f"{name} schema fields do not match the Agent runtime contract")
+        if required is None:
+            required = fields
+        if definition.get("required") != list(required):
+            raise PackageError(f"{name} schema required fields do not match the Agent runtime contract")
+        return definition
+
+    tunnel = require_fields(
+        "tunnel", TUNNEL_FIELDS,
+        ("id", "role", "transport", "tun", "routing", "tls", "wss_path", "health"),
+    )
+    tun = require_fields("tun", TUN_FIELDS)
+    routing = require_fields("routing", ROUTING_FIELDS, ("source_cidrs", "route_cidrs"))
+    tls = require_fields("tls", TLS_FIELDS)
+    health = require_fields("health", HEALTH_FIELDS)
+    require_fields("listen", ("address", "port"))
+    require_fields("remote", ("host", "port"))
+    if tunnel["properties"]["role"].get("enum") != ["entry", "exit"]:
+        raise PackageError("tunnel roles must remain entry and exit")
+    if tunnel["properties"]["transport"].get("enum") != ["quic", "wss"]:
+        raise PackageError("tunnel transports must remain QUIC and WSS")
+    if not isinstance(tunnel.get("allOf"), list) or len(tunnel["allOf"]) != 2:
+        raise PackageError("tunnel schema must enforce role and transport conditions")
+    if tunnel["properties"]["id"].get("pattern") != r"^[a-z0-9][a-z0-9._-]{0,63}$":
+        raise PackageError("tunnel id schema does not match the Agent runtime contract")
+    if tun["properties"]["name"].get("maxLength") != 15 or tun["properties"]["mtu"].get("maximum") != 9000:
+        raise PackageError("TUN schema limits do not match the Agent runtime contract")
+    if tun["properties"]["peer_address"].get("type") != "string" or "$ref" in tun["properties"]["peer_address"]:
+        raise PackageError("tun.peer_address must be an IPv4 host address")
+    if any(
+        routing["properties"][field].get("maxItems") != 128
+        or routing["properties"][field].get("uniqueItems") is not True
+        for field in ("source_cidrs", "route_cidrs")
+    ):
+        raise PackageError("routing CIDR limits do not match the Agent runtime contract")
+    if (
+        routing["properties"]["table"].get("minimum") != 0
+        or routing["properties"]["table"].get("maximum") != 252
+        or routing["properties"]["priority"].get("minimum") != 0
+        or routing["properties"]["priority"].get("maximum") != 32765
+    ):
+        raise PackageError("routing table or priority limits do not match the Agent runtime contract")
+    role_condition = tunnel["allOf"][0]
+    entry_routing = role_condition.get("then", {}).get("properties", {}).get("routing", {})
+    exit_routing = role_condition.get("else", {}).get("properties", {}).get("routing", {})
+    if entry_routing.get("required") != ["table", "priority"]:
+        raise PackageError("entry routing must require table and priority")
+    if any(entry_routing.get("properties", {}).get(field, {}).get("minimum") != 1 for field in ("table", "priority")):
+        raise PackageError("entry routing table and priority must be positive")
+    if any(exit_routing.get("properties", {}).get(field, {}).get("const") != 0 for field in ("table", "priority")):
+        raise PackageError("exit routing table and priority must be omitted or 0")
+    if any(tls["properties"][field].get("maxLength") != 4096 for field in ("ca_file", "cert_file", "key_file")):
+        raise PackageError("TLS path limits do not match the Agent runtime contract")
+    expected_health_limits = {
+        "interval_seconds": (5, 300),
+        "timeout_seconds": (1, 30),
+        "failure_threshold": (1, 20),
+        "restart_delay_seconds": (1, 300),
+        "restart_limit": (1, 100),
+    }
+    for field, (minimum, maximum) in expected_health_limits.items():
+        value = health["properties"][field]
+        if value.get("minimum") != minimum or value.get("maximum") != maximum:
+            raise PackageError(f"health.{field} limits do not match the Agent runtime contract")
+    if not isinstance(health.get("allOf"), list) or len(health["allOf"]) != 1:
+        raise PackageError("health target and source address must be required only when health checks are enabled")
+    if "tuic" in json.dumps(schema, sort_keys=True).lower():
+        raise PackageError("TUIC is not part of the GOST Mesh v1 runtime contract")
     for name, value in defaults.items():
-        definition = properties[name]
-        expected_type = definition.get("type")
-        if expected_type == "string":
-            if not isinstance(value, str):
-                raise PackageError(f"{name} default must be a string")
-            enum = definition.get("enum")
-            if isinstance(enum, list) and value not in enum:
-                raise PackageError(f"{name} default is outside its enum")
-            minimum = definition.get("minLength")
-            maximum = definition.get("maxLength")
-            if isinstance(minimum, int) and len(value) < minimum:
-                raise PackageError(f"{name} default is shorter than minLength")
-            if isinstance(maximum, int) and len(value) > maximum:
-                raise PackageError(f"{name} default is longer than maxLength")
-            pattern = definition.get("pattern")
-            if isinstance(pattern, str) and not re.fullmatch(pattern, value):
-                raise PackageError(f"{name} default does not match pattern")
-        elif expected_type == "integer":
-            if not isinstance(value, int) or isinstance(value, bool):
-                raise PackageError(f"{name} default must be an integer")
-            minimum = definition.get("minimum")
-            maximum = definition.get("maximum")
-            if isinstance(minimum, int) and value < minimum:
-                raise PackageError(f"{name} default is below minimum")
-            if isinstance(maximum, int) and value > maximum:
-                raise PackageError(f"{name} default is above maximum")
-        elif expected_type == "boolean":
-            if not isinstance(value, bool):
-                raise PackageError(f"{name} default must be a boolean")
-        else:
-            raise PackageError(f"{name} schema type is unsupported by package contract")
+        if properties[name].get("default") != value:
+            raise PackageError(f"{name} schema default does not match the Agent runtime default")
 
 
 def validate_manifest_contract(manifest: dict[str, Any], architecture: str | None = None) -> None:
@@ -255,6 +427,17 @@ def validate_manifest_contract(manifest: dict[str, Any], architecture: str | Non
         raise PackageError("generated manifest publisher or API version is invalid")
     if manifest.get("targets") != ["control", "agent"]:
         raise PackageError("generated manifest must contain control and agent targets")
+    if manifest.get("capabilities") != EXPECTED_CAPABILITIES:
+        raise PackageError("generated manifest capabilities do not match the GOST Mesh runtime")
+    if manifest.get("permissions") != EXPECTED_PERMISSIONS:
+        raise PackageError("generated manifest permissions do not match the GOST Mesh runtime")
+    if manifest.get("secret_fields") != []:
+        raise PackageError("GOST Mesh v1 must not declare unresolved secret fields")
+    if manifest.get("control_routes") != EXPECTED_CONTROL_ROUTES:
+        raise PackageError("generated manifest control routes are invalid")
+    webui = manifest.get("webui")
+    if not isinstance(webui, dict) or webui.get("permissions") != EXPECTED_WEBUI_PERMISSIONS:
+        raise PackageError("generated manifest WebUI permissions must remain view-only")
     architectures = manifest.get("architectures")
     if not isinstance(architectures, list) or len(architectures) != 1 or not isinstance(architectures[0], str):
         raise PackageError("generated manifest must contain one architecture")
@@ -273,7 +456,12 @@ def source_bytes(relative_path: str) -> bytes:
         raise PackageError(f"read package source {relative_path}: {exc}") from exc
 
 
-def package_entries(agent: AgentInput, agent_binary: bytes) -> tuple[list[ArchiveEntry], dict[str, Any]]:
+def package_entries(
+    agent: AgentInput,
+    agent_binary: bytes,
+    gost: GostInput,
+    gost_binary: bytes,
+) -> tuple[list[ArchiveEntry], dict[str, Any]]:
     webui = source_bytes(WEBUI_PATH)
     validate_webui_source(webui)
     schema_value = sorted_json_value(load_json(PACKAGE_ROOT / SCHEMA_PATH, "configuration schema"))
@@ -285,6 +473,7 @@ def package_entries(agent: AgentInput, agent_binary: bytes) -> tuple[list[Archiv
     payload_entries = [
         ArchiveEntry(agent.archive_path, agent_binary, 0o755),
         ArchiveEntry(DEFAULTS_PATH, defaults, 0o644),
+        ArchiveEntry(gost.archive_path, gost_binary, 0o755),
         ArchiveEntry(SCHEMA_PATH, schema, 0o644),
         ArchiveEntry(WEBUI_PATH, webui, 0o644),
     ]
@@ -300,10 +489,22 @@ def package_entries(agent: AgentInput, agent_binary: bytes) -> tuple[list[Archiv
     ]
     package_index = {
         "architectures": [agent.architecture],
-        "entrypoints": {agent.entrypoint_name: agent.archive_path},
+        "entrypoints": {
+            agent.entrypoint_name: agent.archive_path,
+            gost.entrypoint_name: gost.archive_path,
+        },
         "files": file_index,
         "format": FORMAT_VERSION,
         "id": PLUGIN_ID,
+        "runtime": {
+            "gost": {
+                "archive_sha256": GOST_RUNTIME_CONTRACT[gost.architecture]["archive_sha256"],
+                "architecture": gost.architecture,
+                "path": gost.archive_path,
+                "sha256": sha256_bytes(gost_binary),
+                "version": GOST_VERSION,
+            }
+        },
         "targets": ["control", "agent"],
         "version": PLUGIN_VERSION,
     }
@@ -329,7 +530,7 @@ def deterministic_tar(entries: list[ArchiveEntry]) -> bytes:
     return output.getvalue()
 
 
-def generated_manifest(agent: AgentInput, artifact: bytes, webui: bytes, schema: Any) -> dict[str, Any]:
+def generated_manifest(agent: AgentInput, gost: GostInput, artifact: bytes, webui: bytes, schema: Any) -> dict[str, Any]:
     template = load_json(PACKAGE_ROOT / MANIFEST_TEMPLATE_PATH, "manifest template")
     if not isinstance(template, dict):
         raise PackageError("manifest template must be a JSON object")
@@ -341,7 +542,10 @@ def generated_manifest(agent: AgentInput, artifact: bytes, webui: bytes, schema:
     template["architectures"] = [agent.architecture]
     template["artifact_sha256"] = sha256_bytes(artifact)
     template["config_schema"] = sorted_json_value(schema)
-    template["entrypoints"] = {agent.entrypoint_name: agent.archive_path}
+    template["entrypoints"] = {
+        agent.entrypoint_name: agent.archive_path,
+        gost.entrypoint_name: gost.archive_path,
+    }
     template["frontend_sha256"] = webui_digest
     try:
         template["webui"]["bundle"]["sha256"] = webui_digest
@@ -352,7 +556,16 @@ def generated_manifest(agent: AgentInput, artifact: bytes, webui: bytes, schema:
     return manifest
 
 
-def output_report(agent: AgentInput, agent_binary: bytes, artifact: bytes, manifest: bytes, webui: bytes, schema: bytes) -> dict[str, Any]:
+def output_report(
+    agent: AgentInput,
+    agent_binary: bytes,
+    gost: GostInput,
+    gost_binary: bytes,
+    artifact: bytes,
+    manifest: bytes,
+    webui: bytes,
+    schema: bytes,
+) -> dict[str, Any]:
     return {
         "agent": {
             "architecture": agent.architecture,
@@ -374,6 +587,17 @@ def output_report(agent: AgentInput, agent_binary: bytes, artifact: bytes, manif
             "size": len(manifest),
         },
         "plugin_id": PLUGIN_ID,
+        "runtime": {
+            "gost": {
+                "archive_sha256": GOST_RUNTIME_CONTRACT[gost.architecture]["archive_sha256"],
+                "architecture": gost.architecture,
+                "entrypoint": gost.entrypoint_name,
+                "path": gost.archive_path,
+                "sha256": sha256_bytes(gost_binary),
+                "size": len(gost_binary),
+                "version": GOST_VERSION,
+            }
+        },
         "schema": {
             "path": SCHEMA_PATH,
             "sha256": sha256_bytes(schema),
@@ -408,18 +632,21 @@ def checksum_bytes(files: dict[str, bytes]) -> bytes:
     return "".join(f"{sha256_bytes(files[name])}  {name}\n" for name in sorted(files)).encode("ascii")
 
 
-def build_package(agent: AgentInput, output_dir: Path) -> dict[str, bytes]:
+def build_package(agent: AgentInput, gost: GostInput, output_dir: Path) -> dict[str, bytes]:
+    if gost.architecture != agent.architecture:
+        raise PackageError("Agent and GOST runtime architectures must match")
     agent_binary = validate_agent_input(agent)
-    entries, _ = package_entries(agent, agent_binary)
+    gost_binary = validate_gost_input(gost)
+    entries, _ = package_entries(agent, agent_binary, gost, gost_binary)
     artifact = deterministic_tar(entries)
     if len(artifact) > MAX_ARTIFACT_BYTES:
         raise PackageError(f"package artifact exceeds {MAX_ARTIFACT_BYTES} bytes")
     webui = source_bytes(WEBUI_PATH)
     schema_value = sorted_json_value(load_json(PACKAGE_ROOT / SCHEMA_PATH, "configuration schema"))
     schema = pretty_json(schema_value)
-    manifest_value = generated_manifest(agent, artifact, webui, schema_value)
+    manifest_value = generated_manifest(agent, gost, artifact, webui, schema_value)
     manifest = canonical_manifest_json(manifest_value)
-    report = pretty_json(output_report(agent, agent_binary, artifact, manifest, webui, schema))
+    report = pretty_json(output_report(agent, agent_binary, gost, gost_binary, artifact, manifest, webui, schema))
     generated = {
         ARTIFACT_NAME: artifact,
         MANIFEST_NAME: manifest,
@@ -494,6 +721,18 @@ def verify_package_index(contents: dict[str, bytes], modes: dict[str, int], mani
         raise PackageError("artifact package index targets are invalid")
     if index.get("architectures") != manifest.get("architectures") or index.get("entrypoints") != manifest.get("entrypoints"):
         raise PackageError("artifact package index does not match manifest runtime targets")
+    architecture = manifest["architectures"][0]
+    contract = GOST_RUNTIME_CONTRACT.get(architecture)
+    runtime = index.get("runtime", {}).get("gost", {})
+    runtime_path = manifest["entrypoints"].get("runtime-gost-" + architecture.replace("/", "-"))
+    if contract is None or runtime != {
+        "archive_sha256": contract["archive_sha256"],
+        "architecture": architecture,
+        "path": runtime_path,
+        "sha256": contract["binary_sha256"],
+        "version": GOST_VERSION,
+    }:
+        raise PackageError("artifact package index GOST runtime contract is invalid")
     rows = index.get("files")
     if not isinstance(rows, list):
         raise PackageError("artifact package file index must be an array")
@@ -543,17 +782,32 @@ def verify_output_dir(output_dir: Path) -> None:
     contents, modes = read_archive(artifact)
     expected_paths = {PACKAGE_INDEX_NAME, WEBUI_PATH, SCHEMA_PATH, DEFAULTS_PATH}
     entrypoints = manifest.get("entrypoints")
-    if not isinstance(entrypoints, dict) or len(entrypoints) != 1:
-        raise PackageError("generated manifest must contain one architecture entrypoint")
-    entrypoint_name, entrypoint_path = next(iter(entrypoints.items()))
-    if not re.fullmatch(r"agent-[a-z0-9_]+-[a-z0-9_]+", entrypoint_name):
-        raise PackageError("generated manifest Agent entrypoint name is invalid")
-    if entrypoint_path not in contents:
-        raise PackageError("generated manifest Agent entrypoint is missing from artifact")
-    expected_paths.add(entrypoint_path)
+    architecture = manifest["architectures"][0]
+    contract = GOST_RUNTIME_CONTRACT.get(architecture)
+    if contract is None:
+        raise PackageError("generated manifest architecture has no pinned GOST runtime")
+    goos, goarch = architecture.split("/", 1)
+    agent_name = f"agent-{goos}-{goarch}"
+    gost_name = f"runtime-gost-{goos}-{goarch}"
+    expected_entrypoints = {
+        agent_name: f"agent/{goos}-{goarch}/plugin",
+        gost_name: f"runtime/{goos}-{goarch}/gost",
+    }
+    if entrypoints != expected_entrypoints:
+        raise PackageError("generated manifest Agent and GOST entrypoints are invalid")
+    agent_path = entrypoints[agent_name]
+    gost_path = entrypoints[gost_name]
+    if agent_path not in contents or gost_path not in contents:
+        raise PackageError("generated manifest runtime entrypoint is missing from artifact")
+    if sha256_bytes(contents[gost_path]) != contract["binary_sha256"]:
+        raise PackageError("packaged GOST runtime does not match the pinned artifact")
+    expected_paths.update((agent_path, gost_path))
     if set(contents) != expected_paths:
         raise PackageError("artifact contains an unexpected file set")
-    if modes[entrypoint_path] != 0o755 or any(modes[path] != 0o644 for path in expected_paths - {entrypoint_path}):
+    executable_paths = {agent_path, gost_path}
+    if any(modes[path] != 0o755 for path in executable_paths) or any(
+        modes[path] != 0o644 for path in expected_paths - executable_paths
+    ):
         raise PackageError("artifact entry modes are invalid")
     validate_webui_source(contents[WEBUI_PATH])
     bundle = manifest.get("webui", {}).get("bundle", {})
@@ -579,8 +833,19 @@ def verify_output_dir(output_dir: Path) -> None:
         raise PackageError("build report manifest digest mismatch")
     if report.get("webui", {}).get("sha256") != sha256_bytes(contents[WEBUI_PATH]):
         raise PackageError("build report WebUI digest mismatch")
-    if report.get("agent", {}).get("sha256") != sha256_bytes(contents[entrypoint_path]):
+    if report.get("agent", {}).get("sha256") != sha256_bytes(contents[agent_path]):
         raise PackageError("build report Agent digest mismatch")
+    expected_runtime_report = {
+        "archive_sha256": contract["archive_sha256"],
+        "architecture": architecture,
+        "entrypoint": gost_name,
+        "path": gost_path,
+        "sha256": contract["binary_sha256"],
+        "size": len(contents[gost_path]),
+        "version": GOST_VERSION,
+    }
+    if report.get("runtime", {}).get("gost") != expected_runtime_report:
+        raise PackageError("build report GOST runtime contract mismatch")
 
 
 def run_self_test() -> None:
@@ -589,24 +854,33 @@ def run_self_test() -> None:
         agent_path = root / "gost-mesh-agent"
         agent_path.write_bytes(b"#!/bin/sh\nexit 0\n")
         agent_path.chmod(0o755)
+        gost_path = root / "gost"
+        gost_path.write_bytes(b"#!/bin/sh\nprintf 'gost v3.2.6 (package-self-test)\\n'\n")
+        gost_path.chmod(0o755)
         agent = AgentInput(agent_path, "linux", "amd64")
+        gost = GostInput(gost_path, "linux", "amd64")
+        original_sha256 = GOST_RUNTIME_CONTRACT[gost.architecture]["binary_sha256"]
+        GOST_RUNTIME_CONTRACT[gost.architecture]["binary_sha256"] = sha256_bytes(gost_path.read_bytes())
         first = root / "first"
         second = root / "second"
-        first_outputs = build_package(agent, first)
-        second_outputs = build_package(agent, second)
-        if first_outputs != second_outputs:
-            raise PackageError("self-test package builds are not byte-identical")
-        verify_output_dir(first)
-        artifact_path = first / ARTIFACT_NAME
-        tampered = bytearray(artifact_path.read_bytes())
-        tampered[0] ^= 0x01
-        artifact_path.write_bytes(tampered)
         try:
+            first_outputs = build_package(agent, gost, first)
+            second_outputs = build_package(agent, gost, second)
+            if first_outputs != second_outputs:
+                raise PackageError("self-test package builds are not byte-identical")
             verify_output_dir(first)
-        except PackageError:
-            pass
-        else:
-            raise PackageError("self-test failed to reject a tampered artifact")
+            artifact_path = first / ARTIFACT_NAME
+            tampered = bytearray(artifact_path.read_bytes())
+            tampered[0] ^= 0x01
+            artifact_path.write_bytes(tampered)
+            try:
+                verify_output_dir(first)
+            except PackageError:
+                pass
+            else:
+                raise PackageError("self-test failed to reject a tampered artifact")
+        finally:
+            GOST_RUNTIME_CONTRACT[gost.architecture]["binary_sha256"] = original_sha256
     print("gost-mesh package self-test passed")
 
 
@@ -616,6 +890,7 @@ def parse_args() -> argparse.Namespace:
 
     build_parser = subparsers.add_parser("build", help="Build and verify a combined package artifact.")
     build_parser.add_argument("--agent-binary", required=True, type=Path, help="Path to the real Agent plugin executable.")
+    build_parser.add_argument("--gost", required=True, type=Path, help=f"Path to the pinned GOST v{GOST_VERSION} executable.")
     build_parser.add_argument("--goos", required=True, help="GOOS represented by the Agent binary.")
     build_parser.add_argument("--goarch", required=True, help="GOARCH represented by the Agent binary.")
     build_parser.add_argument("--output-dir", required=True, type=Path, help="Directory for generated package outputs.")
@@ -638,7 +913,8 @@ def main() -> int:
             print(f"verified {args.output_dir}")
             return 0
         agent = AgentInput(args.agent_binary, args.goos.strip().lower(), args.goarch.strip().lower())
-        build_package(agent, args.output_dir)
+        gost = GostInput(args.gost, args.goos.strip().lower(), args.goarch.strip().lower())
+        build_package(agent, gost, args.output_dir)
         print(f"built and verified {args.output_dir / ARTIFACT_NAME}")
         return 0
     except PackageError as exc:

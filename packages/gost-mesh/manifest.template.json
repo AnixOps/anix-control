@@ -13,20 +13,22 @@
   "capabilities": [
     "forward.gost.mesh",
     "forward.tunnel.wss",
-    "forward.tunnel.tuic",
-    "forward.tunnel.quic"
+    "forward.tunnel.quic",
+    "forward.tunnel.health",
+    "forward.route.policy",
+    "plugin.runtime-state",
+    "plugin.cleanup"
   ],
   "dependencies": [],
   "conflicts": [],
   "permissions": [
     "gost-mesh.view",
-    "gost-mesh.api"
+    "gost-mesh.api",
+    "gost-mesh.network-admin",
+    "gost-mesh.process-exec"
   ],
   "config_schema": {},
-  "secret_fields": [
-    "tls_cert_secret",
-    "tls_key_secret"
-  ],
+  "secret_fields": [],
   "entrypoints": {},
   "migration_version": 1,
   "control_routes": [

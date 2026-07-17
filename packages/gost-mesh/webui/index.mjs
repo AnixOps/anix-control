@@ -14,8 +14,10 @@ function count(value) {
 }
 
 function stateLabel(tunnel) {
+  if (tunnel?.cleanup_pending) return 'Cleanup required'
   if (tunnel?.rollback_required) return 'Rollback'
   if (tunnel?.reconciling) return 'Reconciling'
+  if (tunnel?.health === 'unhealthy' || tunnel?.health === 'degraded') return 'Degraded'
   if (tunnel?.ready) return 'Ready'
   return 'Pending'
 }
@@ -54,13 +56,14 @@ export default function create(host) {
           ['Tunnels', count(value.value.summary?.tunnels)],
           ['Ready', count(value.value.summary?.ready)],
           ['Reconciling', count(value.value.summary?.reconciling)],
+          ['Cleanup', count(value.value.summary?.cleanup_pending)],
           ['Rollback', count(value.value.summary?.rollback_required)],
         ]
         const rows = (value.value.tunnels || []).map(tunnel => h('tr', { key: tunnel.id }, [
           h('td', tunnel.name || tunnel.id),
           h('td', tunnel.entry_node || '-'),
           h('td', tunnel.exit_node || '-'),
-          h('td', tunnel.protocol || '-'),
+          h('td', tunnel.transport || tunnel.protocol || '-'),
           h('td', tunnel.listen || '-'),
           h('td', tunnel.upstream || '-'),
           h('td', stateLabel(tunnel)),
@@ -68,7 +71,7 @@ export default function create(host) {
         return h('section', { class: 'control-page gost-mesh-extension' }, [
           h('header', [
             h('h1', 'GOST Mesh'),
-            h('p', 'WSS/TUIC/QUIC tunnel package status. Runtime execution remains feature-gated until canary approval.'),
+            h('p', 'Signed GOST v3.2.6 WSS/QUIC runtime status. Canary approval is still required before production traffic.'),
           ]),
           h('dl', { class: 'metric-grid' }, summary.flatMap(([label, metric]) => [
             h('dt', label),

@@ -1,0 +1,156 @@
+{
+  "format": "anixops.gost-mesh.semantic-cases/v1",
+  "max_config_bytes": 262144,
+  "valid_cases": [
+    {
+      "name": "entry-wss",
+      "generator": "single",
+      "role": "entry",
+      "transport": "wss"
+    },
+    {
+      "name": "entry-quic",
+      "generator": "single",
+      "role": "entry",
+      "transport": "quic"
+    },
+    {
+      "name": "exit-wss-with-omitted-policy-route",
+      "generator": "single",
+      "role": "exit",
+      "transport": "wss"
+    },
+    {
+      "name": "exit-quic-with-zero-policy-route",
+      "generator": "single",
+      "role": "exit",
+      "transport": "quic",
+      "exit_route_zeroes": true
+    },
+    {
+      "name": "maximum-128-non-conflicting-entry-tunnels",
+      "generator": "entry-set",
+      "count": 128
+    }
+  ],
+  "invalid_cases": [
+    {
+      "name": "duplicate-tunnel-object",
+      "generator": "duplicate-object",
+      "expected_error": "duplicated"
+    },
+    {
+      "name": "noncanonical-source-cidr",
+      "generator": "single",
+      "role": "entry",
+      "transport": "quic",
+      "pointer": "/tunnels/0/routing/source_cidrs/0",
+      "value": "10.66.0.1/24",
+      "expected_error": "routing.source_cidrs"
+    },
+    {
+      "name": "noncanonical-route-cidr",
+      "generator": "single",
+      "role": "exit",
+      "transport": "quic",
+      "pointer": "/tunnels/0/routing/route_cidrs/0",
+      "value": "10.66.0.1/24",
+      "expected_error": "routing.route_cidrs"
+    },
+    {
+      "name": "tun-peer-outside-prefix",
+      "generator": "single",
+      "role": "entry",
+      "transport": "quic",
+      "pointer": "/tunnels/0/tun/peer_address",
+      "value": "172.31.67.1",
+      "expected_error": "tun."
+    },
+    {
+      "name": "health-timeout-equals-interval",
+      "generator": "single",
+      "role": "entry",
+      "transport": "quic",
+      "pointer": "/tunnels/0/health/timeout_seconds",
+      "value": 15,
+      "expected_error": "health.timeout_seconds"
+    },
+    {
+      "name": "health-source-outside-policy",
+      "generator": "single",
+      "role": "entry",
+      "transport": "quic",
+      "pointer": "/tunnels/0/health/source_address",
+      "value": "10.67.0.1",
+      "expected_error": "health.source_address"
+    },
+    {
+      "name": "certificate-and-key-are-the-same-file",
+      "generator": "single",
+      "role": "entry",
+      "transport": "quic",
+      "pointer": "/tunnels/0/tls/key_file",
+      "value": "/run/anixops/secrets/mesh-client.pem",
+      "expected_error": "tls.cert_file"
+    },
+    {
+      "name": "reserved-literal-health-target",
+      "generator": "single",
+      "role": "entry",
+      "transport": "quic",
+      "pointer": "/tunnels/0/health/target",
+      "value": "127.0.0.1:443",
+      "expected_error": "health.target"
+    },
+    {
+      "name": "fractional-lexeme-remote-port",
+      "generator": "single",
+      "role": "entry",
+      "transport": "quic",
+      "pointer": "/tunnels/0/remote/port",
+      "value": 443.0,
+      "expected_error": "remote"
+    },
+    {
+      "name": "fractional-lexeme-routing-table",
+      "generator": "single",
+      "role": "entry",
+      "transport": "quic",
+      "pointer": "/tunnels/0/routing/table",
+      "value": 100.0,
+      "expected_error": "routing"
+    },
+    {
+      "name": "uppercase-role",
+      "generator": "single",
+      "role": "entry",
+      "transport": "quic",
+      "pointer": "/tunnels/0/role",
+      "value": "ENTRY",
+      "expected_error": "role"
+    },
+    {
+      "name": "surrounding-whitespace-role",
+      "generator": "single",
+      "role": "entry",
+      "transport": "quic",
+      "pointer": "/tunnels/0/role",
+      "value": " entry ",
+      "expected_error": "role"
+    },
+    {
+      "name": "exit-must-not-allocate-routing-table",
+      "generator": "single",
+      "role": "exit",
+      "transport": "wss",
+      "pointer": "/tunnels/0/routing/table",
+      "value": 100,
+      "expected_error": "routing.table"
+    },
+    {
+      "name": "oversized-document",
+      "generator": "oversized-document",
+      "expected_error": "exceeds"
+    }
+  ]
+}
