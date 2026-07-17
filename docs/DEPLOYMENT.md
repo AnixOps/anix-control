@@ -126,7 +126,7 @@ docker compose logs -f anix-control
 生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像：
 
 ```bash
-export VERSION=v4.0.0-alpha.1
+export VERSION=v4.0.0-alpha.2
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh

@@ -94,7 +94,7 @@ auth:
 
 app:
   name: "AnixOps Control"
-  version: "4.0.0-alpha.1"
+  version: "4.0.0-alpha.2"
   # The installer must replace this with a generated value. Never ship a
   # reusable node credential in the production template.
   api_token: ""

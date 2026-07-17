@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 4.0.0-alpha.2 - 2026-07-17
+
+### Fixed
+
+- Retried the complete payment callback transaction on bounded SQLite
+  writer-contention errors, preserving atomic payment-record, order, and
+  gateway-stat updates without changing PostgreSQL or semantic error behavior.
+- Tracked asynchronous notification work and drained it before shared SQLite
+  test cleanup so notification logging cannot cross test boundaries and lock a
+  later payment transaction.
+- Required the real `nftables-forward` Agent binary to report plugin version
+  `1.0.0` before package-contract or signed-release builds can proceed.
+- Pinned package builds and cross-repository process gates to Agent hotfix
+  commit `555be48faebf80e6c9d61cea10705583cf7c32f1`.
+- Blocked release tags whose version does not match the Control runtime,
+  frontend package/lockfile, configuration templates, generated Swagger,
+  changelog, and current-preview documentation.
+
 ## 4.0.0-alpha.1 - 2026-07-17
 
 ### Added

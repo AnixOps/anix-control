@@ -130,6 +130,44 @@ const docTemplate = `{
             }
         },
         "/admin/agent/tasks": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Query recent whitelisted diagnostic tasks, optionally filtered by node_id",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端 Agent"
+                ],
+                "summary": "List diagnostic task history",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Node ID",
+                        "name": "node_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -1946,35 +1984,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/admin/nodes/protocol-templates": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "管理员获取可用的协议模板列表",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "管理端-节点"
-                ],
-                "summary": "获取协议模板",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/admin/nodes/protocols/{protocol_id}": {
             "put": {
                 "security": [
@@ -2306,6 +2315,142 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/nodes/{id}/credentials": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员获取指定节点的 api_key / secret, 用于 AnixOps Agent 对接配置。\nNode.APIKey/Secret 在普通序列化里是隐藏字段 (json:\"-\"), 此接口显式返回,\n仅限管理员, 供 Ansible 等部署工具自动拉取节点凭证。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-节点"
+                ],
+                "summary": "获取节点凭证",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "节点ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/nodes/{id}/logs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员获取指定节点通过 gRPC 上报的运行日志",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-节点"
+                ],
+                "summary": "获取节点运行日志",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "节点ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "日志级别",
+                        "name": "level",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "日志来源",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词",
+                        "name": "search",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -4026,6 +4171,99 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/protocol-templates": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员获取可用的协议模板列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-节点"
+                ],
+                "summary": "获取协议模板",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/system/audit-logs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Admin query for system operation audit logs with optional filters.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin System"
+                ],
+                "summary": "Get system audit logs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by target type",
+                        "name": "target_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by action",
+                        "name": "action",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/admin/system/backup": {
             "post": {
                 "security": [
@@ -5261,6 +5499,58 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/users/{id}/reset-subscribe": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "管理员为用户重新生成订阅 token, 旧订阅链接立即失效 (UUID 不变)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-用户"
+                ],
+                "summary": "重置用户订阅",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "用户ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/admin/users/{id}/reset-traffic": {
             "post": {
                 "security": [
@@ -5361,6 +5651,28 @@ const docTemplate = `{
                             "type": "object",
                             "additionalProperties": true
                         }
+                    }
+                }
+            }
+        },
+        "/admin/ws/monitor": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "实时推送节点监控数据",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "管理端-WebSocket"
+                ],
+                "summary": "WebSocket 实时监控",
+                "responses": {
+                    "101": {
+                        "description": "Switching Protocols"
                     }
                 }
             }
@@ -5572,6 +5884,61 @@ const docTemplate = `{
                 }
             }
         },
+        "/internal/auth-keys": {
+            "post": {
+                "security": [
+                    {
+                        "ApiTokenAuth": []
+                    }
+                ],
+                "description": "使用API Token认证生成节点自动注册的授权密钥（供Ansible等自动化工具使用）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "内部API"
+                ],
+                "summary": "内部生成授权密钥",
+                "parameters": [
+                    {
+                        "description": "密钥请求 {name, expire_days, node_name}",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/login": {
             "post": {
                 "description": "用户登录获取 JWT Token",
@@ -5729,6 +6096,74 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/node/runtime-health": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "节点上报 WireGuard/GOST 等托管运行时的进程健康状态，不覆盖普通心跳状态",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "节点通信"
+                ],
+                "summary": "上报节点运行时健康状态",
+                "parameters": [
+                    {
+                        "description": "运行时健康状态",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.NodeRuntimeHealthRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -6745,16 +7180,20 @@ const docTemplate = `{
     "definitions": {
         "handler.AgentHeartbeatRequest": {
             "type": "object",
+            "required": [
+                "node_id"
+            ],
             "properties": {
                 "node_id": {
                     "type": "integer"
                 },
                 "resources": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 },
                 "status": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 32
                 }
             }
         },
@@ -6769,12 +7208,16 @@ const docTemplate = `{
                 },
                 "system": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 }
             }
         },
         "handler.AgentRegisterRequest": {
             "type": "object",
+            "required": [
+                "node_id",
+                "token"
+            ],
             "properties": {
                 "capabilities": {
                     "type": "array",
@@ -6787,13 +7230,15 @@ const docTemplate = `{
                 },
                 "system": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 },
                 "token": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                 },
                 "version": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 64
                 }
             }
         },
@@ -6915,6 +7360,9 @@ const docTemplate = `{
                 "max_conn": {
                     "type": "integer"
                 },
+                "metrics_port": {
+                    "type": "integer"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -7034,7 +7482,7 @@ const docTemplate = `{
                 },
                 "params": {
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {}
                 },
                 "timeout": {
                     "type": "integer"
@@ -7047,25 +7495,19 @@ const docTemplate = `{
         "handler.ExecuteCommandRequest": {
             "type": "object",
             "required": [
-                "command",
+                "action",
                 "node_id"
             ],
             "properties": {
-                "args": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "command": {
+                "action": {
                     "type": "string"
-                },
-                "env": {
-                    "type": "object",
-                    "additionalProperties": true
                 },
                 "node_id": {
                     "type": "integer"
+                },
+                "params": {
+                    "type": "object",
+                    "additionalProperties": {}
                 },
                 "timeout": {
                     "type": "integer"
@@ -7088,18 +7530,24 @@ const docTemplate = `{
         },
         "handler.SendNotificationRequest": {
             "type": "object",
+            "required": [
+                "telegram_id"
+            ],
             "properties": {
                 "content": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 4096
                 },
                 "message": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 4096
                 },
                 "telegram_id": {
                     "type": "integer"
                 },
                 "title": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 }
             }
         },
@@ -7107,7 +7555,8 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "url": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 512
                 }
             }
         },
@@ -7154,16 +7603,20 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "token": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                 },
                 "welcome_message": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 1024
                 },
                 "welcome_msg": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 1024
                 }
             }
         },
@@ -7229,6 +7682,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "max_conn": {
+                    "type": "integer"
+                },
+                "metrics_port": {
                     "type": "integer"
                 },
                 "name": {
@@ -7297,10 +7753,16 @@ const docTemplate = `{
                 "password"
             ],
             "properties": {
+                "device_limit": {
+                    "type": "integer"
+                },
                 "email": {
                     "type": "string"
                 },
                 "flowResetTime": {
+                    "type": "integer"
+                },
+                "group_id": {
                     "type": "integer"
                 },
                 "is_admin": {
@@ -7309,6 +7771,12 @@ const docTemplate = `{
                 "password": {
                     "type": "string",
                     "minLength": 6
+                },
+                "speed_limit": {
+                    "type": "integer"
+                },
+                "transfer_enable": {
+                    "type": "integer"
                 }
             }
         },
@@ -7478,6 +7946,12 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "mfa_code": {
+                    "type": "string"
+                },
+                "mfa_method": {
+                    "type": "string"
+                },
                 "password": {
                     "type": "string"
                 }
@@ -7520,12 +7994,32 @@ const docTemplate = `{
                     "description": "内存使用率",
                     "type": "number"
                 },
+                "monthly_download": {
+                    "description": "本月已用下载流量",
+                    "type": "integer"
+                },
+                "monthly_limit": {
+                    "description": "月流量限额 (仅本节点自身, 不含子节点单独限额; 子节点流量会同时累加到父节点)",
+                    "type": "integer"
+                },
+                "monthly_reset_day": {
+                    "description": "每月流量重置日 (1-28)",
+                    "type": "integer"
+                },
+                "monthly_upload": {
+                    "description": "本月已用上传流量",
+                    "type": "integer"
+                },
                 "name": {
                     "description": "节点名称",
                     "type": "string"
                 },
                 "online_users": {
                     "description": "在线用户数",
+                    "type": "integer"
+                },
+                "parent_id": {
+                    "description": "父子节点 (中转链路: 落地节点为根, 转发节点为子, 支持多级)",
                     "type": "integer"
                 },
                 "port": {
@@ -7546,6 +8040,16 @@ const docTemplate = `{
                 "raw_config": {
                     "description": "高级配置 (直接JSON编辑)",
                     "type": "string"
+                },
+                "runtime_checked_at": {
+                    "type": "integer"
+                },
+                "runtime_error": {
+                    "type": "string"
+                },
+                "runtime_healthy": {
+                    "description": "运行时健康状态 (由支持运行时自愈的节点上报)",
+                    "type": "boolean"
                 },
                 "server_ip": {
                     "description": "服务器信息 (由节点上报)",
@@ -7760,6 +8264,17 @@ const docTemplate = `{
                 }
             }
         },
+        "model.NodeRuntimeHealthRequest": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "healthy": {
+                    "type": "boolean"
+                }
+            }
+        },
         "model.NodeStatus": {
             "type": "integer",
             "enum": [
@@ -7869,7 +8384,8 @@ const docTemplate = `{
                 "shadowsocks",
                 "hysteria2",
                 "tuic",
-                "anytls"
+                "anytls",
+                "wireguard"
             ],
             "x-enum-varnames": [
                 "ProtocolVMess",
@@ -7878,7 +8394,8 @@ const docTemplate = `{
                 "ProtocolShadowsocks",
                 "ProtocolHysteria2",
                 "ProtocolTUIC",
-                "ProtocolAnyTLS"
+                "ProtocolAnyTLS",
+                "ProtocolWireGuard"
             ]
         },
         "model.RegisterRequest": {
@@ -7889,6 +8406,9 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
+                    "type": "string"
+                },
+                "invite_code": {
                     "type": "string"
                 },
                 "password": {
@@ -8216,7 +8736,7 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "4.0.0-alpha.1",
+	Version:          "4.0.0-alpha.2",
 	Host:             "localhost:8080",
 	BasePath:         "/api/v2",
 	Schemes:          []string{"http", "https"},

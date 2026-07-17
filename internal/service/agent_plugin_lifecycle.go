@@ -18,8 +18,6 @@ import (
 
 const maxAgentPluginLifecycleAttempts = 3
 
-const maxSQLiteLifecycleTransactionAttempts = 6
-
 type nodePluginDesiredState struct {
 	Version        string
 	ConfigRevision int64
@@ -35,22 +33,7 @@ func WithAgentLifecycleTransaction(db *gorm.DB, mutation func(*gorm.DB) error) e
 	if mutation == nil {
 		return errors.New("lifecycle transaction mutation is required")
 	}
-	for attempt := 0; ; attempt++ {
-		err := db.Transaction(mutation)
-		if err == nil || db.Name() != "sqlite" || !isSQLiteBusyError(err) || attempt+1 >= maxSQLiteLifecycleTransactionAttempts {
-			return err
-		}
-		time.Sleep(time.Duration(5*(1<<attempt)) * time.Millisecond)
-	}
-}
-
-func isSQLiteBusyError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "database is locked") || strings.Contains(message, "database table is locked") ||
-		strings.Contains(message, "sqlite_busy") || strings.Contains(message, "sqlite_locked")
+	return WithRetryableTransaction(db, mutation)
 }
 
 // SyncNodePluginLifecycle serializes every role of one node/plugin pair,

@@ -22,11 +22,16 @@ jobs:
     outputs:
       is_release_tag: ${{ steps.check.outputs.is_release_tag }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
       - name: Check if tag matches stable or prerelease version
         id: check
         shell: bash
         run: |
+          set -Eeuo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]; then
+            python3 config/scripts/check_release_version.py --tag "${GITHUB_REF_NAME}"
             echo "is_release_tag=true" >> "$GITHUB_OUTPUT"
             echo "Release tag accepted: ${GITHUB_REF_NAME}"
           else
@@ -76,6 +81,9 @@ jobs:
       - name: Validate release notes script syntax
         run: python3 -m py_compile config/scripts/generate_release_notes.py
 
+      - name: Validate release version script syntax
+        run: python3 -m py_compile config/scripts/check_release_version.py
+
       - name: Validate release artifact verification script syntax
         run: python3 -m py_compile config/scripts/verify_release_artifacts.py
 
@@ -99,6 +107,9 @@ jobs:
 
       - name: Run release notes self-test
         run: python3 config/scripts/generate_release_notes.py --self-test
+
+      - name: Run release version self-test
+        run: python3 config/scripts/check_release_version.py --self-test
 
       - name: Run release artifact verification self-test
         run: python3 config/scripts/verify_release_artifacts.py --self-test
@@ -561,11 +572,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Checkout pinned Agent source for GOST Mesh
+      - name: Checkout pinned Agent source for official packages
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 882024acfb1f125becec8138c3ade0173072ef71
+          ref: 555be48faebf80e6c9d61cea10705583cf7c32f1
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -584,7 +595,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Build and verify real GOST Mesh package inputs
+      - name: Build and verify real package inputs
         shell: bash
         env:
           GOEXPERIMENT: jsonv2
@@ -594,8 +605,13 @@ jobs:
           mkdir -p package-build
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
             go -C V2bX_AnixOps build -trimpath \
+              -o "${GITHUB_WORKSPACE}/package-build/nftables-forward-agent" ./cmd/nftables-forward
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go -C V2bX_AnixOps build -trimpath \
               -o "${GITHUB_WORKSPACE}/package-build/gost-mesh-agent" ./cmd/gost-mesh
+          chmod 0755 package-build/nftables-forward-agent
           chmod 0755 package-build/gost-mesh-agent
+          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.0.0" ]]
 
           gost_archive="${RUNNER_TEMP}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
           curl --fail --location --retry 3 --output "${gost_archive}" \
@@ -636,6 +652,7 @@ jobs:
           bash packages/machine-telemetry/tests/release_gate.sh \
             | tee machine-telemetry-package-contract.txt
           bash packages/nftables-forward/tests/release_gate.sh \
+            --agent-binary package-build/nftables-forward-agent \
             | tee nftables-forward-package-contract.txt
           bash packages/gost-mesh/tests/release_gate.sh \
             --agent-binary package-build/gost-mesh-agent \
@@ -667,7 +684,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 882024acfb1f125becec8138c3ade0173072ef71
+          ref: 555be48faebf80e6c9d61cea10705583cf7c32f1
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -699,6 +716,11 @@ jobs:
           chmod 0755 package-build/nftables-forward-agent
           chmod 0755 package-build/gost-mesh-agent
           chmod 0755 package-build/nat-egress-agent
+
+          [[ "$(package-build/machine-telemetry-agent --version)" == "machine-telemetry 1.0.0" ]]
+          [[ "$(package-build/nftables-forward-agent --version)" == "nftables-forward 1.0.0" ]]
+          [[ "$(package-build/gost-mesh-agent --version)" =~ ^gost-mesh[[:space:]]+1\.0\.0[[:space:]]+\(gost[[:space:]]+v3\.2\.6\)$ ]]
+          [[ "$(package-build/nat-egress-agent --version)" == "nat-egress 1.0.0" ]]
 
       - name: Download and verify pinned GOST runtime
         shell: bash
@@ -894,7 +916,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 882024acfb1f125becec8138c3ade0173072ef71
+          ref: 555be48faebf80e6c9d61cea10705583cf7c32f1
           path: V2bX_AnixOps
 
       - name: Setup Go
