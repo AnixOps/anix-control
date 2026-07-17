@@ -84,7 +84,14 @@ func TestStatsServicePostgresLargeTrafficAggregates(t *testing.T) {
 
 	stats, err := svc.fetchDashboardFromDB()
 	require.NoError(t, err)
-	require.Equal(t, 7*gib+768, stats.TodayTraffic)
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).Unix()
+	expectedTodayTraffic := 7 * gib
+	// At midnight previousHour belongs to the prior calendar day and must not be
+	// included in the dashboard's today-only aggregate.
+	if previousHour >= todayStart {
+		expectedTodayTraffic += 768
+	}
+	require.Equal(t, expectedTodayTraffic, stats.TodayTraffic)
 }
 
 func TestStatsServicePostgresSanitizesAndClampsTrafficAggregates(t *testing.T) {
