@@ -384,6 +384,13 @@ func diagnoseTopologyRelease(db *gorm.DB, pluginID, version string) releaseResul
 		return releaseResultCompat{err: fmt.Errorf("dependency graph is invalid: %w", err)}
 	}
 	for _, dependency := range plan.Steps {
+		var dependencyPlugin model.Plugin
+		if err := db.First(&dependencyPlugin, "id = ?", dependency.PluginID).Error; err != nil {
+			return releaseResultCompat{err: fmt.Errorf("dependency %s official plugin catalog entry is missing: %w", dependency.PluginID, err)}
+		}
+		if !dependencyPlugin.Official || dependencyPlugin.Publisher != "AnixOps" {
+			return releaseResultCompat{err: fmt.Errorf("dependency %s is not an official AnixOps plugin", dependency.PluginID)}
+		}
 		if _, err := VerifyStoredPluginRelease(db, dependency.Release, nil); err != nil {
 			return releaseResultCompat{err: fmt.Errorf("dependency %s signature is invalid: %w", dependency.PluginID, err)}
 		}
@@ -404,6 +411,8 @@ func classifyTopologyReleaseError(err error) (string, string) {
 	switch {
 	case strings.Contains(message, "not an official") || strings.Contains(message, "official plugin catalog"):
 		return "plugin_not_official", message
+	case strings.Contains(message, "dependency"):
+		return "dependency_invalid", message
 	case strings.Contains(message, "not registered"):
 		return "release_missing", message
 	case strings.Contains(message, "signature"):
@@ -684,7 +693,8 @@ func validateNftablesForwardTopologyConfig(raw string, basePath string) []Topolo
 	if strings.ContainsAny(config.NftBinary, "\x00\r\n") {
 		add("nftables_binary_invalid", basePath+".nft_binary", "nft_binary must not contain control characters")
 	}
-	if config.PlanPath != "" && (!filepath.IsAbs(config.PlanPath) || filepath.Clean(config.PlanPath) != config.PlanPath) {
+	planPath := strings.TrimSpace(config.PlanPath)
+	if planPath != "" && (!filepath.IsAbs(planPath) || filepath.Clean(planPath) != planPath) {
 		add("nftables_plan_path_invalid", basePath+".plan_path", "plan_path must be absolute and canonical")
 	}
 	if len(config.Rules) == 0 || string(bytes.TrimSpace(config.Rules)) == "null" {
