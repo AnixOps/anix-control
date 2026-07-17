@@ -25,8 +25,8 @@
 - Replaced the incompatible 1.0 package configuration fields with the exact
   Agent runtime contract and added fail-closed Control semantic admission, so
   invalid nftables plans are rejected before dispatch.
-- Pinned official package builds and cross-repository tests to Agent commit
-  `2f257730c20743bbad4acaa3e8b1793e4e32f5f0`, which journals the original
+- Pinned official package builds and cross-repository tests to the published
+  Agent `v4.0.0-alpha.5` commit `72bbdff19f03768fd8bd9c720e236f93e898043f`, which journals the original
   nftables table, recovers after `SIGKILL` or Agent restart, and restores or
   removes owned state through the signed cleanup entrypoint.
 - Cleared the deployment preflight static-analysis gate without changing
