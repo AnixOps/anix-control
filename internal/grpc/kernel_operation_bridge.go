@@ -53,6 +53,10 @@ type kernelOperationStream interface {
 	AddObservedStateHandler(ObservedStateHandler)
 }
 
+type recoveredKernelOperationStream interface {
+	dispatchRecoveredOperation(context.Context, uint32, *agentv1pb.DesiredOperation) (*agentv1pb.OperationAck, error)
+}
+
 // KernelOperationBridge joins durable Kernel operations to the ephemeral Agent
 // stream. The database stays authoritative: the stream supplies only the
 // active session and delivery transport.
@@ -97,38 +101,39 @@ func (b *KernelOperationBridge) RunOnce(ctx context.Context) (int, error) {
 		return 0, b.recoverErr
 	}
 	now := b.now()
+	_, reconcileErr := service.ReconcileAgentAssignments(b.db, now)
 	if _, err := service.ExpireKernelOperations(b.db, now); err != nil {
-		return 0, err
+		return 0, errors.Join(reconcileErr, err)
 	}
 	if err := b.dispatchCancellations(ctx); err != nil {
-		return 0, err
+		return 0, errors.Join(reconcileErr, err)
 	}
 	staleBefore := now.Add(-b.retryAfter)
 	if err := b.db.Model(&model.KernelOperation{}).
 		Where("state = ? AND dispatched_at IS NOT NULL AND dispatched_at <= ?", "dispatching", staleBefore).
 		Updates(map[string]any{"state": "pending", "last_error": "dispatch acknowledgement was not recorded; retrying"}).Error; err != nil {
-		return 0, err
+		return 0, errors.Join(reconcileErr, err)
 	}
 
 	var operations []model.KernelOperation
 	if err := b.db.Where("node_id IS NOT NULL AND state = ?", "pending").Order("node_id, revision, created_at").Find(&operations).Error; err != nil {
-		return 0, err
+		return 0, errors.Join(reconcileErr, err)
 	}
 
 	dispatched := 0
 	for _, operation := range operations {
 		if err := ctx.Err(); err != nil {
-			return dispatched, err
+			return dispatched, errors.Join(reconcileErr, err)
 		}
 		ok, err := b.dispatchOne(ctx, operation)
 		if err != nil {
-			return dispatched, err
+			return dispatched, errors.Join(reconcileErr, err)
 		}
 		if ok {
 			dispatched++
 		}
 	}
-	return dispatched, nil
+	return dispatched, reconcileErr
 }
 
 func (b *KernelOperationBridge) dispatchCancellations(ctx context.Context) error {
@@ -212,6 +217,10 @@ func (b *KernelOperationBridge) dispatchOne(ctx context.Context, operation model
 	if !service.IsAgentPluginOperation(operation.Kind) {
 		return false, b.failOperation(operation.ID, "operation kind is not dispatchable to the Agent Supervisor")
 	}
+	ready, err := b.operationDependencyReady(operation)
+	if err != nil || !ready {
+		return false, err
+	}
 	nodeID, err := kernelAgentNodeID(*operation.NodeID)
 	if err != nil {
 		return false, b.failOperation(operation.ID, err.Error())
@@ -221,6 +230,7 @@ func (b *KernelOperationBridge) dispatchOne(ctx context.Context, operation model
 		return false, nil
 	}
 
+	recovered := operation.DispatchedAt != nil
 	claimedAt := b.now()
 	claim := b.db.Model(&model.KernelOperation{}).
 		Where("id = ? AND state = ?", operation.ID, "pending").
@@ -241,7 +251,13 @@ func (b *KernelOperationBridge) dispatchOne(ctx context.Context, operation model
 	}
 	deadlineCtx, cancel := context.WithDeadline(ctx, *operation.DeadlineAt)
 	defer cancel()
-	ack, err := b.stream.DispatchOperation(deadlineCtx, nodeID, desired)
+	dispatch := b.stream.DispatchOperation
+	if recovered {
+		if replayStream, ok := b.stream.(recoveredKernelOperationStream); ok {
+			dispatch = replayStream.dispatchRecoveredOperation
+		}
+	}
+	ack, err := dispatch(deadlineCtx, nodeID, desired)
 	if err != nil {
 		// Retain dispatching state: a reconnect replays the in-memory desired
 		// operation, while a later worker run recovers an interrupted process.
@@ -254,6 +270,46 @@ func (b *KernelOperationBridge) dispatchOne(ctx context.Context, operation model
 	return true, b.db.Model(&model.KernelOperation{}).
 		Where("id = ? AND state = ?", operation.ID, "dispatching").
 		Updates(map[string]any{"state": "running", "acknowledged_at": ackAt, "last_error": ""}).Error
+}
+
+func (b *KernelOperationBridge) operationDependencyReady(operation model.KernelOperation) (bool, error) {
+	if operation.NodeID == nil {
+		return false, b.failOperation(operation.ID, "Agent operation is missing node identity")
+	}
+	var earlierActive int64
+	if err := b.db.Model(&model.KernelOperation{}).
+		Where("node_id = ? AND revision < ? AND state NOT IN ?", *operation.NodeID, operation.Revision,
+			[]string{"succeeded", "completed", "failed", "superseded", "cancelled", "timed_out"}).
+		Count(&earlierActive).Error; err != nil {
+		return false, err
+	}
+	if earlierActive > 0 {
+		return false, nil
+	}
+	if strings.TrimSpace(operation.DependsOnOperationID) == "" {
+		return true, nil
+	}
+	var dependency model.KernelOperation
+	if err := b.db.First(&dependency, "id = ?", operation.DependsOnOperationID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, b.failOperation(operation.ID, "operation dependency does not exist")
+		}
+		return false, err
+	}
+	if dependency.NodeID == nil || operation.NodeID == nil || *dependency.NodeID != *operation.NodeID || dependency.PluginID != operation.PluginID || dependency.Revision >= operation.Revision {
+		return false, b.failOperation(operation.ID, "operation dependency identity is invalid")
+	}
+	switch dependency.State {
+	case "succeeded", "completed":
+		return true, nil
+	case "failed", "superseded", "cancelled", "timed_out":
+		message := "operation dependency " + dependency.ID + " ended in " + dependency.State
+		return false, b.db.Model(&model.KernelOperation{}).
+			Where("id = ? AND state = ?", operation.ID, "pending").
+			Updates(map[string]any{"state": "superseded", "last_error": message}).Error
+	default:
+		return false, nil
+	}
 }
 
 func kernelOperationDesired(operation model.KernelOperation) (*agentv1pb.DesiredOperation, error) {
@@ -312,7 +368,26 @@ func (b *KernelOperationBridge) recordObserved(nodeID uint32, observed *agentv1p
 		return
 	}
 	observedAt := b.now()
-	if err := b.db.Transaction(func(tx *gorm.DB) error {
+	projectPluginID := ""
+	if err := service.WithAgentLifecycleTransaction(b.db, func(tx *gorm.DB) error {
+		projectPluginID = ""
+		var identity model.KernelOperation
+		if err := tx.Select("id, node_id, plugin_id, kind, revision").First(
+			&identity, "id = ? AND node_id = ? AND revision = ?", observed.OperationId, nodeID, observedRevision,
+		).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return err
+		}
+		if service.IsAgentPluginOperation(identity.Kind) && identity.NodeID != nil {
+			if err := service.LockPluginInstallationTarget(tx, "agent"); err != nil {
+				return err
+			}
+			if _, err := service.LockNodePluginLifecycleTx(tx, *identity.NodeID, identity.PluginID); err != nil {
+				return err
+			}
+		}
 		var operation model.KernelOperation
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(
 			&operation, "id = ? AND node_id = ? AND revision = ?", observed.OperationId, nodeID, observedRevision,
@@ -324,6 +399,9 @@ func (b *KernelOperationBridge) recordObserved(nodeID uint32, observed *agentv1p
 		}
 		state, message := kernelObservedState(observed)
 		terminalObserved := isTerminalKernelObserved(observed.Phase)
+		if terminalObserved && service.IsAgentPluginOperation(operation.Kind) {
+			projectPluginID = operation.PluginID
+		}
 		updates := map[string]any{}
 		switch {
 		case operation.State == "timed_out":
@@ -349,6 +427,11 @@ func (b *KernelOperationBridge) recordObserved(nodeID uint32, observed *agentv1p
 		}
 		if len(updates) > 0 {
 			if err := tx.Model(&operation).Updates(updates).Error; err != nil {
+				return err
+			}
+		}
+		if observed.Phase == agentv1pb.ObservedPhase_OBSERVED_PHASE_SUCCEEDED {
+			if err := service.RecordNodePluginOperationSuccessTx(tx, operation); err != nil {
 				return err
 			}
 		}
@@ -409,6 +492,9 @@ func (b *KernelOperationBridge) recordObserved(nodeID uint32, observed *agentv1p
 		// worker will reconcile nonterminal rows on its next pass.
 		return
 	}
+	if projectPluginID != "" {
+		_ = service.RefreshAgentPluginInstallationObservedState(b.db, projectPluginID)
+	}
 }
 
 func isTerminalKernelObserved(phase agentv1pb.ObservedPhase) bool {
@@ -424,7 +510,7 @@ func isTerminalKernelObserved(phase agentv1pb.ObservedPhase) bool {
 
 func isTerminalKernelOperationState(state string) bool {
 	switch state {
-	case "succeeded", "failed", "superseded", "cancelled", "timed_out":
+	case "succeeded", "completed", "failed", "superseded", "cancelled", "timed_out":
 		return true
 	default:
 		return false

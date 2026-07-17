@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
@@ -40,6 +41,7 @@ type RateLimiter struct {
 	burst       float64 // max burst size
 	ttl         time.Duration
 	exemptPaths []string
+	bypassTest  bool
 }
 
 // RateLimiterOption configures optional behaviour on a RateLimiter.
@@ -55,15 +57,23 @@ func WithExemptPaths(paths []string) RateLimiterOption {
 	return func(rl *RateLimiter) { rl.exemptPaths = paths }
 }
 
+// WithTestModeBypass controls whether gin.TestMode bypasses this limiter.
+// Existing API limiters keep the historical bypass; security-sensitive node
+// downloads can exercise the exact limiter in integration tests.
+func WithTestModeBypass(enabled bool) RateLimiterOption {
+	return func(rl *RateLimiter) { rl.bypassTest = enabled }
+}
+
 // NewRateLimiter creates a new RateLimiter with the given rate and burst.
 //   - rate: sustained requests per second
 //   - burst: maximum burst size (initial tokens)
 func NewRateLimiter(rate, burst float64, opts ...RateLimiterOption) *RateLimiter {
 	rl := &RateLimiter{
-		buckets: make(map[string]*tokenBucket),
-		rate:    rate,
-		burst:   burst,
-		ttl:     5 * time.Minute,
+		buckets:    make(map[string]*tokenBucket),
+		rate:       rate,
+		burst:      burst,
+		ttl:        5 * time.Minute,
+		bypassTest: true,
 	}
 	for _, opt := range opts {
 		opt(rl)
@@ -107,9 +117,24 @@ func (rl *RateLimiter) StartCleanup(interval time.Duration) {
 
 // Middleware returns a gin.HandlerFunc that enforces rate limiting per client IP.
 func (rl *RateLimiter) Middleware() gin.HandlerFunc {
+	return rl.middleware(func(c *gin.Context) string { return c.ClientIP() })
+}
+
+// MiddlewareForContextKey enforces independent buckets for an authenticated
+// identity stored in Gin context, such as a node_id.
+func (rl *RateLimiter) MiddlewareForContextKey(contextKey string) gin.HandlerFunc {
+	return rl.middleware(func(c *gin.Context) string {
+		if value, exists := c.Get(contextKey); exists {
+			return contextKey + ":" + fmt.Sprint(value)
+		}
+		return "ip:" + c.ClientIP()
+	})
+}
+
+func (rl *RateLimiter) middleware(keyFor func(*gin.Context) string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Test mode: skip rate limiting entirely
-		if gin.Mode() == gin.TestMode {
+		if gin.Mode() == gin.TestMode && rl.bypassTest {
 			c.Next()
 			return
 		}
@@ -120,10 +145,10 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 			return
 		}
 
-		ip := c.ClientIP()
+		key := keyFor(c)
 
 		rl.mu.Lock()
-		bucket, ok := rl.buckets[ip]
+		bucket, ok := rl.buckets[key]
 		if !ok {
 			bucket = &tokenBucket{
 				tokens:     rl.burst,
@@ -131,11 +156,12 @@ func (rl *RateLimiter) Middleware() gin.HandlerFunc {
 				refillRate: rl.rate,
 				lastRefill: time.Now(),
 			}
-			rl.buckets[ip] = bucket
+			rl.buckets[key] = bucket
 		}
+		allowed := bucket.allow()
 		rl.mu.Unlock()
 
-		if !bucket.allow() {
+		if !allowed {
 			retryAfter := int(math.Ceil(1.0 / rl.rate))
 			if retryAfter < 1 {
 				retryAfter = 1

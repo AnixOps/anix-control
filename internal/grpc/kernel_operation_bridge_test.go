@@ -209,6 +209,13 @@ func TestKernelObservedStateMapsEveryPhase(t *testing.T) {
 	}
 }
 
+func TestTerminalKernelOperationStateIncludesLegacyCompleted(t *testing.T) {
+	for _, state := range []string{"succeeded", "completed", "failed", "superseded", "cancelled", "timed_out"} {
+		require.True(t, isTerminalKernelOperationState(state), state)
+	}
+	require.False(t, isTerminalKernelOperationState("running"))
+}
+
 func TestKernelOperationBridgePersistsDispatchFailureAndAgentRejection(t *testing.T) {
 	tests := []struct {
 		name          string

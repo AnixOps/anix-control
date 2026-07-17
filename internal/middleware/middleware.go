@@ -82,13 +82,25 @@ func NodeAuth() gin.HandlerFunc {
 
 // NodeAPIKeyAuth 鑺傜偣 API Key 璁よ瘉涓棿浠?(鏂扮増)
 func NodeAPIKeyAuth() gin.HandlerFunc {
+	return nodeAPIKeyAuth(true)
+}
+
+// NodeAPIKeyHeaderAuth is the package-download authentication boundary. API
+// keys in URLs leak through logs, browser history and proxy caches, so this
+// variant accepts only X-API-Key while preserving legacy query fallback on
+// the older node APIs.
+func NodeAPIKeyHeaderAuth() gin.HandlerFunc {
+	return nodeAPIKeyAuth(false)
+}
+
+func nodeAPIKeyAuth(allowQuery bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 浠?Header 鎴?Query 鑾峰彇 API Key
 		apiKey := c.GetHeader("X-API-Key")
-		if apiKey == "" {
+		if allowQuery && apiKey == "" {
 			apiKey = c.Query("api_key")
 		}
-		if apiKey == "" {
+		if allowQuery && apiKey == "" {
 			apiKey = c.Query("token")
 		}
 		if apiKey == "" {

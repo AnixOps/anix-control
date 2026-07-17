@@ -178,10 +178,22 @@ func TestKernelOperationBridgeCrossRepositoryAgentProcess(t *testing.T) {
 
 func siblingAgentRoot(t *testing.T) string {
 	t.Helper()
+	if configured := strings.TrimSpace(os.Getenv("ANIXOPS_AGENT_ROOT")); configured != "" {
+		return filepath.Clean(configured)
+	}
 	_, sourceFile, _, ok := runtime.Caller(0)
 	require.True(t, ok)
 	controlRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", ".."))
-	return filepath.Join(filepath.Dir(controlRoot), "V2bX_AnixOps")
+	candidates := []string{
+		filepath.Join(filepath.Dir(controlRoot), "V2bX_AnixOps"),
+		filepath.Join(controlRoot, "V2bX_AnixOps"),
+	}
+	for _, candidate := range candidates {
+		if _, err := os.Stat(filepath.Join(candidate, "go.mod")); err == nil {
+			return candidate
+		}
+	}
+	return candidates[0]
 }
 
 func buildCrossRepositoryAgentFixture(t *testing.T, agentRoot string) string {

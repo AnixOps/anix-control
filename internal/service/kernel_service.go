@@ -1270,14 +1270,14 @@ var allowedKernelOperationKinds = map[string]bool{
 }
 
 var agentPluginOperationKinds = map[string]bool{
-	"plugin.inspect": true, "plugin.configure": true, "plugin.enable": true,
+	"plugin.inspect": true, "plugin.install": true, "plugin.configure": true, "plugin.enable": true,
 	"plugin.disable": true, "plugin.update": true, "plugin.rollback": true,
 	"plugin.health": true,
 }
 
 // IsAgentPluginOperation reports whether an operation has a concrete Agent
-// Supervisor implementation in 3.1. install and topology operations remain
-// planned until their artifact and topology executors are available.
+// Supervisor implementation. Topology operations remain mediated through
+// their concrete plugin lifecycle operations.
 func IsAgentPluginOperation(kind string) bool {
 	return agentPluginOperationKinds[kind]
 }
@@ -1361,9 +1361,15 @@ func UpdatePluginConfiguration(db *gorm.DB, publicKey ed25519.PublicKey, install
 // package semantics that cannot be expressed safely in JSON Schema.
 type PluginConfigurationSemanticValidator func(pluginID, version string, canonicalConfig json.RawMessage) error
 
+type PluginConfigurationTxHook func(tx *gorm.DB, installation model.PluginInstallation, configuration model.PluginConfiguration) error
+
 // UpdatePluginConfigurationWithValidator runs semantic validation in the same
 // transaction and against the same signed release version that is persisted.
 func UpdatePluginConfigurationWithValidator(db *gorm.DB, publicKey ed25519.PublicKey, installationID uint, rawConfig string, expectedRevision *int64, actorID uint, validator PluginConfigurationSemanticValidator) (*model.PluginConfiguration, error) {
+	return UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installationID, rawConfig, expectedRevision, actorID, validator, nil)
+}
+
+func UpdatePluginConfigurationWithValidatorAndHook(db *gorm.DB, publicKey ed25519.PublicKey, installationID uint, rawConfig string, expectedRevision *int64, actorID uint, validator PluginConfigurationSemanticValidator, hook PluginConfigurationTxHook) (*model.PluginConfiguration, error) {
 	if db == nil {
 		return nil, errors.New("database is not initialized")
 	}
@@ -1378,7 +1384,17 @@ func UpdatePluginConfigurationWithValidator(db *gorm.DB, publicKey ed25519.Publi
 		return nil, err
 	}
 	var result *model.PluginConfiguration
-	err = db.Transaction(func(tx *gorm.DB) error {
+	err = WithAgentLifecycleTransaction(db, func(tx *gorm.DB) error {
+		result = nil
+		var targetIdentity struct {
+			Target string
+		}
+		if err := tx.Model(&model.PluginInstallation{}).Select("target").First(&targetIdentity, installationID).Error; err != nil {
+			return err
+		}
+		if err := LockPluginInstallationTarget(tx, targetIdentity.Target); err != nil {
+			return err
+		}
 		var installation model.PluginInstallation
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&installation, installationID).Error; err != nil {
 			return err
@@ -1436,6 +1452,12 @@ func UpdatePluginConfigurationWithValidator(db *gorm.DB, publicKey ed25519.Publi
 		}
 		if err := tx.Model(&installation).Update("config_revision", configuration.Revision).Error; err != nil {
 			return err
+		}
+		installation.ConfigRevision = configuration.Revision
+		if hook != nil {
+			if err := hook(tx, installation, configuration); err != nil {
+				return err
+			}
 		}
 		result = &configuration
 		return nil
@@ -1539,6 +1561,14 @@ func CreateKernelOperation(db *gorm.DB, operation model.KernelOperation) (*model
 	} else if operation.LifecyclePlanStepID != 0 || operation.LifecyclePlanPhase != "" || operation.LifecyclePlanSequence != 0 {
 		return nil, false, errors.New("lifecycle plan operation fields require lifecycle_plan_id")
 	}
+	if operation.DependsOnOperationID != "" {
+		if operation.NodeID == nil {
+			return nil, false, errors.New("operation dependencies are supported only for Agent operations")
+		}
+		if _, err := uuid.Parse(operation.DependsOnOperationID); err != nil {
+			return nil, false, errors.New("depends_on_operation_id must be a UUID")
+		}
+	}
 
 	var result *model.KernelOperation
 	reused := false
@@ -1574,6 +1604,7 @@ func CreateKernelOperation(db *gorm.DB, operation model.KernelOperation) (*model
 		}
 
 		var cursor *model.NodeOperationRevision
+		var dependencyRevision int64
 		if operation.NodeID != nil {
 			var nodeCount int64
 			if err := tx.Model(&model.Node{}).Where("id = ?", *operation.NodeID).Count(&nodeCount).Error; err != nil {
@@ -1581,6 +1612,16 @@ func CreateKernelOperation(db *gorm.DB, operation model.KernelOperation) (*model
 			}
 			if nodeCount == 0 {
 				return errors.New("operation node does not exist")
+			}
+			if operation.DependsOnOperationID != "" {
+				var dependency model.KernelOperation
+				if err := tx.First(&dependency, "id = ?", operation.DependsOnOperationID).Error; err != nil {
+					return fmt.Errorf("load operation dependency: %w", err)
+				}
+				if dependency.NodeID == nil || *dependency.NodeID != *operation.NodeID || dependency.PluginID != operation.PluginID {
+					return errors.New("operation dependency must target the same node and plugin")
+				}
+				dependencyRevision = dependency.Revision
 			}
 			seed := model.NodeOperationRevision{NodeID: *operation.NodeID}
 			if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&seed).Error; err != nil {
@@ -1594,6 +1635,9 @@ func CreateKernelOperation(db *gorm.DB, operation model.KernelOperation) (*model
 				operation.Revision = cursor.DesiredRevision + 1
 			} else if operation.Revision != cursor.DesiredRevision+1 {
 				return fmt.Errorf("revision %d must be the next node desired revision %d", operation.Revision, cursor.DesiredRevision+1)
+			}
+			if dependencyRevision >= operation.Revision {
+				return errors.New("operation dependency must have an earlier revision")
 			}
 		} else if operation.Revision <= 0 {
 			operation.Revision = 1
@@ -1976,7 +2020,7 @@ func containsPluginString(values []string, needle string) bool {
 }
 
 func sameKernelOperation(existing, requested model.KernelOperation) bool {
-	if existing.ID != requested.ID || existing.EnvelopeVersion != requested.EnvelopeVersion || existing.PluginID != requested.PluginID || existing.TargetVersion != requested.TargetVersion || existing.Kind != requested.Kind || existing.Revision != requested.Revision || existing.ConfigHash != requested.ConfigHash || existing.ConfigJSON != requested.ConfigJSON || existing.LifecyclePlanID != requested.LifecyclePlanID || existing.LifecyclePlanStepID != requested.LifecyclePlanStepID || existing.LifecyclePlanPhase != requested.LifecyclePlanPhase || existing.LifecyclePlanSequence != requested.LifecyclePlanSequence || existing.TopologyRevision != requested.TopologyRevision {
+	if existing.ID != requested.ID || existing.EnvelopeVersion != requested.EnvelopeVersion || existing.PluginID != requested.PluginID || existing.TargetVersion != requested.TargetVersion || existing.Kind != requested.Kind || existing.Revision != requested.Revision || existing.ConfigHash != requested.ConfigHash || existing.ConfigJSON != requested.ConfigJSON || existing.DependsOnOperationID != requested.DependsOnOperationID || existing.LifecyclePlanID != requested.LifecyclePlanID || existing.LifecyclePlanStepID != requested.LifecyclePlanStepID || existing.LifecyclePlanPhase != requested.LifecyclePlanPhase || existing.LifecyclePlanSequence != requested.LifecyclePlanSequence || existing.TopologyRevision != requested.TopologyRevision {
 		return false
 	}
 	if !sameOptionalKernelOperationID(existing.TopologyDeploymentID, requested.TopologyDeploymentID) || !sameOptionalKernelOperationID(existing.TopologyStepID, requested.TopologyStepID) {
