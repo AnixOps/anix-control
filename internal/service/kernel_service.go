@@ -59,6 +59,10 @@ var (
 	ErrPluginArtifactImmutable     = errors.New("plugin artifact is immutable")
 	ErrPluginRouteNotFound         = errors.New("plugin control route is not registered")
 	ErrPluginRouteForbidden        = errors.New("plugin control route permission denied")
+	ErrPackageMigrationImmutable   = errors.New("package migration run is immutable")
+	ErrValidationPrecondition      = errors.New("package validation precondition failed")
+	ErrCohortTransition            = errors.New("package cohort transition is invalid")
+	ErrRollbackPrecondition        = errors.New("package rollback precondition failed")
 )
 
 const KernelOperationEnvelopeVersion = "anixops.operation/v1"

@@ -57,6 +57,12 @@ type Manager interface {
 	Rollback(context.Context, string, string, uint64) error
 }
 
+// MigrationManager is intentionally separate from Manager so existing route
+// dispatch consumers do not gain a migration capability by accident.
+type MigrationManager interface {
+	Migrate(context.Context, MigrationInput, MigrationCheckpointRecorder) (MigrationOutput, error)
+}
+
 var _ Manager = (*Supervisor)(nil)
 
 // SetDefaultManager installs the process-wide supervisor used by HTTP route
