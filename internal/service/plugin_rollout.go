@@ -1,12 +1,14 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"math"
 	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -72,6 +74,9 @@ func BeginPackageMigration(db *gorm.DB, input model.PackageMigrationRun) (*model
 		} else if !errors.Is(previousErr, gorm.ErrRecordNotFound) {
 			return previousErr
 		}
+		if input.PreviousGenerationID != nil && input.BackupReference == "" {
+			return ErrValidationPrecondition
+		}
 
 		input.ID = 0
 		input.OpaqueCheckpoint = ""
@@ -79,6 +84,9 @@ func BeginPackageMigration(db *gorm.DB, input model.PackageMigrationRun) (*model
 		input.State = model.PackageMigrationStateRunning
 		input.Complete = false
 		input.FailureCode = ""
+		input.HealthLeaseID = ""
+		input.HealthGeneration = 0
+		input.HealthVerifiedAt = nil
 		input.CompletedAt = nil
 		input.BackupReferenceID = nil
 		create := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&input)
@@ -119,9 +127,9 @@ func BeginPackageMigration(db *gorm.DB, input model.PackageMigrationRun) (*model
 	return &result, nil
 }
 
-// RecordMigrationCheckpoint durably records a host reply. A complete reply is
-// only eligible for validation after its checkpoint and opaque digest are in
-// this kernel-owned row.
+// RecordMigrationCheckpoint durably records an opaque host reply. It cannot
+// activate a route; the health proof is recorded only by the service-owned
+// migration coordinator after the supervisor returns successfully.
 func RecordMigrationCheckpoint(db *gorm.DB, migrationRunID uint, checkpoint PackageMigrationCheckpoint) (*model.PackageMigrationRun, error) {
 	if db == nil {
 		return nil, errors.New("database is not initialized")
@@ -177,6 +185,94 @@ func RecordMigrationCheckpoint(db *gorm.DB, migrationRunID uint, checkpoint Pack
 	return &result, nil
 }
 
+// MigratePackageHost is the only public orchestration path that can attach a
+// health fence to a migration run. Requiring the concrete Supervisor prevents
+// callers from substituting an arbitrary MigrationManager that fabricates a
+// successful health result.
+func MigratePackageHost(ctx context.Context, db *gorm.DB, manager *pluginhost.Supervisor, migrationRunID uint, input pluginhost.MigrationInput) (pluginhost.MigrationOutput, error) {
+	if manager == nil {
+		return pluginhost.MigrationOutput{}, ErrValidationPrecondition
+	}
+	return migratePackageHost(ctx, db, manager, migrationRunID, input)
+}
+
+type packageMigrationInvoker interface {
+	Migrate(context.Context, pluginhost.MigrationInput, pluginhost.MigrationCheckpointRecorder) (pluginhost.MigrationOutput, error)
+}
+
+func migratePackageHost(ctx context.Context, db *gorm.DB, manager packageMigrationInvoker, migrationRunID uint, input pluginhost.MigrationInput) (pluginhost.MigrationOutput, error) {
+	if db == nil {
+		return pluginhost.MigrationOutput{}, errors.New("database is not initialized")
+	}
+	if manager == nil || migrationRunID == 0 {
+		return pluginhost.MigrationOutput{}, ErrValidationPrecondition
+	}
+	var run model.PackageMigrationRun
+	if err := db.First(&run, migrationRunID).Error; err != nil {
+		return pluginhost.MigrationOutput{}, err
+	}
+	if run.PackageID != input.PackageID || run.PackageVersion != input.Version || run.MigrationID != input.MigrationID || run.Generation != input.Generation {
+		return pluginhost.MigrationOutput{}, ErrValidationPrecondition
+	}
+	output, err := manager.Migrate(ctx, input, func(ctx context.Context, reply pluginhost.MigrationOutput) error {
+		_, checkpointErr := RecordMigrationCheckpoint(db, migrationRunID, PackageMigrationCheckpoint{
+			OpaqueCheckpoint: reply.Checkpoint, ValidationDigest: reply.ValidationDigest,
+			Complete: reply.Complete, FailureCode: reply.FailureCode,
+		})
+		return checkpointErr
+	})
+	if err != nil {
+		return output, err
+	}
+	if !output.Complete {
+		return output, nil
+	}
+	if _, err := recordMigrationHealthFence(db, migrationRunID, input.Generation, output.HealthLeaseID, output.HealthGeneration); err != nil {
+		return output, err
+	}
+	return output, nil
+}
+
+func recordMigrationHealthFence(db *gorm.DB, migrationRunID uint, generation uint64, leaseID string, healthGeneration uint64) (*model.PackageMigrationRun, error) {
+	if db == nil {
+		return nil, errors.New("database is not initialized")
+	}
+	if migrationRunID == 0 || generation == 0 || strings.TrimSpace(leaseID) == "" || generation != healthGeneration {
+		return nil, ErrValidationPrecondition
+	}
+	var result model.PackageMigrationRun
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var run model.PackageMigrationRun
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, migrationRunID).Error; err != nil {
+			return err
+		}
+		if !run.Complete || run.State != model.PackageMigrationStateCompleted || run.FailureCode != "" || run.Generation != generation {
+			return ErrValidationPrecondition
+		}
+		if run.HealthVerifiedAt != nil || run.HealthLeaseID != "" || run.HealthGeneration != 0 {
+			if run.HealthLeaseID == leaseID && run.HealthGeneration == healthGeneration {
+				result = run
+				return nil
+			}
+			return ErrPackageMigrationImmutable
+		}
+		now := time.Now().UTC()
+		if err := tx.Model(&model.PackageMigrationRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+			"health_lease_id": leaseID, "health_generation": healthGeneration, "health_verified_at": &now,
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.First(&result, run.ID).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // RecordPackageValidation accepts only a completed migration checkpoint and
 // creates the initial one-percent route generation. The digest remains opaque
 // to the kernel.
@@ -196,6 +292,9 @@ func RecordPackageValidation(db *gorm.DB, input model.PackageValidationResult) (
 		if !run.Complete || run.State != model.PackageMigrationStateCompleted || run.FailureCode != "" {
 			return ErrValidationPrecondition
 		}
+		if run.HealthVerifiedAt == nil || run.HealthLeaseID == "" || run.HealthGeneration != run.Generation {
+			return ErrValidationPrecondition
+		}
 		if strings.TrimSpace(run.ValidationDigest) == "" {
 			return ErrValidationPrecondition
 		}
@@ -208,6 +307,36 @@ func RecordPackageValidation(db *gorm.DB, input model.PackageValidationResult) (
 			(input.PackageVersion != "" && input.PackageVersion != run.PackageVersion) ||
 			(input.Generation != 0 && input.Generation != run.Generation) {
 			return ErrValidationPrecondition
+		}
+
+		var latest model.PackageRouteGeneration
+		latestErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("package_id = ? AND rolled_back_at IS NULL", run.PackageID).
+			Order("generation DESC, id DESC").First(&latest).Error
+		if run.PreviousGenerationID == nil {
+			if latestErr == nil {
+				return ErrValidationPrecondition
+			}
+			if !errors.Is(latestErr, gorm.ErrRecordNotFound) {
+				return latestErr
+			}
+		} else {
+			if latestErr != nil {
+				if errors.Is(latestErr, gorm.ErrRecordNotFound) {
+					return ErrValidationPrecondition
+				}
+				return latestErr
+			}
+			if latest.ID != *run.PreviousGenerationID {
+				return ErrValidationPrecondition
+			}
+			verified, verifyErr := isVerifiedGeneration(tx, latest)
+			if verifyErr != nil {
+				return verifyErr
+			}
+			if !verified {
+				return ErrValidationPrecondition
+			}
 		}
 
 		var existing model.PackageValidationResult
@@ -350,6 +479,9 @@ func RollbackPackageGeneration(db *gorm.DB, generationID uint, reason string) (*
 		if current.PreviousID == nil {
 			return ErrRollbackPrecondition
 		}
+		if current.BackupReferenceID == nil {
+			return ErrRollbackPrecondition
+		}
 		var previous model.PackageRouteGeneration
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&previous, *current.PreviousID).Error; err != nil {
 			return err
@@ -385,16 +517,14 @@ func RollbackPackageGeneration(db *gorm.DB, generationID uint, reason string) (*
 		}).Error; err != nil {
 			return err
 		}
-		if current.BackupReferenceID != nil {
-			backupUpdate := tx.Model(&model.PackageBackupReference{}).Where("id = ?", *current.BackupReferenceID).Updates(map[string]any{
-				"restored_at": &now, "restore_reason": reason,
-			})
-			if backupUpdate.Error != nil {
-				return backupUpdate.Error
-			}
-			if backupUpdate.RowsAffected != 1 {
-				return ErrRollbackPrecondition
-			}
+		backupUpdate := tx.Model(&model.PackageBackupReference{}).Where("id = ?", *current.BackupReferenceID).Updates(map[string]any{
+			"restored_at": &now, "restore_reason": reason,
+		})
+		if backupUpdate.Error != nil {
+			return backupUpdate.Error
+		}
+		if backupUpdate.RowsAffected != 1 {
+			return ErrRollbackPrecondition
 		}
 		result = previous
 		return nil
@@ -418,7 +548,7 @@ func sameMigrationCheckpoint(run model.PackageMigrationRun, checkpoint PackageMi
 }
 
 func isVerifiedGeneration(tx *gorm.DB, generation model.PackageRouteGeneration) (bool, error) {
-	if generation.State != model.PackageRouteGenerationStateValidated || generation.ValidationResultID == nil {
+	if generation.State != model.PackageRouteGenerationStateValidated || generation.RolledBackAt != nil || generation.ValidationResultID == nil {
 		return false, nil
 	}
 	var validation model.PackageValidationResult
@@ -440,7 +570,7 @@ func isVerifiedGeneration(tx *gorm.DB, generation model.PackageRouteGeneration) 
 		}
 		return false, err
 	}
-	if origin.PackageID != generation.PackageID || origin.Version != generation.Version ||
+	if origin.PackageID != generation.PackageID || origin.Version != generation.Version || origin.RolledBackAt != nil ||
 		origin.Generation != validation.Generation || origin.ValidationResultID == nil || *origin.ValidationResultID != validation.ID {
 		return false, nil
 	}

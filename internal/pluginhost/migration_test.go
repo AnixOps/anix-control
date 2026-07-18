@@ -30,6 +30,7 @@ func TestManagerMigratePersistsCheckpointBeforeInterruptionAndResume(t *testing.
 
 	var checkpoints []MigrationOutput
 	recorder := func(_ context.Context, output MigrationOutput) error {
+		server.recordEvent("checkpoint")
 		checkpoints = append(checkpoints, output)
 		return nil
 	}
@@ -54,6 +55,9 @@ func TestManagerMigratePersistsCheckpointBeforeInterruptionAndResume(t *testing.
 	require.Equal(t, "opaque-step-1", server.requests[1].GetCheckpoint())
 	require.Len(t, server.healthRequests, 1)
 	require.EqualValues(t, 5, server.healthRequests[0].GetRouteGeneration())
+	require.Equal(t, []string{"checkpoint", "checkpoint", "health"}, server.eventSnapshot())
+	require.Equal(t, "lease-5", second.HealthLeaseID)
+	require.EqualValues(t, 5, second.HealthGeneration)
 }
 
 func TestManagerMigrateRejectsActivationWhenHealthLeaseChanges(t *testing.T) {
@@ -86,6 +90,7 @@ type migrationTestHostServer struct {
 	responses      []*pluginhostv1.MigrationResponse
 	requests       []*pluginhostv1.MigrationRequest
 	healthRequests []*pluginhostv1.HealthRequest
+	events         []string
 	healthLeaseID  string
 }
 
@@ -104,8 +109,21 @@ func (s *migrationTestHostServer) Migrate(_ context.Context, request *pluginhost
 func (s *migrationTestHostServer) Health(_ context.Context, request *pluginhostv1.HealthRequest) (*pluginhostv1.HealthResponse, error) {
 	s.mu.Lock()
 	s.healthRequests = append(s.healthRequests, request)
+	s.events = append(s.events, "health")
 	s.mu.Unlock()
 	return &pluginhostv1.HealthResponse{Healthy: true, LeaseId: s.healthLeaseID}, nil
+}
+
+func (s *migrationTestHostServer) recordEvent(event string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.events = append(s.events, event)
+}
+
+func (s *migrationTestHostServer) eventSnapshot() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.events...)
 }
 
 func dialMigrationTestHost(t *testing.T, server pluginhostv1.ControlPackageHostServer) *hostClient {

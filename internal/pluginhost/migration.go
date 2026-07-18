@@ -26,6 +26,8 @@ type MigrationOutput struct {
 	ValidationDigest string
 	Complete         bool
 	FailureCode      string
+	HealthLeaseID    string
+	HealthGeneration uint64
 }
 
 // MigrationCheckpointRecorder must durably persist each host reply before the
@@ -99,5 +101,7 @@ func (m *Supervisor) Migrate(ctx context.Context, input MigrationInput, recorder
 	if !health.Healthy || health.LeaseID == "" {
 		return response, fmt.Errorf("%w: host is not healthy for route activation", ErrHostUnavailable)
 	}
+	response.HealthLeaseID = health.LeaseID
+	response.HealthGeneration = input.Generation
 	return response, nil
 }

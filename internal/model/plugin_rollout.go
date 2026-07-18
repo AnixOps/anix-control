@@ -30,6 +30,9 @@ type PackageMigrationRun struct {
 	State                string     `gorm:"size:32;not null;index" json:"state"`
 	Complete             bool       `gorm:"not null;default:false" json:"complete"`
 	FailureCode          string     `gorm:"size:160" json:"failure_code"`
+	HealthLeaseID        string     `gorm:"size:160" json:"health_lease_id"`
+	HealthGeneration     uint64     `gorm:"not null;default:0" json:"health_generation"`
+	HealthVerifiedAt     *time.Time `json:"health_verified_at"`
 	BackupReference      string     `gorm:"type:text" json:"backup_reference"`
 	BackupReferenceID    *uint      `gorm:"index" json:"backup_reference_id"`
 	PreviousGenerationID *uint      `gorm:"index" json:"previous_generation_id"`

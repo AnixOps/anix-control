@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
@@ -62,6 +63,10 @@ func exercisePackageMigrationRollback(t *testing.T, db *gorm.DB) {
 		OpaqueCheckpoint: "opaque-complete", ValidationDigest: "opaque-validation", Complete: true,
 	})
 	require.NoError(t, err)
+	now := run.CreatedAt.Add(time.Second)
+	require.NoError(t, db.Model(&model.PackageMigrationRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+		"health_lease_id": "integration-lease-8", "health_generation": uint64(8), "health_verified_at": &now,
+	}).Error)
 	validation, err := service.RecordPackageValidation(db, model.PackageValidationResult{MigrationRunID: run.ID})
 	require.NoError(t, err)
 	require.NotNil(t, validation.RouteGenerationID)
