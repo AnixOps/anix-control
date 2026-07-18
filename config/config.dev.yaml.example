@@ -69,8 +69,9 @@ plugins:
   # The development profile exercises the complete signed-package control path.
   control_execution_enabled: true
   control_poll_interval: "5s"
-  # Development hosts still use private local Unix sockets only.
-  control_host_runtime_dir: "/tmp/anixops-plugin-hosts"
+  # Leave this empty to create a unique private local Unix-socket root for
+  # this Control process. Explicit configured roots must have trusted ancestry.
+  control_host_runtime_dir: ""
   control_host_startup_timeout: "5s"
   control_host_request_timeout: "30s"
   # Dispatch is enabled against the local gRPC listener for reproducible alpha

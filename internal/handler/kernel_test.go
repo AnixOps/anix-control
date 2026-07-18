@@ -41,8 +41,9 @@ func newKernelHandlerTestDB(t *testing.T, extra ...any) *gorm.DB {
 }
 
 func TestNewKernelHandlerUsesDefaultPluginHostManager(t *testing.T) {
-	manager, err := pluginhost.NewManager(pluginhost.ManagerConfig{RuntimeDir: t.TempDir()})
+	manager, err := pluginhost.NewManager(pluginhost.ManagerConfig{})
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, manager.Close()) })
 	previous := pluginhost.DefaultManager()
 	pluginhost.SetDefaultManager(manager)
 	t.Cleanup(func() { pluginhost.SetDefaultManager(previous) })

@@ -6,9 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"sync"
 	"time"
 )
@@ -92,10 +90,14 @@ type ManagerConfig struct {
 }
 
 type Supervisor struct {
-	mu             sync.RWMutex
-	hosts          map[string]*hostProcess
+	mu          sync.RWMutex
+	hosts       map[string]*hostProcess
+	runtimeRoot *runtimeRoot
+	// runtimeDir is diagnostic compatibility state. Runtime filesystem work is
+	// always relative to runtimeRoot's pinned descriptor.
 	runtimeDir     string
 	startupTimeout time.Duration
+	closed         bool
 }
 
 type hostProcess struct {
@@ -103,7 +105,7 @@ type hostProcess struct {
 	version    string
 	generation uint64
 	ref        ArtifactRef
-	runtimeDir string
+	runtimeDir *hostRuntimeDir
 	socketPath string
 	command    *exec.Cmd
 	waitDone   chan struct{}
@@ -113,17 +115,15 @@ type hostProcess struct {
 }
 
 func NewManager(config ManagerConfig) (*Supervisor, error) {
-	if config.RuntimeDir == "" {
-		config.RuntimeDir = filepath.Join(os.TempDir(), "anixops", "plugin-hosts")
-	}
-	if !filepath.IsAbs(config.RuntimeDir) {
-		return nil, fmt.Errorf("%w: host runtime directory must be absolute", ErrHostIncompatible)
+	runtimeRoot, err := newRuntimeRoot(config.RuntimeDir)
+	if err != nil {
+		return nil, err
 	}
 	if config.StartupTimeout <= 0 {
 		config.StartupTimeout = 5 * time.Second
 	}
 	return &Supervisor{
-		hosts: make(map[string]*hostProcess), runtimeDir: config.RuntimeDir, startupTimeout: config.StartupTimeout,
+		hosts: make(map[string]*hostProcess), runtimeRoot: runtimeRoot, runtimeDir: runtimeRoot.configuredPath, startupTimeout: config.StartupTimeout,
 	}, nil
 }
 
@@ -142,6 +142,9 @@ func (m *Supervisor) Start(ctx context.Context, ref ArtifactRef, generation uint
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.closed || m.runtimeRoot == nil {
+		return ErrHostUnavailable
+	}
 	key := hostKey(ref.PackageID, ref.Version)
 	if existing := m.hosts[key]; existing != nil {
 		if existing.generation > generation {
@@ -165,7 +168,7 @@ func (m *Supervisor) Start(ctx context.Context, ref ArtifactRef, generation uint
 			delete(m.hosts, key)
 		}
 	}
-	host, err := startHostProcess(ctx, m.runtimeDir, ref, generation, m.startupTimeout)
+	host, err := startHostProcess(ctx, m.runtimeRoot, ref, generation, m.startupTimeout)
 	if err != nil {
 		return err
 	}
@@ -257,18 +260,33 @@ func (m *Supervisor) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return nil
+	}
+	m.closed = true
 	hosts := make([]*hostProcess, 0, len(m.hosts))
 	for _, host := range m.hosts {
 		hosts = append(hosts, host)
 	}
 	m.hosts = make(map[string]*hostProcess)
+	runtimeRoot := m.runtimeRoot
+	m.runtimeRoot = nil
 	m.mu.Unlock()
 
 	var shutdownErr error
 	for _, host := range hosts {
 		shutdownErr = errors.Join(shutdownErr, host.stop(ctx))
 	}
+	if runtimeRoot != nil {
+		shutdownErr = errors.Join(shutdownErr, runtimeRoot.Close())
+	}
 	return shutdownErr
+}
+
+// Close retires every host and releases the pinned runtime-root descriptor.
+func (m *Supervisor) Close() error {
+	return m.Shutdown(context.Background())
 }
 
 func (m *Supervisor) hostForGeneration(packageID, version string, generation uint64) (*hostProcess, error) {

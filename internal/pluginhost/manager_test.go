@@ -68,8 +68,8 @@ func TestManagerStartsVerifiedHostOverPrivateUnixSocket(t *testing.T) {
 	require.NoError(t, manager.Start(context.Background(), ref, 7))
 	host := manager.hosts[hostKey(ref.PackageID, ref.Version)]
 	require.NotNil(t, host)
-	require.Equal(t, filepath.Join(host.runtimeDir, "entrypoint"), host.command.Path)
-	runtimeInfo, err := os.Stat(manager.runtimeDir)
+	require.Equal(t, childRuntimePath("entrypoint"), host.command.Path)
+	runtimeInfo, err := manager.runtimeRoot.directory.Stat()
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o700), runtimeInfo.Mode().Perm())
 	socketInfo, err := os.Lstat(host.socketPath)
@@ -146,7 +146,7 @@ func TestManagerReplacesPriorVersionForNewerGeneration(t *testing.T) {
 	require.NotNil(t, second)
 	require.NotSame(t, first, second)
 	require.Eventually(t, func() bool { return hostExited(first) }, time.Second, 10*time.Millisecond)
-	require.NoFileExists(t, first.socketPath)
+	require.Nil(t, first.runtimeDir)
 
 	_, err = manager.Dispatch(context.Background(), DispatchInput{
 		PackageID: firstRef.PackageID, Version: firstRef.Version, Generation: 7,
@@ -217,22 +217,147 @@ func TestManagerStopTerminatesHostProcessGroup(t *testing.T) {
 	require.Eventually(t, func() bool { return processExited(pid) }, time.Second, 10*time.Millisecond)
 }
 
-func TestCreateHostRuntimeDirRejectsSymlinkBeforePermissionChange(t *testing.T) {
-	target := filepath.Join(t.TempDir(), "target")
-	require.NoError(t, os.Mkdir(target, 0o755))
-	runtimeRoot := filepath.Join(t.TempDir(), "runtime")
-	require.NoError(t, os.Symlink(target, runtimeRoot))
+func TestManagerRetiresDescendantAfterLeaderExit(t *testing.T) {
+	tests := []struct {
+		name   string
+		retire func(t *testing.T, manager *Supervisor, ref ArtifactRef)
+	}{
+		{
+			name: "stop",
+			retire: func(t *testing.T, manager *Supervisor, ref ArtifactRef) {
+				require.NoError(t, manager.Stop(context.Background(), ref.PackageID, ref.Version, 8))
+			},
+		},
+		{
+			name: "replacement",
+			retire: func(t *testing.T, manager *Supervisor, _ ArtifactRef) {
+				replacement := writeHostArtifactRef(t, "knowledge", "4.1.0")
+				require.NoError(t, manager.Start(context.Background(), replacement, 8))
+				t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
+			},
+		},
+		{
+			name: "shutdown",
+			retire: func(t *testing.T, manager *Supervisor, _ ArtifactRef) {
+				require.NoError(t, manager.Shutdown(context.Background()))
+			},
+		},
+	}
 
-	_, err := createHostRuntimeDir(runtimeRoot, "knowledge", "4.0.0", 7)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(hostTestChildEnvironment, "1")
+			manager, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})
+			require.NoError(t, err)
+			childPIDPath := filepath.Join(t.TempDir(), "descendant.pid")
+			ref := writeHostArtifactRefWithPrelude(t, "knowledge", "4.0.0", "/bin/sleep 60 &\necho $! > "+strconv.Quote(childPIDPath)+"\n")
+			require.NoError(t, manager.Start(context.Background(), ref, 7))
+			host := manager.hosts[hostKey(ref.PackageID, ref.Version)]
+			require.NotNil(t, host)
+
+			pidBytes, err := os.ReadFile(childPIDPath)
+			require.NoError(t, err)
+			pid, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				if !processExited(pid) {
+					_ = syscall.Kill(pid, syscall.SIGKILL)
+				}
+			})
+
+			require.NoError(t, host.command.Process.Kill())
+			require.Eventually(t, func() bool { return hostExited(host) }, time.Second, 10*time.Millisecond)
+			require.False(t, processExited(pid), "the descendant must outlive the exited leader before retirement")
+
+			test.retire(t, manager, ref)
+			require.Eventually(t, func() bool { return processExited(pid) }, time.Second, 10*time.Millisecond)
+		})
+	}
+}
+
+func TestNewManagerRejectsRuntimeRootSymlinkAncestor(t *testing.T) {
+	parent := shortHostTempDir(t)
+	target := filepath.Join(parent, "target")
+	require.NoError(t, os.Mkdir(target, 0o700))
+	link := filepath.Join(parent, "runtime-link")
+	require.NoError(t, os.Symlink(target, link))
+
+	_, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(link, "hosts")})
 
 	require.ErrorIs(t, err, ErrHostIncompatible)
-	info, statErr := os.Stat(target)
-	require.NoError(t, statErr)
-	require.Equal(t, os.FileMode(0o755), info.Mode().Perm())
+}
+
+func TestNewManagerRejectsUntrustedRuntimeRootAncestor(t *testing.T) {
+	untrusted := filepath.Join(shortHostTempDir(t), "untrusted")
+	require.NoError(t, os.Mkdir(untrusted, 0o700))
+	require.NoError(t, os.Chmod(untrusted, 0o777))
+
+	_, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(untrusted, "hosts")})
+
+	require.ErrorIs(t, err, ErrHostIncompatible)
+}
+
+func TestNewManagerCreatesUniquePrivateDefaultRuntimeRoots(t *testing.T) {
+	first, err := NewManager(ManagerConfig{})
+	require.NoError(t, err)
+	second, err := NewManager(ManagerConfig{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, first.Close())
+		require.NoError(t, second.Close())
+	})
+
+	firstInfo, err := first.runtimeRoot.directory.Stat()
+	require.NoError(t, err)
+	secondInfo, err := second.runtimeRoot.directory.Stat()
+	require.NoError(t, err)
+	require.False(t, os.SameFile(firstInfo, secondInfo))
+	require.Equal(t, os.FileMode(0o700), firstInfo.Mode().Perm())
+	require.Equal(t, os.FileMode(0o700), secondInfo.Mode().Perm())
+	require.NotEqual(t, filepath.Join(os.TempDir(), "anixops", "plugin-hosts"), first.runtimeDir)
+	require.NotEqual(t, filepath.Join(os.TempDir(), "anixops", "plugin-hosts"), second.runtimeDir)
+}
+
+func TestManagerKeepsRuntimeRootPinnedAfterPathReplacement(t *testing.T) {
+	t.Setenv(hostTestChildEnvironment, "1")
+	parent := shortHostTempDir(t)
+	runtimeRoot := filepath.Join(parent, "runtime")
+	require.NoError(t, os.Mkdir(runtimeRoot, 0o700))
+	manager, err := NewManager(ManagerConfig{RuntimeDir: runtimeRoot})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
+
+	pinnedRoot := filepath.Join(parent, "pinned-runtime")
+	require.NoError(t, os.Rename(runtimeRoot, pinnedRoot))
+	attackerRoot := filepath.Join(parent, "attacker-runtime")
+	require.NoError(t, os.Mkdir(attackerRoot, 0o700))
+	require.NoError(t, os.Symlink(attackerRoot, runtimeRoot))
+
+	ref := writeHostArtifactRef(t, "knowledge", "4.0.0")
+	require.NoError(t, manager.Start(context.Background(), ref, 7))
+	host := manager.hosts[hostKey(ref.PackageID, ref.Version)]
+	require.NotNil(t, host)
+	require.True(t, strings.HasPrefix(host.runtimeDir.path("."), "/proc/self/fd/"))
+	require.Equal(t, childRuntimeDirectoryPath, filepath.Dir(host.command.Path))
+	require.Empty(t, readDirectoryNames(t, attackerRoot))
+	require.NotEmpty(t, readDirectoryNames(t, pinnedRoot))
+
+	response, err := manager.Dispatch(context.Background(), DispatchInput{
+		PackageID: ref.PackageID, Version: ref.Version, Generation: 7,
+		RequestID: "request-1", RouteID: "knowledge.article.list", Method: "GET",
+		PrincipalJSON: []byte(`{"actor_id":7}`), Deadline: time.Now().Add(time.Second),
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, 202, response.StatusCode)
 }
 
 func TestStageVerifiedEntrypointExecutesSnapshotAfterSourceReplacement(t *testing.T) {
-	runtimeDir := t.TempDir()
+	runtimeRoot, err := newRuntimeRoot(shortHostTempDir(t))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, runtimeRoot.Close()) })
+	runtimeDir, err := runtimeRoot.createHostRuntimeDir()
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, runtimeDir.remove()) })
 	outputPath := filepath.Join(t.TempDir(), "result")
 	sourcePath := filepath.Join(t.TempDir(), "entrypoint")
 	safe := []byte("#!/bin/sh\nprintf safe > " + strconv.Quote(outputPath) + "\n")
@@ -242,15 +367,17 @@ func TestStageVerifiedEntrypointExecutesSnapshotAfterSourceReplacement(t *testin
 		EntrypointPath: sourcePath, EntrypointSHA256: testDigest(safe),
 	}, runtimeDir)
 	require.NoError(t, err)
-	require.Equal(t, filepath.Join(runtimeDir, "entrypoint"), stagedPath)
+	require.Equal(t, runtimeDir.path("entrypoint"), stagedPath)
 	stagedInfo, err := os.Stat(stagedPath)
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0o700), stagedInfo.Mode().Perm())
 
 	unsafe := []byte("#!/bin/sh\nprintf unsafe > " + strconv.Quote(outputPath) + "\n")
 	require.NoError(t, os.WriteFile(sourcePath, unsafe, 0o700))
-	command := exec.Command(stagedPath)
-	command.Env = hostEnvironment("/tmp/unused.sock", runtimeDir)
+	command := exec.Command(childRuntimePath("entrypoint"))
+	command.Dir = runtimeDir.path(".")
+	command.ExtraFiles = []*os.File{runtimeDir.directory}
+	command.Env = hostEnvironment(childRuntimePath("unused.sock"), childRuntimeDirectoryPath)
 	require.NoError(t, command.Run())
 
 	result, err := os.ReadFile(outputPath)
@@ -289,7 +416,7 @@ func TestManagerShutdownStopsSupervisedHosts(t *testing.T) {
 
 func newTestManager(t *testing.T, hosts ...*hostProcess) *Supervisor {
 	t.Helper()
-	manager, err := NewManager(ManagerConfig{RuntimeDir: t.TempDir()})
+	manager, err := NewManager(ManagerConfig{RuntimeDir: shortHostTempDir(t)})
 	require.NoError(t, err)
 	for _, host := range hosts {
 		manager.hosts[hostKey(host.packageID, host.version)] = host
@@ -351,10 +478,23 @@ func processExited(pid int) bool {
 
 func shortHostTempDir(t *testing.T) string {
 	t.Helper()
-	directory, err := os.MkdirTemp("", "anix-host-")
+	parent, err := filepath.Abs(".")
+	require.NoError(t, err)
+	directory, err := os.MkdirTemp(parent, ".anix-host-")
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, os.RemoveAll(directory)) })
 	return directory
+}
+
+func readDirectoryNames(t *testing.T, directory string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(directory)
+	require.NoError(t, err)
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	return names
 }
 
 func testDigest(value []byte) string {

@@ -9,6 +9,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"golang.org/x/sys/unix"
 )
 
 // ArtifactRef describes files materialized by a caller that has already bound
@@ -69,9 +71,9 @@ func verifyFileDigest(filePath, expectedDigest string, executable bool) ([]byte,
 	return readVerifiedDigest(file, expectedDigest)
 }
 
-func stageVerifiedEntrypoint(ref ArtifactRef, runtimeDir string) (string, error) {
-	if !filepath.IsAbs(runtimeDir) {
-		return "", fmt.Errorf("%w: host runtime directory must be absolute", ErrHostIncompatible)
+func stageVerifiedEntrypoint(ref ArtifactRef, runtimeDir *hostRuntimeDir) (string, error) {
+	if runtimeDir == nil || runtimeDir.directory == nil {
+		return "", fmt.Errorf("%w: host runtime directory is unavailable", ErrHostUnavailable)
 	}
 	source, err := openVerifiedRegularFile(ref.EntrypointPath, true)
 	if err != nil {
@@ -82,33 +84,39 @@ func stageVerifiedEntrypoint(ref ArtifactRef, runtimeDir string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	stagedPath := filepath.Join(runtimeDir, "entrypoint")
-	destination, err := os.OpenFile(stagedPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)
+	const stagedEntrypointName = "entrypoint"
+	fd, err := unix.Openat(directoryFD(runtimeDir.directory), stagedEntrypointName, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o700)
 	if err != nil {
 		return "", fmt.Errorf("%w: create staged entrypoint: %v", ErrHostUnavailable, err)
 	}
+	destination := os.NewFile(uintptr(fd), stagedEntrypointName)
+	if destination == nil {
+		_ = unix.Close(fd)
+		_ = unix.Unlinkat(directoryFD(runtimeDir.directory), stagedEntrypointName, 0)
+		return "", fmt.Errorf("%w: create staged entrypoint", ErrHostUnavailable)
+	}
 	cleanup := func() {
 		_ = destination.Close()
-		_ = os.Remove(stagedPath)
+		_ = unix.Unlinkat(directoryFD(runtimeDir.directory), stagedEntrypointName, 0)
 	}
 	hasher := sha256.New()
 	if _, err := io.Copy(io.MultiWriter(destination, hasher), source); err != nil {
 		cleanup()
 		return "", fmt.Errorf("%w: stage entrypoint: %v", ErrHostIncompatible, err)
 	}
+	if err := unix.Fchmod(fd, 0o700); err != nil {
+		cleanup()
+		return "", fmt.Errorf("%w: secure staged entrypoint: %v", ErrHostUnavailable, err)
+	}
 	if err := destination.Close(); err != nil {
-		_ = os.Remove(stagedPath)
+		_ = unix.Unlinkat(directoryFD(runtimeDir.directory), stagedEntrypointName, 0)
 		return "", fmt.Errorf("%w: stage entrypoint: %v", ErrHostUnavailable, err)
 	}
 	if subtle.ConstantTimeCompare(expected, hasher.Sum(nil)) != 1 {
-		_ = os.Remove(stagedPath)
+		_ = unix.Unlinkat(directoryFD(runtimeDir.directory), stagedEntrypointName, 0)
 		return "", fmt.Errorf("%w: file digest does not match", ErrHostIncompatible)
 	}
-	if err := os.Chmod(stagedPath, 0o700); err != nil {
-		_ = os.Remove(stagedPath)
-		return "", fmt.Errorf("%w: secure staged entrypoint: %v", ErrHostUnavailable, err)
-	}
-	return stagedPath, nil
+	return runtimeDir.path(stagedEntrypointName), nil
 }
 
 func openVerifiedRegularFile(filePath string, executable bool) (*os.File, error) {

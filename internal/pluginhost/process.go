@@ -6,21 +6,28 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"syscall"
 	"time"
 )
 
-const hostSocketEnvironment = "ANIX_CONTROL_HOST_SOCKET"
+const (
+	hostSocketEnvironment             = "ANIX_CONTROL_HOST_SOCKET"
+	hostRuntimeDirectoryFDEnvironment = "ANIX_CONTROL_HOST_DIR_FD"
+)
+
 const maxUnixSocketPathBytes = 100
 
-func startHostProcess(ctx context.Context, runtimeRoot string, ref ArtifactRef, generation uint64, startupTimeout time.Duration) (*hostProcess, error) {
-	directory, err := createHostRuntimeDir(runtimeRoot, ref.PackageID, ref.Version, generation)
+func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref ArtifactRef, generation uint64, startupTimeout time.Duration) (*hostProcess, error) {
+	directory, err := runtimeRoot.createHostRuntimeDir()
 	if err != nil {
 		return nil, err
 	}
-	cleanup := func() { _ = os.RemoveAll(directory) }
-	socketPath := filepath.Join(directory, "host.sock")
+	cleanup := func() { _ = directory.remove() }
+	socketPath := directory.path("host.sock")
+	if len([]byte(socketPath)) > maxUnixSocketPathBytes || len([]byte(childRuntimePath("host.sock"))) > maxUnixSocketPathBytes {
+		cleanup()
+		return nil, fmt.Errorf("%w: host socket path exceeds Unix socket limit", ErrHostIncompatible)
+	}
 	// Rehash every referenced file and snapshot the entrypoint from its opened
 	// descriptor before execution. The staged path cannot be replaced through
 	// the caller-provided source pathname after this point.
@@ -28,14 +35,17 @@ func startHostProcess(ctx context.Context, runtimeRoot string, ref ArtifactRef, 
 		cleanup()
 		return nil, err
 	}
-	stagedEntrypoint, err := stageVerifiedEntrypoint(ref, directory)
+	_, err = stageVerifiedEntrypoint(ref, directory)
 	if err != nil {
 		cleanup()
 		return nil, err
 	}
-	command := exec.CommandContext(context.Background(), stagedEntrypoint)
-	command.Dir = directory
-	command.Env = hostEnvironment(socketPath, directory)
+	command := exec.CommandContext(context.Background(), childRuntimePath("entrypoint"))
+	// os/exec changes directory before it remaps ExtraFiles to FD 3, so this
+	// parent-side /proc descriptor path preserves the pinned directory for cwd.
+	command.Dir = directory.path(".")
+	command.Env = hostEnvironment(childRuntimePath("host.sock"), childRuntimeDirectoryPath)
+	command.ExtraFiles = []*os.File{directory.directory}
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := command.Start(); err != nil {
 		cleanup()
@@ -65,64 +75,10 @@ func startHostProcess(ctx context.Context, runtimeRoot string, ref ArtifactRef, 
 func hostEnvironment(socketPath, runtimeDir string) []string {
 	return []string{
 		hostSocketEnvironment + "=" + socketPath,
+		hostRuntimeDirectoryFDEnvironment + "=" + fmt.Sprint(childRuntimeDirectoryFD),
 		"HOME=" + runtimeDir,
 		"TMPDIR=" + runtimeDir,
 	}
-}
-
-func createHostRuntimeDir(runtimeRoot, packageID, version string, generation uint64) (string, error) {
-	if runtimeRoot == "" || !filepath.IsAbs(runtimeRoot) {
-		return "", fmt.Errorf("%w: host runtime directory must be absolute", ErrHostIncompatible)
-	}
-	if err := secureRuntimeRoot(runtimeRoot); err != nil {
-		return "", err
-	}
-	directory, err := os.MkdirTemp(runtimeRoot, "host-")
-	if err != nil {
-		return "", fmt.Errorf("%w: create package runtime directory: %v", ErrHostUnavailable, err)
-	}
-	if err := os.Chmod(directory, 0o700); err != nil {
-		_ = os.RemoveAll(directory)
-		return "", fmt.Errorf("%w: secure package runtime directory: %v", ErrHostUnavailable, err)
-	}
-	if len([]byte(filepath.Join(directory, "host.sock"))) > maxUnixSocketPathBytes {
-		_ = os.RemoveAll(directory)
-		return "", fmt.Errorf("%w: host socket path exceeds Unix socket limit", ErrHostIncompatible)
-	}
-	return directory, nil
-}
-
-func secureRuntimeRoot(runtimeRoot string) error {
-	info, err := os.Lstat(runtimeRoot)
-	if errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(runtimeRoot, 0o700); err != nil {
-			return fmt.Errorf("%w: create host runtime directory: %v", ErrHostUnavailable, err)
-		}
-		info, err = os.Lstat(runtimeRoot)
-	}
-	if err != nil {
-		return fmt.Errorf("%w: inspect host runtime directory: %v", ErrHostUnavailable, err)
-	}
-	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("%w: host runtime directory is not private", ErrHostIncompatible)
-	}
-	directory, err := os.Open(runtimeRoot)
-	if err != nil {
-		return fmt.Errorf("%w: open host runtime directory: %v", ErrHostUnavailable, err)
-	}
-	defer directory.Close()
-	openedInfo, err := directory.Stat()
-	if err != nil || !openedInfo.IsDir() || !os.SameFile(info, openedInfo) {
-		return fmt.Errorf("%w: host runtime directory changed before open", ErrHostIncompatible)
-	}
-	if err := directory.Chmod(0o700); err != nil {
-		return fmt.Errorf("%w: secure host runtime directory: %v", ErrHostUnavailable, err)
-	}
-	securedInfo, err := directory.Stat()
-	if err != nil || securedInfo.Mode().Perm() != 0o700 {
-		return fmt.Errorf("%w: host runtime directory is not private", ErrHostIncompatible)
-	}
-	return nil
 }
 
 func waitForHost(ctx context.Context, host *hostProcess) (*hostClient, HostHealth, error) {
@@ -178,27 +134,33 @@ func (h *hostProcess) stop(ctx context.Context) error {
 	if h == nil {
 		return nil
 	}
+	var stopErr error
 	if h.client != nil {
 		_ = h.client.Close()
 	}
 	if h.command != nil && h.command.Process != nil {
-		if !hostExited(h) {
-			if err := terminateHostProcessGroup(h.command.Process.Pid); err != nil && !errors.Is(err, os.ErrProcessDone) {
-				return fmt.Errorf("%w: stop host process: %v", ErrHostUnavailable, err)
-			}
+		// The group can survive after its leader has exited. Always target the
+		// original PGID so descendants cannot outlive retirement.
+		if err := terminateHostProcessGroup(h.command.Process.Pid); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			stopErr = errors.Join(stopErr, fmt.Errorf("%w: stop host process: %v", ErrHostUnavailable, err))
 		}
 	}
+	waited := h.waitDone == nil
 	if h.waitDone != nil {
 		select {
 		case <-h.waitDone:
+			waited = true
 		case <-ctx.Done():
-			return fmt.Errorf("%w: wait for host shutdown: %v", ErrHostUnavailable, ctx.Err())
+			stopErr = errors.Join(stopErr, fmt.Errorf("%w: wait for host shutdown: %v", ErrHostUnavailable, ctx.Err()))
 		}
 	}
-	if err := os.RemoveAll(h.runtimeDir); err != nil {
-		return fmt.Errorf("%w: remove host runtime directory: %v", ErrHostUnavailable, err)
+	if waited && h.runtimeDir != nil {
+		if err := h.runtimeDir.remove(); err != nil {
+			stopErr = errors.Join(stopErr, fmt.Errorf("%w: remove host runtime directory: %v", ErrHostUnavailable, err))
+		}
+		h.runtimeDir = nil
 	}
-	return nil
+	return stopErr
 }
 
 func terminateHostProcessGroup(pid int) error {

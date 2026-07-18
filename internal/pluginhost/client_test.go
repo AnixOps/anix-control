@@ -52,6 +52,14 @@ func TestPluginHostProcess(t *testing.T) {
 	if socketPath == "" {
 		t.Fatal("host socket path is required")
 	}
+	if os.Getenv(hostRuntimeDirectoryFDEnvironment) != "3" {
+		t.Fatal("host runtime directory descriptor is required")
+	}
+	runtimeInfo, err := os.Stat(childRuntimeDirectoryPath)
+	require.NoError(t, err)
+	if !runtimeInfo.IsDir() {
+		t.Fatal("host runtime descriptor is not a directory")
+	}
 	listener, err := net.Listen("unix", socketPath)
 	require.NoError(t, err)
 	require.NoError(t, os.Chmod(socketPath, 0o600))

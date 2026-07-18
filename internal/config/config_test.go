@@ -169,10 +169,11 @@ func TestOfficialPluginAlphaProfiles(t *testing.T) {
 		executionEnabled bool
 		dispatchEnabled  bool
 		grpcEnabled      bool
+		runtimeDir       string
 	}{
-		{name: "development", path: "config.dev.yaml.example", executionEnabled: true, dispatchEnabled: true, grpcEnabled: true},
-		{name: "release installer fail closed", path: "config.yaml.example", executionEnabled: false, dispatchEnabled: false, grpcEnabled: true},
-		{name: "production fail closed", path: "config.prod.yaml", executionEnabled: false, dispatchEnabled: false, grpcEnabled: false},
+		{name: "development", path: "config.dev.yaml.example", executionEnabled: true, dispatchEnabled: true, grpcEnabled: true, runtimeDir: ""},
+		{name: "release installer fail closed", path: "config.yaml.example", executionEnabled: false, dispatchEnabled: false, grpcEnabled: true, runtimeDir: "/var/lib/anixops/plugin-hosts"},
+		{name: "production fail closed", path: "config.prod.yaml", executionEnabled: false, dispatchEnabled: false, grpcEnabled: false, runtimeDir: "/var/lib/anixops/plugin-hosts"},
 	}
 
 	for _, profile := range profiles {
@@ -186,6 +187,7 @@ func TestOfficialPluginAlphaProfiles(t *testing.T) {
 			assert.Equal(t, profile.executionEnabled, loaded.Plugins.ControlExecutionEnabled)
 			assert.Equal(t, profile.dispatchEnabled, loaded.Plugins.DispatchEnabled)
 			assert.Equal(t, profile.grpcEnabled, loaded.GRPC.Enable)
+			assert.Equal(t, profile.runtimeDir, loaded.Plugins.ControlHostRuntimeDir)
 			assert.False(t, loaded.Plugins.TopologyExecutionEnabled)
 			if profile.grpcEnabled {
 				assert.Equal(t, "127.0.0.1", loaded.GRPC.Host)

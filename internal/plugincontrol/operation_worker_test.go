@@ -101,8 +101,9 @@ func TestOperationWorkerFailsClosedWhenHostArtifactRefIsUnavailable(t *testing.T
 	const pluginID = "host-only"
 	const version = "4.0.0"
 	seedControlPluginRelease(t, db, pluginID, version)
-	manager, err := pluginhost.NewManager(pluginhost.ManagerConfig{RuntimeDir: t.TempDir()})
+	manager, err := pluginhost.NewManager(pluginhost.ManagerConfig{})
 	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, manager.Close()) })
 	worker, err := NewOperationWorker(db, NewHostLifecycleDispatcher(manager, nil))
 	require.NoError(t, err)
 	now := time.Now()
