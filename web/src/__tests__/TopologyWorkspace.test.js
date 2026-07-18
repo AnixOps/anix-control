@@ -57,6 +57,21 @@ describe('TopologyWorkspace', () => {
     wrapper.unmount()
   })
 
+  it('does not roll back when a confirmed deployment becomes dirty', async () => {
+    const wrapper = mountWorkspace()
+    await nextTick()
+    await nextTick()
+
+    await wrapper.get('#topology-rollback').trigger('click')
+    const confirm = wrapper.get('[data-testid="confirm-rollback"]')
+    await wrapper.get('#topology-editor-json').setValue('{"vertices":[],"edges":[]}')
+
+    expect(confirm.attributes('disabled')).toBeDefined()
+    await confirm.trigger('click')
+    expect(wrapper.emitted('rollback')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('keeps plan, apply, and rollback unavailable while the revision differs from its baseline', async () => {
     const wrapper = mountWorkspace()
     await nextTick()
@@ -95,7 +110,49 @@ describe('TopologyWorkspace', () => {
     wrapper.unmount()
   })
 
-  it('includes the kernel request spelling alongside preview-compatible topology options', async () => {
+  it('retains a dirty draft when the same selected revision detail is replaced asynchronously', async () => {
+    const wrapper = mountWorkspace()
+    await nextTick()
+    await nextTick()
+
+    await wrapper.get('#topology-editor-json').setValue('{"vertices":[],"edges":[]}')
+    await wrapper.get('#topology-revision-message').setValue('Local draft')
+    await wrapper.setProps({
+      revisionDetail: {
+        revision: { id: 7, message: 'Server refresh' },
+        vertices: [{ key: 'server-entry', kind: 'agent', config: '{"port":8443}' }],
+        edges: [],
+      },
+    })
+
+    expect(wrapper.get('#topology-editor-json').element.value).toBe('{"vertices":[],"edges":[]}')
+    expect(wrapper.get('#topology-revision-message').element.value).toBe('Local draft')
+    expect(wrapper.get('.topology-dirty').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('loads a replacement detail when the selected topology and revision change', async () => {
+    const wrapper = mountWorkspace()
+    await nextTick()
+    await nextTick()
+
+    await wrapper.setProps({
+      topology: { id: 4, name: 'New regional mesh' },
+      revisionID: 8,
+      revisionDetail: {
+        revision: { id: 8, message: 'New revision' },
+        vertices: [{ key: 'new-entry', kind: 'agent', config: '{"port":8443}' }],
+        edges: [],
+      },
+    })
+
+    expect(wrapper.get('#topology-editor-json').element.value).toContain('new-entry')
+    expect(wrapper.get('#topology-revision-message').element.value).toBe('New revision')
+    expect(wrapper.find('.topology-dirty').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('emits preview-compatible UI option names without route-layer request fields', async () => {
     const wrapper = mountWorkspace()
     await nextTick()
     await nextTick()
@@ -110,8 +167,6 @@ describe('TopologyWorkspace', () => {
         options: {
           rolloutGroup: 'canary-a',
           failurePolicy: 'stop_and_rollback',
-          rollout_group: 'canary-a',
-          failure_policy: 'stop_and_rollback',
         },
       },
     ]])

@@ -154,7 +154,7 @@
             <p>{{ t('control.topology.rollbackConfirm') }}</p>
             <div class="confirmation-actions">
               <button class="btn" type="button" :disabled="saving" @click="rollbackConfirming = false">{{ t('common.actions.cancel') }}</button>
-              <button class="btn btn-danger" data-testid="confirm-rollback" type="button" :disabled="saving" @click="rollback">{{ t('control.topology.rollback') }}</button>
+              <button class="btn btn-danger" data-testid="confirm-rollback" type="button" :disabled="saving || dirty" @click="rollback">{{ t('control.topology.rollback') }}</button>
             </div>
           </section>
         </footer>
@@ -200,6 +200,8 @@ const failurePolicy = ref('stop_and_rollback')
 const rollbackConfirming = ref(false)
 const localError = ref('')
 const newTopology = reactive({ name: '', serviceScope: '', description: '' })
+const baselineTopologyID = ref(0)
+const baselineRevisionID = ref(0)
 
 const createMode = computed(() => !props.topology?.id)
 const openState = computed(() => props.open)
@@ -221,23 +223,47 @@ const { handleKeydown, requestClose } = useModalFocus({
   close: () => emit('close'),
 })
 
-watch([() => props.open, () => props.topology?.id, () => props.revisionDetail], ([isOpen, topologyID, detail]) => {
-  if (!isOpen) return
+watch([() => props.open, () => props.topology?.id, () => props.revisionID, () => props.revisionDetail], ([isOpen, topologyID, revisionID, detail]) => {
+  if (!isOpen) {
+    baselineTopologyID.value = 0
+    baselineRevisionID.value = 0
+    return
+  }
   localError.value = ''
   rollbackConfirming.value = false
   if (!topologyID) {
     Object.assign(newTopology, { name: '', serviceScope: props.scopes[0]?.id || '', description: '' })
+    baselineTopologyID.value = 0
+    baselineRevisionID.value = 0
     return
   }
-  selectedRevisionID.value = Number(props.revisionID || 0)
-  rolloutGroup.value = ''
-  failurePolicy.value = 'stop_and_rollback'
-  setRevisionDetail(detail)
-}, { immediate: true })
 
-watch(() => props.revisionID, revisionID => {
-  selectedRevisionID.value = Number(revisionID || 0)
-})
+  const nextTopologyID = Number(topologyID)
+  const nextRevisionID = Number(revisionID || detail?.revision?.id || 0)
+  const detailRevisionID = Number(detail?.revision?.id || 0)
+  if (detail && nextRevisionID && detailRevisionID && nextRevisionID !== detailRevisionID) return
+
+  selectedRevisionID.value = nextRevisionID
+  const topologyChanged = baselineTopologyID.value !== nextTopologyID
+  const revisionChanged = baselineRevisionID.value !== nextRevisionID
+  if (topologyChanged || revisionChanged) {
+    rollbackConfirming.value = false
+    rolloutGroup.value = ''
+    failurePolicy.value = 'stop_and_rollback'
+    if (detail) {
+      setRevisionDetail(detail)
+      baselineTopologyID.value = nextTopologyID
+      baselineRevisionID.value = nextRevisionID
+    } else if (topologyChanged || baselineTopologyID.value === 0) {
+      setRevisionDetail(null)
+      baselineTopologyID.value = nextTopologyID
+      baselineRevisionID.value = nextRevisionID
+    }
+    return
+  }
+
+  if (!dirty.value && detail) setRevisionDetail(detail)
+}, { immediate: true })
 
 function emptyTopologyJSON() {
   return '{\n  "vertices": [],\n  "edges": []\n}'
@@ -264,8 +290,6 @@ function options() {
   return {
     rolloutGroup: rolloutGroup.value,
     failurePolicy: failurePolicy.value,
-    rollout_group: rolloutGroup.value,
-    failure_policy: failurePolicy.value,
   }
 }
 
@@ -323,7 +347,7 @@ function requestRollback() {
 }
 
 function rollback() {
-  if (props.saving || !rollbackConfirming.value || !canRollback.value) return
+  if (props.saving || dirty.value || !rollbackConfirming.value || !canRollback.value) return
   rollbackConfirming.value = false
   emit('rollback', { deploymentID: Number(props.deploymentID) })
 }
