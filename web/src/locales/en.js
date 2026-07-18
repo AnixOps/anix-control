@@ -272,6 +272,8 @@ export default {
       mobileTitle: `${CONTROL_NAME} Console`,
       subtitle: 'Subscription delivery, node orchestration, forwarding tools, and studio operations are centralized here.',
       adminUser: 'Administrator',
+      collapseNavigation: 'Collapse navigation',
+      expandNavigation: 'Expand navigation',
       sections: {
         overview: 'Overview',
         business: 'Business',

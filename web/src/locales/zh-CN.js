@@ -281,6 +281,8 @@ export default {
       badge: '工作室管理台',
       subtitle: '订阅交付、节点编排、转发套件与运维入口统一收敛在此导航。',
       adminUser: '管理员',
+      collapseNavigation: '收起导航',
+      expandNavigation: '展开导航',
       sections: {
         overview: '概览',
         business: '业务',

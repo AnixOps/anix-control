@@ -52,6 +52,41 @@ describe('ForwardSuiteNav.vue', () => {
     expect(ansibleLink.attributes('aria-label')).toContain('Stateless execution machines')
   })
 
+  it('renders Lucide navigation icons rather than text-initial glyphs', async () => {
+    const router = createTestRouter()
+    await router.isReady()
+
+    const wrapper = mount(ForwardSuiteNav, {
+      global: {
+        plugins: [router]
+      }
+    })
+
+    expect(wrapper.findAll('[data-admin-nav-icon]').length).toBeGreaterThan(0)
+    expect(wrapper.find('[data-admin-nav-icon="setup"]').element.tagName).toBe('svg')
+    expect(wrapper.find('.icon').exists()).toBe(false)
+  })
+
+  it('uses sidebar surface treatment only when explicitly embedded in navigation', async () => {
+    const router = createTestRouter()
+    await router.isReady()
+
+    const contentWrapper = mount(ForwardSuiteNav, {
+      global: {
+        plugins: [router]
+      }
+    })
+    const sidebarWrapper = mount(ForwardSuiteNav, {
+      props: { sidebar: true },
+      global: {
+        plugins: [router]
+      }
+    })
+
+    expect(contentWrapper.classes()).not.toContain('forward-suite-nav-sidebar')
+    expect(sidebarWrapper.classes()).toContain('forward-suite-nav-sidebar')
+  })
+
   it('exposes clear active-state semantics via active class and aria-current', async () => {
     const router = createTestRouter('/admin/forward/nodex')
     await router.isReady()
