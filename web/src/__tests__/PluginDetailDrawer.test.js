@@ -54,8 +54,22 @@ function artifactFile(name, read) {
   }
 }
 
+function textFile(name, read) {
+  return {
+    name,
+    size: 1,
+    text: vi.fn(() => read),
+  }
+}
+
 async function selectArtifact(wrapper, file) {
   const input = wrapper.get('#plugin-release-artifact')
+  Object.defineProperty(input.element, 'files', { configurable: true, value: [file] })
+  await input.trigger('change')
+}
+
+async function selectTextFile(wrapper, field, file) {
+  const input = wrapper.get(`#plugin-release-${field}-file`)
   Object.defineProperty(input.element, 'files', { configurable: true, value: [file] })
   await input.trigger('change')
 }
@@ -374,4 +388,69 @@ describe('plugin catalog dialogs', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
     expect(wrapper.emitted('save')[0][0].artifactBase64).toBe('')
   })
+
+  const textFileSpecs = [
+    { field: 'manifest', value: '{"id":"from-file"}' },
+    { field: 'signature', value: 'from-file-signature' },
+  ]
+
+  for (const spec of textFileSpecs) {
+    it(`disables release submission while ${spec.field} file text is reading`, async () => {
+      const wrapper = mount(PluginReleaseImportDialog, { props: { open: true } })
+      mounted.push(wrapper)
+      await completeReleaseFields(wrapper)
+      const pending = deferred()
+
+      await selectTextFile(wrapper, spec.field, textFile(`${spec.field}.txt`, pending.promise))
+      expect(wrapper.get('[data-action="save-release"]').attributes('disabled')).toBeDefined()
+
+      pending.resolve(spec.value)
+      await flushPromises()
+      expect(wrapper.get('[data-action="save-release"]').attributes('disabled')).toBeUndefined()
+    })
+
+    it(`keeps only the most recent ${spec.field} file text`, async () => {
+      const wrapper = mount(PluginReleaseImportDialog, { props: { open: true } })
+      mounted.push(wrapper)
+      const first = deferred()
+      const second = deferred()
+
+      await selectTextFile(wrapper, spec.field, textFile(`first-${spec.field}.txt`, first.promise))
+      await selectTextFile(wrapper, spec.field, textFile(`second-${spec.field}.txt`, second.promise))
+      second.resolve(`second-${spec.value}`)
+      await flushPromises()
+      first.resolve(`first-${spec.value}`)
+      await flushPromises()
+
+      expect(wrapper.get(`#plugin-release-${spec.field}`).element.value).toBe(`second-${spec.value}`)
+    })
+
+    it(`ignores ${spec.field} file text that finishes after close and reopen`, async () => {
+      const wrapper = mount(PluginReleaseImportDialog, { props: { open: true } })
+      mounted.push(wrapper)
+      const pending = deferred()
+
+      await selectTextFile(wrapper, spec.field, textFile(`late-${spec.field}.txt`, pending.promise))
+      await wrapper.setProps({ open: false })
+      await wrapper.setProps({ open: true })
+      pending.resolve(spec.value)
+      await flushPromises()
+
+      expect(wrapper.get(`#plugin-release-${spec.field}`).element.value).toBe('')
+    })
+
+    it(`invalidates ${spec.field} file text as soon as close is requested`, async () => {
+      const wrapper = mount(PluginReleaseImportDialog, { props: { open: true } })
+      mounted.push(wrapper)
+      const pending = deferred()
+
+      await selectTextFile(wrapper, spec.field, textFile(`closing-${spec.field}.txt`, pending.promise))
+      await wrapper.get('[data-testid="plugin-release-import-dialog"]').trigger('keydown', { key: 'Escape' })
+      pending.resolve(spec.value)
+      await flushPromises()
+
+      expect(wrapper.emitted('close')).toHaveLength(1)
+      expect(wrapper.get(`#plugin-release-${spec.field}`).element.value).toBe('')
+    })
+  }
 })
