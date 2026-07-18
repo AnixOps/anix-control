@@ -1,0 +1,160 @@
+import { describe, expect, it } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
+import OperationTimeline from '@/components/admin/OperationTimeline.vue'
+import TopologyWorkspace from '@/components/admin/TopologyWorkspace.vue'
+
+const revisionDetail = {
+  revision: { id: 7, message: 'Published revision' },
+  vertices: [{ key: 'entry', kind: 'agent', node_id: 11, plugin_id: 'gost-mesh', role: 'relay', config: '{"port":443}' }],
+  edges: [],
+}
+
+function mountWorkspace(props = {}) {
+  return mount(TopologyWorkspace, {
+    attachTo: document.body,
+    props: {
+      open: true,
+      topology: { id: 3, name: 'Regional mesh' },
+      revisions: [{ id: 7, revision: 2 }],
+      revisionID: 7,
+      revisionDetail,
+      deploymentID: 13,
+      deploymentStatus: { deployment: { id: 13, state: 'planned' }, operations: [] },
+      scopes: [{ id: 'forward', name: 'Forward' }],
+      validation: { valid: true, issues: [], checks: [{ name: 'release', status: 'passed' }] },
+      preview: { valid: true, steps: [{ order: 1, vertex_key: 'entry', apply_action: 'configure', rollback_mode: 'restore' }] },
+      ...props,
+    },
+  })
+}
+
+describe('TopologyWorkspace', () => {
+  it('emits topology actions from a clean immutable revision and requires an explicit rollback confirmation', async () => {
+    const wrapper = mountWorkspace()
+    await nextTick()
+    await nextTick()
+
+    await wrapper.get('#topology-diagnose').trigger('click')
+    expect(wrapper.emitted('diagnose')).toEqual([[
+      expect.objectContaining({
+        topologyID: 3,
+        revisionID: 7,
+        options: expect.objectContaining({ rolloutGroup: '', failurePolicy: 'stop_and_rollback' }),
+      }),
+    ]])
+
+    await wrapper.get('#topology-preview').trigger('click')
+    await wrapper.get('#topology-plan').trigger('click')
+    expect(wrapper.emitted('preview')).toHaveLength(1)
+    expect(wrapper.emitted('plan')).toHaveLength(1)
+
+    await wrapper.get('#topology-rollback').trigger('click')
+    expect(wrapper.emitted('rollback')).toBeUndefined()
+    expect(wrapper.get('[data-testid="rollback-confirmation"]').text()).toContain('Request rollback')
+    await wrapper.get('[data-testid="confirm-rollback"]').trigger('click')
+    expect(wrapper.emitted('rollback')).toEqual([[{ deploymentID: 13 }]])
+    wrapper.unmount()
+  })
+
+  it('keeps plan, apply, and rollback unavailable while the revision differs from its baseline', async () => {
+    const wrapper = mountWorkspace()
+    await nextTick()
+    await nextTick()
+
+    await wrapper.get('#topology-editor-json').setValue('{"vertices":[],"edges":[]}')
+    expect(wrapper.get('.topology-dirty').text()).toContain('unsaved changes')
+    for (const selector of ['#topology-plan', '#topology-apply', '#topology-rollback']) {
+      expect(wrapper.get(selector).attributes('disabled')).toBeDefined()
+    }
+
+    await wrapper.get('#topology-save-revision').trigger('click')
+    expect(wrapper.emitted('save-revision')).toEqual([[
+      {
+        topologyID: 3,
+        input: {
+          message: 'Published revision',
+          vertices: [],
+          edges: [],
+        },
+      },
+    ]])
+    wrapper.unmount()
+  })
+
+  it('retains a dirty revision when its parent refreshes the same topology record', async () => {
+    const wrapper = mountWorkspace()
+    await nextTick()
+    await nextTick()
+
+    await wrapper.get('#topology-editor-json').setValue('{"vertices":[],"edges":[]}')
+    await wrapper.setProps({ topology: { id: 3, name: 'Regional mesh refreshed' } })
+
+    expect(wrapper.get('#topology-editor-json').element.value).toBe('{"vertices":[],"edges":[]}')
+    expect(wrapper.get('.topology-dirty').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('includes the kernel request spelling alongside preview-compatible topology options', async () => {
+    const wrapper = mountWorkspace()
+    await nextTick()
+    await nextTick()
+
+    await wrapper.get('#topology-rollout-group').setValue('canary-a')
+    await wrapper.get('#topology-plan').trigger('click')
+
+    expect(wrapper.emitted('plan')).toEqual([[
+      {
+        topologyID: 3,
+        revisionID: 7,
+        options: {
+          rolloutGroup: 'canary-a',
+          failurePolicy: 'stop_and_rollback',
+          rollout_group: 'canary-a',
+          failure_policy: 'stop_and_rollback',
+        },
+      },
+    ]])
+    wrapper.unmount()
+  })
+
+  it('collects the kernel topology creation shape when opened without a topology', async () => {
+    const wrapper = mountWorkspace({ topology: null, revisionID: 0, revisionDetail: null })
+    await nextTick()
+
+    await wrapper.get('#new-topology-name').setValue('China egress')
+    await wrapper.get('#new-topology-scope').setValue('forward')
+    await wrapper.get('#new-topology-description').setValue('Regional egress rollout')
+    await wrapper.get('#create-topology').trigger('click')
+
+    expect(wrapper.emitted('create-topology')).toEqual([[
+      { name: 'China egress', service_scope: 'forward', description: 'Regional egress rollout' },
+    ]])
+    wrapper.unmount()
+  })
+})
+
+describe('OperationTimeline', () => {
+  it('shows scoped activity first, exposes global history explicitly, and only cancels cancellable operations', async () => {
+    const wrapper = mount(OperationTimeline, {
+      props: {
+        operations: [
+          { id: 'running', kind: 'deployment.apply', state: 'running', created_at: '2026-07-18T01:00:00Z' },
+          { id: 'completed', kind: 'deployment.plan', state: 'completed', last_error: 'none', created_at: '2026-07-18T02:00:00Z' },
+        ],
+        scopedOperationIDs: ['running'],
+      },
+    })
+
+    expect(wrapper.get('[data-testid="operation-row-running"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="operation-row-completed"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="cancel-operation-running"]').trigger('click')
+    expect(wrapper.emitted('cancel')).toEqual([['running']])
+
+    await wrapper.get('[data-testid="show-all-activity"]').trigger('click')
+    const rows = wrapper.findAll('[data-testid^="operation-row-"]')
+    expect(rows.map(row => row.attributes('data-testid'))).toEqual(['operation-row-completed', 'operation-row-running'])
+    expect(wrapper.find('[data-testid="cancel-operation-completed"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})

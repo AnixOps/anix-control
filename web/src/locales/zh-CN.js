@@ -3042,6 +3042,7 @@ export default {
     labels: { releases: '{count} 个发行版', desired: '期望', observed: '实际' },
     states: { catalogued: '已登记', enabled: '已启用', disabled: '已禁用', loading: '正在加载控制状态...', polling: '正在轮询操作状态' },
     empty: { plugins: '暂无插件', assignments: '该节点暂无服务角色', scopes: '暂无服务作用域', topologies: '暂无拓扑', operations: '暂无操作' },
+    activity: { title: '活动', scoped: '当前范围活动', all: '全部活动', showAll: '显示全部活动', showScoped: '显示当前范围活动', empty: '当前范围暂无活动' },
     topology: {
       select: '拓扑', new: '新建拓扑', newTitle: '新建拓扑', create: '创建拓扑', name: '名称', edit: '编辑修订', status: '查看状态', noDeployment: '暂无部署', editorTitle: '拓扑修订编辑器', revision: '修订',
       noRevisions: '暂无修订', failurePolicy: '失败策略', stopAndRollback: '停止并回滚', message: '修订说明', graphJSON: '拓扑图 JSON',

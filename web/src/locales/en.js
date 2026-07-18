@@ -3034,6 +3034,7 @@ export default {
     labels: { releases: '{count} releases', desired: 'Desired', observed: 'Observed' },
     states: { catalogued: 'Catalogued', enabled: 'Enabled', disabled: 'Disabled', loading: 'Loading control state...', polling: 'Polling operation state' },
     empty: { plugins: 'No plugins', assignments: 'No assignments for this node', scopes: 'No service scopes', topologies: 'No topologies', operations: 'No operations' },
+    activity: { title: 'Activity', scoped: 'Selected activity', all: 'All activity', showAll: 'Show all activity', showScoped: 'Show selected activity', empty: 'No activity for the selected scope' },
     topology: {
       select: 'Topology', new: 'New topology', newTitle: 'Create topology', create: 'Create topology', name: 'Name', edit: 'Edit revision', status: 'View status', noDeployment: 'No deployment', editorTitle: 'Topology revision editor', revision: 'Revision',
       noRevisions: 'No revisions', failurePolicy: 'Failure policy', stopAndRollback: 'Stop and rollback', message: 'Revision message', graphJSON: 'Graph JSON',
