@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the existing Go/kernel APIs untouched. Add two route-level Vue views backed by focused composables: the Plugin Center loads only catalog/install resources, while the Deployment Center loads topology/target/activity resources and fetches assignments only for the selected node. The compact navigation shell owns grouping, collapse state, responsive behavior, permissions, and extension menu placement; domain views own loading, mutation, and polling lifecycles.
 
-**Tech Stack:** Vue 3 Composition API, Vue Router 4, Pinia, vue-i18n, Vitest, Vue Test Utils, Playwright, Vite, and `lucide-vue-next`.
+**Tech Stack:** Vue 3 Composition API, Vue Router 4, Pinia, vue-i18n, Vitest, Vue Test Utils, Playwright, Vite, and `@lucide/vue`.
 
 ## Global Constraints
 
@@ -113,7 +113,7 @@ not exist.
 Run:
 
 ```bash
-npm --prefix web install lucide-vue-next
+npm --prefix web install @lucide/vue
 ```
 
 Create `web/src/router/controlLegacy.js`:
@@ -232,7 +232,7 @@ Use a closed icon mapping in `AdminNavIcon.vue` so extension data cannot select
 an arbitrary component:
 
 ```js
-import { Box, ChartNoAxesCombined, Gauge, LayoutDashboard, Network, Package, Rocket, Settings, Users } from 'lucide-vue-next'
+import { Box, ChartNoAxesCombined, Gauge, LayoutDashboard, Network, Package, Rocket, Settings, Users } from '@lucide/vue'
 
 const icons = Object.freeze({
   dashboard: LayoutDashboard,
