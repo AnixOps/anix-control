@@ -338,6 +338,7 @@ let disposed = false
 let topologyRequestID = 0
 let topologySessionID = 0
 let assignmentLoadRequestID = 0
+let operationRequestGeneration = 0
 
 const scopedOperationIDs = computed(() => {
   const ids = new Set(trackedOperationIDs.value)
@@ -486,12 +487,16 @@ async function refreshTopologies() {
 }
 
 async function refreshOperationState() {
+  const requestGeneration = ++operationRequestGeneration
   try {
-    operations.value = rows(await getKernelOperations())
+    const operationRows = rows(await getKernelOperations())
+    if (requestGeneration !== operationRequestGeneration) return true
+    operations.value = operationRows
     reconcileTrackedOperations()
     updatePolling()
     return true
   } catch (cause) {
+    if (requestGeneration !== operationRequestGeneration) return true
     error.value = errorMessage(cause, 'control.errors.poll')
     return false
   }
@@ -587,7 +592,8 @@ async function saveAssignment({ nodeID, payload }) {
   notice.value = ''
   try {
     const result = await upsertKernelNodeAssignment(targetNodeID, payload)
-    if (isCurrentTarget(targetNodeID)) addTrackedOperation(result)
+    selectedNodeID.value = targetNodeID
+    addTrackedOperation(result)
     if (!await refreshSelectedAssignmentActivity(targetNodeID)) throw new Error(error.value || t('control.errors.assignmentsLoad'))
     assignmentEditor.open = false
     notice.value = t('control.messages.assignmentSaved', { plugin: pluginName(payload.plugin_id) })
@@ -964,6 +970,7 @@ function updatePolling() {
 async function pollActivity() {
   if (pollRequestRunning || disposed) return
   pollRequestRunning = true
+  const operationRequestGenerationAtStart = ++operationRequestGeneration
   const sessionID = topologySessionID
   const topologyID = topologyEditor.topology?.id
   const deploymentID = Number(topologyEditor.deploymentID)
@@ -974,14 +981,16 @@ async function pollActivity() {
       ? getKernelDeploymentStatus(deploymentID)
       : null
     const [operationRows, status] = await Promise.all([operationRequest, deploymentRequest])
-    operations.value = rows(operationRows)
+    if (operationRequestGenerationAtStart === operationRequestGeneration) {
+      operations.value = rows(operationRows)
+      reconcileTrackedOperations()
+    }
     if (status && isCurrentDeploymentStatusSession(sessionID, topologyID, deploymentID)) {
       topologyEditor.deploymentStatus = status
       updateDeployment(status?.deployment || status)
     }
-    reconcileTrackedOperations()
   } catch (cause) {
-    error.value = errorMessage(cause, 'control.errors.poll')
+    if (operationRequestGenerationAtStart === operationRequestGeneration) error.value = errorMessage(cause, 'control.errors.poll')
   } finally {
     pollRequestRunning = false
   }

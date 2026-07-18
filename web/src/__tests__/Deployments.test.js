@@ -237,6 +237,84 @@ describe('Deployments', () => {
     wrapper.unmount()
   })
 
+  it('selects and refreshes the chosen target after creating an assignment there', async () => {
+    const secondNode = { id: 22, name: 'Tokyo entry', host: '10.0.0.22' }
+    const secondNodeAssignment = {
+      id: 8,
+      node_id: 22,
+      service_scope: 'forward',
+      plugin_id: 'gost-mesh',
+      role: 'relay',
+      desired_version: '1.0.0',
+      desired_config_revision: 6,
+      rollout_group: 'tokyo-canary',
+      enabled: true,
+    }
+    resolveAssignmentState()
+    adminApi.getNodes.mockResolvedValue({ code: 0, data: { list: [node, secondNode] } })
+    kernelApi.getKernelNodeAssignments.mockImplementation(nodeID => Promise.resolve(Number(nodeID) === 22 ? [secondNodeAssignment] : []))
+    const wrapper = mountDeployments()
+    await flushPromises()
+    await openTargets(wrapper)
+    const drawer = await openAssignmentDrawer(wrapper)
+
+    await drawer.get('#assignment-node').setValue('22')
+    await drawer.get('[data-testid="save-assignment"]').trigger('click')
+    await flushPromises()
+
+    expect(kernelApi.upsertKernelNodeAssignment).toHaveBeenCalledWith(22, expect.objectContaining({ plugin_id: 'gost-mesh' }))
+    expect(wrapper.get('#assignment-node-filter').element.value).toBe('22')
+    expect(kernelApi.getKernelNodeAssignments.mock.calls.filter(([nodeID]) => nodeID === 22)).toHaveLength(1)
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="deployment-target-panel"]').text()).toContain('tokyo-canary')
+    wrapper.unmount()
+  })
+
+  it('keeps a cross-target assignment operation tracked when an older poll resolves late', async () => {
+    vi.useFakeTimers()
+    const stalePoll = deferred()
+    const secondNode = { id: 22, name: 'Tokyo entry', host: '10.0.0.22' }
+    const activeAssignmentOperation = { id: 'assignment-op-22', kind: 'plugin.enable', node_id: 22, state: 'running' }
+    resolveAssignmentState()
+    adminApi.getNodes.mockResolvedValue({ code: 0, data: { list: [node, secondNode] } })
+    kernelApi.getKernelNodeAssignments.mockImplementation(nodeID => Promise.resolve(Number(nodeID) === 22 ? [{
+      id: 8,
+      node_id: 22,
+      service_scope: 'forward',
+      plugin_id: 'gost-mesh',
+      role: 'relay',
+      desired_version: '1.0.0',
+      desired_config_revision: 6,
+      enabled: true,
+    }] : []))
+    kernelApi.getKernelOperations
+      .mockResolvedValueOnce([{ id: 'prior-target-op', kind: 'plugin.enable', node_id: 11, state: 'running' }])
+      .mockReturnValueOnce(stalePoll.promise)
+      .mockResolvedValueOnce([activeAssignmentOperation])
+      .mockResolvedValueOnce([activeAssignmentOperation])
+    kernelApi.upsertKernelNodeAssignment.mockResolvedValue({ operation: activeAssignmentOperation })
+    const wrapper = mountDeployments()
+    await flushPromises()
+    await openTargets(wrapper)
+
+    vi.advanceTimersByTime(2000)
+    await nextTick()
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
+
+    const drawer = await openAssignmentDrawer(wrapper)
+    await drawer.get('#assignment-node').setValue('22')
+    await drawer.get('[data-testid="save-assignment"]').trigger('click')
+    await flushPromises()
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(3)
+
+    stalePoll.resolve([])
+    await flushPromises()
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(4)
+    wrapper.unmount()
+  })
+
   it('tracks selected-node operations after an assignment mutation until they become terminal', async () => {
     vi.useFakeTimers()
     resolveAssignmentState()

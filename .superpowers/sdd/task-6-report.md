@@ -216,3 +216,66 @@ for the intentionally rejected tampered extension route.
   `web/src/__tests__/Plugins.test.js` for extension runtime error visibility.
 - Modified `web/e2e/control-assignments.spec.js` to accept the restored native
   delete confirmation before asserting the fixture deletion.
+
+### Final Cross-Target Assignment Reconciliation
+
+Final review found that a new assignment can choose a node other than the
+currently viewed Targets node, while the previous save path left the picker on
+the old node and skipped the new node's activity refresh. The fix now assigns
+the successful save's chosen `nodeID` to the current target before using the
+existing race-safe assignment/activity refresh path. It preserves the
+same-target case and keeps the operation result tracked under the new target.
+
+The regression starts on node `11`, selects node `22` in the new-assignment
+drawer, saves, and asserts that the target picker changes to `22`, node `22`
+assignments reload, and operation activity refreshes.
+
+RED command:
+
+```bash
+npm --prefix web run test -- src/__tests__/Deployments.test.js
+```
+
+Result before the fix: target picker remained `11` after the node-`22` upsert.
+
+GREEN verification:
+
+```bash
+npm --prefix web run test -- src/__tests__/Plugins.test.js src/__tests__/Deployments.test.js
+npm --prefix web run test
+npm --prefix web run build
+npm --prefix web run test:e2e -- e2e/control-assignments.spec.js e2e/plugin-webui.spec.js
+```
+
+Results: focused `2 passed`, `34 passed`; full `56 passed`, `337 passed`;
+build passed with only the existing chunk-size advisory; fixture browser `4
+passed`.
+
+#### Stale Poll Follow-Up
+
+Read-only review identified one additional concurrency risk in the
+cross-target path: an older in-flight polling request could resolve after the
+post-save activity refresh, replace the newer operation rows, and reconcile
+away the newly tracked operation ID. `refreshOperationState` and
+`pollActivity` now share an operation response generation; only the newest
+operation response may update rows, reconcile tracked IDs, or surface a poll
+error.
+
+A deferred regression starts a node-11 poll, saves a new node-22 assignment
+whose operation is running, resolves the older poll with an empty list, and
+asserts that polling continues for the node-22 operation. It failed before the
+generation guard because the next poll never occurred, then passed after the
+guard.
+
+Final verification after this safeguard:
+
+```bash
+npm --prefix web run test -- src/__tests__/Plugins.test.js src/__tests__/Deployments.test.js
+npm --prefix web run test
+npm --prefix web run build
+npm --prefix web run test:e2e -- e2e/control-assignments.spec.js e2e/plugin-webui.spec.js
+```
+
+Results: focused `2 passed`, `35 passed`; full `56 passed`, `338 passed`;
+build passed with only the existing chunk-size advisory; fixture browser `4
+passed`.
