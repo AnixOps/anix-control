@@ -3019,6 +3019,12 @@ export default {
       configure: 'Configure', enable: 'Enable', disable: 'Disable', upgrade: 'Upgrade', update: 'Upgrade', rollback: 'Rollback', cancel: 'Cancel operation',
       saving: 'Saving...', newAssignment: 'New assignment'
     },
+    pluginCenter: {
+      filters: { search: 'Search plugins', health: 'Health', target: 'Target', allHealth: 'All health', allTargets: 'All targets' },
+      states: { healthy: 'Healthy', attention: 'Needs attention' },
+      summary: { label: 'Plugin catalog summary', healthy: '{count} healthy', attention: '{count} need attention', catalogued: '{count} catalogued' },
+      empty: 'No plugins match the current filters'
+    },
     tabs: { plugins: 'Plugins', assignments: 'Assignments', scopes: 'Scopes', topologies: 'Topologies', operations: 'Operations' },
     table: {
       plugin: 'Plugin', publisher: 'Publisher', release: 'Release', installation: 'Installation', desiredVersion: 'Desired version', observedVersion: 'Observed version', version: 'Version', state: 'State', actions: 'Actions',

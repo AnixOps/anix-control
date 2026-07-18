@@ -77,6 +77,10 @@
             <dt>{{ t('control.table.state') }}</dt>
             <dd>{{ currentTarget.installation?.state || t('control.states.catalogued') }}</dd>
           </div>
+          <div v-if="currentTarget.installation">
+            <dt>{{ t('control.table.installation') }}</dt>
+            <dd>{{ currentTarget.installation.enabled ? t('control.states.enabled') : t('control.states.disabled') }}</dd>
+          </div>
         </dl>
 
         <p v-if="currentTarget.installation?.last_error" class="health-error" role="alert">
@@ -113,6 +117,16 @@
               @click="emitLifecycle(currentTarget.installation.enabled ? 'disable' : 'enable')"
             >
               {{ currentTarget.installation.enabled ? t('control.actions.disable') : t('control.actions.enable') }}
+            </button>
+            <button
+              v-if="currentTarget.latestRelease?.version && currentTarget.latestRelease.version !== currentTarget.installation.desired_version"
+              class="btn"
+              data-action="upgrade"
+              type="button"
+              :disabled="targetBusy"
+              @click="emit('install', currentTarget)"
+            >
+              {{ t('control.actions.upgrade') }}
             </button>
             <button
               v-if="currentTarget.installation.previous_version"

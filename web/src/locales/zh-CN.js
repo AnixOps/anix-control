@@ -3027,6 +3027,12 @@ export default {
       configure: '配置', enable: '启用', disable: '禁用', upgrade: '升级', update: '升级', rollback: '回滚', cancel: '取消操作',
       saving: '保存中...', newAssignment: '新建角色'
     },
+    pluginCenter: {
+      filters: { search: '搜索插件', health: '健康状态', target: '目标', allHealth: '全部健康状态', allTargets: '全部目标' },
+      states: { healthy: '健康', attention: '需要关注' },
+      summary: { label: '插件目录摘要', healthy: '{count} 个健康', attention: '{count} 个需要关注', catalogued: '{count} 个已登记' },
+      empty: '没有符合当前筛选条件的插件'
+    },
     tabs: { plugins: '插件', assignments: '节点角色', scopes: '作用域', topologies: '拓扑', operations: '操作' },
     table: {
       plugin: '插件', publisher: '发布者', release: '发行版', installation: '安装目标', desiredVersion: '期望版本', observedVersion: '实际版本', version: '版本', state: '状态', actions: '操作',
