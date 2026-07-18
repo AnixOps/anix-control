@@ -47,6 +47,8 @@
 **Files:**
 - Create: `web/src/router/controlLegacy.js`
 - Create: `web/src/__tests__/controlLegacy.test.js`
+- Create: `web/src/views/admin/Plugins.vue` (temporary route stub; Task 4 replaces it)
+- Create: `web/src/views/admin/Deployments.vue` (temporary route stub; Task 6 replaces it)
 - Modify: `web/package.json`
 - Modify: `web/package-lock.json`
 - Modify: `web/src/router/index.js`
@@ -60,6 +62,9 @@
 - `resolveLegacyControlRedirect(to)` accepts `query` and `hash` and returns `{ path, query, hash }`.
 - `LEGACY_DEPLOYMENT_TABS` is a `Set` containing `assignments`, `scopes`, `topologies`, and `operations`.
 - The router exposes `/admin/plugins`, `/admin/deployments`, and `/admin/control`; the last path uses the redirect helper.
+- The two temporary views exist solely so Vite can statically resolve lazy
+  imports while route-contract tests run; they contain no product UI and are
+  replaced by their named route tasks.
 
 - [ ] **Step 1: Write failing redirect and metadata tests.**
 
@@ -144,6 +149,16 @@ Add `plugins`/`deployments` page title and nav keys to both locales, with
 `business`, `network`, `controlCenter`, and `more`. Map both paths in
 `pageMeta.js`. Retain the existing `control` copy for compatibility.
 
+Create the two temporary route files with no data fetching or actions:
+
+```vue
+<template><section data-testid="admin-route-placeholder"></section></template>
+```
+
+They are a Vite import bridge only. Task 4 and Task 6 replace the respective
+files with complete route implementations before any production build or
+visual acceptance run.
+
 - [ ] **Step 4: Run the focused route set and verify it passes.**
 
 Run:
@@ -159,7 +174,7 @@ resolves to `/admin/deployments` and `/admin/control` resolves to
 - [ ] **Step 5: Commit the compatibility foundation.**
 
 ```bash
-git add web/package.json web/package-lock.json web/src/router/controlLegacy.js web/src/router/index.js web/src/utils/pageMeta.js web/src/locales/en.js web/src/locales/zh-CN.js web/src/__tests__/controlLegacy.test.js web/src/__tests__/adminRoutes.test.js web/src/__tests__/pageMeta.test.js
+git add web/package.json web/package-lock.json web/src/router/controlLegacy.js web/src/router/index.js web/src/utils/pageMeta.js web/src/locales/en.js web/src/locales/zh-CN.js web/src/views/admin/Plugins.vue web/src/views/admin/Deployments.vue web/src/__tests__/controlLegacy.test.js web/src/__tests__/adminRoutes.test.js web/src/__tests__/pageMeta.test.js
 git commit -m "feat(admin): add plugin and deployment routes"
 ```
 
@@ -410,7 +425,7 @@ git commit -m "feat(admin): add grouped plugin catalog components"
 ## Task 4: Deliver the Plugin Center Route and Preserve Lifecycle Semantics
 
 **Files:**
-- Create: `web/src/views/admin/Plugins.vue`
+- Modify: `web/src/views/admin/Plugins.vue`
 - Create: `web/src/__tests__/Plugins.test.js`
 - Modify: `web/src/components/admin/PluginDetailDrawer.vue`
 - Modify: `web/src/components/admin/PluginInstallationDialog.vue`
@@ -619,7 +634,7 @@ git commit -m "feat(admin): extract deployment workspace components"
 ## Task 6: Deliver Deployment Center, Migrate Browser Coverage, and Remove the Monolith
 
 **Files:**
-- Create: `web/src/views/admin/Deployments.vue`
+- Modify: `web/src/views/admin/Deployments.vue`
 - Create: `web/src/__tests__/Deployments.test.js`
 - Modify: `web/e2e/control-assignments.spec.js`
 - Modify: `web/e2e/live-control-machine-telemetry.spec.js`

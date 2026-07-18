@@ -253,6 +253,8 @@ export default {
       forwardNodeX: 'NodeX 运行时',
       forwardAgents: 'NodeX Agents',
       control: '控制内核',
+      plugins: '插件',
+      deployments: '部署',
       accessGroups: '访问组',
       payment: '支付网关管理',
       telegram: 'Telegram Bot 管理',
@@ -281,6 +283,10 @@ export default {
       adminUser: '管理员',
       sections: {
         overview: '概览',
+        business: '业务',
+        network: '网络',
+        controlCenter: '控制中心',
+        more: '更多',
         forwardSuite: '转发套件',
         userManagement: '用户管理',
         nodeManagement: '节点管理',
@@ -312,6 +318,8 @@ export default {
         knowledge: '知识库',
         mfa: 'MFA 设置',
         control: '控制内核',
+        plugins: '插件',
+        deployments: '部署',
         accessGroups: '访问组',
         system: '系统管理',
         nodeXAgentsLegacy: 'NodeX Agents Legacy'

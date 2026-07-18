@@ -244,6 +244,8 @@ export default {
       forwardNodeX: 'NodeX Runtime',
       forwardAgents: 'NodeX Agents',
       control: 'Control Kernel',
+      plugins: 'Plugins',
+      deployments: 'Deployments',
       accessGroups: 'Access Groups',
       payment: 'Payment Gateways',
       telegram: 'Telegram Bot',
@@ -272,6 +274,10 @@ export default {
       adminUser: 'Administrator',
       sections: {
         overview: 'Overview',
+        business: 'Business',
+        network: 'Network',
+        controlCenter: 'Control Center',
+        more: 'More',
         forwardSuite: 'Forward Suite',
         userManagement: 'User Management',
         nodeManagement: 'Node Management',
@@ -303,6 +309,8 @@ export default {
         knowledge: 'Knowledge Base',
         mfa: 'MFA',
         control: 'Control Kernel',
+        plugins: 'Plugins',
+        deployments: 'Deployments',
         accessGroups: 'Access Groups',
         system: 'System',
         nodeXAgentsLegacy: 'NodeX Agents Legacy'
