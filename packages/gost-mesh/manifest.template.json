@@ -1,8 +1,8 @@
 {
   "id": "gost-mesh",
   "name": "GOST Mesh",
-  "version": "1.0.0",
-  "api_version": "v1",
+  "version": "4.0.0",
+  "api_version": "v2",
   "publisher": "AnixOps",
   "targets": [
     "control",
@@ -62,5 +62,23 @@
         "permission": "gost-mesh.view"
       }
     ]
-  }
+  },
+  "control_entrypoint": {
+    "path": "bin/control-host",
+    "sha256": "GENERATED_AT_BUILD"
+  },
+  "agent_entrypoint": {
+    "path": "agent/linux-amd64/plugin",
+    "sha256": "GENERATED_AT_BUILD"
+  },
+  "migrations": {
+    "index": "migrations/index.json",
+    "sha256": "GENERATED_AT_BUILD"
+  },
+  "compatibility_routes": {
+    "path": "compat/v2-routes.json",
+    "sha256": "GENERATED_AT_BUILD"
+  },
+  "route_contract_digest": "GENERATED_AT_BUILD",
+  "runtime_api_version": "anixops.agent.sdk/v1.1.0"
 }

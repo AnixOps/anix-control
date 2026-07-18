@@ -1,0 +1,32 @@
+{
+  "id": "payment",
+  "name": "Payment",
+  "version": "4.0.0",
+  "api_version": "v2",
+  "publisher": "AnixOps",
+  "targets": ["control"],
+  "architectures": [],
+  "artifact_sha256": "GENERATED_AT_BUILD",
+  "capabilities": [],
+  "dependencies": [],
+  "conflicts": [],
+  "permissions": ["payment.view", "payment.api"],
+  "config_schema": {},
+  "secret_fields": [],
+  "entrypoints": {},
+  "migration_version": 0,
+  "control_routes": [],
+  "frontend_sha256": "GENERATED_AT_BUILD",
+  "webui": {
+    "bundle": {"path": "webui/index.mjs", "sha256": "GENERATED_AT_BUILD"},
+    "permissions": ["payment.view"],
+    "menus": [{"id": "payment.main", "parent": "services", "label": "Payment", "icon": "credit-card", "route": "/admin/extensions/payment", "permission": "payment.view", "order": 140}],
+    "routes": [{"id": "payment.main", "path": "/admin/extensions/payment", "export": "mount", "permission": "payment.view"}]
+  },
+  "control_entrypoint": {"path": "bin/control-host", "sha256": "GENERATED_AT_BUILD"},
+  "agent_entrypoint": null,
+  "migrations": {"index": "migrations/index.json", "sha256": "GENERATED_AT_BUILD"},
+  "compatibility_routes": {"path": "compat/v2-routes.json", "sha256": "GENERATED_AT_BUILD"},
+  "route_contract_digest": "GENERATED_AT_BUILD",
+  "runtime_api_version": ""
+}

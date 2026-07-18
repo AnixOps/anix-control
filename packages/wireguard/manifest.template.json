@@ -1,0 +1,32 @@
+{
+  "id": "wireguard",
+  "name": "WireGuard",
+  "version": "4.0.0",
+  "api_version": "v2",
+  "publisher": "AnixOps",
+  "targets": ["control", "agent"],
+  "architectures": [],
+  "artifact_sha256": "GENERATED_AT_BUILD",
+  "capabilities": [],
+  "dependencies": [],
+  "conflicts": [],
+  "permissions": ["wireguard.view", "wireguard.api"],
+  "config_schema": {},
+  "secret_fields": [],
+  "entrypoints": {},
+  "migration_version": 0,
+  "control_routes": [],
+  "frontend_sha256": "GENERATED_AT_BUILD",
+  "webui": {
+    "bundle": {"path": "webui/index.mjs", "sha256": "GENERATED_AT_BUILD"},
+    "permissions": ["wireguard.view"],
+    "menus": [{"id": "wireguard.main", "parent": "operations", "label": "WireGuard", "icon": "shield", "route": "/admin/extensions/wireguard", "permission": "wireguard.view", "order": 190}],
+    "routes": [{"id": "wireguard.main", "path": "/admin/extensions/wireguard", "export": "mount", "permission": "wireguard.view"}]
+  },
+  "control_entrypoint": {"path": "bin/control-host", "sha256": "GENERATED_AT_BUILD"},
+  "agent_entrypoint": {"path": "agent/linux-amd64/plugin", "sha256": "GENERATED_AT_BUILD"},
+  "migrations": {"index": "migrations/index.json", "sha256": "GENERATED_AT_BUILD"},
+  "compatibility_routes": {"path": "compat/v2-routes.json", "sha256": "GENERATED_AT_BUILD"},
+  "route_contract_digest": "GENERATED_AT_BUILD",
+  "runtime_api_version": "anixops.agent.sdk/v1.1.0"
+}

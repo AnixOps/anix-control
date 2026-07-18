@@ -182,6 +182,11 @@ def validate_contract_shape(contract: dict[str, Any]) -> None:
             raise StageContractError(
                 f"stage {stage_id} packages cannot be both required and out of scope: {', '.join(sorted(overlap))}"
             )
+        manifest_api_version = stage.get("manifest_api_version")
+        if manifest_api_version is not None and manifest_api_version not in {"v1", "v2"}:
+            raise StageContractError(f"stage {stage_id} manifest_api_version must be v1 or v2")
+        if stage_id == "4.0" and manifest_api_version != "v2":
+            raise StageContractError("stage 4.0 must require manifest_api_version v2")
 
 
 def stages_by_id(contract: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -253,7 +258,34 @@ def semantic_version_at_least(actual: str, minimum: str) -> bool:
     return parse_version(actual, "package manifest version") >= parse_version(minimum, "package minimum_version")
 
 
-def validate_package_requirement(repo_root: Path, requirement: dict[str, Any]) -> None:
+def validate_v2_host_metadata(manifest: dict[str, Any], package_id: str) -> None:
+    if manifest.get("api_version") != "v2":
+        raise StageContractError(f"package {package_id} api_version must be v2")
+
+    def require_file(field: str, path_key: str) -> None:
+        value = manifest.get(field)
+        if not isinstance(value, dict):
+            raise StageContractError(f"package {package_id} {field} is required")
+        if not isinstance(value.get(path_key), str) or not value[path_key]:
+            raise StageContractError(f"package {package_id} {field}.{path_key} is required")
+        if not isinstance(value.get("sha256"), str) or not value["sha256"]:
+            raise StageContractError(f"package {package_id} {field}.sha256 is required")
+
+    require_file("control_entrypoint", "path")
+    require_file("migrations", "index")
+    require_file("compatibility_routes", "path")
+    route_contract_digest = manifest.get("route_contract_digest")
+    if not isinstance(route_contract_digest, str) or not route_contract_digest:
+        raise StageContractError(f"package {package_id} route_contract_digest is required")
+
+    targets = manifest.get("targets")
+    if isinstance(targets, list) and "agent" in targets:
+        require_file("agent_entrypoint", "path")
+        if not isinstance(manifest.get("runtime_api_version"), str) or not manifest["runtime_api_version"]:
+            raise StageContractError(f"package {package_id} runtime_api_version is required for the agent target")
+
+
+def validate_package_requirement(repo_root: Path, requirement: dict[str, Any], manifest_api_version: str | None = None) -> None:
     manifest_path = repo_root / requirement["manifest"]
     if not manifest_path.is_file():
         raise StageContractError(f"required package manifest is missing: {requirement['id']} ({manifest_path})")
@@ -275,6 +307,8 @@ def validate_package_requirement(repo_root: Path, requirement: dict[str, Any]) -
         raise StageContractError(
             f"package {requirement['id']} targets must include {', '.join(requirement['required_targets'])}"
         )
+    if manifest_api_version == "v2":
+        validate_v2_host_metadata(manifest, requirement["id"])
     if not requirement["requires_webui"]:
         return
     webui = manifest.get("webui")
@@ -311,7 +345,7 @@ def validate_stage(repo_root: Path, contract: dict[str, Any], tag: str) -> Stage
     module_path, module_major = module_identity(repo_root, contract)
     validate_configuration_contract(repo_root, contract)
     for requirement in stage["required_packages"]:
-        validate_package_requirement(repo_root, requirement)
+        validate_package_requirement(repo_root, requirement, stage.get("manifest_api_version"))
     return StageDecision(
         tag=tag,
         classification="product-stage",

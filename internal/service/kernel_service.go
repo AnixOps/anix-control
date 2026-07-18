@@ -14,12 +14,15 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/google/uuid"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"gorm.io/gorm"
@@ -59,8 +62,12 @@ var (
 )
 
 const KernelOperationEnvelopeVersion = "anixops.operation/v1"
-const pluginManifestAPIVersion = "v1"
+const pluginManifestAPIVersionV1 = "v1"
+const pluginManifestAPIVersionV2 = "v2"
+const pluginManifestAPIVersion = pluginManifestAPIVersionV1
+const agentRuntimeAPIVersionV110 = "anixops.agent.sdk/v1.1.0"
 const maxPluginWebUIBundleBytes = 2 << 20
+const maxPluginControlEntrypointBytes = 128 << 20
 const PluginAPIGrantResourceType = "plugin_api"
 
 // EnsureKernelSchema only migrates new kernel-owned tables and is safe to run
@@ -164,25 +171,46 @@ func ResolveEffectiveAccess(db *gorm.DB, userID uint, planID *uint, scopeID stri
 }
 
 type PluginManifest struct {
-	ID             string            `json:"id"`
-	Name           string            `json:"name"`
-	Version        string            `json:"version"`
-	APIVersion     string            `json:"api_version"`
-	Publisher      string            `json:"publisher"`
-	Targets        []string          `json:"targets"`
-	Architectures  []string          `json:"architectures"`
-	ArtifactSHA256 string            `json:"artifact_sha256"`
-	Capabilities   []string          `json:"capabilities"`
-	Dependencies   []string          `json:"dependencies"`
-	Conflicts      []string          `json:"conflicts"`
-	Permissions    []string          `json:"permissions"`
-	ConfigSchema   json.RawMessage   `json:"config_schema"`
-	SecretFields   []string          `json:"secret_fields"`
-	Entrypoints    map[string]string `json:"entrypoints"`
-	Migration      int64             `json:"migration_version"`
-	ControlRoutes  []string          `json:"control_routes"`
-	FrontendSHA256 string            `json:"frontend_sha256"`
-	WebUI          *PluginWebUI      `json:"webui,omitempty"`
+	ID                  string                     `json:"id"`
+	Name                string                     `json:"name"`
+	Version             string                     `json:"version"`
+	APIVersion          string                     `json:"api_version"`
+	Publisher           string                     `json:"publisher"`
+	Targets             []string                   `json:"targets"`
+	Architectures       []string                   `json:"architectures"`
+	ArtifactSHA256      string                     `json:"artifact_sha256"`
+	Capabilities        []string                   `json:"capabilities"`
+	Dependencies        []string                   `json:"dependencies"`
+	Conflicts           []string                   `json:"conflicts"`
+	Permissions         []string                   `json:"permissions"`
+	ConfigSchema        json.RawMessage            `json:"config_schema"`
+	SecretFields        []string                   `json:"secret_fields"`
+	Entrypoints         map[string]string          `json:"entrypoints"`
+	Migration           int64                      `json:"migration_version"`
+	ControlRoutes       []string                   `json:"control_routes"`
+	FrontendSHA256      string                     `json:"frontend_sha256"`
+	WebUI               *PluginWebUI               `json:"webui,omitempty"`
+	ControlEntrypoint   *PluginEntrypoint          `json:"control_entrypoint,omitempty"`
+	AgentEntrypoint     *PluginEntrypoint          `json:"agent_entrypoint,omitempty"`
+	Migrations          *PluginMigrations          `json:"migrations,omitempty"`
+	CompatibilityRoutes *PluginCompatibilityRoutes `json:"compatibility_routes,omitempty"`
+	RouteContractDigest string                     `json:"route_contract_digest,omitempty"`
+	RuntimeAPIVersion   string                     `json:"runtime_api_version,omitempty"`
+}
+
+type PluginEntrypoint struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
+}
+
+type PluginMigrations struct {
+	Index  string `json:"index"`
+	SHA256 string `json:"sha256"`
+}
+
+type PluginCompatibilityRoutes struct {
+	Path   string `json:"path"`
+	SHA256 string `json:"sha256"`
 }
 
 // PluginWebUI describes a signed, declarative administrator extension. Bundle
@@ -247,7 +275,7 @@ func (m PluginManifest) Validate() error {
 	if strings.TrimSpace(m.Name) == "" {
 		return errors.New("manifest name is required")
 	}
-	if m.APIVersion != pluginManifestAPIVersion {
+	if m.APIVersion != pluginManifestAPIVersionV1 && m.APIVersion != pluginManifestAPIVersionV2 {
 		return fmt.Errorf("unsupported plugin API version %q", m.APIVersion)
 	}
 	if m.Publisher != "AnixOps" {
@@ -308,6 +336,48 @@ func (m PluginManifest) Validate() error {
 		if err := m.validateWebUI(); err != nil {
 			return err
 		}
+	}
+	if m.APIVersion == pluginManifestAPIVersionV2 {
+		if err := m.validateV2Contract(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m PluginManifest) validateV2Contract() error {
+	if manifestSupportsTarget(m, "control") {
+		if err := validatePluginEntrypoint(m.ControlEntrypoint, "control_entrypoint"); err != nil {
+			return err
+		}
+	} else if m.ControlEntrypoint != nil {
+		return errors.New("control_entrypoint requires the control target")
+	}
+	if m.Migrations == nil || !safePluginRelativePath(m.Migrations.Index) || !validSHA256Hex(m.Migrations.SHA256) {
+		return errors.New("migrations must declare a canonical index and SHA-256 digest")
+	}
+	if m.CompatibilityRoutes == nil || !safePluginRelativePath(m.CompatibilityRoutes.Path) || !validSHA256Hex(m.CompatibilityRoutes.SHA256) {
+		return errors.New("compatibility_routes must declare a canonical path and SHA-256 digest")
+	}
+	if !validSHA256Hex(m.RouteContractDigest) {
+		return errors.New("route_contract_digest must be a SHA-256 digest")
+	}
+	if manifestSupportsTarget(m, "agent") {
+		if err := validatePluginEntrypoint(m.AgentEntrypoint, "agent_entrypoint"); err != nil {
+			return err
+		}
+		if m.RuntimeAPIVersion != agentRuntimeAPIVersionV110 {
+			return fmt.Errorf("runtime_api_version must match %q", agentRuntimeAPIVersionV110)
+		}
+	} else if m.AgentEntrypoint != nil || m.RuntimeAPIVersion != "" {
+		return errors.New("Agent runtime metadata requires the agent target")
+	}
+	return nil
+}
+
+func validatePluginEntrypoint(value *PluginEntrypoint, field string) error {
+	if value == nil || !safePluginRelativePath(value.Path) || !validSHA256Hex(value.SHA256) {
+		return fmt.Errorf("%s must declare a canonical path and SHA-256 digest", field)
 	}
 	return nil
 }
@@ -1423,6 +1493,247 @@ func requireVerifiedPluginArtifact(db *gorm.DB, release model.PluginRelease) err
 		}
 	}
 	return nil
+}
+
+// MaterializePluginControlArtifact writes the verified immutable release bytes
+// and the signed v2 Control entrypoint into a private caller-owned directory.
+// Task 3's lifecycle dispatcher consumes the resulting ArtifactRef; it still
+// owns process supervision and never interprets package metadata itself.
+func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, pluginID, version, destinationRoot string) (pluginhost.ArtifactRef, error) {
+	if db == nil {
+		return pluginhost.ArtifactRef{}, errors.New("database is not initialized")
+	}
+	if !safePluginSegment(pluginID) || !safePluginSegment(version) {
+		return pluginhost.ArtifactRef{}, errors.New("plugin artifact identity is invalid")
+	}
+	if strings.TrimSpace(destinationRoot) == "" {
+		return pluginhost.ArtifactRef{}, errors.New("plugin artifact destination is required")
+	}
+	absoluteRoot, err := filepath.Abs(destinationRoot)
+	if err != nil {
+		return pluginhost.ArtifactRef{}, fmt.Errorf("resolve plugin artifact destination: %w", err)
+	}
+
+	var release model.PluginRelease
+	if err := db.First(&release, "plugin_id = ? AND version = ?", pluginID, version).Error; err != nil {
+		return pluginhost.ArtifactRef{}, err
+	}
+	manifest, err := VerifyStoredPluginRelease(db, release, publicKey)
+	if err != nil {
+		return pluginhost.ArtifactRef{}, fmt.Errorf("verify plugin release: %w", err)
+	}
+	if manifest.APIVersion != pluginManifestAPIVersionV2 || !manifestSupportsTarget(*manifest, "control") || manifest.ControlEntrypoint == nil {
+		return pluginhost.ArtifactRef{}, fmt.Errorf("plugin release does not provide a v2 control entrypoint")
+	}
+	if err := requireVerifiedPluginArtifact(db, release); err != nil {
+		return pluginhost.ArtifactRef{}, err
+	}
+	artifact, err := GetPluginArtifact(db, release.ID)
+	if err != nil {
+		return pluginhost.ArtifactRef{}, err
+	}
+	entrypoint, err := extractPluginArtifactFile(artifact.Data, manifest.ControlEntrypoint.Path, maxPluginControlEntrypointBytes)
+	if err != nil {
+		return pluginhost.ArtifactRef{}, fmt.Errorf("extract control entrypoint: %w", err)
+	}
+	if err := verifyPluginArtifactMember(artifact.Data, manifest.Migrations.Index, manifest.Migrations.SHA256, "migrations index", maxPluginControlEntrypointBytes); err != nil {
+		return pluginhost.ArtifactRef{}, err
+	}
+	routes, err := extractPluginArtifactFile(artifact.Data, manifest.CompatibilityRoutes.Path, maxPluginControlEntrypointBytes)
+	if err != nil {
+		return pluginhost.ArtifactRef{}, fmt.Errorf("extract compatibility routes: %w", err)
+	}
+	if !strings.EqualFold(sha256Bytes(routes), manifest.CompatibilityRoutes.SHA256) {
+		return pluginhost.ArtifactRef{}, errors.New("compatibility routes digest does not match the package artifact")
+	}
+	if !strings.EqualFold(sha256Bytes(routes), manifest.RouteContractDigest) {
+		return pluginhost.ArtifactRef{}, errors.New("route contract digest does not match the package artifact")
+	}
+	canonicalManifest, err := CanonicalPluginManifest(*manifest)
+	if err != nil {
+		return pluginhost.ArtifactRef{}, fmt.Errorf("canonicalize plugin manifest: %w", err)
+	}
+
+	if err := os.MkdirAll(absoluteRoot, 0o700); err != nil {
+		return pluginhost.ArtifactRef{}, fmt.Errorf("create plugin artifact destination: %w", err)
+	}
+	directory, err := os.MkdirTemp(absoluteRoot, ".anix-package-")
+	if err != nil {
+		return pluginhost.ArtifactRef{}, fmt.Errorf("create plugin artifact directory: %w", err)
+	}
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.RemoveAll(directory)
+		}
+	}()
+	artifactPath := filepath.Join(directory, "package.anxp")
+	manifestPath := filepath.Join(directory, "manifest.json")
+	entrypointPath := filepath.Join(directory, "control-host")
+	if err := writeMaterializedPluginFile(artifactPath, artifact.Data, 0o600); err != nil {
+		return pluginhost.ArtifactRef{}, err
+	}
+	if err := writeMaterializedPluginFile(manifestPath, canonicalManifest, 0o600); err != nil {
+		return pluginhost.ArtifactRef{}, err
+	}
+	if err := writeMaterializedPluginFile(entrypointPath, entrypoint, 0o700); err != nil {
+		return pluginhost.ArtifactRef{}, err
+	}
+	manifestDigest := sha256.Sum256(canonicalManifest)
+	ref := pluginhost.ArtifactRef{
+		PackageID:        manifest.ID,
+		Version:          manifest.Version,
+		ArtifactPath:     artifactPath,
+		ArtifactSHA256:   manifest.ArtifactSHA256,
+		EntrypointPath:   entrypointPath,
+		EntrypointSHA256: manifest.ControlEntrypoint.SHA256,
+		ManifestPath:     manifestPath,
+		ManifestSHA256:   hex.EncodeToString(manifestDigest[:]),
+	}
+	cleanup = false
+	return ref, nil
+}
+
+func verifyPluginArtifactMember(artifact []byte, memberPath, expectedDigest, label string, maximum int64) error {
+	contents, err := extractPluginArtifactFile(artifact, memberPath, maximum)
+	if err != nil {
+		return fmt.Errorf("extract %s: %w", label, err)
+	}
+	if !strings.EqualFold(sha256Bytes(contents), expectedDigest) {
+		return fmt.Errorf("%s digest does not match the package artifact", label)
+	}
+	return nil
+}
+
+func sha256Bytes(value []byte) string {
+	digest := sha256.Sum256(value)
+	return hex.EncodeToString(digest[:])
+}
+
+func writeMaterializedPluginFile(path string, data []byte, mode os.FileMode) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	if err != nil {
+		return fmt.Errorf("create materialized plugin file: %w", err)
+	}
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("write materialized plugin file: %w", err)
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("sync materialized plugin file: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close materialized plugin file: %w", err)
+	}
+	return nil
+}
+
+func extractPluginArtifactFile(artifact []byte, memberPath string, maximum int64) ([]byte, error) {
+	if !safePluginRelativePath(memberPath) || maximum <= 0 {
+		return nil, errors.New("plugin artifact member path is invalid")
+	}
+	if contents, found, err := extractPluginArtifactFileFromZip(artifact, memberPath, maximum); err != nil {
+		return nil, err
+	} else if found {
+		return contents, nil
+	}
+	if contents, found, err := extractPluginArtifactFileFromTarGzip(artifact, memberPath, maximum); err != nil {
+		return nil, err
+	} else if found {
+		return contents, nil
+	}
+	if contents, found, err := extractPluginArtifactFileFromTar(bytes.NewReader(artifact), memberPath, maximum); err != nil {
+		return nil, err
+	} else if found {
+		return contents, nil
+	}
+	return nil, fmt.Errorf("plugin artifact member %q was not found", memberPath)
+}
+
+func extractPluginArtifactFileFromZip(artifact []byte, memberPath string, maximum int64) ([]byte, bool, error) {
+	reader, err := zip.NewReader(bytes.NewReader(artifact), int64(len(artifact)))
+	if err != nil {
+		return nil, false, nil
+	}
+	var contents []byte
+	found := false
+	for _, file := range reader.File {
+		if strings.TrimPrefix(file.Name, "./") != memberPath {
+			continue
+		}
+		if found {
+			return nil, true, fmt.Errorf("plugin artifact member %q appears more than once", memberPath)
+		}
+		found = true
+		if file.FileInfo().IsDir() || !file.Mode().IsRegular() || file.UncompressedSize64 > uint64(maximum) {
+			return nil, true, fmt.Errorf("plugin artifact member %q is not a bounded regular file", memberPath)
+		}
+		opened, err := file.Open()
+		if err != nil {
+			return nil, true, err
+		}
+		contents, err = io.ReadAll(io.LimitReader(opened, maximum+1))
+		closeErr := opened.Close()
+		if err != nil {
+			return nil, true, err
+		}
+		if closeErr != nil {
+			return nil, true, closeErr
+		}
+		if int64(len(contents)) > maximum || len(contents) == 0 {
+			return nil, true, fmt.Errorf("plugin artifact member %q is empty or exceeds its size limit", memberPath)
+		}
+	}
+	return contents, found, nil
+}
+
+func extractPluginArtifactFileFromTarGzip(artifact []byte, memberPath string, maximum int64) ([]byte, bool, error) {
+	gzipReader, err := gzip.NewReader(bytes.NewReader(artifact))
+	if err != nil {
+		return nil, false, nil
+	}
+	contents, found, extractErr := extractPluginArtifactFileFromTar(gzipReader, memberPath, maximum)
+	closeErr := gzipReader.Close()
+	if extractErr != nil {
+		return nil, found, extractErr
+	}
+	if closeErr != nil {
+		return nil, found, closeErr
+	}
+	return contents, found, nil
+}
+
+func extractPluginArtifactFileFromTar(reader io.Reader, memberPath string, maximum int64) ([]byte, bool, error) {
+	tarReader := tar.NewReader(reader)
+	var contents []byte
+	found := false
+	for {
+		header, err := tarReader.Next()
+		if errors.Is(err, io.EOF) {
+			return contents, found, nil
+		}
+		if err != nil {
+			return nil, false, nil
+		}
+		if strings.TrimPrefix(header.Name, "./") != memberPath {
+			continue
+		}
+		if found {
+			return nil, true, fmt.Errorf("plugin artifact member %q appears more than once", memberPath)
+		}
+		found = true
+		if (header.Typeflag != tar.TypeReg && header.Typeflag != 0) || header.Size < 0 || header.Size > maximum {
+			return nil, true, fmt.Errorf("plugin artifact member %q is not a bounded regular file", memberPath)
+		}
+		contents, err = io.ReadAll(io.LimitReader(tarReader, maximum+1))
+		if err != nil {
+			return nil, true, err
+		}
+		if int64(len(contents)) > maximum || len(contents) == 0 {
+			return nil, true, fmt.Errorf("plugin artifact member %q is empty or exceeds its size limit", memberPath)
+		}
+	}
 }
 
 type TopologyRevisionInput struct {

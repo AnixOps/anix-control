@@ -346,6 +346,7 @@
     {
       "id": "4.0",
       "product_version": "4.0.0",
+      "manifest_api_version": "v2",
       "summary": "Plugin-only platform with the coupled business/runtime mode removed.",
       "required_packages": [
         {

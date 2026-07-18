@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -166,12 +167,22 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def shared_builder() -> Any:
+    name = "anixops_shared_package_builder"
+    module = sys.modules.get(name)
+    if module is not None:
+        return module
+    specification = importlib.util.spec_from_file_location(name, PACKAGE_ROOT.parent / "shared" / "build_package.py")
+    if specification is None or specification.loader is None:
+        raise PackageError("shared package builder is unavailable")
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[name] = module
+    specification.loader.exec_module(module)
+    return module
+
+
 def canonical_json(value: Any) -> bytes:
-    encoded = json.dumps(value, ensure_ascii=True, separators=(",", ":"))
-    # Go's encoding/json escapes these characters even though they are valid
-    # JSON. Match it because the Control kernel signs json.Marshal output.
-    encoded = encoded.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
-    return encoded.encode("utf-8")
+    return shared_builder().canonical_json(value)
 
 
 def pretty_json(value: Any) -> bytes:
@@ -514,30 +525,21 @@ def package_entries(
 
 
 def deterministic_tar(entries: list[ArchiveEntry]) -> bytes:
-    output = io.BytesIO()
-    with tarfile.open(fileobj=output, mode="w", format=tarfile.USTAR_FORMAT) as archive:
-        for entry in sorted(entries, key=lambda item: item.path):
-            info = tarfile.TarInfo(entry.path)
-            info.size = len(entry.data)
-            info.mode = entry.mode
-            info.uid = 0
-            info.gid = 0
-            info.uname = ""
-            info.gname = ""
-            info.mtime = 0
-            info.type = tarfile.REGTYPE
-            archive.addfile(info, io.BytesIO(entry.data))
-    return output.getvalue()
+    shared = shared_builder()
+    return shared.deterministic_tar([shared.ArchiveEntry(entry.path, entry.data, entry.mode) for entry in entries])
 
 
 def generated_manifest(agent: AgentInput, gost: GostInput, artifact: bytes, webui: bytes, schema: Any) -> dict[str, Any]:
     template = load_json(PACKAGE_ROOT / MANIFEST_TEMPLATE_PATH, "manifest template")
     if not isinstance(template, dict):
         raise PackageError("manifest template must be a JSON object")
-    if template.get("id") != PLUGIN_ID or template.get("version") != PLUGIN_VERSION:
+    if template.get("id") != PLUGIN_ID:
         raise PackageError("manifest template identity does not match package identity")
     if template.get("targets") != ["control", "agent"]:
         raise PackageError("manifest template must declare control and agent targets")
+    template = {field: template[field] for field in MANIFEST_FIELDS}
+    template["version"] = PLUGIN_VERSION
+    template["api_version"] = "v1"
     webui_digest = sha256_bytes(webui)
     template["architectures"] = [agent.architecture]
     template["artifact_sha256"] = sha256_bytes(artifact)

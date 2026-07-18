@@ -1,0 +1,32 @@
+{
+  "id": "knowledge",
+  "name": "Knowledge",
+  "version": "4.0.0",
+  "api_version": "v2",
+  "publisher": "AnixOps",
+  "targets": ["control"],
+  "architectures": [],
+  "artifact_sha256": "GENERATED_AT_BUILD",
+  "capabilities": [],
+  "dependencies": [],
+  "conflicts": [],
+  "permissions": ["knowledge.view", "knowledge.api"],
+  "config_schema": {},
+  "secret_fields": [],
+  "entrypoints": {},
+  "migration_version": 0,
+  "control_routes": [],
+  "frontend_sha256": "GENERATED_AT_BUILD",
+  "webui": {
+    "bundle": {"path": "webui/index.mjs", "sha256": "GENERATED_AT_BUILD"},
+    "permissions": ["knowledge.view"],
+    "menus": [{"id": "knowledge.main", "parent": "content", "label": "Knowledge", "icon": "book-open", "route": "/admin/extensions/knowledge", "permission": "knowledge.view", "order": 180}],
+    "routes": [{"id": "knowledge.main", "path": "/admin/extensions/knowledge", "export": "mount", "permission": "knowledge.view"}]
+  },
+  "control_entrypoint": {"path": "bin/control-host", "sha256": "GENERATED_AT_BUILD"},
+  "agent_entrypoint": null,
+  "migrations": {"index": "migrations/index.json", "sha256": "GENERATED_AT_BUILD"},
+  "compatibility_routes": {"path": "compat/v2-routes.json", "sha256": "GENERATED_AT_BUILD"},
+  "route_contract_digest": "GENERATED_AT_BUILD",
+  "runtime_api_version": ""
+}

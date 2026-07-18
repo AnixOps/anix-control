@@ -1,0 +1,32 @@
+{
+  "id": "protocol-runtime",
+  "name": "Protocol Runtime",
+  "version": "4.0.0",
+  "api_version": "v2",
+  "publisher": "AnixOps",
+  "targets": ["control", "agent"],
+  "architectures": [],
+  "artifact_sha256": "GENERATED_AT_BUILD",
+  "capabilities": [],
+  "dependencies": [],
+  "conflicts": [],
+  "permissions": ["protocol-runtime.view", "protocol-runtime.api"],
+  "config_schema": {},
+  "secret_fields": [],
+  "entrypoints": {},
+  "migration_version": 0,
+  "control_routes": [],
+  "frontend_sha256": "GENERATED_AT_BUILD",
+  "webui": {
+    "bundle": {"path": "webui/index.mjs", "sha256": "GENERATED_AT_BUILD"},
+    "permissions": ["protocol-runtime.view"],
+    "menus": [{"id": "protocol-runtime.main", "parent": "operations", "label": "Protocol Runtime", "icon": "cpu", "route": "/admin/extensions/protocol-runtime", "permission": "protocol-runtime.view", "order": 200}],
+    "routes": [{"id": "protocol-runtime.main", "path": "/admin/extensions/protocol-runtime", "export": "mount", "permission": "protocol-runtime.view"}]
+  },
+  "control_entrypoint": {"path": "bin/control-host", "sha256": "GENERATED_AT_BUILD"},
+  "agent_entrypoint": {"path": "agent/linux-amd64/plugin", "sha256": "GENERATED_AT_BUILD"},
+  "migrations": {"index": "migrations/index.json", "sha256": "GENERATED_AT_BUILD"},
+  "compatibility_routes": {"path": "compat/v2-routes.json", "sha256": "GENERATED_AT_BUILD"},
+  "route_contract_digest": "GENERATED_AT_BUILD",
+  "runtime_api_version": "anixops.agent.sdk/v1.1.0"
+}

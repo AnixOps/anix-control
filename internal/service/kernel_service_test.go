@@ -99,6 +99,107 @@ func kernelTestWebUIManifest(pluginID string) PluginManifest {
 	}
 }
 
+func TestMaterializePluginControlArtifactUsesSignedV2Entrypoint(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	controlEntrypoint := []byte("#!/bin/sh\nexit 0\n")
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	routes := []byte(`{"api_version":"v2","routes":[]}`)
+	artifact := kernelTestV2Package(t, map[string][]byte{
+		"bin/control-host":      controlEntrypoint,
+		"compat/v2-routes.json": routes,
+		"migrations/index.json": migrations,
+	})
+	artifactDigest := sha256.Sum256(artifact)
+	entrypointDigest := sha256.Sum256(controlEntrypoint)
+	migrationDigest := sha256.Sum256(migrations)
+	routeDigest := sha256.Sum256(routes)
+	manifest := PluginManifest{
+		ID:             "materialized-v2-package",
+		Name:           "Materialized V2 Package",
+		Version:        "4.0.0",
+		APIVersion:     pluginManifestAPIVersionV2,
+		Publisher:      "AnixOps",
+		Targets:        []string{"control"},
+		ArtifactSHA256: hex.EncodeToString(artifactDigest[:]),
+		ControlEntrypoint: &PluginEntrypoint{
+			Path:   "bin/control-host",
+			SHA256: hex.EncodeToString(entrypointDigest[:]),
+		},
+		Migrations: &PluginMigrations{
+			Index:  "migrations/index.json",
+			SHA256: hex.EncodeToString(migrationDigest[:]),
+		},
+		CompatibilityRoutes: &PluginCompatibilityRoutes{
+			Path:   "compat/v2-routes.json",
+			SHA256: hex.EncodeToString(routeDigest[:]),
+		},
+		RouteContractDigest: hex.EncodeToString(routeDigest[:]),
+	}
+	canonical, err := CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := RegisterPluginRelease(
+		db,
+		string(canonical),
+		base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)),
+		publicKey,
+	)
+	require.NoError(t, err)
+	_, err = StorePluginArtifact(db, release.ID, artifact)
+	require.NoError(t, err)
+
+	ref, err := MaterializePluginControlArtifact(db, publicKey, manifest.ID, manifest.Version, t.TempDir())
+	require.NoError(t, err)
+	require.Equal(t, manifest.ID, ref.PackageID)
+	require.Equal(t, manifest.Version, ref.Version)
+	require.Equal(t, manifest.ArtifactSHA256, ref.ArtifactSHA256)
+	require.Equal(t, manifest.ControlEntrypoint.SHA256, ref.EntrypointSHA256)
+	require.FileExists(t, ref.ArtifactPath)
+	require.FileExists(t, ref.ManifestPath)
+	require.FileExists(t, ref.EntrypointPath)
+	entrypoint, err := os.ReadFile(ref.EntrypointPath)
+	require.NoError(t, err)
+	require.Equal(t, controlEntrypoint, entrypoint)
+
+	wrongRouteDigest := strings.Repeat("f", sha256.Size*2)
+	tampered := manifest
+	tampered.Version = "4.0.1"
+	tampered.CompatibilityRoutes = &PluginCompatibilityRoutes{
+		Path:   manifest.CompatibilityRoutes.Path,
+		SHA256: wrongRouteDigest,
+	}
+	tampered.RouteContractDigest = wrongRouteDigest
+	tamperedCanonical, err := CanonicalPluginManifest(tampered)
+	require.NoError(t, err)
+	tamperedRelease, err := RegisterPluginRelease(
+		db,
+		string(tamperedCanonical),
+		base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, tamperedCanonical)),
+		publicKey,
+	)
+	require.NoError(t, err)
+	_, err = StorePluginArtifact(db, tamperedRelease.ID, artifact)
+	require.NoError(t, err)
+	_, err = MaterializePluginControlArtifact(db, publicKey, tampered.ID, tampered.Version, t.TempDir())
+	require.ErrorContains(t, err, "compatibility routes digest")
+}
+
+func kernelTestV2Package(t *testing.T, files map[string][]byte) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	for _, name := range []string{"bin/control-host", "compat/v2-routes.json", "migrations/index.json"} {
+		file, err := writer.Create(name)
+		require.NoError(t, err)
+		_, err = file.Write(files[name])
+		require.NoError(t, err)
+	}
+	require.NoError(t, writer.Close())
+	return buffer.Bytes()
+}
+
 func kernelTestControlRouteManifest(pluginID string, artifact []byte) PluginManifest {
 	return PluginManifest{
 		ID: pluginID, Name: "Control Route Plugin", Version: "1.0.0", APIVersion: "v1", Publisher: "AnixOps",
@@ -368,7 +469,7 @@ func TestPluginManifestValidatesControlAgentContract(t *testing.T) {
 		mutate  func(*PluginManifest)
 		wantErr string
 	}{
-		{name: "API version", mutate: func(m *PluginManifest) { m.APIVersion = "v2" }, wantErr: "API version"},
+		{name: "API version", mutate: func(m *PluginManifest) { m.APIVersion = "v3" }, wantErr: "API version"},
 		{name: "unsafe version", mutate: func(m *PluginManifest) { m.Version = "../1.0.0" }, wantErr: "safe path"},
 		{name: "duplicate target", mutate: func(m *PluginManifest) { m.Targets = []string{"agent", "agent"} }, wantErr: "duplicate target"},
 		{name: "invalid architecture", mutate: func(m *PluginManifest) { m.Architectures = []string{"linux/../amd64"} }, wantErr: "invalid plugin architecture"},
