@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test'
 
 const node = { id: 11, name: 'Shanghai entry', host: '10.0.0.11', status: 1 }
 const plugin = { id: 'gost-mesh', name: 'GOST Mesh', publisher: 'AnixOps' }
+const topology = { id: 21, name: 'Shanghai mesh', service_scope: 'forward', active_revision_id: 5 }
+const deployment = { id: 31, topology_id: topology.id, revision_id: 5, state: 'planned' }
 const manifest = JSON.stringify({ id: 'gost-mesh', version: '1.0.0', targets: ['agent'] })
 
 async function seedAdmin(page) {
@@ -15,7 +17,14 @@ async function seedAdmin(page) {
 async function installFixtures(page) {
   const state = {
     assignments: [],
-    operations: []
+    operations: [{
+      id: 'active-operation',
+      kind: 'plugin.enable',
+      plugin_id: plugin.id,
+      revision: 6,
+      state: 'running',
+      created_at: '2026-07-18T01:00:00Z',
+    }]
   }
 
   await page.route(url => url.pathname.startsWith('/api/'), async route => {
@@ -60,8 +69,10 @@ async function installFixtures(page) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'forward', name: 'Forward', plugin_id: plugin.id }]) })
       return
     }
-    if (url.pathname === '/api/v3/topologies' || url.pathname === '/api/v3/operations' || url.pathname === '/api/v3/extensions') {
-      const payload = url.pathname.endsWith('/operations') ? state.operations : []
+    if (url.pathname === '/api/v3/topologies' || url.pathname === '/api/v3/deployments' || url.pathname === '/api/v3/operations' || url.pathname === '/api/v3/extensions') {
+      const payload = url.pathname.endsWith('/topologies') ? [topology]
+        : url.pathname.endsWith('/deployments') ? [deployment]
+          : url.pathname.endsWith('/operations') ? state.operations : []
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) })
       return
     }
@@ -90,33 +101,57 @@ test('runs the assignment lifecycle in a narrow viewport without page overflow',
   await page.setViewportSize({ width: 390, height: 844 })
   await seedAdmin(page)
   await installFixtures(page)
-  page.on('dialog', dialog => dialog.accept())
+  await page.goto('/admin/deployments')
+  await expect(page.getByTestId('edit-topology-21')).toBeVisible()
+  for (const testID of ['edit-topology-21', 'view-deployment-31']) {
+    const action = page.getByTestId(testID)
+    const box = await action.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(390)
+  }
 
-  await page.goto('/admin/control')
-  await page.getByRole('tab', { name: 'Assignments' }).click()
+  await page.locator('[data-testid="deployment-targets"]').click()
   await expect(page.locator('#assignment-node-filter')).toHaveValue('11')
-  await expect(page.locator('#control-panel-assignments')).toBeVisible()
+  await expect(page.locator('[data-testid="deployment-target-panel"]')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 
-  await page.getByRole('button', { name: 'New assignment' }).click()
-  const modal = page.locator('[aria-labelledby="assignment-editor-title"]')
-  await expect(modal).toBeVisible()
-  const modalBox = await modal.boundingBox()
-  expect(modalBox.width).toBeLessThanOrEqual(370)
-  await page.locator('#assignment-rollout-group').fill('canary-mobile')
-  await page.getByRole('button', { name: 'Save' }).last().click()
-  await expect(page.locator('#control-panel-assignments')).toContainText('canary-mobile')
+  await page.locator('[data-testid="new-assignment"]').click()
+  const drawer = page.locator('[data-testid="assignment-drawer"]')
+  await expect(drawer).toBeVisible()
+  const drawerBox = await drawer.boundingBox()
+  expect(drawerBox.width).toBeLessThanOrEqual(390)
+  await drawer.locator('#assignment-rollout-group').fill('canary-mobile')
+  await drawer.locator('[data-testid="save-assignment"]').click()
+  await expect(page.locator('[data-testid="deployment-target-panel"]')).toContainText('canary-mobile')
 
-  await page.getByRole('button', { name: 'Edit' }).click()
-  await expect(page.locator('#assignment-role')).toBeDisabled()
-  await page.locator('#assignment-config-revision').fill('8')
-  await page.getByRole('button', { name: 'Save' }).last().click()
-  await expect(page.locator('#control-panel-assignments')).toContainText('8')
+  for (const testID of ['edit-assignment-7', 'toggle-assignment-7', 'delete-assignment-7']) {
+    const action = page.getByTestId(testID)
+    const box = await action.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(390)
+  }
 
-  await page.getByRole('button', { name: 'Disable' }).click()
-  await expect(page.locator('#control-panel-assignments')).toContainText('Disabled')
-  await page.getByRole('button', { name: 'Enable' }).click()
-  await expect(page.locator('#control-panel-assignments')).toContainText('Enabled')
-  await page.getByRole('button', { name: 'Delete' }).click()
-  await expect(page.locator('#control-panel-assignments')).toContainText('No assignments for this node')
+  await page.getByTestId('show-all-activity').click()
+  const cancelAction = page.getByTestId('cancel-operation-active-operation')
+  await expect(cancelAction).toBeVisible()
+  const cancelBox = await cancelAction.boundingBox()
+  expect(cancelBox).not.toBeNull()
+  expect(cancelBox.x).toBeGreaterThanOrEqual(0)
+  expect(cancelBox.x + cancelBox.width).toBeLessThanOrEqual(390)
+
+  await page.locator('[data-testid="edit-assignment-7"]').click()
+  await expect(drawer.locator('#assignment-role')).toBeDisabled()
+  await drawer.locator('#assignment-config-revision').fill('8')
+  await drawer.locator('[data-testid="save-assignment"]').click()
+  await expect(page.locator('[data-testid="deployment-target-panel"]')).toContainText('8')
+
+  await page.locator('[data-testid="toggle-assignment-7"]').click()
+  await expect(page.locator('[data-testid="deployment-target-panel"]')).toContainText('Disabled')
+  await page.locator('[data-testid="toggle-assignment-7"]').click()
+  await expect(page.locator('[data-testid="deployment-target-panel"]')).toContainText('Enabled')
+  page.once('dialog', dialog => dialog.accept())
+  await page.locator('[data-testid="delete-assignment-7"]').click()
+  await expect(page.locator('[data-testid="deployment-target-panel"]')).toContainText('No assignments for this node')
 })

@@ -244,6 +244,8 @@ export default {
       forwardNodeX: 'NodeX Runtime',
       forwardAgents: 'NodeX Agents',
       control: 'Control Kernel',
+      plugins: 'Plugins',
+      deployments: 'Deployments',
       accessGroups: 'Access Groups',
       payment: 'Payment Gateways',
       telegram: 'Telegram Bot',
@@ -270,8 +272,14 @@ export default {
       mobileTitle: `${CONTROL_NAME} Console`,
       subtitle: 'Subscription delivery, node orchestration, forwarding tools, and studio operations are centralized here.',
       adminUser: 'Administrator',
+      collapseNavigation: 'Collapse navigation',
+      expandNavigation: 'Expand navigation',
       sections: {
         overview: 'Overview',
+        business: 'Business',
+        network: 'Network',
+        controlCenter: 'Control Center',
+        more: 'More',
         forwardSuite: 'Forward Suite',
         userManagement: 'User Management',
         nodeManagement: 'Node Management',
@@ -303,6 +311,8 @@ export default {
         knowledge: 'Knowledge Base',
         mfa: 'MFA',
         control: 'Control Kernel',
+        plugins: 'Plugins',
+        deployments: 'Deployments',
         accessGroups: 'Access Groups',
         system: 'System',
         nodeXAgentsLegacy: 'NodeX Agents Legacy'
@@ -3009,6 +3019,12 @@ export default {
       configure: 'Configure', enable: 'Enable', disable: 'Disable', upgrade: 'Upgrade', update: 'Upgrade', rollback: 'Rollback', cancel: 'Cancel operation',
       saving: 'Saving...', newAssignment: 'New assignment'
     },
+    pluginCenter: {
+      filters: { search: 'Search plugins', health: 'Health', target: 'Target', allHealth: 'All health', allTargets: 'All targets' },
+      states: { healthy: 'Healthy', attention: 'Needs attention' },
+      summary: { label: 'Plugin catalog summary', healthy: '{count} healthy', attention: '{count} need attention', catalogued: '{count} catalogued' },
+      empty: 'No plugins match the current filters'
+    },
     tabs: { plugins: 'Plugins', assignments: 'Assignments', scopes: 'Scopes', topologies: 'Topologies', operations: 'Operations' },
     table: {
       plugin: 'Plugin', publisher: 'Publisher', release: 'Release', installation: 'Installation', desiredVersion: 'Desired version', observedVersion: 'Observed version', version: 'Version', state: 'State', actions: 'Actions',
@@ -3018,13 +3034,14 @@ export default {
     labels: { releases: '{count} releases', desired: 'Desired', observed: 'Observed' },
     states: { catalogued: 'Catalogued', enabled: 'Enabled', disabled: 'Disabled', loading: 'Loading control state...', polling: 'Polling operation state' },
     empty: { plugins: 'No plugins', assignments: 'No assignments for this node', scopes: 'No service scopes', topologies: 'No topologies', operations: 'No operations' },
+    activity: { title: 'Activity', scoped: 'Selected activity', all: 'All activity', showAll: 'Show all activity', showScoped: 'Show selected activity', empty: 'No activity for the selected scope' },
     topology: {
       select: 'Topology', new: 'New topology', newTitle: 'Create topology', create: 'Create topology', name: 'Name', edit: 'Edit revision', status: 'View status', noDeployment: 'No deployment', editorTitle: 'Topology revision editor', revision: 'Revision',
       noRevisions: 'No revisions', failurePolicy: 'Failure policy', stopAndRollback: 'Stop and rollback', message: 'Revision message', graphJSON: 'Graph JSON',
       graphHelp: 'Use vertices and edges. Secrets must be referenced by secret_id; inline secret values are rejected.', diagnose: 'Validate / diagnose', validating: 'Validating...',
       unsavedChanges: 'This revision has unsaved changes. Save a new immutable revision before previewing or planning.',
       valid: 'Topology is valid', invalid: 'Topology has validation issues', invalidJSON: 'Topology JSON is invalid', saveRevision: 'Save revision', plan: 'Plan deployment',
-      apply: 'Apply deployment', rollback: 'Rollback deployment', deployment: 'Deployment', steps: '{count} deployment steps', rollbackConfirm: 'Request rollback for this deployment?',
+      apply: 'Apply deployment', rollback: 'Rollback deployment', deployment: 'Deployment', steps: '{count} deployment steps', applyConfirm: 'Apply {topology} (deployment #{deployment})?', rollbackConfirm: 'Request rollback for {topology} (deployment #{deployment})?',
       preview: 'Read-only deployment preview', previewAction: 'Preview', previewSteps: '{count} planned steps'
     },
     extensions: { errorsTitle: 'WebUI extension loading failed' },

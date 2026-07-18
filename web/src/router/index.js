@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ensureAdminExtensions, resetAdminExtensions } from '@/extensions/runtime'
+import { resolveLegacyControlRedirect } from '@/router/controlLegacy'
 
 // Layouts
 import UserLayout from '@/layouts/UserLayout.vue'
@@ -41,7 +42,8 @@ const AdminNotifications = () => import('@/views/admin/Notifications.vue')
 const AdminInvite = () => import('@/views/admin/Invite.vue')
 const AdminSystem = () => import('@/views/admin/System.vue')
 const AdminAgent = () => import('@/views/admin/Agent.vue')
-const AdminControl = () => import('@/views/admin/Control.vue')
+const AdminPlugins = () => import('@/views/admin/Plugins.vue')
+const AdminDeployments = () => import('@/views/admin/Deployments.vue')
 const AdminAccessGroups = () => import('@/views/admin/AccessGroups.vue')
 
 const routes = [
@@ -234,8 +236,16 @@ const routes = [
         component: AdminAgent
       },
       {
+        path: 'plugins',
+        component: AdminPlugins
+      },
+      {
+        path: 'deployments',
+        component: AdminDeployments
+      },
+      {
         path: 'control',
-        component: AdminControl
+        redirect: resolveLegacyControlRedirect
       },
       {
         path: 'access-groups',
@@ -282,17 +292,17 @@ router.beforeEach(async (to, from, next) => {
         if (resolved.matched.some(record => record.meta.extension)) {
           const extensionPermission = resolved.meta.extensionPermission
           if (!userStore.hasPermission(extensionPermission)) {
-            next('/admin/control')
+            next('/admin/plugins')
           } else {
             next({ path: to.path, query: to.query, hash: to.hash, replace: true })
           }
         } else {
-          next('/admin/control')
+          next('/admin/plugins')
         }
         return
       }
       if (to.meta.extension && !userStore.hasPermission(to.meta.extensionPermission)) {
-        next('/admin/control')
+        next('/admin/plugins')
         return
       }
       if (to.meta.extension) {

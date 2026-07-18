@@ -61,6 +61,8 @@ describe('admin routes', () => {
       '/admin/mfa',
       '/admin/system',
       '/admin/agent',
+      '/admin/plugins',
+      '/admin/deployments',
       '/admin/control',
       '/admin/access-groups',
     ]
@@ -89,8 +91,21 @@ describe('admin routes', () => {
 
     await router.push('/admin/extensions/example')
 
-    expect(router.currentRoute.value.path).toBe('/admin/control')
+    expect(router.currentRoute.value.path).toBe('/admin/plugins')
     removeRoute()
+  })
+
+  it('redirects legacy Control routes to their replacement routes', async () => {
+    const userStore = useUserStore()
+    userStore.login('admin-token', { id: 1, is_admin: true, permissions: [] })
+
+    await router.push('/admin/control?tab=assignments')
+
+    expect(router.currentRoute.value.path).toBe('/admin/deployments')
+
+    await router.push('/admin/control')
+
+    expect(router.currentRoute.value.path).toBe('/admin/plugins')
   })
 
   it('allows plugin extension routes when the admin has the route permission', async () => {

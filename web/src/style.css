@@ -16,7 +16,15 @@
   --warning-color: #d97706;
   --error-color: #dc2626;
   --sidebar-width: 280px;
+  --sidebar-collapsed-width: 72px;
   --header-height: 64px;
+  --admin-sidebar-surface: #182233;
+  --admin-sidebar-accent: #263750;
+  --admin-sidebar-hover: #263750;
+  --admin-sidebar-divider: #31415a;
+  --admin-sidebar-text: #d9e2ef;
+  --admin-sidebar-text-strong: #ffffff;
+  --admin-sidebar-muted: #aab8cd;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 8px;
@@ -24,9 +32,6 @@
   --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
   --shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.12);
   --transition: all 0.2s ease;
-  --body-gradient:
-    radial-gradient(circle at top left, rgba(0, 100, 250, 0.08), transparent 28%),
-    linear-gradient(180deg, #f7f9fc 0%, #f3f5f9 100%);
 }
 
 /* 暗色主题：覆盖自建语义变量。 */
@@ -47,12 +52,16 @@
   --success-color: #27c346;
   --warning-color: #ff9a2e;
   --error-color: #f76965;
+  --admin-sidebar-surface: #1c1c21;
+  --admin-sidebar-accent: #2a2a32;
+  --admin-sidebar-hover: #2a2a32;
+  --admin-sidebar-divider: #3a3a44;
+  --admin-sidebar-text: #d7d9e0;
+  --admin-sidebar-text-strong: #ffffff;
+  --admin-sidebar-muted: #a9aeb8;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
-  --body-gradient:
-    radial-gradient(circle at top left, rgba(60, 126, 255, 0.12), transparent 30%),
-    linear-gradient(180deg, #161618 0%, #121214 100%);
 }
 
 * {
@@ -71,7 +80,7 @@ html {
 
 body {
   min-height: 100vh;
-  background: var(--body-gradient);
+  background: var(--bg-color);
   color: var(--text-color);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;

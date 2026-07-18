@@ -314,7 +314,7 @@ test('disabled and tampered plugins fail closed without contaminating core admin
   ])
 
   await page.goto('/admin/extensions/tampered-fixture')
-  await expect(page).toHaveURL(/\/admin\/control$/)
-  await expect(page.locator('.page-header h1')).toHaveText('Control Kernel')
+  await expect(page).toHaveURL(/\/admin\/plugins$/)
+  await expect(page.locator('.page-header h1')).toHaveText('Plugins')
   await expect(page.locator('a[href="/admin/dashboard"]')).toBeVisible()
 })

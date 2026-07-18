@@ -1,51 +1,49 @@
 <template>
-  <div class="admin-layout">
-    <div class="sidebar-overlay" :class="{ active: sidebarOpen }" aria-hidden="true" @click="sidebarOpen = false"></div>
+  <div class="admin-layout" :class="{ 'navigation-collapsed': sidebarCollapsed }">
+    <div class="sidebar-overlay" :class="{ active: sidebarOpen }" aria-hidden="true" @click="closeSidebar"></div>
 
-    <aside id="admin-sidebar" class="sidebar" :class="{ open: sidebarOpen }" :aria-label="t('layout.admin.mobileTitle')">
+    <aside
+      id="admin-sidebar"
+      class="sidebar"
+      ref="sidebarElement"
+      :class="{ open: sidebarOpen }"
+      :inert="drawerInactive"
+      :aria-hidden="drawerInactive ? 'true' : undefined"
+      :aria-label="t('layout.admin.mobileTitle')"
+      @keydown="handleDrawerKeydown"
+    >
       <div class="sidebar-top">
         <div class="brand-block">
-          <div class="brand-mark">AO</div>
-          <div>
+          <div class="brand-mark" aria-hidden="true"><PanelsTopLeft :size="20" /></div>
+          <div class="brand-copy">
             <div class="brand-name">{{ t('layout.admin.brand') }}</div>
             <div class="brand-meta">{{ t('layout.admin.badge') }}</div>
           </div>
         </div>
         <button
-          class="btn-ghost btn-sm close-button md:hidden"
+          class="btn-ghost close-button"
+          ref="closeButton"
           type="button"
           :aria-label="t('common.a11y.closeNavigation')"
           :title="t('common.a11y.closeNavigation')"
-          @click="sidebarOpen = false"
+          @click="closeSidebar"
         >
-          x
+          <X :size="18" aria-hidden="true" />
         </button>
       </div>
 
-      <nav class="sidebar-nav" :aria-label="t('layout.admin.mobileTitle')">
-        <section
-          v-for="section in navSections"
-          :key="section.id || section.title"
-          class="nav-section"
-          :data-extension-parent="section.kind === 'extension' ? section.parent : undefined"
-        >
-          <div class="nav-section-title">{{ section.title }}</div>
-          <template v-if="section.kind === 'forward'">
-            <ForwardSuiteNav />
-          </template>
-          <template v-else>
-            <router-link v-for="item in section.items" :key="item.to" :to="item.to" class="nav-link" @click="closeSidebar">
-              <span class="nav-link-icon">{{ item.icon }}</span>
-              <span class="nav-link-label">{{ item.label }}</span>
-            </router-link>
-          </template>
-        </section>
-        <router-link to="/admin/agent" class="legacy-hidden-link" aria-hidden="true" tabindex="-1">{{ t('layout.admin.nav.nodeXAgentsLegacy') }}</router-link>
-      </nav>
+      <AdminNavigation
+        class="sidebar-nav"
+        :sections="navSections"
+        :collapsed="sidebarCollapsed"
+        :mobile="isTabletViewport"
+        @navigate="closeSidebar"
+        @toggle-collapse="toggleSidebarCollapse"
+      />
 
       <div class="sidebar-footer">
         <div class="operator-card">
-          <div class="operator-avatar">A</div>
+          <div class="operator-avatar" aria-hidden="true"><Users :size="18" /></div>
           <div class="operator-copy">
             <div class="operator-name">{{ t('layout.admin.adminUser') }}</div>
             <div class="operator-email">{{ userStore.userInfo?.email || '-' }}</div>
@@ -56,7 +54,10 @@
         </div>
         <div class="sidebar-actions">
           <LocaleSwitcher compact />
-          <button class="btn w-full" type="button" @click="logout">{{ t('common.actions.logout') }}</button>
+          <button class="btn logout-button" type="button" :title="t('common.actions.logout')" @click="logout">
+            <LogOut :size="17" aria-hidden="true" />
+            <span class="logout-label">{{ t('common.actions.logout') }}</span>
+          </button>
         </div>
       </div>
     </aside>
@@ -65,15 +66,16 @@
       <header class="topbar">
         <div class="topbar-primary">
           <button
-            class="btn btn-ghost btn-sm menu-button"
+            class="btn btn-ghost menu-button"
+            ref="menuButton"
             type="button"
             :aria-label="t('common.a11y.openNavigation')"
             :title="t('common.a11y.openNavigation')"
             aria-controls="admin-sidebar"
             :aria-expanded="sidebarOpen ? 'true' : 'false'"
-            @click="sidebarOpen = !sidebarOpen"
+            @click="toggleSidebar"
           >
-            ☰
+            <Menu :size="20" aria-hidden="true" />
           </button>
           <div>
             <div class="topbar-title">{{ pageTitle }}</div>
@@ -95,11 +97,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import { LogOut, Menu, PanelsTopLeft, Users, X } from '@lucide/vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
-import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
+import AdminNavigation from '@/components/admin/AdminNavigation.vue'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
@@ -111,12 +114,20 @@ import {
   normalizeWebUIMenuParent
 } from '@/extensions/menuRegistry'
 
+const DESKTOP_SIDEBAR_KEY = 'admin.sidebar.collapsed'
+const TABLET_BREAKPOINT = '(max-width: 1024px)'
+
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const { t, currentLocale, formatDateTime } = useAppI18n()
 
 const sidebarOpen = ref(false)
+const sidebarCollapsed = ref(readSidebarCollapsePreference())
+const isTabletViewport = ref(readTabletViewport())
+const menuButton = ref(null)
+const closeButton = ref(null)
+const sidebarElement = ref(null)
 const currentTime = ref('')
 const systemVersion = ref('')
 const systemBuildCode = ref(import.meta.env.VITE_APP_BUILD_CODE || '')
@@ -125,11 +136,31 @@ const systemCommit = ref('')
 const frontendBuildCode = import.meta.env.VITE_APP_BUILD_CODE || ''
 const frontendBuildTime = import.meta.env.VITE_APP_BUILD_TIME || ''
 
+const drawerInactive = computed(() => isTabletViewport.value && !sidebarOpen.value)
+
 const extensionSectionTitleKeys = {
   services: 'layout.admin.sections.extensionServices',
   operations: 'layout.admin.sections.extensionOperations',
   system: 'layout.admin.sections.extensionSystem',
   [WEBUI_MENU_FALLBACK_PARENT]: 'layout.admin.sections.extensions'
+}
+
+function readSidebarCollapsePreference() {
+  try {
+    return localStorage.getItem(DESKTOP_SIDEBAR_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function readTabletViewport() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  if (typeof window.matchMedia === 'function') {
+    return window.matchMedia(TABLET_BREAKPOINT).matches
+  }
+  return window.innerWidth <= 1024
 }
 
 function compareExtensionMenus(left, right) {
@@ -141,95 +172,91 @@ function compareExtensionMenus(left, right) {
 }
 
 const navSections = computed(() => {
-  const sections = [
-  {
-    title: t('layout.admin.sections.overview'),
-    items: [
-      { to: '/admin/dashboard', icon: 'DB', label: t('layout.admin.nav.dashboard') },
-      { to: '/admin/monitor', icon: 'MT', label: t('layout.admin.nav.monitor') },
-      { to: '/admin/traffic-hourly', icon: 'TH', label: t('layout.admin.nav.trafficHourly') }
-    ]
-  },
-  {
-    title: t('layout.admin.sections.forwardSuite'),
-    kind: 'forward'
-  },
-  {
-    title: t('layout.admin.sections.userManagement'),
-    items: [
-      { to: '/admin/users', icon: 'US', label: t('layout.admin.nav.users') },
-      { to: '/admin/orders', icon: 'OR', label: t('layout.admin.nav.orders') },
-      { to: '/admin/tickets', icon: 'TK', label: t('layout.admin.nav.tickets') }
-    ]
-  },
-  {
-    title: t('layout.admin.sections.nodeManagement'),
-    items: [
-      { to: '/admin/nodes', icon: 'ND', label: t('layout.admin.nav.nodes') },
-      { to: '/admin/subscriptions', icon: 'SB', label: t('layout.admin.nav.subscriptions') }
-    ]
-  },
-  {
-    title: t('layout.admin.sections.marketing'),
-    items: [
-      { to: '/admin/plans', icon: 'PL', label: t('layout.admin.nav.plans') },
-      { to: '/admin/coupons', icon: 'CP', label: t('layout.admin.nav.coupons') },
-      { to: '/admin/invite', icon: 'IV', label: t('layout.admin.nav.invite') }
-    ]
-  },
-  {
-    title: t('layout.admin.sections.finance'),
-    items: [{ to: '/admin/payment', icon: 'PY', label: t('layout.admin.nav.payment') }]
-  },
-  {
-    title: t('layout.admin.sections.notifications'),
-    items: [
-      { to: '/admin/telegram', icon: 'TG', label: t('layout.admin.nav.telegram') },
-      { to: '/admin/notifications', icon: 'NT', label: t('layout.admin.nav.notifications') }
-    ]
-  },
-  {
-    title: t('layout.admin.sections.content'),
-    items: [{ to: '/admin/knowledge', icon: 'KB', label: t('layout.admin.nav.knowledge') }]
-  },
-  {
-    title: t('layout.admin.sections.system'),
-    items: [
-      { to: '/admin/mfa', icon: 'MF', label: t('layout.admin.nav.mfa') },
-      { to: '/admin/control', icon: 'CT', label: t('layout.admin.nav.control') },
-      { to: '/admin/access-groups', icon: 'AG', label: t('layout.admin.nav.accessGroups') },
-      { to: '/admin/system', icon: 'SY', label: t('layout.admin.nav.system') }
-    ]
-  }
-  ]
   const extensionMenusByParent = new Map(WEBUI_MENU_PARENT_REGISTRY.map(parent => [parent, []]))
   for (const item of adminExtensionMenus.value.filter(menu => userStore.hasPermission(menu.permission))) {
     const parent = normalizeWebUIMenuParent(item.parent)
     extensionMenusByParent.get(parent).push({ ...item, parent })
   }
-  const extensionSections = WEBUI_MENU_PARENT_REGISTRY.flatMap(parent => {
+
+  const extensionGroups = WEBUI_MENU_PARENT_REGISTRY.flatMap(parent => {
     const items = extensionMenusByParent.get(parent).sort(compareExtensionMenus)
-    if (items.length === 0) {
-      return []
-    }
-    return [{
-      id: `extension:${parent}`,
-      kind: 'extension',
-      parent,
-      title: t(extensionSectionTitleKeys[parent]),
-      items
-    }]
+    return items.length > 0
+      ? [{ parent, label: t(extensionSectionTitleKeys[parent]), items }]
+      : []
   })
-  if (extensionSections.length > 0) {
-    sections.splice(sections.length - 1, 0, ...extensionSections)
-  }
-  return sections
+
+  return [
+    {
+      id: 'overview',
+      label: t('layout.admin.sections.overview'),
+      items: [
+        { to: '/admin/dashboard', icon: 'dashboard', label: t('layout.admin.nav.dashboard') },
+        { to: '/admin/monitor', icon: 'monitor', label: t('layout.admin.nav.monitor') },
+        { to: '/admin/traffic-hourly', icon: 'traffic', label: t('layout.admin.nav.trafficHourly') }
+      ]
+    },
+    {
+      id: 'business',
+      label: t('layout.admin.sections.business'),
+      items: [
+        { to: '/admin/users', icon: 'users', label: t('layout.admin.nav.users') },
+        { to: '/admin/orders', icon: 'orders', label: t('layout.admin.nav.orders') },
+        { to: '/admin/tickets', icon: 'tickets', label: t('layout.admin.nav.tickets') }
+      ],
+      advancedItems: [
+        { to: '/admin/subscriptions', icon: 'subscriptions', label: t('layout.admin.nav.subscriptions') },
+        { to: '/admin/plans', icon: 'plans', label: t('layout.admin.nav.plans') },
+        { to: '/admin/coupons', icon: 'coupons', label: t('layout.admin.nav.coupons') },
+        { to: '/admin/invite', icon: 'invite', label: t('layout.admin.nav.invite') },
+        { to: '/admin/payment', icon: 'payment', label: t('layout.admin.nav.payment') },
+        { to: '/admin/knowledge', icon: 'knowledge', label: t('layout.admin.nav.knowledge') }
+      ]
+    },
+    {
+      id: 'network',
+      label: t('layout.admin.sections.network'),
+      kind: 'forward',
+      forwardLabel: t('layout.admin.sections.forwardSuite'),
+      items: [
+        { to: '/admin/nodes', icon: 'nodes', label: t('layout.admin.nav.nodes') }
+      ],
+      advancedItems: [
+        { to: '/admin/agent', icon: 'agents', label: t('layout.admin.nav.nodeXAgentsLegacy') }
+      ]
+    },
+    {
+      id: 'control-center',
+      label: t('layout.admin.sections.controlCenter'),
+      items: [
+        { to: '/admin/plugins', icon: 'plugins', label: t('layout.admin.nav.plugins') },
+        { to: '/admin/deployments', icon: 'deployments', label: t('layout.admin.nav.deployments') }
+      ],
+      advancedItems: [
+        { to: '/admin/control', icon: 'control', label: t('layout.admin.nav.control') }
+      ],
+      extensionGroups
+    },
+    {
+      id: 'system',
+      label: t('layout.admin.sections.system'),
+      items: [
+        { to: '/admin/mfa', icon: 'mfa', label: t('layout.admin.nav.mfa') },
+        { to: '/admin/access-groups', icon: 'access-groups', label: t('layout.admin.nav.accessGroups') },
+        { to: '/admin/system', icon: 'system', label: t('layout.admin.nav.system') }
+      ],
+      advancedItems: [
+        { to: '/admin/telegram', icon: 'system', label: t('layout.admin.nav.telegram') },
+        { to: '/admin/notifications', icon: 'system', label: t('layout.admin.nav.notifications') }
+      ]
+    }
+  ]
 })
 
 const pageTitle = computed(() => {
   const extensionMenu = adminExtensionMenus.value.find(item => item.to === route.path && userStore.hasPermission(item.permission))
   return extensionMenu?.label || resolveRoutePageTitle(t, route.path, t('pageTitles.admin.fallback'))
 })
+
 const systemVersionDisplay = computed(() => {
   if (!systemVersion.value) {
     return ''
@@ -241,6 +268,7 @@ const systemVersionDisplay = computed(() => {
     ? `AnixOps v${systemVersion.value} #${systemBuildCode.value}`
     : `AnixOps v${systemVersion.value}`
 })
+
 const systemVersionTitle = computed(() => {
   const rows = []
   if (systemBuildCode.value) {
@@ -262,7 +290,84 @@ const systemVersionTitle = computed(() => {
 })
 
 function closeSidebar() {
+  const restoreFocus = isTabletViewport.value && sidebarOpen.value
   sidebarOpen.value = false
+  if (restoreFocus) {
+    nextTick(() => menuButton.value?.focus?.())
+  }
+}
+
+function getDrawerFocusableElements() {
+  const selector = [
+    'a[href]',
+    'button:not([disabled])',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    'summary',
+    '[tabindex]:not([tabindex="-1"])'
+  ].join(', ')
+
+  return [...(sidebarElement.value?.querySelectorAll(selector) || [])].filter(element => (
+    !element.hasAttribute('hidden') &&
+    element.getAttribute('aria-hidden') !== 'true' &&
+    !element.closest('[inert]')
+  ))
+}
+
+function handleDrawerKeydown(event) {
+  if (!isTabletViewport.value || !sidebarOpen.value) {
+    return
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeSidebar()
+    return
+  }
+
+  if (event.key !== 'Tab') {
+    return
+  }
+
+  const focusableElements = getDrawerFocusableElements()
+  if (focusableElements.length === 0) {
+    return
+  }
+
+  const firstElement = focusableElements[0]
+  const lastElement = focusableElements.at(-1)
+  if (event.shiftKey && document.activeElement === firstElement) {
+    event.preventDefault()
+    lastElement.focus()
+  } else if (!event.shiftKey && document.activeElement === lastElement) {
+    event.preventDefault()
+    firstElement.focus()
+  }
+}
+
+function openSidebar() {
+  sidebarOpen.value = true
+  if (isTabletViewport.value) {
+    nextTick(() => closeButton.value?.focus?.())
+  }
+}
+
+function toggleSidebar() {
+  if (sidebarOpen.value) {
+    closeSidebar()
+  } else {
+    openSidebar()
+  }
+}
+
+function toggleSidebarCollapse() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  try {
+    localStorage.setItem(DESKTOP_SIDEBAR_KEY, String(sidebarCollapsed.value))
+  } catch {
+    // A blocked storage implementation should not prevent navigation from working.
+  }
 }
 
 function logout() {
@@ -280,6 +385,17 @@ function updateTime() {
   })
 }
 
+function updateTabletViewport(event) {
+  const nextIsTabletViewport = typeof event?.matches === 'boolean'
+    ? event.matches
+    : readTabletViewport()
+
+  if (isTabletViewport.value && !nextIsTabletViewport && sidebarOpen.value) {
+    closeSidebar()
+  }
+  isTabletViewport.value = nextIsTabletViewport
+}
+
 async function loadSystemInfo() {
   try {
     const res = await getSystemInfo()
@@ -289,7 +405,7 @@ async function loadSystemInfo() {
     systemBuildTime.value = info.build_time || ''
     systemCommit.value = info.commit || ''
   } catch {
-    // ignore layout metadata failures
+    // Ignore layout metadata failures so a transient version lookup cannot block routes.
   }
 }
 
@@ -302,10 +418,24 @@ function readSystemInfo(res) {
 }
 
 let timer
+let tabletMediaQuery
+let useWindowResizeListener = false
 
 onMounted(() => {
   updateTime()
   timer = setInterval(updateTime, 60000)
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    tabletMediaQuery = window.matchMedia(TABLET_BREAKPOINT)
+    updateTabletViewport(tabletMediaQuery)
+    if (typeof tabletMediaQuery.addEventListener === 'function') {
+      tabletMediaQuery.addEventListener('change', updateTabletViewport)
+    } else if (typeof tabletMediaQuery.addListener === 'function') {
+      tabletMediaQuery.addListener(updateTabletViewport)
+    }
+  } else if (typeof window !== 'undefined') {
+    useWindowResizeListener = true
+    window.addEventListener('resize', updateTabletViewport)
+  }
   if (userStore.isLoggedIn) {
     userStore.getUserInfo()
   }
@@ -314,6 +444,14 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearInterval(timer)
+  if (typeof tabletMediaQuery?.removeEventListener === 'function') {
+    tabletMediaQuery.removeEventListener('change', updateTabletViewport)
+  } else if (typeof tabletMediaQuery?.removeListener === 'function') {
+    tabletMediaQuery.removeListener(updateTabletViewport)
+  }
+  if (useWindowResizeListener && typeof window !== 'undefined') {
+    window.removeEventListener('resize', updateTabletViewport)
+  }
 })
 
 watchEffect(() => {
@@ -326,17 +464,17 @@ watchEffect(() => {
 .admin-layout {
   min-height: 100vh;
   display: flex;
-  background: transparent;
+  background: var(--bg-color);
 }
 
 .sidebar-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.32);
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.42);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
-  z-index: 1000;
 }
 
 .sidebar-overlay.active {
@@ -345,17 +483,26 @@ watchEffect(() => {
 }
 
 .sidebar {
-  width: var(--sidebar-width);
-  background: linear-gradient(180deg, #0f172a 0%, #172033 100%);
-  color: #d8e1f0;
-  padding: 20px 16px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
   position: sticky;
   top: 0;
+  display: flex;
+  width: var(--sidebar-width);
   height: 100vh;
-  border-right: 1px solid rgba(148, 163, 184, 0.18);
+  flex: 0 0 var(--sidebar-width);
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  overflow: hidden;
+  border-right: 1px solid var(--admin-sidebar-divider);
+  background: var(--admin-sidebar-surface);
+  color: var(--admin-sidebar-text);
+  transition: width 0.2s ease, flex-basis 0.2s ease, padding 0.2s ease;
+}
+
+.navigation-collapsed .sidebar {
+  width: var(--sidebar-collapsed-width);
+  flex-basis: var(--sidebar-collapsed-width);
+  padding: 16px 12px;
 }
 
 .sidebar-top,
@@ -370,179 +517,165 @@ watchEffect(() => {
 
 .sidebar-top {
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
 }
 
 .brand-block {
-  gap: 12px;
+  min-width: 0;
+  gap: 10px;
 }
 
 .brand-mark,
-.nav-link-icon,
 .operator-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  flex: 0 0 auto;
+  border: 1px solid var(--admin-sidebar-divider);
+  border-radius: var(--radius-md);
+  background: var(--admin-sidebar-accent);
+  color: var(--admin-sidebar-text-strong);
 }
 
 .brand-mark {
-  width: 40px;
-  height: 40px;
-  background: rgba(0, 100, 250, 0.16);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
+  width: 38px;
+  height: 38px;
 }
 
-.brand-name {
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.brand-meta {
-  font-size: 12px;
-  color: rgba(216, 225, 240, 0.72);
-}
-
-.sidebar-nav {
-  flex: 1;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.nav-section + .nav-section {
-  margin-top: 18px;
-}
-
-.nav-section-title {
-  margin-bottom: 8px;
-  padding: 0 8px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: rgba(216, 225, 240, 0.62);
-}
-
-.nav-link,
-.sidebar :deep(.forward-suite-link) {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 9px 10px;
-  color: rgba(216, 225, 240, 0.86);
-  text-decoration: none;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.nav-link:hover,
-.nav-link.router-link-active,
-.sidebar :deep(.forward-suite-link:hover),
-.sidebar :deep(.forward-suite-link.router-link-active),
-.sidebar :deep(.forward-suite-link-active) {
-  background: rgba(255, 255, 255, 0.09);
-  color: #fff;
-}
-
-.nav-link-icon {
-  width: 28px;
-  height: 28px;
-  background: rgba(255, 255, 255, 0.08);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.nav-link-label {
+.brand-copy,
+.operator-copy {
   min-width: 0;
 }
 
+.brand-name,
+.operator-name {
+  overflow: hidden;
+  color: var(--admin-sidebar-text-strong);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-name {
+  font-size: 15px;
+}
+
+.brand-meta,
+.operator-email,
+.version-line {
+  color: var(--admin-sidebar-muted);
+  font-size: 12px;
+}
+
+.close-button {
+  display: none;
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: var(--radius-md);
+  color: var(--admin-sidebar-text);
+}
+
+.sidebar-nav {
+  min-height: 0;
+}
+
 .sidebar-footer {
-  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   padding-top: 14px;
+  border-top: 1px solid var(--admin-sidebar-divider);
 }
 
 .operator-card {
-  gap: 12px;
-  padding: 12px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
+  gap: 10px;
 }
 
 .operator-avatar {
-  width: 36px;
-  height: 36px;
-  background: rgba(0, 100, 250, 0.18);
-  color: #fff;
-  font-weight: 700;
-}
-
-.operator-name {
-  color: #fff;
-  font-weight: 600;
+  width: 34px;
+  height: 34px;
 }
 
 .operator-email {
-  font-size: 12px;
-  color: rgba(216, 225, 240, 0.72);
-  word-break: break-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .version-line {
-  margin: 10px 0;
-  font-size: 12px;
-  color: rgba(216, 225, 240, 0.56);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-actions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+}
+
+.logout-button {
+  justify-content: flex-start;
+  width: 100%;
 }
 
 .workspace {
-  flex: 1;
-  min-width: 0;
   display: flex;
+  min-width: 0;
+  flex: 1;
   flex-direction: column;
 }
 
 .topbar {
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 24px;
-  border-bottom: 1px solid rgba(220, 227, 240, 0.9);
-  backdrop-filter: blur(8px);
+  min-height: var(--header-height);
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--surface-color);
+  box-shadow: var(--shadow-sm);
 }
 
 .topbar-primary {
+  min-width: 0;
   gap: 12px;
 }
 
 .menu-button {
   display: none;
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: var(--radius-md);
 }
 
 .topbar-title {
-  font-size: 22px;
+  overflow: hidden;
+  color: var(--text-color);
+  font-size: 20px;
   font-weight: 700;
   line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topbar-subtitle {
-  font-size: 13px;
+  max-width: 760px;
+  margin-top: 3px;
   color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .topbar-actions {
-  gap: 12px;
+  flex: 0 0 auto;
+  gap: 10px;
 }
 
 .current-time {
-  font-size: 13px;
   color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .content {
@@ -550,15 +683,50 @@ watchEffect(() => {
   padding: 24px;
 }
 
-.legacy-hidden-link {
-  display: none !important;
+.sidebar :deep(.locale-switcher),
+.topbar :deep(.locale-switcher),
+.topbar :deep(.theme-toggle) {
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.sidebar :deep(.locale-option),
+.topbar :deep(.locale-option) {
+  border-radius: var(--radius-sm);
+}
+
+.navigation-collapsed .brand-copy,
+.navigation-collapsed .operator-copy,
+.navigation-collapsed .version-line,
+.navigation-collapsed .sidebar-actions :deep(.locale-switcher),
+.navigation-collapsed .logout-label {
+  display: none;
+}
+
+.navigation-collapsed .sidebar-top,
+.navigation-collapsed .sidebar-footer,
+.navigation-collapsed .operator-card,
+.navigation-collapsed .sidebar-actions {
+  align-items: center;
+}
+
+.navigation-collapsed .logout-button {
+  justify-content: center;
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
 }
 
 @media (max-width: 1024px) {
-  .sidebar {
+  .sidebar,
+  .navigation-collapsed .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
     z-index: 1010;
+    width: min(88vw, var(--sidebar-width));
+    height: 100dvh;
+    flex-basis: min(88vw, var(--sidebar-width));
+    padding: 16px;
     transform: translateX(-100%);
     transition: transform 0.2s ease;
   }
@@ -567,16 +735,55 @@ watchEffect(() => {
     transform: translateX(0);
   }
 
-  .menu-button {
+  .menu-button,
+  .close-button {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .navigation-collapsed .brand-copy,
+  .navigation-collapsed .operator-copy,
+  .navigation-collapsed .version-line,
+  .navigation-collapsed .logout-label {
+    display: block;
+  }
+
+  .navigation-collapsed .sidebar-actions :deep(.locale-switcher) {
+    display: inline-flex;
+  }
+
+  .navigation-collapsed .sidebar-top,
+  .navigation-collapsed .sidebar-footer,
+  .navigation-collapsed .operator-card,
+  .navigation-collapsed .sidebar-actions {
+    align-items: stretch;
+  }
+
+  .navigation-collapsed .logout-button {
+    justify-content: flex-start;
+    width: 100%;
+    padding: 10px 16px;
   }
 }
 
 @media (max-width: 768px) {
-  .topbar,
-  .topbar-actions {
+  .topbar {
     align-items: flex-start;
     flex-direction: column;
+    padding: 14px 18px;
+  }
+
+  .topbar-actions {
+    flex-wrap: wrap;
+  }
+
+  .current-time {
+    display: none;
+  }
+
+  .topbar-subtitle {
+    display: none;
   }
 
   .content {

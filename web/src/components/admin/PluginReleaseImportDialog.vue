@@ -1,0 +1,228 @@
+<template>
+  <div v-if="open" class="plugin-dialog-backdrop" @click.self="requestClose">
+    <section
+      ref="modal"
+      class="plugin-dialog"
+      data-testid="plugin-release-import-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="plugin-release-title"
+      @keydown="handleKeydown"
+    >
+      <header class="dialog-header">
+        <h2 id="plugin-release-title">{{ t('control.releaseImport.title') }}</h2>
+        <button
+          ref="closeButton"
+          class="icon-button"
+          type="button"
+          :aria-label="t('common.actions.close')"
+          :title="t('common.actions.close')"
+          :disabled="saving"
+          @click="requestClose"
+        >
+          <X :size="20" aria-hidden="true" />
+          <span class="sr-only">{{ t('common.actions.close') }}</span>
+        </button>
+      </header>
+
+      <div class="dialog-body" :aria-busy="releaseReading ? 'true' : undefined">
+        <div class="form-group">
+          <label for="plugin-release-manifest">{{ t('control.releaseImport.manifest') }}</label>
+          <input id="plugin-release-manifest-file" type="file" accept="application/json,.json" :aria-label="t('control.releaseImport.manifest')" :disabled="saving" @change="readTextFile($event, 'manifest')" />
+          <textarea id="plugin-release-manifest" v-model="manifest" rows="10" spellcheck="false" :disabled="saving" @input="invalidateTextRead('manifest')"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="plugin-release-signature">{{ t('control.releaseImport.signature') }}</label>
+          <input id="plugin-release-signature-file" type="file" accept="text/plain,.sig" :aria-label="t('control.releaseImport.signature')" :disabled="saving" @change="readTextFile($event, 'signature')" />
+          <textarea id="plugin-release-signature" v-model="signature" rows="3" spellcheck="false" :disabled="saving" @input="invalidateTextRead('signature')"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="plugin-release-artifact">{{ t('control.releaseImport.artifact') }}</label>
+          <input id="plugin-release-artifact" type="file" :disabled="saving" @change="readArtifactFile" />
+          <p class="field-help">{{ artifactName || t('control.releaseImport.artifactOptional') }}</p>
+        </div>
+        <p v-if="inputError || error" class="dialog-error" role="alert">{{ inputError || error }}</p>
+      </div>
+
+      <footer class="dialog-footer">
+        <button class="btn" type="button" :disabled="saving" @click="requestClose">{{ t('common.actions.cancel') }}</button>
+        <button
+          class="btn btn-primary"
+          data-action="save-release"
+          type="button"
+          :disabled="saving || releaseReading || !manifest.trim() || !signature.trim()"
+          @click="save"
+        >
+          {{ saving ? t('control.actions.importing') : t('control.actions.importRelease') }}
+        </button>
+      </footer>
+    </section>
+  </div>
+</template>
+
+<script setup>
+import { computed, reactive, ref, watch } from 'vue'
+import { X } from '@lucide/vue'
+import { useAppI18n } from '@/composables/useAppI18n'
+import { useModalFocus } from '@/composables/useModalFocus'
+
+const props = defineProps({
+  open: { type: Boolean, default: false },
+  saving: { type: Boolean, default: false },
+  error: { type: String, default: '' },
+})
+const emit = defineEmits(['close', 'save'])
+const { t } = useAppI18n()
+const closeButton = ref(null)
+const modal = ref(null)
+const manifest = ref('')
+const signature = ref('')
+const artifactBase64 = ref('')
+const artifactName = ref('')
+const artifactReading = ref(false)
+const inputError = ref('')
+let artifactReadRevision = 0
+const textFields = ['manifest', 'signature']
+const textReading = reactive({ manifest: false, signature: false })
+const textReadRevision = { manifest: 0, signature: 0 }
+
+const canClose = computed(() => !props.saving)
+const openState = computed(() => props.open)
+const releaseReading = computed(() => artifactReading.value || textReading.manifest || textReading.signature)
+const { handleKeydown, requestClose } = useModalFocus({
+  open: openState,
+  canClose,
+  container: modal,
+  initialFocus: closeButton,
+  close: () => {
+    invalidateReleaseReads()
+    emit('close')
+  },
+})
+
+watch(() => props.open, (isOpen) => {
+  if (!isOpen) {
+    invalidateReleaseReads()
+    return
+  }
+  resetForm()
+}, { immediate: true })
+
+function resetForm() {
+  invalidateReleaseReads()
+  manifest.value = ''
+  signature.value = ''
+  artifactBase64.value = ''
+  artifactName.value = ''
+  inputError.value = ''
+}
+
+function invalidateArtifactRead() {
+  artifactReadRevision += 1
+  artifactReading.value = false
+}
+
+function invalidateReleaseReads() {
+  invalidateArtifactRead()
+  for (const field of textFields) invalidateTextRead(field)
+}
+
+function invalidateTextRead(field) {
+  if (!textFields.includes(field)) return
+  textReadRevision[field] += 1
+  textReading[field] = false
+}
+
+function setTextValue(field, value) {
+  if (field === 'manifest') manifest.value = value
+  if (field === 'signature') signature.value = value
+}
+
+async function readTextFile(event, field) {
+  if (!textFields.includes(field)) return
+  const file = event.target.files?.[0]
+  const revision = ++textReadRevision[field]
+  textReading[field] = false
+  if (!file) return
+  try {
+    inputError.value = ''
+    setTextValue(field, '')
+    textReading[field] = true
+    const value = await file.text()
+    if (revision !== textReadRevision[field] || !props.open) return
+    setTextValue(field, value)
+  } catch {
+    if (revision === textReadRevision[field] && props.open) {
+      setTextValue(field, '')
+      inputError.value = t('control.errors.releaseImport')
+    }
+  } finally {
+    if (revision === textReadRevision[field]) textReading[field] = false
+  }
+}
+
+async function readArtifactFile(event) {
+  const file = event.target.files?.[0]
+  const revision = ++artifactReadRevision
+  artifactReading.value = false
+  artifactBase64.value = ''
+  if (!file) {
+    artifactName.value = ''
+    return
+  }
+  try {
+    inputError.value = ''
+    artifactName.value = `${file.name} (${file.size} B)`
+    artifactReading.value = true
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    if (revision !== artifactReadRevision || !props.open) return
+    let binary = ''
+    const chunkSize = 0x8000
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize))
+    }
+    if (revision === artifactReadRevision && props.open) artifactBase64.value = btoa(binary)
+  } catch {
+    if (revision === artifactReadRevision && props.open) {
+      artifactBase64.value = ''
+      inputError.value = t('control.errors.releaseImport')
+    }
+  } finally {
+    if (revision === artifactReadRevision) artifactReading.value = false
+  }
+}
+
+function save() {
+  if (props.saving || releaseReading.value || !manifest.value.trim() || !signature.value.trim()) return
+  emit('save', {
+    manifest: manifest.value,
+    signature: signature.value.trim(),
+    artifactBase64: artifactBase64.value,
+  })
+}
+</script>
+
+<style scoped>
+.plugin-dialog-backdrop { position: fixed; inset: 0; z-index: 1200; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, .62); }
+.plugin-dialog { width: min(100%, 640px); max-height: calc(100dvh - 40px); overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-color); color: var(--text-color); box-shadow: 0 18px 32px rgba(15, 23, 42, .2); }
+.dialog-header, .dialog-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--border-color); }
+.dialog-header h2 { margin: 0; font-size: 18px; line-height: 1.35; }
+.dialog-body { display: grid; gap: 18px; padding: 20px; }
+.form-group { display: grid; gap: 8px; }
+.form-group label { font-size: 14px; font-weight: 600; }
+.form-group textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-color); color: var(--text-color); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 10px; resize: vertical; }
+.field-help, .dialog-error { margin: 0; color: var(--text-secondary); overflow-wrap: anywhere; }
+.dialog-error { color: var(--error-color); }
+.dialog-footer { align-items: center; justify-content: flex-end; border-top: 1px solid var(--border-color); border-bottom: 0; }
+.btn, .icon-button { min-height: 36px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-color); color: var(--text-color); cursor: pointer; }
+.btn { padding: 8px 12px; }
+.icon-button { display: inline-grid; width: 36px; place-items: center; padding: 0; }
+.btn-primary { border-color: var(--primary-color); background: var(--primary-color); color: #fff; }
+.btn:disabled, .icon-button:disabled { cursor: not-allowed; opacity: .55; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 720px) {
+  .plugin-dialog-backdrop { padding: 0; }
+  .plugin-dialog { width: 100vw; max-height: none; min-height: 100dvh; border: 0; border-radius: 0; display: flex; flex-direction: column; }
+  .dialog-body { flex: 1; align-content: start; }
+}
+</style>

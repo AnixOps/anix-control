@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the existing Go/kernel APIs untouched. Add two route-level Vue views backed by focused composables: the Plugin Center loads only catalog/install resources, while the Deployment Center loads topology/target/activity resources and fetches assignments only for the selected node. The compact navigation shell owns grouping, collapse state, responsive behavior, permissions, and extension menu placement; domain views own loading, mutation, and polling lifecycles.
 
-**Tech Stack:** Vue 3 Composition API, Vue Router 4, Pinia, vue-i18n, Vitest, Vue Test Utils, Playwright, Vite, and `lucide-vue-next`.
+**Tech Stack:** Vue 3 Composition API, Vue Router 4, Pinia, vue-i18n, Vitest, Vue Test Utils, Playwright, Vite, and `@lucide/vue`.
 
 ## Global Constraints
 
@@ -47,6 +47,8 @@
 **Files:**
 - Create: `web/src/router/controlLegacy.js`
 - Create: `web/src/__tests__/controlLegacy.test.js`
+- Create: `web/src/views/admin/Plugins.vue` (temporary route stub; Task 4 replaces it)
+- Create: `web/src/views/admin/Deployments.vue` (temporary route stub; Task 6 replaces it)
 - Modify: `web/package.json`
 - Modify: `web/package-lock.json`
 - Modify: `web/src/router/index.js`
@@ -60,6 +62,9 @@
 - `resolveLegacyControlRedirect(to)` accepts `query` and `hash` and returns `{ path, query, hash }`.
 - `LEGACY_DEPLOYMENT_TABS` is a `Set` containing `assignments`, `scopes`, `topologies`, and `operations`.
 - The router exposes `/admin/plugins`, `/admin/deployments`, and `/admin/control`; the last path uses the redirect helper.
+- The two temporary views exist solely so Vite can statically resolve lazy
+  imports while route-contract tests run; they contain no product UI and are
+  replaced by their named route tasks.
 
 - [ ] **Step 1: Write failing redirect and metadata tests.**
 
@@ -108,7 +113,7 @@ not exist.
 Run:
 
 ```bash
-npm --prefix web install lucide-vue-next
+npm --prefix web install @lucide/vue
 ```
 
 Create `web/src/router/controlLegacy.js`:
@@ -144,6 +149,16 @@ Add `plugins`/`deployments` page title and nav keys to both locales, with
 `business`, `network`, `controlCenter`, and `more`. Map both paths in
 `pageMeta.js`. Retain the existing `control` copy for compatibility.
 
+Create the two temporary route files with no data fetching or actions:
+
+```vue
+<template><section data-testid="admin-route-placeholder"></section></template>
+```
+
+They are a Vite import bridge only. Task 4 and Task 6 replace the respective
+files with complete route implementations before any production build or
+visual acceptance run.
+
 - [ ] **Step 4: Run the focused route set and verify it passes.**
 
 Run:
@@ -159,7 +174,7 @@ resolves to `/admin/deployments` and `/admin/control` resolves to
 - [ ] **Step 5: Commit the compatibility foundation.**
 
 ```bash
-git add web/package.json web/package-lock.json web/src/router/controlLegacy.js web/src/router/index.js web/src/utils/pageMeta.js web/src/locales/en.js web/src/locales/zh-CN.js web/src/__tests__/controlLegacy.test.js web/src/__tests__/adminRoutes.test.js web/src/__tests__/pageMeta.test.js
+git add web/package.json web/package-lock.json web/src/router/controlLegacy.js web/src/router/index.js web/src/utils/pageMeta.js web/src/locales/en.js web/src/locales/zh-CN.js web/src/views/admin/Plugins.vue web/src/views/admin/Deployments.vue web/src/__tests__/controlLegacy.test.js web/src/__tests__/adminRoutes.test.js web/src/__tests__/pageMeta.test.js
 git commit -m "feat(admin): add plugin and deployment routes"
 ```
 
@@ -217,7 +232,7 @@ Use a closed icon mapping in `AdminNavIcon.vue` so extension data cannot select
 an arbitrary component:
 
 ```js
-import { Box, ChartNoAxesCombined, Gauge, LayoutDashboard, Network, Package, Rocket, Settings, Users } from 'lucide-vue-next'
+import { Box, ChartNoAxesCombined, Gauge, LayoutDashboard, Network, Package, Rocket, Settings, Users } from '@lucide/vue'
 
 const icons = Object.freeze({
   dashboard: LayoutDashboard,
@@ -410,7 +425,7 @@ git commit -m "feat(admin): add grouped plugin catalog components"
 ## Task 4: Deliver the Plugin Center Route and Preserve Lifecycle Semantics
 
 **Files:**
-- Create: `web/src/views/admin/Plugins.vue`
+- Modify: `web/src/views/admin/Plugins.vue`
 - Create: `web/src/__tests__/Plugins.test.js`
 - Modify: `web/src/components/admin/PluginDetailDrawer.vue`
 - Modify: `web/src/components/admin/PluginInstallationDialog.vue`
@@ -619,7 +634,7 @@ git commit -m "feat(admin): extract deployment workspace components"
 ## Task 6: Deliver Deployment Center, Migrate Browser Coverage, and Remove the Monolith
 
 **Files:**
-- Create: `web/src/views/admin/Deployments.vue`
+- Modify: `web/src/views/admin/Deployments.vue`
 - Create: `web/src/__tests__/Deployments.test.js`
 - Modify: `web/e2e/control-assignments.spec.js`
 - Modify: `web/e2e/live-control-machine-telemetry.spec.js`
@@ -653,6 +668,15 @@ expect(wrapper.get('[data-testid="assignment-drawer"]').exists()).toBe(true)
 Add an initial-load assertion that `getKernelPluginReleases` is not called until
 the assignment drawer is opened.
 
+Add a plan-payload assertion for a nondefault UI rollout group:
+
+```js
+expect(kernelApi.planKernelDeployment).toHaveBeenCalledWith(expect.objectContaining({
+  rollout_group: 'canary-a',
+  failure_policy: 'stop_and_rollback',
+}))
+```
+
 - [ ] **Step 2: Run the route test and verify it fails.**
 
 Run:
@@ -678,7 +702,12 @@ Preserve staged publishing:
 await diagnoseKernelTopologyDeployment(topologyID, revisionID, options)
 const preview = await previewKernelTopologyDeployment(topologyID, revisionID, options)
 if (!preview?.valid) throw new Error(t('control.topology.invalid'))
-const deployment = await planKernelDeployment({ topology_id: topologyID, revision_id: revisionID, ...options })
+const deployment = await planKernelDeployment({
+  topology_id: topologyID,
+  revision_id: revisionID,
+  rollout_group: options.rolloutGroup?.trim() || '',
+  failure_policy: options.failurePolicy || 'stop_and_rollback',
+})
 await getKernelDeploymentStatus(deployment.id)
 ```
 
