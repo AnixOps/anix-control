@@ -668,6 +668,15 @@ expect(wrapper.get('[data-testid="assignment-drawer"]').exists()).toBe(true)
 Add an initial-load assertion that `getKernelPluginReleases` is not called until
 the assignment drawer is opened.
 
+Add a plan-payload assertion for a nondefault UI rollout group:
+
+```js
+expect(kernelApi.planKernelDeployment).toHaveBeenCalledWith(expect.objectContaining({
+  rollout_group: 'canary-a',
+  failure_policy: 'stop_and_rollback',
+}))
+```
+
 - [ ] **Step 2: Run the route test and verify it fails.**
 
 Run:
@@ -693,7 +702,12 @@ Preserve staged publishing:
 await diagnoseKernelTopologyDeployment(topologyID, revisionID, options)
 const preview = await previewKernelTopologyDeployment(topologyID, revisionID, options)
 if (!preview?.valid) throw new Error(t('control.topology.invalid'))
-const deployment = await planKernelDeployment({ topology_id: topologyID, revision_id: revisionID, ...options })
+const deployment = await planKernelDeployment({
+  topology_id: topologyID,
+  revision_id: revisionID,
+  rollout_group: options.rolloutGroup?.trim() || '',
+  failure_policy: options.failurePolicy || 'stop_and_rollback',
+})
 await getKernelDeploymentStatus(deployment.id)
 ```
 
