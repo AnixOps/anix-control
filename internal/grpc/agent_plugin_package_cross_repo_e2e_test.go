@@ -26,6 +26,7 @@ import (
 	"time"
 
 	agentv1pb "github.com/AnixOps/anix-agent/sdk/api/grpc/agent/v1"
+	agentplugin "github.com/AnixOps/anix-agent/sdk/plugincontrol"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
@@ -44,6 +45,28 @@ import (
 )
 
 const crossRepoPluginE2EArtifactMinimum = 4 << 20
+
+func TestAgentPluginPackageCrossRepoContract(t *testing.T) {
+	operation := agentplugin.Operation{
+		ID:             "agent-package-operation-42",
+		PackageID:      "wireguard",
+		PackageVersion: "4.0.0",
+		Generation:     9,
+		IdempotencyKey: "agent-package-key-42",
+		Kind:           "configure",
+		ConfigJSON:     []byte(`{"interface":"wg0"}`),
+	}
+	require.NoError(t, agentplugin.ValidateOperation(operation))
+
+	status := agentplugin.RuntimeStatus{
+		PackageID: operation.PackageID, PackageVersion: operation.PackageVersion,
+		Generation: operation.Generation, Healthy: true, ObservedHash: "wireguard-config-sha256",
+	}
+	require.Equal(t, operation.PackageID, status.PackageID)
+	require.Equal(t, operation.PackageVersion, status.PackageVersion)
+	require.Equal(t, operation.Generation, status.Generation)
+	require.True(t, status.Healthy)
+}
 
 // TestAgentPluginPackageCrossRepositoryE2E is the release gate for the real
 // Control package transport and Agent Supervisor. It intentionally builds the
