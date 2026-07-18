@@ -52,6 +52,16 @@ const installation = {
   enabled: true,
 }
 
+function deferred() {
+  let resolve
+  let reject
+  const promise = new Promise((nextResolve, nextReject) => {
+    resolve = nextResolve
+    reject = nextReject
+  })
+  return { promise, reject, resolve }
+}
+
 function resolveEmptyState() {
   kernelApi.getKernelTopologies.mockResolvedValue([])
   kernelApi.getKernelDeployments.mockResolvedValue([])
@@ -152,6 +162,47 @@ describe('Deployments', () => {
     wrapper.unmount()
   })
 
+  it('loads default-node assignments when Targets opens before initial nodes resolve', async () => {
+    const nodesRequest = deferred()
+    adminApi.getNodes.mockReturnValue(nodesRequest.promise)
+    const wrapper = mountDeployments()
+
+    await wrapper.get('[data-testid="deployment-targets"]').trigger('click')
+    expect(kernelApi.getKernelNodeAssignments).not.toHaveBeenCalled()
+
+    nodesRequest.resolve({ code: 0, data: { list: [node] } })
+    await flushPromises()
+    expect(kernelApi.getKernelNodeAssignments).toHaveBeenCalledWith(11)
+    wrapper.unmount()
+  })
+
+  it('keeps the current target rows when an older assignment request resolves late', async () => {
+    const firstAssignments = deferred()
+    const secondNode = { id: 22, name: 'Tokyo entry', host: '10.0.0.22' }
+    const firstAssignment = { id: 7, node_id: 11, service_scope: 'forward', plugin_id: 'gost-mesh', role: 'relay', enabled: true }
+    const secondAssignment = { id: 8, node_id: 22, service_scope: 'forward', plugin_id: 'nat-egress', role: 'egress', enabled: true }
+    adminApi.getNodes.mockResolvedValue({ code: 0, data: { list: [node, secondNode] } })
+    kernelApi.getKernelNodeAssignments.mockImplementation(nodeID => {
+      return Number(nodeID) === 11 ? firstAssignments.promise : Promise.resolve([secondAssignment])
+    })
+    const wrapper = mountDeployments()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="deployment-targets"]').trigger('click')
+    await nextTick()
+    const picker = wrapper.get('#assignment-node-filter')
+    picker.element.value = '22'
+    await picker.trigger('change')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="deployment-target-panel"]').text()).toContain('nat-egress')
+
+    firstAssignments.resolve([firstAssignment])
+    await flushPromises()
+    expect(wrapper.get('[data-testid="deployment-target-panel"]').text()).toContain('nat-egress')
+    expect(wrapper.get('[data-testid="deployment-target-panel"]').text()).not.toContain('gost-mesh')
+    wrapper.unmount()
+  })
+
   it('creates an assignment and keeps an assignment failure visible in its drawer', async () => {
     resolveAssignmentState()
     const wrapper = mountDeployments()
@@ -215,6 +266,66 @@ describe('Deployments', () => {
     wrapper.unmount()
   })
 
+  it('polls an already-running operation for the selected target until it becomes terminal', async () => {
+    vi.useFakeTimers()
+    resolveAssignmentState()
+    kernelApi.getKernelOperations
+      .mockResolvedValueOnce([{ id: 'existing-target-op', kind: 'plugin.enable', node_id: 11, state: 'running' }])
+      .mockResolvedValueOnce([{ id: 'existing-target-op', kind: 'plugin.enable', node_id: 11, state: 'completed' }])
+    const wrapper = mountDeployments()
+    await flushPromises()
+
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(1)
+    await openTargets(wrapper)
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(4000)
+    await flushPromises()
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+
+  it('keeps an assignment mutation bound to its initiating target after a target switch', async () => {
+    const mutation = deferred()
+    const assignment = {
+      id: 7,
+      node_id: 11,
+      service_scope: 'forward',
+      plugin_id: 'gost-mesh',
+      role: 'relay',
+      desired_version: '1.0.0',
+      desired_config_revision: 6,
+      rollout_group: '',
+      enabled: true,
+    }
+    const secondNode = { id: 22, name: 'Tokyo entry', host: '10.0.0.22' }
+    adminApi.getNodes.mockResolvedValue({ code: 0, data: { list: [node, secondNode] } })
+    kernelApi.getKernelNodeAssignments.mockResolvedValue([assignment])
+    kernelApi.upsertKernelNodeAssignment.mockReturnValueOnce(mutation.promise)
+    const wrapper = mountDeployments()
+    await flushPromises()
+    await openTargets(wrapper)
+
+    await wrapper.get('[data-testid="toggle-assignment-7"]').trigger('click')
+    await nextTick()
+    expect(kernelApi.upsertKernelNodeAssignment).toHaveBeenCalledWith(11, expect.objectContaining({ enabled: false }))
+    const picker = wrapper.get('#assignment-node-filter')
+    expect(picker.attributes('disabled')).toBeDefined()
+
+    wrapper.vm.$.setupState.selectedNodeID = 22
+    await nextTick()
+    await flushPromises()
+    expect(picker.element.value).toBe('22')
+    mutation.resolve({ id: 7 })
+    await flushPromises()
+
+    expect(kernelApi.getKernelNodeAssignments.mock.calls.filter(([nodeID]) => nodeID === 22)).toHaveLength(0)
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
   it('edits, toggles, and deletes a selected-node assignment without changing identity fields', async () => {
     const assignment = {
       id: 7,
@@ -228,6 +339,7 @@ describe('Deployments', () => {
       enabled: false,
     }
     resolveAssignmentState([assignment])
+    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true)
     const wrapper = mountDeployments()
     await flushPromises()
     await openTargets(wrapper)
@@ -267,6 +379,39 @@ describe('Deployments', () => {
     await flushPromises()
     expect(kernelApi.deleteKernelNodeAssignment).toHaveBeenCalledWith(11, 7)
     wrapper.unmount()
+    confirmSpy.mockRestore()
+  })
+
+  it('requires explicit confirmation before deleting an assignment', async () => {
+    const assignment = {
+      id: 7,
+      node_id: 11,
+      service_scope: 'forward',
+      plugin_id: 'gost-mesh',
+      role: 'relay',
+      desired_version: '1.0.0',
+      desired_config_revision: 6,
+      rollout_group: 'canary-a',
+      enabled: true,
+    }
+    resolveAssignmentState([assignment])
+    const confirmSpy = vi.spyOn(globalThis, 'confirm')
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true)
+    const wrapper = mountDeployments()
+    await flushPromises()
+    await openTargets(wrapper)
+
+    await wrapper.get('[data-testid="delete-assignment-7"]').trigger('click')
+    await flushPromises()
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(kernelApi.deleteKernelNodeAssignment).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-testid="delete-assignment-7"]').trigger('click')
+    await flushPromises()
+    expect(kernelApi.deleteKernelNodeAssignment).toHaveBeenCalledWith(11, 7)
+    wrapper.unmount()
+    confirmSpy.mockRestore()
   })
 
   it('creates a topology and opens its revision workspace', async () => {
@@ -376,6 +521,40 @@ describe('Deployments', () => {
     await wrapper.get('[data-testid="confirm-rollback"]').trigger('click')
     await flushPromises()
     expect(kernelApi.rollbackKernelDeployment).toHaveBeenCalledWith(44)
+    wrapper.unmount()
+  })
+
+  it('does not attach a stale deployment status after switching topology editors', async () => {
+    const firstStatus = deferred()
+    kernelApi.getKernelTopologies.mockResolvedValue([
+      { id: 4, name: 'Mesh', service_scope: 'forward', active_revision_id: 30 },
+      { id: 5, name: 'Tokyo mesh', service_scope: 'forward', active_revision_id: 40 },
+    ])
+    kernelApi.getKernelDeployments.mockResolvedValue([{ id: 44, topology_id: 4, revision_id: 30, state: 'planned' }])
+    kernelApi.getKernelTopologyRevisions.mockImplementation(topologyID => Promise.resolve([
+      { id: Number(topologyID) === 4 ? 30 : 40, topology_id: topologyID, revision: 1, message: 'initial' },
+    ]))
+    kernelApi.getKernelTopologyRevision.mockResolvedValue({ revision: { id: 30, message: 'initial' }, vertices: [], edges: [] })
+    kernelApi.getKernelDeploymentStatus.mockImplementation(deploymentID => {
+      if (Number(deploymentID) === 44) return firstStatus.promise
+      return Promise.resolve({ deployment: { id: deploymentID, state: 'planned' }, steps: [] })
+    })
+    const wrapper = mountDeployments()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="view-deployment-44"]').trigger('click')
+    await flushPromises()
+    expect(kernelApi.getKernelDeploymentStatus).toHaveBeenCalledWith(44)
+
+    await wrapper.get('[data-testid="edit-topology-5"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.workspace-meta').text()).toContain('Tokyo mesh')
+    expect(wrapper.find('.deployment-status').exists()).toBe(false)
+
+    firstStatus.resolve({ deployment: { id: 44, topology_id: 4, state: 'applying' }, steps: [] })
+    await flushPromises()
+    expect(wrapper.get('.workspace-meta').text()).toContain('Tokyo mesh')
+    expect(wrapper.find('.deployment-status').exists()).toBe(false)
     wrapper.unmount()
   })
 

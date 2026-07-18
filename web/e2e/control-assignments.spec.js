@@ -115,6 +115,7 @@ test('runs the assignment lifecycle in a narrow viewport without page overflow',
   await expect(page.locator('[data-testid="deployment-target-panel"]')).toContainText('Disabled')
   await page.locator('[data-testid="toggle-assignment-7"]').click()
   await expect(page.locator('[data-testid="deployment-target-panel"]')).toContainText('Enabled')
+  page.once('dialog', dialog => dialog.accept())
   await page.locator('[data-testid="delete-assignment-7"]').click()
   await expect(page.locator('[data-testid="deployment-target-panel"]')).toContainText('No assignments for this node')
 })

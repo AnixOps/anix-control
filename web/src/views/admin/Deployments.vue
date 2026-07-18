@@ -132,18 +132,18 @@
           <select
             id="assignment-node-filter"
             v-model.number="selectedNodeID"
-            :disabled="nodes.length === 0 || assignmentsLoading"
-            @change="loadAssignments(selectedNodeID)"
+            :disabled="nodes.length === 0 || targetMutationPending"
+            @change="selectAssignmentTarget($event.target.value)"
           >
             <option v-if="nodes.length === 0" :value="0">{{ t('control.assignments.noNodes') }}</option>
             <option v-for="node in nodes" :key="node.id" :value="node.id">{{ node.name || node.host || `#${node.id}` }} (#{{ node.id }})</option>
           </select>
         </label>
         <div class="row-actions">
-          <button class="btn" type="button" :disabled="!selectedNodeID || assignmentsLoading" @click="loadAssignments(selectedNodeID)">
+          <button class="btn" type="button" :disabled="!selectedNodeID || assignmentsLoading || targetMutationPending" @click="loadAssignments(selectedNodeID)">
             {{ assignmentsLoading ? t('control.actions.refreshing') : t('control.actions.refresh') }}
           </button>
-          <button class="btn btn-primary" data-testid="new-assignment" type="button" :disabled="!selectedNodeID" @click="openAssignmentDrawer()">
+          <button class="btn btn-primary" data-testid="new-assignment" type="button" :disabled="!selectedNodeID || targetMutationPending" @click="openAssignmentDrawer()">
             {{ t('control.actions.newAssignment') }}
           </button>
         </div>
@@ -330,19 +330,19 @@ const assignmentResources = reactive({
   releases: [],
   installations: [],
 })
+const targetMutationPending = computed(() => assignmentEditor.saving || Object.values(assignmentBusy.value).some(Boolean))
 
 let pollTimer = null
 let pollRequestRunning = false
 let disposed = false
 let topologyRequestID = 0
+let topologySessionID = 0
+let assignmentLoadRequestID = 0
 
 const scopedOperationIDs = computed(() => {
   const ids = new Set(trackedOperationIDs.value)
-  const deploymentID = Number(topologyEditor.deploymentID)
-  const nodeID = Number(selectedNodeID.value)
   for (const operation of operations.value) {
-    if (deploymentID && operationDeploymentID(operation) === deploymentID) ids.add(String(operation.id))
-    if (nodeID && operationNodeID(operation) === nodeID) ids.add(String(operation.id))
+    if (isScopedOperation(operation)) ids.add(String(operation.id))
   }
   return [...ids]
 })
@@ -399,11 +399,37 @@ function reconcileTrackedOperations() {
 }
 
 function trackNodeOperations(nodeID) {
+  if (!isCurrentTarget(nodeID)) return
   const matchingOperationIDs = operations.value
     .filter(operation => operationNodeID(operation) === Number(nodeID) && !TERMINAL_OPERATION_STATES.has(operation.state))
     .map(operation => String(operation.id))
   if (!matchingOperationIDs.length) return
   trackedOperationIDs.value = new Set([...trackedOperationIDs.value, ...matchingOperationIDs])
+}
+
+function isCurrentTarget(nodeID) {
+  return viewMode.value === 'targets' && Number(nodeID) > 0 && Number(selectedNodeID.value) === Number(nodeID)
+}
+
+function beginTopologyEditorSession() {
+  topologySessionID += 1
+  return topologySessionID
+}
+
+function isCurrentTopologySession(sessionID, topologyID) {
+  return sessionID === topologySessionID && topologyEditor.open && Number(topologyEditor.topology?.id) === Number(topologyID)
+}
+
+function isCurrentDeploymentStatusSession(sessionID, topologyID, deploymentID) {
+  return isCurrentTopologySession(sessionID, topologyID) && Number(topologyEditor.deploymentID) === Number(deploymentID)
+}
+
+function isScopedOperation(operation) {
+  const deploymentID = Number(topologyEditor.deploymentID)
+  return Boolean(
+    (topologyEditor.open && deploymentID && operationDeploymentID(operation) === deploymentID) ||
+    isCurrentTarget(operationNodeID(operation)),
+  )
 }
 
 function updateDeployment(deployment) {
@@ -436,6 +462,7 @@ async function loadInitial({ silent = false } = {}) {
     }
     loaded.value = true
     reconcileTrackedOperations()
+    if (viewMode.value === 'targets' && selectedNodeID.value > 0) await loadAssignments(selectedNodeID.value)
     updatePolling()
     return true
   } catch (cause) {
@@ -472,27 +499,38 @@ async function refreshOperationState() {
 
 async function setViewMode(mode) {
   viewMode.value = mode
-  if (mode === 'targets') await loadAssignments(selectedNodeID.value)
+  if (mode === 'targets' && selectedNodeID.value > 0) await loadAssignments(selectedNodeID.value)
+  updatePolling()
 }
 
 async function loadAssignments(nodeID = selectedNodeID.value) {
   const requestedNodeID = Number(nodeID)
+  const requestID = ++assignmentLoadRequestID
   if (requestedNodeID <= 0) {
-    assignments.value = []
+    if (requestID === assignmentLoadRequestID) assignments.value = []
     return false
   }
   assignmentsLoading.value = true
   error.value = ''
   try {
-    assignments.value = rows(await getKernelNodeAssignments(requestedNodeID))
+    const assignmentRows = rows(await getKernelNodeAssignments(requestedNodeID))
+    if (requestID !== assignmentLoadRequestID || !isCurrentTarget(requestedNodeID)) return false
+    assignments.value = assignmentRows
     return true
   } catch (cause) {
+    if (requestID !== assignmentLoadRequestID || !isCurrentTarget(requestedNodeID)) return false
     assignments.value = []
     error.value = errorMessage(cause, 'control.errors.assignmentsLoad')
     return false
   } finally {
-    assignmentsLoading.value = false
+    if (requestID === assignmentLoadRequestID) assignmentsLoading.value = false
   }
+}
+
+async function selectAssignmentTarget(nodeID) {
+  selectedNodeID.value = Number(nodeID)
+  await loadAssignments(selectedNodeID.value)
+  updatePolling()
 }
 
 async function loadAssignmentResources() {
@@ -529,10 +567,12 @@ function closeAssignmentDrawer() {
 }
 
 async function refreshSelectedAssignmentActivity(nodeID = selectedNodeID.value) {
+  if (!isCurrentTarget(nodeID)) return true
   const [assignmentResult, operationResult] = await Promise.all([
     loadAssignments(nodeID),
     refreshOperationState(),
   ])
+  if (!isCurrentTarget(nodeID)) return true
   if (operationResult) trackNodeOperations(nodeID)
   updatePolling()
   return assignmentResult && operationResult
@@ -547,8 +587,7 @@ async function saveAssignment({ nodeID, payload }) {
   notice.value = ''
   try {
     const result = await upsertKernelNodeAssignment(targetNodeID, payload)
-    addTrackedOperation(result)
-    selectedNodeID.value = targetNodeID
+    if (isCurrentTarget(targetNodeID)) addTrackedOperation(result)
     if (!await refreshSelectedAssignmentActivity(targetNodeID)) throw new Error(error.value || t('control.errors.assignmentsLoad'))
     assignmentEditor.open = false
     notice.value = t('control.messages.assignmentSaved', { plugin: pluginName(payload.plugin_id) })
@@ -569,11 +608,12 @@ function setAssignmentBusy(assignment, action = '') {
 }
 
 async function toggleAssignment(assignment) {
+  const targetNodeID = Number(assignment.node_id || selectedNodeID.value)
   setAssignmentBusy(assignment, 'toggle')
   error.value = ''
   notice.value = ''
   try {
-    const result = await upsertKernelNodeAssignment(Number(selectedNodeID.value), {
+    const result = await upsertKernelNodeAssignment(targetNodeID, {
       service_scope: assignment.service_scope,
       plugin_id: assignment.plugin_id,
       role: assignment.role,
@@ -582,8 +622,8 @@ async function toggleAssignment(assignment) {
       enabled: !assignment.enabled,
       rollout_group: assignment.rollout_group || '',
     })
-    addTrackedOperation(result)
-    await refreshSelectedAssignmentActivity(Number(selectedNodeID.value))
+    if (isCurrentTarget(targetNodeID)) addTrackedOperation(result)
+    await refreshSelectedAssignmentActivity(targetNodeID)
     notice.value = t('control.messages.assignmentStateSaved', { plugin: pluginName(assignment.plugin_id) })
   } catch (cause) {
     error.value = errorMessage(cause, 'control.errors.assignmentSave')
@@ -593,12 +633,14 @@ async function toggleAssignment(assignment) {
 }
 
 async function removeAssignment(assignment) {
+  if (!confirm(t('control.assignments.deleteConfirm', { plugin: pluginName(assignment.plugin_id), role: assignment.role }))) return
+  const targetNodeID = Number(assignment.node_id || selectedNodeID.value)
   setAssignmentBusy(assignment, 'delete')
   error.value = ''
   notice.value = ''
   try {
-    await deleteKernelNodeAssignment(Number(selectedNodeID.value), assignment.id)
-    await refreshSelectedAssignmentActivity(Number(selectedNodeID.value))
+    await deleteKernelNodeAssignment(targetNodeID, assignment.id)
+    await refreshSelectedAssignmentActivity(targetNodeID)
     notice.value = t('control.messages.assignmentDeleted', { plugin: pluginName(assignment.plugin_id) })
   } catch (cause) {
     error.value = errorMessage(cause, 'control.errors.assignmentDelete')
@@ -625,12 +667,17 @@ function resetTopologyEditor() {
 }
 
 function openNewTopology() {
+  beginTopologyEditorSession()
   resetTopologyEditor()
   topologyEditor.open = true
 }
 
 function closeTopologyEditor() {
-  if (!topologyEditor.saving && !topologyEditor.validating) topologyEditor.open = false
+  if (!topologyEditor.saving && !topologyEditor.validating) {
+    beginTopologyEditorSession()
+    topologyEditor.open = false
+    updatePolling()
+  }
 }
 
 async function createTopology(input) {
@@ -660,21 +707,24 @@ async function createTopology(input) {
 
 async function openTopologyEditor(topology) {
   const nextTopology = topology || topologies.value.find(item => Number(item.id) === Number(topologyEditor.topology?.id))
-  if (!nextTopology?.id) return
+  if (!nextTopology?.id) return 0
   const requestID = ++topologyRequestID
+  const sessionID = beginTopologyEditorSession()
   resetTopologyEditor()
   Object.assign(topologyEditor, { open: true, topology: nextTopology, loading: true })
   try {
     const revisions = rows(await getKernelTopologyRevisions(nextTopology.id))
-    if (requestID !== topologyRequestID || !topologyEditor.open) return
+    if (requestID !== topologyRequestID || !isCurrentTopologySession(sessionID, nextTopology.id)) return 0
     topologyEditor.revisions = revisions
     const revisionID = Number(nextTopology.active_revision_id || revisions[0]?.id || 0)
     topologyEditor.revisionID = revisionID
     if (revisionID) await loadTopologyRevisionDetail(nextTopology.id, revisionID, requestID)
+    return isCurrentTopologySession(sessionID, nextTopology.id) ? sessionID : 0
   } catch (cause) {
-    if (requestID === topologyRequestID) topologyEditor.error = errorMessage(cause, 'control.errors.topologyLoad')
+    if (requestID === topologyRequestID && isCurrentTopologySession(sessionID, nextTopology.id)) topologyEditor.error = errorMessage(cause, 'control.errors.topologyLoad')
+    return 0
   } finally {
-    if (requestID === topologyRequestID) topologyEditor.loading = false
+    if (requestID === topologyRequestID && isCurrentTopologySession(sessionID, nextTopology.id)) topologyEditor.loading = false
   }
 }
 
@@ -800,26 +850,35 @@ async function planTopology({ topologyID, revisionID, options }) {
   }
 }
 
-async function refreshDeploymentStatus(deploymentID = topologyEditor.deploymentID) {
+async function refreshDeploymentStatus(deploymentID = topologyEditor.deploymentID, {
+  sessionID = topologySessionID,
+  topologyID = topologyEditor.topology?.id,
+} = {}) {
   const selectedDeploymentID = Number(deploymentID)
   if (!selectedDeploymentID) return null
-  const status = await getKernelDeploymentStatus(selectedDeploymentID)
-  topologyEditor.deploymentID = selectedDeploymentID
-  topologyEditor.deploymentStatus = status
-  updateDeployment(status?.deployment || status)
-  updatePolling()
-  return status
+  try {
+    const status = await getKernelDeploymentStatus(selectedDeploymentID)
+    if (!isCurrentDeploymentStatusSession(sessionID, topologyID, selectedDeploymentID)) return null
+    topologyEditor.deploymentStatus = status
+    updateDeployment(status?.deployment || status)
+    updatePolling()
+    return status
+  } catch (cause) {
+    if (!isCurrentDeploymentStatusSession(sessionID, topologyID, selectedDeploymentID)) return null
+    throw cause
+  }
 }
 
 async function openDeploymentStatus(deployment) {
   const topology = topologies.value.find(item => Number(item.id) === Number(deployment?.topology_id))
   if (!topology) return
-  await openTopologyEditor(topology)
-  if (!deployment?.id) return
+  const sessionID = await openTopologyEditor(topology)
+  if (!deployment?.id || !isCurrentTopologySession(sessionID, topology.id)) return
+  topologyEditor.deploymentID = Number(deployment.id)
   try {
-    await refreshDeploymentStatus(deployment.id)
+    await refreshDeploymentStatus(deployment.id, { sessionID, topologyID: topology.id })
   } catch (cause) {
-    topologyEditor.error = errorMessage(cause, 'control.errors.topologyStatus')
+    if (isCurrentDeploymentStatusSession(sessionID, topology.id, deployment.id)) topologyEditor.error = errorMessage(cause, 'control.errors.topologyStatus')
   }
 }
 
@@ -880,6 +939,7 @@ function selectedDeploymentIsActive() {
 
 function hasActiveScopedWork() {
   if (selectedDeploymentIsActive()) return true
+  if (operations.value.some(operation => isScopedOperation(operation) && !TERMINAL_OPERATION_STATES.has(operation.state))) return true
   return [...trackedOperationIDs.value].some(operationID => {
     const operation = operations.value.find(item => String(item?.id) === String(operationID))
     return operation && !TERMINAL_OPERATION_STATES.has(operation.state)
@@ -904,14 +964,18 @@ function updatePolling() {
 async function pollActivity() {
   if (pollRequestRunning || disposed) return
   pollRequestRunning = true
+  const sessionID = topologySessionID
+  const topologyID = topologyEditor.topology?.id
+  const deploymentID = Number(topologyEditor.deploymentID)
+  const shouldRefreshDeployment = selectedDeploymentIsActive()
   try {
     const operationRequest = getKernelOperations()
-    const deploymentRequest = selectedDeploymentIsActive()
-      ? getKernelDeploymentStatus(topologyEditor.deploymentID)
+    const deploymentRequest = shouldRefreshDeployment
+      ? getKernelDeploymentStatus(deploymentID)
       : null
     const [operationRows, status] = await Promise.all([operationRequest, deploymentRequest])
     operations.value = rows(operationRows)
-    if (status) {
+    if (status && isCurrentDeploymentStatusSession(sessionID, topologyID, deploymentID)) {
       topologyEditor.deploymentStatus = status
       updateDeployment(status?.deployment || status)
     }

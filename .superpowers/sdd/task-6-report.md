@@ -131,3 +131,88 @@ Read-only review against `4ec7054` found and drove the scoped-lifecycle and crea
 ## Concerns
 
 - The live-control browser test requires a local backend that is not running in this workspace; its failure is pre-assertion `ECONNREFUSED`, not a UI regression.
+
+## Fix Round Task 6
+
+### Formal Review Fixes
+
+The formal review identified five migration-scope regressions. No backend,
+API-wrapper, or authorization behavior changed.
+
+- Assignment deletion now asks for the existing localized destructive
+  confirmation before calling the delete API. Focused coverage proves cancel
+  makes no delete request and confirm deletes the selected assignment. The
+  assignment fixture browser flow explicitly accepts this native confirmation.
+- Assignment target mutations capture their initiating node ID. The selector,
+  refresh action, and create action are disabled while an assignment mutation
+  is pending. Assignment responses are request-ordered and only write rows for
+  the current Targets selection; an early Targets entry waits for the initial
+  node load and then loads the default node's assignments.
+- Polling now treats any nonterminal operation row scoped to the selected
+  Targets node as active work, in addition to explicitly tracked operation
+  IDs. A pre-existing selected-node operation starts polling and the timer
+  stops after its row becomes terminal or disappears.
+- Deployment status reads carry the current topology-editor session plus the
+  expected topology and deployment IDs. Closing, opening, or switching the
+  editor invalidates prior status responses; poll-driven status responses use
+  the same guard.
+- Plugin Center now renders nonempty `adminExtensionErrors` in an accessible
+  alert band, including the originating plugin ID and runtime error message.
+
+### RED / GREEN Evidence
+
+Focused RED cases were added before their corresponding implementation:
+
+- A selected-target operation already present in the initial operation list
+  did not start the polling timer (`getKernelOperations` remained at one call).
+- A deferred deployment-status response for topology A attached deployment
+  `#44` to topology B after the editor switched.
+- A populated extension runtime error list had no Plugin Center alert band.
+- The existing assignment browser fixture auto-dismissed the restored native
+  delete confirmation and therefore never deleted its fixture row.
+
+Final focused unit command:
+
+```bash
+npm --prefix web run test -- src/__tests__/Plugins.test.js src/__tests__/Deployments.test.js
+```
+
+Result: `2 passed`, `33 passed`.
+
+### Verification
+
+Full web unit command:
+
+```bash
+npm --prefix web run test
+```
+
+Result: `56 passed`, `336 passed`.
+
+Build command:
+
+```bash
+npm --prefix web run build
+```
+
+Result: passed. Vite emitted only its existing large-chunk advisory.
+
+Fixture browser command:
+
+```bash
+npm --prefix web run test:e2e -- e2e/control-assignments.spec.js e2e/plugin-webui.spec.js
+```
+
+Result: `4 passed`. The WebUI fixture still emits its expected router warning
+for the intentionally rejected tampered extension route.
+
+### Changed Files
+
+- Modified `web/src/views/admin/Deployments.vue` and
+  `web/src/__tests__/Deployments.test.js` for destructive confirmation,
+  race-safe target activity, scoped operation polling, and topology-editor
+  status-session isolation.
+- Modified `web/src/views/admin/Plugins.vue` and
+  `web/src/__tests__/Plugins.test.js` for extension runtime error visibility.
+- Modified `web/e2e/control-assignments.spec.js` to accept the restored native
+  delete confirmation before asserting the fixture deletion.

@@ -63,6 +63,15 @@
 
     <p v-if="pageError" class="error-message" role="alert">{{ pageError }}</p>
     <p v-if="notice" class="notice-message" role="status">{{ notice }}</p>
+    <section v-if="adminExtensionErrors.length" class="extension-error-band" data-testid="plugin-extension-errors" role="alert">
+      <strong>{{ t('control.extensions.errorsTitle') }}</strong>
+      <ul>
+        <li v-for="(extensionError, index) in adminExtensionErrors" :key="`${extensionError.plugin_id || 'catalog'}-${index}`">
+          <code v-if="extensionError.plugin_id">{{ extensionError.plugin_id }}</code>
+          {{ extensionError.message }}
+        </li>
+      </ul>
+    </section>
 
     <div class="plugin-list" data-testid="plugin-list" role="list">
       <p v-if="loading && !loaded" class="state-message">{{ t('control.states.loading') }}</p>
@@ -211,7 +220,7 @@ import {
   uploadKernelPluginReleaseArtifact,
   upsertKernelInstallation,
 } from '@/api/kernel'
-import { refreshAdminExtensions } from '@/extensions/runtime'
+import { adminExtensionErrors, refreshAdminExtensions } from '@/extensions/runtime'
 import { parseManifest } from '@/utils/kernelPluginRelease'
 
 const TERMINAL_OPERATION_STATES = new Set(['succeeded', 'completed', 'failed', 'superseded', 'cancelled', 'timed_out', 'expired', 'rolled_back'])
@@ -617,6 +626,10 @@ onBeforeUnmount(() => {
 .error-message, .notice-message, .dialog-error { margin: 0; overflow-wrap: anywhere; }
 .error-message, .dialog-error, .row-error { color: var(--error-color); }
 .notice-message { color: var(--success-color); }
+.extension-error-band { display: grid; gap: 8px; margin: 0; padding: 12px; border-left: 3px solid var(--error-color); background: rgba(220, 38, 38, .08); color: var(--error-color); }
+.extension-error-band ul { display: grid; gap: 4px; margin: 0; padding-left: 20px; }
+.extension-error-band li { overflow-wrap: anywhere; }
+.extension-error-band code { margin-right: 6px; color: var(--text-color); }
 .plugin-list { display: grid; gap: 8px; }
 .plugin-row { display: grid; grid-template-columns: minmax(220px, 1.55fr) minmax(170px, 1fr) minmax(110px, .6fr) auto; align-items: center; gap: 14px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-color); color: var(--text-color); cursor: pointer; padding: 12px 14px; text-align: left; }
 .plugin-row:hover, .plugin-row:focus-visible { border-color: var(--primary-color); outline: 2px solid transparent; background: var(--surface-hover); }

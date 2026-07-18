@@ -23,6 +23,7 @@ const kernelApi = vi.hoisted(() => ({
 const adminApi = vi.hoisted(() => ({ getNodes: vi.fn() }))
 
 const extensionRuntime = vi.hoisted(() => ({
+  errors: [],
   refreshAdminExtensions: vi.fn(async () => ({ errors: [] })),
 }))
 
@@ -34,6 +35,7 @@ const router = vi.hoisted(() => ({
 vi.mock('@/api/kernel', () => kernelApi)
 vi.mock('@/api/admin', () => adminApi)
 vi.mock('@/extensions/runtime', () => ({
+  adminExtensionErrors: extensionRuntime.errors,
   refreshAdminExtensions: extensionRuntime.refreshAdminExtensions,
 }))
 vi.mock('vue-router', () => ({ useRouter: () => router }))
@@ -112,6 +114,7 @@ async function openTarget(wrapper, target) {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  extensionRuntime.errors.splice(0)
   resolveCatalog()
 })
 
@@ -120,6 +123,23 @@ afterEach(() => {
 })
 
 describe('Plugin Center', () => {
+  it('renders nonempty extension runtime errors in an accessible Plugin Center alert', async () => {
+    const emptyWrapper = mountPlugins()
+    await flushPromises()
+    expect(emptyWrapper.find('[data-testid="plugin-extension-errors"]').exists()).toBe(false)
+    emptyWrapper.unmount()
+
+    extensionRuntime.errors.push({ plugin_id: 'protocol-runtime', message: 'bundle digest mismatch' })
+    const wrapper = mountPlugins()
+    await flushPromises()
+
+    const errorBand = wrapper.get('[data-testid="plugin-extension-errors"]')
+    expect(errorBand.attributes('role')).toBe('alert')
+    expect(errorBand.text()).toContain('WebUI extension loading failed')
+    expect(errorBand.text()).toContain('protocol-runtime')
+    expect(errorBand.text()).toContain('bundle digest mismatch')
+  })
+
   it('loads only plugin resources, renders one grouped row, filters it, and restores row focus after close', async () => {
     resolveCatalog([
       { id: 1, plugin_id: plugin.id, target: 'control', desired_version: '1.0.0', observed_version: '1.0.0', state: 'healthy', enabled: true },
