@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test'
 
 const node = { id: 11, name: 'Shanghai entry', host: '10.0.0.11', status: 1 }
 const plugin = { id: 'gost-mesh', name: 'GOST Mesh', publisher: 'AnixOps' }
+const topology = { id: 21, name: 'Shanghai mesh', service_scope: 'forward', active_revision_id: 5 }
+const deployment = { id: 31, topology_id: topology.id, revision_id: 5, state: 'planned' }
 const manifest = JSON.stringify({ id: 'gost-mesh', version: '1.0.0', targets: ['agent'] })
 
 async function seedAdmin(page) {
@@ -67,8 +69,10 @@ async function installFixtures(page) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'forward', name: 'Forward', plugin_id: plugin.id }]) })
       return
     }
-    if (url.pathname === '/api/v3/topologies' || url.pathname === '/api/v3/operations' || url.pathname === '/api/v3/extensions') {
-      const payload = url.pathname.endsWith('/operations') ? state.operations : []
+    if (url.pathname === '/api/v3/topologies' || url.pathname === '/api/v3/deployments' || url.pathname === '/api/v3/operations' || url.pathname === '/api/v3/extensions') {
+      const payload = url.pathname.endsWith('/topologies') ? [topology]
+        : url.pathname.endsWith('/deployments') ? [deployment]
+          : url.pathname.endsWith('/operations') ? state.operations : []
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(payload) })
       return
     }
@@ -98,6 +102,15 @@ test('runs the assignment lifecycle in a narrow viewport without page overflow',
   await seedAdmin(page)
   await installFixtures(page)
   await page.goto('/admin/deployments')
+  await expect(page.getByTestId('edit-topology-21')).toBeVisible()
+  for (const testID of ['edit-topology-21', 'view-deployment-31']) {
+    const action = page.getByTestId(testID)
+    const box = await action.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(390)
+  }
+
   await page.locator('[data-testid="deployment-targets"]').click()
   await expect(page.locator('#assignment-node-filter')).toHaveValue('11')
   await expect(page.locator('[data-testid="deployment-target-panel"]')).toBeVisible()

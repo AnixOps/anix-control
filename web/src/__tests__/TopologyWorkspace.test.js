@@ -78,6 +78,28 @@ describe('TopologyWorkspace', () => {
     wrapper.unmount()
   })
 
+  it('binds confirmations to one deployment and invalidates them when its identity or state changes', async () => {
+    const wrapper = mountWorkspace()
+    await nextTick()
+    await nextTick()
+
+    await wrapper.get('#topology-apply').trigger('click')
+    expect(wrapper.get('[data-testid="apply-confirmation"]').text()).toContain('#13')
+    expect(wrapper.get('#topology-plan').attributes('disabled')).toBeDefined()
+
+    await wrapper.setProps({
+      deploymentID: 14,
+      deploymentStatus: { deployment: { id: 14, state: 'planned' }, operations: [] },
+    })
+    expect(wrapper.find('[data-testid="apply-confirmation"]').exists()).toBe(false)
+
+    await wrapper.get('#topology-rollback').trigger('click')
+    expect(wrapper.find('[data-testid="rollback-confirmation"]').exists()).toBe(true)
+    await wrapper.setProps({ deploymentStatus: { deployment: { id: 14, state: 'applying' }, operations: [] } })
+    expect(wrapper.find('[data-testid="rollback-confirmation"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('keeps plan, apply, and rollback unavailable while the revision differs from its baseline', async () => {
     const wrapper = mountWorkspace()
     await nextTick()

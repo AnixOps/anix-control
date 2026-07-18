@@ -147,21 +147,21 @@
           </button>
           <button id="topology-preview" class="btn" type="button" :disabled="validating || loading || dirty || !selectedRevisionID" @click="previewRevision">{{ t('control.topology.previewAction') }}</button>
           <button id="topology-save-revision" class="btn btn-primary" type="button" :disabled="saving || loading" @click="saveRevision">{{ saving ? t('control.actions.saving') : t('control.topology.saveRevision') }}</button>
-          <button id="topology-plan" class="btn" type="button" :disabled="saving || dirty || !selectedRevisionID" @click="plan">{{ t('control.topology.plan') }}</button>
+          <button id="topology-plan" class="btn" type="button" :disabled="saving || dirty || !selectedRevisionID || confirmationActive" @click="plan">{{ t('control.topology.plan') }}</button>
           <button id="topology-apply" class="btn btn-primary" type="button" :disabled="saving || dirty || !canApply || applyConfirming || rollbackConfirming" @click="requestApply">{{ t('control.topology.apply') }}</button>
           <button id="topology-rollback" class="btn btn-danger" type="button" :disabled="saving || dirty || !canRollback || applyConfirming || rollbackConfirming" @click="requestRollback">{{ t('control.topology.rollback') }}</button>
           <section v-if="applyConfirming" class="action-confirmation apply-confirmation" data-testid="apply-confirmation" role="alertdialog" :aria-label="t('control.topology.apply')">
-            <p>{{ t('control.topology.applyConfirm', { topology: topologyLabel, deployment: deploymentID }) }}</p>
+            <p>{{ t('control.topology.applyConfirm', { topology: confirmedTopologyLabel, deployment: confirmedDeploymentID }) }}</p>
             <div class="confirmation-actions">
-              <button class="btn" type="button" :disabled="saving" @click="applyConfirming = false">{{ t('common.actions.cancel') }}</button>
-              <button class="btn btn-primary" data-testid="confirm-apply" type="button" :disabled="saving || dirty || !canApply" @click="apply">{{ t('control.topology.apply') }}</button>
+              <button class="btn" type="button" :disabled="saving" @click="clearConfirmation">{{ t('common.actions.cancel') }}</button>
+              <button class="btn btn-primary" data-testid="confirm-apply" type="button" :disabled="saving || dirty || !canApply || !confirmationMatchesCurrentDeployment" @click="apply">{{ t('control.topology.apply') }}</button>
             </div>
           </section>
           <section v-if="rollbackConfirming" class="action-confirmation rollback-confirmation" data-testid="rollback-confirmation" role="alertdialog" :aria-label="t('control.topology.rollback')">
-            <p>{{ t('control.topology.rollbackConfirm', { topology: topologyLabel, deployment: deploymentID }) }}</p>
+            <p>{{ t('control.topology.rollbackConfirm', { topology: confirmedTopologyLabel, deployment: confirmedDeploymentID }) }}</p>
             <div class="confirmation-actions">
-              <button class="btn" type="button" :disabled="saving" @click="rollbackConfirming = false">{{ t('common.actions.cancel') }}</button>
-              <button class="btn btn-danger" data-testid="confirm-rollback" type="button" :disabled="saving || dirty" @click="rollback">{{ t('control.topology.rollback') }}</button>
+              <button class="btn" type="button" :disabled="saving" @click="clearConfirmation">{{ t('common.actions.cancel') }}</button>
+              <button class="btn btn-danger" data-testid="confirm-rollback" type="button" :disabled="saving || dirty || !confirmationMatchesCurrentDeployment" @click="rollback">{{ t('control.topology.rollback') }}</button>
             </div>
           </section>
         </footer>
@@ -206,6 +206,8 @@ const rolloutGroup = ref('')
 const failurePolicy = ref('stop_and_rollback')
 const applyConfirming = ref(false)
 const rollbackConfirming = ref(false)
+const confirmedDeploymentID = ref(0)
+const confirmedTopologyLabel = ref('')
 const localError = ref('')
 const newTopology = reactive({ name: '', serviceScope: '', description: '' })
 const baselineTopologyID = ref(0)
@@ -223,6 +225,10 @@ const canRollback = computed(() => Boolean(props.deploymentID) && ![
   '', 'rollback_requested', 'rollback_configuring', 'rollback_enabling', 'rollback_disabling', 'rolled_back',
 ].includes(deploymentState.value))
 const topologyLabel = computed(() => props.topology?.name || `#${props.topology?.id || props.deploymentID}`)
+const confirmationActive = computed(() => applyConfirming.value || rollbackConfirming.value)
+const confirmationMatchesCurrentDeployment = computed(() => (
+  confirmedDeploymentID.value > 0 && Number(props.deploymentID) === confirmedDeploymentID.value
+))
 const visibleError = computed(() => localError.value || props.error)
 const { handleKeydown, requestClose } = useModalFocus({
   open: openState,
@@ -232,15 +238,23 @@ const { handleKeydown, requestClose } = useModalFocus({
   close: () => emit('close'),
 })
 
-watch([() => props.open, () => props.topology?.id, () => props.revisionID, () => props.revisionDetail], ([isOpen, topologyID, revisionID, detail]) => {
+watch([
+  () => props.open,
+  () => props.topology?.id,
+  () => props.revisionID,
+  () => props.revisionDetail,
+  () => props.deploymentID,
+  () => props.deploymentStatus?.deployment?.id,
+  () => deploymentState.value,
+], ([isOpen, topologyID, revisionID, detail]) => {
   if (!isOpen) {
+    clearConfirmation()
     baselineTopologyID.value = 0
     baselineRevisionID.value = 0
     return
   }
   localError.value = ''
-  applyConfirming.value = false
-  rollbackConfirming.value = false
+  clearConfirmation()
   if (!topologyID) {
     Object.assign(newTopology, { name: '', serviceScope: props.scopes[0]?.id || '', description: '' })
     baselineTopologyID.value = 0
@@ -257,8 +271,7 @@ watch([() => props.open, () => props.topology?.id, () => props.revisionID, () =>
   const topologyChanged = baselineTopologyID.value !== nextTopologyID
   const revisionChanged = baselineRevisionID.value !== nextRevisionID
   if (topologyChanged || revisionChanged) {
-    applyConfirming.value = false
-    rollbackConfirming.value = false
+    clearConfirmation()
     rolloutGroup.value = ''
     failurePolicy.value = 'stop_and_rollback'
     if (detail) {
@@ -305,8 +318,7 @@ function options() {
 }
 
 function selectRevision() {
-  applyConfirming.value = false
-  rollbackConfirming.value = false
+  clearConfirmation()
   emit('select-revision', { topologyID: Number(props.topology.id), revisionID: selectedRevisionID.value })
 }
 
@@ -344,33 +356,55 @@ function previewRevision() {
 }
 
 function plan() {
-  if (props.saving || dirty.value || !props.topology?.id || !selectedRevisionID.value) return
+  if (props.saving || dirty.value || confirmationActive.value || !props.topology?.id || !selectedRevisionID.value) return
   emit('plan', { topologyID: Number(props.topology.id), revisionID: selectedRevisionID.value, options: options() })
 }
 
 function requestApply() {
-  if (props.saving || dirty.value || !canApply.value || applyConfirming.value) return
-  rollbackConfirming.value = false
-  applyConfirming.value = true
+  if (props.saving || dirty.value || !canApply.value || confirmationActive.value) return
+  beginConfirmation('apply')
 }
 
 function apply() {
-  if (props.saving || dirty.value || !applyConfirming.value || !canApply.value) return
-  applyConfirming.value = false
-  emit('apply', { deploymentID: Number(props.deploymentID) })
+  if (props.saving || dirty.value || !applyConfirming.value || !canApply.value || !confirmationMatchesCurrentDeployment.value) {
+    clearConfirmation()
+    return
+  }
+  const deploymentID = confirmedDeploymentID.value
+  clearConfirmation()
+  emit('apply', { deploymentID })
 }
 
 function requestRollback() {
-  if (props.saving || dirty.value || !canRollback.value || rollbackConfirming.value) return
-  applyConfirming.value = false
-  rollbackConfirming.value = true
+  if (props.saving || dirty.value || !canRollback.value || confirmationActive.value) return
+  beginConfirmation('rollback')
 }
 
 function rollback() {
-  if (props.saving || dirty.value || !rollbackConfirming.value || !canRollback.value) return
+  if (props.saving || dirty.value || !rollbackConfirming.value || !canRollback.value || !confirmationMatchesCurrentDeployment.value) {
+    clearConfirmation()
+    return
+  }
+  const deploymentID = confirmedDeploymentID.value
+  clearConfirmation()
+  emit('rollback', { deploymentID })
+}
+
+function beginConfirmation(action) {
+  const deploymentID = Number(props.deploymentID)
+  if (!deploymentID) return
+  clearConfirmation()
+  confirmedDeploymentID.value = deploymentID
+  confirmedTopologyLabel.value = topologyLabel.value
+  applyConfirming.value = action === 'apply'
+  rollbackConfirming.value = action === 'rollback'
+}
+
+function clearConfirmation() {
   applyConfirming.value = false
   rollbackConfirming.value = false
-  emit('rollback', { deploymentID: Number(props.deploymentID) })
+  confirmedDeploymentID.value = 0
+  confirmedTopologyLabel.value = ''
 }
 
 function shortHash(value) {
