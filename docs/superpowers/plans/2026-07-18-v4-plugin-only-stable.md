@@ -1281,12 +1281,13 @@ git commit -m "test(release): rehearse v4 in-place rollback"
 - Modify: config/scripts/check_release_version.py
 - Modify: config/scripts/generate_release_manifest.py
 - Modify: config/scripts/generate_release_notes.py
+- Create: config/scripts/render_v4_release_evidence.py
+- Create: config/scripts/render_v4_release_evidence_test.py
 - Modify: .github/workflows/release.yml
-- Create: docs/release/v4.0.0-evidence.json
 - Test: config/scripts/check_release_version.py
 
 **Interfaces:**
-- Produces: one v4.0.0 release manifest tying Control commit, Agent SDK v1.1.0, all fifteen package versions/digests/signatures/SBOMs, frontend assets, Docker image, binaries, and evidence bundle together.
+- Produces: one v4.0.0 release manifest tying the actual Control commit, Agent SDK v1.1.0, all fifteen package versions/digests/signatures/SBOMs, frontend assets, Docker image, binaries, and evidence bundle together. The evidence JSON is generated into the release artifact directory and is never a tracked placeholder file.
 - Consumes: completed Task 15 evidence and a 72-hour canary record at 1/5/25/100 cohorts.
 - External prerequisite: GitHub Support must confirm PR #4's read-only ref and caches are purged before release wording says history is fully scrubbed.
 
@@ -1302,28 +1303,29 @@ def test_v4_release_requires_all_evidence(tmp_path):
 
 - [ ] **Step 2: Run version and evidence tests to verify they fail**
 
-Run: python3 config/scripts/check_release_version.py --tag v4.0.0 && python3 config/scripts/verify_v4_evidence.py --input docs/release/v4.0.0-evidence.json
+Run: python3 config/scripts/check_release_version.py --tag v4.0.0
 Expected: FAIL because source versions and evidence are not final.
 
-- [ ] **Step 3: Set versions and enforce release evidence**
+- [ ] **Step 3: Set versions and render release evidence from real inputs**
 
-~~~json
-{
-  "release": "v4.0.0",
-  "control_commit": "RELEASE_COMMIT",
-  "agent_sdk": "v1.1.0",
-  "packages": 15,
-  "canary": {"cohorts": [1, 5, 25, 100], "hours": 72},
-  "rehearsals": {"sqlite": "passed", "postgres": "passed", "reverse_upgrade": "passed"},
-  "history_hygiene": {"github_support_case": "CONFIRMED"}
-}
+~~~python
+def render_release_evidence(inputs: ReleaseInputs) -> dict:
+    return {
+        "release": inputs.tag,
+        "control_commit": inputs.control_commit,
+        "agent_sdk": "v1.1.0",
+        "packages": inputs.packages,
+        "canary": inputs.canary,
+        "rehearsals": inputs.rehearsals,
+        "history_hygiene": inputs.github_support,
+    }
 ~~~
 
-Replace RELEASE_COMMIT and CONFIRMED only with recorded final evidence during release execution. Extend the release workflow to call package build/sign/SBOM verification, route/worker gates, SDK compatibility tests, rehearsal evidence validation, release version validation, and artifact verification before it can create a tag or GitHub Release.
+The renderer accepts the current git commit, signed package manifest, canary record, rehearsal bundle, and GitHub Support confirmation as required inputs and fails on a missing value. Extend the release workflow to call package build/sign/SBOM verification, route/worker gates, SDK compatibility tests, rehearsal evidence validation, release version validation, evidence rendering, and artifact verification before it can create a tag or GitHub Release.
 
 - [ ] **Step 4: Run the complete release candidate gate**
 
-Run: python3 config/scripts/check_release_version.py --tag v4.0.0 && python3 config/scripts/check_release_stage.py --tag v4.0.0 && python3 config/scripts/check_plugin_only_routes.py && python3 config/scripts/check_plugin_only_workers.py && python3 config/scripts/verify_v4_evidence.py --input docs/release/v4.0.0-evidence.json && ./config/scripts/check_release_workflow.sh
+Run: python3 config/scripts/render_v4_release_evidence.py --tag v4.0.0 --control-commit "$(git rev-parse HEAD)" --package-manifest dist/release/package-manifest-v4.0.0.json --canary-evidence artifacts/v4-canary.json --rehearsal-evidence artifacts/v4-rehearsal-evidence.json --github-support-evidence artifacts/github-support-pr4.json --out dist/release/v4.0.0-evidence.json && python3 config/scripts/check_release_version.py --tag v4.0.0 && python3 config/scripts/check_release_stage.py --tag v4.0.0 && python3 config/scripts/check_plugin_only_routes.py && python3 config/scripts/check_plugin_only_workers.py && python3 config/scripts/verify_v4_evidence.py --input dist/release/v4.0.0-evidence.json && ./config/scripts/check_release_workflow.sh
 Expected: exit 0.
 
 Run: GOWORK=off go test ./... && cd web && npm run build
@@ -1344,5 +1346,5 @@ Do not execute this step until the evidence document contains a real release com
 ## Self-Review
 
 - Spec coverage: Tasks 1-3 implement the cross-repository SDK, external Control host, and fail-closed lifecycle. Task 4 requires every signed package artifact. Tasks 5-6 implement additive migrations, generation rollouts, and /api/v2 adapters. Tasks 7-12 cover all fifteen package owners. Task 13 covers package-owned admin UI. Tasks 14-16 cover legacy removal, SQLite/PostgreSQL rehearsals, 72-hour canary evidence, version surfaces, and formal release controls.
-- Placeholder scan: the prohibited-marker scan found no unresolved planning markers, generic validation instruction, or unbounded test instruction. Generated build values are explicitly replaced by deterministic package build output rather than hand-authored.
+- Placeholder scan: the prohibited-marker scan found no unresolved planning markers, generic validation instruction, or unbounded test instruction. Release evidence is rendered only from real workflow inputs and is not committed as a template.
 - Type consistency: pluginhost.DispatchInput is the single Control host dispatch input; agentplugin.Operation and agentplugin.RuntimeStatus are the single Control/Agent package operation boundary; PackageRouteGeneration is the single rollout fence; compatv2.Gateway is the only supported /api/v2 business dispatch path.
