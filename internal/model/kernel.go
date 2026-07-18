@@ -495,6 +495,6 @@ func KernelModels() []any {
 		&TopologyDeployment{}, &TopologyDeploymentStep{}, &TopologyObservedState{}, &KernelOperation{},
 		&PluginLifecyclePlan{}, &PluginLifecyclePlanStep{},
 		&NodeOperationRevision{}, &PluginTelemetryState{}, &NodePluginObservedState{},
-		&PackageMigrationRun{}, &PackageValidationResult{}, &PackageRouteGeneration{}, &PackageBackupReference{},
+		&PackageMigrationRun{}, &PackageValidationResult{}, &PackageRouteGeneration{}, &PackageBackupReference{}, &PackageRolloutLock{},
 	}
 }

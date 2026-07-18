@@ -298,6 +298,51 @@ func TestMigratePackageHostRecordsHealthFenceAfterManagerSuccess(t *testing.T) {
 	require.NotNil(t, validated.RouteGenerationID)
 }
 
+func TestRecordPackageValidationReturnsExistingRootValidationBeforeLineageCheck(t *testing.T) {
+	db := newPackageRolloutTestDB(t)
+	started, err := BeginPackageMigration(db, model.PackageMigrationRun{
+		PackageID: "order", PackageVersion: "4.0.0", Generation: 7,
+		MigrationID: "order-v4", MigrationChecksum: "checksum-v4",
+		BeforeSchemaVersion: "3", AfterSchemaVersion: "4",
+	})
+	require.NoError(t, err)
+	_, err = migratePackageHost(context.Background(), db, testMigrationManager{output: pluginhost.MigrationOutput{
+		Checkpoint: "opaque-complete", ValidationDigest: "host-validation", Complete: true,
+		HealthLeaseID: "lease-7", HealthGeneration: 7,
+	}}, started.ID, pluginhost.MigrationInput{PackageID: "order", Version: "4.0.0", MigrationID: "order-v4", Generation: 7})
+	require.NoError(t, err)
+
+	first, err := RecordPackageValidation(db, model.PackageValidationResult{MigrationRunID: started.ID})
+	require.NoError(t, err)
+	retried, err := RecordPackageValidation(db, model.PackageValidationResult{MigrationRunID: started.ID})
+	require.NoError(t, err)
+	require.Equal(t, first.ID, retried.ID)
+	require.Equal(t, first.RouteGenerationID, retried.RouteGenerationID)
+}
+
+func TestRecordPackageValidationReturnsExistingSuccessorValidationBeforeLineageCheck(t *testing.T) {
+	db := newPackageRolloutTestDB(t)
+	seedGeneration(t, db, "order", 4, 100, model.PackageRouteGenerationStateValidated)
+	started, err := BeginPackageMigration(db, model.PackageMigrationRun{
+		PackageID: "order", PackageVersion: "4.0.0", Generation: 6,
+		MigrationID: "order-v6", MigrationChecksum: "checksum-v6",
+		BeforeSchemaVersion: "4", AfterSchemaVersion: "6", BackupReference: "backup://order/v4",
+	})
+	require.NoError(t, err)
+	_, err = migratePackageHost(context.Background(), db, testMigrationManager{output: pluginhost.MigrationOutput{
+		Checkpoint: "opaque-complete", ValidationDigest: "host-validation", Complete: true,
+		HealthLeaseID: "lease-6", HealthGeneration: 6,
+	}}, started.ID, pluginhost.MigrationInput{PackageID: "order", Version: "4.0.0", MigrationID: "order-v6", Generation: 6})
+	require.NoError(t, err)
+
+	first, err := RecordPackageValidation(db, model.PackageValidationResult{MigrationRunID: started.ID})
+	require.NoError(t, err)
+	retried, err := RecordPackageValidation(db, model.PackageValidationResult{MigrationRunID: started.ID})
+	require.NoError(t, err)
+	require.Equal(t, first.ID, retried.ID)
+	require.Equal(t, first.RouteGenerationID, retried.RouteGenerationID)
+}
+
 func TestRecordPackageValidationRejectsStalePredecessor(t *testing.T) {
 	db := newPackageRolloutTestDB(t)
 	predecessor := seedGeneration(t, db, "order", 4, 1, "validated")

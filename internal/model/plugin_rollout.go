@@ -100,3 +100,12 @@ type PackageBackupReference struct {
 }
 
 func (PackageBackupReference) TableName() string { return "v4_kernel_package_backup_reference" }
+
+// PackageRolloutLock is a kernel-owned, package-scoped lock row. It lets
+// rollout transactions serialize lineage changes before a route generation
+// exists, including the first installation of a package.
+type PackageRolloutLock struct {
+	PackageID string `gorm:"primaryKey;size:120" json:"package_id"`
+}
+
+func (PackageRolloutLock) TableName() string { return "v4_kernel_package_rollout_lock" }

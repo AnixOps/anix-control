@@ -45,6 +45,9 @@ func BeginPackageMigration(db *gorm.DB, input model.PackageMigrationRun) (*model
 
 	var result model.PackageMigrationRun
 	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := lockPackageRollout(tx, input.PackageID); err != nil {
+			return err
+		}
 		var existing model.PackageMigrationRun
 		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&existing, "package_id = ? AND generation = ?", input.PackageID, input.Generation).Error
 		if err == nil {
@@ -285,6 +288,13 @@ func RecordPackageValidation(db *gorm.DB, input model.PackageValidationResult) (
 	}
 	var result model.PackageValidationResult
 	err := db.Transaction(func(tx *gorm.DB) error {
+		var migrationIdentity model.PackageMigrationRun
+		if err := tx.Select("id", "package_id").First(&migrationIdentity, input.MigrationRunID).Error; err != nil {
+			return err
+		}
+		if err := lockPackageRollout(tx, migrationIdentity.PackageID); err != nil {
+			return err
+		}
 		var run model.PackageMigrationRun
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&run, input.MigrationRunID).Error; err != nil {
 			return err
@@ -307,6 +317,28 @@ func RecordPackageValidation(db *gorm.DB, input model.PackageValidationResult) (
 			(input.PackageVersion != "" && input.PackageVersion != run.PackageVersion) ||
 			(input.Generation != 0 && input.Generation != run.Generation) {
 			return ErrValidationPrecondition
+		}
+
+		var existing model.PackageValidationResult
+		existingErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&existing, "migration_run_id = ?", run.ID).Error
+		if existingErr == nil {
+			if existing.PackageID != run.PackageID || existing.PackageVersion != run.PackageVersion || existing.Generation != run.Generation ||
+				existing.ValidationDigest != input.ValidationDigest || existing.State != model.PackageValidationStateValidated || existing.RouteGenerationID == nil {
+				return ErrPackageMigrationImmutable
+			}
+			var route model.PackageRouteGeneration
+			if err := tx.First(&route, *existing.RouteGenerationID).Error; err != nil {
+				return err
+			}
+			if route.PackageID != run.PackageID || route.Version != run.PackageVersion || route.Generation != run.Generation ||
+				route.MigrationRunID == nil || *route.MigrationRunID != run.ID || route.ValidationResultID == nil || *route.ValidationResultID != existing.ID {
+				return ErrPackageMigrationImmutable
+			}
+			result = existing
+			return nil
+		}
+		if !errors.Is(existingErr, gorm.ErrRecordNotFound) {
+			return existingErr
 		}
 
 		var latest model.PackageRouteGeneration
@@ -337,19 +369,6 @@ func RecordPackageValidation(db *gorm.DB, input model.PackageValidationResult) (
 			if !verified {
 				return ErrValidationPrecondition
 			}
-		}
-
-		var existing model.PackageValidationResult
-		existingErr := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&existing, "migration_run_id = ?", run.ID).Error
-		if existingErr == nil {
-			if existing.ValidationDigest != input.ValidationDigest || existing.State != model.PackageValidationStateValidated {
-				return ErrPackageMigrationImmutable
-			}
-			result = existing
-			return nil
-		}
-		if !errors.Is(existingErr, gorm.ErrRecordNotFound) {
-			return existingErr
 		}
 
 		input.ID = 0
@@ -397,6 +416,12 @@ func AdvancePackageCohort(db *gorm.DB, generationID uint, target uint8) (*model.
 	var result model.PackageRouteGeneration
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var current model.PackageRouteGeneration
+		if err := tx.Select("id", "package_id").First(&current, generationID).Error; err != nil {
+			return err
+		}
+		if err := lockPackageRollout(tx, current.PackageID); err != nil {
+			return err
+		}
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, generationID).Error; err != nil {
 			return err
 		}
@@ -473,6 +498,12 @@ func RollbackPackageGeneration(db *gorm.DB, generationID uint, reason string) (*
 	var result model.PackageRouteGeneration
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var current model.PackageRouteGeneration
+		if err := tx.Select("id", "package_id").First(&current, generationID).Error; err != nil {
+			return err
+		}
+		if err := lockPackageRollout(tx, current.PackageID); err != nil {
+			return err
+		}
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, generationID).Error; err != nil {
 			return err
 		}
@@ -540,6 +571,20 @@ func sameMigrationInput(existing, input model.PackageMigrationRun) bool {
 		existing.Generation == input.Generation && existing.MigrationID == input.MigrationID &&
 		existing.MigrationChecksum == input.MigrationChecksum && existing.BeforeSchemaVersion == input.BeforeSchemaVersion &&
 		existing.AfterSchemaVersion == input.AfterSchemaVersion && existing.BackupReference == input.BackupReference
+}
+
+// lockPackageRollout creates a permanent package-scoped mutex row if needed,
+// then locks it for the transaction. The row lock works across PostgreSQL
+// sessions; SQLite serializes its write transaction through the same GORM path.
+func lockPackageRollout(tx *gorm.DB, packageID string) error {
+	if strings.TrimSpace(packageID) == "" {
+		return ErrValidationPrecondition
+	}
+	lock := model.PackageRolloutLock{PackageID: packageID}
+	if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&lock).Error; err != nil {
+		return err
+	}
+	return tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&lock, "package_id = ?", packageID).Error
 }
 
 func sameMigrationCheckpoint(run model.PackageMigrationRun, checkpoint PackageMigrationCheckpoint) bool {

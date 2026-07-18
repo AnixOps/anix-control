@@ -23,6 +23,67 @@ func TestPackageMigrationCohortRollbackSQLite(t *testing.T) {
 }
 
 func TestPostgresPackageMigrationRollback(t *testing.T) {
+	db := newPostgresPackageRolloutTestDB(t)
+	exercisePackageMigrationRollback(t, db)
+}
+
+func TestPostgresPackageMigrationSerializesRootRouteGeneration(t *testing.T) {
+	db := newPostgresPackageRolloutTestDB(t)
+	runs := make([]model.PackageMigrationRun, 0, 2)
+	for _, generation := range []uint64{7, 8} {
+		run, err := service.BeginPackageMigration(db, model.PackageMigrationRun{
+			PackageID: "root-race", PackageVersion: "4.0.0", Generation: generation,
+			MigrationID: "root-race-v4", MigrationChecksum: "checksum-v4",
+			BeforeSchemaVersion: "3", AfterSchemaVersion: "4",
+		})
+		require.NoError(t, err)
+		_, err = service.RecordMigrationCheckpoint(db, run.ID, service.PackageMigrationCheckpoint{
+			OpaqueCheckpoint: "opaque-complete", ValidationDigest: "opaque-validation", Complete: true,
+		})
+		require.NoError(t, err)
+		now := time.Now().UTC()
+		require.NoError(t, db.Model(&model.PackageMigrationRun{}).Where("id = ?", run.ID).Updates(map[string]any{
+			"health_lease_id": "integration-lease", "health_generation": generation, "health_verified_at": &now,
+		}).Error)
+		runs = append(runs, *run)
+	}
+
+	ready := make(chan struct{}, len(runs))
+	start := make(chan struct{})
+	results := make(chan error, len(runs))
+	for _, run := range runs {
+		go func(runID uint) {
+			ready <- struct{}{}
+			<-start
+			_, err := service.RecordPackageValidation(db, model.PackageValidationResult{MigrationRunID: runID})
+			results <- err
+		}(run.ID)
+	}
+	for range runs {
+		<-ready
+	}
+	close(start)
+
+	successes := 0
+	var failure error
+	for range runs {
+		if err := <-results; err == nil {
+			successes++
+		} else {
+			failure = err
+		}
+	}
+	require.Equal(t, 1, successes)
+	require.ErrorIs(t, failure, service.ErrValidationPrecondition)
+
+	var activeRoots []model.PackageRouteGeneration
+	require.NoError(t, db.Where("package_id = ? AND rolled_back_at IS NULL", "root-race").Find(&activeRoots).Error)
+	require.Len(t, activeRoots, 1)
+	require.Nil(t, activeRoots[0].PreviousID)
+}
+
+func newPostgresPackageRolloutTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
 	dsn := strings.TrimSpace(os.Getenv("ANIX_TEST_POSTGRES_DSN"))
 	if dsn == "" {
 		t.Skip("ANIX_TEST_POSTGRES_DSN is not set")
@@ -39,7 +100,7 @@ func TestPostgresPackageMigrationRollback(t *testing.T) {
 	require.NoError(t, db.Migrator().DropTable(models...))
 	require.NoError(t, db.AutoMigrate(models...))
 	t.Cleanup(func() { _ = db.Migrator().DropTable(models...) })
-	exercisePackageMigrationRollback(t, db)
+	return db
 }
 
 func packageRolloutModels() []any {
@@ -48,6 +109,7 @@ func packageRolloutModels() []any {
 		&model.PackageValidationResult{},
 		&model.PackageRouteGeneration{},
 		&model.PackageBackupReference{},
+		&model.PackageRolloutLock{},
 	}
 }
 
