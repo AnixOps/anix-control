@@ -114,6 +114,6 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
   // A new SPA runtime must not retain a menu or dynamically registered route
   // after the actual Control installation is disabled.
   await page.reload()
-  await expect(page).toHaveURL(/\/admin\/control$/)
+  await expect(page).toHaveURL(/\/admin\/plugins$/)
   await expect(page.locator(`a[href="${extensionPath}"]`)).toHaveCount(0)
 })
