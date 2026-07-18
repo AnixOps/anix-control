@@ -1,12 +1,13 @@
 <template>
   <div v-if="open" class="plugin-detail-backdrop" @click.self="requestClose">
     <aside
+      ref="modal"
       class="plugin-detail-drawer"
       data-testid="plugin-detail-drawer"
       role="dialog"
       aria-modal="true"
       aria-labelledby="plugin-detail-title"
-      @keydown.esc.prevent="requestClose"
+      @keydown="handleKeydown"
     >
       <header class="drawer-header">
         <div>
@@ -131,9 +132,10 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { X } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useModalFocus } from '@/composables/useModalFocus'
 
 const props = defineProps({
   row: { type: Object, default: null },
@@ -143,6 +145,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'install', 'configure', 'lifecycle'])
 const { t } = useAppI18n()
 const closeButton = ref(null)
+const modal = ref(null)
 const selectedTarget = ref('')
 
 const targets = computed(() => Array.isArray(props.row?.targets) ? props.row.targets : [])
@@ -152,20 +155,20 @@ const targetBusy = computed(() => Boolean(
   props.busyTarget?.target === currentTarget.value?.target
 ))
 const canClose = computed(() => !props.busyTarget)
+const openState = computed(() => props.open)
+const { handleKeydown, requestClose } = useModalFocus({
+  open: openState,
+  canClose,
+  container: modal,
+  initialFocus: closeButton,
+  close: () => emit('close'),
+})
 
-watch([() => props.open, targets], async ([isOpen]) => {
+watch([() => props.open, targets], () => {
   if (!targets.value.some(target => target.target === selectedTarget.value)) {
     selectedTarget.value = targets.value[0]?.target || ''
   }
-  if (isOpen) {
-    await nextTick()
-    closeButton.value?.focus()
-  }
 }, { immediate: true })
-
-function requestClose() {
-  if (canClose.value) emit('close')
-}
 
 function emitLifecycle(action) {
   if (!currentTarget.value?.installation) return

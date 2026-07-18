@@ -1,12 +1,13 @@
 <template>
   <div v-if="open" class="plugin-dialog-backdrop" @click.self="requestClose">
     <section
+      ref="modal"
       class="plugin-dialog"
       data-testid="plugin-release-import-dialog"
       role="dialog"
       aria-modal="true"
       aria-labelledby="plugin-release-title"
-      @keydown.esc.prevent="requestClose"
+      @keydown="handleKeydown"
     >
       <header class="dialog-header">
         <h2 id="plugin-release-title">{{ t('control.releaseImport.title') }}</h2>
@@ -24,15 +25,15 @@
         </button>
       </header>
 
-      <div class="dialog-body">
+      <div class="dialog-body" :aria-busy="artifactReading ? 'true' : undefined">
         <div class="form-group">
           <label for="plugin-release-manifest">{{ t('control.releaseImport.manifest') }}</label>
-          <input type="file" accept="application/json,.json" :disabled="saving" @change="readTextFile($event, 'manifest')" />
+          <input id="plugin-release-manifest-file" type="file" accept="application/json,.json" :aria-label="t('control.releaseImport.manifest')" :disabled="saving" @change="readTextFile($event, 'manifest')" />
           <textarea id="plugin-release-manifest" v-model="manifest" rows="10" spellcheck="false" :disabled="saving"></textarea>
         </div>
         <div class="form-group">
           <label for="plugin-release-signature">{{ t('control.releaseImport.signature') }}</label>
-          <input type="file" accept="text/plain,.sig" :disabled="saving" @change="readTextFile($event, 'signature')" />
+          <input id="plugin-release-signature-file" type="file" accept="text/plain,.sig" :aria-label="t('control.releaseImport.signature')" :disabled="saving" @change="readTextFile($event, 'signature')" />
           <textarea id="plugin-release-signature" v-model="signature" rows="3" spellcheck="false" :disabled="saving"></textarea>
         </div>
         <div class="form-group">
@@ -49,7 +50,7 @@
           class="btn btn-primary"
           data-action="save-release"
           type="button"
-          :disabled="saving || !manifest.trim() || !signature.trim()"
+          :disabled="saving || artifactReading || !manifest.trim() || !signature.trim()"
           @click="save"
         >
           {{ saving ? t('control.actions.importing') : t('control.actions.importRelease') }}
@@ -60,9 +61,10 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { X } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useModalFocus } from '@/composables/useModalFocus'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -72,25 +74,48 @@ const props = defineProps({
 const emit = defineEmits(['close', 'save'])
 const { t } = useAppI18n()
 const closeButton = ref(null)
+const modal = ref(null)
 const manifest = ref('')
 const signature = ref('')
 const artifactBase64 = ref('')
 const artifactName = ref('')
+const artifactReading = ref(false)
 const inputError = ref('')
+let artifactReadRevision = 0
 
-watch(() => props.open, async (isOpen) => {
-  if (!isOpen) return
+const canClose = computed(() => !props.saving)
+const openState = computed(() => props.open)
+const { handleKeydown, requestClose } = useModalFocus({
+  open: openState,
+  canClose,
+  container: modal,
+  initialFocus: closeButton,
+  close: () => {
+    invalidateArtifactRead()
+    emit('close')
+  },
+})
+
+watch(() => props.open, (isOpen) => {
+  if (!isOpen) {
+    invalidateArtifactRead()
+    return
+  }
+  resetForm()
+}, { immediate: true })
+
+function resetForm() {
+  invalidateArtifactRead()
   manifest.value = ''
   signature.value = ''
   artifactBase64.value = ''
   artifactName.value = ''
   inputError.value = ''
-  await nextTick()
-  closeButton.value?.focus()
-}, { immediate: true })
+}
 
-function requestClose() {
-  if (!props.saving) emit('close')
+function invalidateArtifactRead() {
+  artifactReadRevision += 1
+  artifactReading.value = false
 }
 
 async function readTextFile(event, field) {
@@ -107,25 +132,37 @@ async function readTextFile(event, field) {
 
 async function readArtifactFile(event) {
   const file = event.target.files?.[0]
-  if (!file) return
+  const revision = ++artifactReadRevision
+  artifactReading.value = false
+  artifactBase64.value = ''
+  if (!file) {
+    artifactName.value = ''
+    return
+  }
   try {
     inputError.value = ''
     artifactName.value = `${file.name} (${file.size} B)`
+    artifactReading.value = true
     const bytes = new Uint8Array(await file.arrayBuffer())
+    if (revision !== artifactReadRevision || !props.open) return
     let binary = ''
     const chunkSize = 0x8000
     for (let offset = 0; offset < bytes.length; offset += chunkSize) {
       binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize))
     }
-    artifactBase64.value = btoa(binary)
+    if (revision === artifactReadRevision && props.open) artifactBase64.value = btoa(binary)
   } catch {
-    artifactBase64.value = ''
-    inputError.value = t('control.errors.releaseImport')
+    if (revision === artifactReadRevision && props.open) {
+      artifactBase64.value = ''
+      inputError.value = t('control.errors.releaseImport')
+    }
+  } finally {
+    if (revision === artifactReadRevision) artifactReading.value = false
   }
 }
 
 function save() {
-  if (props.saving || !manifest.value.trim() || !signature.value.trim()) return
+  if (props.saving || artifactReading.value || !manifest.value.trim() || !signature.value.trim()) return
   emit('save', {
     manifest: manifest.value,
     signature: signature.value.trim(),

@@ -1,12 +1,13 @@
 <template>
   <div v-if="open" class="plugin-dialog-backdrop" @click.self="requestClose">
     <section
+      ref="modal"
       class="plugin-dialog"
       data-testid="plugin-installation-dialog"
       role="dialog"
       aria-modal="true"
       aria-labelledby="plugin-installation-title"
-      @keydown.esc.prevent="requestClose"
+      @keydown="handleKeydown"
     >
       <header class="dialog-header">
         <div>
@@ -66,10 +67,11 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { X } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { releaseTargets } from '@/utils/kernelPluginRelease'
+import { useModalFocus } from '@/composables/useModalFocus'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -85,11 +87,14 @@ const props = defineProps({
 const emit = defineEmits(['close', 'save'])
 const { t } = useAppI18n()
 const closeButton = ref(null)
+const modal = ref(null)
 const selectedTarget = ref('')
 const selectedVersion = ref('')
 const selectedEnabled = ref(true)
 
 const isUpgrade = computed(() => Boolean(props.installation))
+const canClose = computed(() => !props.saving)
+const openState = computed(() => props.open)
 const targetOptions = computed(() => {
   const explicitTargets = props.targets
     .map(target => typeof target === 'string' ? target : target?.target)
@@ -98,16 +103,19 @@ const targetOptions = computed(() => {
   return [...new Set(props.releases.flatMap(releaseTargets))]
 })
 const availableReleases = computed(() => props.releases.filter(release => releaseTargets(release).includes(selectedTarget.value)))
+const { handleKeydown, requestClose } = useModalFocus({
+  open: openState,
+  canClose,
+  container: modal,
+  initialFocus: closeButton,
+  close: () => emit('close'),
+})
 
-watch([() => props.open, () => props.target, () => props.installation, targetOptions], async ([isOpen]) => {
+watch([() => props.open, () => props.target, () => props.installation, targetOptions], ([isOpen]) => {
   const requestedTarget = props.target || props.installation?.target || targetOptions.value[0] || ''
   if (isOpen && (requestedTarget || !targetOptions.value.includes(selectedTarget.value))) {
     selectedTarget.value = requestedTarget
     selectedEnabled.value = props.installation?.enabled ?? props.enabled
-  }
-  if (isOpen) {
-    await nextTick()
-    closeButton.value?.focus()
   }
 }, { immediate: true })
 
@@ -123,10 +131,6 @@ function resetSelectedVersion() {
   const desiredVersion = props.installation?.desired_version
   const releases = availableReleases.value
   selectedVersion.value = releases.find(release => release.version === desiredVersion)?.version || releases[0]?.version || ''
-}
-
-function requestClose() {
-  if (!props.saving) emit('close')
 }
 
 function save() {
