@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/base64"
@@ -19,6 +20,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
+	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -27,10 +29,12 @@ import (
 )
 
 const maxControlPluginRequestBody = 1 << 20
+const defaultControlPluginHostRequestTimeout = 30 * time.Second
 
 type KernelHandler struct {
 	db                     *gorm.DB
 	controlPluginExecutors *plugincontrol.Registry
+	controlPluginHosts     pluginhost.Manager
 }
 
 // accessGroupDetailResponse keeps the access-control management view on a
@@ -56,12 +60,18 @@ type accessGroupPlanSummary struct {
 }
 
 func NewKernelHandler() *KernelHandler {
-	db := database.Get()
-	registry, err := plugincontrol.DefaultRegistry(db)
-	if err != nil {
-		panic(err)
+	return &KernelHandler{db: database.Get(), controlPluginHosts: pluginhost.DefaultManager()}
+}
+
+func controlPluginHostRequestTimeout(cfg *config.Config) time.Duration {
+	if cfg == nil {
+		return defaultControlPluginHostRequestTimeout
 	}
-	return &KernelHandler{db: db, controlPluginExecutors: registry}
+	parsed, err := time.ParseDuration(strings.TrimSpace(cfg.Plugins.ControlHostRequestTimeout))
+	if err != nil || parsed <= 0 {
+		return defaultControlPluginHostRequestTimeout
+	}
+	return parsed
 }
 
 func kernelData(c *gin.Context, status int, data any) { c.JSON(status, gin.H{"data": data}) }
@@ -117,6 +127,18 @@ func kernelActorID(c *gin.Context) uint {
 func kernelActorIsAdmin(c *gin.Context) bool {
 	value, ok := c.Get("is_admin")
 	return ok && value == true
+}
+
+func kernelRequestID(c *gin.Context) string {
+	if value, ok := c.Get("request_id"); ok {
+		if requestID, ok := value.(string); ok && strings.TrimSpace(requestID) != "" {
+			return requestID
+		}
+	}
+	if requestID := strings.TrimSpace(c.GetHeader("X-Request-ID")); requestID != "" {
+		return requestID
+	}
+	return uuid.NewString()
 }
 
 func controlOperationIdempotencyKey(parts ...string) string {
@@ -230,11 +252,8 @@ func (h *KernelHandler) PluginRouteGateway(c *gin.Context) {
 		}
 		return
 	}
-	if !cfg.Plugins.ControlExecutionEnabled || h.controlPluginExecutors == nil {
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"error": gin.H{"code": "plugin_route_not_implemented", "message": "plugin route is authorized but Control package execution is disabled or unavailable"},
-			"data":  resolution,
-		})
+	if !cfg.Plugins.ControlExecutionEnabled || h.controlPluginHosts == nil {
+		kernelError(c, http.StatusBadGateway, "plugin_host_unavailable", "plugin host is unavailable")
 		return
 	}
 	body, err := io.ReadAll(io.LimitReader(c.Request.Body, maxControlPluginRequestBody+1))
@@ -246,29 +265,47 @@ func (h *KernelHandler) PluginRouteGateway(c *gin.Context) {
 		kernelError(c, http.StatusRequestEntityTooLarge, "plugin_request_too_large", "plugin request body exceeds 1 MiB")
 		return
 	}
-	response, err := h.controlPluginExecutors.ExecuteRoute(c.Request.Context(), resolution.PluginID, resolution.Version, plugincontrol.RouteRequest{
-		Method: c.Request.Method, Path: resolution.Route, Query: c.Request.URL.Query(), Body: body, ActorID: kernelActorID(c),
+	principal, err := json.Marshal(struct {
+		ActorID uint   `json:"actor_id"`
+		Admin   bool   `json:"admin"`
+		Plugin  string `json:"plugin_id"`
+	}{
+		ActorID: kernelActorID(c), Admin: kernelActorIsAdmin(c), Plugin: resolution.PluginID,
+	})
+	if err != nil {
+		kernelError(c, http.StatusInternalServerError, "plugin_host_unavailable", "plugin request principal could not be encoded")
+		return
+	}
+	deadline := time.Now().Add(controlPluginHostRequestTimeout(cfg))
+	if requestDeadline, ok := c.Request.Context().Deadline(); ok && requestDeadline.Before(deadline) {
+		deadline = requestDeadline
+	}
+	dispatchContext, cancelDispatch := context.WithDeadline(c.Request.Context(), deadline)
+	defer cancelDispatch()
+	response, err := h.controlPluginHosts.Dispatch(dispatchContext, pluginhost.DispatchInput{
+		PackageID: resolution.PluginID, Version: resolution.Version, Generation: resolution.Generation,
+		RequestID: kernelRequestID(c), IdempotencyKey: c.GetHeader("Idempotency-Key"), RouteID: resolution.MatchedRoute,
+		Method: c.Request.Method, Body: body, PrincipalJSON: principal, Deadline: deadline,
 	})
 	if err != nil {
 		switch {
-		case errors.Is(err, plugincontrol.ErrExecutorNotFound):
-			kernelError(c, http.StatusNotImplemented, "plugin_route_not_implemented", err.Error())
-		case errors.Is(err, plugincontrol.ErrRouteNotFound):
-			kernelError(c, http.StatusBadGateway, "plugin_executor_route_missing", err.Error())
-		case errors.Is(err, plugincontrol.ErrMethodNotAllowed):
-			kernelError(c, http.StatusMethodNotAllowed, "plugin_method_not_allowed", err.Error())
-		case errors.Is(err, plugincontrol.ErrInvalidPluginInput):
-			kernelError(c, http.StatusBadRequest, "plugin_request_invalid", err.Error())
+		case errors.Is(err, pluginhost.ErrHostIncompatible):
+			kernelError(c, http.StatusBadGateway, "plugin_host_incompatible", "plugin host is incompatible")
 		default:
-			kernelError(c, http.StatusBadGateway, "plugin_executor_failed", err.Error())
+			kernelError(c, http.StatusBadGateway, "plugin_host_unavailable", "plugin host is unavailable")
 		}
 		return
 	}
-	if response.Status < http.StatusOK || response.Status > 599 {
-		kernelError(c, http.StatusBadGateway, "plugin_executor_invalid_response", "plugin executor returned an invalid status")
+	if response.StatusCode < http.StatusContinue || response.StatusCode > 599 {
+		kernelError(c, http.StatusBadGateway, "plugin_host_incompatible", "plugin host returned an invalid response")
 		return
 	}
-	kernelData(c, response.Status, response.Data)
+	for _, header := range response.Headers {
+		if header.Name != "" {
+			c.Header(header.Name, header.Value)
+		}
+	}
+	c.Data(int(response.StatusCode), c.GetHeader("Content-Type"), response.Body)
 }
 
 func (h *KernelHandler) ListPluginReleases(c *gin.Context) {

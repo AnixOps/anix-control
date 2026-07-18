@@ -154,6 +154,18 @@ func TestStartGRPCServerRejectsOccupiedPort(t *testing.T) {
 	}
 }
 
+func TestNewControlPluginHostManagerRejectsInvalidTimeout(t *testing.T) {
+	cfg := &appconfig.Config{}
+	cfg.Plugins.ControlHostRuntimeDir = t.TempDir()
+	cfg.Plugins.ControlHostStartupTimeout = "not-a-duration"
+
+	manager, err := newControlPluginHostManager(cfg)
+
+	if err == nil {
+		t.Fatalf("newControlPluginHostManager() = %v, nil error", manager)
+	}
+}
+
 func TestCreateDefaultIndexWritesFile(t *testing.T) {
 	dir := t.TempDir()
 	if err := createDefaultIndex(dir); err != nil {

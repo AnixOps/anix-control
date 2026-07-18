@@ -11,7 +11,9 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"gorm.io/gorm"
 )
 
@@ -49,7 +51,15 @@ type LifecycleRequest struct {
 	OperationID string
 	Kind        string
 	Target      string
+	Generation  uint64
 	Config      json.RawMessage
+}
+
+// LifecycleDispatcher is the durable-operation execution boundary. Registry
+// remains an implementation for fixtures during the transition, while the
+// production server injects HostLifecycleDispatcher.
+type LifecycleDispatcher interface {
+	ExecuteLifecycle(context.Context, string, string, LifecycleRequest) (json.RawMessage, error)
 }
 
 // Executor is the smallest Control package runtime contract. A package may
@@ -70,6 +80,76 @@ type ConfigurationValidator interface {
 type Registry struct {
 	mu        sync.RWMutex
 	executors map[string]Executor
+}
+
+// ArtifactRefResolver supplies the immutable materialized host files for an
+// installed package. Task 4 owns resolving the v2 manifest entrypoint fields;
+// without one, lifecycle execution deliberately fails closed.
+type ArtifactRefResolver func(context.Context, string, string) (pluginhost.ArtifactRef, error)
+
+// HostLifecycleDispatcher maps the existing durable lifecycle operations onto
+// the narrow host manager API. It never looks up or falls back to Registry.
+type HostLifecycleDispatcher struct {
+	hosts     pluginhost.Manager
+	artifacts ArtifactRefResolver
+}
+
+func NewHostLifecycleDispatcher(hosts pluginhost.Manager, artifacts ArtifactRefResolver) *HostLifecycleDispatcher {
+	return &HostLifecycleDispatcher{hosts: hosts, artifacts: artifacts}
+}
+
+var _ LifecycleDispatcher = (*Registry)(nil)
+var _ LifecycleDispatcher = (*HostLifecycleDispatcher)(nil)
+
+func (d *HostLifecycleDispatcher) ExecuteLifecycle(ctx context.Context, pluginID, version string, request LifecycleRequest) (json.RawMessage, error) {
+	if d == nil || d.hosts == nil {
+		return nil, pluginhost.ErrHostUnavailable
+	}
+	if request.Generation == 0 {
+		return nil, pluginhost.ErrGenerationUnavailable
+	}
+	switch request.Kind {
+	case "plugin.install", "plugin.enable", "plugin.update":
+		if d.artifacts == nil {
+			return nil, fmt.Errorf("%w: no verified artifact reference is available", pluginhost.ErrHostUnavailable)
+		}
+		ref, err := d.artifacts(ctx, pluginID, version)
+		if err != nil {
+			return nil, fmt.Errorf("%w: verified artifact reference is unavailable", pluginhost.ErrHostUnavailable)
+		}
+		if err := d.hosts.Start(ctx, ref, request.Generation); err != nil {
+			return nil, err
+		}
+		return json.RawMessage(`{}`), nil
+	case "plugin.disable":
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			deadline = time.Now().Add(30 * time.Second)
+		}
+		if err := d.hosts.Drain(ctx, pluginID, version, request.Generation, deadline); err != nil {
+			return nil, err
+		}
+		if err := d.hosts.Stop(ctx, pluginID, version, request.Generation); err != nil {
+			return nil, err
+		}
+		return json.RawMessage(`{}`), nil
+	case "plugin.rollback":
+		if err := d.hosts.Rollback(ctx, pluginID, version, request.Generation); err != nil {
+			return nil, err
+		}
+		return json.RawMessage(`{}`), nil
+	case "plugin.health":
+		health, err := d.hosts.Health(ctx, pluginID, version, request.Generation)
+		if err != nil {
+			return nil, err
+		}
+		if !health.Healthy {
+			return nil, fmt.Errorf("%w: host health check failed", pluginhost.ErrHostUnavailable)
+		}
+		return json.RawMessage(`{"healthy":true}`), nil
+	default:
+		return nil, fmt.Errorf("%w: host protocol does not support lifecycle operation %q", pluginhost.ErrHostIncompatible, request.Kind)
+	}
 }
 
 var (

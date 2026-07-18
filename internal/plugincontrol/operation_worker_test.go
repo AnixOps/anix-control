@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/glebarez/sqlite"
 	"github.com/google/uuid"
@@ -93,6 +94,31 @@ func createControlOperation(t *testing.T, db *gorm.DB, pluginID, version, kind, 
 	})
 	require.NoError(t, err)
 	return *operation
+}
+
+func TestOperationWorkerFailsClosedWhenHostArtifactRefIsUnavailable(t *testing.T) {
+	db := newOperationWorkerDB(t)
+	const pluginID = "host-only"
+	const version = "4.0.0"
+	seedControlPluginRelease(t, db, pluginID, version)
+	manager, err := pluginhost.NewManager(pluginhost.ManagerConfig{RuntimeDir: t.TempDir()})
+	require.NoError(t, err)
+	worker, err := NewOperationWorker(db, NewHostLifecycleDispatcher(manager, nil))
+	require.NoError(t, err)
+	now := time.Now()
+	worker.now = func() time.Time { return now }
+	require.NoError(t, db.Create(&model.PluginInstallation{
+		PluginID: pluginID, Target: "control", DesiredVersion: version, State: "pending", Enabled: true, LifecycleGeneration: 7,
+	}).Error)
+	operation := createControlOperation(t, db, pluginID, version, "plugin.enable", "host-artifact-unavailable", now.Add(time.Minute))
+
+	processed, err := worker.RunOnce(context.Background())
+
+	require.NoError(t, err)
+	require.Equal(t, 1, processed)
+	require.NoError(t, db.First(&operation, "id = ?", operation.ID).Error)
+	require.Equal(t, "failed", operation.State)
+	require.Contains(t, operation.LastError, "plugin host unavailable")
 }
 
 func TestOperationWorkerPersistsLifecycleUpdateRollbackAndRestartReplay(t *testing.T) {

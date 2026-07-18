@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -30,6 +31,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	_ "github.com/AnixOps/anix-control/v4/internal/payment/gateways" // register payment gateway plugins
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
+	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v4/internal/router"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
@@ -475,12 +477,18 @@ func main() {
 	}
 
 	var controlPluginCancel context.CancelFunc
+	var controlPluginHosts *pluginhost.Supervisor
+	pluginhost.SetDefaultManager(nil)
 	if cfg.Plugins.ControlExecutionEnabled {
-		registry, err := plugincontrol.DefaultRegistry(database.Get())
+		controlPluginHosts, err = newControlPluginHostManager(cfg)
 		if err != nil {
-			log.Fatalf("Failed to initialize Control plugin executors: %v", err)
+			log.Fatalf("Failed to initialize Control plugin hosts: %v", err)
 		}
-		worker, err := plugincontrol.NewOperationWorker(database.Get(), registry)
+		pluginhost.SetDefaultManager(controlPluginHosts)
+		worker, err := plugincontrol.NewOperationWorker(
+			database.Get(),
+			plugincontrol.NewHostLifecycleDispatcher(controlPluginHosts, nil),
+		)
 		if err != nil {
 			log.Fatalf("Failed to initialize Control plugin lifecycle worker: %v", err)
 		}
@@ -501,7 +509,7 @@ func main() {
 		worker.Start(workerCtx, interval, func(err error) {
 			log.Printf("Control plugin lifecycle worker error: %v", err)
 		})
-		log.Printf("Control plugin execution enabled (poll interval %s, reconciliation operations %d)", interval, queued)
+		log.Printf("Control plugin host supervision enabled (poll interval %s, reconciliation operations %d)", interval, queued)
 	}
 
 	// 设置Gin模式
@@ -690,6 +698,12 @@ func main() {
 	if controlPluginCancel != nil {
 		controlPluginCancel()
 	}
+	if controlPluginHosts != nil {
+		if err := controlPluginHosts.Shutdown(ctx); err != nil {
+			log.Printf("Control plugin host shutdown error: %v", err)
+		}
+	}
+	pluginhost.SetDefaultManager(nil)
 
 	// Give goroutines time to finish returning from ListenAndServe.
 	wg.Wait()
@@ -717,6 +731,29 @@ func startGRPCServer(cfg *config.Config) (*grpcserver.Server, string, error) {
 		return nil, "", err
 	}
 	return server, fmt.Sprintf("%s:%d", grpcCfg.Host, grpcCfg.Port), nil
+}
+
+func newControlPluginHostManager(cfg *config.Config) (*pluginhost.Supervisor, error) {
+	if cfg == nil {
+		return nil, errors.New("plugin host configuration is required")
+	}
+	startupTimeout := 5 * time.Second
+	if raw := strings.TrimSpace(cfg.Plugins.ControlHostStartupTimeout); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil || parsed <= 0 {
+			return nil, fmt.Errorf("invalid plugins.control_host_startup_timeout %q", raw)
+		}
+		startupTimeout = parsed
+	}
+	if raw := strings.TrimSpace(cfg.Plugins.ControlHostRequestTimeout); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil || parsed <= 0 {
+			return nil, fmt.Errorf("invalid plugins.control_host_request_timeout %q", raw)
+		}
+	}
+	return pluginhost.NewManager(pluginhost.ManagerConfig{
+		RuntimeDir: cfg.Plugins.ControlHostRuntimeDir, StartupTimeout: startupTimeout,
+	})
 }
 
 // newAPIServer creates the API server with proper timeouts.

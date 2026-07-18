@@ -28,21 +28,21 @@ var controlOperationKinds = []string{
 // operations remain owned by KernelOperationBridge and the Agent stream.
 type OperationWorker struct {
 	db            *gorm.DB
-	registry      *Registry
+	dispatcher    LifecycleDispatcher
 	now           func() time.Time
 	workerID      string
 	leaseDuration time.Duration
 }
 
-func NewOperationWorker(db *gorm.DB, registry *Registry) (*OperationWorker, error) {
+func NewOperationWorker(db *gorm.DB, dispatcher LifecycleDispatcher) (*OperationWorker, error) {
 	if db == nil {
 		return nil, errors.New("control plugin operation worker requires a database")
 	}
-	if registry == nil {
-		return nil, errors.New("control plugin operation worker requires an executor registry")
+	if dispatcher == nil {
+		return nil, errors.New("control plugin operation worker requires a lifecycle dispatcher")
 	}
 	return &OperationWorker{
-		db: db, registry: registry, now: time.Now, workerID: uuid.NewString(), leaseDuration: controlOperationLeaseDuration,
+		db: db, dispatcher: dispatcher, now: time.Now, workerID: uuid.NewString(), leaseDuration: controlOperationLeaseDuration,
 	}, nil
 }
 
@@ -200,16 +200,18 @@ func (w *OperationWorker) executeOne(ctx context.Context, operation model.Kernel
 	}
 	defer stopLease()
 	executionCtx, cancelExecution := context.WithDeadline(operationCtx, *operation.DeadlineAt)
-	result, executeErr := w.registry.ExecuteLifecycle(executionCtx, operation.PluginID, operation.TargetVersion, LifecycleRequest{
-		OperationID: operation.ID, Kind: operation.Kind, Target: operation.TargetVersion, Config: json.RawMessage(operation.ConfigJSON),
+	result, executeErr := w.dispatcher.ExecuteLifecycle(executionCtx, operation.PluginID, operation.TargetVersion, LifecycleRequest{
+		OperationID: operation.ID, Kind: operation.Kind, Target: operation.TargetVersion,
+		Generation: installationLifecycleGeneration(installation), Config: json.RawMessage(operation.ConfigJSON),
 	})
 	cancelExecution()
 	rollbackSucceeded := false
 	if executeErr != nil && operation.LifecyclePlanID == "" && (operation.Kind == "plugin.update" || operation.Kind == "plugin.rollback") && installation.Enabled && installation.ObservedVersion != "" && installation.ObservedVersion != operation.TargetVersion {
 		rollbackCtx, cancelRollback := context.WithTimeout(operationCtx, 2*time.Minute)
-		_, rollbackErr := w.registry.ExecuteLifecycle(rollbackCtx, installation.PluginID, installation.ObservedVersion, LifecycleRequest{
+		_, rollbackErr := w.dispatcher.ExecuteLifecycle(rollbackCtx, installation.PluginID, installation.ObservedVersion, LifecycleRequest{
 			OperationID: operation.ID + ":automatic-rollback", Kind: "plugin.enable", Target: installation.ObservedVersion,
-			Config: json.RawMessage(operation.ConfigJSON),
+			Generation: installationLifecycleGeneration(installation),
+			Config:     json.RawMessage(operation.ConfigJSON),
 		})
 		cancelRollback()
 		rollbackSucceeded = rollbackErr == nil
@@ -243,6 +245,13 @@ func (w *OperationWorker) executeOne(ctx context.Context, operation model.Kernel
 		return true, w.recordFailure(operation, &installation, errors.New("control plugin executor returned invalid JSON"), false)
 	}
 	return true, w.recordSuccess(operation, installation.ID, result)
+}
+
+func installationLifecycleGeneration(installation model.PluginInstallation) uint64 {
+	if installation.LifecycleGeneration <= 0 {
+		return 0
+	}
+	return uint64(installation.LifecycleGeneration)
 }
 
 func (w *OperationWorker) claimOperation(operation *model.KernelOperation, claimedAt time.Time) (bool, error) {

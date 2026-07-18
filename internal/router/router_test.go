@@ -193,6 +193,17 @@ func TestSetup_V3ExtensionsRequiresAdminAndReturnsEmptyCatalog(t *testing.T) {
 	require.JSONEq(t, `{"data":[]}`, recorder.Body.String())
 }
 
+func TestSetupRegistersV4PluginGateway(t *testing.T) {
+	r, _ := setupTestRouter(t)
+	defer teardownTestRouter(t)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v4/plugins/knowledge/articles", nil)
+	recorder := httptest.NewRecorder()
+	r.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusUnauthorized, recorder.Code, recorder.Body.String())
+}
+
 func TestSetup_MetricsEndpoint(t *testing.T) {
 	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)

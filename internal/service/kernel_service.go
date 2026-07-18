@@ -977,6 +977,7 @@ type PluginControlRouteResolution struct {
 	PluginID       string `json:"plugin_id"`
 	Version        string `json:"version"`
 	InstallationID uint   `json:"installation_id"`
+	Generation     uint64 `json:"generation"`
 	Route          string `json:"route"`
 	MatchedRoute   string `json:"matched_route"`
 	Permission     string `json:"permission"`
@@ -1043,7 +1044,8 @@ func ResolvePluginControlRoute(db *gorm.DB, publicKey ed25519.PublicKey, pluginI
 	}
 	return &PluginControlRouteResolution{
 		PluginID: installation.PluginID, Version: installation.ObservedVersion, InstallationID: installation.ID,
-		Route: requestPath, MatchedRoute: matchedRoute, Permission: permission,
+		Generation: uint64(installation.LifecycleGeneration),
+		Route:      requestPath, MatchedRoute: matchedRoute, Permission: permission,
 	}, nil
 }
 
@@ -2075,9 +2077,19 @@ func validatePluginControlRoute(value, pluginID string) error {
 	if routePath == "" {
 		return fmt.Errorf("control route %q is unsafe", value)
 	}
-	namespace := "/api/v3/plugins/" + pluginID
-	if routePath != namespace && !strings.HasPrefix(routePath, namespace+"/") {
-		return fmt.Errorf("control route %q is outside %s", value, namespace)
+	namespaces := []string{
+		"/api/v3/plugins/" + pluginID,
+		"/api/v4/plugins/" + pluginID,
+	}
+	insideNamespace := false
+	for _, namespace := range namespaces {
+		if routePath == namespace || strings.HasPrefix(routePath, namespace+"/") {
+			insideNamespace = true
+			break
+		}
+	}
+	if !insideNamespace {
+		return fmt.Errorf("control route %q is outside the plugin gateway namespace", value)
 	}
 	if strings.ContainsAny(routePath, "\\%?#\r\n\t ") || path.Clean(routePath) != routePath || strings.Contains(routePath, "//") {
 		return fmt.Errorf("control route %q is unsafe", value)

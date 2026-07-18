@@ -713,4 +713,16 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v3.POST("/operations/:id/cancel", kernel.CancelOperation)
 		v3.GET("/observed-states", kernel.ListObservedStates)
 	}
+
+	// API v4 currently exposes only the package route gateway. Its admission
+	// model is identical to v3 while package execution moves to local hosts.
+	v4 := r.Group("/api/v4")
+	v4.Use(adminLimiter.Middleware())
+	v4.Use(middleware.JWTAuth())
+	v4.Use(middleware.AdminAuth())
+	v4.Use(middleware.AuditLog())
+	{
+		kernel := handler.NewKernelHandler()
+		v4.Any("/plugins/:plugin_id/*route", kernel.PluginRouteGateway)
+	}
 }

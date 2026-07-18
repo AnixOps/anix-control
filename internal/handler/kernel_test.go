@@ -21,6 +21,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
+	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -37,6 +38,23 @@ func newKernelHandlerTestDB(t *testing.T, extra ...any) *gorm.DB {
 		require.NoError(t, db.AutoMigrate(extra...))
 	}
 	return db
+}
+
+func TestNewKernelHandlerUsesDefaultPluginHostManager(t *testing.T) {
+	manager, err := pluginhost.NewManager(pluginhost.ManagerConfig{RuntimeDir: t.TempDir()})
+	require.NoError(t, err)
+	previous := pluginhost.DefaultManager()
+	pluginhost.SetDefaultManager(manager)
+	t.Cleanup(func() { pluginhost.SetDefaultManager(previous) })
+
+	var handler *KernelHandler
+	require.NotPanics(t, func() { handler = NewKernelHandler() })
+	require.Same(t, manager, handler.controlPluginHosts)
+}
+
+func TestControlPluginHostRequestTimeoutUsesConfiguredValue(t *testing.T) {
+	timeout := controlPluginHostRequestTimeout(&config.Config{Plugins: config.PluginConfig{ControlHostRequestTimeout: "2s"}})
+	require.Equal(t, 2*time.Second, timeout)
 }
 
 func TestControlOperationIdempotencyAdvancesWithLifecycleGeneration(t *testing.T) {
@@ -469,8 +487,8 @@ func TestKernelPluginRouteGatewayAuthorizesInstalledSignedRoutes(t *testing.T) {
 		c.Set("is_admin", true)
 	}
 	recorder := performKernelHandlerRequestWithSetup(t, http.MethodGet, "/api/v3/plugins/handler-api/status", "", "/api/v3/plugins/:plugin_id/*route", handler, setupAdmin)
-	require.Equal(t, http.StatusNotImplemented, recorder.Code, recorder.Body.String())
-	require.Contains(t, recorder.Body.String(), "plugin_route_not_implemented")
+	require.Equal(t, http.StatusBadGateway, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "plugin_host_unavailable")
 
 	group := model.AccessGroup{ScopeID: manifest.ID, Name: "operators", Enabled: true}
 	require.NoError(t, db.Create(&group).Error)
@@ -485,15 +503,15 @@ func TestKernelPluginRouteGatewayAuthorizesInstalledSignedRoutes(t *testing.T) {
 
 	require.NoError(t, db.Create(&model.AccessGroupUser{GroupID: group.ID, UserID: 7}).Error)
 	recorder = performKernelHandlerRequestWithSetup(t, http.MethodGet, "/api/v3/plugins/handler-api/status", "", "/api/v3/plugins/:plugin_id/*route", handler, setupAdmin)
-	require.Equal(t, http.StatusNotImplemented, recorder.Code, recorder.Body.String())
-	require.Contains(t, recorder.Body.String(), `"permission":"handler-api.api"`)
+	require.Equal(t, http.StatusBadGateway, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "plugin_host_unavailable")
 
 	recorder = performKernelHandlerRequestWithSetup(t, http.MethodGet, "/api/v3/plugins/handler-api/missing", "", "/api/v3/plugins/:plugin_id/*route", handler, setupAdmin)
 	require.Equal(t, http.StatusNotFound, recorder.Code, recorder.Body.String())
 	require.Contains(t, recorder.Body.String(), "plugin_route_not_found")
 }
 
-func TestKernelMachineTelemetryPluginRouteExecutesAfterKernelAdmission(t *testing.T) {
+func TestKernelMachineTelemetryPluginRouteFailsClosedWithoutHost(t *testing.T) {
 	db := newKernelHandlerTestDB(t, &model.Node{})
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -553,17 +571,164 @@ func TestKernelMachineTelemetryPluginRouteExecutesAfterKernelAdmission(t *testin
 		t, http.MethodGet, plugincontrol.MachineTelemetryStatusRoute, "",
 		"/api/v3/plugins/:plugin_id/*route", handler, setupAdmin,
 	)
-	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-	require.Contains(t, recorder.Body.String(), `"plugin_id":"machine-telemetry"`)
-	require.Contains(t, recorder.Body.String(), `"name":"telemetry-node"`)
-	require.Contains(t, recorder.Body.String(), `"cpu_usage":23.5`)
+	require.Equal(t, http.StatusBadGateway, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "plugin_host_unavailable")
 
 	recorder = performKernelHandlerRequestWithSetup(
 		t, http.MethodPost, plugincontrol.MachineTelemetryStatusRoute, `{}`,
 		"/api/v3/plugins/:plugin_id/*route", handler, setupAdmin,
 	)
-	require.Equal(t, http.StatusMethodNotAllowed, recorder.Code, recorder.Body.String())
-	require.Contains(t, recorder.Body.String(), "plugin_method_not_allowed")
+	require.Equal(t, http.StatusBadGateway, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), "plugin_host_unavailable")
+}
+
+func TestPluginRouteGatewayDoesNotUseRegistryFallback(t *testing.T) {
+	db := newKernelHandlerTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	previousConfig := config.Get()
+	config.Set(&config.Config{Plugins: config.PluginConfig{
+		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlExecutionEnabled: true,
+	}})
+	t.Cleanup(func() { config.Set(previousConfig) })
+
+	artifact := []byte("knowledge-control-artifact")
+	artifactDigest := sha256.Sum256(artifact)
+	manifest := service.PluginManifest{
+		ID: "knowledge", Name: "Knowledge", Version: "4.0.0", APIVersion: "v1", Publisher: "AnixOps",
+		Targets: []string{"control"}, ArtifactSHA256: hex.EncodeToString(artifactDigest[:]),
+		Permissions:   []string{service.PluginAPIPermission("knowledge")},
+		ControlRoutes: []string{"/api/v4/plugins/knowledge/articles"},
+	}
+	canonical, err := service.CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := service.RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	_, err = service.StorePluginArtifact(db, release.ID, artifact)
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&model.PluginInstallation{
+		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version, ObservedVersion: manifest.Version,
+		State: "healthy", Enabled: true, LifecycleGeneration: 7,
+	}).Error)
+
+	registry, err := plugincontrol.NewRegistry(knowledgeRouteFallbackExecutor{})
+	require.NoError(t, err)
+	handler := (&KernelHandler{db: db, controlPluginExecutors: registry}).PluginRouteGateway
+	response := performKernelHandlerRequestWithSetup(
+		t, http.MethodGet, "/api/v4/plugins/knowledge/articles", "", "/api/v4/plugins/:plugin_id/*route", handler,
+		func(c *gin.Context) {
+			c.Set("user_id", uint(7))
+			c.Set("is_admin", true)
+		},
+	)
+
+	require.Equal(t, http.StatusBadGateway, response.Code, response.Body.String())
+	require.Contains(t, response.Body.String(), "plugin_host_unavailable")
+}
+
+func TestPluginRouteGatewayDispatchesResolvedGenerationToHost(t *testing.T) {
+	db := newKernelHandlerTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	previousConfig := config.Get()
+	config.Set(&config.Config{Plugins: config.PluginConfig{
+		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlExecutionEnabled: true, ControlHostRequestTimeout: "2s",
+	}})
+	t.Cleanup(func() { config.Set(previousConfig) })
+
+	artifact := []byte("knowledge-control-artifact")
+	artifactDigest := sha256.Sum256(artifact)
+	manifest := service.PluginManifest{
+		ID: "knowledge", Name: "Knowledge", Version: "4.0.0", APIVersion: "v1", Publisher: "AnixOps",
+		Targets: []string{"control"}, ArtifactSHA256: hex.EncodeToString(artifactDigest[:]),
+		Permissions:   []string{service.PluginAPIPermission("knowledge")},
+		ControlRoutes: []string{"/api/v4/plugins/knowledge/articles"},
+	}
+	canonical, err := service.CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := service.RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	_, err = service.StorePluginArtifact(db, release.ID, artifact)
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&model.PluginInstallation{
+		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version, ObservedVersion: manifest.Version,
+		State: "healthy", Enabled: true, LifecycleGeneration: 7,
+	}).Error)
+
+	hosts := &capturingPluginHostManager{output: pluginhost.DispatchOutput{
+		StatusCode: 202, Body: []byte(`{"accepted":true}`), Headers: []pluginhost.Header{{Name: "Content-Type", Value: "application/vnd.anixops.plugin+json"}},
+	}}
+	handler := (&KernelHandler{db: db, controlPluginHosts: hosts}).PluginRouteGateway
+	response := performKernelHandlerRequestWithSetup(
+		t, http.MethodPost, "/api/v4/plugins/knowledge/articles", `{"title":"new"}`, "/api/v4/plugins/:plugin_id/*route", handler,
+		func(c *gin.Context) {
+			c.Set("user_id", uint(7))
+			c.Set("is_admin", true)
+			c.Set("request_id", "request-1")
+			c.Request.Header.Set("Idempotency-Key", "idempotency-1")
+		},
+	)
+
+	require.Equal(t, 202, response.Code, response.Body.String())
+	require.JSONEq(t, `{"accepted":true}`, response.Body.String())
+	require.Equal(t, "application/vnd.anixops.plugin+json", response.Header().Get("Content-Type"))
+	require.Equal(t, "request-1", hosts.input.RequestID)
+	require.Equal(t, "idempotency-1", hosts.input.IdempotencyKey)
+	require.EqualValues(t, 7, hosts.input.Generation)
+	require.Equal(t, manifest.ID, hosts.input.PackageID)
+	require.Equal(t, manifest.Version, hosts.input.Version)
+	require.Equal(t, manifest.ControlRoutes[0], hosts.input.RouteID)
+	require.JSONEq(t, `{"actor_id":7,"admin":true,"plugin_id":"knowledge"}`, string(hosts.input.PrincipalJSON))
+	require.True(t, hosts.hasContextDeadline)
+	require.WithinDuration(t, hosts.input.Deadline, hosts.contextDeadline, 50*time.Millisecond)
+}
+
+type knowledgeRouteFallbackExecutor struct{}
+
+func (knowledgeRouteFallbackExecutor) PluginID() string { return "knowledge" }
+
+func (knowledgeRouteFallbackExecutor) Version() string { return "4.0.0" }
+
+func (knowledgeRouteFallbackExecutor) HandleRoute(context.Context, plugincontrol.RouteRequest) (plugincontrol.RouteResponse, error) {
+	return plugincontrol.RouteResponse{Status: http.StatusOK, Data: gin.H{"legacy": true}}, nil
+}
+
+func (knowledgeRouteFallbackExecutor) ExecuteLifecycle(context.Context, plugincontrol.LifecycleRequest) (json.RawMessage, error) {
+	return json.RawMessage(`{}`), nil
+}
+
+type capturingPluginHostManager struct {
+	input              pluginhost.DispatchInput
+	output             pluginhost.DispatchOutput
+	err                error
+	hasContextDeadline bool
+	contextDeadline    time.Time
+}
+
+func (m *capturingPluginHostManager) Start(context.Context, pluginhost.ArtifactRef, uint64) error {
+	return pluginhost.ErrHostUnavailable
+}
+
+func (m *capturingPluginHostManager) Dispatch(ctx context.Context, input pluginhost.DispatchInput) (pluginhost.DispatchOutput, error) {
+	m.input = input
+	m.contextDeadline, m.hasContextDeadline = ctx.Deadline()
+	return m.output, m.err
+}
+
+func (*capturingPluginHostManager) Health(context.Context, string, string, uint64) (pluginhost.HostHealth, error) {
+	return pluginhost.HostHealth{}, pluginhost.ErrHostUnavailable
+}
+
+func (*capturingPluginHostManager) Drain(context.Context, string, string, uint64, time.Time) error {
+	return pluginhost.ErrHostUnavailable
+}
+
+func (*capturingPluginHostManager) Stop(context.Context, string, string, uint64) error {
+	return pluginhost.ErrHostUnavailable
+}
+
+func (*capturingPluginHostManager) Rollback(context.Context, string, string, uint64) error {
+	return pluginhost.ErrHostUnavailable
 }
 
 func TestKernelControlPluginRollbackActionQueuesDurableOperation(t *testing.T) {

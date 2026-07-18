@@ -108,6 +108,9 @@ plugins:
   official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
   control_execution_enabled: false
   control_poll_interval: "5s"
+  control_host_runtime_dir: "/var/lib/anixops/plugin-hosts"
+  control_host_startup_timeout: "5s"
+  control_host_request_timeout: "30s"
   dispatch_enabled: false
   dispatch_poll_interval: "5s"
   # Topology fan-out creates Agent plugin operations only when explicitly

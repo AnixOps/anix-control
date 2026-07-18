@@ -395,6 +395,10 @@ func TestPluginManifestValidatesControlRoutes(t *testing.T) {
 	base := kernelTestControlRouteManifest("machine-telemetry", artifact)
 	require.NoError(t, base.Validate())
 
+	v4 := base
+	v4.ControlRoutes = []string{"/api/v4/plugins/machine-telemetry/status"}
+	require.NoError(t, v4.Validate())
+
 	tests := []struct {
 		name    string
 		mutate  func(*PluginManifest)
@@ -530,7 +534,7 @@ func TestResolvePluginControlRouteUsesSignedRouteAndGrantPermissions(t *testing.
 	require.NoError(t, err)
 	installation := model.PluginInstallation{
 		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version, ObservedVersion: manifest.Version,
-		State: "healthy", Enabled: true,
+		State: "healthy", Enabled: true, LifecycleGeneration: 7,
 	}
 	require.NoError(t, db.Create(&installation).Error)
 
@@ -538,6 +542,7 @@ func TestResolvePluginControlRouteUsesSignedRouteAndGrantPermissions(t *testing.
 	require.NoError(t, err)
 	require.Equal(t, "/api/v3/plugins/machine-telemetry/status", resolution.MatchedRoute)
 	require.Equal(t, PluginAPIPermission(manifest.ID), resolution.Permission)
+	require.EqualValues(t, 7, resolution.Generation)
 
 	_, err = ResolvePluginControlRoute(db, publicKey, manifest.ID, "/api/v3/plugins/machine-telemetry/status", 7, false)
 	require.ErrorIs(t, err, ErrPluginRouteForbidden)
