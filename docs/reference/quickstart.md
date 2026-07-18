@@ -18,6 +18,7 @@ Important:
 - `config/config.yaml` is the primary source of truth
 - runtime selection is defined in `config/config.yaml.forward_runtime`
 - merged runtime values are persisted into `v2_system_config`
+- no reusable administrator email or password is shipped with Control; set unique values in `admin.email` and `admin.password` (or the installer's corresponding flags) before first start
 
 ## Docker Quickstart
 

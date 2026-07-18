@@ -186,10 +186,12 @@ No users found for this node, will continue running    ← 空用户列表
 ### Step 6: 通过面板 API 完成数据链路
 
 ```bash
-# 管理员登录
+# 管理员登录。Control 不提供可复用默认账号；从本地配置或密码管理器导出凭据。
+ADMIN_EMAIL="your-admin@example.invalid"
+ADMIN_PASSWORD="replace-with-your-local-secret"
 ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/api/v2/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.invalid","password":"__REDACTED_EXAMPLE_PASSWORD__"}' \
+  -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
   | python -c "import sys,json; print(json.load(sys.stdin)['data']['token'])")
 
 # 注册测试用户
@@ -418,8 +420,8 @@ app:
   api_token: "internal-api-token-for-v2bx-2026"   # V2bX 内部 API 认证
   subscribe_path: "s"
 admin:
-  email: "admin@example.invalid"
-  password: "__REDACTED_EXAMPLE_PASSWORD__"
+  email: "admin@example.invalid" # Replace with your local administrator email.
+  password: "replace-with-a-unique-local-secret"
 ```
 
 ### V2bX config.local.json

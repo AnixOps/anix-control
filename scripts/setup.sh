@@ -14,8 +14,8 @@ PANEL_HOST="${PANEL_HOST:-127.0.0.1}"
 PANEL_PORT="${PANEL_PORT:-8080}"
 PANEL_URL="http://${PANEL_HOST}:${PANEL_PORT}"
 
-ADMIN_EMAIL="${ADMIN_EMAIL:-admin@example.invalid}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-__REDACTED_EXAMPLE_PASSWORD__}"
+ADMIN_EMAIL="${ADMIN_EMAIL:-}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 API_TOKEN="${API_TOKEN:-internal-api-token-for-v2bx-2026}"
 
 TEST_USER_EMAIL="${TEST_USER_EMAIL:-testuser@local.dev}"
@@ -34,6 +34,13 @@ info()    { echo -e "${CYAN}[INFO]${NC}  $*"; }
 ok()      { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 err()     { echo -e "${RED}[ERR]${NC}   $*"; }
+
+require_admin_credentials() {
+    if [ -z "$ADMIN_EMAIL" ] || [ -z "$ADMIN_PASSWORD" ]; then
+        err "Set ADMIN_EMAIL and ADMIN_PASSWORD to an existing administrator account before running this step"
+        exit 2
+    fi
+}
 
 # ============================ 工具函数 ============================
 api() {
@@ -386,7 +393,7 @@ main() {
         build)      step_v2bx_build "${2:-}" ;;
         config)     step_v2bx_config "${2:-}" ;;
         start)      step_v2bx_start ;;
-        datachain)  step_datachain ;;
+        datachain)  require_admin_credentials; step_datachain ;;
         verify)     step_v2bx_verify ;;
         subscribe)  step_subscribe ;;
         speedtest)  step_speedtest "${2:-}" ;;
@@ -398,6 +405,7 @@ main() {
             step_v2bx_config
             step_v2bx_start
             sleep 2
+            require_admin_credentials
             step_datachain
             step_v2bx_verify
             step_subscribe

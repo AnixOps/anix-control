@@ -223,10 +223,12 @@ curl -s http://localhost:8080/health
 ### Step 7: 创建转发规则 (通过 API)
 
 ```bash
-# 管理员登录
+# 管理员登录。Control 不提供可复用默认账号；从本地配置或密码管理器导出凭据。
+ADMIN_EMAIL="your-admin@example.invalid"
+ADMIN_PASSWORD="replace-with-your-local-secret"
 ADMIN_TOKEN=$(curl -s -X POST http://localhost:8080/api/v2/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.invalid","password":"__REDACTED_EXAMPLE_PASSWORD__"}' \
+  -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
   | python -c "import sys,json; print(json.load(sys.stdin)['data']['token'])")
 
 # 创建入站节点 (监听端口 10000)

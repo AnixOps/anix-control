@@ -81,7 +81,7 @@ conn = sqlite3.connect(db_path)
 cur = conn.cursor()
 
 # Users
-cur.execute('SELECT id, email, group_id, transfer_enable FROM v2_user WHERE email != ?', ('admin@example.invalid',))
+cur.execute('SELECT id, email, group_id, transfer_enable FROM v2_user WHERE COALESCE(is_admin, 0) = 0')
 users = cur.fetchall()
 if users:
     for u in users:
