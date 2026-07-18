@@ -111,13 +111,19 @@ watch([() => props.open, () => props.target, () => props.installation, targetOpt
   }
 }, { immediate: true })
 
+watch(() => props.open, isOpen => {
+  if (isOpen) resetSelectedVersion()
+})
+
 watch([selectedTarget, availableReleases, () => props.installation], () => {
+  if (!availableReleases.value.some(release => release.version === selectedVersion.value)) resetSelectedVersion()
+}, { immediate: true })
+
+function resetSelectedVersion() {
   const desiredVersion = props.installation?.desired_version
   const releases = availableReleases.value
-  if (!releases.some(release => release.version === selectedVersion.value)) {
-    selectedVersion.value = releases.find(release => release.version === desiredVersion)?.version || releases[0]?.version || ''
-  }
-}, { immediate: true })
+  selectedVersion.value = releases.find(release => release.version === desiredVersion)?.version || releases[0]?.version || ''
+}
 
 function requestClose() {
   if (!props.saving) emit('close')

@@ -98,7 +98,8 @@ describe('PluginDetailDrawer', () => {
     const ready = mount(PluginDetailDrawer, { attachTo: document.body, props: { row, open: true } })
     mounted.push(ready)
     await ready.get('[data-testid="plugin-detail-drawer"]').trigger('keydown', { key: 'Escape' })
-    expect(ready.emitted('close')).toHaveLength(1)
+    await ready.find('.plugin-detail-backdrop').trigger('click')
+    expect(ready.emitted('close')).toHaveLength(2)
 
     const busy = mount(PluginDetailDrawer, { attachTo: document.body, props: { row, open: true, busyTarget: 'control' } })
     mounted.push(busy)
@@ -130,6 +131,40 @@ describe('plugin catalog dialogs', () => {
     expect(wrapper.emitted('save')[0]).toEqual([{ target: 'agent', version: '1.0.0', enabled: true }])
   })
 
+  it('resets the installation version when the dialog reopens', async () => {
+    const wrapper = mount(PluginInstallationDialog, {
+      props: {
+        open: true,
+        plugin: row.plugin,
+        targets: ['control'],
+        releases: [
+          { id: 1, version: '1.1.0', manifest: JSON.stringify({ targets: ['control'] }) },
+          { id: 2, version: '1.0.0', manifest: JSON.stringify({ targets: ['control'] }) },
+        ],
+      },
+    })
+    mounted.push(wrapper)
+
+    const version = wrapper.get('#plugin-install-version')
+    expect(version.element.value).toBe('1.1.0')
+    await version.setValue('1.0.0')
+    await wrapper.setProps({ open: false })
+    await wrapper.setProps({ open: true })
+    await nextTick()
+    expect(wrapper.get('#plugin-install-version').element.value).toBe('1.1.0')
+  })
+
+  it('allows Escape and backdrop dismissal for an idle installation dialog', async () => {
+    const wrapper = mount(PluginInstallationDialog, {
+      props: { open: true, plugin: row.plugin, targets: ['control'], releases: [{ version: '1.1.0', manifest: JSON.stringify({ targets: ['control'] }) }] },
+    })
+    mounted.push(wrapper)
+
+    await wrapper.get('[data-testid="plugin-installation-dialog"]').trigger('keydown', { key: 'Escape' })
+    await wrapper.find('.plugin-dialog-backdrop').trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(2)
+  })
+
   it('emits release-import text values and refuses an outside close while saving', async () => {
     const wrapper = mount(PluginReleaseImportDialog, { attachTo: document.body, props: { open: true } })
     mounted.push(wrapper)
@@ -146,8 +181,13 @@ describe('plugin catalog dialogs', () => {
       artifactBase64: '',
     }])
 
+    await wrapper.get('[data-testid="plugin-release-import-dialog"]').trigger('keydown', { key: 'Escape' })
+    await wrapper.find('.plugin-dialog-backdrop').trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(2)
+
     await wrapper.setProps({ saving: true })
     await wrapper.get('[data-testid="plugin-release-import-dialog"]').trigger('keydown', { key: 'Escape' })
-    expect(wrapper.emitted('close')).toBeUndefined()
+    await wrapper.find('.plugin-dialog-backdrop').trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(2)
   })
 })
