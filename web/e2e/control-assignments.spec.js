@@ -15,7 +15,14 @@ async function seedAdmin(page) {
 async function installFixtures(page) {
   const state = {
     assignments: [],
-    operations: []
+    operations: [{
+      id: 'active-operation',
+      kind: 'plugin.enable',
+      plugin_id: plugin.id,
+      revision: 6,
+      state: 'running',
+      created_at: '2026-07-18T01:00:00Z',
+    }]
   }
 
   await page.route(url => url.pathname.startsWith('/api/'), async route => {
@@ -104,6 +111,22 @@ test('runs the assignment lifecycle in a narrow viewport without page overflow',
   await drawer.locator('#assignment-rollout-group').fill('canary-mobile')
   await drawer.locator('[data-testid="save-assignment"]').click()
   await expect(page.locator('[data-testid="deployment-target-panel"]')).toContainText('canary-mobile')
+
+  for (const testID of ['edit-assignment-7', 'toggle-assignment-7', 'delete-assignment-7']) {
+    const action = page.getByTestId(testID)
+    const box = await action.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box.x).toBeGreaterThanOrEqual(0)
+    expect(box.x + box.width).toBeLessThanOrEqual(390)
+  }
+
+  await page.getByTestId('show-all-activity').click()
+  const cancelAction = page.getByTestId('cancel-operation-active-operation')
+  await expect(cancelAction).toBeVisible()
+  const cancelBox = await cancelAction.boundingBox()
+  expect(cancelBox).not.toBeNull()
+  expect(cancelBox.x).toBeGreaterThanOrEqual(0)
+  expect(cancelBox.x + cancelBox.width).toBeLessThanOrEqual(390)
 
   await page.locator('[data-testid="edit-assignment-7"]').click()
   await expect(drawer.locator('#assignment-role')).toBeDisabled()

@@ -91,19 +91,19 @@
           <tbody>
             <tr v-if="loading && !loaded"><td colspan="5" class="state-row">{{ t('control.states.loading') }}</td></tr>
             <tr v-for="topology in topologies" v-else :key="topology.id">
-              <td>
+              <td :data-label="t('control.table.topology')">
                 <strong>{{ topology.name || `#${topology.id}` }}</strong>
                 <code>#{{ topology.id }}</code>
               </td>
-              <td><code>{{ topology.service_scope || '-' }}</code></td>
-              <td><code>{{ topology.active_revision_id || '-' }}</code></td>
-              <td>
+              <td :data-label="t('control.table.scope')"><code>{{ topology.service_scope || '-' }}</code></td>
+              <td :data-label="t('control.table.activeRevision')"><code>{{ topology.active_revision_id || '-' }}</code></td>
+              <td :data-label="t('control.table.deployment')">
                 <span v-if="latestDeploymentFor(topology)" :class="['state-badge', stateClass(latestDeploymentFor(topology).state)]">
                   {{ latestDeploymentFor(topology).state }}
                 </span>
                 <span v-else class="muted">{{ t('control.topology.noDeployment') }}</span>
               </td>
-              <td>
+              <td :data-label="t('control.table.actions')">
                 <div class="row-actions">
                   <button class="btn" :data-testid="`edit-topology-${topology.id}`" type="button" @click="openTopologyEditor(topology)">
                     {{ t('control.topology.edit') }}
@@ -174,14 +174,14 @@
           <tbody>
             <tr v-if="assignmentsLoading"><td colspan="8" class="state-row">{{ t('control.assignments.loading') }}</td></tr>
             <tr v-for="assignment in assignments" v-else :key="assignment.id">
-              <td><strong>{{ pluginName(assignment.plugin_id) }}</strong><code>{{ assignment.plugin_id }}</code></td>
-              <td><code>{{ assignment.service_scope }}</code></td>
-              <td><code>{{ assignment.role }}</code></td>
-              <td><code>{{ assignment.desired_version || '-' }}</code></td>
-              <td>{{ assignment.desired_config_revision ?? 0 }}</td>
-              <td>{{ assignment.rollout_group || '-' }}</td>
-              <td><span :class="['state-badge', assignment.enabled ? 'state-active' : 'state-error']">{{ assignment.enabled ? t('control.states.enabled') : t('control.states.disabled') }}</span></td>
-              <td>
+              <td :data-label="t('control.table.plugin')"><strong>{{ pluginName(assignment.plugin_id) }}</strong><code>{{ assignment.plugin_id }}</code></td>
+              <td :data-label="t('control.table.scope')"><code>{{ assignment.service_scope }}</code></td>
+              <td :data-label="t('control.table.role')"><code>{{ assignment.role }}</code></td>
+              <td :data-label="t('control.table.version')"><code>{{ assignment.desired_version || '-' }}</code></td>
+              <td :data-label="t('control.table.configRevision')">{{ assignment.desired_config_revision ?? 0 }}</td>
+              <td :data-label="t('control.table.rolloutGroup')">{{ assignment.rollout_group || '-' }}</td>
+              <td :data-label="t('control.table.state')"><span :class="['state-badge', assignment.enabled ? 'state-active' : 'state-error']">{{ assignment.enabled ? t('control.states.enabled') : t('control.states.disabled') }}</span></td>
+              <td :data-label="t('control.table.actions')">
                 <div class="row-actions">
                   <button class="btn" :data-testid="`edit-assignment-${assignment.id}`" type="button" :disabled="isAssignmentBusy(assignment)" @click="openAssignmentDrawer(assignment)">
                     {{ t('common.actions.edit') }}
@@ -1079,5 +1079,17 @@ onBeforeUnmount(() => {
   .panel-toolbar > div:first-child { width: 100%; }
   .panel-toolbar .row-actions { width: 100%; }
   .panel-toolbar .row-actions .btn { flex: 1; }
+  .table-wrap { overflow: visible; border: 0; }
+  .data-table { display: block; min-width: 0; border-collapse: separate; border-spacing: 0; }
+  .data-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .data-table tbody { display: block; }
+  .data-table tbody tr { display: block; min-width: 0; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; }
+  .data-table tbody tr + tr { margin-top: 10px; }
+  .data-table td { display: grid; grid-template-columns: minmax(96px, 38%) minmax(0, 1fr); gap: 8px; min-width: 0; padding: 7px 0; border: 0; }
+  .data-table td::before { content: attr(data-label); color: var(--text-secondary); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+  .data-table .state-row { display: block; padding: 0; text-align: left !important; }
+  .data-table .state-row::before { content: none; }
+  .data-table td:last-child .row-actions { width: 100%; justify-content: flex-start; }
+  .data-table td:last-child .row-actions .btn { flex: 1 1 92px; }
 }
 </style>

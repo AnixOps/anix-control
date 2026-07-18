@@ -3049,7 +3049,7 @@ export default {
       graphHelp: '使用 vertices 和 edges 描述拓扑。秘密必须通过 secret_id 引用，禁止直接写入秘密值。', diagnose: '校验 / 诊断', validating: '校验中...',
       unsavedChanges: '当前修订存在未保存修改。请先保存新的不可变修订，再进行预览或规划。',
       valid: '拓扑校验通过', invalid: '拓扑存在校验问题', invalidJSON: '拓扑 JSON 无效', saveRevision: '保存修订', plan: '规划部署',
-      apply: '应用部署', rollback: '回滚部署', deployment: '部署', steps: '{count} 个部署步骤', rollbackConfirm: '确认请求回滚此部署吗？',
+      apply: '应用部署', rollback: '回滚部署', deployment: '部署', steps: '{count} 个部署步骤', applyConfirm: '确认应用 {topology}（部署 #{deployment}）吗？', rollbackConfirm: '确认请求回滚 {topology}（部署 #{deployment}）吗？',
       preview: '只读部署预览', previewAction: '预览', previewSteps: '{count} 个计划步骤'
     },
     extensions: { errorsTitle: 'WebUI 扩展加载失败' },

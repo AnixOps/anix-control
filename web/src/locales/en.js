@@ -3041,7 +3041,7 @@ export default {
       graphHelp: 'Use vertices and edges. Secrets must be referenced by secret_id; inline secret values are rejected.', diagnose: 'Validate / diagnose', validating: 'Validating...',
       unsavedChanges: 'This revision has unsaved changes. Save a new immutable revision before previewing or planning.',
       valid: 'Topology is valid', invalid: 'Topology has validation issues', invalidJSON: 'Topology JSON is invalid', saveRevision: 'Save revision', plan: 'Plan deployment',
-      apply: 'Apply deployment', rollback: 'Rollback deployment', deployment: 'Deployment', steps: '{count} deployment steps', rollbackConfirm: 'Request rollback for this deployment?',
+      apply: 'Apply deployment', rollback: 'Rollback deployment', deployment: 'Deployment', steps: '{count} deployment steps', applyConfirm: 'Apply {topology} (deployment #{deployment})?', rollbackConfirm: 'Request rollback for {topology} (deployment #{deployment})?',
       preview: 'Read-only deployment preview', previewAction: 'Preview', previewSteps: '{count} planned steps'
     },
     extensions: { errorsTitle: 'WebUI extension loading failed' },

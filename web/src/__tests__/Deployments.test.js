@@ -648,7 +648,7 @@ describe('Deployments', () => {
     wrapper.unmount()
   })
 
-  it('refreshes the selected deployment after apply and only rolls back after an explicit confirmation', async () => {
+  it('refreshes the selected deployment after named apply and rollback confirmations', async () => {
     kernelApi.getKernelTopologies.mockResolvedValue([{ id: 4, name: 'Mesh', service_scope: 'forward', active_revision_id: 30 }])
     kernelApi.getKernelDeployments.mockResolvedValue([{ id: 44, topology_id: 4, revision_id: 30, state: 'planned', rollout_group: 'canary' }])
     kernelApi.getKernelTopologyRevisions.mockResolvedValue([{ id: 30, topology_id: 4, revision: 1, message: 'initial' }])
@@ -660,12 +660,16 @@ describe('Deployments', () => {
     await wrapper.get('[data-testid="view-deployment-44"]').trigger('click')
     await flushPromises()
     await wrapper.get('#topology-apply').trigger('click')
+    expect(kernelApi.applyKernelDeployment).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="apply-confirmation"]').text()).toContain('Mesh')
+    await wrapper.get('[data-testid="confirm-apply"]').trigger('click')
     await flushPromises()
     expect(kernelApi.applyKernelDeployment).toHaveBeenCalledWith(44)
     expect(kernelApi.getKernelDeploymentStatus.mock.calls.length).toBeGreaterThan(1)
 
     await wrapper.get('#topology-rollback').trigger('click')
     expect(kernelApi.rollbackKernelDeployment).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="rollback-confirmation"]').text()).toContain('Mesh')
     await wrapper.get('[data-testid="confirm-rollback"]').trigger('click')
     await flushPromises()
     expect(kernelApi.rollbackKernelDeployment).toHaveBeenCalledWith(44)

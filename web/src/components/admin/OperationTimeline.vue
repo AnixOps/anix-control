@@ -30,15 +30,15 @@
         </thead>
         <tbody>
           <tr v-for="operation in visibleOperations" :key="operation.id" :data-testid="`operation-row-${operation.id}`">
-            <td><code>{{ operation.kind || '-' }}</code><code class="secondary-cell">{{ operation.id }}</code></td>
-            <td>{{ operation.plugin_id || '-' }}</td>
-            <td>{{ operation.revision ?? '-' }}</td>
-            <td>{{ formatDate(operation.deadline_at || operation.created_at) }}</td>
-            <td>
+            <td :data-label="t('control.table.operation')"><code>{{ operation.kind || '-' }}</code><code class="secondary-cell">{{ operation.id }}</code></td>
+            <td :data-label="t('control.table.plugin')">{{ operation.plugin_id || '-' }}</td>
+            <td :data-label="t('control.table.revision')">{{ operation.revision ?? '-' }}</td>
+            <td :data-label="t('control.table.deadline')">{{ formatDate(operation.deadline_at || operation.created_at) }}</td>
+            <td :data-label="t('control.table.state')">
               <span :class="['state-badge', stateClass(operation.state)]">{{ operation.state || '-' }}</span>
               <span v-if="operation.last_error" class="row-error">{{ operation.last_error }}</span>
             </td>
-            <td>
+            <td :data-label="t('control.table.actions')">
               <button
                 v-if="isCancellable(operation)"
                 class="btn btn-danger"
@@ -131,4 +131,17 @@ function stateClass(state) {
 .btn { min-height: 32px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-color); color: var(--text-color); cursor: pointer; padding: 6px 10px; }
 .btn-danger { border-color: var(--error-color); color: var(--error-color); }
 .btn:disabled { cursor: not-allowed; opacity: .55; }
+@media (max-width: 720px) {
+  .timeline-header { align-items: flex-start; flex-wrap: wrap; }
+  .timeline-table-wrap { overflow: visible; border: 0; }
+  .timeline-table { display: block; min-width: 0; border-collapse: separate; border-spacing: 0; }
+  .timeline-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .timeline-table tbody { display: block; }
+  .timeline-table tbody tr { display: block; min-width: 0; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; }
+  .timeline-table tbody tr + tr { margin-top: 10px; }
+  .timeline-table td { display: grid; grid-template-columns: minmax(96px, 38%) minmax(0, 1fr); gap: 8px; min-width: 0; padding: 7px 0; border: 0; }
+  .timeline-table td::before { content: attr(data-label); color: var(--text-secondary); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+  .timeline-table .empty-row { display: block; padding: 0; text-align: left; }
+  .timeline-table .empty-row::before { content: none; }
+}
 </style>

@@ -30,7 +30,7 @@ function mountWorkspace(props = {}) {
 }
 
 describe('TopologyWorkspace', () => {
-  it('emits topology actions from a clean immutable revision and requires an explicit rollback confirmation', async () => {
+  it('requires named confirmations before applying or rolling back a clean immutable revision', async () => {
     const wrapper = mountWorkspace()
     await nextTick()
     await nextTick()
@@ -49,9 +49,15 @@ describe('TopologyWorkspace', () => {
     expect(wrapper.emitted('preview')).toHaveLength(1)
     expect(wrapper.emitted('plan')).toHaveLength(1)
 
+    await wrapper.get('#topology-apply').trigger('click')
+    expect(wrapper.emitted('apply')).toBeUndefined()
+    expect(wrapper.get('[data-testid="apply-confirmation"]').text()).toContain('Regional mesh')
+    await wrapper.get('[data-testid="confirm-apply"]').trigger('click')
+    expect(wrapper.emitted('apply')).toEqual([[{ deploymentID: 13 }]])
+
     await wrapper.get('#topology-rollback').trigger('click')
     expect(wrapper.emitted('rollback')).toBeUndefined()
-    expect(wrapper.get('[data-testid="rollback-confirmation"]').text()).toContain('Request rollback')
+    expect(wrapper.get('[data-testid="rollback-confirmation"]').text()).toContain('Regional mesh')
     await wrapper.get('[data-testid="confirm-rollback"]').trigger('click')
     expect(wrapper.emitted('rollback')).toEqual([[{ deploymentID: 13 }]])
     wrapper.unmount()
