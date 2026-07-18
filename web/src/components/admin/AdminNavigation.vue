@@ -92,6 +92,7 @@
     </section>
 
     <button
+      v-if="!mobile"
       class="navigation-collapse-control"
       type="button"
       :aria-label="collapseLabel"

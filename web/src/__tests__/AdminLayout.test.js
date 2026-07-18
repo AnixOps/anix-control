@@ -11,10 +11,15 @@ const mockGetSystemInfo = vi.hoisted(() => vi.fn())
 const mockAdminExtensionMenus = vi.hoisted(() => ({ value: [] }))
 
 function stubTabletViewport(matches = true) {
+  const listeners = new Map()
   const mediaQuery = {
     matches,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
+    addEventListener: vi.fn((event, listener) => listeners.set(event, listener)),
+    removeEventListener: vi.fn((event) => listeners.delete(event)),
+    setMatches(nextMatches) {
+      mediaQuery.matches = nextMatches
+      listeners.get('change')?.({ matches: nextMatches })
+    }
   }
   vi.stubGlobal('matchMedia', vi.fn(() => mediaQuery))
   return mediaQuery
@@ -168,6 +173,7 @@ describe('AdminLayout.vue', () => {
   })
 
   it('groups the compact navigation and persists the desktop collapse preference', async () => {
+    stubTabletViewport(false)
     const wrapper = mount(AdminLayout, {
       global: {
         stubs: {
@@ -250,6 +256,118 @@ describe('AdminLayout.vue', () => {
 
     expect(sidebar.attributes('inert')).toBeDefined()
     expect(sidebar.attributes('aria-hidden')).toBe('true')
+    expect(document.activeElement).toBe(menuButton.element)
+    wrapper.unmount()
+  })
+
+  it('resets an open drawer when the viewport leaves the tablet breakpoint', async () => {
+    const mediaQuery = stubTabletViewport()
+    const wrapper = mount(AdminLayout, {
+      global: {
+        stubs: {
+          'router-link': {
+            props: ['to'],
+            emits: ['click'],
+            template: '<a class="menu-link" :data-to="to" @click="$emit(\'click\', $event)"><slot /></a>',
+          },
+          'router-view': true,
+        },
+      },
+    })
+
+    await wrapper.get('.menu-button').trigger('click')
+    expect(wrapper.find('.sidebar-overlay').classes()).toContain('active')
+    expect(wrapper.get('.menu-button').attributes('aria-expanded')).toBe('true')
+
+    mediaQuery.setMatches(false)
+    await nextTick()
+
+    expect(wrapper.find('.sidebar-overlay').classes()).not.toContain('active')
+    expect(wrapper.get('.menu-button').attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('#admin-sidebar').classes()).not.toContain('open')
+  })
+
+  it('wraps Tab from the final mobile drawer control to its close button', async () => {
+    stubTabletViewport()
+    const wrapper = mount(AdminLayout, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          'router-link': {
+            props: ['to'],
+            emits: ['click'],
+            template: '<a class="menu-link" href="#" :data-to="to" @click="$emit(\'click\', $event)"><slot /></a>',
+          },
+          'router-view': true,
+        },
+      },
+    })
+
+    await wrapper.get('.menu-button').trigger('click')
+    await nextTick()
+
+    const closeButton = wrapper.get('.close-button')
+    const logoutButton = wrapper.get('.logout-button')
+    logoutButton.element.focus()
+    await logoutButton.trigger('keydown', { key: 'Tab' })
+
+    expect(document.activeElement).toBe(closeButton.element)
+    wrapper.unmount()
+  })
+
+  it('wraps Shift+Tab from the first mobile drawer control to its final control', async () => {
+    stubTabletViewport()
+    const wrapper = mount(AdminLayout, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          'router-link': {
+            props: ['to'],
+            emits: ['click'],
+            template: '<a class="menu-link" href="#" :data-to="to" @click="$emit(\'click\', $event)"><slot /></a>',
+          },
+          'router-view': true,
+        },
+      },
+    })
+
+    await wrapper.get('.menu-button').trigger('click')
+    await nextTick()
+
+    const closeButton = wrapper.get('.close-button')
+    const logoutButton = wrapper.get('.logout-button')
+    closeButton.element.focus()
+    await closeButton.trigger('keydown', { key: 'Tab', shiftKey: true })
+
+    expect(document.activeElement).toBe(logoutButton.element)
+    wrapper.unmount()
+  })
+
+  it('closes the mobile drawer on Escape and cleans up focus containment', async () => {
+    stubTabletViewport()
+    const wrapper = mount(AdminLayout, {
+      attachTo: document.body,
+      global: {
+        stubs: {
+          'router-link': {
+            props: ['to'],
+            emits: ['click'],
+            template: '<a class="menu-link" href="#" :data-to="to" @click="$emit(\'click\', $event)"><slot /></a>',
+          },
+          'router-view': true,
+        },
+      },
+    })
+
+    const menuButton = wrapper.get('.menu-button')
+    await menuButton.trigger('click')
+    await nextTick()
+
+    await wrapper.get('.close-button').trigger('keydown', { key: 'Escape' })
+    await nextTick()
+
+    expect(menuButton.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.get('#admin-sidebar').attributes('inert')).toBeDefined()
     expect(document.activeElement).toBe(menuButton.element)
     wrapper.unmount()
   })

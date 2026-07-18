@@ -5,10 +5,12 @@
     <aside
       id="admin-sidebar"
       class="sidebar"
+      ref="sidebarElement"
       :class="{ open: sidebarOpen }"
       :inert="drawerInactive"
       :aria-hidden="drawerInactive ? 'true' : undefined"
       :aria-label="t('layout.admin.mobileTitle')"
+      @keydown="handleDrawerKeydown"
     >
       <div class="sidebar-top">
         <div class="brand-block">
@@ -125,6 +127,7 @@ const sidebarCollapsed = ref(readSidebarCollapsePreference())
 const isTabletViewport = ref(readTabletViewport())
 const menuButton = ref(null)
 const closeButton = ref(null)
+const sidebarElement = ref(null)
 const currentTime = ref('')
 const systemVersion = ref('')
 const systemBuildCode = ref(import.meta.env.VITE_APP_BUILD_CODE || '')
@@ -294,6 +297,55 @@ function closeSidebar() {
   }
 }
 
+function getDrawerFocusableElements() {
+  const selector = [
+    'a[href]',
+    'button:not([disabled])',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    'summary',
+    '[tabindex]:not([tabindex="-1"])'
+  ].join(', ')
+
+  return [...(sidebarElement.value?.querySelectorAll(selector) || [])].filter(element => (
+    !element.hasAttribute('hidden') &&
+    element.getAttribute('aria-hidden') !== 'true' &&
+    !element.closest('[inert]')
+  ))
+}
+
+function handleDrawerKeydown(event) {
+  if (!isTabletViewport.value || !sidebarOpen.value) {
+    return
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeSidebar()
+    return
+  }
+
+  if (event.key !== 'Tab') {
+    return
+  }
+
+  const focusableElements = getDrawerFocusableElements()
+  if (focusableElements.length === 0) {
+    return
+  }
+
+  const firstElement = focusableElements[0]
+  const lastElement = focusableElements.at(-1)
+  if (event.shiftKey && document.activeElement === firstElement) {
+    event.preventDefault()
+    lastElement.focus()
+  } else if (!event.shiftKey && document.activeElement === lastElement) {
+    event.preventDefault()
+    firstElement.focus()
+  }
+}
+
 function openSidebar() {
   sidebarOpen.value = true
   if (isTabletViewport.value) {
@@ -334,11 +386,14 @@ function updateTime() {
 }
 
 function updateTabletViewport(event) {
-  if (typeof event?.matches === 'boolean') {
-    isTabletViewport.value = event.matches
-    return
+  const nextIsTabletViewport = typeof event?.matches === 'boolean'
+    ? event.matches
+    : readTabletViewport()
+
+  if (isTabletViewport.value && !nextIsTabletViewport && sidebarOpen.value) {
+    closeSidebar()
   }
-  isTabletViewport.value = readTabletViewport()
+  isTabletViewport.value = nextIsTabletViewport
 }
 
 async function loadSystemInfo() {
