@@ -68,6 +68,15 @@ v2 envelope. A disabled, unhealthy, incompatible, missing, or stale package
 returns the documented package-unavailable/incompatible response and never
 calls a legacy handler, service, model, or worker as fallback.
 
+The three existing v2 WebSocket paths are package routes as well. The kernel
+performs the HTTP upgrade only after the normal middleware and verified route
+resolution, then relays frames over a versioned bidirectional Unix-gRPC
+`OpenWebSocket` host RPC. The opening frame carries package route metadata,
+principal projection, request identity, and generation; subsequent frames are
+opaque payloads. The relay never invokes a legacy WebSocket handler and closes
+both sides on host lease loss, invalid frames, deadline expiry, or package
+drain.
+
 ## Delivery And Reversibility
 
 1. Add `identity-platform` to the signed package builder, release-stage
@@ -75,8 +84,9 @@ calls a legacy handler, service, model, or worker as fallback.
 2. Commit a checked ownership catalog containing all supported v2 business
    method/path pairs, owner, package route id, envelope, and middleware group.
 3. Build the generic compatibility registry/gateway and contract harness
-   against signed fixture artifacts. Do not replace production registrations
-   until the owning package is runnable.
+   against signed fixture artifacts, including the WebSocket relay protocol.
+   Do not replace production registrations until the owning package is
+   runnable.
 4. Implement package declarations and hosts in ownership waves: identity and
    platform first, then knowledge/notification, ticket/plan, order/payment,
    subscription/proxy-node, forward, and Agent/runtime packages.
@@ -104,6 +114,9 @@ or host failure fails closed rather than reverting to coupled legacy code.
   request identity, and idempotency keys where applicable.
 - Disabled, unhealthy, stale-generation, unsigned, and mismatched-declaration
   tests prove fail-closed behavior without legacy fallback.
+- WebSocket handshake, frame relay, host lease loss, package drain, and
+  disabled-package tests prove that the three legacy socket paths use the
+  generic package relay rather than direct handlers.
 - Static route validation parses the actual router registration source and
   fails when a catalogued v2 business route binds a direct handler instead of
   `internal/compat/v2` or the generic Kernel surface.
