@@ -137,6 +137,42 @@ describe('Deployments', () => {
     wrapper.unmount()
   })
 
+  it('links deployment tabs to their panels and supports roving keyboard navigation', async () => {
+    resolveAssignmentState()
+    const wrapper = mountDeployments()
+    await flushPromises()
+    const topologiesTab = wrapper.get('[data-testid="deployment-topologies"]')
+    const targetsTab = wrapper.get('[data-testid="deployment-targets"]')
+
+    expect(topologiesTab.attributes('id')).toBe('deployment-tab-topologies')
+    expect(topologiesTab.attributes('aria-controls')).toBe('deployment-panel-topologies')
+    expect(targetsTab.attributes('id')).toBe('deployment-tab-targets')
+    expect(targetsTab.attributes('aria-controls')).toBe('deployment-panel-targets')
+    expect(wrapper.get('[data-testid="deployment-topology-panel"]').attributes('id')).toBe('deployment-panel-topologies')
+    expect(wrapper.get('[data-testid="deployment-topology-panel"]').attributes('aria-labelledby')).toBe('deployment-tab-topologies')
+    expect(wrapper.get('[data-testid="deployment-target-panel"]').attributes('id')).toBe('deployment-panel-targets')
+    expect(wrapper.get('[data-testid="deployment-target-panel"]').attributes('aria-labelledby')).toBe('deployment-tab-targets')
+
+    await topologiesTab.trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(targetsTab.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(targetsTab.element)
+
+    await targetsTab.trigger('keydown', { key: 'ArrowLeft' })
+    await flushPromises()
+    expect(topologiesTab.attributes('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(topologiesTab.element)
+
+    await topologiesTab.trigger('keydown', { key: 'End' })
+    await flushPromises()
+    expect(targetsTab.attributes('aria-selected')).toBe('true')
+
+    await targetsTab.trigger('keydown', { key: 'Home' })
+    await flushPromises()
+    expect(topologiesTab.attributes('aria-selected')).toBe('true')
+    wrapper.unmount()
+  })
+
   it('loads selected-node assignments on entering Targets and loads form metadata only when opening the drawer', async () => {
     resolveAssignmentState()
     const wrapper = mountDeployments()
@@ -309,6 +345,40 @@ describe('Deployments', () => {
 
     stalePoll.resolve([])
     await flushPromises()
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(4)
+    wrapper.unmount()
+  })
+
+  it('keeps a post-save operation when an older manual refresh resolves late', async () => {
+    vi.useFakeTimers()
+    const staleRefresh = deferred()
+    const activeAssignmentOperation = { id: 'assignment-op-refresh', kind: 'plugin.enable', node_id: 11, state: 'running' }
+    resolveAssignmentState()
+    kernelApi.getKernelOperations
+      .mockResolvedValueOnce([])
+      .mockReturnValueOnce(staleRefresh.promise)
+      .mockResolvedValueOnce([activeAssignmentOperation])
+      .mockResolvedValueOnce([activeAssignmentOperation])
+    kernelApi.upsertKernelNodeAssignment.mockResolvedValue({ operation: activeAssignmentOperation })
+    const wrapper = mountDeployments()
+    await flushPromises()
+    await openTargets(wrapper)
+    const drawer = await openAssignmentDrawer(wrapper)
+
+    await wrapper.get('[data-testid="refresh-deployments"]').trigger('click')
+    await nextTick()
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
+
+    await drawer.get('[data-testid="save-assignment"]').trigger('click')
+    await flushPromises()
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(3)
+    expect(wrapper.get('[data-testid="operation-row-assignment-op-refresh"]').exists()).toBe(true)
+
+    staleRefresh.resolve([])
+    await flushPromises()
+    expect(wrapper.get('[data-testid="operation-row-assignment-op-refresh"]').exists()).toBe(true)
     await vi.advanceTimersByTimeAsync(2000)
     await flushPromises()
     expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(4)

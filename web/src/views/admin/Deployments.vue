@@ -21,24 +21,30 @@
 
     <nav class="view-switcher" role="tablist" :aria-label="t('pageTitles.admin.deployments')">
       <button
+        id="deployment-tab-topologies"
         class="view-tab"
         data-testid="deployment-topologies"
         type="button"
         role="tab"
+        aria-controls="deployment-panel-topologies"
         :aria-selected="viewMode === 'topologies'"
         :tabindex="viewMode === 'topologies' ? 0 : -1"
         @click="setViewMode('topologies')"
+        @keydown="moveViewTab($event, 0)"
       >
         {{ t('control.tabs.topologies') }}
       </button>
       <button
+        id="deployment-tab-targets"
         class="view-tab"
         data-testid="deployment-targets"
         type="button"
         role="tab"
+        aria-controls="deployment-panel-targets"
         :aria-selected="viewMode === 'targets'"
         :tabindex="viewMode === 'targets' ? 0 : -1"
         @click="setViewMode('targets')"
+        @keydown="moveViewTab($event, 1)"
       >
         {{ t('control.tabs.assignments') }}
       </button>
@@ -48,11 +54,12 @@
     <p v-if="notice" class="notice-message" role="status">{{ notice }}</p>
 
     <section
+      id="deployment-panel-topologies"
       v-show="viewMode === 'topologies'"
       class="topologies-panel"
       data-testid="deployment-topology-panel"
       role="tabpanel"
-      :aria-labelledby="'deployment-topologies'"
+      aria-labelledby="deployment-tab-topologies"
     >
       <div class="panel-toolbar">
         <div>
@@ -120,11 +127,12 @@
     </section>
 
     <section
+      id="deployment-panel-targets"
       v-show="viewMode === 'targets'"
       class="targets-panel"
       data-testid="deployment-target-panel"
       role="tabpanel"
-      :aria-labelledby="'deployment-targets'"
+      aria-labelledby="deployment-tab-targets"
     >
       <div class="panel-toolbar">
         <label class="node-picker" for="assignment-node-filter">
@@ -289,6 +297,7 @@ import {
 const TERMINAL_OPERATION_STATES = new Set(['succeeded', 'completed', 'failed', 'superseded', 'cancelled', 'timed_out', 'expired', 'rolled_back'])
 const ACTIVE_DEPLOYMENT_STATES = new Set(['applying', 'rollback_requested'])
 const POLL_INTERVAL_MS = 2000
+const VIEW_MODES = ['topologies', 'targets']
 
 const { t } = useAppI18n()
 const viewMode = ref('topologies')
@@ -445,6 +454,7 @@ async function loadInitial({ silent = false } = {}) {
     error.value = ''
     notice.value = ''
   }
+  const operationRequestGenerationAtStart = ++operationRequestGeneration
   try {
     const [topologyRows, deploymentRows, operationRows, scopeRows, nodeResponse] = await Promise.all([
       getKernelTopologies(),
@@ -455,14 +465,16 @@ async function loadInitial({ silent = false } = {}) {
     ])
     topologies.value = rows(topologyRows)
     deployments.value = rows(deploymentRows)
-    operations.value = rows(operationRows)
+    if (operationRequestGenerationAtStart === operationRequestGeneration) {
+      operations.value = rows(operationRows)
+      reconcileTrackedOperations()
+    }
     scopes.value = rows(scopeRows)
     nodes.value = extractNodes(nodeResponse, t('control.errors.nodesLoad'))
     if (!selectedNodeID.value || !nodes.value.some(node => Number(node.id) === Number(selectedNodeID.value))) {
       selectedNodeID.value = Number(nodes.value[0]?.id || 0)
     }
     loaded.value = true
-    reconcileTrackedOperations()
     if (viewMode.value === 'targets' && selectedNodeID.value > 0) await loadAssignments(selectedNodeID.value)
     updatePolling()
     return true
@@ -471,7 +483,7 @@ async function loadInitial({ silent = false } = {}) {
     if (!loaded.value) {
       topologies.value = []
       deployments.value = []
-      operations.value = []
+      if (operationRequestGenerationAtStart === operationRequestGeneration) operations.value = []
       scopes.value = []
       nodes.value = []
     }
@@ -506,6 +518,19 @@ async function setViewMode(mode) {
   viewMode.value = mode
   if (mode === 'targets' && selectedNodeID.value > 0) await loadAssignments(selectedNodeID.value)
   updatePolling()
+}
+
+function moveViewTab(event, index) {
+  let nextIndex = index
+  if (event.key === 'ArrowRight') nextIndex = (index + 1) % VIEW_MODES.length
+  else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + VIEW_MODES.length) % VIEW_MODES.length
+  else if (event.key === 'Home') nextIndex = 0
+  else if (event.key === 'End') nextIndex = VIEW_MODES.length - 1
+  else return
+  event.preventDefault()
+  const nextMode = VIEW_MODES[nextIndex]
+  void setViewMode(nextMode)
+  document.getElementById(`deployment-tab-${nextMode}`)?.focus()
 }
 
 async function loadAssignments(nodeID = selectedNodeID.value) {

@@ -279,3 +279,39 @@ npm --prefix web run test:e2e -- e2e/control-assignments.spec.js e2e/plugin-webu
 Results: focused `2 passed`, `35 passed`; full `56 passed`, `338 passed`;
 build passed with only the existing chunk-size advisory; fixture browser `4
 passed`.
+
+### Final Refresh and Tab Accessibility Safeguards
+
+Final review found that `loadInitial()` fetched operation rows outside the
+shared operation response generation used by foreground refreshes and polling.
+A manual refresh started before a successful assignment save could therefore
+resolve late, replace the newer operation rows, prune the newly tracked active
+operation, and stop polling. `loadInitial` now claims an operation generation
+before issuing its request and only the current generation may assign operation
+rows, reconcile tracked IDs, or clear rows on an initial-load failure. The
+ordinary topology, deployment, scope, and node refresh behavior remains
+unchanged.
+
+The deferred regression begins a manual refresh, saves an assignment whose
+foreground operation refresh observes a running selected-target operation, and
+then resolves the older refresh empty. Before the guard, the active operation
+disappeared; afterward it remains visible and its next poll occurs.
+
+The final review also restored the Deployment tabs' accessibility contract from
+legacy Control: each tab has a stable ID and `aria-controls`, each panel has a
+matching ID and `aria-labelledby`, and ArrowLeft, ArrowRight, Home, and End
+move both selection and focus. Focused coverage asserts every linkage and key
+path.
+
+Final verification:
+
+```bash
+npm --prefix web run test -- src/__tests__/Plugins.test.js src/__tests__/Deployments.test.js
+npm --prefix web run test
+npm --prefix web run build
+npm --prefix web run test:e2e -- e2e/control-assignments.spec.js e2e/plugin-webui.spec.js
+```
+
+Results: focused `2 passed`, `37 passed`; full `56 passed`, `340 passed`;
+build passed with only the existing chunk-size advisory; fixture browser `4
+passed`.
