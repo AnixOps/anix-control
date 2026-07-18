@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import importlib.util
 import json
-import base64
+import os
 import subprocess
 import sys
 import tarfile
@@ -15,6 +16,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BUILDER = REPO_ROOT / "packages" / "shared" / "build_package.py"
 RELEASE_STAGE = REPO_ROOT / "config" / "scripts" / "check_release_stage.py"
+BUILD_PACKAGE_SPEC = importlib.util.spec_from_file_location("shared_build_package", BUILDER)
+if BUILD_PACKAGE_SPEC is None or BUILD_PACKAGE_SPEC.loader is None:
+    raise RuntimeError("cannot load shared package builder")
+BUILD_PACKAGE_MODULE = importlib.util.module_from_spec(BUILD_PACKAGE_SPEC)
+sys.modules[BUILD_PACKAGE_SPEC.name] = BUILD_PACKAGE_MODULE
+BUILD_PACKAGE_SPEC.loader.exec_module(BUILD_PACKAGE_MODULE)
 RELEASE_STAGE_SPEC = importlib.util.spec_from_file_location("release_stage", RELEASE_STAGE)
 if RELEASE_STAGE_SPEC is None or RELEASE_STAGE_SPEC.loader is None:
     raise RuntimeError("cannot load release-stage checker")
@@ -23,7 +30,206 @@ sys.modules[RELEASE_STAGE_SPEC.name] = RELEASE_STAGE_MODULE
 RELEASE_STAGE_SPEC.loader.exec_module(RELEASE_STAGE_MODULE)
 
 
+ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
+
+
+def run_command(arguments: list[str], *, cwd: Path = REPO_ROOT, input_bytes: bytes | None = None) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(arguments, cwd=cwd, input=input_bytes, check=False, capture_output=True)
+
+
+def generate_ed25519_signer(root: Path, name: str) -> tuple[Path, Path]:
+    private_key = root / f"{name}.private.pem"
+    generated = run_command(["openssl", "genpkey", "-algorithm", "ED25519", "-out", str(private_key)])
+    if generated.returncode != 0:
+        raise AssertionError(generated.stderr.decode("utf-8", errors="replace"))
+    os.chmod(private_key, 0o600)
+
+    derived = run_command(["openssl", "pkey", "-in", str(private_key), "-pubout", "-outform", "DER"])
+    if derived.returncode != 0 or not derived.stdout.startswith(ED25519_SPKI_PREFIX):
+        raise AssertionError(derived.stderr.decode("utf-8", errors="replace"))
+    raw_public_key = derived.stdout[len(ED25519_SPKI_PREFIX) :]
+    if len(raw_public_key) != 32:
+        raise AssertionError("generated Ed25519 public key has an invalid length")
+    official_root = root / f"{name}.official-public-key.raw"
+    official_root.write_bytes(base64.b64encode(raw_public_key) + b"\n")
+    return private_key, official_root
+
+
+def generate_rsa_signer(root: Path) -> Path:
+    private_key = root / "rsa.private.pem"
+    generated = run_command(
+        ["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", str(private_key)]
+    )
+    if generated.returncode != 0:
+        raise AssertionError(generated.stderr.decode("utf-8", errors="replace"))
+    os.chmod(private_key, 0o600)
+    return private_key
+
+
 class V4PackageManifestSchemaTest(unittest.TestCase):
+    def test_canonical_json_matches_go_encoding_for_utf8_and_special_runes(self) -> None:
+        value = {
+            "ascii": "plain",
+            "control": "line\n\t\u0000",
+            "html": "<&>",
+            "separators": "before\u2028middle\u2029after",
+            "utf8": "caf\u00e9 你好",
+        }
+        go_program = """package main
+
+import (
+    "encoding/json"
+    "os"
+)
+
+func main() {
+    var value any
+    if err := json.NewDecoder(os.Stdin).Decode(&value); err != nil {
+        panic(err)
+    }
+    encoded, err := json.Marshal(value)
+    if err != nil {
+        panic(err)
+    }
+    _, _ = os.Stdout.Write(encoded)
+}
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "canonical.go"
+            source.write_text(go_program, encoding="utf-8")
+            payload = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            result = run_command(["go", "run", str(source)], input_bytes=payload)
+
+        self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", errors="replace"))
+        self.assertIn("caf\u00e9 你好".encode("utf-8"), result.stdout)
+        self.assertIn(b"\\u003c\\u0026\\u003e", result.stdout)
+        self.assertIn(b"\\u2028", result.stdout)
+        self.assertIn(b"\\u2029", result.stdout)
+        self.assertEqual(result.stdout, BUILD_PACKAGE_MODULE.canonical_json(value))
+
+    def test_unsafe_version_is_rejected_before_writing_any_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output = root / "selected-output"
+            result = run_command(
+                [
+                    sys.executable,
+                    str(BUILDER),
+                    "--package",
+                    "subscription",
+                    "--version",
+                    "x/../../escaped",
+                    "--out",
+                    str(output),
+                ]
+            )
+
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn(b"version must be a safe path segment", result.stderr)
+            self.assertFalse(any(root.glob("escaped.*")), "unsafe version wrote outside the selected output directory")
+            self.assertFalse(output.exists(), "unsafe version created selected output files")
+
+        for version in ("../escape", r"4.0.0\\escape", "4.0.0 ", ".", ".."):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as temporary:
+                result = run_command(
+                    [
+                        sys.executable,
+                        str(BUILDER),
+                        "--package",
+                        "subscription",
+                        "--version",
+                        version,
+                        "--out",
+                        str(Path(temporary) / "out"),
+                    ]
+                )
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn(b"version must be a safe path segment", result.stderr)
+
+    def test_formal_release_requires_matching_ed25519_root_and_verifies_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            signing_key, official_root = generate_ed25519_signer(root, "official")
+            _, wrong_root = generate_ed25519_signer(root, "wrong")
+            rsa_key = generate_rsa_signer(root)
+            malformed_root = root / "malformed.raw"
+            malformed_root.write_bytes(base64.b64encode(b"not-an-ed25519-public-key") + b"\n")
+            output = root / "packages"
+            command = [
+                sys.executable,
+                str(BUILDER),
+                "--package",
+                "subscription",
+                "--version",
+                "4.0.0",
+                "--out",
+                str(output),
+                "--formal-release",
+            ]
+
+            cases = (
+                ("missing signing key", command + ["--official-public-key", str(official_root)], b"formal release requires --signing-key"),
+                ("missing official root", command + ["--signing-key", str(signing_key)], b"formal release requires --official-public-key"),
+                (
+                    "wrong official root",
+                    command + ["--signing-key", str(signing_key), "--official-public-key", str(wrong_root)],
+                    b"signing key does not match official public key",
+                ),
+                (
+                    "non Ed25519 signing key",
+                    command + ["--signing-key", str(rsa_key), "--official-public-key", str(official_root)],
+                    b"signing key must be Ed25519",
+                ),
+                (
+                    "malformed raw root",
+                    command + ["--signing-key", str(signing_key), "--official-public-key", str(malformed_root)],
+                    b"official public key must contain 32 raw Ed25519 bytes",
+                ),
+            )
+            for name, arguments, expected_error in cases:
+                with self.subTest(name=name):
+                    result = run_command(arguments)
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn(expected_error, result.stderr)
+
+            built = run_command(command + ["--signing-key", str(signing_key), "--official-public-key", str(official_root)])
+            self.assertEqual(0, built.returncode, built.stderr.decode("utf-8", errors="replace"))
+
+            verified = run_command(
+                [
+                    sys.executable,
+                    str(BUILDER),
+                    "--package",
+                    "subscription",
+                    "--version",
+                    "4.0.0",
+                    "--out",
+                    str(output),
+                    "--verify-release",
+                    "--official-public-key",
+                    str(official_root),
+                ]
+            )
+            self.assertEqual(0, verified.returncode, verified.stderr.decode("utf-8", errors="replace"))
+
+            rejected = run_command(
+                [
+                    sys.executable,
+                    str(BUILDER),
+                    "--package",
+                    "subscription",
+                    "--version",
+                    "4.0.0",
+                    "--out",
+                    str(output),
+                    "--verify-release",
+                    "--official-public-key",
+                    str(wrong_root),
+                ]
+            )
+            self.assertNotEqual(0, rejected.returncode)
+            self.assertIn(b"verify manifest signature", rejected.stderr)
+
     def test_all_v4_packages_materialize_signed_v2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "packages"

@@ -1536,6 +1536,9 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 	if err != nil {
 		return pluginhost.ArtifactRef{}, fmt.Errorf("extract control entrypoint: %w", err)
 	}
+	if !strings.EqualFold(sha256Bytes(entrypoint), manifest.ControlEntrypoint.SHA256) {
+		return pluginhost.ArtifactRef{}, errors.New("control entrypoint digest does not match the package artifact")
+	}
 	if err := verifyPluginArtifactMember(artifact.Data, manifest.Migrations.Index, manifest.Migrations.SHA256, "migrations index", maxPluginControlEntrypointBytes); err != nil {
 		return pluginhost.ArtifactRef{}, err
 	}

@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import hashlib
+import hmac
 import io
 import json
 import os
@@ -27,6 +29,9 @@ MANIFEST_API_VERSION = "v2"
 AGENT_RUNTIME_API_VERSION_V110 = "anixops.agent.sdk/v1.1.0"
 PACKAGE_FORMAT = "anixops.package/v2"
 MAX_ARTIFACT_BYTES = 32 << 20
+ED25519_PUBLIC_KEY_BYTES = 32
+ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
+SAFE_SEGMENT_CHARACTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-")
 
 
 @dataclass(frozen=True)
@@ -98,11 +103,20 @@ def sha256_bytes(data: bytes) -> str:
 
 
 def canonical_json(value: Any) -> bytes:
-    encoded = json.dumps(value, ensure_ascii=True, separators=(",", ":"))
+    encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     # encoding/json escapes these values, and manifests are signed by Go as
     # well as by this builder.
-    encoded = encoded.replace("&", "\\u0026").replace("<", "\\u003c").replace(">", "\\u003e")
-    return encoded.encode("utf-8")
+    encoded = (
+        encoded.replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )
+    try:
+        return encoded.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise PackageBuildError("canonical manifest must contain valid UTF-8") from error
 
 
 def pretty_json(value: Any) -> bytes:
@@ -140,6 +154,19 @@ def require_relative_path(value: Any, label: str) -> str:
     candidate = Path(value)
     if candidate.is_absolute() or "\\" in value or value != candidate.as_posix() or ".." in candidate.parts:
         raise PackageBuildError(f"{label} path must be canonical and relative")
+    return value
+
+
+def require_safe_segment(value: Any, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 120
+        or value != value.strip()
+        or value in {".", ".."}
+        or any(character not in SAFE_SEGMENT_CHARACTERS for character in value)
+    ):
+        raise PackageBuildError(f"{label} must be a safe path segment")
     return value
 
 
@@ -424,22 +451,67 @@ class Signer:
             return signature_path.read_bytes()
 
 
-def load_public_key(private_key: Path) -> bytes:
+def ed25519_public_key_from_der(value: bytes, label: str) -> bytes:
+    if len(value) != len(ED25519_SPKI_PREFIX) + ED25519_PUBLIC_KEY_BYTES or not hmac.compare_digest(
+        value[: len(ED25519_SPKI_PREFIX)], ED25519_SPKI_PREFIX
+    ):
+        raise PackageBuildError(f"{label} must be Ed25519")
+    return value[len(ED25519_SPKI_PREFIX) :]
+
+
+def ed25519_public_key_pem(public_key: bytes) -> bytes:
+    if len(public_key) != ED25519_PUBLIC_KEY_BYTES:
+        raise PackageBuildError("official public key must contain 32 raw Ed25519 bytes")
+    encoded = base64.b64encode(ED25519_SPKI_PREFIX + public_key).decode("ascii")
+    lines = [encoded[index : index + 64] for index in range(0, len(encoded), 64)]
+    return ("-----BEGIN PUBLIC KEY-----\n" + "\n".join(lines) + "\n-----END PUBLIC KEY-----\n").encode("ascii")
+
+
+def derive_ed25519_public_key(private_key: Path) -> bytes:
     with tempfile.TemporaryDirectory(prefix="anixops-package-public-key-") as temporary:
-        public_key = Path(temporary) / "public-key.pem"
         result = subprocess.run(
-            ["openssl", "pkey", "-in", str(private_key), "-pubout", "-out", str(public_key)],
+            ["openssl", "pkey", "-in", str(private_key), "-pubout", "-outform", "DER"],
             check=False,
-            text=True,
             capture_output=True,
         )
         if result.returncode != 0:
-            raise PackageBuildError(f"derive signing public key: {result.stderr.strip() or result.stdout.strip()}")
-        return public_key.read_bytes()
+            detail = result.stderr.decode("utf-8", errors="replace").strip() or result.stdout.decode("utf-8", errors="replace").strip()
+            raise PackageBuildError(f"derive signing public key: {detail}")
+        return ed25519_public_key_from_der(result.stdout, "signing key")
+
+
+def derive_ed25519_public_key_from_pem(public_key: Path) -> bytes:
+    result = subprocess.run(
+        ["openssl", "pkey", "-pubin", "-in", str(public_key), "-pubout", "-outform", "DER"],
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", errors="replace").strip() or result.stdout.decode("utf-8", errors="replace").strip()
+        raise PackageBuildError(f"read generated public key: {detail}")
+    return ed25519_public_key_from_der(result.stdout, "generated public key")
+
+
+def load_official_public_key(path: Path | None, mode: str) -> bytes:
+    if path is None:
+        raise PackageBuildError(f"{mode} requires --official-public-key")
+    if path.is_symlink() or not path.is_file():
+        raise PackageBuildError("official public key must be a regular file")
+    try:
+        encoded = b"".join(path.read_bytes().split())
+    except OSError as error:
+        raise PackageBuildError(f"read official public key: {error}") from error
+    try:
+        public_key = base64.b64decode(encoded, validate=True)
+    except (ValueError, binascii.Error) as error:
+        raise PackageBuildError("official public key must be Base64-encoded raw Ed25519 bytes") from error
+    if len(public_key) != ED25519_PUBLIC_KEY_BYTES:
+        raise PackageBuildError("official public key must contain 32 raw Ed25519 bytes")
+    return public_key
 
 
 @contextmanager
-def signer_for_build(signing_key: Path | None) -> Iterator[Signer]:
+def signer_for_build(signing_key: Path | None, official_public_key: bytes | None = None) -> Iterator[Signer]:
     if shutil.which("openssl") is None:
         raise PackageBuildError("OpenSSL executable is required for package signing")
     if signing_key is not None:
@@ -448,8 +520,14 @@ def signer_for_build(signing_key: Path | None) -> Iterator[Signer]:
         mode = stat.S_IMODE(signing_key.stat().st_mode)
         if mode & 0o077:
             raise PackageBuildError("signing key must not be readable by group or others")
-        yield Signer(private_key=signing_key, public_key=load_public_key(signing_key))
+        public_key = derive_ed25519_public_key(signing_key)
+        if official_public_key is not None and not hmac.compare_digest(public_key, official_public_key):
+            raise PackageBuildError("signing key does not match official public key")
+        yield Signer(private_key=signing_key, public_key=ed25519_public_key_pem(public_key))
         return
+
+    if official_public_key is not None:
+        raise PackageBuildError("formal release requires --signing-key")
 
     # Local builds need a verifiable signature without persisting a private
     # key. Release jobs provide --signing-key and retain their official trust
@@ -465,7 +543,8 @@ def signer_for_build(signing_key: Path | None) -> Iterator[Signer]:
         if result.returncode != 0:
             raise PackageBuildError(f"generate local signing key: {result.stderr.strip() or result.stdout.strip()}")
         os.chmod(private_key, 0o600)
-        yield Signer(private_key=private_key, public_key=load_public_key(private_key))
+        public_key = derive_ed25519_public_key(private_key)
+        yield Signer(private_key=private_key, public_key=ed25519_public_key_pem(public_key))
 
 
 def sbom_document(spec: PackageSpec, version: str, artifact_name: str, artifact: bytes) -> bytes:
@@ -530,7 +609,14 @@ def verify_signature(manifest_path: Path, signature_path: Path, public_key_path:
             raise PackageBuildError(f"verify manifest signature: {result.stderr.strip() or result.stdout.strip()}")
 
 
-def verify_output(output: Path, spec: PackageSpec, version: str) -> None:
+def verify_signature_with_official_root(manifest_path: Path, signature_path: Path, official_public_key: bytes) -> None:
+    with tempfile.TemporaryDirectory(prefix="anixops-package-official-root-") as temporary:
+        public_key_path = Path(temporary) / "official-public-key.pem"
+        public_key_path.write_bytes(ed25519_public_key_pem(official_public_key))
+        verify_signature(manifest_path, signature_path, public_key_path)
+
+
+def verify_output(output: Path, spec: PackageSpec, version: str, official_public_key: bytes | None = None) -> None:
     stem = f"{spec.package_id}-{version}"
     artifact_path = output / f"{stem}.anxp"
     manifest_path = output / f"{stem}.manifest.json"
@@ -544,11 +630,21 @@ def verify_output(output: Path, spec: PackageSpec, version: str) -> None:
     if not isinstance(manifest, dict):
         raise PackageBuildError("generated manifest must be an object")
     validate_manifest_value(manifest, spec)
+    if manifest.get("id") != spec.package_id or manifest.get("version") != version:
+        raise PackageBuildError("generated manifest identity does not match the selected package")
     if canonical_json(manifest) != manifest_path.read_bytes():
         raise PackageBuildError("generated manifest is not canonical")
     if sha256_bytes(artifact_path.read_bytes()) != manifest["artifact_sha256"]:
         raise PackageBuildError("generated artifact digest does not match manifest")
-    verify_signature(manifest_path, signature_path, public_key_path)
+    if official_public_key is None:
+        verify_signature(manifest_path, signature_path, public_key_path)
+    else:
+        # The configured raw root is the authority. The emitted PEM is checked
+        # for consistency only after signature verification against that root.
+        verify_signature_with_official_root(manifest_path, signature_path, official_public_key)
+        emitted_public_key = derive_ed25519_public_key_from_pem(public_key_path)
+        if not hmac.compare_digest(emitted_public_key, official_public_key):
+            raise PackageBuildError("generated public key does not match official public key")
     try:
         with tarfile.open(artifact_path, mode="r:") as archive:
             members = archive.getmembers()
@@ -565,7 +661,15 @@ def verify_output(output: Path, spec: PackageSpec, version: str) -> None:
         raise PackageBuildError("generated SBOM does not bind the final artifact digest")
 
 
-def build_package(spec: PackageSpec, version: str, output: Path, signer: Signer, goos: str, goarch: str) -> None:
+def build_package(
+    spec: PackageSpec,
+    version: str,
+    output: Path,
+    signer: Signer,
+    goos: str,
+    goarch: str,
+    official_public_key: bytes | None = None,
+) -> None:
     entries, contents = package_entries(spec, version, goos, goarch)
     # Archive order and bytes are fixed before any generated digest is inserted
     # into the signed manifest.
@@ -586,7 +690,7 @@ def build_package(spec: PackageSpec, version: str, output: Path, signer: Signer,
     }
     for name, data in generated.items():
         atomic_write(output / name, data, 0o644)
-    verify_output(output, spec, version)
+    verify_output(output, spec, version, official_public_key)
 
 
 def parse_args() -> argparse.Namespace:
@@ -599,18 +703,49 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--goos", default="linux", help="Agent target GOOS (default: linux).")
     parser.add_argument("--goarch", default="amd64", help="Agent target GOARCH (default: amd64).")
     parser.add_argument("--signing-key", type=Path, help="PEM Ed25519 key used for an official release signature.")
+    release_mode = parser.add_mutually_exclusive_group()
+    release_mode.add_argument(
+        "--formal-release",
+        action="store_true",
+        help="Require the signing key to match --official-public-key and verify each output against that configured root.",
+    )
+    release_mode.add_argument(
+        "--verify-release",
+        action="store_true",
+        help="Verify existing selected artifacts against --official-public-key without building new artifacts.",
+    )
+    parser.add_argument(
+        "--official-public-key",
+        type=Path,
+        help="File containing the Base64 raw Ed25519 root configured as plugins.official_public_key.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    if not args.version or args.version.strip() != args.version:
-        raise PackageBuildError("version is required")
-    selected = PACKAGE_SPECS if args.all else tuple(spec for spec in PACKAGE_SPECS if spec.package_id == args.package)
     try:
-        with signer_for_build(args.signing_key) as signer:
+        version = require_safe_segment(args.version, "version")
+        selected = PACKAGE_SPECS if args.all else tuple(spec for spec in PACKAGE_SPECS if spec.package_id == args.package)
+        if args.official_public_key is not None and not (args.formal_release or args.verify_release):
+            raise PackageBuildError("--official-public-key requires --formal-release or --verify-release")
+        if args.verify_release:
+            if args.signing_key is not None:
+                raise PackageBuildError("release artifact verification does not accept --signing-key")
+            official_public_key = load_official_public_key(args.official_public_key, "release artifact verification")
             for spec in selected:
-                build_package(spec, args.version, args.out, signer, args.goos, args.goarch)
+                verify_output(args.out, spec, version, official_public_key)
+            print(f"verified {len(selected)} release package artifacts against the configured official root in {args.out}")
+            return 0
+
+        official_public_key = None
+        if args.formal_release:
+            if args.signing_key is None:
+                raise PackageBuildError("formal release requires --signing-key")
+            official_public_key = load_official_public_key(args.official_public_key, "formal release")
+        with signer_for_build(args.signing_key, official_public_key) as signer:
+            for spec in selected:
+                build_package(spec, version, args.out, signer, args.goos, args.goarch, official_public_key)
     except PackageBuildError as error:
         print(f"build_package.py: error: {error}", file=os.sys.stderr)
         return 1

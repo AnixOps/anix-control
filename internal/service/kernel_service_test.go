@@ -184,6 +184,27 @@ func TestMaterializePluginControlArtifactUsesSignedV2Entrypoint(t *testing.T) {
 	require.NoError(t, err)
 	_, err = MaterializePluginControlArtifact(db, publicKey, tampered.ID, tampered.Version, t.TempDir())
 	require.ErrorContains(t, err, "compatibility routes digest")
+
+	wrongEntrypointDigest := strings.Repeat("e", sha256.Size*2)
+	tamperedEntrypoint := manifest
+	tamperedEntrypoint.Version = "4.0.2"
+	tamperedEntrypoint.ControlEntrypoint = &PluginEntrypoint{
+		Path:   manifest.ControlEntrypoint.Path,
+		SHA256: wrongEntrypointDigest,
+	}
+	tamperedEntrypointCanonical, err := CanonicalPluginManifest(tamperedEntrypoint)
+	require.NoError(t, err)
+	tamperedEntrypointRelease, err := RegisterPluginRelease(
+		db,
+		string(tamperedEntrypointCanonical),
+		base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, tamperedEntrypointCanonical)),
+		publicKey,
+	)
+	require.NoError(t, err)
+	_, err = StorePluginArtifact(db, tamperedEntrypointRelease.ID, artifact)
+	require.NoError(t, err)
+	_, err = MaterializePluginControlArtifact(db, publicKey, tamperedEntrypoint.ID, tamperedEntrypoint.Version, t.TempDir())
+	require.ErrorContains(t, err, "control entrypoint digest")
 }
 
 func kernelTestV2Package(t *testing.T, files map[string][]byte) []byte {
