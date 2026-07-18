@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package anix.pluginhost.v1;
+
+option go_package = "github.com/AnixOps/anix-control/v4/api/pluginhost/v1;pluginhostv1";
+
+service ControlPackageHost {
+  rpc Dispatch(DispatchRequest) returns (DispatchResponse);
+  rpc Migrate(MigrationRequest) returns (MigrationResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc Drain(DrainRequest) returns (DrainResponse);
+}
+
+message DispatchRequest {
+  string package_id = 1;
+  string package_version = 2;
+  uint64 route_generation = 3;
+  string request_id = 4;
+  string idempotency_key = 5;
+  string route_id = 6;
+  string method = 7;
+  bytes request_body = 8;
+  bytes principal_json = 9;
+  int64 deadline_unix_millis = 10;
+}
+
+message DispatchResponse {
+  uint32 status_code = 1;
+  bytes response_body = 2;
+  repeated Header headers = 3;
+  string operation_id = 4;
+  string failure_code = 5;
+}
+
+message Header {
+  string name = 1;
+  string value = 2;
+}
+
+message MigrationRequest {
+  string package_id = 1;
+  string package_version = 2;
+  string migration_id = 3;
+  string checkpoint = 4;
+  uint64 route_generation = 5;
+}
+
+message MigrationResponse {
+  string checkpoint = 1;
+  string validation_digest = 2;
+  bool complete = 3;
+  string failure_code = 4;
+}
+
+message HealthRequest {
+  uint64 route_generation = 1;
+}
+
+message HealthResponse {
+  bool healthy = 1;
+  string lease_id = 2;
+  string details_json = 3;
+}
+
+message DrainRequest {
+  uint64 route_generation = 1;
+  int64 deadline_unix_millis = 2;
+}
+
+message DrainResponse {
+  bool drained = 1;
+  uint64 in_flight = 2;
+}
