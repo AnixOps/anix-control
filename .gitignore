@@ -82,6 +82,7 @@ web/test-results/
 # Tool/editor local dirs
 .codex/
 .claude/skills/
+/.worktrees/
 
 # Runtime backup artifacts (db/zip dumps)
 internal/handler/backups/
