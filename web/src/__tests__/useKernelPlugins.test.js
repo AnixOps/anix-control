@@ -99,6 +99,19 @@ describe('kernel plugin catalog', () => {
     expect(catalog.loading.value).toBe(false)
   })
 
+  it('reports a silent refresh failure to mutation callers without clearing catalog rows', async () => {
+    const catalog = useKernelPlugins()
+    await catalog.load()
+    const initialRows = catalog.rows.value
+    kernelApi.getKernelPlugins.mockRejectedValueOnce(new Error('refresh failed'))
+
+    await expect(catalog.load({ silent: true })).resolves.toBe(false)
+
+    expect(catalog.rows.value).toBe(initialRows)
+    expect(catalog.loaded.value).toBe(true)
+    expect(catalog.error.value).toBe('refresh failed')
+  })
+
   it('reports and clears a failed initial load', async () => {
     kernelApi.getKernelPlugins.mockRejectedValueOnce(new Error('catalog unavailable'))
     const catalog = useKernelPlugins()

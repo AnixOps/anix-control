@@ -242,7 +242,7 @@ const trackedOperationIDs = new Set()
 const polling = ref(false)
 const installationEditor = reactive({ open: false, target: null, saving: false, error: '' })
 const configEditor = reactive({ open: false, target: null, schema: {}, value: {}, revision: 0, valid: true, loading: false, saving: false, error: '' })
-const releaseImport = reactive({ open: false, saving: false, error: '' })
+const releaseImport = reactive({ open: false, saving: false, error: '', registeredRelease: null, inputKey: '', artifactUploaded: false })
 const configDialog = ref(null)
 const configCloseButton = ref(null)
 const configOpen = computed(() => configEditor.open)
@@ -251,6 +251,7 @@ const configCanClose = computed(() => !configEditor.saving)
 let pollTimer = null
 let pollRequestRunning = false
 let disposed = false
+let configEditorSession = 0
 
 const filteredRows = computed(() => rows.value.filter(row => {
   const query = search.value.toLocaleLowerCase()
@@ -309,8 +310,10 @@ function synchronizeSelectedRow() {
 }
 
 async function refreshPluginResources(options = {}) {
-  await load(options)
+  const refreshed = await load(options)
+  if (!refreshed) return false
   synchronizeSelectedRow()
+  return true
 }
 
 function openDrawer(event, row) {
@@ -335,10 +338,12 @@ function closeInstallation() {
 }
 
 async function afterPluginMutation(message) {
-  await refreshPluginResources({ silent: true })
+  if (!await refreshPluginResources({ silent: true })) {
+    throw new Error(catalogError.value || t('control.errors.load'))
+  }
+  await refreshOperationState()
   await refreshAdminExtensions(router)
   notice.value = message
-  updatePolling()
 }
 
 async function runLifecycle(target, action, targetVersion = '') {
@@ -411,6 +416,8 @@ async function saveInstallation(input) {
 
 async function openConfig(target) {
   if (!target?.installation) return
+  const session = ++configEditorSession
+  const installationID = target.installation.id
   Object.assign(configEditor, {
     open: true,
     target,
@@ -423,19 +430,29 @@ async function openConfig(target) {
     error: '',
   })
   try {
-    const configuration = await getKernelInstallationConfig(target.installation.id)
+    const configuration = await getKernelInstallationConfig(installationID)
+    if (!isCurrentConfigSession(session, installationID)) return
     const rawConfig = configuration?.config ?? {}
     configEditor.value = typeof rawConfig === 'string' ? JSON.parse(rawConfig || '{}') : rawConfig
     configEditor.revision = configuration?.revision ?? target.installation.config_revision ?? 0
   } catch (cause) {
-    configEditor.error = errorMessage(cause, 'control.errors.configLoad')
+    if (isCurrentConfigSession(session, installationID)) {
+      configEditor.error = errorMessage(cause, 'control.errors.configLoad')
+    }
   } finally {
-    configEditor.loading = false
+    if (isCurrentConfigSession(session, installationID)) configEditor.loading = false
   }
 }
 
+function isCurrentConfigSession(session, installationID) {
+  return configEditor.open && configEditorSession === session && configEditor.target?.installation?.id === installationID
+}
+
 function closeConfig() {
-  if (!configEditor.saving) configEditor.open = false
+  if (!configEditor.saving) {
+    configEditorSession += 1
+    configEditor.open = false
+  }
 }
 
 async function saveConfig(input = configEditor.value) {
@@ -456,11 +473,13 @@ async function saveConfig(input = configEditor.value) {
 }
 
 function openReleaseImport() {
-  Object.assign(releaseImport, { open: true, saving: false, error: '' })
+  Object.assign(releaseImport, { open: true, saving: false, error: '', registeredRelease: null, inputKey: '', artifactUploaded: false })
 }
 
 function closeReleaseImport() {
-  if (!releaseImport.saving) releaseImport.open = false
+  if (!releaseImport.saving) {
+    Object.assign(releaseImport, { open: false, registeredRelease: null, inputKey: '', artifactUploaded: false })
+  }
 }
 
 async function importRelease(input) {
@@ -470,10 +489,19 @@ async function importRelease(input) {
   notice.value = ''
   try {
     JSON.parse(input.manifest)
-    const release = await registerKernelPluginRelease(input.manifest, input.signature)
-    if (input.artifactBase64) await uploadKernelPluginReleaseArtifact(release.id, input.artifactBase64)
+    const inputKey = `${input.manifest}\u0000${input.signature}`
+    if (!releaseImport.registeredRelease || releaseImport.inputKey !== inputKey) {
+      releaseImport.registeredRelease = await registerKernelPluginRelease(input.manifest, input.signature)
+      releaseImport.inputKey = inputKey
+      releaseImport.artifactUploaded = false
+    }
+    const release = releaseImport.registeredRelease
+    if (input.artifactBase64 && !releaseImport.artifactUploaded) {
+      await uploadKernelPluginReleaseArtifact(release.id, input.artifactBase64)
+      releaseImport.artifactUploaded = true
+    }
     await afterPluginMutation(t('control.messages.releaseImported', { plugin: release.plugin_id, version: release.version }))
-    releaseImport.open = false
+    Object.assign(releaseImport, { open: false, registeredRelease: null, inputKey: '', artifactUploaded: false })
   } catch (cause) {
     releaseImport.error = errorMessage(cause, 'control.errors.releaseImport')
   } finally {
@@ -488,9 +516,16 @@ function isPluginLifecycleOperation(operation) {
 function hasActiveOperations() {
   for (const operationID of trackedOperationIDs) {
     const operation = operations.value.find(item => item.id === operationID)
-    if (!operation || !TERMINAL_OPERATION_STATES.has(operation.state)) return true
+    if (operation && !TERMINAL_OPERATION_STATES.has(operation.state)) return true
   }
   return operations.value.some(operation => isPluginLifecycleOperation(operation) && !TERMINAL_OPERATION_STATES.has(operation.state))
+}
+
+function reconcileTrackedOperations() {
+  for (const operationID of [...trackedOperationIDs]) {
+    const operation = operations.value.find(item => item.id === operationID)
+    if (!operation || TERMINAL_OPERATION_STATES.has(operation.state)) trackedOperationIDs.delete(operationID)
+  }
 }
 
 function updatePolling() {
@@ -512,12 +547,17 @@ function updatePolling() {
 
 async function loadOperationState() {
   try {
-    const operationRows = await getKernelOperations()
-    operations.value = Array.isArray(operationRows) ? operationRows : []
-    updatePolling()
+    await refreshOperationState()
   } catch (cause) {
     error.value = errorMessage(cause, 'control.errors.poll')
   }
+}
+
+async function refreshOperationState() {
+  const operationRows = await getKernelOperations()
+  operations.value = Array.isArray(operationRows) ? operationRows : []
+  reconcileTrackedOperations()
+  updatePolling()
 }
 
 async function pollOperations() {
@@ -528,10 +568,7 @@ async function pollOperations() {
     operations.value = Array.isArray(operationRows) ? operationRows : []
     installations.value = Array.isArray(installationRows) ? installationRows : []
     synchronizeSelectedRow()
-    for (const operationID of [...trackedOperationIDs]) {
-      const operation = operations.value.find(item => item.id === operationID)
-      if (operation && TERMINAL_OPERATION_STATES.has(operation.state)) trackedOperationIDs.delete(operationID)
-    }
+    reconcileTrackedOperations()
   } catch (cause) {
     error.value = errorMessage(cause, 'control.errors.poll')
   } finally {

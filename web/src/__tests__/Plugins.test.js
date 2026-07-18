@@ -72,6 +72,16 @@ const releases = [
 
 const mounted = []
 
+function deferred() {
+  let resolve
+  let reject
+  const promise = new Promise((nextResolve, nextReject) => {
+    resolve = nextResolve
+    reject = nextReject
+  })
+  return { promise, reject, resolve }
+}
+
 function resolveCatalog(installations = []) {
   kernelApi.getKernelPlugins.mockResolvedValue([plugin])
   kernelApi.getKernelPluginReleases.mockResolvedValue(releases)
@@ -298,6 +308,128 @@ describe('Plugin Center', () => {
     expect(wrapper.get('#plugin-config-port').element.value).toBe('8443')
   })
 
+  it('ignores a late configuration response after the editor is reopened for another target', async () => {
+    const controlConfig = deferred()
+    const agentConfig = deferred()
+    resolveCatalog([
+      {
+        id: 1,
+        plugin_id: plugin.id,
+        target: 'control',
+        desired_version: '1.0.0',
+        observed_version: '1.0.0',
+        config_revision: 3,
+        state: 'healthy',
+        enabled: true,
+      },
+      {
+        id: 2,
+        plugin_id: plugin.id,
+        target: 'agent',
+        desired_version: '1.0.0',
+        observed_version: '1.0.0',
+        config_revision: 7,
+        state: 'healthy',
+        enabled: true,
+      },
+    ])
+    kernelApi.getKernelInstallationConfig
+      .mockImplementationOnce(() => controlConfig.promise)
+      .mockImplementationOnce(() => agentConfig.promise)
+    const wrapper = mountPlugins()
+    await flushPromises()
+
+    const drawer = await openTarget(wrapper, 'control')
+    await drawer.get('[data-action="configure"]').trigger('click')
+    await nextTick()
+    expect(kernelApi.getKernelInstallationConfig).toHaveBeenCalledWith(1)
+    await wrapper.get('[data-testid="plugin-config-dialog"]').find('button').trigger('click')
+    await wrapper.get('[data-target="agent"]').trigger('click')
+    await drawer.get('[data-action="configure"]').trigger('click')
+    await nextTick()
+    expect(kernelApi.getKernelInstallationConfig).toHaveBeenCalledWith(2)
+
+    agentConfig.resolve({ installation_id: 2, revision: 7, config: '{"port":8443,"enabled":true}' })
+    await flushPromises()
+    expect(wrapper.get('#plugin-config-port').element.value).toBe('8443')
+
+    controlConfig.resolve({ installation_id: 1, revision: 3, config: '{"port":443,"enabled":false}' })
+    await flushPromises()
+    expect(wrapper.get('#plugin-config-port').element.value).toBe('8443')
+    await wrapper.get('[data-testid="save-plugin-config"]').trigger('click')
+    await flushPromises()
+    expect(kernelApi.updateKernelInstallationConfig).toHaveBeenCalledWith(2, { port: 8443, enabled: true }, 7)
+  })
+
+  it('does not report installation success or refresh extensions when catalog refresh fails', async () => {
+    const wrapper = mountPlugins()
+    await flushPromises()
+
+    const drawer = await openTarget(wrapper, 'control')
+    await drawer.get('[data-action="install"]').trigger('click')
+    kernelApi.getKernelPlugins.mockRejectedValueOnce(new Error('catalog refresh failed'))
+    await wrapper.get('[data-action="save-installation"]').trigger('click')
+    await flushPromises()
+
+    expect(extensionRuntime.refreshAdminExtensions).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="plugin-installation-dialog"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="plugin-installation-dialog"]').text()).toContain('catalog refresh failed')
+    expect(wrapper.find('.notice-message').exists()).toBe(false)
+  })
+
+  it('refreshes operation state after an agent mutation and polls newly active plugin work', async () => {
+    vi.useFakeTimers()
+    resolveCatalog([{
+      id: 2,
+      plugin_id: plugin.id,
+      target: 'agent',
+      desired_version: '1.1.0',
+      observed_version: '1.1.0',
+      state: 'healthy',
+      enabled: true,
+    }])
+    kernelApi.getKernelOperations
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'agent-op-1', kind: 'plugin.update', plugin_id: plugin.id, state: 'running' }])
+      .mockResolvedValueOnce([{ id: 'agent-op-1', kind: 'plugin.update', plugin_id: plugin.id, state: 'completed' }])
+    const wrapper = mountPlugins()
+    await flushPromises()
+
+    const drawer = await openTarget(wrapper, 'agent')
+    await drawer.get('[data-action="disable"]').trigger('click')
+    await flushPromises()
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(3)
+  })
+
+  it('removes a tracked operation that is absent from a refresh instead of polling forever', async () => {
+    vi.useFakeTimers()
+    resolveCatalog([{
+      id: 1,
+      plugin_id: plugin.id,
+      target: 'control',
+      desired_version: '1.0.0',
+      observed_version: '1.0.0',
+      state: 'healthy',
+      enabled: false,
+    }])
+    kernelApi.getKernelOperations.mockResolvedValue([])
+    const wrapper = mountPlugins()
+    await flushPromises()
+
+    const drawer = await openTarget(wrapper, 'control')
+    await drawer.get('[data-action="enable"]').trigger('click')
+    await flushPromises()
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(4000)
+    await flushPromises()
+    expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
+  })
+
   it('imports a release artifact and refreshes the catalog before extensions', async () => {
     const wrapper = mountPlugins()
     await flushPromises()
@@ -322,6 +454,39 @@ describe('Plugin Center', () => {
     expect(kernelApi.getKernelPlugins.mock.invocationCallOrder.at(-1)).toBeLessThan(
       extensionRuntime.refreshAdminExtensions.mock.invocationCallOrder.at(-1)
     )
+  })
+
+  it('retries a failed artifact upload against the release that was already registered', async () => {
+    kernelApi.uploadKernelPluginReleaseArtifact
+      .mockRejectedValueOnce(new Error('artifact upload failed'))
+      .mockResolvedValueOnce({ release_id: 9 })
+    const wrapper = mountPlugins()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="import-plugin-release"]').trigger('click')
+    await wrapper.get('#plugin-release-manifest').setValue('{"id":"protocol-runtime","version":"1.2.0"}')
+    await wrapper.get('#plugin-release-signature').setValue('signed-release')
+    const artifact = {
+      name: 'runtime.tar.gz',
+      size: 3,
+      arrayBuffer: vi.fn(async () => new Uint8Array([1, 2, 3]).buffer),
+    }
+    const artifactInput = wrapper.get('#plugin-release-artifact')
+    Object.defineProperty(artifactInput.element, 'files', { configurable: true, value: [artifact] })
+    await artifactInput.trigger('change')
+    await flushPromises()
+
+    await wrapper.get('[data-action="save-release"]').trigger('click')
+    await flushPromises()
+    expect(kernelApi.registerKernelPluginRelease).toHaveBeenCalledTimes(1)
+    expect(kernelApi.uploadKernelPluginReleaseArtifact).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-testid="plugin-release-import-dialog"]').text()).toContain('artifact upload failed')
+
+    await wrapper.get('[data-action="save-release"]').trigger('click')
+    await flushPromises()
+    expect(kernelApi.registerKernelPluginRelease).toHaveBeenCalledTimes(1)
+    expect(kernelApi.uploadKernelPluginReleaseArtifact).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="plugin-release-import-dialog"]').exists()).toBe(false)
   })
 
   it('polls only active plugin operations, stops at terminal state, and clears its timer on unmount', async () => {

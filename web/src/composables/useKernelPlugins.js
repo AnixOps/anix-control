@@ -82,6 +82,7 @@ export function useKernelPlugins() {
       installations.value = asRows(installationRows)
       loaded.value = true
       error.value = ''
+      return true
     } catch (cause) {
       error.value = errorMessage(cause)
       if (!silent && initialLoad) {
@@ -90,6 +91,7 @@ export function useKernelPlugins() {
         installations.value = []
         loaded.value = false
       }
+      return false
     } finally {
       if (!silent) loading.value = false
     }
