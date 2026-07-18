@@ -13,7 +13,10 @@ import (
 	"google.golang.org/grpc"
 )
 
-const hostTestChildEnvironment = "ANIX_PLUGINHOST_TEST_CHILD"
+const (
+	hostTestChildEnvironment           = "ANIX_PLUGINHOST_TEST_CHILD"
+	hostTestForbiddenSecretEnvironment = "ANIX_PLUGINHOST_TEST_SERVER_SECRET"
+)
 
 func TestClientDispatchesOverUnixSocket(t *testing.T) {
 	socketPath := startTestHostServer(t)
@@ -41,6 +44,9 @@ func TestClientDispatchesOverUnixSocket(t *testing.T) {
 func TestPluginHostProcess(t *testing.T) {
 	if os.Getenv(hostTestChildEnvironment) != "1" {
 		return
+	}
+	if os.Getenv(hostTestForbiddenSecretEnvironment) != "" {
+		t.Fatal("host process inherited a parent secret")
 	}
 	socketPath := os.Getenv(hostSocketEnvironment)
 	if socketPath == "" {

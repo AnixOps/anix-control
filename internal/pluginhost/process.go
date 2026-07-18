@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 )
 
@@ -20,16 +21,22 @@ func startHostProcess(ctx context.Context, runtimeRoot string, ref ArtifactRef, 
 	}
 	cleanup := func() { _ = os.RemoveAll(directory) }
 	socketPath := filepath.Join(directory, "host.sock")
-	command := exec.CommandContext(context.Background(), ref.EntrypointPath)
-	command.Dir = directory
-	command.Env = append(os.Environ(), hostSocketEnvironment+"="+socketPath)
-	// Rehash immediately before exec as well as before replacing an active host.
-	// The first verification protects the currently healthy generation; this
-	// second verification narrows the check-to-exec window for the new process.
+	// Rehash every referenced file and snapshot the entrypoint from its opened
+	// descriptor before execution. The staged path cannot be replaced through
+	// the caller-provided source pathname after this point.
 	if err := verifyArtifactRef(ref); err != nil {
 		cleanup()
 		return nil, err
 	}
+	stagedEntrypoint, err := stageVerifiedEntrypoint(ref, directory)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	command := exec.CommandContext(context.Background(), stagedEntrypoint)
+	command.Dir = directory
+	command.Env = hostEnvironment(socketPath, directory)
+	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := command.Start(); err != nil {
 		cleanup()
 		return nil, fmt.Errorf("%w: start package host: %v", ErrHostUnavailable, err)
@@ -55,19 +62,20 @@ func startHostProcess(ctx context.Context, runtimeRoot string, ref ArtifactRef, 
 	return host, nil
 }
 
+func hostEnvironment(socketPath, runtimeDir string) []string {
+	return []string{
+		hostSocketEnvironment + "=" + socketPath,
+		"HOME=" + runtimeDir,
+		"TMPDIR=" + runtimeDir,
+	}
+}
+
 func createHostRuntimeDir(runtimeRoot, packageID, version string, generation uint64) (string, error) {
 	if runtimeRoot == "" || !filepath.IsAbs(runtimeRoot) {
 		return "", fmt.Errorf("%w: host runtime directory must be absolute", ErrHostIncompatible)
 	}
-	if err := os.MkdirAll(runtimeRoot, 0o700); err != nil {
-		return "", fmt.Errorf("%w: create host runtime directory: %v", ErrHostUnavailable, err)
-	}
-	if err := os.Chmod(runtimeRoot, 0o700); err != nil {
-		return "", fmt.Errorf("%w: secure host runtime directory: %v", ErrHostUnavailable, err)
-	}
-	rootInfo, err := os.Lstat(runtimeRoot)
-	if err != nil || !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 || rootInfo.Mode().Perm() != 0o700 {
-		return "", fmt.Errorf("%w: host runtime directory is not private", ErrHostIncompatible)
+	if err := secureRuntimeRoot(runtimeRoot); err != nil {
+		return "", err
 	}
 	directory, err := os.MkdirTemp(runtimeRoot, "host-")
 	if err != nil {
@@ -82,6 +90,39 @@ func createHostRuntimeDir(runtimeRoot, packageID, version string, generation uin
 		return "", fmt.Errorf("%w: host socket path exceeds Unix socket limit", ErrHostIncompatible)
 	}
 	return directory, nil
+}
+
+func secureRuntimeRoot(runtimeRoot string) error {
+	info, err := os.Lstat(runtimeRoot)
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(runtimeRoot, 0o700); err != nil {
+			return fmt.Errorf("%w: create host runtime directory: %v", ErrHostUnavailable, err)
+		}
+		info, err = os.Lstat(runtimeRoot)
+	}
+	if err != nil {
+		return fmt.Errorf("%w: inspect host runtime directory: %v", ErrHostUnavailable, err)
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%w: host runtime directory is not private", ErrHostIncompatible)
+	}
+	directory, err := os.Open(runtimeRoot)
+	if err != nil {
+		return fmt.Errorf("%w: open host runtime directory: %v", ErrHostUnavailable, err)
+	}
+	defer directory.Close()
+	openedInfo, err := directory.Stat()
+	if err != nil || !openedInfo.IsDir() || !os.SameFile(info, openedInfo) {
+		return fmt.Errorf("%w: host runtime directory changed before open", ErrHostIncompatible)
+	}
+	if err := directory.Chmod(0o700); err != nil {
+		return fmt.Errorf("%w: secure host runtime directory: %v", ErrHostUnavailable, err)
+	}
+	securedInfo, err := directory.Stat()
+	if err != nil || securedInfo.Mode().Perm() != 0o700 {
+		return fmt.Errorf("%w: host runtime directory is not private", ErrHostIncompatible)
+	}
+	return nil
 }
 
 func waitForHost(ctx context.Context, host *hostProcess) (*hostClient, HostHealth, error) {
@@ -142,7 +183,7 @@ func (h *hostProcess) stop(ctx context.Context) error {
 	}
 	if h.command != nil && h.command.Process != nil {
 		if !hostExited(h) {
-			if err := h.command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			if err := terminateHostProcessGroup(h.command.Process.Pid); err != nil && !errors.Is(err, os.ErrProcessDone) {
 				return fmt.Errorf("%w: stop host process: %v", ErrHostUnavailable, err)
 			}
 		}
@@ -158,4 +199,15 @@ func (h *hostProcess) stop(ctx context.Context) error {
 		return fmt.Errorf("%w: remove host runtime directory: %v", ErrHostUnavailable, err)
 	}
 	return nil
+}
+
+func terminateHostProcessGroup(pid int) error {
+	if pid <= 0 {
+		return nil
+	}
+	err := syscall.Kill(-pid, syscall.SIGKILL)
+	if errors.Is(err, syscall.ESRCH) {
+		return nil
+	}
+	return err
 }

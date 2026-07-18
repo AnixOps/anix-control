@@ -61,28 +61,102 @@ func verifyArtifactRef(ref ArtifactRef) error {
 }
 
 func verifyFileDigest(filePath, expectedDigest string, executable bool) ([]byte, error) {
+	file, err := openVerifiedRegularFile(filePath, executable)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return readVerifiedDigest(file, expectedDigest)
+}
+
+func stageVerifiedEntrypoint(ref ArtifactRef, runtimeDir string) (string, error) {
+	if !filepath.IsAbs(runtimeDir) {
+		return "", fmt.Errorf("%w: host runtime directory must be absolute", ErrHostIncompatible)
+	}
+	source, err := openVerifiedRegularFile(ref.EntrypointPath, true)
+	if err != nil {
+		return "", err
+	}
+	defer source.Close()
+	expected, err := decodeDigest(ref.EntrypointSHA256)
+	if err != nil {
+		return "", err
+	}
+	stagedPath := filepath.Join(runtimeDir, "entrypoint")
+	destination, err := os.OpenFile(stagedPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o700)
+	if err != nil {
+		return "", fmt.Errorf("%w: create staged entrypoint: %v", ErrHostUnavailable, err)
+	}
+	cleanup := func() {
+		_ = destination.Close()
+		_ = os.Remove(stagedPath)
+	}
+	hasher := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(destination, hasher), source); err != nil {
+		cleanup()
+		return "", fmt.Errorf("%w: stage entrypoint: %v", ErrHostIncompatible, err)
+	}
+	if err := destination.Close(); err != nil {
+		_ = os.Remove(stagedPath)
+		return "", fmt.Errorf("%w: stage entrypoint: %v", ErrHostUnavailable, err)
+	}
+	if subtle.ConstantTimeCompare(expected, hasher.Sum(nil)) != 1 {
+		_ = os.Remove(stagedPath)
+		return "", fmt.Errorf("%w: file digest does not match", ErrHostIncompatible)
+	}
+	if err := os.Chmod(stagedPath, 0o700); err != nil {
+		_ = os.Remove(stagedPath)
+		return "", fmt.Errorf("%w: secure staged entrypoint: %v", ErrHostUnavailable, err)
+	}
+	return stagedPath, nil
+}
+
+func openVerifiedRegularFile(filePath string, executable bool) (*os.File, error) {
+	return openVerifiedRegularFileWithOpen(filePath, executable, os.Open)
+}
+
+func openVerifiedRegularFileWithOpen(filePath string, executable bool, openFile func(string) (*os.File, error)) (*os.File, error) {
 	if !filepath.IsAbs(filePath) {
 		return nil, fmt.Errorf("%w: file path must be absolute", ErrHostIncompatible)
 	}
-	expected, err := hex.DecodeString(expectedDigest)
-	if err != nil || len(expected) != sha256.Size {
-		return nil, fmt.Errorf("%w: file digest is invalid", ErrHostIncompatible)
-	}
-	info, err := os.Lstat(filePath)
-	if err != nil || !info.Mode().IsRegular() {
+	before, err := os.Lstat(filePath)
+	if err != nil || !before.Mode().IsRegular() {
 		return nil, fmt.Errorf("%w: verified file is unavailable", ErrHostIncompatible)
 	}
-	if info.Mode().Perm()&0o022 != 0 {
-		return nil, fmt.Errorf("%w: verified file is writable by group or others", ErrHostIncompatible)
+	if err := validateVerifiedFileMode(before, executable); err != nil {
+		return nil, err
 	}
-	if executable && info.Mode().Perm()&0o111 == 0 {
-		return nil, fmt.Errorf("%w: entrypoint is not executable", ErrHostIncompatible)
-	}
-	file, err := os.Open(filePath)
+	file, err := openFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: verified file is unavailable", ErrHostIncompatible)
 	}
-	defer file.Close()
+	after, err := file.Stat()
+	if err != nil || !after.Mode().IsRegular() || !os.SameFile(before, after) {
+		_ = file.Close()
+		return nil, fmt.Errorf("%w: verified file changed before open", ErrHostIncompatible)
+	}
+	if err := validateVerifiedFileMode(after, executable); err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+	return file, nil
+}
+
+func validateVerifiedFileMode(info os.FileInfo, executable bool) error {
+	if info.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("%w: verified file is writable by group or others", ErrHostIncompatible)
+	}
+	if executable && info.Mode().Perm()&0o111 == 0 {
+		return fmt.Errorf("%w: entrypoint is not executable", ErrHostIncompatible)
+	}
+	return nil
+}
+
+func readVerifiedDigest(file *os.File, expectedDigest string) ([]byte, error) {
+	expected, err := decodeDigest(expectedDigest)
+	if err != nil {
+		return nil, err
+	}
 	hasher := sha256.New()
 	contents, err := io.ReadAll(io.TeeReader(file, hasher))
 	if err != nil {
@@ -92,4 +166,12 @@ func verifyFileDigest(filePath, expectedDigest string, executable bool) ([]byte,
 		return nil, fmt.Errorf("%w: file digest does not match", ErrHostIncompatible)
 	}
 	return contents, nil
+}
+
+func decodeDigest(expectedDigest string) ([]byte, error) {
+	expected, err := hex.DecodeString(expectedDigest)
+	if err != nil || len(expected) != sha256.Size {
+		return nil, fmt.Errorf("%w: file digest is invalid", ErrHostIncompatible)
+	}
+	return expected, nil
 }

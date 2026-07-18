@@ -15,6 +15,7 @@ import (
 
 var (
 	ErrHostUnavailable       = errors.New("plugin host unavailable")
+	ErrHostNotFound          = errors.New("plugin host not found")
 	ErrHostIncompatible      = errors.New("plugin host incompatible")
 	ErrGenerationUnavailable = errors.New("plugin host generation unavailable")
 	defaultManager           struct {
@@ -211,7 +212,12 @@ func (m *Supervisor) Health(ctx context.Context, packageID, version string, gene
 }
 
 func (m *Supervisor) Drain(ctx context.Context, packageID, version string, generation uint64, deadline time.Time) error {
-	host, err := m.hostForGeneration(packageID, version, generation)
+	if m == nil {
+		return ErrHostUnavailable
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	host, err := m.hostForNewerLifecycleGeneration(packageID, version, generation)
 	if err != nil {
 		return err
 	}
@@ -233,9 +239,9 @@ func (m *Supervisor) Stop(ctx context.Context, packageID, version string, genera
 	defer m.mu.Unlock()
 	host := m.hosts[hostKey(packageID, version)]
 	if host == nil {
-		return ErrHostUnavailable
+		return fmt.Errorf("%w: %w", ErrHostUnavailable, ErrHostNotFound)
 	}
-	if generation == 0 || host.generation != generation {
+	if host.version != version || generation == 0 || generation <= host.generation {
 		return ErrGenerationUnavailable
 	}
 	delete(m.hosts, hostKey(packageID, version))
@@ -275,7 +281,7 @@ func (m *Supervisor) hostForGeneration(packageID, version string, generation uin
 	if host == nil {
 		return nil, ErrHostUnavailable
 	}
-	if generation == 0 || host.generation != generation {
+	if host.version != version || generation == 0 || host.generation != generation {
 		return nil, ErrGenerationUnavailable
 	}
 	if host.client == nil {
@@ -284,6 +290,23 @@ func (m *Supervisor) hostForGeneration(packageID, version string, generation uin
 	return host, nil
 }
 
-func hostKey(packageID, version string) string {
-	return packageID + "\x00" + version
+// hostForNewerLifecycleGeneration authorizes retirement only from a later
+// durable transition. Request dispatch always uses hostForGeneration instead.
+// The caller holds m.mu for the duration of the lifecycle RPC.
+func (m *Supervisor) hostForNewerLifecycleGeneration(packageID, version string, generation uint64) (*hostProcess, error) {
+	host := m.hosts[hostKey(packageID, version)]
+	if host == nil {
+		return nil, fmt.Errorf("%w: %w", ErrHostUnavailable, ErrHostNotFound)
+	}
+	if host.version != version || generation == 0 || generation <= host.generation {
+		return nil, ErrGenerationUnavailable
+	}
+	if host.client == nil {
+		return nil, ErrHostUnavailable
+	}
+	return host, nil
+}
+
+func hostKey(packageID, _ string) string {
+	return packageID
 }

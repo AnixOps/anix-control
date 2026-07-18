@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -40,6 +41,89 @@ func TestRegistryRequiresExactPluginVersion(t *testing.T) {
 	_, err = registry.ExecuteRoute(context.Background(), "example", "2.0.0", RouteRequest{})
 	require.ErrorIs(t, err, ErrExecutorNotFound)
 	require.Error(t, registry.Register(registryTestExecutor{id: "example", version: "1.0.0"}))
+}
+
+func TestHostLifecycleDispatcherRejectsMismatchedResolvedArtifact(t *testing.T) {
+	hosts := &recordingHostManager{}
+	dispatcher := NewHostLifecycleDispatcher(hosts, func(context.Context, string, string) (pluginhost.ArtifactRef, error) {
+		return pluginhost.ArtifactRef{PackageID: "other", Version: "4.0.0"}, nil
+	})
+
+	_, err := dispatcher.ExecuteLifecycle(context.Background(), "knowledge", "4.0.0", LifecycleRequest{
+		Kind: "plugin.enable", Generation: 7,
+	})
+
+	require.ErrorIs(t, err, pluginhost.ErrHostIncompatible)
+	require.Empty(t, hosts.starts)
+}
+
+func TestHostLifecycleDispatcherStartsResolvedArtifactForRollback(t *testing.T) {
+	hosts := &recordingHostManager{}
+	ref := pluginhost.ArtifactRef{PackageID: "knowledge", Version: "4.0.0"}
+	dispatcher := NewHostLifecycleDispatcher(hosts, func(context.Context, string, string) (pluginhost.ArtifactRef, error) {
+		return ref, nil
+	})
+
+	_, err := dispatcher.ExecuteLifecycle(context.Background(), "knowledge", "4.0.0", LifecycleRequest{
+		Kind: "plugin.rollback", Generation: 8,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, hosts.starts, 1)
+	require.Equal(t, ref, hosts.starts[0].ref)
+	require.EqualValues(t, 8, hosts.starts[0].generation)
+	require.Zero(t, hosts.rollbacks)
+}
+
+func TestHostLifecycleDispatcherTreatsAbsentOlderHostAsDisabled(t *testing.T) {
+	hosts := &recordingHostManager{drainErr: pluginhost.ErrHostNotFound}
+	dispatcher := NewHostLifecycleDispatcher(hosts, nil)
+
+	_, err := dispatcher.ExecuteLifecycle(context.Background(), "knowledge", "4.0.0", LifecycleRequest{
+		Kind: "plugin.disable", Generation: 8,
+	})
+
+	require.NoError(t, err)
+	require.Zero(t, hosts.stops)
+}
+
+type recordedHostStart struct {
+	ref        pluginhost.ArtifactRef
+	generation uint64
+}
+
+type recordingHostManager struct {
+	starts    []recordedHostStart
+	rollbacks int
+	stops     int
+	drainErr  error
+}
+
+func (m *recordingHostManager) Start(_ context.Context, ref pluginhost.ArtifactRef, generation uint64) error {
+	m.starts = append(m.starts, recordedHostStart{ref: ref, generation: generation})
+	return nil
+}
+
+func (*recordingHostManager) Dispatch(context.Context, pluginhost.DispatchInput) (pluginhost.DispatchOutput, error) {
+	return pluginhost.DispatchOutput{}, pluginhost.ErrHostUnavailable
+}
+
+func (*recordingHostManager) Health(context.Context, string, string, uint64) (pluginhost.HostHealth, error) {
+	return pluginhost.HostHealth{}, pluginhost.ErrHostUnavailable
+}
+
+func (m *recordingHostManager) Drain(context.Context, string, string, uint64, time.Time) error {
+	return m.drainErr
+}
+
+func (m *recordingHostManager) Stop(context.Context, string, string, uint64) error {
+	m.stops++
+	return nil
+}
+
+func (m *recordingHostManager) Rollback(context.Context, string, string, uint64) error {
+	m.rollbacks++
+	return nil
 }
 
 func TestDefaultRegistryKeepsLegacyMachineTelemetryExecutorDuringUpgrade(t *testing.T) {

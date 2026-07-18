@@ -109,32 +109,23 @@ func (d *HostLifecycleDispatcher) ExecuteLifecycle(ctx context.Context, pluginID
 		return nil, pluginhost.ErrGenerationUnavailable
 	}
 	switch request.Kind {
-	case "plugin.install", "plugin.enable", "plugin.update":
-		if d.artifacts == nil {
-			return nil, fmt.Errorf("%w: no verified artifact reference is available", pluginhost.ErrHostUnavailable)
-		}
-		ref, err := d.artifacts(ctx, pluginID, version)
-		if err != nil {
-			return nil, fmt.Errorf("%w: verified artifact reference is unavailable", pluginhost.ErrHostUnavailable)
-		}
-		if err := d.hosts.Start(ctx, ref, request.Generation); err != nil {
-			return nil, err
-		}
-		return json.RawMessage(`{}`), nil
+	case "plugin.install", "plugin.enable", "plugin.update", "plugin.rollback":
+		return d.startResolvedHost(ctx, pluginID, version, request.Generation)
 	case "plugin.disable":
 		deadline, ok := ctx.Deadline()
 		if !ok {
 			deadline = time.Now().Add(30 * time.Second)
 		}
 		if err := d.hosts.Drain(ctx, pluginID, version, request.Generation, deadline); err != nil {
+			if errors.Is(err, pluginhost.ErrHostNotFound) {
+				return json.RawMessage(`{}`), nil
+			}
 			return nil, err
 		}
 		if err := d.hosts.Stop(ctx, pluginID, version, request.Generation); err != nil {
-			return nil, err
-		}
-		return json.RawMessage(`{}`), nil
-	case "plugin.rollback":
-		if err := d.hosts.Rollback(ctx, pluginID, version, request.Generation); err != nil {
+			if errors.Is(err, pluginhost.ErrHostNotFound) {
+				return json.RawMessage(`{}`), nil
+			}
 			return nil, err
 		}
 		return json.RawMessage(`{}`), nil
@@ -150,6 +141,23 @@ func (d *HostLifecycleDispatcher) ExecuteLifecycle(ctx context.Context, pluginID
 	default:
 		return nil, fmt.Errorf("%w: host protocol does not support lifecycle operation %q", pluginhost.ErrHostIncompatible, request.Kind)
 	}
+}
+
+func (d *HostLifecycleDispatcher) startResolvedHost(ctx context.Context, pluginID, version string, generation uint64) (json.RawMessage, error) {
+	if d.artifacts == nil {
+		return nil, fmt.Errorf("%w: no verified artifact reference is available", pluginhost.ErrHostUnavailable)
+	}
+	ref, err := d.artifacts(ctx, pluginID, version)
+	if err != nil {
+		return nil, fmt.Errorf("%w: verified artifact reference is unavailable", pluginhost.ErrHostUnavailable)
+	}
+	if ref.PackageID != pluginID || ref.Version != version {
+		return nil, fmt.Errorf("%w: resolved artifact identity does not match lifecycle request", pluginhost.ErrHostIncompatible)
+	}
+	if err := d.hosts.Start(ctx, ref, generation); err != nil {
+		return nil, err
+	}
+	return json.RawMessage(`{}`), nil
 }
 
 var (
