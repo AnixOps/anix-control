@@ -1,5 +1,3 @@
-github.com/AnixOps/anix-agent/sdk v1.0.0 h1:KImAAk2Ntv35WhfY7gMGbueDo4hyC7N2jXZRLSeBf5I=
-github.com/AnixOps/anix-agent/sdk v1.0.0/go.mod h1:sLPBU1kBX4WP/KuUUhxRqbCcUW9tHoQZ/yR5KIKOOVU=
 github.com/AnixOps/anix-agent/sdk v1.1.0 h1:1IUZA6rRojwf1AcG5uJ0IU62jekVgPD23dZNfmStDi0=
 github.com/AnixOps/anix-agent/sdk v1.1.0/go.mod h1:sLPBU1kBX4WP/KuUUhxRqbCcUW9tHoQZ/yR5KIKOOVU=
 github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
