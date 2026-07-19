@@ -364,6 +364,8 @@ func (c *collector) processExpression(expression ast.Expr, env *scope) error {
 		return c.register(target, selector.Sel.Name, call, env)
 	case "Handle":
 		return c.registerHandle(target, call, env)
+	case "Match":
+		return c.registerMatch(target, call, env)
 	default:
 		return nil
 	}
@@ -436,6 +438,45 @@ func (c *collector) registerHandle(target *group, call *ast.CallExpr, env *scope
 		return c.errorAt(call.Args[0].Pos(), "Gin Handle method %q is not supported", method)
 	}
 	return c.registerArguments(target, method, call.Args[1:], call.Pos(), env)
+}
+
+func (c *collector) registerMatch(target *group, call *ast.CallExpr, env *scope) error {
+	if len(call.Args) < 3 {
+		return c.errorAt(call.Pos(), "Gin Match registration must include methods, a path, and a handler")
+	}
+	methods, err := c.resolveMethodList(call.Args[0], env)
+	if err != nil {
+		return err
+	}
+	for _, method := range methods {
+		if err := c.registerArguments(target, method, call.Args[1:], call.Pos(), env); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *collector) resolveMethodList(expression ast.Expr, env *scope) ([]string, error) {
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return nil, c.errorAt(expression.Pos(), "Gin Match methods must be a literal string list")
+	}
+	if len(literal.Elts) == 0 {
+		return nil, c.errorAt(expression.Pos(), "Gin Match methods must not be empty")
+	}
+	methods := make([]string, 0, len(literal.Elts))
+	for _, element := range literal.Elts {
+		method, ok := resolveString(element, env)
+		if !ok {
+			return nil, c.errorAt(element.Pos(), "Gin Match method must be a string literal or locally resolvable literal")
+		}
+		method = strings.ToUpper(method)
+		if !isHTTPMethod(method) {
+			return nil, c.errorAt(element.Pos(), "Gin Match method %q is not supported", method)
+		}
+		methods = append(methods, method)
+	}
+	return methods, nil
 }
 
 func (c *collector) registerArguments(target *group, method string, args []ast.Expr, position token.Pos, env *scope) error {

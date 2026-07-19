@@ -63,6 +63,8 @@ class RouteCatalogTest(unittest.TestCase):
             ("GET", "/api/v2/inline-auth", "inlineHandler.Get", "user", "http"),
             ("GET", "/api/v2/chained-use", "chainedHandler.Get", "user", "http"),
             ("PATCH", "/api/v2/handled", "handledHandler.Patch", "user", "http"),
+            ("PATCH", "/api/v2/matched", "matchedHandler.Patch", "user", "http"),
+            ("DELETE", "/api/v2/matched", "matchedHandler.Patch", "user", "http"),
         }
         any_methods = {"GET", "POST", "PUT", "PATCH", "HEAD", "OPTIONS", "DELETE", "CONNECT", "TRACE"}
         expected.update(

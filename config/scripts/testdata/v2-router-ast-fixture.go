@@ -50,4 +50,5 @@ func ChainedRoutes(r *gin.Engine) {
 	v2 := r.Group("/api/v2")
 	v2.Use(middleware.JWTAuth()).GET("/chained-use", chainedHandler.Get)
 	v2.Handle("PATCH", "/handled", handledHandler.Patch)
+	v2.Match([]string{"PATCH", "DELETE"}, "/matched", matchedHandler.Patch)
 }
