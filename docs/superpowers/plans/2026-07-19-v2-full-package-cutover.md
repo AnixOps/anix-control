@@ -44,7 +44,7 @@
 - Modify: `packages/shared/tests/test_manifest_schema.py`
 - Modify: `config/scripts/release-stage-contract.json`
 - Modify: `config/scripts/check_release_stage.py`
-- Modify: `config/scripts/check_release_stage_test.py`
+- Create: `config/scripts/check_release_stage_test.py`
 
 **Interfaces:**
 - Produces: `PackageSpec("identity-platform", ("control",))` and a v4 release-stage contract with sixteen required signed package artifacts.
