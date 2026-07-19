@@ -32,6 +32,8 @@ var websocketPaths = map[string]struct{}{
 	"/api/v2/node/ws":          {},
 }
 
+const controlConfigImportPath = "github.com/AnixOps/anix-control/v4/internal/config"
+
 type route struct {
 	Method          string `json:"method"`
 	Path            string `json:"path"`
@@ -204,6 +206,9 @@ func inventory(routerPath string) ([]route, error) {
 
 		env := newScope(nil)
 		if !seedEngineParameters(function, env) {
+			if err := collector.rejectUnresolvedGinSelectors(function.Body, env); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		if err := collector.processBlock(function.Body, env); err != nil {
@@ -224,11 +229,39 @@ func inventory(routerPath string) ([]route, error) {
 	return collector.routes, nil
 }
 
+func (c *collector) rejectUnresolvedGinSelectors(node ast.Node, env *scope) error {
+	var validationError error
+	ast.Inspect(node, func(current ast.Node) bool {
+		if validationError != nil {
+			return false
+		}
+		call, ok := current.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || !isGinRouteSelector(selector.Sel.Name) {
+			return true
+		}
+		target, err := c.resolveGroupWithMiddlewareMutation(selector.X, env, false)
+		if err != nil {
+			validationError = err
+			return false
+		}
+		if target == nil {
+			validationError = c.errorAt(call.Pos(), "unresolved Gin selector receiver for %s", selector.Sel.Name)
+			return false
+		}
+		return true
+	})
+	return validationError
+}
+
 func configPackageAliases(file *ast.File) map[string]struct{} {
 	aliases := make(map[string]struct{})
 	for _, importSpec := range file.Imports {
 		importPath, err := strconv.Unquote(importSpec.Path.Value)
-		if err != nil || !strings.HasSuffix(importPath, "/internal/config") {
+		if err != nil || importPath != controlConfigImportPath {
 			continue
 		}
 
@@ -304,54 +337,39 @@ func (c *collector) processStatement(statement ast.Stmt, env *scope) error {
 		return c.processAssignment(node, env)
 	case *ast.ExprStmt:
 		return c.processExpression(node.X, env)
-	case *ast.IfStmt:
-		branchEnv := newScope(env)
-		if node.Init != nil {
-			if err := c.processStatement(node.Init, branchEnv); err != nil {
-				return err
-			}
-		}
-		if err := c.processBlock(node.Body, branchEnv); err != nil {
-			return err
-		}
-		if node.Else != nil {
-			return c.processStatement(node.Else, branchEnv)
-		}
-	case *ast.ForStmt:
-		loopEnv := newScope(env)
-		if node.Init != nil {
-			if err := c.processStatement(node.Init, loopEnv); err != nil {
-				return err
-			}
-		}
-		return c.processBlock(node.Body, loopEnv)
-	case *ast.RangeStmt:
-		return c.processBlock(node.Body, env)
-	case *ast.SwitchStmt:
-		if node.Init != nil {
-			if err := c.processStatement(node.Init, env); err != nil {
-				return err
-			}
-		}
-		for _, clause := range node.Body.List {
-			caseClause, ok := clause.(*ast.CaseClause)
-			if !ok {
-				continue
-			}
-			caseEnv := newScope(env)
-			for _, bodyStatement := range caseClause.Body {
-				if err := c.processStatement(bodyStatement, caseEnv); err != nil {
-					return err
-				}
-			}
-		}
+	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt, *ast.SelectStmt:
+		return c.rejectTrackedGinGroupInControlFlow(node, env)
 	}
-	return nil
+	return c.rejectTrackedGinGroupInStatement(statement, env)
 }
 
 func (c *collector) processDeclaration(declaration ast.Decl, env *scope) error {
 	general, ok := declaration.(*ast.GenDecl)
-	if !ok || general.Tok != token.VAR {
+	if !ok {
+		return nil
+	}
+	if general.Tok == token.CONST {
+		for _, specification := range general.Specs {
+			value, ok := specification.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for _, name := range value.Names {
+				env.declareName(name.Name)
+			}
+		}
+		return nil
+	}
+	if general.Tok == token.TYPE {
+		for _, specification := range general.Specs {
+			typeSpec, ok := specification.(*ast.TypeSpec)
+			if ok {
+				env.declareName(typeSpec.Name.Name)
+			}
+		}
+		return nil
+	}
+	if general.Tok != token.VAR {
 		return nil
 	}
 	for _, specification := range general.Specs {
@@ -388,11 +406,20 @@ func (c *collector) processDeclaration(declaration ast.Decl, env *scope) error {
 }
 
 func (c *collector) processAssignment(assignment *ast.AssignStmt, env *scope) error {
+	if assignment.Tok != token.DEFINE && assignment.Tok != token.ASSIGN {
+		return c.errorAt(assignment.Pos(), "unsupported assignment operator while analyzing Gin routes")
+	}
+	if len(assignment.Lhs) > 1 && (len(assignment.Rhs) != 1 || !c.isNormalizeSubscribePathCall(assignment.Rhs[0], env)) {
+		return c.errorAt(assignment.Pos(), "unsupported multi-value assignment while analyzing Gin routes")
+	}
 	for index, left := range assignment.Lhs {
 		if index >= len(assignment.Rhs) {
 			continue
 		}
 		name, ok := left.(*ast.Ident)
+		if !ok {
+			return c.errorAt(left.Pos(), "unsupported assignment target while analyzing Gin routes")
+		}
 		if ok && assignment.Tok != token.DEFINE {
 			if _, found := env.lookup(name.Name); found {
 				return c.errorAt(left.Pos(), "Gin group reassignment is unsupported")
@@ -449,7 +476,7 @@ func (c *collector) validateValueExpression(expression ast.Expr, env *scope) err
 			if target != nil {
 				switch selector.Sel.Name {
 				case "Group", "Use":
-					return nil
+					return c.validateGinCallArguments(call, env)
 				case "GET", "POST", "PUT", "PATCH", "HEAD", "OPTIONS", "DELETE", "CONNECT", "TRACE", "Any", "Handle", "Match":
 					if isV2Group(target) {
 						return c.errorAt(call.Pos(), "unsupported Gin registration expression %s on /api/v2 group", selector.Sel.Name)
@@ -459,6 +486,8 @@ func (c *collector) validateValueExpression(expression ast.Expr, env *scope) err
 						return c.errorAt(call.Pos(), "unsupported Gin selector %s on /api/v2 group", selector.Sel.Name)
 					}
 				}
+			} else if isGinRouteSelector(selector.Sel.Name) {
+				return c.errorAt(call.Pos(), "unresolved Gin selector receiver for %s", selector.Sel.Name)
 			}
 		}
 	}
@@ -482,7 +511,13 @@ func (c *collector) processExpression(expression ast.Expr, env *scope) error {
 		return err
 	}
 	if target == nil {
+		if isGinRouteSelector(selector.Sel.Name) {
+			return c.errorAt(call.Pos(), "unresolved Gin selector receiver for %s", selector.Sel.Name)
+		}
 		return c.rejectTrackedGinGroupEscape(expression, env)
+	}
+	if err := c.validateGinCallArguments(call, env); err != nil {
+		return err
 	}
 
 	switch selector.Sel.Name {
@@ -516,13 +551,27 @@ func (c *collector) rejectTrackedGinGroupEscape(expression ast.Expr, env *scope)
 	return nil
 }
 
-func (c *collector) containsTrackedGinGroup(expression ast.Expr, env *scope) bool {
+func (c *collector) rejectTrackedGinGroupInControlFlow(node ast.Node, env *scope) error {
+	if c.containsTrackedGinGroup(node, env) {
+		return c.errorAt(node.Pos(), "unsupported Gin group escape in control flow")
+	}
+	return nil
+}
+
+func (c *collector) rejectTrackedGinGroupInStatement(node ast.Node, env *scope) error {
+	if c.containsTrackedGinGroup(node, env) {
+		return c.errorAt(node.Pos(), "unsupported Gin group escape in statement")
+	}
+	return nil
+}
+
+func (c *collector) containsTrackedGinGroup(node ast.Node, env *scope) bool {
 	found := false
-	ast.Inspect(expression, func(node ast.Node) bool {
+	ast.Inspect(node, func(current ast.Node) bool {
 		if found {
 			return false
 		}
-		identifier, ok := node.(*ast.Ident)
+		identifier, ok := current.(*ast.Ident)
 		if !ok {
 			return true
 		}
@@ -533,6 +582,15 @@ func (c *collector) containsTrackedGinGroup(expression ast.Expr, env *scope) boo
 		return true
 	})
 	return found
+}
+
+func (c *collector) validateGinCallArguments(call *ast.CallExpr, env *scope) error {
+	for _, argument := range call.Args {
+		if c.containsTrackedGinGroup(argument, env) {
+			return c.errorAt(argument.Pos(), "unsupported Gin group escape in call arguments")
+		}
+	}
+	return nil
 }
 
 func (c *collector) resolveGroup(expression ast.Expr, env *scope) (*group, error) {
@@ -557,6 +615,9 @@ func (c *collector) resolveGroupWithMiddlewareMutation(expression ast.Expr, env 
 		}
 		switch selector.Sel.Name {
 		case "Group":
+			if err := c.validateGinCallArguments(node, env); err != nil {
+				return nil, err
+			}
 			if len(node.Args) == 0 {
 				return nil, c.errorAt(node.Pos(), "Gin Group call is missing its relative path")
 			}
@@ -575,6 +636,9 @@ func (c *collector) resolveGroupWithMiddlewareMutation(expression ast.Expr, env 
 			}
 			return child, nil
 		case "Use":
+			if err := c.validateGinCallArguments(node, env); err != nil {
+				return nil, err
+			}
 			if parent.base != "" {
 				if !mutateMiddleware {
 					parent = &group{
@@ -677,8 +741,11 @@ func (c *collector) registerArguments(target *group, method string, args []ast.E
 		return c.errorAt(args[0].Pos(), "Gin %s path must be statically resolvable", method)
 	}
 	fullPath := joinPath(target.base, relativePath)
-	if !isV2Path(fullPath) {
+	if !mayMatchV2Namespace(fullPath) {
 		return nil
+	}
+	if !isV2Path(fullPath) {
+		return c.errorAt(position, "Gin route pattern may overlap /api/v2 and must use a literal /api/v2 prefix")
 	}
 
 	routeMiddleware := append([]string(nil), target.middleware...)
@@ -728,6 +795,15 @@ func isHTTPMethod(method string) bool {
 func isGinRegistrationSelector(name string) bool {
 	switch name {
 	case "GET", "POST", "PUT", "PATCH", "HEAD", "OPTIONS", "DELETE", "CONNECT", "TRACE", "Any", "Handle", "Match":
+		return true
+	default:
+		return false
+	}
+}
+
+func isGinRouteSelector(name string) bool {
+	switch name {
+	case "Group", "Use", "GET", "POST", "PUT", "PATCH", "HEAD", "OPTIONS", "DELETE", "CONNECT", "TRACE", "Any", "Handle", "Match", "Static", "StaticFS", "StaticFile", "StaticFileFS", "NoRoute", "NoMethod":
 		return true
 	default:
 		return false
@@ -865,6 +941,27 @@ func isV2Group(target *group) bool {
 
 func isV2Path(routePath string) bool {
 	return routePath == "/api/v2" || strings.HasPrefix(routePath, "/api/v2/")
+}
+
+func mayMatchV2Namespace(routePath string) bool {
+	trimmed := strings.Trim(routePath, "/")
+	if trimmed == "" {
+		return false
+	}
+	segments := strings.Split(trimmed, "/")
+	for index, expected := range []string{"api", "v2"} {
+		if index >= len(segments) {
+			return false
+		}
+		segment := segments[index]
+		if strings.HasPrefix(segment, "*") || strings.HasPrefix(segment, ":") {
+			continue
+		}
+		if segment != expected {
+			return false
+		}
+	}
+	return true
 }
 
 func classifyMiddleware(middleware []string) (string, error) {

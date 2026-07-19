@@ -231,7 +231,81 @@ func GroupReassignmentRoute(r *gin.Engine) {
 	v2.GET("/hidden", hiddenHandler.Get)
 }
 """,
-                "Gin group reassignment is unsupported",
+                "unsupported Gin group escape in control flow",
+            ),
+            "condition": (
+                """
+func ConditionalRegistration(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	if v2.GET("/hidden", hiddenHandler.Get) != nil {
+	}
+}
+""",
+                "unsupported Gin group escape in control flow",
+            ),
+            "defer": (
+                """
+func DeferredRegistration(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	defer v2.GET("/hidden", hiddenHandler.Get)
+}
+""",
+                "unsupported Gin group escape in statement",
+            ),
+            "return": (
+                """
+func ReturnedRegistration(r *gin.Engine) any {
+	v2 := r.Group("/api/v2")
+	return v2.GET("/hidden", hiddenHandler.Get)
+}
+""",
+                "unsupported Gin group escape in statement",
+            ),
+            "overlapping_root_pattern": (
+                """
+func OverlappingRootPattern(r *gin.Engine) {
+	r.GET("/api/:segment/:token", hiddenHandler.Get)
+}
+""",
+                "Gin route pattern may overlap /api/v2",
+            ),
+            "overlapping_group_pattern": (
+                """
+func OverlappingGroupPattern(r *gin.Engine) {
+	api := r.Group("/api/:segment")
+	api.GET("/token", hiddenHandler.Get)
+}
+""",
+                "Gin route pattern may overlap /api/v2",
+            ),
+            "handler_closure": (
+                """
+func HandlerClosureRoute(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	r.GET("/health", func() {
+		v2.GET("/hidden", hiddenHandler.Get)
+	})
+}
+""",
+                "unsupported Gin group escape in call arguments",
+            ),
+            "compound_subscribe_path": (
+                """
+func CompoundSubscribePath(r *gin.Engine) {
+	subscribePath := "api"
+	subscribePath += "/v2"
+	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
+}
+""",
+                "unsupported assignment operator while analyzing Gin routes",
+            ),
+            "unresolved_gin_receiver": (
+                """
+func UnresolvedGinReceiver(r *gin.Engine) {
+	globalV2.GET("/api/v2/hidden", hiddenHandler.Get)
+}
+""",
+                "unresolved Gin selector receiver for GET",
             ),
         }
         source = SAMPLE_ROUTER.read_text(encoding="utf-8")
@@ -271,7 +345,130 @@ func ShadowedSubscribeNormalizer(r *gin.Engine) {
             result = self.run_inventory(router)
 
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("root Gin Engine path must be statically resolvable", result.stderr)
+        self.assertIn("unsupported multi-value assignment while analyzing Gin routes", result.stderr)
+
+    def test_inventory_rejects_untrusted_config_import(self) -> None:
+        source = SAMPLE_ROUTER.read_text(encoding="utf-8").replace(
+            'import "github.com/gin-gonic/gin"',
+            """import (
+\tconfig \"github.com/example/internal/config\"
+\t\"github.com/gin-gonic/gin\"
+)""",
+        )
+        source += """
+func UntrustedSubscribeNormalizer(r *gin.Engine) {
+	subscribePath, _ := config.NormalizeSubscribePath(cfg.App.SubscribePath)
+	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
+}
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            router = Path(temporary) / "router.go"
+            router.write_text(source, encoding="utf-8")
+            result = self.run_inventory(router)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("unsupported multi-value assignment while analyzing Gin routes", result.stderr)
+
+    def test_inventory_rejects_untracked_global_gin_registration(self) -> None:
+        source = SAMPLE_ROUTER.read_text(encoding="utf-8") + """
+func RegisterGlobalRoute() {
+	globalV2.GET("/api/v2/hidden", hiddenHandler.Get)
+}
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            router = Path(temporary) / "router.go"
+            router.write_text(source, encoding="utf-8")
+            result = self.run_inventory(router)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("unresolved Gin selector receiver for GET", result.stderr)
+
+    def test_inventory_rejects_const_and_range_subscribe_normalizer_shadows(self) -> None:
+        source = SAMPLE_ROUTER.read_text(encoding="utf-8").replace(
+            'import "github.com/gin-gonic/gin"',
+            """import (
+\t\"github.com/AnixOps/anix-control/v4/internal/config\"
+\t\"github.com/gin-gonic/gin\"
+)""",
+        )
+        prefix = source + """
+type constantConfig string
+
+func (constantConfig) NormalizeSubscribePath(string) (string, error) {
+	return "api/v2", nil
+}
+"""
+        cases = {
+            "const": """
+
+func ConstShadowedSubscribeNormalizer(r *gin.Engine) {
+	const config constantConfig = "shadow"
+	subscribePath, _ := config.NormalizeSubscribePath(cfg.App.SubscribePath)
+	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
+}
+""",
+            "range": """
+
+func RangeShadowedSubscribeNormalizer(r *gin.Engine) {
+	for config := range []constantConfig{"shadow"} {
+		subscribePath, _ := config.NormalizeSubscribePath(cfg.App.SubscribePath)
+		r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
+	}
+}
+"""
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_root = Path(temporary)
+            for name, addition in cases.items():
+                router = temporary_root / f"{name}.go"
+                router.write_text(prefix + addition, encoding="utf-8")
+                result = self.run_inventory(router)
+
+                self.assertNotEqual(0, result.returncode, name)
+                if name == "const":
+                    self.assertIn("unsupported multi-value assignment while analyzing Gin routes", result.stderr)
+                else:
+                    self.assertIn("unsupported Gin group escape in control flow", result.stderr)
+
+    def test_inventory_rejects_conditional_and_indirect_subscribe_safety(self) -> None:
+        source = SAMPLE_ROUTER.read_text(encoding="utf-8").replace(
+            'import "github.com/gin-gonic/gin"',
+            """import (
+\t\"github.com/AnixOps/anix-control/v4/internal/config\"
+\t\"github.com/gin-gonic/gin\"
+)""",
+        )
+        cases = {
+            "conditional": """
+func ConditionalSubscribeSafety(r *gin.Engine) {
+	subscribePath := cfg.DynamicPath
+	if false {
+		subscribePath, _ = config.NormalizeSubscribePath(cfg.App.SubscribePath)
+	}
+	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
+}
+""",
+            "pointer": """
+
+func PointerSubscribeMutation(r *gin.Engine) {
+	subscribePath, _ := config.NormalizeSubscribePath(cfg.App.SubscribePath)
+	*(&subscribePath) = cfg.DynamicPath
+	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
+}
+"""
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_root = Path(temporary)
+            for name, addition in cases.items():
+                router = temporary_root / f"{name}.go"
+                router.write_text(source + addition, encoding="utf-8")
+                result = self.run_inventory(router)
+
+                self.assertNotEqual(0, result.returncode, name)
+                if name == "conditional":
+                    self.assertIn("root Gin Engine path must be statically resolvable", result.stderr)
+                else:
+                    self.assertIn("unsupported assignment target while analyzing Gin routes", result.stderr)
 
     def test_inventory_marks_exact_existing_v2_websocket_routes(self) -> None:
         result = self.run_inventory(ROUTER)

@@ -13,13 +13,15 @@ import (
 
 // Setup 设置路由
 func Setup(r *gin.Engine, cfg *config.Config) {
-	subscribePath := "s"
+	subscribePath := ""
 	if cfg != nil {
-		var err error
-		subscribePath, err = config.NormalizeSubscribePath(cfg.App.SubscribePath)
-		if err != nil {
-			panic("invalid app.subscribe_path: " + err.Error())
-		}
+		subscribePath = cfg.App.SubscribePath
+	}
+	subscribePath, err := config.NormalizeSubscribePath(subscribePath)
+	if err != nil {
+		panic("invalid app.subscribe_path: " + err.Error())
+	}
+	if cfg != nil {
 		cfg.App.SubscribePath = subscribePath
 		config.Set(cfg)
 	}
