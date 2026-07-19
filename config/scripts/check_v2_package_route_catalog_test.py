@@ -126,6 +126,73 @@ func UnresolvedGroup(r *gin.Engine) {
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Gin Group path must be a string literal", result.stderr)
 
+    def test_inventory_fails_closed_for_unowned_v2_registration_forms(self) -> None:
+        cases = {
+            "static": (
+                """
+func StaticRoute(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	v2.Static("/assets", "./assets")
+}
+""",
+                "unsupported Gin selector Static on /api/v2 group",
+            ),
+            "unknown": (
+                """
+func UnknownRoute(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	v2.Unrecognized("/hidden", hiddenHandler.Get)
+}
+""",
+                "unsupported Gin selector Unrecognized on /api/v2 group",
+            ),
+            "chain": (
+                """
+func ChainedRegistration(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	v2.GET("/outer", chainedHandler.Get).POST("/inner", chainedHandler.Post)
+}
+""",
+                "unsupported Gin registration expression GET on /api/v2 group",
+            ),
+            "assignment": (
+                """
+func AssignmentBypass(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	_ = v2.StaticFile("/asset", "./asset")
+}
+""",
+                "unsupported Gin selector StaticFile on /api/v2 group",
+            ),
+            "declaration": (
+                """
+func DeclarationBypass(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	var _ = v2.StaticFS("/asset", filesystem)
+}
+""",
+                "unsupported Gin selector StaticFS on /api/v2 group",
+            ),
+            "root_dynamic": (
+                """
+func RootDynamicRoute(r *gin.Engine) {
+	path := cfg.DynamicPath
+	r.GET(path, dynamicHandler.Get)
+}
+""",
+                "root Gin Engine path must be statically resolvable",
+            ),
+        }
+        source = SAMPLE_ROUTER.read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_root = Path(temporary)
+            for name, (addition, expected_error) in cases.items():
+                router = temporary_root / f"{name}.go"
+                router.write_text(source + addition, encoding="utf-8")
+                result = self.run_inventory(router)
+                self.assertNotEqual(0, result.returncode, name)
+                self.assertIn(expected_error, result.stderr, name)
+
     def test_inventory_marks_exact_existing_v2_websocket_routes(self) -> None:
         result = self.run_inventory(ROUTER)
         self.assertEqual(0, result.returncode, result.stderr or result.stdout)

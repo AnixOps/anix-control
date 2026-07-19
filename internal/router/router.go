@@ -13,7 +13,14 @@ import (
 
 // Setup 设置路由
 func Setup(r *gin.Engine, cfg *config.Config) {
+	subscribePath := "s"
 	if cfg != nil {
+		var err error
+		subscribePath, err = config.NormalizeSubscribePath(cfg.App.SubscribePath)
+		if err != nil {
+			panic("invalid app.subscribe_path: " + err.Error())
+		}
+		cfg.App.SubscribePath = subscribePath
 		config.Set(cfg)
 	}
 
@@ -78,10 +85,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 	// 订阅接口 (公开，使用用户 token 认证)
 	// 路径可通过配置 app.subscribe_path 自定义，默认为 "s"
-	subscribePath := cfg.App.SubscribePath
-	if subscribePath == "" {
-		subscribePath = "s"
-	}
 	subscribeHandler := handler.NewSubscribeHandler(cfg)
 	r.GET("/"+subscribePath+"/:token", subscribeHandler.GetSubscription)
 	r.GET("/api/v1/client/subscribe", subscribeHandler.GetLegacySubscription)

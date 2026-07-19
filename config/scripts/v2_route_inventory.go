@@ -46,13 +46,19 @@ type group struct {
 }
 
 type scope struct {
-	parent       *scope
-	groups       map[string]*group
-	stringValues map[string]string
+	parent             *scope
+	groups             map[string]*group
+	stringValues       map[string]string
+	safeSubscribePaths map[string]bool
 }
 
 func newScope(parent *scope) *scope {
-	return &scope{parent: parent, groups: make(map[string]*group), stringValues: make(map[string]string)}
+	return &scope{
+		parent:             parent,
+		groups:             make(map[string]*group),
+		stringValues:       make(map[string]string),
+		safeSubscribePaths: make(map[string]bool),
+	}
 }
 
 func (s *scope) define(name string, value *group) {
@@ -108,6 +114,29 @@ func (s *scope) lookupString(name string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func (s *scope) defineSafeSubscribePath(name string, safe bool) {
+	s.safeSubscribePaths[name] = safe
+}
+
+func (s *scope) assignSafeSubscribePath(name string, safe bool) {
+	for current := s; current != nil; current = current.parent {
+		if _, found := current.safeSubscribePaths[name]; found {
+			current.safeSubscribePaths[name] = safe
+			return
+		}
+	}
+	s.safeSubscribePaths[name] = safe
+}
+
+func (s *scope) isSafeSubscribePath(name string) bool {
+	for current := s; current != nil; current = current.parent {
+		if safe, found := current.safeSubscribePaths[name]; found {
+			return safe
+		}
+	}
+	return false
 }
 
 type collector struct {
@@ -285,9 +314,14 @@ func (c *collector) processDeclaration(declaration ast.Decl, env *scope) error {
 		}
 		for index, name := range value.Names {
 			if index >= len(value.Values) {
+				env.defineSafeSubscribePath(name.Name, false)
 				continue
 			}
 			expression := value.Values[index]
+			if err := c.validateValueExpression(expression, env); err != nil {
+				return err
+			}
+			env.defineSafeSubscribePath(name.Name, isNormalizeSubscribePathCall(expression))
 			if stringValue, known := resolveString(expression, env); known {
 				env.defineString(name.Name, stringValue)
 			}
@@ -308,11 +342,19 @@ func (c *collector) processAssignment(assignment *ast.AssignStmt, env *scope) er
 		if index >= len(assignment.Rhs) {
 			continue
 		}
+		expression := assignment.Rhs[index]
+		if err := c.validateValueExpression(expression, env); err != nil {
+			return err
+		}
 		name, ok := left.(*ast.Ident)
 		if !ok {
 			continue
 		}
-		expression := assignment.Rhs[index]
+		if assignment.Tok == token.DEFINE {
+			env.defineSafeSubscribePath(name.Name, isNormalizeSubscribePathCall(expression))
+		} else {
+			env.assignSafeSubscribePath(name.Name, isNormalizeSubscribePathCall(expression))
+		}
 		if stringValue, known := resolveString(expression, env); known {
 			if assignment.Tok == token.DEFINE {
 				env.defineString(name.Name, stringValue)
@@ -336,6 +378,43 @@ func (c *collector) processAssignment(assignment *ast.AssignStmt, env *scope) er
 		}
 	}
 	return nil
+}
+
+func (c *collector) validateValueExpression(expression ast.Expr, env *scope) error {
+	var validationError error
+	ast.Inspect(expression, func(node ast.Node) bool {
+		if validationError != nil {
+			return false
+		}
+
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		target, err := c.resolveGroupWithMiddlewareMutation(selector.X, env, false)
+		if err != nil {
+			validationError = err
+			return false
+		}
+		if target == nil || !isV2Group(target) {
+			return true
+		}
+
+		switch selector.Sel.Name {
+		case "Group", "Use":
+			return true
+		case "GET", "POST", "PUT", "PATCH", "HEAD", "OPTIONS", "DELETE", "CONNECT", "TRACE", "Any", "Handle", "Match":
+			validationError = c.errorAt(call.Pos(), "unsupported Gin registration expression %s on /api/v2 group", selector.Sel.Name)
+		default:
+			validationError = c.errorAt(call.Pos(), "unsupported Gin selector %s on /api/v2 group", selector.Sel.Name)
+		}
+		return false
+	})
+	return validationError
 }
 
 func (c *collector) processExpression(expression ast.Expr, env *scope) error {
@@ -367,23 +446,30 @@ func (c *collector) processExpression(expression ast.Expr, env *scope) error {
 	case "Match":
 		return c.registerMatch(target, call, env)
 	default:
+		if isV2Group(target) {
+			return c.errorAt(call.Pos(), "unsupported Gin selector %s on /api/v2 group", selector.Sel.Name)
+		}
 		return nil
 	}
 }
 
 func (c *collector) resolveGroup(expression ast.Expr, env *scope) (*group, error) {
+	return c.resolveGroupWithMiddlewareMutation(expression, env, true)
+}
+
+func (c *collector) resolveGroupWithMiddlewareMutation(expression ast.Expr, env *scope, mutateMiddleware bool) (*group, error) {
 	switch node := expression.(type) {
 	case *ast.Ident:
 		value, _ := env.lookup(node.Name)
 		return value, nil
 	case *ast.ParenExpr:
-		return c.resolveGroup(node.X, env)
+		return c.resolveGroupWithMiddlewareMutation(node.X, env, mutateMiddleware)
 	case *ast.CallExpr:
 		selector, ok := node.Fun.(*ast.SelectorExpr)
 		if !ok {
 			return nil, nil
 		}
-		parent, err := c.resolveGroup(selector.X, env)
+		parent, err := c.resolveGroupWithMiddlewareMutation(selector.X, env, mutateMiddleware)
 		if err != nil || parent == nil {
 			return parent, err
 		}
@@ -408,12 +494,24 @@ func (c *collector) resolveGroup(expression ast.Expr, env *scope) (*group, error
 			return child, nil
 		case "Use":
 			if parent.base != "" {
+				if !mutateMiddleware {
+					parent = &group{
+						base:       parent.base,
+						middleware: append([]string(nil), parent.middleware...),
+					}
+				}
 				for _, middleware := range node.Args {
 					parent.middleware = append(parent.middleware, expressionIdentifier(middleware))
 				}
 			}
 			return parent, nil
 		default:
+			if isV2Group(parent) {
+				if isGinRegistrationSelector(selector.Sel.Name) {
+					return nil, c.errorAt(node.Pos(), "unsupported Gin registration expression %s on /api/v2 group", selector.Sel.Name)
+				}
+				return nil, c.errorAt(node.Pos(), "unsupported Gin selector %s on /api/v2 group", selector.Sel.Name)
+			}
 			return nil, nil
 		}
 	default:
@@ -488,6 +586,12 @@ func (c *collector) registerArguments(target *group, method string, args []ast.E
 		if isV2Group(target) {
 			return c.errorAt(args[0].Pos(), "Gin %s path under /api/v2 must be a string literal", method)
 		}
+		if target.base == "" {
+			if method == "GET" && isSafeSubscribeRegistrationPath(args[0], env) {
+				return nil
+			}
+			return c.errorAt(args[0].Pos(), "root Gin Engine path must be statically resolvable")
+		}
 		return nil
 	}
 	fullPath := joinPath(target.base, relativePath)
@@ -537,6 +641,65 @@ func isHTTPMethod(method string) bool {
 		}
 	}
 	return false
+}
+
+func isGinRegistrationSelector(name string) bool {
+	switch name {
+	case "GET", "POST", "PUT", "PATCH", "HEAD", "OPTIONS", "DELETE", "CONNECT", "TRACE", "Any", "Handle", "Match":
+		return true
+	default:
+		return false
+	}
+}
+
+func isNormalizeSubscribePathCall(expression ast.Expr) bool {
+	call, ok := unwrapParens(expression).(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "NormalizeSubscribePath" {
+		return false
+	}
+	packageName, ok := unwrapParens(selector.X).(*ast.Ident)
+	return ok && packageName.Name == "config"
+}
+
+func isSafeSubscribeRegistrationPath(expression ast.Expr, env *scope) bool {
+	var parts []ast.Expr
+	flattenStringConcatenation(unwrapParens(expression), &parts)
+	if len(parts) != 3 {
+		return false
+	}
+	if prefix, ok := resolveString(parts[0], env); !ok || prefix != "/" {
+		return false
+	}
+	identifier, ok := unwrapParens(parts[1]).(*ast.Ident)
+	if !ok || !env.isSafeSubscribePath(identifier.Name) {
+		return false
+	}
+	suffix, ok := resolveString(parts[2], env)
+	return ok && suffix == "/:token"
+}
+
+func flattenStringConcatenation(expression ast.Expr, parts *[]ast.Expr) {
+	binary, ok := unwrapParens(expression).(*ast.BinaryExpr)
+	if !ok || binary.Op != token.ADD {
+		*parts = append(*parts, expression)
+		return
+	}
+	flattenStringConcatenation(binary.X, parts)
+	flattenStringConcatenation(binary.Y, parts)
+}
+
+func unwrapParens(expression ast.Expr) ast.Expr {
+	for {
+		parenthesized, ok := expression.(*ast.ParenExpr)
+		if !ok {
+			return expression
+		}
+		expression = parenthesized.X
+	}
 }
 
 func (c *collector) errorAt(position token.Pos, format string, args ...any) error {

@@ -1,7 +1,9 @@
 package config
 
 import (
+	"fmt"
 	"os"
+	"path"
 	"strings"
 	"sync"
 
@@ -253,6 +255,10 @@ func Load(path string) (*Config, error) {
 		err = yaml.Unmarshal(data, cfg)
 		if err == nil {
 			normalizeBrandDefaults(cfg)
+			cfg.App.SubscribePath, err = NormalizeSubscribePath(cfg.App.SubscribePath)
+			if err != nil {
+				err = fmt.Errorf("invalid app.subscribe_path: %w", err)
+			}
 		}
 	})
 
@@ -268,6 +274,25 @@ func Get() *Config {
 func Set(c *Config) {
 	normalizeBrandDefaults(c)
 	cfg = c
+}
+
+// NormalizeSubscribePath cleans the public subscription path and rejects
+// values that could overlap the versioned API namespace.
+func NormalizeSubscribePath(value string) (string, error) {
+	cleaned := strings.Trim(strings.TrimSpace(value), "/")
+	if cleaned == "" {
+		return "s", nil
+	}
+
+	normalized := strings.TrimPrefix(path.Clean("/"+cleaned), "/")
+	if normalized == "" || normalized == "." {
+		return "s", nil
+	}
+	if normalized == "api/v2" || strings.HasPrefix(normalized, "api/v2/") {
+		return "", fmt.Errorf("subscription path must not overlap /api/v2")
+	}
+
+	return normalized, nil
 }
 
 func normalizeBrandDefaults(c *Config) {
