@@ -13,6 +13,9 @@
 - The PEM stays outside Git with mode 0600; its directory is mode 0700.
 - V4 has one active root. Old-root packages require re-signing and re-import.
 - Do not create canary or support approval secrets during this rotation.
+- Update every repository reference to the retired root, including Node UI tests and startup documentation.
+- Do not create or push a release tag while the public-root configuration and repository secrets are being changed.
+- Upload ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY without a trailing newline because CI compares it byte-for-byte with config/config.prod.yaml.
 - Preserve .superpowers/sdd/task-6-report.md as an unstaged user change.
 
 ---
@@ -71,10 +74,12 @@ Expected: all assertions exit 0.
 - Modify: config/config.yaml.example line 91
 - Modify: config/config.dev.yaml.example line 68
 - Modify: internal/config/config_test.go
+- Modify: web/src/__tests__/Nodes.test.js
+- Modify: docs/reference/startup-config.md
 
 **Consumes:** the public root from Task 1.
 
-**Produces:** all three plugins.official_public_key values equal the new Base64 root.
+**Produces:** all Control configuration, Node UI expectations, and startup documentation refer to the new Base64 root.
 
 - [ ] **Step 1: Change the existing profile test expectation before changing configuration**
 
@@ -90,9 +95,9 @@ Run: GOWORK=off go test ./internal/config -run TestOfficialPluginAlphaProfiles -
 
 Expected: failure because each loaded profile still contains the old root.
 
-- [ ] **Step 3: Replace only the quoted root values**
+- [ ] **Step 3: Replace every retired-root reference**
 
-Use apply_patch to replace official_public_key in each configuration file with the output of:
+Use apply_patch to replace the retired Base64 root in the three configuration files, the Node UI test fixtures, and the startup configuration documentation with the output of:
 
 ~~~bash
 tr -d '[:space:]' < /root/.anixops-release/v4-root-20260720/official-public-key.raw
@@ -108,6 +113,7 @@ for config in config/config.prod.yaml config/config.yaml.example config/config.d
   actual="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' "$config")"
   test "$actual" = "$expected"
 done
+! grep -R --fixed-strings 'IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M=' config web/src/__tests__ docs/reference
 GOWORK=off go test ./internal/config -count=1
 ~~~
 
@@ -155,17 +161,30 @@ Expected: all commands pass.
 - Modify: config/config.yaml.example
 - Modify: config/config.dev.yaml.example
 - Modify: internal/config/config_test.go
+- Modify: web/src/__tests__/Nodes.test.js
+- Modify: docs/reference/startup-config.md
 
 **Consumes:** the verified Task 1 key pair.
 
 **Produces:** a pushed root configuration and two GitHub repository secrets.
 
-- [ ] **Step 1: Commit and push only public-root configuration and its test**
+- [ ] **Step 1: Confirm there is no release tag or release workflow in flight**
 
 Run:
 
 ~~~bash
-git add config/config.prod.yaml config/config.yaml.example config/config.dev.yaml.example internal/config/config_test.go
+gh run list --repo AnixOps/anix-control --workflow ci.yml --limit 20
+git tag --points-at HEAD
+~~~
+
+Expected: no V4 release tag is created during this rotation and no release-tag workflow is active.
+
+- [ ] **Step 2: Commit and push only public-root configuration, references, and tests**
+
+Run:
+
+~~~bash
+git add config/config.prod.yaml config/config.yaml.example config/config.dev.yaml.example internal/config/config_test.go web/src/__tests__/Nodes.test.js docs/reference/startup-config.md
 git diff --cached --check
 git commit -m "chore(release): rotate v4 official package root"
 git push origin go_dev
@@ -173,19 +192,19 @@ git push origin go_dev
 
 Expected: origin/go_dev contains the new public root and the task report remains unstaged.
 
-- [ ] **Step 2: Upload the private and public key as repository secrets**
+- [ ] **Step 3: Upload the private and normalized public key as repository secrets**
 
 Run:
 
 ~~~bash
 gh secret set ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY --repo AnixOps/anix-control < /root/.anixops-release/v4-root-20260720/official-ed25519.pem
-gh secret set ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY --repo AnixOps/anix-control < /root/.anixops-release/v4-root-20260720/official-public-key.raw
+gh secret set ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY --repo AnixOps/anix-control --body "$(tr -d '[:space:]' < /root/.anixops-release/v4-root-20260720/official-public-key.raw)"
 gh secret list --repo AnixOps/anix-control | grep -E '^(ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY|ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY)[[:space:]]'
 ~~~
 
 Expected: both names appear; no secret values are read or printed.
 
-- [ ] **Step 3: Keep approval secrets unset**
+- [ ] **Step 4: Keep approval secrets unset**
 
 Run:
 
