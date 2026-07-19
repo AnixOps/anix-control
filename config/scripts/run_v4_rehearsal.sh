@@ -12,6 +12,8 @@ OFFICIAL_PUBLIC_KEY=""
 POSTGRES_DSN=""
 CANARY_EVIDENCE=""
 SUPPORT_EVIDENCE=""
+AGENT_BINARY_ARGS=()
+RUNTIME_BINARY_ARGS=()
 
 usage() {
   cat <<'EOF'
@@ -28,6 +30,8 @@ Options:
   --postgres-dsn DSN           Disposable PostgreSQL test DSN (required)
   --canary-evidence PATH       Approved canary evidence file (required)
   --support-evidence PATH      Approved support evidence file (required)
+  --agent-binary SPEC          Real Agent binary PACKAGE_ID@GOOS/GOARCH=PATH; repeat for every Agent package/platform
+  --runtime-binary SPEC        Pinned runtime binary PACKAGE_ID:RUNTIME@GOOS/GOARCH=PATH; repeat for every runtime/platform
   --output PATH                Evidence JSON output path
   --self-test                  Validate script dependencies without a rehearsal
   --help                       Show this help
@@ -48,6 +52,8 @@ while (($#)); do
     --postgres-dsn) POSTGRES_DSN="${2:-}"; shift 2 ;;
     --canary-evidence) CANARY_EVIDENCE="${2:-}"; shift 2 ;;
     --support-evidence) SUPPORT_EVIDENCE="${2:-}"; shift 2 ;;
+    --agent-binary) AGENT_BINARY_ARGS+=(--agent-binary "${2:-}"); shift 2 ;;
+    --runtime-binary) RUNTIME_BINARY_ARGS+=(--runtime-binary "${2:-}"); shift 2 ;;
     --output) OUTPUT="${2:-}"; shift 2 ;;
     --self-test)
       python3 "${REPO_ROOT}/config/scripts/render_v4_release_evidence.py" --self-test
@@ -67,6 +73,8 @@ done
 [[ -n "${POSTGRES_DSN}" ]] || fail "--postgres-dsn is required"
 [[ -n "${CANARY_EVIDENCE}" && -f "${CANARY_EVIDENCE}" && ! -L "${CANARY_EVIDENCE}" ]] || fail "--canary-evidence must be a regular file"
 [[ -n "${SUPPORT_EVIDENCE}" && -f "${SUPPORT_EVIDENCE}" && ! -L "${SUPPORT_EVIDENCE}" ]] || fail "--support-evidence must be a regular file"
+(( ${#AGENT_BINARY_ARGS[@]} > 0 )) || fail "--agent-binary is required for the formal Agent package set"
+(( ${#RUNTIME_BINARY_ARGS[@]} > 0 )) || fail "--runtime-binary is required for the formal runtime package set"
 
 mkdir -p "${PACKAGES_DIR}" "$(dirname "${OUTPUT}")"
 python3 "${REPO_ROOT}/packages/shared/build_package.py" \
@@ -75,7 +83,11 @@ python3 "${REPO_ROOT}/packages/shared/build_package.py" \
   --out "${PACKAGES_DIR}" \
   --formal-release \
   --signing-key "${SIGNING_KEY}" \
-  --official-public-key "${OFFICIAL_PUBLIC_KEY}"
+  --official-public-key "${OFFICIAL_PUBLIC_KEY}" \
+  --platform linux/amd64 \
+  --platform linux/arm64 \
+  "${AGENT_BINARY_ARGS[@]}" \
+  "${RUNTIME_BINARY_ARGS[@]}"
 
 ANIX_TEST_POSTGRES_DSN="${POSTGRES_DSN}" \
 python3 "${REPO_ROOT}/config/scripts/render_v4_release_evidence.py" \

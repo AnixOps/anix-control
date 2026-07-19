@@ -14,6 +14,8 @@ env:
   GOST_VERSION: '3.2.6'
   GOST_LINUX_AMD64_ARCHIVE_SHA256: 'b39037b0380ea001fb3c0c28441c2e10bfc694f90682739a65b53e55dce5238b'
   GOST_LINUX_AMD64_BINARY_SHA256: 'a2aea24efb4597b5f57b35b8e1bbcc59f439b80723854d4371f6828b46682ffb'
+  GOST_LINUX_ARM64_ARCHIVE_SHA256: 'f674c8f4a033dc1dfd4f0d5e9602fbe5b0d0f81307bf3794f44b5b5d6d622eae'
+  GOST_LINUX_ARM64_BINARY_SHA256: '343c3e003996ca0437b9cc47dd1500cd0475ba09f5a5f17e50851854e06a1ca7'
 
 jobs:
   tag-gate:
@@ -80,6 +82,9 @@ jobs:
         run: |
           bash -n install.sh
           bash -n scripts/install.sh
+
+      - name: Test identity bootstrap installer configuration
+        run: bash scripts/tests/test_identity_bootstrap_install.sh
 
       - name: Validate PostgreSQL restore rehearsal syntax
         run: bash -n scripts/postgres_restore_rehearsal.sh
@@ -623,7 +628,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 35f1af4b9887e1c2d811d66b8da38c7b0d86c7d9
+          ref: c459383955027ee00719fa2dac1a87813c88a511
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -674,6 +679,9 @@ jobs:
 
       - name: Run Machine Telemetry WebUI smoke test
         run: node packages/machine-telemetry/tests/webui_smoke.mjs
+
+      - name: Run v4 package WebUI contract
+        run: node packages/shared/tests/webui_contract.mjs
 
       - name: Run nftables Forward package unit tests
         run: python3 -m unittest discover -s packages/nftables-forward/tests -p 'test_*.py' -v
@@ -735,7 +743,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 35f1af4b9887e1c2d811d66b8da38c7b0d86c7d9
+          ref: c459383955027ee00719fa2dac1a87813c88a511
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -748,6 +756,54 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.x'
+
+      - name: Build formal v4 Agent plugin binaries
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        env:
+          GOEXPERIMENT: jsonv2
+          GOWORK: 'off'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p package-build/v4-agent
+          build_agent() {
+            local package_id="$1"
+            local goos="$2"
+            local goarch="$3"
+            local output="${GITHUB_WORKSPACE}/package-build/v4-agent/${package_id}-${goos}-${goarch}"
+            CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" \
+              go -C V2bX_AnixOps build -trimpath -buildvcs=false -o "${output}" "./cmd/${package_id}"
+            chmod 0755 "${output}"
+          }
+          for package_id in machine-telemetry nftables-forward gost-mesh nat-egress; do
+            build_agent "${package_id}" linux amd64
+            build_agent "${package_id}" linux arm64
+          done
+
+      - name: Download checksum-pinned formal v4 GOST runtimes
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p package-build/v4-runtime
+          download_gost_runtime() {
+            local goarch="$1"
+            local archive_sha256="$2"
+            local binary_sha256="$3"
+            local archive="${RUNNER_TEMP}/gost_${GOST_VERSION}_linux_${goarch}.tar.gz"
+            local stage
+            stage="$(mktemp -d "${RUNNER_TEMP}/gost-${goarch}.XXXXXX")"
+            curl --fail --location --retry 3 --output "${archive}" \
+              "https://github.com/go-gost/gost/releases/download/v${GOST_VERSION}/gost_${GOST_VERSION}_linux_${goarch}.tar.gz"
+            echo "${archive_sha256}  ${archive}" | sha256sum --check --strict
+            tar -xzf "${archive}" -C "${stage}"
+            install -m 0755 "${stage}/gost" "${GITHUB_WORKSPACE}/package-build/v4-runtime/gost-linux-${goarch}"
+            echo "${binary_sha256}  ${GITHUB_WORKSPACE}/package-build/v4-runtime/gost-linux-${goarch}" | sha256sum --check --strict
+            find "${stage}" -depth -delete
+            find "${archive}" -depth -delete
+          }
+          download_gost_runtime amd64 "${GOST_LINUX_AMD64_ARCHIVE_SHA256}" "${GOST_LINUX_AMD64_BINARY_SHA256}"
+          download_gost_runtime arm64 "${GOST_LINUX_ARM64_ARCHIVE_SHA256}" "${GOST_LINUX_ARM64_BINARY_SHA256}"
 
       - name: Build formal v4 package set
         if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
@@ -782,13 +838,29 @@ jobs:
           }
           unset ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY
           mkdir -p release-packages
+          formal_agent_args=()
+          formal_runtime_args=()
+          for package_id in machine-telemetry nftables-forward gost-mesh nat-egress; do
+            for platform in linux/amd64 linux/arm64; do
+              platform_path="${platform//\//-}"
+              formal_agent_args+=(--agent-binary "${package_id}@${platform}=${GITHUB_WORKSPACE}/package-build/v4-agent/${package_id}-${platform_path}")
+            done
+          done
+          for platform in linux/amd64 linux/arm64; do
+            platform_path="${platform//\//-}"
+            formal_runtime_args+=(--runtime-binary "gost-mesh:gost@${platform}=${GITHUB_WORKSPACE}/package-build/v4-runtime/gost-${platform_path}")
+          done
           python3 packages/shared/build_package.py \
             --all \
             --version "${GITHUB_REF_NAME#v}" \
             --out release-packages \
             --formal-release \
             --signing-key "${key_file}" \
-            --official-public-key "${root_file}"
+            --official-public-key "${root_file}" \
+            --platform linux/amd64 \
+            --platform linux/arm64 \
+            "${formal_agent_args[@]}" \
+            "${formal_runtime_args[@]}"
           python3 packages/shared/build_package.py \
             --all \
             --version "${GITHUB_REF_NAME#v}" \
@@ -1202,7 +1274,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 35f1af4b9887e1c2d811d66b8da38c7b0d86c7d9
+          ref: c459383955027ee00719fa2dac1a87813c88a511
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -1211,9 +1283,15 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
       - name: Run real Control to Agent process E2E
         env:
           ANIXOPS_CROSS_REPO_E2E: '1'
+          ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/V2bX_AnixOps
           GOWORK: 'off'
         run: |
           go test -v -count=1 ./internal/grpc \

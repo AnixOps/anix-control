@@ -5,7 +5,7 @@ import create, { anixopsExtension } from '../webui/index.mjs'
 assert.deepEqual(anixopsExtension, {
   webuiApiVersion: 'anixops.webui/v1',
   pluginId: 'nftables-forward',
-  version: '1.2.0',
+  version: '__ANIXOPS_PACKAGE_VERSION__',
   bundle: { path: 'webui/index.mjs' },
 })
 

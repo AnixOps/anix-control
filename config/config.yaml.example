@@ -79,7 +79,7 @@ auth:
 
 app:
   name: "AnixOps Control"
-  version: "4.0.0-alpha.7"
+  version: "4.0.0"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
@@ -89,6 +89,11 @@ app:
 plugins:
   # Official AnixOps Ed25519 release trust root (raw public key, base64).
   official_public_key: "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="
+  # Optional one-time cold-start source for the official identity package.
+  # Set this to a root-owned directory containing exactly one signed
+  # identity-platform-<version>.anxp/.manifest.json/.manifest.sig trio before
+  # enabling Control package execution on a fresh database.
+  identity_bootstrap_package_dir: ""
   # Normal product installs keep package execution disabled until a documented
   # canary explicitly enables it. Signed catalog and WebUI inspection remain
   # available while this worker is off.

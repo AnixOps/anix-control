@@ -52,15 +52,21 @@ jwt:
 
 app:
   name: "AnixOps Control"
-  version: "4.0.0-alpha.7"
+  version: "4.0.0"
   api_token: "replace-with-node-api-token"
   traffic_log_enable: true
   subscribe_path: "s"
 
 plugins:
   official_public_key: "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="
+  # Required for a new plugin-only database before package execution is enabled.
+  identity_bootstrap_package_dir: "/var/lib/anixops/bootstrap"
   control_execution_enabled: true
   control_poll_interval: "5s"
+  # Use paths writable by the service user. The V4 installer creates these
+  # under its selected installation root with mode 0700.
+  control_host_runtime_dir: "/opt/anixops/control/runtime/plugin-hosts"
+  control_host_artifact_dir: "/opt/anixops/control/data/plugin-artifacts"
   dispatch_enabled: true
   dispatch_poll_interval: "5s"
   topology_execution_enabled: false
@@ -87,11 +93,21 @@ forward_runtime:
     timeout_seconds: 15
 ```
 
-This is the `4.0.0-alpha.7` signed-package profile. The pinned value is the raw
-32-byte AnixOps Ed25519 release public key encoded as Base64. It is public trust
-material, not a private signing key. The loopback gRPC bind makes local
-Control/Agent acceptance reproducible while preventing an unauthenticated
-network listener from appearing during installation.
+This is the `4.0.0` signed-package profile. The pinned value is the raw 32-byte
+AnixOps Ed25519 release public key encoded as Base64. It is public trust
+material, not a private signing key. The V4 release installer fetches and
+checksum-verifies the identity trio automatically, then stages it in a
+root-owned `0750` directory with group-readable `0640` files. For a manual
+deployment, place exactly one verified `identity-platform-<version>.anxp`,
+`identity-platform-<version>.manifest.json`, and
+`identity-platform-<version>.manifest.sig` trio in the configured absolute
+directory with the same ownership and mode requirements before starting
+Control. The bootstrap import is root-pinned and idempotent. When package
+execution is enabled manually, create the configured Control host runtime and
+artifact directories as non-symlink `0700` directories owned by the Control
+service user. The loopback gRPC bind makes local Control/Agent acceptance
+reproducible while preventing an unauthenticated network listener from
+appearing during installation.
 
 An Agent keeps `Transport: "http"` for the existing configuration, user, and
 traffic data plane, then independently opts into package operations with

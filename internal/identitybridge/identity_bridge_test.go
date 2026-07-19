@@ -3,6 +3,7 @@ package identitybridge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -12,6 +13,8 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/pkg/packagebridgesdk"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -83,6 +86,55 @@ func TestNewAllowlistExecutesOnlyTheFixedIdentityMigration(t *testing.T) {
 	call.Payload = []byte("DROP TABLE users")
 	_, err = allowlist.Invoke(context.Background(), call)
 	require.ErrorIs(t, err, packagebridge.ErrCapabilityRejected)
+}
+
+func TestNewAllowlistInvokesMachineTelemetryControlRouteThroughBoundPackageBridge(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cache.InitMemory()
+	cfg := &config.Config{JWT: config.JWTConfig{Secret: "machine-telemetry-bridge-test-secret", Expire: 3600}}
+	config.Set(cfg)
+	require.NoError(t, database.Init(&config.DatabaseConfig{Driver: "sqlite", Database: ":memory:"}))
+	t.Cleanup(func() { require.NoError(t, database.Close()) })
+	require.NoError(t, database.Get().AutoMigrate(&model.Node{}, &model.PluginTelemetryState{}))
+
+	allowlist, err := NewAllowlist(cfg)
+	require.NoError(t, err)
+	routeID := service.PluginControlBridgeRouteID(plugincontrol.MachineTelemetryPluginID, plugincontrol.MachineTelemetryStatusRoute)
+	metadata, err := json.Marshal(map[string]any{
+		"path":  plugincontrol.MachineTelemetryStatusRoute,
+		"query": map[string][]string{"limit": {"1"}},
+	})
+	require.NoError(t, err)
+	response, err := allowlist.Invoke(context.Background(), packagebridge.Call{
+		Host: packagebridge.HostIdentity{PackageID: plugincontrol.MachineTelemetryPluginID, Version: "4.0.0", Generation: 1},
+		Request: packagebridge.Request{
+			RequestID: "machine-telemetry-bridge-status", RouteID: routeID,
+			Method: http.MethodGet, PrincipalJSON: []byte(`{"actor_id":1,"admin":true,"package_id":"machine-telemetry"}`),
+			MetadataJSON: metadata, Deadline: time.Now().Add(time.Second),
+		},
+		Operation: routeID,
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, http.StatusOK, response.StatusCode)
+	var payload struct {
+		Data plugincontrol.MachineTelemetryStatus `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body, &payload))
+	require.Equal(t, plugincontrol.MachineTelemetryPluginID, payload.Data.PluginID)
+	require.Equal(t, "4.0.0", payload.Data.Version)
+}
+
+func TestPackageBridgeHTTPStatusCodeRejectsOutOfRangeValues(t *testing.T) {
+	for _, statusCode := range []int{99, 600} {
+		t.Run(fmt.Sprintf("status_%d", statusCode), func(t *testing.T) {
+			_, err := packageBridgeHTTPStatusCode(statusCode)
+			require.Error(t, err)
+		})
+	}
+
+	statusCode, err := packageBridgeHTTPStatusCode(http.StatusOK)
+	require.NoError(t, err)
+	require.EqualValues(t, http.StatusOK, statusCode)
 }
 
 func TestNewFactoryUsesTheRegisteredWebSocketRouteResolver(t *testing.T) {

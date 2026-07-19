@@ -1,8 +1,10 @@
 package service
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"compress/gzip"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
@@ -14,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -211,7 +214,12 @@ func kernelTestV2Package(t *testing.T, files map[string][]byte) []byte {
 	t.Helper()
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
-	for _, name := range []string{"bin/control-host", "compat/v2-routes.json", "migrations/index.json"} {
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
 		file, err := writer.Create(name)
 		require.NoError(t, err)
 		_, err = file.Write(files[name])
@@ -219,6 +227,152 @@ func kernelTestV2Package(t *testing.T, files map[string][]byte) []byte {
 	}
 	require.NoError(t, writer.Close())
 	return buffer.Bytes()
+}
+
+func kernelTestV2GzipPackage(t *testing.T, files map[string][]byte) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	gzipWriter := gzip.NewWriter(&buffer)
+	tarWriter := tar.NewWriter(gzipWriter)
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		contents := files[name]
+		require.NoError(t, tarWriter.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: int64(len(contents))}))
+		_, err := tarWriter.Write(contents)
+		require.NoError(t, err)
+	}
+	require.NoError(t, tarWriter.Close())
+	require.NoError(t, gzipWriter.Close())
+	return buffer.Bytes()
+}
+
+func TestMaterializePluginControlArtifactSelectsIndexedPlatformEntrypoint(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	platform := runtime.GOOS + "/" + runtime.GOARCH
+	otherPlatform := "linux/arm64"
+	if platform == otherPlatform {
+		otherPlatform = "linux/amd64"
+	}
+	selectedPath := "bin/control-host-" + strings.ReplaceAll(platform, "/", "-")
+	otherPath := "bin/control-host-" + strings.ReplaceAll(otherPlatform, "/", "-")
+	selectedEntrypoint := []byte("#!/bin/sh\necho selected\n")
+	otherEntrypoint := []byte("#!/bin/sh\necho other\n")
+	selectedDigest := kernelTestArtifactSHA256(selectedEntrypoint)
+	otherDigest := kernelTestArtifactSHA256(otherEntrypoint)
+	entries := []map[string]string{
+		{"architecture": platform, "path": selectedPath, "sha256": selectedDigest},
+		{"architecture": otherPlatform, "path": otherPath, "sha256": otherDigest},
+	}
+	sort.Slice(entries, func(left, right int) bool { return entries[left]["architecture"] < entries[right]["architecture"] })
+	index, err := json.Marshal(map[string]any{"format": "anixops.package-entrypoints/v1", "entries": entries})
+	require.NoError(t, err)
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	routes := []byte(`{"api_version":"v2","routes":[]}`)
+	artifact := kernelTestV2Package(t, map[string][]byte{
+		"bin/control-entrypoints.json": index,
+		selectedPath:                   selectedEntrypoint,
+		otherPath:                      otherEntrypoint,
+		"compat/v2-routes.json":        routes,
+		"migrations/index.json":        migrations,
+	})
+	manifest := PluginManifest{
+		ID: "indexed-control-package", Name: "Indexed Control Package", Version: "4.0.0", APIVersion: pluginManifestAPIVersionV2,
+		Publisher: "AnixOps", Targets: []string{"control"}, Architectures: []string{platform, otherPlatform},
+		ArtifactSHA256:    kernelTestArtifactSHA256(artifact),
+		ControlEntrypoint: &PluginEntrypoint{Path: "bin/control-entrypoints.json", SHA256: kernelTestArtifactSHA256(index)},
+		Migrations:        &PluginMigrations{Index: "migrations/index.json", SHA256: kernelTestArtifactSHA256(migrations)},
+		CompatibilityRoutes: &PluginCompatibilityRoutes{
+			Path: "compat/v2-routes.json", SHA256: kernelTestArtifactSHA256(routes),
+		},
+		RouteContractDigest: kernelTestArtifactSHA256(routes),
+	}
+	canonical, err := CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	_, err = StorePluginArtifact(db, release.ID, artifact)
+	require.NoError(t, err)
+
+	ref, err := MaterializePluginControlArtifact(db, publicKey, manifest.ID, manifest.Version, t.TempDir())
+	require.NoError(t, err)
+	require.Equal(t, selectedDigest, ref.EntrypointSHA256)
+	materialized, err := os.ReadFile(ref.EntrypointPath)
+	require.NoError(t, err)
+	require.Equal(t, selectedEntrypoint, materialized)
+
+	tamperedIndex := append([]byte(nil), index...)
+	tamperedIndex = bytes.Replace(tamperedIndex, []byte(selectedDigest), []byte(strings.Repeat("0", sha256.Size*2)), 1)
+	tamperedArtifact := kernelTestV2Package(t, map[string][]byte{
+		"bin/control-entrypoints.json": tamperedIndex,
+		selectedPath:                   selectedEntrypoint,
+		otherPath:                      otherEntrypoint,
+		"compat/v2-routes.json":        routes,
+		"migrations/index.json":        migrations,
+	})
+	tamperedManifest := manifest
+	tamperedManifest.Version = "4.0.1"
+	tamperedManifest.ArtifactSHA256 = kernelTestArtifactSHA256(tamperedArtifact)
+	tamperedManifest.ControlEntrypoint = &PluginEntrypoint{Path: "bin/control-entrypoints.json", SHA256: kernelTestArtifactSHA256(tamperedIndex)}
+	tamperedCanonical, err := CanonicalPluginManifest(tamperedManifest)
+	require.NoError(t, err)
+	tamperedRelease, err := RegisterPluginRelease(db, string(tamperedCanonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, tamperedCanonical)), publicKey)
+	require.NoError(t, err)
+	_, err = StorePluginArtifact(db, tamperedRelease.ID, tamperedArtifact)
+	require.NoError(t, err)
+	_, err = MaterializePluginControlArtifact(db, publicKey, tamperedManifest.ID, tamperedManifest.Version, t.TempDir())
+	require.ErrorContains(t, err, "control entrypoint digest")
+}
+
+func TestMaterializePluginControlArtifactSelectsGzipIndexedPlatformEntrypoint(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	platform := runtime.GOOS + "/" + runtime.GOARCH
+	selectedPath := "bin/control-host-" + strings.ReplaceAll(platform, "/", "-")
+	selectedEntrypoint := []byte("#!/bin/sh\necho gzip-selected\n")
+	index, err := json.Marshal(map[string]any{"format": "anixops.package-entrypoints/v1", "entries": []map[string]string{{
+		"architecture": platform, "path": selectedPath, "sha256": kernelTestArtifactSHA256(selectedEntrypoint),
+	}}})
+	require.NoError(t, err)
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	routes := []byte(`{"api_version":"v2","routes":[]}`)
+	artifact := kernelTestV2GzipPackage(t, map[string][]byte{
+		"bin/control-entrypoints.json": index,
+		selectedPath:                   selectedEntrypoint,
+		"compat/v2-routes.json":        routes,
+		"migrations/index.json":        migrations,
+	})
+	manifest := PluginManifest{
+		ID: "gzip-indexed-control", Name: "Gzip Indexed Control", Version: "4.0.0", APIVersion: pluginManifestAPIVersionV2,
+		Publisher: "AnixOps", Targets: []string{"control"}, Architectures: []string{platform},
+		ArtifactSHA256:    kernelTestArtifactSHA256(artifact),
+		ControlEntrypoint: &PluginEntrypoint{Path: "bin/control-entrypoints.json", SHA256: kernelTestArtifactSHA256(index)},
+		Migrations:        &PluginMigrations{Index: "migrations/index.json", SHA256: kernelTestArtifactSHA256(migrations)},
+		CompatibilityRoutes: &PluginCompatibilityRoutes{
+			Path: "compat/v2-routes.json", SHA256: kernelTestArtifactSHA256(routes),
+		},
+		RouteContractDigest: kernelTestArtifactSHA256(routes),
+	}
+	canonical, err := CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	_, err = StorePluginArtifact(db, release.ID, artifact)
+	require.NoError(t, err)
+
+	ref, err := MaterializePluginControlArtifact(db, publicKey, manifest.ID, manifest.Version, t.TempDir())
+	require.NoError(t, err)
+	materialized, err := os.ReadFile(ref.EntrypointPath)
+	require.NoError(t, err)
+	require.Equal(t, selectedEntrypoint, materialized)
 }
 
 func kernelTestControlRouteManifest(pluginID string, artifact []byte) PluginManifest {
@@ -583,7 +737,7 @@ func TestRegisterPluginReleaseCreatesOnlyVerifiedOfficialCatalogEntry(t *testing
 
 func TestRegisterPluginReleaseTracksTrustRootRotation(t *testing.T) {
 	db := newKernelTestDB(t)
-	register := func(version string) {
+	register := func(version string) (*model.PluginRelease, ed25519.PublicKey) {
 		publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 		require.NoError(t, err)
 		manifest := PluginManifest{
@@ -597,14 +751,30 @@ func TestRegisterPluginReleaseTracksTrustRootRotation(t *testing.T) {
 		release, err := RegisterPluginRelease(db, string(manifestJSON), signature, publicKey)
 		require.NoError(t, err)
 		require.Equal(t, PluginTrustRootFingerprint(publicKey), release.TrustRootFingerprint)
+		return release, publicKey
 	}
 
-	register("1.0.0")
-	register("1.0.1")
+	firstRelease, firstPublicKey := register("1.0.0")
+	secondRelease, secondPublicKey := register("1.0.1")
 
 	var count int64
 	require.NoError(t, db.Model(&model.PluginTrustRoot{}).Where("active = ?", true).Count(&count).Error)
-	require.EqualValues(t, 2, count)
+	require.EqualValues(t, 1, count)
+
+	var firstRoot model.PluginTrustRoot
+	require.NoError(t, db.First(&firstRoot, "fingerprint = ?", PluginTrustRootFingerprint(firstPublicKey)).Error)
+	require.False(t, firstRoot.Active)
+	require.NotNil(t, firstRoot.RetiredAt)
+
+	var secondRoot model.PluginTrustRoot
+	require.NoError(t, db.First(&secondRoot, "fingerprint = ?", PluginTrustRootFingerprint(secondPublicKey)).Error)
+	require.True(t, secondRoot.Active)
+	require.Nil(t, secondRoot.RetiredAt)
+
+	_, err := VerifyStoredPluginRelease(db, *firstRelease, firstPublicKey)
+	require.ErrorIs(t, err, ErrPluginTrustRootRequired)
+	_, err = VerifyStoredPluginRelease(db, *secondRelease, secondPublicKey)
+	require.NoError(t, err)
 }
 
 func TestRegisterPluginReleaseCanonicalizesEquivalentInput(t *testing.T) {
@@ -963,6 +1133,45 @@ func TestStorePluginArtifactVerifiesHashAndImmutability(t *testing.T) {
 	require.NoError(t, db.Model(&model.PluginArtifact{}).Where("id = ?", stored.ID).Update("data", []byte("corrupted")).Error)
 	_, err = StorePluginArtifact(db, release.ID, artifact)
 	require.ErrorIs(t, err, ErrPluginArtifactImmutable)
+}
+
+func TestPluginArtifactSizeLimit(t *testing.T) {
+	require.NoError(t, validatePluginArtifactSize(MaxPluginArtifactBytes))
+	require.ErrorContains(t, validatePluginArtifactSize(MaxPluginArtifactBytes+1), "exceeds 67108864 bytes")
+}
+
+func TestStorePluginArtifactRetriesTransientSQLiteWriterContention(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "plugin-artifact-lock.db")
+	db, err := gorm.Open(sqlite.Open(databasePath+"?_pragma=busy_timeout(1)"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, EnsureKernelSchema(db))
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	artifact := kernelTestArtifact("sqlite-retry")
+	manifest := PluginManifest{
+		ID: "sqlite-retry", Name: "SQLite Retry", Version: "4.0.0", APIVersion: "v1", Publisher: "AnixOps",
+		Targets: []string{"control"}, ArtifactSHA256: kernelTestArtifactSHA256(artifact),
+	}
+	canonical, err := CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+
+	locker, err := gorm.Open(sqlite.Open(databasePath+"?_pragma=busy_timeout(1)"), &gorm.Config{})
+	require.NoError(t, err)
+	lock := locker.Begin()
+	require.NoError(t, lock.Error)
+	require.NoError(t, lock.Exec("UPDATE v3_kernel_plugin SET updated_at = updated_at WHERE id = ?", manifest.ID).Error)
+	releaseErr := make(chan error, 1)
+	go func() {
+		time.Sleep(40 * time.Millisecond)
+		releaseErr <- lock.Rollback().Error
+	}()
+
+	stored, err := StorePluginArtifact(db, release.ID, artifact)
+	require.NoError(t, <-releaseErr)
+	require.NoError(t, err)
+	require.NotNil(t, stored)
 }
 
 func TestValidatePluginInstallationPlanEnforcesDependenciesAndConflicts(t *testing.T) {

@@ -58,7 +58,7 @@ auth:
 
 app:
   name: "AnixOps Control Dev"
-  version: "4.0.0-alpha.7"
+  version: "4.0.0"
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
@@ -66,6 +66,9 @@ app:
 plugins:
   # Official AnixOps Ed25519 release trust root (raw public key, base64).
   official_public_key: "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="
+  # Point this at a local signed identity package trio to prove clean-database
+  # plugin-only startup. Leave empty after the identity package is installed.
+  identity_bootstrap_package_dir: ""
   # The development profile exercises the complete signed-package control path.
   control_execution_enabled: true
   control_poll_interval: "5s"

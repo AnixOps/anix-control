@@ -18,7 +18,7 @@ import (
 
 const AgentPluginInstallAPIVersion = "anixops.io/plugin-install/v1alpha1"
 
-const maxAgentPluginArtifactBytes = 32 << 20
+const maxAgentPluginArtifactBytes = MaxPluginArtifactBytes
 
 var (
 	ErrAgentPluginAssignmentDenied   = errors.New("node is not assigned the requested plugin release")

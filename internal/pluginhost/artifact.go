@@ -27,6 +27,17 @@ type ArtifactRef struct {
 	ManifestSHA256   string
 }
 
+// sameArtifactRelease compares the immutable identity established by
+// verifyArtifactRef. Materialization paths are deliberately excluded: each
+// verified extraction may use a fresh private directory for the same bytes.
+func sameArtifactRelease(left, right ArtifactRef) bool {
+	return left.PackageID == right.PackageID &&
+		left.Version == right.Version &&
+		left.ArtifactSHA256 == right.ArtifactSHA256 &&
+		left.EntrypointSHA256 == right.EntrypointSHA256 &&
+		left.ManifestSHA256 == right.ManifestSHA256
+}
+
 type artifactManifest struct {
 	ID      string   `json:"id"`
 	Version string   `json:"version"`

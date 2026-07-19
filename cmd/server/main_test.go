@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"net"
@@ -15,7 +17,11 @@ import (
 
 	appconfig "github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestResolveConfigPathPrefersExplicitFile(t *testing.T) {
@@ -55,6 +61,50 @@ func TestResolveRuntimePathPrefersProjectRootWhenConfigIsUnderConfigDir(t *testi
 	)
 	if resolved != targetPath {
 		t.Fatalf("resolveRuntimePath() = %q, want %q", resolved, targetPath)
+	}
+}
+
+func TestEnsureConfiguredPluginTrustRootRejectsInvalidConfiguration(t *testing.T) {
+	if err := ensureConfiguredPluginTrustRoot(nil, ""); err == nil {
+		t.Fatal("ensureConfiguredPluginTrustRoot accepted an empty configured root")
+	}
+	if err := ensureConfiguredPluginTrustRoot(nil, "not-base64"); err == nil {
+		t.Fatal("ensureConfiguredPluginTrustRoot accepted a malformed configured root")
+	}
+}
+
+func TestEnsureConfiguredPluginTrustRootActivatesOnlyConfiguredRoot(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.EnsureKernelSchema(db); err != nil {
+		t.Fatal(err)
+	}
+	firstPublicKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondPublicKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureConfiguredPluginTrustRoot(db, base64.StdEncoding.EncodeToString(firstPublicKey)); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureConfiguredPluginTrustRoot(db, base64.StdEncoding.EncodeToString(secondPublicKey)); err != nil {
+		t.Fatal(err)
+	}
+
+	var activeRoots []model.PluginTrustRoot
+	if err := db.Where("active = ?", true).Find(&activeRoots).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(activeRoots) != 1 {
+		t.Fatalf("active roots = %d, want 1", len(activeRoots))
+	}
+	if activeRoots[0].Fingerprint != service.PluginTrustRootFingerprint(secondPublicKey) {
+		t.Fatalf("active root fingerprint = %q", activeRoots[0].Fingerprint)
 	}
 }
 

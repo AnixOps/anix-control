@@ -17,7 +17,14 @@ import (
 	"gorm.io/gorm"
 )
 
-func signedTopologyPreviewRelease(t *testing.T, db *gorm.DB, pluginID string, dependencies []string) model.PluginRelease {
+func signedTopologyPreviewRelease(
+	t *testing.T,
+	db *gorm.DB,
+	publicKey ed25519.PublicKey,
+	privateKey ed25519.PrivateKey,
+	pluginID string,
+	dependencies []string,
+) model.PluginRelease {
 	t.Helper()
 	artifact := []byte("signed-topology-preview-artifact:" + pluginID)
 	digest := sha256.Sum256(artifact)
@@ -27,8 +34,6 @@ func signedTopologyPreviewRelease(t *testing.T, db *gorm.DB, pluginID string, de
 		Dependencies: dependencies, ConfigSchema: []byte(`{"type":"object"}`),
 	}
 	canonical, err := CanonicalPluginManifest(manifest)
-	require.NoError(t, err)
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
 	require.NoError(t, err)
@@ -50,8 +55,10 @@ func TestPreviewTopologyDeploymentIsReadOnlyAndVerifiesSignedDependencyClosure(t
 	require.NoError(t, err)
 	require.NoError(t, EnsureKernelSchema(db))
 	require.NoError(t, db.AutoMigrate(&model.Node{}))
-	dependency := signedTopologyPreviewRelease(t, db, "preview-dependency", nil)
-	root := signedTopologyPreviewRelease(t, db, "preview-root", []string{dependency.PluginID})
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	dependency := signedTopologyPreviewRelease(t, db, publicKey, privateKey, "preview-dependency", nil)
+	root := signedTopologyPreviewRelease(t, db, publicKey, privateKey, "preview-root", []string{dependency.PluginID})
 	node := model.Node{Name: "preview-node", Host: "127.0.0.1", APIKey: "preview-key"}
 	require.NoError(t, db.Create(&node).Error)
 	topology := model.Topology{Name: "preview-topology", ServiceScope: "forward"}

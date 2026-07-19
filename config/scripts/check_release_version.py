@@ -117,9 +117,9 @@ def check_release_version(repo_root: Path, tag: str) -> str:
     )
     require_pattern(
         repo_root / "README.md",
-        r"^- Current preview:\s+`v([^`]+)`",
+        r"^- Current release:\s+`v([^`]+)`",
         version,
-        "README preview",
+        "README release",
     )
     return version
 
@@ -139,7 +139,7 @@ def write_fixture(root: Path, version: str) -> None:
         "docs/docs.go": f'\tVersion: "{version}",\n',
         "docs/swagger.yaml": f'  version: {version}\n',
         "CHANGELOG.md": f"# Changelog\n\n## {version} - 2026-07-17\n",
-        "README.md": f"- Current preview: `v{version}`\n",
+        "README.md": f"- Current release: `v{version}`\n",
     }
     for relative, content in files.items():
         path = root / relative

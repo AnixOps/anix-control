@@ -29,7 +29,10 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-const maxControlPluginRequestBody = 1 << 20
+const (
+	maxControlPluginRequestBody         = 1 << 20
+	maxControlPluginArtifactBase64Bytes = 96 << 20
+)
 const defaultControlPluginHostRequestTimeout = 30 * time.Second
 const defaultControlPluginHostWebSocketSessionTimeout = 24 * time.Hour
 
@@ -303,6 +306,11 @@ func (h *KernelHandler) PluginRouteGateway(c *gin.Context) {
 		kernelError(c, http.StatusBadGateway, "plugin_host_unavailable", "plugin host is unavailable")
 		return
 	}
+	bridgeRouteID := service.PluginControlBridgeRouteID(resolution.PluginID, resolution.MatchedRoute)
+	if bridgeRouteID == "" {
+		kernelError(c, http.StatusConflict, "plugin_route_integrity_failed", "plugin control route is invalid")
+		return
+	}
 	body, err := io.ReadAll(io.LimitReader(c.Request.Body, maxControlPluginRequestBody+1))
 	if err != nil {
 		kernelError(c, http.StatusBadRequest, "plugin_request_invalid", "plugin request body could not be read")
@@ -331,8 +339,9 @@ func (h *KernelHandler) PluginRouteGateway(c *gin.Context) {
 	defer cancelDispatch()
 	response, err := h.controlPluginHosts.Dispatch(dispatchContext, pluginhost.DispatchInput{
 		PackageID: resolution.PluginID, Version: resolution.Version, Generation: resolution.Generation,
-		RequestID: kernelRequestID(c), IdempotencyKey: c.GetHeader("Idempotency-Key"), RouteID: resolution.MatchedRoute,
-		Method: c.Request.Method, Body: body, PrincipalJSON: principal, Deadline: deadline,
+		RequestID: kernelRequestID(c), IdempotencyKey: c.GetHeader("Idempotency-Key"), RouteID: bridgeRouteID,
+		Method: c.Request.Method, Body: body, PrincipalJSON: principal,
+		Metadata: pluginhost.RequestMetadata{Path: c.Request.URL.Path, Query: cloneKernelQuery(c.Request.URL.Query())}, Deadline: deadline,
 	})
 	if err != nil {
 		switch {
@@ -353,6 +362,17 @@ func (h *KernelHandler) PluginRouteGateway(c *gin.Context) {
 		}
 	}
 	c.Data(int(response.StatusCode), c.GetHeader("Content-Type"), response.Body)
+}
+
+func cloneKernelQuery(source map[string][]string) map[string][]string {
+	if len(source) == 0 {
+		return map[string][]string{}
+	}
+	result := make(map[string][]string, len(source))
+	for key, values := range source {
+		result[key] = append([]string(nil), values...)
+	}
+	return result
 }
 
 func (h *KernelHandler) ListPluginReleases(c *gin.Context) {
@@ -420,8 +440,8 @@ func (h *KernelHandler) UploadPluginReleaseArtifact(c *gin.Context) {
 		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	if len(req.ArtifactBase64) > 48<<20 {
-		kernelError(c, http.StatusRequestEntityTooLarge, "artifact_too_large", "plugin artifact request exceeds 48 MiB")
+	if len(req.ArtifactBase64) > maxControlPluginArtifactBase64Bytes {
+		kernelError(c, http.StatusRequestEntityTooLarge, "artifact_too_large", "plugin artifact request exceeds 96 MiB")
 		return
 	}
 	artifactBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(req.ArtifactBase64))
@@ -429,8 +449,8 @@ func (h *KernelHandler) UploadPluginReleaseArtifact(c *gin.Context) {
 		kernelError(c, http.StatusBadRequest, "invalid_artifact", "artifact_base64 must be base64")
 		return
 	}
-	if len(artifactBytes) > 32<<20 {
-		kernelError(c, http.StatusRequestEntityTooLarge, "artifact_too_large", "decoded plugin artifact exceeds 32 MiB")
+	if len(artifactBytes) > service.MaxPluginArtifactBytes {
+		kernelError(c, http.StatusRequestEntityTooLarge, "artifact_too_large", "decoded plugin artifact exceeds 64 MiB")
 		return
 	}
 	artifact, err := service.StorePluginArtifact(h.db, releaseID, artifactBytes)

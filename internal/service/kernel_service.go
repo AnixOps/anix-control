@@ -17,6 +17,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -70,9 +71,24 @@ const pluginManifestAPIVersionV1 = "v1"
 const pluginManifestAPIVersionV2 = "v2"
 const pluginManifestAPIVersion = pluginManifestAPIVersionV1
 const agentRuntimeAPIVersionV110 = "anixops.agent.sdk/v1.1.0"
+const MaxPluginArtifactBytes = 64 << 20
 const maxPluginWebUIBundleBytes = 2 << 20
 const maxPluginControlEntrypointBytes = 128 << 20
+const maxPluginEntrypointPlatforms = 2
 const PluginAPIGrantResourceType = "plugin_api"
+const pluginEntrypointIndexFormat = "anixops.package-entrypoints/v1"
+const pluginControlEntrypointIndexPath = "bin/control-entrypoints.json"
+
+type pluginEntrypointIndex struct {
+	Entries []pluginPlatformEntrypoint `json:"entries"`
+	Format  string                     `json:"format"`
+}
+
+type pluginPlatformEntrypoint struct {
+	Architecture string `json:"architecture"`
+	Path         string `json:"path"`
+	SHA256       string `json:"sha256"`
+}
 
 // EnsureKernelSchema only migrates new kernel-owned tables and is safe to run
 // in production without touching legacy plugin-owned tables.
@@ -580,12 +596,26 @@ func EnsurePluginTrustRoot(db *gorm.DB, publicKey ed25519.PublicKey) (*model.Plu
 	if len(publicKey) != ed25519.PublicKeySize {
 		return nil, ErrPluginTrustRootRequired
 	}
-	return ensurePluginTrustRoot(db, publicKey)
+	var root *model.PluginTrustRoot
+	err := WithRetryableTransaction(db, func(tx *gorm.DB) error {
+		var err error
+		root, err = ensurePluginTrustRoot(tx, publicKey)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return root, nil
 }
 
 func ensurePluginTrustRoot(db *gorm.DB, publicKey ed25519.PublicKey) (*model.PluginTrustRoot, error) {
 	now := time.Now()
 	fingerprint := PluginTrustRootFingerprint(publicKey)
+	if err := db.Model(&model.PluginTrustRoot{}).
+		Where("fingerprint <> ? AND active = ?", fingerprint, true).
+		Updates(map[string]any{"active": false, "retired_at": now}).Error; err != nil {
+		return nil, err
+	}
 	root := model.PluginTrustRoot{
 		Fingerprint: fingerprint,
 		KeyID:       PluginTrustRootKeyID(publicKey),
@@ -652,9 +682,9 @@ func VerifyStoredPluginRelease(db *gorm.DB, release model.PluginRelease, fallbac
 }
 
 // RegisterPluginRelease admits only a manifest signed by the configured
-// AnixOps trust root and records the trust-root fingerprint for later
-// verification across key rotations. Artifact bytes are uploaded separately
-// and must match the signed manifest hash before an install can be enabled.
+// AnixOps trust root and records the current exclusive trust-root fingerprint.
+// Artifact bytes are uploaded separately and must match the signed manifest
+// hash before an install can be enabled.
 func RegisterPluginRelease(db *gorm.DB, manifestJSON, signature string, publicKey ed25519.PublicKey) (*model.PluginRelease, error) {
 	if db == nil {
 		return nil, errors.New("database is not initialized")
@@ -1023,10 +1053,20 @@ func filterPluginWebUIForActor(pluginID string, webUI PluginWebUI, access ActorP
 // before they are handed to an installer. The manifest signature alone is not
 // sufficient when an artifact is replaced at the transport layer.
 func VerifyPluginArtifact(manifest PluginManifest, artifact []byte) error {
+	if err := validatePluginArtifactSize(len(artifact)); err != nil {
+		return err
+	}
 	digest := sha256.Sum256(artifact)
 	actual := hex.EncodeToString(digest[:])
 	if !strings.EqualFold(actual, manifest.ArtifactSHA256) {
 		return fmt.Errorf("plugin artifact hash mismatch: expected %s, got %s", manifest.ArtifactSHA256, actual)
+	}
+	return nil
+}
+
+func validatePluginArtifactSize(size int) error {
+	if size > MaxPluginArtifactBytes {
+		return fmt.Errorf("plugin artifact exceeds %d bytes", MaxPluginArtifactBytes)
 	}
 	return nil
 }
@@ -1045,6 +1085,17 @@ func PluginWebUIAssetURL(pluginID, version, bundleSHA256, bundlePath string) str
 
 func PluginAPIPermission(pluginID string) string {
 	return pluginID + ".api"
+}
+
+// PluginControlBridgeRouteID turns a signed Control route into a stable,
+// package-bridge-safe operation name. The original route remains kernel-owned
+// request metadata; package processes never choose it themselves.
+func PluginControlBridgeRouteID(pluginID, route string) string {
+	if !safePluginSegment(pluginID) || validatePluginControlRoute(route, pluginID) != nil {
+		return ""
+	}
+	digest := sha256.Sum256([]byte(pluginID + "\x00" + route))
+	return pluginID + ".control." + hex.EncodeToString(digest[:])
 }
 
 type PluginControlRouteResolution struct {
@@ -1138,7 +1189,7 @@ func StorePluginArtifact(db *gorm.DB, releaseID uint, artifact []byte) (*model.P
 		return nil, errors.New("plugin artifact is empty")
 	}
 	var result *model.PluginArtifact
-	err := db.Transaction(func(tx *gorm.DB) error {
+	err := WithRetryableTransaction(db, func(tx *gorm.DB) error {
 		var release model.PluginRelease
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&release, releaseID).Error; err != nil {
 			return err
@@ -1538,6 +1589,80 @@ func LoadVerifiedPluginCompatibilityRoutes(db *gorm.DB, release model.PluginRele
 	return append([]byte(nil), routes...), nil
 }
 
+func resolvePluginControlEntrypoint(manifest PluginManifest, artifact []byte) ([]byte, string, error) {
+	if manifest.ControlEntrypoint == nil {
+		return nil, "", errors.New("plugin release does not provide a control entrypoint")
+	}
+	if manifest.ControlEntrypoint.Path != pluginControlEntrypointIndexPath {
+		entrypoint, err := extractPluginArtifactFile(artifact, manifest.ControlEntrypoint.Path, maxPluginControlEntrypointBytes)
+		if err != nil {
+			return nil, "", fmt.Errorf("extract control entrypoint: %w", err)
+		}
+		if !strings.EqualFold(sha256Bytes(entrypoint), manifest.ControlEntrypoint.SHA256) {
+			return nil, "", errors.New("control entrypoint digest does not match the package artifact")
+		}
+		return entrypoint, manifest.ControlEntrypoint.SHA256, nil
+	}
+
+	indexBytes, err := extractPluginArtifactFile(artifact, manifest.ControlEntrypoint.Path, maxPluginControlEntrypointBytes)
+	if err != nil {
+		return nil, "", fmt.Errorf("extract control entrypoint index: %w", err)
+	}
+	if !strings.EqualFold(sha256Bytes(indexBytes), manifest.ControlEntrypoint.SHA256) {
+		return nil, "", errors.New("control entrypoint digest does not match the package artifact")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(indexBytes))
+	decoder.DisallowUnknownFields()
+	var index pluginEntrypointIndex
+	if err := decoder.Decode(&index); err != nil {
+		return nil, "", fmt.Errorf("decode control entrypoint index: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return nil, "", errors.New("control entrypoint index must contain one JSON value")
+	}
+	if index.Format != pluginEntrypointIndexFormat || len(index.Entries) == 0 || len(index.Entries) > maxPluginEntrypointPlatforms {
+		return nil, "", errors.New("control entrypoint index is invalid")
+	}
+
+	manifestArchitectures := make(map[string]struct{}, len(manifest.Architectures))
+	for _, architecture := range manifest.Architectures {
+		manifestArchitectures[architecture] = struct{}{}
+	}
+	selectedArchitecture := runtime.GOOS + "/" + runtime.GOARCH
+	var selected *pluginPlatformEntrypoint
+	previousArchitecture := ""
+	for indexPosition := range index.Entries {
+		entry := &index.Entries[indexPosition]
+		if entry.Architecture == "" || entry.Architecture <= previousArchitecture || !validSHA256Hex(entry.SHA256) {
+			return nil, "", errors.New("control entrypoint index is invalid")
+		}
+		previousArchitecture = entry.Architecture
+		if _, ok := manifestArchitectures[entry.Architecture]; !ok {
+			return nil, "", errors.New("control entrypoint index architecture is not declared by the manifest")
+		}
+		if entry.Path != "bin/control-host-"+strings.ReplaceAll(entry.Architecture, "/", "-") || !safePluginRelativePath(entry.Path) {
+			return nil, "", errors.New("control entrypoint index path is invalid")
+		}
+		if entry.Architecture == selectedArchitecture {
+			selected = entry
+		}
+	}
+	if len(index.Entries) != len(manifestArchitectures) {
+		return nil, "", errors.New("control entrypoint index does not cover every manifest architecture")
+	}
+	if selected == nil {
+		return nil, "", fmt.Errorf("control entrypoint does not support %s", selectedArchitecture)
+	}
+	entrypoint, err := extractPluginArtifactFile(artifact, selected.Path, maxPluginControlEntrypointBytes)
+	if err != nil {
+		return nil, "", fmt.Errorf("extract control entrypoint %q: %w", selected.Path, err)
+	}
+	if !strings.EqualFold(sha256Bytes(entrypoint), selected.SHA256) {
+		return nil, "", errors.New("control entrypoint digest does not match the package artifact")
+	}
+	return entrypoint, selected.SHA256, nil
+}
+
 // MaterializePluginControlArtifact writes the verified immutable release bytes
 // and the signed v2 Control entrypoint into a private caller-owned directory.
 // Task 3's lifecycle dispatcher consumes the resulting ArtifactRef; it still
@@ -1575,12 +1700,9 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 	if err != nil {
 		return pluginhost.ArtifactRef{}, err
 	}
-	entrypoint, err := extractPluginArtifactFile(artifact.Data, manifest.ControlEntrypoint.Path, maxPluginControlEntrypointBytes)
+	entrypoint, entrypointDigest, err := resolvePluginControlEntrypoint(*manifest, artifact.Data)
 	if err != nil {
-		return pluginhost.ArtifactRef{}, fmt.Errorf("extract control entrypoint: %w", err)
-	}
-	if !strings.EqualFold(sha256Bytes(entrypoint), manifest.ControlEntrypoint.SHA256) {
-		return pluginhost.ArtifactRef{}, errors.New("control entrypoint digest does not match the package artifact")
+		return pluginhost.ArtifactRef{}, err
 	}
 	if err := verifyPluginArtifactMember(artifact.Data, manifest.Migrations.Index, manifest.Migrations.SHA256, "migrations index", maxPluginControlEntrypointBytes); err != nil {
 		return pluginhost.ArtifactRef{}, err
@@ -1637,7 +1759,7 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 		ArtifactPath:     artifactPath,
 		ArtifactSHA256:   manifest.ArtifactSHA256,
 		EntrypointPath:   entrypointPath,
-		EntrypointSHA256: manifest.ControlEntrypoint.SHA256,
+		EntrypointSHA256: entrypointDigest,
 		ManifestPath:     manifestPath,
 		ManifestSHA256:   hex.EncodeToString(manifestDigest[:]),
 	}

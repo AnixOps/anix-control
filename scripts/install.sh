@@ -36,6 +36,11 @@ COMMAND="install"
 VERSION="${ANIX_CONTROL_VERSION:-${V2BOARD_VERSION:-}}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+PACKAGE_VERSION=""
+IDENTITY_BOOTSTRAP_DIR=""
+PLUGIN_HOST_RUNTIME_DIR=""
+PLUGIN_ARTIFACT_DIR=""
+FRESH_CONFIG=0
 
 # Native production-layout migration paths.  They are overridable for fixture
 # tests, but default to the documented paths on a real host.
@@ -67,7 +72,7 @@ Usage:
   install.sh [install|update|rollback|preflight|migrate] [options]
 
 Options:
-  --version <tag>          Release tag, for example v4.0.0-alpha.7. Defaults to GitHub's latest stable release.
+  --version <tag>          Release tag, for example v4.0.0. Defaults to GitHub's latest stable release.
   --admin-email <email>    Bootstrap admin email on a fresh installation.
   --admin-password <text>  Bootstrap admin password on a fresh installation.
   --install-dir <path>     Installation root. Default: /opt/anixops/control.
@@ -173,6 +178,10 @@ validate_version() {
     die "Invalid release tag: ${VERSION}"
 }
 
+uses_plugin_only_identity_bootstrap() {
+  [[ "${VERSION}" == v4.* ]]
+}
+
 latest_release() {
   local tag
   tag="$(curl -fsSL --retry 3 --connect-timeout 10 \
@@ -211,6 +220,36 @@ verify_asset() {
   info "Verified SHA-256 for ${name}"
 }
 
+identity_bootstrap_asset_prefix() {
+  [[ -n "${PACKAGE_VERSION}" ]] || die "Identity bootstrap package version is not configured"
+  printf 'identity-platform-%s' "${PACKAGE_VERSION}"
+}
+
+download_identity_bootstrap_assets() {
+  local prefix asset
+  prefix="$(identity_bootstrap_asset_prefix)"
+  for asset in "${prefix}.anxp" "${prefix}.manifest.json" "${prefix}.manifest.sig"; do
+    download_asset "${asset}"
+    verify_asset "${asset}"
+  done
+}
+
+stage_identity_bootstrap_assets() {
+  local prefix parent asset
+  prefix="$(identity_bootstrap_asset_prefix)"
+  [[ -n "${IDENTITY_BOOTSTRAP_DIR}" ]] || die "Identity bootstrap directory is not configured"
+  parent="${INSTALL_DIR}/bootstrap"
+  [[ ! -L "${parent}" && ! -L "${IDENTITY_BOOTSTRAP_DIR}" ]] || die "Identity bootstrap path must not be a symbolic link"
+  install -d -m 0750 -o root -g "${APP_USER}" "${parent}"
+  install -d -m 0750 -o root -g "${APP_USER}" "${IDENTITY_BOOTSTRAP_DIR}"
+  [[ -d "${IDENTITY_BOOTSTRAP_DIR}" && ! -L "${IDENTITY_BOOTSTRAP_DIR}" ]] || die "Identity bootstrap directory is unsafe"
+  for asset in "${prefix}.anxp" "${prefix}.manifest.json" "${prefix}.manifest.sig"; do
+    [[ -f "${TMP_DIR}/${asset}" && ! -L "${TMP_DIR}/${asset}" ]] || die "Verified identity bootstrap asset is unavailable: ${asset}"
+    install -m 0640 -o root -g "${APP_USER}" "${TMP_DIR}/${asset}" "${IDENTITY_BOOTSTRAP_DIR}/${asset}"
+  done
+  info "Staged verified identity bootstrap package in ${IDENTITY_BOOTSTRAP_DIR}"
+}
+
 ensure_app_user() {
   if ! id -u "${APP_USER}" >/dev/null 2>&1; then
     useradd --system --home-dir "${INSTALL_DIR}" --shell /usr/sbin/nologin "${APP_USER}"
@@ -225,6 +264,12 @@ validate_config_value() {
   local value="$1"
   [[ -n "${value}" && "${value}" != *$'\n'* && "${value}" != *'"'* ]] || \
     die "Bootstrap values must be non-empty and must not contain a double quote or newline."
+}
+
+validate_install_managed_plugin_dir() {
+  local value="$1"
+  [[ -n "${value}" && "${value}" == "${INSTALL_DIR}/"* && "${value}" != *$'\n'* && "${value}" != *'"'* && "${value}" != *'..'* ]] || \
+    die "Plugin runtime paths must be safe absolute children of the installation directory."
 }
 
 write_fresh_config() {
@@ -274,6 +319,7 @@ write_fresh_config() {
 
   chmod 0640 "${CONFIG_FILE}"
   chown root:"${APP_USER}" "${CONFIG_FILE}"
+  FRESH_CONFIG=1
   printf '%s\n' "${ADMIN_PASSWORD}" > "${INSTALL_DIR}/.bootstrap-admin-password"
   chmod 0640 "${INSTALL_DIR}/.bootstrap-admin-password"
   chown root:"${APP_USER}" "${INSTALL_DIR}/.bootstrap-admin-password"
@@ -281,11 +327,154 @@ write_fresh_config() {
   warn "The one-time bootstrap password is stored in ${INSTALL_DIR}/.bootstrap-admin-password; move it to a password manager, then delete the file."
 }
 
+configure_identity_bootstrap_config() {
+  [[ -f "${CONFIG_FILE}" ]] || die "Configuration file is missing: ${CONFIG_FILE}"
+  [[ -n "${IDENTITY_BOOTSTRAP_DIR}" ]] || die "Identity bootstrap directory is not configured"
+  validate_config_value "${IDENTITY_BOOTSTRAP_DIR}"
+
+  local configure_runtime_paths=0 replace_runtime_paths=0
+  if uses_plugin_only_identity_bootstrap; then
+    [[ -n "${PLUGIN_HOST_RUNTIME_DIR}" && -n "${PLUGIN_ARTIFACT_DIR}" ]] || \
+      die "Plugin execution directories are not configured"
+    validate_install_managed_plugin_dir "${PLUGIN_HOST_RUNTIME_DIR}"
+    validate_install_managed_plugin_dir "${PLUGIN_ARTIFACT_DIR}"
+    configure_runtime_paths=1
+    # The systemd unit permits writes only under INSTALL_DIR, so V4 package
+    # execution cannot retain an external host/artifact runtime path.
+    replace_runtime_paths=1
+  fi
+
+  local temporary
+  temporary="$(mktemp "${CONFIG_FILE}.identity-bootstrap.XXXXXX")"
+  if ! awk \
+    -v bootstrap_dir="${IDENTITY_BOOTSTRAP_DIR}" \
+    -v configure_runtime_paths="${configure_runtime_paths}" \
+    -v replace_runtime_paths="${replace_runtime_paths}" \
+    -v host_runtime_dir="${PLUGIN_HOST_RUNTIME_DIR}" \
+    -v artifact_dir="${PLUGIN_ARTIFACT_DIR}" \
+    -v legacy_host_runtime_dir="/var/lib/anixops/plugin-hosts" \
+    -v legacy_artifact_dir="/var/lib/anixops/plugin-artifacts" '
+    function field_value(line, value) {
+      value = line
+      sub(/^[^:]*:[[:space:]]*/, "", value)
+      sub(/[[:space:]]+#.*$/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      if (value ~ /^".*"$/) {
+        sub(/^"/, "", value)
+        sub(/"$/, "", value)
+      }
+      return value
+    }
+    function emit_missing() {
+      if (!bootstrap_seen) {
+        print "  identity_bootstrap_package_dir: \"" bootstrap_dir "\""
+        bootstrap_seen = 1
+      }
+      if (!execution_seen) {
+        print "  control_execution_enabled: true"
+        execution_seen = 1
+      }
+      if (configure_runtime_paths && !host_runtime_seen) {
+        print "  control_host_runtime_dir: \"" host_runtime_dir "\""
+        host_runtime_seen = 1
+      }
+      if (configure_runtime_paths && !artifact_dir_seen) {
+        print "  control_host_artifact_dir: \"" artifact_dir "\""
+        artifact_dir_seen = 1
+      }
+    }
+    /^plugins:[[:space:]]*(#.*)?$/ {
+      if (in_plugins) {
+        emit_missing()
+      }
+      plugins_seen = 1
+      in_plugins = 1
+      print
+      next
+    }
+    in_plugins && /^[A-Za-z_][A-Za-z0-9_]*:/ {
+      emit_missing()
+      in_plugins = 0
+    }
+    in_plugins && /^[[:space:]]+identity_bootstrap_package_dir:/ {
+      existing = $0
+      sub(/^[^:]*:[[:space:]]*/, "", existing)
+      sub(/[[:space:]]+#.*$/, "", existing)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", existing)
+      if (existing == "" || existing == "\"\"") {
+        print "  identity_bootstrap_package_dir: \"" bootstrap_dir "\""
+      } else {
+        print
+      }
+      bootstrap_seen = 1
+      next
+    }
+    in_plugins && /^[[:space:]]+control_execution_enabled:/ {
+      print "  control_execution_enabled: true"
+      execution_seen = 1
+      next
+    }
+    in_plugins && /^[[:space:]]+control_host_runtime_dir:/ {
+      existing = field_value($0)
+      if (configure_runtime_paths && (replace_runtime_paths || existing == "" || existing == legacy_host_runtime_dir)) {
+        print "  control_host_runtime_dir: \"" host_runtime_dir "\""
+      } else {
+        print
+      }
+      host_runtime_seen = 1
+      next
+    }
+    in_plugins && /^[[:space:]]+control_host_artifact_dir:/ {
+      existing = field_value($0)
+      if (configure_runtime_paths && (replace_runtime_paths || existing == "" || existing == legacy_artifact_dir)) {
+        print "  control_host_artifact_dir: \"" artifact_dir "\""
+      } else {
+        print
+      }
+      artifact_dir_seen = 1
+      next
+    }
+    { print }
+    END {
+      if (in_plugins) {
+        emit_missing()
+      }
+      if (!plugins_seen) {
+        print "plugins:"
+        print "  identity_bootstrap_package_dir: \"" bootstrap_dir "\""
+        print "  control_execution_enabled: true"
+        if (configure_runtime_paths) {
+          print "  control_host_runtime_dir: \"" host_runtime_dir "\""
+          print "  control_host_artifact_dir: \"" artifact_dir "\""
+        }
+      }
+    }
+  ' "${CONFIG_FILE}" > "${temporary}"; then
+    find "${temporary}" -depth -delete
+    die "Could not update identity bootstrap configuration"
+  fi
+  chmod 0640 "${temporary}"
+  chown root:"${APP_USER}" "${temporary}"
+  mv -f "${temporary}" "${CONFIG_FILE}"
+}
+
 ensure_layout_and_config() {
   install -d -m 0750 -o "${APP_USER}" -g "${APP_USER}" \
     "${INSTALL_DIR}" "${INSTALL_DIR}/bin" "${INSTALL_DIR}/config" \
     "${INSTALL_DIR}/config/data" "${INSTALL_DIR}/logs" "${INSTALL_DIR}/web"
   install -d -m 0700 -o root -g root "${BACKUP_ROOT}"
+  if uses_plugin_only_identity_bootstrap; then
+    validate_install_managed_plugin_dir "${PLUGIN_HOST_RUNTIME_DIR}"
+    validate_install_managed_plugin_dir "${PLUGIN_ARTIFACT_DIR}"
+    [[ ! -L "${PLUGIN_HOST_RUNTIME_DIR}" && ! -L "${PLUGIN_ARTIFACT_DIR}" ]] || \
+      die "Plugin execution directories must not be symbolic links"
+    install -d -m 0700 -o "${APP_USER}" -g "${APP_USER}" \
+      "${PLUGIN_HOST_RUNTIME_DIR}" "${PLUGIN_ARTIFACT_DIR}"
+    [[ -d "${PLUGIN_HOST_RUNTIME_DIR}" && ! -L "${PLUGIN_HOST_RUNTIME_DIR}" ]] || \
+      die "Plugin host runtime directory is unsafe"
+    [[ -d "${PLUGIN_ARTIFACT_DIR}" && ! -L "${PLUGIN_ARTIFACT_DIR}" ]] || \
+      die "Plugin artifact directory is unsafe"
+  fi
 
   if [[ ! -f "${CONFIG_FILE}" ]]; then
     write_fresh_config
@@ -381,6 +570,10 @@ migrate_legacy_layout() {
   BACKUP_ROOT="${MIGRATION_BACKUP_DIR}"
   VERSION_FILE="${INSTALL_DIR}/.release-version"
   TMP_DIR="$(mktemp -d)"
+  PACKAGE_VERSION="${VERSION#v}"
+  IDENTITY_BOOTSTRAP_DIR="${INSTALL_DIR}/bootstrap/identity-platform-${PACKAGE_VERSION}"
+  PLUGIN_HOST_RUNTIME_DIR="${INSTALL_DIR}/runtime/plugin-hosts"
+  PLUGIN_ARTIFACT_DIR="${INSTALL_DIR}/data/plugin-artifacts"
   install_base_tools
   ensure_app_user
   install -d -m 0750 -o "${APP_USER}" -g "${APP_USER}" "${INSTALL_DIR}" "${INSTALL_DIR}/bin" "${INSTALL_DIR}/web" "${INSTALL_DIR}/config/data" "${INSTALL_DIR}/logs" "${TARGET_CONFIG_DIR}" "${TARGET_DATA_DIR}" "${TARGET_LOG_DIR}"
@@ -388,17 +581,24 @@ migrate_legacy_layout() {
   local binary_archive; binary_archive="$(asset_name)"
   download_asset "SHA256SUMS.txt"; download_asset "${binary_archive}"; download_asset "anix-control-frontend.tar.gz"
   verify_asset "${binary_archive}"; verify_asset "anix-control-frontend.tar.gz"
+  if uses_plugin_only_identity_bootstrap; then
+    download_identity_bootstrap_assets
+    stage_identity_bootstrap_assets
+  fi
   snapshot_migration_state
   stop_legacy_service
   copy_migration_config
   install_release_files "${binary_archive}"
+  if uses_plugin_only_identity_bootstrap; then
+    configure_identity_bootstrap_config
+  fi
   write_migration_unit
   # Existing installations commonly use a non-default HTTP port.
   local migrated_port
   migrated_port="$(sed -n -E '/^server:/,/^[^[:space:]]/ s/^[[:space:]]+port:[[:space:]]*([0-9]+).*/\1/p' "${CONFIG_FILE}" | head -n1)"
   [[ "${migrated_port}" =~ ^[0-9]+$ ]] && HEALTH_URL="http://127.0.0.1:${migrated_port}/health"
   if [[ "${SKIP_START}" -eq 1 ]]; then return 0; fi
-  if ! start_and_verify; then
+  if ! start_and_verify || ! verify_plugin_only_startup; then
     restore_migration_on_error
     die "Migration failed health verification; legacy service was restored"
   fi
@@ -440,6 +640,7 @@ backup_current_release() {
     cp -aL "${LEGACY_BINARY_PATH}" "${BACKUP_DIR}/anix-control"
   fi
   [[ -d "${FRONTEND_DIR}" ]] && cp -a "${FRONTEND_DIR}" "${BACKUP_DIR}/frontend"
+  [[ -f "${CONFIG_FILE}" ]] && cp -a "${CONFIG_FILE}" "${BACKUP_DIR}/config.yaml"
   [[ -f "${VERSION_FILE}" ]] && cp -a "${VERSION_FILE}" "${BACKUP_DIR}/release-version"
   info "Backed up the previous release to ${BACKUP_DIR}"
 }
@@ -521,6 +722,7 @@ restore_backup() {
     rm -rf "${FRONTEND_DIR}"
     cp -a "${BACKUP_DIR}/frontend" "${FRONTEND_DIR}"
   fi
+  [[ -f "${BACKUP_DIR}/config.yaml" ]] && cp -a "${BACKUP_DIR}/config.yaml" "${CONFIG_FILE}"
   [[ -f "${BACKUP_DIR}/release-version" ]] && cp -a "${BACKUP_DIR}/release-version" "${VERSION_FILE}"
   chown -R "${APP_USER}:${APP_USER}" "${INSTALL_DIR}/bin" "${INSTALL_DIR}/web" || true
 }
@@ -537,6 +739,57 @@ start_and_verify() {
   done
   systemctl --no-pager --full status "${SERVICE_NAME}" || true
   return 1
+}
+
+identity_login_url() {
+  local base
+  base="${HEALTH_URL%/health}"
+  [[ "${base}" != "${HEALTH_URL}" ]] || base="${HEALTH_URL%/}"
+  printf '%s/api/v2/login' "${base}"
+}
+
+verify_identity_gateway() {
+  local login_url status
+  login_url="$(identity_login_url)"
+  for _ in $(seq 1 30); do
+    status="$(curl -sS --connect-timeout 5 --max-time 15 --output /dev/null --write-out '%{http_code}' \
+      -H 'Content-Type: application/json' --data '{}' "${login_url}" || true)"
+    case "${status}" in
+      200|400|401)
+        info "Identity package gateway is ready: ${login_url}"
+        return 0
+        ;;
+    esac
+    sleep 2
+  done
+  warn "Identity package gateway did not become ready: ${login_url}"
+  return 1
+}
+
+verify_identity_login() {
+  if [[ "${FRESH_CONFIG}" -ne 1 && ( -z "${ADMIN_EMAIL}" || -z "${ADMIN_PASSWORD}" ) ]]; then
+    return 0
+  fi
+  local login_url payload response
+  login_url="$(identity_login_url)"
+  payload="{\"email\":\"$(json_escape "${ADMIN_EMAIL}")\",\"password\":\"$(json_escape "${ADMIN_PASSWORD}")\"}"
+  for _ in $(seq 1 30); do
+    response="$(curl -fsS --connect-timeout 5 --max-time 15 -H 'Content-Type: application/json' --data "${payload}" "${login_url}" || true)"
+    if [[ "${response}" == *'"code":0'* ]]; then
+      info "Identity package login verification succeeded"
+      return 0
+    fi
+    sleep 2
+  done
+  warn "Identity package login verification failed"
+  return 1
+}
+
+verify_plugin_only_startup() {
+  if ! uses_plugin_only_identity_bootstrap; then
+    return 0
+  fi
+  verify_identity_gateway && verify_identity_login
 }
 
 parse_args() {
@@ -593,6 +846,10 @@ main() {
   BACKUP_ROOT="${INSTALL_DIR}/backups"
   VERSION_FILE="${INSTALL_DIR}/.release-version"
   TMP_DIR="$(mktemp -d)"
+  PACKAGE_VERSION="${VERSION#v}"
+  IDENTITY_BOOTSTRAP_DIR="${INSTALL_DIR}/bootstrap/identity-platform-${PACKAGE_VERSION}"
+  PLUGIN_HOST_RUNTIME_DIR="${INSTALL_DIR}/runtime/plugin-hosts"
+  PLUGIN_ARTIFACT_DIR="${INSTALL_DIR}/data/plugin-artifacts"
 
   ensure_app_user
   ensure_layout_and_config
@@ -604,10 +861,17 @@ main() {
   download_asset "anix-control-frontend.tar.gz"
   verify_asset "${binary_archive}"
   verify_asset "anix-control-frontend.tar.gz"
+  if uses_plugin_only_identity_bootstrap; then
+    download_identity_bootstrap_assets
+    stage_identity_bootstrap_assets
+  fi
 
   stop_running_service
   backup_current_release
   install_release_files "${binary_archive}"
+  if uses_plugin_only_identity_bootstrap; then
+    configure_identity_bootstrap_config
+  fi
   write_systemd_unit
 
   if [[ "${SKIP_START}" -eq 1 ]]; then
@@ -615,7 +879,7 @@ main() {
     exit 0
   fi
 
-  if ! start_and_verify; then
+  if ! start_and_verify || ! verify_plugin_only_startup; then
     if [[ -n "${BACKUP_DIR}" ]]; then
       restore_backup
       systemctl restart "${SERVICE_NAME}" || true
@@ -627,4 +891,6 @@ main() {
   [[ "${COMMAND}" == "rollback" ]] && info "Rollback completed by installing the requested release tag."
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

@@ -26,10 +26,21 @@ func newTopologyDeploymentExecutorTestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-func seedTopologyDeploymentAgentRelease(t *testing.T, db *gorm.DB, pluginID string) {
+func newTopologyDeploymentReleaseSigner(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey) {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
+	return publicKey, privateKey
+}
+
+func seedTopologyDeploymentAgentRelease(
+	t *testing.T,
+	db *gorm.DB,
+	publicKey ed25519.PublicKey,
+	privateKey ed25519.PrivateKey,
+	pluginID string,
+) {
+	t.Helper()
 	manifest := PluginManifest{
 		ID: pluginID, Name: pluginID, Version: "1.0.0", APIVersion: "v1", Publisher: "AnixOps",
 		Targets: []string{"agent"}, ArtifactSHA256: strings.Repeat("a", 64),
@@ -86,8 +97,9 @@ func newObservedTopologyDeploymentFixture(t *testing.T) observedTopologyDeployme
 func newTopologyDeploymentFixture(t *testing.T, edges []model.TopologyEdge) topologyDeploymentFixture {
 	t.Helper()
 	db := newTopologyDeploymentExecutorTestDB(t)
-	seedTopologyDeploymentAgentRelease(t, db, "topology-runtime-a")
-	seedTopologyDeploymentAgentRelease(t, db, "topology-runtime-b")
+	publicKey, privateKey := newTopologyDeploymentReleaseSigner(t)
+	seedTopologyDeploymentAgentRelease(t, db, publicKey, privateKey, "topology-runtime-a")
+	seedTopologyDeploymentAgentRelease(t, db, publicKey, privateKey, "topology-runtime-b")
 	nodeA := model.Node{Name: "topology-node-a", Host: "10.10.0.1", APIKey: "topology-node-a-key"}
 	nodeB := model.Node{Name: "topology-node-b", Host: "10.10.0.2", APIKey: "topology-node-b-key"}
 	require.NoError(t, db.Create(&nodeA).Error)
@@ -309,7 +321,8 @@ func TestTopologyDeploymentExecutorFailureStopsExpansionAndCompensates(t *testin
 
 func TestPlanTopologyDeploymentCapturesPreviousConfigForCompensation(t *testing.T) {
 	db := newTopologyDeploymentExecutorTestDB(t)
-	seedTopologyDeploymentAgentRelease(t, db, "topology-runtime-a")
+	publicKey, privateKey := newTopologyDeploymentReleaseSigner(t)
+	seedTopologyDeploymentAgentRelease(t, db, publicKey, privateKey, "topology-runtime-a")
 	node := model.Node{Name: "topology-restore-node", Host: "10.20.0.1", APIKey: "topology-restore-key"}
 	require.NoError(t, db.Create(&node).Error)
 	topology := model.Topology{Name: "topology-restore", ServiceScope: "forward"}
@@ -345,6 +358,7 @@ type rolloutTopologyFixture struct {
 func newRolloutTopologyFixture(t *testing.T, nodeCount int) rolloutTopologyFixture {
 	t.Helper()
 	db := newTopologyDeploymentExecutorTestDB(t)
+	publicKey, privateKey := newTopologyDeploymentReleaseSigner(t)
 	topology := model.Topology{Name: "topology-canary", ServiceScope: "forward"}
 	require.NoError(t, db.Create(&topology).Error)
 	oldRevision := model.TopologyRevision{
@@ -364,7 +378,7 @@ func newRolloutTopologyFixture(t *testing.T, nodeCount int) rolloutTopologyFixtu
 	vertices := make([]model.TopologyVertex, 0, nodeCount)
 	for index := 0; index < nodeCount; index++ {
 		pluginID := fmt.Sprintf("canary-plugin-%d", index+1)
-		seedTopologyDeploymentAgentRelease(t, db, pluginID)
+		seedTopologyDeploymentAgentRelease(t, db, publicKey, privateKey, pluginID)
 		node := model.Node{
 			Name:   fmt.Sprintf("canary-node-%d", index+1),
 			Host:   fmt.Sprintf("10.30.0.%d", index+1),
@@ -772,7 +786,8 @@ func TestTopologyDeploymentCanaryRejectsDependencyOutsideRolloutGroup(t *testing
 
 func TestTopologyDeploymentCanaryCanPlanPureRemoval(t *testing.T) {
 	db := newTopologyDeploymentExecutorTestDB(t)
-	seedTopologyDeploymentAgentRelease(t, db, "removal-plugin")
+	publicKey, privateKey := newTopologyDeploymentReleaseSigner(t)
+	seedTopologyDeploymentAgentRelease(t, db, publicKey, privateKey, "removal-plugin")
 	node := model.Node{Name: "removal-node", Host: "10.40.0.1", APIKey: "removal-node-key"}
 	require.NoError(t, db.Create(&node).Error)
 	topology := model.Topology{Name: "topology-removal", ServiceScope: "forward"}

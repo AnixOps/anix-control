@@ -9,15 +9,23 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
 const packageID = "identity-platform"
+
+const machineTelemetryPackageID = "machine-telemetry"
 
 const (
 	identityMigrationRoute = "migration.identity-platform.001_identity_platform"
@@ -108,6 +116,11 @@ func NewAllowlist(cfg *config.Config) (*packagebridge.Allowlist, error) {
 		PackageID: packageID, RouteID: identityMigrationRoute, Name: identityMigrationRoute,
 		Handler: identityMigrationHandler,
 	})
+	machineTelemetryRouteID := service.PluginControlBridgeRouteID(machineTelemetryPackageID, plugincontrol.MachineTelemetryStatusRoute)
+	operations = append(operations, packagebridge.Operation{
+		PackageID: machineTelemetryPackageID, RouteID: machineTelemetryRouteID, Name: machineTelemetryRouteID,
+		Handler: machineTelemetryStatusHandler,
+	})
 	return packagebridge.NewAllowlistWithFallback(packagebridge.DefaultRouteRegistry(), operations...)
 }
 
@@ -134,4 +147,77 @@ func identityMigrationHandler(ctx context.Context, call packagebridge.Call) (pac
 		return packagebridge.Response{}, err
 	}
 	return packagebridge.Response{StatusCode: 200, Body: body}, nil
+}
+
+type machineTelemetryRouteMetadata struct {
+	Path  string              `json:"path"`
+	Query map[string][]string `json:"query"`
+}
+
+func machineTelemetryStatusHandler(ctx context.Context, call packagebridge.Call) (packagebridge.Response, error) {
+	routeID := service.PluginControlBridgeRouteID(machineTelemetryPackageID, plugincontrol.MachineTelemetryStatusRoute)
+	if call.Host.PackageID != machineTelemetryPackageID || call.Request.RouteID != routeID || call.Operation != routeID || call.Request.Method != http.MethodGet {
+		return packagebridge.Response{}, packagebridge.ErrCapabilityRejected
+	}
+	metadata, err := decodeMachineTelemetryRouteMetadata(call.Request.MetadataJSON)
+	if err != nil {
+		return packagebridge.Response{}, packagebridge.ErrCapabilityRejected
+	}
+	if metadata.Path != plugincontrol.MachineTelemetryStatusRoute {
+		return packagebridge.Response{}, packagebridge.ErrCapabilityRejected
+	}
+	executor := plugincontrol.NewMachineTelemetryExecutorVersion(database.Get(), call.Host.Version)
+	response, err := executor.HandleRoute(ctx, plugincontrol.RouteRequest{
+		Method: call.Request.Method, Path: metadata.Path, Query: url.Values(metadata.Query),
+	})
+	if err != nil {
+		return packagebridge.Response{}, err
+	}
+	body, err := json.Marshal(struct {
+		Data any `json:"data"`
+	}{Data: response.Data})
+	if err != nil {
+		return packagebridge.Response{}, err
+	}
+	statusCode, err := packageBridgeHTTPStatusCode(response.Status)
+	if err != nil {
+		return packagebridge.Response{}, err
+	}
+	return packagebridge.Response{
+		StatusCode: statusCode, Body: body,
+		Headers: []packagebridge.Header{{Name: "Content-Type", Value: "application/json; charset=utf-8"}},
+	}, nil
+}
+
+func packageBridgeHTTPStatusCode(statusCode int) (uint32, error) {
+	if statusCode < http.StatusContinue || statusCode > 599 {
+		return 0, errors.New("package bridge response status is invalid")
+	}
+	return uint32(statusCode), nil
+}
+
+func decodeMachineTelemetryRouteMetadata(raw []byte) (machineTelemetryRouteMetadata, error) {
+	var metadata machineTelemetryRouteMetadata
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&metadata); err != nil {
+		return machineTelemetryRouteMetadata{}, err
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return machineTelemetryRouteMetadata{}, errors.New("machine telemetry route metadata is invalid")
+	}
+	if len(metadata.Query) > 64 {
+		return machineTelemetryRouteMetadata{}, errors.New("machine telemetry route query is invalid")
+	}
+	for key, values := range metadata.Query {
+		if key == "" || len(key) > 256 || len(values) > 32 {
+			return machineTelemetryRouteMetadata{}, errors.New("machine telemetry route query is invalid")
+		}
+		for _, value := range values {
+			if len(value) > 4096 || strings.ContainsAny(value, "\r\n\x00") {
+				return machineTelemetryRouteMetadata{}, errors.New("machine telemetry route query is invalid")
+			}
+		}
+	}
+	return metadata, nil
 }

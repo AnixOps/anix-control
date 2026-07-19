@@ -19,8 +19,10 @@ const telemetryTestVersion = "1.1.0"
 
 func seedOfficialTelemetryPlugins(t *testing.T, db *gorm.DB, pluginIDs ...string) {
 	t.Helper()
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
 	for _, pluginID := range pluginIDs {
-		seedOfficialTelemetryPluginRelease(t, db, pluginID, []string{"telemetry.read"})
+		seedOfficialTelemetryPluginReleaseWithSigner(t, db, publicKey, privateKey, pluginID, []string{"telemetry.read"})
 	}
 }
 
@@ -28,6 +30,18 @@ func seedOfficialTelemetryPluginRelease(t *testing.T, db *gorm.DB, pluginID stri
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
+	seedOfficialTelemetryPluginReleaseWithSigner(t, db, publicKey, privateKey, pluginID, capabilities)
+}
+
+func seedOfficialTelemetryPluginReleaseWithSigner(
+	t *testing.T,
+	db *gorm.DB,
+	publicKey ed25519.PublicKey,
+	privateKey ed25519.PrivateKey,
+	pluginID string,
+	capabilities []string,
+) {
+	t.Helper()
 	manifest := PluginManifest{
 		ID: pluginID, Name: pluginID, Version: telemetryTestVersion, APIVersion: "v1", Publisher: "AnixOps",
 		Targets: []string{"agent"}, ArtifactSHA256: strings.Repeat("a", 64), Capabilities: capabilities,

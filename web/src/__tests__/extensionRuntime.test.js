@@ -35,7 +35,7 @@ function catalogEntry(overrides = {}) {
     plugin_name: 'Example',
     publisher: 'AnixOps',
     version: '1.2.3',
-    api_version: 'v1',
+    api_version: 'v2',
     installation_id: 1,
     state: 'healthy',
     bundle: { path: 'webui/index.mjs', sha256: HASH },
@@ -161,6 +161,20 @@ describe('admin extension runtime', () => {
       extensionPluginID: 'example',
       extensionPermission: 'example.view',
     })
+  })
+
+  it('accepts only the v4 package manifest API version', async () => {
+    const router = createTestRouter()
+    const runtime = createRuntime(async () => [catalogEntry({ api_version: 'v1' })])
+
+    const result = await runtime.refresh(router)
+
+    expect(result.pluginIDs).toEqual([])
+    expect(result.errors).toEqual([expect.objectContaining({
+      code: 'invalid_extension',
+      plugin_id: 'example',
+      message: 'api_version is unsupported',
+    })])
   })
 
   it('accepts a signed WebUI plugin ID with dotted namespace segments', async () => {

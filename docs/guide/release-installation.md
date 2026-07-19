@@ -45,18 +45,27 @@ The installer will:
 1. Create the `anixops` service user and `/opt/anixops/control` layout.
 2. Download the GitHub Release binary and frontend packages.
 3. Verify both packages against the release `SHA256SUMS.txt`.
-4. Download the configuration template that matches the selected tag.
-5. Generate the JWT secret, node API token, and first administrator password.
-6. Install and enable `anix-control.service`.
-7. Start the service and require `http://127.0.0.1:8080/health` to succeed.
+4. For `v4.*`, download and checksum-verify the signed identity package trio,
+   then stage it under `/opt/anixops/control/bootstrap/` with root ownership.
+5. For `v4.*`, place Control host sockets and materialized package artifacts
+   under the installation root with service-user-only permissions. The installer
+   sets these internal execution paths on both fresh installs and updates so
+   they remain within the systemd writable root. The bootstrap directory is set
+   only when empty and
+   `plugins.control_execution_enabled` is enabled so the identity package can
+   serve login.
+6. Download the configuration template that matches the selected tag.
+7. Generate the JWT secret, node API token, and first administrator password.
+8. Install and enable `anix-control.service`.
+9. Start the service and require `http://127.0.0.1:8080/health` to succeed;
+   a fresh V4 install also verifies the identity package gateway and login.
 
 The normal configuration template keeps package execution, Agent dispatch, and
-topology execution disabled. It can inspect signed package metadata without
-switching traffic or starting package workers. Use the explicit development or
-operator-approved canary profile to enable a signed package lifecycle after
-the trust root, Agent Supervisor, rollback plan, and secure gRPC path are
-ready. Existing configuration files are preserved during upgrades and are
-never silently switched to the plugin path.
+topology execution disabled. A V4 installer is the explicit exception: it
+enables Control package execution because login is owned by the verified
+identity package, while leaving Agent dispatch and topology execution disabled.
+Existing configuration files retain every other value; a non-empty
+operator-selected bootstrap directory is not replaced.
 
 The generated initial password is stored at
 `/opt/anixops/control/.bootstrap-admin-password` with restricted permissions. Store it
@@ -78,6 +87,8 @@ not put secrets in shell history on shared hosts.
 | `/opt/anixops/control/web/public` | GitHub Actions-built frontend files |
 | `/opt/anixops/control/config/config.yaml` | Persistent control-plane configuration |
 | `/opt/anixops/control/config/data/v2board.db` | Default SQLite database; filename retained for compatibility |
+| `/opt/anixops/control/runtime/plugin-hosts/` | Service-user-private Control package host sockets and process state |
+| `/opt/anixops/control/data/plugin-artifacts/` | Service-user-private materialized Control package artifacts |
 | `/opt/anixops/control/backups/` | Binary/frontend rollback snapshots |
 | `/opt/anixops/control/.release-version` | Installed release tag |
 
@@ -157,7 +168,8 @@ After importing a release:
    package preserves its database records; use a separate purge workflow for
    destructive removal.
 
-The v4 package-only entry point remains manual import by design. It does not
+After the installer has bootstrapped the official identity package, the
+remaining V4 package cohort remains manual import by design. It does not
 silently fetch untrusted third-party packages or put API keys in package URLs;
 Agent downloads use `X-API-Key` and same-origin, digest-addressed paths. Follow
 [v4-plugin-only-upgrade.md](v4-plugin-only-upgrade.md) for the release cohort
@@ -166,10 +178,12 @@ recovery.
 
 ## Upgrade And Rollback
 
-The installer never overwrites an existing `config/config.yaml` or SQLite data
-directory. Before replacing binaries, it copies the current binary and frontend
-files to `/opt/anixops/control/backups/`. A failed health check automatically restores
-that snapshot.
+The installer never overwrites an existing SQLite data directory. For `v4.*`,
+it preserves existing configuration except an empty identity bootstrap path,
+`plugins.control_execution_enabled`, and the internal plugin runtime paths that
+must remain inside the systemd writable installation root. It saves
+the prior configuration in the release backup before replacing binaries. A
+failed health or identity gateway check restores that snapshot.
 
 Upgrade to an explicit release:
 

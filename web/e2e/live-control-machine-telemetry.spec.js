@@ -21,7 +21,7 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
   // assertion instead of waiting for a second, cache-dependent request.
   const bundleResponse = page.waitForResponse(response => {
     const url = new URL(response.url())
-    return url.pathname.startsWith('/api/v3/extensions/machine-telemetry/1.1.0/webui/') &&
+    return url.pathname.startsWith('/api/v3/extensions/machine-telemetry/4.0.0/webui/') &&
       response.request().method() === 'GET' && response.status() === 200
   })
   const catalogResponse = page.waitForResponse(response => {
@@ -37,17 +37,21 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
 
   const extensions = await (await catalogResponse).json()
   expect(extensions).toEqual(expect.objectContaining({ data: expect.any(Array) }))
-  expect(extensions.data).toHaveLength(1)
-  const [extension] = extensions.data
+  expect(extensions.data).toEqual(expect.arrayContaining([
+    expect.objectContaining({ plugin_id: 'identity-platform', version: '4.0.0', state: 'healthy' }),
+    expect.objectContaining({ plugin_id: 'machine-telemetry', version: '4.0.0', state: 'healthy' }),
+  ]))
+  const extension = extensions.data.find(item => item.plugin_id === 'machine-telemetry')
+  expect(extension).toBeDefined()
   expect(extension).toEqual(expect.objectContaining({
     plugin_id: 'machine-telemetry',
-    version: '1.1.0',
+    version: '4.0.0',
     state: 'healthy',
     installation_id: expect.any(Number),
     bundle: expect.objectContaining({
       path: 'webui/index.mjs',
       sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
-      url: expect.stringMatching(/^\/api\/v3\/extensions\/machine-telemetry\/1\.1\.0\/webui\//),
+      url: expect.stringMatching(/^\/api\/v3\/extensions\/machine-telemetry\/4\.0\.0\/webui\//),
     }),
   }))
   expect(extension.menus).toEqual([expect.objectContaining({ route: extensionPath, label: 'Machine Telemetry' })])
@@ -75,7 +79,7 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
       body: JSON.stringify({
         plugin_id: 'machine-telemetry',
         target: 'control',
-        desired_version: '1.1.0',
+        desired_version: '4.0.0',
         enabled: false,
       }),
     })
@@ -108,7 +112,9 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
     }
   }, extension.bundle.url)
   expect(revocation.catalogStatus).toBe(200)
-  expect(revocation.catalog.data).toEqual([])
+  expect(revocation.catalog.data).toEqual([
+    expect.objectContaining({ plugin_id: 'identity-platform', version: '4.0.0', state: 'healthy' }),
+  ])
   expect(revocation.assetStatus).toBe(404)
 
   // A new SPA runtime must not retain a menu or dynamically registered route

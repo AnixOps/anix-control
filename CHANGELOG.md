@@ -24,6 +24,27 @@
 - Removed the production WebUI runtime's compiled local-module fallback; a
   package WebUI must use its verified Control-served bundle URL.
 
+## 4.0.0 - 2026-07-20
+
+### Added
+
+- Published the formal plugin-only Control release with the complete signed
+  sixteen-package cohort, V2 package manifests, evidence verification, and
+  release-bound canary and support approvals.
+- Added a root-pinned cold-start bootstrap path for the signed
+  `identity-platform` package, so a new package-only database can establish
+  authenticated Control routes without an unauthenticated direct HTTP fallback.
+- Added live signed-package browser coverage and cross-repository Agent package
+  host coverage for package registration, lifecycle, WebUI delivery, bridge
+  routing, and telemetry retrieval.
+
+### Fixed
+
+- Made SQLite package-artifact writes tolerate transient reader/writer
+  contention and use WAL mode for file-backed databases.
+- Bound Control-host bridge route IDs to safe deterministic identifiers while
+  preserving the original validated request metadata for package handlers.
+
 ## 4.0.0-alpha.7 - 2026-07-18
 
 ### Fixed

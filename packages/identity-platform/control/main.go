@@ -54,9 +54,8 @@ func run() error {
 		return err
 	}
 	defer func() { _ = listener.Close() }()
-	if err := os.Chmod(socketPath, 0o600); err != nil {
-		return err
-	}
+	// The descriptor-pinned parent supervisor verifies and secures this socket
+	// before it can dispatch a request to the host.
 	server := grpc.NewServer()
 	pluginhostv1.RegisterControlPackageHostServer(server, host)
 	return server.Serve(listener)

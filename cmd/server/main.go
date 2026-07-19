@@ -37,10 +37,11 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // @title AnixOps Control API
-// @version 4.0.0-alpha.7
+// @version 4.0.0
 // @description AnixOps Control 统一控制面 API 文档
 // @description 支持用户管理、节点管理、订阅系统、支付网关、流量转发等功能
 // @termsOfService https://github.com/AnixOps/anix-control
@@ -424,6 +425,14 @@ func main() {
 	if err := service.EnsureKernelSchema(database.Get()); err != nil {
 		log.Fatalf("Failed to ensure control kernel schema: %v", err)
 	}
+	if err := ensureConfiguredPluginTrustRoot(database.Get(), cfg.Plugins.OfficialPublicKey); err != nil {
+		log.Fatalf("Failed to apply configured plugin trust root: %v", err)
+	}
+	if err := service.BootstrapIdentityPlatformPackage(
+		database.Get(), cfg.Plugins.OfficialPublicKey, cfg.Plugins.IdentityBootstrapPackageDir,
+	); err != nil {
+		log.Fatalf("Failed to bootstrap identity platform package: %v", err)
+	}
 
 	// 初始化管理员账号
 	service.InitAdmin(cfg)
@@ -720,6 +729,15 @@ func main() {
 	// Give goroutines time to finish returning from ListenAndServe.
 	wg.Wait()
 	log.Println("All servers stopped")
+}
+
+func ensureConfiguredPluginTrustRoot(db *gorm.DB, encodedPublicKey string) error {
+	publicKey, err := service.ParseOfficialPluginPublicKey(encodedPublicKey)
+	if err != nil {
+		return err
+	}
+	_, err = service.EnsurePluginTrustRoot(db, publicKey)
+	return err
 }
 
 func startGRPCServer(cfg *config.Config) (*grpcserver.Server, string, error) {

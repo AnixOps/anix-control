@@ -1,0 +1,15 @@
+{
+  "format": "anixops.runtime-contract/v1",
+  "platforms": {
+    "linux/amd64": {
+      "archive_sha256": "b39037b0380ea001fb3c0c28441c2e10bfc694f90682739a65b53e55dce5238b",
+      "binary_sha256": "a2aea24efb4597b5f57b35b8e1bbcc59f439b80723854d4371f6828b46682ffb"
+    },
+    "linux/arm64": {
+      "archive_sha256": "f674c8f4a033dc1dfd4f0d5e9602fbe5b0d0f81307bf3794f44b5b5d6d622eae",
+      "binary_sha256": "343c3e003996ca0437b9cc47dd1500cd0475ba09f5a5f17e50851854e06a1ca7"
+    }
+  },
+  "runtime": "gost",
+  "version": "3.2.6"
+}

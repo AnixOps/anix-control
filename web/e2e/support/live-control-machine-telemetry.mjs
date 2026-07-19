@@ -1,4 +1,4 @@
-import { generateKeyPairSync, sign } from 'node:crypto'
+import { generateKeyPairSync } from 'node:crypto'
 import { access, chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
 import os from 'node:os'
@@ -12,8 +12,7 @@ import { liveControlAPIURL, liveControlAPIPort, liveControlWebUIPort } from './l
 const here = path.dirname(fileURLToPath(import.meta.url))
 const webRoot = path.resolve(here, '../..')
 const controlRoot = path.resolve(webRoot, '..')
-const packageRoot = path.join(controlRoot, 'packages', 'machine-telemetry')
-const packageVersion = '1.1.0'
+const packageVersion = '4.0.0'
 const adminEmail = 'live-control-webui@anixops.test'
 const adminPassword = 'LiveControlWebUI!2026'
 
@@ -124,7 +123,7 @@ function quotedYAML(value) {
   return JSON.stringify(String(value))
 }
 
-function controlConfig({ databasePath, frontendPath, publicKey }) {
+function controlConfig({ databasePath, frontendPath, publicKey, identityBootstrapPackageDir }) {
   return `env: development
 server:
   host: "127.0.0.1"
@@ -162,6 +161,7 @@ app:
   subscribe_path: s
 plugins:
   official_public_key: ${quotedYAML(publicKey)}
+  identity_bootstrap_package_dir: ${quotedYAML(identityBootstrapPackageDir)}
   control_execution_enabled: true
   control_poll_interval: "100ms"
   dispatch_enabled: false
@@ -191,56 +191,88 @@ function rawEd25519PublicKey(publicKey) {
   return raw.toString('base64')
 }
 
-async function waitForInstallation(token) {
-  const deadline = Date.now() + 25_000
-  let last = null
-  while (Date.now() < deadline) {
-    const payload = await apiJSON(`${liveControlAPIURL}/api/v3/plugin-installations`, apiOptions(token, 'GET'))
-    const rows = Array.isArray(payload?.data) ? payload.data : []
-    const installation = rows.find(row => row.plugin_id === 'machine-telemetry' && row.target === 'control')
-    last = installation
-    if (installation?.state === 'healthy' && installation?.observed_version === packageVersion && installation?.enabled === true) {
-      return installation
-    }
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
-  throw new Error(`machine-telemetry Control installation did not become healthy: ${JSON.stringify(last)}`)
+async function waitForInstallation(token, pluginID, version) {
+	const deadline = Date.now() + 25_000
+	let last = null
+	while (Date.now() < deadline) {
+		const payload = await apiJSON(`${liveControlAPIURL}/api/v3/plugin-installations`, apiOptions(token, 'GET'))
+		const rows = Array.isArray(payload?.data) ? payload.data : []
+		const installation = rows.find(row => row.plugin_id === pluginID && row.target === 'control')
+		last = installation
+		if (installation?.state === 'healthy' && installation?.observed_version === version && installation?.enabled === true) {
+			return installation
+		}
+		await new Promise(resolve => setTimeout(resolve, 100))
+	}
+	throw new Error(`${pluginID} Control installation did not become healthy: ${JSON.stringify(last)}`)
 }
 
-async function bootstrapSignedMachineTelemetry(tempRoot) {
-  const fixtureAgent = path.join(tempRoot, 'machine-telemetry-agent-fixture')
-  const packageOutput = path.join(tempRoot, 'package')
-  await writeFile(fixtureAgent, '#!/bin/sh\nprintf "live-control-machine-telemetry-fixture\\n"\n', 'utf8')
-  await chmod(fixtureAgent, 0o755)
-  await runCommand('build signed package fixture', 'python3', [
-    'build.py', 'build',
-    '--agent-binary', fixtureAgent,
-    '--goos', 'linux',
-    '--goarch', 'amd64',
-    '--output-dir', packageOutput,
-  ], { cwd: packageRoot })
+async function loginAsLiveControlAdmin() {
+	const deadline = Date.now() + 25_000
+	let last = null
+	while (Date.now() < deadline) {
+		const response = await fetch(`${liveControlAPIURL}/api/v2/login`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ email: adminEmail, password: adminPassword }),
+		})
+		const text = await response.text()
+		let payload = null
+		try {
+			payload = text ? JSON.parse(text) : null
+		} catch {
+			throw new Error(`live Control login returned non-JSON ${response.status}: ${text.slice(0, 500)}`)
+		}
+		if (response.ok) {
+			return payload
+		}
+		last = { status: response.status, payload }
+		if (response.status !== 503 || payload?.error?.code !== 'package_unavailable') {
+			throw new Error(`live Control login failed with ${response.status}: ${JSON.stringify(payload)}`)
+		}
+		await new Promise(resolve => setTimeout(resolve, 100))
+	}
+	throw new Error(`identity-platform Control host did not become available for login: ${JSON.stringify(last)}`)
+}
 
-  const manifest = await readFile(path.join(packageOutput, `manifest.json`))
-  const artifact = await readFile(path.join(packageOutput, `machine-telemetry-${packageVersion}.tar`))
-  const keys = generateKeyPairSync('ed25519')
-  return {
-    artifact,
-    manifest,
-    signature: sign(null, manifest, keys.privateKey).toString('base64'),
-    publicKey: rawEd25519PublicKey(keys.publicKey),
-  }
+async function createSigningMaterial(tempRoot) {
+	const keys = generateKeyPairSync('ed25519')
+	const publicKey = rawEd25519PublicKey(keys.publicKey)
+	const privateKeyPath = path.join(tempRoot, 'official-ed25519.pem')
+	const publicKeyPath = path.join(tempRoot, 'official-ed25519.raw')
+	await writeFile(privateKeyPath, keys.privateKey.export({ format: 'pem', type: 'pkcs8' }))
+	await chmod(privateKeyPath, 0o600)
+	await writeFile(publicKeyPath, `${publicKey}\n`, 'utf8')
+	return { privateKeyPath, publicKeyPath, publicKey }
+}
+
+async function buildSignedOfficialPackage(tempRoot, signing, packageID) {
+	const packageOutput = path.join(tempRoot, `${packageID}-package`)
+	await runCommand(`build signed ${packageID} package`, 'python3', [
+		'packages/shared/build_package.py',
+		'--package', packageID,
+		'--version', packageVersion,
+		'--out', packageOutput,
+		'--signing-key', signing.privateKeyPath,
+		'--formal-release',
+		'--official-public-key', signing.publicKeyPath,
+	], { cwd: controlRoot })
+	const stem = `${packageID}-${packageVersion}`
+	return {
+		output: packageOutput,
+		artifact: await readFile(path.join(packageOutput, `${stem}.anxp`)),
+		manifest: await readFile(path.join(packageOutput, `${stem}.manifest.json`)),
+		signature: (await readFile(path.join(packageOutput, `${stem}.manifest.sig`), 'utf8')).trim(),
+	}
 }
 
 async function installSignedMachineTelemetry(signed) {
-  const login = await apiJSON(`${liveControlAPIURL}/api/v2/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: adminEmail, password: adminPassword }),
-  })
+	const login = await loginAsLiveControlAdmin()
   const token = login?.data?.token
-  if (typeof token !== 'string' || token.length === 0) {
-    throw new Error(`real Control login did not issue an admin token: ${JSON.stringify(login)}`)
-  }
+	if (typeof token !== 'string' || token.length === 0) {
+		throw new Error(`real Control login did not issue an admin token: ${JSON.stringify(login)}`)
+	}
+	await waitForInstallation(token, 'identity-platform', packageVersion)
 
   const release = await apiJSON(`${liveControlAPIURL}/api/v3/plugin-releases`, apiOptions(token, 'POST', {
     manifest: signed.manifest.toString('utf8'),
@@ -260,7 +292,7 @@ async function installSignedMachineTelemetry(signed) {
     desired_version: packageVersion,
     enabled: true,
   }))
-  await waitForInstallation(token)
+	await waitForInstallation(token, 'machine-telemetry', packageVersion)
 }
 
 async function terminate(child) {
@@ -318,8 +350,15 @@ export default async function setupLiveControlMachineTelemetry() {
     await runCommand('build isolated frontend', vite, ['build', '--outDir', frontendPath], { cwd: webRoot })
     await runCommand('build real Control binary', 'go', ['build', '-o', controlBinary, './cmd/server'], { cwd: controlRoot })
 
-    const signed = await bootstrapSignedMachineTelemetry(tempRoot)
-    await writeFile(configPath, controlConfig({ databasePath, frontendPath, publicKey: signed.publicKey }), 'utf8')
+	const signing = await createSigningMaterial(tempRoot)
+	const identityBootstrap = await buildSignedOfficialPackage(tempRoot, signing, 'identity-platform')
+	const signed = await buildSignedOfficialPackage(tempRoot, signing, 'machine-telemetry')
+	await writeFile(configPath, controlConfig({
+		databasePath,
+		frontendPath,
+		publicKey: signing.publicKey,
+		identityBootstrapPackageDir: identityBootstrap.output,
+	}), 'utf8')
 
     log = await openLog(logPath)
     child = spawn(controlBinary, ['-config', configPath], {

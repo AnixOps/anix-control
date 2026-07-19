@@ -33,7 +33,7 @@ DEFAULTS_PATH = "config.defaults.json"
 MANIFEST_TEMPLATE_PATH = "manifest.template.json"
 FORMAT_VERSION = "anixops.package/v1"
 BUILD_REPORT_VERSION = "anixops.package-build/v1"
-MAX_ARTIFACT_BYTES = 32 << 20
+MAX_ARTIFACT_BYTES = 64 << 20
 MAX_WEBUI_BYTES = 2 << 20
 MANIFEST_FIELDS = (
     "id",

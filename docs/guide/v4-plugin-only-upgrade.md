@@ -54,7 +54,52 @@ operator trust store whose fingerprint was pinned out of band; never extract it
 from the candidate checkout, its configuration, or its evidence archive.
 
 Run the complete rehearsal against the exact candidate before scheduling the
-maintenance window:
+maintenance window. The formal package builder accepts only real Agent command
+binaries for both Linux architectures; point `ANIXOPS_AGENT_SOURCE` at the
+same pinned Agent revision used by the candidate CI run:
+
+```bash
+: "${ANIXOPS_AGENT_SOURCE:?set to the pinned anix-agent checkout}"
+mkdir -p artifacts/v4-agent
+agent_args=()
+for package_id in machine-telemetry nftables-forward gost-mesh nat-egress; do
+  for goarch in amd64 arm64; do
+    output="$PWD/artifacts/v4-agent/${package_id}-linux-${goarch}"
+    GOEXPERIMENT=jsonv2 GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH="${goarch}" \
+      go -C "$ANIXOPS_AGENT_SOURCE" build -trimpath -buildvcs=false -o "$output" "./cmd/${package_id}"
+    agent_args+=(--agent-binary "${package_id}@linux/${goarch}=${output}")
+  done
+done
+
+runtime_dir="$PWD/artifacts/v4-runtime"
+mkdir -p "$runtime_dir"
+runtime_args=()
+for goarch in amd64 arm64; do
+  case "$goarch" in
+    amd64)
+      archive_sha256=b39037b0380ea001fb3c0c28441c2e10bfc694f90682739a65b53e55dce5238b
+      binary_sha256=a2aea24efb4597b5f57b35b8e1bbcc59f439b80723854d4371f6828b46682ffb
+      ;;
+    arm64)
+      archive_sha256=f674c8f4a033dc1dfd4f0d5e9602fbe5b0d0f81307bf3794f44b5b5d6d622eae
+      binary_sha256=343c3e003996ca0437b9cc47dd1500cd0475ba09f5a5f17e50851854e06a1ca7
+      ;;
+  esac
+  archive="$runtime_dir/gost_3.2.6_linux_${goarch}.tar.gz"
+  stage="$(mktemp -d)"
+  curl --fail --location --retry 3 \
+    "https://github.com/go-gost/gost/releases/download/v3.2.6/gost_3.2.6_linux_${goarch}.tar.gz" \
+    -o "$archive"
+  printf '%s  %s\n' "$archive_sha256" "$archive" | sha256sum --check --strict
+  tar -xzf "$archive" -C "$stage"
+  install -m 0755 "$stage/gost" "$runtime_dir/gost-linux-${goarch}"
+  printf '%s  %s\n' "$binary_sha256" "$runtime_dir/gost-linux-${goarch}" | sha256sum --check --strict
+  runtime_args+=(--runtime-binary "gost-mesh:gost@linux/${goarch}=$runtime_dir/gost-linux-${goarch}")
+  find "$stage" -depth -delete
+done
+```
+
+Then run the rehearsal:
 
 ```bash
 config/scripts/run_v4_rehearsal.sh \
@@ -63,7 +108,9 @@ config/scripts/run_v4_rehearsal.sh \
   --official-public-key "$ANIX_OFFICIAL_PUBLIC_KEY" \
   --postgres-dsn "$ANIX_TEST_POSTGRES_DSN" \
   --canary-evidence artifacts/canary-approval.json \
-  --support-evidence artifacts/support-approval.json
+  --support-evidence artifacts/support-approval.json \
+  "${agent_args[@]}" \
+  "${runtime_args[@]}"
 ```
 
 The command writes a machine-readable evidence file. Verify that file before

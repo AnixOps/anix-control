@@ -66,10 +66,10 @@ APPROVAL_FIELDS = frozenset({"schema", "kind", "tag", "release_subject_sha256", 
 ED25519_PUBLIC_KEY_BYTES = 32
 ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
 MAX_ARCHIVE_MEMBERS = 512
-# Sixteen formal artifacts may each reach the builder's 32 MiB limit. The
+# Sixteen formal artifacts may each reach the builder's 64 MiB limit. The
 # remaining 64 MiB is reserved for signed manifests, SBOMs, transcripts, and
 # approvals while keeping archive expansion bounded.
-MAX_ARCHIVE_UNPACKED_BYTES = (len(PACKAGE_IDS) * (32 << 20)) + (64 << 20)
+MAX_ARCHIVE_UNPACKED_BYTES = (len(PACKAGE_IDS) * (64 << 20)) + (64 << 20)
 MAX_ARCHIVE_COMPRESSED_BYTES = MAX_ARCHIVE_UNPACKED_BYTES
 
 

@@ -35,21 +35,45 @@ DEFAULTS_PATH = "config.defaults.json"
 MANIFEST_TEMPLATE_PATH = "manifest.template.json"
 FORMAT_VERSION = "anixops.package/v1"
 BUILD_REPORT_VERSION = "anixops.package-build/v1"
-MAX_ARTIFACT_BYTES = 32 << 20
+MAX_ARTIFACT_BYTES = 64 << 20
 MAX_WEBUI_BYTES = 2 << 20
 MAX_GOST_BYTES = 32 << 20
 CONFIG_API_VERSION = "anixops.gost-mesh/v1"
-GOST_VERSION = "3.2.6"
-GOST_RUNTIME_CONTRACT = {
-    "linux/amd64": {
-        "archive_sha256": "b39037b0380ea001fb3c0c28441c2e10bfc694f90682739a65b53e55dce5238b",
-        "binary_sha256": "a2aea24efb4597b5f57b35b8e1bbcc59f439b80723854d4371f6828b46682ffb",
-    },
-    "linux/arm64": {
-        "archive_sha256": "f674c8f4a033dc1dfd4f0d5e9602fbe5b0d0f81307bf3794f44b5b5d6d622eae",
-        "binary_sha256": "343c3e003996ca0437b9cc47dd1500cd0475ba09f5a5f17e50851854e06a1ca7",
-    },
-}
+
+
+class PackageError(RuntimeError):
+    """Raised when package source or generated output violates the contract."""
+
+
+def load_gost_runtime_contract() -> tuple[str, dict[str, dict[str, str]]]:
+    path = PACKAGE_ROOT / "runtime-contract.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise PackageError(f"invalid shared GOST runtime contract: {exc}") from exc
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"format", "platforms", "runtime", "version"}
+        or value.get("format") != "anixops.runtime-contract/v1"
+        or value.get("runtime") != "gost"
+        or not isinstance(value.get("version"), str)
+        or not isinstance(value.get("platforms"), dict)
+        or set(value["platforms"]) != {"linux/amd64", "linux/arm64"}
+    ):
+        raise PackageError("shared GOST runtime contract is invalid")
+    contract: dict[str, dict[str, str]] = {}
+    for architecture, entry in value["platforms"].items():
+        if (
+            not isinstance(entry, dict)
+            or set(entry) != {"archive_sha256", "binary_sha256"}
+            or not all(isinstance(entry.get(key), str) and re.fullmatch(r"[0-9a-f]{64}", entry[key]) for key in entry)
+        ):
+            raise PackageError(f"shared GOST runtime contract entry is invalid: {architecture}")
+        contract[architecture] = {"archive_sha256": entry["archive_sha256"], "binary_sha256": entry["binary_sha256"]}
+    return value["version"], contract
+
+
+GOST_VERSION, GOST_RUNTIME_CONTRACT = load_gost_runtime_contract()
 RUNTIME_CONFIG_FIELDS = ("api_version", "apply", "rollback_on_exit", "tunnels")
 RUNTIME_DEFAULTS = {
     "api_version": CONFIG_API_VERSION,
@@ -112,10 +136,6 @@ WEBUI_ROUTE_FIELDS = ("id", "path", "export", "permission")
 SAFE_GO_TOKEN = re.compile(r"^[a-z0-9][a-z0-9_]{0,31}$")
 STATIC_IMPORT = re.compile(r"(?m)^\s*import(?:\s|\{|'|\")")
 DYNAMIC_IMPORT = re.compile(r"\bimport\s*\(")
-
-
-class PackageError(RuntimeError):
-    """Raised when package source or generated output violates the contract."""
 
 
 @dataclass(frozen=True)

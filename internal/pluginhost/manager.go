@@ -199,7 +199,7 @@ func (m *Supervisor) Start(ctx context.Context, ref ArtifactRef, generation uint
 			return ErrGenerationUnavailable
 		}
 		if existing.generation == generation {
-			if existing.ref != ref {
+			if !sameArtifactRelease(existing.ref, ref) {
 				return fmt.Errorf("%w: active host artifact does not match", ErrHostIncompatible)
 			}
 			if !hostExited(existing) {

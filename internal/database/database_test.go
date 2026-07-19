@@ -9,6 +9,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSQLiteConnectionStringEnablesBusyTimeoutAndWALForFileDatabases(t *testing.T) {
+	assert.Equal(t,
+		"/var/lib/anixops/control.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)",
+		sqliteConnectionString("/var/lib/anixops/control.db"),
+	)
+	assert.Equal(t,
+		"/var/lib/anixops/control.db?cache=shared&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)",
+		sqliteConnectionString("/var/lib/anixops/control.db?cache=shared"),
+	)
+	assert.Equal(t, ":memory:?_pragma=busy_timeout(5000)", sqliteConnectionString(":memory:"))
+}
+
 func closeDatabase(t testing.TB) {
 	t.Helper()
 	require.NoError(t, Close())

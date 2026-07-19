@@ -13,7 +13,7 @@ export {
 } from './menuRegistry'
 
 const ADMIN_ROUTE_NAME = 'admin'
-const ENVELOPE_VERSION = 'v1'
+const PACKAGE_API_VERSION = 'v2'
 const REFRESH_INTERVAL_MS = 30_000
 const PLUGIN_ID_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,118}[a-z0-9])?$/
 const VERSION_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._+-]{0,118}[A-Za-z0-9])?$/
@@ -132,7 +132,7 @@ function normalizeExtension(raw) {
   if (raw.publisher !== 'AnixOps') {
     throw new Error('publisher is not trusted')
   }
-  if (raw.api_version !== ENVELOPE_VERSION) {
+  if (raw.api_version !== PACKAGE_API_VERSION) {
     throw new Error('api_version is unsupported')
   }
   const version = requireString(raw.version, 'version', 120)

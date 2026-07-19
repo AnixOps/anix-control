@@ -5,7 +5,7 @@ the 3.3 `gost-mesh` plugin. A release build requires two real executable inputs:
 
 - the AnixOps `gost-mesh` Agent plugin executable;
 - the official GOST v3.2.6 executable whose platform SHA-256 is pinned in
-  `build.py`.
+  `runtime-contract.json`.
 
 Both executables are covered by the signed package artifact. The manifest
 declares `agent-<goos>-<goarch>` and

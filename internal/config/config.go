@@ -39,6 +39,7 @@ type Config struct {
 // unsupported by the control kernel.
 type PluginConfig struct {
 	OfficialPublicKey                  string `yaml:"official_public_key"`
+	IdentityBootstrapPackageDir        string `yaml:"identity_bootstrap_package_dir"`
 	ControlExecutionEnabled            bool   `yaml:"control_execution_enabled"`
 	ControlPollInterval                string `yaml:"control_poll_interval"`
 	ControlHostRuntimeDir              string `yaml:"control_host_runtime_dir"`

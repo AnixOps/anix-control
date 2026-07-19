@@ -129,6 +129,28 @@ func TestManagerRestartsExitedHostAtSameGeneration(t *testing.T) {
 	require.NoError(t, manager.Shutdown(context.Background()))
 }
 
+func TestManagerAcceptsEquivalentRematerializedArtifactAtSameGeneration(t *testing.T) {
+	t.Setenv(hostTestChildEnvironment, "1")
+	manager, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
+	firstRef := writeHostArtifactRef(t, "knowledge", "4.0.0")
+	secondRef := writeHostArtifactRef(t, "knowledge", "4.0.0")
+	require.NotEqual(t, firstRef.ArtifactPath, secondRef.ArtifactPath)
+	require.NotEqual(t, firstRef.EntrypointPath, secondRef.EntrypointPath)
+	require.Equal(t, firstRef.ArtifactSHA256, secondRef.ArtifactSHA256)
+	require.Equal(t, firstRef.EntrypointSHA256, secondRef.EntrypointSHA256)
+	require.Equal(t, firstRef.ManifestSHA256, secondRef.ManifestSHA256)
+
+	require.NoError(t, manager.Start(context.Background(), firstRef, 7))
+	active := manager.hosts[hostKey(firstRef.PackageID, firstRef.Version)]
+	require.NoError(t, manager.Start(context.Background(), secondRef, 7))
+	require.Same(t, active, manager.hosts[hostKey(firstRef.PackageID, firstRef.Version)])
+
+	differentRef := writeHostArtifactRefWithPrelude(t, "knowledge", "4.0.0", ":\n")
+	require.ErrorIs(t, manager.Start(context.Background(), differentRef, 7), ErrHostIncompatible)
+}
+
 func TestManagerReplacesPriorVersionForNewerGeneration(t *testing.T) {
 	t.Setenv(hostTestChildEnvironment, "1")
 	manager, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})

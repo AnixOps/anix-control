@@ -1,5 +1,5 @@
 const PLUGIN_ID = 'nat-egress'
-const VERSION = '1.0.0'
+const VERSION = '__ANIXOPS_PACKAGE_VERSION__'
 const STATUS_PATH = '/api/v3/plugins/nat-egress/status?limit=200'
 
 export const anixopsExtension = {

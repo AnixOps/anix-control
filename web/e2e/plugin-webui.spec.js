@@ -67,7 +67,7 @@ function extensionEntry({
     plugin_name: label,
     publisher: 'AnixOps',
     version,
-    api_version: 'v1',
+    api_version: 'v2',
     installation_id: installationID,
     state,
     bundle: {

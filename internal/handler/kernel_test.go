@@ -370,6 +370,10 @@ func TestKernelPluginArtifactUploadAndInstallationGate(t *testing.T) {
 	require.Contains(t, recorder.Body.String(), `"state":"pending"`)
 }
 
+func TestControlPluginArtifactUploadSizeBudgetCoversMaximumArtifact(t *testing.T) {
+	require.GreaterOrEqual(t, maxControlPluginArtifactBase64Bytes, base64.StdEncoding.EncodedLen(service.MaxPluginArtifactBytes))
+}
+
 func TestKernelServesVerifiedWebUIAsset(t *testing.T) {
 	db := newKernelHandlerTestDB(t)
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
@@ -484,7 +488,7 @@ func TestKernelPluginRouteGatewayAuthorizesInstalledSignedRoutes(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Create(&model.PluginInstallation{
 		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version, ObservedVersion: manifest.Version,
-		State: "healthy", Enabled: true,
+		State: "healthy", Enabled: true, LifecycleGeneration: 1,
 	}).Error)
 
 	handler := (&KernelHandler{db: db}).PluginRouteGateway
@@ -683,7 +687,9 @@ func TestPluginRouteGatewayDispatchesResolvedGenerationToHost(t *testing.T) {
 	require.EqualValues(t, 7, hosts.input.Generation)
 	require.Equal(t, manifest.ID, hosts.input.PackageID)
 	require.Equal(t, manifest.Version, hosts.input.Version)
-	require.Equal(t, manifest.ControlRoutes[0], hosts.input.RouteID)
+	require.Equal(t, service.PluginControlBridgeRouteID(manifest.ID, manifest.ControlRoutes[0]), hosts.input.RouteID)
+	require.Equal(t, manifest.ControlRoutes[0], hosts.input.Metadata.Path)
+	require.Empty(t, hosts.input.Metadata.Query)
 	require.JSONEq(t, `{"actor_id":7,"admin":true,"plugin_id":"knowledge"}`, string(hosts.input.PrincipalJSON))
 	require.True(t, hosts.hasContextDeadline)
 	require.WithinDuration(t, hosts.input.Deadline, hosts.contextDeadline, 50*time.Millisecond)

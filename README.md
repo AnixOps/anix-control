@@ -16,28 +16,30 @@ truth for implemented, partial, planned, compatibility, and deferred features.
   pinned to Go `1.26.5` in CI.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.
 - Default database: SQLite, with PostgreSQL migration/dry-run tooling.
-- Current preview: `v4.0.0-alpha.7` (the signed `machine-telemetry` 1.1.0 and
-  crash-safe `nftables-forward` 1.2.0 packages, topology preflight, revision/
-  canary deployment WebUI, and kernel-observed nftables evidence are usable
-  for isolated alpha validation).
-- Product delivery line: `v4.0.0-alpha.*` is immutable historical preview
-  evidence, not a formal 4.0 approval. The formal product stages resume at the
-  untagged `v3.1.0-alpha.2` candidate and advance through 3.5 before 4.0. See
-  [`docs/architecture/release-line-status.md`](docs/architecture/release-line-status.md).
-- Agent-first status: the `anix.agent.v1` bidirectional gRPC control stream is
-  an opt-in foundation in this alpha, not yet the only production task path.
+- Current release: `v4.0.0` (the formal plugin-only Control release). It ships
+  a signed sixteen-package cohort, package-host lifecycle controls, immutable
+  V4 evidence, and compatibility-gated Agent integration.
+- Product delivery line: `v4.0.0-alpha.*` remains immutable historical preview
+  evidence. It is not an alternative trust root or release channel for the
+  formal V4 package cohort.
+- Agent-first status: the `anix.agent.v1` bidirectional gRPC control stream
+  delivers signed package lifecycle work. Legacy data-plane protocols remain
+  available for controlled compatibility and rollback.
 
 Do not infer production completeness from a route or UI existing. Check
 [`docs/features.md`](docs/features.md), [`TODO.md`](TODO.md), and
 [`docs/audit/test-gap.md`](docs/audit/test-gap.md) before marking a feature
 complete.
 
-The v4 alpha keeps REST/UniProxy, the legacy panel-node gRPC services, and the
-existing WebSocket paths available while the new Agent control stream is
-validated. Production task sources have not all moved to the new stream, so
-operators should keep a tested fallback configured. This is an alpha canary,
-not a stable all-purpose Agent rollout: stable publication requires a passing
-72-hour canary and explicit operator authorization.
+V4 keeps REST/UniProxy, the legacy panel-node gRPC services, and existing
+WebSocket paths available as compatibility surfaces. A fresh plugin-only
+deployment must bootstrap the signed `identity-platform` package from the
+verified release evidence before enabling Control package execution; the V4
+release installer performs that verified bootstrap automatically. Operators
+should retain the documented rollback plan throughout rollout. Package hosts
+may invoke narrowly scoped, kernel-owned compatibility bridge operations to
+preserve established route semantics; there is no direct HTTP fallback when a
+signed package is unavailable.
 
 ## Documentation
 
@@ -85,7 +87,7 @@ Production installation downloads checked GitHub Release assets and does not
 clone the repository or build on the target host. Pin the production tag:
 
 ```bash
-export VERSION=v4.0.0-alpha.7
+export VERSION=v4.0.0
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh

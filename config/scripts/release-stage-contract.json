@@ -226,8 +226,7 @@
           "manifest": "packages/wireguard/manifest.template.json",
           "minimum_version": "1.0.0",
           "required_targets": [
-            "control",
-            "agent"
+            "control"
           ],
           "requires_webui": true
         },
@@ -236,8 +235,7 @@
           "manifest": "packages/protocol-runtime/manifest.template.json",
           "minimum_version": "1.0.0",
           "required_targets": [
-            "control",
-            "agent"
+            "control"
           ],
           "requires_webui": true
         }
@@ -484,8 +482,7 @@
           "manifest": "packages/wireguard/manifest.template.json",
           "minimum_version": "1.0.0",
           "required_targets": [
-            "control",
-            "agent"
+            "control"
           ],
           "requires_webui": true
         },
@@ -494,8 +491,7 @@
           "manifest": "packages/protocol-runtime/manifest.template.json",
           "minimum_version": "1.0.0",
           "required_targets": [
-            "control",
-            "agent"
+            "control"
           ],
           "requires_webui": true
         }

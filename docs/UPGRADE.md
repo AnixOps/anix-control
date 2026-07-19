@@ -81,20 +81,20 @@ download:
 - `migration-dry-run.txt`
 - `anix-control-source.sbom.spdx.json`
 
-Plugin-platform releases may also attach signed official package artifacts. The
-asset set is defined by the target product stage, not by every package source
-present in the repository. Formal 3.1 releases attach only
-`machine-telemetry`; `nftables-forward`, `gost-mesh`, and `nat-egress` begin
-at their later stages. Historical `v4.0.0-alpha.*` assets retain their original
-package sets only as frozen preview evidence. For each attached package ID,
-keep these files together:
+The formal `v4.0.0` release attaches all sixteen signed official package
+artifacts. The package set is fixed by the V4 evidence bundle; do not import a
+partial or mixed-version cohort. For each package ID, keep these files from the
+same release together:
 
-- `<plugin-id>-<plugin-version>.tar`
-- `anixops-<plugin-id>-<plugin-version>.manifest.json`
-- `anixops-<plugin-id>-<plugin-version>.sig`
-- `anixops-<plugin-id>-<plugin-version>.public-key.pem`
-- `anixops-<plugin-id>-<plugin-version>.public-key.raw`
-- `anixops-<plugin-id>-<plugin-version>.SHA256SUMS.txt`
+- `<plugin-id>-4.0.0.anxp`
+- `<plugin-id>-4.0.0.manifest.json`
+- `<plugin-id>-4.0.0.manifest.sig`
+- `<plugin-id>-4.0.0.public-key.pem`
+- `<plugin-id>-4.0.0.sbom.spdx.json`
+
+The release-level `official-public-key.raw`, `v4-release-evidence.tar.gz`, and
+`SHA256SUMS.txt` bind the entire cohort. Historical `v4.0.0-alpha.*` assets
+remain frozen preview evidence and must not be mixed into the formal bundle.
 
 Verify checksums before replacing any production file:
 
@@ -111,60 +111,64 @@ Open `RELEASE_MANIFEST.json` and confirm:
 
 If the manifest or checksum verification fails, stop the upgrade.
 
-For signed plugin packages, first verify package checksums:
-
-```bash
-sha256sum -c anixops-machine-telemetry-1.1.0.SHA256SUMS.txt
-```
-
-Then verify the manifest signature with the public key published by the same
+Verify a package manifest signature with the public key published by the same
 GitHub Release, or with the pinned AnixOps trust root already approved in your
 environment:
 
 ```bash
 python3 verify-machine-telemetry-signature.py \
-  --manifest anixops-machine-telemetry-1.1.0.manifest.json \
-  --artifact machine-telemetry-1.1.0.tar \
-  --signature anixops-machine-telemetry-1.1.0.sig \
-  --public-key anixops-machine-telemetry-1.1.0.public-key.pem
+  --manifest machine-telemetry-4.0.0.manifest.json \
+  --artifact machine-telemetry-4.0.0.anxp \
+  --signature machine-telemetry-4.0.0.manifest.sig \
+  --public-key machine-telemetry-4.0.0.public-key.pem
 ```
 
 If the package hash, manifest signature, or trust-root fingerprint does not
 match the release record, stop before enabling any plugin flag.
 
-## Plugin Platform Flags
+## Plugin-Only Bootstrap And Execution
 
-`v4.0.0-alpha.7` is a historical signed-package/WebUI canary artifact, not a
-formal 4.0 release. This section applies only when operating that exact frozen
-artifact. The formal product line resumes at `v3.1.0-alpha.2` and must pass the
-3.1 through 3.5 gates before a plugin-only 4.0 cutover. See
-[`architecture/release-line-status.md`](architecture/release-line-status.md).
+`v4.0.0` is the formal plugin-only Control release. A new database must import
+the signed `identity-platform` package before it can serve authenticated
+Control routes. The release installer downloads the three identity assets,
+verifies each against the release `SHA256SUMS.txt`, stores them under
+`/opt/anixops/control/bootstrap/identity-platform-<version>` as root-owned,
+group-readable files, sets the bootstrap directory and enables only Control
+package execution. It also creates service-user-private `runtime/plugin-hosts`
+and `data/plugin-artifacts` directories under the selected installation root,
+then verifies `/health`, the package gateway, and the initial administrator
+login before reporting a fresh installation as successful.
 
-The historical artifact adds the signed `nftables-forward` 1.2.0 runtime
-observation contract: live ruleset SHA-256 and per-rule counters are persisted
-from Agent heartbeats and are required by topology promotion for that package.
-Start the 72-hour observation window again after installing `alpha.7`. A fresh
-alpha configuration enables the Control package executor and Agent dispatch,
-while topology execution remains disabled. An upgrade preserves the existing
-configuration, so an existing installation is not silently switched to the new
-path. Enable the alpha flags only after importing the official release assets,
-recording checksums/signatures, and selecting a canary node:
+For a manual deployment, verify the formal evidence bundle first, then place
+exactly `identity-platform-4.0.0.anxp`,
+`identity-platform-4.0.0.manifest.json`, and
+`identity-platform-4.0.0.manifest.sig` in a root-owned directory with mode
+`0750` and files mode `0640`, readable by the Control service group. Configure
+that absolute path before the first Control start:
 
 ```yaml
 plugins:
+  identity_bootstrap_package_dir: "/var/lib/anixops/bootstrap"
   control_execution_enabled: true
+  control_host_runtime_dir: "/opt/anixops/control/runtime/plugin-hosts"
+  control_host_artifact_dir: "/opt/anixops/control/data/plugin-artifacts"
   dispatch_enabled: true
   topology_execution_enabled: false
 ```
 
-Enablement order matters. `topology_execution_enabled=true` is refused unless
-`dispatch_enabled=true`. Package artifacts, signatures, database migration
-evidence, canary rollback commands, and a 72-hour observation record are still
-required before any stable rollout. Enabling topology execution does not by
-itself approve business traffic migration; dedicated forwarding still requires
-the real `nftables-forward` Agent runtime, network-namespace TCP/UDP evidence,
-and a recorded rollout plan. Stable 4.0 publication additionally requires
-explicit operator authorization.
+The bootstrap import accepts only one V2 Control-target identity package signed
+by the configured official root; it is idempotent and never replaces an
+operator-selected non-empty bootstrap path. The installer preserves every
+other existing configuration value, except that plugin runtime paths are set
+under the installation root so they remain writable inside the systemd service
+sandbox. Enablement order still matters:
+`topology_execution_enabled=true` is refused unless `dispatch_enabled=true`.
+Do not enable traffic or topology changes until the package artifact,
+signature, migration evidence, node rollback plan, and canary cohort are
+recorded. V4 retains route semantics through capability-scoped,
+kernel-owned compatibility bridge operations, but an uninstalled, disabled,
+unhealthy, unsigned, or incompatible package still returns a package-unavailable
+response instead of falling back to direct HTTP handling.
 
 `gost-mesh` v1 is canary-only. Its signed package embeds the exact GOST v3.2.6
 runtime and supports QUIC and WSS, not TUIC. Both transports require mutual

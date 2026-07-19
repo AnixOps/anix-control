@@ -83,7 +83,7 @@ The tar writer fixes entry order, ownership, permissions, timestamps, and
 format. Identical source and Agent binary bytes therefore produce an identical
 artifact and manifest. Reproducibility of the input Agent binary remains the
 responsibility of its Go release build. The builder enforces the current
-32 MiB Control/Agent artifact limit and 2 MiB WebUI bundle limit.
+64 MiB Control/Agent artifact limit and 2 MiB WebUI bundle limit.
 
 ## Verify
 

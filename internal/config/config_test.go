@@ -130,6 +130,7 @@ func TestLoadPluginDispatchConfig(t *testing.T) {
 	content := `
 plugins:
   official_public_key: "ZmFrZS1wdWJsaWMta2V5"
+  identity_bootstrap_package_dir: "/var/lib/anixops/bootstrap"
   control_execution_enabled: true
   control_poll_interval: "3s"
   control_host_runtime_dir: "/var/lib/anixops/plugin-hosts"
@@ -158,6 +159,7 @@ plugins:
 	assert.Equal(t, "7s", loaded.Plugins.DispatchPollInterval)
 	assert.Equal(t, "11s", loaded.Plugins.TopologyPollInterval)
 	assert.Equal(t, "ZmFrZS1wdWJsaWMta2V5", loaded.Plugins.OfficialPublicKey)
+	assert.Equal(t, "/var/lib/anixops/bootstrap", loaded.Plugins.IdentityBootstrapPackageDir)
 }
 
 func TestOfficialPluginAlphaProfiles(t *testing.T) {

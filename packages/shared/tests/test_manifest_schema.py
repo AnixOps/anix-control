@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -10,6 +11,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -64,6 +66,31 @@ def generate_rsa_signer(root: Path) -> Path:
         raise AssertionError(generated.stderr.decode("utf-8", errors="replace"))
     os.chmod(private_key, 0o600)
     return private_key
+
+
+def agent_binary_arguments(
+    root: Path,
+    platforms: tuple[str, ...] = ("linux/amd64",),
+    package_ids: tuple[str, ...] = ("machine-telemetry", "nftables-forward", "gost-mesh", "nat-egress"),
+) -> list[str]:
+    arguments: list[str] = []
+    for package_id in package_ids:
+        for platform in platforms:
+            binary = root / f"{package_id}-{platform.replace('/', '-')}.bin"
+            binary.write_bytes(b"#!/bin/sh\nexit 0\n")
+            os.chmod(binary, 0o755)
+            arguments.extend(["--agent-binary", f"{package_id}@{platform}={binary}"])
+    return arguments
+
+
+def runtime_binary_arguments(root: Path, platforms: tuple[str, ...] = ("linux/amd64",)) -> list[str]:
+    arguments: list[str] = []
+    for platform in platforms:
+        binary = root / f"gost-runtime-{platform.replace('/', '-')}.bin"
+        binary.write_bytes(b"#!/bin/sh\nprintf 'gost v3.2.6 test runtime\\n'\n")
+        os.chmod(binary, 0o755)
+        arguments.extend(["--runtime-binary", f"gost-mesh:gost@{platform}={binary}"])
+    return arguments
 
 
 class V4PackageManifestSchemaTest(unittest.TestCase):
@@ -155,10 +182,12 @@ func main() {
             malformed_root = root / "malformed.raw"
             malformed_root.write_bytes(base64.b64encode(b"not-an-ed25519-public-key") + b"\n")
             output = root / "packages"
+            platforms = ("linux/amd64", "linux/arm64")
             command = [
                 sys.executable,
                 str(BUILDER),
-                "--all",
+                "--package",
+                "identity-platform",
                 "--version",
                 "4.0.0",
                 "--out",
@@ -191,17 +220,22 @@ func main() {
                     self.assertNotEqual(0, result.returncode)
                     self.assertIn(expected_error, result.stderr)
 
-            built = run_command(command + ["--signing-key", str(signing_key), "--official-public-key", str(official_root)])
+            built = run_command(
+                command
+                + ["--platform", platforms[0], "--platform", platforms[1]]
+                + ["--signing-key", str(signing_key), "--official-public-key", str(official_root)]
+            )
             self.assertEqual(0, built.returncode, built.stderr.decode("utf-8", errors="replace"))
-            self.assertEqual(16, len(list(output.glob("*.anxp"))))
-            self.assertEqual(16, len(list(output.glob("*.sbom.spdx.json"))))
+            self.assertEqual(1, len(list(output.glob("*.anxp"))))
+            self.assertEqual(1, len(list(output.glob("*.sbom.spdx.json"))))
             self.assertTrue((output / "identity-platform-4.0.0.anxp").is_file())
 
             verified = run_command(
                 [
                     sys.executable,
                     str(BUILDER),
-                    "--all",
+                    "--package",
+                    "identity-platform",
                     "--version",
                     "4.0.0",
                     "--out",
@@ -217,7 +251,8 @@ func main() {
                 [
                     sys.executable,
                     str(BUILDER),
-                    "--all",
+                    "--package",
+                    "identity-platform",
                     "--version",
                     "4.0.0",
                     "--out",
@@ -230,16 +265,16 @@ func main() {
             self.assertNotEqual(0, rejected.returncode)
             self.assertIn(b"verify manifest signature", rejected.stderr)
 
-    def test_v4_package_matrix_preserves_existing_targets_and_adds_identity_platform(self) -> None:
+    def test_v4_package_matrix_declares_agent_targets_only_for_real_agent_commands(self) -> None:
         self.assertEqual(
             [
                 ("identity-platform", ("control",)),
                 ("subscription", ("control",)),
-                ("proxy-node", ("control", "agent")),
+                ("proxy-node", ("control",)),
                 ("plan", ("control",)),
                 ("order", ("control",)),
                 ("payment", ("control",)),
-                ("forward", ("control", "agent")),
+                ("forward", ("control",)),
                 ("ticket", ("control",)),
                 ("notification", ("control",)),
                 ("knowledge", ("control",)),
@@ -247,11 +282,243 @@ func main() {
                 ("nftables-forward", ("control", "agent")),
                 ("gost-mesh", ("control", "agent")),
                 ("nat-egress", ("control", "agent")),
-                ("wireguard", ("control", "agent")),
-                ("protocol-runtime", ("control", "agent")),
+                ("wireguard", ("control",)),
+                ("protocol-runtime", ("control",)),
             ],
             [(spec.package_id, spec.targets) for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS],
         )
+
+    def test_formal_agent_package_requires_explicit_agent_binary_for_each_platform(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            signing_key, official_root = generate_ed25519_signer(root, "official")
+            result = run_command(
+                [
+                    sys.executable,
+                    str(BUILDER),
+                    "--package",
+                    "machine-telemetry",
+                    "--version",
+                    "4.0.0",
+                    "--out",
+                    str(root / "packages"),
+                    "--formal-release",
+                    "--signing-key",
+                    str(signing_key),
+                    "--official-public-key",
+                    str(official_root),
+                    "--platform",
+                    "linux/amd64",
+                    "--platform",
+                    "linux/arm64",
+                ]
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn(b"agent binary", result.stderr.lower())
+
+    def test_formal_release_requires_both_supported_platforms(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            signing_key, official_root = generate_ed25519_signer(root, "official")
+            result = run_command(
+                [
+                    sys.executable,
+                    str(BUILDER),
+                    "--package",
+                    "subscription",
+                    "--version",
+                    "4.0.0",
+                    "--out",
+                    str(root / "packages"),
+                    "--formal-release",
+                    "--signing-key",
+                    str(signing_key),
+                    "--official-public-key",
+                    str(official_root),
+                    "--platform",
+                    "linux/amd64",
+                ]
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn(b"formal release requires linux/amd64 and linux/arm64", result.stderr)
+
+    def test_formal_multiarch_package_indexes_real_control_and_agent_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            signing_key, official_root = generate_ed25519_signer(root, "official")
+            output = root / "packages"
+            platforms = ("linux/amd64", "linux/arm64")
+            result = run_command(
+                [
+                    sys.executable,
+                    str(BUILDER),
+                    "--package",
+                    "machine-telemetry",
+                    "--version",
+                    "4.0.0",
+                    "--out",
+                    str(output),
+                    "--formal-release",
+                    "--signing-key",
+                    str(signing_key),
+                    "--official-public-key",
+                    str(official_root),
+                    "--platform",
+                    platforms[0],
+                    "--platform",
+                    platforms[1],
+                    *agent_binary_arguments(root, platforms, ("machine-telemetry",)),
+                ]
+            )
+            self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", errors="replace"))
+
+            manifest = json.loads((output / "machine-telemetry-4.0.0.manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(list(platforms), manifest["architectures"])
+            self.assertEqual(["/api/v3/plugins/machine-telemetry/status"], manifest["control_routes"])
+            self.assertEqual("bin/control-entrypoints.json", manifest["control_entrypoint"]["path"])
+            self.assertEqual("agent/entrypoints.json", manifest["agent_entrypoint"]["path"])
+
+            with tarfile.open(output / "machine-telemetry-4.0.0.anxp", mode="r:") as archive:
+                control_index_file = archive.extractfile("bin/control-entrypoints.json")
+                agent_index_file = archive.extractfile("agent/entrypoints.json")
+                self.assertIsNotNone(control_index_file)
+                self.assertIsNotNone(agent_index_file)
+                control_index = json.loads(control_index_file.read() if control_index_file else b"{}")
+                agent_index = json.loads(agent_index_file.read() if agent_index_file else b"{}")
+                for index in (control_index, agent_index):
+                    self.assertEqual("anixops.package-entrypoints/v1", index["format"])
+                    self.assertEqual(list(platforms), [entry["architecture"] for entry in index["entries"]])
+                    for entry in index["entries"]:
+                        selected = archive.extractfile(entry["path"])
+                        self.assertIsNotNone(selected)
+                        self.assertEqual(entry["sha256"], hashlib.sha256(selected.read() if selected else b"").hexdigest())
+
+    def test_formal_gost_mesh_package_requires_pinned_runtime_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            signing_key, official_root = generate_ed25519_signer(root, "official")
+            platforms = ("linux/amd64", "linux/arm64")
+            result = run_command(
+                [
+                    sys.executable,
+                    str(BUILDER),
+                    "--package",
+                    "gost-mesh",
+                    "--version",
+                    "4.0.0",
+                    "--out",
+                    str(root / "packages"),
+                    "--formal-release",
+                    "--signing-key",
+                    str(signing_key),
+                    "--official-public-key",
+                    str(official_root),
+                    "--platform",
+                    platforms[0],
+                    "--platform",
+                    platforms[1],
+                    *agent_binary_arguments(root, platforms, ("gost-mesh",)),
+                ]
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn(b"runtime binary", result.stderr.lower())
+
+    def test_gost_mesh_runtime_payloads_are_pinned_and_packaged(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            spec = next(item for item in BUILD_PACKAGE_MODULE.PACKAGE_SPECS if item.package_id == "gost-mesh")
+            platforms = (("linux", "amd64"), ("linux", "arm64"))
+            agent_inputs = {}
+            runtime_inputs = {}
+            runtime_payloads = {}
+            for platform in platforms:
+                suffix = "-".join(platform)
+                agent = root / f"gost-mesh-agent-{suffix}"
+                runtime_binary = root / f"gost-{suffix}"
+                agent.write_bytes(b"#!/bin/sh\nexit 0\n")
+                runtime_binary.write_bytes(("#!/bin/sh\nprintf 'gost v3.2.6 " + suffix + "\\n'\n").encode())
+                agent.chmod(0o755)
+                runtime_binary.chmod(0o755)
+                agent_inputs[("gost-mesh", platform)] = agent
+                runtime_inputs[("gost-mesh", "gost", platform)] = runtime_binary
+                runtime_payloads[platform] = runtime_binary.read_bytes()
+
+            def runtime_contract(package_id: str, runtime_name: str, platform: tuple[str, str]) -> dict[str, str]:
+                self.assertEqual("gost-mesh", package_id)
+                self.assertEqual("gost", runtime_name)
+                return {"binary_sha256": hashlib.sha256(runtime_payloads[platform]).hexdigest()}
+
+            with mock.patch.object(
+                BUILD_PACKAGE_MODULE,
+                "runtime_binary_contract",
+                side_effect=runtime_contract,
+                create=True,
+            ):
+                entries, contents = BUILD_PACKAGE_MODULE.package_entries(
+                    spec,
+                    "4.0.0",
+                    platforms,
+                    agent_inputs,
+                    runtime_inputs,
+                )
+            artifact = BUILD_PACKAGE_MODULE.deterministic_tar(entries)
+            manifest = BUILD_PACKAGE_MODULE.generated_manifest(spec, "4.0.0", platforms, artifact, contents)
+            self.assertEqual(
+                {
+                    "runtime-gost-linux-amd64": "runtime/linux-amd64/gost",
+                    "runtime-gost-linux-arm64": "runtime/linux-arm64/gost",
+                },
+                manifest["entrypoints"],
+            )
+            paths = {entry.path: entry.data for entry in entries}
+            for platform in platforms:
+                path = f"runtime/{'-'.join(platform)}/gost"
+                self.assertEqual(runtime_payloads[platform], paths[path])
+
+            mismatched_contract = {"binary_sha256": "0" * 64}
+            with mock.patch.object(
+                BUILD_PACKAGE_MODULE,
+                "runtime_binary_contract",
+                return_value=mismatched_contract,
+                create=True,
+            ):
+                with self.assertRaisesRegex(BUILD_PACKAGE_MODULE.PackageBuildError, "runtime binary SHA-256 mismatch"):
+                    BUILD_PACKAGE_MODULE.source_runtime_binary(
+                        "gost-mesh",
+                        "gost",
+                        platforms[0],
+                        runtime_inputs,
+                    )
+
+    def test_shared_gost_runtime_contract_matches_formal_release_workflow(self) -> None:
+        contract = json.loads((REPO_ROOT / "packages" / "gost-mesh" / "runtime-contract.json").read_text(encoding="utf-8"))
+        workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        self.assertEqual("anixops.runtime-contract/v1", contract["format"])
+        self.assertEqual("gost", contract["runtime"])
+        self.assertEqual("3.2.6", contract["version"])
+        for goarch, workflow_prefix in (("amd64", "GOST_LINUX_AMD64"), ("arm64", "GOST_LINUX_ARM64")):
+            entry = contract["platforms"]["linux/" + goarch]
+            self.assertIn(f"{workflow_prefix}_ARCHIVE_SHA256: '{entry['archive_sha256']}'", workflow)
+            self.assertIn(f"{workflow_prefix}_BINARY_SHA256: '{entry['binary_sha256']}'", workflow)
+
+    def test_artifact_uses_deterministic_gzip_only_when_raw_tar_exceeds_limit(self) -> None:
+        entries = [BUILD_PACKAGE_MODULE.ArchiveEntry("runtime/linux-amd64/gost", b"x" * 4096, 0o755)]
+        with mock.patch.object(BUILD_PACKAGE_MODULE, "MAX_ARTIFACT_BYTES", 1024):
+            first = BUILD_PACKAGE_MODULE.deterministic_artifact(entries)
+            second = BUILD_PACKAGE_MODULE.deterministic_artifact(entries)
+        self.assertEqual(first, second)
+        self.assertTrue(first.startswith(b"\x1f\x8b"))
+        with tarfile.open(fileobj=io.BytesIO(first), mode="r:gz") as archive:
+            member = archive.extractfile("runtime/linux-amd64/gost")
+            self.assertIsNotNone(member)
+            self.assertEqual(b"x" * 4096, member.read() if member else b"")
+
+    def test_v4_package_builder_materializes_each_webui_release_version(self) -> None:
+        for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS:
+            with self.subTest(package_id=spec.package_id):
+                bundle = BUILD_PACKAGE_MODULE.source_webui(spec.package_id, "4.0.0")
+                self.assertNotIn(b"__ANIXOPS_PACKAGE_VERSION__", bundle)
+                self.assertIn(b"4.0.0", bundle)
 
     def test_identity_platform_source_contract_is_a_control_v2_package(self) -> None:
         package_root = REPO_ROOT / "packages" / "identity-platform"
@@ -305,18 +572,23 @@ func main() {
 
             artifact = output / "identity-platform-4.0.0.anxp"
             with tarfile.open(artifact, mode="r:") as archive:
-                host = archive.extractfile("bin/control-host")
+                index_file = archive.extractfile("bin/control-entrypoints.json")
                 routes = archive.extractfile("compat/v2-routes.json")
                 migrations = archive.extractfile("migrations/index.json")
-                self.assertIsNotNone(host)
+                self.assertIsNotNone(index_file)
                 self.assertIsNotNone(routes)
                 self.assertIsNotNone(migrations)
+                index = json.loads(index_file.read() if index_file else b"{}")
+                self.assertEqual("anixops.package-entrypoints/v1", index["format"])
+                self.assertEqual(["linux/amd64"], [entry["architecture"] for entry in index["entries"]])
+                host = archive.extractfile(index["entries"][0]["path"])
+                self.assertIsNotNone(host)
                 host_bytes = host.read() if host else b""
                 routes_value = json.loads(routes.read() if routes else b"{}")
                 migrations_value = json.loads(migrations.read() if migrations else b"{}")
 
                 self.assertTrue(host_bytes.startswith(b"\x7fELF"))
-                self.assertIn(b"Control host socket is required", host_bytes)
+                self.assertIn(b"control host socket is required", host_bytes)
                 self.assertIn("identity.auth.login", {route["package_route"] for route in routes_value["routes"]})
                 self.assertIn("identity.auth.register", {route["package_route"] for route in routes_value["routes"]})
                 migration_paths = [migration["path"] for migration in migrations_value["migrations"]]
@@ -342,7 +614,10 @@ func main() {
 
             artifact = output / "knowledge-4.0.0.anxp"
             with tarfile.open(artifact, mode="r:") as archive:
-                host = archive.extractfile("bin/control-host")
+                index_file = archive.extractfile("bin/control-entrypoints.json")
+                self.assertIsNotNone(index_file)
+                index = json.loads(index_file.read() if index_file else b"{}")
+                host = archive.extractfile(index["entries"][0]["path"])
                 self.assertIsNotNone(host)
                 host_bytes = host.read() if host else b""
 
@@ -400,9 +675,20 @@ func main() {
 
     def test_all_v4_packages_materialize_signed_v2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            output = Path(temporary) / "packages"
+            root = Path(temporary)
+            output = root / "packages"
             result = subprocess.run(
-                [sys.executable, str(BUILDER), "--all", "--version", "4.0.0", "--out", str(output)],
+                [
+                    sys.executable,
+                    str(BUILDER),
+                    "--all",
+                    "--version",
+                    "4.0.0",
+                    "--out",
+                    str(output),
+                    *agent_binary_arguments(root),
+                    *runtime_binary_arguments(root),
+                ],
                 cwd=REPO_ROOT,
                 check=False,
                 text=True,
@@ -424,7 +710,7 @@ func main() {
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
                 self.assertEqual("v2", manifest["api_version"])
-                self.assertTrue(manifest["control_entrypoint"]["path"])
+                self.assertEqual("bin/control-entrypoints.json", manifest["control_entrypoint"]["path"])
                 self.assertTrue(manifest["migrations"]["index"])
                 self.assertTrue(manifest["compatibility_routes"]["path"])
                 self.assertRegex(manifest["route_contract_digest"], r"^[0-9a-f]{64}$")
@@ -456,6 +742,12 @@ func main() {
                     members = archive.getmembers()
                     self.assertEqual(sorted(member.name for member in members), [member.name for member in members])
                     self.assertTrue(all(member.mtime == 0 for member in members))
+                    control_index = archive.extractfile("bin/control-entrypoints.json")
+                    self.assertIsNotNone(control_index)
+                    self.assertEqual(
+                        ["linux/amd64"],
+                        [entry["architecture"] for entry in json.loads(control_index.read() if control_index else b"{}")["entries"]],
+                    )
 
     def test_v4_release_stage_requires_the_materialized_manifest_contract(self) -> None:
         result = subprocess.run(

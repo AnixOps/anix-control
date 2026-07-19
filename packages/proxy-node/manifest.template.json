@@ -4,7 +4,7 @@
   "version": "4.0.0",
   "api_version": "v2",
   "publisher": "AnixOps",
-  "targets": ["control", "agent"],
+  "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
   "capabilities": [],

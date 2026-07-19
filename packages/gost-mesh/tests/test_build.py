@@ -22,6 +22,18 @@ SPEC.loader.exec_module(BUILD)
 
 
 class GostMeshPackageTest(unittest.TestCase):
+    def test_runtime_contract_is_loaded_from_the_shared_release_input(self) -> None:
+        version, contract = BUILD.load_gost_runtime_contract()
+        self.assertEqual("3.2.6", version)
+        self.assertEqual(
+            "a2aea24efb4597b5f57b35b8e1bbcc59f439b80723854d4371f6828b46682ffb",
+            contract["linux/amd64"]["binary_sha256"],
+        )
+        self.assertEqual(
+            "343c3e003996ca0437b9cc47dd1500cd0475ba09f5a5f17e50851854e06a1ca7",
+            contract["linux/arm64"]["binary_sha256"],
+        )
+
     def make_agent(self, root: Path) -> BUILD.AgentInput:
         path = root / "gost-mesh-agent"
         path.write_bytes(b"#!/bin/sh\nprintf 'gost-mesh 1.0.0\\n'\n")

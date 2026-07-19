@@ -123,10 +123,10 @@ docker compose logs -f anix-control
 
 ### 2.1 一键安装脚本
 
-生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像：
+生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像。对 `v4.*`，它还会下载并校验签名身份包三件套，暂存到 root 所有的引导目录后验证登录路径：
 
 ```bash
-export VERSION=v4.0.0-alpha.7
+export VERSION=v4.0.0
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh

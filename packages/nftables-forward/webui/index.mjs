@@ -1,5 +1,5 @@
 const PLUGIN_ID = 'nftables-forward'
-const PLUGIN_VERSION = '1.2.0'
+const PLUGIN_VERSION = '__ANIXOPS_PACKAGE_VERSION__'
 const BUNDLE_PATH = 'webui/index.mjs'
 const STATUS_PATH = '/api/v3/plugins/nftables-forward/status?limit=200'
 

@@ -260,6 +260,14 @@ check_release_workflow() {
   require_job_dependency release v4-release-evidence || failed=1
   require_text "packages/shared/build_package.py" "formal v4 package builder" || failed=1
   require_text "--formal-release" "formal v4 package signing mode" || failed=1
+  require_text "Build formal v4 Agent plugin binaries" "formal v4 real Agent binary build step" || failed=1
+  require_text "formal_agent_args+=(--agent-binary" "formal v4 explicit Agent binary mappings" || failed=1
+  require_text "Download checksum-pinned formal v4 GOST runtimes" "formal v4 pinned GOST runtime download step" || failed=1
+  require_text "GOST_LINUX_ARM64_BINARY_SHA256" "formal v4 arm64 GOST binary checksum" || failed=1
+  require_text "formal_runtime_args+=(--runtime-binary" "formal v4 explicit GOST runtime mappings" || failed=1
+  require_text "--platform linux/amd64" "formal v4 amd64 package platform" || failed=1
+  require_text "--platform linux/arm64" "formal v4 arm64 package platform" || failed=1
+  require_text "scripts/tests/test_identity_bootstrap_install.sh" "identity bootstrap installer regression test" || failed=1
   require_text "config/scripts/run_v4_rehearsal.sh" "v4 release rehearsal invocation" || failed=1
   require_text "config/scripts/verify_v4_evidence.py" "v4 release evidence verification" || failed=1
   require_text "ANIXOPS_V4_CANARY_APPROVAL" "v4 signed canary approval input" || failed=1
@@ -391,7 +399,7 @@ check_release_workflow() {
   require_text "The signed official package IDs for this product stage" "stage-scoped release notes" || failed=1
   require_text "canary-only until Secret ID" "GOST mesh stable-release limitation" || failed=1
   require_text "Control to Agent Process E2E" "cross-repository Agent process E2E job" || failed=1
-  require_text "ref: 35f1af4b9887e1c2d811d66b8da38c7b0d86c7d9" "pinned Agent fixture commit" || failed=1
+  require_text "ref: c459383955027ee00719fa2dac1a87813c88a511" "pinned Agent fixture commit" || failed=1
   require_text "ANIXOPS_CROSS_REPO_E2E: '1'" "cross-repository Agent process E2E opt-in" || failed=1
   require_text "KernelOperationBridgeCrossRepositoryAgentProcess" "cross-repository Agent process E2E test" || failed=1
   require_text "AgentPluginPackageCrossRepositoryE2E" "signed Agent package cross-repository E2E test" || failed=1
@@ -474,6 +482,7 @@ jobs:
   deploy-script-test:
     steps:
       - run: python3 config/scripts/check_release_stage.py --self-test
+      - run: bash scripts/tests/test_identity_bootstrap_install.sh
 
   frontend-build:
     steps:
@@ -566,6 +575,15 @@ jobs:
       RELEASE_PACKAGE_IDS: ${{ needs.tag-gate.outputs.release_package_ids }}
       RELEASE_PACKAGE_SCOPE: ${{ needs.tag-gate.outputs.release_package_scope }}
     steps:
+      - name: Build formal v4 Agent plugin binaries
+        run: |
+          --platform linux/amd64
+          --platform linux/arm64
+          formal_agent_args+=(--agent-binary machine-telemetry@linux/amd64=/tmp/machine-telemetry)
+      - name: Download checksum-pinned formal v4 GOST runtimes
+        run: |
+          GOST_LINUX_ARM64_BINARY_SHA256=343c3e003996ca0437b9cc47dd1500cd0475ba09f5a5f17e50851854e06a1ca7
+          formal_runtime_args+=(--runtime-binary gost-mesh:gost@linux/amd64=/tmp/gost-linux-amd64)
       - env:
           ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
           ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY: ${{ secrets.ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY }}
@@ -631,7 +649,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 35f1af4b9887e1c2d811d66b8da38c7b0d86c7d9
+          ref: c459383955027ee00719fa2dac1a87813c88a511
           path: V2bX_AnixOps
       - env:
           ANIXOPS_CROSS_REPO_E2E: '1'
@@ -710,6 +728,20 @@ EOF
 
   if ! RELEASE_WORKFLOW_PATH="${fixture}" "${BASH_SOURCE[0]}" >/dev/null; then
     echo "self-test failed: complete fixture should pass" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-formal-v4-agent-mappings"
+  sed -i '/formal_agent_args+=(--agent-binary/d' "${fixture}.missing-formal-v4-agent-mappings"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-formal-v4-agent-mappings" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing formal v4 Agent mappings should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-formal-v4-runtime-mappings"
+  sed -i '/formal_runtime_args+=(--runtime-binary/d' "${fixture}.missing-formal-v4-runtime-mappings"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-formal-v4-runtime-mappings" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing formal v4 runtime mappings should fail" >&2
     return 1
   fi
 

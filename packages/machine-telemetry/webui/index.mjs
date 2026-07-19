@@ -1,5 +1,5 @@
 const PLUGIN_ID = 'machine-telemetry'
-const PLUGIN_VERSION = '1.1.0'
+const PLUGIN_VERSION = '__ANIXOPS_PACKAGE_VERSION__'
 const BUNDLE_PATH = 'webui/index.mjs'
 const STATUS_PATH = '/api/v3/plugins/machine-telemetry/status?limit=200'
 

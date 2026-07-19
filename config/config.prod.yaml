@@ -94,7 +94,7 @@ auth:
 
 app:
   name: "AnixOps Control"
-  version: "4.0.0-alpha.7"
+  version: "4.0.0"
   # The installer must replace this with a generated value. Never ship a
   # reusable node credential in the production template.
   api_token: ""
@@ -106,6 +106,9 @@ plugins:
   # Official AnixOps Ed25519 release trust root (raw public key, base64).
   # Trust is pinned even while execution remains fail-closed below.
   official_public_key: "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="
+  # Set only for a fresh plugin-only deployment, using a root-owned directory
+  # containing one official identity package release trio.
+  identity_bootstrap_package_dir: ""
   control_execution_enabled: false
   control_poll_interval: "5s"
   control_host_runtime_dir: "/var/lib/anixops/plugin-hosts"

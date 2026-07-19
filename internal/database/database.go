@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
@@ -44,7 +45,7 @@ func Init(cfg *config.DatabaseConfig) error {
 			}
 		}
 
-		dialector = sqlite.Open(dbPath)
+		dialector = sqlite.Open(sqliteConnectionString(dbPath))
 
 	case "postgres", "postgresql":
 		// PostgreSQL
@@ -100,6 +101,19 @@ func Init(cfg *config.DatabaseConfig) error {
 
 	initialized = true
 	return nil
+}
+
+func sqliteConnectionString(databasePath string) string {
+	databasePath = strings.TrimSpace(databasePath)
+	separator := "?"
+	if strings.Contains(databasePath, "?") {
+		separator = "&"
+	}
+	dsn := databasePath + separator + "_pragma=busy_timeout(5000)"
+	if databasePath == ":memory:" || strings.HasPrefix(databasePath, "file::memory:") {
+		return dsn
+	}
+	return dsn + "&_pragma=journal_mode(WAL)"
 }
 
 // Get 鑾峰彇鏁版嵁搴撳疄渚?

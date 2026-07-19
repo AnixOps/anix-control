@@ -5,7 +5,7 @@ import create, { anixopsExtension } from '../webui/index.mjs'
 assert.deepEqual(anixopsExtension, {
   webuiApiVersion: 'anixops.webui/v1',
   pluginId: 'machine-telemetry',
-  version: '1.1.0',
+  version: '__ANIXOPS_PACKAGE_VERSION__',
   bundle: { path: 'webui/index.mjs' },
 })
 

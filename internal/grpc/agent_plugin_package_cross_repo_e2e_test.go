@@ -1,15 +1,15 @@
 package grpc_test
 
 import (
-	"archive/tar"
-	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -32,9 +32,11 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	controlgrpc "github.com/AnixOps/anix-control/v4/internal/grpc"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
+	"github.com/AnixOps/anix-control/v4/internal/identitybridge"
 	"github.com/AnixOps/anix-control/v4/internal/middleware"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
+	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -72,8 +74,8 @@ func TestAgentPluginPackageCrossRepoContract(t *testing.T) {
 // Control package transport and Agent Supervisor. It intentionally builds the
 // sibling Agent binaries instead of substituting an in-process fake.
 func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the production plugin runtime requires Unix sockets")
+	if runtime.GOOS != "linux" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
+		t.Skip("the formal Linux package runtime requires a linux amd64 or arm64 test host")
 	}
 	if testing.Short() {
 		t.Skip("builds and launches real sibling Agent binaries")
@@ -85,22 +87,21 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	agentRoot := crossRepositorySiblingAgentRoot(t)
 	require.FileExists(t, filepath.Join(agentRoot, "go.mod"))
 	fixtureBinary := buildCrossRepositoryAgentFixtureBinary(t, agentRoot)
-	telemetryBinary := buildCrossRepositoryMachineTelemetry(t, agentRoot)
-	artifact, entrypoint, webUI := buildCrossRepositoryMachineTelemetryTar(t, telemetryBinary)
-	require.Greater(t, len(artifact), crossRepoPluginE2EArtifactMinimum)
-
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
+	telemetryAMD64 := buildCrossRepositoryAgentPluginBinary(t, agentRoot, "machine-telemetry", "linux", "amd64")
+	telemetryARM64 := buildCrossRepositoryAgentPluginBinary(t, agentRoot, "machine-telemetry", "linux", "arm64")
+	artifact, canonicalManifest, signature, manifest := buildCrossRepositoryFormalMachineTelemetryPackage(
+		t, publicKey, privateKey, telemetryAMD64, telemetryARM64,
+	)
+	require.Greater(t, len(artifact), crossRepoPluginE2EArtifactMinimum)
+	require.LessOrEqual(t, len(artifact), service.MaxPluginArtifactBytes)
 	previousConfig := config.Get()
-	config.Set(&config.Config{Plugins: config.PluginConfig{
+	cfg := &config.Config{Plugins: config.PluginConfig{
 		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlExecutionEnabled: true,
-	}})
+	}}
+	config.Set(cfg)
 	t.Cleanup(func() { config.Set(previousConfig) })
-	manifest := crossRepositoryMachineTelemetryManifest(artifact, entrypoint, webUI)
-	canonicalManifest, err := service.CanonicalPluginManifest(manifest)
-	require.NoError(t, err)
-	signature := base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonicalManifest))
-
 	cache.InitMemory()
 	databasePath := filepath.Join(t.TempDir(), "agent-package-cross-repository.db")
 	require.NoError(t, database.Init(&config.DatabaseConfig{
@@ -119,6 +120,7 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	require.NoError(t, db.Create(&model.PluginInstallation{
 		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
 		ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
+		LifecycleGeneration: 1,
 	}).Error)
 
 	const (
@@ -136,7 +138,7 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	require.Equal(t, chain.Install.ID, chain.Update.DependsOnOperationID)
 	require.Equal(t, chain.Update.ID, chain.Enable.DependsOnOperationID)
 
-	httpServer := newCrossRepositoryPluginHTTPServer(t)
+	httpServer := newCrossRepositoryPluginHTTPServer(t, db, cfg, publicKey, manifest)
 	installConfig, err := service.BuildAgentPluginInstallConfig(db, node.ID, manifest.ID, manifest.Version)
 	require.NoError(t, err)
 	assertCrossRepositoryWrongNodeRejected(t, httpServer.URL, wrongNodeAPIKey, installConfig)
@@ -194,6 +196,7 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 
 	waitForCrossRepositoryPluginTelemetry(t, db, node.ID, 15*time.Second)
 	status := getCrossRepositoryMachineTelemetryStatus(t, httpServer.URL)
+	require.Equal(t, manifest.Version, status.Version)
 	var telemetryNode *plugincontrol.MachineTelemetryNode
 	for index := range status.Nodes {
 		if status.Nodes[index].ID == node.ID {
@@ -252,15 +255,93 @@ func (s *crossRepositoryFastHeartbeatStream) Send(message *agentv1pb.ControlToAg
 	return s.AgentControlService_ControlStreamServer.Send(message)
 }
 
-func buildCrossRepositoryMachineTelemetry(t *testing.T, agentRoot string) string {
+func buildCrossRepositoryAgentPluginBinary(t *testing.T, agentRoot, commandName, goos, goarch string) string {
 	t.Helper()
-	binaryPath := filepath.Join(t.TempDir(), "machine-telemetry")
-	command := exec.Command(crossRepositoryAgentGo(), "build", "-o", binaryPath, "./cmd/machine-telemetry")
+	binaryPath := filepath.Join(t.TempDir(), commandName+"-"+goos+"-"+goarch)
+	environment := make([]string, 0, len(os.Environ())+3)
+	for _, entry := range crossRepositoryAgentBuildEnv() {
+		if strings.HasPrefix(entry, "GOOS=") || strings.HasPrefix(entry, "GOARCH=") || strings.HasPrefix(entry, "CGO_ENABLED=") {
+			continue
+		}
+		environment = append(environment, entry)
+	}
+	environment = append(environment, "CGO_ENABLED=0", "GOOS="+goos, "GOARCH="+goarch)
+	command := exec.Command(crossRepositoryAgentGo(), "build", "-trimpath", "-buildvcs=false", "-o", binaryPath, "./cmd/"+commandName)
 	command.Dir = agentRoot
-	command.Env = crossRepositoryAgentBuildEnv()
+	command.Env = environment
 	output, err := command.CombinedOutput()
 	require.NoError(t, err, string(output))
 	return binaryPath
+}
+
+func buildCrossRepositoryFormalMachineTelemetryPackage(
+	t *testing.T,
+	publicKey ed25519.PublicKey,
+	privateKey ed25519.PrivateKey,
+	amd64Binary, arm64Binary string,
+) ([]byte, []byte, string, service.PluginManifest) {
+	t.Helper()
+	privateKeyDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	require.NoError(t, err)
+	credentials := t.TempDir()
+	privateKeyPath := filepath.Join(credentials, "official-ed25519.pem")
+	publicKeyPath := filepath.Join(credentials, "official-ed25519.raw")
+	require.NoError(t, os.WriteFile(privateKeyPath, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateKeyDER}), 0o600))
+	require.NoError(t, os.WriteFile(publicKeyPath, []byte(base64.StdEncoding.EncodeToString(publicKey)+"\n"), 0o600))
+
+	output := t.TempDir()
+	command := exec.Command(
+		"python3",
+		"packages/shared/build_package.py",
+		"--package", "machine-telemetry",
+		"--version", "4.0.0",
+		"--out", output,
+		"--formal-release",
+		"--signing-key", privateKeyPath,
+		"--official-public-key", publicKeyPath,
+		"--platform", "linux/amd64",
+		"--platform", "linux/arm64",
+		"--agent-binary", "machine-telemetry@linux/amd64="+amd64Binary,
+		"--agent-binary", "machine-telemetry@linux/arm64="+arm64Binary,
+	)
+	command.Dir = crossRepositoryControlRoot(t)
+	command.Env = crossRepositoryControlBuildEnv()
+	result, err := command.CombinedOutput()
+	require.NoError(t, err, string(result))
+
+	artifactPath := filepath.Join(output, "machine-telemetry-4.0.0.anxp")
+	manifestPath := filepath.Join(output, "machine-telemetry-4.0.0.manifest.json")
+	signaturePath := filepath.Join(output, "machine-telemetry-4.0.0.manifest.sig")
+	artifact, err := os.ReadFile(artifactPath)
+	require.NoError(t, err)
+	manifestJSON, err := os.ReadFile(manifestPath)
+	require.NoError(t, err)
+	signatureData, err := os.ReadFile(signaturePath)
+	require.NoError(t, err)
+	signature := strings.TrimSpace(string(signatureData))
+	manifest, err := service.VerifyPluginRelease(string(manifestJSON), signature, publicKey)
+	require.NoError(t, err)
+	require.Equal(t, []string{"linux/amd64", "linux/arm64"}, manifest.Architectures)
+	require.Equal(t, "bin/control-entrypoints.json", manifest.ControlEntrypoint.Path)
+	require.Equal(t, "agent/entrypoints.json", manifest.AgentEntrypoint.Path)
+	return artifact, manifestJSON, signature, *manifest
+}
+
+func crossRepositoryControlRoot(t *testing.T) string {
+	t.Helper()
+	_, sourceFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	return filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", ".."))
+}
+
+func crossRepositoryControlBuildEnv() []string {
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(entry, "GOWORK=") {
+			env = append(env, entry)
+		}
+	}
+	return append(env, "GOWORK=off")
 }
 
 func TestCrossRepositoryAgentBuildConfiguration(t *testing.T) {
@@ -288,61 +369,6 @@ func crossRepositoryBuildEnvironmentValue(environment []string, key string) stri
 		}
 	}
 	return value
-}
-
-func buildCrossRepositoryMachineTelemetryTar(t *testing.T, binaryPath string) ([]byte, string, []byte) {
-	t.Helper()
-	binary, err := os.ReadFile(binaryPath)
-	require.NoError(t, err)
-	entrypoint := filepath.ToSlash(filepath.Join("agent", runtime.GOOS+"-"+runtime.GOARCH, "plugin"))
-	webUI := []byte(`export default { name: "MachineTelemetry" }`)
-	var artifact bytes.Buffer
-	writer := tar.NewWriter(&artifact)
-	writeCrossRepositoryTarEntry(t, writer, entrypoint, 0o755, binary)
-	writeCrossRepositoryTarEntry(t, writer, "webui/index.mjs", 0o644, webUI)
-	if artifact.Len() <= crossRepoPluginE2EArtifactMinimum {
-		padding := bytes.Repeat([]byte{0x5a}, crossRepoPluginE2EArtifactMinimum-artifact.Len()+64*1024)
-		writeCrossRepositoryTarEntry(t, writer, "payload/e2e-padding.bin", 0o600, padding)
-	}
-	require.NoError(t, writer.Close())
-	require.Greater(t, artifact.Len(), crossRepoPluginE2EArtifactMinimum)
-	return artifact.Bytes(), entrypoint, webUI
-}
-
-func writeCrossRepositoryTarEntry(t *testing.T, writer *tar.Writer, name string, mode int64, contents []byte) {
-	t.Helper()
-	require.NoError(t, writer.WriteHeader(&tar.Header{
-		Name: name, Mode: mode, Size: int64(len(contents)), Typeflag: tar.TypeReg,
-	}))
-	_, err := writer.Write(contents)
-	require.NoError(t, err)
-}
-
-func crossRepositoryMachineTelemetryManifest(artifact []byte, entrypoint string, webUI []byte) service.PluginManifest {
-	artifactDigest := sha256.Sum256(artifact)
-	webUIDigest := sha256.Sum256(webUI)
-	return service.PluginManifest{
-		ID: "machine-telemetry", Name: "Machine Telemetry", Version: "1.1.0", APIVersion: "v1", Publisher: "AnixOps",
-		Targets: []string{"control", "agent"}, Architectures: []string{runtime.GOOS + "/" + runtime.GOARCH},
-		ArtifactSHA256: hex.EncodeToString(artifactDigest[:]), Capabilities: []string{"telemetry.read"},
-		Permissions:    []string{"machine-telemetry.view", service.PluginAPIPermission("machine-telemetry")},
-		ControlRoutes:  []string{plugincontrol.MachineTelemetryStatusRoute},
-		ConfigSchema:   json.RawMessage(`{"additionalProperties":false,"properties":{"interval_seconds":{"maximum":3600,"minimum":5,"type":"integer"}},"type":"object"}`),
-		Entrypoints:    map[string]string{"agent-" + runtime.GOOS + "-" + runtime.GOARCH: entrypoint},
-		FrontendSHA256: hex.EncodeToString(webUIDigest[:]),
-		WebUI: &service.PluginWebUI{
-			Bundle:      service.PluginWebUIBundle{Path: "webui/index.mjs", SHA256: hex.EncodeToString(webUIDigest[:])},
-			Permissions: []string{"machine-telemetry.view"},
-			Menus: []service.PluginWebUIMenu{{
-				ID: "machine-telemetry.main", Parent: "services", Label: "Machine Telemetry", Icon: "activity",
-				Route: "/admin/extensions/machine-telemetry", Permission: "machine-telemetry.view", Order: 100,
-			}},
-			Routes: []service.PluginWebUIRoute{{
-				ID: "machine-telemetry.main", Path: "/admin/extensions/machine-telemetry", Export: "default",
-				Permission: "machine-telemetry.view",
-			}},
-		},
-	}
 }
 
 func createCrossRepositoryPluginNode(t *testing.T, db *gorm.DB, name, apiKey string) model.Node {
@@ -380,8 +406,33 @@ func createCrossRepositoryPluginAssignment(t *testing.T, db *gorm.DB, node model
 	return installation, assignment, configJSON
 }
 
-func newCrossRepositoryPluginHTTPServer(t *testing.T) *httptest.Server {
+func newCrossRepositoryPluginHTTPServer(t *testing.T, db *gorm.DB, cfg *config.Config, publicKey ed25519.PublicKey, manifest service.PluginManifest) *httptest.Server {
 	t.Helper()
+	bridgeFactory, err := identitybridge.NewFactory(cfg)
+	require.NoError(t, err)
+	hosts, err := pluginhost.NewManager(pluginhost.ManagerConfig{
+		StartupTimeout: 10 * time.Second, BridgeFactory: bridgeFactory,
+	})
+	require.NoError(t, err)
+	artifactRoot := t.TempDir()
+	dispatcher := plugincontrol.NewHostLifecycleDispatcher(hosts, func(ctx context.Context, packageID, version string) (pluginhost.ArtifactRef, error) {
+		return service.MaterializePluginControlArtifact(db, publicKey, packageID, version, artifactRoot)
+	})
+	var installation model.PluginInstallation
+	require.NoError(t, db.First(&installation, "plugin_id = ? AND target = ?", manifest.ID, "control").Error)
+	startupCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	_, err = dispatcher.ExecuteLifecycle(startupCtx, manifest.ID, manifest.Version, plugincontrol.LifecycleRequest{
+		Kind: "plugin.enable", Target: manifest.Version, Generation: uint64(installation.LifecycleGeneration),
+	})
+	require.NoError(t, err)
+	previousHosts := pluginhost.DefaultManager()
+	pluginhost.SetDefaultManager(hosts)
+	t.Cleanup(func() {
+		pluginhost.SetDefaultManager(previousHosts)
+		require.NoError(t, hosts.Shutdown(context.Background()))
+	})
+
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	packages := router.Group("/api/v3/agent/plugin-releases")
