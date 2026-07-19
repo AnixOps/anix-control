@@ -105,7 +105,7 @@ app:
 plugins:
   # Official AnixOps Ed25519 release trust root (raw public key, base64).
   # Trust is pinned even while execution remains fail-closed below.
-  official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
+  official_public_key: "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="
   control_execution_enabled: false
   control_poll_interval: "5s"
   control_host_runtime_dir: "/var/lib/anixops/plugin-hosts"

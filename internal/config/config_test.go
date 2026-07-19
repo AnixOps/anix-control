@@ -161,7 +161,7 @@ plugins:
 }
 
 func TestOfficialPluginAlphaProfiles(t *testing.T) {
-	const officialPublicKey = "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
+	const officialPublicKey = "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="
 
 	decoded, err := base64.StdEncoding.DecodeString(officialPublicKey)
 	require.NoError(t, err)

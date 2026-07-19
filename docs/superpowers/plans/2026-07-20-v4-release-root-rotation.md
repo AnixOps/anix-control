@@ -109,11 +109,13 @@ Run:
 
 ~~~bash
 expected="$(tr -d '[:space:]' < /root/.anixops-release/v4-root-20260720/official-public-key.raw)"
+retired_root="$(git show a84f6ed0:config/config.prod.yaml | sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p')"
+test -n "$retired_root"
 for config in config/config.prod.yaml config/config.yaml.example config/config.dev.yaml.example; do
   actual="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' "$config")"
   test "$actual" = "$expected"
 done
-! grep -R --fixed-strings 'IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M=' config web/src/__tests__ docs/reference
+! grep -R --fixed-strings "$retired_root" config web/src/__tests__ docs/reference
 GOWORK=off go test ./internal/config -count=1
 ~~~
 

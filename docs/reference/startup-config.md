@@ -58,7 +58,7 @@ app:
   subscribe_path: "s"
 
 plugins:
-  official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
+  official_public_key: "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="
   control_execution_enabled: true
   control_poll_interval: "5s"
   dispatch_enabled: true

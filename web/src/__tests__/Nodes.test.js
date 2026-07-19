@@ -205,7 +205,7 @@ describe('Nodes.vue', () => {
       grpcUseTLS: true,
       pluginRoot: '/var/lib/anixops/plugins',
       pluginSocketDir: '/run/anixops/plugins',
-      pluginOfficialPublicKey: 'IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M='
+      pluginOfficialPublicKey: 'lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM='
     })
     await wrapper.vm.$nextTick()
 
@@ -216,7 +216,7 @@ describe('Nodes.vue', () => {
       PluginSupervisorEnabled: true,
       PluginRoot: '/var/lib/anixops/plugins',
       PluginSocketDir: '/run/anixops/plugins',
-      PluginOfficialPublicKey: 'IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M='
+      PluginOfficialPublicKey: 'lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM='
     })
   })
 
@@ -231,7 +231,7 @@ describe('Nodes.vue', () => {
       pluginSupervisorEnabled: true,
       pluginRoot: '/var/lib/anixops/plugins',
       pluginSocketDir: '/run/anixops/plugins',
-      pluginOfficialPublicKey: 'IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M='
+      pluginOfficialPublicKey: 'lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM='
     })
     await wrapper.vm.$nextTick()
 
@@ -265,7 +265,7 @@ describe('Nodes.vue', () => {
     expect(wrapper.vm.pluginSupervisorCanaryError).toContain('Ed25519')
     expect(parseAgentConfigSnippet(wrapper.vm.configSnippet).Nodes[0]).not.toHaveProperty('PluginSupervisorEnabled')
 
-    wrapper.vm.deploySettings.pluginOfficialPublicKey = 'IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M'
+    wrapper.vm.deploySettings.pluginOfficialPublicKey = 'lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM'
     await wrapper.vm.$nextTick()
     expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(false)
     expect(parseAgentConfigSnippet(wrapper.vm.configSnippet).Nodes[0]).not.toHaveProperty('PluginSupervisorEnabled')
@@ -283,7 +283,7 @@ describe('Nodes.vue', () => {
       pluginSupervisorEnabled: true,
       pluginRoot: '/var/lib/anixops/plugins',
       pluginSocketDir: '/run/anixops/plugins',
-      pluginOfficialPublicKey: 'IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M='
+      pluginOfficialPublicKey: 'lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM='
     })
     await wrapper.vm.$nextTick()
 
@@ -293,7 +293,7 @@ describe('Nodes.vue', () => {
     expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_supervisor_enabled: true')
     expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_root: "/var/lib/anixops/plugins"')
     expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_socket_dir: "/run/anixops/plugins"')
-    expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="')
+    expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_official_public_key: "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="')
   })
 
   it('builds WireGuard relay JSON from the visual protocol form', async () => {
