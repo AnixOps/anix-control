@@ -497,8 +497,8 @@ func validateResponse(response Response) error {
 			return errors.New("package bridge response header is invalid")
 		}
 		for _, character := range header.Name {
-			if !((character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
-				(character >= '0' && character <= '9') || character == '-') {
+			if (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') &&
+				(character < '0' || character > '9') && character != '-' {
 				return errors.New("package bridge response header is invalid")
 			}
 		}

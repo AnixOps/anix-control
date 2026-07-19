@@ -686,6 +686,19 @@ func TestResolvePluginControlRouteUsesSignedRouteAndGrantPermissions(t *testing.
 
 	_, err = ResolvePluginControlRoute(db, publicKey, manifest.ID, "/api/v3/plugins/machine-telemetry/missing", 7, true)
 	require.ErrorIs(t, err, ErrPluginRouteNotFound)
+
+	require.NoError(t, db.Model(&installation).Update("lifecycle_generation", -1).Error)
+	_, err = ResolvePluginControlRoute(db, publicKey, manifest.ID, "/api/v3/plugins/machine-telemetry/status", 7, true)
+	require.ErrorIs(t, err, ErrExtensionCatalogIntegrity)
+}
+
+func TestWriteMaterializedPluginFileRejectsTraversal(t *testing.T) {
+	root, err := os.OpenRoot(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, root.Close()) })
+
+	err = writeMaterializedPluginFile(root, "../outside", []byte("plugin"), 0o600)
+	require.Error(t, err)
 }
 
 func TestVerifyPluginReleaseRejectsUnknownManifestFields(t *testing.T) {

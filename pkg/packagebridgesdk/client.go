@@ -72,7 +72,7 @@ func DialFromEnvironment(ctx context.Context) (*Client, error) {
 
 // DialFile consumes a duplicate of file and leaves no filesystem-addressable
 // bridge endpoint for a package to discover or replace.
-func DialFile(ctx context.Context, file *os.File) (*Client, error) {
+func DialFile(_ context.Context, file *os.File) (*Client, error) {
 	if file == nil {
 		return nil, ErrBridgeUnavailable
 	}
@@ -100,12 +100,10 @@ func DialFile(ctx context.Context, file *os.File) (*Client, error) {
 		}
 		return dialConnection, nil
 	}
-	grpcConnection, err := grpc.DialContext(
-		ctx,
+	grpcConnection, err := grpc.NewClient(
 		"passthrough:///anix-package-bridge",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(dialer),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		_ = connection.Close()

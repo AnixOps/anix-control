@@ -29,7 +29,7 @@ func main() {
 func run() error {
 	socketPath := strings.TrimSpace(os.Getenv("ANIX_CONTROL_HOST_SOCKET"))
 	if socketPath == "" {
-		return errors.New("Control host socket is required")
+		return errors.New("control host socket is required")
 	}
 	dialContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -37,7 +37,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer bridge.Close()
+	defer func() { _ = bridge.Close() }()
 	leaseID, err := newLeaseID()
 	if err != nil {
 		return err
@@ -53,7 +53,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	if err := os.Chmod(socketPath, 0o600); err != nil {
 		return err
 	}

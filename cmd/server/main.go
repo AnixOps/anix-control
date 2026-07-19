@@ -829,6 +829,7 @@ func secureControlArtifactRoot(configuredRoot string) (string, error) {
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return "", errors.New("plugins.control_host_artifact_dir must be a directory, not a symlink")
 	}
+	// #nosec G302 -- this is a directory; 0700 is the required private directory mode.
 	if err := os.Chmod(root, 0o700); err != nil {
 		return "", fmt.Errorf("secure plugin artifact directory: %w", err)
 	}

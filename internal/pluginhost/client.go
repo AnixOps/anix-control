@@ -21,15 +21,13 @@ type hostClient struct {
 	rpc        pluginhostv1.ControlPackageHostClient
 }
 
-func dialHostClient(ctx context.Context, socketPath string) (*hostClient, error) {
-	connection, err := grpc.DialContext(
-		ctx,
+func dialHostClient(_ context.Context, socketPath string) (*hostClient, error) {
+	connection, err := grpc.NewClient(
 		"passthrough:///anix-control-plugin-host",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 			return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 		}),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		return nil, hostClientError(err)

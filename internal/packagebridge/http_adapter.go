@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -67,7 +68,11 @@ func NewHTTPAdapter(handler gin.HandlerFunc) OperationHandler {
 			ginContext.Params = append(ginContext.Params, gin.Param{Key: key, Value: value})
 		}
 		handler(ginContext)
-		response := Response{StatusCode: uint32(recorder.Code), Body: append([]byte(nil), recorder.Body.Bytes()...), Headers: responseHeaders(recorder.Header())}
+		statusCode, err := bridgeResponseStatusCode(recorder.Code)
+		if err != nil {
+			return Response{}, err
+		}
+		response := Response{StatusCode: statusCode, Body: append([]byte(nil), recorder.Body.Bytes()...), Headers: responseHeaders(recorder.Header())}
 		if response.StatusCode == 0 {
 			response.StatusCode = http.StatusOK
 		}
@@ -76,6 +81,13 @@ func NewHTTPAdapter(handler gin.HandlerFunc) OperationHandler {
 		}
 		return response, nil
 	}
+}
+
+func bridgeResponseStatusCode(statusCode int) (uint32, error) {
+	if statusCode < 0 || statusCode > int(^uint32(0)) {
+		return 0, fmt.Errorf("legacy handler returned an invalid HTTP status %d", statusCode)
+	}
+	return uint32(statusCode), nil // #nosec G115 -- range is checked immediately above.
 }
 
 func decodeHTTPMetadata(raw []byte) (httpRequestMetadata, error) {

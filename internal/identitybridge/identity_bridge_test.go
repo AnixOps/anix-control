@@ -100,7 +100,7 @@ func TestNewFactoryUsesTheRegisteredWebSocketRouteResolver(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer connection.Close()
+		defer func() { _ = connection.Close() }()
 		_, data, err := connection.ReadMessage()
 		if err == nil {
 			_ = connection.WriteMessage(websocket.TextMessage, append([]byte("echo:"), data...))

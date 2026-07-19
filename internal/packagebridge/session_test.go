@@ -174,8 +174,7 @@ func sessionWebSocketClient(t *testing.T, file *os.File) (packagebridgev1.Kernel
 	require.NoError(t, err)
 	require.NoError(t, file.Close())
 	var once sync.Once
-	grpcConnection, err := grpc.DialContext(
-		context.Background(),
+	grpcConnection, err := grpc.NewClient(
 		"passthrough:///package-bridge-session-test",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
@@ -186,7 +185,6 @@ func sessionWebSocketClient(t *testing.T, file *os.File) (packagebridgev1.Kernel
 			}
 			return connection, nil
 		}),
-		grpc.WithBlock(),
 	)
 	require.NoError(t, err)
 	stream, err := packagebridgev1.NewKernelPackageBridgeClient(grpcConnection).OpenWebSocket(context.Background())

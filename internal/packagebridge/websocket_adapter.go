@@ -40,8 +40,8 @@ func NewWebSocketAdapter(handler gin.HandlerFunc) WebSocketOperationHandler {
 		prepareWebSocketUpgradeRequest(request)
 
 		serverConnection, clientConnection := net.Pipe()
-		defer serverConnection.Close()
-		defer clientConnection.Close()
+		defer func() { _ = serverConnection.Close() }()
+		defer func() { _ = clientConnection.Close() }()
 		responseWriter := newBridgeWebSocketResponseWriter(serverConnection)
 		ginContext, _ := gin.CreateTestContext(responseWriter)
 		ginContext.Request = request
@@ -61,7 +61,10 @@ func NewWebSocketAdapter(handler gin.HandlerFunc) WebSocketOperationHandler {
 
 		clientResult := make(chan webSocketClientResult, 1)
 		go func() {
-			connection, _, clientErr := websocket.NewClient(clientConnection, bridgeWebSocketURL(request.URL), nil, 1024, 1024)
+			dialer := websocket.Dialer{
+				NetDialContext: func(context.Context, string, string) (net.Conn, error) { return clientConnection, nil },
+			}
+			connection, _, clientErr := dialer.DialContext(ctx, bridgeWebSocketURL(request.URL).String(), nil)
 			clientResult <- webSocketClientResult{connection: connection, err: clientErr}
 		}()
 		if err := responseWriter.consumeClientHandshake(); err != nil {
@@ -84,7 +87,7 @@ func NewWebSocketAdapter(handler gin.HandlerFunc) WebSocketOperationHandler {
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		defer client.Close()
+		defer func() { _ = client.Close() }()
 		return relayBridgeWebSocket(ctx, client, stream, handlerDone)
 	}
 }

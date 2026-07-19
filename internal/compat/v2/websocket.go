@@ -99,7 +99,7 @@ func (g WebSocketGateway) serve(writer http.ResponseWriter, request *http.Reques
 		_ = relay.Close(pluginhost.WebSocketClose{Code: websocket.CloseInternalServerErr, Reason: "WebSocket upgrade failed"})
 		return
 	}
-	defer connection.Close()
+	defer func() { _ = connection.Close() }()
 	g.relay(connection, relay)
 }
 

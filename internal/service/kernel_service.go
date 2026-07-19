@@ -374,7 +374,7 @@ func (m PluginManifest) validateV2Contract() error {
 			return fmt.Errorf("runtime_api_version must match %q", agentRuntimeAPIVersionV110)
 		}
 	} else if m.AgentEntrypoint != nil || m.RuntimeAPIVersion != "" {
-		return errors.New("Agent runtime metadata requires the agent target")
+		return errors.New("agent runtime metadata requires the agent target")
 	}
 	return nil
 }
@@ -1116,9 +1116,13 @@ func ResolvePluginControlRoute(db *gorm.DB, publicKey ed25519.PublicKey, pluginI
 	if !allowed {
 		return nil, ErrPluginRouteForbidden
 	}
+	if installation.LifecycleGeneration <= 0 {
+		return nil, fmt.Errorf("%w: plugin %s lifecycle generation is invalid", ErrExtensionCatalogIntegrity, pluginID)
+	}
+	generation := uint64(installation.LifecycleGeneration) // #nosec G115 -- value is checked positive immediately above.
 	return &PluginControlRouteResolution{
 		PluginID: installation.PluginID, Version: installation.ObservedVersion, InstallationID: installation.ID,
-		Generation: uint64(installation.LifecycleGeneration),
+		Generation: generation,
 		Route:      requestPath, MatchedRoute: matchedRoute, Permission: permission,
 	}, nil
 }
@@ -1612,13 +1616,18 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 	artifactPath := filepath.Join(directory, "package.anxp")
 	manifestPath := filepath.Join(directory, "manifest.json")
 	entrypointPath := filepath.Join(directory, "control-host")
-	if err := writeMaterializedPluginFile(artifactPath, artifact.Data, 0o600); err != nil {
+	materializedRoot, err := os.OpenRoot(directory)
+	if err != nil {
+		return pluginhost.ArtifactRef{}, fmt.Errorf("open materialized plugin directory: %w", err)
+	}
+	defer func() { _ = materializedRoot.Close() }()
+	if err := writeMaterializedPluginFile(materializedRoot, "package.anxp", artifact.Data, 0o600); err != nil {
 		return pluginhost.ArtifactRef{}, err
 	}
-	if err := writeMaterializedPluginFile(manifestPath, canonicalManifest, 0o600); err != nil {
+	if err := writeMaterializedPluginFile(materializedRoot, "manifest.json", canonicalManifest, 0o600); err != nil {
 		return pluginhost.ArtifactRef{}, err
 	}
-	if err := writeMaterializedPluginFile(entrypointPath, entrypoint, 0o700); err != nil {
+	if err := writeMaterializedPluginFile(materializedRoot, "control-host", entrypoint, 0o700); err != nil {
 		return pluginhost.ArtifactRef{}, err
 	}
 	manifestDigest := sha256.Sum256(canonicalManifest)
@@ -1652,8 +1661,11 @@ func sha256Bytes(value []byte) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func writeMaterializedPluginFile(path string, data []byte, mode os.FileMode) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+func writeMaterializedPluginFile(root *os.Root, name string, data []byte, mode os.FileMode) error {
+	if root == nil || !safePluginRelativePath(name) {
+		return errors.New("materialized plugin file path is invalid")
+	}
+	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 	if err != nil {
 		return fmt.Errorf("create materialized plugin file: %w", err)
 	}
@@ -1694,6 +1706,10 @@ func extractPluginArtifactFile(artifact []byte, memberPath string, maximum int64
 }
 
 func extractPluginArtifactFileFromZip(artifact []byte, memberPath string, maximum int64) ([]byte, bool, error) {
+	if maximum <= 0 {
+		return nil, false, errors.New("plugin artifact maximum must be positive")
+	}
+	maximumSize := uint64(maximum) // #nosec G115 -- maximum is checked positive immediately above.
 	reader, err := zip.NewReader(bytes.NewReader(artifact), int64(len(artifact)))
 	if err != nil {
 		return nil, false, nil
@@ -1708,7 +1724,7 @@ func extractPluginArtifactFileFromZip(artifact []byte, memberPath string, maximu
 			return nil, true, fmt.Errorf("plugin artifact member %q appears more than once", memberPath)
 		}
 		found = true
-		if file.FileInfo().IsDir() || !file.Mode().IsRegular() || file.UncompressedSize64 > uint64(maximum) {
+		if file.FileInfo().IsDir() || !file.Mode().IsRegular() || file.UncompressedSize64 > maximumSize {
 			return nil, true, fmt.Errorf("plugin artifact member %q is not a bounded regular file", memberPath)
 		}
 		opened, err := file.Open()

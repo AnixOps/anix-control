@@ -21,6 +21,8 @@ const (
 
 const maxUnixSocketPathBytes = 100
 
+const childRuntimeEntrypoint = childRuntimeDirectoryPath + "/entrypoint"
+
 func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref ArtifactRef, generation uint64, startupTimeout time.Duration, bridgeFactory packagebridge.SessionFactory) (*hostProcess, error) {
 	directory, err := runtimeRoot.createHostRuntimeDir()
 	if err != nil {
@@ -63,7 +65,7 @@ func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref Artifac
 		cleanup()
 		return nil, err
 	}
-	command := exec.CommandContext(context.Background(), childRuntimePath("entrypoint"))
+	command := exec.CommandContext(context.Background(), childRuntimeEntrypoint) // #nosec G204 -- fixed descriptor-relative path after digest-verified staging.
 	// os/exec changes directory before it remaps ExtraFiles to FD 3, so this
 	// parent-side /proc descriptor path preserves the pinned directory for cwd.
 	command.Dir = directory.path(".")

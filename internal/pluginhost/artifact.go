@@ -67,7 +67,7 @@ func verifyFileDigest(filePath, expectedDigest string, executable bool) ([]byte,
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	return readVerifiedDigest(file, expectedDigest)
 }
 
@@ -79,7 +79,7 @@ func stageVerifiedEntrypoint(ref ArtifactRef, runtimeDir *hostRuntimeDir) (strin
 	if err != nil {
 		return "", err
 	}
-	defer source.Close()
+	defer func() { _ = source.Close() }()
 	expected, err := decodeDigest(ref.EntrypointSHA256)
 	if err != nil {
 		return "", err

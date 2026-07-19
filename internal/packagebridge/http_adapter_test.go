@@ -67,3 +67,14 @@ func TestHTTPAdapterRejectsSensitiveHeaderSnapshot(t *testing.T) {
 	})
 	require.ErrorIs(t, err, ErrCapabilityRejected)
 }
+
+func TestBridgeResponseStatusCodeRejectsUnrepresentableStatus(t *testing.T) {
+	status, err := bridgeResponseStatusCode(200)
+	require.NoError(t, err)
+	require.EqualValues(t, 200, status)
+
+	_, err = bridgeResponseStatusCode(-1)
+	require.Error(t, err)
+	_, err = bridgeResponseStatusCode(int(^uint32(0)) + 1)
+	require.Error(t, err)
+}
