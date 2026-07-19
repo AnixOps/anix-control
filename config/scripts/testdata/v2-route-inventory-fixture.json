@@ -1,0 +1,9 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/v2/login",
+    "handler": "authHandler.Login",
+    "middleware_group": "public",
+    "transport": "http"
+  }
+]

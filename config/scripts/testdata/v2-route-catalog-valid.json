@@ -1,0 +1,11 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/v2/login",
+    "owner": "identity-platform",
+    "route_id": "identity.auth.login",
+    "envelope": "data",
+    "middleware_group": "public",
+    "transport": "http"
+  }
+]

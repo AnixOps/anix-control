@@ -1,0 +1,2630 @@
+[
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/agent/execute",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.agent.execute.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/agent/list",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.agent.list.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/agent/monitor",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.agent.monitor.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/agent/tasks",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.agent.tasks.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/agent/tasks",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.agent.tasks.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/agent/tasks/:task_id",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.agent.tasks.task_id.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/auth-keys",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.auth_keys.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/auth-keys",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.auth_keys.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/auth-keys/:id",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.auth_keys.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/coupon",
+    "owner": "order",
+    "route_id": "order.admin.coupon.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/coupon",
+    "owner": "order",
+    "route_id": "order.admin.coupon.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/coupon/:id",
+    "owner": "order",
+    "route_id": "order.admin.coupon.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/dashboard",
+    "owner": "machine-telemetry",
+    "route_id": "telemetry.admin.dashboard.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/agents",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.agents.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/agents",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.agents.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/agents/:id/revoke",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.agents.id.revoke.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/ansible-machines",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.ansible_machines.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/ansible-machines",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.ansible_machines.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/forward/ansible-machines/:id",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.ansible_machines.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/ansible-machines/:id",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.ansible_machines.id.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/forward/ansible-machines/:id",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.ansible_machines.id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/ansible-machines/:id/check",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.ansible_machines.id.check.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/ansible-machines/:id/sync-stats",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.ansible_machines.id.sync_stats.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/ansible-machines/:id/toggle",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.ansible_machines.id.toggle.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/create",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.create.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/delete",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.delete.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/diagnose",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.diagnose.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/force-delete",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.force_delete.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/list",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.list.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/local/doctor",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.local.doctor.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/local/status",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.local.status.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/nodes",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.nodes.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/nodes",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.nodes.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/forward/nodes/:id",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.nodes.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/nodes/:id",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.nodes.id.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/forward/nodes/:id",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.nodes.id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/nodes/:id/check",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.nodes.id.check.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/nodes/:id/sync-stats",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.nodes.id.sync_stats.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/nodes/:id/toggle",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.nodes.id.toggle.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/nodex/doctor",
+    "owner": "gost-mesh",
+    "route_id": "gost.admin.forward.nodex.doctor.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/nodex/status",
+    "owner": "gost-mesh",
+    "route_id": "gost.admin.forward.nodex.status.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/observability/multi-ingress",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.observability.multi_ingress.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/observability/targets",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.observability.targets.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/observability/topology",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.observability.topology.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/observability/trend",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.observability.trend.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/pause",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.pause.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/resume",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.resume.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/rules",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.rules.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/rules",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.rules.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/forward/rules/:id",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.rules.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/rules/:id",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.rules.id.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/forward/rules/:id",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.rules.id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/rules/:id/toggle",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.rules.id.toggle.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/runtime/doctor",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.runtime.doctor.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/runtime/jobs",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.runtime.jobs.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/runtime/status",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.runtime.status.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/forward/stats",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.stats.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/sync-backend",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.sync_backend.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/test-connection",
+    "owner": "gost-mesh",
+    "route_id": "gost.admin.forward.test_connection.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/update",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.update.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/forward/update-order",
+    "owner": "forward",
+    "route_id": "forward.admin.forward.update_order.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/invite/config",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.invite.config.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/invite/config",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.invite.config.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/invite/stats",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.invite.stats.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/invite/withdrawals",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.invite.withdrawals.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/invite/withdrawals/:id/process",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.invite.withdrawals.id.process.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/knowledge",
+    "owner": "knowledge",
+    "route_id": "knowledge.admin.knowledge.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/knowledge",
+    "owner": "knowledge",
+    "route_id": "knowledge.admin.knowledge.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/knowledge/:id",
+    "owner": "knowledge",
+    "route_id": "knowledge.admin.knowledge.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/knowledge/:id",
+    "owner": "knowledge",
+    "route_id": "knowledge.admin.knowledge.id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/loadbalancers",
+    "owner": "proxy-node",
+    "route_id": "proxy.loadbalancer.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/loadbalancers",
+    "owner": "proxy-node",
+    "route_id": "proxy.loadbalancer.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/loadbalancers/:id",
+    "owner": "proxy-node",
+    "route_id": "proxy.loadbalancer.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/loadbalancers/:id",
+    "owner": "proxy-node",
+    "route_id": "proxy.loadbalancer.id.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/loadbalancers/:id",
+    "owner": "proxy-node",
+    "route_id": "proxy.loadbalancer.id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/loadbalancers/:id/check",
+    "owner": "proxy-node",
+    "route_id": "proxy.loadbalancer.id.check.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/loadbalancers/:id/stats",
+    "owner": "proxy-node",
+    "route_id": "proxy.loadbalancer.id.stats.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/mfa/config",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.mfa.config.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/mfa/config",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.mfa.config.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/nodes",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.nodes.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/nodes",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.nodes.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/nodes/:id",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.nodes.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/nodes/:id",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.nodes.id.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/nodes/:id",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.nodes.id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/nodes/:id/agent-control",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.nodes.id.agent_control.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/nodes/:id/agent-control/operations",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.nodes.id.agent_control.operations.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/nodes/:id/credentials",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.nodes.id.credentials.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/nodes/:id/logs",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.nodes.id.logs.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/nodes/:id/protocols",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.nodes.id.protocols.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/nodes/:id/protocols",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.nodes.id.protocols.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/nodes/:id/protocols/:protocol_id",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.nodes.id.protocols.protocol_id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/nodes/:id/protocols/:protocol_id",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.nodes.id.protocols.protocol_id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/nodes/:id/raw-config",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.nodes.id.raw_config.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/nodes/:id/raw-config",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.nodes.id.raw_config.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/nodes/:id/sync",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.nodes.id.sync.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/nodes/stats",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.nodes.stats.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/nodes/validate-config",
+    "owner": "proxy-node",
+    "route_id": "proxy.admin.nodes.validate_config.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/notification/email/config",
+    "owner": "notification",
+    "route_id": "notification.admin.notification.email.config.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/notification/email/config",
+    "owner": "notification",
+    "route_id": "notification.admin.notification.email.config.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/notification/logs",
+    "owner": "notification",
+    "route_id": "notification.admin.notification.logs.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/notification/templates",
+    "owner": "notification",
+    "route_id": "notification.admin.notification.templates.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/notification/templates",
+    "owner": "notification",
+    "route_id": "notification.admin.notification.templates.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/notification/templates/:id",
+    "owner": "notification",
+    "route_id": "notification.admin.notification.templates.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/notification/templates/:id",
+    "owner": "notification",
+    "route_id": "notification.admin.notification.templates.id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/notification/test",
+    "owner": "notification",
+    "route_id": "notification.admin.notification.test.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/orders",
+    "owner": "order",
+    "route_id": "order.admin.orders.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/orders/:id",
+    "owner": "order",
+    "route_id": "order.admin.orders.id.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/orders/:id/cancel",
+    "owner": "order",
+    "route_id": "order.admin.orders.id.cancel.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/orders/:id/paid",
+    "owner": "order",
+    "route_id": "order.admin.orders.id.paid.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/orders/:id/status",
+    "owner": "order",
+    "route_id": "order.admin.orders.id.status.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/orders/stats",
+    "owner": "order",
+    "route_id": "order.admin.orders.stats.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/payment/gateways",
+    "owner": "payment",
+    "route_id": "payment.admin.payment.gateways.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/payment/gateways",
+    "owner": "payment",
+    "route_id": "payment.admin.payment.gateways.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/payment/gateways/:id",
+    "owner": "payment",
+    "route_id": "payment.admin.payment.gateways.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/payment/gateways/:id",
+    "owner": "payment",
+    "route_id": "payment.admin.payment.gateways.id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/payment/gateways/:id/toggle",
+    "owner": "payment",
+    "route_id": "payment.admin.payment.gateways.id.toggle.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/payment/records",
+    "owner": "payment",
+    "route_id": "payment.admin.payment.records.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/payment/stats",
+    "owner": "payment",
+    "route_id": "payment.admin.payment.stats.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/plans",
+    "owner": "plan",
+    "route_id": "plan.admin.plans.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/plans",
+    "owner": "plan",
+    "route_id": "plan.admin.plans.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/plans/:id",
+    "owner": "plan",
+    "route_id": "plan.admin.plans.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/plans/:id",
+    "owner": "plan",
+    "route_id": "plan.admin.plans.id.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/plans/:id",
+    "owner": "plan",
+    "route_id": "plan.admin.plans.id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/plans/:id/assign",
+    "owner": "plan",
+    "route_id": "plan.admin.plans.id.assign.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/protocol-templates",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.admin.protocol_templates.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/subscription/formats",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.formats.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/subscription/groups",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.groups.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/subscription/groups",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.groups.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/subscription/groups/:id",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.groups.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/subscription/groups/:id",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.groups.id.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/subscription/groups/:id",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.groups.id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/subscription/groups/:id/protocols",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.groups.id.protocols.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/subscription/groups/:id/protocols",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.groups.id.protocols.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/subscription/groups/:id/templates",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.groups.id.templates.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/subscription/groups/:id/templates",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.groups.id.templates.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/subscription/plans/:plan_id/groups",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.plans.plan_id.groups.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/subscription/plans/:plan_id/groups",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.plans.plan_id.groups.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/subscription/plans/:plan_id/groups/:group_id",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.plans.plan_id.groups.group_id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/subscription/preview",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.preview.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/subscription/protocols",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.protocols.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/subscription/protocols/available",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.protocols.available.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/subscription/stats",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.stats.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/subscription/templates/:id",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.templates.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/subscription/templates/:id",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.templates.id.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/subscription/templates/:id",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.templates.id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/subscription/users/:user_id/groups",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.users.user_id.groups.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/subscription/users/:user_id/groups",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.users.user_id.groups.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/subscription/users/:user_id/groups/:group_id",
+    "owner": "subscription",
+    "route_id": "subscription.admin.subscription.users.user_id.groups.group_id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/system/audit-logs",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.system.audit_logs.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/system/backup",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.system.backup.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/system/backup/config",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.system.backup.config.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/system/backup/config",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.system.backup.config.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/system/backup/stats",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.system.backup.stats.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/system/backups",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.system.backups.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/system/backups/:id",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.system.backups.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/system/backups/:id/restore",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.system.backups.id.restore.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/system/configs",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.system.configs.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/system/configs/:key",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.system.configs.key.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/system/configs/:key",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.system.configs.key.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/system/configs/:key",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.system.configs.key.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/system/info",
+    "owner": "machine-telemetry",
+    "route_id": "telemetry.admin.system.info.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/system/subscription-settings",
+    "owner": "subscription",
+    "route_id": "subscription.admin.system.subscription_settings.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/telegram/bot",
+    "owner": "notification",
+    "route_id": "notification.admin.telegram.bot.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/telegram/bot",
+    "owner": "notification",
+    "route_id": "notification.admin.telegram.bot.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/telegram/broadcast",
+    "owner": "notification",
+    "route_id": "notification.admin.telegram.broadcast.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/telegram/notify",
+    "owner": "notification",
+    "route_id": "notification.admin.telegram.notify.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/telegram/users",
+    "owner": "notification",
+    "route_id": "notification.admin.telegram.users.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/telegram/users/:id/notify",
+    "owner": "notification",
+    "route_id": "notification.admin.telegram.users.id.notify.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/telegram/webhook",
+    "owner": "notification",
+    "route_id": "notification.admin.telegram.webhook.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/telegram/webhook",
+    "owner": "notification",
+    "route_id": "notification.admin.telegram.webhook.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/ticket",
+    "owner": "ticket",
+    "route_id": "ticket.admin.ticket.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/ticket/:id/close",
+    "owner": "ticket",
+    "route_id": "ticket.admin.ticket.id.close.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/ticket/reply",
+    "owner": "ticket",
+    "route_id": "ticket.admin.ticket.reply.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/traffic/hourly",
+    "owner": "machine-telemetry",
+    "route_id": "telemetry.admin.traffic.hourly.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/traffic/user-ranking",
+    "owner": "machine-telemetry",
+    "route_id": "telemetry.admin.traffic.user_ranking.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/tunnel/create",
+    "owner": "forward",
+    "route_id": "forward.admin.tunnel.create.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/tunnel/delete",
+    "owner": "forward",
+    "route_id": "forward.admin.tunnel.delete.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/tunnel/diagnose",
+    "owner": "forward",
+    "route_id": "forward.admin.tunnel.diagnose.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/tunnel/list",
+    "owner": "forward",
+    "route_id": "forward.admin.tunnel.list.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/tunnel/update",
+    "owner": "forward",
+    "route_id": "forward.admin.tunnel.update.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/tunnel/user/assign",
+    "owner": "forward",
+    "route_id": "forward.admin.tunnel.user.assign.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/tunnel/user/list",
+    "owner": "forward",
+    "route_id": "forward.admin.tunnel.user.list.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/tunnel/user/remove",
+    "owner": "forward",
+    "route_id": "forward.admin.tunnel.user.remove.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/tunnel/user/tunnel",
+    "owner": "forward",
+    "route_id": "forward.admin.tunnel.user.tunnel.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/tunnel/user/update",
+    "owner": "forward",
+    "route_id": "forward.admin.tunnel.user.update.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/users",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.users.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/users",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.users.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/users/:id",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.users.id.delete",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/users/:id",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.users.id.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v2/admin/users/:id",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.users.id.put",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/users/:id/ban",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.users.id.ban.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/users/:id/reset-subscribe",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.users.id.reset_subscribe.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/users/:id/reset-traffic",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.users.id.reset_traffic.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/users/:id/unban",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.users.id.unban.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/users/stats",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.users.stats.get",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/wireguard/keypair",
+    "owner": "wireguard",
+    "route_id": "wireguard.admin.wireguard.keypair.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/admin/ws/monitor",
+    "owner": "machine-telemetry",
+    "route_id": "telemetry.admin.ws.monitor.get",
+    "envelope": "websocket",
+    "middleware_group": "admin",
+    "transport": "websocket"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/agent/heartbeat",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.agent.heartbeat.post",
+    "envelope": "raw",
+    "middleware_group": "agent",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/agent/monitor",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.agent.monitor.post",
+    "envelope": "raw",
+    "middleware_group": "agent",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/agent/register",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.agent.register.post",
+    "envelope": "raw",
+    "middleware_group": "agent",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/agent/result",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.agent.result.post",
+    "envelope": "raw",
+    "middleware_group": "agent",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/agent/tasks",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.agent.tasks.get",
+    "envelope": "raw",
+    "middleware_group": "agent",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/agent/ws",
+    "owner": "protocol-runtime",
+    "route_id": "protocol.agent.ws.get",
+    "envelope": "websocket",
+    "middleware_group": "agent",
+    "transport": "websocket"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/forward-agent/heartbeat",
+    "owner": "forward",
+    "route_id": "forward.forward_agent.heartbeat.post",
+    "envelope": "data",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/forward-agent/install.sh",
+    "owner": "forward",
+    "route_id": "forward.forward_agent.install_sh.get",
+    "envelope": "raw",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/forward-agent/register",
+    "owner": "forward",
+    "route_id": "forward.forward_agent.register.post",
+    "envelope": "data",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/forward-agent/report",
+    "owner": "forward",
+    "route_id": "forward.forward_agent.report.post",
+    "envelope": "data",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/forward/agent/rules",
+    "owner": "forward",
+    "route_id": "forward.forward.agent.rules.get",
+    "envelope": "raw",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/forward/create",
+    "owner": "forward",
+    "route_id": "forward.forward.create.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/forward/delete",
+    "owner": "forward",
+    "route_id": "forward.forward.delete.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/forward/diagnose",
+    "owner": "forward",
+    "route_id": "forward.forward.diagnose.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/forward/force-delete",
+    "owner": "forward",
+    "route_id": "forward.forward.force_delete.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/forward/list",
+    "owner": "forward",
+    "route_id": "forward.forward.list.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/forward/pause",
+    "owner": "forward",
+    "route_id": "forward.forward.pause.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/forward/resume",
+    "owner": "forward",
+    "route_id": "forward.forward.resume.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/forward/update",
+    "owner": "forward",
+    "route_id": "forward.forward.update.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/forward/update-order",
+    "owner": "forward",
+    "route_id": "forward.forward.update_order.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/internal/auth-keys",
+    "owner": "proxy-node",
+    "route_id": "proxy.internal.auth_keys.post",
+    "envelope": "raw",
+    "middleware_group": "internal",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/internal/forward/traffic/report",
+    "owner": "forward",
+    "route_id": "forward.internal.forward.traffic.report.post",
+    "envelope": "data",
+    "middleware_group": "internal",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/internal/forward/traffic/snapshot",
+    "owner": "forward",
+    "route_id": "forward.internal.forward.traffic.snapshot.post",
+    "envelope": "data",
+    "middleware_group": "internal",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/internal/forward/traffic/upload",
+    "owner": "forward",
+    "route_id": "forward.internal.forward.traffic.upload.post",
+    "envelope": "raw",
+    "middleware_group": "internal",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/login",
+    "owner": "identity-platform",
+    "route_id": "identity.auth.login",
+    "envelope": "data",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/node/heartbeat",
+    "owner": "proxy-node",
+    "route_id": "proxy.node.heartbeat.post",
+    "envelope": "raw",
+    "middleware_group": "node-api",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/node/register",
+    "owner": "proxy-node",
+    "route_id": "proxy.node.register.post",
+    "envelope": "raw",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/node/runtime-health",
+    "owner": "proxy-node",
+    "route_id": "proxy.node.runtime_health.post",
+    "envelope": "raw",
+    "middleware_group": "node-api",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/node/ws",
+    "owner": "proxy-node",
+    "route_id": "proxy.node.ws.get",
+    "envelope": "websocket",
+    "middleware_group": "public",
+    "transport": "websocket"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/payment/callback/:type",
+    "owner": "payment",
+    "route_id": "payment.callback",
+    "envelope": "raw",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/payment/fiat/create",
+    "owner": "payment",
+    "route_id": "payment.payment.fiat.create.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/payment/methods",
+    "owner": "payment",
+    "route_id": "payment.payment.methods.get",
+    "envelope": "data",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/payment/paypal/webhook",
+    "owner": "payment",
+    "route_id": "payment.payment.paypal.webhook.post",
+    "envelope": "raw",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/payment/status/:trade_no",
+    "owner": "payment",
+    "route_id": "payment.payment.status.trade_no.get",
+    "envelope": "data",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/payment/stripe/webhook",
+    "owner": "payment",
+    "route_id": "payment.payment.stripe.webhook.post",
+    "envelope": "raw",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/payment/x402/callback",
+    "owner": "payment",
+    "route_id": "payment.payment.x402.callback.post",
+    "envelope": "raw",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/payment/x402/check/:id",
+    "owner": "payment",
+    "route_id": "payment.payment.x402.check.id.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/payment/x402/create",
+    "owner": "payment",
+    "route_id": "payment.payment.x402.create.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/register",
+    "owner": "identity-platform",
+    "route_id": "identity.register.post",
+    "envelope": "data",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/server/UniProxy/alive",
+    "owner": "proxy-node",
+    "route_id": "proxy.server.uniproxy.alive.post",
+    "envelope": "raw",
+    "middleware_group": "node-api",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/server/UniProxy/alivelist",
+    "owner": "proxy-node",
+    "route_id": "proxy.server.uniproxy.alivelist.get",
+    "envelope": "raw",
+    "middleware_group": "node-api",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/server/UniProxy/config",
+    "owner": "proxy-node",
+    "route_id": "proxy.server.uniproxy.config.get",
+    "envelope": "raw",
+    "middleware_group": "node-api",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/server/UniProxy/push",
+    "owner": "proxy-node",
+    "route_id": "proxy.server.uniproxy.push.post",
+    "envelope": "raw",
+    "middleware_group": "node-api",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/server/UniProxy/user",
+    "owner": "proxy-node",
+    "route_id": "proxy.server.uniproxy.user.get",
+    "envelope": "raw",
+    "middleware_group": "node-api",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/speed-limit/create",
+    "owner": "plan",
+    "route_id": "plan.speed_limit.create.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/speed-limit/delete",
+    "owner": "plan",
+    "route_id": "plan.speed_limit.delete.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/speed-limit/list",
+    "owner": "plan",
+    "route_id": "plan.speed_limit.list.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/speed-limit/tunnels",
+    "owner": "plan",
+    "route_id": "plan.speed_limit.tunnels.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/speed-limit/update",
+    "owner": "plan",
+    "route_id": "plan.speed_limit.update.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/telegram/webhook",
+    "owner": "notification",
+    "route_id": "notification.telegram.webhook.post",
+    "envelope": "raw",
+    "middleware_group": "public",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/tunnel/user/assign",
+    "owner": "forward",
+    "route_id": "forward.tunnel.user.assign.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/tunnel/user/list",
+    "owner": "forward",
+    "route_id": "forward.tunnel.user.list.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/tunnel/user/remove",
+    "owner": "forward",
+    "route_id": "forward.tunnel.user.remove.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/tunnel/user/tunnel",
+    "owner": "forward",
+    "route_id": "forward.tunnel.user.tunnel.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/tunnel/user/update",
+    "owner": "forward",
+    "route_id": "forward.tunnel.user.update.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/coupon/check",
+    "owner": "order",
+    "route_id": "order.user.coupon.check.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/dashboard",
+    "owner": "identity-platform",
+    "route_id": "identity.user.dashboard.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/forward/rules",
+    "owner": "forward",
+    "route_id": "forward.user.forward.rules.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/forward/rules",
+    "owner": "forward",
+    "route_id": "forward.user.forward.rules.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/invite",
+    "owner": "identity-platform",
+    "route_id": "identity.user.invite.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/invite/commissions",
+    "owner": "identity-platform",
+    "route_id": "identity.user.invite.commissions.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/invite/generate",
+    "owner": "identity-platform",
+    "route_id": "identity.user.invite.generate.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/invite/withdraw",
+    "owner": "identity-platform",
+    "route_id": "identity.user.invite.withdraw.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/invite/withdrawals",
+    "owner": "identity-platform",
+    "route_id": "identity.user.invite.withdrawals.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/knowledge",
+    "owner": "knowledge",
+    "route_id": "knowledge.article.list",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/knowledge/:id",
+    "owner": "knowledge",
+    "route_id": "knowledge.user.knowledge.id.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/mfa/backup-codes/regenerate",
+    "owner": "identity-platform",
+    "route_id": "identity.user.mfa.backup_codes.regenerate.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/mfa/disable",
+    "owner": "identity-platform",
+    "route_id": "identity.user.mfa.disable.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/mfa/status",
+    "owner": "identity-platform",
+    "route_id": "identity.user.mfa.status.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/mfa/totp/enable",
+    "owner": "identity-platform",
+    "route_id": "identity.user.mfa.totp.enable.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/mfa/totp/setup",
+    "owner": "identity-platform",
+    "route_id": "identity.user.mfa.totp.setup.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/mfa/verify",
+    "owner": "identity-platform",
+    "route_id": "identity.user.mfa.verify.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/notifications",
+    "owner": "notification",
+    "route_id": "notification.user.notifications.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/notifications/:id/read",
+    "owner": "notification",
+    "route_id": "notification.user.notifications.id.read.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/notifications/read-all",
+    "owner": "notification",
+    "route_id": "notification.user.notifications.read_all.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/notifications/unread-count",
+    "owner": "notification",
+    "route_id": "notification.user.notifications.unread_count.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/order",
+    "owner": "order",
+    "route_id": "order.user.order.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/order/:id",
+    "owner": "order",
+    "route_id": "order.user.order.id.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/order/save",
+    "owner": "order",
+    "route_id": "order.user.order.save.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/payment/channels",
+    "owner": "payment",
+    "route_id": "payment.user.payment.channels.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/payment/create",
+    "owner": "payment",
+    "route_id": "payment.user.payment.create.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/payment/records",
+    "owner": "payment",
+    "route_id": "payment.user.payment.records.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/payment/status/:trade_no",
+    "owner": "payment",
+    "route_id": "payment.user.payment.status.trade_no.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/plan",
+    "owner": "plan",
+    "route_id": "plan.user.plan.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/profile",
+    "owner": "identity-platform",
+    "route_id": "identity.user.profile.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/reset",
+    "owner": "identity-platform",
+    "route_id": "identity.user.reset.post",
+    "envelope": "data",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/subscription",
+    "owner": "subscription",
+    "route_id": "subscription.user.subscription.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/telegram/notify",
+    "owner": "notification",
+    "route_id": "notification.user.telegram.notify.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/telegram/status",
+    "owner": "notification",
+    "route_id": "notification.user.telegram.status.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/telegram/unbind",
+    "owner": "notification",
+    "route_id": "notification.user.telegram.unbind.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/ticket",
+    "owner": "ticket",
+    "route_id": "ticket.user.ticket.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/ticket",
+    "owner": "ticket",
+    "route_id": "ticket.user.ticket.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
+    "path": "/api/v2/user/ticket/:id",
+    "owner": "ticket",
+    "route_id": "ticket.user.ticket.id.get",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/ticket/:id/close",
+    "owner": "ticket",
+    "route_id": "ticket.user.ticket.id.close.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/user/ticket/:id/reply",
+    "owner": "ticket",
+    "route_id": "ticket.user.ticket.id.reply.post",
+    "envelope": "data",
+    "middleware_group": "user",
+    "transport": "http"
+  }
+]
