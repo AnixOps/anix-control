@@ -276,6 +276,26 @@ func Set(c *Config) {
 	cfg = c
 }
 
+// PrepareSubscribePath normalizes the configured public subscription path,
+// updates the in-memory configuration when present, and fails before route
+// registration if the path could overlap the versioned API namespace.
+func PrepareSubscribePath(c *Config) string {
+	value := ""
+	if c != nil {
+		value = c.App.SubscribePath
+	}
+
+	normalized, err := NormalizeSubscribePath(value)
+	if err != nil {
+		panic("invalid app.subscribe_path: " + err.Error())
+	}
+	if c != nil {
+		c.App.SubscribePath = normalized
+		Set(c)
+	}
+	return normalized
+}
+
 // NormalizeSubscribePath cleans the public subscription path and rejects
 // values that could overlap the versioned API namespace.
 func NormalizeSubscribePath(value string) (string, error) {

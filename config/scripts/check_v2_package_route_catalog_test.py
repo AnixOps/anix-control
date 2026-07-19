@@ -278,6 +278,14 @@ func OverlappingGroupPattern(r *gin.Engine) {
 """,
                 "Gin route pattern may overlap /api/v2",
             ),
+            "overlapping_inline_parameter_pattern": (
+                """
+func OverlappingInlineParameterPattern(r *gin.Engine) {
+	r.GET("/a:prefix/:namespace/:token", hiddenHandler.Get)
+}
+""",
+                "Gin route pattern may overlap /api/v2",
+            ),
             "handler_closure": (
                 """
 func HandlerClosureRoute(r *gin.Engine) {
@@ -441,9 +449,9 @@ func RangeShadowedSubscribeNormalizer(r *gin.Engine) {
         cases = {
             "conditional": """
 func ConditionalSubscribeSafety(r *gin.Engine) {
-	subscribePath := cfg.DynamicPath
+	subscribePath := config.PrepareSubscribePath(cfg)
 	if false {
-		subscribePath, _ = config.NormalizeSubscribePath(cfg.App.SubscribePath)
+		subscribePath = "api/v2"
 	}
 	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
 }
@@ -451,8 +459,8 @@ func ConditionalSubscribeSafety(r *gin.Engine) {
             "pointer": """
 
 func PointerSubscribeMutation(r *gin.Engine) {
-	subscribePath, _ := config.NormalizeSubscribePath(cfg.App.SubscribePath)
-	*(&subscribePath) = cfg.DynamicPath
+	subscribePath := config.PrepareSubscribePath(cfg)
+	mutate(&subscribePath)
 	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
 }
 """
@@ -465,10 +473,36 @@ func PointerSubscribeMutation(r *gin.Engine) {
                 result = self.run_inventory(router)
 
                 self.assertNotEqual(0, result.returncode, name)
-                if name == "conditional":
-                    self.assertIn("root Gin Engine path must be statically resolvable", result.stderr)
-                else:
-                    self.assertIn("unsupported assignment target while analyzing Gin routes", result.stderr)
+                self.assertIn("normalized subscription path escapes its direct registration", result.stderr)
+
+    def test_inventory_rejects_named_result_subscribe_normalizer_shadow(self) -> None:
+        source = SAMPLE_ROUTER.read_text(encoding="utf-8").replace(
+            'import "github.com/gin-gonic/gin"',
+            """import (
+\t\"github.com/AnixOps/anix-control/v4/internal/config\"
+\t\"github.com/gin-gonic/gin\"
+)""",
+        )
+        source += """
+type resultConfig string
+
+func (resultConfig) NormalizeSubscribePath(string) (string, error) {
+	return "api/v2", nil
+}
+
+func NamedResultShadow(r *gin.Engine, cfg *config.Config) (config resultConfig) {
+	subscribePath, _ := config.NormalizeSubscribePath(cfg.App.SubscribePath)
+	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
+	return
+}
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            router = Path(temporary) / "router.go"
+            router.write_text(source, encoding="utf-8")
+            result = self.run_inventory(router)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("unsupported multi-value assignment while analyzing Gin routes", result.stderr)
 
     def test_inventory_marks_exact_existing_v2_websocket_routes(self) -> None:
         result = self.run_inventory(ROUTER)

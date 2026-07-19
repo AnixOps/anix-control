@@ -13,18 +13,7 @@ import (
 
 // Setup 设置路由
 func Setup(r *gin.Engine, cfg *config.Config) {
-	subscribePath := ""
-	if cfg != nil {
-		subscribePath = cfg.App.SubscribePath
-	}
-	subscribePath, err := config.NormalizeSubscribePath(subscribePath)
-	if err != nil {
-		panic("invalid app.subscribe_path: " + err.Error())
-	}
-	if cfg != nil {
-		cfg.App.SubscribePath = subscribePath
-		config.Set(cfg)
-	}
+	subscribePath := config.PrepareSubscribePath(cfg)
 
 	// 全局中间件
 	r.Use(middleware.RequestID())

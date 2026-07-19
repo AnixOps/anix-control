@@ -301,6 +301,13 @@ func seedEngineParameters(function *ast.FuncDecl, env *scope) bool {
 			found = true
 		}
 	}
+	if function.Type.Results != nil {
+		for _, field := range function.Type.Results.List {
+			for _, name := range field.Names {
+				env.declareName(name.Name)
+			}
+		}
+	}
 	return found
 }
 
@@ -328,6 +335,9 @@ func (c *collector) processBlock(block *ast.BlockStmt, parent *scope) error {
 }
 
 func (c *collector) processStatement(statement ast.Stmt, env *scope) error {
+	if c.containsSafeSubscribePath(statement, env) && !c.isDirectSafeSubscribeRegistration(statement, env) {
+		return c.errorAt(statement.Pos(), "normalized subscription path escapes its direct registration")
+	}
 	switch node := statement.(type) {
 	case *ast.BlockStmt:
 		return c.processBlock(node, env)
@@ -387,7 +397,7 @@ func (c *collector) processDeclaration(declaration ast.Decl, env *scope) error {
 			if err := c.validateValueExpression(expression, env); err != nil {
 				return err
 			}
-			safeSubscribePath := c.isNormalizeSubscribePathCall(expression, env)
+			safeSubscribePath := c.isTrustedSubscribePathCall(expression, env)
 			env.declareName(name.Name)
 			env.defineSafeSubscribePath(name.Name, safeSubscribePath)
 			if stringValue, known := resolveString(expression, env); known {
@@ -432,7 +442,7 @@ func (c *collector) processAssignment(assignment *ast.AssignStmt, env *scope) er
 		if !ok {
 			continue
 		}
-		safeSubscribePath := c.isNormalizeSubscribePathCall(expression, env)
+		safeSubscribePath := c.isTrustedSubscribePathCall(expression, env)
 		env.declareName(name.Name)
 		if assignment.Tok == token.DEFINE {
 			env.defineSafeSubscribePath(name.Name, safeSubscribePath)
@@ -563,6 +573,50 @@ func (c *collector) rejectTrackedGinGroupInStatement(node ast.Node, env *scope) 
 		return c.errorAt(node.Pos(), "unsupported Gin group escape in statement")
 	}
 	return nil
+}
+
+func (c *collector) containsSafeSubscribePath(node ast.Node, env *scope) bool {
+	found := false
+	ast.Inspect(node, func(current ast.Node) bool {
+		if found {
+			return false
+		}
+		identifier, ok := current.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if env.isSafeSubscribePath(identifier.Name) {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+func (c *collector) isDirectSafeSubscribeRegistration(statement ast.Stmt, env *scope) bool {
+	expressionStatement, ok := statement.(*ast.ExprStmt)
+	if !ok {
+		return false
+	}
+	call, ok := unwrapParens(expressionStatement.X).(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != "GET" || len(call.Args) < 2 {
+		return false
+	}
+	target, err := c.resolveGroupWithMiddlewareMutation(selector.X, env, false)
+	if err != nil || target == nil || target.base != "" || !isSafeSubscribeRegistrationPath(call.Args[0], env) {
+		return false
+	}
+	for _, argument := range call.Args[1:] {
+		if c.containsSafeSubscribePath(argument, env) {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *collector) containsTrackedGinGroup(node ast.Node, env *scope) bool {
@@ -811,12 +865,20 @@ func isGinRouteSelector(name string) bool {
 }
 
 func (c *collector) isNormalizeSubscribePathCall(expression ast.Expr, env *scope) bool {
+	return c.isTrustedConfigCall(expression, env, "NormalizeSubscribePath")
+}
+
+func (c *collector) isTrustedSubscribePathCall(expression ast.Expr, env *scope) bool {
+	return c.isNormalizeSubscribePathCall(expression, env) || c.isTrustedConfigCall(expression, env, "PrepareSubscribePath")
+}
+
+func (c *collector) isTrustedConfigCall(expression ast.Expr, env *scope, functionName string) bool {
 	call, ok := unwrapParens(expression).(*ast.CallExpr)
 	if !ok || len(call.Args) != 1 {
 		return false
 	}
 	selector, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != "NormalizeSubscribePath" {
+	if !ok || selector.Sel.Name != functionName {
 		return false
 	}
 	packageName, ok := unwrapParens(selector.X).(*ast.Ident)
@@ -954,7 +1016,7 @@ func mayMatchV2Namespace(routePath string) bool {
 			return false
 		}
 		segment := segments[index]
-		if strings.HasPrefix(segment, "*") || strings.HasPrefix(segment, ":") {
+		if strings.ContainsAny(segment, "*:") {
 			continue
 		}
 		if segment != expected {

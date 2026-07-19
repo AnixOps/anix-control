@@ -47,3 +47,13 @@ func TestLoadNormalizesSafeCustomSubscribePath(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "custom/subscribe", loaded.App.SubscribePath)
 }
+
+func TestPrepareSubscribePathNormalizesAndStoresValue(t *testing.T) {
+	resetConfig()
+	t.Cleanup(resetConfig)
+
+	cfg := &Config{App: AppConfig{SubscribePath: " /custom//subscribe/ "}}
+	assert.Equal(t, "custom/subscribe", PrepareSubscribePath(cfg))
+	assert.Equal(t, "custom/subscribe", cfg.App.SubscribePath)
+	assert.Same(t, cfg, Get())
+}
