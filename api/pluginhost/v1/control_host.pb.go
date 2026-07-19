@@ -22,19 +22,21 @@ const (
 )
 
 type DispatchRequest struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	PackageId          string                 `protobuf:"bytes,1,opt,name=package_id,json=packageId,proto3" json:"package_id,omitempty"`
-	PackageVersion     string                 `protobuf:"bytes,2,opt,name=package_version,json=packageVersion,proto3" json:"package_version,omitempty"`
-	RouteGeneration    uint64                 `protobuf:"varint,3,opt,name=route_generation,json=routeGeneration,proto3" json:"route_generation,omitempty"`
-	RequestId          string                 `protobuf:"bytes,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	IdempotencyKey     string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	RouteId            string                 `protobuf:"bytes,6,opt,name=route_id,json=routeId,proto3" json:"route_id,omitempty"`
-	Method             string                 `protobuf:"bytes,7,opt,name=method,proto3" json:"method,omitempty"`
-	RequestBody        []byte                 `protobuf:"bytes,8,opt,name=request_body,json=requestBody,proto3" json:"request_body,omitempty"`
-	PrincipalJson      []byte                 `protobuf:"bytes,9,opt,name=principal_json,json=principalJson,proto3" json:"principal_json,omitempty"`
-	DeadlineUnixMillis int64                  `protobuf:"varint,10,opt,name=deadline_unix_millis,json=deadlineUnixMillis,proto3" json:"deadline_unix_millis,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	PackageId           string                 `protobuf:"bytes,1,opt,name=package_id,json=packageId,proto3" json:"package_id,omitempty"`
+	PackageVersion      string                 `protobuf:"bytes,2,opt,name=package_version,json=packageVersion,proto3" json:"package_version,omitempty"`
+	RouteGeneration     uint64                 `protobuf:"varint,3,opt,name=route_generation,json=routeGeneration,proto3" json:"route_generation,omitempty"`
+	RequestId           string                 `protobuf:"bytes,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	IdempotencyKey      string                 `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	RouteId             string                 `protobuf:"bytes,6,opt,name=route_id,json=routeId,proto3" json:"route_id,omitempty"`
+	Method              string                 `protobuf:"bytes,7,opt,name=method,proto3" json:"method,omitempty"`
+	RequestBody         []byte                 `protobuf:"bytes,8,opt,name=request_body,json=requestBody,proto3" json:"request_body,omitempty"`
+	PrincipalJson       []byte                 `protobuf:"bytes,9,opt,name=principal_json,json=principalJson,proto3" json:"principal_json,omitempty"`
+	DeadlineUnixMillis  int64                  `protobuf:"varint,10,opt,name=deadline_unix_millis,json=deadlineUnixMillis,proto3" json:"deadline_unix_millis,omitempty"`
+	RequestMetadataJson []byte                 `protobuf:"bytes,11,opt,name=request_metadata_json,json=requestMetadataJson,proto3" json:"request_metadata_json,omitempty"`
+	BridgeCapability    []byte                 `protobuf:"bytes,12,opt,name=bridge_capability,json=bridgeCapability,proto3" json:"bridge_capability,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *DispatchRequest) Reset() {
@@ -137,6 +139,20 @@ func (x *DispatchRequest) GetDeadlineUnixMillis() int64 {
 	return 0
 }
 
+func (x *DispatchRequest) GetRequestMetadataJson() []byte {
+	if x != nil {
+		return x.RequestMetadataJson
+	}
+	return nil
+}
+
+func (x *DispatchRequest) GetBridgeCapability() []byte {
+	if x != nil {
+		return x.BridgeCapability
+	}
+	return nil
+}
+
 type DispatchResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	StatusCode    uint32                 `protobuf:"varint,1,opt,name=status_code,json=statusCode,proto3" json:"status_code,omitempty"`
@@ -213,6 +229,272 @@ func (x *DispatchResponse) GetFailureCode() string {
 	return ""
 }
 
+type WebSocketFrame struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Value:
+	//
+	//	*WebSocketFrame_Open
+	//	*WebSocketFrame_Data
+	//	*WebSocketFrame_Close
+	Value         isWebSocketFrame_Value `protobuf_oneof:"value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WebSocketFrame) Reset() {
+	*x = WebSocketFrame{}
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WebSocketFrame) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WebSocketFrame) ProtoMessage() {}
+
+func (x *WebSocketFrame) ProtoReflect() protoreflect.Message {
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WebSocketFrame.ProtoReflect.Descriptor instead.
+func (*WebSocketFrame) Descriptor() ([]byte, []int) {
+	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *WebSocketFrame) GetValue() isWebSocketFrame_Value {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *WebSocketFrame) GetOpen() *WebSocketOpen {
+	if x != nil {
+		if x, ok := x.Value.(*WebSocketFrame_Open); ok {
+			return x.Open
+		}
+	}
+	return nil
+}
+
+func (x *WebSocketFrame) GetData() []byte {
+	if x != nil {
+		if x, ok := x.Value.(*WebSocketFrame_Data); ok {
+			return x.Data
+		}
+	}
+	return nil
+}
+
+func (x *WebSocketFrame) GetClose() *WebSocketClose {
+	if x != nil {
+		if x, ok := x.Value.(*WebSocketFrame_Close); ok {
+			return x.Close
+		}
+	}
+	return nil
+}
+
+type isWebSocketFrame_Value interface {
+	isWebSocketFrame_Value()
+}
+
+type WebSocketFrame_Open struct {
+	Open *WebSocketOpen `protobuf:"bytes,1,opt,name=open,proto3,oneof"`
+}
+
+type WebSocketFrame_Data struct {
+	Data []byte `protobuf:"bytes,2,opt,name=data,proto3,oneof"`
+}
+
+type WebSocketFrame_Close struct {
+	Close *WebSocketClose `protobuf:"bytes,3,opt,name=close,proto3,oneof"`
+}
+
+func (*WebSocketFrame_Open) isWebSocketFrame_Value() {}
+
+func (*WebSocketFrame_Data) isWebSocketFrame_Value() {}
+
+func (*WebSocketFrame_Close) isWebSocketFrame_Value() {}
+
+type WebSocketOpen struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	PackageId           string                 `protobuf:"bytes,1,opt,name=package_id,json=packageId,proto3" json:"package_id,omitempty"`
+	PackageVersion      string                 `protobuf:"bytes,2,opt,name=package_version,json=packageVersion,proto3" json:"package_version,omitempty"`
+	RouteGeneration     uint64                 `protobuf:"varint,3,opt,name=route_generation,json=routeGeneration,proto3" json:"route_generation,omitempty"`
+	RouteId             string                 `protobuf:"bytes,4,opt,name=route_id,json=routeId,proto3" json:"route_id,omitempty"`
+	PrincipalJson       []byte                 `protobuf:"bytes,5,opt,name=principal_json,json=principalJson,proto3" json:"principal_json,omitempty"`
+	RequestId           string                 `protobuf:"bytes,6,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	IdempotencyKey      string                 `protobuf:"bytes,7,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	DeadlineUnixMillis  int64                  `protobuf:"varint,8,opt,name=deadline_unix_millis,json=deadlineUnixMillis,proto3" json:"deadline_unix_millis,omitempty"`
+	RequestMetadataJson []byte                 `protobuf:"bytes,9,opt,name=request_metadata_json,json=requestMetadataJson,proto3" json:"request_metadata_json,omitempty"`
+	BridgeCapability    []byte                 `protobuf:"bytes,10,opt,name=bridge_capability,json=bridgeCapability,proto3" json:"bridge_capability,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *WebSocketOpen) Reset() {
+	*x = WebSocketOpen{}
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WebSocketOpen) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WebSocketOpen) ProtoMessage() {}
+
+func (x *WebSocketOpen) ProtoReflect() protoreflect.Message {
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WebSocketOpen.ProtoReflect.Descriptor instead.
+func (*WebSocketOpen) Descriptor() ([]byte, []int) {
+	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *WebSocketOpen) GetPackageId() string {
+	if x != nil {
+		return x.PackageId
+	}
+	return ""
+}
+
+func (x *WebSocketOpen) GetPackageVersion() string {
+	if x != nil {
+		return x.PackageVersion
+	}
+	return ""
+}
+
+func (x *WebSocketOpen) GetRouteGeneration() uint64 {
+	if x != nil {
+		return x.RouteGeneration
+	}
+	return 0
+}
+
+func (x *WebSocketOpen) GetRouteId() string {
+	if x != nil {
+		return x.RouteId
+	}
+	return ""
+}
+
+func (x *WebSocketOpen) GetPrincipalJson() []byte {
+	if x != nil {
+		return x.PrincipalJson
+	}
+	return nil
+}
+
+func (x *WebSocketOpen) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *WebSocketOpen) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *WebSocketOpen) GetDeadlineUnixMillis() int64 {
+	if x != nil {
+		return x.DeadlineUnixMillis
+	}
+	return 0
+}
+
+func (x *WebSocketOpen) GetRequestMetadataJson() []byte {
+	if x != nil {
+		return x.RequestMetadataJson
+	}
+	return nil
+}
+
+func (x *WebSocketOpen) GetBridgeCapability() []byte {
+	if x != nil {
+		return x.BridgeCapability
+	}
+	return nil
+}
+
+type WebSocketClose struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          uint32                 `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WebSocketClose) Reset() {
+	*x = WebSocketClose{}
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WebSocketClose) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WebSocketClose) ProtoMessage() {}
+
+func (x *WebSocketClose) ProtoReflect() protoreflect.Message {
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WebSocketClose.ProtoReflect.Descriptor instead.
+func (*WebSocketClose) Descriptor() ([]byte, []int) {
+	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *WebSocketClose) GetCode() uint32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *WebSocketClose) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 type Header struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -223,7 +505,7 @@ type Header struct {
 
 func (x *Header) Reset() {
 	*x = Header{}
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[2]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -235,7 +517,7 @@ func (x *Header) String() string {
 func (*Header) ProtoMessage() {}
 
 func (x *Header) ProtoReflect() protoreflect.Message {
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[2]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -248,7 +530,7 @@ func (x *Header) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Header.ProtoReflect.Descriptor instead.
 func (*Header) Descriptor() ([]byte, []int) {
-	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{2}
+	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Header) GetName() string {
@@ -266,19 +548,21 @@ func (x *Header) GetValue() string {
 }
 
 type MigrationRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	PackageId       string                 `protobuf:"bytes,1,opt,name=package_id,json=packageId,proto3" json:"package_id,omitempty"`
-	PackageVersion  string                 `protobuf:"bytes,2,opt,name=package_version,json=packageVersion,proto3" json:"package_version,omitempty"`
-	MigrationId     string                 `protobuf:"bytes,3,opt,name=migration_id,json=migrationId,proto3" json:"migration_id,omitempty"`
-	Checkpoint      string                 `protobuf:"bytes,4,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
-	RouteGeneration uint64                 `protobuf:"varint,5,opt,name=route_generation,json=routeGeneration,proto3" json:"route_generation,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	PackageId          string                 `protobuf:"bytes,1,opt,name=package_id,json=packageId,proto3" json:"package_id,omitempty"`
+	PackageVersion     string                 `protobuf:"bytes,2,opt,name=package_version,json=packageVersion,proto3" json:"package_version,omitempty"`
+	MigrationId        string                 `protobuf:"bytes,3,opt,name=migration_id,json=migrationId,proto3" json:"migration_id,omitempty"`
+	Checkpoint         string                 `protobuf:"bytes,4,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
+	RouteGeneration    uint64                 `protobuf:"varint,5,opt,name=route_generation,json=routeGeneration,proto3" json:"route_generation,omitempty"`
+	BridgeCapability   []byte                 `protobuf:"bytes,6,opt,name=bridge_capability,json=bridgeCapability,proto3" json:"bridge_capability,omitempty"`
+	DeadlineUnixMillis int64                  `protobuf:"varint,7,opt,name=deadline_unix_millis,json=deadlineUnixMillis,proto3" json:"deadline_unix_millis,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *MigrationRequest) Reset() {
 	*x = MigrationRequest{}
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[3]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -290,7 +574,7 @@ func (x *MigrationRequest) String() string {
 func (*MigrationRequest) ProtoMessage() {}
 
 func (x *MigrationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[3]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -303,7 +587,7 @@ func (x *MigrationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MigrationRequest.ProtoReflect.Descriptor instead.
 func (*MigrationRequest) Descriptor() ([]byte, []int) {
-	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{3}
+	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *MigrationRequest) GetPackageId() string {
@@ -341,6 +625,20 @@ func (x *MigrationRequest) GetRouteGeneration() uint64 {
 	return 0
 }
 
+func (x *MigrationRequest) GetBridgeCapability() []byte {
+	if x != nil {
+		return x.BridgeCapability
+	}
+	return nil
+}
+
+func (x *MigrationRequest) GetDeadlineUnixMillis() int64 {
+	if x != nil {
+		return x.DeadlineUnixMillis
+	}
+	return 0
+}
+
 type MigrationResponse struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Checkpoint       string                 `protobuf:"bytes,1,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
@@ -353,7 +651,7 @@ type MigrationResponse struct {
 
 func (x *MigrationResponse) Reset() {
 	*x = MigrationResponse{}
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[4]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -365,7 +663,7 @@ func (x *MigrationResponse) String() string {
 func (*MigrationResponse) ProtoMessage() {}
 
 func (x *MigrationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[4]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -378,7 +676,7 @@ func (x *MigrationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MigrationResponse.ProtoReflect.Descriptor instead.
 func (*MigrationResponse) Descriptor() ([]byte, []int) {
-	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{4}
+	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *MigrationResponse) GetCheckpoint() string {
@@ -418,7 +716,7 @@ type HealthRequest struct {
 
 func (x *HealthRequest) Reset() {
 	*x = HealthRequest{}
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[5]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -430,7 +728,7 @@ func (x *HealthRequest) String() string {
 func (*HealthRequest) ProtoMessage() {}
 
 func (x *HealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[5]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -443,7 +741,7 @@ func (x *HealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthRequest.ProtoReflect.Descriptor instead.
 func (*HealthRequest) Descriptor() ([]byte, []int) {
-	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{5}
+	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *HealthRequest) GetRouteGeneration() uint64 {
@@ -464,7 +762,7 @@ type HealthResponse struct {
 
 func (x *HealthResponse) Reset() {
 	*x = HealthResponse{}
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[6]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -476,7 +774,7 @@ func (x *HealthResponse) String() string {
 func (*HealthResponse) ProtoMessage() {}
 
 func (x *HealthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[6]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -489,7 +787,7 @@ func (x *HealthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthResponse.ProtoReflect.Descriptor instead.
 func (*HealthResponse) Descriptor() ([]byte, []int) {
-	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{6}
+	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *HealthResponse) GetHealthy() bool {
@@ -523,7 +821,7 @@ type DrainRequest struct {
 
 func (x *DrainRequest) Reset() {
 	*x = DrainRequest{}
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[7]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -535,7 +833,7 @@ func (x *DrainRequest) String() string {
 func (*DrainRequest) ProtoMessage() {}
 
 func (x *DrainRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[7]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -548,7 +846,7 @@ func (x *DrainRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainRequest.ProtoReflect.Descriptor instead.
 func (*DrainRequest) Descriptor() ([]byte, []int) {
-	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{7}
+	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DrainRequest) GetRouteGeneration() uint64 {
@@ -575,7 +873,7 @@ type DrainResponse struct {
 
 func (x *DrainResponse) Reset() {
 	*x = DrainResponse{}
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[8]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -587,7 +885,7 @@ func (x *DrainResponse) String() string {
 func (*DrainResponse) ProtoMessage() {}
 
 func (x *DrainResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[8]
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -600,7 +898,7 @@ func (x *DrainResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainResponse.ProtoReflect.Descriptor instead.
 func (*DrainResponse) Descriptor() ([]byte, []int) {
-	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{8}
+	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DrainResponse) GetDrained() bool {
@@ -621,7 +919,7 @@ var File_api_pluginhost_v1_control_host_proto protoreflect.FileDescriptor
 
 const file_api_pluginhost_v1_control_host_proto_rawDesc = "" +
 	"\n" +
-	"$api/pluginhost/v1/control_host.proto\x12\x12anix.pluginhost.v1\"\xfb\x02\n" +
+	"$api/pluginhost/v1/control_host.proto\x12\x12anix.pluginhost.v1\"\xdc\x03\n" +
 	"\x0fDispatchRequest\x12\x1d\n" +
 	"\n" +
 	"package_id\x18\x01 \x01(\tR\tpackageId\x12'\n" +
@@ -635,17 +933,41 @@ const file_api_pluginhost_v1_control_host_proto_rawDesc = "" +
 	"\frequest_body\x18\b \x01(\fR\vrequestBody\x12%\n" +
 	"\x0eprincipal_json\x18\t \x01(\fR\rprincipalJson\x120\n" +
 	"\x14deadline_unix_millis\x18\n" +
-	" \x01(\x03R\x12deadlineUnixMillis\"\xd4\x01\n" +
+	" \x01(\x03R\x12deadlineUnixMillis\x122\n" +
+	"\x15request_metadata_json\x18\v \x01(\fR\x13requestMetadataJson\x12+\n" +
+	"\x11bridge_capability\x18\f \x01(\fR\x10bridgeCapability\"\xd4\x01\n" +
 	"\x10DispatchResponse\x12\x1f\n" +
 	"\vstatus_code\x18\x01 \x01(\rR\n" +
 	"statusCode\x12#\n" +
 	"\rresponse_body\x18\x02 \x01(\fR\fresponseBody\x124\n" +
 	"\aheaders\x18\x03 \x03(\v2\x1a.anix.pluginhost.v1.HeaderR\aheaders\x12!\n" +
 	"\foperation_id\x18\x04 \x01(\tR\voperationId\x12!\n" +
-	"\ffailure_code\x18\x05 \x01(\tR\vfailureCode\"2\n" +
+	"\ffailure_code\x18\x05 \x01(\tR\vfailureCode\"\xa4\x01\n" +
+	"\x0eWebSocketFrame\x127\n" +
+	"\x04open\x18\x01 \x01(\v2!.anix.pluginhost.v1.WebSocketOpenH\x00R\x04open\x12\x14\n" +
+	"\x04data\x18\x02 \x01(\fH\x00R\x04data\x12:\n" +
+	"\x05close\x18\x03 \x01(\v2\".anix.pluginhost.v1.WebSocketCloseH\x00R\x05closeB\a\n" +
+	"\x05value\"\x9f\x03\n" +
+	"\rWebSocketOpen\x12\x1d\n" +
+	"\n" +
+	"package_id\x18\x01 \x01(\tR\tpackageId\x12'\n" +
+	"\x0fpackage_version\x18\x02 \x01(\tR\x0epackageVersion\x12)\n" +
+	"\x10route_generation\x18\x03 \x01(\x04R\x0frouteGeneration\x12\x19\n" +
+	"\broute_id\x18\x04 \x01(\tR\arouteId\x12%\n" +
+	"\x0eprincipal_json\x18\x05 \x01(\fR\rprincipalJson\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x06 \x01(\tR\trequestId\x12'\n" +
+	"\x0fidempotency_key\x18\a \x01(\tR\x0eidempotencyKey\x120\n" +
+	"\x14deadline_unix_millis\x18\b \x01(\x03R\x12deadlineUnixMillis\x122\n" +
+	"\x15request_metadata_json\x18\t \x01(\fR\x13requestMetadataJson\x12+\n" +
+	"\x11bridge_capability\x18\n" +
+	" \x01(\fR\x10bridgeCapability\"<\n" +
+	"\x0eWebSocketClose\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\rR\x04code\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"2\n" +
 	"\x06Header\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value\"\xc8\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\"\xa7\x02\n" +
 	"\x10MigrationRequest\x12\x1d\n" +
 	"\n" +
 	"package_id\x18\x01 \x01(\tR\tpackageId\x12'\n" +
@@ -654,7 +976,9 @@ const file_api_pluginhost_v1_control_host_proto_rawDesc = "" +
 	"\n" +
 	"checkpoint\x18\x04 \x01(\tR\n" +
 	"checkpoint\x12)\n" +
-	"\x10route_generation\x18\x05 \x01(\x04R\x0frouteGeneration\"\x9f\x01\n" +
+	"\x10route_generation\x18\x05 \x01(\x04R\x0frouteGeneration\x12+\n" +
+	"\x11bridge_capability\x18\x06 \x01(\fR\x10bridgeCapability\x120\n" +
+	"\x14deadline_unix_millis\x18\a \x01(\x03R\x12deadlineUnixMillis\"\x9f\x01\n" +
 	"\x11MigrationResponse\x12\x1e\n" +
 	"\n" +
 	"checkpoint\x18\x01 \x01(\tR\n" +
@@ -673,9 +997,10 @@ const file_api_pluginhost_v1_control_host_proto_rawDesc = "" +
 	"\x14deadline_unix_millis\x18\x02 \x01(\x03R\x12deadlineUnixMillis\"F\n" +
 	"\rDrainResponse\x12\x18\n" +
 	"\adrained\x18\x01 \x01(\bR\adrained\x12\x1b\n" +
-	"\tin_flight\x18\x02 \x01(\x04R\binFlight2\xe2\x02\n" +
+	"\tin_flight\x18\x02 \x01(\x04R\binFlight2\xbf\x03\n" +
 	"\x12ControlPackageHost\x12U\n" +
-	"\bDispatch\x12#.anix.pluginhost.v1.DispatchRequest\x1a$.anix.pluginhost.v1.DispatchResponse\x12V\n" +
+	"\bDispatch\x12#.anix.pluginhost.v1.DispatchRequest\x1a$.anix.pluginhost.v1.DispatchResponse\x12[\n" +
+	"\rOpenWebSocket\x12\".anix.pluginhost.v1.WebSocketFrame\x1a\".anix.pluginhost.v1.WebSocketFrame(\x010\x01\x12V\n" +
 	"\aMigrate\x12$.anix.pluginhost.v1.MigrationRequest\x1a%.anix.pluginhost.v1.MigrationResponse\x12O\n" +
 	"\x06Health\x12!.anix.pluginhost.v1.HealthRequest\x1a\".anix.pluginhost.v1.HealthResponse\x12L\n" +
 	"\x05Drain\x12 .anix.pluginhost.v1.DrainRequest\x1a!.anix.pluginhost.v1.DrainResponseBCZAgithub.com/AnixOps/anix-control/v4/api/pluginhost/v1;pluginhostv1b\x06proto3"
@@ -692,33 +1017,40 @@ func file_api_pluginhost_v1_control_host_proto_rawDescGZIP() []byte {
 	return file_api_pluginhost_v1_control_host_proto_rawDescData
 }
 
-var file_api_pluginhost_v1_control_host_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_api_pluginhost_v1_control_host_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_api_pluginhost_v1_control_host_proto_goTypes = []any{
 	(*DispatchRequest)(nil),   // 0: anix.pluginhost.v1.DispatchRequest
 	(*DispatchResponse)(nil),  // 1: anix.pluginhost.v1.DispatchResponse
-	(*Header)(nil),            // 2: anix.pluginhost.v1.Header
-	(*MigrationRequest)(nil),  // 3: anix.pluginhost.v1.MigrationRequest
-	(*MigrationResponse)(nil), // 4: anix.pluginhost.v1.MigrationResponse
-	(*HealthRequest)(nil),     // 5: anix.pluginhost.v1.HealthRequest
-	(*HealthResponse)(nil),    // 6: anix.pluginhost.v1.HealthResponse
-	(*DrainRequest)(nil),      // 7: anix.pluginhost.v1.DrainRequest
-	(*DrainResponse)(nil),     // 8: anix.pluginhost.v1.DrainResponse
+	(*WebSocketFrame)(nil),    // 2: anix.pluginhost.v1.WebSocketFrame
+	(*WebSocketOpen)(nil),     // 3: anix.pluginhost.v1.WebSocketOpen
+	(*WebSocketClose)(nil),    // 4: anix.pluginhost.v1.WebSocketClose
+	(*Header)(nil),            // 5: anix.pluginhost.v1.Header
+	(*MigrationRequest)(nil),  // 6: anix.pluginhost.v1.MigrationRequest
+	(*MigrationResponse)(nil), // 7: anix.pluginhost.v1.MigrationResponse
+	(*HealthRequest)(nil),     // 8: anix.pluginhost.v1.HealthRequest
+	(*HealthResponse)(nil),    // 9: anix.pluginhost.v1.HealthResponse
+	(*DrainRequest)(nil),      // 10: anix.pluginhost.v1.DrainRequest
+	(*DrainResponse)(nil),     // 11: anix.pluginhost.v1.DrainResponse
 }
 var file_api_pluginhost_v1_control_host_proto_depIdxs = []int32{
-	2, // 0: anix.pluginhost.v1.DispatchResponse.headers:type_name -> anix.pluginhost.v1.Header
-	0, // 1: anix.pluginhost.v1.ControlPackageHost.Dispatch:input_type -> anix.pluginhost.v1.DispatchRequest
-	3, // 2: anix.pluginhost.v1.ControlPackageHost.Migrate:input_type -> anix.pluginhost.v1.MigrationRequest
-	5, // 3: anix.pluginhost.v1.ControlPackageHost.Health:input_type -> anix.pluginhost.v1.HealthRequest
-	7, // 4: anix.pluginhost.v1.ControlPackageHost.Drain:input_type -> anix.pluginhost.v1.DrainRequest
-	1, // 5: anix.pluginhost.v1.ControlPackageHost.Dispatch:output_type -> anix.pluginhost.v1.DispatchResponse
-	4, // 6: anix.pluginhost.v1.ControlPackageHost.Migrate:output_type -> anix.pluginhost.v1.MigrationResponse
-	6, // 7: anix.pluginhost.v1.ControlPackageHost.Health:output_type -> anix.pluginhost.v1.HealthResponse
-	8, // 8: anix.pluginhost.v1.ControlPackageHost.Drain:output_type -> anix.pluginhost.v1.DrainResponse
-	5, // [5:9] is the sub-list for method output_type
-	1, // [1:5] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	5,  // 0: anix.pluginhost.v1.DispatchResponse.headers:type_name -> anix.pluginhost.v1.Header
+	3,  // 1: anix.pluginhost.v1.WebSocketFrame.open:type_name -> anix.pluginhost.v1.WebSocketOpen
+	4,  // 2: anix.pluginhost.v1.WebSocketFrame.close:type_name -> anix.pluginhost.v1.WebSocketClose
+	0,  // 3: anix.pluginhost.v1.ControlPackageHost.Dispatch:input_type -> anix.pluginhost.v1.DispatchRequest
+	2,  // 4: anix.pluginhost.v1.ControlPackageHost.OpenWebSocket:input_type -> anix.pluginhost.v1.WebSocketFrame
+	6,  // 5: anix.pluginhost.v1.ControlPackageHost.Migrate:input_type -> anix.pluginhost.v1.MigrationRequest
+	8,  // 6: anix.pluginhost.v1.ControlPackageHost.Health:input_type -> anix.pluginhost.v1.HealthRequest
+	10, // 7: anix.pluginhost.v1.ControlPackageHost.Drain:input_type -> anix.pluginhost.v1.DrainRequest
+	1,  // 8: anix.pluginhost.v1.ControlPackageHost.Dispatch:output_type -> anix.pluginhost.v1.DispatchResponse
+	2,  // 9: anix.pluginhost.v1.ControlPackageHost.OpenWebSocket:output_type -> anix.pluginhost.v1.WebSocketFrame
+	7,  // 10: anix.pluginhost.v1.ControlPackageHost.Migrate:output_type -> anix.pluginhost.v1.MigrationResponse
+	9,  // 11: anix.pluginhost.v1.ControlPackageHost.Health:output_type -> anix.pluginhost.v1.HealthResponse
+	11, // 12: anix.pluginhost.v1.ControlPackageHost.Drain:output_type -> anix.pluginhost.v1.DrainResponse
+	8,  // [8:13] is the sub-list for method output_type
+	3,  // [3:8] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_api_pluginhost_v1_control_host_proto_init() }
@@ -726,13 +1058,18 @@ func file_api_pluginhost_v1_control_host_proto_init() {
 	if File_api_pluginhost_v1_control_host_proto != nil {
 		return
 	}
+	file_api_pluginhost_v1_control_host_proto_msgTypes[2].OneofWrappers = []any{
+		(*WebSocketFrame_Open)(nil),
+		(*WebSocketFrame_Data)(nil),
+		(*WebSocketFrame_Close)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_pluginhost_v1_control_host_proto_rawDesc), len(file_api_pluginhost_v1_control_host_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

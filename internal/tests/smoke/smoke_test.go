@@ -13,7 +13,6 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/router"
-	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/tests/testutil"
 	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"github.com/gin-gonic/gin"
@@ -159,9 +158,9 @@ func (s *SmokeTestSuite) TestHealthEndpoint() {
 }
 
 // ============================================================
-// Smoke 2: User Registration + Login
+// Smoke 2: Identity Routes Fail Closed Without A Signed Package
 // ============================================================
-func (s *SmokeTestSuite) TestRegisterAndLogin() {
+func (s *SmokeTestSuite) TestIdentityRoutesRequireInstalledPackage() {
 	// Register
 	regBody := map[string]string{
 		"email":    "user@smoke.test",
@@ -173,12 +172,12 @@ func (s *SmokeTestSuite) TestRegisterAndLogin() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusOK, w.Code)
+	assert.Equal(s.T(), http.StatusServiceUnavailable, w.Code)
 	var regResp map[string]any
 	require.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &regResp))
-	// Registration returns data with token
-	_, hasData := regResp["data"]
-	assert.True(s.T(), hasData, "register response should have data field")
+	regError, ok := regResp["error"].(map[string]any)
+	require.True(s.T(), ok, "register response should contain a package error")
+	assert.Equal(s.T(), "package_unavailable", regError["code"])
 
 	// Login
 	loginBody := map[string]string{
@@ -191,13 +190,12 @@ func (s *SmokeTestSuite) TestRegisterAndLogin() {
 	w = httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusOK, w.Code)
+	assert.Equal(s.T(), http.StatusServiceUnavailable, w.Code)
 	var loginResp map[string]any
 	require.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &loginResp))
-	// Login returns data with token
-	dataMap, ok := loginResp["data"].(map[string]any)
-	require.True(s.T(), ok, "login response should have data field")
-	assert.NotEmpty(s.T(), dataMap["token"], "login should return token")
+	loginError, ok := loginResp["error"].(map[string]any)
+	require.True(s.T(), ok, "login response should contain a package error")
+	assert.Equal(s.T(), "package_unavailable", loginError["code"])
 }
 
 // ============================================================
@@ -245,7 +243,7 @@ func (s *SmokeTestSuite) TestMetricsEndpoint() {
 }
 
 // ============================================================
-// Smoke 5: Authenticated User Profile
+// Smoke 5: Authenticated Identity Route Requires Installed Package
 // ============================================================
 func (s *SmokeTestSuite) TestUserProfile() {
 	// Create a regular user first
@@ -267,14 +265,12 @@ func (s *SmokeTestSuite) TestUserProfile() {
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
-	assert.Equal(s.T(), http.StatusOK, w.Code)
+	assert.Equal(s.T(), http.StatusServiceUnavailable, w.Code)
 	var resp map[string]any
 	require.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
-	data, ok := resp["data"].(map[string]any)
-	require.True(s.T(), ok, "profile response should have data field, got: %v", resp)
-	assert.Equal(s.T(), "profile@smoke.test", data["email"])
-	assert.Equal(s.T(), service.PluginPermissionModeAuthoritative, data["permission_mode"])
-	assert.Empty(s.T(), data["permissions"])
+	errBody, ok := resp["error"].(map[string]any)
+	require.True(s.T(), ok, "profile response should contain a package error, got: %v", resp)
+	assert.Equal(s.T(), "package_unavailable", errBody["code"])
 }
 
 // ============================================================

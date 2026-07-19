@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/agentws"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
@@ -210,7 +211,42 @@ func (h *AgentHandler) updateConnectionLastSeen(nodeID uint) {
 	h.touchNodeOnline(nodeID, isForwardNode)
 }
 
+// PrepareWebSocketBridge authenticates optional request credentials before a
+// package-host relay is opened. It retains only the verified node identity in
+// Gin context; the credential itself never reaches the package host.
+func (h *AgentHandler) PrepareWebSocketBridge(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	authInfo, hasRequestAuth, err := h.authFromRequest(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return false
+	}
+	if !hasRequestAuth {
+		return true
+	}
+	if authInfo == nil || authInfo.NodeID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid node_id"})
+		return false
+	}
+	c.Set(agentws.TrustedContextKey, true)
+	c.Set(agentws.ForwardNodeContextKey, authInfo.IsForwardNode)
+	c.Set("node_id", authInfo.NodeID)
+	return true
+}
+
 func (h *AgentHandler) authFromRequest(c *gin.Context) (*wsAuthInfo, bool, error) {
+	if agentWebSocketContextBool(c, agentws.TrustedContextKey) {
+		nodeID := agentWebSocketContextNodeID(c)
+		if nodeID == 0 {
+			return nil, true, fmt.Errorf("invalid trusted node_id")
+		}
+		return &wsAuthInfo{
+			NodeID: nodeID, FromHeaders: true,
+			IsForwardNode: agentWebSocketContextBool(c, agentws.ForwardNodeContextKey),
+		}, true, nil
+	}
 	nodeIDStr := c.Query("node_id")
 	if nodeIDStr == "" {
 		nodeIDStr = c.GetHeader("X-Node-ID")
@@ -304,6 +340,39 @@ func normalizeInboundMessageType(messageType string) string {
 	default:
 		return messageType
 	}
+}
+
+func agentWebSocketContextBool(c *gin.Context, key string) bool {
+	if c == nil {
+		return false
+	}
+	value, ok := c.Get(key)
+	return ok && value == true
+}
+
+func agentWebSocketContextNodeID(c *gin.Context) uint {
+	if c == nil {
+		return 0
+	}
+	value, ok := c.Get("node_id")
+	if !ok {
+		return 0
+	}
+	switch nodeID := value.(type) {
+	case uint:
+		return nodeID
+	case uint32:
+		return uint(nodeID)
+	case int:
+		if nodeID > 0 {
+			return uint(nodeID)
+		}
+	case float64:
+		if nodeID > 0 {
+			return uint(nodeID)
+		}
+	}
+	return 0
 }
 
 func parseAckPayload(raw []byte, payload json.RawMessage) (*wsAckPayload, bool) {

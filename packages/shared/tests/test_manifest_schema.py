@@ -279,8 +279,124 @@ func main() {
         self.assertEqual("identity-platform", migrations["package_id"])
         self.assertTrue(routes)
         self.assertEqual("identity-platform", routes["package_id"])
-        self.assertEqual([], routes["routes"])
+        self.assertTrue(
+            {"identity.auth.login", "identity.auth.register"}.issubset(
+                {route["package_route"] for route in routes["routes"]}
+            )
+        )
         self.assertTrue(webui_path.read_bytes())
+
+    def test_identity_platform_artifact_contains_its_executable_host_and_source_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "packages"
+            result = run_command(
+                [
+                    sys.executable,
+                    str(BUILDER),
+                    "--package",
+                    "identity-platform",
+                    "--version",
+                    "4.0.0",
+                    "--out",
+                    str(output),
+                ]
+            )
+            self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", errors="replace"))
+
+            artifact = output / "identity-platform-4.0.0.anxp"
+            with tarfile.open(artifact, mode="r:") as archive:
+                host = archive.extractfile("bin/control-host")
+                routes = archive.extractfile("compat/v2-routes.json")
+                migrations = archive.extractfile("migrations/index.json")
+                self.assertIsNotNone(host)
+                self.assertIsNotNone(routes)
+                self.assertIsNotNone(migrations)
+                host_bytes = host.read() if host else b""
+                routes_value = json.loads(routes.read() if routes else b"{}")
+                migrations_value = json.loads(migrations.read() if migrations else b"{}")
+
+                self.assertTrue(host_bytes.startswith(b"\x7fELF"))
+                self.assertIn(b"Control host socket is required", host_bytes)
+                self.assertIn("identity.auth.login", {route["package_route"] for route in routes_value["routes"]})
+                self.assertIn("identity.auth.register", {route["package_route"] for route in routes_value["routes"]})
+                migration_paths = [migration["path"] for migration in migrations_value["migrations"]]
+                self.assertEqual(["migrations/001_identity_platform.sql"], migration_paths)
+                self.assertIsNotNone(archive.extractfile("migrations/001_identity_platform.sql"))
+
+    def test_fallback_control_package_uses_a_compiled_capability_host(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "packages"
+            result = run_command(
+                [
+                    sys.executable,
+                    str(BUILDER),
+                    "--package",
+                    "knowledge",
+                    "--version",
+                    "4.0.0",
+                    "--out",
+                    str(output),
+                ]
+            )
+            self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", errors="replace"))
+
+            artifact = output / "knowledge-4.0.0.anxp"
+            with tarfile.open(artifact, mode="r:") as archive:
+                host = archive.extractfile("bin/control-host")
+                self.assertIsNotNone(host)
+                host_bytes = host.read() if host else b""
+
+            self.assertTrue(host_bytes.startswith(b"\x7fELF"))
+            self.assertIn(b"package bridge capability is required", host_bytes)
+            self.assertNotIn(b"host is not implemented in the manifest stage", host_bytes)
+
+    def test_identity_platform_routes_match_the_v2_ownership_catalog(self) -> None:
+        catalog = json.loads((REPO_ROOT / "config" / "v2-package-route-catalog.json").read_text(encoding="utf-8"))
+        declaration = json.loads((REPO_ROOT / "packages" / "identity-platform" / "compat" / "v2-routes.json").read_text(encoding="utf-8"))
+        expected = {
+            (route["method"], route["path"], route["route_id"], route["envelope"], route["transport"])
+            for route in catalog
+            if route["owner"] == "identity-platform"
+        }
+        actual = {
+            (route["method"], route["legacy_path"], route["package_route"], route["envelope"], route.get("transport", "http"))
+            for route in declaration["routes"]
+        }
+        self.assertEqual(expected, actual)
+
+    def test_package_cutover_wave_routes_match_the_v2_ownership_catalog(self) -> None:
+        catalog = json.loads((REPO_ROOT / "config" / "v2-package-route-catalog.json").read_text(encoding="utf-8"))
+        for package_id in (
+            "knowledge",
+            "ticket",
+            "plan",
+            "notification",
+            "order",
+            "payment",
+            "subscription",
+            "machine-telemetry",
+            "proxy-node",
+            "protocol-runtime",
+            "wireguard",
+            "forward",
+            "gost-mesh",
+            "nftables-forward",
+            "nat-egress",
+        ):
+            declaration = json.loads((REPO_ROOT / "packages" / package_id / "compat" / "v2-routes.json").read_text(encoding="utf-8"))
+            migrations = json.loads((REPO_ROOT / "packages" / package_id / "migrations" / "index.json").read_text(encoding="utf-8"))
+            expected = {
+                (route["method"], route["path"], route["route_id"], route["envelope"], route["transport"])
+                for route in catalog
+                if route["owner"] == package_id
+            }
+            actual = {
+                (route["method"], route["legacy_path"], route["package_route"], route["envelope"], route.get("transport", "http"))
+                for route in declaration["routes"]
+            }
+            self.assertEqual(expected, actual, package_id)
+            self.assertEqual(package_id, migrations["package_id"])
+            self.assertEqual("4.0.0", migrations["version"])
 
     def test_all_v4_packages_materialize_signed_v2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -3,9 +3,12 @@ package pluginhost
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	pluginhostv1 "github.com/AnixOps/anix-control/v4/api/pluginhost/v1"
+	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 )
 
 // MigrationInput is passed through to the verified package host. Checkpoint
@@ -16,6 +19,9 @@ type MigrationInput struct {
 	MigrationID string
 	Checkpoint  string
 	Generation  uint64
+	// BridgeCapability is minted only by Supervisor and is never caller-owned.
+	BridgeCapability []byte
+	Deadline         time.Time
 }
 
 // MigrationOutput is the opaque reply returned by a package host. The kernel
@@ -41,11 +47,13 @@ func (c *hostClient) Migrate(ctx context.Context, input MigrationInput) (Migrati
 		return MigrationOutput{}, ErrHostUnavailable
 	}
 	response, err := c.rpc.Migrate(ctx, &pluginhostv1.MigrationRequest{
-		PackageId:       input.PackageID,
-		PackageVersion:  input.Version,
-		MigrationId:     input.MigrationID,
-		Checkpoint:      input.Checkpoint,
-		RouteGeneration: input.Generation,
+		PackageId:          input.PackageID,
+		PackageVersion:     input.Version,
+		MigrationId:        input.MigrationID,
+		Checkpoint:         input.Checkpoint,
+		RouteGeneration:    input.Generation,
+		BridgeCapability:   append([]byte(nil), input.BridgeCapability...),
+		DeadlineUnixMillis: input.Deadline.UnixMilli(),
 	})
 	if err != nil {
 		return MigrationOutput{}, hostClientError(err)
@@ -65,18 +73,33 @@ func (m *Supervisor) Migrate(ctx context.Context, input MigrationInput, recorder
 	if m == nil {
 		return MigrationOutput{}, ErrHostUnavailable
 	}
+	if err := ctx.Err(); err != nil {
+		return MigrationOutput{}, fmt.Errorf("%w: %v", ErrHostUnavailable, err)
+	}
 	input.PackageID = strings.TrimSpace(input.PackageID)
 	input.Version = strings.TrimSpace(input.Version)
 	input.MigrationID = strings.TrimSpace(input.MigrationID)
-	if input.PackageID == "" || input.Version == "" || input.MigrationID == "" || input.Generation == 0 {
+	if input.PackageID == "" || input.Version == "" || !validMigrationIdentifier(input.MigrationID) || input.Generation == 0 {
 		return MigrationOutput{}, ErrGenerationUnavailable
 	}
+	if len(input.BridgeCapability) != 0 {
+		return MigrationOutput{}, ErrHostIncompatible
+	}
+	input.Deadline = migrationDeadline(ctx)
 	if recorder == nil {
 		return MigrationOutput{}, fmt.Errorf("%w: migration checkpoint recorder is required", ErrHostIncompatible)
 	}
 	host, err := m.hostForGeneration(input.PackageID, input.Version, input.Generation)
 	if err != nil {
 		return MigrationOutput{}, err
+	}
+	capability, err := host.mintMigrationCapability(input)
+	if err != nil {
+		return MigrationOutput{}, err
+	}
+	if len(capability) > 0 {
+		input.BridgeCapability = capability
+		defer host.bridge.Revoke(capability)
 	}
 	response, err := host.client.Migrate(ctx, input)
 	if err != nil {
@@ -104,4 +127,41 @@ func (m *Supervisor) Migrate(ctx context.Context, input MigrationInput, recorder
 	response.HealthLeaseID = health.LeaseID
 	response.HealthGeneration = input.Generation
 	return response, nil
+}
+
+func (h *hostProcess) mintMigrationCapability(input MigrationInput) ([]byte, error) {
+	if h == nil || h.bridge == nil {
+		return nil, nil
+	}
+	routeID := "migration." + input.PackageID + "." + input.MigrationID
+	requestID := "migration-" + input.MigrationID + "-" + strconv.FormatUint(input.Generation, 10)
+	capability, err := h.bridge.Mint(packagebridge.Request{
+		RequestID: requestID, RouteID: routeID, Method: "MIGRATE",
+		PrincipalJSON: []byte(`{}`), MetadataJSON: []byte(`{}`), Deadline: input.Deadline,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: mint package migration capability: %v", ErrHostUnavailable, err)
+	}
+	return capability, nil
+}
+
+func migrationDeadline(ctx context.Context) time.Time {
+	if deadline, ok := ctx.Deadline(); ok {
+		return deadline
+	}
+	return time.Now().Add(30 * time.Second)
+}
+
+func validMigrationIdentifier(value string) bool {
+	if value == "" || len(value) > 160 {
+		return false
+	}
+	for _, character := range value {
+		if (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+			(character >= '0' && character <= '9') || character == '.' || character == '_' || character == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }

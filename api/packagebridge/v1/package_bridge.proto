@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package anixops.packagebridge.v1;
+
+option go_package = "github.com/AnixOps/anix-control/v4/api/packagebridge/v1;packagebridgev1";
+
+// KernelPackageBridge is a private, per-host channel. It exposes named
+// kernel operations only; package hosts never receive database or signing
+// credentials.
+service KernelPackageBridge {
+  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+  rpc OpenWebSocket(stream WebSocketFrame) returns (stream WebSocketFrame);
+}
+
+message InvokeRequest {
+  bytes capability = 1;
+  string operation = 2;
+  bytes payload = 3;
+}
+
+message InvokeResponse {
+  bytes response_body = 1;
+  uint32 status_code = 2;
+  repeated ResponseHeader headers = 3;
+}
+
+message ResponseHeader {
+  string name = 1;
+  string value = 2;
+}
+
+// WebSocketFrame is available only on the private inherited bridge. The first
+// client frame must be an open frame; every later frame is data or close.
+message WebSocketFrame {
+  oneof value {
+    WebSocketOpen open = 1;
+    bytes data = 2;
+    WebSocketClose close = 3;
+  }
+}
+
+message WebSocketOpen {
+  bytes capability = 1;
+  string operation = 2;
+}
+
+message WebSocketClose {
+  uint32 code = 1;
+  string reason = 2;
+}

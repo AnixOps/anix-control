@@ -1,0 +1,97 @@
+{
+  "api_version": "v2",
+  "package_id": "order",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/coupon",
+      "package_route": "order.admin.coupon.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/coupon",
+      "package_route": "order.admin.coupon.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/coupon/:id",
+      "package_route": "order.admin.coupon.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/orders",
+      "package_route": "order.admin.orders.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/orders/:id",
+      "package_route": "order.admin.orders.id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/orders/:id/cancel",
+      "package_route": "order.admin.orders.id.cancel.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/orders/:id/paid",
+      "package_route": "order.admin.orders.id.paid.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/orders/:id/status",
+      "package_route": "order.admin.orders.id.status.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/orders/stats",
+      "package_route": "order.admin.orders.stats.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/coupon/check",
+      "package_route": "order.user.coupon.check.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/order",
+      "package_route": "order.user.order.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/order/:id",
+      "package_route": "order.user.order.id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/order/save",
+      "package_route": "order.user.order.save.post",
+      "envelope": "data",
+      "transport": "http"
+    }
+  ]
+}

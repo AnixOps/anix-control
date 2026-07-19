@@ -6,6 +6,7 @@ option go_package = "github.com/AnixOps/anix-control/v4/api/pluginhost/v1;plugin
 
 service ControlPackageHost {
   rpc Dispatch(DispatchRequest) returns (DispatchResponse);
+  rpc OpenWebSocket(stream WebSocketFrame) returns (stream WebSocketFrame);
   rpc Migrate(MigrationRequest) returns (MigrationResponse);
   rpc Health(HealthRequest) returns (HealthResponse);
   rpc Drain(DrainRequest) returns (DrainResponse);
@@ -22,6 +23,8 @@ message DispatchRequest {
   bytes request_body = 8;
   bytes principal_json = 9;
   int64 deadline_unix_millis = 10;
+  bytes request_metadata_json = 11;
+  bytes bridge_capability = 12;
 }
 
 message DispatchResponse {
@@ -30,6 +33,32 @@ message DispatchResponse {
   repeated Header headers = 3;
   string operation_id = 4;
   string failure_code = 5;
+}
+
+message WebSocketFrame {
+  oneof value {
+    WebSocketOpen open = 1;
+    bytes data = 2;
+    WebSocketClose close = 3;
+  }
+}
+
+message WebSocketOpen {
+  string package_id = 1;
+  string package_version = 2;
+  uint64 route_generation = 3;
+  string route_id = 4;
+  bytes principal_json = 5;
+  string request_id = 6;
+  string idempotency_key = 7;
+  int64 deadline_unix_millis = 8;
+  bytes request_metadata_json = 9;
+  bytes bridge_capability = 10;
+}
+
+message WebSocketClose {
+  uint32 code = 1;
+  string reason = 2;
 }
 
 message Header {
@@ -43,6 +72,8 @@ message MigrationRequest {
   string migration_id = 3;
   string checkpoint = 4;
   uint64 route_generation = 5;
+  bytes bridge_capability = 6;
+  int64 deadline_unix_millis = 7;
 }
 
 message MigrationResponse {

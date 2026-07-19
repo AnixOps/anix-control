@@ -26,14 +26,15 @@ import (
 // AdminE2ETestSuite 管理员 API E2E 测试套件
 type AdminE2ETestSuite struct {
 	suite.Suite
-	router     *gin.Engine
-	db         *gorm.DB
-	cfg        *config.Config
-	adminToken string
-	userToken  string
-	testUser   *model.User
-	testPlan   *model.Plan
-	testNode   *model.Node
+	router              *gin.Engine
+	db                  *gorm.DB
+	cfg                 *config.Config
+	adminToken          string
+	userToken           string
+	testUser            *model.User
+	testPlan            *model.Plan
+	testNode            *model.Node
+	restoreIdentityHost func()
 }
 
 // SetupSuite 测试套件初始化
@@ -141,6 +142,7 @@ func (s *AdminE2ETestSuite) SetupSuite() {
 
 	// 初始化管理员
 	service.InitAdmin(s.cfg)
+	s.restoreIdentityHost = installIdentityPlatformE2EPackage(s.T(), s.cfg)
 
 	// 创建路由
 	s.router = gin.New()
@@ -223,6 +225,9 @@ func (s *AdminE2ETestSuite) login(email, password string) string {
 
 // TearDownSuite 测试套件清理
 func (s *AdminE2ETestSuite) TearDownSuite() {
+	if s.restoreIdentityHost != nil {
+		s.restoreIdentityHost()
+	}
 	requireDatabaseClosed(s.T())
 }
 

@@ -29,6 +29,7 @@ type UniProxyE2ETestSuite struct {
 	testNode       *model.Node
 	testUser       *model.User
 	globalAPIToken string
+	restoreHost    func()
 }
 
 // SetupSuite 测试套件初始化
@@ -126,6 +127,7 @@ func (s *UniProxyE2ETestSuite) SetupSuite() {
 		IsAdmin:        0,
 	}
 	s.db.Create(s.testUser)
+	s.restoreHost = installIdentityPlatformE2EPackage(s.T(), s.cfg)
 
 	// 创建路由
 	s.router = gin.New()
@@ -134,6 +136,9 @@ func (s *UniProxyE2ETestSuite) SetupSuite() {
 
 // TearDownSuite 测试套件清理
 func (s *UniProxyE2ETestSuite) TearDownSuite() {
+	if s.restoreHost != nil {
+		s.restoreHost()
+	}
 	requireDatabaseClosed(s.T())
 }
 

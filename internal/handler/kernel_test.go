@@ -58,6 +58,11 @@ func TestControlPluginHostRequestTimeoutUsesConfiguredValue(t *testing.T) {
 	require.Equal(t, 2*time.Second, timeout)
 }
 
+func TestControlPluginHostWebSocketSessionTimeoutUsesConfiguredValue(t *testing.T) {
+	timeout := controlPluginHostWebSocketSessionTimeout(&config.Config{Plugins: config.PluginConfig{ControlHostWebSocketSessionTimeout: "6h"}})
+	require.Equal(t, 6*time.Hour, timeout)
+}
+
 func TestControlOperationIdempotencyAdvancesWithLifecycleGeneration(t *testing.T) {
 	db := newKernelHandlerTestDB(t)
 	require.NoError(t, db.Create(&model.Plugin{

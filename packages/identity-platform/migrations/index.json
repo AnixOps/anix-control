@@ -1,6 +1,11 @@
 {
   "format": "anixops.migrations/v1",
-  "migrations": [],
+  "migrations": [
+    {
+      "id": "001_identity_platform",
+      "path": "migrations/001_identity_platform.sql"
+    }
+  ],
   "package_id": "identity-platform",
   "version": "4.0.0"
 }

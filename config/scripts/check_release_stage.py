@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -327,6 +330,50 @@ def validate_package_requirement(repo_root: Path, requirement: dict[str, Any], m
             raise StageContractError(f"package {requirement['id']} WebUI {key} are required")
 
 
+def run_plugin_only_route_gate(repo_root: Path) -> None:
+    checker = repo_root / "config" / "scripts" / "check_plugin_only_routes.py"
+    if not checker.is_file():
+        raise StageContractError(f"plugin-only v2 route gate is missing: {checker}")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(checker),
+            "--catalog",
+            str(repo_root / "config" / "v2-package-route-catalog.json"),
+            "--router",
+            str(repo_root / "internal" / "router" / "router.go"),
+            "--packages-root",
+            str(repo_root / "packages"),
+        ],
+        cwd=repo_root,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode == 0:
+        bridge_result = subprocess.run(
+            [
+                "go",
+                "test",
+                "./internal/router",
+                "-run",
+                "TestPackageRouteWrappersAlwaysUseTheirGenericGateways|TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge",
+                "-count=1",
+            ],
+            cwd=repo_root,
+            env={**os.environ, "GOWORK": "off"},
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+        if bridge_result.returncode == 0:
+            return
+        detail = (bridge_result.stderr or bridge_result.stdout).strip()
+        raise StageContractError(f"router bridge contract failed: {detail}")
+    detail = (result.stderr or result.stdout).strip()
+    raise StageContractError(f"plugin-only v2 route gate failed: {detail}")
+
+
 def validate_stage(repo_root: Path, contract: dict[str, Any], tag: str) -> StageDecision:
     parsed = parse_tag(tag)
     if tag in set(contract["legacy_preview_tags"]):
@@ -346,6 +393,8 @@ def validate_stage(repo_root: Path, contract: dict[str, Any], tag: str) -> Stage
     validate_configuration_contract(repo_root, contract)
     for requirement in stage["required_packages"]:
         validate_package_requirement(repo_root, requirement, stage.get("manifest_api_version"))
+    if stage["id"] == "4.0":
+        run_plugin_only_route_gate(repo_root)
     return StageDecision(
         tag=tag,
         classification="product-stage",

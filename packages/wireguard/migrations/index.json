@@ -1,0 +1,6 @@
+{
+  "format": "anixops.migrations/v1",
+  "migrations": [],
+  "package_id": "wireguard",
+  "version": "4.0.0"
+}

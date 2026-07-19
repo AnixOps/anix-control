@@ -1,0 +1,41 @@
+{
+  "api_version": "v2",
+  "package_id": "machine-telemetry",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/dashboard",
+      "package_route": "telemetry.admin.dashboard.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/info",
+      "package_route": "telemetry.admin.system.info.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/traffic/hourly",
+      "package_route": "telemetry.admin.traffic.hourly.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/traffic/user-ranking",
+      "package_route": "telemetry.admin.traffic.user_ranking.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/ws/monitor",
+      "package_route": "telemetry.admin.ws.monitor.get",
+      "envelope": "websocket",
+      "transport": "websocket"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"errors"
 	"net"
 	"net/http"
@@ -164,6 +165,39 @@ func TestNewControlPluginHostManagerRejectsInvalidTimeout(t *testing.T) {
 	if err == nil {
 		t.Fatalf("newControlPluginHostManager() = %v, nil error", manager)
 	}
+}
+
+func TestNewControlPluginHostManagerRejectsInvalidWebSocketSessionTimeout(t *testing.T) {
+	cfg := &appconfig.Config{}
+	cfg.Plugins.ControlHostRuntimeDir = t.TempDir()
+	cfg.Plugins.ControlHostWebSocketSessionTimeout = "not-a-duration"
+
+	manager, err := newControlPluginHostManager(cfg)
+
+	if err == nil {
+		t.Fatalf("newControlPluginHostManager() = %v, nil error", manager)
+	}
+}
+
+func TestNewControlPluginArtifactResolverValidatesTrustRootAndCreatesCleanup(t *testing.T) {
+	_, cleanup, err := newControlPluginArtifactResolver(&appconfig.Config{})
+	if err == nil {
+		t.Fatal("newControlPluginArtifactResolver accepted an empty trust root")
+	}
+	if cleanup != nil {
+		t.Fatal("invalid resolver returned cleanup")
+	}
+
+	cfg := &appconfig.Config{}
+	cfg.Plugins.OfficialPublicKey = base64.StdEncoding.EncodeToString(make([]byte, 32))
+	resolver, cleanup, err := newControlPluginArtifactResolver(cfg)
+	if err != nil {
+		t.Fatalf("newControlPluginArtifactResolver() error = %v", err)
+	}
+	if resolver == nil || cleanup == nil {
+		t.Fatal("valid resolver must provide resolver and cleanup")
+	}
+	cleanup()
 }
 
 func TestCreateDefaultIndexWritesFile(t *testing.T) {

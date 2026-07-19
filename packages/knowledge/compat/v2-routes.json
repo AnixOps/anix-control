@@ -1,0 +1,48 @@
+{
+  "api_version": "v2",
+  "package_id": "knowledge",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/knowledge",
+      "package_route": "knowledge.admin.knowledge.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/knowledge",
+      "package_route": "knowledge.admin.knowledge.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/knowledge/:id",
+      "package_route": "knowledge.admin.knowledge.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/knowledge/:id",
+      "package_route": "knowledge.admin.knowledge.id.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/knowledge",
+      "package_route": "knowledge.article.list",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/knowledge/:id",
+      "package_route": "knowledge.user.knowledge.id.get",
+      "envelope": "data",
+      "transport": "http"
+    }
+  ]
+}

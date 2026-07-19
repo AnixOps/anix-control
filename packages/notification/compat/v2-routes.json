@@ -1,0 +1,174 @@
+{
+  "api_version": "v2",
+  "package_id": "notification",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/notification/email/config",
+      "package_route": "notification.admin.notification.email.config.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/notification/email/config",
+      "package_route": "notification.admin.notification.email.config.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/notification/logs",
+      "package_route": "notification.admin.notification.logs.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/notification/templates",
+      "package_route": "notification.admin.notification.templates.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/notification/templates",
+      "package_route": "notification.admin.notification.templates.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/notification/templates/:id",
+      "package_route": "notification.admin.notification.templates.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/notification/templates/:id",
+      "package_route": "notification.admin.notification.templates.id.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/notification/test",
+      "package_route": "notification.admin.notification.test.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/telegram/bot",
+      "package_route": "notification.admin.telegram.bot.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/telegram/bot",
+      "package_route": "notification.admin.telegram.bot.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/telegram/broadcast",
+      "package_route": "notification.admin.telegram.broadcast.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/telegram/notify",
+      "package_route": "notification.admin.telegram.notify.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/telegram/users",
+      "package_route": "notification.admin.telegram.users.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/telegram/users/:id/notify",
+      "package_route": "notification.admin.telegram.users.id.notify.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/telegram/webhook",
+      "package_route": "notification.admin.telegram.webhook.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/telegram/webhook",
+      "package_route": "notification.admin.telegram.webhook.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/telegram/webhook",
+      "package_route": "notification.telegram.webhook.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/notifications",
+      "package_route": "notification.user.notifications.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/notifications/:id/read",
+      "package_route": "notification.user.notifications.id.read.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/notifications/read-all",
+      "package_route": "notification.user.notifications.read_all.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/notifications/unread-count",
+      "package_route": "notification.user.notifications.unread_count.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/telegram/notify",
+      "package_route": "notification.user.telegram.notify.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/telegram/status",
+      "package_route": "notification.user.telegram.status.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/telegram/unbind",
+      "package_route": "notification.user.telegram.unbind.post",
+      "envelope": "data",
+      "transport": "http"
+    }
+  ]
+}

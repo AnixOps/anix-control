@@ -2,13 +2,16 @@ package pluginhostsdk
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"testing"
 	"time"
 
 	pluginhostv1 "github.com/AnixOps/anix-control/v4/api/pluginhost/v1"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -56,6 +59,13 @@ func TestServerDispatchRejectsInvalidEnvelope(t *testing.T) {
 			name: "invalid principal JSON",
 			mutate: func(request *pluginhostv1.DispatchRequest) {
 				request.PrincipalJson = []byte(`{"subject":`)
+			},
+			wantCode: codes.InvalidArgument,
+		},
+		{
+			name: "invalid request metadata",
+			mutate: func(request *pluginhostv1.DispatchRequest) {
+				request.RequestMetadataJson = []byte(`{"path":`)
 			},
 			wantCode: codes.InvalidArgument,
 		},
@@ -164,6 +174,9 @@ func TestServerForwardsValidatedRequestsToPackage(t *testing.T) {
 	packageServer := &testPackage{
 		dispatch: func(_ context.Context, request DispatchRequest) (DispatchResponse, error) {
 			require.Equal(t, testPackageID, request.PackageID)
+			require.Equal(t, "/api/v2/user/knowledge", request.Metadata.Path)
+			require.Equal(t, []string{"stable", "v4"}, request.Metadata.Query["tag"])
+			require.Equal(t, map[string]string{"article_id": "42"}, request.Metadata.PathParams)
 			return DispatchResponse{StatusCode: http.StatusCreated, OperationID: "operation-42"}, nil
 		},
 		migrate: func(_ context.Context, request MigrationRequest) (MigrationResponse, error) {
@@ -207,6 +220,43 @@ func TestServerForwardsValidatedRequestsToPackage(t *testing.T) {
 	require.True(t, drainResponse.Drained)
 }
 
+func TestServerOpenWebSocketForwardsVerifiedOpenBeforeData(t *testing.T) {
+	packageServer := &testPackage{
+		openWebSocket: func(_ context.Context, open WebSocketOpen, stream WebSocketStream) error {
+			require.Equal(t, testPackageID, open.PackageID)
+			require.Equal(t, testPackageVersion, open.PackageVersion)
+			require.Equal(t, testGeneration, open.RouteGeneration)
+			require.Equal(t, "telemetry.monitor.ws", open.RouteID)
+			require.Equal(t, []byte(`{"subject":"operator-42"}`), open.PrincipalJSON)
+
+			frame, err := stream.Recv()
+			require.NoError(t, err)
+			require.Equal(t, []byte("ping"), frame.Data)
+			return stream.Send(WebSocketFrame{Data: []byte("pong")})
+		},
+	}
+	server := newTestServer(t, packageServer, 16)
+	stream := &testWebSocketServerStream{frames: []*pluginhostv1.WebSocketFrame{
+		{Value: &pluginhostv1.WebSocketFrame_Open{Open: &pluginhostv1.WebSocketOpen{
+			PackageId:          testPackageID,
+			PackageVersion:     testPackageVersion,
+			RouteGeneration:    testGeneration,
+			RouteId:            "telemetry.monitor.ws",
+			PrincipalJson:      []byte(`{"subject":"operator-42"}`),
+			RequestId:          "request-42",
+			IdempotencyKey:     "idempotency-42",
+			DeadlineUnixMillis: time.Now().Add(time.Minute).UnixMilli(),
+		}}},
+		{Value: &pluginhostv1.WebSocketFrame_Data{Data: []byte("ping")}},
+	}}
+
+	err := server.OpenWebSocket(stream)
+
+	require.NoError(t, err)
+	require.Len(t, stream.sent, 1)
+	require.Equal(t, []byte("pong"), stream.sent[0].GetData())
+}
+
 func newTestServer(t *testing.T, packageServer Package, maxResponseBytes int) *Server {
 	t.Helper()
 
@@ -221,23 +271,25 @@ func newTestServer(t *testing.T, packageServer Package, maxResponseBytes int) *S
 
 func validDispatchRequest() *pluginhostv1.DispatchRequest {
 	return &pluginhostv1.DispatchRequest{
-		PackageId:          testPackageID,
-		PackageVersion:     testPackageVersion,
-		RouteGeneration:    testGeneration,
-		RequestId:          "request-42",
-		IdempotencyKey:     "idempotency-42",
-		RouteId:            "knowledge.article.list",
-		Method:             http.MethodGet,
-		PrincipalJson:      []byte(`{"subject":"operator-42","roles":["admin"]}`),
-		DeadlineUnixMillis: time.Now().Add(time.Minute).UnixMilli(),
+		PackageId:           testPackageID,
+		PackageVersion:      testPackageVersion,
+		RouteGeneration:     testGeneration,
+		RequestId:           "request-42",
+		IdempotencyKey:      "idempotency-42",
+		RouteId:             "knowledge.article.list",
+		Method:              http.MethodGet,
+		PrincipalJson:       []byte(`{"subject":"operator-42","roles":["admin"]}`),
+		RequestMetadataJson: []byte(`{"path":"/api/v2/user/knowledge","query":{"tag":["stable","v4"]},"path_params":{"article_id":"42"}}`),
+		DeadlineUnixMillis:  time.Now().Add(time.Minute).UnixMilli(),
 	}
 }
 
 type testPackage struct {
-	dispatch func(context.Context, DispatchRequest) (DispatchResponse, error)
-	migrate  func(context.Context, MigrationRequest) (MigrationResponse, error)
-	health   func(context.Context) (HealthResponse, error)
-	drain    func(context.Context) (DrainResponse, error)
+	dispatch      func(context.Context, DispatchRequest) (DispatchResponse, error)
+	migrate       func(context.Context, MigrationRequest) (MigrationResponse, error)
+	health        func(context.Context) (HealthResponse, error)
+	drain         func(context.Context) (DrainResponse, error)
+	openWebSocket func(context.Context, WebSocketOpen, WebSocketStream) error
 }
 
 func (p *testPackage) Dispatch(ctx context.Context, request DispatchRequest) (DispatchResponse, error) {
@@ -267,3 +319,42 @@ func (p *testPackage) Drain(ctx context.Context) (DrainResponse, error) {
 	}
 	return p.drain(ctx)
 }
+
+func (p *testPackage) OpenWebSocket(ctx context.Context, open WebSocketOpen, stream WebSocketStream) error {
+	if p.openWebSocket == nil {
+		return nil
+	}
+	return p.openWebSocket(ctx, open, stream)
+}
+
+type testWebSocketServerStream struct {
+	grpc.ServerStream
+	frames []*pluginhostv1.WebSocketFrame
+	sent   []*pluginhostv1.WebSocketFrame
+}
+
+func (s *testWebSocketServerStream) Send(frame *pluginhostv1.WebSocketFrame) error {
+	s.sent = append(s.sent, frame)
+	return nil
+}
+
+func (s *testWebSocketServerStream) Recv() (*pluginhostv1.WebSocketFrame, error) {
+	if len(s.frames) == 0 {
+		return nil, io.EOF
+	}
+	frame := s.frames[0]
+	s.frames = s.frames[1:]
+	return frame, nil
+}
+
+func (s *testWebSocketServerStream) Context() context.Context { return context.Background() }
+
+func (s *testWebSocketServerStream) SetHeader(metadata.MD) error { return nil }
+
+func (s *testWebSocketServerStream) SendHeader(metadata.MD) error { return nil }
+
+func (s *testWebSocketServerStream) SetTrailer(metadata.MD) {}
+
+func (s *testWebSocketServerStream) SendMsg(any) error { return nil }
+
+func (s *testWebSocketServerStream) RecvMsg(any) error { return io.EOF }

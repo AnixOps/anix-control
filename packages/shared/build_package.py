@@ -233,10 +233,83 @@ def generated_compatibility_routes(package_id: str) -> bytes:
     )
 
 
+def source_control_host(spec: PackageSpec, version: str, goos: str, goarch: str) -> bytes:
+    source = package_root(spec.package_id) / "control"
+    if shutil.which("go") is None:
+        raise PackageBuildError(f"{spec.package_id} Control host requires the Go toolchain")
+    package_path = f"./packages/{spec.package_id}/control" if source.is_dir() else "./packages/shared/controlhost"
+    link_flags = f"-buildid= -X main.packageVersion={version}"
+    if not source.is_dir():
+        link_flags = f"{link_flags} -X main.packageID={spec.package_id}"
+    with tempfile.TemporaryDirectory(prefix=f"anixops-{spec.package_id}-host-") as temporary:
+        output = Path(temporary) / "control-host"
+        environment = os.environ.copy()
+        environment.update({"CGO_ENABLED": "0", "GOARCH": goarch, "GOOS": goos, "GOWORK": "off"})
+        result = subprocess.run(
+            [
+                "go",
+                "build",
+                "-trimpath",
+                "-buildvcs=false",
+                "-ldflags",
+                link_flags,
+                "-o",
+                str(output),
+                package_path,
+            ],
+            cwd=REPO_ROOT,
+            env=environment,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+        if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip()
+            raise PackageBuildError(f"build {spec.package_id} Control host: {detail}")
+        return read_source(output, f"{spec.package_id} compiled Control host")
+
+
+def source_compatibility_routes(package_id: str) -> bytes:
+    source = package_root(package_id) / "compat" / "v2-routes.json"
+    if not source.is_file():
+        return generated_compatibility_routes(package_id)
+    routes = load_json(source, f"{package_id} compatibility routes")
+    if not isinstance(routes, dict) or routes.get("api_version") != "v2" or routes.get("package_id") != package_id or not isinstance(routes.get("routes"), list):
+        raise PackageBuildError(f"{package_id} compatibility routes are invalid")
+    return read_source(source, f"{package_id} compatibility routes")
+
+
+def source_migrations(package_id: str, version: str) -> tuple[bytes, list[ArchiveEntry]]:
+    source_root = package_root(package_id)
+    index_path = source_root / "migrations" / "index.json"
+    if not index_path.is_file():
+        return generated_migrations_index(package_id, version), []
+    index = load_json(index_path, f"{package_id} migrations index")
+    if (
+        not isinstance(index, dict)
+        or index.get("format") != "anixops.migrations/v1"
+        or index.get("package_id") != package_id
+        or index.get("version") != version
+        or not isinstance(index.get("migrations"), list)
+    ):
+        raise PackageBuildError(f"{package_id} migrations index is invalid")
+    entries: list[ArchiveEntry] = []
+    seen: set[str] = set()
+    for migration in index["migrations"]:
+        if not isinstance(migration, dict) or not isinstance(migration.get("id"), str):
+            raise PackageBuildError(f"{package_id} migration entry is invalid")
+        relative_path = require_relative_path(migration.get("path"), f"{package_id} migration")
+        if not relative_path.startswith("migrations/") or relative_path == "migrations/index.json" or relative_path in seen:
+            raise PackageBuildError(f"{package_id} migration path is invalid")
+        seen.add(relative_path)
+        entries.append(ArchiveEntry(relative_path, read_source(source_root / relative_path, f"{package_id} {relative_path}"), 0o644))
+    return read_source(index_path, f"{package_id} migrations index"), entries
+
+
 def package_entries(spec: PackageSpec, version: str, goos: str, goarch: str) -> tuple[list[ArchiveEntry], dict[str, bytes]]:
-    control_host = generated_control_host(spec.package_id)
-    migrations = generated_migrations_index(spec.package_id, version)
-    routes = generated_compatibility_routes(spec.package_id)
+    control_host = source_control_host(spec, version, goos, goarch)
+    migrations, migration_entries = source_migrations(spec.package_id, version)
+    routes = source_compatibility_routes(spec.package_id)
     webui = source_webui(spec.package_id)
     entries = [
         ArchiveEntry("bin/control-host", control_host, 0o755),
@@ -244,6 +317,7 @@ def package_entries(spec: PackageSpec, version: str, goos: str, goarch: str) -> 
         ArchiveEntry("migrations/index.json", migrations, 0o644),
         ArchiveEntry("webui/index.mjs", webui, 0o644),
     ]
+    entries.extend(migration_entries)
     source_root = package_root(spec.package_id)
     for relative_path in ("config.schema.json", "config.defaults.json"):
         source = source_root / relative_path

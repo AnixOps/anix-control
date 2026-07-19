@@ -133,8 +133,10 @@ plugins:
   control_execution_enabled: true
   control_poll_interval: "3s"
   control_host_runtime_dir: "/var/lib/anixops/plugin-hosts"
+  control_host_artifact_dir: "/var/lib/anixops/plugin-artifacts"
   control_host_startup_timeout: "4s"
   control_host_request_timeout: "20s"
+  control_host_websocket_session_timeout: "6h"
   dispatch_enabled: true
   dispatch_poll_interval: 7s
   topology_execution_enabled: true
@@ -149,8 +151,10 @@ plugins:
 	require.True(t, loaded.Plugins.TopologyExecutionEnabled)
 	assert.Equal(t, "3s", loaded.Plugins.ControlPollInterval)
 	assert.Equal(t, "/var/lib/anixops/plugin-hosts", loaded.Plugins.ControlHostRuntimeDir)
+	assert.Equal(t, "/var/lib/anixops/plugin-artifacts", loaded.Plugins.ControlHostArtifactDir)
 	assert.Equal(t, "4s", loaded.Plugins.ControlHostStartupTimeout)
 	assert.Equal(t, "20s", loaded.Plugins.ControlHostRequestTimeout)
+	assert.Equal(t, "6h", loaded.Plugins.ControlHostWebSocketSessionTimeout)
 	assert.Equal(t, "7s", loaded.Plugins.DispatchPollInterval)
 	assert.Equal(t, "11s", loaded.Plugins.TopologyPollInterval)
 	assert.Equal(t, "ZmFrZS1wdWJsaWMta2V5", loaded.Plugins.OfficialPublicKey)

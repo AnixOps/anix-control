@@ -1,0 +1,27 @@
+{
+  "api_version": "v2",
+  "package_id": "gost-mesh",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/nodex/doctor",
+      "package_route": "gost.admin.forward.nodex.doctor.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/nodex/status",
+      "package_route": "gost.admin.forward.nodex.status.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/test-connection",
+      "package_route": "gost.admin.forward.test_connection.post",
+      "envelope": "data",
+      "transport": "http"
+    }
+  ]
+}

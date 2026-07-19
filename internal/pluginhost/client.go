@@ -2,8 +2,10 @@ package pluginhost
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"time"
 
@@ -39,17 +41,23 @@ func (c *hostClient) Dispatch(ctx context.Context, input DispatchInput) (Dispatc
 	if c == nil || c.rpc == nil {
 		return DispatchOutput{}, ErrHostUnavailable
 	}
+	metadata, err := marshalRequestMetadata(input.Metadata)
+	if err != nil {
+		return DispatchOutput{}, err
+	}
 	response, err := c.rpc.Dispatch(ctx, &pluginhostv1.DispatchRequest{
-		PackageId:          input.PackageID,
-		PackageVersion:     input.Version,
-		RouteGeneration:    input.Generation,
-		RequestId:          input.RequestID,
-		IdempotencyKey:     input.IdempotencyKey,
-		RouteId:            input.RouteID,
-		Method:             input.Method,
-		RequestBody:        append([]byte(nil), input.Body...),
-		PrincipalJson:      append([]byte(nil), input.PrincipalJSON...),
-		DeadlineUnixMillis: input.Deadline.UnixMilli(),
+		PackageId:           input.PackageID,
+		PackageVersion:      input.Version,
+		RouteGeneration:     input.Generation,
+		RequestId:           input.RequestID,
+		IdempotencyKey:      input.IdempotencyKey,
+		RouteId:             input.RouteID,
+		Method:              input.Method,
+		RequestBody:         append([]byte(nil), input.Body...),
+		PrincipalJson:       append([]byte(nil), input.PrincipalJSON...),
+		DeadlineUnixMillis:  input.Deadline.UnixMilli(),
+		RequestMetadataJson: metadata,
+		BridgeCapability:    append([]byte(nil), input.BridgeCapability...),
 	})
 	if err != nil {
 		return DispatchOutput{}, hostClientError(err)
@@ -62,6 +70,44 @@ func (c *hostClient) Dispatch(ctx context.Context, input DispatchInput) (Dispatc
 		StatusCode: response.GetStatusCode(), Body: append([]byte(nil), response.GetResponseBody()...), Headers: headers,
 		OperationID: response.GetOperationId(), FailureCode: response.GetFailureCode(),
 	}, nil
+}
+
+func (c *hostClient) OpenWebSocket(ctx context.Context, input WebSocketInput) (webSocketTransport, error) {
+	if c == nil || c.rpc == nil {
+		return nil, ErrHostUnavailable
+	}
+	metadata, err := marshalRequestMetadata(input.Metadata)
+	if err != nil {
+		return nil, err
+	}
+	stream, err := c.rpc.OpenWebSocket(ctx)
+	if err != nil {
+		return nil, hostClientError(err)
+	}
+	if err := stream.Send(&pluginhostv1.WebSocketFrame{Value: &pluginhostv1.WebSocketFrame_Open{Open: &pluginhostv1.WebSocketOpen{
+		PackageId:           input.PackageID,
+		PackageVersion:      input.Version,
+		RouteGeneration:     input.Generation,
+		RouteId:             input.RouteID,
+		PrincipalJson:       append([]byte(nil), input.PrincipalJSON...),
+		RequestId:           input.RequestID,
+		IdempotencyKey:      input.IdempotencyKey,
+		DeadlineUnixMillis:  input.Deadline.UnixMilli(),
+		RequestMetadataJson: metadata,
+		BridgeCapability:    append([]byte(nil), input.BridgeCapability...),
+	}}}); err != nil {
+		_ = stream.CloseSend()
+		return nil, hostClientError(err)
+	}
+	return &webSocketClientStream{stream: stream}, nil
+}
+
+func marshalRequestMetadata(metadata RequestMetadata) ([]byte, error) {
+	encoded, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, fmt.Errorf("%w: request metadata is invalid", ErrHostIncompatible)
+	}
+	return encoded, nil
 }
 
 func (c *hostClient) Health(ctx context.Context, generation uint64) (HostHealth, error) {
@@ -93,6 +139,62 @@ func (c *hostClient) Close() error {
 		return nil
 	}
 	return c.connection.Close()
+}
+
+type webSocketClientStream struct {
+	stream pluginhostv1.ControlPackageHost_OpenWebSocketClient
+}
+
+func (s *webSocketClientStream) Send(frame WebSocketFrame) error {
+	if s == nil || s.stream == nil {
+		return ErrHostUnavailable
+	}
+	if frame.Close != nil && len(frame.Data) != 0 {
+		return fmt.Errorf("%w: WebSocket frame cannot contain data and close", ErrHostIncompatible)
+	}
+	var wireFrame *pluginhostv1.WebSocketFrame
+	if frame.Close != nil {
+		wireFrame = &pluginhostv1.WebSocketFrame{Value: &pluginhostv1.WebSocketFrame_Close{Close: &pluginhostv1.WebSocketClose{
+			Code: frame.Close.Code, Reason: frame.Close.Reason,
+		}}}
+	} else {
+		wireFrame = &pluginhostv1.WebSocketFrame{Value: &pluginhostv1.WebSocketFrame_Data{Data: append([]byte(nil), frame.Data...)}}
+	}
+	if err := s.stream.Send(wireFrame); err != nil {
+		return hostClientError(err)
+	}
+	return nil
+}
+
+func (s *webSocketClientStream) Recv() (WebSocketFrame, error) {
+	if s == nil || s.stream == nil {
+		return WebSocketFrame{}, ErrHostUnavailable
+	}
+	frame, err := s.stream.Recv()
+	if errors.Is(err, io.EOF) {
+		return WebSocketFrame{}, io.EOF
+	}
+	if err != nil {
+		return WebSocketFrame{}, hostClientError(err)
+	}
+	switch value := frame.Value.(type) {
+	case *pluginhostv1.WebSocketFrame_Data:
+		return WebSocketFrame{Data: append([]byte(nil), value.Data...)}, nil
+	case *pluginhostv1.WebSocketFrame_Close:
+		if value.Close == nil {
+			return WebSocketFrame{}, fmt.Errorf("%w: WebSocket close frame is required", ErrHostIncompatible)
+		}
+		return WebSocketFrame{Close: &WebSocketClose{Code: value.Close.GetCode(), Reason: value.Close.GetReason()}}, nil
+	default:
+		return WebSocketFrame{}, fmt.Errorf("%w: WebSocket opening frame must be first and unique", ErrHostIncompatible)
+	}
+}
+
+func (s *webSocketClientStream) CloseSend() error {
+	if s == nil || s.stream == nil {
+		return nil
+	}
+	return s.stream.CloseSend()
 }
 
 func hostClientError(err error) error {

@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ControlPackageHost_Dispatch_FullMethodName = "/anix.pluginhost.v1.ControlPackageHost/Dispatch"
-	ControlPackageHost_Migrate_FullMethodName  = "/anix.pluginhost.v1.ControlPackageHost/Migrate"
-	ControlPackageHost_Health_FullMethodName   = "/anix.pluginhost.v1.ControlPackageHost/Health"
-	ControlPackageHost_Drain_FullMethodName    = "/anix.pluginhost.v1.ControlPackageHost/Drain"
+	ControlPackageHost_Dispatch_FullMethodName      = "/anix.pluginhost.v1.ControlPackageHost/Dispatch"
+	ControlPackageHost_OpenWebSocket_FullMethodName = "/anix.pluginhost.v1.ControlPackageHost/OpenWebSocket"
+	ControlPackageHost_Migrate_FullMethodName       = "/anix.pluginhost.v1.ControlPackageHost/Migrate"
+	ControlPackageHost_Health_FullMethodName        = "/anix.pluginhost.v1.ControlPackageHost/Health"
+	ControlPackageHost_Drain_FullMethodName         = "/anix.pluginhost.v1.ControlPackageHost/Drain"
 )
 
 // ControlPackageHostClient is the client API for ControlPackageHost service.
@@ -30,6 +31,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ControlPackageHostClient interface {
 	Dispatch(ctx context.Context, in *DispatchRequest, opts ...grpc.CallOption) (*DispatchResponse, error)
+	OpenWebSocket(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WebSocketFrame, WebSocketFrame], error)
 	Migrate(ctx context.Context, in *MigrationRequest, opts ...grpc.CallOption) (*MigrationResponse, error)
 	Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 	Drain(ctx context.Context, in *DrainRequest, opts ...grpc.CallOption) (*DrainResponse, error)
@@ -52,6 +54,19 @@ func (c *controlPackageHostClient) Dispatch(ctx context.Context, in *DispatchReq
 	}
 	return out, nil
 }
+
+func (c *controlPackageHostClient) OpenWebSocket(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WebSocketFrame, WebSocketFrame], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ControlPackageHost_ServiceDesc.Streams[0], ControlPackageHost_OpenWebSocket_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WebSocketFrame, WebSocketFrame]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ControlPackageHost_OpenWebSocketClient = grpc.BidiStreamingClient[WebSocketFrame, WebSocketFrame]
 
 func (c *controlPackageHostClient) Migrate(ctx context.Context, in *MigrationRequest, opts ...grpc.CallOption) (*MigrationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -88,6 +103,7 @@ func (c *controlPackageHostClient) Drain(ctx context.Context, in *DrainRequest, 
 // for forward compatibility.
 type ControlPackageHostServer interface {
 	Dispatch(context.Context, *DispatchRequest) (*DispatchResponse, error)
+	OpenWebSocket(grpc.BidiStreamingServer[WebSocketFrame, WebSocketFrame]) error
 	Migrate(context.Context, *MigrationRequest) (*MigrationResponse, error)
 	Health(context.Context, *HealthRequest) (*HealthResponse, error)
 	Drain(context.Context, *DrainRequest) (*DrainResponse, error)
@@ -103,6 +119,9 @@ type UnimplementedControlPackageHostServer struct{}
 
 func (UnimplementedControlPackageHostServer) Dispatch(context.Context, *DispatchRequest) (*DispatchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Dispatch not implemented")
+}
+func (UnimplementedControlPackageHostServer) OpenWebSocket(grpc.BidiStreamingServer[WebSocketFrame, WebSocketFrame]) error {
+	return status.Error(codes.Unimplemented, "method OpenWebSocket not implemented")
 }
 func (UnimplementedControlPackageHostServer) Migrate(context.Context, *MigrationRequest) (*MigrationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Migrate not implemented")
@@ -151,6 +170,13 @@ func _ControlPackageHost_Dispatch_Handler(srv interface{}, ctx context.Context, 
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _ControlPackageHost_OpenWebSocket_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ControlPackageHostServer).OpenWebSocket(&grpc.GenericServerStream[WebSocketFrame, WebSocketFrame]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ControlPackageHost_OpenWebSocketServer = grpc.BidiStreamingServer[WebSocketFrame, WebSocketFrame]
 
 func _ControlPackageHost_Migrate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MigrationRequest)
@@ -230,6 +256,13 @@ var ControlPackageHost_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ControlPackageHost_Drain_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "OpenWebSocket",
+			Handler:       _ControlPackageHost_OpenWebSocket_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "api/pluginhost/v1/control_host.proto",
 }

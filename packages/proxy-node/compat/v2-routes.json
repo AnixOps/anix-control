@@ -1,0 +1,223 @@
+{
+  "api_version": "v2",
+  "package_id": "proxy-node",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/auth-keys",
+      "package_route": "proxy.admin.auth_keys.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/auth-keys",
+      "package_route": "proxy.admin.auth_keys.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/auth-keys/:id",
+      "package_route": "proxy.admin.auth_keys.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/loadbalancers",
+      "package_route": "proxy.loadbalancer.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/loadbalancers",
+      "package_route": "proxy.loadbalancer.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/loadbalancers/:id",
+      "package_route": "proxy.loadbalancer.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/loadbalancers/:id",
+      "package_route": "proxy.loadbalancer.id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/loadbalancers/:id",
+      "package_route": "proxy.loadbalancer.id.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/loadbalancers/:id/check",
+      "package_route": "proxy.loadbalancer.id.check.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/loadbalancers/:id/stats",
+      "package_route": "proxy.loadbalancer.id.stats.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/nodes",
+      "package_route": "proxy.admin.nodes.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/nodes",
+      "package_route": "proxy.admin.nodes.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/nodes/:id",
+      "package_route": "proxy.admin.nodes.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/nodes/:id",
+      "package_route": "proxy.admin.nodes.id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/nodes/:id",
+      "package_route": "proxy.admin.nodes.id.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/nodes/:id/credentials",
+      "package_route": "proxy.admin.nodes.id.credentials.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/nodes/:id/logs",
+      "package_route": "proxy.admin.nodes.id.logs.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/nodes/:id/raw-config",
+      "package_route": "proxy.admin.nodes.id.raw_config.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/nodes/:id/raw-config",
+      "package_route": "proxy.admin.nodes.id.raw_config.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/nodes/stats",
+      "package_route": "proxy.admin.nodes.stats.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/nodes/validate-config",
+      "package_route": "proxy.admin.nodes.validate_config.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/internal/auth-keys",
+      "package_route": "proxy.internal.auth_keys.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/node/heartbeat",
+      "package_route": "proxy.node.heartbeat.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/node/register",
+      "package_route": "proxy.node.register.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/node/runtime-health",
+      "package_route": "proxy.node.runtime_health.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/node/ws",
+      "package_route": "proxy.node.ws.get",
+      "envelope": "websocket",
+      "transport": "websocket"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/server/UniProxy/alive",
+      "package_route": "proxy.server.uniproxy.alive.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/server/UniProxy/alivelist",
+      "package_route": "proxy.server.uniproxy.alivelist.get",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/server/UniProxy/config",
+      "package_route": "proxy.server.uniproxy.config.get",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/server/UniProxy/push",
+      "package_route": "proxy.server.uniproxy.push.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/server/UniProxy/user",
+      "package_route": "proxy.server.uniproxy.user.get",
+      "envelope": "raw",
+      "transport": "http"
+    }
+  ]
+}

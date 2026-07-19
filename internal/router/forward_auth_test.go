@@ -27,19 +27,20 @@ func TestSetup_ForwardCompatAdminEndpoints_RequireAdmin(t *testing.T) {
 	adminToken := testRouterJWT(t, cfg.JWT.Secret, true)
 
 	endpoints := []struct {
-		method string
-		path   string
-		body   string
+		method      string
+		path        string
+		body        string
+		adminStatus int
 	}{
-		{method: http.MethodPost, path: "/api/v2/user/reset", body: "{}"},
-		{method: http.MethodPost, path: "/api/v2/tunnel/user/list", body: "{}"},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/jobs"},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/status"},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/doctor"},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/local/status"},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/local/doctor"},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/nodex/status"},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/nodex/doctor"},
+		{method: http.MethodPost, path: "/api/v2/user/reset", body: "{}", adminStatus: http.StatusServiceUnavailable},
+		{method: http.MethodPost, path: "/api/v2/tunnel/user/list", body: "{}", adminStatus: http.StatusServiceUnavailable},
+		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/jobs", adminStatus: http.StatusServiceUnavailable},
+		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/status", adminStatus: http.StatusServiceUnavailable},
+		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/doctor", adminStatus: http.StatusServiceUnavailable},
+		{method: http.MethodGet, path: "/api/v2/admin/forward/local/status", adminStatus: http.StatusServiceUnavailable},
+		{method: http.MethodGet, path: "/api/v2/admin/forward/local/doctor", adminStatus: http.StatusServiceUnavailable},
+		{method: http.MethodGet, path: "/api/v2/admin/forward/nodex/status", adminStatus: http.StatusServiceUnavailable},
+		{method: http.MethodGet, path: "/api/v2/admin/forward/nodex/doctor", adminStatus: http.StatusServiceUnavailable},
 	}
 
 	for _, ep := range endpoints {
@@ -82,7 +83,11 @@ func TestSetup_ForwardCompatAdminEndpoints_RequireAdmin(t *testing.T) {
 				w := httptest.NewRecorder()
 				r.ServeHTTP(w, req)
 
-				assert.Equal(t, http.StatusOK, w.Code)
+				expected := ep.adminStatus
+				if expected == 0 {
+					expected = http.StatusOK
+				}
+				assert.Equal(t, expected, w.Code)
 			})
 		})
 	}
@@ -123,7 +128,7 @@ func TestSetup_ForwardUserEndpoints_RequireJWT(t *testing.T) {
 				w := httptest.NewRecorder()
 				r.ServeHTTP(w, req)
 
-				assert.Equal(t, http.StatusOK, w.Code)
+				assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 			})
 
 			t.Run("admin jwt", func(t *testing.T) {
@@ -134,7 +139,7 @@ func TestSetup_ForwardUserEndpoints_RequireJWT(t *testing.T) {
 				w := httptest.NewRecorder()
 				r.ServeHTTP(w, req)
 
-				assert.Equal(t, http.StatusOK, w.Code)
+				assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 			})
 		})
 	}

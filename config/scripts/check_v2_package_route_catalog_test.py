@@ -88,6 +88,31 @@ class RouteCatalogTest(unittest.TestCase):
         self.assertNotIn(("GET", "/api/v2/comment-only", "decoyHandler.Get"), routes)
         self.assertNotIn(("POST", "/api/v2/string-only", "decoyHandler.Post"), routes)
 
+    def test_inventory_reports_the_gateway_inside_controlled_package_wrappers(self) -> None:
+        source = SAMPLE_ROUTER.read_text(encoding="utf-8")
+        source += """
+func ControlledPackageRoutes(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	v2.GET("/package", registeredPackageRoute(v2PackageGateway.Serve, "knowledge", "knowledge.article.list", knowledgeHandler.GetArticles))
+	v2.GET("/node/ws", registeredPackageWebSocketRoute(v2WebSocketGateway.Serve, "proxy-node", "proxy.node.ws.get", nodeHandler.AgentWebSocketUnified, nil))
+}
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            router = Path(temporary) / "router.go"
+            router.write_text(source, encoding="utf-8")
+            result = self.run_inventory(router)
+
+        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
+        routes = {(row["method"], row["path"]): row for row in json.loads(result.stdout)}
+        self.assertEqual("v2PackageGateway.Serve", routes[("GET", "/api/v2/package")]["handler"])
+        self.assertEqual("package-http", routes[("GET", "/api/v2/package")].get("binding"))
+        self.assertEqual("knowledge", routes[("GET", "/api/v2/package")].get("package_id"))
+        self.assertEqual("knowledge.article.list", routes[("GET", "/api/v2/package")].get("route_id"))
+        self.assertEqual("v2WebSocketGateway.Serve", routes[("GET", "/api/v2/node/ws")]["handler"])
+        self.assertEqual("package-websocket", routes[("GET", "/api/v2/node/ws")].get("binding"))
+        self.assertEqual("proxy-node", routes[("GET", "/api/v2/node/ws")].get("package_id"))
+        self.assertEqual("proxy.node.ws.get", routes[("GET", "/api/v2/node/ws")].get("route_id"))
+
     def test_inventory_resolves_local_literal_group_and_route_paths(self) -> None:
         source = SAMPLE_ROUTER.read_text(encoding="utf-8")
         source += """
@@ -638,7 +663,7 @@ func NamedResultShadow(r *gin.Engine, cfg *config.Config) (config resultConfig) 
         catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
         envelopes = {(row["method"], row["path"]): row["envelope"] for row in catalog}
         expected = {
-            ("POST", "/api/v2/login"): "data",
+            ("POST", "/api/v2/login"): "panel",
             ("POST", "/api/v2/payment/callback/:type"): "raw",
             ("POST", "/api/v2/payment/stripe/webhook"): "raw",
             ("GET", "/api/v2/server/UniProxy/config"): "raw",

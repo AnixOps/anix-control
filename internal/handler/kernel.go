@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	compatv2 "github.com/AnixOps/anix-control/v4/internal/compat/v2"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -30,6 +31,7 @@ import (
 
 const maxControlPluginRequestBody = 1 << 20
 const defaultControlPluginHostRequestTimeout = 30 * time.Second
+const defaultControlPluginHostWebSocketSessionTimeout = 24 * time.Hour
 
 type KernelHandler struct {
 	db                     *gorm.DB
@@ -63,6 +65,40 @@ func NewKernelHandler() *KernelHandler {
 	return &KernelHandler{db: database.Get(), controlPluginHosts: pluginhost.DefaultManager()}
 }
 
+// NewV2CompatibilityGateway wires the legacy API boundary to the current
+// verified package-host manager. A missing or invalid trust root remains a
+// resolver error, so the gateway fails closed rather than using legacy code.
+func NewV2CompatibilityGateway(cfg *config.Config) *compatv2.Gateway {
+	publicKey := ""
+	if cfg != nil {
+		publicKey = cfg.Plugins.OfficialPublicKey
+	}
+	return &compatv2.Gateway{
+		Registry:   compatv2.NewRegistry(compatv2.NewVerifiedRouteSource(database.Get(), publicKey)),
+		Dispatcher: pluginhost.DefaultManager(),
+		Timeout:    controlPluginHostRequestTimeout(cfg),
+	}
+}
+
+// NewV2WebSocketGateway exposes the optional streaming capability only when
+// the current manager explicitly implements it.
+func NewV2WebSocketGateway(cfg *config.Config) *compatv2.WebSocketGateway {
+	publicKey := ""
+	if cfg != nil {
+		publicKey = cfg.Plugins.OfficialPublicKey
+	}
+	var dispatcher pluginhost.WebSocketManager
+	if manager, ok := pluginhost.DefaultManager().(pluginhost.WebSocketManager); ok {
+		dispatcher = manager
+	}
+	return &compatv2.WebSocketGateway{
+		Registry:       compatv2.NewRegistry(compatv2.NewVerifiedRouteSource(database.Get(), publicKey)),
+		Dispatcher:     dispatcher,
+		Timeout:        controlPluginHostRequestTimeout(cfg),
+		SessionTimeout: controlPluginHostWebSocketSessionTimeout(cfg),
+	}
+}
+
 func controlPluginHostRequestTimeout(cfg *config.Config) time.Duration {
 	if cfg == nil {
 		return defaultControlPluginHostRequestTimeout
@@ -70,6 +106,17 @@ func controlPluginHostRequestTimeout(cfg *config.Config) time.Duration {
 	parsed, err := time.ParseDuration(strings.TrimSpace(cfg.Plugins.ControlHostRequestTimeout))
 	if err != nil || parsed <= 0 {
 		return defaultControlPluginHostRequestTimeout
+	}
+	return parsed
+}
+
+func controlPluginHostWebSocketSessionTimeout(cfg *config.Config) time.Duration {
+	if cfg == nil {
+		return defaultControlPluginHostWebSocketSessionTimeout
+	}
+	parsed, err := time.ParseDuration(strings.TrimSpace(cfg.Plugins.ControlHostWebSocketSessionTimeout))
+	if err != nil || parsed <= 0 {
+		return defaultControlPluginHostWebSocketSessionTimeout
 	}
 	return parsed
 }

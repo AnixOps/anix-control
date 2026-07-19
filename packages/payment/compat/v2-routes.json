@@ -1,0 +1,146 @@
+{
+  "api_version": "v2",
+  "package_id": "payment",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/payment/gateways",
+      "package_route": "payment.admin.payment.gateways.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/payment/gateways",
+      "package_route": "payment.admin.payment.gateways.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/payment/gateways/:id",
+      "package_route": "payment.admin.payment.gateways.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/payment/gateways/:id",
+      "package_route": "payment.admin.payment.gateways.id.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/payment/gateways/:id/toggle",
+      "package_route": "payment.admin.payment.gateways.id.toggle.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/payment/records",
+      "package_route": "payment.admin.payment.records.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/payment/stats",
+      "package_route": "payment.admin.payment.stats.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/payment/callback/:type",
+      "package_route": "payment.callback",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/payment/fiat/create",
+      "package_route": "payment.payment.fiat.create.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/payment/methods",
+      "package_route": "payment.payment.methods.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/payment/paypal/webhook",
+      "package_route": "payment.payment.paypal.webhook.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/payment/status/:trade_no",
+      "package_route": "payment.payment.status.trade_no.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/payment/stripe/webhook",
+      "package_route": "payment.payment.stripe.webhook.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/payment/x402/callback",
+      "package_route": "payment.payment.x402.callback.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/payment/x402/check/:id",
+      "package_route": "payment.payment.x402.check.id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/payment/x402/create",
+      "package_route": "payment.payment.x402.create.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/payment/channels",
+      "package_route": "payment.user.payment.channels.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/payment/create",
+      "package_route": "payment.user.payment.create.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/payment/records",
+      "package_route": "payment.user.payment.records.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/payment/status/:trade_no",
+      "package_route": "payment.user.payment.status.trade_no.get",
+      "envelope": "data",
+      "transport": "http"
+    }
+  ]
+}

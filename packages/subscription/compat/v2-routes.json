@@ -1,0 +1,181 @@
+{
+  "api_version": "v2",
+  "package_id": "subscription",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/subscription/formats",
+      "package_route": "subscription.admin.subscription.formats.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/subscription/groups",
+      "package_route": "subscription.admin.subscription.groups.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/subscription/groups",
+      "package_route": "subscription.admin.subscription.groups.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/subscription/groups/:id",
+      "package_route": "subscription.admin.subscription.groups.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/subscription/groups/:id",
+      "package_route": "subscription.admin.subscription.groups.id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/subscription/groups/:id",
+      "package_route": "subscription.admin.subscription.groups.id.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/subscription/groups/:id/protocols",
+      "package_route": "subscription.admin.subscription.groups.id.protocols.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/subscription/groups/:id/protocols",
+      "package_route": "subscription.admin.subscription.groups.id.protocols.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/subscription/groups/:id/templates",
+      "package_route": "subscription.admin.subscription.groups.id.templates.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/subscription/groups/:id/templates",
+      "package_route": "subscription.admin.subscription.groups.id.templates.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/subscription/plans/:plan_id/groups",
+      "package_route": "subscription.admin.subscription.plans.plan_id.groups.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/subscription/plans/:plan_id/groups",
+      "package_route": "subscription.admin.subscription.plans.plan_id.groups.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/subscription/plans/:plan_id/groups/:group_id",
+      "package_route": "subscription.admin.subscription.plans.plan_id.groups.group_id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/subscription/preview",
+      "package_route": "subscription.admin.subscription.preview.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/subscription/protocols",
+      "package_route": "subscription.admin.subscription.protocols.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/subscription/protocols/available",
+      "package_route": "subscription.admin.subscription.protocols.available.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/subscription/stats",
+      "package_route": "subscription.admin.subscription.stats.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/subscription/templates/:id",
+      "package_route": "subscription.admin.subscription.templates.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/subscription/templates/:id",
+      "package_route": "subscription.admin.subscription.templates.id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/subscription/templates/:id",
+      "package_route": "subscription.admin.subscription.templates.id.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/subscription/users/:user_id/groups",
+      "package_route": "subscription.admin.subscription.users.user_id.groups.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/subscription/users/:user_id/groups",
+      "package_route": "subscription.admin.subscription.users.user_id.groups.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/subscription/users/:user_id/groups/:group_id",
+      "package_route": "subscription.admin.subscription.users.user_id.groups.group_id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/subscription-settings",
+      "package_route": "subscription.admin.system.subscription_settings.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/subscription",
+      "package_route": "subscription.user.subscription.get",
+      "envelope": "data",
+      "transport": "http"
+    }
+  ]
+}

@@ -28,6 +28,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	grpcserver "github.com/AnixOps/anix-control/v4/internal/grpc"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
+	"github.com/AnixOps/anix-control/v4/internal/identitybridge"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	_ "github.com/AnixOps/anix-control/v4/internal/payment/gateways" // register payment gateway plugins
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
@@ -478,6 +479,7 @@ func main() {
 
 	var controlPluginCancel context.CancelFunc
 	var controlPluginHosts *pluginhost.Supervisor
+	var controlPluginArtifactCleanup func()
 	pluginhost.SetDefaultManager(nil)
 	if cfg.Plugins.ControlExecutionEnabled {
 		controlPluginHosts, err = newControlPluginHostManager(cfg)
@@ -485,11 +487,18 @@ func main() {
 			log.Fatalf("Failed to initialize Control plugin hosts: %v", err)
 		}
 		pluginhost.SetDefaultManager(controlPluginHosts)
+		artifacts, cleanupArtifacts, err := newControlPluginArtifactResolver(cfg)
+		if err != nil {
+			_ = controlPluginHosts.Shutdown(context.Background())
+			log.Fatalf("Failed to initialize Control plugin artifact resolver: %v", err)
+		}
+		controlPluginArtifactCleanup = cleanupArtifacts
 		worker, err := plugincontrol.NewOperationWorker(
 			database.Get(),
-			plugincontrol.NewHostLifecycleDispatcher(controlPluginHosts, nil),
+			plugincontrol.NewHostLifecycleDispatcher(controlPluginHosts, artifacts),
 		)
 		if err != nil {
+			controlPluginArtifactCleanup()
 			log.Fatalf("Failed to initialize Control plugin lifecycle worker: %v", err)
 		}
 		interval := 5 * time.Second
@@ -704,6 +713,9 @@ func main() {
 		}
 	}
 	pluginhost.SetDefaultManager(nil)
+	if controlPluginArtifactCleanup != nil {
+		controlPluginArtifactCleanup()
+	}
 
 	// Give goroutines time to finish returning from ListenAndServe.
 	wg.Wait()
@@ -751,9 +763,76 @@ func newControlPluginHostManager(cfg *config.Config) (*pluginhost.Supervisor, er
 			return nil, fmt.Errorf("invalid plugins.control_host_request_timeout %q", raw)
 		}
 	}
+	if raw := strings.TrimSpace(cfg.Plugins.ControlHostWebSocketSessionTimeout); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil || parsed <= 0 {
+			return nil, fmt.Errorf("invalid plugins.control_host_websocket_session_timeout %q", raw)
+		}
+	}
+	bridgeFactory, err := identitybridge.NewFactory(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("configure package bridge: %w", err)
+	}
 	return pluginhost.NewManager(pluginhost.ManagerConfig{
 		RuntimeDir: cfg.Plugins.ControlHostRuntimeDir, StartupTimeout: startupTimeout,
+		BridgeFactory: bridgeFactory,
 	})
+}
+
+func newControlPluginArtifactResolver(cfg *config.Config) (plugincontrol.ArtifactRefResolver, func(), error) {
+	if cfg == nil {
+		return nil, nil, errors.New("plugin artifact configuration is required")
+	}
+	publicKey, err := service.ParseOfficialPluginPublicKey(cfg.Plugins.OfficialPublicKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse plugins.official_public_key: %w", err)
+	}
+	root := strings.TrimSpace(cfg.Plugins.ControlHostArtifactDir)
+	cleanup := func() {}
+	if root == "" {
+		root, err = os.MkdirTemp("", "anixops-plugin-artifacts-")
+		if err != nil {
+			return nil, nil, fmt.Errorf("create private plugin artifact directory: %w", err)
+		}
+		cleanup = func() { _ = os.RemoveAll(root) }
+	} else {
+		root, err = secureControlArtifactRoot(root)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	databaseHandle := database.Get()
+	resolver := func(ctx context.Context, packageID, version string) (pluginhost.ArtifactRef, error) {
+		if err := ctx.Err(); err != nil {
+			return pluginhost.ArtifactRef{}, err
+		}
+		return service.MaterializePluginControlArtifact(databaseHandle, publicKey, packageID, version, root)
+	}
+	return resolver, cleanup, nil
+}
+
+func secureControlArtifactRoot(configuredRoot string) (string, error) {
+	if !filepath.IsAbs(configuredRoot) {
+		return "", errors.New("plugins.control_host_artifact_dir must be absolute")
+	}
+	root := filepath.Clean(configuredRoot)
+	if root == string(filepath.Separator) {
+		return "", errors.New("plugins.control_host_artifact_dir must not be the filesystem root")
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return "", fmt.Errorf("create plugin artifact directory: %w", err)
+	}
+	info, err := os.Lstat(root)
+	if err != nil {
+		return "", fmt.Errorf("inspect plugin artifact directory: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return "", errors.New("plugins.control_host_artifact_dir must be a directory, not a symlink")
+	}
+	if err := os.Chmod(root, 0o700); err != nil {
+		return "", fmt.Errorf("secure plugin artifact directory: %w", err)
+	}
+	return root, nil
 }
 
 // newAPIServer creates the API server with proper timeouts.

@@ -22,9 +22,10 @@ import (
 // AuthE2ETestSuite 认证 API E2E 测试套件
 type AuthE2ETestSuite struct {
 	suite.Suite
-	router *gin.Engine
-	db     *gorm.DB
-	cfg    *config.Config
+	router              *gin.Engine
+	db                  *gorm.DB
+	cfg                 *config.Config
+	restoreIdentityHost func()
 }
 
 // SetupSuite 测试套件初始化
@@ -90,6 +91,7 @@ func (s *AuthE2ETestSuite) SetupSuite() {
 
 	// 初始化管理员
 	service.InitAdmin(s.cfg)
+	s.restoreIdentityHost = installIdentityPlatformE2EPackage(s.T(), s.cfg)
 
 	// 创建路由
 	s.router = gin.New()
@@ -98,6 +100,9 @@ func (s *AuthE2ETestSuite) SetupSuite() {
 
 // TearDownSuite 测试套件清理
 func (s *AuthE2ETestSuite) TearDownSuite() {
+	if s.restoreIdentityHost != nil {
+		s.restoreIdentityHost()
+	}
 	requireDatabaseClosed(s.T())
 }
 

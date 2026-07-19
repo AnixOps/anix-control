@@ -1,3 +1,5 @@
+//go:build ignore
+
 package main
 
 import (
@@ -40,6 +42,16 @@ type route struct {
 	Handler         string `json:"handler"`
 	MiddlewareGroup string `json:"middleware_group"`
 	Transport       string `json:"transport"`
+	Binding         string `json:"binding"`
+	PackageID       string `json:"package_id"`
+	RouteID         string `json:"route_id"`
+}
+
+type handlerRegistration struct {
+	handler   string
+	binding   string
+	packageID string
+	routeID   string
 }
 
 type group struct {
@@ -892,7 +904,11 @@ func (c *collector) registerArguments(target *group, method string, args []ast.E
 	if err != nil {
 		return c.errorAt(position, "%w", err)
 	}
-	handler := expressionIdentifier(args[len(args)-1])
+	registration, err := packageGatewayHandlerRegistration(args[len(args)-1], env)
+	if err != nil {
+		return c.errorAt(args[len(args)-1].Pos(), "%w", err)
+	}
+	handler := registration.handler
 	if handler == "" {
 		return c.errorAt(args[len(args)-1].Pos(), "Gin %s registration has no handler identifier", method)
 	}
@@ -914,9 +930,50 @@ func (c *collector) registerArguments(target *group, method string, args []ast.E
 			Handler:         handler,
 			MiddlewareGroup: middlewareGroup,
 			Transport:       transport,
+			Binding:         registration.binding,
+			PackageID:       registration.packageID,
+			RouteID:         registration.routeID,
 		})
 	}
 	return nil
+}
+
+func packageGatewayHandlerRegistration(expression ast.Expr, env *scope) (handlerRegistration, error) {
+	call, ok := unwrapParens(expression).(*ast.CallExpr)
+	if !ok {
+		return handlerRegistration{handler: expressionIdentifier(expression), binding: "direct"}, nil
+	}
+
+	wrapper := expressionIdentifier(call.Fun)
+	expectedArguments := 0
+	switch wrapper {
+	case "registeredPackageRoute":
+		expectedArguments = 4
+	case "registeredPackageWebSocketRoute":
+		expectedArguments = 5
+	default:
+		return handlerRegistration{handler: expressionIdentifier(expression), binding: "direct"}, nil
+	}
+	if len(call.Args) != expectedArguments {
+		return handlerRegistration{}, fmt.Errorf("%s must receive %d arguments", wrapper, expectedArguments)
+	}
+	gateway := expressionIdentifier(call.Args[0])
+	if gateway == "" {
+		return handlerRegistration{}, fmt.Errorf("%s gateway argument has no handler identifier", wrapper)
+	}
+	packageID, ok := resolveString(call.Args[1], env)
+	if !ok || packageID == "" {
+		return handlerRegistration{}, fmt.Errorf("%s package id must be a statically resolvable non-empty string", wrapper)
+	}
+	routeID, ok := resolveString(call.Args[2], env)
+	if !ok || routeID == "" {
+		return handlerRegistration{}, fmt.Errorf("%s route id must be a statically resolvable non-empty string", wrapper)
+	}
+	binding := "package-http"
+	if wrapper == "registeredPackageWebSocketRoute" {
+		binding = "package-websocket"
+	}
+	return handlerRegistration{handler: gateway, binding: binding, packageID: packageID, routeID: routeID}, nil
 }
 
 func isHTTPMethod(method string) bool {

@@ -1499,6 +1499,41 @@ func requireVerifiedPluginArtifact(db *gorm.DB, release model.PluginRelease) err
 	return nil
 }
 
+// LoadVerifiedPluginCompatibilityRoutes returns the immutable compatibility
+// declaration embedded in a signed v2 Control artifact. Callers still decide
+// whether the corresponding installation is active; this helper establishes
+// that the declaration itself is bound to the stored release and artifact.
+func LoadVerifiedPluginCompatibilityRoutes(db *gorm.DB, release model.PluginRelease, publicKey ed25519.PublicKey) ([]byte, error) {
+	if db == nil {
+		return nil, errors.New("database is not initialized")
+	}
+	manifest, err := VerifyStoredPluginRelease(db, release, publicKey)
+	if err != nil {
+		return nil, fmt.Errorf("verify plugin release: %w", err)
+	}
+	if manifest.APIVersion != pluginManifestAPIVersionV2 || !manifestSupportsTarget(*manifest, "control") || manifest.CompatibilityRoutes == nil {
+		return nil, errors.New("plugin release does not provide v2 compatibility routes")
+	}
+	if err := requireVerifiedPluginArtifact(db, release); err != nil {
+		return nil, err
+	}
+	artifact, err := GetPluginArtifact(db, release.ID)
+	if err != nil {
+		return nil, err
+	}
+	routes, err := extractPluginArtifactFile(artifact.Data, manifest.CompatibilityRoutes.Path, maxPluginControlEntrypointBytes)
+	if err != nil {
+		return nil, fmt.Errorf("extract compatibility routes: %w", err)
+	}
+	if !strings.EqualFold(sha256Bytes(routes), manifest.CompatibilityRoutes.SHA256) {
+		return nil, errors.New("compatibility routes digest does not match the package artifact")
+	}
+	if !strings.EqualFold(sha256Bytes(routes), manifest.RouteContractDigest) {
+		return nil, errors.New("route contract digest does not match the package artifact")
+	}
+	return append([]byte(nil), routes...), nil
+}
+
 // MaterializePluginControlArtifact writes the verified immutable release bytes
 // and the signed v2 Control entrypoint into a private caller-owned directory.
 // Task 3's lifecycle dispatcher consumes the resulting ArtifactRef; it still

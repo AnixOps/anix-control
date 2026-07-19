@@ -19,9 +19,9 @@ runbooks instead of mixing deployment models on the same host.
    The fresh development template binds gRPC to `127.0.0.1:50051`; remote
    Agents require an explicit TLS/proxy setup and a deliberate bind-address change.
 3. Decide the exact version to install. Pinning a tag makes the operation
-   reproducible; `v4.0.0-alpha.7` is a historical signed-package WebUI preview,
-   not formal 4.0 approval. The formal product line is documented in
-   [`../architecture/release-line-status.md`](../architecture/release-line-status.md).
+   reproducible. A `v4.0.0` package-only release is installable only when its
+   release assets include a verified `v4-release-evidence.tar.gz`; historical
+   `v4.0.0-alpha.*` tags are previews, not substitutes for that evidence.
 4. Back up any existing panel before running `update` or `rollback`.
 
 ## Fresh Install
@@ -30,7 +30,7 @@ Download the installer from the exact release tag. This fetches one script, not
 the repository checkout:
 
 ```bash
-export VERSION=v4.0.0-alpha.7
+export VERSION=v4.0.0
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -108,21 +108,43 @@ official public key.
 
 ## Import The Signed Official Packages
 
-The package center is intentionally operator-driven. Download only the signed
-package IDs declared by the selected product-stage release: formal 3.1 attaches
-`machine-telemetry` only, while later forwarding packages begin at their own
-stages. Historical `v4.0.0-alpha.*` releases retain their original preview
-assets and must not be treated as the 3.1 asset set. In the admin UI open
-**Control > Plugins > Import release**, paste or upload the manifest and
-signature, choose the matching tar artifact, and submit each release. The UI
-verifies the signed manifest and artifact digest before it becomes installable;
-do not mix assets from different tags.
+The package center is intentionally operator-driven. For `v4.0.0`, verify
+`v4-release-evidence.tar.gz` on a management workstation before importing any
+package. The verifier and official root below must come from a pre-existing,
+independently trusted Control source distribution and operator trust store.
+Do not obtain either value from the checkout, configuration, or archive being
+verified. This is not a production-host build step; do not unpack the archive
+with a general-purpose tar command before the verifier has validated its
+members and signature:
+
+```bash
+: "${ANIXOPS_TRUSTED_CONTROL_SOURCE:?set to a previously verified immutable Control source tree}"
+: "${ANIXOPS_TRUSTED_OFFICIAL_PUBLIC_KEY:?set to the separately managed pinned official root}"
+trusted_verifier="${ANIXOPS_TRUSTED_CONTROL_SOURCE}/config/scripts/verify_v4_evidence.py"
+[[ -f "${trusted_verifier}" && ! -L "${trusted_verifier}" ]] || exit 1
+[[ -f "${ANIXOPS_TRUSTED_OFFICIAL_PUBLIC_KEY}" && ! -L "${ANIXOPS_TRUSTED_OFFICIAL_PUBLIC_KEY}" ]] || exit 1
+python3 "${trusted_verifier}" \
+  --archive v4-release-evidence.tar.gz \
+  --trusted-official-public-key "${ANIXOPS_TRUSTED_OFFICIAL_PUBLIC_KEY}"
+```
+
+Pin and independently confirm the official-root fingerprint when that trust
+store is provisioned. A candidate tag may be used only after this verification;
+it is never the source of the verifier or its trust anchor.
+
+The evidence bundle must name all sixteen signed package artifacts, manifests,
+signatures, public keys, SBOMs, route gates, WebSocket relay checks, SQLite and
+PostgreSQL rehearsals, and signed canary/support approvals. In the admin UI
+open **Control > Plugins > Import release**, paste or upload the manifest and
+signature, choose the matching `.anxp` artifact, and submit each release. The
+UI verifies the signed manifest and artifact digest before it becomes
+installable; do not mix assets from different tags or evidence bundles.
 
 After importing a release:
 
-1. Open **Control > Plugins**, install the package for the `agent` target, and
-   configure it if its manifest exposes a schema.
-2. Open **Control > Assignments**, select a node, and create the service role.
+1. Open **Control > Plugins**, install every Control-target package while
+   disabled, and configure it if its manifest exposes a schema.
+2. For a package with an Agent target, open **Control > Assignments**, select a node, and create the service role.
    The version and configuration revision default from the enabled Agent
    installation. Keep the role disabled until the node is connected if this is
    a first canary.
@@ -135,25 +157,12 @@ After importing a release:
    package preserves its database records; use a separate purge workflow for
    destructive removal.
 
-The alpha entry point is manual import by design. It does not silently fetch
-untrusted third-party packages or put API keys in package URLs; Agent downloads
-use `X-API-Key` and same-origin, digest-addressed paths.
-
-In `v4.0.0-alpha.7`, `machine-telemetry` 1.1.0 still exercises the complete
-metrics package path. The signed `nftables-forward` 1.2.0 package adds one
-Control/Agent configuration contract, topology preview/diagnosis, a crash-safe
-ownership journal with signed cleanup, and kernel-observed ruleset/counter
-evidence. Verify install, observation
-mode, explicit rule configuration, namespace traffic, process-kill recovery,
-disable/re-enable, update, rollback, grant revocation, and malformed-extension
-isolation during the canary. Do not enable topology execution on production
-nodes merely because preview succeeds.
-
-`v4.0.0-alpha.7` is a historical canary artifact. Keep production traffic on
-the tested legacy path while the signed package/WebUI path is observed. Do not
-use it to claim a stable 4.0 release; the formal 3.1 through 3.5 gates, their
-package scope, and the eventual plugin-only 4.0 cutover are defined in
-[`../architecture/release-line-status.md`](../architecture/release-line-status.md).
+The v4 package-only entry point remains manual import by design. It does not
+silently fetch untrusted third-party packages or put API keys in package URLs;
+Agent downloads use `X-API-Key` and same-origin, digest-addressed paths. Follow
+[v4-plugin-only-upgrade.md](v4-plugin-only-upgrade.md) for the release cohort
+and [v4-plugin-only-rollback.md](v4-plugin-only-rollback.md) for fault
+recovery.
 
 ## Upgrade And Rollback
 
@@ -165,7 +174,7 @@ that snapshot.
 Upgrade to an explicit release:
 
 ```bash
-export TARGET=v4.0.0-alpha.7
+export TARGET=v4.0.0
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${TARGET}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
@@ -198,6 +207,9 @@ For older panel products or a coordinated panel/node cutover, follow
   production version selector.
 - Review the script before execution and keep release checksums with the change
   record.
+- For v4, retain the verified `v4-release-evidence.tar.gz` with the deployment
+  record. Do not install a partial sixteen-package set or bypass an unhealthy
+  package with a direct legacy route.
 - Do not use the legacy `install.sh` source/Docker path unless
   `ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1` is intentionally set for a controlled
   recovery. It is not the stable release path.

@@ -1,10 +1,12 @@
 package pluginhostsdk
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	pluginhostv1 "github.com/AnixOps/anix-control/v4/api/pluginhost/v1"
@@ -25,7 +27,24 @@ type DispatchRequest struct {
 	Method             string
 	RequestBody        []byte
 	PrincipalJSON      []byte
+	Metadata           RequestMetadata
+	BridgeCapability   []byte
 	DeadlineUnixMillis int64
+}
+
+// RequestMetadata is kernel-provided HTTP address metadata. It is distinct
+// from signed route selection and lets a package preserve the legacy v2
+// request contract without consulting kernel routing state.
+type RequestMetadata struct {
+	Path                             string              `json:"path,omitempty"`
+	Query                            map[string][]string `json:"query,omitempty"`
+	Headers                          map[string][]string `json:"headers,omitempty"`
+	PathParams                       map[string]string   `json:"path_params,omitempty"`
+	ClientIP                         string              `json:"client_ip,omitempty"`
+	UserAgent                        string              `json:"user_agent,omitempty"`
+	NodeID                           uint                `json:"node_id,omitempty"`
+	TrustedAgentWebSocketAuth        bool                `json:"trusted_agent_websocket_auth,omitempty"`
+	TrustedAgentWebSocketForwardNode bool                `json:"trusted_agent_websocket_forward_node,omitempty"`
 }
 
 type DispatchResponse struct {
@@ -42,11 +61,13 @@ type Header struct {
 }
 
 type MigrationRequest struct {
-	PackageID       string
-	PackageVersion  string
-	MigrationID     string
-	Checkpoint      string
-	RouteGeneration uint64
+	PackageID          string
+	PackageVersion     string
+	MigrationID        string
+	Checkpoint         string
+	RouteGeneration    uint64
+	BridgeCapability   []byte
+	DeadlineUnixMillis int64
 }
 
 type MigrationResponse struct {
@@ -65,6 +86,42 @@ type HealthResponse struct {
 type DrainResponse struct {
 	Drained  bool
 	InFlight uint64
+}
+
+type WebSocketOpen struct {
+	PackageID          string
+	PackageVersion     string
+	RouteGeneration    uint64
+	RouteID            string
+	PrincipalJSON      []byte
+	Metadata           RequestMetadata
+	RequestID          string
+	IdempotencyKey     string
+	DeadlineUnixMillis int64
+	BridgeCapability   []byte
+}
+
+type WebSocketClose struct {
+	Code   uint32
+	Reason string
+}
+
+// WebSocketFrame is a post-open package-host frame. A nil Close denotes a
+// data frame, including an empty opaque payload.
+type WebSocketFrame struct {
+	Data  []byte
+	Close *WebSocketClose
+}
+
+type WebSocketStream interface {
+	Recv() (WebSocketFrame, error)
+	Send(WebSocketFrame) error
+}
+
+// WebSocketPackage is intentionally optional so a host cannot accidentally
+// claim WebSocket support merely by implementing unary package methods.
+type WebSocketPackage interface {
+	OpenWebSocket(context.Context, WebSocketOpen, WebSocketStream) error
 }
 
 type Package interface {
@@ -135,9 +192,39 @@ func (s *Server) Dispatch(ctx context.Context, request *pluginhostv1.DispatchReq
 	return wireResponse, nil
 }
 
+func (s *Server) OpenWebSocket(stream pluginhostv1.ControlPackageHost_OpenWebSocketServer) error {
+	if stream == nil {
+		return status.Error(codes.InvalidArgument, "WebSocket stream is required")
+	}
+	first, err := stream.Recv()
+	if errors.Is(err, io.EOF) {
+		return status.Error(codes.InvalidArgument, "WebSocket opening frame is required")
+	}
+	if err != nil {
+		return packageError("open WebSocket", err)
+	}
+	open := first.GetOpen()
+	if err := s.validateWebSocketOpen(open); err != nil {
+		return err
+	}
+	packageImpl, ok := s.packageImpl.(WebSocketPackage)
+	if !ok {
+		return status.Error(codes.Unimplemented, "package host does not implement WebSocket routes")
+	}
+
+	ctx, cancel := withDeadline(stream.Context(), open.GetDeadlineUnixMillis())
+	defer cancel()
+	return packageError("open WebSocket", packageImpl.OpenWebSocket(ctx, webSocketOpenFromProto(open), &webSocketServerStream{stream: stream}))
+}
+
 func (s *Server) Migrate(ctx context.Context, request *pluginhostv1.MigrationRequest) (*pluginhostv1.MigrationResponse, error) {
 	if err := s.validateMigrationRequest(request); err != nil {
 		return nil, err
+	}
+	if request.GetDeadlineUnixMillis() != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = withDeadline(ctx, request.GetDeadlineUnixMillis())
+		defer cancel()
 	}
 
 	response, err := s.packageImpl.Migrate(ctx, migrationRequestFromProto(request))
@@ -190,6 +277,43 @@ func (s *Server) validateDispatchRequest(request *pluginhostv1.DispatchRequest) 
 	if !json.Valid(request.GetPrincipalJson()) {
 		return status.Error(codes.InvalidArgument, "principal JSON is invalid")
 	}
+	if _, err := requestMetadataFromJSON(request.GetRequestMetadataJson()); err != nil {
+		return err
+	}
+	if capability := request.GetBridgeCapability(); len(capability) != 0 && len(capability) != 32 {
+		return status.Error(codes.InvalidArgument, "bridge capability is invalid")
+	}
+	return nil
+}
+
+func (s *Server) validateWebSocketOpen(open *pluginhostv1.WebSocketOpen) error {
+	if open == nil {
+		return status.Error(codes.InvalidArgument, "WebSocket opening frame is required")
+	}
+	if err := s.validatePackage(open.GetPackageId(), open.GetPackageVersion()); err != nil {
+		return err
+	}
+	if err := validateGeneration(open.GetRouteGeneration()); err != nil {
+		return err
+	}
+	if open.GetRouteId() == "" {
+		return status.Error(codes.InvalidArgument, "WebSocket route ID is required")
+	}
+	if open.GetRequestId() == "" {
+		return status.Error(codes.InvalidArgument, "WebSocket request ID is required")
+	}
+	if err := validateFutureDeadline(open.GetDeadlineUnixMillis()); err != nil {
+		return err
+	}
+	if !json.Valid(open.GetPrincipalJson()) {
+		return status.Error(codes.InvalidArgument, "principal JSON is invalid")
+	}
+	if _, err := requestMetadataFromJSON(open.GetRequestMetadataJson()); err != nil {
+		return err
+	}
+	if capability := open.GetBridgeCapability(); len(capability) != 0 && len(capability) != 32 {
+		return status.Error(codes.InvalidArgument, "WebSocket bridge capability is invalid")
+	}
 	return nil
 }
 
@@ -200,7 +324,16 @@ func (s *Server) validateMigrationRequest(request *pluginhostv1.MigrationRequest
 	if err := s.validatePackage(request.GetPackageId(), request.GetPackageVersion()); err != nil {
 		return err
 	}
-	return validateGeneration(request.GetRouteGeneration())
+	if err := validateGeneration(request.GetRouteGeneration()); err != nil {
+		return err
+	}
+	if capability := request.GetBridgeCapability(); len(capability) != 0 && len(capability) != 32 {
+		return status.Error(codes.InvalidArgument, "migration bridge capability is invalid")
+	}
+	if request.GetDeadlineUnixMillis() != 0 {
+		return validateFutureDeadline(request.GetDeadlineUnixMillis())
+	}
+	return nil
 }
 
 func (s *Server) validatePackage(packageID, packageVersion string) error {
@@ -256,6 +389,7 @@ func packageError(operation string, err error) error {
 }
 
 func dispatchRequestFromProto(request *pluginhostv1.DispatchRequest) DispatchRequest {
+	metadata, _ := requestMetadataFromJSON(request.GetRequestMetadataJson())
 	return DispatchRequest{
 		PackageID:          request.GetPackageId(),
 		PackageVersion:     request.GetPackageVersion(),
@@ -266,8 +400,76 @@ func dispatchRequestFromProto(request *pluginhostv1.DispatchRequest) DispatchReq
 		Method:             request.GetMethod(),
 		RequestBody:        append([]byte(nil), request.GetRequestBody()...),
 		PrincipalJSON:      append([]byte(nil), request.GetPrincipalJson()...),
+		Metadata:           metadata,
+		BridgeCapability:   append([]byte(nil), request.GetBridgeCapability()...),
 		DeadlineUnixMillis: request.GetDeadlineUnixMillis(),
 	}
+}
+
+func webSocketOpenFromProto(open *pluginhostv1.WebSocketOpen) WebSocketOpen {
+	metadata, _ := requestMetadataFromJSON(open.GetRequestMetadataJson())
+	return WebSocketOpen{
+		PackageID:          open.GetPackageId(),
+		PackageVersion:     open.GetPackageVersion(),
+		RouteGeneration:    open.GetRouteGeneration(),
+		RouteID:            open.GetRouteId(),
+		PrincipalJSON:      append([]byte(nil), open.GetPrincipalJson()...),
+		Metadata:           metadata,
+		RequestID:          open.GetRequestId(),
+		IdempotencyKey:     open.GetIdempotencyKey(),
+		DeadlineUnixMillis: open.GetDeadlineUnixMillis(),
+		BridgeCapability:   append([]byte(nil), open.GetBridgeCapability()...),
+	}
+}
+
+func requestMetadataFromJSON(raw []byte) (RequestMetadata, error) {
+	if len(raw) == 0 {
+		return RequestMetadata{}, nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var metadata RequestMetadata
+	if err := decoder.Decode(&metadata); err != nil {
+		return RequestMetadata{}, status.Error(codes.InvalidArgument, "request metadata is invalid")
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return RequestMetadata{}, status.Error(codes.InvalidArgument, "request metadata is invalid")
+	}
+	return metadata, nil
+}
+
+type webSocketServerStream struct {
+	stream pluginhostv1.ControlPackageHost_OpenWebSocketServer
+}
+
+func (s *webSocketServerStream) Recv() (WebSocketFrame, error) {
+	frame, err := s.stream.Recv()
+	if err != nil {
+		return WebSocketFrame{}, err
+	}
+	switch value := frame.Value.(type) {
+	case *pluginhostv1.WebSocketFrame_Data:
+		return WebSocketFrame{Data: append([]byte(nil), value.Data...)}, nil
+	case *pluginhostv1.WebSocketFrame_Close:
+		if value.Close == nil {
+			return WebSocketFrame{}, status.Error(codes.InvalidArgument, "WebSocket close frame is required")
+		}
+		return WebSocketFrame{Close: &WebSocketClose{Code: value.Close.GetCode(), Reason: value.Close.GetReason()}}, nil
+	default:
+		return WebSocketFrame{}, status.Error(codes.InvalidArgument, "WebSocket opening frame must be first and unique")
+	}
+}
+
+func (s *webSocketServerStream) Send(frame WebSocketFrame) error {
+	if frame.Close != nil && len(frame.Data) != 0 {
+		return status.Error(codes.InvalidArgument, "WebSocket frame cannot contain data and close")
+	}
+	if frame.Close != nil {
+		return s.stream.Send(&pluginhostv1.WebSocketFrame{Value: &pluginhostv1.WebSocketFrame_Close{Close: &pluginhostv1.WebSocketClose{
+			Code: frame.Close.Code, Reason: frame.Close.Reason,
+		}}})
+	}
+	return s.stream.Send(&pluginhostv1.WebSocketFrame{Value: &pluginhostv1.WebSocketFrame_Data{Data: append([]byte(nil), frame.Data...)}})
 }
 
 func dispatchResponseToProto(response DispatchResponse) *pluginhostv1.DispatchResponse {
@@ -287,11 +489,13 @@ func dispatchResponseToProto(response DispatchResponse) *pluginhostv1.DispatchRe
 
 func migrationRequestFromProto(request *pluginhostv1.MigrationRequest) MigrationRequest {
 	return MigrationRequest{
-		PackageID:       request.GetPackageId(),
-		PackageVersion:  request.GetPackageVersion(),
-		MigrationID:     request.GetMigrationId(),
-		Checkpoint:      request.GetCheckpoint(),
-		RouteGeneration: request.GetRouteGeneration(),
+		PackageID:          request.GetPackageId(),
+		PackageVersion:     request.GetPackageVersion(),
+		MigrationID:        request.GetMigrationId(),
+		Checkpoint:         request.GetCheckpoint(),
+		RouteGeneration:    request.GetRouteGeneration(),
+		BridgeCapability:   append([]byte(nil), request.GetBridgeCapability()...),
+		DeadlineUnixMillis: request.GetDeadlineUnixMillis(),
 	}
 }
 

@@ -1,10 +1,21 @@
 package router
 
 import (
+	"archive/zip"
 	"bytes"
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -13,13 +24,424 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/identitybridge"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type v2TestHost struct {
+	lastRouteID string
+}
+
+type v2PackageRouteCatalogRow struct {
+	Method    string `json:"method"`
+	Path      string `json:"path"`
+	Owner     string `json:"owner"`
+	RouteID   string `json:"route_id"`
+	Transport string `json:"transport"`
+}
+
+func loadV2PackageRouteCatalog(t *testing.T) []v2PackageRouteCatalogRow {
+	t.Helper()
+	_, sourceFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	path := filepath.Join(filepath.Dir(sourceFile), "..", "..", "config", "v2-package-route-catalog.json")
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var routes []v2PackageRouteCatalogRow
+	require.NoError(t, json.Unmarshal(raw, &routes))
+	require.NotEmpty(t, routes)
+	return routes
+}
+
+func (h *v2TestHost) Start(context.Context, pluginhost.ArtifactRef, uint64) error {
+	return pluginhost.ErrHostUnavailable
+}
+
+func (h *v2TestHost) Dispatch(_ context.Context, input pluginhost.DispatchInput) (pluginhost.DispatchOutput, error) {
+	h.lastRouteID = input.RouteID
+	if strings.HasPrefix(input.RouteID, "identity.") {
+		return pluginhost.DispatchOutput{StatusCode: http.StatusOK, Body: []byte(`{"code":0,"msg":"操作成功","ts":1,"data":{"token":"identity-host"}}`)}, nil
+	}
+	return pluginhost.DispatchOutput{StatusCode: http.StatusOK, Body: []byte(`{"items":[]}`)}, nil
+}
+
+func (h *v2TestHost) Health(context.Context, string, string, uint64) (pluginhost.HostHealth, error) {
+	return pluginhost.HostHealth{}, pluginhost.ErrHostUnavailable
+}
+
+func (h *v2TestHost) Drain(context.Context, string, string, uint64, time.Time) error {
+	return pluginhost.ErrHostUnavailable
+}
+
+func (h *v2TestHost) Stop(context.Context, string, string, uint64) error {
+	return pluginhost.ErrHostUnavailable
+}
+
+func (h *v2TestHost) Rollback(context.Context, string, string, uint64) error {
+	return pluginhost.ErrHostUnavailable
+}
+
+func testHost(t *testing.T) *v2TestHost {
+	t.Helper()
+	host := &v2TestHost{}
+	previous := pluginhost.DefaultManager()
+	pluginhost.SetDefaultManager(host)
+	t.Cleanup(func() { pluginhost.SetDefaultManager(previous) })
+	return host
+}
+
+func seedV2KnowledgePackage(t *testing.T, cfg *config.Config) (ed25519.PublicKey, ed25519.PrivateKey) {
+	t.Helper()
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	cfg.Plugins.OfficialPublicKey = base64.StdEncoding.EncodeToString(publicKey)
+	cfg.Plugins.ControlExecutionEnabled = true
+	config.Set(cfg)
+	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+
+	entrypoint := []byte("#!/bin/sh\nexit 0\n")
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	routes := []byte(`{"api_version":"v2","package_id":"knowledge","routes":[{"method":"GET","legacy_path":"/api/v2/user/knowledge","package_route":"knowledge.article.list","envelope":"data"},{"method":"GET","legacy_path":"/api/v2/admin/ws/monitor","package_route":"telemetry.monitor.ws","envelope":"websocket","transport":"websocket"}]}`)
+	artifact := v2TestPackage(t, map[string][]byte{
+		"bin/control-host":      entrypoint,
+		"compat/v2-routes.json": routes,
+		"migrations/index.json": migrations,
+	})
+	artifactDigest := sha256.Sum256(artifact)
+	entrypointDigest := sha256.Sum256(entrypoint)
+	migrationsDigest := sha256.Sum256(migrations)
+	routesDigest := sha256.Sum256(routes)
+	manifest := service.PluginManifest{
+		ID: "knowledge", Name: "Knowledge", Version: "4.0.0", APIVersion: "v2", Publisher: "AnixOps", Targets: []string{"control"},
+		ArtifactSHA256:    hex.EncodeToString(artifactDigest[:]),
+		ControlEntrypoint: &service.PluginEntrypoint{Path: "bin/control-host", SHA256: hex.EncodeToString(entrypointDigest[:])},
+		Migrations:        &service.PluginMigrations{Index: "migrations/index.json", SHA256: hex.EncodeToString(migrationsDigest[:])},
+		CompatibilityRoutes: &service.PluginCompatibilityRoutes{
+			Path: "compat/v2-routes.json", SHA256: hex.EncodeToString(routesDigest[:]),
+		},
+		RouteContractDigest: hex.EncodeToString(routesDigest[:]),
+	}
+	canonical, err := service.CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := service.RegisterPluginRelease(database.GetDB(), string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	_, err = service.StorePluginArtifact(database.GetDB(), release.ID, artifact)
+	require.NoError(t, err)
+	require.NoError(t, database.GetDB().Create(&model.PluginInstallation{
+		PluginID: "knowledge", Target: "control", DesiredVersion: "4.0.0", ObservedVersion: "4.0.0",
+		State: "healthy", Enabled: true, LifecycleGeneration: 7,
+	}).Error)
+	return publicKey, privateKey
+}
+
+func seedV2IdentityPackage(t *testing.T, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
+	t.Helper()
+	entrypoint := []byte("#!/bin/sh\nexit 0\n")
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	routes := []byte(`{"api_version":"v2","package_id":"identity-platform","routes":[{"method":"POST","legacy_path":"/api/v2/login","package_route":"identity.auth.login","envelope":"panel"},{"method":"POST","legacy_path":"/api/v2/register","package_route":"identity.auth.register","envelope":"panel"}]}`)
+	artifact := v2TestPackage(t, map[string][]byte{
+		"bin/control-host": entrypoint, "compat/v2-routes.json": routes, "migrations/index.json": migrations,
+	})
+	artifactDigest := sha256.Sum256(artifact)
+	entrypointDigest := sha256.Sum256(entrypoint)
+	migrationsDigest := sha256.Sum256(migrations)
+	routesDigest := sha256.Sum256(routes)
+	manifest := service.PluginManifest{
+		ID: "identity-platform", Name: "Identity Platform", Version: "4.0.0", APIVersion: "v2", Publisher: "AnixOps", Targets: []string{"control"},
+		ArtifactSHA256:    hex.EncodeToString(artifactDigest[:]),
+		ControlEntrypoint: &service.PluginEntrypoint{Path: "bin/control-host", SHA256: hex.EncodeToString(entrypointDigest[:])},
+		Migrations:        &service.PluginMigrations{Index: "migrations/index.json", SHA256: hex.EncodeToString(migrationsDigest[:])},
+		CompatibilityRoutes: &service.PluginCompatibilityRoutes{
+			Path: "compat/v2-routes.json", SHA256: hex.EncodeToString(routesDigest[:]),
+		},
+		RouteContractDigest: hex.EncodeToString(routesDigest[:]),
+	}
+	canonical, err := service.CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := service.RegisterPluginRelease(database.GetDB(), string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	_, err = service.StorePluginArtifact(database.GetDB(), release.ID, artifact)
+	require.NoError(t, err)
+	require.NoError(t, database.GetDB().Create(&model.PluginInstallation{
+		PluginID: "identity-platform", Target: "control", DesiredVersion: "4.0.0", ObservedVersion: "4.0.0",
+		State: "healthy", Enabled: true, LifecycleGeneration: 7,
+	}).Error)
+}
+
+func seedV2TaskSixPackage(t *testing.T, packageID, name, routes string, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
+	t.Helper()
+	entrypoint := []byte("#!/bin/sh\nexit 0\n")
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	artifact := v2TestPackage(t, map[string][]byte{
+		"bin/control-host": entrypoint, "compat/v2-routes.json": []byte(routes), "migrations/index.json": migrations,
+	})
+	artifactDigest := sha256.Sum256(artifact)
+	entrypointDigest := sha256.Sum256(entrypoint)
+	migrationsDigest := sha256.Sum256(migrations)
+	routesDigest := sha256.Sum256([]byte(routes))
+	manifest := service.PluginManifest{
+		ID: packageID, Name: name, Version: "4.0.0", APIVersion: "v2", Publisher: "AnixOps", Targets: []string{"control"},
+		ArtifactSHA256:    hex.EncodeToString(artifactDigest[:]),
+		ControlEntrypoint: &service.PluginEntrypoint{Path: "bin/control-host", SHA256: hex.EncodeToString(entrypointDigest[:])},
+		Migrations:        &service.PluginMigrations{Index: "migrations/index.json", SHA256: hex.EncodeToString(migrationsDigest[:])},
+		CompatibilityRoutes: &service.PluginCompatibilityRoutes{
+			Path: "compat/v2-routes.json", SHA256: hex.EncodeToString(routesDigest[:]),
+		},
+		RouteContractDigest: hex.EncodeToString(routesDigest[:]),
+	}
+	canonical, err := service.CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := service.RegisterPluginRelease(database.GetDB(), string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	_, err = service.StorePluginArtifact(database.GetDB(), release.ID, artifact)
+	require.NoError(t, err)
+	require.NoError(t, database.GetDB().Create(&model.PluginInstallation{
+		PluginID: packageID, Target: "control", DesiredVersion: "4.0.0", ObservedVersion: "4.0.0",
+		State: "healthy", Enabled: true, LifecycleGeneration: 7,
+	}).Error)
+}
+
+func seedV2TaskSixPackages(t *testing.T, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
+	t.Helper()
+	seedV2TaskSixPackage(t, "ticket", "Ticket", `{"api_version":"v2","package_id":"ticket","routes":[{"method":"GET","legacy_path":"/api/v2/user/ticket","package_route":"ticket.user.ticket.get","envelope":"data"}]}`, publicKey, privateKey)
+	seedV2TaskSixPackage(t, "plan", "Plan", `{"api_version":"v2","package_id":"plan","routes":[{"method":"GET","legacy_path":"/api/v2/user/plan","package_route":"plan.user.plan.get","envelope":"data"}]}`, publicKey, privateKey)
+	seedV2TaskSixPackage(t, "notification", "Notification", `{"api_version":"v2","package_id":"notification","routes":[{"method":"GET","legacy_path":"/api/v2/user/notifications","package_route":"notification.user.notifications.get","envelope":"data"}]}`, publicKey, privateKey)
+}
+
+func seedV2TaskSevenPackages(t *testing.T, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
+	t.Helper()
+	seedV2TaskSixPackage(t, "order", "Order", `{"api_version":"v2","package_id":"order","routes":[{"method":"GET","legacy_path":"/api/v2/user/order","package_route":"order.user.order.get","envelope":"data"}]}`, publicKey, privateKey)
+	seedV2TaskSixPackage(t, "payment", "Payment", `{"api_version":"v2","package_id":"payment","routes":[{"method":"GET","legacy_path":"/api/v2/payment/methods","package_route":"payment.payment.methods.get","envelope":"data"}]}`, publicKey, privateKey)
+	seedV2TaskSixPackage(t, "subscription", "Subscription", `{"api_version":"v2","package_id":"subscription","routes":[{"method":"GET","legacy_path":"/api/v2/user/subscription","package_route":"subscription.user.subscription.get","envelope":"data"}]}`, publicKey, privateKey)
+}
+
+func seedV2TaskEightPackages(t *testing.T, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
+	t.Helper()
+	seedV2TaskSixPackage(t, "machine-telemetry", "Machine Telemetry", `{"api_version":"v2","package_id":"machine-telemetry","routes":[{"method":"GET","legacy_path":"/api/v2/admin/dashboard","package_route":"telemetry.admin.dashboard.get","envelope":"data"}]}`, publicKey, privateKey)
+	seedV2TaskSixPackage(t, "proxy-node", "Proxy Node", `{"api_version":"v2","package_id":"proxy-node","routes":[{"method":"GET","legacy_path":"/api/v2/admin/nodes","package_route":"proxy.admin.nodes.get","envelope":"data"}]}`, publicKey, privateKey)
+	seedV2TaskSixPackage(t, "protocol-runtime", "Protocol Runtime", `{"api_version":"v2","package_id":"protocol-runtime","routes":[{"method":"GET","legacy_path":"/api/v2/agent/tasks","package_route":"protocol.agent.tasks.get","envelope":"raw"}]}`, publicKey, privateKey)
+	seedV2TaskSixPackage(t, "wireguard", "WireGuard", `{"api_version":"v2","package_id":"wireguard","routes":[{"method":"POST","legacy_path":"/api/v2/admin/wireguard/keypair","package_route":"wireguard.admin.wireguard.keypair.post","envelope":"data"}]}`, publicKey, privateKey)
+	seedV2TaskSixPackage(t, "forward", "Forward", `{"api_version":"v2","package_id":"forward","routes":[{"method":"GET","legacy_path":"/api/v2/user/forward/rules","package_route":"forward.user.forward.rules.get","envelope":"data"}]}`, publicKey, privateKey)
+	seedV2TaskSixPackage(t, "gost-mesh", "Gost Mesh", `{"api_version":"v2","package_id":"gost-mesh","routes":[{"method":"GET","legacy_path":"/api/v2/admin/forward/nodex/status","package_route":"gost.admin.forward.nodex.status.get","envelope":"data"}]}`, publicKey, privateKey)
+}
+
+func v2TestPackage(t *testing.T, files map[string][]byte) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := zip.NewWriter(&buffer)
+	for _, name := range []string{"bin/control-host", "compat/v2-routes.json", "migrations/index.json"} {
+		file, err := writer.Create(name)
+		require.NoError(t, err)
+		_, err = file.Write(files[name])
+		require.NoError(t, err)
+	}
+	require.NoError(t, writer.Close())
+	return buffer.Bytes()
+}
+
+func requestV2(t *testing.T, router *gin.Engine, cfg *config.Config, method, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	token, err := utils.GenerateToken(1, "user@example.com", false, cfg.JWT.Secret, cfg.JWT.Expire)
+	require.NoError(t, err)
+	return requestV2WithToken(t, router, method, path, token)
+}
+
+func requestV2Admin(t *testing.T, router *gin.Engine, cfg *config.Config, method, path string) *httptest.ResponseRecorder {
+	t.Helper()
+	token, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
+	require.NoError(t, err)
+	return requestV2WithToken(t, router, method, path, token)
+}
+
+func requestV2WithToken(t *testing.T, router *gin.Engine, method, path, token string) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(method, path, nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func disablePackage(t *testing.T, packageID string) {
+	t.Helper()
+	require.NoError(t, database.GetDB().Model(&model.PluginInstallation{}).
+		Where("plugin_id = ? AND target = ?", packageID, "control").Update("enabled", false).Error)
+}
+
+func setupV2PackageRouter(t *testing.T) (*gin.Engine, *config.Config, *v2TestHost) {
+	t.Helper()
+	cache.InitMemory()
+	require.NoError(t, database.Close())
+	require.NoError(t, database.Init(&config.DatabaseConfig{Driver: "sqlite", Database: ":memory:"}))
+	t.Cleanup(func() { require.NoError(t, database.Close()) })
+	require.NoError(t, database.GetDB().AutoMigrate(&model.User{}))
+
+	cfg := &config.Config{
+		Env: "test",
+		JWT: config.JWTConfig{Secret: "test-jwt-secret", Expire: 86400},
+		App: config.AppConfig{APIToken: "test-api-token", SubscribePath: "s", TrafficLogEnable: true},
+	}
+	host := testHost(t)
+	publicKey, privateKey := seedV2KnowledgePackage(t, cfg)
+	seedV2IdentityPackage(t, publicKey, privateKey)
+	seedV2TaskSixPackages(t, publicKey, privateKey)
+	seedV2TaskSevenPackages(t, publicKey, privateKey)
+	seedV2TaskEightPackages(t, publicKey, privateKey)
+	router := gin.New()
+	Setup(router, cfg)
+	return router, cfg, host
+}
+
+func TestV2TaskSixRepresentativeRoutesUsePackageHosts(t *testing.T) {
+	router, cfg, host := setupV2PackageRouter(t)
+	for _, test := range []struct {
+		path    string
+		routeID string
+	}{
+		{path: "/api/v2/user/knowledge", routeID: "knowledge.article.list"},
+		{path: "/api/v2/user/ticket", routeID: "ticket.user.ticket.get"},
+		{path: "/api/v2/user/plan", routeID: "plan.user.plan.get"},
+		{path: "/api/v2/user/notifications", routeID: "notification.user.notifications.get"},
+	} {
+		t.Run(test.routeID, func(t *testing.T) {
+			response := requestV2(t, router, cfg, http.MethodGet, test.path)
+			require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+			require.Equal(t, test.routeID, host.lastRouteID)
+		})
+	}
+}
+
+func TestV2TaskSevenRepresentativeRoutesUsePackageHosts(t *testing.T) {
+	router, cfg, host := setupV2PackageRouter(t)
+	for _, test := range []struct {
+		path    string
+		routeID string
+	}{
+		{path: "/api/v2/user/order", routeID: "order.user.order.get"},
+		{path: "/api/v2/payment/methods", routeID: "payment.payment.methods.get"},
+		{path: "/api/v2/user/subscription", routeID: "subscription.user.subscription.get"},
+	} {
+		t.Run(test.routeID, func(t *testing.T) {
+			response := requestV2(t, router, cfg, http.MethodGet, test.path)
+			require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+			require.Equal(t, test.routeID, host.lastRouteID)
+		})
+	}
+}
+
+func TestV2TaskEightRepresentativeRoutesUsePackageHosts(t *testing.T) {
+	router, cfg, host := setupV2PackageRouter(t)
+	for _, test := range []struct {
+		method  string
+		path    string
+		routeID string
+		admin   bool
+	}{
+		{method: http.MethodGet, path: "/api/v2/admin/dashboard", routeID: "telemetry.admin.dashboard.get", admin: true},
+		{method: http.MethodGet, path: "/api/v2/admin/nodes", routeID: "proxy.admin.nodes.get", admin: true},
+		{method: http.MethodGet, path: "/api/v2/agent/tasks", routeID: "protocol.agent.tasks.get"},
+		{method: http.MethodPost, path: "/api/v2/admin/wireguard/keypair", routeID: "wireguard.admin.wireguard.keypair.post", admin: true},
+		{method: http.MethodGet, path: "/api/v2/user/forward/rules", routeID: "forward.user.forward.rules.get"},
+		{method: http.MethodGet, path: "/api/v2/admin/forward/nodex/status", routeID: "gost.admin.forward.nodex.status.get", admin: true},
+	} {
+		t.Run(test.routeID, func(t *testing.T) {
+			var response *httptest.ResponseRecorder
+			if test.admin {
+				response = requestV2Admin(t, router, cfg, test.method, test.path)
+			} else {
+				response = requestV2(t, router, cfg, test.method, test.path)
+			}
+			require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+			require.Equal(t, test.routeID, host.lastRouteID)
+		})
+	}
+}
+
+func TestV2WebSocketRoutesRegisterExactPackageBridgeOperations(t *testing.T) {
+	_, _, _ = setupV2PackageRouter(t)
+	for _, test := range []struct {
+		packageID string
+		routeID   string
+	}{
+		{packageID: "machine-telemetry", routeID: "telemetry.admin.ws.monitor.get"},
+		{packageID: "proxy-node", routeID: "proxy.node.ws.get"},
+		{packageID: "protocol-runtime", routeID: "protocol.agent.ws.get"},
+	} {
+		t.Run(test.routeID, func(t *testing.T) {
+			operation, ok := packagebridge.DefaultRouteRegistry().ResolveWebSocket(test.packageID, test.routeID, test.routeID)
+			require.True(t, ok)
+			require.NotNil(t, operation)
+		})
+	}
+}
+
+func TestPackageRouteWrappersAlwaysUseTheirGenericGateways(t *testing.T) {
+	gateway := func(*gin.Context) {}
+	legacy := func(*gin.Context) {}
+
+	httpRoute := registeredPackageRoute(gateway, "knowledge", "knowledge.wrapper.gateway.test", legacy)
+	require.Equal(t, reflect.ValueOf(gateway).Pointer(), reflect.ValueOf(httpRoute).Pointer())
+
+	webSocketRoute := registeredPackageWebSocketRoute(gateway, "proxy-node", "proxy.wrapper.gateway.test", legacy, nil)
+	require.Equal(t, reflect.ValueOf(gateway).Pointer(), reflect.ValueOf(webSocketRoute).Pointer())
+
+	calledGateway := false
+	calledLegacy := false
+	preflightRoute := registeredPackageWebSocketRoute(
+		func(*gin.Context) { calledGateway = true },
+		"protocol-runtime",
+		"protocol.wrapper.gateway.test",
+		func(*gin.Context) { calledLegacy = true },
+		func(*gin.Context) bool { return true },
+	)
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest(http.MethodGet, "/api/v2/agent/ws", nil)
+	preflightRoute(context)
+	require.True(t, calledGateway)
+	require.False(t, calledLegacy)
+}
+
+func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
+	_, cfg, _ := setupV2PackageRouter(t)
+	identityAllowlist, err := identitybridge.NewAllowlist(cfg)
+	require.NoError(t, err)
+
+	identityRoutes := 0
+	bridgedRoutes := 0
+	for _, route := range loadV2PackageRouteCatalog(t) {
+		t.Run(route.Method+" "+route.Path, func(t *testing.T) {
+			if route.Owner == "identity-platform" {
+				identityRoutes++
+				require.True(t, identityAllowlist.Allows(route.Owner, route.RouteID, route.RouteID))
+				return
+			}
+			bridgedRoutes++
+			if route.Transport == "websocket" {
+				operation, ok := packagebridge.DefaultRouteRegistry().ResolveWebSocket(route.Owner, route.RouteID, route.RouteID)
+				require.True(t, ok)
+				require.NotNil(t, operation)
+				return
+			}
+			operation, ok := packagebridge.DefaultRouteRegistry().Resolve(route.Owner, route.RouteID, route.RouteID)
+			require.True(t, ok)
+			require.NotNil(t, operation)
+		})
+	}
+	require.Equal(t, 45, identityRoutes)
+	require.Equal(t, 247, bridgedRoutes)
+}
+
+func TestV2PackageRouterFixturesAreIsolated(t *testing.T) {
+	_, _, _ = setupV2PackageRouter(t)
+	_, _, _ = setupV2PackageRouter(t)
+}
 
 func init() {
 	gin.SetMode(gin.TestMode)
@@ -202,6 +624,69 @@ func TestSetupRegistersV4PluginGateway(t *testing.T) {
 	r.ServeHTTP(recorder, request)
 
 	require.Equal(t, http.StatusUnauthorized, recorder.Code, recorder.Body.String())
+}
+
+func TestV2KnowledgeListUsesPackageEnvelope(t *testing.T) {
+	router, cfg, host := setupV2PackageRouter(t)
+	defer teardownTestRouter(t)
+
+	response := requestV2(t, router, cfg, http.MethodGet, "/api/v2/user/knowledge")
+	require.Equal(t, http.StatusOK, response.Code)
+	require.JSONEq(t, `{"data":{"items":[]}}`, response.Body.String())
+	require.Equal(t, "knowledge.article.list", host.lastRouteID)
+}
+
+func TestV2LoginUsesIdentityPlatformPackagePanelEnvelope(t *testing.T) {
+	router, _, host := setupV2PackageRouter(t)
+	defer teardownTestRouter(t)
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/login", strings.NewReader(`{"email":"u@example.test","password":"secret"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Request-ID", "identity-login-1")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.JSONEq(t, `{"code":0,"msg":"操作成功","ts":1,"data":{"token":"identity-host"}}`, recorder.Body.String())
+	require.Equal(t, "identity.auth.login", host.lastRouteID)
+
+	disablePackage(t, "identity-platform")
+	recorder = httptest.NewRecorder()
+	router.ServeHTTP(recorder, requestV2LoginRequest(t))
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "package_unavailable")
+}
+
+func requestV2LoginRequest(t *testing.T) *http.Request {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodPost, "/api/v2/login", strings.NewReader(`{"email":"u@example.test","password":"secret"}`))
+	request.Header.Set("Content-Type", "application/json")
+	return request
+}
+
+func TestV2GatewayFailsClosedWhenPackageIsDisabled(t *testing.T) {
+	router, cfg, _ := setupV2PackageRouter(t)
+	defer teardownTestRouter(t)
+	disablePackage(t, "knowledge")
+
+	response := requestV2(t, router, cfg, http.MethodGet, "/api/v2/user/knowledge")
+	require.Equal(t, http.StatusServiceUnavailable, response.Code)
+	require.NotContains(t, response.Body.String(), "legacy")
+}
+
+func TestWebSocketGatewayDoesNotInvokeLegacyHandler(t *testing.T) {
+	router, cfg, _ := setupV2PackageRouter(t)
+	defer teardownTestRouter(t)
+	disablePackage(t, "knowledge")
+
+	token, err := utils.GenerateToken(1, "admin@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
+	require.NoError(t, err)
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/admin/ws/monitor", nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	require.NotContains(t, recorder.Body.String(), "legacy")
 }
 
 func TestSetup_MetricsEndpoint(t *testing.T) {

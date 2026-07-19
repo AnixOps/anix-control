@@ -1,0 +1,90 @@
+{
+  "api_version": "v2",
+  "package_id": "plan",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/plans",
+      "package_route": "plan.admin.plans.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/plans",
+      "package_route": "plan.admin.plans.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/plans/:id",
+      "package_route": "plan.admin.plans.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/plans/:id",
+      "package_route": "plan.admin.plans.id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/plans/:id",
+      "package_route": "plan.admin.plans.id.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/plans/:id/assign",
+      "package_route": "plan.admin.plans.id.assign.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/speed-limit/create",
+      "package_route": "plan.speed_limit.create.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/speed-limit/delete",
+      "package_route": "plan.speed_limit.delete.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/speed-limit/list",
+      "package_route": "plan.speed_limit.list.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/speed-limit/tunnels",
+      "package_route": "plan.speed_limit.tunnels.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/speed-limit/update",
+      "package_route": "plan.speed_limit.update.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/plan",
+      "package_route": "plan.user.plan.get",
+      "envelope": "data",
+      "transport": "http"
+    }
+  ]
+}

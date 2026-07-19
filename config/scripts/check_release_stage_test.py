@@ -6,6 +6,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
+from types import SimpleNamespace
 from pathlib import Path
 
 
@@ -21,6 +23,24 @@ RELEASE_STAGE_SPEC.loader.exec_module(RELEASE_STAGE_MODULE)
 
 
 class V4ReleaseStageContractTest(unittest.TestCase):
+    def test_v4_plugin_only_route_gate_runs_the_router_bridge_contract(self) -> None:
+        successful = SimpleNamespace(returncode=0, stdout="ok", stderr="")
+        with mock.patch.object(RELEASE_STAGE_MODULE.subprocess, "run", return_value=successful) as run:
+            RELEASE_STAGE_MODULE.run_plugin_only_route_gate(REPO_ROOT)
+
+        self.assertEqual(2, run.call_count)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(sys.executable, commands[0][0])
+        self.assertEqual("go", commands[1][0])
+        self.assertIn("TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge", " ".join(commands[1]))
+
+    def test_v4_stage_runs_the_plugin_only_route_gate(self) -> None:
+        contract = RELEASE_STAGE_MODULE.read_contract(REPO_ROOT / "config" / "scripts" / "release-stage-contract.json")
+        with mock.patch.object(RELEASE_STAGE_MODULE, "run_plugin_only_route_gate", create=True) as route_gate:
+            RELEASE_STAGE_MODULE.validate_stage(REPO_ROOT, contract, "v4.0.0")
+
+        route_gate.assert_called_once_with(REPO_ROOT)
+
     def test_v4_stage_requires_identity_platform_and_sixteen_artifacts(self) -> None:
         contract = RELEASE_STAGE_MODULE.read_contract(REPO_ROOT / "config" / "scripts" / "release-stage-contract.json")
         decision = RELEASE_STAGE_MODULE.validate_stage(REPO_ROOT, contract, "v4.0.0")

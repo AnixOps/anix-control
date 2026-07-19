@@ -51,11 +51,12 @@ OWNER_ROUTE_PREFIXES = {
     "gost-mesh": ("gost.",),
     "nat-egress": ("nat.",),
 }
-ALLOWED_ENVELOPES = frozenset({"data", "empty", "raw", "websocket"})
+ALLOWED_ENVELOPES = frozenset({"data", "empty", "panel", "raw", "websocket"})
 ALLOWED_MIDDLEWARE_GROUPS = frozenset({"public", "user", "admin", "agent", "node-api", "internal"})
 ALLOWED_TRANSPORTS = frozenset({"http", "websocket"})
 CATALOG_FIELDS = frozenset({"method", "path", "owner", "route_id", "envelope", "middleware_group", "transport"})
 INVENTORY_FIELDS = frozenset({"method", "path", "handler", "middleware_group", "transport"})
+INVENTORY_OPTIONAL_FIELDS = frozenset({"binding", "package_id", "route_id"})
 
 
 class CatalogError(ValueError):
@@ -84,6 +85,9 @@ class InventoryRoute:
     handler: str
     middleware_group: str
     transport: str
+    binding: str = ""
+    package_id: str = ""
+    route_id: str = ""
 
     @property
     def key(self) -> tuple[str, str]:
@@ -126,13 +130,16 @@ def load_inventory(path: Path | None, raw_inventory: str | None = None) -> tuple
     seen: set[tuple[str, str]] = set()
     for index, row in enumerate(rows):
         context = f"inventory row {index + 1}"
-        validate_exact_fields(row, INVENTORY_FIELDS, context)
+        validate_inventory_fields(row, context)
         route = InventoryRoute(
             method=require_string(row, "method", context),
             path=require_string(row, "path", context),
             handler=require_string(row, "handler", context),
             middleware_group=require_string(row, "middleware_group", context),
             transport=require_string(row, "transport", context),
+            binding=optional_string(row, "binding", context),
+            package_id=optional_string(row, "package_id", context),
+            route_id=optional_string(row, "route_id", context),
         )
         validate_inventory_route(route, context)
         if route.key in seen:
@@ -175,12 +182,34 @@ def validate_exact_fields(row: dict[str, Any], expected: frozenset[str], context
         raise CatalogError(f"{context} has invalid schema: {'; '.join(details)}")
 
 
+def validate_inventory_fields(row: dict[str, Any], context: str) -> None:
+    actual = frozenset(row)
+    missing = sorted(INVENTORY_FIELDS - actual)
+    extra = sorted(actual - INVENTORY_FIELDS - INVENTORY_OPTIONAL_FIELDS)
+    if missing or extra:
+        details: list[str] = []
+        if missing:
+            details.append(f"missing {', '.join(missing)}")
+        if extra:
+            details.append(f"unexpected {', '.join(extra)}")
+        raise CatalogError(f"{context} has invalid schema: {'; '.join(details)}")
+
+
 def require_string(row: dict[str, Any], field: str, context: str, *, allow_empty: bool = False) -> str:
     value = row[field]
     if not isinstance(value, str):
         raise CatalogError(f"{context} field {field} must be a string")
     if not allow_empty and not value:
         raise CatalogError(f"{context} field {field} must not be empty")
+    return value
+
+
+def optional_string(row: dict[str, Any], field: str, context: str) -> str:
+    if field not in row:
+        return ""
+    value = row[field]
+    if not isinstance(value, str):
+        raise CatalogError(f"{context} field {field} must be a string")
     return value
 
 
@@ -211,6 +240,17 @@ def validate_inventory_route(route: InventoryRoute, context: str) -> None:
         raise CatalogError(f"unsupported middleware group {route.middleware_group!r} in {context}")
     if route.transport not in ALLOWED_TRANSPORTS:
         raise CatalogError(f"unsupported transport {route.transport!r} in {context}")
+    metadata = (route.binding, route.package_id, route.route_id)
+    if not any(metadata):
+        return
+    if route.binding not in {"direct", "package-http", "package-websocket"}:
+        raise CatalogError(f"unsupported route binding {route.binding!r} in {context}")
+    if route.binding == "direct":
+        if route.package_id or route.route_id:
+            raise CatalogError(f"direct route binding must not declare package metadata in {context}")
+        return
+    if not route.package_id or not route.route_id:
+        raise CatalogError(f"package route binding must declare package_id and route_id in {context}")
 
 
 def validate_method_and_path(method: str, route_path: str, context: str) -> None:

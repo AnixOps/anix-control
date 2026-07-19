@@ -1,0 +1,13 @@
+{
+  "api_version": "v2",
+  "package_id": "wireguard",
+  "routes": [
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/wireguard/keypair",
+      "package_route": "wireguard.admin.wireguard.keypair.post",
+      "envelope": "data",
+      "transport": "http"
+    }
+  ]
+}

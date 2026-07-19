@@ -1,0 +1,559 @@
+{
+  "api_version": "v2",
+  "package_id": "forward",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/agents",
+      "package_route": "forward.admin.forward.agents.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/agents",
+      "package_route": "forward.admin.forward.agents.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/agents/:id/revoke",
+      "package_route": "forward.admin.forward.agents.id.revoke.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/ansible-machines",
+      "package_route": "forward.admin.forward.ansible_machines.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/ansible-machines",
+      "package_route": "forward.admin.forward.ansible_machines.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/forward/ansible-machines/:id",
+      "package_route": "forward.admin.forward.ansible_machines.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/ansible-machines/:id",
+      "package_route": "forward.admin.forward.ansible_machines.id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/forward/ansible-machines/:id",
+      "package_route": "forward.admin.forward.ansible_machines.id.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/ansible-machines/:id/check",
+      "package_route": "forward.admin.forward.ansible_machines.id.check.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/ansible-machines/:id/sync-stats",
+      "package_route": "forward.admin.forward.ansible_machines.id.sync_stats.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/ansible-machines/:id/toggle",
+      "package_route": "forward.admin.forward.ansible_machines.id.toggle.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/create",
+      "package_route": "forward.admin.forward.create.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/delete",
+      "package_route": "forward.admin.forward.delete.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/diagnose",
+      "package_route": "forward.admin.forward.diagnose.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/force-delete",
+      "package_route": "forward.admin.forward.force_delete.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/list",
+      "package_route": "forward.admin.forward.list.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/local/doctor",
+      "package_route": "forward.admin.forward.local.doctor.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/local/status",
+      "package_route": "forward.admin.forward.local.status.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/nodes",
+      "package_route": "forward.admin.forward.nodes.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/nodes",
+      "package_route": "forward.admin.forward.nodes.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/forward/nodes/:id",
+      "package_route": "forward.admin.forward.nodes.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/nodes/:id",
+      "package_route": "forward.admin.forward.nodes.id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/forward/nodes/:id",
+      "package_route": "forward.admin.forward.nodes.id.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/nodes/:id/check",
+      "package_route": "forward.admin.forward.nodes.id.check.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/nodes/:id/sync-stats",
+      "package_route": "forward.admin.forward.nodes.id.sync_stats.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/nodes/:id/toggle",
+      "package_route": "forward.admin.forward.nodes.id.toggle.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/observability/multi-ingress",
+      "package_route": "forward.admin.forward.observability.multi_ingress.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/observability/targets",
+      "package_route": "forward.admin.forward.observability.targets.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/observability/topology",
+      "package_route": "forward.admin.forward.observability.topology.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/observability/trend",
+      "package_route": "forward.admin.forward.observability.trend.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/pause",
+      "package_route": "forward.admin.forward.pause.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/resume",
+      "package_route": "forward.admin.forward.resume.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/rules",
+      "package_route": "forward.admin.forward.rules.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/rules",
+      "package_route": "forward.admin.forward.rules.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/forward/rules/:id",
+      "package_route": "forward.admin.forward.rules.id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/rules/:id",
+      "package_route": "forward.admin.forward.rules.id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/forward/rules/:id",
+      "package_route": "forward.admin.forward.rules.id.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/rules/:id/toggle",
+      "package_route": "forward.admin.forward.rules.id.toggle.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/runtime/doctor",
+      "package_route": "forward.admin.forward.runtime.doctor.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/runtime/jobs",
+      "package_route": "forward.admin.forward.runtime.jobs.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/runtime/status",
+      "package_route": "forward.admin.forward.runtime.status.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/forward/stats",
+      "package_route": "forward.admin.forward.stats.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/sync-backend",
+      "package_route": "forward.admin.forward.sync_backend.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/update",
+      "package_route": "forward.admin.forward.update.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/forward/update-order",
+      "package_route": "forward.admin.forward.update_order.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/tunnel/create",
+      "package_route": "forward.admin.tunnel.create.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/tunnel/delete",
+      "package_route": "forward.admin.tunnel.delete.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/tunnel/diagnose",
+      "package_route": "forward.admin.tunnel.diagnose.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/tunnel/list",
+      "package_route": "forward.admin.tunnel.list.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/tunnel/update",
+      "package_route": "forward.admin.tunnel.update.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/tunnel/user/assign",
+      "package_route": "forward.admin.tunnel.user.assign.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/tunnel/user/list",
+      "package_route": "forward.admin.tunnel.user.list.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/tunnel/user/remove",
+      "package_route": "forward.admin.tunnel.user.remove.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/tunnel/user/tunnel",
+      "package_route": "forward.admin.tunnel.user.tunnel.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/tunnel/user/update",
+      "package_route": "forward.admin.tunnel.user.update.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/forward-agent/heartbeat",
+      "package_route": "forward.forward_agent.heartbeat.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/forward-agent/install.sh",
+      "package_route": "forward.forward_agent.install_sh.get",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/forward-agent/register",
+      "package_route": "forward.forward_agent.register.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/forward-agent/report",
+      "package_route": "forward.forward_agent.report.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/forward/agent/rules",
+      "package_route": "forward.forward.agent.rules.get",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/forward/create",
+      "package_route": "forward.forward.create.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/forward/delete",
+      "package_route": "forward.forward.delete.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/forward/diagnose",
+      "package_route": "forward.forward.diagnose.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/forward/force-delete",
+      "package_route": "forward.forward.force_delete.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/forward/list",
+      "package_route": "forward.forward.list.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/forward/pause",
+      "package_route": "forward.forward.pause.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/forward/resume",
+      "package_route": "forward.forward.resume.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/forward/update",
+      "package_route": "forward.forward.update.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/forward/update-order",
+      "package_route": "forward.forward.update_order.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/internal/forward/traffic/report",
+      "package_route": "forward.internal.forward.traffic.report.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/internal/forward/traffic/snapshot",
+      "package_route": "forward.internal.forward.traffic.snapshot.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/internal/forward/traffic/upload",
+      "package_route": "forward.internal.forward.traffic.upload.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/tunnel/user/assign",
+      "package_route": "forward.tunnel.user.assign.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/tunnel/user/list",
+      "package_route": "forward.tunnel.user.list.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/tunnel/user/remove",
+      "package_route": "forward.tunnel.user.remove.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/tunnel/user/tunnel",
+      "package_route": "forward.tunnel.user.tunnel.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/tunnel/user/update",
+      "package_route": "forward.tunnel.user.update.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/forward/rules",
+      "package_route": "forward.user.forward.rules.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/forward/rules",
+      "package_route": "forward.user.forward.rules.post",
+      "envelope": "data",
+      "transport": "http"
+    }
+  ]
+}

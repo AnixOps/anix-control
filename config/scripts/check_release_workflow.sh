@@ -112,6 +112,64 @@ require_job_dependency() {
   fail "${job_name} job must depend on ${dependency}"
 }
 
+reject_job_text() {
+  local job_name="$1"
+  local needle="$2"
+  local description="$3"
+  local block
+
+  block="$(job_block "${job_name}")"
+  if grep -Fq -- "${needle}" <<<"${block}"; then
+    fail "forbidden ${description}: ${needle}"
+    return 1
+  fi
+
+  echo "ok: ${description} is absent"
+}
+
+named_step_block() {
+  local job_name="$1"
+  local step_name="$2"
+
+  job_block "${job_name}" | awk -v header="      - name: ${step_name}" '
+    $0 == header { in_step = 1; next }
+    in_step && /^      - name:/ { exit }
+    in_step { print }
+  '
+}
+
+require_named_step_text() {
+  local job_name="$1"
+  local step_name="$2"
+  local needle="$3"
+  local description="$4"
+  local block
+
+  block="$(named_step_block "${job_name}" "${step_name}")"
+  if grep -Fq -- "${needle}" <<<"${block}"; then
+    echo "ok: ${description}"
+    return 0
+  fi
+
+  fail "missing ${description}: ${needle}"
+}
+
+reject_named_step_text() {
+  local job_name="$1"
+  local step_name="$2"
+  local needle="$3"
+  local description="$4"
+  local block
+
+  block="$(named_step_block "${job_name}" "${step_name}")"
+  if grep -Fq -- "${needle}" <<<"${block}"; then
+    fail "forbidden ${description}: ${needle}"
+    return 1
+  fi
+
+  echo "ok: ${description} is absent"
+}
+
 frontend_build_block() {
   awk '
     /^  frontend-build:/ { in_job = 1; next }
@@ -192,8 +250,51 @@ check_release_workflow() {
   require_text "python3 config/scripts/check_release_version.py --tag" "release tag/source version consistency gate" || failed=1
   require_release_stage_tag_gate || failed=1
   require_text "python3 config/scripts/check_release_stage.py --self-test" "release-stage contract self-test" || failed=1
+  require_text "Setup Go for v4 route-gate contracts" "v4 route-gate Go toolchain setup" || failed=1
   require_text "needs.tag-gate.outputs.is_release_tag == 'true'" "release-only job gate" || failed=1
   require_job_dependency docker plugin-package-publish || failed=1
+  require_text "  v4-public-rehearsal:" "public v4 rehearsal job" || failed=1
+  require_text "  v4-release-evidence:" "formal v4 evidence job" || failed=1
+  require_job_dependency v4-public-rehearsal plugin-package-publish || failed=1
+  require_job_dependency v4-release-evidence v4-public-rehearsal || failed=1
+  require_job_dependency release v4-release-evidence || failed=1
+  require_text "packages/shared/build_package.py" "formal v4 package builder" || failed=1
+  require_text "--formal-release" "formal v4 package signing mode" || failed=1
+  require_text "config/scripts/run_v4_rehearsal.sh" "v4 release rehearsal invocation" || failed=1
+  require_text "config/scripts/verify_v4_evidence.py" "v4 release evidence verification" || failed=1
+  require_text "ANIXOPS_V4_CANARY_APPROVAL" "v4 signed canary approval input" || failed=1
+  require_text "ANIXOPS_V4_SUPPORT_APPROVAL" "v4 signed support approval input" || failed=1
+  require_text "ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY" "protected official package root input" || failed=1
+  require_text "candidate configuration does not match the protected official package root" "candidate root pin comparison" || failed=1
+  require_text "unset ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY" "v4 signing secret environment cleanup" || failed=1
+  require_text "--postgres-dsn" "v4 PostgreSQL rehearsal input" || failed=1
+  require_text "docker run --rm --detach" "on-demand v4 PostgreSQL rehearsal" || failed=1
+  reject_job_text v4-public-rehearsal "services:" "job-level v4 PostgreSQL service" || failed=1
+  require_named_step_text v4-public-rehearsal "Run public v4 rehearsal gates" "--results-output" "public v4 rehearsal result collection" || failed=1
+  require_named_step_text v4-public-rehearsal "Run public v4 rehearsal gates" "docker run --rm --detach" "public v4 PostgreSQL rehearsal execution" || failed=1
+  for secret_input in \
+    "ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY" \
+    "ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY" \
+    "ANIXOPS_V4_CANARY_APPROVAL" \
+    "ANIXOPS_V4_SUPPORT_APPROVAL" \
+    "--signing-key" \
+    "--canary-evidence" \
+    "--support-evidence"; do
+    reject_job_text v4-public-rehearsal "${secret_input}" "public v4 rehearsal job secret input" || failed=1
+  done
+  require_named_step_text v4-release-evidence "Sign v4 rehearsal evidence" "--results artifacts/v4-rehearsal-results.json" "private v4 evidence signing uses public results" || failed=1
+  require_named_step_text v4-release-evidence "Sign v4 rehearsal evidence" "--signing-key" "private v4 evidence signing input" || failed=1
+  reject_named_step_text v4-release-evidence "Sign v4 rehearsal evidence" "--postgres-dsn" "private v4 signing test input" || failed=1
+  reject_named_step_text v4-release-evidence "Sign v4 rehearsal evidence" "docker run --rm --detach" "private v4 signing test runtime" || failed=1
+  require_text "--trusted-official-public-key" "independent v4 evidence trust root" || failed=1
+  require_text "--archive release/v4-release-evidence.tar.gz" "safe v4 evidence archive verification" || failed=1
+  require_text "--release-packages-dir release" "published v4 package evidence parity verification" || failed=1
+  require_text "v4-rehearsal-evidence.json.sig" "signed v4 evidence record" || failed=1
+  require_text "canary-approval.json" "normalized public canary approval record" || failed=1
+  require_text "support-approval.json" "normalized public support approval record" || failed=1
+  reject_text "tar -xzf release/v4-release-evidence.tar.gz" "unsafe v4 evidence extraction" || failed=1
+  require_text "official-public-key.raw" "v4 formal public root artifact" || failed=1
+  require_text "v4-release-evidence.tar.gz" "v4 evidence release asset" || failed=1
 
   for dependency in \
     go-quality \
@@ -351,6 +452,8 @@ jobs:
       release_package_ids: ${{ steps.check.outputs.release_package_ids }}
       release_package_scope: ${{ steps.check.outputs.release_package_scope }}
     steps:
+      - name: Setup Go for v4 route-gate contracts
+        uses: actions/setup-go@v6
       - run: |
           [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]
           stage_output="$(mktemp)"
@@ -465,8 +568,11 @@ jobs:
     steps:
       - env:
           ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
+          ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY: ${{ secrets.ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY }}
         run: |
           scripts/sign_plugin_release.sh
+          candidate configuration does not match the protected official package root
+          unset ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY
           has_package() { [[ ",${RELEASE_PACKAGE_IDS}," == *",$1,"* ]]; }
           go -C V2bX_AnixOps build -o package-build/gost-mesh-agent ./cmd/gost-mesh
           python3 packages/gost-mesh/build.py build \
@@ -478,6 +584,46 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: signed-plugin-releases
+
+  v4-public-rehearsal:
+    name: V4 Public Rehearsal Gates
+    needs: [tag-gate, plugin-package-publish]
+    if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    steps:
+      - name: Run public v4 rehearsal gates
+        run: |
+          python3 packages/shared/build_package.py --formal-release
+          docker run --rm --detach postgres:16
+          bash config/scripts/run_v4_rehearsal.sh \
+            --postgres-dsn test-dsn \
+            --official-public-key official-public-key.raw
+          python3 config/scripts/render_v4_release_evidence.py \
+            --postgres-dsn test-dsn \
+            --results-output artifacts/v4-rehearsal-results.json
+
+  v4-release-evidence:
+    name: V4 Formal Release Evidence
+    needs: [tag-gate, plugin-package-publish, v4-public-rehearsal]
+    if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    steps:
+      - name: Sign v4 rehearsal evidence
+        env:
+          ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
+          ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY: ${{ secrets.ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY }}
+          ANIXOPS_V4_CANARY_APPROVAL: ${{ secrets.ANIXOPS_V4_CANARY_APPROVAL }}
+          ANIXOPS_V4_SUPPORT_APPROVAL: ${{ secrets.ANIXOPS_V4_SUPPORT_APPROVAL }}
+        run: |
+          unset ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY
+          --signing-key signing-key.pem
+          --canary-evidence canary-approval.json
+          --support-evidence support-approval.json
+          --results artifacts/v4-rehearsal-results.json
+          cp v4-rehearsal-evidence.json.sig canary-approval.json support-approval.json release/
+          python3 config/scripts/verify_v4_evidence.py \
+            --archive release/v4-release-evidence.tar.gz \
+            --trusted-official-public-key official-public-key.raw \
+            --release-packages-dir release
+          tar -czf v4-release-evidence.tar.gz v4-rehearsal-evidence.json
 
   cross-repository-agent-e2e:
     name: Control to Agent Process E2E
@@ -493,7 +639,7 @@ jobs:
           go test -v -count=1 ./internal/grpc -run '^Test(KernelOperationBridgeCrossRepositoryAgentProcess|AgentPluginPackageCrossRepositoryE2E)$'
 
   release:
-    needs: [frontend-build, release-binaries, docker, plugin-package-publish, tag-gate]
+    needs: [frontend-build, release-binaries, docker, plugin-package-publish, v4-release-evidence, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     env:
       RELEASE_PACKAGE_IDS: ${{ needs.tag-gate.outputs.release_package_ids }}
@@ -514,6 +660,9 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: signed-plugin-releases
+      - run: |
+          echo v4-release-evidence.tar.gz
+          echo official-public-key.raw
       - run: |
           cp migration-dry-run.txt release/migration-dry-run.txt
           echo "No Local Release Builds" > release/OPERATOR_DEPLOYMENT.md
@@ -631,6 +780,55 @@ EOF
   sed -i '/plugin-package-publish:/,/cross-repository-agent-e2e/d;/Publish Signed Official Plugin Packages/d;/ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY/d;/scripts\/sign_plugin_release.sh/d;/machine-telemetry-signed-release/d;/nftables-forward-signed-release/d;/anixops-machine-telemetry-1.1.0.SHA256SUMS.txt/d;/anixops-nftables-forward-1.2.0.SHA256SUMS.txt/d' "${fixture}.missing-signed-plugin-publish"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-signed-plugin-publish" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: missing signed plugin publish gate should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-v4-evidence"
+  sed -i '/  v4-release-evidence:/,/  cross-repository-agent-e2e:/d' "${fixture}.missing-v4-evidence"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-v4-evidence" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing v4 formal evidence job should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-v4-root-pin"
+  sed -i '/ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY/d' "${fixture}.missing-v4-root-pin"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-v4-root-pin" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing protected v4 root input should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.v4-job-service"
+  sed -i '/name: V4 Public Rehearsal Gates/a\    services:' "${fixture}.v4-job-service"
+  if RELEASE_WORKFLOW_PATH="${fixture}.v4-job-service" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: v4 job-level service should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-v4-public-isolation"
+  sed -i 's/needs: \[tag-gate, plugin-package-publish, v4-public-rehearsal\]/needs: [tag-gate, plugin-package-publish]/' "${fixture}.missing-v4-public-isolation"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-v4-public-isolation" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: v4 evidence signing without an isolated public rehearsal job should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.missing-v4-package-parity"
+  sed -i '/--release-packages-dir release/d' "${fixture}.missing-v4-package-parity"
+  if RELEASE_WORKFLOW_PATH="${fixture}.missing-v4-package-parity" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: missing published v4 package parity verification should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.public-v4-secret"
+  sed -i '/name: Run public v4 rehearsal gates/a\          ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY=leak' "${fixture}.public-v4-secret"
+  if RELEASE_WORKFLOW_PATH="${fixture}.public-v4-secret" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: public v4 rehearsal secret input should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.private-v4-test-runtime"
+  sed -i '/--results artifacts\/v4-rehearsal-results.json/a\          --postgres-dsn test-dsn' "${fixture}.private-v4-test-runtime"
+  if RELEASE_WORKFLOW_PATH="${fixture}.private-v4-test-runtime" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: private v4 signing test runtime should fail" >&2
     return 1
   fi
 

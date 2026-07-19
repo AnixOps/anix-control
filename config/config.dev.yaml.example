@@ -72,6 +72,8 @@ plugins:
   # Leave this empty to create a unique private local Unix-socket root for
   # this Control process. Explicit configured roots must have trusted ancestry.
   control_host_runtime_dir: ""
+  # Empty creates a private per-process artifact cache that is removed at shutdown.
+  control_host_artifact_dir: ""
   control_host_startup_timeout: "5s"
   control_host_request_timeout: "30s"
   # Dispatch is enabled against the local gRPC listener for reproducible alpha

@@ -30,6 +30,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      - name: Setup Go for v4 route-gate contracts
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
       - name: Check if tag matches stable or prerelease version
         id: check
         shell: bash
@@ -78,6 +84,9 @@ jobs:
       - name: Validate PostgreSQL restore rehearsal syntax
         run: bash -n scripts/postgres_restore_rehearsal.sh
 
+      - name: Validate v4 release rehearsal syntax
+        run: bash -n config/scripts/run_v4_rehearsal.sh
+
       - name: Validate plugin package release scripts
         run: |
           bash -n packages/machine-telemetry/tests/release_gate.sh
@@ -107,6 +116,9 @@ jobs:
 
       - name: Validate release artifact verification script syntax
         run: python3 -m py_compile config/scripts/verify_release_artifacts.py
+
+      - name: Validate v4 release evidence scripts syntax
+        run: python3 -m py_compile config/scripts/create_v4_approval.py config/scripts/render_v4_release_evidence.py config/scripts/verify_v4_evidence.py
 
       - name: Validate legacy deploy script syntax
         run: bash -n config/scripts/deploy.sh
@@ -143,6 +155,11 @@ jobs:
 
       - name: Run PostgreSQL restore rehearsal self-test
         run: bash scripts/postgres_restore_rehearsal.sh --self-test
+
+      - name: Run v4 release evidence self-tests
+        run: |
+          bash config/scripts/run_v4_rehearsal.sh --self-test
+          python3 config/scripts/render_v4_release_evidence_test.py
 
       - name: Enforce release build policy
         run: bash config/deploy/check_release_build_policy.sh
@@ -709,6 +726,7 @@ jobs:
     env:
       RELEASE_PACKAGE_IDS: ${{ needs.tag-gate.outputs.release_package_ids }}
       RELEASE_PACKAGE_SCOPE: ${{ needs.tag-gate.outputs.release_package_scope }}
+      RELEASE_PRODUCT_STAGE: ${{ needs.tag-gate.outputs.product_stage }}
     steps:
       - name: Checkout Control
         uses: actions/checkout@v7
@@ -731,7 +749,56 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Build formal v4 package set
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        env:
+          ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
+          ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY: ${{ secrets.ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" ]] || {
+            echo "ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY is required for v4.0.0" >&2
+            exit 1
+          }
+          [[ -n "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || {
+            echo "ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY is required for v4.0.0" >&2
+            exit 1
+          }
+          key_file="$(mktemp)"
+          root_file="$(mktemp)"
+          trap 'rm -f "${key_file}" "${root_file}"' EXIT
+          printf '%s\n' "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" >"${key_file}"
+          chmod 0600 "${key_file}"
+          printf '%s\n' "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" >"${root_file}"
+          configured_root="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' config/config.prod.yaml)"
+          [[ -n "${configured_root}" ]] || {
+            echo "config/config.prod.yaml does not declare the official package root" >&2
+            exit 1
+          }
+          [[ "${configured_root}" == "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || {
+            echo "candidate configuration does not match the protected official package root" >&2
+            exit 1
+          }
+          unset ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY
+          mkdir -p release-packages
+          python3 packages/shared/build_package.py \
+            --all \
+            --version "${GITHUB_REF_NAME#v}" \
+            --out release-packages \
+            --formal-release \
+            --signing-key "${key_file}" \
+            --official-public-key "${root_file}"
+          python3 packages/shared/build_package.py \
+            --all \
+            --version "${GITHUB_REF_NAME#v}" \
+            --out release-packages \
+            --verify-release \
+            --official-public-key "${root_file}"
+          cp "${root_file}" release-packages/official-public-key.raw
+
       - name: Build declared release Agent plugin binaries
+        if: ${{ needs.tag-gate.outputs.product_stage != '4.0' }}
         env:
           GOEXPERIMENT: jsonv2
           GOWORK: 'off'
@@ -771,7 +838,7 @@ jobs:
           fi
 
       - name: Download pinned GOST runtime when declared
-        if: ${{ contains(needs.tag-gate.outputs.release_package_scope, ',gost-mesh,') }}
+        if: ${{ needs.tag-gate.outputs.product_stage != '4.0' && contains(needs.tag-gate.outputs.release_package_scope, ',gost-mesh,') }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -785,6 +852,7 @@ jobs:
           package-build/gost -V
 
       - name: Build declared deterministic packages
+        if: ${{ needs.tag-gate.outputs.product_stage != '4.0' }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -815,6 +883,7 @@ jobs:
           fi
 
       - name: Sign declared package releases
+        if: ${{ needs.tag-gate.outputs.product_stage != '4.0' }}
         env:
           ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
         shell: bash
@@ -880,6 +949,191 @@ jobs:
         with:
           name: signed-plugin-releases
           path: release-packages/
+
+  v4-public-rehearsal:
+    name: V4 Public Rehearsal Gates
+    runs-on: ubuntu-latest
+    needs: [tag-gate, plugin-package-publish]
+    if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    steps:
+      - name: Skip v4-only evidence for earlier product stages
+        if: ${{ needs.tag-gate.outputs.product_stage != '4.0' }}
+        run: echo "v4 formal evidence is not required for this product stage"
+
+      - name: Checkout code
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Setup Python
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Download formal v4 package artifacts
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: signed-plugin-releases
+          path: artifacts/v4-packages
+
+      - name: Run public v4 rehearsal gates
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -f artifacts/v4-packages/official-public-key.raw && ! -L artifacts/v4-packages/official-public-key.raw ]] || {
+            echo "formal package artifact root is missing or unsafe" >&2
+            exit 1
+          }
+          mkdir -p artifacts
+          container="anixops-v4-release-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup() {
+            docker rm -f "${container}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker run --rm --detach --name "${container}" \
+            -e POSTGRES_DB=anixops_v4_rehearsal_test \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -p 127.0.0.1:55432:5432 postgres:16 >/dev/null
+          for attempt in {1..30}; do
+            if docker exec "${container}" pg_isready -U postgres -d anixops_v4_rehearsal_test >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec "${container}" pg_isready -U postgres -d anixops_v4_rehearsal_test >/dev/null
+          python3 config/scripts/render_v4_release_evidence.py \
+            --tag "${GITHUB_REF_NAME}" \
+            --packages-dir artifacts/v4-packages \
+            --official-public-key artifacts/v4-packages/official-public-key.raw \
+            --postgres-dsn "host=127.0.0.1 user=postgres password=postgres dbname=anixops_v4_rehearsal_test port=55432 sslmode=disable TimeZone=UTC" \
+            --results-output artifacts/v4-rehearsal-results.json \
+            --repo-root "${GITHUB_WORKSPACE}"
+
+      - name: Upload public v4 rehearsal results
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: v4-public-rehearsal-results
+          path: |
+            artifacts/v4-rehearsal-results.json
+            artifacts/transcripts/
+          if-no-files-found: error
+
+  v4-release-evidence:
+    name: V4 Formal Release Evidence
+    runs-on: ubuntu-latest
+    needs: [tag-gate, plugin-package-publish, v4-public-rehearsal]
+    if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    steps:
+      - name: Skip v4-only evidence signing for earlier product stages
+        if: ${{ needs.tag-gate.outputs.product_stage != '4.0' }}
+        run: echo "v4 formal evidence is not required for this product stage"
+
+      - name: Checkout code
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Download formal v4 package artifacts
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: signed-plugin-releases
+          path: artifacts/v4-packages
+
+      - name: Download public v4 rehearsal results
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: v4-public-rehearsal-results
+          path: artifacts
+
+      - name: Sign v4 rehearsal evidence
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        env:
+          ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
+          ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY: ${{ secrets.ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY }}
+          # Each value is a strict signed approval declaration. The workflow
+          # normalizes it before publication and never archives the secret file.
+          ANIXOPS_V4_CANARY_APPROVAL: ${{ secrets.ANIXOPS_V4_CANARY_APPROVAL }}
+          ANIXOPS_V4_SUPPORT_APPROVAL: ${{ secrets.ANIXOPS_V4_SUPPORT_APPROVAL }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" ]] || {
+            echo "ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY is required for v4.0.0 evidence" >&2
+            exit 1
+          }
+          [[ -n "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || {
+            echo "ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY is required for v4.0.0 evidence" >&2
+            exit 1
+          }
+          [[ -n "${ANIXOPS_V4_CANARY_APPROVAL}" ]] || {
+            echo "ANIXOPS_V4_CANARY_APPROVAL is required for v4.0.0" >&2
+            exit 1
+          }
+          [[ -n "${ANIXOPS_V4_SUPPORT_APPROVAL}" ]] || {
+            echo "ANIXOPS_V4_SUPPORT_APPROVAL is required for v4.0.0" >&2
+            exit 1
+          }
+          key_file="$(mktemp)"
+          root_file="$(mktemp)"
+          canary_file="$(mktemp)"
+          support_file="$(mktemp)"
+          cleanup() {
+            rm -f "${key_file}" "${root_file}" "${canary_file}" "${support_file}"
+          }
+          trap cleanup EXIT
+          printf '%s\n' "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" >"${key_file}"
+          printf '%s\n' "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" >"${root_file}"
+          printf '%s\n' "${ANIXOPS_V4_CANARY_APPROVAL}" >"${canary_file}"
+          printf '%s\n' "${ANIXOPS_V4_SUPPORT_APPROVAL}" >"${support_file}"
+          chmod 0600 "${key_file}" "${root_file}" "${canary_file}" "${support_file}"
+          cmp --silent "${root_file}" artifacts/v4-packages/official-public-key.raw || {
+            echo "formal package artifact root does not match the protected official root" >&2
+            exit 1
+          }
+          unset ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY \
+            ANIXOPS_V4_CANARY_APPROVAL ANIXOPS_V4_SUPPORT_APPROVAL
+          python3 config/scripts/render_v4_release_evidence.py \
+            --tag "${GITHUB_REF_NAME}" \
+            --packages-dir artifacts/v4-packages \
+            --official-public-key "${root_file}" \
+            --canary-evidence "${canary_file}" \
+            --support-evidence "${support_file}" \
+            --signing-key "${key_file}" \
+            --results artifacts/v4-rehearsal-results.json \
+            --output artifacts/v4-rehearsal-evidence.json \
+            --repo-root "${GITHUB_WORKSPACE}"
+          mkdir -p v4-release-evidence/v4-packages
+          cp artifacts/v4-rehearsal-evidence.json artifacts/v4-rehearsal-evidence.json.sig \
+            artifacts/official-public-key.raw v4-release-evidence/
+          cp artifacts/canary-approval.json artifacts/support-approval.json v4-release-evidence/
+          cp -a artifacts/transcripts v4-release-evidence/
+          cp -a artifacts/v4-packages/. v4-release-evidence/v4-packages/
+          tar -czf v4-release-evidence.tar.gz -C v4-release-evidence .
+
+      - name: Upload formal v4 evidence bundle
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: v4-release-evidence
+          path: v4-release-evidence.tar.gz
 
   forward-runtime-test:
     name: Forward Runtime Regression
@@ -1285,11 +1539,13 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [frontend-build, release-binaries, docker, plugin-package-publish, tag-gate]
+    needs: [frontend-build, release-binaries, docker, plugin-package-publish, v4-release-evidence, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     env:
       RELEASE_PACKAGE_IDS: ${{ needs.tag-gate.outputs.release_package_ids }}
       RELEASE_PACKAGE_SCOPE: ${{ needs.tag-gate.outputs.release_package_scope }}
+      RELEASE_PRODUCT_STAGE: ${{ needs.tag-gate.outputs.product_stage }}
+      ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY: ${{ secrets.ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY }}
     permissions:
       actions: read
       contents: write
@@ -1338,6 +1594,13 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: signed-plugin-releases
+          path: release/
+
+      - name: Download formal v4 evidence bundle
+        if: ${{ needs.tag-gate.outputs.product_stage == '4.0' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: v4-release-evidence
           path: release/
 
       - name: Create operator deployment runbook
@@ -1412,6 +1675,8 @@ jobs:
           fi
           cp docs/UPGRADE.md release/UPGRADE.md
           cp packages/machine-telemetry/verify_signature.py release/verify-machine-telemetry-signature.py
+          cp docs/guide/v4-plugin-only-upgrade.md release/v4-plugin-only-upgrade.md
+          cp docs/guide/v4-plugin-only-rollback.md release/v4-plugin-only-rollback.md
 
       - name: Create release archives
         run: |
@@ -1463,37 +1728,73 @@ jobs:
             exit 1
           }
           package_requirements=()
-          require_package_assets() {
-            local package_id="$1"
-            local version="$2"
+          if [[ "${RELEASE_PRODUCT_STAGE}" == "4.0" ]]; then
+            [[ -n "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || {
+              echo "ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY is required for v4.0.0 release verification" >&2
+              exit 1
+            }
+            trusted_root="$(mktemp)"
+            trap 'rm -f "${trusted_root}"' EXIT
+            printf '%s\n' "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" >"${trusted_root}"
+            chmod 0600 "${trusted_root}"
+            unset ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY
+            cmp --silent "${trusted_root}" release/official-public-key.raw || {
+              echo "release package root does not match the protected official root" >&2
+              exit 1
+            }
+            python3 config/scripts/verify_v4_evidence.py \
+              --archive release/v4-release-evidence.tar.gz \
+              --trusted-official-public-key "${trusted_root}" \
+              --release-packages-dir release
+            IFS=',' read -r -a declared_packages <<<"${RELEASE_PACKAGE_IDS}"
+            for package_id in "${declared_packages[@]}"; do
+              package_requirements+=(
+                --require "${package_id}-4.0.0.anxp"
+                --require "${package_id}-4.0.0.manifest.json"
+                --require "${package_id}-4.0.0.manifest.sig"
+                --require "${package_id}-4.0.0.public-key.pem"
+                --require "${package_id}-4.0.0.sbom.spdx.json"
+              )
+            done
             package_requirements+=(
-              --require "${package_id}-${version}.tar"
-              --require "anixops-${package_id}-${version}.manifest.json"
-              --require "anixops-${package_id}-${version}.sig"
-              --require "anixops-${package_id}-${version}.public-key.pem"
-              --require "anixops-${package_id}-${version}.public-key.raw"
-              --require "anixops-${package_id}-${version}.SHA256SUMS.txt"
+              --require official-public-key.raw
+              --require v4-release-evidence.tar.gz
             )
-          }
-          IFS=',' read -r -a declared_packages <<<"${RELEASE_PACKAGE_IDS}"
-          for package_id in "${declared_packages[@]}"; do
-            case "${package_id}" in
-              machine-telemetry) require_package_assets machine-telemetry 1.1.0 ;;
-              nftables-forward) require_package_assets nftables-forward 1.2.0 ;;
-              gost-mesh) require_package_assets gost-mesh 1.0.0 ;;
-              nat-egress) require_package_assets nat-egress 1.0.0 ;;
-              *)
-                echo "release workflow has no artifact verifier for declared package: ${package_id}" >&2
-                exit 1
-                ;;
-            esac
-          done
+          else
+            require_package_assets() {
+              local package_id="$1"
+              local version="$2"
+              package_requirements+=(
+                --require "${package_id}-${version}.tar"
+                --require "anixops-${package_id}-${version}.manifest.json"
+                --require "anixops-${package_id}-${version}.sig"
+                --require "anixops-${package_id}-${version}.public-key.pem"
+                --require "anixops-${package_id}-${version}.public-key.raw"
+                --require "anixops-${package_id}-${version}.SHA256SUMS.txt"
+              )
+            }
+            IFS=',' read -r -a declared_packages <<<"${RELEASE_PACKAGE_IDS}"
+            for package_id in "${declared_packages[@]}"; do
+              case "${package_id}" in
+                machine-telemetry) require_package_assets machine-telemetry 1.1.0 ;;
+                nftables-forward) require_package_assets nftables-forward 1.2.0 ;;
+                gost-mesh) require_package_assets gost-mesh 1.0.0 ;;
+                nat-egress) require_package_assets nat-egress 1.0.0 ;;
+                *)
+                  echo "release workflow has no artifact verifier for declared package: ${package_id}" >&2
+                  exit 1
+                  ;;
+              esac
+            done
+          fi
           python3 config/scripts/verify_release_artifacts.py \
             --release-dir release \
             --manifest release/RELEASE_MANIFEST.json \
             --checksums release/SHA256SUMS.txt \
             --require OPERATOR_DEPLOYMENT.md \
             --require UPGRADE.md \
+            --require v4-plugin-only-upgrade.md \
+            --require v4-plugin-only-rollback.md \
             --require verify-machine-telemetry-signature.py \
             --require RELEASE_NOTES.md \
             --require RELEASE_MANIFEST.json \

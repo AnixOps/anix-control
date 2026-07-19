@@ -1,5 +1,321 @@
 {
   "api_version": "v2",
   "package_id": "identity-platform",
-  "routes": []
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/invite/config",
+      "package_route": "identity.admin.invite.config.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/invite/config",
+      "package_route": "identity.admin.invite.config.put",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/invite/stats",
+      "package_route": "identity.admin.invite.stats.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/invite/withdrawals",
+      "package_route": "identity.admin.invite.withdrawals.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/invite/withdrawals/:id/process",
+      "package_route": "identity.admin.invite.withdrawals.id.process.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/mfa/config",
+      "package_route": "identity.admin.mfa.config.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/mfa/config",
+      "package_route": "identity.admin.mfa.config.put",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/audit-logs",
+      "package_route": "identity.admin.system.audit_logs.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/system/backup",
+      "package_route": "identity.admin.system.backup.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/backup/config",
+      "package_route": "identity.admin.system.backup.config.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/system/backup/config",
+      "package_route": "identity.admin.system.backup.config.put",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/backup/stats",
+      "package_route": "identity.admin.system.backup.stats.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/backups",
+      "package_route": "identity.admin.system.backups.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/system/backups/:id",
+      "package_route": "identity.admin.system.backups.id.delete",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/system/backups/:id/restore",
+      "package_route": "identity.admin.system.backups.id.restore.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/configs",
+      "package_route": "identity.admin.system.configs.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/system/configs/:key",
+      "package_route": "identity.admin.system.configs.key.delete",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/configs/:key",
+      "package_route": "identity.admin.system.configs.key.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/system/configs/:key",
+      "package_route": "identity.admin.system.configs.key.put",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/users",
+      "package_route": "identity.admin.users.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/users",
+      "package_route": "identity.admin.users.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/users/:id",
+      "package_route": "identity.admin.users.id.delete",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/users/:id",
+      "package_route": "identity.admin.users.id.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/users/:id",
+      "package_route": "identity.admin.users.id.put",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/users/:id/ban",
+      "package_route": "identity.admin.users.id.ban.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/users/:id/reset-subscribe",
+      "package_route": "identity.admin.users.id.reset_subscribe.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/users/:id/reset-traffic",
+      "package_route": "identity.admin.users.id.reset_traffic.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/users/:id/unban",
+      "package_route": "identity.admin.users.id.unban.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/users/stats",
+      "package_route": "identity.admin.users.stats.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/login",
+      "package_route": "identity.auth.login",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/register",
+      "package_route": "identity.auth.register",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/dashboard",
+      "package_route": "identity.user.dashboard.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/invite",
+      "package_route": "identity.user.invite.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/invite/commissions",
+      "package_route": "identity.user.invite.commissions.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/invite/generate",
+      "package_route": "identity.user.invite.generate.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/invite/withdraw",
+      "package_route": "identity.user.invite.withdraw.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/invite/withdrawals",
+      "package_route": "identity.user.invite.withdrawals.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/mfa/backup-codes/regenerate",
+      "package_route": "identity.user.mfa.backup_codes.regenerate.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/mfa/disable",
+      "package_route": "identity.user.mfa.disable.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/mfa/status",
+      "package_route": "identity.user.mfa.status.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/mfa/totp/enable",
+      "package_route": "identity.user.mfa.totp.enable.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/mfa/totp/setup",
+      "package_route": "identity.user.mfa.totp.setup.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/mfa/verify",
+      "package_route": "identity.user.mfa.verify.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/profile",
+      "package_route": "identity.user.profile.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/reset",
+      "package_route": "identity.user.reset.post",
+      "envelope": "panel",
+      "transport": "http"
+    }
+  ]
 }

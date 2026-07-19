@@ -1,0 +1,62 @@
+{
+  "api_version": "v2",
+  "package_id": "ticket",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/ticket",
+      "package_route": "ticket.admin.ticket.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/ticket/:id/close",
+      "package_route": "ticket.admin.ticket.id.close.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/ticket/reply",
+      "package_route": "ticket.admin.ticket.reply.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/ticket",
+      "package_route": "ticket.user.ticket.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/ticket",
+      "package_route": "ticket.user.ticket.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/ticket/:id",
+      "package_route": "ticket.user.ticket.id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/ticket/:id/close",
+      "package_route": "ticket.user.ticket.id.close.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/ticket/:id/reply",
+      "package_route": "ticket.user.ticket.id.reply.post",
+      "envelope": "data",
+      "transport": "http"
+    }
+  ]
+}

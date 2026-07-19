@@ -1,0 +1,146 @@
+{
+  "api_version": "v2",
+  "package_id": "protocol-runtime",
+  "routes": [
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/agent/execute",
+      "package_route": "protocol.admin.agent.execute.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/agent/list",
+      "package_route": "protocol.admin.agent.list.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/agent/monitor",
+      "package_route": "protocol.admin.agent.monitor.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/agent/tasks",
+      "package_route": "protocol.admin.agent.tasks.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/agent/tasks",
+      "package_route": "protocol.admin.agent.tasks.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/agent/tasks/:task_id",
+      "package_route": "protocol.admin.agent.tasks.task_id.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/nodes/:id/agent-control",
+      "package_route": "protocol.admin.nodes.id.agent_control.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/nodes/:id/agent-control/operations",
+      "package_route": "protocol.admin.nodes.id.agent_control.operations.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/nodes/:id/protocols",
+      "package_route": "protocol.admin.nodes.id.protocols.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/nodes/:id/protocols",
+      "package_route": "protocol.admin.nodes.id.protocols.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/nodes/:id/protocols/:protocol_id",
+      "package_route": "protocol.admin.nodes.id.protocols.protocol_id.delete",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/nodes/:id/protocols/:protocol_id",
+      "package_route": "protocol.admin.nodes.id.protocols.protocol_id.put",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/nodes/:id/sync",
+      "package_route": "protocol.admin.nodes.id.sync.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/protocol-templates",
+      "package_route": "protocol.admin.protocol_templates.get",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/agent/heartbeat",
+      "package_route": "protocol.agent.heartbeat.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/agent/monitor",
+      "package_route": "protocol.agent.monitor.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/agent/register",
+      "package_route": "protocol.agent.register.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/agent/result",
+      "package_route": "protocol.agent.result.post",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/agent/tasks",
+      "package_route": "protocol.agent.tasks.get",
+      "envelope": "raw",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/agent/ws",
+      "package_route": "protocol.agent.ws.get",
+      "envelope": "websocket",
+      "transport": "websocket"
+    }
+  ]
+}

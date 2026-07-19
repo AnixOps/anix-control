@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"gorm.io/gorm"
 )
@@ -59,6 +60,23 @@ func TestAgentWebSocketUpgraderOriginPolicy(t *testing.T) {
 	req = httptest.NewRequest("GET", "http://panel.example.com/api/v2/agent/ws", nil)
 	req.Header.Set("Origin", "https://agent-admin.example.com")
 	assert.True(t, handler.wsUpgrader.CheckOrigin(req))
+}
+
+func TestAgentWebSocketTrustedBridgeAuthUsesKernelVerifiedNode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	context.Request = httptest.NewRequest(http.MethodGet, "/api/v2/agent/ws", nil)
+	context.Set("anixops.agent_ws.trusted", true)
+	context.Set("anixops.agent_ws.forward_node", true)
+	context.Set("node_id", uint(17))
+
+	auth, hasRequestAuth, err := (&AgentHandler{}).authFromRequest(context)
+
+	require.NoError(t, err)
+	require.True(t, hasRequestAuth)
+	require.Equal(t, uint(17), auth.NodeID)
+	require.True(t, auth.FromHeaders)
+	require.True(t, auth.IsForwardNode)
 }
 
 func (s *AgentHandlerTestSuite) SetupSuite() {

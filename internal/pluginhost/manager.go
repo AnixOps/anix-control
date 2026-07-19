@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 )
 
 var (
@@ -23,16 +25,33 @@ var (
 )
 
 type DispatchInput struct {
-	PackageID      string
-	Version        string
-	Generation     uint64
-	RequestID      string
-	IdempotencyKey string
-	RouteID        string
-	Method         string
-	Body           []byte
-	PrincipalJSON  []byte
-	Deadline       time.Time
+	PackageID        string
+	Version          string
+	Generation       uint64
+	RequestID        string
+	IdempotencyKey   string
+	RouteID          string
+	Method           string
+	Body             []byte
+	PrincipalJSON    []byte
+	Metadata         RequestMetadata
+	BridgeCapability []byte
+	Deadline         time.Time
+}
+
+// RequestMetadata preserves the request address independently from the
+// package route identifier. Query values remain multi-valued because v2
+// clients may repeat a key.
+type RequestMetadata struct {
+	Path                             string              `json:"path,omitempty"`
+	Query                            map[string][]string `json:"query,omitempty"`
+	Headers                          map[string][]string `json:"headers,omitempty"`
+	PathParams                       map[string]string   `json:"path_params,omitempty"`
+	ClientIP                         string              `json:"client_ip,omitempty"`
+	UserAgent                        string              `json:"user_agent,omitempty"`
+	NodeID                           uint                `json:"node_id,omitempty"`
+	TrustedAgentWebSocketAuth        bool                `json:"trusted_agent_websocket_auth,omitempty"`
+	TrustedAgentWebSocketForwardNode bool                `json:"trusted_agent_websocket_forward_node,omitempty"`
 }
 
 type DispatchOutput struct {
@@ -63,6 +82,12 @@ type MigrationManager interface {
 	Migrate(context.Context, MigrationInput, MigrationCheckpointRecorder) (MigrationOutput, error)
 }
 
+// WebSocketManager is separate from unary route dispatch so callers must
+// consciously opt into the bidirectional package-host transport.
+type WebSocketManager interface {
+	OpenWebSocket(context.Context, WebSocketInput) (*WebSocketRelay, error)
+}
+
 var _ Manager = (*Supervisor)(nil)
 
 // SetDefaultManager installs the process-wide supervisor used by HTTP route
@@ -85,6 +110,15 @@ type HostHealth struct {
 	DetailsJSON string
 }
 
+type hostRPCClient interface {
+	Dispatch(context.Context, DispatchInput) (DispatchOutput, error)
+	Migrate(context.Context, MigrationInput) (MigrationOutput, error)
+	Health(context.Context, uint64) (HostHealth, error)
+	Drain(context.Context, uint64, time.Time) (DrainResult, error)
+	OpenWebSocket(context.Context, WebSocketInput) (webSocketTransport, error)
+	Close() error
+}
+
 type DrainResult struct {
 	Drained  bool
 	InFlight uint64
@@ -93,6 +127,7 @@ type DrainResult struct {
 type ManagerConfig struct {
 	RuntimeDir     string
 	StartupTimeout time.Duration
+	BridgeFactory  packagebridge.SessionFactory
 }
 
 type Supervisor struct {
@@ -103,21 +138,27 @@ type Supervisor struct {
 	// always relative to runtimeRoot's pinned descriptor.
 	runtimeDir     string
 	startupTimeout time.Duration
+	bridgeFactory  packagebridge.SessionFactory
 	closed         bool
 }
 
 type hostProcess struct {
-	packageID  string
-	version    string
-	generation uint64
-	ref        ArtifactRef
-	runtimeDir *hostRuntimeDir
-	socketPath string
-	command    *exec.Cmd
-	waitDone   chan struct{}
-	waitErr    error
-	client     *hostClient
-	leaseID    string
+	packageID         string
+	version           string
+	generation        uint64
+	ref               ArtifactRef
+	runtimeDir        *hostRuntimeDir
+	socketPath        string
+	command           *exec.Cmd
+	waitDone          chan struct{}
+	waitErr           error
+	client            hostRPCClient
+	leaseID           string
+	relayMu           sync.Mutex
+	relays            map[*WebSocketRelay]struct{}
+	draining          bool
+	relayHealthCancel context.CancelFunc
+	bridge            *packagebridge.Session
 }
 
 func NewManager(config ManagerConfig) (*Supervisor, error) {
@@ -129,7 +170,8 @@ func NewManager(config ManagerConfig) (*Supervisor, error) {
 		config.StartupTimeout = 5 * time.Second
 	}
 	return &Supervisor{
-		hosts: make(map[string]*hostProcess), runtimeRoot: runtimeRoot, runtimeDir: runtimeRoot.configuredPath, startupTimeout: config.StartupTimeout,
+		hosts: make(map[string]*hostProcess), runtimeRoot: runtimeRoot, runtimeDir: runtimeRoot.configuredPath,
+		startupTimeout: config.StartupTimeout, bridgeFactory: config.BridgeFactory,
 	}, nil
 }
 
@@ -174,7 +216,7 @@ func (m *Supervisor) Start(ctx context.Context, ref ArtifactRef, generation uint
 			delete(m.hosts, key)
 		}
 	}
-	host, err := startHostProcess(ctx, m.runtimeRoot, ref, generation, m.startupTimeout)
+	host, err := startHostProcess(ctx, m.runtimeRoot, ref, generation, m.startupTimeout, m.bridgeFactory)
 	if err != nil {
 		return err
 	}
@@ -202,7 +244,33 @@ func (m *Supervisor) Dispatch(ctx context.Context, input DispatchInput) (Dispatc
 	if err != nil {
 		return DispatchOutput{}, err
 	}
+	capability, err := host.mintDispatchCapability(input)
+	if err != nil {
+		return DispatchOutput{}, err
+	}
+	if len(capability) > 0 {
+		input.BridgeCapability = capability
+		defer host.bridge.Revoke(capability)
+	}
 	return host.client.Dispatch(ctx, input)
+}
+
+func (h *hostProcess) mintDispatchCapability(input DispatchInput) ([]byte, error) {
+	if h == nil || h.bridge == nil {
+		return nil, nil
+	}
+	metadata, err := marshalRequestMetadata(input.Metadata)
+	if err != nil {
+		return nil, err
+	}
+	capability, err := h.bridge.Mint(packagebridge.Request{
+		RequestID: input.RequestID, RouteID: input.RouteID, Method: input.Method,
+		Body: input.Body, PrincipalJSON: input.PrincipalJSON, MetadataJSON: metadata, Deadline: input.Deadline,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: mint package bridge capability: %v", ErrHostUnavailable, err)
+	}
+	return capability, nil
 }
 
 func (m *Supervisor) Health(ctx context.Context, packageID, version string, generation uint64) (HostHealth, error) {
@@ -230,6 +298,7 @@ func (m *Supervisor) Drain(ctx context.Context, packageID, version string, gener
 	if err != nil {
 		return err
 	}
+	host.beginWebSocketDrain()
 	result, err := host.client.Drain(ctx, generation, deadline)
 	if err != nil {
 		return err
@@ -309,6 +378,9 @@ func (m *Supervisor) hostForGeneration(packageID, version string, generation uin
 		return nil, ErrGenerationUnavailable
 	}
 	if host.client == nil {
+		return nil, ErrHostUnavailable
+	}
+	if host.isWebSocketDraining() {
 		return nil, ErrHostUnavailable
 	}
 	return host, nil
