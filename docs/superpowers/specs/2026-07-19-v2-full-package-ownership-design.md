@@ -43,6 +43,15 @@ The remaining endpoint families have one owner:
 | `forward` | forwarding, tunnels, forwarding agents, forwarding traffic ingestion, and forwarding diagnostics |
 | `nftables-forward`, `gost-mesh`, `nat-egress` | their declared topology/runtime routes; no undeclared v2 business handler may remain in Control |
 
+The catalog assigns administrative load-balancer routes to `proxy-node` and
+speed-limit routes to `plan`. Node CRUD, credentials, registration, UniProxy,
+and node auth-key routes belong to `proxy-node`; node protocol configuration
+and protocol templates belong to `protocol-runtime`; WireGuard-specific routes
+belong to `wireguard`. Generic forwarding/tunnel/agent routes belong to
+`forward`, while NodeX, GOST connection, and mesh-specific forwarding routes
+belong to `gost-mesh`. `nftables-forward` and `nat-egress` are valid catalog
+owners even when the current v2 source has no direct registration for them.
+
 The ownership catalog is exhaustive at the method/path level. A route with a
 path parameter has one normalized Gin path and one package route id. Ambiguous
 or duplicate ownership is a build failure. The catalog records the legacy
