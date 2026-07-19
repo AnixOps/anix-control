@@ -112,7 +112,6 @@ git commit -m "feat(packages): add identity platform package"
 - Create: `config/scripts/check_v2_package_route_catalog_test.py`
 - Create: `config/scripts/testdata/v2-route-catalog-duplicate.json`
 - Create: `config/scripts/testdata/v2-route-catalog-unowned.json`
-- Modify: `internal/router/router_test.go`
 
 **Interfaces:**
 - Produces: one record per supported v2 route:
