@@ -191,4 +191,3 @@ release-hygiene prerequisite.
 - Database changes are additive until validated rollback evidence exists.
 - A zero-downtime upgrade never requires an operator to hand-edit database rows,
   package files, or route state.
-
