@@ -442,6 +442,29 @@ def run_self_test(declaration_path: Path) -> None:
     if future_31.intersection(required_31):
         raise AssertionError("3.1 must not require later-stage forwarding packages")
 
+    stage_40 = stages_by_id(contract)["4.0"]
+    required_40 = [package["id"] for package in stage_40["required_packages"]]
+    expected_40 = [
+        "identity-platform",
+        "subscription",
+        "proxy-node",
+        "plan",
+        "order",
+        "payment",
+        "forward",
+        "ticket",
+        "notification",
+        "knowledge",
+        "machine-telemetry",
+        "nftables-forward",
+        "gost-mesh",
+        "nat-egress",
+        "wireguard",
+        "protocol-runtime",
+    ]
+    if required_40 != expected_40:
+        raise AssertionError("4.0 must require the complete v4 package catalog including identity-platform")
+
     with tempfile.TemporaryDirectory(prefix="anix-release-stage-") as temporary_root:
         root = Path(temporary_root)
         fixture_declaration = write_fixture(root, contract)

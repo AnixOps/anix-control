@@ -41,6 +41,7 @@ class PackageSpec:
 
 
 PACKAGE_SPECS = (
+    PackageSpec("identity-platform", ("control",)),
     PackageSpec("subscription", ("control",)),
     PackageSpec("proxy-node", ("control", "agent")),
     PackageSpec("plan", ("control",)),

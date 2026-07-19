@@ -350,6 +350,15 @@
       "summary": "Plugin-only platform with the coupled business/runtime mode removed.",
       "required_packages": [
         {
+          "id": "identity-platform",
+          "manifest": "packages/identity-platform/manifest.template.json",
+          "minimum_version": "1.0.0",
+          "required_targets": [
+            "control"
+          ],
+          "requires_webui": true
+        },
+        {
           "id": "subscription",
           "manifest": "packages/subscription/manifest.template.json",
           "minimum_version": "1.0.0",

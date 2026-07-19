@@ -158,8 +158,7 @@ func main() {
             command = [
                 sys.executable,
                 str(BUILDER),
-                "--package",
-                "subscription",
+                "--all",
                 "--version",
                 "4.0.0",
                 "--out",
@@ -194,13 +193,15 @@ func main() {
 
             built = run_command(command + ["--signing-key", str(signing_key), "--official-public-key", str(official_root)])
             self.assertEqual(0, built.returncode, built.stderr.decode("utf-8", errors="replace"))
+            self.assertEqual(16, len(list(output.glob("*.anxp"))))
+            self.assertEqual(16, len(list(output.glob("*.sbom.spdx.json"))))
+            self.assertTrue((output / "identity-platform-4.0.0.anxp").is_file())
 
             verified = run_command(
                 [
                     sys.executable,
                     str(BUILDER),
-                    "--package",
-                    "subscription",
+                    "--all",
                     "--version",
                     "4.0.0",
                     "--out",
@@ -216,8 +217,7 @@ func main() {
                 [
                     sys.executable,
                     str(BUILDER),
-                    "--package",
-                    "subscription",
+                    "--all",
                     "--version",
                     "4.0.0",
                     "--out",
@@ -229,6 +229,58 @@ func main() {
             )
             self.assertNotEqual(0, rejected.returncode)
             self.assertIn(b"verify manifest signature", rejected.stderr)
+
+    def test_v4_package_matrix_preserves_existing_targets_and_adds_identity_platform(self) -> None:
+        self.assertEqual(
+            [
+                ("identity-platform", ("control",)),
+                ("subscription", ("control",)),
+                ("proxy-node", ("control", "agent")),
+                ("plan", ("control",)),
+                ("order", ("control",)),
+                ("payment", ("control",)),
+                ("forward", ("control", "agent")),
+                ("ticket", ("control",)),
+                ("notification", ("control",)),
+                ("knowledge", ("control",)),
+                ("machine-telemetry", ("control", "agent")),
+                ("nftables-forward", ("control", "agent")),
+                ("gost-mesh", ("control", "agent")),
+                ("nat-egress", ("control", "agent")),
+                ("wireguard", ("control", "agent")),
+                ("protocol-runtime", ("control", "agent")),
+            ],
+            [(spec.package_id, spec.targets) for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS],
+        )
+
+    def test_identity_platform_source_contract_is_a_control_v2_package(self) -> None:
+        package_root = REPO_ROOT / "packages" / "identity-platform"
+        manifest_path = package_root / "manifest.template.json"
+        migrations_path = package_root / "migrations" / "index.json"
+        routes_path = package_root / "compat" / "v2-routes.json"
+        webui_path = package_root / "webui" / "index.mjs"
+        self.assertTrue(manifest_path.is_file())
+        self.assertTrue(migrations_path.is_file())
+        self.assertTrue(routes_path.is_file())
+        self.assertTrue(webui_path.is_file())
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        migrations = json.loads(migrations_path.read_text(encoding="utf-8"))
+        routes = json.loads(routes_path.read_text(encoding="utf-8"))
+
+        self.assertEqual("identity-platform", manifest["id"])
+        self.assertEqual("v2", manifest["api_version"])
+        self.assertEqual(["control"], manifest["targets"])
+        self.assertEqual("bin/control-host", manifest["control_entrypoint"]["path"])
+        self.assertEqual("migrations/index.json", manifest["migrations"]["index"])
+        self.assertEqual("compat/v2-routes.json", manifest["compatibility_routes"]["path"])
+        self.assertEqual("webui/index.mjs", manifest["webui"]["bundle"]["path"])
+        self.assertTrue(migrations)
+        self.assertEqual("identity-platform", migrations["package_id"])
+        self.assertTrue(routes)
+        self.assertEqual("identity-platform", routes["package_id"])
+        self.assertEqual([], routes["routes"])
+        self.assertTrue(webui_path.read_bytes())
 
     def test_all_v4_packages_materialize_signed_v2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -244,8 +296,9 @@ func main() {
 
             artifacts = sorted(output.glob("*.anxp"))
             sboms = sorted(output.glob("*.sbom.spdx.json"))
-            self.assertEqual(15, len(artifacts))
-            self.assertEqual(15, len(sboms))
+            self.assertEqual(16, len(artifacts))
+            self.assertEqual(16, len(sboms))
+            self.assertIn(output / "identity-platform-4.0.0.anxp", artifacts)
 
             for artifact_path in artifacts:
                 stem = artifact_path.name.removesuffix(".anxp")
@@ -301,7 +354,9 @@ func main() {
     def test_v4_release_stage_rejects_legacy_manifest_without_host_metadata(self) -> None:
         contract = RELEASE_STAGE_MODULE.read_contract(REPO_ROOT / "config" / "scripts" / "release-stage-contract.json")
         stage = next(item for item in contract["stages"] if item["id"] == "4.0")
-        contract["stages"] = [{**stage, "required_packages": [stage["required_packages"][0]]}]
+        requirement = stage["required_packages"][0]
+        package_id = requirement["id"]
+        contract["stages"] = [{**stage, "required_packages": [requirement]}]
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -319,19 +374,19 @@ func main() {
                     f"  topology_execution_enabled: {str(values[2]).lower()}\n",
                     encoding="utf-8",
                 )
-            package_root = root / "packages" / "subscription"
+            package_root = root / "packages" / package_id
             (package_root / "webui").mkdir(parents=True)
             (package_root / "webui" / "index.mjs").write_text("export default {};\n", encoding="utf-8")
             (package_root / "manifest.template.json").write_text(
                 json.dumps(
                     {
-                        "id": "subscription",
+                        "id": package_id,
                         "version": "4.0.0",
                         "targets": ["control"],
                         "webui": {
                             "bundle": {"path": "webui/index.mjs", "sha256": "fixture"},
-                            "menus": [{"id": "subscription.main"}],
-                            "routes": [{"id": "subscription.main"}],
+                            "menus": [{"id": f"{package_id}.main"}],
+                            "routes": [{"id": f"{package_id}.main"}],
                         },
                     }
                 ),

@@ -1,0 +1,32 @@
+{
+  "id": "identity-platform",
+  "name": "Identity Platform",
+  "version": "4.0.0",
+  "api_version": "v2",
+  "publisher": "AnixOps",
+  "targets": ["control"],
+  "architectures": [],
+  "artifact_sha256": "GENERATED_AT_BUILD",
+  "capabilities": [],
+  "dependencies": [],
+  "conflicts": [],
+  "permissions": ["identity-platform.view", "identity-platform.api"],
+  "config_schema": {},
+  "secret_fields": [],
+  "entrypoints": {},
+  "migration_version": 0,
+  "control_routes": [],
+  "frontend_sha256": "GENERATED_AT_BUILD",
+  "webui": {
+    "bundle": {"path": "webui/index.mjs", "sha256": "GENERATED_AT_BUILD"},
+    "permissions": ["identity-platform.view"],
+    "menus": [{"id": "identity-platform.main", "parent": "system", "label": "Identity Platform", "icon": "shield", "route": "/admin/extensions/identity-platform", "permission": "identity-platform.view", "order": 90}],
+    "routes": [{"id": "identity-platform.main", "path": "/admin/extensions/identity-platform", "export": "mount", "permission": "identity-platform.view"}]
+  },
+  "control_entrypoint": {"path": "bin/control-host", "sha256": "GENERATED_AT_BUILD"},
+  "agent_entrypoint": null,
+  "migrations": {"index": "migrations/index.json", "sha256": "GENERATED_AT_BUILD"},
+  "compatibility_routes": {"path": "compat/v2-routes.json", "sha256": "GENERATED_AT_BUILD"},
+  "route_contract_digest": "GENERATED_AT_BUILD",
+  "runtime_api_version": ""
+}
