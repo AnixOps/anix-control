@@ -177,7 +177,7 @@ Expected: `v2 package route catalog passed` and one record for every supported v
 - [ ] **Step 5: Commit the catalog**
 
 ```bash
-git add config/v2-package-route-catalog.json config/scripts/v2_route_inventory.go config/scripts/check_v2_package_route_catalog.py config/scripts/check_v2_package_route_catalog_test.py config/scripts/testdata internal/router/router_test.go
+git add config/v2-package-route-catalog.json config/scripts/v2_route_inventory.go config/scripts/check_v2_package_route_catalog.py config/scripts/check_v2_package_route_catalog_test.py config/scripts/testdata
 git commit -m "feat(api): define v2 package route ownership"
 ```
 
