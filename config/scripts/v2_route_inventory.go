@@ -199,6 +199,11 @@ func inventory(routerPath string) ([]route, error) {
 
 	collector := collector{fset: fset, configPackageAliases: configPackageAliases(file)}
 	for _, declaration := range file.Decls {
+		if err := collector.validateTopLevelDeclaration(declaration); err != nil {
+			return nil, err
+		}
+	}
+	for _, declaration := range file.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
 		if !ok || function.Body == nil {
 			continue
@@ -227,6 +232,21 @@ func inventory(routerPath string) ([]route, error) {
 		return left.Handler < right.Handler
 	})
 	return collector.routes, nil
+}
+
+func (c *collector) validateTopLevelDeclaration(declaration ast.Decl) error {
+	general, ok := declaration.(*ast.GenDecl)
+	if !ok || general.Tok != token.VAR {
+		return nil
+	}
+	for _, specification := range general.Specs {
+		value, ok := specification.(*ast.ValueSpec)
+		if !ok || len(value.Values) == 0 {
+			continue
+		}
+		return c.errorAt(value.Pos(), "top-level variable initializers are unsupported while analyzing Gin routes")
+	}
+	return nil
 }
 
 func (c *collector) rejectUnresolvedGinSelectors(node ast.Node, env *scope) error {

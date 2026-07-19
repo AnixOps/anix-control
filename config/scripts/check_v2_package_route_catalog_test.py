@@ -399,6 +399,19 @@ func RegisterGlobalRoute() {
         self.assertNotEqual(0, result.returncode)
         self.assertIn("unresolved Gin selector receiver for GET", result.stderr)
 
+    def test_inventory_rejects_top_level_route_initializers(self) -> None:
+        source = SAMPLE_ROUTER.read_text(encoding="utf-8") + """
+var globalEngine = gin.New()
+var _ = globalEngine.GET("/api/v2/uninventoried", hiddenHandler.Get)
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            router = Path(temporary) / "router.go"
+            router.write_text(source, encoding="utf-8")
+            result = self.run_inventory(router)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("top-level variable initializers are unsupported while analyzing Gin routes", result.stderr)
+
     def test_inventory_rejects_const_and_range_subscribe_normalizer_shadows(self) -> None:
         source = SAMPLE_ROUTER.read_text(encoding="utf-8").replace(
             'import "github.com/gin-gonic/gin"',
