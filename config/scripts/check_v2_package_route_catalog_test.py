@@ -191,7 +191,7 @@ func ClosureRoute(r *gin.Engine) {
 	}()
 }
 """,
-                "unsupported Gin group escape in expression",
+                "function literals are unsupported outside direct Gin route arguments",
             ),
             "helper": (
                 """
@@ -282,6 +282,14 @@ func OverlappingGroupPattern(r *gin.Engine) {
                 """
 func OverlappingInlineParameterPattern(r *gin.Engine) {
 	r.GET("/a:prefix/:namespace/:token", hiddenHandler.Get)
+}
+""",
+                "Gin route pattern may overlap /api/v2",
+            ),
+            "overlapping_root_catchall": (
+                """
+func OverlappingRootCatchall(r *gin.Engine) {
+	r.GET("/*rest", hiddenHandler.Get)
 }
 """,
                 "Gin route pattern may overlap /api/v2",
@@ -463,6 +471,28 @@ func PointerSubscribeMutation(r *gin.Engine) {
 	mutate(&subscribePath)
 	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
 }
+""",
+            "pre_safe_pointer_alias": """
+
+func PreSafePointerAlias(r *gin.Engine) {
+	subscribePath := ""
+	pointer := &subscribePath
+	subscribePath = config.PrepareSubscribePath(cfg)
+	mutate(pointer)
+	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
+}
+	""",
+            "pre_safe_closure_alias": """
+
+func PreSafeClosureAlias(r *gin.Engine) {
+	subscribePath := ""
+	mutate := func() {
+		subscribePath = "api/v2"
+	}
+	subscribePath = config.PrepareSubscribePath(cfg)
+	mutate()
+	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
+}
 """
         }
         with tempfile.TemporaryDirectory() as temporary:
@@ -473,7 +503,12 @@ func PointerSubscribeMutation(r *gin.Engine) {
                 result = self.run_inventory(router)
 
                 self.assertNotEqual(0, result.returncode, name)
-                self.assertIn("normalized subscription path escapes its direct registration", result.stderr)
+                if name in {"pointer", "pre_safe_pointer_alias"}:
+                    self.assertIn("address-taking is unsupported while analyzing Gin routes", result.stderr)
+                elif name == "pre_safe_closure_alias":
+                    self.assertIn("function literals are unsupported outside direct Gin route arguments", result.stderr)
+                else:
+                    self.assertIn("normalized subscription path escapes its direct registration", result.stderr)
 
     def test_inventory_rejects_named_result_subscribe_normalizer_shadow(self) -> None:
         source = SAMPLE_ROUTER.read_text(encoding="utf-8").replace(

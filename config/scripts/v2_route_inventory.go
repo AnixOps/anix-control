@@ -335,6 +335,12 @@ func (c *collector) processBlock(block *ast.BlockStmt, parent *scope) error {
 }
 
 func (c *collector) processStatement(statement ast.Stmt, env *scope) error {
+	if containsAddressTaking(statement) {
+		return c.errorAt(statement.Pos(), "address-taking is unsupported while analyzing Gin routes")
+	}
+	if _, isBlock := statement.(*ast.BlockStmt); !isBlock && containsFunctionLiteral(statement) && !c.isDirectGinFunctionLiteralCall(statement, env) {
+		return c.errorAt(statement.Pos(), "function literals are unsupported outside direct Gin route arguments")
+	}
 	if c.containsSafeSubscribePath(statement, env) && !c.isDirectSafeSubscribeRegistration(statement, env) {
 		return c.errorAt(statement.Pos(), "normalized subscription path escapes its direct registration")
 	}
@@ -351,6 +357,62 @@ func (c *collector) processStatement(statement ast.Stmt, env *scope) error {
 		return c.rejectTrackedGinGroupInControlFlow(node, env)
 	}
 	return c.rejectTrackedGinGroupInStatement(statement, env)
+}
+
+func containsAddressTaking(node ast.Node) bool {
+	found := false
+	ast.Inspect(node, func(current ast.Node) bool {
+		if found {
+			return false
+		}
+		unary, ok := current.(*ast.UnaryExpr)
+		if ok && unary.Op == token.AND {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+func containsFunctionLiteral(node ast.Node) bool {
+	found := false
+	ast.Inspect(node, func(current ast.Node) bool {
+		if found {
+			return false
+		}
+		if _, ok := current.(*ast.FuncLit); ok {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+func (c *collector) isDirectGinFunctionLiteralCall(statement ast.Stmt, env *scope) bool {
+	expressionStatement, ok := statement.(*ast.ExprStmt)
+	if !ok {
+		return false
+	}
+	call, ok := unwrapParens(expressionStatement.X).(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	target, err := c.resolveGroupWithMiddlewareMutation(selector.X, env, false)
+	if err != nil || target == nil {
+		return false
+	}
+	for _, argument := range call.Args {
+		if containsFunctionLiteral(argument) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *collector) processDeclaration(declaration ast.Decl, env *scope) error {
@@ -1016,7 +1078,10 @@ func mayMatchV2Namespace(routePath string) bool {
 			return false
 		}
 		segment := segments[index]
-		if strings.ContainsAny(segment, "*:") {
+		if strings.Contains(segment, "*") {
+			return true
+		}
+		if strings.Contains(segment, ":") {
 			continue
 		}
 		if segment != expected {
