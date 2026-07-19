@@ -1,6 +1,8 @@
 package config_test
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
@@ -10,10 +12,28 @@ import (
 )
 
 func TestRouterSetupRejectsUnsafeSubscribePath(t *testing.T) {
-	cfg := &config.Config{App: config.AppConfig{SubscribePath: " /api/v2/hidden/ "}}
-	routerEngine := gin.New()
+	for _, subscribePath := range []string{" /api/v2/hidden/ ", "api/:segment", "api/*rest"} {
+		t.Run(subscribePath, func(t *testing.T) {
+			cfg := &config.Config{App: config.AppConfig{SubscribePath: subscribePath}}
+			routerEngine := gin.New()
 
-	require.PanicsWithValue(t, "invalid app.subscribe_path: subscription path must not overlap /api/v2", func() {
-		router.Setup(routerEngine, cfg)
+			require.Panics(t, func() {
+				router.Setup(routerEngine, cfg)
+			})
+			require.Empty(t, routerEngine.Routes())
+		})
+	}
+}
+
+func TestGinParameterSubscriptionPathWouldOverlapReservedV2Namespace(t *testing.T) {
+	routerEngine := gin.New()
+	routerEngine.GET("/api/:segment/:token", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
 	})
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/token", nil)
+	response := httptest.NewRecorder()
+	routerEngine.ServeHTTP(response, request)
+
+	require.Equal(t, http.StatusNoContent, response.Code)
 }

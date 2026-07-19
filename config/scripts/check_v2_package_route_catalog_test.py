@@ -182,6 +182,57 @@ func RootDynamicRoute(r *gin.Engine) {
 """,
                 "root Gin Engine path must be statically resolvable",
             ),
+            "closure": (
+                """
+func ClosureRoute(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	func() {
+		v2.GET("/hidden", hiddenHandler.Get)
+	}()
+}
+""",
+                "unsupported Gin group escape in expression",
+            ),
+            "helper": (
+                """
+func HelperRoute(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	registerV2(v2)
+}
+""",
+                "unsupported Gin group escape in expression",
+            ),
+            "method_alias": (
+                """
+func MethodAliasRoute(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	get := v2.GET
+	get("/hidden", hiddenHandler.Get)
+}
+""",
+                "unsupported Gin group escape in value expression",
+            ),
+            "ancestor_dynamic": (
+                """
+func AncestorDynamicRoute(r *gin.Engine) {
+	api := r.Group("/api")
+	api.GET(cfg.Path, hiddenHandler.Get)
+}
+""",
+                "Gin GET path must be statically resolvable",
+            ),
+            "group_reassignment": (
+                """
+func GroupReassignmentRoute(r *gin.Engine) {
+	v2 := r.Group("/api/v2")
+	if false {
+		v2 = r.Group("/other")
+	}
+	v2.GET("/hidden", hiddenHandler.Get)
+}
+""",
+                "Gin group reassignment is unsupported",
+            ),
         }
         source = SAMPLE_ROUTER.read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory() as temporary:
@@ -192,6 +243,35 @@ func RootDynamicRoute(r *gin.Engine) {
                 result = self.run_inventory(router)
                 self.assertNotEqual(0, result.returncode, name)
                 self.assertIn(expected_error, result.stderr, name)
+
+    def test_inventory_rejects_shadowed_subscribe_normalizer(self) -> None:
+        source = SAMPLE_ROUTER.read_text(encoding="utf-8").replace(
+            'import "github.com/gin-gonic/gin"',
+            """import (
+\t\"github.com/AnixOps/anix-control/v4/internal/config\"
+\t\"github.com/gin-gonic/gin\"
+)""",
+        )
+        source += """
+type localConfig struct{}
+
+func (localConfig) NormalizeSubscribePath(string) (string, error) {
+	return "api/v2", nil
+}
+
+func ShadowedSubscribeNormalizer(r *gin.Engine) {
+	config := localConfig{}
+	subscribePath, _ := config.NormalizeSubscribePath(cfg.App.SubscribePath)
+	r.GET("/"+subscribePath+"/:token", hiddenHandler.Get)
+}
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            router = Path(temporary) / "router.go"
+            router.write_text(source, encoding="utf-8")
+            result = self.run_inventory(router)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("root Gin Engine path must be statically resolvable", result.stderr)
 
     def test_inventory_marks_exact_existing_v2_websocket_routes(self) -> None:
         result = self.run_inventory(ROUTER)

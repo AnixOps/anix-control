@@ -288,6 +288,9 @@ func NormalizeSubscribePath(value string) (string, error) {
 	if normalized == "" || normalized == "." {
 		return "s", nil
 	}
+	if strings.ContainsAny(normalized, ":*") {
+		return "", fmt.Errorf("subscription path must not contain Gin parameters or wildcards")
+	}
 	if normalized == "api/v2" || strings.HasPrefix(normalized, "api/v2/") {
 		return "", fmt.Errorf("subscription path must not overlap /api/v2")
 	}

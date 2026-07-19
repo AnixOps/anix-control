@@ -50,6 +50,7 @@ type scope struct {
 	groups             map[string]*group
 	stringValues       map[string]string
 	safeSubscribePaths map[string]bool
+	names              map[string]struct{}
 }
 
 func newScope(parent *scope) *scope {
@@ -58,7 +59,23 @@ func newScope(parent *scope) *scope {
 		groups:             make(map[string]*group),
 		stringValues:       make(map[string]string),
 		safeSubscribePaths: make(map[string]bool),
+		names:              make(map[string]struct{}),
 	}
+}
+
+func (s *scope) declareName(name string) {
+	if name != "_" {
+		s.names[name] = struct{}{}
+	}
+}
+
+func (s *scope) isNameBound(name string) bool {
+	for current := s; current != nil; current = current.parent {
+		if _, found := current.names[name]; found {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *scope) define(name string, value *group) {
@@ -140,8 +157,9 @@ func (s *scope) isSafeSubscribePath(name string) bool {
 }
 
 type collector struct {
-	fset   *token.FileSet
-	routes []route
+	fset                 *token.FileSet
+	routes               []route
+	configPackageAliases map[string]struct{}
 }
 
 func main() {
@@ -177,7 +195,7 @@ func inventory(routerPath string) ([]route, error) {
 		return nil, fmt.Errorf("parse %s: %w", routerPath, err)
 	}
 
-	collector := collector{fset: fset}
+	collector := collector{fset: fset, configPackageAliases: configPackageAliases(file)}
 	for _, declaration := range file.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
 		if !ok || function.Body == nil {
@@ -206,13 +224,42 @@ func inventory(routerPath string) ([]route, error) {
 	return collector.routes, nil
 }
 
+func configPackageAliases(file *ast.File) map[string]struct{} {
+	aliases := make(map[string]struct{})
+	for _, importSpec := range file.Imports {
+		importPath, err := strconv.Unquote(importSpec.Path.Value)
+		if err != nil || !strings.HasSuffix(importPath, "/internal/config") {
+			continue
+		}
+
+		alias := "config"
+		if importSpec.Name != nil {
+			alias = importSpec.Name.Name
+		}
+		if alias != "." && alias != "_" {
+			aliases[alias] = struct{}{}
+		}
+	}
+	return aliases
+}
+
 func seedEngineParameters(function *ast.FuncDecl, env *scope) bool {
 	if function.Type.Params == nil {
 		return false
 	}
 
 	found := false
+	if function.Recv != nil {
+		for _, field := range function.Recv.List {
+			for _, name := range field.Names {
+				env.declareName(name.Name)
+			}
+		}
+	}
 	for _, field := range function.Type.Params.List {
+		for _, name := range field.Names {
+			env.declareName(name.Name)
+		}
 		if !isGinEngine(field.Type) {
 			continue
 		}
@@ -314,6 +361,7 @@ func (c *collector) processDeclaration(declaration ast.Decl, env *scope) error {
 		}
 		for index, name := range value.Names {
 			if index >= len(value.Values) {
+				env.declareName(name.Name)
 				env.defineSafeSubscribePath(name.Name, false)
 				continue
 			}
@@ -321,7 +369,9 @@ func (c *collector) processDeclaration(declaration ast.Decl, env *scope) error {
 			if err := c.validateValueExpression(expression, env); err != nil {
 				return err
 			}
-			env.defineSafeSubscribePath(name.Name, isNormalizeSubscribePathCall(expression))
+			safeSubscribePath := c.isNormalizeSubscribePathCall(expression, env)
+			env.declareName(name.Name)
+			env.defineSafeSubscribePath(name.Name, safeSubscribePath)
 			if stringValue, known := resolveString(expression, env); known {
 				env.defineString(name.Name, stringValue)
 			}
@@ -342,18 +392,25 @@ func (c *collector) processAssignment(assignment *ast.AssignStmt, env *scope) er
 		if index >= len(assignment.Rhs) {
 			continue
 		}
+		name, ok := left.(*ast.Ident)
+		if ok && assignment.Tok != token.DEFINE {
+			if _, found := env.lookup(name.Name); found {
+				return c.errorAt(left.Pos(), "Gin group reassignment is unsupported")
+			}
+		}
 		expression := assignment.Rhs[index]
 		if err := c.validateValueExpression(expression, env); err != nil {
 			return err
 		}
-		name, ok := left.(*ast.Ident)
 		if !ok {
 			continue
 		}
+		safeSubscribePath := c.isNormalizeSubscribePathCall(expression, env)
+		env.declareName(name.Name)
 		if assignment.Tok == token.DEFINE {
-			env.defineSafeSubscribePath(name.Name, isNormalizeSubscribePathCall(expression))
+			env.defineSafeSubscribePath(name.Name, safeSubscribePath)
 		} else {
-			env.assignSafeSubscribePath(name.Name, isNormalizeSubscribePathCall(expression))
+			env.assignSafeSubscribePath(name.Name, safeSubscribePath)
 		}
 		if stringValue, known := resolveString(expression, env); known {
 			if assignment.Tok == token.DEFINE {
@@ -381,57 +438,56 @@ func (c *collector) processAssignment(assignment *ast.AssignStmt, env *scope) er
 }
 
 func (c *collector) validateValueExpression(expression ast.Expr, env *scope) error {
-	var validationError error
-	ast.Inspect(expression, func(node ast.Node) bool {
-		if validationError != nil {
-			return false
+	call, ok := unwrapParens(expression).(*ast.CallExpr)
+	if ok {
+		selector, selectorOK := call.Fun.(*ast.SelectorExpr)
+		if selectorOK {
+			target, err := c.resolveGroupWithMiddlewareMutation(selector.X, env, false)
+			if err != nil {
+				return err
+			}
+			if target != nil {
+				switch selector.Sel.Name {
+				case "Group", "Use":
+					return nil
+				case "GET", "POST", "PUT", "PATCH", "HEAD", "OPTIONS", "DELETE", "CONNECT", "TRACE", "Any", "Handle", "Match":
+					if isV2Group(target) {
+						return c.errorAt(call.Pos(), "unsupported Gin registration expression %s on /api/v2 group", selector.Sel.Name)
+					}
+				default:
+					if isV2Group(target) {
+						return c.errorAt(call.Pos(), "unsupported Gin selector %s on /api/v2 group", selector.Sel.Name)
+					}
+				}
+			}
 		}
-
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		target, err := c.resolveGroupWithMiddlewareMutation(selector.X, env, false)
-		if err != nil {
-			validationError = err
-			return false
-		}
-		if target == nil || !isV2Group(target) {
-			return true
-		}
-
-		switch selector.Sel.Name {
-		case "Group", "Use":
-			return true
-		case "GET", "POST", "PUT", "PATCH", "HEAD", "OPTIONS", "DELETE", "CONNECT", "TRACE", "Any", "Handle", "Match":
-			validationError = c.errorAt(call.Pos(), "unsupported Gin registration expression %s on /api/v2 group", selector.Sel.Name)
-		default:
-			validationError = c.errorAt(call.Pos(), "unsupported Gin selector %s on /api/v2 group", selector.Sel.Name)
-		}
-		return false
-	})
-	return validationError
+	}
+	if c.containsTrackedGinGroup(expression, env) {
+		return c.errorAt(expression.Pos(), "unsupported Gin group escape in value expression")
+	}
+	return nil
 }
 
 func (c *collector) processExpression(expression ast.Expr, env *scope) error {
-	call, ok := expression.(*ast.CallExpr)
+	call, ok := unwrapParens(expression).(*ast.CallExpr)
 	if !ok {
-		return nil
+		return c.rejectTrackedGinGroupEscape(expression, env)
 	}
 	selector, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok {
-		return nil
+		return c.rejectTrackedGinGroupEscape(expression, env)
 	}
 	target, err := c.resolveGroup(selector.X, env)
-	if err != nil || target == nil {
+	if err != nil {
 		return err
+	}
+	if target == nil {
+		return c.rejectTrackedGinGroupEscape(expression, env)
 	}
 
 	switch selector.Sel.Name {
+	case "Group":
+		return nil
 	case "Use":
 		if target.base != "" {
 			for _, middleware := range call.Args {
@@ -449,8 +505,34 @@ func (c *collector) processExpression(expression ast.Expr, env *scope) error {
 		if isV2Group(target) {
 			return c.errorAt(call.Pos(), "unsupported Gin selector %s on /api/v2 group", selector.Sel.Name)
 		}
-		return nil
+		return c.errorAt(call.Pos(), "unsupported Gin selector %s on tracked Gin group", selector.Sel.Name)
 	}
+}
+
+func (c *collector) rejectTrackedGinGroupEscape(expression ast.Expr, env *scope) error {
+	if c.containsTrackedGinGroup(expression, env) {
+		return c.errorAt(expression.Pos(), "unsupported Gin group escape in expression")
+	}
+	return nil
+}
+
+func (c *collector) containsTrackedGinGroup(expression ast.Expr, env *scope) bool {
+	found := false
+	ast.Inspect(expression, func(node ast.Node) bool {
+		if found {
+			return false
+		}
+		identifier, ok := node.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if _, tracked := env.lookup(identifier.Name); tracked {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
 }
 
 func (c *collector) resolveGroup(expression ast.Expr, env *scope) (*group, error) {
@@ -583,16 +665,16 @@ func (c *collector) registerArguments(target *group, method string, args []ast.E
 	}
 	relativePath, ok := resolveString(args[0], env)
 	if !ok {
+		if target.base == "" && method == "GET" && isSafeSubscribeRegistrationPath(args[0], env) {
+			return nil
+		}
 		if isV2Group(target) {
 			return c.errorAt(args[0].Pos(), "Gin %s path under /api/v2 must be a string literal", method)
 		}
 		if target.base == "" {
-			if method == "GET" && isSafeSubscribeRegistrationPath(args[0], env) {
-				return nil
-			}
 			return c.errorAt(args[0].Pos(), "root Gin Engine path must be statically resolvable")
 		}
-		return nil
+		return c.errorAt(args[0].Pos(), "Gin %s path must be statically resolvable", method)
 	}
 	fullPath := joinPath(target.base, relativePath)
 	if !isV2Path(fullPath) {
@@ -652,9 +734,9 @@ func isGinRegistrationSelector(name string) bool {
 	}
 }
 
-func isNormalizeSubscribePathCall(expression ast.Expr) bool {
+func (c *collector) isNormalizeSubscribePathCall(expression ast.Expr, env *scope) bool {
 	call, ok := unwrapParens(expression).(*ast.CallExpr)
-	if !ok {
+	if !ok || len(call.Args) != 1 {
 		return false
 	}
 	selector, ok := call.Fun.(*ast.SelectorExpr)
@@ -662,7 +744,11 @@ func isNormalizeSubscribePathCall(expression ast.Expr) bool {
 		return false
 	}
 	packageName, ok := unwrapParens(selector.X).(*ast.Ident)
-	return ok && packageName.Name == "config"
+	if !ok || env.isNameBound(packageName.Name) {
+		return false
+	}
+	_, imported := c.configPackageAliases[packageName.Name]
+	return imported
 }
 
 func isSafeSubscribeRegistrationPath(expression ast.Expr, env *scope) bool {
