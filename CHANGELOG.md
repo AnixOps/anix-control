@@ -51,7 +51,8 @@
   verified official `protoc` 29.2 archive in the Go quality gate.
 - Made release binaries compile across Linux, macOS, and Windows without
   weakening package-host isolation: unsupported non-Unix hosts now fail closed
-  instead of falling back from the required Unix descriptor protections.
+  instead of falling back from the required Unix descriptor protections, while
+  non-Linux Unix hosts apply an explicit checked close-on-exec descriptor flag.
 
 ## 4.0.0-alpha.7 - 2026-07-18
 
