@@ -1,3 +1,5 @@
+//go:build unix
+
 // Package pluginhost supervises local Control package processes. Package
 // requests enter only after the kernel has completed admission and routing.
 package pluginhost

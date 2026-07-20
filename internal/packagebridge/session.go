@@ -15,7 +15,6 @@ import (
 	"time"
 
 	packagebridgev1 "github.com/AnixOps/anix-control/v4/api/packagebridge/v1"
-	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -229,7 +228,7 @@ func NewSession(identity HostIdentity, handler *Allowlist, webSocketResolvers ..
 	if !safeIdentifier(identity.PackageID) || !safeIdentifier(identity.Version) || identity.Generation == 0 || handler == nil {
 		return nil, nil, errors.New("package bridge session is invalid")
 	}
-	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_STREAM|unix.SOCK_CLOEXEC, 0)
+	fds, err := newSessionSocketpair()
 	if err != nil {
 		return nil, nil, fmt.Errorf("create package bridge socketpair: %w", err)
 	}
@@ -239,12 +238,12 @@ func NewSession(identity HostIdentity, handler *Allowlist, webSocketResolvers ..
 		if parentFile != nil {
 			_ = parentFile.Close()
 		} else {
-			_ = unix.Close(fds[0])
+			_ = closeSessionSocket(fds[0])
 		}
 		if childFile != nil {
 			_ = childFile.Close()
 		} else {
-			_ = unix.Close(fds[1])
+			_ = closeSessionSocket(fds[1])
 		}
 		return nil, nil, errors.New("create package bridge file handles")
 	}

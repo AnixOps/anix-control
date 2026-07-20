@@ -49,6 +49,9 @@
   around its deliberately malformed static-analysis fixture.
 - Replaced the transient third-party `protoc` setup Action with a checksum-
   verified official `protoc` 29.2 archive in the Go quality gate.
+- Made release binaries compile across Linux, macOS, and Windows without
+  weakening package-host isolation: unsupported non-Unix hosts now fail closed
+  instead of falling back from the required Unix descriptor protections.
 
 ## 4.0.0-alpha.7 - 2026-07-18
 
