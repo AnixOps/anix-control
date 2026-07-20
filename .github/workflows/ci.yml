@@ -391,7 +391,7 @@ jobs:
       - name: Run full repository gosec gate and report
         run: |
           mkdir -p security-reports
-          gosec -exclude-generated -fmt=json -out=security-reports/gosec.json ./...
+          gosec -exclude-generated -exclude-dir=config/scripts/testdata -fmt=json -out=security-reports/gosec.json ./...
 
       - name: Upload gosec report
         if: always()
@@ -1359,6 +1359,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      - name: Checkout pinned Agent source for live Control WebUI E2E
+        uses: actions/checkout@v7
+        with:
+          repository: AnixOps/anix-agent
+          ref: c459383955027ee00719fa2dac1a87813c88a511
+          path: V2bX_AnixOps
+
       # The live Control WebUI gate builds a temporary Control binary and a
       # deterministic official plugin package before Chromium opens the UI.
       - name: Setup Go
@@ -1401,6 +1408,8 @@ jobs:
 
       - name: Run live Control signed WebUI E2E gate
         working-directory: web
+        env:
+          ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/V2bX_AnixOps
         run: npx playwright test --config playwright.live-control.config.js
 
       - name: Build frontend

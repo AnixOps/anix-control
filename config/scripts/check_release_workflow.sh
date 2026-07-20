@@ -192,6 +192,8 @@ require_live_control_webui_gate() {
     "actions/setup-go@v6" \
     "actions/setup-python@v6" \
     "actions/setup-node@v6" \
+    "Checkout pinned Agent source for live Control WebUI E2E" \
+    "ANIXOPS_AGENT_ROOT: \${{ github.workspace }}/V2bX_AnixOps" \
     "npm ci" \
     "npx playwright install --with-deps chromium" \
     "npx playwright test --config playwright.live-control.config.js"; do
@@ -267,6 +269,7 @@ check_release_workflow() {
   require_text "formal_runtime_args+=(--runtime-binary" "formal v4 explicit GOST runtime mappings" || failed=1
   require_text "--platform linux/amd64" "formal v4 amd64 package platform" || failed=1
   require_text "--platform linux/arm64" "formal v4 arm64 package platform" || failed=1
+  require_text "-exclude-dir=config/scripts/testdata" "full gosec excludes the non-compiling AST fixture directory" || failed=1
   require_text "scripts/tests/test_identity_bootstrap_install.sh" "identity bootstrap installer regression test" || failed=1
   require_text "config/scripts/run_v4_rehearsal.sh" "v4 release rehearsal invocation" || failed=1
   require_text "config/scripts/verify_v4_evidence.py" "v4 release evidence verification" || failed=1
@@ -487,13 +490,25 @@ jobs:
   frontend-build:
     steps:
       - uses: actions/checkout@v7
+      - name: Checkout pinned Agent source for live Control WebUI E2E
+        uses: actions/checkout@v7
+        with:
+          repository: AnixOps/anix-agent
+          ref: c459383955027ee00719fa2dac1a87813c88a511
+          path: V2bX_AnixOps
       - uses: actions/setup-go@v6
       - uses: actions/setup-python@v6
       - uses: actions/setup-node@v6
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Run live Control signed WebUI E2E gate
+        env:
+          ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/V2bX_AnixOps
         run: npx playwright test --config playwright.live-control.config.js
+
+  go-security:
+    steps:
+      - run: gosec -exclude-generated -exclude-dir=config/scripts/testdata -fmt=json ./...
 
   release-binaries:
     needs: [go-quality, go-lint, go-security, go-race, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, plugin-package-publish, forward-runtime-test, grpc-test, cross-repository-agent-e2e, cmd-test, tag-gate]

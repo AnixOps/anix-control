@@ -243,20 +243,58 @@ async function createSigningMaterial(tempRoot) {
 	await writeFile(privateKeyPath, keys.privateKey.export({ format: 'pem', type: 'pkcs8' }))
 	await chmod(privateKeyPath, 0o600)
 	await writeFile(publicKeyPath, `${publicKey}\n`, 'utf8')
-	return { privateKeyPath, publicKeyPath, publicKey }
+  return { privateKeyPath, publicKeyPath, publicKey }
+}
+
+async function buildFormalAgentBinary(tempRoot, packageID, goarch) {
+  const agentRoot = process.env.ANIXOPS_AGENT_ROOT
+  if (typeof agentRoot !== 'string' || agentRoot.length === 0) {
+    throw new Error('ANIXOPS_AGENT_ROOT is required to build formal Agent package inputs')
+  }
+  await access(agentRoot)
+
+  const output = path.join(tempRoot, `${packageID}-linux-${goarch}`)
+  await runCommand(`build ${packageID} Agent binary for linux/${goarch}`, 'go', [
+    'build',
+    '-trimpath',
+    '-buildvcs=false',
+    '-o', output,
+    `./cmd/${packageID}`,
+  ], {
+    cwd: agentRoot,
+    env: {
+      ...process.env,
+      CGO_ENABLED: '0',
+      GOOS: 'linux',
+      GOARCH: goarch,
+      GOEXPERIMENT: 'jsonv2',
+      GOWORK: 'off',
+    },
+  })
+  await chmod(output, 0o755)
+  return output
 }
 
 async function buildSignedOfficialPackage(tempRoot, signing, packageID) {
-	const packageOutput = path.join(tempRoot, `${packageID}-package`)
-	await runCommand(`build signed ${packageID} package`, 'python3', [
-		'packages/shared/build_package.py',
-		'--package', packageID,
-		'--version', packageVersion,
-		'--out', packageOutput,
-		'--signing-key', signing.privateKeyPath,
-		'--formal-release',
-		'--official-public-key', signing.publicKeyPath,
-	], { cwd: controlRoot })
+  const packageOutput = path.join(tempRoot, `${packageID}-package`)
+  const arguments_ = [
+    'packages/shared/build_package.py',
+    '--package', packageID,
+    '--version', packageVersion,
+    '--out', packageOutput,
+    '--signing-key', signing.privateKeyPath,
+    '--formal-release',
+    '--official-public-key', signing.publicKeyPath,
+    '--platform', 'linux/amd64',
+    '--platform', 'linux/arm64',
+  ]
+  if (packageID === 'machine-telemetry') {
+    for (const goarch of ['amd64', 'arm64']) {
+      const binary = await buildFormalAgentBinary(tempRoot, packageID, goarch)
+      arguments_.push('--agent-binary', `${packageID}@linux/${goarch}=${binary}`)
+    }
+  }
+  await runCommand(`build signed ${packageID} package`, 'python3', arguments_, { cwd: controlRoot })
 	const stem = `${packageID}-${packageVersion}`
 	return {
 		output: packageOutput,
