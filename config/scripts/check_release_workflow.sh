@@ -253,6 +253,9 @@ check_release_workflow() {
   require_release_stage_tag_gate || failed=1
   require_text "python3 config/scripts/check_release_stage.py --self-test" "release-stage contract self-test" || failed=1
   require_text "Setup Go for v4 route-gate contracts" "v4 route-gate Go toolchain setup" || failed=1
+  reject_job_text go-quality "arduino/setup-protoc@v3" "third-party protoc setup action" || failed=1
+  require_named_step_text go-quality "Install pinned protoc" "protocolbuffers/protobuf/releases/download/v29.2/protoc-29.2-linux-x86_64.zip" "pinned official protoc download" || failed=1
+  require_named_step_text go-quality "Install pinned protoc" "sha256sum -c" "pinned protoc checksum verification" || failed=1
   require_text "needs.tag-gate.outputs.is_release_tag == 'true'" "release-only job gate" || failed=1
   require_job_dependency docker plugin-package-publish || failed=1
   require_text "  v4-public-rehearsal:" "public v4 rehearsal job" || failed=1
@@ -505,6 +508,13 @@ jobs:
         env:
           ANIXOPS_AGENT_ROOT: ${{ github.workspace }}/V2bX_AnixOps
         run: npx playwright test --config playwright.live-control.config.js
+
+  go-quality:
+    steps:
+      - name: Install pinned protoc
+        run: |
+          curl --fail --location https://github.com/protocolbuffers/protobuf/releases/download/v29.2/protoc-29.2-linux-x86_64.zip
+          printf '%s  %s\n' checksum protoc-29.2-linux-x86_64.zip | sha256sum -c -
 
   go-security:
     steps:

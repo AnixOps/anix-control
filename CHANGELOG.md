@@ -47,6 +47,8 @@
 - Made the live signed-WebUI CI gate build the pinned Agent source for both
   supported Linux architectures, and scoped the full-repository security scan
   around its deliberately malformed static-analysis fixture.
+- Replaced the transient third-party `protoc` setup Action with a checksum-
+  verified official `protoc` 29.2 archive in the Go quality gate.
 
 ## 4.0.0-alpha.7 - 2026-07-18
 

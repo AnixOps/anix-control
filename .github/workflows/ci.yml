@@ -248,11 +248,23 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Set up protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: '29.2'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install pinned protoc
+        shell: bash
+        run: |
+          set -euo pipefail
+          protoc_version="29.2"
+          protoc_archive="${RUNNER_TEMP}/protoc-${protoc_version}-linux-x86_64.zip"
+          protoc_install_dir="${RUNNER_TEMP}/protoc-${protoc_version}"
+          protoc_sha256="52e9e7ece55c7e30e7e8bbd254b4b21b408a5309bca826763c7124b696a132e9"
+
+          curl --fail --location --retry 5 --retry-all-errors --retry-delay 2 \
+            --output "${protoc_archive}" \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v29.2/protoc-29.2-linux-x86_64.zip"
+          printf '%s  %s\n' "${protoc_sha256}" "${protoc_archive}" | sha256sum -c -
+          mkdir -p "${protoc_install_dir}"
+          unzip -q "${protoc_archive}" -d "${protoc_install_dir}"
+          "${protoc_install_dir}/bin/protoc" --version
+          echo "${protoc_install_dir}/bin" >> "${GITHUB_PATH}"
 
       - name: Install pinned protoc Go plugins
         run: |
