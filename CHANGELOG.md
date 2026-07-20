@@ -44,6 +44,9 @@
   contention and use WAL mode for file-backed databases.
 - Bound Control-host bridge route IDs to safe deterministic identifiers while
   preserving the original validated request metadata for package handlers.
+- Made the live signed-WebUI CI gate build the pinned Agent source for both
+  supported Linux architectures, and scoped the full-repository security scan
+  around its deliberately malformed static-analysis fixture.
 
 ## 4.0.0-alpha.7 - 2026-07-18
 
