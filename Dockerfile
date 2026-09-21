@@ -19,7 +19,7 @@ RUN go install github.com/swaggo/swag/cmd/swag@v1.16.6 && \
 
 # Build frontend (if package.json exists)
 RUN if [ -f "web/package.json" ]; then \
-    cd web && npm ci && npm run build && cd ..; \
+    cd web && npm ci --legacy-peer-deps && npm run build && cd ..; \
     fi
 
 # Build binary with version info

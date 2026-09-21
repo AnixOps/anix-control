@@ -100,6 +100,7 @@ MFA enforcement note:
 - All release binaries and frontend assets must be produced by GitHub Actions.
 - The CI baseline uses Go 1.26.6, runs `govulncheck` against the full module graph, and rejects frontend dependencies reported at moderate severity or above. A newly published advisory must be resolved in the pinned toolchain or dependency versions before release evidence is accepted.
 - Frontend CI runs the mocked browser suite and the isolated real-Control signed WebUI suite as separate gates; both must pass before frontend artifacts are accepted.
+- The frontend job and Docker build use the same committed lockfile installation policy; both dependency paths must pass before a container artifact is accepted.
 - Operators must deploy GitHub Release artifacts after reviewing `RELEASE_NOTES.md`, verifying `SHA256SUMS.txt`, and checking `RELEASE_MANIFEST.json`.
 - Do not build release artifacts on the production host or from a local checkout.
 - `config/deploy/deploy_panel.sh` performs a local source-tree build and is guarded by `ALLOW_LOCAL_BUILD=1`; use it only for explicitly approved development or emergency operator work, not release builds.
