@@ -144,10 +144,12 @@ isolated test nodes. The first production data-plane candidate is domestic
 dedicated-line TCP and UDP forwarding; Agent does not carry business traffic.
 
 Exit evidence: `plugin/nftablesforward/namespace_acceptance.sh` in the pinned
-Agent repo proves namespace TCP/UDP DNAT, plugin-created table deletion, and
-pre-existing table snapshot restoration. Remaining exit evidence is IPv4/IPv6
-validation breadth, partial-node failure rollback, Control/Agent double restart
-recovery, and a staged 1/5/25/100 percent rollout with a legacy fallback.
+Agent repo proves IPv4/IPv6 TCP/UDP DNAT, per-rule counters, plugin-created
+table deletion, pre-existing table snapshot restoration, and crash/restart
+recovery. Control tests prove partial-node failure stops expansion, selected
+nodes roll back, and a recreated executor resumes without duplicate operations.
+Remaining exit evidence is a staged 1/5/25/100 percent rollout with a tested
+legacy fallback and operator approval.
 
 ### 3.3.0 - Tunnel Mesh And NAT Egress
 

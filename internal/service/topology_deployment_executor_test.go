@@ -275,6 +275,73 @@ func TestTopologyDeploymentExecutorAppliesDAGThenRollsBackInReverseOrder(t *test
 	}
 }
 
+func TestTopologyDeploymentExecutorResumesAcrossControlRestartsWithoutDuplicateOperations(t *testing.T) {
+	fixture := newTopologyDeploymentFixture(t, []model.TopologyEdge{{
+		SourceKey: "entry", TargetKey: "exit", Protocol: "tcp", ConfigJSON: `{}`,
+	}})
+	deployment, _, err := PlanTopologyDeployment(fixture.db, TopologyDeploymentPlanInput{
+		TopologyID: fixture.topology.ID, RevisionID: fixture.revision.ID, ActorID: 1,
+	})
+	require.NoError(t, err)
+	_, err = RequestTopologyDeploymentApply(fixture.db, deployment.ID, time.Now())
+	require.NoError(t, err)
+
+	runAfterRestart := func() {
+		t.Helper()
+		executor, restartErr := NewTopologyDeploymentExecutor(fixture.db)
+		require.NoError(t, restartErr)
+		_, restartErr = executor.RunOnce(context.Background())
+		require.NoError(t, restartErr)
+	}
+
+	// Every reconciliation pass uses a new executor, matching a Control process
+	// restart while the durable deployment remains in PostgreSQL.
+	runAfterRestart()
+	entry := topologyDeploymentStep(t, fixture.db, deployment.ID, "entry")
+	require.Equal(t, topologyStepStateConfiguring, entry.State)
+	entryConfigureID := entry.ConfigureOperationID
+	topologyDeploymentOperationState(t, fixture.db, entryConfigureID, "succeeded")
+
+	runAfterRestart()
+	entry = topologyDeploymentStep(t, fixture.db, deployment.ID, "entry")
+	require.Equal(t, topologyStepStateEnabling, entry.State)
+	require.Equal(t, entryConfigureID, entry.ConfigureOperationID)
+	entryEnableID := entry.EnableOperationID
+	topologyDeploymentOperationState(t, fixture.db, entryEnableID, "succeeded")
+
+	runAfterRestart()
+	exit := topologyDeploymentStep(t, fixture.db, deployment.ID, "exit")
+	require.Equal(t, topologyStepStateConfiguring, exit.State)
+	exitConfigureID := exit.ConfigureOperationID
+	topologyDeploymentOperationState(t, fixture.db, exitConfigureID, "succeeded")
+
+	runAfterRestart()
+	exit = topologyDeploymentStep(t, fixture.db, deployment.ID, "exit")
+	require.Equal(t, topologyStepStateEnabling, exit.State)
+	require.Equal(t, exitConfigureID, exit.ConfigureOperationID)
+	exitEnableID := exit.EnableOperationID
+	topologyDeploymentOperationState(t, fixture.db, exitEnableID, "succeeded")
+
+	runAfterRestart()
+	status, err := GetTopologyDeploymentStatus(fixture.db, deployment.ID)
+	require.NoError(t, err)
+	require.Equal(t, topologyDeploymentStateSucceeded, status.Deployment.State)
+	require.Len(t, status.Operations, 4)
+	require.ElementsMatch(t, []string{
+		entryConfigureID, entryEnableID, exitConfigureID, exitEnableID,
+	}, []string{
+		status.Operations[0].OperationID,
+		status.Operations[1].OperationID,
+		status.Operations[2].OperationID,
+		status.Operations[3].OperationID,
+	})
+
+	var operationCount int64
+	require.NoError(t, fixture.db.Model(&model.KernelOperation{}).
+		Where("topology_deployment_id = ?", deployment.ID).Count(&operationCount).Error)
+	require.Equal(t, int64(4), operationCount)
+}
+
 func TestTopologyDeploymentExecutorFailureStopsExpansionAndCompensates(t *testing.T) {
 	fixture := newTopologyDeploymentFixture(t, []model.TopologyEdge{{SourceKey: "entry", TargetKey: "exit", Protocol: "tcp", ConfigJSON: `{}`}})
 	deployment, _, err := PlanTopologyDeployment(fixture.db, TopologyDeploymentPlanInput{TopologyID: fixture.topology.ID, RevisionID: fixture.revision.ID, ActorID: 1})

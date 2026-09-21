@@ -224,9 +224,11 @@ snapshots, and rollback. The Control fan-out and rollback executor is now
 present behind `plugins.topology_execution_enabled`; the deterministic
 `nftables-forward` package release contract and real Agent runtime are present
 in CI/release packaging. The pinned Agent namespace acceptance script now
-proves namespace TCP/UDP traffic and nftables snapshot rollback. The remaining
-3.2 work is staging restore smoke, rollout records, legacy fallback rehearsal,
-and operator approval. Agent processes must not proxy the bulk traffic.
+proves IPv4/IPv6 TCP/UDP traffic, counters, nftables snapshot rollback, and
+crash/restart recovery in regular CI. Control tests prove partial-node rollback
+and restart-safe idempotent reconciliation. The remaining 3.2 work is staging
+restore smoke, rollout records, legacy fallback rehearsal, and operator
+approval. Agent processes must not proxy the bulk traffic.
 
 ## Phase 5: 3.3 Tunnel Mesh And NAT
 
