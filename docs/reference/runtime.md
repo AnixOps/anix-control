@@ -41,6 +41,12 @@ forward_runtime:
 
 Runtime configuration now comes exclusively from `config/config.yaml.forward_runtime`. Legacy `FORWARD_RUNTIME_*` variables are no longer consulted during startup.
 
+Production startup first validates the full YAML with `-check-config`. Database
+changes are a separate `-migrate-schema` operation, and normal startup fails if
+the schema is missing or outdated. After the real deployment exercises alerts,
+canary Agent behavior and rollback, record the result in the ignored
+`config/production-acceptance.yaml` and run `-check-production-evidence`.
+
 ## Control Plane Vs Execution Plane
 
 - `v2board_AnixOps`

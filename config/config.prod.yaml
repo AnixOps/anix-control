@@ -1,7 +1,7 @@
 # AnixOps Control Configuration - Production
-# 鐢熶骇鐜閰嶇疆鏂囦欢
+# Production configuration. Replace every placeholder before startup.
 
-# 鐜鏍囪瘑: development (寮€鍙?, production (鐢熶骇)
+# Strict production preflight is enabled by this value.
 env: "production"
 
 server:
@@ -10,14 +10,13 @@ server:
   mode: "release"
   read_timeout: 30
   write_timeout: 30
-  # 鍙俊浠ｇ悊鍒楄〃 (鐢ㄤ簬鑾峰彇鐪熷疄 IP锛屽鍦?Nginx/Cloudflare 鍚庨潰)
+  # Trusted reverse proxies used to derive the real client IP.
   # Only trust forwarded client IP headers from these reverse proxies/load balancers.
   # If the API is exposed directly, keep this list empty.
   trusted_proxies:
     - "127.0.0.1"
-    - "10.0.0.0/8"
-    - "172.16.0.0/12"
-    - "192.168.0.0/16"
+    - "172.30.0.10" # Bundled Compose Nginx address.
+    # Add only the exact reverse proxy IP/CIDR used by your deployment.
   # HTTP CORS and WebSocket Origin allowlist. Set this to your real panel/admin
   # origins when browsers connect from a different host.
   cors:
@@ -27,46 +26,45 @@ server:
     allow_credentials: false
     max_age: 86400
 
-# TLS/HTTPS 閰嶇疆
-# 鏂瑰紡涓€: 浣跨敤 Nginx 鍙嶄唬 (鎺ㄨ崘) - 璁剧疆 enable: false
-# 鏂瑰紡浜? Go 鍘熺敓 TLS - 璁剧疆 enable: true 骞堕厤缃瘉涔﹁矾寰?
+# Browser-facing TLS. The bundled Nginx profile terminates TLS, so the Go HTTP
+# listener remains plaintext on the private container network.
 tls:
-  enable: false                               # 浣跨敤 Nginx 鍙嶄唬鏃惰涓?false
-  cert_file: "/etc/ssl/certs/anix-control.crt"     # SSL 璇佷功璺緞 (浠?enable: true 鏃堕渶瑕?
-  key_file: "/etc/ssl/private/anix-control.key"    # SSL 绉侀挜璺緞 (浠?enable: true 鏃堕渶瑕?
-  domain: "your-domain.com"                   # 鎮ㄧ殑鍩熷悕 (鐢ㄤ簬鐢熸垚璁㈤槄閾炬帴绛?
+  enable: false
+  cert_file: "/etc/ssl/certs/anix-control.crt"
+  key_file: "/etc/ssl/private/anix-control.key"
+  domain: "your-domain.com"
 
-# 鍓嶇鏈嶅姟鍣ㄩ厤缃?
+# Frontend listener, reached through Nginx in the bundled Compose profile.
 frontend:
   enable: true
-  port: 3000         # 淇濇寔 3000 绔彛锛岄€氳繃 Nginx 鍙嶄唬鍒?80/443
+  port: 3000
   path: "web/public"
 
-# 鏁版嵁搴撻厤缃?- 鐢熶骇鐜鎺ㄨ崘浣跨敤 PostgreSQL
+# Durable production data store.
 database:
   driver: "postgres"
-  host: "127.0.0.1"
+  host: "db"
   port: 5432
   username: "anix_control"
-  password: "your-secure-password"
+  password: "REPLACE-WITH-AT-LEAST-32-RANDOM-CHARACTERS"
   database: "anix_control"
-  log_level: "error"          # 鐢熶骇鐜鍙褰曢敊璇?
+  log_level: "error"
   max_idle_conns: 10
   max_open_conns: 100
   conn_max_lifetime: 3600
 
-# 缂撳瓨閰嶇疆 - 鐢熶骇鐜鎺ㄨ崘浣跨敤 Redis
+# This release provides a process-local cache. Run one Control replica.
 cache:
-  driver: "redis"
-  redis_host: "127.0.0.1"
-  redis_port: 6379
+  driver: "memory"
+  redis_host: ""
+  redis_port: 0
   redis_password: ""
   redis_db: 0
 
 log:
-  level: "warn"               # 鐢熶骇鐜鍑忓皯鏃ュ織
-  output: "file"
-  file_path: "/var/log/anix-control/anix-control.log"
+  level: "warn"
+  output: "stdout"
+  file_path: ""
   max_size: 100
   max_backups: 30
   max_age: 30
@@ -87,17 +85,19 @@ auth:
     window_seconds: 3600
     lockout_seconds: 3600
   registration:
-    enabled: true
-    require_invite: false
+    enabled: false
+    require_invite: true
     allowed_email_domains: []
     blocked_email_domains: []
 
 app:
   name: "AnixOps Control"
   version: "4.0.0-alpha.7"
+  # Public HTTPS origin used by operators, Agents and the external monitor.
+  public_url: "https://control.example.com"
   # The installer must replace this with a generated value. Never ship a
   # reusable node credential in the production template.
-  api_token: ""
+  api_token: "REPLACE-WITH-AT-LEAST-32-RANDOM-CHARACTERS"
   traffic_log_enable: true
   subscribe_path: "s"
 
@@ -106,9 +106,9 @@ plugins:
   # Official AnixOps Ed25519 release trust root (raw public key, base64).
   # Trust is pinned even while execution remains fail-closed below.
   official_public_key: "IaqXgif/OGydNv/mQHoyFmqOvzeplICaMZndrhqMG0M="
-  control_execution_enabled: false
+  control_execution_enabled: true
   control_poll_interval: "5s"
-  dispatch_enabled: false
+  dispatch_enabled: true
   dispatch_poll_interval: "5s"
   # Topology fan-out creates Agent plugin operations only when explicitly
   # enabled together with dispatch_enabled. Keep false until canary evidence.
@@ -165,14 +165,41 @@ forward_runtime:
 # files below or put the service behind an HTTP/2-capable L4/gRPC proxy and a
 # restrictive firewall.
 grpc:
-  enabled: false
+  enabled: true
   host: "0.0.0.0"
   port: 50051
   api_token: ""
-  tls_cert_file: "config/tls/control.crt"
-  tls_key_file: "config/tls/control.key"
+  tls_cert_file: ""
+  tls_key_file: ""
+  # Set true only when an HTTP/2 reverse proxy terminates public TLS and this
+  # listener is restricted to the private host/container network.
+  behind_tls_proxy: true
 
-# 榛樿绠＄悊鍛橀厤缃?
+# Machine telemetry incident delivery. Replace every placeholder before running
+# `anix-control -config <path> -check-config`.
+maintenance:
+  worker_interval: "30s"
+  smtp:
+    host: "smtp.example.com"
+    port: 587
+    from: "anixops-alerts@example.com"
+    username: "anixops-alerts@example.com"
+    password: "REPLACE-WITH-AT-LEAST-32-RANDOM-CHARACTERS"
+  telegram:
+    bot_token: "REPLACE-WITH-TELEGRAM-BOT-TOKEN"
+  external_monitoring:
+    provider: "REPLACE-WITH-INDEPENDENT-PROVIDER"
+    monitor_id: "REPLACE-WITH-MONITOR-ID"
+    health_url: "https://control.example.com/health"
+    check_interval_seconds: 60
+    email_enabled: true
+    telegram_enabled: true
+
+nodes:
+  # Optional first-enrollment key. Leave empty when keys are created in the UI.
+  bootstrap_auth_key: ""
+
+# Bootstrap administrator. Change the password after the first verified login.
 admin:
   email: "admin@your-domain.com"
-  password: ""  # 鐣欑┖灏嗚嚜鍔ㄧ敓鎴?
+  password: "REPLACE-WITH-AT-LEAST-32-RANDOM-CHARACTERS"

@@ -41,3 +41,7 @@ Use this tree like NodeX:
 ## Machine telemetry operations
 
 See [the operations runbook](MAINTENANCE_P0.md) for `/maintenance`, owner/technician roles, verified email and Telegram configuration, startup worker/schema behavior, durable WebSocket events, manual plugin rollback and production acceptance gates. Operations tickets are separate from customer support.
+
+Production operators should start from `config/config.prod.yaml`, run
+`-check-config`, execute the separately approved `-migrate-schema`, and finish
+with the ignored `config/production-acceptance.yaml` evidence gate.

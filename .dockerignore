@@ -52,4 +52,5 @@ internal/tests/
 
 # Config files with secrets
 config/config.yaml
-config/config.prod.yaml
+# Public production templates remain in the build context; deployment-owned
+# config/config.yaml and config/production.env stay excluded by name/pattern.

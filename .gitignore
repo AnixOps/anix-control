@@ -44,6 +44,8 @@ full_internal_test.log
 config/config.yaml
 !config/config.yaml.example
 config/config.dev.yaml
+config/production.env
+config/production-acceptance.yaml
 config/deploy/ssh/*
 !config/deploy/ssh/.gitignore
 config/deploy/ansible/inventory.ini
@@ -97,6 +99,8 @@ ssh.txt
 # TLS private keys/certs (never commit)
 config/deploy/nginx/ssl/*.key
 config/deploy/nginx/ssl/*.crt
+config/docker/nginx/ssl/cert.pem
+config/docker/nginx/ssl/key.pem
 
 # Local build artifacts / production binary backups
 /server

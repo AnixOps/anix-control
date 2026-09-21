@@ -169,3 +169,8 @@ Docker remains supported for startup and future deployment work, but the recorde
 ## Machine telemetry operations
 
 See [the operations runbook](../MAINTENANCE_P0.md) for `/maintenance`, owner/technician roles, verified email and Telegram configuration, startup worker/schema behavior, durable WebSocket events, manual plugin rollback and production acceptance gates. Operations tickets are separate from customer support.
+
+Production uses `config/config.prod.yaml`, one Control replica with memory
+cache, PostgreSQL durability, `-check-config`, and a separately approved
+`-migrate-schema` command. The service must not be started while template
+placeholders remain.

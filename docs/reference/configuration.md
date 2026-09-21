@@ -14,6 +14,16 @@ Important:
 - local `go run` does not auto-load [`.env`](../../.env)
 - `jwt.secret`, `app.api_token`, `admin.*`, database, cache, and frontend settings still come from [`config/config.yaml`](../../config/config.yaml)
 - the runtime selection resides in `config/config.yaml.forward_runtime`; startup writes exactly those values into `v2_system_config`
+- production deployment values live in the ignored `config/config.yaml`, created
+  from `config/config.prod.yaml`; notification credentials are under
+  `maintenance`, and `nodes.bootstrap_auth_key` is optional
+- this release implements only the process-local `memory` cache backend and
+  therefore runs one Control replica
+- use `-check-config` before `-migrate-schema`; normal production startup never
+  performs implicit schema migration
+- Compose deployments also run `-check-production-compose-env
+  config/production.env` so pinned image references and duplicated PostgreSQL
+  values are checked before migration
 
 ## Unified Forward Runtime Layout
 

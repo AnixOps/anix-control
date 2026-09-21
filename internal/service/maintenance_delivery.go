@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/mail"
 	"net/smtp"
-	"os"
 	"strings"
 	"time"
 
@@ -26,26 +25,57 @@ import (
 type MaintenanceSender interface {
 	Send(context.Context, model.MaintenanceDelivery) error
 }
-type MaintenanceTransport struct{}
+type MaintenanceTransportConfig struct {
+	SMTPHost      string
+	SMTPPort      int
+	SMTPFrom      string
+	SMTPUsername  string
+	SMTPPassword  string
+	TelegramToken string
+}
 
-func (MaintenanceTransport) Send(ctx context.Context, d model.MaintenanceDelivery) error {
+type MaintenanceTransport struct {
+	config          MaintenanceTransportConfig
+	httpClient      *http.Client
+	telegramAPIBase string
+}
+
+func NewMaintenanceTransport(config MaintenanceTransportConfig) MaintenanceTransport {
+	return MaintenanceTransport{
+		config: config,
+		httpClient: &http.Client{
+			Timeout:       15 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
+		telegramAPIBase: "https://api.telegram.org",
+	}
+}
+
+func (t MaintenanceTransport) Send(ctx context.Context, d model.MaintenanceDelivery) error {
 	if d.Destination == "" {
 		return errors.New("channel_unconfigured")
 	}
 	switch d.Channel {
 	case "telegram":
-		token := os.Getenv("ANIXOPS_MAINTENANCE_TELEGRAM_TOKEN")
+		token := strings.TrimSpace(t.config.TelegramToken)
 		if token == "" {
 			return errors.New("channel_unconfigured")
 		}
 		body, _ := json.Marshal(map[string]string{"chat_id": d.Destination, "text": d.Body})
 		// #nosec G704 -- only the path contains the deployment secret; scheme and host are fixed to Telegram.
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.telegram.org/bot"+token+"/sendMessage", bytes.NewReader(body))
+		baseURL := strings.TrimRight(t.telegramAPIBase, "/")
+		if baseURL == "" {
+			baseURL = "https://api.telegram.org"
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/bot"+token+"/sendMessage", bytes.NewReader(body))
 		if err != nil {
 			return errors.New("delivery_failed")
 		}
 		req.Header.Set("Content-Type", "application/json")
-		client := &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		client := t.httpClient
+		if client == nil {
+			client = NewMaintenanceTransport(t.config).httpClient
+		}
 		// #nosec G704 -- req always targets the fixed Telegram HTTPS host above and redirects are disabled.
 		resp, err := client.Do(req)
 		if err != nil {
@@ -61,17 +91,18 @@ func (MaintenanceTransport) Send(ctx context.Context, d model.MaintenanceDeliver
 		}
 		return nil
 	case "email":
-		return sendMaintenanceEmail(ctx, d)
+		return sendMaintenanceEmail(ctx, t.config, d)
 	default:
 		return errors.New("invalid_channel")
 	}
 }
-func sendMaintenanceEmail(ctx context.Context, d model.MaintenanceDelivery) error {
-	host, port := os.Getenv("ANIXOPS_MAINTENANCE_SMTP_HOST"), os.Getenv("ANIXOPS_MAINTENANCE_SMTP_PORT")
-	if port == "" {
-		port = "587"
+func sendMaintenanceEmail(ctx context.Context, config MaintenanceTransportConfig, d model.MaintenanceDelivery) error {
+	host := strings.TrimSpace(config.SMTPHost)
+	port := config.SMTPPort
+	if port == 0 {
+		port = 587
 	}
-	from := os.Getenv("ANIXOPS_MAINTENANCE_SMTP_FROM")
+	from := strings.TrimSpace(config.SMTPFrom)
 	if host == "" || from == "" {
 		return errors.New("channel_unconfigured")
 	}
@@ -81,7 +112,7 @@ func sendMaintenanceEmail(ctx context.Context, d model.MaintenanceDelivery) erro
 			return errors.New("invalid_address")
 		}
 	}
-	connection, err := (&net.Dialer{Timeout: 15 * time.Second}).DialContext(ctx, "tcp", net.JoinHostPort(host, port))
+	connection, err := (&net.Dialer{Timeout: 15 * time.Second}).DialContext(ctx, "tcp", net.JoinHostPort(host, fmt.Sprint(port)))
 	if err != nil {
 		return errors.New("delivery_failed")
 	}
@@ -107,7 +138,7 @@ func sendMaintenanceEmail(ctx context.Context, d model.MaintenanceDelivery) erro
 	if err := client.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
 		return errors.New("delivery_failed")
 	}
-	username, password := os.Getenv("ANIXOPS_MAINTENANCE_SMTP_USERNAME"), os.Getenv("ANIXOPS_MAINTENANCE_SMTP_PASSWORD")
+	username, password := config.SMTPUsername, config.SMTPPassword
 	if username != "" {
 		if err := client.Auth(smtp.PlainAuth("", username, password, host)); err != nil {
 			return errors.New("delivery_failed")

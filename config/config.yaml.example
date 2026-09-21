@@ -80,6 +80,7 @@ auth:
 app:
   name: "AnixOps Control"
   version: "4.0.0-alpha.7"
+  public_url: ""
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
@@ -207,6 +208,28 @@ grpc:
   api_token: ""
   tls_cert_file: ""
   tls_key_file: ""
+  behind_tls_proxy: false
+
+maintenance:
+  worker_interval: "30s"
+  smtp:
+    host: ""
+    port: 587
+    from: ""
+    username: ""
+    password: ""
+  telegram:
+    bot_token: ""
+  external_monitoring:
+    provider: ""
+    monitor_id: ""
+    health_url: ""
+    check_interval_seconds: 60
+    email_enabled: false
+    telegram_enabled: false
+
+nodes:
+  bootstrap_auth_key: ""
 
 admin:
   email: "control@anixops.com"

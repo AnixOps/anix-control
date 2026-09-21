@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,6 +21,29 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+func TestMaintenanceTransportUsesConfiguredTelegramToken(t *testing.T) {
+	var receivedPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Cleanup(server.Close)
+
+	transport := NewMaintenanceTransport(MaintenanceTransportConfig{TelegramToken: "123:test-token"})
+	transport.telegramAPIBase = server.URL
+	require.NoError(t, transport.Send(context.Background(), model.MaintenanceDelivery{
+		Channel: "telegram", Destination: "42", Body: "test",
+	}))
+	require.Equal(t, "/bot123:test-token/sendMessage", receivedPath)
+}
+
+func TestMaintenanceTransportRejectsMissingConfiguredChannels(t *testing.T) {
+	transport := NewMaintenanceTransport(MaintenanceTransportConfig{})
+	require.EqualError(t, transport.Send(context.Background(), model.MaintenanceDelivery{Channel: "telegram", Destination: "42"}), "channel_unconfigured")
+	require.EqualError(t, transport.Send(context.Background(), model.MaintenanceDelivery{Channel: "email", Destination: "owner@acme.test"}), "channel_unconfigured")
+}
 
 func maintenanceDB(t *testing.T) *gorm.DB {
 	t.Helper()

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -711,18 +710,17 @@ func (s *NodeService) GetNodeStats() (map[string]any, error) {
 
 // ========== 初始化 ==========
 
-// InitDefaultAuthKeyFromEnv 从环境变量初始化默认授权密钥
-// 环境变量: NODE_DEFAULT_AUTH_KEY
-// 如果设置了该环境变量：
+// InitDefaultAuthKey provisions an optional deployment-owned enrollment key.
+// If the configuration value is set:
 //   - 如果密钥内容已存在 → 跳过
 //   - 如果存在同名默认密钥但内容不同 → 删除旧的，创建新的
 //   - 如果不存在 → 创建
 //
 // Note: 改变 AuthKey 只会影响新节点注册，已注册节点使用 APIKey 通信，不受影响
-func InitDefaultAuthKeyFromEnv() {
-	defaultKey := os.Getenv("NODE_DEFAULT_AUTH_KEY")
+func InitDefaultAuthKey(defaultKey string) {
+	defaultKey = strings.TrimSpace(defaultKey)
 	if defaultKey == "" {
-		return // 环境变量未设置，跳过
+		return
 	}
 
 	db := database.Get()
@@ -732,14 +730,15 @@ func InitDefaultAuthKeyFromEnv() {
 	var count int64
 	db.Model(&model.AuthorizedKey{}).Where("key_hash = ?", keyHash).Count(&count)
 	if count > 0 {
-		log.Printf("Default auth key from environment already exists (hash: %s), skipping", keyHash[:12])
+		log.Printf("Configured default auth key already exists (hash: %s), skipping", keyHash[:12])
 		return
 	}
 
-	// 2. 如果存在同名"Default (from env)"，删除旧的（环境变量已改变，需要更新）
+	// Remove a prior configured key when the deployment rotates it. The old
+	// environment-based name is included for a one-time seamless migration.
 	var existingIDs []uint
 	db.Model(&model.AuthorizedKey{}).
-		Where("name = ?", "Default (from env)").
+		Where("name IN ?", []string{"Default (from config)", "Default (from env)"}).
 		Pluck("id", &existingIDs)
 	if len(existingIDs) > 0 {
 		log.Printf("Removing old default auth key (name matches, content changed)...")
@@ -749,9 +748,9 @@ func InitDefaultAuthKeyFromEnv() {
 	}
 
 	// 3. 创建新的授权密钥
-	log.Println("Creating default auth key from environment...")
+	log.Println("Creating configured default auth key...")
 	authKey := &model.AuthorizedKey{
-		Name:    "Default (from env)",
+		Name:    "Default (from config)",
 		Key:     defaultKey,
 		KeyHash: keyHash,
 		Used:    0,

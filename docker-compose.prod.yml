@@ -1,44 +1,26 @@
-﻿# AnixOps Control - 鐢熶骇鐜閮ㄧ讲
-# 浣跨敤 PostgreSQL + Redis
+# AnixOps Control production deployment using PostgreSQL.
 
 services:
-  # ========== API 鏈嶅姟 ==========
+  # Control API, frontend and Agent gRPC listener.
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ${DOCKER_IMAGE:-anix-control:latest}
+    image: ${DOCKER_IMAGE:?Set a release image pinned by sha256 digest in config/production.env}
     container_name: anix-control
     restart: unless-stopped
     ports:
-      - "${PANEL_API_PORT:-8080}:8080"         # HTTP API
-      - "${PANEL_FRONTEND_PORT:-3000}:3000"    # Frontend/UI
+      - "127.0.0.1:${PANEL_API_PORT:-8080}:8080"         # HTTP API
+      - "127.0.0.1:${PANEL_FRONTEND_PORT:-3000}:3000"    # Frontend/UI
       - "${PANEL_GRPC_BIND:-127.0.0.1}:${PANEL_GRPC_PORT:-50051}:50051" # gRPC; Nginx reaches api:50051 internally
     volumes:
       - ./config:/app/config:ro
       - ./config/deploy/ssh:/home/v2board/.ssh:ro
-      - ./web/public:/app/web/public
-      - ./logs:/app/logs
     environment:
       - TZ=${TZ:-Asia/Shanghai}
       - GIN_MODE=${GIN_MODE:-release}
       - HOME=/home/v2board
       - ANSIBLE_CONFIG=/app/config/deploy/ansible/ansible.cfg
       - ANSIBLE_HOST_KEY_CHECKING=${ANSIBLE_HOST_KEY_CHECKING:-False}
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=${DB_USER:-v2board}
-      - DB_PASSWORD=${DB_PASSWORD:?Database password required}
-      - DB_NAME=${DB_NAME:-v2board}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - JWT_SECRET=${JWT_SECRET:?JWT secret required}
-      - API_TOKEN=${API_TOKEN:?API token required}
     depends_on:
       db:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks:
       - anix-control-network
@@ -54,9 +36,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ========== PostgreSQL 鏁版嵁搴?==========
+  # Durable PostgreSQL database.
   db:
-    image: postgres:16-alpine
+    image: ${POSTGRES_IMAGE:?Set a pinned PostgreSQL image in config/production.env}
     container_name: anix-control-db
     restart: unless-stopped
     environment:
@@ -67,7 +49,6 @@ services:
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./config/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - anix-control-network
     healthcheck:
@@ -81,39 +62,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ========== Redis 缂撳瓨 ==========
-  redis:
-    image: redis:7-alpine
-    container_name: anix-control-redis
-    restart: unless-stopped
-    command: >
-      redis-server
-      --appendonly yes
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-      ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
-    volumes:
-      - redis-data:/data
-    networks:
-      - anix-control-network
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "if [ -n \"$REDIS_PASSWORD\" ]; then redis-cli -a \"$REDIS_PASSWORD\" ping; else redis-cli ping; fi",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
-
-  # ========== Nginx 鍙嶅悜浠ｇ悊 ==========
+  # TLS reverse proxy. Enable with --profile proxy.
   nginx:
-    image: nginx:alpine
+    image: ${NGINX_IMAGE:?Set a pinned Nginx image in config/production.env}
     container_name: anix-control-nginx
     restart: unless-stopped
     profiles:
@@ -124,12 +75,12 @@ services:
     volumes:
       - ./config/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./config/docker/nginx/ssl:/etc/nginx/ssl:ro
-      - ./web/public:/usr/share/nginx/html:ro
       - ./logs/nginx:/var/log/nginx
     depends_on:
       - api
     networks:
-      - anix-control-network
+      anix-control-network:
+        ipv4_address: 172.30.0.10
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
@@ -141,9 +92,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ========== Prometheus 鐩戞帶 (鍙€? ==========
+  # Optional Prometheus profile.
   prometheus:
-    image: prom/prometheus:latest
+    image: ${PROMETHEUS_IMAGE:?Set a pinned Prometheus image in config/production.env}
     container_name: anix-control-prometheus
     restart: unless-stopped
     profiles:
@@ -160,9 +111,9 @@ services:
     networks:
       - anix-control-network
 
-  # ========== Grafana 浠〃鐩?(鍙€? ==========
+  # Optional Grafana profile.
   grafana:
-    image: grafana/grafana:latest
+    image: ${GRAFANA_IMAGE:?Set a pinned Grafana image in config/production.env}
     container_name: anix-control-grafana
     restart: unless-stopped
     profiles:
@@ -175,7 +126,6 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
-      - GF_INSTALL_PLUGINS=redis-datasource
     depends_on:
       - prometheus
     networks:
@@ -184,9 +134,11 @@ services:
 networks:
   anix-control-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
 
 volumes:
   postgres-data:
-  redis-data:
   prometheus-data:
   grafana-data:

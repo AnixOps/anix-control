@@ -95,3 +95,7 @@ Generated artifacts belong under:
 ## Machine telemetry operations
 
 See [the operations runbook](MAINTENANCE_P0.md) for `/maintenance`, owner/technician roles, verified email and Telegram configuration, startup worker/schema behavior, durable WebSocket events, manual plugin rollback and production acceptance gates. Operations tickets are separate from customer support.
+
+Production deployment is fail-closed: values stay in the ignored
+`config/config.yaml`, schema changes require `-migrate-schema`, and real-world
+handoff evidence is checked with `-check-production-evidence`.

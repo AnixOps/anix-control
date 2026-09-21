@@ -1,0 +1,58 @@
+# Copy to config/production-acceptance.yaml after deployment. Record references
+# to operator-owned logs or change tickets; do not put credentials in this file.
+release:
+  control_image_digest: "sha256:REPLACE_WITH_64_LOWERCASE_HEX"
+  control_commit: "REPLACE_WITH_40_CHARACTER_GIT_COMMIT"
+  agent_artifact_sha256: "REPLACE_WITH_64_LOWERCASE_HEX"
+  agent_commit: "REPLACE_WITH_40_CHARACTER_GIT_COMMIT"
+
+database:
+  backup_reference: "REPLACE_WITH_BACKUP_OR_CHANGE_REFERENCE"
+  restore_rehearsed_at: "REPLACE_WITH_RFC3339_TIME"
+  schema_migrated_at: "REPLACE_WITH_RFC3339_TIME"
+  schema_verified_at: "REPLACE_WITH_RFC3339_TIME"
+
+notifications:
+  smtp_delivered_at: "REPLACE_WITH_RFC3339_TIME"
+  smtp_message_id: "REPLACE_WITH_PROVIDER_MESSAGE_ID"
+  telegram_delivered_at: "REPLACE_WITH_RFC3339_TIME"
+  telegram_message_id: "REPLACE_WITH_TELEGRAM_MESSAGE_ID"
+
+external_monitoring:
+  provider: "REPLACE_WITH_PROVIDER"
+  monitor_id: "REPLACE_WITH_MONITOR_ID"
+  outage_alert_at: "REPLACE_WITH_RFC3339_TIME"
+  recovery_alert_at: "REPLACE_WITH_RFC3339_TIME"
+  email_and_telegram_confirmed: false
+
+canary:
+  node_ids: []
+  started_at: "REPLACE_WITH_RFC3339_TIME"
+  completed_at: "REPLACE_WITH_RFC3339_TIME"
+  websocket_reconnect_passed: false
+  agent_restart_passed: false
+  duplicate_delivery_passed: false
+  signed_install_passed: false
+  invalid_signature_rejected: false
+  manual_rollback_passed: false
+  evidence_reference: "REPLACE_WITH_CHANGE_OR_LOG_REFERENCE"
+
+security:
+  forged_node_rejected: false
+  oversize_event_rejected: false
+  redaction_verified: false
+  evidence_reference: "REPLACE_WITH_TEST_REFERENCE"
+
+network:
+  regions: []
+  device_classes: []
+  verified_at: "REPLACE_WITH_RFC3339_TIME"
+  evidence_reference: "REPLACE_WITH_TEST_REFERENCE"
+
+handoff:
+  owner: "REPLACE_WITH_OWNER"
+  technicians: []
+  owner_channels_verified_at: "REPLACE_WITH_RFC3339_TIME"
+  runbook_reviewed_at: "REPLACE_WITH_RFC3339_TIME"
+  approved_by: "REPLACE_WITH_APPROVER"
+  approved_at: "REPLACE_WITH_RFC3339_TIME"

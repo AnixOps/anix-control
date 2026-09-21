@@ -147,10 +147,12 @@ The runtime flow is now:
 
 1. resolve `config/config.yaml`
 2. load app config and `forward_runtime`
-3. normalize sqlite path, frontend path, and ansible runtime paths
-4. initialize database
-5. run `InitForwardRuntimeSystemConfig`
-6. persist the parsed runtime snapshot into `v2_system_config`
+3. run strict placeholder, secret, transport, notification, and proxy checks when `env: production`
+4. normalize sqlite path, frontend path, and ansible runtime paths
+5. initialize the database
+6. run explicit schema migration only with `-migrate-schema`; normal production startup verifies schema without modifying it
+7. run `InitForwardRuntimeSystemConfig`
+8. persist the parsed runtime snapshot into `v2_system_config`
 
 When the alpha plugin profile is enabled, startup also exposes the signed
 package APIs, starts the durable Control lifecycle worker, and dispatches ready
@@ -184,10 +186,20 @@ After startup, verify:
 9. `/admin/control` loads the official package catalog and installation state
 10. an Agent using the same official public key reports an active control stream
 
-For a production-template rehearsal, verify the opposite before adding secrets:
-`control_execution_enabled`, `dispatch_enabled`, `topology_execution_enabled`,
-and `grpc.enabled` must all remain `false`. The production template contains no
-default node API token, gRPC fallback token, or NodeX shared token.
+For a production-template rehearsal, copy `config/config.prod.yaml` to the
+ignored `config/config.yaml`, fill every deployment value and run:
+
+```bash
+anix-control -config config/config.yaml -check-config
+anix-control -config config/config.yaml \
+  -check-production-compose-env config/production.env
+anix-control -config config/config.yaml -migrate-schema
+```
+
+The first-batch production profile requires `control_execution_enabled`,
+`dispatch_enabled`, and `grpc.enabled`. Topology execution remains disabled
+until its own canary approval. The release uses process-local cache and one
+Control replica; PostgreSQL holds durable operations data.
 
 ## 8. Related Docs
 

@@ -32,6 +32,7 @@ TMP_DIR=""
 BACKUP_DIR=""
 WAS_ACTIVE=0
 SKIP_START=0
+FRESH_CONFIG=0
 COMMAND="install"
 VERSION="${ANIX_CONTROL_VERSION:-${V2BOARD_VERSION:-}}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-}"
@@ -228,7 +229,7 @@ validate_config_value() {
 }
 
 write_fresh_config() {
-  local template="${TMP_DIR}/config.yaml.example"
+	local template="${TMP_DIR}/config.prod.yaml"
   local jwt_secret api_token escaped_email escaped_password
 
   [[ -n "${ADMIN_EMAIL}" ]] || ADMIN_EMAIL="admin@localhost"
@@ -240,9 +241,9 @@ write_fresh_config() {
   escaped_email="${ADMIN_EMAIL//\\/\\\\}"
   escaped_password="${ADMIN_PASSWORD//\\/\\\\}"
 
-  info "Downloading the version-matched configuration template"
-  curl -fsSL --retry 3 --connect-timeout 15 \
-    "${RAW_BASE}/${VERSION}/config/config.yaml.example" -o "${template}"
+	info "Downloading the version-matched production configuration template"
+	curl -fsSL --retry 3 --connect-timeout 15 \
+		"${RAW_BASE}/${VERSION}/config/config.prod.yaml" -o "${template}"
 
   awk \
     -v jwt_secret="${jwt_secret}" \
@@ -277,8 +278,9 @@ write_fresh_config() {
   printf '%s\n' "${ADMIN_PASSWORD}" > "${INSTALL_DIR}/.bootstrap-admin-password"
   chmod 0640 "${INSTALL_DIR}/.bootstrap-admin-password"
   chown root:"${APP_USER}" "${INSTALL_DIR}/.bootstrap-admin-password"
-  warn "Fresh installation: bootstrap admin email is ${ADMIN_EMAIL}"
-  warn "The one-time bootstrap password is stored in ${INSTALL_DIR}/.bootstrap-admin-password; move it to a password manager, then delete the file."
+	warn "Fresh installation: bootstrap admin email is ${ADMIN_EMAIL}"
+	warn "The one-time bootstrap password is stored in ${INSTALL_DIR}/.bootstrap-admin-password; move it to a password manager, then delete the file."
+	FRESH_CONFIG=1
 }
 
 ensure_layout_and_config() {
@@ -509,6 +511,10 @@ EOF
   systemctl enable "${SERVICE_NAME}" >/dev/null
 }
 
+check_runtime_config() {
+	"${BINARY_PATH}" -config "${CONFIG_FILE}" -check-config
+}
+
 restore_backup() {
   [[ -n "${BACKUP_DIR}" && -d "${BACKUP_DIR}" ]] || return
   warn "Restoring the previous release from ${BACKUP_DIR}"
@@ -607,10 +613,25 @@ main() {
 
   stop_running_service
   backup_current_release
-  install_release_files "${binary_archive}"
-  write_systemd_unit
+	install_release_files "${binary_archive}"
+	write_systemd_unit
 
-  if [[ "${SKIP_START}" -eq 1 ]]; then
+	if ! check_runtime_config; then
+		if [[ "${FRESH_CONFIG}" -eq 1 ]]; then
+			warn "Production configuration still contains deployment placeholders."
+			warn "Fill ${CONFIG_FILE}, then run:"
+			warn "  ${BINARY_PATH} -config ${CONFIG_FILE} -check-config"
+			warn "  ${BINARY_PATH} -config ${CONFIG_FILE} -migrate-schema"
+			warn "  systemctl start ${SERVICE_NAME}"
+			info "Installed ${VERSION}; service was not started before production preflight."
+			exit 0
+		fi
+		restore_backup
+		systemctl restart "${SERVICE_NAME}" >/dev/null 2>&1 || true
+		die "The existing configuration is incompatible with ${VERSION}; the previous release was restored."
+	fi
+
+	if [[ "${SKIP_START}" -eq 1 ]]; then
     info "Installed ${VERSION}; service start was skipped."
     exit 0
   fi
@@ -627,4 +648,6 @@ main() {
   [[ "${COMMAND}" == "rollback" ]] && info "Rollback completed by installing the requested release tag."
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

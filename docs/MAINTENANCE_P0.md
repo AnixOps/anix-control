@@ -4,9 +4,17 @@
 
 ## 启动与入口
 
-使用同一 GitHub Actions release 的后端和前端。开发启动入口是 `go run ./cmd/server -config config/config.yaml`；生产使用已发布 `anix-control -config <受控配置路径>`。配置模板在 `config/config.yaml.example`，开发时复制后设置独立数据库。不要用生产数据库运行测试。
+使用同一 GitHub Actions release 的后端和前端。开发启动入口是 `go run ./cmd/server -config config/config.yaml`；生产从 `config/config.prod.yaml` 创建受控的 `config/config.yaml`。真实域名、数据库密码、管理员密码、通知凭据和外部监测编号只写入部署端配置，不提交仓库。
 
-后端主进程在现有 Kernel schema 初始化中创建独立 `ops_*` 运维表及 `v3_maintenance_*` 变更表；这属于 schema 写入，上线须提前在备份副本审查和演练。当前没有单独的生产运维 schema 迁移批准执行器。后台任务启动立即补跑，之后每 30 秒消费、升级、通知和保留清理；SIGTERM 取消任务并等待退出。日志写入现有标准输出/服务管理器日志；失败只输出固定类别，待处理数据保留在数据库。
+生产启动不会自动修改 schema。备份和恢复演练后，在批准的维护窗口依次执行：
+
+```bash
+anix-control -config config/config.yaml -check-config
+anix-control -config config/config.yaml -migrate-schema
+anix-control -config config/config.yaml
+```
+
+正常启动会验证所有表、列和关键索引，缺失时立即退出。显式迁移创建完整业务表、`ops_*` 运维表和 `v3_maintenance_*` 变更表，并写入必要的内置目录数据。后台任务启动立即补跑，之后按 `maintenance.worker_interval` 消费、升级、通知和保留清理；SIGTERM 取消运维任务并等待退出。日志写入标准输出或服务管理器，失败只输出固定类别，待处理数据保留在数据库。
 
 登录后进入 `/maintenance`，管理端和用户工作区都有入口。客户售后仍使用原工单页面；运维不向客户 `v2_ticket` 写入。普通用户不能读取运维数据。负责人或指定技术员由服务端判定，不依赖前端按钮隐藏。
 
@@ -14,15 +22,15 @@
 
 首次由管理员在“运维设置”指定负责人、技术员用户 ID 和每个人的邮件/Telegram chat ID。没有技术员时负责人接收普通通知。保存设置后分别发送邮件和 Telegram 验证码、输入收到的验证码，两个渠道都确认成功才可正式启用。负责人/渠道更换会撤销对应验证；修订号阻止并发覆盖。页面不会返回验证码或服务端凭据。
 
-部署平台注入以下环境变量（仓库不提供实际值）：
+通知传输只从 `config/config.yaml` 读取（仓库不提供实际值）：
 
 | 名称 | 用途 |
 |---|---|
-| `ANIXOPS_MAINTENANCE_SMTP_HOST` | SMTP 主机 |
-| `ANIXOPS_MAINTENANCE_SMTP_PORT` | STARTTLS 端口，默认 587 |
-| `ANIXOPS_MAINTENANCE_SMTP_FROM` | 发件地址 |
-| `ANIXOPS_MAINTENANCE_SMTP_USERNAME` / `ANIXOPS_MAINTENANCE_SMTP_PASSWORD` | SMTP 认证 |
-| `ANIXOPS_MAINTENANCE_TELEGRAM_TOKEN` | Telegram Bot token |
+| `maintenance.smtp.host` / `port` | SMTP 主机和 STARTTLS 端口 |
+| `maintenance.smtp.from` | 发件地址 |
+| `maintenance.smtp.username` / `password` | SMTP 认证 |
+| `maintenance.telegram.bot_token` | Telegram Bot token |
+| `maintenance.external_monitoring.*` | 独立监测供应商、监测编号、健康地址和渠道声明 |
 
 邮件必须支持 STARTTLS（TLS 1.2+），发送前校验服务器证书；当前不支持隐式 TLS 465。Telegram 调用官方 HTTPS API，禁止跟随重定向。每次发送最多 15 秒，两个渠道独立失败重试（30 秒逐级至 30 分钟）。不要在开发验收时配置真实接收人；自动测试使用注入的发送器。
 
@@ -57,4 +65,13 @@
 
 ## 上线前独立门槛
 
-真实邮件和 Telegram 验证、独立监测 Control `/health`、真实跨地域网络/设备、灰度观察和交接均需实际证据。见 [外部监測评估](guide/maintenance-external-monitoring.md)。CI 不执行生产变更，也不发送真实通知。
+真实邮件和 Telegram 验证、独立监测 Control `/health`、真实跨地域网络/设备、灰度观察和交接均需实际证据。见 [外部监测评估](guide/maintenance-external-monitoring.md)。CI 不执行生产变更，也不发送真实通知。
+
+部署后复制 `config/production-acceptance.yaml.example` 为未跟踪的 `config/production-acceptance.yaml`，填入消息 ID、监测告警时间、发布散列、迁移、灰度、回滚和交接记录，然后执行：
+
+```bash
+anix-control -config config/config.yaml \
+  -check-production-evidence config/production-acceptance.yaml
+```
+
+该命令通过以前，不得把真实环境标记为生产验收完成。

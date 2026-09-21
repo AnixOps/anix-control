@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26.6-alpine AS builder
 
 # Install build tools
 RUN apk add --no-cache git make nodejs npm
@@ -56,6 +56,8 @@ WORKDIR /app
 COPY --from=builder /app/anix-control .
 COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/config/config.yaml.example ./config/config.yaml.example
+COPY --from=builder /app/config/config.prod.yaml ./config/config.prod.yaml
+COPY --from=builder /app/config/production-acceptance.yaml.example ./config/production-acceptance.yaml.example
 COPY --from=builder /app/config/deploy ./config/deploy
 
 # Copy frontend build (if exists)

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -166,7 +167,7 @@ func TestOfficialPluginAlphaProfiles(t *testing.T) {
 	}{
 		{name: "development", path: "config.dev.yaml.example", executionEnabled: true, dispatchEnabled: true, grpcEnabled: true},
 		{name: "release installer fail closed", path: "config.yaml.example", executionEnabled: false, dispatchEnabled: false, grpcEnabled: true},
-		{name: "production fail closed", path: "config.prod.yaml", executionEnabled: false, dispatchEnabled: false, grpcEnabled: false},
+		{name: "production first delivery", path: "config.prod.yaml", executionEnabled: true, dispatchEnabled: true, grpcEnabled: true},
 	}
 
 	for _, profile := range profiles {
@@ -182,21 +183,46 @@ func TestOfficialPluginAlphaProfiles(t *testing.T) {
 			assert.Equal(t, profile.grpcEnabled, loaded.GRPC.Enable)
 			assert.False(t, loaded.Plugins.TopologyExecutionEnabled)
 			if profile.grpcEnabled {
-				assert.Equal(t, "127.0.0.1", loaded.GRPC.Host)
+				assert.True(t, loaded.GRPC.Host == "127.0.0.1" || loaded.GRPC.BehindTLSProxy)
 			}
 		})
 	}
 }
 
-func TestProductionPluginProfileContainsNoDefaultRemoteCredential(t *testing.T) {
+func TestProductionPluginProfileRejectsUnfilledDeploymentValues(t *testing.T) {
 	resetConfig()
 	t.Cleanup(resetConfig)
 
 	loaded, err := Load(filepath.Join("..", "..", "config", "config.prod.yaml"))
 	require.NoError(t, err)
-	assert.Empty(t, loaded.App.APIToken)
+	assert.Contains(t, loaded.App.APIToken, "REPLACE")
 	assert.Empty(t, loaded.GRPC.APIToken)
 	assert.Empty(t, loaded.ForwardRuntime.NodeX.Token)
+	require.Error(t, ValidateForStartup(loaded))
+}
+
+func TestProductionTemplatePassesAfterOperatorValuesAreFilled(t *testing.T) {
+	resetConfig()
+	t.Cleanup(resetConfig)
+
+	loaded, err := Load(filepath.Join("..", "..", "config", "config.prod.yaml"))
+	require.NoError(t, err)
+	loaded.Database.Password = strings.Repeat("d", 32)
+	loaded.JWT.Secret = strings.Repeat("j", 32)
+	loaded.App.PublicURL = "https://control.company.net"
+	loaded.App.APIToken = strings.Repeat("a", 32)
+	loaded.Admin.Email = "owner@company.net"
+	loaded.Admin.Password = strings.Repeat("p", 32)
+	loaded.Maintenance.SMTP.Host = "smtp.company.net"
+	loaded.Maintenance.SMTP.From = "alerts@company.net"
+	loaded.Maintenance.SMTP.Username = "alerts@company.net"
+	loaded.Maintenance.SMTP.Password = strings.Repeat("s", 32)
+	loaded.Maintenance.Telegram.BotToken = "123456789:production-test-token"
+	loaded.Maintenance.ExternalMonitoring.Provider = "uptime-provider"
+	loaded.Maintenance.ExternalMonitoring.MonitorID = "monitor-123"
+	loaded.Maintenance.ExternalMonitoring.HealthURL = "https://control.company.net/health"
+
+	require.NoError(t, ValidateForStartup(loaded))
 }
 
 func TestLoadUsesAnixOpsControlAsDefaultAppName(t *testing.T) {

@@ -27,7 +27,6 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	grpcserver "github.com/AnixOps/anix-control/v4/internal/grpc"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
-	"github.com/AnixOps/anix-control/v4/internal/model"
 	_ "github.com/AnixOps/anix-control/v4/internal/payment/gateways" // register payment gateway plugins
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
 	"github.com/AnixOps/anix-control/v4/internal/router"
@@ -74,15 +73,23 @@ import (
 const shutdownTimeout = 30 * time.Second
 
 var (
-	configPath string
-	version    = branding.DefaultVersion
-	buildTime  = "unknown"
-	buildCode  = ""
-	commit     = "unknown"
+	configPath               string
+	checkConfigOnly          bool
+	migrateSchema            bool
+	productionEvidencePath   string
+	productionComposeEnvPath string
+	version                  = branding.DefaultVersion
+	buildTime                = "unknown"
+	buildCode                = ""
+	commit                   = "unknown"
 )
 
 func init() {
 	flag.StringVar(&configPath, "config", "config/config.yaml", "配置文件路径")
+	flag.BoolVar(&checkConfigOnly, "check-config", false, "校验配置后退出")
+	flag.BoolVar(&migrateSchema, "migrate-schema", false, "执行显式数据库 schema 迁移后退出")
+	flag.StringVar(&productionEvidencePath, "check-production-evidence", "", "校验生产部署验收记录后退出")
+	flag.StringVar(&productionComposeEnvPath, "check-production-compose-env", "", "校验生产 Compose 环境并与应用配置比对后退出")
 }
 
 func formatDisplayVersion(baseVersion, code string) string {
@@ -267,6 +274,22 @@ func serveAssetFiles(frontendPath string) gin.HandlerFunc {
 
 func main() {
 	flag.Parse()
+	selectedModes := 0
+	if checkConfigOnly {
+		selectedModes++
+	}
+	if migrateSchema {
+		selectedModes++
+	}
+	if strings.TrimSpace(productionEvidencePath) != "" {
+		selectedModes++
+	}
+	if strings.TrimSpace(productionComposeEnvPath) != "" {
+		selectedModes++
+	}
+	if selectedModes > 1 {
+		log.Fatal("Use only one configuration check or migration mode at a time")
+	}
 
 	resolvedConfigPath, resolveErr := resolveConfigPath(configPath)
 	log.Printf("Loading config file: %s", resolvedConfigPath)
@@ -282,6 +305,27 @@ func main() {
 	cfg, err := config.Load(resolvedConfigPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+	}
+	if err := config.ValidateForStartup(cfg); err != nil {
+		log.Fatalf("Failed production configuration preflight: %v", err)
+	}
+	if strings.TrimSpace(productionComposeEnvPath) != "" {
+		if err := config.ValidateProductionComposeEnvironmentFile(productionComposeEnvPath, cfg); err != nil {
+			log.Fatalf("Failed production Compose environment preflight: %v", err)
+		}
+		log.Printf("Production Compose environment preflight passed: %s", productionComposeEnvPath)
+		return
+	}
+	if strings.TrimSpace(productionEvidencePath) != "" {
+		if err := config.ValidateProductionAcceptanceFile(productionEvidencePath); err != nil {
+			log.Fatalf("Failed production acceptance preflight: %v", err)
+		}
+		log.Printf("Production acceptance preflight passed: %s", productionEvidencePath)
+		return
+	}
+	if checkConfigOnly {
+		log.Printf("Configuration preflight passed: %s", resolvedConfigPath)
+		return
 	}
 
 	// 打印环境信息
@@ -302,7 +346,7 @@ func main() {
 	log.Printf("Frontend static path: %s", cfg.Frontend.Path)
 	resolveForwardRuntimePaths(cfg, resolvedConfigPath)
 
-	env := cfg.Env
+	env := strings.ToLower(strings.TrimSpace(cfg.Env))
 	if env == "" {
 		env = "development"
 	}
@@ -322,104 +366,24 @@ func main() {
 			log.Printf("Database close error: %v", err)
 		}
 	}()
+	if migrateSchema {
+		if err := migrateApplicationSchema(database.Get()); err != nil {
+			log.Fatalf("Failed to migrate application schema: %v", err)
+		}
+		log.Print("Application schema migration completed")
+		return
+	}
 
 	// 自动迁移数据库：仅在 development 或 test 环境下运行，避免在生产环境自动修改数据库结构
 	if env == "development" || env == "test" {
-		if err := database.AutoMigrate(
-			&model.User{},
-			&model.Plan{},
-			&model.Order{},
-			&model.Payment{},
-			&model.PaymentLog{},
-			&model.ServerVMess{},
-			&model.ServerVLESS{},
-			&model.ServerTrojan{},
-			&model.ServerShadowsocks{},
-			// 新版节点管理
-			&model.Node{},
-			&model.NodeProtocol{},
-			&model.WireGuardPeer{},
-			&model.NodeGroup{},
-			&model.AuthorizedKey{},
-			// 流量与统计日志
-			&model.TrafficLog{},
-			&model.OnlineLog{},
-			&model.StatUser{},
-			&model.StatServer{},
-			&model.NodeLog{},
-			// 订阅分组和模板
-			&model.SubscriptionGroup{},
-			&model.SubscriptionTemplate{},
-			&model.UserSubscriptionGroup{},
-			&model.PlanSubscriptionGroup{},
-			// 事件与新模型
-			&model.Event{},
-			// 工单系统
-			&model.Ticket{},
-			&model.TicketMessage{},
-			// 优惠券系统
-			&model.Coupon{},
-			&model.CouponUsage{},
-			// 知识库
-			&model.Knowledge{},
-			// 流量转发系统
-			&model.ForwardNode{},
-			&model.ForwardRule{},
-			&model.ForwardRoute{},
-			&model.ForwardLog{},
-			&model.ForwardStats{},
-			&model.ForwardTunnel{},
-			&model.ForwardUserTunnel{},
-			&model.Forward{},
-			&model.ForwardPortBinding{},
-			&model.SpeedLimit{},
-			&model.ForwardRuntimeJob{},
-			&model.ForwardTrafficCursor{},
-			&model.ForwardCleanAgent{},
-			&model.ForwardAgentBridgeTask{},
-			&model.ForwardLatencyBucket{},
-			// 支付网关
-			&model.PaymentGateway{},
-			&model.PaymentRecord{},
-			// Telegram Bot
-			&model.TelegramBot{},
-			&model.TelegramUser{},
-			&model.TelegramChat{},
-			&model.TelegramCommand{},
-			&model.TelegramNotification{},
-			// 通知系统
-			&model.NotificationTemplate{},
-			&model.NotificationLog{},
-			// MFA多因素认证
-			&model.UserMFA{},
-			&model.MFALoginAttempt{},
-			// 邀请返利系统
-			&model.UserLevel{},
-			&model.InviteCode{},
-			&model.CommissionRecord{},
-			&model.CommissionWithdraw{},
-			&model.InviteConfig{},
-			// 系统管理
-			&model.LoadBalancer{},
-			&model.SystemConfig{},
-			&model.BackupRecord{},
-			&model.BackupConfig{},
-			&model.OperationLog{},
-			&model.AuditLog{},
-		); err != nil {
+		if err := migrateApplicationSchema(database.Get()); err != nil {
 			log.Fatalf("Failed to migrate database: %v", err)
 		}
 	} else {
-		log.Println("Production mode: skipping AutoMigrate. Use explicit migrations in production.")
-	}
-	if err := service.EnsureWireGuardPeerSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure WireGuard peer schema: %v", err)
-	}
-	if err := service.EnsureNodeRuntimeHealthSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure node runtime health schema: %v", err)
-	}
-	if err := service.EnsureKernelSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure control kernel schema: %v", err)
+		if err := verifyApplicationSchema(database.Get()); err != nil {
+			log.Fatalf("Production schema preflight failed; run -migrate-schema during the approved maintenance window: %v", err)
+		}
+		log.Println("Production mode: schema verified without mutation")
 	}
 
 	// 初始化管理员账号
@@ -432,32 +396,11 @@ func main() {
 	service.InitDefaultPlan()
 
 	// 从环境变量初始化默认授权密钥
-	service.InitDefaultAuthKeyFromEnv()
+	service.InitDefaultAuthKey(cfg.Nodes.BootstrapAuthKey)
 
 	// 初始化缓存 (默认使用内存缓存)
 	if err := service.InitForwardRuntimeSystemConfig(database.Get()); err != nil {
 		log.Fatalf("Failed to initialize forward runtime config: %v", err)
-	}
-	if err := service.EnsureObservabilitySchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure observability schema: %v", err)
-	}
-	if err := service.EnsureStatsSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure stats schema: %v", err)
-	}
-	if err := service.EnsureForwardBridgeSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure forward bridge schema: %v", err)
-	}
-	if err := service.EnsureForwardRuntimeJobSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure forward runtime job schema: %v", err)
-	}
-	if err := service.EnsureForwardPortBindingSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure forward port binding schema: %v", err)
-	}
-	if err := service.EnsureForwardNodeMetricsPortColumn(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure forward node metrics_port column: %v", err)
-	}
-	if err := service.EnsureAgentDiagnosticTaskSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure agent diagnostic task schema: %v", err)
 	}
 	cache.InitMemory()
 	defer cache.CloseMemory()
@@ -506,9 +449,25 @@ func main() {
 
 	maintenanceCtx, maintenanceCancel := context.WithCancel(context.Background())
 	maintenanceDone := make(chan struct{})
+	maintenanceInterval := 30 * time.Second
+	if raw := strings.TrimSpace(cfg.Maintenance.WorkerInterval); raw != "" {
+		parsed, parseErr := time.ParseDuration(raw)
+		if parseErr != nil || parsed <= 0 {
+			log.Fatalf("Invalid maintenance.worker_interval %q", raw)
+		}
+		maintenanceInterval = parsed
+	}
+	maintenanceSender := service.NewMaintenanceTransport(service.MaintenanceTransportConfig{
+		SMTPHost:      cfg.Maintenance.SMTP.Host,
+		SMTPPort:      cfg.Maintenance.SMTP.Port,
+		SMTPFrom:      cfg.Maintenance.SMTP.From,
+		SMTPUsername:  cfg.Maintenance.SMTP.Username,
+		SMTPPassword:  cfg.Maintenance.SMTP.Password,
+		TelegramToken: cfg.Maintenance.Telegram.BotToken,
+	})
 	go func() {
 		defer close(maintenanceDone)
-		service.MaintenanceEventWorker{DB: database.Get()}.Start(maintenanceCtx)
+		service.MaintenanceEventWorker{DB: database.Get(), Sender: maintenanceSender, Interval: maintenanceInterval}.Start(maintenanceCtx)
 	}()
 
 	// 设置Gin模式

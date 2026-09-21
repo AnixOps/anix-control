@@ -134,7 +134,17 @@ sudo bash /tmp/anix-control-install.sh install --version "${VERSION}" --admin-em
 rm -f /tmp/anix-control-install.sh
 ```
 
-安装器会验证 Release 中的 SHA-256，保留已有配置和数据库，更新失败时恢复上一个二进制/前端快照。完整步骤、反向代理、升级与回滚说明见 [`guide/release-installation.md`](guide/release-installation.md)。
+安装器会验证 Release 中的 SHA-256，保留已有配置和数据库，更新失败时恢复上一个二进制/前端快照。首次安装写入生产模板，但只要仍有部署占位符就不会启动服务。填写 `/opt/anixops/control/config/config.yaml` 后运行：
+
+```bash
+sudo -u anixops /opt/anixops/control/bin/anix-control \
+  -config /opt/anixops/control/config/config.yaml -check-config
+sudo -u anixops /opt/anixops/control/bin/anix-control \
+  -config /opt/anixops/control/config/config.yaml -migrate-schema
+sudo systemctl start anix-control
+```
+
+完整步骤、反向代理、升级与回滚说明见 [`guide/release-installation.md`](guide/release-installation.md)。
 
 历史源码/Docker 安装器仍保留给受控恢复场景；必须显式设置 `ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1`，不是正式发布路径。
 
@@ -225,7 +235,7 @@ npm run dev
 - 反向代理：Nginx 或 Caddy（统一 TLS 终止）
 - 应用服务：`anix-control`（Go 二进制）
 - 数据库：PostgreSQL（优先）
-- 缓存：Redis（多实例/高并发场景）
+- 缓存：进程内存。本发行版只支持单 Control 副本；可靠运维事件和通知存储在 PostgreSQL。
 - 监控：Prometheus（可选），内置 Grafana（可选）
 
 ### systemd 二进制更新
@@ -270,20 +280,36 @@ bash config/deploy/clean_local_build_artifacts.sh --include-deploy-backups
 
 ### 启动生产编排
 
+先准备只保存在部署主机的配置和证书：
+
 ```bash
-docker compose -f docker-compose.prod.yml up -d
+cp config/config.prod.yaml config/config.yaml
+cp config/production.env.example config/production.env
+# Replace every placeholder in both files and install cert.pem/key.pem under
+# config/docker/nginx/ssl/. Keep database values identical in both files.
+
+docker compose --env-file config/production.env -f docker-compose.prod.yml config --quiet
+docker compose --env-file config/production.env -f docker-compose.prod.yml up -d db
+docker compose --env-file config/production.env -f docker-compose.prod.yml run --rm api \
+  ./anix-control -config config/config.yaml -check-config
+docker compose --env-file config/production.env -f docker-compose.prod.yml run --rm api \
+  ./anix-control -config config/config.yaml \
+  -check-production-compose-env config/production.env
+docker compose --env-file config/production.env -f docker-compose.prod.yml run --rm api \
+  ./anix-control -config config/config.yaml -migrate-schema
+docker compose --env-file config/production.env -f docker-compose.prod.yml --profile proxy up -d
 ```
 
 如需只启动 Prometheus：
 
 ```bash
-docker compose -f docker-compose.prod.yml --profile prometheus up -d
+docker compose --env-file config/production.env -f docker-compose.prod.yml --profile proxy --profile prometheus up -d
 ```
 
 如需同时启用内置 Grafana：
 
 ```bash
-docker compose -f docker-compose.prod.yml --profile prometheus --profile grafana up -d
+docker compose --env-file config/production.env -f docker-compose.prod.yml --profile proxy --profile prometheus --profile grafana up -d
 ```
 
 ---
@@ -346,16 +372,7 @@ cache:
   driver: "memory"
 ```
 
-Redis：
-
-```yaml
-cache:
-  driver: "redis"
-  host: "127.0.0.1"
-  port: 6379
-  password: ""
-  db: 0
-```
+`driver: "redis"` 目前只有配置结构兼容，没有运行时后端。生产预检会拒绝它，避免部署一个未使用的 Redis 服务。横向扩容 Control 前须先实现并验证共享缓存。
 
 ### 必填项
 
@@ -500,3 +517,12 @@ curl -H "X-API-Key: your_node_api_key" "http://localhost:8080/api/v2/server/UniP
 - 已有明确 rollback owner 和 rollback window
 
 建议先在预发布环境验证，再进行生产升级。
+
+上线演练完成后，从 `config/production-acceptance.yaml.example` 创建未跟踪的验收记录，并运行：
+
+```bash
+anix-control -config config/config.yaml \
+  -check-production-evidence config/production-acceptance.yaml
+```
+
+该检查要求真实发布散列、备份恢复、双渠道通知、外部监测、Agent 灰度、签名拒绝、人工回滚、跨地域和交接证据。

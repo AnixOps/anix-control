@@ -30,6 +30,45 @@ type Config struct {
 	ForwardRuntime ForwardRuntimeConfig `yaml:"forward_runtime"`
 	Plugins        PluginConfig         `yaml:"plugins"`
 	GRPC           GRPCConfig           `yaml:"grpc"`
+	Maintenance    MaintenanceConfig    `yaml:"maintenance"`
+	Nodes          NodeBootstrapConfig  `yaml:"nodes"`
+}
+
+// MaintenanceConfig contains deployment-owned transport credentials and the
+// independent availability monitor declaration. Operator contacts remain in
+// the maintenance settings database because they are revisioned and verified.
+type MaintenanceConfig struct {
+	WorkerInterval     string                              `yaml:"worker_interval"`
+	SMTP               MaintenanceSMTPConfig               `yaml:"smtp"`
+	Telegram           MaintenanceTelegramConfig           `yaml:"telegram"`
+	ExternalMonitoring MaintenanceExternalMonitoringConfig `yaml:"external_monitoring"`
+}
+
+type MaintenanceSMTPConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	From     string `yaml:"from"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
+type MaintenanceTelegramConfig struct {
+	BotToken string `yaml:"bot_token"`
+}
+
+type MaintenanceExternalMonitoringConfig struct {
+	Provider             string `yaml:"provider"`
+	MonitorID            string `yaml:"monitor_id"`
+	HealthURL            string `yaml:"health_url"`
+	CheckIntervalSeconds int    `yaml:"check_interval_seconds"`
+	EmailEnabled         bool   `yaml:"email_enabled"`
+	TelegramEnabled      bool   `yaml:"telegram_enabled"`
+}
+
+// NodeBootstrapConfig optionally provisions the first node enrollment key.
+// Existing deployments may leave this empty and create keys in the UI.
+type NodeBootstrapConfig struct {
+	BootstrapAuthKey string `yaml:"bootstrap_auth_key"`
 }
 
 // PluginConfig controls the official plugin trust root and the opt-in durable
@@ -47,12 +86,13 @@ type PluginConfig struct {
 
 // GRPCConfig controls the node-facing gRPC server (AnixOps Agent nodes connect here).
 type GRPCConfig struct {
-	Enable      bool   `yaml:"enabled"`
-	Host        string `yaml:"host"`
-	Port        int    `yaml:"port"`
-	APIToken    string `yaml:"api_token"`
-	TLSCertFile string `yaml:"tls_cert_file"`
-	TLSKeyFile  string `yaml:"tls_key_file"`
+	Enable         bool   `yaml:"enabled"`
+	Host           string `yaml:"host"`
+	Port           int    `yaml:"port"`
+	APIToken       string `yaml:"api_token"`
+	TLSCertFile    string `yaml:"tls_cert_file"`
+	TLSKeyFile     string `yaml:"tls_key_file"`
+	BehindTLSProxy bool   `yaml:"behind_tls_proxy"`
 }
 
 // AuthConfig defines authentication security settings.
@@ -231,6 +271,7 @@ type JWTConfig struct {
 type AppConfig struct {
 	Name             string `yaml:"name"`
 	Version          string `yaml:"version"`
+	PublicURL        string `yaml:"public_url"`
 	APIToken         string `yaml:"api_token"`
 	TrafficLogEnable bool   `yaml:"traffic_log_enable"`
 	SubscribePath    string `yaml:"subscribe_path"`

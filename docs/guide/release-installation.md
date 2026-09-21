@@ -45,18 +45,17 @@ The installer will:
 1. Create the `anixops` service user and `/opt/anixops/control` layout.
 2. Download the GitHub Release binary and frontend packages.
 3. Verify both packages against the release `SHA256SUMS.txt`.
-4. Download the configuration template that matches the selected tag.
+4. Download the production configuration template that matches the selected tag.
 5. Generate the JWT secret, node API token, and first administrator password.
 6. Install and enable `anix-control.service`.
-7. Start the service and require `http://127.0.0.1:8080/health` to succeed.
+7. Run the production configuration preflight. A fresh template still contains
+   deployment placeholders, so the installer leaves the enabled service stopped.
 
-The normal configuration template keeps package execution, Agent dispatch, and
-topology execution disabled. It can inspect signed package metadata without
-switching traffic or starting package workers. Use the explicit development or
-operator-approved canary profile to enable a signed package lifecycle after
-the trust root, Agent Supervisor, rollback plan, and secure gRPC path are
-ready. Existing configuration files are preserved during upgrades and are
-never silently switched to the plugin path.
+The production template enables Control package execution, Agent dispatch and
+the gRPC listener required by the first machine-telemetry delivery. Topology
+execution remains disabled until its separate canary approval. Existing
+configuration files are preserved during upgrades and must pass the new binary's
+preflight before the service is restarted.
 
 The generated initial password is stored at
 `/opt/anixops/control/.bootstrap-admin-password` with restricted permissions. Store it
@@ -90,13 +89,17 @@ curl -fsS http://127.0.0.1:8080/health
 sudo cat /opt/anixops/control/.release-version
 ```
 
-Before attaching a node, set the real domain, proxy trust list, CORS origins,
-TLS path or reverse proxy, registration policy, and node API key in
-`/opt/anixops/control/config/config.yaml`. Restart only after validating the intended
-change:
+Before attaching a node, set the real domain, PostgreSQL values, proxy trust
+list, TLS or reverse proxy, registration policy, SMTP, Telegram and independent
+monitoring values in `/opt/anixops/control/config/config.yaml`. Then explicitly
+validate, migrate and start:
 
 ```bash
-sudo systemctl restart anix-control
+sudo -u anixops /opt/anixops/control/bin/anix-control \
+  -config /opt/anixops/control/config/config.yaml -check-config
+sudo -u anixops /opt/anixops/control/bin/anix-control \
+  -config /opt/anixops/control/config/config.yaml -migrate-schema
+sudo systemctl start anix-control
 sudo systemctl status anix-control --no-pager
 ```
 

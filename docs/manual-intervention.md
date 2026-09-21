@@ -70,10 +70,17 @@ Manual action required:
 - Confirm log retention and monitoring.
 - Confirm health check endpoint and alerting.
 - Confirm release rollback procedure.
+- Copy `config/production-acceptance.yaml.example` to the ignored
+  `config/production-acceptance.yaml`, record real provider/change references,
+  and pass `anix-control -config config/config.yaml -check-production-evidence
+  config/production-acceptance.yaml` before handoff.
 
 Current state:
 
 - CI can build binaries and Docker images.
+- Production startup is fail-closed: `-check-config` rejects placeholders and
+  normal startup rejects a missing or outdated schema. Schema changes require
+  the separate `-migrate-schema` command in an approved maintenance window.
 - The release workflow intentionally does not deploy to production.
 - GitHub Releases include `OPERATOR_DEPLOYMENT.md` with the manual deployment, verification, and rollback flow, `UPGRADE.md` with upgrade and rollback instructions, `RELEASE_NOTES.md` generated from `CHANGELOG.md`, `migration-dry-run.txt` as the CI migration dry-run evidence for that tag, and `RELEASE_MANIFEST.json` with GitHub Actions run metadata and artifact hashes.
 
