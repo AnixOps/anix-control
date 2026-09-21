@@ -1,5 +1,9 @@
 # AnixOps Control
 
+维护入口：[首批运维手册](docs/MAINTENANCE_P0.md)
+
+首批验收记录：[docs/P4_EXECUTION_STATUS.md](docs/P4_EXECUTION_STATUS.md)；维护事件契约：[docs/contracts/maintenance-event.schema.json](docs/contracts/maintenance-event.schema.json)
+
 `anix-control` is the control-plane service for AnixOps. It combines a Go
 backend, Vue 3 admin/user frontend, node communication APIs, subscription
 generation, payment/order management, traffic statistics, and the in-progress

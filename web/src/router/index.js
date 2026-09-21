@@ -45,6 +45,7 @@ const AdminControl = () => import('@/views/admin/Control.vue')
 const AdminAccessGroups = () => import('@/views/admin/AccessGroups.vue')
 
 const routes = [
+  { path: '/maintenance', component: () => import('@/views/maintenance/Operations.vue'), meta: { requiresAuth: true } },
   {
     path: '/',
     redirect: '/login'

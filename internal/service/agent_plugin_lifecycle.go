@@ -179,6 +179,13 @@ func resolveNodePluginDesiredState(tx *gorm.DB, lifecycle *model.NodePluginLifec
 			return nodePluginDesiredState{}, fmt.Errorf("%w: enabled roles must share desired_version and desired_config_revision", ErrAgentPluginAssignmentConflict)
 		}
 	}
+	if desired.Enabled && desired.Version == lifecycle.DesiredVersion && desired.ConfigRevision == lifecycle.DesiredConfigRevision {
+		if held, err := MaintenanceOverridesLifecycle(tx, *lifecycle); err != nil {
+			return nodePluginDesiredState{}, err
+		} else if held {
+			return desired, nil
+		}
+	}
 	if desired.Enabled {
 		if errors.Is(installationErr, gorm.ErrRecordNotFound) {
 			return nodePluginDesiredState{}, fmt.Errorf("%w: agent plugin installation is missing", ErrAgentPluginReconcileNotReady)
@@ -257,6 +264,11 @@ func QueueAgentAssignmentLifecycle(tx *gorm.DB, assignment model.NodeServiceAssi
 // successful or in-flight chains are never duplicated on periodic reconcile.
 func QueueNodePluginLifecycle(tx *gorm.DB, lifecycle *model.NodePluginLifecycle, now time.Time) (*AgentAssignmentOperationChain, error) {
 	if lifecycle == nil || lifecycle.DesiredGeneration <= 0 {
+		return &AgentAssignmentOperationChain{}, nil
+	}
+	if held, err := MaintenanceOverridesLifecycle(tx, *lifecycle); err != nil {
+		return nil, err
+	} else if held {
 		return &AgentAssignmentOperationChain{}, nil
 	}
 	if now.IsZero() {

@@ -85,10 +85,16 @@ func LoadAuthorizedAgentPluginMetadata(db *gorm.DB, nodeID uint, pluginID, versi
 	}
 	var installation model.PluginInstallation
 	if err := db.First(&installation, "plugin_id = ? AND target = ? AND desired_version = ? AND enabled = ?", pluginID, "agent", version, true).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		allowed, overrideErr := MaintenanceAuthorizesAgentRelease(db, nodeID, pluginID, version)
+		if overrideErr != nil {
+			return nil, overrideErr
+		}
+		if !allowed {
 			return nil, ErrAgentPluginAssignmentDenied
 		}
-		return nil, err
 	}
 
 	var plugin model.Plugin

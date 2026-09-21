@@ -196,3 +196,7 @@ default node API token, gRPC fallback token, or NodeX shared token.
 - [`runtime.md`](runtime.md)
 - [`../guide/forward-relay-onboarding.md`](../guide/forward-relay-onboarding.md)
 - [`../guide/forward-tunnel-smoke-test.md`](../guide/forward-tunnel-smoke-test.md)
+
+## Machine telemetry operations
+
+See [the operations runbook](../MAINTENANCE_P0.md) for `/maintenance`, owner/technician roles, verified email and Telegram configuration, startup worker/schema behavior, durable WebSocket events, manual plugin rollback and production acceptance gates. Operations tickets are separate from customer support.

@@ -504,6 +504,13 @@ func main() {
 		log.Printf("Control plugin execution enabled (poll interval %s, reconciliation operations %d)", interval, queued)
 	}
 
+	maintenanceCtx, maintenanceCancel := context.WithCancel(context.Background())
+	maintenanceDone := make(chan struct{})
+	go func() {
+		defer close(maintenanceDone)
+		service.MaintenanceEventWorker{DB: database.Get()}.Start(maintenanceCtx)
+	}()
+
 	// 设置Gin模式
 	go func() {
 		executor := service.NewPanelForwardRuntimeJobExecutor(database.Get())
@@ -639,6 +646,7 @@ func main() {
 
 	// Mark servers as draining so /health returns 503 to load balancers.
 	draining.Store(1)
+	maintenanceCancel()
 
 	// Register a second-signal handler for immediate force-exit.
 	forceChan := make(chan os.Signal, 1)
@@ -693,6 +701,11 @@ func main() {
 
 	// Give goroutines time to finish returning from ListenAndServe.
 	wg.Wait()
+	select {
+	case <-maintenanceDone:
+	case <-ctx.Done():
+		log.Print("maintenance worker shutdown deadline reached")
+	}
 	log.Println("All servers stopped")
 }
 

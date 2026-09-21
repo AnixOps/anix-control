@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anixops.dev/contracts/maintenance-event.schema.json",
+  "title": "AnixOps maintenance event version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "occurred_at",
+    "environment",
+    "source",
+    "node_id",
+    "plugin_id",
+    "instance_id",
+    "plugin_version",
+    "error_code",
+    "severity",
+    "status"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "maxLength": 128
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time",
+      "minLength": 20,
+      "maxLength": 35
+    },
+    "environment": {
+      "enum": [
+        "production",
+        "staging",
+        "development"
+      ]
+    },
+    "source": {
+      "enum": [
+        "agent",
+        "control",
+        "networkcore",
+        "deployment"
+      ]
+    },
+    "node_id": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]{0,127}$",
+      "maxLength": 128
+    },
+    "plugin_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "maxLength": 128
+    },
+    "instance_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "maxLength": 128
+    },
+    "plugin_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$",
+      "maxLength": 128
+    },
+    "agent_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$",
+      "maxLength": 128
+    },
+    "config_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$",
+      "maxLength": 128
+    },
+    "error_code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_.-]{0,127}$",
+      "maxLength": 128
+    },
+    "severity": {
+      "enum": [
+        "P0",
+        "P1",
+        "P2",
+        "P3"
+      ]
+    },
+    "status": {
+      "enum": [
+        "open",
+        "degraded",
+        "recovered"
+      ]
+    },
+    "first_failed_at": {
+      "type": "string",
+      "format": "date-time",
+      "minLength": 20,
+      "maxLength": 35
+    },
+    "consecutive_failures": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000,
+      "default": 0
+    },
+    "healthy_since": {
+      "type": "string",
+      "format": "date-time",
+      "minLength": 20,
+      "maxLength": 35
+    },
+    "self_heal_action": {
+      "enum": [
+        "none",
+        "retry",
+        "restart",
+        "circuit_break"
+      ]
+    },
+    "self_heal_result": {
+      "enum": [
+        "not_attempted",
+        "succeeded",
+        "failed",
+        "blocked"
+      ]
+    },
+    "diagnostic_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "ticket_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "redacted_summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "description": "Untrusted caller text. Control must discard and generate structured diagnostics independently."
+    }
+  },
+  "$comment": "Host additionally limits UTF-8 byte sizes, RFC3339 timestamps >=2020 and <=receivedNow+5min, chronological observation evidence, 16KiB/event, 50 events/batch and 256KiB/batch. Only human Control operations close incidents. No runtime connection is implied by this schema."
+}

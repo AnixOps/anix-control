@@ -69,7 +69,7 @@ func EnsureKernelSchema(db *gorm.DB) error {
 	if db == nil {
 		return errors.New("database is not initialized")
 	}
-	if err := db.AutoMigrate(model.KernelModels()...); err != nil {
+	if err := db.AutoMigrate(append(append(model.KernelModels(), model.MaintenanceModels()...), model.MaintenanceOperationModels()...)...); err != nil {
 		return err
 	}
 	return db.Transaction(func(tx *gorm.DB) error {

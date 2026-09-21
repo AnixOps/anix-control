@@ -37,3 +37,7 @@ Use this tree like NodeX:
 - if you are asking "what do I edit to boot this": read `reference`
 - if you are asking "how was this feature cloned or implemented": read `guide`
 - if you are asking "what is implemented or still planned": read `features.md`
+
+## Machine telemetry operations
+
+See [the operations runbook](MAINTENANCE_P0.md) for `/maintenance`, owner/technician roles, verified email and Telegram configuration, startup worker/schema behavior, durable WebSocket events, manual plugin rollback and production acceptance gates. Operations tickets are separate from customer support.

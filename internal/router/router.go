@@ -125,6 +125,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		auth := v2.Group("")
 		auth.Use(userLimiter.Middleware())
 		auth.Use(middleware.JWTAuth())
+		auth.Use(handler.MaintenanceForwardMutationGuard())
 		{
 			// 用户接口
 			userHandler := handler.NewUserHandler()
@@ -171,6 +172,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		admin.Use(adminLimiter.Middleware())
 		admin.Use(middleware.JWTAuth())
 		admin.Use(middleware.AdminAuth())
+		admin.Use(handler.MaintenanceLegacyMutationGuard())
 		admin.Use(middleware.AuditLog())
 		{
 			adminHandler := handler.NewAdminHandler()
@@ -453,9 +455,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		authUser := v2.Group("")
 		authUser.Use(userLimiter.Middleware())
 		authUser.Use(middleware.JWTAuth())
+		authUser.Use(handler.MaintenanceForwardMutationGuard())
 		{
 			adminCompat := authUser.Group("")
 			adminCompat.Use(middleware.AdminAuth())
+			adminCompat.Use(handler.MaintenanceLegacyMutationGuard())
+			adminCompat.Use(middleware.AuditLog())
 			{
 				adminCompatHandler := handler.NewAdminHandler()
 				forwardCompatHandler := handler.NewForwardHandler()
@@ -610,6 +615,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		agentAdmin.Use(adminLimiter.Middleware())
 		agentAdmin.Use(middleware.JWTAuth())
 		agentAdmin.Use(middleware.AdminAuth())
+		agentAdmin.Use(handler.MaintenanceLegacyMutationGuard())
+		agentAdmin.Use(middleware.AuditLog())
 		{
 			agentAdmin.GET("/list", agentHandler.ListAgents)
 			agentAdmin.POST("/tasks", agentHandler.CreateTask)
@@ -645,12 +652,36 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		agentPackages.GET("/:plugin_id/:version/manifest", kernel.ServeAgentPluginManifest)
 	}
 
+	ops := r.Group("/api/v3/maintenance")
+	ops.Use(adminLimiter.Middleware(), middleware.JWTAuth())
+	{
+		h := handler.NewMaintenanceHandler()
+		changes := handler.NewMaintenanceOperationHandler()
+		ops.GET("/changes", changes.List)
+		ops.GET("/catalog", changes.Catalog)
+		ops.POST("/changes", changes.Create)
+		ops.POST("/changes/:id/approve", changes.Approve)
+		ops.POST("/changes/:id/execute", changes.Execute)
+		ops.GET("/me", h.Me)
+		ops.GET("/settings", h.Settings)
+		ops.PUT("/settings", h.SaveSettings)
+		ops.POST("/settings/verify", h.Verify)
+		ops.POST("/settings/confirm", h.Confirm)
+		ops.GET("/tickets", h.Tickets)
+		ops.GET("/tickets/:id", h.Detail)
+		ops.POST("/tickets/:id/claim", h.Claim)
+		ops.POST("/tickets/:id/close", h.Close)
+		ops.POST("/tickets/:id/notes", h.Note)
+		ops.PUT("/nodes/:id/state", h.SetNodeState)
+	}
+
 	// API v3 is the control-kernel surface. Legacy business APIs remain under
 	// /api/v2 while services are migrated behind plugin compatibility adapters.
 	v3 := r.Group("/api/v3")
 	v3.Use(adminLimiter.Middleware())
 	v3.Use(middleware.JWTAuth())
 	v3.Use(middleware.AdminAuth())
+	v3.Use(handler.MaintenanceLegacyMutationGuard())
 	v3.Use(middleware.AuditLog())
 	{
 		kernel := handler.NewKernelHandler()

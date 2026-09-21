@@ -78,6 +78,7 @@ web/test-results/
 # Secrets and local state (never commit)
 .authkey
 .v2board.pid
+/password
 
 # Tool/editor local dirs
 .codex/

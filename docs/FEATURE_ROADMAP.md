@@ -659,3 +659,7 @@ type NotificationTemplate struct {
 > This document contains historical design material.
 > Runtime model snippets here are not the current source of truth for `ForwardNode` fields or relay attachment semantics.
 > Use `internal/model/forward.go`, `internal/model/forward_panel.go`, `docs/reference/runtime.md`, and `docs/guide/forward-relay-onboarding.md` for the current implementation.
+
+### Operations authorization (2026-09-22)
+
+Once an operations owner is configured, designated technicians and other non-owner administrators cannot bypass owner approval through legacy operational writes, including compatibility tunnel/speed-limit administration and elevated forwarding actions. Normal customer resource authorization and read-only compatibility POST routes remain available. The independent `/maintenance` workflow binds approved plugin repairs to nodes and versions; it adds no system-network executor. See `docs/MAINTENANCE_P0.md` for roles and acceptance gates.

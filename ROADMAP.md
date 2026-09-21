@@ -5,6 +5,12 @@ Date: 2026-07-17
 This roadmap is ordered by stability and release risk. Items move to done only after code, tests, and CI evidence exist.
 The P0 WireGuard protocol support phase takes priority over ordinary P1/P2 cleanup once implementation starts.
 
+## First Operations Delivery (2026-09-22)
+
+The current delivery priority is signed machine-telemetry lifecycle and the Agent → Control operations loop: authenticated WebSocket durable acknowledgements, a persistent Agent restart budget, separate operations tickets, owner approvals, independent email/Telegram deliveries and operator UI. Source, CI and real-environment evidence are tracked separately in [the acceptance record](docs/P4_EXECUTION_STATUS.md). No production readiness is implied.
+
+Subsequent forwarding, WireGuard, tunnel, NAT, traffic accounting and plugin milestones below remain in scope and retain their original acceptance criteria. NetworkCore subscription runtime, process management, MITM, browser capture and platform clients continue on that repository's own roadmap; they are not prerequisites for this first machine-monitoring delivery.
+
 ## Primary 3.1 To 4.0 Plugin Transformation
 
 Status: in progress

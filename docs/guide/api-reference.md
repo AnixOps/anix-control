@@ -692,3 +692,7 @@ Tunnel DTOs preserve the reference fields: `id`, `name`, `ip`, `inNodePortSta`, 
 - **Diagnose semantics**: the reference traces relay→exit node chains, whereas ours still uses panel-side dialing; log the divergence in clone docs.
 - **UserTunnel lifecycle**: the list honors `ForwardUserTunnel`, but the remaining quota/expire/flow reset flows still need flux-level implementation.
 - **DTO casing**: keep camelCase names intact and avoid removing fields that exist in the flux reference.
+
+### Operations authorization (2026-09-22)
+
+Once an operations owner is configured, designated technicians and other non-owner administrators cannot bypass owner approval through legacy operational writes, including compatibility tunnel/speed-limit administration and elevated forwarding actions. Normal customer resource authorization and read-only compatibility POST routes remain available. The independent `/maintenance` workflow binds approved plugin repairs to nodes and versions; it adds no system-network executor. See `docs/MAINTENANCE_P0.md` for roles and acceptance gates.

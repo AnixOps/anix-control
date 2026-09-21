@@ -1513,3 +1513,52 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  maintenance-acceptance:
+    name: Machine telemetry operations acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GOWORK: 'off'
+      GOFLAGS: '-p=2'
+    steps:
+      - name: Checkout Control
+        uses: actions/checkout@v7
+      - name: Read pinned Agent revision
+        id: agent
+        shell: bash
+        run: |
+          revision=$(cat docs/contracts/agent-maintenance-revision.txt)
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - name: Checkout matching Agent source
+        uses: actions/checkout@v7
+        with:
+          repository: AnixOps/anix-agent
+          ref: ${{ steps.agent.outputs.revision }}
+          path: .maintenance-agent
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            go.sum
+            .maintenance-agent/go.sum
+      - name: Verify shared event fixture
+        run: cmp docs/contracts/maintenance-event.fixture.json .maintenance-agent/docs/contracts/maintenance-event.fixture.json
+      - name: Build Agent transport test harness
+        working-directory: .maintenance-agent
+        run: GOEXPERIMENT=jsonv2 go test -c -o "$RUNNER_TEMP/maintenance-agent-tests" ./node
+      - name: Verify race safety and actual Agent to Control ticket flow
+        env:
+          ANIXOPS_AGENT_E2E_BINARY: ${{ runner.temp }}/maintenance-agent-tests
+        run: go test -race ./internal/maintenance ./internal/service ./internal/handler -run 'Test(Maintenance|SharedMaintenance|DuplicateFields)' -count=1 -timeout=10m
+      - name: Record exact source evidence
+        shell: bash
+        run: |
+          {
+            echo "Control: $GITHUB_SHA"
+            echo "Agent: ${{ steps.agent.outputs.revision }}"
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "Notifications: injected test adapters, no external recipients"
+          } >> "$GITHUB_STEP_SUMMARY"

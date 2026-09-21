@@ -124,15 +124,16 @@ func NewAgentHandler() *AgentHandler {
 // node so online-status writes land in the right place.
 func (h *AgentHandler) verifyForwardNodeToken(nodeID uint, token string) (isForwardNode bool, err error) {
 	var fwd model.ForwardNode
-	if fwdErr := h.db.First(&fwd, nodeID).Error; fwdErr == nil {
-		if fwd.APIToken != token {
-			return true, errAgentInvalidToken
-		}
+	fwdErr := h.db.First(&fwd, nodeID).Error
+	if fwdErr == nil && token != "" && fwd.APIToken == token {
 		return true, nil
 	}
 
 	var node model.Node
 	if nodeErr := h.db.First(&node, nodeID).Error; nodeErr != nil {
+		if fwdErr == nil {
+			return true, errAgentInvalidToken
+		}
 		return false, errAgentNodeNotFound
 	}
 
@@ -505,6 +506,16 @@ func (h *AgentHandler) handleWebSocketMessage(agentConn *AgentConnection, raw []
 		if ack, ok := parseAckPayload(raw, envelope.Payload); ok {
 			h.resolveAck(ack)
 		}
+		return
+	}
+
+	if envelope.Type == "maintenance_events" {
+		if agentConn.IsForwardNode {
+			h.sendAck(agentConn, envelope.ID, errors.New("maintenance requires proxy node identity"))
+			return
+		}
+		ack := service.ReceiveMaintenanceEvents(h.db, agentConn.NodeID, envelope.Payload, time.Now())
+		_ = h.sendEnvelope(agentConn, &wsOutboundEnvelope{Type: "maintenance_ack", NodeID: agentConn.NodeID, Timestamp: time.Now().Unix(), Payload: ack})
 		return
 	}
 

@@ -147,6 +147,7 @@ const navSections = computed(() => {
     items: [
       { to: '/admin/dashboard', icon: 'DB', label: t('layout.admin.nav.dashboard') },
       { to: '/admin/monitor', icon: 'MT', label: t('layout.admin.nav.monitor') },
+      { to: '/maintenance', icon: 'OP', label: '运维工作台' },
       { to: '/admin/traffic-hourly', icon: 'TH', label: t('layout.admin.nav.trafficHourly') }
     ]
   },

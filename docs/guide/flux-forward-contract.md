@@ -402,3 +402,7 @@ Before merging a forward/tunnel change, verify:
 $env:GOWORK='off'; go test ./internal/router ./internal/handler ./internal/service
 cd web && npm run build
 ```
+
+### Operations authorization (2026-09-22)
+
+Once an operations owner is configured, designated technicians and other non-owner administrators cannot bypass owner approval through legacy operational writes, including compatibility tunnel/speed-limit administration and elevated forwarding actions. Normal customer resource authorization and read-only compatibility POST routes remain available. The independent `/maintenance` workflow binds approved plugin repairs to nodes and versions; it adds no system-network executor. See `docs/MAINTENANCE_P0.md` for roles and acceptance gates.

@@ -23,6 +23,7 @@
       </div>
 
       <nav class="desktop-nav" :aria-label="t('layout.user.brand')">
+        <router-link to="/maintenance">运维工作台</router-link>
         <router-link v-for="item in navItems" :key="item.to" :to="item.to">{{ item.label }}</router-link>
       </nav>
 
@@ -55,6 +56,7 @@
         </button>
       </div>
       <nav class="sidebar-nav" :aria-label="t('layout.user.brand')">
+        <router-link to="/maintenance" class="sidebar-link">运维工作台</router-link>
         <router-link v-for="item in navItems" :key="item.to" :to="item.to" class="sidebar-link" @click="sidebarOpen = false">
           <span class="sidebar-link-icon">{{ item.icon }}</span>
           <span>{{ item.label }}</span>

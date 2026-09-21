@@ -330,3 +330,7 @@ Every time a `flux-panel` module is cloned or significantly adjusted, update:
 - `docs/guide/flux-panel-workstream.md` when the next recommended clone order changes
 
 If the change is partial, update the completion status and gap list anyway.
+
+### Operations authorization (2026-09-22)
+
+Once an operations owner is configured, designated technicians and other non-owner administrators cannot bypass owner approval through legacy operational writes, including compatibility tunnel/speed-limit administration and elevated forwarding actions. Normal customer resource authorization and read-only compatibility POST routes remain available. The independent `/maintenance` workflow binds approved plugin repairs to nodes and versions; it adds no system-network executor. See `docs/MAINTENANCE_P0.md` for roles and acceptance gates.
