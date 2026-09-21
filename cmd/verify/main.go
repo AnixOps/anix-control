@@ -327,7 +327,7 @@ func resolveXrayPath(raw string) (string, error) {
 		return "", fmt.Errorf("only xray or xray.exe binaries are allowed, got %q", name)
 	}
 
-	info, err := os.Stat(clean)
+	info, err := os.Stat(clean) // #nosec G703 -- this local verification CLI accepts an operator-selected xray binary after an exact basename allowlist.
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", errors.New("xray 未找到，请先下载或设置 V2BOARD_VERIFY_XRAY")

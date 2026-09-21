@@ -197,7 +197,7 @@ func resolveSubscriptionConfigPath(configFile string) (string, error) {
 		return "", fmt.Errorf("config file must use .yaml or .yml extension")
 	}
 
-	info, err := os.Stat(clean)
+	info, err := os.Stat(clean) // #nosec G703 -- this local test CLI accepts an operator-selected YAML file after extension validation.
 	if err != nil {
 		return "", err
 	}
