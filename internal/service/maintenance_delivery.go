@@ -49,7 +49,7 @@ func (MaintenanceTransport) Send(ctx context.Context, d model.MaintenanceDeliver
 		if err != nil {
 			return errors.New("delivery_failed")
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		var result struct {
 			OK bool `json:"ok"`
 		}
@@ -83,7 +83,7 @@ func sendMaintenanceEmail(ctx context.Context, d model.MaintenanceDelivery) erro
 	if err != nil {
 		return errors.New("delivery_failed")
 	}
-	defer connection.Close()
+	defer func() { _ = connection.Close() }()
 	deadline := time.Now().Add(15 * time.Second)
 	if end, ok := ctx.Deadline(); ok && end.Before(deadline) {
 		deadline = end
@@ -97,7 +97,7 @@ func sendMaintenanceEmail(ctx context.Context, d model.MaintenanceDelivery) erro
 	if err != nil {
 		return errors.New("delivery_failed")
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	// Always require authenticated server TLS before credentials or message data.
 	if ok, _ := client.Extension("STARTTLS"); !ok {
 		return errors.New("smtp_tls_required")

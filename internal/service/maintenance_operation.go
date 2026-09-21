@@ -447,7 +447,7 @@ func maintenanceSettingsTableExists(db *gorm.DB) (bool, error) {
 	}
 	var count int64
 	var err error
-	switch db.Dialector.Name() {
+	switch db.Name() {
 	case "sqlite":
 		err = db.Raw("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?", (model.MaintenanceSettings{}).TableName()).Scan(&count).Error
 	case "postgres":

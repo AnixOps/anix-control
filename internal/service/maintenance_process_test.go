@@ -24,7 +24,7 @@ func (s maintenanceProcessSender) Send(_ context.Context, d model.MaintenanceDel
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	_, err = f.WriteString(d.Channel + "\n")
 	return err
 }
@@ -37,7 +37,7 @@ func TestMaintenanceProcessWorkerHelper(t *testing.T) {
 	require.NoError(t, err)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 	sqlDB.SetMaxOpenConns(1)
 	require.NoError(t, db.Exec("PRAGMA busy_timeout = 5000").Error)
 	_, err = ProcessMaintenanceEvents(db, 50, time.Now())

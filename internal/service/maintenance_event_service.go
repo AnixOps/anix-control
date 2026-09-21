@@ -249,17 +249,26 @@ func TickMaintenanceTickets(db *gorm.DB, now time.Time) error {
 			if t.Status != "open" {
 				return nil
 			}
-			major, err := maintenanceMultiNodeFault(tx, t, now)
+			clusterMajor, err := maintenanceMultiNodeFault(tx, t, now)
 			if err != nil {
 				return err
 			}
-			major = major || t.Severity == "P0"
+			wasMajor := t.Severity == "P0"
+			major := clusterMajor || wasMajor
 			escalate := major || (t.ClaimedBy == nil && now.Sub(t.FirstFailedAt) >= 30*time.Minute) || now.Sub(t.FirstFailedAt) >= 2*time.Hour
-			if escalate && t.EscalatedAt == nil {
-				t.EscalatedAt = &now
-				if major {
-					t.Severity = "P0"
+			if clusterMajor && !wasMajor {
+				t.Severity = "P0"
+				if t.EscalatedAt == nil {
+					t.EscalatedAt = &now
 				}
+				if err := tx.Save(&t).Error; err != nil {
+					return err
+				}
+				if err := queueMaintenanceNotice(tx, t, "major", true, now); err != nil {
+					return err
+				}
+			} else if escalate && t.EscalatedAt == nil {
+				t.EscalatedAt = &now
 				if err := tx.Save(&t).Error; err != nil {
 					return err
 				}

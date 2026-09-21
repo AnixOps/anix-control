@@ -30,7 +30,7 @@ func TestMaintenanceWebSocketAuthenticationDurableAckAndTicket(t *testing.T) {
 	headers := http.Header{"X-Node-Id": []string{"1"}, "X-Api-Key": []string{"test-only-proxy-secret"}}
 	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"/ws", headers)
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	now := time.Now().UTC()
 	first := now.Add(-2 * time.Minute)
 	event := maintenance.Event{SchemaVersion: 1, EventID: "ws-event-1", OccurredAt: now, Environment: "development", Source: "agent", NodeID: "1", PluginID: "machine-telemetry", InstanceID: "machine-telemetry", PluginVersion: "1.1.0", ErrorCode: "PLUGIN_PROCESS_EXITED", Severity: "P1", Status: "open", FirstFailedAt: &first, ConsecutiveFailures: 3, RedactedSummary: "password=secret-canary"}

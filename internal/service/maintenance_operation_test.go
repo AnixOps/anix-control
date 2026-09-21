@@ -159,7 +159,7 @@ func TestMaintenanceChangeQueueFailureRollsBackApprovalClaimAndAudit(t *testing.
 	require.NoError(t, err)
 	require.NoError(t, db.Callback().Create().Before("gorm:create").Register("reject-maintenance-kernel", func(tx *gorm.DB) {
 		if tx.Statement.Table == (model.KernelOperation{}).TableName() {
-			tx.AddError(gorm.ErrInvalidTransaction)
+			_ = tx.AddError(gorm.ErrInvalidTransaction)
 		}
 	}))
 	_, err = ExecuteMaintenanceChange(db, 2, change.ID)
