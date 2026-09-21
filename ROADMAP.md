@@ -109,6 +109,13 @@ Status: in progress
 - Add forwarding design, API, security, and compatibility docs.
 - Review long-running worker cancellation and drain behavior.
 
+The 3.2 plugin path now has regular Agent CI evidence for real IPv4/IPv6
+TCP/UDP DNAT, per-rule kernel counters, crash/restart recovery, and exact
+nftables rollback. Control tests cover partial-node rollback and reconstruction
+of the topology executor between reconciliation passes without duplicate Agent
+operations. Staging restore, legacy fallback, staged rollout records, and
+operator approval remain deployment gates.
+
 ## Phase 6: P0 WireGuard Protocol Support
 
 Status: in progress
