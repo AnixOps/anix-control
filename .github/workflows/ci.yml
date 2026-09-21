@@ -1043,7 +1043,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: web
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Audit frontend dependencies
         working-directory: web

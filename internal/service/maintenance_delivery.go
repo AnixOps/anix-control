@@ -39,12 +39,14 @@ func (MaintenanceTransport) Send(ctx context.Context, d model.MaintenanceDeliver
 			return errors.New("channel_unconfigured")
 		}
 		body, _ := json.Marshal(map[string]string{"chat_id": d.Destination, "text": d.Body})
+		// #nosec G704 -- only the path contains the deployment secret; scheme and host are fixed to Telegram.
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.telegram.org/bot"+token+"/sendMessage", bytes.NewReader(body))
 		if err != nil {
 			return errors.New("delivery_failed")
 		}
 		req.Header.Set("Content-Type", "application/json")
 		client := &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		// #nosec G704 -- req always targets the fixed Telegram HTTPS host above and redirects are disabled.
 		resp, err := client.Do(req)
 		if err != nil {
 			return errors.New("delivery_failed")
@@ -111,6 +113,7 @@ func sendMaintenanceEmail(ctx context.Context, d model.MaintenanceDelivery) erro
 			return errors.New("delivery_failed")
 		}
 	}
+	// #nosec G707 -- mail.ParseAddress exact-match and CR/LF rejection above prevent SMTP command injection.
 	if err := client.Mail(from); err != nil {
 		return errors.New("delivery_failed")
 	}
@@ -159,7 +162,7 @@ func DeliverMaintenanceNotifications(ctx context.Context, db *gorm.DB, sender Ma
 			claimTime = now
 		}
 		lease := claimTime.Add(time.Minute)
-		claim := db.WithContext(ctx).Model(&model.MaintenanceDelivery{}).Where("id = ? AND status = ?", d.ID, "pending").Updates(map[string]any{"status": "sending", "lease_owner": owner, "lease_until": lease, "attempts": gorm.Expr("attempts + 1")})
+		claim := db.WithContext(ctx).Model(&model.MaintenanceDelivery{}).Where("id = ? AND status = ? AND next_attempt_at <= ?", d.ID, "pending", now).Updates(map[string]any{"status": "sending", "lease_owner": owner, "lease_until": lease, "attempts": gorm.Expr("attempts + 1")})
 		if claim.Error != nil {
 			errs = append(errs, claim.Error)
 			continue
