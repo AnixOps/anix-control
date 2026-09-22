@@ -10,13 +10,17 @@ import (
 	"time"
 
 	agentv1pb "github.com/AnixOps/anix-control/v4/api/grpc/agent/v1"
+	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-const kernelOperationDispatchRetryAfter = 30 * time.Second
+const (
+	kernelOperationDispatchRetryAfter = 30 * time.Second
+	maxKernelOperationEnvelopeBytes   = 6 << 20
+)
 
 const agentOperationDeadlineText = "operation deadline exceeded"
 
@@ -247,8 +251,12 @@ func (b *KernelOperationBridge) dispatchOne(ctx context.Context, operation model
 	operation.SessionID = snapshot.SessionID
 	operation.State = "dispatching"
 	operation.DispatchedAt = &claimedAt
-	desired, err := kernelOperationDesired(operation)
+	desired, err := b.kernelOperationDesired(operation)
 	if err != nil {
+		auditErr := b.auditSecretDispatch(operation, "material_error")
+		return false, b.failOperation(operation.ID, errors.Join(err, auditErr).Error())
+	}
+	if err := b.auditSecretDispatch(operation, "prepared"); err != nil {
 		return false, b.failOperation(operation.ID, err.Error())
 	}
 	deadlineCtx, cancel := context.WithDeadline(ctx, *operation.DeadlineAt)
@@ -263,15 +271,23 @@ func (b *KernelOperationBridge) dispatchOne(ctx context.Context, operation model
 	if err != nil {
 		// Retain dispatching state: a reconnect replays the in-memory desired
 		// operation, while a later worker run recovers an interrupted process.
-		return false, b.recordDispatchError(operation.ID, err.Error())
+		return false, errors.Join(b.recordDispatchError(operation.ID, err.Error()), b.auditSecretDispatch(operation, "retryable_error"))
 	}
 	if !ack.Accepted {
-		return false, b.failOperation(operation.ID, strings.TrimSpace(ack.Error))
+		return false, errors.Join(b.failOperation(operation.ID, strings.TrimSpace(ack.Error)), b.auditSecretDispatch(operation, "rejected"))
 	}
 	ackAt := b.now()
-	return true, b.db.Model(&model.KernelOperation{}).
+	stateErr := b.db.Model(&model.KernelOperation{}).
 		Where("id = ? AND state = ?", operation.ID, "dispatching").
 		Updates(map[string]any{"state": "running", "acknowledged_at": ackAt, "last_error": ""}).Error
+	return true, errors.Join(stateErr, b.auditSecretDispatch(operation, "accepted"))
+}
+
+func (b *KernelOperationBridge) auditSecretDispatch(operation model.KernelOperation, outcome string) error {
+	if operation.EnvelopeVersion != service.KernelOperationEnvelopeVersionV2 || operation.NodeID == nil {
+		return nil
+	}
+	return service.RecordPluginSecretDispatchAudit(b.db, operation.ConfigJSON, operation.ID, *operation.NodeID, outcome, b.now())
 }
 
 func (b *KernelOperationBridge) operationDependencyReady(operation model.KernelOperation) (bool, error) {
@@ -315,11 +331,40 @@ func (b *KernelOperationBridge) operationDependencyReady(operation model.KernelO
 }
 
 func kernelOperationDesired(operation model.KernelOperation) (*agentv1pb.DesiredOperation, error) {
+	return kernelOperationDesiredWithMaterials(operation, nil)
+}
+
+func (b *KernelOperationBridge) kernelOperationDesired(operation model.KernelOperation) (*agentv1pb.DesiredOperation, error) {
+	if operation.EnvelopeVersion != service.KernelOperationEnvelopeVersionV2 {
+		return kernelOperationDesiredWithMaterials(operation, nil)
+	}
+	cfg := config.Get()
+	if cfg == nil {
+		return nil, service.ErrPluginSecretKeyringUnavailable
+	}
+	store, err := service.NewPluginSecretStore(b.db, cfg.Plugins.SecretEncryption)
+	if err != nil {
+		return nil, err
+	}
+	materials, err := store.ResolveConfig(operation.ConfigJSON)
+	if err != nil {
+		return nil, err
+	}
+	return kernelOperationDesiredWithMaterials(operation, materials)
+}
+
+func kernelOperationDesiredWithMaterials(operation model.KernelOperation, materials []service.PluginSecretDispatchMaterial) (*agentv1pb.DesiredOperation, error) {
 	if operation.NodeID == nil || operation.Revision <= 0 || operation.DeadlineAt == nil {
 		return nil, errors.New("stored operation is missing node revision or deadline")
 	}
-	if operation.EnvelopeVersion != service.KernelOperationEnvelopeVersion {
+	if operation.EnvelopeVersion != service.KernelOperationEnvelopeVersion && operation.EnvelopeVersion != service.KernelOperationEnvelopeVersionV2 {
 		return nil, fmt.Errorf("unsupported stored operation envelope version %q", operation.EnvelopeVersion)
+	}
+	if operation.EnvelopeVersion == service.KernelOperationEnvelopeVersion && len(materials) != 0 {
+		return nil, errors.New("operation envelope v1 cannot carry plugin secret material")
+	}
+	if operation.EnvelopeVersion == service.KernelOperationEnvelopeVersionV2 && len(materials) == 0 {
+		return nil, errors.New("operation envelope v2 requires plugin secret material")
 	}
 	canonical, err := service.CanonicalKernelOperationConfig(operation.ConfigJSON)
 	if err != nil {
@@ -333,14 +378,17 @@ func kernelOperationDesired(operation model.KernelOperation) (*agentv1pb.Desired
 		return nil, err
 	}
 	envelope, err := json.Marshal(kernelOperationEnvelopePayload{
-		Version: service.KernelOperationEnvelopeVersion, OperationID: operation.ID,
+		Version: operation.EnvelopeVersion, OperationID: operation.ID,
 		IdempotencyKey: operation.IdempotencyKey, SessionID: operation.SessionID,
 		Revision: revision, PluginID: operation.PluginID,
 		TargetVersion: operation.TargetVersion, ConfigHash: operation.ConfigHash,
-		Config: json.RawMessage(operation.ConfigJSON),
+		Config: json.RawMessage(operation.ConfigJSON), SecretMaterials: materials,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("encode operation envelope: %w", err)
+	}
+	if len(envelope) > maxKernelOperationEnvelopeBytes {
+		return nil, errors.New("plugin operation envelope exceeds size limit")
 	}
 	return &agentv1pb.DesiredOperation{
 		OperationId: operation.ID, Kind: operation.Kind, Revision: revision,

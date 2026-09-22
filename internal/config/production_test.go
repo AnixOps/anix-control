@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 
@@ -67,4 +68,17 @@ func TestValidateForStartupAllowsDevelopmentWithoutProductionSecrets(t *testing.
 
 func TestValidateForStartupRejectsUnknownEnvironment(t *testing.T) {
 	require.ErrorContains(t, ValidateForStartup(&Config{Env: "prod"}), "unsupported environment")
+}
+
+func TestValidateForStartupRequiresSecretKeyringForTopologyExecution(t *testing.T) {
+	cfg := productionReadyConfig()
+	cfg.Plugins.TopologyExecutionEnabled = true
+	err := ValidateForStartup(cfg)
+	require.ErrorContains(t, err, "plugins.secret_encryption")
+
+	cfg.Plugins.SecretEncryption = PluginSecretEncryptionConfig{
+		ActiveKeyID: "primary",
+		Keys:        map[string]string{"primary": base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))},
+	}
+	require.NoError(t, ValidateForStartup(cfg))
 }

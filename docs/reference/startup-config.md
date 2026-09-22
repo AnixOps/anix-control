@@ -65,6 +65,10 @@ plugins:
   dispatch_poll_interval: "5s"
   topology_execution_enabled: false
   topology_poll_interval: "5s"
+  secret_encryption:
+    active_key_id: "primary"
+    keys:
+      primary: "replace-with-base64-encoded-32-byte-key"
 
 grpc:
   enabled: true
@@ -92,6 +96,11 @@ This is the `4.0.0-alpha.7` signed-package profile. The pinned value is the raw
 material, not a private signing key. The loopback gRPC bind makes local
 Control/Agent acceptance reproducible while preventing an unauthenticated
 network listener from appearing during installation.
+
+The Secret encryption key is private deployment material. Leave it empty when
+the Secret subsystem is unused; configure it before creating plugin Secrets or
+enabling topology execution. See [Plugin Secret Operations](../guide/plugin-secrets.md)
+for rotation and recovery rules.
 
 An Agent keeps `Transport: "http"` for the existing configuration, user, and
 traffic data plane, then independently opts into package operations with

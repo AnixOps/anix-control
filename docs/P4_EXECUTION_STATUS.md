@@ -42,3 +42,9 @@
 - 真实环境证据仍未执行。部署者需从 `config/examples/forwarding-acceptance.yaml.example` 创建被 Git 忽略的 `config/forwarding-acceptance.yaml`，填写实际提交、制品摘要、节点、时间线、回滚演练与负责人批准，再运行 `anix-control -config config/config.yaml -check-forwarding-evidence config/forwarding-acceptance.yaml`。该校验成功前不得把 3.2 标记为生产可用。
 
 通知验收使用注入的测试适配器，未向真实接收人发送。真实邮件与 Telegram、Control 第三方外部监测、跨地域和设备演练、灰度观察及维护人员交接仍是生产上线门槛。
+
+## 3.3 Secret 生命周期源码证据
+
+- Control 已实现 AES-256-GCM 加密版本、管理 API/UI、引用保护删除、拓扑双端绑定校验、v2 操作分发与元数据审计；Agent 已实现严格信封校验、`0600` 私有文件、配置路径替换、失败恢复、轮换清理及无明文操作日志。
+- 本地真实进程门禁 `ANIXOPS_CROSS_REPO_E2E=1 ... go test ./internal/grpc -run '^TestAgentPluginPackageCrossRepositoryE2E$'` 已通过，覆盖 Control 加密存储、认证流分发和真实 Agent Supervisor 落盘。
+- 以上尚无对应提交和 GitHub Actions 结果，不登记为 CI 验收。组合 NAT 失败回滚、MTU/持续丢包与重连、核算隔离、多节点回滚及持续灰度仍是 3.3 生产门槛。

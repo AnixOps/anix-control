@@ -1017,6 +1017,76 @@ func TestValidateTopologyRejectsInlineSecretButAllowsReference(t *testing.T) {
 	require.Empty(t, ValidateTopology(referenced))
 }
 
+func TestValidateTopologyRequiresCanonicalSecretReferences(t *testing.T) {
+	input := TopologyRevisionInput{
+		Vertices: []model.TopologyVertex{
+			{Key: "entry", Kind: "plugin", PluginID: "gost-mesh", Role: "entry", ConfigJSON: `{"tls":{"ca_file":"secret://mesh@01/ca.pem"}}`},
+			{Key: "exit", Kind: "plugin", PluginID: "gost-mesh", Role: "exit", ConfigJSON: `{}`},
+		},
+		Edges: []model.TopologyEdge{{SourceKey: "entry", TargetKey: "exit", Protocol: "tls", SecretID: "mesh", ConfigJSON: `{}`}},
+	}
+	codes := make(map[string]int)
+	for _, issue := range ValidateTopology(input) {
+		codes[issue.Code]++
+	}
+	require.Equal(t, 2, codes["invalid_secret_reference"])
+}
+
+func TestValidateTopologySecretBindingsChecksMetadataAndBothEndpoints(t *testing.T) {
+	db := newKernelTestDB(t)
+	secret := model.PluginSecret{ID: "mesh-edge", Name: "Mesh edge", ActiveVersion: 1, CreatedBy: 1}
+	require.NoError(t, db.Create(&secret).Error)
+	version := model.PluginSecretVersion{SecretID: secret.ID, Version: 1, KeyID: "primary", FileCount: 2, CreatedBy: 1}
+	require.NoError(t, db.Create(&version).Error)
+	require.NoError(t, db.Create(&[]model.PluginSecretMaterial{
+		{SecretVersionID: version.ID, Name: "ca.pem", Ciphertext: []byte("ciphertext"), Nonce: []byte("nonce"), SHA256: strings.Repeat("a", 64), Size: 2},
+		{SecretVersionID: version.ID, Name: "server.pem", Ciphertext: []byte("ciphertext"), Nonce: []byte("nonce"), SHA256: strings.Repeat("b", 64), Size: 2},
+	}).Error)
+
+	input := TopologyRevisionInput{
+		Vertices: []model.TopologyVertex{
+			{Key: "entry", Kind: "plugin", PluginID: "gost-mesh", Role: "entry", ConfigJSON: `{"tls":{"ca_file":"secret://mesh-edge@1/ca.pem"}}`},
+			{Key: "exit", Kind: "plugin", PluginID: "gost-mesh", Role: "exit", ConfigJSON: `{"tls":{"cert_file":"secret://mesh-edge@1/server.pem"}}`},
+		},
+		Edges: []model.TopologyEdge{{SourceKey: "entry", TargetKey: "exit", Protocol: "tls", SecretID: "secret://mesh-edge@1", ConfigJSON: `{}`}},
+	}
+	require.Empty(t, ValidateTopologySecretBindings(db, input))
+
+	input.Vertices[1].ConfigJSON = `{}`
+	issues := ValidateTopologySecretBindings(db, input)
+	require.Len(t, issues, 1)
+	require.Equal(t, "secret_binding_missing", issues[0].Code)
+
+	input.Vertices[1].ConfigJSON = `{"tls":{"cert_file":"secret://mesh-edge@1/missing.pem"}}`
+	issues = ValidateTopologySecretBindings(db, input)
+	codes := make(map[string]bool)
+	for _, issue := range issues {
+		codes[issue.Code] = true
+	}
+	require.True(t, codes["secret_not_found"])
+}
+
+func TestCreateTopologyRevisionRejectsDeletedSecretBinding(t *testing.T) {
+	db := newKernelTestDB(t)
+	topology := model.Topology{Name: "secure-mesh", ServiceScope: "forward"}
+	require.NoError(t, db.Create(&topology).Error)
+	deletedAt := time.Now().UTC()
+	secret := model.PluginSecret{ID: "deleted-mesh", Name: "Deleted mesh", ActiveVersion: 1, CreatedBy: 1, DeletedAt: &deletedAt}
+	require.NoError(t, db.Create(&secret).Error)
+	version := model.PluginSecretVersion{SecretID: secret.ID, Version: 1, KeyID: "primary", FileCount: 1, CreatedBy: 1}
+	require.NoError(t, db.Create(&version).Error)
+	require.NoError(t, db.Create(&model.PluginSecretMaterial{SecretVersionID: version.ID, Name: "ca.pem", Ciphertext: []byte("ciphertext"), Nonce: []byte("nonce"), SHA256: strings.Repeat("a", 64), Size: 2}).Error)
+	input := TopologyRevisionInput{
+		Vertices: []model.TopologyVertex{
+			{Key: "entry", Kind: "entry", ConfigJSON: `{"ca_file":"secret://deleted-mesh@1/ca.pem"}`},
+			{Key: "exit", Kind: "exit", ConfigJSON: `{"ca_file":"secret://deleted-mesh@1/ca.pem"}`},
+		},
+		Edges: []model.TopologyEdge{{SourceKey: "entry", TargetKey: "exit", Protocol: "tls", SecretID: "secret://deleted-mesh@1", ConfigJSON: `{}`}},
+	}
+	_, err := CreateTopologyRevision(db, topology.ID, 1, input)
+	require.ErrorContains(t, err, "does not exist")
+}
+
 func TestValidateTopologyRejectsIncompleteNetworkContract(t *testing.T) {
 	input := TopologyRevisionInput{
 		Vertices: []model.TopologyVertex{{Key: "entry", ConfigJSON: `{"port":70000,"address_family":"ipx"}`}},

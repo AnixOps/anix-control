@@ -185,10 +185,11 @@ sysctl -a 2>/dev/null | grep '^net.ipv4.conf.*.rp_filter ='
 The required values are `net.ipv4.ip_forward=1` and
 `net.ipv4.conf.*.rp_filter=0` for all participating scopes/interfaces. The
 plugin validates these prerequisites and fails closed; it does not change
-host-wide sysctls. Current TLS configuration refers to private files already
-materialized on the Agent. Control Secret ID to private-file materialization,
-renewal, deletion, and audit are not complete, so a stable or production
-`gost-mesh` rollout is prohibited even when package signature checks pass.
+host-wide sysctls. Configure the Control Secret keyring and use canonical
+`secret://id@version/file` TLS references as described in
+[Plugin Secret Operations](guide/plugin-secrets.md). Stable or production
+`gost-mesh` rollout remains prohibited until composed rollback, accounting,
+multi-node and sustained-canary evidence passes.
 
 ## Systemd Binary Upgrade
 

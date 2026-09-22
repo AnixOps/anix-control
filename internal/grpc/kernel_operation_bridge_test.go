@@ -19,6 +19,7 @@ import (
 	"time"
 
 	agentv1pb "github.com/AnixOps/anix-control/v4/api/grpc/agent/v1"
+	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/glebarez/sqlite"
@@ -26,6 +27,94 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
+
+func TestKernelOperationBridgeResolvesEncryptedSecretOnlyIntoV2Dispatch(t *testing.T) {
+	db := newKernelOperationBridgeDB(t)
+	node := model.Node{Name: "secret-node", Host: "127.0.0.31", APIKey: "secret-node-key"}
+	require.NoError(t, db.Create(&node).Error)
+	seedAgentPluginRelease(t, db, "gost-mesh")
+	key := []byte("0123456789abcdef0123456789abcdef")
+	previousConfig := config.Get()
+	config.Set(&config.Config{Plugins: config.PluginConfig{SecretEncryption: config.PluginSecretEncryptionConfig{
+		ActiveKeyID: "primary", Keys: map[string]string{"primary": base64.StdEncoding.EncodeToString(key)},
+	}}})
+	t.Cleanup(func() { config.Set(previousConfig) })
+	store, err := service.NewPluginSecretStore(db, config.Get().Plugins.SecretEncryption)
+	require.NoError(t, err)
+	plaintext := "control-dispatch-private-key"
+	_, err = store.Create(service.PluginSecretCreateInput{
+		ID: "mesh-edge", Name: "Mesh edge", ActorID: 1,
+		Files: []service.PluginSecretFileInput{{Name: "client.key", Content: []byte(plaintext)}},
+	})
+	require.NoError(t, err)
+	deadline := time.Now().Add(time.Minute)
+	operation, _, err := service.CreateKernelOperation(db, model.KernelOperation{
+		ID: uuid.NewString(), IdempotencyKey: "secret-v2-dispatch", NodeID: &node.ID,
+		PluginID: "gost-mesh", TargetVersion: "1.0.0", Kind: "plugin.configure",
+		ConfigJSON: `{"tls":{"key_file":"secret://mesh-edge@1/client.key"}}`, DeadlineAt: &deadline,
+	})
+	require.NoError(t, err)
+	require.Equal(t, service.KernelOperationEnvelopeVersionV2, operation.EnvelopeVersion)
+	require.NotContains(t, operation.ConfigJSON, plaintext)
+
+	stream := &kernelOperationStreamStub{connected: true, snapshot: AgentControlSnapshot{NodeID: uint32(node.ID), SessionID: "secret-session"}}
+	bridge, err := NewKernelOperationBridge(db, stream)
+	require.NoError(t, err)
+	count, err := bridge.RunOnce(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+	require.Len(t, stream.operations, 1)
+	var envelope kernelOperationEnvelopePayload
+	require.NoError(t, json.Unmarshal(stream.operations[0].PayloadJson, &envelope))
+	require.Equal(t, service.KernelOperationEnvelopeVersionV2, envelope.Version)
+	require.Len(t, envelope.SecretMaterials, 1)
+	decoded, err := base64.StdEncoding.DecodeString(envelope.SecretMaterials[0].ContentBase64)
+	require.NoError(t, err)
+	require.Equal(t, plaintext, string(decoded))
+
+	var stored model.KernelOperation
+	require.NoError(t, db.First(&stored, "id = ?", operation.ID).Error)
+	require.NotContains(t, stored.ConfigJSON, plaintext)
+	require.NotContains(t, stored.ResultJSON, plaintext)
+	var audits []model.PluginSecretAudit
+	require.NoError(t, db.Where("operation_id = ?", operation.ID).Find(&audits).Error)
+	require.Len(t, audits, 1)
+	require.Equal(t, "dispatch", audits[0].Action)
+	require.Equal(t, "accepted", audits[0].Outcome)
+	require.Equal(t, node.ID, *audits[0].NodeID)
+	require.NotContains(t, audits[0].Detail, plaintext)
+}
+
+func TestKernelOperationBridgeFailsClosedWhenSecretKeyIsUnavailable(t *testing.T) {
+	db := newKernelOperationBridgeDB(t)
+	node := model.Node{Name: "secret-keyless", Host: "127.0.0.32", APIKey: "secret-keyless-key"}
+	require.NoError(t, db.Create(&node).Error)
+	seedAgentPluginRelease(t, db, "gost-mesh")
+	previousConfig := config.Get()
+	config.Set(&config.Config{})
+	t.Cleanup(func() { config.Set(previousConfig) })
+	deadline := time.Now().Add(time.Minute)
+	operation, _, err := service.CreateKernelOperation(db, model.KernelOperation{
+		ID: uuid.NewString(), IdempotencyKey: "secret-keyless-dispatch", NodeID: &node.ID,
+		PluginID: "gost-mesh", TargetVersion: "1.0.0", Kind: "plugin.configure",
+		ConfigJSON: `{"tls":{"key_file":"secret://mesh-edge@1/client.key"}}`, DeadlineAt: &deadline,
+	})
+	require.NoError(t, err)
+	stream := &kernelOperationStreamStub{connected: true, snapshot: AgentControlSnapshot{NodeID: uint32(node.ID), SessionID: "keyless-session"}}
+	bridge, err := NewKernelOperationBridge(db, stream)
+	require.NoError(t, err)
+	count, err := bridge.RunOnce(context.Background())
+	require.NoError(t, err)
+	require.Zero(t, count)
+	require.Empty(t, stream.operations)
+	var stored model.KernelOperation
+	require.NoError(t, db.First(&stored, "id = ?", operation.ID).Error)
+	require.Equal(t, "failed", stored.State)
+	require.Contains(t, stored.LastError, "keyring")
+	var audit model.PluginSecretAudit
+	require.NoError(t, db.First(&audit, "operation_id = ?", operation.ID).Error)
+	require.Equal(t, "material_error", audit.Outcome)
+}
 
 type kernelOperationStreamStub struct {
 	snapshot      AgentControlSnapshot

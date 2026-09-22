@@ -70,10 +70,10 @@ Already present in the current branch:
 The following remain release blockers: staging rehearsal that starts the
 restored Control service and checks login/subscription/catalog behavior,
 canary rollout records, legacy fallback rehearsal, and a manual approval to
-enable topology execution outside isolated test nodes. For `gost-mesh`, Control
-Secret ID to Agent private-file materialization, renewal, deletion, and audit
-are also blocking. Current TLS path fields refer to files already present on
-the Agent and are acceptable only for an isolated canary.
+enable topology execution outside isolated test nodes. The `gost-mesh` Secret
+path now uses encrypted immutable Control bundles and authenticated Agent
+private-file materialization; composed runtime and real-environment evidence
+remain blocking.
 
 ## Release Invariants
 
@@ -251,9 +251,8 @@ extracted binary checksum.
 Before any apply, operators must set `net.ipv4.ip_forward=1` and disable strict
 reverse-path filtering for the participating namespaces/interfaces
 (`net.ipv4.conf.*.rp_filter=0`). The plugin validates and fails closed; it does
-not modify host-wide sysctls. Current TLS fields are Agent-local file paths.
-Control Secret ID materialization, renewal, deletion, and audit remain a hard
-stable-release gate. Both plugins also require composed exit-failure rollback,
+not modify host-wide sysctls. TLS config accepts canonical versioned Secret
+references that the Agent rewrites to private local paths. Both plugins still require composed exit-failure rollback,
 MTU/loss/reconnect evidence, accounting isolation, multi-node rollback, and a
 sustained canary before production rollout.
 

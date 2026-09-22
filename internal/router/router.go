@@ -722,6 +722,14 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v3.PUT("/nodes/:id/assignments", kernel.UpsertAssignment)
 		v3.DELETE("/nodes/:id/assignments/:assignment_id", kernel.DeleteAssignment)
 
+		v3.GET("/secrets", kernel.ListPluginSecrets)
+		v3.POST("/secrets", kernel.CreatePluginSecret)
+		v3.GET("/secrets/:secret_id", kernel.GetPluginSecret)
+		v3.DELETE("/secrets/:secret_id", kernel.DeletePluginSecret)
+		v3.POST("/secrets/:secret_id/versions", kernel.CreatePluginSecretVersion)
+		v3.DELETE("/secrets/:secret_id/versions/:version", kernel.DeletePluginSecretVersion)
+		v3.GET("/secrets/:secret_id/audit", kernel.ListPluginSecretAudit)
+
 		v3.GET("/topologies", kernel.ListTopologies)
 		v3.POST("/topologies", kernel.CreateTopology)
 		v3.POST("/topologies/validate", kernel.ValidateTopology)

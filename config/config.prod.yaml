@@ -114,6 +114,13 @@ plugins:
   # enabled together with dispatch_enabled. Keep false until canary evidence.
   topology_execution_enabled: false
   topology_poll_interval: "5s"
+  # Secret values never belong in topology JSON or the database in plaintext.
+  # Generate 32 random bytes, base64 encode them, and keep old keys here while
+  # stored Secret versions still use them. Required before topology execution.
+  secret_encryption:
+    active_key_id: "primary"
+    keys:
+      primary: "REPLACE-WITH-BASE64-ENCODED-32-BYTE-KEY"
 
 forward_runtime:
   backend: "gost"

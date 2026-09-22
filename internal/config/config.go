@@ -75,13 +75,22 @@ type NodeBootstrapConfig struct {
 // lifecycle dispatcher. Third-party plugin execution is intentionally
 // unsupported by the control kernel.
 type PluginConfig struct {
-	OfficialPublicKey        string `yaml:"official_public_key"`
-	ControlExecutionEnabled  bool   `yaml:"control_execution_enabled"`
-	ControlPollInterval      string `yaml:"control_poll_interval"`
-	DispatchEnabled          bool   `yaml:"dispatch_enabled"`
-	DispatchPollInterval     string `yaml:"dispatch_poll_interval"`
-	TopologyExecutionEnabled bool   `yaml:"topology_execution_enabled"`
-	TopologyPollInterval     string `yaml:"topology_poll_interval"`
+	OfficialPublicKey        string                       `yaml:"official_public_key"`
+	ControlExecutionEnabled  bool                         `yaml:"control_execution_enabled"`
+	ControlPollInterval      string                       `yaml:"control_poll_interval"`
+	DispatchEnabled          bool                         `yaml:"dispatch_enabled"`
+	DispatchPollInterval     string                       `yaml:"dispatch_poll_interval"`
+	TopologyExecutionEnabled bool                         `yaml:"topology_execution_enabled"`
+	TopologyPollInterval     string                       `yaml:"topology_poll_interval"`
+	SecretEncryption         PluginSecretEncryptionConfig `yaml:"secret_encryption"`
+}
+
+// PluginSecretEncryptionConfig is a deployment-owned AES-256-GCM keyring.
+// Keys remain in config and are never copied into the database. Keep retired
+// keys configured while any stored secret version still names their key ID.
+type PluginSecretEncryptionConfig struct {
+	ActiveKeyID string            `yaml:"active_key_id"`
+	Keys        map[string]string `yaml:"keys"`
 }
 
 // GRPCConfig controls the node-facing gRPC server (AnixOps Agent nodes connect here).

@@ -14,6 +14,7 @@ describe('kernel API', () => {
   it('sends every request through the v3 API root', async () => {
     const calls = [
       [kernelApi.getKernelPlugins, '/plugins'],
+      [kernelApi.getKernelPluginSecrets, '/secrets'],
       [kernelApi.getKernelPluginReleases, '/plugin-releases'],
       [kernelApi.getKernelInstallations, '/plugin-installations'],
       [() => kernelApi.getKernelNodeAssignments(11), '/nodes/11/assignments'],
@@ -38,6 +39,27 @@ describe('kernel API', () => {
         method: 'get'
       })
     }
+  })
+
+  it('manages encrypted plugin secret metadata and versions', async () => {
+    const files = [{ name: 'ca.pem', content_base64: 'Y2VydA==' }]
+    await kernelApi.createKernelPluginSecret({ id: 'mesh-edge', name: 'Mesh edge', files })
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3', url: '/secrets', method: 'post',
+      data: { id: 'mesh-edge', name: 'Mesh edge', files }, timeout: 120_000
+    })
+    await kernelApi.getKernelPluginSecret('mesh edge')
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/secrets/mesh%20edge', method: 'get' })
+    await kernelApi.createKernelPluginSecretVersion('mesh-edge', files)
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v3', url: '/secrets/mesh-edge/versions', method: 'post', data: { files }, timeout: 120_000
+    })
+    await kernelApi.getKernelPluginSecretAudit('mesh-edge')
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/secrets/mesh-edge/audit', method: 'get' })
+    await kernelApi.deleteKernelPluginSecretVersion('mesh-edge', 1)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/secrets/mesh-edge/versions/1', method: 'delete' })
+    await kernelApi.deleteKernelPluginSecret('mesh-edge')
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/secrets/mesh-edge', method: 'delete' })
   })
 
   it('unwraps the v3 data envelope and tolerates direct payloads', async () => {

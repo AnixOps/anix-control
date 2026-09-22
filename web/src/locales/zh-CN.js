@@ -3017,7 +3017,7 @@ export default {
       configure: '配置', enable: '启用', disable: '禁用', upgrade: '升级', update: '升级', rollback: '回滚', cancel: '取消操作',
       saving: '保存中...', newAssignment: '新建角色'
     },
-    tabs: { plugins: '插件', assignments: '节点角色', scopes: '作用域', topologies: '拓扑', operations: '操作' },
+    tabs: { plugins: '插件', assignments: '节点角色', scopes: '作用域', topologies: '拓扑', secrets: '秘密', operations: '操作' },
     table: {
       plugin: '插件', publisher: '发布者', release: '发行版', installation: '安装目标', desiredVersion: '期望版本', observedVersion: '实际版本', version: '版本', state: '状态', actions: '操作',
       scope: '作用域', owner: '所有者', description: '说明', topology: '拓扑', activeRevision: '激活 revision', deployment: '部署',
@@ -3025,7 +3025,13 @@ export default {
     },
     labels: { releases: '{count} 个发行版', desired: '期望', observed: '实际' },
     states: { catalogued: '已登记', enabled: '已启用', disabled: '已禁用', loading: '正在加载控制状态...', polling: '正在轮询操作状态' },
-    empty: { plugins: '暂无插件', assignments: '该节点暂无服务角色', scopes: '暂无服务作用域', topologies: '暂无拓扑', operations: '暂无操作' },
+    empty: { plugins: '暂无插件', assignments: '该节点暂无服务角色', scopes: '暂无服务作用域', topologies: '暂无拓扑', secrets: '暂无插件秘密', operations: '暂无操作' },
+    secrets: {
+      title: '插件秘密', subtitle: '供 Agent 插件配置使用的加密、不可变凭据包。', new: '新建秘密', inspect: '查看', addVersion: '添加版本',
+      id: '秘密 ID', name: '名称', activeVersion: '当前版本', updated: '更新时间', versions: '版本', files: '凭据文件', audit: '审计记录', noAudit: '暂无审计记录',
+      createTitle: '新建插件秘密', versionTitle: '为 {id} 添加版本', fileLimits: '最多 16 个文件；单文件不超过 1 MiB，总计不超过 4 MiB。', copyReference: '复制引用',
+      deleteConfirm: '确认删除 {id} 吗？仍被引用的秘密无法删除。', deleteVersionConfirm: '确认删除版本 {version} 吗？当前版本或仍被引用的版本无法删除。'
+    },
     topology: {
       select: '拓扑', new: '新建拓扑', newTitle: '新建拓扑', create: '创建拓扑', name: '名称', edit: '编辑修订', status: '查看状态', noDeployment: '暂无部署', editorTitle: '拓扑修订编辑器', revision: '修订',
       noRevisions: '暂无修订', failurePolicy: '失败策略', stopAndRollback: '停止并回滚', message: '修订说明', graphJSON: '拓扑图 JSON',
@@ -3056,14 +3062,16 @@ export default {
       releaseImported: '{plugin} {version} 已导入', cancelRequested: '已请求取消操作',
       assignmentSaved: '{plugin} 节点角色已保存', assignmentStateSaved: '{plugin} 节点角色状态已保存', assignmentDeleted: '{plugin} 节点角色已删除',
       topologyValidated: '拓扑校验通过', topologyRevisionSaved: '拓扑修订 {revision} 已保存', topologyPlanned: '部署 #{id} 已规划',
-      topologyApplyRequested: '已请求应用拓扑部署', topologyRollbackRequested: '已请求回滚拓扑部署', topologyCreated: '拓扑 {name} 已创建'
+      topologyApplyRequested: '已请求应用拓扑部署', topologyRollbackRequested: '已请求回滚拓扑部署', topologyCreated: '拓扑 {name} 已创建',
+      secretCreated: '插件秘密已创建', secretVersionCreated: '插件秘密版本已创建', secretDeleted: '插件秘密已删除', secretVersionDeleted: '插件秘密版本已删除', secretReferenceCopied: '秘密引用已复制'
     },
     errors: {
       load: '无法加载控制状态', action: '插件操作失败', install: '插件安装失败', configLoad: '无法加载插件配置',
       configSave: '无法保存插件配置', releaseImport: '发行版导入失败', cancel: '无法取消操作', poll: '无法刷新操作状态',
       nodesLoad: '无法加载节点', assignmentsLoad: '无法加载节点角色', assignmentSave: '无法保存节点角色', assignmentDelete: '无法删除节点角色',
       topologyLoad: '无法加载拓扑修订', topologyValidate: '无法校验拓扑', topologySave: '无法保存拓扑修订', topologyPlan: '无法规划拓扑部署',
-      topologyPreview: '无法预览拓扑部署', topologyStatus: '无法加载部署状态', topologyApply: '无法应用拓扑部署', topologyRollback: '无法回滚拓扑部署', topologyCreate: '无法创建拓扑'
+      topologyPreview: '无法预览拓扑部署', topologyStatus: '无法加载部署状态', topologyApply: '无法应用拓扑部署', topologyRollback: '无法回滚拓扑部署', topologyCreate: '无法创建拓扑',
+      secretLoad: '无法加载插件秘密', secretSave: '无法保存插件秘密', secretDelete: '无法删除插件秘密', secretFiles: '请选择 1 至 16 个符合大小限制的非空文件。', secretCopy: '无法复制秘密引用'
     }
   },
   accessGroups: {

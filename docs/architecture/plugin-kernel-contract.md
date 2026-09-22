@@ -156,8 +156,12 @@ the browser does not duplicate or widen the allow-union calculation.
 Topology revisions are immutable snapshots. Validation rejects cycles, missing
 vertices, port conflicts on one node, invalid MTU, missing secure-protocol
 secret references, inline secret material, missing physical nodes, and missing
-enabled node/plugin assignments. Topology JSON may reference secrets by ID or
-`*_ref`; it must not contain passwords, API keys, tokens, or private keys.
+enabled node/plugin assignments. Plugin configs use canonical immutable file
+references in the form `secret://id@version/file`. Secure edges use the bundle
+form `secret://id@version`, and both endpoint configs must consume a file from
+that exact bundle. Control verifies non-deleted Secret/version/file metadata at
+revision creation and deployment planning; it must not contain passwords, API
+keys, tokens, or private keys inline.
 Observed-state write-back is revision-fenced and monotonic: an Agent result is
 accepted only for the exact deployment revision and known node, stale desired
 or observed revisions are ignored, and a deployment reaches a terminal state

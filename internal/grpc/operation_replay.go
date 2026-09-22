@@ -15,15 +15,16 @@ import (
 // durable bridge. The session binding is transport-specific and must be
 // regenerated when an operation is replayed on a new Agent connection.
 type kernelOperationEnvelopePayload struct {
-	Version        string          `json:"version"`
-	OperationID    string          `json:"operation_id"`
-	IdempotencyKey string          `json:"idempotency_key"`
-	SessionID      string          `json:"session_id"`
-	Revision       uint64          `json:"revision"`
-	PluginID       string          `json:"plugin_id"`
-	TargetVersion  string          `json:"target_version"`
-	ConfigHash     string          `json:"config_hash"`
-	Config         json.RawMessage `json:"config"`
+	Version         string                                 `json:"version"`
+	OperationID     string                                 `json:"operation_id"`
+	IdempotencyKey  string                                 `json:"idempotency_key"`
+	SessionID       string                                 `json:"session_id"`
+	Revision        uint64                                 `json:"revision"`
+	PluginID        string                                 `json:"plugin_id"`
+	TargetVersion   string                                 `json:"target_version"`
+	ConfigHash      string                                 `json:"config_hash"`
+	Config          json.RawMessage                        `json:"config"`
+	SecretMaterials []service.PluginSecretDispatchMaterial `json:"secret_materials,omitempty"`
 }
 
 func rebindKernelDesiredSession(operation *agentv1pb.DesiredOperation, sessionID string) (*agentv1pb.DesiredOperation, error) {
@@ -38,7 +39,7 @@ func rebindKernelDesiredSession(operation *agentv1pb.DesiredOperation, sessionID
 	if err := json.Unmarshal(cloned.PayloadJson, &envelope); err != nil {
 		return nil, fmt.Errorf("decode plugin operation envelope for replay: %w", err)
 	}
-	if envelope.Version != service.KernelOperationEnvelopeVersion {
+	if envelope.Version != service.KernelOperationEnvelopeVersion && envelope.Version != service.KernelOperationEnvelopeVersionV2 {
 		return nil, fmt.Errorf("unsupported plugin operation envelope version %q", envelope.Version)
 	}
 	if envelope.OperationID != cloned.OperationId || envelope.Revision != cloned.Revision {

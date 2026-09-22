@@ -1638,6 +1638,7 @@ func (h *KernelHandler) ValidateTopology(c *gin.Context) {
 		return
 	}
 	issues := service.ValidateTopology(input)
+	issues = append(issues, service.ValidateTopologySecretBindings(h.db, input)...)
 	kernelData(c, 200, gin.H{"valid": len(issues) == 0, "issues": issues})
 }
 func (h *KernelHandler) CreateTopologyRevision(c *gin.Context) {

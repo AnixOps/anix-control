@@ -10,9 +10,14 @@ const kernelApi = vi.hoisted(() => ({
   diagnoseKernelTopology: vi.fn(),
   diagnoseKernelTopologyDeployment: vi.fn(),
   deleteKernelNodeAssignment: vi.fn(),
+  deleteKernelPluginSecret: vi.fn(),
+  deleteKernelPluginSecretVersion: vi.fn(),
   getKernelDeploymentStatus: vi.fn(),
   getKernelDeployments: vi.fn(),
   getKernelPlugins: vi.fn(),
+  getKernelPluginSecrets: vi.fn(),
+  getKernelPluginSecret: vi.fn(),
+  getKernelPluginSecretAudit: vi.fn(),
   getKernelPluginReleases: vi.fn(),
   getKernelInstallations: vi.fn(),
   getKernelNodeAssignments: vi.fn(),
@@ -33,6 +38,8 @@ const kernelApi = vi.hoisted(() => ({
   cancelKernelOperation: vi.fn(),
   upsertKernelNodeAssignment: vi.fn(),
   validateKernelTopology: vi.fn(),
+  createKernelPluginSecret: vi.fn(),
+  createKernelPluginSecretVersion: vi.fn(),
 }))
 
 const adminApi = vi.hoisted(() => ({ getNodes: vi.fn() }))
@@ -66,6 +73,9 @@ const MANIFEST_V2 = JSON.stringify({ id: 'protocol-runtime', version: '1.1.0', t
 
 function resolveEmptyState() {
   kernelApi.getKernelPlugins.mockResolvedValue([])
+  kernelApi.getKernelPluginSecrets.mockResolvedValue([])
+  kernelApi.getKernelPluginSecret.mockResolvedValue(null)
+  kernelApi.getKernelPluginSecretAudit.mockResolvedValue([])
   kernelApi.getKernelPluginReleases.mockResolvedValue([])
   kernelApi.getKernelInstallations.mockResolvedValue([])
   kernelApi.getKernelScopes.mockResolvedValue([])

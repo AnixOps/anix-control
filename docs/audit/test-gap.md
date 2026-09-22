@@ -27,10 +27,11 @@
   packages with manifests, public keys, and package checksums.
 - Privileged Agent namespace acceptance now covers `gost-mesh` QUIC and WSS
   TCP/UDP traffic, mutual-TLS positive and negative cases, source-bound health,
-  transport counters, and cleanup. Remaining 3.3 evidence is Control Secret ID
-  materialization, MTU and sustained loss/reconnect behavior, composed
-  `gost-mesh` to `nat-egress` failure rollback, accounting, multi-node rollback,
-  and sustained canary records.
+  transport counters, and cleanup. Encrypted, versioned Control Secrets and
+  authenticated Agent private-file materialization are covered by the
+  cross-repository process gate. Remaining 3.3 evidence is MTU and sustained
+  loss/reconnect behavior, composed `gost-mesh` to `nat-egress` failure
+  rollback, accounting, multi-node rollback, and sustained canary records.
 - The dependency resolver now has deterministic recursive DB preflight,
   dependency-aware Control execution, reverse rollback, and race coverage.
   Staging still needs a live restored Control canary before enabling plugin

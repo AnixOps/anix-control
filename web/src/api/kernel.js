@@ -14,6 +14,39 @@ export async function getKernelPlugins() {
   return unwrap(await v3({ url: '/plugins', method: 'get' }))
 }
 
+export async function getKernelPluginSecrets() {
+  return unwrap(await v3({ url: '/secrets', method: 'get' }))
+}
+
+export async function getKernelPluginSecret(secretID) {
+  return unwrap(await v3({ url: `/secrets/${encodeURIComponent(secretID)}`, method: 'get' }))
+}
+
+export async function createKernelPluginSecret(secret) {
+  return unwrap(await v3({ url: '/secrets', method: 'post', data: secret, timeout: 120_000 }))
+}
+
+export async function createKernelPluginSecretVersion(secretID, files) {
+  return unwrap(await v3({
+    url: `/secrets/${encodeURIComponent(secretID)}/versions`,
+    method: 'post',
+    data: { files },
+    timeout: 120_000
+  }))
+}
+
+export async function deleteKernelPluginSecretVersion(secretID, version) {
+  return unwrap(await v3({ url: `/secrets/${encodeURIComponent(secretID)}/versions/${version}`, method: 'delete' }))
+}
+
+export async function deleteKernelPluginSecret(secretID) {
+  return unwrap(await v3({ url: `/secrets/${encodeURIComponent(secretID)}`, method: 'delete' }))
+}
+
+export async function getKernelPluginSecretAudit(secretID) {
+  return unwrap(await v3({ url: `/secrets/${encodeURIComponent(secretID)}/audit`, method: 'get' }))
+}
+
 export async function getKernelPluginReleases(pluginID) {
   if (pluginID) {
     return unwrap(await v3({ url: '/plugin-releases', method: 'get', params: { plugin_id: pluginID } }))

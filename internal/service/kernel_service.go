@@ -58,7 +58,10 @@ var (
 	ErrPluginRouteForbidden        = errors.New("plugin control route permission denied")
 )
 
-const KernelOperationEnvelopeVersion = "anixops.operation/v1"
+const (
+	KernelOperationEnvelopeVersion   = "anixops.operation/v1"
+	KernelOperationEnvelopeVersionV2 = "anixops.operation/v2"
+)
 const pluginManifestAPIVersion = "v1"
 const maxPluginWebUIBundleBytes = 2 << 20
 const PluginAPIGrantResourceType = "plugin_api"
@@ -1692,15 +1695,28 @@ func CreateKernelOperation(db *gorm.DB, operation model.KernelOperation) (*model
 	if strings.TrimSpace(operation.PluginID) == "" || strings.TrimSpace(operation.TargetVersion) == "" {
 		return nil, false, errors.New("plugin_id and target_version are required")
 	}
-	if operation.EnvelopeVersion == "" {
-		operation.EnvelopeVersion = KernelOperationEnvelopeVersion
-	}
-	if operation.EnvelopeVersion != KernelOperationEnvelopeVersion {
-		return nil, false, fmt.Errorf("unsupported operation envelope version %q", operation.EnvelopeVersion)
-	}
 	canonicalConfig, err := CanonicalKernelOperationConfig(operation.ConfigJSON)
 	if err != nil {
 		return nil, false, err
+	}
+	references, err := ParsePluginSecretReferences(canonicalConfig)
+	if err != nil {
+		return nil, false, err
+	}
+	if operation.EnvelopeVersion == "" {
+		operation.EnvelopeVersion = KernelOperationEnvelopeVersion
+		if len(references) > 0 {
+			operation.EnvelopeVersion = KernelOperationEnvelopeVersionV2
+		}
+	}
+	if operation.EnvelopeVersion != KernelOperationEnvelopeVersion && operation.EnvelopeVersion != KernelOperationEnvelopeVersionV2 {
+		return nil, false, fmt.Errorf("unsupported operation envelope version %q", operation.EnvelopeVersion)
+	}
+	if operation.EnvelopeVersion == KernelOperationEnvelopeVersionV2 && len(references) == 0 {
+		return nil, false, errors.New("operation envelope v2 requires at least one plugin secret reference")
+	}
+	if operation.EnvelopeVersion == KernelOperationEnvelopeVersion && len(references) > 0 {
+		return nil, false, errors.New("operation envelope v1 cannot carry plugin secret references")
 	}
 	operation.ConfigJSON = canonicalConfig
 	computedHash, err := HashKernelOperationConfig(operation.ConfigJSON)
@@ -2302,6 +2318,9 @@ func ValidateTopology(input TopologyRevisionInput) []TopologyValidationIssue {
 				issues = append(issues, TopologyValidationIssue{"inline_secret", path + ".config", "topology config must reference a secret ID instead of carrying secret material"})
 			}
 			_ = json.Unmarshal([]byte(vertex.ConfigJSON), &cfg)
+			if _, err := ParsePluginSecretReferences(vertex.ConfigJSON); err != nil {
+				issues = append(issues, TopologyValidationIssue{"invalid_secret_reference", path + ".config", err.Error()})
+			}
 		}
 		if cfg.MTU != 0 && (cfg.MTU < 576 || cfg.MTU > 9000) {
 			issues = append(issues, TopologyValidationIssue{"invalid_mtu", path + ".config.mtu", "MTU must be between 576 and 9000"})
@@ -2352,11 +2371,19 @@ func ValidateTopology(input TopologyRevisionInput) []TopologyValidationIssue {
 		if secureProtocols[strings.ToLower(edge.Protocol)] && edge.SecretID == "" {
 			issues = append(issues, TopologyValidationIssue{"secret_required", path + ".secret_id", "secure protocol requires a secret reference"})
 		}
+		if edge.SecretID != "" {
+			if _, err := ParsePluginSecretVersionReference(edge.SecretID); err != nil {
+				issues = append(issues, TopologyValidationIssue{"invalid_secret_reference", path + ".secret_id", err.Error()})
+			}
+		}
 		if edge.ConfigJSON != "" && !json.Valid([]byte(edge.ConfigJSON)) {
 			issues = append(issues, TopologyValidationIssue{"invalid_config", path + ".config", "config must be valid JSON"})
 		} else if edge.ConfigJSON != "" {
 			if topologyConfigContainsInlineSecret(edge.ConfigJSON) {
 				issues = append(issues, TopologyValidationIssue{"inline_secret", path + ".config", "topology config must reference a secret ID instead of carrying secret material"})
+			}
+			if _, err := ParsePluginSecretReferences(edge.ConfigJSON); err != nil {
+				issues = append(issues, TopologyValidationIssue{"invalid_secret_reference", path + ".config", err.Error()})
 			}
 			var cfg struct {
 				AddressFamily string `json:"address_family"`
@@ -2397,6 +2424,90 @@ func ValidateTopology(input TopologyRevisionInput) []TopologyValidationIssue {
 	}
 	if visited != len(vertices) {
 		issues = append(issues, TopologyValidationIssue{"cycle", "edges", "topology must be a directed acyclic graph"})
+	}
+	return issues
+}
+
+// ValidateTopologySecretBindings verifies that every file reference resolves
+// to stored metadata and that each edge bundle is actually consumed by both
+// endpoint plugin configurations. It never decrypts secret material.
+func ValidateTopologySecretBindings(db *gorm.DB, input TopologyRevisionInput) []TopologyValidationIssue {
+	if db == nil {
+		return []TopologyValidationIssue{{"database_unavailable", "", "database is not initialized"}}
+	}
+	type versionKey struct {
+		id      string
+		version uint64
+	}
+	vertexIndexes := make(map[string]int, len(input.Vertices))
+	vertexBundles := make(map[string]map[versionKey]struct{}, len(input.Vertices))
+	seenFiles := make(map[string]struct{})
+	issues := make([]TopologyValidationIssue, 0)
+	validateConfig := func(raw, path string) map[versionKey]struct{} {
+		bundles := make(map[versionKey]struct{})
+		if strings.TrimSpace(raw) == "" || !json.Valid([]byte(raw)) {
+			return bundles
+		}
+		references, err := ParsePluginSecretReferences(raw)
+		if err != nil {
+			return bundles
+		}
+		for _, reference := range references {
+			bundles[versionKey{reference.SecretID, reference.Version}] = struct{}{}
+			if _, checked := seenFiles[reference.String()]; checked {
+				continue
+			}
+			seenFiles[reference.String()] = struct{}{}
+			var count int64
+			err := db.Model(&model.PluginSecretMaterial{}).
+				Joins("JOIN v3_kernel_plugin_secret_version AS version ON version.id = v3_kernel_plugin_secret_material.secret_version_id").
+				Joins("JOIN v3_kernel_plugin_secret AS secret ON secret.id = version.secret_id").
+				Where("secret.id = ? AND secret.deleted_at IS NULL AND version.version = ? AND v3_kernel_plugin_secret_material.name = ?", reference.SecretID, reference.Version, reference.Name).
+				Count(&count).Error
+			if err != nil {
+				issues = append(issues, TopologyValidationIssue{"secret_lookup_failed", path, "plugin secret metadata could not be checked"})
+			} else if count == 0 {
+				issues = append(issues, TopologyValidationIssue{"secret_not_found", path, fmt.Sprintf("plugin secret file %q does not exist", reference.String())})
+			}
+		}
+		return bundles
+	}
+	for index, vertex := range input.Vertices {
+		vertexIndexes[vertex.Key] = index
+		vertexBundles[vertex.Key] = validateConfig(vertex.ConfigJSON, fmt.Sprintf("vertices[%d].config", index))
+	}
+	for index, edge := range input.Edges {
+		validateConfig(edge.ConfigJSON, fmt.Sprintf("edges[%d].config", index))
+		if strings.TrimSpace(edge.SecretID) == "" {
+			continue
+		}
+		bundle, err := ParsePluginSecretVersionReference(edge.SecretID)
+		if err != nil {
+			continue
+		}
+		key := versionKey{bundle.SecretID, bundle.Version}
+		var count int64
+		err = db.Model(&model.PluginSecretVersion{}).
+			Joins("JOIN v3_kernel_plugin_secret AS secret ON secret.id = v3_kernel_plugin_secret_version.secret_id").
+			Where("secret.id = ? AND secret.deleted_at IS NULL AND v3_kernel_plugin_secret_version.version = ?", bundle.SecretID, bundle.Version).
+			Count(&count).Error
+		path := fmt.Sprintf("edges[%d].secret_id", index)
+		if err != nil {
+			issues = append(issues, TopologyValidationIssue{"secret_lookup_failed", path, "plugin secret version could not be checked"})
+			continue
+		}
+		if count == 0 {
+			issues = append(issues, TopologyValidationIssue{"secret_not_found", path, fmt.Sprintf("plugin secret version %q does not exist", bundle.String())})
+			continue
+		}
+		for _, endpoint := range []string{edge.SourceKey, edge.TargetKey} {
+			if _, exists := vertexIndexes[endpoint]; !exists {
+				continue
+			}
+			if _, bound := vertexBundles[endpoint][key]; !bound {
+				issues = append(issues, TopologyValidationIssue{"secret_binding_missing", path, fmt.Sprintf("vertex %q config must reference a file from %s", endpoint, bundle.String())})
+			}
+		}
 	}
 	return issues
 }
@@ -2502,6 +2613,7 @@ func CreateTopologyRevision(db *gorm.DB, topologyID, actorID uint, input Topolog
 	}
 	issues := ValidateTopology(input)
 	issues = append(issues, ValidateTopologyAssignments(db, topology.ServiceScope, input)...)
+	issues = append(issues, ValidateTopologySecretBindings(db, input)...)
 	if len(issues) > 0 {
 		return nil, fmt.Errorf("topology validation failed: %s", issues[0].Message)
 	}

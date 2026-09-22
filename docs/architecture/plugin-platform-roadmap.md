@@ -179,9 +179,10 @@ or restored correctly. Deterministic package gates and release signing require
 the real Agent entrypoints and the archive- and binary-digest-pinned GOST
 runtime.
 
-Exit evidence still required: Control Secret ID to Agent private-file
-materialization, renewal, deletion, and audit; composed `gost-mesh` to
-`nat-egress` failure rollback; MTU and sustained loss/reconnect evidence;
+Control-to-Agent private-file Secret materialization, immutable renewal,
+reference-protected deletion and metadata-only audit are implemented and have
+a real cross-repository process test. Exit evidence still required: composed
+`gost-mesh` to `nat-egress` failure rollback; MTU and sustained loss/reconnect evidence;
 per-scope accounting; multi-node rollback; and a sustained canary. Until these
 gates close, 3.3 execution is canary-only and must not be called production
 ready.

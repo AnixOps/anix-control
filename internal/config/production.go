@@ -78,6 +78,13 @@ func ValidateForStartup(c *Config) error {
 
 	require(c.Plugins.ControlExecutionEnabled, "plugins.control_execution_enabled must be true for machine telemetry operations")
 	require(c.Plugins.DispatchEnabled, "plugins.dispatch_enabled must be true for Agent operations")
+	if c.Plugins.TopologyExecutionEnabled {
+		activeKeyID := strings.TrimSpace(c.Plugins.SecretEncryption.ActiveKeyID)
+		encodedKey := strings.TrimSpace(c.Plugins.SecretEncryption.Keys[activeKeyID])
+		decodedSecretKey, secretKeyErr := base64.StdEncoding.DecodeString(encodedKey)
+		require(activeKeyID != "" && secretKeyErr == nil && len(decodedSecretKey) == 32,
+			"plugins.secret_encryption must select a base64 AES-256 key when topology execution is enabled")
+	}
 	require(c.GRPC.Enable, "grpc.enabled must be true for Agent operations")
 	require(c.GRPC.Port > 0 && c.GRPC.Port <= 65535, "grpc.port must be valid")
 	grpcHost := strings.TrimSpace(c.GRPC.Host)

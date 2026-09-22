@@ -258,6 +258,14 @@
       </div>
     </section>
 
+    <PluginSecrets
+      v-if="tab === 'secrets'"
+      id="control-panel-secrets"
+      role="tabpanel"
+      aria-labelledby="control-tab-secrets"
+      tabindex="0"
+    />
+
     <div
       v-show="tab === 'operations'"
       id="control-panel-operations"
@@ -560,6 +568,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppI18n } from '@/composables/useAppI18n'
 import PluginConfigForm from '@/components/admin/PluginConfigForm.vue'
+import PluginSecrets from '@/components/admin/PluginSecrets.vue'
 import { getNodes } from '@/api/admin'
 import {
   cancelKernelOperation,
@@ -675,6 +684,7 @@ const tabs = computed(() => [
   { key: 'assignments', label: t('control.tabs.assignments') },
   { key: 'scopes', label: t('control.tabs.scopes') },
   { key: 'topologies', label: t('control.tabs.topologies') },
+  { key: 'secrets', label: t('control.tabs.secrets') },
   { key: 'operations', label: t('control.tabs.operations') }
 ])
 

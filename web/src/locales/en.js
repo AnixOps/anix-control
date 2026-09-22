@@ -3009,7 +3009,7 @@ export default {
       configure: 'Configure', enable: 'Enable', disable: 'Disable', upgrade: 'Upgrade', update: 'Upgrade', rollback: 'Rollback', cancel: 'Cancel operation',
       saving: 'Saving...', newAssignment: 'New assignment'
     },
-    tabs: { plugins: 'Plugins', assignments: 'Assignments', scopes: 'Scopes', topologies: 'Topologies', operations: 'Operations' },
+    tabs: { plugins: 'Plugins', assignments: 'Assignments', scopes: 'Scopes', topologies: 'Topologies', secrets: 'Secrets', operations: 'Operations' },
     table: {
       plugin: 'Plugin', publisher: 'Publisher', release: 'Release', installation: 'Installation', desiredVersion: 'Desired version', observedVersion: 'Observed version', version: 'Version', state: 'State', actions: 'Actions',
       scope: 'Scope', owner: 'Owner', description: 'Description', topology: 'Topology', activeRevision: 'Active revision', deployment: 'Deployment',
@@ -3017,7 +3017,13 @@ export default {
     },
     labels: { releases: '{count} releases', desired: 'Desired', observed: 'Observed' },
     states: { catalogued: 'Catalogued', enabled: 'Enabled', disabled: 'Disabled', loading: 'Loading control state...', polling: 'Polling operation state' },
-    empty: { plugins: 'No plugins', assignments: 'No assignments for this node', scopes: 'No service scopes', topologies: 'No topologies', operations: 'No operations' },
+    empty: { plugins: 'No plugins', assignments: 'No assignments for this node', scopes: 'No service scopes', topologies: 'No topologies', secrets: 'No plugin secrets', operations: 'No operations' },
+    secrets: {
+      title: 'Plugin secrets', subtitle: 'Encrypted immutable credential bundles used by Agent plugin configurations.', new: 'New secret', inspect: 'Inspect', addVersion: 'Add version',
+      id: 'Secret ID', name: 'Name', activeVersion: 'Active version', updated: 'Updated', versions: 'Versions', files: 'Credential files', audit: 'Audit trail', noAudit: 'No audit records',
+      createTitle: 'Create plugin secret', versionTitle: 'Add version to {id}', fileLimits: 'Up to 16 files, 1 MiB each and 4 MiB total.', copyReference: 'Copy reference',
+      deleteConfirm: 'Delete {id}? Referenced secrets cannot be deleted.', deleteVersionConfirm: 'Delete version {version}? Referenced and active versions cannot be deleted.'
+    },
     topology: {
       select: 'Topology', new: 'New topology', newTitle: 'Create topology', create: 'Create topology', name: 'Name', edit: 'Edit revision', status: 'View status', noDeployment: 'No deployment', editorTitle: 'Topology revision editor', revision: 'Revision',
       noRevisions: 'No revisions', failurePolicy: 'Failure policy', stopAndRollback: 'Stop and rollback', message: 'Revision message', graphJSON: 'Graph JSON',
@@ -3048,14 +3054,16 @@ export default {
       releaseImported: '{plugin} {version} was imported', cancelRequested: 'Operation cancellation was requested',
       assignmentSaved: '{plugin} assignment was saved', assignmentStateSaved: '{plugin} assignment state was saved', assignmentDeleted: '{plugin} assignment was deleted',
       topologyValidated: 'Topology validation passed', topologyRevisionSaved: 'Topology revision {revision} was saved', topologyPlanned: 'Deployment #{id} was planned',
-      topologyApplyRequested: 'Deployment apply was requested', topologyRollbackRequested: 'Deployment rollback was requested', topologyCreated: 'Topology {name} was created'
+      topologyApplyRequested: 'Deployment apply was requested', topologyRollbackRequested: 'Deployment rollback was requested', topologyCreated: 'Topology {name} was created',
+      secretCreated: 'Plugin secret was created', secretVersionCreated: 'Plugin secret version was created', secretDeleted: 'Plugin secret was deleted', secretVersionDeleted: 'Plugin secret version was deleted', secretReferenceCopied: 'Secret reference copied'
     },
     errors: {
       load: 'Unable to load control state', action: 'Plugin operation failed', install: 'Plugin installation failed', configLoad: 'Unable to load plugin configuration',
       configSave: 'Unable to save plugin configuration', releaseImport: 'Release import failed', cancel: 'Unable to cancel operation', poll: 'Unable to refresh operation state',
       nodesLoad: 'Unable to load nodes', assignmentsLoad: 'Unable to load node assignments', assignmentSave: 'Unable to save node assignment', assignmentDelete: 'Unable to delete node assignment',
       topologyLoad: 'Unable to load topology revisions', topologyValidate: 'Unable to validate topology', topologySave: 'Unable to save topology revision', topologyPlan: 'Unable to plan topology deployment',
-      topologyPreview: 'Unable to preview topology deployment', topologyStatus: 'Unable to load deployment status', topologyApply: 'Unable to apply topology deployment', topologyRollback: 'Unable to roll back topology deployment', topologyCreate: 'Unable to create topology'
+      topologyPreview: 'Unable to preview topology deployment', topologyStatus: 'Unable to load deployment status', topologyApply: 'Unable to apply topology deployment', topologyRollback: 'Unable to roll back topology deployment', topologyCreate: 'Unable to create topology',
+      secretLoad: 'Unable to load plugin secrets', secretSave: 'Unable to save plugin secret', secretDelete: 'Unable to delete plugin secret', secretFiles: 'Select 1-16 non-empty files within the size limits.', secretCopy: 'Unable to copy secret reference'
     }
   },
   accessGroups: {

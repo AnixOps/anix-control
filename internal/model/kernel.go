@@ -494,6 +494,7 @@ func KernelModels() []any {
 		&TopologyRevision{}, &TopologyVertex{}, &TopologyEdge{},
 		&TopologyDeployment{}, &TopologyDeploymentStep{}, &TopologyObservedState{}, &KernelOperation{},
 		&PluginLifecyclePlan{}, &PluginLifecyclePlanStep{},
+		&PluginSecret{}, &PluginSecretVersion{}, &PluginSecretMaterial{}, &PluginSecretAudit{},
 		&NodeOperationRevision{}, &PluginTelemetryState{}, &NodePluginObservedState{},
 	}
 }

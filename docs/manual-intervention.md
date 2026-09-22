@@ -16,6 +16,7 @@ Manual action required:
 - Telegram bot token or notification credentials.
 - Docker registry credentials.
 - SSH keys and Ansible inventory secrets.
+- Plugin Secret AES-256-GCM keyring in `plugins.secret_encryption`.
 
 Rules:
 

@@ -68,9 +68,13 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
+	secretEncryptionKey := []byte("0123456789abcdef0123456789abcdef")
 	previousConfig := config.Get()
 	config.Set(&config.Config{Plugins: config.PluginConfig{
 		OfficialPublicKey: base64.StdEncoding.EncodeToString(publicKey), ControlExecutionEnabled: true,
+		SecretEncryption: config.PluginSecretEncryptionConfig{
+			ActiveKeyID: "primary", Keys: map[string]string{"primary": base64.StdEncoding.EncodeToString(secretEncryptionKey)},
+		},
 	}})
 	t.Cleanup(func() { config.Set(previousConfig) })
 	manifest := crossRepositoryMachineTelemetryManifest(artifact, entrypoint, webUI)
@@ -207,6 +211,49 @@ func TestAgentPluginPackageCrossRepositoryE2E(t *testing.T) {
 	var persistedInstallation model.PluginInstallation
 	require.NoError(t, db.First(&persistedInstallation, installation.ID).Error)
 	require.Equal(t, manifest.Version, persistedInstallation.DesiredVersion)
+
+	secretStore, err := service.NewPluginSecretStore(db, config.Get().Plugins.SecretEncryption)
+	require.NoError(t, err)
+	secretPlaintext := "cross-repository-private-material"
+	_, err = secretStore.Create(service.PluginSecretCreateInput{
+		ID: "cross-repository-runtime", Name: "Cross repository runtime", ActorID: 1,
+		Files: []service.PluginSecretFileInput{{Name: "credential.pem", Content: []byte(secretPlaintext)}},
+	})
+	require.NoError(t, err)
+	secretReference := "secret://cross-repository-runtime@1/credential.pem"
+	secretConfig, err := service.CanonicalKernelOperationConfig(`{"credential_file":"` + secretReference + `","interval_seconds":5}`)
+	require.NoError(t, err)
+	deadline := time.Now().Add(time.Minute)
+	secretOperation, reused, err := service.CreateKernelOperation(db, model.KernelOperation{
+		ID: "c170cfaf-baf5-4bea-b110-e72d37c29a62", IdempotencyKey: "cross-repository-secret-configure-1",
+		NodeID: &node.ID, PluginID: manifest.ID, TargetVersion: manifest.Version,
+		Kind: "plugin.configure", ConfigJSON: secretConfig, DeadlineAt: &deadline,
+	})
+	require.NoError(t, err)
+	require.False(t, reused)
+	require.Equal(t, service.KernelOperationEnvelopeVersionV2, secretOperation.EnvelopeVersion)
+	waitForCrossRepositoryOperationChain(t, db, bridge, resultFile, &fixtureOutput, secretOperation)
+
+	materialPath := filepath.Join(pluginDir, "private", "secrets", "cross-repository-runtime", "1", "credential.pem")
+	material, err := os.ReadFile(materialPath)
+	require.NoError(t, err)
+	require.Equal(t, secretPlaintext, string(material))
+	materialInfo, err := os.Lstat(materialPath)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o600), materialInfo.Mode().Perm())
+	runtimeConfig, err := os.ReadFile(filepath.Join(pluginDir, "config.json"))
+	require.NoError(t, err)
+	require.NotContains(t, string(runtimeConfig), secretPlaintext)
+	require.NotContains(t, string(runtimeConfig), secretReference)
+	require.Contains(t, string(runtimeConfig), materialPath)
+	agentState, err := os.ReadFile(filepath.Join(pluginRoot, "state.json"))
+	require.NoError(t, err)
+	require.NotContains(t, string(agentState), secretPlaintext)
+	require.Contains(t, string(agentState), secretReference)
+	var dispatchAudit model.PluginSecretAudit
+	require.NoError(t, db.First(&dispatchAudit, "operation_id = ?", secretOperation.ID).Error)
+	require.Equal(t, "accepted", dispatchAudit.Outcome)
+	require.NotContains(t, dispatchAudit.Detail, secretPlaintext)
 }
 
 type crossRepositoryFastHeartbeatServer struct {

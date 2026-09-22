@@ -89,7 +89,7 @@ The following statements are intentionally false today:
 |-------|-------------------|---------------|
 | 3.1 | Signed package lifecycle and Modular Web UI | Release only `machine-telemetry`; prove package installation, Control/Agent lifecycle, real browser load/revocation, rollback, and legacy regression compatibility. |
 | 3.2 | Declarative topology and dedicated forwarding | Add `nftables-forward` only after real TCP/UDP, IPv4/IPv6, rollback, staged rollout, and legacy-fallback evidence. |
-| 3.3 | Tunnel mesh and NAT egress | Add `gost-mesh` and `nat-egress` only after mutual-TLS, health, cleanup, accounting, secret materialization, and multi-node rollback evidence. |
+| 3.3 | Tunnel mesh and NAT egress | Encrypted Secret materialization, mutual-TLS, health, and cleanup have source and isolated CI coverage. Add `gost-mesh` and `nat-egress` only after accounting, multi-node rollback, MTU/loss/reconnect, composed failure rollback, and sustained canary evidence. |
 | 3.4 | WireGuard and protocol composition | Package WireGuard and protocol adapters; prove composed topology upgrades, client import, accounting, and rollback. |
 | 3.5 | Business-domain migration | Move subscription, proxy, plan/order/payment, forwarding, ticket, notification, and content ownership behind packages while `/api/v2` acts as an adapter. |
 | 4.0 | Plugin-only cutover | Remove coupled business/runtime paths only after clean bootstrap, final-3.5 upgrade, package reinstall, backup/restore, and full rollback evidence prove parity. |

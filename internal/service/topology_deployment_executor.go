@@ -366,6 +366,7 @@ func compileTopologyDeploymentSteps(tx *gorm.DB, topology model.Topology, revisi
 		order = []string{}
 	} else {
 		issues := ValidateTopology(TopologyRevisionInput{Vertices: vertices, Edges: edges})
+		issues = append(issues, ValidateTopologySecretBindings(tx, TopologyRevisionInput{Vertices: vertices, Edges: edges})...)
 		if len(issues) > 0 {
 			return nil, fmt.Errorf("topology validation failed: %s", issues[0].Message)
 		}
