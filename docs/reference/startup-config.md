@@ -196,6 +196,18 @@ anix-control -config config/config.yaml \
 anix-control -config config/config.yaml -migrate-schema
 ```
 
+The `nftables-forward` rollout has a separate post-rehearsal gate:
+
+```bash
+anix-control -config config/config.yaml \
+  -check-forwarding-evidence config/forwarding-acceptance.yaml
+```
+
+Create that ignored file from
+`config/examples/forwarding-acceptance.yaml.example` only after real staging,
+fallback, 72-hour canary, and staged rollout evidence exists. The command
+validates and exits without changing topology execution settings.
+
 The first-batch production profile requires `control_execution_enabled`,
 `dispatch_enabled`, and `grpc.enabled`. Topology execution remains disabled
 until its own canary approval. The release uses process-local cache and one

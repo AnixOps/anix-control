@@ -526,3 +526,12 @@ anix-control -config config/config.yaml \
 ```
 
 该检查要求真实发布散列、备份恢复、双渠道通知、外部监测、Agent 灰度、签名拒绝、人工回滚、跨地域和交接证据。
+
+`nftables-forward` 3.2 上线使用独立证据，避免尚未完成的转发灰度阻塞首批机器监控交付。完成预发布恢复、旧路径回退、至少 72 小时 Canary 和 1/5/25/100 灰度后，从 `config/examples/forwarding-acceptance.yaml.example` 创建未跟踪记录并运行：
+
+```bash
+anix-control -config config/config.yaml \
+  -check-forwarding-evidence config/forwarding-acceptance.yaml
+```
+
+完整字段和顺序约束见 [`forwarding/release-acceptance.md`](forwarding/release-acceptance.md)。该命令只校验证据并退出，不会修改运行配置或部署插件。

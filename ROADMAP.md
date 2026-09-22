@@ -116,6 +116,11 @@ of the topology executor between reconciliation passes without duplicate Agent
 operations. Staging restore, legacy fallback, staged rollout records, and
 operator approval remain deployment gates.
 
+The repository now ships a strict, fail-closed forwarding acceptance template
+and `-check-forwarding-evidence` preflight for those remaining gates. Production
+status still requires operator-filled staging, fallback, 72-hour canary, and
+1/5/25/100 rollout records; the committed template is deliberately invalid.
+
 ## Phase 6: P0 WireGuard Protocol Support
 
 Status: in progress

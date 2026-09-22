@@ -99,3 +99,9 @@ See [the operations runbook](MAINTENANCE_P0.md) for `/maintenance`, owner/techni
 Production deployment is fail-closed: values stay in the ignored
 `config/config.yaml`, schema changes require `-migrate-schema`, and real-world
 handoff evidence is checked with `-check-production-evidence`.
+
+The signed `nftables-forward` rollout is approved separately. Operators fill
+the ignored `config/forwarding-acceptance.yaml` from the template under
+`config/examples/` and run `-check-forwarding-evidence`; the gate validates
+staging, fallback, 72-hour canary, staged rollout, and owner approval evidence
+without performing a deployment.

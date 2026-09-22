@@ -1,0 +1,64 @@
+# Copy this file to config/forwarding-acceptance.yaml for a real 3.2 release.
+# Keep credentials out of this record. References should point to operator-owned
+# change tickets or immutable logs. This template intentionally fails validation.
+release:
+  control_commit: "REPLACE_WITH_40_CHARACTER_GIT_COMMIT"
+  agent_commit: "REPLACE_WITH_40_CHARACTER_GIT_COMMIT"
+  plugin_id: "nftables-forward"
+  plugin_version: "REPLACE_WITH_SEMANTIC_VERSION"
+  package_sha256: "REPLACE_WITH_64_LOWERCASE_HEX"
+
+staging:
+  environment: "staging"
+  restore_rehearsed_at: "REPLACE_WITH_RFC3339_TIME"
+  verified_at: "REPLACE_WITH_RFC3339_TIME"
+  ipv4_tcp_passed: false
+  ipv4_udp_passed: false
+  ipv6_tcp_passed: false
+  ipv6_udp_passed: false
+  partial_node_rollback_passed: false
+  control_restart_passed: false
+  agent_restart_passed: false
+  evidence_reference: "REPLACE_WITH_CHANGE_OR_LOG_REFERENCE"
+
+legacy_fallback:
+  rehearsed_at: "REPLACE_WITH_RFC3339_TIME"
+  recovery_verified_at: "REPLACE_WITH_RFC3339_TIME"
+  evidence_reference: "REPLACE_WITH_CHANGE_OR_LOG_REFERENCE"
+
+canary:
+  node_ids: []
+  started_at: "REPLACE_WITH_RFC3339_TIME"
+  completed_at: "REPLACE_WITH_RFC3339_TIME"
+  traffic_healthy: false
+  rollback_passed: false
+  evidence_reference: "REPLACE_WITH_CHANGE_OR_LOG_REFERENCE"
+
+rollout:
+  managed_node_count: 0
+  steps:
+    - percentage: 1
+      node_ids: []
+      started_at: "REPLACE_WITH_RFC3339_TIME"
+      completed_at: "REPLACE_WITH_RFC3339_TIME"
+      evidence_reference: "REPLACE_WITH_CHANGE_OR_LOG_REFERENCE"
+    - percentage: 5
+      node_ids: []
+      started_at: "REPLACE_WITH_RFC3339_TIME"
+      completed_at: "REPLACE_WITH_RFC3339_TIME"
+      evidence_reference: "REPLACE_WITH_CHANGE_OR_LOG_REFERENCE"
+    - percentage: 25
+      node_ids: []
+      started_at: "REPLACE_WITH_RFC3339_TIME"
+      completed_at: "REPLACE_WITH_RFC3339_TIME"
+      evidence_reference: "REPLACE_WITH_CHANGE_OR_LOG_REFERENCE"
+    - percentage: 100
+      node_ids: []
+      started_at: "REPLACE_WITH_RFC3339_TIME"
+      completed_at: "REPLACE_WITH_RFC3339_TIME"
+      evidence_reference: "REPLACE_WITH_CHANGE_OR_LOG_REFERENCE"
+
+operator:
+  approved_by: "REPLACE_WITH_OPERATIONS_OWNER"
+  approved_at: "REPLACE_WITH_RFC3339_TIME"
+  change_reference: "REPLACE_WITH_APPROVED_CHANGE_REFERENCE"

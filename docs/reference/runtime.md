@@ -47,6 +47,12 @@ the schema is missing or outdated. After the real deployment exercises alerts,
 canary Agent behavior and rollback, record the result in the ignored
 `config/production-acceptance.yaml` and run `-check-production-evidence`.
 
+Production approval for the signed `nftables-forward` topology path remains a
+separate gate. After the real restore, fallback, 72-hour canary, and cumulative
+rollout, validate the ignored `config/forwarding-acceptance.yaml` with
+`-check-forwarding-evidence`. The validator exits without enabling topology
+execution; see [`../forwarding/release-acceptance.md`](../forwarding/release-acceptance.md).
+
 ## Control Plane Vs Execution Plane
 
 - `v2board_AnixOps`

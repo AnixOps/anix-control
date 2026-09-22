@@ -77,6 +77,7 @@ var (
 	checkConfigOnly          bool
 	migrateSchema            bool
 	productionEvidencePath   string
+	forwardingEvidencePath   string
 	productionComposeEnvPath string
 	version                  = branding.DefaultVersion
 	buildTime                = "unknown"
@@ -89,6 +90,7 @@ func init() {
 	flag.BoolVar(&checkConfigOnly, "check-config", false, "校验配置后退出")
 	flag.BoolVar(&migrateSchema, "migrate-schema", false, "执行显式数据库 schema 迁移后退出")
 	flag.StringVar(&productionEvidencePath, "check-production-evidence", "", "校验生产部署验收记录后退出")
+	flag.StringVar(&forwardingEvidencePath, "check-forwarding-evidence", "", "校验转发插件生产验收记录后退出")
 	flag.StringVar(&productionComposeEnvPath, "check-production-compose-env", "", "校验生产 Compose 环境并与应用配置比对后退出")
 }
 
@@ -284,6 +286,9 @@ func main() {
 	if strings.TrimSpace(productionEvidencePath) != "" {
 		selectedModes++
 	}
+	if strings.TrimSpace(forwardingEvidencePath) != "" {
+		selectedModes++
+	}
 	if strings.TrimSpace(productionComposeEnvPath) != "" {
 		selectedModes++
 	}
@@ -321,6 +326,13 @@ func main() {
 			log.Fatalf("Failed production acceptance preflight: %v", err)
 		}
 		log.Printf("Production acceptance preflight passed: %s", productionEvidencePath)
+		return
+	}
+	if strings.TrimSpace(forwardingEvidencePath) != "" {
+		if err := config.ValidateForwardingAcceptanceFile(forwardingEvidencePath); err != nil {
+			log.Fatalf("Failed forwarding acceptance preflight: %v", err)
+		}
+		log.Printf("Forwarding acceptance preflight passed: %s", forwardingEvidencePath)
 		return
 	}
 	if checkConfigOnly {

@@ -28,6 +28,7 @@ Use this tree like NodeX:
 - Runtime config migration: [`reference/forward-runtime-migration.md`](reference/forward-runtime-migration.md)
 - Runtime mode entrypoint: [`reference/runtime.md`](reference/runtime.md)
 - Relay onboarding: [`guide/forward-relay-onboarding.md`](guide/forward-relay-onboarding.md)
+- Forwarding release acceptance: [`forwarding/release-acceptance.md`](forwarding/release-acceptance.md)
 - P0 WireGuard relay plan: [`guide/wireguard-relay.md`](guide/wireguard-relay.md)
 - Config examples: [`../config/examples/README.md`](../config/examples/README.md)
 
@@ -45,3 +46,9 @@ See [the operations runbook](MAINTENANCE_P0.md) for `/maintenance`, owner/techni
 Production operators should start from `config/config.prod.yaml`, run
 `-check-config`, execute the separately approved `-migrate-schema`, and finish
 with the ignored `config/production-acceptance.yaml` evidence gate.
+
+The later `nftables-forward` production rollout has its own ignored
+`config/forwarding-acceptance.yaml` record and
+`-check-forwarding-evidence` gate. It requires staging restore, legacy
+fallback, a 72-hour canary, cumulative 1/5/25/100 rollout evidence, and final
+operator approval without delaying the first machine-telemetry release.

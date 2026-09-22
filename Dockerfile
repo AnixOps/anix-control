@@ -58,6 +58,7 @@ COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/config/config.yaml.example ./config/config.yaml.example
 COPY --from=builder /app/config/config.prod.yaml ./config/config.prod.yaml
 COPY --from=builder /app/config/production-acceptance.yaml.example ./config/production-acceptance.yaml.example
+COPY --from=builder /app/config/examples/forwarding-acceptance.yaml.example ./config/examples/forwarding-acceptance.yaml.example
 COPY --from=builder /app/config/deploy ./config/deploy
 
 # Copy frontend build (if exists)

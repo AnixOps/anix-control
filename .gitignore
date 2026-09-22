@@ -46,6 +46,7 @@ config/config.yaml
 config/config.dev.yaml
 config/production.env
 config/production-acceptance.yaml
+config/forwarding-acceptance.yaml
 config/deploy/ssh/*
 !config/deploy/ssh/.gitignore
 config/deploy/ansible/inventory.ini

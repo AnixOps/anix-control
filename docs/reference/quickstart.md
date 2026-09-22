@@ -174,3 +174,10 @@ Production uses `config/config.prod.yaml`, one Control replica with memory
 cache, PostgreSQL durability, `-check-config`, and a separately approved
 `-migrate-schema` command. The service must not be started while template
 placeholders remain.
+
+When the later signed forwarding rollout reaches production approval, copy
+`config/examples/forwarding-acceptance.yaml.example` to the ignored
+`config/forwarding-acceptance.yaml`, fill only evidence references and release
+identifiers, then run `-check-forwarding-evidence`. See
+[`../forwarding/release-acceptance.md`](../forwarding/release-acceptance.md) for
+the required 72-hour canary and 1/5/25/100 rollout order.
