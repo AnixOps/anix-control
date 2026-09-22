@@ -35,4 +35,10 @@
 - Agent 源码 `e9ea5ce3e784ee60e34a052a4f682d872e9d32e2`：[CI #35667433060](https://github.com/AnixOps/anix-agent/actions/runs/35667433060) 通过，也是 Control 验收固定使用的 Agent 版本。
 - NetworkCore 当前记录提交 `f0fb0da376210a65b8207f7de7095b1e4320b58e`：[CI #35650630501](https://github.com/AnixOps/networkcore_anixops/actions/runs/35650630501) 通过；诊断契约源码 `fb6934a6e0db0c30b455f31edbfcc6491c078c3b` 对应的 [CI #35650045804](https://github.com/AnixOps/networkcore_anixops/actions/runs/35650045804) 通过。该证据仅表示契约、校验与适配边界验收，不表示运行时接入完成。
 
+## 3.2 转发交付证据
+
+- Agent 源码 `bedbd2651936e0891728ab8e9511f73eb14d59fb`：[CI #35669599170](https://github.com/AnixOps/anix-agent/actions/runs/35669599170) 通过。该流水线以特权网络命名空间验证 IPv4/IPv6 TCP/UDP nftables DNAT、计数器、Agent 重启与强制退出后的恢复，以及精确回滚。
+- Control 源码 `4cf77284c3eebbc91e79735cfad04d13caad0eff`：[CI/CD Pipeline #35672522857](https://github.com/AnixOps/anix-control/actions/runs/35672522857) 通过。该流水线覆盖转发回归、Control 到 Agent 进程联调、竞态、全量后端测试、前端、数据库恢复和镜像构建，并验证生产验收证据文件默认拒绝占位值和不完整灰度记录。
+- 真实环境证据仍未执行。部署者需从 `config/examples/forwarding-acceptance.yaml.example` 创建被 Git 忽略的 `config/forwarding-acceptance.yaml`，填写实际提交、制品摘要、节点、时间线、回滚演练与负责人批准，再运行 `anix-control -config config/config.yaml -check-forwarding-evidence config/forwarding-acceptance.yaml`。该校验成功前不得把 3.2 标记为生产可用。
+
 通知验收使用注入的测试适配器，未向真实接收人发送。真实邮件与 Telegram、Control 第三方外部监测、跨地域和设备演练、灰度观察及维护人员交接仍是生产上线门槛。
