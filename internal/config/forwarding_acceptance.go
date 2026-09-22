@@ -161,11 +161,9 @@ func (e ForwardingAcceptance) Validate() error {
 			expectedCount := (e.Rollout.ManagedNodeCount*expectedPercentages[index] + 99) / 100
 			require(uint(len(step.NodeIDs)) == expectedCount, fmt.Sprintf("%s.node_ids must contain %d nodes", field, expectedCount))
 		}
-		if previousNodes != nil {
-			for nodeID := range previousNodes {
-				_, present := nodes[nodeID]
-				require(present, fmt.Sprintf("%s.node_ids must retain node %d from the previous stage", field, nodeID))
-			}
+		for nodeID := range previousNodes {
+			_, present := nodes[nodeID]
+			require(present, fmt.Sprintf("%s.node_ids must retain node %d from the previous stage", field, nodeID))
 		}
 		startedAt := requireTime(step.StartedAt, field+".started_at")
 		completedAt := requireTime(step.CompletedAt, field+".completed_at")
