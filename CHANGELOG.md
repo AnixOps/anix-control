@@ -15,6 +15,10 @@
 - Added a default-off Agent Supervisor canary to the node deployment flow,
   including secure gRPC endpoint checks, canonical Ed25519 public-key checks,
   and Ansible group-variable/template propagation.
+- Added a strict `nftables-forward` production evidence preflight for staging
+  restore, legacy fallback, a 72-hour canary, cumulative 1/5/25/100 rollout
+  groups, and final operations-owner approval. The shipped config template is
+  deliberately invalid until an operator records real deployment evidence.
 
 ### Fixed
 
