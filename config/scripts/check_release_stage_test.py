@@ -49,9 +49,36 @@ class V4ReleaseStageContractTest(unittest.TestCase):
         self.assertEqual(16, len(decision.package_ids))
 
         with tempfile.TemporaryDirectory() as temporary:
-            output = Path(temporary) / "packages"
+            root = Path(temporary)
+            output = root / "packages"
+            # The package matrix intentionally requires explicit executable
+            # inputs for every Agent-target package and declared runtime. The
+            # stage test only checks the package-cohort shape, so use isolated
+            # executable fixtures instead of weakening that builder contract.
+            platforms = ("linux/amd64",)
+            build_inputs: list[str] = []
+            for package_id in ("machine-telemetry", "nftables-forward", "gost-mesh", "nat-egress"):
+                binary = root / f"{package_id}-agent"
+                binary.write_bytes(b"#!/bin/sh\nexit 0\n")
+                binary.chmod(0o755)
+                build_inputs.extend(["--agent-binary", f"{package_id}@{platforms[0]}={binary}"])
+            runtime = root / "gost-runtime"
+            runtime.write_bytes(b"#!/bin/sh\nexit 0\n")
+            runtime.chmod(0o755)
+            build_inputs.extend(["--runtime-binary", f"gost-mesh:gost@{platforms[0]}={runtime}"])
             result = subprocess.run(
-                [sys.executable, str(BUILDER), "--all", "--version", "4.0.0", "--out", str(output)],
+                [
+                    sys.executable,
+                    str(BUILDER),
+                    "--all",
+                    "--version",
+                    "4.0.0",
+                    "--out",
+                    str(output),
+                    "--platform",
+                    platforms[0],
+                    *build_inputs,
+                ],
                 cwd=REPO_ROOT,
                 check=False,
                 text=True,

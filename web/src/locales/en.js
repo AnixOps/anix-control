@@ -3016,20 +3016,21 @@ export default {
     subtitle: 'Manage official signed packages, Control WebUI extensions, and lifecycle operations.',
     actions: {
       refresh: 'Refresh', refreshing: 'Refreshing...', importRelease: 'Import release', importing: 'Importing...', install: 'Install',
-      configure: 'Configure', enable: 'Enable', disable: 'Disable', upgrade: 'Upgrade', update: 'Upgrade', rollback: 'Rollback', cancel: 'Cancel operation',
+      configure: 'Configure', enable: 'Enable', disable: 'Disable', upgrade: 'Upgrade', update: 'Upgrade', rollback: 'Rollback', cancel: 'Cancel operation', installOfficialOnly: 'Official release required',
       saving: 'Saving...', newAssignment: 'New assignment'
     },
     pluginCenter: {
       filters: { search: 'Search plugins', health: 'Health', target: 'Target', allHealth: 'All health', allTargets: 'All targets' },
       states: { healthy: 'Healthy', attention: 'Needs attention' },
       summary: { label: 'Plugin catalog summary', healthy: '{count} healthy', attention: '{count} need attention', catalogued: '{count} catalogued' },
-      empty: 'No plugins match the current filters'
+      empty: 'No plugins match the current filters',
+      operations: { title: 'Recent plugin operations', empty: 'No recent plugin operations' }
     },
     tabs: { plugins: 'Plugins', assignments: 'Assignments', scopes: 'Scopes', topologies: 'Topologies', operations: 'Operations' },
     table: {
       plugin: 'Plugin', publisher: 'Publisher', release: 'Release', installation: 'Installation', desiredVersion: 'Desired version', observedVersion: 'Observed version', version: 'Version', state: 'State', actions: 'Actions',
       scope: 'Scope', owner: 'Owner', description: 'Description', topology: 'Topology', activeRevision: 'Active revision', deployment: 'Deployment',
-      operation: 'Operation', revision: 'Revision', deadline: 'Deadline', role: 'Role', configRevision: 'Config revision', rolloutGroup: 'Rollout group'
+      operation: 'Operation', chain: 'Chain', revision: 'Revision', deadline: 'Deadline', target: 'Target', version: 'Version', role: 'Role', configRevision: 'Config revision', rolloutGroup: 'Rollout group'
     },
     labels: { releases: '{count} releases', desired: 'Desired', observed: 'Observed' },
     states: { catalogued: 'Catalogued', enabled: 'Enabled', disabled: 'Disabled', loading: 'Loading control state...', polling: 'Polling operation state' },
@@ -3061,7 +3062,7 @@ export default {
       artifactOptional: 'Optional; a release without an uploaded artifact cannot be installed.'
     },
     messages: {
-      actionQueued: '{action} was submitted for {plugin}', installed: 'Installation intent was saved for {plugin}', configSaved: 'Configuration was saved for {plugin}',
+      actionQueued: '{action} was submitted for {plugin}', operationStatus: 'Operation {id} is {state}. Chain: {chain}.', installed: 'Installation intent was saved for {plugin}', configSaved: 'Configuration was saved for {plugin}',
       releaseImported: '{plugin} {version} was imported', cancelRequested: 'Operation cancellation was requested',
       assignmentSaved: '{plugin} assignment was saved', assignmentStateSaved: '{plugin} assignment state was saved', assignmentDeleted: '{plugin} assignment was deleted',
       topologyValidated: 'Topology validation passed', topologyRevisionSaved: 'Topology revision {revision} was saved', topologyPlanned: 'Deployment #{id} was planned',

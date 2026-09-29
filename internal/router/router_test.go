@@ -713,6 +713,8 @@ func TestSetup_CORS(t *testing.T) {
 	assert.Equal(t, "https://example.com", w.Header().Get("Access-Control-Allow-Origin"))
 	assert.Equal(t, http.StatusNoContent, w.Code)
 	assert.Contains(t, w.Header().Get("Access-Control-Expose-Headers"), "X-Request-ID")
+	assert.Contains(t, w.Header().Get("Access-Control-Expose-Headers"), "X-AnixOps-Operation-ID")
+	assert.Contains(t, w.Header().Get("Access-Control-Expose-Headers"), "X-AnixOps-Operation-Chain")
 }
 
 func TestSetup_SecurityHeadersAndRequestID(t *testing.T) {

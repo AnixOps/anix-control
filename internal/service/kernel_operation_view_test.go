@@ -44,6 +44,7 @@ func TestPublicPluginInstallationHidesRawExecutorError(t *testing.T) {
 
 	view := PublicPluginInstallation(installation)
 	require.True(t, view.HasError)
+	require.Equal(t, "unhealthy", view.Health)
 	require.Equal(t, "plugin installation failed", view.LastError)
 	payload, err := json.Marshal(view)
 	require.NoError(t, err)

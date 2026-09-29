@@ -3024,20 +3024,21 @@ export default {
     subtitle: '管理官方签名软件包、Control WebUI 扩展与生命周期操作。',
     actions: {
       refresh: '刷新', refreshing: '刷新中...', importRelease: '导入发行版', importing: '导入中...', install: '安装',
-      configure: '配置', enable: '启用', disable: '禁用', upgrade: '升级', update: '升级', rollback: '回滚', cancel: '取消操作',
+      configure: '配置', enable: '启用', disable: '禁用', upgrade: '升级', update: '升级', rollback: '回滚', cancel: '取消操作', installOfficialOnly: '需要官方发行版',
       saving: '保存中...', newAssignment: '新建角色'
     },
     pluginCenter: {
       filters: { search: '搜索插件', health: '健康状态', target: '目标', allHealth: '全部健康状态', allTargets: '全部目标' },
       states: { healthy: '健康', attention: '需要关注' },
       summary: { label: '插件目录摘要', healthy: '{count} 个健康', attention: '{count} 个需要关注', catalogued: '{count} 个已登记' },
-      empty: '没有符合当前筛选条件的插件'
+      empty: '没有符合当前筛选条件的插件',
+      operations: { title: '最近插件操作', empty: '暂无最近插件操作' }
     },
     tabs: { plugins: '插件', assignments: '节点角色', scopes: '作用域', topologies: '拓扑', operations: '操作' },
     table: {
       plugin: '插件', publisher: '发布者', release: '发行版', installation: '安装目标', desiredVersion: '期望版本', observedVersion: '实际版本', version: '版本', state: '状态', actions: '操作',
       scope: '作用域', owner: '所有者', description: '说明', topology: '拓扑', activeRevision: '激活 revision', deployment: '部署',
-      operation: '操作', revision: 'revision', deadline: '截止时间', role: '服务角色', configRevision: '配置 revision', rolloutGroup: '灰度组'
+      operation: '操作', chain: '链', revision: 'revision', deadline: '截止时间', target: '目标', version: '版本', role: '服务角色', configRevision: '配置 revision', rolloutGroup: '灰度组'
     },
     labels: { releases: '{count} 个发行版', desired: '期望', observed: '实际' },
     states: { catalogued: '已登记', enabled: '已启用', disabled: '已禁用', loading: '正在加载控制状态...', polling: '正在轮询操作状态' },
@@ -3069,7 +3070,7 @@ export default {
       artifactOptional: '可选；未上传制品的发行版不能安装。'
     },
     messages: {
-      actionQueued: '{plugin} 的“{action}”操作已提交', installed: '{plugin} 安装意图已保存', configSaved: '{plugin} 配置已保存',
+      actionQueued: '{plugin} 的“{action}”操作已提交', operationStatus: '操作 {id} 当前为 {state}，链：{chain}。', installed: '{plugin} 安装意图已保存', configSaved: '{plugin} 配置已保存',
       releaseImported: '{plugin} {version} 已导入', cancelRequested: '已请求取消操作',
       assignmentSaved: '{plugin} 节点角色已保存', assignmentStateSaved: '{plugin} 节点角色状态已保存', assignmentDeleted: '{plugin} 节点角色已删除',
       topologyValidated: '拓扑校验通过', topologyRevisionSaved: '拓扑修订 {revision} 已保存', topologyPlanned: '部署 #{id} 已规划',

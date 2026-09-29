@@ -4,9 +4,29 @@
 
 ### Added
 
+- Exposed `X-AnixOps-Operation-Chain` consistently for Control plugin
+  installation upserts, configuration writes, and lifecycle actions, including
+  dependency apply plans while excluding rollback operations.
+- Added the compatible Control Center `/plugins` lifecycle slice: a direct
+  authenticated `/api/v3` client, official catalog and release discovery,
+  Control/Agent installation state, revisioned configuration editing,
+  idempotent lifecycle actions, operation-chain display, health/failure
+  summaries, and focused store/view/browser coverage. Its Control administrator
+  session uses `/api/v2/login` and a separate token; the legacy Workers
+  `/api/v1` client and login remain independent. The Center web build now
+  processes Tailwind styles and exposes mobile navigation for the plugin page;
+  transient lifecycle retries reuse their idempotency key, and unverified
+  catalog entries cannot be installed from the UI. A dedicated Control Center
+  browser gate now drives a temporary real Control process through Control
+  login and authenticated catalog/installation reads.
+- Merged the Center plugin operation-history experience into the canonical
+  Control administrator plugin page. It now shows recent plugin operations,
+  supports cancellation, and reuses lifecycle idempotency keys after transient
+  Control failures.
 - Established the formal product-stage contract from `3.1` through `4.0`,
-  separate from the Go module `/v4` import path. The next candidate is
-  `v3.1.0-alpha.2`; its signed package scope is only `machine-telemetry`.
+  separate from the Go module `/v4` import path. The earlier `v3.1.0-alpha.2`
+  candidate remains historical planning context; the active worktree follows
+  the `4.0.x` RC roadmap and its signed package scope is tracked separately.
 - Added an operational `/admin/access-groups` surface, server-side
   effective-access preview, and an identity-only group detail response.
 - Added a real Control-to-Chromium signed WebUI E2E gate that proves package

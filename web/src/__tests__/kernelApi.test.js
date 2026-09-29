@@ -55,7 +55,8 @@ describe('kernel API', () => {
       baseURL: '/api/v3',
       url: '/plugin-installations/7/config',
       method: 'put',
-      data: { config: { port: 443 }, expected_revision: 2 }
+      data: { config: { port: 443 }, expected_revision: 2 },
+      rawResponse: true
     })
 
     await kernelApi.updateKernelInstallationConfig(7, { port: 8443 })
@@ -63,7 +64,8 @@ describe('kernel API', () => {
       baseURL: '/api/v3',
       url: '/plugin-installations/7/config',
       method: 'put',
-      data: { config: { port: 8443 } }
+      data: { config: { port: 8443 } },
+      rawResponse: true
     })
   })
 
@@ -101,7 +103,8 @@ describe('kernel API', () => {
       baseURL: '/api/v3',
       url: '/plugin-installations',
       method: 'put',
-      data: installation
+      data: installation,
+      rawResponse: true
     })
 
     await kernelApi.runKernelInstallationAction(7, 'update', { targetVersion: '1.1.0', idempotencyKey: 'request-1' })
@@ -109,7 +112,8 @@ describe('kernel API', () => {
       baseURL: '/api/v3',
       url: '/plugin-installations/7/actions',
       method: 'post',
-      data: { action: 'update', target_version: '1.1.0', idempotency_key: 'request-1' }
+      data: { action: 'update', target_version: '1.1.0', idempotency_key: 'request-1' },
+      rawResponse: true
     })
 
     await kernelApi.runKernelInstallationAction(7, 'rollback', { idempotencyKey: 'request-2' })
@@ -117,7 +121,8 @@ describe('kernel API', () => {
       baseURL: '/api/v3',
       url: '/plugin-installations/7/actions',
       method: 'post',
-      data: { action: 'rollback', idempotency_key: 'request-2' }
+      data: { action: 'rollback', idempotency_key: 'request-2' },
+      rawResponse: true
     })
   })
 
@@ -193,7 +198,24 @@ describe('kernel API', () => {
     expect(mockRequest).toHaveBeenLastCalledWith({
       baseURL: '/api/v3',
       url: '/operations/operation-1/cancel',
-      method: 'post'
+      method: 'post',
+      rawResponse: true
+    })
+  })
+
+  it('preserves operation headers for lifecycle responses', async () => {
+    mockRequest.mockResolvedValueOnce({
+      data: { data: { operation: { id: 'operation-1', state: 'pending' } } },
+      headers: {
+        'x-anixops-operation-id': 'operation-1',
+        'x-anixops-operation-chain': 'dependency-1,operation-1'
+      }
+    })
+
+    await expect(kernelApi.runKernelInstallationAction(7, 'enable', { idempotencyKey: 'request-3' })).resolves.toEqual({
+      operation: { id: 'operation-1', state: 'pending' },
+      operation_id: 'operation-1',
+      operation_chain: 'dependency-1,operation-1'
     })
   })
 

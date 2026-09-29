@@ -123,3 +123,23 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
   await expect(page).toHaveURL(/\/admin\/plugins$/)
   await expect(page.locator(`a[href="${extensionPath}"]`)).toHaveCount(0)
 })
+
+test('loads the merged native plugin center against the real Control process', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('app.locale', 'en'))
+
+  await page.goto('/login')
+  await page.locator('#email').fill('live-control-webui@anixops.test')
+  await page.locator('#password').fill('LiveControlWebUI!2026')
+  await page.locator('form.login-form button[type="submit"]').click()
+  await page.waitForURL(/\/admin\/dashboard$/)
+
+  await page.goto('/admin/plugins')
+  await expect(page.getByTestId('plugin-row-machine-telemetry')).toBeVisible()
+  await page.getByTestId('plugin-row-machine-telemetry').click()
+  await expect(page.getByTestId('plugin-detail-drawer')).toContainText('Machine Telemetry')
+
+  const history = page.getByTestId('plugin-operation-history')
+  await expect(history).toBeVisible()
+  await expect(history).toContainText('Recent plugin operations')
+  await expect(page.getByTestId('plugin-detail-drawer')).toContainText('4.0.0')
+})

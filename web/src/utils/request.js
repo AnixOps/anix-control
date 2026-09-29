@@ -98,7 +98,10 @@ service.interceptors.request.use(
 // Response interceptor
 service.interceptors.response.use(
   response => {
-    return response.data
+    // Kernel lifecycle writes need response headers for operation identity and
+    // dependency-chain display. Keep the historical body-only contract for
+    // every other caller and opt in per request.
+    return response.config?.rawResponse ? response : response.data
   },
   error => {
     console.error('Request error:', error)

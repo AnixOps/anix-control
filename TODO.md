@@ -1,6 +1,6 @@
 # TODO
 
-Date: 2026-07-17
+Date: 2026-09-28
 
 This list is intentionally concrete. Do not mark an item done without code, tests, and verification evidence where applicable.
 
@@ -59,6 +59,14 @@ This list is intentionally concrete. Do not mark an item done without code, test
   runtime binary packaging, release-tag signing/upload path, WebUI smoke,
   public-key verification, and tamper rejection without claiming production
   traffic takeover.
+- [x] Add the compatible Control Center plugin lifecycle slice over the direct
+  authenticated `/api/v3` contract, including revisioned configuration,
+  idempotent actions, operation-chain state, separate Control admin login, and
+  frontend regression coverage.
+- [x] Adapt the Center plugin experience into the canonical Control admin page:
+  recent plugin operation history, plugin-only operation filtering,
+  cancellation, and stable lifecycle idempotency-key reuse after transient
+  failures.
 - [x] Add privileged `nftables-forward` network-namespace TCP/UDP acceptance and
   nftables snapshot rollback evidence in the pinned Agent repo.
 - [x] Align `nftables-forward` 1.2.0 Control schema/defaults with the strict

@@ -8,6 +8,7 @@ const kernelApi = vi.hoisted(() => ({
   getKernelPluginReleases: vi.fn(),
   getKernelInstallations: vi.fn(),
   getKernelOperations: vi.fn(),
+  cancelKernelOperation: vi.fn(),
   getKernelTopologies: vi.fn(),
   getKernelDeployments: vi.fn(),
   getKernelNodeAssignments: vi.fn(),
@@ -65,6 +66,7 @@ const plugin = {
   name: 'Protocol Runtime',
   description: 'Signed runtime package',
   publisher: 'AnixOps',
+  official: true,
 }
 
 const releases = [
@@ -92,7 +94,11 @@ function resolveCatalog(installations = []) {
   kernelApi.getKernelInstallationConfig.mockResolvedValue({ installation_id: 1, revision: 3, config: '{"port":443,"enabled":true}' })
   kernelApi.updateKernelInstallationConfig.mockResolvedValue({ installation_id: 1, revision: 4, config: '{"port":8443,"enabled":true}' })
   kernelApi.upsertKernelInstallation.mockResolvedValue({ id: 1 })
-  kernelApi.runKernelInstallationAction.mockResolvedValue({ operation: { id: 'plugin-operation-1', state: 'pending' } })
+  kernelApi.runKernelInstallationAction.mockResolvedValue({
+    operation: { id: 'plugin-operation-1', state: 'pending' },
+    operation_chain: 'plugin-operation-1',
+  })
+  kernelApi.cancelKernelOperation.mockResolvedValue({ id: 'plugin-operation-1', state: 'cancel_requested', operation_chain: 'plugin-operation-1' })
   kernelApi.registerKernelPluginRelease.mockResolvedValue({ id: 9, plugin_id: plugin.id, version: '1.2.0' })
   kernelApi.uploadKernelPluginReleaseArtifact.mockResolvedValue({ release_id: 9 })
 }
@@ -120,6 +126,7 @@ beforeEach(() => {
 
 afterEach(() => {
   while (mounted.length) mounted.pop().unmount()
+  vi.useRealTimers()
 })
 
 describe('Plugin Center', () => {
@@ -138,6 +145,23 @@ describe('Plugin Center', () => {
     expect(errorBand.text()).toContain('WebUI extension loading failed')
     expect(errorBand.text()).toContain('protocol-runtime')
     expect(errorBand.text()).toContain('bundle digest mismatch')
+  })
+
+  it('blocks installation controls for unverified catalog entries', async () => {
+    const unverified = { ...plugin, official: false }
+    kernelApi.getKernelPlugins.mockResolvedValue([unverified])
+    const wrapper = mountPlugins()
+    await flushPromises()
+
+    const row = wrapper.get('[data-testid="plugin-row-protocol-runtime"]')
+    await row.trigger('click')
+    await flushPromises()
+    const drawer = wrapper.get('[data-testid="plugin-detail-drawer"]')
+    const install = drawer.get('[data-action="install"]')
+    expect(install.attributes('disabled')).toBeDefined()
+    expect(install.text()).toContain('Official release required')
+    await install.trigger('click')
+    expect(wrapper.find('[data-testid="plugin-installation-dialog"]').exists()).toBe(false)
   })
 
   it('loads only plugin resources, renders one grouped row, filters it, and restores row focus after close', async () => {
@@ -220,6 +244,7 @@ describe('Plugin Center', () => {
     expect(kernelApi.runKernelInstallationAction).toHaveBeenLastCalledWith(1, 'enable', expect.objectContaining({
       idempotencyKey: expect.stringContaining('webui:1:enable:'),
     }))
+    expect(wrapper.get('[data-testid="plugin-operation-status"]').text()).toContain('Chain: plugin-operation-1')
 
     await drawer.get('[data-action="upgrade"]').trigger('click')
     await wrapper.get('#plugin-install-version').setValue('1.1.0')
@@ -235,6 +260,33 @@ describe('Plugin Center', () => {
     expect(kernelApi.runKernelInstallationAction).toHaveBeenLastCalledWith(1, 'rollback', expect.objectContaining({
       idempotencyKey: expect.stringContaining('webui:1:rollback:'),
     }))
+  })
+
+  it('reuses a Control lifecycle idempotency key after a transient failure', async () => {
+    const installation = {
+      id: 1,
+      plugin_id: plugin.id,
+      target: 'control',
+      desired_version: '1.0.0',
+      observed_version: '1.0.0',
+      state: 'healthy',
+      enabled: false,
+    }
+    resolveCatalog([installation])
+    kernelApi.runKernelInstallationAction
+      .mockRejectedValueOnce({ response: { status: 503, data: { error: { message: 'temporarily unavailable' } } } })
+      .mockResolvedValueOnce({ operation: { id: 'plugin-retry-1', state: 'pending' } })
+    const wrapper = mountPlugins()
+    await flushPromises()
+
+    const drawer = await openTarget(wrapper, 'control')
+    await drawer.get('[data-action="enable"]').trigger('click')
+    await flushPromises()
+    const firstKey = kernelApi.runKernelInstallationAction.mock.calls[0][2].idempotencyKey
+    await drawer.get('[data-action="enable"]').trigger('click')
+    await flushPromises()
+
+    expect(kernelApi.runKernelInstallationAction.mock.calls[1][2].idempotencyKey).toBe(firstKey)
   })
 
   it('upserts agent lifecycle state without dispatching a control operation', async () => {
@@ -529,5 +581,30 @@ describe('Plugin Center', () => {
     wrapper.unmount()
     await vi.advanceTimersByTimeAsync(4000)
     expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
+  })
+
+  it('renders recent plugin operations and cancels an active operation', async () => {
+    vi.useFakeTimers()
+    kernelApi.getKernelOperations
+      .mockResolvedValueOnce([
+        { id: 'plugin-op-2', kind: 'plugin.update', plugin_id: plugin.id, state: 'completed', created_at: '2026-09-28T12:00:00Z' },
+        { id: 'plugin-op-1', kind: 'plugin.enable', plugin_id: plugin.id, state: 'running', created_at: '2026-09-28T11:00:00Z' },
+        { id: 'deployment-op-1', kind: 'deployment.apply', state: 'running', created_at: '2026-09-28T10:00:00Z' },
+      ])
+      .mockResolvedValue([])
+    const wrapper = mountPlugins()
+    await flushPromises()
+
+    const history = wrapper.get('[data-testid="plugin-operation-history"]')
+    expect(history.text()).toContain('Recent plugin operations')
+    expect(history.findAll('[data-testid^="operation-row-"]')).toHaveLength(2)
+    expect(history.find('[data-testid="operation-row-plugin-op-2"]').text()).toContain('plugin.update')
+    expect(history.find('[data-testid="operation-row-deployment-op-1"]').exists()).toBe(false)
+
+    await history.get('[data-testid="cancel-operation-plugin-op-1"]').trigger('click')
+    await flushPromises()
+    expect(kernelApi.cancelKernelOperation).toHaveBeenCalledWith('plugin-op-1')
+    expect(wrapper.find('.notice-message').text()).toContain('Operation cancellation was requested')
+    wrapper.unmount()
   })
 })

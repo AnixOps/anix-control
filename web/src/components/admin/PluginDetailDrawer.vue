@@ -94,10 +94,10 @@
             class="btn btn-primary"
             data-action="install"
             type="button"
-            :disabled="targetBusy || currentTarget.releases.length === 0"
+            :disabled="targetBusy || currentTarget.releases.length === 0 || row?.plugin?.official !== true"
             @click="emit('install', currentTarget)"
           >
-            {{ t('control.actions.install') }}
+            {{ row?.plugin?.official === true ? t('control.actions.install') : t('control.actions.installOfficialOnly') }}
           </button>
           <template v-else>
             <button

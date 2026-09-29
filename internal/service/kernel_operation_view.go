@@ -19,6 +19,7 @@ type KernelOperationStatus struct {
 	TopologyStepID       *uint      `json:"topology_step_id,omitempty"`
 	TopologyRevision     int64      `json:"topology_revision,omitempty"`
 	Kind                 string     `json:"kind"`
+	OperationChain       string     `json:"operation_chain,omitempty"`
 	Revision             int64      `json:"revision"`
 	ConfigHash           string     `json:"config_hash,omitempty"`
 	State                string     `json:"state"`
@@ -46,6 +47,7 @@ type PluginInstallationStatus struct {
 	ObservedVersion     string     `json:"observed_version"`
 	PreviousVersion     string     `json:"previous_version"`
 	State               string     `json:"state"`
+	Health              string     `json:"health"`
 	Enabled             bool       `json:"enabled"`
 	LifecycleGeneration int64      `json:"lifecycle_generation"`
 	ConfigRevision      int64      `json:"config_revision"`
@@ -67,10 +69,28 @@ func PublicPluginInstallation(installation model.PluginInstallation) PluginInsta
 	return PluginInstallationStatus{
 		ID: installation.ID, PluginID: installation.PluginID, Target: installation.Target,
 		DesiredVersion: installation.DesiredVersion, ObservedVersion: installation.ObservedVersion,
-		PreviousVersion: installation.PreviousVersion, State: installation.State, Enabled: installation.Enabled,
+		PreviousVersion: installation.PreviousVersion, State: installation.State,
+		Health: pluginInstallationHealth(installation.State), Enabled: installation.Enabled,
 		LifecycleGeneration: installation.LifecycleGeneration, ConfigRevision: installation.ConfigRevision,
 		HasError: hasError, LastError: pluginInstallationErrorSummary(installation.State, hasError),
 		CreatedAt: installation.CreatedAt, UpdatedAt: installation.UpdatedAt, DisabledAt: installation.DisabledAt,
+	}
+}
+
+func pluginInstallationHealth(state string) string {
+	switch strings.TrimSpace(state) {
+	case "healthy", "enabled", "succeeded":
+		return "healthy"
+	case "failed":
+		return "unhealthy"
+	case "degraded":
+		return "degraded"
+	case "disabled":
+		return "disabled"
+	case "pending", "running":
+		return "pending"
+	default:
+		return strings.TrimSpace(state)
 	}
 }
 

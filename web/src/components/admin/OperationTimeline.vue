@@ -1,10 +1,11 @@
 <template>
-  <section class="operation-timeline" data-testid="operation-timeline" :aria-label="t('control.activity.title')">
+  <section class="operation-timeline" data-testid="operation-timeline" :aria-label="heading || t('control.activity.title')">
     <header class="timeline-header">
       <div>
-        <h2>{{ expanded ? t('control.activity.all') : t('control.activity.scoped') }}</h2>
+        <h2>{{ heading || (expanded ? t('control.activity.all') : t('control.activity.scoped')) }}</h2>
       </div>
       <button
+        v-if="showToggle"
         class="btn timeline-toggle"
         data-testid="show-all-activity"
         type="button"
@@ -22,6 +23,8 @@
           <tr>
             <th>{{ t('control.table.operation') }}</th>
             <th>{{ t('control.table.plugin') }}</th>
+            <th>{{ t('control.table.target') }}</th>
+            <th>{{ t('control.table.version') }}</th>
             <th>{{ t('control.table.revision') }}</th>
             <th>{{ t('control.table.deadline') }}</th>
             <th>{{ t('control.table.state') }}</th>
@@ -30,8 +33,14 @@
         </thead>
         <tbody>
           <tr v-for="operation in visibleOperations" :key="operation.id" :data-testid="`operation-row-${operation.id}`">
-            <td :data-label="t('control.table.operation')"><code>{{ operation.kind || '-' }}</code><code class="secondary-cell">{{ operation.id }}</code></td>
+            <td :data-label="t('control.table.operation')">
+              <code>{{ operation.kind || '-' }}</code>
+              <code class="secondary-cell">{{ operation.id }}</code>
+              <code class="secondary-cell" :data-testid="`operation-chain-${operation.id}`">{{ t('control.table.chain') }}: {{ operation.operation_chain || operation.id || '-' }}</code>
+            </td>
             <td :data-label="t('control.table.plugin')">{{ operation.plugin_id || '-' }}</td>
+            <td :data-label="t('control.table.target')">{{ operationTarget(operation) }}</td>
+            <td :data-label="t('control.table.version')"><code>{{ operation.target_version || '-' }}</code></td>
             <td :data-label="t('control.table.revision')">{{ operation.revision ?? '-' }}</td>
             <td :data-label="t('control.table.deadline')">{{ formatDate(operation.deadline_at || operation.created_at) }}</td>
             <td :data-label="t('control.table.state')">
@@ -52,7 +61,7 @@
             </td>
           </tr>
           <tr v-if="visibleOperations.length === 0">
-            <td colspan="6" class="empty-row">{{ expanded ? t('control.empty.operations') : t('control.activity.empty') }}</td>
+            <td colspan="8" class="empty-row">{{ emptyLabel || (expanded ? t('control.empty.operations') : t('control.activity.empty')) }}</td>
           </tr>
         </tbody>
       </table>
@@ -71,17 +80,24 @@ const props = defineProps({
   operations: { type: Array, default: () => [] },
   scopedOperationIDs: { type: Array, default: () => [] },
   busyOperationID: { type: [String, Number], default: '' },
+  heading: { type: String, default: '' },
+  emptyLabel: { type: String, default: '' },
+  showToggle: { type: Boolean, default: true },
+  limit: { type: Number, default: 0 },
 })
 const emit = defineEmits(['cancel'])
 const { t, formatDateTime } = useAppI18n()
 const expanded = ref(false)
 const scopedIDs = computed(() => new Set(props.scopedOperationIDs.map(String)))
-const sortedOperations = computed(() => props.operations.slice().sort((left, right) => {
-  const leftTime = Date.parse(left?.created_at || '') || 0
-  const rightTime = Date.parse(right?.created_at || '') || 0
-  return rightTime - leftTime || Number(right?.id || 0) - Number(left?.id || 0)
-}))
-const visibleOperations = computed(() => expanded.value
+const sortedOperations = computed(() => {
+  const sorted = props.operations.slice().sort((left, right) => {
+    const leftTime = Date.parse(left?.created_at || '') || 0
+    const rightTime = Date.parse(right?.created_at || '') || 0
+    return rightTime - leftTime || Number(right?.id || 0) - Number(left?.id || 0)
+  })
+  return props.limit > 0 ? sorted.slice(0, props.limit) : sorted
+})
+const visibleOperations = computed(() => (expanded.value && props.showToggle)
   ? sortedOperations.value
   : sortedOperations.value.filter(operation => scopedIDs.value.has(String(operation.id))))
 
@@ -96,6 +112,11 @@ function isCancellable(operation) {
 function cancel(operation) {
   if (!isCancellable(operation) || props.busyOperationID === operation.id) return
   emit('cancel', operation.id)
+}
+
+function operationTarget(operation) {
+  if (operation?.target) return operation.target
+  return operation?.node_id === undefined || operation?.node_id === null ? 'control' : 'agent'
 }
 
 function formatDate(value) {

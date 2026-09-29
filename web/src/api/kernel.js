@@ -10,6 +10,16 @@ function unwrap(response) {
   return response?.data ?? response
 }
 
+function operationResult(response) {
+  const result = response?.data?.data ?? response?.data ?? response
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return result
+  return {
+    ...result,
+    operation_id: response?.headers?.['x-anixops-operation-id'] || '',
+    operation_chain: response?.headers?.['x-anixops-operation-chain'] || '',
+  }
+}
+
 export async function getKernelPlugins() {
   return unwrap(await v3({ url: '/plugins', method: 'get' }))
 }
@@ -66,10 +76,11 @@ export async function deleteKernelNodeAssignment(nodeID, assignmentID) {
 }
 
 export async function upsertKernelInstallation(installation) {
-  return unwrap(await v3({
+  return operationResult(await v3({
     url: '/plugin-installations',
     method: 'put',
-    data: installation
+    data: installation,
+    rawResponse: true,
   }))
 }
 
@@ -81,10 +92,11 @@ export async function runKernelInstallationAction(installationID, action, option
   if (options.targetVersion) {
     data.target_version = options.targetVersion
   }
-  return unwrap(await v3({
+  return operationResult(await v3({
     url: `/plugin-installations/${installationID}/actions`,
     method: 'post',
-    data
+    data,
+    rawResponse: true,
   }))
 }
 
@@ -97,7 +109,12 @@ export async function updateKernelInstallationConfig(installationID, config, exp
   if (expectedRevision !== undefined && expectedRevision !== null) {
     data.expected_revision = expectedRevision
   }
-  return unwrap(await v3({ url: `/plugin-installations/${installationID}/config`, method: 'put', data }))
+  return operationResult(await v3({
+    url: `/plugin-installations/${installationID}/config`,
+    method: 'put',
+    data,
+    rawResponse: true,
+  }))
 }
 
 export async function getKernelScopes() {
@@ -249,7 +266,11 @@ export async function getKernelOperations() {
 }
 
 export async function cancelKernelOperation(operationID) {
-  return unwrap(await v3({ url: `/operations/${operationID}/cancel`, method: 'post' }))
+  return operationResult(await v3({
+    url: `/operations/${operationID}/cancel`,
+    method: 'post',
+    rawResponse: true,
+  }))
 }
 
 export async function getKernelExtensions() {

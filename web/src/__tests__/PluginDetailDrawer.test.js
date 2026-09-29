@@ -7,7 +7,7 @@ import PluginReleaseImportDialog from '@/components/admin/PluginReleaseImportDia
 
 const row = {
   key: 'protocol-runtime',
-  plugin: { id: 'protocol-runtime', name: 'Protocol Runtime', description: 'Signed runtime package' },
+  plugin: { id: 'protocol-runtime', name: 'Protocol Runtime', description: 'Signed runtime package', official: true },
   health: { state: 'attention', error: 'control needs attention' },
   targets: [
     {

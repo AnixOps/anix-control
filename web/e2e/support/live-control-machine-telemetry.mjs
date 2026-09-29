@@ -15,6 +15,7 @@ const controlRoot = path.resolve(webRoot, '..')
 const packageVersion = '4.0.0'
 const adminEmail = 'live-control-webui@anixops.test'
 const adminPassword = 'LiveControlWebUI!2026'
+const goBinary = process.env.ANIXOPS_GO_BIN || 'go'
 
 function trimOutput(output, maximum = 12_000) {
   return output.length <= maximum ? output : output.slice(-maximum)
@@ -254,7 +255,7 @@ async function buildFormalAgentBinary(tempRoot, packageID, goarch) {
   await access(agentRoot)
 
   const output = path.join(tempRoot, `${packageID}-linux-${goarch}`)
-  await runCommand(`build ${packageID} Agent binary for linux/${goarch}`, 'go', [
+  await runCommand(`build ${packageID} Agent binary for linux/${goarch}`, goBinary, [
     'build',
     '-trimpath',
     '-buildvcs=false',
@@ -386,7 +387,7 @@ export default async function setupLiveControlMachineTelemetry() {
     await access(vite)
 
     await runCommand('build isolated frontend', vite, ['build', '--outDir', frontendPath], { cwd: webRoot })
-    await runCommand('build real Control binary', 'go', ['build', '-o', controlBinary, './cmd/server'], { cwd: controlRoot })
+    await runCommand('build real Control binary', goBinary, ['build', '-o', controlBinary, './cmd/server'], { cwd: controlRoot })
 
 	const signing = await createSigningMaterial(tempRoot)
 	const identityBootstrap = await buildSignedOfficialPackage(tempRoot, signing, 'identity-platform')

@@ -248,7 +248,9 @@ func CORS() gin.HandlerFunc {
 	allowedOrigins := []string{}
 	allowedMethods := []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"}
 	allowedHeaders := []string{"Content-Type", "Authorization", "X-Response-Format", "If-None-Match", "X-API-Key", "X-Signature", "X-Timestamp", "X-Nonce", "X-Request-ID"}
-	exposeHeaders := []string{"ETag", "X-Request-ID"}
+	exposeHeaders := []string{
+		"ETag", "X-Request-ID", "X-AnixOps-Operation-ID", "X-AnixOps-Operation-Chain",
+	}
 	allowCredentials := false
 	maxAge := 86400 // 24 hours
 

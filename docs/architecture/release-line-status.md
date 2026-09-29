@@ -1,39 +1,42 @@
 # AnixOps Product Release Line And Delivery Status
 
-Date: 2026-07-18
+Date: 2026-09-28
 
-This document is the authoritative explanation of the product-version sequence
-and the current delivery boundary. It prevents an experimental tag from being
-mistaken for approval of a later product stage.
+This document records the staged product-version plan and the current delivery
+boundary. The active `4.0.x` RC plan and its verification status are in
+[`ROADMAP-4.0.x-RC.md`](../ROADMAP-4.0.x-RC.md) and
+[`RC-EVIDENCE-4.0.x.md`](../RC-EVIDENCE-4.0.x.md).
 
 ## Version Decision
 
-The existing `v4.0.0-alpha.1` through `v4.0.0-alpha.7` tags were produced as
-early package-platform experiments before the staged product programme was
-frozen. They are immutable historical preview evidence. They do **not** mean
-that AnixOps 4.0 has been released, that the coupled architecture has been
-removed, or that production data-plane traffic is approved for plugin control.
+The `v4.0.0-alpha.1` through `v4.0.0-alpha.7` tags were early package-platform
+experiments before the staged product programme was frozen. They are immutable
+historical preview evidence, not approval for production data-plane traffic.
+The later `v4.0.0` tag was published on 2026-07-20 with a signed sixteen-package
+baseline. Its evidence binds that tag's commit, not the current `4.0.x` RC
+worktree or any new production traffic approval.
 
-The formal product line is deliberately ordered as:
+The earlier planned product line was:
 
 ```text
 v3.1.0 -> v3.2.0 -> v3.3.0 -> v3.4.0 -> v3.5.0 -> v4.0.0
 ```
 
-The next candidate is `v3.1.0-alpha.2`. At the time this document was written
-it is a release candidate under verification, not a published tag. The Go
+The published tags did not follow every intermediate stage in that sequence;
+`v3.1.0-alpha.2` was a planned candidate, not the next current release. The Go
 module path remains `github.com/AnixOps/anix-control/v4`; import-major version
 and product version are separate contracts.
 
-Historical preview tags must never be moved. Release automation treats a
-historical preview as audit evidence only, and only a declared product-stage
-tag may produce new signed package, Docker, or GitHub release assets.
+Historical preview tags must never be moved. Release automation treats them
+as audit evidence only. The current worktree requires a new commit-bound CI
+run, staging records, and operator approval before an additional RC tag is
+published.
 
 ## What Exists Now
 
-The current worktree contains the following 3.1 foundation work. "Implemented"
-means source and focused test coverage exist; it does not silently imply a
-production rollout.
+The current worktree retains the following foundation from the staged plan.
+"Implemented" means source and focused test coverage exist; it does not
+silently imply a production rollout of new worktree changes.
 
 | Area | Status | Evidence and boundary |
 |------|--------|-----------------------|
@@ -44,6 +47,7 @@ production rollout.
 | Agent Supervisor canary configuration | Implemented, default off | The node deployment wizard can emit Supervisor fields only after explicit opt-in, a trusted Control channel, and an official public key. It does not alter the legacy data plane. |
 | Real signed-WebUI browser gate | Implemented | An isolated Playwright test builds a real Control binary/frontend, registers an ephemeral signed package, checks catalog/asset/menu/route behavior, disables it through a durable operation, and verifies revocation. No browser route interception is used. |
 | Release package scope | Implemented | `config/scripts/release-stage-contract.json` limits 3.1 assets to `machine-telemetry`; later forwarding packages cannot be represented as 3.1 release assets. |
+| Compatible Control Center lifecycle slice | Preview/Partial | `Anixops-control-center` connects with a separate Control administrator session via `/api/v2/login`, then reads the official `/api/v3` catalog and installation state, edits revisioned configuration, submits idempotent Control/Agent install/update/enable/disable/rollback actions, and renders operation chains. Its Workers session remains independent. Local frontend tests/build and a full-process signed Agent install/update/enable rehearsal pass; live staging evidence is still required. |
 | Default deployment safety | Implemented | The normal and production templates keep Control execution, Agent dispatch, and topology execution disabled. The development template is explicitly separate. |
 | Legacy compatibility | Retained intentionally | `/api/v2`, subscription behavior, UniProxy synchronization, and the existing forwarding path remain active until their owning packages reach parity and migration evidence exists. |
 
@@ -65,16 +69,17 @@ bash config/scripts/check_release_workflow.sh --self-test
 bash config/scripts/check_release_workflow.sh
 ```
 
-The release candidate must additionally pass the repository-wide CI gates,
-signed-package workflow, cross-repository Agent process gate, and release
-artifact verification before a tag is created.
+The current `4.0.x` release candidate must additionally pass the
+repository-wide CI gates, signed-package workflow, cross-repository Agent
+process gate, live staging, and release artifact verification before a new tag
+is created.
 
 ## Explicitly Not Complete
 
 The following statements are intentionally false today:
 
-- AnixOps 4.0 is not released and the kernel is not plugin-only.
-- `v3.1.0-alpha.2` is not a stable release and is not production approved.
+- The current `4.0.x` worktree changes are not released or operator approved.
+- The published `v4.0.0` evidence does not certify later uncommitted changes.
 - No plugin package is authorized to take over proxy or forwarding traffic in
   3.1.
 - `nftables-forward`, `gost-mesh`, `nat-egress`, WireGuard, and
@@ -83,7 +88,7 @@ The following statements are intentionally false today:
   still needs the canary record and explicit operator authorization.
 - The legacy business domains have not yet been moved out of the kernel.
 
-## Formal Stage Targets
+## Historical Stage Targets
 
 | Stage | Product objective | Exit boundary |
 |-------|-------------------|---------------|
@@ -96,11 +101,10 @@ The following statements are intentionally false today:
 
 ## Stop Rules
 
-Work on a prerelease stops only when its declared stage scope, tests, signed
-assets, release metadata, and rollback documentation agree. A stable release
-stops only after a 72-hour canary passes and the operator explicitly authorizes
-promotion. A stage cannot borrow completion from a historical preview or a
-later-stage package.
+Work on a prerelease stops only when its declared scope, tests, signed assets,
+release metadata, and rollback documentation agree. Production promotion
+requires the applicable canary and explicit operator authorization. A new
+candidate cannot borrow completion from a historical tag or later worktree.
 
 For detailed architecture and phase-specific evidence, see
 [`plugin-platform-roadmap.md`](plugin-platform-roadmap.md) and

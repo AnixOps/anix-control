@@ -53,6 +53,32 @@ func TestNewKernelHandlerUsesDefaultPluginHostManager(t *testing.T) {
 	require.Same(t, manager, handler.controlPluginHosts)
 }
 
+func TestSetPluginOperationResponseHeadersIncludesDependencyApplyChain(t *testing.T) {
+	db := newKernelHandlerTestDB(t)
+	applyFirst := model.KernelOperation{
+		ID: "plan-operation-1", IdempotencyKey: "plan-key-1", Kind: "plugin.install",
+		LifecyclePlanID: "plan-1", LifecyclePlanPhase: "apply", LifecyclePlanSequence: 1, State: "pending",
+	}
+	applyRoot := model.KernelOperation{
+		ID: "plan-operation-2", IdempotencyKey: "plan-key-2", Kind: "plugin.enable",
+		LifecyclePlanID: "plan-1", LifecyclePlanPhase: "apply", LifecyclePlanSequence: 2, State: "pending",
+	}
+	rollback := model.KernelOperation{
+		ID: "plan-operation-3", IdempotencyKey: "plan-key-3", Kind: "plugin.disable",
+		LifecyclePlanID: "plan-1", LifecyclePlanPhase: "rollback", LifecyclePlanSequence: 3, State: "pending",
+	}
+	require.NoError(t, db.Create(&applyFirst).Error)
+	require.NoError(t, db.Create(&applyRoot).Error)
+	require.NoError(t, db.Create(&rollback).Error)
+
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	require.NoError(t, setPluginOperationResponseHeaders(context, db, applyRoot))
+	require.Equal(t, applyRoot.ID, recorder.Header().Get("X-AnixOps-Operation-ID"))
+	require.Equal(t, applyFirst.ID+","+applyRoot.ID, recorder.Header().Get("X-AnixOps-Operation-Chain"))
+}
+
 func TestControlPluginHostRequestTimeoutUsesConfiguredValue(t *testing.T) {
 	timeout := controlPluginHostRequestTimeout(&config.Config{Plugins: config.PluginConfig{ControlHostRequestTimeout: "2s"}})
 	require.Equal(t, 2*time.Second, timeout)
@@ -562,6 +588,7 @@ func TestKernelMachineTelemetryPluginRouteFailsClosedWithoutHost(t *testing.T) {
 	require.Equal(t, http.StatusOK, installRecorder.Code, installRecorder.Body.String())
 	require.Contains(t, installRecorder.Body.String(), `"state":"pending"`)
 	require.NotEmpty(t, installRecorder.Header().Get("X-AnixOps-Operation-ID"))
+	require.Len(t, strings.Split(installRecorder.Header().Get("X-AnixOps-Operation-Chain"), ","), 2)
 	worker, err := plugincontrol.NewOperationWorker(db, registry)
 	require.NoError(t, err)
 	processed, err := worker.RunOnce(context.Background())
@@ -780,8 +807,10 @@ func TestKernelControlPluginRollbackActionQueuesDurableOperation(t *testing.T) {
 	require.Equal(t, http.StatusAccepted, recorder.Code, recorder.Body.String())
 	operationID := recorder.Header().Get("X-AnixOps-Operation-ID")
 	require.NotEmpty(t, operationID)
+	require.Equal(t, operationID, recorder.Header().Get("X-AnixOps-Operation-Chain"))
 	require.Contains(t, recorder.Body.String(), `"kind":"plugin.rollback"`)
 	require.Contains(t, recorder.Body.String(), `"target_version":"1.0.0"`)
+	require.Contains(t, recorder.Body.String(), `"health":"pending"`)
 	require.NotContains(t, recorder.Body.String(), "control-error-must-not-leak")
 	require.Contains(t, recorder.Body.String(), `"last_error":"plugin installation reported an error"`)
 
@@ -796,6 +825,7 @@ func TestKernelControlPluginRollbackActionQueuesDurableOperation(t *testing.T) {
 	recorder = performKernelHandlerRequest(t, http.MethodPost, path, body, "/plugin-installations/:id/actions", handler)
 	require.Equal(t, http.StatusAccepted, recorder.Code, recorder.Body.String())
 	require.Equal(t, operationID, recorder.Header().Get("X-AnixOps-Operation-ID"))
+	require.Equal(t, operationID, recorder.Header().Get("X-AnixOps-Operation-Chain"))
 	var count int64
 	require.NoError(t, db.Model(&model.KernelOperation{}).Where("plugin_id = ?", pluginID).Count(&count).Error)
 	require.Equal(t, int64(1), count)
@@ -810,6 +840,7 @@ func TestKernelControlPluginRollbackActionQueuesDurableOperation(t *testing.T) {
 	recorder = performKernelHandlerRequest(t, http.MethodPost, path, body, "/plugin-installations/:id/actions", handler)
 	require.Equal(t, http.StatusAccepted, recorder.Code, recorder.Body.String())
 	require.Equal(t, operationID, recorder.Header().Get("X-AnixOps-Operation-ID"))
+	require.Equal(t, operationID, recorder.Header().Get("X-AnixOps-Operation-Chain"))
 	require.NoError(t, db.First(&installation, installation.ID).Error)
 	require.Equal(t, "1.0.0", installation.DesiredVersion)
 	require.Equal(t, "2.0.0", installation.PreviousVersion)

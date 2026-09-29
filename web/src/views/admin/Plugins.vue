@@ -61,8 +61,27 @@
       <span class="summary-item catalogued">{{ t('control.pluginCenter.summary.catalogued', { count: summary.catalogued }) }}</span>
     </div>
 
+    <OperationTimeline
+      :operations="pluginOperations"
+      :scoped-operation-i-ds="pluginOperationIDs"
+      :busy-operation-i-d="operationBusyID"
+      :heading="t('control.pluginCenter.operations.title')"
+      :empty-label="t('control.pluginCenter.operations.empty')"
+      :show-toggle="false"
+      :limit="8"
+      data-testid="plugin-operation-history"
+      @cancel="cancelOperation"
+    />
+
     <p v-if="pageError" class="error-message" role="alert">{{ pageError }}</p>
     <p v-if="notice" class="notice-message" role="status">{{ notice }}</p>
+    <p v-if="lastPluginOperation" class="notice-message" data-testid="plugin-operation-status" role="status">
+      {{ t('control.messages.operationStatus', {
+        id: lastPluginOperation.id,
+        state: lastPluginOperation.state || 'pending',
+        chain: lastPluginOperation.operation_chain || lastPluginOperation.id,
+      }) }}
+    </p>
     <section v-if="adminExtensionErrors.length" class="extension-error-band" data-testid="plugin-extension-errors" role="alert">
       <strong>{{ t('control.extensions.errorsTitle') }}</strong>
       <ul>
@@ -207,6 +226,7 @@ import PluginConfigForm from '@/components/admin/PluginConfigForm.vue'
 import PluginDetailDrawer from '@/components/admin/PluginDetailDrawer.vue'
 import PluginInstallationDialog from '@/components/admin/PluginInstallationDialog.vue'
 import PluginReleaseImportDialog from '@/components/admin/PluginReleaseImportDialog.vue'
+import OperationTimeline from '@/components/admin/OperationTimeline.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useKernelPlugins } from '@/composables/useKernelPlugins'
 import { useModalFocus } from '@/composables/useModalFocus'
@@ -214,6 +234,7 @@ import {
   getKernelInstallationConfig,
   getKernelInstallations,
   getKernelOperations,
+  cancelKernelOperation,
   registerKernelPluginRelease,
   runKernelInstallationAction,
   updateKernelInstallationConfig,
@@ -248,6 +269,9 @@ const drawerTrigger = ref(null)
 const busyTarget = ref('')
 const operations = ref([])
 const trackedOperationIDs = new Set()
+const lastPluginOperation = ref(null)
+const pendingIdempotencyKeys = new Map()
+const operationBusyID = ref('')
 const polling = ref(false)
 const installationEditor = reactive({ open: false, target: null, saving: false, error: '' })
 const configEditor = reactive({ open: false, target: null, schema: {}, value: {}, revision: 0, valid: true, loading: false, saving: false, error: '' })
@@ -280,6 +304,8 @@ const summary = computed(() => filteredRows.value.reduce((counts, row) => {
 }, { healthy: 0, attention: 0, catalogued: 0 }))
 
 const pageError = computed(() => error.value || catalogError.value)
+const pluginOperations = computed(() => operations.value.filter(isPluginLifecycleOperation))
+const pluginOperationIDs = computed(() => pluginOperations.value.map(operation => operation.id).filter(Boolean))
 
 const { handleKeydown: handleConfigKeydown, requestClose: requestConfigClose } = useModalFocus({
   open: configOpen,
@@ -291,6 +317,20 @@ const { handleKeydown: handleConfigKeydown, requestClose: requestConfigClose } =
 
 function createIdempotencyToken() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function isTransientLifecycleError(cause) {
+  const status = cause?.response?.status
+  return status === undefined || status === 408 || status === 425 || status === 429 || status >= 500
+}
+
+function lifecycleIdempotencyKey(installationID, action, targetVersion = '') {
+  const identity = `${installationID}:${action}:${targetVersion || 'current'}`
+  const existing = pendingIdempotencyKeys.get(identity)
+  if (existing) return { identity, key: existing }
+  const key = `webui:${installationID}:${action}:${targetVersion || 'current'}:${createIdempotencyToken()}`
+  pendingIdempotencyKeys.set(identity, key)
+  return { identity, key }
 }
 
 function errorMessage(cause, fallbackKey) {
@@ -338,7 +378,7 @@ function closeDrawer() {
 }
 
 function openInstallation(target) {
-  if (!target || !selectedRow.value) return
+  if (!target || !selectedRow.value || selectedRow.value.plugin?.official !== true) return
   Object.assign(installationEditor, { open: true, target, saving: false, error: '' })
 }
 
@@ -360,13 +400,23 @@ async function runLifecycle(target, action, targetVersion = '') {
   busyTarget.value = target.target
   error.value = ''
   notice.value = ''
+  let operationIdentity = ''
   try {
     if (target.target === 'control') {
+      const idempotency = lifecycleIdempotencyKey(target.installation.id, action, targetVersion)
+      operationIdentity = idempotency.identity
       const result = await runKernelInstallationAction(target.installation.id, action, {
         targetVersion,
-        idempotencyKey: `webui:${target.installation.id}:${action}:${createIdempotencyToken()}`,
+        idempotencyKey: idempotency.key,
       })
-      if (result?.operation?.id) trackedOperationIDs.add(result.operation.id)
+      const operation = result?.operation || result
+      if (operation?.id) {
+        trackedOperationIDs.add(operation.id)
+        lastPluginOperation.value = {
+          ...operation,
+          operation_chain: result?.operation_chain || operation.operation_chain || operation.id,
+        }
+      }
     } else {
       await upsertKernelInstallation({
         plugin_id: selectedRow.value.plugin.id,
@@ -379,8 +429,10 @@ async function runLifecycle(target, action, targetVersion = '') {
       action: t(`control.actions.${action}`),
       plugin: selectedRow.value.plugin.name || selectedRow.value.plugin.id,
     }))
+    if (operationIdentity) pendingIdempotencyKeys.delete(operationIdentity)
     return true
   } catch (cause) {
+    if (operationIdentity && !isTransientLifecycleError(cause)) pendingIdempotencyKeys.delete(operationIdentity)
     error.value = errorMessage(cause, 'control.errors.action')
     return false
   } finally {
@@ -562,6 +614,29 @@ async function loadOperationState() {
   }
 }
 
+async function cancelOperation(operationID) {
+  operationBusyID.value = operationID
+  error.value = ''
+  notice.value = ''
+  try {
+    const result = await cancelKernelOperation(operationID)
+    const operation = result?.operation || result
+    if (operation?.id) {
+      trackedOperationIDs.add(operation.id)
+      lastPluginOperation.value = {
+        ...operation,
+        operation_chain: result?.operation_chain || operation.operation_chain || operation.id,
+      }
+    }
+    await refreshOperationState()
+    notice.value = t('control.messages.cancelRequested')
+  } catch (cause) {
+    error.value = errorMessage(cause, 'control.errors.cancel')
+  } finally {
+    operationBusyID.value = ''
+  }
+}
+
 async function refreshOperationState() {
   const operationRows = await getKernelOperations()
   operations.value = Array.isArray(operationRows) ? operationRows : []
@@ -594,6 +669,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   disposed = true
+  pendingIdempotencyKeys.clear()
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = null
 })
