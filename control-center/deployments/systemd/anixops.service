@@ -1,0 +1,23 @@
+[Unit]
+Description=AnixOps Control Center
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/anixops
+ExecStart=/usr/local/bin/anixops server -c /etc/anixops/config.yaml
+Restart=on-failure
+RestartSec=5s
+
+# Security
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/data
+
+# Environment
+Environment=ANIXOPS_ENV=production
+
+[Install]
+WantedBy=multi-user.target

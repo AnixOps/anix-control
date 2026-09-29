@@ -1,0 +1,145 @@
+{
+  "index_patterns": ["anixops-logs-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 3,
+      "number_of_replicas": 1,
+      "refresh_interval": "5s",
+      "index.lifecycle.name": "anixops-logs-policy",
+      "index.lifecycle.rollover_alias": "anixops-logs"
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date"
+        },
+        "timestamp": {
+          "type": "date"
+        },
+        "level": {
+          "type": "keyword"
+        },
+        "log_level": {
+          "type": "keyword"
+        },
+        "message": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "service": {
+          "type": "keyword"
+        },
+        "logger": {
+          "type": "keyword"
+        },
+        "userId": {
+          "type": "integer"
+        },
+        "user_id": {
+          "type": "integer"
+        },
+        "tenantId": {
+          "type": "integer"
+        },
+        "tenant_id": {
+          "type": "integer"
+        },
+        "nodeId": {
+          "type": "integer"
+        },
+        "node_id": {
+          "type": "integer"
+        },
+        "traceId": {
+          "type": "keyword"
+        },
+        "trace_id": {
+          "type": "keyword"
+        },
+        "spanId": {
+          "type": "keyword"
+        },
+        "span_id": {
+          "type": "keyword"
+        },
+        "parentSpanId": {
+          "type": "keyword"
+        },
+        "http_method": {
+          "type": "keyword"
+        },
+        "http_path": {
+          "type": "keyword"
+        },
+        "http_status": {
+          "type": "integer"
+        },
+        "duration_ms": {
+          "type": "float"
+        },
+        "duration_seconds": {
+          "type": "float"
+        },
+        "response_time_bucket": {
+          "type": "keyword"
+        },
+        "client_ip": {
+          "type": "ip"
+        },
+        "user_agent": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 512
+            }
+          }
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "hostname": {
+          "type": "keyword"
+        },
+        "application": {
+          "type": "keyword"
+        },
+        "tags": {
+          "type": "keyword"
+        },
+        "stack_trace": {
+          "type": "text",
+          "index": false
+        },
+        "metadata": {
+          "type": "object",
+          "dynamic": true
+        },
+        "geoip": {
+          "properties": {
+            "city_name": {
+              "type": "keyword"
+            },
+            "country_name": {
+              "type": "keyword"
+            },
+            "country_code2": {
+              "type": "keyword"
+            },
+            "location": {
+              "type": "geo_point"
+            }
+          }
+        }
+      }
+    },
+    "aliases": {
+      "anixops-logs": {}
+    }
+  }
+}

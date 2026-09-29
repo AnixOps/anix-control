@@ -1,61 +1,50 @@
-# Control Center 合并方案
+# Control Center 合并记录
 
-## 结论
+## 结论（2026-09-29 更新）
 
-两个仓库的产品能力有较高的合并可能性，但不建议把两个仓库的全部代码直接拼成一个运行时。
+`Anixops-control-center` 和 `Anixops-control-center-worker` 两个仓库已经以快照方式合并进本仓库，旧仓库只读归档。之后只在本仓库的 `go_dev` 分支上开发，它是唯一的长期分支。
 
-推荐以 `anix-control` 作为唯一的 Control 后端和主 Web 管理面，将 `anixops-control-center` 中与插件生命周期相关的能力迁入现有的 `anix-control/web`。Control Center 的 Workers、Flutter 移动端、TUI/CLI 和独立 Go 服务先保持独立，作为外部客户端或后续单独迁移对象。
+- `control-center/`：Control Center 应用。快照取自旧仓库 `master` 合并 `production` 后的内容，包括 Go CLI/TUI/服务、Vue Web、Flutter 客户端、Helm/部署/监控资产和测试报告脚本。它是独立的 Go 模块 `github.com/AnixOps/anix-control/control-center`。
+- `control-center/workers/`：Cloudflare Workers API，快照取自 `Anixops-control-center-worker` 的 `master`，并删减到 Center 客户端实际使用的核心路由（见下文）。它取代了 Center 仓库中旧的 `workers/` 目录。
+- 旧仓库的 git 历史、tag 和 Releases 保留在归档仓库中，本仓库不导入历史和 tag。
 
-## 可合并范围
+早先版本的本文建议「不做整仓物理合并」，理由是两边的模块、发布单元和认证边界不同。现在的做法是按目录隔离，保留这些边界，同时把源码、CI 和分支统一到一个仓库：
 
-| 能力 | 可行性 | 目标位置 | 说明 |
-| --- | --- | --- | --- |
-| 插件目录、版本、安装状态 | 高 | `anix-control/web` 现有插件管理页 | 两边都使用 `/api/v3` 插件资源，适合统一数据模型 |
-| Control/Agent 生命周期操作 | 高 | `web/src/api/kernel.js`、插件管理 store 和页面 | 复用 Control 的 JWT、权限和操作 API |
-| 操作链、状态和最近操作 | 高 | 现有插件管理页 | 以 Control 的 operation ID 和 operation chain 为准 |
-| 插件配置和 revision 冲突处理 | 高 | 现有配置编辑器 | 保留 Control 的 `expected_revision` 合同 |
-| Control Center 的插件页面视觉和交互 | 中高 | 适配到 `web/src/views/admin/Plugins.vue` | 不能直接覆盖现有 Vue、路由和国际化约定 |
-| Workers 账号、租户和计费 | 低 | 暂不迁移 | 与 Control 的 `/api/v2` 登录和数据边界不同 |
-| Flutter 移动端 | 中 | 暂不迁移 | 应继续作为调用 Control API 的独立客户端 |
-| TUI/CLI 和 Center Go 服务 | 低 | 暂不迁移 | 与 Control 的 Go module、数据库和进程入口重复 |
+| 边界 | 合并后的处理 |
+| --- | --- |
+| Go module | `control-center/go.mod` 是独立模块；根目录的 `go test ./...`、`go vet`、golangci-lint、govulncheck 都不会扫到它；根 CI 的 gosec 和 swag 显式排除 `control-center/` |
+| 发布单元 | Control 镜像的 Docker 构建上下文排除 `control-center/`（`.dockerignore`）；Center 使用 `control-center-v*` tag，发布时不标记为仓库的 latest，不影响 `scripts/install.sh` |
+| CI | `.github/workflows/control-center.yml`（Go、Web、Flutter）和 `control-center-workers.yml` 通过路径过滤只在相关目录变化时运行；根 `ci.yml` 通过 `paths-ignore` 跳过只改动 `control-center/**` 的提交 |
+| 认证 | 不变。插件页使用 Control `/api/v2` JWT 和 `/api/v3` 合同；其余 Center 页面仍使用 Workers `/api/v1` 会话 |
 
-## 不采用整仓物理合并的原因
+## 导入时排除的内容
 
-1. 两个仓库有不同的 Go module、版本约束、服务入口、配置模型和数据库边界。
-2. 两边都有独立的 Web 应用和认证状态；直接覆盖会引入重复路由、重复 token 存储和不一致的权限判断。
-3. Center 还包含 Cloudflare Workers、Flutter、多平台发布物和 TUI/CLI。把这些目录放进 Control 的发布单元会扩大构建、发布和回滚范围。
-4. `anix-control` 已经有正式的插件 API、管理员插件页面、部署分配和签名扩展运行时。应在现有边界上增量迁移，避免建立第二套插件合同。
+- `release-artifacts/` 中已提交的二进制发布包（约 98MB）。其中的迁移说明和 v2.5.0 公告移到 `control-center/docs/releases/`。
+- `memory/`（AI 助手笔记）、Flutter 生成的 `mobile/ios/Flutter/flutter_export_environment.sh`（含本机路径）、旧的 `workers/` 目录。
+- 两个旧仓库的 `.github/`：子目录中的 workflow 不会被 GitHub 执行，已移植到根目录的 `control-center*.yml`。
+- Worker 仓库的孤儿分支 `main`（只有 LICENSE），以及已过时的机器人 PR（worker 改名）。
 
-## 迁移路线
+## Workers API 删减范围
 
-### 阶段 1：冻结边界
+保留：health/readiness/liveness/metrics、auth、MFA、users（含 me、tokens、sessions、lockout）、nodes、node-groups、playbooks、tasks、schedules、notifications、dashboard、audit-logs、ssh、plugins、agents、logs、backups、batch、SSE/WebSocket，以及 tail worker。
 
-- `anix-control` 负责插件目录、签名发布物、安装状态、生命周期操作和配置 revision。
-- `anix-control` 的 `/api/v2` JWT 是插件管理页的唯一 Control 会话来源。
-- Center Web 只作为客户端参考实现，不再新增第二套 Control API 合同。
-- 对照两边的插件字段、错误 envelope、operation header 和权限要求，形成兼容性清单。
+删除：incidents、governance、webhooks、kubernetes、lb、mesh、scaling、ai、vectors、web3、ipfs，以及 `/internal` 开发者模式和生成的 endpoint-visualizer 报告。
 
-### 阶段 2：迁入插件管理体验
+`migrations/` 不做改动。已经应用到生产 D1 的迁移（包括 incidents 表）保持原样。
 
-- 将 Center 中有价值的 Control/Agent 目标卡片、健康状态、失败原因和最近操作视图适配到 `anix-control/web/src/views/admin/Plugins.vue`。
-- 复用 `anix-control` 的 `useKernelPlugins`、`api/kernel.js`、管理员权限守卫和现有国际化键。
-- 不复制 Center 的独立登录页；插件页使用已登录的 Control 管理员会话。
-- 保留未验证发布物不可安装、配置 revision 冲突、幂等键和 operation 轮询。
+对应地，Center 的 Web 删除了 AI 助手、Web3（含 Web3 登录）页面，以及未挂路由的 ELK/LogSearch/MetricsExplorer/Monitoring/Resilience/ServiceDiscovery/Tracing 模拟页面和它们的模拟数据测试；Flutter 删除了 AI、Web3 功能和对应的 API 客户端。
 
-### 阶段 3：验证和发布
+## 部署注意事项
 
-- 为适配后的页面补充 Vue 单测、API 合同测试和 Chromium E2E。
-- 使用真实 `anix-control` 进程验证登录、目录、安装状态和操作查询。
-- 在真实 Agent staging 环境验证安装、启用、禁用、更新、回滚和配置保存。
-- 通过 Go、Web、文档同步、发布阶段和 legacy smoke gates 后再决定是否下线 Center 中的重复插件页面。
+- Cloudflare Workers Builds 需要把 Git 连接从 `Anixops-control-center-worker` 改为本仓库：根目录 `control-center/workers`，生产分支 `go_dev`，监听路径 `control-center/workers/**`。改完之前，线上仍运行旧仓库最后一次部署的未删减版本；改完后的第一次部署会让被删除的接口从 `api.anixops.com` 下线。
+- Center 旧仓库的历史中曾提交过 Android 签名 keystore（后来已删除）。归档后历史仍然公开；如果这把 keystore 签过已发布的包，需要轮换上传密钥。
 
-当前证据：`anix-control` 的 live Control Chromium gate 已在同一隔离真实进程中验证签名 `machine-telemetry` 包，并打开合并后的原生 `/admin/plugins` 页面读取发行版本和操作历史；Control Center 还提供了一个可选的真实 Control 生命周期 gate，用固定 Agent checkout 构建正式 `machine-telemetry` 包后，通过 Center 页面完成 Control 目标禁用/启用。两者都覆盖本地真实 Control 进程，不能替代真实 Agent staging 的生命周期变更、回滚和 operator approval。若本机的 Go 版本选择器不可用，可用 `ANIXOPS_GO_BIN=/path/to/go` 指定构建器，默认仍使用 PATH 中的 `go`。
+## 插件生命周期迁移（历史阶段，保留作参考）
 
-### 阶段 4：客户端收敛（可选）
-
-- Flutter、TUI/CLI 和 Workers 继续以稳定 API 客户端身份运行。
-- 只有在客户端的认证、租户和发布策略确定后，才迁移共享 SDK 或目录。
-- 迁移客户端前不删除 Center 仓库中的旧入口，先完成一版可回滚发布。
+1. 冻结边界：`anix-control` 负责插件目录、签名发布物、安装状态、生命周期操作和配置 revision；Control `/api/v2` JWT 是插件管理页唯一的 Control 会话来源。
+2. 迁入插件管理体验：Center 的目标卡片、健康状态、失败原因、最近操作、取消操作等已经落到 `web/src/views/admin/Plugins.vue`。
+3. 验证和发布：Vue 单测、API 合同测试、Chromium E2E 和真实 Control 进程 gate 已经通过；真实 Agent staging 的生命周期变更、回滚和 operator approval 证据仍待补齐。
+4. 客户端收敛（可选）：Flutter、TUI/CLI 和 Workers 作为 `control-center/` 下的 API 客户端继续存在；如果后续要把 Center 的插件页标记为 deprecated，仍以真实 Control/Agent staging 通过为前提。
 
 ## 合并完成标准
 
@@ -63,8 +52,4 @@
 - 不再存在两套 Control JWT 存储或两套 `/api/v3` API 客户端实现。
 - Control 生命周期 action 带显式幂等键；Agent 目标的 installation intent 由服务端 lifecycle generation 和派生 identity 去重，并能通过 operation ID 查询最终状态。
 - 未验证发布物不能安装，配置更新遵守 revision 冲突保护。
-- 真实 Control 和 Agent staging 通过后，旧 Center 插件页才标记为 deprecated 或移除。
-
-## 当前建议
-
-阶段 1 已完成，阶段 2 的插件目标卡片、健康状态、配置 revision、生命周期操作、操作历史和取消操作已经落到 `anix-control` 的现有管理员插件页；Center Web 仍保留独立登录页作为兼容客户端参考。下一步只在真实 Agent staging 验证通过后，才考虑标记 Center 的重复插件页为 deprecated。Center 的 Go 后端、Workers、Flutter 和 TUI/CLI 继续保持独立，以保留客户端发布和回滚边界。
+- 源码、CI 和分支统一在本仓库 `go_dev`；旧 Center 与 Worker 仓库已归档。

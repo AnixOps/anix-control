@@ -6,6 +6,13 @@ This record is a local verification snapshot for the `4.0.x` RC roadmap. It is
 not a production approval and does not replace the signed CI or staging
 records required by [`ROADMAP-4.0.x-RC.md`](ROADMAP-4.0.x-RC.md).
 
+Update 2026-09-29: the Control Center rows below were recorded in the separate
+`Anixops-control-center` repository. It has since been imported into
+`control-center/` (and its Workers API into `control-center/workers/`); its CI
+now runs from `.github/workflows/control-center.yml`, and its web suite is 23
+files / 220 tests because mock-only suites for the removed AI/Web3/observability
+pages were dropped. The rows are kept unchanged as the historical snapshot.
+
 ## Passing Locally
 
 | Area | Command or evidence | Result |

@@ -102,3 +102,8 @@ config/deploy/nginx/ssl/*.crt
 /server
 /migrate
 v2board.bak.*
+
+# control-center/ keeps its own .gitignore. Re-include source directories that
+# the root binary (v2board) and logs/ patterns above would otherwise hide.
+!/control-center/internal/plugins/v2board/
+!/control-center/mobile/lib/features/logs/

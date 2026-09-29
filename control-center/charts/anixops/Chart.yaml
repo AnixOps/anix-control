@@ -1,0 +1,30 @@
+apiVersion: v2
+name: anixops
+description: AnixOps Control Center - Unified TUI/GUI Control Center for AnixOps Products
+
+type: application
+
+version: 1.0.0
+
+appVersion: "1.0.0"
+
+keywords:
+  - devops
+  - automation
+  - ansible
+  - kubernetes
+  - monitoring
+
+home: https://anixops.dev
+sources:
+  - https://github.com/AnixOps/anix-control
+
+maintainers:
+  - name: AnixOps Team
+    email: support@anixops.dev
+
+annotations:
+  artifacthub.io/license: MIT
+  artifacthub.io/signKey: |
+    fingerprint: ""
+    url: ""

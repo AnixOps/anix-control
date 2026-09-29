@@ -6,8 +6,11 @@ Date: 2026-09-28
 
 Deliver an auditable `4.0.x` release candidate in one focused week. The
 release candidate is built on the current `v4` module and `go_dev` branch.
-`anix-control` remains the product kernel; `Anixops-control-center` is a
-compatible frontend that calls the kernel API directly.
+`anix-control` remains the product kernel; the Control Center is a
+compatible frontend that calls the kernel API directly. Since 2026-09-29 the
+Control Center lives in `control-center/` of this repository (imported from the
+now-archived `Anixops-control-center` and `Anixops-control-center-worker`
+repositories), and `go_dev` is the only long-lived branch.
 
 The RC must close the plugin lifecycle loop, from catalog discovery through
 installation, configuration, enable/disable, update, rollback, observed state,
@@ -28,7 +31,7 @@ repositories:
 - Its focused Web E2E now drives the native `/admin/plugins` page through a
   mocked signed catalog, filters out non-plugin operations, and exercises
   cancellation; the full Control browser suite passes `5` tests.
-- `Anixops-control-center` has a `/plugins` route and sidebar entry, a separate
+- The Control Center (then `Anixops-control-center`, now `control-center/`) has a `/plugins` route and sidebar entry, a separate
   authenticated `/api/v3` client, catalog/release/installation state, revisioned
   configuration editing, Control and Agent install/update/enable/disable/
   rollback controls, idempotency keys, and operation history refresh. The
@@ -52,8 +55,9 @@ repositories:
   this remains local Control-process evidence. The Go repository full test run
   and release contract
   self-tests pass;
-- The Control Center CI workflow now has a dedicated `web-test` job that
-  installs from `web/package-lock.json`, runs frontend tests and the production
+- The Control Center CI workflow (now `.github/workflows/control-center.yml`)
+  has a dedicated `web-test` job that installs from
+  `control-center/web/package-lock.json`, runs frontend tests and the production
   build, audits production dependencies, runs the Chromium suite, and uploads
   the Playwright report, test results, and production `dist` artifact even when
   a browser test fails. The job still needs a post-push Actions run before it
@@ -176,7 +180,8 @@ passed a new staging canary or official release run.
 
 The RC is accepted only when:
 
-- both repositories are clean and the required checks are reproducible;
+- the `go_dev` tree, including `control-center/`, is clean and the required
+  checks are reproducible;
 - Control and control-center lifecycle tests pass;
 - signed package, manifest, artifact, checksum, and SBOM records agree;
 - migration, restore, and rollback evidence is present;
@@ -240,8 +245,9 @@ steps in order before calling the RC an official final build:
 
 - [x] Keep the current `go_dev` and `master` worktrees reproducible and
   document the local verification snapshot.
-- [ ] Commit the reviewed changes in both repositories and push the selected
-  release branches. The commit SHAs become the evidence identity.
+- [ ] Commit the reviewed changes and push `go_dev`. Since the Control Center
+  now lives in `control-center/`, a single `go_dev` commit SHA becomes the
+  evidence identity.
 - [ ] Run the release workflow for those SHAs and retain the signed package,
   manifest, checksum, SBOM, migration, restore, and browser artifacts.
 - [ ] Run the isolated Control/Agent staging canary with the pinned Agent

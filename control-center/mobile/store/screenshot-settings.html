@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings Screenshot</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 1080px; height: 1920px; margin: 0; padding: 0; overflow: hidden; display: block; }
+        body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }
+        .phone {
+            width: 1080px;
+            height: 1920px;
+            background: #0f172a;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .status-bar {
+            height: 44px;
+            background: #0f172a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 40px;
+            color: white;
+            font-size: 28px;
+        }
+
+        .app-bar {
+            height: 120px;
+            background: linear-gradient(135deg, #1e293b, #334155);
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+        }
+        .app-bar-title {
+            color: white;
+            font-size: 42px;
+            font-weight: 700;
+        }
+
+        .content {
+            padding: 30px 40px;
+        }
+
+        /* Profile Section */
+        .profile-section {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            border-radius: 24px;
+            padding: 30px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            border: 1px solid rgba(56, 189, 248, 0.1);
+        }
+        .profile-avatar {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #38bdf8, #6366f1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            color: white;
+            font-weight: 700;
+        }
+        .profile-info {
+            flex: 1;
+        }
+        .profile-name {
+            color: white;
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .profile-email {
+            color: #94a3b8;
+            font-size: 24px;
+        }
+        .profile-role {
+            background: rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 18px;
+            display: inline-block;
+            margin-top: 8px;
+        }
+
+        /* Settings Groups */
+        .settings-group {
+            margin-bottom: 30px;
+        }
+        .group-title {
+            color: #64748b;
+            font-size: 22px;
+            font-weight: 500;
+            margin-bottom: 16px;
+            padding-left: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .settings-card {
+            background: #1e293b;
+            border-radius: 20px;
+            overflow: hidden;
+        }
+        .setting-item {
+            display: flex;
+            align-items: center;
+            padding: 28px 30px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        .setting-item:last-child {
+            border-bottom: none;
+        }
+        .setting-icon {
+            width: 52px;
+            height: 52px;
+            background: rgba(56, 189, 248, 0.1);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            margin-right: 20px;
+        }
+        .setting-content {
+            flex: 1;
+        }
+        .setting-title {
+            color: white;
+            font-size: 28px;
+            margin-bottom: 4px;
+        }
+        .setting-desc {
+            color: #64748b;
+            font-size: 22px;
+        }
+        .setting-arrow {
+            color: #64748b;
+            font-size: 28px;
+        }
+        .setting-toggle {
+            width: 70px;
+            height: 40px;
+            background: #38bdf8;
+            border-radius: 20px;
+            position: relative;
+        }
+        .setting-toggle::after {
+            content: '';
+            position: absolute;
+            width: 34px;
+            height: 34px;
+            background: white;
+            border-radius: 50%;
+            top: 3px;
+            right: 3px;
+        }
+        .setting-toggle.off {
+            background: #475569;
+        }
+        .setting-toggle.off::after {
+            right: auto;
+            left: 3px;
+        }
+
+        /* Theme Switcher */
+        .theme-options {
+            display: flex;
+            gap: 16px;
+            margin-top: 10px;
+        }
+        .theme-option {
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 20px;
+            color: #64748b;
+            background: transparent;
+            border: 1px solid #475569;
+        }
+        .theme-option.active {
+            background: rgba(56, 189, 248, 0.2);
+            border-color: #38bdf8;
+            color: #38bdf8;
+        }
+
+        /* Version */
+        .version-info {
+            text-align: center;
+            color: #475569;
+            font-size: 22px;
+            margin-top: 20px;
+        }
+
+        .bottom-nav {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 100px;
+            background: #1e293b;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            border-top: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            color: #64748b;
+            font-size: 20px;
+        }
+        .nav-item.active {
+            color: #38bdf8;
+        }
+        .nav-icon {
+            font-size: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="phone">
+        <div class="status-bar">
+            <span>9:41</span>
+            <span>📶 🔋</span>
+        </div>
+
+        <div class="app-bar">
+            <span class="app-bar-title">Settings</span>
+        </div>
+
+        <div class="content">
+            <div class="profile-section">
+                <div class="profile-avatar">JD</div>
+                <div class="profile-info">
+                    <div class="profile-name">John Doe</div>
+                    <div class="profile-email">john@anixops.com</div>
+                    <span class="profile-role">Admin</span>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <div class="group-title">Appearance</div>
+                <div class="settings-card">
+                    <div class="setting-item">
+                        <div class="setting-icon">🌙</div>
+                        <div class="setting-content">
+                            <div class="setting-title">Dark Mode</div>
+                            <div class="setting-desc">Enable dark theme</div>
+                        </div>
+                        <div class="setting-toggle"></div>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-icon">🌐</div>
+                        <div class="setting-content">
+                            <div class="setting-title">Language</div>
+                            <div class="setting-desc">English</div>
+                        </div>
+                        <span class="setting-arrow">›</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <div class="group-title">Notifications</div>
+                <div class="settings-card">
+                    <div class="setting-item">
+                        <div class="setting-icon">🔔</div>
+                        <div class="setting-content">
+                            <div class="setting-title">Push Notifications</div>
+                            <div class="setting-desc">Get alerts on your device</div>
+                        </div>
+                        <div class="setting-toggle"></div>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-icon">⚠️</div>
+                        <div class="setting-content">
+                            <div class="setting-title">Alert Sound</div>
+                            <div class="setting-desc">Play sound for critical alerts</div>
+                        </div>
+                        <div class="setting-toggle off"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <div class="group-title">Security</div>
+                <div class="settings-card">
+                    <div class="setting-item">
+                        <div class="setting-icon">🔐</div>
+                        <div class="setting-content">
+                            <div class="setting-title">Biometric Login</div>
+                            <div class="setting-desc">Use Face ID / Touch ID</div>
+                        </div>
+                        <div class="setting-toggle"></div>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-icon">🔑</div>
+                        <div class="setting-content">
+                            <div class="setting-title">Change Password</div>
+                            <div class="setting-desc">Update your password</div>
+                        </div>
+                        <span class="setting-arrow">›</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-group">
+                <div class="group-title">About</div>
+                <div class="settings-card">
+                    <div class="setting-item">
+                        <div class="setting-icon">📄</div>
+                        <div class="setting-content">
+                            <div class="setting-title">Privacy Policy</div>
+                        </div>
+                        <span class="setting-arrow">›</span>
+                    </div>
+                    <div class="setting-item">
+                        <div class="setting-icon">📋</div>
+                        <div class="setting-content">
+                            <div class="setting-title">Terms of Service</div>
+                        </div>
+                        <span class="setting-arrow">›</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="version-info">Version 0.9.9 (Build 1)</div>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-item">
+                <span class="nav-icon">📊</span>
+                <span>Dashboard</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">🖥️</span>
+                <span>Nodes</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">📋</span>
+                <span>Playbooks</span>
+            </div>
+            <div class="nav-item active">
+                <span class="nav-icon">⚙️</span>
+                <span>Settings</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

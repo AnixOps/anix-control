@@ -19,7 +19,7 @@ Use this tree like NodeX:
 - Product version history and staged-plan status: [`architecture/release-line-status.md`](architecture/release-line-status.md)
 - Current 4.0.x RC execution roadmap: [`ROADMAP-4.0.x-RC.md`](ROADMAP-4.0.x-RC.md)
 - Current RC verification snapshot: [`RC-EVIDENCE-4.0.x.md`](RC-EVIDENCE-4.0.x.md)
-- Control Center merge plan: [`CONTROL-CENTER-MERGE-PLAN.md`](CONTROL-CENTER-MERGE-PLAN.md)
+- Control Center merge record (`control-center/`): [`CONTROL-CENTER-MERGE-PLAN.md`](CONTROL-CENTER-MERGE-PLAN.md)
 - Plugin kernel contract: [`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-contract.md)
 - Brand and compatibility migration: [`BRAND_MIGRATION.md`](BRAND_MIGRATION.md)
 - Upgrade runbook: [`UPGRADE.md`](UPGRADE.md)

@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Screenshot</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 1080px; height: 1920px; margin: 0; padding: 0; overflow: hidden; display: block; }
+        body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }
+        .phone {
+            width: 1080px;
+            height: 1920px;
+            background: #0f172a;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            height: 44px;
+            background: #0f172a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 40px;
+            color: white;
+            font-size: 28px;
+        }
+
+        /* App Bar */
+        .app-bar {
+            height: 120px;
+            background: linear-gradient(135deg, #1e293b, #334155);
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+            gap: 20px;
+        }
+        .app-bar-title {
+            color: white;
+            font-size: 42px;
+            font-weight: 700;
+        }
+        .app-bar-subtitle {
+            color: #94a3b8;
+            font-size: 24px;
+            margin-left: auto;
+        }
+
+        /* Content */
+        .content {
+            padding: 30px 40px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            border-radius: 24px;
+            padding: 30px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+        .stat-label {
+            color: #94a3b8;
+            font-size: 26px;
+            margin-bottom: 12px;
+        }
+        .stat-value {
+            color: white;
+            font-size: 56px;
+            font-weight: 700;
+        }
+        .stat-change {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            font-size: 22px;
+        }
+        .stat-change.up { color: #22c55e; }
+        .stat-change.down { color: #ef4444; }
+
+        /* Chart */
+        .chart-container {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            border-radius: 24px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .chart-title {
+            color: white;
+            font-size: 32px;
+            font-weight: 600;
+        }
+        .chart-period {
+            color: #94a3b8;
+            font-size: 22px;
+        }
+        .chart-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 16px;
+            height: 200px;
+            padding-top: 20px;
+        }
+        .chart-bar {
+            flex: 1;
+            background: linear-gradient(180deg, #38bdf8, #6366f1);
+            border-radius: 8px 8px 0 0;
+            position: relative;
+        }
+        .chart-bar::after {
+            content: attr(data-label);
+            position: absolute;
+            bottom: -40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #94a3b8;
+            font-size: 18px;
+            white-space: nowrap;
+        }
+
+        /* Activity List */
+        .activity-section {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            border-radius: 24px;
+            padding: 30px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .section-title {
+            color: white;
+            font-size: 32px;
+            font-weight: 600;
+        }
+        .view-all {
+            color: #38bdf8;
+            font-size: 22px;
+        }
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 20px 0;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+        .activity-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+        }
+        .activity-icon.success { background: rgba(34, 197, 94, 0.2); }
+        .activity-icon.warning { background: rgba(245, 158, 11, 0.2); }
+        .activity-icon.info { background: rgba(56, 189, 248, 0.2); }
+        .activity-content {
+            flex: 1;
+        }
+        .activity-title {
+            color: white;
+            font-size: 26px;
+            margin-bottom: 6px;
+        }
+        .activity-desc {
+            color: #94a3b8;
+            font-size: 22px;
+        }
+        .activity-time {
+            color: #64748b;
+            font-size: 20px;
+        }
+
+        /* Bottom Nav */
+        .bottom-nav {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 100px;
+            background: #1e293b;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            border-top: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            color: #64748b;
+            font-size: 20px;
+        }
+        .nav-item.active {
+            color: #38bdf8;
+        }
+        .nav-icon {
+            font-size: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="phone">
+        <div class="status-bar">
+            <span>9:41</span>
+            <span>📶 🔋</span>
+        </div>
+
+        <div class="app-bar">
+            <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #38bdf8, #6366f1); border-radius: 16px;"></div>
+            <span class="app-bar-title">Dashboard</span>
+            <span class="app-bar-subtitle">🔔</span>
+        </div>
+
+        <div class="content">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Active Servers</div>
+                    <div class="stat-value">24</div>
+                    <div class="stat-change up">↑ 12%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Nodes</div>
+                    <div class="stat-value">156</div>
+                    <div class="stat-change up">↑ 8%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active Users</div>
+                    <div class="stat-value">89</div>
+                    <div class="stat-change up">↑ 5%</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Alerts</div>
+                    <div class="stat-value">3</div>
+                    <div class="stat-change down">↓ 2</div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-header">
+                    <span class="chart-title">CPU Usage</span>
+                    <span class="chart-period">Last 7 days</span>
+                </div>
+                <div class="chart-bars">
+                    <div class="chart-bar" style="height: 60%;" data-label="Mon"></div>
+                    <div class="chart-bar" style="height: 80%;" data-label="Tue"></div>
+                    <div class="chart-bar" style="height: 45%;" data-label="Wed"></div>
+                    <div class="chart-bar" style="height: 90%;" data-label="Thu"></div>
+                    <div class="chart-bar" style="height: 70%;" data-label="Fri"></div>
+                    <div class="chart-bar" style="height: 55%;" data-label="Sat"></div>
+                    <div class="chart-bar" style="height: 65%;" data-label="Sun"></div>
+                </div>
+            </div>
+
+            <div class="activity-section">
+                <div class="section-header">
+                    <span class="section-title">Recent Activity</span>
+                    <span class="view-all">View All →</span>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-icon success">✓</div>
+                    <div class="activity-content">
+                        <div class="activity-title">Server deployed</div>
+                        <div class="activity-desc">prod-server-02 is now running</div>
+                    </div>
+                    <div class="activity-time">2m ago</div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-icon warning">⚠</div>
+                    <div class="activity-content">
+                        <div class="activity-title">High CPU Alert</div>
+                        <div class="activity-desc">db-master CPU at 85%</div>
+                    </div>
+                    <div class="activity-time">15m ago</div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-icon info">📦</div>
+                    <div class="activity-content">
+                        <div class="activity-title">Playbook completed</div>
+                        <div class="activity-desc">deploy.yml finished successfully</div>
+                    </div>
+                    <div class="activity-time">1h ago</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-nav">
+            <div class="nav-item active">
+                <span class="nav-icon">📊</span>
+                <span>Dashboard</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">🖥️</span>
+                <span>Nodes</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">📋</span>
+                <span>Playbooks</span>
+            </div>
+            <div class="nav-item">
+                <span class="nav-icon">⚙️</span>
+                <span>Settings</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

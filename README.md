@@ -67,6 +67,7 @@ signed package is unavailable.
 ```text
 cmd/                 Go command entrypoints
 config/              Config examples, deployment scripts, migration tooling
+control-center/      Control Center app (own Go module, Vue web, Flutter, Workers API)
 docs/                Product, audit, deployment, and reference docs
 internal/            Backend handlers, services, models, middleware, runtime code
 public/              Legacy/static frontend output location if present

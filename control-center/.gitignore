@@ -1,0 +1,74 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# Build output
+/dist/
+/build/
+
+# Data directory
+/data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+/logs/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Web build
+web/dist/
+web/playwright-report/
+
+# Config secrets
+configs/config.prod.yaml
+*.pem
+*.key
+
+# Wrangler
+.wrangler/
+.dev.vars
+
+.dev.vars*
+!.dev.vars.example
+!.env.example
+
+# Local secrets and test data (NEVER COMMIT)
+.local/
+reports/

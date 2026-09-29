@@ -1,0 +1,136 @@
+# Default values for anixops.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 2
+
+image:
+  repository: anixops/api
+  pullPolicy: IfNotPresent
+  tag: "v1.0.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 1000
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: anixops.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Application configuration
+config:
+  environment: production
+  logLevel: info
+
+# Environment variables from secrets/configmaps
+env:
+  - name: ENVIRONMENT
+    valueFrom:
+      configMapKeyRef:
+        name: anixops-config
+        key: environment
+
+# Secrets
+secrets:
+  jwtSecret:
+    name: anixops-secrets
+    key: jwt-secret
+
+# Database configuration
+database:
+  type: d1
+  # For external D1, specify the database ID
+  d1DatabaseId: ""
+
+# KV namespace
+kv:
+  namespaceId: ""
+
+# R2 bucket
+r2:
+  bucketName: anixops-storage
+
+# Prometheus monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /metrics
+    labels: {}
+
+# Health checks
+healthCheck:
+  enabled: true
+  path: /health
+  livenessPath: /liveness
+  readinessPath: /readiness
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Redis for caching (optional)
+redis:
+  enabled: false
+  host: ""
+  port: 6379
+  password: ""
+
+# Agent configuration
+agent:
+  enabled: true
+  image: anixops/agent
+  tag: "v1.0.0"
+  port: 8080

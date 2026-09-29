@@ -1,0 +1,469 @@
+name: Control Center Release
+
+# Ported from the archived AnixOps/Anixops-control-center repository
+# (.github/workflows/release.yml). Releases are tagged control-center-<version>
+# so they never collide with anix-control's own v*.*.* tags, and they are never
+# marked as the repository's latest release (scripts/install.sh reads
+# releases/latest for the Control package).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v2.6.0); the tag becomes control-center-<version>'
+        required: true
+        type: string
+      environment:
+        description: 'Release environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: '3.41.5'
+
+jobs:
+  # ==================== Android ====================
+  build-android:
+    name: Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Cache Flutter
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            control-center/mobile/.dart_tool
+            control-center/mobile/build
+          key: android-flutter-${{ hashFiles('control-center/mobile/pubspec.lock') }}
+
+      - name: Get dependencies
+        working-directory: control-center/mobile
+        run: flutter pub get
+
+      - name: Decode Keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p control-center/mobile/android/keystore
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > control-center/mobile/android/keystore/anixops-release.jks
+            echo "KEYSTORE_AVAILABLE=true" >> $GITHUB_ENV
+          else
+            echo "KEYSTORE_AVAILABLE=false" >> $GITHUB_ENV
+            echo "No keystore secrets found, using debug signing"
+          fi
+
+      - name: Build APK
+        working-directory: control-center/mobile
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          if [ "$KEYSTORE_AVAILABLE" = "true" ]; then
+            cat > android/key.properties << EOF
+          storePassword=$ANDROID_STORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=../keystore/anixops-release.jks
+          EOF
+          fi
+          flutter build apk --release --shrink
+
+      - name: Build AAB
+        working-directory: control-center/mobile
+        run: flutter build appbundle --release --shrink
+
+      - name: Prepare artifacts
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          mv control-center/mobile/build/app/outputs/flutter-apk/app-release.apk anixops-${VERSION}-android.apk
+          mv control-center/mobile/build/app/outputs/bundle/release/app-release.aab anixops-${VERSION}-android.aab
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: |
+            anixops-${{ github.event.inputs.version }}-android.apk
+            anixops-${{ github.event.inputs.version }}-android.aab
+          retention-days: 90
+
+  # ==================== Web ====================
+  build-web:
+    name: Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Get dependencies
+        working-directory: control-center/mobile
+        run: flutter pub get
+
+      - name: Add Web support
+        working-directory: control-center/mobile
+        run: flutter create . --platforms=web
+
+      - name: Build Web
+        working-directory: control-center/mobile
+        run: flutter build web --release
+
+      - name: Create archive
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          cd control-center/mobile/build/web
+          zip -r ../../../../anixops-${VERSION}-web.zip .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: anixops-${{ github.event.inputs.version }}-web.zip
+          retention-days: 90
+
+  # ==================== Windows ====================
+  build-windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Get dependencies
+        working-directory: control-center/mobile
+        run: flutter pub get
+
+      - name: Add Windows support
+        working-directory: control-center/mobile
+        run: flutter create . --platforms=windows
+
+      - name: Build Windows
+        working-directory: control-center/mobile
+        run: flutter build windows --release
+
+      - name: Create archive
+        run: |
+          $VERSION = "${{ github.event.inputs.version }}"
+          Compress-Archive -Path control-center/mobile/build/windows/x64/runner/Release/* -DestinationPath anixops-$VERSION-windows.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: anixops-${{ github.event.inputs.version }}-windows.zip
+          retention-days: 90
+
+  # ==================== macOS ====================
+  build-macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Get dependencies
+        working-directory: control-center/mobile
+        run: flutter pub get
+
+      - name: Add macOS support
+        working-directory: control-center/mobile
+        run: flutter create . --platforms=macos
+
+      - name: Build macOS
+        working-directory: control-center/mobile
+        run: flutter build macos --release
+
+      - name: Create archive
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          cd control-center/mobile/build/macos/Build/Products/Release
+          APP_NAME=$(ls -d *.app | head -1)
+          ditto -c -k --sequesterRsrc --keepParent "$APP_NAME" ../../../../../../../anixops-${VERSION}-macos.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: anixops-${{ github.event.inputs.version }}-macos.zip
+          retention-days: 90
+
+  # ==================== Linux ====================
+  build-linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev libmpfr-dev libayatana-appindicator3-dev
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Get dependencies
+        working-directory: control-center/mobile
+        run: flutter pub get
+
+      - name: Add Linux support
+        working-directory: control-center/mobile
+        run: flutter create . --platforms=linux
+
+      - name: Build Linux
+        working-directory: control-center/mobile
+        run: flutter build linux --release
+
+      - name: Create archive
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          cd control-center/mobile/build/linux/x64/release
+          tar -czvf ../../../../../../anixops-${VERSION}-linux.tar.gz bundle
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: anixops-${{ github.event.inputs.version }}-linux.tar.gz
+          retention-days: 90
+
+  # ==================== iOS ====================
+  build-ios:
+    name: iOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Get dependencies
+        working-directory: control-center/mobile
+        run: flutter pub get
+
+      - name: Add iOS support
+        working-directory: control-center/mobile
+        run: flutter create . --platforms=ios
+
+      - name: Build iOS (No Codesign)
+        working-directory: control-center/mobile
+        run: flutter build ios --release --no-codesign
+
+      - name: Create archive
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          cd control-center/mobile/build/ios/iphoneos
+          zip -r ../../../../../anixops-${VERSION}-ios.zip Runner.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: anixops-${{ github.event.inputs.version }}-ios.zip
+          retention-days: 90
+
+  # ==================== CLI Tools ====================
+  build-cli:
+    name: CLI (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            platform: linux-amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            platform: linux-arm64
+          - os: ubuntu-latest
+            goos: windows
+            goarch: amd64
+            platform: windows-amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+            platform: darwin-amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+            platform: darwin-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: control-center/go.sum
+
+      - name: Build
+        working-directory: control-center
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          COMMIT="${{ github.sha }}"
+          DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          mkdir -p dist
+
+          # Build CLI
+          BINARY_NAME=anixops
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY_NAME=anixops.exe
+          fi
+          go build -ldflags="-s -w -X 'main.version=${VERSION}' -X 'main.commit=${COMMIT}' -X 'main.date=${DATE}'" -o dist/${BINARY_NAME} cmd/anixops/main.go
+
+          # Build TUI
+          TUI_NAME=anixops-tui
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            TUI_NAME=anixops-tui.exe
+          fi
+          go build -ldflags="-s -w -X 'main.version=${VERSION}' -X 'main.commit=${COMMIT}' -X 'main.date=${DATE}'" -o dist/${TUI_NAME} cmd/anixops-tui/main.go
+
+      - name: Create archive
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          cd control-center/dist
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            7z a -tzip ../../anixops-${VERSION}-cli-${{ matrix.platform }}.zip *
+          else
+            tar -czvf ../../anixops-${VERSION}-cli-${{ matrix.platform }}.tar.gz *
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.platform }}
+          path: |
+            anixops-${{ github.event.inputs.version }}-cli-${{ matrix.platform }}.zip
+            anixops-${{ github.event.inputs.version }}-cli-${{ matrix.platform }}.tar.gz
+          retention-days: 90
+
+  # ==================== Release ====================
+  create-release:
+    name: Create Release
+    needs: [build-android, build-web, build-windows, build-macos, build-linux, build-ios, build-cli]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name "*.apk" -o -name "*.aab" -o -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} release/ \;
+          cd release
+          sha256sum * > checksums.sha256
+          sha512sum * > checksums.sha512
+          ls -la
+
+      - name: Determine prerelease status
+        id: prerelease
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "dev" ]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: control-center-${{ github.event.inputs.version }}
+          target_commitish: ${{ github.sha }}
+          make_latest: 'false'
+          name: AnixOps Control Center ${{ github.event.inputs.version }}
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          generate_release_notes: true
+          body: |
+            ## AnixOps Control Center ${{ github.event.inputs.version }}
+
+            **Environment**: ${{ github.event.inputs.environment == 'dev' && 'Development' || 'Production' }}
+
+            ### GUI Applications (Flutter)
+
+            | Platform | File |
+            |----------|------|
+            | Android | `anixops-${{ github.event.inputs.version }}-android.apk` |
+            | Android (Store) | `anixops-${{ github.event.inputs.version }}-android.aab` |
+            | Windows | `anixops-${{ github.event.inputs.version }}-windows.zip` |
+            | macOS | `anixops-${{ github.event.inputs.version }}-macos.zip` |
+            | Linux | `anixops-${{ github.event.inputs.version }}-linux.tar.gz` |
+            | Web | `anixops-${{ github.event.inputs.version }}-web.zip` |
+            | iOS | `anixops-${{ github.event.inputs.version }}-ios.zip` |
+
+            ### CLI Tools
+
+            | Platform | File |
+            |----------|------|
+            | Linux x64 | `anixops-${{ github.event.inputs.version }}-cli-linux-amd64.tar.gz` |
+            | Linux ARM64 | `anixops-${{ github.event.inputs.version }}-cli-linux-arm64.tar.gz` |
+            | Windows x64 | `anixops-${{ github.event.inputs.version }}-cli-windows-amd64.zip` |
+            | macOS Intel | `anixops-${{ github.event.inputs.version }}-cli-darwin-amd64.tar.gz` |
+            | macOS Apple Silicon | `anixops-${{ github.event.inputs.version }}-cli-darwin-arm64.tar.gz` |
+
+            ### Features
+            - Dashboard with real-time server statistics
+            - Node management and monitoring
+            - Ansible playbook execution
+            - Push notifications
+            - Biometric authentication
+            - Multi-language support (EN, ZH, JA, AR)
+            - Dark theme
+
+            ### Checksums
+            See `checksums.sha256` and `checksums.sha512` for verification.
+          files: release/*
+          draft: false
