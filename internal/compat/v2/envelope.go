@@ -25,6 +25,19 @@ func writePackageResponse(c *gin.Context, route Route, response pluginhost.Dispa
 		c.Status(status)
 		return nil
 	}
+	if status >= http.StatusBadRequest && route.Envelope != EnvelopeRaw && json.Valid(response.Body) {
+		// Error bodies keep their exact shape on panel and data routes. Bridged
+		// legacy handlers answer failures with {"error": ...} or
+		// {"message": ...} objects that v2 clients (and the pre-v4 server that
+		// served them directly) read as-is; wrapping them in {"data": ...} or
+		// rejecting them as an invalid panel envelope turned a 400 with a
+		// message into {"data":{"error":...}} or a 502.
+		if c.Writer.Header().Get("Content-Type") == "" {
+			c.Header("Content-Type", "application/json; charset=utf-8")
+		}
+		c.Data(status, c.Writer.Header().Get("Content-Type"), response.Body)
+		return nil
+	}
 	switch route.Envelope {
 	case EnvelopeRaw:
 		c.Data(status, c.Writer.Header().Get("Content-Type"), response.Body)
