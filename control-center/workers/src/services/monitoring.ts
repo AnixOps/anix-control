@@ -154,7 +154,6 @@ export async function probeRuntimeServices(env: Env): Promise<RuntimeServiceChec
   return { database, kv, r2 }
 }
 
-export { buildDeveloperReadinessSummary } from './developer-readiness'
 export async function recordMetric(
   env: Env,
   point: Omit<MetricPoint, 'timestamp'>

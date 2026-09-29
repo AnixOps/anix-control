@@ -1,6 +1,6 @@
 # Architecture
 
-This repository is a Cloudflare Workers control-plane backend for AnixOps Control Center. It is intentionally broad: the same service family covers identity, users, infrastructure control, incident response, notifications, and operational reporting.
+This repository is a Cloudflare Workers control-plane backend for AnixOps Control Center. It covers the core control-center surface: identity, users, infrastructure control (nodes, playbooks, tasks, schedules), notifications, realtime delivery, and operational reporting.
 
 ## Goals
 
@@ -15,15 +15,15 @@ This repository is a Cloudflare Workers control-plane backend for AnixOps Contro
 - Runtime: Cloudflare Workers
 - Framework: Hono
 - Compatibility: Node.js compatibility is enabled for libraries that need it
-- Data plane: D1, KV, R2, and Workers AI
-- Optional platform primitive: Vectorize
+- Data plane: D1, KV, R2, plus Analytics Engine for scrape telemetry
 
-The source tree contains more than one worker entrypoint. When reading or documenting behavior, distinguish between:
+Entrypoints:
 
-- `src/index.ts` — the full control-plane API surface
-- `src/index-with-auth.ts` — the smaller auth-focused worker used for lightweight bootstrap flows
+- `src/index.ts` — the API worker. It builds the app via `createApp()` (`src/app/create-app.ts`) and adds the `notFound` / `onError` handlers. `npm run build` bundles it to `dist/index.mjs`, which is what `wrangler.toml` deploys.
+- `src/app/register-*.ts` — the only place routes are registered (platform probes, auth, protected core routes, protected system routes).
+- `src/tail.ts` — the tail worker (`wrangler.tail.toml`).
 
-Deployment configuration should always be validated against the actual source tree before a route family is described as live. If the deployment target is narrower than the full app, docs should call that out explicitly.
+Deployment configuration should always be validated against the actual source tree before a route family is described as live.
 
 ## Platform surface
 
@@ -44,7 +44,6 @@ The current API surface spans several stable domains:
 - admin user management
 - user lockout and unlock flows
 - audit log access
-- governance policy management
 
 ### Infrastructure and operations
 
@@ -52,27 +51,17 @@ The current API surface spans several stable domains:
 - agent registration and heartbeat flows
 - playbooks, tasks, schedules, and execution history
 - plugins and backup operations
-- Kubernetes and other infrastructure adapters where exposed
-- load balancing, autoscaling, and related operational controls
+- SSH connection testing and server import
+- batch operations and bulk node status
 
 ### Notifications and observability
 
 - notification records and unread counts
 - dashboards and operational summary views
 - audit logs
-- SSE / realtime delivery
-- webhooks and delivery retries
+- log search and ingestion (`/api/v1/logs`)
+- SSE and WebSocket realtime delivery
 - metrics, health, readiness, liveness, and operational probes
-
-### Incident management
-
-- incident creation, analysis, approval, execution, and recovery
-- comments, evidence, links, tags, activity, and timeline events
-- runbooks, templates, response playbooks, and automation rules
-- maintenance windows, bulk operations, merges, splits, recurrence, snooze, and escalation flows
-- responder teams, on-call schedules, SLA calendars, response targets, and breach handling
-- attachments, related items, integrations, exports, feedback, cost, and compliance
-- war-room collaboration and realtime incident coordination
 
 ## Auth and authorization
 
@@ -98,7 +87,7 @@ The shared principal includes:
 - `authMiddleware` establishes the principal.
 - `rbacMiddleware([...])` gates sensitive routes.
 - Admin-only actions should remain narrow and explicit.
-- Operator access should be reserved for response workflows and operational mutation paths.
+- Operator access should be reserved for operational mutation paths.
 - Viewer access should remain read-only unless a route is intentionally broader.
 
 ### Auth state and revocation
@@ -120,9 +109,8 @@ Use D1 for canonical, relational, queryable state.
 Typical D1 data includes:
 
 - users, tokens, and session metadata
-- incidents and incident history records
-- nodes, schedules, tasks, and operational records
-- integrations, policies, and other durable control-plane objects
+- nodes, node groups, schedules, tasks, and operational records
+- notifications, audit logs, and other durable control-plane objects
 - data that benefits from joins, filters, or relational constraints
 
 ### KV
@@ -142,28 +130,17 @@ Use R2 for objects and other large payloads.
 
 Typical R2 data includes:
 
-- attachments
-- exports
-- generated reports
+- playbook files
 - backup archives
 - downloadable bundles
 
-### AI
+### Analytics Engine
 
-Use Workers AI as a decision-support layer only.
+`ANALYTICS` (optional) receives a lightweight data point on each `/metrics` scrape. The worker runs fine without it.
 
-Typical AI use cases include:
+### Database migrations
 
-- incident summaries
-- root-cause assistance
-- recommendations
-- similarity or retrieval assistance when the feature is wired up
-
-AI outputs must remain advisory. They should never bypass RBAC, approval gates, or audit expectations.
-
-### Vectorize
-
-Vectorize is optional and currently treated as a future retrieval primitive. When it is used, it should support semantic search over runbooks, incidents, and related knowledge objects, but the docs should not imply that it is required for the current platform to function.
+`migrations/` is append-only: `0001`–`0005` are already applied to the production D1 database. Tables for features that were trimmed from this worker (for example `incidents` from `0005` and `webhooks` from `0002`) are intentionally left in place.
 
 ## Response and error conventions
 
@@ -207,7 +184,7 @@ Errors typically look like:
 
 ## Realtime and async behavior
 
-The platform supports realtime delivery through SSE and other transport adapters.
+The platform supports realtime delivery through SSE (`/api/v1/sse`) and WebSocket (`/api/v1/ws`).
 
 Stable rules:
 
@@ -226,11 +203,9 @@ The docs should treat realtime, background jobs, and async orchestration as sepa
 
 The codebase also exposes routes for systems that should be documented as external integration surfaces rather than core domain state:
 
-- webhooks and delivery retries
 - agent registration and command execution
 - backup creation, download, restore, and cleanup
-- Kubernetes and other infrastructure adapters
-- integrations that synchronize external incident systems or notification providers
+- SSH-based server import and connection testing
 
 These surfaces should remain auditable and should not become implicit sources of truth for the main control plane.
 
@@ -238,11 +213,7 @@ These surfaces should remain auditable and should not become implicit sources of
 
 Use the following docs together:
 
+- `docs/api-contract.md` — key compatibility points of the public API
 - `docs/cloudflare-integration.md` — runtime, bindings, deployment assumptions, and Cloudflare-specific gaps
-- `docs/incident-architecture.md` — incident system design and stable workflow boundaries
-- `docs/incident-domain-model.md` — entity groups and storage layout
-- `docs/incident-api-reference.md` — endpoint contract summary
-- `docs/incident-cloudflare-matrix.md` — binding/service mapping for incident capabilities
-- `docs/incident-operations.md` — operator workflow and verification guidance
-- `docs/incident-roadmap.md` — future work phases and platform gaps
 - `docs/client-baseline.md` — client-facing behavior baseline for future frontend or machine client work
+- `docs/deploy.md` — deployment steps

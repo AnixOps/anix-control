@@ -16,6 +16,17 @@
 - The root CI pipeline now ignores changes limited to `control-center/**`, and
   its gosec and swag steps, the Makefile `swagger` target and the Docker build
   context exclude `control-center/`.
+- Imported the Control Center Cloudflare Workers API into
+  `control-center/workers/` as a single snapshot of the archived
+  `AnixOps/Anixops-control-center-worker` repository, trimmed to the routes the
+  Control Center clients use (platform probes, auth/MFA, users, nodes,
+  node-groups, playbooks, tasks, schedules, notifications, dashboard, audit
+  logs, SSH, plugins, agents, logs, backups, batch, SSE/WebSocket). Incidents,
+  governance, webhooks, Kubernetes/load-balancer/mesh/autoscaling, AI/vector,
+  Web3/IPFS and developer-mode routes were removed, and the unused `AI` binding
+  was dropped. D1 migrations are unchanged. CI runs from
+  `.github/workflows/control-center-workers.yml`; deployment stays on Cloudflare
+  Workers Builds (root `control-center/workers`, branch `go_dev`).
 
 ### Added
 

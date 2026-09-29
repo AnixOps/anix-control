@@ -5,25 +5,21 @@ This document is the client-facing reference for future frontend or machine clie
 ## Scope
 
 This baseline covers the parts of the API that clients are expected to consume directly:
-- auth and session handling
-- incident workflows
-- nodes, playbooks, tasks, schedules
+- auth, MFA, and session handling
+- users, API tokens, and sessions
+- nodes, node groups, playbooks, tasks, schedules
 - notifications, dashboard data, and audit visibility
-- SSE / WebSocket / other realtime delivery adapters
+- SSE and WebSocket realtime delivery
 
 For deeper implementation and platform context, see:
 - `docs/architecture.md`
 - `docs/cloudflare-integration.md`
-- `docs/incident-api-reference.md`
-- `docs/incident-architecture.md`
-- `docs/incident-domain-model.md`
-- `docs/incident-operations.md`
 
 ## Client roles
 
 Clients should assume one of these authenticated contexts:
 - **admin** — full control-plane access, including configuration and destructive operations
-- **operator** — operational read/write access for response workflows
+- **operator** — operational read/write access for node, task, and schedule workflows
 - **viewer** — read-only access when the server exposes it
 - **API key client** — machine access with the same principal model as JWT clients
 
@@ -119,56 +115,21 @@ Clients should expect common list endpoints to support:
 - `per_page`
 - `sort`
 - `order`
-- domain-specific filters such as status, severity, source, and tags
+- domain-specific filters such as status, role, or resource type
 
 Client rules:
 - always preserve the active filter state in the URL or route state when possible
 - request the next page only when the user scrolls or explicitly paginates
 - do not assume sort order unless requested
 
-## Incident client baseline
-
-Incidents are the primary client workflow.
-
-### Incident list
-
-The client should be able to:
-- browse incidents
-- filter by status, severity, source, and correlation id
-- sort by created or updated timestamps
-- distinguish open, analyzed, approved, executing, resolved, and failed states
-
-### Incident detail
-
-The detail screen should present:
-- core incident metadata
-- evidence and linked resources
-- comments and activity
-- current status and severity
-- AI analysis and recommendations
-- execution / approval history
-- SLA status and related operational objects
-
-### Incident lifecycle actions
-
-Client action order should generally be:
-1. create or open an incident
-2. review evidence and history
-3. request analysis
-4. assign or acknowledge
-5. approve if required
-6. execute remediation
-7. monitor result
-8. resolve / close / merge / split if the server state requires it
-
-### Retry safety
+## Retry safety
 
 Clients must treat the following as potentially repeated requests and guard accordingly:
-- analyze
-- approve
-- execute
-- bulk operations
-- create comment / attachment / webhook configuration where duplication matters
+- node start / stop / restart / sync and bulk node actions
+- task creation, retry, and cancel
+- schedule run-now
+- batch operations
+- backup create / restore
 
 If the UI retries a request because of a transient failure, it should refresh the resource before re-submitting when possible.
 
@@ -179,17 +140,14 @@ The platform supports realtime delivery through SSE and WebSocket-style transpor
 Clients should:
 - subscribe once per active session or page
 - treat realtime as a hint to refresh state, not as the only source of truth
-- use the incident id and event type to update only the necessary UI region
+- use the resource id and event type to update only the necessary UI region
 - reconnect automatically after temporary connection loss
 
 Recommended event categories:
-- incident created
-- incident analyzed
-- incident approved
-- incident executing
-- incident resolved
-- incident failed
-- comments, evidence, and status changes where exposed by the transport layer
+- node status changes
+- task progress, logs, and completion
+- notifications
+- audit and agent events where exposed by the transport layer
 
 Realtime rules:
 - the client should remain functional if realtime is unavailable
@@ -225,13 +183,11 @@ Clients should treat notifications and dashboard summaries as secondary surfaces
 Clients should rely on stable identifiers and not on display names.
 
 Prefer:
-- incident ids
+- user ids
 - node ids
+- node group ids
 - task ids
 - schedule ids
-- template ids
-- team ids
-- attachment ids
 
 Avoid:
 - using names as database keys
@@ -255,8 +211,8 @@ Clients should therefore:
 
 Before shipping a client update, verify:
 - auth refresh and logout work correctly
-- incident list/detail screens load without errors
-- lifecycle actions update state correctly
+- node, task, and schedule screens load without errors
+- node and task actions update state correctly
 - realtime reconnects do not duplicate messages
 - errors display cleanly for 401/403/404/409/422/500
 - pagination and filtering survive route changes
@@ -265,6 +221,4 @@ Before shipping a client update, verify:
 ## Related documentation
 
 - `docs/api-contract.md`
-- `docs/incident-api-reference.md`
-- `docs/incident-architecture.md`
-- `docs/incident-operations.md`
+- `docs/architecture.md`

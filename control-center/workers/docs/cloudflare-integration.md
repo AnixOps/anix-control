@@ -4,13 +4,11 @@ This repository uses Cloudflare as the runtime, storage, and edge control-plane 
 
 ## Current deployment facts
 
-The current repo state shows two important realities:
+- `src/index.ts` is the single API entrypoint. It wires `createApp()` (routes live in `src/app/register-*.ts`) plus the `notFound` / `onError` handlers.
+- `npm run build` bundles `src/index.ts` into `dist/index.mjs`; `wrangler.toml` sets `main = "dist/index.mjs"` and deploys with `--no-bundle`.
+- `src/tail.ts` is a separate tail worker deployed via `wrangler.tail.toml` and attached through `[[tail_consumers]]`.
 
-- `src/index.ts` contains the full control-plane API surface.
-- `src/index-with-auth.ts` contains a smaller auth/bootstrap worker.
-- `wrangler.toml` now points `main` at `src/index.ts`, which matches the primary source entrypoint.
-
-Because of that alignment, the docs should still distinguish carefully between:
+The docs should still distinguish carefully between:
 
 - what the source tree implements
 - what the deployment configuration actually serves
@@ -31,10 +29,10 @@ Because of that alignment, the docs should still distinguish carefully between:
 | --- | --- | --- | --- |
 | `DB` | Present | Canonical relational data | D1 stores durable control-plane records and queryable workflow state. |
 | `KV` | Present | Shared state, revocation data, caches | Used for token/session revocation and other lightweight fast-path state. |
-| `R2` | Present | Attachments, exports, backups, bundles | Stores large or binary artifacts that should not live in D1. |
-| `AI` | Present | Analysis and summarization | Advisory only; does not replace policy or RBAC. |
-| `ANALYTICS` | Present | Scrape/event telemetry | Used for lightweight edge analytics and operational visibility. |
-| `VECTORIZE` | Optional / not yet bound | Semantic retrieval | Referenced in the docs as a future retrieval primitive, not a required dependency. |
+| `R2` | Present | Playbook files, backups, bundles | Stores large or binary artifacts that should not live in D1. |
+| `ANALYTICS` | Present (optional in code) | Scrape/event telemetry | `/metrics` writes a data point when the binding exists. |
+
+The `AI` (Workers AI) binding was removed together with the AI, vector-search, and incident features; no remaining code references it.
 
 ## What Cloudflare is used for today
 
@@ -43,11 +41,9 @@ The existing platform already uses Cloudflare for:
 - request handling at the edge
 - auth and session enforcement
 - durable and queryable application state
-- object storage for files and generated artifacts
-- AI-assisted analysis paths
+- object storage for playbooks and backup archives
 - runtime metrics and event telemetry
-- realtime transport adapters and event delivery
-- future-ready integration points for vector search and async orchestration
+- realtime delivery over SSE and WebSocket
 
 ## Public endpoints outside the versioned API
 
@@ -70,25 +66,14 @@ The versioned API remains the main product surface, but operational probes shoul
 - Auth headers and CORS settings are enforced in application code, not just in Wrangler config.
 - The deployment path should be validated whenever the codebase adds or renames worker entrypoints.
 
-If the deployed worker is narrowed intentionally, document that explicitly so clients do not assume the full source tree is live.
+## D1 migrations
 
-## Incident-specific docs
-
-For incident platform design and client behavior, use:
-
-- `docs/incident-architecture.md`
-- `docs/incident-domain-model.md`
-- `docs/incident-api-reference.md`
-- `docs/incident-cloudflare-matrix.md`
-- `docs/incident-operations.md`
-- `docs/incident-roadmap.md`
-- `docs/client-baseline.md`
+`migrations/0001`–`0005` are already applied to the production `anixops-db` database and must not be edited or removed. Some of their tables are no longer read or written by this worker after the trim — `incidents` (`0005`), `webhooks` (`0002`), and the tenant/role tables from `0004` (the `tenant_id` columns `0004` added are still used by audit logging) — and are intentionally left in place.
 
 ## Binding gaps to track
 
 Treat the following as future or optional additions unless the code and `wrangler.toml` are updated together:
 
-- Vectorize binding
 - Durable Objects
 - Queues
 - Workflows
@@ -99,5 +84,4 @@ Treat the following as future or optional additions unless the code and `wrangle
 - D1 should remain the source of truth for durable relational records.
 - KV should remain fast and lightweight; do not rely on it as the only durable store for critical business records.
 - R2 should own binary files and generated artifacts.
-- AI should stay advisory.
 - Unknown or missing bindings should be documented as gaps, not silently assumed.

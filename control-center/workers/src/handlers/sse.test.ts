@@ -87,20 +87,20 @@ describe('sse handlers', () => {
     expect(unsubscribeBody.message).toContain('nodes')
   })
 
-  it('subscribes and unsubscribes incident channels', async () => {
+  it('subscribes and unsubscribes task channels', async () => {
     const user = { sub: 99, email: 'u@test.com', role: 'operator' }
 
-    const subscribeRes = await sseSubscribeHandler(createContext(user, { channel: 'incident:abc123' }) as any)
+    const subscribeRes = await sseSubscribeHandler(createContext(user, { channel: 'task:abc123' }) as any)
     expect(subscribeRes.status).toBe(200)
     const subscribeBody = await subscribeRes.json() as { success: boolean; message: string }
     expect(subscribeBody.success).toBe(true)
-    expect(subscribeBody.message).toContain('incident:abc123')
+    expect(subscribeBody.message).toContain('task:abc123')
 
-    const unsubscribeRes = await sseUnsubscribeHandler(createContext(user, { channel: 'incident:abc123' }) as any)
+    const unsubscribeRes = await sseUnsubscribeHandler(createContext(user, { channel: 'task:abc123' }) as any)
     expect(unsubscribeRes.status).toBe(200)
     const unsubscribeBody = await unsubscribeRes.json() as { success: boolean; message: string }
     expect(unsubscribeBody.success).toBe(true)
-    expect(unsubscribeBody.message).toContain('incident:abc123')
+    expect(unsubscribeBody.message).toContain('task:abc123')
   })
 
   it('returns realtime status for any user role', async () => {

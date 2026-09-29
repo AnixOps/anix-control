@@ -5,7 +5,6 @@
 import { describe, it, expect } from 'vitest'
 import { createMockKV, createMockD1 } from './setup'
 import {
-  buildDeveloperReadinessSummary,
   recordMetric,
   queryMetrics,
   createAlertRule,
@@ -20,8 +19,6 @@ import {
 const createMockEnv = () => ({
   KV: createMockKV(),
   DB: createMockD1(),
-  AI: {} as any,
-  VECTORIZE: {} as any,
   ASSETS: {} as any,
 })
 
@@ -74,25 +71,6 @@ describe('Monitoring Service', () => {
       })
       expect(result.success).toBe(true)
       expect(result.data).toEqual([])
-    })
-  })
-
-  describe('Developer Readiness Summary', () => {
-    it('should build the developer readiness summary contract', async () => {
-      const summary = await buildDeveloperReadinessSummary()
-
-      expect(summary.manifest_total).toBeGreaterThan(0)
-      expect(summary.readiness_counts.verified).toBeGreaterThan(0)
-      expect(summary.readiness_counts.diagnostic).toBeGreaterThan(0)
-      expect(summary.execution_mode_counts.automated).toBeGreaterThan(0)
-      expect(summary.execution_mode_counts['fixture-backed']).toBeGreaterThan(0)
-      expect(summary.ready_endpoints.length).toBeGreaterThan(0)
-      expect(summary.manual_endpoints.length).toBeGreaterThan(0)
-      expect(summary.ready_endpoints.every(entry => entry.readiness === 'verified')).toBe(true)
-      expect(summary.manual_endpoints.every(entry => entry.readiness === 'manual' || entry.readiness === 'inventory')).toBe(true)
-      expect(summary.fixture_coverage.total_endpoints).toBeGreaterThan(0)
-      expect(summary.fixture_coverage.fixture_key_counts.principals).toBeGreaterThan(0)
-      expect(summary.fixture_coverage.endpoints.every(entry => entry.fixture_keys.length > 0)).toBe(true)
     })
   })
 

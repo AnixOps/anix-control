@@ -34,6 +34,3 @@ bucket_name = "anixops-files"
 [[analytics_engine_datasets]]
 binding = "ANALYTICS"
 dataset = "anixops_control_center"
-
-[ai]
-binding = "AI"

@@ -1,6 +1,5 @@
 import type { Context } from 'hono'
-import type { DashboardOverviewData, DashboardOverviewResponseData, Env, DeveloperReadinessSummary } from '../types'
-import { buildDeveloperReadinessSummary } from '../services/monitoring'
+import type { DashboardOverviewData, DashboardOverviewResponseData, Env } from '../types'
 
 /**
  * Dashboard 概览
@@ -16,14 +15,6 @@ export async function dashboardHandler(c: Context<{ Bindings: Env }>) {
       data: JSON.parse(cached),
       cached: true,
     } as DashboardOverviewResponseData)
-  }
-
-  let developerReadinessSummary: DeveloperReadinessSummary | null = null
-  try {
-    developerReadinessSummary = await buildDeveloperReadinessSummary()
-  } catch (error) {
-    console.error('Failed to build developer readiness summary:', error)
-    developerReadinessSummary = null
   }
 
   const [nodeCount, userCount, auditCount] = await Promise.all([
@@ -50,7 +41,6 @@ export async function dashboardHandler(c: Context<{ Bindings: Env }>) {
     activity: {
       last_24h: auditCount?.count || 0,
     },
-    developer_readiness_summary: developerReadinessSummary,
     timestamp: new Date().toISOString(),
   }
 

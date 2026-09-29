@@ -89,7 +89,7 @@ export function getRequestId(c: Context<{ Bindings: Env }>): string {
  * Get tenant ID from context
  */
 function getTenantId(c: Context<{ Bindings: Env }>): number | null {
-  // Try to get from context set by tenant middleware
+  // Optional tenant context (no tenant middleware is mounted in this worker)
   const tenant = (c as any).get?.('tenant')
   return tenant?.id || null
 }

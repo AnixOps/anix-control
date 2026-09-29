@@ -14,8 +14,6 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:coverage:ci": "vitest run --coverage --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 --coverage.thresholds.branches=0 --coverage.thresholds.statements=0",
-    "test:devmode": "vitest run test/internal-dev.test.ts",
-    "test:visualize": "vitest run test/endpoint-visualizer.test.ts",
     "db:migrate": "wrangler d1 migrations apply anixops-db",
     "db:create": "wrangler d1 migrations create anixops-db",
     "typecheck": "tsc --noEmit"

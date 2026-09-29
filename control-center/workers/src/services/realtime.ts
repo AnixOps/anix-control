@@ -101,10 +101,6 @@ export function buildAgentChannels(nodeId: number | string, tenantId?: number): 
   return buildChannels('global', 'nodes', 'operations', `node:${nodeId}`, tenantId ? `tenant:${tenantId}` : undefined)
 }
 
-export function buildIncidentChannels(incidentId: string, userId?: number, tenantId?: number): string[] {
-  return buildChannels('global', 'operations', `incident:${incidentId}`, userId ? `user:${userId}` : undefined, tenantId ? `tenant:${tenantId}` : undefined)
-}
-
 export function createRealtimeEvent<T>(event: Omit<RealtimeEvent<T>, 'id' | 'timestamp' | 'version'>): RealtimeEvent<T> {
   return {
     ...event,
@@ -215,10 +211,6 @@ export function isAllowedRealtimeChannel(user: Pick<AuthPrincipal, 'sub' | 'role
   }
 
   if (/^task:[A-Za-z0-9_-]+$/.test(channel)) {
-    return true
-  }
-
-  if (/^incident:[A-Za-z0-9_-]+$/.test(channel)) {
     return true
   }
 

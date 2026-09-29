@@ -108,13 +108,7 @@ export function createMockD1(): D1Database {
   const auditLogs: any[] = []
   const notifications: any[] = []
   const userMfa: any[] = []
-  const tenants: any[] = []
-  const tenantMembers: any[] = []
-  const roles: any[] = []
-  const permissions: any[] = []
-  const tenantInvitations: any[] = []
   const taskLogs: any[] = []
-  const incidents: any[] = []
   let idCounter = 1
 
   return {
@@ -213,130 +207,9 @@ export function createMockD1(): D1Database {
             return tasks.find(t => t.task_id === taskId || t.id === taskId) || null
           }
 
-          // Incident queries
-          if (sqlLower.includes('from incidents where id')) {
-            return incidents.find(i => i.id === bindings[0]) || null
-          }
-
-          // Count queries for incidents
-          if (sqlLower.includes('count(') && sqlLower.includes('from incidents')) {
-            let filtered = [...incidents]
-            let idx = 0
-            if (sqlLower.includes('status = ?')) {
-              filtered = filtered.filter(item => item.status === bindings[idx++])
-            }
-            if (sqlLower.includes('severity = ?')) {
-              filtered = filtered.filter(item => item.severity === bindings[idx++])
-            }
-            if (sqlLower.includes('action_type = ?')) {
-              filtered = filtered.filter(item => item.action_type === bindings[idx++])
-            }
-            if (sqlLower.includes('source = ?')) {
-              filtered = filtered.filter(item => item.source === bindings[idx++])
-            }
-            if (sqlLower.includes('requested_via = ?')) {
-              filtered = filtered.filter(item => item.requested_via === bindings[idx++])
-            }
-            if (sqlLower.includes('approved_by = ?')) {
-              filtered = filtered.filter(item => item.approved_by === bindings[idx++])
-            }
-            if (sqlLower.includes('correlation_id = ?')) {
-              filtered = filtered.filter(item => item.correlation_id === bindings[idx++])
-            }
-            if (sqlLower.includes('action_type is not null and action_ref is not null')) {
-              filtered = filtered.filter(item => item.action_type && item.action_ref)
-            }
-            if (sqlLower.includes('(action_type is null or action_ref is null)')) {
-              filtered = filtered.filter(item => !item.action_type || !item.action_ref)
-            }
-            return { count: filtered.length, total: filtered.length }
-          }
-
           // Count queries (generic)
           if (sqlLower.includes('count(')) {
             return { count: 1, total: 1 }
-          }
-
-          // Tenant queries
-          if (sqlLower.includes('insert into tenants') && sqlLower.includes('returning')) {
-            const tenant = {
-              id: idCounter++,
-              name: bindings[0],
-              slug: bindings[1],
-              plan: bindings[2] || 'free',
-              status: 'active',
-              quotas: bindings[3],
-              billing_email: bindings[4] || null,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            }
-            tenants.push(tenant)
-            return tenant
-          }
-          if (sqlLower.includes('from tenants where id')) {
-            return tenants.find(t => t.id === bindings[0]) || null
-          }
-          if (sqlLower.includes('from tenants where slug')) {
-            return tenants.find(t => t.slug === bindings[0]) || null
-          }
-
-          // Role queries
-          if (sqlLower.includes('from roles where id')) {
-            return roles.find(r => r.id === bindings[0]) || null
-          }
-          if (sqlLower.includes('from roles where name')) {
-            return roles.find(r => r.name === bindings[0]) || null
-          }
-          if (sqlLower.includes('insert into roles') && sqlLower.includes('returning')) {
-            const role = {
-              id: idCounter++,
-              tenant_id: bindings[0],
-              name: bindings[1],
-              display_name: bindings[2] || null,
-              description: bindings[3] || null,
-              permissions: bindings[4],
-              is_system: false,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            }
-            roles.push(role)
-            return role
-          }
-
-          // Tenant member queries
-          if (sqlLower.includes('from tenant_members where user_id')) {
-            return tenantMembers.find(m => m.user_id === bindings[0] && m.tenant_id === bindings[1]) || null
-          }
-          if (sqlLower.includes('insert into tenant_members') && sqlLower.includes('returning')) {
-            const member = {
-              id: idCounter++,
-              tenant_id: bindings[0],
-              user_id: bindings[1],
-              role_id: bindings[2] || null,
-              invited_by: bindings[3] || null,
-              joined_at: new Date().toISOString(),
-            }
-            tenantMembers.push(member)
-            return member
-          }
-
-          // Invitation queries
-          if (sqlLower.includes('from tenant_invitations where token')) {
-            return tenantInvitations.find(i => i.token === bindings[0]) || null
-          }
-          if (sqlLower.includes('insert into tenant_invitations') && sqlLower.includes('returning')) {
-            const invitation = {
-              id: idCounter++,
-              tenant_id: bindings[0],
-              email: bindings[1],
-              role_id: bindings[2] || null,
-              invited_by: bindings[3],
-              token: bindings[4],
-              expires_at: bindings[5],
-              created_at: new Date().toISOString(),
-            }
-            tenantInvitations.push(invitation)
-            return invitation
           }
 
           // API token queries
@@ -381,47 +254,10 @@ export function createMockD1(): D1Database {
               role: user.role,
             }
           }
-
-          // Permission queries
         }),
         all: vi.fn(async function(this: any) {
           const normalizedSql = this._sqlLower || sqlLower
 
-          if (normalizedSql.includes('from incidents')) {
-            let results = [...incidents]
-            const bindings = this._bindings || []
-            let index = 0
-
-            if (normalizedSql.includes('status = ?')) {
-              results = results.filter(item => item.status === bindings[index++])
-            }
-            if (normalizedSql.includes('severity = ?')) {
-              results = results.filter(item => item.severity === bindings[index++])
-            }
-            if (normalizedSql.includes('action_type = ?')) {
-              results = results.filter(item => item.action_type === bindings[index++])
-            }
-            if (normalizedSql.includes('source = ?')) {
-              results = results.filter(item => item.source === bindings[index++])
-            }
-            if (normalizedSql.includes('requested_via = ?')) {
-              results = results.filter(item => item.requested_via === bindings[index++])
-            }
-            if (normalizedSql.includes('approved_by = ?')) {
-              results = results.filter(item => item.approved_by === bindings[index++])
-            }
-            if (normalizedSql.includes('correlation_id = ?')) {
-              results = results.filter(item => item.correlation_id === bindings[index++])
-            }
-            if (normalizedSql.includes('action_type is not null and action_ref is not null')) {
-              results = results.filter(item => item.action_type && item.action_ref)
-            }
-            if (normalizedSql.includes('(action_type is null or action_ref is null)')) {
-              results = results.filter(item => !item.action_type || !item.action_ref)
-            }
-
-            return { results }
-          }
           if (normalizedSql.includes('from api_tokens') && normalizedSql.includes('join users')) {
             const results = apiTokens
               .map((token) => {
@@ -462,21 +298,6 @@ export function createMockD1(): D1Database {
           if (normalizedSql.includes('from audit_logs')) {
             return { results: auditLogs }
           }
-          if (normalizedSql.includes('from tenants')) {
-            return { results: tenants }
-          }
-          if (normalizedSql.includes('from tenant_members')) {
-            return { results: tenantMembers }
-          }
-          if (normalizedSql.includes('from roles')) {
-            return { results: roles }
-          }
-          if (normalizedSql.includes('from permissions')) {
-            return { results: permissions }
-          }
-          if (normalizedSql.includes('from tenant_invitations')) {
-            return { results: tenantInvitations }
-          }
           if (normalizedSql.includes('from api_tokens')) {
             return { results: apiTokens }
           }
@@ -510,38 +331,6 @@ export function createMockD1(): D1Database {
             }
             tasks.push(task)
             return { success: true, results: [task], meta: { last_row_id: task.id } }
-          }
-
-          // INSERT incident
-          if (sqlLower.includes('insert or replace into incidents')) {
-            const incident = {
-              id: bindings[0],
-              title: bindings[1],
-              summary: bindings[2],
-              status: bindings[3],
-              severity: bindings[4],
-              source: bindings[5],
-              correlation_id: bindings[6],
-              requested_by: bindings[7],
-              requested_by_email: bindings[8],
-              requested_via: bindings[9],
-              approved_by: bindings[10],
-              approved_at: bindings[11],
-              execution_id: bindings[12],
-              action_type: bindings[13],
-              action_ref: bindings[14],
-              evidence: bindings[15],
-              recommendations: bindings[16],
-              links: bindings[17],
-              analysis: bindings[18],
-              execution_result: bindings[19],
-              created_at: bindings[20],
-              updated_at: bindings[21],
-            }
-            const idx = incidents.findIndex(item => item.id === incident.id)
-            if (idx >= 0) incidents[idx] = incident
-            else incidents.push(incident)
-            return { success: true, meta: { changes: 1 } }
           }
 
           // INSERT user
@@ -603,103 +392,6 @@ export function createMockD1(): D1Database {
           if (sqlLower.includes('update users set last_login')) {
             const user = users.find(u => u.id === bindings[1])
             if (user) user.last_login_at = new Date().toISOString()
-            return { success: true }
-          }
-
-          // INSERT tenant
-          if (sqlLower.includes('insert into tenants')) {
-            const tenant = {
-              id: idCounter++,
-              name: bindings[0],
-              slug: bindings[1],
-              plan: bindings[2] || 'free',
-              status: 'active',
-              quotas: bindings[3],
-              created_at: new Date().toISOString(),
-            }
-            tenants.push(tenant)
-            return { success: true, results: [tenant] }
-          }
-
-          // UPDATE tenant
-          if (sqlLower.includes('update tenants')) {
-            return { success: true, meta: { changes: 1 } }
-          }
-
-          // INSERT tenant member
-          if (sqlLower.includes('insert into tenant_members')) {
-            const member = {
-              id: idCounter++,
-              tenant_id: bindings[0],
-              user_id: bindings[1],
-              role_id: bindings[2] || null,
-              invited_by: bindings[3] || null,
-              joined_at: new Date().toISOString(),
-            }
-            tenantMembers.push(member)
-            return { success: true }
-          }
-
-          // DELETE tenant member
-          if (sqlLower.includes('delete from tenant_members')) {
-            const idx = tenantMembers.findIndex(m => m.tenant_id === bindings[0] && m.user_id === bindings[1])
-            if (idx >= 0) tenantMembers.splice(idx, 1)
-            return { success: true }
-          }
-
-          // INSERT role
-          if (sqlLower.includes('insert into roles')) {
-            const role = {
-              id: idCounter++,
-              tenant_id: bindings[0],
-              name: bindings[1],
-              display_name: bindings[2] || null,
-              description: bindings[3] || null,
-              permissions: bindings[4],
-              is_system: false,
-              created_at: new Date().toISOString(),
-            }
-            roles.push(role)
-            return { success: true }
-          }
-
-          // UPDATE role
-          if (sqlLower.includes('update roles')) {
-            return { success: true, meta: { changes: 1 } }
-          }
-
-          // DELETE role
-          if (sqlLower.includes('delete from roles')) {
-            const idx = roles.findIndex(r => r.id === bindings[0] && r.tenant_id === bindings[1])
-            if (idx >= 0) roles.splice(idx, 1)
-            return { success: true }
-          }
-
-          // INSERT tenant invitation
-          if (sqlLower.includes('insert into tenant_invitations')) {
-            const invitation = {
-              id: idCounter++,
-              tenant_id: bindings[0],
-              email: bindings[1],
-              role_id: bindings[2] || null,
-              invited_by: bindings[3],
-              token: bindings[4],
-              expires_at: bindings[5],
-              created_at: new Date().toISOString(),
-            }
-            tenantInvitations.push(invitation)
-            return { success: true }
-          }
-
-          // UPDATE tenant invitation
-          if (sqlLower.includes('update tenant_invitations')) {
-            return { success: true }
-          }
-
-          // DELETE tenant invitation
-          if (sqlLower.includes('delete from tenant_invitations')) {
-            const idx = tenantInvitations.findIndex(i => i.id === bindings[0])
-            if (idx >= 0) tenantInvitations.splice(idx, 1)
             return { success: true }
           }
 
@@ -779,6 +471,5 @@ beforeAll(() => {
     JWT_EXPIRE: '86400',
     API_KEY_SALT: 'test-salt',
     ENVIRONMENT: 'test',
-    DEVELOPER_MODE: 'false',
   }
 })
