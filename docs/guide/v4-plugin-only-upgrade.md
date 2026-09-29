@@ -168,3 +168,14 @@ Stop the rollout immediately on a signature/trust-root mismatch, route
 declaration mismatch, failed migration, host lease loss, sustained gateway
 errors, or an unexpected package-unavailable result. Use the rollback runbook
 instead of manually editing package files, database rows, or router settings.
+
+Control supervises every package host. A host that exits on its own is
+restarted at the same generation after a short backoff, and its requests fail
+fast with a package-unavailable response until it is healthy again. Host
+output appears in the Control log prefixed with
+`[pkg:<id> v:<version> gen:<n> stdout|stderr]`; a `plugin host ... exited
+unexpectedly` line counts as a host failure for the stop criteria above, and
+a `plugin host ... failed` line means the host was restarted 5 times within
+5 minutes and stays down until the package is enabled, updated, or rolled
+back again. Set `TZ` (and `LANG`) in the Control service environment; package
+hosts inherit only those two variables from it.

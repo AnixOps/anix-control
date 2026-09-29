@@ -23,9 +23,23 @@ const (
 
 const maxUnixSocketPathBytes = 100
 
+// defaultHostStopGrace bounds how long a stopping host may take to exit after
+// SIGTERM before its process group is killed.
+const defaultHostStopGrace = 2 * time.Second
+
 const childRuntimeEntrypoint = childRuntimeDirectoryPath + "/entrypoint"
 
-func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref ArtifactRef, generation uint64, startupTimeout time.Duration, bridgeFactory packagebridge.SessionFactory) (*hostProcess, error) {
+// hostStartOptions carries the supervisor settings a host process inherits.
+// The watchdog reuses the exact options of the original start.
+type hostStartOptions struct {
+	startupTimeout time.Duration
+	bridgeFactory  packagebridge.SessionFactory
+	stopGrace      time.Duration
+	logf           func(string, ...any)
+}
+
+func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref ArtifactRef, generation uint64, options hostStartOptions) (*hostProcess, error) {
+	startupTimeout, bridgeFactory := options.startupTimeout, options.bridgeFactory
 	directory, err := runtimeRoot.createHostRuntimeDir()
 	if err != nil {
 		return nil, err
@@ -76,11 +90,18 @@ func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref Artifac
 	if bridgeChild != nil {
 		command.ExtraFiles = append(command.ExtraFiles, bridgeChild)
 	}
-	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	command.SysProcAttr = hostSysProcAttr()
+	output, err := newHostOutputPipes(command)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("%w: create package host output pipes: %v", ErrHostUnavailable, err)
+	}
 	if err := command.Start(); err != nil {
+		output.abort()
 		cleanup()
 		return nil, fmt.Errorf("%w: start package host: %v", ErrHostUnavailable, err)
 	}
+	output.forward(hostOutputPrefix(ref, generation), options.logf)
 	if bridgeChild != nil {
 		if err := bridgeChild.Close(); err != nil {
 			_ = terminateHostProcessGroup(command.Process.Pid)
@@ -94,6 +115,7 @@ func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref Artifac
 	host := &hostProcess{
 		packageID: ref.PackageID, version: ref.Version, generation: generation, ref: ref,
 		runtimeDir: directory, socketPath: socketPath, command: command, waitDone: make(chan struct{}), bridge: bridge,
+		stopGrace: options.stopGrace,
 	}
 	go func() {
 		host.waitErr = command.Wait()
@@ -119,8 +141,22 @@ func hostEnvironment(socketPath, runtimeDir string, bridgeEnabled ...bool) []str
 		"HOME=" + runtimeDir,
 		"TMPDIR=" + runtimeDir,
 	}
+	environment = append(environment, hostLocaleEnvironment()...)
 	if len(bridgeEnabled) > 0 && bridgeEnabled[0] {
 		environment = append(environment, hostPackageBridgeFDEnvironment+"="+fmt.Sprint(childPackageBridgeFD))
+	}
+	return environment
+}
+
+// hostLocaleEnvironment passes the kernel's time zone and locale through so
+// package output formats dates like the in-process handlers did. Only these
+// two names are forwarded, and only when the kernel has them set.
+func hostLocaleEnvironment() []string {
+	var environment []string
+	for _, name := range []string{"TZ", "LANG"} {
+		if value, ok := os.LookupEnv(name); ok && value != "" {
+			environment = append(environment, name+"="+value)
+		}
 	}
 	return environment
 }
@@ -188,9 +224,17 @@ func (h *hostProcess) stop(ctx context.Context) error {
 		_ = h.client.Close()
 	}
 	if h.command != nil && h.command.Process != nil {
+		pid := h.command.Process.Pid
+		if !hostExited(h) {
+			// Ask the group to exit first so hosts can flush and close cleanly.
+			if err := signalHostProcessGroup(pid, syscall.SIGTERM); err != nil {
+				stopErr = errors.Join(stopErr, fmt.Errorf("%w: signal host process: %v", ErrHostUnavailable, err))
+			}
+			h.awaitExit(ctx, h.gracePeriod())
+		}
 		// The group can survive after its leader has exited. Always target the
 		// original PGID so descendants cannot outlive retirement.
-		if err := terminateHostProcessGroup(h.command.Process.Pid); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		if err := terminateHostProcessGroup(pid); err != nil && !errors.Is(err, os.ErrProcessDone) {
 			stopErr = errors.Join(stopErr, fmt.Errorf("%w: stop host process: %v", ErrHostUnavailable, err))
 		}
 	}
@@ -212,11 +256,37 @@ func (h *hostProcess) stop(ctx context.Context) error {
 	return stopErr
 }
 
+func (h *hostProcess) gracePeriod() time.Duration {
+	if h.stopGrace > 0 {
+		return h.stopGrace
+	}
+	return defaultHostStopGrace
+}
+
+// awaitExit waits until the host leader exits, the grace period ends, or ctx
+// is done, whichever comes first.
+func (h *hostProcess) awaitExit(ctx context.Context, grace time.Duration) {
+	if h.waitDone == nil {
+		return
+	}
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	select {
+	case <-h.waitDone:
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+}
+
 func terminateHostProcessGroup(pid int) error {
+	return signalHostProcessGroup(pid, syscall.SIGKILL)
+}
+
+func signalHostProcessGroup(pid int, signal syscall.Signal) error {
 	if pid <= 0 {
 		return nil
 	}
-	err := syscall.Kill(-pid, syscall.SIGKILL)
+	err := syscall.Kill(-pid, signal)
 	if errors.Is(err, syscall.ESRCH) {
 		return nil
 	}

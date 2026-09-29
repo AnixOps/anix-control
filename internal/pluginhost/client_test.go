@@ -2,10 +2,13 @@ package pluginhost
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -19,6 +22,11 @@ import (
 const (
 	hostTestChildEnvironment           = "ANIX_PLUGINHOST_TEST_CHILD"
 	hostTestForbiddenSecretEnvironment = "ANIX_PLUGINHOST_TEST_SERVER_SECRET"
+	// hostTestIgnoreTermEnvironment makes the helper host ignore SIGTERM so
+	// tests can observe the SIGKILL that follows the stop grace period.
+	hostTestIgnoreTermEnvironment = "ANIX_PLUGINHOST_TEST_IGNORE_TERM"
+	hostTestStartedLine           = "plugin host test child started"
+	hostTestTerminatedLine        = "plugin host test child received SIGTERM"
 )
 
 func TestClientDispatchesOverUnixSocket(t *testing.T) {
@@ -131,11 +139,24 @@ func TestPluginHostProcess(t *testing.T) {
 	if !runtimeInfo.IsDir() {
 		t.Fatal("host runtime descriptor is not a directory")
 	}
+	// Report the inherited locale on stderr; the supervisor logs it.
+	_, _ = fmt.Fprintf(os.Stderr, "%s TZ=%s LANG=%s\n", hostTestStartedLine, os.Getenv("TZ"), os.Getenv("LANG"))
 	listener, err := net.Listen("unix", socketPath)
 	require.NoError(t, err)
 	require.NoError(t, os.Chmod(socketPath, 0o600))
 	server := grpc.NewServer()
 	pluginhostv1.RegisterControlPackageHostServer(server, testHostServer{})
+	if os.Getenv(hostTestIgnoreTermEnvironment) == "1" {
+		signal.Ignore(syscall.SIGTERM)
+	} else {
+		terminate := make(chan os.Signal, 1)
+		signal.Notify(terminate, syscall.SIGTERM)
+		go func() {
+			<-terminate
+			_, _ = fmt.Fprintln(os.Stderr, hostTestTerminatedLine)
+			server.Stop()
+		}()
+	}
 	require.NoError(t, server.Serve(listener))
 }
 

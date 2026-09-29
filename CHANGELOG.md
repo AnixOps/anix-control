@@ -229,6 +229,26 @@
   `log.Fatal`: it runs the same shutdown and exits with status 1. Plugin poll
   interval settings are validated before any listener starts. A second signal
   still forces an immediate exit.
+
+- A package host that crashes or is killed no longer leaves its routes failing
+  until the next lifecycle operation or reboot. The host supervisor
+  (`internal/pluginhost`) logs the exit status and restarts the host at the
+  same generation, version, and verified artifact after 1 s, 2 s, 4 s, ...
+  (capped at 30 s); after 5 restarts within 5 minutes it marks the host failed
+  and stops restarting until the next explicit lifecycle operation (enable,
+  update, rollback, or boot reconciliation), which also resets the budget.
+  While a host is exited, restarting, or failed, dispatch, health, migration,
+  and WebSocket requests fail immediately with `ErrHostUnavailable` instead of
+  dialing a dead socket. Host stdout and stderr are now written to the kernel
+  log line by line as `[pkg:<id> v:<version> gen:<n> stderr] <line>` (lines
+  capped at 8 KiB) instead of being discarded; `TZ` and `LANG` are passed to
+  hosts when set in the kernel environment, and both bundled hosts embed
+  `time/tzdata`. Stopping a host now sends `SIGTERM` to its process group and
+  waits up to 2 s before `SIGKILL` (the bundled hosts stop gracefully on
+  `SIGTERM`); on Linux a host also receives `SIGKILL` if the kernel dies.
+  `Stop` and watchdog restarts no longer hold the supervisor lock that request
+  dispatch uses, and `(*pluginhost.Supervisor).Stats()` exposes per-package
+  start, unexpected-exit, restart, and failure counters.
 - Made historical `v4.0.0-alpha.*` tags audit-only in release automation and
   made unconfigured product stages fail closed. Docker publication now waits
   for signed package publication.

@@ -99,6 +99,8 @@ func TestManagerRestartsExitedHostAtSameGeneration(t *testing.T) {
 	t.Setenv(hostTestChildEnvironment, "1")
 	manager, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})
 	require.NoError(t, err)
+	// Keep the watchdog out of the way: this covers the explicit Start path.
+	manager.restartBaseDelay = time.Hour
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
 	ref := writeHostArtifactRef(t, "knowledge", "4.0.0")
 
@@ -271,6 +273,9 @@ func TestManagerRetiresDescendantAfterLeaderExit(t *testing.T) {
 			t.Setenv(hostTestChildEnvironment, "1")
 			manager, err := NewManager(ManagerConfig{RuntimeDir: filepath.Join(shortHostTempDir(t), "runtime")})
 			require.NoError(t, err)
+			// The watchdog would reap the descendant on restart; this covers
+			// explicit retirement of an exited leader.
+			manager.restartBaseDelay = time.Hour
 			childPIDPath := filepath.Join(t.TempDir(), "descendant.pid")
 			ref := writeHostArtifactRefWithPrelude(t, "knowledge", "4.0.0", "/bin/sleep 60 &\necho $! > "+strconv.Quote(childPIDPath)+"\n")
 			require.NoError(t, manager.Start(context.Background(), ref, 7))
@@ -487,7 +492,9 @@ func writeHostArtifactRef(t *testing.T, packageID, version string) ArtifactRef {
 func writeHostArtifactRefWithPrelude(t *testing.T, packageID, version, prelude string) ArtifactRef {
 	t.Helper()
 	ref := writeVerifiedArtifactRef(t, packageID, version)
-	entrypoint := []byte("#!/bin/sh\n" + prelude + hostTestChildEnvironment + "=1 exec " + strconv.Quote(os.Args[0]) + " -test.run=^TestPluginHostProcess$ --\n")
+	// A race-enabled child otherwise sleeps 1s at exit, which would make every
+	// graceful SIGTERM stop in a -race run take a second.
+	entrypoint := []byte("#!/bin/sh\n" + prelude + "export GORACE=atexit_sleep_ms=0\n" + hostTestChildEnvironment + "=1 exec " + strconv.Quote(os.Args[0]) + " -test.run=^TestPluginHostProcess$ --\n")
 	require.NoError(t, os.WriteFile(ref.EntrypointPath, entrypoint, 0o700))
 	ref.EntrypointSHA256 = testDigest(entrypoint)
 	return ref
