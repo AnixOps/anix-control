@@ -83,3 +83,46 @@ func TestPanelEnvelopeRejectsNonPanelPayload(t *testing.T) {
 
 	require.Error(t, err)
 }
+
+func TestErrorBodiesPassThroughUnchangedOnDataAndPanelRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cases := []struct {
+		name     string
+		envelope Envelope
+		status   uint32
+		body     string
+	}{
+		{"data route legacy error", EnvelopeData, http.StatusBadRequest, `{"error":"invalid node id"}`},
+		{"data route legacy message", EnvelopeData, http.StatusInternalServerError, `{"message":"创建失败","error":"db down"}`},
+		{"panel route legacy error", EnvelopePanel, http.StatusBadRequest, `{"error":"amount must be positive"}`},
+		{"panel route panel error", EnvelopePanel, http.StatusUnauthorized, `{"code":401,"msg":"unauthorized","ts":1,"data":null}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			context, _ := gin.CreateTestContext(recorder)
+			err := writePackageResponse(context, Route{Envelope: tc.envelope}, pluginhost.DispatchOutput{
+				StatusCode: tc.status, Body: []byte(tc.body),
+			})
+			require.NoError(t, err)
+			require.Equal(t, int(tc.status), recorder.Code)
+			require.Equal(t, tc.body, recorder.Body.String(), "error bodies must be byte-identical to the legacy handler output")
+			require.Contains(t, recorder.Header().Get("Content-Type"), "application/json")
+		})
+	}
+}
+
+func TestSuccessEnvelopeRulesAreUnchangedByErrorPassthrough(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	context, _ := gin.CreateTestContext(recorder)
+	require.Error(t, writePackageResponse(context, Route{Envelope: EnvelopePanel}, pluginhost.DispatchOutput{
+		StatusCode: http.StatusOK, Body: []byte(`{"error":"not a panel body"}`),
+	}))
+
+	recorder = httptest.NewRecorder()
+	context, _ = gin.CreateTestContext(recorder)
+	require.Error(t, writePackageResponse(context, Route{Envelope: EnvelopeData}, pluginhost.DispatchOutput{
+		StatusCode: http.StatusBadRequest, Body: []byte(`not json`),
+	}), "non-JSON error bodies on data routes are still rejected")
+}

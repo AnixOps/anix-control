@@ -185,6 +185,15 @@
 
 ### Fixed
 
+- `/api/v2` error responses now keep the exact body the legacy handler wrote
+  on `data` and `panel` package routes (status >= 400 with a JSON body). The
+  gateway used to wrap `{"error": ...}`/`{"message": ...}` failure bodies as
+  `{"data":{"error":...}}` on data routes and reject them as an invalid panel
+  envelope (502) on panel routes, so 39 routes (agent/node admin, invite,
+  WireGuard keypair, traffic reports) lost their error messages or turned
+  client errors into 502. Found by the local upgrade rehearsal against
+  `v4.0.0-alpha.7`.
+
 - Fixed `/api/v2` package route resolution picking the first declared matching
   pattern instead of the most specific one. `GET /api/v2/admin/users/stats`,
   `/admin/orders/stats` and `/admin/nodes/stats` were dispatched to the
