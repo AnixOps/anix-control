@@ -61,6 +61,17 @@
 
 ### Changed
 
+- Recorded the production baseline and the local upgrade rehearsal from
+  `v4.0.0-alpha.7` to `go_dev` on a copy of the 2026-09-29 production database
+  (`docs/architecture/release-line-status.md`, `docs/RC-EVIDENCE-4.0.x.md`).
+  Subscriptions (360/360) and UniProxy (45/45) were byte-identical, and all
+  82 `/api/v2` GET routes returned the same status. `docs/UPGRADE.md` gains an
+  alpha-to-4.0.x upgrade section: build identification, the five added kernel
+  tables, the package install window, and network isolation for rehearsals.
+  It also documents the empty-password DSN fix. `TODO.md` tracks the
+  production upgrade, the random order of forward observability targets, and
+  the missing switch for outbound background workers.
+
 - `/api/v2` route resolution no longer re-reads and re-hashes every installed
   package artifact on each request. Successfully verified route declarations
   are cached per signed release (keyed by release id, artifact SHA-256, stored

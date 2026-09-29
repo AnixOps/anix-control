@@ -320,14 +320,20 @@ Semantics to keep when wiring:
 | Gap | Where |
 |-----|-------|
 | Package migrations never run in production (runner unwired) | `internal/service/plugin_rollout.go`, `internal/plugincontrol/registry.go` (`startResolvedHost`) |
-| Route gates run only on release tags, not PRs | `check_plugin_only_routes.py` via `check_release_stage.py` in `tag-gate` (`.github/workflows/ci.yml`) |
 | Package execution off in the production template | `plugins.control_execution_enabled: false` in `config/config.prod.yaml` |
-| 7 kernel workers use `context.Background()` (no shutdown cancel) | `cmd/server/main.go` |
+
+Fixed in M0/M1 (2026-09-29): the route gates now run on every PR (PR #11), and
+the kernel workers share a cancellable root context with ordered shutdown
+(PR #13).
 
 ## 10. Roadmap
 
-Step 0 (in progress): merge the cleanup PRs, enable the `go_dev` ruleset, land
-this document.
+Status (2026-09-29): step 0 (cleanup PRs, `go_dev` ruleset, this document),
+M0 and M1 are done. M0/M1 landed as PRs #11-#18. The M2 rehearsal on a
+restored production dump found five defects, all fixed by PRs #14, #15, #17,
+#18 and #19; the results are in
+[`release-line-status.md`](release-line-status.md#production-baseline-and-upgrade-rehearsal).
+The M2 production cutover is next and needs a CI-built release first.
 
 | Milestone | Weeks | Scope | Done when |
 |-----------|-------|-------|-----------|

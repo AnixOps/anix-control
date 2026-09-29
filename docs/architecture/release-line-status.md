@@ -1,6 +1,6 @@
 # AnixOps Product Release Line And Delivery Status
 
-Date: 2026-09-28
+Date: 2026-09-29
 
 This document records the staged product-version plan and the current delivery
 boundary. The active `4.0.x` RC plan and its verification status are in
@@ -73,6 +73,66 @@ The current `4.0.x` release candidate must additionally pass the
 repository-wide CI gates, signed-package workflow, cross-repository Agent
 process gate, live staging, and release artifact verification before a new tag
 is created.
+
+## Production Baseline And Upgrade Rehearsal
+
+Recorded 2026-09-29 from the production PostgreSQL backup taken that day
+(`pg_dump` custom format, PostgreSQL 15.18).
+
+- **Running version.** The production config still reports `app.version`
+  `2.0.1`, but that value is stale. The schema matches the tables that
+  `v4.0.0-alpha.6`/`v4.0.0-alpha.7` create (97 tables, no `v4_kernel_package_*`
+  tables), and the operator confirmed a `v3.1`/`v4.0` alpha tag. The rehearsal
+  therefore used the published `v4.0.0-alpha.7` binary as the old side.
+- **Data size.** About 150 MB of PostgreSQL data: 18 users, 14 nodes (15
+  node/protocol pairs), 23 WireGuard peers; no orders, payments, or forwarding
+  rules. The largest node serves 16 users. Response sizes: `/s/:token` median
+  3.8 KB, max 5.3 KB; UniProxy `config` max 1.4 KB; UniProxy `user` max 9.3 KB,
+  far below the 1 MiB default package payload limit.
+- **Schema delta to current `go_dev`.** Starting in `env: production`, which
+  skips `AutoMigrate` and runs only the `Ensure*` schema helpers, adds exactly
+  five tables: `v4_kernel_package_backup_reference`,
+  `v4_kernel_package_migration_run`, `v4_kernel_package_rollout_lock`,
+  `v4_kernel_package_route_generation`, and
+  `v4_kernel_package_validation_result`. No existing table, column, or index
+  changes.
+- **Crash exposure.** `v4.0.0-alpha.7` crashes with
+  `fatal error: concurrent map writes` in the forward background error logger
+  when several forward latency probes fail at the same time (latency
+  concurrency > 1). The rehearsal hit it while outbound traffic was
+  blocked.
+  Fixed on `go_dev` (PR #14). Until production is upgraded, keep
+  `forward_runtime.latency.concurrency: 1`.
+
+The rehearsal ran `v4.0.0-alpha.7` (old) and `go_dev` `b905a4a8`
+(new) side by side, on two copies of that backup. The new side installed the
+sixteen signed `v4.0.0` packages. Both servers and the test client ran in one
+network namespace with only `lo`. Credentials in the copies were replaced with
+invalid values. Procedure: [`../UPGRADE.md`](../UPGRADE.md#upgrading-from-a-v31-or-v40-alpha-build).
+
+| Check | Result |
+|-------|--------|
+| Subscriptions (`/s/:token`, `/api/v1/client/subscribe`, every user and `?type=`) | 360/360 byte-identical |
+| UniProxy v1 (`config`, `user`, `alivelist` for every node and protocol) | 45/45 byte-identical |
+| `/api/v2` GET routes from the catalog, admin and user identities | 82/82 status equal; 77/82 bodies equal. The 5 differences are three `cached_at` timestamps and two local-ansible paths that differ per instance. |
+| Latency p50, old/new (ms) | subscribe 0.52/0.52; UniProxy user 4.13/4.18; `/api/v2/user/info` 0.24/0.23; `/api/v2/admin/users` 0.25/0.24 |
+| Fault injection | A killed `identity-platform` host restarted after 1 s; the next `/api/v2/admin/users` returned 200 |
+| Network isolation | No non-loopback sockets; the only blocked egress was the forward latency prober |
+
+Defects found by the rehearsal, all fixed on `go_dev` before this record:
+
+- the alpha.7 `concurrent map writes` crash above (PR #14);
+- `/api/v2` route resolution chose the first matching route instead of the
+  most specific one (PR #15);
+- error bodies on `data`/`panel` routes were wrapped or rejected as 502
+  (PR #17);
+- every `/api/v2` request re-verified every signed package: 190-255 ms
+  uncached, 0.22 ms with the verified-route cache (PR #18);
+- the bridge replaced the request `Host` with `package-bridge`, so the
+  forward-agent `install.sh` pointed at `http://package-bridge` (PR #19).
+
+This is a local rehearsal on a copy of production data. It is not a staging
+canary and does not authorize the production upgrade.
 
 ## Explicitly Not Complete
 

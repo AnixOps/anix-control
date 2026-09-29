@@ -14,7 +14,10 @@ files / 220 tests because mock-only suites for the removed AI/Web3/observability
 pages were dropped. The rows are kept unchanged as the historical snapshot.
 PR #7 (`57c62541`: `go_dev` CI green, Go toolchain 1.26.8) and PR #8
 (`8dfc7b70`: dead code and legacy V2bX/Xray test tooling removed) merged after
-this snapshot, so the Go rows must be re-run on the evidence commit.
+this snapshot, so the Go rows must be re-run on the evidence commit. PRs #11
+to #19 (plugin platform hardening, M0/M1 in
+[`architecture/package-extraction.md`](architecture/package-extraction.md))
+merged on 2026-09-29; see the production-copy rehearsal below.
 
 ## Passing Locally
 
@@ -84,6 +87,33 @@ published release package set and the evidence bundle matched those files
 byte-for-byte, and `build_package.py --verify-release` passed against the
 official root. The evidence archive SHA-256 is
 `fa686ab389f019c519958206dc8a3159cb45a9a52899a5639d36b1cc479f1bde`.
+
+## Production-Copy Upgrade Rehearsal
+
+Recorded 2026-09-29. Old side: the published `v4.0.0-alpha.7` binary, which
+matches the production schema. New side: `go_dev` `b905a4a8`,
+with the sixteen signed `v4.0.0` packages installed through `/api/v3`
+(`identity-platform` through `identity_bootstrap_package_dir`). Both sides ran
+against copies of the 2026-09-29 production PostgreSQL backup, with
+credentials replaced by invalid values. Both servers and the test client ran
+inside one `unshare -n` network namespace with only `lo`, with PostgreSQL
+reached over its Unix socket.
+
+| Area | Evidence | Result |
+|------|----------|--------|
+| Schema upgrade | Table, column and index diff between the two copies after the new server started in `env: production` | Passed; only the five `v4_kernel_package_*` tables and their indexes were added |
+| Package install | 16 signed `v4.0.0` packages on the upgraded copy | Passed; all 16 healthy |
+| Subscriptions | 18 users x `/s/:token` and `/api/v1/client/subscribe` x every `?type=`, byte comparison | 360/360 identical |
+| UniProxy v1 | `config`, `user`, `alivelist` for every node and protocol, byte comparison | 45/45 identical |
+| `/api/v2` GET routes | Every catalogued GET route that needs no path parameter, admin and user JWTs, status and body (without `ts`) | 82/82 status equal; 77/82 bodies equal (3 `cached_at` timestamps, 2 per-instance local-ansible paths) |
+| Latency | p50/p99 for subscribe, UniProxy user, `/api/v2/user/info`, `/api/v2/admin/users` | New side within noise of the old side (p50 0.23-4.18 ms) |
+| Host supervision | `SIGKILL` of the `identity-platform` host process | Passed; watchdog restarted it after 1 s, the next admin request returned 200 |
+| Network isolation | `ss -tanp` at the end of the run; blocked-egress log lines | Passed; no non-loopback sockets; only the forward latency prober attempted egress |
+
+Summary and defects found: [`architecture/release-line-status.md`](architecture/release-line-status.md#production-baseline-and-upgrade-rehearsal).
+The harness and its output stay on the operator machine, because they contain
+production data. This is local evidence, not a staging canary or production
+approval.
 
 ## Not Run Locally
 

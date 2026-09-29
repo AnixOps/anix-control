@@ -194,6 +194,86 @@ materialized on the Agent. Control Secret ID to private-file materialization,
 renewal, deletion, and audit are not complete, so a stable or production
 `gost-mesh` rollout is prohibited even when package signature checks pass.
 
+## Upgrading From A v3.1 Or v4.0 Alpha Build
+
+Production installations that were deployed from a `v3.1.0-alpha` or
+`v4.0.0-alpha.1`-`alpha.7` tag need extra checks when they move to `v4.0.x`.
+This path was rehearsed on 2026-09-29 against a copy of a production
+PostgreSQL database. The results are in
+[`architecture/release-line-status.md`](architecture/release-line-status.md#production-baseline-and-upgrade-rehearsal).
+
+### Identify The Running Build
+
+`app.version` in the production config can be stale; check the schema instead:
+
+```bash
+psql -At -d v2board -c "select count(*) from information_schema.tables
+  where table_schema='public' and table_name like 'v4_kernel_package_%'"
+```
+
+`0` means the database was last started by an alpha build: no `v4.0.0`
+package kernel tables exist yet.
+
+### Before The Upgrade
+
+- `v4.0.0-alpha.7` can crash with `fatal error: concurrent map writes` when
+  several forward latency probes fail at once. Until the upgrade, reduce the
+  risk by setting `forward_runtime.latency.concurrency: 1` in the running
+  config; the fix (PR #14) is only in the new build.
+- Take the pre-upgrade database backup (`pg_dump -Fc`) and keep the old binary,
+  frontend and config for the [Rollback](#rollback) section.
+
+### What Changes At Startup
+
+With `env: production`, the server skips `AutoMigrate` and only runs its
+`Ensure*` schema helpers. From an alpha.6/alpha.7 schema they add exactly five
+tables and their indexes: `v4_kernel_package_backup_reference`,
+`v4_kernel_package_migration_run`, `v4_kernel_package_rollout_lock`,
+`v4_kernel_package_route_generation`, and
+`v4_kernel_package_validation_result`. No existing table, column or index
+changes.
+
+### Package Install Window
+
+`v4.0.x` serves every `/api/v2` business route through a signed package. Until
+a route's package is installed and healthy, that route returns
+`package_unavailable`. The kernel keeps serving `/s/:token`,
+`/api/v1/client/subscribe`, `/api/v1/server/UniProxy/*` and `/flow/upload`
+directly, so proxy clients and nodes are not affected by this window.
+
+1. Verify the release evidence bundle and download the sixteen `v4.0.0`
+   packages: `.anxp`, `.manifest.json` and `.manifest.sig` for each.
+2. Configure `identity_bootstrap_package_dir` and
+   `control_execution_enabled: true` as described in
+   [Plugin-Only Bootstrap And Execution](#plugin-only-bootstrap-and-execution),
+   then start the new binary. `identity-platform` is imported on first start,
+   and admin login works once it is healthy.
+3. For each of the other fifteen packages, as an administrator:
+   - `POST /api/v3/plugin-releases` with `{"manifest": "<manifest JSON text>", "signature": "<.manifest.sig contents>"}`;
+   - `POST /api/v3/plugin-releases/<id>/artifact` with `{"artifact_base64": "<base64 of the .anxp>"}`;
+   - `PUT /api/v3/plugin-installations` with `{"plugin_id": "<id>", "target": "control", "desired_version": "4.0.0", "enabled": true}`;
+   - poll `GET /api/v3/plugin-installations` until the package is healthy.
+4. Confirm that all sixteen installations are healthy, then run the admin,
+   user and node smoke checks from [Post-Upgrade Record](#post-upgrade-record).
+
+### Rehearse On A Copy First
+
+Rehearse on a restored copy of the backup, never on the live database.
+Several background workers contact real infrastructure and have no config
+switch:
+
+- the forward runtime job executor (ansible over SSH, NodeX);
+- the forward agent bridge worker;
+- the forward gost and ansible stats workers;
+- the forward flow reset worker (NodeX calls on reset);
+- the forward latency prober (TCP dials to forward targets).
+
+Request handlers can also call Telegram, SMTP and payment providers. Run the
+rehearsal servers and the test client in a network namespace that has only
+loopback (`unshare -n`), and reach PostgreSQL over its Unix socket. Invalidate
+the Telegram, mail, NodeX and payment credentials in the copy as a second
+safeguard.
+
 ## Systemd Binary Upgrade
 
 The exact service name and paths are operator-owned. The example below uses the
@@ -284,6 +364,12 @@ proceeding.
 ## Database And Migration Notes
 
 For ordinary patch upgrades, keep the existing database driver and config.
+
+The PostgreSQL connection string quotes every value. Before PR #13, an empty
+`database.password` shifted the next setting into the password, and the
+server connected to the default `postgres` database instead of the configured
+one. An empty password (for example with peer or trust authentication over a
+Unix socket) now works as written.
 
 If a release requires schema/data changes:
 
