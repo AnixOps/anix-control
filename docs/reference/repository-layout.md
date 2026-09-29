@@ -25,7 +25,7 @@ It should not become a dumping ground for:
 | Path | Purpose |
 |------|------|
 | `cmd/` | Go entrypoints: `server` (the Control binary), `migrate` (XBoard MySQL importer), `sqlite2postgres` (database migration and dry run), `wgrotate` (WireGuard peer key rotation) |
-| `internal/` | backend implementation: `router`, `handler`, `service`, `model`, `middleware`, `database`, `config`, `grpc`, `agentws`, `websocket`, `payment`, `parser`, plugin kernel (`plugincontrol`, `pluginhost`, `packagebridge`, `identitybridge`), and `tests/` (`e2e`, `smoke`, `integration`, `testutil`) |
+| `internal/` | backend implementation: `router`, `handler`, `service`, `model`, `middleware`, `database`, `config`, `grpc`, `agentws`, `websocket`, `payment`, `parser`, plugin kernel (`plugincontrol`, `pluginhost`, `packagebridge`, `identitybridge`), `panicrecovery` (gRPC panic recovery interceptors), and `tests/` (`e2e`, `smoke`, `integration`, `testutil`) |
 | `api/` | wire contracts and generated code: `grpc/` (legacy panel-node `v2board.proto` / `v2boardpb`), `pluginhost/v1` (kernel to package host), `packagebridge/v1` (package host back into kernel bridge operations); regenerate with each directory's `gen.sh` |
 | `pkg/` | importable SDKs for package host processes: `pluginhostsdk` (serve the host protocol) and `packagebridgesdk` (call kernel bridge operations) |
 | `packages/` | signed plugin package sources: one directory per official package (`identity-platform`, `subscription`, `plan`, `order`, `payment`, `ticket`, `knowledge`, `notification`, `proxy-node`, `forward`, `machine-telemetry`, `nftables-forward`, `gost-mesh`, `nat-egress`, `wireguard`, `protocol-runtime`) plus `shared/` (package builder, manifest schema, shared control host) |

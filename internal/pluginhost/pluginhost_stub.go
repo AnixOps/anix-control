@@ -18,6 +18,7 @@ var (
 	ErrHostUnavailable       = errors.New("plugin host unavailable")
 	ErrHostNotFound          = errors.New("plugin host not found")
 	ErrHostIncompatible      = errors.New("plugin host incompatible")
+	ErrPackageFailed         = errors.New("plugin package failed")
 	ErrGenerationUnavailable = errors.New("plugin host generation unavailable")
 	defaultManager           struct {
 		sync.RWMutex

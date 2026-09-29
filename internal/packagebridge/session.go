@@ -15,6 +15,7 @@ import (
 	"time"
 
 	packagebridgev1 "github.com/AnixOps/anix-control/v4/api/packagebridge/v1"
+	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -262,7 +263,7 @@ func NewSession(identity HostIdentity, handler *Allowlist, webSocketResolvers ..
 	}
 	session := &Session{
 		identity: identity, handler: handler, webSocketResolver: webSocketResolver, capabilities: make(map[string]capability),
-		listener: newSingleConnListener(parentConnection), server: grpc.NewServer(),
+		listener: newSingleConnListener(parentConnection), server: grpc.NewServer(panicrecovery.ServerOptions()...),
 	}
 	packagebridgev1.RegisterKernelPackageBridgeServer(session.server, session)
 	go func() { _ = session.server.Serve(session.listener) }()

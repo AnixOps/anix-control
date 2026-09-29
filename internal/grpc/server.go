@@ -9,6 +9,7 @@ import (
 
 	agentv1pb "github.com/AnixOps/anix-agent/sdk/api/grpc/agent/v1"
 	pb "github.com/AnixOps/anix-control/v4/api/grpc/v2boardpb"
+	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -91,20 +92,7 @@ func (s *Server) Start() error {
 		}),
 	}
 
-	// 添加拦截器
-	interceptors := []grpc.UnaryServerInterceptor{
-		LoggingInterceptor(),
-	}
-	streamInterceptors := []grpc.StreamServerInterceptor{
-		StreamLoggingInterceptor(),
-	}
-
-	// 认证拦截器始终启用: 每个节点自带的 x-api-key/x-node-id 必须校验通过,
-	// 不能因为没配置全局 api_token/JWT 就完全跳过认证 (那样任何人接上
-	// gRPC 端口都能冒充任意 node_id 上报数据)。api_token/JWT 仅用于给
-	// 没有节点 key 的旧版调用方或管理端做兼容回退。
-	interceptors = append(interceptors, AuthInterceptor(s.config.APIToken, s.config.JWTSecret))
-	streamInterceptors = append(streamInterceptors, StreamAuthInterceptor(s.config.APIToken, s.config.JWTSecret))
+	interceptors, streamInterceptors := s.interceptorChains()
 
 	// 链式拦截器
 	if len(interceptors) > 0 {
@@ -159,4 +147,27 @@ func (s *Server) Stop() {
 // GetAgentControlManager returns the Agent-first desired/observed connection manager.
 func (s *Server) GetAgentControlManager() *AgentControlManager {
 	return GetAgentControlManager()
+}
+
+// interceptorChains returns the node-facing server's unary and stream
+// interceptor chains, outermost first.
+func (s *Server) interceptorChains() ([]grpc.UnaryServerInterceptor, []grpc.StreamServerInterceptor) {
+	// 添加拦截器. Panic recovery is outermost so a panic in a handler or in a
+	// later interceptor becomes codes.Internal instead of killing the kernel.
+	interceptors := []grpc.UnaryServerInterceptor{
+		panicrecovery.UnaryServerInterceptor(),
+		LoggingInterceptor(),
+	}
+	streamInterceptors := []grpc.StreamServerInterceptor{
+		panicrecovery.StreamServerInterceptor(),
+		StreamLoggingInterceptor(),
+	}
+
+	// 认证拦截器始终启用: 每个节点自带的 x-api-key/x-node-id 必须校验通过,
+	// 不能因为没配置全局 api_token/JWT 就完全跳过认证 (那样任何人接上
+	// gRPC 端口都能冒充任意 node_id 上报数据)。api_token/JWT 仅用于给
+	// 没有节点 key 的旧版调用方或管理端做兼容回退。
+	interceptors = append(interceptors, AuthInterceptor(s.config.APIToken, s.config.JWTSecret))
+	streamInterceptors = append(streamInterceptors, StreamAuthInterceptor(s.config.APIToken, s.config.JWTSecret))
+	return interceptors, streamInterceptors
 }

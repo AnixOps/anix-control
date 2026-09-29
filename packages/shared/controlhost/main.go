@@ -62,7 +62,7 @@ func run() error {
 	defer func() { _ = listener.Close() }()
 	// The descriptor-pinned parent supervisor verifies and secures this socket
 	// before it can dispatch a request to the host.
-	server := grpc.NewServer()
+	server := grpc.NewServer(pluginhostsdk.RecoveryServerOptions()...)
 	pluginhostv1.RegisterControlPackageHostServer(server, host)
 	return server.Serve(listener)
 }
