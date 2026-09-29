@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/cache"
+	compatv2 "github.com/AnixOps/anix-control/v4/internal/compat/v2"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -2893,6 +2894,23 @@ func (s *MetricsHandlerTestSuite) TestGetMetrics_Success() {
 	assert.Contains(s.T(), w.Body.String(), "v2board_info")
 	assert.Contains(s.T(), w.Body.String(), "v2board_users_total")
 	assert.Contains(s.T(), w.Body.String(), "v2board_nodes_total")
+}
+
+func (s *MetricsHandlerTestSuite) TestGetMetrics_IncludesV2GatewaySeries() {
+	compatv2.DefaultGatewayMetrics().Observe("knowledge", "knowledge.article.list", http.StatusOK, "", 3*time.Millisecond)
+	handler := NewMetricsHandler()
+	s.router.GET("/metrics", handler.GetMetrics)
+
+	req, _ := http.NewRequest("GET", "/metrics", nil)
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusOK, w.Code)
+	body := w.Body.String()
+	assert.Contains(s.T(), body, "# TYPE anixops_v2_gateway_requests_total counter")
+	assert.Contains(s.T(), body, `anixops_v2_gateway_requests_total{package="knowledge",route="knowledge.article.list",code_class="2xx"}`)
+	assert.Contains(s.T(), body, "# TYPE anixops_v2_gateway_errors_total counter")
+	assert.Contains(s.T(), body, `anixops_v2_gateway_request_duration_seconds_bucket{package="knowledge",le="0.005"}`)
 }
 
 func (s *MetricsHandlerTestSuite) TestRecordRequest_Success() {

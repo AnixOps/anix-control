@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -18,6 +19,7 @@ const (
 	hostSocketEnvironment             = "ANIX_CONTROL_HOST_SOCKET"
 	hostRuntimeDirectoryFDEnvironment = "ANIX_CONTROL_HOST_DIR_FD"
 	hostPackageBridgeFDEnvironment    = "ANIX_CONTROL_PACKAGE_BRIDGE_FD"
+	hostMaxResponseBytesEnvironment   = "ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES"
 	childPackageBridgeFD              = 4
 )
 
@@ -36,6 +38,10 @@ type hostStartOptions struct {
 	bridgeFactory  packagebridge.SessionFactory
 	stopGrace      time.Duration
 	logf           func(string, ...any)
+	// maxResponseBytes is the configured response body limit, passed to the
+	// host as ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES and used to size the
+	// kernel client's receive window. Restarts reuse it with the options.
+	maxResponseBytes int64
 }
 
 func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref ArtifactRef, generation uint64, options hostStartOptions) (*hostProcess, error) {
@@ -85,7 +91,8 @@ func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref Artifac
 	// os/exec changes directory before it remaps ExtraFiles to FD 3, so this
 	// parent-side /proc descriptor path preserves the pinned directory for cwd.
 	command.Dir = directory.path(".")
-	command.Env = hostEnvironment(childRuntimePath("host.sock"), childRuntimeDirectoryPath, bridgeChild != nil)
+	command.Env = append(hostEnvironment(childRuntimePath("host.sock"), childRuntimeDirectoryPath, bridgeChild != nil),
+		hostMaxResponseBytesEnvironment+"="+strconv.FormatInt(normalizeMaxResponseBytes(options.maxResponseBytes), 10))
 	command.ExtraFiles = []*os.File{directory.directory}
 	if bridgeChild != nil {
 		command.ExtraFiles = append(command.ExtraFiles, bridgeChild)
@@ -115,7 +122,7 @@ func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref Artifac
 	host := &hostProcess{
 		packageID: ref.PackageID, version: ref.Version, generation: generation, ref: ref,
 		runtimeDir: directory, socketPath: socketPath, command: command, waitDone: make(chan struct{}), bridge: bridge,
-		stopGrace: options.stopGrace,
+		stopGrace: options.stopGrace, maxResponseBytes: normalizeMaxResponseBytes(options.maxResponseBytes),
 	}
 	go func() {
 		host.waitErr = command.Wait()
@@ -167,7 +174,7 @@ func waitForHost(ctx context.Context, host *hostProcess) (*hostClient, HostHealt
 	for {
 		if err := ensurePrivateSocket(host.socketPath); err == nil {
 			dialCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-			client, dialErr := dialHostClient(dialCtx, host.socketPath)
+			client, dialErr := dialHostClientWithLimit(dialCtx, host.socketPath, host.maxResponseBytes)
 			cancel()
 			if dialErr == nil {
 				healthCtx, cancelHealth := context.WithTimeout(ctx, 100*time.Millisecond)

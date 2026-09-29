@@ -169,6 +169,54 @@ Legacy compatibility readers still understand:
 - `forward.runtime.iptables_ansible.config`
 - `forward.ansible.*`
 
+## Control Package Payload Limits
+
+`/api/v2` compatibility routes are served by signed control packages. Two
+`plugins` keys bound the bodies that cross the package boundary:
+
+```yaml
+plugins:
+  control_host_max_request_bytes: 1048576   # 0 or unset = 1 MiB
+  control_host_max_response_bytes: 1048576  # 0 or unset = 1 MiB
+```
+
+| Key | Enforced by | Error when exceeded |
+|------|------|------|
+| `control_host_max_request_bytes` | the v2 gateway, before dispatch | `413` `plugin_request_too_large` |
+| `control_host_max_response_bytes` | the package bridge (legacy handler body), the package-host SDK (package response body), the kernel host client | `502` `plugin_response_too_large` |
+
+- Both values are integers in bytes, from `0` (default 1 MiB) to `67108864`
+  (64 MiB). Startup fails on a negative or larger value.
+- The response limit applies to the body only. The SDK additionally allows a
+  fixed 64 KiB for status, headers, and identifiers, so a body the bridge
+  accepts is never rejected by the host for its envelope.
+- The kernel passes the response limit to each package host as
+  `ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES`; hosts built on `pkg/pluginhostsdk`
+  read it with `MaxResponseBytesFromEnvironment`.
+- gRPC receive sizes grow with the limits, so values above 4 MiB work end to
+  end. Package hosts should build their gRPC server with
+  `pluginhostsdk.HostServerOptions()`.
+- WebSocket frames are not affected by these keys.
+
+The gateway exports per-package traffic on `/metrics`:
+`anixops_v2_gateway_requests_total{package,route,code_class}`,
+`anixops_v2_gateway_errors_total{package,route,code}` (gateway error codes such
+as `package_unavailable`, `package_route_not_found`, `plugin_host_unavailable`,
+`plugin_host_incompatible`, `plugin_request_too_large`,
+`plugin_response_too_large`), and the
+`anixops_v2_gateway_request_duration_seconds{package}` histogram. `route` is
+the package route id from the signed declaration, never the request path;
+requests that match no declared route are counted under
+`package="unresolved",route="unresolved"`.
+
+While package execution is enabled, `/metrics` also reports each supervised
+package host: `anixops_plugin_host_starts_total`,
+`anixops_plugin_host_unexpected_exits_total`,
+`anixops_plugin_host_restarts_total` and `anixops_plugin_host_failures_total`
+(all `{package}`), and `anixops_plugin_host_state{package,state}`, which is `1`
+for the current state (`running`, `restarting`, `failed`, `exited`,
+`stopped`) and `0` for the others.
+
 ## Related Docs
 
 - [`forward-runtime-migration.md`](forward-runtime-migration.md)

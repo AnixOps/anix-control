@@ -109,6 +109,10 @@ type ManagerConfig struct {
 	RuntimeDir     string
 	StartupTimeout time.Duration
 	BridgeFactory  packagebridge.SessionFactory
+	// MaxResponseBytes is plugins.control_host_max_response_bytes. It is
+	// passed to hosts as ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES and bounds the
+	// kernel client's receive size. Zero selects the 1 MiB default.
+	MaxResponseBytes int64
 }
 
 type Supervisor struct{}

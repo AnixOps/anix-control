@@ -40,7 +40,7 @@ func TestHTTPAdapterRecoversLegacyHandlerPanicAndDiscardsPartialOutput(t *testin
 	require.EqualValues(t, http.StatusInternalServerError, response.StatusCode)
 	require.Empty(t, response.Body)
 	require.Empty(t, response.Headers)
-	require.NoError(t, validateResponse(response))
+	require.NoError(t, validateResponse(response, DefaultMaxResponseBodyBytes))
 }
 
 func TestHTTPAdapterRecoversNilPanic(t *testing.T) {

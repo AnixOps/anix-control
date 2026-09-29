@@ -30,6 +30,9 @@ type WebSocketGateway struct {
 	Timeout        time.Duration
 	SessionTimeout time.Duration
 	Upgrade        WebSocketUpgrade
+	// Metrics receives one observation per upgrade attempt, recorded when
+	// the relay is established or refused; nil selects DefaultGatewayMetrics.
+	Metrics *GatewayMetrics
 }
 
 func (g WebSocketGateway) Serve(c *gin.Context) {
@@ -39,31 +42,45 @@ func (g WebSocketGateway) Serve(c *gin.Context) {
 	g.serve(c.Writer, c.Request, requestMetadata(c), requestID(c), actorID(c), actorIsAdmin(c))
 }
 
+func (g WebSocketGateway) metrics() *GatewayMetrics {
+	if g.Metrics == nil {
+		return DefaultGatewayMetrics()
+	}
+	return g.Metrics
+}
+
 func (g WebSocketGateway) serve(writer http.ResponseWriter, request *http.Request, metadata pluginhost.RequestMetadata, id string, actor uint, admin bool) {
+	started := time.Now()
+	var route Route
+	fail := func(status int, code, message string) {
+		writeWebSocketError(writer, status, code, message)
+		g.metrics().Observe(route.PackageID, route.PackageRoute, status, code, time.Since(started))
+	}
 	if g.Registry == nil {
-		writeWebSocketError(writer, http.StatusServiceUnavailable, "package_unavailable", "package route is unavailable")
+		fail(http.StatusServiceUnavailable, codePackageUnavailable, "package route is unavailable")
 		return
 	}
-	route, err := g.Registry.ResolveContext(request.Context(), request.Method, request.URL.Path)
+	resolved, err := g.Registry.ResolveContext(request.Context(), request.Method, request.URL.Path)
 	if err != nil {
 		if errors.Is(err, ErrPackageUnavailable) {
-			writeWebSocketError(writer, http.StatusServiceUnavailable, "package_unavailable", "package route is unavailable")
+			fail(http.StatusServiceUnavailable, codePackageUnavailable, "package route is unavailable")
 		} else {
-			writeWebSocketError(writer, http.StatusNotFound, "package_route_not_found", "package route is not declared")
+			fail(http.StatusNotFound, codeRouteNotFound, "package route is not declared")
 		}
 		return
 	}
+	route = resolved
 	if route.Transport != TransportWebSocket {
-		writeWebSocketError(writer, http.StatusBadRequest, "package_route_requires_http", "package route requires HTTP")
+		fail(http.StatusBadRequest, codeRouteRequiresHTTP, "package route requires HTTP")
 		return
 	}
 	if g.Dispatcher == nil {
-		writeWebSocketError(writer, http.StatusBadGateway, "plugin_host_unavailable", "plugin host is unavailable")
+		fail(http.StatusBadGateway, codePluginHostUnavailable, "plugin host is unavailable")
 		return
 	}
 	principal, err := requestPrincipalFor(actor, admin, route.PackageID)
 	if err != nil {
-		writeWebSocketError(writer, http.StatusInternalServerError, "plugin_request_invalid", "plugin request principal could not be encoded")
+		fail(http.StatusInternalServerError, codePluginRequestInvalid, "plugin request principal could not be encoded")
 		return
 	}
 	setupDeadline := requestDeadline(request.Context(), g.setupTimeout())
@@ -75,7 +92,7 @@ func (g WebSocketGateway) serve(writer http.ResponseWriter, request *http.Reques
 	})
 	cancelSetup()
 	if err != nil {
-		writeWebSocketError(writer, http.StatusBadGateway, "plugin_host_unavailable", "plugin host is unavailable")
+		fail(http.StatusBadGateway, codePluginHostUnavailable, "plugin host is unavailable")
 		return
 	}
 	upgrader := g.Upgrade
@@ -84,9 +101,14 @@ func (g WebSocketGateway) serve(writer http.ResponseWriter, request *http.Reques
 	}
 	connection, err := upgrader(writer, request, nil)
 	if err != nil {
+		// The upgrader has already answered the client.
 		_ = relay.Close(pluginhost.WebSocketClose{Code: websocket.CloseInternalServerErr, Reason: "WebSocket upgrade failed"})
+		g.metrics().Observe(route.PackageID, route.PackageRoute, http.StatusBadRequest, "", time.Since(started))
 		return
 	}
+	// Latency covers resolution, relay setup, and the upgrade handshake, not
+	// the lifetime of the socket.
+	g.metrics().Observe(route.PackageID, route.PackageRoute, http.StatusSwitchingProtocols, "", time.Since(started))
 	defer func() { _ = connection.Close() }()
 	g.relay(connection, relay)
 }

@@ -61,6 +61,18 @@
 
 ### Changed
 
+- `/api/v2` route resolution no longer re-reads and re-hashes every installed
+  package artifact on each request. Successfully verified route declarations
+  are cached per signed release (keyed by release id, artifact SHA-256, stored
+  trust-root fingerprint and configured trust-root fingerprint; LRU-bounded to
+  256 releases; failures are never cached), shared by the HTTP and WebSocket
+  gateways. Installations, the official plugin row and trust-root activity are
+  still read on every request (four small queries in total), so disabling a
+  package, bumping its generation, or retiring its trust root takes effect on
+  the next request. With 16 installed ~10 MiB packages on SQLite a resolution
+  drops from about 197 ms to about 0.22 ms. `internal/compat/v2` joins the
+  benchmark smoke CI job.
+
 - The required "Go Quality Gates" CI job now runs the plugin-only `/api/v2`
   route gate (`check_plugin_only_routes.py`, which includes the route catalog
   check), the `config/scripts` Python unit tests, and generated-code drift
@@ -138,6 +150,22 @@
 
 ### Added
 
+- Added `plugins.control_host_max_request_bytes` and
+  `plugins.control_host_max_response_bytes` (default 1 MiB, maximum 64 MiB)
+  to configure the package request and response body limits; see
+  `docs/reference/configuration.md`. Hosts receive the response limit as
+  `ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES` (`pluginhostsdk.MaxResponseBytesFromEnvironment`),
+  and gRPC message sizes on the kernel, bridge and host follow the limits.
+  `pluginhostsdk.HostServerOptions()` is the new recommended host server
+  option set.
+- Added v2 gateway metrics to `/metrics`:
+  `anixops_v2_gateway_requests_total{package,route,code_class}`,
+  `anixops_v2_gateway_errors_total{package,route,code}` and the
+  `anixops_v2_gateway_request_duration_seconds{package}` histogram, labelled by
+  the declared package route id (never the raw path), plus the package host
+  supervision counters from `Supervisor.Stats()`:
+  `anixops_plugin_host_{starts,unexpected_exits,restarts,failures}_total{package}`
+  and the `anixops_plugin_host_state{package,state}` gauge.
 - Added `docs/architecture/package-extraction.md`, the design of record for
   moving business domains into packages: the current routing-only reality,
   the definition of done, the planned storage-lease / per-route-mode / typed
@@ -203,14 +231,19 @@
   matches remain an ambiguity error. Found by the local upgrade rehearsal; a
   new test resolves every catalogued route through each package's real
   `compat/v2-routes.json` and checks the resolved route ID.
-
 - Fixed a process crash (`fatal error: concurrent map writes`) in the forward
   background error logger. The latency prober logs probe failures from
   parallel goroutines, so when several probe targets were unreachable at the
   same time the unsynchronized rate-limit map aborted the whole server; this
   cannot be caught by `recover`. Found by the local upgrade rehearsal, where the
   production release (`v4.0.0-alpha.7`) crashed within a second of startup.
-
+- A package response over the size limit is now reported as `502
+  plugin_response_too_large` instead of `plugin_host_unavailable`. The package
+  bridge, `pkg/pluginhostsdk` and the kernel now apply the same body-size rule
+  (the SDK used to count the whole encoded response against 1 MiB, so a legacy
+  body just under 1 MiB passed the bridge and then failed in the host); the
+  bridge and SDK return `codes.ResourceExhausted`, and the kernel maps it to the
+  new `pluginhost.ErrResponseTooLarge`.
 - A panic in a legacy `/api/v2` handler reached through the package bridge, in
   a package bridge or node-facing gRPC handler, or in a package host no longer
   terminates the process. The bridge HTTP adapter now answers such a panic

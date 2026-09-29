@@ -37,7 +37,8 @@ import (
 )
 
 type v2TestHost struct {
-	lastRouteID string
+	lastRouteID    string
+	lastGeneration uint64
 }
 
 type v2PackageRouteCatalogRow struct {
@@ -67,6 +68,7 @@ func (h *v2TestHost) Start(context.Context, pluginhost.ArtifactRef, uint64) erro
 
 func (h *v2TestHost) Dispatch(_ context.Context, input pluginhost.DispatchInput) (pluginhost.DispatchOutput, error) {
 	h.lastRouteID = input.RouteID
+	h.lastGeneration = input.Generation
 	if strings.HasPrefix(input.RouteID, "identity.") {
 		return pluginhost.DispatchOutput{StatusCode: http.StatusOK, Body: []byte(`{"code":0,"msg":"操作成功","ts":1,"data":{"token":"identity-host"}}`)}, nil
 	}
@@ -672,6 +674,33 @@ func TestV2GatewayFailsClosedWhenPackageIsDisabled(t *testing.T) {
 	response := requestV2(t, router, cfg, http.MethodGet, "/api/v2/user/knowledge")
 	require.Equal(t, http.StatusServiceUnavailable, response.Code)
 	require.NotContains(t, response.Body.String(), "legacy")
+}
+
+func TestV2GatewayFailsClosedWhenCachedPackageTrustRootIsRetired(t *testing.T) {
+	router, cfg, _ := setupV2PackageRouter(t)
+	defer teardownTestRouter(t)
+	require.Equal(t, http.StatusOK, requestV2(t, router, cfg, http.MethodGet, "/api/v2/user/knowledge").Code)
+
+	rotatedKey, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	_, err = service.EnsurePluginTrustRoot(database.GetDB(), rotatedKey)
+	require.NoError(t, err)
+
+	response := requestV2(t, router, cfg, http.MethodGet, "/api/v2/user/knowledge")
+	require.Equal(t, http.StatusServiceUnavailable, response.Code)
+	require.Contains(t, response.Body.String(), `"code":"package_unavailable"`)
+}
+
+func TestV2GatewayReflectsGenerationBumpForCachedPackage(t *testing.T) {
+	router, cfg, host := setupV2PackageRouter(t)
+	defer teardownTestRouter(t)
+	require.Equal(t, http.StatusOK, requestV2(t, router, cfg, http.MethodGet, "/api/v2/user/knowledge").Code)
+	require.Equal(t, uint64(7), host.lastGeneration)
+
+	require.NoError(t, database.GetDB().Model(&model.PluginInstallation{}).
+		Where("plugin_id = ? AND target = ?", "knowledge", "control").Update("lifecycle_generation", 8).Error)
+	require.Equal(t, http.StatusOK, requestV2(t, router, cfg, http.MethodGet, "/api/v2/user/knowledge").Code)
+	require.Equal(t, uint64(8), host.lastGeneration)
 }
 
 func TestWebSocketGatewayDoesNotInvokeLegacyHandler(t *testing.T) {

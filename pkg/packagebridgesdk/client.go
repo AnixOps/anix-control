@@ -22,9 +22,19 @@ import (
 
 const BridgeFDEnvironment = "ANIX_CONTROL_PACKAGE_BRIDGE_FD"
 
+// maxBridgeMessageBytes is the receive limit for bridge responses: the
+// largest configurable response body (64 MiB) plus a fixed envelope. The
+// kernel end of the bridge enforces the configured body limit itself.
+const maxBridgeMessageBytes = 64<<20 + 64<<10
+
 var (
 	ErrBridgeUnavailable  = errors.New("package bridge unavailable")
 	ErrCapabilityRejected = errors.New("package bridge capability rejected")
+	// ErrResponseTooLarge reports that the kernel rejected a bridge response
+	// body above its configured limit. The returned error also carries
+	// codes.ResourceExhausted, so a host that returns it unchanged lets the
+	// kernel report plugin_response_too_large.
+	ErrResponseTooLarge = errors.New("package bridge response exceeds its limit")
 )
 
 type Client struct {
@@ -104,6 +114,7 @@ func DialFile(_ context.Context, file *os.File) (*Client, error) {
 		"passthrough:///anix-package-bridge",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(dialer),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(maxBridgeMessageBytes)),
 	)
 	if err != nil {
 		_ = connection.Close()
@@ -220,6 +231,8 @@ func bridgeError(err error) error {
 		return nil
 	}
 	switch status.Code(err) {
+	case codes.ResourceExhausted:
+		return fmt.Errorf("%w: %w", ErrResponseTooLarge, status.Error(codes.ResourceExhausted, "package bridge response exceeds its limit"))
 	case codes.PermissionDenied:
 		return fmt.Errorf("%w: %s", ErrCapabilityRejected, status.Code(err))
 	case codes.DeadlineExceeded, codes.Canceled, codes.Unavailable:

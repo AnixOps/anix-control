@@ -83,7 +83,7 @@ func NewHTTPAdapter(handler gin.HandlerFunc) OperationHandler {
 		if response.StatusCode == 0 {
 			response.StatusCode = http.StatusOK
 		}
-		if err := validateResponse(response); err != nil {
+		if err := validateResponse(response, responseLimitFromContext(ctx)); err != nil {
 			return Response{}, err
 		}
 		return response, nil

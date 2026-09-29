@@ -133,6 +133,10 @@ type ManagerConfig struct {
 	RuntimeDir     string
 	StartupTimeout time.Duration
 	BridgeFactory  packagebridge.SessionFactory
+	// MaxResponseBytes is plugins.control_host_max_response_bytes. It is
+	// passed to hosts as ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES and bounds the
+	// kernel client's receive size. Zero selects the 1 MiB default.
+	MaxResponseBytes int64
 }
 
 type Supervisor struct {
@@ -151,6 +155,7 @@ type Supervisor struct {
 	runtimeDir     string
 	startupTimeout time.Duration
 	bridgeFactory  packagebridge.SessionFactory
+	maxResponse    int64
 	closed         bool
 
 	// Watchdog and stop timings. NewManager sets the production defaults;
@@ -188,6 +193,7 @@ type hostProcess struct {
 	relayHealthCancel context.CancelFunc
 	bridge            *packagebridge.Session
 	stopGrace         time.Duration
+	maxResponseBytes  int64
 	// retiring is set once a lifecycle operation (Drain, Stop, replacement,
 	// Shutdown) owns this process, so its exit is expected and never restarted.
 	retiring atomic.Bool
@@ -214,6 +220,7 @@ func NewManager(config ManagerConfig) (*Supervisor, error) {
 		stopGrace: defaultHostStopGrace, restartBaseDelay: defaultRestartBaseDelay, restartMaxDelay: defaultRestartMaxDelay,
 		restartWindow: defaultRestartWindow, maxRestarts: defaultMaxRestarts, logf: log.Printf,
 		restartCtx: restartCtx, cancelRestart: cancelRestart, stats: make(map[string]*HostStats),
+		maxResponse: normalizeMaxResponseBytes(config.MaxResponseBytes),
 	}, nil
 }
 

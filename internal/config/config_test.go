@@ -138,6 +138,8 @@ plugins:
   control_host_startup_timeout: "4s"
   control_host_request_timeout: "20s"
   control_host_websocket_session_timeout: "6h"
+  control_host_max_request_bytes: 2097152
+  control_host_max_response_bytes: 8388608
   dispatch_enabled: true
   dispatch_poll_interval: 7s
   topology_execution_enabled: true
@@ -156,10 +158,40 @@ plugins:
 	assert.Equal(t, "4s", loaded.Plugins.ControlHostStartupTimeout)
 	assert.Equal(t, "20s", loaded.Plugins.ControlHostRequestTimeout)
 	assert.Equal(t, "6h", loaded.Plugins.ControlHostWebSocketSessionTimeout)
+	assert.Equal(t, int64(2<<20), loaded.Plugins.ControlHostRequestBodyLimit())
+	assert.Equal(t, int64(8<<20), loaded.Plugins.ControlHostResponseBodyLimit())
 	assert.Equal(t, "7s", loaded.Plugins.DispatchPollInterval)
 	assert.Equal(t, "11s", loaded.Plugins.TopologyPollInterval)
 	assert.Equal(t, "ZmFrZS1wdWJsaWMta2V5", loaded.Plugins.OfficialPublicKey)
 	assert.Equal(t, "/var/lib/anixops/bootstrap", loaded.Plugins.IdentityBootstrapPackageDir)
+}
+
+func TestPluginPayloadLimitsDefaultAndValidate(t *testing.T) {
+	var plugins PluginConfig
+	require.NoError(t, plugins.ValidatePayloadLimits())
+	assert.Equal(t, DefaultControlHostPayloadBytes, plugins.ControlHostRequestBodyLimit())
+	assert.Equal(t, DefaultControlHostPayloadBytes, plugins.ControlHostResponseBodyLimit())
+
+	plugins.ControlHostMaxResponseBytes = MaxControlHostPayloadBytes
+	require.NoError(t, plugins.ValidatePayloadLimits())
+	assert.Equal(t, MaxControlHostPayloadBytes, plugins.ControlHostResponseBodyLimit())
+
+	for _, invalid := range []int64{-1, MaxControlHostPayloadBytes + 1} {
+		plugins = PluginConfig{ControlHostMaxRequestBytes: invalid}
+		require.ErrorContains(t, plugins.ValidatePayloadLimits(), "plugins.control_host_max_request_bytes")
+		assert.Equal(t, DefaultControlHostPayloadBytes, plugins.ControlHostRequestBodyLimit())
+		plugins = PluginConfig{ControlHostMaxResponseBytes: invalid}
+		require.ErrorContains(t, plugins.ValidatePayloadLimits(), "plugins.control_host_max_response_bytes")
+	}
+}
+
+func TestLoadRejectsOversizedPluginPayloadLimit(t *testing.T) {
+	resetConfig()
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("plugins:\n  control_host_max_response_bytes: 134217728\n"), 0o600))
+	_, err := Load(configPath)
+	require.ErrorContains(t, err, "plugins.control_host_max_response_bytes")
+	resetConfig()
 }
 
 func TestOfficialPluginAlphaProfiles(t *testing.T) {

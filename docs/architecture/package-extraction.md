@@ -319,8 +319,6 @@ Semantics to keep when wiring:
 
 | Gap | Where |
 |-----|-------|
-| Every v2 request loads all installations, re-verifies signatures, re-hashes artifacts, and re-extracts route files; no cache | `internal/compat/v2/registry.go` (`verifiedRouteSource.ResolveV2Route`) |
-| 1 MiB response/request caps (large UniProxy user lists may exceed) | `internal/packagebridge/session.go`, `internal/compat/v2/gateway.go`, `pkg/pluginhostsdk/server.go` |
 | Package migrations never run in production (runner unwired) | `internal/service/plugin_rollout.go`, `internal/plugincontrol/registry.go` (`startResolvedHost`) |
 | Route gates run only on release tags, not PRs | `check_plugin_only_routes.py` via `check_release_stage.py` in `tag-gate` (`.github/workflows/ci.yml`) |
 | Package execution off in the production template | `plugins.control_execution_enabled: false` in `config/config.prod.yaml` |
