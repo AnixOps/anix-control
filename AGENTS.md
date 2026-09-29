@@ -53,8 +53,7 @@
 ```
 v2board_AnixOps/
 ├── cmd/
-│   ├── server/main.go          # 主程序入口
-│   └── subtest/main.go         # 订阅测试工具
+│   └── server/main.go          # 主程序入口
 ├── config/
 │   ├── config.yaml             # 当前配置
 │   ├── config.yaml.example     # 配置模板
@@ -1124,7 +1123,7 @@ When planning future clone work, prioritize the remaining gaps in this order:
   - `docs/reference/startup-config.md`
   - `docs/reference/configuration.md`
   - `docs/reference/runtime.md`
-- Sample YAML inputs and helper-generated examples belong under `config/examples/`, never the repository root.
+- Sample YAML inputs belong under `config/`, never the repository root.
 - Root-local scratch artifacts must stay ignored or be deleted quickly:
   - `.codex_*.log`
   - `tmp_*.log`

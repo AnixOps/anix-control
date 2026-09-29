@@ -153,13 +153,3 @@ func Reset() {
 func AutoMigrate(models ...any) error {
 	return db.AutoMigrate(models...)
 }
-
-// IsSQLite 妫€鏌ユ槸鍚︿娇鐢?SQLite
-func IsSQLite() bool {
-	return db.Name() == "sqlite"
-}
-
-// IsPostgres 妫€鏌ユ槸鍚︿娇鐢?PostgreSQL
-func IsPostgres() bool {
-	return db.Name() == "postgres"
-}

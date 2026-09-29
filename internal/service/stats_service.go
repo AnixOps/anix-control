@@ -147,28 +147,6 @@ func (s *StatsService) GetUserSubscription(userID uint, forceRefresh bool) (*Use
 	return sub, nil
 }
 
-// RefreshDashboardCache 强制刷新仪表盘缓存 (后台任务用)
-func (s *StatsService) RefreshDashboardCache() error {
-	stats, err := s.fetchDashboardFromDB()
-	if err != nil {
-		return err
-	}
-	return s.saveDashboardToCache(stats)
-}
-
-// InvalidateUserCache 使用户缓存失效 (用户数据变更时调用)
-func (s *StatsService) InvalidateUserCache(userID uint) {
-	if err := s.InvalidateUserCacheWithError(userID); err != nil {
-		slog.Warn("invalidate user subscription cache failed", "user_id", userID, "error", err)
-	}
-}
-
-// InvalidateUserCacheWithError 使用户缓存失效并返回底层缓存错误
-func (s *StatsService) InvalidateUserCacheWithError(userID uint) error {
-	cacheKey := fmt.Sprintf("%s%d", CacheKeyUserSubscription, userID)
-	return cache.Delete(cacheKey)
-}
-
 // ========== 私有方法 ==========
 
 // 从缓存获取仪表盘数据

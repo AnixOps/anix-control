@@ -9,20 +9,15 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strings"
-	"sync"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
-	"gorm.io/gorm"
 )
 
 var (
-	ErrExecutorNotFound               = errors.New("control plugin executor is not installed")
-	ErrConfigurationValidatorNotFound = errors.New("control plugin configuration validator is not installed for this version")
-	ErrRouteNotFound                  = errors.New("control plugin route is not implemented by the executor")
-	ErrMethodNotAllowed               = errors.New("control plugin route does not allow this method")
-	ErrInvalidPluginInput             = errors.New("control plugin request is invalid")
+	ErrRouteNotFound      = errors.New("control plugin route is not implemented by the executor")
+	ErrMethodNotAllowed   = errors.New("control plugin route does not allow this method")
+	ErrInvalidPluginInput = errors.New("control plugin request is invalid")
 )
 
 // RouteRequest deliberately contains only request data that a package API is
@@ -55,31 +50,10 @@ type LifecycleRequest struct {
 	Config      json.RawMessage
 }
 
-// LifecycleDispatcher is the durable-operation execution boundary. Registry
-// remains an implementation for fixtures during the transition, while the
+// LifecycleDispatcher is the durable-operation execution boundary. The
 // production server injects HostLifecycleDispatcher.
 type LifecycleDispatcher interface {
 	ExecuteLifecycle(context.Context, string, string, LifecycleRequest) (json.RawMessage, error)
-}
-
-// Executor is the smallest Control package runtime contract. A package may
-// expose no backend route, but lifecycle operations are always version-bound.
-type Executor interface {
-	PluginID() string
-	Version() string
-	HandleRoute(context.Context, RouteRequest) (RouteResponse, error)
-	ExecuteLifecycle(context.Context, LifecycleRequest) (json.RawMessage, error)
-}
-
-// ConfigurationValidator is optional. Registries only invoke it for the exact
-// executor version selected by the signed installation release.
-type ConfigurationValidator interface {
-	ValidateConfiguration(context.Context, json.RawMessage) error
-}
-
-type Registry struct {
-	mu        sync.RWMutex
-	executors map[string]Executor
 }
 
 // ArtifactRefResolver supplies the immutable materialized host files for an
@@ -88,7 +62,7 @@ type Registry struct {
 type ArtifactRefResolver func(context.Context, string, string) (pluginhost.ArtifactRef, error)
 
 // HostLifecycleDispatcher maps the existing durable lifecycle operations onto
-// the narrow host manager API. It never looks up or falls back to Registry.
+// the narrow host manager API. It never falls back to an in-process executor.
 type HostLifecycleDispatcher struct {
 	hosts     pluginhost.Manager
 	artifacts ArtifactRefResolver
@@ -98,7 +72,6 @@ func NewHostLifecycleDispatcher(hosts pluginhost.Manager, artifacts ArtifactRefR
 	return &HostLifecycleDispatcher{hosts: hosts, artifacts: artifacts}
 }
 
-var _ LifecycleDispatcher = (*Registry)(nil)
 var _ LifecycleDispatcher = (*HostLifecycleDispatcher)(nil)
 
 func (d *HostLifecycleDispatcher) ExecuteLifecycle(ctx context.Context, pluginID, version string, request LifecycleRequest) (json.RawMessage, error) {
@@ -159,129 +132,3 @@ func (d *HostLifecycleDispatcher) startResolvedHost(ctx context.Context, pluginI
 	}
 	return json.RawMessage(`{}`), nil
 }
-
-var (
-	defaultRegistryMu sync.Mutex
-	defaultRegistryDB *gorm.DB
-	defaultRegistry   *Registry
-)
-
-func NewRegistry(executors ...Executor) (*Registry, error) {
-	r := &Registry{executors: make(map[string]Executor, len(executors))}
-	for _, executor := range executors {
-		if err := r.Register(executor); err != nil {
-			return nil, err
-		}
-	}
-	return r, nil
-}
-
-// DefaultRegistry returns the process-wide first-party executor set. The HTTP
-// gateway and lifecycle worker must share executor instances because future
-// Control packages may own an isolated subprocess or other runtime state.
-func DefaultRegistry(db *gorm.DB) (*Registry, error) {
-	if db == nil {
-		return nil, errors.New("control plugin registry requires a database")
-	}
-	defaultRegistryMu.Lock()
-	defer defaultRegistryMu.Unlock()
-	if defaultRegistry != nil && defaultRegistryDB == db {
-		return defaultRegistry, nil
-	}
-	registry, err := NewRegistry(
-		NewMachineTelemetryExecutor(db),
-		NewMachineTelemetryExecutorVersion(db, MachineTelemetryLegacyVersion),
-		NewNftablesForwardExecutor(db),
-		NewNftablesForwardExecutorVersion(db, NftablesForwardLegacyVersion),
-		NewGostMeshExecutor(db),
-		NewNatEgressExecutor(db),
-	)
-	if err != nil {
-		return nil, err
-	}
-	defaultRegistryDB, defaultRegistry = db, registry
-	return defaultRegistry, nil
-}
-
-func (r *Registry) Register(executor Executor) error {
-	if r == nil {
-		return errors.New("control plugin registry is nil")
-	}
-	if executor == nil || strings.TrimSpace(executor.PluginID()) == "" || strings.TrimSpace(executor.Version()) == "" {
-		return errors.New("control plugin executor id and version are required")
-	}
-	key := executorKey(executor.PluginID(), executor.Version())
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, exists := r.executors[key]; exists {
-		return errors.New("control plugin executor is already registered")
-	}
-	r.executors[key] = executor
-	return nil
-}
-
-func (r *Registry) Lookup(pluginID, version string) (Executor, bool) {
-	if r == nil {
-		return nil, false
-	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	executor, ok := r.executors[executorKey(pluginID, version)]
-	return executor, ok
-}
-
-func (r *Registry) ExecuteRoute(ctx context.Context, pluginID, version string, request RouteRequest) (RouteResponse, error) {
-	executor, ok := r.Lookup(pluginID, version)
-	if !ok {
-		return RouteResponse{}, ErrExecutorNotFound
-	}
-	return executor.HandleRoute(ctx, request)
-}
-
-func (r *Registry) ExecuteLifecycle(ctx context.Context, pluginID, version string, request LifecycleRequest) (json.RawMessage, error) {
-	executor, ok := r.Lookup(pluginID, version)
-	if !ok {
-		return nil, ErrExecutorNotFound
-	}
-	return executor.ExecuteLifecycle(ctx, request)
-}
-
-// ValidateConfiguration applies package-specific semantics after the kernel
-// has verified the signed JSON Schema. Plugins without a registered validator
-// remain schema-only. Once a plugin opts in, unknown versions fail closed so a
-// validator for one release can never be reused for another release.
-func (r *Registry) ValidateConfiguration(ctx context.Context, pluginID, version string, config json.RawMessage) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	executor, ok := r.Lookup(pluginID, version)
-	if ok {
-		validator, validates := executor.(ConfigurationValidator)
-		if !validates {
-			return nil
-		}
-		return validator.ValidateConfiguration(ctx, config)
-	}
-	if r.hasConfigurationValidator(pluginID) {
-		return fmt.Errorf("%w: %s@%s", ErrConfigurationValidatorNotFound, pluginID, version)
-	}
-	return nil
-}
-
-func (r *Registry) hasConfigurationValidator(pluginID string) bool {
-	if r == nil {
-		return false
-	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	for _, executor := range r.executors {
-		if executor.PluginID() == pluginID {
-			if _, ok := executor.(ConfigurationValidator); ok {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func executorKey(pluginID, version string) string { return pluginID + "@" + version }

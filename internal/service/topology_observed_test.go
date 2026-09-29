@@ -35,7 +35,7 @@ func newObservedTopologyFixture(t *testing.T) (*model.TopologyDeployment, uint, 
 func TestApplyTopologyObservedStateIsMonotonicAndAggregatesDeployment(t *testing.T) {
 	deployment, nodeID, db := newObservedTopologyFixture(t)
 	firstAt := time.Unix(1_800_000_000, 0).UTC()
-	state, changed, err := ApplyTopologyObservedState(db, TopologyObservedStateUpdate{
+	state, changed, err := applyTopologyObservedStateForTest(db, TopologyObservedStateUpdate{
 		DeploymentID: deployment.ID, NodeID: nodeID, DesiredRevision: 1, ObservedRevision: 0,
 		State: "applying", HealthJSON: `{"healthy":false}`, ObservedAt: firstAt,
 	})
@@ -44,7 +44,7 @@ func TestApplyTopologyObservedStateIsMonotonicAndAggregatesDeployment(t *testing
 	require.Equal(t, "applying", state.State)
 
 	completedAt := firstAt.Add(time.Second)
-	state, changed, err = ApplyTopologyObservedState(db, TopologyObservedStateUpdate{
+	state, changed, err = applyTopologyObservedStateForTest(db, TopologyObservedStateUpdate{
 		DeploymentID: deployment.ID, NodeID: nodeID, DesiredRevision: 1, ObservedRevision: 1,
 		State: "succeeded", HealthJSON: `{"healthy":true}`, ObservedAt: completedAt,
 	})
@@ -56,7 +56,7 @@ func TestApplyTopologyObservedStateIsMonotonicAndAggregatesDeployment(t *testing
 	require.Equal(t, "succeeded", storedDeployment.State)
 	require.NotNil(t, storedDeployment.CompletedAt)
 
-	stale, changed, err := ApplyTopologyObservedState(db, TopologyObservedStateUpdate{
+	stale, changed, err := applyTopologyObservedStateForTest(db, TopologyObservedStateUpdate{
 		DeploymentID: deployment.ID, NodeID: nodeID, DesiredRevision: 1, ObservedRevision: 0,
 		State: "applying", ObservedAt: completedAt.Add(time.Second),
 	})
@@ -68,13 +68,13 @@ func TestApplyTopologyObservedStateIsMonotonicAndAggregatesDeployment(t *testing
 
 func TestApplyTopologyObservedStateRejectsUnknownNodeAndInvalidHealth(t *testing.T) {
 	deployment, nodeID, db := newObservedTopologyFixture(t)
-	_, _, err := ApplyTopologyObservedState(db, TopologyObservedStateUpdate{
+	_, _, err := applyTopologyObservedStateForTest(db, TopologyObservedStateUpdate{
 		DeploymentID: deployment.ID, NodeID: nodeID + 100, DesiredRevision: 1,
 		ObservedRevision: 1, State: "succeeded",
 	})
 	require.ErrorContains(t, err, "not part of topology deployment")
 
-	_, _, err = ApplyTopologyObservedState(db, TopologyObservedStateUpdate{
+	_, _, err = applyTopologyObservedStateForTest(db, TopologyObservedStateUpdate{
 		DeploymentID: deployment.ID, NodeID: nodeID, DesiredRevision: 1,
 		ObservedRevision: 1, State: "succeeded", HealthJSON: "not-json",
 	})
@@ -98,7 +98,7 @@ func TestApplyTopologyObservedStateWaitsForEveryDeploymentNode(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&secondStep).Error)
 
-	_, changed, err := ApplyTopologyObservedState(db, TopologyObservedStateUpdate{
+	_, changed, err := applyTopologyObservedStateForTest(db, TopologyObservedStateUpdate{
 		DeploymentID: deployment.ID, NodeID: firstNodeID, DesiredRevision: 1,
 		ObservedRevision: 1, State: "succeeded",
 	})
@@ -108,7 +108,7 @@ func TestApplyTopologyObservedStateWaitsForEveryDeploymentNode(t *testing.T) {
 	require.NoError(t, db.First(&stored, deployment.ID).Error)
 	require.Equal(t, "applying", stored.State)
 
-	_, changed, err = ApplyTopologyObservedState(db, TopologyObservedStateUpdate{
+	_, changed, err = applyTopologyObservedStateForTest(db, TopologyObservedStateUpdate{
 		DeploymentID: deployment.ID, NodeID: secondNode.ID, DesiredRevision: 1,
 		ObservedRevision: 1, State: "succeeded",
 	})
@@ -121,7 +121,7 @@ func TestApplyTopologyObservedStateWaitsForEveryDeploymentNode(t *testing.T) {
 func TestApplyTopologyObservedStateSupportsLegacyFullDeploymentWithoutSteps(t *testing.T) {
 	deployment, nodeID, db := newObservedTopologyFixture(t)
 	require.NoError(t, db.Where("deployment_id = ?", deployment.ID).Delete(&model.TopologyDeploymentStep{}).Error)
-	state, changed, err := ApplyTopologyObservedState(db, TopologyObservedStateUpdate{
+	state, changed, err := applyTopologyObservedStateForTest(db, TopologyObservedStateUpdate{
 		DeploymentID: deployment.ID, NodeID: nodeID, DesiredRevision: 1,
 		ObservedRevision: 1, State: "succeeded",
 	})
@@ -134,9 +134,22 @@ func TestApplyTopologyObservedStateRejectsCanaryWithoutDurableSteps(t *testing.T
 	deployment, nodeID, db := newObservedTopologyFixture(t)
 	require.NoError(t, db.Model(deployment).Update("rollout_group", "canary-a").Error)
 	require.NoError(t, db.Where("deployment_id = ?", deployment.ID).Delete(&model.TopologyDeploymentStep{}).Error)
-	_, _, err := ApplyTopologyObservedState(db, TopologyObservedStateUpdate{
+	_, _, err := applyTopologyObservedStateForTest(db, TopologyObservedStateUpdate{
 		DeploymentID: deployment.ID, NodeID: nodeID, DesiredRevision: 1,
 		ObservedRevision: 1, State: "succeeded",
 	})
 	require.ErrorContains(t, err, "has no durable steps")
+}
+
+// applyTopologyObservedStateForTest commits one observation in its own
+// transaction around ApplyTopologyObservedStateTx.
+func applyTopologyObservedStateForTest(db *gorm.DB, update TopologyObservedStateUpdate) (*model.TopologyObservedState, bool, error) {
+	var result *model.TopologyObservedState
+	var changed bool
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		result, changed, err = ApplyTopologyObservedStateTx(tx, update)
+		return err
+	})
+	return result, changed, err
 }

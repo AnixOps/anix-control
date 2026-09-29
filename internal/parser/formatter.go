@@ -571,13 +571,6 @@ func (f *V2RayFormatter) formatAnyTLS(node *model.ParsedNode, ctx *model.Templat
 		url.QueryEscape(password), node.Server, node.Port, params.Encode(), url.QueryEscape(node.Name)), nil
 }
 
-func boolToTLS(b bool) string {
-	if b {
-		return "tls"
-	}
-	return ""
-}
-
 // ClashFormatter Clash YAML 格式化器
 // 支持 Clash Meta (mihomo) 扩展功能
 type ClashFormatter struct{}

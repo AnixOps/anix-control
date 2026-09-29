@@ -43,7 +43,7 @@ func TestResolvePluginDependencyGraphDeduplicatesSharedDependenciesAndSortsRoots
 		dependencyTestManifest("root-a", "shared"),
 	}
 
-	resolution, err := ResolvePluginDependencies([]string{"root-b", "root-a"}, manifests)
+	resolution, err := ResolvePluginDependencyGraph(manifests, []string{"root-b", "root-a"})
 	require.NoError(t, err)
 	require.Equal(t, []string{"root-a", "root-b"}, resolution.Roots)
 	require.Equal(t, []string{"shared", "root-a", "root-b"}, resolution.Order)

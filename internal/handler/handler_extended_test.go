@@ -1763,6 +1763,8 @@ func (s *SystemBackupTestSuite) TestUpdateBackupConfig_InvalidBody() {
 }
 
 func (s *SystemBackupTestSuite) TestCreateBackup() {
+	// The default backup directory is relative to the working directory.
+	s.T().Chdir(s.T().TempDir())
 	handler := NewSystemHandler()
 	s.router.POST("/admin/system/backup", handler.CreateBackup)
 

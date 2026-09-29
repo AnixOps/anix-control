@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Removed
+
+- Removed the legacy V2bX/Xray proxy-node test tooling, which was never part of
+  a release build: `cmd/integration-test`, `cmd/configgen`, `cmd/report`,
+  `cmd/verify`, `cmd/subtest`, the `internal/tests/integration` harness packages
+  (`binary`, `clients`, `config`, `runner`, `echo`, `e2e`, `local`, `mock`), the
+  `integration-test.yml` workflow, the `make test-integration` target,
+  `config/examples/`, `tools/mock_gost_api.py`, and the unused
+  `config/scripts/{setup_integration.go,generate-grpc.sh,coverage.sh,test-all.sh}`
+  and `api/grpc/gen.ps1` helpers (use `api/grpc/gen.sh`). The package rollout
+  tests in `internal/tests/integration` are kept.
+- Removed Go code that no binary reaches: the unused `internal/websocket`
+  subscription hub, the in-memory agent task store, the never-registered gRPC
+  `ConfigSyncService` implementation (the `.proto` and generated code are
+  unchanged), the in-process Control plugin executor registry and its
+  GOST mesh / NAT egress / nftables forward executors (the production kernel
+  never installed it), the `gost.Manager` rule-sync methods, and unused helpers
+  in the cache, compat v2, gRPC, middleware, parser, utils and service layers.
+  Unwired but implemented notification, invite commission, load balancer,
+  backup cleanup and Telegram bot features are intentionally kept. Test-only
+  helpers moved into test files, and backup tests now write to temporary
+  directories instead of the source tree.
+- `golang.org/x/net` is now an indirect dependency.
+
 ### Changed
 
 - Imported the Control Center into `control-center/` as a single snapshot of the

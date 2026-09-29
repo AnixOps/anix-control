@@ -630,7 +630,7 @@ func (s *NodeService) SyncProtocolToNode(nodeID uint) error {
 	// Unimplemented: push protocol configuration to node via API.
 	// When implemented, this should fetch the node's protocol configs
 	// (NodeProtocol records) and push them to the node through either:
-	//   - gRPC ConfigSync service (preferred for connected nodes)
+	//   - gRPC NodeService.StatusStream config push (preferred for connected nodes)
 	//   - REST API call to the node's management endpoint
 	// This requires the node to implement a config-receive endpoint.
 	log.Printf("[node] SyncProtocolToNode: config push to node %d not yet implemented", nodeID)

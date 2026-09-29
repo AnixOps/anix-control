@@ -910,90 +910,11 @@ type AgentMonitorSnapshot struct {
 
 // ========== WebSocket 杩炴帴 ==========
 
-// AgentWebSocket godoc
+// AgentWebSocketUnified supports both legacy message-auth and header/query-auth.
 // @Summary WebSocket 杩炴帴
 // @Description Agent 寤虹珛 WebSocket 闀胯繛鎺?// @Tags Agent
 // @Success 101
 // @Router /api/v2/agent/ws [get]
-func (h *AgentHandler) AgentWebSocket(c *gin.Context) {
-	conn, err := h.wsUpgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		return
-	}
-	defer func() {
-		if err := conn.Close(); err != nil {
-			log.Printf("[WARN] agent ws: failed to close connection: %v", err)
-		}
-	}()
-	if err := prepareAgentWebSocket(conn); err != nil {
-		log.Printf("[WARN] agent ws: failed to prepare connection: %v", err)
-		return
-	}
-
-	// 绛夊緟璁よ瘉娑堟伅
-	msg, err := readAgentWebSocketMessage(conn)
-	if err != nil {
-		return
-	}
-
-	var authMsg struct {
-		Type   string `json:"type"`
-		NodeID uint   `json:"node_id"`
-		Token  string `json:"token"`
-	}
-	if err := json.Unmarshal(msg, &authMsg); err != nil || authMsg.Type != "auth" {
-		agentConn := &AgentConnection{WsConn: conn}
-		_ = writeAgentWebSocketJSON(agentConn, map[string]string{"error": "invalid auth"})
-		return
-	}
-
-	// 楠岃瘉 Token
-	var node model.ForwardNode
-	if err := h.db.First(&node, authMsg.NodeID).Error; err != nil {
-		agentConn := &AgentConnection{WsConn: conn}
-		_ = writeAgentWebSocketJSON(agentConn, map[string]string{"error": "node not found"})
-		return
-	}
-	if node.APIToken != authMsg.Token {
-		agentConn := &AgentConnection{WsConn: conn}
-		_ = writeAgentWebSocketJSON(agentConn, map[string]string{"error": "invalid token"})
-		return
-	}
-
-	// 璁板綍 WebSocket 杩炴帴
-	agentConn := &AgentConnection{
-		NodeID:   authMsg.NodeID,
-		LastSeen: time.Now(),
-		WsConn:   conn,
-	}
-	h.connections.Store(authMsg.NodeID, agentConn)
-
-	_ = writeAgentWebSocketJSON(agentConn, map[string]string{"type": "auth", "message": "connected"})
-
-	// 澶勭悊娑堟伅寰幆
-	for {
-		msg, err := readAgentWebSocketMessage(conn)
-		if err != nil {
-			break
-		}
-
-		// Parse and dispatch WebSocket message types:
-		//   - "heartbeat": update LastSeen timestamp
-		//   - "log": forward log entries to the logging system
-		//   - "status_change": notify about service state changes
-		//   - "error": record and alert error events
-		var m map[string]any
-		if err := json.Unmarshal(msg, &m); err != nil {
-			log.Printf("[WARN] agent ws: failed to parse message: %v", err)
-			continue
-		}
-	}
-
-	// 娓呯悊杩炴帴
-	h.connections.Delete(authMsg.NodeID)
-}
-
-// AgentWebSocketUnified supports both legacy message-auth and header/query-auth.
 func (h *AgentHandler) AgentWebSocketUnified(c *gin.Context) {
 	authInfo, hasHeaderAuth, err := h.authFromRequest(c)
 	if err != nil {

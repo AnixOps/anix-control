@@ -35,17 +35,17 @@ func TestRegistryResolvesOnlyDeclaredInstalledRoute(t *testing.T) {
 		Envelope:     EnvelopeData,
 	}})
 
-	route, ok := registry.Resolve(http.MethodGet, "/api/v2/user/knowledge")
-	require.True(t, ok)
+	route, err := registry.ResolveContext(context.Background(), http.MethodGet, "/api/v2/user/knowledge")
+	require.NoError(t, err)
 	require.Equal(t, "knowledge.article.list", route.PackageRoute)
 
-	_, ok = registry.Resolve(http.MethodGet, "/api/v2/user/knowledge/1")
-	require.False(t, ok)
+	_, err = registry.ResolveContext(context.Background(), http.MethodGet, "/api/v2/user/knowledge/1")
+	require.Error(t, err)
 }
 
 func TestRegistryDoesNotResolveDisabledPackage(t *testing.T) {
 	registry := NewRegistry(registrySourceStub{err: errors.New("knowledge disabled")})
 
-	_, ok := registry.Resolve(http.MethodGet, "/api/v2/user/knowledge")
-	require.False(t, ok)
+	_, err := registry.ResolveContext(context.Background(), http.MethodGet, "/api/v2/user/knowledge")
+	require.Error(t, err)
 }

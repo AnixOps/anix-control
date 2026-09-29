@@ -1,14 +1,10 @@
 package grpc
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	agentv1pb "github.com/AnixOps/anix-agent/sdk/api/grpc/agent/v1"
@@ -160,41 +156,7 @@ func (s *Server) Stop() {
 	}
 }
 
-// GracefulShutdown 优雅关闭
-func (s *Server) GracefulShutdown(ctx context.Context) error {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	select {
-	case sig := <-sigChan:
-		slog.Info("gRPC received signal", "component", "grpc", "signal", sig.String())
-		s.Stop()
-		return nil
-	case <-ctx.Done():
-		s.Stop()
-		return ctx.Err()
-	}
-}
-
-// GetConnectionManager 获取连接管理器
-func (s *Server) GetConnectionManager() *NodeConnectionManager {
-	return GetConnectionManager()
-}
-
 // GetAgentControlManager returns the Agent-first desired/observed connection manager.
 func (s *Server) GetAgentControlManager() *AgentControlManager {
 	return GetAgentControlManager()
-}
-
-// Run 运行服务器（阻塞）
-func Run(cfg *ServerConfig) error {
-	server := NewServer(cfg)
-	if err := server.Start(); err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	return server.GracefulShutdown(ctx)
 }

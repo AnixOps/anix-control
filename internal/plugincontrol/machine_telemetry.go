@@ -15,13 +15,12 @@ import (
 )
 
 const (
-	MachineTelemetryPluginID      = "machine-telemetry"
-	MachineTelemetryVersion       = "1.1.0"
-	MachineTelemetryLegacyVersion = "1.0.0"
-	MachineTelemetryStatusRoute   = "/api/v3/plugins/machine-telemetry/status"
-	machineTelemetryDefaultLimit  = 100
-	machineTelemetryMaximumLimit  = 500
-	machineTelemetryStaleAfter    = 5 * time.Minute
+	MachineTelemetryPluginID     = "machine-telemetry"
+	MachineTelemetryVersion      = "1.1.0"
+	MachineTelemetryStatusRoute  = "/api/v3/plugins/machine-telemetry/status"
+	machineTelemetryDefaultLimit = 100
+	machineTelemetryMaximumLimit = 500
+	machineTelemetryStaleAfter   = 5 * time.Minute
 )
 
 // MachineTelemetryExecutor is the first complete Control-side reference
@@ -33,10 +32,6 @@ type MachineTelemetryExecutor struct {
 	version string
 }
 
-func NewMachineTelemetryExecutor(db *gorm.DB) *MachineTelemetryExecutor {
-	return NewMachineTelemetryExecutorVersion(db, MachineTelemetryVersion)
-}
-
 func NewMachineTelemetryExecutorVersion(db *gorm.DB, version string) *MachineTelemetryExecutor {
 	if strings.TrimSpace(version) == "" {
 		version = MachineTelemetryVersion
@@ -44,8 +39,7 @@ func NewMachineTelemetryExecutorVersion(db *gorm.DB, version string) *MachineTel
 	return &MachineTelemetryExecutor{db: db, now: time.Now, version: version}
 }
 
-func (e *MachineTelemetryExecutor) PluginID() string { return MachineTelemetryPluginID }
-func (e *MachineTelemetryExecutor) Version() string  { return e.version }
+func (e *MachineTelemetryExecutor) Version() string { return e.version }
 
 type MachineTelemetryNode struct {
 	ID                  uint             `json:"id"`
@@ -211,34 +205,6 @@ func telemetryObservedStateStale(state model.PluginTelemetryState, now time.Time
 		return true
 	}
 	return now.Sub(state.ObservedAt) >= machineTelemetryStaleAfter
-}
-
-func (e *MachineTelemetryExecutor) ExecuteLifecycle(ctx context.Context, request LifecycleRequest) (json.RawMessage, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if len(request.Config) == 0 {
-		request.Config = json.RawMessage(`{}`)
-	}
-	if !json.Valid(request.Config) || strings.TrimSpace(string(request.Config))[0] != '{' {
-		return nil, ErrInvalidPluginInput
-	}
-	switch request.Kind {
-	case "plugin.install":
-		return json.RawMessage(`{"state":"installed"}`), nil
-	case "plugin.disable":
-		return json.RawMessage(`{"state":"disabled"}`), nil
-	case "plugin.configure":
-		return append(json.RawMessage(nil), request.Config...), nil
-	case "plugin.enable", "plugin.update", "plugin.rollback", "plugin.health", "plugin.inspect":
-		response, err := e.HandleRoute(ctx, RouteRequest{Method: http.MethodGet, Path: MachineTelemetryStatusRoute})
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(response.Data)
-	default:
-		return nil, errors.New("unsupported machine telemetry lifecycle operation")
-	}
 }
 
 func telemetryLimit(raw string) (int, error) {

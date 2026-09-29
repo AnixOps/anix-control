@@ -892,7 +892,7 @@ func (s *PanelForwardRuntimeServiceTestSuite) TestForwardRuntimeExecutor_Registr
 
 	iptExec, ok := s.svc.forwardRuntimeExecutor(model.ForwardRuntimeBackendIptablesAnsible)
 	assert.True(s.T(), ok)
-	assert.Equal(s.T(), model.ForwardRuntimeBackendNftablesAnsible, iptExec.backend()) // 兜底
+	assert.IsType(s.T(), &nftablesForwardExecutor{}, iptExec) // 兜底
 
 	agentExec, ok := s.svc.forwardRuntimeExecutor(model.ForwardRuntimeBackendCleanAgent)
 	assert.True(s.T(), ok)

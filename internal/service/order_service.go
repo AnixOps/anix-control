@@ -112,16 +112,6 @@ func (s *OrderService) GetByID(id uint) (*model.Order, error) {
 	return &order, nil
 }
 
-// GetByTradeNo 根据交易号获取订单
-func (s *OrderService) GetByTradeNo(tradeNo string) (*model.Order, error) {
-	var order model.Order
-	if err := s.db.Preload("User").Preload("Plan").
-		Where("trade_no = ?", tradeNo).First(&order).Error; err != nil {
-		return nil, err
-	}
-	return &order, nil
-}
-
 // CreateOrderParams 创建订单参数
 type CreateOrderParams struct {
 	UserID   uint

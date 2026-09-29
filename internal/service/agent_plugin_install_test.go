@@ -119,11 +119,18 @@ func mapKeys(values map[string]json.RawMessage) []string {
 	return keys
 }
 
-func TestLoadAuthorizedAgentPluginReleaseRejectsOtherNodeAndTampering(t *testing.T) {
+func TestLoadAuthorizedAgentPluginArtifactRejectsOtherNodeAndTampering(t *testing.T) {
 	fixture := newAgentPluginInstallFixture(t)
+	loadAuthorizedRelease := func(nodeID uint) (*AgentPluginReleaseDownload, error) {
+		metadata, err := LoadAuthorizedAgentPluginMetadata(fixture.db, nodeID, fixture.release.PluginID, fixture.release.Version)
+		if err != nil {
+			return nil, err
+		}
+		return LoadAgentPluginArtifactBlob(fixture.db, metadata)
+	}
 	other := model.Node{Name: "other-node", Host: "127.0.0.2", Status: model.NodeStatusOnline}
 	require.NoError(t, fixture.db.Create(&other).Error)
-	_, err := LoadAuthorizedAgentPluginRelease(fixture.db, other.ID, fixture.release.PluginID, fixture.release.Version)
+	_, err := loadAuthorizedRelease(other.ID)
 	require.ErrorIs(t, err, ErrAgentPluginAssignmentDenied)
 
 	tampered := append([]byte(nil), fixture.artifact...)
@@ -131,7 +138,7 @@ func TestLoadAuthorizedAgentPluginReleaseRejectsOtherNodeAndTampering(t *testing
 	require.NoError(t, fixture.db.Model(&model.PluginArtifact{}).Where("release_id = ?", fixture.release.ID).Update("data", tampered).Error)
 	_, err = LoadAuthorizedAgentPluginMetadata(fixture.db, fixture.node.ID, fixture.release.PluginID, fixture.release.Version)
 	require.NoError(t, err, "bounded metadata path must not read or hash artifact bytes")
-	_, err = LoadAuthorizedAgentPluginRelease(fixture.db, fixture.node.ID, fixture.release.PluginID, fixture.release.Version)
+	_, err = loadAuthorizedRelease(fixture.node.ID)
 	require.ErrorIs(t, err, ErrAgentPluginReleaseIntegrity)
 }
 

@@ -2,7 +2,6 @@ package service
 
 import (
 	"crypto/rand"
-	"encoding/base32"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -36,11 +35,6 @@ func (s *MFAService) SetConfig(config *model.MFAConfig) {
 	s.config = config
 }
 
-// IsEnabled 检查MFA是否启用
-func (s *MFAService) IsEnabled() bool {
-	return s.config != nil && s.config.Enabled
-}
-
 // IsEnforcedForUser 检查是否对用户强制MFA
 func (s *MFAService) IsEnforcedForUser(user *model.User) bool {
 	if s.config == nil || !s.config.Enabled {
@@ -66,15 +60,6 @@ func (s *MFAService) GetUserMFA(userID uint) (*model.UserMFA, error) {
 		return nil, err
 	}
 	return &mfa, nil
-}
-
-// IsUserMFAEnabled 检查用户是否启用了MFA
-func (s *MFAService) IsUserMFAEnabled(userID uint) (bool, error) {
-	mfa, err := s.GetUserMFA(userID)
-	if err != nil {
-		return false, err
-	}
-	return mfa != nil && mfa.Enabled, nil
 }
 
 // SetupTOTP 设置TOTP
@@ -283,6 +268,9 @@ func (s *MFAService) RecordLoginAttempt(userID uint, ip, userAgent string, succe
 }
 
 // CheckBruteForce 检查暴力破解
+//
+// Implemented but not yet wired into the MFA verification flow; see TODO.md
+// ("Implemented but not wired").
 func (s *MFAService) CheckBruteForce(userID uint, maxAttempts int, window time.Duration) (bool, error) {
 	var count int64
 	since := time.Now().Add(-window)
@@ -403,31 +391,4 @@ type TOTPSetup struct {
 	URL         string   `json:"url"`          // otpauth:// URL
 	QRCode      string   `json:"qr_code"`      // 用于生成二维码
 	BackupCodes []string `json:"backup_codes"` // 备用码
-}
-
-// GenerateQRCodeURL 生成二维码URL (用于Google Chart API等)
-func (s *MFAService) GenerateQRCodeURL(secret, email string) string {
-	issuer := branding.ControlName
-	if s.config != nil && s.config.TOTPIssuer != "" {
-		issuer = s.config.TOTPIssuer
-	}
-	return fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s",
-		issuer, email, secret, issuer)
-}
-
-// ValidateCodeFormat 验证代码格式
-func ValidateCodeFormat(code string) bool {
-	code = strings.TrimSpace(code)
-	code = strings.ReplaceAll(code, " ", "")
-	return len(code) == 6 || len(code) == 8
-}
-
-// EncodeSecret 编码密钥
-func EncodeSecret(secret []byte) string {
-	return base32.StdEncoding.EncodeToString(secret)
-}
-
-// DecodeSecret 解码密钥
-func DecodeSecret(encoded string) ([]byte, error) {
-	return base32.StdEncoding.DecodeString(encoded)
 }

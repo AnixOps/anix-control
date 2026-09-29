@@ -36,15 +36,8 @@ It should not become a dumping ground for:
 
 ## Example Inputs
 
-Sample YAML and test inputs belong under:
-
-- `config/examples/`
-
-Current examples:
-- `config/examples/local_test.yaml`
-- `config/examples/test_nodes.yaml`
-
-The `subtest` helper should generate sample output there instead of the repo root.
+Sample YAML and test inputs belong under `config/` (for example
+`config/config.yaml.example`), never the repository root.
 
 ## Generated Artifacts
 

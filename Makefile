@@ -1,4 +1,4 @@
-.PHONY: build run dev-config clean test test-unit test-e2e test-coverage test-coverage-html test-integration test-frontend
+.PHONY: build run dev-config clean test test-unit test-e2e test-coverage test-coverage-html test-frontend
 .PHONY: pre-deploy deploy docker-build docker-run lint vet fmt bench grpc-gen swagger
 .PHONY: test-quick test-clean test-summary test-grpc test-cmd test-all test-coverage-all
 
@@ -75,11 +75,6 @@ test-grpc:
 	@echo "Running gRPC tests..."
 	GOWORK=off go test $(GO_TEST_FLAGS) -coverprofile=grpc_coverage.out ./internal/grpc/...
 	@echo "gRPC coverage:"; go tool cover -func=grpc_coverage.out | grep total
-
-# 运行集成测试（需要 integration build tag）
-test-integration:
-	@echo "Running integration tests..."
-	GOWORK=off go test $(GO_TEST_FLAGS) -tags=integration ./internal/tests/integration/...
 
 # 运行 E2E 测试
 test-e2e:

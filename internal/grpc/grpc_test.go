@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"strconv"
 	"testing"
@@ -297,23 +296,23 @@ func (s *GRPCTestSuite) TestConnectionManager() {
 	mgr.Register(2, "192.168.1.2:12345")
 
 	// 测试获取
-	conn, ok := mgr.GetConnection(1)
+	conn, ok := mgr.connectionForTest(1)
 	assert.True(s.T(), ok)
 	assert.Equal(s.T(), uint32(1), conn.NodeID)
 	assert.Equal(s.T(), "192.168.1.1:12345", conn.RemoteAddr)
 
 	// 测试活跃节点列表
-	nodes := mgr.GetActiveNodes()
+	nodes := mgr.activeNodesForTest()
 	assert.Len(s.T(), nodes, 2)
 
 	// 测试注销
 	mgr.Unregister(1)
-	_, ok = mgr.GetConnection(1)
+	_, ok = mgr.connectionForTest(1)
 	assert.False(s.T(), ok)
 
 	// 测试配置版本
-	mgr.UpdateConfigVersion(2, 100)
-	ver := mgr.GetConfigVersion(2)
+	mgr.SetNodeConfigVersion(2, 100)
+	ver := mgr.configVersionForTest(2)
 	assert.Equal(s.T(), int64(100), ver)
 
 	// 测试配置变更检测
@@ -326,20 +325,6 @@ func (s *GRPCTestSuite) TestGetPeerAddr() {
 	// 没有 peer 信息的上下文
 	addr := GetPeerAddr(context.Background())
 	assert.Equal(s.T(), "unknown", addr)
-}
-
-// TestNodeIDContext 测试节点ID上下文
-func (s *GRPCTestSuite) TestNodeIDContext() {
-	ctx := context.Background()
-
-	// 测试设置和获取
-	ctx = SetNodeIDToContext(ctx, 123)
-	nodeID := GetNodeIDFromContext(ctx)
-	assert.Equal(s.T(), uint32(123), nodeID)
-
-	// 没有设置的上下文
-	nodeID = GetNodeIDFromContext(context.Background())
-	assert.Equal(s.T(), uint32(0), nodeID)
 }
 
 func TestGRPCSuite(t *testing.T) {
@@ -901,18 +886,9 @@ func (s *GRPCAdvancedSuite) TestConnectionManager_UpdateLastSeen() {
 	mgr.UpdateLastSeen(1)
 
 	// 验证时间更新
-	conn, ok := mgr.GetConnection(1)
+	conn, ok := mgr.connectionForTest(1)
 	assert.True(s.T(), ok)
 	assert.True(s.T(), conn.LastSeen.After(time.Now().Add(-100*time.Millisecond)))
-}
-
-// TestConnectionManager_GetConfigVersion_NotExists 测试获取不存在节点的配置版本
-func (s *GRPCAdvancedSuite) TestConnectionManager_GetConfigVersion_NotExists() {
-	mgr := NewNodeConnectionManager()
-
-	// 不存在的节点，版本应为 0
-	ver := mgr.GetConfigVersion(999)
-	assert.Equal(s.T(), int64(0), ver)
 }
 
 // TestConnectionManager_IsConfigChanged_FirstTime 首次连接需要推送
@@ -956,19 +932,6 @@ func (s *GRPCAdvancedSuite) TestGetConnectionManager() {
 	mgr1 := GetConnectionManager()
 	mgr2 := GetConnectionManager()
 	assert.Equal(s.T(), mgr1, mgr2, "Should return the same instance")
-}
-
-// TestHashString 测试字符串哈希
-func (s *GRPCAdvancedSuite) TestHashString() {
-	hash1 := hashString("test")
-	hash2 := hashString("test")
-	assert.Equal(s.T(), hash1, hash2, "Same input should produce same hash")
-
-	hash3 := hashString("different")
-	assert.NotEqual(s.T(), hash1, hash3, "Different input should produce different hash")
-
-	// SHA256 产生 64 个十六进制字符
-	assert.Len(s.T(), hash1, 64)
 }
 
 func TestGRPCAdvancedSuite(t *testing.T) {
@@ -1105,7 +1068,7 @@ func (s *GRPCStreamSuite) TestStatusStream() {
 	// 验证连接管理器中注册了节点
 	time.Sleep(100 * time.Millisecond)
 	mgr := GetConnectionManager()
-	_, ok := mgr.GetConnection(uint32(node.ID))
+	_, ok := mgr.connectionForTest(uint32(node.ID))
 	assert.True(s.T(), ok, "Node should be registered in connection manager")
 
 	requireCloseSend(s.T(), stream)
@@ -1311,18 +1274,6 @@ func TestServerStop(t *testing.T) {
 
 	// 服务器应该已停止
 	assert.NotNil(t, server.grpcServer)
-}
-
-// TestServerGetConnectionManager 测试获取连接管理器
-func TestServerGetConnectionManager(t *testing.T) {
-	cache.InitMemory()
-	requireInMemoryDatabase(t)
-	defer requireDatabaseClosed(t)
-
-	server := NewServer(&ServerConfig{Host: "127.0.0.1", Port: 50054})
-	mgr := server.GetConnectionManager()
-	assert.NotNil(t, mgr)
-	assert.Equal(t, GetConnectionManager(), mgr)
 }
 
 // TestStreamAuthInterceptor_WithAuth 测试流式认证拦截器
@@ -1596,648 +1547,6 @@ func TestGetConfig_WithMultipleProtocols(t *testing.T) {
 	assert.Equal(t, "ws", resp.Network)
 }
 
-// ========== ConfigSync E2E 测试 ==========
-
-// ConfigSyncE2ETestSuite 配置同步 E2E 测试套件
-type ConfigSyncE2ETestSuite struct {
-	suite.Suite
-	server     *grpc.Server
-	serverErr  <-chan error
-	clientConn *grpc.ClientConn
-	addr       string
-}
-
-func (s *ConfigSyncE2ETestSuite) SetupSuite() {
-	cache.InitMemory()
-	requireInMemoryDatabase(s.T())
-	requireAutoMigrate(s.T(),
-		&model.User{},
-		&model.Plan{},
-		&model.Node{},
-		&model.NodeProtocol{},
-		&model.AuthorizedKey{},
-	)
-
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	assert.NoError(s.T(), err)
-	s.addr = lis.Addr().String()
-
-	s.server = grpc.NewServer()
-	pb.RegisterNodeServiceServer(s.server, NewNodeGRPCServer())
-	pb.RegisterUserServiceServer(s.server, NewUserGRPCServer())
-	pb.RegisterTrafficServiceServer(s.server, NewTrafficGRPCServer())
-	pb.RegisterHealthServiceServer(s.server, NewHealthGRPCServer())
-	pb.RegisterConfigSyncServiceServer(s.server, NewConfigSyncGRPCServer())
-
-	s.serverErr = serveGRPCServerForTest(s.T(), s.server, lis)
-	time.Sleep(100 * time.Millisecond)
-
-	s.clientConn, err = grpc.NewClient(s.addr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	assert.NoError(s.T(), err)
-}
-
-func (s *ConfigSyncE2ETestSuite) TearDownSuite() {
-	if s.clientConn != nil {
-		requireClientConnClosed(s.T(), s.clientConn)
-	}
-	if s.server != nil {
-		stopGRPCServerForTest(s.T(), s.server, s.serverErr)
-	}
-	requireDatabaseClosed(s.T())
-}
-
-func (s *ConfigSyncE2ETestSuite) SetupTest() {
-	db := database.Get()
-	db.Exec("DELETE FROM v2_user")
-	db.Exec("DELETE FROM v2_plan")
-	db.Exec("DELETE FROM v2_node")
-	db.Exec("DELETE FROM v2_node_protocol")
-	db.Exec("DELETE FROM v2_authorized_key")
-
-	// 重置全局连接管理器
-	connectionManager = NewNodeConnectionManager()
-}
-
-// TestFullSync_NodeNotFound 测试全量同步（节点不存在）
-func (s *ConfigSyncE2ETestSuite) TestFullSync_NodeNotFound() {
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	req := &pb.ConfigSyncRequest{
-		NodeId:       99999,
-		LastSyncTime: 0,
-	}
-
-	_, err := client.FullSync(ctx, req)
-	assert.Error(s.T(), err)
-	st, ok := status.FromError(err)
-	assert.True(s.T(), ok)
-	assert.Equal(s.T(), codes.NotFound, st.Code())
-	assert.Contains(s.T(), st.Message(), "node not found")
-}
-
-// TestSyncConfig_NodeNotFound 测试增量同步（节点不存在）
-func (s *ConfigSyncE2ETestSuite) TestSyncConfig_NodeNotFound() {
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	req := &pb.ConfigSyncRequest{
-		NodeId:       99999,
-		LastSyncTime: time.Now().Unix(),
-	}
-
-	_, err := client.SyncConfig(ctx, req)
-	assert.Error(s.T(), err)
-	st, ok := status.FromError(err)
-	assert.True(s.T(), ok)
-	assert.Equal(s.T(), codes.NotFound, st.Code())
-}
-
-// TestFullSync_WithNodeAndProtocol 测试全量同步（带节点和协议）
-func (s *ConfigSyncE2ETestSuite) TestFullSync_WithNodeAndProtocol() {
-	db := database.Get()
-
-	// 创建套餐
-	plan := &model.Plan{
-		Name:           "fullsync-plan",
-		TransferEnable: 10737418240,
-		Show:           1,
-	}
-	err := db.Create(plan).Error
-	assert.NoError(s.T(), err)
-
-	// 创建节点
-	groupID := uint(1)
-	node := &model.Node{
-		Name:    "fullsync-node",
-		Host:    "10.0.0.50",
-		Port:    8443,
-		GroupID: &groupID,
-		Rate:    1.0,
-		Show:    1,
-		Status:  model.NodeStatusOnline,
-		APIKey:  "fullsync-key",
-	}
-	err = db.Create(node).Error
-	assert.NoError(s.T(), err)
-
-	// 创建协议
-	protocol := &model.NodeProtocol{
-		NodeID:    node.ID,
-		Type:      model.ProtocolVLESS,
-		Port:      8443,
-		TLS:       1,
-		Transport: func() *string { s := "ws"; return &s }(),
-	}
-	err = db.Create(protocol).Error
-	assert.NoError(s.T(), err)
-
-	// 创建用户
-	speedLimit := int64(100)
-	deviceLimit := 5
-	userPlanID := plan.ID
-	userGroupID := uint(1)
-	user := &model.User{
-		Email:          "fullsync@example.com",
-		Password:       "hashed",
-		Token:          "fullsync-token-" + uuid.New().String()[:8],
-		UUID:           uuid.New().String(),
-		PlanID:         &userPlanID,
-		GroupID:        &userGroupID,
-		TransferEnable: 10737418240,
-		SpeedLimit:     &speedLimit,
-		DeviceLimit:    &deviceLimit,
-	}
-	err = db.Create(user).Error
-	assert.NoError(s.T(), err)
-
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	req := &pb.ConfigSyncRequest{
-		NodeId:       uint32(node.ID),
-		LastSyncTime: 0,
-	}
-
-	resp, err := client.FullSync(ctx, req)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), resp)
-	assert.True(s.T(), resp.HasChanges)
-	assert.Greater(s.T(), resp.SyncTime, int64(0))
-
-	// 验证节点配置
-	assert.NotNil(s.T(), resp.Config)
-	assert.Equal(s.T(), "vless", resp.Config.Type)
-	assert.Equal(s.T(), "vless", resp.Config.NodeType)
-	assert.Equal(s.T(), int32(8443), resp.Config.ServerPort)
-	assert.Equal(s.T(), int32(1), resp.Config.Tls)
-	assert.Equal(s.T(), "ws", resp.Config.Network)
-	assert.Equal(s.T(), "10.0.0.50", resp.Config.Host)
-
-	// 验证用户列表
-	assert.GreaterOrEqual(s.T(), len(resp.Users), 1)
-	found := false
-	for _, u := range resp.Users {
-		if u.Uuid == user.UUID {
-			found = true
-			assert.Equal(s.T(), uint32(user.ID), u.Id)
-			assert.Equal(s.T(), int64(100), u.SpeedLimit)
-			assert.Equal(s.T(), int32(5), u.DeviceLimit)
-			break
-		}
-	}
-	assert.True(s.T(), found, "User should be in the response")
-}
-
-// TestFullSync_WithNoProtocol 测试全量同步（无协议，使用默认）
-func (s *ConfigSyncE2ETestSuite) TestFullSync_WithNoProtocol() {
-	db := database.Get()
-
-	groupID := uint(2)
-	node := &model.Node{
-		Name:    "fullsync-noproto",
-		Host:    "10.0.0.51",
-		Port:    443,
-		GroupID: &groupID,
-		Rate:    1.0,
-		Show:    1,
-		Status:  model.NodeStatusOnline,
-		APIKey:  "fullsync-noproto-key",
-	}
-	err := db.Create(node).Error
-	assert.NoError(s.T(), err)
-
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	req := &pb.ConfigSyncRequest{
-		NodeId:       uint32(node.ID),
-		LastSyncTime: 0,
-	}
-
-	resp, err := client.FullSync(ctx, req)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), resp)
-	assert.True(s.T(), resp.HasChanges)
-	assert.NotNil(s.T(), resp.Config)
-
-	// 无协议时应该使用默认值 vless
-	assert.Equal(s.T(), "vless", resp.Config.Type)
-	assert.Equal(s.T(), "vless", resp.Config.NodeType)
-	assert.Equal(s.T(), "tcp", resp.Config.Network)
-}
-
-// TestSyncConfig_NoChanges 测试增量同步（无变更）
-func (s *ConfigSyncE2ETestSuite) TestSyncConfig_NoChanges() {
-	db := database.Get()
-
-	groupID := uint(3)
-	node := &model.Node{
-		Name:    "sync-no-change",
-		Host:    "10.0.0.52",
-		Port:    443,
-		GroupID: &groupID,
-		Rate:    1.0,
-		Show:    1,
-		Status:  model.NodeStatusOnline,
-		APIKey:  "sync-no-change-key",
-	}
-	err := db.Create(node).Error
-	assert.NoError(s.T(), err)
-
-	// 等待节点创建，确保 updated_at 已经过去
-	time.Sleep(10 * time.Millisecond)
-
-	// 重新获取节点以获取准确的 updated_at
-	var updatedNode model.Node
-	db.First(&updatedNode, node.ID)
-
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// 使用节点的 updated_at 作为 lastSyncTime，应该无变更
-	req := &pb.ConfigSyncRequest{
-		NodeId:       uint32(node.ID),
-		LastSyncTime: updatedNode.UpdatedAt.Unix(),
-	}
-
-	resp, err := client.SyncConfig(ctx, req)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), resp)
-	assert.False(s.T(), resp.HasChanges)
-	assert.Nil(s.T(), resp.Config)
-	assert.Empty(s.T(), resp.Users)
-}
-
-// TestSyncConfig_WithChanges 测试增量同步（有变更）
-func (s *ConfigSyncE2ETestSuite) TestSyncConfig_WithChanges() {
-	db := database.Get()
-
-	// 创建套餐
-	plan := &model.Plan{
-		Name:           "sync-plan",
-		TransferEnable: 10737418240,
-		Show:           1,
-	}
-	err := db.Create(plan).Error
-	assert.NoError(s.T(), err)
-
-	groupID := uint(4)
-	node := &model.Node{
-		Name:    "sync-with-changes",
-		Host:    "10.0.0.53",
-		Port:    443,
-		GroupID: &groupID,
-		Rate:    1.0,
-		Show:    1,
-		Status:  model.NodeStatusOnline,
-		APIKey:  "sync-changes-key",
-	}
-	err = db.Create(node).Error
-	assert.NoError(s.T(), err)
-
-	// 创建协议
-	protocol := &model.NodeProtocol{
-		NodeID: node.ID,
-		Type:   model.ProtocolTrojan,
-		Port:   443,
-		TLS:    1,
-	}
-	err = db.Create(protocol).Error
-	assert.NoError(s.T(), err)
-
-	// 创建用户
-	userPlanID := plan.ID
-	userGroupID := uint(4)
-	user := &model.User{
-		Email:          "sync-changes@example.com",
-		Password:       "hashed",
-		Token:          "sync-token-" + uuid.New().String()[:8],
-		UUID:           uuid.New().String(),
-		PlanID:         &userPlanID,
-		GroupID:        &userGroupID,
-		TransferEnable: 10737418240,
-	}
-	err = db.Create(user).Error
-	assert.NoError(s.T(), err)
-
-	// 修改节点触发变更
-	time.Sleep(10 * time.Millisecond)
-	db.Model(&node).Update("host", "10.0.0.54")
-
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// 使用旧的 lastSyncTime（节点修改前）
-	req := &pb.ConfigSyncRequest{
-		NodeId:       uint32(node.ID),
-		LastSyncTime: time.Now().Unix() - 60,
-	}
-
-	resp, err := client.SyncConfig(ctx, req)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), resp)
-	assert.True(s.T(), resp.HasChanges)
-	assert.NotNil(s.T(), resp.Config)
-
-	// 验证变更后的配置
-	assert.Equal(s.T(), "trojan", resp.Config.Type)
-	assert.Equal(s.T(), "10.0.0.54", resp.Config.Host)
-
-	// 用户列表应该返回
-	assert.GreaterOrEqual(s.T(), len(resp.Users), 1)
-}
-
-// TestConfigChanges_Stream 测试双向流配置变更
-func (s *ConfigSyncE2ETestSuite) TestConfigChanges_Stream() {
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	stream, err := client.ConfigChanges(ctx)
-	assert.NoError(s.T(), err)
-
-	// 发送注册通知（首次注册节点）
-	err = stream.Send(&pb.ConfigChangeNotification{
-		NodeId:    777,
-		Type:      pb.ConfigChangeNotification_NODE_CONFIG,
-		Timestamp: time.Now().Unix(),
-	})
-	assert.NoError(s.T(), err)
-
-	// 接收确认
-	resp, err := stream.Recv()
-	assert.NoError(s.T(), err)
-	assert.True(s.T(), resp.Success)
-	assert.Equal(s.T(), int32(200), resp.Code)
-	assert.Equal(s.T(), "config change notification received", resp.Message)
-
-	// 验证节点已在连接管理器中注册
-	mgr := GetConnectionManager()
-	conn, ok := mgr.GetConnection(777)
-	assert.True(s.T(), ok, "Node should be registered")
-	assert.NotEmpty(s.T(), conn.RemoteAddr)
-
-	// 发送后续变更通知
-	err = stream.Send(&pb.ConfigChangeNotification{
-		NodeId:    777,
-		Type:      pb.ConfigChangeNotification_USER_LIST,
-		Timestamp: time.Now().Unix(),
-	})
-	assert.NoError(s.T(), err)
-
-	// 接收确认
-	resp2, err := stream.Recv()
-	assert.NoError(s.T(), err)
-	assert.True(s.T(), resp2.Success)
-
-	requireCloseSend(s.T(), stream)
-}
-
-// TestConfigChanges_MultipleChangeTypes 测试多种变更类型
-func (s *ConfigSyncE2ETestSuite) TestConfigChanges_MultipleChangeTypes() {
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	stream, err := client.ConfigChanges(ctx)
-	assert.NoError(s.T(), err)
-
-	// 注册节点
-	err = stream.Send(&pb.ConfigChangeNotification{
-		NodeId:    888,
-		Type:      pb.ConfigChangeNotification_NODE_CONFIG,
-		Timestamp: time.Now().Unix(),
-	})
-	assert.NoError(s.T(), err)
-	_, err = stream.Recv()
-	assert.NoError(s.T(), err)
-
-	// 测试所有变更类型
-	changeTypes := []pb.ConfigChangeNotification_ChangeType{
-		pb.ConfigChangeNotification_NODE_CONFIG,
-		pb.ConfigChangeNotification_USER_LIST,
-		pb.ConfigChangeNotification_PROTOCOL_CONFIG,
-	}
-
-	for _, ct := range changeTypes {
-		err = stream.Send(&pb.ConfigChangeNotification{
-			NodeId:    888,
-			Type:      ct,
-			Timestamp: time.Now().Unix(),
-		})
-		assert.NoError(s.T(), err)
-
-		resp, err := stream.Recv()
-		assert.NoError(s.T(), err)
-		assert.True(s.T(), resp.Success)
-	}
-
-	requireCloseSend(s.T(), stream)
-}
-
-// TestNotifyConfigChange_Integration 测试 NotifyConfigChange 集成
-func (s *ConfigSyncE2ETestSuite) TestNotifyConfigChange_Integration() {
-	db := database.Get()
-
-	// 创建节点
-	groupID := uint(5)
-	node := &model.Node{
-		Name:    "notify-test-node",
-		Host:    "10.0.0.55",
-		Port:    443,
-		GroupID: &groupID,
-		Rate:    1.0,
-		Show:    1,
-		Status:  model.NodeStatusOnline,
-		APIKey:  "notify-test-key",
-	}
-	err := db.Create(node).Error
-	assert.NoError(s.T(), err)
-
-	// 创建 ConfigSync 服务实例
-	svc := NewConfigSyncGRPCServer()
-
-	// 调用 notifyConfigChange（非导出方法，通过测试调用）
-	// 这里直接通过连接管理器验证通知机制
-	mgr := GetConnectionManager()
-	mgr.Register(uint32(node.ID), "127.0.0.1:12345")
-
-	// 发送变更通知
-	err = svc.notifyConfigChange(uint32(node.ID), pb.ConfigChangeNotification_NODE_CONFIG)
-	assert.NoError(s.T(), err)
-
-	// 验证连接管理器中的通知 channel 已收到信号
-	conn, ok := mgr.GetConnection(uint32(node.ID))
-	assert.True(s.T(), ok)
-	select {
-	case <-conn.configChan:
-		// 成功收到通知
-	default:
-		s.T().Error("Expected notification in channel")
-	}
-}
-
-// TestSyncConfig_WithTrojanProtocol 测试 Trojan 协议同步
-func (s *ConfigSyncE2ETestSuite) TestSyncConfig_WithTrojanProtocol() {
-	db := database.Get()
-
-	groupID := uint(6)
-	node := &model.Node{
-		Name:    "trojan-sync-node",
-		Host:    "10.0.0.56",
-		Port:    443,
-		GroupID: &groupID,
-		Rate:    1.0,
-		Show:    1,
-		Status:  model.NodeStatusOnline,
-		APIKey:  "trojan-sync-key",
-	}
-	err := db.Create(node).Error
-	assert.NoError(s.T(), err)
-
-	protocol := &model.NodeProtocol{
-		NodeID: node.ID,
-		Type:   model.ProtocolTrojan,
-		Port:   443,
-		TLS:    1,
-	}
-	err = db.Create(protocol).Error
-	assert.NoError(s.T(), err)
-
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	req := &pb.ConfigSyncRequest{
-		NodeId:       uint32(node.ID),
-		LastSyncTime: 0,
-	}
-
-	resp, err := client.SyncConfig(ctx, req)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), resp)
-	assert.True(s.T(), resp.HasChanges)
-	assert.NotNil(s.T(), resp.Config)
-	assert.Equal(s.T(), "trojan", resp.Config.Type)
-	assert.Equal(s.T(), int32(443), resp.Config.ServerPort)
-	assert.Equal(s.T(), int32(1), resp.Config.Tls)
-}
-
-// TestFullSync_WithMultipleUsers 测试全量同步（多用户）
-func (s *ConfigSyncE2ETestSuite) TestFullSync_WithMultipleUsers() {
-	db := database.Get()
-
-	plan := &model.Plan{
-		Name:           "multiuser-plan",
-		TransferEnable: 10737418240,
-		Show:           1,
-	}
-	err := db.Create(plan).Error
-	assert.NoError(s.T(), err)
-
-	groupID := uint(7)
-	node := &model.Node{
-		Name:    "multiuser-node",
-		Host:    "10.0.0.57",
-		Port:    443,
-		GroupID: &groupID,
-		Rate:    1.0,
-		Show:    1,
-		Status:  model.NodeStatusOnline,
-		APIKey:  "multiuser-key",
-	}
-	err = db.Create(node).Error
-	assert.NoError(s.T(), err)
-
-	userPlanID := plan.ID
-	userGroupID := uint(7)
-
-	// 创建 3 个用户
-	for i := 0; i < 3; i++ {
-		user := &model.User{
-			Email:          fmt.Sprintf("user%d@example.com", i),
-			Password:       "hashed",
-			Token:          fmt.Sprintf("token%d-%s", i, uuid.New().String()[:8]),
-			UUID:           uuid.New().String(),
-			PlanID:         &userPlanID,
-			GroupID:        &userGroupID,
-			TransferEnable: 10737418240,
-		}
-		err = db.Create(user).Error
-		assert.NoError(s.T(), err)
-	}
-
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	req := &pb.ConfigSyncRequest{
-		NodeId:       uint32(node.ID),
-		LastSyncTime: 0,
-	}
-
-	resp, err := client.FullSync(ctx, req)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), resp)
-	assert.True(s.T(), resp.HasChanges)
-	assert.Len(s.T(), resp.Users, 3)
-}
-
-// TestConfigChanges_ConfigVersionTracking 测试配置版本跟踪
-func (s *ConfigSyncE2ETestSuite) TestConfigChanges_ConfigVersionTracking() {
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	stream, err := client.ConfigChanges(ctx)
-	assert.NoError(s.T(), err)
-
-	nodeID := uint32(999)
-
-	// 注册节点，应设置配置版本
-	err = stream.Send(&pb.ConfigChangeNotification{
-		NodeId:    nodeID,
-		Type:      pb.ConfigChangeNotification_NODE_CONFIG,
-		Timestamp: 1000,
-	})
-	assert.NoError(s.T(), err)
-
-	resp, err := stream.Recv()
-	assert.NoError(s.T(), err)
-	assert.True(s.T(), resp.Success)
-
-	// 验证配置版本已设置
-	mgr := GetConnectionManager()
-	ver := mgr.GetConfigVersion(nodeID)
-	assert.Greater(s.T(), ver, int64(0), "Config version should be set after registration")
-
-	requireCloseSend(s.T(), stream)
-}
-
-func TestConfigSyncE2ETestSuite(t *testing.T) {
-	suite.Run(t, new(ConfigSyncE2ETestSuite))
-}
-
 // TestAuthInterceptor_NodeAPIKey 校验节点级 x-api-key/x-node-id 认证:
 // 无凭证拒绝、key 与 node_id 不匹配拒绝、正确凭证放行。回归 50051 端口
 // 在生产环境无 api_token/JWT 时完全不设防的问题。
@@ -2249,9 +1558,9 @@ func TestAuthInterceptor_NodeAPIKey(t *testing.T) {
 
 	db := database.Get()
 
-	nodeA := &model.Node{Name: "node-a", Host: "10.0.0.1", Port: 443, Rate: 1.0, Show: 1, Status: model.NodeStatusOnline, APIKey: "key-a", APIKeyHash: hashString("key-a")}
+	nodeA := &model.Node{Name: "node-a", Host: "10.0.0.1", Port: 443, Rate: 1.0, Show: 1, Status: model.NodeStatusOnline, APIKey: "key-a", APIKeyHash: apiKeyHashForTest("key-a")}
 	assert.NoError(t, db.Create(nodeA).Error)
-	nodeB := &model.Node{Name: "node-b", Host: "10.0.0.2", Port: 443, Rate: 1.0, Show: 1, Status: model.NodeStatusOnline, APIKey: "key-b", APIKeyHash: hashString("key-b")}
+	nodeB := &model.Node{Name: "node-b", Host: "10.0.0.2", Port: 443, Rate: 1.0, Show: 1, Status: model.NodeStatusOnline, APIKey: "key-b", APIKeyHash: apiKeyHashForTest("key-b")}
 	assert.NoError(t, db.Create(nodeB).Error)
 
 	// 没有配置全局 api_token/JWT (对应生产环境现状)

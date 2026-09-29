@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )
@@ -19,10 +20,9 @@ func TestWebSocketGatewayRejectsUnavailablePackageBeforeUpgrade(t *testing.T) {
 			return nil, nil
 		},
 	}
-	router := http.NewServeMux()
-	router.HandleFunc("/api/v2/admin/ws/monitor", func(writer http.ResponseWriter, request *http.Request) {
-		gateway.ServeHTTP(writer, request)
-	})
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/api/v2/admin/ws/monitor", gateway.Serve)
 
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v2/admin/ws/monitor", nil))

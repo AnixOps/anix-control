@@ -91,12 +91,6 @@ func ResolvePluginInstallationDependencyGraph(db *gorm.DB, rootRelease model.Plu
 	return ResolvePluginDependencyGraph(manifests, []string{rootManifest.ID})
 }
 
-// ResolvePluginDependencyGraphFromDB is a descriptive alias for callers that
-// do not have an installation object yet and are resolving from a release.
-func ResolvePluginDependencyGraphFromDB(db *gorm.DB, rootRelease model.PluginRelease, target string) (*PluginDependencyResolution, error) {
-	return ResolvePluginInstallationDependencyGraph(db, rootRelease, target)
-}
-
 func loadDependencyGraphReleaseManifest(db *gorm.DB, release model.PluginRelease, target string) (*PluginManifest, error) {
 	if err := ValidatePluginReleaseTarget(release, target); err != nil {
 		return nil, err

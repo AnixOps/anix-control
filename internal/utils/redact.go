@@ -6,24 +6,6 @@ import (
 	"strings"
 )
 
-// SensitiveString 敏感字符串类型，打印时自动脱敏
-type SensitiveString string
-
-// String 实现 Stringer 接口，自动脱敏
-func (s SensitiveString) String() string {
-	return Redact(string(s))
-}
-
-// MarshalJSON 实现 JSON 序列化，返回脱敏值
-func (s SensitiveString) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.String())
-}
-
-// Raw 获取原始值（慎用）
-func (s SensitiveString) Raw() string {
-	return string(s)
-}
-
 // Redact 脱敏字符串
 // 规则：保留前4位和后4位，中间用 **** 替代
 // 如果长度不足8位，全部用 **** 替代
@@ -36,25 +18,6 @@ func Redact(s string) string {
 		return "****"
 	}
 	return s[:4] + "****" + s[length-4:]
-}
-
-// RedactEmail 脱敏邮箱
-// 规则：保留 @ 前2位和 @ 后完整域名
-// 例如：admin@example.com -> ad***@example.com
-func RedactEmail(email string) string {
-	if email == "" {
-		return ""
-	}
-	parts := strings.Split(email, "@")
-	if len(parts) != 2 {
-		return Redact(email)
-	}
-	local := parts[0]
-	domain := parts[1]
-	if len(local) <= 2 {
-		return local + "***@" + domain
-	}
-	return local[:2] + "***@" + domain
 }
 
 // RedactIP 脱敏 IP 地址
@@ -164,32 +127,9 @@ func NewLogSafe() *LogSafe {
 	}
 }
 
-// Set 设置字段（自动判断是否脱敏）
-func (l *LogSafe) Set(key string, value any) *LogSafe {
-	lowerKey := strings.ToLower(key)
-	for _, sk := range SensitiveKeys {
-		if strings.Contains(lowerKey, sk) {
-			if str, ok := value.(string); ok {
-				l.fields[key] = Redact(str)
-			} else {
-				l.fields[key] = "[REDACTED]"
-			}
-			return l
-		}
-	}
-	l.fields[key] = value
-	return l
-}
-
 // SetRaw 设置字段（不脱敏，用于非敏感字段）
 func (l *LogSafe) SetRaw(key string, value any) *LogSafe {
 	l.fields[key] = value
-	return l
-}
-
-// SetEmail 设置邮箱字段（脱敏）
-func (l *LogSafe) SetEmail(key, email string) *LogSafe {
-	l.fields[key] = RedactEmail(email)
 	return l
 }
 
@@ -203,9 +143,4 @@ func (l *LogSafe) SetIP(key, ip string) *LogSafe {
 func (l *LogSafe) String() string {
 	result, _ := json.Marshal(l.fields)
 	return string(result)
-}
-
-// Fields 获取所有字段
-func (l *LogSafe) Fields() map[string]any {
-	return l.fields
 }

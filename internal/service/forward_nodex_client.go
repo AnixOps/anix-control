@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
-	"gorm.io/gorm"
 )
 
 const (
@@ -165,17 +164,6 @@ type nodeXForwardNodePayload struct {
 
 func newNodeXForwardRuntimeClient(configService *SystemConfigService) *nodeXForwardRuntimeClient {
 	return &nodeXForwardRuntimeClient{configService: configService}
-}
-
-func NewNodeXForwardRuntimeProviderWithHTTPClient(db *gorm.DB, httpClient nodeXForwardHTTPDoer) *nodeXForwardRuntimeProvider {
-	configService := NewSystemConfigService(db)
-	return &nodeXForwardRuntimeProvider{
-		db: db,
-		client: &nodeXForwardRuntimeClient{
-			configService: configService,
-			httpClient:    httpClient,
-		},
-	}
 }
 
 func (c *nodeXForwardRuntimeClient) Execute(ctx context.Context, req nodeXForwardExecuteRequest) (*nodeXForwardExecuteResult, error) {

@@ -78,12 +78,6 @@ func ResolvePluginDependencyGraph(manifests []PluginManifest, rootIDs []string) 
 	return resolver.Resolve(rootIDs)
 }
 
-// ResolvePluginDependencies is an argument-order convenience wrapper for
-// callers that naturally have roots before loading the selected manifests.
-func ResolvePluginDependencies(rootIDs []string, manifests []PluginManifest) (*PluginDependencyResolution, error) {
-	return ResolvePluginDependencyGraph(manifests, rootIDs)
-}
-
 // Resolve computes the dependency closure and a deterministic topological
 // order for rootIDs.
 func (r *PluginDependencyResolver) Resolve(rootIDs []string) (*PluginDependencyResolution, error) {

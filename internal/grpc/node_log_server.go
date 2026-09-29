@@ -139,27 +139,6 @@ func newNodeLogBatchMessage() *dynamicpb.Message {
 	return dynamicpb.NewMessage(nodeLogBatchDesc)
 }
 
-type NodeLogServiceClient interface {
-	ReportLogs(ctx context.Context, in *dynamicpb.Message, opts ...grpc.CallOption) (*pb.StatusResponse, error)
-}
-
-type nodeLogServiceClient struct {
-	cc grpc.ClientConnInterface
-}
-
-func NewNodeLogServiceClient(cc grpc.ClientConnInterface) NodeLogServiceClient {
-	return &nodeLogServiceClient{cc: cc}
-}
-
-func (c *nodeLogServiceClient) ReportLogs(ctx context.Context, in *dynamicpb.Message, opts ...grpc.CallOption) (*pb.StatusResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(pb.StatusResponse)
-	if err := c.cc.Invoke(ctx, NodeLogService_ReportLogs_FullMethodName, in, out, cOpts...); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 type NodeLogServiceServer interface {
 	ReportLogs(context.Context, *dynamicpb.Message) (*pb.StatusResponse, error)
 }

@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
@@ -29,26 +28,6 @@ func TestRedact(t *testing.T) {
 	}
 }
 
-func TestRedactEmail(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"", ""},
-		{"a@b.com", "a***@b.com"},
-		{"admin@example.com", "ad***@example.com"},
-		{"test.user@domain.org", "te***@domain.org"},
-		{"invalid-email", "inva****mail"}, // 没有@，使用普通脱敏
-	}
-
-	for _, tt := range tests {
-		result := RedactEmail(tt.input)
-		if result != tt.expected {
-			t.Errorf("RedactEmail(%q) = %q, want %q", tt.input, result, tt.expected)
-		}
-	}
-}
-
 func TestRedactIP(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -66,33 +45,6 @@ func TestRedactIP(t *testing.T) {
 			t.Errorf("RedactIP(%q) = %q, want %q", tt.input, result, tt.expected)
 		}
 	}
-}
-
-func TestSensitiveString(t *testing.T) {
-	s := SensitiveString("my-secret-api-key-12345")
-	result := s.String()
-	expected := "my-s****2345"
-	if result != expected {
-		t.Errorf("SensitiveString.String() = %q, want %q", result, expected)
-	}
-
-	// 确保 Raw() 返回原始值
-	if s.Raw() != "my-secret-api-key-12345" {
-		t.Errorf("SensitiveString.Raw() should return original value")
-	}
-}
-
-func TestSensitiveString_MarshalJSON(t *testing.T) {
-	s := SensitiveString("abcdefghijklmnop")
-	data, err := json.Marshal(s)
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "abcd****mnop")
-}
-
-func TestSensitiveString_Empty(t *testing.T) {
-	s := SensitiveString("")
-	assert.Equal(t, "", s.String())
-	assert.Equal(t, "", s.Raw())
 }
 
 func TestRedactMap(t *testing.T) {
@@ -198,20 +150,12 @@ func TestRedactJSONRegex(t *testing.T) {
 func TestLogSafe(t *testing.T) {
 	log := NewLogSafe().
 		SetRaw("action", "login").
-		Set("api_key", "abcdefghijklmnop").
-		SetEmail("email", "admin@example.com").
 		SetIP("ip", "192.168.1.100")
 
-	fields := log.Fields()
+	fields := log.fields
 
 	if fields["action"] != "login" {
 		t.Errorf("action should be 'login'")
-	}
-	if fields["api_key"] != "abcd****mnop" {
-		t.Errorf("api_key should be redacted")
-	}
-	if fields["email"] != "ad***@example.com" {
-		t.Errorf("email should be redacted")
 	}
 	if fields["ip"] != "192.168.*.*" {
 		t.Errorf("ip should be redacted")
@@ -220,32 +164,12 @@ func TestLogSafe(t *testing.T) {
 
 func TestLogSafe_String(t *testing.T) {
 	log := NewLogSafe().
-		Set("username", "john").
-		Set("password", "secret123456789")
+		SetRaw("username", "john").
+		SetIP("ip", "192.168.1.100")
 
 	result := log.String()
 	assert.Contains(t, result, "john")
-	assert.Contains(t, result, "secr****6789")
-}
-
-func TestLogSafe_Set_NonString(t *testing.T) {
-	log := NewLogSafe().
-		Set("count", 123).
-		Set("password", 456) // non-string sensitive
-
-	fields := log.Fields()
-	assert.Equal(t, 123, fields["count"])
-	assert.Equal(t, "[REDACTED]", fields["password"])
-}
-
-func TestLogSafe_Chained(t *testing.T) {
-	log := NewLogSafe().
-		Set("a", "1").
-		Set("b", "2").
-		SetRaw("c", "3")
-
-	assert.NotNil(t, log)
-	assert.Len(t, log.Fields(), 3)
+	assert.Contains(t, result, "192.168.*.*")
 }
 
 // ========== JWT Tests ==========

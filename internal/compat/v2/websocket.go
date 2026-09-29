@@ -5,14 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -39,16 +37,6 @@ func (g WebSocketGateway) Serve(c *gin.Context) {
 		return
 	}
 	g.serve(c.Writer, c.Request, requestMetadata(c), requestID(c), actorID(c), actorIsAdmin(c))
-}
-
-// ServeHTTP is useful for non-Gin integration points and keeps resolution
-// before upgrade testable without a real WebSocket connection.
-func (g WebSocketGateway) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	if request == nil {
-		writeWebSocketError(writer, http.StatusBadRequest, "plugin_request_invalid", "request is required")
-		return
-	}
-	g.serve(writer, request, requestMetadataFromRequest(request), requestIDFromRequest(request), 0, false)
 }
 
 func (g WebSocketGateway) serve(writer http.ResponseWriter, request *http.Request, metadata pluginhost.RequestMetadata, id string, actor uint, admin bool) {
@@ -182,27 +170,6 @@ func clientClose(err error) pluginhost.WebSocketClose {
 		return pluginhost.WebSocketClose{Code: uint32(closeError.Code), Reason: closeError.Text}
 	}
 	return pluginhost.WebSocketClose{Code: websocket.CloseNormalClosure, Reason: "client disconnected"}
-}
-
-func requestMetadataFromRequest(request *http.Request) pluginhost.RequestMetadata {
-	metadata := pluginhost.RequestMetadata{Path: request.URL.Path}
-	if query := request.URL.Query(); len(query) > 0 {
-		metadata.Query = make(map[string][]string, len(query))
-		for key, values := range query {
-			metadata.Query[key] = append([]string(nil), values...)
-		}
-	}
-	if headers := packageRequestHeaders(request.Header); len(headers) > 0 {
-		metadata.Headers = headers
-	}
-	return metadata
-}
-
-func requestIDFromRequest(request *http.Request) string {
-	if id := strings.TrimSpace(request.Header.Get("X-Request-ID")); id != "" {
-		return id
-	}
-	return uuid.NewString()
 }
 
 func writeWebSocketError(writer http.ResponseWriter, status int, code, message string) {

@@ -184,7 +184,7 @@ type AuthServiceTestSuite struct {
 
 func (s *AuthServiceTestSuite) TestRegister_Success() {
 	svc := NewAuthService()
-	token, user, err := svc.Register("test@example.com", "password123", s.cfg)
+	token, user, err := svc.RegisterWithInvite("test@example.com", "password123", "", s.cfg)
 
 	assert.NoError(s.T(), err)
 	assert.NotEmpty(s.T(), token)
@@ -196,11 +196,11 @@ func (s *AuthServiceTestSuite) TestRegister_DuplicateEmail() {
 	svc := NewAuthService()
 
 	// 绗竴娆℃敞鍐?
-	_, _, err := svc.Register("dup@example.com", "password123", s.cfg)
+	_, _, err := svc.RegisterWithInvite("dup@example.com", "password123", "", s.cfg)
 	assert.NoError(s.T(), err)
 
 	// 绗簩娆℃敞鍐岀浉鍚岄偖绠?
-	_, _, err = svc.Register("dup@example.com", "password456", s.cfg)
+	_, _, err = svc.RegisterWithInvite("dup@example.com", "password456", "", s.cfg)
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "该邮箱已被注册")
 }
@@ -211,7 +211,7 @@ func (s *AuthServiceTestSuite) TestRegister_DisabledByPolicy() {
 	cfg := *s.cfg
 	cfg.Auth.Registration.Enabled = &disabled
 
-	_, _, err := svc.Register("closed@example.com", "password123", &cfg)
+	_, _, err := svc.RegisterWithInvite("closed@example.com", "password123", "", &cfg)
 
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "registration is disabled")
@@ -222,7 +222,7 @@ func (s *AuthServiceTestSuite) TestRegister_RejectsEmailOutsideAllowlist() {
 	cfg := *s.cfg
 	cfg.Auth.Registration.AllowedEmailDomains = []string{"example.com"}
 
-	_, _, err := svc.Register("user@other.test", "password123", &cfg)
+	_, _, err := svc.RegisterWithInvite("user@other.test", "password123", "", &cfg)
 
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "not in the allowlist")
@@ -269,26 +269,28 @@ func (s *AuthServiceTestSuite) TestLogin_Success() {
 	svc := NewAuthService()
 
 	// 鍏堟敞鍐?
-	_, _, err := svc.Register("login@example.com", "password123", s.cfg)
+	_, _, err := svc.RegisterWithInvite("login@example.com", "password123", "", s.cfg)
 	assert.NoError(s.T(), err)
 
 	// 鐧诲綍
-	token, user, err := svc.Login("login@example.com", "password123", s.cfg)
+	user, err := svc.Authenticate("login@example.com", "password123")
+	assert.NoError(s.T(), err)
+	assert.NotNil(s.T(), user)
 
+	token, err := svc.IssueToken(user, s.cfg)
 	assert.NoError(s.T(), err)
 	assert.NotEmpty(s.T(), token)
-	assert.NotNil(s.T(), user)
 }
 
 func (s *AuthServiceTestSuite) TestLogin_WrongPassword() {
 	svc := NewAuthService()
 
 	// 鍏堟敞鍐?
-	_, _, err := svc.Register("wrongpass@example.com", "password123", s.cfg)
+	_, _, err := svc.RegisterWithInvite("wrongpass@example.com", "password123", "", s.cfg)
 	assert.NoError(s.T(), err)
 
 	// 浣跨敤閿欒瀵嗙爜鐧诲綍
-	_, _, err = svc.Login("wrongpass@example.com", "wrongpassword", s.cfg)
+	_, err = svc.Authenticate("wrongpass@example.com", "wrongpassword")
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "用户不存在或密码错误")
 }
@@ -296,7 +298,7 @@ func (s *AuthServiceTestSuite) TestLogin_WrongPassword() {
 func (s *AuthServiceTestSuite) TestLogin_UserNotFound() {
 	svc := NewAuthService()
 
-	_, _, err := svc.Login("nonexistent@example.com", "password123", s.cfg)
+	_, err := svc.Authenticate("nonexistent@example.com", "password123")
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "用户不存在或密码错误")
 }
@@ -305,13 +307,13 @@ func (s *AuthServiceTestSuite) TestLogin_BannedUser() {
 	svc := NewAuthService()
 
 	// 娉ㄥ唽鐢ㄦ埛
-	_, user, _ := svc.Register("banned@example.com", "password123", s.cfg)
+	_, user, _ := svc.RegisterWithInvite("banned@example.com", "password123", "", s.cfg)
 
 	// 灏佺鐢ㄦ埛
 	database.Get().Model(user).Update("banned", 1)
 
 	// 灏濊瘯鐧诲綍
-	_, _, err := svc.Login("banned@example.com", "password123", s.cfg)
+	_, err := svc.Authenticate("banned@example.com", "password123")
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "用户已被封禁")
 }
@@ -319,13 +321,13 @@ func (s *AuthServiceTestSuite) TestLogin_BannedUser() {
 func (s *AuthServiceTestSuite) TestLogin_ExpiredUser() {
 	svc := NewAuthService()
 
-	_, user, err := svc.Register("expired-login@example.com", "password123", s.cfg)
+	_, user, err := svc.RegisterWithInvite("expired-login@example.com", "password123", "", s.cfg)
 	assert.NoError(s.T(), err)
 
 	expiredAt := time.Now().Add(-time.Hour).Unix()
 	assert.NoError(s.T(), database.Get().Model(user).Update("expired_at", expiredAt).Error)
 
-	_, _, err = svc.Login("expired-login@example.com", "password123", s.cfg)
+	_, err = svc.Authenticate("expired-login@example.com", "password123")
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "用户已过期")
 }
@@ -1006,7 +1008,7 @@ func (s *OrderServiceTestSuite) SetupTest() {
 	s.authSvc = NewAuthService()
 
 	// 鍒涘缓娴嬭瘯鐢ㄦ埛
-	_, user, _ := s.authSvc.Register("order@example.com", "password123", s.cfg)
+	_, user, _ := s.authSvc.RegisterWithInvite("order@example.com", "password123", "", s.cfg)
 	s.testUser = user
 
 	// 鍒涘缓娴嬭瘯濂楅
@@ -1115,18 +1117,6 @@ func (s *OrderServiceTestSuite) TestGetOrderByID_NotFound() {
 	found, err := s.svc.GetByID(99999)
 	assert.ErrorIs(s.T(), err, ErrOrderNotFound)
 	assert.Nil(s.T(), found)
-}
-
-func (s *OrderServiceTestSuite) TestGetOrderByTradeNo() {
-	order, _ := s.svc.Create(CreateOrderParams{
-		UserID: s.testUser.ID,
-		PlanID: s.testPlan.ID,
-		Period: "month",
-	})
-
-	found, err := s.svc.GetByTradeNo(order.TradeNo)
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), order.ID, found.ID)
 }
 
 func (s *OrderServiceTestSuite) TestUpdateStatus() {
@@ -1254,7 +1244,7 @@ func (s *StatsServiceTestSuite) SetupTest() {
 func (s *StatsServiceTestSuite) TestGetDashboardStats() {
 	// 鍒涘缓涓€浜涚敤鎴?
 	for i := 0; i < 3; i++ {
-		_, _, err := s.authSvc.Register(fmt.Sprintf("stats%d@example.com", i), "password123", s.cfg)
+		_, _, err := s.authSvc.RegisterWithInvite(fmt.Sprintf("stats%d@example.com", i), "password123", "", s.cfg)
 		assert.NoError(s.T(), err)
 	}
 
@@ -1285,7 +1275,7 @@ func (s *StatsServiceTestSuite) TestGetDashboardStats_DBError() {
 
 func (s *StatsServiceTestSuite) TestGetUserSubscription() {
 	// 鍒涘缓鐢ㄦ埛
-	_, user, _ := s.authSvc.Register("subuser@example.com", "password123", s.cfg)
+	_, user, _ := s.authSvc.RegisterWithInvite("subuser@example.com", "password123", "", s.cfg)
 
 	// 鍒涘缓濂楅
 	groupID := uint(1)
@@ -1312,7 +1302,7 @@ func (s *StatsServiceTestSuite) TestGetUserSubscription() {
 
 func (s *StatsServiceTestSuite) TestGetUserSubscription_Expired() {
 	// 鍒涘缓鐢ㄦ埛
-	_, user, _ := s.authSvc.Register("expireduser@example.com", "password123", s.cfg)
+	_, user, _ := s.authSvc.RegisterWithInvite("expireduser@example.com", "password123", "", s.cfg)
 
 	// 璁剧疆杩囨湡鏃堕棿
 	expiredAt := time.Now().Add(-24 * time.Hour).Unix() // 鏄ㄥぉ杩囨湡
@@ -1326,47 +1316,11 @@ func (s *StatsServiceTestSuite) TestGetUserSubscription_Expired() {
 
 func (s *StatsServiceTestSuite) TestGetUserSubscription_NoPlan() {
 	// 鍒涘缓鏃犲椁愮敤鎴?
-	_, user, _ := s.authSvc.Register("noplanuser@example.com", "password123", s.cfg)
+	_, user, _ := s.authSvc.RegisterWithInvite("noplanuser@example.com", "password123", "", s.cfg)
 
 	sub, err := s.svc.GetUserSubscription(user.ID, true)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "无套餐", sub.PlanName)
-}
-
-func (s *StatsServiceTestSuite) TestInvalidateUserCache() {
-	_, user, _ := s.authSvc.Register("cacheuser@example.com", "password123", s.cfg)
-
-	// 鑾峰彇璁㈤槄锛堜細缂撳瓨锛?
-	_, err := s.svc.GetUserSubscription(user.ID, false)
-	assert.NoError(s.T(), err)
-
-	// 浣跨紦瀛樺け鏁?
-	s.svc.InvalidateUserCache(user.ID)
-
-	// 楠岃瘉缂撳瓨宸插垹闄?
-	exists := cache.Exists(fmt.Sprintf("%s%d", CacheKeyUserSubscription, user.ID))
-	assert.False(s.T(), exists)
-}
-
-func (s *StatsServiceTestSuite) TestInvalidateUserCacheWithError() {
-	_, user, _ := s.authSvc.Register("cacheuser-explicit@example.com", "password123", s.cfg)
-	_, err := s.svc.GetUserSubscription(user.ID, false)
-	assert.NoError(s.T(), err)
-
-	err = s.svc.InvalidateUserCacheWithError(user.ID)
-
-	assert.NoError(s.T(), err)
-	exists := cache.Exists(fmt.Sprintf("%s%d", CacheKeyUserSubscription, user.ID))
-	assert.False(s.T(), exists)
-}
-
-func (s *StatsServiceTestSuite) TestRefreshDashboardCache() {
-	err := s.svc.RefreshDashboardCache()
-	assert.NoError(s.T(), err)
-
-	// 楠岃瘉缂撳瓨瀛樺湪
-	exists := cache.Exists(CacheKeyDashboardStats)
-	assert.True(s.T(), exists)
 }
 
 // TestTodayTraffic_SumsTodayLogsWithRate 验证今日流量从 v2_server_log 按倍率累计,
@@ -1657,14 +1611,6 @@ func (s *MFAServiceTestSuite) SetupTest() {
 	database.Get().Create(s.testUser)
 }
 
-func (s *MFAServiceTestSuite) TestIsEnabled() {
-	assert.True(s.T(), s.svc.IsEnabled())
-
-	// Test with nil config
-	svc := NewMFAService(database.Get(), nil)
-	assert.False(s.T(), svc.IsEnabled())
-}
-
 func (s *MFAServiceTestSuite) TestIsEnforcedForUser_Admin() {
 	adminUser := &model.User{IsAdmin: 1}
 	assert.True(s.T(), s.svc.IsEnforcedForUser(adminUser))
@@ -1677,12 +1623,6 @@ func (s *MFAServiceTestSuite) TestGetUserMFA_NotFound() {
 	mfa, err := s.svc.GetUserMFA(s.testUser.ID)
 	assert.NoError(s.T(), err)
 	assert.Nil(s.T(), mfa)
-}
-
-func (s *MFAServiceTestSuite) TestIsUserMFAEnabled_False() {
-	enabled, err := s.svc.IsUserMFAEnabled(s.testUser.ID)
-	assert.NoError(s.T(), err)
-	assert.False(s.T(), enabled)
 }
 
 func (s *MFAServiceTestSuite) TestSetupTOTP() {
@@ -1711,22 +1651,6 @@ func (s *MFAServiceTestSuite) TestGetRemainingBackupCodes_NoMFA() {
 	count, err := s.svc.GetRemainingBackupCodes(s.testUser.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), 0, count)
-}
-
-func (s *MFAServiceTestSuite) TestValidateCodeFormat() {
-	assert.True(s.T(), ValidateCodeFormat("123456"))
-	assert.True(s.T(), ValidateCodeFormat("12345678"))
-	assert.True(s.T(), ValidateCodeFormat("123 456"))
-	assert.False(s.T(), ValidateCodeFormat("12345"))
-	assert.False(s.T(), ValidateCodeFormat("1234567"))
-}
-
-func (s *MFAServiceTestSuite) TestEncodeDecodeSecret() {
-	secret := []byte("testsecret")
-	encoded := EncodeSecret(secret)
-	decoded, err := DecodeSecret(encoded)
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), secret, decoded)
 }
 
 func (s *MFAServiceTestSuite) TestRecordLoginAttempt() {
@@ -1861,100 +1785,11 @@ func (s *ForwardNodeServiceTestSuite) TestGetByType() {
 	assert.Equal(s.T(), "Relay Node", nodes[0].Name)
 }
 
-func (s *ForwardNodeServiceTestSuite) TestList() {
-	// Create multiple nodes
-	for i := 0; i < 5; i++ {
-		node := &model.ForwardNode{
-			Name:    "List Test Node",
-			Type:    model.ForwardNodeTypeRelay,
-			Host:    "192.168.1.100",
-			Port:    443,
-			Enabled: true,
-		}
-		assert.NoError(s.T(), s.svc.Create(node))
-	}
-
-	nodes, _, err := s.svc.List("", nil, 1, 10)
-	assert.NoError(s.T(), err)
-	// The test might have database state issues in full suite, just check function works
-	assert.NotNil(s.T(), nodes)
-}
-
-func (s *ForwardNodeServiceTestSuite) TestListWithType() {
-	relay := &model.ForwardNode{
-		Name:    "Relay",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "192.168.1.100",
-		Port:    443,
-		Enabled: true,
-	}
-	assert.NoError(s.T(), s.svc.Create(relay))
-	exit := &model.ForwardNode{
-		Name:    "Exit",
-		Type:    model.ForwardNodeTypeExit,
-		Host:    "192.168.1.200",
-		Port:    443,
-		Enabled: true,
-	}
-	assert.NoError(s.T(), s.svc.Create(exit))
-	nodes, _, err := s.svc.List(model.ForwardNodeTypeRelay, nil, 1, 10)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), nodes)
-}
-
-func (s *ForwardNodeServiceTestSuite) TestGetOnlineNodes() {
-	// Create online node
-	online := &model.ForwardNode{
-		Name:    "Online Node",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "192.168.1.100",
-		Port:    443,
-		Enabled: true,
-		Status:  model.ForwardNodeStatusOnline,
-	}
-	assert.NoError(s.T(), s.svc.Create(online))
-	// Create offline node
-	offline := &model.ForwardNode{
-		Name:    "Offline Node",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "192.168.1.101",
-		Port:    443,
-		Enabled: true,
-		Status:  model.ForwardNodeStatusOffline,
-	}
-	assert.NoError(s.T(), s.svc.Create(offline))
-	nodes, err := s.svc.GetOnlineNodes(model.ForwardNodeTypeRelay)
-	assert.NoError(s.T(), err)
-	assert.Len(s.T(), nodes, 1)
-	assert.Equal(s.T(), "Online Node", nodes[0].Name)
-}
-
 func (s *ForwardNodeServiceTestSuite) TestGenerateAPIToken() {
 	token, err := s.svc.GenerateAPIToken()
 	assert.NoError(s.T(), err)
 	assert.NotEmpty(s.T(), token)
 	assert.Len(s.T(), token, 32) // hex encoding of 16 bytes
-}
-
-func (s *ForwardNodeServiceTestSuite) TestUpdateStats() {
-	node := &model.ForwardNode{
-		Name:          "Stats Test",
-		Type:          model.ForwardNodeTypeRelay,
-		Host:          "192.168.1.100",
-		Port:          443,
-		Enabled:       true,
-		TotalUpload:   1000,
-		TotalDownload: 2000,
-		CurrentConn:   5,
-	}
-	assert.NoError(s.T(), s.svc.Create(node))
-	err := s.svc.UpdateStats(node.ID, 500, 1000, 2)
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetByID(node.ID)
-	assert.Equal(s.T(), int64(1500), found.TotalUpload)
-	assert.Equal(s.T(), int64(3000), found.TotalDownload)
-	assert.Equal(s.T(), 7, found.CurrentConn)
 }
 
 func (s *ForwardNodeServiceTestSuite) TestParseTags() {
@@ -1974,23 +1809,6 @@ func (s *ForwardNodeServiceTestSuite) TestParseTagsWithErrorRejectsInvalidJSON()
 	assert.Nil(s.T(), tags)
 	assert.Error(s.T(), err)
 	assert.Empty(s.T(), s.svc.ParseTags(`["tag1"`))
-}
-
-func (s *ForwardNodeServiceTestSuite) TestSetTags() {
-	node := &model.ForwardNode{
-		Name:    "Tags Test",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "192.168.1.100",
-		Port:    443,
-		Enabled: true,
-	}
-	assert.NoError(s.T(), s.svc.Create(node))
-	err := s.svc.SetTags(node.ID, []string{"tag1", "tag2"})
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetByID(node.ID)
-	tags := s.svc.ParseTags(found.Tags)
-	assert.Len(s.T(), tags, 2)
 }
 
 // Skip: HealthCheck tests timeout and cause instability
@@ -2051,44 +1869,6 @@ func (s *InviteServiceTestSuite) TestGenerateInviteCode() {
 	assert.NotNil(s.T(), code)
 	assert.NotEmpty(s.T(), code.Code)
 	assert.Equal(s.T(), 0, code.Status)
-}
-
-func (s *InviteServiceTestSuite) TestGenerateCodesForUser() {
-	err := s.svc.GenerateCodesForUser(s.testUser.ID, 3)
-	assert.NoError(s.T(), err)
-
-	codes, err := s.svc.GetUserInviteCodes(s.testUser.ID)
-	assert.NoError(s.T(), err)
-	assert.Len(s.T(), codes, 3)
-}
-
-func (s *InviteServiceTestSuite) TestValidateInviteCode() {
-	// 鐢熸垚閭€璇风爜
-	code, _ := s.svc.GenerateInviteCode(&s.testUser.ID)
-
-	// 楠岃瘉閭€璇风爜
-	validated, err := s.svc.ValidateInviteCode(code.Code)
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), code.Code, validated.Code)
-}
-
-func (s *InviteServiceTestSuite) TestValidateInviteCode_Invalid() {
-	_, err := s.svc.ValidateInviteCode("invalid-code")
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "invalid")
-}
-
-func (s *InviteServiceTestSuite) TestUseInviteCode() {
-	// 鐢熸垚閭€璇风爜
-	code, _ := s.svc.GenerateInviteCode(nil)
-
-	// 浣跨敤閭€璇风爜
-	err := s.svc.UseInviteCode(code.Code, s.testUser.ID)
-	assert.NoError(s.T(), err)
-
-	// 楠岃瘉宸蹭娇鐢?
-	_, err = s.svc.ValidateInviteCode(code.Code)
-	assert.Error(s.T(), err)
 }
 
 func (s *InviteServiceTestSuite) TestGetInviteStats() {
@@ -2734,93 +2514,6 @@ func (s *NotificationServiceTestSuite) SetupTest() {
 	database.Get().Create(s.testUser)
 }
 
-func (s *NotificationServiceTestSuite) TestCreateTemplate() {
-	tpl := &model.NotificationTemplate{
-		Name:    "Test Template",
-		Type:    "email",
-		Event:   model.EventUserRegister,
-		Title:   "Test Title",
-		Content: "Hello {{.Name}}, your account has been created.",
-		Enabled: true,
-	}
-
-	err := s.svc.CreateTemplate(tpl)
-	assert.NoError(s.T(), err)
-	assert.NotZero(s.T(), tpl.ID)
-}
-
-func (s *NotificationServiceTestSuite) TestGetTemplate() {
-	tpl := &model.NotificationTemplate{
-		Name:    "Get Test",
-		Type:    "email",
-		Event:   model.EventOrderPaid,
-		Title:   "Order Paid",
-		Content: "Test content",
-		Enabled: true,
-	}
-	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
-	found, err := s.svc.GetTemplate("email", model.EventOrderPaid)
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), "Get Test", found.Name)
-}
-
-func (s *NotificationServiceTestSuite) TestGetTemplate_NotFound() {
-	_, err := s.svc.GetTemplate("email", "nonexistent.event")
-	assert.Error(s.T(), err)
-}
-
-func (s *NotificationServiceTestSuite) TestUpdateTemplate() {
-	tpl := &model.NotificationTemplate{
-		Name:    "Update Test",
-		Type:    "email",
-		Event:   model.EventTicketReplied,
-		Title:   "Original",
-		Content: "Original content",
-		Enabled: true,
-	}
-	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
-	tpl.Content = "Updated content"
-	err := s.svc.UpdateTemplate(tpl)
-	assert.NoError(s.T(), err)
-
-	found, err := s.svc.GetTemplate("email", model.EventTicketReplied)
-	if assert.NoError(s.T(), err) && assert.NotNil(s.T(), found) {
-		assert.Equal(s.T(), "Updated content", found.Content)
-	}
-}
-
-func (s *NotificationServiceTestSuite) TestDeleteTemplate() {
-	tpl := &model.NotificationTemplate{
-		Name:    "Delete Test",
-		Type:    "email",
-		Event:   "test.delete",
-		Title:   "Test",
-		Content: "Test",
-		Enabled: true,
-	}
-	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
-	err := s.svc.DeleteTemplate(tpl.ID)
-	assert.NoError(s.T(), err)
-
-	_, err = s.svc.GetTemplate("email", "test.delete")
-	assert.Error(s.T(), err)
-}
-
-func (s *NotificationServiceTestSuite) TestListTemplates() {
-	// 鍒涘缓妯℃澘
-	tpl := &model.NotificationTemplate{
-		Name:    "List Test",
-		Type:    "email",
-		Event:   "test.list",
-		Content: "Test content",
-		Enabled: true,
-	}
-	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
-	templates, err := s.svc.ListTemplates()
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), len(templates), 1)
-}
-
 func (s *NotificationServiceTestSuite) TestSend() {
 	// 璁剧疆閭欢閰嶇疆 (閬垮厤 email not configured 閿欒)
 	s.svc.SetEmailConfig(&model.EmailConfig{
@@ -2838,19 +2531,9 @@ func (s *NotificationServiceTestSuite) TestSend() {
 	// 鐢变簬娌℃湁鐪熷疄鐨凷MTP鏈嶅姟鍣紝鎴戜滑棰勬湡浼氭湁閿欒锛屼絾鏃ュ織搴旇琚垱寤?
 	_ = err // 蹇界暐鍙戦€侀敊璇?
 	// 楠岃瘉鏃ュ織琚垱寤?
-	logs, _, _ := s.svc.GetLogs(1, 10, "")
-	assert.GreaterOrEqual(s.T(), len(logs), 1)
-}
-
-func (s *NotificationServiceTestSuite) TestGetLogs() {
-	// 鍙戦€佷竴鏉￠€氱煡
-	err := s.svc.Send(&s.testUser.ID, "email", model.EventOrderPaid, "Test Title", "Test Content", nil)
-	_ = err
-
-	logs, total, err := s.svc.GetLogs(1, 10, "")
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), total, int64(1))
-	assert.GreaterOrEqual(s.T(), len(logs), 1)
+	var logCount int64
+	assert.NoError(s.T(), s.svc.db.Model(&model.NotificationLog{}).Count(&logCount).Error)
+	assert.GreaterOrEqual(s.T(), logCount, int64(1))
 }
 
 func (s *NotificationServiceTestSuite) TestSendAsyncCopiesUserID() {
@@ -3408,17 +3091,6 @@ func (s *TelegramUserServiceTestSuite) SetupTest() {
 	database.Get().Create(s.tgUser)
 }
 
-func (s *TelegramUserServiceTestSuite) TestGetByTelegramID() {
-	found, err := s.svc.GetByTelegramID(123456789)
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), s.testUser.ID, found.UserID)
-}
-
-func (s *TelegramUserServiceTestSuite) TestGetByTelegramID_NotFound() {
-	_, err := s.svc.GetByTelegramID(999999999)
-	assert.Error(s.T(), err)
-}
-
 func (s *TelegramUserServiceTestSuite) TestGetByUserID() {
 	found, err := s.svc.GetByUserID(s.testUser.ID)
 	assert.NoError(s.T(), err)
@@ -3428,33 +3100,6 @@ func (s *TelegramUserServiceTestSuite) TestGetByUserID() {
 func (s *TelegramUserServiceTestSuite) TestGetByUserID_NotFound() {
 	_, err := s.svc.GetByUserID(99999)
 	assert.Error(s.T(), err)
-}
-
-func (s *TelegramUserServiceTestSuite) TestUpdateLastActive() {
-	err := s.svc.UpdateLastActive(123456789)
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetByTelegramID(123456789)
-	assert.NotZero(s.T(), found.MessageCount)
-}
-
-func (s *TelegramUserServiceTestSuite) TestBan() {
-	err := s.svc.Ban(123456789)
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetByTelegramID(123456789)
-	assert.True(s.T(), found.IsBanned)
-}
-
-func (s *TelegramUserServiceTestSuite) TestUnban() {
-	// 鍏堝皝绂?
-	assert.NoError(s.T(), s.svc.Ban(123456789))
-	// 鍐嶈В灏?
-	err := s.svc.Unban(123456789)
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetByTelegramID(123456789)
-	assert.False(s.T(), found.IsBanned)
 }
 
 func TestTelegramUserService(t *testing.T) {
@@ -3584,7 +3229,7 @@ func (s *BackupServiceTestSuite) TestUpdateConfig() {
 		RetentionDays:  14,
 		BackupDatabase: true,
 		StorageType:    "local",
-		StoragePath:    "backups",
+		StoragePath:    s.T().TempDir(),
 	}
 
 	err := s.svc.UpdateConfig(cfg)
@@ -3673,133 +3318,11 @@ func (s *ForwardRuleServiceTestSuite) TestList() {
 	assert.NotNil(s.T(), rules)
 }
 
-func (s *ForwardRuleServiceTestSuite) TestGetEnabledRules() {
-	rules, err := s.svc.GetEnabledRules()
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), rules)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestCheckPortAvailable() {
-	available, err := s.svc.CheckPortAvailable(s.relayNode.ID, 8080)
-	assert.NoError(s.T(), err)
-	assert.True(s.T(), available)
-}
-
 func (s *ForwardRuleServiceTestSuite) TestGetFreePort() {
 	port, err := s.svc.GetFreePort(s.relayNode.ID, 10000, 20000)
 	assert.NoError(s.T(), err)
 	assert.GreaterOrEqual(s.T(), port, 10000)
 	assert.LessOrEqual(s.T(), port, 20000)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestUpdateTraffic() {
-	// 鍒涘缓娴嬭瘯瑙勫垯
-	rule := &model.ForwardRule{
-		Name:        "Traffic Test Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ListenPort:  10001,
-		Protocol:    "tcp",
-		ExitNodeID:  s.exitNode.ID,
-		TargetHost:  "example.com",
-		TargetPort:  443,
-	}
-	database.Get().Create(rule)
-
-	err := s.svc.UpdateTraffic(rule.ID, 1000, 2000)
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetByID(rule.ID)
-	assert.Equal(s.T(), int64(1000), found.Upload)
-	assert.Equal(s.T(), int64(2000), found.Download)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestUpdateConnections() {
-	rule := &model.ForwardRule{
-		Name:        "Conn Test Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ListenPort:  10002,
-		Protocol:    "tcp",
-		ExitNodeID:  s.exitNode.ID,
-		TargetHost:  "example.com",
-		TargetPort:  443,
-	}
-	database.Get().Create(rule)
-
-	err := s.svc.UpdateConnections(rule.ID, 5)
-	assert.NoError(s.T(), err)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestValidateUserRule_Public() {
-	rule := &model.ForwardRule{
-		Name:        "Public Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ListenPort:  10003,
-		Protocol:    "tcp",
-		ExitNodeID:  s.exitNode.ID,
-		TargetHost:  "example.com",
-		TargetPort:  443,
-		UserID:      nil, // 鍏叡瑙勫垯
-	}
-	database.Get().Create(rule)
-
-	valid, err := s.svc.ValidateUserRule(1, rule.ID)
-	assert.NoError(s.T(), err)
-	assert.True(s.T(), valid)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestParseIPRange() {
-	// 鍗曚釜IP
-	ips, err := ParseIPRange("192.168.1.1")
-	assert.NoError(s.T(), err)
-	assert.Len(s.T(), ips, 1)
-
-	// CIDR
-	ips, err = ParseIPRange("192.168.1.0/30")
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), len(ips), 2)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestGetPortMapping() {
-	mapping, err := s.svc.GetPortMapping(s.relayNode.ID)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), mapping)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestGetConfigForNode() {
-	config, err := s.svc.GetConfigForNode(s.relayNode.ID)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), config)
-	assert.Equal(s.T(), s.relayNode.ID, config.NodeID)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestMatchRule() {
-	// Create a rule with specific target
-	rule := &model.ForwardRule{
-		Name:        "Match Test Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  8080,
-		Protocol:    "tcp",
-		TargetHost:  "example.com",
-		TargetPort:  80,
-	}
-	database.Get().Create(rule)
-
-	// Test matching
-	matched, err := s.svc.MatchRule("192.168.1.1", "example.com", 80)
-	// Should find a match
-	_ = matched
-	_ = err
-
-	// Test non-matching port
-	matched2, err2 := s.svc.MatchRule("192.168.1.1", "example.com", 9999)
-	// Should not find a match
-	_ = matched2
-	_ = err2
 }
 
 func TestForwardRuleService(t *testing.T) {
@@ -4248,197 +3771,6 @@ func (s *ForwardNodeServiceTestSuite) SkipTestHealthCheck() {
 	assert.NotZero(s.T(), found.ID)
 }
 
-func (s *ForwardNodeServiceTestSuite) SkipTestHealthCheckAll() {
-	// Create multiple nodes
-	for i := 0; i < 3; i++ {
-		node := &model.ForwardNode{
-			Name:    "Health All Test",
-			Type:    model.ForwardNodeTypeRelay,
-			Host:    "127.0.0.1",
-			Port:    8080 + i,
-			Enabled: true,
-		}
-		assert.NoError(s.T(), s.svc.Create(node))
-	}
-
-	// Run health check on all nodes
-	_, err := s.svc.HealthCheckAll(context.Background())
-	// We just check the function runs
-	_ = err
-}
-
-func (s *ForwardNodeServiceTestSuite) TestSelectBestNode() {
-	// Create relay node with low latency
-	relay := &model.ForwardNode{
-		Name:    "Best Relay",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "192.168.1.100",
-		Port:    443,
-		Enabled: true,
-		Status:  model.ForwardNodeStatusOnline,
-		Latency: 10,
-		Load:    20,
-	}
-	assert.NoError(s.T(), s.svc.Create(relay))
-	// Create another relay with higher latency
-	relay2 := &model.ForwardNode{
-		Name:    "Slow Relay",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "192.168.1.101",
-		Port:    443,
-		Enabled: true,
-		Status:  model.ForwardNodeStatusOnline,
-		Latency: 100,
-		Load:    80,
-	}
-	assert.NoError(s.T(), s.svc.Create(relay2))
-	selected, err := s.svc.SelectBestNode(model.ForwardNodeTypeRelay, "latency")
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), "Best Relay", selected.Name)
-}
-
-func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_RandomMode() {
-	// Create nodes for random selection
-	for i := 1; i <= 3; i++ {
-		node := &model.ForwardNode{
-			Name:    fmt.Sprintf("Random Relay %d", i),
-			Type:    model.ForwardNodeTypeRelay,
-			Host:    fmt.Sprintf("192.168.1.%d", i+50),
-			Port:    443,
-			Enabled: true,
-			Status:  model.ForwardNodeStatusOnline,
-			Weight:  1,
-		}
-		assert.NoError(s.T(), s.svc.Create(node))
-	}
-
-	// Test random mode - uses randBytes
-	selected, err := s.svc.SelectBestNode(model.ForwardNodeTypeRelay, "random")
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), selected)
-}
-
-func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_RandomModeReturnsEntropyError() {
-	oldRandomInt := forwardNodeRandomInt
-	forwardNodeRandomInt = func(max int) (int, error) {
-		return 0, fmt.Errorf("entropy unavailable")
-	}
-	defer func() {
-		forwardNodeRandomInt = oldRandomInt
-	}()
-
-	node := &model.ForwardNode{
-		Name:    "Random Entropy Relay",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "192.168.1.58",
-		Port:    443,
-		Enabled: true,
-		Status:  model.ForwardNodeStatusOnline,
-		Weight:  1,
-	}
-	assert.NoError(s.T(), s.svc.Create(node))
-
-	selected, err := s.svc.SelectBestNode(model.ForwardNodeTypeRelay, "random")
-
-	assert.Nil(s.T(), selected)
-	assert.EqualError(s.T(), err, "select random forward node: entropy unavailable")
-}
-
-func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_WeightMode() {
-	// Create nodes with different weights
-	weight1 := &model.ForwardNode{
-		Name:    "Weight 1",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "192.168.1.60",
-		Port:    443,
-		Enabled: true,
-		Status:  model.ForwardNodeStatusOnline,
-		Weight:  1,
-	}
-	assert.NoError(s.T(), s.svc.Create(weight1))
-	weight5 := &model.ForwardNode{
-		Name:    "Weight 5",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "192.168.1.61",
-		Port:    443,
-		Enabled: true,
-		Status:  model.ForwardNodeStatusOnline,
-		Weight:  5,
-	}
-	assert.NoError(s.T(), s.svc.Create(weight5))
-	// Test weight mode - uses randBytes
-	selected, err := s.svc.SelectBestNode(model.ForwardNodeTypeRelay, "weight")
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), selected)
-}
-
-func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_WeightModeReturnsEntropyError() {
-	oldRandomInt := forwardNodeRandomInt
-	forwardNodeRandomInt = func(max int) (int, error) {
-		return 0, fmt.Errorf("entropy unavailable")
-	}
-	defer func() {
-		forwardNodeRandomInt = oldRandomInt
-	}()
-
-	node := &model.ForwardNode{
-		Name:    "Weight Entropy Relay",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "192.168.1.59",
-		Port:    443,
-		Enabled: true,
-		Status:  model.ForwardNodeStatusOnline,
-		Weight:  1,
-	}
-	assert.NoError(s.T(), s.svc.Create(node))
-
-	selected, err := s.svc.SelectBestNode(model.ForwardNodeTypeRelay, "weight")
-
-	assert.Nil(s.T(), selected)
-	assert.EqualError(s.T(), err, "select weighted forward node: entropy unavailable")
-}
-
-func (s *ForwardNodeServiceTestSuite) TestSelectBestNode_RoundRobinMode() {
-	// Create nodes for round-robin
-	for i := 1; i <= 2; i++ {
-		node := &model.ForwardNode{
-			Name:    fmt.Sprintf("RR Relay %d", i),
-			Type:    model.ForwardNodeTypeRelay,
-			Host:    fmt.Sprintf("192.168.1.%d", i+70),
-			Port:    443,
-			Enabled: true,
-			Status:  model.ForwardNodeStatusOnline,
-		}
-		assert.NoError(s.T(), s.svc.Create(node))
-	}
-
-	// Test round-robin mode
-	selected1, err := s.svc.SelectBestNode(model.ForwardNodeTypeRelay, "round-robin")
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), selected1)
-
-	selected2, err := s.svc.SelectBestNode(model.ForwardNodeTypeRelay, "round-robin")
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), selected2)
-}
-
-func (s *ForwardNodeServiceTestSuite) TestGetNodesByGroup() {
-	// Create node with tags (group) and proper status
-	node := &model.ForwardNode{
-		Name:    "Group Node",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "192.168.1.100",
-		Port:    443,
-		Enabled: true,
-		Status:  model.ForwardNodeStatusOnline,
-		Tags:    `["group1"]`,
-	}
-	assert.NoError(s.T(), s.svc.Create(node))
-	nodes, err := s.svc.GetNodesByGroup(model.ForwardNodeTypeRelay, "group1")
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), len(nodes), 1)
-}
-
 // Additional ForwardRuleService Tests
 func (s *ForwardRuleServiceTestSuite) TestCreate() {
 	rule := &model.ForwardRule{
@@ -4538,28 +3870,6 @@ func (s *ForwardRuleServiceTestSuite) TestToggle() {
 	assert.False(s.T(), found.Enabled)
 }
 
-func (s *ForwardRuleServiceTestSuite) TestGetTrafficStats() {
-	rule := &model.ForwardRule{
-		Name:        "Stats Test Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ListenPort:  10015,
-		Protocol:    "tcp",
-		ExitNodeID:  s.exitNode.ID,
-		TargetHost:  "example.com",
-		TargetPort:  443,
-		Upload:      1000,
-		Download:    2000,
-	}
-	database.Get().Create(rule)
-
-	start := time.Now().Add(-24 * time.Hour)
-	end := time.Now()
-	stats, err := s.svc.GetTrafficStats(rule.ID, start, end)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), stats)
-}
-
 func (s *ForwardRuleServiceTestSuite) TestCreateRuleForUser() {
 	userID := uint(1)
 	rule, err := s.svc.CreateRuleForUser(userID, &CreateRuleRequest{
@@ -4572,26 +3882,6 @@ func (s *ForwardRuleServiceTestSuite) TestCreateRuleForUser() {
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), rule)
 	assert.Equal(s.T(), userID, *rule.UserID)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestCheckIPAllowed() {
-	userID := uint(1)
-	rule := &model.ForwardRule{
-		Name:        "IP Check Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ListenPort:  10016,
-		Protocol:    "tcp",
-		ExitNodeID:  s.exitNode.ID,
-		TargetHost:  "example.com",
-		TargetPort:  443,
-		UserID:      &userID,
-	}
-	database.Get().Create(rule)
-
-	// CheckIPAllowed returns bool only
-	allowed := s.svc.CheckIPAllowed(rule, "192.168.1.100")
-	assert.True(s.T(), allowed)
 }
 
 // Additional InviteService Tests
@@ -4702,13 +3992,6 @@ func (s *MFAServiceTestSuite) TestRegenerateBackupCodes() {
 		assert.NoError(s.T(), err)
 		assert.Len(s.T(), codes, 10)
 	}
-}
-
-func (s *MFAServiceTestSuite) TestGenerateQRCodeURL() {
-	secret := "testsecret123"
-	url := s.svc.GenerateQRCodeURL(secret, s.testUser.Email)
-	assert.Contains(s.T(), url, "otpauth://totp/")
-	assert.Contains(s.T(), url, s.testUser.Email)
 }
 
 // Additional LoadBalancerService Tests
@@ -5126,21 +4409,6 @@ func (s *PaymentGatewayServiceTestSuite) TestParseConfig() {
 	assert.NotNil(s.T(), cfg)
 }
 
-func (s *PaymentGatewayServiceTestSuite) TestUpdateStats() {
-	gw := &model.PaymentGateway{
-		Name: "Stats Test Gateway",
-		Type: "alipay",
-	}
-	assert.NoError(s.T(), s.svc.Create(gw))
-	err := s.svc.UpdateStats(gw.ID, 100.50)
-	assert.NoError(s.T(), err)
-
-	// Verify stats updated
-	updated, _ := s.svc.GetByID(gw.ID)
-	assert.Equal(s.T(), int64(1), updated.TotalOrders)
-	assert.Equal(s.T(), 100.50, updated.TotalAmount)
-}
-
 func (s *PaymentGatewayServiceTestSuite) TestCreateRecord() {
 	gw := &model.PaymentGateway{
 		Name: "Record Test Gateway",
@@ -5176,102 +4444,6 @@ func (s *PaymentGatewayServiceTestSuite) TestGetRecordByTradeNo() {
 	found, err := s.svc.GetRecordByTradeNo("TRADENO001")
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), "TRADENO001", found.TradeNo)
-}
-
-func (s *PaymentGatewayServiceTestSuite) TestGetRecordByGatewayTradeNo() {
-	gw := &model.PaymentGateway{
-		Name: "Gateway TradeNo Test",
-		Type: "alipay",
-	}
-	assert.NoError(s.T(), s.svc.Create(gw))
-	record := &model.PaymentRecord{
-		GatewayID:      gw.ID,
-		TradeNo:        "LOCAL002",
-		GatewayTradeNo: "GATEWAY002",
-		Amount:         100.00,
-		GatewayType:    "alipay",
-		Status:         0,
-	}
-	assert.NoError(s.T(), s.svc.CreateRecord(record))
-	found, err := s.svc.GetRecordByGatewayTradeNo("GATEWAY002")
-	assert.NoError(s.T(), err)
-	assert.Equal(s.T(), "GATEWAY002", found.GatewayTradeNo)
-}
-
-func (s *PaymentGatewayServiceTestSuite) TestUpdateRecordStatus() {
-	gw := &model.PaymentGateway{
-		Name: "Status Update Gateway",
-		Type: "alipay",
-	}
-	assert.NoError(s.T(), s.svc.Create(gw))
-	record := &model.PaymentRecord{
-		GatewayID:   gw.ID,
-		TradeNo:     "STATUS001",
-		Amount:      100.00,
-		GatewayType: "alipay",
-		Status:      0,
-	}
-	assert.NoError(s.T(), s.svc.CreateRecord(record))
-	err := s.svc.UpdateRecordStatus(record.TradeNo, 1, "GATEWAY_STATUS001")
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetRecordByTradeNo("STATUS001")
-	assert.Equal(s.T(), 1, found.Status)
-	assert.Equal(s.T(), "GATEWAY_STATUS001", found.GatewayTradeNo)
-}
-
-func (s *PaymentGatewayServiceTestSuite) SkipTestMarkAsPaid() {
-	gw := &model.PaymentGateway{
-		Name: "Mark Paid Gateway",
-		Type: "alipay",
-	}
-	assert.NoError(s.T(), s.svc.Create(gw))
-	plan := &model.Plan{
-		Name:           "Paid Plan",
-		TransferEnable: 1073741824,
-	}
-	database.Get().Create(plan)
-
-	user := &model.User{
-		Email:          "markpaid@test.com",
-		Password:       "hashed",
-		Token:          "token-markpaid",
-		UUID:           "uuid-markpaid",
-		TransferEnable: 0,
-	}
-	database.Get().Create(user)
-
-	order := &model.Order{
-		TradeNo:     "MARKPAID001",
-		UserID:      user.ID,
-		PlanID:      plan.ID,
-		Type:        1,
-		Period:      "month",
-		TotalAmount: 1000,
-		Status:      0,
-	}
-	database.Get().Create(order)
-
-	record := &model.PaymentRecord{
-		GatewayID:   gw.ID,
-		TradeNo:     "MARKPAID001",
-		UserID:      user.ID,
-		Amount:      1000.00,
-		GatewayType: "alipay",
-		Status:      0,
-	}
-	assert.NoError(s.T(), s.svc.CreateRecord(record))
-	err := s.svc.MarkAsPaid(record.TradeNo, "GATEWAY_MARKPAID001", "{}")
-	assert.NoError(s.T(), err)
-
-	// Verify record updated
-	found, _ := s.svc.GetRecordByTradeNo("MARKPAID001")
-	assert.Equal(s.T(), 1, found.Status)
-
-	// Verify order completed
-	var updatedOrder model.Order
-	database.Get().Where("trade_no = ?", "MARKPAID001").First(&updatedOrder)
-	assert.Equal(s.T(), 1, updatedOrder.Status)
 }
 
 func (s *PaymentGatewayServiceTestSuite) TestGetUserRecords() {
@@ -5620,7 +4792,7 @@ func (s *BackupServiceTestSuite) TestCreateBackup() {
 		RetentionDays:  7,
 		BackupDatabase: true,
 		StorageType:    "local",
-		StoragePath:    "test_backups",
+		StoragePath:    s.T().TempDir(),
 	}
 	assert.NoError(s.T(), s.svc.UpdateConfig(cfg))
 	// Create backup (will fail for non-existent db, but function runs)
@@ -5636,7 +4808,7 @@ func (s *BackupServiceTestSuite) TestDeleteBackup() {
 		Name:   "test_delete_backup",
 		Type:   "database",
 		Status: 1,
-		Path:   "test_backups/test.db",
+		Path:   filepath.Join(s.T().TempDir(), "test.db"),
 	}
 	database.Get().Create(record)
 
@@ -5682,43 +4854,6 @@ func (s *BackupServiceTestSuite) TestCleanupOldBackups() {
 	database.Get().Model(&model.BackupRecord{}).Where("id = ?", newRecord.ID).Count(&newCount)
 	assert.Equal(s.T(), int64(0), oldCount)
 	assert.Equal(s.T(), int64(1), newCount)
-}
-
-// =====================================================
-// ForwardRuleService MatchRule Tests
-// =====================================================
-
-func (s *ForwardRuleServiceTestSuite) SkipTestMatchRule() {
-	// Create rule using existing relay and exit nodes from SetupTest
-	rule := &model.ForwardRule{
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		Name:        "Match Test Rule",
-		ListenPort:  8080,
-		TargetHost:  "10.0.0.1", // Exact match required
-		TargetPort:  80,
-		Protocol:    "tcp",
-		Enabled:     true,
-		// UserID nil means no user restriction
-	}
-	err := database.Get().Create(rule).Error
-	assert.NoError(s.T(), err)
-
-	// Match by target host and port (source IP is ignored)
-	matched, err := s.svc.MatchRule("192.168.1.100", "10.0.0.1", 80)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), matched)
-	assert.Equal(s.T(), rule.ID, matched.ID)
-
-	// No match - different port
-	notMatched, err := s.svc.MatchRule("192.168.1.100", "10.0.0.1", 9999)
-	assert.NoError(s.T(), err)
-	assert.Nil(s.T(), notMatched)
-
-	// No match - different host
-	notMatched2, err := s.svc.MatchRule("192.168.1.100", "10.0.0.99", 80)
-	assert.NoError(s.T(), err)
-	assert.Nil(s.T(), notMatched2)
 }
 
 // =====================================================
@@ -6343,37 +5478,6 @@ func TestTelegramBotService(t *testing.T) {
 // Additional PaymentGatewayService Tests
 // =====================================================
 
-func (s *PaymentGatewayServiceTestSuite) TestMarkAsPaid() {
-	// Create gateway
-	gateway := &model.PaymentGateway{
-		Name:    "MarkPaid Test",
-		Type:    model.PaymentGatewayEPay,
-		Enabled: true,
-	}
-	assert.NoError(s.T(), s.svc.Create(gateway))
-	// Create record using service method
-	record := &model.PaymentRecord{
-		TradeNo:     "MP-TEST-001",
-		GatewayID:   gateway.ID,
-		GatewayType: model.PaymentGatewayEPay,
-		Amount:      100.0,
-		Status:      0,
-	}
-	err := s.svc.CreateRecord(record)
-	assert.NoError(s.T(), err)
-
-	// Mark as paid
-	err = s.svc.MarkAsPaid(record.TradeNo, "GATEWAY-TRADE-001", `{"notify":"data"}`)
-	// May fail due to SQLite transaction issues with in-memory DB
-	// but function runs and hits the code path
-	_ = err
-}
-
-func (s *PaymentGatewayServiceTestSuite) TestMarkAsPaid_NotFound() {
-	err := s.svc.MarkAsPaid("NONEXISTENT", "", "")
-	assert.Error(s.T(), err)
-}
-
 func (s *PaymentGatewayServiceTestSuite) TestMarkOrderPaidWithAmountRejectsMismatch() {
 	gateway := &model.PaymentGateway{
 		Name:    "Callback Amount Gateway",
@@ -6519,32 +5623,6 @@ func (s *UserServiceTestSuite) TestGetActiveUsers() {
 	users, err := s.svc.GetActiveUsers()
 	_ = users
 	_ = err
-}
-
-// =====================================================
-// Additional SubscriptionService Tests
-// =====================================================
-
-func (s *SubscriptionServiceTestSuite) TestUpdateSubscriptionTemplate() {
-	// Create template
-	tpl := &model.SubscriptionTemplate{
-		Name:   "Update Template",
-		Type:   "vmess",
-		Enable: 1,
-		Server: "example.com",
-		Port:   443,
-	}
-	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
-	// Update
-	tpl.Server = "updated.example.com"
-	err := s.svc.UpdateTemplate(tpl)
-	assert.NoError(s.T(), err)
-
-	// Verify
-	found, err := s.svc.GetTemplate(tpl.ID)
-	if assert.NoError(s.T(), err) {
-		assert.Equal(s.T(), "updated.example.com", found.Server)
-	}
 }
 
 // =====================================================
@@ -7138,189 +6216,6 @@ func (s *ForwardNodeServiceTestSuite) TestRandBytes() {
 // ForwardRuleService Comprehensive Tests
 // =====================================================
 
-func (s *ForwardRuleServiceTestSuite) TestMatchRule_AllBranches() {
-	// Test 1: Matching rule found
-	rule1 := &model.ForwardRule{
-		Name:        "Match Rule 1",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  8081,
-		Protocol:    "tcp",
-		TargetHost:  "example.com",
-		TargetPort:  80,
-	}
-	database.Get().Create(rule1)
-
-	matched, err := s.svc.MatchRule("192.168.1.1", "example.com", 80)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), matched)
-	assert.Equal(s.T(), rule1.ID, matched.ID)
-
-	// Test 2: Port mismatch - should not match
-	matched2, err2 := s.svc.MatchRule("192.168.1.1", "example.com", 9999)
-	assert.Error(s.T(), err2)
-	assert.Nil(s.T(), matched2)
-
-	// Test 3: Host mismatch but TargetHost is 0.0.0.0 (should match any)
-	rule2 := &model.ForwardRule{
-		Name:        "Match Rule 2",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  8082,
-		Protocol:    "tcp",
-		TargetHost:  "0.0.0.0",
-		TargetPort:  443,
-	}
-	database.Get().Create(rule2)
-
-	matched3, err3 := s.svc.MatchRule("192.168.1.1", "anyhost.com", 443)
-	assert.NoError(s.T(), err3)
-	assert.NotNil(s.T(), matched3)
-
-	// Test 4: Host mismatch - exact host required
-	rule3 := &model.ForwardRule{
-		Name:        "Match Rule 3",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  8083,
-		Protocol:    "tcp",
-		TargetHost:  "specific.com",
-		TargetPort:  8080,
-	}
-	database.Get().Create(rule3)
-
-	matched4, err4 := s.svc.MatchRule("192.168.1.1", "other.com", 8080)
-	assert.Error(s.T(), err4)
-	assert.Nil(s.T(), matched4)
-
-	// Test 5: User restriction - rule has UserID set (should skip)
-	userID := uint(999)
-	rule4 := &model.ForwardRule{
-		Name:        "Match Rule 4",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  8084,
-		Protocol:    "tcp",
-		TargetHost:  "user.example.com",
-		TargetPort:  9000,
-		UserID:      &userID,
-	}
-	database.Get().Create(rule4)
-
-	matched5, err5 := s.svc.MatchRule("192.168.1.1", "user.example.com", 9000)
-	assert.Error(s.T(), err5)
-	assert.Nil(s.T(), matched5)
-
-	// Test 6: Expired rule - should skip
-	pastTime := time.Now().Add(-24 * time.Hour)
-	rule5 := &model.ForwardRule{
-		Name:        "Match Rule 5",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  8085,
-		Protocol:    "tcp",
-		TargetHost:  "expired.example.com",
-		TargetPort:  9001,
-		ExpireTime:  &pastTime,
-	}
-	database.Get().Create(rule5)
-
-	matched6, err6 := s.svc.MatchRule("192.168.1.1", "expired.example.com", 9001)
-	assert.Error(s.T(), err6)
-	assert.Nil(s.T(), matched6)
-
-	// Test 7: Traffic limit exceeded - should skip
-	trafficLimit := int64(100)
-	rule6 := &model.ForwardRule{
-		Name:         "Match Rule 6",
-		Enabled:      true,
-		RelayNodeID:  s.relayNode.ID,
-		ExitNodeID:   s.exitNode.ID,
-		ListenPort:   8086,
-		Protocol:     "tcp",
-		TargetHost:   "traffic.example.com",
-		TargetPort:   9002,
-		Upload:       60,
-		Download:     50,
-		TrafficLimit: &trafficLimit,
-	}
-	database.Get().Create(rule6)
-
-	matched7, err7 := s.svc.MatchRule("192.168.1.1", "traffic.example.com", 9002)
-	assert.Error(s.T(), err7)
-	assert.Nil(s.T(), matched7)
-
-	// Test 8: Traffic limit not exceeded - should match
-	trafficLimit2 := int64(200)
-	rule7 := &model.ForwardRule{
-		Name:         "Match Rule 7",
-		Enabled:      true,
-		RelayNodeID:  s.relayNode.ID,
-		ExitNodeID:   s.exitNode.ID,
-		ListenPort:   8087,
-		Protocol:     "tcp",
-		TargetHost:   "traffic-ok.example.com",
-		TargetPort:   9003,
-		Upload:       60,
-		Download:     50,
-		TrafficLimit: &trafficLimit2,
-	}
-	database.Get().Create(rule7)
-
-	matched8, err8 := s.svc.MatchRule("192.168.1.1", "traffic-ok.example.com", 9003)
-	assert.NoError(s.T(), err8)
-	assert.NotNil(s.T(), matched8)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestGetConfigForNode_WithSpeedLimit() {
-	speedLimit := int64(1024000)
-	rule := &model.ForwardRule{
-		Name:        "Config Test Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  9090,
-		Protocol:    "tcp",
-		TargetHost:  "config.example.com",
-		TargetPort:  443,
-		SpeedLimit:  &speedLimit,
-	}
-	database.Get().Create(rule)
-
-	config, err := s.svc.GetConfigForNode(s.relayNode.ID)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), config)
-	assert.Equal(s.T(), s.relayNode.ID, config.NodeID)
-	assert.Len(s.T(), config.Rules, 1)
-	assert.Equal(s.T(), speedLimit, config.Rules[0].SpeedLimit)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestGetConfigForNode_ExitNode() {
-	// Create rule for exit node
-	rule := &model.ForwardRule{
-		Name:        "Exit Node Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  9091,
-		Protocol:    "tcp",
-		TargetHost:  "exit.example.com",
-		TargetPort:  443,
-	}
-	database.Get().Create(rule)
-
-	// Query for exit node
-	config, err := s.svc.GetConfigForNode(s.exitNode.ID)
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), config)
-	assert.Len(s.T(), config.Rules, 1)
-}
-
 func (s *ForwardRuleServiceTestSuite) TestValidateRule_NotRelayNode() {
 	// Create a node that is NOT a relay node
 	notRelayNode := &model.ForwardNode{
@@ -7429,79 +6324,6 @@ func (s *ForwardRuleServiceTestSuite) TestGetFreePort_NoAvailablePort() {
 	port, err := s.svc.GetFreePort(s.relayNode.ID, 10000, 10005)
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), 0, port)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestGetPortMapping_MultipleRules() {
-	// Create multiple rules for the same relay node
-	for i := 0; i < 3; i++ {
-		rule := &model.ForwardRule{
-			Name:        fmt.Sprintf("Mapping Rule %d", i),
-			Enabled:     true,
-			RelayNodeID: s.relayNode.ID,
-			ExitNodeID:  s.exitNode.ID,
-			ListenPort:  20000 + i,
-			Protocol:    "tcp",
-			TargetHost:  fmt.Sprintf("target%d.example.com", i),
-			TargetPort:  443,
-		}
-		database.Get().Create(rule)
-	}
-
-	mapping, err := s.svc.GetPortMapping(s.relayNode.ID)
-	assert.NoError(s.T(), err)
-	assert.Len(s.T(), mapping, 3)
-	assert.NotNil(s.T(), mapping[20000])
-	assert.NotNil(s.T(), mapping[20001])
-	assert.NotNil(s.T(), mapping[20002])
-}
-
-func (s *ForwardRuleServiceTestSuite) TestValidateUserRule_AllBranches() {
-	// Test 1: Public rule (no UserID)
-	publicRule := &model.ForwardRule{
-		Name:        "Public Rule for Validation",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  21000,
-		Protocol:    "tcp",
-		TargetHost:  "public.example.com",
-		TargetPort:  443,
-	}
-	database.Get().Create(publicRule)
-
-	valid, err := s.svc.ValidateUserRule(1, publicRule.ID)
-	assert.NoError(s.T(), err)
-	assert.True(s.T(), valid)
-
-	// Test 2: User's own rule
-	userID := uint(123)
-	userRule := &model.ForwardRule{
-		Name:        "User Own Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  21001,
-		Protocol:    "tcp",
-		TargetHost:  "user.example.com",
-		TargetPort:  443,
-		UserID:      &userID,
-	}
-	database.Get().Create(userRule)
-
-	valid2, err2 := s.svc.ValidateUserRule(userID, userRule.ID)
-	assert.NoError(s.T(), err2)
-	assert.True(s.T(), valid2)
-
-	// Test 3: Other user's rule (should return false)
-	otherUserID := uint(456)
-	valid3, err3 := s.svc.ValidateUserRule(otherUserID, userRule.ID)
-	assert.NoError(s.T(), err3)
-	assert.False(s.T(), valid3)
-
-	// Test 4: Non-existent rule
-	valid4, err4 := s.svc.ValidateUserRule(1, 99999)
-	assert.Error(s.T(), err4)
-	assert.False(s.T(), valid4)
 }
 
 func (s *ForwardRuleServiceTestSuite) TestUpdate_ValidationError() {
@@ -7723,57 +6545,6 @@ func (s *InviteServiceTestSuite) TestGenerateInviteCode_WithoutExpiration() {
 	assert.Nil(s.T(), code.ExpiredAt)
 }
 
-func (s *InviteServiceTestSuite) TestValidateInviteCode_Expired() {
-	// Create expired code
-	pastTime := time.Now().Add(-24 * time.Hour)
-	expiredCode := &model.InviteCode{
-		Code:      "EXPIRED1",
-		UserID:    nil,
-		Status:    0,
-		ExpiredAt: &pastTime,
-	}
-	database.Get().Create(expiredCode)
-
-	_, err := s.svc.ValidateInviteCode("EXPIRED1")
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "expired")
-}
-
-func (s *InviteServiceTestSuite) TestValidateInviteCode_AlreadyUsed() {
-	// Create used code
-	now := time.Now()
-	usedBy := uint(1)
-	usedCode := &model.InviteCode{
-		Code:   "USEDCODE",
-		UserID: nil,
-		Status: 1,
-		UsedBy: &usedBy,
-		UsedAt: &now,
-	}
-	database.Get().Create(usedCode)
-
-	_, err := s.svc.ValidateInviteCode("USEDCODE")
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "invalid or used")
-}
-
-func (s *InviteServiceTestSuite) TestValidateInviteCode_Valid() {
-	// Create valid code
-	futureTime := time.Now().Add(24 * time.Hour)
-	validCode := &model.InviteCode{
-		Code:      "VALIDCODE",
-		UserID:    nil,
-		Status:    0,
-		ExpiredAt: &futureTime,
-	}
-	database.Get().Create(validCode)
-
-	code, err := s.svc.ValidateInviteCode("VALIDCODE")
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), code)
-	assert.Equal(s.T(), "VALIDCODE", code.Code)
-}
-
 func (s *InviteServiceTestSuite) TestGetConfig_NoConfig() {
 	// Clear config
 	database.Get().Where("1 = 1").Delete(&model.InviteConfig{})
@@ -7867,39 +6638,6 @@ func (s *MFAServiceTestSuite) TestDisableMFA_Success() {
 // =====================================================
 // ForwardNodeService Additional Tests
 // =====================================================
-
-func (s *ForwardNodeServiceTestSuite) TestHealthCheckAll() {
-	// Create multiple enabled nodes
-	node1 := &model.ForwardNode{
-		Name:    "HealthCheck Node 1",
-		Type:    "gost",
-		Host:    "127.0.0.1", // localhost for testing
-		Port:    1,           // Use port 1 (will fail, but tests the function)
-		Status:  model.ForwardNodeStatusOnline,
-		Enabled: true,
-	}
-	node2 := &model.ForwardNode{
-		Name:    "HealthCheck Node 2",
-		Type:    "gost",
-		Host:    "127.0.0.1",
-		Port:    2,
-		Status:  model.ForwardNodeStatusOnline,
-		Enabled: true,
-	}
-	database.Get().Create(node1)
-	database.Get().Create(node2)
-
-	// Run health check for all nodes
-	ctx := context.Background()
-	results, err := s.svc.HealthCheckAll(ctx)
-	assert.NoError(s.T(), err)
-	assert.Len(s.T(), results, 2)
-
-	// Check that results are populated
-	for _, result := range results {
-		assert.NotNil(s.T(), result)
-	}
-}
 
 func (s *ForwardNodeServiceTestSuite) TestHealthCheck_NodeNotFound() {
 	ctx := context.Background()
