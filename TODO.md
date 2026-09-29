@@ -28,6 +28,23 @@ checklist.
   release bundle. Keep execution and topology feature flags disabled until
   that approval is recorded.
 
+## P0: Production Upgrade (alpha build to 4.0.x)
+
+Baseline and rehearsal:
+[`docs/architecture/release-line-status.md`](docs/architecture/release-line-status.md#production-baseline-and-upgrade-rehearsal);
+procedure: [`docs/UPGRADE.md`](docs/UPGRADE.md#upgrading-from-a-v31-or-v40-alpha-build).
+
+- [ ] Production runs a `v4.0.0-alpha.6`/`alpha.7` build that can crash with
+  `concurrent map writes` when forward latency probes fail concurrently.
+  Until it is upgraded, set `forward_runtime.latency.concurrency: 1` in the
+  production config.
+- [ ] Cut a CI-built release that contains PRs #11 to #19. The published
+  `v4.0.0` tag has none of the fixes the rehearsal needed. Then upgrade
+  production: back up, start the new build with the identity bootstrap
+  directory, install the other fifteen packages, and run the smoke checks.
+- [ ] Correct the stale `app.version: 2.0.1` in the production config during
+  that upgrade.
+
 ## P0: Plugin Platform
 
 - [ ] Keep Supervisor and dynamic plugin execution feature-gated until staging
@@ -86,6 +103,10 @@ Status and ordering live in
 - [ ] Normalize API error envelopes module by module.
 - [ ] Add handler tests before changing response shapes.
 - [ ] Keep frontend build/test/audit green for admin and user workflows.
+- [ ] `GET /api/v2/admin/forward/observability/targets` returns targets in a
+  random order: `ForwardObservabilityService.ListTargets`
+  (`internal/service/forward_observability_service.go`) iterates a map. Sort
+  the list, for example by `targetKey`.
 
 ## Implemented But Not Wired (keep; wire later)
 
@@ -154,6 +175,12 @@ deliberately in a later PR.
   `config/deploy/deploy_panel.sh`, `config/deploy/ansible/nodes/`,
   `scripts/deploy_wireguard_gost_quic.sh`, and the agent deploy defaults in
   `web/src/views/admin/Nodes.vue`.
+
+- [ ] Background workers that contact real infrastructure (forward runtime
+  job executor, forward agent bridge, gost/ansible stats, flow reset, latency
+  prober) cannot be switched off by configuration. Staging and upgrade
+  rehearsals on production copies need network namespace isolation
+  (`docs/UPGRADE.md`). Add a config switch for outbound background work.
 
 ## Later (Not This Phase)
 
