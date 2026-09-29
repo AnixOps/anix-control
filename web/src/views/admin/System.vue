@@ -732,16 +732,6 @@ const runtimeBackendKey = 'forward.runtime_backend'
 const runtimeAnsibleBackendKey = 'forward.runtime.ansible.backend'
 const runtimeAnsibleConfigKey = 'forward.runtime.ansible.config'
 const runtimeLegacyAnsibleConfigKey = 'forward.runtime.iptables_ansible.config'
-const runtimeAnsibleInventoryKey = 'forward.runtime.ansible.inventory'
-const runtimeAnsibleApplyPlaybookKey = 'forward.runtime.ansible.apply_playbook'
-const runtimeAnsibleRemovePlaybookKey = 'forward.runtime.ansible.remove_playbook'
-const runtimeAnsibleBecomeKey = 'forward.runtime.ansible.become'
-const runtimeAnsibleExtraVarsKey = 'forward.runtime.ansible.extra_vars_json'
-const runtimeLegacyAnsibleInventoryKey = 'forward.ansible.inventory'
-const runtimeLegacyAnsibleApplyPlaybookKey = 'forward.ansible.playbook_apply'
-const runtimeLegacyAnsibleRemovePlaybookKey = 'forward.ansible.playbook_remove'
-const runtimeLegacyAnsibleBecomeKey = 'forward.ansible.become'
-const runtimeLegacyAnsibleExtraVarsKey = 'forward.ansible.extra_vars_json'
 const runtimeNodeXBaseUrlKey = 'forward.runtime.nodex.base_url'
 const runtimeNodeXTokenKey = 'forward.runtime.nodex.token'
 const runtimeNodeXTimeoutKey = 'forward.runtime.nodex.timeout_seconds'
@@ -762,8 +752,6 @@ const runtimeNodeXBaseUrl = ref('')
 const runtimeNodeXToken = ref('')
 const runtimeNodeXTimeout = ref(15)
 const runtimeAnsibleForm = ref(createRuntimeAnsibleForm())
-const runtimeSaving = ref(false)
-const runtimeValidationError = ref('')
 const runtimeJobs = ref([])
 const runtimeJobsLoading = ref(false)
 const runtimeStatus = ref(null)
@@ -899,82 +887,6 @@ function normalizeRuntimeAnsibleForm(source = {}) {
     extraVarsJson: normalizeJsonObjectText(source.extraVarsJson ?? form.extraVarsJson),
     environmentJson: normalizeJsonObjectText(source.environmentJson ?? form.environmentJson)
   }
-}
-
-function parseRuntimeJsonObject(value, label) {
-  const trimmed = String(value ?? '').trim()
-  if (!trimmed) {
-    return {}
-  }
-
-  let parsed
-  try {
-    parsed = JSON.parse(trimmed)
-  } catch {
-    throw new Error(t('runtime.localRuntime.errors.invalidJson', { label }))
-  }
-
-  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
-    throw new Error(t('runtime.localRuntime.errors.invalidObject', { label }))
-  }
-
-  return parsed
-}
-
-function buildRuntimeAnsiblePayload(source = runtimeAnsibleForm.value) {
-  const form = normalizeRuntimeAnsibleForm(source)
-  const extraVars = parseRuntimeJsonObject(form.extraVarsJson, t('runtime.localRuntime.fields.extraVarsJson'))
-  const environmentOverrides = parseRuntimeJsonObject(form.environmentJson, t('runtime.localRuntime.fields.environmentJson'))
-  const environment = {}
-
-  if (form.ansibleConfig) {
-    environment.ANSIBLE_CONFIG = form.ansibleConfig
-  }
-
-  Object.entries(environmentOverrides).forEach(([key, value]) => {
-    const normalizedKey = String(key ?? '').trim()
-    if (!normalizedKey) {
-      return
-    }
-    environment[normalizedKey] = value == null ? '' : String(value)
-  })
-
-  const normalizedExtraVars = {}
-  Object.entries(extraVars).forEach(([key, value]) => {
-    const normalizedKey = String(key ?? '').trim()
-    if (!normalizedKey) {
-      return
-    }
-    normalizedExtraVars[normalizedKey] = value
-  })
-
-  return {
-    inventory: form.inventory,
-    playbookApply: form.playbookApply,
-    playbookRemove: form.playbookRemove,
-    become: !!form.become,
-    extraVars: normalizedExtraVars,
-    command: form.command,
-    workingDir: form.workingDir,
-    targetPattern: form.targetPattern,
-    environment,
-    timeoutSeconds: Number.isFinite(Number(form.timeoutSeconds)) && Number(form.timeoutSeconds) > 0
-      ? Number(form.timeoutSeconds)
-      : defaultRuntimeAnsibleConfig.timeoutSeconds
-  }
-}
-
-const runtimeConfigPreview = computed(() => {
-  try {
-    return JSON.stringify(buildRuntimeAnsiblePayload(runtimeAnsibleForm.value), null, 2)
-  } catch (err) {
-    return t('runtime.localRuntime.errors.invalidPreview', { message: err.message })
-  }
-})
-
-function applyDefaultRuntimeAnsibleConfig() {
-  runtimeValidationError.value = ''
-  runtimeAnsibleForm.value = createRuntimeAnsibleForm(defaultRuntimeAnsibleConfig)
 }
 
 const parseSubscriptionDomainInput = (value) => {
@@ -1237,7 +1149,6 @@ const runRuntimeDoctorCheckSafe = async () => {
 
 const fetchForwardRuntimeConfig = async () => {
   let explicitNodeXMode = null
-  runtimeValidationError.value = ''
   runtimeAnsibleForm.value = createRuntimeAnsibleForm()
   try {
     const nodeXModeRes = await getSystemConfig(runtimeNodeXModeKey)
@@ -1286,7 +1197,6 @@ const fetchForwardRuntimeConfig = async () => {
         }
         runtimeAnsibleForm.value = normalizeRuntimeAnsibleForm(parsed)
       } catch {
-        runtimeValidationError.value = t('runtime.workbench.errors.savedConfigInvalid')
         runtimeAnsibleForm.value = createRuntimeAnsibleForm()
       }
     }
@@ -1311,134 +1221,6 @@ const fetchForwardRuntimeConfig = async () => {
     runtimeNodeXTimeout.value = Number.isFinite(timeoutValue) && timeoutValue > 0 ? timeoutValue : 15
   } catch (err) {
     console.error('get forward runtime NodeX timeout config failed:', err)
-  }
-}
-
-const saveForwardRuntimeConfig = async () => {
-  runtimeValidationError.value = ''
-  const trimmedNodeXBaseUrl = runtimeNodeXBaseUrl.value?.trim() || ''
-  const trimmedNodeXToken = runtimeNodeXToken.value?.trim() || ''
-
-  if (runtimeNodeXMode.value) {
-    if (!trimmedNodeXBaseUrl) {
-      runtimeValidationError.value = t('runtime.workbench.errors.nodeXBaseUrlRequired')
-      return
-    }
-    if (!trimmedNodeXToken) {
-      runtimeValidationError.value = t('runtime.workbench.errors.nodeXTokenRequired')
-      return
-    }
-  }
-
-  let ansiblePayload = null
-  if (!runtimeNodeXMode.value) {
-    try {
-      runtimeAnsibleForm.value = normalizeRuntimeAnsibleForm(runtimeAnsibleForm.value)
-      ansiblePayload = buildRuntimeAnsiblePayload(runtimeAnsibleForm.value)
-    } catch {
-      runtimeValidationError.value = t('runtime.workbench.errors.invalidRuntimeJson')
-      return
-    }
-  }
-
-  const backendValue = runtimeNodeXMode.value ? 'gost' : (runtimeBackend.value && runtimeBackend.value !== 'gost' ? runtimeBackend.value : 'nftables_ansible')
-  runtimeBackend.value = backendValue
-  const timeoutValue = Number(runtimeNodeXTimeout.value)
-
-  runtimeSaving.value = true
-  try {
-    const updates = [
-      ensureSystemMutation(setSystemConfig(runtimeNodeXModeKey, {
-        value: runtimeNodeXMode.value,
-        type: 'bool',
-        group: 'forward',
-        description: 'Enable NodeX forward runtime mode'
-      }), 'runtime.workbench.errors.saveFailed'),
-      ensureSystemMutation(setSystemConfig(runtimeBackendKey, {
-        value: backendValue,
-        type: 'string',
-        group: 'forward',
-        description: 'Forward runtime backend'
-      }), 'runtime.workbench.errors.saveFailed'),
-      ensureSystemMutation(setSystemConfig(runtimeAnsibleBackendKey, {
-        value: backendValue === 'gost' ? 'nftables_ansible' : backendValue,
-        type: 'string',
-        group: 'forward',
-        description: 'Preferred local ansible backend'
-      }), 'runtime.workbench.errors.saveFailed'),
-      ensureSystemMutation(setSystemConfig(runtimeNodeXBaseUrlKey, {
-        value: trimmedNodeXBaseUrl,
-        type: 'string',
-        group: 'forward',
-        description: 'Forward runtime NodeX base URL'
-      }), 'runtime.workbench.errors.saveFailed'),
-      ensureSystemMutation(setSystemConfig(runtimeNodeXTokenKey, {
-        value: trimmedNodeXToken,
-        type: 'string',
-        group: 'forward',
-        description: 'Forward runtime NodeX token'
-      }), 'runtime.workbench.errors.saveFailed'),
-      ensureSystemMutation(setSystemConfig(runtimeNodeXTimeoutKey, {
-        value: Number.isFinite(timeoutValue) && timeoutValue > 0 ? timeoutValue : 15,
-        type: 'number',
-        group: 'forward',
-        description: 'Forward runtime NodeX timeout'
-      }), 'runtime.workbench.errors.saveFailed')
-    ]
-
-    if (!runtimeNodeXMode.value) {
-      updates.push(
-        ensureSystemMutation(setSystemConfig(runtimeAnsibleConfigKey, {
-          value: ansiblePayload ? JSON.stringify(ansiblePayload) : '',
-          type: 'json',
-          group: 'forward',
-          description: 'Forward runtime ansible config'
-        }), 'runtime.workbench.errors.saveFailed'),
-        ensureSystemMutation(setSystemConfig(runtimeAnsibleInventoryKey, {
-          value: ansiblePayload?.inventory || '',
-          type: 'string',
-          group: 'forward',
-          description: 'Forward ansible inventory path'
-        }), 'runtime.workbench.errors.saveFailed'),
-        ensureSystemMutation(setSystemConfig(runtimeAnsibleApplyPlaybookKey, {
-          value: ansiblePayload?.playbookApply || '',
-          type: 'string',
-          group: 'forward',
-          description: 'Forward ansible apply playbook path'
-        }), 'runtime.workbench.errors.saveFailed'),
-        ensureSystemMutation(setSystemConfig(runtimeAnsibleRemovePlaybookKey, {
-          value: ansiblePayload?.playbookRemove || '',
-          type: 'string',
-          group: 'forward',
-          description: 'Forward ansible remove playbook path'
-        }), 'runtime.workbench.errors.saveFailed'),
-        ensureSystemMutation(setSystemConfig(runtimeAnsibleBecomeKey, {
-          value: ansiblePayload?.become || false,
-          type: 'bool',
-          group: 'forward',
-          description: 'Forward ansible become flag'
-        }), 'runtime.workbench.errors.saveFailed'),
-        ensureSystemMutation(setSystemConfig(runtimeAnsibleExtraVarsKey, {
-          value: JSON.stringify(ansiblePayload?.extraVars || {}),
-          type: 'json',
-          group: 'forward',
-          description: 'Forward ansible extra vars JSON'
-        }), 'runtime.workbench.errors.saveFailed')
-      )
-    }
-
-    await Promise.all(updates)
-    await fetchForwardRuntimeConfig()
-    await fetchForwardRuntimeJobs()
-    await fetchRuntimeStatusSafe()
-    fetchConfigs()
-  } catch (err) {
-    runtimeValidationError.value = translateRuntimeText(
-      err.response?.data?.error || err.message,
-      t('runtime.workbench.errors.saveFailed')
-    )
-  } finally {
-    runtimeSaving.value = false
   }
 }
 

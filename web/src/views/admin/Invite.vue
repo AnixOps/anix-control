@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="invite-page">
     <div class="page-header">
       <h1>{{ t('adminInvite.title') }}</h1>

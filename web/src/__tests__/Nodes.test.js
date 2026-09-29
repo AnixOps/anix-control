@@ -16,9 +16,7 @@ const adminApi = vi.hoisted(() => ({
   deleteNodeProtocol: vi.fn(),
   getProtocolTemplates: vi.fn(),
   getAuthKeys: vi.fn(),
-  generateAuthKey: vi.fn(),
-  generateWireGuardKeypair: vi.fn(),
-  deleteAuthKey: vi.fn()
+  generateWireGuardKeypair: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => adminApi)

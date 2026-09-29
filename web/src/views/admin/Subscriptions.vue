@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="subscriptions-page">
     <div class="page-header">
       <h1>{{ $t('admin.subscriptions.title') }}</h1>

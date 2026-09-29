@@ -11,13 +11,6 @@ export default {
         shadowsocks: 'Shadowsocks',
         hysteria2: 'Hysteria2',
         tuic: 'TUIC'
-      },
-      protocolPlaceholders: {
-        settings: '{"flow":"xtls-rprx-vision"}',
-        tlsSettings: '{"server_name":"example.com"}',
-        realitySettings: '{"short_id":"..."}',
-        transportSettings: '{"path":"/ws"}',
-        customConfig: '{"node_type":"vless", ...}'
       }
     },
     subscriptions: {

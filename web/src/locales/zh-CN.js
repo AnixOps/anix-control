@@ -1,4 +1,4 @@
-﻿import runtimePages from './modules/zh-CN/runtimePages'
+import runtimePages from './modules/zh-CN/runtimePages'
 import networkPages from './modules/zh-CN/networkPages'
 import miscPages from './modules/zh-CN/miscPages'
 import adminSupportPages from './modules/zh-CN/adminSupportPages'
@@ -14,7 +14,6 @@ const legacy = {
   'Dashboard': '仪表盘',
   'Forwards': '流量转发',
   'Tunnels': '隧道管理',
-  'Limits': '限速管理',
   'Ansible Machines': 'Ansible 机器',
   'Local Runtime': '本地运行时',
   'NodeX Topology': 'NodeX 拓扑',
@@ -33,29 +32,19 @@ const legacy = {
   'Knowledge': '知识库管理',
   'MFA': 'MFA 设置',
   'System': '系统管理',
-  'Logout': '退出登录',
   'Refresh': '刷新',
-  'Refreshing...': '刷新中...',
   'Save': '保存',
   'Cancel': '取消',
   'Close': '关闭',
   'Create': '创建',
-  'Edit': '编辑',
   'Delete': '删除',
   'Preview': '预览',
   'Copy': '复制',
-  'Copy Content': '复制内容',
-  'Copy Link': '复制链接',
   'Download': '下载',
   'Open': '打开',
   'Details': '详情',
   'Back': '返回',
-  'Submit': '提交',
-  'Submit Order': '提交订单',
-  'Buy Now': '立即选购',
-  'Pay Now': '去支付',
   'Verify': '验证',
-  'Checking...': '检查中...',
   'Remove': '移除',
   'Enabled': '启用',
   'Disabled': '禁用',
@@ -64,37 +53,18 @@ const legacy = {
   'Priority': '优先级',
   'Format': '格式',
   'Traffic': '流量',
-  'Traffic Usage': '流量使用',
   'Upload': '上传',
   'Download': '下载',
-  'Remaining Days': '剩余天数',
-  'Traffic Remaining': '流量剩余',
-  'Expires At': '到期时间',
-  'Created At': '创建时间',
-  'Updated At': '更新时间',
-  'Order Details': '订单详情',
   'Reply': '回复',
-  'Submit Ticket': '提交工单',
-  'Close Ticket': '关闭工单',
-  'Read More': '阅读全文',
-  'I Understand': '我知道了',
   'Loading...': '加载中...',
   'No data': '暂无数据',
   'All': '全部',
-  'Permanent': '永久',
   'Active': '有效',
   'Expired': '已过期',
   'Pending': '待支付',
   'Paid': '已支付',
-  'Cancelled': '已取消',
-  'Completed': '已完成',
   'Unknown': '未知',
-  'Open Ticket': '待处理',
-  'Answered': '已回复',
   'Closed': '已关闭',
-  'Current state': '当前状态',
-  'Doctor Output': 'Doctor 输出',
-  'Yes': '是',
   'No': '否',
   'ansible-playbook is available on the panel host': '\u9762\u677f\u4e3b\u673a\u5df2\u53ef\u7528 ansible-playbook',
   'Local ansible executor resolved inventory/playbooks and is ready to queue jobs': '\u672c\u5730 Ansible \u6267\u884c\u5668\u5df2\u89e3\u6790 inventory \u4e0e playbook\uff0c\u53ef\u4ee5\u5f00\u59cb\u6392\u961f\u6267\u884c\u4efb\u52a1',
@@ -185,15 +155,9 @@ export default {
       password: '密码',
       confirmPassword: '确认密码',
       expiresAt: '到期时间',
-      createdAt: '创建时间',
-      updatedAt: '更新时间',
       subject: '主题',
       priority: '优先级',
-      message: '内容',
-      period: '周期',
-      plan: '套餐',
-      price: '价格',
-      status: '状态'
+      message: '内容'
     },
     ticketPriority: {
       low: '低（一般建议）',
@@ -229,8 +193,7 @@ export default {
       knowledge: '使用教程',
       tickets: '我的工单',
       plans: '购买套餐',
-      orders: '我的订单',
-      fallback: '用户中心'
+      orders: '我的订单'
     },
     admin: {
       dashboard: '仪表盘',
@@ -291,11 +254,6 @@ export default {
         more: '更多',
         forwardSuite: '转发套件',
         userManagement: '用户管理',
-        nodeManagement: '节点管理',
-        marketing: '营销管理',
-        finance: '财务',
-        notifications: '通知',
-        content: '内容管理',
         extensions: '扩展',
         extensionServices: '扩展 / 服务',
         extensionOperations: '扩展 / 运维',
@@ -400,7 +358,6 @@ export default {
         createAndContinue: '创建并继续'
       },
       node: {
-        title: '第二步:机器/节点',
         intro: '先注册一个 NodeX 节点,后面的隧道会用到它。',
         createAndContinue: '创建并继续'
       },
@@ -443,9 +400,7 @@ export default {
       noData: '所选时间范围内无采样数据。',
       avg: '平均',
       p95: 'P95',
-      min: '最小',
       max: '最大',
-      loss: '丢包',
       latencyAxis: '延迟 (ms)',
       online: '在线',
       offline: '离线'
@@ -454,12 +409,7 @@ export default {
       empty: '暂无 relay/exit 节点可展示。',
       relay: '中转',
       exit: '出口',
-      proxy: '代理',
-      latency: '延迟',
-      load: '负载',
-      forwards: '转发数',
-      online: '在线',
-      offline: '离线'
+      proxy: '代理'
     },
     multiIngress: {
       forwardLabel: '转发',
@@ -483,9 +433,6 @@ export default {
       running: '运行中',
       success: '成功',
       failed: '失败'
-    },
-    errors: {
-      loadFailed: '加载可观测性数据失败'
     }
   },
   login: {
@@ -690,8 +637,7 @@ export default {
       online: '\u5728\u7ebf',
       offline: '\u79bb\u7ebf',
       enabled: '\u5df2\u542f\u7528',
-      disabled: '\u5df2\u7981\u7528',
-      all: '\u5168\u90e8'
+      disabled: '\u5df2\u7981\u7528'
     },
     localRuntime: {
       heroEyebrow: '\u65e0\u72b6\u6001\u8fd0\u884c\u65f6',
@@ -758,10 +704,6 @@ export default {
         nftables: {
           label: 'nftables / Ansible',
           description: '\u73b0\u4ee3 Linux \u4e3b\u673a\u5e94\u4f18\u5148\u4f7f\u7528 nftables\u3002'
-        },
-        iptables: {
-          label: 'iptables / Ansible',
-          description: '\u7528\u4e8e\u65e7 playbook \u7684\u517c\u5bb9\u8def\u5f84\u3002'
         }
       },
       errors: {
@@ -918,9 +860,7 @@ export default {
       }
     },
     forward: {
-      heroEyebrow: 'Flux Compatible',
       title: '流量转发管理',
-      note: 'NodeX \u6a21\u5f0f\u4fdd\u7559 ingress/exit \u8bed\u4e49\uff1b\u672c\u5730 Ansible \u6a21\u5f0f\u53ea\u9762\u5411\u7531 inventory \u89e3\u6790\u51fa\u6765\u7684\u6267\u884c\u8282\u70b9\u3002\u8f6c\u53d1\u8282\u70b9\u201c\u5728\u7ebf\u201d\u53ea\u8868\u793a TCP \u53ef\u8fde\u901a\uff0c\u4e0d\u80fd\u8bc1\u660e\u8fdc\u7a0b\u6302\u8f7d\u6216\u9632\u706b\u5899\u72b6\u6001\u5df2\u5b8c\u6210\u3002',
       modeLabelNodeX: '\u5f53\u524d\u8fd0\u884c\u65f6\uff1aNodeX / gost',
       modeLabelLocal: '\u5f53\u524d\u8fd0\u884c\u65f6\uff1aLocal / {backend}',
       modeSummaryNodeX: '\u8bf7\u5728\u4e13\u7528\u7684 NodeX Runtime \u9875\u9762\u7f16\u8f91 NodeX \u63a7\u5236\u9762 URL\u3001Token \u548c gost \u64cd\u4f5c\u68c0\u67e5\u3002',
@@ -950,11 +890,7 @@ export default {
         edit: '\u7f16\u8f91',
         diagnose: '\u8bca\u65ad',
         delete: '\u5220\u9664',
-        copyAll: '\u590d\u5236\u5168\u90e8',
-        regenerate: '\u91cd\u65b0\u751f\u6210',
-        generateExport: '\u751f\u6210\u5bfc\u51fa\u6570\u636e',
-        startImport: '\u5f00\u59cb\u5bfc\u5165',
-        rerunDiagnosis: '\u91cd\u65b0\u8bca\u65ad'
+        copyAll: '\u590d\u5236\u5168\u90e8'
       },
       bulk: {
         selected: '已选择 {count} 条',
@@ -1183,19 +1119,7 @@ export default {
         ingressAddressTitle: '\u5165\u53e3\u5730\u5740',
         ingressLabel: '\u5165\u53e3',
         targetAddressTitle: '\u76ee\u6807\u5730\u5740',
-        targetLabel: '\u76ee\u6807',
-        status: {
-          normal: '\u6b63\u5e38',
-          paused: '\u6682\u505c',
-          error: '\u5f02\u5e38',
-          unknown: '\u672a\u77e5'
-        },
-        strategy: {
-          round: '\u8f6e\u8be2',
-          random: '\u968f\u673a',
-          hash: '\u54c8\u5e0c',
-          primaryBackup: '\u4e3b\u5907'
-        }
+        targetLabel: '\u76ee\u6807'
       }
     },
     tunnel: {
@@ -1373,12 +1297,7 @@ export default {
       },
       errors: {
         fetchStatusFailed: '\u83b7\u53d6 forward runtime \u72b6\u6001\u5931\u8d25',
-        doctorFailed: 'Forward runtime Doctor \u6267\u884c\u5931\u8d25',
-        savedConfigInvalid: '\u5df2\u4fdd\u5b58\u7684 ansible runtime \u914d\u7f6e\u65e0\u6548\uff0c\u5df2\u56de\u9000\u5230\u9ed8\u8ba4\u503c\uff0c\u8bf7\u91cd\u65b0\u4fdd\u5b58\u4ee5\u4fee\u590d\u3002',
-        nodeXBaseUrlRequired: 'NodeX Mode \u4e0b\u5fc5\u987b\u586b\u5199 NodeX base URL',
-        nodeXTokenRequired: 'NodeX Mode \u4e0b\u5fc5\u987b\u586b\u5199 NodeX token',
-        invalidRuntimeJson: 'ansible JSON \u65e0\u6548',
-        saveFailed: '\u4fdd\u5b58 runtime \u914d\u7f6e\u5931\u8d25'
+        doctorFailed: 'Forward runtime Doctor \u6267\u884c\u5931\u8d25'
       }
     },
     systemPage: {
@@ -1612,7 +1531,6 @@ export default {
         startTest: '\u5f00\u59cb\u68c0\u6d4b',
         confirmDelete: '\u786e\u8ba4\u5220\u9664',
         cancel: '\u53d6\u6d88',
-        save: '\u4fdd\u5b58',
         saveChanges: '\u4fdd\u5b58\u4fee\u6539',
         createNode: '\u521b\u5efa\u8282\u70b9',
         createRule: '\u521b\u5efa\u89c4\u5219'
@@ -1633,8 +1551,6 @@ export default {
         disabled: '\u5df2\u7981\u7528',
         online: '\u5728\u7ebf',
         offline: '\u79bb\u7ebf',
-        success: '\u6210\u529f',
-        failed: '\u5931\u8d25',
         operationSuccess: '\u64cd\u4f5c\u6210\u529f',
         operationFailed: '\u64cd\u4f5c\u5931\u8d25'
       },
@@ -1676,7 +1592,6 @@ export default {
       legacy: {
         eyebrow: 'Legacy Rules',
         title: 'Legacy Port Forward Rules',
-        text: '\u8be5\u533a\u5757\u5bf9\u5e94 `/admin/forward/rules*` \u517c\u5bb9 API\uff0c\u7528\u4e8e\u4fdd\u7559 relay + exit \u7aef\u53e3\u7ea7\u8f6c\u53d1\u884c\u4e3a\u3002',
         loading: '\u6b63\u5728\u52a0\u8f7d Legacy \u89c4\u5219...',
         emptyTitle: '\u6682\u65e0 Legacy \u89c4\u5219',
         emptyText: '\u5982\u679c\u9700\u8981\u517c\u5bb9 relay + exit \u7aef\u53e3\u7ea7\u8f6c\u53d1\uff0c\u53ef\u5148\u5728\u8fd9\u91cc\u65b0\u589e\u89c4\u5219\u3002',
@@ -1850,10 +1765,8 @@ export default {
     limitPage: {
       heroEyebrow: '限速管理',
       title: '限速管理',
-      subtitle: '按隧道维护限速规则，保持 Flux 风格的独立规则页。',
       note: '限速规则由当前转发运行时强制执行，更改可能需要短暂时间生效。',
       actions: {
-        refresh: '刷新',
         create: '新增',
         createNow: '立即创建',
         edit: '编辑',
@@ -1870,7 +1783,6 @@ export default {
       },
       cards: {
         speed: '速度限制',
-        tunnel: '绑定隧道',
         updatedAt: '更新时间'
       },
       formModal: {
@@ -1916,8 +1828,6 @@ export default {
         speedInvalid: '请输入有效的速度限制（>= 1 Mbps）',
         tunnelRequired: '请选择要绑定的隧道',
         tunnelMissing: '隧道名称不存在，请刷新后重试',
-        createFailed: '创建限速规则失败',
-        updateFailed: '更新限速规则失败',
         submitFailed: '提交失败',
         deleteFailed: '删除限速规则失败',
         created: '限速规则创建成功',
@@ -1953,7 +1863,6 @@ export default {
         action: '\u64cd\u4f5c',
         taskId: '\u4efb\u52a1 ID',
         node: '\u8282\u70b9',
-        type: '\u7c7b\u578b',
         command: '\u547d\u4ee4 / \u52a8\u4f5c',
         duration: '\u8017\u65f6',
         time: '\u65f6\u95f4'
@@ -1973,9 +1882,7 @@ export default {
       terminal: {
         chooseNode: '\u9009\u62e9\u8282\u70b9',
         nodeLabel: '\u8282\u70b9 #{id}',
-        promptPlaceholder: '\u8f93\u5165\u547d\u4ee4...',
-        chooseAction: '\u9009\u62e9\u52a8\u4f5c',
-        chooseService: '\u9009\u62e9\u670d\u52a1'
+        chooseAction: '\u9009\u62e9\u52a8\u4f5c'
       },
       diagnosticActions: {
         service_status: '\u67e5\u770b\u670d\u52a1\u72b6\u6001',
@@ -1992,17 +1899,8 @@ export default {
       taskModal: {
         title: '\u4e0b\u53d1\u4efb\u52a1',
         targetNode: '\u76ee\u6807\u8282\u70b9',
-        taskType: '\u4efb\u52a1\u7c7b\u578b',
         action: '\u52a8\u4f5c',
-        paramsJson: '\u53c2\u6570 (JSON)',
-        paramsPlaceholder: '{"key": "value"}',
         timeoutSeconds: '\u8d85\u65f6 (\u79d2)'
-      },
-      taskTypes: {
-        command: '\u6267\u884c\u547d\u4ee4',
-        file: '\u6587\u4ef6\u64cd\u4f5c',
-        service: '\u670d\u52a1\u7ba1\u7406',
-        gost: 'GOST \u7ba1\u7406'
       },
       hints: {
         monitor: '\u67e5\u770b\u8282\u70b9 #{id} \u7684\u76d1\u63a7\u6570\u636e'
@@ -2010,7 +1908,6 @@ export default {
       messages: {
         fetchFailed: '\u83b7\u53d6 Agent \u5217\u8868\u5931\u8d25',
         taskIncomplete: '\u8bf7\u586b\u5199\u5b8c\u6574\u4fe1\u606f',
-        invalidParamsJson: '\u53c2\u6570 JSON \u683c\u5f0f\u65e0\u6548',
         taskSent: '\u4efb\u52a1\u5df2\u53d1\u9001',
         taskSendFailed: '\u53d1\u9001\u5931\u8d25: {message}',
         commandError: '\u9519\u8bef: {message}',
@@ -2143,7 +2040,6 @@ export default {
     },
     nodes: {
       title: '节点管理',
-      authKeys: '授权密钥',
       addNode: '添加节点',
       stats: {
         total: '总节点',
@@ -2220,8 +2116,7 @@ export default {
         copy: '复制密钥',
         copyConfig: '复制配置',
         configHint: `将此配置粘贴到 ${AGENT_NAME} 的 config.json 中，并将 <auth_key> 替换为上方密钥值。`,
-        registeredCount: '已注册节点数',
-        copied: '已复制'
+        registeredCount: '已注册节点数'
       },
       deployModal: {
         title: '父节点部署助手',
@@ -2311,7 +2206,6 @@ export default {
         titleEdit: '编辑协议',
         templateLibrary: '协议模板库',
         tabs: {
-          json: 'JSON',
           visual: '可视化配置'
         },
         fields: {
@@ -2430,7 +2324,6 @@ export default {
         deleteFailed: '删除失败: {message}',
         deleteProtocolConfirm: '确定要删除此协议吗？',
         generateFailed: '生成失败: {message}',
-        deleteAuthKeyConfirm: '确定要删除此授权密钥吗？',
         deployLoadFailed: '加载父节点凭据失败',
         copied: '已复制到剪贴板',
         copyFailed: '复制失败: {message}',
@@ -3013,7 +2906,6 @@ export default {
       tunnelFlowReset: '隧道流量已重置',
       noToken: '该用户没有订阅 token',
       subscribeCopied: '订阅链接已复制到剪贴板',
-      copyFailed: '复制失败',
       copyManual: '自动复制失败，请手动复制以下订阅链接：',
       resetSubscribeConfirm: '确认重置用户 {email} 的订阅链接吗？旧链接将立即失效，用户需重新导入。',
       resetSubscribeSuccess: '订阅链接已重置',
@@ -3034,15 +2926,15 @@ export default {
       empty: '没有符合当前筛选条件的插件',
       operations: { title: '最近插件操作', empty: '暂无最近插件操作' }
     },
-    tabs: { plugins: '插件', assignments: '节点角色', scopes: '作用域', topologies: '拓扑', operations: '操作' },
+    tabs: { assignments: '节点角色', topologies: '拓扑' },
     table: {
-      plugin: '插件', publisher: '发布者', release: '发行版', installation: '安装目标', desiredVersion: '期望版本', observedVersion: '实际版本', version: '版本', state: '状态', actions: '操作',
-      scope: '作用域', owner: '所有者', description: '说明', topology: '拓扑', activeRevision: '激活 revision', deployment: '部署',
+      plugin: '插件', release: '发行版', installation: '安装目标', version: '版本', state: '状态', actions: '操作',
+      scope: '作用域', description: '说明', topology: '拓扑', activeRevision: '激活 revision', deployment: '部署',
       operation: '操作', chain: '链', revision: 'revision', deadline: '截止时间', target: '目标', version: '版本', role: '服务角色', configRevision: '配置 revision', rolloutGroup: '灰度组'
     },
     labels: { releases: '{count} 个发行版', desired: '期望', observed: '实际' },
-    states: { catalogued: '已登记', enabled: '已启用', disabled: '已禁用', loading: '正在加载控制状态...', polling: '正在轮询操作状态' },
-    empty: { plugins: '暂无插件', assignments: '该节点暂无服务角色', scopes: '暂无服务作用域', topologies: '暂无拓扑', operations: '暂无操作' },
+    states: { catalogued: '已登记', enabled: '已启用', disabled: '已禁用', loading: '正在加载控制状态...' },
+    empty: { assignments: '该节点暂无服务角色', topologies: '暂无拓扑', operations: '暂无操作' },
     activity: { title: '活动', scoped: '当前范围活动', all: '全部活动', showAll: '显示全部活动', showScoped: '显示当前范围活动', empty: '当前范围暂无活动' },
     topology: {
       select: '拓扑', new: '新建拓扑', newTitle: '新建拓扑', create: '创建拓扑', name: '名称', edit: '编辑修订', status: '查看状态', noDeployment: '暂无部署', editorTitle: '拓扑修订编辑器', revision: '修订',
@@ -3050,7 +2942,7 @@ export default {
       graphHelp: '使用 vertices 和 edges 描述拓扑。秘密必须通过 secret_id 引用，禁止直接写入秘密值。', diagnose: '校验 / 诊断', validating: '校验中...',
       unsavedChanges: '当前修订存在未保存修改。请先保存新的不可变修订，再进行预览或规划。',
       valid: '拓扑校验通过', invalid: '拓扑存在校验问题', invalidJSON: '拓扑 JSON 无效', saveRevision: '保存修订', plan: '规划部署',
-      apply: '应用部署', rollback: '回滚部署', deployment: '部署', steps: '{count} 个部署步骤', applyConfirm: '确认应用 {topology}（部署 #{deployment}）吗？', rollbackConfirm: '确认请求回滚 {topology}（部署 #{deployment}）吗？',
+      apply: '应用部署', rollback: '回滚部署', deployment: '部署', applyConfirm: '确认应用 {topology}（部署 #{deployment}）吗？', rollbackConfirm: '确认请求回滚 {topology}（部署 #{deployment}）吗？',
       preview: '只读部署预览', previewAction: '预览', previewSteps: '{count} 个计划步骤'
     },
     extensions: { errorsTitle: 'WebUI 扩展加载失败' },
@@ -3073,7 +2965,7 @@ export default {
       actionQueued: '{plugin} 的“{action}”操作已提交', operationStatus: '操作 {id} 当前为 {state}，链：{chain}。', installed: '{plugin} 安装意图已保存', configSaved: '{plugin} 配置已保存',
       releaseImported: '{plugin} {version} 已导入', cancelRequested: '已请求取消操作',
       assignmentSaved: '{plugin} 节点角色已保存', assignmentStateSaved: '{plugin} 节点角色状态已保存', assignmentDeleted: '{plugin} 节点角色已删除',
-      topologyValidated: '拓扑校验通过', topologyRevisionSaved: '拓扑修订 {revision} 已保存', topologyPlanned: '部署 #{id} 已规划',
+      topologyRevisionSaved: '拓扑修订 {revision} 已保存', topologyPlanned: '部署 #{id} 已规划',
       topologyApplyRequested: '已请求应用拓扑部署', topologyRollbackRequested: '已请求回滚拓扑部署', topologyCreated: '拓扑 {name} 已创建'
     },
     errors: {

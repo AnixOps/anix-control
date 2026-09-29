@@ -323,11 +323,6 @@ export default {
   adminTickets: {
     title: '工单管理',
     subtitle: '统一查看用户工单并进行回复。',
-    icons: {
-      open: '!',
-      answered: '✓',
-      closed: '×'
-    },
     stats: {
       open: '待处理',
       answered: '已回复',

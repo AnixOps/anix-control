@@ -26,6 +26,23 @@
   directories instead of the source tree.
 - `golang.org/x/net` is now an indirect dependency.
 
+- Removed dead frontend code from `web/`: the unreferenced
+  `views/admin/forward/ForwardCard.vue`; the System page's hidden runtime
+  config editor state and save handler (`saveForwardRuntimeConfig`,
+  `runtimeConfigPreview`, `applyDefaultRuntimeAnsibleConfig`,
+  `runtimeSaving`, `runtimeValidationError`), which the template never
+  rendered (runtime settings stay editable on the Local Runtime and NodeX
+  Runtime pages); 21 API client helpers that only tests called (17 in
+  `api/admin.js`, `getDashboard` and `getKnowledgeDetail` in `api/user.js`,
+  `getKernelPluginReleaseArtifact` and the `diagnoseKernelTopology`
+  compatibility wrapper in `api/kernel.js`); unused `menuRegistry`
+  re-exports and admin extension exports from `extensions/runtime.js`; and
+  the unused `PRODUCT_NAME` and repository URL constants.
+- Removed 95 unused i18n keys from both `en` and `zh-CN`, plus the legacy
+  literal-translation entries whose source strings no longer appear in the
+  frontend, backend, packages, or agent (23 in `en`, 30 in `zh-CN`).
+- Stripped UTF-8 byte order marks from nine frontend source files.
+
 ### Changed
 
 - Made the `go_dev` CI pipeline green again. Go moves to `1.26.8` (go.mod

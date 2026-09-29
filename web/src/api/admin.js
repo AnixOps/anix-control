@@ -56,25 +56,11 @@ export function getUserStats() {
   })
 }
 
-export function getUser(id) {
-  return request({
-    url: `/admin/users/${id}`,
-    method: 'get'
-  })
-}
-
 export function updateUser(id, data) {
   return request({
     url: `/admin/users/${id}`,
     method: 'put',
     data
-  })
-}
-
-export function deleteUser(id) {
-  return request({
-    url: `/admin/users/${id}`,
-    method: 'delete'
   })
 }
 
@@ -136,21 +122,6 @@ export function getOrderStats() {
   })
 }
 
-export function getOrder(id) {
-  return request({
-    url: `/admin/orders/${id}`,
-    method: 'get'
-  })
-}
-
-export function updateOrderStatus(id, status) {
-  return request({
-    url: `/admin/orders/${id}/status`,
-    method: 'put',
-    data: { status }
-  })
-}
-
 export function markOrderPaid(id) {
   return request({
     url: `/admin/orders/${id}/paid`,
@@ -188,13 +159,6 @@ export function getNodeLogs(id, params) {
   })
 }
 
-export function getNode(id) {
-  return request({
-    url: `/admin/nodes/${id}`,
-    method: 'get'
-  })
-}
-
 export function getNodeCredentials(id) {
   return request({
     url: `/admin/nodes/${id}/credentials`,
@@ -229,29 +193,6 @@ export function syncNodeProtocol(id) {
   return request({
     url: `/admin/nodes/${id}/sync`,
     method: 'post'
-  })
-}
-
-export function getNodeRawConfig(id) {
-  return request({
-    url: `/admin/nodes/${id}/raw-config`,
-    method: 'get'
-  })
-}
-
-export function updateNodeRawConfig(id, data) {
-  return request({
-    url: `/admin/nodes/${id}/raw-config`,
-    method: 'put',
-    data
-  })
-}
-
-export function validateNodeConfig(data) {
-  return request({
-    url: '/admin/nodes/validate-config',
-    method: 'post',
-    data
   })
 }
 
@@ -306,21 +247,6 @@ export function getAuthKeys() {
   })
 }
 
-export function generateAuthKey(data) {
-  return request({
-    url: '/admin/auth-keys',
-    method: 'post',
-    data
-  })
-}
-
-export function deleteAuthKey(id) {
-  return request({
-    url: `/admin/auth-keys/${id}`,
-    method: 'delete'
-  })
-}
-
 export function getSubscriptionGroups() {
   return request({
     url: '/admin/subscription/groups',
@@ -333,13 +259,6 @@ export function createSubscriptionGroup(data) {
     url: '/admin/subscription/groups',
     method: 'post',
     data
-  })
-}
-
-export function getSubscriptionGroup(id) {
-  return request({
-    url: `/admin/subscription/groups/${id}`,
-    method: 'get'
   })
 }
 
@@ -395,13 +314,6 @@ export function createSubscriptionTemplate(groupId, data) {
   })
 }
 
-export function getSubscriptionTemplate(id) {
-  return request({
-    url: `/admin/subscription/templates/${id}`,
-    method: 'get'
-  })
-}
-
 export function updateSubscriptionTemplate(id, data) {
   return request({
     url: `/admin/subscription/templates/${id}`,
@@ -444,13 +356,6 @@ export function createPlan(data) {
     url: '/admin/plans',
     method: 'post',
     data
-  })
-}
-
-export function getPlan(id) {
-  return request({
-    url: `/admin/plans/${id}`,
-    method: 'get'
   })
 }
 
@@ -1373,26 +1278,11 @@ export function executeAgentCommand(data) {
   })
 }
 
-export function getAgentTaskResult(taskId) {
-  return request({
-    url: `/admin/agent/tasks/${taskId}`,
-    method: 'get'
-  })
-}
-
 export function listAgentDiagnosticTasks(params) {
   return request({
     url: '/admin/agent/tasks',
     method: 'get',
     params
-  })
-}
-
-export function getAgentMonitor(nodeId) {
-  return request({
-    url: '/admin/agent/monitor',
-    method: 'get',
-    params: { node_id: nodeId }
   })
 }
 
@@ -1412,13 +1302,6 @@ export function createLoadBalancer(data) {
   })
 }
 
-export function getLoadBalancer(id) {
-  return request({
-    url: `/admin/loadbalancers/${id}`,
-    method: 'get'
-  })
-}
-
 export function updateLoadBalancer(id, data) {
   return request({
     url: `/admin/loadbalancers/${id}`,
@@ -1434,13 +1317,6 @@ export function deleteLoadBalancer(id) {
   })
 }
 
-export function getLoadBalancerStats(id) {
-  return request({
-    url: `/admin/loadbalancers/${id}/stats`,
-    method: 'get'
-  })
-}
-
 export function runHealthCheck(id) {
   return request({
     url: `/admin/loadbalancers/${id}/check`,
@@ -1453,42 +1329,31 @@ export default {
   createUser,
   getUserList,
   getUserStats,
-  getUser,
   updateUser,
-  deleteUser,
   banUser,
   unbanUser,
   resetUserTraffic,
   resetUserTunnelTraffic,
   getOrderList,
   getOrderStats,
-  getOrder,
-  updateOrderStatus,
   markOrderPaid,
   cancelOrder,
   getNodes,
   getNodeStats,
   getNodeLogs,
   createNode,
-  getNode,
   getNodeCredentials,
   updateNode,
   deleteNode,
   syncNodeProtocol,
-  getNodeRawConfig,
-  updateNodeRawConfig,
-  validateNodeConfig,
   getNodeProtocols,
   createNodeProtocol,
   updateNodeProtocol,
   deleteNodeProtocol,
   getProtocolTemplates,
   getAuthKeys,
-  generateAuthKey,
-  deleteAuthKey,
   getSubscriptionGroups,
   createSubscriptionGroup,
-  getSubscriptionGroup,
   updateSubscriptionGroup,
   deleteSubscriptionGroup,
   getSubscriptionTemplates,
@@ -1496,13 +1361,11 @@ export default {
   updateGroupProtocols,
   getAvailableProtocols,
   createSubscriptionTemplate,
-  getSubscriptionTemplate,
   updateSubscriptionTemplate,
   deleteSubscriptionTemplate,
   previewSubscription,
   getPlans,
   createPlan,
-  getPlan,
   updatePlan,
   deletePlan,
   assignPlanToUser,
@@ -1620,15 +1483,11 @@ export default {
   getAgents,
   createAgentTask,
   executeAgentCommand,
-  getAgentTaskResult,
   listAgentDiagnosticTasks,
-  getAgentMonitor,
   getLoadBalancers,
   createLoadBalancer,
-  getLoadBalancer,
   updateLoadBalancer,
   deleteLoadBalancer,
-  getLoadBalancerStats,
   runHealthCheck
 }
 

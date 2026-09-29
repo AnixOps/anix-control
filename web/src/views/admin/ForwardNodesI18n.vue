@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="forward-nodes-page">
     <div class="toolbar">
       <div class="toolbar-copy">

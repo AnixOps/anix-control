@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="page-shell knowledge-page">
     <div class="page-toolbar">
       <div>

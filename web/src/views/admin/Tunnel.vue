@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="tunnel-page">
     <div class="toolbar">
       <div class="toolbar-copy">

@@ -7,7 +7,6 @@ export default {
     disconnected: 'Disconnected',
     reconnecting: 'Reconnecting in {seconds}s...',
     overview: {
-      title: 'Overview',
       totalNodes: 'Total Nodes',
       onlineNodes: 'Online',
       offlineNodes: 'Offline',
@@ -24,8 +23,6 @@ export default {
       memory: 'Memory',
       disk: 'Disk',
       users: 'Users',
-      upload: 'Upload',
-      download: 'Download',
       uptime: 'Uptime'
     },
     status: {
@@ -35,7 +32,6 @@ export default {
     },
     empty: 'No nodes to display.',
     errors: {
-      connectFailed: 'Failed to connect to monitor WebSocket',
       unsupported: 'WebSocket is not supported in this browser'
     }
   }

@@ -323,11 +323,6 @@ export default {
   adminTickets: {
     title: 'Tickets',
     subtitle: 'Review user tickets and reply from one queue.',
-    icons: {
-      open: '!',
-      answered: '✓',
-      closed: '×'
-    },
     stats: {
       open: 'Open',
       answered: 'Answered',

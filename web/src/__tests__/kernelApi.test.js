@@ -17,7 +17,6 @@ describe('kernel API', () => {
       [kernelApi.getKernelPluginReleases, '/plugin-releases'],
       [kernelApi.getKernelInstallations, '/plugin-installations'],
       [() => kernelApi.getKernelNodeAssignments(11), '/nodes/11/assignments'],
-      [() => kernelApi.getKernelPluginReleaseArtifact(9), '/plugin-releases/9/artifact'],
       [() => kernelApi.getKernelInstallationConfig(7), '/plugin-installations/7/config'],
       [kernelApi.getKernelScopes, '/service-scopes'],
       [kernelApi.getKernelAccessGroups, '/access-groups'],
@@ -224,7 +223,7 @@ describe('kernel API', () => {
     await kernelApi.validateKernelTopology(graph)
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/topologies/validate', method: 'post', data: graph })
 
-    await kernelApi.diagnoseKernelTopology(3, 7, { rolloutGroup: 'canary-a', failurePolicy: 'stop_and_rollback' })
+    await kernelApi.diagnoseKernelTopologyDeployment(3, 7, { rolloutGroup: 'canary-a', failurePolicy: 'stop_and_rollback' })
     expect(mockRequest).toHaveBeenLastCalledWith({
       baseURL: '/api/v3', url: '/topologies/3/revisions/7/diagnose', method: 'post',
       data: { rollout_group: 'canary-a', failure_policy: 'stop_and_rollback' }

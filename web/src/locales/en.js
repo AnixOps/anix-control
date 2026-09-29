@@ -1,4 +1,4 @@
-﻿import runtimePages from './modules/en/runtimePages'
+import runtimePages from './modules/en/runtimePages'
 import networkPages from './modules/en/networkPages'
 import miscPages from './modules/en/miscPages'
 import adminSupportPages from './modules/en/adminSupportPages'
@@ -8,17 +8,10 @@ import adminTrafficHourly from './modules/en/adminTrafficHourly'
 import { AGENT_NAME, CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
-  'V2Board 管理端': `${CONTROL_NAME} Console`,
   '管理端': 'Studio Console',
   '概览': 'Overview',
   '仪表盘': 'Dashboard',
   '流量转发': 'Forwards',
-  '隧道管理': 'Tunnels',
-  '限速管理': 'Limits',
-  'Ansible 机器': 'Ansible Machines',
-  '本地运行时': 'Local Runtime',
-  'NodeX 拓扑': 'NodeX Topology',
-  'NodeX 运行时': 'NodeX Runtime',
   '用户管理': 'Users',
   '订单管理': 'Orders',
   '工单管理': 'Tickets',
@@ -31,9 +24,7 @@ const legacy = {
   '通知管理': 'Notifications',
   '知识库管理': 'Knowledge',
   '系统管理': 'System',
-  '退出登录': 'Logout',
   '刷新': 'Refresh',
-  '刷新中...': 'Refreshing...',
   '保存': 'Save',
   '取消': 'Cancel',
   '关闭': 'Close',
@@ -42,18 +33,11 @@ const legacy = {
   '删除': 'Delete',
   '预览': 'Preview',
   '复制': 'Copy',
-  '复制内容': 'Copy Content',
-  '复制链接': 'Copy Link',
   '下载': 'Download',
-  '打开': 'Open',
   '详情': 'Details',
   '返回': 'Back',
   '提交': 'Submit',
-  '提交订单': 'Submit Order',
-  '立即选购': 'Buy Now',
-  '去支付': 'Pay Now',
   '验证': 'Verify',
-  '检查中...': 'Checking...',
   '移除': 'Remove',
   '启用': 'Enabled',
   '禁用': 'Disabled',
@@ -65,19 +49,13 @@ const legacy = {
   '流量使用': 'Traffic Usage',
   '上传': 'Upload',
   '下载': 'Download',
-  '剩余天数': 'Remaining Days',
   '流量剩余': 'Traffic Remaining',
   '到期时间': 'Expires At',
-  '创建时间': 'Created At',
   '更新时间': 'Updated At',
   '订单详情': 'Order Details',
   '回复': 'Reply',
   '提交工单': 'Submit Ticket',
   '关闭工单': 'Close Ticket',
-  '阅读全文': 'Read More',
-  '我知道了': 'I Understand',
-  '加载中...': 'Loading...',
-  '暂无数据': 'No data',
   '全部': 'All',
   '永久': 'Permanent',
   '有效': 'Active',
@@ -91,7 +69,6 @@ const legacy = {
   '已回复': 'Answered',
   '已关闭': 'Closed',
   '当前状态': 'Current state',
-  'Doctor 输出': 'Doctor Output',
   '是': 'Yes',
   '否': 'No'
   ,
@@ -176,15 +153,9 @@ export default {
       password: 'Password',
       confirmPassword: 'Confirm password',
       expiresAt: 'Expires at',
-      createdAt: 'Created at',
-      updatedAt: 'Updated at',
       subject: 'Subject',
       priority: 'Priority',
-      message: 'Message',
-      period: 'Billing period',
-      plan: 'Plan',
-      price: 'Price',
-      status: 'Status'
+      message: 'Message'
     },
     ticketPriority: {
       low: 'Low (general inquiries)',
@@ -220,8 +191,7 @@ export default {
       knowledge: 'Guides',
       tickets: 'Tickets',
       plans: 'Plans',
-      orders: 'Orders',
-      fallback: 'User Center'
+      orders: 'Orders'
     },
     admin: {
       dashboard: 'Dashboard',
@@ -282,11 +252,6 @@ export default {
         more: 'More',
         forwardSuite: 'Forward Suite',
         userManagement: 'User Management',
-        nodeManagement: 'Node Management',
-        marketing: 'Marketing',
-        finance: 'Finance',
-        notifications: 'Notifications',
-        content: 'Content',
         extensions: 'Extensions',
         extensionServices: 'Extensions / Services',
         extensionOperations: 'Extensions / Operations',
@@ -391,7 +356,6 @@ export default {
         createAndContinue: 'Create and continue'
       },
       node: {
-        title: 'Step 2: Machine/Node',
         intro: 'Register a NodeX node first — the tunnel step will use it.',
         createAndContinue: 'Create and continue'
       },
@@ -434,9 +398,7 @@ export default {
       noData: 'No samples in the selected window.',
       avg: 'Avg',
       p95: 'P95',
-      min: 'Min',
       max: 'Max',
-      loss: 'Loss',
       latencyAxis: 'Latency (ms)',
       online: 'Online',
       offline: 'Offline'
@@ -445,12 +407,7 @@ export default {
       empty: 'No relay/exit nodes to display.',
       relay: 'Relay',
       exit: 'Exit',
-      proxy: 'Proxy',
-      latency: 'Latency',
-      load: 'Load',
-      forwards: 'Forwards',
-      online: 'Online',
-      offline: 'Offline'
+      proxy: 'Proxy'
     },
     multiIngress: {
       forwardLabel: 'Forward',
@@ -474,9 +431,6 @@ export default {
       running: 'Running',
       success: 'Success',
       failed: 'Failed'
-    },
-    errors: {
-      loadFailed: 'Failed to load observability data'
     }
   },
   login: {
@@ -681,8 +635,7 @@ export default {
       online: 'Online',
       offline: 'Offline',
       enabled: 'Enabled',
-      disabled: 'Disabled',
-      all: 'All'
+      disabled: 'Disabled'
     },
     localRuntime: {
       heroEyebrow: 'Stateless Runtime',
@@ -749,10 +702,6 @@ export default {
         nftables: {
           label: 'nftables / Ansible',
           description: 'Modern Linux hosts should prefer nftables.'
-        },
-        iptables: {
-          label: 'iptables / Ansible',
-          description: 'Legacy compatibility for existing playbooks.'
         }
       },
       errors: {
@@ -909,9 +858,7 @@ export default {
       }
     },
     forward: {
-      heroEyebrow: 'Flux Compatible',
       title: 'Forward Management',
-      note: 'NodeX mode keeps ingress/exit semantics; local Ansible mode only targets execution nodes resolved by inventory. Forward node "online" only checks TCP reachability and does not prove remote attachment or firewall state already exists.',
       modeLabelNodeX: 'Active Runtime: NodeX / gost',
       modeLabelLocal: 'Active Runtime: Local / {backend}',
       modeSummaryNodeX: 'Edit NodeX control-plane URL, token and gost operator checks on the dedicated NodeX Runtime page.',
@@ -941,11 +888,7 @@ export default {
         edit: 'Edit',
         diagnose: 'Diagnose',
         delete: 'Delete',
-        copyAll: 'Copy All',
-        regenerate: 'Regenerate',
-        generateExport: 'Generate Export Data',
-        startImport: 'Start Import',
-        rerunDiagnosis: 'Run Again'
+        copyAll: 'Copy All'
       },
       bulk: {
         selected: '{count} selected',
@@ -1175,19 +1118,7 @@ export default {
         ingressAddressTitle: 'Ingress address',
         ingressLabel: 'Ingress',
         targetAddressTitle: 'Target address',
-        targetLabel: 'Target',
-        status: {
-          normal: 'Healthy',
-          paused: 'Paused',
-          error: 'Error',
-          unknown: 'Unknown'
-        },
-        strategy: {
-          round: 'Round robin',
-          random: 'Random',
-          hash: 'Hash',
-          primaryBackup: 'Primary / Backup'
-        }
+        targetLabel: 'Target'
       }
     },
     tunnel: {
@@ -1365,12 +1296,7 @@ export default {
       },
       errors: {
         fetchStatusFailed: 'Failed to fetch forward runtime status',
-        doctorFailed: 'Forward runtime doctor failed',
-        savedConfigInvalid: 'Saved ansible runtime config is invalid. Defaults were loaded; save again to repair it.',
-        nodeXBaseUrlRequired: 'NodeX base URL is required in NodeX Mode',
-        nodeXTokenRequired: 'NodeX token is required in NodeX Mode',
-        invalidRuntimeJson: 'ansible JSON invalid',
-        saveFailed: 'Failed to save runtime config'
+        doctorFailed: 'Forward runtime doctor failed'
       }
     },
     systemPage: {
@@ -1604,7 +1530,6 @@ export default {
         startTest: 'Start Test',
         confirmDelete: 'Confirm Delete',
         cancel: 'Cancel',
-        save: 'Save',
         saveChanges: 'Save Changes',
         createNode: 'Create Node',
         createRule: 'Create Rule'
@@ -1625,8 +1550,6 @@ export default {
         disabled: 'Disabled',
         online: 'Online',
         offline: 'Offline',
-        success: 'Success',
-        failed: 'Failed',
         operationSuccess: 'Operation succeeded',
         operationFailed: 'Operation failed'
       },
@@ -1668,7 +1591,6 @@ export default {
       legacy: {
         eyebrow: 'Legacy Rules',
         title: 'Legacy Port Forward Rules',
-        text: 'This section mirrors `/admin/forward/rules*` compatibility APIs to preserve legacy relay + exit forwarding behavior.',
         loading: 'Loading legacy rules...',
         emptyTitle: 'No legacy rules yet',
         emptyText: 'Add rules here if you need compatibility for relay + exit port-level forwarding.',
@@ -1842,10 +1764,8 @@ export default {
     limitPage: {
       heroEyebrow: 'Speed Limit Management',
       title: 'Limits',
-      subtitle: 'Maintain rate limit rules per tunnel while keeping the dedicated Flux-style rule page.',
       note: 'Speed limit rules are enforced by the active forwarding runtime. Changes may take effect after a short delay.',
       actions: {
-        refresh: 'Refresh',
         create: 'Create',
         createNow: 'Create Now',
         edit: 'Edit',
@@ -1862,7 +1782,6 @@ export default {
       },
       cards: {
         speed: 'Speed Limit',
-        tunnel: 'Bound Tunnel',
         updatedAt: 'Updated At'
       },
       formModal: {
@@ -1908,8 +1827,6 @@ export default {
         speedInvalid: 'Enter a valid speed limit (>= 1 Mbps)',
         tunnelRequired: 'Please select a tunnel to bind',
         tunnelMissing: 'Tunnel name is missing. Refresh and try again.',
-        createFailed: 'Failed to create limit rule',
-        updateFailed: 'Failed to update limit rule',
         submitFailed: 'Submission failed',
         deleteFailed: 'Failed to delete limit rule',
         created: 'Limit rule created successfully',
@@ -1945,7 +1862,6 @@ export default {
         action: 'Actions',
         taskId: 'Task ID',
         node: 'Node',
-        type: 'Type',
         command: 'Command / Action',
         duration: 'Duration',
         time: 'Time'
@@ -1965,9 +1881,7 @@ export default {
       terminal: {
         chooseNode: 'Choose node',
         nodeLabel: 'Node #{id}',
-        promptPlaceholder: 'Enter command...',
-        chooseAction: 'Choose action',
-        chooseService: 'Choose service'
+        chooseAction: 'Choose action'
       },
       diagnosticActions: {
         service_status: 'Check service status',
@@ -1984,17 +1898,8 @@ export default {
       taskModal: {
         title: 'Send Task',
         targetNode: 'Target Node',
-        taskType: 'Task Type',
         action: 'Action',
-        paramsJson: 'Params (JSON)',
-        paramsPlaceholder: '{"key": "value"}',
         timeoutSeconds: 'Timeout (seconds)'
-      },
-      taskTypes: {
-        command: 'Execute command',
-        file: 'File operation',
-        service: 'Service management',
-        gost: 'GOST management'
       },
       hints: {
         monitor: 'View monitoring data for node #{id}'
@@ -2002,7 +1907,6 @@ export default {
       messages: {
         fetchFailed: 'Failed to fetch agent list',
         taskIncomplete: 'Please fill in the required fields',
-        invalidParamsJson: 'Params JSON is invalid',
         taskSent: 'Task sent',
         taskSendFailed: 'Send failed: {message}',
         commandError: 'Error: {message}',
@@ -2135,7 +2039,6 @@ export default {
     },
     nodes: {
       title: 'Node Management',
-      authKeys: 'Auth Keys',
       addNode: 'Add Node',
       stats: {
         total: 'Total Nodes',
@@ -2212,8 +2115,7 @@ export default {
         copy: 'Copy Key',
         copyConfig: 'Copy Config',
         configHint: `Paste this config into ${AGENT_NAME} config.json, then replace <auth_key> with the key above.`,
-        registeredCount: 'Registered Nodes',
-        copied: 'Copied'
+        registeredCount: 'Registered Nodes'
       },
       deployModal: {
         title: 'Parent Node Deployment Helper',
@@ -2303,7 +2205,6 @@ export default {
         titleEdit: 'Edit Protocol',
         templateLibrary: 'Protocol Template Library',
         tabs: {
-          json: 'JSON',
           visual: 'Visual Config'
         },
         fields: {
@@ -2422,7 +2323,6 @@ export default {
         deleteFailed: 'Delete failed: {message}',
         deleteProtocolConfirm: 'Delete this protocol?',
         generateFailed: 'Generation failed: {message}',
-        deleteAuthKeyConfirm: 'Delete this auth key?',
         deployLoadFailed: 'Failed to load parent node credentials',
         copied: 'Copied to clipboard',
         copyFailed: 'Copy failed: {message}',
@@ -3005,7 +2905,6 @@ export default {
       tunnelFlowReset: 'Tunnel traffic reset successfully',
       noToken: 'This user has no subscription token',
       subscribeCopied: 'Subscription link copied to clipboard',
-      copyFailed: 'Copy failed',
       copyManual: 'Auto-copy failed, please copy the subscription link manually:',
       resetSubscribeConfirm: 'Reset the subscription link for {email}? The old link will stop working immediately and the user must re-import.',
       resetSubscribeSuccess: 'Subscription link reset',
@@ -3026,15 +2925,15 @@ export default {
       empty: 'No plugins match the current filters',
       operations: { title: 'Recent plugin operations', empty: 'No recent plugin operations' }
     },
-    tabs: { plugins: 'Plugins', assignments: 'Assignments', scopes: 'Scopes', topologies: 'Topologies', operations: 'Operations' },
+    tabs: { assignments: 'Assignments', topologies: 'Topologies' },
     table: {
-      plugin: 'Plugin', publisher: 'Publisher', release: 'Release', installation: 'Installation', desiredVersion: 'Desired version', observedVersion: 'Observed version', version: 'Version', state: 'State', actions: 'Actions',
-      scope: 'Scope', owner: 'Owner', description: 'Description', topology: 'Topology', activeRevision: 'Active revision', deployment: 'Deployment',
+      plugin: 'Plugin', release: 'Release', installation: 'Installation', version: 'Version', state: 'State', actions: 'Actions',
+      scope: 'Scope', description: 'Description', topology: 'Topology', activeRevision: 'Active revision', deployment: 'Deployment',
       operation: 'Operation', chain: 'Chain', revision: 'Revision', deadline: 'Deadline', target: 'Target', version: 'Version', role: 'Role', configRevision: 'Config revision', rolloutGroup: 'Rollout group'
     },
     labels: { releases: '{count} releases', desired: 'Desired', observed: 'Observed' },
-    states: { catalogued: 'Catalogued', enabled: 'Enabled', disabled: 'Disabled', loading: 'Loading control state...', polling: 'Polling operation state' },
-    empty: { plugins: 'No plugins', assignments: 'No assignments for this node', scopes: 'No service scopes', topologies: 'No topologies', operations: 'No operations' },
+    states: { catalogued: 'Catalogued', enabled: 'Enabled', disabled: 'Disabled', loading: 'Loading control state...' },
+    empty: { assignments: 'No assignments for this node', topologies: 'No topologies', operations: 'No operations' },
     activity: { title: 'Activity', scoped: 'Selected activity', all: 'All activity', showAll: 'Show all activity', showScoped: 'Show selected activity', empty: 'No activity for the selected scope' },
     topology: {
       select: 'Topology', new: 'New topology', newTitle: 'Create topology', create: 'Create topology', name: 'Name', edit: 'Edit revision', status: 'View status', noDeployment: 'No deployment', editorTitle: 'Topology revision editor', revision: 'Revision',
@@ -3042,7 +2941,7 @@ export default {
       graphHelp: 'Use vertices and edges. Secrets must be referenced by secret_id; inline secret values are rejected.', diagnose: 'Validate / diagnose', validating: 'Validating...',
       unsavedChanges: 'This revision has unsaved changes. Save a new immutable revision before previewing or planning.',
       valid: 'Topology is valid', invalid: 'Topology has validation issues', invalidJSON: 'Topology JSON is invalid', saveRevision: 'Save revision', plan: 'Plan deployment',
-      apply: 'Apply deployment', rollback: 'Rollback deployment', deployment: 'Deployment', steps: '{count} deployment steps', applyConfirm: 'Apply {topology} (deployment #{deployment})?', rollbackConfirm: 'Request rollback for {topology} (deployment #{deployment})?',
+      apply: 'Apply deployment', rollback: 'Rollback deployment', deployment: 'Deployment', applyConfirm: 'Apply {topology} (deployment #{deployment})?', rollbackConfirm: 'Request rollback for {topology} (deployment #{deployment})?',
       preview: 'Read-only deployment preview', previewAction: 'Preview', previewSteps: '{count} planned steps'
     },
     extensions: { errorsTitle: 'WebUI extension loading failed' },
@@ -3065,7 +2964,7 @@ export default {
       actionQueued: '{action} was submitted for {plugin}', operationStatus: 'Operation {id} is {state}. Chain: {chain}.', installed: 'Installation intent was saved for {plugin}', configSaved: 'Configuration was saved for {plugin}',
       releaseImported: '{plugin} {version} was imported', cancelRequested: 'Operation cancellation was requested',
       assignmentSaved: '{plugin} assignment was saved', assignmentStateSaved: '{plugin} assignment state was saved', assignmentDeleted: '{plugin} assignment was deleted',
-      topologyValidated: 'Topology validation passed', topologyRevisionSaved: 'Topology revision {revision} was saved', topologyPlanned: 'Deployment #{id} was planned',
+      topologyRevisionSaved: 'Topology revision {revision} was saved', topologyPlanned: 'Deployment #{id} was planned',
       topologyApplyRequested: 'Deployment apply was requested', topologyRollbackRequested: 'Deployment rollback was requested', topologyCreated: 'Topology {name} was created'
     },
     errors: {
