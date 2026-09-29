@@ -4,8 +4,16 @@ on:
   push:
     branches: [ go_dev, production ]
     tags: [ 'v*.*.*' ]
+    # control-center/ is a separate Go module and app with its own workflows
+    # (control-center*.yml); changes limited to it do not need the Control pipeline.
+    paths-ignore:
+      - 'control-center/**'
+      - '.github/workflows/control-center*.yml'
   pull_request:
     branches: [ go_dev, production ]
+    paths-ignore:
+      - 'control-center/**'
+      - '.github/workflows/control-center*.yml'
   workflow_dispatch:
 
 env:
@@ -403,7 +411,7 @@ jobs:
       - name: Run full repository gosec gate and report
         run: |
           mkdir -p security-reports
-          gosec -exclude-generated -exclude-dir=config/scripts/testdata -fmt=json -out=security-reports/gosec.json ./...
+          gosec -exclude-generated -exclude-dir=config/scripts/testdata -exclude-dir=control-center -fmt=json -out=security-reports/gosec.json ./...
 
       - name: Upload gosec report
         if: always()
@@ -458,7 +466,7 @@ jobs:
       - name: Generate Swagger docs
         run: |
           go install github.com/swaggo/swag/cmd/swag@v1.16.6
-          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal
+          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude control-center
 
       - name: Run go vet
         run: go vet ./...
@@ -1461,7 +1469,7 @@ jobs:
       - name: Generate Swagger docs
         run: |
           go install github.com/swaggo/swag/cmd/swag@v1.16.6
-          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal
+          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude control-center
 
       - name: Build binary
         run: |

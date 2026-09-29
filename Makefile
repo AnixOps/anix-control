@@ -220,7 +220,7 @@ swagger:
 	@echo "Generating Swagger docs..."
 	$(eval SWAG := $(shell go env GOPATH)/bin/swag)
 	@command -v $(SWAG) >/dev/null 2>&1 || go install github.com/swaggo/swag/cmd/swag@latest
-	$(SWAG) init -g cmd/server/main.go -o docs --parseInternal
+	$(SWAG) init -g cmd/server/main.go -o docs --parseInternal --exclude control-center
 
 # 鏌ョ湅 Swagger 鏂囨。
 swagger-serve:

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Changed
+
+- Imported the Control Center into `control-center/` as a single snapshot of the
+  archived `AnixOps/Anixops-control-center` repository (`master` merged with
+  `production`, without committed release binaries or assistant notes). It stays
+  a separate Go module, `github.com/AnixOps/anix-control/control-center`, and
+  its CI and release pipelines moved to `.github/workflows/control-center.yml`
+  and `control-center-release.yml` (tags `control-center-v*`, never marked as
+  the latest release). The Center web and Flutter clients dropped the AI, Web3
+  and unrouted observability mock pages whose Workers endpoints are being
+  removed. `go_dev` is now the only long-lived branch.
+- The root CI pipeline now ignores changes limited to `control-center/**`, and
+  its gosec and swag steps, the Makefile `swagger` target and the Docker build
+  context exclude `control-center/`.
+
 ### Added
 
 - Exposed `X-AnixOps-Operation-Chain` consistently for Control plugin

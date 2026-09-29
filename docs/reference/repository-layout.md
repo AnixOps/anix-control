@@ -24,6 +24,7 @@ It should not become a dumping ground for:
 |------|------|
 | `cmd/` | backend and helper program entrypoints |
 | `config/` | app config, deploy assets, examples, ansible material |
+| `control-center/` | Control Center app imported from the archived `Anixops-control-center` repository: its own Go module (`github.com/AnixOps/anix-control/control-center`), Vue web, Flutter client, Helm/deploy/monitoring assets, and the Cloudflare Workers API under `control-center/workers/`; built by `.github/workflows/control-center*.yml` |
 | `docs/` | intro, reference, and guide docs |
 | `internal/` | backend implementation |
 | `web/` | Vue frontend |

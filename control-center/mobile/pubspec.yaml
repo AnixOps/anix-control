@@ -1,0 +1,95 @@
+name: anixops_mobile
+description: AnixOps Control Center Mobile App
+
+publish_to: 'none'
+
+version: 2.5.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^3.3.0
+  riverpod_annotation: ^4.0.0
+
+  # Navigation
+  go_router: ^17.0.0
+
+  # Networking
+  dio: ^5.4.0
+  http: ^1.2.0
+  connectivity_plus: ^7.0.0
+
+  # Storage
+  shared_preferences: ^2.5.0
+
+  # UI Components
+  cupertino_icons: ^1.0.9
+  flutter_animate: ^4.3.0
+  shimmer: ^3.0.0
+  cached_network_image: ^3.3.0
+  flutter_svg: ^2.0.0
+
+  # Charts
+  fl_chart: ^1.2.0
+
+  # Utils
+  intl: any
+  timeago: ^3.6.0
+  url_launcher: ^6.2.0
+  package_info_plus: ^9.0.0
+  device_info_plus: ^12.0.0
+
+  # Authentication
+  local_auth: ^3.0.0
+
+  # Notifications
+  flutter_local_notifications: ^21.0.0
+
+  # WebSocket
+  web_socket_channel: ^3.0.0
+
+  # Desktop window management
+  window_manager: ^0.5.0
+  tray_manager: ^0.5.0
+  screen_retriever: ^0.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  riverpod_generator: ^4.0.0
+  build_runner: ^2.4.0
+  flutter_launcher_icons: ^0.14.0
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+
+flutter:
+  uses-material-design: true
+  generate: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

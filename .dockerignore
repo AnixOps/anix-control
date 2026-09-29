@@ -53,3 +53,6 @@ internal/tests/
 # Config files with secrets
 config/config.yaml
 config/config.prod.yaml
+
+# Control Center app (separate module, built by control-center*.yml workflows)
+control-center/

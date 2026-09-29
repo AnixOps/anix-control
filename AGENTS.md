@@ -1112,6 +1112,7 @@ When planning future clone work, prioritize the remaining gaps in this order:
   - one short root README
   - one docs landing page at `docs/README.md`
   - no duplicate repository-layout documents outside `docs/reference/`
+  - `control-center/` is the one allowed self-contained app directory at the root (see "Control Center (`control-center/`)" below)
 - The documentation tree is now intentional and must stay layered:
   - `docs/intro/` for ownership and boundary
   - `docs/reference/` for startup, configuration, runtime, and layout
@@ -1132,6 +1133,17 @@ When planning future clone work, prioritize the remaining gaps in this order:
 - Do not reintroduce an empty top-level `deploy/` placeholder while the real deployment assets live under `config/deploy/`.
 - When Docker or env behavior changes, verify both the compose files and the startup/reference docs in the same change.
 - 更详细的模块映射、当前完成度和下一步待补项目，见 `docs/guide/flux-panel-clone.md`。
+
+## Control Center (`control-center/`)
+
+- `control-center/` holds the Control Center, imported on 2026-09-29 from the archived `AnixOps/Anixops-control-center` repository. `control-center/workers/` holds its Cloudflare Workers API, imported from the archived `AnixOps/Anixops-control-center-worker` repository. Do not reopen or push to the archived repositories.
+- `go_dev` is the only long-lived branch. Open feature branches from `go_dev` and merge back through PRs.
+- It is a separate Go module (`github.com/AnixOps/anix-control/control-center`, Go 1.24). Run its checks from inside the directory: `cd control-center && go test ./...`; `cd control-center/web && npm test -- --run && npm run build`; `cd control-center/mobile && flutter test`; `cd control-center/workers && npm run typecheck && npm test`.
+- Its CI lives in `.github/workflows/control-center.yml` and `control-center-workers.yml`, and its releases in `control-center-release.yml`. Release tags are `control-center-v*`. Never let a Center release become the repository's latest release, because `scripts/install.sh` reads `releases/latest`.
+- The root `ci.yml` ignores `control-center/**`. Keep `-exclude-dir=control-center` on gosec, `--exclude control-center` on swag, and `control-center/` in `.dockerignore`.
+- The Workers API deploys through Cloudflare Workers Builds (root `control-center/workers`, branch `go_dev`). A merge to `go_dev` that touches `control-center/workers/**` deploys `api.anixops.com`.
+- `control-center/workers/migrations/` is applied to a production D1 database. Only append new migrations; never edit or delete existing ones.
+- The Center's plugin page talks to Control through `/api/v2/login` and `/api/v3`. Its other pages use the Workers `/api/v1` session. Do not add a second Control API contract for it.
 
 ## UTF-8 / Chinese Copy Rules
 

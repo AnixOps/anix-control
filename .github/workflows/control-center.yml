@@ -1,0 +1,395 @@
+name: Control Center CI
+
+# Ported from the archived AnixOps/Anixops-control-center repository
+# (.github/workflows/ci.yml, mobile.yml and test-report.yml). The app lives in
+# control-center/ as its own Go module; control-center/workers/ has a separate
+# workflow (control-center-workers.yml).
+
+on:
+  push:
+    branches: [ go_dev ]
+    paths:
+      - 'control-center/**'
+      - '!control-center/workers/**'
+      - '.github/workflows/control-center.yml'
+  pull_request:
+    branches: [ go_dev ]
+    paths:
+      - 'control-center/**'
+      - '!control-center/workers/**'
+      - '.github/workflows/control-center.yml'
+  workflow_dispatch:
+    inputs:
+      test_report:
+        description: 'Generate the unified test report (Go, Workers, Flutter, Vue)'
+        type: boolean
+        default: false
+      gomobile:
+        description: 'Build the gomobile Android AAR / iOS framework from internal/mobile'
+        type: boolean
+        default: false
+
+defaults:
+  run:
+    working-directory: control-center
+
+env:
+  GO_VERSION: '1.24'
+  NODE_VERSION: '20'
+  FLUTTER_VERSION: '3.41.5'
+
+jobs:
+  # ============================================
+  # Code Quality Check (Go)
+  # ============================================
+  lint:
+    name: Control Center Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: control-center/go.sum
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          # control-center/.golangci.yml uses the v1 configuration format.
+          version: v1.64.8
+          working-directory: control-center
+          args: --timeout=5m
+
+  # ============================================
+  # Unit Tests (Go)
+  # ============================================
+  test:
+    name: Control Center Go Tests
+    runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{ steps.coverage.outputs.coverage }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: control-center/go.sum
+
+      - name: Verify go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Run tests with coverage
+        id: coverage
+        run: |
+          go test -coverprofile=coverage.out -covermode=atomic ./...
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "coverage=$COVERAGE" >> "$GITHUB_OUTPUT"
+          echo "Test coverage: ${COVERAGE}%"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./control-center/coverage.out
+          flags: control-center-go
+          fail_ci_if_error: false
+
+  # ============================================
+  # Critical Function Tests
+  # ============================================
+  critical-tests:
+    name: Control Center Critical Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: control-center/go.sum
+
+      - name: Run critical function tests
+        run: |
+          go test -v -run "TestRegister|TestStartPlugin|TestStopPlugin" ./internal/core/plugin/... -count=1
+          go test -v -run "TestValidateToken|TestCheckPassword|TestHasPermission" ./internal/security/auth/... -count=1
+          go test -v -run "TestDefaultConfig|TestLoadFromString" ./internal/core/config/... -count=1
+
+  # ============================================
+  # Quality Gate (development branch threshold)
+  # ============================================
+  quality-gate:
+    name: Control Center Quality Gate
+    needs: [test, critical-tests, lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check coverage threshold
+        working-directory: .
+        run: |
+          GO_COVERAGE=${{ needs.test.outputs.coverage }}
+          echo "Go Coverage: ${GO_COVERAGE}%"
+          if (( $(echo "$GO_COVERAGE < 10" | bc -l) )); then
+            echo "::error::Coverage ${GO_COVERAGE}% is below the 10% development threshold"
+            exit 1
+          fi
+          echo "Quality gate passed (coverage: ${GO_COVERAGE}%)"
+
+  # ============================================
+  # Web Tests and Browser Gate
+  # ============================================
+  web-test:
+    name: Control Center Web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: control-center/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: control-center/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run frontend unit tests
+        run: npm test -- --run
+
+      - name: Build production frontend
+        run: npm run build
+
+      - name: Audit production dependencies
+        run: npm audit --audit-level=high --omit=dev
+
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Chromium browser tests
+        run: npm run test:e2e -- --project=chromium --reporter=line
+
+      - name: Upload web verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-center-web-verification-${{ github.run_id }}
+          path: |
+            control-center/web/playwright-report
+            control-center/web/test-results
+            control-center/web/dist
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ============================================
+  # Flutter Client
+  # ============================================
+  flutter-test:
+    name: Control Center Flutter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: control-center/mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Run tests
+        run: flutter test
+
+  # ============================================
+  # Build All Platforms
+  # ============================================
+  build:
+    name: Control Center Build (${{ matrix.platform }})
+    needs: [test]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            platform: linux-amd64
+          - goos: linux
+            goarch: arm64
+            platform: linux-arm64
+          - goos: windows
+            goarch: amd64
+            platform: windows-amd64
+          - goos: windows
+            goarch: arm64
+            platform: windows-arm64
+          - goos: darwin
+            goarch: amd64
+            platform: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            platform: darwin-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: control-center/go.sum
+
+      - name: Build CLI and TUI
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          EXT=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            EXT=".exe"
+          fi
+          go build -ldflags="-s -w -X 'main.version=${{ github.ref_name }}' -X 'main.commit=${{ github.sha }}' -X 'main.date=$(date -u +%Y-%m-%dT%H:%M:%SZ)'" -o dist/${{ matrix.platform }}/anixops${EXT} ./cmd/anixops
+          go build -ldflags="-s -w" -o dist/${{ matrix.platform }}/anixops-tui${EXT} ./cmd/anixops-tui
+
+      - name: Create archive
+        run: tar -czvf anixops-${{ matrix.platform }}.tar.gz -C dist/${{ matrix.platform }} .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-center-anixops-${{ matrix.platform }}
+          path: control-center/anixops-${{ matrix.platform }}.tar.gz
+          retention-days: 30
+
+  # ============================================
+  # Unified Test Report (manual)
+  # ============================================
+  test-report:
+    name: Control Center Test Report
+    if: github.event_name == 'workflow_dispatch' && inputs.test_report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: control-center/go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Install dependencies
+        run: |
+          (cd workers && npm ci)
+          (cd web && npm ci)
+
+      - name: Run all tests and generate report
+        env:
+          CI: true
+        run: |
+          chmod +x scripts/test-report/run-all-tests.sh
+          ./scripts/test-report/run-all-tests.sh
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-center-test-reports
+          path: control-center/reports/test-reports/latest/
+          retention-days: 30
+
+  # ============================================
+  # gomobile builds (manual)
+  # ============================================
+  gomobile-android:
+    name: Control Center gomobile Android
+    if: github.event_name == 'workflow_dispatch' && inputs.gomobile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: control-center/go.sum
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          gomobile init
+
+      - name: Build Android AAR
+        run: |
+          mkdir -p dist/android
+          gomobile bind -target=android -o dist/android/anixops.aar ./internal/mobile
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-center-gomobile-android
+          path: control-center/dist/android/
+          retention-days: 30
+
+  gomobile-ios:
+    name: Control Center gomobile iOS
+    if: github.event_name == 'workflow_dispatch' && inputs.gomobile
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: control-center/go.sum
+
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          gomobile init
+
+      - name: Build iOS Framework
+        run: |
+          mkdir -p dist/ios
+          gomobile bind -target=ios -o dist/ios/AnixOps.framework ./internal/mobile
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-center-gomobile-ios
+          path: control-center/dist/ios/
+          retention-days: 30

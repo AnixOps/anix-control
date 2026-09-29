@@ -1,0 +1,97 @@
+# AnixOps Control Center Configuration
+
+env: "development"
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "debug"  # debug, release, test
+
+grpc:
+  enable: true
+  host: "0.0.0.0"
+  port: 50052
+  keepalive_time: 30      # seconds
+  keepalive_timeout: 10   # seconds
+
+database:
+  driver: "sqlite"
+  database: "data/anixops.db"
+
+auth:
+  provider: "local"  # local, oauth, ldap, saml
+
+  jwt:
+    secret: "your-super-secret-jwt-key-change-in-production"
+    expire: 86400         # 24 hours in seconds
+    refresh_expire: 604800  # 7 days in seconds
+    issuer: "anixops"
+
+  # Local authentication (default)
+  local:
+    admin_email: "admin@example.com"
+    admin_password: "admin123456"
+
+  # OAuth configuration (optional)
+  # oauth:
+  #   providers:
+  #     - name: "github"
+  #       client_id: "your-github-client-id"
+  #       client_secret: "your-github-client-secret"
+  #       redirect_url: "http://localhost:8080/auth/callback/github"
+  #       scopes:
+  #         - "user:email"
+  #     - name: "google"
+  #       client_id: "your-google-client-id"
+  #       client_secret: "your-google-client-secret"
+  #       redirect_url: "http://localhost:8080/auth/callback/google"
+  #       scopes:
+  #         - "email"
+  #         - "profile"
+
+  # LDAP configuration (optional)
+  # ldap:
+  #   url: "ldap://ldap.example.com:389"
+  #   bind_dn: "cn=admin,dc=example,dc=com"
+  #   bind_password: "admin-password"
+  #   base_dn: "ou=users,dc=example,dc=com"
+  #   filter: "(uid=%s)"
+  #   tls: true
+  #   insecure: false
+
+  # SAML configuration (optional)
+  # saml:
+  #   entity_id: "anixops"
+  #   idp_metadata_url: "https://idp.example.com/metadata"
+  #   certificate_file: "/path/to/cert.pem"
+  #   key_file: "/path/to/key.pem"
+
+plugins:
+  # Ansible plugin configuration
+  ansible:
+    playbook_dir: "./playbooks"
+    inventory_file: "./inventory/hosts"
+    timeout: 3600  # 1 hour
+
+  # v2board plugin configuration
+  v2board:
+    host: "http://localhost:8080"
+    api_key: ""  # Set your v2board API token
+    timeout: 30
+
+  # V2bX plugin configuration
+  v2bx:
+    host: ""
+    api_key: ""
+    timeout: 30
+
+  # AnixOps-agent plugin configuration
+  agent:
+    host: ""
+    port: 8081
+    timeout: 30
+
+logging:
+  level: "info"   # debug, info, warn, error
+  format: "text"  # text, json
+  output: "stdout"  # stdout, stderr, or file path

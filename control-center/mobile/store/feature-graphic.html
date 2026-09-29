@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        * { margin: 0; padding: 0; }
+        html, body { width: 1024px; height: 500px; margin: 0; padding: 0; overflow: hidden; }
+    </style>
+</head>
+<body>
+    <div style="width:1024px;height:500px;background:linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);position:relative;overflow:hidden;display:flex;align-items:center;padding:0 60px;">
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background-image:radial-gradient(circle at 20% 80%, rgba(56, 189, 248, 0.1) 0%, transparent 50%),radial-gradient(circle at 80% 20%, rgba(99, 102, 241, 0.1) 0%, transparent 50%);"></div>
+        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background-image:linear-gradient(rgba(56, 189, 248, 0.05) 1px, transparent 1px),linear-gradient(90deg, rgba(56, 189, 248, 0.05) 1px, transparent 1px);background-size:50px 50px;"></div>
+        <div style="position:relative;z-index:10;flex:1;">
+            <div style="display:flex;align-items:center;gap:20px;margin-bottom:24px;">
+                <div style="width:80px;height:80px;background:linear-gradient(135deg, #38bdf8, #6366f1);border-radius:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 40px rgba(56, 189, 248, 0.3);">
+                    <svg width="50" height="50" viewBox="0 0 24 24" fill="white"><path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.5L19 8v8l-7 3.5L5 16V8l7-3.5z"/><path d="M12 6v12M6 9l6 3 6-3"/></svg>
+                </div>
+                <span style="font-size:42px;font-weight:800;color:white;font-family:Segoe UI,sans-serif;">AnixOps</span>
+            </div>
+            <p style="font-size:22px;color:#94a3b8;margin-bottom:32px;line-height:1.4;font-family:Segoe UI,sans-serif;">Unified Control Center for<br>Server Infrastructure Management</p>
+            <div style="display:flex;flex-wrap:wrap;gap:12px;">
+                <span style="background:rgba(56, 189, 248, 0.15);border:1px solid rgba(56, 189, 248, 0.3);color:#38bdf8;padding:8px 16px;border-radius:20px;font-size:14px;font-family:Segoe UI,sans-serif;">📊 Real-time Dashboard</span>
+                <span style="background:rgba(56, 189, 248, 0.15);border:1px solid rgba(56, 189, 248, 0.3);color:#38bdf8;padding:8px 16px;border-radius:20px;font-size:14px;font-family:Segoe UI,sans-serif;">🖥️ Server Management</span>
+                <span style="background:rgba(56, 189, 248, 0.15);border:1px solid rgba(56, 189, 248, 0.3);color:#38bdf8;padding:8px 16px;border-radius:20px;font-size:14px;font-family:Segoe UI,sans-serif;">📋 Ansible Automation</span>
+                <span style="background:rgba(56, 189, 248, 0.15);border:1px solid rgba(56, 189, 248, 0.3);color:#38bdf8;padding:8px 16px;border-radius:20px;font-size:14px;font-family:Segoe UI,sans-serif;">🔒 Secure</span>
+                <span style="background:rgba(56, 189, 248, 0.15);border:1px solid rgba(56, 189, 248, 0.3);color:#38bdf8;padding:8px 16px;border-radius:20px;font-size:14px;font-family:Segoe UI,sans-serif;">📱 Multi-platform</span>
+            </div>
+        </div>
+        <div style="position:relative;">
+            <div style="width:220px;height:440px;background:#1e293b;border-radius:30px;border:4px solid #475569;padding:12px;box-shadow:0 25px 80px rgba(0, 0, 0, 0.5);transform:rotate(-5deg);">
+                <div style="width:100%;height:100%;background:linear-gradient(180deg, #0f172a 0%, #1e293b 100%);border-radius:20px;overflow:hidden;">
+                    <div style="height:50px;background:rgba(56, 189, 248, 0.1);display:flex;align-items:center;justify-content:center;font-size:12px;color:#38bdf8;font-weight:600;font-family:Segoe UI,sans-serif;">Dashboard</div>
+                    <div style="padding:15px;">
+                        <div style="background:rgba(99, 102, 241, 0.2);border-radius:10px;padding:12px;margin-bottom:10px;">
+                            <div style="font-size:9px;color:#94a3b8;margin-bottom:4px;font-family:Segoe UI,sans-serif;">Active Servers</div>
+                            <div style="font-size:16px;font-weight:700;color:white;font-family:Segoe UI,sans-serif;">24</div>
+                            <div style="display:flex;align-items:flex-end;gap:3px;height:30px;margin-top:8px;">
+                                <div style="flex:1;background:linear-gradient(180deg, #38bdf8, #6366f1);border-radius:2px;height:60%;"></div>
+                                <div style="flex:1;background:linear-gradient(180deg, #38bdf8, #6366f1);border-radius:2px;height:80%;"></div>
+                                <div style="flex:1;background:linear-gradient(180deg, #38bdf8, #6366f1);border-radius:2px;height:45%;"></div>
+                                <div style="flex:1;background:linear-gradient(180deg, #38bdf8, #6366f1);border-radius:2px;height:90%;"></div>
+                                <div style="flex:1;background:linear-gradient(180deg, #38bdf8, #6366f1);border-radius:2px;height:70%;"></div>
+                                <div style="flex:1;background:linear-gradient(180deg, #38bdf8, #6366f1);border-radius:2px;height:85%;"></div>
+                            </div>
+                        </div>
+                        <div style="background:rgba(30, 41, 59, 0.8);border-radius:10px;padding:10px;">
+                            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(148, 163, 184, 0.1);">
+                                <div style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></div>
+                                <span style="font-size:9px;color:#e2e8f0;font-family:Segoe UI,sans-serif;">prod-server-01</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(148, 163, 184, 0.1);">
+                                <div style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></div>
+                                <span style="font-size:9px;color:#e2e8f0;font-family:Segoe UI,sans-serif;">db-master</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
+                                <div style="width:8px;height:8px;border-radius:50%;background:#f59e0b;"></div>
+                                <span style="font-size:9px;color:#e2e8f0;font-family:Segoe UI,sans-serif;">cache-redis</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

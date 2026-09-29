@@ -1,0 +1,126 @@
+groups:
+  - name: anixops.rules
+    rules:
+      # Node alerts
+      - alert: AnixOpsNodeDown
+        expr: anixops_nodes_by_status{status="offline"} > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AnixOps node is offline"
+          description: "{{ $value }} node(s) are currently offline"
+
+      - alert: AnixOpsHighNodeErrorRate
+        expr: rate(anixops_nodes_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High node error rate"
+          description: "Node error rate is {{ $value }} errors/sec"
+
+      # Task alerts
+      - alert: AnixOpsTaskFailures
+        expr: anixops_tasks_by_status{status="failed"} > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of failed tasks"
+          description: "{{ $value }} tasks have failed"
+
+      - alert: AnixOpsTasksStuck
+        expr: anixops_tasks_by_status{status="running"} > 100
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Too many running tasks"
+          description: "{{ $value }} tasks are in running state for more than 30 minutes"
+
+      # API latency alerts
+      - alert: AnixOpsHighAPILatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="anixops"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency"
+          description: "95th percentile latency is {{ $value }}s"
+
+      - alert: AnixOpsAPIErrorRate
+        expr: rate(http_requests_total{job="anixops",status=~"5.."}[5m]) / rate(http_requests_total{job="anixops"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High API error rate"
+          description: "API error rate is {{ $value | humanizePercentage }}"
+
+      # Authentication alerts
+      - alert: AnixOpsHighFailedLogins
+        expr: rate(anixops_auth_failures_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of failed login attempts"
+          description: "{{ $value }} failed logins per second"
+
+      - alert: AnixOpsAccountLockouts
+        expr: increase(anixops_account_lockouts_total[1h]) > 5
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Multiple account lockouts"
+          description: "{{ $value }} accounts have been locked in the last hour"
+
+      # Resource alerts
+      - alert: AnixOpsHighMemoryUsage
+        expr: process_resident_memory_bytes{job="anixops"} / 1024 / 1024 / 1024 > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanize1024 }}B"
+
+      - alert: AnixOpsHighCPUUsage
+        expr: rate(process_cpu_seconds_total{job="anixops"}[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+
+      # Backup alerts
+      - alert: AnixOpsBackupFailed
+        expr: anixops_backup_status{status="failed"} == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backup failed"
+          description: "Database backup has failed"
+
+      - alert: AnixOpsBackupTooOld
+        expr: time() - anixops_last_backup_timestamp > 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backup is too old"
+          description: "Last backup was more than 24 hours ago"
+
+      # Agent alerts
+      - alert: AnixOpsAgentDisconnected
+        expr: anixops_agents_by_status{status="disconnected"} > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent disconnected"
+          description: "{{ $value }} agent(s) are disconnected"
