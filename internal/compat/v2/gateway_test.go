@@ -96,6 +96,27 @@ func TestRequestMetadataRemovesAgentWebSocketCredentialsAfterKernelPreflight(t *
 	require.JSONEq(t, `{"path":"/api/v2/agent/ws","query":{"tag":["stable"]},"client_ip":"192.0.2.1","node_id":17,"trusted_agent_websocket_auth":true,"trusted_agent_websocket_forward_node":true}`, string(encoded))
 }
 
+func TestRequestMetadataCarriesTheOriginalRequestAddress(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	var metadata pluginhost.RequestMetadata
+	router.GET("/api/v2/forward-agent/install.sh", func(c *gin.Context) {
+		metadata = requestMetadata(c)
+		c.Status(http.StatusNoContent)
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "https://panel.example.test:8443/api/v2/forward-agent/install.sh", nil)
+	router.ServeHTTP(httptest.NewRecorder(), request)
+	require.Equal(t, "panel.example.test:8443", metadata.Host)
+	require.True(t, metadata.TLS)
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v2/forward-agent/install.sh", nil)
+	request.Host = "panel.example.test\r\nX-Injected: 1"
+	router.ServeHTTP(httptest.NewRecorder(), request)
+	require.Empty(t, metadata.Host)
+	require.False(t, metadata.TLS)
+}
+
 func TestGatewayFailsClosedWhenPackageIsDisabled(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	gateway := Gateway{Registry: NewRegistry(registrySourceStub{err: ErrPackageUnavailable})}

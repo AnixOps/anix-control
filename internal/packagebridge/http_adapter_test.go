@@ -78,3 +78,33 @@ func TestBridgeResponseStatusCodeRejectsUnrepresentableStatus(t *testing.T) {
 	_, err = bridgeResponseStatusCode(int(^uint32(0)) + 1)
 	require.Error(t, err)
 }
+
+func TestHTTPAdapterRestoresTheOriginalRequestAddress(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	adapter := NewHTTPAdapter(func(c *gin.Context) {
+		c.JSON(200, gin.H{"host": c.Request.Host, "tls": c.Request.TLS != nil})
+	})
+	call := func(metadata string) (Response, error) {
+		return adapter(context.Background(), Call{
+			Host: HostIdentity{PackageID: "forward", Version: "4.0.0", Generation: 7},
+			Request: Request{
+				RequestID: "request-http-host", RouteID: "forward.forward_agent.install_sh.get", Method: "GET",
+				PrincipalJSON: []byte(`{"actor_id":0,"admin":false,"package_id":"forward"}`),
+				MetadataJSON:  []byte(metadata),
+				Deadline:      time.Now().Add(time.Second),
+			},
+			Operation: "forward.forward_agent.install_sh.get",
+		})
+	}
+
+	response, err := call(`{"path":"/api/v2/forward-agent/install.sh","host":"panel.example.test:8443","tls":true}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"host":"panel.example.test:8443","tls":true}`, string(response.Body))
+
+	response, err = call(`{"path":"/api/v2/forward-agent/install.sh","host":"[2001:db8::1]:8080"}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"host":"[2001:db8::1]:8080","tls":false}`, string(response.Body))
+
+	_, err = call(`{"path":"/api/v2/forward-agent/install.sh","host":"evil.test/x?y"}`)
+	require.ErrorIs(t, err, ErrCapabilityRejected)
+}

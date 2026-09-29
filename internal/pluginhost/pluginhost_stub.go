@@ -62,6 +62,11 @@ type RequestMetadata struct {
 	NodeID                           uint                `json:"node_id,omitempty"`
 	TrustedAgentWebSocketAuth        bool                `json:"trusted_agent_websocket_auth,omitempty"`
 	TrustedAgentWebSocketForwardNode bool                `json:"trusted_agent_websocket_forward_node,omitempty"`
+	// Host and TLS describe the original request address for the kernel's
+	// package bridge only. They are never sent to package hosts, because hosts
+	// built with the v4.0.0 SDK reject unknown metadata fields.
+	Host string `json:"-"`
+	TLS  bool   `json:"-"`
 }
 
 type DispatchOutput struct {
