@@ -1,0 +1,403 @@
+# Package Extraction Design
+
+Date: 2026-09-29
+
+This is the design of record for moving business domains out of the Control
+kernel and into signed packages. It replaces the retired plans that lived under
+`docs/superpowers/` (see [Sources](#sources)); what is still binding from them
+is copied here. Feature status stays in [`../features.md`](../features.md) and
+open work in [`../../TODO.md`](../../TODO.md).
+
+> 中文摘要：v4.0.0 的「插件化」只到路由层；本文定义「一个领域真正住在插件里」
+> 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均为**计划中**）、
+> 保留下来的旧计划约束，以及 M0–M4 里程碑。
+
+Markers used below: **CURRENT** = true in the tree today; **PLANNED** = accepted
+design, not implemented yet; **HISTORICAL** = preserved from a retired plan for
+context, not a commitment.
+
+## 1. Status And Reality (CURRENT)
+
+v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
+
+- All 292 `/api/v2` routes in `config/v2-package-route-catalog.json` enter the
+  package gateway. 244 are registered with `registeredPackageRoute`
+  (`internal/router/router.go`), which registers the legacy gin handler into
+  `packagebridge.DefaultRouteRegistry()` and returns the gateway; the 45
+  `identity-platform` routes use the bare `v2PackageGateway.Serve`; the 3
+  WebSocket routes use `registeredPackageWebSocketRoute`.
+- Request path: gin middleware -> `compatv2` gateway -> route resolution
+  (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
+  process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
+  handler/service**.
+- 15 of 16 packages run the generic forwarding host
+  `packages/shared/controlhost/service.go` (`build_package.py` falls back to it
+  when `packages/<id>/control` is absent). Only `identity-platform` has its own
+  host (`packages/identity-platform/control/service.go`), and it too forwards
+  every call to the kernel allowlist in
+  `internal/identitybridge/identity_bridge.go`.
+- 11 packages (forward, knowledge, notification, order, payment, plan,
+  protocol-runtime, proxy-node, subscription, ticket, wireguard) are 4-file
+  placeholders (`manifest.template.json`, `compat/`, `migrations/`, `webui/`).
+- The 4.0 stage exit condition "production requests no longer reach coupled
+  legacy handlers" was **not** met. Business tables (`v2_*`), handlers,
+  services, and workers are still kernel-owned.
+- Production (per the operator, 2026-09) still runs a pre-v4 Control on
+  PostgreSQL. Moving it to v4 is a database migration plus host move (M2).
+- Outside the package gate, kernel handlers serve `/api/v1/server/UniProxy/*`,
+  `/{subscribe_path}/:token`, `/api/v1/client/subscribe`, and `/flow/upload`.
+
+Reusable pieces that already exist:
+
+| Piece | Where |
+|-------|-------|
+| Signed package build, compiles `packages/<id>/control` when present | `packages/shared/build_package.py` |
+| Versioned, schema-validated package config | `GET/PUT /api/v3/plugin-installations/:id/config` |
+| Rollout/migration ledger models (unwired) | `internal/model/plugin_rollout.go`, `internal/service/plugin_rollout.go` |
+| Lifecycle plan with reverse compensation | `internal/plugincontrol/lifecycle_plan.go` |
+| Compiling a real host inside a test | `internal/pluginhost/identity_platform_host_test.go` |
+| E2E fixture that installs a real signed package | `internal/tests/e2e/identity_package_fixture_test.go` |
+
+## 2. Definition Of Done For An Extracted Domain
+
+A domain counts as extracted only when all four hold:
+
+1. Its code lives in `packages/<id>/control/{main.go, app/...}` and imports
+   nothing from `internal/` (enforced by a boundary gate).
+2. Every route of the domain is handled natively by the host: `router.go`
+   registers the bare `v2PackageGateway.Serve` and no legacy handler is
+   registered for it.
+3. The package owns its tables, and its migrations run through the kernel
+   migration runner.
+4. The kernel has no handler, service, model, or worker left for the domain.
+
+`identity-platform` is exempt: identity stays kernel-owned by design and remains
+bridged; only its migrations move to the storage lease.
+
+## 3. Target Mechanism (PLANNED — not implemented)
+
+The host process and bridge stay. Three additions make real extraction
+possible, because today a host has no data channel: it never receives database
+credentials, and its one-shot capability can only call back into its own
+legacy route.
+
+### 3.1 Storage lease
+
+- `internal/packagestore.EnsurePackageRole` (idempotent) creates, per package,
+  a PostgreSQL role `anix_pkg_<id>` and schema `pkg_<id>`.
+- Grants come only from signed capabilities in the package manifest:
+  `kernel.storage.v1` (own schema) and `kernel.storage.adopt:<table>` (for
+  example `kernel.storage.adopt:v2_knowledge`). Column-level grants are allowed
+  for shared tables (for example `v2_order(status, paid_at)`).
+- New bridge RPC `LeaseStorage` returns connection parameters for that role
+  only; the host opens it through `pkg/packagestoresdk.Open` and uses GORM.
+  Each lease is capped at 2–4 connections and requested only by packages that
+  have at least one route in `native` mode.
+- `pkg/packagestoresdk.RunEmbeddedMigrations`: embedded SQL, a per-package
+  state table, a digest per step. The kernel records runs in the existing
+  `v4_kernel_package_*` ledger.
+- New kernel model `v4_kernel_package_storage` records role, schema, granted
+  tables, and lease generation.
+
+### 3.2 Per-route modes
+
+- Each route has a mode `legacy` | `shadow` | `native`, stored in the package's
+  existing versioned config document and polled by the host every 5 s through a
+  new bridge RPC `GetPackageConfig`.
+- `legacy`: pass through the bridge to the legacy handler (today's behaviour).
+- `shadow` (GET only): return the legacy result, run the native implementation
+  in the background, compare normalized output, count mismatches in
+  `HealthResponse.details_json`.
+- `native`: the host answers; the legacy handler is not called.
+- Rollback = set the route back to `legacy` (effective within 5 s, audited
+  through the config revision history).
+- Router, mode logic, legacy pass-through, and shadow comparison move into
+  `pkg/pluginhostsdk/router.go` (from `packages/shared/controlhost`).
+- `pkg/v2compat` exposes `PanelSuccess`/`PanelError`/`NormalizeForCompare`;
+  legacy handlers delegate to it so output stays byte-identical.
+
+### 3.3 Typed kernel operations
+
+Cross-domain writes go through typed, idempotent kernel operations instead of
+foreign-table writes. First one: `kernel.entitlement.apply.v1`, covering plan
+assignment and order fulfilment, executed exactly once via an idempotency
+table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
+`OrderService.Complete`.
+
+### 3.4 In-place adoption and kernel views
+
+- Existing tables are adopted in place by grant: no copy, no dual write. The
+  `v4_<pkg>_*` shapes in section 6 are long-term targets, not the first step.
+- Consistency evidence is the shadow mismatch counter plus the migration
+  validation digest (row count + content hash).
+- The kernel publishes read-only views `kapi_*`, created at startup by
+  `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, later
+  `kapi_plan_catalog_v1`). Packages read other domains only through `kapi_*`
+  views or typed operations.
+
+### 3.5 Isolation switch and SQLite
+
+- `plugins.storage_isolation: role | shared`. `role` is the PostgreSQL default;
+  `shared` is the escape hatch (lease uses the kernel pool with SDK-enforced
+  table allowlists) for PG grant problems (sequence privileges, PG15+ `public`
+  schema defaults).
+- SQLite has no roles or schemas. Proposed: on SQLite the lease is always
+  `shared`, tables use a `pkg_<id>_` prefix instead of a schema, and
+  `role` is rejected at startup. Production extraction targets PostgreSQL.
+
+### 3.6 Rejected alternatives
+
+- SQL over IPC: about 3x the code and no smaller privilege.
+- In-process business modules: would discard the shipped signing, lifecycle,
+  and rollback model.
+
+## 4. Security Invariants
+
+**Amended invariant (PLANNED, lands with `LeaseStorage`):** a package host never
+receives **kernel** credentials — the kernel DSN, JWT signing key, or full
+Control configuration. It may lease its own per-package least-privilege role.
+`plugin-kernel-contract.md` must be updated in the same change.
+
+Preserved bridge invariants (from `2026-07-19-v2-package-bridge.md`, still
+CURRENT):
+
+- A host receives only a private inherited socket endpoint; never a DSN,
+  signing key, full configuration, or arbitrary SQL capability.
+- The parent endpoint is bound to one package id, version, lifecycle
+  generation, and host lease. A replacement generation gets a new bridge.
+- Every call carries a cryptographically random, short-lived, single-request
+  capability minted by the kernel after v2 route resolution; the host cannot
+  choose the principal, route, package, or deadline.
+- The bridge exposes explicit named operations only and rejects unknown
+  operations, wrong route, stale generation, reused capability, and expired
+  deadline. No generic query, filesystem, config, process, or token-signing
+  operation.
+- The bridge returns application data only; HTTP status, headers, and framing
+  stay with the host RPC and compatibility gateway.
+- The bridge is a **migration adapter**, not a hidden database escape hatch.
+  "Package-owned projections and checkpointed import migrations can replace
+  each operation independently" once the data contract exists.
+
+Identity waves (bridge plan): login/registration first, then profile/session,
+MFA/invitations, administration, and platform configuration/audit/backup. Each
+wave keeps its gin middleware and needs an enabled-host assertion, a
+disabled-host 503 assertion, and a rollback assertion before the next wave.
+
+Bridge non-goals: no direct database credentials or arbitrary SQL interface
+(amended only by the storage lease above); no legacy handler as a router
+fallback after a route is cut over; no response-envelope guessing — every
+signed route declaration names its transport and envelope.
+
+## 5. Preserved Constraints From Retired Plans (HISTORICAL, still guiding)
+
+From `2026-07-18-v4-plugin-only-stable.md`, Global Constraints (condensed; the
+package list is now sixteen with `identity-platform`):
+
+- Product v4.0.0; module paths stay `github.com/AnixOps/anix-control/v4` and
+  `github.com/AnixOps/anix-agent/v4`.
+- A package is the only owner of its domain behaviour, migrations,
+  compatibility projection, background work, and WebUI. Kernel code may not
+  import a package domain service or query a package-owned table.
+- Supported `/api/v2` path, method, auth semantics, request fields, envelope,
+  and documented error codes stay stable, entering a package adapter with no
+  fallback to coupled legacy code.
+- Packages are separately supervised local processes, never network
+  listeners; they receive only authenticated, authorized, deadline-bound
+  requests over a permission-restricted Unix socket.
+- Every artifact, manifest, WebUI bundle, migration digest, and entrypoint is
+  Ed25519-signed and verified against the official root before activation.
+- Every mutation carries a stable request identity and idempotency key, is
+  audited, and is fenced by the package route generation.
+- Database work stays additive until verified backup, validation, reverse
+  migration, and the 72-hour canary pass. No hand edits of rows, package
+  files, or route state during an upgrade.
+- Rollout 1/5/25/100 % of a cohort; host failure, lease loss, validation
+  mismatch, incompatible response, duplicate non-idempotent mutation, health
+  failure, or error/latency breach halts and returns to the previous verified
+  generation.
+- SQLite and PostgreSQL both pass clean bootstrap, upgrade, backup/restore,
+  and reverse-upgrade rehearsals.
+- Agent changes ship as a tagged `github.com/AnixOps/anix-agent/sdk`; no
+  submodules either way.
+
+From `2026-07-19-v2-full-package-cutover.md`, Global Constraints (condensed):
+
+- Every supported `/api/v2` business method/path has exactly one package
+  owner, signed declaration, route id, envelope, middleware group, and
+  transport (`config/v2-package-route-catalog.json`).
+- `router.go` keeps its middleware chain; final registrations call the
+  gateway, never a legacy handler/service/model/worker.
+- Verified installed artifacts are the only runtime source of route
+  declarations; the source catalog is a build-time gate, never a fallback.
+- Disabled, unsigned, stale, unhealthy, or incompatible packages fail closed.
+- WebSocket routes relay over versioned bidirectional Unix gRPC after normal
+  HTTP middleware.
+- Each ownership wave is additive and generation-fenced. A missing
+  `ANIX_TEST_POSTGRES_DSN` is an evidence gap, never a pass.
+
+Cutover waves (Tasks 6–9, condensed):
+
+| Wave | Packages | Must hold |
+|------|----------|-----------|
+| A: content/support/catalog | knowledge, notification, ticket, plan | Notification outbox exactly-once; generation-fenced ticket state |
+| B: commercial/subscription | order, payment, subscription | Callback receipt persisted before any transition; order owns coupons; byte-stable subscription output |
+| C: node/runtime/topology | proxy-node, protocol-runtime, wireguard, forward, machine-telemetry, nftables-forward, gost-mesh, nat-egress | Includes the 3 WebSocket paths; legacy handlers removed only after package tests and migrations pass |
+| Final enforcement | all | `check_plugin_only_routes.py` rejects a catalogued direct handler, missing declaration, owner mismatch, missing host, or legacy WebSocket binding; kernel handlers allowed only where the catalog says `transport: "kernel"` |
+
+Reality: the final gate passes today because `registeredPackageRoute` returns
+the gateway; the legacy handler is still reached through the bridge registry.
+The planned `config/package-extraction.json` (M3, section 10) closes that gap.
+
+## 6. Per-Domain Target Data Contracts (non-binding)
+
+Route counts are from `config/v2-package-route-catalog.json`; interfaces and
+tables are from Tasks 7–12 of the retired stable plan. Table names are target
+shapes; the first extraction step adopts the existing `v2_*` tables in place.
+
+| Domain (task) | Routes | Planned interfaces | Planned tables | Notes |
+|---------------|-------:|--------------------|----------------|-------|
+| knowledge (T7) | 6 | `knowledge.article.list/read`, `knowledge.admin.write` | `v4_knowledge_article`, `v4_knowledge_category` | Pilot; adopts `v2_knowledge` |
+| notification (T7) | 24 | `notification.notice.list`, `notification.delivery.enqueue/retry` | `v4_notification_notice`, `_delivery`, `_outbox` | Retry idempotent, one outbox row; SMTP/Telegram send moves to host |
+| ticket (T8) | 8 | `ticket.list`, `ticket.message.create`, `ticket.status.transition` | `v4_ticket_ticket`, `v4_ticket_message` | Generation-fenced transitions; adopts `v2_ticket`, `v2_ticket_message` |
+| plan (T8) | 12 | `plan.catalog.list`, `plan.assignment.read`, `plan.entitlement.read` | `v4_plan_catalog`, `_assignment`, `_quota` | Publishes versioned `EntitlementReader`; 5 `/speed-limit/*` routes are Flux forward limits, stay bridged, later join forward |
+| order (T9) | 13 | `order.create`, `order.apply_coupon`, `order.transition`, `order.request_entitlement` | `v4_order_order`, `_promotion`, `_coupon_redemption` | Owns coupons; entitlement requests are durable messages |
+| payment (T9) | 20 | `payment.initiate`, `payment.callback`, `payment.reconcile` | `v4_payment_record`, `_callback`, `_outbox` | Receipt stored before transition; exactly-once per gateway event; one-time secret lease |
+| subscription (T10) | 25 | `subscription.render`, `subscription.usage.read` | `v4_subscription_group`, `_template`, `_usage` | Byte-identical output incl. content type and cache headers |
+| proxy-node (T10) | 31 | `proxy-node.register`, `.config.deliver`, `.user.deliver`, `.traffic.report` | `v4_proxy_node`, `_config`, `_user`, `_usage` | Delivery becomes a versioned Agent operation; kernel gRPC transport-only |
+| forward (T11) | 79 | `forward.rule.create/update`, `forward.tunnel.assign`, `forward.observation.read`, `forward.agent.apply` | `v4_forward_rule`, `_tunnel`, `_assignment`, `_observation`, `_outbox` | Assignment + Agent op atomic, rolled back on Agent reject; 6 kernel workers move to the package |
+| wireguard (T12) | 1 | peer lifecycle, generated config | package migration (names not fixed) | Needs anix-agent revival |
+| protocol-runtime (T12) | 20 | protocol composition, runtime-adapter selection, Agent task/monitor | package migration (names not fixed) | Needs anix-agent revival |
+| machine-telemetry, nftables-forward, gost-mesh, nat-egress (T12) | 5 / 0 / 3 / 0 | keep runtime semantics; add v2 entrypoint, generation, `RuntimeStatus` reports | — | Agent-target runtime packages |
+| identity-platform | 45 | stays bridged | — | Only migrations move to the lease |
+
+## 7. Rollout Record Semantics (T5)
+
+CURRENT: models exist in `internal/model/plugin_rollout.go` (registered in
+`KernelModels()` in `internal/model/kernel.go`), with services
+`BeginPackageMigration`, `MigratePackageHost`, `AdvancePackageCohort`, and
+`RollbackPackageGeneration` in `internal/service/plugin_rollout.go`, tested in
+`internal/tests/integration/plugin_rollout_test.go`. **Nothing in the running
+server calls them.**
+
+Semantics to keep when wiring:
+
+- Tables `v4_kernel_package_migration_run`, `_validation_result`,
+  `_route_generation`, `_backup_reference` (plus `_rollout_lock`).
+- Stored per run: migration checksum, package version, before/after schema
+  version, opaque checkpoint, validation digest, backup reference, previous
+  generation, rollback reason.
+- The package supplies the opaque checkpoint and validation digest; the kernel
+  never computes a domain mapping or queries a package table.
+- Cohorts only 1 → 5 → 25 → 100, one step at a time from a verified
+  generation; each step creates a new immutable generation and retries are
+  idempotent. Rollback restores the previous verified generation.
+- Checkpoints are persisted after each host reply; route activation is refused
+  until the host health lease matches the requested generation.
+- For extraction, per-route modes (3.2) are the traffic switch; the ledger
+  remains the package-version rollout record.
+
+## 8. Worker And Static Gate Design (T14)
+
+- PLANNED `config/scripts/check_plugin_only_workers.py`: scan `cmd/` and
+  `internal/` for kernel-started domain workers and fail with "legacy domain
+  worker". Today's markers are the constructors started in
+  `cmd/server/main.go`: `NewPanelForwardRuntimeJobExecutor`,
+  `NewForwardAgentBridgeWorker`, `NewForwardFlowResetWorker`,
+  `NewNodeMonthlyResetWorker`, `NewForwardGostStatsWorker`,
+  `NewForwardAnsibleStatsWorker`, `NewForwardLatencyProber`. The allowlist
+  shrinks as each domain is extracted.
+- Release gates must fail on: missing required package, direct legacy route
+  registration, legacy domain worker startup, unsigned artifact, missing
+  migration evidence, or unverified package version.
+- Kernel end state keeps only identity/auth/authorization, package policy,
+  audit, lifecycle, migration orchestration, and health.
+- Delete a domain's in-process routes/workers only after it is `native` and
+  its reverse migration passed. Historical types may stay only to read old
+  data during the rollback window; no live path may call them.
+
+## 9. Platform Gaps To Fix First (CURRENT)
+
+| Gap | Where |
+|-----|-------|
+| Every v2 request loads all installations, re-verifies signatures, re-hashes artifacts, and re-extracts route files; no cache | `internal/compat/v2/registry.go` (`verifiedRouteSource.ResolveV2Route`) |
+| Host SDK has no `recover` in Dispatch/Migrate/WebSocket; no crash watchdog | `pkg/pluginhostsdk/server.go`, `internal/pluginhost/manager.go` |
+| Host stdout/stderr discarded; `TZ` not passed to the child | `internal/pluginhost/process.go` (`hostEnvironment`) |
+| 1 MiB response/request caps (large UniProxy user lists may exceed) | `internal/packagebridge/session.go`, `internal/compat/v2/gateway.go`, `pkg/pluginhostsdk/server.go` |
+| Package migrations never run in production (runner unwired) | `internal/service/plugin_rollout.go`, `internal/plugincontrol/registry.go` (`startResolvedHost`) |
+| Route gates run only on release tags, not PRs | `check_plugin_only_routes.py` via `check_release_stage.py` in `tag-gate` (`.github/workflows/ci.yml`) |
+| Package execution off in the production template | `plugins.control_execution_enabled: false` in `config/config.prod.yaml` |
+| 7 kernel workers use `context.Background()` (no shutdown cancel) | `cmd/server/main.go` |
+
+## 10. Roadmap
+
+Step 0 (in progress): merge the cleanup PRs, enable the `go_dev` ruleset, land
+this document.
+
+| Milestone | Weeks | Scope | Done when |
+|-----------|-------|-------|-----------|
+| M0 baseline + gates to PR | 1 | Production inventory into `release-line-status.md` (version, PG size, node count, largest node user count, `/s/:token` and UniProxy `config`/`user` size and p50/p99); run `check_plugin_only_routes.py` and `check_v2_package_route_catalog.py` on PRs; proto-generation drift check for `api/pluginhost`, `api/packagebridge` | Inventory recorded; gates required on PRs |
+| M1 harden v4 | 1–3 | Route-resolution cache keyed by installation id, desired/observed version, `LifecycleGeneration`, enabled state, `ArtifactSHA256`, trust-root fingerprint (success-only, fail-closed); `recover` (`package_panic`); watchdog with backoff; stderr to kernel log with `[pkg:<id>]`; pass `TZ` + `time/tzdata`; configurable body caps; per-package/route metrics; benchmarks in `go-benchmark-smoke`; cancellable worker contexts | Route resolution ≥10x faster; host panic/kill auto-recovers; >1 MiB UniProxy response served |
+| M2 production to v4 | 3–4 | Rehearse on a restored prod PG dump per [`../UPGRADE.md`](../UPGRADE.md) and [`../guide/v4-plugin-only-upgrade.md`](../guide/v4-plugin-only-upgrade.md); enable `control_execution_enabled`; install the 16 signed packages (all bridged); smoke admin/user UI, byte-compare `/s/:token`, UniProxy `config`/`user`/`push`/`alive`, payment callback (test mode), latency; cut over in a window; keep old host/DB N days | Production stable on v4, all routes bridged, error/latency baseline recorded; 72 h with error rate ≤ old version |
+| M3 extraction infrastructure | 4–6 | `internal/packagestore`, `v4_kernel_package_storage`, `kapi_user_directory_v1`, `LeaseStorage`, `pkg/packagestoresdk`, CI job `package-storage-postgres`; wire the migration runner in `startResolvedHost` (compensated by the lifecycle plan); auto migration-index versions in `build_package.py`; `GetPackageConfig` + `pkg/pluginhostsdk/router.go`; `pkg/v2compat`; `internal/tests/packagecompat` (`RunRead`, `RunWrite`); `config/package-extraction.json` (`bridged`/`native-flagged`/`native` per route) with `check_plugin_only_routes.py` allowing direct handling only for `native`; `check_package_boundaries.sh`; `check_plugin_only_workers.py` | Listed packages' tests pass; PG grant tests pass |
+| M4 pilot + first domains | 6–8 | knowledge, then ticket, then plan (after `kernel.entitlement.apply.v1` and `kapi_plan_catalog_v1`) | 72 h of zero shadow mismatches in production; one production rollback to `legacy` rehearsed; gate shows `native`; boundary check clean; legacy code deleted |
+
+Pilot: **knowledge** (6 routes, ~240 lines in `internal/handler/knowledge.go`
+and `admin_knowledge.go`). Capabilities `kernel.storage.v1` +
+`kernel.storage.adopt:v2_knowledge`; migration `001` validates only (tables,
+columns, row count, digest). Sequence: all `legacy` -> GET routes `shadow` for
+3 days with zero mismatches -> all `native` for 7 days -> delete the legacy
+handler and model, unwrap `router.go`, mark `native`. Byte-compat quirks to
+reproduce exactly:
+
+- User list returns `data: null` when empty (nil slice); admin list returns `[]`.
+- Create coerces `show: 0` to `1` (a hidden article cannot be created) and
+  defaults `category` to `公告`.
+- Timestamps are mixed: list/detail `created_at`/`updated_at` are Unix
+  seconds; the create response embeds the model (RFC3339 times); envelope
+  `ts` is Unix milliseconds.
+- Error messages are Chinese strings (`获取知识库失败`, `文章不存在`, ...).
+
+Next quarter, in dependency order:
+
+1. notification (24 routes): SMTP/Telegram sending moves into the host.
+2. order + payment together (33 routes): keep one transaction, column-level
+   grant on `v2_order(status, paid_at)`, replay payment-callback fixtures.
+   Today a successful callback only marks the payment and order paid
+   (`internal/service/payment_gateway_service.go`); it never calls
+   `OrderService.Complete`, so no plan is assigned. Decide that explicitly;
+   do not change it silently during migration.
+3. subscription + proxy-node (56 routes plus parser and gRPC): map
+   `/s/:token` and UniProxy v1 through a kernel-side `Gateway.ServeRoute`.
+4. forward (79 routes, ~12k lines of forward handler/service code, 6 workers).
+5. wireguard / protocol-runtime: requires reviving anix-agent first.
+
+identity-platform stays bridged; only its migrations move to the lease.
+
+## 11. Risks And Rollback
+
+| Risk | Mitigation |
+|------|------------|
+| Output not byte-identical (`ts`, `null` vs `[]`, time zone, validation text) | `pkg/v2compat`, pass `TZ`, copy structs verbatim, per-route compare tests, `shadow` before `native` |
+| Host crash takes a domain down | `recover` + watchdog; switch the mode back to `legacy` at any time before legacy code is deleted |
+| PG grant mistakes (sequence privileges, PG15+ `public` defaults) | PG CI job, idempotent creation, `plugins.storage_isolation: shared` escape hatch |
+| Connection count grows | 2–4 connections per lease; only `native` packages lease |
+| Money paths | Last in order, single transaction, no silent behaviour change |
+| Production cutover (M2) fails | Switch DNS/ApiHost back to the retained old instance; reconcile writes made in the window by hand |
+
+Through M4 every step is reversible: tables are adopted in place, never moved
+or copied.
+
+## Sources
+
+Retired plans, readable with `git show 57c62541:<path>`:
+
+- `docs/superpowers/plans/2026-07-18-v4-plugin-only-stable.md` (Global
+  Constraints; T5 rollout records; T7–T12 domains; T14 gates)
+- `docs/superpowers/plans/2026-07-19-v2-package-bridge.md` (security
+  invariants, adapter role, identity waves, non-goals)
+- `docs/superpowers/plans/2026-07-19-v2-full-package-cutover.md` (Global
+  Constraints; Tasks 6–9 waves and final enforcement)
+- `docs/superpowers/plans/2026-07-20-v4-release-root-rotation.md` (now
+  [`../guide/release-root-rotation.md`](../guide/release-root-rotation.md))
+
+Related: [`release-line-status.md`](release-line-status.md), [`plugin-kernel-contract.md`](plugin-kernel-contract.md).

@@ -1,5 +1,13 @@
 # Security Risk Register
 
+> Note (2026-09-29): the dated entries below are historical remediation
+> records. PR #8 (`8dfc7b70`) later deleted several of the packages they name:
+> `cmd/configgen`, `cmd/integration-test`, `cmd/report`, `cmd/subtest`,
+> `cmd/verify`, the `internal/tests/integration/{binary,clients,config,e2e,echo,local,mock,runner}`
+> harness, `internal/websocket`, and `config/scripts/setup_integration.go`.
+> Their verification commands no longer apply; the findings are closed by
+> removal.
+
 ## 2026-07-08 Dependency Vulnerability Scan
 
 Command:

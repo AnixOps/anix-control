@@ -12,6 +12,9 @@ Update 2026-09-29: the Control Center rows below were recorded in the separate
 now runs from `.github/workflows/control-center.yml`, and its web suite is 23
 files / 220 tests because mock-only suites for the removed AI/Web3/observability
 pages were dropped. The rows are kept unchanged as the historical snapshot.
+PR #7 (`57c62541`: `go_dev` CI green, Go toolchain 1.26.8) and PR #8
+(`8dfc7b70`: dead code and legacy V2bX/Xray test tooling removed) merged after
+this snapshot, so the Go rows must be re-run on the evidence commit.
 
 ## Passing Locally
 

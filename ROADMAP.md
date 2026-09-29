@@ -5,6 +5,7 @@ below so that status is recorded in exactly one place.
 
 | Question | Source of truth |
 |----------|-----------------|
+| What is the current development direction (moving business domains into packages, milestones M0–M4)? | [`docs/architecture/package-extraction.md`](docs/architecture/package-extraction.md) |
 | What is the current release work and its acceptance gates? | [`docs/ROADMAP-4.0.x-RC.md`](docs/ROADMAP-4.0.x-RC.md) and its evidence snapshot [`docs/RC-EVIDENCE-4.0.x.md`](docs/RC-EVIDENCE-4.0.x.md) |
 | Which product stages shipped, and what is explicitly not complete? | [`docs/architecture/release-line-status.md`](docs/architecture/release-line-status.md) |
 | Is a feature implemented, partial, planned, or deferred? | [`docs/features.md`](docs/features.md) |

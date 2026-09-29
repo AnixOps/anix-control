@@ -95,6 +95,15 @@
   changed.
 - `.gitignore` now ignores agent-local state (`.claude/settings.local.json`,
   `.claude/projects/`, `.superpowers/`).
+- Corrected documentation made stale by PR #7 and PR #8: `TODO.md` (removed
+  the deleted `test-all.sh`/`coverage.sh` item; gost-mesh/nftables-forward
+  Control validation must now be rebuilt; gost-mesh is QUIC/WSS with TUIC out
+  of v1 scope; new "Later" section), the release-workflow row in
+  `docs/features.md` (`v4.0.0` was published), the audit registers (current
+  toolchain, commands, packages, workflows; removed `internal/websocket` hub),
+  the RC roadmap/evidence notes, and the trust-root paragraph in
+  `docs/architecture/plugin-kernel-contract.md` (Control keeps one active
+  root and retires the others at startup).
 
 - Imported the Control Center into `control-center/` as a single snapshot of the
   archived `AnixOps/Anixops-control-center` repository (`master` merged with
@@ -121,6 +130,19 @@
   Workers Builds (root `control-center/workers`, branch `go_dev`).
 
 ### Added
+
+- Added `docs/architecture/package-extraction.md`, the design of record for
+  moving business domains into packages: the current routing-only reality,
+  the definition of done, the planned storage-lease / per-route-mode / typed
+  kernel operation mechanism, the preserved constraints, invariants, domain
+  data contracts, rollout and gate designs from the retired
+  `docs/superpowers/` plans, the platform gaps, and milestones M0-M4 with a
+  `knowledge` pilot. `ROADMAP.md`, `AGENTS.md`, `TODO.md`, and
+  `docs/features.md` point to it.
+- Added the operator runbook `docs/guide/release-root-rotation.md`, extracted
+  from the retired root-rotation plan and checked against the current code
+  (single active root, retired-root releases stop verifying, re-signed
+  packages need a new version).
 
 - Exposed `X-AnixOps-Operation-Chain` consistently for Control plugin
   installation upserts, configuration writes, and lifecycle actions, including

@@ -23,7 +23,8 @@ file short and enforceable; put explanations in `docs/`.
   `internal/service/`; keep the route listed in
   `config/v2-package-route-catalog.json`
   (`config/scripts/check_v2_package_route_catalog.py`,
-  `config/scripts/check_plugin_only_routes.py`).
+  `config/scripts/check_plugin_only_routes.py`). The extraction design and
+  milestones are in `docs/architecture/package-extraction.md`.
 - Outside the package gate, kernel handlers serve `/api/v1/server/UniProxy/*`,
   `/{subscribe_path}/:token` (default `/s/:token`), `/api/v1/client/subscribe`,
   and `/flow/upload` directly. Do not change their response shapes without

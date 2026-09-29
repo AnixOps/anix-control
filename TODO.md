@@ -33,14 +33,18 @@ checklist.
 - [ ] Keep Supervisor and dynamic plugin execution feature-gated until staging
   restore smoke, rollout records, legacy fallback rehearsal, and operator
   canary approval pass.
-- [ ] Implement the real Agent runtime and namespace traffic evidence for
-  `gost-mesh` WSS/TUIC/QUIC before the 3.3 canary.
+- [ ] `gost-mesh` canary evidence. The QUIC/WSS Agent runtime and namespace
+  traffic acceptance exist; TUIC is out of v1 scope
+  (`packages/gost-mesh/README.md`). Still needed: Control Secret ID to Agent
+  private-file materialization/renewal/deletion/audit, MTU and sustained
+  loss/reconnect tests, composed NAT failure rollback, accounting, multi-node
+  rollback, and a sustained canary.
 - [ ] Move the legacy business domains out of the kernel. Every `/api/v2`
   business route is registered through `registeredPackageRoute`
   (`internal/router/router.go`) and served by a package host, but the hosts
   still bridge back into the in-kernel gin handlers and services
-  (`internal/identitybridge/identity_bridge.go`); see
-  `docs/architecture/release-line-status.md`.
+  (`internal/identitybridge/identity_bridge.go`). Design, platform gaps, and
+  milestones M0-M4: `docs/architecture/package-extraction.md`.
 - [ ] Known gap: routes outside the `/api/v2` package gate are still served
   directly by kernel handlers: `/api/v1/server/UniProxy/*`,
   `/{subscribe_path}/:token` (default `/s/:token`), `/api/v1/client/subscribe`,
@@ -116,7 +120,12 @@ deliberately in a later PR.
   `docs/guide/legacy-migration.md` still says there is no one-command
   converter. Document its scope and limits, or remove it.
 - [ ] Control-side configuration validation for the `gost-mesh` and
-  `nftables-forward` packages has not been reconnected since `7ccd4781`.
+  `nftables-forward` packages (and the in-process status/lifecycle executors
+  for those two and `nat-egress`) no longer exists: nothing called it after
+  `7ccd4781`, and PR #8 (`8dfc7b70`) deleted
+  `internal/plugincontrol/{gost_mesh,gost_mesh_validation,nftables_forward,nat_egress}.go`.
+  Rebuild it in the package hosts, or restore it from history before
+  `8dfc7b70` and wire it, before these packages take production traffic.
 
 ## Deployment And Repository Hygiene
 
@@ -141,9 +150,19 @@ deliberately in a later PR.
   `telegram.go`, `agent.go`) contain GBK-mojibake Chinese that propagates into
   `docs/swagger.json`, `docs/swagger.yaml`, and `docs/docs.go`. Fix the
   annotations and regenerate with `make swagger`.
-- [ ] `config/scripts/test-all.sh` has mojibake comments and
-  `config/scripts/coverage.sh` is not valid UTF-8.
 - [ ] Remove hard-coded `/home/dev/...` defaults from
   `config/deploy/deploy_panel.sh`, `config/deploy/ansible/nodes/`,
   `scripts/deploy_wireguard_gost_quic.sh`, and the agent deploy defaults in
   `web/src/views/admin/Nodes.vue`.
+
+## Later (Not This Phase)
+
+Recorded so they are not lost; schedule after the package-extraction
+milestones in `docs/architecture/package-extraction.md`.
+
+- [ ] Control Center convergence: the Worker/D1 users and nodes and Control's
+  users and nodes are two separate systems, several Center pages are still
+  mocks, and Center's own Go server is an unwired shell.
+- [ ] Revive `anix-agent`: merge `maintenance/first-delivery-20260922` onto
+  the `dev_new` SDK layout and add the Control-side consumers (prerequisite
+  for extracting `wireguard` and `protocol-runtime`).
