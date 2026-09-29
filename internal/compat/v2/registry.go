@@ -186,11 +186,12 @@ func (s *verifiedRouteSource) ResolveV2Route(ctx context.Context, method, reques
 		}
 		matches = append(matches, route)
 	}
-	if len(matches) > 1 {
-		return Route{}, fmt.Errorf("%w: multiple active packages declare %s %s", ErrPackageUnavailable, method, requestPath)
-	}
-	if len(matches) == 1 {
-		return matches[0], nil
+	if len(matches) > 0 {
+		best, ambiguous := mostSpecificRoute(matches)
+		if ambiguous {
+			return Route{}, fmt.Errorf("%w: multiple active packages declare %s %s", ErrPackageUnavailable, method, requestPath)
+		}
+		return best, nil
 	}
 	if declaredUnavailable {
 		return Route{}, ErrPackageUnavailable
@@ -222,12 +223,54 @@ func (s *verifiedRouteSource) resolveInstallation(ctx context.Context, installat
 	if err != nil {
 		return Route{}, false, err
 	}
+	route, ok := selectMostSpecificRoute(routes, method, requestPath)
+	return route, ok, nil
+}
+
+// selectMostSpecificRoute returns the matching route with gin's precedence:
+// a static segment beats a parameter segment, compared left to right. First
+// match in declaration order would send GET /admin/nodes/stats to
+// /admin/nodes/:id.
+func selectMostSpecificRoute(routes []Route, method, requestPath string) (Route, bool) {
+	var candidates []Route
 	for _, route := range routes {
 		if route.Method == method && routeMatches(route.LegacyPath, requestPath) {
-			return route, true, nil
+			candidates = append(candidates, route)
 		}
 	}
-	return Route{}, false, nil
+	if len(candidates) == 0 {
+		return Route{}, false
+	}
+	best, _ := mostSpecificRoute(candidates)
+	return best, true
+}
+
+// mostSpecificRoute picks the most specific of routes that all match the same
+// request path. ambiguous reports that another match is equally specific.
+func mostSpecificRoute(routes []Route) (best Route, ambiguous bool) {
+	best = routes[0]
+	for _, route := range routes[1:] {
+		switch {
+		case moreSpecificPattern(route.LegacyPath, best.LegacyPath):
+			best, ambiguous = route, false
+		case !moreSpecificPattern(best.LegacyPath, route.LegacyPath):
+			ambiguous = true
+		}
+	}
+	return best, ambiguous
+}
+
+func moreSpecificPattern(a, b string) bool {
+	aParts := strings.Split(strings.TrimPrefix(a, "/"), "/")
+	bParts := strings.Split(strings.TrimPrefix(b, "/"), "/")
+	for index := 0; index < len(aParts) && index < len(bParts); index++ {
+		aParam := strings.HasPrefix(aParts[index], ":")
+		bParam := strings.HasPrefix(bParts[index], ":")
+		if aParam != bParam {
+			return !aParam
+		}
+	}
+	return false
 }
 
 func installationActive(installation model.PluginInstallation) bool {
