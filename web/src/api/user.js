@@ -7,13 +7,6 @@ export function getProfile() {
   })
 }
 
-export function getDashboard() {
-  return request({
-    url: '/user/dashboard',
-    method: 'get'
-  })
-}
-
 export function getSubscription(refresh = false) {
   return request({
     url: '/user/subscription',
@@ -25,13 +18,6 @@ export function getSubscription(refresh = false) {
 export function getKnowledgeList() {
   return request({
     url: '/user/knowledge',
-    method: 'get'
-  })
-}
-
-export function getKnowledgeDetail(id) {
-  return request({
-    url: `/user/knowledge/${id}`,
     method: 'get'
   })
 }

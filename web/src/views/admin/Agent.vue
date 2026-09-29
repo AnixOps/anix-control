@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="agent-page">
     <div class="page-header">
       <h1>{{ t('runtime.nodeXAgents.title') }}</h1>

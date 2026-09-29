@@ -4,14 +4,6 @@ import { useUserStore } from '@/stores/user'
 import { getLocalExtensionModuleLoader } from './registry'
 import { isWebUIMenuParentToken, normalizeWebUIMenuParent } from './menuRegistry'
 
-export {
-  WEBUI_MENU_FALLBACK_PARENT,
-  WEBUI_MENU_PARENT_REGISTRY,
-  WEBUI_MENU_PARENTS,
-  isWebUIMenuParentToken,
-  normalizeWebUIMenuParent
-} from './menuRegistry'
-
 const ADMIN_ROUTE_NAME = 'admin'
 const PACKAGE_API_VERSION = 'v2'
 const REFRESH_INTERVAL_MS = 30_000
@@ -697,9 +689,6 @@ const adminExtensionRuntime = createAdminExtensionRuntime()
 
 export const adminExtensionMenus = adminExtensionRuntime.menus
 export const adminExtensionErrors = adminExtensionRuntime.errors
-export const adminExtensionSkipped = adminExtensionRuntime.skipped
-export const adminExtensionPluginIDs = adminExtensionRuntime.plugins
-export const adminExtensions = adminExtensionRuntime.extensions
 
 export function ensureAdminExtensions(router) {
   return adminExtensionRuntime.ensure(router)

@@ -14,10 +14,6 @@ describe('user api mapping', () => {
   it('covers user menu read endpoints', async () => {
     const cases = [
       {
-        call: () => userApi.getDashboard(),
-        expected: { url: '/user/dashboard', method: 'get' },
-      },
-      {
         call: () => userApi.getSubscription(),
         expected: { url: '/user/subscription', method: 'get', params: {} },
       },
@@ -96,13 +92,6 @@ describe('user api mapping', () => {
         call: () => userApi.getOrderDetail(11),
         expected: {
           url: '/user/order/11',
-          method: 'get',
-        },
-      },
-      {
-        call: () => userApi.getKnowledgeDetail(6),
-        expected: {
-          url: '/user/knowledge/6',
           method: 'get',
         },
       },

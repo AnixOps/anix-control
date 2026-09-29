@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="page-shell tickets-page">
     <div class="page-toolbar">
       <div>

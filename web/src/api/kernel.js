@@ -39,10 +39,6 @@ export async function registerKernelPluginRelease(manifest, signature) {
   }))
 }
 
-export async function getKernelPluginReleaseArtifact(releaseID) {
-  return unwrap(await v3({ url: `/plugin-releases/${releaseID}/artifact`, method: 'get' }))
-}
-
 export async function uploadKernelPluginReleaseArtifact(releaseID, artifactBase64) {
   return unwrap(await v3({
     url: `/plugin-releases/${releaseID}/artifact`,
@@ -249,16 +245,6 @@ export async function diagnoseKernelTopologyDeployment(topologyID, revisionID, o
       failure_policy: options.failurePolicy || 'stop_and_rollback'
     }
   }))
-}
-
-// For compatibility with early alpha clients, an object-only call remains a
-// graph validator. The normal two-ID form is the server-side read-only
-// diagnose endpoint, including assignments, releases and rollout checks.
-export async function diagnoseKernelTopology(topologyID, revisionID, options = {}) {
-  if (topologyID && typeof topologyID === 'object' && revisionID === undefined) {
-    return validateKernelTopology(topologyID)
-  }
-  return diagnoseKernelTopologyDeployment(topologyID, revisionID, options)
 }
 
 export async function getKernelOperations() {

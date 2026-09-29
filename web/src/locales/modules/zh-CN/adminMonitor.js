@@ -7,7 +7,6 @@ export default {
     disconnected: '已断开',
     reconnecting: '{seconds} 秒后重连...',
     overview: {
-      title: '概览',
       totalNodes: '总节点',
       onlineNodes: '在线',
       offlineNodes: '离线',
@@ -24,8 +23,6 @@ export default {
       memory: '内存',
       disk: '磁盘',
       users: '用户',
-      upload: '上传',
-      download: '下载',
       uptime: '运行时间'
     },
     status: {
@@ -35,7 +32,6 @@ export default {
     },
     empty: '暂无节点',
     errors: {
-      connectFailed: '无法连接监控 WebSocket',
       unsupported: '当前浏览器不支持 WebSocket'
     }
   }

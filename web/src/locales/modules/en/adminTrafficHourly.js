@@ -22,7 +22,6 @@ export default {
     summary: {
       total: 'Range total',
       peak: 'Peak hour',
-      peakAt: 'Peak time',
       latestReport: 'Latest report',
       latestReportHint: 'Last traffic log written by a node',
       noReport: 'No traffic reports yet'

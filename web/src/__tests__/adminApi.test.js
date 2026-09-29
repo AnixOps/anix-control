@@ -38,16 +38,8 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/users/stats', method: 'get' },
       },
       {
-        call: () => adminApi.getUser(12),
-        expected: { url: '/admin/users/12', method: 'get' },
-      },
-      {
         call: () => adminApi.getOrderList({ status: 0 }),
         expected: { url: '/admin/orders', method: 'get', params: { status: 0 } },
-      },
-      {
-        call: () => adminApi.getOrder(3),
-        expected: { url: '/admin/orders/3', method: 'get' },
       },
       {
         call: () => adminApi.getTickets({ status: 0 }),
@@ -66,16 +58,8 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/nodes/5/logs', method: 'get', params: { page: 1 } },
       },
       {
-        call: () => adminApi.getNode(5),
-        expected: { url: '/admin/nodes/5', method: 'get' },
-      },
-      {
         call: () => adminApi.getNodeCredentials(5),
         expected: { url: '/admin/nodes/5/credentials', method: 'get' },
-      },
-      {
-        call: () => adminApi.getNodeRawConfig(5),
-        expected: { url: '/admin/nodes/5/raw-config', method: 'get' },
       },
       {
         call: () => adminApi.getNodeProtocols(5),
@@ -94,10 +78,6 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/subscription/groups', method: 'get' },
       },
       {
-        call: () => adminApi.getSubscriptionGroup(7),
-        expected: { url: '/admin/subscription/groups/7', method: 'get' },
-      },
-      {
         call: () => adminApi.getSubscriptionTemplates(7),
         expected: { url: '/admin/subscription/groups/7/templates', method: 'get' },
       },
@@ -108,10 +88,6 @@ describe('admin api mapping', () => {
       {
         call: () => adminApi.getAvailableProtocols(),
         expected: { url: '/admin/subscription/protocols/available', method: 'get' },
-      },
-      {
-        call: () => adminApi.getSubscriptionTemplate(9),
-        expected: { url: '/admin/subscription/templates/9', method: 'get' },
       },
       {
         call: () => adminApi.getSubscriptionStats(),
@@ -193,24 +169,12 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/agent/list', method: 'get' },
       },
       {
-        call: () => adminApi.getAgentTaskResult('task-1'),
-        expected: { url: '/admin/agent/tasks/task-1', method: 'get' },
-      },
-      {
         call: () => adminApi.listAgentDiagnosticTasks({ limit: 50 }),
         expected: { url: '/admin/agent/tasks', method: 'get', params: { limit: 50 } },
       },
       {
-        call: () => adminApi.getAgentMonitor(7),
-        expected: { url: '/admin/agent/monitor', method: 'get', params: { node_id: 7 } },
-      },
-      {
         call: () => adminApi.getPlans(),
         expected: { url: '/admin/plans', method: 'get' },
-      },
-      {
-        call: () => adminApi.getPlan(6),
-        expected: { url: '/admin/plans/6', method: 'get' },
       },
       {
         call: () => adminApi.getCoupons({ page: 1 }),
@@ -280,10 +244,6 @@ describe('admin api mapping', () => {
         call: () => adminApi.getSubscriptionSettings(),
         expected: { url: '/admin/system/subscription-settings', method: 'get' },
       },
-      {
-        call: () => adminApi.getLoadBalancerStats(9),
-        expected: { url: '/admin/loadbalancers/9/stats', method: 'get' },
-      },
     ]
 
     for (const c of cases) {
@@ -313,13 +273,6 @@ describe('admin api mapping', () => {
         },
       },
       {
-        call: () => adminApi.deleteUser(12),
-        expected: {
-          url: '/admin/users/12',
-          method: 'delete',
-        },
-      },
-      {
         call: () => adminApi.banUser(12),
         expected: {
           url: '/admin/users/12/ban',
@@ -346,14 +299,6 @@ describe('admin api mapping', () => {
           url: '/user/reset',
           method: 'post',
           data: { id: 12, type: 1 },
-        },
-      },
-      {
-        call: () => adminApi.updateOrderStatus(3, 2),
-        expected: {
-          url: '/admin/orders/3/status',
-          method: 'put',
-          data: { status: 2 },
         },
       },
       {
@@ -432,22 +377,6 @@ describe('admin api mapping', () => {
         },
       },
       {
-        call: () => adminApi.updateNodeRawConfig(5, { raw_config: { server_port: 443 } }),
-        expected: {
-          url: '/admin/nodes/5/raw-config',
-          method: 'put',
-          data: { raw_config: { server_port: 443 } },
-        },
-      },
-      {
-        call: () => adminApi.validateNodeConfig({ raw_config: { server_port: 443 } }),
-        expected: {
-          url: '/admin/nodes/validate-config',
-          method: 'post',
-          data: { raw_config: { server_port: 443 } },
-        },
-      },
-      {
         call: () => adminApi.createNodeProtocol(5, { type: 'vless' }),
         expected: {
           url: '/admin/nodes/5/protocols',
@@ -467,21 +396,6 @@ describe('admin api mapping', () => {
         call: () => adminApi.deleteNodeProtocol(5, 9),
         expected: {
           url: '/admin/nodes/5/protocols/9',
-          method: 'delete',
-        },
-      },
-      {
-        call: () => adminApi.generateAuthKey({ name: 'key' }),
-        expected: {
-          url: '/admin/auth-keys',
-          method: 'post',
-          data: { name: 'key' },
-        },
-      },
-      {
-        call: () => adminApi.deleteAuthKey(8),
-        expected: {
-          url: '/admin/auth-keys/8',
           method: 'delete',
         },
       },
