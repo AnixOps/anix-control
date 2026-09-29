@@ -8,8 +8,13 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
+	// Embed the zone database so the TZ passed by the kernel resolves even
+	// without system zoneinfo.
+	_ "time/tzdata"
 
 	pluginhostv1 "github.com/AnixOps/anix-control/v4/api/pluginhost/v1"
 	"github.com/AnixOps/anix-control/v4/pkg/packagebridgesdk"
@@ -64,6 +69,15 @@ func run() error {
 	// before it can dispatch a request to the host.
 	server := grpc.NewServer(pluginhostsdk.RecoveryServerOptions()...)
 	pluginhostv1.RegisterControlPackageHostServer(server, host)
+	// The kernel sends SIGTERM before it kills the host's process group, so
+	// finish in-flight RPCs and exit cleanly within its grace period.
+	terminate := make(chan os.Signal, 1)
+	signal.Notify(terminate, syscall.SIGTERM)
+	defer signal.Stop(terminate)
+	go func() {
+		<-terminate
+		server.GracefulStop()
+	}()
 	return server.Serve(listener)
 }
 

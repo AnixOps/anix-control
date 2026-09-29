@@ -320,8 +320,6 @@ Semantics to keep when wiring:
 | Gap | Where |
 |-----|-------|
 | Every v2 request loads all installations, re-verifies signatures, re-hashes artifacts, and re-extracts route files; no cache | `internal/compat/v2/registry.go` (`verifiedRouteSource.ResolveV2Route`) |
-| Host SDK has no `recover` in Dispatch/Migrate/WebSocket; no crash watchdog | `pkg/pluginhostsdk/server.go`, `internal/pluginhost/manager.go` |
-| Host stdout/stderr discarded; `TZ` not passed to the child | `internal/pluginhost/process.go` (`hostEnvironment`) |
 | 1 MiB response/request caps (large UniProxy user lists may exceed) | `internal/packagebridge/session.go`, `internal/compat/v2/gateway.go`, `pkg/pluginhostsdk/server.go` |
 | Package migrations never run in production (runner unwired) | `internal/service/plugin_rollout.go`, `internal/plugincontrol/registry.go` (`startResolvedHost`) |
 | Route gates run only on release tags, not PRs | `check_plugin_only_routes.py` via `check_release_stage.py` in `tag-gate` (`.github/workflows/ci.yml`) |
@@ -378,7 +376,7 @@ identity-platform stays bridged; only its migrations move to the lease.
 | Risk | Mitigation |
 |------|------------|
 | Output not byte-identical (`ts`, `null` vs `[]`, time zone, validation text) | `pkg/v2compat`, pass `TZ`, copy structs verbatim, per-route compare tests, `shadow` before `native` |
-| Host crash takes a domain down | `recover` + watchdog; switch the mode back to `legacy` at any time before legacy code is deleted |
+| Host crash takes a domain down | `recover` + watchdog (same-generation restart with 1–30 s backoff, failed after 5 restarts in 5 min; `internal/pluginhost/supervision.go`); switch the mode back to `legacy` at any time before legacy code is deleted |
 | PG grant mistakes (sequence privileges, PG15+ `public` defaults) | PG CI job, idempotent creation, `plugins.storage_isolation: shared` escape hatch |
 | Connection count grows | 2–4 connections per lease; only `native` packages lease |
 | Money paths | Last in order, single transaction, no silent behaviour change |

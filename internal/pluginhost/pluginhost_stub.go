@@ -207,6 +207,34 @@ func (*Supervisor) OpenWebSocket(context.Context, WebSocketInput) (*WebSocketRel
 	return nil, ErrHostUnavailable
 }
 
+// Host supervision states reported by HostStats.State.
+const (
+	HostStateRunning    = "running"
+	HostStateRestarting = "restarting"
+	HostStateFailed     = "failed"
+	HostStateExited     = "exited"
+	HostStateStopped    = "stopped"
+)
+
+type HostStats struct {
+	PackageID       string
+	Version         string
+	Generation      uint64
+	State           string
+	Starts          uint64
+	UnexpectedExits uint64
+	Restarts        uint64
+	Failures        uint64
+}
+
+type HostStatsProvider interface {
+	Stats() []HostStats
+}
+
+func (*Supervisor) Stats() []HostStats {
+	return nil
+}
+
 func (*Supervisor) Shutdown(context.Context) error {
 	return nil
 }
@@ -230,3 +258,4 @@ func (*WebSocketRelay) Close(WebSocketClose) error {
 var _ Manager = (*Supervisor)(nil)
 var _ MigrationManager = (*Supervisor)(nil)
 var _ WebSocketManager = (*Supervisor)(nil)
+var _ HostStatsProvider = (*Supervisor)(nil)
