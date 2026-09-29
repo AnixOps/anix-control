@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -810,4 +812,26 @@ func TestResolveAnsiblePlaybookCommand(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// Regression: the latency prober calls Logf/Clear from parallel probe
+// goroutines. Without a lock this aborted the process with
+// "fatal error: concurrent map writes" when several targets failed at once.
+func TestForwardBackgroundErrorLoggerIsSafeForConcurrentUse(t *testing.T) {
+	logger := newForwardBackgroundErrorLogger(time.Minute)
+	var wg sync.WaitGroup
+	for i := 0; i < 64; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			key := fmt.Sprintf("probe:%d", i%8)
+			for j := 0; j < 200; j++ {
+				logger.Logf(key, "probe failed for target %d: attempt %d", i, j)
+				if j%10 == 0 {
+					logger.Clear(key)
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
 }
