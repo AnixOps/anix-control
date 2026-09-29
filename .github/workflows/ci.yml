@@ -2,22 +2,20 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ go_dev, production ]
+    branches: [ go_dev ]
     tags: [ 'v*.*.*' ]
-    # control-center/ is a separate Go module and app with its own workflows
-    # (control-center*.yml); changes limited to it do not need the Control pipeline.
-    paths-ignore:
-      - 'control-center/**'
-      - '.github/workflows/control-center*.yml'
   pull_request:
-    branches: [ go_dev, production ]
-    paths-ignore:
-      - 'control-center/**'
-      - '.github/workflows/control-center*.yml'
+    branches: [ go_dev ]
   workflow_dispatch:
 
+# Superseded pull-request runs are cancelled; go_dev pushes, tags and manual
+# runs always finish so release and baseline evidence is never cut short.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
-  GO_VERSION: '1.26.5'
+  GO_VERSION: '1.26.8'
   NODE_VERSION: '22'
   GOST_VERSION: '3.2.6'
   GOST_LINUX_AMD64_ARCHIVE_SHA256: 'b39037b0380ea001fb3c0c28441c2e10bfc694f90682739a65b53e55dce5238b'
@@ -358,7 +356,7 @@ jobs:
           cache: true
 
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 
       - name: Run golangci-lint gate
         shell: bash
@@ -389,13 +387,13 @@ jobs:
           cache: true
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 
       - name: Run govulncheck
         run: govulncheck ./...
 
       - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
 
       - name: Run production gosec gate
         shell: bash
