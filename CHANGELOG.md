@@ -213,6 +213,15 @@
 
 ### Fixed
 
+- Legacy `/api/v2` handlers now see the original request `Host` and TLS state
+  through the package bridge. The bridge rebuilt every request for the
+  placeholder host `package-bridge`, so `GET /api/v2/forward-agent/install.sh`
+  defaulted `PANEL_URL` to `http://package-bridge` and Telegram webhook
+  registration without an explicit URL pointed at the same host. The address
+  is kept in the kernel's bridge snapshot only; package hosts built with the
+  `v4.0.0` SDK still receive the unchanged metadata. Found by the local
+  upgrade rehearsal against `v4.0.0-alpha.7`.
+
 - `/api/v2` error responses now keep the exact body the legacy handler wrote
   on `data` and `panel` package routes (status >= 400 with a JSON body). The
   gateway used to wrap `{"error": ...}`/`{"message": ...}` failure bodies as

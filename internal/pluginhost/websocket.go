@@ -134,7 +134,7 @@ func (h *hostProcess) mintWebSocketCapability(input WebSocketInput) ([]byte, err
 	if h == nil || h.bridge == nil {
 		return nil, nil
 	}
-	metadata, err := marshalRequestMetadata(input.Metadata)
+	metadata, err := marshalBridgeRequestMetadata(input.Metadata)
 	if err != nil {
 		return nil, err
 	}

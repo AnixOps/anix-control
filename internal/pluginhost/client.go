@@ -109,6 +109,20 @@ func (c *hostClient) OpenWebSocket(ctx context.Context, input WebSocketInput) (w
 	return &webSocketClientStream{stream: stream}, nil
 }
 
+// marshalBridgeRequestMetadata encodes the kernel-side bridge snapshot, which
+// adds the original request address to the metadata sent to package hosts.
+func marshalBridgeRequestMetadata(metadata RequestMetadata) ([]byte, error) {
+	encoded, err := json.Marshal(struct {
+		RequestMetadata
+		Host string `json:"host,omitempty"`
+		TLS  bool   `json:"tls,omitempty"`
+	}{RequestMetadata: metadata, Host: metadata.Host, TLS: metadata.TLS})
+	if err != nil {
+		return nil, fmt.Errorf("%w: request metadata is invalid", ErrHostIncompatible)
+	}
+	return encoded, nil
+}
+
 func marshalRequestMetadata(metadata RequestMetadata) ([]byte, error) {
 	encoded, err := json.Marshal(metadata)
 	if err != nil {

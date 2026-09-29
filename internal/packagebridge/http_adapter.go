@@ -3,6 +3,7 @@ package packagebridge
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,8 @@ type httpRequestMetadata struct {
 	NodeID                           uint                `json:"node_id,omitempty"`
 	TrustedAgentWebSocketAuth        bool                `json:"trusted_agent_websocket_auth,omitempty"`
 	TrustedAgentWebSocketForwardNode bool                `json:"trusted_agent_websocket_forward_node,omitempty"`
+	Host                             string              `json:"host,omitempty"`
+	TLS                              bool                `json:"tls,omitempty"`
 }
 
 type bridgePrincipal struct {
@@ -127,6 +130,9 @@ func decodeHTTPMetadata(raw []byte) (httpRequestMetadata, error) {
 	if metadata.ClientIP != "" && net.ParseIP(metadata.ClientIP) == nil {
 		return httpRequestMetadata{}, errors.New("bridge client IP is invalid")
 	}
+	if metadata.Host != "" && !validBridgeHost(metadata.Host) {
+		return httpRequestMetadata{}, errors.New("bridge request host is invalid")
+	}
 	if !validBridgeUserAgent(metadata.UserAgent) {
 		return httpRequestMetadata{}, errors.New("bridge user agent is invalid")
 	}
@@ -207,6 +213,14 @@ func bridgeHTTPRequest(ctx context.Context, request Request, metadata httpReques
 	if err != nil {
 		return nil, err
 	}
+	// Legacy handlers build absolute URLs (agent install scripts, webhook
+	// registration) from the original request address, not the bridge's.
+	if metadata.Host != "" {
+		httpRequest.Host = metadata.Host
+	}
+	if metadata.TLS {
+		httpRequest.TLS = &tls.ConnectionState{}
+	}
 	if metadata.ClientIP != "" {
 		httpRequest.RemoteAddr = net.JoinHostPort(metadata.ClientIP, "0")
 	}
@@ -243,6 +257,20 @@ func blockedBridgeRequestHeader(value string) bool {
 	default:
 		return false
 	}
+}
+
+func validBridgeHost(value string) bool {
+	if len(value) > 255 {
+		return false
+	}
+	for _, character := range value {
+		if (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+			(character >= '0' && character <= '9') || strings.ContainsRune("-._~:[]", character) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func validBridgeUserAgent(value string) bool {

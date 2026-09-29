@@ -148,7 +148,10 @@ func requestPrincipalFor(actorID uint, admin bool, packageID string) ([]byte, er
 }
 
 func requestMetadata(c *gin.Context) pluginhost.RequestMetadata {
-	metadata := pluginhost.RequestMetadata{Path: c.Request.URL.Path}
+	metadata := pluginhost.RequestMetadata{Path: c.Request.URL.Path, TLS: c.Request.TLS != nil}
+	if validPackageRequestHost(c.Request.Host) {
+		metadata.Host = c.Request.Host
+	}
 	if clientIP := net.ParseIP(strings.TrimSpace(c.ClientIP())); clientIP != nil {
 		metadata.ClientIP = clientIP.String()
 	}
@@ -236,6 +239,22 @@ func forwardPackageRequestHeader(name string) bool {
 	default:
 		return true
 	}
+}
+
+// validPackageRequestHost accepts a host[:port] authority: the characters of a
+// registered name, an IPv4 address, or a bracketed IPv6 literal.
+func validPackageRequestHost(value string) bool {
+	if value == "" || len(value) > 255 {
+		return false
+	}
+	for _, character := range value {
+		if (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+			(character >= '0' && character <= '9') || strings.ContainsRune("-._~:[]", character) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func validPackageUserAgent(value string) bool {
