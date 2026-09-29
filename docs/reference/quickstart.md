@@ -6,9 +6,9 @@ This page is the shortest path to getting `anix-control` running with the unifie
 
 Always prepare these inputs first:
 
-- [`config/config.yaml`](../../config/config.yaml)
+- `config/config.yaml` (local, gitignored; copy from [`config/config.yaml.example`](../../config/config.yaml.example))
   - canonical bootstrap config for server, database, cache, JWT, admin, and `forward_runtime`
-- [`.env`](../../.env)
+- `.env` (local, gitignored; copy from [`.env.example`](../../.env.example))
   - optional Docker Compose and installer env file
   - use it for deployment-specific ports or metadata; runtime selection comes from `config/config.yaml.forward_runtime`
 
@@ -24,12 +24,12 @@ Important:
 
 1. Prepare files:
 
-```powershell
-Copy-Item .env.example .env
-Copy-Item config\config.yaml.example config\config.yaml
+```bash
+cp .env.example .env
+cp config/config.yaml.example config/config.yaml
 ```
 
-2. Edit [`config/config.yaml`](../../config/config.yaml) at minimum:
+2. Edit `config/config.yaml` at minimum:
 
 - `jwt.secret`
 - `app.api_token`
@@ -66,7 +66,7 @@ forward_runtime:
 
 5. Start:
 
-```powershell
+```bash
 docker compose up -d
 docker compose logs -f anix-control
 ```
@@ -80,24 +80,26 @@ docker compose logs -f anix-control
 
 1. Prepare `config/config.yaml`:
 
-```powershell
-Copy-Item config\config.yaml.example config\config.yaml
+```bash
+cp config/config.yaml.example config/config.yaml
 ```
 
 2. Fill `jwt.secret`, `app.api_token`, `admin.password`, and `forward_runtime`.
 
 3. Start backend:
 
-```powershell
-go mod download
-go run .\cmd\server\main.go -config .\config\config.yaml
+```bash
+GOWORK=off go mod download
+GOWORK=off go run ./cmd/server -config config/config.yaml
 ```
+
+For an isolated development instance with its own ports and SQLite database, use `make run` instead (see the root [`README.md`](../../README.md)).
 
 4. Start frontend:
 
-```powershell
-Set-Location web
-npm install
+```bash
+cd web
+npm ci
 npm run dev
 ```
 

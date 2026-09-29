@@ -25,12 +25,14 @@ until this key is configured. The manifest signature covers the canonical
 `PluginManifest` JSON representation; configuration schema JSON is normalized
 before signing and verification.
 
-Each admitted release stores the signing trust-root fingerprint and key ID.
-The kernel records all active official trust roots it has seen so normal key
-rotation does not invalidate already admitted releases; later catalog and
-configuration reads re-verify a release with the trust root bound to that
-release. Removing or retiring a compromised trust root is a separate operator
-decision, not an implicit side effect of changing `config.yaml`.
+Each admitted release stores the signing trust-root fingerprint and key ID;
+later catalog, configuration, and v2 route reads re-verify a release with the
+trust root bound to it. Only one root is active: at startup Control activates
+the configured `plugins.official_public_key` and retires every other recorded
+root (`service.EnsurePluginTrustRoot`), so releases signed by a retired root
+stop verifying until they are re-signed and imported as a new version.
+Changing the configured key is therefore a root rotation; follow
+[`../guide/release-root-rotation.md`](../guide/release-root-rotation.md).
 
 Only official `AnixOps` manifests are accepted. A plugin installation or
 operation must reference a registered release. Disabling an installation marks

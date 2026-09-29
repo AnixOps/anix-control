@@ -28,7 +28,7 @@ is_documentation_evidence() {
     README.md|CHANGELOG.md|TODO.md|ROADMAP.md)
       return 0
       ;;
-    docs/README.md|docs/DEPLOYMENT.md|docs/FEATURE_ROADMAP.md|docs/features.md|docs/manual-intervention.md)
+    docs/README.md|docs/DEPLOYMENT.md|docs/features.md|docs/manual-intervention.md)
       return 0
       ;;
     docs/audit/*.md|docs/forwarding/*.md|docs/guide/*.md|docs/reference/*.md)

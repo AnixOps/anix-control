@@ -82,6 +82,9 @@ web/test-results/
 # Tool/editor local dirs
 .codex/
 .claude/skills/
+.claude/settings.local.json
+.claude/projects/
+.superpowers/
 /.worktrees/
 
 # Runtime backup artifacts (db/zip dumps)
@@ -95,8 +98,7 @@ backups/
 ssh.txt
 
 # TLS private keys/certs (never commit)
-config/deploy/nginx/ssl/*.key
-config/deploy/nginx/ssl/*.crt
+config/docker/nginx/ssl/
 
 # Local build artifacts / production binary backups
 /server

@@ -64,16 +64,7 @@ signed package is unavailable.
 
 ## Repository Layout
 
-```text
-cmd/                 Go command entrypoints
-config/              Config examples, deployment scripts, migration tooling
-control-center/      Control Center app (own Go module, Vue web, Flutter, Workers API)
-docs/                Product, audit, deployment, and reference docs
-internal/            Backend handlers, services, models, middleware, runtime code
-public/              Legacy/static frontend output location if present
-web/                 Vue 3 frontend source
-.github/workflows/   CI, integration, and release workflows
-```
+See [`docs/reference/repository-layout.md`](docs/reference/repository-layout.md) (contributor and agent rules: [`AGENTS.md`](AGENTS.md)).
 
 Generated local outputs should stay ignored and out of the source tree. Use:
 

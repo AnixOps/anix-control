@@ -33,9 +33,9 @@ Use it before changing:
 - `vite-frontend/src/pages/limit.tsx`
 - `vite-frontend/src/api/index.ts`
 
-Local reference repo:
+Upstream reference repo:
 
-- `C:\Users\z7299\AppData\Local\Temp\flux-panel`
+- <https://github.com/bqlpfy/flux-panel>
 
 ## Response Envelope
 
@@ -399,6 +399,6 @@ Before merging a forward/tunnel change, verify:
 ## Required Validation Commands
 
 ```bash
-$env:GOWORK='off'; go test ./internal/router ./internal/handler ./internal/service
+GOWORK=off go test ./internal/router ./internal/handler ./internal/service
 cd web && npm run build
 ```

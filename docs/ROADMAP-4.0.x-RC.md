@@ -245,9 +245,10 @@ steps in order before calling the RC an official final build:
 
 - [x] Keep the current `go_dev` and `master` worktrees reproducible and
   document the local verification snapshot.
-- [ ] Commit the reviewed changes and push `go_dev`. Since the Control Center
-  now lives in `control-center/`, a single `go_dev` commit SHA becomes the
-  evidence identity.
+- [ ] Land the reviewed changes on `go_dev` through PRs (`go_dev` is PR-only;
+  see `.github/BRANCH_PROTECTION.md`). Since the Control Center now lives in
+  `control-center/`, a single `go_dev` commit SHA becomes the evidence
+  identity.
 - [ ] Run the release workflow for those SHAs and retain the signed package,
   manifest, checksum, SBOM, migration, restore, and browser artifacts.
 - [ ] Run the isolated Control/Agent staging canary with the pinned Agent
@@ -259,8 +260,10 @@ steps in order before calling the RC an official final build:
   release bundle. Keep execution and topology feature flags disabled until
   that approval is recorded.
 
-The current worktree intentionally stops before the commit/push step so the
-release identity and external approval remain explicit review decisions.
+The evidence commit and external approval remain explicit review decisions.
+Longer-term development after the RC (moving business domains into packages)
+is planned in
+[`architecture/package-extraction.md`](architecture/package-extraction.md).
 
 ## Completion Evidence
 

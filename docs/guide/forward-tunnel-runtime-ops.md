@@ -6,7 +6,7 @@ Do not treat the UI model as proof that a relay is already attached. Attachment 
 
 ## Runtime Ownership
 
-`v2board_AnixOps` owns:
+`anix-control` owns:
 
 - forward, tunnel, and forward-node persistence
 - the admin UI

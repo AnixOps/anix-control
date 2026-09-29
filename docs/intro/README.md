@@ -19,6 +19,47 @@ Execution ownership:
 - `anix-agent`: proxy protocols, forwarding execution, diagnostics, and traffic reporting
 - `NodeX` and the clean forward agent: compatibility runtimes being absorbed into AnixOps Agent
 
+## v4 Architecture At A Glance
+
+`anix-control` v4 is a plugin kernel with a compatibility bridge. The
+important parts, in request order:
+
+- **Kernel** (`cmd/server`, `internal/`): gin HTTP server, GORM persistence
+  (SQLite default, PostgreSQL supported), JWT/admin middleware, background
+  workers, and the gRPC listener for nodes.
+- **`/api/v2` package gateway**: every `/api/v2` business route is registered
+  through `registeredPackageRoute` in `internal/router/router.go`. A request
+  goes to the package gateway, which forwards it to the host process of the
+  signed package that owns the route (see
+  `config/v2-package-route-catalog.json`). There is no request-time fallback
+  when that package is missing, disabled, or unhealthy.
+- **Bridge back into the kernel**: package hosts call narrowly scoped,
+  kernel-owned bridge operations (`internal/packagebridge`,
+  `internal/identitybridge`) that still execute the established in-kernel gin
+  handlers and services. The legacy business domains have not moved out of
+  the kernel yet (see
+  [`../architecture/release-line-status.md`](../architecture/release-line-status.md)).
+- **Routes outside the package gate**: `/api/v1/server/UniProxy/*`,
+  `/{subscribe_path}/:token` (default `/s/:token`), `/api/v1/client/subscribe`,
+  and `/flow/upload` are still served directly by kernel handlers.
+- **`/api/v3` kernel API**: plugin catalog, releases and artifacts,
+  installations and revisioned configuration, lifecycle operations,
+  node assignments, topologies, deployments, access groups, resource grants,
+  and quota policies. `/api/v4/plugins/:plugin_id/*` exposes the package route
+  gateway directly to administrators.
+- **Packages** (`packages/*`): sixteen official signed packages plus
+  `packages/shared`. Package host processes use `pkg/pluginhostsdk` to serve
+  the host protocol (`api/pluginhost/v1`) and `pkg/packagebridgesdk` to call
+  the bridge protocol (`api/packagebridge/v1`).
+- **Nodes**: the node runtime is `anix-agent` (separate repository
+  `AnixOps/anix-agent`). Control imports only
+  `github.com/AnixOps/anix-agent/sdk` and talks to agents over gRPC: the
+  `anix.agent.v1` control stream for signed package lifecycle work, plus the
+  legacy `v2board` panel-node services and UniProxy HTTP for compatibility.
+- **Control Center** (`control-center/`): a separate Go module, web, Flutter,
+  and Cloudflare Workers app that manages plugins through `/api/v2/login` and
+  `/api/v3`.
+
 ## Startup Paths
 
 There are two normal ways to start `anix-control`:
@@ -48,7 +89,7 @@ Important:
 
 ## Runtime Modes
 
-Forward runtime has two distinct modes:
+Forward runtime has these distinct modes:
 
 - NodeX mode
   - `forward.runtime_backend = gost`
@@ -58,7 +99,10 @@ Forward runtime has two distinct modes:
   - `forward.runtime_backend = nftables_ansible`
   - stateless ansible-driven runtime on the panel host
   - uses the local executor plus execution-node SSH/inventory/playbook material
-  - `iptables_ansible` remains available only as legacy compatibility for older relay playbooks/firewall environments
+  - `iptables_ansible` is a legacy value; the runtime normalizes it to `nftables_ansible`
+- clean-room agent mode
+  - `forward.runtime_backend = clean_agent`
+  - pull-based clean-room forward agent; see [`../forward-clean-room/spec.md`](../forward-clean-room/spec.md)
 
 Do not mix proxy-node language and forward-node language.
 

@@ -39,7 +39,7 @@ that unit name throughout this runbook.
 Create a consistent SQLite backup:
 
 ```bash
-cd /home/dev/anixops/anix-control
+cd /path/to/anix-control
 mkdir -p /root/anix-control-migration
 sqlite3 config/data/v2board.db ".backup '/root/anix-control-migration/anix-control.sqlite.$(date +%Y%m%d%H%M%S).db'"
 ```
@@ -55,7 +55,7 @@ pg_dump --format=custom --file=/root/anix-control-migration/anix-control.pg.$(da
 The dry run opens both databases, lists SQLite tables, prints important row counts, and exits before schema migration, truncation, or import:
 
 ```bash
-cd /home/dev/anixops/anix-control
+cd /path/to/anix-control
 POSTGRES_DSN='host=127.0.0.1 user=anix_control password=replace dbname=anix_control port=5432 sslmode=disable TimeZone=Asia/Shanghai'
 
 PATH=/usr/local/go/bin:$PATH go run ./cmd/sqlite2postgres \
@@ -88,7 +88,7 @@ Record the displayed counts for these tables when present:
 Run the import only after the dry run and backups are complete. `-reset` is required by design; without it the tool refuses to import.
 
 ```bash
-cd /home/dev/anixops/anix-control
+cd /path/to/anix-control
 PATH=/usr/local/go/bin:$PATH go run ./cmd/sqlite2postgres \
   -source config/data/v2board.db \
   -target-dsn "$POSTGRES_DSN" \

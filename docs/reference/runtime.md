@@ -43,7 +43,7 @@ Runtime configuration now comes exclusively from `config/config.yaml.forward_run
 
 ## Control Plane Vs Execution Plane
 
-- `v2board_AnixOps`
+- `anix-control`
   - public control plane
   - admin UI
   - persistence

@@ -1,12 +1,12 @@
 # NodeX Internal Extension Boundary
 
-`v2board_AnixOps` still clones the Flux `/admin/forward*` surface.
+`anix-control` still clones the Flux `/admin/forward*` surface.
 
 `NodeX` and local ansible execution are internal extensions behind that surface. They are not part of the public Flux contract.
 
 ## Boundary Summary
 
-- `v2board_AnixOps`
+- `anix-control`
   - public control plane
   - admin UI
   - persistence
@@ -15,7 +15,7 @@
   - internal-only execution control plane
   - stateful `gost` runtime orchestration
 - local ansible execution (`nftables_ansible` default, `iptables_ansible` legacy)
-  - local execution path in `v2board` panel host
+  - local execution path on the `anix-control` panel host
   - stateless SSH + playbook driven forwarding
 
 ## Two Runtime Modes

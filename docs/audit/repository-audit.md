@@ -1,18 +1,21 @@
 # Repository Audit Baseline
 
-Date: 2026-07-08
+Date: 2026-07-08 (inventory in "Current Shape" and "CI/CD Baseline" refreshed
+2026-09-29, after PR #8 removed dead code and the legacy proxy test tooling)
 
 This is the current audit baseline for `github.com/AnixOps/anix-control/v4`. It is a working document: items marked as gaps remain open until backed by code, tests, CI evidence, or operational runbooks.
 
 ## Current Shape
 
 - Go module: `github.com/AnixOps/anix-control/v4`
-- Go version in `go.mod`: `1.25.0`
-- CI Go version: `1.25`
-- Current package count from `go list ./...`: 39
-- Current Go test file count under `cmd`, `internal`, and `config`: 79
+- Go version in `go.mod`: `go 1.25.0` (module minimum) with `toolchain go1.26.8`
+- CI Go version: `1.26.8` (`GO_VERSION` in `.github/workflows/ci.yml`)
+- Current package count from `GOWORK=off go list ./...`: 40
+- Current Go test file count under `cmd`, `internal`, and `config`: 141 (169 repository-wide)
 - Primary backend entry point: `cmd/server/main.go`
-- Supporting commands: `cmd/configgen`, `cmd/integration-test`, `cmd/migrate`, `cmd/report`, `cmd/sqlite2postgres`, `cmd/subtest`, `cmd/verify`
+- Supporting commands: `cmd/migrate`, `cmd/sqlite2postgres`, `cmd/wgrotate`
+  (`cmd/configgen`, `cmd/integration-test`, `cmd/report`, `cmd/subtest`, and
+  `cmd/verify` were removed by PR #8)
 - Frontend: Vue/Vite app under `web/`
 - Generated API docs: `docs/swagger.json`, `docs/swagger.yaml`, and `docs/docs.go`
 
@@ -25,12 +28,17 @@ The backend is organized around these package boundaries:
 - `internal/service`: business logic for users, orders, subscriptions, nodes, forwarding, stats, notifications, MFA, Telegram, and runtime jobs.
 - `internal/model`: GORM models and persistence schema definitions.
 - `internal/database`: global GORM initialization and database helpers.
-- `internal/cache`: in-memory cache implementation with TTL, set support, and LRU eviction. Redis is represented in config/API shape but the current local implementation baseline is memory cache.
+- `internal/cache`: in-memory cache with TTL, basic set operations, and LRU eviction. Redis is represented in config/API shape but the current local implementation baseline is memory cache.
 - `internal/grpc`: gRPC server, interceptors, connection tracking, and node-facing services.
 - `internal/gost`: GOST client/manager integration.
 - `internal/parser`: subscription format parsing and rendering.
 - `internal/payment`: payment registry and gateway implementations.
-- `internal/websocket`: websocket subscription and messaging helpers.
+- v4 package platform: `internal/compat/v2` (v2 gateway and route resolution),
+  `internal/pluginhost` (host supervision), `internal/packagebridge` and
+  `internal/identitybridge` (host-to-kernel bridge), `internal/plugincontrol`
+  (lifecycle dispatch); see `docs/architecture/package-extraction.md`.
+- The unused `internal/websocket` subscription hub was removed by PR #8;
+  WebSocket endpoints live in `internal/handler`.
 
 The current server process initializes config, database, migrations, cache, HTTP routing, gRPC support, forward runtime bootstrap, and graceful shutdown from `cmd/server/main.go`.
 
@@ -184,7 +192,11 @@ Open gaps:
 Current workflow files:
 
 - `.github/workflows/ci.yml`
-- `.github/workflows/integration-test.yml`
+- `.github/workflows/control-center.yml`, `control-center-release.yml`,
+  `control-center-workers.yml` (Control Center app)
+- `.github/workflows/sdk-sync.yml`
+- (`integration-test.yml` was removed by PR #8 together with the V2bX/Xray
+  proxy test tooling.)
 
 Current CI coverage includes:
 
@@ -232,10 +244,10 @@ Open CI/CD gaps:
 
 Current coverage types present in the repository:
 
-- Unit tests for cache, config, database, models, parser, services, handlers, router, payment, utils, websocket.
+- Unit tests for cache, config, database, models, parser, services, handlers, router, payment, utils, package host/bridge, and compat v2.
 - Service tests with table-style scenarios in several modules.
 - Handler and router tests for auth, admin, forward, subscription, node, and payment behavior.
-- Integration and smoke tests under `internal/tests`.
+- E2E, smoke, and package-rollout integration tests under `internal/tests`.
 - Race detector CI.
 - PostgreSQL stats regression test.
 - Frontend unit tests and build checks.

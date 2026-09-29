@@ -201,9 +201,9 @@ Treat a relay as really attached only when all of these line up:
 
 NodeX side:
 
-```powershell
-Invoke-WebRequest http://127.0.0.1:18081/health
-Invoke-WebRequest http://127.0.0.1:18081/api/v2/internal/forward/runtime/status -Headers @{ Authorization = 'Bearer <FORWARD_API_TOKEN>' }
+```bash
+curl -fsS http://127.0.0.1:18081/health
+curl -fsS http://127.0.0.1:18081/api/v2/internal/forward/runtime/status -H 'Authorization: Bearer <FORWARD_API_TOKEN>'
 ```
 
 Relay gost side:

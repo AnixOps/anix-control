@@ -1,6 +1,6 @@
 # Concurrency Risk Register
 
-Date: 2026-07-08
+Date: 2026-07-08 (updated 2026-09-29 for code removed by PR #8)
 
 This register tracks known and suspected concurrency risks. A risk is closed only when code, tests, and CI evidence prove the behavior.
 
@@ -9,7 +9,7 @@ This register tracks known and suspected concurrency risks. A risk is closed onl
 - CI includes `go test -race ./... -count=1 -p=1`.
 - The full Go test suite is run serially with `-p=1` because some tests share fixed SQLite paths.
 - The in-memory cache uses `sync.RWMutex` and a cleanup goroutine.
-- Forward runtime workers, gRPC streams, WebSocket flows, health checks, and integration test servers all create goroutines.
+- Forward runtime workers, gRPC streams, WebSocket flows, package host processes, and health checks all create goroutines.
 
 ## Current Risks
 
@@ -67,7 +67,6 @@ Existing mitigation:
 
 - `InitMemoryWithSize` closes and waits for the previous cleanup goroutine before replacing the global memory cache.
 - `CloseMemory` closes `stopCh` and waits for `doneCh`, making repeated close calls idempotent.
-- `StartCleanup` recreates both lifecycle channels before restarting cleanup.
 - Tests cover repeated init, idempotent close, restart, and race detector coverage for lifecycle/concurrent access paths.
 
 Required remediation:
@@ -117,7 +116,7 @@ Risk:
 Existing mitigation:
 
 - `ForwardNodeService.HealthCheck` now uses `DialContext`, checks canceled contexts, and returns persistence/cleanup errors.
-- `ForwardNodeService.HealthCheckAll` now aggregates per-node errors instead of discarding them.
+- (`ForwardNodeService.HealthCheckAll` was unused and was removed by PR #8.)
 
 Required remediation:
 
@@ -135,8 +134,9 @@ Risk:
 
 Existing mitigation:
 
-- All current WebSocket upgrade paths were reviewed: user subscription WebSocket, admin monitor WebSocket, legacy agent WebSocket, and unified agent WebSocket.
-- User subscription and admin monitor WebSockets require JWT/admin authentication before upgrade, set read deadlines, refresh them through pong handlers, set write deadlines, send pings, and remove or stop clients on disconnect.
+- All current WebSocket upgrade paths were reviewed: admin monitor WebSocket, legacy agent WebSocket, and unified agent WebSocket.
+- Resolved by removal: the user subscription WebSocket hub (`internal/websocket`) was never routed and was deleted by PR #8 (`8dfc7b70`).
+- The admin monitor WebSocket requires JWT/admin authentication before upgrade, sets read deadlines, refreshes them through pong handlers, sets write deadlines, sends pings, and removes clients on disconnect.
 - Agent WebSockets require node credentials through header/query auth or the legacy auth message, now set read limits/read deadlines/pong handlers, refresh read deadlines after messages, set write deadlines for JSON sends, remove node connections on disconnect, and fail pending ACK waiters on unified disconnect.
 - WebSocket `CheckOrigin` now shares a tested policy: no-Origin clients are allowed, same-host origins are allowed, configured `server.cors.allowed_origins` are allowed, and unlisted cross-site origins are rejected.
 - Config examples document the CORS/WebSocket Origin allowlist.
@@ -144,9 +144,9 @@ Existing mitigation:
 Verification:
 
 ```bash
-PATH=/usr/local/go/bin:$PATH go test ./internal/utils ./internal/websocket ./internal/handler -count=1
-PATH=/usr/local/go/bin:$PATH go test -race ./internal/utils ./internal/websocket ./internal/handler -run 'TestIsWebSocketOriginAllowed|TestSubscriptionWebSocketUpgraderOriginPolicy|TestMonitorWSUpgraderOriginPolicy|TestAgentWebSocketUpgraderOriginPolicy|TestPrepareAgentWebSocketSetsReadDeadline|TestHandleWebSocketMessage_RequireAckSendsAck' -count=1
-PATH=/usr/local/go/bin:/home/dev/go/bin:$PATH gosec -quiet ./internal/handler ./internal/websocket ./internal/utils
+GOWORK=off go test ./internal/utils ./internal/handler -count=1
+GOWORK=off go test -race ./internal/utils ./internal/handler -run 'TestIsWebSocketOriginAllowed|TestMonitorWSUpgraderOriginPolicy|TestAgentWebSocketUpgraderOriginPolicy|TestPrepareAgentWebSocketSetsReadDeadline|TestHandleWebSocketMessage_RequireAckSendsAck' -count=1
+gosec -quiet ./internal/handler ./internal/utils
 ```
 
 Remaining remediation:
