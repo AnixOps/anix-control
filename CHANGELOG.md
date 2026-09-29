@@ -28,6 +28,18 @@
 
 ### Changed
 
+- Made the `go_dev` CI pipeline green again. Go moves to `1.26.8` (go.mod
+  toolchain, CI, SDK sync workflow, and a `golang:1.26-alpine` Docker builder),
+  and `google.golang.org/grpc` moves to `v1.83.2` (with `golang.org/x/net`
+  `v0.58.0`, `x/text` `v0.41.0`, `x/crypto` `v0.55.0`), which clears every
+  govulncheck finding that reaches our code while keeping `go 1.25.0` as the
+  module minimum. The web lockfile picks up fixed `postcss`, `nanoid` and
+  `brace-expansion`, and Vitest moves to `^4.1.11`, so `npm audit` is clean.
+- CI scanners are pinned (`golangci-lint` `v2.14.0`, `govulncheck` `v1.8.0`,
+  `gosec` `v2.29.0`) so new upstream rules no longer turn `go_dev` red without a
+  code change. The root pipeline drops the nonexistent `production` branch
+  trigger, runs on every pull request again (its jobs become the required
+  checks for `go_dev`), and cancels superseded pull-request runs.
 - Imported the Control Center into `control-center/` as a single snapshot of the
   archived `AnixOps/Anixops-control-center` repository (`master` merged with
   `production`, without committed release binaries or assistant notes). It stays

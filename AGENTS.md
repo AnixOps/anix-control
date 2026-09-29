@@ -1139,7 +1139,7 @@ When planning future clone work, prioritize the remaining gaps in this order:
 - `go_dev` is the only long-lived branch. Open feature branches from `go_dev` and merge back through PRs.
 - It is a separate Go module (`github.com/AnixOps/anix-control/control-center`, Go 1.24). Run its checks from inside the directory: `cd control-center && go test ./...`; `cd control-center/web && npm test -- --run && npm run build`; `cd control-center/mobile && flutter test`; `cd control-center/workers && npm run typecheck && npm test`.
 - Its CI lives in `.github/workflows/control-center.yml` and `control-center-workers.yml`, and its releases in `control-center-release.yml`. Release tags are `control-center-v*`. Never let a Center release become the repository's latest release, because `scripts/install.sh` reads `releases/latest`.
-- The root `ci.yml` ignores `control-center/**`. Keep `-exclude-dir=control-center` on gosec, `--exclude control-center` on swag, and `control-center/` in `.dockerignore`.
+- The root `ci.yml` runs on every PR (its jobs are the required checks for `go_dev`). Keep `-exclude-dir=control-center` on gosec, `--exclude control-center` on swag, and `control-center/` in `.dockerignore`.
 - The Workers API deploys through Cloudflare Workers Builds (root `control-center/workers`, branch `go_dev`). A merge to `go_dev` that touches `control-center/workers/**` deploys `api.anixops.com`.
 - `control-center/workers/migrations/` is applied to a production D1 database. Only append new migrations; never edit or delete existing ones.
 - The Center's plugin page talks to Control through `/api/v2/login` and `/api/v3`. Its other pages use the Workers `/api/v1` session. Do not add a second Control API contract for it.

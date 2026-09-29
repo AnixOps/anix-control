@@ -79,7 +79,7 @@ loopback 或受控私网使用明文；公网部署必须配置 `grpc.tls_cert_f
 |------|----------|------|
 | Docker | 24.0+ | 容器运行时 |
 | Docker Compose | 2.0+ | 编排服务 |
-| Go | 1.26.5 | 仅用于本地开发/测试；发行构建必须走 GitHub Actions |
+| Go | 1.26.8 | 仅用于本地开发/测试；发行构建必须走 GitHub Actions |
 | Node.js | 22+ | 仅用于本地开发/测试；发行前端资产必须走 GitHub Actions |
 
 ---

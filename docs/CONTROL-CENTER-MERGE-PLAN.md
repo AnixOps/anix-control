@@ -14,7 +14,7 @@
 | --- | --- |
 | Go module | `control-center/go.mod` 是独立模块；根目录的 `go test ./...`、`go vet`、golangci-lint、govulncheck 都不会扫到它；根 CI 的 gosec 和 swag 显式排除 `control-center/` |
 | 发布单元 | Control 镜像的 Docker 构建上下文排除 `control-center/`（`.dockerignore`）；Center 使用 `control-center-v*` tag，发布时不标记为仓库的 latest，不影响 `scripts/install.sh` |
-| CI | `.github/workflows/control-center.yml`（Go、Web、Flutter）和 `control-center-workers.yml` 通过路径过滤只在相关目录变化时运行；根 `ci.yml` 通过 `paths-ignore` 跳过只改动 `control-center/**` 的提交 |
+| CI | `.github/workflows/control-center.yml`（Go、Web、Flutter）和 `control-center-workers.yml` 通过路径过滤只在相关目录变化时运行；根 `ci.yml` 对所有 PR 都运行（go_dev 分支保护的必过检查依赖它），但它的 gosec、swag 和 Docker 构建上下文都排除 `control-center/` |
 | 认证 | 不变。插件页使用 Control `/api/v2` JWT 和 `/api/v3` 合同；其余 Center 页面仍使用 Workers `/api/v1` 会话 |
 
 ## 导入时排除的内容
