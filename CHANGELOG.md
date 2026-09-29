@@ -199,6 +199,26 @@
   host's `codes.Internal` as `pluginhost.ErrPackageFailed` (still wrapped in
   `ErrHostUnavailable`, so the gateway response is unchanged). Recovered
   panics are logged with a stack trace bounded to 16 KiB.
+
+- PostgreSQL connection strings are now built by `database.PostgresDSN`, which
+  single-quotes and escapes every value. Before, an empty `database.password`
+  made the driver read `password= dbname=x` as the password `dbname=x` and
+  connect to the user's default database; empty hosts and values containing
+  spaces, quotes or backslashes broke the same way. An empty host or a zero
+  port now falls back to the driver default. `cmd/sqlite2postgres
+  -target-config` uses the same builder. `github.com/jackc/pgx/v5` is now a
+  direct dependency.
+- `cmd/server` now shuts down in order and waits for its background work. A
+  SIGINT/SIGTERM root context stops up to ten background workers (forward
+  runtime, bridge, reset, stats and latency workers, the Control plugin
+  lifecycle worker, the plugin operation dispatcher and the topology
+  executor), and shutdown runs: `/health` draining, HTTP drain (30s), wait for
+  workers (15s), gRPC stop (10s), Control plugin host shutdown with its own
+  15s timeout, then cache and database close. A listener failure or plugin
+  and dispatcher initialization error after startup no longer calls
+  `log.Fatal`: it runs the same shutdown and exits with status 1. Plugin poll
+  interval settings are validated before any listener starts. A second signal
+  still forces an immediate exit.
 - Made historical `v4.0.0-alpha.*` tags audit-only in release automation and
   made unconfigured product stages fail closed. Docker publication now waits
   for signed package publication.

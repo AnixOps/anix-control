@@ -92,31 +92,36 @@ func (w *OperationWorker) RunOnce(ctx context.Context) (int, error) {
 	return processed, nil
 }
 
+// Start runs Run in a new goroutine.
 func (w *OperationWorker) Start(ctx context.Context, interval time.Duration, reportError func(error)) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	go w.Run(ctx, interval, reportError)
+}
+
+// Run processes queued operations every interval and blocks until ctx is
+// cancelled, so callers can wait for the worker to stop. ctx must not be nil.
+func (w *OperationWorker) Run(ctx context.Context, interval time.Duration, reportError func(error)) {
 	if interval <= 0 {
 		interval = 5 * time.Second
 	}
-	go func() {
-		run := func() {
-			if _, err := w.RunOnce(ctx); err != nil && reportError != nil && !errors.Is(err, context.Canceled) {
-				reportError(err)
-			}
+	run := func() {
+		if _, err := w.RunOnce(ctx); err != nil && reportError != nil && !errors.Is(err, context.Canceled) {
+			reportError(err)
 		}
-		run()
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				run()
-			}
+	}
+	run()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
 		}
-	}()
+	}
 }
 
 // QueueReconciliation records one enable operation per currently enabled

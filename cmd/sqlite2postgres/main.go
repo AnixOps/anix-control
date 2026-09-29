@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/glebarez/sqlite"
@@ -165,9 +166,7 @@ func openPostgres(configPath, dsn string) (*gorm.DB, error) {
 	if driver != "postgres" && driver != "postgresql" {
 		return nil, fmt.Errorf("target config database.driver is %q, expected postgres", cfg.Database.Driver)
 	}
-	dsn = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable TimeZone=Asia/Shanghai",
-		cfg.Database.Host, cfg.Database.Port, cfg.Database.Username, cfg.Database.Password, cfg.Database.Database)
-	return gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Warn)})
+	return gorm.Open(postgres.Open(database.PostgresDSN(&cfg.Database)), &gorm.Config{Logger: logger.Default.LogMode(logger.Warn)})
 }
 
 func migrateSchema(db *gorm.DB) error {

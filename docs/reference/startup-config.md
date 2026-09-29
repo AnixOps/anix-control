@@ -175,6 +175,18 @@ off until a separate canary decision.
 
 That is why local startup and Docker startup now share the same primary config structure.
 
+Invalid `plugins.*_poll_interval` values, or dispatch/topology flags without
+their prerequisites, stop startup before any listener opens. Once the gRPC
+listener is up, a later failure (for example the API port already in use) runs
+the normal shutdown below and exits with status 1.
+
+On SIGINT or SIGTERM, Control shuts down in this order: `/health` on the
+frontend server returns 503, HTTP servers drain for up to 30s, background
+workers are cancelled and awaited for up to 15s, the gRPC server stops (up to
+10s), Control plugin hosts stop (up to 15s), then the cache and database close.
+A clean shutdown exits with status 0. A second signal forces an immediate exit
+with status 1.
+
 ## 6. Runtime Tuning
 
 If you need to change runtime behavior, edit `config/config.yaml.forward_runtime` before startup. That now includes:

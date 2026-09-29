@@ -64,6 +64,12 @@ PATH=/usr/local/go/bin:$PATH go run ./cmd/sqlite2postgres \
   -dry-run
 ```
 
+`-target-dsn` is passed to the driver unchanged. If a value is empty or contains
+spaces, `'` or `\`, wrap it in single quotes and escape `\` as `\\` and `'` as
+`\'` (for example `password='it\'s'`); an unquoted empty value swallows the next
+keyword (`password= dbname=x` sets the password to `dbname=x`). When the DSN is
+built from `-target-config`, the tool quotes every value itself.
+
 Expected dry-run signal:
 
 ```text

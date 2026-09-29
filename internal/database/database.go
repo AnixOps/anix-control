@@ -49,14 +49,7 @@ func Init(cfg *config.DatabaseConfig) error {
 
 	case "postgres", "postgresql":
 		// PostgreSQL
-		dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable TimeZone=Asia/Shanghai",
-			cfg.Host,
-			cfg.Port,
-			cfg.Username,
-			cfg.Password,
-			cfg.Database,
-		)
-		dialector = postgres.Open(dsn)
+		dialector = postgres.Open(PostgresDSN(cfg))
 
 	default:
 		return fmt.Errorf("unsupported database driver: %s (supported: sqlite, postgres)", cfg.Driver)
