@@ -185,6 +185,16 @@
 
 ### Fixed
 
+- Fixed `/api/v2` package route resolution picking the first declared matching
+  pattern instead of the most specific one. `GET /api/v2/admin/users/stats`,
+  `/admin/orders/stats` and `/admin/nodes/stats` were dispatched to the
+  `/:id` routes of the same package (400 or a wrong body). Resolution now
+  follows gin's precedence (a static segment beats a parameter, left to
+  right), within a package and across packages; only equally specific
+  matches remain an ambiguity error. Found by the local upgrade rehearsal; a
+  new test resolves every catalogued route through each package's real
+  `compat/v2-routes.json` and checks the resolved route ID.
+
 - A panic in a legacy `/api/v2` handler reached through the package bridge, in
   a package bridge or node-facing gRPC handler, or in a package host no longer
   terminates the process. The bridge HTTP adapter now answers such a panic

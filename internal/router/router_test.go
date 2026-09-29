@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/cache"
+	compatv2 "github.com/AnixOps/anix-control/v4/internal/compat/v2"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/identitybridge"
@@ -1113,5 +1114,49 @@ func TestSetup_AdminSystemEndpoints(t *testing.T) {
 			// Should return 401 Unauthorized (needs auth)
 			assert.Equal(t, http.StatusUnauthorized, w.Code)
 		})
+	}
+}
+
+// Every catalogued route must resolve through the real verified package route
+// source to its own route ID, using each package's real compat/v2-routes.json.
+// First-match resolution used to send GET /api/v2/admin/{users,orders,nodes}/stats
+// to the /:id routes of the same package.
+func TestEveryCataloguedV2RouteResolvesToItsOwnRouteID(t *testing.T) {
+	cache.InitMemory()
+	require.NoError(t, database.Close())
+	require.NoError(t, database.Init(&config.DatabaseConfig{Driver: "sqlite", Database: ":memory:"}))
+	t.Cleanup(func() { require.NoError(t, database.Close()) })
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	cfg := &config.Config{Env: "test"}
+	cfg.Plugins.OfficialPublicKey = base64.StdEncoding.EncodeToString(publicKey)
+	config.Set(cfg)
+	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
+
+	_, sourceFile, _, ok := runtime.Caller(0)
+	require.True(t, ok)
+	routeFiles, err := filepath.Glob(filepath.Join(filepath.Dir(sourceFile), "..", "..", "packages", "*", "compat", "v2-routes.json"))
+	require.NoError(t, err)
+	require.Len(t, routeFiles, 16)
+	for _, routeFile := range routeFiles {
+		raw, err := os.ReadFile(routeFile)
+		require.NoError(t, err)
+		packageID := filepath.Base(filepath.Dir(filepath.Dir(routeFile)))
+		seedV2TaskSixPackage(t, packageID, packageID, string(raw), publicKey, privateKey)
+	}
+
+	registry := compatv2.NewRegistry(compatv2.NewVerifiedRouteSource(database.GetDB(), cfg.Plugins.OfficialPublicKey))
+	for _, route := range loadV2PackageRouteCatalog(t) {
+		segments := strings.Split(route.Path, "/")
+		for index, segment := range segments {
+			if strings.HasPrefix(segment, ":") {
+				segments[index] = "1"
+			}
+		}
+		requestPath := strings.Join(segments, "/")
+		resolved, err := registry.ResolveContext(context.Background(), route.Method, requestPath)
+		require.NoError(t, err, "%s %s", route.Method, requestPath)
+		require.Equal(t, route.RouteID, resolved.PackageRoute, "%s %s", route.Method, requestPath)
+		require.Equal(t, route.Owner, resolved.PackageID, "%s %s", route.Method, requestPath)
 	}
 }
