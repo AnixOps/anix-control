@@ -4,11 +4,14 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/branding"
+	compatv2 "github.com/AnixOps/anix-control/v4/internal/compat/v2"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -123,7 +126,18 @@ v2board_go_mem_heap_objects ` + formatUint(m.HeapObjects) + `
 v2board_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
 `
 
-	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(metrics))
+	var body strings.Builder
+	body.WriteString(metrics)
+	body.WriteString("\n")
+	// Per-package v2 gateway traffic; rendering into a builder cannot fail.
+	_ = compatv2.DefaultGatewayMetrics().WritePrometheus(&body)
+	// Per-package host supervision counters; absent while package execution
+	// is disabled and no supervisor is installed.
+	if provider, ok := pluginhost.DefaultManager().(pluginhost.HostStatsProvider); ok {
+		writePluginHostMetrics(&body, provider.Stats())
+	}
+
+	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(body.String()))
 }
 
 // 简化的模型定义（用于计数查询）
@@ -160,4 +174,46 @@ func formatFloat(v float64) string {
 		fracPart = -fracPart
 	}
 	return formatInt(intPart) + "." + formatInt(fracPart)
+}
+
+// pluginHostStates is the fixed label set of anixops_plugin_host_state.
+var pluginHostStates = []string{
+	pluginhost.HostStateRunning, pluginhost.HostStateRestarting, pluginhost.HostStateFailed,
+	pluginhost.HostStateExited, pluginhost.HostStateStopped,
+}
+
+// writePluginHostMetrics renders package host supervision counters. Labels
+// are bounded by the supervised packages and the fixed state set.
+func writePluginHostMetrics(body *strings.Builder, stats []pluginhost.HostStats) {
+	counters := []struct {
+		name, help string
+		value      func(pluginhost.HostStats) uint64
+	}{
+		{"anixops_plugin_host_starts_total", "Package host processes that became healthy.", func(s pluginhost.HostStats) uint64 { return s.Starts }},
+		{"anixops_plugin_host_unexpected_exits_total", "Package host exits not caused by a lifecycle operation.", func(s pluginhost.HostStats) uint64 { return s.UnexpectedExits }},
+		{"anixops_plugin_host_restarts_total", "Watchdog restart attempts of package hosts.", func(s pluginhost.HostStats) uint64 { return s.Restarts }},
+		{"anixops_plugin_host_failures_total", "Times a package host exhausted its restart budget.", func(s pluginhost.HostStats) uint64 { return s.Failures }},
+	}
+	for _, counter := range counters {
+		body.WriteString("# HELP " + counter.name + " " + counter.help + "\n")
+		body.WriteString("# TYPE " + counter.name + " counter\n")
+		for _, entry := range stats {
+			body.WriteString(counter.name + "{package=\"" + prometheusLabelValue(entry.PackageID) + "\"} " + formatUint(counter.value(entry)) + "\n")
+		}
+	}
+	body.WriteString("# HELP anixops_plugin_host_state Current package host supervision state (1 for the current state).\n")
+	body.WriteString("# TYPE anixops_plugin_host_state gauge\n")
+	for _, entry := range stats {
+		for _, state := range pluginHostStates {
+			value := "0"
+			if entry.State == state {
+				value = "1"
+			}
+			body.WriteString("anixops_plugin_host_state{package=\"" + prometheusLabelValue(entry.PackageID) + "\",state=\"" + state + "\"} " + value + "\n")
+		}
+	}
+}
+
+func prometheusLabelValue(value string) string {
+	return strings.NewReplacer("\\", "\\\\", "\"", "\\\"", "\n", "\\n").Replace(value)
 }

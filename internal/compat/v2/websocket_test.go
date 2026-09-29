@@ -13,8 +13,10 @@ import (
 
 func TestWebSocketGatewayRejectsUnavailablePackageBeforeUpgrade(t *testing.T) {
 	upgradeCalls := 0
+	metrics := NewGatewayMetrics()
 	gateway := WebSocketGateway{
 		Registry: NewRegistry(registrySourceStub{err: ErrPackageUnavailable}),
+		Metrics:  metrics,
 		Upgrade: func(http.ResponseWriter, *http.Request, http.Header) (*websocket.Conn, error) {
 			upgradeCalls++
 			return nil, nil
@@ -29,6 +31,8 @@ func TestWebSocketGatewayRejectsUnavailablePackageBeforeUpgrade(t *testing.T) {
 
 	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
 	require.Zero(t, upgradeCalls)
+	require.Contains(t, renderGatewayMetrics(t, metrics),
+		`anixops_v2_gateway_errors_total{package="unresolved",route="unresolved",code="package_unavailable"} 1`)
 }
 
 func TestWebSocketGatewayUsesTextFramesAndSeparateSessionLimit(t *testing.T) {

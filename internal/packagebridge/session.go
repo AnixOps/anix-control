@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"sync"
@@ -23,14 +24,70 @@ import (
 
 const (
 	capabilityBytes       = 32
-	maxResponseBodyBytes  = 1 << 20
 	maxResponseHeaderSize = 8192
+	// DefaultMaxResponseBodyBytes bounds a bridge response body when a
+	// session is created without SessionOptions.MaxResponseBodyBytes.
+	DefaultMaxResponseBodyBytes int64 = 1 << 20
+	// messageEnvelopeBytes is the fixed allowance for everything in a bridge
+	// message except its body or payload.
+	messageEnvelopeBytes = 64 << 10
+	// defaultGRPCMessageBytes is grpc-go's default receive limit.
+	defaultGRPCMessageBytes = 4 << 20
 )
 
 var (
 	ErrCapabilityRejected = errors.New("package bridge capability rejected")
 	ErrBridgeClosed       = errors.New("package bridge is closed")
+	// ErrResponseTooLarge reports a bridged response body above the session
+	// limit. The bridge returns it to the host as codes.ResourceExhausted.
+	ErrResponseTooLarge = errors.New("package bridge response exceeds its limit")
 )
+
+// SessionOptions carries the kernel's configured payload limits into a
+// bridge session.
+type SessionOptions struct {
+	// MaxResponseBodyBytes bounds a response body returned to the package
+	// host. Zero selects DefaultMaxResponseBodyBytes.
+	MaxResponseBodyBytes int64
+	// MaxRequestBodyBytes is the kernel's request body limit. The bridge uses
+	// it only to size its gRPC receive window for host payloads.
+	MaxRequestBodyBytes int64
+}
+
+func (o SessionOptions) responseLimit() int64 {
+	if o.MaxResponseBodyBytes <= 0 {
+		return DefaultMaxResponseBodyBytes
+	}
+	return o.MaxResponseBodyBytes
+}
+
+func (o SessionOptions) receiveMessageLimit() int {
+	limit := o.MaxRequestBodyBytes
+	if limit < o.responseLimit() {
+		limit = o.responseLimit()
+	}
+	if size := limit + messageEnvelopeBytes; size > defaultGRPCMessageBytes && size <= math.MaxInt32 {
+		return int(size)
+	}
+	return defaultGRPCMessageBytes
+}
+
+type responseLimitContextKey struct{}
+
+// withResponseLimit lets operation adapters that validate their own
+// responses apply the session's limit.
+func withResponseLimit(ctx context.Context, limit int64) context.Context {
+	return context.WithValue(ctx, responseLimitContextKey{}, limit)
+}
+
+func responseLimitFromContext(ctx context.Context) int64 {
+	if ctx != nil {
+		if limit, ok := ctx.Value(responseLimitContextKey{}).(int64); ok && limit > 0 {
+			return limit
+		}
+	}
+	return DefaultMaxResponseBodyBytes
+}
 
 // HostIdentity is fixed when a child process is started. The socketpair makes
 // this identity process-local rather than client-asserted.
@@ -133,6 +190,7 @@ type SessionFactory interface {
 type Factory struct {
 	allowlist         *Allowlist
 	webSocketResolver WebSocketOperationResolver
+	options           SessionOptions
 }
 
 func NewFactory(allowlist *Allowlist, webSocketResolvers ...WebSocketOperationResolver) *Factory {
@@ -143,11 +201,20 @@ func NewFactory(allowlist *Allowlist, webSocketResolvers ...WebSocketOperationRe
 	return &Factory{allowlist: allowlist, webSocketResolver: webSocketResolver}
 }
 
+// WithSessionOptions sets the payload limits applied to every session the
+// factory creates and returns the factory.
+func (f *Factory) WithSessionOptions(options SessionOptions) *Factory {
+	if f != nil {
+		f.options = options
+	}
+	return f
+}
+
 func (f *Factory) NewSession(identity HostIdentity) (*Session, *os.File, error) {
 	if f == nil {
 		return nil, nil, ErrBridgeClosed
 	}
-	return NewSession(identity, f.allowlist, f.webSocketResolver)
+	return NewSessionWithOptions(identity, f.allowlist, f.options, f.webSocketResolver)
 }
 
 // NewAllowlistWithFallback composes static package operations with a resolver
@@ -214,6 +281,7 @@ type Session struct {
 	handler           *Allowlist
 	webSocketResolver WebSocketOperationResolver
 	capabilities      map[string]capability
+	maxResponseBody   int64
 	listener          *singleConnListener
 	server            *grpc.Server
 	closed            bool
@@ -222,6 +290,11 @@ type Session struct {
 var _ packagebridgev1.KernelPackageBridgeServer = (*Session)(nil)
 
 func NewSession(identity HostIdentity, handler *Allowlist, webSocketResolvers ...WebSocketOperationResolver) (*Session, *os.File, error) {
+	return NewSessionWithOptions(identity, handler, SessionOptions{}, webSocketResolvers...)
+}
+
+// NewSessionWithOptions is NewSession with explicit payload limits.
+func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options SessionOptions, webSocketResolvers ...WebSocketOperationResolver) (*Session, *os.File, error) {
 	if !safeIdentifier(identity.PackageID) || !safeIdentifier(identity.Version) || identity.Generation == 0 || handler == nil {
 		return nil, nil, errors.New("package bridge session is invalid")
 	}
@@ -263,7 +336,8 @@ func NewSession(identity HostIdentity, handler *Allowlist, webSocketResolvers ..
 	}
 	session := &Session{
 		identity: identity, handler: handler, webSocketResolver: webSocketResolver, capabilities: make(map[string]capability),
-		listener: newSingleConnListener(parentConnection), server: grpc.NewServer(panicrecovery.ServerOptions()...),
+		maxResponseBody: options.responseLimit(), listener: newSingleConnListener(parentConnection),
+		server: grpc.NewServer(append(panicrecovery.ServerOptions(), grpc.MaxRecvMsgSize(options.receiveMessageLimit()))...),
 	}
 	packagebridgev1.RegisterKernelPackageBridgeServer(session.server, session)
 	go func() { _ = session.server.Serve(session.listener) }()
@@ -297,7 +371,7 @@ func (s *Session) Invoke(ctx context.Context, request *packagebridgev1.InvokeReq
 	if err != nil {
 		return nil, capabilityStatusError()
 	}
-	callContext, cancel := context.WithDeadline(ctx, capability.request.Deadline)
+	callContext, cancel := context.WithDeadline(withResponseLimit(ctx, s.maxResponseBody), capability.request.Deadline)
 	defer cancel()
 	response, err := s.handler.Invoke(callContext, Call{
 		Host: s.identity, Request: cloneRequest(capability.request), Operation: request.GetOperation(), Payload: append([]byte(nil), request.GetPayload()...),
@@ -309,9 +383,15 @@ func (s *Session) Invoke(ctx context.Context, request *packagebridgev1.InvokeReq
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			return nil, status.Error(codes.DeadlineExceeded, "package bridge operation deadline exceeded")
 		}
+		if errors.Is(err, ErrResponseTooLarge) {
+			return nil, responseTooLargeStatusError()
+		}
 		return nil, status.Error(codes.Internal, "package bridge operation failed")
 	}
-	if err := validateResponse(response); err != nil {
+	if err := validateResponse(response, s.maxResponseBody); err != nil {
+		if errors.Is(err, ErrResponseTooLarge) {
+			return nil, responseTooLargeStatusError()
+		}
 		return nil, status.Error(codes.Internal, "package bridge response is invalid")
 	}
 	headers := make([]*packagebridgev1.ResponseHeader, len(response.Headers))
@@ -449,6 +529,10 @@ func (s *Session) Close() error {
 	return nil
 }
 
+func responseTooLargeStatusError() error {
+	return status.Error(codes.ResourceExhausted, "package bridge response exceeds its limit")
+}
+
 func capabilityStatusError() error {
 	return status.Error(codes.PermissionDenied, "package bridge capability rejected")
 }
@@ -484,9 +568,12 @@ func cloneCall(call Call) Call {
 	return call
 }
 
-func validateResponse(response Response) error {
-	if response.StatusCode < 100 || response.StatusCode > 599 || len(response.Body) > maxResponseBodyBytes {
+func validateResponse(response Response, maxBodyBytes int64) error {
+	if response.StatusCode < 100 || response.StatusCode > 599 {
 		return errors.New("package bridge response is invalid")
+	}
+	if int64(len(response.Body)) > maxBodyBytes {
+		return ErrResponseTooLarge
 	}
 	for _, header := range response.Headers {
 		if header.Name == "" || len(header.Name) > 256 || len(header.Value) == 0 || len(header.Value) > maxResponseHeaderSize {

@@ -54,8 +54,12 @@ func run() error {
 		return err
 	}
 	service := newGenericService(bridge, leaseID)
+	maxResponseBytes, err := pluginhostsdk.MaxResponseBytesFromEnvironment()
+	if err != nil {
+		return err
+	}
 	host, err := pluginhostsdk.NewServer(pluginhostsdk.ServerConfig{
-		PackageID: packageID, PackageVersion: packageVersion,
+		PackageID: packageID, PackageVersion: packageVersion, MaxResponseBytes: maxResponseBytes,
 	}, service)
 	if err != nil {
 		return err
@@ -67,7 +71,7 @@ func run() error {
 	defer func() { _ = listener.Close() }()
 	// The descriptor-pinned parent supervisor verifies and secures this socket
 	// before it can dispatch a request to the host.
-	server := grpc.NewServer(pluginhostsdk.RecoveryServerOptions()...)
+	server := grpc.NewServer(pluginhostsdk.HostServerOptions()...)
 	pluginhostv1.RegisterControlPackageHostServer(server, host)
 	// The kernel sends SIGTERM before it kills the host's process group, so
 	// finish in-flight RPCs and exit cleanly within its grace period.

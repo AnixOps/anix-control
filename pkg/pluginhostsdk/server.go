@@ -15,6 +15,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// DefaultMaxResponseBytes is the response body limit used when
+// ServerConfig.MaxResponseBytes is zero.
 const DefaultMaxResponseBytes = 1 << 20
 
 type DispatchRequest struct {
@@ -132,8 +134,12 @@ type Package interface {
 }
 
 type ServerConfig struct {
-	PackageID        string
-	PackageVersion   string
+	PackageID      string
+	PackageVersion string
+	// MaxResponseBytes bounds DispatchResponse.ResponseBody; the whole
+	// encoded response may additionally use ResponseEnvelopeBytes. Hosts
+	// should set it from MaxResponseBytesFromEnvironment. Zero selects
+	// DefaultMaxResponseBytes.
 	MaxResponseBytes int
 }
 
@@ -380,7 +386,7 @@ func validateDispatchResponse(response *pluginhostv1.DispatchResponse, maxRespon
 	if response.GetStatusCode() < 100 || response.GetStatusCode() > 599 {
 		return status.Error(codes.FailedPrecondition, "package response status code is invalid")
 	}
-	if proto.Size(response) > maxResponseBytes {
+	if len(response.GetResponseBody()) > maxResponseBytes || proto.Size(response) > maxResponseBytes+ResponseEnvelopeBytes {
 		return status.Error(codes.ResourceExhausted, "package response exceeds host response limit")
 	}
 	return nil

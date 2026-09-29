@@ -47,10 +47,59 @@ type PluginConfig struct {
 	ControlHostStartupTimeout          string `yaml:"control_host_startup_timeout"`
 	ControlHostRequestTimeout          string `yaml:"control_host_request_timeout"`
 	ControlHostWebSocketSessionTimeout string `yaml:"control_host_websocket_session_timeout"`
+	ControlHostMaxRequestBytes         int64  `yaml:"control_host_max_request_bytes"`
+	ControlHostMaxResponseBytes        int64  `yaml:"control_host_max_response_bytes"`
 	DispatchEnabled                    bool   `yaml:"dispatch_enabled"`
 	DispatchPollInterval               string `yaml:"dispatch_poll_interval"`
 	TopologyExecutionEnabled           bool   `yaml:"topology_execution_enabled"`
 	TopologyPollInterval               string `yaml:"topology_poll_interval"`
+}
+
+const (
+	// DefaultControlHostPayloadBytes is the request and response body limit
+	// used when plugins.control_host_max_*_bytes is unset.
+	DefaultControlHostPayloadBytes int64 = 1 << 20
+	// MaxControlHostPayloadBytes is the largest accepted configured limit.
+	MaxControlHostPayloadBytes int64 = 64 << 20
+)
+
+// ControlHostRequestBodyLimit returns the effective
+// plugins.control_host_max_request_bytes: the largest /api/v2 request body the
+// gateway forwards to a package host.
+func (p PluginConfig) ControlHostRequestBodyLimit() int64 {
+	return effectiveControlHostPayloadLimit(p.ControlHostMaxRequestBytes)
+}
+
+// ControlHostResponseBodyLimit returns the effective
+// plugins.control_host_max_response_bytes: the largest package response body,
+// enforced by the package bridge, the package-host SDK, and the kernel's host
+// client.
+func (p PluginConfig) ControlHostResponseBodyLimit() int64 {
+	return effectiveControlHostPayloadLimit(p.ControlHostMaxResponseBytes)
+}
+
+// ValidatePayloadLimits rejects negative or oversized payload limits. Zero
+// means "use the default".
+func (p PluginConfig) ValidatePayloadLimits() error {
+	for _, limit := range []struct {
+		key   string
+		value int64
+	}{
+		{"plugins.control_host_max_request_bytes", p.ControlHostMaxRequestBytes},
+		{"plugins.control_host_max_response_bytes", p.ControlHostMaxResponseBytes},
+	} {
+		if limit.value < 0 || limit.value > MaxControlHostPayloadBytes {
+			return fmt.Errorf("invalid %s %d: must be between 0 (default %d) and %d", limit.key, limit.value, DefaultControlHostPayloadBytes, MaxControlHostPayloadBytes)
+		}
+	}
+	return nil
+}
+
+func effectiveControlHostPayloadLimit(value int64) int64 {
+	if value <= 0 || value > MaxControlHostPayloadBytes {
+		return DefaultControlHostPayloadBytes
+	}
+	return value
 }
 
 // GRPCConfig controls the node-facing gRPC server (AnixOps Agent nodes connect here).
@@ -262,6 +311,9 @@ func Load(path string) (*Config, error) {
 			if err != nil {
 				err = fmt.Errorf("invalid app.subscribe_path: %w", err)
 			}
+		}
+		if err == nil {
+			err = cfg.Plugins.ValidatePayloadLimits()
 		}
 	})
 

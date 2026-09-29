@@ -43,7 +43,10 @@ func NewFactory(cfg *config.Config) (packagebridge.SessionFactory, error) {
 	if err != nil {
 		return nil, err
 	}
-	return packagebridge.NewFactory(allowlist, packagebridge.DefaultRouteRegistry()), nil
+	return packagebridge.NewFactory(allowlist, packagebridge.DefaultRouteRegistry()).WithSessionOptions(packagebridge.SessionOptions{
+		MaxResponseBodyBytes: cfg.Plugins.ControlHostResponseBodyLimit(),
+		MaxRequestBodyBytes:  cfg.Plugins.ControlHostRequestBodyLimit(),
+	}), nil
 }
 
 // NewAllowlist returns the complete set of legacy-compatible operations that

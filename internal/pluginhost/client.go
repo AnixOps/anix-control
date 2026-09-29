@@ -23,13 +23,20 @@ type hostClient struct {
 	rpc        pluginhostv1.ControlPackageHostClient
 }
 
-func dialHostClient(_ context.Context, socketPath string) (*hostClient, error) {
+func dialHostClient(ctx context.Context, socketPath string) (*hostClient, error) {
+	return dialHostClientWithLimit(ctx, socketPath, 0)
+}
+
+// dialHostClientWithLimit bounds what the kernel accepts from a host to the
+// configured response body limit plus the SDK envelope allowance.
+func dialHostClientWithLimit(_ context.Context, socketPath string, maxResponseBytes int64) (*hostClient, error) {
 	connection, err := grpc.NewClient(
 		"passthrough:///anix-control-plugin-host",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 			return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 		}),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(hostReceiveMessageLimit(maxResponseBytes))),
 	)
 	if err != nil {
 		return nil, hostClientError(err)
@@ -210,6 +217,10 @@ func hostClientError(err error) error {
 	case codes.Internal:
 		// The host reached the package, which returned an error or panicked.
 		return fmt.Errorf("%w: %w", ErrHostUnavailable, ErrPackageFailed)
+	case codes.ResourceExhausted:
+		// The host SDK or package bridge rejected an oversized response, or
+		// the host sent a message above this client's receive limit.
+		return fmt.Errorf("%w: %w", ErrHostUnavailable, ErrResponseTooLarge)
 	default:
 		return fmt.Errorf("%w: %s", ErrHostUnavailable, status.Code(err))
 	}

@@ -67,24 +67,34 @@ func NewKernelHandler() *KernelHandler {
 	return &KernelHandler{db: database.Get(), controlPluginHosts: pluginhost.DefaultManager()}
 }
 
-// NewV2CompatibilityGateway wires the legacy API boundary to the current
-// verified package-host manager. A missing or invalid trust root remains a
-// resolver error, so the gateway fails closed rather than using legacy code.
-func NewV2CompatibilityGateway(cfg *config.Config) *compatv2.Gateway {
+// NewV2RouteCache returns the verified-route cache that one router's unary
+// and WebSocket v2 gateways share, so a signed release artifact is verified
+// once rather than per request and per gateway.
+func NewV2RouteCache() *compatv2.VerifiedRouteCache {
+	return compatv2.NewVerifiedRouteCache(0)
+}
+
+// NewV2CompatibilityGateway builds the unary v2 compatibility gateway. A
+// missing or invalid trust root remains a resolver error, so the gateway fails
+// closed rather than using legacy code.
+func NewV2CompatibilityGateway(cfg *config.Config, cache *compatv2.VerifiedRouteCache) *compatv2.Gateway {
 	publicKey := ""
+	requestBodyLimit := config.DefaultControlHostPayloadBytes
 	if cfg != nil {
 		publicKey = cfg.Plugins.OfficialPublicKey
+		requestBodyLimit = cfg.Plugins.ControlHostRequestBodyLimit()
 	}
 	return &compatv2.Gateway{
-		Registry:   compatv2.NewRegistry(compatv2.NewVerifiedRouteSource(database.Get(), publicKey)),
-		Dispatcher: pluginhost.DefaultManager(),
-		Timeout:    controlPluginHostRequestTimeout(cfg),
+		Registry:         compatv2.NewRegistry(compatv2.NewVerifiedRouteSourceWithCache(database.Get(), publicKey, cache)),
+		Dispatcher:       pluginhost.DefaultManager(),
+		Timeout:          controlPluginHostRequestTimeout(cfg),
+		RequestBodyLimit: requestBodyLimit,
 	}
 }
 
 // NewV2WebSocketGateway exposes the optional streaming capability only when
 // the current manager explicitly implements it.
-func NewV2WebSocketGateway(cfg *config.Config) *compatv2.WebSocketGateway {
+func NewV2WebSocketGateway(cfg *config.Config, cache *compatv2.VerifiedRouteCache) *compatv2.WebSocketGateway {
 	publicKey := ""
 	if cfg != nil {
 		publicKey = cfg.Plugins.OfficialPublicKey
@@ -94,7 +104,7 @@ func NewV2WebSocketGateway(cfg *config.Config) *compatv2.WebSocketGateway {
 		dispatcher = manager
 	}
 	return &compatv2.WebSocketGateway{
-		Registry:       compatv2.NewRegistry(compatv2.NewVerifiedRouteSource(database.Get(), publicKey)),
+		Registry:       compatv2.NewRegistry(compatv2.NewVerifiedRouteSourceWithCache(database.Get(), publicKey, cache)),
 		Dispatcher:     dispatcher,
 		Timeout:        controlPluginHostRequestTimeout(cfg),
 		SessionTimeout: controlPluginHostWebSocketSessionTimeout(cfg),
@@ -344,6 +354,8 @@ func (h *KernelHandler) PluginRouteGateway(c *gin.Context) {
 	})
 	if err != nil {
 		switch {
+		case errors.Is(err, pluginhost.ErrResponseTooLarge):
+			kernelError(c, http.StatusBadGateway, "plugin_response_too_large", "plugin response exceeds its limit")
 		case errors.Is(err, pluginhost.ErrHostIncompatible):
 			kernelError(c, http.StatusBadGateway, "plugin_host_incompatible", "plugin host is incompatible")
 		default:

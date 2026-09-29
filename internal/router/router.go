@@ -103,8 +103,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 	// API v2
 	v2 := r.Group("/api/v2")
-	v2PackageGateway := handler.NewV2CompatibilityGateway(cfg)
-	v2WebSocketGateway := handler.NewV2WebSocketGateway(cfg)
+	v2RouteCache := handler.NewV2RouteCache()
+	v2PackageGateway := handler.NewV2CompatibilityGateway(cfg, v2RouteCache)
+	v2WebSocketGateway := handler.NewV2WebSocketGateway(cfg, v2RouteCache)
 	{
 		// 认证接口 (无需登录) - 公开限流
 		authPublic := v2.Group("")

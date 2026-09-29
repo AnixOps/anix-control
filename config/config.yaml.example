@@ -105,6 +105,13 @@ plugins:
   control_host_artifact_dir: "/var/lib/anixops/plugin-artifacts"
   control_host_startup_timeout: "5s"
   control_host_request_timeout: "30s"
+  # Package payload limits in bytes (0 or unset = 1 MiB; maximum 64 MiB).
+  # The request limit bounds /api/v2 bodies the gateway forwards to a package
+  # host (413 plugin_request_too_large). The response limit bounds package
+  # response bodies at the package bridge, the package-host SDK, and the
+  # kernel host client (502 plugin_response_too_large).
+  # control_host_max_request_bytes: 1048576
+  # control_host_max_response_bytes: 1048576
   # Keep Control-to-Agent lifecycle delivery disabled in the normal template.
   # Use config.dev.yaml.example or an operator-approved canary profile to turn
   # it on after the Agent Supervisor and rollback plan are ready.

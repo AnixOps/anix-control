@@ -45,6 +45,22 @@ func TestWatchdogRestartsKilledHostAtSameGeneration(t *testing.T) {
 	require.True(t, logs.contains("plugin host [pkg:knowledge v:4.0.0 gen:7] restarted by watchdog"), logs.String())
 }
 
+func TestWatchdogRestartKeepsConfiguredResponseLimit(t *testing.T) {
+	manager, _ := newSupervisedTestManager(t)
+	manager.maxResponse = 3 << 20
+	ref := writeHostArtifactRef(t, "knowledge", "4.0.0")
+	require.NoError(t, manager.Start(context.Background(), ref, 7))
+	first := currentTestHost(manager, ref.PackageID)
+	require.NotNil(t, first)
+	const want = hostMaxResponseBytesEnvironment + "=3145728"
+	require.Contains(t, first.command.Env, want)
+
+	killTestHostGroup(t, first)
+	second := waitForReplacementHost(t, manager, ref.PackageID, first)
+	require.Contains(t, second.command.Env, want, "a watchdog restart reuses the configured limit")
+	require.EqualValues(t, 3<<20, second.maxResponseBytes)
+}
+
 func TestWatchdogMarksHostFailedAfterRestartBudget(t *testing.T) {
 	manager, logs := newSupervisedTestManager(t)
 	manager.maxRestarts = 2

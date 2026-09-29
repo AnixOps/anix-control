@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,7 +127,7 @@ func TestServerDispatchRejectsInvalidPackageResponse(t *testing.T) {
 				StatusCode: http.StatusOK,
 				Headers: []Header{{
 					Name:  "x-package-header",
-					Value: "oversized",
+					Value: strings.Repeat("h", ResponseEnvelopeBytes),
 				}},
 			},
 			limit:    4,
@@ -148,6 +149,58 @@ func TestServerDispatchRejectsInvalidPackageResponse(t *testing.T) {
 			require.Equal(t, test.wantCode, status.Code(err))
 		})
 	}
+}
+
+func TestServerLimitsResponseBodyNotEnvelope(t *testing.T) {
+	const limit = 1 << 10
+	server := newTestServer(t, &testPackage{
+		dispatch: func(context.Context, DispatchRequest) (DispatchResponse, error) {
+			// A body exactly at the limit plus headers and identifiers is the
+			// same response the kernel package bridge accepts.
+			return DispatchResponse{
+				StatusCode: http.StatusOK, ResponseBody: []byte(strings.Repeat("b", limit)),
+				Headers:     []Header{{Name: "Content-Type", Value: "application/json"}},
+				OperationID: "operation-1",
+			}, nil
+		},
+	}, limit)
+
+	response, err := server.Dispatch(context.Background(), validDispatchRequest())
+	require.NoError(t, err)
+	require.Len(t, response.GetResponseBody(), limit)
+
+	server = newTestServer(t, &testPackage{
+		dispatch: func(context.Context, DispatchRequest) (DispatchResponse, error) {
+			return DispatchResponse{StatusCode: http.StatusOK, ResponseBody: []byte(strings.Repeat("b", limit+1))}, nil
+		},
+	}, limit)
+	_, err = server.Dispatch(context.Background(), validDispatchRequest())
+	require.Equal(t, codes.ResourceExhausted, status.Code(err))
+}
+
+func TestMaxResponseBytesFromEnvironment(t *testing.T) {
+	t.Setenv(MaxResponseBytesEnvironment, "")
+	value, err := MaxResponseBytesFromEnvironment()
+	require.NoError(t, err)
+	require.Zero(t, value)
+
+	t.Setenv(MaxResponseBytesEnvironment, "3145728")
+	value, err = MaxResponseBytesFromEnvironment()
+	require.NoError(t, err)
+	require.Equal(t, 3<<20, value)
+
+	for _, invalid := range []string{"-1", "0", "abc", "67108865"} {
+		t.Setenv(MaxResponseBytesEnvironment, invalid)
+		_, err = MaxResponseBytesFromEnvironment()
+		require.Error(t, err, invalid)
+	}
+}
+
+func TestMessageSizeLimitCoversBodyAndEnvelope(t *testing.T) {
+	require.Equal(t, 4<<20, MessageSizeLimit(0))
+	require.Equal(t, 4<<20, MessageSizeLimit(1<<20))
+	require.Equal(t, 8<<20+ResponseEnvelopeBytes, MessageSizeLimit(8<<20))
+	require.Len(t, HostServerOptions(), len(RecoveryServerOptions())+1)
 }
 
 func TestServerValidatesLifecycleEnvelopes(t *testing.T) {

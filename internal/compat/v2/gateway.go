@@ -32,34 +32,40 @@ type Gateway struct {
 	Dispatcher       Dispatcher
 	Timeout          time.Duration
 	RequestBodyLimit int64
+	// Metrics receives one observation per request; nil selects
+	// DefaultGatewayMetrics.
+	Metrics *GatewayMetrics
 }
 
 func (g Gateway) Serve(c *gin.Context) {
 	if c == nil || c.Request == nil {
 		return
 	}
+	started := time.Now()
+	route, errorCode := g.serve(c)
+	g.metrics().Observe(route.PackageID, route.PackageRoute, c.Writer.Status(), errorCode, time.Since(started))
+}
+
+// serve handles one request and returns the resolved route (zero when
+// resolution failed) and the gateway error code it wrote, if any.
+func (g Gateway) serve(c *gin.Context) (Route, string) {
 	route, err := g.resolve(c.Request.Context(), c.Request.Method, c.Request.URL.Path)
 	if err != nil {
-		writeResolutionError(c, err)
-		return
+		return Route{}, writeResolutionError(c, err)
 	}
 	if route.Transport != TransportHTTP {
-		writeGatewayError(c, http.StatusUpgradeRequired, "package_route_requires_websocket", "package route requires a WebSocket connection")
-		return
+		return route, writeGatewayError(c, http.StatusUpgradeRequired, codeRouteRequiresWebSocket, "package route requires a WebSocket connection")
 	}
 	if g.Dispatcher == nil {
-		writeGatewayError(c, http.StatusBadGateway, "plugin_host_unavailable", "plugin host is unavailable")
-		return
+		return route, writeGatewayError(c, http.StatusBadGateway, codePluginHostUnavailable, "plugin host is unavailable")
 	}
 	body, err := readRequestBody(c.Request.Body, g.bodyLimit())
 	if err != nil {
-		writeGatewayError(c, http.StatusRequestEntityTooLarge, "plugin_request_too_large", "plugin request body exceeds its limit")
-		return
+		return route, writeGatewayError(c, http.StatusRequestEntityTooLarge, codePluginRequestTooLarge, "plugin request body exceeds its limit")
 	}
 	principal, err := requestPrincipal(c, route.PackageID)
 	if err != nil {
-		writeGatewayError(c, http.StatusInternalServerError, "plugin_request_invalid", "plugin request principal could not be encoded")
-		return
+		return route, writeGatewayError(c, http.StatusInternalServerError, codePluginRequestInvalid, "plugin request principal could not be encoded")
 	}
 	deadline := requestDeadline(c.Request.Context(), g.timeout())
 	dispatchContext, cancel := context.WithDeadline(c.Request.Context(), deadline)
@@ -70,16 +76,26 @@ func (g Gateway) Serve(c *gin.Context) {
 		Method: c.Request.Method, Body: body, PrincipalJSON: principal, Metadata: requestMetadata(c), Deadline: deadline,
 	})
 	if err != nil {
-		if errors.Is(err, pluginhost.ErrHostIncompatible) {
-			writeGatewayError(c, http.StatusBadGateway, "plugin_host_incompatible", "plugin host is incompatible")
-		} else {
-			writeGatewayError(c, http.StatusBadGateway, "plugin_host_unavailable", "plugin host is unavailable")
+		switch {
+		case errors.Is(err, pluginhost.ErrResponseTooLarge):
+			return route, writeGatewayError(c, http.StatusBadGateway, codePluginResponseTooLarge, "plugin response exceeds its limit")
+		case errors.Is(err, pluginhost.ErrHostIncompatible):
+			return route, writeGatewayError(c, http.StatusBadGateway, codePluginHostIncompatible, "plugin host is incompatible")
+		default:
+			return route, writeGatewayError(c, http.StatusBadGateway, codePluginHostUnavailable, "plugin host is unavailable")
 		}
-		return
 	}
 	if err := writePackageResponse(c, route, response); err != nil {
-		writeGatewayError(c, http.StatusBadGateway, "plugin_host_incompatible", err.Error())
+		return route, writeGatewayError(c, http.StatusBadGateway, codePluginHostIncompatible, err.Error())
 	}
+	return route, ""
+}
+
+func (g Gateway) metrics() *GatewayMetrics {
+	if g.Metrics == nil {
+		return DefaultGatewayMetrics()
+	}
+	return g.Metrics
 }
 
 func (g Gateway) resolve(ctx context.Context, method, requestPath string) (Route, error) {
@@ -306,14 +322,14 @@ func nodeID(c *gin.Context) uint {
 	return 0
 }
 
-func writeResolutionError(c *gin.Context, err error) {
+func writeResolutionError(c *gin.Context, err error) string {
 	if errors.Is(err, ErrPackageUnavailable) {
-		writeGatewayError(c, http.StatusServiceUnavailable, "package_unavailable", "package route is unavailable")
-		return
+		return writeGatewayError(c, http.StatusServiceUnavailable, codePackageUnavailable, "package route is unavailable")
 	}
-	writeGatewayError(c, http.StatusNotFound, "package_route_not_found", "package route is not declared")
+	return writeGatewayError(c, http.StatusNotFound, codeRouteNotFound, "package route is not declared")
 }
 
-func writeGatewayError(c *gin.Context, status int, code, message string) {
+func writeGatewayError(c *gin.Context, status int, code, message string) string {
 	c.AbortWithStatusJSON(status, gin.H{"error": gin.H{"code": code, "message": message}})
+	return code
 }

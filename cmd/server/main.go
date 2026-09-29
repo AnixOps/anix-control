@@ -868,7 +868,7 @@ func newControlPluginHostManager(cfg *config.Config) (*pluginhost.Supervisor, er
 	}
 	return pluginhost.NewManager(pluginhost.ManagerConfig{
 		RuntimeDir: cfg.Plugins.ControlHostRuntimeDir, StartupTimeout: startupTimeout,
-		BridgeFactory: bridgeFactory,
+		BridgeFactory: bridgeFactory, MaxResponseBytes: cfg.Plugins.ControlHostResponseBodyLimit(),
 	})
 }
 
