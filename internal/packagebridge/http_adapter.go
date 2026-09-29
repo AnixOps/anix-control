@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
 	"github.com/gin-gonic/gin"
 )
 
@@ -67,7 +69,12 @@ func NewHTTPAdapter(handler gin.HandlerFunc) OperationHandler {
 		for key, value := range metadata.PathParams {
 			ginContext.Params = append(ginContext.Params, gin.Param{Key: key, Value: value})
 		}
-		handler(ginContext)
+		if !runLegacyHandler(handler, ginContext, call, "HTTP") {
+			// Whatever the handler wrote before panicking is discarded. The
+			// empty 500 matches the kernel's gin recovery middleware and is
+			// valid for every package route envelope.
+			return Response{StatusCode: http.StatusInternalServerError}, nil
+		}
 		statusCode, err := bridgeResponseStatusCode(recorder.Code)
 		if err != nil {
 			return Response{}, err
@@ -81,6 +88,25 @@ func NewHTTPAdapter(handler gin.HandlerFunc) OperationHandler {
 		}
 		return response, nil
 	}
+}
+
+// runLegacyHandler invokes a bridged legacy handler outside gin's recovery
+// middleware and reports whether it returned normally. A panic is logged with
+// a bounded stack trace instead of terminating the kernel process.
+func runLegacyHandler(handler gin.HandlerFunc, ginContext *gin.Context, call Call, transport string) (completed bool) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			method, path := "", ""
+			if ginContext != nil && ginContext.Request != nil {
+				method, path = ginContext.Request.Method, ginContext.Request.URL.Path
+			}
+			log.Printf("panic recovered in package bridge %s handler: package=%q route=%q operation=%q request=%q %s %q: %v\n%s",
+				transport, call.Host.PackageID, call.Request.RouteID, call.Operation, call.Request.RequestID, method, path, recovered, panicrecovery.Stack())
+			completed = false
+		}
+	}()
+	handler(ginContext)
+	return true
 }
 
 func bridgeResponseStatusCode(statusCode int) (uint32, error) {

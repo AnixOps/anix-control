@@ -173,7 +173,8 @@ func NewServer(config ServerConfig, packageImpl Package) (*Server, error) {
 	}, nil
 }
 
-func (s *Server) Dispatch(ctx context.Context, request *pluginhostv1.DispatchRequest) (*pluginhostv1.DispatchResponse, error) {
+func (s *Server) Dispatch(ctx context.Context, request *pluginhostv1.DispatchRequest) (_ *pluginhostv1.DispatchResponse, err error) {
+	defer recoverPanic("dispatch", "package dispatch panicked", &err)
 	if err := s.validateDispatchRequest(request); err != nil {
 		return nil, err
 	}
@@ -192,7 +193,8 @@ func (s *Server) Dispatch(ctx context.Context, request *pluginhostv1.DispatchReq
 	return wireResponse, nil
 }
 
-func (s *Server) OpenWebSocket(stream pluginhostv1.ControlPackageHost_OpenWebSocketServer) error {
+func (s *Server) OpenWebSocket(stream pluginhostv1.ControlPackageHost_OpenWebSocketServer) (err error) {
+	defer recoverPanic("open WebSocket", "package open WebSocket panicked", &err)
 	if stream == nil {
 		return status.Error(codes.InvalidArgument, "WebSocket stream is required")
 	}
@@ -217,7 +219,8 @@ func (s *Server) OpenWebSocket(stream pluginhostv1.ControlPackageHost_OpenWebSoc
 	return packageError("open WebSocket", packageImpl.OpenWebSocket(ctx, webSocketOpenFromProto(open), &webSocketServerStream{stream: stream}))
 }
 
-func (s *Server) Migrate(ctx context.Context, request *pluginhostv1.MigrationRequest) (*pluginhostv1.MigrationResponse, error) {
+func (s *Server) Migrate(ctx context.Context, request *pluginhostv1.MigrationRequest) (_ *pluginhostv1.MigrationResponse, err error) {
+	defer recoverPanic("migrate", "package migrate panicked", &err)
 	if err := s.validateMigrationRequest(request); err != nil {
 		return nil, err
 	}
@@ -234,7 +237,8 @@ func (s *Server) Migrate(ctx context.Context, request *pluginhostv1.MigrationReq
 	return migrationResponseToProto(response), nil
 }
 
-func (s *Server) Health(ctx context.Context, request *pluginhostv1.HealthRequest) (*pluginhostv1.HealthResponse, error) {
+func (s *Server) Health(ctx context.Context, request *pluginhostv1.HealthRequest) (_ *pluginhostv1.HealthResponse, err error) {
+	defer recoverPanic("health", "package health panicked", &err)
 	if err := validateGeneration(request.GetRouteGeneration()); err != nil {
 		return nil, err
 	}
@@ -246,7 +250,8 @@ func (s *Server) Health(ctx context.Context, request *pluginhostv1.HealthRequest
 	return healthResponseToProto(response), nil
 }
 
-func (s *Server) Drain(ctx context.Context, request *pluginhostv1.DrainRequest) (*pluginhostv1.DrainResponse, error) {
+func (s *Server) Drain(ctx context.Context, request *pluginhostv1.DrainRequest) (_ *pluginhostv1.DrainResponse, err error) {
+	defer recoverPanic("drain", "package drain panicked", &err)
 	if err := validateDrainRequest(request); err != nil {
 		return nil, err
 	}

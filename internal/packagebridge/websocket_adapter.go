@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/agentws"
@@ -72,15 +73,24 @@ func NewWebSocketAdapter(handler gin.HandlerFunc) WebSocketOperationHandler {
 		}
 		request.Header.Set("Sec-WebSocket-Key", responseWriter.clientChallengeKey())
 		handlerDone := make(chan struct{})
+		var handlerPanicked atomic.Bool
 		go func() {
-			handler(ginContext)
-			close(handlerDone)
+			defer close(handlerDone)
+			if !runLegacyHandler(handler, ginContext, call, "WebSocket") {
+				handlerPanicked.Store(true)
+				// Closing the kernel end fails a pending handshake or ends an
+				// established relay instead of leaving the package waiting.
+				_ = serverConnection.Close()
+			}
 		}()
 
 		var client *websocket.Conn
 		select {
 		case result := <-clientResult:
 			if result.err != nil {
+				if handlerPanicked.Load() {
+					return errLegacyHandlerPanicked
+				}
 				return fmt.Errorf("open legacy WebSocket bridge: %w", result.err)
 			}
 			client = result.connection
@@ -88,9 +98,11 @@ func NewWebSocketAdapter(handler gin.HandlerFunc) WebSocketOperationHandler {
 			return ctx.Err()
 		}
 		defer func() { _ = client.Close() }()
-		return relayBridgeWebSocket(ctx, client, stream, handlerDone)
+		return relayBridgeWebSocket(ctx, client, stream, handlerDone, handlerPanicked.Load)
 	}
 }
+
+var errLegacyHandlerPanicked = errors.New("legacy WebSocket handler panicked")
 
 type webSocketClientResult struct {
 	connection *websocket.Conn
@@ -118,7 +130,10 @@ func bridgeWebSocketURL(source *url.URL) *url.URL {
 	return &copy
 }
 
-func relayBridgeWebSocket(ctx context.Context, client *websocket.Conn, stream WebSocketStream, handlerDone <-chan struct{}) error {
+// relayBridgeWebSocket copies frames between the package stream and the
+// in-memory legacy connection. handlerFailed reports whether the legacy
+// handler panicked; it may be nil.
+func relayBridgeWebSocket(ctx context.Context, client *websocket.Conn, stream WebSocketStream, handlerDone <-chan struct{}, handlerFailed func() bool) error {
 	if client == nil || stream == nil {
 		return ErrCapabilityRejected
 	}
@@ -149,7 +164,7 @@ func relayBridgeWebSocket(ctx context.Context, client *websocket.Conn, stream We
 		for {
 			messageType, data, err := client.ReadMessage()
 			if err != nil {
-				if close := bridgeClose(err); close != nil {
+				if close := relayClose(err, handlerFailed); close != nil {
 					_ = stream.Send(WebSocketFrame{Close: close})
 				}
 				results <- nil
@@ -177,6 +192,18 @@ func relayBridgeWebSocket(ctx context.Context, client *websocket.Conn, stream We
 		_ = client.Close()
 		return ctx.Err()
 	}
+}
+
+// relayClose reports a panicked legacy handler as 1011 (internal error)
+// unless the handler had already sent its own close frame. gorilla reports
+// the kernel end disappearing as 1006 (abnormal closure).
+func relayClose(err error, handlerFailed func() bool) *WebSocketClose {
+	var closeError *websocket.CloseError
+	sentClose := errors.As(err, &closeError) && closeError.Code != websocket.CloseAbnormalClosure
+	if err != nil && !sentClose && handlerFailed != nil && handlerFailed() {
+		return &WebSocketClose{Code: websocket.CloseInternalServerErr, Reason: "kernel WebSocket handler failed"}
+	}
+	return bridgeClose(err)
 }
 
 func bridgeClose(err error) *WebSocketClose {

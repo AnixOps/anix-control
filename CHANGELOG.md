@@ -185,6 +185,20 @@
 
 ### Fixed
 
+- A panic in a legacy `/api/v2` handler reached through the package bridge, in
+  a package bridge or node-facing gRPC handler, or in a package host no longer
+  terminates the process. The bridge HTTP adapter now answers such a panic
+  with an empty `500` (the same response as the kernel's gin recovery
+  middleware; partial handler output is discarded), and the WebSocket adapter
+  closes the relay with `1011`. The package bridge session and the kernel
+  node gRPC server install recovery interceptors (new `internal/panicrecovery`)
+  outermost and return `codes.Internal`. `pkg/pluginhostsdk` recovers panics
+  in `Dispatch`, `Migrate`, `OpenWebSocket`, `Health` and `Drain` as
+  `codes.Internal`, and its new `RecoveryServerOptions()` is used by the
+  shared control host and identity-platform host. The kernel now reports a
+  host's `codes.Internal` as `pluginhost.ErrPackageFailed` (still wrapped in
+  `ErrHostUnavailable`, so the gateway response is unchanged). Recovered
+  panics are logged with a stack trace bounded to 16 KiB.
 - Made historical `v4.0.0-alpha.*` tags audit-only in release automation and
   made unconfigured product stages fail closed. Docker publication now waits
   for signed package publication.

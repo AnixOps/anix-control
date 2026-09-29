@@ -207,6 +207,9 @@ func hostClientError(err error) error {
 	switch status.Code(err) {
 	case codes.InvalidArgument, codes.FailedPrecondition, codes.Unimplemented, codes.DataLoss:
 		return fmt.Errorf("%w: %s", ErrHostIncompatible, status.Code(err))
+	case codes.Internal:
+		// The host reached the package, which returned an error or panicked.
+		return fmt.Errorf("%w: %w", ErrHostUnavailable, ErrPackageFailed)
 	default:
 		return fmt.Errorf("%w: %s", ErrHostUnavailable, status.Code(err))
 	}
