@@ -1,0 +1,40 @@
+name: Control Center Workers CI
+
+# Ported from the archived AnixOps/Anixops-control-center-worker repository
+# (.github/workflows/ci.yml). Deployment is not done here: Cloudflare Workers
+# Builds deploys control-center/workers from go_dev.
+
+on:
+  push:
+    branches: [ go_dev ]
+    paths:
+      - 'control-center/workers/**'
+      - '.github/workflows/control-center-workers.yml'
+  pull_request:
+    branches: [ go_dev ]
+    paths:
+      - 'control-center/workers/**'
+      - '.github/workflows/control-center-workers.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Control Center Workers
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: control-center/workers
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: control-center/workers/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: test -s dist/index.mjs
+      - run: npm run test:coverage:ci

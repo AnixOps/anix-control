@@ -1,0 +1,36 @@
+{
+  "name": "anixops-control-center-workers",
+  "version": "1.0.0",
+  "description": "Independent AnixOps Control Center Workers API",
+  "main": "dist/index.mjs",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/index.mjs",
+    "build:watch": "esbuild src/index.ts --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/index.mjs --watch",
+    "dev": "npm run build && wrangler dev --no-bundle",
+    "deploy": "npm run build && wrangler deploy --no-bundle",
+    "deploy:tail": "wrangler deploy --config wrangler.tail.toml",
+    "tail": "wrangler tail",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:coverage:ci": "vitest run --coverage --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 --coverage.thresholds.branches=0 --coverage.thresholds.statements=0",
+    "db:migrate": "wrangler d1 migrations apply anixops-db",
+    "db:create": "wrangler d1 migrations create anixops-db",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "hono": "^4.12.0",
+    "jose": "^6.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240117.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@vitest/coverage-v8": "^4.0.0",
+    "esbuild": "^0.27.4",
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0",
+    "wrangler": "^4.77.0"
+  }
+}
