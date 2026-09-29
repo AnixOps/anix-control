@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -30,8 +31,12 @@ type forwardBackgroundErrorLogState struct {
 	loggedAt time.Time
 }
 
+// forwardBackgroundErrorLogger rate-limits repeated background error lines.
+// It is shared by concurrent goroutines (for example the latency prober's
+// parallel probes), so the state map is guarded by mu.
 type forwardBackgroundErrorLogger struct {
 	interval time.Duration
+	mu       sync.Mutex
 	states   map[string]forwardBackgroundErrorLogState
 }
 
@@ -561,14 +566,16 @@ func (l *forwardBackgroundErrorLogger) Logf(key, format string, args ...any) {
 	}
 
 	now := time.Now()
+	l.mu.Lock()
 	if state, ok := l.states[key]; ok && state.message == message && now.Sub(state.loggedAt) < l.interval {
+		l.mu.Unlock()
 		return
 	}
-
 	l.states[key] = forwardBackgroundErrorLogState{
 		message:  message,
 		loggedAt: now,
 	}
+	l.mu.Unlock()
 	log.Print(message)
 }
 
@@ -576,7 +583,9 @@ func (l *forwardBackgroundErrorLogger) Clear(key string) {
 	if l == nil || key == "" {
 		return
 	}
+	l.mu.Lock()
 	delete(l.states, key)
+	l.mu.Unlock()
 }
 
 func normalizeForwardIdlePollInterval(activeInterval, idleInterval time.Duration) time.Duration {

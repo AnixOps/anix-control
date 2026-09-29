@@ -195,6 +195,13 @@
   new test resolves every catalogued route through each package's real
   `compat/v2-routes.json` and checks the resolved route ID.
 
+- Fixed a process crash (`fatal error: concurrent map writes`) in the forward
+  background error logger. The latency prober logs probe failures from
+  parallel goroutines, so when several probe targets were unreachable at the
+  same time the unsynchronized rate-limit map aborted the whole server; this
+  cannot be caught by `recover`. Found by the local upgrade rehearsal, where the
+  production release (`v4.0.0-alpha.7`) crashed within a second of startup.
+
 - A panic in a legacy `/api/v2` handler reached through the package bridge, in
   a package bridge or node-facing gRPC handler, or in a package host no longer
   terminates the process. The bridge HTTP adapter now answers such a panic
