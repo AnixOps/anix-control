@@ -1,7 +1,7 @@
 # AnixOps Control Configuration - Production
-# 鐢熶骇鐜閰嶇疆鏂囦欢
+# 生产环境配置文件
 
-# 鐜鏍囪瘑: development (寮€鍙?, production (鐢熶骇)
+# 环境标识: development (开发), production (生产)
 env: "production"
 
 server:
@@ -10,7 +10,7 @@ server:
   mode: "release"
   read_timeout: 30
   write_timeout: 30
-  # 鍙俊浠ｇ悊鍒楄〃 (鐢ㄤ簬鑾峰彇鐪熷疄 IP锛屽鍦?Nginx/Cloudflare 鍚庨潰)
+  # 可信代理列表 (用于获取真实 IP，如在 Nginx/Cloudflare 后面)
   # Only trust forwarded client IP headers from these reverse proxies/load balancers.
   # If the API is exposed directly, keep this list empty.
   trusted_proxies:
@@ -27,22 +27,22 @@ server:
     allow_credentials: false
     max_age: 86400
 
-# TLS/HTTPS 閰嶇疆
-# 鏂瑰紡涓€: 浣跨敤 Nginx 鍙嶄唬 (鎺ㄨ崘) - 璁剧疆 enable: false
-# 鏂瑰紡浜? Go 鍘熺敓 TLS - 璁剧疆 enable: true 骞堕厤缃瘉涔﹁矾寰?
+# TLS/HTTPS 配置
+# 方式一: 使用 Nginx 反代 (推荐) - 设置 enable: false
+# 方式二: Go 原生 TLS - 设置 enable: true 并配置证书路径
 tls:
-  enable: false                               # 浣跨敤 Nginx 鍙嶄唬鏃惰涓?false
-  cert_file: "/etc/ssl/certs/anix-control.crt"     # SSL 璇佷功璺緞 (浠?enable: true 鏃堕渶瑕?
-  key_file: "/etc/ssl/private/anix-control.key"    # SSL 绉侀挜璺緞 (浠?enable: true 鏃堕渶瑕?
-  domain: "your-domain.com"                   # 鎮ㄧ殑鍩熷悕 (鐢ㄤ簬鐢熸垚璁㈤槄閾炬帴绛?
+  enable: false                               # 使用 Nginx 反代时设为 false
+  cert_file: "/etc/ssl/certs/anix-control.crt"     # SSL 证书路径 (仅 enable: true 时需要)
+  key_file: "/etc/ssl/private/anix-control.key"    # SSL 私钥路径 (仅 enable: true 时需要)
+  domain: "your-domain.com"                   # 您的域名 (用于生成订阅链接等)
 
-# 鍓嶇鏈嶅姟鍣ㄩ厤缃?
+# 前端服务器配置
 frontend:
   enable: true
-  port: 3000         # 淇濇寔 3000 绔彛锛岄€氳繃 Nginx 鍙嶄唬鍒?80/443
+  port: 3000         # 保持 3000 端口，通过 Nginx 反代到 80/443
   path: "web/public"
 
-# 鏁版嵁搴撻厤缃?- 鐢熶骇鐜鎺ㄨ崘浣跨敤 PostgreSQL
+# 数据库配置 - 生产环境推荐使用 PostgreSQL
 database:
   driver: "postgres"
   host: "127.0.0.1"
@@ -50,12 +50,12 @@ database:
   username: "anix_control"
   password: "your-secure-password"
   database: "anix_control"
-  log_level: "error"          # 鐢熶骇鐜鍙褰曢敊璇?
+  log_level: "error"          # 生产环境只记录错误
   max_idle_conns: 10
   max_open_conns: 100
   conn_max_lifetime: 3600
 
-# 缂撳瓨閰嶇疆 - 鐢熶骇鐜鎺ㄨ崘浣跨敤 Redis
+# 缓存配置 - 生产环境推荐使用 Redis
 cache:
   driver: "redis"
   redis_host: "127.0.0.1"
@@ -64,7 +64,7 @@ cache:
   redis_db: 0
 
 log:
-  level: "warn"               # 鐢熶骇鐜鍑忓皯鏃ュ織
+  level: "warn"               # 生产环境减少日志
   output: "file"
   file_path: "/var/log/anix-control/anix-control.log"
   max_size: 100
@@ -180,7 +180,7 @@ grpc:
   tls_cert_file: "config/tls/control.crt"
   tls_key_file: "config/tls/control.key"
 
-# 榛樿绠＄悊鍛橀厤缃?
+# 默认管理员配置
 admin:
   email: "admin@your-domain.com"
-  password: ""  # 鐣欑┖灏嗚嚜鍔ㄧ敓鎴?
+  password: ""  # 留空将自动生成

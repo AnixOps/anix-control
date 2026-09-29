@@ -19,11 +19,10 @@ UI-only similarity is not enough.
 
 ### Upstream
 
-- GitHub: `https://github.com/bqlpfy/flux-panel`
+- GitHub: <https://github.com/bqlpfy/flux-panel>
 
-### Local Reference Copy
-
-- `C:\Users\z7299\AppData\Local\Temp\flux-panel`
+Clone the upstream repository into any scratch directory when you need to read
+the sources side by side; do not commit a copy into this repository.
 
 ### Files To Read First
 
@@ -191,6 +190,57 @@ Still incomplete:
     - expired-user forward pause and expired-grant pause+disable side effects now run after reset scans
     - remaining gap is exact Flux user-disable state parity and exact dialog/layout parity
 
+## Clone Status (2026-04-06)
+
+This dated status section was moved here from `AGENTS.md` ("Flux Clone Status
+Override"). It overrides older statements in this guide where they conflict.
+
+- `POST /api/v2/speed-limit/create|list|update|delete|tunnels` exists and is
+  backed by a real `SpeedLimit` model/service/handler
+  (`internal/model/speed_limit.go`, `internal/service/speed_limit_service.go`,
+  `internal/handler/speed_limit.go`).
+- `web/src/views/admin/Users.vue` uses a tunnel-scoped speed-limit selector
+  instead of a raw numeric placeholder input. Creating a grant filters
+  already-assigned tunnels; editing a grant keeps the tunnel read-only; the
+  grant table shows used flow, monthly reset day, speed limit, and a manual
+  reset action with a confirmation dialog.
+- `web/src/views/admin/Limit.vue` plus route/menu `/admin/limit` provide the
+  standalone speed-limit admin surface modeled after Flux `limit.tsx`.
+- `ForwardUserTunnel` carries `in_flow`/`out_flow` relation counters; list and
+  quota checks read them first and still backfill from legacy `v2_forward`
+  traffic for compatibility.
+- `flowResetTime` is no longer storage-only (`ForwardFlowResetWorker`,
+  `internal/service/forward_flow_reset_worker.go`):
+  - it runs one catch-up scan on startup;
+  - it then schedules daily `00:00:05` local-time scans;
+  - month-end overflow days are handled like upstream `ResetFlowAsync`;
+  - both user flow and user-tunnel flow are reset;
+  - expired-user active forwards are paused during the reset sweep;
+  - expired user-tunnel grants have active forwards paused and the grant is
+    then disabled.
+- Expired login is rejected through `auth_service` using `expired_at`, so an
+  expired user is not reported as banned.
+- Legacy admin mirrors `/api/v2/admin/forward/*` and
+  `/api/v2/admin/tunnel/user/tunnel` remain for the existing admin UI.
+
+Remaining Flux gaps:
+
+- native runtime writes into `ForwardUserTunnel.inFlow/outFlow` (today the
+  relation counters are still backfilled from `v2_forward`)
+- exact `user.tsx` / `limit.tsx` visual and interaction parity
+- runtime-side propagation or enforcement of speed-limit rules beyond
+  resource/API/UI selection
+- exact user disable-state parity with Flux `ResetFlowAsync` / `FlowController`
+
+Prioritize the remaining gaps in this order:
+
+1. Replace compat backfill with native relation counters.
+2. Reconcile runtime speed-limit propagation and deeper forward runtime
+   semantics (create/update/delete/pause/resume side effects, diagnose node
+   paths, quota/expiry-driven runtime pauses).
+3. Close the remaining user disable-state parity gap versus Flux.
+4. Finish exact `user.tsx` / `limit.tsx` layout parity.
+
 ## Local Dual-runtime Extension Rules
 
 These items are local extensions added to support dual internal runtime paths while the main Flux clone work continues:
@@ -299,7 +349,7 @@ A `flux-panel` clone task is only done when all relevant items are true:
 Minimum validation:
 
 ```bash
-$env:GOWORK='off'; go test ./internal/router ./internal/handler ./internal/service
+GOWORK=off go test ./internal/router ./internal/handler ./internal/service
 cd web && npm run build
 ```
 
@@ -313,20 +363,17 @@ If the task touches forward/tunnel behavior, also verify:
 
 ## Recommended Next Clone Order
 
-1. `UserTunnel` management and authorization UI
-2. forward runtime semantics
-3. tunnel / forward diagnose runtime semantics
-4. quota / expire / reset-flow linkage
+Follow the priority list in [Clone Status (2026-04-06)](#clone-status-2026-04-06).
 
 ## Documentation Maintenance
 
 Every time a `flux-panel` module is cloned or significantly adjusted, update:
 
-- `AGENTS.md`
-- `docs/guide/flux-panel-clone.md`
+- `docs/guide/flux-panel-clone.md` (this file, including the current status, gap list, and next clone order)
 - `docs/guide/flux-forward-contract.md` when forward/tunnel contracts change
 - `docs/guide/api-reference.md` when exposed compat endpoints or DTOs change
-- `docs/FEATURE_ROADMAP.md` when clone status or remaining gaps change
-- `docs/guide/flux-panel-workstream.md` when the next recommended clone order changes
+- `docs/features.md` when clone status or remaining gaps change the feature register
+- `docs/control-boundary.md` when user-facing scope or onboarding entry points change
+- `AGENTS.md` only when an enforceable clone rule changes
 
 If the change is partial, update the completion status and gap list anyway.

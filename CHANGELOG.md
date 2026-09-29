@@ -43,6 +43,22 @@
   frontend, backend, packages, or agent (23 in `en`, 30 in `zh-CN`).
 - Stripped UTF-8 byte order marks from nine frontend source files.
 
+- Removed obsolete and personal repository files: the Windows-era `.claude/`
+  directory (personal settings, memory, and `v2board.exe` build commands),
+  `.superpowers/`, the agent plans/specs under `docs/superpowers/`, the
+  2026-04 agent work plans (`docs/guide/forward-runtime-work-plan.md`,
+  `docs/guide/flux-panel-workstream.md`), the retired 3.1-to-4.0 planning docs
+  (`docs/FEATURE_ROADMAP.md`, `docs/architecture/upgrade-program.md`,
+  `docs/architecture/plugin-platform-roadmap.md`), stale V2bX-era and one-off
+  docs (`docs/V2BX_LOCAL_NODE_SETUP.md`, `docs/ANSIBLE_INTEGRATION_GUIDE.md`,
+  `docs/arco-design-vue-setup.md`, `docs/guide/test-release-v2.0.2-test.1.md`,
+  `docs/audit/admin-workbench-verification-2026-07-18.md`,
+  `docs/coverage/grpc-coverage.html`), the personal-domain Nginx configs in
+  `config/deploy/nginx/`, the unused `config/deploy/gost/` bundle, and the
+  V2bX-era `scripts/check-health.sh` and `scripts/setup.sh` (which carried a
+  hard-coded token). `docs/FEATURE_ROADMAP.md` is no longer accepted as
+  documentation evidence by `config/scripts/check_docs_updated.sh`.
+
 ### Changed
 
 - Made the `go_dev` CI pipeline green again. Go moves to `1.26.8` (go.mod
@@ -57,6 +73,29 @@
   code change. The root pipeline drops the nonexistent `production` branch
   trigger, runs on every pull request again (its jobs become the required
   checks for `go_dev`), and cancels superseded pull-request runs.
+
+- Rewrote the repository entry points: `AGENTS.md` is now a concise English
+  rules file for the v4 kernel and package bridge, branch/PR workflow and
+  required checks, build/test commands, the documentation sync gate, version
+  bump surfaces, release policy, Flux-clone and runtime guardrails, the
+  Control Center, and credential rules. The dated Flux clone status moved into
+  `docs/guide/flux-panel-clone.md`. `ROADMAP.md` now points at the maintained
+  roadmap documents, and `TODO.md` keeps only open items plus a new
+  "Implemented but not wired" list and deployment hygiene gaps.
+- `docs/reference/repository-layout.md` is the single repository layout
+  document (the README copy was removed); `docs/intro/README.md` gained a
+  "v4 architecture at a glance" section; `docs/README.md` and
+  `docs/guide/README.md` index every current guide; docs no longer link to
+  gitignored local files, deleted docs, `config/examples/`, or Windows paths.
+- `.github/BRANCH_PROTECTION.md` documents the `go_dev` ruleset, and
+  `.github/CODEOWNERS` is a single valid UTF-8 default rule.
+- Repaired GBK-mojibake comments in `Makefile`, `config/config.prod.yaml`, and
+  `docker-compose.prod.yml` (which also lost its UTF-8 BOM); the repaired
+  `make help` text no longer has unterminated quotes. No configuration values
+  changed.
+- `.gitignore` now ignores agent-local state (`.claude/settings.local.json`,
+  `.claude/projects/`, `.superpowers/`).
+
 - Imported the Control Center into `control-center/` as a single snapshot of the
   archived `AnixOps/Anixops-control-center` repository (`master` merged with
   `production`, without committed release binaries or assistant notes). It stays

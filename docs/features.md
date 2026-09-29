@@ -4,8 +4,8 @@ Date: 2026-09-28
 
 This document is the current feature status index for `anix-control`.
 Use it together with `TODO.md`, `CHANGELOG.md`, and `docs/audit/test-gap.md`.
-`docs/FEATURE_ROADMAP.md` contains older planning notes and design material; when the
-two documents disagree, this file is the status source of truth.
+When any other planning note disagrees with this file, this file is the status
+source of truth.
 
 ## Status Legend
 
@@ -41,7 +41,7 @@ two documents disagree, this file is the status source of truth.
 | Platform | `gost-mesh` official plugin runtime | Preview/Partial | Real aggregate `tunnels[]` Agent entrypoint; signed checksum-pinned GOST v3.2.6 auxiliary runtime; QUIC/WSS mutual TLS; source-policy routing and source-bound health probes; bounded restart; crash-safe ownership journal and cleanup; privileged namespace TCP/UDP, wrong-SNI, untrusted-client, health, transport, and cleanup acceptance; deterministic release signing/upload wiring | TUIC is not supported by v1. Complete Control Secret ID to Agent private-file materialization/renewal/deletion/audit, MTU and sustained loss/reconnect tests, composed NAT failure rollback, accounting, multi-node rollback, and sustained canary. Keep production execution disabled until then. |
 | Platform | Package-driven pluggable WebUI | Preview/Partial | Signed WebUI metadata, actor-scoped verified catalog/assets, immutable same-origin bundle storage, browser SHA-256 verification, active enabled version binding with `private, no-store` revocation, dynamic namespaced menu/route registration, backend/frontend `plugin_api` permission enforcement, unauthorized-route rejection before bundle fetch, per-plugin invalid-extension quarantine, auth/profile permission metadata, happy-dom lifecycle tests, local-module identity checks, installation configuration API, fixture E2E, and a CI live-Control gate that bootstraps a signed `machine-telemetry` package through real registration/upload/enable/disable, catalog, asset, menu, route behavior, and the merged native `/admin/plugins` view | Retain production-like staging/canary evidence for grant/revoke, update, rollback, and malformed-extension isolation; keep package runtime feature-gated until canary approval exists. |
 | Platform | Compatible Control Center plugin lifecycle | Preview/Partial | Canonical `anix-control` admin plugin page plus the compatible Control Center `/plugins` view in `control-center/web` (imported from the archived `Anixops-control-center` repository), authenticated `/api/v2` Control session, direct `/api/v3` client, official catalog/release/install discovery with unverified entries blocked from install, Control and Agent target state, desired/observed version, health and failure summary, revisioned JSON configuration, enable/disable/update/rollback controls, stable retry idempotency keys for Control actions, operation-chain status with target/version history, recent operation history, operation cancellation, passing Center frontend tests (23 files / 220 tests after the import dropped mock-only suites for removed AI/Web3/observability pages), production build, Chromium login/MFA/lifecycle and 401/403/409/501 error E2E, and local full-process signed Agent install/update/enable rehearsal | Add live Control/Agent staging evidence and signed package rollout records before RC acceptance; signed WebUI modules remain rendered by Control's own frontend. |
-| Platform | Plugin-only business/runtime ownership | Planned | Version-gated roadmap in `docs/architecture/plugin-platform-roadmap.md` | Migrate domains through 3.2-3.5; remove coupled mode only in 4.0. |
+| Platform | Plugin-only business/runtime ownership | Planned | Stage history in `docs/architecture/release-line-status.md`; every `/api/v2` business route is package-gated, but package hosts still bridge into the in-kernel legacy handlers | Migrate domains through 3.2-3.5; remove coupled mode only in 4.0. |
 | Auth | Login and registration | Implemented | `POST /api/v2/login`, `POST /api/v2/register`, `web/src/views/Login.vue` | Keep frontend compatible with legacy and enveloped payloads. |
 | Auth | Login and registration rate limiting | Implemented | `AuthHandler`, `auth_rate_limit` service | Tune limits from production signals. |
 | Auth | Registration policy and invite requirement | Implemented | Config-driven registration policy | Add operator docs for production policy choices if needed. |
@@ -154,5 +154,5 @@ Do not normalize these responses blindly, because external clients depend on the
 - `docs/forwarding/api.md`: forwarding API contract.
 - `docs/forwarding/security.md`: forwarding security constraints.
 - `docs/guide/wireguard-relay.md`: P0 WireGuard dual-node relay plan.
-- `docs/guide/flux-panel-workstream.md`: Flux clone status and parity requirements.
+- `docs/guide/flux-panel-clone.md`: Flux clone status, remaining gaps, and parity requirements.
 - `docs/DEPLOYMENT.md`: deployment command and prerequisites.

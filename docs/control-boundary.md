@@ -3,7 +3,10 @@
 `anix-control` is the public control-plane repository in the AnixOps stack.
 
 It owns:
-- public web UI and panel API
+- public web UI and panel API (`/api/v2`, routed through the signed-package gateway)
+- the v4 plugin kernel: signed package catalog, releases, installations,
+  operations, and deployments under `/api/v3`, plus the package host processes
+  that serve `packages/*`
 - user, plan, order, ticket, knowledge, and subscription data
 - public proxy-node inventory and UniProxy-compatible APIs
 - Flux-compatible `/admin/forward*` control pages
@@ -11,15 +14,15 @@ It owns:
 It does not own the private execution plane.
 
 Boundary:
-- `anix-control`: public control plane, persistence, and admin UI
+- `anix-control`: public control plane, plugin kernel, persistence, and admin UI
 - `control-center/` (in this repository): Control Center clients (CLI/TUI, Vue web, Flutter) and their Cloudflare Workers API; a separate Go module that talks to Control over its public `/api/v2` and `/api/v3` APIs
-- `anix-agent`: proxy-node and forwarding runtime
+- `anix-agent` (separate repository `AnixOps/anix-agent`): proxy-node, forwarding, and package runtime on nodes; Control depends only on its `github.com/AnixOps/anix-agent/sdk` module and talks to it over gRPC
 - `NodeX` and legacy clean-agent paths: compatibility runtimes being consolidated into AnixOps Agent
 
 ## Start Here
 
 - [`docs/README.md`](README.md): top-level docs entrypoint
-- [`docs/intro/README.md`](intro/README.md): repository role and deployment boundary
+- [`docs/intro/README.md`](intro/README.md): repository role, v4 architecture, and deployment boundary
 - [`docs/reference/README.md`](reference/README.md): startup, config, repository layout, and runtime references
 - [`docs/guide/README.md`](guide/README.md): Flux-clone and implementation deep dives
 
@@ -27,16 +30,17 @@ Boundary:
 
 Before you try to start the panel, keep these rules straight:
 
-- the backend always loads [`config/config.yaml`](../config/config.yaml) through `-config`
-- local `go run` does not auto-load [`.env`](../.env)
+- the backend always loads `config/config.yaml` through `-config` (template: [`config/config.yaml.example`](../config/config.yaml.example))
+- local `go run` does not auto-load `.env` (template: [`.env.example`](../.env.example))
 - `config/config.yaml.forward_runtime` is the canonical runtime entry
 - `InitForwardRuntimeSystemConfig` normalizes the YAML contents and writes them into `v2_system_config`
-- current app bootstrap still expects `jwt.secret`, `app.api_token`, `admin.*`, and database/cache values in [`config/config.yaml`](../config/config.yaml)
+- current app bootstrap still expects `jwt.secret`, `app.api_token`, `admin.*`, and database/cache values in `config/config.yaml`
 
-If you use [`install.sh`](../install.sh) or [`panel_install.sh`](../panel_install.sh), those scripts generate [`config/config.yaml`](../config/config.yaml) for you. If you skip the installer, fill it manually.
+If you use [`scripts/install.sh`](../scripts/install.sh) (release install), [`install.sh`](../install.sh), or [`panel_install.sh`](../panel_install.sh), those scripts generate `config/config.yaml` for you. If you skip the installer, copy the template and fill it manually.
 
 ## Fixed Entry Points
 
+- Release install: [`docs/guide/release-installation.md`](guide/release-installation.md)
 - Docker: [`docs/reference/quickstart.md`](reference/quickstart.md)
 - Local dev: [`docs/reference/startup-config.md`](reference/startup-config.md)
 - Runtime config migration: [`docs/reference/forward-runtime-migration.md`](reference/forward-runtime-migration.md)
@@ -56,18 +60,32 @@ Current verified deployment truth:
 
 ## Runtime Modes
 
+`config/config.yaml.forward_runtime.backend` selects the forward execution
+plane; startup persists it as the system config key `forward.runtime_backend`.
+
 - `NodeX mode`
-  - `forward_runtime.backend=gost` via `config/config.yaml.forward_runtime`
+  - `forward_runtime.backend=gost`
   - requires `forward_runtime.nodex.base_url` and `forward_runtime.nodex.token`
   - stateful private runtime handoff to NodeX
-- `iptables_ansible mode`
-  - `forward_runtime.backend=iptables_ansible` via `config/config.yaml.forward_runtime`
-  - stateless ansible/iptables execution on forward nodes
+- local Ansible mode (recommended: `nftables_ansible`)
+  - `forward_runtime.backend=nftables_ansible`, configured under `forward_runtime.nftables_ansible`
+  - stateless ansible/nftables execution on forward nodes
   - does not use proxy-node ingress semantics
+  - `iptables_ansible` is a legacy value; the runtime normalizes it to `nftables_ansible`
+- `clean_agent`
+  - clean-room pull agent mode; see [`forward-clean-room/spec.md`](forward-clean-room/spec.md)
 
 Keep the resource split explicit:
 - `/admin/nodes` manages proxy nodes
 - `/admin/forward/nodes` manages forward execution nodes
+
+## Flux-panel
+
+The `/admin/forward*` pages clone the upstream
+[`flux-panel`](https://github.com/bqlpfy/flux-panel) forward/tunnel/user-tunnel
+surface. Clone status and remaining gaps live in
+[`guide/flux-panel-clone.md`](guide/flux-panel-clone.md); the endpoint and DTO
+contract lives in [`guide/flux-forward-contract.md`](guide/flux-forward-contract.md).
 
 ## Repository Index
 

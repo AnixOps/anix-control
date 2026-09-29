@@ -108,7 +108,7 @@ MFA enforcement note:
 Root-only cleanup for old local build outputs:
 
 ```bash
-cd /home/dev/anixops/v2board_AnixOps
+cd /path/to/anix-control
 bash config/deploy/clean_local_build_artifacts.sh --dry-run
 bash config/deploy/clean_local_build_artifacts.sh
 # Optional: remove ignored local deploy archive leftovers after reviewing dry-run.

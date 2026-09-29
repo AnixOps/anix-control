@@ -1,57 +1,69 @@
-# 分支保护规则配置
-#
-# 此文件描述了 production 分支的保护规则
-# 需要在 GitHub 仓库设置中手动配置
-#
-# ==========================================
-# GitHub 仓库设置路径:
-# Settings -> Branches -> Add branch protection rule
-# ==========================================
+# Branch Protection: `go_dev` Ruleset
 
-# Production 分支保护规则:
+`go_dev` is the only long-lived branch of `AnixOps/anix-control` and the
+default branch. It is protected by a repository ruleset (Settings -> Rules ->
+Rulesets), not by a classic branch protection rule. This file documents the
+intended configuration so that it can be reviewed and restored; the ruleset in
+GitHub is the enforcing copy.
 
-## 1. 基本保护
-- [x] Require a pull request before merging
-  - Require approvals: 1
-  - Dismiss stale pull request approvals when new commits are pushed
-  - Require review from Code Owners
+## Target
 
-## 2. 状态检查
-- [x] Require status checks to pass before merging
-  - Status checks that are required:
-    - Test & Coverage
-    - gRPC Core Tests
-    - Build
+- Enforcement: active
+- Target branches: `go_dev` (default branch)
+- There are no other protected long-lived branches. Do not recreate
+  `production` or `master`.
 
-## 3. 分支限制
-- [x] Restrict who can push to matching branches
-  - Only allow specified users/teams
+## Rules
 
-## 4. 代码所有者
-# 创建 .github/CODEOWNERS 文件
+| Rule | Setting |
+|------|---------|
+| Require a pull request before merging | on |
+| Required approvals | 0 |
+| Dismiss stale approvals / require Code Owner review | off (`CODEOWNERS` only requests review) |
+| Allowed merge method | squash |
+| Require status checks to pass | on |
+| Block force pushes | on |
+| Restrict deletions | on |
 
-## 5. 签名要求
-- [x] Require signed commits
+## Required Status Checks
 
-## 6. 线性历史
-- [x] Require linear history
+These are job names from `.github/workflows/ci.yml` and must match exactly:
 
-## 7. 强制推送
-- [x] Do not allow force pushes
+- `Go Quality Gates`
+- `Go Lint Gate`
+- `Backend Tests`
+- `Frontend Build`
+- `Documentation Sync Check`
+- `Release Workflow Policy Check`
 
-## 8. 删除保护
-- [x] Do not allow deletions
+Deliberately not required:
 
-# ==========================================
-# 使用 gh CLI 配置分支保护 (需要管理员权限):
-# ==========================================
+- `Go Security Scans`: `govulncheck` reads a vulnerability database that
+  changes daily, so a new advisory could block unrelated PRs. It still runs on
+  every push and PR and must be triaged when it fails.
+- Control Center checks (`.github/workflows/control-center.yml`,
+  `control-center-workers.yml`): they are path-filtered to `control-center/**`
+  and do not run on every PR, so requiring them would leave unrelated PRs
+  pending forever.
+- The remaining `ci.yml` jobs (race detector, integration-style gates, package
+  release contracts, Docker smoke, and so on) run on every PR and should be
+  green before merge, but are not merge-blocking.
 
-# gh api repos/:owner/:repo/branches/production/protection \
-#   --method PUT \
-#   --field required_status_checks='{"strict":true,"contexts":["Test & Coverage","gRPC Core Tests","Build"]}' \
-#   --field enforce_admins=true \
-#   --field required_pull_request_reviews='{"dismiss_stale_reviews":true,"require_code_owner_reviews":true,"required_approving_review_count":1}' \
-#   --field restrictions=null \
-#   --field required_linear_history=true \
-#   --field allow_force_pushes=false \
-#   --field allow_deletions=false
+If a required job is renamed in `ci.yml`, update the ruleset and this file in
+the same PR.
+
+## Bypass
+
+- Repository administrators are on the bypass list with mode "pull requests
+  only": they may merge a PR whose checks are pending or failing, but they
+  cannot push directly to `go_dev`.
+- Nobody pushes directly to `go_dev`, including release preparation. Release
+  tags (`v*`, and `control-center-v*` for the Control Center) are created on
+  commits that already landed through a PR.
+
+## Contributor Workflow
+
+1. Branch from the latest `go_dev`.
+2. Open a PR against `go_dev`; include the documentation update required by
+   `config/scripts/check_docs_updated.sh` in the same PR.
+3. Wait for the required checks, then squash-merge.

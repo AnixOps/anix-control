@@ -39,16 +39,15 @@ Real attachment must be proven by runtime job success plus relay-side state.
    - confirm NodeX mode values and doctor/readiness
 2. Confirm NodeX health:
 
-```powershell
-Invoke-WebRequest http://127.0.0.1:18081/health | Select-Object -ExpandProperty Content
+```bash
+curl -fsS http://127.0.0.1:18081/health
 ```
 
 3. Confirm NodeX runtime status:
 
-```powershell
-Invoke-WebRequest http://127.0.0.1:18081/api/v2/internal/forward/runtime/status `
-  -Headers @{ Authorization = 'Bearer <FORWARD_API_TOKEN>' } |
-  Select-Object -ExpandProperty Content
+```bash
+curl -fsS http://127.0.0.1:18081/api/v2/internal/forward/runtime/status \
+  -H 'Authorization: Bearer <FORWARD_API_TOKEN>'
 ```
 
 4. Create or update one tunnel and one forward in the panel.
@@ -95,8 +94,8 @@ Recommended path in this section is `nftables_ansible`.
 
 1. Confirm the command exists:
 
-```powershell
-Get-Command ansible-playbook
+```bash
+command -v ansible-playbook
 ```
 
 2. Confirm the inventory path and playbooks exist.

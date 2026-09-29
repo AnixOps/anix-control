@@ -2,46 +2,46 @@
 .PHONY: pre-deploy deploy docker-build docker-run lint vet fmt bench grpc-gen swagger
 .PHONY: test-quick test-clean test-summary test-grpc test-cmd test-all test-coverage-all
 
-# 鐗堟湰淇℃伅
+# 版本信息
 VERSION := 4.0.0
 BUILD_TIME := $(shell date +%Y-%m-%d_%H:%M:%S)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.buildTime=$(BUILD_TIME) -X main.commit=$(GIT_COMMIT)
 RUN_CONFIG ?= config/config.dev.yaml
 
-# Go 娴嬭瘯鍙傛暟
+# Go 测试参数
 GO_TEST_FLAGS := -v -race -timeout 5m
 COVERAGE_FILE := coverage.out
 COVERAGE_HTML := coverage.html
 
-# 瑕嗙洊鐜囬槇鍊?
+# 覆盖率阈值
 MIN_COVERAGE := 80.0
 
 # ==========================================
-# 缂栬瘧鐩稿叧
+# 编译相关
 # ==========================================
 
-# 缂栬瘧 (鍖呭惈鍓嶇)
+# 编译 (包含前端)
 build: build-web build-server
 
-# 缂栬瘧鍓嶇
+# 编译前端
 build-web:
 	@echo "Building frontend..."
 	cd web && npm install && npm run build
 
-# 缂栬瘧鍚庣
+# 编译后端
 build-server:
 	@echo "Building server..."
 	mkdir -p build
 	GOWORK=off CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o build/anix-control ./cmd/server
 
-# 缂栬瘧 Linux 鐗堟湰
+# 编译 Linux 版本
 build-linux:
 	@echo "Building for Linux..."
 	mkdir -p build
 	GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o build/anix-control-linux ./cmd/server
 
-# 杩愯寮€鍙戞湇鍔″櫒
+# 运行开发服务器
 run: dev-config
 	GOWORK=off go run ./cmd/server -config $(RUN_CONFIG)
 
@@ -52,7 +52,7 @@ dev-config:
 	fi
 	@test -f "$(RUN_CONFIG)" || { echo "Run config not found: $(RUN_CONFIG)" >&2; exit 1; }
 
-# 娓呯悊
+# 清理
 clean:
 	rm -f anix-control anix-control-linux build/anix-control build/anix-control-linux $(COVERAGE_FILE) $(COVERAGE_HTML)
 	rm -rf coverage/
@@ -132,61 +132,61 @@ test-clean:
 	find . -name "*.test" -delete 2>/dev/null || true
 	@echo "Test cache cleaned."
 
-# 鍓嶇娴嬭瘯
+# 前端测试
 test-frontend:
 	@echo "Running frontend tests..."
 	cd web && npm run test
 
-# 杩愯鎵€鏈夋祴璇曞苟妫€鏌ヨ鐩栫巼
+# 运行所有测试并检查覆盖率
 test-coverage-all: test-coverage-check
-	@echo "鉁?All tests passed with sufficient coverage!"
+	@echo "✅ All tests passed with sufficient coverage!"
 
 # ==========================================
-# 浠ｇ爜璐ㄩ噺
+# 代码质量
 # ==========================================
 
-# 鏍煎紡鍖栦唬鐮?
+# 格式化代码
 fmt:
 	go fmt ./...
 
-# 浠ｇ爜妫€鏌?
+# 代码检查
 lint:
 	golangci-lint run
 
-# 妫€鏌ヤ唬鐮?
+# 检查代码
 vet:
 	@echo "Running go vet..."
 	go vet ./...
 
-# 鍩哄噯娴嬭瘯
+# 基准测试
 bench:
 	@echo "Running benchmarks..."
 	go test -bench=. -benchmem ./internal/...
 
 # ==========================================
-# 閮ㄧ讲鐩稿叧
+# 部署相关
 # ==========================================
 
-# 閮ㄧ讲鍓嶆祴璇?
+# 部署前测试
 pre-deploy:
 	@echo "Running pre-deployment tests..."
 	@./config/scripts/pre-deploy.sh
 
-# 閮ㄧ讲
+# 部署
 deploy:
 	@echo "Deploying..."
 	@./config/scripts/deploy.sh
 
 # ==========================================
-# Docker 鐩稿叧
+# Docker 相关
 # ==========================================
 
-# 鏋勫缓 Docker 闀滃儚
+# 构建 Docker 镜像
 docker-build:
 	@echo "Building Docker image..."
 	docker build -t anix-control:latest .
 
-# 杩愯 Docker 瀹瑰櫒
+# 运行 Docker 容器
 docker-run:
 	@echo "Running Docker container..."
 	docker run -d --name anix-control \
@@ -196,80 +196,80 @@ docker-run:
 		-v $(PWD)/web/public:/app/web/public \
 		anix-control:latest
 
-# 鍋滄 Docker 瀹瑰櫒
+# 停止 Docker 容器
 docker-stop:
 	docker stop anix-control || true
 	docker rm anix-control || true
 
 # ==========================================
-# gRPC 鐩稿叧
+# gRPC 相关
 # ==========================================
 
-# 鐢熸垚 gRPC 浠ｇ爜
+# 生成 gRPC 代码
 grpc-gen:
 	@echo "Generating gRPC code..."
 	bash api/grpc/gen.sh
 
-# 鐢熸垚 Swagger 鏂囨。
+# 生成 Swagger 文档
 swagger:
 	@echo "Generating Swagger docs..."
 	$(eval SWAG := $(shell go env GOPATH)/bin/swag)
 	@command -v $(SWAG) >/dev/null 2>&1 || go install github.com/swaggo/swag/cmd/swag@latest
 	$(SWAG) init -g cmd/server/main.go -o docs --parseInternal --exclude control-center
 
-# 鏌ョ湅 Swagger 鏂囨。
+# 查看 Swagger 文档
 swagger-serve:
 	@echo "Open http://localhost:8080/swagger/index.html after starting the server"
 
 # ==========================================
-# 渚濊禆绠＄悊
+# 依赖管理
 # ==========================================
 
-# 瀹夎渚濊禆
+# 安装依赖
 deps:
 	go mod tidy
 	go mod download
 
-# 瀹夎娴嬭瘯渚濊禆
+# 安装测试依赖
 install-deps:
 	@echo "Installing test dependencies..."
 	go install github.com/stretchr/testify@latest
 	cd web && npm install
 
 # ==========================================
-# 甯姪
+# 帮助
 # ==========================================
 
 help:
-	@echo "AnixOps Control Makefile 甯姪"
+	@echo "AnixOps Control Makefile 帮助"
 	@echo ""
-	@echo "缂栬瘧鍛戒护:"
-	@echo "  make build          - 缂栬瘧鍓嶅悗绔?
-	@echo "  make build-server   - 浠呯紪璇戝悗绔?
-	@echo "  make build-web      - 浠呯紪璇戝墠绔?
-	@echo "  make build-linux    - 缂栬瘧 Linux 鐗堟湰"
-	@echo "  make run            - 杩愯寮€鍙戞湇鍔″櫒"
+	@echo "编译命令:"
+	@echo "  make build          - 编译前后端"
+	@echo "  make build-server   - 仅编译后端"
+	@echo "  make build-web      - 仅编译前端"
+	@echo "  make build-linux    - 编译 Linux 版本"
+	@echo "  make run            - 运行开发服务器"
 	@echo ""
-	@echo "娴嬭瘯鍛戒护:"
-	@echo "  make test           - 杩愯鍗曞厓娴嬭瘯"
-	@echo "  make test-grpc      - 杩愯 gRPC 娴嬭瘯"
-	@echo "  make test-coverage  - 杩愯瑕嗙洊鐜囨祴璇?
-	@echo "  make test-coverage-check - 妫€鏌ヨ鐩栫巼闃堝€?
-	@echo "  make test-all       - 杩愯鎵€鏈夋祴璇曞苟妫€鏌ヨ鐩栫巼"
+	@echo "测试命令:"
+	@echo "  make test           - 运行单元测试"
+	@echo "  make test-grpc      - 运行 gRPC 测试"
+	@echo "  make test-coverage  - 运行覆盖率测试"
+	@echo "  make test-coverage-check - 检查覆盖率阈值"
+	@echo "  make test-all       - 运行所有测试并检查覆盖率"
 	@echo ""
-	@echo "閮ㄧ讲鍛戒护:"
-	@echo "  make pre-deploy     - 閮ㄧ讲鍓嶆祴璇?
-	@echo "  make deploy         - 閮ㄧ讲搴旂敤"
+	@echo "部署命令:"
+	@echo "  make pre-deploy     - 部署前测试"
+	@echo "  make deploy         - 部署应用"
 	@echo ""
-	@echo "Docker 鍛戒护:"
-	@echo "  make docker-build   - 鏋勫缓 Docker 闀滃儚"
-	@echo "  make docker-run     - 杩愯 Docker 瀹瑰櫒"
-	@echo "  make docker-stop    - 鍋滄 Docker 瀹瑰櫒"
+	@echo "Docker 命令:"
+	@echo "  make docker-build   - 构建 Docker 镜像"
+	@echo "  make docker-run     - 运行 Docker 容器"
+	@echo "  make docker-stop    - 停止 Docker 容器"
 	@echo ""
-	@echo "鍏朵粬鍛戒护:"
-	@echo "  make fmt            - 鏍煎紡鍖栦唬鐮?
-	@echo "  make lint           - 浠ｇ爜妫€鏌?
+	@echo "其他命令:"
+	@echo "  make fmt            - 格式化代码"
+	@echo "  make lint           - 代码检查"
 	@echo "  make vet            - go vet"
-	@echo "  make swagger        - 鐢熸垚 Swagger 鏂囨。"
-	@echo "  make grpc-gen       - 鐢熸垚 gRPC 浠ｇ爜"
-	@echo "  make clean          - 娓呯悊缂栬瘧浜х墿"
+	@echo "  make swagger        - 生成 Swagger 文档"
+	@echo "  make grpc-gen       - 生成 gRPC 代码"
+	@echo "  make clean          - 清理编译产物"

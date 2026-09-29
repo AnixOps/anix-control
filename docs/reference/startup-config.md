@@ -6,22 +6,22 @@ This page describes the exact startup flow after the unified runtime config upda
 
 | Location | Purpose |
 |------|------|
-| [`config/config.yaml`](../../config/config.yaml) | canonical startup config for app settings and `forward_runtime` |
-| [`.env`](../../.env) | optional Docker or installer env file |
+| `config/config.yaml` (template: [`config/config.yaml.example`](../../config/config.yaml.example)) | canonical startup config for app settings and `forward_runtime` |
+| `.env` (template: [`.env.example`](../../.env.example)) | optional Docker or installer env file |
 | `v2_system_config` | persisted merged runtime snapshot used by runtime services |
 
 Important:
 
-- backend startup always begins from [`config/config.yaml`](../../config/config.yaml)
-- local `go run` does not auto-load [`.env`](../../.env)
+- backend startup always begins from `config/config.yaml`
+- local `go run` does not auto-load `.env`
 - runtime services read the forward runtime values that were written into `v2_system_config`
 
 ## 2. Minimal Local Config
 
 Copy the template first:
 
-```powershell
-Copy-Item config/config.yaml.example config/config.yaml
+```bash
+cp config/config.yaml.example config/config.yaml
 ```
 
 Minimum sqlite example:
@@ -119,15 +119,15 @@ proxy and firewall first.
 
 Backend:
 
-```powershell
-go run .\cmd\server\main.go -config .\config\config.yaml
+```bash
+GOWORK=off go run ./cmd/server -config config/config.yaml
 ```
 
 Frontend:
 
-```powershell
-Set-Location .\web
-npm install
+```bash
+cd web
+npm ci
 npm run dev
 ```
 
@@ -141,9 +141,9 @@ Default local URLs:
 
 Prepare files:
 
-```powershell
-Copy-Item .env.example .env
-Copy-Item config/config.yaml.example config/config.yaml
+```bash
+cp .env.example .env
+cp config/config.yaml.example config/config.yaml
 ```
 
 Then:
@@ -152,7 +152,7 @@ Then:
 2. optionally customize `.env` for deployment-specific values that are unrelated to runtime selection
 3. start containers
 
-```powershell
+```bash
 docker compose up -d
 docker compose logs -f anix-control
 ```

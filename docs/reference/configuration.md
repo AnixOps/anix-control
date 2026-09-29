@@ -6,18 +6,18 @@ This page defines the unified configuration scheme for `anix-control`.
 
 | Location | Role | Notes |
 |------|------|------|
- | [`config/config.yaml`](../../config/config.yaml) | canonical app and forward runtime config | always read on backend startup |
+ | `config/config.yaml` (template: [`config/config.yaml.example`](../../config/config.yaml.example)) | canonical app and forward runtime config | always read on backend startup |
  | `v2_system_config` | persisted runtime snapshot | written on startup from the YAML config and consumed by runtime services and `/admin/system` |
 
 Important:
 
-- local `go run` does not auto-load [`.env`](../../.env)
-- `jwt.secret`, `app.api_token`, `admin.*`, database, cache, and frontend settings still come from [`config/config.yaml`](../../config/config.yaml)
+- local `go run` does not auto-load `.env` (template: [`.env.example`](../../.env.example))
+- `jwt.secret`, `app.api_token`, `admin.*`, database, cache, and frontend settings still come from `config/config.yaml`
 - the runtime selection resides in `config/config.yaml.forward_runtime`; startup writes exactly those values into `v2_system_config`
 
 ## Unified Forward Runtime Layout
 
-Put the runtime selection in [`config/config.yaml`](../../config/config.yaml):
+Put the runtime selection in `config/config.yaml`:
 
 ```yaml
 forward_runtime:

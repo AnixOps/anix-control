@@ -1,8 +1,8 @@
-﻿# AnixOps Control - 鐢熶骇鐜閮ㄧ讲
-# 浣跨敤 PostgreSQL + Redis
+# AnixOps Control - 生产环境部署
+# 使用 PostgreSQL + Redis
 
 services:
-  # ========== API 鏈嶅姟 ==========
+  # ========== API 服务 ==========
   api:
     build:
       context: .
@@ -54,7 +54,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ========== PostgreSQL 鏁版嵁搴?==========
+  # ========== PostgreSQL 数据库 ==========
   db:
     image: postgres:16-alpine
     container_name: anix-control-db
@@ -81,7 +81,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ========== Redis 缂撳瓨 ==========
+  # ========== Redis 缓存 ==========
   redis:
     image: redis:7-alpine
     container_name: anix-control-redis
@@ -111,7 +111,7 @@ services:
         max-size: "5m"
         max-file: "2"
 
-  # ========== Nginx 鍙嶅悜浠ｇ悊 ==========
+  # ========== Nginx 反向代理 ==========
   nginx:
     image: nginx:alpine
     container_name: anix-control-nginx
@@ -141,7 +141,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ========== Prometheus 鐩戞帶 (鍙€? ==========
+  # ========== Prometheus 监控 (可选) ==========
   prometheus:
     image: prom/prometheus:latest
     container_name: anix-control-prometheus
@@ -160,7 +160,7 @@ services:
     networks:
       - anix-control-network
 
-  # ========== Grafana 浠〃鐩?(鍙€? ==========
+  # ========== Grafana 仪表盘 (可选) ==========
   grafana:
     image: grafana/grafana:latest
     container_name: anix-control-grafana

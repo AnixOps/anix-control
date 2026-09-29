@@ -106,6 +106,9 @@ release metadata, and rollback documentation agree. Production promotion
 requires the applicable canary and explicit operator authorization. A new
 candidate cannot borrow completion from a historical tag or later worktree.
 
-For detailed architecture and phase-specific evidence, see
-[`plugin-platform-roadmap.md`](plugin-platform-roadmap.md) and
-[`upgrade-program.md`](upgrade-program.md).
+For the kernel/package contract, see
+[`plugin-kernel-contract.md`](plugin-kernel-contract.md). The current release
+work is tracked in [`../ROADMAP-4.0.x-RC.md`](../ROADMAP-4.0.x-RC.md) and its
+evidence in [`../RC-EVIDENCE-4.0.x.md`](../RC-EVIDENCE-4.0.x.md). Earlier
+3.1-to-4.0 planning documents were retired; their history remains in Git and
+`CHANGELOG.md`.
