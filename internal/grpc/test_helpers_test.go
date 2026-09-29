@@ -1,6 +1,8 @@
 package grpc
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net"
 	"testing"
@@ -75,4 +77,36 @@ func stopGRPCServerForTest(t testing.TB, server *grpc.Server, errCh <-chan error
 	if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 		require.NoError(t, err)
 	}
+}
+
+// connectionForTest returns a registered node connection for assertions.
+func (m *NodeConnectionManager) connectionForTest(nodeID uint32) (*NodeConnection, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	conn, ok := m.connections[nodeID]
+	return conn, ok
+}
+
+// activeNodesForTest returns the IDs of all registered node connections.
+func (m *NodeConnectionManager) activeNodesForTest() []uint32 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	nodes := make([]uint32, 0, len(m.connections))
+	for id := range m.connections {
+		nodes = append(nodes, id)
+	}
+	return nodes
+}
+
+// configVersionForTest returns the last config version recorded for a node.
+func (m *NodeConnectionManager) configVersionForTest(nodeID uint32) int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.configVer[nodeID]
+}
+
+// apiKeyHashForTest mirrors the stored node API key hash (hex SHA-256).
+func apiKeyHashForTest(apiKey string) string {
+	sum := sha256.Sum256([]byte(apiKey))
+	return hex.EncodeToString(sum[:])
 }

@@ -147,22 +147,6 @@ func (s *SpeedLimitService) Delete(id uint) error {
 	return s.db.Delete(&model.SpeedLimit{}, id).Error
 }
 
-func (s *SpeedLimitService) GetByIDs(ids []uint) (map[uint]model.SpeedLimit, error) {
-	result := make(map[uint]model.SpeedLimit)
-	if len(ids) == 0 {
-		return result, nil
-	}
-
-	var records []model.SpeedLimit
-	if err := s.db.Where("id IN ?", ids).Find(&records).Error; err != nil {
-		return nil, err
-	}
-	for _, record := range records {
-		result[record.ID] = record
-	}
-	return result, nil
-}
-
 func (s *SpeedLimitService) validateTunnel(tunnelID uint, tunnelName string) (*model.ForwardTunnel, error) {
 	if tunnelID == 0 {
 		return nil, errors.New("tunnelId is required")

@@ -32,7 +32,6 @@ type forwardRuntimeExecContext struct {
 // 新增后端只需实现该接口并在 NewPanelForwardRuntimeService 注册，无需改动 Apply 主流程。
 // 同步后端 (gost) 在 run 内直接执行并回写终态；异步后端 (ansible/clean_agent) 入队 pending 后立即返回。
 type forwardRuntimeExecutor interface {
-	backend() string
 	nodeRole() forwardRuntimeNodeRole
 	validate(action string) error
 	run(ctx context.Context, ec forwardRuntimeExecContext) (*panelForwardRuntimeResult, error)
@@ -44,7 +43,6 @@ type gostForwardExecutor struct {
 	s *PanelForwardRuntimeService
 }
 
-func (e *gostForwardExecutor) backend() string                  { return model.ForwardRuntimeBackendGost }
 func (e *gostForwardExecutor) nodeRole() forwardRuntimeNodeRole { return forwardNodeRoleIngress }
 
 func (e *gostForwardExecutor) validate(action string) error {
@@ -140,9 +138,6 @@ type nftablesForwardExecutor struct {
 	s *PanelForwardRuntimeService
 }
 
-func (e *nftablesForwardExecutor) backend() string {
-	return model.ForwardRuntimeBackendNftablesAnsible
-}
 func (e *nftablesForwardExecutor) nodeRole() forwardRuntimeNodeRole { return forwardNodeRoleExecution }
 
 func (e *nftablesForwardExecutor) validate(action string) error {
@@ -159,9 +154,6 @@ type cleanAgentForwardExecutor struct {
 	s *PanelForwardRuntimeService
 }
 
-func (e *cleanAgentForwardExecutor) backend() string {
-	return model.ForwardRuntimeBackendCleanAgent
-}
 func (e *cleanAgentForwardExecutor) nodeRole() forwardRuntimeNodeRole {
 	return forwardNodeRoleExecution
 }

@@ -227,14 +227,6 @@ func (s *PaymentGatewayService) ValidateAmount(gateway *model.PaymentGateway, am
 	return nil
 }
 
-// UpdateStats 更新统计
-func (s *PaymentGatewayService) UpdateStats(gatewayID uint, amount float64) error {
-	return s.db.Model(&model.PaymentGateway{}).Where("id = ?", gatewayID).Updates(map[string]any{
-		"total_orders": gorm.Expr("total_orders + 1"),
-		"total_amount": gorm.Expr("total_amount + ?", amount),
-	}).Error
-}
-
 // ========== 支付记录管理 ==========
 
 // CreateRecord 创建支付记录
@@ -253,74 +245,6 @@ func (s *PaymentGatewayService) GetRecordByTradeNo(tradeNo string) (*model.Payme
 		return nil, err
 	}
 	return &record, nil
-}
-
-// GetRecordByGatewayTradeNo 根据第三方订单号获取记录
-func (s *PaymentGatewayService) GetRecordByGatewayTradeNo(gatewayTradeNo string) (*model.PaymentRecord, error) {
-	var record model.PaymentRecord
-	err := s.db.Where("gateway_trade_no = ?", gatewayTradeNo).First(&record).Error
-	if err != nil {
-		return nil, err
-	}
-	return &record, nil
-}
-
-// UpdateRecordStatus 更新支付状态
-func (s *PaymentGatewayService) UpdateRecordStatus(tradeNo string, status int, gatewayTradeNo string) error {
-	updates := map[string]any{
-		"status": status,
-	}
-	if gatewayTradeNo != "" {
-		updates["gateway_trade_no"] = gatewayTradeNo
-	}
-
-	switch status {
-	case model.PaymentStatusPaid:
-		updates["paid_at"] = time.Now()
-	case model.PaymentStatusCancelled:
-		updates["cancelled_at"] = time.Now()
-	case model.PaymentStatusRefunded:
-		updates["refunded_at"] = time.Now()
-	}
-
-	return s.db.Model(&model.PaymentRecord{}).Where("trade_no = ?", tradeNo).Updates(updates).Error
-}
-
-// MarkAsPaid 标记为已支付
-func (s *PaymentGatewayService) MarkAsPaid(tradeNo string, gatewayTradeNo string, notifyData string) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		// 更新支付记录
-		record, err := s.GetRecordByTradeNo(tradeNo)
-		if err != nil {
-			return err
-		}
-
-		if record.Status != model.PaymentStatusPending {
-			return fmt.Errorf("payment already processed")
-		}
-
-		now := time.Now()
-		updates := map[string]any{
-			"status":           model.PaymentStatusPaid,
-			"gateway_trade_no": gatewayTradeNo,
-			"notify_data":      notifyData,
-			"paid_at":          now,
-		}
-
-		if err := tx.Model(record).Updates(updates).Error; err != nil {
-			return err
-		}
-
-		// 更新网关统计
-		if err := tx.Model(&model.PaymentGateway{}).Where("id = ?", record.GatewayID).Updates(map[string]any{
-			"total_orders": gorm.Expr("total_orders + 1"),
-			"total_amount": gorm.Expr("total_amount + ?", record.ActualAmount),
-		}).Error; err != nil {
-			return err
-		}
-
-		return nil
-	})
 }
 
 // MarkOrderPaid 标记支付并更新订单状态 (事务)

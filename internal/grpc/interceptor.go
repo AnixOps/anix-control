@@ -22,8 +22,7 @@ type NodeConnection struct {
 	NodeID     uint32
 	LastSeen   time.Time
 	RemoteAddr string
-	Connection any           // 可以是具体的流对象
-	configChan chan struct{} // buffered channel for config push signals
+	Connection any // 可以是具体的流对象
 }
 
 // NodeConnectionManager 节点连接管理器
@@ -49,7 +48,6 @@ func (m *NodeConnectionManager) Register(nodeID uint32, addr string) {
 		NodeID:     nodeID,
 		LastSeen:   time.Now(),
 		RemoteAddr: addr,
-		configChan: make(chan struct{}, 1),
 	}
 }
 
@@ -57,9 +55,6 @@ func (m *NodeConnectionManager) Register(nodeID uint32, addr string) {
 func (m *NodeConnectionManager) Unregister(nodeID uint32) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if conn, ok := m.connections[nodeID]; ok && conn.configChan != nil {
-		close(conn.configChan)
-	}
 	delete(m.connections, nodeID)
 }
 
@@ -70,39 +65,6 @@ func (m *NodeConnectionManager) UpdateLastSeen(nodeID uint32) {
 	if conn, ok := m.connections[nodeID]; ok {
 		conn.LastSeen = time.Now()
 	}
-}
-
-// GetConnection 获取节点连接
-func (m *NodeConnectionManager) GetConnection(nodeID uint32) (*NodeConnection, bool) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	conn, ok := m.connections[nodeID]
-	return conn, ok
-}
-
-// GetActiveNodes 获取所有活跃节点
-func (m *NodeConnectionManager) GetActiveNodes() []uint32 {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	nodes := make([]uint32, 0, len(m.connections))
-	for id := range m.connections {
-		nodes = append(nodes, id)
-	}
-	return nodes
-}
-
-// UpdateConfigVersion 更新配置版本
-func (m *NodeConnectionManager) UpdateConfigVersion(nodeID uint32, version int64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.configVer[nodeID] = version
-}
-
-// GetConfigVersion 获取配置版本
-func (m *NodeConnectionManager) GetConfigVersion(nodeID uint32) int64 {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.configVer[nodeID]
 }
 
 // IsConfigChanged 检查配置是否变更
@@ -116,30 +78,11 @@ func (m *NodeConnectionManager) IsConfigChanged(nodeID uint32, currentVer int64)
 	return currentVer > lastVer
 }
 
-// NotifyConfigChange 通知节点配置变更
-func (m *NodeConnectionManager) NotifyConfigChange(nodeID uint32) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	if conn, ok := m.connections[nodeID]; ok && conn.configChan != nil {
-		select {
-		case conn.configChan <- struct{}{}:
-		default:
-		}
-	}
-}
-
 // SetNodeConfigVersion 记录节点已推送的配置版本
 func (m *NodeConnectionManager) SetNodeConfigVersion(nodeID uint32, version int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.configVer[nodeID] = version
-}
-
-// GetNodeConfigVersion 获取节点已推送的配置版本
-func (m *NodeConnectionManager) GetNodeConfigVersion(nodeID uint32) int64 {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.configVer[nodeID]
 }
 
 // 全局连接管理器
@@ -379,22 +322,6 @@ func GetPeerAddr(ctx context.Context) string {
 	}
 	return p.Addr.String()
 }
-
-// GetNodeIDFromContext 从上下文获取节点ID（需要先在拦截器中设置）
-func GetNodeIDFromContext(ctx context.Context) uint32 {
-	nodeID, ok := ctx.Value(nodeIDKey{}).(uint32)
-	if !ok {
-		return 0
-	}
-	return nodeID
-}
-
-// SetNodeIDToContext 设置节点ID到上下文
-func SetNodeIDToContext(ctx context.Context, nodeID uint32) context.Context {
-	return context.WithValue(ctx, nodeIDKey{}, nodeID)
-}
-
-type nodeIDKey struct{}
 
 type userIDKey struct{}
 

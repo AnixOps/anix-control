@@ -64,36 +64,6 @@ func TestRegistry_GetFormatter(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestRegistry_GetParser(t *testing.T) {
-	r := NewRegistry()
-
-	// Test existing parsers
-	assert.NotNil(t, r.GetParser("base64"))
-	assert.NotNil(t, r.GetParser("clash"))
-	assert.NotNil(t, r.GetParser("sip008"))
-
-	// Test non-existent parser
-	assert.Nil(t, r.GetParser("nonexistent"))
-}
-
-func TestRegistry_AutoParse(t *testing.T) {
-	r := NewRegistry()
-
-	// Test valid V2Ray base64 content
-	v2rayContent := "dmVzczovL2V5SjJJam9pTVM0d0xqQWlMQ0p0YVdRaU9pSmtZWFJoYkd4bElpd2dkR1Z6ZERFaU9pSkRiMlJsYzNsekxYSmtZWFJoYkd4bElpd2lZV3hwWW1WbFlYSjVJbjA5"
-	nodes, err := r.AutoParse([]byte(v2rayContent))
-	// May fail due to invalid format, but should not panic
-	_ = nodes
-	_ = err
-}
-
-func TestRegistry_AutoParse_UnknownFormat(t *testing.T) {
-	r := NewRegistry()
-
-	_, err := r.AutoParse([]byte("invalid content that is not recognized"))
-	assert.Equal(t, ErrUnknownFormat, err)
-}
-
 func TestGetDefaultRegistry(t *testing.T) {
 	r1 := GetDefaultRegistry()
 	r2 := GetDefaultRegistry()
@@ -648,11 +618,6 @@ func TestGenerateSS2022UserKey(t *testing.T) {
 	// aes-128-gcm → 前 16 字节
 	key128 := generateSS2022UserKey(uuid, "2022-blake3-aes-128-gcm")
 	assert.Equal(t, "MTIzNDU2NzgtMTIzNC01Ng==", key128)
-}
-
-func TestBoolToTLS(t *testing.T) {
-	assert.Equal(t, "tls", boolToTLS(true))
-	assert.Equal(t, "", boolToTLS(false))
 }
 
 func TestToInt(t *testing.T) {
@@ -1245,20 +1210,4 @@ func TestGetBool(t *testing.T) {
 	assert.False(t, getBool(m, "false"))
 	assert.False(t, getBool(m, "string"))
 	assert.False(t, getBool(m, "nonexistent"))
-}
-
-// ========== Error Tests ==========
-
-func TestError_Error(t *testing.T) {
-	err := ErrUnknownFormat
-	assert.Equal(t, "unknown subscription format", err.Error())
-
-	err = ErrInvalidContent
-	assert.Equal(t, "invalid subscription content", err.Error())
-
-	err = ErrParseError
-	assert.Equal(t, "parse error", err.Error())
-
-	err = ErrUnsupportedType
-	assert.Equal(t, "unsupported protocol type", err.Error())
 }

@@ -450,15 +450,6 @@ func (s *TelegramBotService) apiRequest(url string, payload any) (map[string]any
 	return result, nil
 }
 
-// parseAdminIDs 解析管理员ID
-func parseAdminIDs(ids string) []int64 {
-	adminIDs, err := parseAdminIDsWithError(ids)
-	if err != nil {
-		return []int64{}
-	}
-	return adminIDs
-}
-
 func parseAdminIDsWithError(ids string) ([]int64, error) {
 	if ids == "" {
 		return []int64{}, nil
@@ -529,16 +520,6 @@ func NewTelegramUserService(db *gorm.DB) *TelegramUserService {
 	return &TelegramUserService{db: db}
 }
 
-// GetByTelegramID 根据TelegramID获取用户
-func (s *TelegramUserService) GetByTelegramID(telegramID int64) (*model.TelegramUser, error) {
-	var user model.TelegramUser
-	err := s.db.Where("telegram_id = ?", telegramID).First(&user).Error
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
-}
-
 // GetByUserID 根据系统用户ID获取绑定
 func (s *TelegramUserService) GetByUserID(userID uint) (*model.TelegramUser, error) {
 	var user model.TelegramUser
@@ -547,35 +528,4 @@ func (s *TelegramUserService) GetByUserID(userID uint) (*model.TelegramUser, err
 		return nil, err
 	}
 	return &user, nil
-}
-
-// UpdateLastActive 更新最后活跃时间
-func (s *TelegramUserService) UpdateLastActive(telegramID int64) error {
-	return s.db.Model(&model.TelegramUser{}).
-		Where("telegram_id = ?", telegramID).
-		Updates(map[string]any{
-			"last_active":   time.Now(),
-			"message_count": gorm.Expr("message_count + 1"),
-		}).Error
-}
-
-// Ban 封禁用户
-func (s *TelegramUserService) Ban(telegramID int64) error {
-	now := time.Now()
-	return s.db.Model(&model.TelegramUser{}).
-		Where("telegram_id = ?", telegramID).
-		Updates(map[string]any{
-			"is_banned": true,
-			"banned_at": now,
-		}).Error
-}
-
-// Unban 解封用户
-func (s *TelegramUserService) Unban(telegramID int64) error {
-	return s.db.Model(&model.TelegramUser{}).
-		Where("telegram_id = ?", telegramID).
-		Updates(map[string]any{
-			"is_banned": false,
-			"banned_at": nil,
-		}).Error
 }

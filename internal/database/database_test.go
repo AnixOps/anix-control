@@ -38,11 +38,13 @@ func TestInit_SQLite(t *testing.T) {
 
 	assert.NotNil(t, Get())
 	assert.NotNil(t, GetDB())
-	assert.True(t, IsSQLite())
-	assert.False(t, IsPostgres())
+	assert.Equal(t, "sqlite", Get().Name())
 }
 
 func TestInit_SQLite_DefaultPath(t *testing.T) {
+	// The default path is relative to the working directory; keep the test
+	// database out of the source tree.
+	t.Chdir(t.TempDir())
 	cfg := &config.DatabaseConfig{
 		Driver: "sqlite",
 		// Empty database path should use default
@@ -53,6 +55,7 @@ func TestInit_SQLite_DefaultPath(t *testing.T) {
 	defer closeDatabase(t)
 
 	assert.NotNil(t, Get())
+	assert.FileExists(t, filepath.Join("config", "data", "v2board.db"))
 }
 
 func TestInit_SQLite_WithDirectory(t *testing.T) {
@@ -215,30 +218,6 @@ func TestAutoMigrate_MultipleModels(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestIsSQLite(t *testing.T) {
-	cfg := &config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	}
-	require.NoError(t, Init(cfg))
-	defer closeDatabase(t)
-
-	assert.True(t, IsSQLite())
-	assert.False(t, IsPostgres())
-}
-
-func TestIsPostgres(t *testing.T) {
-	cfg := &config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	}
-	require.NoError(t, Init(cfg))
-	defer closeDatabase(t)
-
-	assert.False(t, IsPostgres())
-	assert.True(t, IsSQLite())
-}
-
 func TestInit_WithLogLevel(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -292,7 +271,7 @@ func TestInit_EmptyDriver(t *testing.T) {
 	defer closeDatabase(t)
 
 	assert.NotNil(t, Get())
-	assert.True(t, IsSQLite())
+	assert.Equal(t, "sqlite", Get().Name())
 }
 
 func TestInit_SQLite3Driver(t *testing.T) {
@@ -307,7 +286,7 @@ func TestInit_SQLite3Driver(t *testing.T) {
 	defer closeDatabase(t)
 
 	assert.NotNil(t, Get())
-	assert.True(t, IsSQLite())
+	assert.Equal(t, "sqlite", Get().Name())
 }
 
 func TestClose_AfterInit(t *testing.T) {
@@ -328,34 +307,6 @@ func TestClose_AfterInit(t *testing.T) {
 	// Close again should be safe
 	err = Close()
 	assert.NoError(t, err)
-}
-
-func TestIsSQLite_AfterClose(t *testing.T) {
-	cfg := &config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	}
-	err := Init(cfg)
-	require.NoError(t, err)
-
-	assert.True(t, IsSQLite())
-
-	closeDatabase(t)
-	// After close, db is nil, calling IsSQLite would panic
-	// So we just test that it works when db is valid
-}
-
-func TestIsPostgres_AfterInit(t *testing.T) {
-	cfg := &config.DatabaseConfig{
-		Driver:   "sqlite",
-		Database: ":memory:",
-	}
-	err := Init(cfg)
-	require.NoError(t, err)
-	defer closeDatabase(t)
-
-	assert.False(t, IsPostgres())
-	assert.True(t, IsSQLite())
 }
 
 func TestGet_AfterInit(t *testing.T) {

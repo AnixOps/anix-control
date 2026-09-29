@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/http"
 	"testing"
 	"time"
 
@@ -16,6 +15,38 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
+
+// testLifecycleExecutor is the version-bound fake that worker tests register
+// with testLifecycleDispatcher.
+type testLifecycleExecutor interface {
+	PluginID() string
+	Version() string
+	ExecuteLifecycle(context.Context, LifecycleRequest) (json.RawMessage, error)
+}
+
+var errTestLifecycleExecutorNotFound = errors.New("test lifecycle executor is not installed")
+
+// testLifecycleDispatcher routes durable lifecycle operations to the exact
+// plugin@version fake and fails closed for any other version.
+type testLifecycleDispatcher map[string]testLifecycleExecutor
+
+var _ LifecycleDispatcher = testLifecycleDispatcher(nil)
+
+func newTestLifecycleDispatcher(executors ...testLifecycleExecutor) testLifecycleDispatcher {
+	dispatcher := make(testLifecycleDispatcher, len(executors))
+	for _, executor := range executors {
+		dispatcher[executor.PluginID()+"@"+executor.Version()] = executor
+	}
+	return dispatcher
+}
+
+func (d testLifecycleDispatcher) ExecuteLifecycle(ctx context.Context, pluginID, version string, request LifecycleRequest) (json.RawMessage, error) {
+	executor, ok := d[pluginID+"@"+version]
+	if !ok {
+		return nil, errTestLifecycleExecutorNotFound
+	}
+	return executor.ExecuteLifecycle(ctx, request)
+}
 
 type lifecycleTestExecutor struct {
 	id        string
@@ -33,9 +64,6 @@ type blockingLifecycleExecutor struct {
 
 func (e *blockingLifecycleExecutor) PluginID() string { return e.id }
 func (e *blockingLifecycleExecutor) Version() string  { return e.version }
-func (e *blockingLifecycleExecutor) HandleRoute(context.Context, RouteRequest) (RouteResponse, error) {
-	return RouteResponse{Status: http.StatusOK}, nil
-}
 func (e *blockingLifecycleExecutor) ExecuteLifecycle(ctx context.Context, _ LifecycleRequest) (json.RawMessage, error) {
 	close(e.started)
 	select {
@@ -48,9 +76,6 @@ func (e *blockingLifecycleExecutor) ExecuteLifecycle(ctx context.Context, _ Life
 
 func (e *lifecycleTestExecutor) PluginID() string { return e.id }
 func (e *lifecycleTestExecutor) Version() string  { return e.version }
-func (e *lifecycleTestExecutor) HandleRoute(context.Context, RouteRequest) (RouteResponse, error) {
-	return RouteResponse{Status: http.StatusOK, Data: map[string]string{"version": e.version}}, nil
-}
 func (e *lifecycleTestExecutor) ExecuteLifecycle(_ context.Context, request LifecycleRequest) (json.RawMessage, error) {
 	e.calls = append(e.calls, request)
 	if err := e.failKinds[request.Kind]; err != nil {
@@ -129,8 +154,7 @@ func TestOperationWorkerPersistsLifecycleUpdateRollbackAndRestartReplay(t *testi
 	seedControlPluginRelease(t, db, pluginID, "2.0.0")
 	v1 := &lifecycleTestExecutor{id: pluginID, version: "1.0.0", failKinds: map[string]error{}}
 	v2 := &lifecycleTestExecutor{id: pluginID, version: "2.0.0", failKinds: map[string]error{}}
-	registry, err := NewRegistry(v1, v2)
-	require.NoError(t, err)
+	registry := newTestLifecycleDispatcher(v1, v2)
 	worker, err := NewOperationWorker(db, registry)
 	require.NoError(t, err)
 	now := time.Unix(1_800_000_000, 0).UTC()
@@ -213,8 +237,7 @@ func TestOperationWorkerAutomaticallyRestoresPreviousVersionAfterFailedUpdate(t 
 	seedControlPluginRelease(t, db, pluginID, "2.0.0")
 	v1 := &lifecycleTestExecutor{id: pluginID, version: "1.0.0", failKinds: map[string]error{}}
 	v2 := &lifecycleTestExecutor{id: pluginID, version: "2.0.0", failKinds: map[string]error{"plugin.update": errors.New("new version unhealthy")}}
-	registry, err := NewRegistry(v1, v2)
-	require.NoError(t, err)
+	registry := newTestLifecycleDispatcher(v1, v2)
 	worker, err := NewOperationWorker(db, registry)
 	require.NoError(t, err)
 	now := time.Unix(1_800_000_000, 0).UTC()
@@ -249,8 +272,7 @@ func TestOperationWorkerDoesNotStealAnUnexpiredLease(t *testing.T) {
 	const pluginID = "worker-lease"
 	seedControlPluginRelease(t, db, pluginID, "1.0.0")
 	executor := &lifecycleTestExecutor{id: pluginID, version: "1.0.0", failKinds: map[string]error{}}
-	registry, err := NewRegistry(executor)
-	require.NoError(t, err)
+	registry := newTestLifecycleDispatcher(executor)
 	worker, err := NewOperationWorker(db, registry)
 	require.NoError(t, err)
 	current := time.Unix(1_800_000_000, 0).UTC()
@@ -284,8 +306,7 @@ func TestOperationWorkerSerializesReconciliationBehindExistingLease(t *testing.T
 	const pluginID = "worker-reconcile-order"
 	seedControlPluginRelease(t, db, pluginID, "1.0.0")
 	executor := &lifecycleTestExecutor{id: pluginID, version: "1.0.0", failKinds: map[string]error{}}
-	registry, err := NewRegistry(executor)
-	require.NoError(t, err)
+	registry := newTestLifecycleDispatcher(executor)
 	worker, err := NewOperationWorker(db, registry)
 	require.NoError(t, err)
 	current := time.Unix(1_800_000_000, 0).UTC()
@@ -325,8 +346,7 @@ func TestOperationWorkerCancelsExecutorWhenLeaseOwnershipIsLost(t *testing.T) {
 	executor := &blockingLifecycleExecutor{
 		id: pluginID, version: "1.0.0", started: make(chan struct{}), release: make(chan struct{}),
 	}
-	registry, err := NewRegistry(executor)
-	require.NoError(t, err)
+	registry := newTestLifecycleDispatcher(executor)
 	worker, err := NewOperationWorker(db, registry)
 	require.NoError(t, err)
 	worker.leaseDuration = 60 * time.Millisecond
@@ -363,8 +383,7 @@ func TestOperationWorkerCancellationCannotBeOverwrittenByLateSuccess(t *testing.
 	executor := &blockingLifecycleExecutor{
 		id: pluginID, version: "1.0.0", started: make(chan struct{}), release: make(chan struct{}),
 	}
-	registry, err := NewRegistry(executor)
-	require.NoError(t, err)
+	registry := newTestLifecycleDispatcher(executor)
 	worker, err := NewOperationWorker(db, registry)
 	require.NoError(t, err)
 	installation := model.PluginInstallation{PluginID: pluginID, Target: "control", DesiredVersion: "1.0.0", State: "pending", Enabled: true}

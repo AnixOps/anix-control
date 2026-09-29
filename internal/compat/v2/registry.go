@@ -110,14 +110,6 @@ func NewRegistry(source RouteSource) *Registry {
 	return &Registry{source: source}
 }
 
-// Resolve is a boolean convenience API for router registration and callers
-// that do not need an error class. Gateways use ResolveContext to preserve
-// fail-closed status mapping.
-func (r *Registry) Resolve(method, normalizedPath string) (Route, bool) {
-	route, err := r.ResolveContext(context.Background(), method, normalizedPath)
-	return route, err == nil
-}
-
 func (r *Registry) ResolveContext(ctx context.Context, method, requestPath string) (Route, error) {
 	method, err := normalizeMethod(method)
 	if err != nil {

@@ -43,7 +43,6 @@ If you use [`install.sh`](../install.sh) or [`panel_install.sh`](../panel_instal
 - NodeX mode and runtime semantics: [`docs/reference/runtime.md`](reference/runtime.md)
 - Verified relay proof and manual smoke: [`docs/guide/forward-tunnel-smoke-test.md`](guide/forward-tunnel-smoke-test.md)
 - Relay onboarding and acceptance: [`docs/guide/forward-relay-onboarding.md`](guide/forward-relay-onboarding.md)
-- Config examples: [`config/examples/README.md`](../config/examples/README.md)
 
 Current verified deployment truth:
 
@@ -76,7 +75,6 @@ Keep the resource split explicit:
 - [`docs/README.md`](README.md): documentation landing page
 - [`docs/reference/repository-layout.md`](reference/repository-layout.md): root ownership and root hygiene rules
 - [`docs/reference/configuration.md`](reference/configuration.md): config source-of-truth and key mapping
-- [`config/examples/README.md`](../config/examples/README.md): sample YAML inputs and helper commands
 - [`config/deploy/ansible/README.md`](../config/deploy/ansible/README.md): ansible runtime assets
 
 ## Root Hygiene
@@ -90,5 +88,4 @@ The root should stay NodeX-like:
 Generated artifacts belong under:
 - `logs/`
 - `test-reports/`
-- `config/examples/`
 - ignored local-only paths such as `.codex_*.log` and `tmp_*.log`

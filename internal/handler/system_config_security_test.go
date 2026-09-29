@@ -21,6 +21,9 @@ import (
 
 func setupSystemConfigSecurityTest(t *testing.T) (*gorm.DB, *SystemHandler, *gin.Engine) {
 	t.Helper()
+	// Backup create/restore resolve relative paths against the working
+	// directory; keep them out of the source tree.
+	t.Chdir(t.TempDir())
 
 	db := initTestDB()
 	require.NoError(t, db.AutoMigrate(&model.SystemConfig{}, &model.BackupConfig{}, &model.BackupRecord{}, &model.OperationLog{}))
@@ -288,7 +291,7 @@ func TestSystemHandlerGetBackupConfigMasksSensitiveFields(t *testing.T) {
 		BackupDatabase: true,
 		BackupFiles:    true,
 		StorageType:    "s3",
-		StoragePath:    "backups",
+		StoragePath:    t.TempDir(),
 		S3Bucket:       "panel-backups",
 		S3Region:       "eu-west-1",
 		S3Endpoint:     "https://s3.example.com",
@@ -326,7 +329,7 @@ func TestSystemHandlerUpdateBackupConfigPreservesSensitiveFieldsAndWritesAuditLo
 		BackupDatabase: true,
 		BackupFiles:    false,
 		StorageType:    "s3",
-		StoragePath:    "backups",
+		StoragePath:    t.TempDir(),
 		S3Bucket:       "panel-backups",
 		S3Region:       "eu-west-1",
 		S3Endpoint:     "https://s3.example.com",
@@ -339,7 +342,7 @@ func TestSystemHandlerUpdateBackupConfigPreservesSensitiveFieldsAndWritesAuditLo
 		"backup_database":             true,
 		"backup_files":                true,
 		"storage_type":                "s3",
-		"storage_path":                "backups",
+		"storage_path":                t.TempDir(),
 		"s3_bucket":                   "panel-backups",
 		"s3_region":                   "eu-west-1",
 		"s3_endpoint":                 "https://s3.example.com",
@@ -385,7 +388,7 @@ func TestSystemHandlerUpdateBackupConfigTreatsSensitivePlaceholderAsPreserveExis
 	require.NoError(t, db.Create(&model.BackupConfig{
 		Enabled:        true,
 		StorageType:    "s3",
-		StoragePath:    "backups",
+		StoragePath:    t.TempDir(),
 		S3AccessKey:    "ACCESS-KEY-123",
 		S3SecretKey:    "SECRET-KEY-456",
 		BackupDatabase: true,

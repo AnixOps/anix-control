@@ -27,9 +27,6 @@ type orderedLifecycleExecutor struct {
 
 func (e *orderedLifecycleExecutor) PluginID() string { return e.id }
 func (e *orderedLifecycleExecutor) Version() string  { return e.version }
-func (e *orderedLifecycleExecutor) HandleRoute(context.Context, RouteRequest) (RouteResponse, error) {
-	return RouteResponse{Status: 200}, nil
-}
 func (e *orderedLifecycleExecutor) ExecuteLifecycle(_ context.Context, request LifecycleRequest) (json.RawMessage, error) {
 	e.mu.Lock()
 	*e.callOrder = append(*e.callOrder, e.id+":"+request.Kind)
@@ -51,9 +48,6 @@ type cancellablePlanExecutor struct {
 
 func (e *cancellablePlanExecutor) PluginID() string { return e.id }
 func (e *cancellablePlanExecutor) Version() string  { return e.version }
-func (e *cancellablePlanExecutor) HandleRoute(context.Context, RouteRequest) (RouteResponse, error) {
-	return RouteResponse{Status: 200}, nil
-}
 func (e *cancellablePlanExecutor) ExecuteLifecycle(ctx context.Context, request LifecycleRequest) (json.RawMessage, error) {
 	e.mu.Lock()
 	*e.callOrder = append(*e.callOrder, e.id+":"+request.Kind)
@@ -132,12 +126,11 @@ func TestDependencyLifecyclePlanExecutesDependencyClosureBeforeRootAndIsIdempote
 
 	var order []string
 	var mu sync.Mutex
-	registry, err := NewRegistry(
+	registry := newTestLifecycleDispatcher(
 		&orderedLifecycleExecutor{id: leaf.PluginID, version: leaf.Version, mu: &mu, callOrder: &order},
 		&orderedLifecycleExecutor{id: middle.PluginID, version: middle.Version, mu: &mu, callOrder: &order},
 		&orderedLifecycleExecutor{id: rootRelease.PluginID, version: rootRelease.Version, mu: &mu, callOrder: &order},
 	)
-	require.NoError(t, err)
 	worker, err := NewOperationWorker(db, registry)
 	require.NoError(t, err)
 	processed, err := worker.RunOnce(context.Background())
@@ -167,11 +160,10 @@ func TestDependencyLifecyclePlanFailureRollsBackAppliedStepsInReverseOrder(t *te
 
 	var order []string
 	var mu sync.Mutex
-	registry, err := NewRegistry(
+	registry := newTestLifecycleDispatcher(
 		&orderedLifecycleExecutor{id: leaf.PluginID, version: leaf.Version, mu: &mu, callOrder: &order},
 		&orderedLifecycleExecutor{id: rootRelease.PluginID, version: rootRelease.Version, failKind: "plugin.install", failErr: errors.New("root install failed"), mu: &mu, callOrder: &order},
 	)
-	require.NoError(t, err)
 	worker, err := NewOperationWorker(db, registry)
 	require.NoError(t, err)
 	processed, err := worker.RunOnce(context.Background())
@@ -206,8 +198,7 @@ func TestDependencyLifecyclePlanCancellationAndExpiredLeaseRecoverDurably(t *tes
 	var mu sync.Mutex
 	blocking := &cancellablePlanExecutor{id: leaf.PluginID, version: leaf.Version, started: make(chan struct{}), mu: &mu, callOrder: &order}
 	rootExecutor := &orderedLifecycleExecutor{id: rootRelease.PluginID, version: rootRelease.Version, mu: &mu, callOrder: &order}
-	registry, err := NewRegistry(blocking, rootExecutor)
-	require.NoError(t, err)
+	registry := newTestLifecycleDispatcher(blocking, rootExecutor)
 	worker, err := NewOperationWorker(db, registry)
 	require.NoError(t, err)
 	worker.leaseDuration = 20 * time.Millisecond
@@ -244,11 +235,10 @@ func TestDependencyLifecyclePlanCancellationAndExpiredLeaseRecoverDurably(t *tes
 	require.NoError(t, db.Where("lifecycle_plan_id <> ? AND plugin_id = ?", plan.ID, stableLeaf.PluginID).Order("lifecycle_plan_sequence").First(&first).Error)
 	expired := time.Now().Add(-time.Second)
 	require.NoError(t, db.Model(&first).Updates(map[string]any{"state": "running", "claimed_by": "dead-worker", "lease_expires_at": expired}).Error)
-	registry, err = NewRegistry(
+	registry = newTestLifecycleDispatcher(
 		&orderedLifecycleExecutor{id: stableLeaf.PluginID, version: stableLeaf.Version, mu: &mu, callOrder: &order},
 		&orderedLifecycleExecutor{id: stableRoot.PluginID, version: stableRoot.Version, mu: &mu, callOrder: &order},
 	)
-	require.NoError(t, err)
 	worker, err = NewOperationWorker(db, registry)
 	require.NoError(t, err)
 	processed, err = worker.RunOnce(context.Background())

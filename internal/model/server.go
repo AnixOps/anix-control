@@ -131,18 +131,6 @@ func (ServerAnyTLS) TableName() string {
 	return "v2_server_anytls"
 }
 
-// ServerGroup 服务器分组
-type ServerGroup struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Name      string    `gorm:"size:255" json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-func (ServerGroup) TableName() string {
-	return "v2_server_group"
-}
-
 // ServerRoute 服务器路由
 type ServerRoute struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`

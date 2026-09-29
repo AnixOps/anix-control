@@ -84,51 +84,6 @@ func (s *InviteService) GenerateInviteCode(userID *uint) (*model.InviteCode, err
 	return inviteCode, nil
 }
 
-// GenerateCodesForUser 为用户生成邀请码
-func (s *InviteService) GenerateCodesForUser(userID uint, count int) error {
-	for i := 0; i < count; i++ {
-		_, err := s.GenerateInviteCode(&userID)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// ValidateInviteCode 验证邀请码
-func (s *InviteService) ValidateInviteCode(code string) (*model.InviteCode, error) {
-	var inviteCode model.InviteCode
-	err := s.db.Where("code = ? AND status = 0", code).First(&inviteCode).Error
-	if err == gorm.ErrRecordNotFound {
-		return nil, errors.New("invalid or used invite code")
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	// 检查是否过期
-	if inviteCode.ExpiredAt != nil && inviteCode.ExpiredAt.Before(time.Now()) {
-		return nil, errors.New("invite code expired")
-	}
-
-	return &inviteCode, nil
-}
-
-// UseInviteCode 使用邀请码
-func (s *InviteService) UseInviteCode(code string, userID uint) error {
-	inviteCode, err := s.ValidateInviteCode(code)
-	if err != nil {
-		return err
-	}
-
-	now := time.Now()
-	inviteCode.Status = 1
-	inviteCode.UsedBy = &userID
-	inviteCode.UsedAt = &now
-
-	return s.db.Save(inviteCode).Error
-}
-
 // GetUserInviteCodes 获取用户邀请码
 func (s *InviteService) GetUserInviteCodes(userID uint) ([]model.InviteCode, error) {
 	var codes []model.InviteCode

@@ -149,10 +149,6 @@ func (f *Factory) NewSession(identity HostIdentity) (*Session, *os.File, error) 
 	return NewSession(identity, f.allowlist, f.webSocketResolver)
 }
 
-func NewAllowlist(operations ...Operation) (*Allowlist, error) {
-	return NewAllowlistWithFallback(nil, operations...)
-}
-
 // NewAllowlistWithFallback composes static package operations with a resolver
 // that still requires an exact package, route, and operation match.
 func NewAllowlistWithFallback(fallback OperationResolver, operations ...Operation) (*Allowlist, error) {

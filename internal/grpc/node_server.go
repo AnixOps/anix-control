@@ -2,8 +2,6 @@ package grpc
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"time"
@@ -227,12 +225,6 @@ func (s *NodeGRPCServer) StatusStream(stream pb.NodeService_StatusStreamServer) 
 			}
 		}
 	}
-}
-
-// checkConfigChanges 检查配置变更：以节点 UpdatedAt 作为配置版本，
-// 与连接管理器记录的已推送版本比对，发现更新则构建配置并推进版本号。
-func (s *NodeGRPCServer) checkConfigChanges(nodeID uint32) (*pb.NodeConfigResponse, error) {
-	return s.checkConfigChangesWithContext(context.Background(), nodeID)
 }
 
 func (s *NodeGRPCServer) checkConfigChangesWithContext(ctx context.Context, nodeID uint32) (*pb.NodeConfigResponse, error) {
@@ -559,11 +551,4 @@ func (s *HealthGRPCServer) Watch(stream pb.HealthService_WatchServer) error {
 			return err
 		}
 	}
-}
-
-// 辅助函数
-func hashString(s string) string {
-	h := sha256.New()
-	h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
 }

@@ -61,7 +61,6 @@ func (s *StreamBidirectionalTestSuite) SetupSuite() {
 	pb.RegisterUserServiceServer(s.server, NewUserGRPCServer())
 	pb.RegisterTrafficServiceServer(s.server, NewTrafficGRPCServer())
 	pb.RegisterHealthServiceServer(s.server, NewHealthGRPCServer())
-	pb.RegisterConfigSyncServiceServer(s.server, NewConfigSyncGRPCServer())
 
 	s.serverErr = serveGRPCServerForTest(s.T(), s.server, lis)
 	time.Sleep(100 * time.Millisecond)
@@ -69,6 +68,14 @@ func (s *StreamBidirectionalTestSuite) SetupSuite() {
 	s.clientConn, err = grpc.NewClient(s.addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
+	require.NoError(s.T(), err)
+
+	// grpc.NewClient connects lazily. Establish the transport up front so the
+	// goroutine-leak tests do not count the connection's own goroutines,
+	// regardless of which test issues the first RPC.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = pb.NewHealthServiceClient(s.clientConn).Check(ctx, &pb.HealthCheckRequest{NodeId: 1})
 	require.NoError(s.T(), err)
 }
 
@@ -152,7 +159,7 @@ func (s *StreamBidirectionalTestSuite) TestStatusStream_HeartbeatUpdatesLastSeen
 	time.Sleep(50 * time.Millisecond)
 
 	mgr := GetConnectionManager()
-	conn, ok := mgr.GetConnection(uint32(node.ID))
+	conn, ok := mgr.connectionForTest(uint32(node.ID))
 	require.True(s.T(), ok, "node should be registered after first heartbeat")
 	firstSeen := conn.LastSeen
 
@@ -170,7 +177,7 @@ func (s *StreamBidirectionalTestSuite) TestStatusStream_HeartbeatUpdatesLastSeen
 
 	time.Sleep(50 * time.Millisecond)
 
-	conn2, ok := mgr.GetConnection(uint32(node.ID))
+	conn2, ok := mgr.connectionForTest(uint32(node.ID))
 	require.True(s.T(), ok)
 	assert.True(s.T(), conn2.LastSeen.After(firstSeen),
 		"LastSeen should be updated after second heartbeat")
@@ -217,81 +224,8 @@ func (s *StreamBidirectionalTestSuite) TestStatusStream_MultipleHeartbeats() {
 	}
 
 	mgr := GetConnectionManager()
-	_, ok := mgr.GetConnection(uint32(node.ID))
+	_, ok := mgr.connectionForTest(uint32(node.ID))
 	assert.True(s.T(), ok, "node should remain registered after multiple heartbeats")
-
-	requireCloseSend(s.T(), stream)
-}
-
-// ---------------------------------------------------------------------------
-// 2. StatusStream: ConfigChanges via NotifyConfigChange triggers stream send
-// ---------------------------------------------------------------------------
-
-// TestStatusStream_ConfigPushViaNotifyConfigChange verifies that calling
-// NotifyConfigChange on the connection manager sends a non-nil response
-// through the StatusStream (the checkConfigChanges path). Since
-// checkConfigChanges currently returns (nil, nil), this test documents the
-// current behavior and will pass when the implementation is filled in.
-func (s *StreamBidirectionalTestSuite) TestStatusStream_ConfigPushViaNotifyConfigChange() {
-	db := database.Get()
-
-	groupID := uint(1)
-	node := &model.Node{
-		Name:    "config-push-node",
-		Host:    "10.0.0.102",
-		Port:    443,
-		GroupID: &groupID,
-		Rate:    1.0,
-		Show:    1,
-		Status:  model.NodeStatusOnline,
-		APIKey:  uniqueKey("cpk"),
-	}
-	require.NoError(s.T(), db.Create(node).Error)
-
-	client := pb.NewNodeServiceClient(s.clientConn)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	stream, err := client.StatusStream(ctx)
-	require.NoError(s.T(), err)
-
-	// Register node
-	require.NoError(s.T(), stream.Send(&pb.NodeStatusRequest{
-		NodeId: uint32(node.ID),
-	}))
-	time.Sleep(50 * time.Millisecond)
-
-	// Trigger config change notification
-	mgr := GetConnectionManager()
-	mgr.NotifyConfigChange(uint32(node.ID))
-
-	// Drain any responses from the stream with a short timeout
-	recvCtx, recvCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer recvCancel()
-
-	recvDone := make(chan struct{})
-	var responses []*pb.NodeConfigResponse
-	go func() {
-		defer close(recvDone)
-		for {
-			select {
-			case <-recvCtx.Done():
-				return
-			default:
-			}
-			resp, err := stream.Recv()
-			if err != nil {
-				return
-			}
-			responses = append(responses, resp)
-		}
-	}()
-
-	<-recvDone
-	// Current implementation: checkConfigChanges returns nil, so no push.
-	// This test validates the mechanism works end-to-end without erroring.
-	// When checkConfigChanges is implemented, responses will be non-empty.
-	_ = responses
 
 	requireCloseSend(s.T(), stream)
 }
@@ -395,7 +329,7 @@ func (s *StreamBidirectionalTestSuite) TestConfigChanges_VersionBasedIncremental
 	mgr.Register(nodeID, "10.0.0.1:9999")
 	mgr.SetNodeConfigVersion(nodeID, 100)
 
-	ver := mgr.GetConfigVersion(nodeID)
+	ver := mgr.configVersionForTest(nodeID)
 	assert.Equal(s.T(), int64(100), ver)
 
 	// currentVer == lastVer: no change
@@ -419,39 +353,6 @@ func (s *StreamBidirectionalTestSuite) TestConfigChanges_VersionBasedIncremental
 	mgr.Unregister(nodeID)
 }
 
-// TestConfigChanges_StreamVersionTracking verifies the ConfigChanges
-// bidirectional stream sets the config version when a node registers.
-func (s *StreamBidirectionalTestSuite) TestConfigChanges_StreamVersionTracking() {
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	stream, err := client.ConfigChanges(ctx)
-	require.NoError(s.T(), err)
-
-	nodeID := uint32(5002)
-	beforeVer := GetConnectionManager().GetConfigVersion(nodeID)
-	assert.Equal(s.T(), int64(0), beforeVer, "version should be 0 before registration")
-
-	// Register node via the stream
-	require.NoError(s.T(), stream.Send(&pb.ConfigChangeNotification{
-		NodeId:    nodeID,
-		Type:      pb.ConfigChangeNotification_NODE_CONFIG,
-		Timestamp: time.Now().Unix(),
-	}))
-
-	resp, err := stream.Recv()
-	require.NoError(s.T(), err)
-	assert.True(s.T(), resp.Success)
-
-	afterVer := GetConnectionManager().GetConfigVersion(nodeID)
-	assert.Greater(s.T(), afterVer, int64(0),
-		"config version should be set after node registration via stream")
-
-	requireCloseSend(s.T(), stream)
-}
-
 // TestConfigChanges_IncrementalVersionUpdates verifies that multiple
 // config updates properly track the version.
 func (s *StreamBidirectionalTestSuite) TestConfigChanges_IncrementalVersionUpdates() {
@@ -462,7 +363,7 @@ func (s *StreamBidirectionalTestSuite) TestConfigChanges_IncrementalVersionUpdat
 	versions := []int64{10, 20, 30, 40}
 	for _, v := range versions {
 		mgr.SetNodeConfigVersion(nodeID, v)
-		assert.Equal(s.T(), v, mgr.GetConfigVersion(nodeID))
+		assert.Equal(s.T(), v, mgr.configVersionForTest(nodeID))
 		// Client with older version: no change (currentVer < lastVer)
 		assert.False(s.T(), mgr.IsConfigChanged(nodeID, v-5))
 		// Client with same version: no change
@@ -632,118 +533,6 @@ func (s *StreamBidirectionalTestSuite) TestTrafficStream_CleanClose() {
 }
 
 // ---------------------------------------------------------------------------
-// 6. Concurrent NotifyConfigChange calls don't cause deadlocks
-// ---------------------------------------------------------------------------
-
-// TestNotifyConfigChange_ConcurrentNoDeadlock verifies that calling
-// NotifyConfigChange concurrently from multiple goroutines does not deadlock.
-// The configChan is buffered with size 1, so concurrent calls should use the
-// non-blocking select and drop excess signals.
-func (s *StreamBidirectionalTestSuite) TestNotifyConfigChange_ConcurrentNoDeadlock() {
-	mgr := NewNodeConnectionManager()
-	nodeID := uint32(6001)
-	mgr.Register(nodeID, "10.0.0.1:7777")
-
-	var wg sync.WaitGroup
-	numGoroutines := 50
-	numCallsPerGoroutine := 20
-
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < numCallsPerGoroutine; j++ {
-				mgr.NotifyConfigChange(nodeID)
-			}
-		}()
-	}
-
-	// Should complete within 5 seconds (would deadlock if there's a bug)
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		// Success: no deadlock
-	case <-time.After(5 * time.Second):
-		s.T().Fatal("NotifyConfigChange concurrent calls caused a deadlock")
-	}
-
-	// The channel is buffered with size 1, so at most 1 signal should be in it
-	conn, ok := mgr.GetConnection(nodeID)
-	require.True(s.T(), ok)
-	select {
-	case <-conn.configChan:
-		// Got the signal, channel was non-empty
-	default:
-		// Channel was empty (signals were consumed or dropped)
-	}
-}
-
-// TestNotifyConfigChange_BufferedChanSizeOne verifies that the configChan
-// buffer size of 1 is respected: sending twice without consuming should not
-// block, and the channel should contain at most one signal.
-func (s *StreamBidirectionalTestSuite) TestNotifyConfigChange_BufferedChanSizeOne() {
-	mgr := NewNodeConnectionManager()
-	nodeID := uint32(6002)
-	mgr.Register(nodeID, "10.0.0.1:6666")
-
-	conn, ok := mgr.GetConnection(nodeID)
-	require.True(s.T(), ok)
-
-	// Send 5 notifications rapidly; none should block
-	for i := 0; i < 5; i++ {
-		mgr.NotifyConfigChange(nodeID)
-	}
-
-	// Should be able to read exactly one signal
-	count := 0
-	select {
-	case <-conn.configChan:
-		count++
-	default:
-	}
-	assert.Equal(s.T(), 1, count,
-		"buffered chan size 1 should hold at most 1 signal")
-
-	// Channel should be empty now
-	select {
-	case <-conn.configChan:
-		s.T().Error("channel should be empty after consuming one signal")
-	default:
-		// Expected
-	}
-}
-
-// TestNotifyConfigChange_NonExistentNode verifies that notifying a node
-// that doesn't exist does not panic or block.
-func (s *StreamBidirectionalTestSuite) TestNotifyConfigChange_NonExistentNode() {
-	mgr := NewNodeConnectionManager()
-
-	// Should not panic
-	assert.NotPanics(s.T(), func() {
-		mgr.NotifyConfigChange(99999)
-	})
-}
-
-// TestNotifyConfigChange_AfterUnregister verifies that notifying after
-// unregister does not panic (configChan is set to nil in Unregister path
-// via the close + delete sequence).
-func (s *StreamBidirectionalTestSuite) TestNotifyConfigChange_AfterUnregister() {
-	mgr := NewNodeConnectionManager()
-	nodeID := uint32(6003)
-	mgr.Register(nodeID, "10.0.0.1:5555")
-	mgr.Unregister(nodeID)
-
-	assert.NotPanics(s.T(), func() {
-		mgr.NotifyConfigChange(nodeID)
-	})
-}
-
-// ---------------------------------------------------------------------------
 // 7. Stream context cancellation stops goroutines
 // ---------------------------------------------------------------------------
 
@@ -778,7 +567,7 @@ func (s *StreamBidirectionalTestSuite) TestStatusStream_ContextCancellation() {
 	time.Sleep(50 * time.Millisecond)
 
 	mgr := GetConnectionManager()
-	_, ok := mgr.GetConnection(uint32(node.ID))
+	_, ok := mgr.connectionForTest(uint32(node.ID))
 	require.True(s.T(), ok, "node should be registered")
 
 	// Cancel the context
@@ -788,7 +577,7 @@ func (s *StreamBidirectionalTestSuite) TestStatusStream_ContextCancellation() {
 	time.Sleep(200 * time.Millisecond)
 
 	// Node should be unregistered (defer in StatusStream calls Unregister)
-	_, ok = mgr.GetConnection(uint32(node.ID))
+	_, ok = mgr.connectionForTest(uint32(node.ID))
 	assert.False(s.T(), ok, "node should be unregistered after context cancellation")
 }
 
@@ -821,40 +610,6 @@ func (s *StreamBidirectionalTestSuite) TestUserChanges_ContextCancellation() {
 		Timestamp: time.Now().Unix(),
 	})
 	assert.Error(s.T(), err, "send after cancel should fail")
-}
-
-// TestConfigChanges_ContextCancellation verifies ConfigChanges stream exits
-// when context is cancelled.
-func (s *StreamBidirectionalTestSuite) TestConfigChanges_ContextCancellation() {
-	client := pb.NewConfigSyncServiceClient(s.clientConn)
-	ctx, cancel := context.WithCancel(context.Background())
-
-	stream, err := client.ConfigChanges(ctx)
-	require.NoError(s.T(), err)
-
-	nodeID := uint32(7001)
-	require.NoError(s.T(), stream.Send(&pb.ConfigChangeNotification{
-		NodeId:    nodeID,
-		Type:      pb.ConfigChangeNotification_NODE_CONFIG,
-		Timestamp: time.Now().Unix(),
-	}))
-	_, err = stream.Recv()
-	require.NoError(s.T(), err)
-
-	// Verify node is registered
-	mgr := GetConnectionManager()
-	_, ok := mgr.GetConnection(nodeID)
-	require.True(s.T(), ok)
-
-	// Cancel context
-	cancel()
-	time.Sleep(200 * time.Millisecond)
-
-	// Node should be unregistered
-	_, ok = mgr.GetConnection(nodeID)
-	// Note: ConfigChanges doesn't have a defer Unregister like StatusStream does.
-	// This test documents the current behavior.
-	_ = ok
 }
 
 // TestTrafficStream_ContextCancellation verifies TrafficStream exits on cancel.
@@ -980,18 +735,17 @@ func (s *StreamBidirectionalTestSuite) TestConnectionManager_RegisterUnregisterR
 
 	// Register
 	mgr.Register(1, "1.2.3.4:1234")
-	conn, ok := mgr.GetConnection(1)
+	conn, ok := mgr.connectionForTest(1)
 	require.True(s.T(), ok)
 	assert.Equal(s.T(), uint32(1), conn.NodeID)
 	assert.Equal(s.T(), "1.2.3.4:1234", conn.RemoteAddr)
-	assert.NotNil(s.T(), conn.configChan)
-	assert.Len(s.T(), mgr.GetActiveNodes(), 1)
+	assert.Len(s.T(), mgr.activeNodesForTest(), 1)
 
 	// Unregister
 	mgr.Unregister(1)
-	_, ok = mgr.GetConnection(1)
+	_, ok = mgr.connectionForTest(1)
 	assert.False(s.T(), ok)
-	assert.Len(s.T(), mgr.GetActiveNodes(), 0)
+	assert.Len(s.T(), mgr.activeNodesForTest(), 0)
 }
 
 // TestConnectionManager_UpdateLastSeen verifies the LastSeen field updates.
@@ -999,13 +753,13 @@ func (s *StreamBidirectionalTestSuite) TestConnectionManager_UpdateLastSeen() {
 	mgr := NewNodeConnectionManager()
 	mgr.Register(1, "1.2.3.4:1234")
 
-	conn, _ := mgr.GetConnection(1)
+	conn, _ := mgr.connectionForTest(1)
 	before := conn.LastSeen
 
 	time.Sleep(50 * time.Millisecond)
 	mgr.UpdateLastSeen(1)
 
-	after, _ := mgr.GetConnection(1)
+	after, _ := mgr.connectionForTest(1)
 	assert.True(s.T(), after.LastSeen.After(before),
 		"LastSeen should be updated")
 }
@@ -1017,12 +771,12 @@ func (s *StreamBidirectionalTestSuite) TestConnectionManager_ConfigVersionIndepe
 
 	// Set config version without registering connection
 	mgr.SetNodeConfigVersion(999, 42)
-	assert.Equal(s.T(), int64(42), mgr.GetConfigVersion(999))
+	assert.Equal(s.T(), int64(42), mgr.configVersionForTest(999))
 
 	// Now register the same node
 	mgr.Register(999, "1.2.3.4:5678")
 	// Config version should still be preserved
-	assert.Equal(s.T(), int64(42), mgr.GetConfigVersion(999))
+	assert.Equal(s.T(), int64(42), mgr.configVersionForTest(999))
 
 	mgr.Unregister(999)
 }
@@ -1044,7 +798,7 @@ func (s *StreamBidirectionalTestSuite) TestConnectionManager_ConcurrentRegisterU
 		}(uint32(i))
 	}
 	wg.Wait()
-	assert.Len(s.T(), mgr.GetActiveNodes(), 100)
+	assert.Len(s.T(), mgr.activeNodesForTest(), 100)
 
 	// Concurrently unregister
 	for i := 0; i < 100; i++ {
@@ -1055,48 +809,7 @@ func (s *StreamBidirectionalTestSuite) TestConnectionManager_ConcurrentRegisterU
 		}(uint32(i))
 	}
 	wg.Wait()
-	assert.Len(s.T(), mgr.GetActiveNodes(), 0)
-}
-
-// ---------------------------------------------------------------------------
-// 9. ConfigSync server notifyConfigChange integration
-// ---------------------------------------------------------------------------
-
-// TestConfigSync_NotifyConfigChangeIntegration verifies the ConfigSync
-// server's notifyConfigChange method correctly signals the connection manager.
-func (s *StreamBidirectionalTestSuite) TestConfigSync_NotifyConfigChangeIntegration() {
-	db := database.Get()
-
-	groupID := uint(1)
-	node := &model.Node{
-		Name:    "notify-integ-node",
-		Host:    "10.0.0.130",
-		Port:    443,
-		GroupID: &groupID,
-		Rate:    1.0,
-		Show:    1,
-		Status:  model.NodeStatusOnline,
-		APIKey:  uniqueKey("nck"),
-	}
-	require.NoError(s.T(), db.Create(node).Error)
-
-	mgr := GetConnectionManager()
-	mgr.Register(uint32(node.ID), "127.0.0.1:23456")
-
-	svc := NewConfigSyncGRPCServer()
-	err := svc.notifyConfigChange(uint32(node.ID), pb.ConfigChangeNotification_NODE_CONFIG)
-	require.NoError(s.T(), err)
-
-	// Verify signal arrived in configChan
-	conn, ok := mgr.GetConnection(uint32(node.ID))
-	require.True(s.T(), ok)
-
-	select {
-	case <-conn.configChan:
-		// Signal received
-	case <-time.After(1 * time.Second):
-		s.T().Fatal("timed out waiting for config change signal")
-	}
+	assert.Len(s.T(), mgr.activeNodesForTest(), 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -1214,54 +927,6 @@ func (s *StreamBidirectionalTestSuite) TestUserChanges_MultipleConcurrentStreams
 		// Success
 	case <-time.After(10 * time.Second):
 		s.T().Fatal("concurrent UserChanges streams caused a deadlock")
-	}
-}
-
-// TestConfigChanges_MultipleConcurrentStreams verifies concurrent
-// ConfigChanges streams don't interfere.
-func (s *StreamBidirectionalTestSuite) TestConfigChanges_MultipleConcurrentStreams() {
-	var wg sync.WaitGroup
-	numStreams := 5
-
-	for i := 0; i < numStreams; i++ {
-		wg.Add(1)
-		go func(idx int) {
-			defer wg.Done()
-
-			client := pb.NewConfigSyncServiceClient(s.clientConn)
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-
-			stream, err := client.ConfigChanges(ctx)
-			if err != nil {
-				return
-			}
-
-			nodeID := uint32(200 + idx)
-			notification := &pb.ConfigChangeNotification{
-				NodeId:    nodeID,
-				Type:      pb.ConfigChangeNotification_NODE_CONFIG,
-				Timestamp: time.Now().Unix(),
-			}
-			_ = stream.Send(notification)
-			_, _ = stream.Recv()
-			if err := stream.CloseSend(); err != nil {
-				s.T().Errorf("close config changes stream: %v", err)
-			}
-		}(i)
-	}
-
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		// Success
-	case <-time.After(10 * time.Second):
-		s.T().Fatal("concurrent ConfigChanges streams caused a deadlock")
 	}
 }
 

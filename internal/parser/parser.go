@@ -78,50 +78,11 @@ func (r *Registry) RegisterFormatter(format model.SubscriptionFormat, f Formatte
 	r.formatters[format] = f
 }
 
-// AutoParse 自动检测格式并解析
-func (r *Registry) AutoParse(content []byte) ([]*model.ParsedNode, error) {
-	for _, p := range r.parsers {
-		if p.Detect(content) {
-			return p.Parse(content)
-		}
-	}
-	// 尝试所有解析器
-	for _, p := range r.parsers {
-		nodes, err := p.Parse(content)
-		if err == nil && len(nodes) > 0 {
-			return nodes, nil
-		}
-	}
-	return nil, ErrUnknownFormat
-}
-
 // GetFormatter 获取格式化器
 func (r *Registry) GetFormatter(format model.SubscriptionFormat) (Formatter, bool) {
 	f, ok := r.formatters[format]
 	return f, ok
 }
-
-// GetParser 根据名称获取解析器
-func (r *Registry) GetParser(name string) Parser {
-	for _, p := range r.parsers {
-		if p.Name() == name {
-			return p
-		}
-	}
-	return nil
-}
-
-// 错误定义
-type Error string
-
-func (e Error) Error() string { return string(e) }
-
-const (
-	ErrUnknownFormat   Error = "unknown subscription format"
-	ErrInvalidContent  Error = "invalid subscription content"
-	ErrParseError      Error = "parse error"
-	ErrUnsupportedType Error = "unsupported protocol type"
-)
 
 // 全局注册表实例
 var defaultRegistry = NewRegistry()

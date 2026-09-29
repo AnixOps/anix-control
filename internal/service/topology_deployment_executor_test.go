@@ -458,7 +458,7 @@ func TestTopologyDeploymentCanaryDoesNotActivateUntilFullRollout(t *testing.T) {
 	var revision model.TopologyRevision
 	require.NoError(t, fixture.db.First(&revision, fixture.revision.ID).Error)
 	require.Equal(t, "draft", revision.State)
-	_, _, err = ApplyTopologyObservedState(fixture.db, TopologyObservedStateUpdate{
+	_, _, err = applyTopologyObservedStateForTest(fixture.db, TopologyObservedStateUpdate{
 		DeploymentID: canary.ID, NodeID: fixture.nodes[1].ID, DesiredRevision: fixture.revision.Revision,
 		ObservedRevision: fixture.revision.Revision, State: "succeeded",
 	})

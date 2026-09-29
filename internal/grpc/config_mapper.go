@@ -10,7 +10,7 @@ import (
 // NodeConfigResponse, 让 gRPC 节点拿到和 HTTP/订阅端完全一致的协议配置
 // (cipher / server_key / flow / tls_settings / network_settings 等)。
 //
-// node_server.GetConfig 和 config_sync.buildNodeConfigResponse 都调它, 统一逻辑。
+// node_server 的 GetConfig 与 StatusStream 配置推送都调它, 统一逻辑。
 func fillNodeConfigResponse(node *model.Node, protocol *model.NodeProtocol) (*pb.NodeConfigResponse, error) {
 	cfg := service.BuildNodeProtocolConfig(node, protocol)
 

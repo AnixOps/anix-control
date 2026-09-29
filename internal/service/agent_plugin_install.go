@@ -154,17 +154,6 @@ func LoadAuthorizedAgentPluginMetadata(db *gorm.DB, nodeID uint, pluginID, versi
 	}, nil
 }
 
-// LoadAuthorizedAgentPluginRelease is the unbounded blob path used only for
-// the authenticated artifact response. It re-hashes bytes immediately before
-// streaming so database corruption cannot cross the trust boundary.
-func LoadAuthorizedAgentPluginRelease(db *gorm.DB, nodeID uint, pluginID, version string) (*AgentPluginReleaseDownload, error) {
-	metadata, err := LoadAuthorizedAgentPluginMetadata(db, nodeID, pluginID, version)
-	if err != nil {
-		return nil, err
-	}
-	return LoadAgentPluginArtifactBlob(db, metadata)
-}
-
 // LoadAgentPluginArtifactBlob is intentionally separate from authorization and
 // content-address validation. Node-facing handlers call it only after the
 // bounded metadata path has accepted the exact immutable address.

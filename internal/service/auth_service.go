@@ -20,11 +20,6 @@ func NewAuthService() *AuthService {
 	return &AuthService{}
 }
 
-// Register keeps the existing public API and registers without an invite code.
-func (s *AuthService) Register(email, password string, cfg *config.Config) (string, *model.User, error) {
-	return s.RegisterWithInvite(email, password, "", cfg)
-}
-
 // RegisterWithInvite creates a user and optionally consumes an invite code.
 func (s *AuthService) RegisterWithInvite(email, password, inviteCode string, cfg *config.Config) (string, *model.User, error) {
 	db := database.GetDB()
@@ -136,20 +131,6 @@ func (s *AuthService) Authenticate(email, password string) (*model.User, error) 
 // IssueToken signs a JWT for an already authenticated user.
 func (s *AuthService) IssueToken(user *model.User, cfg *config.Config) (string, error) {
 	return utils.GenerateToken(user.ID, user.Email, user.IsAdmin == 1, cfg.JWT.Secret, cfg.JWT.Expire)
-}
-
-// Login validates credentials and returns a JWT token.
-func (s *AuthService) Login(email, password string, cfg *config.Config) (string, *model.User, error) {
-	user, err := s.Authenticate(email, password)
-	if err != nil {
-		return "", nil, err
-	}
-	token, err := s.IssueToken(user, cfg)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return token, user, nil
 }
 
 // checkPassword verifies a bcrypt password hash.

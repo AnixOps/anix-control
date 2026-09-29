@@ -37,23 +37,6 @@ func LegacyTopologyObservedHealthJSON() string {
 	return `{"source":"legacy_agent_operation"}`
 }
 
-// ApplyTopologyObservedState writes one node observation with monotonic
-// desired/observed revisions. A stale or out-of-order observation returns the
-// current row with changed=false and never regresses deployment state.
-func ApplyTopologyObservedState(db *gorm.DB, update TopologyObservedStateUpdate) (*model.TopologyObservedState, bool, error) {
-	if db == nil {
-		return nil, false, errors.New("database is not initialized")
-	}
-	var result *model.TopologyObservedState
-	var changed bool
-	err := db.Transaction(func(tx *gorm.DB) error {
-		var err error
-		result, changed, err = ApplyTopologyObservedStateTx(tx, update)
-		return err
-	})
-	return result, changed, err
-}
-
 // ApplyTopologyObservedStateTx is the transaction form used by gRPC observed
 // callbacks so operation and topology state commit atomically.
 func ApplyTopologyObservedStateTx(tx *gorm.DB, update TopologyObservedStateUpdate) (*model.TopologyObservedState, bool, error) {

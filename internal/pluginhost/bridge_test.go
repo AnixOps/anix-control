@@ -20,7 +20,7 @@ const hostTestBridgeChildEnvironment = "ANIX_PLUGINHOST_TEST_BRIDGE_CHILD"
 
 func TestManagerDispatchesOneShotBridgeCapabilityToHost(t *testing.T) {
 	payloads := make(chan []byte, 1)
-	allowlist, err := packagebridge.NewAllowlist(packagebridge.Operation{
+	allowlist, err := packagebridge.NewAllowlistWithFallback(nil, packagebridge.Operation{
 		PackageID: "identity-platform", RouteID: "identity.auth.login", Name: "identity.auth.login",
 		Handler: func(_ context.Context, call packagebridge.Call) (packagebridge.Response, error) {
 			payloads <- call.Payload
@@ -54,7 +54,7 @@ func TestManagerDispatchesOneShotBridgeCapabilityToHost(t *testing.T) {
 
 func TestManagerMigrateDispatchesOneShotBridgeCapabilityToHost(t *testing.T) {
 	calls := make(chan packagebridge.Call, 1)
-	allowlist, err := packagebridge.NewAllowlist(packagebridge.Operation{
+	allowlist, err := packagebridge.NewAllowlistWithFallback(nil, packagebridge.Operation{
 		PackageID: "identity-platform", RouteID: "migration.identity-platform.001_identity_platform", Name: "migration.identity-platform.001_identity_platform",
 		Handler: func(_ context.Context, call packagebridge.Call) (packagebridge.Response, error) {
 			calls <- call
@@ -87,7 +87,7 @@ func TestManagerMigrateDispatchesOneShotBridgeCapabilityToHost(t *testing.T) {
 }
 
 func TestManagerMintsWebSocketBridgeCapabilityBeforeOpeningTheHostStream(t *testing.T) {
-	allowlist, err := packagebridge.NewAllowlist()
+	allowlist, err := packagebridge.NewAllowlistWithFallback(nil)
 	require.NoError(t, err)
 	session, child, err := packagebridge.NewSession(
 		packagebridge.HostIdentity{PackageID: "machine-telemetry", Version: "4.0.0", Generation: 7}, allowlist,

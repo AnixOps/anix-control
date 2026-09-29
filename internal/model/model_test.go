@@ -475,10 +475,6 @@ func TestServerAnyTLS_TableName(t *testing.T) {
 	assert.Equal(t, "v2_server_anytls", ServerAnyTLS{}.TableName())
 }
 
-func TestServerGroup_TableName(t *testing.T) {
-	assert.Equal(t, "v2_server_group", ServerGroup{}.TableName())
-}
-
 func TestServerRoute_TableName(t *testing.T) {
 	assert.Equal(t, "v2_server_route", ServerRoute{}.TableName())
 }

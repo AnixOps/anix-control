@@ -12,7 +12,7 @@ import (
 )
 
 func TestClientOpensAWebSocketBridgeWithItsMintedCapability(t *testing.T) {
-	allowlist, err := packagebridge.NewAllowlist()
+	allowlist, err := packagebridge.NewAllowlistWithFallback(nil)
 	require.NoError(t, err)
 	session, child, err := packagebridge.NewSession(
 		packagebridge.HostIdentity{PackageID: "machine-telemetry", Version: "4.0.0", Generation: 7},

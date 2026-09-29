@@ -8,11 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sort"
-	"sync"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
 )
@@ -21,8 +18,6 @@ import (
 type ForwardNodeService struct {
 	db *gorm.DB
 }
-
-var forwardNodeRandomInt = cryptoRandomInt
 
 // NewForwardNodeService 创建服务
 func NewForwardNodeService(db *gorm.DB) *ForwardNodeService {
@@ -58,39 +53,6 @@ func (s *ForwardNodeService) GetByID(id uint) (*model.ForwardNode, error) {
 func (s *ForwardNodeService) GetByType(nodeType string) ([]*model.ForwardNode, error) {
 	var nodes []*model.ForwardNode
 	err := s.db.Where("type = ? AND enabled = ?", nodeType, true).Find(&nodes).Error
-	return nodes, err
-}
-
-// List 获取节点列表
-func (s *ForwardNodeService) List(nodeType string, status *int, page, pageSize int) ([]*model.ForwardNode, int64, error) {
-	var nodes []*model.ForwardNode
-	var total int64
-
-	query := s.db.Model(&model.ForwardNode{})
-	if nodeType != "" {
-		query = query.Where("type = ?", nodeType)
-	}
-	if status != nil {
-		query = query.Where("status = ?", *status)
-	}
-
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	offset := (page - 1) * pageSize
-	err := query.Order("id DESC").Offset(offset).Limit(pageSize).Find(&nodes).Error
-	return nodes, total, err
-}
-
-// GetOnlineNodes 获取在线节点
-func (s *ForwardNodeService) GetOnlineNodes(nodeType string) ([]*model.ForwardNode, error) {
-	var nodes []*model.ForwardNode
-	query := s.db.Where("status = ? AND enabled = ?", model.ForwardNodeStatusOnline, true)
-	if nodeType != "" {
-		query = query.Where("type = ?", nodeType)
-	}
-	err := query.Order("latency ASC").Find(&nodes).Error
 	return nodes, err
 }
 
@@ -163,32 +125,6 @@ func (s *ForwardNodeService) HealthCheck(ctx context.Context, nodeID uint) (*Hea
 	return result, nil
 }
 
-// HealthCheckAll 检查所有节点
-func (s *ForwardNodeService) HealthCheckAll(ctx context.Context) ([]*HealthCheckResult, error) {
-	var nodes []*model.ForwardNode
-	err := s.db.Where("enabled = ?", true).Find(&nodes).Error
-	if err != nil {
-		return nil, err
-	}
-
-	results := make([]*HealthCheckResult, len(nodes))
-	errs := make([]error, len(nodes))
-	var wg sync.WaitGroup
-
-	for i, node := range nodes {
-		wg.Add(1)
-		go func(idx int, nodeID uint) {
-			defer wg.Done()
-			result, err := s.HealthCheck(ctx, nodeID)
-			results[idx] = result
-			errs[idx] = err
-		}(i, node.ID)
-	}
-
-	wg.Wait()
-	return results, errors.Join(errs...)
-}
-
 // HealthCheckResult 健康检查结果
 type HealthCheckResult struct {
 	NodeID    uint      `json:"node_id"`
@@ -196,79 +132,6 @@ type HealthCheckResult struct {
 	Latency   int64     `json:"latency"`
 	CheckTime time.Time `json:"check_time"`
 	Error     string    `json:"error,omitempty"`
-}
-
-// SelectBestNode 选择最佳节点 (负载均衡)
-func (s *ForwardNodeService) SelectBestNode(nodeType string, mode string) (*model.ForwardNode, error) {
-	nodes, err := s.GetOnlineNodes(nodeType)
-	if err != nil {
-		return nil, err
-	}
-	if len(nodes) == 0 {
-		return nil, fmt.Errorf("no available nodes")
-	}
-
-	switch mode {
-	case "latency":
-		// 最低延迟
-		sort.Slice(nodes, func(i, j int) bool {
-			return nodes[i].Latency < nodes[j].Latency
-		})
-		return nodes[0], nil
-
-	case "least-conn":
-		// 最少连接
-		sort.Slice(nodes, func(i, j int) bool {
-			return nodes[i].CurrentConn < nodes[j].CurrentConn
-		})
-		return nodes[0], nil
-
-	case "weight":
-		// 加权随机
-		totalWeight := 0
-		for _, n := range nodes {
-			if n.Weight > 0 {
-				totalWeight += n.Weight
-			}
-		}
-		if totalWeight == 0 {
-			return nodes[0], nil
-		}
-		// 简单实现: 按权重比例选择
-		weights := make([]int, len(nodes))
-		current := 0
-		for i := range nodes {
-			if nodes[i].Weight > 0 {
-				current += nodes[i].Weight
-			}
-			weights[i] = current
-		}
-		// 随机选择
-		r, err := forwardNodeRandomInt(totalWeight)
-		if err != nil {
-			return nil, fmt.Errorf("select weighted forward node: %w", err)
-		}
-		for i, w := range weights {
-			if r < w {
-				return nodes[i], nil
-			}
-		}
-		return nodes[0], nil
-
-	case "random":
-		// 随机选择
-		idx, err := forwardNodeRandomInt(len(nodes))
-		if err != nil {
-			return nil, fmt.Errorf("select random forward node: %w", err)
-		}
-		return nodes[idx], nil
-
-	default: // round-robin
-		// 轮询 (使用缓存计数)
-		key := fmt.Sprintf("forward_lb_%s", nodeType)
-		idx := int(cache.Incr(key)) % len(nodes)
-		return nodes[idx], nil
-	}
 }
 
 // randBytes 生成随机字节
@@ -292,27 +155,6 @@ func (s *ForwardNodeService) GenerateAPIToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// UpdateStats 更新节点统计
-func (s *ForwardNodeService) UpdateStats(nodeID uint, upload, download int64, connDelta int) error {
-	return s.db.Model(&model.ForwardNode{}).Where("id = ?", nodeID).Updates(map[string]any{
-		"total_upload":   gorm.Expr("total_upload + ?", upload),
-		"total_download": gorm.Expr("total_download + ?", download),
-		"current_conn":   gorm.Expr("current_conn + ?", connDelta),
-	}).Error
-}
-
-// GetNodesByGroup 根据标签获取节点组
-func (s *ForwardNodeService) GetNodesByGroup(nodeType, group string) ([]*model.ForwardNode, error) {
-	var nodes []*model.ForwardNode
-
-	// 查找包含指定标签的节点
-	err := s.db.Where("type = ? AND enabled = ? AND status = ?",
-		nodeType, true, model.ForwardNodeStatusOnline).
-		Where("tags LIKE ?", fmt.Sprintf("%%\"%s\"%%", group)).
-		Find(&nodes).Error
-	return nodes, err
-}
-
 // ParseTags 解析标签
 func (s *ForwardNodeService) ParseTags(tags string) []string {
 	result, err := s.ParseTagsWithError(tags)
@@ -332,14 +174,4 @@ func (s *ForwardNodeService) ParseTagsWithError(tags string) ([]string, error) {
 		return nil, err
 	}
 	return result, nil
-}
-
-// SetTags 设置标签
-func (s *ForwardNodeService) SetTags(nodeID uint, tags []string) error {
-	tagsJSON, err := json.Marshal(tags)
-	if err != nil {
-		return err
-	}
-	return s.db.Model(&model.ForwardNode{}).Where("id = ?", nodeID).
-		Update("tags", string(tagsJSON)).Error
 }

@@ -872,21 +872,6 @@ func TestSignatureAuth_ValidSignature(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestStrictSignatureAuth_MissingSignature(t *testing.T) {
-	router := gin.New()
-	router.Use(StrictSignatureAuth())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
 func TestCalculateHMAC(t *testing.T) {
 	secret := "test-secret"
 	data := "test-data"
@@ -931,37 +916,6 @@ func TestNonceExpiration(t *testing.T) {
 	assert.False(t, exists) // Should be deleted
 }
 
-func TestSecureLogger(t *testing.T) {
-	router := gin.New()
-	router.Use(SecureLogger())
-	router.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestSecureLogger_WithUserContext(t *testing.T) {
-	router := gin.New()
-	router.Use(SecureLogger())
-	router.GET("/test", func(c *gin.Context) {
-		c.Set("user_id", uint(1))
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
 func TestNodeSecureLogger(t *testing.T) {
 	router := gin.New()
 	router.Use(NodeSecureLogger())
@@ -992,28 +946,6 @@ func TestNodeSecureLogger_WithSignature(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestAuditLog(t *testing.T) {
-	entry := &AuditLogEntry{
-		Timestamp:  time.Now(),
-		Action:     "test_action",
-		UserID:     1,
-		NodeID:     2,
-		IP:         "192.168.1.1",
-		UserAgent:  "test-agent",
-		Path:       "/test",
-		Method:     "GET",
-		StatusCode: 200,
-		Latency:    time.Millisecond * 100,
-		Extra:      map[string]any{"key": "value"},
-	}
-
-	// WriteAuditLog should not panic
-	WriteAuditLog(entry)
-
-	// Check IP is redacted
-	assert.NotEqual(t, "192.168.1.1", entry.IP)
 }
 
 func TestLogger(t *testing.T) {

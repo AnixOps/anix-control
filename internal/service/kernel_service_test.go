@@ -923,7 +923,7 @@ func TestListEnabledWebUIExtensionsRequiresVerifiedVersionBoundInstallation(t *t
 	}
 	require.NoError(t, db.Create(&installation).Error)
 
-	extensions, err := ListEnabledWebUIExtensions(db, publicKey)
+	extensions, err := listEnabledWebUIExtensions(db, publicKey, 0, true, false)
 	require.NoError(t, err)
 	require.Len(t, extensions, 1)
 	extension := extensions[0]
@@ -936,16 +936,16 @@ func TestListEnabledWebUIExtensionsRequiresVerifiedVersionBoundInstallation(t *t
 	require.JSONEq(t, string(manifest.ConfigSchema), string(extension.ConfigSchema))
 
 	require.NoError(t, db.Model(&installation).Updates(map[string]any{"state": "pending"}).Error)
-	extensions, err = ListEnabledWebUIExtensions(db, publicKey)
+	extensions, err = listEnabledWebUIExtensions(db, publicKey, 0, true, false)
 	require.NoError(t, err)
 	require.Empty(t, extensions)
 	require.NoError(t, db.Model(&installation).Updates(map[string]any{"state": "healthy", "desired_version": "2.0.0"}).Error)
-	_, err = ListEnabledWebUIExtensions(db, publicKey)
+	_, err = listEnabledWebUIExtensions(db, publicKey, 0, true, false)
 	require.ErrorIs(t, err, ErrExtensionCatalogIntegrity)
 
 	require.NoError(t, db.Model(&installation).Update("desired_version", manifest.Version).Error)
 	require.NoError(t, db.Model(release).Update("signature", "tampered").Error)
-	_, err = ListEnabledWebUIExtensions(db, publicKey)
+	_, err = listEnabledWebUIExtensions(db, publicKey, 0, true, false)
 	require.ErrorIs(t, err, ErrExtensionCatalogIntegrity)
 }
 
@@ -967,7 +967,7 @@ func TestListEnabledWebUIExtensionsNormalizesUnknownMenuParent(t *testing.T) {
 		ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
 	}).Error)
 
-	extensions, err := ListEnabledWebUIExtensions(db, publicKey)
+	extensions, err := listEnabledWebUIExtensions(db, publicKey, 0, true, false)
 	require.NoError(t, err)
 	require.Len(t, extensions, 1)
 	require.Len(t, extensions[0].Menus, 1)
@@ -1050,13 +1050,13 @@ func TestListEnabledWebUIExtensionsForActorQuarantinesInvalidPlugin(t *testing.T
 	require.Len(t, extensions, 1)
 	require.Equal(t, "catalog-valid", extensions[0].PluginID)
 
-	_, err = ListEnabledWebUIExtensions(db, publicKey)
+	_, err = listEnabledWebUIExtensions(db, publicKey, 0, true, false)
 	require.ErrorIs(t, err, ErrExtensionCatalogIntegrity, "strict diagnostics must still report quarantined catalog corruption")
 }
 
 func TestListEnabledWebUIExtensionsRequiresTrustRootOnlyForActiveCandidates(t *testing.T) {
 	db := newKernelTestDB(t)
-	extensions, err := ListEnabledWebUIExtensions(db, nil)
+	extensions, err := listEnabledWebUIExtensions(db, nil, 0, true, false)
 	require.NoError(t, err)
 	require.NotNil(t, extensions)
 	require.Empty(t, extensions)
@@ -1073,7 +1073,7 @@ func TestListEnabledWebUIExtensionsRequiresTrustRootOnlyForActiveCandidates(t *t
 		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
 		ObservedVersion: manifest.Version, State: "enabled", Enabled: true,
 	}).Error)
-	_, err = ListEnabledWebUIExtensions(db, nil)
+	_, err = listEnabledWebUIExtensions(db, nil, 0, true, false)
 	require.ErrorIs(t, err, ErrPluginTrustRootRequired)
 }
 
@@ -1086,8 +1086,9 @@ func TestStorePluginArtifactExtractsVerifiedWebUIBundle(t *testing.T) {
 
 	_, err := StorePluginArtifact(db, release.ID, artifact)
 	require.NoError(t, err)
-	asset, err := GetPluginWebUIAsset(db, manifest.ID, manifest.Version, manifest.WebUI.Bundle.SHA256)
-	require.NoError(t, err)
+	var asset model.PluginWebUIAsset
+	require.NoError(t, db.First(&asset, "plugin_id = ? AND version = ? AND bundle_sha256 = ?", manifest.ID, manifest.Version, manifest.WebUI.Bundle.SHA256).Error)
+	require.NoError(t, validateStoredPluginWebUIAsset(asset))
 	require.Equal(t, release.ID, asset.ReleaseID)
 	require.Equal(t, manifest.WebUI.Bundle.Path, asset.BundlePath)
 	require.Equal(t, int64(len(source)), asset.SizeBytes)
@@ -1240,7 +1241,7 @@ func TestUpdatePluginConfigurationVerifiesReleaseSchemaAndRevision(t *testing.T)
 	require.NoError(t, db.Create(&installation).Error)
 
 	expected := int64(0)
-	configuration, err := UpdatePluginConfiguration(db, publicKey, installation.ID, ` { "port" : 443 } `, &expected, 42)
+	configuration, err := UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID, ` { "port" : 443 } `, &expected, 42, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), configuration.Revision)
 	require.Equal(t, `{"port":443}`, configuration.ConfigJSON)
@@ -1250,11 +1251,11 @@ func TestUpdatePluginConfigurationVerifiesReleaseSchemaAndRevision(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, configuration.ConfigHash, loaded.ConfigHash)
 
-	_, err = UpdatePluginConfiguration(db, publicKey, installation.ID, `{"port":8443}`, &expected, 42)
+	_, err = UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID, `{"port":8443}`, &expected, 42, nil, nil)
 	require.ErrorIs(t, err, ErrPluginConfigurationConflict)
-	_, err = UpdatePluginConfiguration(db, publicKey, installation.ID, `{"port":0}`, nil, 42)
+	_, err = UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID, `{"port":0}`, nil, 42, nil, nil)
 	require.ErrorContains(t, err, "does not satisfy its schema")
-	_, err = UpdatePluginConfiguration(db, publicKey, installation.ID, `{"port":443,"unexpected":true}`, nil, 42)
+	_, err = UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installation.ID, `{"port":443,"unexpected":true}`, nil, 42, nil, nil)
 	require.ErrorContains(t, err, "does not satisfy its schema")
 
 	var storedInstallation model.PluginInstallation
@@ -1299,7 +1300,7 @@ func TestUpdatePluginConfigurationRunsVersionBoundSemanticValidatorInsideSave(t 
 	require.NoError(t, db.Create(&installation).Error)
 
 	semanticErr := errors.New("semantic contract rejected configuration")
-	_, err = UpdatePluginConfigurationWithValidator(
+	_, err = UpdatePluginConfigurationWithValidatorAndHook(
 		db, publicKey, installation.ID, ` { "port" : 443 } `, nil, 7,
 		func(pluginID, version string, canonicalConfig json.RawMessage) error {
 			require.Equal(t, manifest.ID, pluginID)
@@ -1307,6 +1308,7 @@ func TestUpdatePluginConfigurationRunsVersionBoundSemanticValidatorInsideSave(t 
 			require.JSONEq(t, `{"port":443}`, string(canonicalConfig))
 			return semanticErr
 		},
+		nil,
 	)
 	require.ErrorIs(t, err, semanticErr)
 	var count int64
@@ -1316,7 +1318,7 @@ func TestUpdatePluginConfigurationRunsVersionBoundSemanticValidatorInsideSave(t 
 	require.NoError(t, db.First(&storedInstallation, installation.ID).Error)
 	require.Zero(t, storedInstallation.ConfigRevision)
 
-	configuration, err := UpdatePluginConfigurationWithValidator(
+	configuration, err := UpdatePluginConfigurationWithValidatorAndHook(
 		db, publicKey, installation.ID, ` { "port" : 443 } `, nil, 7,
 		func(pluginID, version string, canonicalConfig json.RawMessage) error {
 			require.Equal(t, manifest.ID, pluginID)
@@ -1324,6 +1326,7 @@ func TestUpdatePluginConfigurationRunsVersionBoundSemanticValidatorInsideSave(t 
 			require.Equal(t, `{"port":443}`, string(canonicalConfig))
 			return nil
 		},
+		nil,
 	)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), configuration.Revision)

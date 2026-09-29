@@ -906,14 +906,6 @@ type WebUIExtensionBundle struct {
 	URL    string `json:"url"`
 }
 
-// ListEnabledWebUIExtensions returns only locally installed administrator
-// extensions whose observed control version exactly matches desired state.
-// Stored release signatures are rechecked so catalog reads fail closed if
-// metadata is corrupted after admission.
-func ListEnabledWebUIExtensions(db *gorm.DB, publicKey ed25519.PublicKey) ([]WebUIExtension, error) {
-	return listEnabledWebUIExtensions(db, publicKey, 0, true, false)
-}
-
 // ListEnabledWebUIExtensionsForActor applies the same authoritative plugin
 // permissions as the control route gateway. Restricted actors only receive
 // routes, menus and declared permissions that they can actually use.
@@ -1252,24 +1244,6 @@ func GetPluginArtifact(db *gorm.DB, releaseID uint) (*model.PluginArtifact, erro
 		return nil, err
 	}
 	return &artifact, nil
-}
-
-func GetPluginWebUIAsset(db *gorm.DB, pluginID, version, bundleSHA256 string) (*model.PluginWebUIAsset, error) {
-	if db == nil {
-		return nil, errors.New("database is not initialized")
-	}
-	pluginID, version, bundleSHA256 = strings.TrimSpace(pluginID), strings.TrimSpace(version), strings.ToLower(strings.TrimSpace(bundleSHA256))
-	if pluginID == "" || version == "" || bundleSHA256 == "" {
-		return nil, errors.New("plugin_id, version and bundle_sha256 are required")
-	}
-	var asset model.PluginWebUIAsset
-	if err := db.First(&asset, "plugin_id = ? AND version = ? AND bundle_sha256 = ?", pluginID, version, bundleSHA256).Error; err != nil {
-		return nil, err
-	}
-	if err := validateStoredPluginWebUIAsset(asset); err != nil {
-		return nil, err
-	}
-	return &asset, nil
 }
 
 // ResolveActivePluginWebUIAsset binds an immutable asset URL to the currently
@@ -2019,24 +1993,11 @@ func GetPluginConfiguration(db *gorm.DB, installationID uint) (*model.PluginConf
 	}, nil
 }
 
-// UpdatePluginConfiguration validates a package configuration against the
-// signed release schema and atomically advances its installation revision.
-// expectedRevision enables optimistic concurrency for independent WebUI pages.
-func UpdatePluginConfiguration(db *gorm.DB, publicKey ed25519.PublicKey, installationID uint, rawConfig string, expectedRevision *int64, actorID uint) (*model.PluginConfiguration, error) {
-	return UpdatePluginConfigurationWithValidator(db, publicKey, installationID, rawConfig, expectedRevision, actorID, nil)
-}
-
 // PluginConfigurationSemanticValidator supplies optional, version-bound
 // package semantics that cannot be expressed safely in JSON Schema.
 type PluginConfigurationSemanticValidator func(pluginID, version string, canonicalConfig json.RawMessage) error
 
 type PluginConfigurationTxHook func(tx *gorm.DB, installation model.PluginInstallation, configuration model.PluginConfiguration) error
-
-// UpdatePluginConfigurationWithValidator runs semantic validation in the same
-// transaction and against the same signed release version that is persisted.
-func UpdatePluginConfigurationWithValidator(db *gorm.DB, publicKey ed25519.PublicKey, installationID uint, rawConfig string, expectedRevision *int64, actorID uint, validator PluginConfigurationSemanticValidator) (*model.PluginConfiguration, error) {
-	return UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, installationID, rawConfig, expectedRevision, actorID, validator, nil)
-}
 
 func UpdatePluginConfigurationWithValidatorAndHook(db *gorm.DB, publicKey ed25519.PublicKey, installationID uint, rawConfig string, expectedRevision *int64, actorID uint, validator PluginConfigurationSemanticValidator, hook PluginConfigurationTxHook) (*model.PluginConfiguration, error) {
 	if db == nil {

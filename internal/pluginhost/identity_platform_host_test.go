@@ -17,7 +17,7 @@ import (
 
 func TestIdentityPlatformCompiledHostUsesTheCapabilityBridge(t *testing.T) {
 	calls := make(chan packagebridge.Call, 1)
-	allowlist, err := packagebridge.NewAllowlist(packagebridge.Operation{
+	allowlist, err := packagebridge.NewAllowlistWithFallback(nil, packagebridge.Operation{
 		PackageID: "identity-platform", RouteID: "identity.auth.login", Name: "identity.auth.login",
 		Handler: func(_ context.Context, call packagebridge.Call) (packagebridge.Response, error) {
 			calls <- call

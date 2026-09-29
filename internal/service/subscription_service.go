@@ -824,11 +824,6 @@ func (s *SubscriptionService) CreateTemplate(template *model.SubscriptionTemplat
 	return s.db.Create(template).Error
 }
 
-// UpdateTemplate 更新订阅模板
-func (s *SubscriptionService) UpdateTemplate(template *model.SubscriptionTemplate) error {
-	return s.db.Save(template).Error
-}
-
 // UpdateTemplateFields 按字段局部更新订阅模板
 func (s *SubscriptionService) UpdateTemplateFields(id uint, fields map[string]any) error {
 	if len(fields) == 0 {

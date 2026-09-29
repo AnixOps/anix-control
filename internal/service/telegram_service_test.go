@@ -376,26 +376,6 @@ func TestTelegramBotServiceHandleAdminRejectsInvalidAdminIDs(t *testing.T) {
 	assert.Contains(t, err.Error(), "parse telegram admin_ids")
 }
 
-func TestParseAdminIDs(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected []int64
-	}{
-		{"", []int64{}},
-		{"[123456789, 987654321]", []int64{123456789, 987654321}},
-		{"[12345]", []int64{12345}},
-		{"invalid", []int64{}}, // JSON unmarshal fails
-	}
-
-	for _, tt := range tests {
-		result := parseAdminIDs(tt.input)
-		if len(tt.expected) == 0 && len(result) == 0 {
-			continue
-		}
-		assert.Equal(t, tt.expected, result, "input: %s", tt.input)
-	}
-}
-
 func TestParseAdminIDsWithError(t *testing.T) {
 	result, err := parseAdminIDsWithError("[123456789,987654321]")
 	require.NoError(t, err)
@@ -405,35 +385,6 @@ func TestParseAdminIDsWithError(t *testing.T) {
 	assert.Nil(t, result)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "parse telegram admin_ids")
-}
-
-func TestTelegramUserService_GetByTelegramID(t *testing.T) {
-	db := setupTelegramTestDB(t)
-	svc := NewTelegramUserService(db)
-
-	// Create test user
-	user := &model.User{
-		Email:          "test@example.com",
-		Token:          "test-token",
-		UUID:           "test-uuid",
-		TransferEnable: 1073741824,
-	}
-	db.Create(user)
-
-	tgUser := &model.TelegramUser{
-		UserID:     user.ID,
-		TelegramID: 12345,
-	}
-	db.Create(tgUser)
-
-	// Test get by telegram ID
-	result, err := svc.GetByTelegramID(12345)
-	require.NoError(t, err)
-	assert.Equal(t, user.ID, result.UserID)
-
-	// Test not found
-	_, err = svc.GetByTelegramID(99999)
-	assert.Error(t, err)
 }
 
 func TestTelegramUserService_GetByUserID(t *testing.T) {
@@ -459,95 +410,6 @@ func TestTelegramUserService_GetByUserID(t *testing.T) {
 	result, err := svc.GetByUserID(user.ID)
 	require.NoError(t, err)
 	assert.Equal(t, int64(12345), result.TelegramID)
-}
-
-func TestTelegramUserService_UpdateLastActive(t *testing.T) {
-	db := setupTelegramTestDB(t)
-	svc := NewTelegramUserService(db)
-
-	// Create test user
-	user := &model.User{
-		Email:          "test@example.com",
-		Token:          "test-token",
-		UUID:           "test-uuid",
-		TransferEnable: 1073741824,
-	}
-	db.Create(user)
-
-	tgUser := &model.TelegramUser{
-		UserID:       user.ID,
-		TelegramID:   12345,
-		MessageCount: 0,
-	}
-	db.Create(tgUser)
-
-	// Update last active
-	err := svc.UpdateLastActive(12345)
-	require.NoError(t, err)
-
-	// Verify
-	var updated model.TelegramUser
-	db.Where("telegram_id = ?", 12345).First(&updated)
-	assert.Equal(t, int64(1), updated.MessageCount)
-}
-
-func TestTelegramUserService_Ban(t *testing.T) {
-	db := setupTelegramTestDB(t)
-	svc := NewTelegramUserService(db)
-
-	// Create test user
-	user := &model.User{
-		Email:          "test@example.com",
-		Token:          "test-token",
-		UUID:           "test-uuid",
-		TransferEnable: 1073741824,
-	}
-	db.Create(user)
-
-	tgUser := &model.TelegramUser{
-		UserID:     user.ID,
-		TelegramID: 12345,
-	}
-	db.Create(tgUser)
-
-	// Ban user
-	err := svc.Ban(12345)
-	require.NoError(t, err)
-
-	// Verify
-	var banned model.TelegramUser
-	db.Where("telegram_id = ?", 12345).First(&banned)
-	assert.True(t, banned.IsBanned)
-}
-
-func TestTelegramUserService_Unban(t *testing.T) {
-	db := setupTelegramTestDB(t)
-	svc := NewTelegramUserService(db)
-
-	// Create test user
-	user := &model.User{
-		Email:          "test@example.com",
-		Token:          "test-token",
-		UUID:           "test-uuid",
-		TransferEnable: 1073741824,
-	}
-	db.Create(user)
-
-	tgUser := &model.TelegramUser{
-		UserID:     user.ID,
-		TelegramID: 12345,
-		IsBanned:   true,
-	}
-	db.Create(tgUser)
-
-	// Unban user
-	err := svc.Unban(12345)
-	require.NoError(t, err)
-
-	// Verify
-	var unbanned model.TelegramUser
-	db.Where("telegram_id = ?", 12345).First(&unbanned)
-	assert.False(t, unbanned.IsBanned)
 }
 
 func TestTelegramBotService_GetTelegramUserService(t *testing.T) {

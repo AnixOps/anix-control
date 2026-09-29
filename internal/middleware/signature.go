@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/gin-gonic/gin"
 )
@@ -160,40 +159,4 @@ func markNonceUsed(nonce string) {
 	}
 	// 添加新的 nonce，有效期与 MaxTimeDiff 相同
 	nonceCache[nonce] = now + MaxTimeDiff
-}
-
-// StrictSignatureAuth 严格签名验证（必须有签名）
-func StrictSignatureAuth() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		signature := c.GetHeader(SignatureHeader)
-		if signature == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"message": "缺少请求签名",
-				"code":    "MISSING_SIGNATURE",
-			})
-			return
-		}
-
-		// 继续到 SignatureAuth 处理
-		SignatureAuth()(c)
-	}
-}
-
-// VerifyNodeSignature 验证节点签名（独立函数，用于特殊场景）
-func VerifyNodeSignature(apiKey, timestamp, method, path, body, signature string) bool {
-	// 查找节点
-	keyHash := sha256Hash(apiKey)
-	var node model.Node
-	db := database.GetDB()
-	if err := db.Where("api_key_hash = ?", keyHash).First(&node).Error; err != nil {
-		return false
-	}
-
-	// 构建签名字符串
-	signData := timestamp + method + path + body
-
-	// 计算期望签名
-	expectedSig := calculateHMAC(signData, node.Secret)
-
-	return hmac.Equal([]byte(signature), []byte(expectedSig))
 }

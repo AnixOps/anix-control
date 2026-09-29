@@ -18,7 +18,7 @@ import (
 
 func TestSessionInvokesOnlyItsMintedRouteCapabilityOnce(t *testing.T) {
 	invocations := make(chan Call, 1)
-	allowlist, err := NewAllowlist(Operation{
+	allowlist, err := NewAllowlistWithFallback(nil, Operation{
 		PackageID: "identity-platform", RouteID: "identity.auth.login", Name: "identity.auth.login",
 		Handler: func(_ context.Context, call Call) (Response, error) {
 			invocations <- call
@@ -68,7 +68,7 @@ func TestSessionInvokesOnlyItsMintedRouteCapabilityOnce(t *testing.T) {
 }
 
 func TestSessionRejectsOperationOutsideTheMintedRoute(t *testing.T) {
-	allowlist, err := NewAllowlist(Operation{
+	allowlist, err := NewAllowlistWithFallback(nil, Operation{
 		PackageID: "identity-platform", RouteID: "identity.auth.login", Name: "identity.auth.login",
 		Handler: func(context.Context, Call) (Response, error) {
 			return Response{StatusCode: 200, Body: []byte(`{}`)}, nil
@@ -89,7 +89,7 @@ func TestSessionRejectsOperationOutsideTheMintedRoute(t *testing.T) {
 }
 
 func TestSessionCloseInvalidatesOutstandingCapabilities(t *testing.T) {
-	allowlist, err := NewAllowlist(Operation{
+	allowlist, err := NewAllowlistWithFallback(nil, Operation{
 		PackageID: "identity-platform", RouteID: "identity.auth.login", Name: "identity.auth.login",
 		Handler: func(context.Context, Call) (Response, error) {
 			return Response{StatusCode: 200, Body: []byte(`{}`)}, nil
@@ -112,7 +112,7 @@ func TestSessionCloseInvalidatesOutstandingCapabilities(t *testing.T) {
 
 func TestSessionRelaysWebSocketThroughMintedCapability(t *testing.T) {
 	calls := make(chan Call, 1)
-	allowlist, err := NewAllowlist()
+	allowlist, err := NewAllowlistWithFallback(nil)
 	require.NoError(t, err)
 	session, child, err := NewSession(
 		HostIdentity{PackageID: "machine-telemetry", Version: "4.0.0", Generation: 7},
