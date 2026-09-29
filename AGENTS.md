@@ -87,7 +87,14 @@ bash config/scripts/check_docs_updated.sh --base origin/go_dev --head HEAD
 bash config/scripts/check_docs_updated.sh --self-test
 bash config/scripts/check_release_workflow.sh
 python3 config/scripts/check_release_version.py --self-test
+GOWORK=off python3 config/scripts/check_plugin_only_routes.py      # 292 /api/v2 routes vs catalog and packages
+GOWORK=off python3 -m unittest discover -s config/scripts -p '*_test.py'
+bash api/pluginhost/gen.sh && bash api/packagebridge/gen.sh      # needs protoc 29.2; then git diff must be empty
 ```
+
+The route gate, the release-script unit tests, and the generated-code drift
+checks for `api/grpc`, `api/pluginhost`, and `api/packagebridge` all run in the
+required "Go Quality Gates" job on every PR.
 
 ## Documentation Sync Gate
 

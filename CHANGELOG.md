@@ -61,6 +61,13 @@
 
 ### Changed
 
+- The required "Go Quality Gates" CI job now runs the plugin-only `/api/v2`
+  route gate (`check_plugin_only_routes.py`, which includes the route catalog
+  check), the `config/scripts` Python unit tests, and generated-code drift
+  checks for `api/pluginhost` and `api/packagebridge` on every pull request.
+  Previously the route gate ran only on release tags and the Python tests never
+  ran in CI.
+
 - Made the `go_dev` CI pipeline green again. Go moves to `1.26.8` (go.mod
   toolchain, CI, SDK sync workflow, and a `golang:1.26-alpine` Docker builder),
   and `google.golang.org/grpc` moves to `v1.83.2` (with `golang.org/x/net`
