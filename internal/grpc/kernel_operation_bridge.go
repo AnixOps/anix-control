@@ -183,33 +183,37 @@ func (b *KernelOperationBridge) dispatchCancellations(ctx context.Context) error
 	return nil
 }
 
-// Start runs durable dispatch until ctx is cancelled. Callers supply logging so
-// this package remains usable by tests and non-server control processes.
+// Start runs Run in a new goroutine.
 func (b *KernelOperationBridge) Start(ctx context.Context, interval time.Duration, reportError func(error)) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	go b.Run(ctx, interval, reportError)
+}
+
+// Run performs durable dispatch every interval and blocks until ctx is
+// cancelled. Callers supply logging so this package remains usable by tests
+// and non-server control processes. ctx must not be nil.
+func (b *KernelOperationBridge) Run(ctx context.Context, interval time.Duration, reportError func(error)) {
 	if interval <= 0 {
 		interval = 5 * time.Second
 	}
-	go func() {
-		run := func() {
-			if _, err := b.RunOnce(ctx); err != nil && reportError != nil && !errors.Is(err, context.Canceled) {
-				reportError(err)
-			}
+	run := func() {
+		if _, err := b.RunOnce(ctx); err != nil && reportError != nil && !errors.Is(err, context.Canceled) {
+			reportError(err)
 		}
-		run()
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				run()
-			}
+	}
+	run()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
 		}
-	}()
+	}
 }
 
 func (b *KernelOperationBridge) dispatchOne(ctx context.Context, operation model.KernelOperation) (bool, error) {

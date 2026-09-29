@@ -270,6 +270,14 @@ func serveAssetFiles(frontendPath string) gin.HandlerFunc {
 }
 
 func main() {
+	if code := run(); code != 0 {
+		os.Exit(code)
+	}
+}
+
+// run starts Control and blocks until shutdown. It returns the process exit
+// code so that deferred cleanup (cache, database) runs before os.Exit.
+func run() int {
 	flag.Parse()
 
 	resolvedConfigPath, resolveErr := resolveConfigPath(configPath)
@@ -475,6 +483,17 @@ func main() {
 	defer cache.CloseMemory()
 	log.Println("Cache initialized: memory")
 
+	// 插件轮询间隔和依赖关系属于纯配置校验，在启动任何组件之前完成，
+	// 配置错误时直接退出，不会留下已启动的监听器或后台任务。
+	pollIntervals, err := parsePluginPollIntervals(cfg)
+	if err != nil {
+		log.Fatalf("Invalid plugin configuration: %v", err)
+	}
+
+	// 根 context：SIGINT/SIGTERM 会取消它，触发下面的有序关闭流程。
+	rootCtx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stopSignals()
+
 	// Bind the required node-facing listener before starting workers or HTTP
 	// servers. A port conflict must fail startup without exposing a partially
 	// initialized Control instance.
@@ -486,248 +505,304 @@ func main() {
 		log.Printf("gRPC server listening on %s", grpcAddr)
 	}
 
-	var controlPluginCancel context.CancelFunc
-	var controlPluginHosts *pluginhost.Supervisor
-	var controlPluginArtifactCleanup func()
+	// 从这里开始已有组件在运行：之后的错误不再 log.Fatal，而是走同一套有序关闭，
+	// 清理完成后以非零状态码退出。
+	rt := &serverRuntime{
+		grpcSrv: grpcSrv,
+		workers: newBackgroundWorkers(rootCtx),
+		fatal:   newFatalErrors(),
+	}
+	exitCode := 0
+	if err := rt.start(cfg, pollIntervals); err != nil {
+		log.Printf("Startup failed, shutting down: %v", err)
+		exitCode = 1
+	} else {
+		select {
+		case <-rootCtx.Done():
+			log.Println("Shutdown signal received, draining in-flight requests...")
+		case err := <-rt.fatal.ch:
+			log.Printf("Fatal runtime error, shutting down: %v", err)
+			exitCode = 1
+		}
+	}
+	rt.shutdown(stopSignals)
+	return exitCode
+}
+
+// pluginPollIntervals holds the validated poll intervals of the optional
+// plugin control loops.
+type pluginPollIntervals struct {
+	control  time.Duration
+	dispatch time.Duration
+	topology time.Duration
+}
+
+func parsePluginPollInterval(key, raw string) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 5 * time.Second, nil
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil || parsed <= 0 {
+		return 0, fmt.Errorf("invalid %s %q", key, raw)
+	}
+	return parsed, nil
+}
+
+func parsePluginPollIntervals(cfg *config.Config) (pluginPollIntervals, error) {
+	var intervals pluginPollIntervals
+	var err error
+	if cfg.Plugins.ControlExecutionEnabled {
+		if intervals.control, err = parsePluginPollInterval("plugins.control_poll_interval", cfg.Plugins.ControlPollInterval); err != nil {
+			return intervals, err
+		}
+	}
+	if cfg.Plugins.DispatchEnabled {
+		if !cfg.GRPC.Enable {
+			return intervals, errors.New("plugin operation dispatch requires grpc.enabled=true")
+		}
+		if intervals.dispatch, err = parsePluginPollInterval("plugins.dispatch_poll_interval", cfg.Plugins.DispatchPollInterval); err != nil {
+			return intervals, err
+		}
+	}
+	if cfg.Plugins.TopologyExecutionEnabled {
+		if !cfg.Plugins.DispatchEnabled {
+			return intervals, errors.New("topology execution requires plugins.dispatch_enabled=true")
+		}
+		if intervals.topology, err = parsePluginPollInterval("plugins.topology_poll_interval", cfg.Plugins.TopologyPollInterval); err != nil {
+			return intervals, err
+		}
+	}
+	return intervals, nil
+}
+
+// serverRuntime owns everything started after the gRPC listener so a single
+// shutdown path can stop it, whether shutdown is triggered by a signal, a
+// startup error, or a fatal runtime error.
+type serverRuntime struct {
+	grpcSrv *grpcserver.Server
+	workers *backgroundWorkers
+	fatal   *fatalErrors
+
+	controlPluginHosts           *pluginhost.Supervisor
+	controlPluginArtifactCleanup func()
+
+	apiSrv      *http.Server
+	frontendSrv *http.Server
+	servers     sync.WaitGroup
+}
+
+// start launches plugin hosts, background workers and HTTP servers. On error
+// it returns immediately; the caller still runs shutdown for whatever started.
+func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals) error {
 	pluginhost.SetDefaultManager(nil)
 	if cfg.Plugins.ControlExecutionEnabled {
-		controlPluginHosts, err = newControlPluginHostManager(cfg)
+		hosts, err := newControlPluginHostManager(cfg)
 		if err != nil {
-			log.Fatalf("Failed to initialize Control plugin hosts: %v", err)
+			return fmt.Errorf("initialize Control plugin hosts: %w", err)
 		}
-		pluginhost.SetDefaultManager(controlPluginHosts)
+		rt.controlPluginHosts = hosts
+		pluginhost.SetDefaultManager(hosts)
 		artifacts, cleanupArtifacts, err := newControlPluginArtifactResolver(cfg)
 		if err != nil {
-			_ = controlPluginHosts.Shutdown(context.Background())
-			log.Fatalf("Failed to initialize Control plugin artifact resolver: %v", err)
+			return fmt.Errorf("initialize Control plugin artifact resolver: %w", err)
 		}
-		controlPluginArtifactCleanup = cleanupArtifacts
+		rt.controlPluginArtifactCleanup = cleanupArtifacts
 		worker, err := plugincontrol.NewOperationWorker(
 			database.Get(),
-			plugincontrol.NewHostLifecycleDispatcher(controlPluginHosts, artifacts),
+			plugincontrol.NewHostLifecycleDispatcher(hosts, artifacts),
 		)
 		if err != nil {
-			controlPluginArtifactCleanup()
-			log.Fatalf("Failed to initialize Control plugin lifecycle worker: %v", err)
-		}
-		interval := 5 * time.Second
-		if raw := strings.TrimSpace(cfg.Plugins.ControlPollInterval); raw != "" {
-			parsed, err := time.ParseDuration(raw)
-			if err != nil || parsed <= 0 {
-				log.Fatalf("Invalid plugins.control_poll_interval %q", raw)
-			}
-			interval = parsed
+			return fmt.Errorf("initialize Control plugin lifecycle worker: %w", err)
 		}
 		queued, err := worker.QueueReconciliation(uuid.NewString())
 		if err != nil {
 			log.Printf("Control plugin restart reconciliation queued with errors: %v", err)
 		}
-		workerCtx, cancelWorker := context.WithCancel(context.Background())
-		controlPluginCancel = cancelWorker
-		worker.Start(workerCtx, interval, func(err error) {
-			log.Printf("Control plugin lifecycle worker error: %v", err)
+		rt.workers.Go("control plugin lifecycle worker", func(ctx context.Context) {
+			worker.Run(ctx, intervals.control, func(err error) {
+				log.Printf("Control plugin lifecycle worker error: %v", err)
+			})
 		})
-		log.Printf("Control plugin host supervision enabled (poll interval %s, reconciliation operations %d)", interval, queued)
+		log.Printf("Control plugin host supervision enabled (poll interval %s, reconciliation operations %d)", intervals.control, queued)
 	}
 
-	// 设置Gin模式
-	go func() {
-		executor := service.NewPanelForwardRuntimeJobExecutor(database.Get())
-		executor.Start(context.Background())
-	}()
+	rt.workers.Go("forward runtime job executor", func(ctx context.Context) {
+		service.NewPanelForwardRuntimeJobExecutor(database.Get()).Start(ctx)
+	})
 
 	if shouldStartForwardAgentBridgeWorker(cfg) {
-		go func() {
-			worker := service.NewForwardAgentBridgeWorker(database.Get())
-			worker.Start(context.Background())
-		}()
+		rt.workers.Go("forward agent bridge worker", func(ctx context.Context) {
+			service.NewForwardAgentBridgeWorker(database.Get()).Start(ctx)
+		})
 	} else {
 		log.Println("Forward clean_agent legacy bridge worker disabled")
 	}
 
-	go func() {
+	rt.workers.Go("forward flow reset worker", func(ctx context.Context) {
 		worker := service.NewForwardFlowResetWorker(database.Get())
 		if err := worker.RunOnce(time.Now()); err != nil {
 			log.Printf("Initial forward flow reset run failed: %v", err)
 		}
-		worker.Start(context.Background())
-	}()
+		worker.Start(ctx)
+	})
 
-	go func() {
+	rt.workers.Go("node monthly reset worker", func(ctx context.Context) {
 		worker := service.NewNodeMonthlyResetWorker(database.Get())
 		if err := worker.RunOnce(time.Now()); err != nil {
 			log.Printf("Initial node monthly reset run failed: %v", err)
 		}
-		worker.Start(context.Background())
-	}()
+		worker.Start(ctx)
+	})
 
-	go func() {
-		worker := service.NewForwardGostStatsWorker(database.Get())
-		worker.Start(context.Background())
-	}()
+	rt.workers.Go("forward gost stats worker", func(ctx context.Context) {
+		service.NewForwardGostStatsWorker(database.Get()).Start(ctx)
+	})
 
-	go func() {
-		worker := service.NewForwardAnsibleStatsWorker(database.Get())
-		worker.Start(context.Background())
-	}()
+	rt.workers.Go("forward ansible stats worker", func(ctx context.Context) {
+		service.NewForwardAnsibleStatsWorker(database.Get()).Start(ctx)
+	})
 
-	go func() {
-		prober := service.NewForwardLatencyProber(database.Get())
-		prober.Start(context.Background())
-	}()
+	rt.workers.Go("forward latency prober", func(ctx context.Context) {
+		service.NewForwardLatencyProber(database.Get()).Start(ctx)
+	})
 
+	// 设置Gin模式
 	gin.SetMode(cfg.Server.Mode)
 
 	// Create HTTP servers with proper timeouts before starting goroutines.
-	apiSrv := newAPIServer(cfg)
-
-	var frontendSrv *http.Server
+	apiSrv, err := newAPIServer(cfg)
+	if err != nil {
+		return err
+	}
+	rt.apiSrv = apiSrv
 	if cfg.Frontend.Enable {
-		frontendSrv = newFrontendServer(cfg)
+		frontendSrv, err := newFrontendServer(cfg)
+		if err != nil {
+			return err
+		}
+		rt.frontendSrv = frontendSrv
 	}
 
-	// Start the servers in goroutines.
-	var wg sync.WaitGroup
-
-	if cfg.Frontend.Enable && frontendSrv != nil {
-		wg.Add(1)
+	// Start the servers in goroutines. A listener failure triggers shutdown.
+	if rt.frontendSrv != nil {
+		rt.servers.Add(1)
 		go func() {
-			defer wg.Done()
-			if err := runFrontendServer(frontendSrv, cfg); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Failed to start frontend server: %v", err)
+			defer rt.servers.Done()
+			if err := runFrontendServer(rt.frontendSrv, cfg); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				rt.fatal.Report(fmt.Errorf("frontend server: %w", err))
 			}
 		}()
 	}
 
-	wg.Add(1)
+	rt.servers.Add(1)
 	go func() {
-		defer wg.Done()
-		if err := runAPIServer(apiSrv); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start API server: %v", err)
+		defer rt.servers.Done()
+		if err := runAPIServer(rt.apiSrv); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			rt.fatal.Report(fmt.Errorf("API server: %w", err))
 		}
 	}()
 
-	var kernelDispatchCancel context.CancelFunc
-	var topologyExecutionCancel context.CancelFunc
 	if cfg.Plugins.DispatchEnabled {
-		if grpcSrv == nil {
-			log.Fatal("Plugin operation dispatch requires grpc.enabled=true")
-		}
-		interval := 5 * time.Second
-		if raw := strings.TrimSpace(cfg.Plugins.DispatchPollInterval); raw != "" {
-			parsed, err := time.ParseDuration(raw)
-			if err != nil || parsed <= 0 {
-				log.Fatalf("Invalid plugins.dispatch_poll_interval %q", raw)
-			}
-			interval = parsed
-		}
-		bridge, err := grpcserver.NewKernelOperationBridge(database.Get(), grpcSrv.GetAgentControlManager())
+		bridge, err := grpcserver.NewKernelOperationBridge(database.Get(), rt.grpcSrv.GetAgentControlManager())
 		if err != nil {
-			log.Fatalf("Failed to initialize plugin operation dispatcher: %v", err)
+			return fmt.Errorf("initialize plugin operation dispatcher: %w", err)
 		}
-		dispatchCtx, cancelDispatch := context.WithCancel(context.Background())
-		kernelDispatchCancel = cancelDispatch
-		bridge.Start(dispatchCtx, interval, func(err error) {
-			log.Printf("Plugin operation dispatcher error: %v", err)
+		rt.workers.Go("plugin operation dispatcher", func(ctx context.Context) {
+			bridge.Run(ctx, intervals.dispatch, func(err error) {
+				log.Printf("Plugin operation dispatcher error: %v", err)
+			})
 		})
-		log.Printf("Plugin operation dispatcher enabled (poll interval %s)", interval)
+		log.Printf("Plugin operation dispatcher enabled (poll interval %s)", intervals.dispatch)
 	}
 	if cfg.Plugins.TopologyExecutionEnabled {
-		if !cfg.Plugins.DispatchEnabled {
-			log.Fatal("Topology execution requires plugins.dispatch_enabled=true")
-		}
-		interval := 5 * time.Second
-		if raw := strings.TrimSpace(cfg.Plugins.TopologyPollInterval); raw != "" {
-			parsed, err := time.ParseDuration(raw)
-			if err != nil || parsed <= 0 {
-				log.Fatalf("Invalid plugins.topology_poll_interval %q", raw)
-			}
-			interval = parsed
-		}
 		executor, err := service.NewTopologyDeploymentExecutor(database.Get())
 		if err != nil {
-			log.Fatalf("Failed to initialize topology deployment executor: %v", err)
+			return fmt.Errorf("initialize topology deployment executor: %w", err)
 		}
-		topologyCtx, cancelTopology := context.WithCancel(context.Background())
-		topologyExecutionCancel = cancelTopology
-		executor.Start(topologyCtx, interval, func(err error) {
-			log.Printf("Topology deployment executor error: %v", err)
+		rt.workers.Go("topology deployment executor", func(ctx context.Context) {
+			executor.Run(ctx, intervals.topology, func(err error) {
+				log.Printf("Topology deployment executor error: %v", err)
+			})
 		})
-		log.Printf("Topology deployment execution enabled (poll interval %s)", interval)
+		log.Printf("Topology deployment execution enabled (poll interval %s)", intervals.topology)
 	}
+	return nil
+}
 
-	// Wait for shutdown signal, then gracefully stop all servers.
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	<-sigChan
-	log.Println("Shutdown signal received, draining in-flight requests...")
-
+// shutdown stops everything start launched, in dependency order: stop taking
+// traffic, stop background work, stop the node-facing gRPC server, then stop
+// plugin hosts. Each blocking step has its own bound. The database and cache
+// are closed afterwards by run's deferred calls.
+func (rt *serverRuntime) shutdown(stopSignals context.CancelFunc) {
 	// Mark servers as draining so /health returns 503 to load balancers.
 	draining.Store(1)
 
-	// Register a second-signal handler for immediate force-exit.
+	// A second signal forces an immediate exit. Register it before releasing
+	// the root signal context so no signal falls through to the default
+	// handler; stopSignals also cancels the root context.
 	forceChan := make(chan os.Signal, 1)
 	signal.Notify(forceChan, syscall.SIGINT, syscall.SIGTERM)
+	stopSignals()
 	go func() {
 		<-forceChan
 		log.Println("Second signal received, forcing immediate exit")
 		os.Exit(1)
 	}()
 
-	// Create a timeout context for graceful shutdown.
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-
 	// Shutdown HTTP servers (drains in-flight requests).
+	httpCtx, cancelHTTP := context.WithTimeout(context.Background(), shutdownTimeout)
 	var httpWg sync.WaitGroup
-	if frontendSrv != nil {
+	for _, srv := range []struct {
+		name string
+		srv  *http.Server
+	}{{"Frontend", rt.frontendSrv}, {"API", rt.apiSrv}} {
+		if srv.srv == nil {
+			continue
+		}
 		httpWg.Add(1)
 		go func() {
 			defer httpWg.Done()
-			if err := frontendSrv.Shutdown(ctx); err != nil {
-				log.Printf("Frontend server shutdown error: %v", err)
+			if err := srv.srv.Shutdown(httpCtx); err != nil {
+				log.Printf("%s server shutdown error: %v", srv.name, err)
 			}
 		}()
 	}
-
-	httpWg.Add(1)
-	go func() {
-		defer httpWg.Done()
-		if err := apiSrv.Shutdown(ctx); err != nil {
-			log.Printf("API server shutdown error: %v", err)
-		}
-	}()
-
 	httpWg.Wait()
+	cancelHTTP()
 	log.Println("HTTP servers shut down gracefully")
 
+	// Background workers observe the cancelled root context; wait for them
+	// before tearing down the gRPC server and plugin hosts they depend on.
+	if stopped, running := rt.workers.Stop(workerStopTimeout); stopped {
+		log.Println("Background workers stopped")
+	} else {
+		log.Printf("Background workers still running after %s: %s", workerStopTimeout, strings.Join(running, ", "))
+	}
+
 	// Stop the gRPC server after HTTP shutdown: it stops accepting new RPCs
-	// and waits for existing ones to finish.
-	if grpcSrv != nil {
-		grpcSrv.Stop()
-	}
-	if kernelDispatchCancel != nil {
-		kernelDispatchCancel()
-	}
-	if topologyExecutionCancel != nil {
-		topologyExecutionCancel()
-	}
-	if controlPluginCancel != nil {
-		controlPluginCancel()
-	}
-	if controlPluginHosts != nil {
-		if err := controlPluginHosts.Shutdown(ctx); err != nil {
-			log.Printf("Control plugin host shutdown error: %v", err)
+	// and waits for existing ones to finish (bounded: agent streams are
+	// long-lived).
+	if rt.grpcSrv != nil {
+		if !waitTimeout(rt.grpcSrv.Stop, grpcStopTimeout) {
+			log.Printf("gRPC server did not stop within %s, continuing shutdown", grpcStopTimeout)
 		}
 	}
+
+	if rt.controlPluginHosts != nil {
+		hostCtx, cancelHosts := context.WithTimeout(context.Background(), pluginHostStopTimeout)
+		if err := rt.controlPluginHosts.Shutdown(hostCtx); err != nil {
+			log.Printf("Control plugin host shutdown error: %v", err)
+		}
+		cancelHosts()
+	}
 	pluginhost.SetDefaultManager(nil)
-	if controlPluginArtifactCleanup != nil {
-		controlPluginArtifactCleanup()
+	if rt.controlPluginArtifactCleanup != nil {
+		rt.controlPluginArtifactCleanup()
 	}
 
 	// Give goroutines time to finish returning from ListenAndServe.
-	wg.Wait()
+	rt.servers.Wait()
 	log.Println("All servers stopped")
 }
 
@@ -855,10 +930,10 @@ func secureControlArtifactRoot(configuredRoot string) (string, error) {
 }
 
 // newAPIServer creates the API server with proper timeouts.
-func newAPIServer(cfg *config.Config) *http.Server {
+func newAPIServer(cfg *config.Config) (*http.Server, error) {
 	r := gin.New()
 	if err := applyTrustedProxies(r, cfg.Server.TrustedProxies); err != nil {
-		log.Fatalf("Failed to configure trusted proxies for API server: %v", err)
+		return nil, fmt.Errorf("configure trusted proxies for API server: %w", err)
 	}
 	router.Setup(r, cfg)
 
@@ -877,7 +952,7 @@ func newAPIServer(cfg *config.Config) *http.Server {
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  120 * time.Second,
-	}
+	}, nil
 }
 
 // runAPIServer starts the API server (blocking).
@@ -887,7 +962,7 @@ func runAPIServer(srv *http.Server) error {
 }
 
 // newFrontendServer creates the frontend server with proper timeouts.
-func newFrontendServer(cfg *config.Config) *http.Server {
+func newFrontendServer(cfg *config.Config) (*http.Server, error) {
 	frontendPath := cfg.Frontend.Path
 	if frontendPath == "" {
 		frontendPath = "web/public"
@@ -897,17 +972,17 @@ func newFrontendServer(cfg *config.Config) *http.Server {
 	if _, err := os.Stat(frontendPath); os.IsNotExist(err) {
 		log.Printf("Frontend directory '%s' not found, creating...", frontendPath)
 		if err := os.MkdirAll(frontendPath, 0o750); err != nil {
-			log.Fatalf("Failed to create frontend directory %q: %v", frontendPath, err)
+			return nil, fmt.Errorf("create frontend directory %q: %w", frontendPath, err)
 		}
 		// 创建默认的 index.html
 		if err := createDefaultIndex(frontendPath); err != nil {
-			log.Fatalf("Failed to create default frontend index in %q: %v", frontendPath, err)
+			return nil, fmt.Errorf("create default frontend index in %q: %w", frontendPath, err)
 		}
 	}
 
 	r := gin.New()
 	if err := applyTrustedProxies(r, cfg.Server.TrustedProxies); err != nil {
-		log.Fatalf("Failed to configure trusted proxies for frontend server: %v", err)
+		return nil, fmt.Errorf("configure trusted proxies for frontend server: %w", err)
 	}
 	r.Use(gin.Recovery())
 
@@ -962,7 +1037,7 @@ func newFrontendServer(cfg *config.Config) *http.Server {
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  120 * time.Second,
-	}
+	}, nil
 }
 
 func frontendAPIProxyTarget(cfg *config.Config) string {

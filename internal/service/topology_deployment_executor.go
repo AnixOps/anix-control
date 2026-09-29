@@ -96,8 +96,7 @@ func NewTopologyDeploymentExecutor(db *gorm.DB) (*TopologyDeploymentExecutor, er
 	}, nil
 }
 
-// Start runs reconciliation until ctx is cancelled. It is deliberately
-// separate from plan/apply HTTP paths so topology execution remains opt-in.
+// Start runs Run in a new goroutine.
 func (e *TopologyDeploymentExecutor) Start(ctx context.Context, interval time.Duration, reportError func(error)) {
 	if e == nil {
 		return
@@ -105,27 +104,35 @@ func (e *TopologyDeploymentExecutor) Start(ctx context.Context, interval time.Du
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	go e.Run(ctx, interval, reportError)
+}
+
+// Run reconciles every interval and blocks until ctx is cancelled. It is
+// deliberately separate from plan/apply HTTP paths so topology execution
+// remains opt-in. ctx must not be nil.
+func (e *TopologyDeploymentExecutor) Run(ctx context.Context, interval time.Duration, reportError func(error)) {
+	if e == nil {
+		return
+	}
 	if interval <= 0 {
 		interval = 5 * time.Second
 	}
-	go func() {
-		run := func() {
-			if _, err := e.RunOnce(ctx); err != nil && reportError != nil && !errors.Is(err, context.Canceled) {
-				reportError(err)
-			}
+	run := func() {
+		if _, err := e.RunOnce(ctx); err != nil && reportError != nil && !errors.Is(err, context.Canceled) {
+			reportError(err)
 		}
-		run()
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				run()
-			}
+	}
+	run()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
 		}
-	}()
+	}
 }
 
 // RunOnce reconciles every active topology deployment. Operations are created
