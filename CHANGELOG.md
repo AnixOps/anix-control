@@ -258,6 +258,27 @@
 
 ### Added
 
+- Kernel module listener and remote bridge sessions (N3).
+  - **Listener.** With `module_runtime.enabled`, the kernel serves `ModulePKI`
+    and the package bridge on an mTLS listener (`module_runtime.listen`,
+    default `:7443`).
+    - TLS 1.3 only.
+    - Every RPC except `Enroll` needs a verified, unrevoked module
+      certificate.
+    - Revocations made by the kernel take effect on the next call.
+  - **Bind and sessions.** Remote instances call `Bind` and get a session
+    token for their package's current generation.
+    - Later calls must carry the token from the same module identity.
+    - Heartbeats keep a session for 15 s and report fencing and draining.
+  - **Generation sessions.** Capabilities now live in a per-generation
+    `GenerationSession`, so any instance of a generation can redeem them,
+    once.
+    - Local hosts keep their private socketpair on top of the same state.
+    - Remote installations are admitted once the remote runtime manager
+      lands; until then `Bind` answers `FailedPrecondition`.
+  - **Maintenance.** The kernel promotes rotated module CAs and prunes expired
+    certificate records every hour.
+
 - Built-in module PKI for network modules (N2).
   - **CA.** `internal/modulepki` is an ECDSA P-256 CA.
     - Its key is sealed under `module_runtime.ca_kek`.

@@ -58,7 +58,14 @@ type StorageLease struct {
 }
 
 // GetPackageConfig returns the calling host's installation configuration.
-func (s *Session) GetPackageConfig(ctx context.Context, _ *packagebridgev1.GetPackageConfigRequest) (*packagebridgev1.GetPackageConfigResponse, error) {
+func (s *Session) GetPackageConfig(ctx context.Context, request *packagebridgev1.GetPackageConfigRequest) (*packagebridgev1.GetPackageConfigResponse, error) {
+	if s == nil {
+		return nil, status.Error(codes.Unavailable, "package bridge is closed")
+	}
+	return s.getPackageConfig(ctx, request)
+}
+
+func (s *GenerationSession) getPackageConfig(ctx context.Context, _ *packagebridgev1.GetPackageConfigRequest) (*packagebridgev1.GetPackageConfigResponse, error) {
 	operations, identity, err := s.hostOperationContext()
 	if err != nil {
 		return nil, err
@@ -75,7 +82,14 @@ func (s *Session) GetPackageConfig(ctx context.Context, _ *packagebridgev1.GetPa
 }
 
 // LeaseStorage returns fresh credentials for the calling host's storage.
-func (s *Session) LeaseStorage(ctx context.Context, _ *packagebridgev1.LeaseStorageRequest) (*packagebridgev1.LeaseStorageResponse, error) {
+func (s *Session) LeaseStorage(ctx context.Context, request *packagebridgev1.LeaseStorageRequest) (*packagebridgev1.LeaseStorageResponse, error) {
+	if s == nil {
+		return nil, status.Error(codes.Unavailable, "package bridge is closed")
+	}
+	return s.leaseStorage(ctx, request)
+}
+
+func (s *GenerationSession) leaseStorage(ctx context.Context, _ *packagebridgev1.LeaseStorageRequest) (*packagebridgev1.LeaseStorageResponse, error) {
 	operations, identity, err := s.hostOperationContext()
 	if err != nil {
 		return nil, err
@@ -92,7 +106,7 @@ func (s *Session) LeaseStorage(ctx context.Context, _ *packagebridgev1.LeaseStor
 	}, nil
 }
 
-func (s *Session) hostOperationContext() (HostOperations, HostIdentity, error) {
+func (s *GenerationSession) hostOperationContext() (HostOperations, HostIdentity, error) {
 	if s == nil {
 		return nil, HostIdentity{}, status.Error(codes.Unavailable, "package bridge is closed")
 	}

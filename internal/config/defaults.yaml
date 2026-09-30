@@ -75,6 +75,7 @@ module_runtime:
   # Network modules (separate services over gRPC with mTLS). Off by default:
   # every package runs as a local child process.
   enabled: false
+  listen: ":7443"
   cluster: "default"
   pki: "builtin"
   cert_lifetime: "24h"

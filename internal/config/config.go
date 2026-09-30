@@ -116,6 +116,9 @@ func effectiveControlHostPayloadLimit(value int64) int64 {
 // separate services and talk to the kernel over gRPC with mTLS.
 type ModuleRuntimeConfig struct {
 	Enabled bool `yaml:"enabled"`
+	// Listen is the address of the kernel's mTLS module listener (ModulePKI
+	// and the remote package bridge).
+	Listen string `yaml:"listen"`
 	// Cluster names the deployment in every module SPIFFE ID.
 	Cluster string `yaml:"cluster"`
 	// PKI is "builtin" (the kernel's own CA, with enrollment) or "external"
@@ -474,6 +477,14 @@ func (m ModuleRuntimeConfig) validate() error {
 		return fmt.Errorf("module_runtime.pki must be %q or %q", ModulePKIBuiltin, ModulePKIExternal)
 	}
 	return nil
+}
+
+// ListenOrDefault returns the module listener address, ":7443" when empty.
+func (m ModuleRuntimeConfig) ListenOrDefault() string {
+	if strings.TrimSpace(m.Listen) == "" {
+		return ":7443"
+	}
+	return strings.TrimSpace(m.Listen)
 }
 
 // ClusterOrDefault returns the configured cluster name, "default" when empty.

@@ -595,6 +595,10 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		log.Printf("Control plugin host supervision enabled (poll interval %s, reconciliation operations %d)", intervals.control, queued)
 	}
 
+	if err := rt.startModuleRuntime(cfg, nil); err != nil {
+		return err
+	}
+
 	// Periodic resets, stats collection, latency probing and the forward job
 	// executors must run in exactly one Control process per database. They
 	// run only while this process holds the singleton-worker lease; another

@@ -122,6 +122,7 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_MODULE_RUNTIME_CLUSTER` | `module_runtime.cluster` | string | `default` |
 | `ANIX_CONTROL_MODULE_RUNTIME_ENABLED` | `module_runtime.enabled` | bool | `false` |
 | `ANIX_CONTROL_MODULE_RUNTIME_KEY_FILE` | `module_runtime.key_file` | string |  |
+| `ANIX_CONTROL_MODULE_RUNTIME_LISTEN` | `module_runtime.listen` | string | `:7443` |
 | `ANIX_CONTROL_MODULE_RUNTIME_PKI` | `module_runtime.pki` | string | `builtin` |
 | `ANIX_CONTROL_MODULE_RUNTIME_TRUST_BUNDLE_FILE` | `module_runtime.trust_bundle_file` | string |  |
 | `ANIX_CONTROL_PLUGINS_CONTROL_EXECUTION_ENABLED` | `plugins.control_execution_enabled` | bool | `true` |

@@ -275,22 +275,89 @@ type capability struct {
 	request Request
 }
 
-// Session owns one endpoint of an inherited Unix socketpair. The returned
-// child file is passed once through exec.ExtraFiles and is never addressable
-// by a filesystem path.
-type Session struct {
-	packagebridgev1.UnimplementedKernelPackageBridgeServer
-
+// GenerationSession is the kernel-side state of one package host generation:
+// its identity, the one-shot capabilities minted for its requests, and the
+// operations it may call. It is independent of the transport: a local host
+// reaches it through its own socketpair Session, and every remote instance
+// of the same generation shares one through the module bridge, so any of
+// them can redeem a capability minted for the generation.
+type GenerationSession struct {
 	mu                sync.Mutex
 	identity          HostIdentity
 	handler           *Allowlist
 	webSocketResolver WebSocketOperationResolver
 	capabilities      map[string]capability
 	maxResponseBody   int64
-	listener          *singleConnListener
-	server            *grpc.Server
 	hostOperations    HostOperations
 	closed            bool
+	draining          bool
+}
+
+// NewGenerationSession returns the state of one host generation.
+func NewGenerationSession(identity HostIdentity, handler *Allowlist, options SessionOptions, webSocketResolvers ...WebSocketOperationResolver) (*GenerationSession, error) {
+	if !safeIdentifier(identity.PackageID) || !safeIdentifier(identity.Version) || identity.Generation == 0 || handler == nil {
+		return nil, errors.New("package bridge session is invalid")
+	}
+	var webSocketResolver WebSocketOperationResolver
+	if len(webSocketResolvers) > 0 {
+		webSocketResolver = webSocketResolvers[0]
+	}
+	return &GenerationSession{
+		identity: identity, handler: handler, webSocketResolver: webSocketResolver, capabilities: make(map[string]capability),
+		maxResponseBody: options.responseLimit(), hostOperations: options.HostOperations,
+	}, nil
+}
+
+// Identity returns the generation's host identity.
+func (g *GenerationSession) Identity() HostIdentity {
+	if g == nil {
+		return HostIdentity{}
+	}
+	return g.identity
+}
+
+// Closed reports whether the generation is fenced.
+func (g *GenerationSession) Closed() bool {
+	if g == nil {
+		return true
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.closed
+}
+
+// SetDraining records whether the kernel is draining the generation; remote
+// instances learn it from their heartbeat.
+func (g *GenerationSession) SetDraining(draining bool) {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.draining = draining
+}
+
+// Draining reports whether the kernel is draining the generation.
+func (g *GenerationSession) Draining() bool {
+	if g == nil {
+		return false
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.draining
+}
+
+// Session owns one endpoint of an inherited Unix socketpair. The returned
+// child file is passed once through exec.ExtraFiles and is never addressable
+// by a filesystem path.
+type Session struct {
+	packagebridgev1.UnimplementedKernelPackageBridgeServer
+
+	*GenerationSession
+	listener  *singleConnListener
+	server    *grpc.Server
+	closeOnce sync.Once
+	closeErr  error
 }
 
 var _ packagebridgev1.KernelPackageBridgeServer = (*Session)(nil)
@@ -301,8 +368,9 @@ func NewSession(identity HostIdentity, handler *Allowlist, webSocketResolvers ..
 
 // NewSessionWithOptions is NewSession with explicit payload limits.
 func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options SessionOptions, webSocketResolvers ...WebSocketOperationResolver) (*Session, *os.File, error) {
-	if !safeIdentifier(identity.PackageID) || !safeIdentifier(identity.Version) || identity.Generation == 0 || handler == nil {
-		return nil, nil, errors.New("package bridge session is invalid")
+	generation, err := NewGenerationSession(identity, handler, options, webSocketResolvers...)
+	if err != nil {
+		return nil, nil, err
 	}
 	fds, err := newSessionSocketpair()
 	if err != nil {
@@ -336,24 +404,19 @@ func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options Se
 		return nil, nil, fmt.Errorf("close package bridge parent descriptor: %w", closeErr)
 	}
 
-	var webSocketResolver WebSocketOperationResolver
-	if len(webSocketResolvers) > 0 {
-		webSocketResolver = webSocketResolvers[0]
-	}
 	session := &Session{
-		identity: identity, handler: handler, webSocketResolver: webSocketResolver, capabilities: make(map[string]capability),
-		maxResponseBody: options.responseLimit(), listener: newSingleConnListener(parentConnection),
-		hostOperations: options.HostOperations,
-		server:         grpc.NewServer(append(panicrecovery.ServerOptions(), grpc.MaxRecvMsgSize(options.receiveMessageLimit()))...),
+		GenerationSession: generation, listener: newSingleConnListener(parentConnection),
+		server: grpc.NewServer(append(panicrecovery.ServerOptions(), grpc.MaxRecvMsgSize(options.receiveMessageLimit()))...),
 	}
 	packagebridgev1.RegisterKernelPackageBridgeServer(session.server, session)
-	go func() { _ = session.server.Serve(session.listener) }()
+	server, listener := session.server, session.listener
+	go func() { _ = server.Serve(listener) }()
 	return session, childFile, nil
 }
 
 // Mint creates an opaque one-shot capability for a dispatch already admitted
 // by the kernel. It is not an authority token that a package can fabricate.
-func (s *Session) Mint(request Request) ([]byte, error) {
+func (s *GenerationSession) Mint(request Request) ([]byte, error) {
 	if s == nil || !safeIdentifier(request.RequestID) || !safeIdentifier(request.RouteID) || request.Deadline.IsZero() || !request.Deadline.After(time.Now()) {
 		return nil, ErrCapabilityRejected
 	}
@@ -371,6 +434,13 @@ func (s *Session) Mint(request Request) ([]byte, error) {
 }
 
 func (s *Session) Invoke(ctx context.Context, request *packagebridgev1.InvokeRequest) (*packagebridgev1.InvokeResponse, error) {
+	if s == nil {
+		return nil, status.Error(codes.Unavailable, "package bridge is closed")
+	}
+	return s.invoke(ctx, request)
+}
+
+func (s *GenerationSession) invoke(ctx context.Context, request *packagebridgev1.InvokeRequest) (*packagebridgev1.InvokeResponse, error) {
 	if request == nil || len(request.GetCapability()) != capabilityBytes || !safeIdentifier(request.GetOperation()) {
 		return nil, capabilityStatusError()
 	}
@@ -411,6 +481,13 @@ func (s *Session) Invoke(ctx context.Context, request *packagebridgev1.InvokeReq
 }
 
 func (s *Session) OpenWebSocket(stream packagebridgev1.KernelPackageBridge_OpenWebSocketServer) error {
+	if s == nil {
+		return status.Error(codes.Unavailable, "package bridge is closed")
+	}
+	return s.openWebSocket(stream)
+}
+
+func (s *GenerationSession) openWebSocket(stream packagebridgev1.KernelPackageBridge_OpenWebSocketServer) error {
 	if stream == nil {
 		return status.Error(codes.InvalidArgument, "package bridge WebSocket stream is required")
 	}
@@ -446,7 +523,7 @@ func (s *Session) OpenWebSocket(stream packagebridgev1.KernelPackageBridge_OpenW
 	return status.Error(codes.Internal, "package bridge WebSocket operation failed")
 }
 
-func (s *Session) take(raw []byte, operation string) (capability, error) {
+func (s *GenerationSession) take(raw []byte, operation string) (capability, error) {
 	if s == nil {
 		return capability{}, ErrBridgeClosed
 	}
@@ -469,7 +546,7 @@ func (s *Session) take(raw []byte, operation string) (capability, error) {
 	return issued, nil
 }
 
-func (s *Session) takeWebSocket(raw []byte, operation string) (capability, WebSocketOperationHandler, error) {
+func (s *GenerationSession) takeWebSocket(raw []byte, operation string) (capability, WebSocketOperationHandler, error) {
 	if s == nil {
 		return capability{}, nil, ErrBridgeClosed
 	}
@@ -502,7 +579,7 @@ func (s *Session) takeWebSocket(raw []byte, operation string) (capability, WebSo
 
 // Revoke removes an unconsumed capability once the outer package-host
 // dispatch returns. Calling it after a successful bridge call is harmless.
-func (s *Session) Revoke(raw []byte) {
+func (s *GenerationSession) Revoke(raw []byte) {
 	if s == nil || len(raw) != capabilityBytes {
 		return
 	}
@@ -513,27 +590,34 @@ func (s *Session) Revoke(raw []byte) {
 	}
 }
 
-func (s *Session) Close() error {
+// Close fences the generation: unconsumed capabilities are dropped and every
+// later call is rejected.
+func (s *GenerationSession) Close() error {
 	if s == nil {
 		return nil
 	}
 	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return nil
-	}
+	defer s.mu.Unlock()
 	s.closed = true
 	s.capabilities = nil
-	listener := s.listener
-	server := s.server
-	s.mu.Unlock()
-	if server != nil {
-		server.Stop()
-	}
-	if listener != nil {
-		return listener.Close()
-	}
 	return nil
+}
+
+// Close fences the generation and closes the socketpair.
+func (s *Session) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.closeOnce.Do(func() {
+		_ = s.GenerationSession.Close()
+		if s.server != nil {
+			s.server.Stop()
+		}
+		if s.listener != nil {
+			s.closeErr = s.listener.Close()
+		}
+	})
+	return s.closeErr
 }
 
 func responseTooLargeStatusError() error {
