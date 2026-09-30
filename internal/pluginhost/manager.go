@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -553,4 +554,33 @@ func (m *Supervisor) hostForNewerLifecycleGeneration(packageID, version string, 
 
 func hostKey(packageID, _ string) string {
 	return packageID
+}
+
+// PackageConn returns a connection to the running host of packageID, for
+// the contracts a package serves beside the host protocol (such as
+// IdentityService). A remote package yields one of its bound instances.
+// Callers must not keep it: restarts and rebinds replace connections.
+func (m *Supervisor) PackageConn(packageID string) (grpc.ClientConnInterface, error) {
+	if m == nil {
+		return nil, ErrHostUnavailable
+	}
+	m.mu.RLock()
+	host := m.hosts[hostKey(packageID, "")]
+	exited := host != nil && hostExited(host)
+	m.mu.RUnlock()
+	if host == nil || exited || host.client == nil {
+		return nil, fmt.Errorf("%w: package %s has no running host", ErrHostUnavailable, packageID)
+	}
+	switch client := host.client.(type) {
+	case *hostClient:
+		return client.connection, nil
+	case *remotePool:
+		picked, _, err := client.pick()
+		if err != nil {
+			return nil, err
+		}
+		return picked.connection, nil
+	default:
+		return nil, fmt.Errorf("%w: package %s host has no connection", ErrHostUnavailable, packageID)
+	}
 }

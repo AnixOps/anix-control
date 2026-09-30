@@ -375,6 +375,25 @@
     - **Discovery:** the OpenID discovery document.
   - CI and the local gates tidy, vet, test, race-test, lint, scan and
     vulnerability-check the new module.
+- Control verifies identity tokens (N10b, kernel side).
+  - **Key refresh.** `internal/identitykeys` pulls the identity module's
+    token keys with `IdentityService.GetTokenKeys`. It refreshes every 5
+    minutes, and at once (rate limited) when a token names an unknown `kid`.
+    - Keys are persisted in the new table `v4_kernel_identity_token_key`, so
+      tokens keep verifying while identity is down.
+    - Refused: keys with another issuer or audience, and malformed keys.
+    - Keys identity no longer lists are dropped; revoked keys are kept so
+      their tokens fail.
+  - **Verification.** `internal/authn` accepts EdDSA tokens (issuer
+    `anixops-identity`, audience `anix-control`) beside the kernel's HS256
+    tokens, for the HTTP middleware, the monitor WebSocket and the gRPC
+    interceptor. The same revocation store checks both kinds (token version,
+    session, not-before).
+  - **JWKS.** `GET /api/v4/identity/jwks.json` (public, cached 5 minutes)
+    publishes the accepted keys.
+  - **Host connection.** `pluginhost.Supervisor.PackageConn` reaches a
+    running package host, local or remote, for contracts it serves beside
+    the host protocol.
 - Identity signing keys in the identity module (N10b, host side).
   - **Storage.** identity-platform now declares `kernel.storage.v1`. Its
     embedded migration index adds `002_signing_keys`, which the kernel ledger

@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"time"
 
@@ -164,6 +165,23 @@ func (s JWKS) KeySet() (KeySet, error) {
 		keys[key.KeyID] = Key{ID: key.KeyID, PublicKey: ed25519.PublicKey(raw)}
 	}
 	return keys, nil
+}
+
+// Published returns the key set as a JWKS in key id order, leaving out
+// revoked keys.
+func (s KeySet) Published() JWKS {
+	ids := make([]string, 0, len(s))
+	for id, key := range s {
+		if !key.Revoked {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	document := JWKS{Keys: make([]JWK, 0, len(ids))}
+	for _, id := range ids {
+		document.Keys = append(document.Keys, NewJWK(id, s[id].PublicKey))
+	}
+	return document
 }
 
 // ParseJWKS decodes a JSON Web Key Set document.

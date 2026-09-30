@@ -13,6 +13,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -309,6 +310,11 @@ type RemoteConfig struct {
 
 // EnableRemote is unavailable without Unix package hosts.
 func (m *Supervisor) EnableRemote(RemoteConfig) error { return ErrHostUnavailable }
+
+// PackageConn has no host to reach without Unix package hosts.
+func (m *Supervisor) PackageConn(string) (grpc.ClientConnInterface, error) {
+	return nil, ErrHostUnavailable
+}
 
 // BindInstance admits no remote instance without Unix package hosts.
 func (m *Supervisor) BindInstance(context.Context, packagebridge.InstanceBinding) (*packagebridge.GenerationSession, error) {
