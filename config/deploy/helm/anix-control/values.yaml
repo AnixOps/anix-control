@@ -68,6 +68,41 @@ grpc:
     annotations: {}
     loadBalancerSourceRanges: []
 
+# Network modules (docs/architecture/module-runtime.md): packages that run as
+# their own Deployments and talk to Control over gRPC with mTLS on a module
+# listener. Control must then also have its CA key: add
+#   secrets.files.module_ca_kek: ANIX_CONTROL_MODULE_RUNTIME_CA_KEK
+# with a 32-byte base64 value (openssl rand -base64 32).
+moduleRuntime:
+  enabled: false
+  port: 7443
+  cluster: default
+  # "builtin" (Control's own CA, with enrollment) or "external" (cert-manager;
+  # then configure ANIX_CONTROL_MODULE_RUNTIME_* file paths in config).
+  pki: builtin
+  # PostgreSQL address modules use for their storage leases, when it differs
+  # from ANIX_CONTROL_DATABASE_HOST (host or host:port).
+  databaseHost: ""
+  networkPolicy:
+    enabled: false
+    # CIDR of PostgreSQL for module egress; empty allows port 5432 anywhere.
+    databaseCIDR: ""
+
+# One Deployment per network module. The chart README lists the bootstrap
+# (trust bundle ConfigMap, enrollment Secret, runtime switch) to run first.
+modules: {}
+#  identity-platform:
+#    enabled: true
+#    image:
+#      repository: ghcr.io/anixops/anix-module-identity-platform
+#      tag: ""
+#      digest: ""
+#      pullPolicy: IfNotPresent
+#    replicas: 2
+#    trustBundleConfigMap: anix-module-ca     # key ca.pem
+#    enrollmentSecret: anix-identity-enrollment  # key credential, reusable
+#    resources: {}
+
 ingress:
   enabled: false
   className: ""

@@ -71,3 +71,19 @@ func TestModulePKIBootstrapIsOptional(t *testing.T) {
 	cfg := &config.Config{ModuleRuntime: config.ModuleRuntimeConfig{Enabled: true, CAKEK: "short"}}
 	require.Error(t, ensureModulePKI(context.Background(), cfg, db))
 }
+
+func TestModuleCommandSelectsRuntimes(t *testing.T) {
+	cfg, db := moduleCommandFixture(t)
+	require.NoError(t, db.AutoMigrate(&model.Plugin{}, &model.PluginRuntime{}))
+	require.NoError(t, db.Create(&model.Plugin{ID: "identity-platform", Name: "Identity", Publisher: "AnixOps", Official: true}).Error)
+	ctx := context.Background()
+	var output bytes.Buffer
+	require.NoError(t, runModuleCommand(ctx, cfg, db, []string{"runtime", "set", "identity-platform", "local"}, &output))
+	require.Contains(t, output.String(), `"runtime": "local"`)
+	err := runModuleCommand(ctx, cfg, db, []string{"runtime", "set", "identity-platform", "remote"}, &output)
+	require.ErrorContains(t, err, "requires PostgreSQL")
+	output.Reset()
+	require.NoError(t, runModuleCommand(ctx, cfg, db, []string{"runtime", "list"}, &output))
+	require.Contains(t, output.String(), `"plugin_id": "identity-platform"`)
+	require.Error(t, runModuleCommand(ctx, cfg, db, []string{"runtime", "set", "identity-platform"}, &output))
+}

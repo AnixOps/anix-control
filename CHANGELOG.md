@@ -66,6 +66,8 @@
 
 ### Changed
 
+- `anix-control module ...` commands log to stderr, so their JSON output on
+  stdout can be piped (for example into `jq`).
 - The AnixOps contracts and SDKs are now their own Go module,
   `github.com/AnixOps/anix-control/sdk`, in `sdk/`.
   - **Moves.** `api/{pluginhost,packagebridge,modulepki,identity,kernelidentity}`
@@ -274,6 +276,29 @@
 
 ### Added
 
+- Deployment of network modules (N6).
+  - **`Dockerfile.module`.** One image per package, built from the
+    package's own host or the generic host. Distroless, uid 65532, about
+    15 MB, remote mode by default.
+    - `go_dev` publishes `ghcr.io/anixops/anix-module-identity-platform:edge`
+      and `:sha-<commit>` for amd64 and arm64, signed with cosign.
+  - **Compose.** The `docker-compose.modules.yml` overlay runs
+    identity-platform as its own container next to Control; the guide is
+    `config/deploy/compose/modules.md`.
+  - **Helm (chart 0.2.0).**
+    - `moduleRuntime` turns on Control's mTLS module listener: port 7443 on
+      the Deployment and Service, and the CA key from the Secret.
+    - `modules.<id>` adds one Deployment per module, with an optional
+      NetworkPolicy.
+    - Rendering fails without a CA key or with modules but no module
+      runtime.
+  - **CLI.** `anix-control module runtime list|set` selects a package's
+    runtime (`local` or `remote`).
+  - **CI smoke tests.** Both build the module image and log in through
+    identity-platform running as a separate service:
+    `modules_compose_smoke.sh` (production Compose files) and
+    `modules_kind_smoke.sh` (the chart on kind, two replicas, NetworkPolicy
+    on, pod replacement).
 - Module SDK for network modules (N5).
   - **`pkg/modulesdk.Run`.** Runs a host as the kernel's local child process
     or, with `ANIX_MODULE_MODE=remote`, as a network module.

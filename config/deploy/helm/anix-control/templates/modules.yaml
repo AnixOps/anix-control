@@ -1,0 +1,180 @@
+{{- range $id, $module := .Values.modules }}
+{{- if $module.enabled }}
+{{- if not $.Values.moduleRuntime.enabled }}
+{{- fail (printf "modules.%s needs moduleRuntime.enabled" $id) }}
+{{- end }}
+{{- if not $module.image.repository }}
+{{- fail (printf "modules.%s.image.repository is required" $id) }}
+{{- end }}
+{{- $name := printf "%s-module-%s" (include "anix-control.fullname" $) $id | trunc 63 | trimSuffix "-" }}
+{{- $labels := dict "root" $ "id" $id }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "anix-control.moduleLabels" $labels | nindent 4 }}
+spec:
+  replicas: {{ default 1 $module.replicas }}
+  selector:
+    matchLabels:
+      {{- include "anix-control.moduleSelectorLabels" $labels | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "anix-control.moduleLabels" $labels | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # Readiness fails first, then the module keeps serving for its grace.
+      terminationGracePeriodSeconds: 40
+      containers:
+        - name: module
+          image: {{ include "anix-control.moduleImage" (dict "image" $module.image "appVersion" $.Chart.AppVersion) }}
+          imagePullPolicy: {{ default "IfNotPresent" $module.image.pullPolicy }}
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: ANIX_MODULE_KERNEL_ADDR
+              value: {{ printf "%s:%d" (include "anix-control.fullname" $) (int $.Values.moduleRuntime.port) | quote }}
+            - name: ANIX_MODULE_CLUSTER
+              value: {{ $.Values.moduleRuntime.cluster | quote }}
+            - name: ANIX_MODULE_INSTANCE_ID
+              value: $(POD_NAME)
+            - name: ANIX_MODULE_ADVERTISE_ADDR
+              value: $(POD_IP):7000
+            - name: ANIX_MODULE_TRUST_BUNDLE_FILE
+              value: /etc/anix-module/trust/ca.pem
+            - name: ANIX_MODULE_ENROLL_CREDENTIAL_FILE
+              value: /etc/anix-module/enrollment/credential
+            {{- with $module.image.digest }}
+            - name: ANIX_MODULE_IMAGE_DIGEST
+              value: {{ . | quote }}
+            {{- end }}
+          ports:
+            - name: host
+              containerPort: 7000
+              protocol: TCP
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /livez
+              port: health
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: health
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            # Certificates are per pod; a restarted pod enrolls again with the
+            # reusable credential.
+            - name: state
+              mountPath: /var/lib/anix-module
+            - name: trust
+              mountPath: /etc/anix-module/trust
+              readOnly: true
+            - name: enrollment
+              mountPath: /etc/anix-module/enrollment
+              readOnly: true
+          {{- with $module.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: state
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: trust
+          configMap:
+            name: {{ required (printf "modules.%s.trustBundleConfigMap is required" $id) $module.trustBundleConfigMap }}
+            items:
+              - key: ca.pem
+                path: ca.pem
+        - name: enrollment
+          secret:
+            secretName: {{ required (printf "modules.%s.enrollmentSecret is required" $id) $module.enrollmentSecret }}
+            defaultMode: 0400
+            items:
+              - key: credential
+                path: credential
+{{- if $.Values.moduleRuntime.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "anix-control.moduleLabels" $labels | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "anix-control.moduleSelectorLabels" $labels | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    # Only Control dials the host protocol.
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "anix-control.selectorLabels" $ | nindent 14 }}
+      ports:
+        - port: 7000
+          protocol: TCP
+    # Kubelet probes.
+    - ports:
+        - port: 8081
+          protocol: TCP
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "anix-control.selectorLabels" $ | nindent 14 }}
+      ports:
+        - port: {{ $.Values.moduleRuntime.port }}
+          protocol: TCP
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - {{- with $.Values.moduleRuntime.networkPolicy.databaseCIDR }}
+      to:
+        - ipBlock:
+            cidr: {{ . }}
+      {{- end }}
+      ports:
+        - port: 5432
+          protocol: TCP
+{{- end }}
+{{- end }}
+{{- end }}

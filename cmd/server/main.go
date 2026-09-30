@@ -380,7 +380,12 @@ func run() int {
 			log.Fatalf("Invalid config: %v", err)
 		}
 	}
-	logging.Setup(cfg.Log)
+	if moduleArguments != nil {
+		// Module commands print their result on stdout; logs go to stderr.
+		logging.SetupTo(cfg.Log, os.Stderr)
+	} else {
+		logging.Setup(cfg.Log)
+	}
 
 	// 打印环境信息
 	driver := strings.ToLower(cfg.Database.Driver)

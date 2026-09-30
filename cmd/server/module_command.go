@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"gorm.io/gorm"
 )
 
@@ -20,6 +22,8 @@ const moduleCommandUsage = `usage:
   anix-control module token revoke <enrollment-id>
   anix-control module ca rotate
   anix-control module ca bundle
+  anix-control module runtime list
+  anix-control module runtime set <plugin-id> <local|remote>
 
 The config file comes from ANIX_CONTROL_CONFIG or config/config.yaml.`
 
@@ -44,12 +48,30 @@ func runModuleCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, argu
 	if len(arguments) < 2 {
 		return moduleUsageError()
 	}
+	encoder := json.NewEncoder(stdout)
+	encoder.SetIndent("", "  ")
+	// Runtime selection needs no PKI: it only records the package runtime.
+	switch arguments[0] + " " + arguments[1] {
+	case "runtime list":
+		var rows []model.PluginRuntime
+		if err := db.WithContext(ctx).Order("plugin_id").Find(&rows).Error; err != nil {
+			return err
+		}
+		return encoder.Encode(rows)
+	case "runtime set":
+		if len(arguments) != 4 {
+			return moduleUsageError()
+		}
+		row, err := service.SetPluginRuntime(ctx, db, arguments[2], arguments[3], cfg.ModuleRuntime.Enabled, 0)
+		if err != nil {
+			return err
+		}
+		return encoder.Encode(row)
+	}
 	authority, err := modulepki.FromConfig(cfg.ModuleRuntime, db)
 	if err != nil {
 		return err
 	}
-	encoder := json.NewEncoder(stdout)
-	encoder.SetIndent("", "  ")
 	switch arguments[0] + " " + arguments[1] {
 	case "token create":
 		flags := flag.NewFlagSet("module token create", flag.ContinueOnError)

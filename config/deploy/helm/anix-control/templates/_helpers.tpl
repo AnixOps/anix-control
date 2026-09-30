@@ -22,6 +22,23 @@ app.kubernetes.io/name: {{ include "anix-control.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
+{{/*
+Network module labels. They must not match the Control selector, which would
+put module pods behind the Control Service.
+*/}}
+{{- define "anix-control.moduleSelectorLabels" -}}
+app.kubernetes.io/name: anix-module
+app.kubernetes.io/instance: {{ .root.Release.Name }}
+app.kubernetes.io/component: {{ .id }}
+{{- end -}}
+
+{{- define "anix-control.moduleLabels" -}}
+helm.sh/chart: {{ printf "%s-%s" .root.Chart.Name .root.Chart.Version | replace "+" "_" }}
+{{ include "anix-control.moduleSelectorLabels" . }}
+app.kubernetes.io/part-of: {{ include "anix-control.name" .root }}
+app.kubernetes.io/managed-by: {{ .root.Release.Service }}
+{{- end -}}
+
 {{- define "anix-control.image" -}}
 {{- if .Values.image.digest -}}
 {{- printf "%s@%s" .Values.image.repository .Values.image.digest -}}
@@ -48,6 +65,42 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 - name: {{ printf "%s_FILE" $variable }}
   value: {{ printf "/run/secrets/anix-control/%s" $key | quote }}
 {{- end }}
+{{- if .Values.moduleRuntime.enabled }}
+- name: ANIX_CONTROL_MODULE_RUNTIME_ENABLED
+  value: "true"
+- name: ANIX_CONTROL_MODULE_RUNTIME_LISTEN
+  value: {{ printf ":%d" (int .Values.moduleRuntime.port) | quote }}
+- name: ANIX_CONTROL_MODULE_RUNTIME_CLUSTER
+  value: {{ .Values.moduleRuntime.cluster | quote }}
+- name: ANIX_CONTROL_MODULE_RUNTIME_PKI
+  value: {{ .Values.moduleRuntime.pki | quote }}
+{{- with .Values.moduleRuntime.databaseHost }}
+- name: ANIX_CONTROL_MODULE_RUNTIME_DATABASE_HOST
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/* Fail early when the module runtime lacks its CA key. */}}
+{{- define "anix-control.validateModuleRuntime" -}}
+{{- if and .Values.moduleRuntime.enabled (eq .Values.moduleRuntime.pki "builtin") }}
+{{- $found := false }}
+{{- range $key, $variable := .Values.secrets.files }}
+{{- if eq $variable "ANIX_CONTROL_MODULE_RUNTIME_CA_KEK" }}{{ $found = true }}{{ end }}
+{{- end }}
+{{- if not $found }}
+{{- fail "moduleRuntime.enabled with pki=builtin needs secrets.files.<key>: ANIX_CONTROL_MODULE_RUNTIME_CA_KEK" }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{- define "anix-control.moduleImage" -}}
+{{- $image := .image -}}
+{{- if $image.digest -}}
+{{- printf "%s@%s" $image.repository $image.digest -}}
+{{- else -}}
+{{- printf "%s:%s" $image.repository (default .appVersion $image.tag) -}}
+{{- end -}}
 {{- end -}}
 
 {{- define "anix-control.envFrom" -}}
