@@ -45,13 +45,17 @@ type route struct {
 	Binding         string `json:"binding"`
 	PackageID       string `json:"package_id"`
 	RouteID         string `json:"route_id"`
+	// LegacyHandler is the legacy gin handler a bridged route keeps
+	// registered for the package bridge; empty for direct bindings.
+	LegacyHandler string `json:"legacy_handler"`
 }
 
 type handlerRegistration struct {
-	handler   string
-	binding   string
-	packageID string
-	routeID   string
+	handler       string
+	binding       string
+	packageID     string
+	routeID       string
+	legacyHandler string
 }
 
 type group struct {
@@ -933,6 +937,7 @@ func (c *collector) registerArguments(target *group, method string, args []ast.E
 			Binding:         registration.binding,
 			PackageID:       registration.packageID,
 			RouteID:         registration.routeID,
+			LegacyHandler:   registration.legacyHandler,
 		})
 	}
 	return nil
@@ -973,7 +978,11 @@ func packageGatewayHandlerRegistration(expression ast.Expr, env *scope) (handler
 	if wrapper == "registeredPackageWebSocketRoute" {
 		binding = "package-websocket"
 	}
-	return handlerRegistration{handler: gateway, binding: binding, packageID: packageID, routeID: routeID}, nil
+	legacyHandler := expressionIdentifier(call.Args[3])
+	if legacyHandler == "" {
+		return handlerRegistration{}, fmt.Errorf("%s legacy handler argument has no handler identifier", wrapper)
+	}
+	return handlerRegistration{handler: gateway, binding: binding, packageID: packageID, routeID: routeID, legacyHandler: legacyHandler}, nil
 }
 
 func isHTTPMethod(method string) bool {

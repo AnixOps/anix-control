@@ -28,6 +28,10 @@ class PluginOnlyRoutesTest(unittest.TestCase):
         declaration_owner: str | None = None,
         declaration_routes: list[dict[str, str]] | None = None,
         include_generic_host: bool = True,
+        mode: str = "bridged",
+        legacy: str = "router",
+        package_host_source: str | None = None,
+        identity_bridge_source: str = "",
     ) -> tuple[Path, Path, Path]:
         packages_root = root / "packages"
         package_root = packages_root / owner
@@ -85,6 +89,22 @@ class PluginOnlyRoutesTest(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        (root / "extraction.json").write_text(
+            json.dumps(
+                {
+                    "format": "anixops.package-extraction/v1",
+                    "routes": [
+                        {"method": method, "path": path, "package_id": owner, "route_id": route_id, "mode": mode, "legacy": legacy}
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        if package_host_source is not None:
+            (package_root / "control").mkdir()
+            (package_root / "control" / "main.go").write_text(package_host_source, encoding="utf-8")
+        (root / "identitybridge").mkdir()
+        (root / "identitybridge" / "bridge.go").write_text(identity_bridge_source, encoding="utf-8")
         if handler is None:
             handler = (
                 f'registeredPackageWebSocketRoute(v2WebSocketGateway.Serve, "{owner}", "{route_id}", legacyHandler, nil)'
@@ -134,6 +154,10 @@ GROUP
                 str(packages_root),
                 "--expected-route-count",
                 str(expected_route_count),
+                "--extraction",
+                str(catalog.parent / "extraction.json"),
+                "--identity-bridge",
+                str(catalog.parent / "identitybridge"),
             ],
             cwd=REPO_ROOT,
             check=False,
@@ -218,6 +242,87 @@ GROUP
 
         self.assertNotEqual(0, result.returncode)
         self.assertIn("expected 292 routes", result.stderr)
+
+    def test_extraction_map_expresses_the_identity_bridge_exception(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(
+                Path(temporary), handler="v2PackageGateway.Serve", legacy="identity-bridge",
+                identity_bridge_source='package identitybridge\nvar ids = []string{"knowledge.article.list"}\n',
+            )
+            accepted = self.run_gate(catalog, router, packages_root)
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(
+                Path(temporary), handler="v2PackageGateway.Serve", legacy="identity-bridge"
+            )
+            missing = self.run_gate(catalog, router, packages_root)
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(Path(temporary), handler="v2PackageGateway.Serve")
+            undeclared = self.run_gate(catalog, router, packages_root)
+
+        self.assertEqual(0, accepted.returncode, accepted.stderr)
+        self.assertIn("identity bridge has no legacy handler", missing.stderr)
+        self.assertIn("package bridge binding mismatch", undeclared.stderr)
+
+    def test_native_route_must_drop_its_legacy_handler(self) -> None:
+        host = 'package main\nconst route = "knowledge.article.list"\n'
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(
+                Path(temporary), handler="v2PackageGateway.Serve", mode="native", legacy="none", package_host_source=host
+            )
+            accepted = self.run_gate(catalog, router, packages_root)
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(
+                Path(temporary), mode="native", legacy="none", package_host_source=host
+            )
+            kept_legacy = self.run_gate(catalog, router, packages_root)
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(
+                Path(temporary), handler="v2PackageGateway.Serve", mode="native", legacy="none", package_host_source=host,
+                identity_bridge_source='package identitybridge\nvar ids = []string{"knowledge.article.list"}\n',
+            )
+            kept_bridge = self.run_gate(catalog, router, packages_root)
+
+        self.assertEqual(0, accepted.returncode, accepted.stderr)
+        self.assertIn("native route GET /api/v2/user/knowledge registers legacy handler legacyHandler", kept_legacy.stderr)
+        self.assertIn("still has an identity bridge handler", kept_bridge.stderr)
+
+    def test_native_modes_need_a_package_host_that_implements_the_route(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(Path(temporary), mode="native-flagged")
+            generic_only = self.run_gate(catalog, router, packages_root)
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(
+                Path(temporary), mode="native-flagged", package_host_source='package main\nconst route = "knowledge.article.list"\n'
+            )
+            flagged = self.run_gate(catalog, router, packages_root)
+
+        self.assertIn("has no native implementation", generic_only.stderr)
+        self.assertEqual(0, flagged.returncode, flagged.stderr)
+        self.assertIn("1 native-flagged", flagged.stdout)
+
+    def test_extraction_map_rejects_inconsistent_rows(self) -> None:
+        cases = {
+            "native with legacy": ({"mode": "native", "legacy": "router"}, "does not match legacy source"),
+            "bridged without legacy": ({"mode": "bridged", "legacy": "none"}, "does not match legacy source"),
+            "unknown mode": ({"mode": "shadow", "legacy": "router"}, "unsupported mode"),
+        }
+        for name, (row, message) in cases.items():
+            with self.subTest(name), tempfile.TemporaryDirectory() as temporary:
+                catalog, router, packages_root = self.write_fixture(Path(temporary), **row)
+                result = self.run_gate(catalog, router, packages_root)
+                self.assertIn(message, result.stderr)
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(Path(temporary))
+            extraction = catalog.parent / "extraction.json"
+            document = json.loads(extraction.read_text(encoding="utf-8"))
+            document["routes"][0]["route_id"] = "knowledge.other"
+            extraction.write_text(json.dumps(document), encoding="utf-8")
+            mismatch = self.run_gate(catalog, router, packages_root)
+            document["routes"] = []
+            extraction.write_text(json.dumps(document), encoding="utf-8")
+            missing = self.run_gate(catalog, router, packages_root)
+        self.assertIn("package extraction mismatch", mismatch.stderr)
+        self.assertIn("missing package extraction row", missing.stderr)
 
 
 if __name__ == "__main__":

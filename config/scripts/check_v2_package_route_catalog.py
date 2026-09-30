@@ -56,7 +56,7 @@ ALLOWED_MIDDLEWARE_GROUPS = frozenset({"public", "user", "admin", "agent", "node
 ALLOWED_TRANSPORTS = frozenset({"http", "websocket"})
 CATALOG_FIELDS = frozenset({"method", "path", "owner", "route_id", "envelope", "middleware_group", "transport"})
 INVENTORY_FIELDS = frozenset({"method", "path", "handler", "middleware_group", "transport"})
-INVENTORY_OPTIONAL_FIELDS = frozenset({"binding", "package_id", "route_id"})
+INVENTORY_OPTIONAL_FIELDS = frozenset({"binding", "package_id", "route_id", "legacy_handler"})
 
 
 class CatalogError(ValueError):
@@ -88,6 +88,7 @@ class InventoryRoute:
     binding: str = ""
     package_id: str = ""
     route_id: str = ""
+    legacy_handler: str = ""
 
     @property
     def key(self) -> tuple[str, str]:
@@ -140,6 +141,7 @@ def load_inventory(path: Path | None, raw_inventory: str | None = None) -> tuple
             binding=optional_string(row, "binding", context),
             package_id=optional_string(row, "package_id", context),
             route_id=optional_string(row, "route_id", context),
+            legacy_handler=optional_string(row, "legacy_handler", context),
         )
         validate_inventory_route(route, context)
         if route.key in seen:
