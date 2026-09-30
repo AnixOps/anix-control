@@ -28,8 +28,9 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). All 292 routes are `bridged`; the
-  identity routes are `identity-bridge`. `check_plugin_only_routes.py`
+  (`router`, `identity-bridge` or `none`). 21 routes are `native-flagged`:
+  identity's group A (15) and the knowledge pilot (6). The rest are `bridged`.
+  The identity routes are `identity-bridge`. `check_plugin_only_routes.py`
   enforces the map against the router and the identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
@@ -166,6 +167,20 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   `v4_<pkg>_*` shapes in section 6 are long-term targets, not the first step.
 - Consistency evidence is the shadow mismatch counter plus the migration
   validation digest (row count + content hash).
+- **Knowledge pilot (in place).** It is the pattern for self-contained
+  domains.
+  - `packages/knowledge` declares `kernel.storage.v1` and
+    `kernel.storage.adopt:v2_knowledge`.
+  - Its host (`packages/knowledge/control`) serves all 6 routes natively on
+    the adopted table (`packages/knowledge/native`), and
+    `internal/tests/knowledgecompat` proves byte parity on SQLite and
+    PostgreSQL.
+  - Legacy handlers and native routes share the table, so a route's mode
+    (the installation's `routes` configuration, optionally `shadow` for GETs
+    first) can switch either way at any time. There is no import and no
+    finalize.
+  - Deleting the legacy handlers (mode `native`) follows once the operator
+    has run natively for a release.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, later
   `kapi_plan_catalog_v1`). Packages read other domains only through `kapi_*`
