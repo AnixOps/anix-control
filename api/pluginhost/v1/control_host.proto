@@ -10,6 +10,9 @@ service ControlPackageHost {
   rpc Migrate(MigrationRequest) returns (MigrationResponse);
   rpc Health(HealthRequest) returns (HealthResponse);
   rpc Drain(DrainRequest) returns (DrainResponse);
+  // Resume undoes a Drain of the same route generation. Remote modules
+  // cannot be restarted by the kernel, so a drain must be reversible.
+  rpc Resume(ResumeRequest) returns (ResumeResponse);
 }
 
 message DispatchRequest {
@@ -101,4 +104,12 @@ message DrainRequest {
 message DrainResponse {
   bool drained = 1;
   uint64 in_flight = 2;
+}
+
+message ResumeRequest {
+  uint64 route_generation = 1;
+}
+
+message ResumeResponse {
+  bool resumed = 1;
 }

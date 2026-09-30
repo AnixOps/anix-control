@@ -24,6 +24,7 @@ const (
 	ControlPackageHost_Migrate_FullMethodName       = "/anix.pluginhost.v1.ControlPackageHost/Migrate"
 	ControlPackageHost_Health_FullMethodName        = "/anix.pluginhost.v1.ControlPackageHost/Health"
 	ControlPackageHost_Drain_FullMethodName         = "/anix.pluginhost.v1.ControlPackageHost/Drain"
+	ControlPackageHost_Resume_FullMethodName        = "/anix.pluginhost.v1.ControlPackageHost/Resume"
 )
 
 // ControlPackageHostClient is the client API for ControlPackageHost service.
@@ -35,6 +36,9 @@ type ControlPackageHostClient interface {
 	Migrate(ctx context.Context, in *MigrationRequest, opts ...grpc.CallOption) (*MigrationResponse, error)
 	Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 	Drain(ctx context.Context, in *DrainRequest, opts ...grpc.CallOption) (*DrainResponse, error)
+	// Resume undoes a Drain of the same route generation. Remote modules
+	// cannot be restarted by the kernel, so a drain must be reversible.
+	Resume(ctx context.Context, in *ResumeRequest, opts ...grpc.CallOption) (*ResumeResponse, error)
 }
 
 type controlPackageHostClient struct {
@@ -98,6 +102,16 @@ func (c *controlPackageHostClient) Drain(ctx context.Context, in *DrainRequest, 
 	return out, nil
 }
 
+func (c *controlPackageHostClient) Resume(ctx context.Context, in *ResumeRequest, opts ...grpc.CallOption) (*ResumeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResumeResponse)
+	err := c.cc.Invoke(ctx, ControlPackageHost_Resume_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControlPackageHostServer is the server API for ControlPackageHost service.
 // All implementations must embed UnimplementedControlPackageHostServer
 // for forward compatibility.
@@ -107,6 +121,9 @@ type ControlPackageHostServer interface {
 	Migrate(context.Context, *MigrationRequest) (*MigrationResponse, error)
 	Health(context.Context, *HealthRequest) (*HealthResponse, error)
 	Drain(context.Context, *DrainRequest) (*DrainResponse, error)
+	// Resume undoes a Drain of the same route generation. Remote modules
+	// cannot be restarted by the kernel, so a drain must be reversible.
+	Resume(context.Context, *ResumeRequest) (*ResumeResponse, error)
 	mustEmbedUnimplementedControlPackageHostServer()
 }
 
@@ -131,6 +148,9 @@ func (UnimplementedControlPackageHostServer) Health(context.Context, *HealthRequ
 }
 func (UnimplementedControlPackageHostServer) Drain(context.Context, *DrainRequest) (*DrainResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Drain not implemented")
+}
+func (UnimplementedControlPackageHostServer) Resume(context.Context, *ResumeRequest) (*ResumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Resume not implemented")
 }
 func (UnimplementedControlPackageHostServer) mustEmbedUnimplementedControlPackageHostServer() {}
 func (UnimplementedControlPackageHostServer) testEmbeddedByValue()                            {}
@@ -232,6 +252,24 @@ func _ControlPackageHost_Drain_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControlPackageHost_Resume_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControlPackageHostServer).Resume(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ControlPackageHost_Resume_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControlPackageHostServer).Resume(ctx, req.(*ResumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ControlPackageHost_ServiceDesc is the grpc.ServiceDesc for ControlPackageHost service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -254,6 +292,10 @@ var ControlPackageHost_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Drain",
 			Handler:    _ControlPackageHost_Drain_Handler,
+		},
+		{
+			MethodName: "Resume",
+			Handler:    _ControlPackageHost_Resume_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

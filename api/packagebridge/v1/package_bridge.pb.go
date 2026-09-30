@@ -253,6 +253,273 @@ func (x *LeaseStorageResponse) GetViews() []string {
 	return nil
 }
 
+type BindRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	PackageId      string                 `protobuf:"bytes,1,opt,name=package_id,json=packageId,proto3" json:"package_id,omitempty"`
+	PackageVersion string                 `protobuf:"bytes,2,opt,name=package_version,json=packageVersion,proto3" json:"package_version,omitempty"`
+	// instance_id is unique per module process, for example the pod name.
+	InstanceId string `protobuf:"bytes,3,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	// advertise_addr is the host:port the kernel dials for ControlPackageHost.
+	AdvertiseAddr string `protobuf:"bytes,4,opt,name=advertise_addr,json=advertiseAddr,proto3" json:"advertise_addr,omitempty"`
+	// lease_id is the random per-process lease the module also reports from
+	// Health.
+	LeaseId string `protobuf:"bytes,5,opt,name=lease_id,json=leaseId,proto3" json:"lease_id,omitempty"`
+	// image_digest is the module's reported OCI image digest. It is advisory:
+	// the kernel cannot prove what a remote process runs.
+	ImageDigest   string `protobuf:"bytes,6,opt,name=image_digest,json=imageDigest,proto3" json:"image_digest,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BindRequest) Reset() {
+	*x = BindRequest{}
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BindRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BindRequest) ProtoMessage() {}
+
+func (x *BindRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BindRequest.ProtoReflect.Descriptor instead.
+func (*BindRequest) Descriptor() ([]byte, []int) {
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *BindRequest) GetPackageId() string {
+	if x != nil {
+		return x.PackageId
+	}
+	return ""
+}
+
+func (x *BindRequest) GetPackageVersion() string {
+	if x != nil {
+		return x.PackageVersion
+	}
+	return ""
+}
+
+func (x *BindRequest) GetInstanceId() string {
+	if x != nil {
+		return x.InstanceId
+	}
+	return ""
+}
+
+func (x *BindRequest) GetAdvertiseAddr() string {
+	if x != nil {
+		return x.AdvertiseAddr
+	}
+	return ""
+}
+
+func (x *BindRequest) GetLeaseId() string {
+	if x != nil {
+		return x.LeaseId
+	}
+	return ""
+}
+
+func (x *BindRequest) GetImageDigest() string {
+	if x != nil {
+		return x.ImageDigest
+	}
+	return ""
+}
+
+type BindResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// session_token authorizes every later bridge RPC of this instance when
+	// presented as x-anix-bridge-session together with the same client
+	// certificate.
+	SessionToken            []byte `protobuf:"bytes,1,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`
+	RouteGeneration         uint64 `protobuf:"varint,2,opt,name=route_generation,json=routeGeneration,proto3" json:"route_generation,omitempty"`
+	HeartbeatIntervalMillis int64  `protobuf:"varint,3,opt,name=heartbeat_interval_millis,json=heartbeatIntervalMillis,proto3" json:"heartbeat_interval_millis,omitempty"`
+	SessionTtlMillis        int64  `protobuf:"varint,4,opt,name=session_ttl_millis,json=sessionTtlMillis,proto3" json:"session_ttl_millis,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *BindResponse) Reset() {
+	*x = BindResponse{}
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BindResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BindResponse) ProtoMessage() {}
+
+func (x *BindResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BindResponse.ProtoReflect.Descriptor instead.
+func (*BindResponse) Descriptor() ([]byte, []int) {
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *BindResponse) GetSessionToken() []byte {
+	if x != nil {
+		return x.SessionToken
+	}
+	return nil
+}
+
+func (x *BindResponse) GetRouteGeneration() uint64 {
+	if x != nil {
+		return x.RouteGeneration
+	}
+	return 0
+}
+
+func (x *BindResponse) GetHeartbeatIntervalMillis() int64 {
+	if x != nil {
+		return x.HeartbeatIntervalMillis
+	}
+	return 0
+}
+
+func (x *BindResponse) GetSessionTtlMillis() int64 {
+	if x != nil {
+		return x.SessionTtlMillis
+	}
+	return 0
+}
+
+type HeartbeatRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InFlight      uint64                 `protobuf:"varint,1,opt,name=in_flight,json=inFlight,proto3" json:"in_flight,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HeartbeatRequest) Reset() {
+	*x = HeartbeatRequest{}
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeartbeatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeartbeatRequest) ProtoMessage() {}
+
+func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
+func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *HeartbeatRequest) GetInFlight() uint64 {
+	if x != nil {
+		return x.InFlight
+	}
+	return 0
+}
+
+type HeartbeatResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	RouteGeneration uint64                 `protobuf:"varint,1,opt,name=route_generation,json=routeGeneration,proto3" json:"route_generation,omitempty"`
+	// fenced means the session's generation is no longer current; the module
+	// must stop serving it and Bind again.
+	Fenced        bool `protobuf:"varint,2,opt,name=fenced,proto3" json:"fenced,omitempty"`
+	Draining      bool `protobuf:"varint,3,opt,name=draining,proto3" json:"draining,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HeartbeatResponse) Reset() {
+	*x = HeartbeatResponse{}
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeartbeatResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeartbeatResponse) ProtoMessage() {}
+
+func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HeartbeatResponse.ProtoReflect.Descriptor instead.
+func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *HeartbeatResponse) GetRouteGeneration() uint64 {
+	if x != nil {
+		return x.RouteGeneration
+	}
+	return 0
+}
+
+func (x *HeartbeatResponse) GetFenced() bool {
+	if x != nil {
+		return x.Fenced
+	}
+	return false
+}
+
+func (x *HeartbeatResponse) GetDraining() bool {
+	if x != nil {
+		return x.Draining
+	}
+	return false
+}
+
 type InvokeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Capability    []byte                 `protobuf:"bytes,1,opt,name=capability,proto3" json:"capability,omitempty"`
@@ -264,7 +531,7 @@ type InvokeRequest struct {
 
 func (x *InvokeRequest) Reset() {
 	*x = InvokeRequest{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[4]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -276,7 +543,7 @@ func (x *InvokeRequest) String() string {
 func (*InvokeRequest) ProtoMessage() {}
 
 func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[4]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -289,7 +556,7 @@ func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokeRequest.ProtoReflect.Descriptor instead.
 func (*InvokeRequest) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{4}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *InvokeRequest) GetCapability() []byte {
@@ -324,7 +591,7 @@ type InvokeResponse struct {
 
 func (x *InvokeResponse) Reset() {
 	*x = InvokeResponse{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[5]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -336,7 +603,7 @@ func (x *InvokeResponse) String() string {
 func (*InvokeResponse) ProtoMessage() {}
 
 func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[5]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -349,7 +616,7 @@ func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokeResponse.ProtoReflect.Descriptor instead.
 func (*InvokeResponse) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{5}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *InvokeResponse) GetResponseBody() []byte {
@@ -383,7 +650,7 @@ type ResponseHeader struct {
 
 func (x *ResponseHeader) Reset() {
 	*x = ResponseHeader{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[6]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -395,7 +662,7 @@ func (x *ResponseHeader) String() string {
 func (*ResponseHeader) ProtoMessage() {}
 
 func (x *ResponseHeader) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[6]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -408,7 +675,7 @@ func (x *ResponseHeader) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseHeader.ProtoReflect.Descriptor instead.
 func (*ResponseHeader) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{6}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ResponseHeader) GetName() string {
@@ -441,7 +708,7 @@ type WebSocketFrame struct {
 
 func (x *WebSocketFrame) Reset() {
 	*x = WebSocketFrame{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[7]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -453,7 +720,7 @@ func (x *WebSocketFrame) String() string {
 func (*WebSocketFrame) ProtoMessage() {}
 
 func (x *WebSocketFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[7]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -466,7 +733,7 @@ func (x *WebSocketFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebSocketFrame.ProtoReflect.Descriptor instead.
 func (*WebSocketFrame) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{7}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *WebSocketFrame) GetValue() isWebSocketFrame_Value {
@@ -535,7 +802,7 @@ type WebSocketOpen struct {
 
 func (x *WebSocketOpen) Reset() {
 	*x = WebSocketOpen{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[8]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -547,7 +814,7 @@ func (x *WebSocketOpen) String() string {
 func (*WebSocketOpen) ProtoMessage() {}
 
 func (x *WebSocketOpen) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[8]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -560,7 +827,7 @@ func (x *WebSocketOpen) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebSocketOpen.ProtoReflect.Descriptor instead.
 func (*WebSocketOpen) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{8}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *WebSocketOpen) GetCapability() []byte {
@@ -587,7 +854,7 @@ type WebSocketClose struct {
 
 func (x *WebSocketClose) Reset() {
 	*x = WebSocketClose{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[9]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -599,7 +866,7 @@ func (x *WebSocketClose) String() string {
 func (*WebSocketClose) ProtoMessage() {}
 
 func (x *WebSocketClose) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[9]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -612,7 +879,7 @@ func (x *WebSocketClose) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebSocketClose.ProtoReflect.Descriptor instead.
 func (*WebSocketClose) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{9}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *WebSocketClose) GetCode() uint32 {
@@ -652,7 +919,27 @@ const file_api_packagebridge_v1_package_bridge_proto_rawDesc = "" +
 	"\ftable_prefix\x18\x04 \x01(\tR\vtablePrefix\x12)\n" +
 	"\x10lease_generation\x18\x05 \x01(\x03R\x0fleaseGeneration\x12%\n" +
 	"\x0eadopted_tables\x18\x06 \x03(\tR\radoptedTables\x12\x14\n" +
-	"\x05views\x18\a \x03(\tR\x05views\"g\n" +
+	"\x05views\x18\a \x03(\tR\x05views\"\xdb\x01\n" +
+	"\vBindRequest\x12\x1d\n" +
+	"\n" +
+	"package_id\x18\x01 \x01(\tR\tpackageId\x12'\n" +
+	"\x0fpackage_version\x18\x02 \x01(\tR\x0epackageVersion\x12\x1f\n" +
+	"\vinstance_id\x18\x03 \x01(\tR\n" +
+	"instanceId\x12%\n" +
+	"\x0eadvertise_addr\x18\x04 \x01(\tR\radvertiseAddr\x12\x19\n" +
+	"\blease_id\x18\x05 \x01(\tR\aleaseId\x12!\n" +
+	"\fimage_digest\x18\x06 \x01(\tR\vimageDigest\"\xc8\x01\n" +
+	"\fBindResponse\x12#\n" +
+	"\rsession_token\x18\x01 \x01(\fR\fsessionToken\x12)\n" +
+	"\x10route_generation\x18\x02 \x01(\x04R\x0frouteGeneration\x12:\n" +
+	"\x19heartbeat_interval_millis\x18\x03 \x01(\x03R\x17heartbeatIntervalMillis\x12,\n" +
+	"\x12session_ttl_millis\x18\x04 \x01(\x03R\x10sessionTtlMillis\"/\n" +
+	"\x10HeartbeatRequest\x12\x1b\n" +
+	"\tin_flight\x18\x01 \x01(\x04R\binFlight\"r\n" +
+	"\x11HeartbeatResponse\x12)\n" +
+	"\x10route_generation\x18\x01 \x01(\x04R\x0frouteGeneration\x12\x16\n" +
+	"\x06fenced\x18\x02 \x01(\bR\x06fenced\x12\x1a\n" +
+	"\bdraining\x18\x03 \x01(\bR\bdraining\"g\n" +
 	"\rInvokeRequest\x12\x1e\n" +
 	"\n" +
 	"capability\x18\x01 \x01(\fR\n" +
@@ -679,12 +966,14 @@ const file_api_packagebridge_v1_package_bridge_proto_rawDesc = "" +
 	"\toperation\x18\x02 \x01(\tR\toperation\"<\n" +
 	"\x0eWebSocketClose\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\rR\x04code\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason2\xc5\x03\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason2\x82\x05\n" +
 	"\x13KernelPackageBridge\x12[\n" +
 	"\x06Invoke\x12'.anixops.packagebridge.v1.InvokeRequest\x1a(.anixops.packagebridge.v1.InvokeResponse\x12g\n" +
 	"\rOpenWebSocket\x12(.anixops.packagebridge.v1.WebSocketFrame\x1a(.anixops.packagebridge.v1.WebSocketFrame(\x010\x01\x12y\n" +
 	"\x10GetPackageConfig\x121.anixops.packagebridge.v1.GetPackageConfigRequest\x1a2.anixops.packagebridge.v1.GetPackageConfigResponse\x12m\n" +
-	"\fLeaseStorage\x12-.anixops.packagebridge.v1.LeaseStorageRequest\x1a..anixops.packagebridge.v1.LeaseStorageResponseBIZGgithub.com/AnixOps/anix-control/v4/api/packagebridge/v1;packagebridgev1b\x06proto3"
+	"\fLeaseStorage\x12-.anixops.packagebridge.v1.LeaseStorageRequest\x1a..anixops.packagebridge.v1.LeaseStorageResponse\x12U\n" +
+	"\x04Bind\x12%.anixops.packagebridge.v1.BindRequest\x1a&.anixops.packagebridge.v1.BindResponse\x12d\n" +
+	"\tHeartbeat\x12*.anixops.packagebridge.v1.HeartbeatRequest\x1a+.anixops.packagebridge.v1.HeartbeatResponseBIZGgithub.com/AnixOps/anix-control/v4/api/packagebridge/v1;packagebridgev1b\x06proto3"
 
 var (
 	file_api_packagebridge_v1_package_bridge_proto_rawDescOnce sync.Once
@@ -698,35 +987,43 @@ func file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP() []byte {
 	return file_api_packagebridge_v1_package_bridge_proto_rawDescData
 }
 
-var file_api_packagebridge_v1_package_bridge_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_api_packagebridge_v1_package_bridge_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_api_packagebridge_v1_package_bridge_proto_goTypes = []any{
 	(*GetPackageConfigRequest)(nil),  // 0: anixops.packagebridge.v1.GetPackageConfigRequest
 	(*GetPackageConfigResponse)(nil), // 1: anixops.packagebridge.v1.GetPackageConfigResponse
 	(*LeaseStorageRequest)(nil),      // 2: anixops.packagebridge.v1.LeaseStorageRequest
 	(*LeaseStorageResponse)(nil),     // 3: anixops.packagebridge.v1.LeaseStorageResponse
-	(*InvokeRequest)(nil),            // 4: anixops.packagebridge.v1.InvokeRequest
-	(*InvokeResponse)(nil),           // 5: anixops.packagebridge.v1.InvokeResponse
-	(*ResponseHeader)(nil),           // 6: anixops.packagebridge.v1.ResponseHeader
-	(*WebSocketFrame)(nil),           // 7: anixops.packagebridge.v1.WebSocketFrame
-	(*WebSocketOpen)(nil),            // 8: anixops.packagebridge.v1.WebSocketOpen
-	(*WebSocketClose)(nil),           // 9: anixops.packagebridge.v1.WebSocketClose
-	nil,                              // 10: anixops.packagebridge.v1.GetPackageConfigResponse.RouteModesEntry
+	(*BindRequest)(nil),              // 4: anixops.packagebridge.v1.BindRequest
+	(*BindResponse)(nil),             // 5: anixops.packagebridge.v1.BindResponse
+	(*HeartbeatRequest)(nil),         // 6: anixops.packagebridge.v1.HeartbeatRequest
+	(*HeartbeatResponse)(nil),        // 7: anixops.packagebridge.v1.HeartbeatResponse
+	(*InvokeRequest)(nil),            // 8: anixops.packagebridge.v1.InvokeRequest
+	(*InvokeResponse)(nil),           // 9: anixops.packagebridge.v1.InvokeResponse
+	(*ResponseHeader)(nil),           // 10: anixops.packagebridge.v1.ResponseHeader
+	(*WebSocketFrame)(nil),           // 11: anixops.packagebridge.v1.WebSocketFrame
+	(*WebSocketOpen)(nil),            // 12: anixops.packagebridge.v1.WebSocketOpen
+	(*WebSocketClose)(nil),           // 13: anixops.packagebridge.v1.WebSocketClose
+	nil,                              // 14: anixops.packagebridge.v1.GetPackageConfigResponse.RouteModesEntry
 }
 var file_api_packagebridge_v1_package_bridge_proto_depIdxs = []int32{
-	10, // 0: anixops.packagebridge.v1.GetPackageConfigResponse.route_modes:type_name -> anixops.packagebridge.v1.GetPackageConfigResponse.RouteModesEntry
-	6,  // 1: anixops.packagebridge.v1.InvokeResponse.headers:type_name -> anixops.packagebridge.v1.ResponseHeader
-	8,  // 2: anixops.packagebridge.v1.WebSocketFrame.open:type_name -> anixops.packagebridge.v1.WebSocketOpen
-	9,  // 3: anixops.packagebridge.v1.WebSocketFrame.close:type_name -> anixops.packagebridge.v1.WebSocketClose
-	4,  // 4: anixops.packagebridge.v1.KernelPackageBridge.Invoke:input_type -> anixops.packagebridge.v1.InvokeRequest
-	7,  // 5: anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket:input_type -> anixops.packagebridge.v1.WebSocketFrame
+	14, // 0: anixops.packagebridge.v1.GetPackageConfigResponse.route_modes:type_name -> anixops.packagebridge.v1.GetPackageConfigResponse.RouteModesEntry
+	10, // 1: anixops.packagebridge.v1.InvokeResponse.headers:type_name -> anixops.packagebridge.v1.ResponseHeader
+	12, // 2: anixops.packagebridge.v1.WebSocketFrame.open:type_name -> anixops.packagebridge.v1.WebSocketOpen
+	13, // 3: anixops.packagebridge.v1.WebSocketFrame.close:type_name -> anixops.packagebridge.v1.WebSocketClose
+	8,  // 4: anixops.packagebridge.v1.KernelPackageBridge.Invoke:input_type -> anixops.packagebridge.v1.InvokeRequest
+	11, // 5: anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket:input_type -> anixops.packagebridge.v1.WebSocketFrame
 	0,  // 6: anixops.packagebridge.v1.KernelPackageBridge.GetPackageConfig:input_type -> anixops.packagebridge.v1.GetPackageConfigRequest
 	2,  // 7: anixops.packagebridge.v1.KernelPackageBridge.LeaseStorage:input_type -> anixops.packagebridge.v1.LeaseStorageRequest
-	5,  // 8: anixops.packagebridge.v1.KernelPackageBridge.Invoke:output_type -> anixops.packagebridge.v1.InvokeResponse
-	7,  // 9: anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket:output_type -> anixops.packagebridge.v1.WebSocketFrame
-	1,  // 10: anixops.packagebridge.v1.KernelPackageBridge.GetPackageConfig:output_type -> anixops.packagebridge.v1.GetPackageConfigResponse
-	3,  // 11: anixops.packagebridge.v1.KernelPackageBridge.LeaseStorage:output_type -> anixops.packagebridge.v1.LeaseStorageResponse
-	8,  // [8:12] is the sub-list for method output_type
-	4,  // [4:8] is the sub-list for method input_type
+	4,  // 8: anixops.packagebridge.v1.KernelPackageBridge.Bind:input_type -> anixops.packagebridge.v1.BindRequest
+	6,  // 9: anixops.packagebridge.v1.KernelPackageBridge.Heartbeat:input_type -> anixops.packagebridge.v1.HeartbeatRequest
+	9,  // 10: anixops.packagebridge.v1.KernelPackageBridge.Invoke:output_type -> anixops.packagebridge.v1.InvokeResponse
+	11, // 11: anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket:output_type -> anixops.packagebridge.v1.WebSocketFrame
+	1,  // 12: anixops.packagebridge.v1.KernelPackageBridge.GetPackageConfig:output_type -> anixops.packagebridge.v1.GetPackageConfigResponse
+	3,  // 13: anixops.packagebridge.v1.KernelPackageBridge.LeaseStorage:output_type -> anixops.packagebridge.v1.LeaseStorageResponse
+	5,  // 14: anixops.packagebridge.v1.KernelPackageBridge.Bind:output_type -> anixops.packagebridge.v1.BindResponse
+	7,  // 15: anixops.packagebridge.v1.KernelPackageBridge.Heartbeat:output_type -> anixops.packagebridge.v1.HeartbeatResponse
+	10, // [10:16] is the sub-list for method output_type
+	4,  // [4:10] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
 	4,  // [4:4] is the sub-list for extension extendee
 	0,  // [0:4] is the sub-list for field type_name
@@ -737,7 +1034,7 @@ func file_api_packagebridge_v1_package_bridge_proto_init() {
 	if File_api_packagebridge_v1_package_bridge_proto != nil {
 		return
 	}
-	file_api_packagebridge_v1_package_bridge_proto_msgTypes[7].OneofWrappers = []any{
+	file_api_packagebridge_v1_package_bridge_proto_msgTypes[11].OneofWrappers = []any{
 		(*WebSocketFrame_Open)(nil),
 		(*WebSocketFrame_Data)(nil),
 		(*WebSocketFrame_Close)(nil),
@@ -748,7 +1045,7 @@ func file_api_packagebridge_v1_package_bridge_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_packagebridge_v1_package_bridge_proto_rawDesc), len(file_api_packagebridge_v1_package_bridge_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

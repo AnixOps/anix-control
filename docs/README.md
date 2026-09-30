@@ -19,6 +19,8 @@ Use this tree like NodeX:
 - Product version history and staged-plan status: [`architecture/release-line-status.md`](architecture/release-line-status.md)
 - Plugin kernel contract: [`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-contract.md)
 - Package extraction design and current development direction: [`architecture/package-extraction.md`](architecture/package-extraction.md)
+- Network module runtime (mTLS, module PKI, remote runtime): [`architecture/module-runtime.md`](architecture/module-runtime.md)
+- Identity service design (login and credentials as a module): [`architecture/identity-service.md`](architecture/identity-service.md)
 - Control Center merge record (`control-center/`): [`CONTROL-CENTER-MERGE-PLAN.md`](CONTROL-CENTER-MERGE-PLAN.md)
 - Open backlog: [`../TODO.md`](../TODO.md)
 - Change history: [`../CHANGELOG.md`](../CHANGELOG.md)

@@ -1,0 +1,16 @@
+{
+  "description": "Tokens the kernel must reject. Each case changes the golden token.",
+  "cases": [
+    {"name": "hs256-with-identity-issuer", "header": {"alg": "HS256"}, "reason": "algorithm is pinned to EdDSA for identity tokens"},
+    {"name": "alg-none", "header": {"alg": "none"}, "reason": "unsigned tokens are never accepted"},
+    {"name": "missing-kid", "header": {"kid": null}, "reason": "kid selects the verification key"},
+    {"name": "unknown-kid", "header": {"kid": "idk-unknown"}, "reason": "only published keys verify"},
+    {"name": "revoked-kid", "header": {"kid": "idk-revoked"}, "reason": "revoked keys verify nothing"},
+    {"name": "wrong-audience", "claims": {"aud": "other-service"}, "reason": "tokens are scoped to the Control kernel"},
+    {"name": "wrong-issuer", "claims": {"iss": "v2board"}, "reason": "EdDSA tokens must come from the identity module"},
+    {"name": "expired", "claims": {"exp": 1789999000}, "reason": "exp beyond the 60 s leeway"},
+    {"name": "stale-token-version", "claims": {"tv": 2}, "reason": "a revocation raised the user's token version to 3"},
+    {"name": "revoked-session", "claims": {"sid": "revoked-session"}, "reason": "the session was logged out"},
+    {"name": "issued-before-not-before", "claims": {"iat": 1789990000}, "reason": "a revocation set not_before after iat"}
+  ]
+}

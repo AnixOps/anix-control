@@ -21,6 +21,14 @@ service KernelPackageBridge {
   // least-privilege storage. Like GetPackageConfig it is authorized by the
   // session identity and fenced against the installation.
   rpc LeaseStorage(LeaseStorageRequest) returns (LeaseStorageResponse);
+  // Bind attaches a remote module instance to the current installation
+  // generation. It is the only bridge RPC a remote module may call without a
+  // session token; its identity comes from the mTLS client certificate. Local
+  // hosts never call it: their session is bound to the inherited socketpair.
+  rpc Bind(BindRequest) returns (BindResponse);
+  // Heartbeat keeps a bound session alive and reports fencing. Remote
+  // modules send it with the x-anix-bridge-session metadata.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
 }
 
 message GetPackageConfigRequest {}
@@ -49,6 +57,43 @@ message LeaseStorageResponse {
   int64 lease_generation = 5;
   repeated string adopted_tables = 6;
   repeated string views = 7;
+}
+
+message BindRequest {
+  string package_id = 1;
+  string package_version = 2;
+  // instance_id is unique per module process, for example the pod name.
+  string instance_id = 3;
+  // advertise_addr is the host:port the kernel dials for ControlPackageHost.
+  string advertise_addr = 4;
+  // lease_id is the random per-process lease the module also reports from
+  // Health.
+  string lease_id = 5;
+  // image_digest is the module's reported OCI image digest. It is advisory:
+  // the kernel cannot prove what a remote process runs.
+  string image_digest = 6;
+}
+
+message BindResponse {
+  // session_token authorizes every later bridge RPC of this instance when
+  // presented as x-anix-bridge-session together with the same client
+  // certificate.
+  bytes session_token = 1;
+  uint64 route_generation = 2;
+  int64 heartbeat_interval_millis = 3;
+  int64 session_ttl_millis = 4;
+}
+
+message HeartbeatRequest {
+  uint64 in_flight = 1;
+}
+
+message HeartbeatResponse {
+  uint64 route_generation = 1;
+  // fenced means the session's generation is no longer current; the module
+  // must stop serving it and Bind again.
+  bool fenced = 2;
+  bool draining = 3;
 }
 
 message InvokeRequest {

@@ -915,6 +915,94 @@ func (x *DrainResponse) GetInFlight() uint64 {
 	return 0
 }
 
+type ResumeRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	RouteGeneration uint64                 `protobuf:"varint,1,opt,name=route_generation,json=routeGeneration,proto3" json:"route_generation,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ResumeRequest) Reset() {
+	*x = ResumeRequest{}
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeRequest) ProtoMessage() {}
+
+func (x *ResumeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeRequest.ProtoReflect.Descriptor instead.
+func (*ResumeRequest) Descriptor() ([]byte, []int) {
+	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ResumeRequest) GetRouteGeneration() uint64 {
+	if x != nil {
+		return x.RouteGeneration
+	}
+	return 0
+}
+
+type ResumeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Resumed       bool                   `protobuf:"varint,1,opt,name=resumed,proto3" json:"resumed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeResponse) Reset() {
+	*x = ResumeResponse{}
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeResponse) ProtoMessage() {}
+
+func (x *ResumeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_pluginhost_v1_control_host_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeResponse.ProtoReflect.Descriptor instead.
+func (*ResumeResponse) Descriptor() ([]byte, []int) {
+	return file_api_pluginhost_v1_control_host_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ResumeResponse) GetResumed() bool {
+	if x != nil {
+		return x.Resumed
+	}
+	return false
+}
+
 var File_api_pluginhost_v1_control_host_proto protoreflect.FileDescriptor
 
 const file_api_pluginhost_v1_control_host_proto_rawDesc = "" +
@@ -997,13 +1085,18 @@ const file_api_pluginhost_v1_control_host_proto_rawDesc = "" +
 	"\x14deadline_unix_millis\x18\x02 \x01(\x03R\x12deadlineUnixMillis\"F\n" +
 	"\rDrainResponse\x12\x18\n" +
 	"\adrained\x18\x01 \x01(\bR\adrained\x12\x1b\n" +
-	"\tin_flight\x18\x02 \x01(\x04R\binFlight2\xbf\x03\n" +
+	"\tin_flight\x18\x02 \x01(\x04R\binFlight\":\n" +
+	"\rResumeRequest\x12)\n" +
+	"\x10route_generation\x18\x01 \x01(\x04R\x0frouteGeneration\"*\n" +
+	"\x0eResumeResponse\x12\x18\n" +
+	"\aresumed\x18\x01 \x01(\bR\aresumed2\x90\x04\n" +
 	"\x12ControlPackageHost\x12U\n" +
 	"\bDispatch\x12#.anix.pluginhost.v1.DispatchRequest\x1a$.anix.pluginhost.v1.DispatchResponse\x12[\n" +
 	"\rOpenWebSocket\x12\".anix.pluginhost.v1.WebSocketFrame\x1a\".anix.pluginhost.v1.WebSocketFrame(\x010\x01\x12V\n" +
 	"\aMigrate\x12$.anix.pluginhost.v1.MigrationRequest\x1a%.anix.pluginhost.v1.MigrationResponse\x12O\n" +
 	"\x06Health\x12!.anix.pluginhost.v1.HealthRequest\x1a\".anix.pluginhost.v1.HealthResponse\x12L\n" +
-	"\x05Drain\x12 .anix.pluginhost.v1.DrainRequest\x1a!.anix.pluginhost.v1.DrainResponseBCZAgithub.com/AnixOps/anix-control/v4/api/pluginhost/v1;pluginhostv1b\x06proto3"
+	"\x05Drain\x12 .anix.pluginhost.v1.DrainRequest\x1a!.anix.pluginhost.v1.DrainResponse\x12O\n" +
+	"\x06Resume\x12!.anix.pluginhost.v1.ResumeRequest\x1a\".anix.pluginhost.v1.ResumeResponseBCZAgithub.com/AnixOps/anix-control/v4/api/pluginhost/v1;pluginhostv1b\x06proto3"
 
 var (
 	file_api_pluginhost_v1_control_host_proto_rawDescOnce sync.Once
@@ -1017,7 +1110,7 @@ func file_api_pluginhost_v1_control_host_proto_rawDescGZIP() []byte {
 	return file_api_pluginhost_v1_control_host_proto_rawDescData
 }
 
-var file_api_pluginhost_v1_control_host_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_api_pluginhost_v1_control_host_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_api_pluginhost_v1_control_host_proto_goTypes = []any{
 	(*DispatchRequest)(nil),   // 0: anix.pluginhost.v1.DispatchRequest
 	(*DispatchResponse)(nil),  // 1: anix.pluginhost.v1.DispatchResponse
@@ -1031,6 +1124,8 @@ var file_api_pluginhost_v1_control_host_proto_goTypes = []any{
 	(*HealthResponse)(nil),    // 9: anix.pluginhost.v1.HealthResponse
 	(*DrainRequest)(nil),      // 10: anix.pluginhost.v1.DrainRequest
 	(*DrainResponse)(nil),     // 11: anix.pluginhost.v1.DrainResponse
+	(*ResumeRequest)(nil),     // 12: anix.pluginhost.v1.ResumeRequest
+	(*ResumeResponse)(nil),    // 13: anix.pluginhost.v1.ResumeResponse
 }
 var file_api_pluginhost_v1_control_host_proto_depIdxs = []int32{
 	5,  // 0: anix.pluginhost.v1.DispatchResponse.headers:type_name -> anix.pluginhost.v1.Header
@@ -1041,13 +1136,15 @@ var file_api_pluginhost_v1_control_host_proto_depIdxs = []int32{
 	6,  // 5: anix.pluginhost.v1.ControlPackageHost.Migrate:input_type -> anix.pluginhost.v1.MigrationRequest
 	8,  // 6: anix.pluginhost.v1.ControlPackageHost.Health:input_type -> anix.pluginhost.v1.HealthRequest
 	10, // 7: anix.pluginhost.v1.ControlPackageHost.Drain:input_type -> anix.pluginhost.v1.DrainRequest
-	1,  // 8: anix.pluginhost.v1.ControlPackageHost.Dispatch:output_type -> anix.pluginhost.v1.DispatchResponse
-	2,  // 9: anix.pluginhost.v1.ControlPackageHost.OpenWebSocket:output_type -> anix.pluginhost.v1.WebSocketFrame
-	7,  // 10: anix.pluginhost.v1.ControlPackageHost.Migrate:output_type -> anix.pluginhost.v1.MigrationResponse
-	9,  // 11: anix.pluginhost.v1.ControlPackageHost.Health:output_type -> anix.pluginhost.v1.HealthResponse
-	11, // 12: anix.pluginhost.v1.ControlPackageHost.Drain:output_type -> anix.pluginhost.v1.DrainResponse
-	8,  // [8:13] is the sub-list for method output_type
-	3,  // [3:8] is the sub-list for method input_type
+	12, // 8: anix.pluginhost.v1.ControlPackageHost.Resume:input_type -> anix.pluginhost.v1.ResumeRequest
+	1,  // 9: anix.pluginhost.v1.ControlPackageHost.Dispatch:output_type -> anix.pluginhost.v1.DispatchResponse
+	2,  // 10: anix.pluginhost.v1.ControlPackageHost.OpenWebSocket:output_type -> anix.pluginhost.v1.WebSocketFrame
+	7,  // 11: anix.pluginhost.v1.ControlPackageHost.Migrate:output_type -> anix.pluginhost.v1.MigrationResponse
+	9,  // 12: anix.pluginhost.v1.ControlPackageHost.Health:output_type -> anix.pluginhost.v1.HealthResponse
+	11, // 13: anix.pluginhost.v1.ControlPackageHost.Drain:output_type -> anix.pluginhost.v1.DrainResponse
+	13, // 14: anix.pluginhost.v1.ControlPackageHost.Resume:output_type -> anix.pluginhost.v1.ResumeResponse
+	9,  // [9:15] is the sub-list for method output_type
+	3,  // [3:9] is the sub-list for method input_type
 	3,  // [3:3] is the sub-list for extension type_name
 	3,  // [3:3] is the sub-list for extension extendee
 	0,  // [0:3] is the sub-list for field type_name
@@ -1069,7 +1166,7 @@ func file_api_pluginhost_v1_control_host_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_pluginhost_v1_control_host_proto_rawDesc), len(file_api_pluginhost_v1_control_host_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

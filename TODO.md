@@ -75,7 +75,9 @@ PostgreSQL), not the systemd installer.
   milestones M0-M4: `docs/architecture/package-extraction.md`. The M3
   infrastructure is in place: storage leases, route modes, ledger-run
   migrations, the extraction map and gates, and `internal/tests/packagecompat`.
-  Next is the M4 knowledge pilot.
+  Next: the network module runtime and the identity module
+  (`docs/architecture/module-runtime.md`, `docs/architecture/identity-service.md`),
+  then the knowledge pilot.
 - [ ] Known gap: routes outside the `/api/v2` package gate are still served
   directly by kernel handlers: `/api/v1/server/UniProxy/*`,
   `/{subscribe_path}/:token` (default `/s/:token`), `/api/v1/client/subscribe`,
