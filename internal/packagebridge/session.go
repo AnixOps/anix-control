@@ -52,6 +52,10 @@ type SessionOptions struct {
 	// MaxRequestBodyBytes is the kernel's request body limit. The bridge uses
 	// it only to size its gRPC receive window for host payloads.
 	MaxRequestBodyBytes int64
+	// HostOperations serves the session-scoped RPCs (GetPackageConfig). Nil
+	// answers them with codes.Unimplemented, which hosts treat as "no
+	// configuration": every route stays in legacy mode.
+	HostOperations HostOperations
 }
 
 func (o SessionOptions) responseLimit() int64 {
@@ -284,6 +288,7 @@ type Session struct {
 	maxResponseBody   int64
 	listener          *singleConnListener
 	server            *grpc.Server
+	hostOperations    HostOperations
 	closed            bool
 }
 
@@ -337,7 +342,8 @@ func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options Se
 	session := &Session{
 		identity: identity, handler: handler, webSocketResolver: webSocketResolver, capabilities: make(map[string]capability),
 		maxResponseBody: options.responseLimit(), listener: newSingleConnListener(parentConnection),
-		server: grpc.NewServer(append(panicrecovery.ServerOptions(), grpc.MaxRecvMsgSize(options.receiveMessageLimit()))...),
+		hostOperations: options.HostOperations,
+		server:         grpc.NewServer(append(panicrecovery.ServerOptions(), grpc.MaxRecvMsgSize(options.receiveMessageLimit()))...),
 	}
 	packagebridgev1.RegisterKernelPackageBridgeServer(session.server, session)
 	go func() { _ = session.server.Serve(session.listener) }()

@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	KernelPackageBridge_Invoke_FullMethodName        = "/anixops.packagebridge.v1.KernelPackageBridge/Invoke"
-	KernelPackageBridge_OpenWebSocket_FullMethodName = "/anixops.packagebridge.v1.KernelPackageBridge/OpenWebSocket"
+	KernelPackageBridge_Invoke_FullMethodName           = "/anixops.packagebridge.v1.KernelPackageBridge/Invoke"
+	KernelPackageBridge_OpenWebSocket_FullMethodName    = "/anixops.packagebridge.v1.KernelPackageBridge/OpenWebSocket"
+	KernelPackageBridge_GetPackageConfig_FullMethodName = "/anixops.packagebridge.v1.KernelPackageBridge/GetPackageConfig"
 )
 
 // KernelPackageBridgeClient is the client API for KernelPackageBridge service.
@@ -28,11 +29,18 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // KernelPackageBridge is a private, per-host channel. It exposes named
-// kernel operations only; package hosts never receive database or signing
-// credentials.
+// kernel operations only; package hosts never receive kernel database or
+// signing credentials.
+//
+// Invoke and OpenWebSocket require a single-use capability minted for one
+// request. Session-scoped RPCs (GetPackageConfig) need no capability: the
+// inherited socket is bound to one package id, version and lifecycle
+// generation, and the kernel fences every call against the current
+// installation.
 type KernelPackageBridgeClient interface {
 	Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error)
 	OpenWebSocket(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WebSocketFrame, WebSocketFrame], error)
+	GetPackageConfig(ctx context.Context, in *GetPackageConfigRequest, opts ...grpc.CallOption) (*GetPackageConfigResponse, error)
 }
 
 type kernelPackageBridgeClient struct {
@@ -66,16 +74,33 @@ func (c *kernelPackageBridgeClient) OpenWebSocket(ctx context.Context, opts ...g
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type KernelPackageBridge_OpenWebSocketClient = grpc.BidiStreamingClient[WebSocketFrame, WebSocketFrame]
 
+func (c *kernelPackageBridgeClient) GetPackageConfig(ctx context.Context, in *GetPackageConfigRequest, opts ...grpc.CallOption) (*GetPackageConfigResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPackageConfigResponse)
+	err := c.cc.Invoke(ctx, KernelPackageBridge_GetPackageConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // KernelPackageBridgeServer is the server API for KernelPackageBridge service.
 // All implementations must embed UnimplementedKernelPackageBridgeServer
 // for forward compatibility.
 //
 // KernelPackageBridge is a private, per-host channel. It exposes named
-// kernel operations only; package hosts never receive database or signing
-// credentials.
+// kernel operations only; package hosts never receive kernel database or
+// signing credentials.
+//
+// Invoke and OpenWebSocket require a single-use capability minted for one
+// request. Session-scoped RPCs (GetPackageConfig) need no capability: the
+// inherited socket is bound to one package id, version and lifecycle
+// generation, and the kernel fences every call against the current
+// installation.
 type KernelPackageBridgeServer interface {
 	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
 	OpenWebSocket(grpc.BidiStreamingServer[WebSocketFrame, WebSocketFrame]) error
+	GetPackageConfig(context.Context, *GetPackageConfigRequest) (*GetPackageConfigResponse, error)
 	mustEmbedUnimplementedKernelPackageBridgeServer()
 }
 
@@ -91,6 +116,9 @@ func (UnimplementedKernelPackageBridgeServer) Invoke(context.Context, *InvokeReq
 }
 func (UnimplementedKernelPackageBridgeServer) OpenWebSocket(grpc.BidiStreamingServer[WebSocketFrame, WebSocketFrame]) error {
 	return status.Error(codes.Unimplemented, "method OpenWebSocket not implemented")
+}
+func (UnimplementedKernelPackageBridgeServer) GetPackageConfig(context.Context, *GetPackageConfigRequest) (*GetPackageConfigResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPackageConfig not implemented")
 }
 func (UnimplementedKernelPackageBridgeServer) mustEmbedUnimplementedKernelPackageBridgeServer() {}
 func (UnimplementedKernelPackageBridgeServer) testEmbeddedByValue()                             {}
@@ -138,6 +166,24 @@ func _KernelPackageBridge_OpenWebSocket_Handler(srv interface{}, stream grpc.Ser
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type KernelPackageBridge_OpenWebSocketServer = grpc.BidiStreamingServer[WebSocketFrame, WebSocketFrame]
 
+func _KernelPackageBridge_GetPackageConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPackageConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelPackageBridgeServer).GetPackageConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KernelPackageBridge_GetPackageConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelPackageBridgeServer).GetPackageConfig(ctx, req.(*GetPackageConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KernelPackageBridge_ServiceDesc is the grpc.ServiceDesc for KernelPackageBridge service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -148,6 +194,10 @@ var KernelPackageBridge_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Invoke",
 			Handler:    _KernelPackageBridge_Invoke_Handler,
+		},
+		{
+			MethodName: "GetPackageConfig",
+			Handler:    _KernelPackageBridge_GetPackageConfig_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

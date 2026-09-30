@@ -46,6 +46,7 @@ func NewFactory(cfg *config.Config) (packagebridge.SessionFactory, error) {
 	return packagebridge.NewFactory(allowlist, packagebridge.DefaultRouteRegistry()).WithSessionOptions(packagebridge.SessionOptions{
 		MaxResponseBodyBytes: cfg.Plugins.ControlHostResponseBodyLimit(),
 		MaxRequestBodyBytes:  cfg.Plugins.ControlHostRequestBodyLimit(),
+		HostOperations:       service.PackageHostOperations{DB: database.Get()},
 	}), nil
 }
 

@@ -2048,11 +2048,23 @@ func UpdatePluginConfigurationWithValidatorAndHook(db *gorm.DB, publicKey ed2551
 		if manifest.ID != installation.PluginID || manifest.Version != installation.DesiredVersion || !manifestSupportsTarget(*manifest, installation.Target) {
 			return errors.New("installation release is not version-bound to its target")
 		}
-		if err := validatePluginConfigurationSchema(*manifest, canonical); err != nil {
+		packageConfig, routeModes, hasRouteModes, err := splitPackageRouteModes(canonical)
+		if err != nil {
+			return err
+		}
+		if hasRouteModes {
+			if installation.Target != "control" || manifest.APIVersion != pluginManifestAPIVersionV2 {
+				return fmt.Errorf("configuration key %q is only valid for v2 control packages", PackageRouteModesConfigKey)
+			}
+			if err := validatePackageRouteModes(tx, release, publicKey, routeModes); err != nil {
+				return err
+			}
+		}
+		if err := validatePluginConfigurationSchema(*manifest, packageConfig); err != nil {
 			return err
 		}
 		if validator != nil {
-			if err := validator(manifest.ID, manifest.Version, json.RawMessage(canonical)); err != nil {
+			if err := validator(manifest.ID, manifest.Version, json.RawMessage(packageConfig)); err != nil {
 				return fmt.Errorf("plugin configuration semantic validation failed: %w", err)
 			}
 		}

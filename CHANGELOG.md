@@ -234,6 +234,23 @@
 
 ### Added
 
+- Package route modes and the `GetPackageConfig` package bridge RPC (M3).
+  - **Route modes.** Control package configuration documents reserve a
+    top-level `routes` key that maps v2 route ids to `legacy`, `shadow` or
+    `native`.
+  - **Validation.** The kernel checks the modes against the release's
+    verified compatibility routes: `shadow` only on GET routes, and WebSocket
+    routes stay `legacy`. It then removes the key before applying the
+    package's own schema.
+  - **Reading the config.** Hosts read their configuration with the new
+    session-scoped bridge RPC `GetPackageConfig`.
+    - It needs no per-request capability: it is authorized by the session's
+      package id, version and lifecycle generation.
+    - Disabled packages and stale versions or generations are fenced.
+  - **SDK.** `packagebridgesdk.Client.GetPackageConfig` reports an older
+    kernel as `ErrSessionOperationUnsupported`, which means every route stays
+    `legacy`.
+
 - A Helm chart for Kubernetes (`config/deploy/helm/anix-control`), single
   replica with an external PostgreSQL.
   - `Recreate` strategy. `replicaCount` other than 1 is rejected until
@@ -388,6 +405,10 @@
   and Ansible group-variable/template propagation.
 
 ### Fixed
+
+- Configuration changes to a Control package no longer fail. Its `plugin.configure`
+  operation completes immediately, because hosts pull the configuration. Before
+  this, the host lifecycle dispatcher rejected the operation as unsupported.
 
 - `docker-compose.prod.yml` keeps verified package copies on a disk-backed
   `plugin-artifacts` volume (`/var/lib/anixops`, pre-created in the image for

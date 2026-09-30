@@ -5,11 +5,29 @@ package anixops.packagebridge.v1;
 option go_package = "github.com/AnixOps/anix-control/v4/api/packagebridge/v1;packagebridgev1";
 
 // KernelPackageBridge is a private, per-host channel. It exposes named
-// kernel operations only; package hosts never receive database or signing
-// credentials.
+// kernel operations only; package hosts never receive kernel database or
+// signing credentials.
+//
+// Invoke and OpenWebSocket require a single-use capability minted for one
+// request. Session-scoped RPCs (GetPackageConfig) need no capability: the
+// inherited socket is bound to one package id, version and lifecycle
+// generation, and the kernel fences every call against the current
+// installation.
 service KernelPackageBridge {
   rpc Invoke(InvokeRequest) returns (InvokeResponse);
   rpc OpenWebSocket(stream WebSocketFrame) returns (stream WebSocketFrame);
+  rpc GetPackageConfig(GetPackageConfigRequest) returns (GetPackageConfigResponse);
+}
+
+message GetPackageConfigRequest {}
+
+// GetPackageConfigResponse is the host's view of its installation
+// configuration. route_modes maps v2 route ids to legacy, shadow or native;
+// routes that are absent run in legacy mode.
+message GetPackageConfigResponse {
+  int64 revision = 1;
+  string config_hash = 2;
+  map<string, string> route_modes = 3;
 }
 
 message InvokeRequest {

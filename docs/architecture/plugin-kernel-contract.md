@@ -135,6 +135,33 @@ plugin process. A configuration document is package-level intent, not an
 implicit command to every node. Node assignment expansion and per-node
 `plugin.configure` operations remain an explicit dispatcher step.
 
+The top-level key `routes` is reserved by the kernel for Control packages. It
+maps v2 route ids to a route mode:
+
+| Mode | Meaning |
+|------|---------|
+| `legacy` (default, also when absent) | the host passes the request through the bridge to the legacy handler |
+| `shadow` | GET only: the legacy result is returned, the host runs its native implementation in the background and counts mismatches |
+| `native` | the host answers with its native implementation |
+
+On `PUT`, the kernel validates `routes` against the verified compatibility
+routes of the installation's release: unknown routes, other modes, `shadow`
+on non-GET routes, and non-legacy WebSocket routes are rejected. It then
+removes the key before applying the package's own `config_schema`, so package
+schemas need not declare it. A Control `plugin.configure` operation completes
+immediately, because hosts pull their configuration.
+
+Hosts read their configuration with the package bridge RPC
+`GetPackageConfig`, which returns the revision, the configuration hash and the
+non-legacy route modes. Unlike `Invoke` and `OpenWebSocket`, session-scoped
+RPCs carry no per-request capability. The caller is authorized by the session
+identity, i.e. the package id, version and lifecycle generation that the
+kernel bound to the inherited socketpair when it started the host. Every call
+is fenced against the installation: a disabled package, another desired
+version, or another lifecycle generation gets `PermissionDenied`. A kernel
+without session operations answers `Unimplemented`, and hosts then keep every
+route in `legacy` mode.
+
 ## Scoped Authorization
 
 `service_scope` owns an independent authorization namespace. The startup
