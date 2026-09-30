@@ -53,7 +53,7 @@ is_implementation_surface() {
     go.mod|go.sum|Dockerfile|docker-compose*.yml)
       return 0
       ;;
-    config/deploy/*|config/scripts/*|config/docker/*)
+    config/deploy/*|config/scripts/*)
       return 0
       ;;
     config/config.yaml.example|config/config.prod.yaml)

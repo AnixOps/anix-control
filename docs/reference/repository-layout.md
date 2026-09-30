@@ -36,7 +36,8 @@ It should not become a dumping ground for:
 | `scripts/` | operator-facing scripts: release installer `install.sh`, `install-agent.sh`, `manage.sh`, SQLite/PostgreSQL migration and restore rehearsal, plugin release signing, WireGuard helpers, legacy panel upgrade |
 | `docs/` | documentation tree (see below) plus generated Swagger output (`docs.go`, `swagger.json`, `swagger.yaml`) |
 | `.github/` | CI (`workflows/ci.yml`), SDK sync, Control Center workflows, `CODEOWNERS`, and the branch ruleset description in `BRANCH_PROTECTION.md` |
-| `install.sh` / `panel_install.sh` | one-click Docker/bootstrap installer for the internal forward runtime (`panel_install.sh` is a wrapper) |
+| `install.sh` / `panel_install.sh` | forwarders to the frozen systemd release installer `scripts/install.sh` (container deployment is the primary path) |
+| `Dockerfile`, `docker-compose.yml`, `docker-compose.prod.yml` | container image (`source` and CI-only `release` targets), development stack, and production Compose deployment with an external PostgreSQL |
 | `Dockerfile` / `docker-compose.yml` / `docker-compose.prod.yml` | container build and startup |
 | `Makefile` | local build, run, test, lint, swagger, and gRPC generation targets |
 | `tools.go` | pins the protoc Go plugins and records the expected `protoc` versions |
@@ -56,7 +57,7 @@ It should not become a dumping ground for:
   manifest/notes generators, artifact and V4 evidence verifiers, and the
   guarded legacy `deploy.sh`/`pre-deploy.sh` entrypoints.
 
-## `config/deploy/` And `config/docker/`
+## `config/deploy/`
 
 - `config/deploy/ansible/`: bundled ansible inventory examples and forward
   apply/remove/stats playbooks (nftables and legacy iptables) for the local
@@ -66,11 +67,14 @@ It should not become a dumping ground for:
 - `config/deploy/deploy_panel.sh`, `clean_local_build_artifacts.sh`,
   `check_release_build_policy.sh`: guarded local deploy, artifact cleanup, and
   the release-build policy gate.
-- `config/docker/`: Nginx and Prometheus configuration mounted by
+- `config/deploy/compose/`: `control.env.example` and the secrets notes for
   `docker-compose.prod.yml`.
+- `config/deploy/examples/`: host-side nginx and Prometheus examples for the
+  ports the Control container publishes.
 
-The Docker image copies all of `config/deploy/` into `/app/config/deploy`. Do
-not reintroduce a top-level `deploy/` directory.
+The Docker image copies only `config/deploy/ansible/ansible.cfg` and the
+playbooks into `/app/config/deploy/ansible`. Do not reintroduce a top-level
+`deploy/` directory.
 
 ## Documentation Layout
 

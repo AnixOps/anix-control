@@ -102,7 +102,7 @@ required "Go Quality Gates" job on every PR.
 fails a diff that touches implementation, CI, deployment, or config surfaces
 (`.github/workflows/*`, `api/*`, `cmd/*`, `internal/*`, `web/src/*` and web
 build config, `go.mod`/`go.sum`, `Dockerfile`, `docker-compose*.yml`,
-`config/deploy/*`, `config/scripts/*`, `config/docker/*`,
+`config/deploy/*`, `config/scripts/*`,
 `config/config.yaml.example`, `config/config.prod.yaml`) unless the same diff
 updates one of `README.md`, `CHANGELOG.md`, `TODO.md`, `ROADMAP.md`,
 `docs/README.md`, `docs/DEPLOYMENT.md`, `docs/features.md`,
@@ -121,7 +121,6 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
 - `web/package.json` and `web/package-lock.json` (`version` and `packages[""].version`)
 - `docs/swagger.json`, `docs/swagger.yaml`, `docs/docs.go` (regenerate with `make swagger`)
 - `config/config.yaml.example`, `config/config.prod.yaml`, `config/config.dev.yaml.example` (`app.version`)
-- `install.sh` (both embedded `version:` fields)
 - `CHANGELOG.md` (first `## X.Y.Z - YYYY-MM-DD` heading)
 - `README.md` (the `- Current release:` line)
 

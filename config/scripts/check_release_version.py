@@ -21,24 +21,6 @@ def require_pattern(path: Path, pattern: str, expected: str, label: str) -> None
         raise ValueError(f"{label} version mismatch: expected {expected}, found {actual}")
 
 
-def require_all_patterns(
-    path: Path,
-    pattern: str,
-    expected: str,
-    label: str,
-    expected_count: int | None = None,
-) -> None:
-    content = path.read_text(encoding="utf-8")
-    matches = re.findall(pattern, content, re.MULTILINE)
-    if not matches:
-        raise ValueError(f"{label} version is missing")
-    if expected_count is not None and len(matches) != expected_count:
-        raise ValueError(f"{label} version field count mismatch: expected {expected_count}, found {len(matches)}")
-    mismatches = [actual for actual in matches if actual != expected]
-    if mismatches:
-        raise ValueError(f"{label} version mismatch: expected {expected}, found {mismatches[0]}")
-
-
 def require_json_version(path: Path, keys: tuple[str, ...], expected: str, label: str) -> None:
     value: object = json.loads(path.read_text(encoding="utf-8"))
     for key in keys:
@@ -90,13 +72,6 @@ def check_release_version(repo_root: Path, tag: str) -> str:
             version,
             config_name,
         )
-    require_all_patterns(
-        repo_root / "install.sh",
-        r'^\s{2}version:\s*"([^"]+)"',
-        version,
-        "installer configuration",
-        expected_count=2,
-    )
     require_pattern(
         repo_root / "docs/docs.go",
         r'^\s*Version:\s*"([^"]+)"',
@@ -135,7 +110,6 @@ def write_fixture(root: Path, version: str) -> None:
         "config/config.yaml.example": f'app:\n  version: "{version}"\n',
         "config/config.prod.yaml": f'app:\n  version: "{version}"\n',
         "config/config.dev.yaml.example": f'app:\n  version: "{version}"\n',
-        "install.sh": f'  version: "{version}"\n  version: "{version}"\n',
         "docs/docs.go": f'\tVersion: "{version}",\n',
         "docs/swagger.yaml": f'  version: {version}\n',
         "CHANGELOG.md": f"# Changelog\n\n## {version} - 2026-07-17\n",
@@ -166,21 +140,6 @@ def self_test() -> None:
         package = root / "web/package.json"
         package.write_text(json.dumps({"version": "4.0.0-alpha.8"}), encoding="utf-8")
         expect_failure("frontend package version mismatch")
-
-        write_fixture(root, version)
-        installer = root / "install.sh"
-        installer.write_text(
-            f'  version: "{version}"\n  version: "4.0.0-alpha.8"\n',
-            encoding="utf-8",
-        )
-        expect_failure("installer configuration version mismatch")
-
-        write_fixture(root, version)
-        installer.write_text(
-            f'  version: "{version}"\n  version: {version}\n',
-            encoding="utf-8",
-        )
-        expect_failure("installer configuration version field count mismatch")
 
         try:
             check_release_version(root, "v4")

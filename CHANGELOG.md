@@ -4,6 +4,11 @@
 
 ### Removed
 
+- The legacy source/Docker Compose installer in the root `install.sh`
+  (`ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1`). It built images on the target
+  host against the release policy. `install.sh` now only forwards to the
+  frozen systemd release installer and no longer carries version fields
+  (`check_release_version.py` and AGENTS.md updated).
 - Removed the legacy V2bX/Xray proxy-node test tooling, which was never part of
   a release build: `cmd/integration-test`, `cmd/configgen`, `cmd/report`,
   `cmd/verify`, `cmd/subtest`, the `internal/tests/integration` harness packages
@@ -60,6 +65,32 @@
   documentation evidence by `config/scripts/check_docs_updated.sh`.
 
 ### Changed
+
+- Rewrote `docker-compose.prod.yml` for container-first production.
+  - It runs only Control against an external PostgreSQL: a one-shot
+    `migrate` service, then `control`.
+  - The image is pinned by digest (`ANIX_CONTROL_IMAGE`), with no local
+    build.
+  - Settings come from `control.env` (`config/deploy/compose/control.env.example`).
+    The JWT secret and database password come from `secrets/` files
+    passed as `ANIX_CONTROL_*_FILE`.
+  - Hardening: read-only root filesystem with an exec `/tmp` tmpfs,
+    `cap_drop: ALL`, `no-new-privileges`.
+  - Operations: `/readyz` healthcheck, 90 s stop grace period, rotated JSON
+    logs; ports published on `127.0.0.1` by default.
+  - Removed the bundled Redis (unused by the code), Postgres, Prometheus,
+    Grafana and nginx services and their mounts of files that did not
+    exist.
+- `docker-compose.yml` is now a development stack: it builds the `source`
+  target with a throwaway PostgreSQL and no longer bind-mounts `web/public`
+  over the built frontend.
+- The nginx and Prometheus configs moved to `config/deploy/examples/` as
+  host-side examples for the published ports (`config/docker/` is gone).
+- `.env.example` now documents the Compose variables (`ANIX_CONTROL_IMAGE`,
+  bind addresses, ports) instead of settings the server never read.
+- `docker-smoke` also runs the production Compose file against a separate
+  PostgreSQL: `migrate` completes, `control` becomes healthy, stops cleanly.
+
 
 - The container image was rebuilt for container-first deployments.
   - **Targets:** `source` (default) builds from the checkout. `release`, used
