@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -88,9 +89,17 @@ func (a *Authority) ListEnrollments(ctx context.Context) ([]model.ModuleEnrollme
 	return rows, err
 }
 
+// revocationEpoch changes whenever this process revokes certificates, so
+// caches of revocation state can drop stale answers at once.
+var revocationEpoch atomic.Uint64
+
+// RevocationEpoch returns the process-wide revocation epoch.
+func RevocationEpoch() uint64 { return revocationEpoch.Load() }
+
 // RevokeEnrollment stops a credential and every certificate issued through
 // it: they can no longer renew, and IsRevoked reports their serials.
 func (a *Authority) RevokeEnrollment(ctx context.Context, id string) error {
+	defer revocationEpoch.Add(1)
 	return a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		now := a.now().UTC()
 		result := tx.Model(&model.ModuleEnrollment{}).Where("id = ? AND cluster = ? AND revoked_at IS NULL", id, a.cluster).

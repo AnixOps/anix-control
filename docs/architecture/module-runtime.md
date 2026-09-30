@@ -102,6 +102,20 @@ that serves `ModulePKI` arrives with `Bind`.
 
 ## Bind, sessions and fencing
 
+Status: implemented in the kernel.
+- **`internal/moduleruntime`** is the listener, enabled by
+  `module_runtime.enabled` and `module_runtime.listen` (default `:7443`). It
+  requires a verified, unrevoked client certificate for every RPC except
+  `Enroll`.
+  - A revocation by this kernel applies to the next call.
+  - Revocation state is cached for at most 30 s.
+- **`packagebridge.ModuleBridge`** handles Bind and sessions.
+- **`packagebridge.GenerationSession`** is the per-generation state.
+- **Session token.** The token travels in `x-anix-bridge-session` as unpadded
+  base64url.
+- **Binder.** The binder that admits remote installations comes with the remote
+  runtime manager; until then every `Bind` answers `FailedPrecondition`.
+
 1. **Bind.** A remote instance calls `KernelPackageBridge.Bind` with:
    - package id and version;
    - instance id (the pod name) and the address to dial;
@@ -113,8 +127,12 @@ that serves `ModulePKI` arrives with `Bind`.
 
    It then returns a session token and the current route generation.
 3. **Later calls.** Every other bridge RPC carries the token as
-   `x-anix-bridge-session`. The kernel accepts it only with the certificate
-   fingerprint pinned at Bind, so a stolen token is useless elsewhere.
+   `x-anix-bridge-session`. The kernel accepts it only from a client
+   certificate with the same module identity, so a token stolen by another
+   module is useless.
+   - The pin is the identity, not one certificate, because instances renew
+     their certificates while a session lives.
+   - Rebinding the same instance id replaces its session.
 4. **Heartbeat.** Sent every 5 s; a session expires after 15 s without one. A
    heartbeat answer reports `fenced` and `draining`.
 
