@@ -354,6 +354,12 @@
     now the one writer of plan activations, with the request ledger
     `v4_kernel_subscriber_request`. Order completion and administrator plan
     assignment use it; their results are unchanged.
+  - **Traffic ledger (F2b).** `RecordTrafficTx` and `ResetTrafficTx` are now
+    the only writers of subscriber traffic counters: node reports, the traffic
+    service, forward flow and manual resets.
+    - Updates run in user-id order, which removes a deadlock risk between
+      concurrent node reports.
+    - A batch id makes a report apply once.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

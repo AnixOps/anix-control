@@ -1,7 +1,7 @@
 # Subscriber Service (KernelSubscriber)
 
-Status: the contract is defined (`sdk/api/kernelsubscriber/v1`) and F2a is
-in place. F2b–F2d follow.
+Status: the contract is defined (`sdk/api/kernelsubscriber/v1`), and F2a and
+F2b are in place. F2c and F2d follow.
 
 ## Why
 
@@ -114,7 +114,16 @@ package and generation.
     onto it.
   - Payment callbacks auto-complete orders.
   - The legacy v2 handlers then call the same code the contract will serve.
-- **F2b. Traffic ledger.**
+- **F2b. Traffic ledger** (in place).
+  - `internal/subscriber.RecordTrafficTx` and `ResetTrafficTx` are the only
+    writers of `v2_user.u/d`. They are used by node reports, the v2board
+    traffic service, forward flow and manual resets.
+  - Rows are updated in id order, so concurrent reports cannot deadlock.
+  - A batch id is applied once. Legacy node reports carry none and are
+    therefore not deduplicated, as before.
+  - Exhaustion (crossing the transfer limit) is reported for F2c's change
+    feed.
+  - Originally planned scope:
   - `RecordNodeTrafficReport`, forward flow accounting and the monthly reset
     worker go through `RecordTraffic` and `ResetTraffic` semantics, with batch
     idempotency.

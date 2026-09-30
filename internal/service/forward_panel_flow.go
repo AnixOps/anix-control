@@ -6,8 +6,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -243,12 +245,9 @@ func (s *PanelForwardService) recordForwardTrafficDeltaTx(tx *gorm.DB, forwardID
 		return err
 	}
 
-	if err := tx.Model(&model.User{}).
-		Where("id = ?", forward.UserID).
-		Updates(map[string]any{
-			"u": gorm.Expr("u + ?", upload),
-			"d": gorm.Expr("d + ?", download),
-		}).Error; err != nil {
+	if _, err := subscriber.RecordTrafficTx(tx, "", []subscriber.TrafficEntry{{
+		UserID: forward.UserID, Upload: upload, Download: download,
+	}}, time.Now()); err != nil {
 		return err
 	}
 
