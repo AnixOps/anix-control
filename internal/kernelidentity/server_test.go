@@ -278,3 +278,37 @@ func TestResolveActorAccessAndSettings(t *testing.T) {
 	require.Contains(t, settings.AdminMFA, "enabled")
 	require.Positive(t, settings.LoginRateLimit.MaxAttempts)
 }
+
+func TestCreateSubscriberConsumesTheInviteCode(t *testing.T) {
+	f := newFixture(t)
+	require.NoError(t, f.db.AutoMigrate(&model.InviteCode{}))
+	owner := model.User{Email: "owner@example.test", Password: "x", UUID: "u-owner", Token: "t-owner"}
+	require.NoError(t, f.db.Create(&owner).Error)
+	expired := time.Now().Add(-time.Hour)
+	require.NoError(t, f.db.Create(&[]model.InviteCode{{Code: "OPEN", UserID: &owner.ID}, {Code: "OLD", ExpiredAt: &expired}}).Error)
+
+	for code, message := range map[string]string{"MISSING": "invalid or used invite code", "OLD": "invite code expired"} {
+		_, err := f.server.CreateSubscriber(context.Background(), &kernelidentityv1.CreateSubscriberRequest{
+			AccountUuid: "11111111-2222-4333-8444-555555555555", Email: "new@example.test", InviteCode: code,
+		})
+		requireCode(t, err, codes.FailedPrecondition)
+		require.Equal(t, message, status.Convert(err).Message())
+	}
+
+	response, err := f.server.CreateSubscriber(context.Background(), &kernelidentityv1.CreateSubscriberRequest{
+		AccountUuid: "11111111-2222-4333-8444-555555555555", Email: "new@example.test", InviteCode: " OPEN ",
+	})
+	require.NoError(t, err)
+	var user model.User
+	require.NoError(t, f.db.Take(&user, response.GetUserId()).Error)
+	require.Equal(t, owner.ID, *user.InviteUserID, "the code's owner is the inviter")
+	var invite model.InviteCode
+	require.NoError(t, f.db.Take(&invite, "code = ?", "OPEN").Error)
+	require.Equal(t, 1, invite.Status)
+	require.Equal(t, user.ID, *invite.UsedBy)
+
+	_, err = f.server.CreateSubscriber(context.Background(), &kernelidentityv1.CreateSubscriberRequest{
+		AccountUuid: "99999999-2222-4333-8444-555555555555", Email: "other@example.test", InviteCode: "OPEN",
+	})
+	requireCode(t, err, codes.FailedPrecondition)
+}

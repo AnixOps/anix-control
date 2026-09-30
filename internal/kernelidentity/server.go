@@ -78,6 +78,12 @@ func (h *hostServer) begin(ctx context.Context) (*gorm.DB, error) {
 
 var errEmailTaken = errors.New("email belongs to another user")
 
+// inviteRefusal is an invite code CreateSubscriber cannot consume; its text
+// is the v2 registration message.
+type inviteRefusal struct{ message string }
+
+func (r inviteRefusal) Error() string { return r.message }
+
 func (h *hostServer) CreateSubscriber(ctx context.Context, request *kernelidentityv1.CreateSubscriberRequest) (*kernelidentityv1.CreateSubscriberResponse, error) {
 	db, err := h.begin(ctx)
 	if err != nil {
@@ -125,10 +131,34 @@ func (h *hostServer) CreateSubscriber(ctx context.Context, request *kernelidenti
 				inviteUserID = nil
 			}
 		}
+		var invite *model.InviteCode
+		if code := strings.TrimSpace(request.GetInviteCode()); code != "" {
+			var record model.InviteCode
+			if err := tx.Where("code = ? AND status = 0", code).First(&record).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return inviteRefusal{"invalid or used invite code"}
+				}
+				return err
+			}
+			if record.ExpiredAt != nil && record.ExpiredAt.Before(time.Now()) {
+				return inviteRefusal{"invite code expired"}
+			}
+			invite = &record
+			if invite.UserID != nil {
+				inviteUserID = invite.UserID
+			}
+		}
 		user := service.NewSubscriberUser(email, UnusableLegacyPassword)
 		user.InviteUserID = inviteUserID
 		if err := tx.Create(user).Error; err != nil {
 			return err
+		}
+		if invite != nil {
+			now := time.Now()
+			invite.Status, invite.UsedBy, invite.UsedAt = 1, &user.ID, &now
+			if err := tx.Save(invite).Error; err != nil {
+				return err
+			}
 		}
 		if err := tx.Create(&model.IdentityAccountLink{UserID: user.ID, AccountUUID: accountUUID}).Error; err != nil {
 			return err
@@ -143,6 +173,10 @@ func (h *hostServer) CreateSubscriber(ctx context.Context, request *kernelidenti
 		}
 		if errors.Is(err, errEmailTaken) {
 			return nil, status.Error(codes.AlreadyExists, "email belongs to another subscriber")
+		}
+		var refusal inviteRefusal
+		if errors.As(err, &refusal) {
+			return nil, status.Error(codes.FailedPrecondition, refusal.message)
 		}
 		return nil, internalError("create subscriber", err)
 	}

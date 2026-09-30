@@ -16,6 +16,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -65,12 +66,25 @@ type Case struct {
 	// Snapshot returns the database state RunWrite compares after the
 	// request; any JSON-encodable value.
 	Snapshot func(t testing.TB, db *gorm.DB) any
+	// Mask lists dotted JSON paths (for example "data.token") whose values
+	// differ by design, such as tokens and secrets: they must exist on both
+	// sides and are replaced before comparing.
+	Mask []string
+	// Headers lists response headers both sides must send.
+	Headers []string
+	// Warmup bodies are sent, in order, before the compared request.
+	Warmup [][]byte
 }
+
+// clientIP is the address both sides see: the legacy handler through the
+// request, the native one through the metadata the kernel sends.
+const clientIP = "192.0.2.1"
 
 // Result is one side's answer.
 type Result struct {
 	StatusCode int
 	Body       []byte
+	Header     http.Header
 	State      any
 }
 
@@ -80,7 +94,7 @@ func RunRead(t *testing.T, route Route, c Case) {
 	t.Helper()
 	forEachBackend(t, c.Name, func(t *testing.T, open opener) {
 		legacy, native := run(t, open, route, c)
-		requireSameAnswer(t, legacy, native)
+		requireSame(t, c, legacy, native)
 	})
 }
 
@@ -90,7 +104,7 @@ func RunWrite(t *testing.T, route Route, c Case) {
 	require.NotNil(t, c.Snapshot, "RunWrite needs Case.Snapshot")
 	forEachBackend(t, c.Name, func(t *testing.T, open opener) {
 		legacy, native := run(t, open, route, c)
-		requireSameAnswer(t, legacy, native)
+		requireSame(t, c, legacy, native)
 		legacyState, err := json.Marshal(legacy.State)
 		require.NoError(t, err)
 		nativeState, err := json.Marshal(native.State)
@@ -102,6 +116,39 @@ func RunWrite(t *testing.T, route Route, c Case) {
 func requireSameAnswer(t *testing.T, legacy, native Result) {
 	t.Helper()
 	require.NoError(t, CompareAnswers(legacy, native))
+}
+
+func requireSame(t *testing.T, c Case, legacy, native Result) {
+	t.Helper()
+	for _, name := range c.Headers {
+		require.NotEmpty(t, legacy.Header.Get(name), "legacy %s header", name)
+		require.NotEmpty(t, native.Header.Get(name), "native %s header", name)
+	}
+	if len(c.Mask) > 0 {
+		legacy.Body, native.Body = mask(t, legacy.Body, c.Mask), mask(t, native.Body, c.Mask)
+	}
+	requireSameAnswer(t, legacy, native)
+}
+
+func mask(t *testing.T, body []byte, paths []string) []byte {
+	t.Helper()
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(body, &decoded), "masked body must be a JSON object: %s", body)
+	for _, path := range paths {
+		parts := strings.Split(path, ".")
+		node := decoded
+		for _, part := range parts[:len(parts)-1] {
+			next, ok := node[part].(map[string]any)
+			require.True(t, ok, "masked path %s is missing in %s", path, body)
+			node = next
+		}
+		_, ok := node[parts[len(parts)-1]]
+		require.True(t, ok, "masked path %s is missing in %s", path, body)
+		node[parts[len(parts)-1]] = "<masked>"
+	}
+	encoded, err := json.Marshal(decoded)
+	require.NoError(t, err)
+	return encoded
 }
 
 // CompareAnswers reports how two answers differ: status code, or body after
@@ -160,9 +207,14 @@ func run(t *testing.T, open opener, route Route, c Case) (Result, Result) {
 		for _, param := range ctx.Params {
 			params[param.Key] = param.Value
 		}
+		body, err := io.ReadAll(ctx.Request.Body)
+		require.NoError(t, err)
 		response, err := handler(ctx.Request.Context(), pluginhostsdk.NativeRequest{
-			RouteID: route.RouteID, Method: route.Method, Body: c.Body, Principal: c.Principal,
-			Metadata: pluginhostsdk.RequestMetadata{Path: ctx.Request.URL.Path, Query: ctx.Request.URL.Query(), PathParams: params},
+			RouteID: route.RouteID, Method: route.Method, Body: body, Principal: c.Principal,
+			Metadata: pluginhostsdk.RequestMetadata{
+				Path: ctx.Request.URL.Path, Query: ctx.Request.URL.Query(), PathParams: params,
+				ClientIP: clientIP, UserAgent: ctx.Request.UserAgent(),
+			},
 		})
 		require.NoError(t, err, "native handler failed")
 		for _, header := range response.Headers {
@@ -190,14 +242,21 @@ func serve(t *testing.T, method, pattern string, c Case, handler gin.HandlerFunc
 	t.Helper()
 	engine := gin.New()
 	engine.Handle(method, pattern, handler)
-	request := httptest.NewRequestWithContext(context.Background(), method, c.Path, bytes.NewReader(c.Body))
-	if len(c.Body) > 0 {
-		request.Header.Set("Content-Type", "application/json")
+	send := func(body []byte) Result {
+		request := httptest.NewRequestWithContext(context.Background(), method, c.Path, bytes.NewReader(body))
+		request.RemoteAddr = clientIP + ":1234"
+		if len(body) > 0 {
+			request.Header.Set("Content-Type", "application/json")
+		}
+		recorder := httptest.NewRecorder()
+		engine.ServeHTTP(recorder, request)
+		require.NotEqual(t, http.StatusNotFound, recorder.Code, "case path %s does not match pattern %s", c.Path, pattern)
+		return Result{StatusCode: recorder.Code, Body: recorder.Body.Bytes(), Header: recorder.Header()}
 	}
-	recorder := httptest.NewRecorder()
-	engine.ServeHTTP(recorder, request)
-	require.NotEqual(t, http.StatusNotFound, recorder.Code, "case path %s does not match pattern %s", c.Path, pattern)
-	return Result{StatusCode: recorder.Code, Body: recorder.Body.Bytes()}
+	for _, body := range c.Warmup {
+		send(body)
+	}
+	return send(c.Body)
 }
 
 func openSQLite(t *testing.T, label string) (*config.DatabaseConfig, *gorm.DB) {

@@ -12,11 +12,15 @@ import (
 	"github.com/AnixOps/anix-control/identity/keystore"
 	"github.com/AnixOps/anix-control/identity/secretbox"
 	"github.com/AnixOps/anix-control/identity/server"
+	"github.com/AnixOps/anix-control/identity/settings"
 	"github.com/AnixOps/anix-control/identity/signingkey"
+	"github.com/AnixOps/anix-control/identity/throttle"
 	identityv1 "github.com/AnixOps/anix-control/sdk/api/identity/v1"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
+	"github.com/AnixOps/anix-control/v4/packages/identity-platform/native"
 	"google.golang.org/grpc"
+	"gorm.io/gorm"
 )
 
 // Control's identity tokens: the kernel verifies iss and aud.
@@ -188,6 +192,7 @@ func (a *storedAccounts) accountStore(ctx context.Context) (*account.Store, erro
 	}
 	a.store = &account.Store{DB: storage.DB, Secrets: a.box, Tables: account.Tables{
 		Account: storage.Table("account"), MFA: storage.Table("mfa"), ImportRun: storage.Table("import_run"),
+		MFAAttempt: storage.Table("mfa_attempt"),
 	}}
 	return a.store, nil
 }
@@ -217,4 +222,40 @@ func (a *storedAccounts) ChangedAfter(ctx context.Context, version uint64, limit
 		return nil, err
 	}
 	return store.ChangedAfter(ctx, version, limit)
+}
+
+// signingKey returns the key that signs tokens now.
+func (k *storedKeys) signingKey(ctx context.Context) (signingkey.Key, error) {
+	keys, err := k.Load(ctx)
+	if err != nil {
+		return signingkey.Key{}, err
+	}
+	return signingkey.Signing(keys)
+}
+
+func openDB(ctx context.Context, open packagestoresdk.Opener) (*gorm.DB, error) {
+	storage, err := open(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return storage.DB, nil
+}
+
+// nativeStores opens the stores the native routes use.
+func nativeStores(open packagestoresdk.Opener, accounts *storedAccounts) func(context.Context) (*native.Stores, error) {
+	return func(ctx context.Context) (*native.Stores, error) {
+		store, err := accounts.accountStore(ctx)
+		if err != nil {
+			return nil, err
+		}
+		storage, err := open(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &native.Stores{
+			Accounts: store,
+			Throttle: &throttle.Limiter{DB: storage.DB, Table: storage.Table("throttle")},
+			Settings: &settings.Store{DB: storage.DB, Table: storage.Table("setting")},
+		}, nil
+	}
 }

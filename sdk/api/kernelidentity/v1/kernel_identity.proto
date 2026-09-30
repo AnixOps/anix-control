@@ -38,6 +38,10 @@ message CreateSubscriberRequest {
   string account_uuid = 1;
   string email = 2;
   uint64 invite_user_id = 3;
+  // invite_code, when set, is validated and consumed together with the new
+  // subscriber: the code's owner becomes the inviter. Codes stay with the
+  // kernel. Refusals are FailedPrecondition with the v2 message.
+  string invite_code = 4;
 }
 
 message CreateSubscriberResponse {

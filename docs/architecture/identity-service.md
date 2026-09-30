@@ -227,7 +227,22 @@ instance's generation.
         commission data. Registration will validate and consume a code
         through `CreateSubscriber`, so `/user/invite` and
         `/user/invite/generate` leave group A.
-11. Group A native handlers with parity tests.
+11. Group A native handlers with parity tests, in three steps:
+    - 11a (in place): login and registration in identity.
+      - Accounts, bcrypt passwords, the ban flag and MFA come from identity;
+        expiry comes from `kapi_user_directory_v1`.
+      - Attempt limits live in identity's `throttle` table, shared by
+        replicas. The configuration is seeded once from
+        `GetIdentitySettings`.
+      - Login issues an EdDSA token for `aud=anix-control`. The permission
+        fields come from `ResolveActorAccess`.
+      - Registration creates the subscriber with `CreateSubscriber`, which
+        also consumes the invite code.
+      - `internal/tests/identitycompat` proves the responses equal the v2
+        handlers on SQLite and PostgreSQL. Only the token differs, by
+        design.
+    - 11b: user MFA routes and the admin MFA configuration.
+    - 11c: admin user create, update, ban, unban and delete.
 12. Cutover, revocation push and finalize.
 13. End-to-end acceptance on Compose and kind.
 

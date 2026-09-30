@@ -12,6 +12,10 @@
     {
       "id": "003_accounts",
       "path": "migrations/003_accounts.sql"
+    },
+    {
+      "id": "004_login",
+      "path": "migrations/004_login.sql"
     }
   ],
   "package_id": "identity-platform",
