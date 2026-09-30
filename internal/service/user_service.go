@@ -2,8 +2,10 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/authn"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/google/uuid"
@@ -217,6 +219,10 @@ func (s *UserService) Create(user *model.User) error {
 	return s.db.Create(user).Error
 }
 
+// revokingUserFields are the user columns whose change ends the user's
+// sessions: tokens issued before it stop working.
+var revokingUserFields = []string{"password", "email", "is_admin", "banned"}
+
 // Update 更新用户
 func (s *UserService) Update(id uint, updates map[string]any) error {
 	if err := s.ensureUserExists(id); err != nil {
@@ -225,7 +231,60 @@ func (s *UserService) Update(id uint, updates map[string]any) error {
 	if len(updates) == 0 {
 		return nil
 	}
-	return s.db.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error
+	var revocation *authn.Revocation
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		reason, err := sessionEndingChange(tx, id, updates)
+		if err != nil {
+			return err
+		}
+		if err := tx.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+			return err
+		}
+		if reason == "" {
+			return nil
+		}
+		r := authn.UserRevocation(id, reason)
+		revocation = &r
+		return authn.Write(tx, r)
+	})
+	if err != nil {
+		return err
+	}
+	if revocation != nil {
+		authn.Remember(*revocation)
+	}
+	return nil
+}
+
+// sessionEndingChange names the first revoking field that updates actually
+// changes; forms that resend unchanged values keep the user's sessions.
+func sessionEndingChange(tx *gorm.DB, id uint, updates map[string]any) (string, error) {
+	present := false
+	for _, field := range revokingUserFields {
+		if _, ok := updates[field]; ok {
+			present = true
+			break
+		}
+	}
+	if !present {
+		return "", nil
+	}
+	var current model.User
+	if err := tx.Select("id", "password", "email", "is_admin", "banned").Where("id = ?", id).Take(&current).Error; err != nil {
+		return "", err
+	}
+	was := map[string]string{
+		"password": current.Password,
+		"email":    current.Email,
+		"is_admin": fmt.Sprint(current.IsAdmin),
+		"banned":   fmt.Sprint(current.Banned),
+	}
+	for _, field := range revokingUserFields {
+		if value, ok := updates[field]; ok && fmt.Sprint(value) != was[field] {
+			return "user " + field + " changed", nil
+		}
+	}
+	return "", nil
 }
 
 // Delete 删除用户
@@ -233,7 +292,8 @@ func (s *UserService) Delete(id uint) error {
 	if id == 0 {
 		return ErrUserNotFound
 	}
-	return s.db.Transaction(func(tx *gorm.DB) error {
+	revocation := authn.UserRevocation(id, "user deleted")
+	err := s.db.Transaction(func(tx *gorm.DB) error {
 		if err := deleteWireGuardPeers(tx, "user_id = ?", id); err != nil {
 			return err
 		}
@@ -244,8 +304,13 @@ func (s *UserService) Delete(id uint) error {
 		if res.RowsAffected == 0 {
 			return ErrUserNotFound
 		}
-		return nil
+		return authn.Write(tx, revocation)
 	})
+	if err != nil {
+		return err
+	}
+	authn.Remember(revocation)
+	return nil
 }
 
 // Ban 封禁用户

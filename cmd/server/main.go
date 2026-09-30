@@ -563,6 +563,9 @@ type serverRuntime struct {
 // start launches plugin hosts, background workers and HTTP servers. On error
 // it returns immediately; the caller still runs shutdown for whatever started.
 func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals) error {
+	if err := rt.startTokenRevocations(cfg); err != nil {
+		return err
+	}
 	pluginhost.SetDefaultManager(nil)
 	if cfg.Plugins.ControlExecutionEnabled {
 		hosts, err := newControlPluginHostManager(cfg)

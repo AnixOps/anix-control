@@ -12,11 +12,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/authn"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/tests/testutil"
+	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -59,6 +61,8 @@ func (s *ServiceTestSuite) SetupSuite() {
 		// 鑷姩杩佺Щ鎵€鏈夋ā鍨?
 		dbInitErr = database.AutoMigrate(
 			&model.User{},
+			&model.IdentityRevocation{},
+			&model.IdentitySessionRevocation{},
 			&model.Plan{},
 			&model.Order{},
 			&model.Node{},
@@ -733,6 +737,54 @@ func (s *UserServiceTestSuite) TestBanUnban() {
 
 	found, _ = s.svc.GetByID(user.ID)
 	assert.Equal(s.T(), 0, found.Banned)
+}
+
+// A ban, and the other session-ending changes, revoke the user's tokens in
+// the same transaction and at once in this process.
+func (s *UserServiceTestSuite) TestSessionEndingChangesRevokeTokens() {
+	cfg := &config.Config{JWT: config.JWTConfig{Secret: "revocation-test-secret", Expire: 3600}}
+	config.Set(cfg)
+	store := authn.NewStore(database.Get(), time.Hour)
+	authn.SetDefaultStore(store)
+	s.T().Cleanup(func() { authn.SetDefaultStore(nil) })
+
+	user := &model.User{Email: "revoke@example.com", Password: "hash", Token: "revoke-token", UUID: "revoke-uuid"}
+	require.NoError(s.T(), database.Get().Create(user).Error)
+	issue := func() string {
+		token, err := utils.GenerateToken(user.ID, user.Email, false, cfg.JWT.Secret, cfg.JWT.Expire)
+		require.NoError(s.T(), err)
+		return token
+	}
+	verify := func(token string) error {
+		_, err := authn.Default().Verify(context.Background(), token)
+		return err
+	}
+
+	token := issue()
+	require.NoError(s.T(), s.svc.Update(user.ID, map[string]any{"u": 1, "d": 2}))
+	require.NoError(s.T(), verify(token), "a traffic update keeps sessions")
+	require.NoError(s.T(), s.svc.Update(user.ID, map[string]any{"email": user.Email, "banned": 0, "is_admin": 0}))
+	require.NoError(s.T(), verify(token), "resending unchanged values keeps sessions")
+
+	require.NoError(s.T(), s.svc.Ban(user.ID))
+	require.ErrorIs(s.T(), verify(token), authn.ErrRevokedToken)
+
+	var row model.IdentityRevocation
+	require.NoError(s.T(), database.Get().Take(&row, "user_id = ?", user.ID).Error)
+	require.Equal(s.T(), "user banned changed", row.Reason)
+
+	// The revocation holds after a reload from the table as well.
+	require.NoError(s.T(), store.Reload(context.Background()))
+	require.ErrorIs(s.T(), verify(token), authn.ErrRevokedToken)
+
+	// A token issued in a later second is valid again.
+	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second)))
+	require.NoError(s.T(), verify(issue()))
+
+	later := issue()
+	time.Sleep(time.Until(time.Now().Truncate(time.Second).Add(time.Second)))
+	require.NoError(s.T(), s.svc.Delete(user.ID))
+	require.ErrorIs(s.T(), verify(later), authn.ErrRevokedToken)
 }
 
 func (s *UserServiceTestSuite) TestBanUnban_NotFound() {

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/authn"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
@@ -1005,4 +1006,26 @@ func TestRecovery(t *testing.T) {
 
 	// Recovery should prevent crash and return 500
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestJWTAuth_RejectsRevokedToken(t *testing.T) {
+	secret := "test-secret-key"
+	config.Set(&config.Config{JWT: config.JWTConfig{Secret: secret}})
+	token, err := utils.GenerateToken(41, "revoked@example.com", false, secret, 3600)
+	assert.NoError(t, err)
+
+	store := authn.NewStore(nil, time.Hour)
+	store.Remember(authn.Revocation{UserID: 41, NotBefore: time.Now(), Reason: "ban"})
+	authn.SetDefaultStore(store)
+	t.Cleanup(func() { authn.SetDefaultStore(nil) })
+
+	router := gin.New()
+	router.Use(JWTAuth())
+	router.GET("/test", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"message": "ok"}) })
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

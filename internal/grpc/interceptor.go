@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/authn"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"google.golang.org/grpc"
@@ -228,7 +229,8 @@ func StreamAuthInterceptor(apiToken, jwtSecret string) grpc.StreamServerIntercep
 func validateToken(token, apiToken, jwtSecret string) (bool, *utils.Claims, string) {
 	// 优先尝试 JWT 验证（如果 token 看起来像 JWT 且配置了 secret）
 	if jwtSecret != "" && strings.Contains(token, ".") {
-		claims, err := utils.ParseTokenWithSecret(token, jwtSecret)
+		verifier := authn.Verifier{Secret: func() string { return jwtSecret }, Revocations: authn.DefaultStore()}
+		claims, err := verifier.Verify(context.Background(), token)
 		if err == nil {
 			return true, claims, ""
 		}
