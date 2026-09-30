@@ -4,17 +4,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"net"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
-	packagebridgev1 "github.com/AnixOps/anix-control/v4/api/packagebridge/v1"
 	pluginhostv1 "github.com/AnixOps/anix-control/v4/api/pluginhost/v1"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
@@ -24,70 +21,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/metadata"
 )
-
-// networkBridge is a minimal module-side bridge client over the module
-// listener: it binds, heartbeats, and rebinds when its generation is fenced.
-type networkBridge struct {
-	client   packagebridgev1.KernelPackageBridgeClient
-	instance string
-	address  string
-	lease    string
-
-	mu    sync.Mutex
-	token string
-}
-
-func (b *networkBridge) bind(ctx context.Context) error {
-	response, err := b.client.Bind(ctx, &packagebridgev1.BindRequest{
-		PackageId: "knowledge", PackageVersion: "4.1.0", InstanceId: b.instance,
-		AdvertiseAddr: b.address, LeaseId: b.lease,
-	})
-	if err != nil {
-		return err
-	}
-	b.mu.Lock()
-	b.token = base64.RawURLEncoding.EncodeToString(response.GetSessionToken())
-	b.mu.Unlock()
-	return nil
-}
-
-func (b *networkBridge) context(ctx context.Context) context.Context {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return metadata.AppendToOutgoingContext(ctx, packagebridge.SessionMetadataKey, b.token)
-}
-
-// run keeps the session alive and rebinds after fences until ctx ends.
-func (b *networkBridge) run(ctx context.Context) {
-	for ctx.Err() == nil {
-		heartbeat, err := b.client.Heartbeat(b.context(ctx), &packagebridgev1.HeartbeatRequest{})
-		if err != nil || heartbeat.GetFenced() {
-			_ = b.bind(ctx)
-		}
-		select {
-		case <-ctx.Done():
-		case <-time.After(50 * time.Millisecond):
-		}
-	}
-}
-
-func (b *networkBridge) Invoke(ctx context.Context, capability []byte, operation string, payload []byte) (packagebridgesdk.Response, error) {
-	response, err := b.client.Invoke(b.context(ctx), &packagebridgev1.InvokeRequest{Capability: capability, Operation: operation, Payload: payload})
-	if err != nil {
-		return packagebridgesdk.Response{}, err
-	}
-	return packagebridgesdk.Response{StatusCode: response.GetStatusCode(), Body: response.GetResponseBody()}, nil
-}
-
-func (b *networkBridge) GetPackageConfig(context.Context) (packagebridgesdk.PackageConfig, error) {
-	return packagebridgesdk.PackageConfig{}, packagebridgesdk.ErrSessionOperationUnsupported
-}
 
 // startModuleInstance runs a knowledge module instance: an SDK host served
 // over mTLS with its module certificate, bound to the kernel.
-func startModuleInstance(t *testing.T, fixture *listenerFixture, instance string) *networkBridge {
+func startModuleInstance(t *testing.T, fixture *listenerFixture, instance string) *packagebridgesdk.NetworkClient {
 	t.Helper()
 	certificate, _ := fixture.enroll(t, "knowledge")
 	roots := fixture.kernel.Roots
@@ -97,13 +35,19 @@ func startModuleInstance(t *testing.T, fixture *listenerFixture, instance string
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	connection, err := grpc.NewClient(fixture.address, grpc.WithTransportCredentials(credentials.NewTLS(source.ClientConfig(moduletls.AcceptExactly(kernelID)))))
+	var router *pluginhostsdk.Router
+	bridge, err := packagebridgesdk.DialNetwork(packagebridgesdk.NetworkConfig{
+		KernelAddr: fixture.address, TLS: source.ClientConfig(moduletls.AcceptExactly(kernelID)),
+		PackageID: "knowledge", PackageVersion: "4.1.0", InstanceID: instance,
+		AdvertiseAddr: listener.Addr().String(), LeaseID: "lease-" + instance,
+		OnBind: func(uint64) {
+			if router != nil {
+				_ = router.Resume(context.Background())
+			}
+		},
+	})
 	require.NoError(t, err)
-	bridge := &networkBridge{
-		client: packagebridgev1.NewKernelPackageBridgeClient(connection), instance: instance,
-		address: listener.Addr().String(), lease: "lease-" + instance,
-	}
-	router, err := pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{PackageID: "knowledge", LeaseID: bridge.lease, Bridge: bridge})
+	router, err = pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{PackageID: "knowledge", LeaseID: "lease-" + instance, Bridge: bridge})
 	require.NoError(t, err)
 	host, err := pluginhostsdk.NewServer(pluginhostsdk.ServerConfig{PackageID: "knowledge", PackageVersion: "4.1.0"}, router)
 	require.NoError(t, err)
@@ -115,13 +59,13 @@ func startModuleInstance(t *testing.T, fixture *listenerFixture, instance string
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		bridge.run(ctx)
+		bridge.Run(ctx)
 	}()
 	t.Cleanup(func() {
 		cancel()
 		<-done
 		server.Stop()
-		_ = connection.Close()
+		_ = bridge.Close()
 	})
 	return bridge
 }

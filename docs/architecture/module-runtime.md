@@ -196,6 +196,43 @@ Remote modules require PostgreSQL; a remote lease on SQLite is refused.
   `host:port`) is the database address in remote leases when it differs
   from the kernel's.
 
+## Running a module
+
+`pkg/modulesdk.Run` starts a host in either runtime. The official hosts
+(`packages/shared/controlhost`, `packages/identity-platform/control`) use it:
+- **Local.** Without `ANIX_MODULE_MODE`, the host expects the environment the
+  kernel gives a child process.
+- **Remote.** With `ANIX_MODULE_MODE=remote` it runs as a network module:
+  - it enrolls, or loads its stored certificate, and renews it at the renew
+    time; after expiry it enrolls again;
+  - it serves `ControlPackageHost` over mTLS and accepts only the kernel's
+    identity;
+  - it binds, heartbeats and binds again after a fence or a kernel restart,
+    and resumes a drained package when it binds;
+  - it answers `/livez` and `/readyz` (bound and not shutting down);
+  - on SIGTERM it fails readiness, stops heartbeating, keeps serving for
+    the shutdown grace, then stops gracefully.
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ANIX_MODULE_MODE` | (local) | `remote` for a network module |
+| `ANIX_MODULE_KERNEL_ADDR` | required | kernel module listener, `host:port` |
+| `ANIX_MODULE_CLUSTER` | `default` | SPIFFE cluster |
+| `ANIX_MODULE_LISTEN_ADDR` | `:7000` | host protocol listener |
+| `ANIX_MODULE_ADVERTISE_ADDR` | instance id and listen port | address the kernel dials (use the pod IP) |
+| `ANIX_MODULE_INSTANCE_ID` | host name | unique per process (pod name) |
+| `ANIX_MODULE_CERT_DIR` | `/var/lib/anix-module/certs` | stored key, certificate and trust bundle (0600) |
+| `ANIX_MODULE_TRUST_BUNDLE_FILE` | required with the built-in PKI | kernel CA bundle: `anix-control module ca bundle` or `GET /api/v4/kernel/modules/trust-bundle` |
+| `ANIX_MODULE_ENROLL_CREDENTIAL_FILE` | | enrollment credential from `anix-control module token create` |
+| `ANIX_MODULE_CERT_FILE`, `ANIX_MODULE_KEY_FILE` | | externally issued certificate (cert-manager); enables the external mode |
+| `ANIX_MODULE_HEALTH_ADDR` | `:8081` | `/livez` and `/readyz` |
+| `ANIX_MODULE_SHUTDOWN_GRACE` | `20s` | serving time after SIGTERM |
+| `ANIX_MODULE_IMAGE_DIGEST` | | reported at Bind (advisory) |
+
+**Storage in remote modules.** New connections fetch the current storage
+lease from the kernel before they connect, so a pool picks up a rotated role
+password instead of failing.
+
 ## Trust boundary
 
 For `local` hosts the kernel proves what runs: it executes only the entrypoint

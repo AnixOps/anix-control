@@ -19,6 +19,7 @@ const moduleCommandUsage = `usage:
   anix-control module token list
   anix-control module token revoke <enrollment-id>
   anix-control module ca rotate
+  anix-control module ca bundle
 
 The config file comes from ANIX_CONTROL_CONFIG or config/config.yaml.`
 
@@ -80,6 +81,13 @@ func runModuleCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, argu
 			return err
 		}
 		return encoder.Encode(map[string]any{"revoked": arguments[2]})
+	case "ca bundle":
+		bundle, err := authority.TrustBundlePEM(ctx)
+		if err != nil {
+			return err
+		}
+		_, err = stdout.Write(bundle)
+		return err
 	case "ca rotate":
 		next, err := authority.Rotate(ctx)
 		if err != nil {

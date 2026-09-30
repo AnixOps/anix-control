@@ -505,6 +505,18 @@ func (r *Router) Drain(context.Context) (DrainResponse, error) {
 	return DrainResponse{Drained: true}, nil
 }
 
+// Resume serves again after a Drain.
+func (r *Router) Resume(context.Context) error {
+	if r == nil {
+		return errors.New("package is unavailable")
+	}
+	r.draining.Store(false)
+	return nil
+}
+
+// Draining reports whether the router refuses new requests.
+func (r *Router) Draining() bool { return r != nil && r.draining.Load() }
+
 func relayWebSocketBridge(ctx context.Context, host WebSocketStream, bridge packagebridgesdk.WebSocketStream) error {
 	result := make(chan error, 2)
 	go func() {

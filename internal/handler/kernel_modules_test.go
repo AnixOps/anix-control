@@ -29,6 +29,7 @@ func newModuleTestRouter(t *testing.T, authority func() (*modulepki.Authority, e
 	router.GET("/enrollments", modules.ListEnrollments)
 	router.DELETE("/enrollments/:id", modules.RevokeEnrollment)
 	router.POST("/ca/rotate", modules.RotateCA)
+	router.GET("/trust-bundle", modules.TrustBundle)
 	return router
 }
 
@@ -82,6 +83,11 @@ func TestModuleEnrollmentAdministration(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, serveModuleRequest(router, http.MethodDelete, "/enrollments/missing", "").Code)
 	require.Equal(t, http.StatusBadRequest, serveModuleRequest(router, http.MethodPost, "/enrollments", `{"package_id":"Bad_ID","ttl_seconds":60}`).Code)
 	require.Equal(t, http.StatusBadRequest, serveModuleRequest(router, http.MethodPost, "/enrollments", `{"package_id":"identity-platform"}`).Code)
+
+	bundle := serveModuleRequest(router, http.MethodGet, "/trust-bundle", "")
+	require.Equal(t, http.StatusOK, bundle.Code)
+	require.Contains(t, bundle.Body.String(), "BEGIN CERTIFICATE")
+	require.NotContains(t, bundle.Body.String(), "PRIVATE")
 
 	rotated := serveModuleRequest(router, http.MethodPost, "/ca/rotate", "")
 	require.Equal(t, http.StatusOK, rotated.Code)

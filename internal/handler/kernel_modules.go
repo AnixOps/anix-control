@@ -171,3 +171,17 @@ func (h *ModuleHandler) SetRuntime(c *gin.Context) {
 		kernelData(c, http.StatusOK, row)
 	}
 }
+
+// TrustBundle returns the module CA bundle as PEM for module deployments.
+func (h *ModuleHandler) TrustBundle(c *gin.Context) {
+	authority := h.authorityOrError(c)
+	if authority == nil {
+		return
+	}
+	bundle, err := authority.TrustBundlePEM(c.Request.Context())
+	if err != nil {
+		kernelError(c, http.StatusServiceUnavailable, "module_pki_unavailable", err.Error())
+		return
+	}
+	c.Data(http.StatusOK, "application/x-pem-file", bundle)
+}
