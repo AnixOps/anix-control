@@ -17,19 +17,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BUILDER = REPO_ROOT / "packages" / "shared" / "build_package.py"
-RELEASE_STAGE = REPO_ROOT / "config" / "scripts" / "check_release_stage.py"
 BUILD_PACKAGE_SPEC = importlib.util.spec_from_file_location("shared_build_package", BUILDER)
 if BUILD_PACKAGE_SPEC is None or BUILD_PACKAGE_SPEC.loader is None:
     raise RuntimeError("cannot load shared package builder")
 BUILD_PACKAGE_MODULE = importlib.util.module_from_spec(BUILD_PACKAGE_SPEC)
 sys.modules[BUILD_PACKAGE_SPEC.name] = BUILD_PACKAGE_MODULE
 BUILD_PACKAGE_SPEC.loader.exec_module(BUILD_PACKAGE_MODULE)
-RELEASE_STAGE_SPEC = importlib.util.spec_from_file_location("release_stage", RELEASE_STAGE)
-if RELEASE_STAGE_SPEC is None or RELEASE_STAGE_SPEC.loader is None:
-    raise RuntimeError("cannot load release-stage checker")
-RELEASE_STAGE_MODULE = importlib.util.module_from_spec(RELEASE_STAGE_SPEC)
-sys.modules[RELEASE_STAGE_SPEC.name] = RELEASE_STAGE_MODULE
-RELEASE_STAGE_SPEC.loader.exec_module(RELEASE_STAGE_MODULE)
 
 
 ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
@@ -785,61 +778,6 @@ func main() {
                         ["linux/amd64"],
                         [entry["architecture"] for entry in json.loads(control_index.read() if control_index else b"{}")["entries"]],
                     )
-
-    def test_v4_release_stage_requires_the_materialized_manifest_contract(self) -> None:
-        result = subprocess.run(
-            [sys.executable, str(RELEASE_STAGE), "--tag", "v4.0.0"],
-            cwd=REPO_ROOT,
-            check=False,
-            text=True,
-            capture_output=True,
-        )
-        self.assertEqual(0, result.returncode, result.stderr or result.stdout)
-
-    def test_v4_release_stage_rejects_legacy_manifest_without_host_metadata(self) -> None:
-        contract = RELEASE_STAGE_MODULE.read_contract(REPO_ROOT / "config" / "scripts" / "release-stage-contract.json")
-        stage = next(item for item in contract["stages"] if item["id"] == "4.0")
-        requirement = stage["required_packages"][0]
-        package_id = requirement["id"]
-        contract["stages"] = [{**stage, "required_packages": [requirement]}]
-
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            (root / "go.mod").write_text("module github.com/AnixOps/anix-control/v4\n", encoding="utf-8")
-            for relative_path, values in {
-                "config/config.yaml.example": (False, False, False),
-                "config/config.prod.yaml": (False, False, False),
-                "config/config.dev.yaml.example": (True, True, False),
-            }.items():
-                (root / relative_path).parent.mkdir(parents=True, exist_ok=True)
-                (root / relative_path).write_text(
-                    "plugins:\n"
-                    f"  control_execution_enabled: {str(values[0]).lower()}\n"
-                    f"  dispatch_enabled: {str(values[1]).lower()}\n"
-                    f"  topology_execution_enabled: {str(values[2]).lower()}\n",
-                    encoding="utf-8",
-                )
-            package_root = root / "packages" / package_id
-            (package_root / "webui").mkdir(parents=True)
-            (package_root / "webui" / "index.mjs").write_text("export default {};\n", encoding="utf-8")
-            (package_root / "manifest.template.json").write_text(
-                json.dumps(
-                    {
-                        "id": package_id,
-                        "version": "4.0.0",
-                        "targets": ["control"],
-                        "webui": {
-                            "bundle": {"path": "webui/index.mjs", "sha256": "fixture"},
-                            "menus": [{"id": f"{package_id}.main"}],
-                            "routes": [{"id": f"{package_id}.main"}],
-                        },
-                    }
-                ),
-                encoding="utf-8",
-            )
-
-            with self.assertRaisesRegex(RELEASE_STAGE_MODULE.StageContractError, "api_version"):
-                RELEASE_STAGE_MODULE.validate_stage(root, contract, "v4.0.0")
 
 
 if __name__ == "__main__":

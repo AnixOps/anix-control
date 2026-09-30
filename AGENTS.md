@@ -140,10 +140,16 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
 ## Release Policy
 
 - Releases are built only by GitHub Actions: a `v*.*.*` tag on a commit that
-  landed on `go_dev` runs the `ci.yml` tag pipeline (artifacts, checksums,
-  SBOM, manifest, release notes, signed packages). Never build release
-  artifacts locally or on a production host; local deploy scripts are guarded
-  by `config/deploy/check_release_build_policy.sh`.
+  landed on `go_dev` runs the `ci.yml` tag pipeline.
+  - It produces signed packages for every package under `packages/`, the
+    binaries, a signed GHCR image with SBOM and provenance, the source SBOM,
+    checksums and the manifest.
+  - The release body is the tag's CHANGELOG section.
+- Cut a release with `config/scripts/prepare_release.py <version>`, a pull
+  request, then the tag (`docs/RELEASING.md`). There are no release-stage,
+  rehearsal or approval gates.
+- Never build release artifacts locally or on a production host; local deploy
+  scripts are guarded by `config/deploy/check_release_build_policy.sh`.
 - If you change release steps in `ci.yml`, update
   `config/scripts/check_release_workflow.sh` in the same PR.
 - Containers are the primary deployment. The release `docker` job builds the

@@ -52,9 +52,10 @@ It should not become a dumping ground for:
 - `config/scripts/` holds repository gates and release tooling that CI runs:
   documentation sync (`check_docs_updated.sh`), release workflow policy
   (`check_release_workflow.sh`), release version surfaces
-  (`check_release_version.py`), release stage contract, `/api/v2` package route
-  catalog and plugin-only route checks, Agent SDK dependency check, release
-  manifest/notes generators, artifact and V4 evidence verifiers, and the
+  (`check_release_version.py`) and release preparation (`prepare_release.py`),
+  `/api/v2` package route catalog and plugin-only route checks, Agent SDK
+  dependency check, release manifest/notes generators, the artifact verifier,
+  and the
   guarded legacy `deploy.sh`/`pre-deploy.sh` entrypoints.
 
 ## `config/deploy/`

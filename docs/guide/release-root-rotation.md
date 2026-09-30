@@ -37,15 +37,11 @@ Do not rotate while a release tag or a release-tag workflow run is in flight.
 |------|---------|-------|
 | Private key | PEM Ed25519 key | Outside Git in a `0700` directory, file mode `0600`; GitHub secret `ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY` |
 | Public root | One-line Base64 of the raw 32-byte public key, **no trailing newline** | GitHub secret `ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY`; `plugins.official_public_key` in config |
-| Approvals | Signed canary/support declarations | `ANIXOPS_V4_CANARY_APPROVAL`, `ANIXOPS_V4_SUPPORT_APPROVAL`: **not** created during rotation |
 
 On a release tag, `.github/workflows/ci.yml` job `plugin-package-publish`
 requires `ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY` to equal `official_public_key` in
-`config/config.prod.yaml` exactly before signing packages, and
-`v4-release-evidence` requires it to equal the root recorded with those
-packages before signing evidence. A mismatch fails the tag run closed. The
-canary/support approvals are signed by the same root, so they are recreated
-with the new key for the next release.
+`config/config.prod.yaml` exactly before signing packages. A mismatch fails the
+tag run closed.
 
 Repository surfaces that carry the public root (check with
 `git grep -l "<old root>"`):
@@ -157,19 +153,14 @@ gh secret set ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY --body "$(cat "$KEY_DIR/officia
 gh secret list | grep -E '^(ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY|ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY)[[:space:]]'
 ```
 
-Never read back or print secret values. Leave
-`ANIXOPS_V4_CANARY_APPROVAL` and `ANIXOPS_V4_SUPPORT_APPROVAL` alone; they are
-created per release with `config/scripts/create_v4_approval.py` only after
-the canary and support decisions for that exact package cohort.
+Never read back or print secret values.
 
 ### 6. Produce and import re-signed packages
 
-1. Cut the next release through the normal process (`AGENTS.md`, "Version
-   Bumps" and "Release Policy"). The `plugin-package-publish` job signs all
-   sixteen packages with the new root, using the tag version as the package
-   version, so `packages/*/manifest.template.json`,
-   `packages/*/migrations/index.json`, and `packageVersion` in
-   `packages/identity-platform/control/main.go` must carry that version.
+1. Cut the next release through the normal process (`docs/RELEASING.md`).
+   The `plugin-package-publish` job signs every package with the new root at
+   the tag version; the builder stamps that version into each manifest and
+   host binary.
 2. On each running Control, in the maintenance window: set
    `plugins.official_public_key` in the deployed configuration to the new
    root, deploy the release, then import every package with the new version (**Control > Plugins > Import release**, see
@@ -187,7 +178,7 @@ the canary and support decisions for that exact package cohort.
   longer appears anywhere in the tree.
 - `--formal-release` and `--verify-release` succeed with the new pair.
 - `gh secret list` shows both key secret names.
-- After import: all sixteen installations are enabled at the new version and
+- After import: every installation is enabled at the new version and
   `/api/v2` business routes answer (no `503` `package_unavailable` responses).
 
 ## Rollback
