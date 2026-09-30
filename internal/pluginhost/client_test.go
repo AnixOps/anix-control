@@ -140,7 +140,7 @@ func TestPluginHostProcess(t *testing.T) {
 		t.Fatal("host runtime descriptor is not a directory")
 	}
 	// Report the inherited locale on stderr; the supervisor logs it.
-	_, _ = fmt.Fprintf(os.Stderr, "%s TZ=%s LANG=%s\n", hostTestStartedLine, os.Getenv("TZ"), os.Getenv("LANG"))
+	_, _ = fmt.Fprintf(os.Stderr, "%s TZ=%s LANG=%s KEK=%t\n", hostTestStartedLine, os.Getenv("TZ"), os.Getenv("LANG"), os.Getenv("ANIX_IDENTITY_KEK") != "")
 	listener, err := net.Listen("unix", socketPath)
 	require.NoError(t, err)
 	require.NoError(t, os.Chmod(socketPath, 0o600))

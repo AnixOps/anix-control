@@ -42,6 +42,17 @@ type Config struct {
 	Plugins        PluginConfig         `yaml:"plugins"`
 	GRPC           GRPCConfig           `yaml:"grpc"`
 	ModuleRuntime  ModuleRuntimeConfig  `yaml:"module_runtime"`
+	Identity       IdentityConfig       `yaml:"identity"`
+}
+
+// IdentityConfig configures the identity module when Control runs it as a
+// local package host.
+type IdentityConfig struct {
+	// KEK is the base64 or hex 32-byte key that seals the identity signing
+	// keys. It is passed to the local identity-platform host only; a network
+	// module gets its own copy (ANIX_IDENTITY_KEK_FILE). Without it identity
+	// signs no tokens and the kernel's own HS256 tokens stay in use.
+	KEK string `yaml:"kek"`
 }
 
 // PluginConfig controls the official plugin trust root and the opt-in durable

@@ -10,6 +10,7 @@
 #     | install -m 0444 /dev/stdin secrets/module_ca_bundle
 #   $c run --rm -T --no-deps migrate module token create -package identity-platform -reusable -ttl 8760h \
 #     | jq -r .credential | install -m 0400 -o 65532 -g 65532 /dev/stdin secrets/identity_enrollment
+#   openssl rand -base64 32 | install -m 0400 -o 65532 -g 65532 /dev/stdin secrets/identity_kek
 #   $c run --rm -T --no-deps migrate module runtime set identity-platform remote
 #   export ANIX_MODULE_IDENTITY_IMAGE=ghcr.io/anixops/anix-module-identity-platform@sha256:<digest>
 #   $c up -d
@@ -44,9 +45,12 @@ services:
       ANIX_MODULE_ADVERTISE_ADDR: identity:7000
       ANIX_MODULE_TRUST_BUNDLE_FILE: /run/secrets/module_ca_bundle
       ANIX_MODULE_ENROLL_CREDENTIAL_FILE: /run/secrets/identity_enrollment
+      # Seals the identity signing keys; every identity replica needs the same.
+      ANIX_IDENTITY_KEK_FILE: /run/secrets/identity_kek
     secrets:
       - module_ca_bundle
       - identity_enrollment
+      - identity_kek
     volumes:
       # The module's key and certificates survive restarts; the enrollment
       # credential is needed again only after they expire.
@@ -79,3 +83,5 @@ secrets:
     file: ${ANIX_CONTROL_SECRETS_DIR:-./secrets}/module_ca_bundle
   identity_enrollment:
     file: ${ANIX_CONTROL_SECRETS_DIR:-./secrets}/identity_enrollment
+  identity_kek:
+    file: ${ANIX_CONTROL_SECRETS_DIR:-./secrets}/identity_kek

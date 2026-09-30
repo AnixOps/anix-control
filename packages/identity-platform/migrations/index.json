@@ -4,6 +4,10 @@
     {
       "id": "001_identity_platform",
       "path": "migrations/001_identity_platform.sql"
+    },
+    {
+      "id": "002_signing_keys",
+      "path": "migrations/002_signing_keys.sql"
     }
   ],
   "package_id": "identity-platform",

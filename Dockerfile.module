@@ -16,6 +16,7 @@ FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS builder
 WORKDIR /src
 COPY go.mod go.sum ./
 COPY sdk/go.mod sdk/go.sum ./sdk/
+COPY identity/go.mod identity/go.sum ./identity/
 RUN go mod download
 COPY . .
 ARG TARGETOS=linux

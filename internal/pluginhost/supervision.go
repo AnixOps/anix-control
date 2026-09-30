@@ -155,6 +155,7 @@ func (m *Supervisor) hostStartOptions() hostStartOptions {
 	return hostStartOptions{
 		startupTimeout: m.startupTimeout, bridgeFactory: m.bridgeFactory,
 		stopGrace: m.stopGrace, logf: m.logger(), maxResponseBytes: m.maxResponse,
+		packageEnvironment: m.packageEnvironment,
 	}
 }
 

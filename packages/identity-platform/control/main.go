@@ -18,7 +18,7 @@ func main() {
 	err := modulesdk.Run(context.Background(), modulesdk.Options{
 		PackageID: "identity-platform", PackageVersion: packageVersion,
 		Build: func(host modulesdk.Host) (pluginhostsdk.Package, error) {
-			return newIdentityService(host.Bridge, host.LeaseID)
+			return newIdentityHost(host.Bridge, host.LeaseID, os.Getenv, host.Logf)
 		},
 	})
 	if err != nil {

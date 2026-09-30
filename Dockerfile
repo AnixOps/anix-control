@@ -34,6 +34,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 # The SDK module is a local replace target and must exist before download.
 COPY sdk/go.mod sdk/go.sum ./sdk/
+COPY identity/go.mod identity/go.sum ./identity/
 RUN go mod download
 COPY . .
 ARG TARGETOS=linux

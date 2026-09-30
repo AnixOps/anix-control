@@ -242,3 +242,11 @@ tls:
   cert_file: ""
   key_file: ""
   domain: ""
+
+# Identity module (identity-platform). kek seals identity's token signing keys
+# and is passed only to the local identity-platform host; a network module
+# gets its own copy (ANIX_IDENTITY_KEK_FILE). 32 bytes, base64 or hex; keep it
+# with the other secrets (ANIX_CONTROL_IDENTITY_KEK or ..._KEK_FILE). Empty:
+# identity signs no tokens and Control's own tokens stay in use.
+identity:
+  kek: ""

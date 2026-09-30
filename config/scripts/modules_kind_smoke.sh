@@ -95,6 +95,7 @@ k create configmap anix-module-ca --from-file=ca.pem="${work}/ca.pem" >/dev/null
 (umask 077 && control module token create -package identity-platform -reusable -ttl 24h 2>/dev/null \
   | python3 -c 'import json,sys; sys.stdout.write(json.load(sys.stdin)["credential"])' > "${work}/credential")
 k create secret generic anix-identity-enrollment --from-file=credential="${work}/credential" >/dev/null
+k create secret generic anix-identity-kek --from-literal=kek="$(openssl rand -base64 32)" >/dev/null
 contains "$(control module runtime set identity-platform remote 2>/dev/null)" '"runtime": "remote"'
 
 echo "== run identity-platform as its own Deployment"
@@ -105,7 +106,8 @@ helm upgrade "${release}" "${chart}" --namespace "${NAMESPACE}" --reuse-values \
   --set modules.identity-platform.image.pullPolicy=Never \
   --set modules.identity-platform.replicas=2 \
   --set modules.identity-platform.trustBundleConfigMap=anix-module-ca \
-  --set modules.identity-platform.enrollmentSecret=anix-identity-enrollment >/dev/null
+  --set modules.identity-platform.enrollmentSecret=anix-identity-enrollment \
+  --set-json 'modules.identity-platform.extraEnv=[{"name":"ANIX_IDENTITY_KEK","valueFrom":{"secretKeyRef":{"name":"anix-identity-kek","key":"kek"}}}]' >/dev/null
 # The runtime choice applies when Control next starts the package.
 k rollout restart "deployment/${fullname}" >/dev/null
 k rollout status "deployment/${fullname}" --timeout=6m

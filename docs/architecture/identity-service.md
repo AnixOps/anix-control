@@ -199,8 +199,11 @@ instance's generation.
 10. Identity storage, keys, `GetTokenKeys`, the kernel EdDSA verifier, and
     the kernel-led account import, in three steps:
     - 10a: the token contract in the SDK and the identity core module;
-    - 10b: identity storage and `IdentityService`, plus the kernel's key pull,
-      JWKS and EdDSA verification;
+    - 10b: identity storage and `IdentityService` (host side, in place:
+      signing keys in the package's storage, sealed under `ANIX_IDENTITY_KEK`,
+      which Control passes to a local host from `identity.kek`; rotation in
+      the host; `GetTokenKeys`), then the kernel's key pull, JWKS and EdDSA
+      verification;
     - 10c: the kernel-led account import.
 11. Group A native handlers with parity tests.
 12. Cutover, revocation push and finalize.
