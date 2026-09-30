@@ -19,7 +19,9 @@ import (
 	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
 	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 )
 
 // Files in the certificate directory.
@@ -44,7 +46,7 @@ type certificates struct {
 	modTimes    [3]time.Time
 }
 
-func newCertificates(ctx context.Context, s settings) (*certificates, error) {
+func newCertificates(ctx context.Context, s settings, logf func(string, ...any)) (*certificates, error) {
 	identity, err := moduletls.Module(s.cluster, s.packageID)
 	if err != nil {
 		return nil, err
@@ -63,11 +65,36 @@ func newCertificates(ctx context.Context, s settings) (*certificates, error) {
 	if err := c.loadStored(); err == nil && c.usable() {
 		return c, nil
 	}
-	if err := c.enroll(ctx); err != nil {
-		return nil, err
+	// The kernel may be starting or restarting (a rolling update creates
+	// module pods while Control restarts): wait for it instead of exiting.
+	// A refused credential still fails at once.
+	delay := minEnrollRetryDelay
+	for {
+		err := c.enroll(ctx)
+		if err == nil {
+			return c, nil
+		}
+		if !errors.Is(err, errKernelUnreachable) || ctx.Err() != nil {
+			return nil, err
+		}
+		logf("module enrollment: %v; retrying in %s", err, delay)
+		select {
+		case <-ctx.Done():
+			return nil, err
+		case <-time.After(delay):
+		}
+		delay = min(2*delay, maxEnrollRetryDelay)
 	}
-	return c, nil
 }
+
+// Enrollment retry bounds while the kernel is unreachable.
+const (
+	minEnrollRetryDelay = time.Second
+	maxEnrollRetryDelay = 30 * time.Second
+)
+
+// errKernelUnreachable marks enrollment failures worth retrying.
+var errKernelUnreachable = errors.New("the kernel is unreachable")
 
 // source is the module's moduletls.Source.
 func (c *certificates) source() moduletls.Source {
@@ -154,6 +181,9 @@ func (c *certificates) enroll(ctx context.Context) error {
 		PackageId:            c.settings.packageID, Cluster: c.settings.cluster, CsrDer: csr,
 	})
 	if err != nil {
+		if code := status.Code(err); code == codes.Unavailable || code == codes.DeadlineExceeded {
+			return fmt.Errorf("%w: enroll: %w", errKernelUnreachable, err)
+		}
 		return fmt.Errorf("enroll with the kernel: %w", err)
 	}
 	return c.store(key, response.GetCertificate())
