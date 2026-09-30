@@ -44,7 +44,9 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
     -ldflags="-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -X main.buildCode=${BUILD_CODE} -X main.commit=${COMMIT}" \
     -o /out/anix-control ./cmd/server
 
-# Runtime base shared by both targets.
+# Runtime base shared by both targets. /var/lib/anixops is the mount point for
+# the package artifact volume; a new named volume inherits its owner (uid 10001)
+# and mode from the image.
 FROM ${RUNTIME_IMAGE} AS runtime-base
 # ansible, openssh-client and sshpass serve the local-ansible forward runtime
 # (forward_runtime.backend: nftables_ansible); tini reaps the ssh and ansible
@@ -55,7 +57,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 anixops \
     && useradd --uid 10001 --gid 10001 --home-dir /home/anixops --create-home --shell /usr/sbin/nologin anixops \
-    && install -d -o anixops -g anixops -m 0700 /home/anixops/.ssh
+    && install -d -o anixops -g anixops -m 0700 /home/anixops/.ssh \
+    && install -d -o anixops -g anixops -m 0700 /var/lib/anixops
 WORKDIR /app
 # Code, docs and playbooks are owned by root and read-only for the app user.
 COPY docs/swagger.json docs/swagger.yaml ./docs/
