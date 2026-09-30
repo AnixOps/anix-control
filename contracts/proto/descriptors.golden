@@ -195,6 +195,7 @@ field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.transfer_bytes = 6 op
 field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.user_id = 2 optional uint64
 field anixops.kernelsubscriber.v1.AdjustEntitlementResponse.applied = 1 optional bool
 field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.expires_at_unix = 5 optional int64 oneof expiry
+field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.keep_subscription_groups = 9 optional bool
 field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.period = 4 optional anixops.kernelsubscriber.v1.Period oneof expiry
 field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.plan = 3 optional anixops.kernelsubscriber.v1.PlanSnapshot
 field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.reason = 8 optional string

@@ -1,7 +1,7 @@
 # Subscriber Service (KernelSubscriber)
 
-Status: contract defined (`sdk/api/kernelsubscriber/v1`); implementation in
-steps F2a–F2d below.
+Status: the contract is defined (`sdk/api/kernelsubscriber/v1`) and F2a is
+in place. F2b–F2d follow.
 
 ## Why
 
@@ -97,7 +97,16 @@ package and generation.
 
 ## Delivery
 
-- **F2a. Entitlement engine.**
+- **F2a. Entitlement engine** (in place).
+  - `internal/subscriber.ApplyEntitlementTx`, with the request ledger
+    `v4_kernel_subscriber_request`.
+  - `OrderService.Complete` applies `order:<id>` once, and
+    `PlanService.AssignToUser` keeps the subscription groups, as in v2.
+  - Payment callbacks complete the order in a savepoint: a failed activation
+    leaves the payment recorded and the order paid, and is logged.
+  - Admin entitlement edits (`SubscriberEntitlements`) move in F2d with the
+    contract's AdjustEntitlement.
+  - Originally planned scope:
   - Add `internal/subscriber` holding the entitlement, credential and balance
     logic, plus the request ledger.
   - Move `OrderService.Complete`, `PlanService.AssignToUser`, admin

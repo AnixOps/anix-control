@@ -89,6 +89,10 @@ message ApplyEntitlementRequest {
   // reset_traffic zeroes the traffic counters, as a purchase does.
   bool reset_traffic = 7;
   string reason = 8;
+  // keep_subscription_groups leaves the subscriber's subscription groups
+  // unchanged instead of replacing them with the plan's (administrator
+  // assignment, as in v2).
+  bool keep_subscription_groups = 9;
 }
 
 message ApplyEntitlementResponse {

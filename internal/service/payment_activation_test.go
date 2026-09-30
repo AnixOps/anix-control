@@ -1,0 +1,68 @@
+package service
+
+import (
+	"testing"
+
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/glebarez/sqlite"
+	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+)
+
+func paymentActivationDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	require.NoError(t, db.AutoMigrate(&model.PaymentGateway{}, &model.PaymentRecord{}, &model.Order{}, &model.Plan{},
+		&model.PlanSubscriptionGroup{}, &model.User{}, &model.UserSubscriptionGroup{}, &model.SubscriberRequest{}))
+	return db
+}
+
+func pendingPayment(t *testing.T, db *gorm.DB, tradeNo string, planID uint) model.Order {
+	t.Helper()
+	order := model.Order{TradeNo: tradeNo, UserID: 1, PlanID: planID, Period: "month", TotalAmount: 1000}
+	require.NoError(t, db.Create(&order).Error)
+	require.NoError(t, db.Create(&model.PaymentRecord{
+		TradeNo: tradeNo, UserID: 1, Amount: 10, ActualAmount: 10, Status: model.PaymentStatusPending, OrderID: &order.ID,
+	}).Error)
+	return order
+}
+
+// A successful payment callback activates the order's plan at once
+// (owner decision, 2026-09-30).
+func TestPaymentCallbackActivatesThePaidOrder(t *testing.T) {
+	db := paymentActivationDB(t)
+	require.NoError(t, db.Create(&model.User{ID: 1, Email: "buyer@example.test", Token: "t", UUID: "u"}).Error)
+	plan := model.Plan{Name: "Pro", GroupID: 4, TransferEnable: 50}
+	require.NoError(t, db.Create(&plan).Error)
+	require.NoError(t, db.Create(&model.PlanSubscriptionGroup{PlanID: plan.ID, GroupID: 4}).Error)
+	order := pendingPayment(t, db, "PAY-ACTIVATE", plan.ID)
+
+	require.NoError(t, NewPaymentGatewayService(db).MarkOrderPaid("PAY-ACTIVATE", "GW-1", "{}"))
+	require.NoError(t, db.Take(&order, order.ID).Error)
+	require.Equal(t, 3, order.Status, "the paid order is completed")
+	var user model.User
+	require.NoError(t, db.Take(&user, 1).Error)
+	require.Equal(t, plan.ID, *user.PlanID)
+	require.Equal(t, int64(50*1073741824), user.TransferEnable)
+	require.NotNil(t, user.ExpiredAt)
+}
+
+// If activation fails the payment is still recorded, and the order stays
+// paid for an administrator to complete.
+func TestPaymentCallbackKeepsThePaymentWhenActivationFails(t *testing.T) {
+	db := paymentActivationDB(t)
+	require.NoError(t, db.Create(&model.User{ID: 1, Email: "buyer@example.test", Token: "t", UUID: "u"}).Error)
+	order := pendingPayment(t, db, "PAY-NO-PLAN", 404)
+
+	require.NoError(t, NewPaymentGatewayService(db).MarkOrderPaid("PAY-NO-PLAN", "GW-2", "{}"))
+	require.NoError(t, db.Take(&order, order.ID).Error)
+	require.Equal(t, 1, order.Status)
+	var record model.PaymentRecord
+	require.NoError(t, db.Take(&record, "trade_no = ?", "PAY-NO-PLAN").Error)
+	require.Equal(t, model.PaymentStatusPaid, record.Status)
+}

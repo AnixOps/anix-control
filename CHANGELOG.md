@@ -107,6 +107,12 @@
     full test suite before release.
   - **Policy check.** `check_release_workflow.sh` shrinks from 997 to about
     380 lines of essentials. Its self-test now mutates the real workflow.
+- **A successful payment now activates the plan at once.** The payment
+  callback completes the paid order through the entitlement engine; before,
+  an administrator had to complete paid orders.
+  - If the activation fails (for example, the plan was deleted), the payment
+    stays recorded, the order stays paid for an administrator, and the
+    failure is logged.
 
 - 21 v2 routes moved out of identity-platform (N7). Paths and responses are
   unchanged; the routes stay bridged to the same kernel handlers.
@@ -343,9 +349,11 @@
   - Domain modules will call it instead of writing `v2_user`, per capability
     family (`kernel.subscriber.{entitlements,traffic,credentials,balance,directory}.v1`).
   - Writes are idempotent by request id.
-  - This change adds the contract only, registered in the proto
-    compatibility and drift checks. The implementation follows in steps
-    F2a–F2d.
+  - The contract is registered in the proto compatibility and drift checks.
+  - **Entitlement engine (F2a).** `internal/subscriber.ApplyEntitlementTx` is
+    now the one writer of plan activations, with the request ledger
+    `v4_kernel_subscriber_request`. Order completion and administrator plan
+    assignment use it; their results are unchanged.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

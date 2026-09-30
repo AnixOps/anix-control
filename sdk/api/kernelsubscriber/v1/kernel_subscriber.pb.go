@@ -282,10 +282,14 @@ type ApplyEntitlementRequest struct {
 	Expiry        isApplyEntitlementRequest_Expiry `protobuf_oneof:"expiry"`
 	RenewSamePlan bool                             `protobuf:"varint,6,opt,name=renew_same_plan,json=renewSamePlan,proto3" json:"renew_same_plan,omitempty"`
 	// reset_traffic zeroes the traffic counters, as a purchase does.
-	ResetTraffic  bool   `protobuf:"varint,7,opt,name=reset_traffic,json=resetTraffic,proto3" json:"reset_traffic,omitempty"`
-	Reason        string `protobuf:"bytes,8,opt,name=reason,proto3" json:"reason,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ResetTraffic bool   `protobuf:"varint,7,opt,name=reset_traffic,json=resetTraffic,proto3" json:"reset_traffic,omitempty"`
+	Reason       string `protobuf:"bytes,8,opt,name=reason,proto3" json:"reason,omitempty"`
+	// keep_subscription_groups leaves the subscriber's subscription groups
+	// unchanged instead of replacing them with the plan's (administrator
+	// assignment, as in v2).
+	KeepSubscriptionGroups bool `protobuf:"varint,9,opt,name=keep_subscription_groups,json=keepSubscriptionGroups,proto3" json:"keep_subscription_groups,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *ApplyEntitlementRequest) Reset() {
@@ -383,6 +387,13 @@ func (x *ApplyEntitlementRequest) GetReason() string {
 		return x.Reason
 	}
 	return ""
+}
+
+func (x *ApplyEntitlementRequest) GetKeepSubscriptionGroups() bool {
+	if x != nil {
+		return x.KeepSubscriptionGroups
+	}
+	return false
 }
 
 type isApplyEntitlementRequest_Expiry interface {
@@ -1755,7 +1766,7 @@ const file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDesc = "" +
 	"\r_device_limit\"4\n" +
 	"\x06Period\x12\x16\n" +
 	"\x06months\x18\x01 \x01(\x05R\x06months\x12\x12\n" +
-	"\x04days\x18\x02 \x01(\x05R\x04days\"\xe8\x02\n" +
+	"\x04days\x18\x02 \x01(\x05R\x04days\"\xa2\x03\n" +
 	"\x17ApplyEntitlementRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x17\n" +
@@ -1765,7 +1776,8 @@ const file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDesc = "" +
 	"\x0fexpires_at_unix\x18\x05 \x01(\x03H\x00R\rexpiresAtUnix\x12&\n" +
 	"\x0frenew_same_plan\x18\x06 \x01(\bR\rrenewSamePlan\x12#\n" +
 	"\rreset_traffic\x18\a \x01(\bR\fresetTraffic\x12\x16\n" +
-	"\x06reason\x18\b \x01(\tR\x06reasonB\b\n" +
+	"\x06reason\x18\b \x01(\tR\x06reason\x128\n" +
+	"\x18keep_subscription_groups\x18\t \x01(\bR\x16keepSubscriptionGroupsB\b\n" +
 	"\x06expiry\"\\\n" +
 	"\x18ApplyEntitlementResponse\x12\x18\n" +
 	"\aapplied\x18\x01 \x01(\bR\aapplied\x12&\n" +

@@ -2,10 +2,12 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -271,111 +273,44 @@ func (s *OrderService) Complete(orderID uint) error {
 	if orderID == 0 {
 		return ErrOrderNotFound
 	}
-
-	// 启用事务执行订单完成逻辑
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		// 1. 获取并锁定订单记录
-		var order model.Order
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Preload("User").First(&order, orderID).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrOrderNotFound
-			}
-			return err
-		}
-
-		if order.Status != 1 {
-			return errors.New("订单状态不处于已支付，无法完成")
-		}
-
-		// 2. 获取套餐详情及关联分组
-		var plan model.Plan
-		if err := tx.First(&plan, order.PlanID).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return ErrOrderPlanNotFound
-			}
-			return err
-		}
-
-		var planGroups []model.PlanSubscriptionGroup
-		tx.Where("plan_id = ?", plan.ID).Find(&planGroups)
-
-		// 3. 计算日期逻辑 (面向生产：支持续费累加)
-		var expiredAt int64
-		now := time.Now()
-
-		// 基础增加时间计算
-		var addMonths, addDays int
-		switch order.Period {
-		case "month":
-			addMonths = 1
-		case "quarter":
-			addMonths = 3
-		case "half_year":
-			addMonths = 6
-		case "year":
-			addMonths = 12
-		case "two_year":
-			addMonths = 24
-		case "three_year":
-			addMonths = 36
-		case "onetime":
-			addMonths = 1200 // 100年
-		}
-
-		// 如果用户当前套餐与订单套餐一致且未过期，则在原有基础上累加
-		if order.User.PlanID != nil && *order.User.PlanID == plan.ID && order.User.ExpiredAt != nil && *order.User.ExpiredAt > now.Unix() {
-			baseTime := time.Unix(*order.User.ExpiredAt, 0)
-			expiredAt = baseTime.AddDate(0, addMonths, addDays).Unix()
-		} else {
-			// 新购或切换套餐，从现在开始计算
-			expiredAt = now.AddDate(0, addMonths, addDays).Unix()
-		}
-
-		// 4. 更新用户主表信息
-		userUpdates := map[string]any{
-			"plan_id":         plan.ID,
-			"group_id":        plan.GroupID, // 保持向后兼容
-			"transfer_enable": plan.TransferEnable * 1073741824,
-			"expired_at":      expiredAt,
-			"u":               0, // 购买/续费通常重置流量
-			"d":               0,
-		}
-
-		if plan.SpeedLimit != nil {
-			userUpdates["speed_limit"] = *plan.SpeedLimit
-		}
-		if plan.DeviceLimit != nil {
-			userUpdates["device_limit"] = *plan.DeviceLimit
-		}
-
-		if err := tx.Model(&model.User{}).Where("id = ?", order.UserID).Updates(userUpdates).Error; err != nil {
-			return err
-		}
-
-		// 5. 权限分发 (面向生产的多分组同步)
-		// 删除旧的所有订阅分组关联
-		if err := tx.Where("user_id = ?", order.UserID).Delete(&model.UserSubscriptionGroup{}).Error; err != nil {
-			return err
-		}
-
-		// 插入新的分组关联
-		for _, pg := range planGroups {
-			usg := model.UserSubscriptionGroup{
-				UserID:  order.UserID,
-				GroupID: pg.GroupID,
-			}
-			if err := tx.Create(&usg).Error; err != nil {
-				return err
-			}
-		}
-
-		// 6. 更新订单状态为已完成 (3)
-		if err := tx.Model(&order).Update("status", 3).Error; err != nil {
-			return err
-		}
-
-		return nil
+		return completeOrderTx(tx, orderID, time.Now())
 	})
+}
+
+// completeOrderTx grants a paid order's plan through the subscriber engine
+// (once per order) and marks the order completed. A purchase resets
+// traffic and renews on top of an unexpired identical plan.
+func completeOrderTx(tx *gorm.DB, orderID uint, now time.Time) error {
+	var order model.Order
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&order, orderID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrOrderNotFound
+		}
+		return err
+	}
+	if order.Status != 1 {
+		return errors.New("订单状态不处于已支付，无法完成")
+	}
+	var plan model.Plan
+	if err := tx.First(&plan, order.PlanID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrOrderPlanNotFound
+		}
+		return err
+	}
+	var planGroups []model.PlanSubscriptionGroup
+	if err := tx.Where("plan_id = ?", plan.ID).Find(&planGroups).Error; err != nil {
+		return err
+	}
+	if _, err := subscriber.ApplyEntitlementTx(tx, subscriber.Entitlement{
+		RequestID: fmt.Sprintf("order:%d", order.ID), UserID: order.UserID,
+		Plan:   subscriber.PlanSnapshotFromPlan(plan, planGroups),
+		Period: &subscriber.Period{Months: subscriber.PeriodMonths[order.Period]}, RenewSamePlan: true, ResetTraffic: true,
+	}, now); err != nil {
+		return err
+	}
+	return tx.Model(&order).Update("status", 3).Error
 }
 
 // GetUserOrders 获取用户订单
