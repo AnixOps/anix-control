@@ -49,6 +49,10 @@ type HostStats struct {
 	// Failures counts how often the restart budget was exhausted and the
 	// host was marked failed.
 	Failures uint64
+	// HealthDetailsJSON is the details document of the host's last successful
+	// Health call made by PollHealth, and HealthCheckedAt its time.
+	HealthDetailsJSON string
+	HealthCheckedAt   time.Time
 }
 
 // HostStatsProvider is implemented by supervisors that expose per-package
@@ -73,6 +77,56 @@ func (m *Supervisor) Stats() []HostStats {
 	}
 	sort.Slice(stats, func(i, j int) bool { return stats[i].PackageID < stats[j].PackageID })
 	return stats
+}
+
+// healthPollTimeout bounds one host's Health call during PollHealth.
+const healthPollTimeout = 5 * time.Second
+
+// PollHealth calls Health on every running host each interval until ctx ends
+// and records the returned details document in the host's stats, so metrics
+// and diagnostics can read route modes and shadow counters. A failed call
+// leaves the previous details in place.
+func (m *Supervisor) PollHealth(ctx context.Context, interval time.Duration) {
+	if m == nil || interval <= 0 {
+		return
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			m.pollHealthOnce(ctx)
+		}
+	}
+}
+
+func (m *Supervisor) pollHealthOnce(ctx context.Context) {
+	m.mu.RLock()
+	hosts := make([]*hostProcess, 0, len(m.hosts))
+	for _, host := range m.hosts {
+		if host != nil && host.supervision == hostSupervisionNone {
+			hosts = append(hosts, host)
+		}
+	}
+	m.mu.RUnlock()
+	for _, host := range hosts {
+		if ctx.Err() != nil {
+			return
+		}
+		healthCtx, cancel := context.WithTimeout(ctx, healthPollTimeout)
+		health, err := m.Health(healthCtx, host.packageID, host.version, host.generation)
+		cancel()
+		if err != nil {
+			continue
+		}
+		checkedAt := time.Now()
+		m.updateStats(host, func(stats *HostStats) {
+			stats.HealthDetailsJSON = health.DetailsJSON
+			stats.HealthCheckedAt = checkedAt
+		})
+	}
 }
 
 // hostSupervisionState describes a host whose process has exited while it is

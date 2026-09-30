@@ -1,20 +1,12 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
-	"sync/atomic"
+	"log"
 
-	"github.com/AnixOps/anix-control/v4/pkg/packagebridgesdk"
 	"github.com/AnixOps/anix-control/v4/pkg/pluginhostsdk"
 )
 
-const (
-	identityLoginRoute     = "identity.auth.login"
-	identityRegisterRoute  = "identity.auth.register"
-	identityMigrationRoute = "migration.identity-platform.001_identity_platform"
-)
+const identityMigrationRoute = "migration.identity-platform.001_identity_platform"
 
 var identityRoutes = map[string]struct{}{
 	"identity.admin.invite.config.get":                  {},
@@ -64,81 +56,18 @@ var identityRoutes = map[string]struct{}{
 	"identity.user.reset.post":                          {},
 }
 
-type bridgeClient interface {
-	Invoke(context.Context, []byte, string, []byte) (packagebridgesdk.Response, error)
-}
-
-type identityService struct {
-	bridge   bridgeClient
-	leaseID  string
-	draining atomic.Bool
-}
-
-func newIdentityService(bridge bridgeClient, leaseID string) *identityService {
-	return &identityService{bridge: bridge, leaseID: leaseID}
-}
-
-func (s *identityService) Dispatch(ctx context.Context, request pluginhostsdk.DispatchRequest) (pluginhostsdk.DispatchResponse, error) {
-	if s == nil || s.bridge == nil || s.draining.Load() {
-		return pluginhostsdk.DispatchResponse{}, errors.New("identity package is unavailable")
-	}
-	if _, exists := identityRoutes[request.RouteID]; !exists {
-		return pluginhostsdk.DispatchResponse{}, errors.New("identity package route is unsupported")
-	}
-	if len(request.BridgeCapability) != 32 {
-		return pluginhostsdk.DispatchResponse{}, errors.New("identity package bridge capability is required")
-	}
-	response, err := s.bridge.Invoke(ctx, request.BridgeCapability, request.RouteID, request.RequestBody)
-	if err != nil {
-		return pluginhostsdk.DispatchResponse{}, err
-	}
-	headers := make([]pluginhostsdk.Header, len(response.Headers))
-	for index, header := range response.Headers {
-		headers[index] = pluginhostsdk.Header{Name: header.Name, Value: header.Value}
-	}
-	return pluginhostsdk.DispatchResponse{
-		StatusCode: response.StatusCode, ResponseBody: response.Body, Headers: headers,
-	}, nil
-}
-
-func (s *identityService) Migrate(ctx context.Context, request pluginhostsdk.MigrationRequest) (pluginhostsdk.MigrationResponse, error) {
-	if s == nil || s.bridge == nil || s.draining.Load() {
-		return pluginhostsdk.MigrationResponse{}, errors.New("identity package is unavailable")
-	}
-	if request.MigrationID != "001_identity_platform" || len(request.BridgeCapability) != 32 {
-		return pluginhostsdk.MigrationResponse{}, errors.New("identity package migration is unsupported")
-	}
-	response, err := s.bridge.Invoke(ctx, request.BridgeCapability, identityMigrationRoute, nil)
-	if err != nil {
-		return pluginhostsdk.MigrationResponse{}, err
-	}
-	var result struct {
-		Checkpoint       string `json:"checkpoint"`
-		ValidationDigest string `json:"validation_digest"`
-		Complete         bool   `json:"complete"`
-	}
-	if response.StatusCode != 200 || json.Unmarshal(response.Body, &result) != nil || result.Checkpoint == "" || result.ValidationDigest == "" || !result.Complete {
-		return pluginhostsdk.MigrationResponse{}, errors.New("identity package migration bridge response is invalid")
-	}
-	return pluginhostsdk.MigrationResponse{
-		Checkpoint: result.Checkpoint, ValidationDigest: result.ValidationDigest, Complete: result.Complete,
-	}, nil
-}
-
-func (s *identityService) Health(context.Context) (pluginhostsdk.HealthResponse, error) {
-	if s == nil {
-		return pluginhostsdk.HealthResponse{Healthy: false}, nil
-	}
-	if s.bridge == nil || s.draining.Load() {
-		return pluginhostsdk.HealthResponse{Healthy: false, LeaseID: s.leaseID}, nil
-	}
-	return pluginhostsdk.HealthResponse{Healthy: true, LeaseID: s.leaseID, DetailsJSON: `{"bridge":"required"}`}, nil
-}
-
-func (s *identityService) Drain(context.Context) (pluginhostsdk.DrainResponse, error) {
-	if s == nil {
-		return pluginhostsdk.DrainResponse{}, errors.New("identity package is unavailable")
-	}
-	s.draining.Store(true)
-	return pluginhostsdk.DrainResponse{Drained: true}, nil
+// newIdentityService returns the identity host's router: only the declared
+// identity routes and the 001_identity_platform migration are accepted, and
+// every route passes through the bridge (identity stays kernel-owned).
+func newIdentityService(bridge pluginhostsdk.RouterBridge, leaseID string) (*pluginhostsdk.Router, error) {
+	return pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
+		PackageID: "identity-platform", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,
+		AllowRoute: func(routeID string) bool {
+			_, allowed := identityRoutes[routeID]
+			return allowed
+		},
+		MigrationOperation: func(migrationID string) (string, bool) {
+			return identityMigrationRoute, migrationID == "001_identity_platform"
+		},
+	})
 }

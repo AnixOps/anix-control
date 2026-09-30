@@ -96,6 +96,10 @@ func init() {
 
 const defaultConfigPath = "config/config.yaml"
 
+// pluginHostHealthPollInterval is how often package host health details are
+// read for metrics.
+const pluginHostHealthPollInterval = 30 * time.Second
+
 // takeMigrateCommand removes a leading "migrate" argument and reports whether
 // it was present. `anix-control migrate [flags]` prepares the database schema
 // and seed data, then exits: the one-shot step for a Compose service or a
@@ -549,6 +553,10 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		}
 		rt.controlPluginHosts = hosts
 		pluginhost.SetDefaultManager(hosts)
+		// Read route modes and shadow counters from package hosts for metrics.
+		rt.workers.Go("plugin host health poller", func(ctx context.Context) {
+			hosts.PollHealth(ctx, pluginHostHealthPollInterval)
+		})
 		artifacts, cleanupArtifacts, err := newControlPluginArtifactResolver(cfg)
 		if err != nil {
 			return fmt.Errorf("initialize Control plugin artifact resolver: %w", err)

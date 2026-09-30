@@ -135,7 +135,9 @@ v2board_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
 	// Per-package host supervision counters; absent while package execution
 	// is disabled and no supervisor is installed.
 	if provider, ok := pluginhost.DefaultManager().(pluginhost.HostStatsProvider); ok {
-		writePluginHostMetrics(&body, provider.Stats())
+		stats := provider.Stats()
+		writePluginHostMetrics(&body, stats)
+		writePackageRouteMetrics(&body, stats)
 	}
 	// Singleton-worker leadership of this process.
 	lease.WritePrometheus(&body)

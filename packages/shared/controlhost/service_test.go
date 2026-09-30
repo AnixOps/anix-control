@@ -19,6 +19,10 @@ type bridgeStub struct {
 	webSocket  *bridgeWebSocketStub
 }
 
+func (s *bridgeStub) GetPackageConfig(context.Context) (packagebridgesdk.PackageConfig, error) {
+	return packagebridgesdk.PackageConfig{}, packagebridgesdk.ErrSessionOperationUnsupported
+}
+
 func (s *bridgeStub) Invoke(_ context.Context, capability []byte, operation string, payload []byte) (packagebridgesdk.Response, error) {
 	s.capability = append([]byte(nil), capability...)
 	s.operation = operation
@@ -39,7 +43,8 @@ func TestGenericServiceDispatchesOnlyThroughTheBridgeCapability(t *testing.T) {
 	bridge := &bridgeStub{response: packagebridgesdk.Response{
 		StatusCode: 200, Body: []byte(`{"items":["article-1"]}`),
 	}}
-	service := newGenericService(bridge, "lease-1")
+	service, err := newGenericService("knowledge", bridge, "lease-1")
+	require.NoError(t, err)
 	capability := make([]byte, 32)
 	response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 		RouteID: "knowledge.article.list", RequestBody: []byte(`{"page":1}`),
@@ -57,7 +62,8 @@ func TestGenericServiceDispatchesOnlyThroughTheBridgeCapability(t *testing.T) {
 }
 
 func TestGenericServiceExplicitlyImplementsWebSocketPackage(t *testing.T) {
-	service := newGenericService(&bridgeStub{}, "lease-1")
+	service, err := newGenericService("knowledge", &bridgeStub{}, "lease-1")
+	require.NoError(t, err)
 	_, supported := any(service).(pluginhostsdk.WebSocketPackage)
 	require.True(t, supported)
 }
@@ -65,7 +71,8 @@ func TestGenericServiceExplicitlyImplementsWebSocketPackage(t *testing.T) {
 func TestGenericServiceRelaysWebSocketOnlyThroughTheBridgeCapability(t *testing.T) {
 	bridgeStream := newBridgeWebSocketStub()
 	bridge := &bridgeStub{webSocket: bridgeStream}
-	service := newGenericService(bridge, "lease-1")
+	service, err := newGenericService("knowledge", bridge, "lease-1")
+	require.NoError(t, err)
 	hostStream := newHostWebSocketStub()
 	capability := make([]byte, 32)
 	done := make(chan error, 1)

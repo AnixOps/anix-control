@@ -66,6 +66,9 @@
 
 ### Changed
 
+- The generic Control package host and the identity-platform host now run
+  on `pluginhostsdk.Router`. They have no native routes, so every request
+  still passes through the bridge to its legacy handler.
 - Package migration indexes are materialized per release.
   - Source `packages/*/migrations/index.json` files use the
     `__ANIXOPS_PACKAGE_VERSION__` token.
@@ -254,6 +257,23 @@
   Workers Builds (root `control-center/workers`, branch `go_dev`).
 
 ### Added
+
+- A per-route package router in the host SDK (M3).
+  - **Router.** `pkg/pluginhostsdk.Router` polls `GetPackageConfig` every
+    5 s and serves each route in `legacy`, `shadow` or `native` mode.
+    - A failed poll keeps the last modes.
+    - Routes without a native handler stay `legacy` and are reported as
+      `mode_unsupported`.
+    - `shadow` returns the legacy response, then compares the native one in
+      the background with a timeout and a concurrency limit.
+    - WebSocket routes always relay through the bridge.
+  - **v2compat.** `pkg/v2compat` holds the v2 panel envelope
+    (`PanelSuccess`, `PanelError`) and `NormalizeForCompare`. The kernel's
+    panel helpers now use it, and their output is byte-identical.
+  - **Health and metrics.** The supervisor calls `Health` on running hosts
+    every 30 s and keeps the returned details. `/metrics` exports them as
+    `anixops_package_config_status`, `anixops_package_route_mode` and the
+    `anixops_package_native_*` and `anixops_package_shadow_*` counters.
 
 - Package route modes and the `GetPackageConfig` package bridge RPC (M3).
   - **Route modes.** Control package configuration documents reserve a

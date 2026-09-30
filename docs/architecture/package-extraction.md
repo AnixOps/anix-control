@@ -116,6 +116,12 @@ legacy route.
 - `pkg/v2compat` exposes `PanelSuccess`/`PanelError`/`NormalizeForCompare`;
   legacy handlers delegate to it so output stays byte-identical.
 
+Status (2026-09-30): implemented. `GetPackageConfig` and the reserved
+`routes` configuration key, `pkg/pluginhostsdk.Router` and `pkg/v2compat` are
+in place, and route modes and shadow counters are exported on `/metrics`
+(see [`plugin-kernel-contract.md`](plugin-kernel-contract.md#package-configuration)).
+No package has a native route yet.
+
 ### 3.3 Typed kernel operations
 
 Cross-domain writes go through typed, idempotent kernel operations instead of

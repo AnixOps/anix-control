@@ -184,6 +184,21 @@ version, or another lifecycle generation gets `PermissionDenied`. A kernel
 without session operations answers `Unimplemented`, and hosts then keep every
 route in `legacy` mode.
 
+`pkg/pluginhostsdk.Router` implements this for package hosts. It polls
+`GetPackageConfig` every 5 s and keeps the last successful modes when a poll
+fails. A route without a native handler stays `legacy` and is reported as
+`mode_unsupported`. In `shadow` mode the legacy response is returned first and
+the native handler runs in the background with a timeout and a concurrency
+limit; status codes and bodies are compared after
+`pkg/v2compat.NormalizeForCompare` drops the envelope `ts`. WebSocket routes
+always relay through the bridge. The router reports its configuration status
+and per-route counters in `HealthResponse.details_json`. The kernel's
+supervisor calls `Health` on every running host every 30 s, keeps the last
+details document, and `/metrics` exports it as `anixops_package_config_status`,
+`anixops_package_route_mode` and the `anixops_package_native_*` and
+`anixops_package_shadow_*` counters. The generic Control host and the
+identity-platform host run on the router with no native routes.
+
 ## Scoped Authorization
 
 `service_scope` owns an independent authorization namespace. The startup
