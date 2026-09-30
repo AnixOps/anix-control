@@ -57,7 +57,7 @@ func TestImportIsIdempotentAndVersionsOnlyChanges(t *testing.T) {
 		{Account: member(1, "a@example.test"), MFA: &MFA{Enabled: true, TOTPSecret: "JBSWY3DPEHPK3PXP", BackupCodeHashes: []string{digest("AAAA-BBBB")}}},
 		{Account: member(2, "b@example.test")},
 	}
-	result, err := store.Import(ctx, "import-1", "0", batch)
+	result, err := store.Import(ctx, "import-1", "0", ImportBatch{Accounts: batch})
 	require.NoError(t, err)
 	require.Equal(t, ImportResult{Accounts: 2}, result)
 
@@ -69,7 +69,7 @@ func TestImportIsIdempotentAndVersionsOnlyChanges(t *testing.T) {
 	require.True(t, accounts[0].MFAEnabled)
 	require.False(t, accounts[1].MFAEnabled)
 
-	_, err = store.Import(ctx, "import-1", "2", batch)
+	_, err = store.Import(ctx, "import-1", "2", ImportBatch{Accounts: batch})
 	require.NoError(t, err)
 	accounts, err = store.Get(ctx, []uint64{1})
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestImportIsIdempotentAndVersionsOnlyChanges(t *testing.T) {
 
 	changed := batch[:1]
 	changed[0].Account.Banned = true
-	_, err = store.Import(ctx, "import-2", "1", changed)
+	_, err = store.Import(ctx, "import-2", "1", ImportBatch{Accounts: changed})
 	require.NoError(t, err)
 	accounts, err = store.Get(ctx, []uint64{1})
 	require.NoError(t, err)
@@ -93,9 +93,9 @@ func TestImportIsIdempotentAndVersionsOnlyChanges(t *testing.T) {
 func TestMFASecretsAreSealedAndBackupCodesKeyed(t *testing.T) {
 	store, db := NewTestStore(t)
 	ctx := context.Background()
-	_, err := store.Import(ctx, "import-1", "0", []Imported{{Account: member(1, "a@example.test"), MFA: &MFA{
+	_, err := store.Import(ctx, "import-1", "0", ImportBatch{Accounts: []Imported{{Account: member(1, "a@example.test"), MFA: &MFA{
 		Enabled: true, TOTPSecret: "JBSWY3DPEHPK3PXP", BackupCodeHashes: []string{digest("AAAA-BBBB")},
-	}}})
+	}}}})
 	require.NoError(t, err)
 
 	var row mfaRow
@@ -110,18 +110,25 @@ func TestMFASecretsAreSealedAndBackupCodesKeyed(t *testing.T) {
 	require.False(t, store.BackupCodeMatches(1, digest("AAAA-CCCC"), keyed))
 	require.False(t, store.BackupCodeMatches(2, digest("AAAA-BBBB"), keyed), "hashes are bound to their account")
 
-	_, err = store.Import(ctx, "import-2", "0", []Imported{{Account: member(1, "a@example.test")}})
+	_, err = store.Import(ctx, "import-2", "0", ImportBatch{Accounts: []Imported{{Account: member(1, "a@example.test")}}})
 	require.NoError(t, err)
 	mfa, _, err = store.MFA(ctx, 1)
 	require.NoError(t, err)
 	require.Nil(t, mfa, "MFA removed at the source is removed")
+
+	result, err := store.Import(ctx, "import-3", "0", ImportBatch{Deleted: []uint64{1, 99}})
+	require.NoError(t, err)
+	require.EqualValues(t, 2, result.Deleted, "deleting an account that is already gone is not an error")
+	accounts, err := store.Get(ctx, []uint64{1})
+	require.NoError(t, err)
+	require.Empty(t, accounts, "an account whose subscriber was deleted is deleted")
 }
 
 func TestImportRejectsIncompleteAccounts(t *testing.T) {
 	store, _ := NewTestStore(t)
-	_, err := store.Import(context.Background(), "import-1", "0", []Imported{{Account: Account{UserID: 1, Email: "a@example.test"}}})
+	_, err := store.Import(context.Background(), "import-1", "0", ImportBatch{Accounts: []Imported{{Account: Account{UserID: 1, Email: "a@example.test"}}}})
 	require.Error(t, err)
-	_, err = store.Import(context.Background(), "", "0", nil)
+	_, err = store.Import(context.Background(), "", "0", ImportBatch{})
 	require.Error(t, err)
 	_, err = (&Store{}).Get(context.Background(), []uint64{1})
 	require.ErrorIs(t, err, ErrNotConfigured)

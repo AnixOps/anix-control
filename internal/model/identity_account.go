@@ -39,3 +39,28 @@ type IdentityAuthority struct {
 }
 
 func (IdentityAuthority) TableName() string { return "v4_kernel_identity_authority" }
+
+// UnusableLegacyPassword is stored in v2_user.password for accounts whose
+// credentials live in identity. It never matches a password.
+const UnusableLegacyPassword = "!identity"
+
+// Identity cutover actions, recorded in IdentityCutoverEvent.
+const (
+	IdentityCutoverActionCutover  = "cutover"
+	IdentityCutoverActionAborted  = "cutover_aborted"
+	IdentityCutoverActionRollback = "rollback"
+	IdentityCutoverActionFinalize = "finalize"
+)
+
+// IdentityCutoverEvent records each change of credential authority: the
+// cutover to identity, an aborted cutover, a rollback and finalize.
+// Finalize waits for a day after the latest cutover.
+type IdentityCutoverEvent struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Action    string    `gorm:"size:32;not null;index" json:"action"`
+	ActorID   uint      `gorm:"not null;default:0" json:"actor_id"`
+	Detail    string    `gorm:"type:text;not null;default:''" json:"detail"`
+	CreatedAt time.Time `gorm:"not null;index" json:"created_at"`
+}
+
+func (IdentityCutoverEvent) TableName() string { return "v4_kernel_identity_cutover" }

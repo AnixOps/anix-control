@@ -144,16 +144,26 @@ func (s *Store) now() time.Time {
 	return time.Now()
 }
 
+// ImportBatch is one batch of an import: accounts to store and the user ids
+// of accounts whose subscriber the product deleted.
+type ImportBatch struct {
+	Accounts []Imported
+	Deleted  []uint64
+}
+
 // ImportResult is what one import batch stored.
 type ImportResult struct {
 	Accounts uint64
+	// Deleted counts the deletions applied, including accounts already gone.
+	Deleted uint64
 }
 
 // Import stores one batch of accounts from the product's legacy tables in a single
 // transaction and records the batch's checkpoint under importID. The source
 // is authoritative for imported fields: an account that changed gets a new
 // version, one that did not keeps it, so a repeated batch changes nothing.
-func (s *Store) Import(ctx context.Context, importID, checkpoint string, accounts []Imported) (ImportResult, error) {
+// Deleted accounts are removed with their MFA.
+func (s *Store) Import(ctx context.Context, importID, checkpoint string, batch ImportBatch) (ImportResult, error) {
 	if err := s.check(); err != nil {
 		return ImportResult{}, err
 	}
@@ -163,11 +173,20 @@ func (s *Store) Import(ctx context.Context, importID, checkpoint string, account
 	now := s.now().Unix()
 	var result ImportResult
 	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, imported := range accounts {
+		for _, imported := range batch.Accounts {
 			if err := s.importAccount(tx, imported, now); err != nil {
 				return err
 			}
 			result.Accounts++
+		}
+		for _, userID := range batch.Deleted {
+			if err := tx.Table(s.Tables.MFA).Where("user_id = ?", userID).Delete(&mfaRow{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Table(s.Tables.Account).Where("user_id = ?", userID).Delete(&accountRow{}).Error; err != nil {
+				return err
+			}
+			result.Deleted++
 		}
 		run := importRow{ImportID: importID, Checkpoint: checkpoint, UpdatedAt: now}
 		var existing importRow

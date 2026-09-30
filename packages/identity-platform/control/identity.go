@@ -198,12 +198,12 @@ func (a *storedAccounts) accountStore(ctx context.Context) (*account.Store, erro
 }
 
 // Import stores an import batch of Control's legacy accounts.
-func (a *storedAccounts) Import(ctx context.Context, importID, checkpoint string, accounts []account.Imported) (account.ImportResult, error) {
+func (a *storedAccounts) Import(ctx context.Context, importID, checkpoint string, batch account.ImportBatch) (account.ImportResult, error) {
 	store, err := a.accountStore(ctx)
 	if err != nil {
 		return account.ImportResult{}, err
 	}
-	return store.Import(ctx, importID, checkpoint, accounts)
+	return store.Import(ctx, importID, checkpoint, batch)
 }
 
 // Get returns accounts by user id.

@@ -187,8 +187,10 @@ instance's generation.
 
 - **Identity down.** Login, registration and MFA return 503. Issued tokens keep
   working.
-- **Rollback before finalize.** Switch group A back to `legacy`. Going native
-  again needs a delta import first.
+- **Rollback before finalize.** `POST /api/v4/kernel/identity/rollback`
+  switches group A back to `legacy` with the authority. A later cutover
+  imports what changed meanwhile. Backup codes generated natively are not
+  mirrored, so after a rollback users use TOTP or regenerate codes.
 - **Kernel restart.** Sessions and capabilities are lost; modules bind again.
 
 ## Delivery
@@ -275,8 +277,43 @@ instance's generation.
       - **Logout.** `POST /api/v4/identity/logout` ends the calling session
         (its `sid`) until the token would have expired, in every process,
         for HS256 and EdDSA tokens alike. Other sessions of the user go on.
-    - 12b: the cutover itself (import, freeze, route modes, authority),
-      rollback and finalize.
+    - 12b (in place): the cutover, rollback and finalize
+      (`internal/identitycutover`), each recorded in
+      `v4_kernel_identity_cutover`.
+      - **Cutover.** `POST /api/v4/kernel/identity/cutover` runs in the
+        background; `GET /api/v4/kernel/identity` follows it. It needs a
+        completed full import and identity's token keys. Then:
+        1. a catch-up delta import;
+        2. group A is paused: the v2 gateway answers 503 with `Retry-After`,
+           and requests already dispatched finish;
+        3. a final delta import;
+        4. in one transaction, the authority becomes `identity` and group A
+           `native`;
+        5. once the identity host reports the new configuration revision and
+           serves group A natively, plus one poll interval for other
+           instances, group A resumes.
+
+        If the host does not confirm within 30 seconds, both switch back
+        (`cutover_aborted`).
+      - **Complete deltas.** A delta also carries users whose
+        `v2_user_mfa` row changed. Disabling MFA in legacy touches the
+        user. Every import ends by deleting the identity accounts of deleted
+        subscribers, sent as `ImportAccountsRequest.deleted_user_id` (new).
+      - **Consistency.** Configuration writes are refused unless group A's 15
+        routes are native together, and exactly while identity is
+        authoritative. Only the cutover and rollback change both.
+      - **Rollback.** `POST /api/v4/kernel/identity/rollback` pauses group A,
+        switches it to legacy and the authority to `importing`.
+      - **Finalize.** `POST /api/v4/kernel/identity/finalize`
+        (`{"force": true}` skips the day). One day after the latest
+        cutover, when pre-cutover tokens have expired:
+        - legacy passwords become unusable and `v2_user_mfa` is emptied;
+        - the authority becomes `finalized`, so identity stops mirroring;
+        - Control refuses HS256 tokens, from then on and after restarts.
+
+        There is no rollback after finalize.
+      - **Bootstrap.** `InitAdmin` creates no default administrator once
+        identity is authoritative.
 13. End-to-end acceptance on Compose and kind.
 
 Deferred:

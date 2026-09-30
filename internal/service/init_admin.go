@@ -22,6 +22,19 @@ func InitAdmin(cfg *config.Config) {
 		}
 	}
 
+	// Once identity is authoritative a v2_user row alone cannot log in:
+	// administrators are created through identity.
+	if database.GetDB().Migrator().HasTable(&model.IdentityAuthority{}) {
+		state, err := IdentityAuthorityState(database.GetDB())
+		if err != nil {
+			log.Fatalf("Failed to read the identity authority: %v", err)
+		}
+		if IdentityAuthoritative(state) {
+			log.Println("Identity is authoritative; skipping the default admin (create administrators through identity).")
+			return
+		}
+	}
+
 	var count int64
 	if err := database.GetDB().Model(&model.User{}).Where("is_admin = ?", 1).Count(&count).Error; err != nil {
 		log.Fatalf("Failed to check admin account: %v", err)

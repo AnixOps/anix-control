@@ -754,6 +754,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/modules/trust-bundle", modules.TrustBundle)
 		v4.GET("/kernel/identity", handler.IdentityStatus)
 		v4.POST("/kernel/identity/import", handler.StartIdentityImport)
+		v4.POST("/kernel/identity/cutover", handler.StartIdentityCutover)
+		v4.POST("/kernel/identity/rollback", handler.StartIdentityRollback)
+		v4.POST("/kernel/identity/finalize", handler.FinalizeIdentity)
 		v4.GET("/kernel/modules/runtimes", modules.ListRuntimes)
 		v4.PUT("/kernel/modules/runtimes/:plugin_id", modules.SetRuntime)
 	}

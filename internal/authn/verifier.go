@@ -149,12 +149,23 @@ func SetDefaultStore(store *Store) { defaultStore.Store(store) }
 // DefaultStore returns the installed revocation store, or nil.
 func DefaultStore() *Store { return defaultStore.Load() }
 
+var legacyTokensRefused atomic.Bool
+
+// RefuseLegacyTokens makes the default verifier refuse the kernel's own
+// HS256 tokens from now on. The server calls it once identity is finalized:
+// only identity then issues tokens.
+func RefuseLegacyTokens() { legacyTokensRefused.Store(true) }
+
+// LegacyTokensRefused reports whether RefuseLegacyTokens was called.
+func LegacyTokensRefused() bool { return legacyTokensRefused.Load() }
+
 // Default returns a verifier over the loaded configuration's secret and the
-// default revocation store.
+// default revocation store. It has no secret once legacy tokens are
+// refused.
 func Default() *Verifier {
 	return &Verifier{
 		Secret: func() string {
-			if cfg := config.Get(); cfg != nil {
+			if cfg := config.Get(); cfg != nil && !legacyTokensRefused.Load() {
 				return cfg.JWT.Secret
 			}
 			return ""

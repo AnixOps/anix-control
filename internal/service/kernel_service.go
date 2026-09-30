@@ -2016,7 +2016,20 @@ func UpdatePluginConfigurationWithValidatorAndHook(db *gorm.DB, publicKey ed2551
 	}
 	var result *model.PluginConfiguration
 	err = WithAgentLifecycleTransaction(db, func(tx *gorm.DB) error {
-		result = nil
+		result, err = updatePluginConfigurationTx(tx, publicKey, installationID, canonical, expectedRevision, actorID, validator, hook)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// updatePluginConfigurationTx is UpdatePluginConfigurationWithValidatorAndHook
+// inside tx, for a canonical document.
+func updatePluginConfigurationTx(tx *gorm.DB, publicKey ed25519.PublicKey, installationID uint, canonical string, expectedRevision *int64, actorID uint, validator PluginConfigurationSemanticValidator, hook PluginConfigurationTxHook) (*model.PluginConfiguration, error) {
+	var result *model.PluginConfiguration
+	err := func() error {
 		var targetIdentity struct {
 			Target string
 		}
@@ -2054,6 +2067,11 @@ func UpdatePluginConfigurationWithValidatorAndHook(db *gorm.DB, publicKey ed2551
 				return fmt.Errorf("configuration key %q is only valid for v2 control packages", PackageRouteModesConfigKey)
 			}
 			if err := validatePackageRouteModes(tx, release, publicKey, routeModes); err != nil {
+				return err
+			}
+		}
+		if installation.Target == "control" {
+			if err := validateIdentityGroupA(tx, installation.PluginID, routeModes); err != nil {
 				return err
 			}
 		}
@@ -2104,7 +2122,7 @@ func UpdatePluginConfigurationWithValidatorAndHook(db *gorm.DB, publicKey ed2551
 		}
 		result = &configuration
 		return nil
-	})
+	}()
 	if err != nil {
 		return nil, err
 	}

@@ -21,6 +21,7 @@ const (
 	codePluginRequestTooLarge        = "plugin_request_too_large"
 	codePluginResponseTooLarge       = "plugin_response_too_large"
 	codePluginRequestInvalid         = "plugin_request_invalid"
+	codePackageRouteFrozen           = "package_route_frozen"
 	metricsUnresolvedPackage         = "unresolved"
 	metricsUnresolvedRoute           = "unresolved"
 	metricsOverflowLabel             = "_overflow"
