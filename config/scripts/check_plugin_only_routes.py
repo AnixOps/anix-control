@@ -27,6 +27,17 @@ COMPATIBILITY_ROUTE_FIELDS = frozenset({"method", "legacy_path", "package_route"
 HTTP_GATEWAY_HANDLER = "v2PackageGateway.Serve"
 WEBSOCKET_GATEWAY_HANDLER = "v2WebSocketGateway.Serve"
 EXPECTED_V4_ROUTE_COUNT = 292
+EXTRACTION_FORMAT = "anixops.package-extraction/v1"
+EXTRACTION_ROOT_FIELDS = frozenset({"format", "routes"})
+EXTRACTION_ROUTE_FIELDS = frozenset({"method", "path", "package_id", "route_id", "mode", "legacy"})
+# bridged: only the legacy implementation exists. native-flagged: the host has
+# a native implementation and the legacy one stays for runtime route modes.
+# native: the legacy handler is deleted and the host answers alone.
+EXTRACTION_MODES = frozenset({"bridged", "native-flagged", "native"})
+# router: the legacy gin handler is registered through registeredPackageRoute.
+# identity-bridge: it lives in the kernel's identity bridge allowlist and the
+# router binds the bare gateway. none: there is no legacy handler.
+EXTRACTION_LEGACY_SOURCES = frozenset({"router", "identity-bridge", "none"})
 
 
 class PluginOnlyRouteError(CatalogError):
@@ -161,7 +172,111 @@ def load_package_declarations(packages_root: Path, owners: Iterable[str]) -> tup
     return tuple(declarations)
 
 
-def validate_gateway_handlers(catalog: Iterable[CatalogRoute], inventory: Iterable[InventoryRoute]) -> None:
+@dataclass(frozen=True)
+class ExtractionRoute:
+    method: str
+    path: str
+    package_id: str
+    route_id: str
+    mode: str
+    legacy: str
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return self.method, self.path
+
+
+def load_extraction(path: Path) -> dict[tuple[str, str], ExtractionRoute]:
+    document = load_json_object(path, "package extraction map")
+    require_exact_fields(document, EXTRACTION_ROOT_FIELDS, "package extraction map")
+    if document["format"] != EXTRACTION_FORMAT:
+        raise PluginOnlyRouteError(f"package extraction map format must be {EXTRACTION_FORMAT}")
+    rows = document["routes"]
+    if not isinstance(rows, list):
+        raise PluginOnlyRouteError("package extraction map field routes must be an array")
+    routes: dict[tuple[str, str], ExtractionRoute] = {}
+    for index, row in enumerate(rows):
+        context = f"package extraction row {index + 1}"
+        if not isinstance(row, dict):
+            raise PluginOnlyRouteError(f"{context} must be an object")
+        require_exact_fields(row, EXTRACTION_ROUTE_FIELDS, context)
+        route = ExtractionRoute(
+            method=require_string(row, "method", context),
+            path=require_string(row, "path", context),
+            package_id=require_string(row, "package_id", context),
+            route_id=require_string(row, "route_id", context),
+            mode=require_string(row, "mode", context),
+            legacy=require_string(row, "legacy", context),
+        )
+        if route.mode not in EXTRACTION_MODES:
+            raise PluginOnlyRouteError(f"{context} has unsupported mode {route.mode!r}")
+        if route.legacy not in EXTRACTION_LEGACY_SOURCES:
+            raise PluginOnlyRouteError(f"{context} has unsupported legacy source {route.legacy!r}")
+        if (route.mode == "native") != (route.legacy == "none"):
+            raise PluginOnlyRouteError(
+                f"{context} mode {route.mode!r} does not match legacy source {route.legacy!r}: "
+                "only native routes have no legacy handler"
+            )
+        if route.key in routes:
+            raise PluginOnlyRouteError(f"duplicate package extraction row: {route.method} {route.path}")
+        routes[route.key] = route
+    return routes
+
+
+def validate_extraction(
+    catalog: Iterable[CatalogRoute], extraction: dict[tuple[str, str], ExtractionRoute], packages_root: Path
+) -> None:
+    catalog_keys = set()
+    for route in catalog:
+        catalog_keys.add(route.key)
+        entry = extraction.get(route.key)
+        if entry is None:
+            raise PluginOnlyRouteError(f"missing package extraction row for {route.method} {route.path}")
+        if entry.package_id != route.owner or entry.route_id != route.route_id:
+            raise PluginOnlyRouteError(
+                f"package extraction mismatch for {route.method} {route.path}: "
+                f"catalog=({route.owner!r}, {route.route_id!r}) extraction=({entry.package_id!r}, {entry.route_id!r})"
+            )
+    for key in sorted(set(extraction) - catalog_keys):
+        raise PluginOnlyRouteError(f"package extraction row without catalog row: {key[0]} {key[1]}")
+    host_sources: dict[str, str] = {}
+    for entry in extraction.values():
+        if entry.mode == "bridged":
+            continue
+        # A native implementation lives in the package's own host; the
+        # generic host only relays to legacy handlers.
+        if entry.package_id not in host_sources:
+            host_root = packages_root / entry.package_id / "control"
+            sources = sorted(host_root.glob("*.go")) if host_root.is_dir() else []
+            host_sources[entry.package_id] = "\n".join(
+                source.read_text(encoding="utf-8") for source in sources if not source.name.endswith("_test.go")
+            )
+        if f'"{entry.route_id}"' not in host_sources[entry.package_id]:
+            raise PluginOnlyRouteError(
+                f"{entry.mode} route {entry.method} {entry.path} has no native implementation: "
+                f"packages/{entry.package_id}/control does not name {entry.route_id}"
+            )
+
+
+def identity_bridge_route_ids(source_root: Path) -> frozenset[str]:
+    """Route ids quoted in the kernel's identity bridge sources."""
+    identifiers: set[str] = set()
+    if source_root.is_dir():
+        for source in sorted(source_root.glob("*.go")):
+            if source.name.endswith("_test.go"):
+                continue
+            text = source.read_text(encoding="utf-8")
+            for piece in text.split('"')[1::2]:
+                identifiers.add(piece)
+    return frozenset(identifiers)
+
+
+def validate_gateway_handlers(
+    catalog: Iterable[CatalogRoute],
+    inventory: Iterable[InventoryRoute],
+    extraction: dict[tuple[str, str], ExtractionRoute],
+    identity_bridge_ids: frozenset[str],
+) -> None:
     inventory_by_key = {route.key: route for route in inventory}
     for route in catalog:
         registered = inventory_by_key[route.key]
@@ -179,8 +294,19 @@ def validate_gateway_handlers(catalog: Iterable[CatalogRoute], inventory: Iterab
             expected_binding = "package-websocket"
         else:
             expected_binding = "package-http"
+        entry = extraction[route.key]
         if registered.binding == "direct":
-            if route.transport == "http" and route.owner == "identity-platform":
+            if route.transport == "http" and entry.legacy == "identity-bridge":
+                if route.route_id not in identity_bridge_ids:
+                    raise PluginOnlyRouteError(
+                        f"identity bridge has no legacy handler for {route.method} {route.path} ({route.route_id})"
+                    )
+                continue
+            if route.transport == "http" and entry.legacy == "none":
+                if route.route_id in identity_bridge_ids:
+                    raise PluginOnlyRouteError(
+                        f"native route {route.method} {route.path} still has an identity bridge handler"
+                    )
                 continue
             raise PluginOnlyRouteError(
                 f"package bridge binding mismatch for {route.method} {route.path}: "
@@ -190,6 +316,11 @@ def validate_gateway_handlers(catalog: Iterable[CatalogRoute], inventory: Iterab
             raise PluginOnlyRouteError(
                 f"package bridge binding mismatch for {route.method} {route.path}: "
                 f"catalog requires {expected_binding}, found {registered.binding or 'missing'}"
+            )
+        if entry.legacy != "router":
+            raise PluginOnlyRouteError(
+                f"{entry.mode} route {route.method} {route.path} registers legacy handler "
+                f"{registered.legacy_handler or 'unknown'}; the extraction map says {entry.legacy!r}"
             )
         if registered.package_id != route.owner or registered.route_id != route.route_id:
             raise PluginOnlyRouteError(
@@ -240,6 +371,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--router", type=Path, default=REPO_ROOT / "internal" / "router" / "router.go")
     parser.add_argument("--packages-root", type=Path, default=REPO_ROOT / "packages")
     parser.add_argument("--expected-route-count", type=int, default=EXPECTED_V4_ROUTE_COUNT)
+    parser.add_argument("--extraction", type=Path, default=REPO_ROOT / "config" / "package-extraction.json")
+    parser.add_argument("--identity-bridge", type=Path, default=REPO_ROOT / "internal" / "identitybridge")
     return parser.parse_args()
 
 
@@ -253,16 +386,20 @@ def main() -> int:
             raise PluginOnlyRouteError(
                 f"expected {arguments.expected_route_count} routes, found {len(catalog)}"
             )
+        extraction = load_extraction(arguments.extraction)
+        validate_extraction(catalog, extraction, arguments.packages_root)
         inventory = inventory_from_go(arguments.router)
         validate_catalog_against_inventory(catalog, inventory)
-        validate_gateway_handlers(catalog, inventory)
+        validate_gateway_handlers(catalog, inventory, extraction, identity_bridge_route_ids(arguments.identity_bridge))
         declarations = load_package_declarations(arguments.packages_root, (route.owner for route in catalog))
         validate_declarations(catalog, declarations)
     except CatalogError as error:
         print(f"plugin-only v2 route gate: {error}", file=sys.stderr)
         return 1
 
-    print(f"plugin-only v2 route gate passed ({len(catalog)} routes)")
+    modes = {mode: sum(1 for route in extraction.values() if route.mode == mode) for mode in sorted(EXTRACTION_MODES)}
+    summary = ", ".join(f"{count} {mode}" for mode, count in modes.items())
+    print(f"plugin-only v2 route gate passed ({len(catalog)} routes: {summary})")
     return 0
 
 

@@ -1,0 +1,2341 @@
+{
+  "format": "anixops.package-extraction/v1",
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/agent/execute",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.agent.execute.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/agent/list",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.agent.list.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/agent/monitor",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.agent.monitor.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/agent/tasks",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.agent.tasks.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/agent/tasks",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.agent.tasks.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/agent/tasks/:task_id",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.agent.tasks.task_id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/auth-keys",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.auth_keys.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/auth-keys",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.auth_keys.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/auth-keys/:id",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.auth_keys.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/coupon",
+      "package_id": "order",
+      "route_id": "order.admin.coupon.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/coupon",
+      "package_id": "order",
+      "route_id": "order.admin.coupon.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/coupon/:id",
+      "package_id": "order",
+      "route_id": "order.admin.coupon.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/dashboard",
+      "package_id": "machine-telemetry",
+      "route_id": "telemetry.admin.dashboard.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/agents",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.agents.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/agents",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.agents.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/agents/:id/revoke",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.agents.id.revoke.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/ansible-machines",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.ansible_machines.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/ansible-machines",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.ansible_machines.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/forward/ansible-machines/:id",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.ansible_machines.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/ansible-machines/:id",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.ansible_machines.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/forward/ansible-machines/:id",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.ansible_machines.id.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/ansible-machines/:id/check",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.ansible_machines.id.check.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/ansible-machines/:id/sync-stats",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.ansible_machines.id.sync_stats.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/ansible-machines/:id/toggle",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.ansible_machines.id.toggle.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/create",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.create.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/delete",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.delete.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/diagnose",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.diagnose.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/force-delete",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.force_delete.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/list",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.list.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/local/doctor",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.local.doctor.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/local/status",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.local.status.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/nodes",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.nodes.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/nodes",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.nodes.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/forward/nodes/:id",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.nodes.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/nodes/:id",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.nodes.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/forward/nodes/:id",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.nodes.id.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/nodes/:id/check",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.nodes.id.check.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/nodes/:id/sync-stats",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.nodes.id.sync_stats.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/nodes/:id/toggle",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.nodes.id.toggle.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/nodex/doctor",
+      "package_id": "gost-mesh",
+      "route_id": "gost.admin.forward.nodex.doctor.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/nodex/status",
+      "package_id": "gost-mesh",
+      "route_id": "gost.admin.forward.nodex.status.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/observability/multi-ingress",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.observability.multi_ingress.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/observability/targets",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.observability.targets.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/observability/topology",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.observability.topology.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/observability/trend",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.observability.trend.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/pause",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.pause.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/resume",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.resume.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/rules",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.rules.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/rules",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.rules.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/forward/rules/:id",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.rules.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/rules/:id",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.rules.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/forward/rules/:id",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.rules.id.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/rules/:id/toggle",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.rules.id.toggle.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/runtime/doctor",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.runtime.doctor.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/runtime/jobs",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.runtime.jobs.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/runtime/status",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.runtime.status.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/forward/stats",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.stats.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/sync-backend",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.sync_backend.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/test-connection",
+      "package_id": "gost-mesh",
+      "route_id": "gost.admin.forward.test_connection.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/update",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.update.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/forward/update-order",
+      "package_id": "forward",
+      "route_id": "forward.admin.forward.update_order.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/invite/config",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.invite.config.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/invite/config",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.invite.config.put",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/invite/stats",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.invite.stats.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/invite/withdrawals",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.invite.withdrawals.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/invite/withdrawals/:id/process",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.invite.withdrawals.id.process.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/knowledge",
+      "package_id": "knowledge",
+      "route_id": "knowledge.admin.knowledge.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/knowledge",
+      "package_id": "knowledge",
+      "route_id": "knowledge.admin.knowledge.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/knowledge/:id",
+      "package_id": "knowledge",
+      "route_id": "knowledge.admin.knowledge.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/knowledge/:id",
+      "package_id": "knowledge",
+      "route_id": "knowledge.admin.knowledge.id.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/loadbalancers",
+      "package_id": "proxy-node",
+      "route_id": "proxy.loadbalancer.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/loadbalancers",
+      "package_id": "proxy-node",
+      "route_id": "proxy.loadbalancer.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/loadbalancers/:id",
+      "package_id": "proxy-node",
+      "route_id": "proxy.loadbalancer.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/loadbalancers/:id",
+      "package_id": "proxy-node",
+      "route_id": "proxy.loadbalancer.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/loadbalancers/:id",
+      "package_id": "proxy-node",
+      "route_id": "proxy.loadbalancer.id.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/loadbalancers/:id/check",
+      "package_id": "proxy-node",
+      "route_id": "proxy.loadbalancer.id.check.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/loadbalancers/:id/stats",
+      "package_id": "proxy-node",
+      "route_id": "proxy.loadbalancer.id.stats.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/mfa/config",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.mfa.config.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/mfa/config",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.mfa.config.put",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/nodes",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.nodes.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/nodes",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.nodes.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/nodes/:id",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.nodes.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/nodes/:id",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.nodes.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/nodes/:id",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.nodes.id.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/nodes/:id/agent-control",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.nodes.id.agent_control.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/nodes/:id/agent-control/operations",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.nodes.id.agent_control.operations.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/nodes/:id/credentials",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.nodes.id.credentials.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/nodes/:id/logs",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.nodes.id.logs.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/nodes/:id/protocols",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.nodes.id.protocols.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/nodes/:id/protocols",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.nodes.id.protocols.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/nodes/:id/protocols/:protocol_id",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.nodes.id.protocols.protocol_id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/nodes/:id/protocols/:protocol_id",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.nodes.id.protocols.protocol_id.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/nodes/:id/raw-config",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.nodes.id.raw_config.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/nodes/:id/raw-config",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.nodes.id.raw_config.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/nodes/:id/sync",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.nodes.id.sync.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/nodes/stats",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.nodes.stats.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/nodes/validate-config",
+      "package_id": "proxy-node",
+      "route_id": "proxy.admin.nodes.validate_config.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/notification/email/config",
+      "package_id": "notification",
+      "route_id": "notification.admin.notification.email.config.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/notification/email/config",
+      "package_id": "notification",
+      "route_id": "notification.admin.notification.email.config.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/notification/logs",
+      "package_id": "notification",
+      "route_id": "notification.admin.notification.logs.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/notification/templates",
+      "package_id": "notification",
+      "route_id": "notification.admin.notification.templates.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/notification/templates",
+      "package_id": "notification",
+      "route_id": "notification.admin.notification.templates.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/notification/templates/:id",
+      "package_id": "notification",
+      "route_id": "notification.admin.notification.templates.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/notification/templates/:id",
+      "package_id": "notification",
+      "route_id": "notification.admin.notification.templates.id.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/notification/test",
+      "package_id": "notification",
+      "route_id": "notification.admin.notification.test.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/orders",
+      "package_id": "order",
+      "route_id": "order.admin.orders.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/orders/:id",
+      "package_id": "order",
+      "route_id": "order.admin.orders.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/orders/:id/cancel",
+      "package_id": "order",
+      "route_id": "order.admin.orders.id.cancel.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/orders/:id/paid",
+      "package_id": "order",
+      "route_id": "order.admin.orders.id.paid.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/orders/:id/status",
+      "package_id": "order",
+      "route_id": "order.admin.orders.id.status.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/orders/stats",
+      "package_id": "order",
+      "route_id": "order.admin.orders.stats.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/payment/gateways",
+      "package_id": "payment",
+      "route_id": "payment.admin.payment.gateways.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/payment/gateways",
+      "package_id": "payment",
+      "route_id": "payment.admin.payment.gateways.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/payment/gateways/:id",
+      "package_id": "payment",
+      "route_id": "payment.admin.payment.gateways.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/payment/gateways/:id",
+      "package_id": "payment",
+      "route_id": "payment.admin.payment.gateways.id.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/payment/gateways/:id/toggle",
+      "package_id": "payment",
+      "route_id": "payment.admin.payment.gateways.id.toggle.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/payment/records",
+      "package_id": "payment",
+      "route_id": "payment.admin.payment.records.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/payment/stats",
+      "package_id": "payment",
+      "route_id": "payment.admin.payment.stats.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/plans",
+      "package_id": "plan",
+      "route_id": "plan.admin.plans.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/plans",
+      "package_id": "plan",
+      "route_id": "plan.admin.plans.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/plans/:id",
+      "package_id": "plan",
+      "route_id": "plan.admin.plans.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/plans/:id",
+      "package_id": "plan",
+      "route_id": "plan.admin.plans.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/plans/:id",
+      "package_id": "plan",
+      "route_id": "plan.admin.plans.id.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/plans/:id/assign",
+      "package_id": "plan",
+      "route_id": "plan.admin.plans.id.assign.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/protocol-templates",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.admin.protocol_templates.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/subscription/formats",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.formats.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/subscription/groups",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.groups.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/subscription/groups",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.groups.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/subscription/groups/:id",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.groups.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/subscription/groups/:id",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.groups.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/subscription/groups/:id",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.groups.id.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/subscription/groups/:id/protocols",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.groups.id.protocols.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/subscription/groups/:id/protocols",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.groups.id.protocols.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/subscription/groups/:id/templates",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.groups.id.templates.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/subscription/groups/:id/templates",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.groups.id.templates.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/subscription/plans/:plan_id/groups",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.plans.plan_id.groups.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/subscription/plans/:plan_id/groups",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.plans.plan_id.groups.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/subscription/plans/:plan_id/groups/:group_id",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.plans.plan_id.groups.group_id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/subscription/preview",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.preview.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/subscription/protocols",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.protocols.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/subscription/protocols/available",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.protocols.available.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/subscription/stats",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.stats.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/subscription/templates/:id",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.templates.id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/subscription/templates/:id",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.templates.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/subscription/templates/:id",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.templates.id.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/subscription/users/:user_id/groups",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.users.user_id.groups.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/subscription/users/:user_id/groups",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.users.user_id.groups.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/subscription/users/:user_id/groups/:group_id",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.subscription.users.user_id.groups.group_id.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/system/audit-logs",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.system.audit_logs.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/system/backup",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.system.backup.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/system/backup/config",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.system.backup.config.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/system/backup/config",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.system.backup.config.put",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/system/backup/stats",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.system.backup.stats.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/system/backups",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.system.backups.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/system/backups/:id",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.system.backups.id.delete",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/system/backups/:id/restore",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.system.backups.id.restore.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/system/configs",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.system.configs.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/system/configs/:key",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.system.configs.key.delete",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/system/configs/:key",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.system.configs.key.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/system/configs/:key",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.system.configs.key.put",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/system/info",
+      "package_id": "machine-telemetry",
+      "route_id": "telemetry.admin.system.info.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/system/subscription-settings",
+      "package_id": "subscription",
+      "route_id": "subscription.admin.system.subscription_settings.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/telegram/bot",
+      "package_id": "notification",
+      "route_id": "notification.admin.telegram.bot.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/telegram/bot",
+      "package_id": "notification",
+      "route_id": "notification.admin.telegram.bot.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/telegram/broadcast",
+      "package_id": "notification",
+      "route_id": "notification.admin.telegram.broadcast.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/telegram/notify",
+      "package_id": "notification",
+      "route_id": "notification.admin.telegram.notify.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/telegram/users",
+      "package_id": "notification",
+      "route_id": "notification.admin.telegram.users.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/telegram/users/:id/notify",
+      "package_id": "notification",
+      "route_id": "notification.admin.telegram.users.id.notify.put",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/telegram/webhook",
+      "package_id": "notification",
+      "route_id": "notification.admin.telegram.webhook.delete",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/telegram/webhook",
+      "package_id": "notification",
+      "route_id": "notification.admin.telegram.webhook.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/ticket",
+      "package_id": "ticket",
+      "route_id": "ticket.admin.ticket.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/ticket/:id/close",
+      "package_id": "ticket",
+      "route_id": "ticket.admin.ticket.id.close.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/ticket/reply",
+      "package_id": "ticket",
+      "route_id": "ticket.admin.ticket.reply.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/traffic/hourly",
+      "package_id": "machine-telemetry",
+      "route_id": "telemetry.admin.traffic.hourly.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/traffic/user-ranking",
+      "package_id": "machine-telemetry",
+      "route_id": "telemetry.admin.traffic.user_ranking.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/tunnel/create",
+      "package_id": "forward",
+      "route_id": "forward.admin.tunnel.create.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/tunnel/delete",
+      "package_id": "forward",
+      "route_id": "forward.admin.tunnel.delete.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/tunnel/diagnose",
+      "package_id": "forward",
+      "route_id": "forward.admin.tunnel.diagnose.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/tunnel/list",
+      "package_id": "forward",
+      "route_id": "forward.admin.tunnel.list.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/tunnel/update",
+      "package_id": "forward",
+      "route_id": "forward.admin.tunnel.update.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/tunnel/user/assign",
+      "package_id": "forward",
+      "route_id": "forward.admin.tunnel.user.assign.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/tunnel/user/list",
+      "package_id": "forward",
+      "route_id": "forward.admin.tunnel.user.list.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/tunnel/user/remove",
+      "package_id": "forward",
+      "route_id": "forward.admin.tunnel.user.remove.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/tunnel/user/tunnel",
+      "package_id": "forward",
+      "route_id": "forward.admin.tunnel.user.tunnel.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/tunnel/user/update",
+      "package_id": "forward",
+      "route_id": "forward.admin.tunnel.user.update.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/users",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.users.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/users",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.users.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/users/:id",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.users.id.delete",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/users/:id",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.users.id.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/admin/users/:id",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.users.id.put",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/users/:id/ban",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.users.id.ban.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/users/:id/reset-subscribe",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.users.id.reset_subscribe.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/users/:id/reset-traffic",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.users.id.reset_traffic.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/users/:id/unban",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.users.id.unban.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/users/stats",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.users.stats.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/wireguard/keypair",
+      "package_id": "wireguard",
+      "route_id": "wireguard.admin.wireguard.keypair.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/admin/ws/monitor",
+      "package_id": "machine-telemetry",
+      "route_id": "telemetry.admin.ws.monitor.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/agent/heartbeat",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.agent.heartbeat.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/agent/monitor",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.agent.monitor.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/agent/register",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.agent.register.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/agent/result",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.agent.result.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/agent/tasks",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.agent.tasks.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/agent/ws",
+      "package_id": "protocol-runtime",
+      "route_id": "protocol.agent.ws.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/forward-agent/heartbeat",
+      "package_id": "forward",
+      "route_id": "forward.forward_agent.heartbeat.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/forward-agent/install.sh",
+      "package_id": "forward",
+      "route_id": "forward.forward_agent.install_sh.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/forward-agent/register",
+      "package_id": "forward",
+      "route_id": "forward.forward_agent.register.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/forward-agent/report",
+      "package_id": "forward",
+      "route_id": "forward.forward_agent.report.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/forward/agent/rules",
+      "package_id": "forward",
+      "route_id": "forward.forward.agent.rules.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/forward/create",
+      "package_id": "forward",
+      "route_id": "forward.forward.create.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/forward/delete",
+      "package_id": "forward",
+      "route_id": "forward.forward.delete.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/forward/diagnose",
+      "package_id": "forward",
+      "route_id": "forward.forward.diagnose.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/forward/force-delete",
+      "package_id": "forward",
+      "route_id": "forward.forward.force_delete.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/forward/list",
+      "package_id": "forward",
+      "route_id": "forward.forward.list.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/forward/pause",
+      "package_id": "forward",
+      "route_id": "forward.forward.pause.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/forward/resume",
+      "package_id": "forward",
+      "route_id": "forward.forward.resume.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/forward/update",
+      "package_id": "forward",
+      "route_id": "forward.forward.update.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/forward/update-order",
+      "package_id": "forward",
+      "route_id": "forward.forward.update_order.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/internal/auth-keys",
+      "package_id": "proxy-node",
+      "route_id": "proxy.internal.auth_keys.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/internal/forward/traffic/report",
+      "package_id": "forward",
+      "route_id": "forward.internal.forward.traffic.report.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/internal/forward/traffic/snapshot",
+      "package_id": "forward",
+      "route_id": "forward.internal.forward.traffic.snapshot.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/internal/forward/traffic/upload",
+      "package_id": "forward",
+      "route_id": "forward.internal.forward.traffic.upload.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/login",
+      "package_id": "identity-platform",
+      "route_id": "identity.auth.login",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/node/heartbeat",
+      "package_id": "proxy-node",
+      "route_id": "proxy.node.heartbeat.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/node/register",
+      "package_id": "proxy-node",
+      "route_id": "proxy.node.register.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/node/runtime-health",
+      "package_id": "proxy-node",
+      "route_id": "proxy.node.runtime_health.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/node/ws",
+      "package_id": "proxy-node",
+      "route_id": "proxy.node.ws.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/payment/callback/:type",
+      "package_id": "payment",
+      "route_id": "payment.callback",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/payment/fiat/create",
+      "package_id": "payment",
+      "route_id": "payment.payment.fiat.create.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/payment/methods",
+      "package_id": "payment",
+      "route_id": "payment.payment.methods.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/payment/paypal/webhook",
+      "package_id": "payment",
+      "route_id": "payment.payment.paypal.webhook.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/payment/status/:trade_no",
+      "package_id": "payment",
+      "route_id": "payment.payment.status.trade_no.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/payment/stripe/webhook",
+      "package_id": "payment",
+      "route_id": "payment.payment.stripe.webhook.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/payment/x402/callback",
+      "package_id": "payment",
+      "route_id": "payment.payment.x402.callback.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/payment/x402/check/:id",
+      "package_id": "payment",
+      "route_id": "payment.payment.x402.check.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/payment/x402/create",
+      "package_id": "payment",
+      "route_id": "payment.payment.x402.create.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/register",
+      "package_id": "identity-platform",
+      "route_id": "identity.auth.register",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/server/UniProxy/alive",
+      "package_id": "proxy-node",
+      "route_id": "proxy.server.uniproxy.alive.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/server/UniProxy/alivelist",
+      "package_id": "proxy-node",
+      "route_id": "proxy.server.uniproxy.alivelist.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/server/UniProxy/config",
+      "package_id": "proxy-node",
+      "route_id": "proxy.server.uniproxy.config.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/server/UniProxy/push",
+      "package_id": "proxy-node",
+      "route_id": "proxy.server.uniproxy.push.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/server/UniProxy/user",
+      "package_id": "proxy-node",
+      "route_id": "proxy.server.uniproxy.user.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/speed-limit/create",
+      "package_id": "plan",
+      "route_id": "plan.speed_limit.create.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/speed-limit/delete",
+      "package_id": "plan",
+      "route_id": "plan.speed_limit.delete.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/speed-limit/list",
+      "package_id": "plan",
+      "route_id": "plan.speed_limit.list.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/speed-limit/tunnels",
+      "package_id": "plan",
+      "route_id": "plan.speed_limit.tunnels.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/speed-limit/update",
+      "package_id": "plan",
+      "route_id": "plan.speed_limit.update.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/telegram/webhook",
+      "package_id": "notification",
+      "route_id": "notification.telegram.webhook.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/tunnel/user/assign",
+      "package_id": "forward",
+      "route_id": "forward.tunnel.user.assign.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/tunnel/user/list",
+      "package_id": "forward",
+      "route_id": "forward.tunnel.user.list.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/tunnel/user/remove",
+      "package_id": "forward",
+      "route_id": "forward.tunnel.user.remove.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/tunnel/user/tunnel",
+      "package_id": "forward",
+      "route_id": "forward.tunnel.user.tunnel.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/tunnel/user/update",
+      "package_id": "forward",
+      "route_id": "forward.tunnel.user.update.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/coupon/check",
+      "package_id": "order",
+      "route_id": "order.user.coupon.check.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/dashboard",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.dashboard.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/forward/rules",
+      "package_id": "forward",
+      "route_id": "forward.user.forward.rules.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/forward/rules",
+      "package_id": "forward",
+      "route_id": "forward.user.forward.rules.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/invite",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.invite.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/invite/commissions",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.invite.commissions.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/invite/generate",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.invite.generate.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/invite/withdraw",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.invite.withdraw.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/invite/withdrawals",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.invite.withdrawals.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/knowledge",
+      "package_id": "knowledge",
+      "route_id": "knowledge.article.list",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/knowledge/:id",
+      "package_id": "knowledge",
+      "route_id": "knowledge.user.knowledge.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/mfa/backup-codes/regenerate",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.mfa.backup_codes.regenerate.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/mfa/disable",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.mfa.disable.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/mfa/status",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.mfa.status.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/mfa/totp/enable",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.mfa.totp.enable.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/mfa/totp/setup",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.mfa.totp.setup.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/mfa/verify",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.mfa.verify.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/notifications",
+      "package_id": "notification",
+      "route_id": "notification.user.notifications.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/notifications/:id/read",
+      "package_id": "notification",
+      "route_id": "notification.user.notifications.id.read.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/notifications/read-all",
+      "package_id": "notification",
+      "route_id": "notification.user.notifications.read_all.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/notifications/unread-count",
+      "package_id": "notification",
+      "route_id": "notification.user.notifications.unread_count.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/order",
+      "package_id": "order",
+      "route_id": "order.user.order.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/order/:id",
+      "package_id": "order",
+      "route_id": "order.user.order.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/order/save",
+      "package_id": "order",
+      "route_id": "order.user.order.save.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/payment/channels",
+      "package_id": "payment",
+      "route_id": "payment.user.payment.channels.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/payment/create",
+      "package_id": "payment",
+      "route_id": "payment.user.payment.create.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/payment/records",
+      "package_id": "payment",
+      "route_id": "payment.user.payment.records.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/payment/status/:trade_no",
+      "package_id": "payment",
+      "route_id": "payment.user.payment.status.trade_no.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/plan",
+      "package_id": "plan",
+      "route_id": "plan.user.plan.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/profile",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.profile.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/reset",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.reset.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/subscription",
+      "package_id": "subscription",
+      "route_id": "subscription.user.subscription.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/telegram/notify",
+      "package_id": "notification",
+      "route_id": "notification.user.telegram.notify.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/telegram/status",
+      "package_id": "notification",
+      "route_id": "notification.user.telegram.status.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/telegram/unbind",
+      "package_id": "notification",
+      "route_id": "notification.user.telegram.unbind.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/ticket",
+      "package_id": "ticket",
+      "route_id": "ticket.user.ticket.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/ticket",
+      "package_id": "ticket",
+      "route_id": "ticket.user.ticket.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/user/ticket/:id",
+      "package_id": "ticket",
+      "route_id": "ticket.user.ticket.id.get",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/ticket/:id/close",
+      "package_id": "ticket",
+      "route_id": "ticket.user.ticket.id.close.post",
+      "mode": "bridged",
+      "legacy": "router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/user/ticket/:id/reply",
+      "package_id": "ticket",
+      "route_id": "ticket.user.ticket.id.reply.post",
+      "mode": "bridged",
+      "legacy": "router"
+    }
+  ]
+}

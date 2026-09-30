@@ -72,7 +72,10 @@ PostgreSQL), not the systemd installer.
   (`internal/router/router.go`) and served by a package host, but the hosts
   still bridge back into the in-kernel gin handlers and services
   (`internal/identitybridge/identity_bridge.go`). Design, platform gaps, and
-  milestones M0-M4: `docs/architecture/package-extraction.md`.
+  milestones M0-M4: `docs/architecture/package-extraction.md`. The M3
+  infrastructure is in place: storage leases, route modes, ledger-run
+  migrations, the extraction map and gates, and `internal/tests/packagecompat`.
+  Next is the M4 knowledge pilot.
 - [ ] Known gap: routes outside the `/api/v2` package gate are still served
   directly by kernel handlers: `/api/v1/server/UniProxy/*`,
   `/{subscribe_path}/:token` (default `/s/:token`), `/api/v1/client/subscribe`,

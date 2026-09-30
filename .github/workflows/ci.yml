@@ -298,11 +298,13 @@ jobs:
       - name: Verify Agent SDK dependency boundary
         run: bash config/scripts/check_agent_sdk_dependency.sh
 
-      - name: Check plugin-only route gate and release script tests
+      - name: Check plugin-only route, worker and package boundary gates and script tests
         env:
           GOWORK: 'off'
         run: |
           python3 config/scripts/check_plugin_only_routes.py
+          python3 config/scripts/check_plugin_only_workers.py
+          bash config/scripts/check_package_boundaries.sh
           python3 -m unittest discover -s config/scripts -p '*_test.py'
 
       - name: Check gofmt
@@ -810,10 +812,10 @@ jobs:
             -c "CREATE ROLE anix_kernel LOGIN CREATEROLE PASSWORD 'kernel'" \
             -c "ALTER DATABASE anix_package_test OWNER TO anix_kernel"
 
-      - name: Run package storage and rollout PostgreSQL tests
+      - name: Run package storage, rollout and compatibility harness PostgreSQL tests
         env:
           ANIX_TEST_POSTGRES_DSN: host=127.0.0.1 port=5432 user=anix_kernel password=kernel dbname=anix_package_test sslmode=disable TimeZone=UTC
-        run: go test -p 1 -v -count=1 ./internal/packagestore ./pkg/packagestoresdk ./internal/tests/integration
+        run: go test -p 1 -v -count=1 ./internal/packagestore ./pkg/packagestoresdk ./internal/tests/integration ./internal/tests/packagecompat
 
   migration-dry-run-test:
     name: SQLite to PostgreSQL Dry Run

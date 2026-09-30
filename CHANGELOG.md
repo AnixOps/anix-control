@@ -258,6 +258,33 @@
 
 ### Added
 
+- Extraction gates and a legacy/native comparison harness (M3).
+  - **Extraction map.** `config/package-extraction.json` records every
+    `/api/v2` route's extraction mode (`bridged`, `native-flagged`,
+    `native`) and where its legacy handler lives. All 292 routes are
+    `bridged`.
+  - **Route gate.** `check_plugin_only_routes.py` enforces the map:
+    - a `native` route binds the bare gateway and has no legacy handler left;
+    - `native-flagged` and `native` routes need a package host that
+      implements them;
+    - the identity-platform exception, formerly hardcoded, is now the map's
+      `identity-bridge` source, checked against `internal/identitybridge`.
+  - **Inventory.** The route inventory reports each route's
+    `legacy_handler`.
+  - **Worker gate.** `check_plugin_only_workers.py` fails when `cmd/server`
+    starts a new business worker and keeps the list of the seven legacy
+    domain workers shrink-only.
+  - **Boundary gate.** `check_package_boundaries.sh` fails when
+    `packages/...` or `pkg/...` depend on `internal/`. Test imports need a
+    reasoned allowlist entry.
+  - **CI.** All three gates and their tests run in the required Go Quality
+    Gates job.
+  - **Harness.** `internal/tests/packagecompat` (`RunRead`, `RunWrite`) runs
+    a route's legacy handler and its native implementation on identically
+    seeded databases. It compares status codes, bodies normalized with
+    `v2compat`, and, for writes, the database state. It uses SQLite, and
+    also PostgreSQL schemas when `ANIX_TEST_POSTGRES_DSN` is set.
+
 - Package migrations run through the migration ledger when a storage
   package's host starts (M3).
   - **Scope.** Applies to releases that declare `kernel.storage.v1`. After

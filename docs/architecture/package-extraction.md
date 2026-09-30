@@ -26,6 +26,11 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   `packagebridge.DefaultRouteRegistry()` and returns the gateway; the 45
   `identity-platform` routes use the bare `v2PackageGateway.Serve`; the 3
   WebSocket routes use `registeredPackageWebSocketRoute`.
+- `config/package-extraction.json` records each route's extraction mode
+  (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
+  (`router`, `identity-bridge` or `none`). All 292 routes are `bridged`; the
+  identity routes are `identity-bridge`. `check_plugin_only_routes.py`
+  enforces the map against the router and the identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -53,7 +58,8 @@ Reusable pieces that already exist:
 |-------|-------|
 | Signed package build, compiles `packages/<id>/control` when present | `packages/shared/build_package.py` |
 | Versioned, schema-validated package config | `GET/PUT /api/v3/plugin-installations/:id/config` |
-| Rollout/migration ledger models (unwired) | `internal/model/plugin_rollout.go`, `internal/service/plugin_rollout.go` |
+| Rollout/migration ledger models | `internal/model/plugin_rollout.go`, `internal/service/plugin_rollout.go` |
+| Legacy/native comparison harness (`RunRead`, `RunWrite`) | `internal/tests/packagecompat` |
 | Lifecycle plan with reverse compensation | `internal/plugincontrol/lifecycle_plan.go` |
 | Compiling a real host inside a test | `internal/pluginhost/identity_platform_host_test.go` |
 | E2E fixture that installs a real signed package | `internal/tests/e2e/identity_package_fixture_test.go` |
@@ -74,7 +80,7 @@ A domain counts as extracted only when all four hold:
 `identity-platform` is exempt: identity stays kernel-owned by design and remains
 bridged; only its migrations move to the storage lease.
 
-## 3. Target Mechanism (PLANNED — not implemented)
+## 3. Target Mechanism (M3 infrastructure CURRENT; no domain extracted yet)
 
 The host process and bridge stay. Three additions make real extraction
 possible, because today a host has no data channel: it never receives database
@@ -320,14 +326,28 @@ Semantics to keep when wiring:
 
 ## 8. Worker And Static Gate Design (T14)
 
-- PLANNED `config/scripts/check_plugin_only_workers.py`: scan `cmd/` and
-  `internal/` for kernel-started domain workers and fail with "legacy domain
-  worker". Today's markers are the constructors started in
-  `cmd/server/main.go`: `NewPanelForwardRuntimeJobExecutor`,
+- CURRENT `config/scripts/check_plugin_only_workers.py` scans the non-test
+  Go files of `cmd/server` for `service.New*Worker/Executor/Prober/...`
+  constructors. The kernel's topology executor is allowed. Seven legacy
+  domain workers, all started from `cmd/server/singleton_workers.go`, are
+  listed: `NewPanelForwardRuntimeJobExecutor`,
   `NewForwardAgentBridgeWorker`, `NewForwardFlowResetWorker`,
   `NewNodeMonthlyResetWorker`, `NewForwardGostStatsWorker`,
-  `NewForwardAnsibleStatsWorker`, `NewForwardLatencyProber`. The allowlist
-  shrinks as each domain is extracted.
+  `NewForwardAnsibleStatsWorker` and `NewForwardLatencyProber`. A new one
+  fails the gate. A listed one that is no longer started must be removed, so
+  the list only shrinks.
+- CURRENT `config/scripts/check_package_boundaries.sh` fails when
+  `packages/...` or `pkg/...` code depends on `internal/`, even
+  transitively. A test may import `internal/` only through a reasoned
+  allowlist entry; today only the `pkg/packagebridgesdk` contract tests do.
+- CURRENT `config/package-extraction.json` and `check_plugin_only_routes.py`:
+  - `bridged` and `native-flagged` routes keep their legacy handler, in the
+    router or the identity bridge.
+  - A `native` route must bind the bare gateway and have no legacy handler
+    left.
+  - `native-flagged` and `native` routes need a package host in
+    `packages/<id>/control` that names the route.
+- All three gates run in the required Go Quality Gates job.
 - Release gates must fail on: missing required package, direct legacy route
   registration, legacy domain worker startup, unsigned artifact, missing
   migration evidence, or unverified package version.
@@ -359,6 +379,18 @@ restored production dump found five defects, all fixed by PRs #14, #15, #17,
 #18 and #19; the results are in
 [`release-line-status.md`](release-line-status.md#production-baseline-and-upgrade-rehearsal).
 The M2 production cutover is next and needs a CI-built release first.
+
+Status (2026-09-30): the M3 extraction infrastructure landed as PRs #32-#37:
+- migration index digests and the capability grammar;
+- `GetPackageConfig` and route modes;
+- `pluginhostsdk.Router` with shadow comparison and `/metrics`;
+- per-package PostgreSQL roles and `LeaseStorage`;
+- ledger-run migrations on host start;
+- the extraction map, boundary and worker gates, and the
+  `internal/tests/packagecompat` harness.
+
+Not yet repeated for M3: the Docker rehearsal of the v4.0.0 signed packages
+against the new kernel. M4, the knowledge pilot, is next.
 
 | Milestone | Weeks | Scope | Done when |
 |-----------|-------|-------|-----------|
