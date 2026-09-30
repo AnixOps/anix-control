@@ -62,6 +62,22 @@ duplicate it here); the docs landing page is `docs/README.md`.
   0 approvals and these checks: Go Quality Gates, Go Lint Gate, Backend Tests,
   Frontend Build, Documentation Sync Check, Release Workflow Policy Check. No
   force pushes or deletions; administrators may bypass only by merging a PR.
+- CI has two lanes (`config/scripts/classify_changes.py`, job "Classify
+  Changes").
+  - **Fast lane.** Pull requests run the required checks plus the heavy jobs
+    whose paths changed:
+    - PostgreSQL jobs for schema, storage and service code;
+    - Docker and Kubernetes smokes for the module runtime, identity and
+      deployment;
+    - forward, Agent and package jobs for their areas.
+
+    Documentation-only PRs skip the Go jobs.
+  - **Full lane.** Every job, including the race detector and benchmarks.
+    It runs on `go_dev` pushes, tags, the nightly schedule, manual runs,
+    PRs labelled `ci:full`, and PRs that change the workflow or Go
+    dependencies.
+  - Skipped jobs count as passed for the required checks, so conditions stay
+    job-level `if:`. Never use a workflow-level `paths` filter.
 
 ## Build And Test Cheat-Sheet
 
