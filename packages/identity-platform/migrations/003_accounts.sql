@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS __PKG_PREFIX__account (
   created_at BIGINT NOT NULL,
   updated_at BIGINT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS __PKG_PREFIX__account_version ON __PKG_PREFIX__account (version);
+CREATE INDEX IF NOT EXISTS __PKG_NAME_PREFIX__account_version ON __PKG_PREFIX__account (version);
 CREATE TABLE IF NOT EXISTS __PKG_PREFIX__mfa (
   user_id BIGINT PRIMARY KEY,
   enabled SMALLINT NOT NULL,

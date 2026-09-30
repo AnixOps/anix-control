@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +14,8 @@ import (
 	"github.com/AnixOps/anix-control/identity/secretbox"
 	"github.com/AnixOps/anix-control/identity/server"
 	identityv1 "github.com/AnixOps/anix-control/sdk/api/identity/v1"
+	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
+	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
@@ -67,7 +68,8 @@ func newFixture(t *testing.T) *fixture {
 	identityDB := openSQLite(t)
 	schema, err := os.ReadFile("../../packages/identity-platform/migrations/003_accounts.sql")
 	require.NoError(t, err)
-	require.NoError(t, identityDB.Exec(strings.ReplaceAll(string(schema), "__PKG_PREFIX__", "t_")).Error)
+	prefixed := &packagestoresdk.Store{Lease: packagebridgesdk.StorageLease{Driver: "sqlite", TablePrefix: "t_"}}
+	require.NoError(t, identityDB.Exec(prefixed.ExpandScript(string(schema))).Error)
 	box, err := secretbox.New([]byte("0123456789abcdef0123456789abcdef"))
 	require.NoError(t, err)
 	store := &account.Store{DB: identityDB, Secrets: box, Tables: account.Tables{

@@ -398,6 +398,11 @@
     `POST /api/v4/kernel/identity/import` (`{"delta": bool}`, one at a time).
   - **Contract.** New, additive fields: `ImportedMFA.last_used_unix` and
     `last_method`.
+  - **Package migrations.** New `__PKG_NAME_PREFIX__` token (and
+    `Store.NamePrefix`, `Store.ExpandScript` in `packagestoresdk`) for index
+    and constraint names, which PostgreSQL cannot schema-qualify. It expands
+    to nothing on PostgreSQL and to the table prefix on SQLite. A PostgreSQL
+    test applies identity-platform's migrations in a real package schema.
 - Control verifies identity tokens (N10b, kernel side).
   - **Key refresh.** `internal/identitykeys` pulls the identity module's
     token keys with `IdentityService.GetTokenKeys`. It refreshes every 5

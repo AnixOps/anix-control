@@ -261,6 +261,9 @@ cannot be created, startup continues and leases that grant it fail.
   - Each step runs in its own transaction with its row in
     `schema_migrations`, and `__PKG_PREFIX__` in scripts expands to the same
     prefix.
+  - `__PKG_NAME_PREFIX__` is for index and constraint names. PostgreSQL does
+    not schema-qualify them (they live in their table's schema), so it
+    expands to nothing there and to the table prefix on SQLite.
   - An applied step whose digest changed is an error.
   - The run reports `StepsDigest`: the SHA-256 over `id:sha256\n` lines of
     the index's steps, sorted by id.

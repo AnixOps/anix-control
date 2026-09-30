@@ -116,6 +116,22 @@ func (s *Store) Prefix() string {
 	return s.Lease.TablePrefix
 }
 
+// NamePrefix is what the __PKG_NAME_PREFIX__ migration token expands to:
+// nothing on PostgreSQL, where an index lives in its table's schema and its
+// name cannot be qualified, the table prefix on SQLite, where index names
+// share the database file.
+func (s *Store) NamePrefix() string {
+	if s == nil || s.Lease.Driver == "postgres" {
+		return ""
+	}
+	return s.Lease.TablePrefix
+}
+
+// ExpandScript expands the migration tokens in script for this store.
+func (s *Store) ExpandScript(script string) string {
+	return strings.NewReplacer(PrefixPlaceholder, s.Prefix(), NamePrefixPlaceholder, s.NamePrefix()).Replace(script)
+}
+
 // Table returns the full name of one of the package's own tables, for example
 // "pkg_knowledge.notes" on PostgreSQL and "pkg_knowledge_notes" on SQLite.
 // It panics on a name that is not lowercase letters, digits and underscores,
