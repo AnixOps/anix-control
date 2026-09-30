@@ -22,6 +22,7 @@ const (
 	KernelPackageBridge_Invoke_FullMethodName           = "/anixops.packagebridge.v1.KernelPackageBridge/Invoke"
 	KernelPackageBridge_OpenWebSocket_FullMethodName    = "/anixops.packagebridge.v1.KernelPackageBridge/OpenWebSocket"
 	KernelPackageBridge_GetPackageConfig_FullMethodName = "/anixops.packagebridge.v1.KernelPackageBridge/GetPackageConfig"
+	KernelPackageBridge_LeaseStorage_FullMethodName     = "/anixops.packagebridge.v1.KernelPackageBridge/LeaseStorage"
 )
 
 // KernelPackageBridgeClient is the client API for KernelPackageBridge service.
@@ -41,6 +42,10 @@ type KernelPackageBridgeClient interface {
 	Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error)
 	OpenWebSocket(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WebSocketFrame, WebSocketFrame], error)
 	GetPackageConfig(ctx context.Context, in *GetPackageConfigRequest, opts ...grpc.CallOption) (*GetPackageConfigResponse, error)
+	// LeaseStorage issues database credentials for the calling package's own
+	// least-privilege storage. Like GetPackageConfig it is authorized by the
+	// session identity and fenced against the installation.
+	LeaseStorage(ctx context.Context, in *LeaseStorageRequest, opts ...grpc.CallOption) (*LeaseStorageResponse, error)
 }
 
 type kernelPackageBridgeClient struct {
@@ -84,6 +89,16 @@ func (c *kernelPackageBridgeClient) GetPackageConfig(ctx context.Context, in *Ge
 	return out, nil
 }
 
+func (c *kernelPackageBridgeClient) LeaseStorage(ctx context.Context, in *LeaseStorageRequest, opts ...grpc.CallOption) (*LeaseStorageResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LeaseStorageResponse)
+	err := c.cc.Invoke(ctx, KernelPackageBridge_LeaseStorage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // KernelPackageBridgeServer is the server API for KernelPackageBridge service.
 // All implementations must embed UnimplementedKernelPackageBridgeServer
 // for forward compatibility.
@@ -101,6 +116,10 @@ type KernelPackageBridgeServer interface {
 	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
 	OpenWebSocket(grpc.BidiStreamingServer[WebSocketFrame, WebSocketFrame]) error
 	GetPackageConfig(context.Context, *GetPackageConfigRequest) (*GetPackageConfigResponse, error)
+	// LeaseStorage issues database credentials for the calling package's own
+	// least-privilege storage. Like GetPackageConfig it is authorized by the
+	// session identity and fenced against the installation.
+	LeaseStorage(context.Context, *LeaseStorageRequest) (*LeaseStorageResponse, error)
 	mustEmbedUnimplementedKernelPackageBridgeServer()
 }
 
@@ -119,6 +138,9 @@ func (UnimplementedKernelPackageBridgeServer) OpenWebSocket(grpc.BidiStreamingSe
 }
 func (UnimplementedKernelPackageBridgeServer) GetPackageConfig(context.Context, *GetPackageConfigRequest) (*GetPackageConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPackageConfig not implemented")
+}
+func (UnimplementedKernelPackageBridgeServer) LeaseStorage(context.Context, *LeaseStorageRequest) (*LeaseStorageResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LeaseStorage not implemented")
 }
 func (UnimplementedKernelPackageBridgeServer) mustEmbedUnimplementedKernelPackageBridgeServer() {}
 func (UnimplementedKernelPackageBridgeServer) testEmbeddedByValue()                             {}
@@ -184,6 +206,24 @@ func _KernelPackageBridge_GetPackageConfig_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _KernelPackageBridge_LeaseStorage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LeaseStorageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelPackageBridgeServer).LeaseStorage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KernelPackageBridge_LeaseStorage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelPackageBridgeServer).LeaseStorage(ctx, req.(*LeaseStorageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KernelPackageBridge_ServiceDesc is the grpc.ServiceDesc for KernelPackageBridge service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -198,6 +238,10 @@ var KernelPackageBridge_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPackageConfig",
 			Handler:    _KernelPackageBridge_GetPackageConfig_Handler,
+		},
+		{
+			MethodName: "LeaseStorage",
+			Handler:    _KernelPackageBridge_LeaseStorage_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -18,6 +18,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v4/internal/packagestore"
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
@@ -43,11 +44,35 @@ func NewFactory(cfg *config.Config) (packagebridge.SessionFactory, error) {
 	if err != nil {
 		return nil, err
 	}
+	operations, err := newHostOperations(cfg)
+	if err != nil {
+		return nil, err
+	}
 	return packagebridge.NewFactory(allowlist, packagebridge.DefaultRouteRegistry()).WithSessionOptions(packagebridge.SessionOptions{
 		MaxResponseBodyBytes: cfg.Plugins.ControlHostResponseBodyLimit(),
 		MaxRequestBodyBytes:  cfg.Plugins.ControlHostRequestBodyLimit(),
-		HostOperations:       service.PackageHostOperations{DB: database.Get()},
+		HostOperations:       operations,
 	}), nil
+}
+
+// newHostOperations serves the session-scoped RPCs from the kernel database,
+// including package storage leases derived from the kernel's connection.
+func newHostOperations(cfg *config.Config) (service.PackageHostOperations, error) {
+	db := database.Get()
+	operations := service.PackageHostOperations{DB: db}
+	if strings.TrimSpace(cfg.Plugins.OfficialPublicKey) != "" {
+		publicKey, err := service.ParseOfficialPluginPublicKey(cfg.Plugins.OfficialPublicKey)
+		if err != nil {
+			return operations, err
+		}
+		operations.FallbackPublicKey = publicKey
+	}
+	source, err := database.PackageStorageSource(&cfg.Database)
+	if err != nil {
+		return operations, err
+	}
+	operations.Storage = &packagestore.Store{DB: db, Driver: cfg.Database.Driver, DSN: source}
+	return operations, nil
 }
 
 // NewAllowlist returns the complete set of legacy-compatible operations that

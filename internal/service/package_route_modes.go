@@ -12,6 +12,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v4/internal/packagestore"
 	"gorm.io/gorm"
 )
 
@@ -114,6 +115,10 @@ func validatePackageRouteModes(db *gorm.DB, release model.PluginRelease, publicK
 // the kernel database.
 type PackageHostOperations struct {
 	DB *gorm.DB
+	// Storage provisions package storage for LeaseStorage; nil disables it.
+	Storage *packagestore.Store
+	// FallbackPublicKey verifies releases recorded without a trust root.
+	FallbackPublicKey ed25519.PublicKey
 }
 
 var _ packagebridge.HostOperations = PackageHostOperations{}
@@ -122,22 +127,11 @@ var _ packagebridge.HostOperations = PackageHostOperations{}
 // enabled control installation at its desired version and current lifecycle
 // generation; any other host is fenced.
 func (o PackageHostOperations) PackageConfig(ctx context.Context, host packagebridge.HostIdentity) (packagebridge.PackageConfig, error) {
-	if o.DB == nil {
-		return packagebridge.PackageConfig{}, errors.New("database is not initialized")
-	}
-	db := o.DB.WithContext(ctx)
-	var installation model.PluginInstallation
-	if err := db.First(&installation, "plugin_id = ? AND target = ?", host.PackageID, "control").Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return packagebridge.PackageConfig{}, packagebridge.ErrHostFenced
-		}
+	installation, err := o.currentInstallation(ctx, host)
+	if err != nil {
 		return packagebridge.PackageConfig{}, err
 	}
-	if !installation.Enabled || installation.DesiredVersion != host.Version ||
-		installation.LifecycleGeneration <= 0 || uint64(installation.LifecycleGeneration) != host.Generation {
-		return packagebridge.PackageConfig{}, packagebridge.ErrHostFenced
-	}
-	configuration, err := GetPluginConfiguration(db, installation.ID)
+	configuration, err := GetPluginConfiguration(o.DB.WithContext(ctx), installation.ID)
 	if err != nil {
 		return packagebridge.PackageConfig{}, err
 	}
@@ -152,4 +146,25 @@ func (o PackageHostOperations) PackageConfig(ctx context.Context, host packagebr
 		}
 	}
 	return packagebridge.PackageConfig{Revision: configuration.Revision, ConfigHash: configuration.ConfigHash, RouteModes: active}, nil
+}
+
+// currentInstallation returns the host's Control installation if the host is
+// its enabled desired version at the current lifecycle generation, and
+// ErrHostFenced otherwise.
+func (o PackageHostOperations) currentInstallation(ctx context.Context, host packagebridge.HostIdentity) (model.PluginInstallation, error) {
+	var installation model.PluginInstallation
+	if o.DB == nil {
+		return installation, errors.New("database is not initialized")
+	}
+	if err := o.DB.WithContext(ctx).First(&installation, "plugin_id = ? AND target = ?", host.PackageID, "control").Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return installation, packagebridge.ErrHostFenced
+		}
+		return installation, err
+	}
+	if !installation.Enabled || installation.DesiredVersion != host.Version ||
+		installation.LifecycleGeneration <= 0 || uint64(installation.LifecycleGeneration) != host.Generation {
+		return installation, packagebridge.ErrHostFenced
+	}
+	return installation, nil
 }

@@ -36,6 +36,9 @@ var (
 	// ErrHostFenced is returned when the host is no longer the current
 	// installation generation.
 	ErrHostFenced = errors.New("package host generation is fenced")
+	// ErrStorageUnavailable is returned by LeaseStorage when the kernel cannot
+	// lease storage to this package; the error text says why.
+	ErrStorageUnavailable = errors.New("package storage is unavailable")
 	// ErrResponseTooLarge reports that the kernel rejected a bridge response
 	// body above its configured limit. The returned error also carries
 	// codes.ResourceExhausted, so a host that returns it unchanged lets the
@@ -282,4 +285,50 @@ func (c *Client) GetPackageConfig(ctx context.Context) (PackageConfig, error) {
 		modes[route] = mode
 	}
 	return PackageConfig{Revision: response.GetRevision(), ConfigHash: response.GetConfigHash(), RouteModes: modes}, nil
+}
+
+// StorageLease holds credentials for the package's own storage.
+type StorageLease struct {
+	// Driver is "postgres" or "sqlite".
+	Driver string
+	// DSN connects as the package role (postgres) or names the shared
+	// database file (sqlite).
+	DSN string
+	// Schema holds the package's own tables on postgres.
+	Schema string
+	// TablePrefix names the package's own tables on sqlite.
+	TablePrefix     string
+	LeaseGeneration int64
+	AdoptedTables   []string
+	Views           []string
+}
+
+// LeaseStorage asks the kernel for fresh credentials for this package's
+// storage. Each lease rotates the credentials of the previous one.
+// ErrSessionOperationUnsupported means the kernel has no package storage,
+// ErrHostFenced that this host is no longer current, and
+// ErrStorageUnavailable that the kernel refused the lease.
+func (c *Client) LeaseStorage(ctx context.Context) (StorageLease, error) {
+	if c == nil || c.rpc == nil {
+		return StorageLease{}, ErrBridgeUnavailable
+	}
+	response, err := c.rpc.LeaseStorage(ctx, &packagebridgev1.LeaseStorageRequest{})
+	if err != nil {
+		switch status.Code(err) {
+		case codes.Unimplemented:
+			return StorageLease{}, ErrSessionOperationUnsupported
+		case codes.PermissionDenied:
+			return StorageLease{}, ErrHostFenced
+		case codes.FailedPrecondition:
+			return StorageLease{}, fmt.Errorf("%w: %s", ErrStorageUnavailable, status.Convert(err).Message())
+		default:
+			return StorageLease{}, bridgeError(err)
+		}
+	}
+	return StorageLease{
+		Driver: response.GetDriver(), DSN: response.GetDsn(), Schema: response.GetSchema(),
+		TablePrefix: response.GetTablePrefix(), LeaseGeneration: response.GetLeaseGeneration(),
+		AdoptedTables: append([]string(nil), response.GetAdoptedTables()...),
+		Views:         append([]string(nil), response.GetViews()...),
+	}, nil
 }

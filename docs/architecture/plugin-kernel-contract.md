@@ -199,6 +199,70 @@ details document, and `/metrics` exports it as `anixops_package_config_status`,
 `anixops_package_shadow_*` counters. The generic Control host and the
 identity-platform host run on the router with no native routes.
 
+## Package Storage
+
+A package host never receives kernel credentials: not the kernel DSN, the
+JWT signing key or the Control configuration. A package that declares
+`kernel.storage.v1` may lease its own least-privilege storage with the
+session-scoped bridge RPC `LeaseStorage`, which is authorized and fenced like
+`GetPackageConfig`. The kernel reads the grants from the signed manifest of
+the host's release, verified again on every lease.
+
+On PostgreSQL (`internal/packagestore`):
+
+- **Role.** Each package gets a login role `anix_pkg_<id>` (`-` becomes `_`)
+  with `NOINHERIT`, no other attributes, and `CONNECTION LIMIT 4`. It is a
+  member of the `NOLOGIN` group `anix_packages`, which holds no privileges and
+  exists so `pg_hba.conf` can admit every package role as `+anix_packages`. A
+  pre-existing role with elevated attributes is refused.
+- **Schema.** The kernel creates and owns schema `pkg_<id>`. The package role
+  may create tables there, and its `search_path` is its schema, then the
+  kernel's.
+- **Grants.** Each lease replaces every privilege the role holds in the
+  kernel schema with exactly the declared ones:
+  - `SELECT, INSERT, UPDATE, DELETE` on adopted tables, and `USAGE, SELECT` on
+    their sequences;
+  - `SELECT` on kernel API views.
+
+  A dropped capability is revoked on the next lease, including for
+  connections that are already open.
+- **Password.** Each lease sets a new random password from a SCRAM-SHA-256
+  verifier computed in the kernel, so neither the server nor a statement log
+  sees the password. Connections of the previous lease stay open, but it
+  cannot open new ones.
+- **Connection string.** The package connection string reuses only the
+  server settings of the kernel's (host, port, database, TLS verification,
+  time zone).
+- **Kernel role.** The kernel's database role needs `CREATEROLE`
+  (`ALTER ROLE <kernel_role> CREATEROLE` as a superuser). Without it, leases
+  fail with an error that says so, and routes in `legacy` mode are
+  unaffected.
+- **Ledger.** `v4_kernel_package_storage` records the role, the schema, the
+  grants and the lease generation of each package.
+
+On SQLite there are no roles. Packages share the kernel's database file and
+name their own tables with the prefix `pkg_<id>_`. This isolates nothing and
+is meant for development and tests.
+
+**Kernel API views** are versioned read-only views, created at startup and
+never changed once published. `kapi_user_directory_v1` exposes `id`, `email`,
+`is_admin`, `is_staff`, `banned`, `plan_id`, `group_id`, `expired_at` and
+`created_at` of `v2_user`, and no password hash, token or UUID. If a view
+cannot be created, startup continues and leases that grant it fail.
+
+`pkg/packagestoresdk` is the host side:
+
+- `Open` leases storage and connects with at most 4 connections.
+- `Store.Table` names the package's own tables: `pkg_<id>.<name>` on
+  PostgreSQL, `pkg_<id>_<name>` on SQLite.
+- `RunEmbeddedMigrations` applies the steps of an embedded
+  `migrations/index.json`.
+  - Each step runs in its own transaction with its row in
+    `schema_migrations`, and `__PKG_PREFIX__` in scripts expands to the same
+    prefix.
+  - An applied step whose digest changed is an error.
+  - The run reports a digest of the applied state.
+
 ## Scoped Authorization
 
 `service_scope` owns an independent authorization namespace. The startup

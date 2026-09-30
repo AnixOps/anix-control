@@ -95,7 +95,8 @@ Recorded 2026-09-29 from the production PostgreSQL backup taken that day
   `v4_kernel_package_migration_run`, `v4_kernel_package_rollout_lock`,
   `v4_kernel_package_route_generation`, and
   `v4_kernel_package_validation_result`. No existing table, column, or index
-  changes.
+  changes. (M3 later adds `v4_kernel_package_storage` and the
+  `kapi_user_directory_v1` view; see `docs/UPGRADE.md`.)
 - **Crash exposure.** `v4.0.0-alpha.7` crashes with
   `fatal error: concurrent map writes` in the forward background error logger
   when several forward latency probes fail at the same time (latency

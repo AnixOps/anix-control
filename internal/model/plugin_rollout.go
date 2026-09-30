@@ -109,3 +109,22 @@ type PackageRolloutLock struct {
 }
 
 func (PackageRolloutLock) TableName() string { return "v4_kernel_package_rollout_lock" }
+
+// PackageStorage records the least-privilege database storage the kernel
+// provisioned for a package: its role, its schema, the adopted tables and
+// kernel API views it may use, and how many leases have been issued.
+type PackageStorage struct {
+	PackageID       string    `gorm:"primaryKey;size:120" json:"package_id"`
+	Driver          string    `gorm:"size:16;not null" json:"driver"`
+	RoleName        string    `gorm:"size:63" json:"role_name"`
+	SchemaName      string    `gorm:"size:63" json:"schema_name"`
+	TablePrefix     string    `gorm:"size:63" json:"table_prefix"`
+	GrantsJSON      string    `gorm:"type:text;not null" json:"grants_json"`
+	PackageVersion  string    `gorm:"size:64;not null" json:"package_version"`
+	HostGeneration  uint64    `gorm:"not null" json:"host_generation"`
+	LeaseGeneration int64     `gorm:"not null" json:"lease_generation"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+func (PackageStorage) TableName() string { return "v4_kernel_package_storage" }

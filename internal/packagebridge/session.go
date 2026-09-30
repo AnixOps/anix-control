@@ -52,9 +52,10 @@ type SessionOptions struct {
 	// MaxRequestBodyBytes is the kernel's request body limit. The bridge uses
 	// it only to size its gRPC receive window for host payloads.
 	MaxRequestBodyBytes int64
-	// HostOperations serves the session-scoped RPCs (GetPackageConfig). Nil
-	// answers them with codes.Unimplemented, which hosts treat as "no
-	// configuration": every route stays in legacy mode.
+	// HostOperations serves the session-scoped RPCs (GetPackageConfig and
+	// LeaseStorage). Nil answers them with codes.Unimplemented, which hosts
+	// treat as "no configuration": every route stays in legacy mode and no
+	// storage is available.
 	HostOperations HostOperations
 }
 

@@ -227,12 +227,18 @@ package kernel tables exist yet.
 
 With `env: production`, the server never alters existing tables: it creates
 only missing tables and then runs its `Ensure*` schema helpers (`anix-control
-migrate` runs the same step and exits). From an alpha.6/alpha.7 schema they add exactly five
+migrate` runs the same step and exits). From an alpha.6/alpha.7 schema they add exactly six
 tables and their indexes: `v4_kernel_package_backup_reference`,
 `v4_kernel_package_migration_run`, `v4_kernel_package_rollout_lock`,
-`v4_kernel_package_route_generation`, and
-`v4_kernel_package_validation_result`. No existing table, column or index
+`v4_kernel_package_route_generation`, `v4_kernel_package_storage`, and
+`v4_kernel_package_validation_result`, plus the read-only view
+`kapi_user_directory_v1` over `v2_user`. No existing table, column or index
 changes.
+
+Package storage leases additionally need `CREATEROLE` on the Control
+database role and a `pg_hba.conf` entry that admits the `+anix_packages`
+group (see `docs/architecture/plugin-kernel-contract.md`, "Package
+Storage"). Neither is needed while every route runs in `legacy` mode.
 
 ### Package Install Window
 

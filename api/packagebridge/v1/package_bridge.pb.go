@@ -120,6 +120,139 @@ func (x *GetPackageConfigResponse) GetRouteModes() map[string]string {
 	return nil
 }
 
+type LeaseStorageRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LeaseStorageRequest) Reset() {
+	*x = LeaseStorageRequest{}
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaseStorageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaseStorageRequest) ProtoMessage() {}
+
+func (x *LeaseStorageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaseStorageRequest.ProtoReflect.Descriptor instead.
+func (*LeaseStorageRequest) Descriptor() ([]byte, []int) {
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{2}
+}
+
+type LeaseStorageResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// driver is "postgres" or "sqlite".
+	Driver string `protobuf:"bytes,1,opt,name=driver,proto3" json:"driver,omitempty"`
+	// dsn connects as the package role (postgres) or names the shared database
+	// file (sqlite). It never carries kernel credentials.
+	Dsn string `protobuf:"bytes,2,opt,name=dsn,proto3" json:"dsn,omitempty"`
+	// schema holds the package's own tables on postgres; empty on sqlite.
+	Schema string `protobuf:"bytes,3,opt,name=schema,proto3" json:"schema,omitempty"`
+	// table_prefix names the package's own tables on sqlite; empty on postgres.
+	TablePrefix     string   `protobuf:"bytes,4,opt,name=table_prefix,json=tablePrefix,proto3" json:"table_prefix,omitempty"`
+	LeaseGeneration int64    `protobuf:"varint,5,opt,name=lease_generation,json=leaseGeneration,proto3" json:"lease_generation,omitempty"`
+	AdoptedTables   []string `protobuf:"bytes,6,rep,name=adopted_tables,json=adoptedTables,proto3" json:"adopted_tables,omitempty"`
+	Views           []string `protobuf:"bytes,7,rep,name=views,proto3" json:"views,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *LeaseStorageResponse) Reset() {
+	*x = LeaseStorageResponse{}
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LeaseStorageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LeaseStorageResponse) ProtoMessage() {}
+
+func (x *LeaseStorageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LeaseStorageResponse.ProtoReflect.Descriptor instead.
+func (*LeaseStorageResponse) Descriptor() ([]byte, []int) {
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *LeaseStorageResponse) GetDriver() string {
+	if x != nil {
+		return x.Driver
+	}
+	return ""
+}
+
+func (x *LeaseStorageResponse) GetDsn() string {
+	if x != nil {
+		return x.Dsn
+	}
+	return ""
+}
+
+func (x *LeaseStorageResponse) GetSchema() string {
+	if x != nil {
+		return x.Schema
+	}
+	return ""
+}
+
+func (x *LeaseStorageResponse) GetTablePrefix() string {
+	if x != nil {
+		return x.TablePrefix
+	}
+	return ""
+}
+
+func (x *LeaseStorageResponse) GetLeaseGeneration() int64 {
+	if x != nil {
+		return x.LeaseGeneration
+	}
+	return 0
+}
+
+func (x *LeaseStorageResponse) GetAdoptedTables() []string {
+	if x != nil {
+		return x.AdoptedTables
+	}
+	return nil
+}
+
+func (x *LeaseStorageResponse) GetViews() []string {
+	if x != nil {
+		return x.Views
+	}
+	return nil
+}
+
 type InvokeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Capability    []byte                 `protobuf:"bytes,1,opt,name=capability,proto3" json:"capability,omitempty"`
@@ -131,7 +264,7 @@ type InvokeRequest struct {
 
 func (x *InvokeRequest) Reset() {
 	*x = InvokeRequest{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[2]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -143,7 +276,7 @@ func (x *InvokeRequest) String() string {
 func (*InvokeRequest) ProtoMessage() {}
 
 func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[2]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -156,7 +289,7 @@ func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokeRequest.ProtoReflect.Descriptor instead.
 func (*InvokeRequest) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{2}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *InvokeRequest) GetCapability() []byte {
@@ -191,7 +324,7 @@ type InvokeResponse struct {
 
 func (x *InvokeResponse) Reset() {
 	*x = InvokeResponse{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[3]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -203,7 +336,7 @@ func (x *InvokeResponse) String() string {
 func (*InvokeResponse) ProtoMessage() {}
 
 func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[3]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -216,7 +349,7 @@ func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokeResponse.ProtoReflect.Descriptor instead.
 func (*InvokeResponse) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{3}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *InvokeResponse) GetResponseBody() []byte {
@@ -250,7 +383,7 @@ type ResponseHeader struct {
 
 func (x *ResponseHeader) Reset() {
 	*x = ResponseHeader{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[4]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -262,7 +395,7 @@ func (x *ResponseHeader) String() string {
 func (*ResponseHeader) ProtoMessage() {}
 
 func (x *ResponseHeader) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[4]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -275,7 +408,7 @@ func (x *ResponseHeader) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseHeader.ProtoReflect.Descriptor instead.
 func (*ResponseHeader) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{4}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ResponseHeader) GetName() string {
@@ -308,7 +441,7 @@ type WebSocketFrame struct {
 
 func (x *WebSocketFrame) Reset() {
 	*x = WebSocketFrame{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[5]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -320,7 +453,7 @@ func (x *WebSocketFrame) String() string {
 func (*WebSocketFrame) ProtoMessage() {}
 
 func (x *WebSocketFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[5]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -333,7 +466,7 @@ func (x *WebSocketFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebSocketFrame.ProtoReflect.Descriptor instead.
 func (*WebSocketFrame) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{5}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *WebSocketFrame) GetValue() isWebSocketFrame_Value {
@@ -402,7 +535,7 @@ type WebSocketOpen struct {
 
 func (x *WebSocketOpen) Reset() {
 	*x = WebSocketOpen{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[6]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -414,7 +547,7 @@ func (x *WebSocketOpen) String() string {
 func (*WebSocketOpen) ProtoMessage() {}
 
 func (x *WebSocketOpen) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[6]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -427,7 +560,7 @@ func (x *WebSocketOpen) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebSocketOpen.ProtoReflect.Descriptor instead.
 func (*WebSocketOpen) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{6}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *WebSocketOpen) GetCapability() []byte {
@@ -454,7 +587,7 @@ type WebSocketClose struct {
 
 func (x *WebSocketClose) Reset() {
 	*x = WebSocketClose{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[7]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -466,7 +599,7 @@ func (x *WebSocketClose) String() string {
 func (*WebSocketClose) ProtoMessage() {}
 
 func (x *WebSocketClose) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[7]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -479,7 +612,7 @@ func (x *WebSocketClose) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebSocketClose.ProtoReflect.Descriptor instead.
 func (*WebSocketClose) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{7}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *WebSocketClose) GetCode() uint32 {
@@ -510,7 +643,16 @@ const file_api_packagebridge_v1_package_bridge_proto_rawDesc = "" +
 	"routeModes\x1a=\n" +
 	"\x0fRouteModesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"g\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x15\n" +
+	"\x13LeaseStorageRequest\"\xe3\x01\n" +
+	"\x14LeaseStorageResponse\x12\x16\n" +
+	"\x06driver\x18\x01 \x01(\tR\x06driver\x12\x10\n" +
+	"\x03dsn\x18\x02 \x01(\tR\x03dsn\x12\x16\n" +
+	"\x06schema\x18\x03 \x01(\tR\x06schema\x12!\n" +
+	"\ftable_prefix\x18\x04 \x01(\tR\vtablePrefix\x12)\n" +
+	"\x10lease_generation\x18\x05 \x01(\x03R\x0fleaseGeneration\x12%\n" +
+	"\x0eadopted_tables\x18\x06 \x03(\tR\radoptedTables\x12\x14\n" +
+	"\x05views\x18\a \x03(\tR\x05views\"g\n" +
 	"\rInvokeRequest\x12\x1e\n" +
 	"\n" +
 	"capability\x18\x01 \x01(\fR\n" +
@@ -537,11 +679,12 @@ const file_api_packagebridge_v1_package_bridge_proto_rawDesc = "" +
 	"\toperation\x18\x02 \x01(\tR\toperation\"<\n" +
 	"\x0eWebSocketClose\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\rR\x04code\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason2\xd6\x02\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason2\xc5\x03\n" +
 	"\x13KernelPackageBridge\x12[\n" +
 	"\x06Invoke\x12'.anixops.packagebridge.v1.InvokeRequest\x1a(.anixops.packagebridge.v1.InvokeResponse\x12g\n" +
 	"\rOpenWebSocket\x12(.anixops.packagebridge.v1.WebSocketFrame\x1a(.anixops.packagebridge.v1.WebSocketFrame(\x010\x01\x12y\n" +
-	"\x10GetPackageConfig\x121.anixops.packagebridge.v1.GetPackageConfigRequest\x1a2.anixops.packagebridge.v1.GetPackageConfigResponseBIZGgithub.com/AnixOps/anix-control/v4/api/packagebridge/v1;packagebridgev1b\x06proto3"
+	"\x10GetPackageConfig\x121.anixops.packagebridge.v1.GetPackageConfigRequest\x1a2.anixops.packagebridge.v1.GetPackageConfigResponse\x12m\n" +
+	"\fLeaseStorage\x12-.anixops.packagebridge.v1.LeaseStorageRequest\x1a..anixops.packagebridge.v1.LeaseStorageResponseBIZGgithub.com/AnixOps/anix-control/v4/api/packagebridge/v1;packagebridgev1b\x06proto3"
 
 var (
 	file_api_packagebridge_v1_package_bridge_proto_rawDescOnce sync.Once
@@ -555,34 +698,38 @@ func file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP() []byte {
 	return file_api_packagebridge_v1_package_bridge_proto_rawDescData
 }
 
-var file_api_packagebridge_v1_package_bridge_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_api_packagebridge_v1_package_bridge_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_api_packagebridge_v1_package_bridge_proto_goTypes = []any{
 	(*GetPackageConfigRequest)(nil),  // 0: anixops.packagebridge.v1.GetPackageConfigRequest
 	(*GetPackageConfigResponse)(nil), // 1: anixops.packagebridge.v1.GetPackageConfigResponse
-	(*InvokeRequest)(nil),            // 2: anixops.packagebridge.v1.InvokeRequest
-	(*InvokeResponse)(nil),           // 3: anixops.packagebridge.v1.InvokeResponse
-	(*ResponseHeader)(nil),           // 4: anixops.packagebridge.v1.ResponseHeader
-	(*WebSocketFrame)(nil),           // 5: anixops.packagebridge.v1.WebSocketFrame
-	(*WebSocketOpen)(nil),            // 6: anixops.packagebridge.v1.WebSocketOpen
-	(*WebSocketClose)(nil),           // 7: anixops.packagebridge.v1.WebSocketClose
-	nil,                              // 8: anixops.packagebridge.v1.GetPackageConfigResponse.RouteModesEntry
+	(*LeaseStorageRequest)(nil),      // 2: anixops.packagebridge.v1.LeaseStorageRequest
+	(*LeaseStorageResponse)(nil),     // 3: anixops.packagebridge.v1.LeaseStorageResponse
+	(*InvokeRequest)(nil),            // 4: anixops.packagebridge.v1.InvokeRequest
+	(*InvokeResponse)(nil),           // 5: anixops.packagebridge.v1.InvokeResponse
+	(*ResponseHeader)(nil),           // 6: anixops.packagebridge.v1.ResponseHeader
+	(*WebSocketFrame)(nil),           // 7: anixops.packagebridge.v1.WebSocketFrame
+	(*WebSocketOpen)(nil),            // 8: anixops.packagebridge.v1.WebSocketOpen
+	(*WebSocketClose)(nil),           // 9: anixops.packagebridge.v1.WebSocketClose
+	nil,                              // 10: anixops.packagebridge.v1.GetPackageConfigResponse.RouteModesEntry
 }
 var file_api_packagebridge_v1_package_bridge_proto_depIdxs = []int32{
-	8, // 0: anixops.packagebridge.v1.GetPackageConfigResponse.route_modes:type_name -> anixops.packagebridge.v1.GetPackageConfigResponse.RouteModesEntry
-	4, // 1: anixops.packagebridge.v1.InvokeResponse.headers:type_name -> anixops.packagebridge.v1.ResponseHeader
-	6, // 2: anixops.packagebridge.v1.WebSocketFrame.open:type_name -> anixops.packagebridge.v1.WebSocketOpen
-	7, // 3: anixops.packagebridge.v1.WebSocketFrame.close:type_name -> anixops.packagebridge.v1.WebSocketClose
-	2, // 4: anixops.packagebridge.v1.KernelPackageBridge.Invoke:input_type -> anixops.packagebridge.v1.InvokeRequest
-	5, // 5: anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket:input_type -> anixops.packagebridge.v1.WebSocketFrame
-	0, // 6: anixops.packagebridge.v1.KernelPackageBridge.GetPackageConfig:input_type -> anixops.packagebridge.v1.GetPackageConfigRequest
-	3, // 7: anixops.packagebridge.v1.KernelPackageBridge.Invoke:output_type -> anixops.packagebridge.v1.InvokeResponse
-	5, // 8: anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket:output_type -> anixops.packagebridge.v1.WebSocketFrame
-	1, // 9: anixops.packagebridge.v1.KernelPackageBridge.GetPackageConfig:output_type -> anixops.packagebridge.v1.GetPackageConfigResponse
-	7, // [7:10] is the sub-list for method output_type
-	4, // [4:7] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	10, // 0: anixops.packagebridge.v1.GetPackageConfigResponse.route_modes:type_name -> anixops.packagebridge.v1.GetPackageConfigResponse.RouteModesEntry
+	6,  // 1: anixops.packagebridge.v1.InvokeResponse.headers:type_name -> anixops.packagebridge.v1.ResponseHeader
+	8,  // 2: anixops.packagebridge.v1.WebSocketFrame.open:type_name -> anixops.packagebridge.v1.WebSocketOpen
+	9,  // 3: anixops.packagebridge.v1.WebSocketFrame.close:type_name -> anixops.packagebridge.v1.WebSocketClose
+	4,  // 4: anixops.packagebridge.v1.KernelPackageBridge.Invoke:input_type -> anixops.packagebridge.v1.InvokeRequest
+	7,  // 5: anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket:input_type -> anixops.packagebridge.v1.WebSocketFrame
+	0,  // 6: anixops.packagebridge.v1.KernelPackageBridge.GetPackageConfig:input_type -> anixops.packagebridge.v1.GetPackageConfigRequest
+	2,  // 7: anixops.packagebridge.v1.KernelPackageBridge.LeaseStorage:input_type -> anixops.packagebridge.v1.LeaseStorageRequest
+	5,  // 8: anixops.packagebridge.v1.KernelPackageBridge.Invoke:output_type -> anixops.packagebridge.v1.InvokeResponse
+	7,  // 9: anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket:output_type -> anixops.packagebridge.v1.WebSocketFrame
+	1,  // 10: anixops.packagebridge.v1.KernelPackageBridge.GetPackageConfig:output_type -> anixops.packagebridge.v1.GetPackageConfigResponse
+	3,  // 11: anixops.packagebridge.v1.KernelPackageBridge.LeaseStorage:output_type -> anixops.packagebridge.v1.LeaseStorageResponse
+	8,  // [8:12] is the sub-list for method output_type
+	4,  // [4:8] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_api_packagebridge_v1_package_bridge_proto_init() }
@@ -590,7 +737,7 @@ func file_api_packagebridge_v1_package_bridge_proto_init() {
 	if File_api_packagebridge_v1_package_bridge_proto != nil {
 		return
 	}
-	file_api_packagebridge_v1_package_bridge_proto_msgTypes[5].OneofWrappers = []any{
+	file_api_packagebridge_v1_package_bridge_proto_msgTypes[7].OneofWrappers = []any{
 		(*WebSocketFrame_Open)(nil),
 		(*WebSocketFrame_Data)(nil),
 		(*WebSocketFrame_Close)(nil),
@@ -601,7 +748,7 @@ func file_api_packagebridge_v1_package_bridge_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_packagebridge_v1_package_bridge_proto_rawDesc), len(file_api_packagebridge_v1_package_bridge_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
