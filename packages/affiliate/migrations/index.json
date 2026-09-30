@@ -1,0 +1,6 @@
+{
+  "format": "anixops.migrations/v1",
+  "migrations": [],
+  "package_id": "affiliate",
+  "version": "__ANIXOPS_PACKAGE_VERSION__"
+}

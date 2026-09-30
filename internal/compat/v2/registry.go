@@ -228,6 +228,7 @@ func (s *verifiedRouteSource) ResolveV2Route(ctx context.Context, method, reques
 		}
 		matches = append(matches, route)
 	}
+	matches = preferMovedRouteOwners(matches)
 	if len(matches) > 0 {
 		best, ambiguous := mostSpecificRoute(matches)
 		if ambiguous {

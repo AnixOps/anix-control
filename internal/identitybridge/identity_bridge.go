@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strings"
 
+	compatv2 "github.com/AnixOps/anix-control/v4/internal/compat/v2"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
@@ -106,53 +107,31 @@ func NewAllowlist(cfg *config.Config) (*packagebridge.Allowlist, error) {
 	adminHandler := handler.NewAdminHandler()
 	mfaHandler := handler.NewMFAHandler()
 	inviteHandler := handler.NewInviteHandler()
-	systemHandler := handler.NewSystemHandler()
 	handlers := map[string]gin.HandlerFunc{
-		"identity.auth.login":                               authHandler.Login,
-		"identity.auth.register":                            authHandler.Register,
-		"identity.user.profile.get":                         userHandler.GetProfile,
-		"identity.user.dashboard.get":                       userHandler.GetDashboard,
-		"identity.user.reset.post":                          adminHandler.ResetCompatFlow,
-		"identity.admin.users.post":                         adminHandler.CreateUser,
-		"identity.admin.users.get":                          adminHandler.GetUserList,
-		"identity.admin.users.stats.get":                    adminHandler.GetUserStats,
-		"identity.admin.users.id.get":                       adminHandler.GetUser,
-		"identity.admin.users.id.put":                       adminHandler.UpdateUser,
-		"identity.admin.users.id.delete":                    adminHandler.DeleteUser,
-		"identity.admin.users.id.ban.post":                  adminHandler.BanUser,
-		"identity.admin.users.id.unban.post":                adminHandler.UnbanUser,
-		"identity.admin.users.id.reset_traffic.post":        adminHandler.ResetUserTraffic,
-		"identity.admin.users.id.reset_subscribe.post":      adminHandler.ResetUserSubscribe,
-		"identity.user.mfa.status.get":                      mfaHandler.GetStatus,
-		"identity.user.mfa.totp.setup.post":                 mfaHandler.SetupTOTP,
-		"identity.user.mfa.totp.enable.post":                mfaHandler.EnableTOTP,
-		"identity.user.mfa.disable.post":                    mfaHandler.DisableMFA,
-		"identity.user.mfa.verify.post":                     mfaHandler.VerifyMFA,
-		"identity.user.mfa.backup_codes.regenerate.post":    mfaHandler.RegenerateBackupCodes,
-		"identity.admin.mfa.config.get":                     mfaHandler.GetAdminConfig,
-		"identity.admin.mfa.config.put":                     mfaHandler.UpdateAdminConfig,
-		"identity.user.invite.get":                          inviteHandler.GetInviteInfo,
-		"identity.user.invite.generate.post":                inviteHandler.GenerateCode,
-		"identity.user.invite.commissions.get":              inviteHandler.GetCommissionRecords,
-		"identity.user.invite.withdraw.post":                inviteHandler.RequestWithdraw,
-		"identity.user.invite.withdrawals.get":              inviteHandler.GetWithdrawRecords,
-		"identity.admin.invite.config.get":                  inviteHandler.GetConfig,
-		"identity.admin.invite.config.put":                  inviteHandler.UpdateConfig,
-		"identity.admin.invite.stats.get":                   inviteHandler.GetInviteStats,
-		"identity.admin.invite.withdrawals.get":             inviteHandler.GetWithdrawals,
-		"identity.admin.invite.withdrawals.id.process.post": inviteHandler.ProcessWithdraw,
-		"identity.admin.system.configs.get":                 systemHandler.GetConfigs,
-		"identity.admin.system.configs.key.get":             systemHandler.GetConfig,
-		"identity.admin.system.configs.key.put":             systemHandler.SetConfig,
-		"identity.admin.system.configs.key.delete":          systemHandler.DeleteConfig,
-		"identity.admin.system.audit_logs.get":              systemHandler.GetAuditLogs,
-		"identity.admin.system.backup.config.get":           systemHandler.GetBackupConfig,
-		"identity.admin.system.backup.config.put":           systemHandler.UpdateBackupConfig,
-		"identity.admin.system.backup.post":                 systemHandler.CreateBackup,
-		"identity.admin.system.backups.get":                 systemHandler.ListBackups,
-		"identity.admin.system.backup.stats.get":            systemHandler.GetBackupStats,
-		"identity.admin.system.backups.id.delete":           systemHandler.DeleteBackup,
-		"identity.admin.system.backups.id.restore.post":     systemHandler.RestoreBackup,
+		"identity.auth.login":                            authHandler.Login,
+		"identity.auth.register":                         authHandler.Register,
+		"identity.user.profile.get":                      userHandler.GetProfile,
+		"identity.user.dashboard.get":                    userHandler.GetDashboard,
+		"identity.admin.users.post":                      adminHandler.CreateUser,
+		"identity.admin.users.get":                       adminHandler.GetUserList,
+		"identity.admin.users.stats.get":                 adminHandler.GetUserStats,
+		"identity.admin.users.id.get":                    adminHandler.GetUser,
+		"identity.admin.users.id.put":                    adminHandler.UpdateUser,
+		"identity.admin.users.id.delete":                 adminHandler.DeleteUser,
+		"identity.admin.users.id.ban.post":               adminHandler.BanUser,
+		"identity.admin.users.id.unban.post":             adminHandler.UnbanUser,
+		"identity.admin.users.id.reset_traffic.post":     adminHandler.ResetUserTraffic,
+		"identity.admin.users.id.reset_subscribe.post":   adminHandler.ResetUserSubscribe,
+		"identity.user.mfa.status.get":                   mfaHandler.GetStatus,
+		"identity.user.mfa.totp.setup.post":              mfaHandler.SetupTOTP,
+		"identity.user.mfa.totp.enable.post":             mfaHandler.EnableTOTP,
+		"identity.user.mfa.disable.post":                 mfaHandler.DisableMFA,
+		"identity.user.mfa.verify.post":                  mfaHandler.VerifyMFA,
+		"identity.user.mfa.backup_codes.regenerate.post": mfaHandler.RegenerateBackupCodes,
+		"identity.admin.mfa.config.get":                  mfaHandler.GetAdminConfig,
+		"identity.admin.mfa.config.put":                  mfaHandler.UpdateAdminConfig,
+		"identity.user.invite.get":                       inviteHandler.GetInviteInfo,
+		"identity.user.invite.generate.post":             inviteHandler.GenerateCode,
 	}
 	operations := make([]packagebridge.Operation, 0, len(handlers))
 	for routeID, routeHandler := range handlers {
@@ -170,7 +149,33 @@ func NewAllowlist(cfg *config.Config) (*packagebridge.Allowlist, error) {
 		PackageID: machineTelemetryPackageID, RouteID: machineTelemetryRouteID, Name: machineTelemetryRouteID,
 		Handler: machineTelemetryStatusHandler,
 	})
-	return packagebridge.NewAllowlistWithFallback(packagebridge.DefaultRouteRegistry(), operations...)
+	routes := packagebridge.DefaultRouteRegistry()
+	operations = append(operations, movedRouteOperations(routes)...)
+	return packagebridge.NewAllowlistWithFallback(routes, operations...)
+}
+
+// movedRouteOperations keeps the old route ids of routes that moved to other
+// packages callable by identity-platform releases that still declare them.
+// Each call runs the new owner's handler, resolved when the call arrives
+// because the router registers it.
+func movedRouteOperations(routes packagebridge.OperationResolver) []packagebridge.Operation {
+	var operations []packagebridge.Operation
+	for _, moved := range compatv2.MovedRoutes() {
+		if moved.FromPackage != packageID {
+			continue
+		}
+		operations = append(operations, packagebridge.Operation{
+			PackageID: packageID, RouteID: moved.FromRoute, Name: moved.FromRoute,
+			Handler: func(ctx context.Context, call packagebridge.Call) (packagebridge.Response, error) {
+				handler, ok := routes.Resolve(moved.ToPackage, moved.ToRoute, moved.ToRoute)
+				if !ok {
+					return packagebridge.Response{}, packagebridge.ErrCapabilityRejected
+				}
+				return handler(ctx, call)
+			},
+		})
+	}
+	return operations
 }
 
 func identityMigrationHandler(ctx context.Context, call packagebridge.Call) (packagebridge.Response, error) {

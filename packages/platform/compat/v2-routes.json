@@ -1,0 +1,90 @@
+{
+  "api_version": "v2",
+  "package_id": "platform",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/audit-logs",
+      "package_route": "platform.admin.system.audit_logs.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/system/backup",
+      "package_route": "platform.admin.system.backup.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/backup/config",
+      "package_route": "platform.admin.system.backup.config.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/system/backup/config",
+      "package_route": "platform.admin.system.backup.config.put",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/backup/stats",
+      "package_route": "platform.admin.system.backup.stats.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/backups",
+      "package_route": "platform.admin.system.backups.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/system/backups/:id",
+      "package_route": "platform.admin.system.backups.id.delete",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/system/backups/:id/restore",
+      "package_route": "platform.admin.system.backups.id.restore.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/configs",
+      "package_route": "platform.admin.system.configs.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/system/configs/:key",
+      "package_route": "platform.admin.system.configs.key.delete",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/system/configs/:key",
+      "package_route": "platform.admin.system.configs.key.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/system/configs/:key",
+      "package_route": "platform.admin.system.configs.key.put",
+      "envelope": "panel",
+      "transport": "http"
+    }
+  ]
+}

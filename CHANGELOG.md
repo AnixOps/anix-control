@@ -85,6 +85,22 @@
 
 ### Changed
 
+- 21 v2 routes moved out of identity-platform (N7). Paths and responses are
+  unchanged; the routes stay bridged to the same kernel handlers.
+  - **New packages.** `platform` takes system configuration, audit logs and
+    backup (12 routes, `platform.admin.system.*`). `affiliate` takes
+    commissions, withdrawals and invite statistics and configuration (8
+    routes, `affiliate.*.invite.*`).
+  - **forward.** `POST /api/v2/user/reset` (Flux reset flow) moves to
+    `forward` as `forward.user.reset.post`.
+  - identity-platform keeps 24 routes: login, register, profile, dashboard,
+    user administration, MFA, and invite codes. The builder, route catalog,
+    extraction map and route gates know the two new package ids.
+  - **Transition.** Old identity-platform releases keep working: the kernel
+    still accepts their old route ids for the moved routes and runs the new
+    owner's handler. While both packages declare a route, the new owner
+    serves it (`internal/compat/v2/moved_routes.go`). Install `platform` and
+    `affiliate`, and upgrade `forward`, before upgrading identity-platform.
 - `anix-control module ...` commands log to stderr, so their JSON output on
   stdout can be piped (for example into `jq`).
 - The AnixOps contracts and SDKs are now their own Go module,

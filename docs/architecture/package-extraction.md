@@ -44,6 +44,20 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - 11 packages (forward, knowledge, notification, order, payment, plan,
   protocol-runtime, proxy-node, subscription, ticket, wireguard) are 4-file
   placeholders (`manifest.template.json`, `compat/`, `migrations/`, `webui/`).
+- **After v4.0.0.** 21 of the 45 identity-platform routes moved to other
+  packages, still bridged:
+  - system configuration, audit and backup (12) to the new `platform`
+    package;
+  - commissions, withdrawals and invite statistics and configuration (8) to
+    the new `affiliate` package;
+  - `/user/reset` to `forward`.
+
+  They are now `registeredPackageRoute` routes. identity-platform keeps 24,
+  all still served through the identity bridge. `internal/compat/v2/moved_routes.go`
+  lists the moves: the kernel accepts the old route ids from old
+  identity-platform releases and, while both packages declare a route,
+  prefers the new owner. There are now 18 packages, 17 of them on the generic
+  host.
 - The 4.0 stage exit condition "production requests no longer reach coupled
   legacy handlers" was **not** met. Business tables (`v2_*`), handlers,
   services, and workers are still kernel-owned.
@@ -295,11 +309,13 @@ shapes; the first extraction step adopts the existing `v2_*` tables in place.
 | payment (T9) | 20 | `payment.initiate`, `payment.callback`, `payment.reconcile` | `v4_payment_record`, `_callback`, `_outbox` | Receipt stored before transition; exactly-once per gateway event; one-time secret lease |
 | subscription (T10) | 25 | `subscription.render`, `subscription.usage.read` | `v4_subscription_group`, `_template`, `_usage` | Byte-identical output incl. content type and cache headers |
 | proxy-node (T10) | 31 | `proxy-node.register`, `.config.deliver`, `.user.deliver`, `.traffic.report` | `v4_proxy_node`, `_config`, `_user`, `_usage` | Delivery becomes a versioned Agent operation; kernel gRPC transport-only |
-| forward (T11) | 79 | `forward.rule.create/update`, `forward.tunnel.assign`, `forward.observation.read`, `forward.agent.apply` | `v4_forward_rule`, `_tunnel`, `_assignment`, `_observation`, `_outbox` | Assignment + Agent op atomic, rolled back on Agent reject; 6 kernel workers move to the package |
+| forward (T11) | 80 | `forward.rule.create/update`, `forward.tunnel.assign`, `forward.observation.read`, `forward.agent.apply` | `v4_forward_rule`, `_tunnel`, `_assignment`, `_observation`, `_outbox` | Assignment + Agent op atomic, rolled back on Agent reject; 6 kernel workers move to the package |
 | wireguard (T12) | 1 | peer lifecycle, generated config | package migration (names not fixed) | Needs anix-agent revival |
 | protocol-runtime (T12) | 20 | protocol composition, runtime-adapter selection, Agent task/monitor | package migration (names not fixed) | Needs anix-agent revival |
 | machine-telemetry, nftables-forward, gost-mesh, nat-egress (T12) | 5 / 0 / 3 / 0 | keep runtime semantics; add v2 entrypoint, generation, `RuntimeStatus` reports | — | Agent-target runtime packages |
-| identity-platform | 45 | stays bridged | — | Only migrations move to the lease |
+| identity-platform | 24 | stays bridged until the identity cutover | — | Only migrations move to the lease |
+| platform | 12 | system configuration, audit, backup | — | Moved from identity-platform after v4.0.0; bridged |
+| affiliate | 8 | commissions, withdrawals, invite statistics and configuration | — | Moved from identity-platform after v4.0.0; bridged |
 
 ## 7. Rollout Record Semantics (T5)
 

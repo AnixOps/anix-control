@@ -554,6 +554,13 @@
       "package_route": "forward.user.forward.rules.post",
       "envelope": "data",
       "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/reset",
+      "package_route": "forward.user.reset.post",
+      "envelope": "panel",
+      "transport": "http"
     }
   ]
 }

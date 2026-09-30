@@ -86,7 +86,11 @@ class V4ReleaseStageContractTest(unittest.TestCase):
             )
 
             self.assertEqual(0, result.returncode, result.stderr or result.stdout)
-            self.assertEqual(16, len(list(output.glob("*.anxp"))))
+            # The builder also carries packages added after v4.0.0 (platform,
+            # affiliate); every package of the 4.0 cohort must still build.
+            built = {path.name.removesuffix("-4.0.0.anxp") for path in output.glob("*.anxp")}
+            self.assertLessEqual(set(decision.package_ids), built)
+            self.assertEqual({"platform", "affiliate"}, built - set(decision.package_ids))
 
     def test_self_test_rejects_a_v4_contract_without_identity_platform(self) -> None:
         contract = json.loads((REPO_ROOT / "config" / "scripts" / "release-stage-contract.json").read_text(encoding="utf-8"))

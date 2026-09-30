@@ -165,12 +165,22 @@ instance's generation.
   proven with `internal/tests/packagecompat`.
 - **Stay bridged for now:** profile, dashboard, and admin user list, detail
   and stats. They read the projection.
-- **Move to other packages, still bridged:**
+- **Moved to other packages, still bridged (done, step 7):**
   - system configuration, audit and backup (12 routes) → new package
     `platform`;
   - `/user/reset` → `forward`;
-  - commissions, withdrawals and invite statistics and configuration → new
-    package `affiliate`.
+  - commissions, withdrawals and invite statistics and configuration (8) →
+    new package `affiliate`.
+
+  The HTTP paths are unchanged; only the owner and route id changed
+  (`platform.*`, `affiliate.*`, `forward.user.reset.post`).
+  - **Transition.** Old identity-platform releases still declare these
+    routes. The kernel keeps their old `identity.*` ids callable, and while
+    both packages are active it resolves the route to the new owner
+    (`internal/compat/v2/moved_routes.go`).
+  - **Upgrade order.** Install `platform` and `affiliate`, and upgrade
+    `forward`, before upgrading identity-platform: the routes then keep
+    serving throughout.
 
 ## Failure behaviour
 
