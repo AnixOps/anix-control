@@ -101,6 +101,10 @@ modules: {}
 #    replicas: 2
 #    trustBundleConfigMap: anix-module-ca     # key ca.pem
 #    enrollmentSecret: anix-identity-enrollment  # key credential, reusable
+#    # identity-platform seals its signing keys with a 32-byte KEK:
+#    extraEnv:
+#      - name: ANIX_IDENTITY_KEK
+#        valueFrom: {secretKeyRef: {name: anix-identity-kek, key: kek}}
 #    resources: {}
 
 ingress:

@@ -31,6 +31,7 @@ require (
 )
 
 require (
+	github.com/AnixOps/anix-control/identity v0.0.0-00010101000000-000000000000
 	github.com/AnixOps/anix-control/sdk v0.0.0-00010101000000-000000000000
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
@@ -92,3 +93,5 @@ require (
 )
 
 replace github.com/AnixOps/anix-control/sdk => ./sdk
+
+replace github.com/AnixOps/anix-control/identity => ./identity

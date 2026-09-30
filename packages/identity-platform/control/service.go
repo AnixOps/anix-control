@@ -3,7 +3,11 @@ package main
 import (
 	"log"
 
+	"github.com/AnixOps/anix-control/identity/server"
+	"github.com/AnixOps/anix-control/identity/signingkey"
+	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
+	identityplatform "github.com/AnixOps/anix-control/v4/packages/identity-platform"
 )
 
 const identityMigrationRoute = "migration.identity-platform.001_identity_platform"
@@ -35,10 +39,17 @@ var identityRoutes = map[string]struct{}{
 	"identity.user.profile.get":                      {},
 }
 
+// identityBridge is what the identity host needs from the package bridge.
+type identityBridge interface {
+	pluginhostsdk.RouterBridge
+	packagestoresdk.Leaser
+}
+
 // newIdentityService returns the identity host's router: only the declared
 // identity routes and the 001_identity_platform migration are accepted, and
-// every route passes through the bridge (identity stays kernel-owned).
-func newIdentityService(bridge pluginhostsdk.RouterBridge, leaseID string) (*pluginhostsdk.Router, error) {
+// every route passes through the bridge. The package's own storage runs the
+// embedded migration index when the kernel starts the host.
+func newIdentityService(bridge identityBridge, leaseID string, storage packagestoresdk.Opener) (*pluginhostsdk.Router, error) {
 	return pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
 		PackageID: "identity-platform", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,
 		AllowRoute: func(routeID string) bool {
@@ -48,5 +59,40 @@ func newIdentityService(bridge pluginhostsdk.RouterBridge, leaseID string) (*plu
 		MigrationOperation: func(migrationID string) (string, bool) {
 			return identityMigrationRoute, migrationID == "001_identity_platform"
 		},
+		IndexMigration: packagestoresdk.IndexMigrator(storage, identityplatform.Migrations, identityplatform.MigrationIndex),
 	})
+}
+
+// newIdentityHost builds the identity-platform package. Without a KEK the
+// host serves the routes and IdentityService, but publishes no keys.
+func newIdentityHost(bridge identityBridge, leaseID string, getenv func(string) string, logf func(string, ...any)) (*identityHost, error) {
+	storage := packagestoresdk.SharedOpener(bridge)
+	router, err := newIdentityService(bridge, leaseID, storage)
+	if err != nil {
+		return nil, err
+	}
+	policy, err := keyPolicy(getenv)
+	if err != nil {
+		return nil, err
+	}
+	host := &identityHost{
+		Router:   router,
+		identity: &server.Server{Policy: policy, Issuer: tokenIssuer, Audience: tokenAudience},
+		logf:     logf,
+	}
+	kek, err := loadKEK(getenv)
+	if err != nil {
+		return nil, err
+	}
+	if kek == nil {
+		logf("identity signing keys: no %s; identity publishes no keys and signs no tokens", envKEK)
+		return host, nil
+	}
+	sealer, err := signingkey.NewSealer(kek)
+	if err != nil {
+		return nil, err
+	}
+	host.keys = &storedKeys{open: storage, sealer: sealer, policy: policy}
+	host.identity.Keys = host.keys
+	return host, nil
 }

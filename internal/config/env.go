@@ -175,7 +175,7 @@ func envTypeName(fieldType reflect.Type) (string, bool) {
 
 func secretConfigKey(key string) bool {
 	switch key {
-	case "password", "secret", "token", "api_token", "redis_password", "dsn", "ca_kek":
+	case "password", "secret", "token", "api_token", "redis_password", "dsn", "ca_kek", "kek":
 		return true
 	default:
 		return false

@@ -139,8 +139,27 @@ func TestHostStderrAndLocaleReachKernelLog(t *testing.T) {
 
 	require.NoError(t, manager.Start(context.Background(), ref, 7))
 
-	want := "[pkg:knowledge v:4.0.0 gen:7 stderr] " + hostTestStartedLine + " TZ=Europe/Berlin LANG=C.UTF-8"
+	want := "[pkg:knowledge v:4.0.0 gen:7 stderr] " + hostTestStartedLine + " TZ=Europe/Berlin LANG=C.UTF-8 KEK=false"
 	require.Eventually(t, func() bool { return logs.contains(want) }, supervisionTestTimeout, 5*time.Millisecond, logs.String())
+}
+
+func TestPackageEnvironmentReachesOnlyItsPackage(t *testing.T) {
+	manager, logs := newSupervisedTestManager(t)
+	manager.packageEnvironment = map[string][]string{"knowledge": {"ANIX_IDENTITY_KEK=test-kek"}}
+
+	require.NoError(t, manager.Start(context.Background(), writeHostArtifactRef(t, "knowledge", "4.0.0"), 7))
+	require.NoError(t, manager.Start(context.Background(), writeHostArtifactRef(t, "ticket", "4.0.0"), 3))
+
+	require.Eventually(t, func() bool {
+		return logs.contains("[pkg:knowledge v:4.0.0 gen:7 stderr] "+hostTestStartedLine) &&
+			logs.contains("[pkg:ticket v:4.0.0 gen:3 stderr] "+hostTestStartedLine)
+	}, supervisionTestTimeout, 5*time.Millisecond, logs.String())
+	require.True(t, logs.contains("[pkg:knowledge v:4.0.0 gen:7 stderr] "+hostTestStartedLine+" TZ="), logs.String())
+	for _, line := range strings.Split(logs.String(), "\n") {
+		if strings.Contains(line, hostTestStartedLine) {
+			require.Equal(t, strings.HasPrefix(line, "[pkg:knowledge"), strings.HasSuffix(line, "KEK=true"), line)
+		}
+	}
 }
 
 func TestHostEnvironmentPassesOnlySetLocaleVariables(t *testing.T) {

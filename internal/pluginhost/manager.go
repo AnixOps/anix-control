@@ -142,9 +142,15 @@ type ManagerConfig struct {
 	// passed to hosts as ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES and bounds the
 	// kernel client's receive size. Zero selects the 1 MiB default.
 	MaxResponseBytes int64
+	// PackageEnvironment adds "NAME=value" entries to one package's local
+	// host environment, for secrets that package alone needs (the identity
+	// key-encryption key). Hosts otherwise inherit nothing from the kernel.
+	PackageEnvironment map[string][]string
 }
 
 type Supervisor struct {
+	// packageEnvironment is ManagerConfig.PackageEnvironment.
+	packageEnvironment map[string][]string
 	// lifecycleMu serializes lifecycle transitions (Start, Drain, Stop,
 	// Shutdown, and watchdog restarts). It is always taken before mu, and it
 	// lets a watchdog restart run without holding mu so request dispatch to
@@ -239,7 +245,8 @@ func NewManager(config ManagerConfig) (*Supervisor, error) {
 		stopGrace: defaultHostStopGrace, restartBaseDelay: defaultRestartBaseDelay, restartMaxDelay: defaultRestartMaxDelay,
 		restartWindow: defaultRestartWindow, maxRestarts: defaultMaxRestarts, logf: log.Printf,
 		restartCtx: restartCtx, cancelRestart: cancelRestart, stats: make(map[string]*HostStats),
-		maxResponse: normalizeMaxResponseBytes(config.MaxResponseBytes),
+		maxResponse:        normalizeMaxResponseBytes(config.MaxResponseBytes),
+		packageEnvironment: config.PackageEnvironment,
 	}, nil
 }
 

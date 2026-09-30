@@ -840,7 +840,18 @@ func newControlPluginHostManager(cfg *config.Config) (*pluginhost.Supervisor, er
 	return pluginhost.NewManager(pluginhost.ManagerConfig{
 		RuntimeDir: cfg.Plugins.ControlHostRuntimeDir, StartupTimeout: startupTimeout,
 		BridgeFactory: bridgeFactory, MaxResponseBytes: cfg.Plugins.ControlHostResponseBodyLimit(),
+		PackageEnvironment: identityHostEnvironment(cfg),
 	})
+}
+
+// identityHostEnvironment gives the local identity-platform host its signing
+// key KEK; no other package receives it.
+func identityHostEnvironment(cfg *config.Config) map[string][]string {
+	kek := strings.TrimSpace(cfg.Identity.KEK)
+	if kek == "" {
+		return nil
+	}
+	return map[string][]string{"identity-platform": {"ANIX_IDENTITY_KEK=" + kek}}
 }
 
 func newControlPluginArtifactResolver(cfg *config.Config) (plugincontrol.ArtifactRefResolver, func(), error) {

@@ -134,6 +134,9 @@ type ManagerConfig struct {
 	// passed to hosts as ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES and bounds the
 	// kernel client's receive size. Zero selects the 1 MiB default.
 	MaxResponseBytes int64
+	// PackageEnvironment adds "NAME=value" entries to one package's local
+	// host environment.
+	PackageEnvironment map[string][]string
 }
 
 type Supervisor struct{}

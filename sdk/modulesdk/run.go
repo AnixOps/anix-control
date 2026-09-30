@@ -85,13 +85,27 @@ type Options struct {
 	PackageID      string
 	PackageVersion string
 	// Build returns the package the host serves. A package that implements
-	// Run(context.Context) is run for the life of the host, and one that
+	// Run(context.Context) is run for the life of the host, one that
 	// implements pluginhostsdk.ResumablePackage is resumed whenever it binds
-	// to a generation.
+	// to a generation, and one that implements ServiceRegistrant serves its
+	// extra gRPC services next to the host protocol (only the kernel reaches
+	// them: over the kernel-owned socket locally, with mTLS remotely).
 	Build func(Host) (pluginhostsdk.Package, error)
 	Logf  func(string, ...any)
 	// Getenv defaults to os.Getenv.
 	Getenv func(string) string
+}
+
+// ServiceRegistrant is a package that serves more gRPC services than the
+// host protocol, such as a contract the kernel calls.
+type ServiceRegistrant interface {
+	RegisterServices(grpc.ServiceRegistrar)
+}
+
+func registerPackageServices(server *grpc.Server, packageImpl pluginhostsdk.Package) {
+	if registrant, ok := packageImpl.(ServiceRegistrant); ok {
+		registrant.RegisterServices(server)
+	}
 }
 
 // Run serves the host until SIGTERM, SIGINT or ctx ends.
@@ -154,6 +168,7 @@ func runLocal(ctx context.Context, options Options) error {
 	// before it can dispatch a request to the host.
 	server := grpc.NewServer(pluginhostsdk.HostServerOptions()...)
 	pluginhostv1.RegisterControlPackageHostServer(server, host)
+	registerPackageServices(server, packageImpl)
 	// The kernel sends SIGTERM before it kills the host's process group, so
 	// finish in-flight RPCs and exit cleanly within its grace period.
 	go func() {
@@ -226,6 +241,7 @@ func runRemote(ctx context.Context, options Options) error {
 		grpc.Creds(credentials.NewTLS(source.ServerConfig(moduletls.AcceptExactly(kernel), false))))
 	server := grpc.NewServer(serverOptions...)
 	pluginhostv1.RegisterControlPackageHostServer(server, host)
+	registerPackageServices(server, packageImpl)
 
 	serving := make(chan error, 1)
 	go func() { serving <- server.Serve(listener) }()

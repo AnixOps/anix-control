@@ -375,6 +375,34 @@
     - **Discovery:** the OpenID discovery document.
   - CI and the local gates tidy, vet, test, race-test, lint, scan and
     vulnerability-check the new module.
+- Identity signing keys in the identity module (N10b, host side).
+  - **Storage.** identity-platform now declares `kernel.storage.v1`. Its
+    embedded migration index adds `002_signing_keys`, which the kernel ledger
+    runs when the host starts.
+  - **Keys.** The host keeps its Ed25519 signing keys in its own storage
+    (`identity/keystore`).
+    - They are sealed under `ANIX_IDENTITY_KEK` or `ANIX_IDENTITY_KEK_FILE`.
+    - Rotation runs in the host every minute. It takes a PostgreSQL advisory
+      lock, so replicas never race.
+    - Without a KEK the host publishes no keys and signs nothing.
+  - **Service.** The host serves `IdentityService.GetTokenKeys` next to the
+    host protocol: live keys with their states and ends, issuer
+    `anixops-identity`, audience `anix-control`. `modulesdk` gains a
+    `ServiceRegistrant` hook for this.
+  - **Local hosts.** A new `identity.kek` setting (`ANIX_CONTROL_IDENTITY_KEK`,
+    secret) is passed only to the local identity-platform host, through the
+    supervisor's per-package environment.
+  - **Deployment.**
+    - Compose: `docker-compose.modules.yml` requires a new `identity_kek`
+      secret.
+    - Helm: `modules.<id>.extraEnv` (chart 0.2.1) carries it, for example
+      from a Secret.
+    - Both module smokes set it.
+  - The kernel module now requires the identity module (`replace => ./identity`).
+  - **Upgrade note:** from this version identity-platform needs package
+    storage. On PostgreSQL the kernel's database role must be allowed to
+    create the package role (`CREATEROLE`, as for other storage packages);
+    without it the identity host fails to start after the upgrade.
 - Module SDK for network modules (N5).
   - **`pkg/modulesdk.Run`.** Runs a host as the kernel's local child process
     or, with `ANIX_MODULE_MODE=remote`, as a network module.

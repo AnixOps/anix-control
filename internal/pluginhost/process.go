@@ -42,6 +42,8 @@ type hostStartOptions struct {
 	// host as ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES and used to size the
 	// kernel client's receive window. Restarts reuse it with the options.
 	maxResponseBytes int64
+	// packageEnvironment adds entries to one package's environment.
+	packageEnvironment map[string][]string
 }
 
 func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref ArtifactRef, generation uint64, options hostStartOptions) (*hostProcess, error) {
@@ -93,6 +95,7 @@ func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref Artifac
 	command.Dir = directory.path(".")
 	command.Env = append(hostEnvironment(childRuntimePath("host.sock"), childRuntimeDirectoryPath, bridgeChild != nil),
 		hostMaxResponseBytesEnvironment+"="+strconv.FormatInt(normalizeMaxResponseBytes(options.maxResponseBytes), 10))
+	command.Env = append(command.Env, options.packageEnvironment[ref.PackageID]...)
 	command.ExtraFiles = []*os.File{directory.directory}
 	if bridgeChild != nil {
 		command.ExtraFiles = append(command.ExtraFiles, bridgeChild)

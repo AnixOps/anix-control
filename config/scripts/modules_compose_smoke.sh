@@ -73,6 +73,7 @@ install -d -m 0755 "${work}/secrets"
 openssl rand -hex 32 | sudo_install -m 0400 -o 10001 -g 10001 /dev/stdin "${work}/secrets/jwt_secret"
 printf '%s' "${DB_PASSWORD}" | sudo_install -m 0400 -o 10001 -g 10001 /dev/stdin "${work}/secrets/db_password"
 openssl rand -base64 32 | sudo_install -m 0400 -o 10001 -g 10001 /dev/stdin "${work}/secrets/module_ca_kek"
+openssl rand -base64 32 | sudo_install -m 0400 -o 65532 -g 65532 /dev/stdin "${work}/secrets/identity_kek"
 
 cd "${work}"
 export ANIX_CONTROL_IMAGE="${CONTROL_IMAGE}" ANIX_MODULE_IDENTITY_IMAGE="${IDENTITY_IMAGE}"

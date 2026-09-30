@@ -68,6 +68,9 @@ spec:
             - name: ANIX_MODULE_IMAGE_DIGEST
               value: {{ . | quote }}
             {{- end }}
+            {{- with $module.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           ports:
             - name: host
               containerPort: 7000

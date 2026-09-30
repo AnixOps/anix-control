@@ -43,6 +43,11 @@ $c run --rm -T --no-deps migrate module ca bundle \
 $c run --rm -T --no-deps migrate module token create -package identity-platform -reusable -ttl 8760h \
   | jq -r .credential | install -m 0400 -o 65532 -g 65532 /dev/stdin secrets/identity_enrollment
 
+# 4b. Identity signing key KEK: 32 random bytes that seal identity's token
+#     signing keys in its storage. Every identity replica needs the same one;
+#     back it up. Without it identity signs no tokens.
+openssl rand -base64 32 | install -m 0400 -o 65532 -g 65532 /dev/stdin secrets/identity_kek
+
 # 5. Run identity-platform remotely. The choice applies when Control next
 #    starts the package.
 $c run --rm -T --no-deps migrate module runtime set identity-platform remote

@@ -107,6 +107,7 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_GRPC_PORT` | `grpc.port` | int | `50051` |
 | `ANIX_CONTROL_GRPC_TLS_CERT_FILE` | `grpc.tls_cert_file` | string |  |
 | `ANIX_CONTROL_GRPC_TLS_KEY_FILE` | `grpc.tls_key_file` | string |  |
+| `ANIX_CONTROL_IDENTITY_KEK` | `identity.kek` | string | secret, no default |
 | `ANIX_CONTROL_JWT_EXPIRE` | `jwt.expire` | int | `86400` |
 | `ANIX_CONTROL_JWT_SECRET` | `jwt.secret` | string | secret, no default |
 | `ANIX_CONTROL_LOG_FILE_PATH` | `log.file_path` | string |  |
