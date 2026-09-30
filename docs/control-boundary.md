@@ -34,14 +34,15 @@ Before you try to start the panel, keep these rules straight:
 - local `go run` does not auto-load `.env` (template: [`.env.example`](../.env.example))
 - `config/config.yaml.forward_runtime` is the canonical runtime entry
 - `InitForwardRuntimeSystemConfig` normalizes the YAML contents and writes them into `v2_system_config`
-- current app bootstrap still expects `jwt.secret`, `app.api_token`, `admin.*`, and database/cache values in `config/config.yaml`
+- app settings (`jwt.secret`, `app.api_token`, `admin.*`, database) come from the config file or from `ANIX_CONTROL_*` environment variables; containers use only the variables and the built-in defaults ([`reference/environment-variables.md`](reference/environment-variables.md))
 
-If you use [`scripts/install.sh`](../scripts/install.sh) (release install), [`install.sh`](../install.sh), or [`panel_install.sh`](../panel_install.sh), those scripts generate `config/config.yaml` for you. If you skip the installer, copy the template and fill it manually.
+The frozen systemd installer [`scripts/install.sh`](../scripts/install.sh) (also reached through [`install.sh`](../install.sh) and [`panel_install.sh`](../panel_install.sh)) generates `config/config.yaml`. Container deployments need no config file.
 
 ## Fixed Entry Points
 
-- Release install: [`docs/guide/release-installation.md`](guide/release-installation.md)
-- Docker: [`docs/reference/quickstart.md`](reference/quickstart.md)
+- Container deployment (Compose, Helm): [`docs/DEPLOYMENT.md`](DEPLOYMENT.md)
+- Docker development stack: [`docs/reference/quickstart.md`](reference/quickstart.md)
+- Native systemd install (frozen): [`docs/guide/release-installation.md`](guide/release-installation.md)
 - Local dev: [`docs/reference/startup-config.md`](reference/startup-config.md)
 - Runtime config migration: [`docs/reference/forward-runtime-migration.md`](reference/forward-runtime-migration.md)
 - NodeX mode and runtime semantics: [`docs/reference/runtime.md`](reference/runtime.md)
@@ -56,7 +57,7 @@ Current verified deployment truth:
   - AnixOps Control API on `8080`
   - NodeX control-plane on `18081`
   - relay gost API on `18080`
-- Docker deployment docs remain important, but the full real-machine proof recorded today is not the Docker path yet
+- containers are the primary deployment path: CI runs the image (read-only, non-root, env-only config) against PostgreSQL, the production Compose file, and the Helm chart in kind; a production cutover to containers has not been recorded yet
 
 ## Runtime Modes
 

@@ -28,20 +28,31 @@ checklist.
   release bundle. Keep execution and topology feature flags disabled until
   that approval is recorded.
 
-## P0: Production Upgrade (alpha build to 4.0.x)
+## P0: Production Upgrade (alpha build to 4.0.x, onto containers)
 
 Baseline and rehearsal:
 [`docs/architecture/release-line-status.md`](docs/architecture/release-line-status.md#production-baseline-and-upgrade-rehearsal);
 procedure: [`docs/UPGRADE.md`](docs/UPGRADE.md#upgrading-from-a-v31-or-v40-alpha-build).
+The target is the container deployment (`docker-compose.prod.yml`, external
+PostgreSQL), not the systemd installer.
 
 - [ ] Production runs a `v4.0.0-alpha.6`/`alpha.7` build that can crash with
   `concurrent map writes` when forward latency probes fail concurrently.
   Until it is upgraded, set `forward_runtime.latency.concurrency: 1` in the
   production config.
-- [ ] Cut a CI-built release that contains PRs #11 to #19. The published
-  `v4.0.0` tag has none of the fixes the rehearsal needed. Then upgrade
-  production: back up, start the new build with the identity bootstrap
-  directory, install the other fifteen packages, and run the smoke checks.
+- [ ] Cut a CI-built release that contains PRs #11 to #19 and the container
+  work (#21 to #29). The published `v4.0.0` tag has none of the fixes the
+  rehearsal needed and no GHCR image. Then move production onto containers:
+  back up, point `control.env` at the existing PostgreSQL (on the host:
+  `host.docker.internal`, with `listen_addresses`/`pg_hba.conf` allowing the
+  Docker bridge), run `docker compose -f docker-compose.prod.yml up -d` with
+  the release digest (the image imports the identity package), install the
+  other fifteen packages, and run the smoke checks. Stop the old service first;
+  never run both against one database.
+- [ ] Make the `ghcr.io/anixops/anix-control` package public (or grant pull
+  access) after the first image push; GHCR creates it private.
+- [ ] Optional before cutover: install Docker on the rehearsal host and repeat
+  the upgrade rehearsal with the Compose file against a production copy.
 - [ ] Correct the stale `app.version: 2.0.1` in the production config during
   that upgrade.
 
@@ -173,6 +184,25 @@ deliberately in a later PR.
   prober) cannot be switched off by configuration. Staging and upgrade
   rehearsals on production copies need network namespace isolation
   (`docs/UPGRADE.md`). Add a config switch for outbound background work.
+
+## P1: Multiple Control Replicas (HA)
+
+Design and blocker list:
+[`docs/architecture/container-deployment.md`](docs/architecture/container-deployment.md#still-single-instance-next-round-ha).
+Singleton workers are already lease-guarded; the Helm chart refuses
+`replicaCount > 1` until these land:
+
+- [ ] Start enabled package hosts on every replica (reconcile per process),
+  keeping lifecycle operations durable and single-claimed.
+- [ ] Record agent gRPC stream and agent WebSocket ownership per replica and
+  forward admin actions to the owning replica.
+- [ ] Record the dispatching replica on node operations; `recoverOnce` must only
+  recover operations of replicas whose heartbeat expired.
+- [ ] Share online-user state (UniProxy alive lists, device limits), login and
+  registration rate limits, and per-IP limiters across replicas.
+- [ ] Move backups to object storage with `pg_dump`.
+- [ ] Then allow `replicaCount > 1` with a RollingUpdate strategy and a
+  PodDisruptionBudget, and add a multi-replica kind smoke test.
 
 ## Later (Not This Phase)
 

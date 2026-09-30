@@ -71,6 +71,9 @@ usage() {
 Usage:
   install.sh [install|update|rollback|preflight|migrate] [options]
 
+This native systemd installer is frozen: it keeps working but gets no new
+features. Containers are the primary deployment (docs/DEPLOYMENT.md).
+
 Options:
   --version <tag>          Release tag, for example v4.0.0. Defaults to GitHub's latest stable release.
   --admin-email <email>    Bootstrap admin email on a fresh installation.
@@ -833,6 +836,7 @@ main() {
     rollback_migration
     exit 0
   fi
+  warn "The systemd install path is frozen; containers are the primary deployment: https://github.com/AnixOps/anix-control/blob/go_dev/docs/DEPLOYMENT.md"
   detect_legacy_layout
   validate_install_dir
   install_base_tools
