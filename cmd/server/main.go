@@ -31,6 +31,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/health"
 	"github.com/AnixOps/anix-control/v4/internal/identitybridge"
+	"github.com/AnixOps/anix-control/v4/internal/lease"
 	"github.com/AnixOps/anix-control/v4/internal/logging"
 	_ "github.com/AnixOps/anix-control/v4/internal/payment/gateways" // register payment gateway plugins
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
@@ -572,44 +573,20 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		log.Printf("Control plugin host supervision enabled (poll interval %s, reconciliation operations %d)", intervals.control, queued)
 	}
 
-	rt.workers.Go("forward runtime job executor", func(ctx context.Context) {
-		service.NewPanelForwardRuntimeJobExecutor(database.Get()).Start(ctx)
-	})
-
-	if shouldStartForwardAgentBridgeWorker(cfg) {
-		rt.workers.Go("forward agent bridge worker", func(ctx context.Context) {
-			service.NewForwardAgentBridgeWorker(database.Get()).Start(ctx)
-		})
-	} else {
+	// Periodic resets, stats collection, latency probing and the forward job
+	// executors must run in exactly one Control process per database. They
+	// run only while this process holds the singleton-worker lease; another
+	// process (a rolling update, or a second replica) takes over when this
+	// one stops renewing it.
+	bridgeEnabled := shouldStartForwardAgentBridgeWorker(cfg)
+	if !bridgeEnabled {
 		log.Println("Forward clean_agent legacy bridge worker disabled")
 	}
-
-	rt.workers.Go("forward flow reset worker", func(ctx context.Context) {
-		worker := service.NewForwardFlowResetWorker(database.Get())
-		if err := worker.RunOnce(time.Now()); err != nil {
-			log.Printf("Initial forward flow reset run failed: %v", err)
-		}
-		worker.Start(ctx)
-	})
-
-	rt.workers.Go("node monthly reset worker", func(ctx context.Context) {
-		worker := service.NewNodeMonthlyResetWorker(database.Get())
-		if err := worker.RunOnce(time.Now()); err != nil {
-			log.Printf("Initial node monthly reset run failed: %v", err)
-		}
-		worker.Start(ctx)
-	})
-
-	rt.workers.Go("forward gost stats worker", func(ctx context.Context) {
-		service.NewForwardGostStatsWorker(database.Get()).Start(ctx)
-	})
-
-	rt.workers.Go("forward ansible stats worker", func(ctx context.Context) {
-		service.NewForwardAnsibleStatsWorker(database.Get()).Start(ctx)
-	})
-
-	rt.workers.Go("forward latency prober", func(ctx context.Context) {
-		service.NewForwardLatencyProber(database.Get()).Start(ctx)
+	elector := &lease.Elector{DB: database.Get(), Name: singletonWorkerLease, Holder: lease.InstanceID(), TTL: singletonWorkerLeaseTTL}
+	rt.workers.Go("singleton worker lease", func(ctx context.Context) {
+		elector.Run(ctx, func(ctx context.Context) {
+			runSingletonWorkers(ctx, bridgeEnabled)
+		})
 	})
 
 	// 设置Gin模式

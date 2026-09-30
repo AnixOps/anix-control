@@ -9,6 +9,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/lease"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"gorm.io/gorm"
@@ -127,6 +128,7 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config, env string) erro
 		{"WireGuard peer schema", service.EnsureWireGuardPeerSchema},
 		{"node runtime health schema", service.EnsureNodeRuntimeHealthSchema},
 		{"control kernel schema", service.EnsureKernelSchema},
+		{"worker lease schema", lease.EnsureSchema},
 	} {
 		if err := step.run(db); err != nil {
 			return fmt.Errorf("ensure %s: %w", step.name, err)
