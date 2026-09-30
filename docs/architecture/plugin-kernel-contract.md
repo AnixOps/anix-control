@@ -261,7 +261,39 @@ cannot be created, startup continues and leases that grant it fail.
     `schema_migrations`, and `__PKG_PREFIX__` in scripts expands to the same
     prefix.
   - An applied step whose digest changed is an error.
-  - The run reports a digest of the applied state.
+  - The run reports `StepsDigest`: the SHA-256 over `id:sha256\n` lines of
+    the index's steps, sorted by id.
+- `IndexMigrator` plugs this into `pluginhostsdk.RouterConfig.IndexMigration`.
+
+### Package Migrations
+
+When a Control host starts (`plugin.install`, `enable`, `update` or
+`rollback`) for a release that declares `kernel.storage.v1` and lists
+migration steps, the lifecycle dispatcher runs the release's migration index
+through the migration ledger before the operation succeeds:
+
+1. **Begin.** `BeginPackageMigration` records one run per package lifecycle
+   generation with the migration id `index.<first 32 hex of the index
+   digest>`.
+   - A run that upgrades from an earlier validated generation records the
+     backup reference `operator-managed:<package>:<generation>:<unix time>`:
+     operators take the database backup before an upgrade, as `UPGRADE.md`
+     requires.
+2. **Migrate.** `MigratePackageHost` sends that id to the host. The host
+   applies its embedded index and reports `StepsDigest`.
+3. **Check.** The kernel compares the reported digest with the digest of the
+   verified index in the artifact, whose per-step SHA-256 values were checked
+   when the artifact was materialized. This proves that the scripts embedded
+   in the host binary are the signed ones.
+4. **Validate.** `RecordPackageValidation` closes the run.
+
+If any step fails, the host is stopped and the lifecycle operation fails. A
+Control restart re-runs `plugin.enable` for the same generation; the recorded
+run is confirmed and nothing is applied twice. A failed run is not retried
+within its generation; a new lifecycle operation gets a new generation. The
+ledger's route cohorts are not used: traffic moves with route modes. Releases
+without `kernel.storage.v1` are unaffected. identity-platform keeps its
+kernel-side migration until it moves to a storage lease.
 
 ## Scoped Authorization
 

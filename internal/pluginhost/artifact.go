@@ -31,6 +31,10 @@ type ArtifactRef struct {
 	// index of the release; Migrations is empty when it declares no steps.
 	MigrationIndexSHA256 string
 	Migrations           []MigrationStep
+	// Storage is set when the signed manifest declares kernel.storage.v1.
+	// Only such releases run their migration index through the kernel's
+	// migration ledger when the host starts.
+	Storage bool
 }
 
 // MigrationStep is one verified step of a package migration index.

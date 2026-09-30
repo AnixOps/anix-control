@@ -102,8 +102,9 @@ legacy route.
 Status (2026-09-30): implemented. `internal/packagestore`, `LeaseStorage`,
 `pkg/packagestoresdk`, `v4_kernel_package_storage`, `kapi_user_directory_v1`
 and the CI job `package-storage-postgres` are in place. Column-level grants
-are not implemented yet. The migration runner is not yet wired into host
-start (M3 PR 5).
+are not implemented yet. Package migrations of storage packages run
+through the ledger when their host starts (`plugin-kernel-contract.md`,
+"Package Migrations").
 
 ### 3.2 Per-route modes
 
@@ -340,12 +341,15 @@ Semantics to keep when wiring:
 
 | Gap | Where |
 |-----|-------|
-| Package migrations never run in production (runner unwired) | `internal/service/plugin_rollout.go`, `internal/plugincontrol/registry.go` (`startResolvedHost`) |
 | Package execution off in the production template | `plugins.control_execution_enabled: false` in `config/config.prod.yaml` |
 
 Fixed in M0/M1 (2026-09-29): the route gates now run on every PR (PR #11), and
 the kernel workers share a cancellable root context with ordered shutdown
 (PR #13).
+
+Fixed in M3 (2026-09-30): package migrations run through the ledger when a
+storage package's host starts (`internal/service/package_host_migration.go`,
+`startResolvedHost`).
 
 ## 10. Roadmap
 

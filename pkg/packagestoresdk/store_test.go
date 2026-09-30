@@ -2,6 +2,8 @@ package packagestoresdk
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -43,12 +45,12 @@ func TestRunEmbeddedMigrationsOnSQLiteAppliesEachStepOnce(t *testing.T) {
 	result, err := RunEmbeddedMigrations(ctx, store, fsys, "migrations/index.json")
 	require.NoError(t, err)
 	require.Equal(t, []string{"001_notes", "002_seed"}, result.Applied)
-	require.Len(t, result.StateDigest, 64)
+	require.Len(t, result.StepsDigest, 64)
 
 	again, err := RunEmbeddedMigrations(ctx, store, fsys, "migrations/index.json")
 	require.NoError(t, err)
 	require.Empty(t, again.Applied)
-	require.Equal(t, result.StateDigest, again.StateDigest)
+	require.Equal(t, result.StepsDigest, again.StepsDigest)
 	var count int64
 	require.NoError(t, store.DB.Table(store.Table("notes")).Count(&count).Error)
 	require.EqualValues(t, 1, count)
@@ -111,4 +113,9 @@ func TestOpenRejectsBadLeases(t *testing.T) {
 	}))
 	require.ErrorIs(t, err, refused)
 	require.Panics(t, func() { (&Store{}).Table("Bad-Name") })
+}
+
+func TestStepsDigestIsOrderIndependentAndLowercase(t *testing.T) {
+	want := sha256.Sum256([]byte("001_a:aa\n002_b:bb\n"))
+	require.Equal(t, hex.EncodeToString(want[:]), StepsDigest([]MigrationStep{{ID: "002_b", SHA256: "BB"}, {ID: "001_a", SHA256: "aa"}}))
 }

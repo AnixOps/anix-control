@@ -564,7 +564,8 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		rt.controlPluginArtifactCleanup = cleanupArtifacts
 		worker, err := plugincontrol.NewOperationWorker(
 			database.Get(),
-			plugincontrol.NewHostLifecycleDispatcher(hosts, artifacts),
+			plugincontrol.NewHostLifecycleDispatcher(hosts, artifacts).
+				WithMigrator(service.PackageHostMigrator{DB: database.Get(), Hosts: hosts}),
 		)
 		if err != nil {
 			return fmt.Errorf("initialize Control plugin lifecycle worker: %w", err)

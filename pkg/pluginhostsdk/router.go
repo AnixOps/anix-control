@@ -30,6 +30,10 @@ const (
 	defaultShadowConcurrency  = 4
 )
 
+// IndexMigrationPrefix starts the id of a migration run that applies a
+// package's whole migration index.
+const IndexMigrationPrefix = "index."
+
 // Principal is the kernel-authenticated caller of a v2 route.
 type Principal struct {
 	ActorID   uint   `json:"actor_id"`
@@ -95,6 +99,11 @@ type RouterConfig struct {
 	// MigrationOperation maps a migration id to its bridge operation; nil uses
 	// "migration.<package>.<id>". It returns false for unsupported migrations.
 	MigrationOperation func(migrationID string) (string, bool)
+	// IndexMigration runs the package's own migration index when the kernel
+	// sends a migration id with IndexMigrationPrefix, which it does only for
+	// packages that declare kernel.storage.v1. It needs no bridge capability;
+	// packagestoresdk.IndexMigrator implements it.
+	IndexMigration func(ctx context.Context, request MigrationRequest) (MigrationResponse, error)
 	// Compare decides whether a shadow run matched; nil compares the status
 	// code and v2compat-normalized bodies.
 	Compare func(legacy, native NativeResponse) bool
@@ -384,6 +393,12 @@ func (r *Router) OpenWebSocket(ctx context.Context, open WebSocketOpen, stream W
 func (r *Router) Migrate(ctx context.Context, request MigrationRequest) (MigrationResponse, error) {
 	if r == nil || r.draining.Load() {
 		return MigrationResponse{}, errors.New("package is unavailable")
+	}
+	if strings.HasPrefix(request.MigrationID, IndexMigrationPrefix) {
+		if r.config.IndexMigration == nil {
+			return MigrationResponse{}, errors.New("package has no migration index runner")
+		}
+		return r.config.IndexMigration(ctx, request)
 	}
 	if strings.TrimSpace(request.MigrationID) == "" || len(request.BridgeCapability) != 32 {
 		return MigrationResponse{}, errors.New("package migration bridge capability is required")

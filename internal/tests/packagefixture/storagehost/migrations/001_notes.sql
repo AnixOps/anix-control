@@ -1,0 +1,4 @@
+CREATE TABLE __PKG_PREFIX__notes (
+  id INTEGER PRIMARY KEY,
+  body TEXT NOT NULL
+);

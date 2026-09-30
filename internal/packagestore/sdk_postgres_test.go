@@ -43,7 +43,7 @@ func TestPostgresPackageStoreSDKRunsMigrationsInThePackageSchema(t *testing.T) {
 	again, err := packagestoresdk.RunEmbeddedMigrations(ctx, pkg, fsys, "migrations/index.json")
 	require.NoError(t, err)
 	require.Empty(t, again.Applied)
-	require.Equal(t, result.StateDigest, again.StateDigest)
+	require.Equal(t, result.StepsDigest, again.StepsDigest)
 
 	var tables []string
 	require.NoError(t, kernel.Raw("SELECT tablename FROM pg_tables WHERE schemaname = ? ORDER BY tablename", SchemaName(packageID)).Scan(&tables).Error)

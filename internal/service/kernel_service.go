@@ -1747,6 +1747,7 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 
 		MigrationIndexSHA256: strings.ToLower(manifest.Migrations.SHA256),
 		Migrations:           migrations,
+		Storage:              StorageGrants(*manifest).Storage,
 	}
 	cleanup = false
 	return ref, nil
