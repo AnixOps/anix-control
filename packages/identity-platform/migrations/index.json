@@ -8,6 +8,10 @@
     {
       "id": "002_signing_keys",
       "path": "migrations/002_signing_keys.sql"
+    },
+    {
+      "id": "003_accounts",
+      "path": "migrations/003_accounts.sql"
     }
   ],
   "package_id": "identity-platform",

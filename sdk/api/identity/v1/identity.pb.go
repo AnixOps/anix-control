@@ -725,8 +725,11 @@ type ImportedMFA struct {
 	TotpSecret       string                 `protobuf:"bytes,2,opt,name=totp_secret,json=totpSecret,proto3" json:"totp_secret,omitempty"`
 	BackupCodeHashes []string               `protobuf:"bytes,3,rep,name=backup_code_hashes,json=backupCodeHashes,proto3" json:"backup_code_hashes,omitempty"`
 	EnabledAtUnix    int64                  `protobuf:"varint,4,opt,name=enabled_at_unix,json=enabledAtUnix,proto3" json:"enabled_at_unix,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// last_used_unix and last_method describe the last successful check.
+	LastUsedUnix  int64  `protobuf:"varint,5,opt,name=last_used_unix,json=lastUsedUnix,proto3" json:"last_used_unix,omitempty"`
+	LastMethod    string `protobuf:"bytes,6,opt,name=last_method,json=lastMethod,proto3" json:"last_method,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ImportedMFA) Reset() {
@@ -785,6 +788,20 @@ func (x *ImportedMFA) GetEnabledAtUnix() int64 {
 		return x.EnabledAtUnix
 	}
 	return 0
+}
+
+func (x *ImportedMFA) GetLastUsedUnix() int64 {
+	if x != nil {
+		return x.LastUsedUnix
+	}
+	return 0
+}
+
+func (x *ImportedMFA) GetLastMethod() string {
+	if x != nil {
+		return x.LastMethod
+	}
+	return ""
 }
 
 type ImportedInviteCode struct {
@@ -1021,13 +1038,16 @@ const file_api_identity_v1_identity_proto_rawDesc = "" +
 	"\rpassword_algo\x18\x03 \x01(\tR\fpasswordAlgo\x12#\n" +
 	"\rpassword_salt\x18\x04 \x01(\tR\fpasswordSalt\x122\n" +
 	"\x03mfa\x18\x05 \x01(\v2 .anixops.identity.v1.ImportedMFAR\x03mfa\x12$\n" +
-	"\x0einvite_user_id\x18\x06 \x01(\x04R\finviteUserId\"\x9e\x01\n" +
+	"\x0einvite_user_id\x18\x06 \x01(\x04R\finviteUserId\"\xe5\x01\n" +
 	"\vImportedMFA\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1f\n" +
 	"\vtotp_secret\x18\x02 \x01(\tR\n" +
 	"totpSecret\x12,\n" +
 	"\x12backup_code_hashes\x18\x03 \x03(\tR\x10backupCodeHashes\x12&\n" +
-	"\x0fenabled_at_unix\x18\x04 \x01(\x03R\renabledAtUnix\"}\n" +
+	"\x0fenabled_at_unix\x18\x04 \x01(\x03R\renabledAtUnix\x12$\n" +
+	"\x0elast_used_unix\x18\x05 \x01(\x03R\flastUsedUnix\x12\x1f\n" +
+	"\vlast_method\x18\x06 \x01(\tR\n" +
+	"lastMethod\"}\n" +
 	"\x12ImportedInviteCode\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x12\n" +

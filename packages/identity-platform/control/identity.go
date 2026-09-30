@@ -8,7 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AnixOps/anix-control/identity/account"
 	"github.com/AnixOps/anix-control/identity/keystore"
+	"github.com/AnixOps/anix-control/identity/secretbox"
 	"github.com/AnixOps/anix-control/identity/server"
 	"github.com/AnixOps/anix-control/identity/signingkey"
 	identityv1 "github.com/AnixOps/anix-control/sdk/api/identity/v1"
@@ -162,4 +164,57 @@ func (k *storedKeys) maintain(ctx context.Context, interval time.Duration, logf 
 		case <-time.After(interval):
 		}
 	}
+}
+
+// storedAccounts opens the account store in the package storage on first
+// use.
+type storedAccounts struct {
+	open packagestoresdk.Opener
+	box  *secretbox.Box
+
+	mu    sync.Mutex
+	store *account.Store
+}
+
+func (a *storedAccounts) accountStore(ctx context.Context) (*account.Store, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.store != nil {
+		return a.store, nil
+	}
+	storage, err := a.open(ctx)
+	if err != nil {
+		return nil, err
+	}
+	a.store = &account.Store{DB: storage.DB, Secrets: a.box, Tables: account.Tables{
+		Account: storage.Table("account"), MFA: storage.Table("mfa"), ImportRun: storage.Table("import_run"),
+	}}
+	return a.store, nil
+}
+
+// Import stores an import batch of Control's legacy accounts.
+func (a *storedAccounts) Import(ctx context.Context, importID, checkpoint string, accounts []account.Imported) (account.ImportResult, error) {
+	store, err := a.accountStore(ctx)
+	if err != nil {
+		return account.ImportResult{}, err
+	}
+	return store.Import(ctx, importID, checkpoint, accounts)
+}
+
+// Get returns accounts by user id.
+func (a *storedAccounts) Get(ctx context.Context, userIDs []uint64) ([]account.Account, error) {
+	store, err := a.accountStore(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return store.Get(ctx, userIDs)
+}
+
+// ChangedAfter returns accounts changed after a version.
+func (a *storedAccounts) ChangedAfter(ctx context.Context, version uint64, limit int) ([]account.Account, error) {
+	store, err := a.accountStore(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return store.ChangedAfter(ctx, version, limit)
 }

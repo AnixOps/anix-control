@@ -102,6 +102,9 @@ message ImportedMFA {
   string totp_secret = 2;
   repeated string backup_code_hashes = 3;
   int64 enabled_at_unix = 4;
+  // last_used_unix and last_method describe the last successful check.
+  int64 last_used_unix = 5;
+  string last_method = 6;
 }
 
 message ImportedInviteCode {

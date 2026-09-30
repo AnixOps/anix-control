@@ -63,5 +63,5 @@ func TestWithoutKeysNothingIsPublished(t *testing.T) {
 	_, err := (&Server{}).GetTokenKeys(context.Background(), &identityv1.GetTokenKeysRequest{})
 	require.Equal(t, codes.FailedPrecondition, status.Code(err))
 	_, err = (&Server{}).BatchGetAccounts(context.Background(), &identityv1.BatchGetAccountsRequest{})
-	require.Equal(t, codes.Unimplemented, status.Code(err), "accounts arrive with the import")
+	require.Equal(t, codes.FailedPrecondition, status.Code(err), "no accounts without a KEK")
 }

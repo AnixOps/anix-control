@@ -208,7 +208,25 @@ instance's generation.
       `v4_kernel_identity_token_key`, and `internal/authn` accepts EdDSA
       tokens for `aud=anix-control` beside the HS256 ones, through the same
       revocation store; `GET /api/v4/identity/jwks.json` publishes them);
-    - 10c: the kernel-led account import.
+    - 10c: the kernel-led account import (in place):
+      - **Trigger.** `POST /api/v4/kernel/identity/import` (`{"delta": true}`
+        for a delta), followed with `GET /api/v4/kernel/identity`.
+      - **Batches.** The kernel reads users by id and streams each batch to
+        `ImportAccounts`, which commits it in one transaction.
+        It checkpoints after each batch, so an interrupted import resumes.
+      - **Links.** Legacy users get a deterministic account UUID and a link
+        row.
+      - **Credentials.** Password hashes travel with their algorithm and
+        salt. TOTP seeds are sealed under the KEK. Backup codes go as SHA-256
+        digests, and identity keeps only KEK-keyed hashes of those.
+      - **Delta.** A delta sends what changed since the previous import
+        started.
+      - **Authority.** The state moves from `kernel` to `importing`. Imports
+        are refused once identity is authoritative.
+      - **Invite codes stay with Control.** They carry subscriber and
+        commission data. Registration will validate and consume a code
+        through `CreateSubscriber`, so `/user/invite` and
+        `/user/invite/generate` leave group A.
 11. Group A native handlers with parity tests.
 12. Cutover, revocation push and finalize.
 13. End-to-end acceptance on Compose and kind.
