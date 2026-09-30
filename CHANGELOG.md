@@ -85,6 +85,18 @@
 
 ### Changed
 
+- CI has a fast lane for pull requests and a full lane for everything else
+  (`config/scripts/classify_changes.py`).
+  - **Fast lane.** The required checks, plus the heavy jobs whose paths
+    changed.
+    - Docker and Kubernetes smokes, the PostgreSQL jobs, and the forward,
+      Agent and package jobs each run only for their areas.
+    - The race detector and benchmarks run only in the full lane.
+    - Backend tests no longer wait for the quality gates.
+    - Documentation-only PRs skip the Go jobs.
+  - **Full lane.** Runs on `go_dev` pushes, tags, a nightly schedule, manual
+    runs, the `ci:full` label, and workflow or Go dependency changes.
+
 - Releases follow an individual-developer flow (`docs/RELEASING.md`).
   - **Cutting a release.** `config/scripts/prepare_release.py <version>`
     sets every declared version and dates the CHANGELOG. Merge that through
