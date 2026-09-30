@@ -32,7 +32,6 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/health"
 	"github.com/AnixOps/anix-control/v4/internal/identitybridge"
 	"github.com/AnixOps/anix-control/v4/internal/logging"
-	"github.com/AnixOps/anix-control/v4/internal/model"
 	_ "github.com/AnixOps/anix-control/v4/internal/payment/gateways" // register payment gateway plugins
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
@@ -95,6 +94,18 @@ func init() {
 }
 
 const defaultConfigPath = "config/config.yaml"
+
+// takeMigrateCommand removes a leading "migrate" argument and reports whether
+// it was present. `anix-control migrate [flags]` prepares the database schema
+// and seed data, then exits: the one-shot step for a Compose service or a
+// Kubernetes Job before the server starts.
+func takeMigrateCommand() bool {
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		os.Args = append(os.Args[:1], os.Args[2:]...)
+		return true
+	}
+	return false
+}
 
 // selectConfigPath decides which config file to load. An explicit -config or
 // ANIX_CONTROL_CONFIG must exist. Without either, the default
@@ -324,6 +335,7 @@ func main() {
 // run starts Control and blocks until shutdown. It returns the process exit
 // code so that deferred cleanup (cache, database) runs before os.Exit.
 func run() int {
+	migrateOnly := takeMigrateCommand()
 	flag.Parse()
 	if printEnv {
 		if err := writeEnvTable(os.Stdout); err != nil {
@@ -352,8 +364,10 @@ func run() int {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	if err := cfg.ValidateForServer(); err != nil {
-		log.Fatalf("Invalid config: %v", err)
+	if !migrateOnly {
+		if err := cfg.ValidateForServer(); err != nil {
+			log.Fatalf("Invalid config: %v", err)
+		}
 	}
 	logging.Setup(cfg.Log)
 
@@ -399,149 +413,12 @@ func run() int {
 		}
 	}()
 
-	// 自动迁移数据库：仅在 development 或 test 环境下运行，避免在生产环境自动修改数据库结构
-	if env == "development" || env == "test" {
-		if err := database.AutoMigrate(
-			&model.User{},
-			&model.Plan{},
-			&model.Order{},
-			&model.Payment{},
-			&model.PaymentLog{},
-			&model.ServerVMess{},
-			&model.ServerVLESS{},
-			&model.ServerTrojan{},
-			&model.ServerShadowsocks{},
-			// 新版节点管理
-			&model.Node{},
-			&model.NodeProtocol{},
-			&model.WireGuardPeer{},
-			&model.NodeGroup{},
-			&model.AuthorizedKey{},
-			// 流量与统计日志
-			&model.TrafficLog{},
-			&model.OnlineLog{},
-			&model.StatUser{},
-			&model.StatServer{},
-			&model.NodeLog{},
-			// 订阅分组和模板
-			&model.SubscriptionGroup{},
-			&model.SubscriptionTemplate{},
-			&model.UserSubscriptionGroup{},
-			&model.PlanSubscriptionGroup{},
-			// 事件与新模型
-			&model.Event{},
-			// 工单系统
-			&model.Ticket{},
-			&model.TicketMessage{},
-			// 优惠券系统
-			&model.Coupon{},
-			&model.CouponUsage{},
-			// 知识库
-			&model.Knowledge{},
-			// 流量转发系统
-			&model.ForwardNode{},
-			&model.ForwardRule{},
-			&model.ForwardRoute{},
-			&model.ForwardLog{},
-			&model.ForwardStats{},
-			&model.ForwardTunnel{},
-			&model.ForwardUserTunnel{},
-			&model.Forward{},
-			&model.ForwardPortBinding{},
-			&model.SpeedLimit{},
-			&model.ForwardRuntimeJob{},
-			&model.ForwardTrafficCursor{},
-			&model.ForwardCleanAgent{},
-			&model.ForwardAgentBridgeTask{},
-			&model.ForwardLatencyBucket{},
-			// 支付网关
-			&model.PaymentGateway{},
-			&model.PaymentRecord{},
-			// Telegram Bot
-			&model.TelegramBot{},
-			&model.TelegramUser{},
-			&model.TelegramChat{},
-			&model.TelegramCommand{},
-			&model.TelegramNotification{},
-			// 通知系统
-			&model.NotificationTemplate{},
-			&model.NotificationLog{},
-			// MFA多因素认证
-			&model.UserMFA{},
-			&model.MFALoginAttempt{},
-			// 邀请返利系统
-			&model.UserLevel{},
-			&model.InviteCode{},
-			&model.CommissionRecord{},
-			&model.CommissionWithdraw{},
-			&model.InviteConfig{},
-			// 系统管理
-			&model.LoadBalancer{},
-			&model.SystemConfig{},
-			&model.BackupRecord{},
-			&model.BackupConfig{},
-			&model.OperationLog{},
-			&model.AuditLog{},
-		); err != nil {
-			log.Fatalf("Failed to migrate database: %v", err)
-		}
-	} else {
-		log.Println("Production mode: skipping AutoMigrate. Use explicit migrations in production.")
+	if err := bootstrapDatabase(context.Background(), cfg, env); err != nil {
+		log.Fatalf("Failed to prepare database: %v", err)
 	}
-	if err := service.EnsureWireGuardPeerSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure WireGuard peer schema: %v", err)
-	}
-	if err := service.EnsureNodeRuntimeHealthSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure node runtime health schema: %v", err)
-	}
-	if err := service.EnsureKernelSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure control kernel schema: %v", err)
-	}
-	if err := ensureConfiguredPluginTrustRoot(database.Get(), cfg.Plugins.OfficialPublicKey); err != nil {
-		log.Fatalf("Failed to apply configured plugin trust root: %v", err)
-	}
-	if err := service.BootstrapIdentityPlatformPackage(
-		database.Get(), cfg.Plugins.OfficialPublicKey, cfg.Plugins.IdentityBootstrapPackageDir,
-	); err != nil {
-		log.Fatalf("Failed to bootstrap identity platform package: %v", err)
-	}
-
-	// 初始化管理员账号
-	service.InitAdmin(cfg)
-
-	// 初始化默认订阅分组
-	service.InitSubscriptionDefaults()
-
-	// 初始化默认套餐
-	service.InitDefaultPlan()
-
-	// 从环境变量初始化默认授权密钥
-	service.InitDefaultAuthKeyFromEnv()
-
-	// 初始化缓存 (默认使用内存缓存)
-	if err := service.InitForwardRuntimeSystemConfig(database.Get()); err != nil {
-		log.Fatalf("Failed to initialize forward runtime config: %v", err)
-	}
-	if err := service.EnsureObservabilitySchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure observability schema: %v", err)
-	}
-	if err := service.EnsureStatsSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure stats schema: %v", err)
-	}
-	if err := service.EnsureForwardBridgeSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure forward bridge schema: %v", err)
-	}
-	if err := service.EnsureForwardRuntimeJobSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure forward runtime job schema: %v", err)
-	}
-	if err := service.EnsureForwardPortBindingSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure forward port binding schema: %v", err)
-	}
-	if err := service.EnsureForwardNodeMetricsPortColumn(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure forward node metrics_port column: %v", err)
-	}
-	if err := service.EnsureAgentDiagnosticTaskSchema(database.Get()); err != nil {
-		log.Fatalf("Failed to ensure agent diagnostic task schema: %v", err)
+	if migrateOnly {
+		log.Println("Database schema and seed data are up to date; migrate finished.")
+		return 0
 	}
 	cache.InitMemory()
 	defer cache.CloseMemory()
@@ -969,6 +846,7 @@ func newControlPluginArtifactResolver(cfg *config.Config) (plugincontrol.Artifac
 		if err != nil {
 			return nil, nil, err
 		}
+		removeStaleArtifactCopies(root)
 	}
 	databaseHandle := database.Get()
 	resolver := func(ctx context.Context, packageID, version string) (pluginhost.ArtifactRef, error) {
@@ -1003,6 +881,32 @@ func secureControlArtifactRoot(configuredRoot string) (string, error) {
 		return "", fmt.Errorf("secure plugin artifact directory: %w", err)
 	}
 	return root, nil
+}
+
+// removeStaleArtifactCopies deletes package copies a previous process left in
+// a configured artifact directory. Artifacts are materialized again from the
+// database on demand, and no host runs yet when this is called, so the
+// directory must not be shared by concurrently running processes.
+func removeStaleArtifactCopies(root string) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		log.Printf("Warning: list plugin artifact directory: %v", err)
+		return
+	}
+	removed := 0
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), service.PluginArtifactCopyPrefix) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(root, entry.Name())); err != nil {
+			log.Printf("Warning: remove stale plugin artifact copy %s: %v", entry.Name(), err)
+			continue
+		}
+		removed++
+	}
+	if removed > 0 {
+		log.Printf("Removed %d stale plugin artifact copies from %s", removed, root)
+	}
 }
 
 // newAPIServer creates the API server with proper timeouts.

@@ -161,6 +161,23 @@
 
 ### Added
 
+- `anix-control migrate` prepares the database, then exits: schema, `Ensure*`
+  helpers, plugin trust root, identity package bootstrap, and default seeds.
+  Use it as a one-shot Compose service or Kubernetes Job.
+- Database preparation now runs under a PostgreSQL advisory lock, in both the
+  server and `migrate`. Several processes starting at once run it one at a
+  time instead of racing on DDL and seed rows.
+- Production databases get their tables without `env: development`.
+  - An empty database gets the full schema.
+  - An existing database only gets the tables it lacks; existing tables,
+    columns and indexes are never altered.
+  - Previously production mode skipped table creation entirely, so a fresh
+    production install needed `env: development` for its first start.
+  - Verified on a copy of the production database: only the five
+    `v4_kernel_package_*` tables were added.
+- A configured `plugins.control_host_artifact_dir` is cleared of package
+  copies left by earlier processes at startup.
+
 - Container probes on both the API and UI servers:
   - `/livez`: the process answers.
   - `/readyz`: startup finished, not draining, and the database answers a
