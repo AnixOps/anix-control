@@ -375,6 +375,28 @@
     - **Discovery:** the OpenID discovery document.
   - CI and the local gates tidy, vet, test, race-test, lint, scan and
     vulnerability-check the new module.
+- Native login and registration in identity-platform (N11a). They serve once
+  their route mode is native, which the identity cutover sets; until then
+  both routes stay legacy.
+  - **Parity.** Responses equal the v2 handlers byte for byte, except the
+    token: messages, key order, `Retry-After`, the MFA challenge and
+    enrollment answers, and the permission fields.
+    `internal/tests/identitycompat` checks 31 cases on SQLite and
+    PostgreSQL, the latter in the CI PostgreSQL job.
+  - **Login.** Identity checks accounts, bcrypt passwords, bans and MFA
+    (TOTP with one step of skew; backup codes consumed on use). Expiry is
+    read from `kapi_user_directory_v1`. The token is EdDSA for
+    `aud=anix-control`.
+  - **Registration.** It creates the subscriber through `CreateSubscriber`.
+    Its new `invite_code` field is validated and consumed with the
+    subscriber in one kernel transaction, with the v2 messages.
+  - **Identity core.** It gains `identity/throttle` (attempt limits shared by
+    replicas) and `identity/settings`. The account store gains lookup,
+    creation, MFA verification and login attempts (migration `004_login`).
+  - identity-platform also declares `kernel.view:kapi_user_directory_v1`.
+  - **Harness.** `internal/tests/packagecompat` can mask values that differ
+    by design, require headers, send warm-up requests, and passes the client
+    IP and user agent to native routes.
 - Kernel-led account import into the identity module (N10c).
   - **Identity side.** The core gains `identity/account`, which stores
     accounts, MFA and import runs in identity's own tables (migration

@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/AnixOps/anix-control/identity/secretbox"
 	"github.com/AnixOps/anix-control/identity/server"
 	"github.com/AnixOps/anix-control/identity/signingkey"
+	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	identityplatform "github.com/AnixOps/anix-control/v4/packages/identity-platform"
+	"github.com/AnixOps/anix-control/v4/packages/identity-platform/native"
+	"google.golang.org/grpc"
+	"gorm.io/gorm"
 )
 
 const identityMigrationRoute = "migration.identity-platform.001_identity_platform"
@@ -50,7 +55,11 @@ type identityBridge interface {
 // identity routes and the 001_identity_platform migration are accepted, and
 // every route passes through the bridge. The package's own storage runs the
 // embedded migration index when the kernel starts the host.
-func newIdentityService(bridge identityBridge, leaseID string, storage packagestoresdk.Opener) (*pluginhostsdk.Router, error) {
+func newIdentityService(bridge identityBridge, leaseID string, storage packagestoresdk.Opener, handlers ...map[string]pluginhostsdk.NativeHandler) (*pluginhostsdk.Router, error) {
+	var nativeHandlers map[string]pluginhostsdk.NativeHandler
+	if len(handlers) > 0 {
+		nativeHandlers = handlers[0]
+	}
 	return pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
 		PackageID: "identity-platform", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,
 		AllowRoute: func(routeID string) bool {
@@ -61,6 +70,9 @@ func newIdentityService(bridge identityBridge, leaseID string, storage packagest
 			return identityMigrationRoute, migrationID == "001_identity_platform"
 		},
 		IndexMigration: packagestoresdk.IndexMigrator(storage, identityplatform.Migrations, identityplatform.MigrationIndex),
+		// Native routes serve only once the kernel sets their mode (the
+		// identity cutover); until then every route stays legacy.
+		Native: nativeHandlers,
 	})
 }
 
@@ -68,16 +80,11 @@ func newIdentityService(bridge identityBridge, leaseID string, storage packagest
 // host serves the routes and IdentityService, but publishes no keys.
 func newIdentityHost(bridge identityBridge, leaseID string, getenv func(string) string, logf func(string, ...any)) (*identityHost, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
-	router, err := newIdentityService(bridge, leaseID, storage)
-	if err != nil {
-		return nil, err
-	}
 	policy, err := keyPolicy(getenv)
 	if err != nil {
 		return nil, err
 	}
 	host := &identityHost{
-		Router:   router,
 		identity: &server.Server{Policy: policy, Issuer: tokenIssuer, Audience: tokenAudience},
 		logf:     logf,
 	}
@@ -87,6 +94,9 @@ func newIdentityHost(bridge identityBridge, leaseID string, getenv func(string) 
 	}
 	if kek == nil {
 		logf("identity signing keys: no %s; identity publishes no keys and signs no tokens", envKEK)
+		if host.Router, err = newIdentityService(bridge, leaseID, storage); err != nil {
+			return nil, err
+		}
 		return host, nil
 	}
 	sealer, err := signingkey.NewSealer(kek)
@@ -99,6 +109,24 @@ func newIdentityHost(bridge identityBridge, leaseID string, getenv func(string) 
 	if err != nil {
 		return nil, err
 	}
-	host.identity.Accounts = &storedAccounts{open: storage, box: box}
+	accounts := &storedAccounts{open: storage, box: box}
+	host.identity.Accounts = accounts
+	service := &native.Service{
+		Open:       nativeStores(storage, accounts),
+		Directory:  native.ViewDirectory{DB: func(ctx context.Context) (*gorm.DB, error) { return openDB(ctx, storage) }},
+		SigningKey: host.keys.signingKey,
+	}
+	if conn, ok := bridge.(interface {
+		Conn() grpc.ClientConnInterface
+	}); ok && conn.Conn() != nil {
+		service.Kernel = kernelidentityv1.NewKernelIdentityClient(conn.Conn())
+	}
+	handlers := map[string]pluginhostsdk.NativeHandler(nil)
+	if service.Kernel != nil {
+		handlers = service.Handlers()
+	}
+	if host.Router, err = newIdentityService(bridge, leaseID, storage, handlers); err != nil {
+		return nil, err
+	}
 	return host, nil
 }

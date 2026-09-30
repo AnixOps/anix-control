@@ -16,13 +16,19 @@ package account
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/identity/secretbox"
+	"github.com/google/uuid"
+	"github.com/pquerna/otp"
+	"github.com/pquerna/otp/totp"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -72,6 +78,8 @@ type Tables struct {
 	Account   string
 	MFA       string
 	ImportRun string
+	// MFAAttempt records MFA checks at login; optional for imports.
+	MFAAttempt string
 }
 
 // Store reads and writes accounts.
@@ -370,4 +378,216 @@ func fromUnix(value int64) time.Time {
 		return time.Time{}
 	}
 	return time.Unix(value, 0)
+}
+
+// ErrEmailTaken means another account has the email.
+var ErrEmailTaken = errors.New("email belongs to another account")
+
+// FindByEmail returns the account whose stored email equals email exactly.
+func (s *Store) FindByEmail(ctx context.Context, email string) (Account, bool, error) {
+	if err := s.check(); err != nil {
+		return Account{}, false, err
+	}
+	var rows []accountRow
+	if err := s.DB.WithContext(ctx).Table(s.Tables.Account).Where("email = ?", email).Order("user_id").Limit(1).Find(&rows).Error; err != nil {
+		return Account{}, false, err
+	}
+	if len(rows) == 0 {
+		return Account{}, false, nil
+	}
+	accounts, err := s.withMFA(ctx, rows)
+	if err != nil {
+		return Account{}, false, err
+	}
+	return accounts[0], true, nil
+}
+
+// EmailTaken reports whether an account has the email.
+func (s *Store) EmailTaken(ctx context.Context, email string) (bool, error) {
+	if err := s.check(); err != nil {
+		return false, err
+	}
+	var count int64
+	err := s.DB.WithContext(ctx).Table(s.Tables.Account).Where("email = ?", email).Count(&count).Error
+	return count > 0, err
+}
+
+// Create stores a new account (version 1, token version 1).
+func (s *Store) Create(ctx context.Context, a Account) error {
+	if err := s.check(); err != nil {
+		return err
+	}
+	if a.UserID == 0 || len(a.AccountUUID) != 36 || a.Email == "" || a.PasswordHash == "" {
+		return errors.New("a new account needs a user id, an account UUID, an email and a password hash")
+	}
+	now := s.now().Unix()
+	row := accountRow{
+		UserID: a.UserID, AccountUUID: a.AccountUUID, Email: a.Email, PasswordHash: a.PasswordHash,
+		PasswordAlgo: a.PasswordAlgo, PasswordSalt: a.PasswordSalt, IsAdmin: flag(a.IsAdmin), IsStaff: flag(a.IsStaff),
+		Banned: flag(a.Banned), TokenVersion: 1, Version: 1, InviteUserID: a.InviteUserID, CreatedAt: now, UpdatedAt: now,
+	}
+	return s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var taken int64
+		if err := tx.Table(s.Tables.Account).Where("email = ?", a.Email).Count(&taken).Error; err != nil {
+			return err
+		}
+		if taken > 0 {
+			return ErrEmailTaken
+		}
+		return tx.Table(s.Tables.Account).Create(&row).Error
+	})
+}
+
+// MFA methods.
+const (
+	MethodTOTP   = "totp"
+	MethodBackup = "backup"
+	MethodEmail  = "email"
+	MethodSMS    = "sms"
+)
+
+// VerifyMFA checks a login or step-up code against the account's second
+// factor. An account without enabled MFA passes. The method selects TOTP or
+// a backup code; email and SMS are not implemented and always fail; any
+// other value tries TOTP, then a backup code. A used backup code is
+// consumed; a success records when and how.
+func (s *Store) VerifyMFA(ctx context.Context, userID uint64, code, method string) (bool, error) {
+	if err := s.check(); err != nil {
+		return false, err
+	}
+	var valid bool
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row mfaRow
+		err := tx.Table(s.Tables.MFA).Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ?", userID).Take(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			valid = true
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if row.Enabled != 1 {
+			valid = true
+			return nil
+		}
+		owner := mfaOwner(userID)
+		secret := ""
+		if row.SealedTOTPSecret != "" {
+			opened, err := s.Secrets.Open(owner, row.SealedTOTPSecret)
+			if err != nil {
+				return err
+			}
+			secret = string(opened)
+		}
+		var keyed []string
+		if err := json.Unmarshal([]byte(row.BackupCodeHashes), &keyed); err != nil {
+			return fmt.Errorf("parse MFA backup codes: %w", err)
+		}
+		consumeBackup := func() bool {
+			sum := sha256.Sum256([]byte(code))
+			candidate := s.Secrets.Hash(owner, hex.EncodeToString(sum[:]))
+			for index, stored := range keyed {
+				if secretbox.Equal(candidate, stored) {
+					keyed = append(keyed[:index], keyed[index+1:]...)
+					return true
+				}
+			}
+			return false
+		}
+		method = strings.ToLower(strings.TrimSpace(method))
+		used := method
+		consumed := false
+		switch method {
+		case MethodTOTP:
+			valid = validTOTP(secret, code, s.now())
+		case MethodBackup:
+			valid = consumeBackup()
+			consumed = valid
+		case MethodEmail, MethodSMS:
+			valid = false
+		default:
+			used = MethodTOTP
+			valid = validTOTP(secret, code, s.now())
+			if !valid {
+				valid = consumeBackup()
+				consumed = valid
+				if valid {
+					used = MethodBackup
+				}
+			}
+		}
+		if !valid {
+			return nil
+		}
+		updates := map[string]any{"last_used": s.now().Unix(), "last_method": used}
+		if consumed {
+			encoded, err := json.Marshal(keyed)
+			if err != nil {
+				return err
+			}
+			updates["backup_code_hashes"] = string(encoded)
+		}
+		return tx.Table(s.Tables.MFA).Where("user_id = ?", userID).Updates(updates).Error
+	})
+	return valid, err
+}
+
+func validTOTP(secret, code string, now time.Time) bool {
+	if secret == "" {
+		return false
+	}
+	valid, err := totp.ValidateCustom(code, secret, now, totp.ValidateOpts{
+		Period: 30, Skew: 1, Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA1,
+	})
+	return err == nil && valid
+}
+
+// MFAMethods returns the methods an MFA-enabled account can answer with:
+// totp when it has a secret, backup when it has a backup code list.
+func (s *Store) MFAMethods(ctx context.Context, userID uint64) ([]string, bool, error) {
+	if err := s.check(); err != nil {
+		return nil, false, err
+	}
+	var row mfaRow
+	err := s.DB.WithContext(ctx).Table(s.Tables.MFA).Where("user_id = ?", userID).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if row.Enabled != 1 {
+		return nil, false, nil
+	}
+	methods := make([]string, 0, 2)
+	if strings.TrimSpace(row.SealedTOTPSecret) != "" {
+		methods = append(methods, MethodTOTP)
+	}
+	if strings.TrimSpace(row.BackupCodeHashes) != "" {
+		methods = append(methods, MethodBackup)
+	}
+	if len(methods) == 0 {
+		methods = append(methods, MethodTOTP)
+	}
+	return methods, true, nil
+}
+
+// RecordMFAAttempt records an MFA check at login.
+func (s *Store) RecordMFAAttempt(ctx context.Context, userID uint64, ip, userAgent string, success bool, method string) error {
+	if err := s.check(); err != nil {
+		return err
+	}
+	if s.Tables.MFAAttempt == "" {
+		return errors.New("the MFA attempt table is not configured")
+	}
+	if len(userAgent) > 255 {
+		userAgent = userAgent[:255]
+	}
+	if len(ip) > 64 {
+		ip = ip[:64]
+	}
+	return s.DB.WithContext(ctx).Table(s.Tables.MFAAttempt).Create(map[string]any{
+		"id": uuid.NewString(), "user_id": userID, "ip": ip, "user_agent": userAgent,
+		"success": flag(success), "method": method, "created_at": s.now().Unix(),
+	}).Error
 }

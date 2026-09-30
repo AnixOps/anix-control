@@ -22,10 +22,14 @@ const (
 )
 
 type CreateSubscriberRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AccountUuid   string                 `protobuf:"bytes,1,opt,name=account_uuid,json=accountUuid,proto3" json:"account_uuid,omitempty"`
-	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
-	InviteUserId  uint64                 `protobuf:"varint,3,opt,name=invite_user_id,json=inviteUserId,proto3" json:"invite_user_id,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	AccountUuid  string                 `protobuf:"bytes,1,opt,name=account_uuid,json=accountUuid,proto3" json:"account_uuid,omitempty"`
+	Email        string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	InviteUserId uint64                 `protobuf:"varint,3,opt,name=invite_user_id,json=inviteUserId,proto3" json:"invite_user_id,omitempty"`
+	// invite_code, when set, is validated and consumed together with the new
+	// subscriber: the code's owner becomes the inviter. Codes stay with the
+	// kernel. Refusals are FailedPrecondition with the v2 message.
+	InviteCode    string `protobuf:"bytes,4,opt,name=invite_code,json=inviteCode,proto3" json:"invite_code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -79,6 +83,13 @@ func (x *CreateSubscriberRequest) GetInviteUserId() uint64 {
 		return x.InviteUserId
 	}
 	return 0
+}
+
+func (x *CreateSubscriberRequest) GetInviteCode() string {
+	if x != nil {
+		return x.InviteCode
+	}
+	return ""
 }
 
 type CreateSubscriberResponse struct {
@@ -865,11 +876,13 @@ var File_api_kernelidentity_v1_kernel_identity_proto protoreflect.FileDescriptor
 
 const file_api_kernelidentity_v1_kernel_identity_proto_rawDesc = "" +
 	"\n" +
-	"+api/kernelidentity/v1/kernel_identity.proto\x12\x19anixops.kernelidentity.v1\"x\n" +
+	"+api/kernelidentity/v1/kernel_identity.proto\x12\x19anixops.kernelidentity.v1\"\x99\x01\n" +
 	"\x17CreateSubscriberRequest\x12!\n" +
 	"\faccount_uuid\x18\x01 \x01(\tR\vaccountUuid\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12$\n" +
-	"\x0einvite_user_id\x18\x03 \x01(\x04R\finviteUserId\"M\n" +
+	"\x0einvite_user_id\x18\x03 \x01(\x04R\finviteUserId\x12\x1f\n" +
+	"\vinvite_code\x18\x04 \x01(\tR\n" +
+	"inviteCode\"M\n" +
 	"\x18CreateSubscriberResponse\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x18\n" +
 	"\acreated\x18\x02 \x01(\bR\acreated\"_\n" +
