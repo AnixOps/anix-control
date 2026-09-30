@@ -39,7 +39,7 @@ func TestRunEmbeddedMigrationsOnSQLiteAppliesEachStepOnce(t *testing.T) {
 	require.Equal(t, "pkg_knowledge_notes", store.Table("notes"))
 
 	fsys := migrationFS(map[string]string{
-		"migrations/001_notes.sql": "CREATE TABLE __PKG_PREFIX__notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL);\nCREATE INDEX __PKG_PREFIX__notes_body ON __PKG_PREFIX__notes (body);",
+		"migrations/001_notes.sql": "CREATE TABLE __PKG_PREFIX__notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL);\nCREATE INDEX __PKG_NAME_PREFIX__notes_body ON __PKG_PREFIX__notes (body);",
 		"migrations/002_seed.sql":  "INSERT INTO __PKG_PREFIX__notes (body) VALUES ('first');",
 	}, twoStepIndex)
 	result, err := RunEmbeddedMigrations(ctx, store, fsys, "migrations/index.json")
@@ -54,6 +54,8 @@ func TestRunEmbeddedMigrationsOnSQLiteAppliesEachStepOnce(t *testing.T) {
 	var count int64
 	require.NoError(t, store.DB.Table(store.Table("notes")).Count(&count).Error)
 	require.EqualValues(t, 1, count)
+	require.NoError(t, store.DB.Raw("SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = 'pkg_knowledge_notes_body'").Scan(&count).Error)
+	require.EqualValues(t, 1, count, "index names carry the table prefix on SQLite")
 
 	fsys["migrations/002_seed.sql"] = &fstest.MapFile{Data: []byte("INSERT INTO __PKG_PREFIX__notes (body) VALUES ('changed');")}
 	_, err = RunEmbeddedMigrations(ctx, store, fsys, "migrations/index.json")

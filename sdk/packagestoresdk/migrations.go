@@ -23,6 +23,9 @@ const (
 	MigrationIndexFormat = "anixops.migrations/v1"
 	// PrefixPlaceholder in a migration script expands to Store.Prefix.
 	PrefixPlaceholder = "__PKG_PREFIX__"
+	// NamePrefixPlaceholder expands to Store.NamePrefix, for the names of
+	// indexes and constraints, which PostgreSQL does not schema-qualify.
+	NamePrefixPlaceholder = "__PKG_NAME_PREFIX__"
 	// StateTable records applied steps in the package's own storage.
 	StateTable = "schema_migrations"
 )
@@ -79,7 +82,7 @@ func StepsDigest(steps []MigrationStep) string {
 // root of fsys, as in a package artifact. A step's digest is checked against
 // the index when the index lists one. Each step runs in its own transaction
 // together with its state row; __PKG_PREFIX__ in the script expands to
-// store.Prefix().
+// store.Prefix() and __PKG_NAME_PREFIX__ to store.NamePrefix().
 func RunEmbeddedMigrations(ctx context.Context, store *Store, fsys fs.FS, indexPath string) (MigrationResult, error) {
 	if store == nil || store.DB == nil {
 		return MigrationResult{}, errors.New("package storage is not open")
@@ -178,7 +181,7 @@ func applyMigrationStep(db *gorm.DB, store *Store, state string, step migrationS
 			}
 			return nil
 		}
-		script := strings.ReplaceAll(string(step.script), PrefixPlaceholder, store.Prefix())
+		script := store.ExpandScript(string(step.script))
 		if err := tx.Exec(script).Error; err != nil {
 			return err
 		}

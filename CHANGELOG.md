@@ -375,6 +375,34 @@
     - **Discovery:** the OpenID discovery document.
   - CI and the local gates tidy, vet, test, race-test, lint, scan and
     vulnerability-check the new module.
+- Kernel-led account import into the identity module (N10c).
+  - **Identity side.** The core gains `identity/account`, which stores
+    accounts, MFA and import runs in identity's own tables (migration
+    `003_accounts`).
+    - TOTP seeds are sealed and backup codes kept as KEK-keyed hashes
+      (`identity/secretbox`).
+    - Versions rise only on real changes, so a repeated batch changes
+      nothing.
+    - identity-platform serves `ImportAccounts`, `BatchGetAccounts` and
+      `ExportAccounts` when a KEK is configured.
+  - **Kernel side.** `internal/identityimport` copies the `v2_user` identity
+    columns and `v2_user_mfa` in checkpointed batches.
+    - An interrupted import resumes. A delta re-sends what changed since the
+      previous import started.
+    - Legacy users are linked in `v4_kernel_identity_account` under
+      deterministic account UUIDs.
+    - The authority state becomes `importing`. Imports are refused once
+      identity is authoritative.
+    - Invite codes stay with Control.
+  - **Admin API.** `GET /api/v4/kernel/identity` (state and progress) and
+    `POST /api/v4/kernel/identity/import` (`{"delta": bool}`, one at a time).
+  - **Contract.** New, additive fields: `ImportedMFA.last_used_unix` and
+    `last_method`.
+  - **Package migrations.** New `__PKG_NAME_PREFIX__` token (and
+    `Store.NamePrefix`, `Store.ExpandScript` in `packagestoresdk`) for index
+    and constraint names, which PostgreSQL cannot schema-qualify. It expands
+    to nothing on PostgreSQL and to the table prefix on SQLite. A PostgreSQL
+    test applies identity-platform's migrations in a real package schema.
 - Control verifies identity tokens (N10b, kernel side).
   - **Key refresh.** `internal/identitykeys` pulls the identity module's
     token keys with `IdentityService.GetTokenKeys`. It refreshes every 5

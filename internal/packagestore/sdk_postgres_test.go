@@ -34,7 +34,7 @@ func TestPostgresPackageStoreSDKRunsMigrationsInThePackageSchema(t *testing.T) {
 	fsys := fstest.MapFS{
 		"migrations/index.json": {Data: []byte(`{"format":"anixops.migrations/v1","package_id":"x","version":"4.1.0","migrations":[
 			{"id":"001_notes","path":"migrations/001_notes.sql"},{"id":"002_directory","path":"migrations/002_directory.sql"}]}`)},
-		"migrations/001_notes.sql":     {Data: []byte("CREATE TABLE __PKG_PREFIX__notes (id BIGSERIAL PRIMARY KEY, body TEXT NOT NULL);\nINSERT INTO __PKG_PREFIX__notes (body) VALUES ('a'), ('b');")},
+		"migrations/001_notes.sql":     {Data: []byte("CREATE TABLE __PKG_PREFIX__notes (id BIGSERIAL PRIMARY KEY, body TEXT NOT NULL);\nCREATE INDEX __PKG_NAME_PREFIX__notes_body ON __PKG_PREFIX__notes (body);\nINSERT INTO __PKG_PREFIX__notes (body) VALUES ('a'), ('b');")},
 		"migrations/002_directory.sql": {Data: []byte("CREATE VIEW __PKG_PREFIX__admins AS SELECT id, email FROM kapi_user_directory_v1 WHERE is_admin = 1;")},
 	}
 	result, err := packagestoresdk.RunEmbeddedMigrations(ctx, pkg, fsys, "migrations/index.json")
@@ -48,6 +48,9 @@ func TestPostgresPackageStoreSDKRunsMigrationsInThePackageSchema(t *testing.T) {
 	var tables []string
 	require.NoError(t, kernel.Raw("SELECT tablename FROM pg_tables WHERE schemaname = ? ORDER BY tablename", SchemaName(packageID)).Scan(&tables).Error)
 	require.Equal(t, []string{"notes", "schema_migrations"}, tables)
+	var indexes []string
+	require.NoError(t, kernel.Raw("SELECT indexname FROM pg_indexes WHERE schemaname = ? AND tablename = 'notes' ORDER BY indexname", SchemaName(packageID)).Scan(&indexes).Error)
+	require.Equal(t, []string{"notes_body", "notes_pkey"}, indexes)
 
 	bad := fstest.MapFS{
 		"migrations/index.json": {Data: []byte(`{"format":"anixops.migrations/v1","migrations":[{"id":"003_escape","path":"migrations/003.sql"}]}`)},

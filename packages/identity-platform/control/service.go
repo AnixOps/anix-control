@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	"github.com/AnixOps/anix-control/identity/secretbox"
 	"github.com/AnixOps/anix-control/identity/server"
 	"github.com/AnixOps/anix-control/identity/signingkey"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
@@ -94,5 +95,10 @@ func newIdentityHost(bridge identityBridge, leaseID string, getenv func(string) 
 	}
 	host.keys = &storedKeys{open: storage, sealer: sealer, policy: policy}
 	host.identity.Keys = host.keys
+	box, err := secretbox.New(kek)
+	if err != nil {
+		return nil, err
+	}
+	host.identity.Accounts = &storedAccounts{open: storage, box: box}
 	return host, nil
 }

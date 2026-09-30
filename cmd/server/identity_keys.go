@@ -8,6 +8,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/authn"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/identityimport"
 	"github.com/AnixOps/anix-control/v4/internal/identitykeys"
 	"google.golang.org/grpc"
 )
@@ -25,6 +26,7 @@ func (rt *serverRuntime) startIdentityKeys() error {
 		return fmt.Errorf("load identity token keys: %w", err)
 	}
 	authn.SetDefaultIdentityKeys(keys)
+	identityimport.SetDefault(nil, database.Get())
 	hosts := rt.controlPluginHosts
 	if hosts == nil {
 		return nil
@@ -37,10 +39,12 @@ func (rt *serverRuntime) startIdentityKeys() error {
 			log.Printf("Identity token keys not refreshed: %v", err)
 		}
 	}
+	connect := func() (grpc.ClientConnInterface, error) { return hosts.PackageConn("identity-platform") }
 	rt.workers.Go("identity token key refresher", func(ctx context.Context) {
-		keys.Run(ctx, identityKeyRefresh, func() (grpc.ClientConnInterface, error) {
-			return hosts.PackageConn("identity-platform")
-		}, report)
+		keys.Run(ctx, identityKeyRefresh, connect, report)
 	})
+	runner := identityimport.NewRunner(&identityimport.Importer{DB: database.Get(), Connect: connect}, log.Printf)
+	identityimport.SetDefault(runner, database.Get())
+	rt.workers.Go("identity account importer", runner.Serve)
 	return nil
 }

@@ -526,7 +526,7 @@ func main() {
         index_bytes, entries = BUILD_PACKAGE_MODULE.source_migrations("identity-platform", "4.0.7")
         index = json.loads(index_bytes)
         self.assertEqual("4.0.7", index["version"])
-        self.assertEqual(["001_identity_platform", "002_signing_keys"], [step["id"] for step in index["migrations"]])
+        self.assertEqual(["001_identity_platform", "002_signing_keys", "003_accounts"], [step["id"] for step in index["migrations"]])
         scripts = {entry.path: entry.data for entry in entries}
         for step in index["migrations"]:
             self.assertEqual(hashlib.sha256(scripts[step["path"]]).hexdigest(), step["sha256"])
@@ -629,7 +629,7 @@ func main() {
                 self.assertIn("identity.auth.login", {route["package_route"] for route in routes_value["routes"]})
                 self.assertIn("identity.auth.register", {route["package_route"] for route in routes_value["routes"]})
                 migration_paths = [migration["path"] for migration in migrations_value["migrations"]]
-                self.assertEqual(["migrations/001_identity_platform.sql", "migrations/002_signing_keys.sql"], migration_paths)
+                self.assertEqual(["migrations/001_identity_platform.sql", "migrations/002_signing_keys.sql", "migrations/003_accounts.sql"], migration_paths)
                 self.assertIsNotNone(archive.extractfile("migrations/001_identity_platform.sql"))
 
     def test_fallback_control_package_uses_a_compiled_capability_host(self) -> None:
