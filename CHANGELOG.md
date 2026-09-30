@@ -375,6 +375,19 @@
     - **Discovery:** the OpenID discovery document.
   - CI and the local gates tidy, vet, test, race-test, lint, scan and
     vulnerability-check the new module.
+- Rollback-safe native identity routes, and logout (N12a).
+  - **Legacy mirror.** Until finalize, every native change the legacy routes
+    read is mirrored into `v2_user` and `v2_user_mfa`, so switching group A
+    back to legacy keeps logins working:
+    - the password hash of new registrations and admin-created users, through
+      the new `CreateSubscriber.legacy_mirror` field (applied with the
+      subscriber, revoking nothing);
+    - TOTP setup, enable and disable.
+  - **Rollback test.** `internal/tests/identitycompat` registers and enables
+    MFA natively, then logs in through the legacy handler.
+  - **Logout.** `POST /api/v4/identity/logout` ends the calling session (its
+    `sid`) at once and until the token would have expired. Other sessions of
+    the user continue. HS256 and EdDSA tokens alike.
 - Native user administration in identity-platform (N11c): create, update,
   ban, unban and delete, serving once their mode is native.
   - **Projection.** Identity changes the account and projects email, admin,

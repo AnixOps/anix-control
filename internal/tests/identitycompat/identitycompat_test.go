@@ -119,6 +119,14 @@ func importAccounts(db *gorm.DB, store *account.Store) {
 // nativeRoute builds a native route on the native database.
 func nativeRoute(routeID string) func(db *gorm.DB) pluginhostsdk.NativeHandler {
 	return func(db *gorm.DB) pluginhostsdk.NativeHandler {
+		return nativeService(db).Handlers()[routeID]
+	}
+}
+
+// nativeService builds identity on db: its tables, the imported accounts, a
+// signing key and Control through the real KernelIdentity server.
+func nativeService(db *gorm.DB) *native.Service {
+	{
 		for _, migration := range []string{"003_accounts.sql", "004_login.sql"} {
 			applyMigration(db, migration)
 		}
@@ -145,6 +153,6 @@ func nativeRoute(routeID string) func(db *gorm.DB) pluginhostsdk.NativeHandler {
 				return key, nil
 			},
 		}
-		return service.Handlers()[routeID]
+		return service
 	}
 }

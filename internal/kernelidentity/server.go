@@ -156,6 +156,24 @@ func (h *hostServer) CreateSubscriber(ctx context.Context, request *kernelidenti
 		if err := tx.Create(user).Error; err != nil {
 			return err
 		}
+		if mirror := request.GetLegacyMirror(); mirror != nil {
+			state, err := authorityState(tx)
+			if err != nil {
+				return err
+			}
+			if state != model.IdentityAuthorityFinalized {
+				updates := map[string]any{}
+				if err := mirrorCredentials(tx, user.ID, mirror, updates); err != nil {
+					return err
+				}
+				// Part of the creation: written directly, revoking nothing.
+				if len(updates) > 0 {
+					if err := tx.Model(&model.User{}).Where("id = ?", user.ID).Updates(updates).Error; err != nil {
+						return err
+					}
+				}
+			}
+		}
 		if invite != nil {
 			now := time.Now()
 			invite.Status, invite.UsedBy, invite.UsedAt = 1, &user.ID, &now

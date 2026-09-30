@@ -106,3 +106,35 @@ func isUniqueViolation(err error) bool {
 	message := strings.ToLower(err.Error())
 	return strings.Contains(message, "unique constraint") || strings.Contains(message, "duplicate key")
 }
+
+// Touch raises an account's version without changing its fields, for
+// changes the product mirrors elsewhere, such as the second factor.
+func (s *Store) Touch(ctx context.Context, userID uint64) (Account, error) {
+	if err := s.check(); err != nil {
+		return Account{}, err
+	}
+	var touched Account
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row accountRow
+		err := tx.Table(s.Tables.Account).Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ?", userID).Take(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrAccountNotFound
+		}
+		if err != nil {
+			return err
+		}
+		row.Version++
+		row.UpdatedAt = s.now().Unix()
+		if err := tx.Table(s.Tables.Account).Where("user_id = ?", userID).
+			Updates(map[string]any{"version": row.Version, "updated_at": row.UpdatedAt}).Error; err != nil {
+			return err
+		}
+		accounts, err := s.withMFA(ctx, []accountRow{row})
+		if err != nil {
+			return err
+		}
+		touched = accounts[0]
+		return nil
+	})
+	return touched, err
+}

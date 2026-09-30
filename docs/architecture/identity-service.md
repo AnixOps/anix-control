@@ -141,7 +141,8 @@ instance's generation.
   stored one. It writes email, admin, staff and ban flags through the same
   path as the admin API, so a ban or demotion revokes at once.
 - **Legacy mirror.** Password hash, algorithm and salt, and TOTP, are copied
-  back until the state is `finalized`. Backup codes are not: legacy compares
+  back until the state is `finalized`: through `ApplyAccountProjection` for
+  existing subscribers, and through `CreateSubscriber` for new ones. Backup codes are not: legacy compares
   them in plain text and identity keeps only hashes, so after a rollback users
   use TOTP or regenerate codes.
 - **Authority state.** `v4_kernel_identity_authority` holds the state (no row
@@ -259,7 +260,23 @@ instance's generation.
         staff flags.
       - Parity covers the responses and the resulting Control state:
         subscribers, revocations and legacy MFA rows.
-12. Cutover, revocation push and finalize.
+12. Cutover, revocation push and finalize, in two steps:
+    - 12a (in place): what a rollback before finalize needs, and logout.
+      - **Mirror everywhere.** Every native change that the legacy routes
+        read is mirrored until finalize:
+        - registration and admin create pass the password hash in
+          `CreateSubscriber.legacy_mirror` (new field), applied with the
+          subscriber and without revoking anything;
+        - TOTP setup, enable and disable mirror the MFA state;
+        - password changes mirror as in 11c.
+      - **Rollback test.** `internal/tests/identitycompat` registers and
+        enables MFA natively, then logs in through the legacy handler with
+        the same password and TOTP secret.
+      - **Logout.** `POST /api/v4/identity/logout` ends the calling session
+        (its `sid`) until the token would have expired, in every process,
+        for HS256 and EdDSA tokens alike. Other sessions of the user go on.
+    - 12b: the cutover itself (import, freeze, route modes, authority),
+      rollback and finalize.
 13. End-to-end acceptance on Compose and kind.
 
 Deferred:
