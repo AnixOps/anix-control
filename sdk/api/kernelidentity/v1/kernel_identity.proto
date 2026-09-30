@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package anixops.kernelidentity.v1;
+
+option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1;kernelidentityv1";
+
+// KernelIdentity is the kernel's contract for the identity module. It is
+// served on the module listener and on the local package bridge, and only to
+// a package whose signed manifest declares kernel.identity.v1 and that is
+// signed by the official trust root.
+//
+// v2_user stays the kernel's subscriber and entitlement table. Its email,
+// is_admin, is_staff and banned columns are a read projection that only this
+// contract writes.
+service KernelIdentity {
+  // CreateSubscriber allocates the v2_user row (id, uuid, subscription
+  // token) for a new account. It is idempotent on account_uuid.
+  rpc CreateSubscriber(CreateSubscriberRequest) returns (CreateSubscriberResponse);
+  // UpdateSubscriber changes entitlement fields an administrator edits
+  // together with identity fields.
+  rpc UpdateSubscriber(UpdateSubscriberRequest) returns (UpdateSubscriberResponse);
+  // ApplyAccountProjection writes identity fields into the projection. Older
+  // versions than the stored one are ignored.
+  rpc ApplyAccountProjection(ApplyAccountProjectionRequest) returns (ApplyAccountProjectionResponse);
+  rpc DeleteSubscriber(DeleteSubscriberRequest) returns (DeleteSubscriberResponse);
+  // PublishRevocation makes tokens issued before a point, or with an older
+  // token version, or with a session id, stop working in the kernel.
+  rpc PublishRevocation(PublishRevocationRequest) returns (PublishRevocationResponse);
+  // ResolveActorAccess returns the plugin permissions the v2 login and
+  // profile responses carry.
+  rpc ResolveActorAccess(ResolveActorAccessRequest) returns (ResolveActorAccessResponse);
+  // GetIdentitySettings returns the kernel's legacy auth settings once, to
+  // seed the identity installation configuration.
+  rpc GetIdentitySettings(GetIdentitySettingsRequest) returns (GetIdentitySettingsResponse);
+}
+
+message CreateSubscriberRequest {
+  string account_uuid = 1;
+  string email = 2;
+  uint64 invite_user_id = 3;
+}
+
+message CreateSubscriberResponse {
+  uint64 user_id = 1;
+  bool created = 2;
+}
+
+message UpdateSubscriberRequest {
+  uint64 user_id = 1;
+  // entitlements_json holds only the entitlement fields of the v2 admin
+  // user update (plan_id, group_id, transfer_enable, expired_at, limits,
+  // balance); absent fields are unchanged.
+  bytes entitlements_json = 2;
+}
+
+message UpdateSubscriberResponse {}
+
+message ApplyAccountProjectionRequest {
+  uint64 user_id = 1;
+  uint64 version = 2;
+  string email = 3;
+  bool is_admin = 4;
+  bool is_staff = 5;
+  bool banned = 6;
+  // legacy_mirror carries credentials back into the legacy tables until the
+  // identity cutover is finalized, so a rollback to legacy routes works.
+  LegacyCredentialMirror legacy_mirror = 7;
+}
+
+message LegacyCredentialMirror {
+  string password_hash = 1;
+  string password_algo = 2;
+  string password_salt = 3;
+  bool mfa_enabled = 4;
+  string totp_secret = 5;
+  repeated string backup_code_hashes = 6;
+}
+
+message ApplyAccountProjectionResponse {
+  bool applied = 1;
+  uint64 stored_version = 2;
+}
+
+message DeleteSubscriberRequest {
+  uint64 user_id = 1;
+}
+
+message DeleteSubscriberResponse {}
+
+message PublishRevocationRequest {
+  uint64 user_id = 1;
+  // token_version: tokens with a smaller tv claim stop working.
+  uint64 token_version = 2;
+  // not_before_unix: tokens issued before it stop working.
+  int64 not_before_unix = 3;
+  // session_id revokes one session (logout); tokens expire by exp anyway.
+  string session_id = 4;
+  int64 session_expires_at_unix = 5;
+  string reason = 6;
+}
+
+message PublishRevocationResponse {}
+
+message ResolveActorAccessRequest {
+  uint64 user_id = 1;
+  bool is_admin = 2;
+}
+
+message ResolveActorAccessResponse {
+  string permission_mode = 1;
+  repeated string permissions = 2;
+  repeated string restricted_plugins = 3;
+  // unrestricted actors get "permissions": null in v2 responses, which a
+  // repeated field cannot express.
+  bool unrestricted = 4;
+}
+
+message GetIdentitySettingsRequest {}
+
+message GetIdentitySettingsResponse {
+  // settings_json is the kernel's auth configuration: registration policy,
+  // login rate limits and the admin MFA configuration.
+  bytes settings_json = 1;
+}

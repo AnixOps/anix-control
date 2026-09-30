@@ -239,7 +239,7 @@ plugins:
   fixed 64 KiB for status, headers, and identifiers, so a body the bridge
   accepts is never rejected by the host for its envelope.
 - The kernel passes the response limit to each package host as
-  `ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES`; hosts built on `pkg/pluginhostsdk`
+  `ANIX_CONTROL_HOST_MAX_RESPONSE_BYTES`; hosts built on `sdk/pluginhostsdk`
   read it with `MaxResponseBytesFromEnvironment`.
 - gRPC receive sizes grow with the limits, so values above 4 MiB work end to
   end. Package hosts should build their gRPC server with

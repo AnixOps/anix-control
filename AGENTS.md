@@ -9,9 +9,15 @@ file short and enforceable; put explanations in `docs/`.
   `github.com/AnixOps/anix-control/v4` (gin + GORM on SQLite or PostgreSQL)
   with the Vue 3 + Vite admin/user frontend in `web/`. The Go toolchain is
   pinned in `go.mod` and in `ci.yml` (`GO_VERSION`).
+- `sdk/` is a second Go module, `github.com/AnixOps/anix-control/sdk`: the
+  AnixOps protocol contracts (`sdk/api/*`) and the SDKs modules and other
+  services build on. The kernel uses it through `replace => ./sdk`; it must
+  never depend on the kernel module (`check_package_boundaries.sh`). Run its
+  checks with `go -C sdk build ./...`, `go -C sdk vet ./...` and
+  `go -C sdk test ./...`.
 - v4.0.0 is the "plugin-only platform" release: signed plugin packages under
-  `packages/*`, package host processes (`api/pluginhost`, `api/packagebridge`,
-  `pkg/pluginhostsdk`, `pkg/packagebridgesdk`), and the kernel API under
+  `packages/*`, package host processes (`sdk/api/pluginhost`, `sdk/api/packagebridge`,
+  `sdk/pluginhostsdk`, `sdk/packagebridgesdk`), and the kernel API under
   `/api/v3` (catalog, releases, installations, operations, deployments).
 - Reality check: every `/api/v2` business route is registered through
   `registeredPackageRoute` in `internal/router/router.go`, goes through the
@@ -91,11 +97,12 @@ bash config/scripts/check_release_workflow.sh
 python3 config/scripts/check_release_version.py --self-test
 GOWORK=off python3 config/scripts/check_plugin_only_routes.py      # 292 /api/v2 routes vs catalog and packages
 GOWORK=off python3 -m unittest discover -s config/scripts -p '*_test.py'
-bash api/pluginhost/gen.sh && bash api/packagebridge/gen.sh      # needs protoc 29.2; then git diff must be empty
+for c in pluginhost packagebridge modulepki identity kernelidentity; do bash sdk/api/$c/gen.sh; done  # needs protoc 29.2; then git diff must be empty
+GOWORK=off go test ./internal/tests/protocompat                     # contracts may only grow
 ```
 
 The route gate, the release-script unit tests, and the generated-code drift
-checks for `api/grpc`, `api/pluginhost`, and `api/packagebridge` all run in the
+checks for `api/grpc` and every `sdk/api/*` contract all run in the
 required "Go Quality Gates" job on every PR.
 
 ## Documentation Sync Gate

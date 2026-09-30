@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Package hosts (packages/...) and the public SDKs (pkg/...) are built and
-# shipped apart from the kernel, so they must not depend on internal/.
-# Non-test code may not reach internal/ at all, even transitively. A test may
-# import internal/ directly only when it is listed below with a reason.
+# Package hosts (packages/...) and the SDK module (sdk/) are built and shipped
+# apart from the kernel.
+# - Non-test package code may not reach the kernel's internal/ packages, even
+#   transitively. A test may import internal/ directly only when it is listed
+#   below with a reason.
+# - The SDK module may not depend on the kernel module at all; Go already
+#   forbids it from importing the kernel's internal packages.
 set -euo pipefail
 
 module='github.com/AnixOps/anix-control/v4'
@@ -10,12 +13,10 @@ go_workspace="${GOWORK:-off}"
 
 # "<package> <internal import>": reason.
 allowed_test_imports=(
-  # The SDK's contract tests run against the kernel's real bridge session.
-  "${module}/pkg/packagebridgesdk ${module}/internal/packagebridge"
 )
 
 failed=0
-packages="$(GOWORK="${go_workspace}" go list ./packages/... ./pkg/...)"
+packages="$(GOWORK="${go_workspace}" go list ./packages/...)"
 
 while IFS= read -r package; do
   [[ -n "${package}" ]] || continue
@@ -35,13 +36,24 @@ while IFS= read -r package; do
       fi
     done
     if [[ "${allowed}" -eq 0 ]]; then
-      echo "${package} tests import ${import}; add a reasoned entry to ${BASH_SOURCE[0]} or use a pkg/ fixture" >&2
+      echo "${package} tests import ${import}; add a reasoned entry to ${BASH_SOURCE[0]} or use an sdk/ fixture" >&2
       failed=1
     fi
   done <<< "${test_imports}"
 done <<< "${packages}"
 
+sdk_count=0
+if [[ -f sdk/go.mod ]]; then
+  sdk_dependencies="$(cd sdk && GOWORK="${go_workspace}" go list -deps -test -f '{{.ImportPath}}' ./... | grep -E "^${module}(/|$)" || true)"
+  if [[ -n "${sdk_dependencies}" ]]; then
+    echo "the SDK module depends on the kernel module:" >&2
+    printf '  %s\n' ${sdk_dependencies} >&2
+    failed=1
+  fi
+  sdk_count="$(cd sdk && GOWORK="${go_workspace}" go list ./... | wc -l)"
+fi
+
 if [[ "${failed}" -ne 0 ]]; then
   exit 1
 fi
-echo "package boundary gate passed ($(wc -l <<< "${packages}") packages)"
+echo "package boundary gate passed ($(wc -l <<< "${packages}") packages, ${sdk_count} SDK packages)"

@@ -3,7 +3,7 @@ package pluginhost
 import (
 	"errors"
 
-	"github.com/AnixOps/anix-control/v4/pkg/pluginhostsdk"
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 )
 
 // ErrResponseTooLarge reports a package response above the configured

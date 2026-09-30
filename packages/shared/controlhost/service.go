@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/AnixOps/anix-control/v4/pkg/pluginhostsdk"
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 )
 
 // newGenericService returns the host's router. The generic host has no

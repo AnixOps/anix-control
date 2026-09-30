@@ -48,9 +48,9 @@ important parts, in request order:
   and quota policies. `/api/v4/plugins/:plugin_id/*` exposes the package route
   gateway directly to administrators.
 - **Packages** (`packages/*`): sixteen official signed packages plus
-  `packages/shared`. Package host processes use `pkg/pluginhostsdk` to serve
-  the host protocol (`api/pluginhost/v1`) and `pkg/packagebridgesdk` to call
-  the bridge protocol (`api/packagebridge/v1`).
+  `packages/shared`. Package host processes use `sdk/pluginhostsdk` to serve
+  the host protocol (`sdk/api/pluginhost/v1`) and `sdk/packagebridgesdk` to call
+  the bridge protocol (`sdk/api/packagebridge/v1`).
 - **Nodes**: the node runtime is `anix-agent` (separate repository
   `AnixOps/anix-agent`). Control imports only
   `github.com/AnixOps/anix-agent/sdk` and talks to agents over gRPC: the

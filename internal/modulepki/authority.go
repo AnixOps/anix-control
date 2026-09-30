@@ -31,8 +31,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/pkg/moduletls"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

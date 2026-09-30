@@ -23,10 +23,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
-	"github.com/AnixOps/anix-control/v4/pkg/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/pkg/v2compat"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"

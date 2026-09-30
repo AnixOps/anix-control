@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	packagebridgev1 "github.com/AnixOps/anix-control/v4/api/packagebridge/v1"
+	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

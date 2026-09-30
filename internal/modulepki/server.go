@@ -5,8 +5,8 @@ import (
 	"crypto/x509"
 	"errors"
 
-	modulepkiv1 "github.com/AnixOps/anix-control/v4/api/modulepki/v1"
-	"github.com/AnixOps/anix-control/v4/pkg/moduletls"
+	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
+	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"

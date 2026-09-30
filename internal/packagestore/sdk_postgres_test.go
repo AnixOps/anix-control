@@ -5,8 +5,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/AnixOps/anix-control/v4/pkg/packagebridgesdk"
-	"github.com/AnixOps/anix-control/v4/pkg/packagestoresdk"
+	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
+	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/stretchr/testify/require"
 )
 

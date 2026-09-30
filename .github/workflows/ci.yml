@@ -287,15 +287,16 @@ jobs:
           test -z "$(git ls-files --others --exclude-standard -- api/grpc/v2boardpb)"
           contracts=(pluginhost packagebridge modulepki identity kernelidentity)
           for contract in "${contracts[@]}"; do
-            bash "api/${contract}/gen.sh"
+            bash "sdk/api/${contract}/gen.sh"
           done
-          git diff --exit-code -- "${contracts[@]/#/api/}"
-          test -z "$(git ls-files --others --exclude-standard -- "${contracts[@]/#/api/}")"
+          git diff --exit-code -- "${contracts[@]/#/sdk/api/}"
+          test -z "$(git ls-files --others --exclude-standard -- "${contracts[@]/#/sdk/api/}")"
 
       - name: Check go mod tidy
         run: |
           go mod tidy
-          git diff --exit-code -- go.mod go.sum
+          go -C sdk mod tidy
+          git diff --exit-code -- go.mod go.sum sdk/go.mod sdk/go.sum
 
       - name: Verify Agent SDK dependency boundary
         run: bash config/scripts/check_agent_sdk_dependency.sh
@@ -320,10 +321,14 @@ jobs:
           fi
 
       - name: Run go vet
-        run: go vet ./...
+        run: |
+          go vet ./...
+          go -C sdk vet ./...
 
       - name: Run full Go test suite
-        run: go test ./... -count=1 -p=1
+        run: |
+          go test ./... -count=1 -p=1
+          go -C sdk test ./... -count=1
 
   go-race:
     name: Go Race Detector
@@ -339,7 +344,9 @@ jobs:
           cache: true
 
       - name: Run race tests
-        run: go test -race ./... -count=1 -p=1
+        run: |
+          go test -race ./... -count=1 -p=1
+          go -C sdk test -race ./... -count=1
 
   go-benchmark-smoke:
     name: Go Benchmark Smoke
@@ -378,7 +385,7 @@ jobs:
         run: |
           mkdir -p lint-reports
           set +e
-          golangci-lint run --timeout=8m 2>&1 | tee lint-reports/golangci-lint.txt
+          { golangci-lint run --timeout=8m && (cd sdk && golangci-lint run --timeout=8m --config ../.golangci.yml); } 2>&1 | tee lint-reports/golangci-lint.txt
           exit "${PIPESTATUS[0]}"
 
       - name: Upload golangci-lint report
@@ -405,7 +412,9 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 
       - name: Run govulncheck
-        run: govulncheck ./...
+        run: |
+          govulncheck ./...
+          (cd sdk && govulncheck ./...)
 
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
@@ -425,6 +434,7 @@ jobs:
         run: |
           mkdir -p security-reports
           gosec -exclude-generated -exclude-dir=config/scripts/testdata -exclude-dir=control-center -fmt=json -out=security-reports/gosec.json ./...
+          (cd sdk && gosec -exclude-generated -nosec-require-rules -nosec-require-justification -quiet ./...)
 
       - name: Upload gosec report
         if: always()
@@ -817,7 +827,9 @@ jobs:
       - name: Run package storage, rollout and compatibility harness PostgreSQL tests
         env:
           ANIX_TEST_POSTGRES_DSN: host=127.0.0.1 port=5432 user=anix_kernel password=kernel dbname=anix_package_test sslmode=disable TimeZone=UTC
-        run: go test -p 1 -v -count=1 ./internal/packagestore ./pkg/packagestoresdk ./internal/tests/integration ./internal/tests/packagecompat
+        run: |
+          go test -p 1 -v -count=1 ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat
+          go -C sdk test -v -count=1 ./packagestoresdk
 
   migration-dry-run-test:
     name: SQLite to PostgreSQL Dry Run

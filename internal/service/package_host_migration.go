@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
-	"github.com/AnixOps/anix-control/v4/pkg/packagestoresdk"
-	"github.com/AnixOps/anix-control/v4/pkg/pluginhostsdk"
 	"gorm.io/gorm"
 )
 

@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
-	"github.com/AnixOps/anix-control/v4/pkg/moduletls"
 )
 
 var (

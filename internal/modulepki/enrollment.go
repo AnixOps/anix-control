@@ -17,8 +17,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/pkg/moduletls"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

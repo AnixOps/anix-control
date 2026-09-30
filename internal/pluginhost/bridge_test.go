@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	pluginhostv1 "github.com/AnixOps/anix-control/v4/api/pluginhost/v1"
+	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
+	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
-	"github.com/AnixOps/anix-control/v4/pkg/packagebridgesdk"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	packagebridgev1 "github.com/AnixOps/anix-control/v4/api/packagebridge/v1"
-	"github.com/AnixOps/anix-control/v4/pkg/moduletls"
+	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
+	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
