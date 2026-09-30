@@ -5136,3 +5136,46 @@ func (s *AdminExtendedTestSuite) TestAssignPlanToUser_InvalidBody() {
 func TestAdminExtended(t *testing.T) {
 	suite.Run(t, new(AdminExtendedTestSuite))
 }
+
+// A template id that is not a number must never reach GORM, which would run
+// it as an inline SQL condition.
+func (s *NotificationExtendedTestSuite) TestTemplateIDsAreNotSQL() {
+	for _, name := range []string{"first", "second"} {
+		s.Require().NoError(s.db.Create(&model.NotificationTemplate{Name: name, Type: "email", Event: "e", Content: "c"}).Error)
+	}
+	handler := NewNotificationHandler()
+	s.router.PUT("/admin/notification/templates/:id", handler.UpdateTemplate)
+	s.router.DELETE("/admin/notification/templates/:id", handler.DeleteTemplate)
+
+	req, _ := http.NewRequest("PUT", "/admin/notification/templates/0%20OR%201=1", strings.NewReader(`{"name":"renamed"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), "template not found", decodePanelTestResponse(s.T(), w)["msg"])
+
+	req, _ = http.NewRequest("DELETE", "/admin/notification/templates/0%20OR%201=1", nil)
+	w = httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), "invalid template id", decodePanelTestResponse(s.T(), w)["msg"])
+
+	var names []string
+	s.Require().NoError(s.db.Model(&model.NotificationTemplate{}).Order("id").Pluck("name", &names).Error)
+	assert.Equal(s.T(), []string{"first", "second"}, names)
+}
+
+func (s *InviteHandlerExtendedTestSuite) TestProcessWithdraw_IDIsNotSQL() {
+	withdraw := &model.CommissionWithdraw{UserID: s.testUser.ID, Amount: 1000}
+	s.Require().NoError(s.db.Create(withdraw).Error)
+	handler := NewInviteHandler()
+	s.router.POST("/admin/invite/withdrawals/:id/process", handler.ProcessWithdraw)
+
+	req, _ := http.NewRequest("POST", "/admin/invite/withdrawals/0%20OR%201=1/process", strings.NewReader(`{"approve":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+
+	assert.Equal(s.T(), http.StatusNotFound, w.Code)
+	var stored model.CommissionWithdraw
+	s.Require().NoError(s.db.First(&stored, withdraw.ID).Error)
+	assert.Equal(s.T(), 0, stored.Status)
+}

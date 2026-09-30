@@ -187,7 +187,8 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   list's legacy preload of the user is not needed: only `user_id` is
   returned.
 - **Notification (in place).** 19 of 24 routes on the adopted
-  `v2_notification_*` and `v2_telegram_*` tables, proved by
+  `v2_notification_template`, `v2_notification_log`, `v2_telegram_bot` and
+  `v2_telegram_user` tables, proved by
   `internal/tests/notificationcompat`; binding e-mails come from
   `kapi_user_directory_v1`. Five stay bridged: the e-mail configuration and
   test send (settings in `v2_system_config`), setting the webhook (needs the

@@ -379,10 +379,15 @@ func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
 // @Failure 500 {object} map[string]any
 // @Router /admin/notification/templates/{id} [put]
 func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
-	id := c.Param("id")
+	// A string id would reach GORM as an inline SQL condition.
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		panelError(c, "template not found")
+		return
+	}
 
 	var template model.NotificationTemplate
-	if err := database.Get().First(&template, id).Error; err != nil {
+	if err := database.Get().First(&template, uint(id)).Error; err != nil {
 		panelError(c, "template not found")
 		return
 	}
@@ -439,9 +444,13 @@ func (h *NotificationHandler) UpdateTemplate(c *gin.Context) {
 // @Failure 500 {object} map[string]any
 // @Router /admin/notification/templates/{id} [delete]
 func (h *NotificationHandler) DeleteTemplate(c *gin.Context) {
-	id := c.Param("id")
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		panelError(c, "invalid template id")
+		return
+	}
 
-	if err := database.Get().Delete(&model.NotificationTemplate{}, id).Error; err != nil {
+	if err := database.Get().Delete(&model.NotificationTemplate{}, uint(id)).Error; err != nil {
 		panelError(c, err.Error())
 		return
 	}

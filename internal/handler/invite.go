@@ -778,7 +778,6 @@ func (h *InviteHandler) GetWithdrawals(c *gin.Context) {
 // @Failure 404 {object} map[string]any
 // @Router /admin/invite/withdrawals/{id}/process [post]
 func (h *InviteHandler) ProcessWithdraw(c *gin.Context) {
-	id := c.Param("id")
 
 	var req map[string]any
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -829,8 +828,14 @@ func (h *InviteHandler) ProcessWithdraw(c *gin.Context) {
 
 	remark, _ := req["remark"].(string)
 
+	// A string id would reach GORM as an inline SQL condition.
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "withdrawal not found"})
+		return
+	}
 	var withdraw model.CommissionWithdraw
-	if err := database.Get().First(&withdraw, id).Error; err != nil {
+	if err := database.Get().First(&withdraw, uint(id)).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "withdrawal not found"})
 			return

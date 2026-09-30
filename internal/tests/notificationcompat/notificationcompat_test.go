@@ -252,11 +252,13 @@ func TestAdminTemplateRoutesParity(t *testing.T) {
 		{Name: "unknown template", Path: "/api/v2/admin/notification/templates/99", Principal: admin, Body: []byte(`{"name":"x"}`)},
 		{Name: "unknown template with a bad body", Path: "/api/v2/admin/notification/templates/99", Principal: admin, Body: []byte(`{"type":"sms"}`)},
 		{Name: "id that is not a number", Path: "/api/v2/admin/notification/templates/x", Principal: admin, Body: []byte(`{"name":"x"}`)},
+		{Name: "id that is SQL", Path: "/api/v2/admin/notification/templates/0%20OR%201=1", Principal: admin, Body: []byte(`{"name":"x"}`)},
 	})
 	write(t, route("DELETE", "/api/v2/admin/notification/templates/:id", "notification.admin.notification.templates.id.delete", notifications((*handler.NotificationHandler).DeleteTemplate)), []packagecompat.Case{
 		{Name: "delete", Path: "/api/v2/admin/notification/templates/2", Principal: admin},
 		{Name: "delete an unknown template", Path: "/api/v2/admin/notification/templates/99", Principal: admin},
 		{Name: "delete by an id that is not a number", Path: "/api/v2/admin/notification/templates/x", Principal: admin},
+		{Name: "delete by an id that is SQL", Path: "/api/v2/admin/notification/templates/0%20OR%201=1", Principal: admin},
 	})
 }
 

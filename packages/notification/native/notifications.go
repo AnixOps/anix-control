@@ -215,20 +215,19 @@ func (s *Service) AdminCreateTemplate(ctx context.Context, request pluginhostsdk
 }
 
 // AdminUpdateTemplate is PUT /api/v2/admin/notification/templates/:id.
-//
-// The id goes to GORM as the legacy handler passes it: a numeric id is the
-// primary key, anything else becomes GORM's inline SQL condition. The native
-// route keeps that for parity with the legacy handler (admin only); a fix
-// belongs in both at once.
 func (s *Service) AdminUpdateTemplate(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
-	id := request.Metadata.PathParams["id"]
+	// A string id would reach GORM as an inline SQL condition.
+	id, err := strconv.ParseUint(request.Metadata.PathParams["id"], 10, 32)
+	if err != nil {
+		return s.panelError("template not found")
+	}
 
 	db, err := s.Open(ctx)
 	if err != nil {
 		return s.panelError("template not found")
 	}
 	var template Template
-	if err := db.First(&template, id).Error; err != nil {
+	if err := db.First(&template, uint(id)).Error; err != nil {
 		return s.panelError("template not found")
 	}
 
@@ -271,15 +270,17 @@ func (s *Service) AdminUpdateTemplate(ctx context.Context, request pluginhostsdk
 }
 
 // AdminDeleteTemplate is DELETE /api/v2/admin/notification/templates/:id.
-// The id reaches GORM as in AdminUpdateTemplate.
 func (s *Service) AdminDeleteTemplate(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
-	id := request.Metadata.PathParams["id"]
+	id, err := strconv.ParseUint(request.Metadata.PathParams["id"], 10, 32)
+	if err != nil {
+		return s.panelError("invalid template id")
+	}
 
 	db, err := s.Open(ctx)
 	if err != nil {
 		return s.panelError(err.Error())
 	}
-	if err := db.Delete(&Template{}, id).Error; err != nil {
+	if err := db.Delete(&Template{}, uint(id)).Error; err != nil {
 		return s.panelError(err.Error())
 	}
 

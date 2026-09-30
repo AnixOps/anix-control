@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_notification_template", "kernel.storage.adopt:v2_notification_log", "kernel.storage.adopt:v2_telegram_bot", "kernel.storage.adopt:v2_telegram_user", "kernel.storage.adopt:v2_telegram_chat", "kernel.storage.adopt:v2_telegram_command", "kernel.storage.adopt:v2_telegram_notification", "kernel.view:kapi_user_directory_v1"],
+  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_notification_template", "kernel.storage.adopt:v2_notification_log", "kernel.storage.adopt:v2_telegram_bot", "kernel.storage.adopt:v2_telegram_user", "kernel.view:kapi_user_directory_v1"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["notification.view", "notification.api"],
