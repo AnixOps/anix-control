@@ -375,6 +375,22 @@
     - **Discovery:** the OpenID discovery document.
   - CI and the local gates tidy, vet, test, race-test, lint, scan and
     vulnerability-check the new module.
+- Native user administration in identity-platform (N11c): create, update,
+  ban, unban and delete, serving once their mode is native.
+  - **Projection.** Identity changes the account and projects email, admin,
+    staff and ban flags to Control, which revokes sessions exactly as v2
+    does.
+  - **Password changes** also mirror the hash and MFA state to the legacy
+    columns.
+  - **Entitlements** go through `UpdateSubscriber`.
+  - **Contract.** New `KernelIdentity.GetSubscriber` returns the v2 user
+    object for admin answers. `CreateSubscriber` gains `is_admin` and
+    `is_staff`. Control keeps emails as identity sends them: registration
+    lowercases, v2 administration stores them as given.
+  - **Parity.** `internal/tests/identitycompat` compares 27 more cases on
+    SQLite and PostgreSQL, the responses and Control's resulting
+    subscribers, revocations and MFA rows. Generated uuid, token and times
+    are masked.
 - Native MFA routes in identity-platform (N11b): the six user MFA routes
   (status, TOTP setup and enable, disable, verify, backup code regeneration)
   and the admin MFA configuration. Like login, they serve once their mode is

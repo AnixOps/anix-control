@@ -94,7 +94,9 @@ func (h *hostServer) CreateSubscriber(ctx context.Context, request *kernelidenti
 		return nil, status.Error(codes.InvalidArgument, "account_uuid must be a UUID")
 	}
 	accountUUID := accountID.String()
-	email := normalizeEmail(request.GetEmail())
+	// Identity decides how emails are normalized: registration lowercases
+	// them, v2 administration stores them as given.
+	email := strings.TrimSpace(request.GetEmail())
 	if email == "" {
 		return nil, status.Error(codes.InvalidArgument, "email is required")
 	}
@@ -150,6 +152,7 @@ func (h *hostServer) CreateSubscriber(ctx context.Context, request *kernelidenti
 		}
 		user := service.NewSubscriberUser(email, UnusableLegacyPassword)
 		user.InviteUserID = inviteUserID
+		user.IsAdmin, user.IsStaff = boolInt(request.GetIsAdmin()), boolInt(request.GetIsStaff())
 		if err := tx.Create(user).Error; err != nil {
 			return err
 		}
@@ -231,7 +234,7 @@ func (h *hostServer) ApplyAccountProjection(ctx context.Context, request *kernel
 	if request.GetVersion() == 0 {
 		return nil, status.Error(codes.InvalidArgument, "version must be positive")
 	}
-	email := normalizeEmail(request.GetEmail())
+	email := strings.TrimSpace(request.GetEmail())
 	if email == "" {
 		return nil, status.Error(codes.InvalidArgument, "email is required")
 	}
@@ -392,6 +395,27 @@ func (h *hostServer) ResolveActorAccess(ctx context.Context, request *kerneliden
 	}, nil
 }
 
+// GetSubscriber returns the subscriber as the v2 admin API shows it.
+func (h *hostServer) GetSubscriber(ctx context.Context, request *kernelidentityv1.GetSubscriberRequest) (*kernelidentityv1.GetSubscriberResponse, error) {
+	db, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := userID(request.GetUserId())
+	if err != nil {
+		return nil, err
+	}
+	var user model.User
+	if err := db.Take(&user, id).Error; err != nil {
+		return nil, statusFor("get subscriber", err)
+	}
+	encoded, err := json.Marshal(user)
+	if err != nil {
+		return nil, internalError("encode subscriber", err)
+	}
+	return &kernelidentityv1.GetSubscriberResponse{SubscriberJson: encoded}, nil
+}
+
 // IdentitySettings is the settings_json document of GetIdentitySettings.
 type IdentitySettings struct {
 	Registration          RegistrationSettings `json:"registration"`
@@ -537,10 +561,6 @@ func userID(value uint64) (uint, error) {
 		return 0, status.Error(codes.InvalidArgument, "user_id is out of range")
 	}
 	return uint(value), nil // #nosec G115 -- range is checked immediately above.
-}
-
-func normalizeEmail(email string) string {
-	return strings.ToLower(strings.TrimSpace(email))
 }
 
 func boolInt(value bool) int {

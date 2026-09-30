@@ -26,6 +26,7 @@ const (
 	KernelIdentity_PublishRevocation_FullMethodName      = "/anixops.kernelidentity.v1.KernelIdentity/PublishRevocation"
 	KernelIdentity_ResolveActorAccess_FullMethodName     = "/anixops.kernelidentity.v1.KernelIdentity/ResolveActorAccess"
 	KernelIdentity_GetIdentitySettings_FullMethodName    = "/anixops.kernelidentity.v1.KernelIdentity/GetIdentitySettings"
+	KernelIdentity_GetSubscriber_FullMethodName          = "/anixops.kernelidentity.v1.KernelIdentity/GetSubscriber"
 )
 
 // KernelIdentityClient is the client API for KernelIdentity service.
@@ -60,6 +61,9 @@ type KernelIdentityClient interface {
 	// GetIdentitySettings returns the kernel's legacy auth settings once, to
 	// seed the identity installation configuration.
 	GetIdentitySettings(ctx context.Context, in *GetIdentitySettingsRequest, opts ...grpc.CallOption) (*GetIdentitySettingsResponse, error)
+	// GetSubscriber returns a subscriber as the v2 admin API shows it, for
+	// identity's administration answers.
+	GetSubscriber(ctx context.Context, in *GetSubscriberRequest, opts ...grpc.CallOption) (*GetSubscriberResponse, error)
 }
 
 type kernelIdentityClient struct {
@@ -140,6 +144,16 @@ func (c *kernelIdentityClient) GetIdentitySettings(ctx context.Context, in *GetI
 	return out, nil
 }
 
+func (c *kernelIdentityClient) GetSubscriber(ctx context.Context, in *GetSubscriberRequest, opts ...grpc.CallOption) (*GetSubscriberResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSubscriberResponse)
+	err := c.cc.Invoke(ctx, KernelIdentity_GetSubscriber_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // KernelIdentityServer is the server API for KernelIdentity service.
 // All implementations must embed UnimplementedKernelIdentityServer
 // for forward compatibility.
@@ -172,6 +186,9 @@ type KernelIdentityServer interface {
 	// GetIdentitySettings returns the kernel's legacy auth settings once, to
 	// seed the identity installation configuration.
 	GetIdentitySettings(context.Context, *GetIdentitySettingsRequest) (*GetIdentitySettingsResponse, error)
+	// GetSubscriber returns a subscriber as the v2 admin API shows it, for
+	// identity's administration answers.
+	GetSubscriber(context.Context, *GetSubscriberRequest) (*GetSubscriberResponse, error)
 	mustEmbedUnimplementedKernelIdentityServer()
 }
 
@@ -202,6 +219,9 @@ func (UnimplementedKernelIdentityServer) ResolveActorAccess(context.Context, *Re
 }
 func (UnimplementedKernelIdentityServer) GetIdentitySettings(context.Context, *GetIdentitySettingsRequest) (*GetIdentitySettingsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetIdentitySettings not implemented")
+}
+func (UnimplementedKernelIdentityServer) GetSubscriber(context.Context, *GetSubscriberRequest) (*GetSubscriberResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSubscriber not implemented")
 }
 func (UnimplementedKernelIdentityServer) mustEmbedUnimplementedKernelIdentityServer() {}
 func (UnimplementedKernelIdentityServer) testEmbeddedByValue()                        {}
@@ -350,6 +370,24 @@ func _KernelIdentity_GetIdentitySettings_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _KernelIdentity_GetSubscriber_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSubscriberRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelIdentityServer).GetSubscriber(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KernelIdentity_GetSubscriber_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelIdentityServer).GetSubscriber(ctx, req.(*GetSubscriberRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KernelIdentity_ServiceDesc is the grpc.ServiceDesc for KernelIdentity service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -384,6 +422,10 @@ var KernelIdentity_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetIdentitySettings",
 			Handler:    _KernelIdentity_GetIdentitySettings_Handler,
+		},
+		{
+			MethodName: "GetSubscriber",
+			Handler:    _KernelIdentity_GetSubscriber_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

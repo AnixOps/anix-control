@@ -28,6 +28,10 @@ type Kernel interface {
 	CreateSubscriber(ctx context.Context, in *kernelidentityv1.CreateSubscriberRequest, opts ...grpc.CallOption) (*kernelidentityv1.CreateSubscriberResponse, error)
 	ResolveActorAccess(ctx context.Context, in *kernelidentityv1.ResolveActorAccessRequest, opts ...grpc.CallOption) (*kernelidentityv1.ResolveActorAccessResponse, error)
 	GetIdentitySettings(ctx context.Context, in *kernelidentityv1.GetIdentitySettingsRequest, opts ...grpc.CallOption) (*kernelidentityv1.GetIdentitySettingsResponse, error)
+	UpdateSubscriber(ctx context.Context, in *kernelidentityv1.UpdateSubscriberRequest, opts ...grpc.CallOption) (*kernelidentityv1.UpdateSubscriberResponse, error)
+	ApplyAccountProjection(ctx context.Context, in *kernelidentityv1.ApplyAccountProjectionRequest, opts ...grpc.CallOption) (*kernelidentityv1.ApplyAccountProjectionResponse, error)
+	DeleteSubscriber(ctx context.Context, in *kernelidentityv1.DeleteSubscriberRequest, opts ...grpc.CallOption) (*kernelidentityv1.DeleteSubscriberResponse, error)
+	GetSubscriber(ctx context.Context, in *kernelidentityv1.GetSubscriberRequest, opts ...grpc.CallOption) (*kernelidentityv1.GetSubscriberResponse, error)
 }
 
 // Directory reads subscriber fields Control owns, from the kernel API view
@@ -69,6 +73,11 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"identity.user.mfa.backup_codes.regenerate.post": s.RegenerateBackupCodes,
 		"identity.admin.mfa.config.get":                  s.AdminMFAConfig,
 		"identity.admin.mfa.config.put":                  s.UpdateAdminMFAConfig,
+		"identity.admin.users.post":                      s.CreateUser,
+		"identity.admin.users.id.put":                    s.UpdateUser,
+		"identity.admin.users.id.ban.post":               s.BanUser,
+		"identity.admin.users.id.unban.post":             s.UnbanUser,
+		"identity.admin.users.id.delete":                 s.DeleteUser,
 	}
 }
 

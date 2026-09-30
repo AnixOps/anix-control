@@ -32,6 +32,18 @@ service KernelIdentity {
   // GetIdentitySettings returns the kernel's legacy auth settings once, to
   // seed the identity installation configuration.
   rpc GetIdentitySettings(GetIdentitySettingsRequest) returns (GetIdentitySettingsResponse);
+  // GetSubscriber returns a subscriber as the v2 admin API shows it, for
+  // identity's administration answers.
+  rpc GetSubscriber(GetSubscriberRequest) returns (GetSubscriberResponse);
+}
+
+message GetSubscriberRequest {
+  uint64 user_id = 1;
+}
+
+message GetSubscriberResponse {
+  // subscriber_json is the v2 user object, without credentials.
+  bytes subscriber_json = 1;
 }
 
 message CreateSubscriberRequest {
@@ -42,6 +54,10 @@ message CreateSubscriberRequest {
   // subscriber: the code's owner becomes the inviter. Codes stay with the
   // kernel. Refusals are FailedPrecondition with the v2 message.
   string invite_code = 4;
+  // is_admin and is_staff set the new subscriber's projected flags, for
+  // accounts an administrator creates.
+  bool is_admin = 5;
+  bool is_staff = 6;
 }
 
 message CreateSubscriberResponse {

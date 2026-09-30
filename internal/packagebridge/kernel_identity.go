@@ -86,3 +86,11 @@ func (m *moduleKernelIdentity) GetIdentitySettings(ctx context.Context, request 
 	}
 	return server.GetIdentitySettings(ctx, request)
 }
+
+func (m *moduleKernelIdentity) GetSubscriber(ctx context.Context, request *kernelidentityv1.GetSubscriberRequest) (*kernelidentityv1.GetSubscriberResponse, error) {
+	server, err := m.caller(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return server.GetSubscriber(ctx, request)
+}

@@ -248,7 +248,17 @@ instance's generation.
         the v2 defaults, coercions and normalization.
       - Parity is proven except for the random secrets and codes, and
         `last_used`, which identity keeps to the second.
-    - 11c: admin user create, update, ban, unban and delete.
+    - 11c (in place): admin user create, update, ban, unban and delete.
+      - Identity changes the account and projects email, admin, staff and
+        ban flags with `ApplyAccountProjection`, so Control revokes as v2
+        does.
+      - A password change also mirrors the hash and the MFA state to the
+        legacy columns.
+      - Entitlements go to `UpdateSubscriber`. Create answers with
+        `GetSubscriber` (new RPC); `CreateSubscriber` takes the admin and
+        staff flags.
+      - Parity covers the responses and the resulting Control state:
+        subscribers, revocations and legacy MFA rows.
 12. Cutover, revocation push and finalize.
 13. End-to-end acceptance on Compose and kind.
 
