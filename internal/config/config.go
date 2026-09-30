@@ -41,6 +41,7 @@ type Config struct {
 	ForwardRuntime ForwardRuntimeConfig `yaml:"forward_runtime"`
 	Plugins        PluginConfig         `yaml:"plugins"`
 	GRPC           GRPCConfig           `yaml:"grpc"`
+	ModuleRuntime  ModuleRuntimeConfig  `yaml:"module_runtime"`
 }
 
 // PluginConfig controls the official plugin trust root and the opt-in durable
@@ -110,6 +111,31 @@ func effectiveControlHostPayloadLimit(value int64) int64 {
 	}
 	return value
 }
+
+// ModuleRuntimeConfig controls network modules: packages that run as
+// separate services and talk to the kernel over gRPC with mTLS.
+type ModuleRuntimeConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// Cluster names the deployment in every module SPIFFE ID.
+	Cluster string `yaml:"cluster"`
+	// PKI is "builtin" (the kernel's own CA, with enrollment) or "external"
+	// (certificates issued elsewhere, for example by cert-manager).
+	PKI string `yaml:"pki"`
+	// CAKEK is the base64 or hex 32-byte key that seals the built-in CA key.
+	CAKEK string `yaml:"ca_kek"`
+	// CertLifetime bounds module and kernel certificates (default 24h).
+	CertLifetime string `yaml:"cert_lifetime"`
+	// External PKI: the trust bundle and the kernel's own certificate.
+	TrustBundleFile string `yaml:"trust_bundle_file"`
+	CertFile        string `yaml:"cert_file"`
+	KeyFile         string `yaml:"key_file"`
+}
+
+// Module runtime PKI modes.
+const (
+	ModulePKIBuiltin  = "builtin"
+	ModulePKIExternal = "external"
+)
 
 // GRPCConfig controls the node-facing gRPC server (AnixOps Agent nodes connect here).
 type GRPCConfig struct {
@@ -413,6 +439,9 @@ func (c *Config) ValidateForServer() error {
 	if c == nil {
 		return fmt.Errorf("configuration is missing")
 	}
+	if err := c.ModuleRuntime.validate(); err != nil {
+		return err
+	}
 	if c.Env == "production" {
 		secret := strings.TrimSpace(c.JWT.Secret)
 		if secret == "" {
@@ -423,6 +452,53 @@ func (c *Config) ValidateForServer() error {
 		}
 	}
 	return nil
+}
+
+func (m ModuleRuntimeConfig) validate() error {
+	if !m.Enabled {
+		return nil
+	}
+	if _, err := time.ParseDuration(m.CertLifetimeOrDefault()); err != nil {
+		return fmt.Errorf("invalid module_runtime.cert_lifetime %q", m.CertLifetime)
+	}
+	switch m.PKIOrDefault() {
+	case ModulePKIBuiltin:
+		if strings.TrimSpace(m.CAKEK) == "" {
+			return fmt.Errorf("module_runtime.ca_kek is required for the built-in PKI (set %sMODULE_RUNTIME_CA_KEK or %sMODULE_RUNTIME_CA_KEK%s)", EnvPrefix, EnvPrefix, EnvFileSuffix)
+		}
+	case ModulePKIExternal:
+		if m.TrustBundleFile == "" || m.CertFile == "" || m.KeyFile == "" {
+			return fmt.Errorf("module_runtime.trust_bundle_file, cert_file and key_file are required for the external PKI")
+		}
+	default:
+		return fmt.Errorf("module_runtime.pki must be %q or %q", ModulePKIBuiltin, ModulePKIExternal)
+	}
+	return nil
+}
+
+// ClusterOrDefault returns the configured cluster name, "default" when empty.
+func (m ModuleRuntimeConfig) ClusterOrDefault() string {
+	if strings.TrimSpace(m.Cluster) == "" {
+		return "default"
+	}
+	return strings.TrimSpace(m.Cluster)
+}
+
+// PKIOrDefault returns the configured PKI mode, "builtin" when empty.
+func (m ModuleRuntimeConfig) PKIOrDefault() string {
+	if strings.TrimSpace(m.PKI) == "" {
+		return ModulePKIBuiltin
+	}
+	return strings.TrimSpace(m.PKI)
+}
+
+// CertLifetimeOrDefault returns the configured certificate lifetime, 24h when
+// empty.
+func (m ModuleRuntimeConfig) CertLifetimeOrDefault() string {
+	if strings.TrimSpace(m.CertLifetime) == "" {
+		return "24h"
+	}
+	return strings.TrimSpace(m.CertLifetime)
 }
 
 func (d DatabaseConfig) validateConnectionSettings() error {

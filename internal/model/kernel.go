@@ -496,6 +496,6 @@ func KernelModels() []any {
 		&PluginLifecyclePlan{}, &PluginLifecyclePlanStep{},
 		&NodeOperationRevision{}, &PluginTelemetryState{}, &NodePluginObservedState{},
 		&PackageMigrationRun{}, &PackageValidationResult{}, &PackageRouteGeneration{}, &PackageBackupReference{}, &PackageRolloutLock{},
-		&PackageStorage{},
+		&PackageStorage{}, &ServiceCA{}, &ModuleEnrollment{}, &ModuleCertificate{},
 	}
 }

@@ -258,6 +258,31 @@
 
 ### Added
 
+- Built-in module PKI for network modules (N2).
+  - **CA.** `internal/modulepki` is an ECDSA P-256 CA.
+    - Its key is sealed under `module_runtime.ca_kek`.
+    - A name constraint limits it to `spiffe://anixops/...` identities.
+    - It is created at startup when `module_runtime.enabled` is set.
+    - Rotation keeps the next and retired CAs trusted while their
+      certificates are valid.
+  - **Certificates.** Short-lived, 24h by default, with exactly one SPIFFE
+    URI SAN; requested subjects and SANs are ignored. Renewal runs over mTLS.
+  - **Enrollment credentials.** Hashed, one-time or reusable, consumed
+    atomically. Revoking one revokes the certificates issued through it.
+  - **Administration.** `POST/GET/DELETE /api/v4/kernel/modules/enrollment-tokens`,
+    `POST /api/v4/kernel/modules/ca/rotate`, and the CLI
+    `anix-control module token|ca ...`.
+  - **External CA.** `module_runtime.pki: external` loads a trust bundle and
+    kernel certificate (for example from cert-manager) and reloads them on
+    change.
+  - **`pkg/moduletls`** holds the SPIFFE identity rules and TLS 1.3
+    configurations shared by the kernel and modules. Peers are verified by
+    identity on every handshake, including resumed ones.
+  - **New tables:** `v4_kernel_service_ca`, `v4_kernel_module_enrollment`,
+    `v4_kernel_module_certificate`.
+  - **New settings:** `module_runtime.*` (`ANIX_CONTROL_MODULE_RUNTIME_*`),
+    off by default.
+
 - Contracts for network modules and the identity service (N1).
   - **New protocols.**
     - `api/modulepki/v1` `ModulePKI`: `Enroll`, `Renew`, `GetTrustBundle`.
