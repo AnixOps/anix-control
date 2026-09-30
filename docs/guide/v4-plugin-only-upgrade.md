@@ -5,6 +5,12 @@ All supported `/api/v2` business routes resolve from signed package
 declarations. There is no request-time fallback to an uninstalled, disabled,
 unhealthy, unsigned, or incompatible package.
 
+> **Applies to `v4.0.0` only.** That release carries the evidence bundle and
+> approvals described here; the scripts it names exist in the `v4.0.0` source
+> tree, which is the trusted source to run them from. Later releases have no
+> such gates (`docs/RELEASING.md`): verify them with `SHA256SUMS.txt`, the
+> pinned official root and cosign (`docs/UPGRADE.md`).
+
 ## Release Preconditions
 
 Do not start an upgrade until the release record contains all sixteen signed

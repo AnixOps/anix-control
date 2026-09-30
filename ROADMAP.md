@@ -18,6 +18,6 @@ Rules that apply to every roadmap item:
 - A passing unit or browser test is not a production canary. Production
   execution flags (topology, Supervisor, dynamic plugin execution) stay off
   until the documented operator approval is recorded.
-- Product stage tags are governed by
-  [`config/scripts/release-stage-contract.json`](config/scripts/release-stage-contract.json),
-  not by the Go module import suffix (`/v4`).
+- Product version tags follow the CHANGELOG and
+  [`docs/RELEASING.md`](docs/RELEASING.md), not the Go module import suffix
+  (`/v4`).

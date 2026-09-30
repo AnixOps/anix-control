@@ -2,6 +2,10 @@
 
 Date: 2026-09-28
 
+> Historical record. The release-stage, rehearsal and evidence gates it cites
+> were retired after `v4.0.0`; releases now follow `docs/RELEASING.md`. The
+> scripts named below remain in the `v4.0.0` source tree.
+
 This record is a local verification snapshot for the `4.0.x` RC roadmap. It is
 not a production approval and does not replace the signed CI or staging
 records required by [`ROADMAP-4.0.x-RC.md`](ROADMAP-4.0.x-RC.md).

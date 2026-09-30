@@ -67,7 +67,8 @@ Evidence to keep:
 
 ## Artifact Verification
 
-Download artifacts from the GitHub Release for the target tag. At minimum,
+Download artifacts from the GitHub Release for the target tag.
+[`RELEASING.md`](RELEASING.md) lists what every release carries. At minimum,
 download:
 
 - the matching `anix-control-<os>-<arch>.tar.gz` backend artifact (or the
@@ -75,26 +76,19 @@ download:
 - `anix-control-frontend.tar.gz` or `anix-control-frontend.zip`
 - `SHA256SUMS.txt`
 - `RELEASE_MANIFEST.json`
-- `OPERATOR_DEPLOYMENT.md`
 - `RELEASE_NOTES.md`
-- `verify-machine-telemetry-signature.py`
-- `migration-dry-run.txt`
-- `anix-control-source.sbom.spdx.json`
 
-The formal `v4.0.0` release attaches all sixteen signed official package
-artifacts. The package set is fixed by the V4 evidence bundle; do not import a
-partial or mixed-version cohort. For each package ID, keep these files from the
-same release together:
+Every official package is attached at the release version. For each package
+ID, keep these files from the same release together:
 
-- `<plugin-id>-4.0.0.anxp`
-- `<plugin-id>-4.0.0.manifest.json`
-- `<plugin-id>-4.0.0.manifest.sig`
-- `<plugin-id>-4.0.0.public-key.pem`
-- `<plugin-id>-4.0.0.sbom.spdx.json`
+- `<plugin-id>-<version>.anxp`
+- `<plugin-id>-<version>.manifest.json`
+- `<plugin-id>-<version>.manifest.sig`
+- `<plugin-id>-<version>.public-key.pem`
+- `<plugin-id>-<version>.sbom.spdx.json`
 
-The release-level `official-public-key.raw`, `v4-release-evidence.tar.gz`, and
-`SHA256SUMS.txt` bind the entire cohort. Historical `v4.0.0-alpha.*` assets
-remain frozen preview evidence and must not be mixed into the formal bundle.
+Do not import a mixed-version package set. The `v4.0.0` release also attaches
+`v4-release-evidence.tar.gz`; the v4 plugin-only upgrade guide covers it.
 
 Verify checksums before replacing any production file:
 
@@ -111,20 +105,11 @@ Open `RELEASE_MANIFEST.json` and confirm:
 
 If the manifest or checksum verification fails, stop the upgrade.
 
-Verify a package manifest signature with the public key published by the same
-GitHub Release, or with the pinned AnixOps trust root already approved in your
-environment:
-
-```bash
-python3 verify-machine-telemetry-signature.py \
-  --manifest machine-telemetry-4.0.0.manifest.json \
-  --artifact machine-telemetry-4.0.0.anxp \
-  --signature machine-telemetry-4.0.0.manifest.sig \
-  --public-key machine-telemetry-4.0.0.public-key.pem
-```
-
-If the package hash, manifest signature, or trust-root fingerprint does not
-match the release record, stop before enabling any plugin flag.
+Control verifies every package manifest against its configured official root
+(`plugins.official_public_key`) when it imports a package, and refuses any
+package signed by another key. Before importing, compare the release's
+`official-public-key.raw` with the root pinned in your environment. If they
+differ, stop before enabling any plugin flag.
 
 ## Plugin-Only Bootstrap And Execution
 
@@ -400,7 +385,7 @@ Unix socket) now works as written.
 If a release requires schema/data changes:
 
 - review release notes before the maintenance window
-- keep `migration-dry-run.txt` from the GitHub Release
+- take and verify a database backup first
 - record pre/post row counts for affected tables
 - keep rollback instructions for each changed schema helper
 - do not combine SQLite-to-PostgreSQL migration with an unrelated feature

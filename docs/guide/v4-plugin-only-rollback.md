@@ -4,6 +4,12 @@ This runbook rolls back a `v4.0.0` package-only release. It restores a
 previous verified package generation; it does not re-enable direct legacy v2
 business handlers as an emergency bypass.
 
+> **Applies to `v4.0.0` only.** That release carries the evidence bundle and
+> approvals described here; the scripts it names exist in the `v4.0.0` source
+> tree, which is the trusted source to run them from. Later releases have no
+> such gates (`docs/RELEASING.md`): verify them with `SHA256SUMS.txt`, the
+> pinned official root and cosign (`docs/UPGRADE.md`).
+
 ## Rollback Triggers
 
 Start the rollback procedure when a signed package cannot be verified, a

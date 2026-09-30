@@ -85,6 +85,29 @@
 
 ### Changed
 
+- Releases follow an individual-developer flow (`docs/RELEASING.md`).
+  - **Cutting a release.** `config/scripts/prepare_release.py <version>`
+    sets every declared version and dates the CHANGELOG. Merge that through
+    a pull request, then push the `vX.Y.Z` tag.
+  - **Package set.** The tag pipeline signs every package under `packages/`
+    at the tag version: 18 today, including `platform` and `affiliate`. The
+    old per-stage package list pinned releases to 4.0 and 16 packages;
+    v4.1.0 can now ship.
+  - **Release body.** The GitHub Release body is the tag's CHANGELOG
+    section. Suffixed tags are prereleases and never become the latest
+    release.
+  - **Removed gates.** The release-stage contract, the public rehearsal, the
+    signed evidence bundle, and the canary and support approvals are gone,
+    together with their scripts. So are the `OPERATOR_DEPLOYMENT.md`,
+    migration dry-run and legacy signature-verifier release assets.
+    `v4.0.0` keeps its evidence bundle, and its guides still describe it.
+  - **Kept.** Package signing with the protected root (checked against the
+    shipped trust root), the cosign-signed multi-architecture image with SBOM
+    and provenance, the source SBOM, checksums, the release manifest and the
+    full test suite before release.
+  - **Policy check.** `check_release_workflow.sh` shrinks from 997 to about
+    380 lines of essentials. Its self-test now mutates the real workflow.
+
 - 21 v2 routes moved out of identity-platform (N7). Paths and responses are
   unchanged; the routes stay bridged to the same kernel handlers.
   - **New packages.** `platform` takes system configuration, audit logs and

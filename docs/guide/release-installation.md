@@ -22,9 +22,11 @@ with systemd. Upgrades are in [`../UPGRADE.md`](../UPGRADE.md).
    The fresh development template binds gRPC to `127.0.0.1:50051`; remote
    Agents require an explicit TLS/proxy setup and a deliberate bind-address change.
 3. Decide the exact version to install. Pinning a tag makes the operation
-   reproducible. A `v4.0.0` package-only release is installable only when its
-   release assets include a verified `v4-release-evidence.tar.gz`; historical
-   `v4.0.0-alpha.*` tags are previews, not substitutes for that evidence.
+   reproducible. The `v4.0.0` package-only release is installable only when
+   its release assets include a verified `v4-release-evidence.tar.gz`;
+   historical `v4.0.0-alpha.*` tags are previews, not substitutes for that
+   evidence. Later releases carry no evidence bundle: verify them with
+   `SHA256SUMS.txt` and the pinned official root (`docs/UPGRADE.md`).
 4. Back up any existing panel before running `update` or `rollback`.
 
 ## Fresh Install

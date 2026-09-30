@@ -46,7 +46,7 @@ silently imply a production rollout of new worktree changes.
 | Scoped authorization | Implemented and administrable | `service_scope`, access groups, group users/plans, resource grants, quota policies, and server-side effective-access resolution exist. `/admin/access-groups` manages the model without returning member credentials. |
 | Agent Supervisor canary configuration | Implemented, default off | The node deployment wizard can emit Supervisor fields only after explicit opt-in, a trusted Control channel, and an official public key. It does not alter the legacy data plane. |
 | Real signed-WebUI browser gate | Implemented | An isolated Playwright test builds a real Control binary/frontend, registers an ephemeral signed package, checks catalog/asset/menu/route behavior, disables it through a durable operation, and verifies revocation. No browser route interception is used. |
-| Release package scope | Implemented | `config/scripts/release-stage-contract.json` limits 3.1 assets to `machine-telemetry`; later forwarding packages cannot be represented as 3.1 release assets. |
+| Release package scope | Retired after v4.0.0 | Up to `v4.0.0` a release-stage contract fixed each release's package set (3.1 shipped only `machine-telemetry`). Releases now sign and publish every package under `packages/` at the tag version (`docs/RELEASING.md`). |
 | Compatible Control Center lifecycle slice | Preview/Partial | The Control Center (`control-center/`, imported from the archived `Anixops-control-center` repository) connects with a separate Control administrator session via `/api/v2/login`, then reads the official `/api/v3` catalog and installation state, edits revisioned configuration, submits idempotent Control/Agent install/update/enable/disable/rollback actions, and renders operation chains. Its Workers session remains independent. Local frontend tests/build and a full-process signed Agent install/update/enable rehearsal pass; live staging evidence is still required. |
 | Default deployment safety | Implemented | The normal and production templates keep Control execution, Agent dispatch, and topology execution disabled. The development template is explicitly separate. |
 | Legacy compatibility | Retained intentionally | `/api/v2`, subscription behavior, UniProxy synchronization, and the existing forwarding path remain active until their owning packages reach parity and migration evidence exists. |
@@ -64,7 +64,7 @@ npm test -- --run src/__tests__/AccessGroups.test.js src/__tests__/Nodes.test.js
 npm run build
 npx playwright test --config playwright.live-control.config.js
 cd ..
-python3 config/scripts/check_release_stage.py --self-test
+python3 config/scripts/prepare_release.py --self-test
 bash config/scripts/check_release_workflow.sh --self-test
 bash config/scripts/check_release_workflow.sh
 ```
