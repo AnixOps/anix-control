@@ -1722,7 +1722,7 @@ jobs:
             COMMIT=${{ steps.build_meta.outputs.commit }}
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v4.1.2
 
       - name: Sign the image digest
         shell: bash
@@ -1800,7 +1800,7 @@ jobs:
           cache-to: type=gha,scope=docker-edge,mode=max
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v4.1.2
 
       - name: Sign the edge image digest
         shell: bash
