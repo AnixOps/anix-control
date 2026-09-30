@@ -274,6 +274,30 @@ the kernel:
 - If a second consumer or a separate release cadence makes it worthwhile,
   the directory can move to its own repository unchanged.
 
+## Identity core module
+
+`identity/` is a third Go module, `github.com/AnixOps/anix-control/identity`:
+the product-neutral identity core that AnixOps services can reuse.
+- **Dependencies.** It depends only on the SDK module. The boundary gate
+  rejects any dependency on the kernel.
+- **`identity/signingkey`.** Ed25519 signing keys, sealed at rest with
+  AES-256-GCM under a 32-byte KEK and bound to their key id. Rotation policy:
+  - a key is published (NEXT) before it signs, for longer than verifiers take
+    to refresh;
+  - it then signs (ACTIVE);
+  - once replaced it only verifies (RETIRED) until its tokens have expired;
+  - REVOKED keys verify nothing.
+- **`identity/token`.** Issues access tokens for one audience (`aud`) each,
+  and renders the published keys as a JWKS.
+- **`identity/oidc`.** The OpenID discovery document (`issuer`, `jwks_uri`,
+  EdDSA), so any service can find the keys from the issuer.
+- **Verification in the SDK.** Verification lives in the SDK
+  (`sdk/identitytoken`), so services verify tokens without depending on the
+  identity core. It pins EdDSA, requires a published, unrevoked `kid`,
+  issuer, audience and the required claims, and allows 60 s of leeway.
+  `contracts/identity/v1` fixtures drive its tests. Revocation (token
+  versions, sessions, not-before) is the verifier's own state.
+
 ## Trust boundary
 
 For `local` hosts the kernel proves what runs: it executes only the entrypoint

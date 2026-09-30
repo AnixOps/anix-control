@@ -358,6 +358,23 @@
     `modules_compose_smoke.sh` (production Compose files) and
     `modules_kind_smoke.sh` (the chart on kind, two replicas, NetworkPolicy
     on, pod replacement).
+- Identity token contract and identity core module (N10a).
+  - **`sdk/identitytoken`.** Verifies identity access tokens for any AnixOps
+    service.
+    - It checks the EdDSA signature against a published, unrevoked `kid`,
+      and requires the issuer, audience and the required claims (`sub` equal
+      to `user_id`, `sid`, `tv`, `jti`), with 60 s of leeway.
+    - It includes the JWKS types.
+    - Tests run the `contracts/identity/v1` golden and negative fixtures.
+  - **`identity/`.** A new Go module, `github.com/AnixOps/anix-control/identity`:
+    the product-neutral identity core, which depends only on the SDK
+    (boundary gate).
+    - **Signing keys:** Ed25519 keys sealed under a KEK, with a
+      NEXT → ACTIVE → RETIRED rotation policy and revocation.
+    - **Tokens:** per-audience token issuing and a JWKS rendering.
+    - **Discovery:** the OpenID discovery document.
+  - CI and the local gates tidy, vet, test, race-test, lint, scan and
+    vulnerability-check the new module.
 - Module SDK for network modules (N5).
   - **`pkg/modulesdk.Run`.** Runs a host as the kernel's local child process
     or, with `ANIX_MODULE_MODE=remote`, as a network module.

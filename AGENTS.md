@@ -15,6 +15,10 @@ file short and enforceable; put explanations in `docs/`.
   never depend on the kernel module (`check_package_boundaries.sh`). Run its
   checks with `go -C sdk build ./...`, `go -C sdk vet ./...` and
   `go -C sdk test ./...`.
+- `identity/` is the identity core module, `github.com/AnixOps/anix-control/identity`
+  (signing keys, token issuing, OIDC discovery). It is product-neutral and
+  may depend only on the SDK module (`check_package_boundaries.sh`); check it
+  with `go -C identity build ./...`, `vet` and `test` like the SDK.
 - v4.0.0 is the "plugin-only platform" release: signed plugin packages under
   `packages/*`, package host processes (`sdk/api/pluginhost`, `sdk/api/packagebridge`,
   `sdk/pluginhostsdk`, `sdk/packagebridgesdk`), and the kernel API under

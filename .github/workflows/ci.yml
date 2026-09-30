@@ -296,7 +296,8 @@ jobs:
         run: |
           go mod tidy
           go -C sdk mod tidy
-          git diff --exit-code -- go.mod go.sum sdk/go.mod sdk/go.sum
+          go -C identity mod tidy
+          git diff --exit-code -- go.mod go.sum sdk/go.mod sdk/go.sum identity/go.mod identity/go.sum
 
       - name: Verify Agent SDK dependency boundary
         run: bash config/scripts/check_agent_sdk_dependency.sh
@@ -324,11 +325,13 @@ jobs:
         run: |
           go vet ./...
           go -C sdk vet ./...
+          go -C identity vet ./...
 
       - name: Run full Go test suite
         run: |
           go test ./... -count=1 -p=1
           go -C sdk test ./... -count=1
+          go -C identity test ./... -count=1
 
   go-race:
     name: Go Race Detector
@@ -347,6 +350,7 @@ jobs:
         run: |
           go test -race ./... -count=1 -p=1
           go -C sdk test -race ./... -count=1
+          go -C identity test -race ./... -count=1
 
   go-benchmark-smoke:
     name: Go Benchmark Smoke
@@ -385,7 +389,8 @@ jobs:
         run: |
           mkdir -p lint-reports
           set +e
-          { golangci-lint run --timeout=8m && (cd sdk && golangci-lint run --timeout=8m --config ../.golangci.yml); } 2>&1 | tee lint-reports/golangci-lint.txt
+          { golangci-lint run --timeout=8m && (cd sdk && golangci-lint run --timeout=8m --config ../.golangci.yml) \
+            && (cd identity && golangci-lint run --timeout=8m --config ../.golangci.yml); } 2>&1 | tee lint-reports/golangci-lint.txt
           exit "${PIPESTATUS[0]}"
 
       - name: Upload golangci-lint report
@@ -415,6 +420,7 @@ jobs:
         run: |
           govulncheck ./...
           (cd sdk && govulncheck ./...)
+          (cd identity && govulncheck ./...)
 
       - name: Install gosec
         run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
@@ -435,6 +441,7 @@ jobs:
           mkdir -p security-reports
           gosec -exclude-generated -exclude-dir=config/scripts/testdata -exclude-dir=control-center -fmt=json -out=security-reports/gosec.json ./...
           (cd sdk && gosec -exclude-generated -nosec-require-rules -nosec-require-justification -quiet ./...)
+          (cd identity && gosec -exclude-generated -nosec-require-rules -nosec-require-justification -quiet ./...)
 
       - name: Upload gosec report
         if: always()

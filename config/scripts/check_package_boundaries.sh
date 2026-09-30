@@ -53,7 +53,20 @@ if [[ -f sdk/go.mod ]]; then
   sdk_count="$(cd sdk && GOWORK="${go_workspace}" go list ./... | wc -l)"
 fi
 
+# The identity core is product-neutral: besides third-party code it may use
+# only the SDK module, never the kernel.
+identity_count=0
+if [[ -f identity/go.mod ]]; then
+  identity_dependencies="$(cd identity && GOWORK="${go_workspace}" go list -deps -test -f '{{.ImportPath}}' ./... | grep -E "^${module}(/|$)" || true)"
+  if [[ -n "${identity_dependencies}" ]]; then
+    echo "the identity module depends on the kernel module:" >&2
+    printf '  %s\n' ${identity_dependencies} >&2
+    failed=1
+  fi
+  identity_count="$(cd identity && GOWORK="${go_workspace}" go list ./... | wc -l)"
+fi
+
 if [[ "${failed}" -ne 0 ]]; then
   exit 1
 fi
-echo "package boundary gate passed ($(wc -l <<< "${packages}") packages, ${sdk_count} SDK packages)"
+echo "package boundary gate passed ($(wc -l <<< "${packages}") packages, ${sdk_count} SDK packages, ${identity_count} identity packages)"
