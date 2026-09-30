@@ -133,6 +133,13 @@ type Package interface {
 	Drain(context.Context) (DrainResponse, error)
 }
 
+// ResumablePackage undoes a Drain. Network modules implement it because the
+// kernel cannot restart them: a drained instance serves again after it binds
+// to a new generation or the kernel calls Resume.
+type ResumablePackage interface {
+	Resume(context.Context) error
+}
+
 type ServerConfig struct {
 	PackageID      string
 	PackageVersion string
@@ -270,6 +277,22 @@ func (s *Server) Drain(ctx context.Context, request *pluginhostv1.DrainRequest) 
 		return nil, packageError("drain", err)
 	}
 	return drainResponseToProto(response), nil
+}
+
+// Resume undoes a Drain when the package supports it.
+func (s *Server) Resume(ctx context.Context, request *pluginhostv1.ResumeRequest) (_ *pluginhostv1.ResumeResponse, err error) {
+	defer recoverPanic("resume", "package resume panicked", &err)
+	if err := validateGeneration(request.GetRouteGeneration()); err != nil {
+		return nil, err
+	}
+	resumable, ok := s.packageImpl.(ResumablePackage)
+	if !ok {
+		return &pluginhostv1.ResumeResponse{}, nil
+	}
+	if err := resumable.Resume(ctx); err != nil {
+		return nil, packageError("resume", err)
+	}
+	return &pluginhostv1.ResumeResponse{Resumed: true}, nil
 }
 
 func (s *Server) validateDispatchRequest(request *pluginhostv1.DispatchRequest) error {

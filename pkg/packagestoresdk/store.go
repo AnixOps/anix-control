@@ -10,6 +10,7 @@ package packagestoresdk
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"regexp"
@@ -18,6 +19,8 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/pkg/packagebridgesdk"
 	"github.com/glebarez/sqlite"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -61,7 +64,11 @@ func Open(ctx context.Context, leaser Leaser) (*Store, error) {
 		if !ownNamePattern.MatchString(lease.Schema) {
 			return nil, fmt.Errorf("package storage lease has an invalid schema %q", lease.Schema)
 		}
-		dialector = postgres.Open(lease.DSN)
+		sqlDB, err := openPostgres(lease.DSN, leaser)
+		if err != nil {
+			return nil, err
+		}
+		dialector = postgres.New(postgres.Config{Conn: sqlDB})
 	case "sqlite":
 		if !ownNamePattern.MatchString(strings.TrimSuffix(lease.TablePrefix, "_")) || !strings.HasSuffix(lease.TablePrefix, "_") {
 			return nil, fmt.Errorf("package storage lease has an invalid table prefix %q", lease.TablePrefix)
@@ -130,4 +137,27 @@ func (s *Store) Close() error {
 		return err
 	}
 	return sqlDB.Close()
+}
+
+// openPostgres opens the package role's pool. Every new connection asks the
+// kernel for the current lease first: the kernel returns its cached lease,
+// and when another lease rotated the role password (a kernel restart, a new
+// replica) the pool picks up the new one instead of failing with 28P01.
+func openPostgres(dsn string, leaser Leaser) (*sql.DB, error) {
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("invalid package storage lease: %w", err)
+	}
+	return stdlib.OpenDB(*config, stdlib.OptionBeforeConnect(func(ctx context.Context, connection *pgx.ConnConfig) error {
+		lease, err := leaser.LeaseStorage(ctx)
+		if err != nil {
+			return fmt.Errorf("refresh package storage lease: %w", err)
+		}
+		fresh, err := pgx.ParseConfig(lease.DSN)
+		if err != nil {
+			return fmt.Errorf("invalid package storage lease: %w", err)
+		}
+		connection.User, connection.Password = fresh.User, fresh.Password
+		return nil
+	})), nil
 }

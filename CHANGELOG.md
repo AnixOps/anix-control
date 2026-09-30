@@ -258,6 +258,32 @@
 
 ### Added
 
+- Module SDK for network modules (N5).
+  - **`pkg/modulesdk.Run`.** Runs a host as the kernel's local child process
+    or, with `ANIX_MODULE_MODE=remote`, as a network module.
+    - Enrolls from a credential file, or uses externally issued
+      certificates.
+    - Stores and renews its certificate (0600 files) and reuses it after a
+      restart.
+    - Serves the host protocol over mTLS, accepting only the kernel.
+    - Binds, heartbeats and rebinds.
+    - Answers `/livez` and `/readyz`.
+    - Drains gracefully on SIGTERM.
+    - The official generic and identity-platform hosts, and the storage test
+      fixture, now start through it; local behaviour is unchanged.
+  - **`packagebridgesdk.NetworkClient`.** The remote package bridge.
+    - Session tokens travel on every call.
+    - A call rejected for an unknown session binds again and retries once.
+    - Concurrent rebinds collapse into one.
+  - **`Resume`.** `pluginhostsdk.ResumablePackage` and `Router.Resume` let a
+    drained network module serve again after it binds to a new generation.
+  - **`packagestoresdk`.** PostgreSQL pools fetch the current storage lease
+    before every new connection, so rotated role passwords heal without
+    `28P01` failures.
+  - **Trust bundle.** The kernel exports the module CA bundle for
+    deployments: `GET /api/v4/kernel/modules/trust-bundle` and
+    `anix-control module ca bundle`.
+
 - Remote runtime for Control packages (N4).
   - **Selecting the runtime.** A package can run from network module
     instances instead of a local child process.

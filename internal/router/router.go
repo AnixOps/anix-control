@@ -741,6 +741,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/modules/enrollment-tokens", modules.ListEnrollments)
 		v4.DELETE("/kernel/modules/enrollment-tokens/:id", modules.RevokeEnrollment)
 		v4.POST("/kernel/modules/ca/rotate", modules.RotateCA)
+		v4.GET("/kernel/modules/trust-bundle", modules.TrustBundle)
 		v4.GET("/kernel/modules/runtimes", modules.ListRuntimes)
 		v4.PUT("/kernel/modules/runtimes/:plugin_id", modules.SetRuntime)
 	}

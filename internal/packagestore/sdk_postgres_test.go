@@ -56,3 +56,31 @@ func TestPostgresPackageStoreSDKRunsMigrationsInThePackageSchema(t *testing.T) {
 	_, err = packagestoresdk.RunEmbeddedMigrations(ctx, pkg, bad, "migrations/index.json")
 	requirePermissionDenied(t, err)
 }
+
+// New pool connections fetch the current lease, so a password rotated by
+// another lease (a kernel restart, another generation) does not break the
+// module's pool.
+func TestPostgresPackageStoreSDKFollowsRotatedPasswords(t *testing.T) {
+	kernel, kernelDSN := openPostgresKernel(t)
+	packageID := "pkgtest-" + randomSuffix(t)
+	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
+	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN, Leases: NewLeaseCache()}
+	generation := uint64(1)
+	leaser := packagestoresdk.LeaserFunc(func(ctx context.Context) (packagebridgesdk.StorageLease, error) {
+		lease, err := store.Lease(ctx, Holder{PackageID: packageID, Version: "4.1.0", Generation: generation}, Grants{Storage: true})
+		return packagebridgesdk.StorageLease{Driver: lease.Driver, DSN: lease.DSN, Schema: lease.Schema, LeaseGeneration: lease.LeaseGeneration}, err
+	})
+	pkg, err := packagestoresdk.Open(context.Background(), leaser)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, pkg.Close()) })
+	sqlDB, err := pkg.DB.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxIdleConns(0)
+	require.NoError(t, pkg.DB.Exec("SELECT 1").Error)
+
+	// A new generation leases and rotates the role password.
+	generation = 2
+	_, err = store.Lease(context.Background(), Holder{PackageID: packageID, Version: "4.1.0", Generation: 2}, Grants{Storage: true})
+	require.NoError(t, err)
+	require.NoError(t, pkg.DB.Exec("SELECT 1").Error, "the next connection uses the rotated password")
+}

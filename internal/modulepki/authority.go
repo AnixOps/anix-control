@@ -230,6 +230,20 @@ func (a *Authority) TrustBundle(ctx context.Context) ([]*x509.Certificate, error
 	return bundle, nil
 }
 
+// TrustBundlePEM returns TrustBundle PEM-encoded, the file a module needs
+// to verify the kernel when it enrolls (ANIX_MODULE_TRUST_BUNDLE_FILE).
+func (a *Authority) TrustBundlePEM(ctx context.Context) ([]byte, error) {
+	bundle, err := a.TrustBundle(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var encoded []byte
+	for _, certificate := range bundle {
+		encoded = append(encoded, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificate.Raw})...)
+	}
+	return encoded, nil
+}
+
 // Roots returns TrustBundle as a certificate pool.
 func (a *Authority) Roots(ctx context.Context) (*x509.CertPool, error) {
 	bundle, err := a.TrustBundle(ctx)

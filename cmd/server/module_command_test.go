@@ -52,6 +52,9 @@ func TestModuleCommandManagesEnrollments(t *testing.T) {
 	output.Reset()
 	require.NoError(t, runModuleCommand(ctx, cfg, db, []string{"ca", "rotate"}, &output))
 	require.Contains(t, output.String(), `"state": "next"`)
+	output.Reset()
+	require.NoError(t, runModuleCommand(ctx, cfg, db, []string{"ca", "bundle"}, &output))
+	require.Equal(t, 2, strings.Count(output.String(), "BEGIN CERTIFICATE"), "current and next CA")
 
 	for _, arguments := range [][]string{{"token"}, {"token", "revoke"}, {"bogus", "command"}, {"token", "create", "-nope"}} {
 		require.Error(t, runModuleCommand(ctx, cfg, db, arguments, &output), arguments)
