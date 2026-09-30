@@ -16,6 +16,9 @@ const (
 	CapabilityObservedState = "kernel.observed-state"
 	// CapabilityStorage leases a per-package database role and schema.
 	CapabilityStorage = "kernel.storage.v1"
+	// CapabilityIdentity lets the official identity package call the
+	// KernelIdentity contract (subscribers, account projection, revocation).
+	CapabilityIdentity = "kernel.identity.v1"
 	// capabilityStorageAdoptPrefix grants the storage role access to an
 	// existing kernel table, adopted in place: kernel.storage.adopt:<table>.
 	capabilityStorageAdoptPrefix = "kernel.storage.adopt:"
@@ -77,7 +80,7 @@ func validateManifestCapabilities(capabilities []string) error {
 			continue
 		}
 		switch {
-		case capability == CapabilityObservedState:
+		case capability == CapabilityObservedState, capability == CapabilityIdentity:
 		case capability == CapabilityStorage:
 			storage = true
 		case strings.HasPrefix(capability, capabilityStorageAdoptPrefix):

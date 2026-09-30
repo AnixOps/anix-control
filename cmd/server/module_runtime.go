@@ -11,6 +11,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/identitybridge"
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
 	"github.com/AnixOps/anix-control/v4/internal/moduleruntime"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
@@ -70,7 +71,11 @@ func (rt *serverRuntime) startModuleRuntime(cfg *config.Config, hosts *pluginhos
 	if err != nil {
 		return fmt.Errorf("module listener: %w", err)
 	}
-	server := &moduleruntime.Listener{TLS: source, Cluster: cluster, PKI: authority, Bridge: bridge}
+	identity, err := identitybridge.NewKernelIdentity(cfg)
+	if err != nil {
+		return fmt.Errorf("module runtime kernel identity: %w", err)
+	}
+	server := &moduleruntime.Listener{TLS: source, Cluster: cluster, PKI: authority, Bridge: bridge, KernelIdentity: identity}
 	rt.workers.Go("module listener", func(ctx context.Context) {
 		if err := server.Serve(ctx, listener); err != nil && !errors.Is(err, net.ErrClosed) {
 			rt.fatal.Report(fmt.Errorf("module listener: %w", err))

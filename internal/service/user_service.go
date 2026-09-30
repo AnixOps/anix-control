@@ -233,19 +233,9 @@ func (s *UserService) Update(id uint, updates map[string]any) error {
 	}
 	var revocation *authn.Revocation
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		reason, err := sessionEndingChange(tx, id, updates)
-		if err != nil {
-			return err
-		}
-		if err := tx.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
-			return err
-		}
-		if reason == "" {
-			return nil
-		}
-		r := authn.UserRevocation(id, reason)
-		revocation = &r
-		return authn.Write(tx, r)
+		var err error
+		revocation, err = UpdateUserTx(tx, id, updates)
+		return err
 	})
 	if err != nil {
 		return err
@@ -254,6 +244,27 @@ func (s *UserService) Update(id uint, updates map[string]any) error {
 		authn.Remember(*revocation)
 	}
 	return nil
+}
+
+// UpdateUserTx updates a user in tx. When the change ends the user's
+// sessions it also records the revocation and returns it; apply it with
+// authn.Remember after the commit.
+func UpdateUserTx(tx *gorm.DB, id uint, updates map[string]any) (*authn.Revocation, error) {
+	reason, err := sessionEndingChange(tx, id, updates)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+	if reason == "" {
+		return nil, nil
+	}
+	revocation := authn.UserRevocation(id, reason)
+	if err := authn.Write(tx, revocation); err != nil {
+		return nil, err
+	}
+	return &revocation, nil
 }
 
 // sessionEndingChange names the first revoking field that updates actually
@@ -292,25 +303,34 @@ func (s *UserService) Delete(id uint) error {
 	if id == 0 {
 		return ErrUserNotFound
 	}
-	revocation := authn.UserRevocation(id, "user deleted")
+	var revocation authn.Revocation
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := deleteWireGuardPeers(tx, "user_id = ?", id); err != nil {
-			return err
-		}
-		res := tx.Delete(&model.User{}, id)
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			return ErrUserNotFound
-		}
-		return authn.Write(tx, revocation)
+		var err error
+		revocation, err = DeleteUserTx(tx, id)
+		return err
 	})
 	if err != nil {
 		return err
 	}
 	authn.Remember(revocation)
 	return nil
+}
+
+// DeleteUserTx deletes a user and its WireGuard peers in tx and records the
+// revocation of its tokens; apply it with authn.Remember after the commit.
+func DeleteUserTx(tx *gorm.DB, id uint) (authn.Revocation, error) {
+	revocation := authn.UserRevocation(id, "user deleted")
+	if err := deleteWireGuardPeers(tx, "user_id = ?", id); err != nil {
+		return revocation, err
+	}
+	res := tx.Delete(&model.User{}, id)
+	if res.Error != nil {
+		return revocation, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return revocation, ErrUserNotFound
+	}
+	return revocation, authn.Write(tx, revocation)
 }
 
 // Ban 封禁用户

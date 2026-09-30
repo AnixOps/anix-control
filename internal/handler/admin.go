@@ -235,56 +235,20 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 		}
 		updates["password"] = string(hash)
 	}
-	if req.Balance != nil {
-		updates["balance"] = *req.Balance
+	// 套餐、流量、限速等权益字段（更换套餐时从套餐同步）
+	entitlements := service.SubscriberEntitlements{
+		Balance: req.Balance, PlanID: req.PlanID, GroupID: req.GroupID, ExpiredAt: req.ExpiredAt,
+		TransferEnable: req.TransferEnable, SpeedLimit: req.SpeedLimit, DeviceLimit: req.DeviceLimit,
+		FlowResetTime: req.FlowResetTime, RemarkContent: req.RemarkContent,
 	}
-
-	// 如果更新了套餐，且没有显式提供其他套餐相关字段，则从套餐自动同步
-	if req.PlanID != nil {
-		updates["plan_id"] = *req.PlanID
-		plan, err := h.planService.Get(*req.PlanID)
-		if err == nil {
-			updates["group_id"] = plan.GroupID
-			if req.TransferEnable == nil {
-				updates["transfer_enable"] = plan.TransferEnable * 1073741824
-			}
-			if req.SpeedLimit == nil && plan.SpeedLimit != nil {
-				updates["speed_limit"] = *plan.SpeedLimit
-			}
-			if req.DeviceLimit == nil && plan.DeviceLimit != nil {
-				updates["device_limit"] = *plan.DeviceLimit
-			}
-			// 通常手动修改套餐 ID 时，如果没传过期时间，可能需要根据逻辑处理
-			// 但这里我们尊重 req.ExpiredAt 的显式设置（或不设置保持原样）
-		}
-	}
-
-	if req.ExpiredAt != nil {
-		updates["expired_at"] = *req.ExpiredAt
-	}
-	if req.TransferEnable != nil {
-		updates["transfer_enable"] = *req.TransferEnable
-	}
-	if req.SpeedLimit != nil {
-		updates["speed_limit"] = *req.SpeedLimit
-	}
-	if req.DeviceLimit != nil {
-		updates["device_limit"] = *req.DeviceLimit
-	}
-	if req.FlowResetTime != nil {
-		updates["flow_reset_time"] = *req.FlowResetTime
+	for column, value := range entitlements.Updates(h.planService) {
+		updates[column] = value
 	}
 	if req.Banned != nil {
 		updates["banned"] = *req.Banned
 	}
 	if req.IsAdmin != nil {
 		updates["is_admin"] = *req.IsAdmin
-	}
-	if req.RemarkContent != nil {
-		updates["remark_content"] = *req.RemarkContent
-	}
-	if req.GroupID != nil {
-		updates["group_id"] = *req.GroupID
 	}
 
 	if err := h.userService.Update(uint(id), updates); err != nil {

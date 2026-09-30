@@ -51,6 +51,16 @@ type Client struct {
 	rpc        packagebridgev1.KernelPackageBridgeClient
 }
 
+// Conn is the connection to the kernel, for the other kernel contracts a
+// package may call over it, such as KernelIdentity. On a network client it
+// carries the bridge session, rebinding when the kernel asks.
+func (c *Client) Conn() grpc.ClientConnInterface {
+	if c == nil {
+		return nil
+	}
+	return c.connection
+}
+
 type Header struct {
 	Name  string
 	Value string

@@ -85,12 +85,14 @@ func TestManifestCapabilityGrammar(t *testing.T) {
 		{"forward.gost.mesh", "plugin.runtime-state", "kernel.observed-state"},
 		{CapabilityStorage},
 		{CapabilityStorage, "kernel.storage.adopt:v2_knowledge", "kernel.view:kapi_user_directory_v1"},
+		{CapabilityIdentity, CapabilityStorage},
 	}
 	for _, capabilities := range valid {
 		assert.NoError(t, validateManifestCapabilities(capabilities), "%v", capabilities)
 	}
 	invalid := map[string][]string{
 		"unknown kernel capability": {"kernel.admin"},
+		"unknown identity version":  {"kernel.identity.v2"},
 		"adopt without storage":     {"kernel.storage.adopt:v2_knowledge"},
 		"view without storage":      {"kernel.view:kapi_user_directory_v1"},
 		"adopt users table":         {CapabilityStorage, "kernel.storage.adopt:v2_user"},

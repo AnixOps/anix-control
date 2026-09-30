@@ -120,6 +120,36 @@ lists that read the `v2_user` projection.
   configuration) move into the identity installation configuration. They are
   seeded once from `GetIdentitySettings`.
 
+**Kernel side, in place since step 9** (`internal/kernelidentity`). It is
+served on the local package bridge and on the module listener to the bound
+instance's generation.
+- **Authorization.** Every call must come from the current generation of an
+  official AnixOps package whose signed release, verified again on every call,
+  declares `kernel.identity.v1`.
+- **Links.** `v4_kernel_identity_account` links an account UUID to its
+  `v2_user` id and records the last projection version applied.
+  - `CreateSubscriber` creates the row with a fresh node UUID and
+    subscription token, and a password (`!identity`) that never matches.
+  - A repeated call for the same account returns the same user.
+  - An email that belongs to another subscriber is `AlreadyExists`.
+- **Entitlements.** `UpdateSubscriber` takes the entitlement keys of the v2
+  admin user update (`balance`, `plan_id`, `group_id`, `expired_at`,
+  `transfer_enable`, `speed_limit`, `device_limit`, `flowResetTime`,
+  `remark_content`). A new plan fills group, traffic and limits exactly as the
+  admin API does. Only linked subscribers can be changed.
+- **Projection.** `ApplyAccountProjection` ignores versions at or below the
+  stored one. It writes email, admin, staff and ban flags through the same
+  path as the admin API, so a ban or demotion revokes at once.
+- **Legacy mirror.** Password hash, algorithm and salt, and TOTP, are copied
+  back until the state is `finalized`. Backup codes are not: legacy compares
+  them in plain text and identity keeps only hashes, so after a rollback users
+  use TOTP or regenerate codes.
+- **Authority state.** `v4_kernel_identity_authority` holds the state (no row
+  means `kernel`) and the import's checkpoint.
+- **Account import.** `ImportAccounts` is started by the kernel against the
+  identity module's `IdentityService`, so it arrives with that service in
+  step 10.
+
 ## Routes
 
 - **Group A — moves to identity, switched together at cutover:**
@@ -154,8 +184,10 @@ lists that read the `v2_user` projection.
 
 7. Re-home the non-identity routes.
 8. `internal/authn` verifier, HS256 pinning and the revocation store.
-9. `KernelIdentity` in the kernel, `kernel.identity.v1`, projection and import.
-10. Identity storage, keys, `GetTokenKeys` and the kernel EdDSA verifier.
+9. `KernelIdentity` in the kernel, `kernel.identity.v1`, links and the
+   versioned projection.
+10. Identity storage, keys, `GetTokenKeys`, the kernel EdDSA verifier, and
+    the kernel-led account import.
 11. Group A native handlers with parity tests.
 12. Cutover, revocation push and finalize.
 13. End-to-end acceptance on Compose and kind.

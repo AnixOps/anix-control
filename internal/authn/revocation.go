@@ -3,6 +3,7 @@ package authn
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -31,15 +32,18 @@ func UserRevocation(userID uint, reason string) Revocation {
 	return Revocation{UserID: userID, NotBefore: time.Now(), Reason: reason}
 }
 
+// ErrInvalidRevocation wraps every reason a revocation is refused.
+var ErrInvalidRevocation = errors.New("invalid revocation")
+
 func (r Revocation) validate() error {
 	if r.UserID == 0 {
-		return errors.New("revocation needs a user")
+		return fmt.Errorf("%w: it needs a user", ErrInvalidRevocation)
 	}
 	if r.SessionID == "" && r.NotBefore.IsZero() && r.TokenVersion == 0 {
-		return errors.New("revocation needs not_before, a token version or a session")
+		return fmt.Errorf("%w: it needs not_before, a token version or a session", ErrInvalidRevocation)
 	}
 	if r.SessionID != "" && (len(r.SessionID) > 64 || r.SessionExpiresAt.IsZero()) {
-		return errors.New("session revocation needs a session id of at most 64 bytes and its expiry")
+		return fmt.Errorf("%w: a session revocation needs a session id of at most 64 bytes and its expiry", ErrInvalidRevocation)
 	}
 	return nil
 }

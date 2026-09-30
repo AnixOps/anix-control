@@ -17,6 +17,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
+	"github.com/AnixOps/anix-control/v4/internal/kernelidentity"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v4/internal/packagestore"
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
@@ -52,7 +53,23 @@ func NewFactory(cfg *config.Config) (packagebridge.SessionFactory, error) {
 		MaxResponseBodyBytes: cfg.Plugins.ControlHostResponseBodyLimit(),
 		MaxRequestBodyBytes:  cfg.Plugins.ControlHostRequestBodyLimit(),
 		HostOperations:       operations,
+		KernelIdentity:       kernelIdentity(operations),
 	}), nil
+}
+
+// NewKernelIdentity returns the KernelIdentity provider for the module
+// listener; local sessions get the same one from NewFactory.
+func NewKernelIdentity(cfg *config.Config) (packagebridge.KernelIdentityProvider, error) {
+	operations, err := newHostOperations(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return kernelIdentity(operations), nil
+}
+
+func kernelIdentity(operations service.PackageHostOperations) packagebridge.KernelIdentityProvider {
+	server := &kernelidentity.Server{DB: operations.DB, Authorizer: operations, Config: config.Get}
+	return server.For
 }
 
 // newHostOperations serves the session-scoped RPCs from the kernel database,

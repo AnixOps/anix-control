@@ -295,6 +295,30 @@
 
 ### Added
 
+- The kernel side of the identity module, `KernelIdentity` (N9). It is served
+  on the local package bridge and on the module listener.
+  - **Capability.** A new `kernel.identity.v1` capability. Only the current
+    generation of an official package whose signed release declares it may
+    call, checked on every call; identity-platform declares it.
+  - **Subscribers.** `CreateSubscriber` is idempotent on the account UUID and
+    allocates the `v2_user` row, whose password never matches.
+    `UpdateSubscriber` takes the v2 admin entitlement fields, and a new plan
+    fills group, traffic and limits as the admin API does. `DeleteSubscriber`
+    also revokes the user's tokens.
+  - **Projection.** `ApplyAccountProjection` is versioned and monotonic. A
+    ban or demotion revokes at once. Password and TOTP are mirrored back
+    until finalize.
+  - **Other calls.** `PublishRevocation` feeds the revocation store.
+    `ResolveActorAccess` returns the v2 permission fields.
+    `GetIdentitySettings` returns the registration policy, rate limits, admin
+    MFA configuration, token lifetime and authority state.
+  - **Tables.** New tables `v4_kernel_identity_account` (account links and
+    projection versions) and `v4_kernel_identity_authority` (authority state
+    and import checkpoint).
+  - **SDK.** `packagebridgesdk.Client.Conn()` lets a host call further kernel
+    contracts over its bridge connection.
+  - The v2 admin user update now shares its entitlement logic
+    (`service.SubscriberEntitlements`) with `UpdateSubscriber`.
 - Deployment of network modules (N6).
   - **`Dockerfile.module`.** One image per package, built from the
     package's own host or the generic host. Distroless, uid 65532, about

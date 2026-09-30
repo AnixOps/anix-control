@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
 	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"github.com/AnixOps/anix-control/sdk/moduletls"
@@ -74,6 +75,20 @@ type listenerFixture struct {
 	bridge     *packagebridge.ModuleBridge
 	clock      *mutableClock
 	calls      chan packagebridge.Call
+	// identityHosts records the host identity KernelIdentity calls ran as.
+	identityHosts chan packagebridge.HostIdentity
+}
+
+// identityRecorder answers ResolveActorAccess and records the calling host.
+type identityRecorder struct {
+	kernelidentityv1.UnimplementedKernelIdentityServer
+	host  packagebridge.HostIdentity
+	hosts chan packagebridge.HostIdentity
+}
+
+func (r identityRecorder) ResolveActorAccess(context.Context, *kernelidentityv1.ResolveActorAccessRequest) (*kernelidentityv1.ResolveActorAccessResponse, error) {
+	r.hosts <- r.host
+	return &kernelidentityv1.ResolveActorAccessResponse{PermissionMode: "legacy", Unrestricted: true}, nil
 }
 
 // newPKIFixture creates the kernel CA and its TLS identity.
@@ -101,7 +116,12 @@ func (f *listenerFixture) serve(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	served := make(chan error, 1)
 	go func() {
-		served <- (&Listener{TLS: f.kernel, Cluster: "prod", PKI: f.authority, Bridge: f.bridge}).Serve(ctx, listener)
+		served <- (&Listener{
+			TLS: f.kernel, Cluster: "prod", PKI: f.authority, Bridge: f.bridge,
+			KernelIdentity: func(host packagebridge.HostIdentity) kernelidentityv1.KernelIdentityServer {
+				return identityRecorder{host: host, hosts: f.identityHosts}
+			},
+		}).Serve(ctx, listener)
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -129,6 +149,7 @@ func newListenerFixture(t *testing.T) *listenerFixture {
 	bridge, err := packagebridge.NewModuleBridge(binder, packagebridge.ModuleBridgeOptions{Cluster: "prod", Now: clock.Now})
 	require.NoError(t, err)
 	fixture.generation, fixture.binder, fixture.bridge, fixture.clock, fixture.calls = generation, binder, bridge, clock, calls
+	fixture.identityHosts = make(chan packagebridge.HostIdentity, 4)
 	fixture.serve(t)
 	return fixture
 }
@@ -304,4 +325,29 @@ func TestSessionsExpireWithoutHeartbeats(t *testing.T) {
 	fresh := bind(t, client, "pod-a")
 	_, err = client.Heartbeat(fresh, &packagebridgev1.HeartbeatRequest{})
 	require.NoError(t, err)
+}
+
+// KernelIdentity on the module listener runs as the bound instance's
+// generation, and needs the same session as the package bridge.
+func TestKernelIdentityIsServedToBoundInstancesOnly(t *testing.T) {
+	fixture := newListenerFixture(t)
+	certificate, _ := fixture.enroll(t, "knowledge")
+	connection := fixture.dial(t, certificate)
+	identity := kernelidentityv1.NewKernelIdentityClient(connection)
+
+	_, err := identity.ResolveActorAccess(context.Background(), &kernelidentityv1.ResolveActorAccessRequest{UserId: 1})
+	require.Equal(t, codes.Unauthenticated, status.Code(err), "no bridge session")
+	anonymous := kernelidentityv1.NewKernelIdentityClient(fixture.dial(t, nil))
+	_, err = anonymous.ResolveActorAccess(context.Background(), &kernelidentityv1.ResolveActorAccessRequest{UserId: 1})
+	require.Equal(t, codes.Unauthenticated, status.Code(err), "no client certificate")
+
+	session := bind(t, packagebridgev1.NewKernelPackageBridgeClient(connection), "pod-a")
+	response, err := identity.ResolveActorAccess(session, &kernelidentityv1.ResolveActorAccessRequest{UserId: 1})
+	require.NoError(t, err)
+	require.True(t, response.GetUnrestricted())
+	require.Equal(t, packagebridge.HostIdentity{PackageID: "knowledge", Version: "4.1.0", Generation: 9}, <-fixture.identityHosts)
+
+	require.NoError(t, fixture.generation.Close())
+	_, err = identity.ResolveActorAccess(session, &kernelidentityv1.ResolveActorAccessRequest{UserId: 1})
+	require.Equal(t, codes.PermissionDenied, status.Code(err), "a fenced generation loses KernelIdentity too")
 }

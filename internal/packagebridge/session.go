@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
 	"google.golang.org/grpc"
@@ -57,6 +58,9 @@ type SessionOptions struct {
 	// treat as "no configuration": every route stays in legacy mode and no
 	// storage is available.
 	HostOperations HostOperations
+	// KernelIdentity, when set, serves the KernelIdentity contract on the
+	// session; the provided server authorizes the host on every call.
+	KernelIdentity KernelIdentityProvider
 }
 
 func (o SessionOptions) responseLimit() int64 {
@@ -427,6 +431,9 @@ func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options Se
 		server: grpc.NewServer(append(panicrecovery.ServerOptions(), grpc.MaxRecvMsgSize(options.receiveMessageLimit()))...),
 	}
 	packagebridgev1.RegisterKernelPackageBridgeServer(session.server, session)
+	if options.KernelIdentity != nil {
+		kernelidentityv1.RegisterKernelIdentityServer(session.server, options.KernelIdentity(identity))
+	}
 	server, listener := session.server, session.listener
 	go func() { _ = server.Serve(listener) }()
 	return session, childFile, nil

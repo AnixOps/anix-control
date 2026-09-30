@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
 	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"github.com/AnixOps/anix-control/sdk/moduletls"
@@ -43,6 +44,9 @@ type Listener struct {
 	// ModulePKI.
 	PKI    *modulepki.Authority
 	Bridge *packagebridge.ModuleBridge
+	// KernelIdentity, when set, is served to bound instances; see
+	// ModuleBridge.KernelIdentityServer.
+	KernelIdentity packagebridge.KernelIdentityProvider
 
 	revocations revocationCache
 }
@@ -98,6 +102,9 @@ func (l *Listener) newServer() (*grpc.Server, error) {
 		modulepkiv1.RegisterModulePKIServer(server, &modulepki.Server{})
 	}
 	packagebridgev1.RegisterKernelPackageBridgeServer(server, l.Bridge)
+	if l.KernelIdentity != nil {
+		kernelidentityv1.RegisterKernelIdentityServer(server, l.Bridge.KernelIdentityServer(l.KernelIdentity))
+	}
 	return server, nil
 }
 
