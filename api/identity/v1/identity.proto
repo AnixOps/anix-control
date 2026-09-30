@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package anixops.identity.v1;
+
+option go_package = "github.com/AnixOps/anix-control/v4/api/identity/v1;identityv1";
+
+// IdentityService is served by the identity module. The kernel is its only
+// caller: it authenticates with the kernel's mTLS identity.
+service IdentityService {
+  // GetTokenKeys publishes the public keys that verify access tokens.
+  rpc GetTokenKeys(GetTokenKeysRequest) returns (GetTokenKeysResponse);
+  rpc BatchGetAccounts(BatchGetAccountsRequest) returns (BatchGetAccountsResponse);
+  // ImportAccounts receives accounts from the kernel's legacy tables. The
+  // first message is the header; the stream is resumable by checkpoint.
+  rpc ImportAccounts(stream ImportAccountsRequest) returns (ImportAccountsResponse);
+  // ExportAccounts streams accounts changed after a version, for kernel
+  // reconciliation of its read projection.
+  rpc ExportAccounts(ExportAccountsRequest) returns (stream Account);
+}
+
+enum TokenKeyState {
+  TOKEN_KEY_STATE_UNSPECIFIED = 0;
+  // NEXT keys are published before they sign.
+  TOKEN_KEY_STATE_NEXT = 1;
+  TOKEN_KEY_STATE_ACTIVE = 2;
+  // RETIRED keys no longer sign but still verify until not_after.
+  TOKEN_KEY_STATE_RETIRED = 3;
+  // REVOKED keys must not verify anything.
+  TOKEN_KEY_STATE_REVOKED = 4;
+}
+
+message TokenKey {
+  string kid = 1;
+  // alg is always "EdDSA" (Ed25519).
+  string alg = 2;
+  bytes public_key = 3;
+  TokenKeyState state = 4;
+  int64 not_before_unix = 5;
+  int64 not_after_unix = 6;
+}
+
+message GetTokenKeysRequest {}
+
+message GetTokenKeysResponse {
+  repeated TokenKey keys = 1;
+  // issuer and audience are the iss and aud claims every token carries.
+  string issuer = 2;
+  string audience = 3;
+}
+
+message Account {
+  uint64 user_id = 1;
+  string account_uuid = 2;
+  string email = 3;
+  bool is_admin = 4;
+  bool is_staff = 5;
+  bool banned = 6;
+  // token_version increases whenever existing tokens must stop working.
+  uint64 token_version = 7;
+  // version increases on every change; the kernel projection is monotonic
+  // in it.
+  uint64 version = 8;
+  int64 created_at_unix = 9;
+  int64 updated_at_unix = 10;
+  bool mfa_enabled = 11;
+}
+
+message BatchGetAccountsRequest {
+  repeated uint64 user_ids = 1;
+}
+
+message BatchGetAccountsResponse {
+  repeated Account accounts = 1;
+}
+
+message ImportAccountsRequest {
+  oneof value {
+    ImportHeader header = 1;
+    ImportedAccount account = 2;
+    ImportedInviteCode invite_code = 3;
+  }
+}
+
+message ImportHeader {
+  string import_id = 1;
+  // delta imports only carry accounts updated after the previous import.
+  bool delta = 2;
+  string checkpoint = 3;
+}
+
+message ImportedAccount {
+  Account account = 1;
+  string password_hash = 2;
+  string password_algo = 3;
+  string password_salt = 4;
+  ImportedMFA mfa = 5;
+  uint64 invite_user_id = 6;
+}
+
+message ImportedMFA {
+  bool enabled = 1;
+  string totp_secret = 2;
+  repeated string backup_code_hashes = 3;
+  int64 enabled_at_unix = 4;
+}
+
+message ImportedInviteCode {
+  uint64 user_id = 1;
+  string code = 2;
+  bool used = 3;
+  int64 created_at_unix = 4;
+}
+
+message ImportAccountsResponse {
+  uint64 accounts = 1;
+  uint64 invite_codes = 2;
+  string checkpoint = 3;
+}
+
+message ExportAccountsRequest {
+  uint64 after_version = 1;
+  uint32 limit = 2;
+}

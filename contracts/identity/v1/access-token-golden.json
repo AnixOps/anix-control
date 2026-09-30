@@ -1,0 +1,29 @@
+{
+  "description": "Access token issued by the identity module and verified by the kernel gateway. Lifetime is the configured jwt.expire (24h by default).",
+  "header": {
+    "alg": "EdDSA",
+    "typ": "JWT",
+    "kid": "idk-2026-09-30-a"
+  },
+  "claims": {
+    "iss": "anixops-identity",
+    "aud": "anix-control",
+    "sub": "42",
+    "user_id": 42,
+    "email": "member@example.test",
+    "is_admin": false,
+    "sid": "3f0c5d1e8b8a4a0f9f2c6d7e1a2b3c4d",
+    "tv": 3,
+    "jti": "b7e6f0a1c2d34e5f8a9b0c1d2e3f4a5b",
+    "iat": 1790000000,
+    "exp": 1790086400
+  },
+  "required_claims": ["iss", "aud", "sub", "user_id", "email", "is_admin", "sid", "tv", "jti", "iat", "exp"],
+  "verification": {
+    "algorithms": ["EdDSA"],
+    "issuer": "anixops-identity",
+    "audience": "anix-control",
+    "leeway_seconds": 60,
+    "key_source": "IdentityService.GetTokenKeys, persisted by the kernel; public copy at /api/v4/identity/jwks.json"
+  }
+}

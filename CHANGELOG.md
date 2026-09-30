@@ -258,6 +258,29 @@
 
 ### Added
 
+- Contracts for network modules and the identity service (N1).
+  - **New protocols.**
+    - `api/modulepki/v1` `ModulePKI`: `Enroll`, `Renew`, `GetTrustBundle`.
+    - `api/identity/v1` `IdentityService`: `GetTokenKeys`,
+      `BatchGetAccounts`, `ImportAccounts`, `ExportAccounts`.
+    - `api/kernelidentity/v1` `KernelIdentity`: subscriber allocation,
+      account projection, revocation, actor access, settings.
+  - **New RPCs on existing protocols.** `Bind` and `Heartbeat` on
+    `KernelPackageBridge`, and `Resume` on `ControlPackageHost`. Existing
+    hosts answer them with `Unimplemented`, so v4.0.0 packages are
+    unaffected.
+  - **Compatibility gate.** `internal/tests/protocompat` checks every
+    AnixOps protobuf contract against `contracts/proto/descriptors.golden`.
+    Removing or renumbering a method, field or enum value fails; additions
+    need an explicit `-update`.
+  - **Token contract.** `contracts/identity/v1` fixes the EdDSA access-token
+    claims and the tokens the kernel must reject.
+  - **CI.** The protobuf drift check covers the new generators.
+  - **Design documents.** `docs/architecture/module-runtime.md` and
+    `docs/architecture/identity-service.md`. `package-extraction.md` no
+    longer keeps identity in the kernel: login and credentials become the
+    first network module.
+
 - Extraction gates and a legacy/native comparison harness (M3).
   - **Extraction map.** `config/package-extraction.json` records every
     `/api/v2` route's extraction mode (`bridged`, `native-flagged`,

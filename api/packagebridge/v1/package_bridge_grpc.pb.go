@@ -23,6 +23,8 @@ const (
 	KernelPackageBridge_OpenWebSocket_FullMethodName    = "/anixops.packagebridge.v1.KernelPackageBridge/OpenWebSocket"
 	KernelPackageBridge_GetPackageConfig_FullMethodName = "/anixops.packagebridge.v1.KernelPackageBridge/GetPackageConfig"
 	KernelPackageBridge_LeaseStorage_FullMethodName     = "/anixops.packagebridge.v1.KernelPackageBridge/LeaseStorage"
+	KernelPackageBridge_Bind_FullMethodName             = "/anixops.packagebridge.v1.KernelPackageBridge/Bind"
+	KernelPackageBridge_Heartbeat_FullMethodName        = "/anixops.packagebridge.v1.KernelPackageBridge/Heartbeat"
 )
 
 // KernelPackageBridgeClient is the client API for KernelPackageBridge service.
@@ -46,6 +48,14 @@ type KernelPackageBridgeClient interface {
 	// least-privilege storage. Like GetPackageConfig it is authorized by the
 	// session identity and fenced against the installation.
 	LeaseStorage(ctx context.Context, in *LeaseStorageRequest, opts ...grpc.CallOption) (*LeaseStorageResponse, error)
+	// Bind attaches a remote module instance to the current installation
+	// generation. It is the only bridge RPC a remote module may call without a
+	// session token; its identity comes from the mTLS client certificate. Local
+	// hosts never call it: their session is bound to the inherited socketpair.
+	Bind(ctx context.Context, in *BindRequest, opts ...grpc.CallOption) (*BindResponse, error)
+	// Heartbeat keeps a bound session alive and reports fencing. Remote
+	// modules send it with the x-anix-bridge-session metadata.
+	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 }
 
 type kernelPackageBridgeClient struct {
@@ -99,6 +109,26 @@ func (c *kernelPackageBridgeClient) LeaseStorage(ctx context.Context, in *LeaseS
 	return out, nil
 }
 
+func (c *kernelPackageBridgeClient) Bind(ctx context.Context, in *BindRequest, opts ...grpc.CallOption) (*BindResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BindResponse)
+	err := c.cc.Invoke(ctx, KernelPackageBridge_Bind_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kernelPackageBridgeClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(HeartbeatResponse)
+	err := c.cc.Invoke(ctx, KernelPackageBridge_Heartbeat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // KernelPackageBridgeServer is the server API for KernelPackageBridge service.
 // All implementations must embed UnimplementedKernelPackageBridgeServer
 // for forward compatibility.
@@ -120,6 +150,14 @@ type KernelPackageBridgeServer interface {
 	// least-privilege storage. Like GetPackageConfig it is authorized by the
 	// session identity and fenced against the installation.
 	LeaseStorage(context.Context, *LeaseStorageRequest) (*LeaseStorageResponse, error)
+	// Bind attaches a remote module instance to the current installation
+	// generation. It is the only bridge RPC a remote module may call without a
+	// session token; its identity comes from the mTLS client certificate. Local
+	// hosts never call it: their session is bound to the inherited socketpair.
+	Bind(context.Context, *BindRequest) (*BindResponse, error)
+	// Heartbeat keeps a bound session alive and reports fencing. Remote
+	// modules send it with the x-anix-bridge-session metadata.
+	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	mustEmbedUnimplementedKernelPackageBridgeServer()
 }
 
@@ -141,6 +179,12 @@ func (UnimplementedKernelPackageBridgeServer) GetPackageConfig(context.Context, 
 }
 func (UnimplementedKernelPackageBridgeServer) LeaseStorage(context.Context, *LeaseStorageRequest) (*LeaseStorageResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LeaseStorage not implemented")
+}
+func (UnimplementedKernelPackageBridgeServer) Bind(context.Context, *BindRequest) (*BindResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Bind not implemented")
+}
+func (UnimplementedKernelPackageBridgeServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
 }
 func (UnimplementedKernelPackageBridgeServer) mustEmbedUnimplementedKernelPackageBridgeServer() {}
 func (UnimplementedKernelPackageBridgeServer) testEmbeddedByValue()                             {}
@@ -224,6 +268,42 @@ func _KernelPackageBridge_LeaseStorage_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _KernelPackageBridge_Bind_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelPackageBridgeServer).Bind(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KernelPackageBridge_Bind_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelPackageBridgeServer).Bind(ctx, req.(*BindRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KernelPackageBridge_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HeartbeatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelPackageBridgeServer).Heartbeat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KernelPackageBridge_Heartbeat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelPackageBridgeServer).Heartbeat(ctx, req.(*HeartbeatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KernelPackageBridge_ServiceDesc is the grpc.ServiceDesc for KernelPackageBridge service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -242,6 +322,14 @@ var KernelPackageBridge_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LeaseStorage",
 			Handler:    _KernelPackageBridge_LeaseStorage_Handler,
+		},
+		{
+			MethodName: "Bind",
+			Handler:    _KernelPackageBridge_Bind_Handler,
+		},
+		{
+			MethodName: "Heartbeat",
+			Handler:    _KernelPackageBridge_Heartbeat_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

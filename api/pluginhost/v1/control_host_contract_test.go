@@ -6,15 +6,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestControlHostDescriptorContainsOnlyLocalRPCs(t *testing.T) {
+func TestControlHostDescriptorContainsOnlyHostRPCs(t *testing.T) {
 	service := File_api_pluginhost_v1_control_host_proto.Services().ByName("ControlPackageHost")
 	require.NotNil(t, service)
-	require.Equal(t, 5, service.Methods().Len())
+	require.Equal(t, 6, service.Methods().Len())
 	require.NotNil(t, service.Methods().ByName("Dispatch"))
 	require.NotNil(t, service.Methods().ByName("OpenWebSocket"))
 	require.NotNil(t, service.Methods().ByName("Migrate"))
 	require.NotNil(t, service.Methods().ByName("Health"))
 	require.NotNil(t, service.Methods().ByName("Drain"))
+	require.NotNil(t, service.Methods().ByName("Resume"))
 	require.Nil(t, service.Methods().ByName("Listen"))
 }
 

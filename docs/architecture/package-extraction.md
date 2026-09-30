@@ -77,8 +77,11 @@ A domain counts as extracted only when all four hold:
    migration runner.
 4. The kernel has no handler, service, model, or worker left for the domain.
 
-`identity-platform` is exempt: identity stays kernel-owned by design and remains
-bridged; only its migrations move to the storage lease.
+Identity is no longer exempt (decision of 2026-09-30). Login, credentials,
+MFA and invite codes move into the identity module, which runs as a network
+module and is the first domain extracted; see
+[`identity-service.md`](identity-service.md) and
+[`module-runtime.md`](module-runtime.md).
 
 ## 3. Target Mechanism (M3 infrastructure CURRENT; no domain extracted yet)
 
@@ -351,8 +354,9 @@ Semantics to keep when wiring:
 - Release gates must fail on: missing required package, direct legacy route
   registration, legacy domain worker startup, unsigned artifact, missing
   migration evidence, or unverified package version.
-- Kernel end state keeps only identity/auth/authorization, package policy,
-  audit, lifecycle, migration orchestration, and health.
+- Kernel end state keeps only token verification and authorization, package
+  policy, the module PKI, audit, lifecycle, migration orchestration, and
+  health. Token issuing, credentials and MFA belong to the identity module.
 - Delete a domain's in-process routes/workers only after it is `native` and
   its reverse migration passed. Historical types may stay only to read old
   data during the rollback window; no live path may call them.
@@ -390,7 +394,12 @@ Status (2026-09-30): the M3 extraction infrastructure landed as PRs #32-#37:
   `internal/tests/packagecompat` harness.
 
 Not yet repeated for M3: the Docker rehearsal of the v4.0.0 signed packages
-against the new kernel. M4, the knowledge pilot, is next.
+against the new kernel.
+
+Next (decision of 2026-09-30): the network module runtime and the identity
+module (N1–N2 in [`module-runtime.md`](module-runtime.md) and
+[`identity-service.md`](identity-service.md)). The knowledge pilot (M4) moves
+after identity.
 
 | Milestone | Weeks | Scope | Done when |
 |-----------|-------|-------|-----------|
@@ -430,7 +439,8 @@ Next quarter, in dependency order:
 4. forward (79 routes, ~12k lines of forward handler/service code, 6 workers).
 5. wireguard / protocol-runtime: requires reviving anix-agent first.
 
-identity-platform stays bridged; only its migrations move to the lease.
+Identity goes first, ahead of the knowledge pilot, as a network module; see
+[`identity-service.md`](identity-service.md).
 
 ## 11. Risks And Rollback
 

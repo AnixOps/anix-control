@@ -285,10 +285,12 @@ jobs:
           bash api/grpc/gen.sh
           git diff --exit-code -- api/grpc/v2boardpb
           test -z "$(git ls-files --others --exclude-standard -- api/grpc/v2boardpb)"
-          bash api/pluginhost/gen.sh
-          bash api/packagebridge/gen.sh
-          git diff --exit-code -- api/pluginhost/v1 api/packagebridge/v1
-          test -z "$(git ls-files --others --exclude-standard -- api/pluginhost/v1 api/packagebridge/v1)"
+          contracts=(pluginhost packagebridge modulepki identity kernelidentity)
+          for contract in "${contracts[@]}"; do
+            bash "api/${contract}/gen.sh"
+          done
+          git diff --exit-code -- "${contracts[@]/#/api/}"
+          test -z "$(git ls-files --others --exclude-standard -- "${contracts[@]/#/api/}")"
 
       - name: Check go mod tidy
         run: |

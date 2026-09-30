@@ -1,0 +1,150 @@
+# Identity Service
+
+Status: DESIGN (2026-09-30). This supersedes the earlier decision in
+[`package-extraction.md`](package-extraction.md) that identity stays owned by
+the kernel. Login, registration, credentials, MFA and invite codes move into
+the identity module (`identity-platform`), the first network module on the
+[module runtime](module-runtime.md).
+
+## Today
+
+- **Routing.** `identity-platform` is a pass-through host. Its 45 routes go
+  through `internal/identitybridge` back into the kernel handlers
+  `handler/auth.go`, `user.go`, `admin.go`, `mfa.go`, `invite.go` and
+  `system*.go`.
+- **Tokens.** HS256 with a shared secret (`internal/utils/jwt.go`). There is no
+  algorithm pinning, no issuer or audience check, and no revocation.
+- **Data.** `v2_user` mixes identity columns (email, password, is_admin,
+  is_staff, banned) with subscriber and entitlement columns (plan, traffic,
+  expiry, limits, balance). About 20 other kernel files read those identity
+  columns.
+
+## Target
+
+| Concern | Owner | Contract |
+|---------|-------|----------|
+| Accounts, password hashes, MFA, login attempts, invite codes, sessions, signing keys | identity module, own schema | `IdentityService` |
+| Access tokens | issued by identity (Ed25519 JWT), verified by the kernel gateway | JWT/JWKS, `GetTokenKeys` |
+| Subscriber rows (id, uuid, subscription token) and entitlements | kernel (`v2_user`) until a subscriber module exists | `KernelIdentity.CreateSubscriber` / `UpdateSubscriber` |
+| Identity columns of `v2_user` (email, is_admin, is_staff, banned) | read projection written only by `ApplyAccountProjection` | versioned, monotonic |
+| Plugin permissions in login and profile responses | kernel access groups | `KernelIdentity.ResolveActorAccess` |
+| Revocation | identity decides; kernel enforces | `KernelIdentity.PublishRevocation` |
+
+`KernelIdentity` is served only to a package whose signed manifest declares
+the capability `kernel.identity.v1`, and only if that package is signed by the
+official trust root.
+
+## Tokens
+
+- **Algorithm.** EdDSA (Ed25519) with header `kid`. The claims are fixed by
+  `contracts/identity/v1/access-token-golden.json`:
+  - `iss=anixops-identity` and `aud=anix-control`;
+  - `sub`, `user_id`, `email` and `is_admin`, so the ~70 handler sites that read
+    them are unchanged;
+  - `sid` (session), `tv` (token version) and `jti`.
+- **Lifetime.** The configured `jwt.expire`, 24 h by default. The v2 login
+  response keeps its shape, so the web UI and v2board clients need no change.
+- **Keys.** Signing keys live only in the identity module, encrypted under
+  `ANIX_IDENTITY_KEK` and shared by its replicas.
+  - A `next` key is published at least one kernel refresh interval before it
+    signs.
+  - Retired keys verify until the last token they signed expires.
+  - A compromised key is revoked, which forces those users to log in again.
+- **Kernel verification.**
+  - The kernel pulls keys with `GetTokenKeys` and persists them in
+    `v4_kernel_identity_token_key`, so it keeps verifying while identity is
+    down. The public keys are also served at `/api/v4/identity/jwks.json`.
+  - The verifier pins the algorithm, requires `kid`, `iss` and `aud`, and
+    allows 60 s of leeway.
+  - The negative cases in `contracts/identity/v1/access-token-negative.json`
+    must all fail.
+- **Legacy tokens.** HS256 tokens stay valid only until 24 h after the
+  cutover. Until then the kernel pins HS256 for them, which closes today's
+  algorithm-confusion gap.
+
+## Real-time revocation
+
+The kernel checks every token against `v4_kernel_identity_revocation`
+(`user_id`, `token_version`, `not_before`) and a session-id denylist. Both are
+cached in memory. The identity module publishes revocations through an outbox
+on:
+- ban;
+- password change;
+- email change;
+- delete;
+- admin demotion;
+- logout (`POST /api/v4/identity/logout`).
+
+Restrictive changes are projected to the kernel before identity commits them.
+A banned user is therefore rejected within seconds, including by node user
+lists that read the `v2_user` projection.
+
+## Data split
+
+- **Identity schema.** Tables `account`, `mfa`, `mfa_attempt`, `invite_code`,
+  `signing_key`, `outbox`, `throttle` and `session`.
+  - `account.id` equals `v2_user.id`.
+  - TOTP secrets are encrypted at rest.
+  - The login throttle is a table, so identity replicas share it.
+- **Registration.** Identity calls `CreateSubscriber`, which is idempotent on
+  the account UUID. The kernel allocates the `v2_user` id, uuid and
+  subscription token, so logging in right after registering works.
+- **Import.** The kernel reads the legacy identity columns, MFA and invite
+  codes and pushes them with `ImportAccounts`. The import is checkpointed and
+  can repeat as `updated_at` deltas. Identity never reads `v2_user.password`.
+- **Authority state machine.** `kernel → importing → identity → finalized`.
+  - **Before finalize,** identity mirrors credentials back into the legacy
+    tables (`LegacyCredentialMirror`), so switching the routes back to
+    `legacy` is an instant rollback.
+  - **Finalize** stops the mirror, sets `v2_user.password` to a sentinel,
+    deletes `v2_user_mfa` rows and disables HS256.
+- **Settings.** The `auth.*` settings (registration policy, login limits, MFA
+  configuration) move into the identity installation configuration. They are
+  seeded once from `GetIdentitySettings`.
+
+## Routes
+
+- **Group A — moves to identity, switched together at cutover:**
+  - login and register;
+  - user MFA (6) and admin MFA configuration (2);
+  - admin user create, update, ban, unban and delete;
+  - invite code generate and list.
+
+  For admin create and update, identity handles the identity fields and
+  passes the entitlement fields to `UpdateSubscriber`. Responses stay
+  byte-compatible with v2 (panel envelope, Chinese error strings,
+  `Retry-After`, the MFA response shapes and the permission fields). Parity is
+  proven with `internal/tests/packagecompat`.
+- **Stay bridged for now:** profile, dashboard, and admin user list, detail
+  and stats. They read the projection.
+- **Move to other packages, still bridged:**
+  - system configuration, audit and backup (12 routes) → new package
+    `platform`;
+  - `/user/reset` → `forward`;
+  - commissions, withdrawals and invite statistics and configuration → new
+    package `affiliate`.
+
+## Failure behaviour
+
+- **Identity down.** Login, registration and MFA return 503. Issued tokens keep
+  working.
+- **Rollback before finalize.** Switch group A back to `legacy`. Going native
+  again needs a delta import first.
+- **Kernel restart.** Sessions and capabilities are lost; modules bind again.
+
+## Delivery
+
+7. Re-home the non-identity routes.
+8. `internal/authn` verifier, HS256 pinning and the revocation store.
+9. `KernelIdentity` in the kernel, `kernel.identity.v1`, projection and import.
+10. Identity storage, keys, `GetTokenKeys` and the kernel EdDSA verifier.
+11. Group A native handlers with parity tests.
+12. Cutover, revocation push and finalize.
+13. End-to-end acceptance on Compose and kind.
+
+Deferred:
+- deleting the legacy identity handlers (after finalize and the rollback
+  window);
+- multiple kernel replicas;
+- OIDC discovery and refresh tokens;
+- a separate subscriber and entitlement module.
