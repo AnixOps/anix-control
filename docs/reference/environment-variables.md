@@ -116,10 +116,12 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_LOG_MAX_BACKUPS` | `log.max_backups` | int | `0` |
 | `ANIX_CONTROL_LOG_MAX_SIZE` | `log.max_size` | int | `0` |
 | `ANIX_CONTROL_LOG_OUTPUT` | `log.output` | string |  |
+| `ANIX_CONTROL_MODULE_RUNTIME_BIND_TIMEOUT` | `module_runtime.bind_timeout` | string | `2m` |
 | `ANIX_CONTROL_MODULE_RUNTIME_CA_KEK` | `module_runtime.ca_kek` | string | secret, no default |
 | `ANIX_CONTROL_MODULE_RUNTIME_CERT_FILE` | `module_runtime.cert_file` | string |  |
 | `ANIX_CONTROL_MODULE_RUNTIME_CERT_LIFETIME` | `module_runtime.cert_lifetime` | string | `24h` |
 | `ANIX_CONTROL_MODULE_RUNTIME_CLUSTER` | `module_runtime.cluster` | string | `default` |
+| `ANIX_CONTROL_MODULE_RUNTIME_DATABASE_HOST` | `module_runtime.database_host` | string |  |
 | `ANIX_CONTROL_MODULE_RUNTIME_ENABLED` | `module_runtime.enabled` | bool | `false` |
 | `ANIX_CONTROL_MODULE_RUNTIME_KEY_FILE` | `module_runtime.key_file` | string |  |
 | `ANIX_CONTROL_MODULE_RUNTIME_LISTEN` | `module_runtime.listen` | string | `:7443` |

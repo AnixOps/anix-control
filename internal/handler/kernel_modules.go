@@ -9,6 +9,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -18,18 +19,27 @@ import (
 // and the audit log.
 type ModuleHandler struct {
 	authority func() (*modulepki.Authority, error)
+	db        func() *gorm.DB
+	remote    func() bool
 }
 
 // NewModuleHandler builds the authority from the loaded configuration on
 // each request, so the handler follows configuration reloads in tests.
 func NewModuleHandler() *ModuleHandler {
-	return &ModuleHandler{authority: func() (*modulepki.Authority, error) {
-		cfg := config.Get()
-		if cfg == nil {
-			return nil, modulepki.ErrBuiltinPKIDisabled
-		}
-		return modulepki.FromConfig(cfg.ModuleRuntime, database.Get())
-	}}
+	return &ModuleHandler{
+		authority: func() (*modulepki.Authority, error) {
+			cfg := config.Get()
+			if cfg == nil {
+				return nil, modulepki.ErrBuiltinPKIDisabled
+			}
+			return modulepki.FromConfig(cfg.ModuleRuntime, database.Get())
+		},
+		db: database.Get,
+		remote: func() bool {
+			cfg := config.Get()
+			return cfg != nil && cfg.ModuleRuntime.Enabled
+		},
+	}
 }
 
 type createEnrollmentRequest struct {
@@ -124,4 +134,40 @@ func (h *ModuleHandler) RotateCA(c *gin.Context) {
 		return
 	}
 	kernelData(c, http.StatusOK, next)
+}
+
+type setRuntimeRequest struct {
+	Runtime string `json:"runtime" binding:"required"`
+}
+
+// ListRuntimes lists the packages whose runtime was chosen explicitly; all
+// others run locally.
+func (h *ModuleHandler) ListRuntimes(c *gin.Context) {
+	var rows []model.PluginRuntime
+	if err := h.db().WithContext(c.Request.Context()).Order("plugin_id").Find(&rows).Error; err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, rows)
+}
+
+// SetRuntime selects local or remote for a package. It applies at the
+// package's next lifecycle operation.
+func (h *ModuleHandler) SetRuntime(c *gin.Context) {
+	var request setRuntimeRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	row, err := service.SetPluginRuntime(c.Request.Context(), h.db(), c.Param("plugin_id"), request.Runtime, h.remote(), kernelActorID(c))
+	switch {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		kernelError(c, http.StatusNotFound, "not_found", "plugin not found")
+	case errors.Is(err, service.ErrRemoteRuntimeDisabled):
+		kernelError(c, http.StatusConflict, "module_runtime_disabled", err.Error())
+	case err != nil:
+		kernelError(c, http.StatusBadRequest, "invalid_request", err.Error())
+	default:
+		kernelData(c, http.StatusOK, row)
+	}
 }

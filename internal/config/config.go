@@ -132,6 +132,12 @@ type ModuleRuntimeConfig struct {
 	TrustBundleFile string `yaml:"trust_bundle_file"`
 	CertFile        string `yaml:"cert_file"`
 	KeyFile         string `yaml:"key_file"`
+	// DatabaseHost ("host" or "host:port") is the PostgreSQL address in
+	// storage leases for remote modules, when it differs from the kernel's.
+	DatabaseHost string `yaml:"database_host"`
+	// BindTimeout bounds how long starting a remote package waits for a
+	// healthy instance (default 2m).
+	BindTimeout string `yaml:"bind_timeout"`
 }
 
 // Module runtime PKI modes.
@@ -464,6 +470,11 @@ func (m ModuleRuntimeConfig) validate() error {
 	if _, err := time.ParseDuration(m.CertLifetimeOrDefault()); err != nil {
 		return fmt.Errorf("invalid module_runtime.cert_lifetime %q", m.CertLifetime)
 	}
+	if value := strings.TrimSpace(m.BindTimeout); value != "" {
+		if timeout, err := time.ParseDuration(value); err != nil || timeout <= 0 {
+			return fmt.Errorf("invalid module_runtime.bind_timeout %q", m.BindTimeout)
+		}
+	}
 	switch m.PKIOrDefault() {
 	case ModulePKIBuiltin:
 		if strings.TrimSpace(m.CAKEK) == "" {
@@ -485,6 +496,15 @@ func (m ModuleRuntimeConfig) ListenOrDefault() string {
 		return ":7443"
 	}
 	return strings.TrimSpace(m.Listen)
+}
+
+// BindTimeoutOrDefault returns the remote start timeout, 2m when empty or
+// invalid (validate rejects invalid values).
+func (m ModuleRuntimeConfig) BindTimeoutOrDefault() time.Duration {
+	if timeout, err := time.ParseDuration(strings.TrimSpace(m.BindTimeout)); err == nil && timeout > 0 {
+		return timeout
+	}
+	return 2 * time.Minute
 }
 
 // ClusterOrDefault returns the configured cluster name, "default" when empty.

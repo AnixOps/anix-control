@@ -3,6 +3,7 @@ package packagestore
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"sort"
 	"strings"
@@ -22,9 +23,26 @@ var packageDSNKeys = map[string]bool{
 // Both keyword/value and postgres:// URL forms are accepted; the result is
 // always keyword/value.
 func packageDSN(kernelDSN, user, password, applicationName string) (string, error) {
+	return packageDSNWithHost(kernelDSN, "", user, password, applicationName)
+}
+
+// packageDSNWithHost is packageDSN with the server address replaced by
+// hostPort ("host" or "host:port") when it is not empty.
+func packageDSNWithHost(kernelDSN, hostPort, user, password, applicationName string) (string, error) {
 	settings, err := parseDSN(kernelDSN)
 	if err != nil {
 		return "", err
+	}
+	if hostPort = strings.TrimSpace(hostPort); hostPort != "" {
+		host, port, err := net.SplitHostPort(hostPort)
+		if err != nil {
+			host, port = hostPort, ""
+		}
+		delete(settings, "hostaddr")
+		settings["host"] = strings.Trim(host, "[]")
+		if port != "" {
+			settings["port"] = port
+		}
 	}
 	keys := make([]string, 0, len(settings))
 	for key := range settings {

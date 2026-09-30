@@ -35,7 +35,7 @@ func (o PackageHostOperations) LeaseStorage(ctx context.Context, host packagebri
 	}
 	grants := StorageGrants(*manifest)
 	lease, err := o.Storage.Lease(ctx, packagestore.Holder{
-		PackageID: host.PackageID, Version: host.Version, Generation: host.Generation,
+		PackageID: host.PackageID, Version: host.Version, Generation: host.Generation, Remote: host.Remote,
 	}, packagestore.Grants{Storage: grants.Storage, AdoptTables: grants.AdoptTables, Views: grants.Views})
 	switch {
 	case errors.Is(err, packagestore.ErrStorageNotDeclared), errors.Is(err, packagestore.ErrPackageNotEligible),

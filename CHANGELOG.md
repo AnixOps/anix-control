@@ -258,6 +258,34 @@
 
 ### Added
 
+- Remote runtime for Control packages (N4).
+  - **Selecting the runtime.** A package can run from network module
+    instances instead of a local child process.
+    - Set it with `PUT /api/v4/kernel/modules/runtimes/:plugin_id`
+      (table `v4_kernel_plugin_runtime`).
+    - Remote requires `module_runtime.enabled` and PostgreSQL.
+    - A change applies at the package's next lifecycle operation.
+  - **Instance pool.** Remote hosts live in the same host supervisor as
+    local ones.
+    - Calls go round-robin over the instances bound to the generation.
+    - An instance that fails at the transport is ejected.
+    - Health is cached for 2s, so per-frame WebSocket checks stay local.
+    - Dispatch, WebSocket relays, ledger migrations and fencing use the same
+      code as local hosts.
+  - **Starting a remote generation.** It waits
+    (`module_runtime.bind_timeout`, default 2m) for a bound, healthy
+    instance.
+    - A new version keeps the old generation serving until then.
+    - The same version fences the old generation first so its instances
+      rebind.
+  - **Storage.** Replicas of one generation share one storage lease instead
+    of rotating each other's password. `module_runtime.database_host` sets
+    the database address in remote leases. Remote packages cannot lease
+    SQLite storage.
+  - **Startup order.** The module listener and remote runtime start before
+    restart reconciliation, so remote packages never start locally by
+    mistake.
+
 - Kernel module listener and remote bridge sessions (N3).
   - **Listener.** With `module_runtime.enabled`, the kernel serves `ModulePKI`
     and the package bridge on an mTLS listener (`module_runtime.listen`,

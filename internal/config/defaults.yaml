@@ -79,6 +79,8 @@ module_runtime:
   cluster: "default"
   pki: "builtin"
   cert_lifetime: "24h"
+  bind_timeout: "2m"
+  database_host: ""
 forward_runtime:
   jobs:
     poll_interval: "5s"

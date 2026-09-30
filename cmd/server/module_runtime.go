@@ -13,6 +13,8 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
 	"github.com/AnixOps/anix-control/v4/internal/moduleruntime"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/pkg/moduletls"
 )
 
@@ -21,9 +23,9 @@ import (
 const moduleCAMaintenanceInterval = time.Hour
 
 // startModuleRuntime starts the mTLS module listener when the module runtime
-// is enabled. Remote installations bind through binder; nil rejects every
-// Bind until the remote runtime manager provides one.
-func (rt *serverRuntime) startModuleRuntime(cfg *config.Config, binder packagebridge.Binder) error {
+// is enabled and turns on the remote runtime of hosts, which admits remote
+// instances. Without hosts (package execution off) every Bind is rejected.
+func (rt *serverRuntime) startModuleRuntime(cfg *config.Config, hosts *pluginhost.Supervisor) error {
 	settings := cfg.ModuleRuntime
 	if !settings.Enabled {
 		return nil
@@ -48,9 +50,21 @@ func (rt *serverRuntime) startModuleRuntime(cfg *config.Config, binder packagebr
 	if err != nil {
 		return fmt.Errorf("module runtime TLS: %w", err)
 	}
+	var binder packagebridge.Binder
+	if hosts != nil {
+		binder = hosts
+	}
 	bridge, err := packagebridge.NewModuleBridge(binder, packagebridge.ModuleBridgeOptions{Cluster: cluster})
 	if err != nil {
 		return err
+	}
+	if hosts != nil {
+		if err := hosts.EnableRemote(pluginhost.RemoteConfig{
+			Instances: bridge, TLS: source, Cluster: cluster, BindTimeout: settings.BindTimeoutOrDefault(),
+			IsRemote: service.PluginRuntimeIsRemote(database.Get()),
+		}); err != nil {
+			return fmt.Errorf("module runtime: %w", err)
+		}
 	}
 	listener, err := net.Listen("tcp", settings.ListenOrDefault())
 	if err != nil {
