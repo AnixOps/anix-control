@@ -10,16 +10,29 @@ import (
 // with the kernel.view:<name> capability. A published version never changes;
 // a new shape gets a new version.
 type KernelAPIView struct {
-	Name  string
-	Query string
+	Name string
+	// Source is the kernel table the view reads.
+	Source string
+	Query  string
 }
 
 // KernelAPIViews lists every kernel API view. They expose only the columns a
 // package may read: never password hashes, tokens or subscription UUIDs.
 var KernelAPIViews = []KernelAPIView{
 	{
-		Name:  "kapi_user_directory_v1",
-		Query: "SELECT id, email, is_admin, is_staff, banned, plan_id, group_id, expired_at, created_at FROM v2_user",
+		Name:   "kapi_user_directory_v1",
+		Source: "v2_user",
+		Query:  "SELECT id, email, is_admin, is_staff, banned, plan_id, group_id, expired_at, created_at FROM v2_user",
+	},
+	{
+		// The system audit trail the kernel records for configuration and
+		// backup changes, for the platform package's audit log list. Its
+		// content holds which fields changed and whether a secret is set,
+		// never a secret's value.
+		Name:   "kapi_system_audit_log_v1",
+		Source: "v2_operation_log",
+		Query: "SELECT id, user_id, username, action, module, target_type, target_id, content, ip, user_agent, status, created_at " +
+			"FROM v2_operation_log WHERE module = 'system'",
 	},
 	{
 		// Entitlements and traffic counters (docs/architecture/subscriber-service.md);
@@ -32,6 +45,9 @@ var KernelAPIViews = []KernelAPIView{
 
 // EnsureKernelAPIViews creates the kernel API views that do not exist yet.
 // Existing views are left unchanged, since a published version is immutable.
+// A view whose source table does not exist is left out; the kernel creates
+// its tables before its views, so this only happens on a partial schema,
+// and a lease that grants the view then fails as for any missing view.
 func EnsureKernelAPIViews(db *gorm.DB) error {
 	if db == nil {
 		return nil
@@ -44,7 +60,7 @@ func EnsureKernelAPIViews(db *gorm.DB) error {
 		if err != nil {
 			return err
 		}
-		if exists {
+		if exists || !db.Migrator().HasTable(view.Source) {
 			continue
 		}
 		if err := db.Exec("CREATE VIEW " + quoteIdent(view.Name) + " AS " + view.Query).Error; err != nil {

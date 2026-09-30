@@ -249,8 +249,12 @@ is meant for development and tests.
 **Kernel API views** are versioned read-only views, created at startup and
 never changed once published. `kapi_user_directory_v1` exposes `id`, `email`,
 `is_admin`, `is_staff`, `banned`, `plan_id`, `group_id`, `expired_at` and
-`created_at` of `v2_user`, and no password hash, token or UUID. If a view
-cannot be created, startup continues and leases that grant it fail.
+`created_at` of `v2_user`, and no password hash, token or UUID.
+`kapi_system_audit_log_v1` exposes the `v2_operation_log` rows of module
+`system` (the audit trail of configuration and backup changes, which records
+whether a secret is set, never its value). If a view cannot be created, or
+its source table does not exist, startup continues and leases that grant it
+fail.
 
 `sdk/packagestoresdk` is the host side:
 

@@ -216,9 +216,9 @@ migrate` runs the same step and exits). From an alpha.6/alpha.7 schema they add 
 tables and their indexes: `v4_kernel_package_backup_reference`,
 `v4_kernel_package_migration_run`, `v4_kernel_package_rollout_lock`,
 `v4_kernel_package_route_generation`, `v4_kernel_package_storage`, and
-`v4_kernel_package_validation_result`, plus the read-only view
-`kapi_user_directory_v1` over `v2_user`. No existing table, column or index
-changes.
+`v4_kernel_package_validation_result`, plus the read-only views
+`kapi_user_directory_v1` over `v2_user` and `kapi_system_audit_log_v1` over
+`v2_operation_log`. No existing table, column or index changes.
 
 Package storage leases additionally need `CREATEROLE` on the Control
 database role and a `pg_hba.conf` entry that admits the `+anix_packages`
