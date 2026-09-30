@@ -247,7 +247,27 @@ directly, so proxy clients and nodes are not affected by this window.
 2. Containers: the release image already contains the identity package and
    enables package execution by default, so start `docker-compose.prod.yml`
    (see [Docker Compose Upgrade](#docker-compose-upgrade)) and continue with
-   step 3. Native installs: configure `identity_bootstrap_package_dir` and
+   step 3. An `:edge` or `sha-<commit>` image (Dockerfile `source` target)
+   does not bundle the package: mount the three verified
+   `identity-platform-<version>` files read-only and point the server at them,
+   for example with a `compose.override.yml`:
+
+   ```yaml
+   x-identity: &identity
+     environment:
+       ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR: /app/bootstrap/identity-platform
+     volumes:
+       - ./bootstrap/identity-platform:/app/bootstrap/identity-platform:ro
+   services:
+     migrate: *identity
+     control: *identity
+   ```
+
+   Compose merges an override's `environment` and `volumes` into the base
+   file, so the secrets and the artifact volume stay in place. The directory
+   and files must not be group- or world-writable.
+
+   Native installs: configure `identity_bootstrap_package_dir` and
    `control_execution_enabled: true` as described in
    [Plugin-Only Bootstrap And Execution](#plugin-only-bootstrap-and-execution),
    then start the new binary. `identity-platform` is imported on first start,

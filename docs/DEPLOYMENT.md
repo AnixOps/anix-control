@@ -131,7 +131,8 @@ curl -fsS http://127.0.0.1:8080/readyz
   Docker 网桥地址上监听（`listen_addresses`），并在 `pg_hba.conf` 允许网桥网段使用密码认证。
   托管数据库使用 `ANIX_CONTROL_DATABASE_SSLMODE=require` 或 `verify-full`。
 - 容器以只读根文件系统、uid 10001、`cap_drop: ALL` 运行；`/tmp` 是可执行 tmpfs
-  （插件宿主进程与 ansible 状态）。
+  （插件宿主进程与 ansible 状态）。已验证的插件包副本放在 `plugin-artifacts` 卷
+  （`/var/lib/anixops`，约 0.5 GB 磁盘，可随时删除，启动时会按需从数据库重建）。
 - 迁移到新机器：在新机器上放同样的 `docker-compose.prod.yml`、`.env`、`control.env`、
   `secrets/`，指向同一个数据库（或先 `pg_dump -Fc` / `pg_restore` 迁移数据库），然后
   `docker compose -f docker-compose.prod.yml up -d`。

@@ -94,9 +94,10 @@ resources:
   limits:
     memory: 1Gi
 
-# Plugin host sockets and binaries, and ansible state; must allow exec.
+# Plugin host sockets and binaries, verified package copies (about 0.5 GB for
+# the official package set), and ansible state; disk-backed, must allow exec.
 tmpVolume:
-  sizeLimit: 1Gi
+  sizeLimit: 2Gi
 
 terminationGracePeriodSeconds: 90
 

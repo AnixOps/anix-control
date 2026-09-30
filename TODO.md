@@ -204,6 +204,14 @@ Singleton workers are already lease-guarded; the Helm chart refuses
 - [ ] Then allow `replicaCount > 1` with a RollingUpdate strategy and a
   PodDisruptionBudget, and add a multi-replica kind smoke test.
 
+## P2: Package Artifact Footprint
+
+- [ ] Control package hosts materialize the whole signed `.anxp` (each bundles
+  Agent binaries for several architectures, up to ~50 MB) because the host
+  re-verifies the package digest; the official set needs ~0.5 GB of disk per
+  Control process. Materialize only the verified control entrypoint (verify the
+  package once, then pin the entrypoint digest) to cut this to a few MB each.
+
 ## Later (Not This Phase)
 
 Recorded so they are not lost; schedule after the package-extraction

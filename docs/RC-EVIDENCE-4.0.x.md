@@ -115,7 +115,30 @@ The harness and its output stay on the operator machine, because they contain
 production data. This is local evidence, not a staging canary or production
 approval.
 
-## Not Run Locally
+## Container Cutover Rehearsal
+
+Recorded 2026-09-30 on the test host with Docker 26.1, in the production
+shape: PostgreSQL 17 on the host and Control from `docker-compose.prod.yml`
+plus a rehearsal override. The override puts every container on an internal
+Docker network with no egress, and PostgreSQL listens only on that bridge
+with password authentication. Both sides ran on copies of the 2026-09-29
+production backup:
+
+- old side: `v4.0.0-alpha.7` in a container on the same network;
+- new side: an image built locally from `go_dev` `3c8423bd` plus the artifact
+  volume fix. The signed GHCR edge image was not pullable because the package
+  is private.
+
+| Check | Result |
+|-------|--------|
+| `migrate` + `control` | healthy; only the five `v4_kernel_package_*` tables added |
+| Package install (16 signed `v4.0.0`, identity from a mounted bootstrap directory) | 16/16 healthy after moving package copies to the `plugin-artifacts` volume; with the original 512 MB `/tmp` tmpfs, `nat-egress` failed |
+| Subscriptions / UniProxy | 360/360 and 45/45 byte-identical to alpha.7 |
+| `/api/v2` GET | 82/82 status equal; body differences are timestamps, image-bundled ansible, observability ordering and the alpha.7 container's UTC time zone |
+| Restart, redeploy, stop | `/readyz` 200, lease re-acquired, `migrate` no-op, exit code 0 |
+| Rollback | alpha.7 on the upgraded database: 360/360 subscriptions identical to before the upgrade, so rollback needs no database restore |
+| Isolation | internal network, 15 blocked egress attempts, uid 10001 |
+
 
 The following evidence remains a CI/staging gate and must not be inferred from
 the passing local checks:

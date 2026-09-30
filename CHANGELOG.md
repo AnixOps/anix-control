@@ -389,6 +389,14 @@
 
 ### Fixed
 
+- `docker-compose.prod.yml` keeps verified package copies on a disk-backed
+  `plugin-artifacts` volume (`/var/lib/anixops`, pre-created in the image for
+  uid 10001) instead of the 512 MB RAM-backed `/tmp` tmpfs. With the sixteen
+  official packages (~0.5 GB of copies) the tmpfs filled up and package hosts
+  failed with "verified artifact reference is unavailable"; found by the
+  container cutover rehearsal on a production database copy. The Helm chart's
+  disk-backed `/tmp` limit is raised from 1 Gi to 2 Gi.
+
 - `TestElectorStopsWorkWhenRenewalsFail` waits for the leader flag to clear
   instead of reading it the moment the work returns; it failed under the race
   detector.
