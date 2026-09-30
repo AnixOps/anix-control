@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/pkg/pluginhostsdk"
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/stretchr/testify/require"
 )
 

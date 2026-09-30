@@ -8,6 +8,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
@@ -15,7 +16,6 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v4/internal/service"
-	"github.com/AnixOps/anix-control/v4/pkg/moduletls"
 )
 
 // moduleCAMaintenanceInterval is how often the kernel promotes a rotated

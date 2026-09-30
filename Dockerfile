@@ -32,6 +32,8 @@ RUN npm run build
 FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS builder
 WORKDIR /src
 COPY go.mod go.sum ./
+# The SDK module is a local replace target and must exist before download.
+COPY sdk/go.mod sdk/go.sum ./sdk/
 RUN go mod download
 COPY . .
 ARG TARGETOS=linux

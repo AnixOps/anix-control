@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/AnixOps/anix-control/v4/pkg/pluginhostsdk"
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 )
 
 const identityMigrationRoute = "migration.identity-platform.001_identity_platform"

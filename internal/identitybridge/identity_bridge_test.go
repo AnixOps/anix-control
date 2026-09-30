@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
@@ -15,7 +16,6 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
 	"github.com/AnixOps/anix-control/v4/internal/service"
-	"github.com/AnixOps/anix-control/v4/pkg/packagebridgesdk"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"

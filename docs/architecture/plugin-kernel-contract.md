@@ -184,13 +184,13 @@ version, or another lifecycle generation gets `PermissionDenied`. A kernel
 without session operations answers `Unimplemented`, and hosts then keep every
 route in `legacy` mode.
 
-`pkg/pluginhostsdk.Router` implements this for package hosts. It polls
+`sdk/pluginhostsdk.Router` implements this for package hosts. It polls
 `GetPackageConfig` every 5 s and keeps the last successful modes when a poll
 fails. A route without a native handler stays `legacy` and is reported as
 `mode_unsupported`. In `shadow` mode the legacy response is returned first and
 the native handler runs in the background with a timeout and a concurrency
 limit; status codes and bodies are compared after
-`pkg/v2compat.NormalizeForCompare` drops the envelope `ts`. WebSocket routes
+`sdk/v2compat.NormalizeForCompare` drops the envelope `ts`. WebSocket routes
 always relay through the bridge. The router reports its configuration status
 and per-route counters in `HealthResponse.details_json`. The kernel's
 supervisor calls `Health` on every running host every 30 s, keeps the last
@@ -250,7 +250,7 @@ never changed once published. `kapi_user_directory_v1` exposes `id`, `email`,
 `created_at` of `v2_user`, and no password hash, token or UUID. If a view
 cannot be created, startup continues and leases that grant it fail.
 
-`pkg/packagestoresdk` is the host side:
+`sdk/packagestoresdk` is the host side:
 
 - `Open` leases storage and connects with at most 4 connections.
 - `Store.Table` names the package's own tables: `pkg_<id>.<name>` on

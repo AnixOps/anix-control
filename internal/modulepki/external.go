@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/pkg/moduletls"
+	"github.com/AnixOps/anix-control/sdk/moduletls"
 )
 
 // ExternalSource serves certificates issued outside the kernel, for example

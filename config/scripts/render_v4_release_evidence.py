@@ -379,15 +379,11 @@ def run_rehearsal(
         "websocket_relay_tests": command_result(
             "WebSocket relay tests",
             [
-                "go",
-                "test",
-                "./internal/packagebridge",
-                "./pkg/packagebridgesdk",
-                "./packages/shared/controlhost",
-                "./internal/pluginhost",
-                "./pkg/pluginhostsdk",
-                "./internal/identitybridge",
-                "-count=1",
+                "sh",
+                "-c",
+                "go test ./internal/packagebridge ./internal/tests/bridgecontract ./packages/shared/controlhost"
+                " ./internal/pluginhost ./internal/identitybridge -count=1"
+                " && go -C sdk test ./packagebridgesdk ./pluginhostsdk -count=1",
             ],
             repo_root=repo_root,
             environment=environment,

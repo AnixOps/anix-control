@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	packagebridgev1 "github.com/AnixOps/anix-control/v4/api/packagebridge/v1"
-	"github.com/AnixOps/anix-control/v4/pkg/packagebridgesdk"
+	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
+	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

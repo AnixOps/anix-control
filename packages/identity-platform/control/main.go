@@ -8,8 +8,8 @@ import (
 	// without system zoneinfo.
 	_ "time/tzdata"
 
-	"github.com/AnixOps/anix-control/v4/pkg/modulesdk"
-	"github.com/AnixOps/anix-control/v4/pkg/pluginhostsdk"
+	"github.com/AnixOps/anix-control/sdk/modulesdk"
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 )
 
 var packageVersion = "4.0.0"

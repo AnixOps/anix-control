@@ -66,6 +66,22 @@
 
 ### Changed
 
+- The AnixOps contracts and SDKs are now their own Go module,
+  `github.com/AnixOps/anix-control/sdk`, in `sdk/`.
+  - **Moves.** `api/{pluginhost,packagebridge,modulepki,identity,kernelidentity}`
+    moved to `sdk/api/...`, and `pkg/{moduletls,pluginhostsdk,packagebridgesdk,modulesdk,packagestoresdk,v2compat}`
+    moved to `sdk/...`. Import paths change accordingly; the wire formats do
+    not.
+  - **Consumers.** Other AnixOps services can depend on the contracts and
+    SDKs, versioned by `sdk/vX.Y.Z` tags, without pulling in the kernel. The
+    kernel uses the module through a local `replace`.
+  - **Boundary gate.** `check_package_boundaries.sh` now fails when the SDK
+    module depends on the kernel module. The SDK contract tests that use the
+    kernel's real bridge moved to `internal/tests/bridgecontract`.
+  - **CI and tooling.** CI builds, vets, tests (including race), lints,
+    tidies and scans the SDK module. The Dockerfile copies `sdk/go.mod`
+    before downloading modules.
+
 - The generic Control package host and the identity-platform host now run
   on `pluginhostsdk.Router`. They have no native routes, so every request
   still passes through the bridge to its legacy handler.

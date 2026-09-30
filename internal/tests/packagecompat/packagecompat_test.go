@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/pkg/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/pkg/v2compat"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )

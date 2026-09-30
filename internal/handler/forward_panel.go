@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"github.com/AnixOps/anix-control/v4/pkg/v2compat"
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"net/http"
 	"strconv"
 	"time"

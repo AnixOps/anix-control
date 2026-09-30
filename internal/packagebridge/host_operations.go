@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	packagebridgev1 "github.com/AnixOps/anix-control/v4/api/packagebridge/v1"
+	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

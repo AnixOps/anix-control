@@ -99,17 +99,17 @@ legacy route.
   example `kernel.storage.adopt:v2_knowledge`). Column-level grants are allowed
   for shared tables (for example `v2_order(status, paid_at)`).
 - New bridge RPC `LeaseStorage` returns connection parameters for that role
-  only; the host opens it through `pkg/packagestoresdk.Open` and uses GORM.
+  only; the host opens it through `sdk/packagestoresdk.Open` and uses GORM.
   Each lease is capped at 2–4 connections and requested only by packages that
   have at least one route in `native` mode.
-- `pkg/packagestoresdk.RunEmbeddedMigrations`: embedded SQL, a per-package
+- `sdk/packagestoresdk.RunEmbeddedMigrations`: embedded SQL, a per-package
   state table, a digest per step. The kernel records runs in the existing
   `v4_kernel_package_*` ledger.
 - New kernel model `v4_kernel_package_storage` records role, schema, granted
   tables, and lease generation.
 
 Status (2026-09-30): implemented. `internal/packagestore`, `LeaseStorage`,
-`pkg/packagestoresdk`, `v4_kernel_package_storage`, `kapi_user_directory_v1`
+`sdk/packagestoresdk`, `v4_kernel_package_storage`, `kapi_user_directory_v1`
 and the CI job `package-storage-postgres` are in place. Column-level grants
 are not implemented yet. Package migrations of storage packages run
 through the ledger when their host starts (`plugin-kernel-contract.md`,
@@ -128,12 +128,12 @@ through the ledger when their host starts (`plugin-kernel-contract.md`,
 - Rollback = set the route back to `legacy` (effective within 5 s, audited
   through the config revision history).
 - Router, mode logic, legacy pass-through, and shadow comparison move into
-  `pkg/pluginhostsdk/router.go` (from `packages/shared/controlhost`).
-- `pkg/v2compat` exposes `PanelSuccess`/`PanelError`/`NormalizeForCompare`;
+  `sdk/pluginhostsdk/router.go` (from `packages/shared/controlhost`).
+- `sdk/v2compat` exposes `PanelSuccess`/`PanelError`/`NormalizeForCompare`;
   legacy handlers delegate to it so output stays byte-identical.
 
 Status (2026-09-30): implemented. `GetPackageConfig` and the reserved
-`routes` configuration key, `pkg/pluginhostsdk.Router` and `pkg/v2compat` are
+`routes` configuration key, `sdk/pluginhostsdk.Router` and `sdk/v2compat` are
 in place, and route modes and shadow counters are exported on `/metrics`
 (see [`plugin-kernel-contract.md`](plugin-kernel-contract.md#package-configuration)).
 No package has a native route yet.
@@ -342,7 +342,7 @@ Semantics to keep when wiring:
 - CURRENT `config/scripts/check_package_boundaries.sh` fails when
   `packages/...` or `pkg/...` code depends on `internal/`, even
   transitively. A test may import `internal/` only through a reasoned
-  allowlist entry; today only the `pkg/packagebridgesdk` contract tests do.
+  allowlist entry; today only the `sdk/packagebridgesdk` contract tests do.
 - CURRENT `config/package-extraction.json` and `check_plugin_only_routes.py`:
   - `bridged` and `native-flagged` routes keep their legacy handler, in the
     router or the identity bridge.
@@ -403,10 +403,10 @@ after identity.
 
 | Milestone | Weeks | Scope | Done when |
 |-----------|-------|-------|-----------|
-| M0 baseline + gates to PR | 1 | Production inventory into `release-line-status.md` (version, PG size, node count, largest node user count, `/s/:token` and UniProxy `config`/`user` size and p50/p99); run `check_plugin_only_routes.py` and `check_v2_package_route_catalog.py` on PRs; proto-generation drift check for `api/pluginhost`, `api/packagebridge` | Inventory recorded; gates required on PRs |
+| M0 baseline + gates to PR | 1 | Production inventory into `release-line-status.md` (version, PG size, node count, largest node user count, `/s/:token` and UniProxy `config`/`user` size and p50/p99); run `check_plugin_only_routes.py` and `check_v2_package_route_catalog.py` on PRs; proto-generation drift check for `sdk/api/pluginhost`, `sdk/api/packagebridge` | Inventory recorded; gates required on PRs |
 | M1 harden v4 | 1–3 | Route-resolution cache keyed by installation id, desired/observed version, `LifecycleGeneration`, enabled state, `ArtifactSHA256`, trust-root fingerprint (success-only, fail-closed); `recover` (`package_panic`); watchdog with backoff; stderr to kernel log with `[pkg:<id>]`; pass `TZ` + `time/tzdata`; configurable body caps; per-package/route metrics; benchmarks in `go-benchmark-smoke`; cancellable worker contexts | Route resolution ≥10x faster; host panic/kill auto-recovers; >1 MiB UniProxy response served |
 | M2 production to v4 | 3–4 | Rehearse on a restored prod PG dump per [`../UPGRADE.md`](../UPGRADE.md) and [`../guide/v4-plugin-only-upgrade.md`](../guide/v4-plugin-only-upgrade.md); enable `control_execution_enabled`; install the 16 signed packages (all bridged); smoke admin/user UI, byte-compare `/s/:token`, UniProxy `config`/`user`/`push`/`alive`, payment callback (test mode), latency; cut over in a window; keep old host/DB N days | Production stable on v4, all routes bridged, error/latency baseline recorded; 72 h with error rate ≤ old version |
-| M3 extraction infrastructure | 4–6 | `internal/packagestore`, `v4_kernel_package_storage`, `kapi_user_directory_v1`, `LeaseStorage`, `pkg/packagestoresdk`, CI job `package-storage-postgres`; wire the migration runner in `startResolvedHost` (compensated by the lifecycle plan); auto migration-index versions in `build_package.py`; `GetPackageConfig` + `pkg/pluginhostsdk/router.go`; `pkg/v2compat`; `internal/tests/packagecompat` (`RunRead`, `RunWrite`); `config/package-extraction.json` (`bridged`/`native-flagged`/`native` per route) with `check_plugin_only_routes.py` allowing direct handling only for `native`; `check_package_boundaries.sh`; `check_plugin_only_workers.py` | Listed packages' tests pass; PG grant tests pass |
+| M3 extraction infrastructure | 4–6 | `internal/packagestore`, `v4_kernel_package_storage`, `kapi_user_directory_v1`, `LeaseStorage`, `sdk/packagestoresdk`, CI job `package-storage-postgres`; wire the migration runner in `startResolvedHost` (compensated by the lifecycle plan); auto migration-index versions in `build_package.py`; `GetPackageConfig` + `sdk/pluginhostsdk/router.go`; `sdk/v2compat`; `internal/tests/packagecompat` (`RunRead`, `RunWrite`); `config/package-extraction.json` (`bridged`/`native-flagged`/`native` per route) with `check_plugin_only_routes.py` allowing direct handling only for `native`; `check_package_boundaries.sh`; `check_plugin_only_workers.py` | Listed packages' tests pass; PG grant tests pass |
 | M4 pilot + first domains | 6–8 | knowledge, then ticket, then plan (after `kernel.entitlement.apply.v1` and `kapi_plan_catalog_v1`) | 72 h of zero shadow mismatches in production; one production rollback to `legacy` rehearsed; gate shows `native`; boundary check clean; legacy code deleted |
 
 Pilot: **knowledge** (6 routes, ~240 lines in `internal/handler/knowledge.go`
@@ -446,7 +446,7 @@ Identity goes first, ahead of the knowledge pilot, as a network module; see
 
 | Risk | Mitigation |
 |------|------------|
-| Output not byte-identical (`ts`, `null` vs `[]`, time zone, validation text) | `pkg/v2compat`, pass `TZ`, copy structs verbatim, per-route compare tests, `shadow` before `native` |
+| Output not byte-identical (`ts`, `null` vs `[]`, time zone, validation text) | `sdk/v2compat`, pass `TZ`, copy structs verbatim, per-route compare tests, `shadow` before `native` |
 | Host crash takes a domain down | `recover` + watchdog (same-generation restart with 1–30 s backoff, failed after 5 restarts in 5 min; `internal/pluginhost/supervision.go`); switch the mode back to `legacy` at any time before legacy code is deleted |
 | PG grant mistakes (sequence privileges, PG15+ `public` defaults) | PG CI job, idempotent creation, `plugins.storage_isolation: shared` escape hatch |
 | Connection count grows | 2–4 connections per lease; only `native` packages lease |

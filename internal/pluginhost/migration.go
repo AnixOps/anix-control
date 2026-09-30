@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	pluginhostv1 "github.com/AnixOps/anix-control/v4/api/pluginhost/v1"
+	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 )
 

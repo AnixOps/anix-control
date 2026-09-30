@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AnixOps/anix-control/v4/pkg/packagebridgesdk"
+	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"

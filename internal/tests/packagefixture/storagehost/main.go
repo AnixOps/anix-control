@@ -9,9 +9,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/AnixOps/anix-control/v4/pkg/modulesdk"
-	"github.com/AnixOps/anix-control/v4/pkg/packagestoresdk"
-	"github.com/AnixOps/anix-control/v4/pkg/pluginhostsdk"
+	"github.com/AnixOps/anix-control/sdk/modulesdk"
+	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
+	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 )
 
 const packageID = "storage-fixture"

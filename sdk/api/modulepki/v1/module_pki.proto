@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package anixops.modulepki.v1;
+
+option go_package = "github.com/AnixOps/anix-control/sdk/api/modulepki/v1;modulepkiv1";
+
+// ModulePKI issues the mTLS certificates of remote modules. It is served on
+// the kernel's module listener. Enroll is the only RPC accepted without a
+// client certificate; Renew and GetTrustBundle require the module's current
+// certificate.
+//
+// Certificates carry one URI SAN: spiffe://anixops/<cluster>/module/<package>
+// for modules and spiffe://anixops/<cluster>/kernel for the kernel.
+service ModulePKI {
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+  rpc Renew(RenewRequest) returns (RenewResponse);
+  rpc GetTrustBundle(GetTrustBundleRequest) returns (GetTrustBundleResponse);
+}
+
+message EnrollRequest {
+  // enrollment_credential is a one-time token (Compose, VMs) or a revocable
+  // package-bound bootstrap credential (Kubernetes Secret).
+  string enrollment_credential = 1;
+  string package_id = 2;
+  string cluster = 3;
+  // csr_der is a PKCS#10 request; the kernel ignores its subject and SANs and
+  // issues the package's SPIFFE identity.
+  bytes csr_der = 4;
+}
+
+message EnrollResponse {
+  IssuedCertificate certificate = 1;
+}
+
+message RenewRequest {
+  bytes csr_der = 1;
+}
+
+message RenewResponse {
+  IssuedCertificate certificate = 1;
+}
+
+message GetTrustBundleRequest {}
+
+message GetTrustBundleResponse {
+  // trust_bundle_der holds every CA certificate a module must trust, current
+  // and next during a rotation.
+  repeated bytes trust_bundle_der = 1;
+}
+
+message IssuedCertificate {
+  bytes certificate_der = 1;
+  repeated bytes intermediate_der = 2;
+  repeated bytes trust_bundle_der = 3;
+  string spiffe_id = 4;
+  int64 not_after_unix = 5;
+  // renew_after_unix is when the module should renew (two thirds of the
+  // lifetime).
+  int64 renew_after_unix = 6;
+}

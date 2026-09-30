@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	modulepkiv1 "github.com/AnixOps/anix-control/v4/api/modulepki/v1"
-	"github.com/AnixOps/anix-control/v4/pkg/moduletls"
+	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
+	"github.com/AnixOps/anix-control/sdk/moduletls"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

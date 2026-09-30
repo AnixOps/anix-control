@@ -12,11 +12,11 @@ other only through contracts:
 
 - **AnixOps protocols** (gRPC/protobuf, guarded by
   `internal/tests/protocompat` and `contracts/proto/descriptors.golden`):
-  - `api/pluginhost/v1` `ControlPackageHost` (kernel → module);
-  - `api/packagebridge/v1` `KernelPackageBridge` (module → kernel);
-  - `api/modulepki/v1` `ModulePKI`;
-  - `api/identity/v1` `IdentityService`;
-  - `api/kernelidentity/v1` `KernelIdentity`.
+  - `sdk/api/pluginhost/v1` `ControlPackageHost` (kernel → module);
+  - `sdk/api/packagebridge/v1` `KernelPackageBridge` (module → kernel);
+  - `sdk/api/modulepki/v1` `ModulePKI`;
+  - `sdk/api/identity/v1` `IdentityService`;
+  - `sdk/api/kernelidentity/v1` `KernelIdentity`.
 - **Public protocols:**
   - the v2 HTTP API (v2board compatible) behind the kernel gateway;
   - JWT (EdDSA) and JWKS for access tokens;
@@ -33,7 +33,7 @@ The kernel keeps a narrow set of jobs:
 
 Each Control installation runs in one of two runtimes. The runtime is stored in
 a new table, `v4_kernel_plugin_runtime`, because production never alters
-existing tables. The same module binary supports both; `pkg/modulesdk` picks
+existing tables. The same module binary supports both; `sdk/modulesdk` picks
 the transport from the environment.
 
 | | `local` (current) | `remote` (new) |
@@ -65,7 +65,7 @@ Remote hosts live inside the same host `Supervisor` as local ones.
 
 ## PKI
 
-Status: implemented (`internal/modulepki`, `pkg/moduletls`); the listener
+Status: implemented (`internal/modulepki`, `sdk/moduletls`); the listener
 that serves `ModulePKI` arrives with `Bind`.
 
 - **Built-in CA** (`internal/modulepki`).
@@ -198,7 +198,7 @@ Remote modules require PostgreSQL; a remote lease on SQLite is refused.
 
 ## Running a module
 
-`pkg/modulesdk.Run` starts a host in either runtime. The official hosts
+`sdk/modulesdk.Run` starts a host in either runtime. The official hosts
 (`packages/shared/controlhost`, `packages/identity-platform/control`) use it:
 - **Local.** Without `ANIX_MODULE_MODE`, the host expects the environment the
   kernel gives a child process.
@@ -233,6 +233,31 @@ Remote modules require PostgreSQL; a remote lease on SQLite is refused.
 lease from the kernel before they connect, so a pool picks up a rotated role
 password instead of failing.
 
+## SDK module
+
+The contracts and SDKs form their own Go module,
+`github.com/AnixOps/anix-control/sdk`, in `sdk/`:
+
+- **Contracts:** `sdk/api/{pluginhost,packagebridge,modulepki,identity,kernelidentity}/v1`.
+- **SDKs:** `sdk/moduletls`, `sdk/pluginhostsdk`, `sdk/packagebridgesdk`,
+  `sdk/modulesdk`, `sdk/packagestoresdk`, `sdk/v2compat`.
+
+**Independence from the kernel.** The module has no dependency on the kernel
+module: Go forbids it from importing the kernel's `internal/` packages, and
+`check_package_boundaries.sh` also rejects any dependency on
+`github.com/AnixOps/anix-control/v4`. Tests that exercise the SDK against the
+kernel's real bridge live in the kernel module (`internal/tests/bridgecontract`).
+
+**Consumers.** Other AnixOps services depend only on this module, never on
+the kernel:
+- It is versioned by tags of the form `sdk/vX.Y.Z` and fetched with
+  `go get github.com/AnixOps/anix-control/sdk@vX.Y.Z` (set `GOPRIVATE` while
+  the repository is private).
+- Wire compatibility of the contracts is guarded by
+  `internal/tests/protocompat`.
+- If a second consumer or a separate release cadence makes it worthwhile,
+  the directory can move to its own repository unchanged.
+
 ## Trust boundary
 
 For `local` hosts the kernel proves what runs: it executes only the entrypoint
@@ -260,7 +285,7 @@ client certificate and `Bind`. What runs is enforced outside the kernel:
 2. `internal/modulepki`.
 3. Module listener, `Bind`, `GenerationSession`.
 4. Remote runtime manager.
-5. `pkg/modulesdk`.
+5. `sdk/modulesdk`.
 6. Module images, Compose and Helm, kind smoke test.
 
 The identity work (7–13) is in [`identity-service.md`](identity-service.md).
