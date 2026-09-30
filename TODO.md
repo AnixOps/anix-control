@@ -150,14 +150,6 @@ deliberately in a later PR.
 
 ## Deployment And Repository Hygiene
 
-- [ ] `docker-compose.prod.yml` mounts files that do not exist in the
-  repository: `config/docker/postgres/init.sql`,
-  `config/docker/grafana/provisioning`, and `config/docker/nginx/ssl`. Docker
-  creates empty directories in their place. Add the assets or drop the mounts.
-- [ ] The `Dockerfile` copies all of `config/deploy/` into the image
-  (`COPY --from=builder /app/config/deploy ./config/deploy`), including node
-  deployment playbooks and local deploy helpers the runtime does not need.
-  Narrow it to the runtime assets (`config/deploy/ansible/`).
 - [ ] `config/config.prod.yaml`, `config/config.yaml.example`, and the
   configuration that `install.sh` generates still write a
   `forward_runtime.iptables_ansible` block, but the config loader

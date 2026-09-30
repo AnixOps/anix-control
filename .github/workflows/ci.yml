@@ -508,6 +508,42 @@ jobs:
           test "$(docker inspect -f '{{.State.ExitCode}}' control)" = 0
           docker logs control 2>&1 | grep 'Draining: waiting 2s' >/dev/null
           docker logs control 2>&1 | grep '"level":"INFO"' >/dev/null
+          docker rm control
+
+      - name: Run the production Compose file against an external PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -e PGPASSWORD=postgres postgres:16 \
+            psql -h 127.0.0.1 -U postgres -d anix_control_smoke -c 'CREATE DATABASE anix_control_compose'
+          work="$(mktemp -d)"
+          cp docker-compose.prod.yml "${work}/"
+          cp config/deploy/compose/control.env.example "${work}/control.env"
+          sed -i -e 's/^ANIX_CONTROL_DATABASE_USERNAME=.*/ANIX_CONTROL_DATABASE_USERNAME=postgres/' \
+                 -e 's/^ANIX_CONTROL_DATABASE_DATABASE=.*/ANIX_CONTROL_DATABASE_DATABASE=anix_control_compose/' "${work}/control.env"
+          install -d -m 0755 "${work}/secrets"
+          openssl rand -hex 32 | sudo install -m 0400 -o 10001 -g 10001 /dev/stdin "${work}/secrets/jwt_secret"
+          printf '%s' postgres | sudo install -m 0400 -o 10001 -g 10001 /dev/stdin "${work}/secrets/db_password"
+          cd "${work}"
+          export ANIX_CONTROL_IMAGE=anix-control:ci
+          compose=(docker compose -f docker-compose.prod.yml)
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d
+          control_id="$("${compose[@]}" ps -q control)"
+          health=starting
+          for _ in $(seq 1 40); do
+            health="$(docker inspect -f '{{.State.Health.Status}}' "${control_id}")"
+            [[ "${health}" == healthy ]] && break
+            sleep 3
+          done
+          "${compose[@]}" logs --no-color | tail -40
+          test "${health}" = healthy
+          "${compose[@]}" logs migrate | grep 'migrate finished' >/dev/null
+          curl -fsS http://127.0.0.1:8080/readyz
+          curl -fsS -o /dev/null http://127.0.0.1:3000/livez
+          "${compose[@]}" stop control
+          test "$(docker inspect -f '{{.State.ExitCode}}' "${control_id}")" = 0
+          "${compose[@]}" down
 
   backend-test:
     name: Backend Tests

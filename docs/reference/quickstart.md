@@ -22,59 +22,35 @@ Important:
 
 ## Docker Quickstart
 
-1. Prepare files:
+Development stack (builds this checkout, runs a throwaway PostgreSQL, no config
+file needed):
 
 ```bash
-cp .env.example .env
-cp config/config.yaml.example config/config.yaml
+docker compose up -d --build
+docker compose logs migrate        # prints the generated admin password once
+docker compose ps                  # control becomes healthy
 ```
 
-2. Edit `config/config.yaml` at minimum:
+Open:
 
-- `jwt.secret`
-- `app.api_token`
-- `admin.email`
-- `admin.password`
-- `forward_runtime.backend`
-
-3. If you need NodeX mode, set it in `config/config.yaml`:
-
-```yaml
-forward_runtime:
-  backend: "gost"
-  nodex:
-    base_url: "http://nodex-control-plane:18081"
-    token: "replace-with-shared-token"
-    timeout_seconds: 15
-```
-
-4. If you need the local stateless Ansible path, set it in `config/config.yaml`:
-
-```yaml
-forward_runtime:
-  backend: "nftables_ansible"
-  nftables_ansible:
-    inventory: "config/deploy/ansible/inventory.ini"
-    apply_playbook: "config/deploy/ansible/playbooks/forward_apply_nftables.yml"
-    remove_playbook: "config/deploy/ansible/playbooks/forward_remove_nftables.yml"
-    working_dir: "config/deploy/ansible"
-    target_pattern: "{{node.host}}"
-    environment:
-      ANSIBLE_CONFIG: "config/deploy/ansible/ansible.cfg"
-    timeout_seconds: 120
-```
-
-5. Start:
-
-```bash
-docker compose up -d
-docker compose logs -f anix-control
-```
-
-6. Open:
-
-- panel API: `http://127.0.0.1:8080`
+- panel API: `http://127.0.0.1:8080` (`/readyz` for readiness)
 - admin or user frontend: `http://127.0.0.1:3000`
+
+Settings are `ANIX_CONTROL_*` environment variables in `docker-compose.yml`
+(`docker compose run --rm control -print-env` lists all of them). For example,
+NodeX mode:
+
+```yaml
+    environment:
+      ANIX_CONTROL_FORWARD_RUNTIME_BACKEND: gost
+      ANIX_CONTROL_FORWARD_RUNTIME_NODEX_BASE_URL: http://nodex-control-plane:18081
+      ANIX_CONTROL_FORWARD_RUNTIME_NODEX_TOKEN: replace-with-shared-token
+```
+
+Map-valued keys such as `forward_runtime.nftables_ansible.environment` can only
+be set in a YAML file: mount one and set `ANIX_CONTROL_CONFIG`. Production
+deployments use `docker-compose.prod.yml` with a released image; see
+[`../DEPLOYMENT.md`](../DEPLOYMENT.md).
 
 ## Local Development
 

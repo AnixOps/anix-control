@@ -331,36 +331,32 @@ Then check:
 
 ## Docker Compose Upgrade
 
-Docker deployments must still use GitHub Release evidence. Do not build release
-images or frontend assets from the production checkout.
+Container deployments pin the image by digest. Never build images on the
+production host.
 
-Before upgrade:
+1. Read the target release's `docker-image.txt` and verify the signature:
 
-```bash
-docker compose -f docker-compose.prod.yml ps
-docker compose -f docker-compose.prod.yml logs --tail=120
-```
+   ```bash
+   cosign verify ghcr.io/anixops/anix-control@sha256:<digest> \
+     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+     --certificate-identity-regexp '^https://github.com/AnixOps/anix-control/'
+   ```
 
-Verify the release's Docker metadata and digest in `docker-image.txt` if the
-release includes one. Pull the approved image or deploy the approved binary and
-frontend artifacts into the image strategy used by the operator. Then restart:
+2. Back up the database (`pg_dump -Fc`) and keep the current `.env`, so the
+   previous digest is on record.
+3. Replace `docker-compose.prod.yml` with the target tag's copy, set
+   `ANIX_CONTROL_IMAGE=ghcr.io/anixops/anix-control@sha256:<digest>` in `.env`, then:
 
-```bash
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.prod.yml ps
-```
+   ```bash
+   docker compose -f docker-compose.prod.yml pull
+   docker compose -f docker-compose.prod.yml up -d      # migrate runs first
+   docker compose -f docker-compose.prod.yml logs migrate
+   docker compose -f docker-compose.prod.yml ps         # control healthy
+   curl -fsS http://127.0.0.1:8080/readyz
+   ```
 
-Verify:
-
-```bash
-curl -fsS http://127.0.0.1:8080/health
-docker compose -f docker-compose.prod.yml logs --tail=120
-```
-
-If the deployment still requires a local Docker build, it is not a release
-deployment under the current policy. Record it as a manual exception before
-proceeding.
+Rollback: set the previous digest in `.env` and run `up -d` again. Restore the
+database backup only when the approved rollback plan says so.
 
 ## Database And Migration Notes
 

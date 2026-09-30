@@ -84,44 +84,60 @@ loopback 或受控私网使用明文；公网部署必须配置 `grpc.tls_cert_f
 
 ---
 
-## 2. 开发或受控 Docker Compose 部署
+## 2. 容器部署（推荐）
 
-This source-checkout Docker Compose path is for development or an operator-owned
-container workflow. It is not the default stable release installation path:
-production hosts should use the tag-pinned release installer in section 2.1 or
-an image digest supplied by the GitHub Release metadata.
+容器是主部署路径。发布镜像 `ghcr.io/anixops/anix-control` 由 GitHub Actions
+用 Release 附件构建（linux/amd64、linux/arm64），带 SBOM、provenance 和 cosign
+签名；镜像内含本版本的二进制、前端和签名身份引导包，不需要配置文件，全部设置
+通过 `ANIX_CONTROL_*` 环境变量或 `*_FILE` secret 文件提供（`docker run --rm
+<image> -print-env` 列出全部变量）。Control 本体无状态，数据全部在外部
+PostgreSQL 中，因此迁移到另一台机器只需复制 `control.env` 与 `secrets/`。
+
+### 2.0 Docker Compose + 外部 PostgreSQL
 
 ```bash
-# 1) 克隆仓库
-git clone https://github.com/AnixOps/anix-control.git
-cd anix-control
+# 1) 取得本版本的 Compose 文件与模板（与镜像同一个 tag）
+export VERSION=v4.0.1
+mkdir -p /opt/anix-control && cd /opt/anix-control
+base="https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}"
+curl -fsSLO "${base}/docker-compose.prod.yml"
+curl -fsSL "${base}/config/deploy/compose/control.env.example" -o control.env
+curl -fsSL "${base}/.env.example" -o .env
 
-# 2) 准备配置
-cp .env.example .env
-cp config/config.yaml.example config/config.yaml
+# 2) 固定镜像 digest（来自 Release 附件 docker-image.txt），并验证签名
+#    编辑 .env: ANIX_CONTROL_IMAGE=ghcr.io/anixops/anix-control@sha256:<digest>
+cosign verify ghcr.io/anixops/anix-control@sha256:<digest> \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/AnixOps/anix-control/'
 
-# 3) 按需修改配置
-# 至少设置 jwt.secret、app.api_token、admin.email、admin.password
-# nano config/config.yaml
+# 3) 编辑 control.env（数据库地址、管理员邮箱等），创建 secrets（容器 uid 10001 可读）
+install -d -m 0750 secrets
+openssl rand -hex 32 | install -m 0400 -o 10001 -g 10001 /dev/stdin secrets/jwt_secret
+printf '%s' '数据库密码' | install -m 0400 -o 10001 -g 10001 /dev/stdin secrets/db_password
 
-# 4) 如需 NodeX mode，直接编辑 config/config.yaml 里的 forward_runtime
-# backend: gost
-# nodex.base_url: http://nodex-control-plane:18081
-# nodex.token: replace-with-shared-token
-
-# 5) 启动
-docker compose up -d
-
-# 6) 查看状态与日志
-docker compose ps
-docker compose logs -f anix-control
+# 4) 启动：migrate 一次性服务先准备库结构，control 随后启动
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml logs migrate   # 新库会打印生成的管理员密码
+docker compose -f docker-compose.prod.yml ps             # control 应为 healthy
+curl -fsS http://127.0.0.1:8080/readyz
 ```
 
-默认访问地址：`http://localhost:8080`
+说明：
 
-默认前端地址：`http://localhost:3000`
+- 默认只在 `127.0.0.1` 发布 8080（API）、3000（UI）、50051（gRPC）；对外由宿主机
+  反向代理终止 TLS，示例见 [`config/deploy/examples/nginx/anix-control.conf`](../config/deploy/examples/nginx/anix-control.conf)。
+  节点直连 gRPC 时在 `.env` 设置 `ANIX_CONTROL_GRPC_BIND`，并在 `control.env` 设置 `ANIX_CONTROL_GRPC_ENABLED=true`。
+- 数据库在本机时，`ANIX_CONTROL_DATABASE_HOST=host.docker.internal`：PostgreSQL 需在
+  Docker 网桥地址上监听（`listen_addresses`），并在 `pg_hba.conf` 允许网桥网段使用密码认证。
+  托管数据库使用 `ANIX_CONTROL_DATABASE_SSLMODE=require` 或 `verify-full`。
+- 容器以只读根文件系统、uid 10001、`cap_drop: ALL` 运行；`/tmp` 是可执行 tmpfs
+  （插件宿主进程与 ansible 状态）。
+- 迁移到新机器：在新机器上放同样的 `docker-compose.prod.yml`、`.env`、`control.env`、
+  `secrets/`，指向同一个数据库（或先 `pg_dump -Fc` / `pg_restore` 迁移数据库），然后
+  `docker compose -f docker-compose.prod.yml up -d`。
+- 开发环境可直接 `docker compose up -d --build`（`docker-compose.yml`，从源码构建并自带一个开发用 PostgreSQL）。
 
-### 2.1 一键安装脚本
+### 2.1 一键安装脚本（systemd，已冻结）
 
 生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像。对 `v4.*`，它还会下载并校验签名身份包三件套，暂存到 root 所有的引导目录后验证登录路径：
 
@@ -136,7 +152,7 @@ rm -f /tmp/anix-control-install.sh
 
 安装器会验证 Release 中的 SHA-256，保留已有配置和数据库，更新失败时恢复上一个二进制/前端快照。完整步骤、反向代理、升级与回滚说明见 [`guide/release-installation.md`](guide/release-installation.md)。
 
-历史源码/Docker 安装器仍保留给受控恢复场景；必须显式设置 `ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1`，不是正式发布路径。
+该 systemd 安装路径已冻结：保持可用，但不再增加功能；新部署请使用第 2.0 节的容器方式。历史源码/Docker 安装器（`ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1`）已移除，因为它会在目标主机上构建镜像。
 
 ### 2.2 Docker 内置 ansible-playbook
 
@@ -178,8 +194,8 @@ rm -f /tmp/anix-control-install.sh
 - `nftables_ansible` 是当前推荐的本地无状态后端；`iptables_ansible` 仅保留给旧 relay 环境的兼容入口。两者都由 AnixOps Control 内置的 panel-host executor 执行。
 - 本地 Ansible 路径不等同于 `NodeX`，也不属于 `flux-panel` 原始 `/forward` 页面契约。
 - 示例 inventory 模板位于 `config/deploy/ansible/inventory.ini.example`，安装脚本会复制为 `inventory.ini`。
-- SSH 密钥目录为 `config/deploy/ssh/`，会被挂载到容器内的 `/home/v2board/.ssh`。
-- Docker 启动时会先读取 `config/config.yaml.forward_runtime`，并把这些值同步到系统配置表；环境变量不影响 runtime 行为。
+- 容器内 SSH 目录为 `/home/anixops/.ssh`：在 `docker-compose.prod.yml` 中取消注释 inventory 与 SSH 的只读挂载。
+- 启动时会读取 `forward_runtime`（配置文件或 `ANIX_CONTROL_FORWARD_RUNTIME_*` 环境变量），并把这些值同步到系统配置表。
 - 如果 NodeX 与 AnixOps Control 不在同一个网络命名空间，`forward_runtime.nodex.base_url` 不能写成容器内的 `127.0.0.1`，应写成可达的宿主机地址或 Compose service 名。
 - 如果没有 SSH 私钥，调整 `config/deploy/ansible/inventory.ini` 或所选本地 ansible block 下的 `extra_vars` 来提供目标主机的账户信息。
 - 容器启动时会基于 `config/config.yaml.forward_runtime` 写入 runtime 配置；非 root 用户可以直接在 YAML 中设置 `forward_runtime.nftables_ansible.become=true`，sudo 凭据则放在 inventory 或其他 ansible 变量里。若使用 legacy path，则对应改 `forward_runtime.iptables_ansible.become=true`。
@@ -270,21 +286,10 @@ bash config/deploy/clean_local_build_artifacts.sh --include-deploy-backups
 
 ### 启动生产编排
 
-```bash
-docker compose -f docker-compose.prod.yml up -d
-```
-
-如需只启动 Prometheus：
-
-```bash
-docker compose -f docker-compose.prod.yml --profile prometheus up -d
-```
-
-如需同时启用内置 Grafana：
-
-```bash
-docker compose -f docker-compose.prod.yml --profile prometheus --profile grafana up -d
-```
+见第 2.0 节：`docker-compose.prod.yml` 只运行 Control（`migrate` + `control`），
+数据库、监控与反向代理由宿主机或平台提供。Prometheus 抓取示例见
+[`config/deploy/examples/prometheus/prometheus.yml`](../config/deploy/examples/prometheus/prometheus.yml)；
+`/metrics` 无认证，只应在私有地址上暴露。
 
 ---
 

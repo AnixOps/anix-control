@@ -143,23 +143,18 @@ Default local URLs:
 
 ## 4. Docker Startup
 
-Prepare files:
+Development (builds this checkout and runs a throwaway PostgreSQL):
 
 ```bash
-cp .env.example .env
-cp config/config.yaml.example config/config.yaml
+docker compose up -d --build
+docker compose logs migrate   # generated admin password on the first run
 ```
 
-Then:
-
-1. fill `config/config.yaml`
-2. optionally customize `.env` for deployment-specific values that are unrelated to runtime selection
-3. start containers
-
-```bash
-docker compose up -d
-docker compose logs -f anix-control
-```
+Production uses `docker-compose.prod.yml` with a released image digest, an
+external PostgreSQL, `control.env` and `secrets/`; see
+[`../DEPLOYMENT.md`](../DEPLOYMENT.md). The containers need no config file: the
+built-in defaults plus `ANIX_CONTROL_*` variables configure them. To keep a
+YAML file instead, mount it and set `ANIX_CONTROL_CONFIG`.
 
 ## 5. What Happens On Startup
 

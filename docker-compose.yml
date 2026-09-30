@@ -1,119 +1,66 @@
-# AnixOps Control - Docker Compose
-# 零依赖部署：SQLite + 内存缓存
+# AnixOps Control: local development stack.
+#
+# Builds the image from this checkout (Dockerfile "source" target) and runs a
+# throwaway PostgreSQL next to it. Not for production: use
+# docker-compose.prod.yml with a released image and an external database.
+#
+#   docker compose up -d --build
+#   docker compose logs migrate      # generated admin password on first run
+#   open http://127.0.0.1:3000
+name: anix-control-dev
+
+x-control: &control
+  image: anix-control:dev
+  build:
+    context: .
+    target: source
+  environment:
+    ANIX_CONTROL_ENV: development
+    ANIX_CONTROL_DATABASE_HOST: postgres
+    ANIX_CONTROL_DATABASE_USERNAME: anix_control
+    ANIX_CONTROL_DATABASE_PASSWORD: anix_control
+    ANIX_CONTROL_DATABASE_DATABASE: anix_control
+    ANIX_CONTROL_JWT_SECRET: dev-only-jwt-secret-change-me
+    ANIX_CONTROL_ADMIN_EMAIL: admin@anixops.local
+  read_only: true
+  tmpfs:
+    - /tmp:rw,exec,mode=1777
 
 services:
-  anix-control:
-    build: .
-    image: ${DOCKER_IMAGE:-anix-control:latest}
-    container_name: anix-control
-    ports:
-      - "${PANEL_API_PORT:-8080}:8080"        # HTTP API
-      - "${PANEL_FRONTEND_PORT:-3000}:3000"   # Frontend/UI
-      - "${PANEL_GRPC_BIND:-127.0.0.1}:${PANEL_GRPC_PORT:-50051}:50051" # gRPC; expose publicly only with TLS
-    volumes:
-      - ./config:/app/config
-      - ./config/data:/app/config/data
-      - ./config/deploy/ssh:/home/v2board/.ssh:ro
-      - ./logs:/app/logs
-      - ./web/public:/app/web/public
+  postgres:
+    image: postgres:16-alpine
     environment:
-      - TZ=${TZ:-Asia/Shanghai}
-      - GIN_MODE=${GIN_MODE:-release}
-      - HOME=/home/v2board
-      - ANSIBLE_CONFIG=/app/config/deploy/ansible/ansible.cfg
-      - ANSIBLE_HOST_KEY_CHECKING=${ANSIBLE_HOST_KEY_CHECKING:-False}
-    restart: unless-stopped
+      POSTGRES_DB: anix_control
+      POSTGRES_USER: anix_control
+      POSTGRES_PASSWORD: anix_control
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+      test: ["CMD-SHELL", "pg_isready -U anix_control -d anix_control"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
-# 生产环境部署：PostgreSQL + Redis
+  migrate:
+    <<: *control
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
 
-# services:
-#   api:
-#     build: .
-#     container_name: anix-control
-#     restart: unless-stopped
-#     ports:
-#       - "8080:8080"
-#       - "50051:50051"
-#     volumes:
-#       - ./config:/app/config
-#       - ./web/public:/app/web/public
-#     environment:
-#       - TZ=Asia/Shanghai
-#       - GIN_MODE=release
-#     depends_on:
-#       db:
-#         condition: service_healthy
-#       redis:
-#         condition: service_healthy
-#     networks:
-#       - anix-control-network
-#     healthcheck:
-#       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-#       interval: 30s
-#       timeout: 10s
-#       retries: 3
-#       start_period: 10s
-#
-#   db:
-#     image: postgres:16-alpine
-#     container_name: anix-control-db
-#     restart: unless-stopped
-#     environment:
-#       POSTGRES_USER: v2board
-#       POSTGRES_PASSWORD: ${DB_PASSWORD:-v2board_secret}
-#       POSTGRES_DB: v2board
-#       TZ: Asia/Shanghai
-#     volumes:
-#       - postgres-data:/var/lib/postgresql/data
-#     networks:
-#       - anix-control-network
-#     healthcheck:
-#       test: ["CMD-SHELL", "pg_isready -U v2board"]
-#       interval: 10s
-#       timeout: 5s
-#       retries: 5
-#
-#   redis:
-#     image: redis:7-alpine
-#     container_name: anix-control-redis
-#     restart: unless-stopped
-#     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_secret}
-#     volumes:
-#       - redis-data:/data
-#     networks:
-#       - anix-control-network
-#     healthcheck:
-#       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_secret}", "ping"]
-#       interval: 10s
-#       timeout: 5s
-#       retries: 5
-#
-#   nginx:
-#     image: nginx:alpine
-#     container_name: anix-control-nginx
-#     restart: unless-stopped
-#     ports:
-#       - "80:80"
-#       - "443:443"
-#     volumes:
-#       - ./config/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-#       - ./config/docker/nginx/ssl:/etc/nginx/ssl:ro
-#       - ./web/public:/usr/share/nginx/html:ro
-#     depends_on:
-#       - api
-#     networks:
-#       - anix-control-network
-#
-# networks:
-#   anix-control-network:
-#     driver: bridge
-#
-# volumes:
-#   postgres-data:
-#   redis-data:
+  control:
+    <<: *control
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:50051:50051"
+    stop_grace_period: 90s
+
+volumes:
+  postgres-data:
