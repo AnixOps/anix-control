@@ -112,6 +112,21 @@ require_job_dependency() {
   fail "${job_name} job must depend on ${dependency}"
 }
 
+require_job_text() {
+  local job_name="$1"
+  local needle="$2"
+  local description="$3"
+  local block
+
+  block="$(job_block "${job_name}")"
+  if grep -Fq -- "${needle}" <<<"${block}"; then
+    echo "ok: ${description}"
+    return 0
+  fi
+
+  fail "missing ${description} in ${job_name} job: ${needle}"
+}
+
 reject_job_text() {
   local job_name="$1"
   local needle="$2"
@@ -258,6 +273,13 @@ check_release_workflow() {
   require_named_step_text go-quality "Install pinned protoc" "sha256sum -c" "pinned protoc checksum verification" || failed=1
   require_text "needs.tag-gate.outputs.is_release_tag == 'true'" "release-only job gate" || failed=1
   require_job_dependency docker plugin-package-publish || failed=1
+  require_job_dependency docker release-binaries || failed=1
+  require_job_text docker "ghcr.io/anixops/anix-control" "GHCR release image" || failed=1
+  require_job_text docker "target: release" "release image built from the release artifacts" || failed=1
+  require_job_text docker "linux/amd64,linux/arm64" "multi-architecture release image" || failed=1
+  require_job_text docker "provenance: mode=max" "release image provenance attestation" || failed=1
+  require_job_text docker "cosign sign" "signed release image digest" || failed=1
+  reject_job_text docker "DOCKER_PASSWORD" "Docker Hub release credentials" || failed=1
   require_text "  v4-public-rehearsal:" "public v4 rehearsal job" || failed=1
   require_text "  v4-release-evidence:" "formal v4 evidence job" || failed=1
   require_job_dependency v4-public-rehearsal plugin-package-publish || failed=1
@@ -544,9 +566,17 @@ jobs:
           name: release-binary-${{ matrix.goos }}-${{ matrix.goarch }}
 
   docker:
-    needs: [backend-build, frontend-build, plugin-package-publish, tag-gate]
+    needs: [backend-build, frontend-build, release-binaries, plugin-package-publish, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
+    env:
+      IMAGE: ghcr.io/anixops/anix-control
+      PLATFORMS: linux/amd64,linux/arm64
     steps:
+      - uses: docker/build-push-action@v7
+        with:
+          target: release
+          provenance: mode=max
+      - run: cosign sign --yes "${IMAGE}@${DIGEST}"
       - run: |
           echo "digest=${{ steps.build.outputs.digest }}" > release/docker-image.txt
 
@@ -771,9 +801,23 @@ EOF
   fi
 
   cp "${fixture}" "${fixture}.missing-docker-package-dependency"
-  sed -i 's/needs: \[backend-build, frontend-build, plugin-package-publish, tag-gate\]/needs: [backend-build, frontend-build, tag-gate]/' "${fixture}.missing-docker-package-dependency"
+  sed -i 's/needs: \[backend-build, frontend-build, release-binaries, plugin-package-publish, tag-gate\]/needs: [backend-build, frontend-build, release-binaries, tag-gate]/' "${fixture}.missing-docker-package-dependency"
   if RELEASE_WORKFLOW_PATH="${fixture}.missing-docker-package-dependency" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
     echo "self-test failed: Docker release push without signed package publish dependency should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.unsigned-image"
+  sed -i '/cosign sign/d' "${fixture}.unsigned-image"
+  if RELEASE_WORKFLOW_PATH="${fixture}.unsigned-image" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: an unsigned release image should fail" >&2
+    return 1
+  fi
+
+  cp "${fixture}" "${fixture}.docker-hub-image"
+  sed -i 's#IMAGE: ghcr.io/anixops/anix-control#IMAGE: docker.io/anixops/anix-control\n      DOCKER_PASSWORD: x#' "${fixture}.docker-hub-image"
+  if RELEASE_WORKFLOW_PATH="${fixture}.docker-hub-image" "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+    echo "self-test failed: a Docker Hub release image should fail" >&2
     return 1
   fi
 

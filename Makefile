@@ -181,20 +181,28 @@ deploy:
 # Docker 相关
 # ==========================================
 
-# 构建 Docker 镜像
+# 构建 Docker 镜像 (source target; release images are built only by CI)
 docker-build:
-	@echo "Building Docker image..."
-	docker build -t anix-control:latest .
+	@echo "Building Docker image (source target)..."
+	docker build --target source \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_TIME=$(shell date -u +%Y-%m-%dT%H:%M:%SZ) \
+		--build-arg COMMIT=$(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown) \
+		-t anix-control:dev .
 
-# 运行 Docker 容器
+# 运行 Docker 容器 (needs a reachable PostgreSQL; override DOCKER_RUN_ENV)
+DOCKER_RUN_ENV ?= -e ANIX_CONTROL_DATABASE_HOST=host.docker.internal \
+	-e ANIX_CONTROL_DATABASE_PASSWORD=anix_control \
+	-e ANIX_CONTROL_JWT_SECRET=dev-only-jwt-secret-change-me \
+	-e ANIX_CONTROL_ENV=development
 docker-run:
 	@echo "Running Docker container..."
 	docker run -d --name anix-control \
-		-p 8080:8080 \
-		-p 50051:50051 \
-		-v $(PWD)/config/data:/app/config/data \
-		-v $(PWD)/web/public:/app/web/public \
-		anix-control:latest
+		--add-host host.docker.internal:host-gateway \
+		--read-only --tmpfs /tmp:rw,exec,mode=1777 \
+		-p 127.0.0.1:8080:8080 -p 127.0.0.1:3000:3000 \
+		$(DOCKER_RUN_ENV) \
+		anix-control:dev
 
 # 停止 Docker 容器
 docker-stop:

@@ -61,6 +61,37 @@
 
 ### Changed
 
+- The container image was rebuilt for container-first deployments.
+  - **Targets:** `source` (default) builds from the checkout. `release`, used
+    only by CI, copies the exact release binary, frontend and signed
+    `identity-platform` bootstrap package. A fresh database therefore
+    bootstraps without extra files
+    (`ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR` is preset).
+  - **Base images:** pinned by digest. The Go and frontend stages
+    cross-compile on the build platform.
+  - **Runtime:** runs as uid 10001 (`anixops`, previously uid 1000
+    `v2board`) under `tini`, with no config file, and works on a read-only
+    root filesystem with a writable `/tmp`. `HEALTHCHECK` uses `/readyz`.
+    Ansible state goes to `/tmp/.ansible`.
+  - **Contents:** only the ansible playbooks and `ansible.cfg` are copied.
+    `.dockerignore` keeps `config/deploy/ssh`, inventories, keys, `.env`
+    files and `config/tls` out of the build context. The legacy `/app/v2board`
+    symlink is gone.
+- Release images are published to `ghcr.io/anixops/anix-control` instead of
+  Docker Hub.
+  - Platforms: `linux/amd64` and `linux/arm64`.
+  - Tags: `X.Y.Z`, `X.Y` (stable only) and `sha-<commit>`.
+  - SBOM and provenance attestations are attached, and the digest is signed
+    with cosign keyless signing.
+  - `docker-image.txt` records the digest, platforms and signature.
+  - `check_release_workflow.sh` enforces these properties.
+  - Pushes to `go_dev` publish `:edge` and `:sha-<commit>` images for
+    pre-release testing.
+- `Docker Build Smoke` now runs the image instead of only building it:
+  `migrate` against PostgreSQL; a read-only, non-root container configured
+  only by environment; `/readyz`, `/livez` and an unauthenticated `/api/v3`
+  401; then a graceful `docker stop` that must exit 0.
+
 - Recorded the production baseline and the local upgrade rehearsal from
   `v4.0.0-alpha.7` to `go_dev` on a copy of the 2026-09-29 production database
   (`docs/architecture/release-line-status.md`, `docs/RC-EVIDENCE-4.0.x.md`).
