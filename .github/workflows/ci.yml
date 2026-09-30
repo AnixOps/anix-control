@@ -545,6 +545,154 @@ jobs:
           test "$(docker inspect -f '{{.State.ExitCode}}' "${control_id}")" = 0
           "${compose[@]}" down
 
+  helm-chart:
+    name: Helm Chart Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v4.3.0
+
+      - name: Install kubeconform
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kubeconform
+
+      - name: Lint and validate the chart
+        shell: bash
+        run: |
+          set -euo pipefail
+          chart=config/deploy/helm/anix-control
+          secrets=(--set secrets.values.jwt_secret=x --set secrets.values.db_password=y)
+          helm lint --strict "${chart}" "${secrets[@]}"
+          helm template ci "${chart}" "${secrets[@]}" | kubeconform -strict -summary -kubernetes-version 1.30.0
+          helm template ci "${chart}" "${secrets[@]}" --set grpc.enabled=true --set ingress.enabled=true \
+            --set ansible.existingSecret=ansible --set image.digest=sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef \
+            | kubeconform -strict -summary -kubernetes-version 1.30.0
+          helm template ci "${chart}" --set secrets.existingSecret=control | kubeconform -strict -summary -kubernetes-version 1.30.0
+          if helm template ci "${chart}" "${secrets[@]}" --set replicaCount=2 >/dev/null 2>&1; then
+            echo "replicaCount=2 must be rejected"; exit 1
+          fi
+          if helm template ci "${chart}" >/dev/null 2>&1; then
+            echo "missing secrets must be rejected"; exit 1
+          fi
+
+  kubernetes-smoke:
+    name: Kubernetes Smoke
+    runs-on: ubuntu-latest
+    needs: [helm-chart, docker-smoke]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v4.3.0
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: anix-control
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: source
+          load: true
+          push: false
+          tags: anix-control:ci
+          build-args: |
+            VERSION=ci
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=docker-smoke
+
+      - name: Install the chart against an in-cluster PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          kind load docker-image anix-control:ci --name anix-control
+          kubectl create namespace anix
+          kubectl -n anix apply -f - <<'YAML'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: postgresql
+          spec:
+            replicas: 1
+            selector:
+              matchLabels: {app: postgresql}
+            template:
+              metadata:
+                labels: {app: postgresql}
+              spec:
+                containers:
+                  - name: postgres
+                    image: postgres:16-alpine
+                    env:
+                      - {name: POSTGRES_DB, value: anix_control}
+                      - {name: POSTGRES_USER, value: anix_control}
+                      - {name: POSTGRES_PASSWORD, value: ci-db-password}
+                    ports:
+                      - containerPort: 5432
+                    readinessProbe:
+                      exec:
+                        command: ["pg_isready", "-U", "anix_control", "-d", "anix_control"]
+                      periodSeconds: 3
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: postgresql
+          spec:
+            selector: {app: postgresql}
+            ports:
+              - port: 5432
+          YAML
+          kubectl -n anix rollout status deployment/postgresql --timeout=180s
+          helm install control config/deploy/helm/anix-control --namespace anix \
+            --set image.repository=anix-control --set image.tag=ci --set image.pullPolicy=Never \
+            --set secrets.values.jwt_secret=ci-kubernetes-jwt-secret-0123456789 \
+            --set secrets.values.db_password=ci-db-password \
+            --wait --timeout 6m
+          kubectl -n anix get pods -o wide
+          kubectl -n anix logs deployment/control-anix-control -c migrate | tail -5
+          kubectl -n anix logs deployment/control-anix-control -c migrate | grep 'migrate finished' >/dev/null
+
+      - name: Probe the running release
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl -n anix port-forward svc/control-anix-control 18080:8080 13000:3000 >/tmp/port-forward.log 2>&1 &
+          for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:18080/readyz && break; sleep 1; done
+          curl -fsS http://127.0.0.1:18080/readyz
+          curl -fsS http://127.0.0.1:13000/livez
+          status="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/v3/plugins)"
+          test "${status}" = 401
+          # A config change rolls the pod (Recreate) and it becomes ready again.
+          helm upgrade control config/deploy/helm/anix-control --namespace anix --reuse-values \
+            --set config.ANIX_CONTROL_LOG_FORMAT=text --wait --timeout 6m
+          kubectl -n anix get pods
+          helm uninstall control --namespace anix --wait
+
+      - name: Dump cluster state on failure
+        if: failure()
+        shell: bash
+        run: |
+          kubectl -n anix get all || true
+          kubectl -n anix describe pods || true
+          kubectl -n anix logs deployment/control-anix-control --all-containers --tail=200 || true
+
   backend-test:
     name: Backend Tests
     runs-on: ubuntu-latest

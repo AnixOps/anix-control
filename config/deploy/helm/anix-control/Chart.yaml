@@ -1,0 +1,12 @@
+apiVersion: v2
+name: anix-control
+description: AnixOps Control plane (single replica) for Kubernetes, with an external PostgreSQL.
+type: application
+# Chart version; bump on any template or values change.
+version: 0.1.0
+# Control release the default image tag follows.
+appVersion: "4.0.0"
+home: https://github.com/AnixOps/anix-control
+sources:
+  - https://github.com/AnixOps/anix-control
+kubeVersion: ">=1.27.0-0"

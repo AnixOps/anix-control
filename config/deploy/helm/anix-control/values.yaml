@@ -1,0 +1,133 @@
+# Values for the AnixOps Control chart. Control is configured entirely through
+# ANIX_CONTROL_* environment variables (list them with
+# `kubectl run --rm -it tmp --image=<image> --restart=Never -- -print-env`).
+
+image:
+  repository: ghcr.io/anixops/anix-control
+  # Defaults to the chart appVersion. Prefer pinning `digest` from the release
+  # docker-image.txt; when set it takes precedence over the tag.
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Control is single-replica until the multi-replica work in
+# docs/architecture/container-deployment.md lands; the chart refuses other values.
+replicaCount: 1
+
+# Non-secret settings, rendered into a ConfigMap and loaded with envFrom.
+config:
+  ANIX_CONTROL_DATABASE_HOST: postgresql
+  ANIX_CONTROL_DATABASE_PORT: "5432"
+  ANIX_CONTROL_DATABASE_USERNAME: anix_control
+  ANIX_CONTROL_DATABASE_DATABASE: anix_control
+  ANIX_CONTROL_DATABASE_SSLMODE: disable
+  ANIX_CONTROL_ADMIN_EMAIL: admin@example.com
+  ANIX_CONTROL_LOG_FORMAT: json
+  ANIX_CONTROL_SERVER_SHUTDOWN_DRAIN_DELAY: 5s
+  ANIX_CONTROL_SERVER_TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+  TZ: Asia/Shanghai
+
+# Secrets, mounted as files and passed as ANIX_CONTROL_<NAME>_FILE.
+secrets:
+  # Use an existing Secret instead of creating one. It must contain the keys
+  # listed in `files` below.
+  existingSecret: ""
+  # Secret key -> the configuration variable it feeds (the _FILE suffix is
+  # added by the chart). Add keys such as grpc_api_token here.
+  files:
+    jwt_secret: ANIX_CONTROL_JWT_SECRET
+    db_password: ANIX_CONTROL_DATABASE_PASSWORD
+  # Values for a chart-created Secret (ignored with existingSecret). Keep them
+  # out of version control: pass them with --set-file or an external values file.
+  values:
+    jwt_secret: ""
+    db_password: ""
+
+# Run `anix-control migrate` as an init container before the server starts. It
+# holds a PostgreSQL advisory lock and is idempotent.
+migrate:
+  enabled: true
+  resources: {}
+
+service:
+  type: ClusterIP
+  annotations: {}
+  httpPort: 8080
+  webPort: 3000
+
+# Node-facing gRPC (set ANIX_CONTROL_GRPC_ENABLED: "true" in config too).
+# Nodes hold long-lived streams: expose it with an L4 or HTTP/2-aware load
+# balancer.
+grpc:
+  enabled: false
+  service:
+    type: LoadBalancer
+    port: 50051
+    annotations: {}
+    loadBalancerSourceRanges: []
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # The UI server (port 3000) also proxies /api and the subscription path to
+  # the API, so one host rule is enough.
+  hosts:
+    - host: control.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Optional local-ansible forward runtime (forward_runtime.backend:
+# nftables_ansible): an existing Secret holding `inventory.ini` and the SSH
+# material (for example `id_ed25519`, `known_hosts`).
+ansible:
+  existingSecret: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+# Plugin host sockets and binaries, and ansible state; must allow exec.
+tmpVolume:
+  sizeLimit: 1Gi
+
+terminationGracePeriodSeconds: 90
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+serviceAccount:
+  create: true
+  name: ""
+  automountServiceAccountToken: false
+
+serviceMonitor:
+  # Requires the Prometheus Operator CRDs. /metrics is unauthenticated.
+  enabled: false
+  interval: 30s
+  labels: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

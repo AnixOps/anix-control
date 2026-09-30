@@ -137,6 +137,26 @@ curl -fsS http://127.0.0.1:8080/readyz
   `docker compose -f docker-compose.prod.yml up -d`。
 - 开发环境可直接 `docker compose up -d --build`（`docker-compose.yml`，从源码构建并自带一个开发用 PostgreSQL）。
 
+### 2.0.1 Kubernetes（Helm，单副本）
+
+Chart 位于 [`config/deploy/helm/anix-control`](../config/deploy/helm/anix-control/README.md)：
+单副本、`Recreate` 更新策略、`migrate` init container、`/livez`/`/readyz` 探针、
+只读根文件系统，数据库为外部 PostgreSQL。
+
+```bash
+kubectl create namespace anix
+kubectl -n anix create secret generic anix-control \
+  --from-literal=jwt_secret="$(openssl rand -hex 32)" \
+  --from-literal=db_password='数据库密码'
+helm install control config/deploy/helm/anix-control -n anix \
+  --set secrets.existingSecret=anix-control \
+  --set image.digest=sha256:<docker-image.txt 中的 digest> \
+  --set config.ANIX_CONTROL_DATABASE_HOST=postgres.example.internal
+kubectl -n anix rollout status deploy/control-anix-control
+```
+
+多副本（HA）尚未支持：chart 会拒绝 `replicaCount` 大于 1。
+
 ### 2.1 一键安装脚本（systemd，已冻结）
 
 生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像。对 `v4.*`，它还会下载并校验签名身份包三件套，暂存到 root 所有的引导目录后验证登录路径：
