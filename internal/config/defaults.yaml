@@ -71,6 +71,13 @@ plugins:
   dispatch_poll_interval: "5s"
   topology_execution_enabled: false
   topology_poll_interval: "5s"
+module_runtime:
+  # Network modules (separate services over gRPC with mTLS). Off by default:
+  # every package runs as a local child process.
+  enabled: false
+  cluster: "default"
+  pki: "builtin"
+  cert_lifetime: "24h"
 forward_runtime:
   jobs:
     poll_interval: "5s"

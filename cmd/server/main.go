@@ -341,6 +341,7 @@ func main() {
 // code so that deferred cleanup (cache, database) runs before os.Exit.
 func run() int {
 	migrateOnly := takeMigrateCommand()
+	moduleArguments := takeModuleCommand()
 	flag.Parse()
 	if printEnv {
 		if err := writeEnvTable(os.Stdout); err != nil {
@@ -362,14 +363,19 @@ func run() int {
 
 	// 打印版本信息
 	syncBuildInfo()
-	fmt.Printf("%s v%s (build: %s)\n", branding.ControlName, version, buildTime)
+	// Module commands print JSON on stdout, so the banner goes to stderr.
+	banner := os.Stdout
+	if moduleArguments != nil {
+		banner = os.Stderr
+	}
+	_, _ = fmt.Fprintf(banner, "%s v%s (build: %s)\n", branding.ControlName, version, buildTime)
 
 	// 加载配置
 	cfg, err := config.Load(resolvedConfigPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	if !migrateOnly {
+	if !migrateOnly && moduleArguments == nil {
 		if err := cfg.ValidateForServer(); err != nil {
 			log.Fatalf("Invalid config: %v", err)
 		}
@@ -423,6 +429,13 @@ func run() int {
 	}
 	if migrateOnly {
 		log.Println("Database schema and seed data are up to date; migrate finished.")
+		return 0
+	}
+	if moduleArguments != nil {
+		if err := runModuleCommand(context.Background(), cfg, database.Get(), moduleArguments, os.Stdout); err != nil {
+			log.Printf("module: %v", err)
+			return 2
+		}
 		return 0
 	}
 	cache.InitMemory()

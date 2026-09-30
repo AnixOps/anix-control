@@ -50,9 +50,17 @@ Existing packages keep the `local` runtime. `remote` is opt-in per installation.
 
 ## PKI
 
+Status: implemented (`internal/modulepki`, `pkg/moduletls`); the listener
+that serves `ModulePKI` arrives with `Bind`.
+
 - **Built-in CA** (`internal/modulepki`).
   - The CA key is ECDSA P-256, sealed with AES-GCM under
-    `ANIX_CONTROL_SERVICE_CA_KEK` and stored in `v4_kernel_service_ca`.
+    `module_runtime.ca_kek` (`ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`, 32 bytes
+    as base64 or hex) and stored in `v4_kernel_service_ca`.
+  - The CA certificate carries a name constraint: only `spiffe://anixops/...`
+    URIs can chain to it.
+  - The kernel creates the CA at startup (under the bootstrap lock) when
+    `module_runtime.enabled` is true and `module_runtime.pki` is `builtin`.
   - Rotation keeps a `current` and a `next` CA. The trust bundle carries
     both, and issuing switches to `next` only after one full certificate
     lifetime.
@@ -63,14 +71,33 @@ Existing packages keep the `local` runtime. `remote` is opt-in per installation.
     `spiffe://anixops/<cluster>/kernel` for the kernel. The kernel ignores
     whatever subject a CSR asks for.
 - **Enrollment** (`ModulePKI.Enroll`, the only RPC allowed without a client
-  certificate). Credentials are stored hashed in `v4_kernel_module_enrollment`
-  and issued through `POST /api/v4/kernel/modules/enrollment-tokens` or
-  `anix-control module token create`; both are audited.
+  certificate). Credentials (`anixenr_...`) are stored hashed in
+  `v4_kernel_module_enrollment`.
+  - One-time credentials last at most 7 days and are consumed atomically.
+  - Reusable ones last at most 366 days.
+  - Rejections share one answer, so credentials cannot be probed.
+- **Administration.** Both interfaces print the credential once; the admin
+  API routes are audited.
+  - Admin API:
+    - `POST /api/v4/kernel/modules/enrollment-tokens`
+      (`{"package_id","ttl_seconds","reusable"}`);
+    - `GET` lists enrollments;
+    - `DELETE .../:id` revokes an enrollment;
+    - `POST /api/v4/kernel/modules/ca/rotate`.
+  - CLI:
+    - `anix-control module token create -package <id> [-ttl 1h] [-reusable]`;
+    - `anix-control module token list`;
+    - `anix-control module token revoke <id>`;
+    - `anix-control module ca rotate`.
+- **Revocation.** Every issued certificate is recorded in
+  `v4_kernel_module_certificate`. Revoking an enrollment revokes its
+  certificates: they cannot renew, and the listener rejects their serials.
   - Compose and VMs: a one-time token plus a persistent certificate volume.
   - Kubernetes: a revocable, package-bound bootstrap credential in a Secret,
     so a restarted pod can enroll again.
-- **External CA (optional).** The kernel loads a trust bundle and its own
-  certificate from files, for example from cert-manager. It then checks SANs
+- **External CA (optional, `module_runtime.pki: external`).** The kernel
+  loads `trust_bundle_file`, `cert_file` and `key_file`, for example from
+  cert-manager, and re-reads them when they change. It then checks SANs
   only, and `Enroll`/`Renew` are disabled.
 
 ## Bind, sessions and fencing

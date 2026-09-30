@@ -116,6 +116,14 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_LOG_MAX_BACKUPS` | `log.max_backups` | int | `0` |
 | `ANIX_CONTROL_LOG_MAX_SIZE` | `log.max_size` | int | `0` |
 | `ANIX_CONTROL_LOG_OUTPUT` | `log.output` | string |  |
+| `ANIX_CONTROL_MODULE_RUNTIME_CA_KEK` | `module_runtime.ca_kek` | string | secret, no default |
+| `ANIX_CONTROL_MODULE_RUNTIME_CERT_FILE` | `module_runtime.cert_file` | string |  |
+| `ANIX_CONTROL_MODULE_RUNTIME_CERT_LIFETIME` | `module_runtime.cert_lifetime` | string | `24h` |
+| `ANIX_CONTROL_MODULE_RUNTIME_CLUSTER` | `module_runtime.cluster` | string | `default` |
+| `ANIX_CONTROL_MODULE_RUNTIME_ENABLED` | `module_runtime.enabled` | bool | `false` |
+| `ANIX_CONTROL_MODULE_RUNTIME_KEY_FILE` | `module_runtime.key_file` | string |  |
+| `ANIX_CONTROL_MODULE_RUNTIME_PKI` | `module_runtime.pki` | string | `builtin` |
+| `ANIX_CONTROL_MODULE_RUNTIME_TRUST_BUNDLE_FILE` | `module_runtime.trust_bundle_file` | string |  |
 | `ANIX_CONTROL_PLUGINS_CONTROL_EXECUTION_ENABLED` | `plugins.control_execution_enabled` | bool | `true` |
 | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_ARTIFACT_DIR` | `plugins.control_host_artifact_dir` | string |  |
 | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_MAX_REQUEST_BYTES` | `plugins.control_host_max_request_bytes` | int | `0` |

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/lease"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/modulepki"
 	"github.com/AnixOps/anix-control/v4/internal/packagestore"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"gorm.io/gorm"
@@ -135,6 +137,9 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config, env string) erro
 			return fmt.Errorf("ensure %s: %w", step.name, err)
 		}
 	}
+	if err := ensureModulePKI(ctx, cfg, db); err != nil {
+		return err
+	}
 	// Kernel API views only serve package storage leases: a failure must not
 	// stop Control, it only fails leases that ask for the missing view.
 	if err := packagestore.EnsureKernelAPIViews(db); err != nil {
@@ -247,4 +252,20 @@ func releaseBootstrapLock(conn *sql.Conn) {
 		log.Printf("release bootstrap lock: %v", err)
 	}
 	_ = conn.Close()
+}
+
+// ensureModulePKI creates the built-in module CA on first start. It runs
+// under the bootstrap lock, so concurrent kernels create one CA.
+func ensureModulePKI(ctx context.Context, cfg *config.Config, db *gorm.DB) error {
+	authority, err := modulepki.FromConfig(cfg.ModuleRuntime, db)
+	if errors.Is(err, modulepki.ErrBuiltinPKIDisabled) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("module PKI: %w", err)
+	}
+	if err := authority.Ensure(ctx); err != nil {
+		return fmt.Errorf("create the module CA: %w", err)
+	}
+	return nil
 }
