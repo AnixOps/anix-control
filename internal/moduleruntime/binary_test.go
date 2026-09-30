@@ -3,6 +3,7 @@ package moduleruntime
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -133,4 +134,79 @@ func TestModuleBinaryRunsAsANetworkModule(t *testing.T) {
 		<-fixture.calls
 		return response.StatusCode == 200
 	}, 10*time.Second, 100*time.Millisecond, fmt.Sprintf("dispatch reaches the restarted module at %s", listen))
+}
+
+// proxyAfter forwards connections on address to target, starting only after
+// delay, as a kernel that comes up late.
+func proxyAfter(t *testing.T, address, target string, delay time.Duration) {
+	t.Helper()
+	done := make(chan struct{})
+	t.Cleanup(func() { close(done) })
+	go func() {
+		select {
+		case <-done:
+			return
+		case <-time.After(delay):
+		}
+		listener, err := net.Listen("tcp", address)
+		if err != nil {
+			t.Errorf("proxy listen: %v", err)
+			return
+		}
+		go func() { <-done; _ = listener.Close() }()
+		for {
+			client, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer func() { _ = client.Close() }()
+				upstream, err := net.Dial("tcp", target)
+				if err != nil {
+					return
+				}
+				defer func() { _ = upstream.Close() }()
+				go func() { _, _ = io.Copy(upstream, client) }()
+				_, _ = io.Copy(client, upstream)
+			}()
+		}
+	}()
+}
+
+// A module that starts while the kernel is unreachable waits for it and
+// enrolls, instead of exiting and crash-looping.
+func TestModuleBinaryWaitsForAnUnreachableKernel(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds a module binary")
+	}
+	fixture := newRemoteFixture(t)
+	binary := buildGenericHost(t)
+	ctx := context.Background()
+
+	directory := t.TempDir()
+	bundle, err := fixture.authority.TrustBundlePEM(ctx)
+	require.NoError(t, err)
+	bundleFile := filepath.Join(directory, "bundle.pem")
+	require.NoError(t, os.WriteFile(bundleFile, bundle, 0o600))
+	credential, _, err := fixture.authority.CreateEnrollment(ctx, modulepki.EnrollmentRequest{PackageID: "knowledge", TTL: time.Hour})
+	require.NoError(t, err)
+	credentialFile := filepath.Join(directory, "credential")
+	require.NoError(t, os.WriteFile(credentialFile, []byte(credential), 0o600))
+	kernel, listen, health := freeAddress(t), freeAddress(t), freeAddress(t)
+	proxyAfter(t, kernel, fixture.address, 2*time.Second)
+
+	process := startModuleProcess(t, binary, []string{
+		"ANIX_MODULE_MODE=remote", "ANIX_MODULE_KERNEL_ADDR=" + kernel, "ANIX_MODULE_CLUSTER=prod",
+		"ANIX_MODULE_LISTEN_ADDR=" + listen, "ANIX_MODULE_ADVERTISE_ADDR=" + listen, "ANIX_MODULE_INSTANCE_ID=pod-late",
+		"ANIX_MODULE_CERT_DIR=" + filepath.Join(directory, "certs"), "ANIX_MODULE_TRUST_BUNDLE_FILE=" + bundleFile,
+		"ANIX_MODULE_ENROLL_CREDENTIAL_FILE=" + credentialFile, "ANIX_MODULE_HEALTH_ADDR=" + health,
+		"ANIX_MODULE_SHUTDOWN_GRACE=200ms", "PATH=" + os.Getenv("PATH"),
+	}, health)
+	select {
+	case err := <-process.exited:
+		t.Fatalf("the module exited while the kernel was unreachable: %v", err)
+	case <-time.After(1500 * time.Millisecond):
+	}
+	require.NoError(t, fixture.supervisor.Start(ctx, writeArtifactRef(t), 5), "the module enrolls and binds once the kernel is up")
+	require.Eventually(t, process.ready, 10*time.Second, 50*time.Millisecond)
 }

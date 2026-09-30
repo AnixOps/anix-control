@@ -169,7 +169,7 @@ func runRemote(ctx context.Context, options Options) error {
 	if err != nil {
 		return err
 	}
-	certs, err := newCertificates(ctx, settings)
+	certs, err := newCertificates(ctx, settings, options.Logf)
 	if err != nil {
 		return err
 	}

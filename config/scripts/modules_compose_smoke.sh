@@ -17,6 +17,9 @@ set -Eeuo pipefail
 : "${CONTROL_IMAGE:?}" "${IDENTITY_IMAGE:?}" "${DB_HOST:?}" "${DB_PORT:?}" "${DB_USER:?}" "${DB_PASSWORD:?}" "${DB_NAME:?}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 work="$(mktemp -d)"
+# grep -q exits at the first match; under pipefail the writer then dies of
+# SIGPIPE and fails the pipeline, so match against captured output instead.
+contains() { grep -q -- "$2" <<<"$1"; }
 sudo_install() { if [[ "$(id -u)" == 0 ]]; then install "$@"; else sudo install "$@"; fi; }
 
 cleanup() {
@@ -84,7 +87,7 @@ sudo_install -m 0444 "${work}/bundle.pem" "${work}/secrets/module_ca_bundle"
 "${compose[@]}" run --rm -T --no-deps migrate module token create -package identity-platform -reusable -ttl 24h 2>/dev/null \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["credential"])' \
   | sudo_install -m 0400 -o 65532 -g 65532 /dev/stdin "${work}/secrets/identity_enrollment"
-"${compose[@]}" run --rm -T --no-deps migrate module runtime set identity-platform remote 2>/dev/null | grep -q '"runtime": "remote"'
+contains "$("${compose[@]}" run --rm -T --no-deps migrate module runtime set identity-platform remote 2>/dev/null)" '"runtime": "remote"'
 
 echo "== start Control and the identity module"
 "${compose[@]}" up -d
@@ -99,8 +102,8 @@ for _ in $(seq 1 60); do
   sleep 3
 done
 test "${logged_in}" = 1 || { echo "login through the remote identity module failed: ${response:-}"; exit 1; }
-"${compose[@]}" logs control 2>/dev/null | grep -q 'serving from remote instances'
-"${compose[@]}" logs identity 2>/dev/null | grep -q 'bound to generation'
+contains "$("${compose[@]}" logs control 2>/dev/null)" 'serving from remote instances'
+contains "$("${compose[@]}" logs identity 2>/dev/null)" 'bound to generation'
 echo "login through the remote identity module: ok"
 
 echo "== restart the module: it reuses its certificate and binds again"

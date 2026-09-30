@@ -26,6 +26,9 @@ module_selector="app.kubernetes.io/name=anix-module,app.kubernetes.io/instance=$
 work="$(mktemp -d)"
 port_forward=""
 k() { kubectl -n "${NAMESPACE}" "$@"; }
+# grep -q exits at the first match; under pipefail the writer then dies of
+# SIGPIPE and fails the pipeline, so match against captured output instead.
+contains() { grep -q -- "$2" <<<"$1"; }
 
 cleanup() {
   status=$?
@@ -92,7 +95,7 @@ k create configmap anix-module-ca --from-file=ca.pem="${work}/ca.pem" >/dev/null
 (umask 077 && control module token create -package identity-platform -reusable -ttl 24h 2>/dev/null \
   | python3 -c 'import json,sys; sys.stdout.write(json.load(sys.stdin)["credential"])' > "${work}/credential")
 k create secret generic anix-identity-enrollment --from-file=credential="${work}/credential" >/dev/null
-control module runtime set identity-platform remote 2>/dev/null | grep -q '"runtime": "remote"'
+contains "$(control module runtime set identity-platform remote 2>/dev/null)" '"runtime": "remote"'
 
 echo "== run identity-platform as its own Deployment"
 helm upgrade "${release}" "${chart}" --namespace "${NAMESPACE}" --reuse-values \
@@ -124,7 +127,7 @@ wait_for_login() {
   return 1
 }
 wait_for_login
-k logs "deployment/${fullname}" -c control | grep -q 'serving from remote instances'
+contains "$(k logs "deployment/${fullname}" -c control)" 'serving from remote instances'
 test "$(k logs -l "${module_selector}" --tail=-1 | grep -c 'bound to generation')" -ge 2
 echo "login through two remote identity pods: ok"
 

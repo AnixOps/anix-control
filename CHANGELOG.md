@@ -691,6 +691,12 @@
 
 ### Fixed
 
+- Network modules no longer crash-loop when they start while Control is
+  unreachable (for example during a rollout restart). `modulesdk` retries
+  enrollment with backoff while the kernel is unavailable; a refused
+  credential still fails at once.
+- The module smoke scripts no longer fail with SIGPIPE (exit 141) when a log
+  check matches early: `grep -q` now reads captured output instead of a pipe.
 - The web frontend depends on axios 1.20.0. axios up to 1.19.0 is affected
   by newly published advisories (prototype-pollution gadgets, ReDoS, HTTP/2
   proxy bypass and DoS), which made `npm audit` fail the Frontend Build
