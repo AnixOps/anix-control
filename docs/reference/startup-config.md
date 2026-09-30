@@ -7,12 +7,16 @@ This page describes the exact startup flow after the unified runtime config upda
 | Location | Purpose |
 |------|------|
 | `config/config.yaml` (template: [`config/config.yaml.example`](../../config/config.yaml.example)) | canonical startup config for app settings and `forward_runtime` |
+| `ANIX_CONTROL_*` environment variables | per-key overrides and secrets ([configuration.md](configuration.md#environment-variables)) |
 | `.env` (template: [`.env.example`](../../.env.example)) | optional Docker or installer env file |
 | `v2_system_config` | persisted merged runtime snapshot used by runtime services |
 
 Important:
 
-- backend startup always begins from `config/config.yaml`
+- backend startup reads `-config`, else `ANIX_CONTROL_CONFIG`, else
+  `config/config.yaml` when it exists; an explicitly named file must exist
+- with no config file, startup uses the built-in container defaults; `ANIX_CONTROL_*`
+  variables override either source
 - local `go run` does not auto-load `.env`
 - runtime services read the forward runtime values that were written into `v2_system_config`
 

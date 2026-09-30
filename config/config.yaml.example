@@ -1,7 +1,8 @@
 env: "development"
 
 # Bootstrap rules:
-# - the backend always reads this file on startup
+# - the backend reads this file on startup; ANIX_CONTROL_* environment
+#   variables override any key (list them with `anix-control -print-env`)
 # - local go run does not auto-load .env
 # - runtime backend selection comes only from forward_runtime below
 
@@ -37,6 +38,9 @@ database:
   # port: 5432
   # username: "postgres"
   # password: ""
+  # sslmode: "disable"          # disable|allow|prefer|require|verify-ca|verify-full
+  # timezone: "Asia/Shanghai"
+  # dsn: ""                     # full connection string; overrides the fields above
   # max_idle_conns: 10
   # max_open_conns: 100
   # conn_max_lifetime: 3600

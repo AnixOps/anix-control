@@ -161,6 +161,27 @@
 
 ### Added
 
+- Configuration can now come from the environment, for container deployments.
+  - Every scalar or list key has an `ANIX_CONTROL_<PATH>` variable, for
+    example `ANIX_CONTROL_DATABASE_PASSWORD` or `ANIX_CONTROL_JWT_SECRET`.
+  - Each variable also has a `_FILE` variant that reads the value from a
+    mounted secret file.
+  - Variables are applied on top of the config file.
+  - Unknown `ANIX_CONTROL_*` names are logged.
+  - `anix-control -print-env` lists every variable with its default.
+- The server can start without a config file.
+  - When neither `-config` nor `ANIX_CONTROL_CONFIG` is given and
+    `config/config.yaml` does not exist, the server uses built-in,
+    production-shaped defaults (`internal/config/defaults.yaml`).
+  - A config file named explicitly must still exist.
+  - In production, startup refuses an empty or template `jwt.secret`.
+- New PostgreSQL connection settings:
+  - `database.sslmode` (default `disable`) and `database.timezone` (default
+    `Asia/Shanghai`), so managed databases that require TLS can be used;
+  - `database.dsn`, a full connection string that is used verbatim.
+- `env: production` now defaults `server.mode` to `release`; gin previously
+  fell back to debug mode.
+
 - Added `plugins.control_host_max_request_bytes` and
   `plugins.control_host_max_response_bytes` (default 1 MiB, maximum 64 MiB)
   to configure the package request and response body limits; see

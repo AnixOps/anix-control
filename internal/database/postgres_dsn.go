@@ -19,14 +19,31 @@ import (
 // (libpq and pgx: the local Unix socket directory or localhost, port 5432),
 // matching libpq, which treats an empty host or port as unset.
 //
-// The fixed `sslmode=disable TimeZone=Asia/Shanghai` settings come first:
-// gorm.io/driver/postgres also scans the raw DSN for the first `TimeZone=`, so a
-// password that happens to contain that text cannot override the time zone.
+// The `sslmode` and `TimeZone` settings come first (defaults `disable` and
+// `Asia/Shanghai`): gorm.io/driver/postgres also scans the raw DSN for the
+// first `TimeZone=`, so a password that happens to contain that text cannot
+// override the time zone.
+//
+// A non-empty cfg.DSN is returned unchanged, for connection strings supplied
+// whole by a secret store or database operator.
 func PostgresDSN(cfg *config.DatabaseConfig) string {
 	if cfg == nil {
 		cfg = &config.DatabaseConfig{}
 	}
-	parts := []string{"sslmode=disable", "TimeZone=Asia/Shanghai"}
+	if dsn := strings.TrimSpace(cfg.DSN); dsn != "" {
+		return dsn
+	}
+	sslMode, timeZone := cfg.SSLMode, cfg.TimeZone
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+	if timeZone == "" {
+		timeZone = "Asia/Shanghai"
+	}
+	// Both values are validated by config.Load (an sslmode keyword and a
+	// time zone without spaces or quotes), and stay unquoted because
+	// gorm.io/driver/postgres reads the TimeZone value from the raw string.
+	parts := []string{"sslmode=" + sslMode, "TimeZone=" + timeZone}
 	if cfg.Host != "" {
 		parts = append(parts, "host="+quotePostgresDSNValue(cfg.Host))
 	}
