@@ -329,6 +329,9 @@ func (m PluginManifest) Validate() error {
 	if err := validateManifestPermissions(m.ID, m.Permissions); err != nil {
 		return err
 	}
+	if err := validateManifestCapabilities(m.Capabilities); err != nil {
+		return err
+	}
 	if err := m.validateControlRoutes(); err != nil {
 		return err
 	}
@@ -1682,9 +1685,6 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 	if err != nil {
 		return pluginhost.ArtifactRef{}, err
 	}
-	if err := verifyPluginArtifactMember(artifact.Data, manifest.Migrations.Index, manifest.Migrations.SHA256, "migrations index", maxPluginControlEntrypointBytes); err != nil {
-		return pluginhost.ArtifactRef{}, err
-	}
 	routes, err := extractPluginArtifactFile(artifact.Data, manifest.CompatibilityRoutes.Path, maxPluginControlEntrypointBytes)
 	if err != nil {
 		return pluginhost.ArtifactRef{}, fmt.Errorf("extract compatibility routes: %w", err)
@@ -1694,6 +1694,10 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 	}
 	if !strings.EqualFold(sha256Bytes(routes), manifest.RouteContractDigest) {
 		return pluginhost.ArtifactRef{}, errors.New("route contract digest does not match the package artifact")
+	}
+	migrations, err := ParsePluginMigrationIndex(*manifest, artifact.Data)
+	if err != nil {
+		return pluginhost.ArtifactRef{}, err
 	}
 	canonicalManifest, err := CanonicalPluginManifest(*manifest)
 	if err != nil {
@@ -1740,20 +1744,12 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 		EntrypointSHA256: entrypointDigest,
 		ManifestPath:     manifestPath,
 		ManifestSHA256:   hex.EncodeToString(manifestDigest[:]),
+
+		MigrationIndexSHA256: strings.ToLower(manifest.Migrations.SHA256),
+		Migrations:           migrations,
 	}
 	cleanup = false
 	return ref, nil
-}
-
-func verifyPluginArtifactMember(artifact []byte, memberPath, expectedDigest, label string, maximum int64) error {
-	contents, err := extractPluginArtifactFile(artifact, memberPath, maximum)
-	if err != nil {
-		return fmt.Errorf("extract %s: %w", label, err)
-	}
-	if !strings.EqualFold(sha256Bytes(contents), expectedDigest) {
-		return fmt.Errorf("%s digest does not match the package artifact", label)
-	}
-	return nil
 }
 
 func sha256Bytes(value []byte) string {

@@ -79,7 +79,7 @@ func TestBootstrapIdentityPlatformPackageRejectsWrongRootAndPreservesExistingIns
 func writeBootstrapIdentityPlatformPackage(t *testing.T, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) string {
 	t.Helper()
 	entrypoint := []byte("#!/bin/sh\nexit 0\n")
-	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"identity-platform","version":"4.0.0"}`)
 	routes := []byte(`{"api_version":"v2","package_id":"identity-platform","routes":[]}`)
 	artifact := kernelTestV2Package(t, map[string][]byte{
 		"bin/control-host":      entrypoint,

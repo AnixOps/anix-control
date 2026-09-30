@@ -113,6 +113,28 @@ schemas, backend control-route violations, global permission namespace
 violations, and WebUI namespace/bundle/permission violations. Both repositories
 must reject every case before a manifest can be admitted or installed.
 
+Control additionally checks the `capabilities` grammar (Control-only, so the
+shared negative fixture is unchanged). Names are lowercase and unique.
+Capabilities in the `kernel.` namespace grant kernel authority, so only these
+forms are accepted:
+
+| Capability | Grants |
+|------------|--------|
+| `kernel.observed-state` | Agent observed-state reports |
+| `kernel.storage.v1` | a per-package database role and schema (storage lease) |
+| `kernel.storage.adopt:<table>` | read/write on an existing table, adopted in place; requires `kernel.storage.v1`; kernel and identity tables (`v2_user*`, `v2_system_config`, `v2_audit_log`, `v2_operation_log`, `v3_kernel_*`, `v4_kernel_*`, `identity_*`, `kapi_*`) cannot be adopted |
+| `kernel.view:kapi_<name>_v<N>` | read access to a kernel API view; requires `kernel.storage.v1` |
+
+The packaged migration index (`migrations/index.json`, format
+`anixops.migrations/v1`) names the package and the release version and lists
+ordered steps `{id, path, sha256}`. `build_package.py` writes the release
+version (source indexes use the `__ANIXOPS_PACKAGE_VERSION__` token) and the
+SHA-256 of every step script. When the kernel materializes a Control artifact
+it verifies the index digest, the package and version, every step id
+(`[0-9a-z][0-9a-z_]*`) and path (under `migrations/`), and every step digest,
+and exposes the verified steps on the artifact reference. v4.0.0 indexes carry
+no step digests; the kernel computes them from the packaged scripts.
+
 When a Control installation is enabled, updated, or rolled back, the kernel
 compiles the same-target dependency closure into a durable lifecycle plan.
 Dependencies execute first, the root operation remains the user-visible

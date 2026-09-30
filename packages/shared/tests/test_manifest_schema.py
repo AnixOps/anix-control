@@ -520,6 +520,41 @@ func main() {
                 self.assertNotIn(b"__ANIXOPS_PACKAGE_VERSION__", bundle)
                 self.assertIn(b"4.0.0", bundle)
 
+    def test_migration_index_is_materialized_with_build_version_and_step_digests(self) -> None:
+        index_bytes, entries = BUILD_PACKAGE_MODULE.source_migrations("identity-platform", "4.0.7")
+        index = json.loads(index_bytes)
+        self.assertEqual("4.0.7", index["version"])
+        self.assertEqual(["001_identity_platform"], [step["id"] for step in index["migrations"]])
+        scripts = {entry.path: entry.data for entry in entries}
+        for step in index["migrations"]:
+            self.assertEqual(hashlib.sha256(scripts[step["path"]]).hexdigest(), step["sha256"])
+        empty, _ = BUILD_PACKAGE_MODULE.source_migrations("knowledge", "4.0.7")
+        self.assertEqual([], json.loads(empty)["migrations"])
+
+    def test_migration_index_rejects_unknown_fields_and_foreign_versions(self) -> None:
+        original = BUILD_PACKAGE_MODULE.package_root
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "knowledge"
+            (root / "migrations").mkdir(parents=True)
+            (root / "migrations" / "001_x.sql").write_text("SELECT 1;\n", encoding="utf-8")
+            BUILD_PACKAGE_MODULE.package_root = lambda _package_id: root
+            try:
+                cases = {
+                    "pinned to another version": {"version": "4.0.0"},
+                    "unknown field": {"extra": True},
+                    "step sha256 in source": {"migrations": [{"id": "001_x", "path": "migrations/001_x.sql", "sha256": "0" * 64}]},
+                    "bad step id": {"migrations": [{"id": "Bad-Id", "path": "migrations/001_x.sql"}]},
+                }
+                for name, override in cases.items():
+                    with self.subTest(name):
+                        index = {"format": "anixops.migrations/v1", "migrations": [], "package_id": "knowledge", "version": "__ANIXOPS_PACKAGE_VERSION__"}
+                        index.update(override)
+                        (root / "migrations" / "index.json").write_text(json.dumps(index), encoding="utf-8")
+                        with self.assertRaises(BUILD_PACKAGE_MODULE.PackageBuildError):
+                            BUILD_PACKAGE_MODULE.source_migrations("knowledge", "4.0.7")
+            finally:
+                BUILD_PACKAGE_MODULE.package_root = original
+
     def test_identity_platform_source_contract_is_a_control_v2_package(self) -> None:
         package_root = REPO_ROOT / "packages" / "identity-platform"
         manifest_path = package_root / "manifest.template.json"
@@ -671,7 +706,7 @@ func main() {
             }
             self.assertEqual(expected, actual, package_id)
             self.assertEqual(package_id, migrations["package_id"])
-            self.assertEqual("4.0.0", migrations["version"])
+            self.assertEqual("__ANIXOPS_PACKAGE_VERSION__", migrations["version"])
 
     def test_all_v4_packages_materialize_signed_v2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

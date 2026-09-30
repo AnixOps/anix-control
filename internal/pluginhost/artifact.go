@@ -27,6 +27,17 @@ type ArtifactRef struct {
 	EntrypointSHA256 string
 	ManifestPath     string
 	ManifestSHA256   string
+	// MigrationIndexSHA256 and Migrations describe the verified migration
+	// index of the release; Migrations is empty when it declares no steps.
+	MigrationIndexSHA256 string
+	Migrations           []MigrationStep
+}
+
+// MigrationStep is one verified step of a package migration index.
+type MigrationStep struct {
+	ID     string
+	Path   string
+	SHA256 string
 }
 
 // sameArtifactRelease compares the immutable identity established by

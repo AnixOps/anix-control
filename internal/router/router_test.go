@@ -110,7 +110,7 @@ func seedV2KnowledgePackage(t *testing.T, cfg *config.Config) (ed25519.PublicKey
 	require.NoError(t, service.EnsureKernelSchema(database.GetDB()))
 
 	entrypoint := []byte("#!/bin/sh\nexit 0\n")
-	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"knowledge","version":"4.0.0"}`)
 	routes := []byte(`{"api_version":"v2","package_id":"knowledge","routes":[{"method":"GET","legacy_path":"/api/v2/user/knowledge","package_route":"knowledge.article.list","envelope":"data"},{"method":"GET","legacy_path":"/api/v2/admin/ws/monitor","package_route":"telemetry.monitor.ws","envelope":"websocket","transport":"websocket"}]}`)
 	artifact := v2TestPackage(t, map[string][]byte{
 		"bin/control-host":      entrypoint,
@@ -147,7 +147,7 @@ func seedV2KnowledgePackage(t *testing.T, cfg *config.Config) (ed25519.PublicKey
 func seedV2IdentityPackage(t *testing.T, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
 	t.Helper()
 	entrypoint := []byte("#!/bin/sh\nexit 0\n")
-	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"identity-platform","version":"4.0.0"}`)
 	routes := []byte(`{"api_version":"v2","package_id":"identity-platform","routes":[{"method":"POST","legacy_path":"/api/v2/login","package_route":"identity.auth.login","envelope":"panel"},{"method":"POST","legacy_path":"/api/v2/register","package_route":"identity.auth.register","envelope":"panel"}]}`)
 	artifact := v2TestPackage(t, map[string][]byte{
 		"bin/control-host": entrypoint, "compat/v2-routes.json": routes, "migrations/index.json": migrations,
@@ -181,7 +181,7 @@ func seedV2IdentityPackage(t *testing.T, publicKey ed25519.PublicKey, privateKey
 func seedV2TaskSixPackage(t *testing.T, packageID, name, routes string, publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) {
 	t.Helper()
 	entrypoint := []byte("#!/bin/sh\nexit 0\n")
-	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"` + packageID + `","version":"` + "4.0.0" + `"}`)
 	artifact := v2TestPackage(t, map[string][]byte{
 		"bin/control-host": entrypoint, "compat/v2-routes.json": []byte(routes), "migrations/index.json": migrations,
 	})
