@@ -224,6 +224,26 @@
 
 ### Fixed
 
+- Periodic traffic resets now run at most once per calendar day.
+  - The forward flow reset and node monthly reset workers also run at every
+    start, so restarting the server (or a rescheduled container) on a reset
+    day zeroed user, tunnel and node traffic a second time.
+  - Each run now claims the day in `v2_system_config`
+    (`scheduler.forward_flow_reset.last_day`,
+    `scheduler.node_monthly_reset.last_day`). The claim is made in the same
+    transaction as the reset.
+  - Expiry checks still run every time.
+- Forward traffic snapshots now lock the forward row while advancing the
+  traffic cursor. Two processes applying the same gost or ansible snapshot
+  could both read the old cursor and double-count the delta; the in-process
+  lock only covered one process.
+- `OrderService.Complete` and node self-registration now really lock their
+  rows. They used the GORM v1 `gorm:query_option` setting, which GORM v1.25
+  ignores.
+- The node request-signature nonce cache is now safe for concurrent requests:
+  the map had no lock, and the check-then-mark sequence let two requests with
+  the same nonce both pass.
+
 - Legacy `/api/v2` handlers now see the original request `Host` and TLS state
   through the package bridge. The bridge rebuilt every request for the
   placeholder host `package-bridge`, so `GET /api/v2/forward-agent/install.sh`

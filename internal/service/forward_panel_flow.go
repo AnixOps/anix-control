@@ -9,6 +9,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -105,6 +106,20 @@ func (s *PanelForwardService) applyForwardTrafficSnapshot(record PanelForwardTra
 	lock.Lock()
 	defer lock.Unlock()
 
+	scope, err := s.advanceForwardTrafficCursor(record, backend)
+	if err != nil {
+		return err
+	}
+	if scope.UserID == 0 {
+		return nil
+	}
+	return s.reconcileTrafficScope(scope)
+}
+
+// advanceForwardTrafficCursor moves the forward's traffic cursor to the
+// snapshot totals and records the difference, in one transaction. It is safe
+// to call concurrently from several processes for the same forward.
+func (s *PanelForwardService) advanceForwardTrafficCursor(record PanelForwardTrafficSnapshot, backend string) (panelForwardTrafficScope, error) {
 	var (
 		uploadDelta   int64
 		downloadDelta int64
@@ -112,8 +127,11 @@ func (s *PanelForwardService) applyForwardTrafficSnapshot(record PanelForwardTra
 	)
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
+		// Lock the forward row so that concurrent snapshots for the same
+		// forward, from any process, read and advance the cursor one at a
+		// time; the in-process lock above only covers this process.
 		var forward model.Forward
-		if err := tx.Preload("Tunnel").Select("id", "user_id", "tunnel_id").First(&forward, record.ForwardID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Preload("Tunnel").Select("id", "user_id", "tunnel_id").First(&forward, record.ForwardID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				_ = tx.Where("forward_id = ? AND backend = ?", record.ForwardID, backend).Delete(&model.ForwardTrafficCursor{}).Error
 				return nil
@@ -168,12 +186,9 @@ func (s *PanelForwardService) applyForwardTrafficSnapshot(record PanelForwardTra
 		return s.recordForwardTrafficDeltaTx(tx, record.ForwardID, uploadDelta, downloadDelta)
 	})
 	if err != nil {
-		return err
+		return panelForwardTrafficScope{}, err
 	}
-	if scope.UserID == 0 {
-		return nil
-	}
-	return s.reconcileTrafficScope(scope)
+	return scope, nil
 }
 
 func (s *PanelForwardService) recordForwardTrafficDelta(forwardID uint, upload, download int64) error {

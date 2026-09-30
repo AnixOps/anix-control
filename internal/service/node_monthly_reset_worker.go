@@ -49,18 +49,26 @@ func (w *NodeMonthlyResetWorker) RunOnce(now time.Time) error {
 	currentDay := now.Day()
 	lastDayOfMonth := daysInMonth(now)
 
-	query := w.db.Model(&model.Node{})
-	if currentDay == lastDayOfMonth {
-		// 月末兜底: reset_day 设成了大于本月天数的日子(比如 30/31 但本月只有 28/29 天)
-		query = query.Where("monthly_reset_day = ? OR monthly_reset_day > ?", currentDay, lastDayOfMonth)
-	} else {
-		query = query.Where("monthly_reset_day = ?", currentDay)
-	}
+	return w.db.Transaction(func(tx *gorm.DB) error {
+		// RunOnce also runs at every start; reset at most once per day so a
+		// restart on a reset day does not zero the counters again.
+		firstRunToday, err := claimDailyRun(tx, nodeMonthlyResetRunKey, now)
+		if err != nil || !firstRunToday {
+			return err
+		}
+		query := tx.Model(&model.Node{})
+		if currentDay == lastDayOfMonth {
+			// 月末兜底: reset_day 设成了大于本月天数的日子(比如 30/31 但本月只有 28/29 天)
+			query = query.Where("monthly_reset_day = ? OR monthly_reset_day > ?", currentDay, lastDayOfMonth)
+		} else {
+			query = query.Where("monthly_reset_day = ?", currentDay)
+		}
 
-	return query.Updates(map[string]any{
-		"monthly_upload":   0,
-		"monthly_download": 0,
-	}).Error
+		return query.Updates(map[string]any{
+			"monthly_upload":   0,
+			"monthly_download": 0,
+		}).Error
+	})
 }
 
 func (w *NodeMonthlyResetWorker) nextRunTime(now time.Time) time.Time {

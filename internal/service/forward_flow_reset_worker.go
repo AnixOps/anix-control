@@ -50,12 +50,21 @@ func (w *ForwardFlowResetWorker) RunOnce(now time.Time) error {
 	nowUnixMilli := now.UnixMilli()
 
 	return w.db.Transaction(func(tx *gorm.DB) error {
-		if err := w.resetUserTunnelTraffic(tx, currentDay, lastDayOfMonth); err != nil {
-			return err
+		// Traffic resets run once per calendar day: RunOnce also runs at every
+		// start, and a restart on a reset day must not zero traffic again.
+		firstRunToday, err := claimDailyRun(tx, forwardFlowResetRunKey, now)
+		if err != nil {
+			return fmt.Errorf("claim daily flow reset: %w", err)
 		}
-		if err := w.resetUserTraffic(tx, currentDay, lastDayOfMonth); err != nil {
-			return err
+		if firstRunToday {
+			if err := w.resetUserTunnelTraffic(tx, currentDay, lastDayOfMonth); err != nil {
+				return err
+			}
+			if err := w.resetUserTraffic(tx, currentDay, lastDayOfMonth); err != nil {
+				return err
+			}
 		}
+		// Expiry checks are idempotent and run every time.
 		if err := w.pauseExpiredUserForwards(tx, nowUnix); err != nil {
 			return err
 		}

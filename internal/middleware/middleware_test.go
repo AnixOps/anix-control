@@ -4,9 +4,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -914,6 +917,31 @@ func TestNonceExpiration(t *testing.T) {
 	assert.False(t, isNonceUsed(nonce))
 	_, exists := nonceCache[nonce]
 	assert.False(t, exists) // Should be deleted
+}
+
+func TestClaimNonceAdmitsOneOfManyConcurrentRequests(t *testing.T) {
+	nonceMu.Lock()
+	nonceCache = make(map[string]int64)
+	nonceMu.Unlock()
+
+	const requests = 32
+	var (
+		wg       sync.WaitGroup
+		admitted atomic.Int32
+	)
+	for i := 0; i < requests; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if claimNonce("replayed-nonce") {
+				admitted.Add(1)
+			}
+			claimNonce(fmt.Sprintf("distinct-nonce-%d", i))
+		}(i)
+	}
+	wg.Wait()
+	assert.EqualValues(t, 1, admitted.Load())
+	assert.True(t, isNonceUsed("distinct-nonce-7"))
 }
 
 func TestNodeSecureLogger(t *testing.T) {
