@@ -25,8 +25,8 @@ import (
 	"testing"
 	"time"
 
-	agentv1pb "github.com/AnixOps/anix-agent/sdk/api/grpc/agent/v1"
-	agentplugin "github.com/AnixOps/anix-agent/sdk/plugincontrol"
+	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
+	agentplugin "github.com/AnixOps/anix-control/sdk/plugincontrol"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"

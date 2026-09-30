@@ -5,7 +5,6 @@ go 1.25.0
 toolchain go1.26.8
 
 require (
-	github.com/AnixOps/anix-agent/sdk v1.1.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/golang-jwt/jwt/v5 v5.3.0

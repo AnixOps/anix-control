@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	agentv1pb "github.com/AnixOps/anix-agent/sdk/api/grpc/agent/v1"
+	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

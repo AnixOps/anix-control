@@ -1,0 +1,628 @@
+# The anix.agent.v1 file descriptor exactly as compiled into
+# github.com/AnixOps/anix-agent/sdk v1.1.0 (tag sdk/v1.1.0, commit
+# e7252d837206c3d33bc0d7edf39dbb309f8bfee6, file
+# sdk/api/grpc/agent/v1/agent.pb.go), decoded with
+#   protoc --decode=google.protobuf.FileDescriptorProto google/protobuf/descriptor.proto
+# Agents in the field run this contract. Do not edit: agent_descriptor_test.go
+# pins the SHA-256 of its serialized form.
+name: "api/grpc/agent/v1/agent.proto"
+package: "anix.agent.v1"
+message_type {
+  name: "Capability"
+  field {
+    name: "name"
+    number: 1
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "name"
+  }
+  field {
+    name: "version"
+    number: 2
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "version"
+  }
+  field {
+    name: "attributes"
+    number: 3
+    label: LABEL_REPEATED
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.Capability.AttributesEntry"
+    json_name: "attributes"
+  }
+  nested_type {
+    name: "AttributesEntry"
+    field {
+      name: "key"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "key"
+    }
+    field {
+      name: "value"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "value"
+    }
+    options {
+      map_entry: true
+    }
+  }
+}
+message_type {
+  name: "Hello"
+  field {
+    name: "protocol"
+    number: 1
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "protocol"
+  }
+  field {
+    name: "agent_version"
+    number: 2
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "agentVersion"
+  }
+  field {
+    name: "instance_id"
+    number: 3
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "instanceId"
+  }
+  field {
+    name: "capabilities"
+    number: 4
+    label: LABEL_REPEATED
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.Capability"
+    json_name: "capabilities"
+  }
+  field {
+    name: "labels"
+    number: 5
+    label: LABEL_REPEATED
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.Hello.LabelsEntry"
+    json_name: "labels"
+  }
+  nested_type {
+    name: "LabelsEntry"
+    field {
+      name: "key"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "key"
+    }
+    field {
+      name: "value"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "value"
+    }
+    options {
+      map_entry: true
+    }
+  }
+}
+message_type {
+  name: "HelloAck"
+  field {
+    name: "session_id"
+    number: 1
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "sessionId"
+  }
+  field {
+    name: "server_time_unix_ms"
+    number: 2
+    label: LABEL_OPTIONAL
+    type: TYPE_INT64
+    json_name: "serverTimeUnixMs"
+  }
+  field {
+    name: "heartbeat_interval_seconds"
+    number: 3
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT32
+    json_name: "heartbeatIntervalSeconds"
+  }
+  field {
+    name: "desired_revision"
+    number: 4
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT64
+    json_name: "desiredRevision"
+  }
+}
+message_type {
+  name: "Heartbeat"
+  field {
+    name: "session_id"
+    number: 1
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "sessionId"
+  }
+  field {
+    name: "uptime_seconds"
+    number: 2
+    label: LABEL_OPTIONAL
+    type: TYPE_INT64
+    json_name: "uptimeSeconds"
+  }
+  field {
+    name: "observed_revision"
+    number: 3
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT64
+    json_name: "observedRevision"
+  }
+  field {
+    name: "metrics"
+    number: 4
+    label: LABEL_REPEATED
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.Heartbeat.MetricsEntry"
+    json_name: "metrics"
+  }
+  field {
+    name: "plugin_observations"
+    number: 5
+    label: LABEL_REPEATED
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.PluginObservedState"
+    json_name: "pluginObservations"
+  }
+  nested_type {
+    name: "MetricsEntry"
+    field {
+      name: "key"
+      number: 1
+      label: LABEL_OPTIONAL
+      type: TYPE_STRING
+      json_name: "key"
+    }
+    field {
+      name: "value"
+      number: 2
+      label: LABEL_OPTIONAL
+      type: TYPE_DOUBLE
+      json_name: "value"
+    }
+    options {
+      map_entry: true
+    }
+  }
+}
+message_type {
+  name: "PluginObservedState"
+  field {
+    name: "plugin_id"
+    number: 1
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "pluginId"
+  }
+  field {
+    name: "version"
+    number: 2
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "version"
+  }
+  field {
+    name: "desired_revision"
+    number: 3
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT64
+    json_name: "desiredRevision"
+  }
+  field {
+    name: "observed_revision"
+    number: 4
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT64
+    json_name: "observedRevision"
+  }
+  field {
+    name: "config_hash"
+    number: 5
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "configHash"
+  }
+  field {
+    name: "health"
+    number: 6
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "health"
+  }
+  field {
+    name: "ruleset_sha256"
+    number: 7
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "rulesetSha256"
+  }
+  field {
+    name: "observed_at_unix_ms"
+    number: 8
+    label: LABEL_OPTIONAL
+    type: TYPE_INT64
+    json_name: "observedAtUnixMs"
+  }
+  field {
+    name: "rule_counters"
+    number: 9
+    label: LABEL_REPEATED
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.PluginRuleCounter"
+    json_name: "ruleCounters"
+  }
+}
+message_type {
+  name: "PluginRuleCounter"
+  field {
+    name: "rule_id"
+    number: 1
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "ruleId"
+  }
+  field {
+    name: "packets"
+    number: 2
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT64
+    json_name: "packets"
+  }
+  field {
+    name: "bytes"
+    number: 3
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT64
+    json_name: "bytes"
+  }
+}
+message_type {
+  name: "HeartbeatAck"
+  field {
+    name: "session_id"
+    number: 1
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "sessionId"
+  }
+  field {
+    name: "server_time_unix_ms"
+    number: 2
+    label: LABEL_OPTIONAL
+    type: TYPE_INT64
+    json_name: "serverTimeUnixMs"
+  }
+  field {
+    name: "desired_revision"
+    number: 3
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT64
+    json_name: "desiredRevision"
+  }
+}
+message_type {
+  name: "DesiredOperation"
+  field {
+    name: "operation_id"
+    number: 1
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "operationId"
+  }
+  field {
+    name: "kind"
+    number: 2
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "kind"
+  }
+  field {
+    name: "revision"
+    number: 3
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT64
+    json_name: "revision"
+  }
+  field {
+    name: "payload_json"
+    number: 4
+    label: LABEL_OPTIONAL
+    type: TYPE_BYTES
+    json_name: "payloadJson"
+  }
+  field {
+    name: "deadline_unix_ms"
+    number: 5
+    label: LABEL_OPTIONAL
+    type: TYPE_INT64
+    json_name: "deadlineUnixMs"
+  }
+}
+message_type {
+  name: "OperationAck"
+  field {
+    name: "operation_id"
+    number: 1
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "operationId"
+  }
+  field {
+    name: "accepted"
+    number: 2
+    label: LABEL_OPTIONAL
+    type: TYPE_BOOL
+    json_name: "accepted"
+  }
+  field {
+    name: "error"
+    number: 3
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "error"
+  }
+  field {
+    name: "accepted_at_unix_ms"
+    number: 4
+    label: LABEL_OPTIONAL
+    type: TYPE_INT64
+    json_name: "acceptedAtUnixMs"
+  }
+  field {
+    name: "session_id"
+    number: 5
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "sessionId"
+  }
+  field {
+    name: "revision"
+    number: 6
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT64
+    json_name: "revision"
+  }
+}
+message_type {
+  name: "ObservedState"
+  field {
+    name: "operation_id"
+    number: 1
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "operationId"
+  }
+  field {
+    name: "revision"
+    number: 2
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT64
+    json_name: "revision"
+  }
+  field {
+    name: "phase"
+    number: 3
+    label: LABEL_OPTIONAL
+    type: TYPE_ENUM
+    type_name: ".anix.agent.v1.ObservedPhase"
+    json_name: "phase"
+  }
+  field {
+    name: "message"
+    number: 4
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "message"
+  }
+  field {
+    name: "state_json"
+    number: 5
+    label: LABEL_OPTIONAL
+    type: TYPE_BYTES
+    json_name: "stateJson"
+  }
+  field {
+    name: "observed_at_unix_ms"
+    number: 6
+    label: LABEL_OPTIONAL
+    type: TYPE_INT64
+    json_name: "observedAtUnixMs"
+  }
+  field {
+    name: "session_id"
+    number: 7
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "sessionId"
+  }
+}
+message_type {
+  name: "AgentToControl"
+  field {
+    name: "request_id"
+    number: 1
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "requestId"
+  }
+  field {
+    name: "node_id"
+    number: 2
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT32
+    json_name: "nodeId"
+  }
+  field {
+    name: "revision"
+    number: 3
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT64
+    json_name: "revision"
+  }
+  field {
+    name: "sent_at_unix_ms"
+    number: 4
+    label: LABEL_OPTIONAL
+    type: TYPE_INT64
+    json_name: "sentAtUnixMs"
+  }
+  field {
+    name: "hello"
+    number: 10
+    label: LABEL_OPTIONAL
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.Hello"
+    oneof_index: 0
+    json_name: "hello"
+  }
+  field {
+    name: "heartbeat"
+    number: 11
+    label: LABEL_OPTIONAL
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.Heartbeat"
+    oneof_index: 0
+    json_name: "heartbeat"
+  }
+  field {
+    name: "operation_ack"
+    number: 12
+    label: LABEL_OPTIONAL
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.OperationAck"
+    oneof_index: 0
+    json_name: "operationAck"
+  }
+  field {
+    name: "observed_state"
+    number: 13
+    label: LABEL_OPTIONAL
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.ObservedState"
+    oneof_index: 0
+    json_name: "observedState"
+  }
+  oneof_decl {
+    name: "payload"
+  }
+}
+message_type {
+  name: "ControlToAgent"
+  field {
+    name: "request_id"
+    number: 1
+    label: LABEL_OPTIONAL
+    type: TYPE_STRING
+    json_name: "requestId"
+  }
+  field {
+    name: "node_id"
+    number: 2
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT32
+    json_name: "nodeId"
+  }
+  field {
+    name: "revision"
+    number: 3
+    label: LABEL_OPTIONAL
+    type: TYPE_UINT64
+    json_name: "revision"
+  }
+  field {
+    name: "sent_at_unix_ms"
+    number: 4
+    label: LABEL_OPTIONAL
+    type: TYPE_INT64
+    json_name: "sentAtUnixMs"
+  }
+  field {
+    name: "hello_ack"
+    number: 10
+    label: LABEL_OPTIONAL
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.HelloAck"
+    oneof_index: 0
+    json_name: "helloAck"
+  }
+  field {
+    name: "heartbeat_ack"
+    number: 11
+    label: LABEL_OPTIONAL
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.HeartbeatAck"
+    oneof_index: 0
+    json_name: "heartbeatAck"
+  }
+  field {
+    name: "desired_operation"
+    number: 12
+    label: LABEL_OPTIONAL
+    type: TYPE_MESSAGE
+    type_name: ".anix.agent.v1.DesiredOperation"
+    oneof_index: 0
+    json_name: "desiredOperation"
+  }
+  oneof_decl {
+    name: "payload"
+  }
+}
+enum_type {
+  name: "ObservedPhase"
+  value {
+    name: "OBSERVED_PHASE_UNSPECIFIED"
+    number: 0
+  }
+  value {
+    name: "OBSERVED_PHASE_ACCEPTED"
+    number: 1
+  }
+  value {
+    name: "OBSERVED_PHASE_APPLYING"
+    number: 2
+  }
+  value {
+    name: "OBSERVED_PHASE_SUCCEEDED"
+    number: 3
+  }
+  value {
+    name: "OBSERVED_PHASE_FAILED"
+    number: 4
+  }
+  value {
+    name: "OBSERVED_PHASE_SUPERSEDED"
+    number: 5
+  }
+}
+service {
+  name: "AgentControlService"
+  method {
+    name: "ControlStream"
+    input_type: ".anix.agent.v1.AgentToControl"
+    output_type: ".anix.agent.v1.ControlToAgent"
+    client_streaming: true
+    server_streaming: true
+  }
+}
+options {
+  go_package: "github.com/AnixOps/anix-agent/sdk/api/grpc/agent/v1;agentv1pb"
+}
+syntax: "proto3"

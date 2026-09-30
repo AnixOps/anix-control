@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	agentv1pb "github.com/AnixOps/anix-agent/sdk/api/grpc/agent/v1"
+	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	pb "github.com/AnixOps/anix-control/v4/api/grpc/v2boardpb"
 	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
 	"google.golang.org/grpc"
