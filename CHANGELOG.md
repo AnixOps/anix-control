@@ -223,6 +223,27 @@
 
 ### Added
 
+- A Helm chart for Kubernetes (`config/deploy/helm/anix-control`), single
+  replica with an external PostgreSQL.
+  - `Recreate` strategy. `replicaCount` other than 1 is rejected until
+    multi-replica support lands.
+  - A `migrate` init container. It is used instead of a Helm hook so it
+    always sees the release's Secret and ConfigMap.
+  - Probes: startup and liveness on `/livez`, readiness on `/readyz`.
+  - Settings come from a ConfigMap of `ANIX_CONTROL_*` variables. Secrets,
+    chart-created or `existingSecret`, are mounted as `_FILE` files. Config
+    and secret checksums roll the pod.
+  - Security: non-root uid 10001, read-only root filesystem, all
+    capabilities dropped, `RuntimeDefault` seccomp, exec `emptyDir` `/tmp`.
+  - Optional: gRPC Service for nodes, Ingress, `ServiceMonitor`, and an
+    ansible inventory/SSH Secret.
+  - CI: `Helm Chart Checks` (strict lint, kubeconform on several value sets,
+    guard failures) and `Kubernetes Smoke`.
+  - `.gitignore` now ignores only the root `/anix-control` binary. The bare
+    `anix-control` pattern also matched any directory of that name, including
+    the chart. The smoke installs the freshly
+    built image into kind with an in-cluster PostgreSQL, probes it, upgrades
+    it and uninstalls it.
 - Database leases (`internal/lease`, table `v4_kernel_lease`) keep single-instance
   background work in one Control process per database. The following run only
   in the process holding the `control.singleton-workers` lease:

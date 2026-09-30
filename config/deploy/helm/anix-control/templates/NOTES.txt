@@ -1,0 +1,11 @@
+AnixOps Control {{ .Chart.AppVersion }} is starting ({{ include "anix-control.image" . }}).
+
+Readiness:
+  kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "anix-control.fullname" . }}
+
+First administrator ({{ index .Values.config "ANIX_CONTROL_ADMIN_EMAIL" | default "admin" }}): on an empty database without
+ANIX_CONTROL_ADMIN_PASSWORD_FILE, the migrate init container prints a generated password once:
+  kubectl -n {{ .Release.Namespace }} logs deployment/{{ include "anix-control.fullname" . }} -c migrate
+
+UI and API (the UI server also proxies /api):
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "anix-control.fullname" . }} 3000:{{ .Values.service.webPort }}

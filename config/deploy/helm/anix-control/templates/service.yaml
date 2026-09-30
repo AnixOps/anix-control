@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "anix-control.fullname" . }}
+  labels:
+    {{- include "anix-control.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "anix-control.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.httpPort }}
+      targetPort: http
+      protocol: TCP
+    - name: web
+      port: {{ .Values.service.webPort }}
+      targetPort: web
+      protocol: TCP
+{{- if .Values.grpc.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "anix-control.fullname" . }}-grpc
+  labels:
+    {{- include "anix-control.labels" . | nindent 4 }}
+  {{- with .Values.grpc.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.grpc.service.type }}
+  {{- with .Values.grpc.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    {{- include "anix-control.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: grpc
+      port: {{ .Values.grpc.service.port }}
+      targetPort: grpc
+      protocol: TCP
+      appProtocol: kubernetes.io/h2c
+{{- end }}
