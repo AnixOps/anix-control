@@ -375,6 +375,17 @@
     - **Discovery:** the OpenID discovery document.
   - CI and the local gates tidy, vet, test, race-test, lint, scan and
     vulnerability-check the new module.
+- Native MFA routes in identity-platform (N11b): the six user MFA routes
+  (status, TOTP setup and enable, disable, verify, backup code regeneration)
+  and the admin MFA configuration. Like login, they serve once their mode is
+  native.
+  - **Storage.** TOTP secrets are sealed and backup codes kept as keyed
+    hashes in identity (`identity/account` MFA operations).
+  - **Admin configuration.** It lives in identity's settings document with
+    the v2 defaults, value coercions and normalization; login applies it too.
+  - **Parity.** `internal/tests/identitycompat` compares 26 more cases with
+    the v2 handlers on SQLite and PostgreSQL. Masked: generated secrets and
+    codes, and `last_used`, which identity keeps to the second.
 - Native login and registration in identity-platform (N11a). They serve once
   their route mode is native, which the identity cutover sets; until then
   both routes stay legacy.

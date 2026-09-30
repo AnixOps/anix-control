@@ -144,11 +144,8 @@ type mfaPolicy struct {
 }
 
 func policyFrom(settings map[string]any) mfaPolicy {
-	flag := func(name string) bool {
-		value, _ := settings[name].(bool)
-		return value
-	}
-	return mfaPolicy{Enabled: flag("enabled"), Required: flag("required"), EnforceForAdmin: flag("enforce_for_admin")}
+	config := loadAdminMFA(settings)
+	return mfaPolicy{Enabled: config.Enabled, Required: config.Required, EnforceForAdmin: config.EnforceForAdmin}
 }
 
 func (p mfaPolicy) enforcedFor(user account.Account) bool {
