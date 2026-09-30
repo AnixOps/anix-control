@@ -314,7 +314,12 @@ instance's generation.
         There is no rollback after finalize.
       - **Bootstrap.** `InitAdmin` creates no default administrator once
         identity is authoritative.
-13. End-to-end acceptance on Compose and kind.
+13. End-to-end acceptance on Compose and kind (in place).
+    - `config/scripts/identity_cutover_acceptance.sh` drives the whole move
+      against a running Control.
+    - The kind smoke runs it against two identity replicas.
+    - The Compose smoke runs it, then checks that issued tokens outlive the
+      identity module.
 
 Deferred:
 - deleting the legacy identity handlers (after finalize and the rollback
