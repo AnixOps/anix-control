@@ -15,8 +15,12 @@ import (
 
 // Revocation makes tokens stop working. It mirrors
 // KernelIdentity.PublishRevocation:
-//   - UserID with NotBefore and/or TokenVersion revokes that user's tokens
-//     issued before NotBefore or carrying a smaller tv claim;
+//   - UserID with NotBefore revokes that user's kernel tokens (no tv claim)
+//     issued up to NotBefore;
+//   - with TokenVersion as well, the user's identity tokens (tv claim) stop
+//     working when their tv is below TokenVersion, so a token identity issues
+//     afterwards works even within the same second; without it, identity
+//     tokens issued up to NotBefore stop working too;
 //   - SessionID revokes one session until SessionExpiresAt.
 type Revocation struct {
 	UserID           uint
@@ -63,6 +67,9 @@ func Write(db *gorm.DB, r Revocation) error {
 		if row.NotBefore.IsZero() {
 			row.NotBefore = time.Unix(0, 0)
 		}
+		if bound := r.identityNotBefore(); !bound.IsZero() {
+			row.IdentityNotBefore = &bound
+		}
 		var existing model.IdentityRevocation
 		err := db.Where("user_id = ?", r.UserID).Take(&existing).Error
 		switch {
@@ -73,8 +80,12 @@ func Write(db *gorm.DB, r Revocation) error {
 			if existing.TokenVersion > row.TokenVersion {
 				row.TokenVersion = existing.TokenVersion
 			}
+			if existing.IdentityNotBefore != nil && (row.IdentityNotBefore == nil || existing.IdentityNotBefore.After(*row.IdentityNotBefore)) {
+				row.IdentityNotBefore = existing.IdentityNotBefore
+			}
 			if err := db.Model(&model.IdentityRevocation{}).Where("user_id = ?", r.UserID).Updates(map[string]any{
-				"token_version": row.TokenVersion, "not_before": row.NotBefore, "reason": row.Reason, "updated_at": now,
+				"token_version": row.TokenVersion, "not_before": row.NotBefore, "identity_not_before": row.IdentityNotBefore,
+				"reason": row.Reason, "updated_at": now,
 			}).Error; err != nil {
 				return err
 			}
@@ -97,9 +108,20 @@ func Write(db *gorm.DB, r Revocation) error {
 	return nil
 }
 
+// identityNotBefore is the bound a revocation sets for identity tokens: its
+// NotBefore when it carries no token version, else none.
+func (r Revocation) identityNotBefore() time.Time {
+	if r.TokenVersion > 0 {
+		return time.Time{}
+	}
+	return r.NotBefore
+}
+
 type userBounds struct {
-	notBefore    time.Time
-	tokenVersion uint64
+	// notBefore bounds kernel tokens, identityNotBefore identity tokens.
+	notBefore         time.Time
+	identityNotBefore time.Time
+	tokenVersion      uint64
 }
 
 // Store answers revocation checks from memory. It loads the tables at start,
@@ -150,12 +172,24 @@ func (s *Store) Revoked(claims *utils.Claims) bool {
 	if !ok {
 		return false
 	}
-	if claims.TokenVersion < bounds.tokenVersion {
-		return true
+	if claims.TokenVersion > 0 {
+		// An identity token: its token version decides, exactly.
+		if claims.TokenVersion < bounds.tokenVersion {
+			return true
+		}
+		return issuedBy(claims, bounds.identityNotBefore)
 	}
-	// iat has one-second precision, so a token issued in the revocation's
-	// second is revoked too; one issued in a later second is valid.
-	return claims.IssuedAt == nil || !claims.IssuedAt.After(bounds.notBefore.Truncate(time.Second))
+	return issuedBy(claims, bounds.notBefore)
+}
+
+// issuedBy reports whether a token was issued up to bound. iat has
+// one-second precision, so a token issued in the bound's second counts; one
+// issued in a later second does not.
+func issuedBy(claims *utils.Claims, bound time.Time) bool {
+	if bound.IsZero() {
+		return false
+	}
+	return claims.IssuedAt == nil || !claims.IssuedAt.After(bound.Truncate(time.Second))
 }
 
 // Publish writes a revocation and applies it at once.
@@ -183,6 +217,9 @@ func (s *Store) applyLocked(r Revocation) {
 		bounds := s.users[r.UserID]
 		if r.NotBefore.After(bounds.notBefore) {
 			bounds.notBefore = r.NotBefore
+		}
+		if identity := r.identityNotBefore(); identity.After(bounds.identityNotBefore) {
+			bounds.identityNotBefore = identity
 		}
 		if r.TokenVersion > bounds.tokenVersion {
 			bounds.tokenVersion = r.TokenVersion
@@ -219,7 +256,11 @@ func (s *Store) Reload(ctx context.Context) error {
 	}
 	users := make(map[uint]userBounds, len(userRows))
 	for _, row := range userRows {
-		users[row.UserID] = userBounds{notBefore: row.NotBefore, tokenVersion: row.TokenVersion}
+		bounds := userBounds{notBefore: row.NotBefore, tokenVersion: row.TokenVersion}
+		if row.IdentityNotBefore != nil {
+			bounds.identityNotBefore = *row.IdentityNotBefore
+		}
+		users[row.UserID] = bounds
 	}
 	sessions := make(map[string]time.Time, len(sessionRows))
 	for _, row := range sessionRows {

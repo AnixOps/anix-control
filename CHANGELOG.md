@@ -375,6 +375,22 @@
     - **Discovery:** the OpenID discovery document.
   - CI and the local gates tidy, vet, test, race-test, lint, scan and
     vulnerability-check the new module.
+- Identity tokens are revoked by token version.
+  - **What changed.** A session-ending change identity projects (ban,
+    demotion, password or email change) now carries the account's new token
+    version (`ApplyAccountProjectionRequest.token_version`, new). The kernel
+    ends identity tokens with a lower `tv` claim. Before, it ended every token
+    issued up to that second, so a user who logged in again within the same
+    second got a dead token.
+  - **Kernel tokens.** HS256 tokens carry no `tv` and are still ended by time.
+    A token-version revocation no longer ends every future HS256 token of the
+    user, which mattered after a rollback.
+  - **Guard.** A version that did not rise above the last one projected falls
+    back to time, so a revocation cannot be missed.
+  - **Schema.** New columns `v4_kernel_identity_revocation.identity_not_before`
+    and `v4_kernel_identity_account.token_version`.
+  - **Acceptance.** The identity acceptance logs a demoted administrator in
+    again at once.
 - Identity acceptance on Compose and kind (N13).
   - **Shared flow.** The cutover acceptance is now
     `config/scripts/identity_cutover_acceptance.sh`: import, cutover, native

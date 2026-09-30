@@ -117,6 +117,7 @@ func (s *Service) mirrorMFA(ctx context.Context, stores *Stores, userID uint64) 
 func (s *Service) project(ctx context.Context, stores *Stores, a account.Account, mirror bool) error {
 	request := &kernelidentityv1.ApplyAccountProjectionRequest{
 		UserId: a.UserID, Version: a.Version, Email: a.Email, IsAdmin: a.IsAdmin, IsStaff: a.IsStaff, Banned: a.Banned,
+		TokenVersion: a.TokenVersion,
 	}
 	if mirror {
 		credentials := &kernelidentityv1.LegacyCredentialMirror{PasswordHash: a.PasswordHash, PasswordAlgo: a.PasswordAlgo, PasswordSalt: a.PasswordSalt}

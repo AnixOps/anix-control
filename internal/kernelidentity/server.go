@@ -288,12 +288,21 @@ func (h *hostServer) ApplyAccountProjection(ctx context.Context, request *kernel
 				}
 			}
 		}
+		// Identity raises the token version whenever a change ends sessions.
+		// Only a version above the last one projected can revoke by version;
+		// otherwise the revocation falls back to time, which cannot miss.
+		tokenVersion := uint64(0)
+		if request.GetTokenVersion() > link.TokenVersion {
+			tokenVersion = request.GetTokenVersion()
+		}
 		var err error
-		if revocation, err = service.UpdateUserTx(tx, id, updates); err != nil {
+		if revocation, err = service.UpdateUserTxWithTokenVersion(tx, id, updates, tokenVersion); err != nil {
 			return err
 		}
-		if err := tx.Model(&model.IdentityAccountLink{}).Where("user_id = ?", id).
-			Updates(map[string]any{"projection_version": request.GetVersion(), "updated_at": time.Now()}).Error; err != nil {
+		if err := tx.Model(&model.IdentityAccountLink{}).Where("user_id = ?", id).Updates(map[string]any{
+			"projection_version": request.GetVersion(), "token_version": max(link.TokenVersion, request.GetTokenVersion()),
+			"updated_at": time.Now(),
+		}).Error; err != nil {
 			return err
 		}
 		response = &kernelidentityv1.ApplyAccountProjectionResponse{Applied: true, StoredVersion: request.GetVersion()}
@@ -377,6 +386,9 @@ func (h *hostServer) PublishRevocation(ctx context.Context, request *kernelident
 	}
 	if request.GetNotBeforeUnix() > 0 {
 		revocation.NotBefore = time.Unix(request.GetNotBeforeUnix(), 0)
+	} else if revocation.TokenVersion > 0 {
+		// Kernel tokens carry no token version: end those issued until now.
+		revocation.NotBefore = time.Now()
 	}
 	if request.GetSessionExpiresAtUnix() > 0 {
 		revocation.SessionExpiresAt = time.Unix(request.GetSessionExpiresAtUnix(), 0)

@@ -2,15 +2,19 @@ package model
 
 import "time"
 
-// IdentityRevocation makes a user's tokens stop working: those issued before
-// NotBefore, and those whose token version (tv claim) is below TokenVersion.
-// One row per user; a later revocation only moves the bounds forward.
+// IdentityRevocation makes a user's tokens stop working. One row per user; a
+// later revocation only moves the bounds forward.
+//   - Kernel tokens (no tv claim) issued up to NotBefore stop working.
+//   - Identity tokens (tv claim) stop working when their token version is
+//     below TokenVersion, or when they were issued up to IdentityNotBefore,
+//     the bound of revocations that carried no token version.
 type IdentityRevocation struct {
-	UserID       uint      `gorm:"primaryKey;autoIncrement:false" json:"user_id"`
-	TokenVersion uint64    `gorm:"not null;default:0" json:"token_version"`
-	NotBefore    time.Time `gorm:"not null" json:"not_before"`
-	Reason       string    `gorm:"size:64;not null;default:''" json:"reason"`
-	UpdatedAt    time.Time `gorm:"not null;index" json:"updated_at"`
+	UserID            uint       `gorm:"primaryKey;autoIncrement:false" json:"user_id"`
+	TokenVersion      uint64     `gorm:"not null;default:0" json:"token_version"`
+	NotBefore         time.Time  `gorm:"not null" json:"not_before"`
+	IdentityNotBefore *time.Time `json:"identity_not_before,omitempty"`
+	Reason            string     `gorm:"size:64;not null;default:''" json:"reason"`
+	UpdatedAt         time.Time  `gorm:"not null;index" json:"updated_at"`
 }
 
 func (IdentityRevocation) TableName() string { return "v4_kernel_identity_revocation" }

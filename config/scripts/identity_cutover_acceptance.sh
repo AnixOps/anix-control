@@ -85,9 +85,8 @@ for _ in $(seq 1 5); do
   sleep 1
 done
 test "${demoted}" = 1 || { echo "a demoted administrator's token still works"; exit 1; }
-# Revocations have one-second precision: a token issued in the revocation's
-# second is revoked too, so log in again from the next second on.
-sleep 2
+# Identity tokens are revoked by token version, so logging in again at once,
+# even within the same second, yields a working (non-administrator) token.
 test "$(call GET /api/v4/kernel/identity "$(login_as ops@example.test Ops-0123456789)")" = 403
 echo "demotion revokes and removes administrator access: ok"
 
