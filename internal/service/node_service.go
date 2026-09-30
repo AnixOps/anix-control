@@ -18,6 +18,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // 缓存键
@@ -293,7 +294,7 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		// 在事务内用 SELECT FOR UPDATE 锁定授权密钥，防止并发注册
 		var authKey model.AuthorizedKey
-		if err := tx.Set("gorm:query_option", "FOR UPDATE").Where("key_hash = ?", keyHash).First(&authKey).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("key_hash = ?", keyHash).First(&authKey).Error; err != nil {
 			return errors.New("授权密钥无效")
 		}
 

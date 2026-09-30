@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -109,15 +110,12 @@ func SignatureAuth() gin.HandlerFunc {
 		}
 
 		// 防重放攻击：检查 nonce（可选，需要 Redis 支持）
-		if nonce != "" {
-			if isNonceUsed(nonce) {
-				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-					"message": "请求已处理",
-					"code":    "DUPLICATE_REQUEST",
-				})
-				return
-			}
-			markNonceUsed(nonce)
+		if nonce != "" && !claimNonce(nonce) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"message": "请求已处理",
+				"code":    "DUPLICATE_REQUEST",
+			})
+			return
 		}
 
 		c.Next()
@@ -131,11 +129,40 @@ func calculateHMAC(data, secret string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// nonce 缓存 (简单实现，生产环境建议用 Redis)
-var nonceCache = make(map[string]int64)
+// nonce 缓存 (进程内实现; 多实例部署时各实例独立, 生产环境建议用共享存储)
+var (
+	nonceMu    sync.Mutex
+	nonceCache = make(map[string]int64)
+)
+
+// claimNonce atomically checks and records a nonce. It returns false when the
+// nonce was already used and has not expired, so two concurrent requests with
+// the same nonce cannot both pass.
+func claimNonce(nonce string) bool {
+	nonceMu.Lock()
+	defer nonceMu.Unlock()
+	if nonceUsedLocked(nonce) {
+		return false
+	}
+	markNonceUsedLocked(nonce)
+	return true
+}
 
 // isNonceUsed 检查 nonce 是否已使用
 func isNonceUsed(nonce string) bool {
+	nonceMu.Lock()
+	defer nonceMu.Unlock()
+	return nonceUsedLocked(nonce)
+}
+
+// markNonceUsed 标记 nonce 已使用
+func markNonceUsed(nonce string) {
+	nonceMu.Lock()
+	defer nonceMu.Unlock()
+	markNonceUsedLocked(nonce)
+}
+
+func nonceUsedLocked(nonce string) bool {
 	expireAt, exists := nonceCache[nonce]
 	if !exists {
 		return false
@@ -148,8 +175,7 @@ func isNonceUsed(nonce string) bool {
 	return true
 }
 
-// markNonceUsed 标记 nonce 已使用
-func markNonceUsed(nonce string) {
+func markNonceUsedLocked(nonce string) {
 	// 清理过期的 nonce
 	now := time.Now().Unix()
 	for k, v := range nonceCache {

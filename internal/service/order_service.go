@@ -7,6 +7,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // OrderService 订单服务
@@ -275,7 +276,7 @@ func (s *OrderService) Complete(orderID uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// 1. 获取并锁定订单记录
 		var order model.Order
-		if err := tx.Set("gorm:query_option", "FOR UPDATE").Preload("User").First(&order, orderID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Preload("User").First(&order, orderID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrOrderNotFound
 			}
