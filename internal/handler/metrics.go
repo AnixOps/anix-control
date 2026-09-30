@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/AnixOps/anix-control/v4/internal/lease"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -136,6 +137,8 @@ v2board_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
 	if provider, ok := pluginhost.DefaultManager().(pluginhost.HostStatsProvider); ok {
 		writePluginHostMetrics(&body, provider.Stats())
 	}
+	// Singleton-worker leadership of this process.
+	lease.WritePrometheus(&body)
 
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(body.String()))
 }

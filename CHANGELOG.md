@@ -161,6 +161,21 @@
 
 ### Added
 
+- Database leases (`internal/lease`, table `v4_kernel_lease`) keep single-instance
+  background work in one Control process per database. The following run only
+  in the process holding the `control.singleton-workers` lease:
+  - the forward runtime job executor and forward agent bridge worker;
+  - the flow and monthly resets;
+  - the gost and ansible stats workers;
+  - the latency prober.
+
+  The lease lasts 30 s and is renewed every 10 s. A leader that cannot renew
+  stops its workers after 20 s, and a leader that shuts down releases the
+  lease, so a rolling update or an accidental second process no longer
+  double-runs jobs, resets or traffic accounting. `/metrics` reports
+  `anixops_lease_leader`. `docs/architecture/container-deployment.md` records
+  the container design and the remaining multi-replica blockers.
+
 - `anix-control migrate` prepares the database, then exits: schema, `Ensure*`
   helpers, plugin trust root, identity package bootstrap, and default seeds.
   Use it as a one-shot Compose service or Kubernetes Job.
