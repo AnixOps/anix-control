@@ -42,14 +42,7 @@ func (s *AuthService) RegisterWithInvite(email, password, inviteCode string, cfg
 		return "", nil, errors.New("密码加密失败")
 	}
 
-	user := &model.User{
-		Email:    email,
-		Password: string(hashedPassword),
-		UUID:     uuid.New().String(),
-		Token:    uuid.New().String(),
-		IsAdmin:  0,
-		Banned:   0,
-	}
+	user := NewSubscriberUser(email, string(hashedPassword))
 
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		var existingUser model.User
@@ -137,4 +130,17 @@ func (s *AuthService) IssueToken(user *model.User, cfg *config.Config) (string, 
 func checkPassword(password, hashedPassword string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
 	return err == nil
+}
+
+// NewSubscriberUser returns a new v2_user row with fresh node UUID and
+// subscription token, as registration creates it.
+func NewSubscriberUser(email, passwordHash string) *model.User {
+	return &model.User{
+		Email:    email,
+		Password: passwordHash,
+		UUID:     uuid.New().String(),
+		Token:    uuid.New().String(),
+		IsAdmin:  0,
+		Banned:   0,
+	}
 }

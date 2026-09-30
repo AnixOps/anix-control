@@ -539,3 +539,13 @@ func (h *MFAHandler) UpdateAdminConfig(c *gin.Context) {
 	h.applyRuntimeConfig(cfg)
 	panelSuccess(c, mfaAdminConfigResponse(cfg))
 }
+
+// AdminMFASettings returns the admin MFA configuration as the admin API
+// shows it, with defaults applied; KernelIdentity seeds identity with it.
+func AdminMFASettings(db *gorm.DB) (map[string]any, error) {
+	cfg, err := loadMFAAdminConfig(db)
+	if err != nil {
+		return nil, err
+	}
+	return mfaAdminConfigResponse(cfg), nil
+}

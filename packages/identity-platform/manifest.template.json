@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": [],
+  "capabilities": ["kernel.identity.v1"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["identity-platform.view", "identity-platform.api"],
