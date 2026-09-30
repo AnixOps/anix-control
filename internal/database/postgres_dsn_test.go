@@ -126,3 +126,17 @@ func TestPostgresDSNRoundTripsArbitraryValues(t *testing.T) {
 		require.Equal(t, cfg.Database, parsed.Database, "dsn: %s", PostgresDSN(&cfg))
 	}
 }
+
+func TestPostgresDSNUsesConfiguredSSLModeAndTimeZone(t *testing.T) {
+	isolatePostgresEnv(t)
+	dsn := PostgresDSN(&config.DatabaseConfig{Host: "db.internal", Username: "u", Password: "p", Database: "d", SSLMode: "require", TimeZone: "UTC"})
+	assert.True(t, strings.HasPrefix(dsn, "sslmode=require TimeZone=UTC "), dsn)
+	parsed := parsePostgresDSN(t, &config.DatabaseConfig{Host: "db.internal", Username: "u", Password: "p", Database: "d", SSLMode: "require", TimeZone: "UTC"})
+	assert.NotNil(t, parsed.TLSConfig, "sslmode=require must enable TLS")
+	assert.Equal(t, "UTC", parsed.RuntimeParams["TimeZone"])
+}
+
+func TestPostgresDSNPassesAConfiguredDSNThroughUnchanged(t *testing.T) {
+	const raw = "postgres://anix:secret@db.internal:5432/anix_control?sslmode=verify-full"
+	assert.Equal(t, raw, PostgresDSN(&config.DatabaseConfig{DSN: "  " + raw + " ", Host: "ignored", Password: "ignored"}))
+}

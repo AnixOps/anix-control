@@ -6,14 +6,54 @@ This page defines the unified configuration scheme for `anix-control`.
 
 | Location | Role | Notes |
 |------|------|------|
- | `config/config.yaml` (template: [`config/config.yaml.example`](../../config/config.yaml.example)) | canonical app and forward runtime config | always read on backend startup |
- | `v2_system_config` | persisted runtime snapshot | written on startup from the YAML config and consumed by runtime services and `/admin/system` |
+ | `config/config.yaml` (template: [`config/config.yaml.example`](../../config/config.yaml.example)) | canonical app and forward runtime config | read on startup when it exists, or when named by `-config` / `ANIX_CONTROL_CONFIG` |
+ | built-in defaults ([`internal/config/defaults.yaml`](../../internal/config/defaults.yaml)) | production-shaped container defaults | used instead of a file when no config file is present |
+ | `ANIX_CONTROL_*` environment variables | per-key overrides and secrets | applied on top of the file or the built-in defaults; see [Environment Variables](#environment-variables) |
+ | `v2_system_config` | persisted runtime snapshot | written on startup from the loaded config and consumed by runtime services and `/admin/system` |
 
 Important:
 
 - local `go run` does not auto-load `.env` (template: [`.env.example`](../../.env.example))
-- `jwt.secret`, `app.api_token`, `admin.*`, database, cache, and frontend settings still come from `config/config.yaml`
-- the runtime selection resides in `config/config.yaml.forward_runtime`; startup writes exactly those values into `v2_system_config`
+- `jwt.secret`, `app.api_token`, `admin.*`, database, cache, and frontend settings come from the config file or its `ANIX_CONTROL_*` override
+- the runtime selection resides in `forward_runtime`; startup writes exactly those values into `v2_system_config`
+
+## Environment Variables
+
+Every scalar and list key can be set from the environment. The variable name
+is `ANIX_CONTROL_` plus the upper-cased YAML path joined with underscores:
+
+| YAML key | Variable |
+|------|------|
+| `database.password` | `ANIX_CONTROL_DATABASE_PASSWORD` |
+| `jwt.secret` | `ANIX_CONTROL_JWT_SECRET` |
+| `plugins.control_execution_enabled` | `ANIX_CONTROL_PLUGINS_CONTROL_EXECUTION_ENABLED` |
+| `server.trusted_proxies` | `ANIX_CONTROL_SERVER_TRUSTED_PROXIES` (comma-separated) |
+
+Rules:
+
+- Precedence: config file (or built-in defaults) first, then the environment.
+- `NAME_FILE=/path` reads the value from a file, for Docker and Kubernetes
+  secrets. Setting both `NAME` and `NAME_FILE` is an error.
+- Booleans accept `true`/`false`/`1`/`0`; lists are comma-separated.
+- Map-valued keys (`forward_runtime.nftables_ansible.environment` and
+  `extra_vars`) can only be set in the YAML file.
+- Unknown `ANIX_CONTROL_*` names are logged at startup, so typos are visible.
+- `anix-control -print-env` prints every variable with its type and built-in
+  default; secret defaults are never printed.
+
+Without a config file, Control starts from the built-in defaults: `env:
+production`, API on `0.0.0.0:8080`, UI on `3000`, PostgreSQL
+`anix_control@127.0.0.1:5432`, Control package execution enabled with private
+temporary host directories, gRPC disabled. In production `jwt.secret` is
+required and must not be a template value, or the server refuses to start.
+
+PostgreSQL connection settings:
+
+| Key | Default | Notes |
+|------|------|------|
+| `database.sslmode` | `disable` | libpq `sslmode`: `disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full` |
+| `database.timezone` | `Asia/Shanghai` | session `TimeZone`; must be a valid IANA name |
+| `database.dsn` | empty | full connection string used verbatim instead of the fields above |
 
 ## Unified Forward Runtime Layout
 

@@ -40,6 +40,44 @@ func TestResolveConfigPathPrefersExplicitFile(t *testing.T) {
 	}
 }
 
+func TestSelectConfigPathFallsBackToBuiltInDefaults(t *testing.T) {
+	explicit := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(explicit, []byte("env: test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(t.TempDir(), "missing.yaml")
+
+	if path, err := selectConfigPath(explicit, true, ""); err != nil || path != explicit {
+		t.Fatalf("explicit -config = %q, %v", path, err)
+	}
+	if _, err := selectConfigPath(missing, true, ""); err == nil {
+		t.Fatal("a missing explicit -config must fail")
+	}
+	if path, err := selectConfigPath(defaultConfigPath, false, explicit); err != nil || path != explicit {
+		t.Fatalf("ANIX_CONTROL_CONFIG = %q, %v", path, err)
+	}
+	if _, err := selectConfigPath(defaultConfigPath, false, missing); err == nil {
+		t.Fatal("a missing ANIX_CONTROL_CONFIG must fail")
+	}
+	// The test runs in cmd/server, which has no config/config.yaml.
+	if path, err := selectConfigPath(defaultConfigPath, false, ""); err != nil || path != "" {
+		t.Fatalf("no config = %q, %v; want built-in defaults", path, err)
+	}
+}
+
+func TestWriteEnvTableListsVariablesWithoutSecretValues(t *testing.T) {
+	var out strings.Builder
+	if err := writeEnvTable(&out); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, expected := range []string{"ANIX_CONTROL_DATABASE_PASSWORD", "(secret)", "ANIX_CONTROL_SERVER_PORT", "8080", "_FILE"} {
+		if !strings.Contains(text, expected) {
+			t.Fatalf("print-env output lacks %q", expected)
+		}
+	}
+}
+
 func TestResolveRuntimePathPrefersProjectRootWhenConfigIsUnderConfigDir(t *testing.T) {
 	tempDir := t.TempDir()
 	projectRoot := filepath.Join(tempDir, "repo")

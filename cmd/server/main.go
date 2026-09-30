@@ -19,7 +19,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"text/tabwriter"
 	"time"
+	_ "time/tzdata" // database.timezone and TZ resolve without system zoneinfo
 
 	_ "github.com/AnixOps/anix-control/v4/docs" // swagger docs
 	"github.com/AnixOps/anix-control/v4/internal/branding"
@@ -79,6 +81,7 @@ const shutdownTimeout = 30 * time.Second
 
 var (
 	configPath string
+	printEnv   bool
 	version    = branding.DefaultVersion
 	buildTime  = "unknown"
 	buildCode  = ""
@@ -86,7 +89,63 @@ var (
 )
 
 func init() {
-	flag.StringVar(&configPath, "config", "config/config.yaml", "配置文件路径")
+	flag.StringVar(&configPath, "config", defaultConfigPath, "配置文件路径 (or "+config.ConfigPathEnv+")")
+	flag.BoolVar(&printEnv, "print-env", false, "print every ANIX_CONTROL_* configuration variable and exit")
+}
+
+const defaultConfigPath = "config/config.yaml"
+
+// selectConfigPath decides which config file to load. An explicit -config or
+// ANIX_CONTROL_CONFIG must exist. Without either, the default
+// config/config.yaml is used when present; otherwise Control starts from its
+// built-in defaults plus ANIX_CONTROL_* variables and the returned path is "".
+func selectConfigPath(flagValue string, flagSet bool, envValue string) (string, error) {
+	switch {
+	case flagSet:
+		return resolveConfigPath(flagValue)
+	case envValue != "":
+		return resolveConfigPath(envValue)
+	}
+	resolved, err := resolveConfigPath(defaultConfigPath)
+	if err != nil {
+		return "", nil
+	}
+	return resolved, nil
+}
+
+func configFlagSet() bool {
+	set := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "config" {
+			set = true
+		}
+	})
+	return set
+}
+
+// writeEnvTable prints the configuration variables with their built-in
+// defaults; secret values are never printed.
+func writeEnvTable(w io.Writer) error {
+	table := tabwriter.NewWriter(w, 0, 4, 2, ' ', 0)
+	var writeErr error
+	printf := func(format string, args ...any) {
+		if writeErr == nil {
+			_, writeErr = fmt.Fprintf(table, format, args...)
+		}
+	}
+	printf("VARIABLE\tTYPE\tDEFAULT\tKEY\n")
+	for _, variable := range config.EnvVars(config.Defaults()) {
+		value := variable.Default
+		if variable.Secret {
+			value = "(secret)"
+		}
+		printf("%s\t%s\t%s\t%s\n", variable.Name, variable.Type, value, variable.Path)
+	}
+	printf("\nEvery variable also accepts NAME%s=<path> to read the value from a file.\n", config.EnvFileSuffix)
+	if writeErr != nil {
+		return writeErr
+	}
+	return table.Flush()
 }
 
 func formatDisplayVersion(baseVersion, code string) string {
@@ -279,11 +338,22 @@ func main() {
 // code so that deferred cleanup (cache, database) runs before os.Exit.
 func run() int {
 	flag.Parse()
+	if printEnv {
+		if err := writeEnvTable(os.Stdout); err != nil {
+			log.Printf("print-env: %v", err)
+			return 1
+		}
+		return 0
+	}
 
-	resolvedConfigPath, resolveErr := resolveConfigPath(configPath)
-	log.Printf("Loading config file: %s", resolvedConfigPath)
+	resolvedConfigPath, resolveErr := selectConfigPath(configPath, configFlagSet(), config.PathFromEnv())
 	if resolveErr != nil {
 		log.Fatalf("Failed to locate config: %v", resolveErr)
+	}
+	if resolvedConfigPath == "" {
+		log.Printf("No config file; using built-in defaults and %s* environment variables", config.EnvPrefix)
+	} else {
+		log.Printf("Loading config file: %s", resolvedConfigPath)
 	}
 
 	// 打印版本信息
@@ -294,6 +364,9 @@ func run() int {
 	cfg, err := config.Load(resolvedConfigPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+	}
+	if err := cfg.ValidateForServer(); err != nil {
+		log.Fatalf("Invalid config: %v", err)
 	}
 
 	// 打印环境信息

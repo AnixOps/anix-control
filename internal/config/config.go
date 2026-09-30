@@ -1,11 +1,14 @@
 package config
 
 import (
+	_ "embed"
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/branding"
 	"gopkg.in/yaml.v3"
@@ -15,6 +18,12 @@ var (
 	cfg  *Config
 	once sync.Once
 )
+
+// defaultsYAML is the configuration used when Control starts without a config
+// file (the container model); ANIX_CONTROL_* variables override it.
+//
+//go:embed defaults.yaml
+var defaultsYAML []byte
 
 // Config is the root application configuration loaded from config.yaml.
 type Config struct {
@@ -247,12 +256,19 @@ type FrontendConfig struct {
 
 // DatabaseConfig defines database connection settings.
 type DatabaseConfig struct {
-	Driver          string `yaml:"driver"`
-	Database        string `yaml:"database"`
-	Host            string `yaml:"host"`
-	Port            int    `yaml:"port"`
-	Username        string `yaml:"username"`
-	Password        string `yaml:"password"`
+	Driver   string `yaml:"driver"`
+	Database string `yaml:"database"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	// SSLMode is the libpq sslmode (disable, allow, prefer, require,
+	// verify-ca, verify-full); empty means disable.
+	SSLMode string `yaml:"sslmode"`
+	// TimeZone is the PostgreSQL session time zone; empty means Asia/Shanghai.
+	TimeZone string `yaml:"timezone"`
+	// DSN, when set, is used verbatim instead of the fields above.
+	DSN             string `yaml:"dsn"`
 	LogLevel        string `yaml:"log_level"`
 	MaxIdleConns    int    `yaml:"max_idle_conns"`
 	MaxOpenConns    int    `yaml:"max_open_conns"`
@@ -293,31 +309,107 @@ type AppConfig struct {
 	SubscribePath    string `yaml:"subscribe_path"`
 }
 
-// Load reads a YAML config file once per process.
+// Load reads the configuration once per process. A non-empty path names a
+// YAML file; an empty path starts from the built-in defaults (defaults.yaml),
+// which is how containers run without a config file. ANIX_CONTROL_*
+// environment variables override either source.
 func Load(path string) (*Config, error) {
 	var err error
 	once.Do(func() {
-		var data []byte
-		data, err = os.ReadFile(path) // #nosec G304 -- config path is supplied by the operator or test harness, not by an HTTP user.
-		if err != nil {
-			return
-		}
-
-		cfg = &Config{}
-		err = yaml.Unmarshal(data, cfg)
+		var loaded *Config
+		loaded, err = load(path, os.Environ())
 		if err == nil {
-			normalizeBrandDefaults(cfg)
-			cfg.App.SubscribePath, err = NormalizeSubscribePath(cfg.App.SubscribePath)
-			if err != nil {
-				err = fmt.Errorf("invalid app.subscribe_path: %w", err)
-			}
-		}
-		if err == nil {
-			err = cfg.Plugins.ValidatePayloadLimits()
+			cfg = loaded
 		}
 	})
 
 	return cfg, err
+}
+
+func load(path string, environ []string) (*Config, error) {
+	data := defaultsYAML
+	if path != "" {
+		var err error
+		data, err = os.ReadFile(path) // #nosec G304 -- config path is supplied by the operator or test harness, not by an HTTP user.
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	loaded := &Config{}
+	if err := yaml.Unmarshal(data, loaded); err != nil {
+		return nil, err
+	}
+	unknown, err := ApplyEnv(loaded, environ)
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range unknown {
+		log.Printf("Ignoring unknown configuration variable %s (see anix-control -print-env)", name)
+	}
+	normalizeBrandDefaults(loaded)
+	if loaded.Server.Mode == "" && loaded.Env == "production" {
+		loaded.Server.Mode = "release"
+	}
+	loaded.App.SubscribePath, err = NormalizeSubscribePath(loaded.App.SubscribePath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid app.subscribe_path: %w", err)
+	}
+	if err := loaded.Plugins.ValidatePayloadLimits(); err != nil {
+		return nil, err
+	}
+	if err := loaded.Database.validateConnectionSettings(); err != nil {
+		return nil, err
+	}
+	return loaded, nil
+}
+
+// Defaults returns a fresh copy of the built-in container defaults.
+func Defaults() *Config {
+	defaults := &Config{}
+	if err := yaml.Unmarshal(defaultsYAML, defaults); err != nil {
+		panic(fmt.Sprintf("embedded defaults.yaml is invalid: %v", err))
+	}
+	normalizeBrandDefaults(defaults)
+	return defaults
+}
+
+// placeholderJWTSecrets are the example values shipped in the config templates.
+var placeholderJWTSecrets = map[string]bool{
+	"your-jwt-secret-key-change-in-production":               true,
+	"CHANGE-THIS-TO-A-VERY-LONG-RANDOM-STRING-IN-PRODUCTION": true,
+}
+
+// ValidateForServer rejects settings the server must not start with. In
+// production the JWT secret must be set and must not be a template value.
+func (c *Config) ValidateForServer() error {
+	if c == nil {
+		return fmt.Errorf("configuration is missing")
+	}
+	if c.Env == "production" {
+		secret := strings.TrimSpace(c.JWT.Secret)
+		if secret == "" {
+			return fmt.Errorf("jwt.secret is required in production (set %sJWT_SECRET or %sJWT_SECRET%s)", EnvPrefix, EnvPrefix, EnvFileSuffix)
+		}
+		if placeholderJWTSecrets[secret] {
+			return fmt.Errorf("jwt.secret still has the template value; generate a random secret")
+		}
+	}
+	return nil
+}
+
+func (d DatabaseConfig) validateConnectionSettings() error {
+	switch d.SSLMode {
+	case "", "disable", "allow", "prefer", "require", "verify-ca", "verify-full":
+	default:
+		return fmt.Errorf("invalid database.sslmode %q", d.SSLMode)
+	}
+	if d.TimeZone != "" {
+		if _, err := time.LoadLocation(d.TimeZone); err != nil || strings.ContainsAny(d.TimeZone, " \t'\"\\") {
+			return fmt.Errorf("invalid database.timezone %q", d.TimeZone)
+		}
+	}
+	return nil
 }
 
 // Get returns the loaded config.
