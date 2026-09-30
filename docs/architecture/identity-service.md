@@ -241,7 +241,13 @@ instance's generation.
       - `internal/tests/identitycompat` proves the responses equal the v2
         handlers on SQLite and PostgreSQL. Only the token differs, by
         design.
-    - 11b: user MFA routes and the admin MFA configuration.
+    - 11b (in place): the six user MFA routes and the admin MFA
+      configuration.
+      - TOTP secrets are sealed and backup codes keyed-hashed in identity.
+      - The admin configuration lives in identity's settings document, with
+        the v2 defaults, coercions and normalization.
+      - Parity is proven except for the random secrets and codes, and
+        `last_used`, which identity keeps to the second.
     - 11c: admin user create, update, ban, unban and delete.
 12. Cutover, revocation push and finalize.
 13. End-to-end acceptance on Compose and kind.

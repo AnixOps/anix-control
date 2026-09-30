@@ -59,8 +59,16 @@ type Service struct {
 // Handlers returns the native handlers by route id.
 func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 	return map[string]pluginhostsdk.NativeHandler{
-		"identity.auth.login":    s.Login,
-		"identity.auth.register": s.Register,
+		"identity.auth.login":                            s.Login,
+		"identity.auth.register":                         s.Register,
+		"identity.user.mfa.status.get":                   s.MFAStatus,
+		"identity.user.mfa.totp.setup.post":              s.SetupTOTP,
+		"identity.user.mfa.totp.enable.post":             s.EnableTOTP,
+		"identity.user.mfa.disable.post":                 s.DisableMFA,
+		"identity.user.mfa.verify.post":                  s.VerifyMFA,
+		"identity.user.mfa.backup_codes.regenerate.post": s.RegenerateBackupCodes,
+		"identity.admin.mfa.config.get":                  s.AdminMFAConfig,
+		"identity.admin.mfa.config.put":                  s.UpdateAdminMFAConfig,
 	}
 }
 
