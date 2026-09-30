@@ -1,7 +1,7 @@
 # Subscriber Service (KernelSubscriber)
 
-Status: the contract is defined (`sdk/api/kernelsubscriber/v1`), and F2a–F2c
-are in place. F2d (serving the contract) follows.
+Status: in place. The contract is `sdk/api/kernelsubscriber/v1`, served by
+`internal/kernelsubscriber` since F2d.
 
 ## Why
 
@@ -143,7 +143,19 @@ package and generation.
     lists read `ListActiveSubscribers`.
   - The change log feeds `UserChanges`.
   - The view `kapi_subscriber_entitlement_v1` is added.
-- **F2d. Serve the contract.**
+- **F2d. Serve the contract** (in place).
+  - The five capabilities are in the grammar.
+  - `PackageHostOperations.AuthorizeCapability` checks each call against the
+    host's current generation and verified signed release, as for
+    KernelIdentity.
+  - The contract is served on local package bridge sessions and on the mTLS
+    module listener, where calls resolve to the bound instance's generation.
+  - Idempotent writes go through the request ledger; entitlement edits and
+    credential resets go through `UpdateUserTx`, so revocations and the
+    change log apply.
+  - `WatchSubscriberChanges` polls the change log every second, re-checks
+    authorization every 30 seconds and answers `RESYNC` for pruned cursors.
+  - Originally planned scope:
   - The capabilities join the grammar.
   - `KernelSubscriber` is served on the module listener and package bridge,
     with authorization and parity tests between legacy callers and contract

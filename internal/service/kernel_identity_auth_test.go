@@ -34,3 +34,23 @@ func TestAuthorizeIdentityRefusesPackagesWithoutTheCapability(t *testing.T) {
 
 	require.ErrorIs(t, operations.AuthorizeIdentity(context.Background(), host), ErrIdentityNotAuthorized)
 }
+
+// Subscriber method families are authorized one capability at a time, on the
+// same terms as KernelIdentity.
+func TestAuthorizeCapabilityGrantsOnlyTheSignedSubscriberFamilies(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, _ := seedKnowledgeRelease(t, db, "", []string{CapabilitySubscriberTraffic, CapabilitySubscriberDirectory})
+	operations := PackageHostOperations{DB: db, FallbackPublicKey: publicKey}
+	host := packagebridge.HostIdentity{PackageID: "knowledge", Version: "4.0.1", Generation: 7}
+	ctx := context.Background()
+
+	require.NoError(t, operations.AuthorizeCapability(ctx, host, CapabilitySubscriberTraffic))
+	require.NoError(t, operations.AuthorizeCapability(ctx, host, CapabilitySubscriberDirectory))
+	require.ErrorIs(t, operations.AuthorizeCapability(ctx, host, CapabilitySubscriberEntitlements), ErrCapabilityNotAuthorized)
+	require.ErrorIs(t, operations.AuthorizeIdentity(ctx, host), ErrIdentityNotAuthorized)
+	stale := host
+	stale.Generation = 6
+	require.ErrorIs(t, operations.AuthorizeCapability(ctx, stale, CapabilitySubscriberTraffic), packagebridge.ErrHostFenced)
+
+	require.Error(t, validateManifestCapabilities([]string{"kernel.subscriber.everything.v1"}), "unknown families are refused")
+}

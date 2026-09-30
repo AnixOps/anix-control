@@ -19,6 +19,13 @@ const (
 	// CapabilityIdentity lets the official identity package call the
 	// KernelIdentity contract (subscribers, account projection, revocation).
 	CapabilityIdentity = "kernel.identity.v1"
+	// The KernelSubscriber method families (subscriber-service.md): each
+	// lets an official package call one part of the subscriber contract.
+	CapabilitySubscriberEntitlements = "kernel.subscriber.entitlements.v1"
+	CapabilitySubscriberTraffic      = "kernel.subscriber.traffic.v1"
+	CapabilitySubscriberCredentials  = "kernel.subscriber.credentials.v1"
+	CapabilitySubscriberBalance      = "kernel.subscriber.balance.v1"
+	CapabilitySubscriberDirectory    = "kernel.subscriber.directory.v1"
 	// capabilityStorageAdoptPrefix grants the storage role access to an
 	// existing kernel table, adopted in place: kernel.storage.adopt:<table>.
 	capabilityStorageAdoptPrefix = "kernel.storage.adopt:"
@@ -80,7 +87,10 @@ func validateManifestCapabilities(capabilities []string) error {
 			continue
 		}
 		switch {
-		case capability == CapabilityObservedState, capability == CapabilityIdentity:
+		case capability == CapabilityObservedState, capability == CapabilityIdentity,
+			capability == CapabilitySubscriberEntitlements, capability == CapabilitySubscriberTraffic,
+			capability == CapabilitySubscriberCredentials, capability == CapabilitySubscriberBalance,
+			capability == CapabilitySubscriberDirectory:
 		case capability == CapabilityStorage:
 			storage = true
 		case strings.HasPrefix(capability, capabilityStorageAdoptPrefix):

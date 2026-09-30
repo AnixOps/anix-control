@@ -380,6 +380,14 @@
       creation and deletion. It is pruned after 7 days.
     - New kernel view `kapi_subscriber_entitlement_v1` exposes entitlements
       and counters, without token or uuid.
+  - **Contract served (F2d).** `KernelSubscriber` is served on local package
+    bridge sessions and on the mTLS module listener to official packages.
+    Each method family is authorized by its own signed capability:
+    `kernel.subscriber.{entitlements,traffic,credentials,balance,directory}.v1`.
+    - Writes are idempotent by request id.
+    - Directory reads carry no token.
+    - `WatchSubscriberChanges` streams each change with the subscriber's
+      current state, and answers `RESYNC` for pruned cursors.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

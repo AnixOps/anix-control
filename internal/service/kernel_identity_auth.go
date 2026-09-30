@@ -13,10 +13,25 @@ import (
 // ErrIdentityNotAuthorized means the calling host may not use KernelIdentity.
 var ErrIdentityNotAuthorized = errors.New("package is not authorized for kernel.identity.v1")
 
+// ErrCapabilityNotAuthorized means the calling host may not use a kernel
+// contract method family.
+var ErrCapabilityNotAuthorized = errors.New("package is not authorized for the kernel capability")
+
 // AuthorizeIdentity admits a host to KernelIdentity only when it is the
 // current generation of an official AnixOps package whose signed release,
 // verified again here, declares kernel.identity.v1.
 func (o PackageHostOperations) AuthorizeIdentity(ctx context.Context, host packagebridge.HostIdentity) error {
+	return o.authorizeCapability(ctx, host, CapabilityIdentity, ErrIdentityNotAuthorized)
+}
+
+// AuthorizeCapability admits a host to a kernel contract method family on
+// the same terms: the current generation of an official AnixOps package
+// whose verified signed release declares capability.
+func (o PackageHostOperations) AuthorizeCapability(ctx context.Context, host packagebridge.HostIdentity, capability string) error {
+	return o.authorizeCapability(ctx, host, capability, ErrCapabilityNotAuthorized)
+}
+
+func (o PackageHostOperations) authorizeCapability(ctx context.Context, host packagebridge.HostIdentity, capability string, notAuthorized error) error {
 	if _, err := o.currentInstallation(ctx, host); err != nil {
 		return err
 	}
@@ -24,7 +39,7 @@ func (o PackageHostOperations) AuthorizeIdentity(ctx context.Context, host packa
 	var plugin model.Plugin
 	if err := db.First(&plugin, "id = ? AND official = ? AND publisher = ?", host.PackageID, true, "AnixOps").Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrIdentityNotAuthorized
+			return notAuthorized
 		}
 		return err
 	}
@@ -37,10 +52,10 @@ func (o PackageHostOperations) AuthorizeIdentity(ctx context.Context, host packa
 	}
 	manifest, err := VerifyStoredPluginRelease(db, release, o.FallbackPublicKey)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrIdentityNotAuthorized, err)
+		return fmt.Errorf("%w: %w", notAuthorized, err)
 	}
-	if !containsPluginCapability(manifest.Capabilities, CapabilityIdentity) {
-		return ErrIdentityNotAuthorized
+	if !containsPluginCapability(manifest.Capabilities, capability) {
+		return notAuthorized
 	}
 	return nil
 }

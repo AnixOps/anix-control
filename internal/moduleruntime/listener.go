@@ -12,6 +12,7 @@ import (
 	"time"
 
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
+	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"github.com/AnixOps/anix-control/sdk/moduletls"
@@ -47,6 +48,9 @@ type Listener struct {
 	// KernelIdentity, when set, is served to bound instances; see
 	// ModuleBridge.KernelIdentityServer.
 	KernelIdentity packagebridge.KernelIdentityProvider
+	// KernelSubscriber, when set, is served to bound instances; see
+	// ModuleBridge.KernelSubscriberServer.
+	KernelSubscriber packagebridge.KernelSubscriberProvider
 
 	revocations revocationCache
 }
@@ -104,6 +108,9 @@ func (l *Listener) newServer() (*grpc.Server, error) {
 	packagebridgev1.RegisterKernelPackageBridgeServer(server, l.Bridge)
 	if l.KernelIdentity != nil {
 		kernelidentityv1.RegisterKernelIdentityServer(server, l.Bridge.KernelIdentityServer(l.KernelIdentity))
+	}
+	if l.KernelSubscriber != nil {
+		kernelsubscriberv1.RegisterKernelSubscriberServer(server, l.Bridge.KernelSubscriberServer(l.KernelSubscriber))
 	}
 	return server, nil
 }
