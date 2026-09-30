@@ -102,6 +102,10 @@ func (d *HostLifecycleDispatcher) ExecuteLifecycle(ctx context.Context, pluginID
 			return nil, err
 		}
 		return json.RawMessage(`{}`), nil
+	case "plugin.configure":
+		// Control hosts pull their configuration (route modes) over the
+		// package bridge; the new revision is already stored when this runs.
+		return json.RawMessage(`{}`), nil
 	case "plugin.health":
 		health, err := d.hosts.Health(ctx, pluginID, version, request.Generation)
 		if err != nil {

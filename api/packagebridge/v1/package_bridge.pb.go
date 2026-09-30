@@ -21,6 +21,105 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type GetPackageConfigRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPackageConfigRequest) Reset() {
+	*x = GetPackageConfigRequest{}
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPackageConfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPackageConfigRequest) ProtoMessage() {}
+
+func (x *GetPackageConfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPackageConfigRequest.ProtoReflect.Descriptor instead.
+func (*GetPackageConfigRequest) Descriptor() ([]byte, []int) {
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{0}
+}
+
+// GetPackageConfigResponse is the host's view of its installation
+// configuration. route_modes maps v2 route ids to legacy, shadow or native;
+// routes that are absent run in legacy mode.
+type GetPackageConfigResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Revision      int64                  `protobuf:"varint,1,opt,name=revision,proto3" json:"revision,omitempty"`
+	ConfigHash    string                 `protobuf:"bytes,2,opt,name=config_hash,json=configHash,proto3" json:"config_hash,omitempty"`
+	RouteModes    map[string]string      `protobuf:"bytes,3,rep,name=route_modes,json=routeModes,proto3" json:"route_modes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPackageConfigResponse) Reset() {
+	*x = GetPackageConfigResponse{}
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPackageConfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPackageConfigResponse) ProtoMessage() {}
+
+func (x *GetPackageConfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPackageConfigResponse.ProtoReflect.Descriptor instead.
+func (*GetPackageConfigResponse) Descriptor() ([]byte, []int) {
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *GetPackageConfigResponse) GetRevision() int64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *GetPackageConfigResponse) GetConfigHash() string {
+	if x != nil {
+		return x.ConfigHash
+	}
+	return ""
+}
+
+func (x *GetPackageConfigResponse) GetRouteModes() map[string]string {
+	if x != nil {
+		return x.RouteModes
+	}
+	return nil
+}
+
 type InvokeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Capability    []byte                 `protobuf:"bytes,1,opt,name=capability,proto3" json:"capability,omitempty"`
@@ -32,7 +131,7 @@ type InvokeRequest struct {
 
 func (x *InvokeRequest) Reset() {
 	*x = InvokeRequest{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[0]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -44,7 +143,7 @@ func (x *InvokeRequest) String() string {
 func (*InvokeRequest) ProtoMessage() {}
 
 func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[0]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57,7 +156,7 @@ func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokeRequest.ProtoReflect.Descriptor instead.
 func (*InvokeRequest) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{0}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *InvokeRequest) GetCapability() []byte {
@@ -92,7 +191,7 @@ type InvokeResponse struct {
 
 func (x *InvokeResponse) Reset() {
 	*x = InvokeResponse{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[1]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -104,7 +203,7 @@ func (x *InvokeResponse) String() string {
 func (*InvokeResponse) ProtoMessage() {}
 
 func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[1]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -117,7 +216,7 @@ func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokeResponse.ProtoReflect.Descriptor instead.
 func (*InvokeResponse) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{1}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *InvokeResponse) GetResponseBody() []byte {
@@ -151,7 +250,7 @@ type ResponseHeader struct {
 
 func (x *ResponseHeader) Reset() {
 	*x = ResponseHeader{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[2]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -163,7 +262,7 @@ func (x *ResponseHeader) String() string {
 func (*ResponseHeader) ProtoMessage() {}
 
 func (x *ResponseHeader) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[2]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -176,7 +275,7 @@ func (x *ResponseHeader) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseHeader.ProtoReflect.Descriptor instead.
 func (*ResponseHeader) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{2}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ResponseHeader) GetName() string {
@@ -209,7 +308,7 @@ type WebSocketFrame struct {
 
 func (x *WebSocketFrame) Reset() {
 	*x = WebSocketFrame{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[3]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -221,7 +320,7 @@ func (x *WebSocketFrame) String() string {
 func (*WebSocketFrame) ProtoMessage() {}
 
 func (x *WebSocketFrame) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[3]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -234,7 +333,7 @@ func (x *WebSocketFrame) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebSocketFrame.ProtoReflect.Descriptor instead.
 func (*WebSocketFrame) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{3}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *WebSocketFrame) GetValue() isWebSocketFrame_Value {
@@ -303,7 +402,7 @@ type WebSocketOpen struct {
 
 func (x *WebSocketOpen) Reset() {
 	*x = WebSocketOpen{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[4]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -315,7 +414,7 @@ func (x *WebSocketOpen) String() string {
 func (*WebSocketOpen) ProtoMessage() {}
 
 func (x *WebSocketOpen) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[4]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -328,7 +427,7 @@ func (x *WebSocketOpen) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebSocketOpen.ProtoReflect.Descriptor instead.
 func (*WebSocketOpen) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{4}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *WebSocketOpen) GetCapability() []byte {
@@ -355,7 +454,7 @@ type WebSocketClose struct {
 
 func (x *WebSocketClose) Reset() {
 	*x = WebSocketClose{}
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[5]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -367,7 +466,7 @@ func (x *WebSocketClose) String() string {
 func (*WebSocketClose) ProtoMessage() {}
 
 func (x *WebSocketClose) ProtoReflect() protoreflect.Message {
-	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[5]
+	mi := &file_api_packagebridge_v1_package_bridge_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -380,7 +479,7 @@ func (x *WebSocketClose) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebSocketClose.ProtoReflect.Descriptor instead.
 func (*WebSocketClose) Descriptor() ([]byte, []int) {
-	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{5}
+	return file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *WebSocketClose) GetCode() uint32 {
@@ -401,7 +500,17 @@ var File_api_packagebridge_v1_package_bridge_proto protoreflect.FileDescriptor
 
 const file_api_packagebridge_v1_package_bridge_proto_rawDesc = "" +
 	"\n" +
-	")api/packagebridge/v1/package_bridge.proto\x12\x18anixops.packagebridge.v1\"g\n" +
+	")api/packagebridge/v1/package_bridge.proto\x12\x18anixops.packagebridge.v1\"\x19\n" +
+	"\x17GetPackageConfigRequest\"\xfb\x01\n" +
+	"\x18GetPackageConfigResponse\x12\x1a\n" +
+	"\brevision\x18\x01 \x01(\x03R\brevision\x12\x1f\n" +
+	"\vconfig_hash\x18\x02 \x01(\tR\n" +
+	"configHash\x12c\n" +
+	"\vroute_modes\x18\x03 \x03(\v2B.anixops.packagebridge.v1.GetPackageConfigResponse.RouteModesEntryR\n" +
+	"routeModes\x1a=\n" +
+	"\x0fRouteModesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"g\n" +
 	"\rInvokeRequest\x12\x1e\n" +
 	"\n" +
 	"capability\x18\x01 \x01(\fR\n" +
@@ -428,10 +537,11 @@ const file_api_packagebridge_v1_package_bridge_proto_rawDesc = "" +
 	"\toperation\x18\x02 \x01(\tR\toperation\"<\n" +
 	"\x0eWebSocketClose\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\rR\x04code\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason2\xdb\x01\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason2\xd6\x02\n" +
 	"\x13KernelPackageBridge\x12[\n" +
 	"\x06Invoke\x12'.anixops.packagebridge.v1.InvokeRequest\x1a(.anixops.packagebridge.v1.InvokeResponse\x12g\n" +
-	"\rOpenWebSocket\x12(.anixops.packagebridge.v1.WebSocketFrame\x1a(.anixops.packagebridge.v1.WebSocketFrame(\x010\x01BIZGgithub.com/AnixOps/anix-control/v4/api/packagebridge/v1;packagebridgev1b\x06proto3"
+	"\rOpenWebSocket\x12(.anixops.packagebridge.v1.WebSocketFrame\x1a(.anixops.packagebridge.v1.WebSocketFrame(\x010\x01\x12y\n" +
+	"\x10GetPackageConfig\x121.anixops.packagebridge.v1.GetPackageConfigRequest\x1a2.anixops.packagebridge.v1.GetPackageConfigResponseBIZGgithub.com/AnixOps/anix-control/v4/api/packagebridge/v1;packagebridgev1b\x06proto3"
 
 var (
 	file_api_packagebridge_v1_package_bridge_proto_rawDescOnce sync.Once
@@ -445,28 +555,34 @@ func file_api_packagebridge_v1_package_bridge_proto_rawDescGZIP() []byte {
 	return file_api_packagebridge_v1_package_bridge_proto_rawDescData
 }
 
-var file_api_packagebridge_v1_package_bridge_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_api_packagebridge_v1_package_bridge_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_api_packagebridge_v1_package_bridge_proto_goTypes = []any{
-	(*InvokeRequest)(nil),  // 0: anixops.packagebridge.v1.InvokeRequest
-	(*InvokeResponse)(nil), // 1: anixops.packagebridge.v1.InvokeResponse
-	(*ResponseHeader)(nil), // 2: anixops.packagebridge.v1.ResponseHeader
-	(*WebSocketFrame)(nil), // 3: anixops.packagebridge.v1.WebSocketFrame
-	(*WebSocketOpen)(nil),  // 4: anixops.packagebridge.v1.WebSocketOpen
-	(*WebSocketClose)(nil), // 5: anixops.packagebridge.v1.WebSocketClose
+	(*GetPackageConfigRequest)(nil),  // 0: anixops.packagebridge.v1.GetPackageConfigRequest
+	(*GetPackageConfigResponse)(nil), // 1: anixops.packagebridge.v1.GetPackageConfigResponse
+	(*InvokeRequest)(nil),            // 2: anixops.packagebridge.v1.InvokeRequest
+	(*InvokeResponse)(nil),           // 3: anixops.packagebridge.v1.InvokeResponse
+	(*ResponseHeader)(nil),           // 4: anixops.packagebridge.v1.ResponseHeader
+	(*WebSocketFrame)(nil),           // 5: anixops.packagebridge.v1.WebSocketFrame
+	(*WebSocketOpen)(nil),            // 6: anixops.packagebridge.v1.WebSocketOpen
+	(*WebSocketClose)(nil),           // 7: anixops.packagebridge.v1.WebSocketClose
+	nil,                              // 8: anixops.packagebridge.v1.GetPackageConfigResponse.RouteModesEntry
 }
 var file_api_packagebridge_v1_package_bridge_proto_depIdxs = []int32{
-	2, // 0: anixops.packagebridge.v1.InvokeResponse.headers:type_name -> anixops.packagebridge.v1.ResponseHeader
-	4, // 1: anixops.packagebridge.v1.WebSocketFrame.open:type_name -> anixops.packagebridge.v1.WebSocketOpen
-	5, // 2: anixops.packagebridge.v1.WebSocketFrame.close:type_name -> anixops.packagebridge.v1.WebSocketClose
-	0, // 3: anixops.packagebridge.v1.KernelPackageBridge.Invoke:input_type -> anixops.packagebridge.v1.InvokeRequest
-	3, // 4: anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket:input_type -> anixops.packagebridge.v1.WebSocketFrame
-	1, // 5: anixops.packagebridge.v1.KernelPackageBridge.Invoke:output_type -> anixops.packagebridge.v1.InvokeResponse
-	3, // 6: anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket:output_type -> anixops.packagebridge.v1.WebSocketFrame
-	5, // [5:7] is the sub-list for method output_type
-	3, // [3:5] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	8, // 0: anixops.packagebridge.v1.GetPackageConfigResponse.route_modes:type_name -> anixops.packagebridge.v1.GetPackageConfigResponse.RouteModesEntry
+	4, // 1: anixops.packagebridge.v1.InvokeResponse.headers:type_name -> anixops.packagebridge.v1.ResponseHeader
+	6, // 2: anixops.packagebridge.v1.WebSocketFrame.open:type_name -> anixops.packagebridge.v1.WebSocketOpen
+	7, // 3: anixops.packagebridge.v1.WebSocketFrame.close:type_name -> anixops.packagebridge.v1.WebSocketClose
+	2, // 4: anixops.packagebridge.v1.KernelPackageBridge.Invoke:input_type -> anixops.packagebridge.v1.InvokeRequest
+	5, // 5: anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket:input_type -> anixops.packagebridge.v1.WebSocketFrame
+	0, // 6: anixops.packagebridge.v1.KernelPackageBridge.GetPackageConfig:input_type -> anixops.packagebridge.v1.GetPackageConfigRequest
+	3, // 7: anixops.packagebridge.v1.KernelPackageBridge.Invoke:output_type -> anixops.packagebridge.v1.InvokeResponse
+	5, // 8: anixops.packagebridge.v1.KernelPackageBridge.OpenWebSocket:output_type -> anixops.packagebridge.v1.WebSocketFrame
+	1, // 9: anixops.packagebridge.v1.KernelPackageBridge.GetPackageConfig:output_type -> anixops.packagebridge.v1.GetPackageConfigResponse
+	7, // [7:10] is the sub-list for method output_type
+	4, // [4:7] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_api_packagebridge_v1_package_bridge_proto_init() }
@@ -474,7 +590,7 @@ func file_api_packagebridge_v1_package_bridge_proto_init() {
 	if File_api_packagebridge_v1_package_bridge_proto != nil {
 		return
 	}
-	file_api_packagebridge_v1_package_bridge_proto_msgTypes[3].OneofWrappers = []any{
+	file_api_packagebridge_v1_package_bridge_proto_msgTypes[5].OneofWrappers = []any{
 		(*WebSocketFrame_Open)(nil),
 		(*WebSocketFrame_Data)(nil),
 		(*WebSocketFrame_Close)(nil),
@@ -485,7 +601,7 @@ func file_api_packagebridge_v1_package_bridge_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_packagebridge_v1_package_bridge_proto_rawDesc), len(file_api_packagebridge_v1_package_bridge_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

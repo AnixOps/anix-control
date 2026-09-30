@@ -30,6 +30,12 @@ const maxBridgeMessageBytes = 64<<20 + 64<<10
 var (
 	ErrBridgeUnavailable  = errors.New("package bridge unavailable")
 	ErrCapabilityRejected = errors.New("package bridge capability rejected")
+	// ErrSessionOperationUnsupported is returned by session-scoped calls when
+	// the kernel does not implement them.
+	ErrSessionOperationUnsupported = errors.New("package bridge session operation unsupported")
+	// ErrHostFenced is returned when the host is no longer the current
+	// installation generation.
+	ErrHostFenced = errors.New("package host generation is fenced")
 	// ErrResponseTooLarge reports that the kernel rejected a bridge response
 	// body above its configured limit. The returned error also carries
 	// codes.ResourceExhausted, so a host that returns it unchanged lets the
@@ -240,4 +246,40 @@ func bridgeError(err error) error {
 	default:
 		return fmt.Errorf("%w: %s", ErrBridgeUnavailable, status.Code(err))
 	}
+}
+
+// PackageConfig is a host's view of its installation configuration.
+type PackageConfig struct {
+	Revision   int64
+	ConfigHash string
+	// RouteModes maps route ids to "shadow" or "native"; absent routes run in
+	// legacy mode.
+	RouteModes map[string]string
+}
+
+// GetPackageConfig reads the calling host's configuration. It needs no
+// capability: the kernel authorizes the private bridge session itself.
+// ErrSessionOperationUnsupported means the kernel predates session operations
+// and every route must stay in legacy mode; ErrHostFenced means this host is
+// no longer the current installation generation.
+func (c *Client) GetPackageConfig(ctx context.Context) (PackageConfig, error) {
+	if c == nil || c.rpc == nil {
+		return PackageConfig{}, ErrBridgeUnavailable
+	}
+	response, err := c.rpc.GetPackageConfig(ctx, &packagebridgev1.GetPackageConfigRequest{})
+	if err != nil {
+		switch status.Code(err) {
+		case codes.Unimplemented:
+			return PackageConfig{}, ErrSessionOperationUnsupported
+		case codes.PermissionDenied:
+			return PackageConfig{}, ErrHostFenced
+		default:
+			return PackageConfig{}, bridgeError(err)
+		}
+	}
+	modes := make(map[string]string, len(response.GetRouteModes()))
+	for route, mode := range response.GetRouteModes() {
+		modes[route] = mode
+	}
+	return PackageConfig{Revision: response.GetRevision(), ConfigHash: response.GetConfigHash(), RouteModes: modes}, nil
 }

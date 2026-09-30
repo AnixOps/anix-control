@@ -158,8 +158,17 @@ receives **kernel** credentials — the kernel DSN, JWT signing key, or full
 Control configuration. It may lease its own per-package least-privilege role.
 `plugin-kernel-contract.md` must be updated in the same change.
 
+**Session-scoped RPCs (CURRENT since M3):** besides the per-request
+`Invoke`/`OpenWebSocket`, a host may call named session operations
+(`GetPackageConfig`; `LeaseStorage` follows) without a capability. They are
+authorized by the session identity (package id, version, lifecycle
+generation bound to the inherited socketpair) and fenced against the current
+installation on every call; see `plugin-kernel-contract.md`, "Package
+Configuration".
+
 Preserved bridge invariants (from `2026-07-19-v2-package-bridge.md`, still
-CURRENT):
+CURRENT; the per-request capability rule applies to `Invoke` and
+`OpenWebSocket`):
 
 - A host receives only a private inherited socket endpoint; never a DSN,
   signing key, full configuration, or arbitrary SQL capability.

@@ -151,3 +151,10 @@ func TestMachineTelemetryExecutorReturnsBoundedHeartbeatMetrics(t *testing.T) {
 	_, err = executor.HandleRoute(context.Background(), RouteRequest{Method: http.MethodGet, Path: "/api/v3/plugins/machine-telemetry/missing"})
 	require.ErrorIs(t, err, ErrRouteNotFound)
 }
+
+func TestHostLifecycleDispatcherAcceptsControlConfigurationChanges(t *testing.T) {
+	dispatcher := NewHostLifecycleDispatcher(&recordingHostManager{}, nil)
+	result, err := dispatcher.ExecuteLifecycle(context.Background(), "knowledge", "4.0.1", LifecycleRequest{Kind: "plugin.configure", Generation: 7})
+	require.NoError(t, err)
+	require.JSONEq(t, `{}`, string(result))
+}
