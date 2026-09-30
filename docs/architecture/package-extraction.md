@@ -28,8 +28,9 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 21 routes are `native-flagged`:
-  identity's group A (15) and the knowledge pilot (6). The rest are `bridged`.
+  (`router`, `identity-bridge` or `none`). 29 routes are `native-flagged`:
+  identity's group A (15), knowledge (6) and ticket (8). The rest are
+  `bridged`.
   The identity routes are `identity-bridge`. `check_plugin_only_routes.py`
   enforces the map against the router and the identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
@@ -181,6 +182,10 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
     finalize.
   - Deleting the legacy handlers (mode `native`) follows once the operator
     has run natively for a release.
+- **Ticket (in place).** The same pattern on `v2_ticket` and
+  `v2_ticket_message`, proved by `internal/tests/ticketcompat`. The admin
+  list's legacy preload of the user is not needed: only `user_id` is
+  returned.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, later
   `kapi_plan_catalog_v1`). Packages read other domains only through `kapi_*`

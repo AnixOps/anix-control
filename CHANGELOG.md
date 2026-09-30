@@ -414,6 +414,10 @@
     through the installation's `routes` configuration.
   - `config/package-extraction.json` now marks the knowledge routes and
     identity's 15 group A routes `native-flagged`.
+- **Ticket module on adopted tables.** `packages/ticket` serves its 8
+  routes natively on `v2_ticket` and `v2_ticket_message`, adopted in place.
+  `internal/tests/ticketcompat` proves byte parity on SQLite and PostgreSQL,
+  and the PostgreSQL run is part of CI.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.
