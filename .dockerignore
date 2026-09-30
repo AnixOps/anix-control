@@ -29,17 +29,23 @@ coverage/
 .env
 .env.*
 
-# Node modules (will be installed during build)
+# Frontend dependencies and output (built inside the image)
 web/node_modules
+web/public
+web/dist
 
 # Data directories (should be mounted as volumes)
 config/data/
 logs/
 
-# Documentation
+# Documentation (the generated swagger package and specs are compiled in)
 docs/
+!docs/docs.go
+!docs/swagger.json
+!docs/swagger.yaml
 *.md
 !README.md
+!config/deploy/ansible/README.md
 
 # CI/CD
 .github/
@@ -50,9 +56,21 @@ docs/
 internal/tests/
 *_test.go
 
-# Config files with secrets
+# Config files, credentials and operator inventories never enter the image
 config/config.yaml
 config/config.prod.yaml
+config/tls/
+config/deploy/ssh/
+config/deploy/**/inventory.ini
+config/deploy/**/*.pem
+config/deploy/**/*.key
+**/*.env
+secrets/
+
+# Package build outputs and scratch space
+packages/**/dist/
+release-packages/
+.tmp/
 
 # Control Center app (separate module, built by control-center*.yml workflows)
 control-center/
